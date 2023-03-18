@@ -15,7 +15,7 @@ pub fn collaborate_json_object(
     collab: &Collab,
 ) {
     let map = match parent {
-        None => collab.insert_map_with_transaction(id, txn),
+        None => collab.create_map_with_transaction(id, txn),
         Some(parent) => {
             let map = MapPrelim::<lib0::any::Any>::new();
             if object.is_object() {

@@ -20,30 +20,30 @@ type InnerSubscription = Subscription<SubscriptionCallback>;
 pub struct Collab {
     id: String,
     doc: Doc,
-    attrs: MapRef,
+    attributes: MapRef,
     subscription: Option<InnerSubscription>,
 }
 
 impl Collab {
     pub fn new(id: String) -> Collab {
         let doc = Doc::new();
-        let attrs = doc.get_or_insert_map("attrs");
+        let attributes = doc.get_or_insert_map("attrs");
         Self {
             id,
             doc,
-            attrs,
+            attributes,
             subscription: None,
         }
     }
 
     pub fn get(&self, key: &str) -> Option<Value> {
         let txn = self.doc.transact();
-        self.attrs.get(&txn, &key)
+        self.attributes.get(&txn, &key)
     }
 
     pub fn insert<V: Prelim>(&self, key: &str, value: V) {
         let mut txn = self.doc.transact_mut();
-        self.attrs.insert(&mut txn, key, value);
+        self.attributes.insert(&mut txn, key, value);
     }
 
     pub fn insert_object_with_path<T: Serialize>(
@@ -56,7 +56,7 @@ impl Collab {
             None
         } else {
             let txn = self.transact();
-            self.get_map_with_path(&txn, path).map(|m| m.into_inner())
+            self.get_map_with_txn(&txn, path).map(|m| m.into_inner())
         };
 
         let mut txn = self.transact_mut();
@@ -72,56 +72,62 @@ impl Collab {
             return None;
         }
         let txn = self.transact();
-        let map = self.get_map_with_path(&txn, paths)?;
+        let map = self.get_map_with_txn(&txn, paths)?;
+        drop(txn);
 
         let json_str = map.to_json();
         let object = serde_json::from_str::<T>(&json_str).ok()?;
         return Some((object, map));
     }
 
-    pub fn get_map_with_path(&self, txn: &Transaction, paths: Vec<String>) -> Option<MapModifier> {
+    pub fn get_map_with_path(&self, paths: Vec<String>) -> Option<MapModifier> {
+        let txn = self.doc.transact();
+        self.get_map_with_txn(&txn, paths)
+    }
+
+    pub fn get_map_with_txn(&self, txn: &Transaction, paths: Vec<String>) -> Option<MapModifier> {
         if paths.is_empty() {
             return None;
         }
         let mut iter = paths.into_iter();
-        let mut map = self.attrs.get(txn, &iter.next().unwrap())?.to_ymap();
+        let mut map = self.attributes.get(txn, &iter.next().unwrap())?.to_ymap();
         while let Some(path) = iter.next() {
             map = map?.get(txn, &path)?.to_ymap();
         }
         map.map(|m| MapModifier::new(m, self.doc.clone()))
     }
 
-    pub fn get_map(&self, id: &str) -> Option<MapRef> {
-        let txn = self.doc.transact();
-        let value = self.attrs.get(&txn, &id)?;
-        value.to_ymap()
-    }
-
-    pub fn insert_map(&self, id: &str) -> MapRef {
+    pub fn create_map(&self, id: &str) -> MapRef {
         let mut txn = self.doc.transact_mut();
-        self.insert_map_with_transaction(id, &mut txn)
+        self.create_map_with_transaction(id, &mut txn)
     }
 
-    pub fn insert_map_with_transaction(&self, id: &str, txn: &mut TransactionMut) -> MapRef {
+    pub fn create_map_with_transaction(&self, id: &str, txn: &mut TransactionMut) -> MapRef {
         let map = MapPrelim::<lib0::any::Any>::new();
-        self.attrs.insert(txn, id, map)
+        self.attributes.insert(txn, id, map)
     }
 
     pub fn get_str(&self, key: &str) -> Option<String> {
         let txn = self.doc.transact();
-        self.attrs.get(&txn, &key).map(|val| val.to_string(&txn))
+        self.attributes
+            .get(&txn, &key)
+            .map(|val| val.to_string(&txn))
     }
 
     pub fn remove(&mut self, key: &str) -> Option<Value> {
         let mut txn = self.doc.transact_mut();
-        self.attrs.remove(&mut txn, key)
+        self.attributes.remove(&mut txn, key)
+    }
+
+    pub fn to_json(&self, txn: &Transaction) -> lib0::any::Any {
+        self.attributes.to_json(txn)
     }
 }
 
 impl Display for Collab {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let txn = self.doc.transact();
-        print_map(self.attrs.clone(), &txn, f)
+        f.write_str(&serde_json::to_string(self).unwrap())?;
+        Ok(())
     }
 }
 
@@ -150,7 +156,7 @@ mod tests {
     #[test]
     fn insert_text() {
         let mut collab = Collab::new("1".to_string());
-        let sub = collab.attrs.observe(|txn, event| {
+        let sub = collab.attributes.observe(|txn, event| {
             event.target().iter(txn).for_each(|(a, b)| {
                 println!("{}: {}", a, b);
             });
@@ -184,6 +190,7 @@ mod tests {
             },
         };
         collab.insert_object_with_path(vec!["person".to_string()], "person", object);
+        println!("{}", collab);
 
         let (person, map) = collab
             .get_object_with_path::<Person>(vec!["person".to_string()])
@@ -214,9 +221,8 @@ mod tests {
             .1
             .insert("title", "manager");
 
-        let txn = collab.transact();
         let title = collab
-            .get_map_with_path(&txn, vec!["person".to_string(), "position".to_string()])
+            .get_map_with_path(vec!["person".to_string(), "position".to_string()])
             .unwrap()
             .get_str("title")
             .unwrap();
@@ -224,15 +230,43 @@ mod tests {
     }
 
     #[test]
+    fn observer_object_mut() {
+        let mut collab = Collab::new("1".to_string());
+        let object = Person {
+            name: "nathan".to_string(),
+            position: Position {
+                title: "developer".to_string(),
+                level: 3,
+            },
+        };
+        collab.insert_object_with_path(vec![], "person", object);
+        let sub = collab
+            .get_object_with_path::<Position>(vec!["person".to_string(), "position".to_string()])
+            .unwrap()
+            .1
+            .observe(|txn, event| {
+                event.target().iter(txn).for_each(|(a, b)| {
+                    println!("{}: {}", a, b);
+                });
+            });
+
+        let mut map = collab
+            .get_map_with_path(vec!["person".to_string(), "position".to_string()])
+            .unwrap();
+
+        map.insert("title", "manager");
+    }
+
+    #[test]
     fn insert_map() {
         let mut collab = Collab::new("1".to_string());
-        let c = collab.attrs.observe(|txn, event| {
+        let c = collab.attributes.observe(|txn, event| {
             event.target().iter(txn).for_each(|(a, b)| {
                 println!("{}: {}", a, b);
             });
         });
 
-        let mut map = collab.insert_map("map_object");
+        let mut map = collab.create_map("map_object");
         let mut txn = collab.doc.transact_mut();
         map.insert(&mut txn, "a", "a text");
         map.insert(&mut txn, "b", "b text");
@@ -240,8 +274,10 @@ mod tests {
         map.insert(&mut txn, "d", true);
         drop(txn);
 
-        let txn = collab.doc.transact();
-        let value = collab.get_map("map_object").unwrap();
+        let value = collab
+            .get_map_with_path(vec!["map_object".to_string()])
+            .unwrap();
+        let txn = collab.transact();
         value.iter(&txn).for_each(|(a, b)| {
             println!("{}:{}", a, b);
         });

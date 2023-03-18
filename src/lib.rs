@@ -1,4 +1,5 @@
 mod collab;
+mod collab_serde;
 mod entities;
 mod error;
 mod util;
