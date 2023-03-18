@@ -1,3 +1,4 @@
+use crate::entities::MapModifier;
 use crate::util::{collaborate_json_object, print_map};
 use anyhow::Result;
 use serde::de::DeserializeOwned;
@@ -16,33 +17,15 @@ use yrs::{
 type SubscriptionCallback = Arc<dyn Fn(&TransactionMut, &Event) -> ()>;
 type InnerSubscription = Subscription<SubscriptionCallback>;
 
-pub trait DataParser {
-    type Object;
-
-    fn parser(value: MapRef) -> Result<Self::Object>;
-}
-
-pub struct JsonParser<T>(PhantomData<T>);
-impl<T> DataParser for JsonParser<T>
-where
-    T: DeserializeOwned,
-{
-    type Object = T;
-
-    fn parser(value: MapRef) -> Result<Self::Object> {
-        todo!()
-    }
-}
-
-pub struct Collaborator {
+pub struct Collab {
     id: String,
     doc: Doc,
     attrs: MapRef,
     subscription: Option<InnerSubscription>,
 }
 
-impl Collaborator {
-    pub fn new(id: String) -> Collaborator {
+impl Collab {
+    pub fn new(id: String) -> Collab {
         let doc = Doc::new();
         let attrs = doc.get_or_insert_map("attrs");
         Self {
@@ -69,9 +52,12 @@ impl Collaborator {
         id: &str,
         object: T,
     ) {
-        let txn = self.transact();
-        let map = self.get_map_with_path(&txn, path);
-        drop(txn);
+        let map = if path.is_empty() {
+            None
+        } else {
+            let txn = self.transact();
+            self.get_map_with_path(&txn, path).map(|m| m.into_inner())
+        };
 
         let mut txn = self.transact_mut();
         let value = serde_json::to_value(&object).unwrap();
@@ -81,21 +67,19 @@ impl Collaborator {
     pub fn get_object_with_path<T: DeserializeOwned>(
         &self,
         paths: Vec<String>,
-    ) -> Option<(T, MapRef)> {
+    ) -> Option<(T, MapModifier)> {
         if paths.is_empty() {
             return None;
         }
         let txn = self.transact();
         let map = self.get_map_with_path(&txn, paths)?;
 
-        let mut json_str = String::new();
-        let value = map.to_json(&txn);
-        value.to_json(&mut json_str);
+        let json_str = map.to_json();
         let object = serde_json::from_str::<T>(&json_str).ok()?;
         return Some((object, map));
     }
 
-    pub fn get_map_with_path(&self, txn: &Transaction, paths: Vec<String>) -> Option<MapRef> {
+    pub fn get_map_with_path(&self, txn: &Transaction, paths: Vec<String>) -> Option<MapModifier> {
         if paths.is_empty() {
             return None;
         }
@@ -104,7 +88,7 @@ impl Collaborator {
         while let Some(path) = iter.next() {
             map = map?.get(txn, &path)?.to_ymap();
         }
-        map
+        map.map(|m| MapModifier::new(m, self.doc.clone()))
     }
 
     pub fn get_map(&self, id: &str) -> Option<MapRef> {
@@ -134,14 +118,14 @@ impl Collaborator {
     }
 }
 
-impl Display for Collaborator {
+impl Display for Collab {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let txn = self.doc.transact();
         print_map(self.attrs.clone(), &txn, f)
     }
 }
 
-impl std::ops::Deref for Collaborator {
+impl std::ops::Deref for Collab {
     type Target = Doc;
 
     fn deref(&self) -> &Self::Target {
@@ -149,7 +133,7 @@ impl std::ops::Deref for Collaborator {
     }
 }
 
-impl std::ops::DerefMut for Collaborator {
+impl std::ops::DerefMut for Collab {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.doc
     }
@@ -157,7 +141,7 @@ impl std::ops::DerefMut for Collaborator {
 
 #[cfg(test)]
 mod tests {
-    use crate::collaborator::Collaborator;
+    use crate::collab::Collab;
     use crate::util::collaborate_json_object;
     use serde::{Deserialize, Serialize};
     use yrs::types::ToJson;
@@ -165,7 +149,7 @@ mod tests {
 
     #[test]
     fn insert_text() {
-        let mut collab = Collaborator::new("1".to_string());
+        let mut collab = Collab::new("1".to_string());
         let sub = collab.attrs.observe(|txn, event| {
             event.target().iter(txn).for_each(|(a, b)| {
                 println!("{}: {}", a, b);
@@ -190,8 +174,8 @@ mod tests {
     }
 
     #[test]
-    fn insert_json() {
-        let mut collab = Collaborator::new("1".to_string());
+    fn insert_json_object() {
+        let mut collab = Collab::new("1".to_string());
         let object = Person {
             name: "nathan".to_string(),
             position: Position {
@@ -214,26 +198,34 @@ mod tests {
     }
 
     #[test]
-    fn test() {
+    fn mut_json_object() {
+        let mut collab = Collab::new("1".to_string());
         let object = Person {
             name: "nathan".to_string(),
             position: Position {
-                title: "develop".to_string(),
+                title: "developer".to_string(),
                 level: 3,
             },
         };
-        let json_value = serde_json::to_value(&object).unwrap();
-        if json_value.is_object() {
-            let map = json_value.as_object().unwrap();
-            map.iter().for_each(|(k, v)| {
-                println!("{}:{}", k, v);
-            });
-        }
+        collab.insert_object_with_path(vec![], "person", object);
+        collab
+            .get_object_with_path::<Position>(vec!["person".to_string(), "position".to_string()])
+            .unwrap()
+            .1
+            .insert("title", "manager");
+
+        let txn = collab.transact();
+        let title = collab
+            .get_map_with_path(&txn, vec!["person".to_string(), "position".to_string()])
+            .unwrap()
+            .get_str("title")
+            .unwrap();
+        assert_eq!(title, "manager")
     }
 
     #[test]
     fn insert_map() {
-        let mut collab = Collaborator::new("1".to_string());
+        let mut collab = Collab::new("1".to_string());
         let c = collab.attrs.observe(|txn, event| {
             event.target().iter(txn).for_each(|(a, b)| {
                 println!("{}: {}", a, b);

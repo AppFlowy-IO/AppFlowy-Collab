@@ -1,4 +1,4 @@
-use crate::collaborator::Collaborator;
+use crate::collab::Collab;
 use lib0::any::Any;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
@@ -12,7 +12,7 @@ pub fn collaborate_json_object(
     object: &JsonValue,
     parent: Option<MapRef>,
     txn: &mut TransactionMut,
-    collab: &Collaborator,
+    collab: &Collab,
 ) {
     let map = match parent {
         None => collab.insert_map_with_transaction(id, txn),

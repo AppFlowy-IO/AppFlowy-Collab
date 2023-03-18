@@ -1,4 +1,5 @@
-mod collaborator;
+mod collab;
+mod entities;
 mod error;
 mod util;
 
