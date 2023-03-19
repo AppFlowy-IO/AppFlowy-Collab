@@ -8,8 +8,7 @@ impl Serialize for Collab {
         S: Serializer,
     {
         let mut map = serializer.serialize_map(None)?;
-        let txn = self.transact();
-        map.serialize_entry("attributes", &self.to_json(&txn))?;
+        map.serialize_entry("attributes", &self.to_json())?;
         map.end()
     }
 }

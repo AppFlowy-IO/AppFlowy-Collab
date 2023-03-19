@@ -5,8 +5,10 @@ use bytes::Bytes;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::{Display, Formatter};
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::vec::IntoIter;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
@@ -58,7 +60,12 @@ impl Collab {
         })
     }
 
-    pub fn insert_json_with_path<T: Serialize>(&mut self, path: Vec<String>, id: &str, object: T) {
+    pub fn insert_json_attr_with_path<T: Serialize>(
+        &mut self,
+        path: Vec<String>,
+        id: &str,
+        object: T,
+    ) {
         let map = if path.is_empty() {
             None
         } else {
@@ -72,15 +79,16 @@ impl Collab {
         });
     }
 
-    pub fn get_json_with_path<T: DeserializeOwned>(
+    pub fn get_json_attr_with_path<T: DeserializeOwned>(
         &self,
-        paths: Vec<String>,
+        path: impl Into<Path>,
     ) -> Option<(T, MapModifier)> {
-        if paths.is_empty() {
+        let path = path.into();
+        if path.is_empty() {
             return None;
         }
         let txn = self.transact();
-        let map = self.get_map_with_txn(&txn, paths)?;
+        let map = self.get_map_with_txn(&txn, path)?;
         drop(txn);
 
         let json_str = map.to_json();
@@ -88,12 +96,17 @@ impl Collab {
         Some((object, map))
     }
 
-    pub fn get_map_with_path(&self, path: Vec<String>) -> Option<MapModifier> {
+    pub fn get_map_with_path<P: Into<Path>>(&self, path: P) -> Option<MapModifier> {
         let txn = self.doc.transact();
         self.get_map_with_txn(&txn, path)
     }
 
-    pub fn get_map_with_txn(&self, txn: &Transaction, path: Vec<String>) -> Option<MapModifier> {
+    pub fn get_map_with_txn<P: Into<Path>>(
+        &self,
+        txn: &Transaction,
+        path: P,
+    ) -> Option<MapModifier> {
+        let path = path.into();
         if path.is_empty() {
             return None;
         }
@@ -115,19 +128,13 @@ impl Collab {
         self.attributes.insert(txn, id, map)
     }
 
-    pub fn get_str(&self, key: &str) -> Option<String> {
-        let txn = self.doc.transact();
-        self.attributes
-            .get(&txn, key)
-            .map(|val| val.to_string(&txn))
-    }
-
-    pub fn remove(&mut self, key: &str) -> Option<Value> {
+    pub fn remove_attr(&mut self, key: &str) -> Option<Value> {
         let mut txn = self.doc.transact_mut();
         self.attributes.remove(&mut txn, key)
     }
 
-    pub fn remove_with_path(&mut self, path: Vec<String>) -> Option<Value> {
+    pub fn remove_attr_with_path<P: Into<Path>>(&mut self, path: P) -> Option<Value> {
+        let path = path.into();
         if path.is_empty() {
             return None;
         }
@@ -156,8 +163,9 @@ impl Collab {
         }
     }
 
-    pub fn to_json(&self, txn: &Transaction) -> lib0::any::Any {
-        self.attributes.to_json(txn)
+    pub fn to_json(&self) -> lib0::any::Any {
+        let txn = self.transact();
+        self.attributes.to_json(&txn)
     }
 
     pub fn transact(&self) -> Transaction {
@@ -242,5 +250,46 @@ impl CollabTransact {
             .for_each(|plugin| plugin.did_receive_new_update(update.clone()));
 
         ret
+    }
+}
+
+pub struct Path(Vec<String>);
+
+impl IntoIterator for Path {
+    type Item = String;
+    type IntoIter = IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl From<Vec<&str>> for Path {
+    fn from(values: Vec<&str>) -> Self {
+        let values = values
+            .into_iter()
+            .map(|value| value.to_string())
+            .collect::<Vec<String>>();
+        Self(values)
+    }
+}
+
+impl From<Vec<String>> for Path {
+    fn from(values: Vec<String>) -> Self {
+        Self(values)
+    }
+}
+
+impl Deref for Path {
+    type Target = Vec<String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Path {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }

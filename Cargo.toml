@@ -19,3 +19,4 @@ tracing = { version = "0.1.37" }
 
 [dev-dependencies]
 appflowy-collab = { path = "."}
+indexmap = {version = "1.9.2", features = ["serde"]}

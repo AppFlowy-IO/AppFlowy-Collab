@@ -6,9 +6,9 @@ use yrs::updates::decoder::Decode;
 use yrs::{ReadTxn, StateVector, TransactionMut, Update};
 
 #[derive(Debug, Default, Clone)]
-pub struct CollabStateHistory(Arc<RwLock<Vec<Bytes>>>);
+pub struct CollabHistoryPlugin(Arc<RwLock<Vec<Bytes>>>);
 
-impl CollabStateHistory {
+impl CollabHistoryPlugin {
     pub fn new() -> Self {
         Self::default()
     }
@@ -22,7 +22,7 @@ impl CollabStateHistory {
     }
 }
 
-impl CollabPlugin for CollabStateHistory {
+impl CollabPlugin for CollabHistoryPlugin {
     fn did_receive_new_update(&self, update: Bytes) {
         self.0.write().push(update);
     }

@@ -1,3 +1,4 @@
+use crate::helper::{Person, Position};
 use appflowy_collab::collab::Collab;
 use serde::{Deserialize, Serialize};
 use yrs::{Map, Observable};
@@ -12,8 +13,9 @@ fn insert_text() {
     });
 
     collab.insert_attr("text", "hello world");
-    let value = collab.get_str("text");
-    assert_eq!(value.unwrap(), "hello world".to_string());
+    let value = collab.get_attr("text").unwrap();
+    let s = value.to_string(&collab.transact());
+    assert_eq!(s, "hello world".to_string());
 }
 
 #[test]
@@ -26,17 +28,17 @@ fn insert_json_attrs() {
             level: 3,
         },
     };
-    collab.insert_json_with_path(vec![], "person", object);
+    collab.insert_json_attr_with_path(vec![], "person", object);
     println!("{}", collab);
 
     let (person, _map) = collab
-        .get_json_with_path::<Person>(vec!["person".to_string()])
+        .get_json_attr_with_path::<Person>(vec!["person".to_string()])
         .unwrap();
 
     println!("{:?}", person);
 
     let (pos, _map) = collab
-        .get_json_with_path::<Position>(vec!["person".to_string(), "position".to_string()])
+        .get_json_attr_with_path::<Position>(vec!["person".to_string(), "position".to_string()])
         .unwrap();
     println!("{:?}", pos);
 }
@@ -51,9 +53,9 @@ fn mut_json_attrs() {
             level: 3,
         },
     };
-    collab.insert_json_with_path(vec![], "person", object);
+    collab.insert_json_attr_with_path(vec![], "person", object);
     collab
-        .get_json_with_path::<Position>(vec!["person".to_string(), "position".to_string()])
+        .get_json_attr_with_path::<Position>(vec!["person".to_string(), "position".to_string()])
         .unwrap()
         .1
         .insert("title", "manager");
@@ -76,9 +78,9 @@ fn observer_attr_mut() {
             level: 3,
         },
     };
-    collab.insert_json_with_path(vec![], "person", object);
+    collab.insert_json_attr_with_path(vec![], "person", object);
     let _sub = collab
-        .get_json_with_path::<Position>(vec!["person".to_string(), "position".to_string()])
+        .get_json_attr_with_path::<Position>(vec!["person".to_string(), "position".to_string()])
         .unwrap()
         .1
         .observe(|txn, event| {
@@ -97,20 +99,6 @@ fn observer_attr_mut() {
 #[test]
 fn remove_value() {
     let mut collab = Collab::new("1".to_string(), 1);
-    collab.insert_attr("today", "Monday");
-
-    let map = collab.get_str("today");
-    assert!(map.is_some());
-
-    collab.remove_with_path(vec!["today".to_string()]);
-
-    let map = collab.get_str("today");
-    assert!(map.is_none());
-}
-
-#[test]
-fn remove_value2() {
-    let mut collab = Collab::new("1".to_string(), 1);
     let object = Person {
         name: "nathan".to_string(),
         position: Position {
@@ -118,24 +106,12 @@ fn remove_value2() {
             level: 3,
         },
     };
-    collab.insert_json_with_path(vec![], "person", object);
+    collab.insert_json_attr_with_path(vec![], "person", object);
     let map = collab.get_map_with_path(vec!["person".to_string(), "position".to_string()]);
     assert!(map.is_some());
 
-    collab.remove_with_path(vec!["person".to_string(), "position".to_string()]);
+    collab.remove_attr_with_path(vec!["person".to_string(), "position".to_string()]);
 
     let map = collab.get_map_with_path(vec!["person".to_string(), "position".to_string()]);
     assert!(map.is_none());
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Person {
-    name: String,
-    position: Position,
-}
-
-#[derive(Default, Debug, Serialize, Deserialize)]
-struct Position {
-    title: String,
-    level: u8,
 }

@@ -1,5 +1,6 @@
+pub mod disk;
 pub mod history;
-pub mod persistence;
+pub mod ws;
 
 use bytes::Bytes;
 
