@@ -1,7 +1,6 @@
 use crate::collab::Collab;
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
-use yrs::Transact;
 
 impl Serialize for Collab {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

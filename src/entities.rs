@@ -1,17 +1,20 @@
-use crate::collab::Collab;
+use crate::collab::CollabTransact;
 use std::ops::{Deref, DerefMut};
 use yrs::block::Prelim;
 use yrs::types::ToJson;
-use yrs::{Doc, Map, MapRef, Transact};
+use yrs::{Map, MapRef};
 
 pub struct MapModifier {
-    doc: Doc,
     inner: MapRef,
+    collab_txn: CollabTransact,
 }
 
 impl MapModifier {
-    pub fn new(map: MapRef, doc: Doc) -> Self {
-        Self { doc, inner: map }
+    pub fn new(collab_txn: CollabTransact, map: MapRef) -> Self {
+        Self {
+            collab_txn,
+            inner: map,
+        }
     }
 
     pub fn into_inner(self) -> MapRef {
@@ -19,18 +22,18 @@ impl MapModifier {
     }
 
     pub fn insert<V: Prelim>(&mut self, key: &str, value: V) {
-        let mut txn = self.doc.transact_mut();
-        self.inner.insert(&mut txn, key, value);
-        drop(txn);
+        self.collab_txn.with_transact_mut(|txn| {
+            self.inner.insert(txn, key, value);
+        })
     }
 
     pub fn get_str(&self, key: &str) -> Option<String> {
-        let txn = self.doc.transact();
-        self.inner.get(&txn, &key).map(|val| val.to_string(&txn))
+        let txn = self.collab_txn.transact();
+        self.inner.get(&txn, key).map(|val| val.to_string(&txn))
     }
 
     pub fn to_json(&self) -> String {
-        let txn = self.doc.transact();
+        let txn = self.collab_txn.transact();
         let value = self.inner.to_json(&txn);
         let mut json_str = String::new();
         value.to_json(&mut json_str);

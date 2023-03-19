@@ -1,13 +1,10 @@
 use crate::collab::Collab;
 use lib0::any::Any;
-use serde::Serialize;
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
-use std::fmt::{Formatter, Write};
-use yrs::types::{ToJson, Value as YrsValue, Value};
 use yrs::{Map, MapPrelim, MapRef, Transact, Transaction, TransactionMut, WriteTxn};
 
-pub fn collaborate_json_object(
+pub(crate) fn insert_value_to_parent(
     id: &str,
     object: &JsonValue,
     parent: Option<MapRef>,
@@ -31,7 +28,7 @@ pub fn collaborate_json_object(
     };
     if object.is_object() {
         object.as_object().unwrap().into_iter().for_each(|(k, v)| {
-            collaborate_json_object(k, v, Some(map.clone()), txn, collab);
+            insert_value_to_parent(k, v, Some(map.clone()), txn, collab);
         });
     } else {
         map.insert(txn, id, json_value_to_any(object.clone()));
@@ -65,40 +62,5 @@ fn json_value_to_any(json_value: JsonValue) -> Any {
             .map(|(k, v)| (k, json_value_to_any(v)))
             .collect::<HashMap<String, Any>>()
             .into(),
-    }
-}
-
-pub fn print_map<'a>(map: MapRef, txn: &Transaction, f: &mut Formatter<'a>) -> std::fmt::Result {
-    let iter = map.iter(txn);
-    for (key, value) in iter {
-        match value {
-            Value::Any(value) => {
-                f.write_fmt(format_args!("{}:{}\n", key, value))?;
-            }
-            Value::YText(_) => {}
-            Value::YArray(_) => {}
-            Value::YMap(map) => {
-                f.write_fmt(format_args!("{} ", key))?;
-                print_map(map, txn, f)?;
-            }
-            Value::YXmlElement(_) => {}
-            Value::YXmlFragment(_) => {}
-            Value::YXmlText(_) => {}
-            Value::YDoc(_) => {}
-        }
-    }
-    Ok(())
-}
-
-pub fn print_value(value: YrsValue) {
-    match value {
-        Value::Any(_) => {}
-        Value::YText(_) => {}
-        Value::YArray(_) => {}
-        Value::YMap(map) => {}
-        Value::YXmlElement(_) => {}
-        Value::YXmlFragment(_) => {}
-        Value::YXmlText(_) => {}
-        Value::YDoc(_) => {}
     }
 }
