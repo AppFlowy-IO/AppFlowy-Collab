@@ -1,7 +1,4 @@
-use crate::helper::{
-    make_collab_pair, Document, DocumentMapRef, Owner, OwnerMapRef, TaskInfoMapRef,
-};
-
+use crate::helper::{make_collab_pair, DocumentMapRef, Owner, OwnerMapRef, TaskInfoMapRef};
 #[test]
 fn derive_string_test() {
     let (local, _remote, update_cache) = make_collab_pair();
@@ -37,7 +34,7 @@ fn derive_hash_map_test() {
     assert_eq!(attributes.get("2").unwrap(), "task 2");
 
     local.with_transact_mut(|txn| {
-        map_ref.update_attributes_with_kv(txn, "1", "Hello AppFlowy".to_string());
+        map_ref.update_attributes_key_value(txn, "1", "Hello AppFlowy".to_string());
     });
 
     assert_eq!(update_cache.num_of_updates(), 1);
@@ -56,7 +53,7 @@ fn derive_hash_map_test() {
 
 #[test]
 fn derive_hash_map_inner_json_value_test() {
-    let (local, _remote, update_cache) = make_collab_pair();
+    let (local, _remote, _update_cache) = make_collab_pair();
 
     let mut map_ref = local
         .get_map_with_path::<TaskInfoMapRef>(vec!["document", "tasks", "1"])

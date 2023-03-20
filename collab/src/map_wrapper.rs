@@ -1,10 +1,10 @@
 use crate::collab::CollabTransact;
-use crate::util::{json_value_to_lib0_any, lib0_any_to_json_value};
+use crate::insert_json_value_to_map_ref;
+use crate::util::lib0_any_to_json_value;
 use lib0::any::Any;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::insert_json_value_to_map_ref;
 use std::ops::{Deref, DerefMut};
 use yrs::block::Prelim;
 use yrs::types::{ToJson, Value};
@@ -84,7 +84,7 @@ impl MapRefWrapper {
     ) -> Option<T> {
         let map_ref = self.get_map_with_txn(txn, key)?;
         let json_value = lib0_any_to_json_value(map_ref.to_json(txn)).ok()?;
-        return serde_json::from_value::<T>(json_value).ok();
+        serde_json::from_value::<T>(json_value).ok()
     }
 
     pub fn get_str(&self, key: &str) -> Option<String> {

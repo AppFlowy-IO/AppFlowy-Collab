@@ -5,7 +5,7 @@
 use crate::internal::ctxt::ASTResult;
 use proc_macro2::Ident;
 use syn::Meta::NameValue;
-use syn::{self, punctuated::Punctuated, Expr, Fields, Lit, Path, Token};
+use syn::{self, punctuated::Punctuated, Fields, Path, Token};
 
 pub struct ASTContainer<'a> {
     /// The struct or enum name (without generics).

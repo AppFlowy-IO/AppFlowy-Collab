@@ -3,8 +3,6 @@ use anyhow::Result;
 use bytes::Bytes;
 use parking_lot::RwLock;
 
-use yrs::Update;
-
 pub trait WebSocketConnect {
     fn send(msg: Bytes) -> Result<()>;
 }
@@ -18,11 +16,6 @@ impl CollabWebSocketPlugin {
         Self {
             updates: RwLock::new(vec![]),
         }
-    }
-
-    fn get_updates(&self) -> Result<Vec<Update>, anyhow::Error> {
-        // we can use [merge_updates_v1] to merge these updates
-        Ok(vec![])
     }
 }
 

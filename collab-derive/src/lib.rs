@@ -13,8 +13,8 @@ use syn::DeriveInput;
 
 #[proc_macro_derive(Collab, attributes(collab, collab_key))]
 pub fn derive_collab(input: TokenStream) -> TokenStream {
-    let mut input = parse_macro_input!(input as DeriveInput);
-    collab::expand_derive(&mut input)
+    let input = parse_macro_input!(input as DeriveInput);
+    collab::expand_derive(&input)
         .unwrap_or_else(to_compile_errors)
         .into()
 }

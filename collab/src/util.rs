@@ -1,9 +1,7 @@
-use crate::collab::Collab;
 use anyhow::Result;
 use lib0::any::Any;
 use serde_json::Value as JsonValue;
-
-use yrs::{Map, MapPrelim, MapRef, Transact, Transaction, TransactionMut, WriteTxn};
+use yrs::{Map, MapPrelim, MapRef, TransactionMut};
 
 pub fn insert_json_value_to_map_ref(
     key: &str,

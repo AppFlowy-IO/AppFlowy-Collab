@@ -1,8 +1,7 @@
 use crate::internal::{ASTContainer, ASTResult};
 use proc_macro2::{Ident, TokenStream};
-use std::process::id;
 
-use syn::{AngleBracketedGenericArguments, ItemType, PathSegment, Type};
+use syn::{AngleBracketedGenericArguments, PathSegment, Type};
 
 pub fn make_yrs_token_steam(ast_result: &ASTResult, ast: &ASTContainer) -> Option<TokenStream> {
     let map_token_stream = token_stream_for_yrs_map(ast_result, ast);
@@ -102,7 +101,7 @@ fn into_inner_field_token_stream(
         IdentType::OptionType {
             ident_type,
             inner_ty,
-        } => into_inner_field_token_stream(ast_result, member, inner_ty, &*ident_type, true),
+        } => into_inner_field_token_stream(ast_result, member, inner_ty, ident_type, true),
     }
 }
 
@@ -148,7 +147,7 @@ fn setter_getter_token_steam_for_item_type(
             }
         }),
         IdentType::HashMapType { value_type } => {
-            let update = format_ident!("update_{}_with_kv", ident.to_string());
+            let update = format_ident!("update_{}_key_value", ident.to_string());
             Some(quote! {
                 pub fn #update(&mut self, txn: &mut yrs::TransactionMut, key: &str, value: #value_type) {
                     if let Some(map_ref) = self.map_ref.get_map_with_txn(txn, #key) {
@@ -178,12 +177,7 @@ fn setter_getter_token_steam_for_item_type(
             ident_type,
             inner_ty,
         } => setter_getter_token_steam_for_item_type(
-            key,
-            setter,
-            getter,
-            inner_ty,
-            ident,
-            &*ident_type,
+            key, setter, getter, inner_ty, ident, ident_type,
         ),
     }
 }
