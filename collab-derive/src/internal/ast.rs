@@ -92,7 +92,7 @@ pub struct ASTField<'a> {
 }
 
 impl<'a> ASTField<'a> {
-    pub fn new(ctxt: &ASTResult, field: &'a syn::Field, index: usize) -> Result<Self, String> {
+    pub fn new(_ctxt: &ASTResult, field: &'a syn::Field, index: usize) -> Result<Self, String> {
         Ok(ASTField {
             member: match &field.ident {
                 Some(ident) => syn::Member::Named(ident.clone()),
@@ -133,7 +133,7 @@ pub fn struct_from_ast<'a>(cx: &ASTResult, fields: &'a Fields) -> (ASTStyle, Vec
 
 fn enum_from_ast<'a>(
     cx: &ASTResult,
-    ident: &Ident,
+    _ident: &Ident,
     variants: &'a Punctuated<syn::Variant, Token![,]>,
 ) -> Vec<ASTEnumVariant<'a>> {
     variants
