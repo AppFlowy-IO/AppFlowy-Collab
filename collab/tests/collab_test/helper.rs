@@ -38,14 +38,22 @@ pub struct Document {
     name: String,
     created_at: i64,
     attributes: HashMap<String, String>,
+    tasks: HashMap<String, TaskInfo>,
     owner: Owner,
 }
 
-#[derive(Collab, Serialize, Deserialize)]
+#[derive(Collab, Default, Serialize, Deserialize)]
 pub struct Owner {
     pub id: String,
     pub name: String,
     pub email: String,
+    pub location: Option<String>,
+}
+
+#[derive(Collab, Default, Serialize, Deserialize)]
+pub struct TaskInfo {
+    pub title: String,
+    pub repeated: bool,
 }
 
 fn test_document() -> Document {
@@ -53,17 +61,35 @@ fn test_document() -> Document {
         id: "owner_id".to_string(),
         name: "nathan".to_string(),
         email: "nathan@appflowy.io".to_string(),
+        location: None,
     };
 
     let mut attributes = HashMap::new();
     attributes.insert("1".to_string(), "task 1".to_string());
     attributes.insert("2".to_string(), "task 2".to_string());
 
+    let mut tasks = HashMap::new();
+    tasks.insert(
+        "1".to_string(),
+        TaskInfo {
+            title: "Task 1".to_string(),
+            repeated: true,
+        },
+    );
+    tasks.insert(
+        "2".to_string(),
+        TaskInfo {
+            title: "Task 2".to_string(),
+            repeated: false,
+        },
+    );
+
     Document {
         doc_id: "doc_id".to_string(),
         name: "Hello world".to_string(),
         created_at: 0,
         attributes,
+        tasks,
         owner,
     }
 }
