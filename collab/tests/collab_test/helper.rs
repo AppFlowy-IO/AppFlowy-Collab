@@ -2,6 +2,7 @@ use collab::collab::{Collab, CollabBuilder};
 use collab::plugin::disk::CollabStateCachePlugin;
 use collab_derive::Collab;
 
+use lib0::any::Any;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use yrs::Map;
@@ -50,10 +51,17 @@ pub struct Owner {
     pub location: Option<String>,
 }
 
-#[derive(Collab, Default, Serialize, Deserialize)]
+#[derive(Debug, Collab, Default, Serialize, Deserialize)]
 pub struct TaskInfo {
     pub title: String,
     pub repeated: bool,
+}
+
+impl From<TaskInfo> for Any {
+    fn from(task_info: TaskInfo) -> Self {
+        let a = serde_json::to_value(&task_info).unwrap();
+        serde_json::from_value(a).unwrap()
+    }
 }
 
 fn test_document() -> Document {
@@ -91,5 +99,41 @@ fn test_document() -> Document {
         attributes,
         tasks,
         owner,
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Document2 {
+    doc_id: String,
+    name: String,
+    tasks: HashMap<String, TaskInfo>,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::helper::{Document2, TaskInfo};
+
+    #[test]
+    fn test() {
+        let mut doc = Document2 {
+            doc_id: "".to_string(),
+            name: "".to_string(),
+            tasks: Default::default(),
+        };
+
+        doc.tasks.insert(
+            "1".to_string(),
+            TaskInfo {
+                title: "Task 1".to_string(),
+                repeated: false,
+            },
+        );
+        let json = serde_json::to_value(&doc).unwrap();
+        let tasks = &json["tasks"]["1"];
+        println!("{:?}", tasks);
+
+        let a = serde_json::from_value::<Document2>(json).unwrap();
+
+        println!("{:?}", a);
     }
 }

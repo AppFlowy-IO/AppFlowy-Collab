@@ -59,8 +59,18 @@ fn derive_hash_map_inner_json_value_test() {
     let (local, _remote, update_cache) = make_collab_pair();
 
     let mut map_ref = local
-        .get_map_with_path::<TaskInfoMapRef>(vec!["document", "tasks"])
+        .get_map_with_path::<TaskInfoMapRef>(vec!["document", "tasks", "1"])
         .unwrap();
+
+    let title = map_ref.get_title(&local.transact());
+    assert_eq!(title.unwrap(), "Task 1".to_string());
+
+    local.with_transact_mut(|txn| {
+        map_ref.set_title(txn, "New Task 1".to_string());
+    });
+
+    let title = map_ref.get_title(&local.transact());
+    assert_eq!(title.unwrap(), "New Task 1".to_string());
 }
 
 #[test]
