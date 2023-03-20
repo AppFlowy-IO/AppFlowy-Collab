@@ -2,6 +2,10 @@
 <module type="CPP_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/collab-derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/collab-derive/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/collab/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/collab/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
