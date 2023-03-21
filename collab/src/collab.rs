@@ -32,7 +32,6 @@ impl Collab {
     pub fn new(id: String, uid: i64) -> Collab {
         let doc = Doc::with_client_id(uid as u64);
         let attributes = doc.get_or_insert_map("attrs");
-
         Self {
             id,
             doc,
