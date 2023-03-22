@@ -23,7 +23,6 @@ type SubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 type MapSubscription = Subscription<SubscriptionCallback>;
 
 pub struct Collab {
-    id: String,
     doc: Doc,
     attributes: MapRef,
     plugins: Plugins,
@@ -31,7 +30,7 @@ pub struct Collab {
 }
 
 impl Collab {
-    pub fn new(id: String, uid: i64) -> Collab {
+    pub fn new(uid: i64) -> Collab {
         let doc = Doc::with_client_id(uid as u64);
         let attributes = doc.get_or_insert_map("attrs");
         let plugins = Plugins::new();
@@ -47,7 +46,6 @@ impl Collab {
             .unwrap();
 
         Self {
-            id,
             doc,
             attributes,
             plugins,
@@ -204,14 +202,14 @@ pub struct CollabBuilder {
 }
 
 impl CollabBuilder {
-    pub fn new(id: String, uid: i64) -> Self {
+    pub fn new(uid: i64) -> Self {
         Self {
-            collab: Collab::new(id, uid),
+            collab: Collab::new(uid),
         }
     }
 
-    pub fn from_updates(id: String, uid: i64, updates: Vec<Update>) -> Self {
-        let builder = CollabBuilder::new(id, uid);
+    pub fn from_updates(uid: i64, updates: Vec<Update>) -> Self {
+        let builder = CollabBuilder::new(uid);
         let mut txn = builder.collab.doc.transact_mut();
         for update in updates {
             txn.apply_update(update);

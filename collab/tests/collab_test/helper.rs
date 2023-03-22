@@ -24,13 +24,13 @@ pub struct Position {
 
 pub fn make_collab_pair() -> (Collab, Collab, CollabStateCachePlugin) {
     let update_cache = CollabStateCachePlugin::new();
-    let mut local_collab = CollabBuilder::new("1".to_string(), 1)
+    let mut local_collab = CollabBuilder::new(1)
         .with_plugin(update_cache.clone())
         .build();
     // Insert document
     local_collab.insert_json_with_path(vec![], "document", test_document());
     let updates = update_cache.get_updates();
-    let remote_collab = CollabBuilder::from_updates("1".to_string(), 1, updates.unwrap()).build();
+    let remote_collab = CollabBuilder::from_updates(1, updates.unwrap()).build();
 
     (local_collab, remote_collab, update_cache)
 }
