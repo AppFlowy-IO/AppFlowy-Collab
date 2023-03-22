@@ -1,5 +1,5 @@
+use crate::helper::CollabStateCachePlugin;
 use collab::collab::CollabBuilder;
-use collab::plugin::disk::CollabStateCachePlugin;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use yrs::encode_state_vector_from_update_v1;

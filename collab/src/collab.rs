@@ -1,5 +1,5 @@
+use crate::collab_plugin::CollabPlugin;
 use crate::map_wrapper::{CustomMapRef, MapRefWrapper};
-use crate::plugin::CollabPlugin;
 use crate::util::insert_json_value_to_map_ref;
 use bytes::Bytes;
 use serde::de::DeserializeOwned;
@@ -12,6 +12,7 @@ use std::vec::IntoIter;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
+use yrs::updates::encoder::Encode;
 use yrs::{
     Doc, Map, MapPrelim, MapRef, Observable, ReadTxn, Subscription, Transact, Transaction,
     TransactionMut, Update,
@@ -115,7 +116,7 @@ impl Collab {
         map_ref.map(|map_ref| {
             MapRefWrapper::new(
                 map_ref,
-                CollabTransact::new(self.plugins.clone(), self.doc.clone()),
+                CollabContext::new(self.plugins.clone(), self.doc.clone()),
             )
         })
     }
@@ -173,7 +174,7 @@ impl Collab {
     where
         F: FnOnce(&mut TransactionMut) -> T,
     {
-        let transact = CollabTransact::new(self.plugins.clone(), self.doc.clone());
+        let transact = CollabContext::new(self.plugins.clone(), self.doc.clone());
         transact.with_transact_mut(f)
     }
 }
@@ -219,12 +220,12 @@ impl CollabBuilder {
     }
 }
 
-pub struct CollabTransact {
-    plugins: Vec<Rc<dyn CollabPlugin>>,
+pub struct CollabContext {
     doc: Doc,
+    plugins: Vec<Rc<dyn CollabPlugin>>,
 }
 
-impl CollabTransact {
+impl CollabContext {
     pub fn new(plugins: Vec<Rc<dyn CollabPlugin>>, doc: Doc) -> Self {
         Self { plugins, doc }
     }
@@ -240,12 +241,10 @@ impl CollabTransact {
         let mut txn = self.doc.transact_mut();
         let state = txn.state_vector();
         let ret = f(&mut txn);
-
-        let update = Bytes::from(txn.encode_state_as_update_v1(&state));
+        let sv = state.encode_v1();
         self.plugins
             .iter()
-            .for_each(|plugin| plugin.did_receive_new_update(update.clone()));
-
+            .for_each(|plugin| plugin.did_receive_sv(&self.doc, &sv));
         ret
     }
 }

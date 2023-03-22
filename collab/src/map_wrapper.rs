@@ -1,4 +1,4 @@
-use crate::collab::CollabTransact;
+use crate::collab::CollabContext;
 use crate::insert_json_value_to_map_ref;
 use crate::util::lib0_any_to_json_value;
 use lib0::any::Any;
@@ -22,11 +22,11 @@ impl CustomMapRef for MapRefWrapper {
 
 pub struct MapRefWrapper {
     map_ref: MapRef,
-    collab_txn: CollabTransact,
+    collab_txn: CollabContext,
 }
 
 impl MapRefWrapper {
-    pub fn new(map_ref: MapRef, collab_txn: CollabTransact) -> Self {
+    pub fn new(map_ref: MapRef, collab_txn: CollabContext) -> Self {
         Self {
             collab_txn,
             map_ref,

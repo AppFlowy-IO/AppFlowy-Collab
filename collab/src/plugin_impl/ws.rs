@@ -1,4 +1,4 @@
-use crate::plugin::CollabPlugin;
+use crate::collab_plugin::CollabPlugin;
 use anyhow::Result;
 use bytes::Bytes;
 use parking_lot::RwLock;
@@ -19,8 +19,4 @@ impl CollabWebSocketPlugin {
     }
 }
 
-impl CollabPlugin for CollabWebSocketPlugin {
-    fn did_receive_new_update(&self, update: Bytes) {
-        self.updates.write().push(update);
-    }
-}
+impl CollabPlugin for CollabWebSocketPlugin {}

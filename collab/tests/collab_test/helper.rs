@@ -1,11 +1,14 @@
+use bytes::Bytes;
 use collab::collab::{Collab, CollabBuilder};
-use collab::plugin::disk::CollabStateCachePlugin;
+use collab::collab_plugin::CollabPlugin;
 use collab_derive::Collab;
-
 use lib0::any::Any;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use yrs::Map;
+use std::sync::Arc;
+use yrs::updates::decoder::Decode;
+use yrs::{merge_updates_v1, Doc, Map, ReadTxn, StateVector, Transact, Update};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Person {
@@ -31,6 +34,54 @@ pub fn make_collab_pair() -> (Collab, Collab, CollabStateCachePlugin) {
             .build();
 
     (local_collab, remote_collab, update_cache)
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct CollabStateCachePlugin(Arc<RwLock<Vec<Bytes>>>);
+
+impl CollabStateCachePlugin {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn num_of_updates(&self) -> usize {
+        return self.0.read().len();
+    }
+
+    pub fn get_updates(&self) -> Result<Vec<Update>, anyhow::Error> {
+        let mut updates = vec![];
+        for encoded_data in self.0.read().iter() {
+            updates.push(Update::decode_v1(encoded_data)?);
+        }
+        Ok(updates)
+    }
+
+    pub fn get_update(&self) -> Result<Update, anyhow::Error> {
+        let read_guard = self.0.read();
+        let updates = read_guard
+            .iter()
+            .map(|update| update.as_ref())
+            .collect::<Vec<&[u8]>>();
+        let encoded_data = merge_updates_v1(&updates)?;
+        let update = Update::decode_v1(&encoded_data)?;
+        Ok(update)
+    }
+
+    pub fn clear(&self) {
+        self.0.write().clear()
+    }
+}
+
+impl CollabPlugin for CollabStateCachePlugin {
+    fn did_receive_sv(&self, doc: &Doc, sv: &[u8]) {
+        let mut write_guard = self.0.write();
+        if write_guard.is_empty() {
+            let txn = doc.transact();
+            let doc_state = txn.encode_state_as_update_v1(&StateVector::default());
+            write_guard.push(Bytes::from(doc_state));
+        }
+        write_guard.push(Bytes::from(sv.to_vec()));
+    }
 }
 
 #[derive(Collab, Serialize, Deserialize)]
