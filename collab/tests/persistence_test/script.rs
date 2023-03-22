@@ -5,7 +5,6 @@ use lib0::any::Any;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::Instant;
 use tempfile::TempDir;
 use yrs::Map;
 
@@ -44,6 +43,7 @@ pub enum Script {
 pub struct CollabPersistenceTest {
     collabs: HashMap<String, Collab>,
     disk_plugin: CollabDiskPlugin,
+    #[allow(dead_code)]
     cleaner: Cleaner,
     pub db_path: PathBuf,
 }

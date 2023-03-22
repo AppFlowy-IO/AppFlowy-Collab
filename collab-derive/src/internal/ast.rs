@@ -56,19 +56,6 @@ impl<'a> ASTData<'a> {
             ASTData::Struct(_, fields) => Box::new(fields.iter()),
         }
     }
-
-    pub fn all_idents(&'a self) -> Box<dyn Iterator<Item = &'a syn::Ident> + 'a> {
-        match self {
-            ASTData::Enum(variants) => Box::new(variants.iter().map(|v| &v.ident)),
-            ASTData::Struct(_, fields) => {
-                let iter = fields.iter().flat_map(|f| match &f.member {
-                    syn::Member::Named(ident) => Some(ident),
-                    _ => None,
-                });
-                Box::new(iter)
-            }
-        }
-    }
 }
 
 /// A variant of an enum.
@@ -77,12 +64,6 @@ pub struct ASTEnumVariant<'a> {
     pub style: ASTStyle,
     pub fields: Vec<ASTField<'a>>,
     pub original: &'a syn::Variant,
-}
-
-impl<'a> ASTEnumVariant<'a> {
-    pub fn name(&self) -> String {
-        self.ident.to_string()
-    }
 }
 
 pub struct ASTField<'a> {
@@ -101,14 +82,6 @@ impl<'a> ASTField<'a> {
             ty: &field.ty,
             original: field,
         })
-    }
-
-    pub fn name(&self) -> Option<syn::Ident> {
-        if let syn::Member::Named(ident) = &self.member {
-            Some(ident.clone())
-        } else {
-            None
-        }
     }
 }
 

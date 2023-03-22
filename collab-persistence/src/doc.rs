@@ -4,7 +4,7 @@ use crate::keys::{
 };
 use crate::{CollabKV, PersistenceError};
 use sled::{IVec, Iter};
-use std::vec::IntoIter;
+
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{ReadTxn, StateVector, TransactionMut, Update};
@@ -47,7 +47,7 @@ impl<'a> YrsDoc<'a> {
 
             let update_start = make_update_key(did, 0);
             let update_end = make_update_key(did, u32::MAX);
-            let mut encoded_updates = self.db.batch_get(&update_start, &update_end)?;
+            let encoded_updates = self.db.batch_get(&update_start, &update_end)?;
             for encoded_update in encoded_updates {
                 let update = Update::decode_v1(encoded_update.as_ref())?;
                 txn.apply_update(update);
@@ -113,7 +113,7 @@ impl<'a> YrsDoc<'a> {
         if let Some(did) = self.get_did(name) {
             let start = make_update_key(did, 0);
             let end = make_update_key(did, u32::MAX);
-            let mut encoded_updates = self.db.batch_get(&start, &end)?;
+            let encoded_updates = self.db.batch_get(&start, &end)?;
             let mut updates = vec![];
             for encoded_update in encoded_updates {
                 updates.push(Update::decode_v1(encoded_update.as_ref())?);

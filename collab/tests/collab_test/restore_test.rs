@@ -1,7 +1,6 @@
 use crate::helper::CollabStateCachePlugin;
 use collab::core::collab::CollabBuilder;
 use std::collections::HashMap;
-use yrs::encode_state_vector_from_update_v1;
 
 #[test]
 fn restore_from_update() {

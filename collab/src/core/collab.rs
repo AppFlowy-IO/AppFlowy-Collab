@@ -1,7 +1,6 @@
 use crate::core::collab_plugin::CollabPlugin;
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::util::insert_json_value_to_map_ref;
-use bytes::Bytes;
 use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -13,10 +12,10 @@ use std::vec::IntoIter;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
-use yrs::updates::encoder::Encode;
+
 use yrs::{
-    Doc, Map, MapPrelim, MapRef, Observable, ReadTxn, Subscription, Transact, Transaction,
-    TransactionMut, Update, UpdateSubscription,
+    Doc, Map, MapPrelim, MapRef, Observable, Subscription, Transact, Transaction, TransactionMut,
+    Update, UpdateSubscription,
 };
 
 type SubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
@@ -24,9 +23,11 @@ type MapSubscription = Subscription<SubscriptionCallback>;
 
 pub struct Collab {
     doc: Doc,
+    #[allow(dead_code)]
     cid: String,
     attributes: MapRef,
     plugins: Plugins,
+    #[allow(dead_code)]
     subscription: UpdateSubscription,
 }
 
@@ -247,6 +248,7 @@ impl CollabBuilder {
 
 pub struct CollabContext {
     doc: Doc,
+    #[allow(dead_code)]
     plugins: Plugins,
 }
 

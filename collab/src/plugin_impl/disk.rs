@@ -1,10 +1,10 @@
 use crate::core::collab_plugin::CollabPlugin;
 use crate::error::CollabError;
-use bytes::Bytes;
+
 use collab_persistence::doc::YrsDoc;
-use collab_persistence::{CollabKV, PersistenceError};
+use collab_persistence::CollabKV;
 use std::path::Path;
-use yrs::{Doc, ReadTxn, Transaction, TransactionMut};
+use yrs::TransactionMut;
 
 #[derive(Clone)]
 pub struct CollabDiskPlugin {
@@ -31,7 +31,7 @@ impl CollabPlugin for CollabDiskPlugin {
         }
     }
 
-    fn did_receive_update(&self, cid: &str, txn: &TransactionMut, update: &[u8]) {
+    fn did_receive_update(&self, cid: &str, _txn: &TransactionMut, update: &[u8]) {
         self.db.doc().push_update(cid, update).unwrap();
     }
 }

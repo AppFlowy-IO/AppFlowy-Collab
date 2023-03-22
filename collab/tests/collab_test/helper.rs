@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use yrs::updates::decoder::Decode;
-use yrs::{merge_updates_v1, Doc, Map, ReadTxn, StateVector, Transact, TransactionMut, Update};
+use yrs::{merge_updates_v1, Map, ReadTxn, StateVector, TransactionMut, Update};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Person {
@@ -43,10 +43,6 @@ impl CollabStateCachePlugin {
         Self::default()
     }
 
-    pub fn num_of_updates(&self) -> usize {
-        return self.0.read().len();
-    }
-
     pub fn get_updates(&self) -> Result<Vec<Update>, anyhow::Error> {
         let mut updates = vec![];
         for encoded_data in self.0.read().iter() {
@@ -72,7 +68,7 @@ impl CollabStateCachePlugin {
 }
 
 impl CollabPlugin for CollabStateCachePlugin {
-    fn did_receive_update(&self, cid: &str, txn: &TransactionMut, update: &[u8]) {
+    fn did_receive_update(&self, _cid: &str, txn: &TransactionMut, update: &[u8]) {
         let mut write_guard = self.0.write();
         if write_guard.is_empty() {
             let doc_state = txn.encode_state_as_update_v1(&StateVector::default());
