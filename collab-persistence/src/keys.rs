@@ -23,11 +23,11 @@ pub const DOC_STATE_VEC: u8 = 1;
 /// Tag byte within [DOC_SPACE] used to identify document's update entries.
 pub const DOC_UPDATE: u8 = 2;
 
-pub type DID = u32;
+pub type DocID = u32;
 
-pub fn make_doc_id(doc_name: &[u8]) -> Key<20> {
+pub fn make_doc_id(name: &[u8]) -> Key<20> {
     let mut v: SmallVec<[u8; 20]> = smallvec![SPACE, DID_SPACE];
-    v.write_all(doc_name).unwrap();
+    v.write_all(name).unwrap();
     v.push(TERMINATOR);
     Key(v)
 }
@@ -36,32 +36,33 @@ pub fn doc_name_from_key(key: &[u8]) -> &[u8] {
     &key[2..(key.len() - 1)]
 }
 
-pub fn make_doc_state_key(doc_id: DID) -> Key<8> {
+pub fn make_doc_state_key(doc_id: DocID) -> Key<8> {
     let mut v: SmallVec<[u8; 8]> = smallvec![SPACE, DOC_SPACE];
     v.write_all(&doc_id.to_be_bytes()).unwrap();
     v.push(DOC_STATE);
     Key(v)
 }
 
-pub fn make_doc_start_key(doc_id: DID) -> Key<8> {
+// document related elements are stored within bounds [0,1,..did,0]..[0,1,..did,255]
+pub fn make_doc_start_key(doc_id: DocID) -> Key<8> {
     make_doc_state_key(doc_id)
 }
 
-pub fn make_doc_end_key(doc_id: DID) -> Key<8> {
+pub fn make_doc_end_key(doc_id: DocID) -> Key<8> {
     let mut v: SmallVec<[u8; 8]> = smallvec![SPACE, DOC_SPACE];
     v.write_all(&doc_id.to_be_bytes()).unwrap();
     v.push(TERMINATOR_HI_WATERMARK);
     Key(v)
 }
 
-pub fn make_state_vector_key(doc_id: DID) -> Key<8> {
+pub fn make_state_vector_key(doc_id: DocID) -> Key<8> {
     let mut v: SmallVec<[u8; 8]> = smallvec![SPACE, DOC_SPACE];
     v.write_all(&doc_id.to_be_bytes()).unwrap();
     v.push(DOC_STATE_VEC);
     Key(v)
 }
 
-pub fn make_update_key(doc_id: DID, clock: u32) -> Key<12> {
+pub fn make_update_key(doc_id: DocID, clock: u32) -> Key<12> {
     let mut v: SmallVec<[u8; 12]> = smallvec![SPACE, DOC_SPACE];
     v.write_all(&doc_id.to_be_bytes()).unwrap();
     v.push(DOC_UPDATE);

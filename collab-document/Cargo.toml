@@ -1,0 +1,11 @@
+[package]
+name = "collab-document"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+collab = { path = "../collab"}
+collab-derive = { path = "../collab-derive"}
+collab-persistence = { path = "../collab-persistence" }

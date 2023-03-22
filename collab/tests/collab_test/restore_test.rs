@@ -12,7 +12,7 @@ fn restore_from_update() {
     collab.insert("text", "hello world");
 
     let updates = update_cache.get_updates().unwrap();
-    let restored_collab = CollabBuilder::from_updates(1, "1".to_string(), updates).build();
+    let restored_collab = CollabBuilder::new(1, "1".to_string()).build_with_updates(updates);
     let value = restored_collab.get("text").unwrap();
     let s = value.to_string(&collab.transact());
     assert_eq!(s, "hello world");
@@ -32,7 +32,7 @@ fn restore_from_multiple_update() {
     collab.insert_json_with_path(vec![], "bullet", map);
 
     let updates = update_cache.get_updates().unwrap();
-    let restored_collab = CollabBuilder::from_updates(1, updates).build();
+    let restored_collab = CollabBuilder::new(1, "1".to_string()).build_with_updates(updates);
     assert_eq!(collab.to_json(), restored_collab.to_json());
 }
 
@@ -45,7 +45,7 @@ fn apply_same_update_multiple_time() {
     collab.insert("text", "hello world");
 
     let updates = update_cache.get_updates().unwrap();
-    let restored_collab = CollabBuilder::from_updates(1, updates).build();
+    let restored_collab = CollabBuilder::new(1, "1".to_string()).build_with_updates(updates);
 
     // It's ok to apply the updates that were already applied
     let updates = update_cache.get_updates().unwrap();

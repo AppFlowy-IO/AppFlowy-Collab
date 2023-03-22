@@ -7,7 +7,6 @@ pub struct Document {
 
 impl Document {
     pub fn new(uid: i64, id: String) -> Self {
-        let inner = Collab::new(uid, id);
-        Self { inner }
+        todo!()
     }
 }

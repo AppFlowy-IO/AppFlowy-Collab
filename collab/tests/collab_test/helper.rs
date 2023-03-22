@@ -30,7 +30,7 @@ pub fn make_collab_pair() -> (Collab, Collab, CollabStateCachePlugin) {
     // Insert document
     local_collab.insert_json_with_path(vec![], "document", test_document());
     let updates = update_cache.get_updates();
-    let remote_collab = CollabBuilder::from_updates(1, updates.unwrap()).build();
+    let remote_collab = CollabBuilder::new(1, "1").build_with_updates(updates.unwrap());
 
     (local_collab, remote_collab, update_cache)
 }

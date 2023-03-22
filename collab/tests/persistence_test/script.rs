@@ -10,76 +10,103 @@ use tempfile::TempDir;
 use yrs::Map;
 
 pub enum Script {
-    InsertText { key: String, value: Any },
-    GetText { key: String, expected: Option<Any> },
-    AssertNumOfUpdates { expected: usize },
-    AssertDiskUpdate,
+    CreateDocument {
+        id: String,
+    },
+    OpenDocument {
+        id: String,
+    },
+    CloseDocument {
+        id: String,
+    },
+    DeleteDocument {
+        id: String,
+    },
+    InsertText {
+        id: String,
+        key: String,
+        value: Any,
+    },
+    GetText {
+        id: String,
+        key: String,
+        expected: Option<Any>,
+    },
+    AssertNumOfUpdates {
+        id: String,
+        expected: usize,
+    },
+    AssertNumOfDocuments {
+        expected: usize,
+    },
 }
 
 pub struct CollabPersistenceTest {
-    collab: Collab,
+    collabs: HashMap<String, Collab>,
     disk_plugin: CollabDiskPlugin,
+    cleaner: Cleaner,
     pub db_path: PathBuf,
-    pub cid: String,
 }
 
 impl CollabPersistenceTest {
     pub fn new() -> Self {
         let tempdir = TempDir::new().unwrap();
         let path = tempdir.into_path();
-        // let cleaner = Cleaner::new(path.clone());
-        let cid = "1".to_string();
         let disk_plugin = CollabDiskPlugin::new(path.clone()).unwrap();
-        let collab = CollabBuilder::new(1, &cid)
-            .with_plugin(disk_plugin.clone())
-            .build();
+        let cleaner = Cleaner::new(path.clone());
         Self {
-            collab,
+            collabs: HashMap::default(),
             disk_plugin,
+            cleaner,
             db_path: path,
-            cid,
         }
     }
 
-    pub fn new_with_path(path: PathBuf, cid: String) -> Self {
-        let disk_plugin = CollabDiskPlugin::new(path.clone()).unwrap();
-        let collab = CollabBuilder::new(1, &cid)
-            .with_plugin(disk_plugin.clone())
-            .build();
-        Self {
-            collab,
-            disk_plugin,
-            db_path: path,
-            cid,
-        }
-    }
-
-    pub fn run_scripts(&self, scripts: Vec<Script>) {
+    pub fn run_scripts(&mut self, scripts: Vec<Script>) {
         for script in scripts {
             self.run_script(script);
         }
     }
 
-    pub fn run_script(&self, script: Script) {
+    pub fn run_script(&mut self, script: Script) {
         match script {
-            Script::InsertText { key, value } => {
-                self.collab.insert(&key, value);
+            Script::CreateDocument { id } => {
+                let collab = CollabBuilder::new(1, &id)
+                    .with_plugin(self.disk_plugin.clone())
+                    .build();
+                self.collabs.insert(id, collab);
             }
-            Script::GetText { key, expected } => {
-                let txn = self.collab.transact();
-                let text = self
-                    .collab
+            Script::CloseDocument { id } => {
+                self.collabs.remove(&id);
+            }
+            Script::OpenDocument { id } => {
+                let collab = CollabBuilder::new(1, &id)
+                    .with_plugin(self.disk_plugin.clone())
+                    .build();
+                self.collabs.insert(id, collab);
+            }
+            Script::DeleteDocument { id } => {
+                self.disk_plugin.doc().delete_doc(&id).unwrap();
+            }
+            Script::InsertText { id, key, value } => {
+                self.collabs.get(&id).as_ref().unwrap().insert(&key, value);
+            }
+            Script::GetText { id, key, expected } => {
+                let collab = self.collabs.get(&id).unwrap();
+                let txn = collab.transact();
+                let text = collab
                     .get(&key)
                     .map(|value| value.to_string(&txn))
                     .map(|value| Any::String(value.into_boxed_str()));
                 assert_eq!(text, expected)
             }
-            Script::AssertNumOfUpdates { expected } => {
-                let updates = self.disk_plugin.doc().get_updates(&self.cid).unwrap();
+            Script::AssertNumOfUpdates { id, expected } => {
+                let updates = self.disk_plugin.doc().get_updates(&id).unwrap();
                 assert_eq!(updates.len(), expected)
             }
-            Script::AssertDiskUpdate => {
-                //
+            Script::AssertNumOfDocuments { expected } => {
+                let docs = self.disk_plugin.doc().get_all_docs().unwrap();
+                assert_eq!(docs.count(), expected);
             }
         }
     }
