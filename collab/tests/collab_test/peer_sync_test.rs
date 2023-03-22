@@ -1,5 +1,5 @@
 use crate::helper::make_collab_pair;
-use collab::MapRefWrapper;
+use collab::preclude::MapRefWrapper;
 
 #[test]
 fn sync_document_edit() {

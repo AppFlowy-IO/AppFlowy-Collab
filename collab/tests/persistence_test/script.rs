@@ -1,12 +1,10 @@
-use collab::core::collab::{Collab, CollabBuilder};
 use collab::plugin_impl::disk::CollabDiskPlugin;
-use collab_derive::Collab;
+use collab::preclude::*;
 use lib0::any::Any;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile::TempDir;
-use yrs::Map;
 
 pub enum Script {
     CreateDocument {
@@ -128,12 +126,4 @@ impl Drop for Cleaner {
     fn drop(&mut self) {
         Self::cleanup(&self.0)
     }
-}
-
-#[derive(Collab, Serialize, Deserialize, Clone)]
-pub struct Document {
-    doc_id: String,
-    name: String,
-    created_at: i64,
-    attributes: HashMap<String, String>,
 }

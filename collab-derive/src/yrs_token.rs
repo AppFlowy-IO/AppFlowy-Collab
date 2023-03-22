@@ -28,11 +28,11 @@ fn token_stream_for_yrs_map(ast_result: &ASTResult, ast: &ASTContainer) -> Optio
 
     Some(quote! {
         pub struct #struct_map_modifier {
-            map_ref: collab::MapRefWrapper,
+            map_ref: collab::preclude::MapRefWrapper,
         }
 
         impl #struct_map_modifier {
-            pub fn new(map_ref: collab::MapRefWrapper) -> Self {
+            pub fn new(map_ref: collab::preclude::MapRefWrapper) -> Self {
                 Self { map_ref }
             }
 
@@ -45,14 +45,14 @@ fn token_stream_for_yrs_map(ast_result: &ASTResult, ast: &ASTContainer) -> Optio
             }
         }
 
-        impl collab::CustomMapRef for #struct_map_modifier {
-            fn from_map_ref(map_ref: collab::MapRefWrapper) -> Self {
+        impl collab::preclude::CustomMapRef for #struct_map_modifier {
+            fn from_map_ref(map_ref: collab::preclude::MapRefWrapper) -> Self {
                 Self { map_ref}
             }
         }
 
         impl std::ops::Deref for #struct_map_modifier {
-            type Target = collab::MapRefWrapper;
+            type Target = collab::preclude::MapRefWrapper;
             fn deref(&self) -> &Self::Target {
                 &self.map_ref
             }

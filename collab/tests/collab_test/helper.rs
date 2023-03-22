@@ -1,6 +1,5 @@
 use bytes::Bytes;
-use collab::core::collab::{Collab, CollabBuilder};
-use collab::core::collab_plugin::CollabPlugin;
+use collab::preclude::*;
 use collab_derive::Collab;
 use lib0::any::Any;
 use parking_lot::RwLock;
@@ -8,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use yrs::updates::decoder::Decode;
-use yrs::{merge_updates_v1, Map, ReadTxn, StateVector, TransactionMut, Update};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Person {

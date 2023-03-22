@@ -1,7 +1,5 @@
 use crate::helper::{Person, Position};
-use collab::MapRefWrapper;
-
-use collab::core::collab::Collab;
+use collab::preclude::{Collab, MapRefWrapper};
 use yrs::{Map, Observable};
 
 #[test]
