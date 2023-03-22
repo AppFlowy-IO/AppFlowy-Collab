@@ -18,5 +18,3 @@ impl CollabWebSocketPlugin {
         }
     }
 }
-
-impl CollabPlugin for CollabWebSocketPlugin {}

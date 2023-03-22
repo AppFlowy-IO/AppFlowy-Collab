@@ -17,6 +17,8 @@ parking_lot = "0.12.1"
 bytes = "1.4.0"
 tracing = { version = "0.1.37" }
 
+collab-persistence = { path = "../collab-persistence" }
+
 [dev-dependencies]
 collab = { path = "."}
 indexmap = {version = "1.9.2", features = ["serde"]}

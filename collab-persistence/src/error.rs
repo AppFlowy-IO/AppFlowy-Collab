@@ -1,5 +1,5 @@
 #[derive(Debug, thiserror::Error)]
-pub enum CLError {
+pub enum PersistenceError {
     #[error(transparent)]
     Db(#[from] sled::Error),
 

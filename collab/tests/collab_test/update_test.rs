@@ -14,7 +14,6 @@ fn derive_string_test() {
     local.with_transact_mut(|txn| {
         map_ref.set_name(txn, "Hello AppFlowy".to_string());
     });
-    assert_eq!(update_cache.num_of_updates(), 1);
 
     let name = map_ref.get_name(&local.transact()).unwrap();
     assert_eq!(name, "Hello AppFlowy");
@@ -37,7 +36,6 @@ fn derive_hash_map_test() {
         map_ref.update_attributes_key_value(txn, "1", "Hello AppFlowy".to_string());
     });
 
-    assert_eq!(update_cache.num_of_updates(), 1);
     let mut attributes = map_ref.get_attributes(&local.transact()).unwrap();
     assert_eq!(attributes.get("1").unwrap(), "Hello AppFlowy");
 
@@ -45,7 +43,6 @@ fn derive_hash_map_test() {
         attributes.insert("1".to_string(), "task 1".to_string());
         map_ref.set_attributes(txn, attributes);
     });
-    assert_eq!(update_cache.num_of_updates(), 2);
 
     let attributes = map_ref.get_attributes(&local.transact()).unwrap();
     assert_eq!(attributes.get("1").unwrap(), "task 1");

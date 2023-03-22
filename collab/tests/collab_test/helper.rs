@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use yrs::updates::decoder::Decode;
-use yrs::{merge_updates_v1, Doc, Map, ReadTxn, StateVector, Transact, Update};
+use yrs::{merge_updates_v1, Doc, Map, ReadTxn, StateVector, Transact, TransactionMut, Update};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Person {
@@ -29,9 +29,8 @@ pub fn make_collab_pair() -> (Collab, Collab, CollabStateCachePlugin) {
         .build();
     // Insert document
     local_collab.insert_json_with_path(vec![], "document", test_document());
-    let remote_collab =
-        CollabBuilder::from_updates("1".to_string(), 1, update_cache.get_updates().unwrap())
-            .build();
+    let updates = update_cache.get_updates();
+    let remote_collab = CollabBuilder::from_updates("1".to_string(), 1, updates.unwrap()).build();
 
     (local_collab, remote_collab, update_cache)
 }
@@ -73,14 +72,13 @@ impl CollabStateCachePlugin {
 }
 
 impl CollabPlugin for CollabStateCachePlugin {
-    fn did_receive_sv(&self, doc: &Doc, sv: &[u8]) {
+    fn did_receive_update(&self, txn: &TransactionMut, update: &[u8]) {
         let mut write_guard = self.0.write();
         if write_guard.is_empty() {
-            let txn = doc.transact();
             let doc_state = txn.encode_state_as_update_v1(&StateVector::default());
             write_guard.push(Bytes::from(doc_state));
         }
-        write_guard.push(Bytes::from(sv.to_vec()));
+        write_guard.push(Bytes::from(update.to_vec()));
     }
 }
 

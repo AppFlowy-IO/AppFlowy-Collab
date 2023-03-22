@@ -1,6 +1,6 @@
 mod db;
 mod doc;
-mod error;
+pub mod error;
 mod keys;
 mod range;
 

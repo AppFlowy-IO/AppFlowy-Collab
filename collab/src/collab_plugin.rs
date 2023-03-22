@@ -1,6 +1,6 @@
 use bytes::Bytes;
-use yrs::{Doc, ReadTxn};
+use yrs::{Doc, ReadTxn, TransactionMut};
 
 pub trait CollabPlugin: Send + Sync + 'static {
-    fn did_receive_sv(&self, doc: &Doc, sv: &[u8]) {}
+    fn did_receive_update(&self, txn: &TransactionMut, update: &[u8]);
 }

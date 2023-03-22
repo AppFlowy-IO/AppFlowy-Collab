@@ -2,6 +2,7 @@ use crate::collab_plugin::CollabPlugin;
 use crate::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::util::insert_json_value_to_map_ref;
 use bytes::Bytes;
+use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::{Display, Formatter};
@@ -15,7 +16,7 @@ use yrs::types::{ToJson, Value};
 use yrs::updates::encoder::Encode;
 use yrs::{
     Doc, Map, MapPrelim, MapRef, Observable, ReadTxn, Subscription, Transact, Transaction,
-    TransactionMut, Update,
+    TransactionMut, Update, UpdateSubscription,
 };
 
 type SubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
@@ -25,20 +26,32 @@ pub struct Collab {
     id: String,
     doc: Doc,
     attributes: MapRef,
-    plugins: Vec<Rc<dyn CollabPlugin>>,
-    subscription: Option<MapSubscription>,
+    plugins: Plugins,
+    subscription: UpdateSubscription,
 }
 
 impl Collab {
     pub fn new(id: String, uid: i64) -> Collab {
         let doc = Doc::with_client_id(uid as u64);
         let attributes = doc.get_or_insert_map("attrs");
+        let plugins = Plugins::new();
+
+        let cloned_plugins = plugins.clone();
+        let subscription = doc
+            .observe_update_v1(move |txn, event| {
+                cloned_plugins
+                    .read()
+                    .iter()
+                    .for_each(|plugin| plugin.did_receive_update(txn, &event.update));
+            })
+            .unwrap();
+
         Self {
             id,
             doc,
             attributes,
-            plugins: vec![],
-            subscription: None,
+            plugins,
+            subscription,
         }
     }
 
@@ -211,7 +224,7 @@ impl CollabBuilder {
     where
         T: CollabPlugin + 'static,
     {
-        self.collab.plugins.push(Rc::new(plugin));
+        self.collab.plugins.push(plugin);
         self
     }
 
@@ -222,11 +235,11 @@ impl CollabBuilder {
 
 pub struct CollabContext {
     doc: Doc,
-    plugins: Vec<Rc<dyn CollabPlugin>>,
+    plugins: Plugins,
 }
 
 impl CollabContext {
-    pub fn new(plugins: Vec<Rc<dyn CollabPlugin>>, doc: Doc) -> Self {
+    fn new(plugins: Plugins, doc: Doc) -> Self {
         Self { plugins, doc }
     }
 
@@ -239,12 +252,8 @@ impl CollabContext {
         F: FnOnce(&mut TransactionMut) -> T,
     {
         let mut txn = self.doc.transact_mut();
-        let state = txn.state_vector();
         let ret = f(&mut txn);
-        let sv = state.encode_v1();
-        self.plugins
-            .iter()
-            .for_each(|plugin| plugin.did_receive_sv(&self.doc, &sv));
+        drop(txn);
         ret
     }
 }
@@ -287,5 +296,29 @@ impl Deref for Path {
 impl DerefMut for Path {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+#[derive(Default, Clone)]
+pub(crate) struct Plugins(Rc<RwLock<Vec<Box<dyn CollabPlugin>>>>);
+
+impl Plugins {
+    pub fn new() -> Plugins {
+        Self::default()
+    }
+
+    pub fn push<P>(&self, plugin: P)
+    where
+        P: CollabPlugin + 'static,
+    {
+        self.0.write().push(Box::new(plugin));
+    }
+}
+
+impl Deref for Plugins {
+    type Target = Rc<RwLock<Vec<Box<dyn CollabPlugin>>>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
