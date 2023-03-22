@@ -22,5 +22,6 @@ collab-persistence = { path = "../collab-persistence" }
 [dev-dependencies]
 tempfile = "3.4.0"
 collab = { path = "."}
-indexmap = {version = "1.9.2", features = ["serde"]}
 collab-derive = { path = "../collab-derive"}
+nanoid = "0.4.0"
+chrono = "0.4.19"

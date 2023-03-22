@@ -1,10 +1,10 @@
-use crate::collab::CollabContext;
 use crate::insert_json_value_to_map_ref;
 use crate::util::lib0_any_to_json_value;
 use lib0::any::Any;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use crate::core::collab::CollabContext;
 use std::ops::{Deref, DerefMut};
 use yrs::block::Prelim;
 use yrs::types::{ToJson, Value};

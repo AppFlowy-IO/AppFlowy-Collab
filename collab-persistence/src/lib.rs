@@ -1,5 +1,5 @@
 mod db;
-mod doc;
+pub mod doc;
 pub mod error;
 mod keys;
 mod range;

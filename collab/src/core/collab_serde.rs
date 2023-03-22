@@ -1,4 +1,4 @@
-use crate::collab::Collab;
+use crate::core::collab::Collab;
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
 

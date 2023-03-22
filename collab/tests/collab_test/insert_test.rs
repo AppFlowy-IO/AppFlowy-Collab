@@ -1,12 +1,12 @@
 use crate::helper::{Person, Position};
-use collab::collab::Collab;
 use collab::MapRefWrapper;
 
+use collab::core::collab::Collab;
 use yrs::{Map, Observable};
 
 #[test]
 fn insert_text() {
-    let mut collab = Collab::new(1);
+    let mut collab = Collab::new(1, "1");
     let _sub = collab.observer_attrs(|txn, event| {
         event.target().iter(txn).for_each(|(a, b)| {
             println!("{}: {}", a, b);
@@ -21,7 +21,7 @@ fn insert_text() {
 
 #[test]
 fn insert_json_attrs() {
-    let mut collab = Collab::new(1);
+    let mut collab = Collab::new(1, "1");
     let object = Person {
         name: "nathan".to_string(),
         position: Position {
@@ -46,7 +46,7 @@ fn insert_json_attrs() {
 
 #[test]
 fn observer_attr_mut() {
-    let mut collab = Collab::new(1);
+    let mut collab = Collab::new(1, "1");
     let object = Person {
         name: "nathan".to_string(),
         position: Position {
@@ -73,7 +73,7 @@ fn observer_attr_mut() {
 
 #[test]
 fn remove_value() {
-    let mut collab = Collab::new(1);
+    let mut collab = Collab::new(1, "1");
     let object = Person {
         name: "nathan".to_string(),
         position: Position {

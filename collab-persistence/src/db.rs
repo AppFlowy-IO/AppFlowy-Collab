@@ -4,6 +4,7 @@ use sled::{Batch, Db, IVec};
 use std::ops::Deref;
 use std::path::Path;
 
+#[derive(Clone)]
 pub struct CollabKV {
     pub(crate) db: Db,
 }

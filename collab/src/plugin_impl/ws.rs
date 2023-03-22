@@ -1,4 +1,3 @@
-use crate::collab_plugin::CollabPlugin;
 use anyhow::Result;
 use bytes::Bytes;
 use parking_lot::RwLock;

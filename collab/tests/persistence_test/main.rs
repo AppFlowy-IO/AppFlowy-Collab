@@ -1,2 +1,2 @@
+mod insert_test;
 mod script;
-mod test;

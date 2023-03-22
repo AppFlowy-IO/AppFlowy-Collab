@@ -1,6 +1,6 @@
 use bytes::Bytes;
-use collab::collab::{Collab, CollabBuilder};
-use collab::collab_plugin::CollabPlugin;
+use collab::core::collab::{Collab, CollabBuilder};
+use collab::core::collab_plugin::CollabPlugin;
 use collab_derive::Collab;
 use lib0::any::Any;
 use parking_lot::RwLock;
@@ -24,7 +24,7 @@ pub struct Position {
 
 pub fn make_collab_pair() -> (Collab, Collab, CollabStateCachePlugin) {
     let update_cache = CollabStateCachePlugin::new();
-    let mut local_collab = CollabBuilder::new(1)
+    let mut local_collab = CollabBuilder::new(1, "1")
         .with_plugin(update_cache.clone())
         .build();
     // Insert document
@@ -72,7 +72,7 @@ impl CollabStateCachePlugin {
 }
 
 impl CollabPlugin for CollabStateCachePlugin {
-    fn did_receive_update(&self, txn: &TransactionMut, update: &[u8]) {
+    fn did_receive_update(&self, cid: &str, txn: &TransactionMut, update: &[u8]) {
         let mut write_guard = self.0.write();
         if write_guard.is_empty() {
             let doc_state = txn.encode_state_as_update_v1(&StateVector::default());

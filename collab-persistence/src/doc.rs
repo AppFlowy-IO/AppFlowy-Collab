@@ -13,7 +13,7 @@ pub struct YrsDoc<'a> {
 }
 
 impl<'a> YrsDoc<'a> {
-    pub fn create_new_doc<K: AsRef<[u8]>, T: ReadTxn>(
+    pub fn insert_or_create_new_doc<K: AsRef<[u8]> + ?Sized, T: ReadTxn>(
         &self,
         name: &K,
         txn: &T,
@@ -28,7 +28,11 @@ impl<'a> YrsDoc<'a> {
         Ok(())
     }
 
-    pub fn load_doc<K: AsRef<[u8]>>(
+    pub fn is_exist<K: AsRef<[u8]> + ?Sized>(&self, name: &K) -> bool {
+        self.get_did(name).is_some()
+    }
+
+    pub fn load_doc<K: AsRef<[u8]> + ?Sized>(
         &self,
         name: &K,
         txn: &mut TransactionMut,
@@ -61,7 +65,7 @@ impl<'a> YrsDoc<'a> {
         let did = self.get_or_create_did(name.as_ref())?;
         let last_clock = {
             let end = make_update_key(did, u32::MAX);
-            if let Some((k, _v)) = self.peek_back(&end) {
+            if let Some((k, _v)) = self.entry_before_key(&end) {
                 let last_key = k.as_ref();
                 let len = last_key.len();
                 let last_clock = &last_key[(len - 5)..(len - 1)]; // update key scheme: 01{name:n}1{clock:4}0
@@ -76,7 +80,7 @@ impl<'a> YrsDoc<'a> {
         Ok(())
     }
 
-    pub fn delete_doc<K: AsRef<[u8]>>(&self, name: &K) -> Result<(), PersistenceError> {
+    pub fn delete_doc<K: AsRef<[u8]> + ?Sized>(&self, name: &K) -> Result<(), PersistenceError> {
         todo!()
     }
 
@@ -88,6 +92,24 @@ impl<'a> YrsDoc<'a> {
         Ok(DocsNameIter { iter })
     }
 
+    pub fn get_updates<K: AsRef<[u8]> + ?Sized>(
+        &self,
+        name: &K,
+    ) -> Result<Vec<Update>, PersistenceError> {
+        if let Some(did) = self.get_did(name) {
+            let start = make_update_key(did, 0);
+            let end = make_update_key(did, u32::MAX);
+            let mut encoded_updates = self.db.batch_get(&start, &end)?;
+            let mut updates = vec![];
+            for encoded_update in encoded_updates {
+                updates.push(Update::decode_v1(encoded_update.as_ref())?);
+            }
+            Ok(updates)
+        } else {
+            Err(PersistenceError::DocumentNotExist)
+        }
+    }
+
     fn get_or_create_did<K: AsRef<[u8]> + ?Sized>(
         &self,
         name: &K,
@@ -95,7 +117,9 @@ impl<'a> YrsDoc<'a> {
         if let Some(did) = self.get_did(name.as_ref()) {
             Ok(did)
         } else {
-            let last_did = self.peek_back_did([SPACE, DOC_SPACE].as_ref()).unwrap_or(0);
+            let last_did = self
+                .did_before_key([SPACE, DOC_SPACE].as_ref())
+                .unwrap_or(0);
             let new_did = last_did + 1;
             let key = make_doc_id(name.as_ref());
             let _ = self.db.insert(key, &new_did.to_be_bytes());
@@ -110,13 +134,13 @@ impl<'a> YrsDoc<'a> {
     }
 
     /// Looks into the last entry value prior to a given key.
-    fn peek_back(&self, key: &[u8]) -> Option<(IVec, IVec)> {
-        let (k, v) = self.db.get_gt(key).ok()??;
+    fn entry_before_key(&self, key: &[u8]) -> Option<(IVec, IVec)> {
+        let (k, v) = self.db.get_lt(key).ok()??;
         Some((k, v))
     }
 
-    fn peek_back_did(&self, key: &[u8]) -> Option<DID> {
-        let (_, v) = self.peek_back(key)?;
+    fn did_before_key(&self, key: &[u8]) -> Option<DID> {
+        let (_, v) = self.entry_before_key(key)?;
         Some(DID::from_be_bytes(v.as_ref().try_into().ok()?))
     }
 }

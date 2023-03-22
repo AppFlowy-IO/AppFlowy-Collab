@@ -1,5 +1,5 @@
-use crate::collab_plugin::CollabPlugin;
-use crate::map_wrapper::{CustomMapRef, MapRefWrapper};
+use crate::core::collab_plugin::CollabPlugin;
+use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::util::insert_json_value_to_map_ref;
 use bytes::Bytes;
 use parking_lot::RwLock;
@@ -24,28 +24,27 @@ type MapSubscription = Subscription<SubscriptionCallback>;
 
 pub struct Collab {
     doc: Doc,
+    cid: String,
     attributes: MapRef,
     plugins: Plugins,
     subscription: UpdateSubscription,
 }
 
 impl Collab {
-    pub fn new(uid: i64) -> Collab {
+    pub fn new<T: AsRef<str>>(uid: i64, cid: T, plugins: Vec<Box<dyn CollabPlugin>>) -> Collab {
+        let cid = cid.as_ref().to_string();
         let doc = Doc::with_client_id(uid as u64);
         let attributes = doc.get_or_insert_map("attrs");
-        let plugins = Plugins::new();
-
-        let cloned_plugins = plugins.clone();
-        let subscription = doc
-            .observe_update_v1(move |txn, event| {
-                cloned_plugins
-                    .read()
-                    .iter()
-                    .for_each(|plugin| plugin.did_receive_update(txn, &event.update));
-            })
-            .unwrap();
-
+        let plugins = Plugins::new(plugins);
+        let subscription = observe_updates(&doc, cid.clone(), plugins.clone());
+        let mut txn = doc.transact_mut();
+        plugins
+            .read()
+            .iter()
+            .for_each(|plugin| plugin.did_init(&cid, &mut txn));
+        drop(txn);
         Self {
+            cid,
             doc,
             attributes,
             plugins,
@@ -190,6 +189,16 @@ impl Collab {
     }
 }
 
+fn observe_updates(doc: &Doc, cid: String, plugins: Plugins) -> UpdateSubscription {
+    doc.observe_update_v1(move |txn, event| {
+        plugins
+            .read()
+            .iter()
+            .for_each(|plugin| plugin.did_receive_update(&cid, txn, &event.update));
+    })
+    .unwrap()
+}
+
 impl Display for Collab {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(&serde_json::to_string(self).unwrap())?;
@@ -198,36 +207,41 @@ impl Display for Collab {
 }
 
 pub struct CollabBuilder {
-    collab: Collab,
+    plugins: Vec<Box<dyn CollabPlugin>>,
+    uid: i64,
+    cid: String,
 }
 
 impl CollabBuilder {
-    pub fn new(uid: i64) -> Self {
+    pub fn new<T: AsRef<str>>(uid: i64, cid: T) -> Self {
+        let cid = cid.as_ref();
         Self {
-            collab: Collab::new(uid),
+            uid,
+            plugins: vec![],
+            cid: cid.to_string(),
         }
-    }
-
-    pub fn from_updates(uid: i64, updates: Vec<Update>) -> Self {
-        let builder = CollabBuilder::new(uid);
-        let mut txn = builder.collab.doc.transact_mut();
-        for update in updates {
-            txn.apply_update(update);
-        }
-        drop(txn);
-        builder
     }
 
     pub fn with_plugin<T>(mut self, plugin: T) -> Self
     where
         T: CollabPlugin + 'static,
     {
-        self.collab.plugins.push(plugin);
+        self.plugins.push(Box::new(plugin));
         self
     }
 
+    pub fn build_with_updates(self, updates: Vec<Update>) -> Collab {
+        let collab = Collab::new(self.uid, self.cid, self.plugins);
+        let mut txn = collab.doc.transact_mut();
+        for update in updates {
+            txn.apply_update(update);
+        }
+        drop(txn);
+        collab
+    }
+
     pub fn build(self) -> Collab {
-        self.collab
+        Collab::new(self.uid, self.cid, self.plugins)
     }
 }
 
@@ -298,11 +312,11 @@ impl DerefMut for Path {
 }
 
 #[derive(Default, Clone)]
-pub(crate) struct Plugins(Rc<RwLock<Vec<Box<dyn CollabPlugin>>>>);
+pub struct Plugins(Rc<RwLock<Vec<Box<dyn CollabPlugin>>>>);
 
 impl Plugins {
-    pub fn new() -> Plugins {
-        Self::default()
+    pub fn new(plugins: Vec<Box<dyn CollabPlugin>>) -> Plugins {
+        Self(Rc::new(RwLock::new(plugins)))
     }
 
     pub fn push<P>(&self, plugin: P)

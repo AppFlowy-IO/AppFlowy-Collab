@@ -1,14 +1,11 @@
-pub mod collab;
-pub mod collab_plugin;
-mod collab_serde;
 mod error;
-mod map_wrapper;
-pub mod plugin_impl;
 mod util;
 
-pub use crate::collab::CollabContext;
-pub use crate::map_wrapper::CustomMapRef;
-pub use crate::map_wrapper::MapRefWrapper;
+pub mod core;
+pub mod plugin_impl;
+
+pub use crate::core::map_wrapper::CustomMapRef;
+pub use crate::core::map_wrapper::MapRefWrapper;
 pub use crate::util::insert_json_value_to_map_ref;
 
 #[cfg(test)]
