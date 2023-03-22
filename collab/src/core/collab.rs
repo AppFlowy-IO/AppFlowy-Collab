@@ -14,8 +14,8 @@ use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
 
 use yrs::{
-    Doc, Map, MapPrelim, MapRef, Observable, Subscription, Transact, Transaction, TransactionMut,
-    Update, UpdateSubscription,
+    Doc, Map, MapPrelim, MapRef, Observable, ReadTxn, Subscription, Transact, Transaction,
+    TransactionMut, Update, UpdateSubscription,
 };
 
 type SubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
@@ -83,11 +83,20 @@ impl Collab {
 
         self.with_transact_mut(|txn| {
             if map.is_none() {
-                map = Some(self.create_map_with_transaction(key, txn));
+                map = Some(
+                    self.attributes
+                        .insert(txn, key, MapPrelim::<lib0::any::Any>::new()),
+                );
             }
             let value = serde_json::to_value(&value).unwrap();
             insert_json_value_to_map_ref(key, &value, map.unwrap(), txn);
         });
+    }
+
+    pub fn create_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
+        let map = MapPrelim::<lib0::any::Any>::new();
+        let map_ref = self.attributes.insert(txn, key, map);
+        self.map_wrapper_with(map_ref)
     }
 
     pub fn get_json_with_path<T: DeserializeOwned>(&self, path: impl Into<Path>) -> Option<T> {
@@ -110,9 +119,9 @@ impl Collab {
         Some(M::from_map_ref(map_ref))
     }
 
-    pub fn get_map_with_txn<P: Into<Path>>(
+    pub fn get_map_with_txn<P: Into<Path>, T: ReadTxn>(
         &self,
-        txn: &Transaction,
+        txn: &T,
         path: P,
     ) -> Option<MapRefWrapper> {
         let path = path.into();
@@ -124,17 +133,7 @@ impl Collab {
         for path in iter {
             map_ref = map_ref?.get(txn, &path)?.to_ymap();
         }
-        map_ref.map(|map_ref| {
-            MapRefWrapper::new(
-                map_ref,
-                CollabContext::new(self.plugins.clone(), self.doc.clone()),
-            )
-        })
-    }
-
-    pub fn create_map_with_transaction(&self, key: &str, txn: &mut TransactionMut) -> MapRef {
-        let map = MapPrelim::<lib0::any::Any>::new();
-        self.attributes.insert(txn, key, map)
+        map_ref.map(|map_ref| self.map_wrapper_with(map_ref))
     }
 
     pub fn remove(&mut self, key: &str) -> Option<Value> {
@@ -187,6 +186,13 @@ impl Collab {
     {
         let transact = CollabContext::new(self.plugins.clone(), self.doc.clone());
         transact.with_transact_mut(f)
+    }
+
+    fn map_wrapper_with(&self, map_ref: MapRef) -> MapRefWrapper {
+        MapRefWrapper::new(
+            map_ref,
+            CollabContext::new(self.plugins.clone(), self.doc.clone()),
+        )
     }
 }
 
@@ -246,6 +252,7 @@ impl CollabBuilder {
     }
 }
 
+#[derive(Clone)]
 pub struct CollabContext {
     doc: Doc,
     #[allow(dead_code)]

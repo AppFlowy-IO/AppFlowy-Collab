@@ -38,7 +38,7 @@ fn token_stream_for_yrs_map(ast_result: &ASTResult, ast: &ASTContainer) -> Optio
 
             #(#setter_getter_stream_token)*
 
-            pub fn into_object(&self, txn: &yrs::Transaction) -> #struct_name {
+            pub fn into_object(&self, txn: &collab::preclude::Transaction) -> #struct_name {
                 #struct_name {
                     #(#into_inner_token_stream)*
                 }
@@ -115,61 +115,61 @@ fn setter_getter_token_steam_for_item_type(
 ) -> Option<TokenStream> {
     match ident_type {
         IdentType::StringType => Some(quote! {
-            pub fn #setter(&mut self, txn: &mut yrs::TransactionMut, value: #ty) {
+            pub fn #setter(&mut self, txn: &mut collab::preclude::TransactionMut, value: #ty) {
                 self.map_ref.insert_with_txn(txn, #key, value)
             }
-            pub fn #getter(&self, txn: &yrs::Transaction) -> Option<#ty> {
+            pub fn #getter(&self, txn: &collab::preclude::Transaction) -> Option<#ty> {
                 self.map_ref.get_str_with_txn(txn, #key)
             }
         }),
         IdentType::I64Type => Some(quote! {
-            pub fn #setter(&mut self, txn: &mut yrs::TransactionMut, value: #ty) {
+            pub fn #setter(&mut self, txn: &mut collab::preclude::TransactionMut, value: #ty) {
                 self.map_ref.insert_with_txn(txn, #key, value)
             }
-            pub fn #getter(&self, txn: &yrs::Transaction) -> Option<#ty> {
+            pub fn #getter(&self, txn: &collab::preclude::Transaction) -> Option<#ty> {
                 self.map_ref.get_i64_with_txn(txn, #key)
             }
         }),
         IdentType::F64Type => Some(quote! {
-            pub fn #setter(&mut self, txn: &mut yrs::TransactionMut, value: #ty) {
+            pub fn #setter(&mut self, txn: &mut collab::preclude::TransactionMut, value: #ty) {
                 self.map_ref.insert_with_txn(txn, #key, value)
             }
-            pub fn #getter(&self, txn: &yrs::Transaction) -> Option<#ty> {
+            pub fn #getter(&self, txn: &collab::preclude::Transaction) -> Option<#ty> {
                 self.map_ref.get_f64_with_txn(txn, #key)
             }
         }),
         IdentType::BoolType => Some(quote! {
-            pub fn #setter(&mut self, txn: &mut yrs::TransactionMut, value: #ty) {
+            pub fn #setter(&mut self, txn: &mut collab::preclude::TransactionMut, value: #ty) {
                 self.map_ref.insert_with_txn(txn, #key, value)
             }
-            pub fn #getter(&self, txn: &yrs::Transaction) -> Option<#ty> {
+            pub fn #getter(&self, txn: &collab::preclude::Transaction) -> Option<#ty> {
                 self.map_ref.get_bool_with_txn(txn, #key)
             }
         }),
         IdentType::HashMapType { value_type } => {
             let update = format_ident!("update_{}_key_value", ident.to_string());
             Some(quote! {
-                pub fn #update(&mut self, txn: &mut yrs::TransactionMut, key: &str, value: #value_type) {
+                pub fn #update(&mut self, txn: &mut collab::preclude::TransactionMut, key: &str, value: #value_type) {
                     if let Some(map_ref) = self.map_ref.get_map_with_txn(txn, #key) {
                         map_ref.insert(txn, key, value);
                     }
                 }
 
-                pub fn #setter(&mut self, txn: &mut yrs::TransactionMut, value: #ty) {
+                pub fn #setter(&mut self, txn: &mut collab::preclude::TransactionMut, value: #ty) {
                     self.map_ref.insert_json_with_txn(txn, #key, value)
                 }
 
-                pub fn #getter(&self, txn: &yrs::Transaction) -> Option<#ty> {
+                pub fn #getter(&self, txn: &collab::preclude::Transaction) -> Option<#ty> {
                     self.map_ref.get_json_with_txn(txn, #key)
                 }
             })
         }
         IdentType::Others => Some(quote! {
-            pub fn #setter<T: serde::Serialize>(&mut self, txn: &mut yrs::TransactionMut, value: T) {
+            pub fn #setter<T: serde::Serialize>(&mut self, txn: &mut collab::preclude::TransactionMut, value: T) {
                 self.map_ref.insert_json_with_txn(txn, #key, value);
             }
 
-            pub fn #getter<T: serde::de::DeserializeOwned>(&self, txn: &yrs::Transaction) -> Option<#ty> {
+            pub fn #getter<T: serde::de::DeserializeOwned>(&self, txn: &collab::preclude::Transaction) -> Option<#ty> {
                 self.map_ref.get_json_with_txn::<#ty>(txn, #key)
             }
         }),

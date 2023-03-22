@@ -90,3 +90,11 @@ fn remove_value() {
         .get_map_with_path::<MapRefWrapper>(vec!["person".to_string(), "position".to_string()]);
     assert!(map.is_none());
 }
+
+#[test]
+fn insert_delta_test() {
+    let mut collab = Collab::new(1, "1", vec![]);
+    collab.with_transact_mut(|txn| {
+        let map = collab.create_map_with_txn(txn, "list");
+    });
+}
