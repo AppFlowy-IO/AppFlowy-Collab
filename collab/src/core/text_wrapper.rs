@@ -1,4 +1,5 @@
 use crate::preclude::CollabContext;
+use std::any::Any;
 use std::ops::Deref;
 use yrs::types::Attrs;
 use yrs::TextRef;

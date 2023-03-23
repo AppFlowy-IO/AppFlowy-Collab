@@ -9,6 +9,7 @@ pub mod preclude {
     pub use crate::core::collab_plugin::CollabPlugin;
     pub use crate::core::map_wrapper::CustomMapRef;
     pub use crate::core::map_wrapper::MapRefWrapper;
+    pub use crate::core::text_wrapper::TextRefWrapper;
     pub use crate::util::insert_json_value_to_map_ref;
     pub use yrs::block::Prelim;
     pub use yrs::types::Value as YrsValue;

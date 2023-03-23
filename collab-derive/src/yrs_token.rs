@@ -156,7 +156,7 @@ fn setter_getter_token_steam_for_item_type(
             Some(quote! {
                 pub fn #update(&mut self, txn: &mut collab::preclude::TransactionMut, key: &str, value: #value_type) {
                     if let Some(map_ref) = self.map_ref.get_map_with_txn(txn, #key) {
-                        map_ref.insert(txn, key, value);
+                        map_ref.insert_with_txn(txn, key, value);
                     }
                 }
 
