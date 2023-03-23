@@ -1,9 +1,10 @@
-use crate::preclude::CollabContext;
+use crate::preclude::{CollabContext, YrsDelta};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
-use yrs::types::text::TextEvent;
+use yrs::types::text::{TextEvent, YChange};
 
-use yrs::{Subscription, TextRef, Transaction, TransactionMut};
+use yrs::types::Delta;
+use yrs::{ReadTxn, Subscription, Text, TextRef, Transaction, TransactionMut};
 
 pub type TextSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &TextEvent)>;
 pub type TextSubscription = Subscription<TextSubscriptionCallback>;
@@ -30,6 +31,16 @@ impl TextRefWrapper {
         F: FnOnce(&mut TransactionMut) -> T,
     {
         self.collab_ctx.with_transact_mut(f)
+    }
+
+    pub fn get_delta_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Delta> {
+        let changes = self.text_ref.diff(txn, YChange::identity);
+        let mut deltas = vec![];
+        for change in changes {
+            let delta = YrsDelta::Inserted(change.insert, change.attributes);
+            deltas.push(delta);
+        }
+        deltas
     }
 }
 

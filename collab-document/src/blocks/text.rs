@@ -58,6 +58,21 @@ impl TextMap {
             .map(|map| map.get_string(txn))
     }
 
+    pub fn get_delta(&self, text_id: &str) -> Vec<YrsDelta> {
+        let txn = self.root.transact();
+        self.root
+            .get_text_with_txn(&txn, text_id)
+            .map(|map| map.get_delta_with_txn(&txn))
+            .unwrap_or(vec![])
+    }
+
+    pub fn get_delta_with_txn<T: ReadTxn>(&self, txn: &T, text_id: &str) -> Vec<YrsDelta> {
+        self.root
+            .get_text_with_txn(txn, text_id)
+            .map(|map| map.get_delta_with_txn(txn))
+            .unwrap_or(vec![])
+    }
+
     pub fn edit_text_with_txn(
         &self,
         txn: &mut TransactionMut,

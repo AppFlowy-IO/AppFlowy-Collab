@@ -38,10 +38,6 @@ impl Document {
         }
     }
 
-    pub fn blocks(&self) -> BlockMap {
-        BlocksMap(&self.blocks)
-    }
-
     pub fn to_json(&self) -> Result<String, DocumentError> {
         Ok(self.root.to_json())
     }

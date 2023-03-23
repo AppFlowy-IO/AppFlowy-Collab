@@ -45,7 +45,7 @@ impl BlockMap {
         B: FnOnce(BlockBuilder) -> BlockMapRef,
     {
         self.root.with_transact_mut(|txn| {
-            let builder = BlockBuilder::new_with_txn(txn, block_id.to_string(), &self.0);
+            let builder = BlockBuilder::new_with_txn(txn, block_id.to_string(), &self.root);
             let _ = f(builder);
         })
     }

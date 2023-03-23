@@ -64,9 +64,14 @@ fn edit_text_multiple_time_test() {
     );
     texts.edit_text(
         text_id,
-        vec![TextAction::Push {
-            s: "123".to_string(),
-        }],
+        vec![
+            TextAction::Push {
+                s: "123".to_string(),
+            },
+            TextAction::Remove { index: 0, len: 2 },
+        ],
     );
-    assert_eq!(texts.get_str(text_id).unwrap(), "abc123");
+    assert_eq!(texts.get_str(text_id).unwrap(), "c123");
+    // let deltas = texts.get_delta(text_id);
+    // println!("{:?}", deltas);
 }

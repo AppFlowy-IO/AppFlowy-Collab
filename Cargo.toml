@@ -4,4 +4,5 @@ members = [
     "collab-derive",
     "collab-persistence",
     "collab-document",
+    "collab-folder",
 ]
