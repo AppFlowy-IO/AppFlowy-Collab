@@ -5,7 +5,7 @@ use std::ops::Deref;
 
 const ROOT: &str = "document";
 const BLOCKS: &str = "blocks";
-const TESTS: &str = "texts";
+const TEXTS: &str = "texts";
 
 pub struct Document {
     inner: Collab,
@@ -24,8 +24,8 @@ impl Document {
                 .get_map_with_txn(txn, vec![ROOT, BLOCKS])
                 .unwrap_or_else(|| root.create_map_with_txn(txn, BLOCKS));
             let texts = collab
-                .get_map_with_txn(txn, vec![ROOT, TESTS])
-                .unwrap_or_else(|| root.create_map_with_txn(txn, TESTS));
+                .get_map_with_txn(txn, vec![ROOT, TEXTS])
+                .unwrap_or_else(|| root.create_map_with_txn(txn, TEXTS));
             (root, blocks, texts)
         });
         let blocks = BlockMap::new(blocks);
