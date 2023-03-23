@@ -1,5 +1,6 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
+use collab_document::blocks::{Block, TextData};
 use collab_document::document::Document;
 use std::path::PathBuf;
 use tempfile::TempDir;

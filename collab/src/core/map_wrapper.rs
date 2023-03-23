@@ -61,7 +61,7 @@ impl MapRefWrapper {
     }
 
     pub fn insert_json_with_txn<T: Serialize>(
-        &mut self,
+        &self,
         txn: &mut TransactionMut,
         key: &str,
         value: T,
@@ -111,7 +111,7 @@ impl MapRefWrapper {
         None
     }
 
-    pub fn get_text_with_txn(&self, txn: &Transaction, key: &str) -> Option<TextRefWrapper> {
+    pub fn get_text_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<TextRefWrapper> {
         let text_ref = self.map_ref.get(txn, key).map(|value| value.to_ytext())??;
         Some(TextRefWrapper::new(text_ref, self.collab_ctx.clone()))
     }

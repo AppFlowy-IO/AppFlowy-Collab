@@ -1,7 +1,12 @@
 use crate::preclude::CollabContext;
-use std::ops::Deref;
-use yrs::types::Attrs;
-use yrs::{TextRef, Transaction, TransactionMut};
+use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
+use yrs::types::text::TextEvent;
+
+use yrs::{Subscription, TextRef, Transaction, TransactionMut};
+
+pub type TextSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &TextEvent)>;
+pub type TextSubscription = Subscription<TextSubscriptionCallback>;
 
 pub struct TextRefWrapper {
     text_ref: TextRef,
@@ -33,5 +38,11 @@ impl Deref for TextRefWrapper {
 
     fn deref(&self) -> &Self::Target {
         &self.text_ref
+    }
+}
+
+impl DerefMut for TextRefWrapper {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.text_ref
     }
 }
