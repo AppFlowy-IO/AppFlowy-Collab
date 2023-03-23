@@ -3,9 +3,13 @@
 #![allow(unused_assignments)]
 
 use crate::internal::ctxt::ASTResult;
-use proc_macro2::Ident;
-use syn::Meta::NameValue;
-use syn::{self, punctuated::Punctuated, Fields, Path, Token};
+use proc_macro2::{Ident, TokenStream};
+use quote::ToTokens;
+use std::fmt;
+use std::fmt::Display;
+use syn::Meta::{List, NameValue};
+use syn::NestedMeta::{Lit, Meta};
+use syn::{self, punctuated::Punctuated, Fields, LitStr, NestedMeta, Path, Token};
 
 pub struct ASTContainer<'a> {
     /// The struct or enum name (without generics).
@@ -69,19 +73,120 @@ pub struct ASTEnumVariant<'a> {
 pub struct ASTField<'a> {
     pub member: syn::Member,
     pub ty: &'a syn::Type,
+    pub yrs_attr: YrsAttribute,
     pub original: &'a syn::Field,
 }
 
 impl<'a> ASTField<'a> {
-    pub fn new(_ctxt: &ASTResult, field: &'a syn::Field, index: usize) -> Result<Self, String> {
+    pub fn new(
+        ast_result: &ASTResult,
+        field: &'a syn::Field,
+        index: usize,
+    ) -> Result<Self, String> {
         Ok(ASTField {
             member: match &field.ident {
                 Some(ident) => syn::Member::Named(ident.clone()),
                 None => syn::Member::Unnamed(index.into()),
             },
             ty: &field.ty,
+            yrs_attr: YrsAttribute::from_ast(ast_result, field),
             original: field,
         })
+    }
+}
+
+pub const YRS: Symbol = Symbol("yrs");
+pub const PRS_TY: Symbol = Symbol("ty");
+pub struct YrsAttribute {
+    ty: Option<LitStr>,
+}
+
+impl YrsAttribute {
+    /// Extract out the `#[yrs(...)]` attributes from a struct field.
+    pub fn from_ast(ast_result: &ASTResult, field: &syn::Field) -> Self {
+        let mut ty = ASTFieldAttr::none(ast_result, PRS_TY);
+        for meta_item in field
+            .attrs
+            .iter()
+            .flat_map(|attr| get_yrs_nested_meta(ast_result, attr))
+            .flatten()
+        {
+            match &meta_item {
+                // Parse '#[yrs(ty = x)]'
+                Meta(NameValue(m)) if m.path == PRS_TY => {
+                    if let syn::Lit::Str(lit) = &m.lit {
+                        ty.set(&m.path, lit.clone());
+                    }
+                }
+
+                _ => {
+                    ast_result.error_spanned_by(meta_item, "unexpected meta in field attribute");
+                }
+            }
+        }
+        YrsAttribute { ty: ty.get() }
+    }
+}
+
+fn get_yrs_nested_meta(cx: &ASTResult, attr: &syn::Attribute) -> Result<Vec<syn::NestedMeta>, ()> {
+    // Only handle the attribute that we have defined
+    if attr.path != YRS {
+        return Ok(vec![]);
+    }
+
+    match attr.parse_meta() {
+        Ok(List(meta)) => Ok(meta.nested.into_iter().collect()),
+        Ok(_) => Ok(vec![]),
+        Err(err) => {
+            cx.error_spanned_by(attr, "attribute must be str, e.g. #[yrs(xx = \"xxx\")]");
+            cx.syn_error(err);
+            Err(())
+        }
+    }
+}
+
+pub struct ASTFieldAttr<'c, T> {
+    ast_result: &'c ASTResult,
+    name: Symbol,
+    tokens: TokenStream,
+    value: Option<T>,
+}
+
+impl<'c, T> ASTFieldAttr<'c, T> {
+    pub(crate) fn none(ast_result: &'c ASTResult, name: Symbol) -> Self {
+        ASTFieldAttr {
+            ast_result,
+            name,
+            tokens: TokenStream::new(),
+            value: None,
+        }
+    }
+
+    pub(crate) fn set<A: ToTokens>(&mut self, obj: A, value: T) {
+        let tokens = obj.into_token_stream();
+        if self.value.is_some() {
+            self.ast_result
+                .error_spanned_by(tokens, format!("duplicate attribute `{}`", self.name));
+        } else {
+            self.tokens = tokens;
+            self.value = Some(value);
+        }
+    }
+
+    fn set_opt<A: ToTokens>(&mut self, obj: A, value: Option<T>) {
+        if let Some(value) = value {
+            self.set(obj, value);
+        }
+    }
+
+    pub(crate) fn set_if_none(&mut self, value: T) {
+        if self.value.is_none() {
+            self.value = Some(value);
+        }
+    }
+
+    pub(crate) fn get(self) -> Option<T> {
+        self.value
     }
 }
 
@@ -124,13 +229,13 @@ fn enum_from_ast<'a>(
 }
 
 fn fields_from_ast<'a>(
-    cx: &ASTResult,
+    ast_result: &ASTResult,
     fields: &'a Punctuated<syn::Field, Token![,]>,
 ) -> Vec<ASTField<'a>> {
     fields
         .iter()
         .enumerate()
-        .flat_map(|(index, field)| ASTField::new(cx, field, index).ok())
+        .flat_map(|(index, field)| ASTField::new(ast_result, field, index).ok())
         .collect()
 }
 
@@ -158,6 +263,12 @@ impl PartialEq<Symbol> for Path {
 impl<'a> PartialEq<Symbol> for &'a Path {
     fn eq(&self, word: &Symbol) -> bool {
         self.is_ident(word.0)
+    }
+}
+
+impl Display for Symbol {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str(self.0)
     }
 }
 

@@ -80,7 +80,8 @@ fn into_inner_field_token_stream(
     let ident = get_member_ident(ast_result, member)?;
     let getter = format_ident!("get_{}", ident.to_string());
     match ident_type {
-        IdentType::StringType
+        IdentType::TextType
+        | IdentType::StringType
         | IdentType::I64Type
         | IdentType::F64Type
         | IdentType::BoolType
@@ -114,6 +115,10 @@ fn setter_getter_token_steam_for_item_type(
     ident_type: &IdentType,
 ) -> Option<TokenStream> {
     match ident_type {
+        IdentType::TextType => {
+            //
+            None
+        }
         IdentType::StringType => Some(quote! {
             pub fn #setter(&mut self, txn: &mut collab::preclude::TransactionMut, value: #ty) {
                 self.map_ref.insert_with_txn(txn, #key, value)
@@ -211,6 +216,7 @@ pub(crate) fn get_member_ident<'a>(
 
 #[derive(Debug, Eq, PartialEq)]
 enum IdentType {
+    TextType,
     StringType,
     I64Type,
     F64Type,

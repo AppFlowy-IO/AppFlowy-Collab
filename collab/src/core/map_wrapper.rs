@@ -111,6 +111,11 @@ impl MapRefWrapper {
         None
     }
 
+    pub fn get_text_with_txn(&self, txn: &Transaction, key: &str) -> Option<TextRefWrapper> {
+        let text_ref = self.map_ref.get(txn, key).map(|value| value.to_ytext())??;
+        Some(TextRefWrapper::new(text_ref, self.collab_ctx.clone()))
+    }
+
     pub fn get_i64_with_txn(&self, txn: &Transaction, key: &str) -> Option<i64> {
         if let Some(Value::Any(Any::BigInt(value))) = self.map_ref.get(txn, key) {
             return Some(value);
@@ -130,6 +135,17 @@ impl MapRefWrapper {
             return Some(value);
         }
         None
+    }
+
+    pub fn transact(&self) -> Transaction {
+        self.collab_ctx.transact()
+    }
+
+    pub fn with_transact_mut<F, T>(&self, f: F) -> T
+    where
+        F: FnOnce(&mut TransactionMut) -> T,
+    {
+        self.collab_ctx.with_transact_mut(f)
     }
 
     pub fn to_json(&self) -> String {

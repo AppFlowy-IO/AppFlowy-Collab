@@ -1,3 +1,4 @@
+use crate::struct_define::{Document, Owner, TaskInfo};
 use bytes::Bytes;
 use collab::preclude::*;
 use collab_derive::Collab;
@@ -73,37 +74,6 @@ impl CollabPlugin for CollabStateCachePlugin {
             write_guard.push(Bytes::from(doc_state));
         }
         write_guard.push(Bytes::from(update.to_vec()));
-    }
-}
-
-#[derive(Collab, Serialize, Deserialize)]
-pub struct Document {
-    doc_id: String,
-    name: String,
-    created_at: i64,
-    attributes: HashMap<String, String>,
-    tasks: HashMap<String, TaskInfo>,
-    owner: Owner,
-}
-
-#[derive(Collab, Default, Serialize, Deserialize)]
-pub struct Owner {
-    pub id: String,
-    pub name: String,
-    pub email: String,
-    pub location: Option<String>,
-}
-
-#[derive(Debug, Collab, Default, Serialize, Deserialize)]
-pub struct TaskInfo {
-    pub title: String,
-    pub repeated: bool,
-}
-
-impl From<TaskInfo> for Any {
-    fn from(task_info: TaskInfo) -> Self {
-        let a = serde_json::to_value(&task_info).unwrap();
-        serde_json::from_value(a).unwrap()
     }
 }
 

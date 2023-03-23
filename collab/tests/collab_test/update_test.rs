@@ -1,4 +1,6 @@
-use crate::helper::{make_collab_pair, DocumentMapRef, Owner, OwnerMapRef, TaskInfoMapRef};
+use crate::helper::make_collab_pair;
+use crate::struct_define::{DocumentMapRef, Owner, OwnerMapRef, TaskInfoMapRef};
+
 #[test]
 fn derive_string_test() {
     let (local, _remote, update_cache) = make_collab_pair();
