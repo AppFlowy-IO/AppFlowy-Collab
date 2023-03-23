@@ -8,8 +8,8 @@ use quote::ToTokens;
 use std::fmt;
 use std::fmt::Display;
 use syn::Meta::{List, NameValue};
-use syn::NestedMeta::{Lit, Meta};
-use syn::{self, punctuated::Punctuated, Fields, LitStr, NestedMeta, Path, Token};
+use syn::NestedMeta::Meta;
+use syn::{self, punctuated::Punctuated, Fields, LitStr, Path, Token};
 
 pub struct ASTContainer<'a> {
     /// The struct or enum name (without generics).
@@ -169,18 +169,6 @@ impl<'c, T> ASTFieldAttr<'c, T> {
                 .error_spanned_by(tokens, format!("duplicate attribute `{}`", self.name));
         } else {
             self.tokens = tokens;
-            self.value = Some(value);
-        }
-    }
-
-    fn set_opt<A: ToTokens>(&mut self, obj: A, value: Option<T>) {
-        if let Some(value) = value {
-            self.set(obj, value);
-        }
-    }
-
-    pub(crate) fn set_if_none(&mut self, value: T) {
-        if self.value.is_none() {
             self.value = Some(value);
         }
     }

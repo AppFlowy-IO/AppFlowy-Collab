@@ -1,4 +1,4 @@
-use crate::block::{Block, BlockBuilder, BlockMapRef};
+use crate::blocks::{BlockBuilder, BlockMapRef};
 use crate::error::DocumentError;
 use collab::preclude::*;
 use std::ops::Deref;

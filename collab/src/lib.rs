@@ -12,7 +12,7 @@ pub mod preclude {
     pub use crate::core::text_wrapper::TextRefWrapper;
     pub use crate::util::insert_json_value_to_map_ref;
     pub use yrs::block::Prelim;
-    pub use yrs::types::Value as YrsValue;
+    pub use yrs::types::{Attrs, Value as YrsValue};
     pub use yrs::{
         merge_updates_v1, Map, ReadTxn, StateVector, Text, Transaction, TransactionMut, Update,
     };

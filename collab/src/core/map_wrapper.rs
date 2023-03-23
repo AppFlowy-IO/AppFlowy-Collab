@@ -7,8 +7,8 @@ use crate::core::text_wrapper::TextRefWrapper;
 use crate::preclude::*;
 use std::ops::{Deref, DerefMut};
 use yrs::block::Prelim;
-use yrs::types::{Delta, ToJson, Value};
-use yrs::{Map, MapPrelim, MapRef, ReadTxn, TextPrelim, TextRef, Transaction, TransactionMut};
+use yrs::types::{ToJson, Value};
+use yrs::{Map, MapPrelim, MapRef, ReadTxn, TextPrelim, Transaction, TransactionMut};
 
 pub trait CustomMapRef {
     fn from_map_ref(map_ref: MapRefWrapper) -> Self;

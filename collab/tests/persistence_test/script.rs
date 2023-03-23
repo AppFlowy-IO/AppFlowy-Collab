@@ -1,7 +1,7 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::*;
 use lib0::any::Any;
-use serde::{Deserialize, Serialize};
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile::TempDir;

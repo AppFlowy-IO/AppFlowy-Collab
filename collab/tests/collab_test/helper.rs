@@ -1,8 +1,6 @@
 use crate::struct_define::{Document, Owner, TaskInfo};
 use bytes::Bytes;
 use collab::preclude::*;
-use collab_derive::Collab;
-use lib0::any::Any;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

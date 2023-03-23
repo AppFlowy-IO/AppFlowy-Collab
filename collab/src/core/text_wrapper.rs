@@ -1,8 +1,7 @@
 use crate::preclude::CollabContext;
-use std::any::Any;
 use std::ops::Deref;
 use yrs::types::Attrs;
-use yrs::TextRef;
+use yrs::{TextRef, Transaction, TransactionMut};
 
 pub struct TextRefWrapper {
     text_ref: TextRef,
@@ -17,13 +16,15 @@ impl TextRefWrapper {
         }
     }
 
-    pub fn apply_action(&self, action: TextAction) {
-        match action {
-            TextAction::Insert { .. } => {}
-            TextAction::InsertWithAttribute { .. } => {}
-            TextAction::Remove { .. } => {}
-            TextAction::Format { .. } => {}
-        }
+    pub fn transact(&self) -> Transaction {
+        self.collab_ctx.transact()
+    }
+
+    pub fn with_transact_mut<F, T>(&self, f: F) -> T
+    where
+        F: FnOnce(&mut TransactionMut) -> T,
+    {
+        self.collab_ctx.with_transact_mut(f)
     }
 }
 
@@ -33,11 +34,4 @@ impl Deref for TextRefWrapper {
     fn deref(&self) -> &Self::Target {
         &self.text_ref
     }
-}
-
-pub enum TextAction {
-    Insert { index: u32, s: String },
-    InsertWithAttribute { index: u32, s: String, attrs: Attrs },
-    Remove { index: u32, len: u32 },
-    Format { index: u32, len: u32, attrs: Attrs },
 }

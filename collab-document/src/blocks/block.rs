@@ -1,8 +1,7 @@
-use collab::preclude::{CustomMapRef, MapRefWrapper, Prelim, TransactionMut};
+use collab::preclude::{CustomMapRef, MapRefWrapper, TransactionMut};
 use collab_derive::Collab;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
-use std::ops::Deref;
 
 #[derive(Collab, Serialize, Deserialize)]
 pub struct Block {
