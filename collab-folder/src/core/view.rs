@@ -1,6 +1,7 @@
 use crate::core::{Belongings, BelongingsArray};
 use anyhow::{anyhow, bail, Result};
-use collab::preclude::{Map, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::core::collab::MapSubscription;
+use collab::preclude::{Map, MapRefWrapper, Observable, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
@@ -14,23 +15,51 @@ const VIEW_BELONGINGS: &str = "belongings";
 
 pub struct ViewsMap {
     container: MapRefWrapper,
+    subscription: Option<MapSubscription>,
 }
 
 impl ViewsMap {
-    pub fn new(root: MapRefWrapper) -> ViewsMap {
-        Self { container: root }
+    pub fn new(mut root: MapRefWrapper) -> ViewsMap {
+        let subscription = root.observe(|txn, map_event| {});
+        Self {
+            container: root,
+            subscription: Some(subscription),
+        }
     }
 
-    pub fn get_view(&self, view_id: &str) -> Option<View> {
+    pub fn get_views(&self, view_ids: &[String]) -> Vec<View> {
         let txn = self.container.transact();
-        self.get_view_with_txn(&txn, view_id)
+        self.get_views_with_txn(&txn, view_ids)
     }
 
-    pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<View> {
+    pub fn get_views_with_txn<T: ReadTxn>(&self, txn: &T, view_ids: &[String]) -> Vec<View> {
+        view_ids
+            .iter()
+            .flat_map(|view_id| self.get_view_with_txn(txn, view_id, None))
+            .collect::<Vec<_>>()
+    }
+
+    pub fn get_view(&self, view_id: &str, belong_to: Option<String>) -> Option<View> {
+        let txn = self.container.transact();
+        self.get_view_with_txn(&txn, view_id, belong_to)
+    }
+
+    pub fn get_view_with_txn<T: ReadTxn>(
+        &self,
+        txn: &T,
+        view_id: &str,
+        belong_to: Option<String>,
+    ) -> Option<View> {
         let map_ref = self.container.get_map_with_txn(txn, view_id)?;
+        let bid = map_ref.get_str_with_txn(txn, VIEW_BID)?;
+        if let Some(belong_to) = belong_to {
+            if belong_to != bid {
+                return None;
+            }
+        }
+
         let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
         let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();
-        let bid = map_ref.get_str_with_txn(txn, VIEW_BID);
         let desc = map_ref.get_str_with_txn(txn, VIEW_DESC).unwrap_or_default();
         let created_at = map_ref
             .get_i64_with_txn(txn, VIEW_CREATE_AT)
@@ -135,7 +164,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
         self
     }
 
-    pub fn set_bid(self, bid: Option<String>) -> Self {
+    pub fn set_bid(self, bid: String) -> Self {
         self.map_ref.insert_with_txn(self.txn, VIEW_BID, bid);
         self
     }
@@ -169,7 +198,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
 pub struct View {
     pub id: String,
     // bid short for belong to id
-    pub bid: Option<String>,
+    pub bid: String,
     pub name: String,
     pub desc: String,
     pub belongings: Belongings,

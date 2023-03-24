@@ -19,8 +19,8 @@ use yrs::{
     Transaction, TransactionMut, Update, UpdateSubscription,
 };
 
-type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
-type MapSubscription = Subscription<MapSubscriptionCallback>;
+pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
+pub type MapSubscription = Subscription<MapSubscriptionCallback>;
 
 pub struct Collab {
     doc: Doc,
