@@ -9,8 +9,8 @@ pub struct Belongings {
 }
 
 impl Belongings {
-    pub fn new() -> Self {
-        Self { view_ids: vec![] }
+    pub fn new(view_ids: Vec<String>) -> Self {
+        Self { view_ids }
     }
 
     pub fn into_inner(self) -> Vec<String> {

@@ -140,7 +140,7 @@ impl<'a, 'b> ViewUpdateBuilder<'a, 'b> {
     pub fn done(self) {}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct View {
     pub id: String,
     // bid short for belong to id

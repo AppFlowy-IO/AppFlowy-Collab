@@ -12,7 +12,11 @@ impl BelongingsArray {
         let belongings_container = container
             .get_array_ref_with_txn(txn, BELONGINGS)
             .unwrap_or_else(|| {
-                container.insert_array_with_txn(txn, BELONGINGS, Belongings::new().into_inner())
+                container.insert_array_with_txn(
+                    txn,
+                    BELONGINGS,
+                    Belongings::new(vec![]).into_inner(),
+                )
             });
         Self {
             container: belongings_container,
@@ -31,7 +35,7 @@ impl BelongingsArray {
     }
 
     pub fn get_belongings_with_txn<T: ReadTxn>(&self, txn: &T) -> Belongings {
-        let mut belongings = Belongings::new();
+        let mut belongings = Belongings::new(vec![]);
         for value in self.container.iter(txn) {
             belongings.view_ids.push(value.to_string(txn));
         }

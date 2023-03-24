@@ -1,6 +1,6 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
-use collab_folder::core::Folder;
+use collab_folder::core::{Folder, Workspace};
 use std::ops::Deref;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -19,6 +19,19 @@ pub fn create_folder(id: &str) -> FolderTest {
     let collab = CollabBuilder::new(1, id).with_plugin(disk_plugin).build();
     let folder = Folder::create(collab);
     FolderTest { folder, cleaner }
+}
+
+pub fn create_folder_with_workspace(id: &str, workspace_id: &str) -> FolderTest {
+    let test = create_folder(id);
+    let workspace = Workspace {
+        id: workspace_id.to_string(),
+        name: "My first workspace".to_string(),
+        belongings: Default::default(),
+        created_at: 123,
+    };
+
+    test.folder.workspaces.create_workspace(workspace);
+    test
 }
 
 impl Deref for FolderTest {
