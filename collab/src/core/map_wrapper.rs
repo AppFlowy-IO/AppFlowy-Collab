@@ -9,7 +9,9 @@ use crate::preclude::*;
 use std::ops::{Deref, DerefMut};
 use yrs::block::Prelim;
 use yrs::types::{ToJson, Value};
-use yrs::{ArrayPrelim, Map, MapPrelim, MapRef, ReadTxn, TextPrelim, Transaction, TransactionMut};
+use yrs::{
+    ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, ReadTxn, TextPrelim, Transaction, TransactionMut,
+};
 
 pub trait CustomMapRef {
     fn from_map_ref(map_ref: MapRefWrapper) -> Self;
@@ -187,6 +189,59 @@ impl MapRefWrapper {
         let mut json_str = String::new();
         value.to_json(&mut json_str);
         json_str
+    }
+}
+
+pub struct MapRefTool<'a>(pub &'a MapRef);
+impl<'a> MapRefTool<'a> {
+    pub fn insert_array_with_txn<V: Prelim>(
+        &self,
+        txn: &mut TransactionMut,
+        key: &str,
+        values: Vec<V>,
+    ) -> ArrayRef {
+        self.0.insert(txn, key, ArrayPrelim::from(values))
+    }
+
+    pub fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
+        let map = MapPrelim::<lib0::any::Any>::new();
+        self.0.insert(txn, key, map)
+    }
+
+    pub fn get_array_ref_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<ArrayRef> {
+        self.0.get(txn, key).map(|value| value.to_yarray())?
+    }
+
+    pub fn get_str_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<String> {
+        if let Some(Value::Any(Any::String(value))) = self.0.get(txn, key) {
+            return Some(value.to_string());
+        }
+        None
+    }
+
+    pub fn get_text_ref_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<TextRef> {
+        self.0.get(txn, key).map(|value| value.to_ytext())?
+    }
+
+    pub fn get_i64_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<i64> {
+        if let Some(Value::Any(Any::BigInt(value))) = self.0.get(txn, key) {
+            return Some(value);
+        }
+        None
+    }
+
+    pub fn get_f64_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<f64> {
+        if let Some(Value::Any(Any::Number(value))) = self.0.get(txn, key) {
+            return Some(value);
+        }
+        None
+    }
+
+    pub fn get_bool_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<bool> {
+        if let Some(Value::Any(Any::Bool(value))) = self.0.get(txn, key) {
+            return Some(value);
+        }
+        None
     }
 }
 

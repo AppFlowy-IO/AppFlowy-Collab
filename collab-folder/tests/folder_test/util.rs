@@ -1,15 +1,17 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
-use collab_folder::core::{Folder, Workspace};
+use collab_folder::core::{Folder, FolderContext, ViewChange, Workspace};
 use collab_persistence::CollabKV;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
+use tokio::sync::broadcast::Receiver;
 
 pub struct FolderTest {
     folder: Folder,
     cleaner: Cleaner,
+    rx: Receiver<ViewChange>,
 }
 
 pub fn create_folder(id: &str) -> FolderTest {
@@ -20,8 +22,17 @@ pub fn create_folder(id: &str) -> FolderTest {
     let cleaner = Cleaner::new(path);
 
     let collab = CollabBuilder::new(1, id).with_plugin(disk_plugin).build();
-    let folder = Folder::create(collab);
-    FolderTest { folder, cleaner }
+
+    let (tx, rx) = tokio::sync::broadcast::channel(100);
+    let context = FolderContext {
+        view_change_tx: Some(tx),
+    };
+    let folder = Folder::create(collab, context);
+    FolderTest {
+        folder,
+        cleaner,
+        rx,
+    }
 }
 
 pub fn create_folder_with_workspace(id: &str, workspace_id: &str) -> FolderTest {

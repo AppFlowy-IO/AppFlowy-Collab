@@ -1,5 +1,5 @@
 use crate::core::Belongings;
-use collab::preclude::{Array, ArrayRefWrapper, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{Array, ArrayRef, ArrayRefWrapper, MapRefWrapper, ReadTxn, TransactionMut};
 
 const BELONGINGS: &str = "belongings";
 #[derive(Clone)]
@@ -35,11 +35,7 @@ impl BelongingsArray {
     }
 
     pub fn get_belongings_with_txn<T: ReadTxn>(&self, txn: &T) -> Belongings {
-        let mut belongings = Belongings::new(vec![]);
-        for value in self.container.iter(txn) {
-            belongings.view_ids.push(value.to_string(txn));
-        }
-        belongings
+        belongings_from_array_ref(txn, &self.container)
     }
 
     pub fn move_belonging_with_txn(&self, txn: &mut TransactionMut, from: u32, to: u32) {
@@ -53,4 +49,12 @@ impl BelongingsArray {
     pub fn add_belonging_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
         self.container.push_with_txn(txn, view_id)
     }
+}
+
+pub fn belongings_from_array_ref<T: ReadTxn>(txn: &T, array_ref: &ArrayRef) -> Belongings {
+    let mut belongings = Belongings::new(vec![]);
+    for value in array_ref.iter(txn) {
+        belongings.view_ids.push(value.to_string(txn));
+    }
+    belongings
 }

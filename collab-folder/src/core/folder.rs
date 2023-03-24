@@ -1,5 +1,5 @@
 use crate::core::trash::{TrashArray, TrashItem};
-use crate::core::{FolderData, ViewsMap, Workspace, WorkspaceMap};
+use crate::core::{FolderData, ViewChangeSender, ViewsMap, Workspace, WorkspaceMap};
 use collab::preclude::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,11 @@ const META: &str = "meta";
 const CURRENT_WORKSPACE: &str = "current_workspace";
 const CURRENT_VIEW: &str = "current_view";
 
+#[derive(Default)]
+pub struct FolderContext {
+    pub view_change_tx: Option<ViewChangeSender>,
+}
+
 pub struct Folder {
     inner: Collab,
     root: MapRefWrapper,
@@ -23,7 +28,7 @@ pub struct Folder {
 }
 
 impl Folder {
-    pub fn create(collab: Collab) -> Self {
+    pub fn create(collab: Collab, context: FolderContext) -> Self {
         let (folder, workspaces, views, trash, meta) = collab.with_transact_mut(|txn| {
             // { FOLDER: {:} }
             let folder = collab
@@ -55,7 +60,7 @@ impl Folder {
             (folder, workspaces, views, trash, meta)
         });
         let workspaces = WorkspaceArray::new(workspaces);
-        let views = ViewsMap::new(views);
+        let views = ViewsMap::new(views, context.view_change_tx);
         let trash = TrashArray::new(trash);
         Self {
             inner: collab,
@@ -68,7 +73,7 @@ impl Folder {
     }
 
     pub fn create_with_data(collab: Collab, data: FolderData) {
-        let this = Self::create(collab);
+        let this = Self::create(collab, FolderContext::default());
         this.root.with_transact_mut(|txn| {
             for workspace in data.workspaces {
                 this.workspaces.create_workspace_with_txn(txn, workspace);
