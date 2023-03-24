@@ -1,0 +1,48 @@
+use collab::plugin_impl::disk::CollabDiskPlugin;
+use collab::preclude::CollabBuilder;
+use collab_folder::core::Folder;
+use std::ops::Deref;
+use std::path::PathBuf;
+use tempfile::TempDir;
+
+pub struct FolderTest {
+    folder: Folder,
+    cleaner: Cleaner,
+}
+
+pub fn create_folder(id: &str) -> FolderTest {
+    let tempdir = TempDir::new().unwrap();
+    let path = tempdir.into_path();
+    let disk_plugin = CollabDiskPlugin::new(path.clone()).unwrap();
+    let cleaner = Cleaner::new(path);
+
+    let collab = CollabBuilder::new(1, id).with_plugin(disk_plugin).build();
+    let folder = Folder::create(collab);
+    FolderTest { folder, cleaner }
+}
+
+impl Deref for FolderTest {
+    type Target = Folder;
+
+    fn deref(&self) -> &Self::Target {
+        &self.folder
+    }
+}
+
+struct Cleaner(PathBuf);
+
+impl Cleaner {
+    fn new(dir: PathBuf) -> Self {
+        Cleaner(dir)
+    }
+
+    fn cleanup(dir: &PathBuf) {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+impl Drop for Cleaner {
+    fn drop(&mut self) {
+        Self::cleanup(&self.0)
+    }
+}

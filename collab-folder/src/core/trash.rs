@@ -2,12 +2,12 @@ use collab::preclude::{lib0Any, ArrayRefWrapper};
 use serde::{Deserialize, Serialize};
 
 pub struct TrashArray {
-    root: ArrayRefWrapper,
+    container: ArrayRefWrapper,
 }
 
 impl TrashArray {
     pub fn new(root: ArrayRefWrapper) -> Self {
-        Self { root }
+        Self { container: root }
     }
 }
 

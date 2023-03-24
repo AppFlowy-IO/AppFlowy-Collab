@@ -1,26 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
+use std::ops::Deref;
 
-pub struct Workspace {
-    pub id: String,
-    pub name: String,
-    pub belongings: Belongings,
-    pub created_at: i64,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct View {
-    pub id: String,
-    // bid short for belong to id
-    pub bid: Option<String>,
-    pub name: String,
-    pub desc: String,
-    pub belongings: Belongings,
-    pub created_at: i64,
-    pub layout: u8,
-}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq, Debug)]
 #[repr(transparent)]
 pub struct Belongings {
     pub view_ids: Vec<String>,
@@ -36,11 +18,10 @@ impl Belongings {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Serialize_repr, Deserialize_repr)]
-#[repr(u8)]
-pub enum ViewLayout {
-    Document = 0,
-    Grid = 1,
-    Board = 2,
-    Calendar = 3,
+impl Deref for Belongings {
+    type Target = Vec<String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.view_ids
+    }
 }

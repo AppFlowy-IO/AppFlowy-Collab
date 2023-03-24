@@ -1,7 +1,9 @@
 use crate::core::trash::{TrashArray, TrashItem};
-use crate::core::{ViewsMap, WorkspaceMap};
+use crate::core::{ViewsMap, Workspace, WorkspaceMap};
 use collab::preclude::*;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 const FOLDER: &str = "folder";
 const WORKSPACES: &str = "workspaces";
@@ -55,42 +57,90 @@ impl Folder {
         }
     }
 
-    pub fn get_workspaces(&self) -> Vec<WorkspaceItem> {
-        self.workspaces.get_all_workspaces()
-    }
-
-    pub fn get_workspace_map(&self, workspace_id: &str) -> Option<WorkspaceMap> {
-        let workspace_map = self.root.with_transact_mut(|txn| {
-            self.root
-                .get_map_with_txn(txn, workspace_id)
-                .unwrap_or_else(|| self.root.insert_map_with_txn(txn, workspace_id))
-        });
-
-        Some(WorkspaceMap::new(workspace_map))
+    pub fn to_json(&self) -> String {
+        self.root.to_json()
     }
 }
 
 pub struct WorkspaceArray {
-    inner: ArrayRefWrapper,
+    container: ArrayRefWrapper,
+    workspace_cache: RwLock<HashMap<String, WorkspaceMap>>,
 }
 
 impl WorkspaceArray {
     pub fn new(array_ref: ArrayRefWrapper) -> Self {
-        Self { inner: array_ref }
-    }
-
-    pub fn get_all_workspaces(&self) -> Vec<WorkspaceItem> {
-        let txn = self.inner.transact();
-        self.inner
-            .iter(&txn)
-            .flat_map(|item| {
-                if let YrsValue::Any(any) = item {
-                    Some(WorkspaceItem::from(any))
-                } else {
-                    None
+        let txn = array_ref.transact();
+        let workspace_maps = array_ref
+            .to_map_refs_with_txn(&txn)
+            .into_iter()
+            .flat_map(|map_ref| {
+                let workspace_map = WorkspaceMap::new(map_ref);
+                match workspace_map.workspace_id() {
+                    None => None,
+                    Some(workspace_id) => Some((workspace_id, workspace_map)),
                 }
             })
+            .collect::<HashMap<String, WorkspaceMap>>();
+        drop(txn);
+        Self {
+            container: array_ref,
+            workspace_cache: RwLock::new(workspace_maps),
+        }
+    }
+
+    pub fn get_all_workspaces(&self) -> Vec<Workspace> {
+        let txn = self.container.transact();
+        self.get_all_workspaces_with_txn(&txn)
+    }
+
+    pub fn get_workspace(&self, workspace_id: &str) -> Option<Workspace> {
+        self.workspace_cache
+            .read()
+            .get(workspace_id)
+            .map(|workspace_map| workspace_map.to_workspace())?
+    }
+
+    pub fn get_all_workspaces_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Workspace> {
+        let map_refs = self.container.to_map_refs();
+        map_refs
+            .into_iter()
+            .flat_map(|map_ref| WorkspaceMap::new(map_ref).to_workspace_with_txn(txn))
             .collect::<Vec<_>>()
+    }
+
+    pub fn create_workspace(&self, workspace: Workspace) {
+        self.container
+            .with_transact_mut(|txn| self.create_workspace_with_txn(txn, workspace))
+    }
+
+    pub fn delete_workspace(&self, index: u32) {
+        self.container.with_transact_mut(|txn| {
+            self.container.remove_with_txn(txn, index);
+        })
+    }
+
+    pub fn create_workspace_with_txn(&self, txn: &mut TransactionMut, workspace: Workspace) {
+        let workspace_id = workspace.id.clone();
+        let map_ref = self.container.create_map_with_txn(txn);
+        let workspace_map = WorkspaceMap::create_with_txn(txn, map_ref, &workspace.id, |builder| {
+            builder
+                .update(|update| {
+                    update
+                        .set_name(workspace.name)
+                        .set_created_at(workspace.created_at)
+                        .set_belongings(workspace.belongings);
+                })
+                .done()
+                .unwrap()
+        });
+
+        self.workspace_cache
+            .write()
+            .insert(workspace_id, workspace_map);
+    }
+
+    pub fn edit_workspace(&self, workspace_id: &str) -> Option<WorkspaceMap> {
+        self.workspace_cache.read().get(workspace_id).cloned()
     }
 }
 

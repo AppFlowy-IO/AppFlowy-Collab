@@ -21,6 +21,7 @@ impl CustomMapRef for MapRefWrapper {
     }
 }
 
+#[derive(Clone)]
 pub struct MapRefWrapper {
     map_ref: MapRef,
     collab_ctx: CollabContext,

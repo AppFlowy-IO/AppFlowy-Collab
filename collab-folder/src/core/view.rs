@@ -1,6 +1,7 @@
-use crate::core::{Belongings, BelongingsArray, View};
-
+use crate::core::{Belongings, BelongingsArray};
 use collab::preclude::{Map, MapRefWrapper, ReadTxn, TransactionMut};
+use serde::{Deserialize, Serialize};
+use serde_repr::*;
 
 const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";
@@ -11,26 +12,28 @@ const VIEW_CREATE_AT: &str = "created_at";
 const VIEW_BELONGINGS: &str = "belongings";
 
 pub struct ViewsMap {
-    root: MapRefWrapper,
+    container: MapRefWrapper,
 }
 
 impl ViewsMap {
     pub fn new(root: MapRefWrapper) -> ViewsMap {
-        Self { root }
+        Self { container: root }
     }
 
     pub fn get_view(&self, view_id: &str) -> Option<View> {
-        let txn = self.root.transact();
+        let txn = self.container.transact();
         self.get_view_with_txn(&txn, view_id)
     }
 
     pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<View> {
-        let map_ref = self.root.get_map_with_txn(txn, view_id)?;
+        let map_ref = self.container.get_map_with_txn(txn, view_id)?;
         let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
         let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();
         let bid = map_ref.get_str_with_txn(txn, VIEW_BID);
         let desc = map_ref.get_str_with_txn(txn, VIEW_DESC).unwrap_or_default();
-        let created_at = map_ref.get_i64_with_txn(txn, VIEW_CREATE_AT)?;
+        let created_at = map_ref
+            .get_i64_with_txn(txn, VIEW_CREATE_AT)
+            .unwrap_or_default();
         let layout = map_ref.get_i64_with_txn(txn, VIEW_LAYOUT)? as u8;
         let array = map_ref.get_array_ref(VIEW_BELONGINGS)?;
         let belongings = BelongingsArray::from_array(array).get_belongings();
@@ -46,12 +49,12 @@ impl ViewsMap {
     }
 
     pub fn insert_view(&self, view: View) {
-        self.root
+        self.container
             .with_transact_mut(|txn| self.insert_view_with_txn(txn, view));
     }
 
     pub fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View) {
-        let map_ref = self.root.insert_map_with_txn(txn, &view.id);
+        let map_ref = self.container.insert_map_with_txn(txn, &view.id);
         ViewUpdateBuilder::new(txn, map_ref)
             .with_id(view.id)
             .with_name(view.name)
@@ -64,20 +67,20 @@ impl ViewsMap {
     }
 
     pub fn delete_view(&self, view_id: &str) {
-        self.root
+        self.container
             .with_transact_mut(|txn| self.delete_view_with_txn(txn, view_id));
     }
 
     pub fn delete_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
-        self.root.remove(txn, view_id);
+        self.container.remove(txn, view_id);
     }
 
     pub fn update_view<F>(&self, view_id: &str, f: F)
     where
         F: FnOnce(ViewUpdateBuilder),
     {
-        self.root.with_transact_mut(|txn| {
-            let map_ref = self.root.insert_map_with_txn(txn, view_id);
+        self.container.with_transact_mut(|txn| {
+            let map_ref = self.container.insert_map_with_txn(txn, view_id);
             let builder = ViewUpdateBuilder::new(txn, map_ref);
             f(builder);
         })
@@ -135,4 +138,25 @@ impl<'a, 'b> ViewUpdateBuilder<'a, 'b> {
     }
 
     pub fn done(self) {}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct View {
+    pub id: String,
+    // bid short for belong to id
+    pub bid: Option<String>,
+    pub name: String,
+    pub desc: String,
+    pub belongings: Belongings,
+    pub created_at: i64,
+    pub layout: u8,
+}
+
+#[derive(Eq, PartialEq, Debug, Clone, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum ViewLayout {
+    Document = 0,
+    Grid = 1,
+    Board = 2,
+    Calendar = 3,
 }
