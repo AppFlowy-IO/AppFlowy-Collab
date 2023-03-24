@@ -2,7 +2,9 @@ use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
 
 use collab_document::document::Document;
+use collab_persistence::CollabKV;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tempfile::TempDir;
 
 pub struct DocumentTest {
@@ -14,7 +16,8 @@ pub struct DocumentTest {
 pub fn create_document(doc_id: &str) -> DocumentTest {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
-    let disk_plugin = CollabDiskPlugin::new(path.clone()).unwrap();
+    let db = Arc::new(CollabKV::open(path.clone()).unwrap());
+    let disk_plugin = CollabDiskPlugin::new(db).unwrap();
     let cleaner = Cleaner::new(path);
 
     let collab = CollabBuilder::new(1, doc_id)

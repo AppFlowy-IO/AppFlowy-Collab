@@ -1,8 +1,10 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
 use collab_folder::core::{Folder, Workspace};
+use collab_persistence::CollabKV;
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tempfile::TempDir;
 
 pub struct FolderTest {
@@ -13,7 +15,8 @@ pub struct FolderTest {
 pub fn create_folder(id: &str) -> FolderTest {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
-    let disk_plugin = CollabDiskPlugin::new(path.clone()).unwrap();
+    let db = Arc::new(CollabKV::open(path.clone()).unwrap());
+    let disk_plugin = CollabDiskPlugin::new(db).unwrap();
     let cleaner = Cleaner::new(path);
 
     let collab = CollabBuilder::new(1, id).with_plugin(disk_plugin).build();

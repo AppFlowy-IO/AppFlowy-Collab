@@ -2,8 +2,10 @@ use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::*;
 use lib0::any::Any;
 
+use collab_persistence::CollabKV;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tempfile::TempDir;
 
 pub enum Script {
@@ -50,7 +52,8 @@ impl CollabPersistenceTest {
     pub fn new() -> Self {
         let tempdir = TempDir::new().unwrap();
         let path = tempdir.into_path();
-        let disk_plugin = CollabDiskPlugin::new(path.clone()).unwrap();
+        let db = Arc::new(CollabKV::open(path.clone()).unwrap());
+        let disk_plugin = CollabDiskPlugin::new(db).unwrap();
         let cleaner = Cleaner::new(path.clone());
         Self {
             collabs: HashMap::default(),

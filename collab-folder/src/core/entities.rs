@@ -1,3 +1,4 @@
+use crate::core::{View, Workspace};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 use std::ops::Deref;
@@ -24,4 +25,11 @@ impl Deref for Belongings {
     fn deref(&self) -> &Self::Target {
         &self.view_ids
     }
+}
+
+pub struct FolderData {
+    pub current_workspace: String,
+    pub current_view: String,
+    pub workspaces: Vec<Workspace>,
+    pub views: Vec<View>,
 }

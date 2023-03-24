@@ -23,8 +23,8 @@ impl Document {
                 .get_map_with_txn(txn, vec![ROOT, BLOCKS])
                 .unwrap_or_else(|| root.insert_map_with_txn(txn, BLOCKS));
             let texts = collab
-                .get_map_with_txn(txn, vec![ROOT, TESTS])
-                .unwrap_or_else(|| root.insert_map_with_txn(txn, TESTS));
+                .get_map_with_txn(txn, vec![ROOT, TEXTS])
+                .unwrap_or_else(|| root.insert_map_with_txn(txn, TEXTS));
             (root, blocks, texts)
         });
         let blocks = BlockMap::new(blocks);

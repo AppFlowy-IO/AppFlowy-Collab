@@ -1,5 +1,5 @@
 use crate::core::trash::{TrashArray, TrashItem};
-use crate::core::{ViewsMap, Workspace, WorkspaceMap};
+use crate::core::{FolderData, ViewsMap, Workspace, WorkspaceMap};
 use collab::preclude::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -9,6 +9,9 @@ const FOLDER: &str = "folder";
 const WORKSPACES: &str = "workspaces";
 const VIEWS: &str = "views";
 const TRASH: &str = "trash";
+const META: &str = "meta";
+const CURRENT_WORKSPACE: &str = "current_workspace";
+const CURRENT_VIEW: &str = "current_view";
 
 pub struct Folder {
     inner: Collab,
@@ -16,11 +19,12 @@ pub struct Folder {
     pub workspaces: WorkspaceArray,
     pub views: ViewsMap,
     pub trash: TrashArray,
+    pub meta: MapRefWrapper,
 }
 
 impl Folder {
     pub fn create(collab: Collab) -> Self {
-        let (folder, workspaces, views, trash) = collab.with_transact_mut(|txn| {
+        let (folder, workspaces, views, trash, meta) = collab.with_transact_mut(|txn| {
             // { FOLDER: {:} }
             let folder = collab
                 .get_map_with_txn(txn, vec![FOLDER])
@@ -43,7 +47,12 @@ impl Folder {
                 .get_array_with_txn(txn, vec![FOLDER, TRASH])
                 .unwrap_or_else(|| folder.insert_array_with_txn::<TrashItem>(txn, TRASH, vec![]));
 
-            (folder, workspaces, views, trash)
+            // { FOLDER: { WORKSPACES: [], VIEWS: {:}, TRASH: [], META: {:} } }
+            let meta = collab
+                .get_map_with_txn(txn, vec![FOLDER, META])
+                .unwrap_or_else(|| folder.insert_map_with_txn(txn, META));
+
+            (folder, workspaces, views, trash, meta)
         });
         let workspaces = WorkspaceArray::new(workspaces);
         let views = ViewsMap::new(views);
@@ -54,7 +63,43 @@ impl Folder {
             workspaces,
             views,
             trash,
+            meta,
         }
+    }
+
+    pub fn create_with_data(collab: Collab, data: FolderData) {
+        let this = Self::create(collab);
+        this.root.with_transact_mut(|txn| {
+            for workspace in data.workspaces {
+                this.workspaces.create_workspace_with_txn(txn, workspace);
+            }
+
+            for view in data.views {
+                this.views.insert_view_with_txn(txn, view);
+            }
+
+            this.meta
+                .insert_with_txn(txn, CURRENT_WORKSPACE, data.current_workspace);
+
+            this.meta
+                .insert_with_txn(txn, CURRENT_VIEW, data.current_view);
+        })
+    }
+
+    pub fn set_current_workspace(&self, workspace_id: &str) {
+        self.meta.insert(CURRENT_WORKSPACE, workspace_id);
+    }
+
+    pub fn get_current_workspace(&self) -> Option<String> {
+        self.meta.get_str(CURRENT_WORKSPACE)
+    }
+
+    pub fn set_current_view(&self, view_id: &str) {
+        self.meta.insert(CURRENT_VIEW, view_id);
+    }
+
+    pub fn get_current_view(&self) -> Option<String> {
+        self.meta.get_str(CURRENT_VIEW)
     }
 
     pub fn to_json(&self) -> String {
