@@ -8,5 +8,6 @@ mod workspace;
 pub use belongings::*;
 pub use entities::*;
 pub use folder::*;
+pub use trash::*;
 pub use view::*;
 pub use workspace::*;

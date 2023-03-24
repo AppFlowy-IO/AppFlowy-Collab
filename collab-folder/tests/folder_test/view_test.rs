@@ -1,5 +1,5 @@
 use crate::util::create_folder_with_workspace;
-use collab_folder::core::{Belongings, View};
+use collab_folder::core::{Belongings, View, ViewLayout};
 
 #[test]
 fn create_view_test() {
@@ -11,7 +11,7 @@ fn create_view_test() {
         desc: "".to_string(),
         belongings: Default::default(),
         created_at: 0,
-        layout: 0,
+        layout: ViewLayout::Document,
     };
     folder_test.views.insert_view(o_view.clone());
 
@@ -31,7 +31,7 @@ fn create_view_with_sub_test() {
         desc: "".to_string(),
         belongings: Default::default(),
         created_at: 0,
-        layout: 0,
+        layout: ViewLayout::Document,
     };
 
     let o_view = View {
@@ -41,7 +41,7 @@ fn create_view_with_sub_test() {
         desc: "".to_string(),
         belongings: Belongings::new(vec!["v1_1".to_string()]),
         created_at: 0,
-        layout: 0,
+        layout: ViewLayout::Document,
     };
     folder_test.views.insert_view(o_sub_view.clone());
     folder_test.views.insert_view(o_view.clone());
@@ -66,7 +66,7 @@ fn delete_view_test() {
         desc: "".to_string(),
         belongings: Default::default(),
         created_at: 0,
-        layout: 0,
+        layout: ViewLayout::Document,
     };
     folder_test.views.insert_view(o_view.clone());
     assert!(folder_test.views.get_view("v1").is_some());
@@ -84,8 +84,17 @@ fn update_view_test() {
         desc: "".to_string(),
         belongings: Default::default(),
         created_at: 0,
-        layout: 0,
+        layout: ViewLayout::Document,
     };
-    folder_test.views.insert_view(o_view.clone());
-    // folder_test.views.update_view()
+    folder_test.views.insert_view(o_view);
+    folder_test
+        .views
+        .update_view("v1", |update| {
+            update.set_name("Untitled").set_desc("My first view");
+        })
+        .unwrap();
+
+    let r_view = folder_test.views.get_view("v1").unwrap();
+    assert_eq!(r_view.name, "Untitled");
+    assert_eq!(r_view.desc, "My first view");
 }

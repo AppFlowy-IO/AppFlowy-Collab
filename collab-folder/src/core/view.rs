@@ -1,4 +1,5 @@
 use crate::core::{Belongings, BelongingsArray};
+use anyhow::{anyhow, bail, Result};
 use collab::preclude::{Map, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
@@ -34,7 +35,9 @@ impl ViewsMap {
         let created_at = map_ref
             .get_i64_with_txn(txn, VIEW_CREATE_AT)
             .unwrap_or_default();
-        let layout = map_ref.get_i64_with_txn(txn, VIEW_LAYOUT)? as u8;
+        let layout = map_ref
+            .get_i64_with_txn(txn, VIEW_LAYOUT)
+            .map(|value| value.try_into().ok())??;
         let array = map_ref.get_array_ref(VIEW_BELONGINGS)?;
         let belongings = BelongingsArray::from_array(array).get_belongings();
         Some(View {
@@ -55,14 +58,16 @@ impl ViewsMap {
 
     pub fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View) {
         let map_ref = self.container.insert_map_with_txn(txn, &view.id);
-        ViewUpdateBuilder::new(txn, map_ref)
-            .with_id(view.id)
-            .with_name(view.name)
-            .with_bid(view.bid)
-            .with_desc(view.desc)
-            .with_layout(view.layout)
-            .with_created_at(view.created_at)
-            .with_belongings(view.belongings)
+        ViewBuilder::new(&view.id, txn, map_ref)
+            .update(|update| {
+                update
+                    .set_name(view.name)
+                    .set_bid(view.bid)
+                    .set_desc(view.desc)
+                    .set_layout(view.layout)
+                    .set_created_at(view.created_at)
+                    .set_belongings(view.belongings);
+            })
             .done();
     }
 
@@ -75,69 +80,89 @@ impl ViewsMap {
         self.container.remove(txn, view_id);
     }
 
-    pub fn update_view<F>(&self, view_id: &str, f: F)
+    pub fn update_view<F>(&self, view_id: &str, f: F) -> Result<()>
     where
-        F: FnOnce(ViewUpdateBuilder),
+        F: FnOnce(ViewUpdate),
     {
         self.container.with_transact_mut(|txn| {
-            let map_ref = self.container.insert_map_with_txn(txn, view_id);
-            let builder = ViewUpdateBuilder::new(txn, map_ref);
-            f(builder);
+            match self.container.get_map_with_txn(txn, view_id) {
+                None => bail!("View is not existing"),
+                Some(map_ref) => {
+                    let update = ViewUpdate::new(txn, &map_ref);
+                    f(update);
+                    Ok(())
+                }
+            }
         })
     }
 }
 
-pub struct ViewUpdateBuilder<'a, 'b> {
+pub struct ViewBuilder<'a, 'b> {
     map_ref: MapRefWrapper,
     txn: &'a mut TransactionMut<'b>,
 }
 
-impl<'a, 'b> ViewUpdateBuilder<'a, 'b> {
-    pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: MapRefWrapper) -> Self {
+impl<'a, 'b> ViewBuilder<'a, 'b> {
+    pub fn new(view_id: &str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefWrapper) -> Self {
+        map_ref.insert_with_txn(txn, VIEW_ID, view_id);
         Self { map_ref, txn }
     }
 
-    pub fn with_id<T: AsRef<str>>(self, id: T) -> Self {
-        self.map_ref.insert_with_txn(self.txn, VIEW_ID, id.as_ref());
+    pub fn update<F>(self, f: F) -> Self
+    where
+        F: FnOnce(ViewUpdate),
+    {
+        let update = ViewUpdate::new(self.txn, &self.map_ref);
+        f(update);
         self
     }
+    pub fn done(self) {}
+}
 
-    pub fn with_name<T: AsRef<str>>(self, name: T) -> Self {
+pub struct ViewUpdate<'a, 'b, 'c> {
+    map_ref: &'c MapRefWrapper,
+    txn: &'a mut TransactionMut<'b>,
+}
+
+impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
+    pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRefWrapper) -> Self {
+        Self { map_ref, txn }
+    }
+
+    pub fn set_name<T: AsRef<str>>(self, name: T) -> Self {
         self.map_ref
             .insert_with_txn(self.txn, VIEW_NAME, name.as_ref());
         self
     }
 
-    pub fn with_bid(self, bid: Option<String>) -> Self {
+    pub fn set_bid(self, bid: Option<String>) -> Self {
         self.map_ref.insert_with_txn(self.txn, VIEW_BID, bid);
         self
     }
 
-    pub fn with_desc<T: AsRef<str>>(self, desc: T) -> Self {
+    pub fn set_desc<T: AsRef<str>>(self, desc: T) -> Self {
         self.map_ref
             .insert_with_txn(self.txn, VIEW_DESC, desc.as_ref());
         self
     }
 
-    pub fn with_layout(self, layout: u8) -> Self {
+    pub fn set_layout(self, layout: ViewLayout) -> Self {
         self.map_ref
             .insert_with_txn(self.txn, VIEW_LAYOUT, layout as i64);
         self
     }
 
-    pub fn with_created_at(self, created_at: i64) -> Self {
+    pub fn set_created_at(self, created_at: i64) -> Self {
         self.map_ref
             .insert_with_txn(self.txn, VIEW_CREATE_AT, created_at);
         self
     }
 
-    pub fn with_belongings(self, belongings: Belongings) -> Self {
+    pub fn set_belongings(self, belongings: Belongings) -> Self {
         self.map_ref
             .insert_array_with_txn(self.txn, VIEW_BELONGINGS, belongings.into_inner());
         self
     }
-
-    pub fn done(self) {}
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -149,7 +174,7 @@ pub struct View {
     pub desc: String,
     pub belongings: Belongings,
     pub created_at: i64,
-    pub layout: u8,
+    pub layout: ViewLayout,
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize_repr, Deserialize_repr)]
@@ -159,4 +184,24 @@ pub enum ViewLayout {
     Grid = 1,
     Board = 2,
     Calendar = 3,
+}
+
+impl TryFrom<i64> for ViewLayout {
+    type Error = anyhow::Error;
+
+    fn try_from(value: i64) -> std::result::Result<Self, Self::Error> {
+        match value {
+            0 => Ok(ViewLayout::Document),
+            1 => Ok(ViewLayout::Grid),
+            2 => Ok(ViewLayout::Board),
+            3 => Ok(ViewLayout::Calendar),
+            _ => bail!("Unknown layout {}", value),
+        }
+    }
+}
+
+impl From<ViewLayout> for i64 {
+    fn from(layout: ViewLayout) -> Self {
+        layout as i64
+    }
 }
