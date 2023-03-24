@@ -19,7 +19,7 @@ fn insert_single_change_and_restore_from_disk() {
             id: doc_id.to_string(),
         },
         GetText {
-            id: doc_id.clone(),
+            id: doc_id,
             key: "1".to_string(),
             expected: Some("a".into()),
         },
@@ -78,7 +78,7 @@ fn insert_multiple_changes_and_restore_from_disk() {
             expected: Some("c".into()),
         },
         GetText {
-            id: doc_id.to_string(),
+            id: doc_id,
             key: "4".to_string(),
             expected: Some("d".into()),
         },

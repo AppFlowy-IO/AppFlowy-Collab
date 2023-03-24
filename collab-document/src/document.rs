@@ -1,7 +1,6 @@
 use crate::blocks::{Block, BlockBuilder, BlockMap, BlockMapRef, TextMap};
 use crate::error::DocumentError;
 use collab::preclude::*;
-use std::ops::Deref;
 
 const ROOT: &str = "document";
 const BLOCKS: &str = "blocks";
@@ -22,10 +21,10 @@ impl Document {
                 .unwrap_or_else(|| collab.create_map_with_txn(txn, ROOT));
             let blocks = collab
                 .get_map_with_txn(txn, vec![ROOT, BLOCKS])
-                .unwrap_or_else(|| root.create_map_with_txn(txn, BLOCKS));
+                .unwrap_or_else(|| root.insert_map_with_txn(txn, BLOCKS));
             let texts = collab
                 .get_map_with_txn(txn, vec![ROOT, TESTS])
-                .unwrap_or_else(|| root.create_map_with_txn(txn, TESTS));
+                .unwrap_or_else(|| root.insert_map_with_txn(txn, TESTS));
             (root, blocks, texts)
         });
         let blocks = BlockMap::new(blocks);

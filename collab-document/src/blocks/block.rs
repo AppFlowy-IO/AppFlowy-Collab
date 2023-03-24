@@ -32,6 +32,7 @@ impl BlockMap {
     pub fn new(root: MapRefWrapper) -> Self {
         Self { root }
     }
+
     pub fn get_block(&self, block_id: &str) -> Option<BlockMapRef> {
         let txn = self.root.transact();
         let map_ref = self.root.get_map_with_txn(&txn, block_id)?;
@@ -83,7 +84,7 @@ impl<'a, 'b> BlockBuilder<'a, 'b> {
         container: &MapRefWrapper,
     ) -> Self {
         let map_ref = match container.get_map_with_txn(txn, &block_id) {
-            None => container.create_map_with_txn(txn, &block_id),
+            None => container.insert_map_with_txn(txn, &block_id),
             Some(map) => map,
         };
         let block_map = BlockMapRef::from_map_ref(map_ref);
