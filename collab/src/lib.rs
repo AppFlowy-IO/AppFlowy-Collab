@@ -16,7 +16,7 @@ pub mod preclude {
     pub use yrs::block::Prelim;
     pub use yrs::types::{
         array::Array, Attrs, Delta as YrsDelta, EntryChange, GetString, Observable, ToJson,
-        Value as YrsValue,
+        Value as YrsValue, *,
     };
     pub use yrs::{
         merge_updates_v1, ArrayRef, Map, MapRef, ReadTxn, StateVector, Text, TextRef, Transaction,

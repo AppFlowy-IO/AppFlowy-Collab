@@ -1,9 +1,10 @@
 use crate::util::create_folder_with_workspace;
-use collab_folder::core::{Belongings, View, ViewLayout};
+use collab_folder::core::{Belongings, View, ViewBuilder, ViewLayout};
 
 #[test]
 fn create_view_test() {
     let folder_test = create_folder_with_workspace("1", "w1");
+    ViewBuilder::default();
     let o_view = View {
         id: "v1".to_string(),
         bid: "w1".to_string(),
@@ -12,6 +13,7 @@ fn create_view_test() {
         belongings: Default::default(),
         created_at: 0,
         layout: ViewLayout::Document,
+        visible: false,
     };
     folder_test.views.insert_view(o_view.clone());
 
@@ -35,6 +37,7 @@ fn create_view_with_sub_view_test() {
         belongings: Default::default(),
         created_at: 0,
         layout: ViewLayout::Document,
+        visible: true,
     };
 
     let o_view = View {
@@ -45,6 +48,7 @@ fn create_view_with_sub_view_test() {
         belongings: Belongings::new(vec!["v1_1".to_string()]),
         created_at: 0,
         layout: ViewLayout::Document,
+        visible: true,
     };
     folder_test.views.insert_view(o_sub_view.clone());
     folder_test.views.insert_view(o_view.clone());
@@ -76,6 +80,7 @@ fn delete_view_test() {
         belongings: Default::default(),
         created_at: 0,
         layout: ViewLayout::Document,
+        visible: false,
     };
     folder_test.views.insert_view(o_view.clone());
     assert!(folder_test
@@ -100,6 +105,7 @@ fn update_view_test() {
         belongings: Default::default(),
         created_at: 0,
         layout: ViewLayout::Document,
+        visible: false,
     };
     folder_test.views.insert_view(o_view);
     folder_test
