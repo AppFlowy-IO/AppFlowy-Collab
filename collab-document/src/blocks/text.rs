@@ -36,7 +36,7 @@ impl TextMap {
 
     pub fn get_text(&self, text_id: &str) -> Option<TextRefWrapper> {
         let txn = self.root.transact();
-        self.root.get_text_with_txn(&txn, text_id)
+        self.root.get_text_ref_with_txn(&txn, text_id)
     }
 
     pub fn edit_text(&self, text_id: &str, actions: Vec<TextAction>) {
@@ -54,23 +54,23 @@ impl TextMap {
 
     pub fn get_str_with_txn<T: ReadTxn>(&self, txn: &T, text_id: &str) -> Option<String> {
         self.root
-            .get_text_with_txn(txn, text_id)
+            .get_text_ref_with_txn(txn, text_id)
             .map(|map| map.get_string(txn))
     }
 
     pub fn get_delta(&self, text_id: &str) -> Vec<YrsDelta> {
         let txn = self.root.transact();
         self.root
-            .get_text_with_txn(&txn, text_id)
+            .get_text_ref_with_txn(&txn, text_id)
             .map(|map| map.get_delta_with_txn(&txn))
-            .unwrap_or(vec![])
+            .unwrap_or_default()
     }
 
     pub fn get_delta_with_txn<T: ReadTxn>(&self, txn: &T, text_id: &str) -> Vec<YrsDelta> {
         self.root
-            .get_text_with_txn(txn, text_id)
+            .get_text_ref_with_txn(txn, text_id)
             .map(|map| map.get_delta_with_txn(txn))
-            .unwrap_or(vec![])
+            .unwrap_or_default()
     }
 
     pub fn edit_text_with_txn(

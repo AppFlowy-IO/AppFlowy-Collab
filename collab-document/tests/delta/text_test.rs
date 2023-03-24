@@ -1,5 +1,5 @@
 use crate::util::create_document;
-use collab_document::blocks::{Block, BlockBuilder, TextAction, TextData};
+use collab_document::blocks::{Block, TextAction, TextData};
 
 #[test]
 fn update_text_test() {

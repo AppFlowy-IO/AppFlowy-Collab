@@ -84,6 +84,7 @@ fn into_inner_field_token_stream(
         | IdentType::I64Type
         | IdentType::F64Type
         | IdentType::BoolType
+        | IdentType::ArrayType { .. }
         | IdentType::HashMapType { .. } => {
             if is_option {
                 Some(quote! {
@@ -179,6 +180,18 @@ fn setter_getter_token_steam_for_item_type(
         } => setter_getter_token_steam_for_item_type(
             key, setter, getter, inner_ty, ident, ident_type,
         ),
+        IdentType::ArrayType {
+            ident_type: _,
+            inner_ty: _,
+        } => Some(quote! {
+              pub fn #setter(&mut self, txn: &mut collab::preclude::TransactionMut, value: #ty) {
+                  self.map_ref.insert_json_with_txn(txn, #key, value)
+              }
+
+              pub fn #getter(&self, txn: &collab::preclude::Transaction) -> Option<#ty> {
+                  self.map_ref.get_json_with_txn(txn, #key)
+              }
+        }),
     }
 }
 fn setter_getter_token_stream(
@@ -222,6 +235,10 @@ enum IdentType {
         ident_type: Box<IdentType>,
         inner_ty: Type,
     },
+    ArrayType {
+        ident_type: Box<IdentType>,
+        inner_ty: Type,
+    },
     Others,
 }
 
@@ -248,8 +265,12 @@ impl IdentType {
                     }
 
                     if seg.ident == "Vec" {
-                        ast_result.error_spanned_by(ty, "Unsupported");
-                        ident_type = IdentType::Others;
+                        let types = get_bracketed_value_type_from(ast_result, seg);
+                        let item_type = IdentType::from_ty(ast_result, types[0]);
+                        ident_type = IdentType::ArrayType {
+                            ident_type: Box::new(item_type),
+                            inner_ty: types[0].clone(),
+                        };
                     }
 
                     if seg.ident == "Option" {

@@ -2,10 +2,8 @@ use crate::preclude::{CollabContext, YrsDelta};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use yrs::types::text::{TextEvent, YChange};
-
 use yrs::types::Delta;
 use yrs::{ReadTxn, Subscription, Text, TextRef, Transaction, TransactionMut};
-
 pub type TextSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &TextEvent)>;
 pub type TextSubscription = Subscription<TextSubscriptionCallback>;
 

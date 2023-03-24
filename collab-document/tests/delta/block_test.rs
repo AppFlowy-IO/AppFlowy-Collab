@@ -1,5 +1,4 @@
 use crate::util::create_document;
-use collab_document::blocks::{TextAction, TextData};
 
 #[test]
 fn create_block_test() {

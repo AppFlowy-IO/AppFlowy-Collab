@@ -77,7 +77,7 @@ impl<'a> YrsDoc<'a> {
         };
         let clock = last_clock + 1;
         let update_key = make_update_key(did, clock);
-        self.db.insert(&update_key, &update)?;
+        self.db.insert(&update_key, update)?;
         Ok(())
     }
 

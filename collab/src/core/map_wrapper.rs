@@ -3,12 +3,13 @@ use lib0::any::Any;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use crate::core::array_wrapper::ArrayRefWrapper;
 use crate::core::text_wrapper::TextRefWrapper;
 use crate::preclude::*;
 use std::ops::{Deref, DerefMut};
 use yrs::block::Prelim;
 use yrs::types::{ToJson, Value};
-use yrs::{Map, MapPrelim, MapRef, ReadTxn, TextPrelim, Transaction, TransactionMut};
+use yrs::{ArrayPrelim, Map, MapPrelim, MapRef, ReadTxn, TextPrelim, Transaction, TransactionMut};
 
 pub trait CustomMapRef {
     fn from_map_ref(map_ref: MapRefWrapper) -> Self;
@@ -20,6 +21,7 @@ impl CustomMapRef for MapRefWrapper {
     }
 }
 
+#[derive(Clone)]
 pub struct MapRefWrapper {
     map_ref: MapRef,
     collab_ctx: CollabContext,
@@ -72,7 +74,21 @@ impl MapRefWrapper {
         }
     }
 
-    pub fn create_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
+    pub fn insert_array<V: Prelim>(&self, key: &str, values: Vec<V>) -> ArrayRefWrapper {
+        self.with_transact_mut(|txn| self.insert_array_with_txn(txn, key, values))
+    }
+
+    pub fn insert_array_with_txn<V: Prelim>(
+        &self,
+        txn: &mut TransactionMut,
+        key: &str,
+        values: Vec<V>,
+    ) -> ArrayRefWrapper {
+        let array = self.map_ref.insert(txn, key, ArrayPrelim::from(values));
+        ArrayRefWrapper::new(array, self.collab_ctx.clone())
+    }
+
+    pub fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
         let map = MapPrelim::<lib0::any::Any>::new();
         let map_ref = self.map_ref.insert(txn, key, map);
         MapRefWrapper::new(map_ref, self.collab_ctx.clone())
@@ -104,33 +120,50 @@ impl MapRefWrapper {
         self.get_str_with_txn(&txn, key)
     }
 
-    pub fn get_str_with_txn(&self, txn: &Transaction, key: &str) -> Option<String> {
+    pub fn get_array_ref_with_txn<T: ReadTxn>(
+        &self,
+        txn: &T,
+        key: &str,
+    ) -> Option<ArrayRefWrapper> {
+        let array_ref = self
+            .map_ref
+            .get(txn, key)
+            .map(|value| value.to_yarray())??;
+        Some(ArrayRefWrapper::new(array_ref, self.collab_ctx.clone()))
+    }
+
+    pub fn get_array_ref(&self, key: &str) -> Option<ArrayRefWrapper> {
+        let txn = self.transact();
+        self.get_array_ref_with_txn(&txn, key)
+    }
+
+    pub fn get_str_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<String> {
         if let Some(Value::Any(Any::String(value))) = self.map_ref.get(txn, key) {
             return Some(value.to_string());
         }
         None
     }
 
-    pub fn get_text_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<TextRefWrapper> {
+    pub fn get_text_ref_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<TextRefWrapper> {
         let text_ref = self.map_ref.get(txn, key).map(|value| value.to_ytext())??;
         Some(TextRefWrapper::new(text_ref, self.collab_ctx.clone()))
     }
 
-    pub fn get_i64_with_txn(&self, txn: &Transaction, key: &str) -> Option<i64> {
+    pub fn get_i64_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<i64> {
         if let Some(Value::Any(Any::BigInt(value))) = self.map_ref.get(txn, key) {
             return Some(value);
         }
         None
     }
 
-    pub fn get_f64_with_txn(&self, txn: &Transaction, key: &str) -> Option<f64> {
+    pub fn get_f64_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<f64> {
         if let Some(Value::Any(Any::Number(value))) = self.map_ref.get(txn, key) {
             return Some(value);
         }
         None
     }
 
-    pub fn get_bool_with_txn(&self, txn: &Transaction, key: &str) -> Option<bool> {
+    pub fn get_bool_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<bool> {
         if let Some(Value::Any(Any::Bool(value))) = self.map_ref.get(txn, key) {
             return Some(value);
         }

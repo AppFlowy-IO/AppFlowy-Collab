@@ -13,9 +13,10 @@ use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
 
+use crate::preclude::ArrayRefWrapper;
 use yrs::{
-    Doc, Map, MapPrelim, MapRef, Observable, ReadTxn, Subscription, Transact, Transaction,
-    TransactionMut, Update, UpdateSubscription,
+    ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, ReadTxn, Subscription, Transact,
+    Transaction, TransactionMut, Update, UpdateSubscription,
 };
 
 type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
@@ -136,6 +137,37 @@ impl Collab {
         map_ref.map(|map_ref| self.map_wrapper_with(map_ref))
     }
 
+    pub fn get_array_with_txn<P: Into<Path>, T: ReadTxn>(
+        &self,
+        txn: &T,
+        path: P,
+    ) -> Option<ArrayRefWrapper> {
+        let path = path.into();
+        let array_ref = self
+            .get_ref_from_path_with_txn(txn, path)
+            .map(|value| value.to_yarray())?;
+
+        array_ref.map(|array_ref| self.array_wrapper_with(array_ref))
+    }
+
+    fn get_ref_from_path_with_txn<T: ReadTxn>(&self, txn: &T, mut path: Path) -> Option<Value> {
+        if path.is_empty() {
+            return None;
+        }
+
+        if path.len() == 1 {
+            return self.attributes.get(txn, &path[0]);
+        }
+
+        let last = path.pop().unwrap();
+        let mut iter = path.into_iter();
+        let mut map_ref = self.attributes.get(txn, &iter.next().unwrap())?.to_ymap();
+        for path in iter {
+            map_ref = map_ref?.get(txn, &path)?.to_ymap();
+        }
+        map_ref?.get(txn, &last)
+    }
+
     pub fn remove(&mut self, key: &str) -> Option<Value> {
         let mut txn = self.doc.transact_mut();
         self.attributes.remove(&mut txn, key)
@@ -191,6 +223,12 @@ impl Collab {
     fn map_wrapper_with(&self, map_ref: MapRef) -> MapRefWrapper {
         MapRefWrapper::new(
             map_ref,
+            CollabContext::new(self.plugins.clone(), self.doc.clone()),
+        )
+    }
+    fn array_wrapper_with(&self, array_ref: ArrayRef) -> ArrayRefWrapper {
+        ArrayRefWrapper::new(
+            array_ref,
             CollabContext::new(self.plugins.clone(), self.doc.clone()),
         )
     }
@@ -279,6 +317,7 @@ impl CollabContext {
     }
 }
 
+#[derive(Clone)]
 pub struct Path(Vec<String>);
 
 impl IntoIterator for Path {
