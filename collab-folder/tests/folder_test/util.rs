@@ -1,6 +1,8 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
-use collab_folder::core::{Folder, FolderContext, ViewChangeReceiver, Workspace};
+use collab_folder::core::{
+    Folder, FolderContext, TrashChangeReceiver, TrashChangeSender, ViewChangeReceiver, Workspace,
+};
 use collab_persistence::CollabKV;
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -14,7 +16,10 @@ pub struct FolderTest {
     cleaner: Cleaner,
 
     #[allow(dead_code)]
-    rx: ViewChangeReceiver,
+    view_rx: ViewChangeReceiver,
+
+    #[allow(dead_code)]
+    trash_rx: TrashChangeReceiver,
 }
 
 pub fn create_folder(id: &str) -> FolderTest {
@@ -26,15 +31,18 @@ pub fn create_folder(id: &str) -> FolderTest {
 
     let collab = CollabBuilder::new(1, id).with_plugin(disk_plugin).build();
 
-    let (tx, rx) = tokio::sync::broadcast::channel(100);
+    let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
+    let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
     let context = FolderContext {
-        view_change_tx: Some(tx),
+        view_change_tx: Some(view_tx),
+        trash_change_tx: Some(trash_tx),
     };
     let folder = Folder::create(collab, context);
     FolderTest {
         folder,
         cleaner,
-        rx,
+        view_rx,
+        trash_rx,
     }
 }
 

@@ -12,7 +12,6 @@ fn create_view_test() {
         belongings: Default::default(),
         created_at: 0,
         layout: ViewLayout::Document,
-        visible: false,
     };
     folder_test.views.insert_view(o_view.clone());
 
@@ -33,7 +32,6 @@ fn create_view_with_sub_view_test() {
         belongings: Default::default(),
         created_at: 0,
         layout: ViewLayout::Document,
-        visible: true,
     };
 
     let o_view = View {
@@ -44,7 +42,6 @@ fn create_view_with_sub_view_test() {
         belongings: Belongings::new(vec!["v1_1".to_string()]),
         created_at: 0,
         layout: ViewLayout::Document,
-        visible: true,
     };
     folder_test.views.insert_view(o_sub_view.clone());
     folder_test.views.insert_view(o_view.clone());
@@ -70,7 +67,6 @@ fn delete_view_test() {
         belongings: Default::default(),
         created_at: 0,
         layout: ViewLayout::Document,
-        visible: false,
     };
     folder_test.views.insert_view(o_view);
     assert!(folder_test.views.get_view("v1",).is_some());
@@ -89,7 +85,6 @@ fn update_view_test() {
         belongings: Default::default(),
         created_at: 0,
         layout: ViewLayout::Document,
-        visible: false,
     };
     folder_test.views.insert_view(o_view);
     folder_test

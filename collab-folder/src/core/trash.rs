@@ -1,18 +1,64 @@
-use collab::preclude::{lib0Any, Array, ArrayRefWrapper, ReadTxn, TransactionMut, YrsValue};
+use crate::core::{TrashInfo, ViewsMap};
+use collab::preclude::array::ArrayEvent;
+use collab::preclude::{
+    lib0Any, Array, ArrayRefWrapper, Change, MapRefWrapper, Observable, ReadTxn, Subscription,
+    TransactionMut, YrsValue,
+};
 use serde::{Deserialize, Serialize};
+use std::rc::Rc;
+use std::sync::Arc;
+use tokio::sync::broadcast;
+
+pub type TrashChangeSender = broadcast::Sender<TrashChange>;
+pub type TrashChangeReceiver = broadcast::Receiver<TrashChange>;
+type ArraySubscription = Subscription<Arc<dyn Fn(&TransactionMut, &ArrayEvent)>>;
+
+#[derive(Debug, Clone)]
+pub enum TrashChange {
+    DidCreateTrash { ids: Vec<String> },
+    DidDeleteTrash { ids: Vec<String> },
+}
 
 pub struct TrashArray {
     container: ArrayRefWrapper,
+    view_map: Rc<ViewsMap>,
+    tx: Option<TrashChangeSender>,
+    #[allow(dead_code)]
+    subscription: Option<ArraySubscription>,
 }
 
 impl TrashArray {
-    pub fn new(root: ArrayRefWrapper) -> Self {
-        Self { container: root }
+    pub fn new(
+        mut root: ArrayRefWrapper,
+        view_map: Rc<ViewsMap>,
+        tx: Option<TrashChangeSender>,
+    ) -> Self {
+        let subscription = subscribe_change(&mut root, tx.clone());
+        Self {
+            container: root,
+            view_map,
+            tx,
+            subscription,
+        }
     }
 
-    pub fn get_all_trash(&self) -> Vec<TrashItem> {
+    pub fn get_all_trash(&self) -> Vec<TrashInfo> {
         let txn = self.container.transact();
-        self.get_all_trash_with_txn(&txn)
+        let items = self.get_all_trash_with_txn(&txn);
+        items
+            .into_iter()
+            .map(|item| {
+                let name = self
+                    .view_map
+                    .get_view_name_with_txn(&txn, &item.id)
+                    .unwrap_or_default();
+                TrashInfo {
+                    id: item.id,
+                    name,
+                    created_at: item.created_at,
+                }
+            })
+            .collect::<Vec<_>>()
     }
 
     pub fn get_all_trash_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<TrashItem> {
@@ -25,14 +71,20 @@ impl TrashArray {
         trash
     }
 
-    pub fn remove_trash(&self, index: u32) {
+    pub fn remove_trash(&self, id: &str) {
         self.container.with_transact_mut(|txn| {
-            self.container.remove_with_txn(txn, index);
+            self.remove_trash_with_txn(txn, id);
         })
     }
 
-    pub fn remove_trash_with_txn(&self, txn: &mut TransactionMut, index: u32) {
-        self.container.remove_with_txn(txn, index);
+    pub fn remove_trash_with_txn(&self, txn: &mut TransactionMut, id: &str) {
+        if let Some(pos) = self
+            .get_all_trash_with_txn(txn)
+            .into_iter()
+            .position(|item| item.id == id)
+        {
+            self.container.remove_with_txn(txn, pos as u32);
+        }
     }
 
     pub fn add_trash(&self, trash: TrashItem) {
@@ -44,11 +96,38 @@ impl TrashArray {
     pub fn add_trash_with_txn(&self, txn: &mut TransactionMut, trash: TrashItem) {
         self.container.push_with_txn(txn, trash);
     }
+
+    pub fn clear(&self) {
+        self.container.with_transact_mut(|txn| {
+            let len = self.container.iter(txn).count();
+            self.container.remove_range(txn, 0, len as u32);
+        });
+    }
+}
+
+fn subscribe_change(
+    array: &mut ArrayRefWrapper,
+    tx: Option<TrashChangeSender>,
+) -> Option<ArraySubscription> {
+    return if tx.is_some() {
+        Some(array.observe(|txn, event| {
+            for change in event.delta(txn) {
+                match change {
+                    Change::Added(values) => {}
+                    Change::Removed(value) => {}
+                    Change::Retain(_) => {}
+                }
+            }
+        }))
+    } else {
+        None
+    };
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TrashItem {
     pub id: String,
+    pub created_at: i64,
 }
 
 impl From<lib0Any> for TrashItem {

@@ -1,5 +1,8 @@
 use crate::core::trash::{TrashArray, TrashItem};
-use crate::core::{BelongingMap, FolderData, ViewChangeSender, ViewsMap, Workspace, WorkspaceMap};
+use crate::core::{
+    BelongingMap, FolderData, TrashChangeSender, ViewChangeSender, ViewsMap, Workspace,
+    WorkspaceMap,
+};
 use collab::preclude::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -18,6 +21,7 @@ const CURRENT_VIEW: &str = "current_view";
 #[derive(Default)]
 pub struct FolderContext {
     pub view_change_tx: Option<ViewChangeSender>,
+    pub trash_change_tx: Option<TrashChangeSender>,
 }
 
 pub struct Folder {
@@ -25,7 +29,7 @@ pub struct Folder {
     inner: Collab,
     root: MapRefWrapper,
     pub workspaces: WorkspaceArray,
-    pub views: ViewsMap,
+    pub views: Rc<ViewsMap>,
     pub belongings: Rc<BelongingMap>,
     pub trash: TrashArray,
     pub meta: MapRefWrapper,
@@ -73,8 +77,12 @@ impl Folder {
             });
         let belongings = Rc::new(BelongingMap::new(belongings));
         let workspaces = WorkspaceArray::new(workspaces, belongings.clone());
-        let views = ViewsMap::new(views, context.view_change_tx, belongings.clone());
-        let trash = TrashArray::new(trash);
+        let views = Rc::new(ViewsMap::new(
+            views,
+            context.view_change_tx,
+            belongings.clone(),
+        ));
+        let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx);
         Self {
             inner: collab,
             root: folder,

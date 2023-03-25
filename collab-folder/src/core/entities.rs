@@ -44,3 +44,9 @@ pub struct FolderData {
     pub workspaces: Vec<Workspace>,
     pub views: Vec<View>,
 }
+
+pub struct TrashInfo {
+    pub id: String,
+    pub name: String,
+    pub created_at: i64,
+}

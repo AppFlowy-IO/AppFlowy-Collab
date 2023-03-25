@@ -19,7 +19,7 @@ pub mod preclude {
         Value as YrsValue, *,
     };
     pub use yrs::{
-        merge_updates_v1, ArrayRef, Map, MapRef, ReadTxn, StateVector, Text, TextRef, Transaction,
-        TransactionMut, Update,
+        merge_updates_v1, ArrayRef, Map, MapRef, ReadTxn, StateVector, Subscription, Text, TextRef,
+        Transaction, TransactionMut, Update,
     };
 }

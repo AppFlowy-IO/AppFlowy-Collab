@@ -17,10 +17,10 @@ const VIEW_BID: &str = "bid";
 const VIEW_DESC: &str = "desc";
 const VIEW_LAYOUT: &str = "layout";
 const VIEW_CREATE_AT: &str = "created_at";
-const VIEW_VISIBLE: &str = "visible";
 
 pub type ViewChangeSender = broadcast::Sender<ViewChange>;
 pub type ViewChangeReceiver = broadcast::Receiver<ViewChange>;
+
 pub struct ViewsMap {
     container: MapRefWrapper,
     subscription: Option<DeepEventsSubscription>,
@@ -87,6 +87,11 @@ impl ViewsMap {
         view_from_map_ref(&map_ref, txn, &self.belonging_map)
     }
 
+    pub fn get_view_name_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<String> {
+        let map_ref = self.container.get_map_with_txn(txn, view_id)?;
+        map_ref.get_str_with_txn(txn, VIEW_NAME)
+    }
+
     pub fn insert_view(&self, view: View) {
         self.container
             .with_transact_mut(|txn| self.insert_view_with_txn(txn, view));
@@ -103,7 +108,7 @@ impl ViewsMap {
                     .set_layout(view.layout)
                     .set_created_at(view.created_at)
                     .set_belongings(view.belongings)
-                    .set_visible(view.visible);
+                    .done();
             })
             .done();
     }
@@ -204,9 +209,6 @@ fn view_from_map_ref<T: ReadTxn>(
     let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
     let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();
     let desc = map_ref.get_str_with_txn(txn, VIEW_DESC).unwrap_or_default();
-    let visible = map_ref
-        .get_bool_with_txn(txn, VIEW_VISIBLE)
-        .unwrap_or_default();
     let created_at = map_ref
         .get_i64_with_txn(txn, VIEW_CREATE_AT)
         .unwrap_or_default();
@@ -227,7 +229,6 @@ fn view_from_map_ref<T: ReadTxn>(
         belongings,
         created_at,
         layout,
-        visible,
     })
 }
 
@@ -282,7 +283,6 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     impl_str_update!(set_bid, set_bid_if_not_none, VIEW_BID);
     impl_str_update!(set_desc, set_desc_if_not_none, VIEW_DESC);
     impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
-    impl_bool_update!(set_visible, set_visible_if_not_none, VIEW_VISIBLE);
     impl_any_update!(set_layout, set_layout_if_not_none, VIEW_LAYOUT, ViewLayout);
 
     pub fn new(
@@ -320,7 +320,6 @@ pub struct View {
     pub belongings: Belongings,
     pub created_at: i64,
     pub layout: ViewLayout,
-    pub visible: bool,
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize_repr, Deserialize_repr)]
@@ -361,7 +360,6 @@ impl From<ViewLayout> for i64 {
 #[derive(Debug, Clone)]
 pub enum ViewChange {
     DidCreateView { view: View },
-    DidHideView { view: View },
     DidDeleteView { view: View },
     DidUpdate { view: View },
 }

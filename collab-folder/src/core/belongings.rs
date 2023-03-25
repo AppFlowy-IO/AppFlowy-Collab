@@ -10,12 +10,23 @@ impl BelongingMap {
         Self { container }
     }
 
-    pub fn move_belonging_with_txn<T: ReadTxn>(&self, txn: &T, bid: &str, from: u32, to: u32) {
+    pub fn move_belonging(&self, bid: &str, from: u32, to: u32) {
+        self.container.with_transact_mut(|txn| {
+            self.move_belonging_with_txn(txn, bid, from, to);
+        })
+    }
+
+    pub fn move_belonging_with_txn(&self, txn: &mut TransactionMut, bid: &str, from: u32, to: u32) {
         if let Some(belonging_array) = self.get_belongings_array_with_txn(txn, bid) {
             self.container.with_transact_mut(|txn| {
                 belonging_array.move_belonging_with_txn(txn, from, to);
             })
         }
+    }
+
+    pub fn get_belongings_array(&self, bid: &str) -> Option<BelongingsArray> {
+        let txn = self.container.transact();
+        self.get_belongings_array_with_txn(&txn, bid)
     }
 
     pub fn get_belongings_array_with_txn<T: ReadTxn>(
@@ -87,6 +98,11 @@ impl BelongingsArray {
         belongings_from_array_ref(txn, &self.container)
     }
 
+    pub fn move_belonging(&self, from: u32, to: u32) {
+        self.container.with_transact_mut(|txn| {
+            self.move_belonging_with_txn(txn, from, to);
+        });
+    }
     pub fn move_belonging_with_txn(&self, txn: &mut TransactionMut, from: u32, to: u32) {
         self.container.move_to(txn, from, to)
     }
