@@ -1,5 +1,5 @@
 use crate::core::{BelongingMap, Belongings, BelongingsArray};
-use anyhow::{Result};
+use anyhow::Result;
 use collab::preclude::{MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
@@ -25,6 +25,10 @@ impl WorkspaceMap {
 
     pub fn workspace_id(&self) -> Option<String> {
         self.container.get_str(WORKSPACE_ID)
+    }
+
+    pub fn get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+        self.container.get_str_with_txn(txn, WORKSPACE_ID)
     }
 
     pub fn create_with_txn<F>(
@@ -53,7 +57,7 @@ impl WorkspaceMap {
     where
         F: FnOnce(WorkspaceUpdate),
     {
-        if let Some(workspace_id) = self.workspace_id() {
+        if let Some(workspace_id) = self.get_workspace_id_with_txn(txn) {
             let update =
                 WorkspaceUpdate::new(&workspace_id, txn, &self.container, self.belongings.clone());
             f(update);
@@ -76,8 +80,12 @@ impl WorkspaceMap {
             .get_i64_with_txn(txn, WORKSPACE_CREATED_AT)
             .unwrap_or_default();
 
-        let array = self.container.get_array_ref(WORKSPACE_BELONGINGS)?;
-        let belongings = BelongingsArray::from_array(array).get_belongings();
+        let belongings = self
+            .belongings
+            .get_belongings_array_with_txn(txn, &id)
+            .map(|array| array.get_belongings())
+            .unwrap_or_default();
+
         Some(Workspace {
             id,
             name,
@@ -173,12 +181,13 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
 
     pub fn set_belongings(self, belongings: Belongings) -> Self {
         self.belongings
-            .insert_belongings(self.workspace_id, belongings);
+            .insert_belongings_with_txn(self.txn, self.workspace_id, belongings);
         self
     }
 
     pub fn delete_belongings(self, index: u32) -> Self {
-        self.belongings.delete_belongings(self.workspace_id, index);
+        self.belongings
+            .delete_belongings_with_txn(self.txn, self.workspace_id, index);
         self
     }
 }

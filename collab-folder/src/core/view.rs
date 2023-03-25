@@ -1,8 +1,6 @@
 use crate::core::{belongings_from_array_ref, BelongingMap, Belongings};
-use crate::{
-    impl_any_update, impl_array_update, impl_bool_update, impl_i64_update, impl_str_update,
-};
-use anyhow::{bail, Result};
+use crate::{impl_any_update, impl_bool_update, impl_i64_update, impl_str_update};
+use anyhow::bail;
 
 use collab::preclude::{
     lib0Any, DeepEventsSubscription, DeepObservable, EntryChange, Event, Map, MapRef, MapRefTool,
@@ -19,7 +17,6 @@ const VIEW_BID: &str = "bid";
 const VIEW_DESC: &str = "desc";
 const VIEW_LAYOUT: &str = "layout";
 const VIEW_CREATE_AT: &str = "created_at";
-const VIEW_BELONGINGS: &str = "belongings";
 const VIEW_VISIBLE: &str = "visible";
 
 pub type ViewChangeSender = broadcast::Sender<ViewChange>;
@@ -28,7 +25,7 @@ pub struct ViewsMap {
     container: MapRefWrapper,
     subscription: Option<DeepEventsSubscription>,
     change_tx: Option<ViewChangeSender>,
-    belongings: Rc<BelongingMap>,
+    belonging_map: Rc<BelongingMap>,
 }
 
 impl ViewsMap {
@@ -37,12 +34,12 @@ impl ViewsMap {
         change_tx: Option<ViewChangeSender>,
         belongings: Rc<BelongingMap>,
     ) -> ViewsMap {
-        let subscription = subscribe_change(&mut root, change_tx.clone());
+        let subscription = subscribe_change(&mut root, change_tx.clone(), belongings.clone());
         Self {
             container: root,
             subscription,
             change_tx,
-            belongings,
+            belonging_map: belongings,
         }
     }
 
@@ -57,7 +54,7 @@ impl ViewsMap {
             .iter(txn)
             .flat_map(|(_k, v)| v.to_ymap())
             .flat_map(|map| {
-                let view = view_from_map_ref(&map, txn)?;
+                let view = view_from_map_ref(&map, txn, &self.belonging_map)?;
                 if view.bid == bid {
                     Some(view)
                 } else {
@@ -87,7 +84,7 @@ impl ViewsMap {
 
     pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<View> {
         let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-        view_from_map_ref(&map_ref, txn)
+        view_from_map_ref(&map_ref, txn, &self.belonging_map)
     }
 
     pub fn insert_view(&self, view: View) {
@@ -97,7 +94,7 @@ impl ViewsMap {
 
     pub fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View) {
         let map_ref = self.container.insert_map_with_txn(txn, &view.id);
-        ViewBuilder::new(&view.id, txn, map_ref, self.belongings.clone())
+        ViewBuilder::new(&view.id, txn, map_ref, self.belonging_map.clone())
             .update(|update| {
                 update
                     .set_name(view.name)
@@ -137,7 +134,7 @@ impl ViewsMap {
     {
         self.container.with_transact_mut(|txn| {
             let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-            let update = ViewUpdate::new(view_id, txn, &map_ref, self.belongings.clone());
+            let update = ViewUpdate::new(view_id, txn, &map_ref, self.belonging_map.clone());
             f(update)
         })
     }
@@ -146,6 +143,7 @@ impl ViewsMap {
 fn subscribe_change(
     root: &mut MapRefWrapper,
     change_tx: Option<ViewChangeSender>,
+    belonging_map: Rc<BelongingMap>,
 ) -> Option<DeepEventsSubscription> {
     change_tx.as_ref()?;
     return Some(root.observe_deep(move |txn, events| {
@@ -159,7 +157,9 @@ fn subscribe_change(
                         match c {
                             EntryChange::Inserted(v) => {
                                 if let YrsValue::YMap(map_ref) = v {
-                                    if let Some(view) = view_from_map_ref(map_ref, txn) {
+                                    if let Some(view) =
+                                        view_from_map_ref(map_ref, txn, &belonging_map)
+                                    {
                                         let _ = change_tx.send(ViewChange::DidCreateView { view });
                                     }
                                 }
@@ -167,14 +167,18 @@ fn subscribe_change(
                             EntryChange::Updated(_k, v) => {
                                 println!("update: {}", event.target().to_json(txn));
                                 if let YrsValue::YMap(map_ref) = v {
-                                    if let Some(view) = view_from_map_ref(map_ref, txn) {
+                                    if let Some(view) =
+                                        view_from_map_ref(map_ref, txn, &belonging_map)
+                                    {
                                         let _ = change_tx.send(ViewChange::DidUpdate { view });
                                     }
                                 }
                             }
                             EntryChange::Removed(v) => {
                                 if let YrsValue::YMap(map_ref) = v {
-                                    if let Some(view) = view_from_map_ref(map_ref, txn) {
+                                    if let Some(view) =
+                                        view_from_map_ref(map_ref, txn, &belonging_map)
+                                    {
                                         let _ = change_tx.send(ViewChange::DidDeleteView { view });
                                     }
                                 }
@@ -189,7 +193,11 @@ fn subscribe_change(
     }));
 }
 
-fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> {
+fn view_from_map_ref<T: ReadTxn>(
+    map_ref: &MapRef,
+    txn: &T,
+    belonging_map: &Rc<BelongingMap>,
+) -> Option<View> {
     let map_ref = MapRefTool(map_ref);
     let bid = map_ref.get_str_with_txn(txn, VIEW_BID)?;
 
@@ -205,8 +213,12 @@ fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> {
     let layout = map_ref
         .get_i64_with_txn(txn, VIEW_LAYOUT)
         .map(|value| value.try_into().ok())??;
-    let array = map_ref.get_array_ref_with_txn(txn, VIEW_BELONGINGS)?;
-    let belongings = belongings_from_array_ref(txn, &array);
+
+    let belongings = belonging_map
+        .get_belongings_array_with_txn(txn, &id)
+        .map(|array| array.get_belongings_with_txn(txn))
+        .unwrap_or_default();
+
     Some(View {
         id,
         bid,
@@ -262,7 +274,7 @@ pub struct ViewUpdate<'a, 'b, 'c> {
     view_id: &'a str,
     map_ref: &'c MapRefWrapper,
     txn: &'a mut TransactionMut<'b>,
-    belongings: Rc<BelongingMap>,
+    belonging_map: Rc<BelongingMap>,
 }
 
 impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
@@ -283,17 +295,18 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
             view_id,
             map_ref,
             txn,
-            belongings,
+            belonging_map: belongings,
         }
     }
 
     pub fn set_belongings(self, belongings: Belongings) -> Self {
-        self.belongings.insert_belongings(self.view_id, belongings);
+        self.belonging_map
+            .insert_belongings_with_txn(self.txn, self.view_id, belongings);
         self
     }
 
     pub fn done(self) -> Option<View> {
-        view_from_map_ref(self.map_ref, self.txn)
+        view_from_map_ref(self.map_ref, self.txn, &self.belonging_map)
     }
 }
 
