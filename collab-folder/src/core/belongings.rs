@@ -117,6 +117,17 @@ impl BelongingsArray {
         self.container.remove_with_txn(txn, index);
     }
 
+    pub fn remove_belonging(&self, index: u32) {
+        self.container.with_transact_mut(|txn| {
+            self.container.remove_with_txn(txn, index);
+        })
+    }
+
+    pub fn add_belonging(&self, view_id: &str) {
+        self.container
+            .with_transact_mut(|txn| self.container.push_with_txn(txn, view_id))
+    }
+
     pub fn add_belonging_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
         self.container.push_with_txn(txn, view_id)
     }
