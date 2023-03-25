@@ -1,10 +1,9 @@
 use crate::util::create_folder_with_workspace;
-use collab_folder::core::{Belongings, View, ViewBuilder, ViewLayout};
+use collab_folder::core::{Belongings, View, ViewLayout};
 
 #[test]
 fn create_view_test() {
     let folder_test = create_folder_with_workspace("1", "w1");
-    ViewBuilder::default();
     let o_view = View {
         id: "v1".to_string(),
         bid: "w1".to_string(),
@@ -17,10 +16,7 @@ fn create_view_test() {
     };
     folder_test.views.insert_view(o_view.clone());
 
-    let r_view = folder_test
-        .views
-        .get_view("v1", Some("w1".to_string()))
-        .unwrap();
+    let r_view = folder_test.views.get_view("v1").unwrap();
     assert_eq!(o_view.name, r_view.name);
     assert_eq!(o_view.bid, r_view.bid);
     assert_eq!(o_view.belongings, r_view.belongings);
@@ -53,18 +49,12 @@ fn create_view_with_sub_view_test() {
     folder_test.views.insert_view(o_sub_view.clone());
     folder_test.views.insert_view(o_view.clone());
 
-    let r_view = folder_test
-        .views
-        .get_view("v1", Some("w1".to_string()))
-        .unwrap();
+    let r_view = folder_test.views.get_view("v1").unwrap();
     assert_eq!(o_view.name, r_view.name);
     assert_eq!(o_view.bid, r_view.bid);
     assert_eq!(o_view.belongings, r_view.belongings);
 
-    let r_sub_view = folder_test
-        .views
-        .get_view(&r_view.belongings[0], Some("v1".to_string()))
-        .unwrap();
+    let r_sub_view = folder_test.views.get_view(&r_view.belongings[0]).unwrap();
     assert_eq!(o_sub_view.name, r_sub_view.name);
     assert_eq!(o_sub_view.bid, r_sub_view.bid);
 }
@@ -82,16 +72,10 @@ fn delete_view_test() {
         layout: ViewLayout::Document,
         visible: false,
     };
-    folder_test.views.insert_view(o_view.clone());
-    assert!(folder_test
-        .views
-        .get_view("v1", Some("w1".to_string()))
-        .is_some());
+    folder_test.views.insert_view(o_view);
+    assert!(folder_test.views.get_view("v1",).is_some());
     folder_test.views.delete_view("v1");
-    assert!(folder_test
-        .views
-        .get_view("v1", Some("w1".to_string()))
-        .is_none());
+    assert!(folder_test.views.get_view("v1",).is_none());
 }
 
 #[test]
@@ -111,14 +95,11 @@ fn update_view_test() {
     folder_test
         .views
         .update_view("v1", |update| {
-            update.set_name("Untitled").set_desc("My first view");
+            update.set_name("Untitled").set_desc("My first view").done()
         })
         .unwrap();
 
-    let r_view = folder_test
-        .views
-        .get_view("v1", Some("w1".to_string()))
-        .unwrap();
+    let r_view = folder_test.views.get_view("v1").unwrap();
     assert_eq!(r_view.name, "Untitled");
     assert_eq!(r_view.desc, "My first view");
 }

@@ -11,3 +11,6 @@ pub use folder::*;
 pub use trash::*;
 pub use view::*;
 pub use workspace::*;
+
+#[macro_use]
+mod macros;

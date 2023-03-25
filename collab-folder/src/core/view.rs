@@ -1,12 +1,16 @@
-use crate::core::{belongings_from_array_ref, Belongings, BelongingsArray};
-use anyhow::{anyhow, bail, Result};
-use collab::core::collab::MapSubscription;
+use crate::core::{belongings_from_array_ref, BelongingMap, Belongings};
+use crate::{
+    impl_any_update, impl_array_update, impl_bool_update, impl_i64_update, impl_str_update,
+};
+use anyhow::{bail, Result};
+
 use collab::preclude::{
-    DeepEventsSubscription, DeepObservable, EntryChange, Event, Map, MapRef, MapRefTool,
-    MapRefWrapper, Observable, ReadTxn, ToJson, TransactionMut, YrsValue,
+    lib0Any, DeepEventsSubscription, DeepObservable, EntryChange, Event, Map, MapRef, MapRefTool,
+    MapRefWrapper, ReadTxn, ToJson, TransactionMut, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
+use std::rc::Rc;
 use tokio::sync::broadcast;
 
 const VIEW_ID: &str = "id";
@@ -19,20 +23,49 @@ const VIEW_BELONGINGS: &str = "belongings";
 const VIEW_VISIBLE: &str = "visible";
 
 pub type ViewChangeSender = broadcast::Sender<ViewChange>;
+pub type ViewChangeReceiver = broadcast::Receiver<ViewChange>;
 pub struct ViewsMap {
     container: MapRefWrapper,
     subscription: Option<DeepEventsSubscription>,
     change_tx: Option<ViewChangeSender>,
+    belongings: Rc<BelongingMap>,
 }
 
 impl ViewsMap {
-    pub fn new(mut root: MapRefWrapper, change_tx: Option<ViewChangeSender>) -> ViewsMap {
+    pub fn new(
+        mut root: MapRefWrapper,
+        change_tx: Option<ViewChangeSender>,
+        belongings: Rc<BelongingMap>,
+    ) -> ViewsMap {
         let subscription = subscribe_change(&mut root, change_tx.clone());
         Self {
             container: root,
             subscription,
             change_tx,
+            belongings,
         }
+    }
+
+    pub fn get_views_belong_to(&self, bid: &str) -> Vec<View> {
+        let txn = self.container.transact();
+        self.get_views_belong_to_with_txn(&txn, bid)
+    }
+
+    pub fn get_views_belong_to_with_txn<T: ReadTxn>(&self, txn: &T, bid: &str) -> Vec<View> {
+        let views = self
+            .container
+            .iter(txn)
+            .flat_map(|(_k, v)| v.to_ymap())
+            .flat_map(|map| {
+                let view = view_from_map_ref(&map, txn)?;
+                if view.bid == bid {
+                    Some(view)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<View>>();
+        views
     }
 
     pub fn get_views(&self, view_ids: &[String]) -> Vec<View> {
@@ -43,23 +76,18 @@ impl ViewsMap {
     pub fn get_views_with_txn<T: ReadTxn>(&self, txn: &T, view_ids: &[String]) -> Vec<View> {
         view_ids
             .iter()
-            .flat_map(|view_id| self.get_view_with_txn(txn, view_id, None))
+            .flat_map(|view_id| self.get_view_with_txn(txn, view_id))
             .collect::<Vec<_>>()
     }
 
-    pub fn get_view(&self, view_id: &str, belong_to: Option<String>) -> Option<View> {
+    pub fn get_view(&self, view_id: &str) -> Option<View> {
         let txn = self.container.transact();
-        self.get_view_with_txn(&txn, view_id, belong_to)
+        self.get_view_with_txn(&txn, view_id)
     }
 
-    pub fn get_view_with_txn<T: ReadTxn>(
-        &self,
-        txn: &T,
-        view_id: &str,
-        belong_to: Option<String>,
-    ) -> Option<View> {
+    pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<View> {
         let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-        view_from_map_ref(&map_ref, txn, belong_to)
+        view_from_map_ref(&map_ref, txn)
     }
 
     pub fn insert_view(&self, view: View) {
@@ -69,7 +97,7 @@ impl ViewsMap {
 
     pub fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View) {
         let map_ref = self.container.insert_map_with_txn(txn, &view.id);
-        ViewBuilder::new(&view.id, txn, map_ref)
+        ViewBuilder::new(&view.id, txn, map_ref, self.belongings.clone())
             .update(|update| {
                 update
                     .set_name(view.name)
@@ -91,7 +119,7 @@ impl ViewsMap {
     pub fn delete_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
         // Have no idea why the return map from the remove is empty. So just
         // get the view before deleting.
-        let view = self.get_view_with_txn(txn, view_id, None);
+        let view = self.get_view_with_txn(txn, view_id);
         if let Some(Some(_)) = self
             .container
             .remove(txn, view_id)
@@ -103,19 +131,14 @@ impl ViewsMap {
         }
     }
 
-    pub fn update_view<F>(&self, view_id: &str, f: F) -> Result<()>
+    pub fn update_view<F>(&self, view_id: &str, f: F) -> Option<View>
     where
-        F: FnOnce(ViewUpdate),
+        F: FnOnce(ViewUpdate) -> Option<View>,
     {
         self.container.with_transact_mut(|txn| {
-            match self.container.get_map_with_txn(txn, view_id) {
-                None => bail!("View is not existing"),
-                Some(map_ref) => {
-                    let update = ViewUpdate::new(txn, &map_ref);
-                    f(update);
-                    Ok(())
-                }
-            }
+            let map_ref = self.container.get_map_with_txn(txn, view_id)?;
+            let update = ViewUpdate::new(view_id, txn, &map_ref, self.belongings.clone());
+            f(update)
         })
     }
 }
@@ -124,7 +147,7 @@ fn subscribe_change(
     root: &mut MapRefWrapper,
     change_tx: Option<ViewChangeSender>,
 ) -> Option<DeepEventsSubscription> {
-    let change_tx = change_tx?;
+    change_tx.as_ref()?;
     return Some(root.observe_deep(move |txn, events| {
         for deep_event in events.iter() {
             match deep_event {
@@ -132,25 +155,26 @@ fn subscribe_change(
                 Event::Array(_) => {}
                 Event::Map(event) => {
                     for (_, c) in event.keys(txn) {
+                        let change_tx = change_tx.clone().unwrap();
                         match c {
                             EntryChange::Inserted(v) => {
                                 if let YrsValue::YMap(map_ref) = v {
-                                    if let Some(view) = view_from_map_ref(&map_ref, txn, None) {
+                                    if let Some(view) = view_from_map_ref(map_ref, txn) {
                                         let _ = change_tx.send(ViewChange::DidCreateView { view });
                                     }
                                 }
                             }
-                            EntryChange::Updated(k, v) => {
+                            EntryChange::Updated(_k, v) => {
                                 println!("update: {}", event.target().to_json(txn));
                                 if let YrsValue::YMap(map_ref) = v {
-                                    if let Some(view) = view_from_map_ref(&map_ref, txn, None) {
+                                    if let Some(view) = view_from_map_ref(map_ref, txn) {
                                         let _ = change_tx.send(ViewChange::DidUpdate { view });
                                     }
                                 }
                             }
                             EntryChange::Removed(v) => {
                                 if let YrsValue::YMap(map_ref) = v {
-                                    if let Some(view) = view_from_map_ref(&map_ref, txn, None) {
+                                    if let Some(view) = view_from_map_ref(map_ref, txn) {
                                         let _ = change_tx.send(ViewChange::DidDeleteView { view });
                                     }
                                 }
@@ -165,18 +189,9 @@ fn subscribe_change(
     }));
 }
 
-fn view_from_map_ref<T: ReadTxn>(
-    map_ref: &MapRef,
-    txn: &T,
-    belong_to: Option<String>,
-) -> Option<View> {
+fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> {
     let map_ref = MapRefTool(map_ref);
     let bid = map_ref.get_str_with_txn(txn, VIEW_BID)?;
-    if let Some(belong_to) = belong_to {
-        if belong_to != bid {
-            return None;
-        }
-    }
 
     let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
     let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();
@@ -205,21 +220,38 @@ fn view_from_map_ref<T: ReadTxn>(
 }
 
 pub struct ViewBuilder<'a, 'b> {
+    view_id: &'a str,
     map_ref: MapRefWrapper,
     txn: &'a mut TransactionMut<'b>,
+    belongings: Rc<BelongingMap>,
 }
 
 impl<'a, 'b> ViewBuilder<'a, 'b> {
-    pub fn new(view_id: &str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefWrapper) -> Self {
+    pub fn new(
+        view_id: &'a str,
+        txn: &'a mut TransactionMut<'b>,
+        map_ref: MapRefWrapper,
+        belongings: Rc<BelongingMap>,
+    ) -> Self {
         map_ref.insert_with_txn(txn, VIEW_ID, view_id);
-        Self { map_ref, txn }
+        Self {
+            view_id,
+            map_ref,
+            txn,
+            belongings,
+        }
     }
 
     pub fn update<F>(self, f: F) -> Self
     where
         F: FnOnce(ViewUpdate),
     {
-        let update = ViewUpdate::new(self.txn, &self.map_ref);
+        let update = ViewUpdate::new(
+            self.view_id,
+            self.txn,
+            &self.map_ref,
+            self.belongings.clone(),
+        );
         f(update);
         self
     }
@@ -227,54 +259,41 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
 }
 
 pub struct ViewUpdate<'a, 'b, 'c> {
+    view_id: &'a str,
     map_ref: &'c MapRefWrapper,
     txn: &'a mut TransactionMut<'b>,
+    belongings: Rc<BelongingMap>,
 }
 
 impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
-    pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRefWrapper) -> Self {
-        Self { map_ref, txn }
-    }
+    impl_str_update!(set_name, set_name_if_not_none, VIEW_NAME);
+    impl_str_update!(set_bid, set_bid_if_not_none, VIEW_BID);
+    impl_str_update!(set_desc, set_desc_if_not_none, VIEW_DESC);
+    impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
+    impl_bool_update!(set_visible, set_visible_if_not_none, VIEW_VISIBLE);
+    impl_any_update!(set_layout, set_layout_if_not_none, VIEW_LAYOUT, ViewLayout);
 
-    pub fn set_name<T: AsRef<str>>(self, name: T) -> Self {
-        self.map_ref
-            .insert_with_txn(self.txn, VIEW_NAME, name.as_ref());
-        self
-    }
-
-    pub fn set_bid(self, bid: String) -> Self {
-        self.map_ref.insert_with_txn(self.txn, VIEW_BID, bid);
-        self
-    }
-
-    pub fn set_desc<T: AsRef<str>>(self, desc: T) -> Self {
-        self.map_ref
-            .insert_with_txn(self.txn, VIEW_DESC, desc.as_ref());
-        self
-    }
-
-    pub fn set_layout(self, layout: ViewLayout) -> Self {
-        self.map_ref
-            .insert_with_txn(self.txn, VIEW_LAYOUT, layout as i64);
-        self
-    }
-
-    pub fn set_created_at(self, created_at: i64) -> Self {
-        self.map_ref
-            .insert_with_txn(self.txn, VIEW_CREATE_AT, created_at);
-        self
-    }
-
-    pub fn set_visible(self, visible: bool) -> Self {
-        self.map_ref
-            .insert_with_txn(self.txn, VIEW_VISIBLE, visible);
-        self
+    pub fn new(
+        view_id: &'a str,
+        txn: &'a mut TransactionMut<'b>,
+        map_ref: &'c MapRefWrapper,
+        belongings: Rc<BelongingMap>,
+    ) -> Self {
+        Self {
+            view_id,
+            map_ref,
+            txn,
+            belongings,
+        }
     }
 
     pub fn set_belongings(self, belongings: Belongings) -> Self {
-        self.map_ref
-            .insert_array_with_txn(self.txn, VIEW_BELONGINGS, belongings.into_inner());
+        self.belongings.insert_belongings(self.view_id, belongings);
         self
+    }
+
+    pub fn done(self) -> Option<View> {
+        view_from_map_ref(self.map_ref, self.txn)
     }
 }
 
@@ -311,6 +330,12 @@ impl TryFrom<i64> for ViewLayout {
             3 => Ok(ViewLayout::Calendar),
             _ => bail!("Unknown layout {}", value),
         }
+    }
+}
+
+impl From<ViewLayout> for lib0Any {
+    fn from(layout: ViewLayout) -> Self {
+        lib0Any::BigInt(layout as i64)
     }
 }
 

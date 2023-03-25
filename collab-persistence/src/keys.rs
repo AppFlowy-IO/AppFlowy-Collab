@@ -103,8 +103,8 @@ impl<const N: usize> AsMut<[u8]> for Key<N> {
     }
 }
 
-impl<const N: usize> Into<Vec<u8>> for Key<N> {
-    fn into(self) -> Vec<u8> {
-        self.0.to_vec()
+impl<const N: usize> From<Key<N>> for Vec<u8> {
+    fn from(key: Key<N>) -> Self {
+        key.0.to_vec()
     }
 }

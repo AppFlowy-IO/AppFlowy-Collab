@@ -3,7 +3,7 @@ use crate::error::CollabError;
 
 use collab_persistence::doc::YrsDoc;
 use collab_persistence::CollabKV;
-use std::path::Path;
+
 use std::sync::Arc;
 use yrs::TransactionMut;
 

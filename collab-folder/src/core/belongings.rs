@@ -1,6 +1,49 @@
 use crate::core::Belongings;
 use collab::preclude::{Array, ArrayRef, ArrayRefWrapper, MapRefWrapper, ReadTxn, TransactionMut};
 
+pub struct BelongingMap {
+    container: MapRefWrapper,
+}
+
+impl BelongingMap {
+    pub fn new(container: MapRefWrapper) -> Self {
+        Self { container }
+    }
+
+    pub fn move_belonging(&self, bid: &str, from: u32, to: u32) {
+        if let Some(belonging_array) = self.get_belongings(bid) {
+            self.container.with_transact_mut(|txn| {
+                belonging_array.move_belonging_with_txn(txn, from, to);
+            })
+        }
+    }
+
+    pub fn get_belongings(&self, bid: &str) -> Option<BelongingsArray> {
+        let array = self.container.get_array_ref(bid)?;
+        Some(BelongingsArray::from_array(array))
+    }
+
+    pub fn insert_belongings(&self, bid: &str, belongings: Belongings) -> BelongingsArray {
+        let array_ref = self.container.with_transact_mut(|txn| {
+            self.container
+                .get_array_ref_with_txn(txn, bid)
+                .unwrap_or_else(|| {
+                    self.container
+                        .insert_array_with_txn(txn, bid, belongings.into_inner())
+                })
+        });
+        BelongingsArray::from_array(array_ref)
+    }
+
+    pub fn delete_belongings(&self, bid: &str, index: u32) {
+        if let Some(belonging_array) = self.get_belongings(bid) {
+            self.container.with_transact_mut(|txn| {
+                belonging_array.remove_belonging_with_txn(txn, index);
+            })
+        }
+    }
+}
+
 const BELONGINGS: &str = "belongings";
 #[derive(Clone)]
 pub struct BelongingsArray {

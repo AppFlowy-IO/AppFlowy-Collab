@@ -48,6 +48,7 @@ impl CollabStateCachePlugin {
         Ok(updates)
     }
 
+    #[allow(dead_code)]
     pub fn get_update(&self) -> Result<Update, anyhow::Error> {
         let read_guard = self.0.read();
         let updates = read_guard

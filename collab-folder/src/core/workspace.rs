@@ -1,11 +1,13 @@
-use crate::core::{Belongings, BelongingsArray};
-use anyhow::{bail, Result};
-use collab::preclude::{Array, Map, MapRef, MapRefWrapper, ReadTxn, TransactionMut};
+use crate::core::{BelongingMap, Belongings, BelongingsArray};
+use anyhow::{Result};
+use collab::preclude::{MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct WorkspaceMap {
     container: MapRefWrapper,
+    belongings: Rc<BelongingMap>,
 }
 
 const WORKSPACE_ID: &str = "id";
@@ -14,8 +16,11 @@ const WORKSPACE_BELONGINGS: &str = "belongings";
 const WORKSPACE_CREATED_AT: &str = "created_at";
 
 impl WorkspaceMap {
-    pub fn new(container: MapRefWrapper) -> Self {
-        Self { container }
+    pub fn new(container: MapRefWrapper, belongings: Rc<BelongingMap>) -> Self {
+        Self {
+            container,
+            belongings,
+        }
     }
 
     pub fn workspace_id(&self) -> Option<String> {
@@ -26,12 +31,13 @@ impl WorkspaceMap {
         txn: &mut TransactionMut,
         container: MapRefWrapper,
         workspace_id: &str,
+        belongings: Rc<BelongingMap>,
         f: F,
     ) -> Self
     where
         F: FnOnce(WorkspaceBuilder) -> WorkspaceMap,
     {
-        let builder = WorkspaceBuilder::new(workspace_id, txn, container.clone());
+        let builder = WorkspaceBuilder::new(workspace_id, txn, container, belongings);
         f(builder)
     }
 
@@ -47,8 +53,11 @@ impl WorkspaceMap {
     where
         F: FnOnce(WorkspaceUpdate),
     {
-        let update = WorkspaceUpdate::new(txn, &self.container);
-        f(update);
+        if let Some(workspace_id) = self.workspace_id() {
+            let update =
+                WorkspaceUpdate::new(&workspace_id, txn, &self.container, self.belongings.clone());
+            f(update);
+        }
     }
 
     pub fn to_workspace(&self) -> Option<Workspace> {
@@ -66,6 +75,7 @@ impl WorkspaceMap {
             .container
             .get_i64_with_txn(txn, WORKSPACE_CREATED_AT)
             .unwrap_or_default();
+
         let array = self.container.get_array_ref(WORKSPACE_BELONGINGS)?;
         let belongings = BelongingsArray::from_array(array).get_belongings();
         Some(Workspace {
@@ -86,44 +96,63 @@ pub struct Workspace {
 }
 
 pub struct WorkspaceBuilder<'a, 'b> {
+    workspace_id: &'a str,
     map_ref: MapRefWrapper,
     txn: &'a mut TransactionMut<'b>,
+    belongings: Rc<BelongingMap>,
 }
 
 impl<'a, 'b> WorkspaceBuilder<'a, 'b> {
     pub fn new(
-        workspace_id: &str,
+        workspace_id: &'a str,
         txn: &'a mut TransactionMut<'b>,
         map_ref: MapRefWrapper,
+        belongings: Rc<BelongingMap>,
     ) -> Self {
         map_ref.insert_with_txn(txn, WORKSPACE_ID, workspace_id);
-        Self { map_ref, txn }
+        Self {
+            workspace_id,
+            map_ref,
+            txn,
+            belongings,
+        }
     }
 
     pub fn update<F>(self, f: F) -> Self
     where
         F: FnOnce(WorkspaceUpdate),
     {
-        let update = WorkspaceUpdate::new(self.txn, &self.map_ref);
+        let update = WorkspaceUpdate::new(
+            self.workspace_id,
+            self.txn,
+            &self.map_ref,
+            self.belongings.clone(),
+        );
         f(update);
         self
     }
 
     pub fn done(self) -> Result<WorkspaceMap> {
-        Ok(WorkspaceMap::new(self.map_ref))
+        Ok(WorkspaceMap::new(self.map_ref, self.belongings))
     }
 }
 
 pub struct WorkspaceUpdate<'a, 'b, 'c> {
+    workspace_id: &'a str,
     map_ref: &'c MapRefWrapper,
     txn: &'a mut TransactionMut<'b>,
-    belongings: BelongingsArray,
+    belongings: Rc<BelongingMap>,
 }
 
 impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
-    pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRefWrapper) -> Self {
-        let belongings = BelongingsArray::get_or_create_with_txn(txn, &map_ref);
+    pub fn new(
+        workspace_id: &'a str,
+        txn: &'a mut TransactionMut<'b>,
+        map_ref: &'c MapRefWrapper,
+        belongings: Rc<BelongingMap>,
+    ) -> Self {
         Self {
+            workspace_id,
             map_ref,
             txn,
             belongings,
@@ -142,18 +171,14 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
         self
     }
 
-    pub fn set_belongings(mut self, belongings: Belongings) -> Self {
-        let belongings_map = self.map_ref.insert_array_with_txn(
-            self.txn,
-            WORKSPACE_BELONGINGS,
-            belongings.into_inner(),
-        );
-        self.belongings = BelongingsArray::from_array(belongings_map);
+    pub fn set_belongings(self, belongings: Belongings) -> Self {
+        self.belongings
+            .insert_belongings(self.workspace_id, belongings);
         self
     }
 
     pub fn delete_belongings(self, index: u32) -> Self {
-        self.belongings.remove_belonging_with_txn(self.txn, index);
+        self.belongings.delete_belongings(self.workspace_id, index);
         self
     }
 }

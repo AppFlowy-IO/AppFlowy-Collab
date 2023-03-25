@@ -1,17 +1,20 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
-use collab_folder::core::{Folder, FolderContext, ViewChange, Workspace};
+use collab_folder::core::{Folder, FolderContext, ViewChangeReceiver, Workspace};
 use collab_persistence::CollabKV;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
-use tokio::sync::broadcast::Receiver;
 
 pub struct FolderTest {
     folder: Folder,
+
+    #[allow(dead_code)]
     cleaner: Cleaner,
-    rx: Receiver<ViewChange>,
+
+    #[allow(dead_code)]
+    rx: ViewChangeReceiver,
 }
 
 pub fn create_folder(id: &str) -> FolderTest {
