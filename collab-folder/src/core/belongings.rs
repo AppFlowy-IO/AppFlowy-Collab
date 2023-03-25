@@ -1,5 +1,7 @@
 use crate::core::Belongings;
-use collab::preclude::{Array, ArrayRef, ArrayRefWrapper, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{
+    lib0Any, Array, ArrayRef, ArrayRefWrapper, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+};
 
 pub struct BelongingMap {
     container: MapRefWrapper,
@@ -104,7 +106,11 @@ impl BelongingsArray {
         });
     }
     pub fn move_belonging_with_txn(&self, txn: &mut TransactionMut, from: u32, to: u32) {
-        self.container.move_to(txn, from, to)
+        if let Some(value) = self.container.get_with_txn(txn, from) {
+            let value = value.to_string(txn);
+            self.container.remove(txn, from);
+            self.container.insert(txn, to, value);
+        }
     }
 
     pub fn remove_belonging_with_txn(&self, txn: &mut TransactionMut, index: u32) {

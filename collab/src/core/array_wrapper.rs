@@ -43,6 +43,10 @@ impl ArrayRefWrapper {
         self.array_ref.get(&txn, index)
     }
 
+    pub fn get_with_txn<T: ReadTxn>(&self, txn: &T, index: u32) -> Option<YrsValue> {
+        self.array_ref.get(txn, index)
+    }
+
     pub fn push_with_txn<V: Prelim>(&self, txn: &mut TransactionMut, value: V) {
         self.array_ref.push_back(txn, value);
     }

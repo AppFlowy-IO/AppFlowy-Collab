@@ -94,8 +94,12 @@ fn move_belongings_test() {
     assert_eq!(belongings[2], "1_3");
 
     // 1_1, 1_3
-    belonging_array.move_belonging(2, 1);
+    // belonging_array.move_belonging(2, 1);
 
     // 1_3
-    // belonging_array.move_belonging(2, 0);
+    belonging_array.move_belonging(2, 0);
+
+    let view = folder_test.views.get_view(&view_1.id).unwrap();
+    assert_eq!(view.belongings[0], "1_3");
+    assert_eq!(view.belongings[2], "1_2");
 }
