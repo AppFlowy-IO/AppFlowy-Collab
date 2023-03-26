@@ -347,6 +347,15 @@ pub enum ViewLayout {
     Calendar = 3,
 }
 
+impl ViewLayout {
+    pub fn is_database(&self) -> bool {
+        matches!(
+            self,
+            ViewLayout::Grid | ViewLayout::Board | ViewLayout::Calendar
+        )
+    }
+}
+
 impl TryFrom<i64> for ViewLayout {
     type Error = anyhow::Error;
 

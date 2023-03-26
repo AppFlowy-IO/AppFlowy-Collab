@@ -1,6 +1,6 @@
 use crate::core::trash::{TrashArray, TrashItem};
 use crate::core::{
-    BelongingMap, FolderData, TrashChangeSender, ViewChangeSender, ViewsMap, Workspace,
+    BelongingMap, FolderData, TrashChangeSender, View, ViewChangeSender, ViewsMap, Workspace,
     WorkspaceMap,
 };
 use collab::preclude::*;
@@ -34,9 +34,6 @@ pub struct Folder {
     pub trash: TrashArray,
     pub meta: MapRefWrapper,
 }
-
-unsafe impl Sync for Folder {}
-unsafe impl Send for Folder {}
 
 impl Folder {
     pub fn create(collab: Collab, context: FolderContext) -> Self {
@@ -97,7 +94,7 @@ impl Folder {
         }
     }
 
-    pub fn create_with_data(&mut self, data: FolderData) {
+    pub fn create_with_data(&self, data: FolderData) {
         self.root.with_transact_mut(|txn| {
             for workspace in data.workspaces {
                 self.workspaces.create_workspace_with_txn(txn, workspace);
@@ -115,7 +112,7 @@ impl Folder {
         })
     }
 
-    pub fn set_current_workspace(&mut self, workspace_id: &str) {
+    pub fn set_current_workspace(&self, workspace_id: &str) {
         self.meta.insert(CURRENT_WORKSPACE, workspace_id);
     }
 
@@ -124,7 +121,15 @@ impl Folder {
         self.workspaces.get_workspace(&workspace_id)
     }
 
-    pub fn set_current_view(&mut self, view_id: &str) {
+    pub fn get_views_belong_to_current_workspace(&self) -> Vec<View> {
+        if let Some(workspace_id) = self.meta.get_str(CURRENT_WORKSPACE) {
+            self.views.get_views_belong_to(&workspace_id)
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn set_current_view(&self, view_id: &str) {
         self.meta.insert(CURRENT_VIEW, view_id);
     }
 
