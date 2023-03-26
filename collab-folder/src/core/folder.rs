@@ -35,6 +35,9 @@ pub struct Folder {
     pub meta: MapRefWrapper,
 }
 
+unsafe impl Sync for Folder {}
+unsafe impl Send for Folder {}
+
 impl Folder {
     pub fn create(collab: Collab, context: FolderContext) -> Self {
         let (folder, workspaces, views, trash, meta, belongings) =
@@ -94,26 +97,25 @@ impl Folder {
         }
     }
 
-    pub fn create_with_data(collab: Collab, data: FolderData) {
-        let this = Self::create(collab, FolderContext::default());
-        this.root.with_transact_mut(|txn| {
+    pub fn create_with_data(&mut self, data: FolderData) {
+        self.root.with_transact_mut(|txn| {
             for workspace in data.workspaces {
-                this.workspaces.create_workspace_with_txn(txn, workspace);
+                self.workspaces.create_workspace_with_txn(txn, workspace);
             }
 
             for view in data.views {
-                this.views.insert_view_with_txn(txn, view);
+                self.views.insert_view_with_txn(txn, view);
             }
 
-            this.meta
+            self.meta
                 .insert_with_txn(txn, CURRENT_WORKSPACE, data.current_workspace);
 
-            this.meta
+            self.meta
                 .insert_with_txn(txn, CURRENT_VIEW, data.current_view);
         })
     }
 
-    pub fn set_current_workspace(&self, workspace_id: &str) {
+    pub fn set_current_workspace(&mut self, workspace_id: &str) {
         self.meta.insert(CURRENT_WORKSPACE, workspace_id);
     }
 
@@ -122,7 +124,7 @@ impl Folder {
         self.workspaces.get_workspace(&workspace_id)
     }
 
-    pub fn set_current_view(&self, view_id: &str) {
+    pub fn set_current_view(&mut self, view_id: &str) {
         self.meta.insert(CURRENT_VIEW, view_id);
     }
 

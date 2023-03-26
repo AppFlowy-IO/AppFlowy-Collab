@@ -338,7 +338,7 @@ pub struct View {
     pub database_id: Option<String>,
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Serialize_repr, Deserialize_repr)]
+#[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum ViewLayout {
     Document = 0,
