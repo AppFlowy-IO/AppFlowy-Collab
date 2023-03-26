@@ -1,5 +1,5 @@
-use crate::core::{belongings_from_array_ref, BelongingMap, Belongings};
-use crate::{impl_any_update, impl_bool_update, impl_i64_update, impl_str_update};
+use crate::core::{BelongingMap, Belongings};
+use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update};
 use anyhow::bail;
 
 use collab::preclude::{
@@ -15,6 +15,7 @@ const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";
 const VIEW_BID: &str = "bid";
 const VIEW_DESC: &str = "desc";
+const VIEW_DATABASE_ID: &str = "database_id";
 const VIEW_LAYOUT: &str = "layout";
 const VIEW_CREATE_AT: &str = "created_at";
 
@@ -23,6 +24,7 @@ pub type ViewChangeReceiver = broadcast::Receiver<ViewChange>;
 
 pub struct ViewsMap {
     container: MapRefWrapper,
+    #[allow(dead_code)]
     subscription: Option<DeepEventsSubscription>,
     change_tx: Option<ViewChangeSender>,
     belonging_map: Rc<BelongingMap>,
@@ -65,15 +67,19 @@ impl ViewsMap {
         views
     }
 
-    pub fn get_views(&self, view_ids: &[String]) -> Vec<View> {
+    pub fn get_views<T: AsRef<str>>(&self, view_ids: &[T]) -> Vec<View> {
         let txn = self.container.transact();
         self.get_views_with_txn(&txn, view_ids)
     }
 
-    pub fn get_views_with_txn<T: ReadTxn>(&self, txn: &T, view_ids: &[String]) -> Vec<View> {
+    pub fn get_views_with_txn<T: ReadTxn, V: AsRef<str>>(
+        &self,
+        txn: &T,
+        view_ids: &[V],
+    ) -> Vec<View> {
         view_ids
             .iter()
-            .flat_map(|view_id| self.get_view_with_txn(txn, view_id))
+            .flat_map(|view_id| self.get_view_with_txn(txn, view_id.as_ref()))
             .collect::<Vec<_>>()
     }
 
@@ -108,28 +114,30 @@ impl ViewsMap {
                     .set_layout(view.layout)
                     .set_created_at(view.created_at)
                     .set_belongings(view.belongings)
+                    .set_database_id(view.database_id)
                     .done();
             })
             .done();
     }
 
-    pub fn delete_view(&self, view_id: &str) {
+    pub fn delete_views<T: AsRef<str>>(&self, view_ids: Vec<T>) {
         self.container
-            .with_transact_mut(|txn| self.delete_view_with_txn(txn, view_id));
+            .with_transact_mut(|txn| self.delete_views_with_txn(txn, view_ids));
     }
 
-    pub fn delete_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
-        // Have no idea why the return map from the remove is empty. So just
-        // get the view before deleting.
-        let view = self.get_view_with_txn(txn, view_id);
-        if let Some(Some(_)) = self
-            .container
-            .remove(txn, view_id)
-            .map(|value| value.to_ymap())
-        {
-            if let (Some(tx), Some(view)) = (&self.change_tx, view) {
-                let _ = tx.send(ViewChange::DidDeleteView { view });
-            }
+    pub fn delete_views_with_txn<T: AsRef<str>>(&self, txn: &mut TransactionMut, view_ids: Vec<T>) {
+        // Get the view before deleting.
+        let views = view_ids
+            .iter()
+            .flat_map(|view_id| self.get_view_with_txn(txn, view_id.as_ref()))
+            .collect::<Vec<View>>();
+
+        view_ids.iter().for_each(|view_id| {
+            self.container.remove(txn, view_id.as_ref());
+        });
+
+        if let Some(tx) = &self.change_tx {
+            let _ = tx.send(ViewChange::DidDeleteView { views });
         }
     }
 
@@ -184,7 +192,8 @@ fn subscribe_change(
                                     if let Some(view) =
                                         view_from_map_ref(map_ref, txn, &belonging_map)
                                     {
-                                        let _ = change_tx.send(ViewChange::DidDeleteView { view });
+                                        let _ = change_tx
+                                            .send(ViewChange::DidDeleteView { views: vec![view] });
                                     }
                                 }
                             }
@@ -205,10 +214,10 @@ fn view_from_map_ref<T: ReadTxn>(
 ) -> Option<View> {
     let map_ref = MapRefTool(map_ref);
     let bid = map_ref.get_str_with_txn(txn, VIEW_BID)?;
-
     let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
     let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();
     let desc = map_ref.get_str_with_txn(txn, VIEW_DESC).unwrap_or_default();
+    let database_id = map_ref.get_str_with_txn(txn, VIEW_DATABASE_ID);
     let created_at = map_ref
         .get_i64_with_txn(txn, VIEW_CREATE_AT)
         .unwrap_or_default();
@@ -229,6 +238,7 @@ fn view_from_map_ref<T: ReadTxn>(
         belongings,
         created_at,
         layout,
+        database_id,
     })
 }
 
@@ -281,6 +291,11 @@ pub struct ViewUpdate<'a, 'b, 'c> {
 impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     impl_str_update!(set_name, set_name_if_not_none, VIEW_NAME);
     impl_str_update!(set_bid, set_bid_if_not_none, VIEW_BID);
+    impl_option_str_update!(
+        set_database_id,
+        set_database_id_if_not_none,
+        VIEW_DATABASE_ID
+    );
     impl_str_update!(set_desc, set_desc_if_not_none, VIEW_DESC);
     impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
     impl_any_update!(set_layout, set_layout_if_not_none, VIEW_LAYOUT, ViewLayout);
@@ -320,6 +335,7 @@ pub struct View {
     pub belongings: Belongings,
     pub created_at: i64,
     pub layout: ViewLayout,
+    pub database_id: Option<String>,
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize_repr, Deserialize_repr)]
@@ -360,6 +376,6 @@ impl From<ViewLayout> for i64 {
 #[derive(Debug, Clone)]
 pub enum ViewChange {
     DidCreateView { view: View },
-    DidDeleteView { view: View },
+    DidDeleteView { views: Vec<View> },
     DidUpdate { view: View },
 }

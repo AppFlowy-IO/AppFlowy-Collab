@@ -50,3 +50,8 @@ pub struct TrashInfo {
     pub name: String,
     pub created_at: i64,
 }
+impl AsRef<str> for TrashInfo {
+    fn as_ref(&self) -> &str {
+        &self.id
+    }
+}

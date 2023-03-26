@@ -1,5 +1,4 @@
-use crate::util::create_folder_with_workspace;
-use collab_folder::core::{Belongings, TrashItem, View, ViewLayout};
+use crate::util::{create_folder_with_workspace, make_test_view};
 
 #[test]
 fn create_belongings_test() {
@@ -93,16 +92,4 @@ fn delete_belongings_test() {
     let belongings = belonging_array.get_belongings();
     assert_eq!(belongings[0], "1_1");
     assert_eq!(belongings[1], "1_3");
-}
-
-fn make_test_view(view_id: &str, bid: &str, belongings: Vec<String>) -> View {
-    View {
-        id: view_id.to_string(),
-        bid: bid.to_string(),
-        name: "".to_string(),
-        desc: "".to_string(),
-        belongings: Belongings::new(belongings),
-        created_at: 0,
-        layout: ViewLayout::Document,
-    }
 }

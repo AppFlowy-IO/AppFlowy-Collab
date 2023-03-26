@@ -1,18 +1,9 @@
-use crate::util::create_folder_with_workspace;
-use collab_folder::core::{Belongings, View, ViewLayout};
+use crate::util::{create_folder_with_workspace, make_test_view};
 
 #[test]
 fn create_view_test() {
     let folder_test = create_folder_with_workspace("1", "w1");
-    let o_view = View {
-        id: "v1".to_string(),
-        bid: "w1".to_string(),
-        name: "My first view".to_string(),
-        desc: "".to_string(),
-        belongings: Default::default(),
-        created_at: 0,
-        layout: ViewLayout::Document,
-    };
+    let o_view = make_test_view("v1", "w1", vec![]);
     folder_test.views.insert_view(o_view.clone());
 
     let r_view = folder_test.views.get_view("v1").unwrap();
@@ -24,68 +15,47 @@ fn create_view_test() {
 #[test]
 fn create_view_with_sub_view_test() {
     let folder_test = create_folder_with_workspace("1", "w1");
-    let o_sub_view = View {
-        id: "v1_1".to_string(),
-        bid: "v1".to_string(),
-        name: "My first sub view".to_string(),
-        desc: "".to_string(),
-        belongings: Default::default(),
-        created_at: 0,
-        layout: ViewLayout::Document,
-    };
+    let child_view = make_test_view("v1_1", "v1", vec![]);
+    let view = make_test_view("v1", "w1", vec![child_view.id.clone()]);
 
-    let o_view = View {
-        id: "v1".to_string(),
-        bid: "w1".to_string(),
-        name: "My first view".to_string(),
-        desc: "".to_string(),
-        belongings: Belongings::new(vec!["v1_1".to_string()]),
-        created_at: 0,
-        layout: ViewLayout::Document,
-    };
-    folder_test.views.insert_view(o_sub_view.clone());
-    folder_test.views.insert_view(o_view.clone());
+    folder_test.views.insert_view(child_view.clone());
+    folder_test.views.insert_view(view.clone());
 
     let r_view = folder_test.views.get_view("v1").unwrap();
-    assert_eq!(o_view.name, r_view.name);
-    assert_eq!(o_view.bid, r_view.bid);
-    assert_eq!(o_view.belongings, r_view.belongings);
+    assert_eq!(view.name, r_view.name);
+    assert_eq!(view.bid, r_view.bid);
+    assert_eq!(view.belongings, r_view.belongings);
 
     let r_sub_view = folder_test.views.get_view(&r_view.belongings[0]).unwrap();
-    assert_eq!(o_sub_view.name, r_sub_view.name);
-    assert_eq!(o_sub_view.bid, r_sub_view.bid);
+    assert_eq!(child_view.name, r_sub_view.name);
+    assert_eq!(child_view.bid, r_sub_view.bid);
 }
 
 #[test]
 fn delete_view_test() {
     let folder_test = create_folder_with_workspace("1", "w1");
-    let o_view = View {
-        id: "v1".to_string(),
-        bid: "w1".to_string(),
-        name: "My first view".to_string(),
-        desc: "".to_string(),
-        belongings: Default::default(),
-        created_at: 0,
-        layout: ViewLayout::Document,
-    };
-    folder_test.views.insert_view(o_view);
-    assert!(folder_test.views.get_view("v1",).is_some());
-    folder_test.views.delete_view("v1");
-    assert!(folder_test.views.get_view("v1",).is_none());
+    let view_1 = make_test_view("v1", "w1", vec![]);
+    let view_2 = make_test_view("v2", "w1", vec![]);
+    let view_3 = make_test_view("v3", "w1", vec![]);
+    folder_test.views.insert_view(view_1);
+    folder_test.views.insert_view(view_2);
+    folder_test.views.insert_view(view_3);
+
+    let views = folder_test.views.get_views(&["v1", "v2", "v3"]);
+    assert_eq!(views[0].id, "v1");
+    assert_eq!(views[1].id, "v2");
+    assert_eq!(views[2].id, "v3");
+
+    folder_test.views.delete_views(vec!["v1", "v2", "v3"]);
+
+    let views = folder_test.views.get_views(&["v1", "v2", "v3"]);
+    assert_eq!(views.len(), 0);
 }
 
 #[test]
 fn update_view_test() {
     let folder_test = create_folder_with_workspace("1", "w1");
-    let o_view = View {
-        id: "v1".to_string(),
-        bid: "w1".to_string(),
-        name: "My first view".to_string(),
-        desc: "".to_string(),
-        belongings: Default::default(),
-        created_at: 0,
-        layout: ViewLayout::Document,
-    };
+    let o_view = make_test_view("v1", "w1", vec![]);
     folder_test.views.insert_view(o_view);
     folder_test
         .views

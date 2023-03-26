@@ -1,8 +1,8 @@
 use crate::core::{TrashInfo, ViewsMap};
 use collab::preclude::array::ArrayEvent;
 use collab::preclude::{
-    lib0Any, Array, ArrayRefWrapper, Change, MapRefWrapper, Observable, ReadTxn, Subscription,
-    TransactionMut, YrsValue,
+    lib0Any, Array, ArrayRefWrapper, Change, Observable, ReadTxn, Subscription, TransactionMut,
+    YrsValue,
 };
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
@@ -22,6 +22,7 @@ pub enum TrashChange {
 pub struct TrashArray {
     container: ArrayRefWrapper,
     view_map: Rc<ViewsMap>,
+    #[allow(dead_code)]
     tx: Option<TrashChangeSender>,
     #[allow(dead_code)]
     subscription: Option<ArraySubscription>,
@@ -71,13 +72,13 @@ impl TrashArray {
         trash
     }
 
-    pub fn remove_trash(&self, id: &str) {
+    pub fn delete_trash(&self, id: &str) {
         self.container.with_transact_mut(|txn| {
-            self.remove_trash_with_txn(txn, id);
+            self.delete_trash_with_txn(txn, id);
         })
     }
 
-    pub fn remove_trash_with_txn(&self, txn: &mut TransactionMut, id: &str) {
+    pub fn delete_trash_with_txn(&self, txn: &mut TransactionMut, id: &str) {
         if let Some(pos) = self
             .get_all_trash_with_txn(txn)
             .into_iter()
@@ -113,8 +114,8 @@ fn subscribe_change(
         Some(array.observe(|txn, event| {
             for change in event.delta(txn) {
                 match change {
-                    Change::Added(values) => {}
-                    Change::Removed(value) => {}
+                    Change::Added(_values) => {}
+                    Change::Removed(_value) => {}
                     Change::Retain(_) => {}
                 }
             }

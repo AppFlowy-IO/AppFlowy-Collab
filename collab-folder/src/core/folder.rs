@@ -117,8 +117,9 @@ impl Folder {
         self.meta.insert(CURRENT_WORKSPACE, workspace_id);
     }
 
-    pub fn get_current_workspace(&self) -> Option<String> {
-        self.meta.get_str(CURRENT_WORKSPACE)
+    pub fn get_current_workspace(&self) -> Option<Workspace> {
+        let workspace_id = self.meta.get_str(CURRENT_WORKSPACE)?;
+        self.workspaces.get_workspace(&workspace_id)
     }
 
     pub fn set_current_view(&self, view_id: &str) {
@@ -136,7 +137,7 @@ impl Folder {
 
 pub struct WorkspaceArray {
     container: ArrayRefWrapper,
-    workspace_cache: RwLock<HashMap<String, WorkspaceMap>>,
+    workspaces: RwLock<HashMap<String, WorkspaceMap>>,
     belongings: Rc<BelongingMap>,
 }
 
@@ -156,7 +157,7 @@ impl WorkspaceArray {
         drop(txn);
         Self {
             container: array_ref,
-            workspace_cache: RwLock::new(workspace_maps),
+            workspaces: RwLock::new(workspace_maps),
             belongings,
         }
     }
@@ -167,7 +168,7 @@ impl WorkspaceArray {
     }
 
     pub fn get_workspace(&self, workspace_id: &str) -> Option<Workspace> {
-        self.workspace_cache
+        self.workspaces
             .read()
             .get(workspace_id)
             .map(|workspace_map| workspace_map.to_workspace())?
@@ -215,13 +216,11 @@ impl WorkspaceArray {
             },
         );
 
-        self.workspace_cache
-            .write()
-            .insert(workspace_id, workspace_map);
+        self.workspaces.write().insert(workspace_id, workspace_map);
     }
 
     pub fn edit_workspace(&self, workspace_id: &str) -> Option<WorkspaceMap> {
-        self.workspace_cache.read().get(workspace_id).cloned()
+        self.workspaces.read().get(workspace_id).cloned()
     }
 }
 

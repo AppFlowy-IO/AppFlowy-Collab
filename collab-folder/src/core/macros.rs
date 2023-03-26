@@ -15,6 +15,22 @@ macro_rules! impl_str_update {
 }
 
 #[macro_export]
+macro_rules! impl_option_str_update {
+    ($setter1: ident, $setter2: ident, $key: expr) => {
+        pub fn $setter1(self, value: Option<String>) -> Self {
+            self.map_ref.insert_with_txn(self.txn, $key, value);
+            self
+        }
+        pub fn $setter2<T: AsRef<str>>(self, value: Option<T>) -> Self {
+            if let Some(value) = value {
+                self.map_ref.insert_with_txn(self.txn, $key, value.as_ref());
+            }
+            self
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! impl_i64_update {
     ($setter1: ident, $setter2: ident, $key: expr) => {
         pub fn $setter1(self, value: i64) -> Self {

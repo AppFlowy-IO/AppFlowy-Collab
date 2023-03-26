@@ -43,7 +43,7 @@ fn delete_trash_test() {
     assert_eq!(trash[0].id, "1");
     assert_eq!(trash[1].id, "2");
 
-    folder_test.trash.remove_trash("1");
+    folder_test.trash.delete_trash("1");
     let trash = folder_test.trash.get_all_trash();
     assert_eq!(trash[0].id, "2");
 }

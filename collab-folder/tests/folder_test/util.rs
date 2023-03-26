@@ -1,7 +1,8 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
 use collab_folder::core::{
-    Folder, FolderContext, TrashChangeReceiver, TrashChangeSender, ViewChangeReceiver, Workspace,
+    Belongings, Folder, FolderContext, TrashChangeReceiver, View, ViewChangeReceiver, ViewLayout,
+    Workspace,
 };
 use collab_persistence::CollabKV;
 use std::ops::Deref;
@@ -59,6 +60,18 @@ pub fn create_folder_with_workspace(id: &str, workspace_id: &str) -> FolderTest 
     test
 }
 
+pub fn make_test_view(view_id: &str, bid: &str, belongings: Vec<String>) -> View {
+    View {
+        id: view_id.to_string(),
+        bid: bid.to_string(),
+        name: "".to_string(),
+        desc: "".to_string(),
+        belongings: Belongings::new(belongings),
+        created_at: 0,
+        layout: ViewLayout::Document,
+        database_id: None,
+    }
+}
 impl Deref for FolderTest {
     type Target = Folder;
 

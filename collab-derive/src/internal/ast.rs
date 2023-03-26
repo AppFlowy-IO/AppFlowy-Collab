@@ -98,6 +98,7 @@ impl<'a> ASTField<'a> {
 pub const YRS: Symbol = Symbol("yrs");
 pub const PRS_TY: Symbol = Symbol("ty");
 pub struct YrsAttribute {
+    #[allow(dead_code)]
     ty: Option<LitStr>,
 }
 

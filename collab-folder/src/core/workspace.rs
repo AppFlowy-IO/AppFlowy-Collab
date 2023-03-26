@@ -1,4 +1,4 @@
-use crate::core::{BelongingMap, Belongings, BelongingsArray};
+use crate::core::{BelongingMap, Belongings};
 use anyhow::Result;
 use collab::preclude::{MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,6 @@ pub struct WorkspaceMap {
 
 const WORKSPACE_ID: &str = "id";
 const WORKSPACE_NAME: &str = "name";
-const WORKSPACE_BELONGINGS: &str = "belongings";
 const WORKSPACE_CREATED_AT: &str = "created_at";
 
 impl WorkspaceMap {

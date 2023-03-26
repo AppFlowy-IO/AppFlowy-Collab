@@ -1,4 +1,4 @@
-use crate::blocks::{Block, BlockBuilder, BlockMap, BlockMapRef, TextMap};
+use crate::blocks::{BlockMap, TextMap};
 use crate::error::DocumentError;
 use collab::preclude::*;
 
@@ -7,6 +7,7 @@ const BLOCKS: &str = "blocks";
 const TEXTS: &str = "texts";
 
 pub struct Document {
+    #[allow(dead_code)]
     inner: Collab,
     root: MapRefWrapper,
     pub blocks: BlockMap,

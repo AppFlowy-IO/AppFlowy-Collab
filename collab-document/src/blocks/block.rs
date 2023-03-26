@@ -3,6 +3,7 @@ use collab_derive::Collab;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
+use std::str::FromStr;
 
 #[derive(Collab, Serialize, Deserialize)]
 pub struct Block {
@@ -139,9 +140,11 @@ pub struct TextData {
     pub text_id: String,
 }
 
-impl TextData {
-    pub fn from_str<T: AsRef<str>>(s: T) -> Result<Self, anyhow::Error> {
-        let object = serde_json::from_str(s.as_ref())?;
+impl FromStr for TextData {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let object = serde_json::from_str(s)?;
         Ok(object)
     }
 }
