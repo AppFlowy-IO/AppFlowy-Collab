@@ -1,12 +1,15 @@
 use crate::util::create_folder;
-use collab_folder::core::{Belongings, Workspace};
+use collab_folder::core::{Belonging, Belongings, Workspace};
 
 #[test]
 fn create_workspace_test() {
     let folder_test = create_folder("1");
 
     let belongings = Belongings {
-        view_ids: vec!["1".to_string(), "2".to_string()],
+        items: vec![
+            Belonging::new("1".to_string()),
+            Belonging::new("2".to_string()),
+        ],
     };
     let o_workspace = Workspace {
         id: "1".to_string(),
@@ -30,7 +33,10 @@ fn update_workspace_test() {
         id: "1".to_string(),
         name: "My first workspace".to_string(),
         belongings: Belongings {
-            view_ids: vec!["1".to_string(), "2".to_string()],
+            items: vec![
+                Belonging::new("1".to_string()),
+                Belonging::new("2".to_string()),
+            ],
         },
         created_at: 123,
     };
@@ -45,7 +51,7 @@ fn update_workspace_test() {
     let workspace = folder_test.workspaces.get_workspace("1").unwrap();
     assert_eq!(workspace.name, "New workspace");
     assert_eq!(workspace.belongings.len(), 1);
-    assert_eq!(workspace.belongings[0], "2");
+    assert_eq!(workspace.belongings[0].id, "2");
 }
 
 #[test]

@@ -8,6 +8,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 const FOLDER: &str = "folder";
 const WORKSPACES: &str = "workspaces";
@@ -25,7 +26,6 @@ pub struct FolderContext {
 }
 
 pub struct Folder {
-    #[allow(dead_code)]
     inner: Collab,
     root: MapRefWrapper,
     pub workspaces: WorkspaceArray,
@@ -92,6 +92,10 @@ impl Folder {
             meta,
             belongings,
         }
+    }
+
+    pub fn add_plugins(&mut self, plugins: Vec<Arc<dyn CollabPlugin>>) {
+        self.inner.add_plugins(plugins);
     }
 
     pub fn create_with_data(&self, data: FolderData) {

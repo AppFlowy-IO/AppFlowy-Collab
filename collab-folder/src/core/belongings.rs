@@ -1,6 +1,8 @@
-use crate::core::Belongings;
+use collab::preclude::{lib0Any, YrsValue};
 use collab::preclude::{Array, ArrayRef, ArrayRefWrapper, MapRefWrapper, ReadTxn, TransactionMut};
-
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::ops::Deref;
 pub struct BelongingMap {
     container: MapRefWrapper,
 }
@@ -104,8 +106,7 @@ impl BelongingsArray {
         });
     }
     pub fn move_belonging_with_txn(&self, txn: &mut TransactionMut, from: u32, to: u32) {
-        if let Some(value) = self.container.get_with_txn(txn, from) {
-            let value = value.to_string(txn);
+        if let Some(YrsValue::Any(value)) = self.container.get_with_txn(txn, from) {
             self.container.remove(txn, from);
             self.container.insert(txn, to, value);
         }
@@ -121,20 +122,97 @@ impl BelongingsArray {
         })
     }
 
-    pub fn add_belonging(&self, view_id: &str) {
+    pub fn add_belonging(&self, belonging: Belonging) {
         self.container
-            .with_transact_mut(|txn| self.container.push_with_txn(txn, view_id))
+            .with_transact_mut(|txn| self.container.push_with_txn(txn, belonging))
     }
 
-    pub fn add_belonging_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
-        self.container.push_with_txn(txn, view_id)
+    pub fn add_belonging_with_txn(&self, txn: &mut TransactionMut, belonging: Belonging) {
+        self.container.push_with_txn(txn, belonging)
     }
 }
 
 pub fn belongings_from_array_ref<T: ReadTxn>(txn: &T, array_ref: &ArrayRef) -> Belongings {
     let mut belongings = Belongings::new(vec![]);
     for value in array_ref.iter(txn) {
-        belongings.view_ids.push(value.to_string(txn));
+        if let YrsValue::Any(lib0Any::Map(map)) = value {
+            if let Some(belonging) = Belonging::from_map(map) {
+                belongings.items.push(belonging);
+            }
+        }
     }
     belongings
+}
+
+#[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq, Debug)]
+#[repr(transparent)]
+pub struct Belongings {
+    pub items: Vec<Belonging>,
+}
+
+impl Belongings {
+    pub fn new(items: Vec<Belonging>) -> Self {
+        Self { items }
+    }
+
+    pub fn into_inner(self) -> Vec<Belonging> {
+        self.items
+    }
+}
+
+impl Deref for Belongings {
+    type Target = Vec<Belonging>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.items
+    }
+}
+
+impl From<Belongings> for Vec<lib0Any> {
+    fn from(values: Belongings) -> Self {
+        values
+            .into_inner()
+            .into_iter()
+            .map(|value| value.into())
+            .collect::<Vec<_>>()
+    }
+}
+
+#[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq, Debug)]
+pub struct Belonging {
+    pub id: String,
+    pub name: String,
+}
+
+impl Belonging {
+    pub fn new(id: String) -> Self {
+        Self {
+            id,
+            name: "".to_string(),
+        }
+    }
+    pub fn from_map(map: Box<HashMap<String, lib0Any>>) -> Option<Self> {
+        if let lib0Any::String(id) = map.get("id")? {
+            if let lib0Any::String(name) = map.get("name")? {
+                return Some(Self {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                });
+            }
+        }
+
+        None
+    }
+}
+
+impl From<Belonging> for lib0Any {
+    fn from(value: Belonging) -> Self {
+        let mut map = HashMap::new();
+        map.insert("id".to_string(), lib0Any::String(value.id.into_boxed_str()));
+        map.insert(
+            "name".to_string(),
+            lib0Any::String(value.name.into_boxed_str()),
+        );
+        lib0Any::Map(Box::new(map))
+    }
 }

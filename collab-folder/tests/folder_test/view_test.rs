@@ -26,7 +26,10 @@ fn create_view_with_sub_view_test() {
     assert_eq!(view.bid, r_view.bid);
     assert_eq!(view.belongings, r_view.belongings);
 
-    let r_sub_view = folder_test.views.get_view(&r_view.belongings[0]).unwrap();
+    let r_sub_view = folder_test
+        .views
+        .get_view(&r_view.belongings[0].id)
+        .unwrap();
     assert_eq!(child_view.name, r_sub_view.name);
     assert_eq!(child_view.bid, r_sub_view.bid);
 }

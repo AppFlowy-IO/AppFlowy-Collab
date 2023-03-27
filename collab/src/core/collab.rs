@@ -33,7 +33,7 @@ pub struct Collab {
 }
 
 impl Collab {
-    pub fn new<T: AsRef<str>>(uid: i64, cid: T, plugins: Vec<Rc<dyn CollabPlugin>>) -> Collab {
+    pub fn new<T: AsRef<str>>(uid: i64, cid: T, plugins: Vec<Arc<dyn CollabPlugin>>) -> Collab {
         let cid = cid.as_ref().to_string();
         let doc = Doc::with_client_id(uid as u64);
         let attributes = doc.get_or_insert_map("attrs");
@@ -48,11 +48,11 @@ impl Collab {
         }
     }
 
-    pub fn add_plugin(&mut self, plugin: Rc<dyn CollabPlugin>) {
+    pub fn add_plugin(&mut self, plugin: Arc<dyn CollabPlugin>) {
         self.plugins.write().push(plugin);
     }
 
-    pub fn add_plugins(&mut self, plugins: Vec<Rc<dyn CollabPlugin>>) {
+    pub fn add_plugins(&mut self, plugins: Vec<Arc<dyn CollabPlugin>>) {
         let mut write_guard = self.plugins.write();
         for plugin in plugins {
             write_guard.push(plugin);
@@ -267,7 +267,7 @@ impl Display for Collab {
 }
 
 pub struct CollabBuilder {
-    plugins: Vec<Rc<dyn CollabPlugin>>,
+    plugins: Vec<Arc<dyn CollabPlugin>>,
     uid: i64,
     cid: String,
 }
@@ -286,7 +286,7 @@ impl CollabBuilder {
     where
         T: CollabPlugin + 'static,
     {
-        self.plugins.push(Rc::new(plugin));
+        self.plugins.push(Arc::new(plugin));
         self
     }
 
@@ -375,16 +375,16 @@ impl DerefMut for Path {
 }
 
 #[derive(Default, Clone)]
-pub struct Plugins(Rc<RwLock<Vec<Rc<dyn CollabPlugin>>>>);
+pub struct Plugins(Rc<RwLock<Vec<Arc<dyn CollabPlugin>>>>);
 
 impl Plugins {
-    pub fn new(plugins: Vec<Rc<dyn CollabPlugin>>) -> Plugins {
+    pub fn new(plugins: Vec<Arc<dyn CollabPlugin>>) -> Plugins {
         Self(Rc::new(RwLock::new(plugins)))
     }
 }
 
 impl Deref for Plugins {
-    type Target = Rc<RwLock<Vec<Rc<dyn CollabPlugin>>>>;
+    type Target = Rc<RwLock<Vec<Arc<dyn CollabPlugin>>>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0

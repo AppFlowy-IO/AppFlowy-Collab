@@ -1,4 +1,5 @@
 use crate::util::{create_folder_with_workspace, make_test_view};
+use collab_folder::core::Belonging;
 
 #[test]
 fn create_belongings_test() {
@@ -59,26 +60,35 @@ fn move_belongings_test() {
         .get_belongings_array(&view_1.id)
         .unwrap();
     let belongings = belonging_array.get_belongings();
-    assert_eq!(belongings[0], "1_1");
-    assert_eq!(belongings[1], "1_2");
-    assert_eq!(belongings[2], "1_3");
+    assert_eq!(belongings[0].id, "1_1");
+    assert_eq!(belongings[1].id, "1_2");
+    assert_eq!(belongings[2].id, "1_3");
 
     belonging_array.move_belonging(2, 0);
     belonging_array.move_belonging(0, 1);
 
     let view = folder_test.views.get_view(&view_1.id).unwrap();
-    assert_eq!(view.belongings[0], "1_1");
-    assert_eq!(view.belongings[1], "1_3");
-    assert_eq!(view.belongings[2], "1_2");
+    assert_eq!(view.belongings[0].id, "1_1");
+    assert_eq!(view.belongings[1].id, "1_3");
+    assert_eq!(view.belongings[2].id, "1_2");
 }
 
 #[test]
 fn delete_belongings_test() {
     let folder_test = create_folder_with_workspace("1", "w1");
     let belonging_array = folder_test.belongings.get_belongings_array("w1").unwrap();
-    belonging_array.add_belonging("1_1");
-    belonging_array.add_belonging("1_2");
-    belonging_array.add_belonging("1_3");
+    belonging_array.add_belonging(Belonging {
+        id: "1_1".to_string(),
+        name: "".to_string(),
+    });
+    belonging_array.add_belonging(Belonging {
+        id: "1_2".to_string(),
+        name: "".to_string(),
+    });
+    belonging_array.add_belonging(Belonging {
+        id: "1_3".to_string(),
+        name: "".to_string(),
+    });
 
     let view_1_1 = make_test_view("1_1", "w1", vec![]);
     let view_1_2 = make_test_view("1_2", "w1", vec![]);
@@ -90,6 +100,6 @@ fn delete_belongings_test() {
     let belonging_array = folder_test.belongings.get_belongings_array("w1").unwrap();
     belonging_array.remove_belonging(1);
     let belongings = belonging_array.get_belongings();
-    assert_eq!(belongings[0], "1_1");
-    assert_eq!(belongings[1], "1_3");
+    assert_eq!(belongings[0].id, "1_1");
+    assert_eq!(belongings[1].id, "1_3");
 }

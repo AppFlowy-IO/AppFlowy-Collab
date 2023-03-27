@@ -5,7 +5,7 @@ use lib0::any::Any;
 use collab_persistence::CollabKV;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::rc::Rc;
+
 use std::sync::Arc;
 use tempfile::TempDir;
 
@@ -75,7 +75,7 @@ impl CollabPersistenceTest {
         match script {
             Script::CreateDocumentWithPlugin { id, plugin } => {
                 let mut collab = CollabBuilder::new(1, &id).build();
-                collab.add_plugins(vec![Rc::new(plugin.clone())]);
+                collab.add_plugins(vec![Arc::new(plugin.clone())]);
                 collab.initial();
 
                 self.disk_plugin = plugin;
@@ -121,7 +121,7 @@ impl CollabPersistenceTest {
 pub fn disk_plugin() -> CollabDiskPlugin {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
-    let db = Arc::new(CollabKV::open(path.clone()).unwrap());
+    let db = Arc::new(CollabKV::open(path).unwrap());
     CollabDiskPlugin::new(db).unwrap()
 }
 

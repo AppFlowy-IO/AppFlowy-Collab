@@ -11,7 +11,7 @@ fn delete_single_doc_test() {
             plugin: disk_plugin(),
         },
         AssertNumOfDocuments { expected: 1 },
-        DeleteDocument { id: doc_id.clone() },
+        DeleteDocument { id: doc_id },
         AssertNumOfDocuments { expected: 0 },
     ]);
 }
@@ -30,7 +30,7 @@ fn delete_multiple_docs_test() {
         },
         CreateDocumentWithPlugin {
             id: "3".to_string(),
-            plugin: disk_plugin.clone(),
+            plugin: disk_plugin,
         },
         DeleteDocument {
             id: "1".to_string(),

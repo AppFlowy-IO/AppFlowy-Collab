@@ -118,7 +118,7 @@ fn insert_multiple_docs() {
         },
         CreateDocumentWithPlugin {
             id: "6".to_string(),
-            plugin: disk_plugin.clone(),
+            plugin: disk_plugin,
         },
         AssertNumOfDocuments { expected: 6 },
     ]);
