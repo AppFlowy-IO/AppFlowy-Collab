@@ -33,18 +33,12 @@ pub struct Collab {
 }
 
 impl Collab {
-    pub fn new<T: AsRef<str>>(uid: i64, cid: T, plugins: Vec<Box<dyn CollabPlugin>>) -> Collab {
+    pub fn new<T: AsRef<str>>(uid: i64, cid: T, plugins: Vec<Rc<dyn CollabPlugin>>) -> Collab {
         let cid = cid.as_ref().to_string();
         let doc = Doc::with_client_id(uid as u64);
         let attributes = doc.get_or_insert_map("attrs");
         let plugins = Plugins::new(plugins);
         let subscription = observe_updates(&doc, cid.clone(), plugins.clone());
-        let mut txn = doc.transact_mut();
-        plugins
-            .read()
-            .iter()
-            .for_each(|plugin| plugin.did_init(&cid, &mut txn));
-        drop(txn);
         Self {
             cid,
             doc,
@@ -52,6 +46,27 @@ impl Collab {
             plugins,
             subscription,
         }
+    }
+
+    pub fn add_plugin(&mut self, plugin: Rc<dyn CollabPlugin>) {
+        self.plugins.write().push(plugin);
+    }
+
+    pub fn add_plugins(&mut self, plugins: Vec<Rc<dyn CollabPlugin>>) {
+        let mut write_guard = self.plugins.write();
+        for plugin in plugins {
+            write_guard.push(plugin);
+        }
+    }
+
+    ///  
+    pub fn initial(&self) {
+        let mut txn = self.doc.transact_mut();
+        self.plugins
+            .read()
+            .iter()
+            .for_each(|plugin| plugin.did_init(&self.cid, &mut txn));
+        drop(txn);
     }
 
     pub fn observer_attrs<F>(&mut self, f: F) -> MapSubscription
@@ -252,7 +267,7 @@ impl Display for Collab {
 }
 
 pub struct CollabBuilder {
-    plugins: Vec<Box<dyn CollabPlugin>>,
+    plugins: Vec<Rc<dyn CollabPlugin>>,
     uid: i64,
     cid: String,
 }
@@ -271,7 +286,7 @@ impl CollabBuilder {
     where
         T: CollabPlugin + 'static,
     {
-        self.plugins.push(Box::new(plugin));
+        self.plugins.push(Rc::new(plugin));
         self
     }
 
@@ -360,23 +375,16 @@ impl DerefMut for Path {
 }
 
 #[derive(Default, Clone)]
-pub struct Plugins(Rc<RwLock<Vec<Box<dyn CollabPlugin>>>>);
+pub struct Plugins(Rc<RwLock<Vec<Rc<dyn CollabPlugin>>>>);
 
 impl Plugins {
-    pub fn new(plugins: Vec<Box<dyn CollabPlugin>>) -> Plugins {
+    pub fn new(plugins: Vec<Rc<dyn CollabPlugin>>) -> Plugins {
         Self(Rc::new(RwLock::new(plugins)))
-    }
-
-    pub fn push<P>(&self, plugin: P)
-    where
-        P: CollabPlugin + 'static,
-    {
-        self.0.write().push(Box::new(plugin));
     }
 }
 
 impl Deref for Plugins {
-    type Target = Rc<RwLock<Vec<Box<dyn CollabPlugin>>>>;
+    type Target = Rc<RwLock<Vec<Rc<dyn CollabPlugin>>>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0

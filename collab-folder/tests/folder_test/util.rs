@@ -31,6 +31,7 @@ pub fn create_folder(id: &str) -> FolderTest {
     let cleaner = Cleaner::new(path);
 
     let collab = CollabBuilder::new(1, id).with_plugin(disk_plugin).build();
+    collab.initial();
 
     let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
     let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);

@@ -1,12 +1,15 @@
-use crate::script::CollabPersistenceTest;
 use crate::script::Script::*;
+use crate::script::{disk_plugin, CollabPersistenceTest};
 
 #[test]
 fn insert_single_change_and_restore_from_disk() {
     let doc_id = "1".to_string();
     let mut test = CollabPersistenceTest::new();
     test.run_scripts(vec![
-        CreateDocument { id: doc_id.clone() },
+        CreateDocumentWithPlugin {
+            id: doc_id.clone(),
+            plugin: disk_plugin(),
+        },
         InsertText {
             id: doc_id.clone(),
             key: "1".to_string(),
@@ -15,7 +18,7 @@ fn insert_single_change_and_restore_from_disk() {
         CloseDocument {
             id: doc_id.to_string(),
         },
-        OpenDocument {
+        OpenDocumentWithPlugin {
             id: doc_id.to_string(),
         },
         GetText {
@@ -31,7 +34,10 @@ fn insert_multiple_changes_and_restore_from_disk() {
     let mut test = CollabPersistenceTest::new();
     let doc_id = "1".to_string();
     test.run_scripts(vec![
-        CreateDocument { id: doc_id.clone() },
+        CreateDocumentWithPlugin {
+            id: doc_id.clone(),
+            plugin: disk_plugin(),
+        },
         InsertText {
             id: doc_id.clone(),
             key: "1".to_string(),
@@ -59,7 +65,7 @@ fn insert_multiple_changes_and_restore_from_disk() {
         CloseDocument {
             id: doc_id.to_string(),
         },
-        OpenDocument {
+        OpenDocumentWithPlugin {
             id: doc_id.to_string(),
         },
         GetText {
@@ -88,24 +94,31 @@ fn insert_multiple_changes_and_restore_from_disk() {
 #[test]
 fn insert_multiple_docs() {
     let mut test = CollabPersistenceTest::new();
+    let disk_plugin = disk_plugin();
     test.run_scripts(vec![
-        CreateDocument {
+        CreateDocumentWithPlugin {
             id: "1".to_string(),
+            plugin: disk_plugin.clone(),
         },
-        CreateDocument {
+        CreateDocumentWithPlugin {
             id: "2".to_string(),
+            plugin: disk_plugin.clone(),
         },
-        CreateDocument {
+        CreateDocumentWithPlugin {
             id: "3".to_string(),
+            plugin: disk_plugin.clone(),
         },
-        CreateDocument {
+        CreateDocumentWithPlugin {
             id: "4".to_string(),
+            plugin: disk_plugin.clone(),
         },
-        CreateDocument {
+        CreateDocumentWithPlugin {
             id: "5".to_string(),
+            plugin: disk_plugin.clone(),
         },
-        CreateDocument {
+        CreateDocumentWithPlugin {
             id: "6".to_string(),
+            plugin: disk_plugin.clone(),
         },
         AssertNumOfDocuments { expected: 6 },
     ]);

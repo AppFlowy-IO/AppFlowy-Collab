@@ -23,6 +23,7 @@ pub fn create_document(doc_id: &str) -> DocumentTest {
     let collab = CollabBuilder::new(1, doc_id)
         .with_plugin(disk_plugin)
         .build();
+    collab.initial();
 
     let document = Document::create(collab);
     DocumentTest { document, cleaner }

@@ -8,6 +8,7 @@ fn restore_from_update() {
     let collab = CollabBuilder::new(1, "1")
         .with_plugin(update_cache.clone())
         .build();
+    collab.initial();
     collab.insert("text", "hello world");
 
     let updates = update_cache.get_updates().unwrap();
@@ -23,6 +24,7 @@ fn restore_from_multiple_update() {
     let mut collab = CollabBuilder::new(1, "1")
         .with_plugin(update_cache.clone())
         .build();
+    collab.initial();
 
     // Insert map
     let mut map = HashMap::new();
@@ -41,6 +43,7 @@ fn apply_same_update_multiple_time() {
     let collab = CollabBuilder::new(1, "1")
         .with_plugin(update_cache.clone())
         .build();
+    collab.initial();
     collab.insert("text", "hello world");
 
     let updates = update_cache.get_updates().unwrap();
@@ -66,6 +69,7 @@ fn apply_unordered_updates() {
     let collab = CollabBuilder::new(1, "1")
         .with_plugin(update_cache.clone())
         .build();
+    collab.initial();
     collab.insert("text", "hello world");
 
     // Insert map
@@ -78,6 +82,7 @@ fn apply_unordered_updates() {
     updates.reverse();
 
     let restored_collab = CollabBuilder::new(1, "1").build();
+    restored_collab.initial();
     restored_collab.with_transact_mut(|txn| {
         //Out of order updates from the same peer will be stashed internally and their
         // integration will be postponed until missing blocks arrive first.

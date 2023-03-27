@@ -1,32 +1,36 @@
-use crate::script::CollabPersistenceTest;
 use crate::script::Script::*;
+use crate::script::{disk_plugin, CollabPersistenceTest};
 
 #[test]
 fn delete_single_doc_test() {
     let mut test = CollabPersistenceTest::new();
+    let doc_id = "1".to_string();
     test.run_scripts(vec![
-        CreateDocument {
-            id: "1".to_string(),
+        CreateDocumentWithPlugin {
+            id: doc_id.clone(),
+            plugin: disk_plugin(),
         },
         AssertNumOfDocuments { expected: 1 },
-        DeleteDocument {
-            id: "1".to_string(),
-        },
+        DeleteDocument { id: doc_id.clone() },
         AssertNumOfDocuments { expected: 0 },
     ]);
 }
 #[test]
 fn delete_multiple_docs_test() {
     let mut test = CollabPersistenceTest::new();
+    let disk_plugin = disk_plugin();
     test.run_scripts(vec![
-        CreateDocument {
+        CreateDocumentWithPlugin {
             id: "1".to_string(),
+            plugin: disk_plugin.clone(),
         },
-        CreateDocument {
+        CreateDocumentWithPlugin {
             id: "2".to_string(),
+            plugin: disk_plugin.clone(),
         },
-        CreateDocument {
+        CreateDocumentWithPlugin {
             id: "3".to_string(),
+            plugin: disk_plugin.clone(),
         },
         DeleteDocument {
             id: "1".to_string(),

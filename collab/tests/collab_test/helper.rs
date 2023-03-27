@@ -24,10 +24,13 @@ pub fn make_collab_pair() -> (Collab, Collab, CollabStateCachePlugin) {
     let mut local_collab = CollabBuilder::new(1, "1")
         .with_plugin(update_cache.clone())
         .build();
+    local_collab.initial();
+
     // Insert document
     local_collab.insert_json_with_path(vec![], "document", test_document());
     let updates = update_cache.get_updates();
     let remote_collab = CollabBuilder::new(1, "1").build_with_updates(updates.unwrap());
+    remote_collab.initial();
 
     (local_collab, remote_collab, update_cache)
 }

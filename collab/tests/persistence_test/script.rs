@@ -5,14 +5,16 @@ use lib0::any::Any;
 use collab_persistence::CollabKV;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 use tempfile::TempDir;
 
 pub enum Script {
-    CreateDocument {
+    CreateDocumentWithPlugin {
         id: String,
+        plugin: CollabDiskPlugin,
     },
-    OpenDocument {
+    OpenDocumentWithPlugin {
         id: String,
     },
     CloseDocument {
@@ -71,19 +73,22 @@ impl CollabPersistenceTest {
 
     pub fn run_script(&mut self, script: Script) {
         match script {
-            Script::CreateDocument { id } => {
-                let collab = CollabBuilder::new(1, &id)
-                    .with_plugin(self.disk_plugin.clone())
-                    .build();
+            Script::CreateDocumentWithPlugin { id, plugin } => {
+                let mut collab = CollabBuilder::new(1, &id).build();
+                collab.add_plugins(vec![Rc::new(plugin.clone())]);
+                collab.initial();
+
+                self.disk_plugin = plugin;
                 self.collabs.insert(id, collab);
             }
             Script::CloseDocument { id } => {
                 self.collabs.remove(&id);
             }
-            Script::OpenDocument { id } => {
+            Script::OpenDocumentWithPlugin { id } => {
                 let collab = CollabBuilder::new(1, &id)
                     .with_plugin(self.disk_plugin.clone())
                     .build();
+                collab.initial();
                 self.collabs.insert(id, collab);
             }
             Script::DeleteDocument { id } => {
@@ -111,6 +116,13 @@ impl CollabPersistenceTest {
             }
         }
     }
+}
+
+pub fn disk_plugin() -> CollabDiskPlugin {
+    let tempdir = TempDir::new().unwrap();
+    let path = tempdir.into_path();
+    let db = Arc::new(CollabKV::open(path.clone()).unwrap());
+    CollabDiskPlugin::new(db).unwrap()
 }
 
 struct Cleaner(PathBuf);
