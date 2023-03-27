@@ -179,8 +179,10 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
     }
 
     pub fn set_belongings(self, belongings: Belongings) -> Self {
-        self.belongings
-            .insert_belongings_with_txn(self.txn, self.workspace_id, belongings);
+        let array = self
+            .belongings
+            .get_or_create_belongings_with_txn(self.txn, self.workspace_id);
+        array.add_belongings_with_txn(self.txn, belongings.into_inner());
         self
     }
 

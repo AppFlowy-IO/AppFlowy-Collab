@@ -98,6 +98,10 @@ impl Folder {
         self.inner.add_plugins(plugins);
     }
 
+    pub fn initial(&self) {
+        self.inner.initial();
+    }
+
     pub fn create_with_data(&self, data: FolderData) {
         self.root.with_transact_mut(|txn| {
             for workspace in data.workspaces {
@@ -108,15 +112,18 @@ impl Folder {
                 self.views.insert_view_with_txn(txn, view);
             }
 
+            tracing::debug!("Set current workspace: {}", data.current_workspace);
             self.meta
                 .insert_with_txn(txn, CURRENT_WORKSPACE, data.current_workspace);
 
+            tracing::debug!("Set current view: {}", data.current_view);
             self.meta
                 .insert_with_txn(txn, CURRENT_VIEW, data.current_view);
         })
     }
 
     pub fn set_current_workspace(&self, workspace_id: &str) {
+        tracing::debug!("Set current workspace: {}", workspace_id);
         self.meta.insert(CURRENT_WORKSPACE, workspace_id);
     }
 
@@ -134,6 +141,7 @@ impl Folder {
     }
 
     pub fn set_current_view(&self, view_id: &str) {
+        tracing::debug!("Set current view: {}", view_id);
         self.meta.insert(CURRENT_VIEW, view_id);
     }
 

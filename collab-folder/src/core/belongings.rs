@@ -2,7 +2,7 @@ use collab::preclude::{lib0Any, YrsValue};
 use collab::preclude::{Array, ArrayRef, ArrayRefWrapper, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 pub struct BelongingMap {
     container: MapRefWrapper,
 }
@@ -40,18 +40,17 @@ impl BelongingMap {
         Some(BelongingsArray::from_array(array))
     }
 
-    pub fn insert_belongings_with_txn(
+    pub fn get_or_create_belongings_with_txn(
         &self,
         txn: &mut TransactionMut,
         bid: &str,
-        belongings: Belongings,
     ) -> BelongingsArray {
         let array_ref = self
             .container
             .get_array_ref_with_txn(txn, bid)
             .unwrap_or_else(|| {
                 self.container
-                    .insert_array_with_txn(txn, bid, belongings.into_inner())
+                    .insert_array_with_txn::<Belonging>(txn, bid, vec![])
             });
         BelongingsArray::from_array(array_ref)
     }
@@ -61,30 +60,19 @@ impl BelongingMap {
             belonging_array.remove_belonging_with_txn(txn, index);
         }
     }
+
+    pub fn add_belongings(&self, txn: &mut TransactionMut, bid: &str, belongings: Vec<Belonging>) {
+        let array = self.get_or_create_belongings_with_txn(txn, bid);
+        array.add_belongings_with_txn(txn, belongings);
+    }
 }
 
-const BELONGINGS: &str = "belongings";
 #[derive(Clone)]
 pub struct BelongingsArray {
     container: ArrayRefWrapper,
 }
 
 impl BelongingsArray {
-    pub fn get_or_create_with_txn(txn: &mut TransactionMut, container: &MapRefWrapper) -> Self {
-        let belongings_container = container
-            .get_array_ref_with_txn(txn, BELONGINGS)
-            .unwrap_or_else(|| {
-                container.insert_array_with_txn(
-                    txn,
-                    BELONGINGS,
-                    Belongings::new(vec![]).into_inner(),
-                )
-            });
-        Self {
-            container: belongings_container,
-        }
-    }
-
     pub fn from_array(belongings: ArrayRefWrapper) -> Self {
         Self {
             container: belongings,
@@ -122,13 +110,25 @@ impl BelongingsArray {
         })
     }
 
-    pub fn add_belonging(&self, belonging: Belonging) {
+    pub fn add_belongings(&self, belongings: Vec<Belonging>) {
         self.container
-            .with_transact_mut(|txn| self.container.push_with_txn(txn, belonging))
+            .with_transact_mut(|txn| self.add_belongings_with_txn(txn, belongings))
     }
 
-    pub fn add_belonging_with_txn(&self, txn: &mut TransactionMut, belonging: Belonging) {
-        self.container.push_with_txn(txn, belonging)
+    pub fn add_belongings_with_txn(&self, txn: &mut TransactionMut, belongings: Vec<Belonging>) {
+        let mut existing_belonging_ids = self
+            .get_belongings_with_txn(txn)
+            .into_inner()
+            .into_iter()
+            .map(|belonging| belonging.id)
+            .collect::<Vec<String>>();
+
+        for belonging in belongings {
+            if !existing_belonging_ids.contains(&belonging.id) {
+                existing_belonging_ids.push(belonging.id.clone());
+                self.container.push_with_txn(txn, belonging);
+            }
+        }
     }
 }
 
@@ -136,7 +136,7 @@ pub fn belongings_from_array_ref<T: ReadTxn>(txn: &T, array_ref: &ArrayRef) -> B
     let mut belongings = Belongings::new(vec![]);
     for value in array_ref.iter(txn) {
         if let YrsValue::Any(lib0Any::Map(map)) = value {
-            if let Some(belonging) = Belonging::from_map(map) {
+            if let Some(belonging) = Belonging::from_map(&map) {
                 belongings.items.push(belonging);
             }
         }
@@ -168,6 +168,12 @@ impl Deref for Belongings {
     }
 }
 
+impl DerefMut for Belongings {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.items
+    }
+}
+
 impl From<Belongings> for Vec<lib0Any> {
     fn from(values: Belongings) -> Self {
         values
@@ -191,7 +197,7 @@ impl Belonging {
             name: "".to_string(),
         }
     }
-    pub fn from_map(map: Box<HashMap<String, lib0Any>>) -> Option<Self> {
+    pub fn from_map(map: &HashMap<String, lib0Any>) -> Option<Self> {
         if let lib0Any::String(id) = map.get("id")? {
             if let lib0Any::String(name) = map.get("name")? {
                 return Some(Self {

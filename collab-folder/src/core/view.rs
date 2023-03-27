@@ -1,4 +1,4 @@
-use crate::core::{BelongingMap, Belongings};
+use crate::core::{Belonging, BelongingMap, Belongings};
 use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update};
 use anyhow::bail;
 
@@ -104,6 +104,16 @@ impl ViewsMap {
     }
 
     pub fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View) {
+        if let Some(parent_map_ref) = self.container.get_map_with_txn(txn, &view.bid) {
+            let belonging = Belonging {
+                id: view.id.clone(),
+                name: view.name.clone(),
+            };
+            ViewUpdate::new(&view.bid, txn, &parent_map_ref, self.belonging_map.clone())
+                .add_belonging(vec![belonging])
+                .done();
+        }
+
         let map_ref = self.container.insert_map_with_txn(txn, &view.id);
         ViewBuilder::new(&view.id, txn, map_ref, self.belonging_map.clone())
             .update(|update| {
@@ -165,7 +175,7 @@ fn subscribe_change(
                 Event::Text(_) => {}
                 Event::Array(_) => {}
                 Event::Map(event) => {
-                    for (_, c) in event.keys(txn) {
+                    for c in event.keys(txn).values() {
                         let change_tx = change_tx.clone().unwrap();
                         match c {
                             EntryChange::Inserted(v) => {
@@ -315,8 +325,17 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     }
 
     pub fn set_belongings(self, belongings: Belongings) -> Self {
+        let array = self
+            .belonging_map
+            .get_or_create_belongings_with_txn(self.txn, self.view_id);
+        array.add_belongings_with_txn(self.txn, belongings.into_inner());
+
+        self
+    }
+
+    pub fn add_belonging(self, belongings: Vec<Belonging>) -> Self {
         self.belonging_map
-            .insert_belongings_with_txn(self.txn, self.view_id, belongings);
+            .add_belongings(self.txn, self.view_id, belongings);
         self
     }
 

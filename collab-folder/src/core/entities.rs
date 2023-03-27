@@ -1,6 +1,4 @@
 use crate::core::{View, Workspace};
-use collab::preclude::lib0Any;
-use serde::{Deserialize, Serialize};
 
 pub struct FolderData {
     pub current_workspace: String,
