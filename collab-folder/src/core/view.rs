@@ -51,20 +51,18 @@ impl ViewsMap {
     }
 
     pub fn get_views_belong_to_with_txn<T: ReadTxn>(&self, txn: &T, bid: &str) -> Vec<View> {
-        let views = self
-            .container
-            .iter(txn)
-            .flat_map(|(_k, v)| v.to_ymap())
-            .flat_map(|map| {
-                let view = view_from_map_ref(&map, txn, &self.belonging_map)?;
-                if view.bid == bid {
-                    Some(view)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<View>>();
-        views
+        match self.get_view_with_txn(txn, bid) {
+            Some(root_view) => root_view
+                .belongings
+                .iter()
+                .flat_map(|be| {
+                    self.container
+                        .get_map_with_txn(txn, &be.id)
+                        .and_then(|map| view_from_map_ref(&map, txn, &self.belonging_map))
+                })
+                .collect::<Vec<View>>(),
+            None => vec![],
+        }
     }
 
     pub fn get_views<T: AsRef<str>>(&self, view_ids: &[T]) -> Vec<View> {
@@ -98,12 +96,12 @@ impl ViewsMap {
         map_ref.get_str_with_txn(txn, VIEW_NAME)
     }
 
-    pub fn insert_view(&self, view: View) {
+    pub(crate) fn insert_view(&self, view: View) {
         self.container
             .with_transact_mut(|txn| self.insert_view_with_txn(txn, view));
     }
 
-    pub fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View) {
+    pub(crate) fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View) {
         if let Some(parent_map_ref) = self.container.get_map_with_txn(txn, &view.bid) {
             let belonging = Belonging {
                 id: view.id.clone(),

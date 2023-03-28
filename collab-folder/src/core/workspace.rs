@@ -1,4 +1,4 @@
-use crate::core::{BelongingMap, Belongings};
+use crate::core::{Belonging, BelongingMap, Belongings};
 use anyhow::Result;
 use collab::preclude::{MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
@@ -190,5 +190,10 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
         self.belongings
             .delete_belongings_with_txn(self.txn, self.workspace_id, index);
         self
+    }
+
+    pub fn add_belongings(self, belongings: Vec<Belonging>) {
+        self.belongings
+            .add_belongings(self.txn, self.workspace_id, belongings);
     }
 }

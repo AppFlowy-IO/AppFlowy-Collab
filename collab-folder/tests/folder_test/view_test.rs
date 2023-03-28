@@ -4,7 +4,7 @@ use crate::util::{create_folder_with_workspace, make_test_view};
 fn create_view_test() {
     let folder_test = create_folder_with_workspace("1", "w1");
     let o_view = make_test_view("v1", "w1", vec![]);
-    folder_test.views.insert_view(o_view.clone());
+    folder_test.insert_view(o_view.clone());
 
     let r_view = folder_test.views.get_view("v1").unwrap();
     assert_eq!(o_view.name, r_view.name);
@@ -18,8 +18,8 @@ fn create_view_with_sub_view_test() {
     let child_view = make_test_view("v1_1", "v1", vec![]);
     let view = make_test_view("v1", "w1", vec![child_view.id.clone()]);
 
-    folder_test.views.insert_view(child_view.clone());
-    folder_test.views.insert_view(view.clone());
+    folder_test.insert_view(child_view.clone());
+    folder_test.insert_view(view.clone());
 
     let r_view = folder_test.views.get_view("v1").unwrap();
     assert_eq!(view.name, r_view.name);
@@ -40,9 +40,9 @@ fn delete_view_test() {
     let view_1 = make_test_view("v1", "w1", vec![]);
     let view_2 = make_test_view("v2", "w1", vec![]);
     let view_3 = make_test_view("v3", "w1", vec![]);
-    folder_test.views.insert_view(view_1);
-    folder_test.views.insert_view(view_2);
-    folder_test.views.insert_view(view_3);
+    folder_test.insert_view(view_1);
+    folder_test.insert_view(view_2);
+    folder_test.insert_view(view_3);
 
     let views = folder_test.views.get_views(&["v1", "v2", "v3"]);
     assert_eq!(views[0].id, "v1");
@@ -59,7 +59,7 @@ fn delete_view_test() {
 fn update_view_test() {
     let folder_test = create_folder_with_workspace("1", "w1");
     let o_view = make_test_view("v1", "w1", vec![]);
-    folder_test.views.insert_view(o_view);
+    folder_test.insert_view(o_view);
     folder_test
         .views
         .update_view("v1", |update| {

@@ -11,12 +11,12 @@ fn create_belongings_test() {
     let view_1_3 = make_test_view("1_3", "1", vec![]);
     let view_1 = make_test_view("1", "w1", vec![]);
 
-    folder_test.views.insert_view(view_1.clone());
-    folder_test.views.insert_view(view_1_1);
-    folder_test.views.insert_view(view_1_2.clone());
-    folder_test.views.insert_view(view_1_2_1);
-    folder_test.views.insert_view(view_1_2_2);
-    folder_test.views.insert_view(view_1_3);
+    folder_test.insert_view(view_1.clone());
+    folder_test.insert_view(view_1_1);
+    folder_test.insert_view(view_1_2.clone());
+    folder_test.insert_view(view_1_2_1);
+    folder_test.insert_view(view_1_2_2);
+    folder_test.insert_view(view_1_3);
 
     let belongings = folder_test
         .belongings
@@ -44,10 +44,10 @@ fn move_belongings_test() {
         vec!["1_1".to_string(), "1_2".to_string(), "1_3".to_string()],
     );
 
-    folder_test.views.insert_view(view_1.clone());
-    folder_test.views.insert_view(view_1_1);
-    folder_test.views.insert_view(view_1_2);
-    folder_test.views.insert_view(view_1_3);
+    folder_test.insert_view(view_1.clone());
+    folder_test.insert_view(view_1_1);
+    folder_test.insert_view(view_1_2);
+    folder_test.insert_view(view_1_3);
 
     let belonging_array = folder_test
         .belongings
@@ -80,9 +80,9 @@ fn delete_belongings_test() {
     let view_1_1 = make_test_view("1_1", "w1", vec![]);
     let view_1_2 = make_test_view("1_2", "w1", vec![]);
     let view_1_3 = make_test_view("1_3", "w1", vec![]);
-    folder_test.views.insert_view(view_1_1);
-    folder_test.views.insert_view(view_1_2);
-    folder_test.views.insert_view(view_1_3);
+    folder_test.insert_view(view_1_1);
+    folder_test.insert_view(view_1_2);
+    folder_test.insert_view(view_1_3);
 
     let belonging_array = folder_test.belongings.get_belongings_array("w1").unwrap();
     belonging_array.remove_belonging(1);

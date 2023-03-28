@@ -1,7 +1,7 @@
 use crate::core::trash::{TrashArray, TrashItem};
 use crate::core::{
-    BelongingMap, FolderData, TrashChangeSender, View, ViewChangeSender, ViewsMap, Workspace,
-    WorkspaceMap,
+    Belonging, BelongingMap, FolderData, TrashChangeSender, View, ViewChangeSender, ViewsMap,
+    Workspace, WorkspaceMap,
 };
 use collab::preclude::*;
 use parking_lot::RwLock;
@@ -134,10 +134,33 @@ impl Folder {
 
     pub fn get_views_belong_to_current_workspace(&self) -> Vec<View> {
         if let Some(workspace_id) = self.meta.get_str(CURRENT_WORKSPACE) {
-            self.views.get_views_belong_to(&workspace_id)
-        } else {
-            vec![]
+            if let Some(workspace) = self.workspaces.get_workspace(&workspace_id) {
+                let view_ids = workspace
+                    .belongings
+                    .into_inner()
+                    .into_iter()
+                    .map(|be| be.id)
+                    .collect::<Vec<String>>();
+                return self.views.get_views(&view_ids);
+            }
         }
+        vec![]
+    }
+
+    pub fn insert_view(&self, view: View) {
+        if let Some(workspace_id) = self.meta.get_str(CURRENT_WORKSPACE) {
+            if view.bid == workspace_id {
+                if let Some(workspace_map) = self.workspaces.edit_workspace(workspace_id) {
+                    workspace_map.update(|update| {
+                        update.add_belongings(vec![Belonging {
+                            id: view.id.clone(),
+                            name: view.name.clone(),
+                        }])
+                    });
+                }
+            }
+        }
+        self.views.insert_view(view)
     }
 
     pub fn set_current_view(&self, view_id: &str) {
@@ -186,10 +209,10 @@ impl WorkspaceArray {
         self.get_all_workspaces_with_txn(&txn)
     }
 
-    pub fn get_workspace(&self, workspace_id: &str) -> Option<Workspace> {
+    pub fn get_workspace<T: AsRef<str>>(&self, workspace_id: T) -> Option<Workspace> {
         self.workspaces
             .read()
-            .get(workspace_id)
+            .get(workspace_id.as_ref())
             .map(|workspace_map| workspace_map.to_workspace())?
     }
 
@@ -238,8 +261,8 @@ impl WorkspaceArray {
         self.workspaces.write().insert(workspace_id, workspace_map);
     }
 
-    pub fn edit_workspace(&self, workspace_id: &str) -> Option<WorkspaceMap> {
-        self.workspaces.read().get(workspace_id).cloned()
+    pub fn edit_workspace<T: AsRef<str>>(&self, workspace_id: T) -> Option<WorkspaceMap> {
+        self.workspaces.read().get(workspace_id.as_ref()).cloned()
     }
 }
 
