@@ -1,4 +1,4 @@
-use crate::core::trash::{TrashArray, TrashItem};
+use crate::core::trash::{TrashArray, TrashRecord};
 use crate::core::{
     Belonging, BelongingMap, FolderData, TrashChangeSender, View, ViewChangeSender, ViewsMap,
     Workspace, WorkspaceMap,
@@ -60,7 +60,7 @@ impl Folder {
                 let trash = collab
                     .get_array_with_txn(txn, vec![FOLDER, TRASH])
                     .unwrap_or_else(|| {
-                        folder.insert_array_with_txn::<TrashItem>(txn, TRASH, vec![])
+                        folder.insert_array_with_txn::<TrashRecord>(txn, TRASH, vec![])
                     });
 
                 // { FOLDER: { WORKSPACES: [], VIEWS: {:}, TRASH: [], META: {:} } }

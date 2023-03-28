@@ -1,8 +1,9 @@
 use crate::core::{TrashInfo, ViewsMap};
+use anyhow::bail;
 use collab::preclude::array::ArrayEvent;
 use collab::preclude::{
     lib0Any, Array, ArrayRefWrapper, Change, Observable, ReadTxn, Subscription, TransactionMut,
-    YrsValue,
+    Value, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
@@ -62,40 +63,60 @@ impl TrashArray {
             .collect::<Vec<_>>()
     }
 
-    pub fn get_all_trash_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<TrashItem> {
+    pub fn get_all_trash_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<TrashRecord> {
         let mut trash = vec![];
         for value in self.container.iter(txn) {
             if let YrsValue::Any(any) = value {
-                trash.push(TrashItem::from(any));
+                trash.push(TrashRecord::from(any));
             }
         }
         trash
     }
 
-    pub fn delete_trash(&self, id: &str) {
+    pub fn delete_trash<T: AsRef<str>>(&self, ids: Vec<T>) {
         self.container.with_transact_mut(|txn| {
-            self.delete_trash_with_txn(txn, id);
+            self.delete_trash_with_txn(txn, ids);
         })
     }
 
-    pub fn delete_trash_with_txn(&self, txn: &mut TransactionMut, id: &str) {
-        if let Some(pos) = self
-            .get_all_trash_with_txn(txn)
-            .into_iter()
-            .position(|item| item.id == id)
-        {
-            self.container.remove_with_txn(txn, pos as u32);
+    pub fn delete_trash_with_txn<T: AsRef<str>>(&self, txn: &mut TransactionMut, ids: Vec<T>) {
+        for id in &ids {
+            if let Some(pos) = self
+                .get_all_trash_with_txn(txn)
+                .into_iter()
+                .position(|item| item.id == id.as_ref())
+            {
+                self.container.remove_with_txn(txn, pos as u32);
+            }
+        }
+
+        if let Some(tx) = self.tx.as_ref() {
+            let record_ids = ids
+                .iter()
+                .map(|id| id.as_ref().to_string())
+                .collect::<Vec<String>>();
+            let _ = tx.send(TrashChange::DidDeleteTrash { ids: record_ids });
         }
     }
 
-    pub fn add_trash(&self, trash: TrashItem) {
+    pub fn add_trash(&self, records: Vec<TrashRecord>) {
         self.container.with_transact_mut(|txn| {
-            self.container.push_with_txn(txn, trash);
+            self.add_trash_with_txn(txn, records);
         })
     }
 
-    pub fn add_trash_with_txn(&self, txn: &mut TransactionMut, trash: TrashItem) {
-        self.container.push_with_txn(txn, trash);
+    pub fn add_trash_with_txn(&self, txn: &mut TransactionMut, records: Vec<TrashRecord>) {
+        let record_ids = records
+            .iter()
+            .map(|record| record.id.clone())
+            .collect::<Vec<String>>();
+        for record in records {
+            self.container.push_with_txn(txn, record);
+        }
+
+        if let Some(tx) = self.tx.as_ref() {
+            let _ = tx.send(TrashChange::DidCreateTrash { ids: record_ids });
+        }
     }
 
     pub fn clear(&self) {
@@ -108,30 +129,37 @@ impl TrashArray {
 
 fn subscribe_change(
     array: &mut ArrayRefWrapper,
-    tx: Option<TrashChangeSender>,
+    _tx: Option<TrashChangeSender>,
 ) -> Option<ArraySubscription> {
-    return if tx.is_some() {
-        Some(array.observe(|txn, event| {
-            for change in event.delta(txn) {
-                match change {
-                    Change::Added(_values) => {}
-                    Change::Removed(_value) => {}
-                    Change::Retain(_) => {}
+    Some(array.observe(move |txn, event| {
+        for change in event.delta(txn) {
+            match change {
+                Change::Added(_) => {
+                    // let records = values
+                    //     .iter()
+                    //     .flat_map(|value| match value {
+                    //         Value::Any(any) => Some(any),
+                    //         _ => None,
+                    //     })
+                    //     .map(|any| TrashRecord::from(any.clone()))
+                    //     .map(|record| record.id)
+                    //     .collect::<Vec<String>>();
+                    // let _ = tx.send(TrashChange::DidCreateTrash { ids: records });
                 }
+                Change::Removed(_) => {}
+                Change::Retain(_) => {}
             }
-        }))
-    } else {
-        None
-    };
+        }
+    }))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TrashItem {
+pub struct TrashRecord {
     pub id: String,
     pub created_at: i64,
 }
 
-impl From<lib0Any> for TrashItem {
+impl From<lib0Any> for TrashRecord {
     fn from(any: lib0Any) -> Self {
         let mut json = String::new();
         any.to_json(&mut json);
@@ -139,9 +167,20 @@ impl From<lib0Any> for TrashItem {
     }
 }
 
-impl From<TrashItem> for lib0Any {
-    fn from(item: TrashItem) -> Self {
+impl From<TrashRecord> for lib0Any {
+    fn from(item: TrashRecord) -> Self {
         let json = serde_json::to_string(&item).unwrap();
         lib0Any::from_json(&json).unwrap()
+    }
+}
+
+impl TryFrom<&YrsValue> for TrashRecord {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Any(any) => Ok(TrashRecord::from(any.clone())),
+            _ => bail!("Invalid trash yrs value"),
+        }
     }
 }

@@ -7,6 +7,7 @@ pub struct FolderData {
     pub views: Vec<View>,
 }
 
+#[derive(Clone)]
 pub struct TrashInfo {
     pub id: String,
     pub name: String,

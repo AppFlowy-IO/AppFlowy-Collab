@@ -20,8 +20,11 @@ pub struct FolderTest {
     view_rx: ViewChangeReceiver,
 
     #[allow(dead_code)]
-    trash_rx: TrashChangeReceiver,
+    pub trash_rx: Option<TrashChangeReceiver>,
 }
+
+unsafe impl Send for FolderTest {}
+unsafe impl Sync for FolderTest {}
 
 pub fn create_folder(id: &str) -> FolderTest {
     let tempdir = TempDir::new().unwrap();
@@ -44,7 +47,7 @@ pub fn create_folder(id: &str) -> FolderTest {
         folder,
         cleaner,
         view_rx,
-        trash_rx,
+        trash_rx: Some(trash_rx),
     }
 }
 
