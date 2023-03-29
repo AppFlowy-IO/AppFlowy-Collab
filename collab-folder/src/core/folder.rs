@@ -185,6 +185,10 @@ impl Folder {
     pub fn to_json(&self) -> String {
         self.root.to_json()
     }
+
+    pub fn to_json_value(&self) -> JsonValue {
+        self.root.to_json_value()
+    }
 }
 
 pub struct WorkspaceArray {
