@@ -25,3 +25,4 @@ collab = { path = "."}
 collab-derive = { path = "../collab-derive"}
 nanoid = "0.4.0"
 chrono = "0.4.19"
+assert-json-diff = "2.0.2"

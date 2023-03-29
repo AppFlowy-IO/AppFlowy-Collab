@@ -14,7 +14,7 @@ use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
 
 pub const DATA_SECTION: &str = "data";
-use crate::preclude::ArrayRefWrapper;
+use crate::preclude::{ArrayRefWrapper, JsonValue};
 use yrs::{
     ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, ReadTxn, Subscription, Transact,
     Transaction, TransactionMut, Update, UpdateSubscription,
@@ -222,6 +222,11 @@ impl Collab {
     pub fn to_json(&self) -> lib0::any::Any {
         let txn = self.transact();
         self.data.to_json(&txn)
+    }
+
+    pub fn to_json_value(&self) -> JsonValue {
+        let txn = self.transact();
+        serde_json::to_value(&self.data.to_json(&txn)).unwrap()
     }
 
     pub fn transact(&self) -> Transaction {

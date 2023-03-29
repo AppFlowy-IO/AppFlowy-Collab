@@ -1,5 +1,6 @@
 use crate::helper::CollabStateCachePlugin;
 use collab::core::collab::CollabBuilder;
+use serde_json::json;
 use std::collections::HashMap;
 
 #[test]
@@ -57,10 +58,7 @@ fn apply_same_update_multiple_time() {
         }
     });
 
-    assert_eq!(
-        restored_collab.to_string(),
-        r#"{"attributes":{"text":"hello world"}}"#
-    );
+    assert_json_diff::assert_json_eq!(collab.to_json(), restored_collab.to_json(),);
 }
 
 #[test]
@@ -91,8 +89,10 @@ fn apply_unordered_updates() {
         }
     });
 
-    assert_eq!(
-        restored_collab.to_string(),
-        r#"{"attributes":{"text":"hello world"}}"#
+    assert_json_diff::assert_json_eq!(
+        json!( {
+          "text": "hello world"
+        }),
+        restored_collab.to_json_value()
     );
 }
