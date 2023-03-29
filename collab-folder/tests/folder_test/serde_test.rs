@@ -33,7 +33,7 @@ fn workspace_json_serde() {
         created_at: 123,
     };
 
-    folder_test.workspaces.create_workspace(workspace.clone());
+    folder_test.workspaces.create_workspace(workspace);
     assert_json_diff::assert_json_eq!(
         json!({
           "Belongings": {
@@ -84,7 +84,7 @@ fn view_json_serde() {
     folder_test.insert_view(view_1);
     folder_test.insert_view(view_2);
 
-    folder_test.workspaces.create_workspace(workspace.clone());
+    folder_test.workspaces.create_workspace(workspace);
     assert_json_diff::assert_json_eq!(
         json!({
           "Belongings": {
@@ -160,7 +160,7 @@ fn child_view_json_serde() {
     folder_test.insert_view(view_2_1);
     folder_test.insert_view(view_2_2);
 
-    folder_test.workspaces.create_workspace(workspace.clone());
+    folder_test.workspaces.create_workspace(workspace);
     assert_json_diff::assert_json_eq!(
         json!({
           "Belongings": {

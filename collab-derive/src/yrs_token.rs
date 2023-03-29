@@ -316,7 +316,7 @@ fn get_bracketed_value_type_from<'a>(
             "Option" => parse_bracketed(bracketed),
             _ => {
                 let msg = format!("Unsupported type: {}", seg.ident);
-                ast_result.error_spanned_by(&seg.ident, &msg);
+                ast_result.error_spanned_by(&seg.ident, msg);
                 vec![]
             }
         };
