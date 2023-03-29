@@ -13,7 +13,8 @@ use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
 
-use crate::preclude::ArrayRefWrapper;
+pub const DATA_SECTION: &str = "data";
+use crate::preclude::{ArrayRefWrapper, JsonValue};
 use yrs::{
     ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, ReadTxn, Subscription, Transact,
     Transaction, TransactionMut, Update, UpdateSubscription,
@@ -26,7 +27,7 @@ pub struct Collab {
     doc: Doc,
     #[allow(dead_code)]
     cid: String,
-    attributes: MapRef,
+    data: MapRef,
     plugins: Plugins,
     #[allow(dead_code)]
     subscription: UpdateSubscription,
@@ -36,13 +37,13 @@ impl Collab {
     pub fn new<T: AsRef<str>>(uid: i64, cid: T, plugins: Vec<Arc<dyn CollabPlugin>>) -> Collab {
         let cid = cid.as_ref().to_string();
         let doc = Doc::with_client_id(uid as u64);
-        let attributes = doc.get_or_insert_map("attrs");
+        let data = doc.get_or_insert_map(DATA_SECTION);
         let plugins = Plugins::new(plugins);
         let subscription = observe_updates(&doc, cid.clone(), plugins.clone());
         Self {
             cid,
             doc,
-            attributes,
+            data,
             plugins,
             subscription,
         }
@@ -73,12 +74,12 @@ impl Collab {
     where
         F: Fn(&TransactionMut, &MapEvent) + 'static,
     {
-        self.attributes.observe(f)
+        self.data.observe(f)
     }
 
     pub fn get(&self, key: &str) -> Option<Value> {
         let txn = self.doc.transact();
-        self.attributes.get(&txn, key)
+        self.data.get(&txn, key)
     }
 
     pub fn insert<V: Prelim>(&self, key: &str, value: V) {
@@ -86,7 +87,7 @@ impl Collab {
     }
 
     pub fn insert_with_txn<V: Prelim>(&self, txn: &mut TransactionMut, key: &str, value: V) {
-        self.attributes.insert(txn, key, value);
+        self.data.insert(txn, key, value);
     }
 
     pub fn insert_json_with_path<T: Serialize>(&mut self, path: Vec<String>, key: &str, value: T) {
@@ -100,7 +101,7 @@ impl Collab {
         self.with_transact_mut(|txn| {
             if map.is_none() {
                 map = Some(
-                    self.attributes
+                    self.data
                         .insert(txn, key, MapPrelim::<lib0::any::Any>::new()),
                 );
             }
@@ -111,7 +112,7 @@ impl Collab {
 
     pub fn create_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
         let map = MapPrelim::<lib0::any::Any>::new();
-        let map_ref = self.attributes.insert(txn, key, map);
+        let map_ref = self.data.insert(txn, key, map);
         self.map_wrapper_with(map_ref)
     }
 
@@ -145,7 +146,7 @@ impl Collab {
             return None;
         }
         let mut iter = path.into_iter();
-        let mut map_ref = self.attributes.get(txn, &iter.next().unwrap())?.to_ymap();
+        let mut map_ref = self.data.get(txn, &iter.next().unwrap())?.to_ymap();
         for path in iter {
             map_ref = map_ref?.get(txn, &path)?.to_ymap();
         }
@@ -171,12 +172,12 @@ impl Collab {
         }
 
         if path.len() == 1 {
-            return self.attributes.get(txn, &path[0]);
+            return self.data.get(txn, &path[0]);
         }
 
         let last = path.pop().unwrap();
         let mut iter = path.into_iter();
-        let mut map_ref = self.attributes.get(txn, &iter.next().unwrap())?.to_ymap();
+        let mut map_ref = self.data.get(txn, &iter.next().unwrap())?.to_ymap();
         for path in iter {
             map_ref = map_ref?.get(txn, &path)?.to_ymap();
         }
@@ -185,7 +186,7 @@ impl Collab {
 
     pub fn remove(&mut self, key: &str) -> Option<Value> {
         let mut txn = self.doc.transact_mut();
-        self.attributes.remove(&mut txn, key)
+        self.data.remove(&mut txn, key)
     }
 
     pub fn remove_with_path<P: Into<Path>>(&mut self, path: P) -> Option<Value> {
@@ -195,12 +196,12 @@ impl Collab {
         }
         let len = path.len();
         if len == 1 {
-            self.with_transact_mut(|txn| self.attributes.remove(txn, &path[0]))
+            self.with_transact_mut(|txn| self.data.remove(txn, &path[0]))
         } else {
             let txn = self.transact();
             let mut iter = path.into_iter();
             let mut remove_path = iter.next().unwrap();
-            let mut map_ref = self.attributes.get(&txn, &remove_path)?.to_ymap();
+            let mut map_ref = self.data.get(&txn, &remove_path)?.to_ymap();
 
             let remove_index = len - 2;
             for (index, path) in iter.enumerate() {
@@ -220,7 +221,12 @@ impl Collab {
 
     pub fn to_json(&self) -> lib0::any::Any {
         let txn = self.transact();
-        self.attributes.to_json(&txn)
+        self.data.to_json(&txn)
+    }
+
+    pub fn to_json_value(&self) -> JsonValue {
+        let txn = self.transact();
+        serde_json::to_value(&self.data.to_json(&txn)).unwrap()
     }
 
     pub fn transact(&self) -> Transaction {

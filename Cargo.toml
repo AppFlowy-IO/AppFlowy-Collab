@@ -6,7 +6,3 @@ members = [
     "collab-document",
     "collab-folder",
 ]
-
-[patch.crates-io]
-lib0 = { git = "https://github.com/toeverything/y-crdt", rev = "a3f7263" }
-yrs = { git = "https://github.com/toeverything/y-crdt", rev = "a3f7263" }
