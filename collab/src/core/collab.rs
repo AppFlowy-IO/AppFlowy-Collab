@@ -15,9 +15,12 @@ use yrs::types::{ToJson, Value};
 
 pub const DATA_SECTION: &str = "data";
 use crate::preclude::{ArrayRefWrapper, JsonValue};
+
+type AfterTransactionSubscription = Subscription<Arc<dyn Fn(&mut TransactionMut)>>;
+
 use yrs::{
-  ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, ReadTxn, Subscription, Transact, Transaction,
-  TransactionMut, Update, UpdateSubscription,
+  ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, Subscription, Transact,
+  Transaction, TransactionMut, Update, UpdateSubscription,
 };
 
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
@@ -30,22 +33,30 @@ pub struct Collab {
   data: MapRef,
   plugins: Plugins,
   #[allow(dead_code)]
-  subscription: UpdateSubscription,
+  update_subscription: UpdateSubscription,
+  #[allow(dead_code)]
+  after_txn_subscription: AfterTransactionSubscription,
 }
 
 impl Collab {
   pub fn new<T: AsRef<str>>(uid: i64, cid: T, plugins: Vec<Arc<dyn CollabPlugin>>) -> Collab {
     let cid = cid.as_ref().to_string();
-    let doc = Doc::with_client_id(uid as u64);
+    let doc = Doc::with_options(Options {
+      skip_gc: true,
+      client_id: uid as u64, // in order to support revisions we cannot garbage collect deleted blocks
+      ..Options::default()
+    });
     let data = doc.get_or_insert_map(DATA_SECTION);
     let plugins = Plugins::new(plugins);
-    let subscription = observe_updates(&doc, cid.clone(), plugins.clone());
+    let (update_subscription, after_txn_subscription) =
+      observe_doc(&doc, cid.clone(), plugins.clone());
     Self {
       cid,
       doc,
       data,
       plugins,
-      subscription,
+      update_subscription,
+      after_txn_subscription,
     }
   }
 
@@ -257,15 +268,32 @@ impl Collab {
   }
 }
 
-fn observe_updates(doc: &Doc, cid: String, plugins: Plugins) -> UpdateSubscription {
-  doc
+fn observe_doc(
+  doc: &Doc,
+  cid: String,
+  plugins: Plugins,
+) -> (UpdateSubscription, AfterTransactionSubscription) {
+  let cloned_cid = cid.clone();
+  let cloned_plugins = plugins.clone();
+  let update_sub = doc
     .observe_update_v1(move |txn, event| {
+      cloned_plugins
+        .read()
+        .iter()
+        .for_each(|plugin| plugin.did_receive_update(&cloned_cid, txn, &event.update));
+    })
+    .unwrap();
+
+  let after_txn_sub = doc
+    .observe_after_transaction(move |txn| {
       plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.did_receive_update(&cid, txn, &event.update));
+        .for_each(|plugin| plugin.after_transaction(&cid, txn));
     })
-    .unwrap()
+    .unwrap();
+
+  (update_sub, after_txn_sub)
 }
 
 impl Display for Collab {

@@ -1,5 +1,6 @@
 use crate::doc::YrsDoc;
 use crate::error::PersistenceError;
+use crate::snapshot::YrsSnapshot;
 use sled::{Batch, Db, IVec};
 use std::ops::Deref;
 use std::path::Path;
@@ -17,6 +18,10 @@ impl CollabKV {
 
   pub fn doc(&self) -> YrsDoc {
     YrsDoc { db: self }
+  }
+
+  pub fn snapshot(&self) -> YrsSnapshot {
+    YrsSnapshot { db: self }
   }
 
   pub fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<IVec>, PersistenceError> {
