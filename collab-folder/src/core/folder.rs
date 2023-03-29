@@ -132,6 +132,10 @@ impl Folder {
         self.workspaces.get_workspace(&workspace_id)
     }
 
+    pub fn get_current_workspace_id(&self) -> Option<String> {
+        self.meta.get_str(CURRENT_WORKSPACE)
+    }
+
     pub fn get_views_belong_to_current_workspace(&self) -> Vec<View> {
         if let Some(workspace_id) = self.meta.get_str(CURRENT_WORKSPACE) {
             if let Some(workspace) = self.workspaces.get_workspace(&workspace_id) {
@@ -161,6 +165,12 @@ impl Folder {
             }
         }
         self.views.insert_view(view)
+    }
+
+    pub fn move_view(&self, view_id: &str, from: u32, to: u32) -> Option<View> {
+        let view = self.views.get_view(view_id)?;
+        self.belongings.move_belonging(&view.bid, from, to);
+        Some(view)
     }
 
     pub fn set_current_view(&self, view_id: &str) {

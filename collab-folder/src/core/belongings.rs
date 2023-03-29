@@ -20,9 +20,7 @@ impl BelongingMap {
 
     pub fn move_belonging_with_txn(&self, txn: &mut TransactionMut, bid: &str, from: u32, to: u32) {
         if let Some(belonging_array) = self.get_belongings_array_with_txn(txn, bid) {
-            self.container.with_transact_mut(|txn| {
-                belonging_array.move_belonging_with_txn(txn, from, to);
-            })
+            belonging_array.move_belonging_with_txn(txn, from, to);
         }
     }
 
