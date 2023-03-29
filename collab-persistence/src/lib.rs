@@ -3,6 +3,7 @@ pub mod doc;
 pub mod error;
 mod keys;
 mod range;
+pub mod snapshot;
 
 pub use db::*;
 pub use error::*;

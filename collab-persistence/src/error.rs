@@ -3,8 +3,8 @@ pub enum PersistenceError {
   #[error(transparent)]
   Db(#[from] sled::Error),
 
-  #[error("Serde error")]
-  SerdeError,
+  #[error(transparent)]
+  Bincode(#[from] bincode::Error),
 
   #[error("The document is not exist")]
   DocumentNotExist,

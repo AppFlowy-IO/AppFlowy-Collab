@@ -6,7 +6,7 @@ fn delete_single_doc_test() {
   let mut test = CollabPersistenceTest::new();
   let doc_id = "1".to_string();
   test.run_scripts(vec![
-    CreateDocumentWithPlugin {
+    CreateDocumentWithDiskPlugin {
       id: doc_id.clone(),
       plugin: disk_plugin(),
     },
@@ -20,15 +20,15 @@ fn delete_multiple_docs_test() {
   let mut test = CollabPersistenceTest::new();
   let disk_plugin = disk_plugin();
   test.run_scripts(vec![
-    CreateDocumentWithPlugin {
+    CreateDocumentWithDiskPlugin {
       id: "1".to_string(),
       plugin: disk_plugin.clone(),
     },
-    CreateDocumentWithPlugin {
+    CreateDocumentWithDiskPlugin {
       id: "2".to_string(),
       plugin: disk_plugin.clone(),
     },
-    CreateDocumentWithPlugin {
+    CreateDocumentWithDiskPlugin {
       id: "3".to_string(),
       plugin: disk_plugin,
     },

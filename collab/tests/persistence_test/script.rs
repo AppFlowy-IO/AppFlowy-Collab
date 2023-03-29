@@ -6,15 +6,20 @@ use collab_persistence::CollabKV;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use std::sync::Arc;
 use tempfile::TempDir;
+use yrs::updates::decoder::Decode;
 
 pub enum Script {
-  CreateDocumentWithPlugin {
+  CreateDocumentWithDiskPlugin {
     id: String,
     plugin: CollabDiskPlugin,
   },
-  OpenDocumentWithPlugin {
+  OpenDocumentWithDiskPlugin {
+    id: String,
+  },
+  OpenDocumentWithSnapshotPlugin {
     id: String,
   },
   CloseDocument {
@@ -23,15 +28,20 @@ pub enum Script {
   DeleteDocument {
     id: String,
   },
-  InsertText {
+  InsertKeyValue {
     id: String,
     key: String,
     value: Any,
   },
-  GetText {
+  GetValue {
     id: String,
     key: String,
     expected: Option<Any>,
+  },
+  AssertSnapshot {
+    id: String,
+    index: u32,
+    expected: JsonValue,
   },
   AssertNumOfUpdates {
     id: String,
@@ -45,6 +55,7 @@ pub enum Script {
 pub struct CollabPersistenceTest {
   collabs: HashMap<String, Collab>,
   disk_plugin: CollabDiskPlugin,
+  snapshot_plugin: CollabSnapshotPlugin,
   #[allow(dead_code)]
   cleaner: Cleaner,
   pub db_path: PathBuf,
@@ -55,11 +66,13 @@ impl CollabPersistenceTest {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let db = Arc::new(CollabKV::open(path.clone()).unwrap());
-    let disk_plugin = CollabDiskPlugin::new(db).unwrap();
+    let disk_plugin = CollabDiskPlugin::new(db.clone()).unwrap();
+    let snapshot_plugin = CollabSnapshotPlugin::new(db, 5).unwrap();
     let cleaner = Cleaner::new(path.clone());
     Self {
       collabs: HashMap::default(),
       disk_plugin,
+      snapshot_plugin,
       cleaner,
       db_path: path,
     }
@@ -73,7 +86,7 @@ impl CollabPersistenceTest {
 
   pub fn run_script(&mut self, script: Script) {
     match script {
-      Script::CreateDocumentWithPlugin { id, plugin } => {
+      Script::CreateDocumentWithDiskPlugin { id, plugin } => {
         let mut collab = CollabBuilder::new(1, &id).build();
         collab.add_plugins(vec![Arc::new(plugin.clone())]);
         collab.initial();
@@ -81,10 +94,18 @@ impl CollabPersistenceTest {
         self.disk_plugin = plugin;
         self.collabs.insert(id, collab);
       },
+      Script::OpenDocumentWithSnapshotPlugin { id } => {
+        let collab = CollabBuilder::new(1, &id)
+          .with_plugin(self.snapshot_plugin.clone())
+          .build();
+        collab.initial();
+
+        self.collabs.insert(id, collab);
+      },
       Script::CloseDocument { id } => {
         self.collabs.remove(&id);
       },
-      Script::OpenDocumentWithPlugin { id } => {
+      Script::OpenDocumentWithDiskPlugin { id } => {
         let collab = CollabBuilder::new(1, &id)
           .with_plugin(self.disk_plugin.clone())
           .build();
@@ -94,10 +115,10 @@ impl CollabPersistenceTest {
       Script::DeleteDocument { id } => {
         self.disk_plugin.doc().delete_doc(&id).unwrap();
       },
-      Script::InsertText { id, key, value } => {
+      Script::InsertKeyValue { id, key, value } => {
         self.collabs.get(&id).as_ref().unwrap().insert(&key, value);
       },
-      Script::GetText { id, key, expected } => {
+      Script::GetValue { id, key, expected } => {
         let collab = self.collabs.get(&id).unwrap();
         let txn = collab.transact();
         let text = collab
@@ -113,6 +134,20 @@ impl CollabPersistenceTest {
       Script::AssertNumOfDocuments { expected } => {
         let docs = self.disk_plugin.doc().get_all_docs().unwrap();
         assert_eq!(docs.count(), expected);
+      },
+      Script::AssertSnapshot {
+        id,
+        index,
+        expected,
+      } => {
+        let snapshots = self.snapshot_plugin.snapshot().get_snapshots(&id);
+        let collab = CollabBuilder::new(1, &id).build();
+        collab.with_transact_mut(|txn| {
+          txn.apply_update(Update::decode_v1(&snapshots[index as usize].data).unwrap());
+        });
+
+        let json = collab.to_json_value();
+        assert_json_diff::assert_json_eq!(json, expected);
       },
     }
   }
