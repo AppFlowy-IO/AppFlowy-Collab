@@ -85,6 +85,16 @@ impl MapRefWrapper {
     ArrayRefWrapper::new(array, self.collab_ctx.clone())
   }
 
+  pub fn get_or_insert_array_with_txn<V: Prelim>(
+    &self,
+    txn: &mut TransactionMut,
+    key: &str,
+  ) -> ArrayRefWrapper {
+    self
+      .get_array_ref_with_txn(txn, key)
+      .unwrap_or_else(|| self.insert_array_with_txn::<V>(txn, key, vec![]))
+  }
+
   pub fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
     let map = MapPrelim::<lib0::any::Any>::new();
     let map_ref = self.map_ref.insert(txn, key, map);
@@ -103,6 +113,7 @@ impl MapRefWrapper {
       .get_map_with_txn(txn, key)
       .unwrap_or_else(|| self.insert_map_with_txn(txn, key))
   }
+
   pub fn get_json<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
     self.get_json_with_txn(&self.collab_ctx.transact(), key)
   }

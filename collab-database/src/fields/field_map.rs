@@ -27,8 +27,7 @@ impl FieldMap {
           .set_field_type(field.field_type)
           .set_width(field.width)
           .set_visibility(field.visibility)
-          .set_type_option(field.type_options)
-          .done();
+          .set_type_option(field.type_options);
       })
       .done();
   }

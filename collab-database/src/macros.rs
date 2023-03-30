@@ -63,6 +63,24 @@ macro_rules! impl_i32_update {
     }
   };
 }
+
+#[macro_export]
+macro_rules! impl_u8_update {
+  ($setter1: ident, $setter2: ident, $key: expr) => {
+    pub fn $setter1(self, value: u8) -> Self {
+      self.map_ref.insert_with_txn(self.txn, $key, value);
+      self
+    }
+
+    pub fn $setter2(self, value: Option<u8>) -> Self {
+      if let Some(value) = value {
+        self.map_ref.insert_with_txn(self.txn, $key, value);
+      }
+      self
+    }
+  };
+}
+
 #[macro_export]
 macro_rules! impl_bool_update {
   ($setter1: ident, $setter2: ident, $key: expr) => {

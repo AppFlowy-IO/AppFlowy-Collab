@@ -23,7 +23,7 @@ impl TypeOptions {
     this
   }
 
-  pub fn fill_in_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRefWrapper) {
+  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRefWrapper) {
     self.into_inner().into_iter().for_each(|(k, v)| {
       map_ref.insert_with_txn(txn, &k, v);
     });

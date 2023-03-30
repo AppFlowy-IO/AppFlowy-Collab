@@ -112,7 +112,7 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
     let map_ref = self
       .map_ref
       .get_or_insert_map_with_txn(self.txn, FIELD_TYPE_OPTION);
-    type_option.fill_in_map_ref(self.txn, &map_ref);
+    type_option.fill_map_ref(self.txn, &map_ref);
     self
   }
 
@@ -131,9 +131,7 @@ const FIELD_PRIMARY: &str = "is_primary";
 
 pub fn field_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Field> {
   let map_ref = MapRefTool(map_ref);
-
   let id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
-
   let name = map_ref
     .get_str_with_txn(txn, FIELD_NAME)
     .unwrap_or_default();

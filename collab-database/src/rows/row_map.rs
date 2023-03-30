@@ -23,8 +23,7 @@ impl RowMap {
         update
           .set_height(row.height)
           .set_visibility(row.visibility)
-          .set_cells(row.cells)
-          .done();
+          .set_cells(row.cells);
       })
       .done();
   }

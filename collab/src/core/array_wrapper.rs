@@ -57,11 +57,11 @@ impl ArrayRefWrapper {
     Ok(())
   }
 
-  pub fn create_map_ref(&self) -> MapRefWrapper {
-    self.with_transact_mut(|txn| self.create_map_with_txn(txn))
+  pub fn insert_map_ref(&self) -> MapRefWrapper {
+    self.with_transact_mut(|txn| self.insert_map_with_txn(txn))
   }
 
-  pub fn create_map_with_txn(&self, txn: &mut TransactionMut) -> MapRefWrapper {
+  pub fn insert_map_with_txn(&self, txn: &mut TransactionMut) -> MapRefWrapper {
     let array = MapPrelim::<Any>::new();
     let map_ref = self.array_ref.push_back(txn, array);
     MapRefWrapper::new(map_ref, self.collab_ctx.clone())

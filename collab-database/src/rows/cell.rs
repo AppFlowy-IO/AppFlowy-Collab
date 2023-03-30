@@ -74,7 +74,7 @@ impl TryFrom<YrsValue> for Cell {
     if let YrsValue::Any(lib0Any::String(s)) = value {
       Ok(Self::from(s))
     } else {
-      bail!("Invalid cell type")
+      bail!("Invalid cell data")
     }
   }
 }
