@@ -1,7 +1,7 @@
 mod block;
-mod text;
 mod children;
+mod text;
 
 pub use block::*;
-pub use text::*;
 pub use children::*;
+pub use text::*;

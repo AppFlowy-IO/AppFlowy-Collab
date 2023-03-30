@@ -62,15 +62,15 @@ impl TextRefWrapper {
           let len = value.len() as u32;
           self.text_ref.insert(txn, index, &value);
           self.text_ref.format(txn, index, len, attrs);
-          index = index + len;
+          index += len;
         },
         TextDelta::Deleted(len) => {
           self.text_ref.remove_range(txn, index, len);
-          index = index + len;
+          index += len;
         },
         TextDelta::Retain(len, attrs) => {
           self.text_ref.format(txn, index, len, attrs);
-          index = index + len;
+          index += len;
         },
       }
     }
