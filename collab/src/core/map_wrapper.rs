@@ -57,6 +57,10 @@ impl MapRefWrapper {
     self.map_ref.insert(txn, key, value);
   }
 
+  pub fn delete_with_txn(&self, txn: &mut TransactionMut, key: &str) {
+    self.map_ref.remove(txn, key);
+  }
+
   pub fn insert_json<T: Serialize>(&self, key: &str, value: T) {
     let value = serde_json::to_value(&value).unwrap();
     self.collab_ctx.with_transact_mut(|txn| {
@@ -168,11 +172,6 @@ impl MapRefWrapper {
     F: FnOnce(&mut TransactionMut) -> T,
   {
     self.collab_ctx.with_transact_mut(f)
-  }
-
-  pub fn to_json_value(&self) -> JsonValue {
-    let txn = self.collab_ctx.transact();
-    serde_json::to_value(&self.map_ref.to_json(&txn)).unwrap()
   }
 
   pub fn to_json(&self) -> String {

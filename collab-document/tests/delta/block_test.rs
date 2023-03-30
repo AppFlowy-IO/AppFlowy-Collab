@@ -2,47 +2,44 @@ use crate::util::create_document;
 
 #[test]
 fn create_block_test() {
-  let doc_id = "1";
-  let test = create_document(doc_id);
-  // Create block
-  test.document.blocks.create_block("1", |builder| {
-    builder.with_type("text").with_data("hello world").build()
-  });
+    let doc_id = "1";
+    let test = create_document(doc_id);
+    let document_data = test.document.to_json().unwrap();
+    let document = &document_data["document"];
 
-  // Update block
-  let blocks = &test.document.blocks;
-  let mut block_map = blocks.get_block("1").unwrap();
-  blocks.with_transact_mut(|txn| {
-    block_map.set_data(txn, "hello appflowy".to_string());
-  });
+    let root_id = document["root_id"].as_str().unwrap();
+    let blocks = &document["blocks"];
+    let meta = &document["meta"];
+    let text_map = &meta["text_map"];
+    let children_map = &meta["children_map"];
 
-  // Get block
-  let txn = blocks.transact();
-  let block = block_map.into_object(&txn);
+    assert!(blocks.is_object());
+    assert!(text_map.is_object());
+    assert!(children_map.is_object());
 
-  assert_eq!(block.ty, "text");
-  assert_eq!(block.data, "hello appflowy");
-}
+    assert!(text_map.as_object().unwrap().len() == 2);
+    assert!(children_map.as_object().unwrap().len() == 2);
 
-#[test]
-fn update_block_test() {
-  let doc_id = "1";
-  let test = create_document(doc_id);
-  // Create block
-  test.document.blocks.create_block("1", |builder| {
-    builder.with_type("text").with_data("hello world").build()
-  });
+    let root = &blocks[root_id];
+    let root_data = &root["data"];
+    let root_children = root["children"].as_str().unwrap();
+    let root_text = root_data["text"].as_str().unwrap();
 
-  // Update block
-  let blocks = &test.document.blocks;
-  let mut map_ref = blocks.get_block("1").unwrap();
-  blocks.with_transact_mut(|txn| {
-    map_ref.set_data(txn, "hello appflowy".to_string());
-  });
+    assert!(root["ty"] == "page");
+    assert!(children_map[root_children].is_array());
+    assert!(text_map[root_text].is_array());
+    assert!(children_map[root_children].as_array().unwrap().len() == 1);
 
-  // Get block
-  let block = map_ref.into_object(&blocks.transact());
-
-  assert_eq!(block.ty, "text");
-  assert_eq!(block.data, "hello appflowy");
+    let head_id = children_map[root_children].as_array().unwrap()[0]
+        .as_str()
+        .unwrap();
+    let head = blocks[head_id].as_object().unwrap();
+    let head_data = head["data"].as_object().unwrap();
+    let head_children = head["children"].as_str().unwrap();
+    let head_text = head_data["text"].as_str().unwrap();
+    assert!(head["ty"] == "text");
+    assert!(children_map[head_children].is_array());
+    assert!(text_map[head_text].is_array());
+    assert!(children_map[head_children].as_array().unwrap().len() == 0);
+    assert!(children_map[root_children][0] == head_id);
 }
