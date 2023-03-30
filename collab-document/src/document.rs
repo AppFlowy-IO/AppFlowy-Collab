@@ -1,9 +1,7 @@
-use crate::blocks::{
-  Block, BlockData, BlockDataParser, BlockMap, ChildrenMap, DataParser, TextMap,
-};
+use crate::blocks::{Block, BlockData, BlockMap, ChildrenMap, TextMap};
 use crate::error::DocumentError;
 use collab::preclude::*;
-use uuid::Uuid;
+use nanoid::nanoid;
 
 const ROOT: &str = "document";
 const BLOCKS: &str = "blocks";
@@ -28,8 +26,9 @@ impl Document {
       let root = collab
         .get_map_with_txn(txn, vec![ROOT])
         .unwrap_or_else(|| collab.create_map_with_txn(txn, ROOT));
+      let head_id = nanoid!();
       // { document: { head_id: "uuid" } }
-      root.insert_with_txn(txn, "head_id", Uuid::new_v4().to_string());
+      root.insert_with_txn(txn, "head_id", head_id);
       // { document: { blocks: {:} } }
       let blocks = collab
         .get_map_with_txn(txn, vec![ROOT, BLOCKS])
@@ -87,8 +86,8 @@ impl Document {
 
   pub fn init(&self, txn: &mut TransactionMut) {
     let head_id = self.root.get(txn, "head_id").unwrap().to_string(txn);
-    let head_children_id = Uuid::new_v4().to_string();
-    let head_text_id = Uuid::new_v4().to_string();
+    let head_children_id = nanoid!();
+    let head_text_id = nanoid!();
     let head_data = BlockData {
       text: head_text_id,
       level: None,
@@ -104,9 +103,9 @@ impl Document {
       "".to_string(),
     );
 
-    let first_id = Uuid::new_v4().to_string();
-    let first_text_id = Uuid::new_v4().to_string();
-    let first_children_id = Uuid::new_v4().to_string();
+    let first_id = nanoid!();
+    let first_text_id = nanoid!();
+    let first_children_id = nanoid!();
     let first_data = BlockData {
       text: first_text_id,
       level: None,
@@ -141,30 +140,32 @@ impl Document {
     let block = self
       .blocks
       .create_block(txn, block_id, ty, parent_id, children_id.clone(), data);
-    let block = match block {
-      Ok(block) => block,
-      Err(err) => {
-        panic!("create block error: {:?}", err);
+
+    match block {
+      Ok(block) => self.insert_block_to_parent(txn, &block, prev_id),
+      _ => {
+        println!("block create fail!");
+        return;
       },
     };
-    self.insert_block_to_parent(txn, &block, prev_id);
   }
 
   pub fn insert_block_to_parent(&self, txn: &mut TransactionMut, block: &Block, prev_id: String) {
     let parent_id = &block.parent;
-    if parent_id == "" {
+    if parent_id.is_empty() {
       return;
     }
     let parent = self.blocks.get_block(txn, parent_id);
-    let parent = match parent {
-      Some(parent) => parent,
-      None => {
-        panic!("parent not found");
-      },
-    };
+
+    let parent_is_empty = parent.is_none();
+    if parent_is_empty {
+      return;
+    }
+
+    let parent = parent.unwrap();
     let parent_children_id = &parent.children;
     let mut index = 0;
-    if prev_id != "" {
+    if !prev_id.is_empty() {
       let prev_index = self
         .children_map
         .get_child_index(parent_children_id, &prev_id);
@@ -186,22 +187,22 @@ impl Document {
   //     self.text_map.apply_text_delta_with_txn(txn, text_id, delta);
   // }
 
-  pub fn delete_block(&self, txn: &mut TransactionMut, block_id: &str) {
-    let block = self.blocks.get_block(txn, block_id).unwrap();
-    let children_id = &block.children;
-    let block_data = BlockDataParser::parser(&block.data).unwrap();
-    let text_id = &block_data.text;
-    let parent_id = &block.parent;
-    let parent = self.blocks.get_block(txn, parent_id).unwrap();
-    let parent_children_id = &parent.children;
-
-    self
-      .children_map
-      .delete_child_with_txn(txn, parent_children_id, block_id);
-    self.children_map.delete_children_with_txn(txn, children_id);
-    self.text_map.delete_with_txn(txn, text_id);
-    self.blocks.delete_block_with_txn(txn, block_id);
-  }
+  // pub fn delete_block(&self, txn: &mut TransactionMut, block_id: &str) {
+  //   let block = self.blocks.get_block(txn, block_id).unwrap();
+  //   let children_id = &block.children;
+  //   let block_data = BlockDataParser::parser(&block.data).unwrap();
+  //   let text_id = &block_data.text;
+  //   let parent_id = &block.parent;
+  //   let parent = self.blocks.get_block(txn, parent_id).unwrap();
+  //   let parent_children_id = &parent.children;
+  //
+  //   self
+  //     .children_map
+  //     .delete_child_with_txn(txn, parent_children_id, block_id);
+  //   self.children_map.delete_children_with_txn(txn, children_id);
+  //   self.text_map.delete_with_txn(txn, text_id);
+  //   self.blocks.delete_block_with_txn(txn, block_id);
+  // }
 
   // pub fn move_block(&self, txn: &mut TransactionMut, block_id: &str, parent_id: &str, prev_id: &str) {
   //     let block = self.blocks.get_block(block_id).unwrap();
