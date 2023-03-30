@@ -1,4 +1,4 @@
-use collab::preclude::{Map, MapRef, MapRefWrapper, ReadTxn};
+use collab::preclude::{Map, MapRef, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
@@ -23,9 +23,9 @@ impl TypeOptions {
     this
   }
 
-  pub fn fill_in_map_ref(self, map_ref: &MapRefWrapper) {
+  pub fn fill_in_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRefWrapper) {
     self.into_inner().into_iter().for_each(|(k, v)| {
-      map_ref.insert_with_txn(self.txn, &k, v);
+      map_ref.insert_with_txn(txn, &k, v);
     });
   }
 }

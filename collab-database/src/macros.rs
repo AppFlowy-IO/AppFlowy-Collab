@@ -48,6 +48,22 @@ macro_rules! impl_i64_update {
 }
 
 #[macro_export]
+macro_rules! impl_i32_update {
+  ($setter1: ident, $setter2: ident, $key: expr) => {
+    pub fn $setter1(self, value: i32) -> Self {
+      self.map_ref.insert_with_txn(self.txn, $key, value);
+      self
+    }
+
+    pub fn $setter2(self, value: Option<i32>) -> Self {
+      if let Some(value) = value {
+        self.map_ref.insert_with_txn(self.txn, $key, value);
+      }
+      self
+    }
+  };
+}
+#[macro_export]
 macro_rules! impl_bool_update {
   ($setter1: ident, $setter2: ident, $key: expr) => {
     pub fn $setter1(self, value: bool) -> Self {

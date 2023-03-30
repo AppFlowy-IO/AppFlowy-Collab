@@ -71,7 +71,7 @@ pub struct FieldBuilder<'a, 'b> {
 
 impl<'a, 'b> FieldBuilder<'a, 'b> {
   pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefWrapper) -> Self {
-    map_ref.insert_with_txn(txn, "id", id);
+    map_ref.insert_with_txn(txn, FIELD_ID, id);
     Self { id, map_ref, txn }
   }
 
@@ -112,7 +112,7 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
     let map_ref = self
       .map_ref
       .get_or_insert_map_with_txn(self.txn, FIELD_TYPE_OPTION);
-    type_option.fill_in_map_ref(&map_ref);
+    type_option.fill_in_map_ref(self.txn, &map_ref);
     self
   }
 
