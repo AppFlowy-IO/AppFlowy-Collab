@@ -1,5 +1,5 @@
 use crate::views::layout::{Layout, LayoutSettings};
-use crate::views::{Filter, FilterArray, Group, GroupArray, Sort};
+use crate::views::{Filter, FilterArray, Group, GroupArray, Sort, SortArray};
 use crate::{impl_any_update, impl_str_update};
 use collab::preclude::map::MapPrelim;
 use collab::preclude::{lib0Any, MapRef, MapRefTool, MapRefWrapper, ReadTxn, TransactionMut};
@@ -94,6 +94,15 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS);
     let filter_array = GroupArray::new(array_ref);
     filter_array.extends_with_txn(self.txn, groups);
+    self
+  }
+
+  pub fn set_sorts(self, sorts: Vec<Sort>) -> Self {
+    let array_ref = self
+      .map_ref
+      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_SORTS);
+    let sort_array = SortArray::new(array_ref);
+    sort_array.extends_with_txn(self.txn, sorts);
     self
   }
 
