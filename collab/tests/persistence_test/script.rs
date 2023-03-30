@@ -53,6 +53,7 @@ pub enum Script {
 }
 
 pub struct CollabPersistenceTest {
+  pub uid: i64,
   collabs: HashMap<String, Collab>,
   disk_plugin: CollabDiskPlugin,
   snapshot_plugin: CollabSnapshotPlugin,
@@ -65,11 +66,13 @@ impl CollabPersistenceTest {
   pub fn new() -> Self {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
+    let uid = 1;
     let db = Arc::new(CollabKV::open(path.clone()).unwrap());
-    let disk_plugin = CollabDiskPlugin::new(db.clone()).unwrap();
-    let snapshot_plugin = CollabSnapshotPlugin::new(db, 5).unwrap();
+    let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
+    let snapshot_plugin = CollabSnapshotPlugin::new(uid, db, 5).unwrap();
     let cleaner = Cleaner::new(path.clone());
     Self {
+      uid,
       collabs: HashMap::default(),
       disk_plugin,
       snapshot_plugin,
@@ -153,11 +156,11 @@ impl CollabPersistenceTest {
   }
 }
 
-pub fn disk_plugin() -> CollabDiskPlugin {
+pub fn disk_plugin(uid: i64) -> CollabDiskPlugin {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(CollabKV::open(path).unwrap());
-  CollabDiskPlugin::new(db).unwrap()
+  CollabDiskPlugin::new(uid, db).unwrap()
 }
 
 struct Cleaner(PathBuf);

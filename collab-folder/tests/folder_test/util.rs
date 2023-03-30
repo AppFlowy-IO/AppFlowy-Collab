@@ -27,10 +27,11 @@ unsafe impl Send for FolderTest {}
 unsafe impl Sync for FolderTest {}
 
 pub fn create_folder(id: &str) -> FolderTest {
+  let uid = 1;
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(CollabKV::open(path.clone()).unwrap());
-  let disk_plugin = CollabDiskPlugin::new(db).unwrap();
+  let disk_plugin = CollabDiskPlugin::new(uid, db).unwrap();
   let cleaner = Cleaner::new(path);
 
   let collab = CollabBuilder::new(1, id).with_plugin(disk_plugin).build();

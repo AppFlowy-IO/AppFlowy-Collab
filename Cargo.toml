@@ -5,4 +5,5 @@ members = [
     "collab-persistence",
     "collab-document",
     "collab-folder",
+    "collab-database",
 ]

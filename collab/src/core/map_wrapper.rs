@@ -98,6 +98,11 @@ impl MapRefWrapper {
     None
   }
 
+  pub fn get_or_insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
+    self
+      .get_map_with_txn(txn, key)
+      .unwrap_or_else(|| self.insert_map_with_txn(txn, key))
+  }
   pub fn get_json<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
     self.get_json_with_txn(&self.collab_ctx.transact(), key)
   }
@@ -202,6 +207,10 @@ impl<'a> MapRefTool<'a> {
 
   pub fn get_array_ref_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<ArrayRef> {
     self.0.get(txn, key).map(|value| value.to_yarray())?
+  }
+
+  pub fn get_map_ref_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<MapRef> {
+    self.0.get(txn, key).map(|value| value.to_ymap())?
   }
 
   pub fn get_str_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<String> {

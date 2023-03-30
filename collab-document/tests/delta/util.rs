@@ -14,10 +14,11 @@ pub struct DocumentTest {
 }
 
 pub fn create_document(doc_id: &str) -> DocumentTest {
+  let uid = 1;
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(CollabKV::open(path.clone()).unwrap());
-  let disk_plugin = CollabDiskPlugin::new(db).unwrap();
+  let disk_plugin = CollabDiskPlugin::new(uid, db).unwrap();
   let cleaner = Cleaner::new(path);
 
   let collab = CollabBuilder::new(1, doc_id)
