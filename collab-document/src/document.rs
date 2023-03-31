@@ -1,4 +1,6 @@
-use crate::blocks::{Block, BlockData, BlockMap, ChildrenMap, TextMap};
+use crate::blocks::{
+  Block, BlockData, BlockDataParser, BlockMap, ChildrenMap, DataParser, TextMap,
+};
 use crate::error::DocumentError;
 use collab::preclude::*;
 use nanoid::nanoid;
@@ -49,11 +51,11 @@ impl Serialize for Document {
 }
 
 pub struct InsertBlockArgs {
-  parent_id: String,
-  block_id: String,
-  data: BlockData,
-  children_id: String,
-  ty: String,
+  pub parent_id: String,
+  pub block_id: String,
+  pub data: BlockData,
+  pub children_id: String,
+  pub ty: String,
 }
 
 impl Document {
@@ -154,6 +156,15 @@ impl Document {
     );
   }
 
+  pub fn with_txn(&self, f: impl FnOnce(&mut TransactionMut)) {
+    self.inner.with_transact_mut(f);
+  }
+
+  pub fn get_block(&self, block_id: &str) -> Option<Block> {
+    let txn = self.inner.transact();
+    self.blocks.get_block(&txn, block_id)
+  }
+
   pub fn insert_block(&self, txn: &mut TransactionMut, block: InsertBlockArgs, prev_id: String) {
     let block_id = block.block_id;
     let ty = block.ty;
@@ -194,9 +205,10 @@ impl Document {
     let parent_children_id = &parent.children;
     let mut index = 0;
     if !prev_id.is_empty() {
-      let prev_index = self
-        .children_map
-        .get_child_index(parent_children_id, &prev_id);
+      let prev_index =
+        self
+          .children_map
+          .get_child_index_with_txn(txn, parent_children_id, &prev_id);
       match prev_index {
         Some(prev_index) => {
           index = prev_index + 1;
@@ -211,26 +223,40 @@ impl Document {
       .insert_child_with_txn(txn, parent_children_id, &block.id, index);
   }
 
-  // pub fn apply_text(&self, txn: &mut TransactionMut, text_id: &str, delta: Vec<TextDelta>) {
-  //     self.text_map.apply_text_delta_with_txn(txn, text_id, delta);
-  // }
+  pub fn delete_block(&self, txn: &mut TransactionMut, block_id: &str) {
+    let block = self.blocks.get_block(txn, block_id);
+    if block.is_none() {
+      return;
+    }
 
-  // pub fn delete_block(&self, txn: &mut TransactionMut, block_id: &str) {
-  //   let block = self.blocks.get_block(txn, block_id).unwrap();
-  //   let children_id = &block.children;
-  //   let block_data = BlockDataParser::parser(&block.data).unwrap();
-  //   let text_id = &block_data.text;
-  //   let parent_id = &block.parent;
-  //   let parent = self.blocks.get_block(txn, parent_id).unwrap();
-  //   let parent_children_id = &parent.children;
-  //
-  //   self
-  //     .children_map
-  //     .delete_child_with_txn(txn, parent_children_id, block_id);
-  //   self.children_map.delete_children_with_txn(txn, children_id);
-  //   self.text_map.delete_with_txn(txn, text_id);
-  //   self.blocks.delete_block_with_txn(txn, block_id);
-  // }
+    let block = block.unwrap();
+    let children_id = &block.children;
+    let block_data = &block.data;
+    let text_id = BlockDataParser::parser(block_data).unwrap().text;
+
+    let parent_id = &block.parent;
+    self.delete_block_from_parent(txn, block_id, parent_id);
+
+    self.children_map.delete_children_with_txn(txn, children_id);
+    self.text_map.delete_with_txn(txn, &text_id);
+    self.blocks.delete_block_with_txn(txn, block_id);
+  }
+
+  pub fn delete_block_from_parent(
+    &self,
+    txn: &mut TransactionMut,
+    block_id: &str,
+    parent_id: &str,
+  ) {
+    let parent = self.blocks.get_block(txn, parent_id);
+
+    if let Some(parent) = parent {
+      let parent_children_id = &parent.children;
+      self
+        .children_map
+        .delete_child_with_txn(txn, parent_children_id, block_id);
+    }
+  }
 
   // pub fn move_block(&self, txn: &mut TransactionMut, block_id: &str, parent_id: &str, prev_id: &str) {
   //     let block = self.blocks.get_block(block_id).unwrap();

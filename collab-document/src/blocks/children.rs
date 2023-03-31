@@ -58,12 +58,21 @@ impl ChildrenMap {
     self.root.delete_with_txn(txn, children_id);
   }
 
-  pub fn get_child_index(&self, children_id: &str, child_id: &str) -> Option<u32> {
-    let children_ref = self.root.get_array_ref(children_id).unwrap();
-    let txn = self.root.transact();
+  pub fn get_child_index_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    children_id: &str,
+    child_id: &str,
+  ) -> Option<u32> {
+    let children_ref = self.root.get_array_ref_with_txn(txn, children_id);
+    if children_ref.as_ref()?.len(txn) == 0 {
+      return None;
+    }
+    let children_ref = children_ref.unwrap();
+
     let index = children_ref
-      .iter(&txn)
-      .position(|child| child.to_string(&txn) == child_id);
+      .iter(txn)
+      .position(|child| child.to_string(txn) == child_id);
 
     index.map(|index| index as u32)
   }
@@ -81,7 +90,7 @@ impl ChildrenMap {
 
   pub fn delete_child_with_txn(&self, txn: &mut TransactionMut, children_id: &str, child_id: &str) {
     let children_ref = self.get_children_with_txn(txn, children_id);
-    let index = self.get_child_index(children_id, child_id);
+    let index = self.get_child_index_with_txn(txn, children_id, child_id);
     if let Some(index) = index {
       children_ref.remove_with_txn(txn, index);
     }
