@@ -2,10 +2,22 @@ use crate::preclude::{CollabContext, YrsDelta};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use yrs::types::text::{TextEvent, YChange};
-use yrs::types::Delta;
+use yrs::types::{Attrs, Delta};
 use yrs::{ReadTxn, Subscription, Text, TextRef, Transaction, TransactionMut};
 pub type TextSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &TextEvent)>;
 pub type TextSubscription = Subscription<TextSubscriptionCallback>;
+
+pub enum TextDelta {
+  Inserted(String, Attrs),
+
+  /// Determines a change that resulted in removing a consecutive range of characters.
+  Deleted(u32),
+
+  /// Determines a number of consecutive unchanged characters. Used to recognize non-edited spaces
+  /// between [Delta::Inserted] and/or [Delta::Deleted] chunks. Can contain an optional set of
+  /// attributes, which have been used to format an existing piece of text.
+  Retain(u32, Attrs),
+}
 
 pub struct TextRefWrapper {
   text_ref: TextRef,
@@ -39,6 +51,29 @@ impl TextRefWrapper {
       deltas.push(delta);
     }
     deltas
+  }
+
+  pub fn apply_delta_with_txn(&self, txn: &mut TransactionMut, delta: Vec<TextDelta>) {
+    let mut index = 0;
+    for d in delta {
+      match d {
+        TextDelta::Inserted(content, attrs) => {
+          let value = content.to_string();
+          let len = value.len() as u32;
+          self.text_ref.insert(txn, index, &value);
+          self.text_ref.format(txn, index, len, attrs);
+          index += len;
+        },
+        TextDelta::Deleted(len) => {
+          self.text_ref.remove_range(txn, index, len);
+          index += len;
+        },
+        TextDelta::Retain(len, attrs) => {
+          self.text_ref.format(txn, index, len, attrs);
+          index += len;
+        },
+      }
+    }
   }
 }
 
