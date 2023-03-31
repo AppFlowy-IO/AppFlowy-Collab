@@ -1,5 +1,5 @@
 use anyhow::bail;
-use collab::preclude::{lib0Any, MapRefWrapper, TransactionMut};
+use collab::preclude::{lib0Any, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 use std::collections::HashMap;
@@ -51,6 +51,11 @@ impl From<Layout> for lib0Any {
 pub struct LayoutSettings(HashMap<Layout, LayoutSetting>);
 
 impl LayoutSettings {
+  pub fn from_map_ref<T: ReadTxn>(_txn: &T, map_ref: MapRef) -> Self {
+    let _map_ref = MapRefExtension(&map_ref);
+    todo!()
+  }
+
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRefWrapper) {
     self.0.into_iter().for_each(|(k, v)| {
       let inner_map = map_ref.get_or_insert_map_with_txn(txn, k.as_ref());

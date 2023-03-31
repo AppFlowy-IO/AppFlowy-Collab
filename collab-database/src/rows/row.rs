@@ -1,11 +1,9 @@
 use crate::rows::Cells;
 use crate::{impl_any_update, impl_bool_update, impl_i32_update, impl_i64_update, impl_str_update};
 use collab::preclude::{
-  lib0Any, Map, MapRef, MapRefTool, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+  lib0Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Row {
@@ -69,7 +67,7 @@ const ROW_HEIGHT: &str = "height";
 const ROW_CELLS: &str = "cells";
 
 pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
-  let map_ref = MapRefTool(map_ref);
+  let map_ref = MapRefExtension(map_ref);
   let id = map_ref.get_str_with_txn(txn, ROW_ID)?;
   let visibility = map_ref
     .get_bool_with_txn(txn, ROW_VISIBILITY)

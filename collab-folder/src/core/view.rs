@@ -3,8 +3,8 @@ use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_u
 use anyhow::bail;
 
 use collab::preclude::{
-  lib0Any, DeepEventsSubscription, DeepObservable, EntryChange, Event, Map, MapRef, MapRefTool,
-  MapRefWrapper, ReadTxn, ToJson, TransactionMut, YrsValue,
+  lib0Any, DeepEventsSubscription, DeepObservable, EntryChange, Event, Map, MapRef,
+  MapRefExtension, MapRefWrapper, ReadTxn, ToJson, TransactionMut, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
@@ -216,7 +216,7 @@ fn view_from_map_ref<T: ReadTxn>(
   txn: &T,
   belonging_map: &Rc<BelongingMap>,
 ) -> Option<View> {
-  let map_ref = MapRefTool(map_ref);
+  let map_ref = MapRefExtension(map_ref);
   let bid = map_ref.get_str_with_txn(txn, VIEW_BID)?;
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
   let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();

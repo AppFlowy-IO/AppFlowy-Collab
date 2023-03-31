@@ -1,20 +1,25 @@
 use crate::fields::FieldType;
 use crate::{impl_i64_update, impl_str_update};
-use collab::preclude::{ArrayRefWrapper, MapRefTool, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::core::array_wrapper::ArrayRefExtension;
+use collab::preclude::{
+  Array, ArrayRef, ArrayRefWrapper, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
+  TransactionMut, YrsValue,
+};
 use serde::{Deserialize, Serialize};
 
 pub struct FilterArray {
-  array_ref: ArrayRefWrapper,
+  array_ref: ArrayRef,
 }
 
 impl FilterArray {
-  pub fn new(array_ref: ArrayRefWrapper) -> Self {
+  pub fn new(array_ref: ArrayRef) -> Self {
     Self { array_ref }
   }
 
   pub fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<Filter>) {
+    let array_ref = ArrayRefExtension(&self.array_ref);
     for filter in others {
-      let filter_map_ref = self.array_ref.insert_map_with_txn(txn);
+      let filter_map_ref = array_ref.insert_map_with_txn(txn);
       FilterBuilder::new(
         &filter.id,
         filter.field_id,
@@ -28,6 +33,14 @@ impl FilterArray {
           .set_content(filter.content);
       });
     }
+  }
+
+  pub fn get_filters_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Filter> {
+    self
+      .array_ref
+      .iter(txn)
+      .flat_map(|v| filter_from_value(v, txn))
+      .collect::<Vec<Filter>>()
   }
 }
 
@@ -48,7 +61,7 @@ const FILTER_CONTENT: &str = "content";
 
 pub struct FilterBuilder<'a, 'b> {
   id: &'a str,
-  map_ref: MapRefWrapper,
+  map_ref: MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
@@ -58,11 +71,12 @@ impl<'a, 'b> FilterBuilder<'a, 'b> {
     field_id: String,
     field_type: FieldType,
     txn: &'a mut TransactionMut<'b>,
-    map_ref: MapRefWrapper,
+    map_ref: MapRef,
   ) -> Self {
-    map_ref.insert_with_txn(txn, FILTER_ID, id);
-    map_ref.insert_with_txn(txn, FIELD_ID, field_id);
-    map_ref.insert_with_txn(txn, FIELD_TYPE, field_type);
+    let map_ref_ext = MapRefExtension(&map_ref);
+    map_ref_ext.insert_with_txn(txn, FILTER_ID, id);
+    map_ref_ext.insert_with_txn(txn, FIELD_ID, field_id);
+    map_ref_ext.insert_with_txn(txn, FIELD_TYPE, field_type);
     Self { id, map_ref, txn }
   }
 
@@ -70,7 +84,8 @@ impl<'a, 'b> FilterBuilder<'a, 'b> {
   where
     F: FnOnce(FilterUpdate),
   {
-    let update = FilterUpdate::new(self.id, self.txn, &self.map_ref);
+    let map_ref = MapRefExtension(&self.map_ref);
+    let update = FilterUpdate::new(self.id, self.txn, map_ref);
     f(update);
     self
   }
@@ -79,12 +94,12 @@ impl<'a, 'b> FilterBuilder<'a, 'b> {
 
 pub struct FilterUpdate<'a, 'b, 'c> {
   id: &'a str,
-  map_ref: &'c MapRefWrapper,
+  map_ref: MapRefExtension<'c>,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b, 'c> FilterUpdate<'a, 'b, 'c> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRefWrapper) -> Self {
+  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefExtension<'c>) -> Self {
     Self { id, map_ref, txn }
   }
 
@@ -92,12 +107,20 @@ impl<'a, 'b, 'c> FilterUpdate<'a, 'b, 'c> {
   impl_i64_update!(set_condition, set_condition_if_not_none, FILTER_CONDITION);
 
   pub fn done(self) -> Option<Filter> {
-    filter_from_map_ref(self.map_ref, self.txn)
+    filter_from_map_ref(self.map_ref.into_inner(), self.txn)
   }
 }
 
-pub fn filter_from_map_ref<T: ReadTxn>(map_ref: &MapRefWrapper, txn: &T) -> Option<Filter> {
-  let map_ref = MapRefTool(map_ref);
+pub fn filter_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Filter> {
+  if let YrsValue::YMap(map_ref) = value {
+    filter_from_map_ref(&map_ref, txn)
+  } else {
+    None
+  }
+}
+
+pub fn filter_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Filter> {
+  let map_ref = MapRefExtension(map_ref);
   let id = map_ref.get_str_with_txn(txn, FILTER_ID)?;
   let field_id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
   let condition = map_ref.get_i64_with_txn(txn, FILTER_CONDITION).unwrap_or(0);

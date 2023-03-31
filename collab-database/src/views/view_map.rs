@@ -1,4 +1,4 @@
-use collab::preclude::{ArrayRefWrapper, MapRefWrapper};
+use collab::preclude::MapRefWrapper;
 
 pub struct ViewMap {
   container: MapRefWrapper,

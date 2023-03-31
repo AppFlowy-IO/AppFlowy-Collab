@@ -20,7 +20,7 @@ const VIEWS: &str = "views";
 pub struct DatabaseContext {}
 
 impl Database {
-  pub fn create(collab: Collab, context: DatabaseContext) -> Self {
+  pub fn create(collab: Collab, _context: DatabaseContext) -> Self {
     let (database, fields, rows, views) = collab.with_transact_mut(|txn| {
       // { DATABASE: {:} }
       let database = collab

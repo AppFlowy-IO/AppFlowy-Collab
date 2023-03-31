@@ -1,11 +1,9 @@
 use crate::fields::TypeOptions;
 use crate::{impl_any_update, impl_bool_update, impl_i64_update, impl_str_update};
 use anyhow::bail;
-use collab::preclude::{lib0Any, Map, MapRef, MapRefTool, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{lib0Any, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Field {
@@ -130,7 +128,7 @@ const FIELD_WIDTH: &str = "width";
 const FIELD_PRIMARY: &str = "is_primary";
 
 pub fn field_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Field> {
-  let map_ref = MapRefTool(map_ref);
+  let map_ref = MapRefExtension(map_ref);
   let id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
   let name = map_ref
     .get_str_with_txn(txn, FIELD_NAME)

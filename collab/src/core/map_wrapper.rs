@@ -200,8 +200,8 @@ impl MapRefWrapper {
   }
 }
 
-pub struct MapRefTool<'a>(pub &'a MapRef);
-impl<'a> MapRefTool<'a> {
+pub struct MapRefExtension<'a>(pub &'a MapRef);
+impl<'a> MapRefExtension<'a> {
   pub fn insert_array_with_txn<V: Prelim>(
     &self,
     txn: &mut TransactionMut,
@@ -209,6 +209,10 @@ impl<'a> MapRefTool<'a> {
     values: Vec<V>,
   ) -> ArrayRef {
     self.0.insert(txn, key, ArrayPrelim::from(values))
+  }
+
+  pub fn insert_with_txn<V: Prelim>(&self, txn: &mut TransactionMut, key: &str, value: V) {
+    self.0.insert(txn, key, value);
   }
 
   pub fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
@@ -222,6 +226,16 @@ impl<'a> MapRefTool<'a> {
 
   pub fn get_map_ref_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<MapRef> {
     self.0.get(txn, key).map(|value| value.to_ymap())?
+  }
+
+  pub fn get_or_insert_array_with_txn<V: Prelim>(
+    &self,
+    txn: &mut TransactionMut,
+    key: &str,
+  ) -> ArrayRef {
+    self
+      .get_array_ref_with_txn(txn, key)
+      .unwrap_or_else(|| self.insert_array_with_txn::<V>(txn, key, vec![]))
   }
 
   pub fn get_str_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<String> {
@@ -254,6 +268,10 @@ impl<'a> MapRefTool<'a> {
       return Some(value);
     }
     None
+  }
+
+  pub fn into_inner(self) -> &'a MapRef {
+    self.0
   }
 }
 

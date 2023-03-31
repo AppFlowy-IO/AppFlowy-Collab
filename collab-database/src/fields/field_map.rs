@@ -1,6 +1,5 @@
 use crate::fields::{field_from_map_ref, Field, FieldBuilder, FieldUpdate};
 use collab::preclude::{MapRefWrapper, ReadTxn, TransactionMut};
-use std::collections::HashMap;
 
 pub struct FieldMap {
   container: MapRefWrapper,

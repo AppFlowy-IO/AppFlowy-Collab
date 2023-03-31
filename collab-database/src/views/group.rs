@@ -1,25 +1,27 @@
 use crate::fields::FieldType;
 use crate::{impl_any_update, impl_str_update};
-use anyhow::bail;
+
+use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::map::MapPrelim;
 use collab::preclude::{
-  lib0Any, Array, ArrayRef, ArrayRefWrapper, Map, MapRef, MapRefTool, MapRefWrapper, ReadTxn,
+  lib0Any, Array, ArrayRef, ArrayRefWrapper, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
   TransactionMut, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 
 pub struct GroupArray {
-  array_ref: ArrayRefWrapper,
+  array_ref: ArrayRef,
 }
 
 impl GroupArray {
-  pub fn new(array_ref: ArrayRefWrapper) -> Self {
+  pub fn new(array_ref: ArrayRef) -> Self {
     Self { array_ref }
   }
 
   pub fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<Group>) {
+    let array_ref = ArrayRefExtension(&self.array_ref);
     for group in others {
-      let group_map_ref = self.array_ref.insert_map_with_txn(txn);
+      let group_map_ref = array_ref.insert_map_with_txn(txn);
       GroupBuilder::new(&group.id, txn, group_map_ref).update(|update| {
         update
           .set_items(group.items)
@@ -28,6 +30,14 @@ impl GroupArray {
           .set_field_id(group.field_id);
       });
     }
+  }
+
+  pub fn get_groups_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Group> {
+    self
+      .array_ref
+      .iter(txn)
+      .flat_map(|v| group_from_value(v, txn))
+      .collect::<Vec<Group>>()
   }
 }
 
@@ -47,13 +57,14 @@ const GROUP_CONTENT: &str = "content";
 
 pub struct GroupBuilder<'a, 'b> {
   id: &'a str,
-  map_ref: MapRefWrapper,
+  map_ref: MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b> GroupBuilder<'a, 'b> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefWrapper) -> Self {
-    map_ref.insert_with_txn(txn, GROUP_ID, id);
+  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRef) -> Self {
+    let map_ref_ext = MapRefExtension(&map_ref);
+    map_ref_ext.insert_with_txn(txn, GROUP_ID, id);
     Self { id, map_ref, txn }
   }
 
@@ -61,7 +72,8 @@ impl<'a, 'b> GroupBuilder<'a, 'b> {
   where
     F: FnOnce(GroupUpdate),
   {
-    let update = GroupUpdate::new(self.id, self.txn, &self.map_ref);
+    let map_ref = MapRefExtension(&self.map_ref);
+    let update = GroupUpdate::new(self.id, self.txn, map_ref);
     f(update);
     self
   }
@@ -70,12 +82,12 @@ impl<'a, 'b> GroupBuilder<'a, 'b> {
 
 pub struct GroupUpdate<'a, 'b, 'c> {
   id: &'a str,
-  map_ref: &'c MapRefWrapper,
+  map_ref: MapRefExtension<'c>,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b, 'c> GroupUpdate<'a, 'b, 'c> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRefWrapper) -> Self {
+  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefExtension<'c>) -> Self {
     Self { id, map_ref, txn }
   }
 
@@ -98,12 +110,20 @@ impl<'a, 'b, 'c> GroupUpdate<'a, 'b, 'c> {
   }
 
   pub fn done(self) -> Option<Group> {
-    group_from_map_ref(self.map_ref, self.txn)
+    group_from_map_ref(self.map_ref.into_inner(), self.txn)
+  }
+}
+
+pub fn group_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Group> {
+  if let YrsValue::YMap(map_ref) = value {
+    group_from_map_ref(&map_ref, txn)
+  } else {
+    None
   }
 }
 
 pub fn group_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Group> {
-  let map_ref = MapRefTool(map_ref);
+  let map_ref = MapRefExtension(map_ref);
   let id = map_ref.get_str_with_txn(txn, GROUP_ID)?;
   let content = map_ref.get_str_with_txn(txn, GROUP_CONTENT)?;
   let field_id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
@@ -126,17 +146,18 @@ pub fn group_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Group
 }
 
 pub struct GroupItemArray {
-  array_ref: ArrayRefWrapper,
+  array_ref: ArrayRef,
 }
 
 impl GroupItemArray {
-  pub fn new(array_ref: ArrayRefWrapper) -> Self {
+  pub fn new(array_ref: ArrayRef) -> Self {
     Self { array_ref }
   }
 
   pub fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<GroupItem>) {
+    let array_ref = ArrayRefExtension(&self.array_ref);
     for items in others {
-      let filter_map_ref = self.array_ref.insert_map_with_txn(txn);
+      let filter_map_ref = array_ref.insert_map_with_txn(txn);
       items.fill_map_ref(txn, filter_map_ref);
     }
   }
@@ -164,14 +185,15 @@ pub struct GroupItem {
 const GROUP_REV_VISIBILITY: fn() -> bool = || true;
 
 impl GroupItem {
-  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: MapRefWrapper) {
+  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: MapRef) {
+    let map_ref = MapRefExtension(&map_ref);
     map_ref.insert_with_txn(txn, "id", self.id);
     map_ref.insert_with_txn(txn, "name", self.name);
     map_ref.insert_with_txn(txn, "visible", self.visible);
   }
 
   pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Option<Self> {
-    let map_ref = MapRefTool(&map_ref);
+    let map_ref = MapRefExtension(&map_ref);
     let id = map_ref.get_str_with_txn(txn, "id")?;
     let name = map_ref.get_str_with_txn(txn, "name").unwrap_or_default();
     let visible = map_ref
