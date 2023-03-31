@@ -51,12 +51,17 @@ impl RowMap {
   }
 
   pub fn get_all_row_orders_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<RowOrder> {
-    self
+    let mut a = self
       .container
       .iter(txn)
       .flat_map(|(_k, v)| row_id_from_value(v, txn))
-      .map(RowOrder::new)
-      .collect::<Vec<_>>()
+      .collect::<Vec<(String, i64)>>();
+
+    a.sort_by(|(_, left), (_, right)| left.cmp(right));
+
+    // .map(RowOrder::new)
+    // .collect::<Vec<_>>()
+    todo!()
   }
 
   pub fn delete_row_with_txn(&self, txn: &mut TransactionMut, row_id: &str) {

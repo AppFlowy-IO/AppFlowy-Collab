@@ -79,10 +79,14 @@ const ROW_HEIGHT: &str = "height";
 const CREATED_AT: &str = "created_at";
 const ROW_CELLS: &str = "cells";
 
-pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<String> {
+pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(String, i64)> {
   let map_ref = value.to_ymap()?;
   let map_ref_ext = MapRefExtension(&map_ref);
-  map_ref_ext.get_str_with_txn(txn, ROW_ID)
+  let id = map_ref_ext.get_str_with_txn(txn, ROW_ID)?;
+  let crated_at = map_ref_ext
+    .get_i64_with_txn(txn, CREATED_AT)
+    .unwrap_or_default();
+  Some((id, crated_at))
 }
 
 pub fn row_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Row> {
