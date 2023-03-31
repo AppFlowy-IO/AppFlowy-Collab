@@ -1,9 +1,6 @@
 use crate::rows::Row;
 use crate::views::{OrderArray, OrderIdentifiable};
-
-use collab::preclude::{
-  lib0Any, Array, ArrayRef, ArrayRefWrapper, ReadTxn, TransactionMut, YrsValue,
-};
+use collab::preclude::{lib0Any, ArrayRef, ReadTxn, YrsValue};
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 

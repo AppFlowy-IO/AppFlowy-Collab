@@ -3,8 +3,8 @@ use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_u
 use anyhow::bail;
 
 use collab::preclude::{
-  lib0Any, DeepEventsSubscription, DeepObservable, EntryChange, Event, Map, MapRef,
-  MapRefExtension, MapRefWrapper, ReadTxn, ToJson, TransactionMut, YrsValue,
+  lib0Any, DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRef, MapRefExtension,
+  MapRefWrapper, ReadTxn, ToJson, TransactionMut, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 use serde_repr::*;

@@ -7,6 +7,7 @@ use collab::preclude::{Collab, JsonValue, MapRefWrapper, ReadTxn};
 use std::rc::Rc;
 
 pub struct Database {
+  #[allow(dead_code)]
   inner: Collab,
   pub(crate) root: MapRefWrapper,
   pub rows: Rc<RowMap>,

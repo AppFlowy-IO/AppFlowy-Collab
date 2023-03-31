@@ -76,6 +76,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
 }
 
 pub struct ViewUpdate<'a, 'b, 'c> {
+  #[allow(dead_code)]
   id: &'a str,
   map_ref: MapRefExtension<'c>,
   txn: &'a mut TransactionMut<'b>,

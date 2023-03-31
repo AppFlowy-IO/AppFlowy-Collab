@@ -4,8 +4,7 @@ use crate::{impl_any_update, impl_str_update};
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::map::MapPrelim;
 use collab::preclude::{
-  lib0Any, Array, ArrayRef, ArrayRefWrapper, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
-  TransactionMut, YrsValue,
+  lib0Any, Array, ArrayRef, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 
@@ -81,6 +80,7 @@ impl<'a, 'b> GroupBuilder<'a, 'b> {
 }
 
 pub struct GroupUpdate<'a, 'b, 'c> {
+  #[allow(dead_code)]
   id: &'a str,
   map_ref: MapRefExtension<'c>,
   txn: &'a mut TransactionMut<'b>,

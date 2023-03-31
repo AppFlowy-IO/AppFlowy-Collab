@@ -2,8 +2,7 @@ use crate::fields::FieldType;
 use crate::{impl_i64_update, impl_str_update};
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::{
-  Array, ArrayRef, ArrayRefWrapper, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
-  TransactionMut, YrsValue,
+  Array, ArrayRef, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 
@@ -93,6 +92,7 @@ impl<'a, 'b> FilterBuilder<'a, 'b> {
 }
 
 pub struct FilterUpdate<'a, 'b, 'c> {
+  #[allow(dead_code)]
   id: &'a str,
   map_ref: MapRefExtension<'c>,
   txn: &'a mut TransactionMut<'b>,

@@ -1,5 +1,5 @@
 use crate::rows::Cells;
-use crate::{impl_any_update, impl_bool_update, impl_i32_update, impl_i64_update, impl_str_update};
+use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 
@@ -48,6 +48,7 @@ impl<'a, 'b> RowBuilder<'a, 'b> {
 }
 
 pub struct RowUpdate<'a, 'b, 'c> {
+  #[allow(dead_code)]
   id: &'a str,
   map_ref: &'c MapRefWrapper,
   txn: &'a mut TransactionMut<'b>,
@@ -105,7 +106,7 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
 
   let created_at = map_ref
     .get_i64_with_txn(txn, CREATED_AT)
-    .unwrap_or(chrono::Utc::now().timestamp());
+    .unwrap_or_else(|| chrono::Utc::now().timestamp());
 
   let cells = map_ref
     .get_map_with_txn(txn, ROW_CELLS)

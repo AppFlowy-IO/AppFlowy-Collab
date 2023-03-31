@@ -101,6 +101,7 @@ impl<'a, 'b> FieldBuilder<'a, 'b> {
 }
 
 pub struct FieldUpdate<'a, 'b, 'c> {
+  #[allow(dead_code)]
   id: &'a str,
   map_ref: &'c MapRefWrapper,
   txn: &'a mut TransactionMut<'b>,

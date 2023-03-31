@@ -3,7 +3,7 @@ use collab::preclude::CollabBuilder;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::{Field, FieldType};
 use collab_database::rows::Row;
-use collab_database::views::{CreateViewParams, Layout, View};
+use collab_database::views::{CreateViewParams, Layout};
 use collab_persistence::CollabKV;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -133,22 +133,5 @@ impl Cleaner {
 impl Drop for Cleaner {
   fn drop(&mut self) {
     Self::cleanup(&self.0)
-  }
-}
-
-pub fn make_grid_view(id: &str, name: &str) -> View {
-  View {
-    id: id.to_string(),
-    database_id: "".to_string(),
-    name: name.to_string(),
-    layout: Layout::Grid,
-    layout_settings: Default::default(),
-    filters: vec![],
-    groups: vec![],
-    sorts: vec![],
-    row_orders: vec![],
-    field_orders: vec![],
-    created_at: 0,
-    modified_at: 0,
   }
 }

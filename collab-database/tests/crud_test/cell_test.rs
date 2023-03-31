@@ -1,6 +1,5 @@
-use crate::helper::{create_database, create_database_with_default_data};
+use crate::helper::create_database_with_default_data;
 use collab_database::views::CreateViewParams;
-use nanoid::nanoid;
 
 #[test]
 fn create_row_shared_by_two_view_test() {

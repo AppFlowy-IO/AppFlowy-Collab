@@ -3,8 +3,7 @@ use crate::{impl_any_update, impl_str_update};
 use anyhow::bail;
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::{
-  lib0Any, Array, ArrayRef, ArrayRefWrapper, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
-  TransactionMut, YrsValue,
+  lib0Any, Array, ArrayRef, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
@@ -78,6 +77,7 @@ impl<'a, 'b> SortBuilder<'a, 'b> {
 }
 
 pub struct SortUpdate<'a, 'b, 'c> {
+  #[allow(dead_code)]
   id: &'a str,
   map_ref: MapRefExtension<'c>,
   txn: &'a mut TransactionMut<'b>,
