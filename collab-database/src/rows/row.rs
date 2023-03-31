@@ -13,6 +13,17 @@ pub struct Row {
   pub visibility: bool,
 }
 
+impl Row {
+  pub fn new(id: String) -> Self {
+    Row {
+      id,
+      cells: Default::default(),
+      height: 60,
+      visibility: true,
+    }
+  }
+}
+
 pub struct RowBuilder<'a, 'b> {
   id: &'a str,
   map_ref: MapRefWrapper,
@@ -66,6 +77,12 @@ const ROW_VISIBILITY: &str = "visibility";
 const ROW_HEIGHT: &str = "height";
 const ROW_CELLS: &str = "cells";
 
+pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<String> {
+  let map_ref = value.to_ymap()?;
+  let map_ref_ext = MapRefExtension(&map_ref);
+  map_ref_ext.get_str_with_txn(txn, ROW_ID)
+}
+
 pub fn row_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Row> {
   let map_ref = value.to_ymap()?;
   row_from_map_ref(&map_ref, txn)
@@ -81,7 +98,7 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
   let height = map_ref.get_i64_with_txn(txn, ROW_HEIGHT).unwrap_or(60);
 
   let cells = map_ref
-    .get_map_ref_with_txn(txn, ROW_CELLS)
+    .get_map_with_txn(txn, ROW_CELLS)
     .map(|map_ref| Cells::from_map_ref(txn, map_ref))
     .unwrap_or_default();
 

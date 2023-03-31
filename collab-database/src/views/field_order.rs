@@ -1,8 +1,10 @@
+use crate::fields::Field;
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::{
   lib0Any, Array, ArrayRef, ArrayRefWrapper, ReadTxn, TransactionMut, YrsValue,
 };
 use serde::{Deserialize, Serialize};
+use std::ops::{Deref, DerefMut};
 
 pub struct FieldOrderArray {
   array_ref: ArrayRef,
@@ -27,11 +29,52 @@ impl FieldOrderArray {
       .flat_map(|v| field_order_from_value(v, txn))
       .collect::<Vec<FieldOrder>>()
   }
+
+  pub fn remove_with_txn(&self, txn: &mut TransactionMut, field_id: &str) -> Option<()> {
+    let pos =
+      self
+        .array_ref
+        .iter(txn)
+        .position(|value| match field_order_from_value(value, txn) {
+          None => false,
+          Some(field_order) => field_order.id == field_id,
+        })?;
+    self.array_ref.remove(txn, pos as u32);
+    None
+  }
+}
+
+impl Deref for FieldOrderArray {
+  type Target = ArrayRef;
+
+  fn deref(&self) -> &Self::Target {
+    &self.array_ref
+  }
+}
+
+impl DerefMut for FieldOrderArray {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.array_ref
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FieldOrder {
   pub id: String,
+}
+
+impl FieldOrder {
+  pub fn new(id: String) -> FieldOrder {
+    Self { id }
+  }
+}
+
+impl From<&Field> for FieldOrder {
+  fn from(field: &Field) -> Self {
+    Self {
+      id: field.id.clone(),
+    }
+  }
 }
 
 impl From<lib0Any> for FieldOrder {

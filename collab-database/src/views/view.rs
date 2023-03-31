@@ -3,9 +3,11 @@ use crate::views::{
   FieldOrder, FieldOrderArray, Filter, FilterArray, Group, GroupArray, RowOrder, RowOrderArray,
   Sort, SortArray,
 };
-use crate::{impl_any_update, impl_str_update};
+use crate::{impl_any_update, impl_order_update, impl_str_update};
 use collab::preclude::map::MapPrelim;
-use collab::preclude::{lib0Any, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{
+  lib0Any, Array, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -20,6 +22,18 @@ pub struct View {
   pub sorts: Vec<Sort>,
   pub row_orders: Vec<RowOrder>,
   pub field_orders: Vec<FieldOrder>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CreateViewParams {
+  pub id: String,
+  pub database_id: String,
+  pub name: String,
+  pub layout: Layout,
+  pub layout_settings: LayoutSettings,
+  pub filters: Vec<Filter>,
+  pub groups: Vec<Group>,
+  pub sorts: Vec<Sort>,
 }
 
 const VIEW_ID: &str = "id";
@@ -49,7 +63,8 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
   where
     F: FnOnce(ViewUpdate),
   {
-    let update = ViewUpdate::new(self.id, self.txn, &self.map_ref);
+    let map_ref_ext = MapRefExtension(&self.map_ref);
+    let update = ViewUpdate::new(self.id, self.txn, map_ref_ext);
     f(update);
     self
   }
@@ -58,12 +73,12 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
 
 pub struct ViewUpdate<'a, 'b, 'c> {
   id: &'a str,
-  map_ref: &'c MapRefWrapper,
+  map_ref: MapRefExtension<'c>,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRefWrapper) -> Self {
+  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefExtension<'c>) -> Self {
     Self { id, map_ref, txn }
   }
 
@@ -76,8 +91,8 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   impl_str_update!(set_name, set_name_if_not_none, VIEW_NAME);
 
   impl_any_update!(
-    set_field_type,
-    set_field_type_if_not_none,
+    set_layout_type,
+    set_layout_type_if_not_none,
     VIEW_LAYOUT,
     Layout
   );
@@ -94,7 +109,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     let array_ref = self
       .map_ref
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_FILTERS);
-    let filter_array = FilterArray::new(array_ref.into_inner());
+    let filter_array = FilterArray::new(array_ref);
     filter_array.extends_with_txn(self.txn, filters);
     self
   }
@@ -103,7 +118,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     let array_ref = self
       .map_ref
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS);
-    let filter_array = GroupArray::new(array_ref.into_inner());
+    let filter_array = GroupArray::new(array_ref);
     filter_array.extends_with_txn(self.txn, groups);
     self
   }
@@ -112,37 +127,45 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     let array_ref = self
       .map_ref
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_SORTS);
-    let sort_array = SortArray::new(array_ref.into_inner());
+    let sort_array = SortArray::new(array_ref);
     sort_array.extends_with_txn(self.txn, sorts);
     self
   }
 
-  pub fn set_row_orders(self, row_orders: Vec<RowOrder>) -> Self {
-    let array_ref = self
-      .map_ref
-      .get_or_insert_array_with_txn::<RowOrder>(self.txn, ROW_ORDERS);
-    let row_order_array = RowOrderArray::new(array_ref.into_inner());
-    row_order_array.extends_with_txn(self.txn, row_orders);
-    self
-  }
+  impl_order_update!(
+    set_row_orders,
+    add_row_order,
+    remove_row_order,
+    ROW_ORDERS,
+    RowOrder,
+    RowOrderArray
+  );
 
-  pub fn set_field_orders(self, field_orders: Vec<FieldOrder>) -> Self {
-    let array_ref = self
-      .map_ref
-      .get_or_insert_array_with_txn::<FieldOrder>(self.txn, FIELD_ORDERS);
-    let field_order_array = FieldOrderArray::new(array_ref.into_inner());
-    field_order_array.extends_with_txn(self.txn, field_orders);
-    self
-  }
+  impl_order_update!(
+    set_field_orders,
+    add_field_order,
+    remove_field_order,
+    FIELD_ORDERS,
+    FieldOrder,
+    FieldOrderArray
+  );
 
   pub fn done(self) -> Option<View> {
-    view_from_map_ref(self.map_ref, self.txn)
+    view_from_map_ref(self.map_ref.into_inner(), self.txn)
   }
+}
+
+pub fn view_id_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<String> {
+  MapRefExtension(map_ref).get_str_with_txn(txn, VIEW_ID)
+}
+
+pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<View> {
+  let map_ref = value.to_ymap()?;
+  view_from_map_ref(&map_ref, txn)
 }
 
 pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> {
   let map_ref = MapRefExtension(map_ref);
-
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
   let name = map_ref.get_str_with_txn(txn, VIEW_NAME)?;
   let database_id = map_ref
@@ -153,7 +176,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> 
     .map(|value| value.try_into().ok())??;
 
   let layout_settings = map_ref
-    .get_map_ref_with_txn(txn, VIEW_LAYOUT_SETTINGS)
+    .get_map_with_txn(txn, VIEW_LAYOUT_SETTINGS)
     .map(|map_ref| LayoutSettings::from_map_ref(txn, map_ref))
     .unwrap_or_default();
 

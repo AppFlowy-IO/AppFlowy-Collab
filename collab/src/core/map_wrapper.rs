@@ -224,8 +224,14 @@ impl<'a> MapRefExtension<'a> {
     self.0.get(txn, key).map(|value| value.to_yarray())?
   }
 
-  pub fn get_map_ref_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<MapRef> {
+  pub fn get_map_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<MapRef> {
     self.0.get(txn, key).map(|value| value.to_ymap())?
+  }
+
+  pub fn get_or_insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
+    self
+      .get_map_with_txn(txn, key)
+      .unwrap_or_else(|| self.insert_map_with_txn(txn, key))
   }
 
   pub fn get_or_insert_array_with_txn<V: Prelim>(

@@ -10,6 +10,7 @@ mod view_map;
 pub use field_order::*;
 pub use filter::*;
 pub use group::*;
+pub use layout::*;
 pub use row_order::*;
 pub use sort::*;
 pub use view::*;

@@ -1,7 +1,9 @@
 use crate::fields::TypeOptions;
 use crate::{impl_any_update, impl_bool_update, impl_i64_update, impl_str_update};
 use anyhow::bail;
-use collab::preclude::{lib0Any, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{
+  lib0Any, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
@@ -15,6 +17,20 @@ pub struct Field {
   pub type_options: TypeOptions,
   #[serde(default = "DEFAULT_IS_PRIMARY_VALUE")]
   pub is_primary: bool,
+}
+
+impl Field {
+  pub fn new(id: String, name: String, field_type: FieldType, is_primary: bool) -> Self {
+    Self {
+      id,
+      name,
+      field_type,
+      visibility: true,
+      width: 120,
+      type_options: Default::default(),
+      is_primary,
+    }
+  }
 }
 
 const DEFAULT_IS_PRIMARY_VALUE: fn() -> bool = || false;
@@ -127,6 +143,17 @@ const FIELD_VISIBILITY: &str = "visibility";
 const FIELD_WIDTH: &str = "width";
 const FIELD_PRIMARY: &str = "is_primary";
 
+pub fn field_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<String> {
+  let map_ref = value.to_ymap()?;
+  let map_ref_ext = MapRefExtension(&map_ref);
+  map_ref_ext.get_str_with_txn(txn, FIELD_ID)
+}
+
+pub fn field_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Field> {
+  let map_ref = value.to_ymap()?;
+  field_from_map_ref(&map_ref, txn)
+}
+
 pub fn field_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Field> {
   let map_ref = MapRefExtension(map_ref);
   let id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
@@ -141,7 +168,7 @@ pub fn field_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Field
   let width = map_ref.get_i64_with_txn(txn, FIELD_WIDTH).unwrap_or(120);
 
   let type_options = map_ref
-    .get_map_ref_with_txn(txn, FIELD_TYPE_OPTION)
+    .get_map_with_txn(txn, FIELD_TYPE_OPTION)
     .map(|map_ref| TypeOptions::from_map_ref(txn, map_ref))
     .unwrap_or_default();
 

@@ -1,8 +1,9 @@
 pub mod database;
-mod fields;
-mod rows;
-mod views;
+pub mod fields;
+pub mod rows;
+pub mod views;
 
 #[macro_use]
 mod macros;
 mod database_serde;
+pub mod error;

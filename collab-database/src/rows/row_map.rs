@@ -1,4 +1,7 @@
-use crate::rows::{row_from_map_ref, row_from_value, Row, RowBuilder, RowUpdate};
+use crate::rows::{
+  row_from_map_ref, row_from_value, row_id_from_value, Row, RowBuilder, RowUpdate,
+};
+use crate::views::RowOrder;
 use collab::preclude::{Map, MapRefWrapper, ReadTxn, TransactionMut};
 
 pub struct RowMap {
@@ -43,6 +46,15 @@ impl RowMap {
       .container
       .iter(txn)
       .flat_map(|(k, v)| row_from_value(v, txn))
+      .collect::<Vec<_>>()
+  }
+
+  pub fn get_all_row_orders_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<RowOrder> {
+    self
+      .container
+      .iter(txn)
+      .flat_map(|(k, v)| row_id_from_value(v, txn))
+      .map(|row_id| RowOrder::new(row_id))
       .collect::<Vec<_>>()
   }
 
