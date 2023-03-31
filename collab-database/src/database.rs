@@ -1,12 +1,13 @@
+use crate::database_serde::DatabaseSerde;
 use crate::fields::FieldMap;
 use crate::rows::RowMap;
 use crate::views::ViewMap;
-use collab::preclude::{Collab, MapRefWrapper};
+use collab::preclude::{Collab, JsonValue, MapRefWrapper};
 use std::rc::Rc;
 
 pub struct Database {
   inner: Collab,
-  database: MapRefWrapper,
+  pub(crate) root: MapRefWrapper,
   pub rows: Rc<RowMap>,
   pub views: Rc<ViewMap>,
   pub fields: Rc<FieldMap>,
@@ -50,10 +51,15 @@ impl Database {
 
     Self {
       inner: collab,
-      database,
+      root: database,
       rows: Rc::new(rows),
       views: Rc::new(views),
       fields: Rc::new(fields),
     }
+  }
+
+  pub fn to_json_value(&self) -> JsonValue {
+    let database_serde = DatabaseSerde::from_database(self);
+    serde_json::to_value(&database_serde).unwrap()
   }
 }

@@ -5,3 +5,4 @@ mod views;
 
 #[macro_use]
 mod macros;
+mod database_serde;

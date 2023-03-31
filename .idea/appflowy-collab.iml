@@ -15,6 +15,7 @@
       <sourceFolder url="file://$MODULE_DIR$/collab-folder/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/collab-folder/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/collab-database/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/collab-database/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
