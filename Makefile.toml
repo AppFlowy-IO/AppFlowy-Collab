@@ -1,0 +1,39 @@
+[tasks.get_lcov_report]
+description = "Generates `lcov` report for `rust-lib`"
+script_runner = "@shell"
+script = '''
+  echo Getting 'lcov' results for 'collab'
+
+  grcov . \
+  --binary-path target/debug/deps \
+  --source-dir . \
+  --output-type lcov \
+  --branch \
+  --ignore-not-existing \
+  --log-level WARN \
+  --output-path target/coverage.lcov
+
+  echo "--- Done! Generated 'target/coverage.lcov' for collab."
+'''
+
+
+[tasks.run_rustlib_coverage_tests]
+description = "Run tests with coverage instrumentation"
+script_runner = "@shell"
+script = ["""
+  echo --- Running coverage tests ---
+
+  CARGO_INCREMENTAL=0 \
+  RUSTFLAGS='-C instrument-coverage' \
+  LLVM_PROFILE_FILE='prof-%p-%m.profraw' \
+  cargo test
+  """]
+
+
+
+[tasks.run_code_coverage]
+run_task = { name = [
+  "run_rustlib_coverage_tests",
+  "get_lcov_report",
+] }
+
