@@ -1,4 +1,4 @@
-name: Rust CI with Code Coverage
+name: Code Coverage
 
 on:
   push:
@@ -39,21 +39,21 @@ jobs:
           command: build
           args: --all-features
 
-      - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features --no-fail-fast --workspace -- --nocapture
+      - name: Install prerequisites
+        run: |
+          cargo install --force cargo-make
+          cargo install --force duckscript_cli
+          rustup component add llvm-tools-preview
 
       - name: Generate code coverage report
-        run: |
-          zip -0 ccov.zip `find . \( -name "AppFlowy-Collab*.gc*" \) -print`
-          grcov ccov.zip -s . -t lcov --llvm --branch --ignore-not-existing --ignore "/*" -o lcov.info
+        run: | 
+          cargo make run_coverage
+          
 
       - name: Upload code coverage report to codecov.io
         uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./lcov.info
+          files: ./target/coverage.lcov
           fail_ci_if_error: true
 
