@@ -41,7 +41,8 @@ jobs:
 
       - name: Install prerequisites
         run: |
-          cargo install cargo-make
+          cargo install --force cargo-make
+          cargo install --force duckscript_cli
 
       - name: Generate code coverage report
         run: | 

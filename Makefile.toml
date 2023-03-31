@@ -2,6 +2,7 @@
 run_task = { name = [
   "run_rustlib_coverage_tests",
   "get_lcov_report",
+  "clean_profraw_files",
 ] }
 script_runner = "@shell"
 
@@ -53,6 +54,17 @@ else
   exit -1
 fi
 '''
+
+[tasks.clean_profraw_files]
+description = "Cleans profraw files that are created by `cargo test`"
+script_runner = "@duckscript"
+script = ["""
+  profs = glob_array ./**/*.profraw
+  for prof in ${profs}
+    full_path = canonicalize ${prof}
+    rm ${full_path}
+  end
+  """]
 
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
