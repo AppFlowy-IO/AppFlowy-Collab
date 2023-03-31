@@ -1,7 +1,7 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
 
-use collab_document::blocks::BlockData;
+use collab_document::blocks::BlockDataEnum;
 use collab_document::document::{Document, InsertBlockArgs};
 use collab_persistence::CollabKV;
 use nanoid::nanoid;
@@ -39,10 +39,7 @@ pub fn inser_text_block(document: &Document, parent_id: &str, prev_id: &str) -> 
       InsertBlockArgs {
         parent_id: parent_id.to_string(),
         block_id: block_id.clone(),
-        data: BlockData {
-          text: nanoid!(),
-          level: None,
-        },
+        data: BlockDataEnum::Text(nanoid!()),
         children_id: nanoid!(),
         ty: "text".to_string(),
       },

@@ -1,6 +1,4 @@
-use crate::blocks::{
-  Block, BlockData, BlockDataParser, BlockMap, ChildrenMap, DataParser, TextMap,
-};
+use crate::blocks::{Block, BlockDataEnum, BlockMap, ChildrenMap, TextMap};
 use crate::error::DocumentError;
 use collab::preclude::*;
 use nanoid::nanoid;
@@ -53,7 +51,7 @@ impl Serialize for Document {
 pub struct InsertBlockArgs {
   pub parent_id: String,
   pub block_id: String,
-  pub data: BlockData,
+  pub data: BlockDataEnum,
   pub children_id: String,
   pub ty: String,
 }
@@ -118,10 +116,7 @@ impl Document {
     let head_id = self.root.get(txn, "head_id").unwrap().to_string(txn);
     let head_children_id = nanoid!();
     let head_text_id = nanoid!();
-    let head_data = BlockData {
-      text: head_text_id,
-      level: None,
-    };
+    let head_data = BlockDataEnum::Page(head_text_id);
     // { document: { blocks: { head_id: { id: "head_id", ty: "page", data: { text: "head_text_id", level: null }, children: "head_children_id" } } } }
     self.insert_block(
       txn,
@@ -138,10 +133,7 @@ impl Document {
     let first_id = nanoid!();
     let first_text_id = nanoid!();
     let first_children_id = nanoid!();
-    let first_data = BlockData {
-      text: first_text_id,
-      level: None,
-    };
+    let first_data = BlockDataEnum::Text(first_text_id);
     // { document: { blocks: { head_id: { id: "head_id", ty: "page", data: { text: "head_text_id", level: null }, children: "head_children_id" }, first_id: { id: "first_id", ty: "text", data: { text: "first_text_id", level: null }, children: "first_children_id" } } } }
     self.insert_block(
       txn,
@@ -170,16 +162,19 @@ impl Document {
     let ty = block.ty;
     let parent_id = block.parent_id;
     let children_id = block.children_id;
-    let data = block.data;
+    let text_id = block.data.get_text();
 
     self
       .children_map
       .create_children_with_txn(txn, children_id.clone());
-    self.text_map.create_text(txn, data.text.as_str());
+
+    if let Some(text_id) = text_id {
+      self.text_map.create_text(txn, &text_id);
+    }
 
     let block = self
       .blocks
-      .create_block(txn, block_id, ty, parent_id, children_id, data);
+      .create_block(txn, block_id, ty, parent_id, children_id, block.data);
 
     match block {
       Ok(block) => self.insert_block_to_parent(txn, &block, prev_id),
@@ -231,14 +226,18 @@ impl Document {
 
     let block = block.unwrap();
     let children_id = &block.children;
-    let block_data = &block.data;
-    let text_id = BlockDataParser::parser(block_data).unwrap().text;
+    let block_data = BlockDataEnum::from_string(&block.data);
 
     let parent_id = &block.parent;
     self.delete_block_from_parent(txn, block_id, parent_id);
 
     self.children_map.delete_children_with_txn(txn, children_id);
-    self.text_map.delete_with_txn(txn, &text_id);
+
+    let text_id = block_data.get_text();
+
+    if let Some(text_id) = text_id {
+      self.text_map.delete_with_txn(txn, &text_id);
+    }
     self.blocks.delete_block_with_txn(txn, block_id);
   }
 

@@ -1,5 +1,4 @@
 use crate::util::{create_document, delete_block, inser_text_block};
-use collab_document::blocks::{BlockDataParser, DataParser};
 
 #[test]
 fn create_block_test() {
@@ -89,8 +88,10 @@ fn delete_block_test() {
   let block_id = inser_text_block(&test.document, root_id, "");
   let parent_id = test.document.get_block(&block_id).unwrap().parent;
   let parent_children_id = test.document.get_block(&parent_id).unwrap().children;
-  let data = test.document.get_block(&block_id).unwrap().data;
-  let text_id = BlockDataParser::parser(&data).unwrap().text;
+  let document_data = test.document.to_json().unwrap();
+  let text_id = &document_data["document"]["blocks"][&block_id]["data"]["text"]
+    .as_str()
+    .unwrap();
   let children_id = test.document.get_block(&block_id).unwrap().children;
 
   delete_block(&test.document, &block_id);

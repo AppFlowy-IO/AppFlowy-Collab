@@ -2,7 +2,6 @@ use anyhow::Result;
 use collab::preclude::{Map, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Serialize, Serializer};
-use std::str::FromStr;
 
 #[derive(Deserialize, Debug)]
 pub struct Block {
@@ -27,7 +26,18 @@ impl Serialize for Block {
     s.serialize_field("ty", &self.ty)?;
     s.serialize_field("parent", &self.parent)?;
     s.serialize_field("children", &self.children)?;
-    s.serialize_field("data", &BlockDataParser::parser(&self.data))?;
+    let data = BlockDataEnum::from_string(&self.data);
+    let data = match data {
+      BlockDataEnum::Page(text) | BlockDataEnum::Text(text) => serde_json::json!({
+        "text": text,
+      }),
+      BlockDataEnum::Header(level, text) => serde_json::json!({
+        "level": level,
+        "text": text,
+      }),
+      _ => serde_json::json!({}),
+    };
+    s.serialize_field("data", &data)?;
 
     s.end()
   }
@@ -94,14 +104,14 @@ impl BlockMap {
     ty: String,
     parent_id: String,
     children_id: String,
-    data: BlockData,
+    data: BlockDataEnum,
   ) -> Result<Block> {
     let block = Block {
       id: block_id.clone(),
       ty,
       parent: parent_id,
       children: children_id,
-      data: BlockData::to_string(&data),
+      data: data.to_string(),
     };
     let block_map = self.root.insert_map_with_txn(txn, &block_id);
     block_map.insert_with_txn(txn, "id", block.id.clone());
@@ -121,45 +131,30 @@ impl BlockMap {
   }
 }
 
-pub trait DataParser {
-  type Output;
-
-  fn parser(data: &str) -> Option<Self::Output>;
-
-  fn to_string(data: &Self::Output) -> String;
-}
-
-pub struct BlockDataParser {}
-
-impl DataParser for BlockDataParser {
-  type Output = BlockData;
-
-  fn parser(data: &str) -> Option<Self::Output> {
-    BlockData::from_str(data).ok()
-  }
-
-  fn to_string(data: &Self::Output) -> String {
-    BlockData::to_string(data)
-  }
-}
-
 #[derive(Serialize, Deserialize)]
-pub struct BlockData {
-  pub text: String,
-  pub level: Option<u32>,
+pub enum BlockDataEnum {
+  Page(String),
+  Text(String),
+  Header(u32, String),
+  Image(),
 }
 
-impl FromStr for BlockData {
-  type Err = anyhow::Error;
-
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    let object = serde_json::from_str(s)?;
-    Ok(object)
+impl ToString for BlockDataEnum {
+  fn to_string(&self) -> String {
+    serde_json::to_string(self).unwrap_or_else(|_| "".to_string())
   }
 }
 
-impl ToString for BlockData {
-  fn to_string(&self) -> String {
-    serde_json::to_string(self).unwrap()
+impl BlockDataEnum {
+  pub fn from_string(s: &str) -> Self {
+    serde_json::from_str(s).unwrap()
+  }
+
+  pub fn get_text(&self) -> Option<String> {
+    match self {
+      BlockDataEnum::Page(text) | BlockDataEnum::Text(text) => Some(text.clone()),
+      BlockDataEnum::Header(_, text) => Some(text.clone()),
+      _ => None,
+    }
   }
 }
