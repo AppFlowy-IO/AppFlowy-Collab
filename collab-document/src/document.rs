@@ -2,6 +2,8 @@ use crate::blocks::{Block, BlockData, BlockMap, ChildrenMap, TextMap};
 use crate::error::DocumentError;
 use collab::preclude::*;
 use nanoid::nanoid;
+use serde::ser::SerializeStruct;
+use serde::{Serialize, Serializer};
 
 const ROOT: &str = "document";
 const BLOCKS: &str = "blocks";
@@ -17,6 +19,33 @@ pub struct Document {
   children_map: ChildrenMap,
   pub blocks: BlockMap,
   pub meta: MapRefWrapper,
+}
+
+impl Serialize for Document {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let txn = self.root.transact();
+    let mut s = serializer.serialize_struct("Document", 3)?;
+    s.serialize_field(
+      "root_id",
+      &self
+        .root
+        .get(&txn, "head_id")
+        .unwrap_or_else(|| Value::from(""))
+        .to_string(&txn),
+    )?;
+    s.serialize_field("blocks", &self.blocks.to_json())?;
+    s.serialize_field(
+      "meta",
+      &serde_json::json!({
+          "text_map": self.text_map.to_json(),
+          "children_map": self.children_map.to_json(),
+      }),
+    )?;
+    s.end()
+  }
 }
 
 impl Document {
@@ -68,17 +97,8 @@ impl Document {
   }
 
   pub fn to_json(&self) -> Result<serde_json::value::Value, DocumentError> {
-    let txn = self.root.transact();
-    let root_id = self.root.get(&txn, "head_id").unwrap().to_string(&txn);
     let document_data = serde_json::json!({
-        "document": {
-            "root_id": root_id,
-            "blocks": self.blocks.to_json(),
-            "meta": serde_json::json!({
-                "text_map": self.text_map.to_json(),
-                "children_map": self.children_map.to_json(),
-            })
-        }
+        "document": serde_json::to_value(self).unwrap()
     });
 
     Ok(document_data)

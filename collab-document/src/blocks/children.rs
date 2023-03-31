@@ -1,30 +1,37 @@
 use collab::preclude::*;
+use serde::ser::SerializeMap;
+use serde::{Serialize, Serializer};
+
 pub struct ChildrenMap {
   pub root: MapRefWrapper,
 }
+
+impl Serialize for ChildrenMap {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let txn = self.root.transact();
+    let mut map = serializer.serialize_map(Some(self.root.len(&txn) as usize))?;
+    for (key, _) in self.root.iter(&txn) {
+      let children = self.root.get_array_ref_with_txn(&txn, &key).unwrap();
+      let value = serde_json::json!(children
+        .iter(&txn)
+        .map(|child| child.to_string(&txn))
+        .collect::<Vec<String>>());
+      map.serialize_entry(key, &value)?;
+    }
+    map.end()
+  }
+}
+
 impl ChildrenMap {
   pub fn new(root: MapRefWrapper) -> Self {
     Self { root }
   }
 
   pub fn to_json(&self) -> serde_json::Value {
-    let mut obj = serde_json::json!({});
-    let txn = self.root.transact();
-    self.root.iter(&txn).for_each(|(key, _)| {
-      let key = key.to_string();
-      let children = self.root.get_array_ref_with_txn(&txn, &key);
-      match children {
-        Some(children) => {
-          let children = serde_json::json!(children
-            .iter(&txn)
-            .map(|child| child.to_string(&txn))
-            .collect::<Vec<String>>());
-          obj[key] = children;
-        },
-        None => {},
-      }
-    });
-    obj
+    serde_json::to_value(self).unwrap()
   }
 
   pub fn get_children_with_txn(

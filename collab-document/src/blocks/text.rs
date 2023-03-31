@@ -1,8 +1,67 @@
 use collab::{core::text_wrapper::TextDelta, preclude::*};
+use serde::ser::SerializeMap;
+use serde::{Serialize, Serializer};
 use serde_json::Value::Null;
 
 pub struct TextMap {
   pub root: MapRefWrapper,
+}
+
+struct InsertedDelta {
+  insert: String,
+  attributes: Option<Box<Attrs>>,
+}
+
+impl InsertedDelta {
+  fn new(insert: String, attributes: Option<Box<Attrs>>) -> Self {
+    Self { insert, attributes }
+  }
+}
+
+impl Serialize for InsertedDelta {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let mut map = serializer.serialize_map(None)?;
+    map.serialize_entry("insert", &self.insert)?;
+    let attrs = match &self.attributes {
+      Some(attrs) => {
+        let mut attrs_obj = serde_json::json!({});
+        attrs.iter().for_each(|(k, v)| {
+          attrs_obj[k.to_string()] = v.to_string().parse().unwrap();
+        });
+        attrs_obj
+      },
+      None => Null,
+    };
+    map.serialize_entry("attributes", &attrs)?;
+    map.end()
+  }
+}
+
+impl Serialize for TextMap {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let txn = self.root.transact();
+    let mut map = serializer.serialize_map(Some(self.root.len(&txn) as usize))?;
+    for (key, _) in self.root.iter(&txn) {
+      let text = self.get_delta_with_txn(&txn, &key);
+      let value = serde_json::json!(text
+        .iter()
+        .map(|delta| match delta {
+          Delta::Inserted(content, attrs) => {
+            serde_json::json!(InsertedDelta::new(content.to_string(), attrs.clone()))
+          },
+          _ => Null,
+        })
+        .collect::<Vec<serde_json::Value>>());
+      map.serialize_entry(key, &value)?;
+    }
+    map.end()
+  }
 }
 
 impl TextMap {
@@ -11,34 +70,7 @@ impl TextMap {
   }
 
   pub fn to_json(&self) -> serde_json::Value {
-    let txn = self.root.transact();
-    let mut obj = serde_json::json!({});
-
-    self.root.iter(&txn).for_each(|(k, _)| {
-      let mut delta_arr = vec![];
-      self.get_delta_with_txn(&txn, k).iter().for_each(|delta| {
-        let mut delta_item = serde_json::json!({});
-        match delta {
-          Delta::Inserted(content, attrs) => {
-            delta_item["insert"] = serde_json::json!(content.to_string());
-            delta_item["attributes"] = match attrs {
-              Some(attrs) => {
-                let mut attrs_obj = serde_json::json!({});
-                attrs.iter().for_each(|(k, v)| {
-                  attrs_obj[k.to_string()] = v.to_string().parse().unwrap();
-                });
-                attrs_obj
-              },
-              None => Null,
-            }
-          },
-          _ => (),
-        };
-        delta_arr.push(delta_item);
-      });
-      obj[k.to_string()] = serde_json::json!(delta_arr);
-    });
-    obj
+    serde_json::to_value(self).unwrap()
   }
 
   pub fn create_text(&self, txn: &mut TransactionMut, text_id: &str) -> TextRefWrapper {
