@@ -46,7 +46,7 @@ jobs:
 
       - name: Generate code coverage report
         run: | 
-          cargo make run_code_coverage
+          cargo make run_coverage
           
 
       - name: Upload code coverage report to codecov.io
