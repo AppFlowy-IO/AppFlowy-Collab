@@ -8,11 +8,11 @@ script_runner = "@shell"
 
 
 [tasks.get_lcov_report]
+cwd = ".."
 description = "Generates `lcov` report for `collab`"
 script_runner = "@shell"
 script = '''
   echo Getting 'lcov' results for 'collab'
-
   grcov . \
   --binary-path target/debug/deps \
   --source-dir . \
@@ -27,6 +27,7 @@ script = '''
 
 
 [tasks.run_rustlib_coverage_tests]
+cwd = ".."
 description = "Run tests with coverage instrumentation"
 script_runner = "@shell"
 script = '''
@@ -65,6 +66,12 @@ script = ["""
     rm ${full_path}
   end
   """]
+
+[config]
+on_error_task = "catch"
+
+[tasks.catch]
+run_task = { name = ["clean_profraw_files"] }
 
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
