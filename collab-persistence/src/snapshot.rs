@@ -12,6 +12,7 @@ use yrs::ReadTxn;
 
 pub struct YrsSnapshot<'a> {
   pub(crate) db: &'a CollabKV,
+  pub(crate) uid: i64,
 }
 
 impl<'a> YrsSnapshot<'a> {
@@ -57,14 +58,14 @@ impl<'a> YrsSnapshot<'a> {
         .snapshot_id_before_key([SNAPSHOT_SPACE, SNAPSHOT_SPACE_OBJECT].as_ref())
         .unwrap_or(0);
       let new_snapshot_id = last_snapshot_id + 1;
-      let key = make_snapshot_id(object_id.as_ref());
+      let key = make_snapshot_id(&self.uid.to_be_bytes(), object_id.as_ref());
       let _ = self.db.insert(key, &new_snapshot_id.to_be_bytes());
       Ok(new_snapshot_id)
     }
   }
 
   fn get_snapshot_id<K: AsRef<[u8]> + ?Sized>(&self, object_id: &K) -> Option<SnapshotID> {
-    let key = make_snapshot_id(object_id.as_ref());
+    let key = make_snapshot_id(&self.uid.to_be_bytes(), object_id.as_ref());
     let value = self.db.get(key).ok()??;
     Some(SnapshotID::from_be_bytes(
       value.as_ref().try_into().unwrap(),

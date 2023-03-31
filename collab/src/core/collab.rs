@@ -29,7 +29,7 @@ pub type MapSubscription = Subscription<MapSubscriptionCallback>;
 pub struct Collab {
   doc: Doc,
   #[allow(dead_code)]
-  cid: String,
+  object_id: String,
   data: MapRef,
   plugins: Plugins,
   #[allow(dead_code)]
@@ -39,8 +39,8 @@ pub struct Collab {
 }
 
 impl Collab {
-  pub fn new<T: AsRef<str>>(uid: i64, cid: T, plugins: Vec<Arc<dyn CollabPlugin>>) -> Collab {
-    let cid = cid.as_ref().to_string();
+  pub fn new<T: AsRef<str>>(uid: i64, object_id: T, plugins: Vec<Arc<dyn CollabPlugin>>) -> Collab {
+    let object_id = object_id.as_ref().to_string();
     let doc = Doc::with_options(Options {
       skip_gc: true,
       client_id: uid as u64, // in order to support revisions we cannot garbage collect deleted blocks
@@ -49,9 +49,9 @@ impl Collab {
     let data = doc.get_or_insert_map(DATA_SECTION);
     let plugins = Plugins::new(plugins);
     let (update_subscription, after_txn_subscription) =
-      observe_doc(&doc, cid.clone(), plugins.clone());
+      observe_doc(&doc, object_id.clone(), plugins.clone());
     Self {
-      cid,
+      object_id,
       doc,
       data,
       plugins,
@@ -78,7 +78,7 @@ impl Collab {
       .plugins
       .read()
       .iter()
-      .for_each(|plugin| plugin.did_init(&self.cid, &mut txn));
+      .for_each(|plugin| plugin.did_init(&self.object_id, &mut txn));
     drop(txn);
   }
 
@@ -306,16 +306,16 @@ impl Display for Collab {
 pub struct CollabBuilder {
   plugins: Vec<Arc<dyn CollabPlugin>>,
   uid: i64,
-  cid: String,
+  object_id: String,
 }
 
 impl CollabBuilder {
-  pub fn new<T: AsRef<str>>(uid: i64, cid: T) -> Self {
-    let cid = cid.as_ref();
+  pub fn new<T: AsRef<str>>(uid: i64, object_id: T) -> Self {
+    let object_id = object_id.as_ref();
     Self {
       uid,
       plugins: vec![],
-      cid: cid.to_string(),
+      object_id: object_id.to_string(),
     }
   }
 
@@ -328,7 +328,7 @@ impl CollabBuilder {
   }
 
   pub fn build_with_updates(self, updates: Vec<Update>) -> Collab {
-    let collab = Collab::new(self.uid, self.cid, self.plugins);
+    let collab = Collab::new(self.uid, self.object_id, self.plugins);
     let mut txn = collab.doc.transact_mut();
     for update in updates {
       txn.apply_update(update);
@@ -338,7 +338,7 @@ impl CollabBuilder {
   }
 
   pub fn build(self) -> Collab {
-    Collab::new(self.uid, self.cid, self.plugins)
+    Collab::new(self.uid, self.object_id, self.plugins)
   }
 }
 

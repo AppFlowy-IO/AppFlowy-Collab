@@ -54,8 +54,9 @@ pub const SNAPSHOT_UPDATE: u8 = 1;
 pub type DocID = u32;
 pub type SnapshotID = u32;
 
-pub fn make_doc_id(object_id: &[u8]) -> Key<20> {
+pub fn make_doc_id(uid: &[u8], object_id: &[u8]) -> Key<20> {
   let mut v: SmallVec<[u8; 20]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT];
+  v.write_all(uid).unwrap();
   v.write_all(object_id).unwrap();
   v.push(TERMINATOR);
   Key(v)
@@ -106,8 +107,9 @@ pub fn clock_from_key(key: &[u8]) -> &[u8] {
   &key[(len - 5)..(len - 1)]
 }
 
-pub fn make_snapshot_id(object_id: &[u8]) -> Key<20> {
+pub fn make_snapshot_id(uid: &[u8], object_id: &[u8]) -> Key<20> {
   let mut v: SmallVec<[u8; 20]> = smallvec![SNAPSHOT_SPACE, SNAPSHOT_SPACE_OBJECT];
+  v.write_all(uid).unwrap();
   v.write_all(object_id).unwrap();
   v.push(TERMINATOR);
   Key(v)

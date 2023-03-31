@@ -11,6 +11,7 @@ use yrs::updates::encoder::Encode;
 use yrs::{ReadTxn, StateVector, TransactionMut, Update};
 
 pub struct YrsDoc<'a> {
+  pub(crate) uid: i64,
   pub(crate) db: &'a CollabKV,
 }
 
@@ -110,7 +111,7 @@ impl<'a> YrsDoc<'a> {
   /// ```
   pub fn delete_doc<K: AsRef<[u8]> + ?Sized>(&self, object_id: &K) -> Result<(), PersistenceError> {
     if let Some(did) = self.get_did(object_id) {
-      let key = make_doc_id(object_id.as_ref());
+      let key = make_doc_id(&self.uid.to_be_bytes(), object_id.as_ref());
       let _ = self.db.remove(key);
 
       let start = make_doc_start_key(did);
@@ -162,14 +163,15 @@ impl<'a> YrsDoc<'a> {
         .did_before_key([DOC_SPACE, DOC_SPACE_OBJECT_KEY].as_ref())
         .unwrap_or(0);
       let new_did = last_did + 1;
-      let key = make_doc_id(object_id.as_ref());
+      let key = make_doc_id(&self.uid.to_be_bytes(), object_id.as_ref());
       let _ = self.db.insert(key, &new_did.to_be_bytes());
       Ok(new_did)
     }
   }
 
   fn get_did<K: AsRef<[u8]> + ?Sized>(&self, object_id: &K) -> Option<DocID> {
-    let key = make_doc_id(object_id.as_ref());
+    let uid = &self.uid.to_be_bytes();
+    let key = make_doc_id(uid, object_id.as_ref());
     let value = self.db.get(key).ok()??;
     Some(DocID::from_be_bytes(value.as_ref().try_into().unwrap()))
   }

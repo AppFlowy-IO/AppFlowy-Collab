@@ -130,7 +130,7 @@ impl BlockMap {
   }
 
   pub fn delete_block_with_txn(&self, txn: &mut TransactionMut, block_id: &str) {
-    self.root.remove(txn, block_id);
+    self.root.remove_with_txn(txn, block_id);
   }
 }
 

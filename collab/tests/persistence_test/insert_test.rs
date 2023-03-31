@@ -8,7 +8,7 @@ fn insert_single_change_and_restore_from_disk() {
   test.run_scripts(vec![
     CreateDocumentWithDiskPlugin {
       id: doc_id.clone(),
-      plugin: disk_plugin(),
+      plugin: disk_plugin(test.uid),
     },
     InsertKeyValue {
       id: doc_id.clone(),
@@ -36,7 +36,7 @@ fn insert_multiple_changes_and_restore_from_disk() {
   test.run_scripts(vec![
     CreateDocumentWithDiskPlugin {
       id: doc_id.clone(),
-      plugin: disk_plugin(),
+      plugin: disk_plugin(test.uid),
     },
     InsertKeyValue {
       id: doc_id.clone(),
@@ -94,7 +94,7 @@ fn insert_multiple_changes_and_restore_from_disk() {
 #[test]
 fn insert_multiple_docs() {
   let mut test = CollabPersistenceTest::new();
-  let disk_plugin = disk_plugin();
+  let disk_plugin = disk_plugin(test.uid);
   test.run_scripts(vec![
     CreateDocumentWithDiskPlugin {
       id: "1".to_string(),

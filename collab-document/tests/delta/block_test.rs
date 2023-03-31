@@ -40,7 +40,7 @@ fn create_block_test() {
   assert!(head["ty"] == "text");
   assert!(children_map[head_children].is_array());
   assert!(text_map[head_text].is_array());
-  assert!(children_map[head_children].as_array().unwrap().len() == 0);
+  assert!(children_map[head_children].as_array().unwrap().is_empty());
   assert!(children_map[root_children][0] == head_id);
 }
 
@@ -109,9 +109,7 @@ fn delete_block_test() {
   assert!(children_map[&children_id].is_null());
   let parent_children = children_map[parent_children_id].as_array().unwrap();
   assert!(parent_children.len() == 1);
-  assert!(parent_children
-    .iter()
-    .any(|e| e.to_string() != block_id.to_string()));
+  assert!(parent_children.iter().any(|e| *e != block_id));
 }
 
 #[test]

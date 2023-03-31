@@ -16,12 +16,12 @@ impl CollabKV {
     Ok(Self { db })
   }
 
-  pub fn doc(&self) -> YrsDoc {
-    YrsDoc { db: self }
+  pub fn doc(&self, uid: i64) -> YrsDoc {
+    YrsDoc { db: self, uid }
   }
 
-  pub fn snapshot(&self) -> YrsSnapshot {
-    YrsSnapshot { db: self }
+  pub fn snapshot(&self, uid: i64) -> YrsSnapshot {
+    YrsSnapshot { db: self, uid }
   }
 
   pub fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<IVec>, PersistenceError> {

@@ -5,7 +5,7 @@ use lib0::any::Any;
 use serde::Serialize;
 use std::ops::{Deref, DerefMut};
 use yrs::block::Prelim;
-use yrs::{Array, ArrayRef, MapPrelim, ReadTxn, Transact, Transaction, TransactionMut};
+use yrs::{Array, ArrayRef, MapPrelim, MapRef, ReadTxn, Transact, Transaction, TransactionMut};
 
 #[derive(Clone)]
 pub struct ArrayRefWrapper {
@@ -61,11 +61,11 @@ impl ArrayRefWrapper {
     Ok(())
   }
 
-  pub fn create_map_ref(&self) -> MapRefWrapper {
-    self.with_transact_mut(|txn| self.create_map_with_txn(txn))
+  pub fn insert_map_ref(&self) -> MapRefWrapper {
+    self.with_transact_mut(|txn| self.insert_map_with_txn(txn))
   }
 
-  pub fn create_map_with_txn(&self, txn: &mut TransactionMut) -> MapRefWrapper {
+  pub fn insert_map_with_txn(&self, txn: &mut TransactionMut) -> MapRefWrapper {
     let array = MapPrelim::<Any>::new();
     let map_ref = self.array_ref.push_back(txn, array);
     MapRefWrapper::new(map_ref, self.collab_ctx.clone())
@@ -87,6 +87,10 @@ impl ArrayRefWrapper {
   pub fn remove_with_txn(&self, txn: &mut TransactionMut, index: u32) {
     self.array_ref.remove(txn, index);
   }
+
+  pub fn into_inner(self) -> ArrayRef {
+    self.array_ref
+  }
 }
 
 impl Deref for ArrayRefWrapper {
@@ -100,5 +104,21 @@ impl Deref for ArrayRefWrapper {
 impl DerefMut for ArrayRefWrapper {
   fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.array_ref
+  }
+}
+
+pub struct ArrayRefExtension<'a>(pub &'a ArrayRef);
+impl<'a> ArrayRefExtension<'a> {
+  pub fn insert_map_with_txn(&self, txn: &mut TransactionMut) -> MapRef {
+    let array = MapPrelim::<Any>::new();
+    self.0.push_back(txn, array)
+  }
+}
+
+impl<'a> Deref for ArrayRefExtension<'a> {
+  type Target = ArrayRef;
+
+  fn deref(&self) -> &Self::Target {
+    self.0
   }
 }
