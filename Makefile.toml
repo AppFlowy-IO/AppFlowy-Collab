@@ -1,5 +1,13 @@
+[tasks.run_coverage]
+run_task = { name = [
+  "run_rustlib_coverage_tests",
+  "get_lcov_report",
+] }
+script_runner = "@shell"
+
+
 [tasks.get_lcov_report]
-description = "Generates `lcov` report for `rust-lib`"
+description = "Generates `lcov` report for `collab`"
 script_runner = "@shell"
 script = '''
   echo Getting 'lcov' results for 'collab'
@@ -20,20 +28,31 @@ script = '''
 [tasks.run_rustlib_coverage_tests]
 description = "Run tests with coverage instrumentation"
 script_runner = "@shell"
-script = ["""
+script = '''
   echo --- Running coverage tests ---
 
   CARGO_INCREMENTAL=0 \
   RUSTFLAGS='-C instrument-coverage' \
   LLVM_PROFILE_FILE='prof-%p-%m.profraw' \
   cargo test
-  """]
+'''
 
+[tasks.check_grcov]
+description = "Check if `grcov` is installled"
+script_runner = "@shell"
+script = '''
+export PATH=$PATH:"$HOME/.cargo/bin/"
+if command -v grcov > /dev/null; then
+  echo "Found 'grcov' executable."
+else
+  echo "[!] Could not find 'grcov' executable."
+  echo "[!] Please install 'grcov' by running 'cargo install grcov'."
+  echo "[!] You may also need to install 'llvm-tools-preview' using 'rustup component add llvm-tools-preview'."
+  echo "[!] If installed, check if 'grcov' is in PATH."
+  echo "[!] Exiting..."
+  exit -1
+fi
+'''
 
-
-[tasks.run_code_coverage]
-run_task = { name = [
-  "run_rustlib_coverage_tests",
-  "get_lcov_report",
-] }
-
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
