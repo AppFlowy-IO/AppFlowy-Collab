@@ -55,6 +55,12 @@ pub fn delete_block(document: &Document, block_id: &str) {
   });
 }
 
+pub fn move_block(document: &Document, block_id: &str, parent_id: &str, prev_id: &str) {
+  document.with_txn(|txn| {
+    document.move_block(txn, block_id, parent_id, prev_id);
+  });
+}
+
 struct Cleaner(PathBuf);
 
 impl Cleaner {

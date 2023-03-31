@@ -257,23 +257,57 @@ impl Document {
     }
   }
 
-  // pub fn move_block(&self, txn: &mut TransactionMut, block_id: &str, parent_id: &str, prev_id: &str) {
-  //     let block = self.blocks.get_block(block_id).unwrap();
-  //     let parent = self.blocks.get_block(parent_id).unwrap();
-  //     let old_parent = self.blocks.get_block(&block.parent).unwrap();
-  //     let old_parent_children_id = &old_parent.children;
-  //     let new_parent_children_id = &parent.children;
-  //     let prev_index = self.children_map.get_child_index(new_parent_children_id, prev_id);
-  //     let new_index = match prev_index {
-  //         Some(prev_index) => prev_index + 1,
-  //         None => 0,
-  //     };
+  pub fn move_block(
+    &self,
+    txn: &mut TransactionMut,
+    block_id: &str,
+    parent_id: &str,
+    prev_id: &str,
+  ) {
+    let block = self.blocks.get_block(txn, block_id);
+    if block.is_none() {
+      return;
+    }
+    let block = block.unwrap();
+    let parent = self.blocks.get_block(txn, parent_id);
+    if parent.is_none() {
+      return;
+    }
 
-  //     self.children_map.delete_child_with_txn(txn, old_parent_children_id, block_id);
-  //     self.children_map.insert_child_with_txn(txn, new_parent_children_id, block_id, new_index);
-  //     self.blocks.set_block_with_txn(txn, block_id, Block {
-  //         parent: parent_id.to_owned(),
-  //         ..block
-  //     });
-  // }
+    let parent = parent.unwrap();
+    let old_parent = self.blocks.get_block(txn, &block.parent);
+    if old_parent.is_none() {
+      return;
+    }
+
+    let old_parent = old_parent.unwrap();
+    let old_parent_children_id = old_parent.children;
+    let new_parent_children_id = parent.children;
+
+    let prev_index =
+      self
+        .children_map
+        .get_child_index_with_txn(txn, &new_parent_children_id, prev_id);
+
+    let new_index = match prev_index {
+      Some(prev_index) => prev_index + 1,
+      None => 0,
+    };
+
+    self
+      .children_map
+      .delete_child_with_txn(txn, &old_parent_children_id, block_id);
+    self
+      .children_map
+      .insert_child_with_txn(txn, &new_parent_children_id, block_id, new_index);
+
+    self.blocks.set_block_with_txn(
+      txn,
+      block_id,
+      Block {
+        parent: parent_id.to_string(),
+        ..block
+      },
+    );
+  }
 }

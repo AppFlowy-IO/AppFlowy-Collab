@@ -1,4 +1,4 @@
-use crate::util::{create_document, delete_block, inser_text_block};
+use crate::util::{create_document, delete_block, inser_text_block, move_block};
 
 #[test]
 fn create_block_test() {
@@ -112,4 +112,27 @@ fn delete_block_test() {
   assert!(parent_children
     .iter()
     .any(|e| e.to_string() != block_id.to_string()));
+}
+
+#[test]
+fn move_block_test() {
+  let doc_id = "1";
+  let test = create_document(doc_id);
+  let document_data = test.document.to_json().unwrap();
+  let root_id = &document_data["document"]["root_id"].as_str().unwrap();
+
+  let block_id = inser_text_block(&test.document, root_id, "");
+  let child_block_id = inser_text_block(&test.document, &block_id, "");
+
+  move_block(&test.document, &child_block_id, root_id, &block_id);
+
+  let document_data = test.document.to_json().unwrap();
+  let document = &document_data["document"];
+  let root_children_id = &document["blocks"][root_id]["children"].as_str().unwrap();
+  let meta = &document["meta"];
+  let children_map = &meta["children_map"];
+  let root_children = children_map[root_children_id].as_array().unwrap();
+  assert_eq!(root_children.len(), 3);
+  assert_eq!(root_children[0], block_id);
+  assert_eq!(root_children[1], child_block_id);
 }

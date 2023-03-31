@@ -147,7 +147,7 @@ impl ToString for BlockDataEnum {
 
 impl BlockDataEnum {
   pub fn from_string(s: &str) -> Self {
-    serde_json::from_str(s).unwrap()
+    serde_json::from_str(s).unwrap_or_else(|_| BlockDataEnum::Text("".to_string()))
   }
 
   pub fn get_text(&self) -> Option<String> {
