@@ -137,13 +137,13 @@ macro_rules! impl_order_update {
       self
     }
 
-    pub fn $setter3(self, row_id: &str) -> Self {
+    pub fn $setter3(self, id: &str) -> Self {
       if let Some(array) = self
         .map_ref
         .get_array_ref_with_txn(self.txn, $key)
         .map(|array_ref| $array_ty::new(array_ref))
       {
-        array.remove_with_txn(self.txn, row_id);
+        array.remove_with_txn(self.txn, id);
       }
       self
     }
