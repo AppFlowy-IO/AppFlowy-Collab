@@ -128,6 +128,15 @@ impl Database {
     })
   }
 
+  pub fn delete_field(&self, field_id: &str) {
+    self.root.with_transact_mut(|txn| {
+      self.views.update_all_views_with_txn(txn, |update| {
+        update.remove_field_order(field_id);
+      });
+      self.fields.delete_field_with_txn(txn, field_id);
+    })
+  }
+
   pub fn create_view(&self, params: CreateViewParams) {
     self.root.with_transact_mut(|txn| {
       let field_orders = self.fields.get_all_field_orders(txn);
@@ -151,10 +160,6 @@ impl Database {
       };
       self.views.insert_view_with_txn(txn, view);
     })
-  }
-
-  pub fn remove_view(&self, view_id: &str) {
-    self.views.remove_view(view_id);
   }
 
   pub fn to_json_value(&self) -> JsonValue {

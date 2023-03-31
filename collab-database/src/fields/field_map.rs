@@ -34,6 +34,11 @@ impl FieldMap {
       .done();
   }
 
+  pub fn get_all_fields(&self) -> Vec<Field> {
+    let txn = self.container.transact();
+    self.get_all_fields_with_txn(&txn)
+  }
+
   pub fn get_field_with_txn<T: ReadTxn>(&self, txn: &T, field_id: &str) -> Option<Field> {
     let map_ref = self.container.get_map_with_txn(txn, field_id)?;
     field_from_map_ref(&map_ref.into_inner(), txn)
@@ -65,5 +70,9 @@ impl FieldMap {
       let update = FieldUpdate::new(field_id, txn, &map_ref);
       f(update)
     })
+  }
+
+  pub fn delete_field_with_txn(&self, txn: &mut TransactionMut, field_id: &str) {
+    self.container.remove_with_txn(txn, field_id);
   }
 }

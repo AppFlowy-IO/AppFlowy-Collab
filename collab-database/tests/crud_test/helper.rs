@@ -2,7 +2,7 @@ use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::{Field, FieldType};
-use collab_database::rows::Row;
+use collab_database::rows::{CellsBuilder, Row};
 use collab_database::views::{CreateViewParams, Layout};
 use collab_persistence::CollabKV;
 use std::ops::{Deref, DerefMut};
@@ -53,7 +53,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
 pub fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
   let row_1 = Row {
     id: "r1".to_string(),
-    cells: Default::default(),
+    cells: CellsBuilder::new().insert_text_cell("f1", "123").build(),
     height: 0,
     visibility: true,
     created_at: 1,

@@ -214,7 +214,7 @@ fn delete_database_view_test() {
   let view_id = views[1].id.clone();
   assert_eq!(views.len(), 3);
 
-  database_test.remove_view(&view_id);
+  database_test.views.delete_view(&view_id);
   let views = database_test
     .views
     .get_all_views()

@@ -99,7 +99,7 @@ impl ViewMap {
     }
   }
 
-  pub fn remove_view(&self, view_id: &str) {
+  pub fn delete_view(&self, view_id: &str) {
     self.container.remove(view_id);
   }
 }

@@ -105,6 +105,26 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     Layout
   );
 
+  impl_order_update!(
+    set_row_orders,
+    add_row_order,
+    remove_row_order,
+    move_row,
+    ROW_ORDERS,
+    RowOrder,
+    RowOrderArray
+  );
+
+  impl_order_update!(
+    set_field_orders,
+    add_field_order,
+    remove_field_order,
+    move_field,
+    FIELD_ORDERS,
+    FieldOrder,
+    FieldOrderArray
+  );
+
   pub fn set_layout_settings(self, layout_settings: LayoutSettings) -> Self {
     let map_ref = self
       .map_ref
@@ -139,26 +159,6 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     sort_array.extends_with_txn(self.txn, sorts);
     self
   }
-
-  impl_order_update!(
-    set_row_orders,
-    add_row_order,
-    remove_row_order,
-    move_row,
-    ROW_ORDERS,
-    RowOrder,
-    RowOrderArray
-  );
-
-  impl_order_update!(
-    set_field_orders,
-    add_field_order,
-    remove_field_order,
-    move_field,
-    FIELD_ORDERS,
-    FieldOrder,
-    FieldOrderArray
-  );
 
   pub fn done(self) -> Option<View> {
     view_from_map_ref(self.map_ref.into_inner(), self.txn)
