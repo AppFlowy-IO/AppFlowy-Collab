@@ -48,6 +48,14 @@ impl Serialize for Document {
   }
 }
 
+pub struct InsertBlockArgs {
+  parent_id: String,
+  block_id: String,
+  data: BlockData,
+  children_id: String,
+  ty: String,
+}
+
 impl Document {
   pub fn create(collab: Collab) -> Self {
     let (root, blocks, meta, text_map, children_map) = collab.with_transact_mut(|txn| {
@@ -115,11 +123,13 @@ impl Document {
     // { document: { blocks: { head_id: { id: "head_id", ty: "page", data: { text: "head_text_id", level: null }, children: "head_children_id" } } } }
     self.insert_block(
       txn,
-      head_id.clone(),
-      "page".to_string(),
-      head_data,
-      head_children_id,
-      "".to_string(),
+      InsertBlockArgs {
+        parent_id: "".to_string(),
+        block_id: head_id.clone(),
+        data: head_data,
+        children_id: head_children_id,
+        ty: "page".to_string(),
+      },
       "".to_string(),
     );
 
@@ -133,25 +143,24 @@ impl Document {
     // { document: { blocks: { head_id: { id: "head_id", ty: "page", data: { text: "head_text_id", level: null }, children: "head_children_id" }, first_id: { id: "first_id", ty: "text", data: { text: "first_text_id", level: null }, children: "first_children_id" } } } }
     self.insert_block(
       txn,
-      first_id,
-      "text".to_string(),
-      first_data,
-      first_children_id,
-      head_id,
+      InsertBlockArgs {
+        parent_id: head_id,
+        block_id: first_id,
+        data: first_data,
+        children_id: first_children_id,
+        ty: "text".to_string(),
+      },
       "".to_string(),
     );
   }
 
-  pub fn insert_block(
-    &self,
-    txn: &mut TransactionMut,
-    block_id: String,
-    ty: String,
-    data: BlockData,
-    children_id: String,
-    parent_id: String,
-    prev_id: String,
-  ) {
+  pub fn insert_block(&self, txn: &mut TransactionMut, block: InsertBlockArgs, prev_id: String) {
+    let block_id = block.block_id;
+    let ty = block.ty;
+    let parent_id = block.parent_id;
+    let children_id = block.children_id;
+    let data = block.data;
+
     self
       .children_map
       .create_children_with_txn(txn, children_id.clone());
@@ -159,13 +168,12 @@ impl Document {
 
     let block = self
       .blocks
-      .create_block(txn, block_id, ty, parent_id, children_id.clone(), data);
+      .create_block(txn, block_id, ty, parent_id, children_id, data);
 
     match block {
       Ok(block) => self.insert_block_to_parent(txn, &block, prev_id),
       _ => {
         println!("block create fail!");
-        return;
       },
     };
   }

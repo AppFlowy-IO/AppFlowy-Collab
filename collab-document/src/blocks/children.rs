@@ -14,7 +14,7 @@ impl Serialize for ChildrenMap {
     let txn = self.root.transact();
     let mut map = serializer.serialize_map(Some(self.root.len(&txn) as usize))?;
     for (key, _) in self.root.iter(&txn) {
-      let children = self.root.get_array_ref_with_txn(&txn, &key).unwrap();
+      let children = self.root.get_array_ref_with_txn(&txn, key).unwrap();
       let value = serde_json::json!(children
         .iter(&txn)
         .map(|child| child.to_string(&txn))
@@ -65,10 +65,7 @@ impl ChildrenMap {
       .iter(&txn)
       .position(|child| child.to_string(&txn) == child_id);
 
-    match index {
-      Some(index) => Some(index as u32),
-      None => None,
-    }
+    index.map(|index| index as u32)
   }
 
   pub fn insert_child_with_txn(
@@ -85,9 +82,8 @@ impl ChildrenMap {
   pub fn delete_child_with_txn(&self, txn: &mut TransactionMut, children_id: &str, child_id: &str) {
     let children_ref = self.get_children_with_txn(txn, children_id);
     let index = self.get_child_index(children_id, child_id);
-    match index {
-      Some(index) => children_ref.remove_with_txn(txn, index),
-      None => (),
+    if let Some(index) = index {
+      children_ref.remove_with_txn(txn, index);
     }
   }
 }

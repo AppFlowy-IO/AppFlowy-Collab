@@ -29,7 +29,7 @@ impl Serialize for BlockMap {
     let txn = self.root.transact();
     let mut map = serializer.serialize_map(Some(self.root.len(&txn) as usize))?;
     for (k, _) in self.root.iter(&txn) {
-      let block = self.get_block(&txn, &k).unwrap();
+      let block = self.get_block(&txn, k).unwrap();
       let value = serde_json::json!({
           "id": block.id,
           "ty": block.ty,
@@ -104,7 +104,7 @@ impl BlockMap {
   }
 
   pub fn set_block_with_txn(&self, txn: &mut TransactionMut, block_id: &str, block: Block) {
-    self.root.insert_json_with_txn(txn, &block_id, block);
+    self.root.insert_json_with_txn(txn, block_id, block);
   }
 
   pub fn delete_block_with_txn(&self, txn: &mut TransactionMut, block_id: &str) {

@@ -48,7 +48,7 @@ impl Serialize for TextMap {
     let txn = self.root.transact();
     let mut map = serializer.serialize_map(Some(self.root.len(&txn) as usize))?;
     for (key, _) in self.root.iter(&txn) {
-      let text = self.get_delta_with_txn(&txn, &key);
+      let text = self.get_delta_with_txn(&txn, key);
       let value = serde_json::json!(text
         .iter()
         .map(|delta| match delta {
@@ -74,14 +74,12 @@ impl TextMap {
   }
 
   pub fn create_text(&self, txn: &mut TransactionMut, text_id: &str) -> TextRefWrapper {
-    let text_map = self.root.insert_text_with_txn(txn, text_id);
-    text_map
+    self.root.insert_text_with_txn(txn, text_id)
   }
 
   pub fn get_text(&self, text_id: &str) -> Option<TextRefWrapper> {
     let txn = self.root.transact();
-    let text_map = self.root.get_text_ref_with_txn(&txn, text_id);
-    text_map
+    self.root.get_text_ref_with_txn(&txn, text_id)
   }
 
   pub fn apply_text_delta_with_txn(
