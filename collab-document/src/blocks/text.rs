@@ -29,7 +29,7 @@ impl Serialize for InsertedDelta {
       Some(attrs) => {
         let mut attrs_obj = serde_json::json!({});
         attrs.iter().for_each(|(k, v)| {
-          attrs_obj[k.to_string()] = v.to_string().parse().unwrap();
+          attrs_obj[k.to_string()] = v.to_string().parse().unwrap_or_default();
         });
         attrs_obj
       },
@@ -70,7 +70,7 @@ impl TextMap {
   }
 
   pub fn to_json(&self) -> serde_json::Value {
-    serde_json::to_value(self).unwrap()
+    serde_json::to_value(self).unwrap_or_default()
   }
 
   pub fn create_text(&self, txn: &mut TransactionMut, text_id: &str) -> TextRefWrapper {

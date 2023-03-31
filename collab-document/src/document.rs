@@ -166,7 +166,7 @@ impl Document {
 
     self
       .children_map
-      .create_children_with_txn(txn, children_id.clone());
+      .create_children_with_txn(txn, &children_id);
 
     if let Some(text_id) = text_id {
       self.text_map.create_text(txn, &text_id);

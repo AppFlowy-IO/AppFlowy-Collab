@@ -14,6 +14,7 @@ impl Serialize for ChildrenMap {
     let txn = self.root.transact();
     let mut map = serializer.serialize_map(Some(self.root.len(&txn) as usize))?;
     for (key, _) in self.root.iter(&txn) {
+      // It is save to unwrap here because we know that the key exists
       let children = self.root.get_array_ref_with_txn(&txn, key).unwrap();
       let value = serde_json::json!(children
         .iter(&txn)
@@ -31,7 +32,7 @@ impl ChildrenMap {
   }
 
   pub fn to_json(&self) -> serde_json::Value {
-    serde_json::to_value(self).unwrap()
+    serde_json::to_value(self).unwrap_or_default()
   }
 
   pub fn get_children_with_txn(
@@ -42,16 +43,16 @@ impl ChildrenMap {
     self
       .root
       .get_array_ref_with_txn(txn, children_id)
-      .unwrap_or_else(|| self.create_children_with_txn(txn, children_id.to_owned()))
+      .unwrap_or_else(|| self.create_children_with_txn(txn, children_id))
   }
 
   pub fn create_children_with_txn(
     &self,
     txn: &mut TransactionMut,
-    children_id: String,
+    children_id: &str,
   ) -> ArrayRefWrapper {
     let children: Vec<String> = vec![];
-    self.root.insert_array_with_txn(txn, &children_id, children)
+    self.root.insert_array_with_txn(txn, children_id, children)
   }
 
   pub fn delete_children_with_txn(&self, txn: &mut TransactionMut, children_id: &str) {

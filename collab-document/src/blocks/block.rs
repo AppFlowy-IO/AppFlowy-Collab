@@ -3,6 +3,12 @@ use collab::preclude::{Map, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Serialize, Serializer};
 
+const ID: &str = "id";
+const TYPE: &str = "ty";
+const CHILDREN: &str = "children";
+const PARENT: &str = "parent";
+const DATA: &str = "data";
+
 #[derive(Deserialize, Debug)]
 pub struct Block {
   pub id: String,
@@ -54,8 +60,9 @@ impl Serialize for BlockMap {
     let txn = self.root.transact();
     let mut map = serializer.serialize_map(Some(self.root.len(&txn) as usize))?;
     for (k, _) in self.root.iter(&txn) {
+      // It's safe to unwrap, because we know the key exists.
       let block = self.get_block(&txn, k).unwrap();
-      let value = serde_json::to_value(block).unwrap();
+      let value = serde_json::to_value(block).unwrap_or_default();
       map.serialize_entry(k, &value)?;
     }
     map.end()
@@ -68,26 +75,22 @@ impl BlockMap {
   }
 
   pub fn to_json(&self) -> serde_json::Value {
-    serde_json::to_value(self).unwrap()
+    serde_json::to_value(self).unwrap_or_default()
   }
 
   pub fn get_block<T: ReadTxn>(&self, txn: &T, block_id: &str) -> Option<Block> {
     let block_map = self.root.get_map_with_txn(txn, block_id);
-    match block_map {
-      Some(block_map) => {
-        let block = self.get_block_by_map(txn, block_map);
-        Some(block)
-      },
-      None => None,
-    }
+    block_map.map(|block_map| self.get_block_by_map(txn, block_map))
   }
 
   pub fn get_block_by_map<T: ReadTxn>(&self, txn: &T, block_map: MapRefWrapper) -> Block {
-    let id = block_map.get(txn, "id").unwrap().to_string(txn);
-    let ty = block_map.get(txn, "ty").unwrap().to_string(txn);
-    let parent = block_map.get(txn, "parent").unwrap().to_string(txn);
-    let children = block_map.get(txn, "children").unwrap().to_string(txn);
-    let data = block_map.get(txn, "data").unwrap().to_string(txn);
+    let id = block_map.get_str_with_txn(txn, ID).unwrap_or_default();
+    let ty = block_map.get_str_with_txn(txn, TYPE).unwrap_or_default();
+    let parent = block_map.get_str_with_txn(txn, PARENT).unwrap_or_default();
+    let children = block_map
+      .get_str_with_txn(txn, CHILDREN)
+      .unwrap_or_default();
+    let data = block_map.get_str_with_txn(txn, DATA).unwrap_or_default();
     Block {
       id,
       ty,
@@ -114,11 +117,11 @@ impl BlockMap {
       data: data.to_string(),
     };
     let block_map = self.root.insert_map_with_txn(txn, &block_id);
-    block_map.insert_with_txn(txn, "id", block.id.clone());
-    block_map.insert_with_txn(txn, "ty", block.ty.clone());
-    block_map.insert_with_txn(txn, "parent", block.parent.clone());
-    block_map.insert_with_txn(txn, "children", block.children.clone());
-    block_map.insert_with_txn(txn, "data", block.data.clone());
+    block_map.insert_with_txn(txn, ID, block.id.clone());
+    block_map.insert_with_txn(txn, TYPE, block.ty.clone());
+    block_map.insert_with_txn(txn, PARENT, block.parent.clone());
+    block_map.insert_with_txn(txn, CHILDREN, block.children.clone());
+    block_map.insert_with_txn(txn, DATA, block.data.clone());
     Ok(block)
   }
 
