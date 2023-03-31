@@ -1,38 +1,80 @@
-use collab::core::text_wrapper::TextSubscription;
-use collab::preclude::*;
-use parking_lot::RwLock;
-use std::collections::HashMap;
+use collab::{core::text_wrapper::TextDelta, preclude::*};
+use serde::ser::SerializeMap;
+use serde::{Serialize, Serializer};
+use serde_json::Value::Null;
 
 pub struct TextMap {
   pub root: MapRefWrapper,
-  pub subscriptions: RwLock<HashMap<String, TextSubscription>>,
 }
+
+struct InsertedDelta {
+  insert: String,
+  attributes: Option<Box<Attrs>>,
+}
+
+impl InsertedDelta {
+  fn new(insert: String, attributes: Option<Box<Attrs>>) -> Self {
+    Self { insert, attributes }
+  }
+}
+
+impl Serialize for InsertedDelta {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let mut map = serializer.serialize_map(None)?;
+    map.serialize_entry("insert", &self.insert)?;
+    let attrs = match &self.attributes {
+      Some(attrs) => {
+        let mut attrs_obj = serde_json::json!({});
+        attrs.iter().for_each(|(k, v)| {
+          attrs_obj[k.to_string()] = v.to_string().parse().unwrap_or_default();
+        });
+        attrs_obj
+      },
+      None => Null,
+    };
+    map.serialize_entry("attributes", &attrs)?;
+    map.end()
+  }
+}
+
+impl Serialize for TextMap {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let txn = self.root.transact();
+    let mut map = serializer.serialize_map(Some(self.root.len(&txn) as usize))?;
+    for (key, _) in self.root.iter(&txn) {
+      let text = self.get_delta_with_txn(&txn, key);
+      let value = serde_json::json!(text
+        .iter()
+        .map(|delta| match delta {
+          Delta::Inserted(content, attrs) => {
+            serde_json::json!(InsertedDelta::new(content.to_string(), attrs.clone()))
+          },
+          _ => Null,
+        })
+        .collect::<Vec<serde_json::Value>>());
+      map.serialize_entry(key, &value)?;
+    }
+    map.end()
+  }
+}
+
 impl TextMap {
   pub fn new(root: MapRefWrapper) -> Self {
-    Self {
-      root,
-      subscriptions: Default::default(),
-    }
+    Self { root }
   }
 
-  pub fn create_text(&self, text_id: &str) -> TextRefWrapper {
-    self.root.with_transact_mut(|txn| {
-      let mut text_ref = self.root.insert_text_with_txn(txn, text_id);
-      let subscription = text_ref.observe(|txn, event| {
-        for delta in event.delta(txn) {
-          match delta {
-            YrsDelta::Inserted(_, _) => {},
-            YrsDelta::Deleted(_) => {},
-            YrsDelta::Retain(_, _) => {},
-          }
-        }
-      });
-      self
-        .subscriptions
-        .write()
-        .insert(text_id.to_string(), subscription);
-      text_ref
-    })
+  pub fn to_json_value(&self) -> serde_json::Value {
+    serde_json::to_value(self).unwrap_or_default()
+  }
+
+  pub fn create_text(&self, txn: &mut TransactionMut, text_id: &str) -> TextRefWrapper {
+    self.root.insert_text_with_txn(txn, text_id)
   }
 
   pub fn get_text(&self, text_id: &str) -> Option<TextRefWrapper> {
@@ -40,13 +82,16 @@ impl TextMap {
     self.root.get_text_ref_with_txn(&txn, text_id)
   }
 
-  pub fn edit_text(&self, text_id: &str, actions: Vec<TextAction>) {
+  pub fn apply_text_delta_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    text_id: &str,
+    delta: Vec<TextDelta>,
+  ) {
     let text_ref = self
       .get_text(text_id)
-      .unwrap_or_else(|| self.create_text(text_id));
-    self
-      .root
-      .with_transact_mut(|txn| self.edit_text_with_txn(txn, &text_ref, actions))
+      .unwrap_or_else(|| self.create_text(txn, text_id));
+    text_ref.apply_delta_with_txn(txn, delta);
   }
 
   pub fn get_str(&self, text_id: &str) -> Option<String> {
@@ -78,51 +123,7 @@ impl TextMap {
       .unwrap_or_default()
   }
 
-  pub fn edit_text_with_txn(
-    &self,
-    txn: &mut TransactionMut,
-    text_ref: &TextRefWrapper,
-    actions: Vec<TextAction>,
-  ) {
-    self.apply_text_actions(txn, text_ref, actions);
+  pub fn delete_with_txn(&self, txn: &mut TransactionMut, text_id: &str) {
+    self.root.delete_with_txn(txn, text_id);
   }
-
-  fn apply_text_actions(
-    &self,
-    txn: &mut TransactionMut,
-    text_ref: &TextRefWrapper,
-    actions: Vec<TextAction>,
-  ) {
-    for action in actions {
-      match action {
-        TextAction::Insert { index, s, attrs } => match attrs {
-          None => text_ref.insert(txn, index, &s),
-          Some(attrs) => text_ref.insert_with_attributes(txn, index, &s, attrs),
-        },
-        TextAction::Remove { index, len } => text_ref.remove_range(txn, index, len),
-        TextAction::Format { index, len, attrs } => text_ref.format(txn, index, len, attrs),
-        TextAction::Push { s } => text_ref.push(txn, &s),
-      }
-    }
-  }
-}
-
-pub enum TextAction {
-  Insert {
-    index: u32,
-    s: String,
-    attrs: Option<Attrs>,
-  },
-  Remove {
-    index: u32,
-    len: u32,
-  },
-  Format {
-    index: u32,
-    len: u32,
-    attrs: Attrs,
-  },
-  Push {
-    s: String,
-  },
 }

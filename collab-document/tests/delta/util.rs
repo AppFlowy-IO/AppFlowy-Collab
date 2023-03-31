@@ -1,8 +1,10 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
 
-use collab_document::document::Document;
+use collab_document::blocks::BlockDataEnum;
+use collab_document::document::{Document, InsertBlockArgs};
 use collab_persistence::CollabKV;
+use nanoid::nanoid;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -28,6 +30,36 @@ pub fn create_document(doc_id: &str) -> DocumentTest {
 
   let document = Document::create(collab);
   DocumentTest { document, cleaner }
+}
+
+pub fn inser_text_block(document: &Document, parent_id: &str, prev_id: &str) -> String {
+  let block_id = nanoid!();
+  document.with_txn(|txn| {
+    document.insert_block(
+      txn,
+      InsertBlockArgs {
+        parent_id: parent_id.to_string(),
+        block_id: block_id.clone(),
+        data: BlockDataEnum::Text(nanoid!()),
+        children_id: nanoid!(),
+        ty: "text".to_string(),
+      },
+      prev_id.to_string(),
+    );
+  });
+  block_id
+}
+
+pub fn delete_block(document: &Document, block_id: &str) {
+  document.with_txn(|txn| {
+    document.delete_block(txn, block_id);
+  });
+}
+
+pub fn move_block(document: &Document, block_id: &str, parent_id: &str, prev_id: &str) {
+  document.with_txn(|txn| {
+    document.move_block(txn, block_id, parent_id, prev_id);
+  });
 }
 
 struct Cleaner(PathBuf);

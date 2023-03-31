@@ -47,6 +47,10 @@ impl ArrayRefWrapper {
     self.array_ref.get(txn, index)
   }
 
+  pub fn insert_with_txn<V: Prelim>(&self, txn: &mut TransactionMut, index: u32, value: V) {
+    self.array_ref.insert(txn, index, value);
+  }
+
   pub fn push_with_txn<V: Prelim>(&self, txn: &mut TransactionMut, value: V) {
     self.array_ref.push_back(txn, value);
   }
