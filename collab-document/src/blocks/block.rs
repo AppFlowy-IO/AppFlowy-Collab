@@ -1,10 +1,10 @@
 use anyhow::Result;
 use collab::preclude::{Map, MapRefWrapper, ReadTxn, TransactionMut};
-use serde::ser::SerializeMap;
+use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Serialize, Serializer};
 use std::str::FromStr;
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Block {
   pub id: String,
 
@@ -17,6 +17,21 @@ pub struct Block {
   pub data: String,
 }
 
+impl Serialize for Block {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let mut s = serializer.serialize_struct("Block", 5)?;
+    s.serialize_field("id", &self.id)?;
+    s.serialize_field("ty", &self.ty)?;
+    s.serialize_field("parent", &self.parent)?;
+    s.serialize_field("children", &self.children)?;
+    s.serialize_field("data", &BlockDataParser::parser(&self.data))?;
+
+    s.end()
+  }
+}
 pub struct BlockMap {
   root: MapRefWrapper,
 }
@@ -30,13 +45,7 @@ impl Serialize for BlockMap {
     let mut map = serializer.serialize_map(Some(self.root.len(&txn) as usize))?;
     for (k, _) in self.root.iter(&txn) {
       let block = self.get_block(&txn, k).unwrap();
-      let value = serde_json::json!({
-          "id": block.id,
-          "ty": block.ty,
-          "parent": block.parent,
-          "children": block.children,
-          "data": BlockDataParser::parser(&block.data),
-      });
+      let value = serde_json::to_value(block).unwrap();
       map.serialize_entry(k, &value)?;
     }
     map.end()
