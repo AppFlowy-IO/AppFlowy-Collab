@@ -51,9 +51,27 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
 }
 
 pub fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
-  let row_1 = Row::new("r1".to_string());
-  let row_2 = Row::new("r2".to_string());
-  let row_3 = Row::new("r3".to_string());
+  let row_1 = Row {
+    id: "r1".to_string(),
+    cells: Default::default(),
+    height: 0,
+    visibility: true,
+    created_at: 1,
+  };
+  let row_2 = Row {
+    id: "r2".to_string(),
+    cells: Default::default(),
+    height: 0,
+    visibility: true,
+    created_at: 2,
+  };
+  let row_3 = Row {
+    id: "r3".to_string(),
+    cells: Default::default(),
+    height: 0,
+    visibility: true,
+    created_at: 3,
+  };
 
   let database_test = create_database(uid, database_id);
   database_test.insert_row(row_1);
