@@ -4,7 +4,7 @@ use crate::util::{create_document, delete_block, inser_text_block, move_block};
 fn create_block_test() {
   let doc_id = "1";
   let test = create_document(doc_id);
-  let document_data = test.document.to_json().unwrap();
+  let document_data = test.document.to_json_value().unwrap();
   let document = &document_data["document"];
 
   let root_id = document["root_id"].as_str().unwrap();
@@ -48,14 +48,14 @@ fn create_block_test() {
 fn insert_block_test() {
   let doc_id = "1";
   let test = create_document(doc_id);
-  let document_data = test.document.to_json().unwrap();
+  let document_data = test.document.to_json_value().unwrap();
   let root_id = &document_data["document"]["root_id"].as_str().unwrap();
 
   let block_id = inser_text_block(&test.document, root_id, "");
   // insert after block
   let after_block_id = inser_text_block(&test.document, root_id, &block_id);
 
-  let document_data = test.document.to_json().unwrap();
+  let document_data = test.document.to_json_value().unwrap();
   let document = &document_data["document"];
 
   let blocks = &document["blocks"];
@@ -83,12 +83,12 @@ fn insert_block_test() {
 fn delete_block_test() {
   let doc_id = "1";
   let test = create_document(doc_id);
-  let document_data = test.document.to_json().unwrap();
+  let document_data = test.document.to_json_value().unwrap();
   let root_id = &document_data["document"]["root_id"].as_str().unwrap();
   let block_id = inser_text_block(&test.document, root_id, "");
   let parent_id = test.document.get_block(&block_id).unwrap().parent;
   let parent_children_id = test.document.get_block(&parent_id).unwrap().children;
-  let document_data = test.document.to_json().unwrap();
+  let document_data = test.document.to_json_value().unwrap();
   let text_id = &document_data["document"]["blocks"][&block_id]["data"]["text"]
     .as_str()
     .unwrap();
@@ -98,7 +98,7 @@ fn delete_block_test() {
 
   assert!(test.document.get_block(&block_id).is_none());
 
-  let document_data = test.document.to_json().unwrap();
+  let document_data = test.document.to_json_value().unwrap();
   let document = &document_data["document"];
   let blocks = &document["blocks"];
   assert!(blocks[&block_id].is_null());
@@ -118,7 +118,7 @@ fn delete_block_test() {
 fn move_block_test() {
   let doc_id = "1";
   let test = create_document(doc_id);
-  let document_data = test.document.to_json().unwrap();
+  let document_data = test.document.to_json_value().unwrap();
   let root_id = &document_data["document"]["root_id"].as_str().unwrap();
 
   let block_id = inser_text_block(&test.document, root_id, "");
@@ -126,7 +126,7 @@ fn move_block_test() {
 
   move_block(&test.document, &child_block_id, root_id, &block_id);
 
-  let document_data = test.document.to_json().unwrap();
+  let document_data = test.document.to_json_value().unwrap();
   let document = &document_data["document"];
   let root_children_id = &document["blocks"][root_id]["children"].as_str().unwrap();
   let meta = &document["meta"];

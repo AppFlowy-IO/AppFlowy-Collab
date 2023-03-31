@@ -36,12 +36,12 @@ impl Serialize for Document {
         .unwrap_or_else(|| Value::from(""))
         .to_string(&txn),
     )?;
-    s.serialize_field("blocks", &self.blocks.to_json())?;
+    s.serialize_field("blocks", &self.blocks.to_json_value())?;
     s.serialize_field(
       "meta",
       &serde_json::json!({
-          "text_map": self.text_map.to_json(),
-          "children_map": self.children_map.to_json(),
+          "text_map": self.text_map.to_json_value(),
+          "children_map": self.children_map.to_json_value(),
       }),
     )?;
     s.end()
@@ -104,7 +104,7 @@ impl Document {
     document
   }
 
-  pub fn to_json(&self) -> Result<serde_json::value::Value, DocumentError> {
+  pub fn to_json_value(&self) -> Result<serde_json::value::Value, DocumentError> {
     let document_data = serde_json::json!({
         "document": serde_json::to_value(self).unwrap()
     });

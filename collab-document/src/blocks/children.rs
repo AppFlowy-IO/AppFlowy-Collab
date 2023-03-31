@@ -31,7 +31,7 @@ impl ChildrenMap {
     Self { root }
   }
 
-  pub fn to_json(&self) -> serde_json::Value {
+  pub fn to_json_value(&self) -> serde_json::Value {
     serde_json::to_value(self).unwrap_or_default()
   }
 
