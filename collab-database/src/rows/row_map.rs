@@ -26,6 +26,7 @@ impl RowMap {
         update
           .set_height(row.height)
           .set_visibility(row.visibility)
+          .set_created_at(row.created_at)
           .set_cells(row.cells);
       })
       .done();
@@ -45,7 +46,7 @@ impl RowMap {
     self
       .container
       .iter(txn)
-      .flat_map(|(k, v)| row_from_value(v, txn))
+      .flat_map(|(_k, v)| row_from_value(v, txn))
       .collect::<Vec<_>>()
   }
 
@@ -53,9 +54,13 @@ impl RowMap {
     self
       .container
       .iter(txn)
-      .flat_map(|(k, v)| row_id_from_value(v, txn))
-      .map(|row_id| RowOrder::new(row_id))
+      .flat_map(|(_k, v)| row_id_from_value(v, txn))
+      .map(RowOrder::new)
       .collect::<Vec<_>>()
+  }
+
+  pub fn delete_row_with_txn(&self, txn: &mut TransactionMut, row_id: &str) {
+    self.container.remove_with_txn(txn, row_id)
   }
 
   pub fn update_row<F>(&self, row_id: &str, f: F) -> Option<Row>

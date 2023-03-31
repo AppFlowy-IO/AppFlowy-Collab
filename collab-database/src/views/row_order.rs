@@ -1,5 +1,6 @@
 use crate::rows::Row;
-use collab::core::array_wrapper::ArrayRefExtension;
+use crate::views::{OrderArray, OrderIdentifiable};
+
 use collab::preclude::{
   lib0Any, Array, ArrayRef, ArrayRefWrapper, ReadTxn, TransactionMut, YrsValue,
 };
@@ -10,37 +11,25 @@ pub struct RowOrderArray {
   array_ref: ArrayRef,
 }
 
+impl OrderArray for RowOrderArray {
+  type Object = RowOrder;
+
+  fn array_ref(&self) -> &ArrayRef {
+    &self.array_ref
+  }
+
+  fn object_from_value_with_txn<T: ReadTxn>(
+    &self,
+    value: YrsValue,
+    txn: &T,
+  ) -> Option<Self::Object> {
+    row_order_from_value(value, txn)
+  }
+}
+
 impl RowOrderArray {
   pub fn new(array_ref: ArrayRef) -> Self {
     Self { array_ref }
-  }
-
-  pub fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<RowOrder>) {
-    let array_ref = ArrayRefExtension(&self.array_ref);
-    for row_order in others {
-      array_ref.push_back(txn, row_order);
-    }
-  }
-
-  pub fn get_row_orders_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<RowOrder> {
-    self
-      .array_ref
-      .iter(txn)
-      .flat_map(|v| row_order_from_value(v, txn))
-      .collect::<Vec<RowOrder>>()
-  }
-
-  pub fn remove_with_txn(&self, txn: &mut TransactionMut, row_id: &str) -> Option<()> {
-    let pos =
-      self
-        .array_ref
-        .iter(txn)
-        .position(|value| match row_order_from_value(value, txn) {
-          None => false,
-          Some(row_order) => row_order.id == row_id,
-        })?;
-    self.array_ref.remove(txn, pos as u32);
-    None
   }
 }
 
@@ -61,6 +50,12 @@ impl DerefMut for RowOrderArray {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RowOrder {
   pub id: String,
+}
+
+impl OrderIdentifiable for RowOrder {
+  fn identify_id(&self) -> &str {
+    &self.id
+  }
 }
 
 impl RowOrder {
@@ -90,7 +85,7 @@ impl From<&Row> for RowOrder {
   }
 }
 
-pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<RowOrder> {
+pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, _txn: &T) -> Option<RowOrder> {
   if let YrsValue::Any(value) = value {
     Some(RowOrder::from(value))
   } else {

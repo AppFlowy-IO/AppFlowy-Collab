@@ -3,10 +3,11 @@ use crate::views::{
   FieldOrder, FieldOrderArray, Filter, FilterArray, Group, GroupArray, RowOrder, RowOrderArray,
   Sort, SortArray,
 };
-use crate::{impl_any_update, impl_order_update, impl_str_update};
+use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 use collab::preclude::map::MapPrelim;
 use collab::preclude::{
-  lib0Any, Array, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+  lib0Any, Array, ArrayRef, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  YrsValue,
 };
 use serde::{Deserialize, Serialize};
 
@@ -22,12 +23,13 @@ pub struct View {
   pub sorts: Vec<Sort>,
   pub row_orders: Vec<RowOrder>,
   pub field_orders: Vec<FieldOrder>,
+  pub created_at: i64,
+  pub modified_at: i64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateViewParams {
   pub id: String,
-  pub database_id: String,
   pub name: String,
   pub layout: Layout,
   pub layout_settings: LayoutSettings,
@@ -46,6 +48,8 @@ const VIEW_GROUPS: &str = "groups";
 const VIEW_SORTS: &str = "sorts";
 const ROW_ORDERS: &str = "row_orders";
 const FIELD_ORDERS: &str = "field_orders";
+const VIEW_CREATE_AT: &str = "created_at";
+const VIEW_MODIFY_AT: &str = "modified_at";
 
 pub struct ViewBuilder<'a, 'b> {
   id: &'a str,
@@ -87,6 +91,9 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     set_database_id_if_not_none,
     VIEW_DATABASE_ID
   );
+
+  impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
+  impl_i64_update!(set_modified_at, set_modified_at_if_not_none, VIEW_MODIFY_AT);
 
   impl_str_update!(set_name, set_name_if_not_none, VIEW_NAME);
 
@@ -136,6 +143,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     set_row_orders,
     add_row_order,
     remove_row_order,
+    move_row,
     ROW_ORDERS,
     RowOrder,
     RowOrderArray
@@ -145,6 +153,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     set_field_orders,
     add_field_order,
     remove_field_order,
+    move_field,
     FIELD_ORDERS,
     FieldOrder,
     FieldOrderArray
@@ -197,12 +206,20 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> 
 
   let row_orders = map_ref
     .get_array_ref_with_txn(txn, ROW_ORDERS)
-    .map(|array_ref| RowOrderArray::new(array_ref).get_row_orders_with_txn(txn))
+    .map(|array_ref| RowOrderArray::new(array_ref).get_orders_with_txn(txn))
     .unwrap_or_default();
 
   let field_orders = map_ref
     .get_array_ref_with_txn(txn, FIELD_ORDERS)
-    .map(|array_ref| FieldOrderArray::new(array_ref).get_field_orders_with_txn(txn))
+    .map(|array_ref| FieldOrderArray::new(array_ref).get_orders_with_txn(txn))
+    .unwrap_or_default();
+
+  let created_at = map_ref
+    .get_i64_with_txn(txn, VIEW_CREATE_AT)
+    .unwrap_or_default();
+
+  let modified_at = map_ref
+    .get_i64_with_txn(txn, VIEW_MODIFY_AT)
     .unwrap_or_default();
 
   Some(View {
@@ -216,5 +233,57 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> 
     sorts,
     row_orders,
     field_orders,
+    created_at,
+    modified_at,
   })
+}
+
+pub trait OrderIdentifiable {
+  fn identify_id(&self) -> &str;
+}
+
+pub trait OrderArray {
+  type Object: OrderIdentifiable + Into<lib0Any>;
+
+  fn array_ref(&self) -> &ArrayRef;
+
+  fn object_from_value_with_txn<T: ReadTxn>(
+    &self,
+    value: YrsValue,
+    txn: &T,
+  ) -> Option<Self::Object>;
+
+  fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<Self::Object>) {
+    let array_ref = self.array_ref();
+    for order in others {
+      array_ref.push_back(txn, order);
+    }
+  }
+
+  fn get_orders_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Self::Object> {
+    self
+      .array_ref()
+      .iter(txn)
+      .flat_map(|v| self.object_from_value_with_txn(v, txn))
+      .collect::<Vec<Self::Object>>()
+  }
+
+  fn remove_with_txn(&self, txn: &mut TransactionMut, id: &str) -> Option<()> {
+    let pos = self.array_ref().iter(txn).position(|value| {
+      match self.object_from_value_with_txn(value, txn) {
+        None => false,
+        Some(order) => order.identify_id() == id,
+      }
+    })?;
+    self.array_ref().remove(txn, pos as u32);
+    None
+  }
+
+  fn move_to(&self, txn: &mut TransactionMut, from: u32, to: u32) {
+    let array_ref = self.array_ref();
+    if let Some(YrsValue::Any(value)) = array_ref.get(txn, from) {
+      array_ref.remove(txn, from);
+      array_ref.insert(txn, to, value);
+    }
+  }
 }

@@ -1,8 +1,6 @@
 use crate::rows::Cells;
 use crate::{impl_any_update, impl_bool_update, impl_i32_update, impl_i64_update, impl_str_update};
-use collab::preclude::{
-  lib0Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
-};
+use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -11,6 +9,7 @@ pub struct Row {
   pub cells: Cells,
   pub height: i32,
   pub visibility: bool,
+  pub created_at: i64,
 }
 
 impl Row {
@@ -20,6 +19,7 @@ impl Row {
       cells: Default::default(),
       height: 60,
       visibility: true,
+      created_at: chrono::Utc::now().timestamp(),
     }
   }
 }
@@ -60,10 +60,11 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
 
   impl_bool_update!(set_visibility, set_visibility_if_not_none, ROW_VISIBILITY);
   impl_i32_update!(set_height, set_height_at_if_not_none, ROW_HEIGHT);
+  impl_i64_update!(set_created_at, set_created_at_if_not_none, CREATED_AT);
 
   pub fn set_cells(self, cells: Cells) -> Self {
     let cell_map = self.map_ref.get_or_insert_map_with_txn(self.txn, ROW_CELLS);
-    cells.fill_in_map_ref(self.txn, &cell_map);
+    cells.fill_map_ref(self.txn, &cell_map);
     self
   }
 
@@ -75,6 +76,7 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
 const ROW_ID: &str = "id";
 const ROW_VISIBILITY: &str = "visibility";
 const ROW_HEIGHT: &str = "height";
+const CREATED_AT: &str = "created_at";
 const ROW_CELLS: &str = "cells";
 
 pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<String> {
@@ -97,6 +99,10 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
 
   let height = map_ref.get_i64_with_txn(txn, ROW_HEIGHT).unwrap_or(60);
 
+  let created_at = map_ref
+    .get_i64_with_txn(txn, CREATED_AT)
+    .unwrap_or(chrono::Utc::now().timestamp());
+
   let cells = map_ref
     .get_map_with_txn(txn, ROW_CELLS)
     .map(|map_ref| Cells::from_map_ref(txn, map_ref))
@@ -107,5 +113,6 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
     cells,
     height: height as i32,
     visibility,
+    created_at,
   })
 }

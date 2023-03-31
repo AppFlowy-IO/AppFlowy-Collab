@@ -43,7 +43,7 @@ impl FieldMap {
     self
       .container
       .iter(txn)
-      .flat_map(|(k, v)| field_from_value(v, txn))
+      .flat_map(|(_k, v)| field_from_value(v, txn))
       .collect::<Vec<_>>()
   }
 
@@ -51,7 +51,7 @@ impl FieldMap {
     self
       .container
       .iter(txn)
-      .flat_map(|(k, v)| field_id_from_value(v, txn))
+      .flat_map(|(_k, v)| field_id_from_value(v, txn))
       .map(FieldOrder::new)
       .collect::<Vec<_>>()
   }

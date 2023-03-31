@@ -1,7 +1,5 @@
 use anyhow::bail;
-use collab::preclude::{
-  lib0Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
-};
+use collab::preclude::{lib0Any, Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 use std::collections::HashMap;
@@ -115,6 +113,9 @@ impl DerefMut for LayoutSettings {
 pub struct LayoutSetting(HashMap<String, lib0Any>);
 
 impl LayoutSetting {
+  pub fn new() -> Self {
+    Self::default()
+  }
   pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Self {
     let mut this = Self(Default::default());
     map_ref.iter(txn).for_each(|(k, v)| {
@@ -130,6 +131,10 @@ impl LayoutSetting {
     self.0.into_iter().for_each(|(k, v)| {
       map_ref_ext.insert_with_txn(txn, &k, v);
     });
+  }
+
+  pub fn insert_any<T: Into<lib0Any>>(&mut self, k: &str, v: T) {
+    self.0.insert(k.to_string(), v.into());
   }
 }
 impl Deref for LayoutSetting {

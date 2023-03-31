@@ -41,6 +41,14 @@ impl MapRefWrapper {
     self.map_ref
   }
 
+  pub fn remove(&self, key: &str) {
+    self.with_transact_mut(|txn| self.map_ref.remove(txn, key));
+  }
+
+  pub fn remove_with_txn(&self, txn: &mut TransactionMut, key: &str) {
+    self.map_ref.remove(txn, key);
+  }
+
   pub fn insert<V: Prelim>(&self, key: &str, value: V) {
     self.collab_ctx.with_transact_mut(|txn| {
       self.map_ref.insert(txn, key, value);

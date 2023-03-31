@@ -1,9 +1,7 @@
 use crate::views::{
   view_from_map_ref, view_from_value, view_id_from_map_ref, View, ViewBuilder, ViewUpdate,
 };
-use collab::preclude::{
-  Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
-};
+use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 
 pub struct ViewMap {
   container: MapRefWrapper,
@@ -47,12 +45,39 @@ impl ViewMap {
     view_from_map_ref(&map_ref, txn)
   }
 
+  pub fn get_all_views(&self) -> Vec<View> {
+    let txn = self.container.transact();
+    self.get_all_views_with_txn(&txn)
+  }
+
   pub fn get_all_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<View> {
     self
       .container
       .iter(txn)
-      .flat_map(|(k, v)| view_from_value(v, txn))
+      .flat_map(|(_k, v)| view_from_value(v, txn))
       .collect::<Vec<_>>()
+  }
+
+  pub fn update_view<F>(&self, view_id: &str, f: F)
+  where
+    F: Fn(ViewUpdate),
+  {
+    self
+      .container
+      .with_transact_mut(|txn| self.update_view_with_txn(txn, view_id, f))
+  }
+
+  pub fn update_view_with_txn<F>(&self, txn: &mut TransactionMut, view_id: &str, f: F)
+  where
+    F: Fn(ViewUpdate),
+  {
+    if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
+      let map_ref_ext = MapRefExtension(&map_ref);
+      let update = ViewUpdate::new(view_id, txn, map_ref_ext);
+      f(update)
+    } else {
+      tracing::warn!("Can't update the view. The view is not found")
+    }
   }
 
   pub fn update_all_views_with_txn<F>(&self, txn: &mut TransactionMut, f: F)
@@ -62,7 +87,7 @@ impl ViewMap {
     let map_refs = self
       .container
       .iter(txn)
-      .flat_map(|(k, v)| v.to_ymap())
+      .flat_map(|(_k, v)| v.to_ymap())
       .collect::<Vec<MapRef>>();
 
     for map_ref in map_refs {
@@ -72,5 +97,9 @@ impl ViewMap {
         f(update)
       }
     }
+  }
+
+  pub fn remove_view(&self, view_id: &str) {
+    self.container.remove(view_id);
   }
 }

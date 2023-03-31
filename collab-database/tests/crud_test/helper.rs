@@ -88,11 +88,10 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   database_test
 }
 
-pub fn create_database_with_grid_view(uid: i64, database_id: &str, view_id: &str) -> DatabaseTest {
+pub fn create_database_grid_view(uid: i64, database_id: &str, view_id: &str) -> DatabaseTest {
   let database_test = create_database_with_default_data(uid, database_id);
   let params = CreateViewParams {
     id: view_id.to_string(),
-    database_id: database_test.get_database_id().unwrap(),
     name: "my first grid".to_string(),
     layout: Layout::Grid,
     ..Default::default()
@@ -131,5 +130,7 @@ pub fn make_grid_view(id: &str, name: &str) -> View {
     sorts: vec![],
     row_orders: vec![],
     field_orders: vec![],
+    created_at: 0,
+    modified_at: 0,
   }
 }

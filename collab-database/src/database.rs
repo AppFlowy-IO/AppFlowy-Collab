@@ -2,8 +2,8 @@ use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::rows::{Row, RowMap};
-use crate::views::{CreateViewParams, View, ViewMap};
-use collab::preclude::{Collab, JsonValue, MapRefWrapper};
+use crate::views::{CreateViewParams, RowOrder, View, ViewMap};
+use collab::preclude::{Collab, JsonValue, MapRefWrapper, ReadTxn};
 use std::rc::Rc;
 
 pub struct Database {
@@ -74,12 +74,47 @@ impl Database {
     self.root.get_str(DATABASE_ID)
   }
 
+  pub fn get_database_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+    self.root.get_str_with_txn(txn, DATABASE_ID)
+  }
+
   pub fn insert_row(&self, row: Row) {
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |update| {
         update.add_row_order(&row);
       });
       self.rows.insert_row_with_txn(txn, row);
+    })
+  }
+
+  pub fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
+    let txn = self.root.transact();
+    let row_orders = self
+      .views
+      .get_view_with_txn(&txn, view_id)
+      .map(|view| view.row_orders)
+      .unwrap_or_default();
+
+    self.get_rows_in_order_with_txn(&txn, &row_orders)
+  }
+
+  pub fn get_rows_in_order_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    row_orders: &[RowOrder],
+  ) -> Vec<Row> {
+    row_orders
+      .iter()
+      .flat_map(|row_order| self.rows.get_row_with_txn(txn, &row_order.id))
+      .collect::<Vec<Row>>()
+  }
+
+  pub fn delete_row(&self, row_id: &str) {
+    self.root.with_transact_mut(|txn| {
+      self.views.update_all_views_with_txn(txn, |update| {
+        update.remove_row_order(row_id);
+      });
+      self.rows.delete_row_with_txn(txn, row_id);
     })
   }
 
@@ -96,9 +131,12 @@ impl Database {
     self.root.with_transact_mut(|txn| {
       let field_orders = self.fields.get_all_field_orders(txn);
       let row_orders = self.rows.get_all_row_orders_with_txn(txn);
+      let timestamp = chrono::Utc::now().timestamp();
+      // It's safe to unwrap. Because the database_id must exist
+      let database_id = self.get_database_id_with_txn(txn).unwrap();
       let view = View {
         id: params.id,
-        database_id: params.database_id,
+        database_id,
         name: params.name,
         layout: params.layout,
         layout_settings: params.layout_settings,
@@ -107,9 +145,15 @@ impl Database {
         sorts: params.sorts,
         row_orders,
         field_orders,
+        created_at: timestamp,
+        modified_at: timestamp,
       };
       self.views.insert_view_with_txn(txn, view);
     })
+  }
+
+  pub fn remove_view(&self, view_id: &str) {
+    self.views.remove_view(view_id);
   }
 
   pub fn to_json_value(&self) -> JsonValue {

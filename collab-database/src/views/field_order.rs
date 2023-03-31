@@ -1,13 +1,28 @@
 use crate::fields::Field;
+use crate::views::{OrderArray, OrderIdentifiable};
 use collab::core::array_wrapper::ArrayRefExtension;
-use collab::preclude::{
-  lib0Any, Array, ArrayRef, ArrayRefWrapper, ReadTxn, TransactionMut, YrsValue,
-};
+use collab::preclude::{lib0Any, Array, ArrayRef, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 
 pub struct FieldOrderArray {
   array_ref: ArrayRef,
+}
+
+impl OrderArray for FieldOrderArray {
+  type Object = FieldOrder;
+
+  fn array_ref(&self) -> &ArrayRef {
+    &self.array_ref
+  }
+
+  fn object_from_value_with_txn<T: ReadTxn>(
+    &self,
+    value: YrsValue,
+    txn: &T,
+  ) -> Option<Self::Object> {
+    field_order_from_value(value, txn)
+  }
 }
 
 impl FieldOrderArray {
@@ -63,6 +78,12 @@ pub struct FieldOrder {
   pub id: String,
 }
 
+impl OrderIdentifiable for FieldOrder {
+  fn identify_id(&self) -> &str {
+    &self.id
+  }
+}
+
 impl FieldOrder {
   pub fn new(id: String) -> FieldOrder {
     Self { id }
@@ -92,7 +113,7 @@ impl From<FieldOrder> for lib0Any {
   }
 }
 
-pub fn field_order_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<FieldOrder> {
+pub fn field_order_from_value<T: ReadTxn>(value: YrsValue, _txn: &T) -> Option<FieldOrder> {
   if let YrsValue::Any(value) = value {
     Some(FieldOrder::from(value))
   } else {

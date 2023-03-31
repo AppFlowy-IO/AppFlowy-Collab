@@ -115,7 +115,7 @@ macro_rules! impl_any_update {
 
 #[macro_export]
 macro_rules! impl_order_update {
-  ($setter1: ident,  $setter2: ident,  $setter3: ident, $key:expr, $ty:ident, $array_ty:ident) => {
+  ($setter1: ident,  $setter2: ident,  $setter3: ident,  $setter4: ident, $key:expr, $ty:ident, $array_ty:ident) => {
     pub fn $setter1(self, orders: Vec<$ty>) -> Self {
       let array_ref = self
         .map_ref
@@ -144,6 +144,17 @@ macro_rules! impl_order_update {
         .map(|array_ref| $array_ty::new(array_ref))
       {
         array.remove_with_txn(self.txn, row_id);
+      }
+      self
+    }
+
+    pub fn $setter4(self, from: u32, to: u32) -> Self {
+      if let Some(array) = self
+        .map_ref
+        .get_array_ref_with_txn(self.txn, $key)
+        .map(|array_ref| $array_ty::new(array_ref))
+      {
+        array.move_to(self.txn, from, to);
       }
       self
     }

@@ -144,7 +144,7 @@ impl ViewsMap {
       .collect::<Vec<View>>();
 
     view_ids.iter().for_each(|view_id| {
-      self.container.remove(txn, view_id.as_ref());
+      self.container.remove_with_txn(txn, view_id.as_ref());
     });
 
     if let Some(tx) = &self.change_tx {
