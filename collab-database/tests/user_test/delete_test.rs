@@ -1,5 +1,5 @@
 use crate::helper::create_user_database;
-use collab_database::views::CreateViewParams;
+use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 
 #[test]
 fn delete_database_inline_view_test() {
@@ -7,8 +7,8 @@ fn delete_database_inline_view_test() {
   let database = user_db
     .create_database(
       "d1",
-      CreateViewParams {
-        id: "v1".to_string(),
+      CreateDatabaseParams {
+        view_id: "v1".to_string(),
         ..Default::default()
       },
     )
@@ -16,7 +16,7 @@ fn delete_database_inline_view_test() {
 
   for i in 2..5 {
     database.create_view(CreateViewParams {
-      id: format!("v{}", i),
+      view_id: format!("v{}", i),
       ..Default::default()
     });
   }

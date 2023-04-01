@@ -3,8 +3,7 @@ use crate::rows::{
 };
 use crate::views::RowOrder;
 use collab::preclude::{
-  Array, ArrayRefWrapper, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
-  YrsValue,
+  Array, ArrayRefWrapper, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
 };
 
 const ROW_META: &str = "row_meta";
@@ -110,6 +109,7 @@ impl RowMap {
     array_ref.remove_with_txn(txn, index);
   }
 
+  #[allow(dead_code)]
   fn get_doc_with_txn<T: ReadTxn>(&self, txn: &T) -> MapRefWrapper {
     // It's safe to unwrap because the doc will be inserted when this row gets initialized
     self.meta.get_map_with_txn(txn, ROW_DOC).unwrap()

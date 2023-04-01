@@ -70,7 +70,7 @@ fn restore_from_disk_with_different_uid_test() {
 fn create_database_with_view() -> (Arc<CollabKV>, DatabaseTest, Value) {
   let (db, database_test) = create_database_with_db(1, "1");
   let params = CreateViewParams {
-    id: "v1".to_string(),
+    view_id: "v1".to_string(),
     name: "my first grid".to_string(),
     ..Default::default()
   };

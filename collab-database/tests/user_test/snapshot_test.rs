@@ -1,7 +1,7 @@
 use crate::helper::create_user_database;
 
 use collab_database::rows::Row;
-use collab_database::views::CreateViewParams;
+use collab_database::views::CreateDatabaseParams;
 
 #[test]
 fn database_get_snapshot_test() {
@@ -9,8 +9,8 @@ fn database_get_snapshot_test() {
   let database = user_db
     .create_database(
       "d1",
-      CreateViewParams {
-        id: "v1".to_string(),
+      CreateDatabaseParams {
+        view_id: "v1".to_string(),
         ..Default::default()
       },
     )
@@ -34,8 +34,8 @@ fn delete_database_snapshot_test() {
   let database = user_db
     .create_database(
       "d1",
-      CreateViewParams {
-        id: "v1".to_string(),
+      CreateDatabaseParams {
+        view_id: "v1".to_string(),
         ..Default::default()
       },
     )
@@ -56,8 +56,8 @@ fn restore_from_database_snapshot_test() {
   let database = user_db
     .create_database(
       "d1",
-      CreateViewParams {
-        id: "v1".to_string(),
+      CreateDatabaseParams {
+        view_id: "v1".to_string(),
         ..Default::default()
       },
     )

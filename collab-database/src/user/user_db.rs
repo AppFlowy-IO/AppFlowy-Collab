@@ -1,7 +1,7 @@
-use crate::database::{Database, DatabaseContext};
+use crate::database::{gen_database_id, Database, DatabaseContext, DuplicatedDatabase};
 use crate::error::DatabaseError;
 use crate::user::user_db_record::{DatabaseArray, DatabaseRecord};
-use crate::views::CreateViewParams;
+use crate::views::CreateDatabaseParams;
 
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
@@ -76,7 +76,7 @@ impl UserDatabase {
   pub fn create_database(
     &self,
     database_id: &str,
-    params: CreateViewParams,
+    params: CreateDatabaseParams,
   ) -> Result<Arc<Database>, DatabaseError> {
     let context = DatabaseContext {
       collab: self.collab_for_database(database_id),
@@ -134,11 +134,28 @@ impl UserDatabase {
     }
   }
 
-  pub fn duplicate_view(&self, database_id: &str, _view_id: &str) {
-    if let Some(_database) = self.get_database(database_id) {
-      // if database.is_inline_view(view_id) {
-      // } else {
-      // }
+  /// Duplicate the view in the database.
+  /// If the id of the view equal to the inline view id of the database, then it will
+  /// duplicate the database view data and database data as well. Otherwise only
+  /// duplicate the view data.
+  pub fn duplicate_view(
+    &self,
+    database_id: &str,
+    view_id: &str,
+  ) -> Result<Arc<Database>, DatabaseError> {
+    if let Some(database) = self.get_database(database_id) {
+      if database.is_inline_view(view_id) {
+        let DuplicatedDatabase { view, rows, fields } = database.duplicate_data();
+        let database_id = gen_database_id();
+        let params = CreateDatabaseParams::from_view(view, rows, fields);
+        let database = self.create_database(&database_id, params)?;
+        Ok(database)
+      } else {
+        database.duplicate_view(view_id);
+        Ok(database)
+      }
+    } else {
+      Err(DatabaseError::DatabaseNotExist)
     }
   }
 

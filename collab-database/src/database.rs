@@ -3,8 +3,10 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::meta::MetaMap;
 use crate::rows::{Row, RowMap};
-use crate::views::{CreateViewParams, RowOrder, View, ViewMap};
-use collab::preclude::{Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn};
+use crate::views::{CreateDatabaseParams, CreateViewParams, RowOrder, View, ViewMap};
+use collab::preclude::{
+  Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+};
 use nanoid::nanoid;
 use std::rc::Rc;
 
@@ -33,11 +35,20 @@ pub struct DatabaseContext {
 impl Database {
   pub fn create_with_view(
     database_id: &str,
-    params: CreateViewParams,
+    params: CreateDatabaseParams,
     context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
     let this = Self::create(database_id, context)?;
-    this.set_database_inline_view(&params.id);
+    let (rows, fields, params) = params.split();
+    this.root.with_transact_mut(|txn| {
+      this.set_inline_view_with_txn(txn, &params.view_id);
+      for row in rows {
+        this.rows.insert_row_with_txn(txn, row);
+      }
+      for field in fields {
+        this.fields.insert_field_with_txn(txn, field);
+      }
+    });
     this.create_view(params);
     Ok(this)
   }
@@ -167,7 +178,7 @@ impl Database {
       // It's safe to unwrap. Because the database_id must exist
       let database_id = self.get_database_id_with_txn(txn).unwrap();
       let view = View {
-        id: params.id,
+        id: params.view_id,
         database_id,
         name: params.name,
         layout: params.layout,
@@ -184,7 +195,7 @@ impl Database {
     })
   }
 
-  pub fn duplicate(&self, view_id: &str) -> Option<View> {
+  pub fn duplicate_view(&self, view_id: &str) -> Option<View> {
     let view = self.views.get_view(view_id)?;
     let mut duplicated_view = view.clone();
     duplicated_view.id = gen_database_view_id();
@@ -196,25 +207,31 @@ impl Database {
     Some(duplicated_view)
   }
 
+  pub fn duplicate_data(&self) -> DuplicatedDatabase {
+    let inline_view_id = self.get_inline_view_id();
+    let view = self.views.get_view(&inline_view_id).unwrap();
+    let rows = self.rows.get_all_rows();
+    let fields = self.fields.get_all_fields();
+    DuplicatedDatabase { view, rows, fields }
+  }
+
   pub fn to_json_value(&self) -> JsonValue {
     let database_serde = DatabaseSerde::from_database(self);
     serde_json::to_value(&database_serde).unwrap()
   }
 
   pub fn is_inline_view(&self, view_id: &str) -> bool {
-    let inline_view_id = self.get_database_inline_view_id();
+    let inline_view_id = self.get_inline_view_id();
     inline_view_id == view_id
   }
 
-  fn set_database_inline_view(&self, view_id: &str) {
-    self.root.with_transact_mut(|txn| {
-      self
-        .metas
-        .insert_with_txn(txn, DATABASE_INLINE_VIEW, view_id);
-    })
+  fn set_inline_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
+    self
+      .metas
+      .insert_with_txn(txn, DATABASE_INLINE_VIEW, view_id);
   }
 
-  fn get_database_inline_view_id(&self) -> String {
+  fn get_inline_view_id(&self) -> String {
     let txn = self.root.transact();
     // It's safe to unwrap because each database inline view id was set
     // when initializing the database
@@ -263,4 +280,10 @@ pub fn gen_database_sort_id() -> String {
 
 pub fn timestamp() -> i64 {
   chrono::Utc::now().timestamp()
+}
+
+pub struct DuplicatedDatabase {
+  pub view: View,
+  pub rows: Vec<Row>,
+  pub fields: Vec<Field>,
 }

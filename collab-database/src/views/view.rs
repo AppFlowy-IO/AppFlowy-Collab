@@ -1,3 +1,6 @@
+use crate::database::gen_database_view_id;
+use crate::fields::Field;
+use crate::rows::Row;
 use crate::views::layout::{Layout, LayoutSettings};
 use crate::views::{
   FieldOrder, FieldOrderArray, Filter, FilterArray, Group, GroupArray, RowOrder, RowOrderArray,
@@ -29,13 +32,66 @@ pub struct View {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateViewParams {
-  pub id: String,
+  pub view_id: String,
   pub name: String,
   pub layout: Layout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<Filter>,
   pub groups: Vec<Group>,
   pub sorts: Vec<Sort>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CreateDatabaseParams {
+  pub view_id: String,
+  pub name: String,
+  pub layout: Layout,
+  pub layout_settings: LayoutSettings,
+  pub filters: Vec<Filter>,
+  pub groups: Vec<Group>,
+  pub sorts: Vec<Sort>,
+  pub rows: Vec<Row>,
+  pub fields: Vec<Field>,
+}
+
+impl CreateDatabaseParams {
+  pub fn from_view(view: View, rows: Vec<Row>, fields: Vec<Field>) -> Self {
+    let mut params: Self = view.into();
+    params.rows = rows;
+    params.fields = fields;
+    params
+  }
+  pub fn split(self) -> (Vec<Row>, Vec<Field>, CreateViewParams) {
+    (
+      self.rows,
+      self.fields,
+      CreateViewParams {
+        view_id: self.view_id,
+        name: self.name,
+        layout: self.layout,
+        layout_settings: self.layout_settings,
+        filters: self.filters,
+        groups: self.groups,
+        sorts: self.sorts,
+      },
+    )
+  }
+}
+
+impl From<View> for CreateDatabaseParams {
+  fn from(view: View) -> Self {
+    Self {
+      view_id: gen_database_view_id(),
+      name: view.name,
+      layout: view.layout,
+      layout_settings: view.layout_settings,
+      filters: view.filters,
+      groups: view.groups,
+      sorts: view.sorts,
+      rows: vec![],
+      fields: vec![],
+    }
+  }
 }
 
 const VIEW_ID: &str = "id";

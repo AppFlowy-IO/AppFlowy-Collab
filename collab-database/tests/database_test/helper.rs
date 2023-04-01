@@ -144,7 +144,7 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
 pub fn create_database_grid_view(uid: i64, database_id: &str, view_id: &str) -> DatabaseTest {
   let database_test = create_database_with_default_data(uid, database_id);
   let params = CreateViewParams {
-    id: view_id.to_string(),
+    view_id: view_id.to_string(),
     name: "my first grid".to_string(),
     layout: Layout::Grid,
     ..Default::default()
