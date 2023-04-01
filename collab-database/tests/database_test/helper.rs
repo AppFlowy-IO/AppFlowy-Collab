@@ -35,11 +35,11 @@ impl DerefMut for DatabaseTest {
   }
 }
 
-pub fn create_database(_uid: i64, database_id: &str) -> DatabaseTest {
-  let collab = CollabBuilder::new(1, database_id).build();
+pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
+  let collab = CollabBuilder::new(uid, database_id).build();
   collab.initial();
-  let context = DatabaseContext {};
-  let database = Database::create(database_id, collab, context).unwrap();
+  let context = DatabaseContext { collab };
+  let database = Database::create(database_id, context).unwrap();
   DatabaseTest {
     database,
     cleaner: None,
@@ -58,8 +58,8 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabKV>, D
     .with_plugin(snapshot_plugin)
     .build();
   collab.initial();
-  let context = DatabaseContext {};
-  let database = Database::create(database_id, collab, context).unwrap();
+  let context = DatabaseContext { collab };
+  let database = Database::create(database_id, context).unwrap();
   (
     db,
     DatabaseTest {
@@ -72,13 +72,13 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabKV>, D
 pub fn create_database_from_db(uid: i64, database_id: &str, db: Arc<CollabKV>) -> DatabaseTest {
   let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
   let snapshot_plugin = CollabSnapshotPlugin::new(uid, db, 5).unwrap();
-  let collab = CollabBuilder::new(1, database_id)
+  let collab = CollabBuilder::new(uid, database_id)
     .with_plugin(disk_plugin)
     .with_plugin(snapshot_plugin)
     .build();
   collab.initial();
-  let context = DatabaseContext {};
-  let database = Database::create(database_id, collab, context).unwrap();
+  let context = DatabaseContext { collab };
+  let database = Database::create(database_id, context).unwrap();
   DatabaseTest {
     database,
     cleaner: None,

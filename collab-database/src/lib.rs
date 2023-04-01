@@ -1,6 +1,8 @@
 pub mod database;
 pub mod fields;
+pub mod meta;
 pub mod rows;
+pub mod user;
 pub mod views;
 
 #[macro_use]

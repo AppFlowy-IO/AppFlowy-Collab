@@ -55,7 +55,6 @@ pub struct TypeOption(HashMap<String, lib0Any>);
 impl TypeOption {
   pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Self {
     let mut this = Self(Default::default());
-
     map_ref.iter(txn).for_each(|(k, v)| {
       if let YrsValue::Any(any) = v {
         this.insert(k.to_string(), any);

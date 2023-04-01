@@ -19,8 +19,8 @@ use crate::preclude::{ArrayRefWrapper, JsonValue};
 type AfterTransactionSubscription = Subscription<Arc<dyn Fn(&mut TransactionMut)>>;
 
 use yrs::{
-  ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, Subscription, Transact,
-  Transaction, TransactionMut, Update, UpdateSubscription,
+  ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, Subscription,
+  Transact, Transaction, TransactionMut, Update, UpdateSubscription,
 };
 
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
@@ -177,6 +177,16 @@ impl Collab {
       .map(|value| value.to_yarray())?;
 
     array_ref.map(|array_ref| self.array_wrapper_with(array_ref))
+  }
+
+  pub fn create_array_with_txn<V: Prelim>(
+    &self,
+    txn: &mut TransactionMut,
+    key: &str,
+    values: Vec<V>,
+  ) -> ArrayRefWrapper {
+    let array_ref = self.data.insert(txn, key, ArrayPrelim::from(values));
+    self.array_wrapper_with(array_ref)
   }
 
   fn get_ref_from_path_with_txn<T: ReadTxn>(&self, txn: &T, mut path: Path) -> Option<Value> {

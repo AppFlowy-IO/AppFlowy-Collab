@@ -84,6 +84,7 @@ impl ArrayRefWrapper {
       .map(|map_ref| MapRefWrapper::new(map_ref, self.collab_ctx.clone()))
       .collect::<Vec<_>>()
   }
+
   pub fn remove_with_txn(&self, txn: &mut TransactionMut, index: u32) {
     self.array_ref.remove(txn, index);
   }

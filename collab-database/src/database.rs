@@ -1,6 +1,7 @@
 use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
+use crate::meta::MetaMap;
 use crate::rows::{Row, RowMap};
 use crate::views::{CreateViewParams, RowOrder, View, ViewMap};
 use collab::preclude::{Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn};
@@ -13,6 +14,7 @@ pub struct Database {
   pub rows: Rc<RowMap>,
   pub views: Rc<ViewMap>,
   pub fields: Rc<FieldMap>,
+  pub metas: Rc<MetaMap>,
 }
 
 const DATABASE_ID: &str = "id";
@@ -20,26 +22,35 @@ const DATABASE: &str = "database";
 const FIELDS: &str = "fields";
 const ROWS: &str = "rows";
 const VIEWS: &str = "views";
+const METAS: &str = "metas";
 
-pub struct DatabaseContext {}
+pub struct DatabaseContext {
+  pub collab: Collab,
+}
 
 impl Database {
-  pub fn create(
-    id: &str,
-    collab: Collab,
-    _context: DatabaseContext,
+  pub fn create_with_view(
+    database_id: &str,
+    params: CreateViewParams,
+    context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
-    if id.is_empty() {
+    let this = Self::create(database_id, context)?;
+    this.create_view(params);
+    Ok(this)
+  }
+
+  pub fn create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
+    if database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID);
     }
-
-    let (database, fields, rows, views) = collab.with_transact_mut(|txn| {
+    let collab = context.collab;
+    let (database, fields, rows, views, metas) = collab.with_transact_mut(|txn| {
       // { DATABASE: {:} }
       let database = collab
         .get_map_with_txn(txn, vec![DATABASE])
         .unwrap_or_else(|| collab.create_map_with_txn(txn, DATABASE));
 
-      database.insert_with_txn(txn, DATABASE_ID, id);
+      database.insert_with_txn(txn, DATABASE_ID, database_id);
 
       // { DATABASE: { FIELDS: {:} } }
       let fields = collab
@@ -50,17 +61,23 @@ impl Database {
       let rows = collab
         .get_map_with_txn(txn, vec![DATABASE, ROWS])
         .unwrap_or_else(|| database.insert_map_with_txn(txn, ROWS));
+      let rows = RowMap::new_with_txn(txn, rows);
 
       // { DATABASE: { FIELDS: {:}, ROWS: {:}, VIEWS: {:} } }
       let views = collab
         .get_map_with_txn(txn, vec![DATABASE, VIEWS])
         .unwrap_or_else(|| database.insert_map_with_txn(txn, VIEWS));
 
-      (database, fields, rows, views)
+      // { DATABASE: { FIELDS: {:}, ROWS: {:}, VIEWS: {:}, METAS: {:} } }
+      let metas = collab
+        .get_map_with_txn(txn, vec![DATABASE, METAS])
+        .unwrap_or_else(|| database.insert_map_with_txn(txn, METAS));
+
+      (database, fields, rows, views, metas)
     });
-    let rows = RowMap::new(rows);
     let views = ViewMap::new(views);
     let fields = FieldMap::new(fields);
+    let metas = MetaMap::new(metas);
 
     Ok(Self {
       inner: collab,
@@ -68,6 +85,7 @@ impl Database {
       rows: Rc::new(rows),
       views: Rc::new(views),
       fields: Rc::new(fields),
+      metas: Rc::new(metas),
     })
   }
 

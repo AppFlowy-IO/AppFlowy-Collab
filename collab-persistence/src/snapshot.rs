@@ -47,6 +47,18 @@ impl<'a> YrsSnapshot<'a> {
     snapshots
   }
 
+  pub fn delete_snapshot<K: AsRef<[u8]> + ?Sized>(
+    &self,
+    object_id: &K,
+  ) -> Result<(), PersistenceError> {
+    if let Some(snapshot_id) = self.get_snapshot_id(object_id) {
+      let start = make_snapshot_key(snapshot_id, 0);
+      let end = make_snapshot_key(snapshot_id, u32::MAX);
+      self.db.batch_remove(&start, &end)?;
+    }
+    Ok(())
+  }
+
   fn get_or_create_snapshot_id<K: AsRef<[u8]> + ?Sized>(
     &self,
     object_id: &K,
