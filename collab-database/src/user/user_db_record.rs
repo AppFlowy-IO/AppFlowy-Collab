@@ -1,3 +1,4 @@
+use crate::database::timestamp;
 use anyhow::bail;
 use collab::preclude::{
   Array, ArrayRefWrapper, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
@@ -17,7 +18,7 @@ impl DatabaseArray {
       let record = DatabaseRecord {
         database_id: database_id.to_string(),
         name: name.to_string(),
-        created_at: chrono::Utc::now().timestamp(),
+        created_at: timestamp(),
       };
       let map_ref = self.array_ref.insert_map_with_txn(txn);
       record.fill_map_ref(txn, map_ref);

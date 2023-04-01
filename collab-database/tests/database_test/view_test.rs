@@ -224,3 +224,17 @@ fn delete_inline_database_view_test() {
   assert_eq!(views.len(), 2);
   assert!(!views.contains(&view_id));
 }
+
+#[test]
+fn duplicate_database_view_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let params = CreateViewParams {
+    id: "v1".to_string(),
+    ..Default::default()
+  };
+  database_test.create_view(params);
+  database_test.duplicate("v1");
+
+  let views = database_test.views.get_all_views();
+  assert_eq!(views.len(), 2);
+}

@@ -5,6 +5,7 @@ use crate::meta::MetaMap;
 use crate::rows::{Row, RowMap};
 use crate::views::{CreateViewParams, RowOrder, View, ViewMap};
 use collab::preclude::{Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn};
+use nanoid::nanoid;
 use std::rc::Rc;
 
 pub struct Database {
@@ -162,7 +163,7 @@ impl Database {
     self.root.with_transact_mut(|txn| {
       let field_orders = self.fields.get_all_field_orders(txn);
       let row_orders = self.rows.get_all_row_orders_with_txn(txn);
-      let timestamp = chrono::Utc::now().timestamp();
+      let timestamp = timestamp();
       // It's safe to unwrap. Because the database_id must exist
       let database_id = self.get_database_id_with_txn(txn).unwrap();
       let view = View {
@@ -183,8 +184,16 @@ impl Database {
     })
   }
 
-  pub fn duplicate(&self) {
-    // Just duplicate the inline-view
+  pub fn duplicate(&self, view_id: &str) -> Option<View> {
+    let view = self.views.get_view(view_id)?;
+    let mut duplicated_view = view.clone();
+    duplicated_view.id = gen_database_view_id();
+    duplicated_view.created_at = timestamp();
+    duplicated_view.modified_at = timestamp();
+    duplicated_view.name = format!("{}-copy", view.name);
+    self.views.insert_view(duplicated_view.clone());
+
+    Some(duplicated_view)
   }
 
   pub fn to_json_value(&self) -> JsonValue {
@@ -226,4 +235,32 @@ impl Database {
       });
     }
   }
+}
+pub fn gen_database_id() -> String {
+  // nanoid calculator https://zelark.github.io/nano-id-cc/
+  format!("d:{}", nanoid!(10))
+}
+
+pub fn gen_database_view_id() -> String {
+  format!("d:{}", nanoid!(6))
+}
+
+pub fn gen_field_id() -> String {
+  nanoid!(6)
+}
+
+pub fn gen_database_filter_id() -> String {
+  nanoid!(6)
+}
+
+pub fn gen_database_group_id() -> String {
+  nanoid!(6)
+}
+
+pub fn gen_database_sort_id() -> String {
+  nanoid!(6)
+}
+
+pub fn timestamp() -> i64 {
+  chrono::Utc::now().timestamp()
 }

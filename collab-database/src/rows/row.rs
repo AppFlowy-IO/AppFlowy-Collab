@@ -1,3 +1,4 @@
+use crate::database::timestamp;
 use crate::rows::Cells;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
@@ -19,7 +20,7 @@ impl Row {
       cells: Default::default(),
       height: 60,
       visibility: true,
-      created_at: chrono::Utc::now().timestamp(),
+      created_at: timestamp(),
     }
   }
 }
