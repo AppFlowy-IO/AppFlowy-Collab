@@ -3,6 +3,9 @@ pub enum DatabaseError {
   #[error("The database's id is invalid")]
   InvalidDatabaseID,
 
+  #[error("Can not decode the data to update")]
+  DecodeUpdate(#[from] collab::preclude::lib0Error),
+
   #[error("Internal error")]
   Internal(#[from] anyhow::Error),
 }

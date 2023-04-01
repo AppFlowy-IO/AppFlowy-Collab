@@ -2,10 +2,13 @@ use crate::database::{Database, DatabaseContext};
 use crate::error::DatabaseError;
 use crate::user::user_db_record::{DatabaseArray, DatabaseRecord};
 use crate::views::CreateViewParams;
+use anyhow::Context;
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
+use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{
   lib0Any, Array, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, MapRefWrapper, TransactionMut,
+  Update,
 };
 use collab_persistence::snapshot::CollabSnapshot;
 use collab_persistence::CollabKV;
@@ -87,6 +90,21 @@ impl UserDatabase {
 
   pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
     self.db.snapshot(self.uid).get_snapshots(database_id)
+  }
+
+  pub fn restore_database_from_snapshot(
+    &self,
+    database_id: &str,
+    snapshot: CollabSnapshot,
+  ) -> Result<Database, DatabaseError> {
+    let collab = self.collab_for_database(database_id);
+    let update = Update::decode_v1(&snapshot.data)?;
+    collab.with_transact_mut(|txn| {
+      txn.apply_update(update);
+    });
+
+    let context = DatabaseContext { collab };
+    Database::create(database_id, context)
   }
 
   fn collab_for_database(&self, database_id: &str) -> Collab {

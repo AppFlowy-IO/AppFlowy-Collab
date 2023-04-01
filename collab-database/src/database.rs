@@ -181,6 +181,11 @@ impl Database {
     })
   }
 
+  pub fn duplicate_view(&self, view_id: &str) -> Option<View> {
+    //
+    todo!()
+  }
+
   pub fn to_json_value(&self) -> JsonValue {
     let database_serde = DatabaseSerde::from_database(self);
     serde_json::to_value(&database_serde).unwrap()

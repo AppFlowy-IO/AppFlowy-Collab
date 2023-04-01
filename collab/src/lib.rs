@@ -13,6 +13,7 @@ pub mod preclude {
   pub use crate::core::text_wrapper::TextRefWrapper;
   pub use crate::util::insert_json_value_to_map_ref;
   pub use lib0::any::Any as lib0Any;
+  pub use lib0::error::Error as lib0Error;
   pub use serde_json::value::Value as JsonValue;
   pub use yrs::block::Prelim;
   pub use yrs::types::{
