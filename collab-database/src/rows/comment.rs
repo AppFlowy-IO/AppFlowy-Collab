@@ -1,4 +1,4 @@
-use collab::preclude::{lib0Any};
+use collab::preclude::lib0Any;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]

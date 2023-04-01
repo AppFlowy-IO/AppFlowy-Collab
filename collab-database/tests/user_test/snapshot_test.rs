@@ -25,7 +25,7 @@ fn database_get_snapshot_test() {
   }
 
   let snapshots = user_db.get_database_snapshots("d1");
-  assert!(snapshots.is_empty());
+  assert!(!snapshots.is_empty());
 }
 
 #[test]

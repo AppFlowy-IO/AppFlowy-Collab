@@ -161,7 +161,7 @@ impl UserDatabase {
 
   fn collab_for_database(&self, database_id: &str) -> Collab {
     let disk_plugin = CollabDiskPlugin::new(self.uid, self.db.clone()).unwrap();
-    let snapshot_plugin = CollabSnapshotPlugin::new(self.uid, self.db.clone(), 5).unwrap();
+    let snapshot_plugin = CollabSnapshotPlugin::new(self.uid, self.db.clone(), 6).unwrap();
     CollabBuilder::new(self.uid, database_id)
       .with_plugin(disk_plugin)
       .with_plugin(snapshot_plugin)
