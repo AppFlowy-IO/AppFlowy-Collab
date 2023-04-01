@@ -59,8 +59,7 @@ pub struct SortBuilder<'a, 'b> {
 
 impl<'a, 'b> SortBuilder<'a, 'b> {
   pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRef) -> Self {
-    let map_ref_ext = MapRefExtension(&map_ref);
-    map_ref_ext.insert_with_txn(txn, SORT_ID, id);
+    map_ref.insert_with_txn(txn, SORT_ID, id);
     Self { id, map_ref, txn }
   }
 
@@ -68,23 +67,22 @@ impl<'a, 'b> SortBuilder<'a, 'b> {
   where
     F: FnOnce(SortUpdate),
   {
-    let map_ref = MapRefExtension(&self.map_ref);
-    let update = SortUpdate::new(self.id, self.txn, map_ref);
+    let update = SortUpdate::new(self.id, self.txn, &self.map_ref);
     f(update);
     self
   }
   pub fn done(self) {}
 }
 
-pub struct SortUpdate<'a, 'b, 'c> {
+pub struct SortUpdate<'a, 'b> {
   #[allow(dead_code)]
   id: &'a str,
-  map_ref: MapRefExtension<'c>,
+  map_ref: &'a MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
-impl<'a, 'b, 'c> SortUpdate<'a, 'b, 'c> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefExtension<'c>) -> Self {
+impl<'a, 'b> SortUpdate<'a, 'b> {
+  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'a MapRef) -> Self {
     Self { id, map_ref, txn }
   }
 
@@ -103,7 +101,7 @@ impl<'a, 'b, 'c> SortUpdate<'a, 'b, 'c> {
   );
 
   pub fn done(self) -> Option<Sort> {
-    sort_from_map_ref(self.map_ref.into_inner(), self.txn)
+    sort_from_map_ref(self.map_ref, self.txn)
   }
 }
 
@@ -116,7 +114,6 @@ pub fn sort_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Sort> {
 }
 
 pub fn sort_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Sort> {
-  let map_ref = MapRefExtension(map_ref);
   let id = map_ref.get_str_with_txn(txn, SORT_ID)?;
   let field_id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
   let field_type = map_ref

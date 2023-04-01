@@ -3,7 +3,7 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::rows::{Row, RowMap};
 use crate::views::{CreateViewParams, RowOrder, View, ViewMap};
-use collab::preclude::{Collab, JsonValue, MapRefWrapper, ReadTxn};
+use collab::preclude::{Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn};
 use std::rc::Rc;
 
 pub struct Database {
@@ -72,7 +72,8 @@ impl Database {
   }
 
   pub fn get_database_id(&self) -> Option<String> {
-    self.root.get_str(DATABASE_ID)
+    let txn = self.root.transact();
+    self.root.get_str_with_txn(&txn, DATABASE_ID)
   }
 
   pub fn get_database_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {

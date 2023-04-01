@@ -62,8 +62,7 @@ pub struct GroupBuilder<'a, 'b> {
 
 impl<'a, 'b> GroupBuilder<'a, 'b> {
   pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRef) -> Self {
-    let map_ref_ext = MapRefExtension(&map_ref);
-    map_ref_ext.insert_with_txn(txn, GROUP_ID, id);
+    map_ref.insert_with_txn(txn, GROUP_ID, id);
     Self { id, map_ref, txn }
   }
 
@@ -71,23 +70,22 @@ impl<'a, 'b> GroupBuilder<'a, 'b> {
   where
     F: FnOnce(GroupUpdate),
   {
-    let map_ref = MapRefExtension(&self.map_ref);
-    let update = GroupUpdate::new(self.id, self.txn, map_ref);
+    let update = GroupUpdate::new(self.id, self.txn, &self.map_ref);
     f(update);
     self
   }
   pub fn done(self) {}
 }
 
-pub struct GroupUpdate<'a, 'b, 'c> {
+pub struct GroupUpdate<'a, 'b> {
   #[allow(dead_code)]
   id: &'a str,
-  map_ref: MapRefExtension<'c>,
+  map_ref: &'a MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
-impl<'a, 'b, 'c> GroupUpdate<'a, 'b, 'c> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefExtension<'c>) -> Self {
+impl<'a, 'b> GroupUpdate<'a, 'b> {
+  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'a MapRef) -> Self {
     Self { id, map_ref, txn }
   }
 
@@ -110,7 +108,7 @@ impl<'a, 'b, 'c> GroupUpdate<'a, 'b, 'c> {
   }
 
   pub fn done(self) -> Option<Group> {
-    group_from_map_ref(self.map_ref.into_inner(), self.txn)
+    group_from_map_ref(self.map_ref, self.txn)
   }
 }
 
@@ -123,7 +121,6 @@ pub fn group_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Group> {
 }
 
 pub fn group_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Group> {
-  let map_ref = MapRefExtension(map_ref);
   let id = map_ref.get_str_with_txn(txn, GROUP_ID)?;
   let content = map_ref.get_str_with_txn(txn, GROUP_CONTENT)?;
   let field_id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
@@ -186,14 +183,12 @@ const GROUP_REV_VISIBILITY: fn() -> bool = || true;
 
 impl GroupItem {
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: MapRef) {
-    let map_ref = MapRefExtension(&map_ref);
     map_ref.insert_with_txn(txn, "id", self.id);
     map_ref.insert_with_txn(txn, "name", self.name);
     map_ref.insert_with_txn(txn, "visible", self.visible);
   }
 
   pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Option<Self> {
-    let map_ref = MapRefExtension(&map_ref);
     let id = map_ref.get_str_with_txn(txn, "id")?;
     let name = map_ref.get_str_with_txn(txn, "name").unwrap_or_default();
     let visible = map_ref

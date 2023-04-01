@@ -1,4 +1,6 @@
-use collab::preclude::{lib0Any, Map, MapRef, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
+use collab::preclude::{
+  lib0Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};

@@ -1,6 +1,6 @@
 use crate::core::{Belonging, BelongingMap, Belongings};
 use anyhow::Result;
-use collab::preclude::{MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 
@@ -23,7 +23,8 @@ impl WorkspaceMap {
   }
 
   pub fn workspace_id(&self) -> Option<String> {
-    self.container.get_str(WORKSPACE_ID)
+    let txn = self.container.transact();
+    self.container.get_str_with_txn(&txn, WORKSPACE_ID)
   }
 
   pub fn get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {

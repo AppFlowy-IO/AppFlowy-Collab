@@ -2,7 +2,7 @@ use crate::fields::{
   field_from_map_ref, field_from_value, field_id_from_value, Field, FieldBuilder, FieldUpdate,
 };
 use crate::views::FieldOrder;
-use collab::preclude::{Map, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 
 pub struct FieldMap {
   container: MapRefWrapper,
@@ -73,6 +73,6 @@ impl FieldMap {
   }
 
   pub fn delete_field_with_txn(&self, txn: &mut TransactionMut, field_id: &str) {
-    self.container.remove_with_txn(txn, field_id);
+    self.container.delete_with_txn(txn, field_id);
   }
 }

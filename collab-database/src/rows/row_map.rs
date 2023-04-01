@@ -2,7 +2,7 @@ use crate::rows::{
   row_from_map_ref, row_from_value, row_id_from_value, Row, RowBuilder, RowUpdate,
 };
 use crate::views::RowOrder;
-use collab::preclude::{Map, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 
 pub struct RowMap {
   container: MapRefWrapper,
@@ -61,7 +61,7 @@ impl RowMap {
   }
 
   pub fn delete_row_with_txn(&self, txn: &mut TransactionMut, row_id: &str) {
-    self.container.remove_with_txn(txn, row_id)
+    self.container.delete_with_txn(txn, row_id)
   }
 
   pub fn update_row<F>(&self, row_id: &str, f: F) -> Option<Row>

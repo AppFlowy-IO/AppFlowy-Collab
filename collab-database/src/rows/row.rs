@@ -82,9 +82,8 @@ const ROW_CELLS: &str = "cells";
 
 pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(String, i64)> {
   let map_ref = value.to_ymap()?;
-  let map_ref_ext = MapRefExtension(&map_ref);
-  let id = map_ref_ext.get_str_with_txn(txn, ROW_ID)?;
-  let crated_at = map_ref_ext
+  let id = map_ref.get_str_with_txn(txn, ROW_ID)?;
+  let crated_at = map_ref
     .get_i64_with_txn(txn, CREATED_AT)
     .unwrap_or_default();
   Some((id, crated_at))
@@ -96,7 +95,6 @@ pub fn row_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Row> {
 }
 
 pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
-  let map_ref = MapRefExtension(map_ref);
   let id = map_ref.get_str_with_txn(txn, ROW_ID)?;
   let visibility = map_ref
     .get_bool_with_txn(txn, ROW_VISIBILITY)

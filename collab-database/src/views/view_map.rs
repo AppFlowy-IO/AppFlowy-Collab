@@ -1,7 +1,7 @@
 use crate::views::{
   view_from_map_ref, view_from_value, view_id_from_map_ref, View, ViewBuilder, ViewUpdate,
 };
-use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{Map, MapRef, MapRefWrapper, ReadTxn, TransactionMut};
 
 pub struct ViewMap {
   container: MapRefWrapper,
@@ -72,8 +72,7 @@ impl ViewMap {
     F: Fn(ViewUpdate),
   {
     if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
-      let map_ref_ext = MapRefExtension(&map_ref);
-      let update = ViewUpdate::new(view_id, txn, map_ref_ext);
+      let update = ViewUpdate::new(view_id, txn, &map_ref);
       f(update)
     } else {
       tracing::warn!("Can't update the view. The view is not found")
@@ -92,8 +91,7 @@ impl ViewMap {
 
     for map_ref in map_refs {
       if let Some(view_id) = view_id_from_map_ref(&map_ref, txn) {
-        let map_ref_ext = MapRefExtension(&map_ref);
-        let update = ViewUpdate::new(&view_id, txn, map_ref_ext);
+        let update = ViewUpdate::new(&view_id, txn, &map_ref);
         f(update)
       }
     }

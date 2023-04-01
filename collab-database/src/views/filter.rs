@@ -72,10 +72,9 @@ impl<'a, 'b> FilterBuilder<'a, 'b> {
     txn: &'a mut TransactionMut<'b>,
     map_ref: MapRef,
   ) -> Self {
-    let map_ref_ext = MapRefExtension(&map_ref);
-    map_ref_ext.insert_with_txn(txn, FILTER_ID, id);
-    map_ref_ext.insert_with_txn(txn, FIELD_ID, field_id);
-    map_ref_ext.insert_with_txn(txn, FIELD_TYPE, field_type);
+    map_ref.insert_with_txn(txn, FILTER_ID, id);
+    map_ref.insert_with_txn(txn, FIELD_ID, field_id);
+    map_ref.insert_with_txn(txn, FIELD_TYPE, field_type);
     Self { id, map_ref, txn }
   }
 
@@ -83,23 +82,22 @@ impl<'a, 'b> FilterBuilder<'a, 'b> {
   where
     F: FnOnce(FilterUpdate),
   {
-    let map_ref = MapRefExtension(&self.map_ref);
-    let update = FilterUpdate::new(self.id, self.txn, map_ref);
+    let update = FilterUpdate::new(self.id, self.txn, &self.map_ref);
     f(update);
     self
   }
   pub fn done(self) {}
 }
 
-pub struct FilterUpdate<'a, 'b, 'c> {
+pub struct FilterUpdate<'a, 'b> {
   #[allow(dead_code)]
   id: &'a str,
-  map_ref: MapRefExtension<'c>,
+  map_ref: &'a MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
-impl<'a, 'b, 'c> FilterUpdate<'a, 'b, 'c> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefExtension<'c>) -> Self {
+impl<'a, 'b> FilterUpdate<'a, 'b> {
+  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'a MapRef) -> Self {
     Self { id, map_ref, txn }
   }
 
@@ -107,7 +105,7 @@ impl<'a, 'b, 'c> FilterUpdate<'a, 'b, 'c> {
   impl_i64_update!(set_condition, set_condition_if_not_none, FILTER_CONDITION);
 
   pub fn done(self) -> Option<Filter> {
-    filter_from_map_ref(self.map_ref.into_inner(), self.txn)
+    filter_from_map_ref(self.map_ref, self.txn)
   }
 }
 
@@ -120,7 +118,6 @@ pub fn filter_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Filter>
 }
 
 pub fn filter_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Filter> {
-  let map_ref = MapRefExtension(map_ref);
   let id = map_ref.get_str_with_txn(txn, FILTER_ID)?;
   let field_id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
   let condition = map_ref.get_i64_with_txn(txn, FILTER_CONDITION).unwrap_or(0);
