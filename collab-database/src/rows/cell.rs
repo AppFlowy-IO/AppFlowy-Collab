@@ -1,6 +1,4 @@
-use collab::preclude::{
-  lib0Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
-};
+use collab::preclude::{lib0Any, Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
@@ -17,21 +15,23 @@ impl Cells {
     self.0
   }
 
-  pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Self {
+  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
+    self.into_inner().into_iter().for_each(|(k, v)| {
+      let cell_map_ref = map_ref.get_or_insert_map_with_txn(txn, &k);
+      v.fill_map_ref(txn, &cell_map_ref);
+    });
+  }
+}
+
+impl<T: ReadTxn> From<(&'_ T, &MapRef)> for Cells {
+  fn from(params: (&'_ T, &MapRef)) -> Self {
     let mut this = Self::new();
-    map_ref.iter(txn).for_each(|(k, v)| {
+    params.1.iter(params.0).for_each(|(k, v)| {
       if let YrsValue::YMap(map_ref) = v {
-        this.insert(k.to_string(), Cell::from_map_ref(txn, map_ref));
+        this.insert(k.to_string(), (params.0, &map_ref).into());
       }
     });
     this
-  }
-
-  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRefWrapper) {
-    self.into_inner().into_iter().for_each(|(k, v)| {
-      let cell_map_ref = map_ref.get_or_insert_map_with_txn(txn, &k);
-      v.fill_map_ref(txn, cell_map_ref);
-    });
   }
 }
 
@@ -97,10 +97,22 @@ impl Cell {
     this
   }
 
-  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: MapRefWrapper) {
+  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.0.into_iter().for_each(|(k, v)| {
       map_ref.insert_with_txn(txn, &k, v);
     })
+  }
+}
+
+impl<T: ReadTxn> From<(&'_ T, &MapRef)> for Cell {
+  fn from(params: (&'_ T, &MapRef)) -> Self {
+    let mut this = Cell::default();
+    params.1.iter(params.0).for_each(|(k, v)| {
+      if let YrsValue::Any(any) = v {
+        this.insert(k.to_string(), any);
+      }
+    });
+    this
   }
 }
 

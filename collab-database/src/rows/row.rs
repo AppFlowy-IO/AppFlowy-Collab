@@ -108,7 +108,7 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
 
   let cells = map_ref
     .get_map_with_txn(txn, ROW_CELLS)
-    .map(|map_ref| Cells::from_map_ref(txn, map_ref))
+    .map(|map_ref| (txn, &map_ref).into())
     .unwrap_or_default();
 
   Some(Row {
