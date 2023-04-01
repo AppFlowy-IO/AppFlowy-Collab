@@ -200,7 +200,7 @@ fn create_database_view_with_layout_setting_test() {
 }
 
 #[test]
-fn delete_database_view_test() {
+fn delete_inline_database_view_test() {
   let database_test = create_database_with_default_data(1, "1");
   for i in 0..3 {
     let params = CreateViewParams {

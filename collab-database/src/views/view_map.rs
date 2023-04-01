@@ -100,4 +100,12 @@ impl ViewMap {
   pub fn delete_view(&self, view_id: &str) {
     self.container.remove(view_id);
   }
+
+  pub fn clear_with_txn(&self, txn: &mut TransactionMut) {
+    self.container.clear(txn);
+  }
+
+  pub fn delete_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
+    self.container.remove_with_txn(txn, view_id)
+  }
 }

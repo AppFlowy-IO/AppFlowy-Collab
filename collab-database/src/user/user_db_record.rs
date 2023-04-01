@@ -46,6 +46,17 @@ impl DatabaseArray {
       .with_transact_mut(|txn| self.get_all_databases_with_txn(txn))
   }
 
+  pub fn contains(&self, database_id: &str) -> bool {
+    let txn = self.array_ref.transact();
+    self
+      .array_ref
+      .iter(&txn)
+      .any(|value| match database_id_from_value(&txn, value) {
+        None => false,
+        Some(id) => id == database_id,
+      })
+  }
+
   pub fn get_all_databases_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseRecord> {
     self
       .array_ref

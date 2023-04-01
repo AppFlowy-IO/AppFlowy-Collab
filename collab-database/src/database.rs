@@ -23,6 +23,7 @@ const FIELDS: &str = "fields";
 const ROWS: &str = "rows";
 const VIEWS: &str = "views";
 const METAS: &str = "metas";
+const DATABASE_INLINE_VIEW: &str = "iid";
 
 pub struct DatabaseContext {
   pub collab: Collab,
@@ -35,6 +36,7 @@ impl Database {
     context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
     let this = Self::create(database_id, context)?;
+    this.set_database_inline_view(&params.id);
     this.create_view(params);
     Ok(this)
   }
@@ -181,13 +183,47 @@ impl Database {
     })
   }
 
-  pub fn duplicate_view(&self, view_id: &str) -> Option<View> {
-    //
-    todo!()
+  pub fn duplicate(&self) {
+    // Just duplicate the inline-view
   }
 
   pub fn to_json_value(&self) -> JsonValue {
     let database_serde = DatabaseSerde::from_database(self);
     serde_json::to_value(&database_serde).unwrap()
+  }
+
+  pub fn is_inline_view(&self, view_id: &str) -> bool {
+    let inline_view_id = self.get_database_inline_view_id();
+    inline_view_id == view_id
+  }
+
+  fn set_database_inline_view(&self, view_id: &str) {
+    self.root.with_transact_mut(|txn| {
+      self
+        .metas
+        .insert_with_txn(txn, DATABASE_INLINE_VIEW, view_id);
+    })
+  }
+
+  fn get_database_inline_view_id(&self) -> String {
+    let txn = self.root.transact();
+    // It's safe to unwrap because each database inline view id was set
+    // when initializing the database
+    self
+      .metas
+      .get_str_with_txn(&txn, DATABASE_INLINE_VIEW)
+      .unwrap()
+  }
+
+  pub fn delete_view(&self, view_id: &str) {
+    if self.is_inline_view(view_id) {
+      self.root.with_transact_mut(|txn| {
+        self.views.clear_with_txn(txn);
+      });
+    } else {
+      self.root.with_transact_mut(|txn| {
+        self.views.delete_view_with_txn(txn, view_id);
+      });
+    }
   }
 }

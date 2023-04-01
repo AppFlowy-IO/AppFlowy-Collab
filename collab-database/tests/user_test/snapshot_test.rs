@@ -1,8 +1,7 @@
 use crate::helper::create_user_database;
-use assert_json_diff::assert_json_eq;
+
 use collab_database::rows::Row;
 use collab_database::views::CreateViewParams;
-use serde_json::json;
 
 #[test]
 fn database_get_snapshot_test() {

@@ -42,7 +42,11 @@ impl MapRefWrapper {
   }
 
   pub fn remove(&self, key: &str) {
-    self.with_transact_mut(|txn| self.map_ref.remove(txn, key));
+    self.with_transact_mut(|txn| self.remove_with_txn(txn, key));
+  }
+
+  pub fn remove_with_txn(&self, txn: &mut TransactionMut, key: &str) {
+    self.map_ref.remove(txn, key);
   }
 
   pub fn insert<V: Prelim>(&self, key: &str, value: V) {
