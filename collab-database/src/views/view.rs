@@ -164,7 +164,8 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     set_row_orders,
     add_row_order,
     remove_row_order,
-    move_row,
+    move_row_order,
+    insert_row_order,
     ROW_ORDERS,
     RowOrder,
     RowOrderArray
@@ -174,7 +175,8 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     set_field_orders,
     add_field_order,
     remove_field_order,
-    move_field,
+    move_field_order,
+    insert_field_order,
     FIELD_ORDERS,
     FieldOrder,
     FieldOrderArray
@@ -315,6 +317,27 @@ pub trait OrderArray {
     }
   }
 
+  fn push_with_txn(&self, txn: &mut TransactionMut, object: Self::Object) {
+    self.array_ref().push_back(txn, object);
+  }
+
+  fn insert_with_txn(&self, txn: &mut TransactionMut, object: Self::Object, prev_object_id: &str) {
+    if prev_object_id.is_empty() {
+      self.array_ref().push_front(txn, object);
+      return;
+    }
+
+    match self.get_row_position_with_txn(txn, prev_object_id) {
+      None => {
+        self.array_ref().push_back(txn, object);
+      },
+      Some(pos) => {
+        let next: u32 = pos as u32 + 1;
+        self.array_ref().insert(txn, next, object);
+      },
+    }
+  }
+
   fn get_orders_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Self::Object> {
     self
       .array_ref()
@@ -340,5 +363,16 @@ pub trait OrderArray {
       array_ref.remove(txn, from);
       array_ref.insert(txn, to, value);
     }
+  }
+
+  fn get_row_position_with_txn<T: ReadTxn>(&self, txn: &T, row_id: &str) -> Option<u32> {
+    self
+      .array_ref()
+      .iter(txn)
+      .position(|value| match self.object_from_value_with_txn(value, txn) {
+        None => false,
+        Some(order) => order.identify_id() == row_id,
+      })
+      .map(|pos| pos as u32)
   }
 }

@@ -112,13 +112,26 @@ impl Database {
     self.root.get_str_with_txn(txn, DATABASE_ID)
   }
 
-  pub fn insert_row(&self, row: Row) {
+  pub fn push_row(&self, row: Row) {
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |update| {
         update.add_row_order(&row);
       });
       self.rows.insert_row_with_txn(txn, row);
     })
+  }
+
+  pub fn insert_row(&self, row: Row, prev_row_id: &str) {
+    self.root.with_transact_mut(|txn| {
+      self.insert_row_with_txn(txn, row, prev_row_id);
+    });
+  }
+
+  pub fn insert_row_with_txn(&self, txn: &mut TransactionMut, row: Row, prev_row_id: &str) {
+    self.views.update_all_views_with_txn(txn, |update| {
+      update.insert_row_order(&row, prev_row_id);
+    });
+    self.rows.insert_row_with_txn(txn, row);
   }
 
   pub fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
@@ -143,7 +156,7 @@ impl Database {
       .collect::<Vec<Row>>()
   }
 
-  pub fn delete_row(&self, row_id: &str) {
+  pub fn remove_row(&self, row_id: &str) {
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |update| {
         update.remove_row_order(row_id);
@@ -207,6 +220,16 @@ impl Database {
     Some(duplicated_view)
   }
 
+  pub fn duplicate_row(&self, row_id: &str) {
+    self.root.with_transact_mut(|txn| {
+      if let Some(mut row) = self.rows.get_row_with_txn(txn, row_id) {
+        row.id = gen_row_id();
+        self.insert_row_with_txn(txn, row, row_id);
+      }
+    });
+    todo!()
+  }
+
   pub fn duplicate_data(&self) -> DuplicatedDatabase {
     let inline_view_id = self.get_inline_view_id();
     let view = self.views.get_view(&inline_view_id).unwrap();
@@ -263,6 +286,10 @@ pub fn gen_database_view_id() -> String {
 }
 
 pub fn gen_field_id() -> String {
+  nanoid!(6)
+}
+
+pub fn gen_row_id() -> String {
   nanoid!(6)
 }
 

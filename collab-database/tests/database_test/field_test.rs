@@ -134,7 +134,7 @@ fn move_field_test() {
   }
 
   database_test.views.update_view("v1", |update| {
-    update.move_field(2, 0);
+    update.move_field_order(2, 0);
   });
 
   let view_1 = database_test.views.get_view("v1").unwrap();

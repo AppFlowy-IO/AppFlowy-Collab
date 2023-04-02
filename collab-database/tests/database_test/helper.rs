@@ -109,9 +109,9 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   };
 
   let database_test = create_database(uid, database_id);
-  database_test.insert_row(row_1);
-  database_test.insert_row(row_2);
-  database_test.insert_row(row_3);
+  database_test.push_row(row_1);
+  database_test.push_row(row_2);
+  database_test.push_row(row_3);
 
   let field_1 = Field::new(
     "f1".to_string(),

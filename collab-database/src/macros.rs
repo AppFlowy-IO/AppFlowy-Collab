@@ -115,8 +115,15 @@ macro_rules! impl_any_update {
 
 #[macro_export]
 macro_rules! impl_order_update {
-  ($setter1: ident,  $setter2: ident,  $setter3: ident,  $setter4: ident, $key:expr, $ty:ident, $array_ty:ident) => {
-    pub fn $setter1(self, orders: Vec<$ty>) -> Self {
+  ($set_orders: ident,
+    $push_back: ident,
+    $remove: ident,
+    $move_to: ident,
+    $insert: ident,
+    $key:expr, $ty:ident,
+    $array_ty:ident
+  ) => {
+    pub fn $set_orders(self, orders: Vec<$ty>) -> Self {
       let array_ref = self
         .map_ref
         .get_or_insert_array_with_txn::<$ty>(self.txn, $key);
@@ -125,19 +132,19 @@ macro_rules! impl_order_update {
       self
     }
 
-    pub fn $setter2<T: Into<$ty>>(self, order: T) -> Self {
+    pub fn $push_back<T: Into<$ty>>(self, order: T) -> Self {
       let order = order.into();
       if let Some(array) = self
         .map_ref
         .get_array_ref_with_txn(self.txn, $key)
         .map(|array_ref| $array_ty::new(array_ref))
       {
-        array.push_back(self.txn, order);
+        array.push_with_txn(self.txn, order);
       }
       self
     }
 
-    pub fn $setter3(self, id: &str) -> Self {
+    pub fn $remove(self, id: &str) -> Self {
       if let Some(array) = self
         .map_ref
         .get_array_ref_with_txn(self.txn, $key)
@@ -148,13 +155,25 @@ macro_rules! impl_order_update {
       self
     }
 
-    pub fn $setter4(self, from: u32, to: u32) -> Self {
+    pub fn $move_to(self, from: u32, to: u32) -> Self {
       if let Some(array) = self
         .map_ref
         .get_array_ref_with_txn(self.txn, $key)
         .map(|array_ref| $array_ty::new(array_ref))
       {
         array.move_to(self.txn, from, to);
+      }
+      self
+    }
+
+    pub fn $insert<T: Into<$ty>>(self, object: T, prev_object_id: &str) -> Self {
+      let object = object.into();
+      if let Some(array) = self
+        .map_ref
+        .get_array_ref_with_txn(self.txn, $key)
+        .map(|array_ref| $array_ty::new(array_ref))
+      {
+        array.insert_with_txn(self.txn, object, prev_object_id)
       }
       self
     }
