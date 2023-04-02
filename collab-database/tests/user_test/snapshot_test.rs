@@ -21,7 +21,7 @@ fn database_get_snapshot_test() {
 
   for i in 0..10 {
     let row_id = format!("r{}", i);
-    database.insert_row(Row::new(row_id));
+    database.push_row(Row::new(row_id));
   }
 
   let snapshots = user_db.get_database_snapshots("d1");
@@ -43,7 +43,7 @@ fn delete_database_snapshot_test() {
 
   for i in 0..10 {
     let row_id = format!("r{}", i);
-    database.insert_row(Row::new(row_id));
+    database.push_row(Row::new(row_id));
   }
   user_db.delete_database("d1");
   let snapshots = user_db.get_database_snapshots("d1");
@@ -64,7 +64,7 @@ fn restore_from_database_snapshot_test() {
     .unwrap();
   for i in 0..4 {
     let row_id = format!("r{}", i);
-    database.insert_row(Row {
+    database.push_row(Row {
       id: row_id,
       ..Default::default()
     });

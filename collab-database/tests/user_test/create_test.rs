@@ -70,7 +70,7 @@ fn duplicate_database_inline_view_test() {
     .unwrap();
 
   let duplicated_database = user_db.duplicate_view("d1", "v1").unwrap();
-  duplicated_database.insert_row(Row {
+  duplicated_database.push_row(Row {
     id: "r1".to_string(),
     ..Default::default()
   });
@@ -98,7 +98,7 @@ fn duplicate_database_view_test() {
   });
 
   let duplicated_database = user_db.duplicate_view("d1", "v").unwrap();
-  duplicated_database.insert_row(Row {
+  duplicated_database.push_row(Row {
     id: "r1".to_string(),
     ..Default::default()
   });

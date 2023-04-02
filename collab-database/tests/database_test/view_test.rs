@@ -69,7 +69,7 @@ fn create_database_row_test() {
   let database_test = create_database_grid_view(1, "1", "v1");
 
   let row_id = nanoid!(4);
-  database_test.insert_row(Row {
+  database_test.push_row(Row {
     id: row_id.clone(),
     ..Default::default()
   });

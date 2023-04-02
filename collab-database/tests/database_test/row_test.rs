@@ -19,7 +19,7 @@ fn create_row_shared_by_two_view_test() {
   database_test.create_view(params);
 
   let row_id = nanoid!(4);
-  database_test.insert_row(Row {
+  database_test.push_row(Row {
     id: row_id.clone(),
     ..Default::default()
   });
@@ -46,12 +46,12 @@ fn delete_row_shared_by_two_view_test() {
   database_test.create_view(params);
 
   let row_id = nanoid!(4);
-  database_test.insert_row(Row {
+  database_test.push_row(Row {
     id: row_id.clone(),
     ..Default::default()
   });
 
-  database_test.delete_row(&row_id);
+  database_test.remove_row(&row_id);
 
   let view_1 = database_test.views.get_view("v1").unwrap();
   let view_2 = database_test.views.get_view("v2").unwrap();
@@ -76,7 +76,7 @@ fn move_row_in_view_test() {
   assert_eq!(rows[2].id, "r3");
 
   database_test.views.update_view("v1", |update| {
-    update.move_row(2, 1);
+    update.move_row_order(2, 1);
   });
 
   let rows2 = database_test.get_rows_for_view("v1");
@@ -85,7 +85,7 @@ fn move_row_in_view_test() {
   assert_eq!(rows2[2].id, "r2");
 
   database_test.views.update_view("v1", |update| {
-    update.move_row(2, 0);
+    update.move_row_order(2, 0);
   });
 
   let row3 = database_test.get_rows_for_view("v1");
@@ -109,7 +109,7 @@ fn move_row_in_views_test() {
   database_test.create_view(params);
 
   database_test.views.update_view("v1", |update| {
-    update.move_row(2, 1);
+    update.move_row_order(2, 1);
   });
 
   let rows_1 = database_test.get_rows_for_view("v1");
@@ -121,4 +121,70 @@ fn move_row_in_views_test() {
   assert_eq!(rows_2[0].id, "r1");
   assert_eq!(rows_2[1].id, "r2");
   assert_eq!(rows_2[2].id, "r3");
+}
+
+#[test]
+fn insert_row_in_views_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let params = CreateViewParams {
+    view_id: "v1".to_string(),
+    ..Default::default()
+  };
+  database_test.create_view(params);
+
+  let row = Row {
+    id: "r4".to_string(),
+    ..Default::default()
+  };
+  database_test.insert_row(row, "r2");
+
+  let rows = database_test.get_rows_for_view("v1");
+  assert_eq!(rows[0].id, "r1");
+  assert_eq!(rows[1].id, "r2");
+  assert_eq!(rows[2].id, "r4");
+  assert_eq!(rows[3].id, "r3");
+}
+
+#[test]
+fn insert_row_at_front_in_views_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let params = CreateViewParams {
+    view_id: "v1".to_string(),
+    ..Default::default()
+  };
+  database_test.create_view(params);
+
+  let row = Row {
+    id: "r4".to_string(),
+    ..Default::default()
+  };
+  database_test.insert_row(row, "");
+
+  let rows = database_test.get_rows_for_view("v1");
+  assert_eq!(rows[0].id, "r4");
+  assert_eq!(rows[1].id, "r1");
+  assert_eq!(rows[2].id, "r2");
+  assert_eq!(rows[3].id, "r3");
+}
+
+#[test]
+fn insert_row_at_last_in_views_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let params = CreateViewParams {
+    view_id: "v1".to_string(),
+    ..Default::default()
+  };
+  database_test.create_view(params);
+
+  let row = Row {
+    id: "r4".to_string(),
+    ..Default::default()
+  };
+  database_test.insert_row(row, "r3");
+
+  let rows = database_test.get_rows_for_view("v1");
+  assert_eq!(rows[0].id, "r1");
+  assert_eq!(rows[1].id, "r2");
+  assert_eq!(rows[2].id, "r3");
+  assert_eq!(rows[3].id, "r4");
 }
