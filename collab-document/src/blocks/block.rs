@@ -1,5 +1,5 @@
 use anyhow::Result;
-use collab::preclude::{Map, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Serialize, Serializer};
 
@@ -130,7 +130,7 @@ impl BlockMap {
   }
 
   pub fn delete_block_with_txn(&self, txn: &mut TransactionMut, block_id: &str) {
-    self.root.remove_with_txn(txn, block_id);
+    self.root.delete_with_txn(txn, block_id);
   }
 }
 

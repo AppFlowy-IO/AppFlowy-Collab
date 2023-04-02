@@ -125,16 +125,19 @@ impl Folder {
   }
 
   pub fn get_current_workspace(&self) -> Option<Workspace> {
-    let workspace_id = self.meta.get_str(CURRENT_WORKSPACE)?;
+    let txn = self.meta.transact();
+    let workspace_id = self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE)?;
     self.workspaces.get_workspace(&workspace_id)
   }
 
   pub fn get_current_workspace_id(&self) -> Option<String> {
-    self.meta.get_str(CURRENT_WORKSPACE)
+    let txn = self.meta.transact();
+    self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE)
   }
 
   pub fn get_views_belong_to_current_workspace(&self) -> Vec<View> {
-    if let Some(workspace_id) = self.meta.get_str(CURRENT_WORKSPACE) {
+    let txn = self.meta.transact();
+    if let Some(workspace_id) = self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE) {
       if let Some(workspace) = self.workspaces.get_workspace(workspace_id) {
         let view_ids = workspace
           .belongings
@@ -149,7 +152,7 @@ impl Folder {
   }
 
   pub fn insert_view(&self, view: View) {
-    if let Some(workspace_id) = self.meta.get_str(CURRENT_WORKSPACE) {
+    if let Some(workspace_id) = self.get_current_workspace_id() {
       if view.bid == workspace_id {
         if let Some(workspace_map) = self.workspaces.edit_workspace(workspace_id) {
           workspace_map.update(|update| {
@@ -176,7 +179,8 @@ impl Folder {
   }
 
   pub fn get_current_view(&self) -> Option<String> {
-    self.meta.get_str(CURRENT_VIEW)
+    let txn = self.meta.transact();
+    self.meta.get_str_with_txn(&txn, CURRENT_VIEW)
   }
 
   pub fn to_json(&self) -> String {

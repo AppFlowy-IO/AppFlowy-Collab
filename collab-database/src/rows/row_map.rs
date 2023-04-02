@@ -1,16 +1,26 @@
 use crate::rows::{
-  row_from_map_ref, row_from_value, row_id_from_value, Row, RowBuilder, RowUpdate,
+  row_from_map_ref, row_from_value, row_id_from_value, Row, RowBuilder, RowComment, RowUpdate,
 };
 use crate::views::RowOrder;
-use collab::preclude::{Map, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{
+  Array, ArrayRefWrapper, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+};
+
+const ROW_META: &str = "row_meta";
+const ROW_DOC: &str = "row_doc";
+const ROW_COMMENT: &str = "row_comment";
 
 pub struct RowMap {
   container: MapRefWrapper,
+  meta: MapRefWrapper,
 }
 
 impl RowMap {
-  pub fn new(container: MapRefWrapper) -> Self {
-    Self { container }
+  pub fn new_with_txn(txn: &mut TransactionMut, container: MapRefWrapper) -> Self {
+    let meta = container.get_or_insert_map_with_txn(txn, ROW_META);
+    meta.get_or_insert_map_with_txn(txn, ROW_DOC);
+    meta.get_or_insert_array_with_txn::<RowComment>(txn, ROW_COMMENT);
+    Self { container, meta }
   }
 
   pub fn insert_row(&self, row: Row) {
@@ -61,7 +71,7 @@ impl RowMap {
   }
 
   pub fn delete_row_with_txn(&self, txn: &mut TransactionMut, row_id: &str) {
-    self.container.remove_with_txn(txn, row_id)
+    self.container.delete_with_txn(txn, row_id)
   }
 
   pub fn update_row<F>(&self, row_id: &str, f: F) -> Option<Row>
@@ -73,5 +83,40 @@ impl RowMap {
       let update = RowUpdate::new(row_id, txn, &map_ref);
       f(update)
     })
+  }
+
+  pub fn get_comments_for_row_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<RowComment> {
+    let array_ref = self.get_comment_array_with_txn(txn);
+    array_ref
+      .iter(txn)
+      .flat_map(|v| {
+        if let YrsValue::Any(any) = v {
+          RowComment::try_from(any).ok()
+        } else {
+          None
+        }
+      })
+      .collect()
+  }
+
+  pub fn add_comment_with_txn(&self, txn: &mut TransactionMut, comment: RowComment) {
+    let array_ref = self.get_comment_array_with_txn(txn);
+    array_ref.push(comment);
+  }
+
+  pub fn remove_comment_with_txn(&self, txn: &mut TransactionMut, index: u32) {
+    let array_ref = self.get_comment_array_with_txn(txn);
+    array_ref.remove_with_txn(txn, index);
+  }
+
+  #[allow(dead_code)]
+  fn get_doc_with_txn<T: ReadTxn>(&self, txn: &T) -> MapRefWrapper {
+    // It's safe to unwrap because the doc will be inserted when this row gets initialized
+    self.meta.get_map_with_txn(txn, ROW_DOC).unwrap()
+  }
+
+  fn get_comment_array_with_txn<T: ReadTxn>(&self, txn: &T) -> ArrayRefWrapper {
+    // It's safe to unwrap because the doc will be inserted when this row gets initialized
+    self.meta.get_array_ref_with_txn(txn, ROW_COMMENT).unwrap()
   }
 }

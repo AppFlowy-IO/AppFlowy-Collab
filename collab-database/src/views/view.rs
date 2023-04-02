@@ -1,3 +1,6 @@
+use crate::database::gen_database_view_id;
+use crate::fields::Field;
+use crate::rows::Row;
 use crate::views::layout::{Layout, LayoutSettings};
 use crate::views::{
   FieldOrder, FieldOrderArray, Filter, FilterArray, Group, GroupArray, RowOrder, RowOrderArray,
@@ -29,13 +32,66 @@ pub struct View {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateViewParams {
-  pub id: String,
+  pub view_id: String,
   pub name: String,
   pub layout: Layout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<Filter>,
   pub groups: Vec<Group>,
   pub sorts: Vec<Sort>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CreateDatabaseParams {
+  pub view_id: String,
+  pub name: String,
+  pub layout: Layout,
+  pub layout_settings: LayoutSettings,
+  pub filters: Vec<Filter>,
+  pub groups: Vec<Group>,
+  pub sorts: Vec<Sort>,
+  pub rows: Vec<Row>,
+  pub fields: Vec<Field>,
+}
+
+impl CreateDatabaseParams {
+  pub fn from_view(view: View, rows: Vec<Row>, fields: Vec<Field>) -> Self {
+    let mut params: Self = view.into();
+    params.rows = rows;
+    params.fields = fields;
+    params
+  }
+  pub fn split(self) -> (Vec<Row>, Vec<Field>, CreateViewParams) {
+    (
+      self.rows,
+      self.fields,
+      CreateViewParams {
+        view_id: self.view_id,
+        name: self.name,
+        layout: self.layout,
+        layout_settings: self.layout_settings,
+        filters: self.filters,
+        groups: self.groups,
+        sorts: self.sorts,
+      },
+    )
+  }
+}
+
+impl From<View> for CreateDatabaseParams {
+  fn from(view: View) -> Self {
+    Self {
+      view_id: gen_database_view_id(),
+      name: view.name,
+      layout: view.layout,
+      layout_settings: view.layout_settings,
+      filters: view.filters,
+      groups: view.groups,
+      sorts: view.sorts,
+      rows: vec![],
+      fields: vec![],
+    }
+  }
 }
 
 const VIEW_ID: &str = "id";
@@ -67,23 +123,22 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
   where
     F: FnOnce(ViewUpdate),
   {
-    let map_ref_ext = MapRefExtension(&self.map_ref);
-    let update = ViewUpdate::new(self.id, self.txn, map_ref_ext);
+    let update = ViewUpdate::new(self.id, self.txn, &self.map_ref);
     f(update);
     self
   }
   pub fn done(self) {}
 }
 
-pub struct ViewUpdate<'a, 'b, 'c> {
+pub struct ViewUpdate<'a, 'b> {
   #[allow(dead_code)]
   id: &'a str,
-  map_ref: MapRefExtension<'c>,
+  map_ref: &'a MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
-impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefExtension<'c>) -> Self {
+impl<'a, 'b> ViewUpdate<'a, 'b> {
+  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'a MapRef) -> Self {
     Self { id, map_ref, txn }
   }
 
@@ -161,12 +216,12 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   }
 
   pub fn done(self) -> Option<View> {
-    view_from_map_ref(self.map_ref.into_inner(), self.txn)
+    view_from_map_ref(self.map_ref, self.txn)
   }
 }
 
 pub fn view_id_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<String> {
-  MapRefExtension(map_ref).get_str_with_txn(txn, VIEW_ID)
+  map_ref.get_str_with_txn(txn, VIEW_ID)
 }
 
 pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<View> {
@@ -175,7 +230,6 @@ pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<View> {
 }
 
 pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> {
-  let map_ref = MapRefExtension(map_ref);
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
   let name = map_ref.get_str_with_txn(txn, VIEW_NAME)?;
   let database_id = map_ref

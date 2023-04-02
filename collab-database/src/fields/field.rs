@@ -146,8 +146,7 @@ const FIELD_PRIMARY: &str = "is_primary";
 
 pub fn field_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<String> {
   let map_ref = value.to_ymap()?;
-  let map_ref_ext = MapRefExtension(&map_ref);
-  map_ref_ext.get_str_with_txn(txn, FIELD_ID)
+  map_ref.get_str_with_txn(txn, FIELD_ID)
 }
 
 pub fn field_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Field> {
@@ -156,7 +155,6 @@ pub fn field_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Field> {
 }
 
 pub fn field_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Field> {
-  let map_ref = MapRefExtension(map_ref);
   let id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
   let name = map_ref
     .get_str_with_txn(txn, FIELD_NAME)

@@ -1,4 +1,5 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
+use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use collab::preclude::CollabBuilder;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::{Field, FieldType};
@@ -14,7 +15,7 @@ pub struct DatabaseTest {
   database: Database,
 
   #[allow(dead_code)]
-  cleaner: Cleaner,
+  cleaner: Option<Cleaner>,
 }
 
 unsafe impl Send for DatabaseTest {}
@@ -35,19 +36,53 @@ impl DerefMut for DatabaseTest {
 }
 
 pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
+  let collab = CollabBuilder::new(uid, database_id).build();
+  collab.initial();
+  let context = DatabaseContext { collab };
+  let database = Database::create(database_id, context).unwrap();
+  DatabaseTest {
+    database,
+    cleaner: None,
+  }
+}
+
+pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabKV>, DatabaseTest) {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(CollabKV::open(path.clone()).unwrap());
-  let disk_plugin = CollabDiskPlugin::new(uid, db).unwrap();
-  let cleaner = Cleaner::new(path);
+  let db = Arc::new(CollabKV::open(path).unwrap());
+  let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
+  let snapshot_plugin = CollabSnapshotPlugin::new(uid, db.clone(), 5).unwrap();
 
   let collab = CollabBuilder::new(1, database_id)
     .with_plugin(disk_plugin)
+    .with_plugin(snapshot_plugin)
     .build();
   collab.initial();
-  let context = DatabaseContext {};
-  let database = Database::create(database_id, collab, context).unwrap();
-  DatabaseTest { database, cleaner }
+  let context = DatabaseContext { collab };
+  let database = Database::create(database_id, context).unwrap();
+  (
+    db,
+    DatabaseTest {
+      database,
+      cleaner: None,
+    },
+  )
+}
+
+pub fn create_database_from_db(uid: i64, database_id: &str, db: Arc<CollabKV>) -> DatabaseTest {
+  let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
+  let snapshot_plugin = CollabSnapshotPlugin::new(uid, db, 5).unwrap();
+  let collab = CollabBuilder::new(uid, database_id)
+    .with_plugin(disk_plugin)
+    .with_plugin(snapshot_plugin)
+    .build();
+  collab.initial();
+  let context = DatabaseContext { collab };
+  let database = Database::create(database_id, context).unwrap();
+  DatabaseTest {
+    database,
+    cleaner: None,
+  }
 }
 
 pub fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
@@ -109,7 +144,7 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
 pub fn create_database_grid_view(uid: i64, database_id: &str, view_id: &str) -> DatabaseTest {
   let database_test = create_database_with_default_data(uid, database_id);
   let params = CreateViewParams {
-    id: view_id.to_string(),
+    view_id: view_id.to_string(),
     name: "my first grid".to_string(),
     layout: Layout::Grid,
     ..Default::default()
@@ -121,6 +156,7 @@ pub fn create_database_grid_view(uid: i64, database_id: &str, view_id: &str) -> 
 struct Cleaner(PathBuf);
 
 impl Cleaner {
+  #[allow(dead_code)]
   fn new(dir: PathBuf) -> Self {
     Cleaner(dir)
   }

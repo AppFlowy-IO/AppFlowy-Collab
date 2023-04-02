@@ -6,7 +6,7 @@ use collab_database::views::CreateViewParams;
 fn create_single_field_test() {
   let database_test = create_database(1, "1");
   let params = CreateViewParams {
-    id: "v1".to_string(),
+    view_id: "v1".to_string(),
     ..Default::default()
   };
   database_test.create_view(params);
@@ -71,7 +71,7 @@ fn delete_field_in_views_test() {
   }
 
   let params = CreateViewParams {
-    id: "v1".to_string(),
+    view_id: "v1".to_string(),
     ..Default::default()
   };
   database_test.create_view(params);
@@ -87,7 +87,7 @@ fn delete_field_in_views_test() {
 fn field_order_in_view_test() {
   let database_test = create_database(1, "1");
   let params = CreateViewParams {
-    id: "v1".to_string(),
+    view_id: "v1".to_string(),
     ..Default::default()
   };
   database_test.create_view(params);
@@ -113,13 +113,13 @@ fn field_order_in_view_test() {
 fn move_field_test() {
   let database_test = create_database(1, "1");
   let params = CreateViewParams {
-    id: "v1".to_string(),
+    view_id: "v1".to_string(),
     ..Default::default()
   };
   database_test.create_view(params);
 
   let params = CreateViewParams {
-    id: "v2".to_string(),
+    view_id: "v2".to_string(),
     ..Default::default()
   };
   database_test.create_view(params);

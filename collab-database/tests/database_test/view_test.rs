@@ -29,7 +29,7 @@ fn create_initial_database_test() {
 fn create_database_with_single_view_test() {
   let database_test = create_database_with_default_data(1, "1");
   let params = CreateViewParams {
-    id: "v1".to_string(),
+    view_id: "v1".to_string(),
     name: "my first grid".to_string(),
     layout: Layout::Grid,
     ..Default::default()
@@ -45,7 +45,7 @@ fn create_database_with_single_view_test() {
 fn create_same_database_view_twice_test() {
   let database_test = create_database_with_default_data(1, "1");
   let params = CreateViewParams {
-    id: "v1".to_string(),
+    view_id: "v1".to_string(),
     name: "my first grid".to_string(),
     layout: Layout::Grid,
     ..Default::default()
@@ -53,7 +53,7 @@ fn create_same_database_view_twice_test() {
   database_test.create_view(params);
 
   let params = CreateViewParams {
-    id: "v1".to_string(),
+    view_id: "v1".to_string(),
     name: "my second grid".to_string(),
     layout: Layout::Grid,
     ..Default::default()
@@ -113,7 +113,7 @@ fn create_database_view_with_filter_test() {
   };
 
   let params = CreateViewParams {
-    id: "v1".to_string(),
+    view_id: "v1".to_string(),
     name: "my first grid".to_string(),
     filters: vec![filter_1, filter_2],
     layout: Layout::Grid,
@@ -157,7 +157,7 @@ fn create_database_view_with_group_test() {
   };
 
   let params = CreateViewParams {
-    id: "v1".to_string(),
+    view_id: "v1".to_string(),
     groups: vec![group_1, group_2],
     layout: Layout::Grid,
     ..Default::default()
@@ -183,7 +183,7 @@ fn create_database_view_with_layout_setting_test() {
   layout_settings.insert(Layout::Grid, grid_setting);
 
   let params = CreateViewParams {
-    id: "v1".to_string(),
+    view_id: "v1".to_string(),
     layout: Layout::Grid,
     layout_settings,
     ..Default::default()
@@ -200,11 +200,11 @@ fn create_database_view_with_layout_setting_test() {
 }
 
 #[test]
-fn delete_database_view_test() {
+fn delete_inline_database_view_test() {
   let database_test = create_database_with_default_data(1, "1");
   for i in 0..3 {
     let params = CreateViewParams {
-      id: format!("v{}", i),
+      view_id: format!("v{}", i),
       ..Default::default()
     };
     database_test.create_view(params);
@@ -223,4 +223,18 @@ fn delete_database_view_test() {
     .collect::<Vec<String>>();
   assert_eq!(views.len(), 2);
   assert!(!views.contains(&view_id));
+}
+
+#[test]
+fn duplicate_database_view_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let params = CreateViewParams {
+    view_id: "v1".to_string(),
+    ..Default::default()
+  };
+  database_test.create_view(params);
+  database_test.duplicate_view("v1");
+
+  let views = database_test.views.get_all_views();
+  assert_eq!(views.len(), 2);
 }

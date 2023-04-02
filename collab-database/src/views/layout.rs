@@ -87,7 +87,6 @@ impl LayoutSettings {
   }
 
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
-    let map_ref = MapRefExtension(map_ref);
     self.0.into_iter().for_each(|(k, v)| {
       let inner_map = map_ref.get_or_insert_map_with_txn(txn, k.as_ref());
       v.fill_map_ref(txn, &inner_map);
@@ -127,9 +126,8 @@ impl LayoutSetting {
   }
 
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
-    let map_ref_ext = MapRefExtension(map_ref);
     self.0.into_iter().for_each(|(k, v)| {
-      map_ref_ext.insert_with_txn(txn, &k, v);
+      map_ref.insert_with_txn(txn, &k, v);
     });
   }
 

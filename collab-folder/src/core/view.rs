@@ -144,7 +144,7 @@ impl ViewsMap {
       .collect::<Vec<View>>();
 
     view_ids.iter().for_each(|view_id| {
-      self.container.remove_with_txn(txn, view_id.as_ref());
+      self.container.delete_with_txn(txn, view_id.as_ref());
     });
 
     if let Some(tx) = &self.change_tx {
@@ -216,7 +216,6 @@ fn view_from_map_ref<T: ReadTxn>(
   txn: &T,
   belonging_map: &Rc<BelongingMap>,
 ) -> Option<View> {
-  let map_ref = MapRefExtension(map_ref);
   let bid = map_ref.get_str_with_txn(txn, VIEW_BID)?;
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
   let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();

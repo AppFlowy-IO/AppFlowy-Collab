@@ -1,4 +1,6 @@
-use collab::preclude::{lib0Any, Map, MapRef, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
+use collab::preclude::{
+  lib0Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
@@ -53,7 +55,6 @@ pub struct TypeOption(HashMap<String, lib0Any>);
 impl TypeOption {
   pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Self {
     let mut this = Self(Default::default());
-
     map_ref.iter(txn).for_each(|(k, v)| {
       if let YrsValue::Any(any) = v {
         this.insert(k.to_string(), any);

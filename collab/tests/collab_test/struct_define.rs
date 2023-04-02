@@ -1,3 +1,4 @@
+use collab::core::map_wrapper::MapRefExtension;
 use collab_derive::Collab;
 use lib0::any::Any;
 use serde::{Deserialize, Serialize};
