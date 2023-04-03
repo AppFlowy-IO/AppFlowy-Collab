@@ -1,6 +1,6 @@
 use crate::error::CollabError;
 use crate::preclude::CollabPlugin;
-use collab_persistence::snapshot::YrsSnapshot;
+use collab_persistence::snapshot::YrsSnapshotDB;
 use collab_persistence::CollabKV;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering::SeqCst;
@@ -26,7 +26,7 @@ impl CollabSnapshotPlugin {
     })
   }
 
-  pub fn snapshot(&self) -> YrsSnapshot {
+  pub fn snapshot(&self) -> YrsSnapshotDB {
     self.db.snapshot(self.uid)
   }
 

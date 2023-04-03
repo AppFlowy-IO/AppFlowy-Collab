@@ -10,12 +10,12 @@ use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{ReadTxn, StateVector, TransactionMut, Update};
 
-pub struct YrsDoc<'a> {
+pub struct YrsDocDB<'a> {
   pub(crate) uid: i64,
   pub(crate) db: &'a CollabKV,
 }
 
-impl<'a> YrsDoc<'a> {
+impl<'a> YrsDocDB<'a> {
   pub fn insert_or_create_new_doc<K: AsRef<[u8]> + ?Sized, T: ReadTxn>(
     &self,
     object_id: &K,

@@ -1,12 +1,15 @@
 use crate::database::{gen_database_id, Database, DatabaseContext, DuplicatedDatabase};
 use crate::error::DatabaseError;
-use crate::user::user_db_record::{DatabaseArray, DatabaseRecord};
+use crate::user::db_record::{DatabaseArray, DatabaseRecord};
+use crate::user::db_relation::{DatabaseRelation, RelationMap};
 use crate::views::CreateDatabaseParams;
-
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use collab::preclude::updates::decoder::Decode;
-use collab::preclude::{lib0Any, Collab, CollabBuilder, MapPrelim, Update};
+use collab::preclude::{
+  lib0Any, Collab, CollabBuilder, Doc, MapPrelim, MapRefWrapper, Options, ToJson, Update, Uuid,
+  YrsValue,
+};
 use collab_persistence::snapshot::CollabSnapshot;
 use collab_persistence::CollabKV;
 use parking_lot::RwLock;
@@ -19,10 +22,12 @@ pub struct UserDatabase {
   #[allow(dead_code)]
   collab: Collab,
   database_vec: DatabaseArray,
+  database_relation: DatabaseRelation,
   open_handlers: RwLock<HashMap<String, Arc<Database>>>,
 }
 
 const DATABASES: &str = "databases";
+const RELATIONS: &str = "relations";
 
 impl UserDatabase {
   pub fn new(uid: i64, db: Arc<CollabKV>) -> Self {
@@ -33,22 +38,40 @@ impl UserDatabase {
       .with_plugin(snapshot_plugin)
       .build();
     collab.initial();
-    let databases = collab.with_transact_mut(|txn| {
+    let (databases, relation) = collab.with_transact_mut(|txn| {
       // { DATABASES: {:} }
-      collab
+      let databases = collab
         .get_array_with_txn(txn, vec![DATABASES])
         .unwrap_or_else(|| {
           collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn, DATABASES, vec![])
+        });
+
+      let relation = collab
+        .get_with_txn(txn, RELATIONS)
+        .unwrap_or_else(|| {
+          let doc = Doc::new();
+          collab.insert_with_txn(txn, RELATIONS, doc.clone());
+          doc.load(txn);
+          YrsValue::YDoc(doc)
         })
+        .to_ydoc()
+        .unwrap();
+
+      let json = relation.to_json(txn);
+      println!("relation: {}", json);
+
+      (databases, relation)
     });
 
     let database_vec = DatabaseArray::new(databases);
+    let database_relation = DatabaseRelation::new(relation);
     Self {
       uid,
       db,
       collab,
       database_vec,
       open_handlers: Default::default(),
+      database_relation,
     }
   }
 
@@ -159,6 +182,10 @@ impl UserDatabase {
     }
   }
 
+  pub fn relations(&self) -> &RelationMap {
+    self.database_relation.relations()
+  }
+
   fn collab_for_database(&self, database_id: &str) -> Collab {
     let disk_plugin = CollabDiskPlugin::new(self.uid, self.db.clone()).unwrap();
     let snapshot_plugin = CollabSnapshotPlugin::new(self.uid, self.db.clone(), 6).unwrap();
@@ -168,3 +195,5 @@ impl UserDatabase {
       .build()
   }
 }
+
+fn create_relations_subdocs() {}

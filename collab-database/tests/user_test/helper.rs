@@ -5,7 +5,15 @@ use std::sync::Arc;
 use tempfile::TempDir;
 
 pub struct UserDatabaseTest {
+  uid: i64,
   inner: UserDatabase,
+  pub db: Arc<CollabKV>,
+}
+
+impl UserDatabaseTest {
+  pub fn open_user_database(&self) -> UserDatabase {
+    UserDatabase::new(self.uid, self.db.clone())
+  }
 }
 
 impl Deref for UserDatabaseTest {
@@ -21,6 +29,8 @@ pub fn create_user_database(uid: i64) -> UserDatabaseTest {
   let path = tempdir.into_path();
   let db = Arc::new(CollabKV::open(path).unwrap());
   UserDatabaseTest {
-    inner: UserDatabase::new(uid, db),
+    uid,
+    inner: UserDatabase::new(uid, db.clone()),
+    db,
   }
 }
