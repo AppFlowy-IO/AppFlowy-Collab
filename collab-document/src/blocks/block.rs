@@ -1,7 +1,10 @@
+use crate::blocks::{BlockDataEnum, BlockType};
 use anyhow::Result;
 use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Serialize, Serializer};
+use serde_json::Value;
+use std::collections::HashMap;
 
 const ID: &str = "id";
 const TYPE: &str = "ty";
@@ -13,13 +16,13 @@ const DATA: &str = "data";
 pub struct Block {
   pub id: String,
 
-  pub ty: String,
+  pub ty: BlockType,
 
   pub parent: String,
 
   pub children: String,
 
-  pub data: String,
+  pub data: BlockDataEnum,
 }
 
 impl Serialize for Block {
@@ -32,19 +35,7 @@ impl Serialize for Block {
     s.serialize_field("ty", &self.ty)?;
     s.serialize_field("parent", &self.parent)?;
     s.serialize_field("children", &self.children)?;
-    let data = BlockDataEnum::from_string(&self.data);
-    let data = match data {
-      BlockDataEnum::Page(text) | BlockDataEnum::Text(text) => serde_json::json!({
-        "text": text,
-      }),
-      BlockDataEnum::Header(level, text) => serde_json::json!({
-        "level": level,
-        "text": text,
-      }),
-      _ => serde_json::json!({}),
-    };
-    s.serialize_field("data", &data)?;
-
+    s.serialize_field("data", &self.data.to_json_value())?;
     s.end()
   }
 }
@@ -93,10 +84,10 @@ impl BlockMap {
     let data = block_map.get_str_with_txn(txn, DATA).unwrap_or_default();
     Block {
       id,
-      ty,
+      ty: BlockType::from_string(&ty),
       parent,
       children,
-      data,
+      data: BlockDataEnum::from_string(&data),
     }
   }
 
@@ -107,21 +98,21 @@ impl BlockMap {
     ty: String,
     parent_id: String,
     children_id: String,
-    data: BlockDataEnum,
+    data: HashMap<String, Value>,
   ) -> Result<Block> {
     let block = Block {
       id: block_id.clone(),
-      ty,
+      ty: BlockType::from_string(&ty),
       parent: parent_id,
       children: children_id,
-      data: data.to_string(),
+      data: BlockDataEnum::from_map(BlockType::from_string(&ty), &data),
     };
     let block_map = self.root.insert_map_with_txn(txn, &block_id);
     block_map.insert_with_txn(txn, ID, block.id.clone());
-    block_map.insert_with_txn(txn, TYPE, block.ty.clone());
+    block_map.insert_with_txn(txn, TYPE, block.ty.to_string());
     block_map.insert_with_txn(txn, PARENT, block.parent.clone());
     block_map.insert_with_txn(txn, CHILDREN, block.children.clone());
-    block_map.insert_with_txn(txn, DATA, block.data.clone());
+    block_map.insert_with_txn(txn, DATA, block.data.to_string());
     Ok(block)
   }
 
@@ -131,33 +122,5 @@ impl BlockMap {
 
   pub fn delete_block_with_txn(&self, txn: &mut TransactionMut, block_id: &str) {
     self.root.delete_with_txn(txn, block_id);
-  }
-}
-
-#[derive(Serialize, Deserialize)]
-pub enum BlockDataEnum {
-  Page(String),
-  Text(String),
-  Header(u32, String),
-  Image(),
-}
-
-impl ToString for BlockDataEnum {
-  fn to_string(&self) -> String {
-    serde_json::to_string(self).unwrap_or_else(|_| "".to_string())
-  }
-}
-
-impl BlockDataEnum {
-  pub fn from_string(s: &str) -> Self {
-    serde_json::from_str(s).unwrap_or_else(|_| BlockDataEnum::Text("".to_string()))
-  }
-
-  pub fn get_text(&self) -> Option<String> {
-    match self {
-      BlockDataEnum::Page(text) | BlockDataEnum::Text(text) => Some(text.clone()),
-      BlockDataEnum::Header(_, text) => Some(text.clone()),
-      _ => None,
-    }
   }
 }

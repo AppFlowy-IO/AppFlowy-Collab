@@ -1,4 +1,5 @@
-use crate::util::{create_document, delete_block, inser_text_block, move_block};
+use crate::util::{create_document, delete_block, insert_block, move_block};
+use collab_document::blocks::BlockType;
 
 #[test]
 fn create_block_test() {
@@ -25,7 +26,7 @@ fn create_block_test() {
   let root_children = root["children"].as_str().unwrap();
   let root_text = root_data["text"].as_str().unwrap();
 
-  assert!(root["ty"] == "page");
+  assert!(root["ty"] == BlockType::Page.to_string());
   assert!(children_map[root_children].is_array());
   assert!(text_map[root_text].is_array());
   assert!(children_map[root_children].as_array().unwrap().len() == 1);
@@ -37,7 +38,7 @@ fn create_block_test() {
   let head_data = head["data"].as_object().unwrap();
   let head_children = head["children"].as_str().unwrap();
   let head_text = head_data["text"].as_str().unwrap();
-  assert!(head["ty"] == "text");
+  assert!(head["ty"] == BlockType::Text.to_string());
   assert!(children_map[head_children].is_array());
   assert!(text_map[head_text].is_array());
   assert!(children_map[head_children].as_array().unwrap().is_empty());
@@ -51,9 +52,14 @@ fn insert_block_test() {
   let document_data = test.document.to_json_value().unwrap();
   let root_id = &document_data["document"]["root_id"].as_str().unwrap();
 
-  let block_id = inser_text_block(&test.document, root_id, "");
+  let block_id = insert_block(&test.document, BlockType::Text.to_string(), root_id, "");
   // insert after block
-  let after_block_id = inser_text_block(&test.document, root_id, &block_id);
+  let after_block_id = insert_block(
+    &test.document,
+    BlockType::Heading.to_string(),
+    root_id,
+    &block_id,
+  );
 
   let document_data = test.document.to_json_value().unwrap();
   let document = &document_data["document"];
@@ -64,8 +70,9 @@ fn insert_block_test() {
   let children_map = &meta["children_map"];
   let block = blocks[&block_id].as_object().unwrap();
   let after_block = blocks[&after_block_id].as_object().unwrap();
-  assert!(block["ty"] == "text");
-  assert!(after_block["ty"] == "text");
+  assert!(block["ty"] == BlockType::Text.to_string());
+  assert!(after_block["ty"] == BlockType::Heading.to_string());
+  assert!(after_block["data"]["level"] == 0);
 
   let text = block["data"]["text"].as_str().unwrap();
   assert!(text_map[text].is_array());
@@ -85,7 +92,7 @@ fn delete_block_test() {
   let test = create_document(doc_id);
   let document_data = test.document.to_json_value().unwrap();
   let root_id = &document_data["document"]["root_id"].as_str().unwrap();
-  let block_id = inser_text_block(&test.document, root_id, "");
+  let block_id = insert_block(&test.document, BlockType::Text.to_string(), root_id, "");
   let parent_id = test.document.get_block(&block_id).unwrap().parent;
   let parent_children_id = test.document.get_block(&parent_id).unwrap().children;
   let document_data = test.document.to_json_value().unwrap();
@@ -119,8 +126,8 @@ fn move_block_test() {
   let document_data = test.document.to_json_value().unwrap();
   let root_id = &document_data["document"]["root_id"].as_str().unwrap();
 
-  let block_id = inser_text_block(&test.document, root_id, "");
-  let child_block_id = inser_text_block(&test.document, &block_id, "");
+  let block_id = insert_block(&test.document, BlockType::Text.to_string(), root_id, "");
+  let child_block_id = insert_block(&test.document, BlockType::Text.to_string(), &block_id, "");
 
   move_block(&test.document, &child_block_id, root_id, &block_id);
 

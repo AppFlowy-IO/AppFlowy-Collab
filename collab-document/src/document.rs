@@ -1,9 +1,10 @@
-use crate::blocks::{Block, BlockDataEnum, BlockMap, ChildrenMap, TextMap};
+use crate::blocks::{Block, BlockDataEnum, BlockMap, BlockType, ChildrenMap, TextMap};
 use crate::error::DocumentError;
 use collab::preclude::*;
 use nanoid::nanoid;
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
+use std::collections::HashMap;
 
 const ROOT: &str = "document";
 const BLOCKS: &str = "blocks";
@@ -51,7 +52,7 @@ impl Serialize for Document {
 pub struct InsertBlockArgs {
   pub parent_id: String,
   pub block_id: String,
-  pub data: BlockDataEnum,
+  pub data: HashMap<String, JsonValue>,
   pub children_id: String,
   pub ty: String,
 }
@@ -97,9 +98,14 @@ impl Document {
       text_map,
       children_map,
     };
-    document.inner.with_transact_mut(|txn| {
-      document.init(txn);
-    });
+    document
+      .inner
+      .with_transact_mut(|txn| match document.init(txn) {
+        Ok(_) => {},
+        Err(e) => {
+          println!("Error: {:?}", e);
+        },
+      });
 
     document
   }
@@ -112,28 +118,33 @@ impl Document {
     Ok(document_data)
   }
 
-  pub fn init(&self, txn: &mut TransactionMut) {
+  pub fn init(&self, txn: &mut TransactionMut) -> Result<Block, DocumentError> {
     let head_id = self.root.get(txn, "head_id").unwrap().to_string(txn);
     let head_children_id = nanoid!();
     let head_text_id = nanoid!();
-    let head_data = BlockDataEnum::Page(head_text_id);
+    let mut head_data = HashMap::new();
+    head_data.insert("text".to_string(), JsonValue::String(head_text_id));
     // { document: { blocks: { head_id: { id: "head_id", ty: "page", data: { text: "head_text_id", level: null }, children: "head_children_id" } } } }
-    self.insert_block(
+    let block = self.insert_block(
       txn,
       InsertBlockArgs {
         parent_id: "".to_string(),
         block_id: head_id.clone(),
         data: head_data,
         children_id: head_children_id,
-        ty: "page".to_string(),
+        ty: BlockType::Page.to_string(),
       },
       "".to_string(),
     );
+    if block.as_ref().is_err() {
+      return block;
+    }
 
     let first_id = nanoid!();
     let first_text_id = nanoid!();
     let first_children_id = nanoid!();
-    let first_data = BlockDataEnum::Text(first_text_id);
+    let mut first_data = HashMap::new();
+    first_data.insert("text".to_string(), JsonValue::String(first_text_id));
     // { document: { blocks: { head_id: { id: "head_id", ty: "page", data: { text: "head_text_id", level: null }, children: "head_children_id" }, first_id: { id: "first_id", ty: "text", data: { text: "first_text_id", level: null }, children: "first_children_id" } } } }
     self.insert_block(
       txn,
@@ -142,10 +153,10 @@ impl Document {
         block_id: first_id,
         data: first_data,
         children_id: first_children_id,
-        ty: "text".to_string(),
+        ty: BlockType::Text.to_string(),
       },
       "".to_string(),
-    );
+    )
   }
 
   pub fn with_txn(&self, f: impl FnOnce(&mut TransactionMut)) {
@@ -157,12 +168,17 @@ impl Document {
     self.blocks.get_block(&txn, block_id)
   }
 
-  pub fn insert_block(&self, txn: &mut TransactionMut, block: InsertBlockArgs, prev_id: String) {
+  pub fn insert_block(
+    &self,
+    txn: &mut TransactionMut,
+    block: InsertBlockArgs,
+    prev_id: String,
+  ) -> Result<Block, DocumentError> {
     let block_id = block.block_id;
     let ty = block.ty;
     let parent_id = block.parent_id;
     let children_id = block.children_id;
-    let text_id = block.data.get_text();
+    let text_id = BlockDataEnum::from_map(BlockType::from_string(&ty), &block.data).get_text();
 
     self
       .children_map
@@ -172,16 +188,22 @@ impl Document {
       self.text_map.create_text(txn, &text_id);
     }
 
-    let block = self
-      .blocks
-      .create_block(txn, block_id, ty, parent_id, children_id, block.data);
+    let block = self.blocks.create_block(
+      txn,
+      block_id.clone(),
+      ty,
+      parent_id,
+      children_id,
+      block.data,
+    );
 
     match block {
-      Ok(block) => self.insert_block_to_parent(txn, &block, prev_id),
-      _ => {
-        println!("block create fail!");
+      Ok(block) => {
+        self.insert_block_to_parent(txn, &block, prev_id);
+        Ok(block)
       },
-    };
+      _ => Err(DocumentError::BlockCreateError { block_id }),
+    }
   }
 
   pub fn insert_block_to_parent(&self, txn: &mut TransactionMut, block: &Block, prev_id: String) {
@@ -226,7 +248,7 @@ impl Document {
 
     let block = block.unwrap();
     let children_id = &block.children;
-    let block_data = BlockDataEnum::from_string(&block.data);
+    let block_data = &block.data;
 
     let parent_id = &block.parent;
     self.delete_block_from_parent(txn, block_id, parent_id);

@@ -1,7 +1,7 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
-use collab::preclude::CollabBuilder;
+use collab::preclude::{CollabBuilder, JsonValue};
+use std::collections::HashMap;
 
-use collab_document::blocks::BlockDataEnum;
 use collab_document::document::{Document, InsertBlockArgs};
 use collab_persistence::CollabKV;
 use nanoid::nanoid;
@@ -32,20 +32,24 @@ pub fn create_document(doc_id: &str) -> DocumentTest {
   DocumentTest { document, cleaner }
 }
 
-pub fn inser_text_block(document: &Document, parent_id: &str, prev_id: &str) -> String {
+pub fn insert_block(document: &Document, ty: String, parent_id: &str, prev_id: &str) -> String {
   let block_id = nanoid!();
+  let mut data = HashMap::new();
+  data.insert("text".to_string(), JsonValue::String(nanoid!()));
   document.with_txn(|txn| {
-    document.insert_block(
-      txn,
-      InsertBlockArgs {
-        parent_id: parent_id.to_string(),
-        block_id: block_id.clone(),
-        data: BlockDataEnum::Text(nanoid!()),
-        children_id: nanoid!(),
-        ty: "text".to_string(),
-      },
-      prev_id.to_string(),
-    );
+    document
+      .insert_block(
+        txn,
+        InsertBlockArgs {
+          parent_id: parent_id.to_string(),
+          block_id: block_id.clone(),
+          data,
+          children_id: nanoid!(),
+          ty,
+        },
+        prev_id.to_string(),
+      )
+      .unwrap();
   });
   block_id
 }
