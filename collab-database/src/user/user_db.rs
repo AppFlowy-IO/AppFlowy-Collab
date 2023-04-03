@@ -1,15 +1,12 @@
 use crate::database::{gen_database_id, Database, DatabaseContext, DuplicatedDatabase};
 use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
-use crate::user::db_relation::{DatabaseRelation, RelationMap};
+use crate::user::relation::{DatabaseRelation, RowRelationMap};
 use crate::views::CreateDatabaseParams;
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use collab::preclude::updates::decoder::Decode;
-use collab::preclude::{
-  lib0Any, Collab, CollabBuilder, Doc, MapPrelim, MapRefWrapper, Options, ToJson, Update, Uuid,
-  YrsValue,
-};
+use collab::preclude::{lib0Any, Collab, CollabBuilder, MapPrelim, Update};
 use collab_persistence::snapshot::CollabSnapshot;
 use collab_persistence::CollabKV;
 use parking_lot::RwLock;
@@ -27,7 +24,6 @@ pub struct UserDatabase {
 }
 
 const DATABASES: &str = "databases";
-const RELATIONS: &str = "relations";
 
 impl UserDatabase {
   pub fn new(uid: i64, db: Arc<CollabKV>) -> Self {
@@ -46,20 +42,7 @@ impl UserDatabase {
           collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn, DATABASES, vec![])
         });
 
-      let relation = collab
-        .get_with_txn(txn, RELATIONS)
-        .unwrap_or_else(|| {
-          let doc = Doc::new();
-          collab.insert_with_txn(txn, RELATIONS, doc.clone());
-          doc.load(txn);
-          YrsValue::YDoc(doc)
-        })
-        .to_ydoc()
-        .unwrap();
-
-      let json = relation.to_json(txn);
-      println!("relation: {}", json);
-
+      let relation = create_relations_collab(uid, db.clone());
       (databases, relation)
     });
 
@@ -182,8 +165,8 @@ impl UserDatabase {
     }
   }
 
-  pub fn relations(&self) -> &RelationMap {
-    self.database_relation.relations()
+  pub fn relations(&self) -> &RowRelationMap {
+    self.database_relation.row_relations()
   }
 
   fn collab_for_database(&self, database_id: &str) -> Collab {
@@ -196,4 +179,12 @@ impl UserDatabase {
   }
 }
 
-fn create_relations_subdocs() {}
+fn create_relations_collab(uid: i64, db: Arc<CollabKV>) -> Collab {
+  let disk_plugin = CollabDiskPlugin::new(uid, db).unwrap();
+  let object_id = format!("{}_db_relations", uid);
+  let collab = CollabBuilder::new(uid, object_id)
+    .with_plugin(disk_plugin)
+    .build();
+  collab.initial();
+  collab
+}
