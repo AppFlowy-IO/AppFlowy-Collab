@@ -1,4 +1,4 @@
-use crate::core::{Belonging, BelongingMap, Belongings};
+use crate::core::{Belonging, BelongingMap, Belongings, View};
 use anyhow::Result;
 use collab::preclude::{MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
@@ -101,6 +101,14 @@ pub struct Workspace {
   pub id: String,
   pub name: String,
   pub belongings: Belongings,
+  pub created_at: i64,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct WorkspaceInfo {
+  pub id: String,
+  pub name: String,
+  pub views: Vec<View>,
   pub created_at: i64,
 }
 

@@ -1,7 +1,7 @@
 use crate::core::trash::{TrashArray, TrashRecord};
 use crate::core::{
   Belonging, BelongingMap, FolderData, TrashChangeSender, View, ViewChangeSender, ViewsMap,
-  Workspace, WorkspaceMap,
+  Workspace, WorkspaceInfo, WorkspaceMap,
 };
 use collab::preclude::*;
 use parking_lot::RwLock;
@@ -124,10 +124,17 @@ impl Folder {
     self.meta.insert(CURRENT_WORKSPACE, workspace_id);
   }
 
-  pub fn get_current_workspace(&self) -> Option<Workspace> {
+  pub fn get_current_workspace(&self) -> Option<WorkspaceInfo> {
     let txn = self.meta.transact();
     let workspace_id = self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE)?;
-    self.workspaces.get_workspace(&workspace_id)
+    let workspace = self.workspaces.get_workspace(&workspace_id)?;
+    let views = self.get_current_workspace_views_with_txn(&txn);
+    Some(WorkspaceInfo {
+      id: workspace.id,
+      name: workspace.name,
+      views,
+      created_at: workspace.created_at,
+    })
   }
 
   pub fn get_current_workspace_id(&self) -> Option<String> {
@@ -135,9 +142,13 @@ impl Folder {
     self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE)
   }
 
-  pub fn get_views_belong_to_current_workspace(&self) -> Vec<View> {
+  pub fn get_current_workspace_views(&self) -> Vec<View> {
     let txn = self.meta.transact();
-    if let Some(workspace_id) = self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE) {
+    self.get_current_workspace_views_with_txn(&txn)
+  }
+
+  pub fn get_current_workspace_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<View> {
+    if let Some(workspace_id) = self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE) {
       if let Some(workspace) = self.workspaces.get_workspace(workspace_id) {
         let view_ids = workspace
           .belongings
