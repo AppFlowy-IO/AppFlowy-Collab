@@ -3,6 +3,9 @@ pub enum DocumentError {
   #[error(transparent)]
   Internal(#[from] anyhow::Error),
 
+  #[error("Could not create block")]
+  BlockCreateError,
+
   #[error("The block is existed already")]
   BlockIsExistedAlready,
 
@@ -11,4 +14,10 @@ pub enum DocumentError {
 
   #[error("Could not convert json to data")]
   ConvertDataError,
+
+  #[error("The parent is not found")]
+  ParentIsNotFound,
+
+  #[error("Could not create root block")]
+  CreateRootBlockError,
 }
