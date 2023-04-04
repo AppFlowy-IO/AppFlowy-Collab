@@ -1,17 +1,14 @@
 use crate::fields::TypeOptions;
-use crate::{impl_any_update, impl_bool_update, impl_i64_update, impl_str_update};
-use anyhow::bail;
-use collab::preclude::{
-  lib0Any, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
-};
+use crate::{impl_bool_update, impl_i64_update, impl_str_update};
+
+use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
-use serde_repr::*;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Field {
   pub id: String,
   pub name: String,
-  pub field_type: FieldType,
+  pub field_type: i64,
   pub visibility: bool,
   pub width: i64,
   pub type_options: TypeOptions,
@@ -20,7 +17,7 @@ pub struct Field {
 }
 
 impl Field {
-  pub fn new(id: String, name: String, field_type: FieldType, is_primary: bool) -> Self {
+  pub fn new(id: String, name: String, field_type: i64, is_primary: bool) -> Self {
     Self {
       id,
       name,
@@ -35,48 +32,6 @@ impl Field {
 
 const DEFAULT_IS_PRIMARY_VALUE: fn() -> bool = || false;
 
-#[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize_repr, Deserialize_repr)]
-#[repr(u8)]
-pub enum FieldType {
-  RichText = 0,
-  Number = 1,
-  DateTime = 2,
-  SingleSelect = 3,
-  MultiSelect = 4,
-  Checkbox = 5,
-  URL = 6,
-  Checklist = 7,
-}
-
-impl Default for FieldType {
-  fn default() -> Self {
-    Self::RichText
-  }
-}
-
-impl TryFrom<i64> for FieldType {
-  type Error = anyhow::Error;
-
-  fn try_from(value: i64) -> std::result::Result<Self, Self::Error> {
-    match value {
-      0 => Ok(FieldType::RichText),
-      1 => Ok(FieldType::Number),
-      2 => Ok(FieldType::DateTime),
-      3 => Ok(FieldType::SingleSelect),
-      4 => Ok(FieldType::MultiSelect),
-      5 => Ok(FieldType::Checkbox),
-      6 => Ok(FieldType::URL),
-      7 => Ok(FieldType::Checklist),
-      _ => bail!("Unknown field type {}", value),
-    }
-  }
-}
-
-impl From<FieldType> for lib0Any {
-  fn from(field_type: FieldType) -> Self {
-    lib0Any::BigInt(field_type as i64)
-  }
-}
 pub struct FieldBuilder<'a, 'b> {
   id: &'a str,
   map_ref: MapRefWrapper,
@@ -116,12 +71,7 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
   impl_bool_update!(set_visibility, set_visibility_if_not_none, FIELD_VISIBILITY);
   impl_bool_update!(set_primary, set_primary_if_not_none, FIELD_PRIMARY);
   impl_i64_update!(set_width, set_width_at_if_not_none, FIELD_WIDTH);
-  impl_any_update!(
-    set_field_type,
-    set_field_type_if_not_none,
-    FIELD_TYPE,
-    FieldType
-  );
+  impl_i64_update!(set_field_type, set_field_type_if_not_none, FIELD_TYPE);
 
   pub fn set_type_option(self, type_option: TypeOptions) -> Self {
     let map_ref = self

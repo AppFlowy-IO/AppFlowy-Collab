@@ -1,5 +1,5 @@
 use crate::helper::create_database;
-use collab_database::fields::{Field, FieldType};
+use collab_database::fields::Field;
 use collab_database::views::CreateViewParams;
 
 #[test]
@@ -14,7 +14,7 @@ fn create_single_field_test() {
   database_test.insert_field(Field::new(
     "f1".to_string(),
     "text field".to_string(),
-    FieldType::RichText,
+    0,
     true,
   ));
 
@@ -32,7 +32,7 @@ fn create_multiple_field_test() {
     database_test.insert_field(Field::new(
       format!("f{}", i),
       format!("text field {}", i),
-      FieldType::RichText,
+      0,
       true,
     ));
   }
@@ -48,7 +48,7 @@ fn delete_field_test() {
     database_test.insert_field(Field::new(
       format!("f{}", i),
       format!("text field {}", i),
-      FieldType::RichText,
+      0,
       true,
     ));
   }
@@ -65,7 +65,7 @@ fn delete_field_in_views_test() {
     database_test.insert_field(Field::new(
       format!("f{}", i),
       format!("text field {}", i),
-      FieldType::RichText,
+      0,
       true,
     ));
   }
@@ -95,7 +95,7 @@ fn field_order_in_view_test() {
     database_test.insert_field(Field::new(
       format!("f{}", i),
       format!("text field {}", i),
-      FieldType::RichText,
+      0,
       true,
     ));
   }
@@ -128,7 +128,7 @@ fn move_field_test() {
     database_test.insert_field(Field::new(
       format!("f{}", i),
       format!("text field {}", i),
-      FieldType::RichText,
+      0,
       true,
     ));
   }

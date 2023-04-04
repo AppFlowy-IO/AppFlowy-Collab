@@ -1,5 +1,4 @@
-use crate::fields::FieldType;
-use crate::{impl_any_update, impl_str_update};
+use crate::{impl_any_update, impl_i64_update, impl_str_update};
 use anyhow::bail;
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::{
@@ -43,7 +42,7 @@ impl SortArray {
 pub struct Sort {
   pub id: String,
   pub field_id: String,
-  pub field_type: FieldType,
+  pub field_type: i64,
   pub condition: SortCondition,
 }
 
@@ -93,12 +92,7 @@ impl<'a, 'b> SortUpdate<'a, 'b> {
     SORT_CONDITION,
     SortCondition
   );
-  impl_any_update!(
-    set_field_type,
-    set_field_type_if_not_none,
-    FIELD_TYPE,
-    FieldType
-  );
+  impl_i64_update!(set_field_type, set_field_type_if_not_none, FIELD_TYPE);
 
   pub fn done(self) -> Option<Sort> {
     sort_from_map_ref(self.map_ref, self.txn)
@@ -117,8 +111,7 @@ pub fn sort_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Sort> 
   let id = map_ref.get_str_with_txn(txn, SORT_ID)?;
   let field_id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
   let field_type = map_ref
-    .get_i64_with_txn(txn, FIELD_TYPE)
-    .map(|value| value.try_into().ok())??;
+    .get_i64_with_txn(txn, FIELD_TYPE)?;
 
   let condition = map_ref
     .get_i64_with_txn(txn, SORT_CONDITION)

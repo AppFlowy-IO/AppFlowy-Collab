@@ -1,5 +1,4 @@
-use crate::fields::FieldType;
-use crate::{impl_any_update, impl_str_update};
+use crate::{impl_i64_update, impl_str_update};
 
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::map::MapPrelim;
@@ -44,10 +43,11 @@ impl GroupArray {
 pub struct Group {
   pub id: String,
   pub field_id: String,
-  pub field_type: FieldType,
+  pub field_type: i64,
   pub items: Vec<GroupItem>,
   pub content: String,
 }
+
 const GROUP_ID: &str = "id";
 const FIELD_ID: &str = "field_id";
 const FIELD_TYPE: &str = "ty";
@@ -91,12 +91,7 @@ impl<'a, 'b> GroupUpdate<'a, 'b> {
 
   impl_str_update!(set_field_id, set_field_id_if_not_none, FIELD_ID);
   impl_str_update!(set_content, set_content_if_not_none, GROUP_CONTENT);
-  impl_any_update!(
-    set_field_type,
-    set_field_type_if_not_none,
-    FIELD_TYPE,
-    FieldType
-  );
+  impl_i64_update!(set_field_type, set_field_type_if_not_none, FIELD_TYPE);
 
   pub fn set_items(self, items: Vec<GroupItem>) -> Self {
     let array_ref = self
@@ -124,9 +119,7 @@ pub fn group_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Group
   let id = map_ref.get_str_with_txn(txn, GROUP_ID)?;
   let content = map_ref.get_str_with_txn(txn, GROUP_CONTENT)?;
   let field_id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
-  let field_type = map_ref
-    .get_i64_with_txn(txn, FIELD_TYPE)
-    .map(|value| value.try_into().ok())??;
+  let field_type = map_ref.get_i64_with_txn(txn, FIELD_TYPE)?;
 
   let items = map_ref
     .get_array_ref_with_txn(txn, GROUP_ITEMS)
@@ -179,6 +172,7 @@ pub struct GroupItem {
   #[serde(default = "GROUP_REV_VISIBILITY")]
   pub visible: bool,
 }
+
 const GROUP_REV_VISIBILITY: fn() -> bool = || true;
 
 impl GroupItem {

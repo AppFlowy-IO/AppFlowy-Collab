@@ -6,14 +6,14 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TypeOptions(HashMap<String, TypeOption>);
+pub struct TypeOptions(HashMap<String, TypeOptionData>);
 
 impl TypeOptions {
   pub fn new() -> Self {
     Self::default()
   }
 
-  pub fn into_inner(self) -> HashMap<String, TypeOption> {
+  pub fn into_inner(self) -> HashMap<String, TypeOptionData> {
     self.0
   }
 
@@ -21,7 +21,7 @@ impl TypeOptions {
     let mut this = Self::new();
     map_ref.iter(txn).for_each(|(k, v)| {
       if let YrsValue::YMap(map_ref) = v {
-        this.insert(k.to_string(), TypeOption::from_map_ref(txn, map_ref));
+        this.insert(k.to_string(), TypeOptionData::from_map_ref(txn, map_ref));
       }
     });
     this
@@ -36,7 +36,7 @@ impl TypeOptions {
 }
 
 impl Deref for TypeOptions {
-  type Target = HashMap<String, TypeOption>;
+  type Target = HashMap<String, TypeOptionData>;
 
   fn deref(&self) -> &Self::Target {
     &self.0
@@ -50,9 +50,9 @@ impl DerefMut for TypeOptions {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TypeOption(HashMap<String, lib0Any>);
+pub struct TypeOptionData(HashMap<String, lib0Any>);
 
-impl TypeOption {
+impl TypeOptionData {
   pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Self {
     let mut this = Self(Default::default());
     map_ref.iter(txn).for_each(|(k, v)| {
@@ -70,14 +70,14 @@ impl TypeOption {
   }
 }
 
-impl Deref for TypeOption {
+impl Deref for TypeOptionData {
   type Target = HashMap<String, lib0Any>;
 
   fn deref(&self) -> &Self::Target {
     &self.0
   }
 }
-impl DerefMut for TypeOption {
+impl DerefMut for TypeOptionData {
   fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.0
   }

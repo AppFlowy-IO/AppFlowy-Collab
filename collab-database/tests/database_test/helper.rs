@@ -2,7 +2,7 @@ use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use collab::preclude::CollabBuilder;
 use collab_database::database::{Database, DatabaseContext};
-use collab_database::fields::{Field, FieldType};
+use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, Row};
 use collab_database::views::{CreateViewParams, Layout};
 use collab_persistence::CollabKV;
@@ -19,6 +19,7 @@ pub struct DatabaseTest {
 }
 
 unsafe impl Send for DatabaseTest {}
+
 unsafe impl Sync for DatabaseTest {}
 
 impl Deref for DatabaseTest {
@@ -113,26 +114,9 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   database_test.push_row(row_2);
   database_test.push_row(row_3);
 
-  let field_1 = Field::new(
-    "f1".to_string(),
-    "text field".to_string(),
-    FieldType::RichText,
-    true,
-  );
-
-  let field_2 = Field::new(
-    "f2".to_string(),
-    "single select field".to_string(),
-    FieldType::SingleSelect,
-    true,
-  );
-
-  let field_3 = Field::new(
-    "f3".to_string(),
-    "checkbox field".to_string(),
-    FieldType::Checkbox,
-    true,
-  );
+  let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);
+  let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
+  let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
 
   database_test.insert_field(field_1);
   database_test.insert_field(field_2);

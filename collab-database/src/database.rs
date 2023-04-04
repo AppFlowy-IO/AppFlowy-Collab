@@ -305,6 +305,10 @@ pub fn gen_database_sort_id() -> String {
   nanoid!(6)
 }
 
+pub fn gen_option_id() -> String {
+  nanoid!(4)
+}
+
 pub fn timestamp() -> i64 {
   chrono::Utc::now().timestamp()
 }

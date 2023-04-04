@@ -1,4 +1,3 @@
-use crate::fields::FieldType;
 use crate::{impl_i64_update, impl_str_update};
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::{
@@ -47,7 +46,7 @@ impl FilterArray {
 pub struct Filter {
   pub id: String,
   pub field_id: String,
-  pub field_type: FieldType,
+  pub field_type: i64,
   pub condition: i64,
   pub content: String,
 }
@@ -68,7 +67,7 @@ impl<'a, 'b> FilterBuilder<'a, 'b> {
   pub fn new(
     id: &'a str,
     field_id: String,
-    field_type: FieldType,
+    field_type: i64,
     txn: &'a mut TransactionMut<'b>,
     map_ref: MapRef,
   ) -> Self {
@@ -125,8 +124,7 @@ pub fn filter_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Filt
     .get_str_with_txn(txn, FILTER_CONTENT)
     .unwrap_or_default();
   let field_type = map_ref
-    .get_i64_with_txn(txn, FIELD_TYPE)
-    .map(|value| value.try_into().ok())??;
+    .get_i64_with_txn(txn, FIELD_TYPE)?;
 
   Some(Filter {
     id,
