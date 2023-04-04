@@ -2,11 +2,11 @@ use collab::preclude::*;
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
 
-pub struct ChildrenMap {
+pub struct ChildrenOperation {
   pub root: MapRefWrapper,
 }
 
-impl Serialize for ChildrenMap {
+impl Serialize for ChildrenOperation {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: Serializer,
@@ -26,13 +26,9 @@ impl Serialize for ChildrenMap {
   }
 }
 
-impl ChildrenMap {
+impl ChildrenOperation {
   pub fn new(root: MapRefWrapper) -> Self {
     Self { root }
-  }
-
-  pub fn to_json_value(&self) -> serde_json::Value {
-    serde_json::to_value(self).unwrap_or_default()
   }
 
   pub fn get_children_with_txn(

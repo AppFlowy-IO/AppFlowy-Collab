@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::blocks::{Block, BlockMap, ChildrenMap, OperableBlocks, TextMap, EXTERNAL_TYPE_TEXT};
+use crate::blocks::{Block, BlockOperation, ChildrenOperation, TextOperation, EXTERNAL_TYPE_TEXT};
 use crate::error::DocumentError;
 use collab::preclude::*;
 use nanoid::nanoid;
@@ -19,9 +19,9 @@ pub struct Document {
   #[allow(dead_code)]
   inner: Collab,
   pub root: MapRefWrapper,
-  pub text_map: TextMap,
-  pub children_map: ChildrenMap,
-  pub blocks: BlockMap,
+  text_operation: TextOperation,
+  children_operation: ChildrenOperation,
+  block_operation: BlockOperation,
 }
 
 impl Serialize for Document {
@@ -39,13 +39,13 @@ impl Serialize for Document {
         .unwrap_or_else(|| YrsValue::from(""))
         .to_string(&txn),
     )?;
-    let blocks = serde_json::to_value(&self.blocks).unwrap();
+    let blocks = serde_json::to_value(&self.block_operation).unwrap_or_default();
     s.serialize_field(BLOCKS, &blocks)?;
     s.serialize_field(
       META,
       &serde_json::json!({
-          TEXT_MAP: self.text_map.to_json_value(),
-          CHILDREN_MAP: self.children_map.to_json_value(),
+          TEXT_MAP: serde_json::to_value(&self.text_operation).unwrap_or_default(),
+          CHILDREN_MAP: serde_json::to_value(&self.children_operation).unwrap_or_default(),
       }),
     )?;
     s.end()
@@ -88,20 +88,20 @@ impl Document {
 
       (root, blocks, text_map, children_map)
     });
-    let blocks = BlockMap::new(
+    let block_operation = BlockOperation::new(
       blocks,
-      ChildrenMap::new(children_map.clone()),
-      TextMap::new(text_map.clone()),
+      ChildrenOperation::new(children_map.clone()),
+      TextOperation::new(text_map.clone()),
     );
-    let text_map = TextMap::new(text_map);
-    let children_map = ChildrenMap::new(children_map);
+    let text_operation = TextOperation::new(text_map);
+    let children_operation = ChildrenOperation::new(children_map);
 
     let document = Self {
       inner: collab,
       root,
-      blocks,
-      text_map,
-      children_map,
+      block_operation,
+      text_operation,
+      children_operation,
     };
     match document.initial() {
       Ok(_) => Ok(document),
@@ -119,13 +119,13 @@ impl Document {
       });
 
       // { document: { page_id: "xxxx", blocks: { xxxx: {:} } } }
-      let page_block = self.blocks.get_block_with_txn(txn, &page_id);
+      let page_block = self.block_operation.get_block_with_txn(txn, &page_id);
       let page_block = match page_block {
         Some(block) => Some(block),
         None => {
           let root_text_id = nanoid!(10);
           let root_children_id = nanoid!(10);
-          let block = self.blocks.create_block(
+          let block = self.block_operation.create_block_with_txn(
             txn,
             &Block {
               id: page_id.clone(),
@@ -150,7 +150,7 @@ impl Document {
 
       // { document: { page_id: "xxxx", blocks: { xxxx: {:}, first_line_id: {:} } } }
       let page_children = self
-        .children_map
+        .children_operation
         .get_children_with_txn(txn, &page_block.unwrap().children);
       if page_children.as_ref().len() > 0 {
         return Ok(());
@@ -193,7 +193,7 @@ impl Document {
 
   pub fn get_block(&self, block_id: &str) -> Option<Block> {
     let txn = self.inner.transact();
-    self.blocks.get_block_with_txn(&txn, block_id)
+    self.block_operation.get_block_with_txn(&txn, block_id)
   }
 
   pub fn insert_block(
@@ -205,7 +205,7 @@ impl Document {
     let block_id = args.block_id;
     let parent_id = args.parent_id;
 
-    let block = self.blocks.create_block(
+    let block = self.block_operation.create_block_with_txn(
       txn,
       &Block {
         id: block_id,
@@ -234,7 +234,7 @@ impl Document {
     if parent_id.is_empty() {
       return Err(DocumentError::ParentIsNotFound);
     }
-    let parent = self.blocks.get_block_with_txn(txn, parent_id);
+    let parent = self.block_operation.get_block_with_txn(txn, parent_id);
 
     let parent_is_empty = parent.is_none();
     if parent_is_empty {
@@ -247,7 +247,7 @@ impl Document {
     if !prev_id.is_empty() {
       let prev_index =
         self
-          .children_map
+          .children_operation
           .get_child_index_with_txn(txn, parent_children_id, &prev_id);
       match prev_index {
         Some(prev_index) => {
@@ -259,9 +259,14 @@ impl Document {
       }
     }
     self
-      .children_map
+      .children_operation
       .insert_child_with_txn(txn, parent_children_id, &block.id, index);
-    Ok(self.blocks.get_block_with_txn(txn, &block.id).unwrap())
+    Ok(
+      self
+        .block_operation
+        .get_block_with_txn(txn, &block.id)
+        .unwrap(),
+    )
   }
 
   pub fn delete_block(
@@ -269,7 +274,7 @@ impl Document {
     txn: &mut TransactionMut,
     block_id: &str,
   ) -> Result<Block, DocumentError> {
-    let block = self.blocks.get_block_with_txn(txn, block_id);
+    let block = self.block_operation.get_block_with_txn(txn, block_id);
     if block.is_none() {
       return Err(DocumentError::BlockIsNotFound);
     }
@@ -277,7 +282,7 @@ impl Document {
     let block = block.unwrap();
 
     let children = self
-      .children_map
+      .children_operation
       .get_children_with_txn(txn, &block.children);
     children
       .iter(txn)
@@ -294,7 +299,7 @@ impl Document {
     let parent_id = &block.parent;
     self.delete_block_from_parent(txn, block_id, parent_id);
 
-    self.blocks.delete_block_with_txn(txn, block_id)
+    self.block_operation.delete_block_with_txn(txn, block_id)
   }
 
   pub fn delete_block_from_parent(
@@ -303,12 +308,12 @@ impl Document {
     block_id: &str,
     parent_id: &str,
   ) {
-    let parent = self.blocks.get_block_with_txn(txn, parent_id);
+    let parent = self.block_operation.get_block_with_txn(txn, parent_id);
 
     if let Some(parent) = parent {
       let parent_children_id = &parent.children;
       self
-        .children_map
+        .children_operation
         .delete_child_with_txn(txn, parent_children_id, block_id);
     }
   }
@@ -319,13 +324,13 @@ impl Document {
     block_id: &str,
     data: HashMap<String, Value>,
   ) -> Result<(), DocumentError> {
-    let block = self.blocks.get_block_with_txn(txn, block_id);
+    let block = self.block_operation.get_block_with_txn(txn, block_id);
     if block.is_none() {
       return Err(DocumentError::BlockIsNotFound);
     }
     let block = block.unwrap();
     self
-      .blocks
+      .block_operation
       .set_block_with_txn(txn, &block.id, Some(data), None)
   }
 
@@ -336,20 +341,20 @@ impl Document {
     parent_id: &str,
     prev_id: &str,
   ) -> Result<(), DocumentError> {
-    let block = self.blocks.get_block_with_txn(txn, block_id);
+    let block = self.block_operation.get_block_with_txn(txn, block_id);
     if block.is_none() {
       return Err(DocumentError::BlockIsNotFound);
     }
     let block = block.unwrap();
 
-    let parent = self.blocks.get_block_with_txn(txn, parent_id);
+    let parent = self.block_operation.get_block_with_txn(txn, parent_id);
     if parent.is_none() {
       return Err(DocumentError::ParentIsNotFound);
     }
 
     let new_parent_children_id = parent.unwrap().children;
 
-    let old_parent = self.blocks.get_block_with_txn(txn, &block.parent);
+    let old_parent = self.block_operation.get_block_with_txn(txn, &block.parent);
     if old_parent.is_none() {
       return Err(DocumentError::ParentIsNotFound);
     }
@@ -358,7 +363,7 @@ impl Document {
 
     let prev_index =
       self
-        .children_map
+        .children_operation
         .get_child_index_with_txn(txn, &new_parent_children_id, prev_id);
 
     let new_index = match prev_index {
@@ -367,14 +372,17 @@ impl Document {
     };
 
     self
-      .children_map
+      .children_operation
       .delete_child_with_txn(txn, &old_parent_children_id, block_id);
-    self
-      .children_map
-      .insert_child_with_txn(txn, &new_parent_children_id, block_id, new_index);
+    self.children_operation.insert_child_with_txn(
+      txn,
+      &new_parent_children_id,
+      block_id,
+      new_index,
+    );
 
     self
-      .blocks
+      .block_operation
       .set_block_with_txn(txn, block_id, Some(block.data), Some(parent_id))
   }
 }
