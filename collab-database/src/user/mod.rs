@@ -1,4 +1,6 @@
+mod db_record;
+mod relation;
 mod user_db;
-mod user_db_record;
 
+pub use relation::*;
 pub use user_db::*;

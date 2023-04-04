@@ -1,7 +1,7 @@
 use crate::core::collab_plugin::CollabPlugin;
 use crate::error::CollabError;
 
-use collab_persistence::doc::YrsDoc;
+use collab_persistence::doc::YrsDocDB;
 use collab_persistence::CollabKV;
 use std::sync::Arc;
 use yrs::TransactionMut;
@@ -16,7 +16,7 @@ impl CollabDiskPlugin {
     Ok(Self { db, uid })
   }
 
-  pub fn doc(&self) -> YrsDoc {
+  pub fn doc(&self) -> YrsDocDB {
     self.db.doc(self.uid)
   }
 }

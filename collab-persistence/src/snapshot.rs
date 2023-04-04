@@ -10,12 +10,12 @@ use std::collections::HashMap;
 use yrs::updates::encoder::{Encoder, EncoderV1};
 use yrs::ReadTxn;
 
-pub struct YrsSnapshot<'a> {
+pub struct YrsSnapshotDB<'a> {
   pub(crate) db: &'a CollabKV,
   pub(crate) uid: i64,
 }
 
-impl<'a> YrsSnapshot<'a> {
+impl<'a> YrsSnapshotDB<'a> {
   pub fn push_snapshot<K: AsRef<[u8]> + ?Sized, T: ReadTxn>(
     &self,
     object_id: &K,

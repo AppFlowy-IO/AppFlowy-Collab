@@ -1,6 +1,6 @@
-use crate::doc::YrsDoc;
+use crate::doc::YrsDocDB;
 use crate::error::PersistenceError;
-use crate::snapshot::YrsSnapshot;
+use crate::snapshot::YrsSnapshotDB;
 use sled::{Batch, Db, IVec};
 use std::ops::Deref;
 use std::path::Path;
@@ -16,12 +16,12 @@ impl CollabKV {
     Ok(Self { db })
   }
 
-  pub fn doc(&self, uid: i64) -> YrsDoc {
-    YrsDoc { db: self, uid }
+  pub fn doc(&self, uid: i64) -> YrsDocDB {
+    YrsDocDB { db: self, uid }
   }
 
-  pub fn snapshot(&self, uid: i64) -> YrsSnapshot {
-    YrsSnapshot { db: self, uid }
+  pub fn snapshot(&self, uid: i64) -> YrsSnapshotDB {
+    YrsSnapshotDB { db: self, uid }
   }
 
   pub fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<IVec>, PersistenceError> {

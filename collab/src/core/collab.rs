@@ -94,12 +94,21 @@ impl Collab {
     self.data.get(&txn, key)
   }
 
-  pub fn insert<V: Prelim>(&self, key: &str, value: V) {
+  pub fn get_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<Value> {
+    self.data.get(txn, key)
+  }
+
+  pub fn insert<V: Prelim>(&self, key: &str, value: V) -> V::Return {
     self.with_transact_mut(|txn| self.insert_with_txn(txn, key, value))
   }
 
-  pub fn insert_with_txn<V: Prelim>(&self, txn: &mut TransactionMut, key: &str, value: V) {
-    self.data.insert(txn, key, value);
+  pub fn insert_with_txn<V: Prelim>(
+    &self,
+    txn: &mut TransactionMut,
+    key: &str,
+    value: V,
+  ) -> V::Return {
+    self.data.insert(txn, key, value)
   }
 
   pub fn insert_json_with_path<T: Serialize>(&mut self, path: Vec<String>, key: &str, value: T) {
