@@ -1,7 +1,10 @@
-use crate::util::{create_document, delete_block, get_document_data, insert_block, move_block};
+use crate::util::{
+  create_document, delete_block, get_document_data, insert_block, move_block, update_block,
+};
 use collab_document::blocks::EXTERNAL_TYPE_TEXT;
 use collab_document::document::InsertBlockArgs;
 use nanoid::nanoid;
+use serde_json::to_value;
 use std::collections::HashMap;
 
 #[test]
@@ -173,4 +176,39 @@ fn move_block_test() {
   assert!(page_children[0].as_str().unwrap().to_string() == first_child_id);
   assert!(page_children[1].as_str().unwrap().to_string() == block_id);
   assert!(page_children[2].as_str().unwrap().to_string() == child_block_id);
+}
+
+#[test]
+fn update_block_data_test() {
+  let doc_id = "1";
+  let test = create_document(doc_id);
+  let (page_id, blocks, _, children_map) = get_document_data(&test.document);
+
+  let page_id = page_id.as_str();
+  let page_children_id = blocks[page_id]["children"].as_str().unwrap();
+  let page_children = children_map[page_children_id].as_array().unwrap();
+  let first_child_id = page_children[0].as_str().unwrap();
+
+  let block = insert_block(
+    &test.document,
+    InsertBlockArgs {
+      parent_id: page_id.to_string(),
+      ty: "text".to_string(),
+      data: HashMap::new(),
+      external_id: nanoid!(10).to_string(),
+      external_type: EXTERNAL_TYPE_TEXT.to_string(),
+      block_id: nanoid!(10).to_string(),
+      children_id: nanoid!(10).to_string(),
+    },
+    first_child_id,
+  )
+  .unwrap();
+
+  let mut data = HashMap::new();
+  data.insert("text".to_string(), to_value("hello").unwrap());
+  let res = update_block(&test.document, &block.id, data);
+  assert!(res.is_ok());
+  let (_, blocks, _, _) = get_document_data(&test.document);
+  let block = blocks[block.id].as_object().unwrap();
+  assert_eq!(block["data"]["text"].as_str().unwrap(), "hello");
 }

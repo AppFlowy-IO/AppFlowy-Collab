@@ -275,12 +275,8 @@ impl Document {
     }
 
     let block = block.unwrap();
-    let children_id = &block.children;
-
     let parent_id = &block.parent;
     self.delete_block_from_parent(txn, block_id, parent_id);
-
-    self.children_map.delete_children_with_txn(txn, children_id);
 
     self.blocks.delete_block_with_txn(txn, block_id)
   }
@@ -299,6 +295,22 @@ impl Document {
         .children_map
         .delete_child_with_txn(txn, parent_children_id, block_id);
     }
+  }
+
+  pub fn update_block_data(
+    &self,
+    txn: &mut TransactionMut,
+    block_id: &str,
+    data: HashMap<String, Value>,
+  ) -> Result<(), DocumentError> {
+    let block = self.blocks.get_block_with_txn(txn, block_id);
+    if block.is_none() {
+      return Err(DocumentError::BlockIsNotFound);
+    }
+    let block = block.unwrap();
+    self
+      .blocks
+      .set_block_with_txn(txn, &block.id, Some(data), None)
   }
 
   pub fn move_block(

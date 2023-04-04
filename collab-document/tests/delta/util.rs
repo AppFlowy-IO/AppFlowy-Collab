@@ -1,5 +1,6 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
+use std::collections::HashMap;
 
 use collab_document::blocks::Block;
 use collab_document::document::{Document, InsertBlockArgs};
@@ -67,6 +68,16 @@ pub fn delete_block(document: &Document, block_id: &str) -> Result<Block, Docume
   document
     .root
     .with_transact_mut(|txn| document.delete_block(txn, block_id))
+}
+
+pub fn update_block(
+  document: &Document,
+  block_id: &str,
+  data: HashMap<String, Value>,
+) -> Result<(), DocumentError> {
+  document
+    .root
+    .with_transact_mut(|txn| document.update_block_data(txn, block_id, data))
 }
 
 pub fn move_block(
