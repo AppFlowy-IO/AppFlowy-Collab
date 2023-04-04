@@ -275,6 +275,22 @@ impl Document {
     }
 
     let block = block.unwrap();
+
+    let children = self
+      .children_map
+      .get_children_with_txn(txn, &block.children);
+    children
+      .iter(txn)
+      .map(|child| child.to_string(txn))
+      .collect::<Vec<String>>()
+      .iter()
+      .for_each(|child| match self.delete_block(txn, child) {
+        Ok(_) => (),
+        Err(_) => {
+          println!("delete block error");
+        },
+      });
+
     let parent_id = &block.parent;
     self.delete_block_from_parent(txn, block_id, parent_id);
 

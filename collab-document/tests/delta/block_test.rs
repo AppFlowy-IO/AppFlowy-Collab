@@ -63,6 +63,20 @@ fn insert_block_test() {
     },
     first_child_id,
   );
+  let block_child = insert_block(
+    &test.document,
+    InsertBlockArgs {
+      parent_id: block_id.to_string(),
+      ty: "text".to_string(),
+      data: HashMap::new(),
+      external_id: nanoid!(10).to_string(),
+      external_type: EXTERNAL_TYPE_TEXT.to_string(),
+      block_id: nanoid!(10).to_string(),
+      children_id: nanoid!(10).to_string(),
+    },
+    "",
+  );
+  assert!(block_child.is_ok());
   assert!(block.is_ok());
   let block = block.unwrap();
   let (page_id, blocks, text_map, children_map) = get_document_data(&test.document);
@@ -72,7 +86,18 @@ fn insert_block_test() {
   assert_eq!(block.external_id, block_external_id);
   assert_eq!(block.external_type, EXTERNAL_TYPE_TEXT);
   assert_eq!(block.ty, "text");
-  assert!(children_map[block_children_id].is_array());
+  assert!(children_map[&block_children_id].is_array());
+  assert_eq!(
+    children_map[&block_children_id].as_array().unwrap().len(),
+    1
+  );
+  assert_eq!(
+    children_map[&block_children_id].as_array().unwrap()[0]
+      .as_str()
+      .unwrap()
+      .to_string(),
+    block_child.unwrap().id
+  );
   assert!(text_map[block_external_id].is_array());
   let page_children = children_map[page_children_id].as_array().unwrap();
 
@@ -108,6 +133,20 @@ fn delete_block_test() {
     },
     first_child_id,
   );
+  insert_block(
+    &test.document,
+    InsertBlockArgs {
+      parent_id: block_id.to_string(),
+      ty: "text".to_string(),
+      data: HashMap::new(),
+      external_id: nanoid!(10).to_string(),
+      external_type: EXTERNAL_TYPE_TEXT.to_string(),
+      block_id: nanoid!(10).to_string(),
+      children_id: nanoid!(10).to_string(),
+    },
+    "",
+  )
+  .unwrap();
   assert!(block.is_ok());
   let block = delete_block(&test.document, &block.unwrap().id);
   let block = block.unwrap();

@@ -1,12 +1,9 @@
-use std::collections::HashMap;
-
-use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
-
 use crate::blocks::{ChildrenMap, TextMap};
+use crate::error::DocumentError;
+use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 use serde_json::Value;
-
-use crate::error::DocumentError;
+use std::collections::HashMap;
 
 const ID: &str = "id";
 const TYPE: &str = "ty";
