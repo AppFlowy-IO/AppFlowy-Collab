@@ -1,9 +1,13 @@
-use crate::blocks::{Block, BlockDataEnum, BlockMap, ChildrenMap, TextMap};
+use std::collections::HashMap;
+
+use crate::blocks::{Block, BlockMap, ChildrenMap, OperableBlocks, TextMap};
 use crate::error::DocumentError;
 use collab::preclude::*;
 use nanoid::nanoid;
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
+use serde_json::Value;
+use std::any::Any;
 
 const ROOT: &str = "document";
 const BLOCKS: &str = "blocks";
@@ -33,10 +37,11 @@ impl Serialize for Document {
       &self
         .root
         .get(&txn, "head_id")
-        .unwrap_or_else(|| Value::from(""))
+        .unwrap_or_else(|| YrsValue::from(""))
         .to_string(&txn),
     )?;
-    s.serialize_field("blocks", &self.blocks.to_json_value())?;
+    let blocks = serde_json::to_value(&self.blocks).unwrap();
+    s.serialize_field("blocks", &blocks)?;
     s.serialize_field(
       "meta",
       &serde_json::json!({
@@ -51,7 +56,7 @@ impl Serialize for Document {
 pub struct InsertBlockArgs {
   pub parent_id: String,
   pub block_id: String,
-  pub data: BlockDataEnum,
+  pub data: HashMap<String, Value>,
   pub children_id: String,
   pub ty: String,
 }
@@ -113,39 +118,39 @@ impl Document {
   }
 
   pub fn init(&self, txn: &mut TransactionMut) {
-    let head_id = self.root.get(txn, "head_id").unwrap().to_string(txn);
-    let head_children_id = nanoid!();
-    let head_text_id = nanoid!();
-    let head_data = BlockDataEnum::Page(head_text_id);
-    // { document: { blocks: { head_id: { id: "head_id", ty: "page", data: { text: "head_text_id", level: null }, children: "head_children_id" } } } }
-    self.insert_block(
-      txn,
-      InsertBlockArgs {
-        parent_id: "".to_string(),
-        block_id: head_id.clone(),
-        data: head_data,
-        children_id: head_children_id,
-        ty: "page".to_string(),
-      },
-      "".to_string(),
-    );
+    // let head_id = self.root.get(txn, "head_id").unwrap().to_string(txn);
+    // let head_children_id = nanoid!();
+    // let head_text_id = nanoid!();
+    // let head_data = BlockDataEnum::Page(head_text_id);
+    // // { document: { blocks: { head_id: { id: "head_id", ty: "page", data: { text: "head_text_id", level: null }, children: "head_children_id" } } } }
+    // self.insert_block(
+    //   txn,
+    //   InsertBlockArgs {
+    //     parent_id: "".to_string(),
+    //     block_id: head_id.clone(),
+    //     data: head_data,
+    //     children_id: head_children_id,
+    //     ty: "page".to_string(),
+    //   },
+    //   "".to_string(),
+    // );
 
-    let first_id = nanoid!();
-    let first_text_id = nanoid!();
-    let first_children_id = nanoid!();
-    let first_data = BlockDataEnum::Text(first_text_id);
-    // { document: { blocks: { head_id: { id: "head_id", ty: "page", data: { text: "head_text_id", level: null }, children: "head_children_id" }, first_id: { id: "first_id", ty: "text", data: { text: "first_text_id", level: null }, children: "first_children_id" } } } }
-    self.insert_block(
-      txn,
-      InsertBlockArgs {
-        parent_id: head_id,
-        block_id: first_id,
-        data: first_data,
-        children_id: first_children_id,
-        ty: "text".to_string(),
-      },
-      "".to_string(),
-    );
+    // let first_id = nanoid!();
+    // let first_text_id = nanoid!();
+    // let first_children_id = nanoid!();
+    // let first_data = BlockDataEnum::Text(first_text_id);
+    // // { document: { blocks: { head_id: { id: "head_id", ty: "page", data: { text: "head_text_id", level: null }, children: "head_children_id" }, first_id: { id: "first_id", ty: "text", data: { text: "first_text_id", level: null }, children: "first_children_id" } } } }
+    // self.insert_block(
+    //   txn,
+    //   InsertBlockArgs {
+    //     parent_id: head_id,
+    //     block_id: first_id,
+    //     data: first_data,
+    //     children_id: first_children_id,
+    //     ty: "text".to_string(),
+    //   },
+    //   "".to_string(),
+    // );
   }
 
   pub fn with_txn(&self, f: impl FnOnce(&mut TransactionMut)) {
@@ -154,27 +159,23 @@ impl Document {
 
   pub fn get_block(&self, block_id: &str) -> Option<Block> {
     let txn = self.inner.transact();
-    self.blocks.get_block(&txn, block_id)
+    self.blocks.get_block_with_txn(&txn, block_id)
   }
 
-  pub fn insert_block(&self, txn: &mut TransactionMut, block: InsertBlockArgs, prev_id: String) {
-    let block_id = block.block_id;
-    let ty = block.ty;
-    let parent_id = block.parent_id;
-    let children_id = block.children_id;
-    let text_id = block.data.get_text();
+  pub fn insert_block(&self, txn: &mut TransactionMut, args: InsertBlockArgs, prev_id: String) {
+    let block_id = args.block_id;
+    let ty = args.ty;
+    let parent_id = args.parent_id;
+    let children_id = args.children_id;
+    // FIXME: add extend id and type.
 
     self
       .children_map
       .create_children_with_txn(txn, &children_id);
 
-    if let Some(text_id) = text_id {
-      self.text_map.create_text(txn, &text_id);
-    }
-
     let block = self
       .blocks
-      .create_block(txn, block_id, ty, parent_id, children_id, block.data);
+      .create_block(txn, &block_id, &ty, &parent_id, &children_id, args.data);
 
     match block {
       Ok(block) => self.insert_block_to_parent(txn, &block, prev_id),
@@ -189,7 +190,7 @@ impl Document {
     if parent_id.is_empty() {
       return;
     }
-    let parent = self.blocks.get_block(txn, parent_id);
+    let parent = self.blocks.get_block_with_txn(txn, parent_id);
 
     let parent_is_empty = parent.is_none();
     if parent_is_empty {
@@ -219,25 +220,19 @@ impl Document {
   }
 
   pub fn delete_block(&self, txn: &mut TransactionMut, block_id: &str) {
-    let block = self.blocks.get_block(txn, block_id);
+    let block = self.blocks.get_block_with_txn(txn, block_id);
     if block.is_none() {
       return;
     }
 
     let block = block.unwrap();
     let children_id = &block.children;
-    let block_data = BlockDataEnum::from_string(&block.data);
 
     let parent_id = &block.parent;
     self.delete_block_from_parent(txn, block_id, parent_id);
 
     self.children_map.delete_children_with_txn(txn, children_id);
 
-    let text_id = block_data.get_text();
-
-    if let Some(text_id) = text_id {
-      self.text_map.delete_with_txn(txn, &text_id);
-    }
     self.blocks.delete_block_with_txn(txn, block_id);
   }
 
@@ -247,7 +242,7 @@ impl Document {
     block_id: &str,
     parent_id: &str,
   ) {
-    let parent = self.blocks.get_block(txn, parent_id);
+    let parent = self.blocks.get_block_with_txn(txn, parent_id);
 
     if let Some(parent) = parent {
       let parent_children_id = &parent.children;
@@ -264,18 +259,18 @@ impl Document {
     parent_id: &str,
     prev_id: &str,
   ) {
-    let block = self.blocks.get_block(txn, block_id);
+    let block = self.blocks.get_block_with_txn(txn, block_id);
     if block.is_none() {
       return;
     }
     let block = block.unwrap();
-    let parent = self.blocks.get_block(txn, parent_id);
+    let parent = self.blocks.get_block_with_txn(txn, parent_id);
     if parent.is_none() {
       return;
     }
 
     let parent = parent.unwrap();
-    let old_parent = self.blocks.get_block(txn, &block.parent);
+    let old_parent = self.blocks.get_block_with_txn(txn, &block.parent);
     if old_parent.is_none() {
       return;
     }
@@ -301,13 +296,8 @@ impl Document {
       .children_map
       .insert_child_with_txn(txn, &new_parent_children_id, block_id, new_index);
 
-    self.blocks.set_block_with_txn(
-      txn,
-      block_id,
-      Block {
-        parent: parent_id.to_string(),
-        ..block
-      },
-    );
+    self
+      .blocks
+      .set_block_with_txn(txn, block_id, Some(block.data), Some(parent_id));
   }
 }
