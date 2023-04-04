@@ -1,7 +1,7 @@
 use crate::core::trash::{TrashArray, TrashRecord};
 use crate::core::{
   Belonging, BelongingMap, FolderData, TrashChangeSender, View, ViewChangeSender, ViewsMap,
-  Workspace, WorkspaceInfo, WorkspaceMap,
+  Workspace, WorkspaceMap,
 };
 use collab::preclude::*;
 use parking_lot::RwLock;
@@ -124,17 +124,11 @@ impl Folder {
     self.meta.insert(CURRENT_WORKSPACE, workspace_id);
   }
 
-  pub fn get_current_workspace(&self) -> Option<WorkspaceInfo> {
+  pub fn get_current_workspace(&self) -> Option<Workspace> {
     let txn = self.meta.transact();
     let workspace_id = self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE)?;
     let workspace = self.workspaces.get_workspace(&workspace_id)?;
-    let views = self.get_current_workspace_views_with_txn(&txn);
-    Some(WorkspaceInfo {
-      id: workspace.id,
-      name: workspace.name,
-      views,
-      created_at: workspace.created_at,
-    })
+    Some(workspace)
   }
 
   pub fn get_current_workspace_id(&self) -> Option<String> {
@@ -149,17 +143,29 @@ impl Folder {
 
   pub fn get_current_workspace_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<View> {
     if let Some(workspace_id) = self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE) {
-      if let Some(workspace) = self.workspaces.get_workspace(workspace_id) {
-        let view_ids = workspace
-          .belongings
-          .into_inner()
-          .into_iter()
-          .map(|be| be.id)
-          .collect::<Vec<String>>();
-        return self.views.get_views(&view_ids);
-      }
+      self.get_workspace_views_with_txn(txn, &workspace_id)
+    } else {
+      vec![]
     }
-    vec![]
+  }
+
+  pub fn get_workspace_views(&self, workspace_id: &str) -> Vec<View> {
+    let txn = self.meta.transact();
+    self.get_workspace_views_with_txn(&txn, workspace_id)
+  }
+
+  pub fn get_workspace_views_with_txn<T: ReadTxn>(&self, txn: &T, workspace_id: &str) -> Vec<View> {
+    if let Some(workspace) = self.workspaces.get_workspace(workspace_id) {
+      let view_ids = workspace
+        .belongings
+        .into_inner()
+        .into_iter()
+        .map(|be| be.id)
+        .collect::<Vec<String>>();
+      self.views.get_views_with_txn(txn, &view_ids)
+    } else {
+      vec![]
+    }
   }
 
   pub fn insert_view(&self, view: View) {
