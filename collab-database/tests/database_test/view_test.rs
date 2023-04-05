@@ -6,7 +6,8 @@ use collab::preclude::lib0Any;
 use collab_database::fields::Field;
 use collab_database::rows::Row;
 use collab_database::views::{
-  CreateViewParams, DatabaseLayout, Filter, Group, GroupSetting, LayoutSetting, LayoutSettings,
+  CreateViewParams, DatabaseLayout, Filter, Group, GroupSetting, LayoutSettingBuilder,
+  LayoutSettings,
 };
 use nanoid::nanoid;
 
@@ -177,9 +178,11 @@ fn create_database_view_with_group_test() {
 fn create_database_view_with_layout_setting_test() {
   let database_test = create_database_with_default_data(1, "1");
   let mut layout_settings = LayoutSettings::new();
-  let mut grid_setting = LayoutSetting::new();
-  grid_setting.insert_any("1", lib0Any::BigInt(123));
-  grid_setting.insert_any("2", "abc");
+  let grid_setting = LayoutSettingBuilder::new()
+    .insert("1", lib0Any::BigInt(123))
+    .insert("2", "abc")
+    .build();
+
   layout_settings.insert(DatabaseLayout::Grid, grid_setting);
 
   let params = CreateViewParams {
