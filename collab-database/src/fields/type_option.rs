@@ -52,4 +52,4 @@ impl DerefMut for TypeOptions {
 }
 
 pub type TypeOptionData = AnyMap;
-pub type TypeOptionBuilder = AnyMapBuilder;
+pub type TypeOptionDataBuilder = AnyMapBuilder;
