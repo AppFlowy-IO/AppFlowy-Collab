@@ -130,9 +130,7 @@ pub fn field_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Field
     .map(|map_ref| TypeOptions::from_map_ref(txn, map_ref))
     .unwrap_or_default();
 
-  let field_type = map_ref
-    .get_i64_with_txn(txn, FIELD_TYPE)
-    .map(|value| value.try_into().ok())??;
+  let field_type = map_ref.get_i64_with_txn(txn, FIELD_TYPE)?;
 
   let is_primary = map_ref
     .get_bool_with_txn(txn, FIELD_PRIMARY)

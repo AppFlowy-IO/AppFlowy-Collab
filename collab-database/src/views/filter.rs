@@ -123,8 +123,7 @@ pub fn filter_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Filt
   let content = map_ref
     .get_str_with_txn(txn, FILTER_CONTENT)
     .unwrap_or_default();
-  let field_type = map_ref
-    .get_i64_with_txn(txn, FIELD_TYPE)?;
+  let field_type = map_ref.get_i64_with_txn(txn, FIELD_TYPE)?;
 
   Some(Filter {
     id,

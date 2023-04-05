@@ -110,8 +110,7 @@ pub fn sort_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Sort> {
 pub fn sort_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Sort> {
   let id = map_ref.get_str_with_txn(txn, SORT_ID)?;
   let field_id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
-  let field_type = map_ref
-    .get_i64_with_txn(txn, FIELD_TYPE)?;
+  let field_type = map_ref.get_i64_with_txn(txn, FIELD_TYPE)?;
 
   let condition = map_ref
     .get_i64_with_txn(txn, SORT_CONDITION)
