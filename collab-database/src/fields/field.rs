@@ -35,7 +35,7 @@ impl Field {
   }
 
   pub fn get_any_type_option(&self, type_id: impl AsRef<str>) -> Option<TypeOptionData> {
-    self.type_options.get(type_id).cloned()
+    self.type_options.get(type_id.as_ref()).cloned()
   }
 }
 

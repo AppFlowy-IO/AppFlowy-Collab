@@ -4,7 +4,7 @@ use collab::preclude::CollabBuilder;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, Row};
-use collab_database::views::{CreateViewParams, Layout};
+use collab_database::views::{CreateViewParams, DatabaseLayout};
 use collab_persistence::CollabKV;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -130,7 +130,7 @@ pub fn create_database_grid_view(uid: i64, database_id: &str, view_id: &str) -> 
   let params = CreateViewParams {
     view_id: view_id.to_string(),
     name: "my first grid".to_string(),
-    layout: Layout::Grid,
+    layout: DatabaseLayout::Grid,
     ..Default::default()
   };
   database_test.create_view(params);

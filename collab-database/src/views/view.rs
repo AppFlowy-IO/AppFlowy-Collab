@@ -1,7 +1,7 @@
 use crate::database::gen_database_view_id;
 use crate::fields::Field;
 use crate::rows::Row;
-use crate::views::layout::{Layout, LayoutSettings};
+use crate::views::layout::{DatabaseLayout, LayoutSettings};
 use crate::views::{
   FieldOrder, FieldOrderArray, Filter, FilterArray, GroupSetting, GroupSettingArray, RowOrder,
   RowOrderArray, Sort, SortArray,
@@ -19,7 +19,7 @@ pub struct DatabaseView {
   pub id: String,
   pub database_id: String,
   pub name: String,
-  pub layout: Layout,
+  pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<Filter>,
   pub groups: Vec<GroupSetting>,
@@ -34,7 +34,7 @@ pub struct DatabaseView {
 pub struct CreateViewParams {
   pub view_id: String,
   pub name: String,
-  pub layout: Layout,
+  pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<Filter>,
   pub groups: Vec<GroupSetting>,
@@ -45,7 +45,7 @@ pub struct CreateViewParams {
 pub struct CreateDatabaseParams {
   pub view_id: String,
   pub name: String,
-  pub layout: Layout,
+  pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<Filter>,
   pub groups: Vec<GroupSetting>,
@@ -157,7 +157,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     set_layout_type,
     set_layout_type_if_not_none,
     VIEW_LAYOUT,
-    Layout
+    DatabaseLayout
   );
 
   impl_order_update!(

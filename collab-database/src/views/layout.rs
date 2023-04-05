@@ -8,76 +8,76 @@ use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
-pub enum Layout {
+pub enum DatabaseLayout {
   Grid = 0,
   Board = 1,
   Calendar = 2,
 }
 
-impl AsRef<str> for Layout {
+impl AsRef<str> for DatabaseLayout {
   fn as_ref(&self) -> &str {
     match self {
-      Layout::Grid => "Grid",
-      Layout::Board => "Board",
-      Layout::Calendar => "Calendar",
+      DatabaseLayout::Grid => "Grid",
+      DatabaseLayout::Board => "Board",
+      DatabaseLayout::Calendar => "Calendar",
     }
   }
 }
 
-impl FromStr for Layout {
+impl FromStr for DatabaseLayout {
   type Err = anyhow::Error;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     match s {
-      "Grid" => Ok(Layout::Grid),
-      "Board" => Ok(Layout::Board),
-      "Calendar" => Ok(Layout::Calendar),
+      "Grid" => Ok(DatabaseLayout::Grid),
+      "Board" => Ok(DatabaseLayout::Board),
+      "Calendar" => Ok(DatabaseLayout::Calendar),
       _ => bail!("Invalid layout type"),
     }
   }
 }
 
-impl Default for Layout {
+impl Default for DatabaseLayout {
   fn default() -> Self {
     Self::Grid
   }
 }
 
-impl TryFrom<i64> for Layout {
+impl TryFrom<i64> for DatabaseLayout {
   type Error = anyhow::Error;
 
   fn try_from(value: i64) -> std::result::Result<Self, Self::Error> {
     match value {
-      0 => Ok(Layout::Grid),
-      1 => Ok(Layout::Board),
-      2 => Ok(Layout::Calendar),
+      0 => Ok(DatabaseLayout::Grid),
+      1 => Ok(DatabaseLayout::Board),
+      2 => Ok(DatabaseLayout::Calendar),
       _ => bail!("Unknown layout type {}", value),
     }
   }
 }
 
-impl From<Layout> for lib0Any {
-  fn from(layout: Layout) -> Self {
+impl From<DatabaseLayout> for lib0Any {
+  fn from(layout: DatabaseLayout) -> Self {
     lib0Any::BigInt(layout as i64)
   }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct LayoutSettings(HashMap<Layout, LayoutSetting>);
+pub struct LayoutSettings(HashMap<DatabaseLayout, LayoutSetting>);
 
 impl LayoutSettings {
   pub fn new() -> Self {
     Self::default()
   }
 
-  pub fn into_inner(self) -> HashMap<Layout, LayoutSetting> {
+  pub fn into_inner(self) -> HashMap<DatabaseLayout, LayoutSetting> {
     self.0
   }
 
   pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Self {
     let mut this = Self::new();
     map_ref.iter(txn).for_each(|(k, v)| {
-      if let Ok(layout) = Layout::from_str(k) {
+      if let Ok(layout) = DatabaseLayout::from_str(k) {
         if let YrsValue::YMap(map_ref) = v {
           this.insert(layout, LayoutSetting::from_map_ref(txn, map_ref));
         }
@@ -95,7 +95,7 @@ impl LayoutSettings {
 }
 
 impl Deref for LayoutSettings {
-  type Target = HashMap<Layout, LayoutSetting>;
+  type Target = HashMap<DatabaseLayout, LayoutSetting>;
 
   fn deref(&self) -> &Self::Target {
     &self.0

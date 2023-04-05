@@ -1,10 +1,8 @@
-use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder, Lib0AnyMapExtension};
-use collab::preclude::{
-  lib0Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
-};
+use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder};
+use collab::preclude::{Map, MapRef, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+use std::hash::Hasher;
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
