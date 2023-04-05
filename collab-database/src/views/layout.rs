@@ -1,4 +1,5 @@
 use anyhow::bail;
+use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder};
 use collab::preclude::{lib0Any, Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
@@ -89,7 +90,7 @@ impl LayoutSettings {
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.0.into_iter().for_each(|(k, v)| {
       let inner_map = map_ref.get_or_insert_map_with_txn(txn, k.as_ref());
-      v.fill_map_ref(txn, &inner_map);
+      v.fill_map_ref(txn, inner_map);
     });
   }
 }
@@ -108,42 +109,5 @@ impl DerefMut for LayoutSettings {
   }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct LayoutSetting(HashMap<String, lib0Any>);
-
-impl LayoutSetting {
-  pub fn new() -> Self {
-    Self::default()
-  }
-  pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Self {
-    let mut this = Self(Default::default());
-    map_ref.iter(txn).for_each(|(k, v)| {
-      if let YrsValue::Any(any) = v {
-        this.insert(k.to_string(), any);
-      }
-    });
-    this
-  }
-
-  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
-    self.0.into_iter().for_each(|(k, v)| {
-      map_ref.insert_with_txn(txn, &k, v);
-    });
-  }
-
-  pub fn insert_any<T: Into<lib0Any>>(&mut self, k: &str, v: T) {
-    self.0.insert(k.to_string(), v.into());
-  }
-}
-impl Deref for LayoutSetting {
-  type Target = HashMap<String, lib0Any>;
-
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-impl DerefMut for LayoutSetting {
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.0
-  }
-}
+pub type LayoutSetting = AnyMap;
+pub type LayoutSettingBuilder = AnyMapBuilder;

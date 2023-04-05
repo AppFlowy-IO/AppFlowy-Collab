@@ -89,7 +89,7 @@ pub fn get_field_type_from_cell<T: From<i64>>(cell: &Cell) -> Option<T> {
 pub type CellBuilder = AnyMapBuilder;
 
 pub fn new_cell_builder(field_type: impl Into<i64>) -> CellBuilder {
-  let mut inner = AnyMapBuilder::new();
+  let inner = AnyMapBuilder::new();
   inner.insert("field_type", field_type.into())
 }
 

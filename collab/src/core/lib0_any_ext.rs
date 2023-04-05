@@ -39,6 +39,12 @@ pub trait Lib0AnyMapExtension {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AnyMap(HashMap<String, lib0Any>);
 
+impl AsRef<AnyMap> for AnyMap {
+  fn as_ref(&self) -> &AnyMap {
+    self
+  }
+}
+
 impl AnyMap {
   pub fn new() -> Self {
     Self::default()
