@@ -1,4 +1,4 @@
-use crate::preclude::{lib0Any, MapRefExtension, MapRefWrapper, YrsValue};
+use crate::preclude::{lib0Any, MapRefExtension, YrsValue};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -39,6 +39,12 @@ pub trait Lib0AnyMapExtension {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AnyMap(HashMap<String, lib0Any>);
 
+impl AnyMap {
+  pub fn new() -> Self {
+    Self::default()
+  }
+}
+
 impl Lib0AnyMapExtension for AnyMap {
   fn value(&self) -> &HashMap<String, lib0Any> {
     &self.0
@@ -64,10 +70,22 @@ impl AnyMap {
     this
   }
 
-  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: MapRefWrapper) {
+  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: MapRef) {
     self.0.into_iter().for_each(|(k, v)| {
       map_ref.insert_with_txn(txn, &k, v);
     })
+  }
+}
+
+impl<T: ReadTxn> From<(&'_ T, &MapRef)> for AnyMap {
+  fn from(params: (&'_ T, &MapRef)) -> Self {
+    let mut this = AnyMap::default();
+    params.1.iter(params.0).for_each(|(k, v)| {
+      if let YrsValue::Any(any) = v {
+        this.insert(k.to_string(), any);
+      }
+    });
+    this
   }
 }
 

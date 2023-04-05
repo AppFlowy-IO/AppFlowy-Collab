@@ -2,7 +2,6 @@ use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder};
 use collab::preclude::{Map, MapRef, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::hash::Hasher;
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -29,7 +28,7 @@ impl TypeOptions {
 
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRefWrapper) {
     self.into_inner().into_iter().for_each(|(k, v)| {
-      let type_option_map = map_ref.get_or_insert_map_with_txn(txn, &k);
+      let type_option_map = map_ref.get_or_insert_map_with_txn(txn, &k).into_inner();
       v.fill_map_ref(txn, type_option_map);
     });
   }
