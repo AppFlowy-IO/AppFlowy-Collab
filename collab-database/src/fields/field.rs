@@ -1,4 +1,4 @@
-use crate::fields::TypeOptions;
+use crate::fields::{TypeOptionData, TypeOptions};
 use crate::{impl_bool_update, impl_i64_update, impl_str_update};
 
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
@@ -27,6 +27,15 @@ impl Field {
       type_options: Default::default(),
       is_primary,
     }
+  }
+
+  pub fn get_type_option<T: From<TypeOptionData>>(&self, type_id: &str) -> Option<T> {
+    let type_option_data = self.type_options.get(type_id)?.clone();
+    Some(T::from(type_option_data))
+  }
+
+  pub fn get_any_type_option(&self, type_id: &str) -> Option<TypeOptionData> {
+    self.type_options.get(type_id).cloned()
   }
 }
 

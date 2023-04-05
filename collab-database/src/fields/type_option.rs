@@ -1,8 +1,10 @@
+use collab::core::lib0_any_ext::Lib0AnyMapExtension;
 use collab::preclude::{
   lib0Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -52,6 +54,20 @@ impl DerefMut for TypeOptions {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TypeOptionData(HashMap<String, lib0Any>);
 
+impl Lib0AnyMapExtension for TypeOptionData {
+  fn value(&self) -> &HashMap<String, lib0Any> {
+    &self.0
+  }
+}
+
+impl Hash for TypeOptionData {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.0.iter().for_each(|(_, v)| {
+      v.to_string().hash(state);
+    });
+  }
+}
+
 impl TypeOptionData {
   pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Self {
     let mut this = Self(Default::default());
@@ -77,6 +93,7 @@ impl Deref for TypeOptionData {
     &self.0
   }
 }
+
 impl DerefMut for TypeOptionData {
   fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.0

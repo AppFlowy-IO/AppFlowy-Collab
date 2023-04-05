@@ -1,5 +1,4 @@
 use crate::{impl_i64_update, impl_str_update};
-
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::map::MapPrelim;
 use collab::preclude::{
