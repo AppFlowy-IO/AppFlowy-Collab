@@ -1,13 +1,13 @@
 use crate::database::Database;
 use crate::fields::Field;
 use crate::rows::Row;
-use crate::views::View;
+use crate::views::DatabaseView;
 use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct DatabaseSerde {
   pub rows: Vec<Row>,
-  pub views: Vec<View>,
+  pub views: Vec<DatabaseView>,
   pub fields: Vec<Field>,
 }
 

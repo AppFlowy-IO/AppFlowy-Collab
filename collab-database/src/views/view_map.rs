@@ -1,5 +1,5 @@
 use crate::views::{
-  view_from_map_ref, view_from_value, view_id_from_map_ref, View, ViewBuilder, ViewUpdate,
+  view_from_map_ref, view_from_value, view_id_from_map_ref, DatabaseView, ViewBuilder, ViewUpdate,
 };
 use collab::preclude::{Map, MapRef, MapRefWrapper, ReadTxn, TransactionMut};
 
@@ -13,13 +13,13 @@ impl ViewMap {
     Self { container }
   }
 
-  pub fn insert_view(&self, view: View) {
+  pub fn insert_view(&self, view: DatabaseView) {
     self
       .container
       .with_transact_mut(|txn| self.insert_view_with_txn(txn, view))
   }
 
-  pub fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View) {
+  pub fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: DatabaseView) {
     let map_ref = self.container.insert_map_with_txn(txn, &view.id);
     ViewBuilder::new(&view.id, txn, map_ref).update(|update| {
       update
@@ -35,22 +35,22 @@ impl ViewMap {
     });
   }
 
-  pub fn get_view(&self, view_id: &str) -> Option<View> {
+  pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
     let txn = self.container.transact();
     self.get_view_with_txn(&txn, view_id)
   }
 
-  pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<View> {
+  pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<DatabaseView> {
     let map_ref = self.container.get_map_with_txn(txn, view_id)?;
     view_from_map_ref(&map_ref, txn)
   }
 
-  pub fn get_all_views(&self) -> Vec<View> {
+  pub fn get_all_views(&self) -> Vec<DatabaseView> {
     let txn = self.container.transact();
     self.get_all_views_with_txn(&txn)
   }
 
-  pub fn get_all_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<View> {
+  pub fn get_all_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseView> {
     self
       .container
       .iter(txn)

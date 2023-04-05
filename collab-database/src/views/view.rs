@@ -3,8 +3,8 @@ use crate::fields::Field;
 use crate::rows::Row;
 use crate::views::layout::{Layout, LayoutSettings};
 use crate::views::{
-  FieldOrder, FieldOrderArray, Filter, FilterArray, Group, GroupArray, RowOrder, RowOrderArray,
-  Sort, SortArray,
+  FieldOrder, FieldOrderArray, Filter, FilterArray, GroupSetting, GroupSettingArray, RowOrder,
+  RowOrderArray, Sort, SortArray,
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 use collab::preclude::map::MapPrelim;
@@ -15,14 +15,14 @@ use collab::preclude::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct View {
+pub struct DatabaseView {
   pub id: String,
   pub database_id: String,
   pub name: String,
   pub layout: Layout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<Filter>,
-  pub groups: Vec<Group>,
+  pub groups: Vec<GroupSetting>,
   pub sorts: Vec<Sort>,
   pub row_orders: Vec<RowOrder>,
   pub field_orders: Vec<FieldOrder>,
@@ -37,7 +37,7 @@ pub struct CreateViewParams {
   pub layout: Layout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<Filter>,
-  pub groups: Vec<Group>,
+  pub groups: Vec<GroupSetting>,
   pub sorts: Vec<Sort>,
 }
 
@@ -48,14 +48,14 @@ pub struct CreateDatabaseParams {
   pub layout: Layout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<Filter>,
-  pub groups: Vec<Group>,
+  pub groups: Vec<GroupSetting>,
   pub sorts: Vec<Sort>,
   pub rows: Vec<Row>,
   pub fields: Vec<Field>,
 }
 
 impl CreateDatabaseParams {
-  pub fn from_view(view: View, rows: Vec<Row>, fields: Vec<Field>) -> Self {
+  pub fn from_view(view: DatabaseView, rows: Vec<Row>, fields: Vec<Field>) -> Self {
     let mut params: Self = view.into();
     params.rows = rows;
     params.fields = fields;
@@ -78,8 +78,8 @@ impl CreateDatabaseParams {
   }
 }
 
-impl From<View> for CreateDatabaseParams {
-  fn from(view: View) -> Self {
+impl From<DatabaseView> for CreateDatabaseParams {
+  fn from(view: DatabaseView) -> Self {
     Self {
       view_id: gen_database_view_id(),
       name: view.name,
@@ -199,11 +199,11 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
-  pub fn set_groups(self, groups: Vec<Group>) -> Self {
+  pub fn set_groups(self, groups: Vec<GroupSetting>) -> Self {
     let array_ref = self
       .map_ref
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS);
-    let filter_array = GroupArray::new(array_ref);
+    let filter_array = GroupSettingArray::new(array_ref);
     filter_array.extends_with_txn(self.txn, groups);
     self
   }
@@ -217,7 +217,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
-  pub fn done(self) -> Option<View> {
+  pub fn done(self) -> Option<DatabaseView> {
     view_from_map_ref(self.map_ref, self.txn)
   }
 }
@@ -226,12 +226,12 @@ pub fn view_id_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Str
   map_ref.get_str_with_txn(txn, VIEW_ID)
 }
 
-pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<View> {
+pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<DatabaseView> {
   let map_ref = value.to_ymap()?;
   view_from_map_ref(&map_ref, txn)
 }
 
-pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> {
+pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<DatabaseView> {
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
   let name = map_ref.get_str_with_txn(txn, VIEW_NAME)?;
   let database_id = map_ref
@@ -253,7 +253,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> 
 
   let groups = map_ref
     .get_array_ref_with_txn(txn, VIEW_GROUPS)
-    .map(|array_ref| GroupArray::new(array_ref).get_groups_with_txn(txn))
+    .map(|array_ref| GroupSettingArray::new(array_ref).get_group_setting_with_txn(txn))
     .unwrap_or_default();
 
   let sorts = map_ref
@@ -279,7 +279,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> 
     .get_i64_with_txn(txn, VIEW_MODIFY_AT)
     .unwrap_or_default();
 
-  Some(View {
+  Some(DatabaseView {
     id,
     database_id,
     name,

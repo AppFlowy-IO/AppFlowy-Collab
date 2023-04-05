@@ -8,7 +8,7 @@ use yrs::{Map, MapRef, ReadTxn, TransactionMut};
 pub trait Lib0AnyMapExtension {
   fn value(&self) -> &HashMap<String, lib0Any>;
 
-  fn get_str_value<K: AsRef<str>>(&self, key: &K) -> Option<String> {
+  fn get_str_value<K: AsRef<str>>(&self, key: K) -> Option<String> {
     let value = self.value().get(key.as_ref())?;
     if let lib0Any::String(s) = value {
       Some(s.to_string())
@@ -17,7 +17,7 @@ pub trait Lib0AnyMapExtension {
     }
   }
 
-  fn get_i64_value<K: AsRef<str>>(&self, key: &K) -> Option<i64> {
+  fn get_i64_value<K: AsRef<str>>(&self, key: K) -> Option<i64> {
     let value = self.value().get(key.as_ref())?;
     if let lib0Any::BigInt(num) = value {
       Some(*num)
@@ -26,7 +26,7 @@ pub trait Lib0AnyMapExtension {
     }
   }
 
-  fn get_bool_value<K: AsRef<str>>(&self, key: &K) -> Option<bool> {
+  fn get_bool_value<K: AsRef<str>>(&self, key: K) -> Option<bool> {
     let value = self.value().get(key.as_ref())?;
     if let lib0Any::Bool(value) = value {
       Some(*value)
@@ -96,7 +96,8 @@ impl AnyMapBuilder {
     }
   }
 
-  pub fn insert<K: AsRef<str>>(mut self, key: &str, value: impl Into<lib0Any>) -> Self {
+  pub fn insert<K: AsRef<str>>(mut self, key: K, value: impl Into<lib0Any>) -> Self {
+    let key = key.as_ref();
     self.inner.insert(key.to_string(), value.into());
     self
   }

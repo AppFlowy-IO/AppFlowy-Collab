@@ -3,7 +3,7 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::meta::MetaMap;
 use crate::rows::{Row, RowMap};
-use crate::views::{CreateDatabaseParams, CreateViewParams, RowOrder, View, ViewMap};
+use crate::views::{CreateDatabaseParams, CreateViewParams, DatabaseView, RowOrder, ViewMap};
 use collab::preclude::{
   Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
@@ -190,7 +190,7 @@ impl Database {
       let timestamp = timestamp();
       // It's safe to unwrap. Because the database_id must exist
       let database_id = self.get_database_id_with_txn(txn).unwrap();
-      let view = View {
+      let view = DatabaseView {
         id: params.view_id,
         database_id,
         name: params.name,
@@ -208,7 +208,7 @@ impl Database {
     })
   }
 
-  pub fn duplicate_view(&self, view_id: &str) -> Option<View> {
+  pub fn duplicate_view(&self, view_id: &str) -> Option<DatabaseView> {
     let view = self.views.get_view(view_id)?;
     let mut duplicated_view = view.clone();
     duplicated_view.id = gen_database_view_id();
@@ -314,7 +314,7 @@ pub fn timestamp() -> i64 {
 }
 
 pub struct DuplicatedDatabase {
-  pub view: View,
+  pub view: DatabaseView,
   pub rows: Vec<Row>,
   pub fields: Vec<Field>,
 }

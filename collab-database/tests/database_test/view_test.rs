@@ -6,7 +6,7 @@ use collab::preclude::lib0Any;
 use collab_database::fields::Field;
 use collab_database::rows::Row;
 use collab_database::views::{
-  CreateViewParams, Filter, Group, GroupItem, Layout, LayoutSetting, LayoutSettings,
+  CreateViewParams, Filter, Group, GroupSetting, Layout, LayoutSetting, LayoutSettings,
 };
 use nanoid::nanoid;
 
@@ -130,17 +130,17 @@ fn create_database_view_with_filter_test() {
 #[test]
 fn create_database_view_with_group_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let group_1 = Group {
+  let group_1 = GroupSetting {
     id: "group1".to_string(),
     field_id: "".to_string(),
     field_type: Default::default(),
-    items: vec![
-      GroupItem {
+    groups: vec![
+      Group {
         id: "group_item1".to_string(),
         name: "group item 1".to_string(),
         visible: false,
       },
-      GroupItem {
+      Group {
         id: "group_item2".to_string(),
         name: "group item 2".to_string(),
         visible: false,
@@ -148,11 +148,11 @@ fn create_database_view_with_group_test() {
     ],
     content: "".to_string(),
   };
-  let group_2 = Group {
+  let group_2 = GroupSetting {
     id: "group2".to_string(),
     field_id: "".to_string(),
     field_type: Default::default(),
-    items: vec![],
+    groups: vec![],
     content: "".to_string(),
   };
 
@@ -167,9 +167,9 @@ fn create_database_view_with_group_test() {
   let view = database_test.views.get_view("v1").unwrap();
   assert_eq!(view.groups.len(), 2);
   assert_eq!(view.groups[0].id, "group1");
-  assert_eq!(view.groups[0].items.len(), 2);
-  assert_eq!(view.groups[0].items[0].id, "group_item1");
-  assert_eq!(view.groups[0].items[1].id, "group_item2");
+  assert_eq!(view.groups[0].groups.len(), 2);
+  assert_eq!(view.groups[0].groups[0].id, "group_item1");
+  assert_eq!(view.groups[0].groups[1].id, "group_item2");
   assert_eq!(view.groups[1].id, "group2");
 }
 

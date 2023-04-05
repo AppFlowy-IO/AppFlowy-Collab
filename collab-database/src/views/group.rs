@@ -1,3 +1,4 @@
+use crate::database::gen_database_group_id;
 use crate::{impl_i64_update, impl_str_update};
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::map::MapPrelim;
@@ -6,22 +7,22 @@ use collab::preclude::{
 };
 use serde::{Deserialize, Serialize};
 
-pub struct GroupArray {
+pub struct GroupSettingArray {
   array_ref: ArrayRef,
 }
 
-impl GroupArray {
+impl GroupSettingArray {
   pub fn new(array_ref: ArrayRef) -> Self {
     Self { array_ref }
   }
 
-  pub fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<Group>) {
+  pub fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<GroupSetting>) {
     let array_ref = ArrayRefExtension(&self.array_ref);
     for group in others {
       let group_map_ref = array_ref.insert_map_with_txn(txn);
       GroupBuilder::new(&group.id, txn, group_map_ref).update(|update| {
         update
-          .set_items(group.items)
+          .set_items(group.groups)
           .set_content(group.content)
           .set_field_type(group.field_type)
           .set_field_id(group.field_id);
@@ -29,29 +30,41 @@ impl GroupArray {
     }
   }
 
-  pub fn get_groups_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Group> {
+  pub fn get_group_setting_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<GroupSetting> {
     self
       .array_ref
       .iter(txn)
       .flat_map(|v| group_from_value(v, txn))
-      .collect::<Vec<Group>>()
+      .collect::<Vec<GroupSetting>>()
   }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
-pub struct Group {
+pub struct GroupSetting {
   pub id: String,
   pub field_id: String,
   pub field_type: i64,
-  pub items: Vec<GroupItem>,
+  pub groups: Vec<Group>,
   pub content: String,
+}
+
+impl GroupSetting {
+  pub fn new(field_id: String, field_type: i64, content: String) -> Self {
+    Self {
+      id: gen_database_group_id(),
+      field_id,
+      field_type,
+      groups: vec![],
+      content,
+    }
+  }
 }
 
 const GROUP_ID: &str = "id";
 const FIELD_ID: &str = "field_id";
 const FIELD_TYPE: &str = "ty";
-const GROUP_ITEMS: &str = "items";
-const GROUP_CONTENT: &str = "content";
+const GROUP_SETTING_GROUPS: &str = "groups";
+const GROUP_SETTING_CONTENT: &str = "content";
 
 pub struct GroupBuilder<'a, 'b> {
   id: &'a str,
@@ -89,24 +102,24 @@ impl<'a, 'b> GroupUpdate<'a, 'b> {
   }
 
   impl_str_update!(set_field_id, set_field_id_if_not_none, FIELD_ID);
-  impl_str_update!(set_content, set_content_if_not_none, GROUP_CONTENT);
+  impl_str_update!(set_content, set_content_if_not_none, GROUP_SETTING_CONTENT);
   impl_i64_update!(set_field_type, set_field_type_if_not_none, FIELD_TYPE);
 
-  pub fn set_items(self, items: Vec<GroupItem>) -> Self {
+  pub fn set_items(self, items: Vec<Group>) -> Self {
     let array_ref = self
       .map_ref
-      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, GROUP_ITEMS);
-    let items_array = GroupItemArray::new(array_ref);
+      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, GROUP_SETTING_GROUPS);
+    let items_array = GroupArray::new(array_ref);
     items_array.extends_with_txn(self.txn, items);
     self
   }
 
-  pub fn done(self) -> Option<Group> {
+  pub fn done(self) -> Option<GroupSetting> {
     group_from_map_ref(self.map_ref, self.txn)
   }
 }
 
-pub fn group_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Group> {
+pub fn group_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<GroupSetting> {
   if let YrsValue::YMap(map_ref) = value {
     group_from_map_ref(&map_ref, txn)
   } else {
@@ -114,36 +127,36 @@ pub fn group_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Group> {
   }
 }
 
-pub fn group_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Group> {
+pub fn group_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<GroupSetting> {
   let id = map_ref.get_str_with_txn(txn, GROUP_ID)?;
-  let content = map_ref.get_str_with_txn(txn, GROUP_CONTENT)?;
+  let content = map_ref.get_str_with_txn(txn, GROUP_SETTING_CONTENT)?;
   let field_id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
   let field_type = map_ref.get_i64_with_txn(txn, FIELD_TYPE)?;
 
   let items = map_ref
-    .get_array_ref_with_txn(txn, GROUP_ITEMS)
+    .get_array_ref_with_txn(txn, GROUP_SETTING_GROUPS)
     .map(|array_ref| get_items_with_txn(txn, array_ref))
     .unwrap_or_default();
 
-  Some(Group {
+  Some(GroupSetting {
     id,
     field_id,
     field_type,
-    items,
+    groups: items,
     content,
   })
 }
 
-pub struct GroupItemArray {
+pub struct GroupArray {
   array_ref: ArrayRef,
 }
 
-impl GroupItemArray {
+impl GroupArray {
   pub fn new(array_ref: ArrayRef) -> Self {
     Self { array_ref }
   }
 
-  pub fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<GroupItem>) {
+  pub fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<Group>) {
     let array_ref = ArrayRefExtension(&self.array_ref);
     for items in others {
       let filter_map_ref = array_ref.insert_map_with_txn(txn);
@@ -152,11 +165,11 @@ impl GroupItemArray {
   }
 }
 
-pub fn get_items_with_txn<T: ReadTxn>(txn: &T, array_ref: ArrayRef) -> Vec<GroupItem> {
+pub fn get_items_with_txn<T: ReadTxn>(txn: &T, array_ref: ArrayRef) -> Vec<Group> {
   let mut items = vec![];
   array_ref.iter(txn).for_each(|v| {
     if let YrsValue::YMap(map_ref) = v {
-      if let Some(item) = GroupItem::from_map_ref(txn, map_ref) {
+      if let Some(item) = Group::from_map_ref(txn, map_ref) {
         items.push(item);
       }
     }
@@ -165,7 +178,7 @@ pub fn get_items_with_txn<T: ReadTxn>(txn: &T, array_ref: ArrayRef) -> Vec<Group
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
-pub struct GroupItem {
+pub struct Group {
   pub id: String,
   pub name: String,
   #[serde(default = "GROUP_REV_VISIBILITY")]
@@ -174,7 +187,15 @@ pub struct GroupItem {
 
 const GROUP_REV_VISIBILITY: fn() -> bool = || true;
 
-impl GroupItem {
+impl Group {
+  pub fn new(id: String, name: String) -> Self {
+    Self {
+      id,
+      name,
+      visible: true,
+    }
+  }
+
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: MapRef) {
     map_ref.insert_with_txn(txn, "id", self.id);
     map_ref.insert_with_txn(txn, "name", self.name);
