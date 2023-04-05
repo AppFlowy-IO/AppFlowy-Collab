@@ -1,4 +1,4 @@
-use collab::core::lib0_any_ext::Lib0AnyMapExtension;
+use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder, Lib0AnyMapExtension};
 use collab::preclude::{
   lib0Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
 };
@@ -51,51 +51,5 @@ impl DerefMut for TypeOptions {
   }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TypeOptionData(HashMap<String, lib0Any>);
-
-impl Lib0AnyMapExtension for TypeOptionData {
-  fn value(&self) -> &HashMap<String, lib0Any> {
-    &self.0
-  }
-}
-
-impl Hash for TypeOptionData {
-  fn hash<H: Hasher>(&self, state: &mut H) {
-    self.0.iter().for_each(|(_, v)| {
-      v.to_string().hash(state);
-    });
-  }
-}
-
-impl TypeOptionData {
-  pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Self {
-    let mut this = Self(Default::default());
-    map_ref.iter(txn).for_each(|(k, v)| {
-      if let YrsValue::Any(any) = v {
-        this.insert(k.to_string(), any);
-      }
-    });
-    this
-  }
-
-  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: MapRefWrapper) {
-    self.0.into_iter().for_each(|(k, v)| {
-      map_ref.insert_with_txn(txn, &k, v);
-    })
-  }
-}
-
-impl Deref for TypeOptionData {
-  type Target = HashMap<String, lib0Any>;
-
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-
-impl DerefMut for TypeOptionData {
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.0
-  }
-}
+pub type TypeOptionData = AnyMap;
+pub type TypeOptionBuilder = AnyMapBuilder;
