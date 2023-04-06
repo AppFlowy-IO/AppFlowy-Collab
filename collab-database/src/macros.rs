@@ -166,7 +166,7 @@ macro_rules! impl_order_update {
       self
     }
 
-    pub fn $insert<T: Into<$ty>>(self, object: T, prev_object_id: &str) -> Self {
+    pub fn $insert<T: Into<$ty>>(self, object: T, prev_object_id: Option<&str>) -> Self {
       let object = object.into();
       if let Some(array) = self
         .map_ref

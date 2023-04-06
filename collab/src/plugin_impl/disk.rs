@@ -1,6 +1,5 @@
 use crate::core::collab_plugin::CollabPlugin;
 use crate::error::CollabError;
-
 use collab_persistence::doc::YrsDocDB;
 use collab_persistence::CollabKV;
 use std::sync::Arc;

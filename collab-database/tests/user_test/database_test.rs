@@ -1,11 +1,11 @@
-use crate::helper::create_user_database;
+use crate::helper::user_database_test;
 use collab_database::rows::Row;
 use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 
 #[test]
 fn create_multiple_database_test() {
-  let user_db = create_user_database(1);
-  user_db
+  let test = user_database_test(1);
+  test
     .create_database(
       "d1",
       CreateDatabaseParams {
@@ -14,7 +14,7 @@ fn create_multiple_database_test() {
       },
     )
     .unwrap();
-  user_db
+  test
     .create_database(
       "d2",
       CreateDatabaseParams {
@@ -23,7 +23,7 @@ fn create_multiple_database_test() {
       },
     )
     .unwrap();
-  let all_databases = user_db.get_all_databases();
+  let all_databases = test.get_all_databases();
   assert_eq!(all_databases.len(), 2);
   assert_eq!(all_databases[0].database_id, "d1");
   assert_eq!(all_databases[1].database_id, "d2");
@@ -31,8 +31,8 @@ fn create_multiple_database_test() {
 
 #[test]
 fn delete_database_test() {
-  let user_db = create_user_database(1);
-  user_db
+  let test = user_database_test(1);
+  test
     .create_database(
       "d1",
       CreateDatabaseParams {
@@ -41,7 +41,7 @@ fn delete_database_test() {
       },
     )
     .unwrap();
-  user_db
+  test
     .create_database(
       "d2",
       CreateDatabaseParams {
@@ -50,16 +50,16 @@ fn delete_database_test() {
       },
     )
     .unwrap();
-  user_db.delete_database("d1");
+  test.delete_database("d1");
 
-  let all_databases = user_db.get_all_databases();
+  let all_databases = test.get_all_databases();
   assert_eq!(all_databases[0].database_id, "d2");
 }
 
 #[test]
 fn duplicate_database_inline_view_test() {
-  let user_db = create_user_database(1);
-  let database = user_db
+  let test = user_database_test(1);
+  let database = test
     .create_database(
       "d1",
       CreateDatabaseParams {
@@ -69,7 +69,7 @@ fn duplicate_database_inline_view_test() {
     )
     .unwrap();
 
-  let duplicated_database = user_db.duplicate_view("d1", "v1").unwrap();
+  let duplicated_database = test.duplicate_view("d1", "v1").unwrap();
   duplicated_database.push_row(Row {
     id: "r1".to_string(),
     ..Default::default()
@@ -81,8 +81,8 @@ fn duplicate_database_inline_view_test() {
 
 #[test]
 fn duplicate_database_view_test() {
-  let user_db = create_user_database(1);
-  let database = user_db
+  let test = user_database_test(1);
+  let database = test
     .create_database(
       "d1",
       CreateDatabaseParams {
@@ -97,7 +97,7 @@ fn duplicate_database_view_test() {
     ..Default::default()
   });
 
-  let duplicated_database = user_db.duplicate_view("d1", "v").unwrap();
+  let duplicated_database = test.duplicate_view("d1", "v").unwrap();
   duplicated_database.push_row(Row {
     id: "r1".to_string(),
     ..Default::default()
@@ -105,4 +105,32 @@ fn duplicate_database_view_test() {
 
   assert_eq!(duplicated_database.rows.get_all_rows().len(), 1);
   assert_eq!(database.rows.get_all_rows().len(), 1);
+}
+
+#[test]
+fn delete_database_inline_view_test() {
+  let test = user_database_test(1);
+  let database = test
+    .create_database(
+      "d1",
+      CreateDatabaseParams {
+        view_id: "v1".to_string(),
+        ..Default::default()
+      },
+    )
+    .unwrap();
+
+  for i in 2..5 {
+    database.create_view(CreateViewParams {
+      view_id: format!("v{}", i),
+      ..Default::default()
+    });
+  }
+
+  let views = database.views.get_all_views();
+  assert_eq!(views.len(), 4);
+
+  test.delete_view("d1", "v1");
+  let views = database.views.get_all_views();
+  assert_eq!(views.len(), 0);
 }

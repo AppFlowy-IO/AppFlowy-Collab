@@ -1,4 +1,4 @@
-use crate::fields::{TypeOptionData, TypeOptions};
+use crate::fields::{TypeOptionData, TypeOptions, TypeOptionsUpdate};
 use crate::{impl_bool_update, impl_i64_update, impl_str_update};
 
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
@@ -29,13 +29,13 @@ impl Field {
     }
   }
 
-  pub fn get_type_option<T: From<TypeOptionData>>(&self, type_id: &str) -> Option<T> {
-    let type_option_data = self.type_options.get(type_id)?.clone();
+  pub fn get_type_option<T: From<TypeOptionData>>(&self, type_id: impl AsRef<str>) -> Option<T> {
+    let type_option_data = self.type_options.get(type_id.as_ref())?.clone();
     Some(T::from(type_option_data))
   }
 
-  pub fn get_any_type_option(&self, type_id: &str) -> Option<TypeOptionData> {
-    self.type_options.get(type_id).cloned()
+  pub fn get_any_type_option(&self, type_id: impl AsRef<str>) -> Option<TypeOptionData> {
+    self.type_options.get(type_id.as_ref()).cloned()
   }
 }
 
@@ -82,11 +82,20 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
   impl_i64_update!(set_width, set_width_at_if_not_none, FIELD_WIDTH);
   impl_i64_update!(set_field_type, set_field_type_if_not_none, FIELD_TYPE);
 
-  pub fn set_type_option(self, type_option: TypeOptions) -> Self {
+  pub fn set_type_options(self, type_options: TypeOptions) -> Self {
     let map_ref = self
       .map_ref
       .get_or_insert_map_with_txn(self.txn, FIELD_TYPE_OPTION);
-    type_option.fill_map_ref(self.txn, &map_ref);
+    type_options.fill_map_ref(self.txn, &map_ref);
+    self
+  }
+
+  pub fn update_type_options(self, f: impl FnOnce(TypeOptionsUpdate)) -> Self {
+    let map_ref = self
+      .map_ref
+      .get_or_insert_map_with_txn(self.txn, FIELD_TYPE_OPTION);
+    let update = TypeOptionsUpdate::new(self.txn, &map_ref);
+    f(update);
     self
   }
 

@@ -1,10 +1,10 @@
 use crate::database::gen_database_view_id;
 use crate::fields::Field;
 use crate::rows::Row;
-use crate::views::layout::{Layout, LayoutSettings};
+use crate::views::layout::{DatabaseLayout, LayoutSettings};
 use crate::views::{
-  FieldOrder, FieldOrderArray, Filter, FilterArray, Group, GroupArray, RowOrder, RowOrderArray,
-  Sort, SortArray,
+  FieldOrder, FieldOrderArray, Filter, FilterArray, GroupSetting, GroupSettingArray, RowOrder,
+  RowOrderArray, Sort, SortArray,
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 use collab::preclude::map::MapPrelim;
@@ -15,14 +15,14 @@ use collab::preclude::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct View {
+pub struct DatabaseView {
   pub id: String,
   pub database_id: String,
   pub name: String,
-  pub layout: Layout,
+  pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<Filter>,
-  pub groups: Vec<Group>,
+  pub groups: Vec<GroupSetting>,
   pub sorts: Vec<Sort>,
   pub row_orders: Vec<RowOrder>,
   pub field_orders: Vec<FieldOrder>,
@@ -34,10 +34,10 @@ pub struct View {
 pub struct CreateViewParams {
   pub view_id: String,
   pub name: String,
-  pub layout: Layout,
+  pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<Filter>,
-  pub groups: Vec<Group>,
+  pub groups: Vec<GroupSetting>,
   pub sorts: Vec<Sort>,
 }
 
@@ -45,17 +45,17 @@ pub struct CreateViewParams {
 pub struct CreateDatabaseParams {
   pub view_id: String,
   pub name: String,
-  pub layout: Layout,
+  pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<Filter>,
-  pub groups: Vec<Group>,
+  pub groups: Vec<GroupSetting>,
   pub sorts: Vec<Sort>,
   pub rows: Vec<Row>,
   pub fields: Vec<Field>,
 }
 
 impl CreateDatabaseParams {
-  pub fn from_view(view: View, rows: Vec<Row>, fields: Vec<Field>) -> Self {
+  pub fn from_view(view: DatabaseView, rows: Vec<Row>, fields: Vec<Field>) -> Self {
     let mut params: Self = view.into();
     params.rows = rows;
     params.fields = fields;
@@ -78,8 +78,8 @@ impl CreateDatabaseParams {
   }
 }
 
-impl From<View> for CreateDatabaseParams {
-  fn from(view: View) -> Self {
+impl From<DatabaseView> for CreateDatabaseParams {
+  fn from(view: DatabaseView) -> Self {
     Self {
       view_id: gen_database_view_id(),
       name: view.name,
@@ -157,7 +157,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     set_layout_type,
     set_layout_type_if_not_none,
     VIEW_LAYOUT,
-    Layout
+    DatabaseLayout
   );
 
   impl_order_update!(
@@ -199,11 +199,11 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
-  pub fn set_groups(self, groups: Vec<Group>) -> Self {
+  pub fn set_groups(self, groups: Vec<GroupSetting>) -> Self {
     let array_ref = self
       .map_ref
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS);
-    let filter_array = GroupArray::new(array_ref);
+    let filter_array = GroupSettingArray::new(array_ref);
     filter_array.extends_with_txn(self.txn, groups);
     self
   }
@@ -217,7 +217,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
-  pub fn done(self) -> Option<View> {
+  pub fn done(self) -> Option<DatabaseView> {
     view_from_map_ref(self.map_ref, self.txn)
   }
 }
@@ -226,12 +226,12 @@ pub fn view_id_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Str
   map_ref.get_str_with_txn(txn, VIEW_ID)
 }
 
-pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<View> {
+pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<DatabaseView> {
   let map_ref = value.to_ymap()?;
   view_from_map_ref(&map_ref, txn)
 }
 
-pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> {
+pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<DatabaseView> {
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
   let name = map_ref.get_str_with_txn(txn, VIEW_NAME)?;
   let database_id = map_ref
@@ -253,7 +253,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> 
 
   let groups = map_ref
     .get_array_ref_with_txn(txn, VIEW_GROUPS)
-    .map(|array_ref| GroupArray::new(array_ref).get_groups_with_txn(txn))
+    .map(|array_ref| GroupSettingArray::new(array_ref).get_group_setting_with_txn(txn))
     .unwrap_or_default();
 
   let sorts = map_ref
@@ -279,7 +279,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<View> 
     .get_i64_with_txn(txn, VIEW_MODIFY_AT)
     .unwrap_or_default();
 
-  Some(View {
+  Some(DatabaseView {
     id,
     database_id,
     name,
@@ -321,20 +321,24 @@ pub trait OrderArray {
     self.array_ref().push_back(txn, object);
   }
 
-  fn insert_with_txn(&self, txn: &mut TransactionMut, object: Self::Object, prev_object_id: &str) {
-    if prev_object_id.is_empty() {
+  fn insert_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    object: Self::Object,
+    prev_object_id: Option<&str>,
+  ) {
+    if let Some(prev_object_id) = prev_object_id {
+      match self.get_row_position_with_txn(txn, prev_object_id) {
+        None => {
+          self.array_ref().push_back(txn, object);
+        },
+        Some(pos) => {
+          let next: u32 = pos as u32 + 1;
+          self.array_ref().insert(txn, next, object);
+        },
+      }
+    } else {
       self.array_ref().push_front(txn, object);
-      return;
-    }
-
-    match self.get_row_position_with_txn(txn, prev_object_id) {
-      None => {
-        self.array_ref().push_back(txn, object);
-      },
-      Some(pos) => {
-        let next: u32 = pos as u32 + 1;
-        self.array_ref().insert(txn, next, object);
-      },
     }
   }
 

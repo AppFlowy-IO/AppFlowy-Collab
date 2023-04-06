@@ -1,5 +1,5 @@
 use crate::database::timestamp;
-use crate::rows::Cells;
+use crate::rows::{Cells, CellsUpdate};
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
@@ -67,6 +67,16 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
   pub fn set_cells(self, cells: Cells) -> Self {
     let cell_map = self.map_ref.get_or_insert_map_with_txn(self.txn, ROW_CELLS);
     cells.fill_map_ref(self.txn, &cell_map);
+    self
+  }
+
+  pub fn update_cells<F>(self, f: F) -> Self
+  where
+    F: FnOnce(CellsUpdate),
+  {
+    let cell_map = self.map_ref.get_or_insert_map_with_txn(self.txn, ROW_CELLS);
+    let update = CellsUpdate::new(self.txn, &cell_map);
+    f(update);
     self
   }
 

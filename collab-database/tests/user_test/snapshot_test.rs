@@ -1,12 +1,12 @@
-use crate::helper::create_user_database;
+use crate::helper::user_database_test;
 
 use collab_database::rows::Row;
 use collab_database::views::CreateDatabaseParams;
 
 #[test]
 fn database_get_snapshot_test() {
-  let user_db = create_user_database(1);
-  let database = user_db
+  let test = user_database_test(1);
+  let database = test
     .create_database(
       "d1",
       CreateDatabaseParams {
@@ -16,7 +16,7 @@ fn database_get_snapshot_test() {
     )
     .unwrap();
 
-  let snapshots = user_db.get_database_snapshots("d1");
+  let snapshots = test.get_database_snapshots("d1");
   assert!(snapshots.is_empty());
 
   for i in 0..10 {
@@ -24,14 +24,14 @@ fn database_get_snapshot_test() {
     database.push_row(Row::new(row_id));
   }
 
-  let snapshots = user_db.get_database_snapshots("d1");
+  let snapshots = test.get_database_snapshots("d1");
   assert!(!snapshots.is_empty());
 }
 
 #[test]
 fn delete_database_snapshot_test() {
-  let user_db = create_user_database(1);
-  let database = user_db
+  let test = user_database_test(1);
+  let database = test
     .create_database(
       "d1",
       CreateDatabaseParams {
@@ -45,15 +45,15 @@ fn delete_database_snapshot_test() {
     let row_id = format!("r{}", i);
     database.push_row(Row::new(row_id));
   }
-  user_db.delete_database("d1");
-  let snapshots = user_db.get_database_snapshots("d1");
+  test.delete_database("d1");
+  let snapshots = test.get_database_snapshots("d1");
   assert!(snapshots.is_empty());
 }
 
 #[test]
 fn restore_from_database_snapshot_test() {
-  let user_db = create_user_database(1);
-  let database = user_db
+  let test = user_database_test(1);
+  let database = test
     .create_database(
       "d1",
       CreateDatabaseParams {
@@ -70,8 +70,8 @@ fn restore_from_database_snapshot_test() {
     });
   }
 
-  let mut snapshots = user_db.get_database_snapshots("d1");
-  let database2 = user_db
+  let mut snapshots = test.get_database_snapshots("d1");
+  let database2 = test
     .restore_database_from_snapshot("d1", snapshots.remove(0))
     .unwrap();
 

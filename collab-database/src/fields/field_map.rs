@@ -29,7 +29,7 @@ impl FieldMap {
           .set_field_type(field.field_type)
           .set_width(field.width)
           .set_visibility(field.visibility)
-          .set_type_option(field.type_options);
+          .set_type_options(field.type_options);
       })
       .done();
   }
@@ -37,6 +37,11 @@ impl FieldMap {
   pub fn get_all_fields(&self) -> Vec<Field> {
     let txn = self.container.transact();
     self.get_all_fields_with_txn(&txn)
+  }
+
+  pub fn get_field(&self, field_id: &str) -> Option<Field> {
+    let txn = self.container.transact();
+    self.get_field_with_txn(&txn, field_id)
   }
 
   pub fn get_field_with_txn<T: ReadTxn>(&self, txn: &T, field_id: &str) -> Option<Field> {
@@ -61,14 +66,14 @@ impl FieldMap {
       .collect::<Vec<_>>()
   }
 
-  pub fn update_field<F>(&self, field_id: &str, f: F) -> Option<Field>
+  pub fn update_field<F>(&self, field_id: &str, f: F)
   where
-    F: FnOnce(FieldUpdate) -> Option<Field>,
+    F: FnOnce(FieldUpdate),
   {
     self.container.with_transact_mut(|txn| {
-      let map_ref = self.container.get_map_with_txn(txn, field_id)?;
+      let map_ref = self.container.get_or_insert_map_with_txn(txn, field_id);
       let update = FieldUpdate::new(field_id, txn, &map_ref);
-      f(update)
+      f(update);
     })
   }
 

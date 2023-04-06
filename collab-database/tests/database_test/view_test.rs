@@ -6,7 +6,8 @@ use collab::preclude::lib0Any;
 use collab_database::fields::Field;
 use collab_database::rows::Row;
 use collab_database::views::{
-  CreateViewParams, Filter, Group, GroupItem, Layout, LayoutSetting, LayoutSettings,
+  CreateViewParams, DatabaseLayout, Filter, Group, GroupSetting, LayoutSettingBuilder,
+  LayoutSettings,
 };
 use nanoid::nanoid;
 
@@ -31,7 +32,7 @@ fn create_database_with_single_view_test() {
   let params = CreateViewParams {
     view_id: "v1".to_string(),
     name: "my first grid".to_string(),
-    layout: Layout::Grid,
+    layout: DatabaseLayout::Grid,
     ..Default::default()
   };
 
@@ -47,7 +48,7 @@ fn create_same_database_view_twice_test() {
   let params = CreateViewParams {
     view_id: "v1".to_string(),
     name: "my first grid".to_string(),
-    layout: Layout::Grid,
+    layout: DatabaseLayout::Grid,
     ..Default::default()
   };
   database_test.create_view(params);
@@ -55,7 +56,7 @@ fn create_same_database_view_twice_test() {
   let params = CreateViewParams {
     view_id: "v1".to_string(),
     name: "my second grid".to_string(),
-    layout: Layout::Grid,
+    layout: DatabaseLayout::Grid,
     ..Default::default()
   };
   database_test.create_view(params);
@@ -116,7 +117,7 @@ fn create_database_view_with_filter_test() {
     view_id: "v1".to_string(),
     name: "my first grid".to_string(),
     filters: vec![filter_1, filter_2],
-    layout: Layout::Grid,
+    layout: DatabaseLayout::Grid,
     ..Default::default()
   };
   database_test.create_view(params);
@@ -130,17 +131,17 @@ fn create_database_view_with_filter_test() {
 #[test]
 fn create_database_view_with_group_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let group_1 = Group {
+  let group_1 = GroupSetting {
     id: "group1".to_string(),
     field_id: "".to_string(),
     field_type: Default::default(),
-    items: vec![
-      GroupItem {
+    groups: vec![
+      Group {
         id: "group_item1".to_string(),
         name: "group item 1".to_string(),
         visible: false,
       },
-      GroupItem {
+      Group {
         id: "group_item2".to_string(),
         name: "group item 2".to_string(),
         visible: false,
@@ -148,18 +149,18 @@ fn create_database_view_with_group_test() {
     ],
     content: "".to_string(),
   };
-  let group_2 = Group {
+  let group_2 = GroupSetting {
     id: "group2".to_string(),
     field_id: "".to_string(),
     field_type: Default::default(),
-    items: vec![],
+    groups: vec![],
     content: "".to_string(),
   };
 
   let params = CreateViewParams {
     view_id: "v1".to_string(),
     groups: vec![group_1, group_2],
-    layout: Layout::Grid,
+    layout: DatabaseLayout::Grid,
     ..Default::default()
   };
   database_test.create_view(params);
@@ -167,9 +168,9 @@ fn create_database_view_with_group_test() {
   let view = database_test.views.get_view("v1").unwrap();
   assert_eq!(view.groups.len(), 2);
   assert_eq!(view.groups[0].id, "group1");
-  assert_eq!(view.groups[0].items.len(), 2);
-  assert_eq!(view.groups[0].items[0].id, "group_item1");
-  assert_eq!(view.groups[0].items[1].id, "group_item2");
+  assert_eq!(view.groups[0].groups.len(), 2);
+  assert_eq!(view.groups[0].groups[0].id, "group_item1");
+  assert_eq!(view.groups[0].groups[1].id, "group_item2");
   assert_eq!(view.groups[1].id, "group2");
 }
 
@@ -177,21 +178,23 @@ fn create_database_view_with_group_test() {
 fn create_database_view_with_layout_setting_test() {
   let database_test = create_database_with_default_data(1, "1");
   let mut layout_settings = LayoutSettings::new();
-  let mut grid_setting = LayoutSetting::new();
-  grid_setting.insert_any("1", lib0Any::BigInt(123));
-  grid_setting.insert_any("2", "abc");
-  layout_settings.insert(Layout::Grid, grid_setting);
+  let grid_setting = LayoutSettingBuilder::new()
+    .insert_i64_value("1", 123)
+    .insert_any("2", "abc")
+    .build();
+
+  layout_settings.insert(DatabaseLayout::Grid, grid_setting);
 
   let params = CreateViewParams {
     view_id: "v1".to_string(),
-    layout: Layout::Grid,
+    layout: DatabaseLayout::Grid,
     layout_settings,
     ..Default::default()
   };
   database_test.create_view(params);
 
   let view = database_test.views.get_view("v1").unwrap();
-  let grid_layout_setting = view.layout_settings.get(&Layout::Grid).unwrap();
+  let grid_layout_setting = view.layout_settings.get(&DatabaseLayout::Grid).unwrap();
   assert_eq!(grid_layout_setting.get("1").unwrap(), &lib0Any::BigInt(123));
   assert_eq!(
     grid_layout_setting.get("2").unwrap(),
