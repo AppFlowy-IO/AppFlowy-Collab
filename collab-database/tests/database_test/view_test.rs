@@ -1,12 +1,13 @@
 use crate::helper::{
   create_database, create_database_grid_view, create_database_with_default_data, TestFilter,
+  TestGroup,
 };
 use assert_json_diff::assert_json_eq;
 use collab::preclude::lib0Any;
 use collab_database::fields::Field;
 use collab_database::rows::Row;
 use collab_database::views::{
-  CreateViewParams, DatabaseLayout, Group, GroupSetting, LayoutSettingBuilder, LayoutSettings,
+  CreateViewParams, DatabaseLayout, GroupSetting, LayoutSettingBuilder, LayoutSettings,
 };
 use nanoid::nanoid;
 
@@ -140,16 +141,18 @@ fn create_database_view_with_group_test() {
     field_id: "".to_string(),
     field_type: Default::default(),
     groups: vec![
-      Group {
+      TestGroup {
         id: "group_item1".to_string(),
         name: "group item 1".to_string(),
         visible: false,
-      },
-      Group {
+      }
+      .into(),
+      TestGroup {
         id: "group_item2".to_string(),
         name: "group item 2".to_string(),
         visible: false,
-      },
+      }
+      .into(),
     ],
     content: "".to_string(),
   };
@@ -170,12 +173,17 @@ fn create_database_view_with_group_test() {
   database_test.create_view(params);
 
   let view = database_test.views.get_view("v1").unwrap();
-  assert_eq!(view.groups.len(), 2);
-  assert_eq!(view.groups[0].id, "group1");
-  assert_eq!(view.groups[0].groups.len(), 2);
-  assert_eq!(view.groups[0].groups[0].id, "group_item1");
-  assert_eq!(view.groups[0].groups[1].id, "group_item2");
-  assert_eq!(view.groups[1].id, "group2");
+  assert_eq!(view.group_settings.len(), 2);
+  assert_eq!(view.group_settings[1].id, "group2");
+  assert_eq!(view.group_settings[0].id, "group1");
+  assert_eq!(view.group_settings[0].groups.len(), 2);
+  let groups = view.group_settings[0]
+    .groups
+    .iter()
+    .map(|group| TestGroup::from(group.clone()))
+    .collect::<Vec<TestGroup>>();
+  assert_eq!(groups[0].id, "group_item1");
+  assert_eq!(groups[1].id, "group_item2");
 }
 
 #[test]

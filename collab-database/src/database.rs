@@ -197,7 +197,7 @@ impl Database {
         layout: params.layout,
         layout_settings: params.layout_settings,
         filters: params.filters,
-        groups: params.groups,
+        group_settings: params.groups,
         sorts: params.sorts,
         row_orders,
         field_orders,

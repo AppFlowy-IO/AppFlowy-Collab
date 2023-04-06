@@ -5,7 +5,9 @@ use collab::preclude::CollabBuilder;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, Row};
-use collab_database::views::{CreateViewParams, DatabaseLayout, FilterMap, FilterMapBuilder};
+use collab_database::views::{
+  CreateViewParams, DatabaseLayout, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder,
+};
 use collab_persistence::CollabKV;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -198,5 +200,31 @@ impl From<FilterMap> for TestFilter {
       condition,
       content,
     }
+  }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TestGroup {
+  pub id: String,
+  pub name: String,
+  pub visible: bool,
+}
+
+impl From<GroupMap> for TestGroup {
+  fn from(value: GroupMap) -> Self {
+    let id = value.get_str_value("id").unwrap();
+    let name = value.get_str_value("name").unwrap_or_default();
+    let visible = value.get_bool_value("visible").unwrap_or_default();
+    Self { id, name, visible }
+  }
+}
+
+impl From<TestGroup> for GroupMap {
+  fn from(group: TestGroup) -> Self {
+    GroupMapBuilder::new()
+      .insert_str_value("id", group.id)
+      .insert_str_value("name", group.name)
+      .insert_bool_value("visible", group.visible)
+      .build()
   }
 }

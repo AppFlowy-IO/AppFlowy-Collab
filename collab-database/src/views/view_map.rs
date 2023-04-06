@@ -28,7 +28,7 @@ impl ViewMap {
         .set_layout_settings(view.layout_settings)
         .set_layout_type(view.layout)
         .set_filter(view.filters)
-        .set_groups(view.groups)
+        .set_groups(view.group_settings)
         .set_sorts(view.sorts)
         .set_field_orders(view.field_orders)
         .set_row_orders(view.row_orders);

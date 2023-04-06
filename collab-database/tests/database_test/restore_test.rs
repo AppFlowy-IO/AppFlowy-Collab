@@ -84,7 +84,7 @@ fn create_database_with_view() -> (Arc<CollabKV>, DatabaseTest, Value) {
         "database_id": "1",
         "field_orders": [],
         "filters": [],
-        "groups": [],
+        "group_settings": [],
         "id": "v1",
         "layout": 0,
         "layout_settings": {},
