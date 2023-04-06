@@ -116,6 +116,14 @@ impl AnyMap {
     this
   }
 
+  pub fn from_value<T: ReadTxn>(txn: &T, value: YrsValue) -> Option<Self> {
+    if let YrsValue::YMap(map_ref) = value {
+      Some(Self::from_map_ref(txn, map_ref))
+    } else {
+      None
+    }
+  }
+
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: MapRef) {
     self.0.into_iter().for_each(|(k, v)| {
       map_ref.insert_with_txn(txn, &k, v);
@@ -171,6 +179,11 @@ impl AnyMapBuilder {
 
   pub fn insert_str_value<K: AsRef<str>, S: ToString>(mut self, key: K, s: S) -> Self {
     self.inner.insert_str_value(key, s.to_string());
+    self
+  }
+
+  pub fn insert_bool_value<K: AsRef<str>>(mut self, key: K, value: bool) -> Self {
+    self.inner.insert_bool_value(key, value);
     self
   }
 

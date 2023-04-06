@@ -1,10 +1,11 @@
+use collab::core::lib0_any_ext::Lib0AnyMapExtension;
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use collab::preclude::CollabBuilder;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, Row};
-use collab_database::views::{CreateViewParams, DatabaseLayout};
+use collab_database::views::{CreateViewParams, DatabaseLayout, FilterMap, FilterMapBuilder};
 use collab_persistence::CollabKV;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -153,5 +154,49 @@ impl Cleaner {
 impl Drop for Cleaner {
   fn drop(&mut self) {
     Self::cleanup(&self.0)
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct TestFilter {
+  pub id: String,
+  pub field_id: String,
+  pub field_type: i64,
+  pub condition: i64,
+  pub content: String,
+}
+
+const FILTER_ID: &str = "id";
+const FIELD_ID: &str = "field_id";
+const FIELD_TYPE: &str = "ty";
+const FILTER_CONDITION: &str = "condition";
+const FILTER_CONTENT: &str = "content";
+
+impl From<TestFilter> for FilterMap {
+  fn from(data: TestFilter) -> Self {
+    FilterMapBuilder::new()
+      .insert_str_value(FILTER_ID, data.id)
+      .insert_str_value(FIELD_ID, data.field_id)
+      .insert_str_value(FILTER_CONTENT, data.content)
+      .insert_i64_value(FIELD_TYPE, data.field_type)
+      .insert_i64_value(FILTER_CONDITION, data.condition)
+      .build()
+  }
+}
+
+impl From<FilterMap> for TestFilter {
+  fn from(filter: FilterMap) -> Self {
+    let id = filter.get_str_value(FILTER_ID).unwrap();
+    let field_id = filter.get_str_value(FIELD_ID).unwrap();
+    let condition = filter.get_i64_value(FILTER_CONDITION).unwrap_or(0);
+    let content = filter.get_str_value(FILTER_CONTENT).unwrap_or_default();
+    let field_type = filter.get_i64_value(FIELD_TYPE).unwrap_or_default();
+    TestFilter {
+      id,
+      field_id,
+      field_type,
+      condition,
+      content,
+    }
   }
 }

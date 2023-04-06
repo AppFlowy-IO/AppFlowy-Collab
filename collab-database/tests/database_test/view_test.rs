@@ -1,13 +1,12 @@
 use crate::helper::{
-  create_database, create_database_grid_view, create_database_with_default_data,
+  create_database, create_database_grid_view, create_database_with_default_data, TestFilter,
 };
 use assert_json_diff::assert_json_eq;
 use collab::preclude::lib0Any;
 use collab_database::fields::Field;
 use collab_database::rows::Row;
 use collab_database::views::{
-  CreateViewParams, DatabaseLayout, Filter, Group, GroupSetting, LayoutSettingBuilder,
-  LayoutSettings,
+  CreateViewParams, DatabaseLayout, Group, GroupSetting, LayoutSettingBuilder, LayoutSettings,
 };
 use nanoid::nanoid;
 
@@ -97,7 +96,7 @@ fn create_database_field_test() {
 #[test]
 fn create_database_view_with_filter_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let filter_1 = Filter {
+  let filter_1 = TestFilter {
     id: "filter1".to_string(),
     field_id: "".to_string(),
     field_type: Default::default(),
@@ -105,7 +104,7 @@ fn create_database_view_with_filter_test() {
     content: "".to_string(),
   };
 
-  let filter_2 = Filter {
+  let filter_2 = TestFilter {
     id: "filter2".to_string(),
     field_id: "".to_string(),
     field_type: Default::default(),
@@ -116,16 +115,21 @@ fn create_database_view_with_filter_test() {
   let params = CreateViewParams {
     view_id: "v1".to_string(),
     name: "my first grid".to_string(),
-    filters: vec![filter_1, filter_2],
+    filters: vec![filter_1.into(), filter_2.into()],
     layout: DatabaseLayout::Grid,
     ..Default::default()
   };
   database_test.create_view(params);
 
   let view = database_test.views.get_view("v1").unwrap();
-  assert_eq!(view.filters.len(), 2);
-  assert_eq!(view.filters[0].id, "filter1");
-  assert_eq!(view.filters[1].id, "filter2");
+  let filters = view
+    .filters
+    .into_iter()
+    .map(TestFilter::from)
+    .collect::<Vec<TestFilter>>();
+  assert_eq!(filters.len(), 2);
+  assert_eq!(filters[0].id, "filter1");
+  assert_eq!(filters[1].id, "filter2");
 }
 
 #[test]

@@ -3,7 +3,7 @@ use crate::fields::Field;
 use crate::rows::Row;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
 use crate::views::{
-  FieldOrder, FieldOrderArray, Filter, FilterArray, GroupSetting, GroupSettingArray, RowOrder,
+  FieldOrder, FieldOrderArray, FilterArray, FilterMap, GroupSetting, GroupSettingArray, RowOrder,
   RowOrderArray, Sort, SortArray,
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
@@ -21,7 +21,7 @@ pub struct DatabaseView {
   pub name: String,
   pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
-  pub filters: Vec<Filter>,
+  pub filters: Vec<FilterMap>,
   pub groups: Vec<GroupSetting>,
   pub sorts: Vec<Sort>,
   pub row_orders: Vec<RowOrder>,
@@ -36,7 +36,7 @@ pub struct CreateViewParams {
   pub name: String,
   pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
-  pub filters: Vec<Filter>,
+  pub filters: Vec<FilterMap>,
   pub groups: Vec<GroupSetting>,
   pub sorts: Vec<Sort>,
 }
@@ -47,7 +47,7 @@ pub struct CreateDatabaseParams {
   pub name: String,
   pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
-  pub filters: Vec<Filter>,
+  pub filters: Vec<FilterMap>,
   pub groups: Vec<GroupSetting>,
   pub sorts: Vec<Sort>,
   pub rows: Vec<Row>,
@@ -190,7 +190,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
-  pub fn set_filter(self, filters: Vec<Filter>) -> Self {
+  pub fn set_filter(self, filters: Vec<FilterMap>) -> Self {
     let array_ref = self
       .map_ref
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_FILTERS);
