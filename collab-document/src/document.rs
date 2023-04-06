@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::blocks::{Block, BlockOperation, ChildrenOperation, TextOperation, EXTERNAL_TYPE_TEXT};
 use crate::error::DocumentError;
@@ -19,8 +20,8 @@ pub struct Document {
   #[allow(dead_code)]
   inner: Collab,
   pub root: MapRefWrapper,
-  text_operation: TextOperation,
-  children_operation: ChildrenOperation,
+  text_operation: Rc<TextOperation>,
+  children_operation: Rc<ChildrenOperation>,
   block_operation: BlockOperation,
 }
 
@@ -44,8 +45,8 @@ impl Serialize for Document {
     s.serialize_field(
       META,
       &serde_json::json!({
-          TEXT_MAP: serde_json::to_value(&self.text_operation).unwrap_or_default(),
-          CHILDREN_MAP: serde_json::to_value(&self.children_operation).unwrap_or_default(),
+          TEXT_MAP: serde_json::to_value(self.text_operation.as_ref()).unwrap_or_default(),
+          CHILDREN_MAP: serde_json::to_value(self.children_operation.as_ref()).unwrap_or_default(),
       }),
     )?;
     s.end()
@@ -58,8 +59,8 @@ pub struct InsertBlockArgs {
   pub data: HashMap<String, Value>,
   pub children_id: String,
   pub ty: String,
-  pub external_id: String,
-  pub external_type: String,
+  pub external_id: Option<String>,
+  pub external_type: Option<String>,
 }
 
 impl Document {
@@ -88,14 +89,15 @@ impl Document {
 
       (root, blocks, text_map, children_map)
     });
+
+    let text_operation = Rc::new(TextOperation::new(text_map));
+    let children_operation = Rc::new(ChildrenOperation::new(children_map));
+
     let block_operation = BlockOperation::new(
       blocks,
-      ChildrenOperation::new(children_map.clone()),
-      TextOperation::new(text_map.clone()),
+      Rc::clone(&children_operation),
+      Rc::clone(&text_operation),
     );
-    let text_operation = TextOperation::new(text_map);
-    let children_operation = ChildrenOperation::new(children_map);
-
     let document = Self {
       inner: collab,
       root,
@@ -133,8 +135,8 @@ impl Document {
               children: root_children_id,
               data: HashMap::new(),
               ty: "page".to_string(),
-              external_id: root_text_id,
-              external_type: EXTERNAL_TYPE_TEXT.to_string(),
+              external_id: Some(root_text_id),
+              external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
             },
           );
           match block {
@@ -168,8 +170,8 @@ impl Document {
             data: HashMap::new(),
             children_id: first_line_children_id,
             ty: "text".to_string(),
-            external_id: first_line_text_id,
-            external_type: EXTERNAL_TYPE_TEXT.to_string(),
+            external_id: Some(first_line_text_id),
+            external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
           },
           "".to_string(),
         );

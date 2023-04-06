@@ -50,14 +50,15 @@ fn insert_block_test() {
   let block_external_id = nanoid!(10);
   let block_children_id = nanoid!(10);
   let block_id = nanoid!(10);
+
   let block = insert_block(
     &test.document,
     InsertBlockArgs {
       parent_id: page_id.to_string(),
       ty: "text".to_string(),
       data: HashMap::new(),
-      external_id: block_external_id.to_string(),
-      external_type: EXTERNAL_TYPE_TEXT.to_string(),
+      external_id: Some(block_external_id.to_string()),
+      external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
       block_id: block_id.to_string(),
       children_id: block_children_id.to_string(),
     },
@@ -69,8 +70,8 @@ fn insert_block_test() {
       parent_id: block_id.to_string(),
       ty: "text".to_string(),
       data: HashMap::new(),
-      external_id: nanoid!(10).to_string(),
-      external_type: EXTERNAL_TYPE_TEXT.to_string(),
+      external_id: None,
+      external_type: None,
       block_id: nanoid!(10).to_string(),
       children_id: nanoid!(10).to_string(),
     },
@@ -79,13 +80,18 @@ fn insert_block_test() {
   assert!(block_child.is_ok());
   assert!(block.is_ok());
   let block = block.unwrap();
+  let block_child = block_child.unwrap();
   let (page_id, blocks, text_map, children_map) = get_document_data(&test.document);
   assert!(blocks[block.id].is_object());
   assert_eq!(block.parent, page_id.to_string());
   assert_eq!(block.children, block_children_id);
-  assert_eq!(block.external_id, block_external_id);
-  assert_eq!(block.external_type, EXTERNAL_TYPE_TEXT);
+  assert_eq!(block.external_id, Some(block_external_id.clone()));
+  assert_eq!(block.external_type.unwrap(), EXTERNAL_TYPE_TEXT.to_string());
   assert_eq!(block.ty, "text");
+
+  assert!(block_child.external_type.is_none());
+  assert!(block_child.external_id.is_none());
+
   assert!(children_map[&block_children_id].is_array());
   assert_eq!(
     children_map[&block_children_id].as_array().unwrap().len(),
@@ -96,13 +102,13 @@ fn insert_block_test() {
       .as_str()
       .unwrap()
       .to_string(),
-    block_child.unwrap().id
+    block_child.id
   );
   assert!(text_map[block_external_id].is_array());
   let page_children = children_map[page_children_id].as_array().unwrap();
 
   assert_eq!(page_children.len(), 2);
-  assert!(page_children[1].as_str().unwrap().to_string() == block_id);
+  assert_eq!(page_children[1].as_str().unwrap().to_string(), block_id);
 }
 
 #[test]
@@ -126,8 +132,8 @@ fn delete_block_test() {
       parent_id: page_id.to_string(),
       ty: "text".to_string(),
       data: HashMap::new(),
-      external_id: block_external_id.to_string(),
-      external_type: EXTERNAL_TYPE_TEXT.to_string(),
+      external_id: Some(block_external_id.to_string()),
+      external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
       block_id: block_id.to_string(),
       children_id: block_children_id.to_string(),
     },
@@ -139,8 +145,8 @@ fn delete_block_test() {
       parent_id: block_id.to_string(),
       ty: "text".to_string(),
       data: HashMap::new(),
-      external_id: nanoid!(10).to_string(),
-      external_type: EXTERNAL_TYPE_TEXT.to_string(),
+      external_id: Some(nanoid!(10).to_string()),
+      external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
       block_id: nanoid!(10).to_string(),
       children_id: nanoid!(10).to_string(),
     },
@@ -180,8 +186,8 @@ fn move_block_test() {
       parent_id: page_id.to_string(),
       ty: "text".to_string(),
       data: HashMap::new(),
-      external_id: nanoid!(10).to_string(),
-      external_type: EXTERNAL_TYPE_TEXT.to_string(),
+      external_id: Some(nanoid!(10).to_string()),
+      external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
       block_id: nanoid!(10).to_string(),
       children_id: nanoid!(10).to_string(),
     },
@@ -196,8 +202,8 @@ fn move_block_test() {
       parent_id: block_id.to_string(),
       ty: "text".to_string(),
       data: HashMap::new(),
-      external_id: nanoid!(10).to_string(),
-      external_type: EXTERNAL_TYPE_TEXT.to_string(),
+      external_id: Some(nanoid!(10).to_string()),
+      external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
       block_id: nanoid!(10).to_string(),
       children_id: nanoid!(10).to_string(),
     },
@@ -234,8 +240,8 @@ fn update_block_data_test() {
       parent_id: page_id.to_string(),
       ty: "text".to_string(),
       data: HashMap::new(),
-      external_id: nanoid!(10).to_string(),
-      external_type: EXTERNAL_TYPE_TEXT.to_string(),
+      external_id: Some(nanoid!(10).to_string()),
+      external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
       block_id: nanoid!(10).to_string(),
       children_id: nanoid!(10).to_string(),
     },

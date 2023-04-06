@@ -4,6 +4,7 @@ use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, Transaction
 use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 const ID: &str = "id";
 const TYPE: &str = "ty";
@@ -23,15 +24,15 @@ pub struct Block {
   pub ty: String,
   pub parent: String,
   pub children: String,
-  pub external_id: String,
-  pub external_type: String,
+  pub external_id: Option<String>,
+  pub external_type: Option<String>,
   pub data: HashMap<String, Value>,
 }
 
 pub struct BlockOperation {
   pub root: MapRefWrapper,
-  pub children_operation: ChildrenOperation,
-  pub text_operation: TextOperation,
+  children_operation: Rc<ChildrenOperation>,
+  text_operation: Rc<TextOperation>,
 }
 
 impl Serialize for BlockOperation {
@@ -55,8 +56,8 @@ impl Serialize for BlockOperation {
 impl BlockOperation {
   pub fn new(
     root: MapRefWrapper,
-    children_operation: ChildrenOperation,
-    text_operation: TextOperation,
+    children_operation: Rc<ChildrenOperation>,
+    text_operation: Rc<TextOperation>,
   ) -> Self {
     Self {
       root,
@@ -72,8 +73,8 @@ impl BlockOperation {
     let children = map.get_str_with_txn(txn, CHILDREN).unwrap_or_default();
     let json_str = map.get_str_with_txn(txn, DATA).unwrap_or_default();
     let data = json_str_to_hashmap(&json_str).unwrap_or_default();
-    let external_id = map.get_str_with_txn(txn, EXTERNAL_ID).unwrap_or_default();
-    let external_type = map.get_str_with_txn(txn, EXTERNAL_TYPE).unwrap_or_default();
+    let external_id = map.get_str_with_txn(txn, EXTERNAL_ID);
+    let external_type = map.get_str_with_txn(txn, EXTERNAL_TYPE);
     Block {
       id,
       ty,
@@ -102,12 +103,17 @@ impl BlockOperation {
     map.insert_with_txn(txn, PARENT, block.parent.to_string());
     map.insert_with_txn(txn, CHILDREN, block.children.to_string());
     map.insert_with_txn(txn, DATA, json_str);
-    map.insert_with_txn(txn, EXTERNAL_ID, block.external_id.to_string());
-    map.insert_with_txn(txn, EXTERNAL_TYPE, block.external_type.to_string());
 
-    if block.external_type == EXTERNAL_TYPE_TEXT {
-      self.text_operation.create_text(txn, &block.external_id);
+    if let (Some(external_type), Some(external_id)) =
+      (block.external_type.clone(), block.external_id.clone())
+    {
+      map.insert_with_txn(txn, EXTERNAL_TYPE, external_type.to_string());
+      map.insert_with_txn(txn, EXTERNAL_ID, external_id.to_string());
+      if external_type == EXTERNAL_TYPE_TEXT {
+        self.text_operation.create_text(txn, &external_id);
+      }
     }
+
     self
       .children_operation
       .get_children_with_txn(txn, &block.children);
@@ -124,9 +130,15 @@ impl BlockOperation {
       .get_block_with_txn(txn, id)
       .ok_or(DocumentError::BlockIsNotFound)?;
     self.root.remove_with_txn(txn, id);
-    if block.external_type == EXTERNAL_TYPE_TEXT {
-      self.text_operation.delete_with_txn(txn, &block.external_id);
+
+    if let (Some(external_type), Some(external_id)) =
+      (block.external_type.clone(), block.external_id.clone())
+    {
+      if external_type == EXTERNAL_TYPE_TEXT {
+        self.text_operation.delete_with_txn(txn, &external_id);
+      }
     }
+
     self
       .children_operation
       .delete_children_with_txn(txn, &block.children);
