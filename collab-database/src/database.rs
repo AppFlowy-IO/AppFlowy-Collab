@@ -121,13 +121,13 @@ impl Database {
     })
   }
 
-  pub fn insert_row(&self, row: Row, prev_row_id: &str) {
+  pub fn insert_row(&self, row: Row, prev_row_id: Option<&str>) {
     self.root.with_transact_mut(|txn| {
       self.insert_row_with_txn(txn, row, prev_row_id);
     });
   }
 
-  pub fn insert_row_with_txn(&self, txn: &mut TransactionMut, row: Row, prev_row_id: &str) {
+  pub fn insert_row_with_txn(&self, txn: &mut TransactionMut, row: Row, prev_row_id: Option<&str>) {
     self.views.update_all_views_with_txn(txn, |update| {
       update.insert_row_order(&row, prev_row_id);
     });
@@ -224,7 +224,7 @@ impl Database {
     self.root.with_transact_mut(|txn| {
       if let Some(mut row) = self.rows.get_row_with_txn(txn, row_id) {
         row.id = gen_row_id();
-        self.insert_row_with_txn(txn, row, row_id);
+        self.insert_row_with_txn(txn, row, Some(row_id));
       }
     });
     todo!()
@@ -276,6 +276,7 @@ impl Database {
     }
   }
 }
+
 pub fn gen_database_id() -> String {
   // nanoid calculator https://zelark.github.io/nano-id-cc/
   format!("d:{}", nanoid!(10))

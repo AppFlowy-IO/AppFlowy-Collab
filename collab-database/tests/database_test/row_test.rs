@@ -136,7 +136,7 @@ fn insert_row_in_views_test() {
     id: "r4".to_string(),
     ..Default::default()
   };
-  database_test.insert_row(row, "r2");
+  database_test.insert_row(row, Some("r2"));
 
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, "r1");
@@ -158,7 +158,7 @@ fn insert_row_at_front_in_views_test() {
     id: "r4".to_string(),
     ..Default::default()
   };
-  database_test.insert_row(row, "");
+  database_test.insert_row(row, None);
 
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, "r4");
@@ -180,7 +180,7 @@ fn insert_row_at_last_in_views_test() {
     id: "r4".to_string(),
     ..Default::default()
   };
-  database_test.insert_row(row, "r3");
+  database_test.insert_row(row, Some("r3"));
 
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, "r1");

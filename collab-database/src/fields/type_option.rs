@@ -1,9 +1,13 @@
-use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder};
-use collab::preclude::{Map, MapRef, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
+use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder, AnyMapUpdate};
+use collab::preclude::{
+  Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
+/// It's used to store lists of field's type option data
+/// The key is the [FieldType] string representation
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TypeOptions(HashMap<String, TypeOptionData>);
 
@@ -28,8 +32,8 @@ impl TypeOptions {
 
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRefWrapper) {
     self.into_inner().into_iter().for_each(|(k, v)| {
-      let type_option_map = map_ref.get_or_insert_map_with_txn(txn, &k).into_inner();
-      v.fill_map_ref(txn, type_option_map);
+      let update = TypeOptionsUpdate::new(txn, map_ref);
+      update.insert(&k, v);
     });
   }
 }
@@ -48,5 +52,31 @@ impl DerefMut for TypeOptions {
   }
 }
 
+pub struct TypeOptionsUpdate<'a, 'b> {
+  map_ref: &'a MapRef,
+  txn: &'a mut TransactionMut<'b>,
+}
+
+impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
+  pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: &'a MapRef) -> Self {
+    Self { map_ref, txn }
+  }
+
+  pub fn insert(self, key: &str, value: TypeOptionData) -> Self {
+    let type_option_map = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
+    value.fill_map_ref(self.txn, type_option_map);
+    self
+  }
+
+  /// Override the existing cell's key/value contained in the [TypeOptionData]
+  /// It will create the type option if it's not exist
+  pub fn update(self, key: &str, value: TypeOptionData) -> Self {
+    let type_option_map = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
+    value.fill_map_ref(self.txn, type_option_map);
+    self
+  }
+}
+
 pub type TypeOptionData = AnyMap;
 pub type TypeOptionDataBuilder = AnyMapBuilder;
+pub type TypeOptionUpdate<'a, 'b> = AnyMapUpdate<'a, 'b>;

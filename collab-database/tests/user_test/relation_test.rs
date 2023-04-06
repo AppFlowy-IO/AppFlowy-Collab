@@ -1,11 +1,11 @@
-use crate::helper::{create_user_database, poll_row_relation_rx, test_timeout};
+use crate::helper::{poll_row_relation_rx, test_timeout, user_database_test};
 use collab::preclude::MapRefExtension;
 use collab_database::user::{RowRelation, RowRelationChange};
 
 #[test]
 fn insert_relation_data_test() {
-  let user_db = create_user_database(1);
-  let relations = user_db.relations();
+  let test = user_database_test(1);
+  let relations = test.relations();
   relations.with_transact_mut(|txn| {
     relations.insert_with_txn(txn, "version", "1.0");
   });
@@ -16,14 +16,13 @@ fn insert_relation_data_test() {
 
 #[test]
 fn restore_relation_data_test() {
-  let user_db = create_user_database(1);
-  let relations = user_db.relations();
+  let test = user_database_test(1);
+  let relations = test.relations();
   relations.with_transact_mut(|txn| {
     relations.insert_with_txn(txn, "version", "1.0");
   });
 
-  let database = user_db.open_user_database();
-  let relations = database.relations();
+  let relations = test.relations();
   {
     let txn = relations.transact();
     assert_eq!(relations.get_str_with_txn(&txn, "version").unwrap(), "1.0");
@@ -36,8 +35,8 @@ fn restore_relation_data_test() {
 
 #[tokio::test]
 async fn insert_row_relation_data_test() {
-  let user_db = create_user_database(1);
-  let relations = user_db.relations();
+  let test = user_database_test(1);
+  let relations = test.relations();
   let mut rx = poll_row_relation_rx(relations.subscript_update());
 
   relations.insert_relation(RowRelation {
@@ -59,8 +58,8 @@ async fn insert_row_relation_data_test() {
 
 #[tokio::test]
 async fn remove_row_relation_data_test() {
-  let user_db = create_user_database(1);
-  let relations = user_db.relations();
+  let test = user_database_test(1);
+  let relations = test.relations();
   let mut rx = poll_row_relation_rx(relations.subscript_update());
 
   let relation = RowRelation {

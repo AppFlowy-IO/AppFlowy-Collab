@@ -321,20 +321,24 @@ pub trait OrderArray {
     self.array_ref().push_back(txn, object);
   }
 
-  fn insert_with_txn(&self, txn: &mut TransactionMut, object: Self::Object, prev_object_id: &str) {
-    if prev_object_id.is_empty() {
+  fn insert_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    object: Self::Object,
+    prev_object_id: Option<&str>,
+  ) {
+    if let Some(prev_object_id) = prev_object_id {
+      match self.get_row_position_with_txn(txn, prev_object_id) {
+        None => {
+          self.array_ref().push_back(txn, object);
+        },
+        Some(pos) => {
+          let next: u32 = pos as u32 + 1;
+          self.array_ref().insert(txn, next, object);
+        },
+      }
+    } else {
       self.array_ref().push_front(txn, object);
-      return;
-    }
-
-    match self.get_row_position_with_txn(txn, prev_object_id) {
-      None => {
-        self.array_ref().push_back(txn, object);
-      },
-      Some(pos) => {
-        let next: u32 = pos as u32 + 1;
-        self.array_ref().insert(txn, next, object);
-      },
     }
   }
 

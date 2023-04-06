@@ -8,15 +8,10 @@ use tempfile::TempDir;
 use tokio::sync::mpsc::{channel, Receiver};
 
 pub struct UserDatabaseTest {
+  #[allow(dead_code)]
   uid: i64,
   inner: UserDatabase,
   pub db: Arc<CollabKV>,
-}
-
-impl UserDatabaseTest {
-  pub fn open_user_database(&self) -> UserDatabase {
-    UserDatabase::new(self.uid, self.db.clone())
-  }
 }
 
 impl Deref for UserDatabaseTest {
@@ -27,7 +22,7 @@ impl Deref for UserDatabaseTest {
   }
 }
 
-pub fn create_user_database(uid: i64) -> UserDatabaseTest {
+pub fn user_database_test(uid: i64) -> UserDatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(CollabKV::open(path).unwrap());

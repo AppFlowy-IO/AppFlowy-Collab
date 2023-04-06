@@ -179,8 +179,8 @@ fn create_database_view_with_layout_setting_test() {
   let database_test = create_database_with_default_data(1, "1");
   let mut layout_settings = LayoutSettings::new();
   let grid_setting = LayoutSettingBuilder::new()
-    .insert("1", lib0Any::BigInt(123))
-    .insert("2", "abc")
+    .insert_i64_value("1", 123)
+    .insert_any("2", "abc")
     .build();
 
   layout_settings.insert(DatabaseLayout::Grid, grid_setting);

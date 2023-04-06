@@ -1,9 +1,11 @@
-use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder, Lib0AnyMapExtension};
-use collab::preclude::{lib0Any, Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
+use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder, AnyMapUpdate, Lib0AnyMapExtension};
+use collab::preclude::{Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
+/// Store lists of cells
+/// The key is the id of the [Field]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Cells(HashMap<String, Cell>);
 
@@ -50,70 +52,40 @@ impl DerefMut for Cells {
   }
 }
 
-#[derive(Debug, Default)]
-pub struct CellsBuilder {
-  cells: Cells,
+pub struct CellsUpdate<'a, 'b> {
+  map_ref: &'a MapRef,
+  txn: &'a mut TransactionMut<'b>,
 }
 
-impl CellsBuilder {
-  pub fn new() -> CellsBuilder {
-    Self::default()
+impl<'a, 'b> CellsUpdate<'a, 'b> {
+  pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: &'a MapRef) -> Self {
+    Self { map_ref, txn }
   }
 
-  pub fn insert_cell<T: Into<lib0Any>>(mut self, key: &str, value: HashMap<String, T>) -> Self {
-    let mut cell = Cell::new();
-    value.into_iter().for_each(|(k, v)| {
-      cell.insert(k, v.into());
-    });
-    self.cells.insert(key.to_string(), cell);
+  pub fn insert(self, key: &str, value: Cell) -> Self {
+    let cell_map_ref = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
+    value.fill_map_ref(self.txn, cell_map_ref);
     self
   }
 
-  pub fn insert_text_cell<T: Into<TextCell>>(mut self, key: &str, text_cell: T) -> Self {
-    let text_cell = text_cell.into();
-    self.cells.insert(key.to_string(), text_cell.into());
+  /// Override the existing cell's key/value contained in the [Cell]
+  /// It will create the cell if it's not exist
+  pub fn update(self, key: &str, value: Cell) -> Self {
+    let cell_map_ref = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
+    value.fill_map_ref(self.txn, cell_map_ref);
     self
-  }
-
-  pub fn build(self) -> Cells {
-    self.cells
   }
 }
 
 pub type Cell = AnyMap;
+pub type CellBuilder = AnyMapBuilder;
+pub type CellUpdate<'a, 'b> = AnyMapUpdate<'a, 'b>;
 
 pub fn get_field_type_from_cell<T: From<i64>>(cell: &Cell) -> Option<T> {
   cell.get_i64_value("field_type").map(|value| T::from(value))
 }
 
-pub type CellBuilder = AnyMapBuilder;
-
 pub fn new_cell_builder(field_type: impl Into<i64>) -> CellBuilder {
   let inner = AnyMapBuilder::new();
-  inner.insert("field_type", field_type.into())
-}
-
-pub struct TextCell(String);
-
-impl From<TextCell> for Cell {
-  fn from(text_cell: TextCell) -> Self {
-    let mut cell = Self::new();
-    cell.insert(
-      "data".to_string(),
-      lib0Any::String(text_cell.0.into_boxed_str()),
-    );
-    cell
-  }
-}
-
-impl From<String> for TextCell {
-  fn from(s: String) -> Self {
-    Self(s)
-  }
-}
-
-impl From<&str> for TextCell {
-  fn from(s: &str) -> Self {
-    Self(s.to_string())
-  }
+  inner.insert_i64_value("field_type", field_type.into())
 }
