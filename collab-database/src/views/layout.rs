@@ -1,5 +1,5 @@
 use anyhow::bail;
-use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder};
+use collab::core::any_map::{AnyMap, AnyMapBuilder};
 use collab::preclude::{lib0Any, Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;

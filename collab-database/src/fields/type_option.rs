@@ -1,4 +1,4 @@
-use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder, AnyMapUpdate};
+use collab::core::any_map::{AnyMap, AnyMapBuilder, AnyMapUpdate};
 use collab::preclude::{
   Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
 };

@@ -1,4 +1,4 @@
-use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder, AnyMapUpdate, Lib0AnyMapExtension};
+use collab::core::any_map::{AnyMap, AnyMapBuilder, AnyMapExtension, AnyMapUpdate};
 use collab::preclude::{Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

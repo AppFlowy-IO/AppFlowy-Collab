@@ -5,7 +5,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
 use yrs::{Map, MapRef, ReadTxn, TransactionMut};
 
-pub trait Lib0AnyMapExtension {
+pub trait AnyMapExtension {
   fn value(&self) -> &HashMap<String, lib0Any>;
 
   fn mut_value(&mut self) -> &mut HashMap<String, lib0Any>;
@@ -87,7 +87,7 @@ impl AnyMap {
   }
 }
 
-impl Lib0AnyMapExtension for AnyMap {
+impl AnyMapExtension for AnyMap {
   fn value(&self) -> &HashMap<String, lib0Any> {
     &self.0
   }

@@ -1,4 +1,4 @@
-use collab::core::lib0_any_ext::Lib0AnyMapExtension;
+use collab::core::any_map::AnyMapExtension;
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use collab::preclude::CollabBuilder;

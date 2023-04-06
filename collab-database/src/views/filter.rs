@@ -1,5 +1,5 @@
+use collab::core::any_map::{AnyMap, AnyMapBuilder};
 use collab::core::array_wrapper::ArrayRefExtension;
-use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder};
 use collab::preclude::{Array, ArrayRef, ReadTxn, TransactionMut};
 
 pub struct FilterArray {

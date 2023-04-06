@@ -1,7 +1,7 @@
 use crate::database::gen_database_group_id;
 use crate::{impl_i64_update, impl_str_update};
+use collab::core::any_map::{AnyMap, AnyMapBuilder};
 use collab::core::array_wrapper::ArrayRefExtension;
-use collab::core::lib0_any_ext::{AnyMap, AnyMapBuilder};
 use collab::preclude::map::MapPrelim;
 use collab::preclude::{
   lib0Any, Array, ArrayRef, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
