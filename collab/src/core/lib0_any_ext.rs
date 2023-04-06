@@ -149,15 +149,14 @@ impl DerefMut for AnyMap {
   }
 }
 
+#[derive(Default)]
 pub struct AnyMapBuilder {
   inner: AnyMap,
 }
 
 impl AnyMapBuilder {
   pub fn new() -> Self {
-    Self {
-      inner: Default::default(),
-    }
+    Self::default()
   }
 
   /// Insert the lib0Any into the map.
