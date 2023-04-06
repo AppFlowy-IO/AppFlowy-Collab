@@ -80,7 +80,7 @@ impl LayoutSettings {
     map_ref.iter(txn).for_each(|(k, v)| {
       if let Ok(layout) = DatabaseLayout::from_str(k) {
         if let YrsValue::YMap(map_ref) = v {
-          this.insert(layout, LayoutSetting::from_map_ref(txn, map_ref));
+          this.insert(layout, LayoutSetting::from_map_ref(txn, &map_ref));
         }
       }
     });
@@ -90,7 +90,7 @@ impl LayoutSettings {
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.0.into_iter().for_each(|(k, v)| {
       let inner_map = map_ref.get_or_insert_map_with_txn(txn, k.as_ref());
-      v.fill_map_ref(txn, inner_map);
+      v.fill_map_ref(txn, &inner_map);
     });
   }
 }

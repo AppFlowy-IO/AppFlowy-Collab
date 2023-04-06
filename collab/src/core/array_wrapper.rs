@@ -108,18 +108,22 @@ impl DerefMut for ArrayRefWrapper {
   }
 }
 
-pub struct ArrayRefExtension<'a>(pub &'a ArrayRef);
-impl<'a> ArrayRefExtension<'a> {
-  pub fn insert_map_with_txn(&self, txn: &mut TransactionMut) -> MapRef {
+pub trait ArrayRefExtension {
+  fn array_ref(&self) -> &ArrayRef;
+
+  fn insert_map_with_txn(&self, txn: &mut TransactionMut) -> MapRef {
     let array = MapPrelim::<Any>::new();
-    self.0.push_back(txn, array)
+    self.array_ref().push_back(txn, array)
+  }
+
+  fn insert_map_at_index_with_txn(&self, txn: &mut TransactionMut, index: u32) -> MapRef {
+    let array = MapPrelim::<Any>::new();
+    self.array_ref().insert(txn, index, array)
   }
 }
 
-impl<'a> Deref for ArrayRefExtension<'a> {
-  type Target = ArrayRef;
-
-  fn deref(&self) -> &Self::Target {
-    self.0
+impl ArrayRefExtension for ArrayRef {
+  fn array_ref(&self) -> &ArrayRef {
+    self
   }
 }

@@ -12,10 +12,9 @@ impl FilterArray {
   }
 
   pub fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<FilterMap>) {
-    let array_ref = ArrayRefExtension(&self.array_ref);
     for filter in others {
-      let filter_map_ref = array_ref.insert_map_with_txn(txn);
-      filter.fill_map_ref(txn, filter_map_ref);
+      let filter_map_ref = self.array_ref.insert_map_with_txn(txn);
+      filter.fill_map_ref(txn, &filter_map_ref);
     }
   }
 

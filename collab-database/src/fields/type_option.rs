@@ -24,7 +24,7 @@ impl TypeOptions {
     let mut this = Self::new();
     map_ref.iter(txn).for_each(|(k, v)| {
       if let YrsValue::YMap(map_ref) = v {
-        this.insert(k.to_string(), TypeOptionData::from_map_ref(txn, map_ref));
+        this.insert(k.to_string(), TypeOptionData::from_map_ref(txn, &map_ref));
       }
     });
     this
@@ -64,7 +64,7 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
 
   pub fn insert(self, key: &str, value: TypeOptionData) -> Self {
     let type_option_map = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
-    value.fill_map_ref(self.txn, type_option_map);
+    value.fill_map_ref(self.txn, &type_option_map);
     self
   }
 
@@ -72,7 +72,7 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
   /// It will create the type option if it's not exist
   pub fn update(self, key: &str, value: TypeOptionData) -> Self {
     let type_option_map = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
-    value.fill_map_ref(self.txn, type_option_map);
+    value.fill_map_ref(self.txn, &type_option_map);
     self
   }
 }

@@ -70,6 +70,24 @@ pub trait AnyMapExtension {
       None
     }
   }
+
+  fn get_map_items<K: AsRef<str>, T: From<AnyMap>>(&self, key: K) -> Vec<T> {
+    if let Some(value) = self.value().get(key.as_ref()) {
+      if let lib0Any::Array(array) = value {
+        return array
+          .into_iter()
+          .flat_map(|item| {
+            if let lib0Any::Map(map) = item {
+              Some(T::from(AnyMap((**map).clone())))
+            } else {
+              None
+            }
+          })
+          .collect::<Vec<_>>();
+      }
+    }
+    vec![]
+  }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -106,7 +124,7 @@ impl Hash for AnyMap {
 }
 
 impl AnyMap {
-  pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Self {
+  pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Self {
     let mut this = Self(Default::default());
     map_ref.iter(txn).for_each(|(k, v)| {
       if let YrsValue::Any(any) = v {
@@ -118,16 +136,32 @@ impl AnyMap {
 
   pub fn from_value<T: ReadTxn>(txn: &T, value: YrsValue) -> Option<Self> {
     if let YrsValue::YMap(map_ref) = value {
-      Some(Self::from_map_ref(txn, map_ref))
+      Some(Self::from_map_ref(txn, &map_ref))
     } else {
       None
     }
   }
 
-  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: MapRef) {
+  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.0.into_iter().for_each(|(k, v)| {
       map_ref.insert_with_txn(txn, &k, v);
     })
+  }
+}
+
+impl From<AnyMap> for lib0Any {
+  fn from(map: AnyMap) -> Self {
+    lib0Any::Map(Box::new(map.0))
+  }
+}
+
+impl From<lib0Any> for AnyMap {
+  fn from(value: lib0Any) -> Self {
+    if let lib0Any::Map(map) = value {
+      Self(*map)
+    } else {
+      Self::default()
+    }
   }
 }
 
@@ -174,6 +208,21 @@ impl AnyMapBuilder {
   pub fn insert_any<K: AsRef<str>>(mut self, key: K, value: impl Into<lib0Any>) -> Self {
     let key = key.as_ref();
     self.inner.insert(key.to_string(), value.into());
+    self
+  }
+
+  pub fn insert_map_items<K: AsRef<str>, T: Into<AnyMap>>(mut self, key: K, items: Vec<T>) -> Self {
+    let key = key.as_ref();
+    let items = items
+      .into_iter()
+      .map(|item| {
+        let any_map: AnyMap = item.into();
+        any_map.into()
+      })
+      .collect::<Vec<_>>();
+    self
+      .inner
+      .insert(key.to_string(), lib0Any::Array(items.into_boxed_slice()));
     self
   }
 

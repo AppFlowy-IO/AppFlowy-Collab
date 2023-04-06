@@ -3,7 +3,9 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::meta::MetaMap;
 use crate::rows::{Row, RowMap};
-use crate::views::{CreateDatabaseParams, CreateViewParams, DatabaseView, RowOrder, ViewMap};
+use crate::views::{
+  CreateDatabaseParams, CreateViewParams, DatabaseView, GroupSettingMap, RowOrder, ViewMap,
+};
 use collab::preclude::{
   Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
@@ -183,6 +185,38 @@ impl Database {
     })
   }
 
+  pub fn add_group_setting(&self, view_id: &str, group_setting: impl Into<GroupSettingMap>) {
+    self.views.update_view(view_id, |update| {
+      update.update_group_setting(|group_update| {
+        group_update.push(group_setting.into());
+      });
+    });
+  }
+
+  pub fn update_group_setting<'a, T: From<&'a GroupSettingMap> + Into<GroupSettingMap>>(
+    &self,
+    view_id: &str,
+    setting_id: &str,
+    f: impl FnOnce(&mut T),
+  ) {
+    self.views.update_view(view_id, |update| {
+      update.update_group_setting(|group_update| {
+        group_update.update(setting_id, |mut setting| {
+          f(&mut setting);
+          setting
+        });
+      });
+    });
+  }
+
+  pub fn remove_group_setting(&self, view_id: &str, setting_id: &str) {
+    self.views.update_view(view_id, |update| {
+      update.update_group_setting(|group_update| {
+        group_update.remove(&setting_id);
+      });
+    });
+  }
+
   pub fn create_view(&self, params: CreateViewParams) {
     self.root.with_transact_mut(|txn| {
       let field_orders = self.fields.get_all_field_orders(txn);
@@ -254,6 +288,7 @@ impl Database {
       .insert_with_txn(txn, DATABASE_INLINE_VIEW, view_id);
   }
 
+  /// The inline view is the view that create with the database when initializing
   fn get_inline_view_id(&self) -> String {
     let txn = self.root.transact();
     // It's safe to unwrap because each database inline view id was set

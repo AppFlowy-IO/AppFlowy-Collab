@@ -151,7 +151,6 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
     let array_ref = self
       .map_ref
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, LINKING_ROWS);
-    let array_ref = ArrayRefExtension(&array_ref);
     for row in rows {
       let map_ref = array_ref.insert_map_with_txn(self.txn);
       row.fill_map_with_txn(self.txn, map_ref);
@@ -164,7 +163,6 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
       .map_ref
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, LINKED_BY_ROWS);
 
-    let array_ref = ArrayRefExtension(&array_ref);
     for row in rows {
       let map_ref = array_ref.insert_map_with_txn(self.txn);
       row.fill_map_with_txn(self.txn, map_ref);

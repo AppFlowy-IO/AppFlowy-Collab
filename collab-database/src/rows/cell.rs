@@ -21,7 +21,7 @@ impl Cells {
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.into_inner().into_iter().for_each(|(k, v)| {
       let cell_map_ref = map_ref.get_or_insert_map_with_txn(txn, &k);
-      v.fill_map_ref(txn, cell_map_ref);
+      v.fill_map_ref(txn, &cell_map_ref);
     });
   }
 }
@@ -64,7 +64,7 @@ impl<'a, 'b> CellsUpdate<'a, 'b> {
 
   pub fn insert(self, key: &str, value: Cell) -> Self {
     let cell_map_ref = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
-    value.fill_map_ref(self.txn, cell_map_ref);
+    value.fill_map_ref(self.txn, &cell_map_ref);
     self
   }
 
@@ -72,7 +72,7 @@ impl<'a, 'b> CellsUpdate<'a, 'b> {
   /// It will create the cell if it's not exist
   pub fn update(self, key: &str, value: Cell) -> Self {
     let cell_map_ref = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
-    value.fill_map_ref(self.txn, cell_map_ref);
+    value.fill_map_ref(self.txn, &cell_map_ref);
     self
   }
 }

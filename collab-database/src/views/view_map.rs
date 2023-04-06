@@ -28,7 +28,7 @@ impl ViewMap {
         .set_layout_settings(view.layout_settings)
         .set_layout_type(view.layout)
         .set_filter(view.filters)
-        .set_groups(view.group_settings)
+        .set_group_settings(view.group_settings)
         .set_sorts(view.sorts)
         .set_field_orders(view.field_orders)
         .set_row_orders(view.row_orders);
@@ -60,7 +60,7 @@ impl ViewMap {
 
   pub fn update_view<F>(&self, view_id: &str, f: F)
   where
-    F: Fn(ViewUpdate),
+    F: FnOnce(ViewUpdate),
   {
     self
       .container
@@ -69,7 +69,7 @@ impl ViewMap {
 
   pub fn update_view_with_txn<F>(&self, txn: &mut TransactionMut, view_id: &str, f: F)
   where
-    F: Fn(ViewUpdate),
+    F: FnOnce(ViewUpdate),
   {
     if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
       let update = ViewUpdate::new(view_id, txn, &map_ref);

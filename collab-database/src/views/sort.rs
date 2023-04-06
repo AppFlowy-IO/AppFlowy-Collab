@@ -17,9 +17,8 @@ impl SortArray {
   }
 
   pub fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<Sort>) {
-    let array_ref = ArrayRefExtension(&self.array_ref);
     for sort in others {
-      let sort_map_ref = array_ref.insert_map_with_txn(txn);
+      let sort_map_ref = self.array_ref.insert_map_with_txn(txn);
       SortBuilder::new(&sort.id, txn, sort_map_ref).update(|update| {
         update
           .set_condition(sort.condition)
@@ -50,6 +49,7 @@ const SORT_ID: &str = "id";
 const FIELD_ID: &str = "field_id";
 const FIELD_TYPE: &str = "ty";
 const SORT_CONDITION: &str = "condition";
+
 pub struct SortBuilder<'a, 'b> {
   id: &'a str,
   map_ref: MapRef,

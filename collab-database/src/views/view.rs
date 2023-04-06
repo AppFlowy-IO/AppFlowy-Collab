@@ -3,10 +3,11 @@ use crate::fields::Field;
 use crate::rows::Row;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
 use crate::views::{
-  FieldOrder, FieldOrderArray, FilterArray, FilterMap, GroupSetting, GroupSettingArray, RowOrder,
-  RowOrderArray, Sort, SortArray,
+  FieldOrder, FieldOrderArray, FilterArray, FilterMap, GroupSettingArray, GroupSettingMap,
+  RowOrder, RowOrderArray, Sort, SortArray,
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
+use collab::core::any_array::ArrayMapUpdate;
 use collab::preclude::map::MapPrelim;
 use collab::preclude::{
   lib0Any, Array, ArrayRef, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
@@ -22,7 +23,7 @@ pub struct DatabaseView {
   pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<FilterMap>,
-  pub group_settings: Vec<GroupSetting>,
+  pub group_settings: Vec<GroupSettingMap>,
   pub sorts: Vec<Sort>,
   pub row_orders: Vec<RowOrder>,
   pub field_orders: Vec<FieldOrder>,
@@ -37,7 +38,7 @@ pub struct CreateViewParams {
   pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<FilterMap>,
-  pub groups: Vec<GroupSetting>,
+  pub groups: Vec<GroupSettingMap>,
   pub sorts: Vec<Sort>,
 }
 
@@ -48,7 +49,7 @@ pub struct CreateDatabaseParams {
   pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<FilterMap>,
-  pub groups: Vec<GroupSetting>,
+  pub groups: Vec<GroupSettingMap>,
   pub sorts: Vec<Sort>,
   pub rows: Vec<Row>,
   pub fields: Vec<Field>,
@@ -199,12 +200,24 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
-  pub fn set_groups(self, groups: Vec<GroupSetting>) -> Self {
+  pub fn set_group_settings(self, group_settings: Vec<GroupSettingMap>) -> Self {
     let array_ref = self
       .map_ref
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS);
-    let filter_array = GroupSettingArray::new(array_ref);
-    filter_array.extends_with_txn(self.txn, groups);
+    let group_settings = GroupSettingArray::from_any_maps(group_settings);
+    group_settings.extend_array_ref(self.txn, array_ref);
+    self
+  }
+
+  pub fn update_group_setting<F>(self, f: F) -> Self
+  where
+    F: FnOnce(ArrayMapUpdate),
+  {
+    let array_ref = self
+      .map_ref
+      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS);
+    let update = ArrayMapUpdate::new(self.txn, array_ref);
+    f(update);
     self
   }
 
@@ -251,9 +264,9 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
     .map(|array_ref| FilterArray::new(array_ref).get_filters_with_txn(txn))
     .unwrap_or_default();
 
-  let groups = map_ref
+  let group_settings = map_ref
     .get_array_ref_with_txn(txn, VIEW_GROUPS)
-    .map(|array_ref| GroupSettingArray::new(array_ref).get_group_setting_with_txn(txn))
+    .map(|array_ref| GroupSettingArray::from_array_ref(txn, &array_ref).0)
     .unwrap_or_default();
 
   let sorts = map_ref
@@ -286,7 +299,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
     layout,
     layout_settings,
     filters,
-    group_settings: groups,
+    group_settings,
     sorts,
     row_orders,
     field_orders,
