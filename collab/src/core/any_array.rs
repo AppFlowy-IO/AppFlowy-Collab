@@ -3,7 +3,8 @@ use crate::core::array_wrapper::ArrayRefExtension;
 use crate::preclude::{MapRefExtension, YrsValue};
 
 use std::ops::{Deref, DerefMut};
-use yrs::{Array, ArrayRef, MapRef, ReadTxn, TransactionMut};
+use yrs::types::Value;
+use yrs::{Array, ArrayRef, ReadTxn, TransactionMut};
 
 pub struct ArrayMap(pub Vec<AnyMap>);
 
@@ -23,8 +24,11 @@ impl ArrayMap {
   pub fn from_array_ref<R: ReadTxn>(txn: &R, array_ref: &ArrayRef) -> Self {
     let mut any_array = Self::new();
     for value in array_ref.iter(txn) {
-      if let YrsValue::YMap(map_ref) = value {
-        any_array.push(AnyMap::from((txn, &map_ref)));
+      match value {
+        Value::YMap(map_ref) => {
+          any_array.push(AnyMap::from((txn, &map_ref)));
+        },
+        _ => debug_assert!(false, "Unsupported type"),
       }
     }
     any_array
@@ -81,20 +85,15 @@ impl<'a, 'b> ArrayMapUpdate<'a, 'b> {
     self
   }
 
-  pub fn update<'c, F, T>(self, id: &str, f: F) -> Self
+  pub fn update<'c, F>(self, id: &str, f: F) -> Self
   where
-    F: FnOnce(T) -> T,
-    T: From<&'c AnyMap> + Into<AnyMap> + 'c,
+    F: FnOnce(AnyMap) -> AnyMap,
   {
     if let Some(pos) = self.index_of(id) {
       let pos = pos as u32;
       if let YrsValue::YMap(map_ref) = self.array_ref.get(self.txn, pos).unwrap() {
-        let target = {
-          let any_map = AnyMap::from_map_ref(self.txn, &map_ref);
-          T::from(&any_map)
-        };
-        let any_map: AnyMap = f(target).into();
-        any_map.fill_map_ref(self.txn, &map_ref);
+        let any_map = AnyMap::from_map_ref(self.txn, &map_ref);
+        f(any_map).fill_map_ref(self.txn, &map_ref);
       }
     }
 

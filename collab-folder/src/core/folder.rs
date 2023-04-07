@@ -3,6 +3,7 @@ use crate::core::{
   Belonging, BelongingMap, FolderData, TrashChangeSender, View, ViewChangeSender, ViewsMap,
   Workspace, WorkspaceMap,
 };
+use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -276,19 +277,19 @@ impl WorkspaceArray {
     let map_ref = self.container.insert_map_with_txn(txn);
     let workspace_map = WorkspaceMap::create_with_txn(
       txn,
-      map_ref,
+      &map_ref,
       &workspace.id,
       self.belongings.clone(),
       |builder| {
-        builder
-          .update(|update| {
-            update
-              .set_name(workspace.name)
-              .set_created_at(workspace.created_at)
-              .set_belongings(workspace.belongings);
-          })
-          .done()
-          .unwrap()
+        let _ = builder.update(|update| {
+          update
+            .set_name(workspace.name)
+            .set_created_at(workspace.created_at)
+            .set_belongings(workspace.belongings);
+        });
+
+        let map_ref = MapRefWrapper::new(map_ref.clone(), self.container.collab_ctx.clone());
+        WorkspaceMap::new(map_ref, self.belongings.clone())
       },
     );
 

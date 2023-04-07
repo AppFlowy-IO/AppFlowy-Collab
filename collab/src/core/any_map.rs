@@ -1,9 +1,11 @@
 use crate::preclude::{lib0Any, MapRefExtension, YrsValue};
+use lib0::any::Any;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
-use yrs::{Map, MapRef, ReadTxn, TransactionMut};
+use yrs::types::Value;
+use yrs::{Array, Map, MapRef, ReadTxn, TransactionMut};
 
 pub trait AnyMapExtension {
   fn value(&self) -> &HashMap<String, lib0Any>;
@@ -71,7 +73,7 @@ pub trait AnyMapExtension {
     }
   }
 
-  fn get_map_items<K: AsRef<str>, T: From<AnyMap>>(&self, key: K) -> Vec<T> {
+  fn get_any_maps<K: AsRef<str>, T: From<AnyMap>>(&self, key: K) -> Vec<T> {
     if let Some(value) = self.value().get(key.as_ref()) {
       if let lib0Any::Array(array) = value {
         return array
@@ -87,6 +89,38 @@ pub trait AnyMapExtension {
       }
     }
     vec![]
+  }
+
+  fn try_get_any_maps<K: AsRef<str>, T: TryFrom<AnyMap>>(&self, key: K) -> Vec<T> {
+    if let Some(value) = self.value().get(key.as_ref()) {
+      if let lib0Any::Array(array) = value {
+        return array
+          .into_iter()
+          .flat_map(|item| {
+            if let lib0Any::Map(map) = item {
+              T::try_from(AnyMap((**map).clone())).ok()
+            } else {
+              None
+            }
+          })
+          .collect::<Vec<_>>();
+      }
+    }
+    vec![]
+  }
+
+  fn insert_any_maps<K: AsRef<str>, T: Into<AnyMap>>(&mut self, key: K, items: Vec<T>) {
+    let key = key.as_ref();
+    let items = items
+      .into_iter()
+      .map(|item| {
+        let any_map: AnyMap = item.into();
+        any_map.into() // lib0Any::Map
+      })
+      .collect::<Vec<_>>();
+    self
+      .mut_value()
+      .insert(key.to_string(), lib0Any::Array(items.into_boxed_slice()));
   }
 }
 
@@ -125,13 +159,7 @@ impl Hash for AnyMap {
 
 impl AnyMap {
   pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Self {
-    let mut this = Self(Default::default());
-    map_ref.iter(txn).for_each(|(k, v)| {
-      if let YrsValue::Any(any) = v {
-        this.insert(k.to_string(), any);
-      }
-    });
-    this
+    (txn, map_ref).into()
   }
 
   pub fn from_value<T: ReadTxn>(txn: &T, value: YrsValue) -> Option<Self> {
@@ -143,8 +171,13 @@ impl AnyMap {
   }
 
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
-    self.0.into_iter().for_each(|(k, v)| {
-      map_ref.insert_with_txn(txn, &k, v);
+    self.0.into_iter().for_each(|(k, v)| match v {
+      Any::Array(array) => {
+        map_ref.insert_array_with_txn(txn, &k, array.to_vec());
+      },
+      _ => {
+        map_ref.insert_with_txn(txn, &k, v);
+      },
     })
   }
 }
@@ -167,11 +200,28 @@ impl From<lib0Any> for AnyMap {
 
 impl<T: ReadTxn> From<(&'_ T, &MapRef)> for AnyMap {
   fn from(params: (&'_ T, &MapRef)) -> Self {
+    let (txn, map_ref) = params;
     let mut this = AnyMap::default();
-    params.1.iter(params.0).for_each(|(k, v)| {
-      if let YrsValue::Any(any) = v {
+    map_ref.iter(txn).for_each(|(k, v)| match v {
+      Value::Any(any) => {
         this.insert(k.to_string(), any);
-      }
+      },
+      Value::YArray(array) => {
+        let array = array
+          .iter(txn)
+          .flat_map(|v| {
+            if let YrsValue::Any(any) = v {
+              Some(any)
+            } else {
+              None
+            }
+          })
+          .collect::<Vec<lib0Any>>();
+        this.insert(k.to_string(), lib0Any::Array(array.into_boxed_slice()));
+      },
+      _ => {
+        debug_assert!(false, "Unsupported");
+      },
     });
     this
   }
@@ -212,17 +262,7 @@ impl AnyMapBuilder {
   }
 
   pub fn insert_map_items<K: AsRef<str>, T: Into<AnyMap>>(mut self, key: K, items: Vec<T>) -> Self {
-    let key = key.as_ref();
-    let items = items
-      .into_iter()
-      .map(|item| {
-        let any_map: AnyMap = item.into();
-        any_map.into()
-      })
-      .collect::<Vec<_>>();
-    self
-      .inner
-      .insert(key.to_string(), lib0Any::Array(items.into_boxed_slice()));
+    self.inner.insert_any_maps(key, items);
     self
   }
 

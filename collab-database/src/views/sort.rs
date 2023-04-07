@@ -1,156 +1,55 @@
-use crate::{impl_any_update, impl_i64_update, impl_str_update};
-use anyhow::bail;
-use collab::core::array_wrapper::ArrayRefExtension;
-use collab::preclude::{
-  lib0Any, Array, ArrayRef, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
-};
-use serde::{Deserialize, Serialize};
-use serde_repr::*;
+use collab::core::any_array::ArrayMap;
+use collab::core::any_map::{AnyMap, AnyMapBuilder};
 
-pub struct SortArray {
-  array_ref: ArrayRef,
-}
+pub type SortArray = ArrayMap;
+pub type SortMap = AnyMap;
+pub type SortMapBuilder = AnyMapBuilder;
 
-impl SortArray {
-  pub fn new(array_ref: ArrayRef) -> Self {
-    Self { array_ref }
-  }
+// pub struct SortBuilder<'a, 'b> {
+//   id: &'a str,
+//   map_ref: MapRef,
+//   txn: &'a mut TransactionMut<'b>,
+// }
+//
+// impl<'a, 'b> SortBuilder<'a, 'b> {
+//   pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRef) -> Self {
+//     map_ref.insert_with_txn(txn, SORT_ID, id);
+//     Self { id, map_ref, txn }
+//   }
+//
+//   pub fn update<F>(self, f: F) -> Self
+//   where
+//     F: FnOnce(SortUpdate),
+//   {
+//     let update = SortUpdate::new(self.id, self.txn, &self.map_ref);
+//     f(update);
+//     self
+//   }
+//   pub fn done(self) {}
+// }
 
-  pub fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<Sort>) {
-    for sort in others {
-      let sort_map_ref = self.array_ref.insert_map_with_txn(txn);
-      SortBuilder::new(&sort.id, txn, sort_map_ref).update(|update| {
-        update
-          .set_condition(sort.condition)
-          .set_field_type(sort.field_type)
-          .set_field_id(sort.field_id);
-      });
-    }
-  }
-
-  pub fn get_sorts_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Sort> {
-    self
-      .array_ref
-      .iter(txn)
-      .flat_map(|v| sort_from_value(v, txn))
-      .collect::<Vec<Sort>>()
-  }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash)]
-pub struct Sort {
-  pub id: String,
-  pub field_id: String,
-  pub field_type: i64,
-  pub condition: SortCondition,
-}
-
-const SORT_ID: &str = "id";
-const FIELD_ID: &str = "field_id";
-const FIELD_TYPE: &str = "ty";
-const SORT_CONDITION: &str = "condition";
-
-pub struct SortBuilder<'a, 'b> {
-  id: &'a str,
-  map_ref: MapRef,
-  txn: &'a mut TransactionMut<'b>,
-}
-
-impl<'a, 'b> SortBuilder<'a, 'b> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRef) -> Self {
-    map_ref.insert_with_txn(txn, SORT_ID, id);
-    Self { id, map_ref, txn }
-  }
-
-  pub fn update<F>(self, f: F) -> Self
-  where
-    F: FnOnce(SortUpdate),
-  {
-    let update = SortUpdate::new(self.id, self.txn, &self.map_ref);
-    f(update);
-    self
-  }
-  pub fn done(self) {}
-}
-
-pub struct SortUpdate<'a, 'b> {
-  #[allow(dead_code)]
-  id: &'a str,
-  map_ref: &'a MapRef,
-  txn: &'a mut TransactionMut<'b>,
-}
-
-impl<'a, 'b> SortUpdate<'a, 'b> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'a MapRef) -> Self {
-    Self { id, map_ref, txn }
-  }
-
-  impl_str_update!(set_field_id, set_field_id_if_not_none, FIELD_ID);
-  impl_any_update!(
-    set_condition,
-    set_condition_if_not_none,
-    SORT_CONDITION,
-    SortCondition
-  );
-  impl_i64_update!(set_field_type, set_field_type_if_not_none, FIELD_TYPE);
-
-  pub fn done(self) -> Option<Sort> {
-    sort_from_map_ref(self.map_ref, self.txn)
-  }
-}
-
-pub fn sort_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Sort> {
-  if let YrsValue::YMap(map_ref) = value {
-    sort_from_map_ref(&map_ref, txn)
-  } else {
-    None
-  }
-}
-
-pub fn sort_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Sort> {
-  let id = map_ref.get_str_with_txn(txn, SORT_ID)?;
-  let field_id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
-  let field_type = map_ref.get_i64_with_txn(txn, FIELD_TYPE)?;
-
-  let condition = map_ref
-    .get_i64_with_txn(txn, SORT_CONDITION)
-    .map(|value| value.try_into().ok())??;
-
-  Some(Sort {
-    id,
-    field_id,
-    field_type,
-    condition,
-  })
-}
-
-#[derive(Serialize_repr, Deserialize_repr, PartialEq, Eq, Hash, Clone, Debug)]
-#[repr(u8)]
-pub enum SortCondition {
-  Ascending = 0,
-  Descending = 1,
-}
-
-impl Default for SortCondition {
-  fn default() -> Self {
-    Self::Ascending
-  }
-}
-
-impl TryFrom<i64> for SortCondition {
-  type Error = anyhow::Error;
-
-  fn try_from(value: i64) -> std::result::Result<Self, Self::Error> {
-    match value {
-      0 => Ok(SortCondition::Ascending),
-      1 => Ok(SortCondition::Descending),
-      _ => bail!("Unknown field type {}", value),
-    }
-  }
-}
-
-impl From<SortCondition> for lib0Any {
-  fn from(condition: SortCondition) -> Self {
-    lib0Any::BigInt(condition as i64)
-  }
-}
+// pub struct SortUpdate<'a, 'b> {
+//   #[allow(dead_code)]
+//   id: &'a str,
+//   map_ref: &'a MapRef,
+//   txn: &'a mut TransactionMut<'b>,
+// }
+//
+// impl<'a, 'b> SortUpdate<'a, 'b> {
+//   pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'a MapRef) -> Self {
+//     Self { id, map_ref, txn }
+//   }
+//
+//   impl_str_update!(set_field_id, set_field_id_if_not_none, FIELD_ID);
+//   impl_any_update!(
+//     set_condition,
+//     set_condition_if_not_none,
+//     SORT_CONDITION,
+//     SortCondition
+//   );
+//   impl_i64_update!(set_field_type, set_field_type_if_not_none, FIELD_TYPE);
+//
+//   pub fn done(self) -> Option<Sort> {
+//     sort_from_map_ref(self.map_ref, self.txn)
+//   }
+// }

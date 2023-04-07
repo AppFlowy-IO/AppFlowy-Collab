@@ -1,31 +1,6 @@
+use collab::core::any_array::ArrayMap;
 use collab::core::any_map::{AnyMap, AnyMapBuilder};
-use collab::core::array_wrapper::ArrayRefExtension;
-use collab::preclude::{Array, ArrayRef, ReadTxn, TransactionMut};
 
-pub struct FilterArray {
-  array_ref: ArrayRef,
-}
-
-impl FilterArray {
-  pub fn new(array_ref: ArrayRef) -> Self {
-    Self { array_ref }
-  }
-
-  pub fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<FilterMap>) {
-    for filter in others {
-      let filter_map_ref = self.array_ref.insert_map_with_txn(txn);
-      filter.fill_map_ref(txn, &filter_map_ref);
-    }
-  }
-
-  pub fn get_filters_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<FilterMap> {
-    self
-      .array_ref
-      .iter(txn)
-      .flat_map(|v| FilterMap::from_value(txn, v))
-      .collect::<Vec<FilterMap>>()
-  }
-}
-
+pub type FilterArray = ArrayMap;
 pub type FilterMap = AnyMap;
 pub type FilterMapBuilder = AnyMapBuilder;

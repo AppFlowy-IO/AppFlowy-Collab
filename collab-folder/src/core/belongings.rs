@@ -93,7 +93,7 @@ impl BelongingsArray {
     });
   }
   pub fn move_belonging_with_txn(&self, txn: &mut TransactionMut, from: u32, to: u32) {
-    if let Some(YrsValue::Any(value)) = self.container.get_with_txn(txn, from) {
+    if let Some(YrsValue::Any(value)) = self.container.get(txn, from) {
       self.container.remove(txn, from);
       self.container.insert(txn, to, value);
     }
@@ -126,7 +126,7 @@ impl BelongingsArray {
     for belonging in belongings {
       if !existing_belonging_ids.contains(&belonging.id) {
         existing_belonging_ids.push(belonging.id.clone());
-        self.container.push_with_txn(txn, belonging);
+        self.container.push_back(txn, belonging);
       }
     }
   }

@@ -111,7 +111,7 @@ impl TrashArray {
       .map(|record| record.id.clone())
       .collect::<Vec<String>>();
     for record in records {
-      self.container.push_with_txn(txn, record);
+      self.container.push_back(txn, record);
     }
 
     if let Some(tx) = self.tx.as_ref() {

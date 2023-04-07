@@ -1,7 +1,8 @@
 use crate::database::timestamp;
 use anyhow::bail;
+use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::{
-  Array, ArrayRefWrapper, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+  Array, ArrayRefWrapper, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
 };
 
 pub struct DatabaseArray {
@@ -21,7 +22,7 @@ impl DatabaseArray {
         created_at: timestamp(),
       };
       let map_ref = self.array_ref.insert_map_with_txn(txn);
-      record.fill_map_ref(txn, map_ref);
+      record.fill_map_ref(txn, &map_ref);
     });
   }
 
@@ -81,7 +82,7 @@ const DATABASE_RECORD_NAME: &str = "name";
 const DATABASE_RECORD_CREATED_AT: &str = "created_at";
 
 impl DatabaseRecord {
-  fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: MapRefWrapper) {
+  fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     map_ref.insert_with_txn(txn, DATABASE_RECORD_ID, self.database_id);
     map_ref.insert_with_txn(txn, DATABASE_RECORD_NAME, self.name);
     map_ref.insert_with_txn(txn, DATABASE_RECORD_CREATED_AT, self.created_at);

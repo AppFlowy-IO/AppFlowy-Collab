@@ -3,7 +3,7 @@ use crate::rows::{
 };
 use crate::views::RowOrder;
 use collab::preclude::{
-  Array, ArrayRefWrapper, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+  Array, ArrayRef, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
 };
 
 const ROW_META: &str = "row_meta";
@@ -12,7 +12,7 @@ const ROW_COMMENT: &str = "row_comment";
 
 pub struct RowMap {
   container: MapRefWrapper,
-  meta: MapRefWrapper,
+  meta: MapRef,
 }
 
 impl RowMap {
@@ -106,21 +106,21 @@ impl RowMap {
 
   pub fn add_comment_with_txn(&self, txn: &mut TransactionMut, comment: RowComment) {
     let array_ref = self.get_comment_array_with_txn(txn);
-    array_ref.push(comment);
+    array_ref.push_back(txn, comment);
   }
 
   pub fn remove_comment_with_txn(&self, txn: &mut TransactionMut, index: u32) {
     let array_ref = self.get_comment_array_with_txn(txn);
-    array_ref.remove_with_txn(txn, index);
+    array_ref.remove(txn, index);
   }
 
   #[allow(dead_code)]
-  fn get_doc_with_txn<T: ReadTxn>(&self, txn: &T) -> MapRefWrapper {
+  fn get_doc_with_txn<T: ReadTxn>(&self, txn: &T) -> MapRef {
     // It's safe to unwrap because the doc will be inserted when this row gets initialized
     self.meta.get_map_with_txn(txn, ROW_DOC).unwrap()
   }
 
-  fn get_comment_array_with_txn<T: ReadTxn>(&self, txn: &T) -> ArrayRefWrapper {
+  fn get_comment_array_with_txn<T: ReadTxn>(&self, txn: &T) -> ArrayRef {
     // It's safe to unwrap because the doc will be inserted when this row gets initialized
     self.meta.get_array_ref_with_txn(txn, ROW_COMMENT).unwrap()
   }

@@ -1,3 +1,4 @@
+use anyhow::bail;
 use collab::core::any_map::AnyMapExtension;
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
@@ -7,7 +8,7 @@ use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, Row};
 use collab_database::views::{
   CreateViewParams, DatabaseLayout, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder,
-  GroupSettingBuilder, GroupSettingMap,
+  GroupSettingBuilder, GroupSettingMap, SortMap, SortMapBuilder,
 };
 use collab_persistence::CollabKV;
 use std::ops::{Deref, DerefMut};
@@ -240,8 +241,14 @@ pub struct TestGroupSetting {
 }
 
 const GROUP_ID: &str = "id";
-const GROUPS: &str = "groups";
-const CONTENT: &str = "content";
+pub const GROUPS: &str = "groups";
+pub const CONTENT: &str = "content";
+
+impl From<GroupSettingMap> for TestGroupSetting {
+  fn from(value: GroupSettingMap) -> Self {
+    Self::from(&value)
+  }
+}
 
 impl From<&GroupSettingMap> for TestGroupSetting {
   fn from(value: &GroupSettingMap) -> Self {
@@ -249,7 +256,7 @@ impl From<&GroupSettingMap> for TestGroupSetting {
     let field_id = value.get_str_value(FIELD_ID).unwrap();
     let field_type = value.get_i64_value(FIELD_TYPE).unwrap();
     let content = value.get_str_value(CONTENT).unwrap_or_default();
-    let groups = value.get_map_items(GROUPS);
+    let groups = value.get_any_maps(GROUPS);
     Self {
       id,
       field_id,
@@ -269,5 +276,64 @@ impl From<TestGroupSetting> for GroupSettingMap {
       .insert_str_value(CONTENT, data.content)
       .insert_map_items(GROUPS, data.groups)
       .build()
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct TestSort {
+  pub id: String,
+  pub field_id: String,
+  pub field_type: i64,
+  pub condition: SortCondition,
+}
+
+const SORT_ID: &str = "id";
+const SORT_CONDITION: &str = "condition";
+
+impl From<SortMap> for TestSort {
+  fn from(_: SortMap) -> Self {
+    todo!()
+  }
+}
+
+impl From<TestSort> for SortMap {
+  fn from(data: TestSort) -> Self {
+    SortMapBuilder::new()
+      .insert_str_value(SORT_ID, data.id)
+      .insert_str_value(FIELD_ID, data.field_id)
+      .insert_i64_value(FIELD_TYPE, data.field_type)
+      .insert_i64_value(SORT_CONDITION, data.condition.value())
+      .build()
+  }
+}
+
+#[derive(Copy, Clone, Debug)]
+#[repr(u8)]
+pub enum SortCondition {
+  Ascending = 0,
+  Descending = 1,
+}
+
+impl SortCondition {
+  pub fn value(&self) -> i64 {
+    *self as i64
+  }
+}
+
+impl Default for SortCondition {
+  fn default() -> Self {
+    Self::Ascending
+  }
+}
+
+impl TryFrom<i64> for SortCondition {
+  type Error = anyhow::Error;
+
+  fn try_from(value: i64) -> std::result::Result<Self, Self::Error> {
+    match value {
+      0 => Ok(SortCondition::Ascending),
+      1 => Ok(SortCondition::Descending),
+      _ => bail!("Unknown field type {}", value),
+    }
   }
 }

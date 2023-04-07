@@ -1,4 +1,4 @@
-use crate::preclude::{CollabContext, MapRefWrapper, YrsValue};
+use crate::preclude::{CollabContext, MapRefWrapper};
 use crate::util::insert_json_value_to_array_ref;
 use anyhow::Result;
 use lib0::any::Any;
@@ -10,7 +10,7 @@ use yrs::{Array, ArrayRef, MapPrelim, MapRef, ReadTxn, Transact, Transaction, Tr
 #[derive(Clone)]
 pub struct ArrayRefWrapper {
   array_ref: ArrayRef,
-  collab_ctx: CollabContext,
+  pub collab_ctx: CollabContext,
 }
 
 impl ArrayRefWrapper {
@@ -38,37 +38,10 @@ impl ArrayRefWrapper {
     });
   }
 
-  pub fn get(&self, index: u32) -> Option<YrsValue> {
-    let txn = self.transact();
-    self.array_ref.get(&txn, index)
-  }
-
-  pub fn get_with_txn<T: ReadTxn>(&self, txn: &T, index: u32) -> Option<YrsValue> {
-    self.array_ref.get(txn, index)
-  }
-
-  pub fn insert_with_txn<V: Prelim>(&self, txn: &mut TransactionMut, index: u32, value: V) {
-    self.array_ref.insert(txn, index, value);
-  }
-
-  pub fn push_with_txn<V: Prelim>(&self, txn: &mut TransactionMut, value: V) {
-    self.array_ref.push_back(txn, value);
-  }
-
   pub fn push_json_with_txn<T: Serialize>(&self, txn: &mut TransactionMut, value: T) -> Result<()> {
     let value = serde_json::to_value(value)?;
     insert_json_value_to_array_ref(txn, &self.array_ref, &value);
     Ok(())
-  }
-
-  pub fn insert_map_ref(&self) -> MapRefWrapper {
-    self.with_transact_mut(|txn| self.insert_map_with_txn(txn))
-  }
-
-  pub fn insert_map_with_txn(&self, txn: &mut TransactionMut) -> MapRefWrapper {
-    let array = MapPrelim::<Any>::new();
-    let map_ref = self.array_ref.push_back(txn, array);
-    MapRefWrapper::new(map_ref, self.collab_ctx.clone())
   }
 
   pub fn to_map_refs(&self) -> Vec<MapRefWrapper> {

@@ -86,7 +86,7 @@ impl ChildrenMap {
     index: u32,
   ) {
     let children_ref = self.get_children_with_txn(txn, children_id);
-    children_ref.insert_with_txn(txn, index, child_id);
+    children_ref.insert(txn, index, child_id);
   }
 
   pub fn delete_child_with_txn(&self, txn: &mut TransactionMut, children_id: &str, child_id: &str) {

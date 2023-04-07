@@ -67,12 +67,12 @@ impl<'a, 'b> FieldBuilder<'a, 'b> {
 pub struct FieldUpdate<'a, 'b, 'c> {
   #[allow(dead_code)]
   id: &'a str,
-  map_ref: &'c MapRefWrapper,
+  map_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRefWrapper) -> Self {
+  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRef) -> Self {
     Self { id, map_ref, txn }
   }
 

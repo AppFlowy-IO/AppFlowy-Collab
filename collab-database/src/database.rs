@@ -187,23 +187,23 @@ impl Database {
 
   pub fn add_group_setting(&self, view_id: &str, group_setting: impl Into<GroupSettingMap>) {
     self.views.update_view(view_id, |update| {
-      update.update_group_setting(|group_update| {
+      update.update_groups(|group_update| {
         group_update.push(group_setting.into());
       });
     });
   }
 
-  pub fn update_group_setting<'a, T: From<&'a GroupSettingMap> + Into<GroupSettingMap>>(
+  pub fn update_group_setting(
     &self,
     view_id: &str,
     setting_id: &str,
-    f: impl FnOnce(&mut T),
+    f: impl FnOnce(&mut GroupSettingMap),
   ) {
-    self.views.update_view(view_id, |update| {
-      update.update_group_setting(|group_update| {
-        group_update.update(setting_id, |mut setting| {
-          f(&mut setting);
-          setting
+    self.views.update_view(view_id, |view_update| {
+      view_update.update_groups(|group_update| {
+        group_update.update(setting_id, |mut map| {
+          f(&mut map);
+          map
         });
       });
     });
@@ -211,7 +211,7 @@ impl Database {
 
   pub fn remove_group_setting(&self, view_id: &str, setting_id: &str) {
     self.views.update_view(view_id, |update| {
-      update.update_group_setting(|group_update| {
+      update.update_groups(|group_update| {
         group_update.remove(&setting_id);
       });
     });

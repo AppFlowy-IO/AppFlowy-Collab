@@ -1,7 +1,5 @@
 use collab::core::any_map::{AnyMap, AnyMapBuilder, AnyMapUpdate};
-use collab::preclude::{
-  Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
-};
+use collab::preclude::{Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
@@ -30,7 +28,7 @@ impl TypeOptions {
     this
   }
 
-  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRefWrapper) {
+  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.into_inner().into_iter().for_each(|(k, v)| {
       let update = TypeOptionsUpdate::new(txn, map_ref);
       update.insert(&k, v);
