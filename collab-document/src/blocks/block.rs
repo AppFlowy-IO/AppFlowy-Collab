@@ -1,7 +1,6 @@
-use crate::blocks::{hashmap_to_json_str, json_str_to_hashmap, ChildrenOperation, TextOperation};
+use crate::blocks::{hashmap_to_json_str, json_str_to_hashmap, Block, ChildrenOperation};
 use crate::error::DocumentError;
 use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
-use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -18,52 +17,27 @@ pub const EXTERNAL_TYPE_TEXT: &str = "text";
 pub const EXTERNAL_TYPE_ARRAY: &str = "array";
 pub const EXTERNAL_TYPE_MAP: &str = "map";
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Block {
-  pub id: String,
-  pub ty: String,
-  pub parent: String,
-  pub children: String,
-  pub external_id: Option<String>,
-  pub external_type: Option<String>,
-  pub data: HashMap<String, Value>,
-}
-
 pub struct BlockOperation {
   root: MapRefWrapper,
   children_operation: Rc<ChildrenOperation>,
-  text_operation: Rc<TextOperation>,
-}
-
-impl Serialize for BlockOperation {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: Serializer,
-  {
-    let txn = self.root.transact();
-    let len = self.root.len(&txn) as usize;
-    let mut s = serializer.serialize_map(Some(len))?;
-    self.root.iter(&txn).for_each(|(k, _)| {
-      let block = self.get_block_with_txn(&txn, k).unwrap();
-      if let Ok(value) = serde_json::to_value(block) {
-        s.serialize_entry(k, &value).unwrap();
-      }
-    });
-    s.end()
-  }
 }
 
 impl BlockOperation {
-  pub fn new(
-    root: MapRefWrapper,
-    children_operation: Rc<ChildrenOperation>,
-    text_operation: Rc<TextOperation>,
-  ) -> Self {
+  pub fn new(root: MapRefWrapper, children_operation: Rc<ChildrenOperation>) -> Self {
     Self {
       root,
       children_operation,
-      text_operation,
     }
+  }
+
+  pub fn get_all_blocks(&self) -> HashMap<String, Block> {
+    let txn = self.root.transact();
+    let mut hash_map = HashMap::new();
+    self.root.iter(&txn).for_each(|(k, _)| {
+      let block = self.get_block_with_txn(&txn, k).unwrap();
+      hash_map.insert(k.to_string(), block);
+    });
+    hash_map
   }
 
   fn get_block_from_root<T: ReadTxn>(&self, txn: &T, map: MapRefWrapper) -> Block {
@@ -104,16 +78,6 @@ impl BlockOperation {
     map.insert_with_txn(txn, CHILDREN, block.children.to_string());
     map.insert_with_txn(txn, DATA, json_str);
 
-    if let (Some(external_type), Some(external_id)) =
-      (block.external_type.clone(), block.external_id.clone())
-    {
-      map.insert_with_txn(txn, EXTERNAL_TYPE, external_type.to_string());
-      map.insert_with_txn(txn, EXTERNAL_ID, external_id.to_string());
-      if external_type == EXTERNAL_TYPE_TEXT {
-        self.text_operation.create_text(txn, &external_id);
-      }
-    }
-
     self
       .children_operation
       .get_children_with_txn(txn, &block.children);
@@ -130,14 +94,6 @@ impl BlockOperation {
       .get_block_with_txn(txn, id)
       .ok_or(DocumentError::BlockIsNotFound)?;
     self.root.remove(txn, id);
-
-    if let (Some(external_type), Some(external_id)) =
-      (block.external_type.clone(), block.external_id.clone())
-    {
-      if external_type == EXTERNAL_TYPE_TEXT {
-        self.text_operation.delete_with_txn(txn, &external_id);
-      }
-    }
 
     self
       .children_operation

@@ -1,29 +1,8 @@
 use collab::preclude::*;
-use serde::ser::SerializeMap;
-use serde::{Serialize, Serializer};
+use std::collections::HashMap;
 
 pub struct ChildrenOperation {
   pub root: MapRefWrapper,
-}
-
-impl Serialize for ChildrenOperation {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: Serializer,
-  {
-    let txn = self.root.transact();
-    let mut map = serializer.serialize_map(Some(self.root.len(&txn) as usize))?;
-    for (key, _) in self.root.iter(&txn) {
-      // It is save to unwrap here because we know that the key exists
-      let children = self.root.get_array_ref_with_txn(&txn, key).unwrap();
-      let value = serde_json::json!(children
-        .iter(&txn)
-        .map(|child| child.to_string(&txn))
-        .collect::<Vec<String>>());
-      map.serialize_entry(key, &value)?;
-    }
-    map.end()
-  }
 }
 
 impl ChildrenOperation {
@@ -40,6 +19,24 @@ impl ChildrenOperation {
       .root
       .get_array_ref_with_txn(txn, children_id)
       .unwrap_or_else(|| self.create_children_with_txn(txn, children_id))
+  }
+
+  pub fn get_all_children(&self) -> HashMap<String, Vec<String>> {
+    let txn = self.root.transact();
+    let mut hash_map = HashMap::new();
+    self.root.iter(&txn).for_each(|(k, _)| {
+      let children = self.root.get_array_ref_with_txn(&txn, k);
+      if let Some(children) = children {
+        hash_map.insert(
+          k.to_string(),
+          children
+            .iter(&txn)
+            .map(|child| child.to_string(&txn))
+            .collect(),
+        );
+      }
+    });
+    hash_map
   }
 
   pub fn create_children_with_txn(

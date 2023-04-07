@@ -2,12 +2,14 @@ use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
 use std::collections::HashMap;
 
-use collab_document::blocks::Block;
-use collab_document::document::{Document, InsertBlockArgs};
+use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
+use collab_document::document::Document;
 use collab_document::error::DocumentError;
 use collab_persistence::CollabKV;
-use serde_json::Value;
+use nanoid::nanoid;
+use serde_json::{json, Value};
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 use tempfile::TempDir;
 
@@ -30,7 +32,49 @@ pub fn create_document(doc_id: &str) -> DocumentTest {
     .build();
   collab.initial();
 
-  match Document::create(collab) {
+  let mut blocks = HashMap::new();
+  let mut children_map = HashMap::new();
+
+  let mut data = HashMap::new();
+  data.insert("delta".to_string(), json!([]));
+  let page_id = nanoid!(10);
+  let page_children_id = nanoid!(10);
+  blocks.insert(
+    page_id.clone(),
+    Block {
+      id: page_id.clone(),
+      ty: "page".to_string(),
+      parent: "".to_string(),
+      children: page_children_id.clone(),
+      data: data.clone(),
+      external_id: None,
+      external_type: None,
+    },
+  );
+
+  let first_text_id = nanoid!(10);
+  children_map.insert(page_children_id.clone(), vec![first_text_id.clone()]);
+  let first_text_children_id = nanoid!(10);
+  children_map.insert(first_text_children_id.clone(), vec![]);
+  blocks.insert(
+    first_text_id.clone(),
+    Block {
+      id: first_text_id.clone(),
+      ty: "text".to_string(),
+      parent: page_id.clone(),
+      children: first_text_children_id,
+      data: data.clone(),
+      external_id: None,
+      external_type: None,
+    },
+  );
+  let meta = DocumentMeta { children_map };
+  let document_data = DocumentData {
+    page_id,
+    blocks,
+    meta,
+  };
+  match Document::create(collab, document_data) {
     Ok(document) => DocumentTest { document, cleaner },
     Err(e) => panic!("create document error: {}", e),
   }
@@ -38,28 +82,27 @@ pub fn create_document(doc_id: &str) -> DocumentTest {
 
 pub fn insert_block(
   document: &Document,
-  block: InsertBlockArgs,
-  prev_id: &str,
+  block: Block,
+  prev_id: String,
 ) -> Result<Block, DocumentError> {
-  document.with_transact_mut(|txn| document.insert_block(txn, block, prev_id.to_string()))
+  document.with_transact_mut(|txn| document.insert_block(txn, block, Some(prev_id)))
 }
 
-pub fn get_document_data(document: &Document) -> (String, Value, Value, Value) {
+pub fn get_document_data(
+  document: &Document,
+) -> (
+  String,
+  Rc<HashMap<String, Block>>,
+  Rc<HashMap<String, Vec<String>>>,
+) {
   let document_data = document.get_document().unwrap();
-  let document = &document_data["document"];
 
-  let page_id = document["page_id"].as_str().unwrap();
-  let blocks = &document["blocks"];
-  let meta = &document["meta"];
-  let text_map = &meta["text_map"];
-  let children_map = &meta["children_map"];
+  let page_id = document_data.page_id.as_str();
+  let blocks = Rc::new(document_data.blocks);
+  let meta = document_data.meta;
+  let children_map = Rc::new(meta.children_map);
 
-  return (
-    page_id.to_owned(),
-    blocks.clone(),
-    text_map.clone(),
-    children_map.clone(),
-  );
+  return (page_id.to_owned(), blocks, children_map);
 }
 
 pub fn delete_block(document: &Document, block_id: &str) -> Result<Block, DocumentError> {
@@ -80,7 +123,18 @@ pub fn move_block(
   parent_id: &str,
   prev_id: &str,
 ) -> Result<(), DocumentError> {
-  document.with_transact_mut(|txn| document.move_block(txn, block_id, parent_id, prev_id))
+  document.with_transact_mut(|txn| {
+    document.move_block(
+      txn,
+      block_id,
+      Some(parent_id.to_owned()),
+      Some(prev_id.to_owned()),
+    )
+  })
+}
+
+pub fn apply_actions(document: &Document, actions: Vec<BlockAction>) {
+  document.apply_action(actions)
 }
 
 struct Cleaner(PathBuf);
