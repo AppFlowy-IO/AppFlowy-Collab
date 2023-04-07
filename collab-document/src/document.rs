@@ -402,13 +402,13 @@ fn subscribe_changes(root: &mut MapRefWrapper) -> Option<DeepEventsSubscription>
         Event::Map(event) => {
           for c in event.keys(txn).values() {
             match c {
-              EntryChange::Inserted(v) => {
+              EntryChange::Inserted(_v) => {
                 println!("insert: {}", event.target().to_json(txn));
               },
-              EntryChange::Updated(_k, v) => {
+              EntryChange::Updated(_k, _v) => {
                 println!("update: {}", event.target().to_json(txn));
               },
-              EntryChange::Removed(v) => {
+              EntryChange::Removed(_v) => {
                 println!("remove: {}", event.target().to_json(txn));
               },
             }
