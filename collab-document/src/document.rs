@@ -67,13 +67,15 @@ impl Document {
   pub fn create(collab: Collab) -> Result<Document, DocumentError> {
     let (root, blocks, text_map, children_map) = collab.with_transact_mut(|txn| {
       // { document: {:} }
-      let root = collab
+      let mut root = collab
         .get_map_with_txn(txn, vec![ROOT])
         .unwrap_or_else(|| collab.create_map_with_txn(txn, ROOT));
+      subscribe_changes(&mut root);
       // { document: { blocks: {:} } }
-      let blocks = collab
+      let mut blocks = collab
         .get_map_with_txn(txn, vec![ROOT, BLOCKS])
         .unwrap_or_else(|| root.insert_map_with_txn(txn, BLOCKS));
+      subscribe_changes(&mut blocks);
       // { document: { blocks: {:}, meta: {:} } }
       let meta = collab
         .get_map_with_txn(txn, vec![ROOT, META])
@@ -83,9 +85,10 @@ impl Document {
         .get_map_with_txn(txn, vec![META, TEXT_MAP])
         .unwrap_or_else(|| meta.insert_map_with_txn(txn, TEXT_MAP));
       // {document: { blocks: {:}, meta: { text_map: {:}, children_map: {:} } }
-      let children_map = collab
+      let mut children_map = collab
         .get_map_with_txn(txn, vec![META, CHILDREN_MAP])
         .unwrap_or_else(|| meta.insert_map_with_txn(txn, CHILDREN_MAP));
+      subscribe_changes(&mut children_map);
 
       (root, blocks, text_map, children_map)
     });
@@ -387,4 +390,31 @@ impl Document {
       .block_operation
       .set_block_with_txn(txn, block_id, Some(block.data), Some(parent_id))
   }
+}
+
+fn subscribe_changes(root: &mut MapRefWrapper) -> Option<DeepEventsSubscription> {
+  return Some(root.observe_deep(move |txn, events| {
+    for deep_event in events.iter() {
+      match deep_event {
+        Event::Text(_) => {},
+        Event::Array(_) => {},
+        Event::Map(event) => {
+          for c in event.keys(txn).values() {
+            match c {
+              EntryChange::Inserted(v) => {
+                println!("insert: {}", event.target().to_json(txn));
+              },
+              EntryChange::Updated(_k, v) => {
+                println!("update: {}", event.target().to_json(txn));
+              },
+              EntryChange::Removed(v) => {
+                println!("remove: {}", event.target().to_json(txn));
+              },
+            }
+          }
+        },
+        _ => {},
+      }
+    }
+  }));
 }
