@@ -45,7 +45,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let collab = CollabBuilder::new(uid, database_id).build();
   collab.initial();
   let context = DatabaseContext { collab };
-  let database = Database::create(database_id, context).unwrap();
+  let database = Database::get_or_create(database_id, context).unwrap();
   DatabaseTest {
     database,
     cleaner: None,
@@ -65,7 +65,7 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabKV>, D
     .build();
   collab.initial();
   let context = DatabaseContext { collab };
-  let database = Database::create(database_id, context).unwrap();
+  let database = Database::get_or_create(database_id, context).unwrap();
   (
     db,
     DatabaseTest {
@@ -84,7 +84,7 @@ pub fn create_database_from_db(uid: i64, database_id: &str, db: Arc<CollabKV>) -
     .build();
   collab.initial();
   let context = DatabaseContext { collab };
-  let database = Database::create(database_id, context).unwrap();
+  let database = Database::get_or_create(database_id, context).unwrap();
   DatabaseTest {
     database,
     cleaner: None,
@@ -256,7 +256,7 @@ impl From<&GroupSettingMap> for TestGroupSetting {
     let field_id = value.get_str_value(FIELD_ID).unwrap();
     let field_type = value.get_i64_value(FIELD_TYPE).unwrap();
     let content = value.get_str_value(CONTENT).unwrap_or_default();
-    let groups = value.get_maps(GROUPS);
+    let groups = value.get_array(GROUPS);
     Self {
       id,
       field_id,
@@ -274,7 +274,7 @@ impl From<TestGroupSetting> for GroupSettingMap {
       .insert_str_value(FIELD_ID, data.field_id)
       .insert_i64_value(FIELD_TYPE, data.field_type)
       .insert_str_value(CONTENT, data.content)
-      .insert_map_items(GROUPS, data.groups)
+      .insert_maps(GROUPS, data.groups)
       .build()
   }
 }

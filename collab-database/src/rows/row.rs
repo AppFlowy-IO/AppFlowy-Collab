@@ -1,5 +1,6 @@
 use crate::database::timestamp;
 use crate::rows::{Cells, CellsUpdate};
+use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
@@ -98,6 +99,16 @@ pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(String
     .get_i64_with_txn(txn, CREATED_AT)
     .unwrap_or_default();
   Some((id, crated_at))
+}
+
+pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(RowOrder, i64)> {
+  let map_ref = value.to_ymap()?;
+  let id = map_ref.get_str_with_txn(txn, ROW_ID)?;
+  let height = map_ref.get_i64_with_txn(txn, ROW_HEIGHT)?;
+  let crated_at = map_ref
+    .get_i64_with_txn(txn, CREATED_AT)
+    .unwrap_or_default();
+  Some((RowOrder::new(id, height as i32), crated_at))
 }
 
 pub fn row_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Row> {

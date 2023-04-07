@@ -1,5 +1,6 @@
 use crate::rows::{
-  row_from_map_ref, row_from_value, row_id_from_value, Row, RowBuilder, RowComment, RowUpdate,
+  row_from_map_ref, row_from_value, row_id_from_value, row_order_from_value, Row, RowBuilder,
+  RowComment, RowUpdate,
 };
 use crate::views::RowOrder;
 use collab::preclude::{
@@ -65,14 +66,19 @@ impl RowMap {
       .collect::<Vec<_>>()
   }
 
+  pub fn get_all_row_orders(&self) -> Vec<RowOrder> {
+    let txn = self.container.transact();
+    self.get_all_row_orders_with_txn(&txn)
+  }
+
   pub fn get_all_row_orders_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<RowOrder> {
     let mut ids = self
       .container
       .iter(txn)
-      .flat_map(|(_k, v)| row_id_from_value(v, txn))
-      .collect::<Vec<(String, i64)>>();
+      .flat_map(|(_k, v)| row_order_from_value(v, txn))
+      .collect::<Vec<(RowOrder, i64)>>();
     ids.sort_by(|(_, left), (_, right)| left.cmp(right));
-    ids.into_iter().map(|(id, _)| RowOrder::new(id)).collect()
+    ids.into_iter().map(|(row_order, _)| row_order).collect()
   }
 
   pub fn delete_row_with_txn(&self, txn: &mut TransactionMut, row_id: &str) {

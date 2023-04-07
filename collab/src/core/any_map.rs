@@ -83,7 +83,7 @@ pub trait AnyMapExtension {
   }
 
   /// Get the maps with the given key.
-  fn get_maps<K: AsRef<str>, T: From<AnyMap>>(&self, key: K) -> Vec<T> {
+  fn get_array<K: AsRef<str>, T: From<AnyMap>>(&self, key: K) -> Vec<T> {
     if let Some(value) = self.value().get(key.as_ref()) {
       if let lib0Any::Array(array) = value {
         return array
@@ -103,7 +103,7 @@ pub trait AnyMapExtension {
 
   /// Try to get the maps with the given key.
   /// It [T] can't be converted from [AnyMap], it will be ignored.
-  fn try_get_maps<K: AsRef<str>, T: TryFrom<AnyMap>>(&self, key: K) -> Vec<T> {
+  fn try_get_array<K: AsRef<str>, T: TryFrom<AnyMap>>(&self, key: K) -> Vec<T> {
     if let Some(value) = self.value().get(key.as_ref()) {
       if let lib0Any::Array(array) = value {
         return array
@@ -123,14 +123,14 @@ pub trait AnyMapExtension {
 
   /// Insert the maps with the given key.
   /// It will override the old maps with the same id.
-  fn insert_maps<K: AsRef<str>, T: Into<AnyMap>>(&mut self, key: K, items: Vec<T>) {
+  fn insert_array<K: AsRef<str>, T: Into<AnyMap>>(&mut self, key: K, items: Vec<T>) {
     let key = key.as_ref();
-    let array = items_to_lib_array(items);
+    let array = items_to_lib_0_array(items);
     self.mut_value().insert(key.to_string(), array);
   }
 
   /// Extends the maps with the given key.
-  fn extend_with_maps<K: AsRef<str>, T: Into<AnyMap>>(&mut self, key: K, items: Vec<T>) {
+  fn extend_with_array<K: AsRef<str>, T: Into<AnyMap>>(&mut self, key: K, items: Vec<T>) {
     let key = key.as_ref();
     let items = items_to_anys(items);
     if let Some(lib0Any::Array(old_items)) = self.value().get(key) {
@@ -143,13 +143,13 @@ pub trait AnyMapExtension {
     } else {
       self
         .mut_value()
-        .insert(key.to_string(), items_to_lib_array(items));
+        .insert(key.to_string(), items_to_lib_0_array(items));
     }
   }
 
   /// Remove the maps with the given ids.
-  /// It requires the maps to have an id field.
-  fn remove_maps<K: AsRef<str>>(&mut self, key: K, ids: &[&str]) {
+  /// It requires the element to have an [id] field. Otherwise, it will be ignored.
+  fn remove_array_element<K: AsRef<str>>(&mut self, key: K, ids: &[&str]) {
     if let Some(value) = self.value().get(key.as_ref()) {
       if let lib0Any::Array(array) = value {
         let new_array = array
@@ -173,7 +173,9 @@ pub trait AnyMapExtension {
     }
   }
 
-  fn mut_maps_element<K: AsRef<str>, F>(&mut self, key: K, id: &str, mut f: F)
+  /// Mutate the maps with the given id.
+  /// It requires the element to have an [id] field. Otherwise, it will be ignored.
+  fn mut_array_element_by_id<K: AsRef<str>, F>(&mut self, key: K, id: &str, mut f: F)
   where
     F: FnMut(&mut MutAnyMap),
   {
@@ -195,7 +197,7 @@ pub trait AnyMapExtension {
 }
 
 #[inline]
-fn items_to_lib_array<T: Into<AnyMap>>(items: Vec<T>) -> lib0Any {
+fn items_to_lib_0_array<T: Into<AnyMap>>(items: Vec<T>) -> lib0Any {
   let items = items_to_anys(items);
   lib0Any::Array(items.into_boxed_slice())
 }
@@ -363,8 +365,8 @@ impl AnyMapBuilder {
     self
   }
 
-  pub fn insert_map_items<K: AsRef<str>, T: Into<AnyMap>>(mut self, key: K, items: Vec<T>) -> Self {
-    self.inner.insert_maps(key, items);
+  pub fn insert_maps<K: AsRef<str>, T: Into<AnyMap>>(mut self, key: K, items: Vec<T>) -> Self {
+    self.inner.insert_array(key, items);
     self
   }
 

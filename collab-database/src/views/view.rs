@@ -1,4 +1,3 @@
-use crate::database::gen_database_view_id;
 use crate::fields::Field;
 use crate::rows::Row;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
@@ -33,6 +32,7 @@ pub struct DatabaseView {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateViewParams {
+  pub database_id: String,
   pub view_id: String,
   pub name: String,
   pub layout: DatabaseLayout,
@@ -44,6 +44,7 @@ pub struct CreateViewParams {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateDatabaseParams {
+  pub database_id: String,
   pub view_id: String,
   pub name: String,
   pub layout: DatabaseLayout,
@@ -67,6 +68,7 @@ impl CreateDatabaseParams {
       self.rows,
       self.fields,
       CreateViewParams {
+        database_id: self.database_id,
         view_id: self.view_id,
         name: self.name,
         layout: self.layout,
@@ -82,7 +84,8 @@ impl CreateDatabaseParams {
 impl From<DatabaseView> for CreateDatabaseParams {
   fn from(view: DatabaseView) -> Self {
     Self {
-      view_id: gen_database_view_id(),
+      database_id: view.database_id,
+      view_id: view.id,
       name: view.name,
       layout: view.layout,
       layout_settings: view.layout_settings,

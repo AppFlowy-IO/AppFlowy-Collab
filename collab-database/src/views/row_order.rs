@@ -47,6 +47,7 @@ impl DerefMut for RowOrderArray {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RowOrder {
   pub id: String,
+  pub height: i32,
 }
 
 impl OrderIdentifiable for RowOrder {
@@ -56,8 +57,8 @@ impl OrderIdentifiable for RowOrder {
 }
 
 impl RowOrder {
-  pub fn new(id: String) -> RowOrder {
-    Self { id }
+  pub fn new(id: String, height: i32) -> RowOrder {
+    Self { id, height }
   }
 }
 
@@ -78,7 +79,10 @@ impl From<RowOrder> for lib0Any {
 
 impl From<&Row> for RowOrder {
   fn from(row: &Row) -> Self {
-    Self { id: row.id.clone() }
+    Self {
+      id: row.id.clone(),
+      height: row.height,
+    }
   }
 }
 

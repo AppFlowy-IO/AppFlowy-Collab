@@ -69,7 +69,7 @@ fn extend_database_view_group_test() {
   let database_test = create_database_with_two_groups();
   database_test.update_group_setting("v1", "g1", |object| {
     object.insert_str_value(CONTENT, "hello world".to_string());
-    object.extend_with_maps(
+    object.extend_with_array(
       GROUPS,
       vec![TestGroup {
         id: "group_item3".to_string(),
@@ -98,7 +98,7 @@ fn extend_database_view_group_test() {
 fn remove_database_view_group_test() {
   let database_test = create_database_with_two_groups();
   database_test.update_group_setting("v1", "g1", |object| {
-    object.remove_maps(GROUPS, vec!["group_item1"].as_slice());
+    object.remove_array_element(GROUPS, vec!["group_item1"].as_slice());
   });
 
   let view = database_test.views.get_view("v1").unwrap();
@@ -125,7 +125,7 @@ fn update_database_view_group_test() {
   assert_eq!(group_settings[0].groups[0].visible, false);
 
   database_test.update_group_setting("v1", "g1", |object| {
-    object.mut_maps_element(GROUPS, "group_item1", |map| {
+    object.mut_array_element_by_id(GROUPS, "group_item1", |map| {
       map.insert_bool_value("visible", true);
     });
   });
