@@ -67,15 +67,13 @@ impl Document {
   pub fn create(collab: Collab) -> Result<Document, DocumentError> {
     let (root, blocks, text_map, children_map) = collab.with_transact_mut(|txn| {
       // { document: {:} }
-      let mut root = collab
+      let root = collab
         .get_map_with_txn(txn, vec![ROOT])
         .unwrap_or_else(|| collab.create_map_with_txn(txn, ROOT));
-      subscribe_changes(&mut root);
       // { document: { blocks: {:} } }
-      let mut blocks = collab
+      let blocks = collab
         .get_map_with_txn(txn, vec![ROOT, BLOCKS])
         .unwrap_or_else(|| root.insert_map_with_txn(txn, BLOCKS));
-      subscribe_changes(&mut blocks);
       // { document: { blocks: {:}, meta: {:} } }
       let meta = collab
         .get_map_with_txn(txn, vec![ROOT, META])
@@ -85,17 +83,20 @@ impl Document {
         .get_map_with_txn(txn, vec![META, TEXT_MAP])
         .unwrap_or_else(|| meta.insert_map_with_txn(txn, TEXT_MAP));
       // {document: { blocks: {:}, meta: { text_map: {:}, children_map: {:} } }
-      let mut children_map = collab
+      let children_map = collab
         .get_map_with_txn(txn, vec![META, CHILDREN_MAP])
         .unwrap_or_else(|| meta.insert_map_with_txn(txn, CHILDREN_MAP));
-      subscribe_changes(&mut children_map);
 
       (root, blocks, text_map, children_map)
     });
+    let mut root = root;
+    let mut blocks = blocks;
+    subscribe_changes(&mut root);
 
     let text_operation = Rc::new(TextOperation::new(text_map));
     let children_operation = Rc::new(ChildrenOperation::new(children_map));
 
+    subscribe_changes(&mut blocks);
     let block_operation = BlockOperation::new(
       blocks,
       Rc::clone(&children_operation),
