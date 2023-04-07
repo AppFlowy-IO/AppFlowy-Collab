@@ -191,45 +191,74 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
-  pub fn set_filters(self, filters: Vec<FilterMap>) -> Self {
-    let array_ref = self
-      .map_ref
-      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_FILTERS);
+  pub fn set_filters(mut self, filters: Vec<FilterMap>) -> Self {
+    let array_ref = self.get_filter_array();
     let filter_array = FilterArray::from_any_maps(filters);
     filter_array.extend_array_ref(self.txn, array_ref);
     self
   }
 
-  pub fn set_groups(self, group_settings: Vec<GroupSettingMap>) -> Self {
-    let array_ref = self
-      .map_ref
-      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS);
-    let group_settings = GroupSettingArray::from_any_maps(group_settings);
-    group_settings.extend_array_ref(self.txn, array_ref);
-    self
-  }
-
-  pub fn update_groups<F>(self, f: F) -> Self
+  pub fn update_filters<F>(mut self, f: F) -> Self
   where
     F: FnOnce(ArrayMapUpdate),
   {
-    let array_ref = self
-      .map_ref
-      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS);
+    let array_ref = self.get_filter_array();
     let update = ArrayMapUpdate::new(self.txn, array_ref);
     f(update);
     self
   }
 
-  pub fn set_sorts(self, sorts: Vec<SortMap>) -> Self {
-    let array_ref = self
-      .map_ref
-      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_SORTS);
+  pub fn set_groups(mut self, group_settings: Vec<GroupSettingMap>) -> Self {
+    let array_ref = self.get_group_array();
+    let group_settings = GroupSettingArray::from_any_maps(group_settings);
+    group_settings.extend_array_ref(self.txn, array_ref);
+    self
+  }
+
+  pub fn update_groups<F>(mut self, f: F) -> Self
+  where
+    F: FnOnce(ArrayMapUpdate),
+  {
+    let array_ref = self.get_group_array();
+    let update = ArrayMapUpdate::new(self.txn, array_ref);
+    f(update);
+    self
+  }
+
+  pub fn set_sorts(mut self, sorts: Vec<SortMap>) -> Self {
+    let array_ref = self.get_sort_array();
     let sort_array = SortArray::from_any_maps(sorts);
     sort_array.extend_array_ref(self.txn, array_ref);
     self
   }
 
+  pub fn update_sorts<F>(mut self, f: F) -> Self
+  where
+    F: FnOnce(ArrayMapUpdate),
+  {
+    let array_ref = self.get_sort_array();
+    let update = ArrayMapUpdate::new(self.txn, array_ref);
+    f(update);
+    self
+  }
+
+  fn get_sort_array(&mut self) -> ArrayRef {
+    self
+      .map_ref
+      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_SORTS)
+  }
+
+  fn get_group_array(&mut self) -> ArrayRef {
+    self
+      .map_ref
+      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS)
+  }
+
+  fn get_filter_array(&mut self) -> ArrayRef {
+    self
+      .map_ref
+      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_FILTERS)
+  }
   pub fn done(self) -> Option<DatabaseView> {
     view_from_map_ref(self.map_ref, self.txn)
   }

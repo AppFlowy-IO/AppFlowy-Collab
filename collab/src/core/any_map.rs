@@ -7,11 +7,13 @@ use std::ops::{Deref, DerefMut};
 use yrs::types::Value;
 use yrs::{Array, Map, MapRef, ReadTxn, TransactionMut};
 
+/// A wrapper around `yrs::Map` that provides a more ergonomic API.
 pub trait AnyMapExtension {
   fn value(&self) -> &HashMap<String, lib0Any>;
 
   fn mut_value(&mut self) -> &mut HashMap<String, lib0Any>;
 
+  /// Insert the string value with the given key.
   fn insert_str_value<K: AsRef<str>>(&mut self, key: K, s: String) {
     let _ = self.mut_value().insert(
       key.as_ref().to_string(),
@@ -19,6 +21,7 @@ pub trait AnyMapExtension {
     );
   }
 
+  /// Get the string value with the given key.
   fn get_str_value<K: AsRef<str>>(&self, key: K) -> Option<String> {
     let value = self.value().get(key.as_ref())?;
     if let lib0Any::String(s) = value {
@@ -28,12 +31,14 @@ pub trait AnyMapExtension {
     }
   }
 
+  /// Insert the i64 value with the given key.
   fn insert_i64_value<K: AsRef<str>>(&mut self, key: K, value: i64) {
     let _ = self
       .mut_value()
       .insert(key.as_ref().to_string(), lib0Any::BigInt(value));
   }
 
+  /// Get the i64 value with the given key.
   fn get_i64_value<K: AsRef<str>>(&self, key: K) -> Option<i64> {
     let value = self.value().get(key.as_ref())?;
     if let lib0Any::BigInt(num) = value {
@@ -43,12 +48,14 @@ pub trait AnyMapExtension {
     }
   }
 
+  /// Insert the f64 value with the given key.
   fn insert_f64_value<K: AsRef<str>>(&mut self, key: K, value: f64) {
     let _ = self
       .mut_value()
       .insert(key.as_ref().to_string(), lib0Any::Number(value));
   }
 
+  /// Get the f64 value with the given key.
   fn get_f64_value<K: AsRef<str>>(&self, key: K) -> Option<f64> {
     let value = self.value().get(key.as_ref())?;
     if let lib0Any::Number(num) = value {
@@ -58,12 +65,14 @@ pub trait AnyMapExtension {
     }
   }
 
+  /// Insert the bool value with the given key.
   fn insert_bool_value<K: AsRef<str>>(&mut self, key: K, value: bool) {
     let _ = self
       .mut_value()
       .insert(key.as_ref().to_string(), lib0Any::Bool(value));
   }
 
+  /// Get the bool value with the given key.
   fn get_bool_value<K: AsRef<str>>(&self, key: K) -> Option<bool> {
     let value = self.value().get(key.as_ref())?;
     if let lib0Any::Bool(value) = value {
@@ -73,7 +82,8 @@ pub trait AnyMapExtension {
     }
   }
 
-  fn get_any_maps<K: AsRef<str>, T: From<AnyMap>>(&self, key: K) -> Vec<T> {
+  /// Get the maps with the given key.
+  fn get_maps<K: AsRef<str>, T: From<AnyMap>>(&self, key: K) -> Vec<T> {
     if let Some(value) = self.value().get(key.as_ref()) {
       if let lib0Any::Array(array) = value {
         return array
@@ -91,7 +101,9 @@ pub trait AnyMapExtension {
     vec![]
   }
 
-  fn try_get_any_maps<K: AsRef<str>, T: TryFrom<AnyMap>>(&self, key: K) -> Vec<T> {
+  /// Try to get the maps with the given key.
+  /// It [T] can't be converted from [AnyMap], it will be ignored.
+  fn try_get_maps<K: AsRef<str>, T: TryFrom<AnyMap>>(&self, key: K) -> Vec<T> {
     if let Some(value) = self.value().get(key.as_ref()) {
       if let lib0Any::Array(array) = value {
         return array
@@ -109,21 +121,110 @@ pub trait AnyMapExtension {
     vec![]
   }
 
-  fn insert_any_maps<K: AsRef<str>, T: Into<AnyMap>>(&mut self, key: K, items: Vec<T>) {
+  /// Insert the maps with the given key.
+  /// It will override the old maps with the same id.
+  fn insert_maps<K: AsRef<str>, T: Into<AnyMap>>(&mut self, key: K, items: Vec<T>) {
     let key = key.as_ref();
-    let items = items
-      .into_iter()
-      .map(|item| {
-        let any_map: AnyMap = item.into();
-        any_map.into() // lib0Any::Map
-      })
-      .collect::<Vec<_>>();
-    self
-      .mut_value()
-      .insert(key.to_string(), lib0Any::Array(items.into_boxed_slice()));
+    let array = items_to_lib_array(items);
+    self.mut_value().insert(key.to_string(), array);
+  }
+
+  /// Extends the maps with the given key.
+  fn extend_with_maps<K: AsRef<str>, T: Into<AnyMap>>(&mut self, key: K, items: Vec<T>) {
+    let key = key.as_ref();
+    let items = items_to_anys(items);
+    if let Some(lib0Any::Array(old_items)) = self.value().get(key) {
+      let mut new_items = old_items.to_vec();
+      new_items.extend(items);
+      self.mut_value().insert(
+        key.to_string(),
+        lib0Any::Array(new_items.into_boxed_slice()),
+      );
+    } else {
+      self
+        .mut_value()
+        .insert(key.to_string(), items_to_lib_array(items));
+    }
+  }
+
+  /// Remove the maps with the given ids.
+  /// It requires the maps to have an id field.
+  fn remove_maps<K: AsRef<str>>(&mut self, key: K, ids: &[&str]) {
+    if let Some(value) = self.value().get(key.as_ref()) {
+      if let lib0Any::Array(array) = value {
+        let new_array = array
+          .into_iter()
+          .filter(|item| {
+            if let lib0Any::Map(map) = item {
+              if let Some(lib0Any::String(s)) = map.get("id") {
+                return !ids.contains(&(*s).as_ref());
+              }
+            }
+            true
+          })
+          .map(|value| value.clone())
+          .collect::<Vec<lib0Any>>();
+
+        self.mut_value().insert(
+          key.as_ref().to_string(),
+          lib0Any::Array(new_array.into_boxed_slice()),
+        );
+      }
+    }
+  }
+
+  fn mut_maps_element<K: AsRef<str>, F>(&mut self, key: K, id: &str, mut f: F)
+  where
+    F: FnMut(&mut MutAnyMap),
+  {
+    if let Some(value) = self.mut_value().get_mut(key.as_ref()) {
+      if let lib0Any::Array(array) = value {
+        array.iter_mut().for_each(|item| {
+          if let lib0Any::Map(map) = item {
+            if let Some(lib0Any::String(s)) = map.get("id") {
+              if (*s).as_ref() == id {
+                let mut any_map = MutAnyMap(map);
+                f(&mut any_map);
+              }
+            }
+          }
+        });
+      }
+    }
   }
 }
 
+#[inline]
+fn items_to_lib_array<T: Into<AnyMap>>(items: Vec<T>) -> lib0Any {
+  let items = items_to_anys(items);
+  lib0Any::Array(items.into_boxed_slice())
+}
+
+#[inline]
+fn items_to_anys<T: Into<AnyMap>>(items: Vec<T>) -> Vec<lib0Any> {
+  items
+    .into_iter()
+    .map(|item| {
+      let any_map: AnyMap = item.into();
+      any_map.into() // lib0Any::Map
+    })
+    .collect::<Vec<_>>()
+}
+
+pub struct MutAnyMap<'a>(&'a mut HashMap<String, lib0Any>);
+
+impl<'a> AnyMapExtension for MutAnyMap<'a> {
+  fn value(&self) -> &HashMap<String, lib0Any> {
+    &self.0
+  }
+
+  fn mut_value(&mut self) -> &mut HashMap<String, lib0Any> {
+    self.0
+  }
+}
+
+/// A map that can store any type of value.
+/// It uses [lib0Any] as the value type.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AnyMap(HashMap<String, lib0Any>);
 
@@ -241,6 +342,7 @@ impl DerefMut for AnyMap {
   }
 }
 
+/// Builder for [AnyMap].
 #[derive(Default)]
 pub struct AnyMapBuilder {
   inner: AnyMap,
@@ -262,7 +364,7 @@ impl AnyMapBuilder {
   }
 
   pub fn insert_map_items<K: AsRef<str>, T: Into<AnyMap>>(mut self, key: K, items: Vec<T>) -> Self {
-    self.inner.insert_any_maps(key, items);
+    self.inner.insert_maps(key, items);
     self
   }
 

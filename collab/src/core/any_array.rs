@@ -6,6 +6,7 @@ use std::ops::{Deref, DerefMut};
 use yrs::types::Value;
 use yrs::{Array, ArrayRef, ReadTxn, TransactionMut};
 
+/// A wrapper around an `ArrayRef` that allows to store `AnyMap` in it.
 pub struct ArrayMap(pub Vec<AnyMap>);
 
 impl ArrayMap {

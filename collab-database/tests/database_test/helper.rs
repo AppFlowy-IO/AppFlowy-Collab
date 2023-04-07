@@ -256,7 +256,7 @@ impl From<&GroupSettingMap> for TestGroupSetting {
     let field_id = value.get_str_value(FIELD_ID).unwrap();
     let field_type = value.get_i64_value(FIELD_TYPE).unwrap();
     let content = value.get_str_value(CONTENT).unwrap_or_default();
-    let groups = value.get_any_maps(GROUPS);
+    let groups = value.get_maps(GROUPS);
     Self {
       id,
       field_id,
