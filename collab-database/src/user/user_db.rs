@@ -177,10 +177,10 @@ impl UserDatabase {
       if database.is_inline_view(view_id) {
         let DuplicatedDatabase { view, rows, fields } = database.duplicate_data();
         let params = CreateDatabaseParams::from_view(view, rows, fields);
-        let database = self.create_database(&database_id, params)?;
+        let database = self.create_database(database_id, params)?;
         Ok(database)
       } else {
-        if let None = database.duplicate_view(view_id) {
+        if database.duplicate_view(view_id).is_none() {
           return Err(DatabaseError::DatabaseViewNotExist);
         }
         Ok(database)

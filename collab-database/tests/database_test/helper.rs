@@ -394,6 +394,7 @@ impl From<TestDateTypeOption> for TypeOptionData {
   }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Debug, Copy, Eq, PartialEq)]
 pub enum TestDateFormat {
   Local = 0,

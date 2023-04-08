@@ -122,6 +122,7 @@ impl DatabaseRecord {
     map_ref.insert_array_with_txn(txn, DATABASE_RECORD_VIEWS, views);
   }
 
+  #[allow(clippy::needless_collect)]
   fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<Self> {
     let id = map_ref.get_str_with_txn(txn, DATABASE_RECORD_ID)?;
     let name = map_ref

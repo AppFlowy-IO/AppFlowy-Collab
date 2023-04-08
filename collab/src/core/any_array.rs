@@ -7,11 +7,12 @@ use yrs::types::Value;
 use yrs::{Array, ArrayRef, ReadTxn, TransactionMut};
 
 /// A wrapper around an `ArrayRef` that allows to store `AnyMap` in it.
+#[derive(Default, Debug)]
 pub struct ArrayMap(pub Vec<AnyMap>);
 
 impl ArrayMap {
   pub fn new() -> Self {
-    Self(Vec::new())
+    Self::default()
   }
 
   pub fn from_any_maps(items: Vec<AnyMap>) -> Self {
@@ -86,7 +87,7 @@ impl<'a, 'b> ArrayMapUpdate<'a, 'b> {
     self
   }
 
-  pub fn update<'c, F>(self, id: &str, f: F) -> Self
+  pub fn update<F>(self, id: &str, f: F) -> Self
   where
     F: FnOnce(AnyMap) -> AnyMap,
   {

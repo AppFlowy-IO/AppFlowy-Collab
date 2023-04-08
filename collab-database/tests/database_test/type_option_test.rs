@@ -18,7 +18,7 @@ fn insert_checkbox_type_option_data_test() {
   let type_option = field
     .get_type_option::<TestCheckboxTypeOption>("0")
     .unwrap();
-  assert_eq!(type_option.is_selected, true);
+  assert!(type_option.is_selected);
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn insert_date_type_option_data_test() {
 
   let field = test.fields.get_field("f1").unwrap();
   let type_option = field.get_type_option::<TestDateTypeOption>("0").unwrap();
-  assert_eq!(type_option.include_time, true);
+  assert!(type_option.include_time);
   assert_eq!(type_option.date_format, TestDateFormat::ISO);
   assert_eq!(type_option.time_format, TestTimeFormat::TwelveHour);
 }
@@ -70,7 +70,7 @@ fn update_date_type_option_data_test() {
 
   let field = test.fields.get_field("f1").unwrap();
   let type_option = field.get_type_option::<TestDateTypeOption>("0").unwrap();
-  assert_eq!(type_option.include_time, true);
+  assert!(type_option.include_time);
   assert_eq!(type_option.time_format, TestTimeFormat::TwentyFourHour);
 }
 
@@ -101,7 +101,7 @@ fn single_field_contains_multiple_type_options_test() {
     .get_type_option::<TestCheckboxTypeOption>("0")
     .unwrap();
   let date_tp = field.get_type_option::<TestDateTypeOption>("1").unwrap();
-  assert_eq!(check_tp.is_selected, true);
+  assert!(check_tp.is_selected);
   assert_eq!(date_tp.time_format, TestTimeFormat::TwelveHour);
 }
 

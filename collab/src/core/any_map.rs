@@ -84,19 +84,17 @@ pub trait AnyMapExtension {
 
   /// Get the maps with the given key.
   fn get_array<K: AsRef<str>, T: From<AnyMap>>(&self, key: K) -> Vec<T> {
-    if let Some(value) = self.value().get(key.as_ref()) {
-      if let lib0Any::Array(array) = value {
-        return array
-          .into_iter()
-          .flat_map(|item| {
-            if let lib0Any::Map(map) = item {
-              Some(T::from(AnyMap((**map).clone())))
-            } else {
-              None
-            }
-          })
-          .collect::<Vec<_>>();
-      }
+    if let Some(lib0Any::Array(array)) = self.value().get(key.as_ref()) {
+      return array
+        .iter()
+        .flat_map(|item| {
+          if let lib0Any::Map(map) = item {
+            Some(T::from(AnyMap((**map).clone())))
+          } else {
+            None
+          }
+        })
+        .collect::<Vec<_>>();
     }
     vec![]
   }
@@ -104,19 +102,17 @@ pub trait AnyMapExtension {
   /// Try to get the maps with the given key.
   /// It [T] can't be converted from [AnyMap], it will be ignored.
   fn try_get_array<K: AsRef<str>, T: TryFrom<AnyMap>>(&self, key: K) -> Vec<T> {
-    if let Some(value) = self.value().get(key.as_ref()) {
-      if let lib0Any::Array(array) = value {
-        return array
-          .into_iter()
-          .flat_map(|item| {
-            if let lib0Any::Map(map) = item {
-              T::try_from(AnyMap((**map).clone())).ok()
-            } else {
-              None
-            }
-          })
-          .collect::<Vec<_>>();
-      }
+    if let Some(lib0Any::Array(array)) = self.value().get(key.as_ref()) {
+      return array
+        .iter()
+        .flat_map(|item| {
+          if let lib0Any::Map(map) = item {
+            T::try_from(AnyMap((**map).clone())).ok()
+          } else {
+            None
+          }
+        })
+        .collect::<Vec<_>>();
     }
     vec![]
   }
@@ -150,26 +146,24 @@ pub trait AnyMapExtension {
   /// Remove the maps with the given ids.
   /// It requires the element to have an [id] field. Otherwise, it will be ignored.
   fn remove_array_element<K: AsRef<str>>(&mut self, key: K, ids: &[&str]) {
-    if let Some(value) = self.value().get(key.as_ref()) {
-      if let lib0Any::Array(array) = value {
-        let new_array = array
-          .into_iter()
-          .filter(|item| {
-            if let lib0Any::Map(map) = item {
-              if let Some(lib0Any::String(s)) = map.get("id") {
-                return !ids.contains(&(*s).as_ref());
-              }
+    if let Some(lib0Any::Array(array)) = self.value().get(key.as_ref()) {
+      let new_array = array
+        .iter()
+        .filter(|item| {
+          if let lib0Any::Map(map) = item {
+            if let Some(lib0Any::String(s)) = map.get("id") {
+              return !ids.contains(&(*s).as_ref());
             }
-            true
-          })
-          .map(|value| value.clone())
-          .collect::<Vec<lib0Any>>();
+          }
+          true
+        })
+        .cloned()
+        .collect::<Vec<lib0Any>>();
 
-        self.mut_value().insert(
-          key.as_ref().to_string(),
-          lib0Any::Array(new_array.into_boxed_slice()),
-        );
-      }
+      self.mut_value().insert(
+        key.as_ref().to_string(),
+        lib0Any::Array(new_array.into_boxed_slice()),
+      );
     }
   }
 
@@ -179,19 +173,17 @@ pub trait AnyMapExtension {
   where
     F: FnMut(&mut MutAnyMap),
   {
-    if let Some(value) = self.mut_value().get_mut(key.as_ref()) {
-      if let lib0Any::Array(array) = value {
-        array.iter_mut().for_each(|item| {
-          if let lib0Any::Map(map) = item {
-            if let Some(lib0Any::String(s)) = map.get("id") {
-              if (*s).as_ref() == id {
-                let mut any_map = MutAnyMap(map);
-                f(&mut any_map);
-              }
+    if let Some(lib0Any::Array(array)) = self.mut_value().get_mut(key.as_ref()) {
+      array.iter_mut().for_each(|item| {
+        if let lib0Any::Map(map) = item {
+          if let Some(lib0Any::String(s)) = map.get("id") {
+            if (*s).as_ref() == id {
+              let mut any_map = MutAnyMap(map);
+              f(&mut any_map);
             }
           }
-        });
-      }
+        }
+      });
     }
   }
 }
@@ -217,7 +209,7 @@ pub struct MutAnyMap<'a>(&'a mut HashMap<String, lib0Any>);
 
 impl<'a> AnyMapExtension for MutAnyMap<'a> {
   fn value(&self) -> &HashMap<String, lib0Any> {
-    &self.0
+    self.0
   }
 
   fn mut_value(&mut self) -> &mut HashMap<String, lib0Any> {

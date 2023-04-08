@@ -122,7 +122,7 @@ fn update_database_view_group_test() {
     .iter()
     .map(TestGroupSetting::from)
     .collect::<Vec<TestGroupSetting>>();
-  assert_eq!(group_settings[0].groups[0].visible, false);
+  assert!(!group_settings[0].groups[0].visible);
 
   database_test.update_group_setting("v1", "g1", |object| {
     object.mut_array_element_by_id(GROUPS, "group_item1", |map| {
@@ -136,7 +136,7 @@ fn update_database_view_group_test() {
     .iter()
     .map(TestGroupSetting::from)
     .collect::<Vec<TestGroupSetting>>();
-  assert_eq!(group_settings[0].groups[0].visible, true);
+  assert!(group_settings[0].groups[0].visible);
 }
 
 fn create_database_with_two_groups() -> DatabaseTest {

@@ -213,7 +213,7 @@ impl Database {
   pub fn remove_group_setting(&self, view_id: &str, setting_id: &str) {
     self.views.update_view(view_id, |update| {
       update.update_groups(|group_update| {
-        group_update.remove(&setting_id);
+        group_update.remove(setting_id);
       });
     });
   }
