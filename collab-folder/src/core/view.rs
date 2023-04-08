@@ -259,7 +259,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
     map_ref: MapRefWrapper,
     belongings: Rc<BelongingMap>,
   ) -> Self {
-    map_ref.insert_with_txn(txn, VIEW_ID, view_id);
+    map_ref.insert_str_with_txn(txn, VIEW_ID, view_id);
     Self {
       view_id,
       map_ref,

@@ -26,7 +26,7 @@ impl CustomMapRef for MapRefWrapper {
 #[derive(Clone)]
 pub struct MapRefWrapper {
   map_ref: MapRef,
-  collab_ctx: CollabContext,
+  pub collab_ctx: CollabContext,
 }
 
 impl MapRefWrapper {
@@ -39,14 +39,6 @@ impl MapRefWrapper {
 
   pub fn into_inner(self) -> MapRef {
     self.map_ref
-  }
-
-  pub fn remove(&self, key: &str) {
-    self.with_transact_mut(|txn| self.remove_with_txn(txn, key));
-  }
-
-  pub fn remove_with_txn(&self, txn: &mut TransactionMut, key: &str) {
-    self.map_ref.remove(txn, key);
   }
 
   pub fn insert<V: Prelim>(&self, key: &str, value: V) {
@@ -96,17 +88,6 @@ impl MapRefWrapper {
       return Some(MapRefWrapper::new(map_ref, self.collab_ctx.clone()));
     }
     None
-  }
-
-  pub fn get_or_insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
-    self
-      .get_map_with_txn(txn, key)
-      .unwrap_or_else(|| self.insert_map_with_txn(txn, key))
-  }
-
-  pub fn get_array_ref(&self, key: &str) -> Option<ArrayRefWrapper> {
-    let txn = self.transact();
-    self.get_array_ref_with_txn(&txn, key)
   }
 
   pub fn get_array_ref_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<ArrayRefWrapper> {
@@ -191,6 +172,22 @@ pub trait MapRefExtension {
 
   fn insert_with_txn<V: Prelim>(&self, txn: &mut TransactionMut, key: &str, value: V) {
     self.map_ref().insert(txn, key, value);
+  }
+
+  fn insert_str_with_txn<T: ToString>(&self, txn: &mut TransactionMut, key: &str, value: T) {
+    self.map_ref().insert(
+      txn,
+      key,
+      lib0Any::String(value.to_string().into_boxed_str()),
+    );
+  }
+
+  fn insert_i64_with_txn(&self, txn: &mut TransactionMut, key: &str, value: i64) {
+    self.map_ref().insert(txn, key, lib0Any::BigInt(value));
+  }
+
+  fn insert_f64_with_txn(&self, txn: &mut TransactionMut, key: &str, value: f64) {
+    self.map_ref().insert(txn, key, lib0Any::Number(value));
   }
 
   fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {

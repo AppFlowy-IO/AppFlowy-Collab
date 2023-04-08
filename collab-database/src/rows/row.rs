@@ -1,5 +1,6 @@
 use crate::database::timestamp;
 use crate::rows::{Cells, CellsUpdate};
+use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
@@ -33,7 +34,7 @@ pub struct RowBuilder<'a, 'b> {
 
 impl<'a, 'b> RowBuilder<'a, 'b> {
   pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefWrapper) -> Self {
-    map_ref.insert_with_txn(txn, ROW_ID, id);
+    map_ref.insert_str_with_txn(txn, ROW_ID, id);
     Self { id, map_ref, txn }
   }
 
@@ -51,12 +52,12 @@ impl<'a, 'b> RowBuilder<'a, 'b> {
 pub struct RowUpdate<'a, 'b, 'c> {
   #[allow(dead_code)]
   id: &'a str,
-  map_ref: &'c MapRefWrapper,
+  map_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRefWrapper) -> Self {
+  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRef) -> Self {
     Self { id, map_ref, txn }
   }
 
@@ -98,6 +99,16 @@ pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(String
     .get_i64_with_txn(txn, CREATED_AT)
     .unwrap_or_default();
   Some((id, crated_at))
+}
+
+pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(RowOrder, i64)> {
+  let map_ref = value.to_ymap()?;
+  let id = map_ref.get_str_with_txn(txn, ROW_ID)?;
+  let height = map_ref.get_i64_with_txn(txn, ROW_HEIGHT).unwrap_or(60);
+  let crated_at = map_ref
+    .get_i64_with_txn(txn, CREATED_AT)
+    .unwrap_or_default();
+  Some((RowOrder::new(id, height as i32), crated_at))
 }
 
 pub fn row_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Row> {

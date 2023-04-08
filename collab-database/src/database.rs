@@ -3,7 +3,9 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::meta::MetaMap;
 use crate::rows::{Row, RowMap};
-use crate::views::{CreateDatabaseParams, CreateViewParams, DatabaseView, RowOrder, ViewMap};
+use crate::views::{
+  CreateDatabaseParams, CreateViewParams, DatabaseView, GroupSettingMap, RowOrder, ViewMap,
+};
 use collab::preclude::{
   Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
@@ -38,7 +40,7 @@ impl Database {
     params: CreateDatabaseParams,
     context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
-    let this = Self::create(database_id, context)?;
+    let this = Self::get_or_create(database_id, context)?;
     let (rows, fields, params) = params.split();
     this.root.with_transact_mut(|txn| {
       this.set_inline_view_with_txn(txn, &params.view_id);
@@ -53,7 +55,7 @@ impl Database {
     Ok(this)
   }
 
-  pub fn create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
+  pub fn get_or_create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
     if database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID);
     }
@@ -64,7 +66,7 @@ impl Database {
         .get_map_with_txn(txn, vec![DATABASE])
         .unwrap_or_else(|| collab.create_map_with_txn(txn, DATABASE));
 
-      database.insert_with_txn(txn, DATABASE_ID, database_id);
+      database.insert_str_with_txn(txn, DATABASE_ID, database_id);
 
       // { DATABASE: { FIELDS: {:} } }
       let fields = collab
@@ -103,13 +105,14 @@ impl Database {
     })
   }
 
-  pub fn get_database_id(&self) -> Option<String> {
+  pub fn get_database_id(&self) -> String {
     let txn = self.root.transact();
-    self.root.get_str_with_txn(&txn, DATABASE_ID)
+    // It's safe to unwrap. Because the database_id must exist
+    self.root.get_str_with_txn(&txn, DATABASE_ID).unwrap()
   }
 
-  pub fn get_database_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
-    self.root.get_str_with_txn(txn, DATABASE_ID)
+  pub fn get_database_id_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
+    self.root.get_str_with_txn(txn, DATABASE_ID).unwrap()
   }
 
   pub fn push_row(&self, row: Row) {
@@ -183,13 +186,44 @@ impl Database {
     })
   }
 
+  pub fn add_group_setting(&self, view_id: &str, group_setting: impl Into<GroupSettingMap>) {
+    self.views.update_view(view_id, |update| {
+      update.update_groups(|group_update| {
+        group_update.push(group_setting.into());
+      });
+    });
+  }
+
+  pub fn update_group_setting(
+    &self,
+    view_id: &str,
+    setting_id: &str,
+    f: impl FnOnce(&mut GroupSettingMap),
+  ) {
+    self.views.update_view(view_id, |view_update| {
+      view_update.update_groups(|group_update| {
+        group_update.update(setting_id, |mut map| {
+          f(&mut map);
+          map
+        });
+      });
+    });
+  }
+
+  pub fn remove_group_setting(&self, view_id: &str, setting_id: &str) {
+    self.views.update_view(view_id, |update| {
+      update.update_groups(|group_update| {
+        group_update.remove(setting_id);
+      });
+    });
+  }
+
   pub fn create_view(&self, params: CreateViewParams) {
     self.root.with_transact_mut(|txn| {
-      let field_orders = self.fields.get_all_field_orders(txn);
+      let field_orders = self.fields.get_all_field_orders_with_txn(txn);
       let row_orders = self.rows.get_all_row_orders_with_txn(txn);
       let timestamp = timestamp();
-      // It's safe to unwrap. Because the database_id must exist
-      let database_id = self.get_database_id_with_txn(txn).unwrap();
+      let database_id = self.get_database_id_with_txn(txn);
       let view = DatabaseView {
         id: params.view_id,
         database_id,
@@ -197,7 +231,7 @@ impl Database {
         layout: params.layout,
         layout_settings: params.layout_settings,
         filters: params.filters,
-        groups: params.groups,
+        group_settings: params.groups,
         sorts: params.sorts,
         row_orders,
         field_orders,
@@ -206,6 +240,11 @@ impl Database {
       };
       self.views.insert_view_with_txn(txn, view);
     })
+  }
+
+  pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
+    let txn = self.root.transact();
+    self.views.get_view_with_txn(&txn, view_id)
   }
 
   pub fn duplicate_view(&self, view_id: &str) -> Option<DatabaseView> {
@@ -232,7 +271,8 @@ impl Database {
 
   pub fn duplicate_data(&self) -> DuplicatedDatabase {
     let inline_view_id = self.get_inline_view_id();
-    let view = self.views.get_view(&inline_view_id).unwrap();
+    let mut view = self.views.get_view(&inline_view_id).unwrap();
+    view.id = gen_database_view_id();
     let rows = self.rows.get_all_rows();
     let fields = self.fields.get_all_fields();
     DuplicatedDatabase { view, rows, fields }
@@ -251,9 +291,10 @@ impl Database {
   fn set_inline_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
     self
       .metas
-      .insert_with_txn(txn, DATABASE_INLINE_VIEW, view_id);
+      .insert_str_with_txn(txn, DATABASE_INLINE_VIEW, view_id);
   }
 
+  /// The inline view is the view that create with the database when initializing
   fn get_inline_view_id(&self) -> String {
     let txn = self.root.transact();
     // It's safe to unwrap because each database inline view id was set

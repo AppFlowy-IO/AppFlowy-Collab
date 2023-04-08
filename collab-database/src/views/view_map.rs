@@ -27,8 +27,8 @@ impl ViewMap {
         .set_database_id(view.database_id)
         .set_layout_settings(view.layout_settings)
         .set_layout_type(view.layout)
-        .set_filter(view.filters)
-        .set_groups(view.groups)
+        .set_filters(view.filters)
+        .set_groups(view.group_settings)
         .set_sorts(view.sorts)
         .set_field_orders(view.field_orders)
         .set_row_orders(view.row_orders);
@@ -60,7 +60,7 @@ impl ViewMap {
 
   pub fn update_view<F>(&self, view_id: &str, f: F)
   where
-    F: Fn(ViewUpdate),
+    F: FnOnce(ViewUpdate),
   {
     self
       .container
@@ -69,7 +69,7 @@ impl ViewMap {
 
   pub fn update_view_with_txn<F>(&self, txn: &mut TransactionMut, view_id: &str, f: F)
   where
-    F: Fn(ViewUpdate),
+    F: FnOnce(ViewUpdate),
   {
     if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
       let update = ViewUpdate::new(view_id, txn, &map_ref);
@@ -98,7 +98,9 @@ impl ViewMap {
   }
 
   pub fn delete_view(&self, view_id: &str) {
-    self.container.remove(view_id);
+    self.container.with_transact_mut(|txn| {
+      self.container.remove(txn, view_id);
+    })
   }
 
   pub fn clear_with_txn(&self, txn: &mut TransactionMut) {
@@ -106,6 +108,6 @@ impl ViewMap {
   }
 
   pub fn delete_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
-    self.container.remove_with_txn(txn, view_id)
+    self.container.remove(txn, view_id);
   }
 }

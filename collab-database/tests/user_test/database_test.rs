@@ -92,17 +92,19 @@ fn duplicate_database_view_test() {
     )
     .unwrap();
 
-  database.create_view(CreateViewParams {
+  test.create_database_view(CreateViewParams {
+    database_id: "d1".to_string(),
     view_id: "v2".to_string(),
     ..Default::default()
   });
 
-  let duplicated_database = test.duplicate_view("d1", "v").unwrap();
+  let duplicated_database = test.duplicate_view("d1", "v2").unwrap();
   duplicated_database.push_row(Row {
     id: "r1".to_string(),
     ..Default::default()
   });
 
+  // Duplicated database should have the same rows as the original database
   assert_eq!(duplicated_database.rows.get_all_rows().len(), 1);
   assert_eq!(database.rows.get_all_rows().len(), 1);
 }
@@ -133,4 +135,28 @@ fn delete_database_inline_view_test() {
   test.delete_view("d1", "v1");
   let views = database.views.get_all_views();
   assert_eq!(views.len(), 0);
+}
+
+#[test]
+fn get_database_by_view_id_test() {
+  let test = user_database_test(1);
+  let _database = test
+    .create_database(
+      "d1",
+      CreateDatabaseParams {
+        database_id: "d1".to_string(),
+        view_id: "v1".to_string(),
+        ..Default::default()
+      },
+    )
+    .unwrap();
+
+  test.create_database_view(CreateViewParams {
+    database_id: "d1".to_string(),
+    view_id: "v2".to_string(),
+    ..Default::default()
+  });
+
+  let database = test.get_database_with_view_id("v2");
+  assert!(database.is_some());
 }

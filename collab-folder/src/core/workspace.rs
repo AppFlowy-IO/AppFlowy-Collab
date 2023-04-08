@@ -1,6 +1,6 @@
 use crate::core::{Belonging, BelongingMap, Belongings};
-use anyhow::Result;
-use collab::preclude::{MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+
+use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 
@@ -33,7 +33,7 @@ impl WorkspaceMap {
 
   pub fn create_with_txn<F>(
     txn: &mut TransactionMut,
-    container: MapRefWrapper,
+    container: &MapRef,
     workspace_id: &str,
     belongings: Rc<BelongingMap>,
     f: F,
@@ -106,7 +106,7 @@ pub struct Workspace {
 
 pub struct WorkspaceBuilder<'a, 'b> {
   workspace_id: &'a str,
-  map_ref: MapRefWrapper,
+  map_ref: &'a MapRef,
   txn: &'a mut TransactionMut<'b>,
   belongings: Rc<BelongingMap>,
 }
@@ -115,10 +115,10 @@ impl<'a, 'b> WorkspaceBuilder<'a, 'b> {
   pub fn new(
     workspace_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
-    map_ref: MapRefWrapper,
+    map_ref: &'a MapRef,
     belongings: Rc<BelongingMap>,
   ) -> Self {
-    map_ref.insert_with_txn(txn, WORKSPACE_ID, workspace_id);
+    map_ref.insert_str_with_txn(txn, WORKSPACE_ID, workspace_id);
     Self {
       workspace_id,
       map_ref,
@@ -134,21 +134,17 @@ impl<'a, 'b> WorkspaceBuilder<'a, 'b> {
     let update = WorkspaceUpdate::new(
       self.workspace_id,
       self.txn,
-      &self.map_ref,
+      self.map_ref,
       self.belongings.clone(),
     );
     f(update);
     self
   }
-
-  pub fn done(self) -> Result<WorkspaceMap> {
-    Ok(WorkspaceMap::new(self.map_ref, self.belongings))
-  }
 }
 
 pub struct WorkspaceUpdate<'a, 'b, 'c> {
   workspace_id: &'a str,
-  map_ref: &'c MapRefWrapper,
+  map_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
   belongings: Rc<BelongingMap>,
 }
@@ -157,7 +153,7 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
   pub fn new(
     workspace_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
-    map_ref: &'c MapRefWrapper,
+    map_ref: &'c MapRef,
     belongings: Rc<BelongingMap>,
   ) -> Self {
     Self {
@@ -171,14 +167,14 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
   pub fn set_name<T: AsRef<str>>(self, name: T) -> Self {
     self
       .map_ref
-      .insert_with_txn(self.txn, WORKSPACE_NAME, name.as_ref());
+      .insert_str_with_txn(self.txn, WORKSPACE_NAME, name.as_ref());
     self
   }
 
   pub fn set_created_at(self, created_at: i64) -> Self {
     self
       .map_ref
-      .insert_with_txn(self.txn, WORKSPACE_CREATED_AT, created_at);
+      .insert_i64_with_txn(self.txn, WORKSPACE_CREATED_AT, created_at);
     self
   }
 

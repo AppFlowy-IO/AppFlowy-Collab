@@ -1,7 +1,7 @@
 use crate::user::relation::{RowRelation, RowRelationBuilder};
 use crate::user::row_relation_from_map_ref;
 use collab::preclude::{
-  DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRefWrapper, ToJson,
+  DeepEventsSubscription, DeepObservable, EntryChange, Event, Map, MapRefWrapper, ToJson,
   TransactionMut, YrsValue,
 };
 use std::ops::Deref;
@@ -64,7 +64,7 @@ impl RowRelationMap {
   }
 
   pub fn remove_relation_with_txn(&self, txn: &mut TransactionMut, relation_id: &str) {
-    self.container.remove_with_txn(txn, relation_id);
+    self.container.remove(txn, relation_id);
   }
 }
 

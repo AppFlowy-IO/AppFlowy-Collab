@@ -1,6 +1,5 @@
 use crate::fields::Field;
 use crate::views::{OrderArray, OrderIdentifiable};
-use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::{lib0Any, Array, ArrayRef, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
@@ -31,9 +30,8 @@ impl FieldOrderArray {
   }
 
   pub fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<FieldOrder>) {
-    let array_ref = ArrayRefExtension(&self.array_ref);
     for row_order in others {
-      array_ref.push_back(txn, row_order);
+      self.array_ref.push_back(txn, row_order);
     }
   }
 

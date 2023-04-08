@@ -1,5 +1,5 @@
 use crate::helper::{user_database_test, UserDatabaseTest};
-use collab::core::lib0_any_ext::Lib0AnyMapExtension;
+use collab::core::any_map::AnyMapExtension;
 use collab_database::rows::{new_cell_builder, Row};
 use collab_database::views::CreateDatabaseParams;
 

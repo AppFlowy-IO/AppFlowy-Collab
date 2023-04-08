@@ -67,12 +67,12 @@ impl<'a, 'b> FieldBuilder<'a, 'b> {
 pub struct FieldUpdate<'a, 'b, 'c> {
   #[allow(dead_code)]
   id: &'a str,
-  map_ref: &'c MapRefWrapper,
+  map_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRefWrapper) -> Self {
+  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRef) -> Self {
     Self { id, map_ref, txn }
   }
 
@@ -80,7 +80,6 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
   impl_bool_update!(set_visibility, set_visibility_if_not_none, FIELD_VISIBILITY);
   impl_bool_update!(set_primary, set_primary_if_not_none, FIELD_PRIMARY);
   impl_i64_update!(set_width, set_width_at_if_not_none, FIELD_WIDTH);
-  impl_i64_update!(set_field_type, set_field_type_if_not_none, FIELD_TYPE);
 
   pub fn set_type_options(self, type_options: TypeOptions) -> Self {
     let map_ref = self
@@ -90,12 +89,35 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
     self
   }
 
+  /// Update type options
   pub fn update_type_options(self, f: impl FnOnce(TypeOptionsUpdate)) -> Self {
+    if let Some(map_ref) = self.map_ref.get_map_with_txn(self.txn, FIELD_TYPE_OPTION) {
+      let update = TypeOptionsUpdate::new(self.txn, &map_ref);
+      f(update);
+    }
+    self
+  }
+
+  /// Set field type
+  pub fn set_field_type(self, field_type: i64) -> Self {
+    self
+      .map_ref
+      .insert_i64_with_txn(self.txn, FIELD_TYPE, field_type);
+    self
+  }
+
+  /// Set type option data for a field type
+  /// If type option data is None, the type option data will be removed if it exists.
+  /// If type option data is Some, the type option data will be updated or inserted.
+  pub fn set_type_option(self, field_type: i64, type_option_data: Option<TypeOptionData>) -> Self {
     let map_ref = self
       .map_ref
       .get_or_insert_map_with_txn(self.txn, FIELD_TYPE_OPTION);
-    let update = TypeOptionsUpdate::new(self.txn, &map_ref);
-    f(update);
+
+    if let Some(type_option_data) = type_option_data {
+      let update = TypeOptionsUpdate::new(self.txn, &map_ref);
+      update.insert(&field_type.to_string(), type_option_data);
+    }
     self
   }
 

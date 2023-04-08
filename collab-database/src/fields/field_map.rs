@@ -57,7 +57,12 @@ impl FieldMap {
       .collect::<Vec<_>>()
   }
 
-  pub fn get_all_field_orders<T: ReadTxn>(&self, txn: &T) -> Vec<FieldOrder> {
+  pub fn get_all_field_orders(&self) -> Vec<FieldOrder> {
+    let txn = self.container.transact();
+    self.get_all_field_orders_with_txn(&txn)
+  }
+
+  pub fn get_all_field_orders_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<FieldOrder> {
     self
       .container
       .iter(txn)

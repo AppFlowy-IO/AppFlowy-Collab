@@ -37,8 +37,8 @@ impl<'a, 'b> RowRelationBuilder<'a, 'b> {
     txn: &'a mut TransactionMut<'b>,
     map_ref: MapRefWrapper,
   ) -> Self {
-    map_ref.insert_with_txn(txn, LINKING_DB_ID, linking_database_id);
-    map_ref.insert_with_txn(txn, LINKED_BY_DB_ID, linked_by_database_id);
+    map_ref.insert_str_with_txn(txn, LINKING_DB_ID, linking_database_id);
+    map_ref.insert_str_with_txn(txn, LINKED_BY_DB_ID, linked_by_database_id);
     Self { map_ref, txn }
   }
 
@@ -122,7 +122,7 @@ pub struct RowConnectionBuilder<'a, 'b> {
 
 impl<'a, 'b> RowConnectionBuilder<'a, 'b> {
   pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRef) -> Self {
-    map_ref.insert_with_txn(txn, ROW_ID, id);
+    map_ref.insert_str_with_txn(txn, ROW_ID, id);
     Self { map_ref, txn }
   }
 
@@ -151,7 +151,6 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
     let array_ref = self
       .map_ref
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, LINKING_ROWS);
-    let array_ref = ArrayRefExtension(&array_ref);
     for row in rows {
       let map_ref = array_ref.insert_map_with_txn(self.txn);
       row.fill_map_with_txn(self.txn, map_ref);
@@ -164,7 +163,6 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
       .map_ref
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, LINKED_BY_ROWS);
 
-    let array_ref = ArrayRefExtension(&array_ref);
     for row in rows {
       let map_ref = array_ref.insert_map_with_txn(self.txn);
       row.fill_map_with_txn(self.txn, map_ref);
@@ -211,8 +209,8 @@ impl LinkingRow {
   }
 
   pub fn fill_map_with_txn(self, txn: &mut TransactionMut, map_ref: MapRef) {
-    map_ref.insert_with_txn(txn, "row_id", self.row_id);
-    map_ref.insert_with_txn(txn, "content", self.content);
+    map_ref.insert_str_with_txn(txn, "row_id", self.row_id);
+    map_ref.insert_str_with_txn(txn, "content", self.content);
   }
 }
 
@@ -229,6 +227,6 @@ impl LinkedByRow {
   }
 
   pub fn fill_map_with_txn(self, txn: &mut TransactionMut, map_ref: MapRef) {
-    map_ref.insert_with_txn(txn, "row_id", self.row_id);
+    map_ref.insert_str_with_txn(txn, "row_id", self.row_id);
   }
 }
