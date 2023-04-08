@@ -7,7 +7,7 @@ fn insert_relation_data_test() {
   let test = user_database_test(1);
   let relations = test.relations();
   relations.with_transact_mut(|txn| {
-    relations.insert_with_txn(txn, "version", "1.0");
+    relations.insert_str_with_txn(txn, "version", "1.0");
   });
 
   let txn = relations.transact();
@@ -19,7 +19,7 @@ fn restore_relation_data_test() {
   let test = user_database_test(1);
   let relations = test.relations();
   relations.with_transact_mut(|txn| {
-    relations.insert_with_txn(txn, "version", "1.0");
+    relations.insert_str_with_txn(txn, "version", "1.0");
   });
 
   let relations = test.relations();
@@ -29,7 +29,7 @@ fn restore_relation_data_test() {
   }
 
   relations.with_transact_mut(|txn| {
-    relations.insert_with_txn(txn, "version", "2.0");
+    relations.insert_str_with_txn(txn, "version", "2.0");
   });
 }
 

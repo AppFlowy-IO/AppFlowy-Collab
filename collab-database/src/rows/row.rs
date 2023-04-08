@@ -34,7 +34,7 @@ pub struct RowBuilder<'a, 'b> {
 
 impl<'a, 'b> RowBuilder<'a, 'b> {
   pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefWrapper) -> Self {
-    map_ref.insert_with_txn(txn, ROW_ID, id);
+    map_ref.insert_str_with_txn(txn, ROW_ID, id);
     Self { id, map_ref, txn }
   }
 
@@ -104,7 +104,7 @@ pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(String
 pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(RowOrder, i64)> {
   let map_ref = value.to_ymap()?;
   let id = map_ref.get_str_with_txn(txn, ROW_ID)?;
-  let height = map_ref.get_i64_with_txn(txn, ROW_HEIGHT)?;
+  let height = map_ref.get_i64_with_txn(txn, ROW_HEIGHT).unwrap_or(60);
   let crated_at = map_ref
     .get_i64_with_txn(txn, CREATED_AT)
     .unwrap_or_default();

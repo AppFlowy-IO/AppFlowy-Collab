@@ -119,7 +119,7 @@ pub struct ViewBuilder<'a, 'b> {
 
 impl<'a, 'b> ViewBuilder<'a, 'b> {
   pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefWrapper) -> Self {
-    map_ref.insert_with_txn(txn, VIEW_ID, id);
+    map_ref.insert_str_with_txn(txn, VIEW_ID, id);
     Self { id, map_ref, txn }
   }
 

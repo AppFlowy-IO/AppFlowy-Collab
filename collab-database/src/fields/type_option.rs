@@ -4,6 +4,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
+pub struct FieldTypeOptionKey(i64);
+
+impl ToString for FieldTypeOptionKey {
+  fn to_string(&self) -> String {
+    self.0.to_string()
+  }
+}
+
 /// It's used to store lists of field's type option data
 /// The key is the [FieldType] string representation
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -60,7 +68,8 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
     Self { map_ref, txn }
   }
 
-  pub fn insert(self, key: &str, value: TypeOptionData) -> Self {
+  pub fn insert<T: Into<TypeOptionData>>(self, key: &str, value: T) -> Self {
+    let value = value.into();
     let type_option_map = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
     value.fill_map_ref(self.txn, &type_option_map);
     self
@@ -68,7 +77,8 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
 
   /// Override the existing cell's key/value contained in the [TypeOptionData]
   /// It will create the type option if it's not exist
-  pub fn update(self, key: &str, value: TypeOptionData) -> Self {
+  pub fn update<T: Into<TypeOptionData>>(self, key: &str, value: T) -> Self {
+    let value = value.into();
     let type_option_map = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
     value.fill_map_ref(self.txn, &type_option_map);
     self

@@ -118,7 +118,7 @@ impl<'a, 'b> WorkspaceBuilder<'a, 'b> {
     map_ref: &'a MapRef,
     belongings: Rc<BelongingMap>,
   ) -> Self {
-    map_ref.insert_with_txn(txn, WORKSPACE_ID, workspace_id);
+    map_ref.insert_str_with_txn(txn, WORKSPACE_ID, workspace_id);
     Self {
       workspace_id,
       map_ref,
@@ -167,14 +167,14 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
   pub fn set_name<T: AsRef<str>>(self, name: T) -> Self {
     self
       .map_ref
-      .insert_with_txn(self.txn, WORKSPACE_NAME, name.as_ref());
+      .insert_str_with_txn(self.txn, WORKSPACE_NAME, name.as_ref());
     self
   }
 
   pub fn set_created_at(self, created_at: i64) -> Self {
     self
       .map_ref
-      .insert_with_txn(self.txn, WORKSPACE_CREATED_AT, created_at);
+      .insert_i64_with_txn(self.txn, WORKSPACE_CREATED_AT, created_at);
     self
   }
 

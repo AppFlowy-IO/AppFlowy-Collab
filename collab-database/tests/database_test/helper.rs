@@ -4,7 +4,7 @@ use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use collab::preclude::CollabBuilder;
 use collab_database::database::{Database, DatabaseContext};
-use collab_database::fields::Field;
+use collab_database::fields::{Field, TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::{CellsBuilder, Row};
 use collab_database::views::{
   CreateViewParams, DatabaseLayout, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder,
@@ -334,6 +334,138 @@ impl TryFrom<i64> for SortCondition {
       0 => Ok(SortCondition::Ascending),
       1 => Ok(SortCondition::Descending),
       _ => bail!("Unknown field type {}", value),
+    }
+  }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TestCheckboxTypeOption {
+  pub is_selected: bool,
+}
+
+impl From<TypeOptionData> for TestCheckboxTypeOption {
+  fn from(data: TypeOptionData) -> Self {
+    let is_selected = data.get_bool_value("is_selected").unwrap_or(false);
+    TestCheckboxTypeOption { is_selected }
+  }
+}
+
+impl From<TestCheckboxTypeOption> for TypeOptionData {
+  fn from(data: TestCheckboxTypeOption) -> Self {
+    TypeOptionDataBuilder::new()
+      .insert_bool_value("is_selected", data.is_selected)
+      .build()
+  }
+}
+
+#[derive(Clone, Debug)]
+pub struct TestDateTypeOption {
+  pub date_format: TestDateFormat,
+  pub time_format: TestTimeFormat,
+  pub include_time: bool,
+}
+
+impl From<TypeOptionData> for TestDateTypeOption {
+  fn from(data: TypeOptionData) -> Self {
+    let include_time = data.get_bool_value("include_time").unwrap_or(false);
+    let date_format = data
+      .get_i64_value("data_format")
+      .map(TestDateFormat::from)
+      .unwrap();
+    let time_format = data
+      .get_i64_value("time_format")
+      .map(TestTimeFormat::from)
+      .unwrap();
+    Self {
+      date_format,
+      time_format,
+      include_time,
+    }
+  }
+}
+
+impl From<TestDateTypeOption> for TypeOptionData {
+  fn from(data: TestDateTypeOption) -> Self {
+    TypeOptionDataBuilder::new()
+      .insert_i64_value("data_format", data.date_format.value())
+      .insert_i64_value("time_format", data.time_format.value())
+      .insert_bool_value("include_time", data.include_time)
+      .build()
+  }
+}
+
+#[derive(Clone, Debug, Copy, Eq, PartialEq)]
+pub enum TestDateFormat {
+  Local = 0,
+  US = 1,
+  ISO = 2,
+  Friendly = 3,
+}
+impl std::default::Default for TestDateFormat {
+  fn default() -> Self {
+    TestDateFormat::Friendly
+  }
+}
+
+impl std::convert::From<i64> for TestDateFormat {
+  fn from(value: i64) -> Self {
+    match value {
+      0 => TestDateFormat::Local,
+      1 => TestDateFormat::US,
+      2 => TestDateFormat::ISO,
+      3 => TestDateFormat::Friendly,
+      _ => {
+        tracing::error!("Unsupported date format, fallback to friendly");
+        TestDateFormat::Friendly
+      },
+    }
+  }
+}
+
+impl TestDateFormat {
+  pub fn value(&self) -> i64 {
+    *self as i64
+  }
+  // https://docs.rs/chrono/0.4.19/chrono/format/strftime/index.html
+  pub fn format_str(&self) -> &'static str {
+    match self {
+      TestDateFormat::Local => "%m/%d/%Y",
+      TestDateFormat::US => "%Y/%m/%d",
+      TestDateFormat::ISO => "%Y-%m-%d",
+      TestDateFormat::Friendly => "%b %d,%Y",
+    }
+  }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum TestTimeFormat {
+  TwelveHour = 0,
+  TwentyFourHour = 1,
+}
+
+impl std::convert::From<i64> for TestTimeFormat {
+  fn from(value: i64) -> Self {
+    match value {
+      0 => TestTimeFormat::TwelveHour,
+      1 => TestTimeFormat::TwentyFourHour,
+      _ => {
+        tracing::error!("Unsupported time format, fallback to TwentyFourHour");
+        TestTimeFormat::TwentyFourHour
+      },
+    }
+  }
+}
+
+impl TestTimeFormat {
+  pub fn value(&self) -> i64 {
+    *self as i64
+  }
+
+  // https://docs.rs/chrono/0.4.19/chrono/format/strftime/index.html
+  pub fn format_str(&self) -> &'static str {
+    match self {
+      TestTimeFormat::TwelveHour => "%I:%M %p",
+      TestTimeFormat::TwentyFourHour => "%R",
     }
   }
 }

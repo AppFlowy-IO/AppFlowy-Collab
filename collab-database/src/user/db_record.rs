@@ -115,10 +115,9 @@ const DATABASE_RECORD_VIEWS: &str = "views";
 
 impl DatabaseRecord {
   fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
-    map_ref.insert_with_txn(txn, DATABASE_RECORD_ID, self.database_id);
-    map_ref.insert_with_txn(txn, DATABASE_RECORD_NAME, self.name);
-    map_ref.insert_with_txn(txn, DATABASE_RECORD_CREATED_AT, self.created_at);
-
+    map_ref.insert_str_with_txn(txn, DATABASE_RECORD_ID, self.database_id);
+    map_ref.insert_str_with_txn(txn, DATABASE_RECORD_NAME, self.name);
+    map_ref.insert_str_with_txn(txn, DATABASE_RECORD_CREATED_AT, self.created_at);
     let views = self.views.into_iter().collect::<Vec<String>>();
     map_ref.insert_array_with_txn(txn, DATABASE_RECORD_VIEWS, views);
   }

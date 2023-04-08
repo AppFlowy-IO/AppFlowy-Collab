@@ -111,12 +111,12 @@ impl Folder {
       tracing::debug!("Set current workspace: {}", data.current_workspace);
       self
         .meta
-        .insert_with_txn(txn, CURRENT_WORKSPACE, data.current_workspace);
+        .insert_str_with_txn(txn, CURRENT_WORKSPACE, data.current_workspace);
 
       tracing::debug!("Set current view: {}", data.current_view);
       self
         .meta
-        .insert_with_txn(txn, CURRENT_VIEW, data.current_view);
+        .insert_str_with_txn(txn, CURRENT_VIEW, data.current_view);
     })
   }
 

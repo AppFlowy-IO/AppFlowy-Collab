@@ -174,6 +174,22 @@ pub trait MapRefExtension {
     self.map_ref().insert(txn, key, value);
   }
 
+  fn insert_str_with_txn<T: ToString>(&self, txn: &mut TransactionMut, key: &str, value: T) {
+    self.map_ref().insert(
+      txn,
+      key,
+      lib0Any::String(value.to_string().into_boxed_str()),
+    );
+  }
+
+  fn insert_i64_with_txn(&self, txn: &mut TransactionMut, key: &str, value: i64) {
+    self.map_ref().insert(txn, key, lib0Any::BigInt(value));
+  }
+
+  fn insert_f64_with_txn(&self, txn: &mut TransactionMut, key: &str, value: f64) {
+    self.map_ref().insert(txn, key, lib0Any::Number(value));
+  }
+
   fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
     let map = MapPrelim::<lib0::any::Any>::new();
     self.map_ref().insert(txn, key, map)

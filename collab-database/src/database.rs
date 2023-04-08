@@ -66,7 +66,7 @@ impl Database {
         .get_map_with_txn(txn, vec![DATABASE])
         .unwrap_or_else(|| collab.create_map_with_txn(txn, DATABASE));
 
-      database.insert_with_txn(txn, DATABASE_ID, database_id);
+      database.insert_str_with_txn(txn, DATABASE_ID, database_id);
 
       // { DATABASE: { FIELDS: {:} } }
       let fields = collab
@@ -291,7 +291,7 @@ impl Database {
   fn set_inline_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
     self
       .metas
-      .insert_with_txn(txn, DATABASE_INLINE_VIEW, view_id);
+      .insert_str_with_txn(txn, DATABASE_INLINE_VIEW, view_id);
   }
 
   /// The inline view is the view that create with the database when initializing
