@@ -1,6 +1,6 @@
 use crate::helper::{create_database, create_database_with_default_data};
 use collab_database::database::gen_row_id;
-use collab_database::rows::Row;
+use collab_database::rows::{BlockId, Row};
 use collab_database::views::CreateViewParams;
 
 #[test]
@@ -46,19 +46,14 @@ fn delete_row_shared_by_two_view_test() {
   database_test.create_view(params);
 
   let row_id = gen_row_id();
-  database_test.push_row(Row {
-    id: row_id,
-    ..Default::default()
-  });
-
-  database_test.remove_row(&row_id);
+  let block_id = BlockId::from(0);
+  database_test.push_row(Row::new(row_id, block_id));
+  database_test.remove_row(row_id, block_id);
 
   let view_1 = database_test.views.get_view("v1").unwrap();
   let view_2 = database_test.views.get_view("v2").unwrap();
-  let rows = database_test.rows.get_all_rows();
   assert!(view_1.row_orders.is_empty());
   assert!(view_2.row_orders.is_empty());
-  assert!(rows.is_empty())
 }
 
 #[test]

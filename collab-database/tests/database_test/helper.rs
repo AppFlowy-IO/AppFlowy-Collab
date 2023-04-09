@@ -3,12 +3,13 @@ use collab::core::any_map::AnyMapExtension;
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use collab::preclude::CollabBuilder;
+use collab_database::block::Blocks;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::{Field, TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::{CellsBuilder, Row};
 use collab_database::views::{
-  CreateViewParams, DatabaseLayout, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder,
-  GroupSettingBuilder, GroupSettingMap, SortMap, SortMapBuilder,
+  CreateDatabaseParams, CreateViewParams, DatabaseLayout, FilterMap, FilterMapBuilder, GroupMap,
+  GroupMapBuilder, GroupSettingBuilder, GroupSettingMap, SortMap, SortMapBuilder,
 };
 use collab_persistence::CollabKV;
 use std::ops::{Deref, DerefMut};
@@ -42,10 +43,19 @@ impl DerefMut for DatabaseTest {
 }
 
 pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
+  let tempdir = TempDir::new().unwrap();
+  let path = tempdir.into_path();
+  let db = Arc::new(CollabKV::open(path).unwrap());
   let collab = CollabBuilder::new(uid, database_id).build();
   collab.initial();
-  let context = DatabaseContext { collab };
-  let database = Database::get_or_create(database_id, context).unwrap();
+  let blocks = Blocks::new(uid, db.clone());
+  let context = DatabaseContext { collab, blocks };
+  let params = CreateDatabaseParams {
+    database_id: database_id.to_string(),
+    view_id: "v1".to_string(),
+    ..Default::default()
+  };
+  let database = Database::create_with_view(database_id, params, context).unwrap();
   DatabaseTest {
     database,
     cleaner: None,
@@ -64,8 +74,14 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabKV>, D
     .with_plugin(snapshot_plugin)
     .build();
   collab.initial();
-  let context = DatabaseContext { collab };
-  let database = Database::get_or_create(database_id, context).unwrap();
+  let blocks = Blocks::new(uid, db.clone());
+  let context = DatabaseContext { collab, blocks };
+  let params = CreateDatabaseParams {
+    view_id: "v1".to_string(),
+    name: "my first grid".to_string(),
+    ..Default::default()
+  };
+  let database = Database::create_with_view(database_id, params, context).unwrap();
   (
     db,
     DatabaseTest {
@@ -75,15 +91,16 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabKV>, D
   )
 }
 
-pub fn create_database_from_db(uid: i64, database_id: &str, db: Arc<CollabKV>) -> DatabaseTest {
+pub fn restore_database_from_db(uid: i64, database_id: &str, db: Arc<CollabKV>) -> DatabaseTest {
   let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
+  let blocks = Blocks::new(uid, db.clone());
   let snapshot_plugin = CollabSnapshotPlugin::new(uid, db, 5).unwrap();
   let collab = CollabBuilder::new(uid, database_id)
     .with_plugin(disk_plugin)
     .with_plugin(snapshot_plugin)
     .build();
   collab.initial();
-  let context = DatabaseContext { collab };
+  let context = DatabaseContext { collab, blocks };
   let database = Database::get_or_create(database_id, context).unwrap();
   DatabaseTest {
     database,
@@ -133,15 +150,8 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   database_test
 }
 
-pub fn create_database_grid_view(uid: i64, database_id: &str, view_id: &str) -> DatabaseTest {
+pub fn create_database_grid_view(uid: i64, database_id: &str) -> DatabaseTest {
   let database_test = create_database_with_default_data(uid, database_id);
-  let params = CreateViewParams {
-    view_id: view_id.to_string(),
-    name: "my first grid".to_string(),
-    layout: DatabaseLayout::Grid,
-    ..Default::default()
-  };
-  database_test.create_view(params);
   database_test
 }
 

@@ -75,8 +75,8 @@ fn duplicate_database_inline_view_test() {
     ..Default::default()
   });
 
-  assert_eq!(duplicated_database.rows.get_all_rows().len(), 1);
-  assert!(database.rows.get_all_rows().is_empty());
+  assert_eq!(duplicated_database.get_rows_for_view("v1").len(), 1);
+  assert!(database.get_rows_for_view("v1").is_empty());
 }
 
 #[test]
@@ -105,8 +105,8 @@ fn duplicate_database_view_test() {
   });
 
   // Duplicated database should have the same rows as the original database
-  assert_eq!(duplicated_database.rows.get_all_rows().len(), 1);
-  assert_eq!(database.rows.get_all_rows().len(), 1);
+  assert_eq!(duplicated_database.get_rows_for_view("v2").len(), 1);
+  assert_eq!(database.get_rows_for_view("v1").len(), 1);
 }
 
 #[test]

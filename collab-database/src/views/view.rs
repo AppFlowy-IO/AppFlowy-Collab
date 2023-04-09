@@ -1,3 +1,4 @@
+use crate::block::CreateRowParams;
 use crate::fields::Field;
 use crate::rows::Row;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
@@ -52,20 +53,19 @@ pub struct CreateDatabaseParams {
   pub filters: Vec<FilterMap>,
   pub groups: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
-  pub rows: Vec<Row>,
+  pub created_rows: Vec<CreateRowParams>,
   pub fields: Vec<Field>,
 }
 
 impl CreateDatabaseParams {
-  pub fn from_view(view: DatabaseView, rows: Vec<Row>, fields: Vec<Field>) -> Self {
+  pub fn from_view(view: DatabaseView, fields: Vec<Field>) -> Self {
     let mut params: Self = view.into();
-    params.rows = rows;
     params.fields = fields;
     params
   }
-  pub fn split(self) -> (Vec<Row>, Vec<Field>, CreateViewParams) {
+  pub fn split(self) -> (Vec<CreateRowParams>, Vec<Field>, CreateViewParams) {
     (
-      self.rows,
+      self.created_rows,
       self.fields,
       CreateViewParams {
         database_id: self.database_id,
@@ -92,7 +92,7 @@ impl From<DatabaseView> for CreateDatabaseParams {
       filters: view.filters,
       groups: view.group_settings,
       sorts: view.sorts,
-      rows: vec![],
+      created_rows: vec![],
       fields: vec![],
     }
   }
@@ -106,7 +106,7 @@ const VIEW_LAYOUT_SETTINGS: &str = "layout_settings";
 const VIEW_FILTERS: &str = "filters";
 const VIEW_GROUPS: &str = "groups";
 const VIEW_SORTS: &str = "sorts";
-const ROW_ORDERS: &str = "row_orders";
+pub const ROW_ORDERS: &str = "row_orders";
 const FIELD_ORDERS: &str = "field_orders";
 const VIEW_CREATE_AT: &str = "created_at";
 const VIEW_MODIFY_AT: &str = "modified_at";

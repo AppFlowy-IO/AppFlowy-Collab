@@ -1,9 +1,10 @@
+use crate::block::Blocks;
 use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::id_gen::ID_GEN;
 use crate::meta::MetaMap;
-use crate::rows::{Row, RowId, RowMap};
+use crate::rows::{BlockId, Row, RowId, RowMap, RowUpdate};
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, DatabaseView, GroupSettingMap, RowOrder, ViewMap,
 };
@@ -17,10 +18,10 @@ pub struct Database {
   #[allow(dead_code)]
   inner: Collab,
   pub(crate) root: MapRefWrapper,
-  pub rows: Rc<RowMap>,
   pub views: Rc<ViewMap>,
   pub fields: Rc<FieldMap>,
   pub metas: Rc<MetaMap>,
+  pub blocks: Blocks,
 }
 
 const DATABASE_ID: &str = "id";
@@ -33,6 +34,7 @@ const DATABASE_INLINE_VIEW: &str = "iid";
 
 pub struct DatabaseContext {
   pub collab: Collab,
+  pub blocks: Blocks,
 }
 
 impl Database {
@@ -45,14 +47,15 @@ impl Database {
     let (rows, fields, params) = params.split();
     this.root.with_transact_mut(|txn| {
       this.set_inline_view_with_txn(txn, &params.view_id);
+      let row_orders = rows.iter().map(RowOrder::from).collect();
       for row in rows {
-        this.rows.insert_row_with_txn(txn, row);
+        this.blocks.create_row_with_txn(txn, row);
       }
       for field in fields {
         this.fields.insert_field_with_txn(txn, field);
       }
+      this.create_inline_view_with_txn(txn, params, row_orders);
     });
-    this.create_view(params);
     Ok(this)
   }
 
@@ -99,7 +102,7 @@ impl Database {
     Ok(Self {
       inner: collab,
       root: database,
-      rows: Rc::new(rows),
+      blocks: context.blocks,
       views: Rc::new(views),
       fields: Rc::new(fields),
       metas: Rc::new(metas),
@@ -121,7 +124,8 @@ impl Database {
       self.views.update_all_views_with_txn(txn, |update| {
         update.add_row_order(&row);
       });
-      self.rows.insert_row_with_txn(txn, row);
+
+      self.blocks.insert_row_with_txn(txn, row);
     })
   }
 
@@ -141,17 +145,21 @@ impl Database {
       let prev_row_id = prev_row_id.map(|value| value.to_string());
       update.insert_row_order(&row, prev_row_id);
     });
-    self.rows.insert_row_with_txn(txn, row);
+    self.blocks.insert_row_with_txn(txn, row);
+  }
+
+  pub fn get_row<R, B>(&self, row_id: R, block_id: B) -> Option<Row>
+  where
+    R: Into<RowId>,
+    B: Into<BlockId>,
+  {
+    let block = self.blocks.get_block(block_id)?;
+    block.get_row(row_id)
   }
 
   pub fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
     let txn = self.root.transact();
-    let row_orders = self
-      .views
-      .get_view_with_txn(&txn, view_id)
-      .map(|view| view.row_orders)
-      .unwrap_or_default();
-
+    let row_orders = self.views.get_view_row_orders(&txn, view_id);
     self.get_rows_in_order_with_txn(&txn, &row_orders)
   }
 
@@ -160,20 +168,27 @@ impl Database {
     txn: &T,
     row_orders: &[RowOrder],
   ) -> Vec<Row> {
-    row_orders
-      .iter()
-      .flat_map(|row_order| self.rows.get_row_with_txn(txn, row_order.id))
-      .collect::<Vec<Row>>()
+    self.blocks.get_rows_from_row_orders(txn, row_orders)
   }
 
-  pub fn remove_row(&self, row_id: &RowId) {
-    let row_id = row_id.to_string();
+  pub fn remove_row(&self, row_id: RowId, block_id: BlockId) {
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |update| {
-        update.remove_row_order(&row_id);
+        update.remove_row_order(&row_id.to_string());
       });
-      self.rows.delete_row_with_txn(txn, &row_id);
+      self.blocks.remove_row_with_txn(txn, row_id, block_id);
     })
+  }
+
+  pub fn update_row<R, B, F>(&self, row_id: R, block_id: B, f: F)
+  where
+    F: FnOnce(RowUpdate),
+    R: Into<RowId>,
+    B: Into<BlockId>,
+  {
+    if let Some(block) = self.blocks.get_block(block_id) {
+      block.rows.update_row(row_id, f);
+    }
   }
 
   pub fn insert_field(&self, field: Field) {
@@ -228,26 +243,36 @@ impl Database {
 
   pub fn create_view(&self, params: CreateViewParams) {
     self.root.with_transact_mut(|txn| {
-      let field_orders = self.fields.get_all_field_orders_with_txn(txn);
-      let row_orders = self.rows.get_all_row_orders_with_txn(txn);
-      let timestamp = timestamp();
-      let database_id = self.get_database_id_with_txn(txn);
-      let view = DatabaseView {
-        id: params.view_id,
-        database_id,
-        name: params.name,
-        layout: params.layout,
-        layout_settings: params.layout_settings,
-        filters: params.filters,
-        group_settings: params.groups,
-        sorts: params.sorts,
-        row_orders,
-        field_orders,
-        created_at: timestamp,
-        modified_at: timestamp,
-      };
-      self.views.insert_view_with_txn(txn, view);
+      let inline_view_id = self.get_inline_view_id_with_txn(txn);
+      let row_orders = self.views.get_view_row_orders(txn, &inline_view_id);
+      self.create_inline_view_with_txn(txn, params, row_orders);
     })
+  }
+
+  pub fn create_inline_view_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    params: CreateViewParams,
+    row_orders: Vec<RowOrder>,
+  ) {
+    let field_orders = self.fields.get_all_field_orders_with_txn(txn);
+    let timestamp = timestamp();
+    let database_id = self.get_database_id_with_txn(txn);
+    let view = DatabaseView {
+      id: params.view_id,
+      database_id,
+      name: params.name,
+      layout: params.layout,
+      layout_settings: params.layout_settings,
+      filters: params.filters,
+      group_settings: params.groups,
+      sorts: params.sorts,
+      row_orders,
+      field_orders,
+      created_at: timestamp,
+      modified_at: timestamp,
+    };
+    self.views.insert_view_with_txn(txn, view);
   }
 
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
@@ -267,9 +292,9 @@ impl Database {
     Some(duplicated_view)
   }
 
-  pub fn duplicate_row(&self, row_id: RowId) {
+  pub fn duplicate_row(&self, row_id: RowId, block_id: BlockId) {
     self.root.with_transact_mut(|txn| {
-      if let Some(mut row) = self.rows.get_row_with_txn(txn, row_id) {
+      if let Some(mut row) = self.blocks.get_row_with_txn(txn, row_id, block_id) {
         row.id = gen_row_id();
         self.insert_row_with_txn(txn, row, Some(row_id));
       }
@@ -281,9 +306,8 @@ impl Database {
     let inline_view_id = self.get_inline_view_id();
     let mut view = self.views.get_view(&inline_view_id).unwrap();
     view.id = gen_database_view_id();
-    let rows = self.rows.get_all_rows();
     let fields = self.fields.get_all_fields();
-    DuplicatedDatabase { view, rows, fields }
+    DuplicatedDatabase { view, fields }
   }
 
   pub fn to_json_value(&self) -> JsonValue {
@@ -310,6 +334,15 @@ impl Database {
     self
       .metas
       .get_str_with_txn(&txn, DATABASE_INLINE_VIEW)
+      .unwrap()
+  }
+
+  fn get_inline_view_id_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
+    // It's safe to unwrap because each database inline view id was set
+    // when initializing the database
+    self
+      .metas
+      .get_str_with_txn(txn, DATABASE_INLINE_VIEW)
       .unwrap()
   }
 
@@ -365,6 +398,5 @@ pub fn timestamp() -> i64 {
 
 pub struct DuplicatedDatabase {
   pub view: DatabaseView,
-  pub rows: Vec<Row>,
   pub fields: Vec<Field>,
 }

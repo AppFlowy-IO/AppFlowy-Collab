@@ -67,7 +67,7 @@ fn create_same_database_view_twice_test() {
 
 #[test]
 fn create_database_row_test() {
-  let database_test = create_database_grid_view(1, "1", "v1");
+  let database_test = create_database_grid_view(1, "1");
 
   let row_id = gen_row_id();
   database_test.push_row(Row {
@@ -81,7 +81,7 @@ fn create_database_row_test() {
 
 #[test]
 fn create_database_field_test() {
-  let database_test = create_database_grid_view(1, "1", "v1");
+  let database_test = create_database_grid_view(1, "1");
 
   let field_id = nanoid!(4);
   database_test.insert_field(Field {

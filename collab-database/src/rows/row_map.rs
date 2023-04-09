@@ -11,6 +11,7 @@ const ROW_META: &str = "row_meta";
 const ROW_DOC: &str = "row_doc";
 const ROW_COMMENT: &str = "row_comment";
 
+#[derive(Clone)]
 pub struct RowMap {
   container: MapRefWrapper,
   meta: MapRef,
