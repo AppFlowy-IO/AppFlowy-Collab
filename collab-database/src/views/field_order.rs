@@ -77,8 +77,8 @@ pub struct FieldOrder {
 }
 
 impl OrderIdentifiable for FieldOrder {
-  fn identify_id(&self) -> &str {
-    &self.id
+  fn identify_id(&self) -> String {
+    self.id.clone()
   }
 }
 

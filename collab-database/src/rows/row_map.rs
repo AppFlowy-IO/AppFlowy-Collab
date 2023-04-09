@@ -1,5 +1,6 @@
 use crate::rows::{
-  row_from_map_ref, row_from_value, row_order_from_value, Row, RowBuilder, RowComment, RowUpdate,
+  row_from_map_ref, row_from_value, row_order_from_value, Row, RowBuilder, RowComment, RowId,
+  RowUpdate,
 };
 use crate::views::RowOrder;
 use collab::preclude::{
@@ -30,8 +31,9 @@ impl RowMap {
   }
 
   pub fn insert_row_with_txn(&self, txn: &mut TransactionMut, row: Row) {
-    let map_ref = self.container.insert_map_with_txn(txn, &row.id);
-    RowBuilder::new(&row.id, txn, map_ref)
+    let row_id = row.id.to_string();
+    let map_ref = self.container.insert_map_with_txn(txn, &row_id);
+    RowBuilder::new(row.id, row.block_id, txn, map_ref)
       .update(|update| {
         update
           .set_height(row.height)
@@ -42,13 +44,14 @@ impl RowMap {
       .done();
   }
 
-  pub fn get_row(&self, row_id: &str) -> Option<Row> {
+  pub fn get_row<R: Into<RowId>>(&self, row_id: R) -> Option<Row> {
     let txn = self.container.transact();
     self.get_row_with_txn(&txn, row_id)
   }
 
-  pub fn get_row_with_txn<T: ReadTxn>(&self, txn: &T, row_id: &str) -> Option<Row> {
-    let map_ref = self.container.get_map_with_txn(txn, row_id)?;
+  pub fn get_row_with_txn<T: ReadTxn, R: Into<RowId>>(&self, txn: &T, row_id: R) -> Option<Row> {
+    let row_id = row_id.into().to_string();
+    let map_ref = self.container.get_map_with_txn(txn, &row_id)?;
     row_from_map_ref(&map_ref.into_inner(), txn)
   }
 
@@ -84,13 +87,14 @@ impl RowMap {
     self.container.delete_with_txn(txn, row_id)
   }
 
-  pub fn update_row<F>(&self, row_id: &str, f: F)
+  pub fn update_row<F, R: Into<RowId>>(&self, row_id: R, f: F)
   where
     F: FnOnce(RowUpdate),
   {
+    let row_id = row_id.into().to_string();
     self.container.with_transact_mut(|txn| {
-      let map_ref = self.container.get_or_insert_map_with_txn(txn, row_id);
-      let update = RowUpdate::new(row_id, txn, &map_ref);
+      let map_ref = self.container.get_or_insert_map_with_txn(txn, &row_id);
+      let update = RowUpdate::new(txn, &map_ref);
       f(update)
     })
   }

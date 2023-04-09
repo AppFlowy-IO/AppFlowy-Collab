@@ -93,21 +93,24 @@ pub fn create_database_from_db(uid: i64, database_id: &str, db: Arc<CollabKV>) -
 
 pub fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
   let row_1 = Row {
-    id: "r1".to_string(),
+    id: 1.into(),
+    block_id: 0.into(),
     cells: CellsBuilder::new().insert_text_cell("f1", "123").build(),
     height: 0,
     visibility: true,
     created_at: 1,
   };
   let row_2 = Row {
-    id: "r2".to_string(),
+    id: 2.into(),
+    block_id: 0.into(),
     cells: Default::default(),
     height: 0,
     visibility: true,
     created_at: 2,
   };
   let row_3 = Row {
-    id: "r3".to_string(),
+    id: 3.into(),
+    block_id: 0.into(),
     cells: Default::default(),
     height: 0,
     visibility: true,

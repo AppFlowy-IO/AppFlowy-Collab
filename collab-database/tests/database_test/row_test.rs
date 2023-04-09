@@ -1,7 +1,7 @@
 use crate::helper::{create_database, create_database_with_default_data};
+use collab_database::database::gen_row_id;
 use collab_database::rows::Row;
 use collab_database::views::CreateViewParams;
-use nanoid::nanoid;
 
 #[test]
 fn create_row_shared_by_two_view_test() {
@@ -18,9 +18,9 @@ fn create_row_shared_by_two_view_test() {
   };
   database_test.create_view(params);
 
-  let row_id = nanoid!(4);
+  let row_id = gen_row_id();
   database_test.push_row(Row {
-    id: row_id.clone(),
+    id: row_id,
     ..Default::default()
   });
 
@@ -45,9 +45,9 @@ fn delete_row_shared_by_two_view_test() {
   };
   database_test.create_view(params);
 
-  let row_id = nanoid!(4);
+  let row_id = gen_row_id();
   database_test.push_row(Row {
-    id: row_id.clone(),
+    id: row_id,
     ..Default::default()
   });
 
@@ -71,27 +71,27 @@ fn move_row_in_view_test() {
   database_test.create_view(params);
 
   let rows = database_test.get_rows_for_view("v1");
-  assert_eq!(rows[0].id, "r1");
-  assert_eq!(rows[1].id, "r2");
-  assert_eq!(rows[2].id, "r3");
+  assert_eq!(rows[0].id, 1.into());
+  assert_eq!(rows[1].id, 2.into());
+  assert_eq!(rows[2].id, 3.into());
 
   database_test.views.update_view("v1", |update| {
     update.move_row_order(2, 1);
   });
 
   let rows2 = database_test.get_rows_for_view("v1");
-  assert_eq!(rows2[0].id, "r1");
-  assert_eq!(rows2[1].id, "r3");
-  assert_eq!(rows2[2].id, "r2");
+  assert_eq!(rows2[0].id, 1.into());
+  assert_eq!(rows2[1].id, 3.into());
+  assert_eq!(rows2[2].id, 2.into());
 
   database_test.views.update_view("v1", |update| {
     update.move_row_order(2, 0);
   });
 
   let row3 = database_test.get_rows_for_view("v1");
-  assert_eq!(row3[0].id, "r2");
-  assert_eq!(row3[1].id, "r1");
-  assert_eq!(row3[2].id, "r3");
+  assert_eq!(row3[0].id, 2.into());
+  assert_eq!(row3[1].id, 1.into());
+  assert_eq!(row3[2].id, 3.into());
 }
 
 #[test]
@@ -113,14 +113,14 @@ fn move_row_in_views_test() {
   });
 
   let rows_1 = database_test.get_rows_for_view("v1");
-  assert_eq!(rows_1[0].id, "r1");
-  assert_eq!(rows_1[1].id, "r3");
-  assert_eq!(rows_1[2].id, "r2");
+  assert_eq!(rows_1[0].id, 1.into());
+  assert_eq!(rows_1[1].id, 3.into());
+  assert_eq!(rows_1[2].id, 2.into());
 
   let rows_2 = database_test.get_rows_for_view("v2");
-  assert_eq!(rows_2[0].id, "r1");
-  assert_eq!(rows_2[1].id, "r2");
-  assert_eq!(rows_2[2].id, "r3");
+  assert_eq!(rows_2[0].id, 1.into());
+  assert_eq!(rows_2[1].id, 2.into());
+  assert_eq!(rows_2[2].id, 3.into());
 }
 
 #[test]
@@ -133,16 +133,16 @@ fn insert_row_in_views_test() {
   database_test.create_view(params);
 
   let row = Row {
-    id: "r4".to_string(),
+    id: 4.into(),
     ..Default::default()
   };
-  database_test.insert_row(row, Some("r2"));
+  database_test.insert_row(row, Some(2.into()));
 
   let rows = database_test.get_rows_for_view("v1");
-  assert_eq!(rows[0].id, "r1");
-  assert_eq!(rows[1].id, "r2");
-  assert_eq!(rows[2].id, "r4");
-  assert_eq!(rows[3].id, "r3");
+  assert_eq!(rows[0].id, 1.into());
+  assert_eq!(rows[1].id, 2.into());
+  assert_eq!(rows[2].id, 4.into());
+  assert_eq!(rows[3].id, 3.into());
 }
 
 #[test]
@@ -155,16 +155,16 @@ fn insert_row_at_front_in_views_test() {
   database_test.create_view(params);
 
   let row = Row {
-    id: "r4".to_string(),
+    id: 4.into(),
     ..Default::default()
   };
   database_test.insert_row(row, None);
 
   let rows = database_test.get_rows_for_view("v1");
-  assert_eq!(rows[0].id, "r4");
-  assert_eq!(rows[1].id, "r1");
-  assert_eq!(rows[2].id, "r2");
-  assert_eq!(rows[3].id, "r3");
+  assert_eq!(rows[0].id, 4.into());
+  assert_eq!(rows[1].id, 1.into());
+  assert_eq!(rows[2].id, 2.into());
+  assert_eq!(rows[3].id, 3.into());
 }
 
 #[test]
@@ -177,14 +177,14 @@ fn insert_row_at_last_in_views_test() {
   database_test.create_view(params);
 
   let row = Row {
-    id: "r4".to_string(),
+    id: 4.into(),
     ..Default::default()
   };
-  database_test.insert_row(row, Some("r3"));
+  database_test.insert_row(row, Some(3.into()));
 
   let rows = database_test.get_rows_for_view("v1");
-  assert_eq!(rows[0].id, "r1");
-  assert_eq!(rows[1].id, "r2");
-  assert_eq!(rows[2].id, "r3");
-  assert_eq!(rows[3].id, "r4");
+  assert_eq!(rows[0].id, 1.into());
+  assert_eq!(rows[1].id, 2.into());
+  assert_eq!(rows[2].id, 3.into());
+  assert_eq!(rows[3].id, 4.into());
 }

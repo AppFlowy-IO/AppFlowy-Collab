@@ -341,7 +341,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
 }
 
 pub trait OrderIdentifiable {
-  fn identify_id(&self) -> &str;
+  fn identify_id(&self) -> String;
 }
 
 pub trait OrderArray {
@@ -370,10 +370,10 @@ pub trait OrderArray {
     &self,
     txn: &mut TransactionMut,
     object: Self::Object,
-    prev_object_id: Option<&str>,
+    prev_object_id: Option<String>,
   ) {
     if let Some(prev_object_id) = prev_object_id {
-      match self.get_row_position_with_txn(txn, prev_object_id) {
+      match self.get_row_position_with_txn(txn, &prev_object_id) {
         None => {
           self.array_ref().push_back(txn, object);
         },

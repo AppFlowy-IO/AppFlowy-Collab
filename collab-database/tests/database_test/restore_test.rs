@@ -10,11 +10,11 @@ use std::sync::Arc;
 fn restore_row_from_disk_test() {
   let (db, database_test) = create_database_with_db(1, "1");
   let row_1 = Row {
-    id: "r1".to_string(),
+    id: 1.into(),
     ..Default::default()
   };
   let row_2 = Row {
-    id: "r2".to_string(),
+    id: 2.into(),
     ..Default::default()
   };
   database_test.push_row(row_1.clone());

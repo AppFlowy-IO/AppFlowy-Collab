@@ -10,6 +10,7 @@ use collab_database::views::{
 };
 use nanoid::nanoid;
 
+use collab_database::database::gen_row_id;
 use serde_json::json;
 
 #[test]
@@ -68,9 +69,9 @@ fn create_same_database_view_twice_test() {
 fn create_database_row_test() {
   let database_test = create_database_grid_view(1, "1", "v1");
 
-  let row_id = nanoid!(4);
+  let row_id = gen_row_id();
   database_test.push_row(Row {
-    id: row_id.clone(),
+    id: row_id,
     ..Default::default()
   });
 

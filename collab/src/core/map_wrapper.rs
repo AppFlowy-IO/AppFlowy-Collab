@@ -7,6 +7,7 @@ use crate::core::array_wrapper::ArrayRefWrapper;
 use crate::core::text_wrapper::TextRefWrapper;
 use crate::preclude::*;
 use std::ops::{Deref, DerefMut};
+
 use yrs::block::Prelim;
 use yrs::types::{ToJson, Value};
 use yrs::{
@@ -182,8 +183,10 @@ pub trait MapRefExtension {
     );
   }
 
-  fn insert_i64_with_txn(&self, txn: &mut TransactionMut, key: &str, value: i64) {
-    self.map_ref().insert(txn, key, lib0Any::BigInt(value));
+  fn insert_i64_with_txn<T: Into<i64>>(&self, txn: &mut TransactionMut, key: &str, value: T) {
+    self
+      .map_ref()
+      .insert(txn, key, lib0Any::BigInt(value.into()));
   }
 
   fn insert_f64_with_txn(&self, txn: &mut TransactionMut, key: &str, value: f64) {

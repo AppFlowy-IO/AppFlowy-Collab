@@ -1,8 +1,9 @@
 use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
+use crate::id_gen::ID_GEN;
 use crate::meta::MetaMap;
-use crate::rows::{Row, RowMap};
+use crate::rows::{Row, RowId, RowMap};
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, DatabaseView, GroupSettingMap, RowOrder, ViewMap,
 };
@@ -124,14 +125,20 @@ impl Database {
     })
   }
 
-  pub fn insert_row(&self, row: Row, prev_row_id: Option<&str>) {
+  pub fn insert_row(&self, row: Row, prev_row_id: Option<RowId>) {
     self.root.with_transact_mut(|txn| {
       self.insert_row_with_txn(txn, row, prev_row_id);
     });
   }
 
-  pub fn insert_row_with_txn(&self, txn: &mut TransactionMut, row: Row, prev_row_id: Option<&str>) {
+  pub fn insert_row_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    row: Row,
+    prev_row_id: Option<RowId>,
+  ) {
     self.views.update_all_views_with_txn(txn, |update| {
+      let prev_row_id = prev_row_id.map(|value| value.to_string());
       update.insert_row_order(&row, prev_row_id);
     });
     self.rows.insert_row_with_txn(txn, row);
@@ -155,16 +162,17 @@ impl Database {
   ) -> Vec<Row> {
     row_orders
       .iter()
-      .flat_map(|row_order| self.rows.get_row_with_txn(txn, &row_order.id))
+      .flat_map(|row_order| self.rows.get_row_with_txn(txn, row_order.id))
       .collect::<Vec<Row>>()
   }
 
-  pub fn remove_row(&self, row_id: &str) {
+  pub fn remove_row(&self, row_id: &RowId) {
+    let row_id = row_id.to_string();
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |update| {
-        update.remove_row_order(row_id);
+        update.remove_row_order(&row_id);
       });
-      self.rows.delete_row_with_txn(txn, row_id);
+      self.rows.delete_row_with_txn(txn, &row_id);
     })
   }
 
@@ -259,7 +267,7 @@ impl Database {
     Some(duplicated_view)
   }
 
-  pub fn duplicate_row(&self, row_id: &str) {
+  pub fn duplicate_row(&self, row_id: RowId) {
     self.root.with_transact_mut(|txn| {
       if let Some(mut row) = self.rows.get_row_with_txn(txn, row_id) {
         row.id = gen_row_id();
@@ -331,8 +339,8 @@ pub fn gen_field_id() -> String {
   nanoid!(6)
 }
 
-pub fn gen_row_id() -> String {
-  nanoid!(6)
+pub fn gen_row_id() -> RowId {
+  RowId::from(ID_GEN.lock().next_id())
 }
 
 pub fn gen_database_filter_id() -> String {

@@ -20,8 +20,7 @@ fn database_get_snapshot_test() {
   assert!(snapshots.is_empty());
 
   for i in 0..10 {
-    let row_id = format!("r{}", i);
-    database.push_row(Row::new(row_id));
+    database.push_row(Row::new(i, 0));
   }
 
   let snapshots = test.get_database_snapshots("d1");
@@ -42,8 +41,7 @@ fn delete_database_snapshot_test() {
     .unwrap();
 
   for i in 0..10 {
-    let row_id = format!("r{}", i);
-    database.push_row(Row::new(row_id));
+    database.push_row(Row::new(i, 0));
   }
   test.delete_database("d1");
   let snapshots = test.get_database_snapshots("d1");
@@ -63,9 +61,8 @@ fn restore_from_database_snapshot_test() {
     )
     .unwrap();
   for i in 0..4 {
-    let row_id = format!("r{}", i);
     database.push_row(Row {
-      id: row_id,
+      id: i.into(),
       ..Default::default()
     });
   }
