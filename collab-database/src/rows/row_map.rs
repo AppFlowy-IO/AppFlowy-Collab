@@ -25,7 +25,7 @@ impl RowMap {
     Self { container, meta }
   }
 
-  pub fn insert_row(&self, row: Row) {
+  pub fn insert_rows(&self, row: Row) {
     self
       .container
       .with_transact_mut(|txn| self.insert_row_with_txn(txn, row))

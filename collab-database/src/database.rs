@@ -48,14 +48,15 @@ impl Database {
     this.root.with_transact_mut(|txn| {
       this.set_inline_view_with_txn(txn, &params.view_id);
       let row_orders = rows.iter().map(RowOrder::from).collect();
-      for row in rows {
-        this.blocks.create_row_with_txn(txn, row);
-      }
+
       for field in fields {
         this.fields.insert_field_with_txn(txn, field);
       }
       this.create_inline_view_with_txn(txn, params, row_orders);
     });
+    for row in rows {
+      this.blocks.create_row_with_txn(txn, row);
+    }
     Ok(this)
   }
 

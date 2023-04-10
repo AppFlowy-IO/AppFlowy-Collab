@@ -45,13 +45,17 @@ impl Blocks {
     blocks.get(&block_id).cloned()
   }
 
-  pub fn create_row_with_txn(&self, txn: &mut TransactionMut, params: CreateRowParams) {
+  pub fn create_rows(&self, params: Vec<CreateRowParams>) {
     let row_id: i64 = params.id.into();
     let block_id = row_id % NUM_OF_BLOCKS;
 
     if let Some(block) = self.get_block(block_id) {
+      let rows = params
+        .into_iter()
+        .map(|params| Row::from((block_id, params)))
+        .collect();
       let row = Row::from((block_id, params));
-      block.insert_row_with_txn(txn, row);
+      block.insert_row(txn, rows);
     }
   }
 
@@ -109,7 +113,11 @@ fn create_block(block_id: BlockId, collab: Collab) -> Block {
     RowMap::new_with_txn(txn, block)
   });
 
-  Block { block_id, rows }
+  Block {
+    collab,
+    block_id,
+    rows,
+  }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -159,6 +167,7 @@ impl From<&CreateRowParams> for RowOrder {
 
 #[derive(Clone)]
 pub struct Block {
+  collab: Collab,
   pub block_id: BlockId,
   pub rows: RowMap,
 }
