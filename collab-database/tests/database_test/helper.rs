@@ -3,13 +3,13 @@ use collab::core::any_map::AnyMapExtension;
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use collab::preclude::CollabBuilder;
-use collab_database::block::Blocks;
+use collab_database::block::{Blocks, CreateRowParams};
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::{Field, TypeOptionData, TypeOptionDataBuilder};
-use collab_database::rows::{CellsBuilder, Row};
+use collab_database::rows::{CellsBuilder};
 use collab_database::views::{
-  CreateDatabaseParams, CreateViewParams, DatabaseLayout, FilterMap, FilterMapBuilder, GroupMap,
-  GroupMapBuilder, GroupSettingBuilder, GroupSettingMap, SortMap, SortMapBuilder,
+  CreateDatabaseParams, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder,
+  GroupSettingBuilder, GroupSettingMap, SortMap, SortMapBuilder,
 };
 use collab_persistence::CollabKV;
 use std::ops::{Deref, DerefMut};
@@ -109,29 +109,26 @@ pub fn restore_database_from_db(uid: i64, database_id: &str, db: Arc<CollabKV>) 
 }
 
 pub fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
-  let row_1 = Row {
+  let row_1 = CreateRowParams {
     id: 1.into(),
-    block_id: 0.into(),
     cells: CellsBuilder::new().insert_text_cell("f1", "123").build(),
     height: 0,
     visibility: true,
-    created_at: 1,
+    prev_row_id: None,
   };
-  let row_2 = Row {
+  let row_2 = CreateRowParams {
     id: 2.into(),
-    block_id: 0.into(),
     cells: Default::default(),
     height: 0,
     visibility: true,
-    created_at: 2,
+    prev_row_id: None,
   };
-  let row_3 = Row {
+  let row_3 = CreateRowParams {
     id: 3.into(),
-    block_id: 0.into(),
     cells: Default::default(),
     height: 0,
     visibility: true,
-    created_at: 3,
+    prev_row_id: None,
   };
 
   let database_test = create_database(uid, database_id);

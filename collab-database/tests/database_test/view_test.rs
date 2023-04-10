@@ -4,12 +4,13 @@ use crate::helper::{
 use assert_json_diff::assert_json_eq;
 use collab::preclude::lib0Any;
 use collab_database::fields::Field;
-use collab_database::rows::Row;
+
 use collab_database::views::{
   CreateViewParams, DatabaseLayout, LayoutSettingBuilder, LayoutSettings,
 };
 use nanoid::nanoid;
 
+use collab_database::block::CreateRowParams;
 use collab_database::database::gen_row_id;
 use serde_json::json;
 
@@ -17,10 +18,25 @@ use serde_json::json;
 fn create_initial_database_test() {
   let database_test = create_database(1, "1");
   assert_json_eq!(
-    json!({
+    json!( {
       "fields": [],
       "rows": [],
-      "views": []
+      "views": [
+        {
+          "created_at": 0,
+          "database_id": "1",
+          "field_orders": [],
+          "filters": [],
+          "group_settings": [],
+          "id": "v1",
+          "layout": 0,
+          "layout_settings": {},
+          "modified_at": 0,
+          "name": "",
+          "row_orders": [],
+          "sorts": []
+        }
+      ]
     }),
     database_test.to_json_value()
   );
@@ -70,7 +86,7 @@ fn create_database_row_test() {
   let database_test = create_database_grid_view(1, "1");
 
   let row_id = gen_row_id();
-  database_test.push_row(Row {
+  database_test.push_row(CreateRowParams {
     id: row_id,
     ..Default::default()
   });

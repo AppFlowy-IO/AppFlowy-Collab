@@ -1,6 +1,7 @@
 use crate::helper::{create_database, create_database_with_default_data};
+use collab_database::block::CreateRowParams;
 use collab_database::database::gen_row_id;
-use collab_database::rows::{BlockId, Row};
+
 use collab_database::views::CreateViewParams;
 
 #[test]
@@ -19,7 +20,7 @@ fn create_row_shared_by_two_view_test() {
   database_test.create_view(params);
 
   let row_id = gen_row_id();
-  database_test.push_row(Row {
+  database_test.push_row(CreateRowParams {
     id: row_id,
     ..Default::default()
   });
@@ -45,10 +46,13 @@ fn delete_row_shared_by_two_view_test() {
   };
   database_test.create_view(params);
 
-  let row_id = gen_row_id();
-  let block_id = BlockId::from(0);
-  database_test.push_row(Row::new(row_id, block_id));
-  database_test.remove_row(row_id, block_id);
+  let row_order = database_test
+    .push_row(CreateRowParams {
+      id: gen_row_id(),
+      ..Default::default()
+    })
+    .unwrap();
+  database_test.remove_row(row_order.id, row_order.block_id);
 
   let view_1 = database_test.views.get_view("v1").unwrap();
   let view_2 = database_test.views.get_view("v2").unwrap();
@@ -127,11 +131,12 @@ fn insert_row_in_views_test() {
   };
   database_test.create_view(params);
 
-  let row = Row {
+  let row = CreateRowParams {
     id: 4.into(),
+    prev_row_id: Some(2.into()),
     ..Default::default()
   };
-  database_test.insert_row(row, Some(2.into()));
+  database_test.create_row(row);
 
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, 1.into());
@@ -149,11 +154,11 @@ fn insert_row_at_front_in_views_test() {
   };
   database_test.create_view(params);
 
-  let row = Row {
+  let row = CreateRowParams {
     id: 4.into(),
     ..Default::default()
   };
-  database_test.insert_row(row, None);
+  database_test.create_row(row);
 
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, 4.into());
@@ -171,11 +176,12 @@ fn insert_row_at_last_in_views_test() {
   };
   database_test.create_view(params);
 
-  let row = Row {
+  let row = CreateRowParams {
     id: 4.into(),
+    prev_row_id: Some(3.into()),
     ..Default::default()
   };
-  database_test.insert_row(row, Some(3.into()));
+  database_test.create_row(row);
 
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, 1.into());

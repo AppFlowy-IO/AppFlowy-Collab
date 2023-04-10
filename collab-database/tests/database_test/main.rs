@@ -1,3 +1,4 @@
+mod block_test;
 mod field_test;
 mod group_test;
 mod restore_test;

@@ -1,6 +1,7 @@
 use crate::helper::user_database_test;
+use collab_database::block::CreateRowParams;
 
-use collab_database::rows::Row;
+
 use collab_database::views::CreateDatabaseParams;
 
 #[test]
@@ -20,7 +21,10 @@ fn database_get_snapshot_test() {
   assert!(snapshots.is_empty());
 
   for i in 0..10 {
-    database.push_row(Row::new(i, 0));
+    database.push_row(CreateRowParams {
+      id: i.into(),
+      ..Default::default()
+    });
   }
 
   let snapshots = test.get_database_snapshots("d1");
@@ -41,7 +45,10 @@ fn delete_database_snapshot_test() {
     .unwrap();
 
   for i in 0..10 {
-    database.push_row(Row::new(i, 0));
+    database.push_row(CreateRowParams {
+      id: i.into(),
+      ..Default::default()
+    });
   }
   test.delete_database("d1");
   let snapshots = test.get_database_snapshots("d1");
@@ -60,8 +67,8 @@ fn restore_from_database_snapshot_test() {
       },
     )
     .unwrap();
-  for i in 0..4 {
-    database.push_row(Row {
+  for i in 0..5 {
+    database.push_row(CreateRowParams {
       id: i.into(),
       ..Default::default()
     });

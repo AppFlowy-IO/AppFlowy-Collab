@@ -1,6 +1,7 @@
 use crate::helper::{user_database_test, UserDatabaseTest};
 use collab::core::any_map::AnyMapExtension;
-use collab_database::rows::{new_cell_builder, Row};
+use collab_database::block::CreateRowParams;
+use collab_database::rows::{new_cell_builder};
 use collab_database::views::CreateDatabaseParams;
 
 #[test]
@@ -82,13 +83,10 @@ fn user_database_with_default_row() -> UserDatabaseTest {
     )
     .unwrap();
 
-  database.insert_row(
-    Row {
-      id: 1.into(),
-      ..Default::default()
-    },
-    None,
-  );
+  database.create_row(CreateRowParams {
+    id: 1.into(),
+    ..Default::default()
+  });
 
   test
 }

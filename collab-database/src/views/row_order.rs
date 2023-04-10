@@ -92,6 +92,11 @@ impl From<&Row> for RowOrder {
   }
 }
 
+impl From<&RowOrder> for RowOrder {
+  fn from(row: &RowOrder) -> Self {
+    row.clone()
+  }
+}
 pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, _txn: &T) -> Option<RowOrder> {
   if let YrsValue::Any(value) = value {
     Some(RowOrder::from(value))

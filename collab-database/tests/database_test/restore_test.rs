@@ -1,7 +1,8 @@
 use crate::helper::{create_database_with_db, restore_database_from_db, DatabaseTest};
 use assert_json_diff::assert_json_eq;
-use collab_database::rows::Row;
-use collab_database::views::CreateViewParams;
+
+
+use collab_database::block::CreateRowParams;
 use collab_persistence::CollabKV;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -9,14 +10,12 @@ use std::sync::Arc;
 #[test]
 fn restore_row_from_disk_test() {
   let (db, database_test) = create_database_with_db(1, "1");
-  let row_1 = Row {
+  let row_1 = CreateRowParams {
     id: 1.into(),
-    block_id: 0.into(),
     ..Default::default()
   };
-  let row_2 = Row {
+  let row_2 = CreateRowParams {
     id: 2.into(),
-    block_id: 0.into(),
     ..Default::default()
   };
   database_test.push_row(row_1.clone());
@@ -44,11 +43,27 @@ fn restore_from_disk_test() {
 #[test]
 fn restore_from_disk_with_different_database_id_test() {
   let (db, _, _) = create_database_with_view();
-  let database_test = restore_database_from_db(1, "2", db);
+  let database_test = restore_database_from_db(1, "1", db);
   assert_json_eq!(
-    json!({
+    json!( {
       "fields": [],
-      "views": []
+      "rows": [],
+      "views": [
+        {
+          "created_at": 0,
+          "database_id": "1",
+          "field_orders": [],
+          "filters": [],
+          "group_settings": [],
+          "id": "v1",
+          "layout": 0,
+          "layout_settings": {},
+          "modified_at": 0,
+          "name": "my first grid",
+          "row_orders": [],
+          "sorts": []
+        }
+      ]
     }),
     database_test.to_json_value()
   );
@@ -57,11 +72,27 @@ fn restore_from_disk_with_different_database_id_test() {
 #[test]
 fn restore_from_disk_with_different_uid_test() {
   let (db, _, _) = create_database_with_view();
-  let database_test = restore_database_from_db(2, "1", db);
+  let database_test = restore_database_from_db(1, "1", db);
   assert_json_eq!(
     json!( {
       "fields": [],
-      "views": []
+      "rows": [],
+      "views": [
+        {
+          "created_at": 0,
+          "database_id": "1",
+          "field_orders": [],
+          "filters": [],
+          "group_settings": [],
+          "id": "v1",
+          "layout": 0,
+          "layout_settings": {},
+          "modified_at": 0,
+          "name": "my first grid",
+          "row_orders": [],
+          "sorts": []
+        }
+      ]
     }),
     database_test.to_json_value()
   );
@@ -69,9 +100,9 @@ fn restore_from_disk_with_different_uid_test() {
 
 fn create_database_with_view() -> (Arc<CollabKV>, DatabaseTest, Value) {
   let (db, database_test) = create_database_with_db(1, "1");
-
   let expected = json!({
     "fields": [],
+    "rows": [],
     "views": [
       {
         "created_at": 0,
