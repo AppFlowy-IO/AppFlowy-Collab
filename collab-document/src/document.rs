@@ -19,7 +19,7 @@ const CHILDREN_MAP: &str = "children_map";
 pub struct Document {
   #[allow(dead_code)]
   inner: Collab,
-  pub root: MapRefWrapper,
+  root: MapRefWrapper,
   text_operation: Rc<TextOperation>,
   children_operation: Rc<ChildrenOperation>,
   block_operation: BlockOperation,
@@ -187,6 +187,13 @@ impl Document {
 
       Ok(())
     })
+  }
+
+  pub fn with_transact_mut<F, T>(&self, f: F) -> T
+  where
+    F: FnOnce(&mut TransactionMut) -> T,
+  {
+    self.root.with_transact_mut(f)
   }
 
   pub fn get_document(&self) -> Result<serde_json::value::Value, DocumentError> {

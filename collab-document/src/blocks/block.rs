@@ -30,7 +30,7 @@ pub struct Block {
 }
 
 pub struct BlockOperation {
-  pub root: MapRefWrapper,
+  root: MapRefWrapper,
   children_operation: Rc<ChildrenOperation>,
   text_operation: Rc<TextOperation>,
 }
