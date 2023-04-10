@@ -70,14 +70,10 @@ impl Blocks {
     }
   }
 
-  pub fn get_row_with_txn(
-    &self,
-    txn: &mut TransactionMut,
-    row_id: RowId,
-    block_id: BlockId,
-  ) -> Option<Row> {
+  pub fn get_row(&self, row_id: RowId) -> Option<Row> {
+    let block_id = block_id_from_row_id(row_id);
     if let Some(block) = self.get_block(block_id) {
-      return block.get_row_with_txn(txn, row_id);
+      return block.get_row(row_id);
     }
     dbg!("Can't find the block with block_id: {}", block_id);
     None
@@ -118,6 +114,19 @@ impl Blocks {
       }
     }
     rows
+  }
+
+  pub fn update_row<F, R: Into<RowId>>(&self, row_id: R, f: F)
+  where
+    F: FnOnce(RowUpdate),
+  {
+    let row_id = row_id.into();
+    let block_id = block_id_from_row_id(row_id);
+    if let Some(block) = self.get_block(block_id) {
+      block.update_row(row_id, f);
+    } else {
+      dbg!("Can't find the block with block_id: {}", block_id);
+    }
   }
 }
 

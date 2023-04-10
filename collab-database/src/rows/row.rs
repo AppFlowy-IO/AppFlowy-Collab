@@ -5,22 +5,23 @@ use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 
-#[derive(Copy, Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Copy, Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub struct RowId(i64);
+
+impl Display for RowId {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.write_str(&self.0.to_string())
+  }
+}
 
 impl Deref for RowId {
   type Target = i64;
 
   fn deref(&self) -> &Self::Target {
     &self.0
-  }
-}
-
-impl ToString for RowId {
-  fn to_string(&self) -> String {
-    self.0.to_string()
   }
 }
 
@@ -39,6 +40,12 @@ impl From<RowId> for i64 {
 impl std::default::Default for RowId {
   fn default() -> Self {
     Self(ID_GEN.lock().next_id())
+  }
+}
+
+impl AsRef<i64> for RowId {
+  fn as_ref(&self) -> &i64 {
+    &self.0
   }
 }
 

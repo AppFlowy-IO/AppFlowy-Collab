@@ -139,6 +139,16 @@ pub fn field_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Strin
   map_ref.get_str_with_txn(txn, FIELD_ID)
 }
 
+pub fn primary_field_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<String> {
+  let map_ref = value.to_ymap()?;
+  let is_primary = map_ref.get_bool_with_txn(txn, FIELD_PRIMARY)?;
+  if is_primary {
+    map_ref.get_str_with_txn(txn, FIELD_ID)
+  } else {
+    None
+  }
+}
+
 pub fn field_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Field> {
   let map_ref = value.to_ymap()?;
   field_from_map_ref(&map_ref, txn)

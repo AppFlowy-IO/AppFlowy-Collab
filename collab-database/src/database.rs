@@ -135,13 +135,11 @@ impl Database {
     }
   }
 
-  pub fn get_row<R, B>(&self, row_id: R, block_id: B) -> Option<Row>
+  pub fn get_row<R>(&self, row_id: R) -> Option<Row>
   where
     R: Into<RowId>,
-    B: Into<BlockId>,
   {
-    let block = self.blocks.get_block(block_id)?;
-    block.get_row(row_id)
+    self.blocks.get_row(row_id.into())
   }
 
   pub fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
@@ -163,15 +161,17 @@ impl Database {
     })
   }
 
-  pub fn update_row<R, B, F>(&self, row_id: R, block_id: B, f: F)
+  pub fn update_row<R, F>(&self, row_id: R, f: F)
   where
     F: FnOnce(RowUpdate),
     R: Into<RowId>,
-    B: Into<BlockId>,
   {
-    if let Some(block) = self.blocks.get_block(block_id) {
-      block.update_row(row_id, f);
-    }
+    self.blocks.update_row(row_id, f);
+  }
+
+  pub fn index_of_row(&self, view_id: &str, row_id: RowId) -> Option<usize> {
+    let view = self.views.get_view(view_id)?;
+    view.row_orders.iter().position(|order| order.id == row_id)
   }
 
   pub fn insert_field(&self, field: Field) {
@@ -275,9 +275,9 @@ impl Database {
     Some(duplicated_view)
   }
 
-  pub fn duplicate_row(&self, row_id: RowId, block_id: BlockId) {
+  pub fn duplicate_row(&self, row_id: RowId) {
     self.root.with_transact_mut(|txn| {
-      if let Some(mut row) = self.blocks.get_row_with_txn(txn, row_id, block_id) {
+      if let Some(mut row) = self.blocks.get_row(row_id) {
         row.id = gen_row_id();
         let mut params: CreateRowParams = row.into();
         params.prev_row_id = Some(row_id);
@@ -303,6 +303,11 @@ impl Database {
   pub fn is_inline_view(&self, view_id: &str) -> bool {
     let inline_view_id = self.get_inline_view_id();
     inline_view_id == view_id
+  }
+
+  pub fn get_database_rows(&self) -> Vec<Row> {
+    let txn = self.inner.transact();
+    self.get_database_rows_with_txn(&txn)
   }
 
   pub fn get_database_rows_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Row> {

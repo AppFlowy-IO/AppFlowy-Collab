@@ -1,5 +1,6 @@
 use crate::fields::{
-  field_from_map_ref, field_from_value, field_id_from_value, Field, FieldBuilder, FieldUpdate,
+  field_from_map_ref, field_from_value, field_id_from_value, primary_field_id_from_value, Field,
+  FieldBuilder, FieldUpdate,
 };
 use crate::views::FieldOrder;
 use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
@@ -34,9 +35,24 @@ impl FieldMap {
       .done();
   }
 
+  pub fn get_primary_field(&self) -> Option<Field> {
+    let txn = self.container.transact();
+    for (_, v) in self.container.iter(&txn) {
+      if let Some(field_id) = primary_field_id_from_value(v, &txn) {
+        return self.get_field_with_txn(&txn, &field_id);
+      }
+    }
+
+    return None;
+  }
+
   pub fn get_all_fields(&self) -> Vec<Field> {
     let txn = self.container.transact();
     self.get_all_fields_with_txn(&txn)
+  }
+
+  pub fn get_all_fields_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Field> {
+    self.get_fields_with_txn(txn, None)
   }
 
   pub fn get_field(&self, field_id: &str) -> Option<Field> {
@@ -49,12 +65,31 @@ impl FieldMap {
     field_from_map_ref(&map_ref.into_inner(), txn)
   }
 
-  pub fn get_all_fields_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Field> {
-    self
-      .container
-      .iter(txn)
-      .flat_map(|(_k, v)| field_from_value(v, txn))
-      .collect::<Vec<_>>()
+  pub fn get_fields(&self, field_ids: Option<Vec<String>>) -> Vec<Field> {
+    let txn = self.container.transact();
+    self.get_fields_with_txn(&txn, field_ids)
+  }
+  /// Get fields by field ids
+  /// If field_ids is None, return all fields
+  /// If field_ids is Some, return fields that match the field ids
+  pub fn get_fields_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    field_ids: Option<Vec<String>>,
+  ) -> Vec<Field> {
+    match field_ids {
+      None => self
+        .container
+        .iter(txn)
+        .flat_map(|(_k, v)| field_from_value(v, txn))
+        .collect::<Vec<_>>(),
+      Some(field_ids) => self
+        .container
+        .iter(txn)
+        .flat_map(|(_k, v)| field_from_value(v, txn))
+        .filter(|field| field_ids.contains(&field.id))
+        .collect::<Vec<_>>(),
+    }
   }
 
   pub fn get_all_field_orders(&self) -> Vec<FieldOrder> {
