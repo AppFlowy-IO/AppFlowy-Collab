@@ -3,7 +3,7 @@ use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
 use serde_json::Value::Null;
 
-pub struct TextMap {
+pub struct TextOperation {
   pub root: MapRefWrapper,
 }
 
@@ -40,7 +40,7 @@ impl Serialize for InsertedDelta {
   }
 }
 
-impl Serialize for TextMap {
+impl Serialize for TextOperation {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: Serializer,
@@ -64,13 +64,9 @@ impl Serialize for TextMap {
   }
 }
 
-impl TextMap {
+impl TextOperation {
   pub fn new(root: MapRefWrapper) -> Self {
     Self { root }
-  }
-
-  pub fn to_json_value(&self) -> serde_json::Value {
-    serde_json::to_value(self).unwrap_or_default()
   }
 
   pub fn create_text(&self, txn: &mut TransactionMut, text_id: &str) -> TextRefWrapper {

@@ -1,163 +1,172 @@
-use anyhow::Result;
+use crate::blocks::{hashmap_to_json_str, json_str_to_hashmap, ChildrenOperation, TextOperation};
+use crate::error::DocumentError;
 use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
-use serde::ser::{SerializeMap, SerializeStruct};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
+use serde_json::Value;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 const ID: &str = "id";
 const TYPE: &str = "ty";
-const CHILDREN: &str = "children";
 const PARENT: &str = "parent";
+const CHILDREN: &str = "children";
 const DATA: &str = "data";
+const EXTERNAL_ID: &str = "external_id";
+const EXTERNAL_TYPE: &str = "external_type";
 
-#[derive(Deserialize, Debug)]
+pub const EXTERNAL_TYPE_TEXT: &str = "text";
+pub const EXTERNAL_TYPE_ARRAY: &str = "array";
+pub const EXTERNAL_TYPE_MAP: &str = "map";
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Block {
   pub id: String,
-
   pub ty: String,
-
   pub parent: String,
-
   pub children: String,
-
-  pub data: String,
+  pub external_id: Option<String>,
+  pub external_type: Option<String>,
+  pub data: HashMap<String, Value>,
 }
 
-impl Serialize for Block {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: Serializer,
-  {
-    let mut s = serializer.serialize_struct("Block", 5)?;
-    s.serialize_field("id", &self.id)?;
-    s.serialize_field("ty", &self.ty)?;
-    s.serialize_field("parent", &self.parent)?;
-    s.serialize_field("children", &self.children)?;
-    let data = BlockDataEnum::from_string(&self.data);
-    let data = match data {
-      BlockDataEnum::Page(text) | BlockDataEnum::Text(text) => serde_json::json!({
-        "text": text,
-      }),
-      BlockDataEnum::Header(level, text) => serde_json::json!({
-        "level": level,
-        "text": text,
-      }),
-      _ => serde_json::json!({}),
-    };
-    s.serialize_field("data", &data)?;
-
-    s.end()
-  }
-}
-pub struct BlockMap {
+pub struct BlockOperation {
   root: MapRefWrapper,
+  children_operation: Rc<ChildrenOperation>,
+  text_operation: Rc<TextOperation>,
 }
 
-impl Serialize for BlockMap {
+impl Serialize for BlockOperation {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: Serializer,
   {
     let txn = self.root.transact();
-    let mut map = serializer.serialize_map(Some(self.root.len(&txn) as usize))?;
-    for (k, _) in self.root.iter(&txn) {
-      // It's safe to unwrap, because we know the key exists.
-      let block = self.get_block(&txn, k).unwrap();
-      let value = serde_json::to_value(block).unwrap_or_default();
-      map.serialize_entry(k, &value)?;
-    }
-    map.end()
+    let len = self.root.len(&txn) as usize;
+    let mut s = serializer.serialize_map(Some(len))?;
+    self.root.iter(&txn).for_each(|(k, _)| {
+      let block = self.get_block_with_txn(&txn, k).unwrap();
+      if let Ok(value) = serde_json::to_value(block) {
+        s.serialize_entry(k, &value).unwrap();
+      }
+    });
+    s.end()
   }
 }
 
-impl BlockMap {
-  pub fn new(root: MapRefWrapper) -> Self {
-    Self { root }
+impl BlockOperation {
+  pub fn new(
+    root: MapRefWrapper,
+    children_operation: Rc<ChildrenOperation>,
+    text_operation: Rc<TextOperation>,
+  ) -> Self {
+    Self {
+      root,
+      children_operation,
+      text_operation,
+    }
   }
 
-  pub fn to_json_value(&self) -> serde_json::Value {
-    serde_json::to_value(self).unwrap_or_default()
-  }
-
-  pub fn get_block<T: ReadTxn>(&self, txn: &T, block_id: &str) -> Option<Block> {
-    let block_map = self.root.get_map_with_txn(txn, block_id);
-    block_map.map(|block_map| self.get_block_by_map(txn, block_map))
-  }
-
-  pub fn get_block_by_map<T: ReadTxn>(&self, txn: &T, block_map: MapRefWrapper) -> Block {
-    let id = block_map.get_str_with_txn(txn, ID).unwrap_or_default();
-    let ty = block_map.get_str_with_txn(txn, TYPE).unwrap_or_default();
-    let parent = block_map.get_str_with_txn(txn, PARENT).unwrap_or_default();
-    let children = block_map
-      .get_str_with_txn(txn, CHILDREN)
-      .unwrap_or_default();
-    let data = block_map.get_str_with_txn(txn, DATA).unwrap_or_default();
+  fn get_block_from_root<T: ReadTxn>(&self, txn: &T, map: MapRefWrapper) -> Block {
+    let id = map.get_str_with_txn(txn, ID).unwrap_or_default();
+    let ty = map.get_str_with_txn(txn, TYPE).unwrap_or_default();
+    let parent = map.get_str_with_txn(txn, PARENT).unwrap_or_default();
+    let children = map.get_str_with_txn(txn, CHILDREN).unwrap_or_default();
+    let json_str = map.get_str_with_txn(txn, DATA).unwrap_or_default();
+    let data = json_str_to_hashmap(&json_str).unwrap_or_default();
+    let external_id = map.get_str_with_txn(txn, EXTERNAL_ID);
+    let external_type = map.get_str_with_txn(txn, EXTERNAL_TYPE);
     Block {
       id,
       ty,
       parent,
       children,
+      external_id,
+      external_type,
       data,
     }
   }
 
-  pub fn create_block(
+  pub fn create_block_with_txn(
     &self,
     txn: &mut TransactionMut,
-    block_id: String,
-    ty: String,
-    parent_id: String,
-    children_id: String,
-    data: BlockDataEnum,
-  ) -> Result<Block> {
-    let block = Block {
-      id: block_id.clone(),
-      ty,
-      parent: parent_id,
-      children: children_id,
-      data: data.to_string(),
-    };
-    let block_map = self.root.insert_map_with_txn(txn, &block_id);
-    block_map.insert_with_txn(txn, ID, block.id.clone());
-    block_map.insert_with_txn(txn, TYPE, block.ty.clone());
-    block_map.insert_with_txn(txn, PARENT, block.parent.clone());
-    block_map.insert_with_txn(txn, CHILDREN, block.children.clone());
-    block_map.insert_with_txn(txn, DATA, block.data.clone());
+    block: &Block,
+  ) -> Result<Block, DocumentError> {
+    let id = &block.id;
+    if self.root.get_map_with_txn(txn, id).is_some() {
+      return Err(DocumentError::BlockIsExistedAlready);
+    }
+    let map = self.root.insert_map_with_txn(txn, id);
+    let data = &block.data;
+    let json_str = hashmap_to_json_str(data.clone())?;
+    map.insert_with_txn(txn, ID, id.to_string());
+    map.insert_with_txn(txn, TYPE, block.ty.to_string());
+    map.insert_with_txn(txn, PARENT, block.parent.to_string());
+    map.insert_with_txn(txn, CHILDREN, block.children.to_string());
+    map.insert_with_txn(txn, DATA, json_str);
+
+    if let (Some(external_type), Some(external_id)) =
+      (block.external_type.clone(), block.external_id.clone())
+    {
+      map.insert_with_txn(txn, EXTERNAL_TYPE, external_type.to_string());
+      map.insert_with_txn(txn, EXTERNAL_ID, external_id.to_string());
+      if external_type == EXTERNAL_TYPE_TEXT {
+        self.text_operation.create_text(txn, &external_id);
+      }
+    }
+
+    self
+      .children_operation
+      .get_children_with_txn(txn, &block.children);
+
+    Ok(self.get_block_with_txn(txn, id).unwrap())
+  }
+
+  pub fn delete_block_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    id: &str,
+  ) -> Result<Block, DocumentError> {
+    let block = self
+      .get_block_with_txn(txn, id)
+      .ok_or(DocumentError::BlockIsNotFound)?;
+    self.root.remove(txn, id);
+
+    if let (Some(external_type), Some(external_id)) =
+      (block.external_type.clone(), block.external_id.clone())
+    {
+      if external_type == EXTERNAL_TYPE_TEXT {
+        self.text_operation.delete_with_txn(txn, &external_id);
+      }
+    }
+
+    self
+      .children_operation
+      .delete_children_with_txn(txn, &block.children);
     Ok(block)
   }
 
-  pub fn set_block_with_txn(&self, txn: &mut TransactionMut, block_id: &str, block: Block) {
-    self.root.insert_json_with_txn(txn, block_id, block);
+  pub fn get_block_with_txn<T: ReadTxn>(&self, txn: &T, id: &str) -> Option<Block> {
+    let map = self.root.get_map_with_txn(txn, id);
+    map.map(|map| self.get_block_from_root(txn, map))
   }
 
-  pub fn delete_block_with_txn(&self, txn: &mut TransactionMut, block_id: &str) {
-    self.root.delete_with_txn(txn, block_id);
-  }
-}
-
-#[derive(Serialize, Deserialize)]
-pub enum BlockDataEnum {
-  Page(String),
-  Text(String),
-  Header(u32, String),
-  Image(),
-}
-
-impl ToString for BlockDataEnum {
-  fn to_string(&self) -> String {
-    serde_json::to_string(self).unwrap_or_else(|_| "".to_string())
-  }
-}
-
-impl BlockDataEnum {
-  pub fn from_string(s: &str) -> Self {
-    serde_json::from_str(s).unwrap_or_else(|_| BlockDataEnum::Text("".to_string()))
-  }
-
-  pub fn get_text(&self) -> Option<String> {
-    match self {
-      BlockDataEnum::Page(text) | BlockDataEnum::Text(text) => Some(text.clone()),
-      BlockDataEnum::Header(_, text) => Some(text.clone()),
-      _ => None,
+  pub fn set_block_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    id: &str,
+    data: Option<HashMap<String, Value>>,
+    parent_id: Option<&str>,
+  ) -> Result<(), DocumentError> {
+    let map = self
+      .root
+      .get_map_with_txn(txn, id)
+      .ok_or(DocumentError::BlockIsNotFound)?;
+    if let Some(parent_id) = parent_id {
+      map.insert_with_txn(txn, PARENT, parent_id);
     }
+    if let Some(data) = data {
+      map.insert_with_txn(txn, DATA, hashmap_to_json_str(data)?);
+    }
+    Ok(())
   }
 }

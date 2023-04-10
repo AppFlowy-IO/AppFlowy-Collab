@@ -1,11 +1,16 @@
-use crate::blocks::{Block, BlockDataEnum, BlockMap, ChildrenMap, TextMap};
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use crate::blocks::{Block, BlockOperation, ChildrenOperation, TextOperation, EXTERNAL_TYPE_TEXT};
 use crate::error::DocumentError;
 use collab::preclude::*;
 use nanoid::nanoid;
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
+use serde_json::Value;
 
 const ROOT: &str = "document";
+const PAGE_ID: &str = "page_id";
 const BLOCKS: &str = "blocks";
 const META: &str = "meta";
 const TEXT_MAP: &str = "text_map";
@@ -15,10 +20,9 @@ pub struct Document {
   #[allow(dead_code)]
   inner: Collab,
   root: MapRefWrapper,
-  text_map: TextMap,
-  children_map: ChildrenMap,
-  pub blocks: BlockMap,
-  pub meta: MapRefWrapper,
+  text_operation: Rc<TextOperation>,
+  children_operation: Rc<ChildrenOperation>,
+  block_operation: BlockOperation,
 }
 
 impl Serialize for Document {
@@ -29,19 +33,20 @@ impl Serialize for Document {
     let txn = self.root.transact();
     let mut s = serializer.serialize_struct("Document", 3)?;
     s.serialize_field(
-      "root_id",
+      PAGE_ID,
       &self
         .root
-        .get(&txn, "head_id")
-        .unwrap_or_else(|| Value::from(""))
+        .get(&txn, PAGE_ID)
+        .unwrap_or_else(|| YrsValue::from(""))
         .to_string(&txn),
     )?;
-    s.serialize_field("blocks", &self.blocks.to_json_value())?;
+    let blocks = serde_json::to_value(&self.block_operation).unwrap_or_default();
+    s.serialize_field(BLOCKS, &blocks)?;
     s.serialize_field(
-      "meta",
+      META,
       &serde_json::json!({
-          "text_map": self.text_map.to_json_value(),
-          "children_map": self.children_map.to_json_value(),
+          TEXT_MAP: serde_json::to_value(self.text_operation.as_ref()).unwrap_or_default(),
+          CHILDREN_MAP: serde_json::to_value(self.children_operation.as_ref()).unwrap_or_default(),
       }),
     )?;
     s.end()
@@ -51,21 +56,20 @@ impl Serialize for Document {
 pub struct InsertBlockArgs {
   pub parent_id: String,
   pub block_id: String,
-  pub data: BlockDataEnum,
+  pub data: HashMap<String, Value>,
   pub children_id: String,
   pub ty: String,
+  pub external_id: Option<String>,
+  pub external_type: Option<String>,
 }
 
 impl Document {
-  pub fn create(collab: Collab) -> Self {
-    let (root, blocks, meta, text_map, children_map) = collab.with_transact_mut(|txn| {
+  pub fn create(collab: Collab) -> Result<Document, DocumentError> {
+    let (root, blocks, text_map, children_map) = collab.with_transact_mut(|txn| {
       // { document: {:} }
       let root = collab
         .get_map_with_txn(txn, vec![ROOT])
         .unwrap_or_else(|| collab.create_map_with_txn(txn, ROOT));
-      let head_id = nanoid!();
-      // { document: { head_id: "uuid" } }
-      root.insert_with_txn(txn, "head_id", head_id);
       // { document: { blocks: {:} } }
       let blocks = collab
         .get_map_with_txn(txn, vec![ROOT, BLOCKS])
@@ -83,28 +87,116 @@ impl Document {
         .get_map_with_txn(txn, vec![META, CHILDREN_MAP])
         .unwrap_or_else(|| meta.insert_map_with_txn(txn, CHILDREN_MAP));
 
-      (root, blocks, meta, text_map, children_map)
+      (root, blocks, text_map, children_map)
     });
-    let blocks = BlockMap::new(blocks);
-    let text_map = TextMap::new(text_map);
-    let children_map = ChildrenMap::new(children_map);
+    let mut root = root;
+    let mut blocks = blocks;
+    subscribe_changes(&mut root);
 
+    let text_operation = Rc::new(TextOperation::new(text_map));
+    let children_operation = Rc::new(ChildrenOperation::new(children_map));
+
+    subscribe_changes(&mut blocks);
+    let block_operation = BlockOperation::new(
+      blocks,
+      Rc::clone(&children_operation),
+      Rc::clone(&text_operation),
+    );
     let document = Self {
       inner: collab,
       root,
-      blocks,
-      meta,
-      text_map,
-      children_map,
+      block_operation,
+      text_operation,
+      children_operation,
     };
-    document.inner.with_transact_mut(|txn| {
-      document.init(txn);
-    });
-
-    document
+    match document.initial() {
+      Ok(_) => Ok(document),
+      Err(err) => Err(err),
+    }
   }
 
-  pub fn to_json_value(&self) -> Result<serde_json::value::Value, DocumentError> {
+  pub fn initial(&self) -> Result<(), DocumentError> {
+    self.inner.with_transact_mut(|txn| {
+      // { document: { page_id: "xxxx" } }
+      let page_id = self.root.get_str_with_txn(txn, PAGE_ID).unwrap_or_else(|| {
+        let page_id = nanoid!(10);
+        self.root.insert_with_txn(txn, PAGE_ID, page_id.to_string());
+        page_id
+      });
+
+      // { document: { page_id: "xxxx", blocks: { xxxx: {:} } } }
+      let page_block = self.block_operation.get_block_with_txn(txn, &page_id);
+      let page_block = match page_block {
+        Some(block) => Some(block),
+        None => {
+          let root_text_id = nanoid!(10);
+          let root_children_id = nanoid!(10);
+          let block = self.block_operation.create_block_with_txn(
+            txn,
+            &Block {
+              id: page_id.clone(),
+              parent: "".to_string(),
+              children: root_children_id,
+              data: HashMap::new(),
+              ty: "page".to_string(),
+              external_id: Some(root_text_id),
+              external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
+            },
+          );
+          match block {
+            Ok(block) => Some(block),
+            Err(_) => None,
+          }
+        },
+      };
+
+      if page_block.is_none() {
+        return Err(DocumentError::CreateRootBlockError);
+      }
+
+      // { document: { page_id: "xxxx", blocks: { xxxx: {:}, first_line_id: {:} } } }
+      let page_children = self
+        .children_operation
+        .get_children_with_txn(txn, &page_block.unwrap().children);
+      if page_children.as_ref().len() > 0 {
+        return Ok(());
+      }
+      let first_line_id = page_children.get(txn, 0);
+      if first_line_id.is_none() {
+        let first_line_id = nanoid!(10);
+        let first_line_text_id = nanoid!(10);
+        let first_line_children_id = nanoid!(10);
+        let block = self.insert_block(
+          txn,
+          InsertBlockArgs {
+            parent_id: page_id,
+            block_id: first_line_id,
+            data: HashMap::new(),
+            children_id: first_line_children_id,
+            ty: "text".to_string(),
+            external_id: Some(first_line_text_id),
+            external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
+          },
+          "".to_string(),
+        );
+        return match block {
+          Ok(_) => Ok(()),
+          Err(_) => Err(DocumentError::BlockCreateError),
+        };
+      }
+
+      Ok(())
+    })
+  }
+
+  pub fn with_transact_mut<F, T>(&self, f: F) -> T
+  where
+    F: FnOnce(&mut TransactionMut) -> T,
+  {
+    self.root.with_transact_mut(f)
+  }
+
+  pub fn get_document(&self) -> Result<serde_json::value::Value, DocumentError> {
     let document_data = serde_json::json!({
         "document": serde_json::to_value(self).unwrap()
     });
@@ -112,88 +204,54 @@ impl Document {
     Ok(document_data)
   }
 
-  pub fn init(&self, txn: &mut TransactionMut) {
-    let head_id = self.root.get(txn, "head_id").unwrap().to_string(txn);
-    let head_children_id = nanoid!();
-    let head_text_id = nanoid!();
-    let head_data = BlockDataEnum::Page(head_text_id);
-    // { document: { blocks: { head_id: { id: "head_id", ty: "page", data: { text: "head_text_id", level: null }, children: "head_children_id" } } } }
-    self.insert_block(
-      txn,
-      InsertBlockArgs {
-        parent_id: "".to_string(),
-        block_id: head_id.clone(),
-        data: head_data,
-        children_id: head_children_id,
-        ty: "page".to_string(),
-      },
-      "".to_string(),
-    );
-
-    let first_id = nanoid!();
-    let first_text_id = nanoid!();
-    let first_children_id = nanoid!();
-    let first_data = BlockDataEnum::Text(first_text_id);
-    // { document: { blocks: { head_id: { id: "head_id", ty: "page", data: { text: "head_text_id", level: null }, children: "head_children_id" }, first_id: { id: "first_id", ty: "text", data: { text: "first_text_id", level: null }, children: "first_children_id" } } } }
-    self.insert_block(
-      txn,
-      InsertBlockArgs {
-        parent_id: head_id,
-        block_id: first_id,
-        data: first_data,
-        children_id: first_children_id,
-        ty: "text".to_string(),
-      },
-      "".to_string(),
-    );
-  }
-
-  pub fn with_txn(&self, f: impl FnOnce(&mut TransactionMut)) {
-    self.inner.with_transact_mut(f);
-  }
-
   pub fn get_block(&self, block_id: &str) -> Option<Block> {
     let txn = self.inner.transact();
-    self.blocks.get_block(&txn, block_id)
+    self.block_operation.get_block_with_txn(&txn, block_id)
   }
 
-  pub fn insert_block(&self, txn: &mut TransactionMut, block: InsertBlockArgs, prev_id: String) {
-    let block_id = block.block_id;
-    let ty = block.ty;
-    let parent_id = block.parent_id;
-    let children_id = block.children_id;
-    let text_id = block.data.get_text();
+  pub fn insert_block(
+    &self,
+    txn: &mut TransactionMut,
+    args: InsertBlockArgs,
+    prev_id: String,
+  ) -> Result<Block, DocumentError> {
+    let block_id = args.block_id;
+    let parent_id = args.parent_id;
 
-    self
-      .children_map
-      .create_children_with_txn(txn, &children_id);
-
-    if let Some(text_id) = text_id {
-      self.text_map.create_text(txn, &text_id);
-    }
-
-    let block = self
-      .blocks
-      .create_block(txn, block_id, ty, parent_id, children_id, block.data);
+    let block = self.block_operation.create_block_with_txn(
+      txn,
+      &Block {
+        id: block_id,
+        parent: parent_id,
+        children: args.children_id,
+        data: args.data,
+        ty: args.ty,
+        external_id: args.external_id,
+        external_type: args.external_type,
+      },
+    );
 
     match block {
       Ok(block) => self.insert_block_to_parent(txn, &block, prev_id),
-      _ => {
-        println!("block create fail!");
-      },
-    };
+      _ => Err(DocumentError::BlockCreateError),
+    }
   }
 
-  pub fn insert_block_to_parent(&self, txn: &mut TransactionMut, block: &Block, prev_id: String) {
+  pub fn insert_block_to_parent(
+    &self,
+    txn: &mut TransactionMut,
+    block: &Block,
+    prev_id: String,
+  ) -> Result<Block, DocumentError> {
     let parent_id = &block.parent;
     if parent_id.is_empty() {
-      return;
+      return Err(DocumentError::ParentIsNotFound);
     }
-    let parent = self.blocks.get_block(txn, parent_id);
+    let parent = self.block_operation.get_block_with_txn(txn, parent_id);
 
     let parent_is_empty = parent.is_none();
     if parent_is_empty {
-      return;
+      return Err(DocumentError::ParentIsNotFound);
     }
 
     let parent = parent.unwrap();
@@ -202,7 +260,7 @@ impl Document {
     if !prev_id.is_empty() {
       let prev_index =
         self
-          .children_map
+          .children_operation
           .get_child_index_with_txn(txn, parent_children_id, &prev_id);
       match prev_index {
         Some(prev_index) => {
@@ -214,31 +272,47 @@ impl Document {
       }
     }
     self
-      .children_map
+      .children_operation
       .insert_child_with_txn(txn, parent_children_id, &block.id, index);
+    Ok(
+      self
+        .block_operation
+        .get_block_with_txn(txn, &block.id)
+        .unwrap(),
+    )
   }
 
-  pub fn delete_block(&self, txn: &mut TransactionMut, block_id: &str) {
-    let block = self.blocks.get_block(txn, block_id);
+  pub fn delete_block(
+    &self,
+    txn: &mut TransactionMut,
+    block_id: &str,
+  ) -> Result<Block, DocumentError> {
+    let block = self.block_operation.get_block_with_txn(txn, block_id);
     if block.is_none() {
-      return;
+      return Err(DocumentError::BlockIsNotFound);
     }
 
     let block = block.unwrap();
-    let children_id = &block.children;
-    let block_data = BlockDataEnum::from_string(&block.data);
+
+    let children = self
+      .children_operation
+      .get_children_with_txn(txn, &block.children);
+    children
+      .iter(txn)
+      .map(|child| child.to_string(txn))
+      .collect::<Vec<String>>()
+      .iter()
+      .for_each(|child| match self.delete_block(txn, child) {
+        Ok(_) => (),
+        Err(_) => {
+          println!("delete block error");
+        },
+      });
 
     let parent_id = &block.parent;
     self.delete_block_from_parent(txn, block_id, parent_id);
 
-    self.children_map.delete_children_with_txn(txn, children_id);
-
-    let text_id = block_data.get_text();
-
-    if let Some(text_id) = text_id {
-      self.text_map.delete_with_txn(txn, &text_id);
-    }
-    self.blocks.delete_block_with_txn(txn, block_id);
+    self.block_operation.delete_block_with_txn(txn, block_id)
   }
 
   pub fn delete_block_from_parent(
@@ -247,14 +321,30 @@ impl Document {
     block_id: &str,
     parent_id: &str,
   ) {
-    let parent = self.blocks.get_block(txn, parent_id);
+    let parent = self.block_operation.get_block_with_txn(txn, parent_id);
 
     if let Some(parent) = parent {
       let parent_children_id = &parent.children;
       self
-        .children_map
+        .children_operation
         .delete_child_with_txn(txn, parent_children_id, block_id);
     }
+  }
+
+  pub fn update_block_data(
+    &self,
+    txn: &mut TransactionMut,
+    block_id: &str,
+    data: HashMap<String, Value>,
+  ) -> Result<(), DocumentError> {
+    let block = self.block_operation.get_block_with_txn(txn, block_id);
+    if block.is_none() {
+      return Err(DocumentError::BlockIsNotFound);
+    }
+    let block = block.unwrap();
+    self
+      .block_operation
+      .set_block_with_txn(txn, &block.id, Some(data), None)
   }
 
   pub fn move_block(
@@ -263,30 +353,30 @@ impl Document {
     block_id: &str,
     parent_id: &str,
     prev_id: &str,
-  ) {
-    let block = self.blocks.get_block(txn, block_id);
+  ) -> Result<(), DocumentError> {
+    let block = self.block_operation.get_block_with_txn(txn, block_id);
     if block.is_none() {
-      return;
+      return Err(DocumentError::BlockIsNotFound);
     }
     let block = block.unwrap();
-    let parent = self.blocks.get_block(txn, parent_id);
+
+    let parent = self.block_operation.get_block_with_txn(txn, parent_id);
     if parent.is_none() {
-      return;
+      return Err(DocumentError::ParentIsNotFound);
     }
 
-    let parent = parent.unwrap();
-    let old_parent = self.blocks.get_block(txn, &block.parent);
+    let new_parent_children_id = parent.unwrap().children;
+
+    let old_parent = self.block_operation.get_block_with_txn(txn, &block.parent);
     if old_parent.is_none() {
-      return;
+      return Err(DocumentError::ParentIsNotFound);
     }
 
-    let old_parent = old_parent.unwrap();
-    let old_parent_children_id = old_parent.children;
-    let new_parent_children_id = parent.children;
+    let old_parent_children_id = old_parent.unwrap().children;
 
     let prev_index =
       self
-        .children_map
+        .children_operation
         .get_child_index_with_txn(txn, &new_parent_children_id, prev_id);
 
     let new_index = match prev_index {
@@ -295,19 +385,44 @@ impl Document {
     };
 
     self
-      .children_map
+      .children_operation
       .delete_child_with_txn(txn, &old_parent_children_id, block_id);
-    self
-      .children_map
-      .insert_child_with_txn(txn, &new_parent_children_id, block_id, new_index);
-
-    self.blocks.set_block_with_txn(
+    self.children_operation.insert_child_with_txn(
       txn,
+      &new_parent_children_id,
       block_id,
-      Block {
-        parent: parent_id.to_string(),
-        ..block
-      },
+      new_index,
     );
+
+    self
+      .block_operation
+      .set_block_with_txn(txn, block_id, Some(block.data), Some(parent_id))
   }
+}
+
+fn subscribe_changes(root: &mut MapRefWrapper) -> Option<DeepEventsSubscription> {
+  return Some(root.observe_deep(move |txn, events| {
+    for deep_event in events.iter() {
+      match deep_event {
+        Event::Text(_) => {},
+        Event::Array(_) => {},
+        Event::Map(event) => {
+          for c in event.keys(txn).values() {
+            match c {
+              EntryChange::Inserted(_v) => {
+                println!("insert: {}", event.target().to_json(txn));
+              },
+              EntryChange::Updated(_k, _v) => {
+                println!("update: {}", event.target().to_json(txn));
+              },
+              EntryChange::Removed(_v) => {
+                println!("remove: {}", event.target().to_json(txn));
+              },
+            }
+          }
+        },
+        _ => {},
+      }
+    }
+  }));
 }

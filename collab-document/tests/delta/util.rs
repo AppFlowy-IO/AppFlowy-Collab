@@ -1,10 +1,12 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
+use std::collections::HashMap;
 
-use collab_document::blocks::BlockDataEnum;
+use collab_document::blocks::Block;
 use collab_document::document::{Document, InsertBlockArgs};
+use collab_document::error::DocumentError;
 use collab_persistence::CollabKV;
-use nanoid::nanoid;
+use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -28,38 +30,57 @@ pub fn create_document(doc_id: &str) -> DocumentTest {
     .build();
   collab.initial();
 
-  let document = Document::create(collab);
-  DocumentTest { document, cleaner }
+  match Document::create(collab) {
+    Ok(document) => DocumentTest { document, cleaner },
+    Err(e) => panic!("create document error: {}", e),
+  }
 }
 
-pub fn inser_text_block(document: &Document, parent_id: &str, prev_id: &str) -> String {
-  let block_id = nanoid!();
-  document.with_txn(|txn| {
-    document.insert_block(
-      txn,
-      InsertBlockArgs {
-        parent_id: parent_id.to_string(),
-        block_id: block_id.clone(),
-        data: BlockDataEnum::Text(nanoid!()),
-        children_id: nanoid!(),
-        ty: "text".to_string(),
-      },
-      prev_id.to_string(),
-    );
-  });
-  block_id
+pub fn insert_block(
+  document: &Document,
+  block: InsertBlockArgs,
+  prev_id: &str,
+) -> Result<Block, DocumentError> {
+  document.with_transact_mut(|txn| document.insert_block(txn, block, prev_id.to_string()))
 }
 
-pub fn delete_block(document: &Document, block_id: &str) {
-  document.with_txn(|txn| {
-    document.delete_block(txn, block_id);
-  });
+pub fn get_document_data(document: &Document) -> (String, Value, Value, Value) {
+  let document_data = document.get_document().unwrap();
+  let document = &document_data["document"];
+
+  let page_id = document["page_id"].as_str().unwrap();
+  let blocks = &document["blocks"];
+  let meta = &document["meta"];
+  let text_map = &meta["text_map"];
+  let children_map = &meta["children_map"];
+
+  return (
+    page_id.to_owned(),
+    blocks.clone(),
+    text_map.clone(),
+    children_map.clone(),
+  );
 }
 
-pub fn move_block(document: &Document, block_id: &str, parent_id: &str, prev_id: &str) {
-  document.with_txn(|txn| {
-    document.move_block(txn, block_id, parent_id, prev_id);
-  });
+pub fn delete_block(document: &Document, block_id: &str) -> Result<Block, DocumentError> {
+  document.with_transact_mut(|txn| document.delete_block(txn, block_id))
+}
+
+pub fn update_block(
+  document: &Document,
+  block_id: &str,
+  data: HashMap<String, Value>,
+) -> Result<(), DocumentError> {
+  document.with_transact_mut(|txn| document.update_block_data(txn, block_id, data))
+}
+
+pub fn move_block(
+  document: &Document,
+  block_id: &str,
+  parent_id: &str,
+  prev_id: &str,
+) -> Result<(), DocumentError> {
+  document.with_transact_mut(|txn| document.move_block(txn, block_id, parent_id, prev_id))
 }
 
 struct Cleaner(PathBuf);
