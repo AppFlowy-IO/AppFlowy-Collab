@@ -161,7 +161,7 @@ impl Document {
       if page_children.as_ref().len() > 0 {
         return Ok(());
       }
-      let first_line_id = page_children.get_with_txn(txn, 0);
+      let first_line_id = page_children.get(txn, 0);
       if first_line_id.is_none() {
         let first_line_id = nanoid!(10);
         let first_line_text_id = nanoid!(10);

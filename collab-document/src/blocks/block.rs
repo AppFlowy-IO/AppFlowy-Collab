@@ -129,7 +129,7 @@ impl BlockOperation {
     let block = self
       .get_block_with_txn(txn, id)
       .ok_or(DocumentError::BlockIsNotFound)?;
-    self.root.remove_with_txn(txn, id);
+    self.root.remove(txn, id);
 
     if let (Some(external_type), Some(external_id)) =
       (block.external_type.clone(), block.external_id.clone())
