@@ -32,12 +32,14 @@ impl BlockOperation {
 
   pub fn get_all_blocks(&self) -> HashMap<String, Block> {
     let txn = self.root.transact();
-    let mut hash_map = HashMap::new();
-    self.root.iter(&txn).for_each(|(k, _)| {
-      let block = self.get_block_with_txn(&txn, k).unwrap();
-      hash_map.insert(k.to_string(), block);
-    });
-    hash_map
+    self
+      .root
+      .iter(&txn)
+      .map(|(k, _)| {
+        let block = self.get_block_with_txn(&txn, k).unwrap();
+        (k.to_string(), block)
+      })
+      .collect()
   }
 
   fn get_block_from_root<T: ReadTxn>(&self, txn: &T, map: MapRefWrapper) -> Block {

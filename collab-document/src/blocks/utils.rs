@@ -20,10 +20,7 @@ fn set_array_delta_from_event(txn: &TransactionMut, event: &ArrayEvent, delta: &
   event.delta(txn).iter().for_each(|change| {
     let array_change = match change {
       Change::Added(v) => {
-        let mut add_vals = vec![];
-        v.iter().for_each(|v| {
-          add_vals.push(v.to_json(txn).to_string());
-        });
+        let add_vals = v.iter().map(|v| v.to_json(txn).to_string()).collect();
         ArrayDelta::Added(add_vals)
       },
       Change::Removed(v) => ArrayDelta::Removed(v.to_owned()),

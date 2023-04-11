@@ -22,19 +22,21 @@ impl RootDeepSubscription {
     F: Fn(&Vec<BlockEvent>, Option<&Origin>) + 'static,
   {
     let subscription = Some(root.observe_deep(move |txn, events| {
-      let mut block_events = vec![];
-      events.iter().for_each(|deep_event| {
-        let delta = get_delta_from_event(txn, deep_event);
-
-        let mut path = vec![];
-        deep_event.path().iter().for_each(|v| match v {
-          PathSegment::Key(v) => path.push(v.to_string()),
-          PathSegment::Index(v) => path.push(v.to_string()),
-        });
-
-        let block_event = BlockEvent { path, delta };
-        block_events.push(block_event);
-      });
+      let block_events = events
+        .iter()
+        .map(|deep_event| {
+          let delta = get_delta_from_event(txn, deep_event);
+          let path = deep_event
+            .path()
+            .iter()
+            .map(|v| match v {
+              PathSegment::Key(v) => v.to_string(),
+              PathSegment::Index(v) => v.to_string(),
+            })
+            .collect();
+          BlockEvent { path, delta }
+        })
+        .collect();
 
       callback(&block_events, txn.origin());
     }));
