@@ -92,7 +92,6 @@ fn insert_block_test() {
   assert!(block_child.external_type.is_none());
   assert!(block_child.external_id.is_none());
 
-  dbg!(&children_map[&block_children_id]);
   assert_eq!(
     children_map[&block_children_id][0].as_str(),
     &block_child.id

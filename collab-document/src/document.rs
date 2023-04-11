@@ -74,7 +74,7 @@ impl Document {
       for (_id, block) in data.blocks {
         let res = self.block_operation.create_block_with_txn(txn, &block);
         if res.is_err() {
-          continue;
+          return;
         }
       }
       for (id, child_ids) in data.meta.children_map {
@@ -131,31 +131,20 @@ impl Document {
         let data = &block.data;
         let parent_id = payload.parent_id;
         let prev_id = payload.prev_id;
-        match action.action {
+        let res = match action.action {
           BlockActionType::Insert => {
             let block = self.insert_block(txn, block, prev_id);
-            if block.is_err() {
-              return;
+            match block {
+              Ok(_) => Ok(()),
+              Err(err) => Err(err),
             }
           },
-          BlockActionType::Update => {
-            let block = self.update_block_data(txn, block_id, data.to_owned());
-            if block.is_err() {
-              return;
-            }
-          },
-          BlockActionType::Delete => {
-            let block = self.delete_block(txn, block_id);
-            if block.is_err() {
-              return;
-            }
-          },
-          BlockActionType::Move => {
-            let block = self.move_block(txn, block_id, parent_id, prev_id);
-            if block.is_err() {
-              return;
-            }
-          },
+          BlockActionType::Update => self.update_block_data(txn, block_id, data.to_owned()),
+          BlockActionType::Delete => self.delete_block(txn, block_id),
+          BlockActionType::Move => self.move_block(txn, block_id, parent_id, prev_id),
+        };
+        if res.is_err() {
+          return;
         }
       }
     })
@@ -172,12 +161,9 @@ impl Document {
     block: Block,
     prev_id: Option<String>,
   ) -> Result<Block, DocumentError> {
-    let block = self.block_operation.create_block_with_txn(txn, &block);
+    let block = self.block_operation.create_block_with_txn(txn, &block)?;
 
-    match block {
-      Ok(block) => self.insert_block_to_parent(txn, &block, prev_id),
-      _ => Err(DocumentError::BlockCreateError),
-    }
+    self.insert_block_to_parent(txn, &block, prev_id)
   }
 
   pub fn insert_block_to_parent(
@@ -229,7 +215,7 @@ impl Document {
     &self,
     txn: &mut TransactionMut,
     block_id: &str,
-  ) -> Result<Block, DocumentError> {
+  ) -> Result<(), DocumentError> {
     let block = self.block_operation.get_block_with_txn(txn, block_id);
     if block.is_none() {
       return Err(DocumentError::BlockIsNotFound);
@@ -255,7 +241,11 @@ impl Document {
     let parent_id = &block.parent;
     self.delete_block_from_parent(txn, block_id, parent_id);
 
-    self.block_operation.delete_block_with_txn(txn, block_id)
+    let res = self.block_operation.delete_block_with_txn(txn, block_id);
+    match res {
+      Ok(_) => Ok(()),
+      Err(_) => Err(DocumentError::DeleteBlockError),
+    }
   }
 
   pub fn delete_block_from_parent(

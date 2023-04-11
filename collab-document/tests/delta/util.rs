@@ -105,7 +105,7 @@ pub fn get_document_data(
   return (page_id.to_owned(), blocks, children_map);
 }
 
-pub fn delete_block(document: &Document, block_id: &str) -> Result<Block, DocumentError> {
+pub fn delete_block(document: &Document, block_id: &str) -> Result<(), DocumentError> {
   document.with_transact_mut(|txn| document.delete_block(txn, block_id))
 }
 
