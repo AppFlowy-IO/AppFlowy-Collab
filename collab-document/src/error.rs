@@ -20,4 +20,7 @@ pub enum DocumentError {
 
   #[error("Could not create root block")]
   CreateRootBlockError,
+
+  #[error("Could not delete block")]
+  DeleteBlockError,
 }
