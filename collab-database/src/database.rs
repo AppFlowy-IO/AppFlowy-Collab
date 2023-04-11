@@ -200,6 +200,14 @@ impl Database {
     });
   }
 
+  pub fn delete_group_setting(&self, view_id: &str, group_setting_id: &str) {
+    self.views.update_view(view_id, |update| {
+      update.update_groups(|group_update| {
+        group_update.remove(group_setting_id);
+      });
+    });
+  }
+
   pub fn update_group_setting(
     &self,
     view_id: &str,
