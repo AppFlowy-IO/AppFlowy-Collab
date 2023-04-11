@@ -93,7 +93,6 @@ impl Document {
     self
       .subscription
       .subscribe(&mut self.root, move |block_events, origin| {
-        println!("{:?}", block_events);
         let is_remote = origin.is_some();
         callback(block_events, is_remote);
       });
