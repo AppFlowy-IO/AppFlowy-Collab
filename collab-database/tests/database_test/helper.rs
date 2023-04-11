@@ -2,11 +2,11 @@ use anyhow::bail;
 use collab::core::any_map::AnyMapExtension;
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
-use collab::preclude::CollabBuilder;
+use collab::preclude::{lib0Any, CollabBuilder};
 use collab_database::block::{Blocks, CreateRowParams};
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::{Field, TypeOptionData, TypeOptionDataBuilder};
-use collab_database::rows::{CellsBuilder};
+use collab_database::rows::{Cell, CellsBuilder};
 use collab_database::views::{
   CreateDatabaseParams, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder,
   GroupSettingBuilder, GroupSettingMap, SortMap, SortMapBuilder,
@@ -111,21 +111,31 @@ pub fn restore_database_from_db(uid: i64, database_id: &str, db: Arc<CollabKV>) 
 pub fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
   let row_1 = CreateRowParams {
     id: 1.into(),
-    cells: CellsBuilder::new().insert_text_cell("f1", "123").build(),
+    cells: CellsBuilder::new()
+      .insert_cell("f1", TestTextCell::from("1f1cell"))
+      .insert_cell("f2", TestTextCell::from("1f2cell"))
+      .insert_cell("f3", TestTextCell::from("1f3cell"))
+      .build(),
     height: 0,
     visibility: true,
     prev_row_id: None,
   };
   let row_2 = CreateRowParams {
     id: 2.into(),
-    cells: Default::default(),
+    cells: CellsBuilder::new()
+      .insert_cell("f1", TestTextCell::from("2f1cell"))
+      .insert_cell("f2", TestTextCell::from("2f2cell"))
+      .build(),
     height: 0,
     visibility: true,
     prev_row_id: None,
   };
   let row_3 = CreateRowParams {
     id: 3.into(),
-    cells: Default::default(),
+    cells: CellsBuilder::new()
+      .insert_cell("f1", TestTextCell::from("3f1cell"))
+      .insert_cell("f3", TestTextCell::from("3f3cell"))
+      .build(),
     height: 0,
     visibility: true,
     prev_row_id: None,
@@ -412,6 +422,7 @@ pub enum TestDateFormat {
   ISO = 2,
   Friendly = 3,
 }
+
 impl std::default::Default for TestDateFormat {
   fn default() -> Self {
     TestDateFormat::Friendly
@@ -478,5 +489,31 @@ impl TestTimeFormat {
       TestTimeFormat::TwelveHour => "%I:%M %p",
       TestTimeFormat::TwentyFourHour => "%R",
     }
+  }
+}
+
+pub struct TestTextCell(pub String);
+
+impl From<TestTextCell> for Cell {
+  fn from(text_cell: TestTextCell) -> Self {
+    let mut cell = Self::new();
+    cell.insert(
+      "data".to_string(),
+      lib0Any::String(text_cell.0.into_boxed_str()),
+    );
+    cell
+  }
+}
+
+impl From<Cell> for TestTextCell {
+  fn from(cell: Cell) -> Self {
+    let data = cell.get_str_value("data").unwrap();
+    Self(data)
+  }
+}
+
+impl From<&str> for TestTextCell {
+  fn from(s: &str) -> Self {
+    Self(s.to_string())
   }
 }

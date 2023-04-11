@@ -4,7 +4,7 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::id_gen::ID_GEN;
 use crate::meta::MetaMap;
-use crate::rows::{BlockId, Row, RowId, RowUpdate};
+use crate::rows::{BlockId, Cell, Row, RowId, RowUpdate};
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, DatabaseView, GroupSettingMap, RowOrder, ViewMap,
 };
@@ -152,6 +152,25 @@ impl Database {
     self.blocks.get_rows_from_row_orders(&row_orders)
   }
 
+  pub fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<Cell> {
+    let txn = self.root.transact();
+    self.get_cells_for_field_with_txn(&txn, view_id, field_id)
+  }
+
+  pub fn get_cells_for_field_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+    field_id: &str,
+  ) -> Vec<Cell> {
+    let row_orders = self.views.get_view_row_orders(txn, view_id);
+    let rows = self.blocks.get_rows_from_row_orders(&row_orders);
+    rows
+      .into_iter()
+      .flat_map(|row| row.cells.get(field_id).cloned())
+      .collect::<Vec<Cell>>()
+  }
+
   pub fn remove_row(&self, row_id: RowId, block_id: BlockId) {
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |update| {
@@ -190,6 +209,15 @@ impl Database {
       });
       self.fields.delete_field_with_txn(txn, field_id);
     })
+  }
+
+  pub fn get_group_setting<T: From<GroupSettingMap>>(&self, view_id: &str) -> Vec<T> {
+    self
+      .views
+      .get_view_group_setting(view_id)
+      .into_iter()
+      .map(T::from)
+      .collect()
   }
 
   pub fn add_group_setting(&self, view_id: &str, group_setting: impl Into<GroupSettingMap>) {

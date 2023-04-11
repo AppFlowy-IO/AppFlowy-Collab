@@ -276,6 +276,13 @@ pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<DatabaseV
   view_from_map_ref(&map_ref, txn)
 }
 
+pub fn group_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<GroupSettingMap> {
+  map_ref
+    .get_array_ref_with_txn(txn, VIEW_GROUPS)
+    .map(|array_ref| GroupSettingArray::from_array_ref(txn, &array_ref).0)
+    .unwrap_or_default()
+}
+
 pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<DatabaseView> {
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
   let name = map_ref.get_str_with_txn(txn, VIEW_NAME)?;

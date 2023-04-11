@@ -8,12 +8,6 @@ use collab_database::views::CreateViewParams;
 fn create_row_shared_by_two_view_test() {
   let database_test = create_database(1, "1");
   let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    ..Default::default()
-  };
-  database_test.create_view(params);
-
-  let params = CreateViewParams {
     view_id: "v2".to_string(),
     ..Default::default()
   };
@@ -34,12 +28,6 @@ fn create_row_shared_by_two_view_test() {
 #[test]
 fn delete_row_shared_by_two_view_test() {
   let database_test = create_database(1, "1");
-  let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    ..Default::default()
-  };
-  database_test.create_view(params);
-
   let params = CreateViewParams {
     view_id: "v2".to_string(),
     ..Default::default()
@@ -63,12 +51,6 @@ fn delete_row_shared_by_two_view_test() {
 #[test]
 fn move_row_in_view_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    ..Default::default()
-  };
-  database_test.create_view(params);
-
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, 1.into());
   assert_eq!(rows[1].id, 2.into());
@@ -97,11 +79,6 @@ fn move_row_in_view_test() {
 fn move_row_in_views_test() {
   let database_test = create_database_with_default_data(1, "1");
   let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    ..Default::default()
-  };
-  database_test.create_view(params);
-  let params = CreateViewParams {
     view_id: "v2".to_string(),
     ..Default::default()
   };
@@ -125,12 +102,6 @@ fn move_row_in_views_test() {
 #[test]
 fn insert_row_in_views_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    ..Default::default()
-  };
-  database_test.create_view(params);
-
   let row = CreateRowParams {
     id: 4.into(),
     prev_row_id: Some(2.into()),
@@ -148,12 +119,6 @@ fn insert_row_in_views_test() {
 #[test]
 fn insert_row_at_front_in_views_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    ..Default::default()
-  };
-  database_test.create_view(params);
-
   let row = CreateRowParams {
     id: 4.into(),
     ..Default::default()
@@ -170,12 +135,6 @@ fn insert_row_at_front_in_views_test() {
 #[test]
 fn insert_row_at_last_in_views_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    ..Default::default()
-  };
-  database_test.create_view(params);
-
   let row = CreateRowParams {
     id: 4.into(),
     prev_row_id: Some(3.into()),

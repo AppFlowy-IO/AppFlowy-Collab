@@ -1,6 +1,7 @@
 use crate::views::{
-  view_from_map_ref, view_from_value, view_id_from_map_ref, DatabaseView, OrderArray, RowOrder,
-  RowOrderArray, ViewBuilder, ViewUpdate, ROW_ORDERS,
+  group_setting_from_map_ref, view_from_map_ref, view_from_value, view_id_from_map_ref,
+  DatabaseView, GroupSettingMap, OrderArray, RowOrder, RowOrderArray, ViewBuilder, ViewUpdate,
+  ROW_ORDERS,
 };
 use collab::preclude::{Map, MapRef, MapRefWrapper, ReadTxn, TransactionMut};
 
@@ -34,6 +35,23 @@ impl ViewMap {
         .set_field_orders(view.field_orders)
         .set_row_orders(view.row_orders);
     });
+  }
+
+  pub fn get_view_group_setting(&self, view_id: &str) -> Vec<GroupSettingMap> {
+    let txn = self.container.transact();
+    self.get_view_group_setting_with_txn(&txn, view_id)
+  }
+
+  pub fn get_view_group_setting_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+  ) -> Vec<GroupSettingMap> {
+    if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
+      group_setting_from_map_ref(txn, &map_ref)
+    } else {
+      vec![]
+    }
   }
 
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
