@@ -9,7 +9,8 @@ use collab_database::fields::{Field, TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::{Cell, CellsBuilder};
 use collab_database::views::{
   CreateDatabaseParams, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder,
-  GroupSettingBuilder, GroupSettingMap, SortMap, SortMapBuilder,
+  GroupSettingBuilder, GroupSettingMap, LayoutSetting, LayoutSettingBuilder, SortMap,
+  SortMapBuilder,
 };
 use collab_persistence::CollabKV;
 use std::ops::{Deref, DerefMut};
@@ -108,6 +109,8 @@ pub fn restore_database_from_db(uid: i64, database_id: &str, db: Arc<CollabKV>) 
   }
 }
 
+/// Create a database with default data
+/// It will create a default view with id 'v1'
 pub fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
   let row_1 = CreateRowParams {
     id: 1.into(),
@@ -264,25 +267,37 @@ const GROUP_ID: &str = "id";
 pub const GROUPS: &str = "groups";
 pub const CONTENT: &str = "content";
 
-impl From<GroupSettingMap> for TestGroupSetting {
-  fn from(value: GroupSettingMap) -> Self {
-    Self::from(&value)
+impl TryFrom<&GroupSettingMap> for TestGroupSetting {
+  type Error = anyhow::Error;
+
+  fn try_from(value: &GroupSettingMap) -> Result<Self, Self::Error> {
+    Self::try_from(value.clone())
   }
 }
 
-impl From<&GroupSettingMap> for TestGroupSetting {
-  fn from(value: &GroupSettingMap) -> Self {
-    let id = value.get_str_value(GROUP_ID).unwrap();
-    let field_id = value.get_str_value(FIELD_ID).unwrap();
-    let field_type = value.get_i64_value(FIELD_TYPE).unwrap();
-    let content = value.get_str_value(CONTENT).unwrap_or_default();
-    let groups = value.get_array(GROUPS);
-    Self {
-      id,
-      field_id,
-      field_type,
-      groups,
-      content,
+impl TryFrom<GroupSettingMap> for TestGroupSetting {
+  type Error = anyhow::Error;
+
+  fn try_from(value: GroupSettingMap) -> Result<Self, Self::Error> {
+    match (
+      value.get_str_value(GROUP_ID),
+      value.get_str_value(FIELD_ID),
+      value.get_i64_value(FIELD_TYPE),
+    ) {
+      (Some(id), Some(field_id), Some(field_type)) => {
+        let content = value.get_str_value(CONTENT).unwrap_or_default();
+        let groups = value.try_get_array(GROUPS);
+        Ok(Self {
+          id,
+          field_id,
+          field_type,
+          groups,
+          content,
+        })
+      },
+      _ => {
+        bail!("Invalid group setting data")
+      },
     }
   }
 }
@@ -310,9 +325,32 @@ pub struct TestSort {
 const SORT_ID: &str = "id";
 const SORT_CONDITION: &str = "condition";
 
-impl From<SortMap> for TestSort {
-  fn from(_: SortMap) -> Self {
-    todo!()
+impl TryFrom<SortMap> for TestSort {
+  type Error = anyhow::Error;
+
+  fn try_from(value: SortMap) -> Result<Self, Self::Error> {
+    match (
+      value.get_str_value(SORT_ID),
+      value.get_str_value(FIELD_ID),
+      value.get_i64_value(FIELD_TYPE),
+    ) {
+      (Some(id), Some(field_id), Some(field_type)) => {
+        let condition = value
+          .get_i64_value(SORT_CONDITION)
+          .map(|value| SortCondition::try_from(value).unwrap())
+          .unwrap_or_default();
+
+        Ok(Self {
+          id,
+          field_id,
+          field_type,
+          condition,
+        })
+      },
+      _ => {
+        bail!("Invalid group setting data")
+      },
+    }
   }
 }
 
@@ -327,7 +365,7 @@ impl From<TestSort> for SortMap {
   }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum SortCondition {
   Ascending = 0,
@@ -517,3 +555,90 @@ impl From<&str> for TestTextCell {
     Self(s.to_string())
   }
 }
+
+#[derive(Debug, Clone)]
+pub struct TestCalendarLayoutSetting {
+  pub layout_ty: CalendarLayout,
+  pub first_day_of_week: i32,
+  pub show_weekends: bool,
+  pub show_week_numbers: bool,
+  pub field_id: String,
+}
+
+impl From<LayoutSetting> for TestCalendarLayoutSetting {
+  fn from(setting: LayoutSetting) -> Self {
+    let layout_ty = setting
+      .get_i64_value("layout_ty")
+      .map(CalendarLayout::from)
+      .unwrap_or_default();
+    let first_day_of_week = setting
+      .get_i64_value("first_day_of_week")
+      .unwrap_or(DEFAULT_FIRST_DAY_OF_WEEK as i64) as i32;
+    let show_weekends = setting.get_bool_value("show_weekends").unwrap_or_default();
+    let show_week_numbers = setting
+      .get_bool_value("show_week_numbers")
+      .unwrap_or_default();
+    let field_id = setting.get_str_value("field_id").unwrap_or_default();
+    Self {
+      layout_ty,
+      first_day_of_week,
+      show_weekends,
+      show_week_numbers,
+      field_id,
+    }
+  }
+}
+
+impl From<TestCalendarLayoutSetting> for LayoutSetting {
+  fn from(setting: TestCalendarLayoutSetting) -> Self {
+    LayoutSettingBuilder::new()
+      .insert_i64_value("layout_ty", setting.layout_ty.value())
+      .insert_i64_value("first_day_of_week", setting.first_day_of_week as i64)
+      .insert_bool_value("show_week_numbers", setting.show_week_numbers)
+      .insert_bool_value("show_weekends", setting.show_weekends)
+      .insert_str_value("field_id", setting.field_id)
+      .build()
+  }
+}
+
+impl TestCalendarLayoutSetting {
+  pub fn new(field_id: String) -> Self {
+    TestCalendarLayoutSetting {
+      layout_ty: CalendarLayout::default(),
+      first_day_of_week: DEFAULT_FIRST_DAY_OF_WEEK,
+      show_weekends: DEFAULT_SHOW_WEEKENDS,
+      show_week_numbers: DEFAULT_SHOW_WEEK_NUMBERS,
+      field_id,
+    }
+  }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+#[repr(u8)]
+pub enum CalendarLayout {
+  #[default]
+  MonthLayout = 0,
+  WeekLayout = 1,
+  DayLayout = 2,
+}
+
+impl From<i64> for CalendarLayout {
+  fn from(value: i64) -> Self {
+    match value {
+      0 => CalendarLayout::MonthLayout,
+      1 => CalendarLayout::WeekLayout,
+      2 => CalendarLayout::DayLayout,
+      _ => CalendarLayout::MonthLayout,
+    }
+  }
+}
+
+impl CalendarLayout {
+  pub fn value(&self) -> i64 {
+    *self as i64
+  }
+}
+
+pub const DEFAULT_FIRST_DAY_OF_WEEK: i32 = 0;
+pub const DEFAULT_SHOW_WEEKENDS: bool = true;
+pub const DEFAULT_SHOW_WEEK_NUMBERS: bool = true;

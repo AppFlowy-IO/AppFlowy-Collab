@@ -45,14 +45,6 @@ fn create_initial_database_test() {
 #[test]
 fn create_database_with_single_view_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    name: "my first grid".to_string(),
-    layout: DatabaseLayout::Grid,
-    ..Default::default()
-  };
-
-  database_test.create_view(params);
   let view = database_test.views.get_view("v1").unwrap();
   assert_eq!(view.row_orders.len(), 3);
   assert_eq!(view.field_orders.len(), 3);
@@ -61,14 +53,6 @@ fn create_database_with_single_view_test() {
 #[test]
 fn create_same_database_view_twice_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    name: "my first grid".to_string(),
-    layout: DatabaseLayout::Grid,
-    ..Default::default()
-  };
-  database_test.create_view(params);
-
   let params = CreateViewParams {
     view_id: "v1".to_string(),
     name: "my second grid".to_string(),
@@ -206,13 +190,27 @@ fn delete_inline_database_view_test() {
 #[test]
 fn duplicate_database_view_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    ..Default::default()
-  };
-  database_test.create_view(params);
   database_test.duplicate_view("v1");
 
   let views = database_test.views.get_all_views();
   assert_eq!(views.len(), 2);
+}
+
+#[test]
+fn get_database_view_layout_test() {
+  let database_test = create_database_with_default_data(1, "1");
+
+  let layout = database_test.views.get_view_layout("v1").unwrap();
+  assert_eq!(layout, DatabaseLayout::Grid);
+}
+
+#[test]
+fn update_database_view_layout_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  database_test.views.update_view("v1", |update| {
+    update.set_layout_type(DatabaseLayout::Calendar);
+  });
+
+  let layout = database_test.views.get_view_layout("v1").unwrap();
+  assert_eq!(layout, DatabaseLayout::Calendar);
 }

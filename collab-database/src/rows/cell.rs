@@ -1,3 +1,4 @@
+use crate::rows::RowId;
 use collab::core::any_map::{AnyMap, AnyMapBuilder, AnyMapExtension, AnyMapUpdate};
 use collab::preclude::{Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
@@ -93,4 +94,23 @@ pub fn get_field_type_from_cell<T: From<i64>>(cell: &Cell) -> Option<T> {
 pub fn new_cell_builder(field_type: impl Into<i64>) -> CellBuilder {
   let inner = AnyMapBuilder::new();
   inner.insert_i64_value("field_type", field_type.into())
+}
+
+pub struct RowCell {
+  pub row_id: RowId,
+  cell: Cell,
+}
+
+impl RowCell {
+  pub fn new(row_id: RowId, cell: Cell) -> Self {
+    Self { row_id, cell }
+  }
+}
+
+impl Deref for RowCell {
+  type Target = Cell;
+
+  fn deref(&self) -> &Self::Target {
+    &self.cell
+  }
 }

@@ -1,9 +1,10 @@
 use crate::views::{
-  group_setting_from_map_ref, view_from_map_ref, view_from_value, view_id_from_map_ref,
-  DatabaseView, GroupSettingMap, OrderArray, RowOrder, RowOrderArray, ViewBuilder, ViewUpdate,
-  ROW_ORDERS,
+  filters_from_map_ref, group_setting_from_map_ref, layout_setting_from_map_ref,
+  sorts_from_map_ref, view_from_map_ref, view_from_value, view_id_from_map_ref, DatabaseLayout,
+  DatabaseView, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray,
+  SortMap, ViewBuilder, ViewUpdate, ROW_ORDERS, VIEW_LAYOUT,
 };
-use collab::preclude::{Map, MapRef, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 
 pub struct ViewMap {
   container: MapRefWrapper,
@@ -54,6 +55,46 @@ impl ViewMap {
     }
   }
 
+  pub fn get_view_sorts(&self, view_id: &str) -> Vec<SortMap> {
+    let txn = self.container.transact();
+    self.get_view_sorts_with_txn(&txn, view_id)
+  }
+
+  pub fn get_view_sorts_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<SortMap> {
+    if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
+      sorts_from_map_ref(txn, &map_ref)
+    } else {
+      vec![]
+    }
+  }
+  pub fn get_view_filters(&self, view_id: &str) -> Vec<FilterMap> {
+    let txn = self.container.transact();
+    self.get_view_filters_with_txn(&txn, view_id)
+  }
+
+  pub fn get_view_filters_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FilterMap> {
+    if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
+      filters_from_map_ref(txn, &map_ref)
+    } else {
+      vec![]
+    }
+  }
+
+  pub fn get_layout_setting<T: From<LayoutSetting>>(
+    &self,
+    view_id: &str,
+    layout_ty: &DatabaseLayout,
+  ) -> Option<T> {
+    let txn = self.container.transact();
+    if let Some(map_ref) = self.container.get_map_with_txn(&txn, view_id) {
+      layout_setting_from_map_ref(&txn, &map_ref)
+        .get(layout_ty)
+        .map(|value| T::from(value.clone()))
+    } else {
+      None
+    }
+  }
+
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
     let txn = self.container.transact();
     self.get_view_with_txn(&txn, view_id)
@@ -75,6 +116,18 @@ impl ViewMap {
       .iter(txn)
       .flat_map(|(_k, v)| view_from_value(v, txn))
       .collect::<Vec<_>>()
+  }
+
+  pub fn get_view_layout(&self, view_id: &str) -> Option<DatabaseLayout> {
+    let txn = self.container.transact();
+    self
+      .container
+      .get_map_with_txn(&txn, view_id)
+      .map(|map_ref| {
+        map_ref
+          .get_i64_with_txn(&txn, VIEW_LAYOUT)
+          .map(|value| DatabaseLayout::try_from(value).ok())?
+      })?
   }
 
   pub fn get_view_row_orders<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<RowOrder> {

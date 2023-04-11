@@ -4,13 +4,13 @@ use crate::fields::Field;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
 use crate::views::{
   FieldOrder, FieldOrderArray, FilterArray, FilterMap, GroupSettingArray, GroupSettingMap,
-  RowOrder, RowOrderArray, SortArray, SortMap,
+  LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 use collab::core::any_array::ArrayMapUpdate;
 use collab::preclude::map::MapPrelim;
 use collab::preclude::{
-  lib0Any, Array, ArrayRef, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  lib0Any, Array, ArrayRef, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
   YrsValue,
 };
 use serde::{Deserialize, Serialize};
@@ -101,7 +101,7 @@ impl From<DatabaseView> for CreateDatabaseParams {
 const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";
 const VIEW_DATABASE_ID: &str = "database_id";
-const VIEW_LAYOUT: &str = "layout";
+pub const VIEW_LAYOUT: &str = "layout";
 const VIEW_LAYOUT_SETTINGS: &str = "layout_settings";
 const VIEW_FILTERS: &str = "filters";
 const VIEW_GROUPS: &str = "groups";
@@ -194,6 +194,29 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
+  pub fn update_layout_settings(
+    self,
+    layout_ty: &DatabaseLayout,
+    layout_setting: LayoutSetting,
+  ) -> Self {
+    let layout_settings = self
+      .map_ref
+      .get_or_insert_map_with_txn(self.txn, VIEW_LAYOUT_SETTINGS);
+
+    let inner_map = layout_settings.get_or_insert_map_with_txn(self.txn, layout_ty.as_ref());
+    layout_setting.fill_map_ref(self.txn, &inner_map);
+    self
+  }
+
+  pub fn remove_layout_setting(self, layout_ty: &DatabaseLayout) -> Self {
+    let layout_settings = self
+      .map_ref
+      .get_or_insert_map_with_txn(self.txn, VIEW_LAYOUT_SETTINGS);
+
+    layout_settings.remove(self.txn, layout_ty.as_ref());
+    self
+  }
+
   pub fn set_filters(mut self, filters: Vec<FilterMap>) -> Self {
     let array_ref = self.get_filter_array();
     let filter_array = FilterArray::from_any_maps(filters);
@@ -280,6 +303,27 @@ pub fn group_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<
   map_ref
     .get_array_ref_with_txn(txn, VIEW_GROUPS)
     .map(|array_ref| GroupSettingArray::from_array_ref(txn, &array_ref).0)
+    .unwrap_or_default()
+}
+
+pub fn sorts_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<SortMap> {
+  map_ref
+    .get_array_ref_with_txn(txn, VIEW_SORTS)
+    .map(|array_ref| SortArray::from_array_ref(txn, &array_ref).0)
+    .unwrap_or_default()
+}
+
+pub fn filters_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<FilterMap> {
+  map_ref
+    .get_array_ref_with_txn(txn, VIEW_FILTERS)
+    .map(|array_ref| FilterArray::from_array_ref(txn, &array_ref).0)
+    .unwrap_or_default()
+}
+
+pub fn layout_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> LayoutSettings {
+  map_ref
+    .get_map_with_txn(txn, VIEW_LAYOUT_SETTINGS)
+    .map(|map_ref| LayoutSettings::from_map_ref(txn, map_ref))
     .unwrap_or_default()
 }
 

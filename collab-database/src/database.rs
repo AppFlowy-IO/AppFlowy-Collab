@@ -4,10 +4,12 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::id_gen::ID_GEN;
 use crate::meta::MetaMap;
-use crate::rows::{BlockId, Cell, Row, RowId, RowUpdate};
+use crate::rows::{BlockId, Row, RowCell, RowId, RowUpdate};
 use crate::views::{
-  CreateDatabaseParams, CreateViewParams, DatabaseView, GroupSettingMap, RowOrder, ViewMap,
+  CreateDatabaseParams, CreateViewParams, DatabaseLayout, DatabaseView, FilterMap, GroupSettingMap,
+  LayoutSetting, RowOrder, SortMap, ViewMap,
 };
+use collab::core::any_map::AnyMapExtension;
 use collab::preclude::{
   Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
@@ -152,7 +154,7 @@ impl Database {
     self.blocks.get_rows_from_row_orders(&row_orders)
   }
 
-  pub fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<Cell> {
+  pub fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<RowCell> {
     let txn = self.root.transact();
     self.get_cells_for_field_with_txn(&txn, view_id, field_id)
   }
@@ -162,13 +164,16 @@ impl Database {
     txn: &T,
     view_id: &str,
     field_id: &str,
-  ) -> Vec<Cell> {
+  ) -> Vec<RowCell> {
     let row_orders = self.views.get_view_row_orders(txn, view_id);
     let rows = self.blocks.get_rows_from_row_orders(&row_orders);
     rows
       .into_iter()
-      .flat_map(|row| row.cells.get(field_id).cloned())
-      .collect::<Vec<Cell>>()
+      .flat_map(|row| match row.cells.get(field_id).cloned() {
+        None => None,
+        Some(cell) => Some(RowCell::new(row.id, cell)),
+      })
+      .collect::<Vec<RowCell>>()
   }
 
   pub fn remove_row(&self, row_id: RowId, block_id: BlockId) {
@@ -211,19 +216,29 @@ impl Database {
     })
   }
 
-  pub fn get_group_setting<T: From<GroupSettingMap>>(&self, view_id: &str) -> Vec<T> {
+  pub fn get_all_group_setting<T: TryFrom<GroupSettingMap>>(&self, view_id: &str) -> Vec<T> {
     self
       .views
       .get_view_group_setting(view_id)
       .into_iter()
-      .map(T::from)
+      .flat_map(|setting| T::try_from(setting).ok())
       .collect()
   }
 
-  pub fn add_group_setting(&self, view_id: &str, group_setting: impl Into<GroupSettingMap>) {
+  /// Add a group setting to the view. If the setting already exists, it will be replaced.
+  pub fn insert_group_setting(&self, view_id: &str, group_setting: impl Into<GroupSettingMap>) {
     self.views.update_view(view_id, |update| {
       update.update_groups(|group_update| {
-        group_update.push(group_setting.into());
+        let group_setting = group_setting.into();
+        if let Some(setting_id) = group_setting.get_str_value("id") {
+          if group_update.contains(&setting_id) {
+            group_update.update(&setting_id, |_| group_setting);
+          } else {
+            group_update.push(group_setting);
+          }
+        } else {
+          group_update.push(group_setting);
+        }
       });
     });
   }
@@ -257,6 +272,121 @@ impl Database {
       update.update_groups(|group_update| {
         group_update.remove(setting_id);
       });
+    });
+  }
+
+  pub fn insert_sort(&self, view_id: &str, sort: impl Into<SortMap>) {
+    self.views.update_view(view_id, |update| {
+      update.update_sorts(|sort_update| {
+        let sort = sort.into();
+        if let Some(sort_id) = sort.get_str_value("id") {
+          if sort_update.contains(&sort_id) {
+            sort_update.update(&sort_id, |_| sort);
+          } else {
+            sort_update.push(sort.into());
+          }
+        } else {
+          sort_update.push(sort.into());
+        }
+      });
+    });
+  }
+
+  pub fn get_all_sorts<T: TryFrom<SortMap>>(&self, view_id: &str) -> Vec<T> {
+    self
+      .views
+      .get_view_sorts(view_id)
+      .into_iter()
+      .flat_map(|sort| T::try_from(sort).ok())
+      .collect()
+  }
+
+  pub fn remove_sort(&self, view_id: &str, sort_id: &str) {
+    self.views.update_view(view_id, |update| {
+      update.update_sorts(|sort_update| {
+        sort_update.remove(sort_id);
+      });
+    });
+  }
+
+  pub fn remove_all_sorts(&self, view_id: &str) {
+    self.views.update_view(view_id, |update| {
+      update.update_sorts(|sort_update| {
+        sort_update.clear();
+      });
+    });
+  }
+
+  pub fn get_all_filters<T: TryFrom<FilterMap>>(&self, view_id: &str) -> Vec<T> {
+    self
+      .views
+      .get_view_filters(view_id)
+      .into_iter()
+      .flat_map(|setting| T::try_from(setting).ok())
+      .collect()
+  }
+
+  pub fn get_filter<T: TryFrom<FilterMap>>(&self, view_id: &str, filter_id: &str) -> Option<T> {
+    let filter_id = filter_id.to_string();
+    let mut filters = self
+      .views
+      .get_view_filters(view_id)
+      .into_iter()
+      .filter(|filter_map| filter_map.get_str_value("id").as_ref() == Some(&filter_id))
+      .flat_map(|value| T::try_from(value).ok())
+      .collect::<Vec<T>>();
+    if filters.is_empty() {
+      None
+    } else {
+      Some(filters.remove(0))
+    }
+  }
+
+  pub fn update_filter(&self, view_id: &str, filter_id: &str, f: impl FnOnce(&mut FilterMap)) {
+    self.views.update_view(view_id, |view_update| {
+      view_update.update_filters(|filter_update| {
+        filter_update.update(filter_id, |mut map| {
+          f(&mut map);
+          map
+        });
+      });
+    });
+  }
+
+  pub fn remove_filter(&self, view_id: &str, filter_id: &str) {
+    self.views.update_view(view_id, |update| {
+      update.update_filters(|filter_update| {
+        filter_update.remove(filter_id);
+      });
+    });
+  }
+
+  /// Add a group setting to the view. If the setting already exists, it will be replaced.
+  pub fn insert_filter(&self, view_id: &str, filter: impl Into<FilterMap>) {
+    self.views.update_view(view_id, |update| {
+      update.update_filters(|filter_update| {
+        let filter = filter.into();
+        if let Some(filter_id) = filter.get_str_value("id") {
+          if filter_update.contains(&filter_id) {
+            filter_update.update(&filter_id, |_| filter);
+          } else {
+            filter_update.push(filter);
+          }
+        } else {
+          filter_update.push(filter);
+        }
+      });
+    });
+  }
+
+  pub fn insert_layout_setting<T: Into<LayoutSetting>>(
+    &self,
+    view_id: &str,
+    layout_ty: &DatabaseLayout,
+    layout_setting: T,
+  ) {
+    self.views.update_view(view_id, |update| {
+      update.update_layout_settings(layout_ty, layout_setting.into());
     });
   }
 

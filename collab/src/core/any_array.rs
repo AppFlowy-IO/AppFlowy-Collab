@@ -87,6 +87,12 @@ impl<'a, 'b> ArrayMapUpdate<'a, 'b> {
     self
   }
 
+  pub fn clear(self) -> Self {
+    let len = self.array_ref.len(self.txn);
+    self.array_ref.remove_range(self.txn, 0, len);
+    self
+  }
+
   pub fn update<F>(self, id: &str, f: F) -> Self
   where
     F: FnOnce(AnyMap) -> AnyMap,
@@ -100,6 +106,10 @@ impl<'a, 'b> ArrayMapUpdate<'a, 'b> {
     }
 
     self
+  }
+
+  pub fn contains(&self, id: &str) -> bool {
+    self.index_of(id).is_some()
   }
 
   fn index_of(&self, id: &str) -> Option<u32> {
