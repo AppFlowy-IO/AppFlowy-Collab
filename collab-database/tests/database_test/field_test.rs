@@ -110,6 +110,31 @@ fn field_order_in_view_test() {
 }
 
 #[test]
+fn get_field_in_order_test() {
+  let database_test = create_database(1, "1");
+  for i in 0..3 {
+    database_test.insert_field(Field::new(
+      format!("f{}", i),
+      format!("text field {}", i),
+      0,
+      true,
+    ));
+  }
+  let fields = database_test.get_fields("v1");
+  assert_eq!(fields[0].id, "f0");
+  assert_eq!(fields[1].id, "f1");
+  assert_eq!(fields[2].id, "f2");
+
+  database_test.views.update_view("v1", |update| {
+    update.move_field_order(0, 2);
+  });
+  let fields = database_test.get_fields("v1");
+  assert_eq!(fields[0].id, "f1");
+  assert_eq!(fields[1].id, "f2");
+  assert_eq!(fields[2].id, "f0");
+}
+
+#[test]
 fn move_field_test() {
   let database_test = create_database(1, "1");
   let params = CreateViewParams {

@@ -1,3 +1,4 @@
+use crate::block::Blocks;
 use crate::database::{Database, DatabaseContext, DuplicatedDatabase};
 use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
@@ -18,6 +19,7 @@ pub struct UserDatabase {
   db: Arc<CollabKV>,
   #[allow(dead_code)]
   collab: Collab,
+  blocks: Blocks,
   database_records: DatabaseArray,
   database_relation: DatabaseRelation,
   open_handlers: RwLock<HashMap<String, Arc<Database>>>,
@@ -48,10 +50,12 @@ impl UserDatabase {
 
     let database_vec = DatabaseArray::new(databases);
     let database_relation = DatabaseRelation::new(relation);
+    let blocks = Blocks::new(uid, db.clone());
     Self {
       uid,
       db,
       collab,
+      blocks,
       database_records: database_vec,
       open_handlers: Default::default(),
       database_relation,
@@ -67,6 +71,7 @@ impl UserDatabase {
       None => {
         let context = DatabaseContext {
           collab: self.collab_for_database(database_id),
+          blocks: self.blocks.clone(),
         };
         let database = Arc::new(Database::get_or_create(database_id, context).ok()?);
         self
@@ -97,6 +102,7 @@ impl UserDatabase {
   ) -> Result<Arc<Database>, DatabaseError> {
     let context = DatabaseContext {
       collab: self.collab_for_database(database_id),
+      blocks: self.blocks.clone(),
     };
     self
       .database_records
@@ -151,7 +157,10 @@ impl UserDatabase {
       txn.apply_update(update);
     });
 
-    let context = DatabaseContext { collab };
+    let context = DatabaseContext {
+      collab,
+      blocks: self.blocks.clone(),
+    };
     Database::get_or_create(database_id, context)
   }
 
@@ -175,8 +184,8 @@ impl UserDatabase {
   ) -> Result<Arc<Database>, DatabaseError> {
     if let Some(database) = self.get_database(database_id) {
       if database.is_inline_view(view_id) {
-        let DuplicatedDatabase { view, rows, fields } = database.duplicate_data();
-        let params = CreateDatabaseParams::from_view(view, rows, fields);
+        let DuplicatedDatabase { view, fields } = database.duplicate_data();
+        let params = CreateDatabaseParams::from_view(view, fields);
         let database = self.create_database(database_id, params)?;
         Ok(database)
       } else {

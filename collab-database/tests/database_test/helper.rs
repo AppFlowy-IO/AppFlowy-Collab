@@ -1,14 +1,17 @@
+#![allow(clippy::upper_case_acronyms)]
 use anyhow::bail;
 use collab::core::any_map::AnyMapExtension;
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
-use collab::preclude::CollabBuilder;
+use collab::preclude::{lib0Any, CollabBuilder};
+use collab_database::block::{Blocks, CreateRowParams};
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::{Field, TypeOptionData, TypeOptionDataBuilder};
-use collab_database::rows::{CellsBuilder, Row};
+use collab_database::rows::{Cell, CellsBuilder};
 use collab_database::views::{
-  CreateViewParams, DatabaseLayout, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder,
-  GroupSettingBuilder, GroupSettingMap, SortMap, SortMapBuilder,
+  CreateDatabaseParams, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder,
+  GroupSettingBuilder, GroupSettingMap, LayoutSetting, LayoutSettingBuilder, SortMap,
+  SortMapBuilder,
 };
 use collab_persistence::CollabKV;
 use std::ops::{Deref, DerefMut};
@@ -41,11 +44,21 @@ impl DerefMut for DatabaseTest {
   }
 }
 
+/// Create a database with a single view.
 pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
+  let tempdir = TempDir::new().unwrap();
+  let path = tempdir.into_path();
+  let db = Arc::new(CollabKV::open(path).unwrap());
   let collab = CollabBuilder::new(uid, database_id).build();
   collab.initial();
-  let context = DatabaseContext { collab };
-  let database = Database::get_or_create(database_id, context).unwrap();
+  let blocks = Blocks::new(uid, db);
+  let context = DatabaseContext { collab, blocks };
+  let params = CreateDatabaseParams {
+    database_id: database_id.to_string(),
+    view_id: "v1".to_string(),
+    ..Default::default()
+  };
+  let database = Database::create_with_view(database_id, params, context).unwrap();
   DatabaseTest {
     database,
     cleaner: None,
@@ -64,8 +77,14 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabKV>, D
     .with_plugin(snapshot_plugin)
     .build();
   collab.initial();
-  let context = DatabaseContext { collab };
-  let database = Database::get_or_create(database_id, context).unwrap();
+  let blocks = Blocks::new(uid, db.clone());
+  let context = DatabaseContext { collab, blocks };
+  let params = CreateDatabaseParams {
+    view_id: "v1".to_string(),
+    name: "my first grid".to_string(),
+    ..Default::default()
+  };
+  let database = Database::create_with_view(database_id, params, context).unwrap();
   (
     db,
     DatabaseTest {
@@ -75,15 +94,16 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabKV>, D
   )
 }
 
-pub fn create_database_from_db(uid: i64, database_id: &str, db: Arc<CollabKV>) -> DatabaseTest {
+pub fn restore_database_from_db(uid: i64, database_id: &str, db: Arc<CollabKV>) -> DatabaseTest {
   let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
+  let blocks = Blocks::new(uid, db.clone());
   let snapshot_plugin = CollabSnapshotPlugin::new(uid, db, 5).unwrap();
   let collab = CollabBuilder::new(uid, database_id)
     .with_plugin(disk_plugin)
     .with_plugin(snapshot_plugin)
     .build();
   collab.initial();
-  let context = DatabaseContext { collab };
+  let context = DatabaseContext { collab, blocks };
   let database = Database::get_or_create(database_id, context).unwrap();
   DatabaseTest {
     database,
@@ -91,27 +111,39 @@ pub fn create_database_from_db(uid: i64, database_id: &str, db: Arc<CollabKV>) -
   }
 }
 
+/// Create a database with default data
+/// It will create a default view with id 'v1'
 pub fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
-  let row_1 = Row {
-    id: "r1".to_string(),
-    cells: CellsBuilder::new().insert_text_cell("f1", "123").build(),
+  let row_1 = CreateRowParams {
+    id: 1.into(),
+    cells: CellsBuilder::new()
+      .insert_cell("f1", TestTextCell::from("1f1cell"))
+      .insert_cell("f2", TestTextCell::from("1f2cell"))
+      .insert_cell("f3", TestTextCell::from("1f3cell"))
+      .build(),
     height: 0,
     visibility: true,
-    created_at: 1,
+    prev_row_id: None,
   };
-  let row_2 = Row {
-    id: "r2".to_string(),
-    cells: Default::default(),
+  let row_2 = CreateRowParams {
+    id: 2.into(),
+    cells: CellsBuilder::new()
+      .insert_cell("f1", TestTextCell::from("2f1cell"))
+      .insert_cell("f2", TestTextCell::from("2f2cell"))
+      .build(),
     height: 0,
     visibility: true,
-    created_at: 2,
+    prev_row_id: None,
   };
-  let row_3 = Row {
-    id: "r3".to_string(),
-    cells: Default::default(),
+  let row_3 = CreateRowParams {
+    id: 3.into(),
+    cells: CellsBuilder::new()
+      .insert_cell("f1", TestTextCell::from("3f1cell"))
+      .insert_cell("f3", TestTextCell::from("3f3cell"))
+      .build(),
     height: 0,
     visibility: true,
-    created_at: 3,
+    prev_row_id: None,
   };
 
   let database_test = create_database(uid, database_id);
@@ -127,18 +159,6 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   database_test.insert_field(field_2);
   database_test.insert_field(field_3);
 
-  database_test
-}
-
-pub fn create_database_grid_view(uid: i64, database_id: &str, view_id: &str) -> DatabaseTest {
-  let database_test = create_database_with_default_data(uid, database_id);
-  let params = CreateViewParams {
-    view_id: view_id.to_string(),
-    name: "my first grid".to_string(),
-    layout: DatabaseLayout::Grid,
-    ..Default::default()
-  };
-  database_test.create_view(params);
   database_test
 }
 
@@ -165,16 +185,16 @@ impl Drop for Cleaner {
 pub struct TestFilter {
   pub id: String,
   pub field_id: String,
-  pub field_type: i64,
+  pub field_type: TestFieldType,
   pub condition: i64,
   pub content: String,
 }
 
 const FILTER_ID: &str = "id";
-const FIELD_ID: &str = "field_id";
-const FIELD_TYPE: &str = "ty";
-const FILTER_CONDITION: &str = "condition";
-const FILTER_CONTENT: &str = "content";
+pub const FIELD_ID: &str = "field_id";
+pub const FIELD_TYPE: &str = "ty";
+pub const FILTER_CONDITION: &str = "condition";
+pub const FILTER_CONTENT: &str = "content";
 
 impl From<TestFilter> for FilterMap {
   fn from(data: TestFilter) -> Self {
@@ -182,25 +202,38 @@ impl From<TestFilter> for FilterMap {
       .insert_str_value(FILTER_ID, data.id)
       .insert_str_value(FIELD_ID, data.field_id)
       .insert_str_value(FILTER_CONTENT, data.content)
-      .insert_i64_value(FIELD_TYPE, data.field_type)
+      .insert_i64_value(FIELD_TYPE, data.field_type.into())
       .insert_i64_value(FILTER_CONDITION, data.condition)
       .build()
   }
 }
 
-impl From<FilterMap> for TestFilter {
-  fn from(filter: FilterMap) -> Self {
-    let id = filter.get_str_value(FILTER_ID).unwrap();
-    let field_id = filter.get_str_value(FIELD_ID).unwrap();
-    let condition = filter.get_i64_value(FILTER_CONDITION).unwrap_or(0);
-    let content = filter.get_str_value(FILTER_CONTENT).unwrap_or_default();
-    let field_type = filter.get_i64_value(FIELD_TYPE).unwrap_or_default();
-    TestFilter {
-      id,
-      field_id,
-      field_type,
-      condition,
-      content,
+impl TryFrom<FilterMap> for TestFilter {
+  type Error = anyhow::Error;
+
+  fn try_from(filter: FilterMap) -> Result<Self, Self::Error> {
+    match (
+      filter.get_str_value(FILTER_ID),
+      filter.get_str_value(FIELD_ID),
+    ) {
+      (Some(id), Some(field_id)) => {
+        let condition = filter.get_i64_value(FILTER_CONDITION).unwrap_or(0);
+        let content = filter.get_str_value(FILTER_CONTENT).unwrap_or_default();
+        let field_type = filter
+          .get_i64_value(FIELD_TYPE)
+          .map(TestFieldType::from)
+          .unwrap_or_default();
+        Ok(TestFilter {
+          id,
+          field_id,
+          field_type,
+          condition,
+          content,
+        })
+      },
+      _ => {
+        bail!("Invalid filter data")
+      },
     }
   }
 }
@@ -244,25 +277,37 @@ const GROUP_ID: &str = "id";
 pub const GROUPS: &str = "groups";
 pub const CONTENT: &str = "content";
 
-impl From<GroupSettingMap> for TestGroupSetting {
-  fn from(value: GroupSettingMap) -> Self {
-    Self::from(&value)
+impl TryFrom<&GroupSettingMap> for TestGroupSetting {
+  type Error = anyhow::Error;
+
+  fn try_from(value: &GroupSettingMap) -> Result<Self, Self::Error> {
+    Self::try_from(value.clone())
   }
 }
 
-impl From<&GroupSettingMap> for TestGroupSetting {
-  fn from(value: &GroupSettingMap) -> Self {
-    let id = value.get_str_value(GROUP_ID).unwrap();
-    let field_id = value.get_str_value(FIELD_ID).unwrap();
-    let field_type = value.get_i64_value(FIELD_TYPE).unwrap();
-    let content = value.get_str_value(CONTENT).unwrap_or_default();
-    let groups = value.get_array(GROUPS);
-    Self {
-      id,
-      field_id,
-      field_type,
-      groups,
-      content,
+impl TryFrom<GroupSettingMap> for TestGroupSetting {
+  type Error = anyhow::Error;
+
+  fn try_from(value: GroupSettingMap) -> Result<Self, Self::Error> {
+    match (
+      value.get_str_value(GROUP_ID),
+      value.get_str_value(FIELD_ID),
+      value.get_i64_value(FIELD_TYPE),
+    ) {
+      (Some(id), Some(field_id), Some(field_type)) => {
+        let content = value.get_str_value(CONTENT).unwrap_or_default();
+        let groups = value.try_get_array(GROUPS);
+        Ok(Self {
+          id,
+          field_id,
+          field_type,
+          groups,
+          content,
+        })
+      },
+      _ => {
+        bail!("Invalid group setting data")
+      },
     }
   }
 }
@@ -290,9 +335,32 @@ pub struct TestSort {
 const SORT_ID: &str = "id";
 const SORT_CONDITION: &str = "condition";
 
-impl From<SortMap> for TestSort {
-  fn from(_: SortMap) -> Self {
-    todo!()
+impl TryFrom<SortMap> for TestSort {
+  type Error = anyhow::Error;
+
+  fn try_from(value: SortMap) -> Result<Self, Self::Error> {
+    match (
+      value.get_str_value(SORT_ID),
+      value.get_str_value(FIELD_ID),
+      value.get_i64_value(FIELD_TYPE),
+    ) {
+      (Some(id), Some(field_id), Some(field_type)) => {
+        let condition = value
+          .get_i64_value(SORT_CONDITION)
+          .map(|value| SortCondition::try_from(value).unwrap())
+          .unwrap_or_default();
+
+        Ok(Self {
+          id,
+          field_id,
+          field_type,
+          condition,
+        })
+      },
+      _ => {
+        bail!("Invalid group setting data")
+      },
+    }
   }
 }
 
@@ -307,7 +375,7 @@ impl From<TestSort> for SortMap {
   }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum SortCondition {
   Ascending = 0,
@@ -402,6 +470,7 @@ pub enum TestDateFormat {
   ISO = 2,
   Friendly = 3,
 }
+
 impl std::default::Default for TestDateFormat {
   fn default() -> Self {
     TestDateFormat::Friendly
@@ -467,6 +536,163 @@ impl TestTimeFormat {
     match self {
       TestTimeFormat::TwelveHour => "%I:%M %p",
       TestTimeFormat::TwentyFourHour => "%R",
+    }
+  }
+}
+
+pub struct TestTextCell(pub String);
+
+impl From<TestTextCell> for Cell {
+  fn from(text_cell: TestTextCell) -> Self {
+    let mut cell = Self::new();
+    cell.insert(
+      "data".to_string(),
+      lib0Any::String(text_cell.0.into_boxed_str()),
+    );
+    cell
+  }
+}
+
+impl From<Cell> for TestTextCell {
+  fn from(cell: Cell) -> Self {
+    let data = cell.get_str_value("data").unwrap();
+    Self(data)
+  }
+}
+
+impl From<&str> for TestTextCell {
+  fn from(s: &str) -> Self {
+    Self(s.to_string())
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct TestCalendarLayoutSetting {
+  pub layout_ty: TestCalendarLayout,
+  pub first_day_of_week: i32,
+  pub show_weekends: bool,
+  pub show_week_numbers: bool,
+  pub field_id: String,
+}
+
+impl From<LayoutSetting> for TestCalendarLayoutSetting {
+  fn from(setting: LayoutSetting) -> Self {
+    let layout_ty = setting
+      .get_i64_value("layout_ty")
+      .map(TestCalendarLayout::from)
+      .unwrap_or_default();
+    let first_day_of_week = setting
+      .get_i64_value("first_day_of_week")
+      .unwrap_or(DEFAULT_FIRST_DAY_OF_WEEK as i64) as i32;
+    let show_weekends = setting.get_bool_value("show_weekends").unwrap_or_default();
+    let show_week_numbers = setting
+      .get_bool_value("show_week_numbers")
+      .unwrap_or_default();
+    let field_id = setting.get_str_value("field_id").unwrap_or_default();
+    Self {
+      layout_ty,
+      first_day_of_week,
+      show_weekends,
+      show_week_numbers,
+      field_id,
+    }
+  }
+}
+
+impl From<TestCalendarLayoutSetting> for LayoutSetting {
+  fn from(setting: TestCalendarLayoutSetting) -> Self {
+    LayoutSettingBuilder::new()
+      .insert_i64_value("layout_ty", setting.layout_ty.value())
+      .insert_i64_value("first_day_of_week", setting.first_day_of_week as i64)
+      .insert_bool_value("show_week_numbers", setting.show_week_numbers)
+      .insert_bool_value("show_weekends", setting.show_weekends)
+      .insert_str_value("field_id", setting.field_id)
+      .build()
+  }
+}
+
+impl TestCalendarLayoutSetting {
+  pub fn new(field_id: String) -> Self {
+    TestCalendarLayoutSetting {
+      layout_ty: TestCalendarLayout::default(),
+      first_day_of_week: DEFAULT_FIRST_DAY_OF_WEEK,
+      show_weekends: DEFAULT_SHOW_WEEKENDS,
+      show_week_numbers: DEFAULT_SHOW_WEEK_NUMBERS,
+      field_id,
+    }
+  }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
+#[repr(u8)]
+pub enum TestCalendarLayout {
+  #[default]
+  Month = 0,
+  Week = 1,
+  Day = 2,
+}
+
+impl From<i64> for TestCalendarLayout {
+  fn from(value: i64) -> Self {
+    match value {
+      0 => TestCalendarLayout::Month,
+      1 => TestCalendarLayout::Week,
+      2 => TestCalendarLayout::Day,
+      _ => TestCalendarLayout::Month,
+    }
+  }
+}
+
+impl TestCalendarLayout {
+  pub fn value(&self) -> i64 {
+    *self as i64
+  }
+}
+
+pub const DEFAULT_FIRST_DAY_OF_WEEK: i32 = 0;
+pub const DEFAULT_SHOW_WEEKENDS: bool = true;
+pub const DEFAULT_SHOW_WEEK_NUMBERS: bool = true;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum TestFieldType {
+  RichText = 0,
+  Number = 1,
+  DateTime = 2,
+  SingleSelect = 3,
+  MultiSelect = 4,
+  Checkbox = 5,
+  URL = 6,
+  Checklist = 7,
+}
+
+impl Default for TestFieldType {
+  fn default() -> Self {
+    TestFieldType::RichText
+  }
+}
+
+impl From<TestFieldType> for i64 {
+  fn from(ty: TestFieldType) -> Self {
+    ty as i64
+  }
+}
+
+impl std::convert::From<i64> for TestFieldType {
+  fn from(ty: i64) -> Self {
+    match ty {
+      0 => TestFieldType::RichText,
+      1 => TestFieldType::Number,
+      2 => TestFieldType::DateTime,
+      3 => TestFieldType::SingleSelect,
+      4 => TestFieldType::MultiSelect,
+      5 => TestFieldType::Checkbox,
+      6 => TestFieldType::URL,
+      7 => TestFieldType::Checklist,
+      _ => {
+        tracing::error!("Can't parser FieldType from value: {}", ty);
+        TestFieldType::RichText
+      },
     }
   }
 }

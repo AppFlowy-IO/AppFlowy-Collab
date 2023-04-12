@@ -1,25 +1,40 @@
-use crate::helper::{
-  create_database, create_database_grid_view, create_database_with_default_data, TestFilter,
-};
+use crate::helper::{create_database, create_database_with_default_data, TestFilter};
 use assert_json_diff::assert_json_eq;
 use collab::preclude::lib0Any;
 use collab_database::fields::Field;
-use collab_database::rows::Row;
+
 use collab_database::views::{
   CreateViewParams, DatabaseLayout, LayoutSettingBuilder, LayoutSettings,
 };
 use nanoid::nanoid;
 
+use collab_database::block::CreateRowParams;
+use collab_database::database::gen_row_id;
 use serde_json::json;
 
 #[test]
 fn create_initial_database_test() {
   let database_test = create_database(1, "1");
   assert_json_eq!(
-    json!({
+    json!( {
       "fields": [],
       "rows": [],
-      "views": []
+      "views": [
+        {
+          "created_at": 0,
+          "database_id": "1",
+          "field_orders": [],
+          "filters": [],
+          "group_settings": [],
+          "id": "v1",
+          "layout": 0,
+          "layout_settings": {},
+          "modified_at": 0,
+          "name": "",
+          "row_orders": [],
+          "sorts": []
+        }
+      ]
     }),
     database_test.to_json_value()
   );
@@ -28,14 +43,6 @@ fn create_initial_database_test() {
 #[test]
 fn create_database_with_single_view_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    name: "my first grid".to_string(),
-    layout: DatabaseLayout::Grid,
-    ..Default::default()
-  };
-
-  database_test.create_view(params);
   let view = database_test.views.get_view("v1").unwrap();
   assert_eq!(view.row_orders.len(), 3);
   assert_eq!(view.field_orders.len(), 3);
@@ -44,14 +51,6 @@ fn create_database_with_single_view_test() {
 #[test]
 fn create_same_database_view_twice_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    name: "my first grid".to_string(),
-    layout: DatabaseLayout::Grid,
-    ..Default::default()
-  };
-  database_test.create_view(params);
-
   let params = CreateViewParams {
     view_id: "v1".to_string(),
     name: "my second grid".to_string(),
@@ -66,11 +65,11 @@ fn create_same_database_view_twice_test() {
 
 #[test]
 fn create_database_row_test() {
-  let database_test = create_database_grid_view(1, "1", "v1");
+  let database_test = create_database_with_default_data(1, "1");
 
-  let row_id = nanoid!(4);
-  database_test.push_row(Row {
-    id: row_id.clone(),
+  let row_id = gen_row_id();
+  database_test.push_row(CreateRowParams {
+    id: row_id,
     ..Default::default()
   });
 
@@ -80,7 +79,7 @@ fn create_database_row_test() {
 
 #[test]
 fn create_database_field_test() {
-  let database_test = create_database_grid_view(1, "1", "v1");
+  let database_test = create_database_with_default_data(1, "1");
 
   let field_id = nanoid!(4);
   database_test.insert_field(Field {
@@ -125,7 +124,7 @@ fn create_database_view_with_filter_test() {
   let filters = view
     .filters
     .into_iter()
-    .map(TestFilter::from)
+    .map(|value| TestFilter::try_from(value).unwrap())
     .collect::<Vec<TestFilter>>();
   assert_eq!(filters.len(), 2);
   assert_eq!(filters[0].id, "filter1");
@@ -189,13 +188,27 @@ fn delete_inline_database_view_test() {
 #[test]
 fn duplicate_database_view_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    ..Default::default()
-  };
-  database_test.create_view(params);
   database_test.duplicate_view("v1");
 
   let views = database_test.views.get_all_views();
   assert_eq!(views.len(), 2);
+}
+
+#[test]
+fn get_database_view_layout_test() {
+  let database_test = create_database_with_default_data(1, "1");
+
+  let layout = database_test.views.get_view_layout("v1").unwrap();
+  assert_eq!(layout, DatabaseLayout::Grid);
+}
+
+#[test]
+fn update_database_view_layout_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  database_test.views.update_view("v1", |update| {
+    update.set_layout_type(DatabaseLayout::Calendar);
+  });
+
+  let layout = database_test.views.get_view_layout("v1").unwrap();
+  assert_eq!(layout, DatabaseLayout::Calendar);
 }

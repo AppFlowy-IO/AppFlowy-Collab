@@ -1,4 +1,4 @@
-use crate::rows::Row;
+use crate::rows::{BlockId, Row, RowId};
 use crate::views::{OrderArray, OrderIdentifiable};
 use collab::preclude::{lib0Any, ArrayRef, ReadTxn, YrsValue};
 use serde::{Deserialize, Serialize};
@@ -46,19 +46,24 @@ impl DerefMut for RowOrderArray {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RowOrder {
-  pub id: String,
+  pub id: RowId,
+  pub block_id: BlockId,
   pub height: i32,
 }
 
 impl OrderIdentifiable for RowOrder {
-  fn identify_id(&self) -> &str {
-    &self.id
+  fn identify_id(&self) -> String {
+    self.id.to_string()
   }
 }
 
 impl RowOrder {
-  pub fn new(id: String, height: i32) -> RowOrder {
-    Self { id, height }
+  pub fn new(id: RowId, block_id: BlockId, height: i32) -> RowOrder {
+    Self {
+      id,
+      block_id,
+      height,
+    }
   }
 }
 
@@ -80,12 +85,18 @@ impl From<RowOrder> for lib0Any {
 impl From<&Row> for RowOrder {
   fn from(row: &Row) -> Self {
     Self {
-      id: row.id.clone(),
+      id: row.id,
+      block_id: row.block_id,
       height: row.height,
     }
   }
 }
 
+impl From<&RowOrder> for RowOrder {
+  fn from(row: &RowOrder) -> Self {
+    row.clone()
+  }
+}
 pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, _txn: &T) -> Option<RowOrder> {
   if let YrsValue::Any(value) = value {
     Some(RowOrder::from(value))

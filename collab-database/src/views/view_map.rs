@@ -1,7 +1,10 @@
 use crate::views::{
-  view_from_map_ref, view_from_value, view_id_from_map_ref, DatabaseView, ViewBuilder, ViewUpdate,
+  filters_from_map_ref, group_setting_from_map_ref, layout_setting_from_map_ref,
+  sorts_from_map_ref, view_from_map_ref, view_from_value, view_id_from_map_ref, DatabaseLayout,
+  DatabaseView, FieldOrder, FieldOrderArray, FilterMap, GroupSettingMap, LayoutSetting, OrderArray,
+  RowOrder, RowOrderArray, SortMap, ViewBuilder, ViewUpdate, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
 };
-use collab::preclude::{Map, MapRef, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 
 pub struct ViewMap {
   container: MapRefWrapper,
@@ -35,6 +38,63 @@ impl ViewMap {
     });
   }
 
+  pub fn get_view_group_setting(&self, view_id: &str) -> Vec<GroupSettingMap> {
+    let txn = self.container.transact();
+    self.get_view_group_setting_with_txn(&txn, view_id)
+  }
+
+  pub fn get_view_group_setting_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+  ) -> Vec<GroupSettingMap> {
+    if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
+      group_setting_from_map_ref(txn, &map_ref)
+    } else {
+      vec![]
+    }
+  }
+
+  pub fn get_view_sorts(&self, view_id: &str) -> Vec<SortMap> {
+    let txn = self.container.transact();
+    self.get_view_sorts_with_txn(&txn, view_id)
+  }
+
+  pub fn get_view_sorts_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<SortMap> {
+    if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
+      sorts_from_map_ref(txn, &map_ref)
+    } else {
+      vec![]
+    }
+  }
+  pub fn get_view_filters(&self, view_id: &str) -> Vec<FilterMap> {
+    let txn = self.container.transact();
+    self.get_view_filters_with_txn(&txn, view_id)
+  }
+
+  pub fn get_view_filters_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FilterMap> {
+    if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
+      filters_from_map_ref(txn, &map_ref)
+    } else {
+      vec![]
+    }
+  }
+
+  pub fn get_layout_setting<T: From<LayoutSetting>>(
+    &self,
+    view_id: &str,
+    layout_ty: &DatabaseLayout,
+  ) -> Option<T> {
+    let txn = self.container.transact();
+    if let Some(map_ref) = self.container.get_map_with_txn(&txn, view_id) {
+      layout_setting_from_map_ref(&txn, &map_ref)
+        .get(layout_ty)
+        .map(|value| T::from(value.clone()))
+    } else {
+      None
+    }
+  }
+
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
     let txn = self.container.transact();
     self.get_view_with_txn(&txn, view_id)
@@ -56,6 +116,44 @@ impl ViewMap {
       .iter(txn)
       .flat_map(|(_k, v)| view_from_value(v, txn))
       .collect::<Vec<_>>()
+  }
+
+  pub fn get_view_layout(&self, view_id: &str) -> Option<DatabaseLayout> {
+    let txn = self.container.transact();
+    self
+      .container
+      .get_map_with_txn(&txn, view_id)
+      .map(|map_ref| {
+        map_ref
+          .get_i64_with_txn(&txn, VIEW_LAYOUT)
+          .map(|value| DatabaseLayout::try_from(value).ok())?
+      })?
+  }
+
+  pub fn get_view_row_orders_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<RowOrder> {
+    self
+      .container
+      .get_map_with_txn(txn, view_id)
+      .map(|map_ref| {
+        map_ref
+          .get_array_ref_with_txn(txn, ROW_ORDERS)
+          .map(|array_ref| RowOrderArray::new(array_ref.into_inner()).get_orders_with_txn(txn))
+          .unwrap_or_default()
+      })
+      .unwrap_or_default()
+  }
+
+  pub fn get_view_field_orders_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FieldOrder> {
+    self
+      .container
+      .get_map_with_txn(txn, view_id)
+      .map(|map_ref| {
+        map_ref
+          .get_array_ref_with_txn(txn, FIELD_ORDERS)
+          .map(|array_ref| FieldOrderArray::new(array_ref.into_inner()).get_orders_with_txn(txn))
+          .unwrap_or_default()
+      })
+      .unwrap_or_default()
   }
 
   pub fn update_view<F>(&self, view_id: &str, f: F)

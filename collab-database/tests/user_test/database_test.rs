@@ -1,5 +1,6 @@
 use crate::helper::user_database_test;
-use collab_database::rows::Row;
+use collab_database::block::CreateRowParams;
+
 use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 
 #[test]
@@ -70,13 +71,19 @@ fn duplicate_database_inline_view_test() {
     .unwrap();
 
   let duplicated_database = test.duplicate_view("d1", "v1").unwrap();
-  duplicated_database.push_row(Row {
-    id: "r1".to_string(),
+  let duplicated_view_id = duplicated_database.get_inline_view_id();
+  duplicated_database.push_row(CreateRowParams {
+    id: 1.into(),
     ..Default::default()
   });
 
-  assert_eq!(duplicated_database.rows.get_all_rows().len(), 1);
-  assert!(database.rows.get_all_rows().is_empty());
+  assert_eq!(
+    duplicated_database
+      .get_rows_for_view(&duplicated_view_id)
+      .len(),
+    1
+  );
+  assert!(database.get_rows_for_view("v1").is_empty());
 }
 
 #[test]
@@ -99,14 +106,14 @@ fn duplicate_database_view_test() {
   });
 
   let duplicated_database = test.duplicate_view("d1", "v2").unwrap();
-  duplicated_database.push_row(Row {
-    id: "r1".to_string(),
+  duplicated_database.push_row(CreateRowParams {
+    id: 1.into(),
     ..Default::default()
   });
 
   // Duplicated database should have the same rows as the original database
-  assert_eq!(duplicated_database.rows.get_all_rows().len(), 1);
-  assert_eq!(database.rows.get_all_rows().len(), 1);
+  assert_eq!(duplicated_database.get_rows_for_view("v2").len(), 1);
+  assert_eq!(database.get_rows_for_view("v1").len(), 1);
 }
 
 #[test]

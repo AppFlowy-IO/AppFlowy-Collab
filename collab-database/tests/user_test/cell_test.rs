@@ -1,13 +1,14 @@
 use crate::helper::{user_database_test, UserDatabaseTest};
 use collab::core::any_map::AnyMapExtension;
-use collab_database::rows::{new_cell_builder, Row};
+use collab_database::block::CreateRowParams;
+use collab_database::rows::new_cell_builder;
 use collab_database::views::CreateDatabaseParams;
 
 #[test]
 fn insert_cell_test() {
   let test = user_database_with_default_row();
   let database = test.get_database("d1").unwrap();
-  database.rows.update_row("r1", |row_update| {
+  database.update_row(1, |row_update| {
     row_update.update_cells(|cells_update| {
       cells_update.insert(
         "f1",
@@ -16,7 +17,7 @@ fn insert_cell_test() {
     });
   });
 
-  let row = database.rows.get_row("r1").unwrap();
+  let row = database.get_row(1).unwrap();
   let cell = row.cells.get("f1").unwrap();
   assert_eq!(cell.get_i64_value("level").unwrap(), 1);
 }
@@ -25,7 +26,7 @@ fn insert_cell_test() {
 fn update_cell_test() {
   let test = user_database_with_default_row();
   let database = test.get_database("d1").unwrap();
-  database.rows.update_row("r1", |row_update| {
+  database.update_row(1, |row_update| {
     row_update.update_cells(|cells_update| {
       cells_update.insert(
         "f1",
@@ -34,7 +35,7 @@ fn update_cell_test() {
     });
   });
 
-  database.rows.update_row("r1", |row_update| {
+  database.update_row(1, |row_update| {
     row_update.update_cells(|cells_update| {
       cells_update.update(
         "f1",
@@ -46,7 +47,7 @@ fn update_cell_test() {
     });
   });
 
-  let row = database.rows.get_row("r1").unwrap();
+  let row = database.get_row(1).unwrap();
   let cell = row.cells.get("f1").unwrap();
   assert_eq!(cell.get_i64_value("level").unwrap(), 2);
   assert_eq!(cell.get_str_value("name").unwrap(), "appflowy");
@@ -65,8 +66,8 @@ fn update_not_exist_row_test() {
     )
     .unwrap();
 
-  database.rows.update_row("r1", |_row_update| {});
-  let row = database.rows.get_row("r1");
+  database.update_row(1, |_row_update| {});
+  let row = database.get_row(1);
   assert!(row.is_none())
 }
 
@@ -82,13 +83,10 @@ fn user_database_with_default_row() -> UserDatabaseTest {
     )
     .unwrap();
 
-  database.insert_row(
-    Row {
-      id: "r1".to_string(),
-      ..Default::default()
-    },
-    None,
-  );
+  database.create_row(CreateRowParams {
+    id: 1.into(),
+    ..Default::default()
+  });
 
   test
 }

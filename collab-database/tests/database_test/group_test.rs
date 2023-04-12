@@ -12,7 +12,7 @@ fn create_database_view_with_group_test() {
   let group_settings = view
     .group_settings
     .iter()
-    .map(TestGroupSetting::from)
+    .map(|value| TestGroupSetting::try_from(value).unwrap())
     .collect::<Vec<TestGroupSetting>>();
 
   assert_eq!(group_settings[1].id, "g2");
@@ -25,11 +25,6 @@ fn create_database_view_with_group_test() {
 #[test]
 fn create_database_view_with_group_test2() {
   let database_test = create_database_with_default_data(1, "1");
-  let params = CreateViewParams {
-    view_id: "v1".to_string(),
-    ..Default::default()
-  };
-  database_test.create_view(params);
   let group_setting = TestGroupSetting {
     id: "g1".to_string(),
     field_id: "".to_string(),
@@ -48,20 +43,89 @@ fn create_database_view_with_group_test2() {
     ],
     content: "".to_string(),
   };
-  database_test.add_group_setting("v1", group_setting);
+  database_test.insert_group_setting("v1", group_setting);
 
   let view = database_test.views.get_view("v1").unwrap();
   assert_eq!(view.group_settings.len(), 1);
   let group_settings = view
     .group_settings
     .iter()
-    .map(TestGroupSetting::from)
+    .map(|value| TestGroupSetting::try_from(value).unwrap())
     .collect::<Vec<TestGroupSetting>>();
 
   assert_eq!(group_settings[0].id, "g1");
   assert_eq!(group_settings[0].groups.len(), 2);
   assert_eq!(group_settings[0].groups[0].id, "group_item1");
   assert_eq!(group_settings[0].groups[1].id, "group_item2");
+}
+
+#[test]
+fn get_single_database_group_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let group_setting = TestGroupSetting {
+    id: "g1".to_string(),
+    field_id: "f1".to_string(),
+    field_type: Default::default(),
+    groups: vec![
+      TestGroup {
+        id: "group_item1".to_string(),
+        name: "group item 1".to_string(),
+        visible: false,
+      },
+      TestGroup {
+        id: "group_item2".to_string(),
+        name: "group item 2".to_string(),
+        visible: false,
+      },
+    ],
+    content: "test group".to_string(),
+  };
+  database_test.insert_group_setting("v1", group_setting);
+  let settings = database_test.get_all_group_setting::<TestGroupSetting>("v1");
+  assert_eq!(settings.len(), 1);
+  assert_eq!(settings[0].id, "g1");
+  assert_eq!(settings[0].content, "test group");
+  assert_eq!(settings[0].groups.len(), 2);
+  assert_eq!(settings[0].groups[0].id, "group_item1");
+  assert_eq!(settings[0].groups[1].id, "group_item2");
+}
+
+#[test]
+fn get_multiple_database_group_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let group_setting_1 = TestGroupSetting {
+    id: "g1".to_string(),
+    field_id: "f1".to_string(),
+    field_type: Default::default(),
+    groups: vec![
+      TestGroup {
+        id: "group_item1".to_string(),
+        name: "group item 1".to_string(),
+        visible: false,
+      },
+      TestGroup {
+        id: "group_item2".to_string(),
+        name: "group item 2".to_string(),
+        visible: false,
+      },
+    ],
+    content: "test group".to_string(),
+  };
+  let group_setting_2 = TestGroupSetting {
+    id: "g2".to_string(),
+    field_id: "f1".to_string(),
+    field_type: Default::default(),
+    groups: vec![],
+    content: "test group 2".to_string(),
+  };
+  database_test.insert_group_setting("v1", group_setting_1);
+  database_test.insert_group_setting("v1", group_setting_2);
+
+  let settings = database_test.get_all_group_setting::<TestGroupSetting>("v1");
+  assert_eq!(settings.len(), 2);
+  assert_eq!(settings[1].id, "g2");
+  assert_eq!(settings[1].content, "test group 2");
+  assert_eq!(settings[1].groups.len(), 0);
 }
 
 #[test]
@@ -84,7 +148,7 @@ fn extend_database_view_group_test() {
   let group_settings = view
     .group_settings
     .iter()
-    .map(TestGroupSetting::from)
+    .map(|value| TestGroupSetting::try_from(value).unwrap())
     .collect::<Vec<TestGroupSetting>>();
 
   assert_eq!(group_settings[0].content, "hello world");
@@ -105,7 +169,7 @@ fn remove_database_view_group_test() {
   let group_settings = view
     .group_settings
     .iter()
-    .map(TestGroupSetting::from)
+    .map(|value| TestGroupSetting::try_from(value).unwrap())
     .collect::<Vec<TestGroupSetting>>();
 
   assert_eq!(group_settings[0].id, "g1");
@@ -120,7 +184,7 @@ fn update_database_view_group_test() {
   let group_settings = view
     .group_settings
     .iter()
-    .map(TestGroupSetting::from)
+    .map(|value| TestGroupSetting::try_from(value).unwrap())
     .collect::<Vec<TestGroupSetting>>();
   assert!(!group_settings[0].groups[0].visible);
 
@@ -134,7 +198,7 @@ fn update_database_view_group_test() {
   let group_settings = view
     .group_settings
     .iter()
-    .map(TestGroupSetting::from)
+    .map(|value| TestGroupSetting::try_from(value).unwrap())
     .collect::<Vec<TestGroupSetting>>();
   assert!(group_settings[0].groups[0].visible);
 }
@@ -143,7 +207,7 @@ fn create_database_with_two_groups() -> DatabaseTest {
   let database_test = create_database_with_default_data(1, "1");
   let group_1 = TestGroupSetting {
     id: "g1".to_string(),
-    field_id: "".to_string(),
+    field_id: "f1".to_string(),
     field_type: Default::default(),
     groups: vec![
       TestGroup {
@@ -161,7 +225,7 @@ fn create_database_with_two_groups() -> DatabaseTest {
   };
   let group_2 = TestGroupSetting {
     id: "g2".to_string(),
-    field_id: "".to_string(),
+    field_id: "f2".to_string(),
     field_type: Default::default(),
     groups: vec![],
     content: "".to_string(),
