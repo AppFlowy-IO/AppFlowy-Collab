@@ -56,6 +56,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
     view_id: "v1".to_string(),
+    name: "my first database view".to_string(),
     ..Default::default()
   };
   let database = Database::create_with_view(database_id, params, context).unwrap();

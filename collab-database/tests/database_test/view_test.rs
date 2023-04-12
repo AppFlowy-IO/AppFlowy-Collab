@@ -49,6 +49,14 @@ fn create_database_with_single_view_test() {
 }
 
 #[test]
+fn get_database_view_description_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let views = database_test.get_all_views_description();
+  assert_eq!(views.len(), 1);
+  assert_eq!(views[0].name, "my first database view");
+}
+
+#[test]
 fn create_same_database_view_twice_test() {
   let database_test = create_database_with_default_data(1, "1");
   let params = CreateViewParams {

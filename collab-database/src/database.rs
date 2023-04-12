@@ -7,7 +7,7 @@ use crate::meta::MetaMap;
 use crate::rows::{BlockId, Row, RowCell, RowId, RowUpdate};
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, DatabaseLayout, DatabaseView, FilterMap, GroupSettingMap,
-  LayoutSetting, RowOrder, SortMap, ViewMap,
+  LayoutSetting, RowOrder, SortMap, ViewDescription, ViewMap,
 };
 use collab::core::any_map::AnyMapExtension;
 use collab::preclude::{
@@ -456,6 +456,11 @@ impl Database {
         .get_view_row_orders_with_txn(txn, &inline_view_id);
       self.create_inline_view_with_txn(txn, params, row_orders);
     })
+  }
+
+  pub fn get_all_views_description(&self) -> Vec<ViewDescription> {
+    let txn = self.root.transact();
+    self.views.get_all_views_description_with_txn(&txn)
   }
 
   pub fn create_inline_view_with_txn(

@@ -1,8 +1,9 @@
 use crate::views::{
   filters_from_map_ref, group_setting_from_map_ref, layout_setting_from_map_ref,
-  sorts_from_map_ref, view_from_map_ref, view_from_value, view_id_from_map_ref, DatabaseLayout,
-  DatabaseView, FieldOrder, FieldOrderArray, FilterMap, GroupSettingMap, LayoutSetting, OrderArray,
-  RowOrder, RowOrderArray, SortMap, ViewBuilder, ViewUpdate, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
+  sorts_from_map_ref, view_description_from_value, view_from_map_ref, view_from_value,
+  view_id_from_map_ref, DatabaseLayout, DatabaseView, FieldOrder, FieldOrderArray, FilterMap,
+  GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray, SortMap, ViewBuilder,
+  ViewDescription, ViewUpdate, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
 };
 use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 
@@ -115,6 +116,14 @@ impl ViewMap {
       .container
       .iter(txn)
       .flat_map(|(_k, v)| view_from_value(v, txn))
+      .collect::<Vec<_>>()
+  }
+
+  pub fn get_all_views_description_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<ViewDescription> {
+    self
+      .container
+      .iter(txn)
+      .flat_map(|(_k, v)| view_description_from_value(v, txn))
       .collect::<Vec<_>>()
   }
 

@@ -80,6 +80,7 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
   impl_bool_update!(set_visibility, set_visibility_if_not_none, FIELD_VISIBILITY);
   impl_bool_update!(set_primary, set_primary_if_not_none, FIELD_PRIMARY);
   impl_i64_update!(set_width, set_width_at_if_not_none, FIELD_WIDTH);
+  impl_i64_update!(set_field_type, set_field_type_if_not_none, FIELD_TYPE);
 
   pub fn set_type_options(self, type_options: TypeOptions) -> Self {
     let map_ref = self
@@ -95,14 +96,6 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
       let update = TypeOptionsUpdate::new(self.txn, &map_ref);
       f(update);
     }
-    self
-  }
-
-  /// Set field type
-  pub fn set_field_type(self, field_type: i64) -> Self {
-    self
-      .map_ref
-      .insert_i64_with_txn(self.txn, FIELD_TYPE, field_type);
     self
   }
 

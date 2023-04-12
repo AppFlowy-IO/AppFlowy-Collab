@@ -31,6 +31,11 @@ pub struct DatabaseView {
   pub modified_at: i64,
 }
 
+pub struct ViewDescription {
+  pub id: String,
+  pub name: String,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateViewParams {
   pub database_id: String,
@@ -292,6 +297,16 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
 
 pub fn view_id_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<String> {
   map_ref.get_str_with_txn(txn, VIEW_ID)
+}
+
+pub fn view_description_from_value<T: ReadTxn>(
+  value: YrsValue,
+  txn: &T,
+) -> Option<ViewDescription> {
+  let map_ref = value.to_ymap()?;
+  let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
+  let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();
+  Some(ViewDescription { id, name })
 }
 
 pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<DatabaseView> {
