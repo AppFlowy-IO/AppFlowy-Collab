@@ -43,7 +43,7 @@ impl FieldMap {
       }
     }
 
-    return None;
+    None
   }
 
   pub fn get_all_fields(&self) -> Vec<Field> {

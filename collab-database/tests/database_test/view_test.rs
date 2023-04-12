@@ -1,6 +1,4 @@
-use crate::helper::{
-  create_database, create_database_grid_view, create_database_with_default_data, TestFilter,
-};
+use crate::helper::{create_database, create_database_with_default_data, TestFilter};
 use assert_json_diff::assert_json_eq;
 use collab::preclude::lib0Any;
 use collab_database::fields::Field;
@@ -67,7 +65,7 @@ fn create_same_database_view_twice_test() {
 
 #[test]
 fn create_database_row_test() {
-  let database_test = create_database_grid_view(1, "1");
+  let database_test = create_database_with_default_data(1, "1");
 
   let row_id = gen_row_id();
   database_test.push_row(CreateRowParams {
@@ -81,7 +79,7 @@ fn create_database_row_test() {
 
 #[test]
 fn create_database_field_test() {
-  let database_test = create_database_grid_view(1, "1");
+  let database_test = create_database_with_default_data(1, "1");
 
   let field_id = nanoid!(4);
   database_test.insert_field(Field {
@@ -126,7 +124,7 @@ fn create_database_view_with_filter_test() {
   let filters = view
     .filters
     .into_iter()
-    .map(TestFilter::from)
+    .map(|value| TestFilter::try_from(value).unwrap())
     .collect::<Vec<TestFilter>>();
   assert_eq!(filters.len(), 2);
   assert_eq!(filters[0].id, "filter1");

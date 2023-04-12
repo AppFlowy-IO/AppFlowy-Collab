@@ -39,7 +39,7 @@ fn update_layout_setting_test() {
     .get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Board)
     .unwrap();
   assert_eq!(layout_setting.first_day_of_week, 0);
-  assert_eq!(layout_setting.show_weekends, true);
+  assert!(layout_setting.show_weekends);
 
   //
   let mut layout_setting = TestCalendarLayoutSetting::new("f1".to_string());
@@ -53,7 +53,7 @@ fn update_layout_setting_test() {
     .get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Board)
     .unwrap();
   assert_eq!(layout_setting.first_day_of_week, 2);
-  assert_eq!(layout_setting.show_weekends, false);
+  assert!(!layout_setting.show_weekends);
 }
 
 fn create_database_with_two_layout_settings() -> DatabaseTest {

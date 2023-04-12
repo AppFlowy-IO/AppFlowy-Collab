@@ -283,10 +283,10 @@ impl Database {
           if sort_update.contains(&sort_id) {
             sort_update.update(&sort_id, |_| sort);
           } else {
-            sort_update.push(sort.into());
+            sort_update.push(sort);
           }
         } else {
-          sort_update.push(sort.into());
+          sort_update.push(sort);
         }
       });
     });
@@ -333,6 +333,26 @@ impl Database {
       .get_view_filters(view_id)
       .into_iter()
       .filter(|filter_map| filter_map.get_str_value("id").as_ref() == Some(&filter_id))
+      .flat_map(|value| T::try_from(value).ok())
+      .collect::<Vec<T>>();
+    if filters.is_empty() {
+      None
+    } else {
+      Some(filters.remove(0))
+    }
+  }
+
+  pub fn get_filter_by_field_id<T: TryFrom<FilterMap>>(
+    &self,
+    view_id: &str,
+    field_id: &str,
+  ) -> Option<T> {
+    let field_id = field_id.to_string();
+    let mut filters = self
+      .views
+      .get_view_filters(view_id)
+      .into_iter()
+      .filter(|filter_map| filter_map.get_str_value("field_id").as_ref() == Some(&field_id))
       .flat_map(|value| T::try_from(value).ok())
       .collect::<Vec<T>>();
     if filters.is_empty() {

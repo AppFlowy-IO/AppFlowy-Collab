@@ -29,7 +29,7 @@ impl Blocks {
     let disk_plugin = CollabDiskPlugin::new(uid, db).unwrap();
     let mut write_guard = blocks.write();
     for i in 0..NUM_OF_BLOCKS {
-      let block_id = BlockId::from(i);
+      let block_id = i;
       let collab = CollabBuilder::new(uid, format!("block_{}", block_id))
         .with_plugin(disk_plugin.clone())
         .build();

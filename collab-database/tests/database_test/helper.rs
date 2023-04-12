@@ -1,3 +1,4 @@
+#![allow(clippy::upper_case_acronyms)]
 use anyhow::bail;
 use collab::core::any_map::AnyMapExtension;
 use collab::plugin_impl::disk::CollabDiskPlugin;
@@ -49,7 +50,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let db = Arc::new(CollabKV::open(path).unwrap());
   let collab = CollabBuilder::new(uid, database_id).build();
   collab.initial();
-  let blocks = Blocks::new(uid, db.clone());
+  let blocks = Blocks::new(uid, db);
   let context = DatabaseContext { collab, blocks };
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
@@ -160,11 +161,6 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   database_test
 }
 
-pub fn create_database_grid_view(uid: i64, database_id: &str) -> DatabaseTest {
-  let database_test = create_database_with_default_data(uid, database_id);
-  database_test
-}
-
 struct Cleaner(PathBuf);
 
 impl Cleaner {
@@ -188,16 +184,16 @@ impl Drop for Cleaner {
 pub struct TestFilter {
   pub id: String,
   pub field_id: String,
-  pub field_type: i64,
+  pub field_type: TestFieldType,
   pub condition: i64,
   pub content: String,
 }
 
 const FILTER_ID: &str = "id";
-const FIELD_ID: &str = "field_id";
-const FIELD_TYPE: &str = "ty";
-const FILTER_CONDITION: &str = "condition";
-const FILTER_CONTENT: &str = "content";
+pub const FIELD_ID: &str = "field_id";
+pub const FIELD_TYPE: &str = "ty";
+pub const FILTER_CONDITION: &str = "condition";
+pub const FILTER_CONTENT: &str = "content";
 
 impl From<TestFilter> for FilterMap {
   fn from(data: TestFilter) -> Self {
@@ -205,25 +201,38 @@ impl From<TestFilter> for FilterMap {
       .insert_str_value(FILTER_ID, data.id)
       .insert_str_value(FIELD_ID, data.field_id)
       .insert_str_value(FILTER_CONTENT, data.content)
-      .insert_i64_value(FIELD_TYPE, data.field_type)
+      .insert_i64_value(FIELD_TYPE, data.field_type.into())
       .insert_i64_value(FILTER_CONDITION, data.condition)
       .build()
   }
 }
 
-impl From<FilterMap> for TestFilter {
-  fn from(filter: FilterMap) -> Self {
-    let id = filter.get_str_value(FILTER_ID).unwrap();
-    let field_id = filter.get_str_value(FIELD_ID).unwrap();
-    let condition = filter.get_i64_value(FILTER_CONDITION).unwrap_or(0);
-    let content = filter.get_str_value(FILTER_CONTENT).unwrap_or_default();
-    let field_type = filter.get_i64_value(FIELD_TYPE).unwrap_or_default();
-    TestFilter {
-      id,
-      field_id,
-      field_type,
-      condition,
-      content,
+impl TryFrom<FilterMap> for TestFilter {
+  type Error = anyhow::Error;
+
+  fn try_from(filter: FilterMap) -> Result<Self, Self::Error> {
+    match (
+      filter.get_str_value(FILTER_ID),
+      filter.get_str_value(FIELD_ID),
+    ) {
+      (Some(id), Some(field_id)) => {
+        let condition = filter.get_i64_value(FILTER_CONDITION).unwrap_or(0);
+        let content = filter.get_str_value(FILTER_CONTENT).unwrap_or_default();
+        let field_type = filter
+          .get_i64_value(FIELD_TYPE)
+          .map(TestFieldType::from)
+          .unwrap_or_default();
+        Ok(TestFilter {
+          id,
+          field_id,
+          field_type,
+          condition,
+          content,
+        })
+      },
+      _ => {
+        bail!("Invalid filter data")
+      },
     }
   }
 }
@@ -558,7 +567,7 @@ impl From<&str> for TestTextCell {
 
 #[derive(Debug, Clone)]
 pub struct TestCalendarLayoutSetting {
-  pub layout_ty: CalendarLayout,
+  pub layout_ty: TestCalendarLayout,
   pub first_day_of_week: i32,
   pub show_weekends: bool,
   pub show_week_numbers: bool,
@@ -569,7 +578,7 @@ impl From<LayoutSetting> for TestCalendarLayoutSetting {
   fn from(setting: LayoutSetting) -> Self {
     let layout_ty = setting
       .get_i64_value("layout_ty")
-      .map(CalendarLayout::from)
+      .map(TestCalendarLayout::from)
       .unwrap_or_default();
     let first_day_of_week = setting
       .get_i64_value("first_day_of_week")
@@ -604,7 +613,7 @@ impl From<TestCalendarLayoutSetting> for LayoutSetting {
 impl TestCalendarLayoutSetting {
   pub fn new(field_id: String) -> Self {
     TestCalendarLayoutSetting {
-      layout_ty: CalendarLayout::default(),
+      layout_ty: TestCalendarLayout::default(),
       first_day_of_week: DEFAULT_FIRST_DAY_OF_WEEK,
       show_weekends: DEFAULT_SHOW_WEEKENDS,
       show_week_numbers: DEFAULT_SHOW_WEEK_NUMBERS,
@@ -615,25 +624,25 @@ impl TestCalendarLayoutSetting {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[repr(u8)]
-pub enum CalendarLayout {
+pub enum TestCalendarLayout {
   #[default]
-  MonthLayout = 0,
-  WeekLayout = 1,
-  DayLayout = 2,
+  Month = 0,
+  Week = 1,
+  Day = 2,
 }
 
-impl From<i64> for CalendarLayout {
+impl From<i64> for TestCalendarLayout {
   fn from(value: i64) -> Self {
     match value {
-      0 => CalendarLayout::MonthLayout,
-      1 => CalendarLayout::WeekLayout,
-      2 => CalendarLayout::DayLayout,
-      _ => CalendarLayout::MonthLayout,
+      0 => TestCalendarLayout::Month,
+      1 => TestCalendarLayout::Week,
+      2 => TestCalendarLayout::Day,
+      _ => TestCalendarLayout::Month,
     }
   }
 }
 
-impl CalendarLayout {
+impl TestCalendarLayout {
   pub fn value(&self) -> i64 {
     *self as i64
   }
@@ -642,3 +651,47 @@ impl CalendarLayout {
 pub const DEFAULT_FIRST_DAY_OF_WEEK: i32 = 0;
 pub const DEFAULT_SHOW_WEEKENDS: bool = true;
 pub const DEFAULT_SHOW_WEEK_NUMBERS: bool = true;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum TestFieldType {
+  RichText = 0,
+  Number = 1,
+  DateTime = 2,
+  SingleSelect = 3,
+  MultiSelect = 4,
+  Checkbox = 5,
+  URL = 6,
+  Checklist = 7,
+}
+
+impl Default for TestFieldType {
+  fn default() -> Self {
+    TestFieldType::RichText
+  }
+}
+
+impl From<TestFieldType> for i64 {
+  fn from(ty: TestFieldType) -> Self {
+    ty as i64
+  }
+}
+
+impl std::convert::From<i64> for TestFieldType {
+  fn from(ty: i64) -> Self {
+    match ty {
+      0 => TestFieldType::RichText,
+      1 => TestFieldType::Number,
+      2 => TestFieldType::DateTime,
+      3 => TestFieldType::SingleSelect,
+      4 => TestFieldType::MultiSelect,
+      5 => TestFieldType::Checkbox,
+      6 => TestFieldType::URL,
+      7 => TestFieldType::Checklist,
+      _ => {
+        tracing::error!("Can't parser FieldType from value: {}", ty);
+        TestFieldType::RichText
+      },
+    }
+  }
+}
