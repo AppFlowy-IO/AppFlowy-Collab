@@ -12,10 +12,12 @@ pub struct Block {
   pub data: HashMap<String, Value>,
 }
 
+#[derive(Debug, Clone)]
 pub struct DocumentMeta {
   pub children_map: HashMap<String, Vec<String>>,
 }
 
+#[derive(Debug, Clone)]
 pub struct DocumentData {
   pub page_id: String,
   pub blocks: HashMap<String, Block>,
