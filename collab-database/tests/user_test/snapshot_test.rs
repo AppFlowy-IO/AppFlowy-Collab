@@ -1,7 +1,6 @@
 use crate::helper::user_database_test;
 use collab_database::block::CreateRowParams;
 
-
 use collab_database::views::CreateDatabaseParams;
 
 #[test]

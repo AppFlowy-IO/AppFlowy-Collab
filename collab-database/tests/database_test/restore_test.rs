@@ -1,7 +1,6 @@
 use crate::helper::{create_database_with_db, restore_database_from_db, DatabaseTest};
 use assert_json_diff::assert_json_eq;
 
-
 use collab_database::block::CreateRowParams;
 use collab_persistence::CollabKV;
 use serde_json::{json, Value};

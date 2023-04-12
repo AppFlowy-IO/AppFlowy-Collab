@@ -107,7 +107,7 @@ const VIEW_FILTERS: &str = "filters";
 const VIEW_GROUPS: &str = "groups";
 const VIEW_SORTS: &str = "sorts";
 pub const ROW_ORDERS: &str = "row_orders";
-const FIELD_ORDERS: &str = "field_orders";
+pub const FIELD_ORDERS: &str = "field_orders";
 const VIEW_CREATE_AT: &str = "created_at";
 const VIEW_MODIFY_AT: &str = "modified_at";
 

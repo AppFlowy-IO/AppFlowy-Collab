@@ -44,6 +44,7 @@ impl DerefMut for DatabaseTest {
   }
 }
 
+/// Create a database with a single view.
 pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();

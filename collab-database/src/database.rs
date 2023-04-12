@@ -14,6 +14,7 @@ use collab::preclude::{
   Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 use nanoid::nanoid;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 pub struct Database {
@@ -150,7 +151,7 @@ impl Database {
   }
 
   pub fn get_rows_for_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<Row> {
-    let row_orders = self.views.get_view_row_orders(txn, view_id);
+    let row_orders = self.views.get_view_row_orders_with_txn(txn, view_id);
     self.blocks.get_rows_from_row_orders(&row_orders)
   }
 
@@ -165,7 +166,7 @@ impl Database {
     view_id: &str,
     field_id: &str,
   ) -> Vec<RowCell> {
-    let row_orders = self.views.get_view_row_orders(txn, view_id);
+    let row_orders = self.views.get_view_row_orders_with_txn(txn, view_id);
     let rows = self.blocks.get_rows_from_row_orders(&row_orders);
     rows
       .into_iter()
@@ -196,6 +197,24 @@ impl Database {
   pub fn index_of_row(&self, view_id: &str, row_id: RowId) -> Option<usize> {
     let view = self.views.get_view(view_id)?;
     view.row_orders.iter().position(|order| order.id == row_id)
+  }
+
+  pub fn get_fields(&self, view_id: &str) -> Vec<Field> {
+    let txn = self.root.transact();
+    let field_orders = self.views.get_view_field_orders_txn(&txn, view_id);
+    let mut all_field_map = self
+      .fields
+      .get_fields_with_txn(&txn, None)
+      .into_iter()
+      .map(|field| (field.id.clone(), field))
+      .collect::<HashMap<String, Field>>();
+
+    debug_assert!(field_orders.len() == all_field_map.len());
+
+    field_orders
+      .into_iter()
+      .flat_map(|order| all_field_map.remove(&order.id))
+      .collect()
   }
 
   pub fn insert_field(&self, field: Field) {
@@ -429,7 +448,9 @@ impl Database {
   pub fn create_view(&self, params: CreateViewParams) {
     self.root.with_transact_mut(|txn| {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
-      let row_orders = self.views.get_view_row_orders(txn, &inline_view_id);
+      let row_orders = self
+        .views
+        .get_view_row_orders_with_txn(txn, &inline_view_id);
       self.create_inline_view_with_txn(txn, params, row_orders);
     })
   }

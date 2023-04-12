@@ -1,8 +1,8 @@
 use crate::views::{
   filters_from_map_ref, group_setting_from_map_ref, layout_setting_from_map_ref,
   sorts_from_map_ref, view_from_map_ref, view_from_value, view_id_from_map_ref, DatabaseLayout,
-  DatabaseView, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray,
-  SortMap, ViewBuilder, ViewUpdate, ROW_ORDERS, VIEW_LAYOUT,
+  DatabaseView, FieldOrder, FieldOrderArray, FilterMap, GroupSettingMap, LayoutSetting, OrderArray,
+  RowOrder, RowOrderArray, SortMap, ViewBuilder, ViewUpdate, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
 };
 use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 
@@ -130,7 +130,7 @@ impl ViewMap {
       })?
   }
 
-  pub fn get_view_row_orders<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<RowOrder> {
+  pub fn get_view_row_orders_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<RowOrder> {
     self
       .container
       .get_map_with_txn(txn, view_id)
@@ -138,6 +138,19 @@ impl ViewMap {
         map_ref
           .get_array_ref_with_txn(txn, ROW_ORDERS)
           .map(|array_ref| RowOrderArray::new(array_ref.into_inner()).get_orders_with_txn(txn))
+          .unwrap_or_default()
+      })
+      .unwrap_or_default()
+  }
+
+  pub fn get_view_field_orders_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FieldOrder> {
+    self
+      .container
+      .get_map_with_txn(txn, view_id)
+      .map(|map_ref| {
+        map_ref
+          .get_array_ref_with_txn(txn, FIELD_ORDERS)
+          .map(|array_ref| FieldOrderArray::new(array_ref.into_inner()).get_orders_with_txn(txn))
           .unwrap_or_default()
       })
       .unwrap_or_default()
