@@ -5,8 +5,28 @@ use collab_database::views::{CreateViewParams, DatabaseLayout};
 #[test]
 fn create_database_view_with_sort_test() {
   let database_test = create_database_with_two_sorts();
-  let view = database_test.views.get_view("v1").unwrap();
-  assert_eq!(view.sorts.len(), 2);
+  let sorts = database_test.get_all_sorts::<TestSort>("v1");
+  assert_eq!(sorts.len(), 2);
+  assert_eq!(sorts[0].condition, SortCondition::Ascending);
+  assert_eq!(sorts[1].condition, SortCondition::Descending);
+}
+
+#[test]
+fn get_database_view_sort_test() {
+  let database_test = create_database_with_two_sorts();
+
+  database_test.insert_sort(
+    "v1",
+    TestSort {
+      id: "s3".to_string(),
+      field_id: "f1".to_string(),
+      field_type: 0,
+      condition: Default::default(),
+    },
+  );
+
+  let sort = database_test.get_sort::<TestSort>("v1", "s3");
+  assert!(sort.is_some());
 }
 
 #[test]
@@ -55,7 +75,7 @@ fn create_database_with_two_sorts() -> DatabaseTest {
     id: "s1".to_string(),
     field_id: "f1".to_string(),
     field_type: Default::default(),
-    condition: SortCondition::Descending,
+    condition: SortCondition::Ascending,
   };
   let sort_2 = TestSort {
     id: "s2".to_string(),

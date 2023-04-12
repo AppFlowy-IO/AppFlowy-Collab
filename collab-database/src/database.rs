@@ -301,6 +301,22 @@ impl Database {
       .collect()
   }
 
+  pub fn get_sort<T: TryFrom<SortMap>>(&self, view_id: &str, sort_id: &str) -> Option<T> {
+    let sort_id = sort_id.to_string();
+    let mut sorts = self
+      .views
+      .get_view_sorts(view_id)
+      .into_iter()
+      .filter(|filter_map| filter_map.get_str_value("id").as_ref() == Some(&sort_id))
+      .flat_map(|value| T::try_from(value).ok())
+      .collect::<Vec<T>>();
+    if sorts.is_empty() {
+      None
+    } else {
+      Some(sorts.remove(0))
+    }
+  }
+
   pub fn remove_sort(&self, view_id: &str, sort_id: &str) {
     self.views.update_view(view_id, |update| {
       update.update_sorts(|sort_update| {
