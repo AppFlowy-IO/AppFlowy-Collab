@@ -120,7 +120,7 @@ fn get_field_in_order_test() {
       true,
     ));
   }
-  let fields = database_test.get_fields("v1");
+  let fields = database_test.get_fields("v1", None);
   assert_eq!(fields[0].id, "f0");
   assert_eq!(fields[1].id, "f1");
   assert_eq!(fields[2].id, "f2");
@@ -128,7 +128,7 @@ fn get_field_in_order_test() {
   database_test.views.update_view("v1", |update| {
     update.move_field_order(0, 2);
   });
-  let fields = database_test.get_fields("v1");
+  let fields = database_test.get_fields("v1", None);
   assert_eq!(fields[0].id, "f1");
   assert_eq!(fields[1].id, "f2");
   assert_eq!(fields[2].id, "f0");

@@ -199,12 +199,15 @@ impl Database {
     view.row_orders.iter().position(|order| order.id == row_id)
   }
 
-  pub fn get_fields(&self, view_id: &str) -> Vec<Field> {
+  /// Get all fields in the database
+  /// If field_ids is None, return all fields
+  /// If field_ids is Some, return the fields with the given ids
+  pub fn get_fields(&self, view_id: &str, field_ids: Option<Vec<String>>) -> Vec<Field> {
     let txn = self.root.transact();
     let field_orders = self.views.get_view_field_orders_txn(&txn, view_id);
     let mut all_field_map = self
       .fields
-      .get_fields_with_txn(&txn, None)
+      .get_fields_with_txn(&txn, field_ids)
       .into_iter()
       .map(|field| (field.id.clone(), field))
       .collect::<HashMap<String, Field>>();
