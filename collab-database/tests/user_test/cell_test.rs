@@ -83,10 +83,13 @@ fn user_database_with_default_row() -> UserDatabaseTest {
     )
     .unwrap();
 
-  database.create_row(CreateRowParams {
-    id: 1.into(),
-    ..Default::default()
-  });
+  database.create_row(
+    "v1",
+    CreateRowParams {
+      id: 1.into(),
+      ..Default::default()
+    },
+  );
 
   test
 }

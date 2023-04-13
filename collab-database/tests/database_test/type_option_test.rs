@@ -123,7 +123,7 @@ fn insert_multi_type_options_test() {
       .build(),
   );
 
-  test.insert_field(Field {
+  test.push_field(Field {
     id: "f2".to_string(),
     name: "second field".to_string(),
     field_type: 0,

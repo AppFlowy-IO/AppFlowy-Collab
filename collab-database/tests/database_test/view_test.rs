@@ -30,7 +30,7 @@ fn create_initial_database_test() {
           "layout": 0,
           "layout_settings": {},
           "modified_at": 0,
-          "name": "",
+          "name": "my first database view",
           "row_orders": [],
           "sorts": []
         }
@@ -90,7 +90,7 @@ fn create_database_field_test() {
   let database_test = create_database_with_default_data(1, "1");
 
   let field_id = nanoid!(4);
-  database_test.insert_field(Field {
+  database_test.push_field(Field {
     id: field_id.clone(),
     name: "my third field".to_string(),
     ..Default::default()

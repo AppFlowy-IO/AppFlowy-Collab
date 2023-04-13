@@ -1,21 +1,23 @@
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use collab::core::any_map::AnyMapExtension;
+use collab::preclude::{
+  Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+};
+use nanoid::nanoid;
+
 use crate::block::{Blocks, CreateRowParams};
 use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::id_gen::ID_GEN;
 use crate::meta::MetaMap;
-use crate::rows::{BlockId, Row, RowCell, RowId, RowUpdate};
+use crate::rows::{Row, RowCell, RowId, RowUpdate};
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, DatabaseLayout, DatabaseView, FilterMap, GroupSettingMap,
   LayoutSetting, RowOrder, SortMap, ViewDescription, ViewMap,
 };
-use collab::core::any_map::AnyMapExtension;
-use collab::preclude::{
-  Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
-};
-use nanoid::nanoid;
-use std::collections::HashMap;
-use std::rc::Rc;
 
 pub struct Database {
   #[allow(dead_code)]
@@ -117,25 +119,71 @@ impl Database {
     let row_order = self.blocks.create_row(params)?;
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |update| {
-        update.add_row_order(&row_order);
+        update.push_row_order(&row_order);
       });
     });
     Some(row_order)
   }
 
-  pub fn create_row(&self, params: CreateRowParams) {
+  pub fn create_row(&self, view_id: &str, params: CreateRowParams) {
     self.root.with_transact_mut(|txn| {
-      self.create_row_with_txn(txn, params);
+      self.create_row_with_txn(txn, view_id, params);
     });
   }
 
-  pub fn create_row_with_txn(&self, txn: &mut TransactionMut, params: CreateRowParams) {
+  pub fn create_row_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    view_id: &str,
+    params: CreateRowParams,
+  ) -> Option<(usize, RowOrder)> {
     let prev_row_id = params.prev_row_id.map(|value| value.to_string());
     if let Some(row_order) = self.blocks.create_row(params) {
       self.views.update_all_views_with_txn(txn, |update| {
-        update.insert_row_order(&row_order, prev_row_id.clone());
+        update.insert_row_order(&row_order, prev_row_id.as_ref());
       });
+
+      let index = self
+        .index_of_row_with_txn(txn, view_id, row_order.id)
+        .unwrap_or_default();
+      Some((index, row_order))
+    } else {
+      None
     }
+  }
+
+  pub fn remove_row(&self, row_id: RowId) -> Option<Row> {
+    self.root.with_transact_mut(|txn| {
+      self.views.update_all_views_with_txn(txn, |update| {
+        update.remove_row_order(&row_id.to_string());
+      });
+      let row = self.blocks.get_row(row_id);
+      self.blocks.remove_row(row_id);
+      row
+    })
+  }
+
+  pub fn update_row<R, F>(&self, row_id: R, f: F)
+  where
+    F: FnOnce(RowUpdate),
+    R: Into<RowId>,
+  {
+    self.blocks.update_row(row_id, f);
+  }
+
+  pub fn index_of_row(&self, view_id: &str, row_id: RowId) -> Option<usize> {
+    let view = self.views.get_view(view_id)?;
+    view.row_orders.iter().position(|order| order.id == row_id)
+  }
+
+  pub fn index_of_row_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+    row_id: RowId,
+  ) -> Option<usize> {
+    let view = self.views.get_view_with_txn(txn, view_id)?;
+    view.row_orders.iter().position(|order| order.id == row_id)
   }
 
   pub fn get_row<R>(&self, row_id: R) -> Option<Row>
@@ -177,26 +225,17 @@ impl Database {
       .collect::<Vec<RowCell>>()
   }
 
-  pub fn remove_row(&self, row_id: RowId, block_id: BlockId) {
-    self.root.with_transact_mut(|txn| {
-      self.views.update_all_views_with_txn(txn, |update| {
-        update.remove_row_order(&row_id.to_string());
-      });
-      self.blocks.remove_row(row_id, block_id);
-    })
-  }
-
-  pub fn update_row<R, F>(&self, row_id: R, f: F)
-  where
-    F: FnOnce(RowUpdate),
-    R: Into<RowId>,
-  {
-    self.blocks.update_row(row_id, f);
-  }
-
-  pub fn index_of_row(&self, view_id: &str, row_id: RowId) -> Option<usize> {
-    let view = self.views.get_view(view_id)?;
-    view.row_orders.iter().position(|order| order.id == row_id)
+  pub fn index_of_field_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+    field_id: &str,
+  ) -> Option<usize> {
+    let view = self.views.get_view_with_txn(txn, view_id)?;
+    view
+      .field_orders
+      .iter()
+      .position(|order| order.id == field_id)
   }
 
   /// Get all fields in the database
@@ -220,13 +259,29 @@ impl Database {
       .collect()
   }
 
-  pub fn insert_field(&self, field: Field) {
+  pub fn push_field(&self, field: Field) {
     self.root.with_transact_mut(|txn| {
-      self.views.update_all_views_with_txn(txn, |update| {
-        update.add_field_order(&field);
-      });
-      self.fields.insert_field_with_txn(txn, field);
+      self.push_field_with_txn(txn, field);
     })
+  }
+
+  pub fn push_field_with_txn(&self, txn: &mut TransactionMut, field: Field) {
+    self.views.update_all_views_with_txn(txn, |update| {
+      update.push_field_order(&field);
+    });
+    self.fields.insert_field_with_txn(txn, field);
+  }
+
+  fn insert_field_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    field: Field,
+    prev_field_id: Option<String>,
+  ) {
+    self.views.update_all_views_with_txn(txn, |update| {
+      update.insert_field_order(&field, prev_field_id.as_ref());
+    });
+    self.fields.insert_field_with_txn(txn, field);
   }
 
   pub fn delete_field(&self, field_id: &str) {
@@ -506,24 +561,69 @@ impl Database {
     Some(duplicated_view)
   }
 
-  pub fn duplicate_row(&self, row_id: RowId) {
+  pub fn duplicate_row(&self, view_id: &str, row_id: RowId) -> Option<(usize, RowOrder)> {
     self.root.with_transact_mut(|txn| {
-      if let Some(mut row) = self.blocks.get_row(row_id) {
-        row.id = gen_row_id();
-        let mut params: CreateRowParams = row.into();
-        params.prev_row_id = Some(row_id);
-        self.create_row_with_txn(txn, params);
+      if let Some(row) = self.blocks.get_row(row_id) {
+        let params = CreateRowParams {
+          id: gen_row_id(),
+          cells: row.cells,
+          height: row.height,
+          visibility: row.visibility,
+          prev_row_id: Some(row.id),
+        };
+        self.create_row_with_txn(txn, view_id, params)
+      } else {
+        None
       }
-    });
-    todo!()
+    })
   }
 
-  pub fn duplicate_data(&self) -> DuplicatedDatabase {
+  pub fn duplicate_field(
+    &self,
+    view_id: &str,
+    field_id: &str,
+    f: impl FnOnce(&Field) -> String,
+  ) -> Option<(usize, Field)> {
+    self.root.with_transact_mut(|txn| {
+      if let Some(mut field) = self.fields.get_field_with_txn(txn, field_id) {
+        field.id = gen_field_id();
+        field.name = f(&field);
+        self.insert_field_with_txn(txn, field.clone(), Some(field_id.to_string()));
+        let index = self
+          .index_of_field_with_txn(txn, view_id, &field.id)
+          .unwrap_or_default();
+        Some((index, field))
+      } else {
+        None
+      }
+    })
+  }
+
+  pub fn duplicate_database_data(&self) -> DuplicatedDatabase {
     let inline_view_id = self.get_inline_view_id();
     let mut view = self.views.get_view(&inline_view_id).unwrap();
     view.id = gen_database_view_id();
     let fields = self.fields.get_all_fields();
     DuplicatedDatabase { view, fields }
+  }
+
+  pub fn create_default_field(
+    &self,
+    view_id: &str,
+    name: String,
+    field_type: i64,
+    f: impl FnOnce(&mut Field),
+  ) -> (usize, Field) {
+    let mut field = Field::new(gen_field_id(), name, field_type, false);
+    f(&mut field);
+    let index = self.root.with_transact_mut(|txn| {
+      self.push_field_with_txn(txn, field.clone());
+      self
+        .index_of_field_with_txn(txn, view_id, &field.id)
+        .unwrap_or_default()
+    });
+
+    (index, field)
   }
 
   pub fn to_json_value(&self) -> JsonValue {

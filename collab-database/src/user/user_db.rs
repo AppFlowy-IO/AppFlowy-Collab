@@ -1,9 +1,6 @@
-use crate::block::Blocks;
-use crate::database::{Database, DatabaseContext, DuplicatedDatabase};
-use crate::error::DatabaseError;
-use crate::user::db_record::{DatabaseArray, DatabaseRecord};
-use crate::user::relation::{DatabaseRelation, RowRelationMap};
-use crate::views::{CreateDatabaseParams, CreateViewParams};
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use collab::preclude::updates::decoder::Decode;
@@ -11,8 +8,13 @@ use collab::preclude::{lib0Any, Collab, CollabBuilder, MapPrelim, Update};
 use collab_persistence::snapshot::CollabSnapshot;
 use collab_persistence::CollabKV;
 use parking_lot::RwLock;
-use std::collections::HashMap;
-use std::sync::Arc;
+
+use crate::block::Blocks;
+use crate::database::{Database, DatabaseContext, DuplicatedDatabase};
+use crate::error::DatabaseError;
+use crate::user::db_record::{DatabaseArray, DatabaseRecord};
+use crate::user::relation::{DatabaseRelation, RowRelationMap};
+use crate::views::{CreateDatabaseParams, CreateViewParams};
 
 pub struct UserDatabase {
   uid: i64,
@@ -184,7 +186,7 @@ impl UserDatabase {
   ) -> Result<Arc<Database>, DatabaseError> {
     if let Some(database) = self.get_database(database_id) {
       if database.is_inline_view(view_id) {
-        let DuplicatedDatabase { view, fields } = database.duplicate_data();
+        let DuplicatedDatabase { view, fields } = database.duplicate_database_data();
         let params = CreateDatabaseParams::from_view(view, fields);
         let database = self.create_database(database_id, params)?;
         Ok(database)

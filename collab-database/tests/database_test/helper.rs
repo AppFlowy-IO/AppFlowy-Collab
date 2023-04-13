@@ -156,9 +156,9 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
 
-  database_test.insert_field(field_1);
-  database_test.insert_field(field_2);
-  database_test.insert_field(field_3);
+  database_test.push_field(field_1);
+  database_test.push_field(field_2);
+  database_test.push_field(field_3);
 
   database_test
 }

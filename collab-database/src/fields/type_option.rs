@@ -83,6 +83,11 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
     value.fill_map_ref(self.txn, &type_option_map);
     self
   }
+
+  pub fn remove(self, key: &str) -> Self {
+    self.map_ref.remove(self.txn, key);
+    self
+  }
 }
 
 pub type TypeOptionData = AnyMap;

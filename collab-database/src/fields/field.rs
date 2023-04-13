@@ -29,13 +29,13 @@ impl Field {
     }
   }
 
-  pub fn get_type_option<T: From<TypeOptionData>>(&self, type_id: impl AsRef<str>) -> Option<T> {
-    let type_option_data = self.type_options.get(type_id.as_ref())?.clone();
+  pub fn get_type_option<T: From<TypeOptionData>>(&self, type_id: impl ToString) -> Option<T> {
+    let type_option_data = self.type_options.get(&type_id.to_string())?.clone();
     Some(T::from(type_option_data))
   }
 
-  pub fn get_any_type_option(&self, type_id: impl AsRef<str>) -> Option<TypeOptionData> {
-    self.type_options.get(type_id.as_ref()).cloned()
+  pub fn get_any_type_option(&self, type_id: impl ToString) -> Option<TypeOptionData> {
+    self.type_options.get(&type_id.to_string()).cloned()
   }
 }
 
@@ -107,9 +107,11 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
       .map_ref
       .get_or_insert_map_with_txn(self.txn, FIELD_TYPE_OPTION);
 
+    let update = TypeOptionsUpdate::new(self.txn, &map_ref);
     if let Some(type_option_data) = type_option_data {
-      let update = TypeOptionsUpdate::new(self.txn, &map_ref);
       update.insert(&field_type.to_string(), type_option_data);
+    } else {
+      update.remove(&field_type.to_string());
     }
     self
   }

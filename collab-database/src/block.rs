@@ -94,7 +94,8 @@ impl Blocks {
     }
   }
 
-  pub fn remove_row(&self, row_id: RowId, block_id: BlockId) {
+  pub fn remove_row(&self, row_id: RowId) {
+    let block_id = block_id_from_row_id(row_id);
     if let Some(block) = self.get_block(block_id) {
       let row_id = row_id.to_string();
       block.delete_row(&row_id);
@@ -168,18 +169,6 @@ impl From<(BlockId, CreateRowParams)> for Row {
       height: params.height,
       visibility: params.visibility,
       created_at: timestamp(),
-    }
-  }
-}
-
-impl From<Row> for CreateRowParams {
-  fn from(row: Row) -> Self {
-    Self {
-      id: row.id,
-      cells: row.cells,
-      height: row.height,
-      visibility: row.visibility,
-      prev_row_id: None,
     }
   }
 }

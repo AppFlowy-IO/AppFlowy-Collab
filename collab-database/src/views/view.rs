@@ -1,12 +1,3 @@
-use crate::block::CreateRowParams;
-use crate::fields::Field;
-
-use crate::views::layout::{DatabaseLayout, LayoutSettings};
-use crate::views::{
-  FieldOrder, FieldOrderArray, FilterArray, FilterMap, GroupSettingArray, GroupSettingMap,
-  LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
-};
-use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 use collab::core::any_array::ArrayMapUpdate;
 use collab::preclude::map::MapPrelim;
 use collab::preclude::{
@@ -14,6 +5,15 @@ use collab::preclude::{
   YrsValue,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::block::CreateRowParams;
+use crate::fields::Field;
+use crate::views::layout::{DatabaseLayout, LayoutSettings};
+use crate::views::{
+  FieldOrder, FieldOrderArray, FilterArray, FilterMap, GroupSettingArray, GroupSettingMap,
+  LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
+};
+use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DatabaseView {
@@ -171,7 +171,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
 
   impl_order_update!(
     set_row_orders,
-    add_row_order,
+    push_row_order,
     remove_row_order,
     move_row_order,
     insert_row_order,
@@ -182,7 +182,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
 
   impl_order_update!(
     set_field_orders,
-    add_field_order,
+    push_field_order,
     remove_field_order,
     move_field_order,
     insert_field_order,
@@ -436,10 +436,10 @@ pub trait OrderArray {
     &self,
     txn: &mut TransactionMut,
     object: Self::Object,
-    prev_object_id: Option<String>,
+    prev_object_id: Option<&String>,
   ) {
     if let Some(prev_object_id) = prev_object_id {
-      match self.get_row_position_with_txn(txn, &prev_object_id) {
+      match self.get_position_with_txn(txn, &prev_object_id) {
         None => {
           self.array_ref().push_back(txn, object);
         },
@@ -475,18 +475,20 @@ pub trait OrderArray {
   fn move_to(&self, txn: &mut TransactionMut, from: u32, to: u32) {
     let array_ref = self.array_ref();
     if let Some(YrsValue::Any(value)) = array_ref.get(txn, from) {
-      array_ref.remove(txn, from);
-      array_ref.insert(txn, to, value);
+      if to <= array_ref.len(txn) {
+        array_ref.remove(txn, from);
+        array_ref.insert(txn, to, value);
+      }
     }
   }
 
-  fn get_row_position_with_txn<T: ReadTxn>(&self, txn: &T, row_id: &str) -> Option<u32> {
+  fn get_position_with_txn<T: ReadTxn>(&self, txn: &T, id: &str) -> Option<u32> {
     self
       .array_ref()
       .iter(txn)
       .position(|value| match self.object_from_value_with_txn(value, txn) {
         None => false,
-        Some(order) => order.identify_id() == row_id,
+        Some(order) => order.identify_id() == id,
       })
       .map(|pos| pos as u32)
   }
