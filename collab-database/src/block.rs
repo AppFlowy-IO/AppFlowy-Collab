@@ -1,7 +1,7 @@
 use crate::database::timestamp;
 use crate::rows::{
-  row_from_map_ref, row_from_value, row_order_from_value, BlockId, Cells, Row, RowBuilder, RowId,
-  RowMetaMap, RowUpdate,
+  cell_from_map_ref, row_from_map_ref, row_from_value, row_order_from_value, BlockId, Cell, Cells,
+  Row, RowBuilder, RowId, RowMetaMap, RowUpdate,
 };
 use crate::views::RowOrder;
 use collab::plugin_impl::disk::CollabDiskPlugin;
@@ -100,6 +100,15 @@ impl Blocks {
       let row_id = row_id.to_string();
       block.delete_row(&row_id);
     }
+  }
+
+  pub fn get_cell(&self, field_id: &str, row_id: RowId) -> Option<Cell> {
+    let block_id = block_id_from_row_id(row_id);
+    self
+      .blocks
+      .read()
+      .get(&block_id)?
+      .get_cell(row_id, field_id)
   }
 
   pub fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
@@ -240,6 +249,13 @@ impl Block {
     let row_id = row_id.into().to_string();
     let map_ref = self.container.get_map_with_txn(txn, &row_id)?;
     row_from_map_ref(&map_ref.into_inner(), txn)
+  }
+
+  pub fn get_cell<R: Into<RowId>>(&self, row_id: R, field_id: &str) -> Option<Cell> {
+    let txn = self.container.transact();
+    let row_id = row_id.into().to_string();
+    let map_ref = self.container.get_map_with_txn(&txn, &row_id)?;
+    cell_from_map_ref(&map_ref.into_inner(), &txn, field_id)
   }
 
   pub fn get_all_rows(&self) -> Vec<Row> {

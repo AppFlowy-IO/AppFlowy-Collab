@@ -13,7 +13,7 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::id_gen::ID_GEN;
 use crate::meta::MetaMap;
-use crate::rows::{Row, RowCell, RowId, RowUpdate};
+use crate::rows::{Cell, Row, RowCell, RowId, RowUpdate};
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, DatabaseLayout, DatabaseView, FilterMap, GroupSettingMap,
   LayoutSetting, RowOrder, SortMap, ViewDescription, ViewMap,
@@ -125,10 +125,10 @@ impl Database {
     Some(row_order)
   }
 
-  pub fn create_row(&self, view_id: &str, params: CreateRowParams) {
-    self.root.with_transact_mut(|txn| {
-      self.create_row_with_txn(txn, view_id, params);
-    });
+  pub fn create_row(&self, view_id: &str, params: CreateRowParams) -> Option<(usize, RowOrder)> {
+    self
+      .root
+      .with_transact_mut(|txn| self.create_row_with_txn(txn, view_id, params))
   }
 
   pub fn create_row_with_txn(
@@ -201,6 +201,10 @@ impl Database {
   pub fn get_rows_for_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<Row> {
     let row_orders = self.views.get_view_row_orders_with_txn(txn, view_id);
     self.blocks.get_rows_from_row_orders(&row_orders)
+  }
+
+  pub fn get_cell(&self, field_id: &str, row_id: RowId) -> Option<Cell> {
+    self.blocks.get_cell(field_id, row_id)
   }
 
   pub fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<RowCell> {
