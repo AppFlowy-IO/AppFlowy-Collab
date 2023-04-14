@@ -1,9 +1,11 @@
-use crate::rows::RowId;
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
+
 use collab::core::any_map::{AnyMap, AnyMapBuilder, AnyMapExtension, AnyMapUpdate};
 use collab::preclude::{Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
+
+use crate::rows::RowId;
 
 /// Store lists of cells
 /// The key is the id of the [Field]
@@ -40,6 +42,12 @@ impl<T: ReadTxn> From<(&'_ T, &MapRef)> for Cells {
       }
     });
     this
+  }
+}
+
+impl From<HashMap<String, Cell>> for Cells {
+  fn from(data: HashMap<String, Cell>) -> Self {
+    Self(data)
   }
 }
 
