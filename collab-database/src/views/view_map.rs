@@ -139,7 +139,7 @@ impl ViewMap {
       })?
   }
 
-  pub fn get_view_row_orders_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<RowOrder> {
+  pub fn get_row_orders_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<RowOrder> {
     self
       .container
       .get_map_with_txn(txn, view_id)
@@ -152,7 +152,7 @@ impl ViewMap {
       .unwrap_or_default()
   }
 
-  pub fn get_view_field_orders_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FieldOrder> {
+  pub fn get_field_orders_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FieldOrder> {
     self
       .container
       .get_map_with_txn(txn, view_id)

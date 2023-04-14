@@ -1,23 +1,22 @@
-use std::collections::HashMap;
-use std::rc::Rc;
-
-use collab::core::any_map::AnyMapExtension;
-use collab::preclude::{
-  Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
-};
-use nanoid::nanoid;
-
 use crate::block::{Blocks, CreateRowParams};
 use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::id_gen::ID_GEN;
 use crate::meta::MetaMap;
-use crate::rows::{Cell, Row, RowCell, RowId, RowUpdate};
+use crate::rows::{Row, RowCell, RowId, RowUpdate};
 use crate::views::{
-  CreateDatabaseParams, CreateViewParams, DatabaseLayout, DatabaseView, FilterMap, GroupSettingMap,
-  LayoutSetting, RowOrder, SortMap, ViewDescription, ViewMap,
+  CreateDatabaseParams, CreateViewParams, DatabaseLayout, DatabaseView, FieldOrder, FilterMap,
+  GroupSettingMap, LayoutSetting, RowOrder, SortMap, ViewDescription, ViewMap,
 };
+use collab::core::any_map::AnyMapExtension;
+use collab::preclude::{
+  Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+};
+use nanoid::nanoid;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::rc::Rc;
 
 pub struct Database {
   #[allow(dead_code)]
@@ -42,7 +41,7 @@ pub struct DatabaseContext {
 }
 
 impl Database {
-  pub fn create_with_view(
+  pub fn create_with_inline_view(
     database_id: &str,
     params: CreateDatabaseParams,
     context: DatabaseContext,
@@ -50,13 +49,14 @@ impl Database {
     let this = Self::get_or_create(database_id, context)?;
     let (rows, fields, params) = params.split();
     let row_orders = this.blocks.create_rows(rows);
+    let field_orders = fields.iter().map(FieldOrder::from).collect();
 
     this.root.with_transact_mut(|txn| {
       this.set_inline_view_with_txn(txn, &params.view_id);
       for field in fields {
         this.fields.insert_field_with_txn(txn, field);
       }
-      this.create_inline_view_with_txn(txn, params, row_orders);
+      this.create_view_with_txn(txn, params, field_orders, row_orders);
     });
     Ok(this)
   }
@@ -199,17 +199,18 @@ impl Database {
   }
 
   pub fn get_rows_for_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<Row> {
-    let row_orders = self.views.get_view_row_orders_with_txn(txn, view_id);
+    let row_orders = self.views.get_row_orders_with_txn(txn, view_id);
     self.blocks.get_rows_from_row_orders(&row_orders)
-  }
-
-  pub fn get_cell(&self, field_id: &str, row_id: RowId) -> Option<Cell> {
-    self.blocks.get_cell(field_id, row_id)
   }
 
   pub fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<RowCell> {
     let txn = self.root.transact();
     self.get_cells_for_field_with_txn(&txn, view_id, field_id)
+  }
+
+  pub fn get_cell(&self, field_id: &str, row_id: RowId) -> Option<RowCell> {
+    let cell = self.blocks.get_cell(field_id, row_id)?;
+    Some(RowCell::new(row_id, cell))
   }
 
   pub fn get_cells_for_field_with_txn<T: ReadTxn>(
@@ -218,7 +219,7 @@ impl Database {
     view_id: &str,
     field_id: &str,
   ) -> Vec<RowCell> {
-    let row_orders = self.views.get_view_row_orders_with_txn(txn, view_id);
+    let row_orders = self.views.get_row_orders_with_txn(txn, view_id);
     let rows = self.blocks.get_rows_from_row_orders(&row_orders);
     rows
       .into_iter()
@@ -247,10 +248,19 @@ impl Database {
   /// If field_ids is Some, return the fields with the given ids
   pub fn get_fields(&self, view_id: &str, field_ids: Option<Vec<String>>) -> Vec<Field> {
     let txn = self.root.transact();
-    let field_orders = self.views.get_view_field_orders_txn(&txn, view_id);
+    self.get_fields_with_txn(&txn, view_id, field_ids)
+  }
+
+  pub fn get_fields_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+    field_ids: Option<Vec<String>>,
+  ) -> Vec<Field> {
+    let field_orders = self.views.get_field_orders_txn(txn, view_id);
     let mut all_field_map = self
       .fields
-      .get_fields_with_txn(&txn, field_ids)
+      .get_fields_with_txn(txn, field_ids)
       .into_iter()
       .map(|field| (field.id.clone(), field))
       .collect::<HashMap<String, Field>>();
@@ -510,10 +520,9 @@ impl Database {
   pub fn create_view(&self, params: CreateViewParams) {
     self.root.with_transact_mut(|txn| {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
-      let row_orders = self
-        .views
-        .get_view_row_orders_with_txn(txn, &inline_view_id);
-      self.create_inline_view_with_txn(txn, params, row_orders);
+      let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
+      let field_orders = self.views.get_field_orders_txn(txn, &inline_view_id);
+      self.create_view_with_txn(txn, params, field_orders, row_orders);
     })
   }
 
@@ -522,13 +531,13 @@ impl Database {
     self.views.get_all_views_description_with_txn(&txn)
   }
 
-  pub fn create_inline_view_with_txn(
+  pub fn create_view_with_txn(
     &self,
     txn: &mut TransactionMut,
     params: CreateViewParams,
+    field_orders: Vec<FieldOrder>,
     row_orders: Vec<RowOrder>,
   ) {
-    let field_orders = self.fields.get_all_field_orders_with_txn(txn);
     let timestamp = timestamp();
     let database_id = self.get_database_id_with_txn(txn);
     let view = DatabaseView {
@@ -553,6 +562,7 @@ impl Database {
     self.views.get_view_with_txn(&txn, view_id)
   }
 
+  /// Duplicate a view that shares the same rows as the original view.
   pub fn duplicate_view(&self, view_id: &str) -> Option<DatabaseView> {
     let view = self.views.get_view(view_id)?;
     let mut duplicated_view = view.clone();
@@ -565,6 +575,7 @@ impl Database {
     Some(duplicated_view)
   }
 
+  /// Duplicate a row
   pub fn duplicate_row(&self, view_id: &str, row_id: RowId) -> Option<(usize, RowOrder)> {
     self.root.with_transact_mut(|txn| {
       if let Some(row) = self.blocks.get_row(row_id) {
@@ -605,10 +616,26 @@ impl Database {
 
   pub fn duplicate_database_data(&self) -> DuplicatedDatabase {
     let inline_view_id = self.get_inline_view_id();
-    let mut view = self.views.get_view(&inline_view_id).unwrap();
+    let txn = self.root.transact();
+    let mut view = self.views.get_view_with_txn(&txn, &inline_view_id).unwrap();
+    let fields = self.get_fields_with_txn(&txn, &inline_view_id, None);
+    let row_orders = self.views.get_row_orders_with_txn(&txn, &view.id);
+    let rows = self
+      .blocks
+      .get_rows_from_row_orders(&row_orders)
+      .into_iter()
+      .map(|row| CreateRowParams {
+        id: gen_row_id(),
+        cells: row.cells,
+        height: row.height,
+        visibility: row.visibility,
+        prev_row_id: None,
+      })
+      .collect::<Vec<CreateRowParams>>();
+
     view.id = gen_database_view_id();
-    let fields = self.fields.get_all_fields();
-    DuplicatedDatabase { view, fields }
+    view.database_id = gen_database_id();
+    DuplicatedDatabase { view, fields, rows }
   }
 
   pub fn create_default_field(
@@ -726,7 +753,21 @@ pub fn timestamp() -> i64 {
   chrono::Utc::now().timestamp()
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct DuplicatedDatabase {
   pub view: DatabaseView,
   pub fields: Vec<Field>,
+  pub rows: Vec<CreateRowParams>,
+}
+
+impl DuplicatedDatabase {
+  pub fn to_json(&self) -> Result<String, DatabaseError> {
+    let s = serde_json::to_string(self)?;
+    Ok(s)
+  }
+
+  pub fn from_json(json: &str) -> Result<Self, DatabaseError> {
+    let database = serde_json::from_str(json)?;
+    Ok(database)
+  }
 }

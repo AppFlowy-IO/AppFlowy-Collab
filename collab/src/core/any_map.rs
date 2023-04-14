@@ -219,7 +219,7 @@ impl<'a> AnyMapExtension for MutAnyMap<'a> {
 
 /// A map that can store any type of value.
 /// It uses [lib0Any] as the value type.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct AnyMap(HashMap<String, lib0Any>);
 
 impl AsRef<AnyMap> for AnyMap {

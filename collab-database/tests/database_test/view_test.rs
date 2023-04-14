@@ -9,7 +9,7 @@ use collab_database::views::{
 use nanoid::nanoid;
 
 use collab_database::block::CreateRowParams;
-use collab_database::database::gen_row_id;
+use collab_database::database::{gen_row_id, DuplicatedDatabase};
 use serde_json::json;
 
 #[test]
@@ -200,6 +200,23 @@ fn duplicate_database_view_test() {
 
   let views = database_test.views.get_all_views();
   assert_eq!(views.len(), 2);
+}
+
+#[test]
+fn duplicate_database_data_serde_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let duplicated_database = database_test.duplicate_database_data();
+
+  let json = duplicated_database.to_json().unwrap();
+  let duplicated_database2 = DuplicatedDatabase::from_json(&json).unwrap();
+  assert_eq!(
+    duplicated_database.fields.len(),
+    duplicated_database2.fields.len()
+  );
+  assert_eq!(
+    duplicated_database.rows.len(),
+    duplicated_database2.rows.len()
+  );
 }
 
 #[test]

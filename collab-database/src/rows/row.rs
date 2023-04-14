@@ -51,7 +51,7 @@ impl AsRef<i64> for RowId {
 
 pub type BlockId = i64;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Row {
   pub id: RowId,
   pub block_id: BlockId,

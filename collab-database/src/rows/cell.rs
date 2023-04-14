@@ -9,7 +9,7 @@ use crate::rows::RowId;
 
 /// Store lists of cells
 /// The key is the id of the [Field]
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Cells(HashMap<String, Cell>);
 
 impl Cells {
@@ -106,7 +106,7 @@ pub fn new_cell_builder(field_type: impl Into<i64>) -> CellBuilder {
 
 pub struct RowCell {
   pub row_id: RowId,
-  cell: Cell,
+  pub cell: Cell,
 }
 
 impl RowCell {

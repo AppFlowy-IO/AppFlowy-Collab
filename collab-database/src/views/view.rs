@@ -7,6 +7,7 @@ use collab::preclude::{
 use serde::{Deserialize, Serialize};
 
 use crate::block::CreateRowParams;
+
 use crate::fields::Field;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
 use crate::views::{
@@ -63,11 +64,13 @@ pub struct CreateDatabaseParams {
 }
 
 impl CreateDatabaseParams {
-  pub fn from_view(view: DatabaseView, fields: Vec<Field>) -> Self {
+  pub fn from_view(view: DatabaseView, fields: Vec<Field>, rows: Vec<CreateRowParams>) -> Self {
     let mut params: Self = view.into();
     params.fields = fields;
+    params.created_rows = rows;
     params
   }
+
   pub fn split(self) -> (Vec<CreateRowParams>, Vec<Field>, CreateViewParams) {
     (
       self.created_rows,

@@ -11,6 +11,7 @@ use parking_lot::RwLock;
 
 use crate::block::Blocks;
 use crate::database::{Database, DatabaseContext, DuplicatedDatabase};
+
 use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::user::relation::{DatabaseRelation, RowRelationMap};
@@ -97,6 +98,7 @@ impl UserDatabase {
       .map(|record| record.database_id)
   }
 
+  /// Create database with inline view
   pub fn create_database(
     &self,
     database_id: &str,
@@ -109,7 +111,11 @@ impl UserDatabase {
     self
       .database_records
       .add_database(database_id, &params.view_id, &params.name);
-    let database = Arc::new(Database::create_with_view(database_id, params, context)?);
+    let database = Arc::new(Database::create_with_inline_view(
+      database_id,
+      params,
+      context,
+    )?);
     self
       .open_handlers
       .write()
@@ -117,6 +123,20 @@ impl UserDatabase {
     Ok(database)
   }
 
+  pub fn create_database_with_duplicated_data(
+    &self,
+    data: DuplicatedDatabase,
+  ) -> Result<Arc<Database>, DatabaseError> {
+    let DuplicatedDatabase { view, fields, rows } = data;
+    let params = CreateDatabaseParams::from_view(view, fields, rows);
+    let database_id = params.database_id.clone();
+    let database = self.create_database(&database_id, params)?;
+    Ok(database)
+  }
+
+  /// Create reference view
+  /// The reference view shares the same data with the inline view.
+  /// If the inline view is deleted, the reference view will be deleted too.
   pub fn create_database_view(&self, params: CreateViewParams) {
     if let Some(database) = self.get_database(&params.database_id) {
       self
@@ -175,27 +195,23 @@ impl UserDatabase {
     }
   }
 
+  /// Duplicate the database that contains the view.
+  pub fn duplicate_database(&self, view_id: &str) -> Result<Arc<Database>, DatabaseError> {
+    let DuplicatedDatabase { view, fields, rows } = self.make_duplicate_database_data(view_id)?;
+    let params = CreateDatabaseParams::from_view(view, fields, rows);
+    let database_id = params.database_id.clone();
+    let database = self.create_database(&database_id, params)?;
+    Ok(database)
+  }
+
   /// Duplicate the view in the database.
-  /// If the id of the view equal to the inline view id of the database, then it will
-  /// duplicate the database view data and database data as well. Otherwise only
-  /// duplicate the view data.
-  pub fn duplicate_view(
+  pub fn make_duplicate_database_data(
     &self,
-    database_id: &str,
     view_id: &str,
-  ) -> Result<Arc<Database>, DatabaseError> {
-    if let Some(database) = self.get_database(database_id) {
-      if database.is_inline_view(view_id) {
-        let DuplicatedDatabase { view, fields } = database.duplicate_database_data();
-        let params = CreateDatabaseParams::from_view(view, fields);
-        let database = self.create_database(database_id, params)?;
-        Ok(database)
-      } else {
-        if database.duplicate_view(view_id).is_none() {
-          return Err(DatabaseError::DatabaseViewNotExist);
-        }
-        Ok(database)
-      }
+  ) -> Result<DuplicatedDatabase, DatabaseError> {
+    if let Some(database) = self.get_database_with_view_id(view_id) {
+      let data = database.duplicate_database_data();
+      Ok(data)
     } else {
       Err(DatabaseError::DatabaseNotExist)
     }

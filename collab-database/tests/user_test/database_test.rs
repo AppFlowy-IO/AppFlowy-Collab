@@ -1,4 +1,4 @@
-use crate::helper::user_database_test;
+use crate::helper::{user_database_test, user_database_test_with_default_data};
 use collab_database::block::CreateRowParams;
 
 use collab_database::views::{CreateDatabaseParams, CreateViewParams};
@@ -70,7 +70,7 @@ fn duplicate_database_inline_view_test() {
     )
     .unwrap();
 
-  let duplicated_database = test.duplicate_view("d1", "v1").unwrap();
+  let duplicated_database = test.duplicate_database("v1").unwrap();
   let duplicated_view_id = duplicated_database.get_inline_view_id();
   duplicated_database.push_row(CreateRowParams {
     id: 1.into(),
@@ -89,6 +89,8 @@ fn duplicate_database_inline_view_test() {
 #[test]
 fn duplicate_database_view_test() {
   let test = user_database_test(1);
+
+  // create the database with inline view
   let database = test
     .create_database(
       "d1",
@@ -105,14 +107,15 @@ fn duplicate_database_view_test() {
     ..Default::default()
   });
 
-  let duplicated_database = test.duplicate_view("d1", "v2").unwrap();
-  duplicated_database.push_row(CreateRowParams {
+  // Duplicate the ref view.
+  let duplicated_view = database.duplicate_view("v2").unwrap();
+  database.push_row(CreateRowParams {
     id: 1.into(),
     ..Default::default()
   });
 
   // Duplicated database should have the same rows as the original database
-  assert_eq!(duplicated_database.get_rows_for_view("v2").len(), 1);
+  assert_eq!(database.get_rows_for_view(&duplicated_view.id).len(), 1);
   assert_eq!(database.get_rows_for_view("v1").len(), 1);
 }
 
@@ -139,9 +142,56 @@ fn delete_database_inline_view_test() {
   let views = database.views.get_all_views();
   assert_eq!(views.len(), 4);
 
+  // After deleting the inline view, all ref views will be removed
   test.delete_view("d1", "v1");
   let views = database.views.get_all_views();
   assert_eq!(views.len(), 0);
+}
+
+#[test]
+fn duplicate_database_data_test() {
+  let test = user_database_test_with_default_data(1);
+  let original = test.get_database_with_view_id("v1").unwrap();
+  let duplicated_data = test.make_duplicate_database_data("v1").unwrap();
+  let duplicate = test
+    .create_database_with_duplicated_data(duplicated_data)
+    .unwrap();
+
+  let duplicated_view_id = &duplicate.get_all_views_description()[0].id;
+
+  // compare rows
+  let original_rows = original.get_rows_for_view("v1");
+  let duplicate_rows = duplicate.get_rows_for_view(duplicated_view_id);
+  assert_eq!(original_rows.len(), duplicate_rows.len());
+  for (index, row) in original_rows.iter().enumerate() {
+    assert_eq!(row.visibility, duplicate_rows[index].visibility);
+    assert_eq!(row.cells, duplicate_rows[index].cells);
+    assert_eq!(row.height, duplicate_rows[index].height);
+  }
+
+  // compare views
+  let original_views = original.views.get_all_views();
+  let duplicated_views = duplicate.views.get_all_views();
+  assert_eq!(original_views.len(), duplicated_views.len());
+
+  // compare inline view
+  let original_inline_view_id = original.get_inline_view_id();
+  let original_inline_view = original.get_view(&original_inline_view_id).unwrap();
+  let duplicated_inline_view_id = duplicate.get_inline_view_id();
+  let duplicated_inline_view = duplicate.get_view(&duplicated_inline_view_id).unwrap();
+  assert_eq!(
+    original_inline_view.row_orders.len(),
+    duplicated_inline_view.row_orders.len()
+  );
+  assert_eq!(
+    original_inline_view.field_orders.len(),
+    duplicated_inline_view.field_orders.len()
+  );
+
+  // compare field orders
+  assert_eq!(duplicated_inline_view.field_orders[0].id, "f1");
+  assert_eq!(duplicated_inline_view.field_orders[1].id, "f2");
+  assert_eq!(duplicated_inline_view.field_orders[2].id, "f3");
 }
 
 #[test]

@@ -50,24 +50,37 @@ impl Blocks {
     blocks.get(&block_id).cloned()
   }
 
-  pub fn create_rows(&self, params: Vec<CreateRowParams>) -> Vec<RowOrder> {
-    if params.is_empty() {
+  pub fn create_rows(&self, create_row_params: Vec<CreateRowParams>) -> Vec<RowOrder> {
+    if create_row_params.is_empty() {
       return vec![];
     }
+    let mut row_orders: Vec<RowOrder> = vec![];
+    let mut block_rows: HashMap<BlockId, Vec<CreateRowParams>> = HashMap::new();
+    for params in create_row_params {
+      let block_id = block_id_from_row_id(params.id);
+      row_orders.push(RowOrder {
+        id: params.id,
+        block_id,
+        height: params.height,
+      });
 
-    let block_id = block_id_from_row_id(params[0].id);
-    if let Some(block) = self.get_block(block_id) {
-      let rows = params
-        .into_iter()
-        .map(|params| Row::from((block_id, params)))
-        .collect::<Vec<Row>>();
-      let row_orders = rows.iter().map(RowOrder::from).collect();
-      block.insert_rows(rows);
-      row_orders
-    } else {
-      dbg!("Can't find the block with block_id: {}", block_id);
-      vec![]
+      block_rows
+        .entry(block_id)
+        .or_insert_with(|| vec![])
+        .push(params);
     }
+
+    for (block_id, params) in block_rows.into_iter() {
+      if let Some(block) = self.get_block(block_id) {
+        let rows = params
+          .into_iter()
+          .map(|params| Row::from((block_id, params)))
+          .collect::<Vec<Row>>();
+        block.insert_rows(rows);
+      }
+    }
+
+    row_orders
   }
 
   pub fn get_row(&self, row_id: RowId) -> Option<Row> {
@@ -153,6 +166,7 @@ pub struct CreateRowParams {
   pub cells: Cells,
   pub height: i32,
   pub visibility: bool,
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub prev_row_id: Option<RowId>,
 }
 

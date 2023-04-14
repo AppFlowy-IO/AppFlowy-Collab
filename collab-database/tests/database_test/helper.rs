@@ -59,7 +59,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     name: "my first database view".to_string(),
     ..Default::default()
   };
-  let database = Database::create_with_view(database_id, params, context).unwrap();
+  let database = Database::create_with_inline_view(database_id, params, context).unwrap();
   DatabaseTest {
     database,
     cleaner: None,
@@ -85,7 +85,7 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabKV>, D
     name: "my first grid".to_string(),
     ..Default::default()
   };
-  let database = Database::create_with_view(database_id, params, context).unwrap();
+  let database = Database::create_with_inline_view(database_id, params, context).unwrap();
   (
     db,
     DatabaseTest {
