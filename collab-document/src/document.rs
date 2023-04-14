@@ -26,7 +26,7 @@ pub struct Document {
 }
 
 impl Document {
-  pub fn create(collab: Collab, document_data: DocumentData) -> Result<Document, DocumentError> {
+  pub fn create(collab: Collab) -> Result<Document, DocumentError> {
     let (root, blocks, children_map) = collab.with_transact_mut(|txn| {
       // { document: {:} }
       let root = collab
@@ -63,18 +63,18 @@ impl Document {
       subscription,
     };
 
-    document.create_with_data(document_data);
     Ok(document)
   }
 
-  pub fn create_with_data(&self, data: DocumentData) {
+  pub fn create_with_data(&self, data: DocumentData) -> Result<(), DocumentError> {
     self.inner.with_transact_mut(|txn| {
       let page_id = data.page_id;
       self.root.insert_with_txn(txn, PAGE_ID, page_id);
       for (_id, block) in data.blocks {
         let res = self.block_operation.create_block_with_txn(txn, &block);
+
         if res.is_err() {
-          return;
+          return Err(res.err().unwrap());
         }
       }
       for (id, child_ids) in data.meta.children_map {
@@ -83,7 +83,8 @@ impl Document {
           map.push_back(txn, child_id.to_string());
         });
       }
-    });
+      Ok(())
+    })
   }
 
   pub fn open<F>(&mut self, callback: F) -> Result<DocumentData, DocumentError>
