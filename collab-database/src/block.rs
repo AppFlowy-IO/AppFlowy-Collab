@@ -171,11 +171,11 @@ pub struct CreateRowParams {
 }
 
 impl CreateRowParams {
-  pub fn new(id: RowId, cells: Cells, height: i32) -> Self {
+  pub fn new(id: RowId) -> Self {
     Self {
       id,
-      cells,
-      height,
+      cells: Cells::default(),
+      height: 60,
       visibility: true,
       prev_row_id: None,
     }

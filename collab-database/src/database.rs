@@ -770,4 +770,13 @@ impl DuplicatedDatabase {
     let database = serde_json::from_str(json)?;
     Ok(database)
   }
+
+  pub fn to_json_bytes(&self) -> Result<Vec<u8>, DatabaseError> {
+    Ok(self.to_json()?.as_bytes().to_vec())
+  }
+
+  pub fn from_json_bytes(json: Vec<u8>) -> Result<Self, DatabaseError> {
+    let database = serde_json::from_slice(&json)?;
+    Ok(database)
+  }
 }
