@@ -1,8 +1,8 @@
-use crate::helper::{user_database_test, UserDatabaseTest};
 use collab::core::any_map::AnyMapExtension;
-
 use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
 use collab_database::views::CreateDatabaseParams;
+
+use crate::helper::{user_database_test, UserDatabaseTest};
 
 #[test]
 fn update_single_type_option_data_test() {
@@ -64,13 +64,11 @@ fn insert_multi_type_options_test() {
 fn user_database_with_default_field() -> UserDatabaseTest {
   let test = user_database_test(1);
   let database = test
-    .create_database(
-      "d1",
-      CreateDatabaseParams {
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
 
   let field = Field {

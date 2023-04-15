@@ -1,18 +1,23 @@
-use crate::core::collab_plugin::CollabPlugin;
-use crate::error::CollabError;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
 use collab_persistence::doc::YrsDocDB;
 use collab_persistence::CollabKV;
-use std::sync::Arc;
 use yrs::TransactionMut;
+
+use crate::core::collab_plugin::CollabPlugin;
+use crate::error::CollabError;
 
 #[derive(Clone)]
 pub struct CollabDiskPlugin {
   uid: i64,
+  did_load: Arc<AtomicBool>,
   db: Arc<CollabKV>,
 }
 impl CollabDiskPlugin {
   pub fn new(uid: i64, db: Arc<CollabKV>) -> Result<Self, CollabError> {
-    Ok(Self { db, uid })
+    let did_load = Arc::new(AtomicBool::new(false));
+    Ok(Self { db, uid, did_load })
   }
 
   pub fn doc(&self) -> YrsDocDB {
@@ -26,11 +31,14 @@ impl CollabPlugin for CollabDiskPlugin {
     if doc.is_exist(object_id) {
       doc.load_doc(object_id, txn).unwrap();
     } else {
-      self.doc().insert_or_create_new_doc(object_id, txn).unwrap();
+      self.doc().create_new_doc(object_id, txn).unwrap();
     }
+    self.did_load.store(true, Ordering::SeqCst);
   }
 
   fn did_receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
-    self.doc().push_update(object_id, update).unwrap();
+    if self.did_load.load(Ordering::SeqCst) {
+      self.doc().push_update(object_id, update).unwrap();
+    }
   }
 }

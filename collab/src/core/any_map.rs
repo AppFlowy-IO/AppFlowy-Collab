@@ -1,11 +1,13 @@
-use crate::preclude::{lib0Any, MapRefExtension, YrsValue};
-use lib0::any::Any;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
+
+use lib0::any::Any;
+use serde::{Deserialize, Serialize};
 use yrs::types::Value;
 use yrs::{Array, Map, MapRef, ReadTxn, TransactionMut};
+
+use crate::preclude::{lib0Any, MapRefExtension, YrsValue};
 
 /// A wrapper around `yrs::Map` that provides a more ergonomic API.
 pub trait AnyMapExtension {
@@ -251,6 +253,8 @@ impl Hash for AnyMap {
     });
   }
 }
+
+impl Eq for AnyMap {}
 
 impl AnyMap {
   pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Self {

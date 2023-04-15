@@ -1,8 +1,8 @@
-use crate::helper::{create_database, create_database_with_default_data};
 use collab_database::block::CreateRowParams;
 use collab_database::database::gen_row_id;
-
 use collab_database::views::CreateViewParams;
+
+use crate::helper::{create_database, create_database_with_default_data};
 
 #[test]
 fn create_row_shared_by_two_view_test() {
@@ -11,7 +11,7 @@ fn create_row_shared_by_two_view_test() {
     view_id: "v2".to_string(),
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
 
   let row_id = gen_row_id();
   database_test.push_row(CreateRowParams {
@@ -32,7 +32,7 @@ fn delete_row_shared_by_two_view_test() {
     view_id: "v2".to_string(),
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
 
   let row_order = database_test
     .push_row(CreateRowParams {
@@ -82,7 +82,7 @@ fn move_row_in_views_test() {
     view_id: "v2".to_string(),
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
 
   database_test.views.update_view("v1", |update| {
     update.move_row_order(2, 1);

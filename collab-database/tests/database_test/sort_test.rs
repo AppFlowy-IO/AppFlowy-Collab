@@ -1,6 +1,6 @@
-use crate::helper::{create_database_with_default_data, DatabaseTest, SortCondition, TestSort};
-
 use collab_database::views::{CreateViewParams, DatabaseLayout};
+
+use crate::helper::{create_database_with_default_data, DatabaseTest, SortCondition, TestSort};
 
 #[test]
 fn create_database_view_with_sort_test() {
@@ -90,6 +90,6 @@ fn create_database_with_two_sorts() -> DatabaseTest {
     layout: DatabaseLayout::Grid,
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
   database_test
 }

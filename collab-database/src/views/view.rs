@@ -7,7 +7,6 @@ use collab::preclude::{
 use serde::{Deserialize, Serialize};
 
 use crate::block::CreateRowParams;
-
 use crate::fields::Field;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
 use crate::views::{
@@ -47,6 +46,21 @@ pub struct CreateViewParams {
   pub filters: Vec<FilterMap>,
   pub groups: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
+}
+
+impl CreateViewParams {
+  pub fn new(database_id: String, view_id: String, name: String, layout: DatabaseLayout) -> Self {
+    Self {
+      database_id,
+      view_id,
+      name,
+      layout,
+      layout_settings: LayoutSettings::default(),
+      filters: vec![],
+      groups: vec![],
+      sorts: vec![],
+    }
+  }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

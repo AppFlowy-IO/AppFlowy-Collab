@@ -1,6 +1,7 @@
-use smallvec::{smallvec, SmallVec};
 use std::io::Write;
 use std::ops::Deref;
+
+use smallvec::{smallvec, SmallVec};
 
 // https://github.com/spacejam/sled
 // sled performs prefix encoding on long keys with similar prefixes that are grouped together in a
@@ -54,7 +55,7 @@ pub const SNAPSHOT_UPDATE: u8 = 1;
 pub type DocID = u32;
 pub type SnapshotID = u32;
 
-pub fn make_doc_id(uid: &[u8], object_id: &[u8]) -> Key<20> {
+pub fn make_doc_id_key(uid: &[u8], object_id: &[u8]) -> Key<20> {
   let mut v: SmallVec<[u8; 20]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT];
   v.write_all(uid).unwrap();
   v.write_all(object_id).unwrap();
@@ -92,7 +93,7 @@ pub fn make_state_vector_key(doc_id: DocID) -> Key<8> {
   Key(v)
 }
 
-pub fn make_update_key(doc_id: DocID, clock: u32) -> Key<12> {
+pub fn make_doc_update_key(doc_id: DocID, clock: u32) -> Key<12> {
   let mut v: SmallVec<[u8; 12]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT_KEY];
   v.write_all(&doc_id.to_be_bytes()).unwrap();
   v.push(DOC_UPDATE);
@@ -107,7 +108,7 @@ pub fn clock_from_key(key: &[u8]) -> &[u8] {
   &key[(len - 5)..(len - 1)]
 }
 
-pub fn make_snapshot_id(uid: &[u8], object_id: &[u8]) -> Key<20> {
+pub fn make_snapshot_id_key(uid: &[u8], object_id: &[u8]) -> Key<20> {
   let mut v: SmallVec<[u8; 20]> = smallvec![SNAPSHOT_SPACE, SNAPSHOT_SPACE_OBJECT];
   v.write_all(uid).unwrap();
   v.write_all(object_id).unwrap();

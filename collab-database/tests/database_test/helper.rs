@@ -1,4 +1,9 @@
 #![allow(clippy::upper_case_acronyms)]
+
+use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use anyhow::bail;
 use collab::core::any_map::AnyMapExtension;
 use collab::plugin_impl::disk::CollabDiskPlugin;
@@ -14,9 +19,7 @@ use collab_database::views::{
   SortMapBuilder,
 };
 use collab_persistence::CollabKV;
-use std::ops::{Deref, DerefMut};
-use std::path::PathBuf;
-use std::sync::Arc;
+
 use tempfile::TempDir;
 
 pub struct DatabaseTest {
@@ -59,7 +62,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     name: "my first database view".to_string(),
     ..Default::default()
   };
-  let database = Database::create_with_inline_view(database_id, params, context).unwrap();
+  let database = Database::create_with_inline_view(params, context).unwrap();
   DatabaseTest {
     database,
     cleaner: None,
@@ -83,9 +86,10 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabKV>, D
   let params = CreateDatabaseParams {
     view_id: "v1".to_string(),
     name: "my first grid".to_string(),
+    database_id: database_id.to_string(),
     ..Default::default()
   };
-  let database = Database::create_with_inline_view(database_id, params, context).unwrap();
+  let database = Database::create_with_inline_view(params, context).unwrap();
   (
     db,
     DatabaseTest {

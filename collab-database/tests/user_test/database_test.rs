@@ -1,28 +1,24 @@
-use crate::helper::{user_database_test, user_database_test_with_default_data};
 use collab_database::block::CreateRowParams;
-
 use collab_database::views::{CreateDatabaseParams, CreateViewParams};
+
+use crate::helper::{user_database_test, user_database_test_with_default_data};
 
 #[test]
 fn create_multiple_database_test() {
   let test = user_database_test(1);
   test
-    .create_database(
-      "d1",
-      CreateDatabaseParams {
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
   test
-    .create_database(
-      "d2",
-      CreateDatabaseParams {
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d2".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
   let all_databases = test.get_all_databases();
   assert_eq!(all_databases.len(), 2);
@@ -34,22 +30,18 @@ fn create_multiple_database_test() {
 fn delete_database_test() {
   let test = user_database_test(1);
   test
-    .create_database(
-      "d1",
-      CreateDatabaseParams {
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
   test
-    .create_database(
-      "d2",
-      CreateDatabaseParams {
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d2".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
   test.delete_database("d1");
 
@@ -61,13 +53,11 @@ fn delete_database_test() {
 fn duplicate_database_inline_view_test() {
   let test = user_database_test(1);
   let database = test
-    .create_database(
-      "d1",
-      CreateDatabaseParams {
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
 
   let duplicated_database = test.duplicate_database("v1").unwrap();
@@ -92,13 +82,11 @@ fn duplicate_database_view_test() {
 
   // create the database with inline view
   let database = test
-    .create_database(
-      "d1",
-      CreateDatabaseParams {
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
 
   test.create_database_view(CreateViewParams {
@@ -107,8 +95,8 @@ fn duplicate_database_view_test() {
     ..Default::default()
   });
 
-  // Duplicate the ref view.
-  let duplicated_view = database.duplicate_view("v2").unwrap();
+  // Duplicate the linked view.
+  let duplicated_view = database.duplicate_linked_view("v2").unwrap();
   database.push_row(CreateRowParams {
     id: 1.into(),
     ..Default::default()
@@ -123,17 +111,15 @@ fn duplicate_database_view_test() {
 fn delete_database_inline_view_test() {
   let test = user_database_test(1);
   let database = test
-    .create_database(
-      "d1",
-      CreateDatabaseParams {
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
 
   for i in 2..5 {
-    database.create_view(CreateViewParams {
+    database.create_linked_view(CreateViewParams {
       view_id: format!("v{}", i),
       ..Default::default()
     });
@@ -142,7 +128,7 @@ fn delete_database_inline_view_test() {
   let views = database.views.get_all_views();
   assert_eq!(views.len(), 4);
 
-  // After deleting the inline view, all ref views will be removed
+  // After deleting the inline view, all linked views will be removed
   test.delete_view("d1", "v1");
   let views = database.views.get_all_views();
   assert_eq!(views.len(), 0);
@@ -198,14 +184,11 @@ fn duplicate_database_data_test() {
 fn get_database_by_view_id_test() {
   let test = user_database_test(1);
   let _database = test
-    .create_database(
-      "d1",
-      CreateDatabaseParams {
-        database_id: "d1".to_string(),
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
 
   test.create_database_view(CreateViewParams {

@@ -101,7 +101,7 @@ fn delete_field_in_views_test() {
     view_id: "v1".to_string(),
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
   database_test.delete_field("f0");
 
   let fields = database_test.fields.get_all_fields();
@@ -117,7 +117,7 @@ fn field_order_in_view_test() {
     view_id: "v1".to_string(),
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
   for i in 0..10 {
     database_test.push_field(Field::new(
       format!("f{}", i),
@@ -168,7 +168,7 @@ fn move_field_test() {
     view_id: "v2".to_string(),
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
 
   for i in 0..3 {
     database_test.push_field(Field::new(

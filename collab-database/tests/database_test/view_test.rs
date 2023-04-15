@@ -1,16 +1,16 @@
-use crate::helper::{create_database, create_database_with_default_data, TestFilter};
-use assert_json_diff::assert_json_eq;
 use collab::preclude::lib0Any;
+use collab_database::block::CreateRowParams;
+use collab_database::database::{gen_row_id, DuplicatedDatabase};
 use collab_database::fields::Field;
-
 use collab_database::views::{
   CreateViewParams, DatabaseLayout, LayoutSettingBuilder, LayoutSettings,
 };
 use nanoid::nanoid;
-
-use collab_database::block::CreateRowParams;
-use collab_database::database::{gen_row_id, DuplicatedDatabase};
 use serde_json::json;
+
+use assert_json_diff::assert_json_eq;
+
+use crate::helper::{create_database, create_database_with_default_data, TestFilter};
 
 #[test]
 fn create_initial_database_test() {
@@ -65,7 +65,7 @@ fn create_same_database_view_twice_test() {
     layout: DatabaseLayout::Grid,
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
   let view = database_test.views.get_view("v1").unwrap();
 
   assert_eq!(view.name, "my second grid");
@@ -126,7 +126,7 @@ fn create_database_view_with_filter_test() {
     layout: DatabaseLayout::Grid,
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
 
   let view = database_test.views.get_view("v1").unwrap();
   let filters = view
@@ -156,7 +156,7 @@ fn create_database_view_with_layout_setting_test() {
     layout_settings,
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
 
   let view = database_test.views.get_view("v1").unwrap();
   let grid_layout_setting = view.layout_settings.get(&DatabaseLayout::Grid).unwrap();
@@ -175,7 +175,7 @@ fn delete_inline_database_view_test() {
       view_id: format!("v{}", i),
       ..Default::default()
     };
-    database_test.create_view(params);
+    database_test.create_linked_view(params);
   }
 
   let views = database_test.views.get_all_views();
@@ -196,7 +196,7 @@ fn delete_inline_database_view_test() {
 #[test]
 fn duplicate_database_view_test() {
   let database_test = create_database_with_default_data(1, "1");
-  database_test.duplicate_view("v1");
+  database_test.duplicate_linked_view("v1");
 
   let views = database_test.views.get_all_views();
   assert_eq!(views.len(), 2);

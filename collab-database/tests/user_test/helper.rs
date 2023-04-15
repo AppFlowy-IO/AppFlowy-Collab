@@ -1,3 +1,8 @@
+use std::future::Future;
+use std::ops::Deref;
+use std::sync::Arc;
+use std::time::Duration;
+
 use collab::core::any_map::AnyMapExtension;
 use collab::preclude::lib0Any;
 use collab_database::block::CreateRowParams;
@@ -6,12 +11,9 @@ use collab_database::rows::{Cell, CellsBuilder};
 use collab_database::user::{RowRelationChange, RowRelationUpdateReceiver, UserDatabase};
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::CollabKV;
-use std::future::Future;
-use std::ops::Deref;
-use std::sync::Arc;
-use std::time::Duration;
-use tempfile::TempDir;
 use tokio::sync::mpsc::{channel, Receiver};
+
+use tempfile::TempDir;
 
 pub struct UserDatabaseTest {
   #[allow(dead_code)]
@@ -50,7 +52,7 @@ pub fn user_database_test_with_default_data(uid: i64) -> UserDatabaseTest {
   };
 
   user_database
-    .create_database("d1", create_database_params("d1"))
+    .create_database(create_database_params("d1"))
     .unwrap();
 
   user_database

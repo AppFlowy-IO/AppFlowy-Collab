@@ -1,19 +1,17 @@
-use crate::helper::user_database_test;
 use collab_database::block::CreateRowParams;
-
 use collab_database::views::CreateDatabaseParams;
+
+use crate::helper::user_database_test;
 
 #[test]
 fn database_get_snapshot_test() {
   let test = user_database_test(1);
   let database = test
-    .create_database(
-      "d1",
-      CreateDatabaseParams {
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
 
   let snapshots = test.get_database_snapshots("d1");
@@ -34,13 +32,11 @@ fn database_get_snapshot_test() {
 fn delete_database_snapshot_test() {
   let test = user_database_test(1);
   let database = test
-    .create_database(
-      "d1",
-      CreateDatabaseParams {
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
 
   for i in 0..10 {
@@ -58,13 +54,11 @@ fn delete_database_snapshot_test() {
 fn restore_from_database_snapshot_test() {
   let test = user_database_test(1);
   let database = test
-    .create_database(
-      "d1",
-      CreateDatabaseParams {
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
   for i in 0..5 {
     database.push_row(CreateRowParams {

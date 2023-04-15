@@ -1,3 +1,13 @@
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use collab::core::any_map::AnyMapExtension;
+use collab::preclude::{
+  Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+};
+use nanoid::nanoid;
+use serde::{Deserialize, Serialize};
+
 use crate::block::{Blocks, CreateRowParams};
 use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
@@ -9,14 +19,6 @@ use crate::views::{
   CreateDatabaseParams, CreateViewParams, DatabaseLayout, DatabaseView, FieldOrder, FilterMap,
   GroupSettingMap, LayoutSetting, RowOrder, SortMap, ViewDescription, ViewMap,
 };
-use collab::core::any_map::AnyMapExtension;
-use collab::preclude::{
-  Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
-};
-use nanoid::nanoid;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::rc::Rc;
 
 pub struct Database {
   #[allow(dead_code)]
@@ -42,11 +44,10 @@ pub struct DatabaseContext {
 
 impl Database {
   pub fn create_with_inline_view(
-    database_id: &str,
     params: CreateDatabaseParams,
     context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
-    let this = Self::get_or_create(database_id, context)?;
+    let this = Self::get_or_create(&params.database_id, context)?;
     let (rows, fields, params) = params.split();
     let row_orders = this.blocks.create_rows(rows);
     let field_orders = fields.iter().map(FieldOrder::from).collect();
@@ -56,7 +57,7 @@ impl Database {
       for field in fields {
         this.fields.insert_field_with_txn(txn, field);
       }
-      this.create_view_with_txn(txn, params, field_orders, row_orders);
+      this.create_linked_view_with_txn(txn, params, field_orders, row_orders);
     });
     Ok(this)
   }
@@ -517,21 +518,24 @@ impl Database {
     });
   }
 
-  pub fn create_view(&self, params: CreateViewParams) {
-    self.root.with_transact_mut(|txn| {
-      let inline_view_id = self.get_inline_view_id_with_txn(txn);
-      let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
-      let field_orders = self.views.get_field_orders_txn(txn, &inline_view_id);
-      self.create_view_with_txn(txn, params, field_orders, row_orders);
-    })
-  }
-
+  /// Returns all the views that the current database has.
   pub fn get_all_views_description(&self) -> Vec<ViewDescription> {
     let txn = self.root.transact();
     self.views.get_all_views_description_with_txn(&txn)
   }
 
-  pub fn create_view_with_txn(
+  /// Create a linked view to existing database
+  pub fn create_linked_view(&self, params: CreateViewParams) {
+    self.root.with_transact_mut(|txn| {
+      let inline_view_id = self.get_inline_view_id_with_txn(txn);
+      let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
+      let field_orders = self.views.get_field_orders_txn(txn, &inline_view_id);
+      self.create_linked_view_with_txn(txn, params, field_orders, row_orders);
+    })
+  }
+
+  /// Create a linked view to existing database.
+  pub fn create_linked_view_with_txn(
     &self,
     txn: &mut TransactionMut,
     params: CreateViewParams,
@@ -557,13 +561,9 @@ impl Database {
     self.views.insert_view_with_txn(txn, view);
   }
 
-  pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
-    let txn = self.root.transact();
-    self.views.get_view_with_txn(&txn, view_id)
-  }
-
-  /// Duplicate a view that shares the same rows as the original view.
-  pub fn duplicate_view(&self, view_id: &str) -> Option<DatabaseView> {
+  /// Create a linked view that duplicate the target view's setting including filter, sort and
+  /// group. etc.
+  pub fn duplicate_linked_view(&self, view_id: &str) -> Option<DatabaseView> {
     let view = self.views.get_view(view_id)?;
     let mut duplicated_view = view.clone();
     duplicated_view.id = gen_database_view_id();
@@ -636,6 +636,11 @@ impl Database {
     view.id = gen_database_view_id();
     view.database_id = gen_database_id();
     DuplicatedDatabase { view, fields, rows }
+  }
+
+  pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
+    let txn = self.root.transact();
+    self.views.get_view_with_txn(&txn, view_id)
   }
 
   pub fn create_default_field(

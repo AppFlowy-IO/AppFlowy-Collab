@@ -1,8 +1,9 @@
+use collab::core::any_map::AnyMapExtension;
+use collab_database::views::{CreateViewParams, DatabaseLayout};
+
 use crate::helper::{
   create_database_with_default_data, DatabaseTest, TestGroup, TestGroupSetting, CONTENT, GROUPS,
 };
-use collab::core::any_map::AnyMapExtension;
-use collab_database::views::{CreateViewParams, DatabaseLayout};
 
 #[test]
 fn create_database_view_with_group_test() {
@@ -237,6 +238,6 @@ fn create_database_with_two_groups() -> DatabaseTest {
     layout: DatabaseLayout::Grid,
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
   database_test
 }

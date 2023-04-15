@@ -11,7 +11,6 @@ use parking_lot::RwLock;
 
 use crate::block::Blocks;
 use crate::database::{Database, DatabaseContext, DuplicatedDatabase};
-
 use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::user::relation::{DatabaseRelation, RowRelationMap};
@@ -32,6 +31,7 @@ const DATABASES: &str = "databases";
 
 impl UserDatabase {
   pub fn new(uid: i64, db: Arc<CollabKV>) -> Self {
+    tracing::trace!("Init user database: {}", uid);
     let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
     let snapshot_plugin = CollabSnapshotPlugin::new(uid, db.clone(), 5).unwrap();
     let collab = CollabBuilder::new(uid, "user_database")
@@ -39,7 +39,7 @@ impl UserDatabase {
       .with_plugin(snapshot_plugin)
       .build();
     collab.initial();
-    let (databases, relation) = collab.with_transact_mut(|txn| {
+    let databases = collab.with_transact_mut(|txn| {
       // { DATABASES: {:} }
       let databases = collab
         .get_array_with_txn(txn, vec![DATABASES])
@@ -47,12 +47,10 @@ impl UserDatabase {
           collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn, DATABASES, vec![])
         });
 
-      let relation = create_relations_collab(uid, db.clone());
-      (databases, relation)
+      databases
     });
-
     let database_vec = DatabaseArray::new(databases);
-    let database_relation = DatabaseRelation::new(relation);
+    let database_relation = DatabaseRelation::new(create_relations_collab(uid, db.clone()));
     let blocks = Blocks::new(uid, db.clone());
     Self {
       uid,
@@ -101,25 +99,21 @@ impl UserDatabase {
   /// Create database with inline view
   pub fn create_database(
     &self,
-    database_id: &str,
     params: CreateDatabaseParams,
   ) -> Result<Arc<Database>, DatabaseError> {
     let context = DatabaseContext {
-      collab: self.collab_for_database(database_id),
+      collab: self.collab_for_database(&params.database_id),
       blocks: self.blocks.clone(),
     };
     self
       .database_records
-      .add_database(database_id, &params.view_id, &params.name);
-    let database = Arc::new(Database::create_with_inline_view(
-      database_id,
-      params,
-      context,
-    )?);
+      .add_database(&params.database_id, &params.view_id, &params.name);
+    let database_id = params.database_id.clone();
+    let database = Arc::new(Database::create_with_inline_view(params, context)?);
     self
       .open_handlers
       .write()
-      .insert(database_id.to_string(), database.clone());
+      .insert(database_id, database.clone());
     Ok(database)
   }
 
@@ -129,13 +123,11 @@ impl UserDatabase {
   ) -> Result<Arc<Database>, DatabaseError> {
     let DuplicatedDatabase { view, fields, rows } = data;
     let params = CreateDatabaseParams::from_view(view, fields, rows);
-    let database_id = params.database_id.clone();
-    let database = self.create_database(&database_id, params)?;
+    let database = self.create_database(params)?;
     Ok(database)
   }
 
-  /// Create reference view
-  /// The reference view shares the same data with the inline view.
+  /// Create reference view that shares the same data with the inline view's database
   /// If the inline view is deleted, the reference view will be deleted too.
   pub fn create_database_view(&self, params: CreateViewParams) {
     if let Some(database) = self.get_database(&params.database_id) {
@@ -144,7 +136,7 @@ impl UserDatabase {
         .update_database(&params.database_id, |record| {
           record.views.insert(params.view_id.clone());
         });
-      database.create_view(params);
+      database.create_linked_view(params);
     }
   }
 
@@ -199,8 +191,7 @@ impl UserDatabase {
   pub fn duplicate_database(&self, view_id: &str) -> Result<Arc<Database>, DatabaseError> {
     let DuplicatedDatabase { view, fields, rows } = self.make_duplicate_database_data(view_id)?;
     let params = CreateDatabaseParams::from_view(view, fields, rows);
-    let database_id = params.database_id.clone();
-    let database = self.create_database(&database_id, params)?;
+    let database = self.create_database(params)?;
     Ok(database)
   }
 
