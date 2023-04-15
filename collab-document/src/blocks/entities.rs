@@ -1,6 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::ops::Deref;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Block {
@@ -49,6 +50,14 @@ impl BlockEvent {
     Self(event)
   }
 }
+
+impl Deref for BlockEvent {
+  type Target = Vec<BlockEventPayload>;
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct BlockEventPayload {
   pub value: String,
