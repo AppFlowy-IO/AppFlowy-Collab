@@ -1,6 +1,6 @@
 use crate::blocks::{BlockEvent, BlockEventPayload, DeltaType};
 use crate::error::DocumentError;
-use collab::preclude::{EntryChange, Event, PathSegment, ToJson, TransactionMut};
+use collab::preclude::{Array, EntryChange, Event, Map, PathSegment, TransactionMut, YrsValue};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -14,6 +14,26 @@ pub fn hashmap_to_json_str(data: HashMap<String, Value>) -> Result<String, Docum
   v.map_err(|_| DocumentError::ConvertDataError)
 }
 
+fn parse_yrs_value(txn: &TransactionMut, value: &YrsValue) -> String {
+  match value {
+    YrsValue::YArray(val) => {
+      let array = val
+        .iter(txn)
+        .map(|v| v.to_string(txn))
+        .collect::<Vec<String>>();
+      serde_json::to_string(&array).unwrap_or_default()
+    },
+    YrsValue::YMap(val) => {
+      let obj: HashMap<String, String> = HashMap::from_iter(
+        val
+          .iter(txn)
+          .map(|(k, v)| (k.to_string(), v.to_string(txn))),
+      );
+      serde_json::to_string(&obj).unwrap_or_default()
+    },
+    _ => "".to_string(),
+  }
+}
 pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
   let path = event
     .path()
@@ -29,7 +49,7 @@ pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
       let id = path.last().unwrap().to_string();
 
       vec![BlockEventPayload {
-        value: event.target().to_string(txn),
+        value: parse_yrs_value(txn, &event.target()),
         id,
         path,
         command: DeltaType::Updated,
@@ -41,7 +61,7 @@ pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
       .map(|(key, change)| {
         match change {
           EntryChange::Inserted(value) => BlockEventPayload {
-            value: value.to_json(txn).to_string(),
+            value: parse_yrs_value(txn, value),
             id: key.to_string(),
             path: path.clone(),
             command: DeltaType::Inserted,
@@ -49,15 +69,16 @@ pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
           EntryChange::Updated(_, _value) => {
             // Here use unwrap is safe, because we have checked the type of event.
             let id = path.last().unwrap().to_string();
+
             BlockEventPayload {
-              value: event.target().to_string(txn),
+              value: parse_yrs_value(txn, &event.target()),
               id,
               path: path.clone(),
               command: DeltaType::Updated,
             }
           },
           EntryChange::Removed(value) => BlockEventPayload {
-            value: value.to_json(txn).to_string(),
+            value: parse_yrs_value(txn, value),
             id: key.to_string(),
             path: path.clone(),
             command: DeltaType::Removed,
