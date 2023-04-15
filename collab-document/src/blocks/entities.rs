@@ -42,30 +42,24 @@ pub enum BlockActionType {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct BlockEvent {
+pub struct BlockEvent(Vec<BlockEventPayload>);
+
+impl BlockEvent {
+  pub fn new(event: Vec<BlockEventPayload>) -> Self {
+    Self(event)
+  }
+}
+#[derive(Debug, Clone, Serialize)]
+pub struct BlockEventPayload {
+  pub value: String,
+  pub id: String,
   pub path: Vec<String>,
-  pub delta: Vec<Delta>,
+  pub command: DeltaType,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub enum Delta {
-  Array(ArrayDelta),
-  Map(MapDelta),
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub enum ArrayDelta {
-  Added(Vec<String>),
-  Removed(u32),
-  Retain(u32),
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub enum MapDelta {
-  // id, content
-  Inserted(String, Value),
-  // path, old value, new value
-  Updated(String, Value, Value),
-  // id
-  Removed(String),
+#[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
+pub enum DeltaType {
+  Inserted,
+  Updated,
+  Removed,
 }

@@ -1,7 +1,5 @@
-use crate::blocks::{get_delta_from_event, BlockEvent};
-use collab::preclude::{
-  DeepEventsSubscription, DeepObservable, MapRefWrapper, Origin, PathSegment,
-};
+use crate::blocks::{parse_event, BlockEvent};
+use collab::preclude::{DeepEventsSubscription, DeepObservable, MapRefWrapper, Origin};
 
 pub struct RootDeepSubscription {
   pub(crate) subscription: Option<DeepEventsSubscription>,
@@ -24,19 +22,8 @@ impl RootDeepSubscription {
     let subscription = Some(root.observe_deep(move |txn, events| {
       let block_events = events
         .iter()
-        .map(|deep_event| {
-          let delta = get_delta_from_event(txn, deep_event);
-          let path = deep_event
-            .path()
-            .iter()
-            .map(|v| match v {
-              PathSegment::Key(v) => v.to_string(),
-              PathSegment::Index(v) => v.to_string(),
-            })
-            .collect();
-          BlockEvent { path, delta }
-        })
-        .collect();
+        .map(|deep_event| parse_event(txn, deep_event))
+        .collect::<Vec<BlockEvent>>();
 
       callback(&block_events, txn.origin());
     }));

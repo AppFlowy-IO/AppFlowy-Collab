@@ -77,7 +77,7 @@ pub fn create_document(doc_id: &str) -> DocumentTest {
 
   match Document::create(collab) {
     Ok(document) => {
-      document.create_with_data(document_data);
+      document.create_with_data(document_data).unwrap();
       DocumentTest { document, cleaner }
     },
     Err(e) => panic!("create document error: {}", e),
