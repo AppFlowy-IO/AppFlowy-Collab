@@ -43,7 +43,7 @@ impl Document {
 
       // {document: { blocks: {:}, meta: { children_map: {:} } }
       let children_map = collab
-        .get_map_with_txn(txn, vec![META, CHILDREN_MAP])
+        .get_map_with_txn(txn, vec![ROOT, META, CHILDREN_MAP])
         .unwrap_or_else(|| meta.insert_map_with_txn(txn, CHILDREN_MAP));
 
       (root, blocks, children_map)
