@@ -1,7 +1,8 @@
-use crate::rows::RowComment;
 use collab::preclude::{
   Array, ArrayRef, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
 };
+
+use crate::rows::RowComment;
 
 const ROW_META: &str = "row_meta";
 const ROW_DOC: &str = "row_doc";
@@ -12,11 +13,21 @@ pub struct RowMetaMap {
   meta: MapRef,
 }
 
+pub(crate) fn get_row_meta<T: ReadTxn>(txn: &T, container: &MapRefWrapper) -> Option<MapRef> {
+  container
+    .get_map_with_txn(txn, ROW_META)
+    .map(|map| map.into_inner())
+}
+
+pub(crate) fn create_row_meta(txn: &mut TransactionMut, container: &MapRefWrapper) -> MapRef {
+  let meta = container.insert_map_with_txn(txn, ROW_META);
+  meta.insert_map_with_txn(txn, ROW_DOC);
+  meta.insert_array_with_txn::<RowComment>(txn, ROW_COMMENT, vec![]);
+  meta.into_inner()
+}
+
 impl RowMetaMap {
-  pub fn new_with_txn(txn: &mut TransactionMut, container: &MapRefWrapper) -> Self {
-    let meta = container.get_or_insert_map_with_txn(txn, ROW_META);
-    meta.get_or_insert_map_with_txn(txn, ROW_DOC);
-    meta.get_or_insert_array_with_txn::<RowComment>(txn, ROW_COMMENT);
+  pub fn new(meta: MapRef) -> Self {
     Self { meta }
   }
 

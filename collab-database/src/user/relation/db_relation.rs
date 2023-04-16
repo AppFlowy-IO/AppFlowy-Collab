@@ -1,5 +1,7 @@
+use collab::core::collab::Path;
+use collab::preclude::{Collab, MapRefWrapper};
+
 use crate::user::relation::RowRelationMap;
-use collab::preclude::Collab;
 
 pub struct DatabaseRelation {
   #[allow(dead_code)]
@@ -10,17 +12,19 @@ pub struct DatabaseRelation {
 const ROW_RELATION_MAP: &str = "row_relations";
 impl DatabaseRelation {
   pub fn new(collab: Collab) -> DatabaseRelation {
-    let row_relation_map = collab.with_transact_mut(|txn| {
-      let relation_map = collab
-        .get_map_with_txn(txn, vec![ROW_RELATION_MAP])
-        .unwrap_or_else(|| collab.create_map_with_txn(txn, ROW_RELATION_MAP));
+    let row_relation_map = {
+      let txn = collab.transact();
+      collab.get_map_with_txn(&txn, vec![ROW_RELATION_MAP])
+    };
 
-      RowRelationMap::from_map_ref(relation_map)
-    });
+    let relation_map = match row_relation_map {
+      None => collab.with_transact_mut(|txn| collab.create_map_with_txn(txn, ROW_RELATION_MAP)),
+      Some(row_relation_map) => row_relation_map,
+    };
 
     Self {
       inner: collab,
-      row_relation_map,
+      row_relation_map: RowRelationMap::from_map_ref(relation_map),
     }
   }
 

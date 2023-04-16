@@ -35,7 +35,6 @@ const DATABASE: &str = "database";
 const FIELDS: &str = "fields";
 const VIEWS: &str = "views";
 const METAS: &str = "metas";
-const DATABASE_INLINE_VIEW: &str = "iid";
 
 pub struct DatabaseContext {
   pub collab: Collab,
@@ -63,6 +62,54 @@ impl Database {
   }
 
   pub fn get_or_create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
+    if database_id.is_empty() {
+      return Err(DatabaseError::InvalidDatabaseID);
+    }
+
+    let database = {
+      let txn = context.collab.transact();
+      context.collab.get_map_with_txn(&txn, vec![DATABASE])
+    };
+
+    match database {
+      None => Self::create(database_id, context),
+      Some(database) => {
+        let collab = context.collab;
+        let (fields, views, metas) = collab.with_transact_mut(|txn| {
+          // { DATABASE: {:} }
+          let database = collab
+            .get_map_with_txn(txn, vec![DATABASE])
+            .unwrap_or_else(|| collab.create_map_with_txn(txn, DATABASE));
+
+          // { DATABASE: { FIELDS: {:} } }
+          let fields = collab
+            .get_map_with_txn(txn, vec![DATABASE, FIELDS])
+            .unwrap();
+
+          // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
+          let views = collab.get_map_with_txn(txn, vec![DATABASE, VIEWS]).unwrap();
+
+          // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
+          let metas = collab.get_map_with_txn(txn, vec![DATABASE, METAS]).unwrap();
+
+          (fields, views, metas)
+        });
+        let views = ViewMap::new(views);
+        let fields = FieldMap::new(fields);
+        let metas = MetaMap::new(metas);
+        Ok(Self {
+          inner: collab,
+          root: database,
+          blocks: context.blocks,
+          views: Rc::new(views),
+          fields: Rc::new(fields),
+          metas: Rc::new(metas),
+        })
+      },
+    }
+  }
+
+  pub fn create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
     if database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID);
     }
@@ -683,9 +730,8 @@ impl Database {
   }
 
   pub fn set_inline_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
-    self
-      .metas
-      .insert_str_with_txn(txn, DATABASE_INLINE_VIEW, view_id);
+    tracing::trace!("Set inline view id: {}", view_id);
+    self.metas.set_inline_view_with_txn(txn, view_id);
   }
 
   /// The inline view is the view that create with the database when initializing
@@ -693,19 +739,13 @@ impl Database {
     let txn = self.root.transact();
     // It's safe to unwrap because each database inline view id was set
     // when initializing the database
-    self
-      .metas
-      .get_str_with_txn(&txn, DATABASE_INLINE_VIEW)
-      .unwrap()
+    self.metas.get_inline_view_with_txn(&txn).unwrap()
   }
 
   fn get_inline_view_id_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
     // It's safe to unwrap because each database inline view id was set
     // when initializing the database
-    self
-      .metas
-      .get_str_with_txn(txn, DATABASE_INLINE_VIEW)
-      .unwrap()
+    self.metas.get_inline_view_with_txn(txn).unwrap()
   }
 
   pub fn delete_view(&self, view_id: &str) {
@@ -727,11 +767,11 @@ pub fn gen_database_id() -> String {
 }
 
 pub fn gen_database_view_id() -> String {
-  format!("d:{}", nanoid!(6))
+  format!("v:{}", nanoid!(6))
 }
 
 pub fn gen_field_id() -> String {
-  nanoid!(6)
+  format!("f:{}", nanoid!(6))
 }
 
 pub fn gen_row_id() -> RowId {
@@ -743,11 +783,11 @@ pub fn gen_database_filter_id() -> String {
 }
 
 pub fn gen_database_group_id() -> String {
-  nanoid!(6)
+  format!("g:{}", nanoid!(6))
 }
 
 pub fn gen_database_sort_id() -> String {
-  nanoid!(6)
+  format!("s:{}", nanoid!(6))
 }
 
 pub fn gen_option_id() -> String {

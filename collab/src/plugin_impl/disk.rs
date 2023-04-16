@@ -33,12 +33,13 @@ impl CollabPlugin for CollabDiskPlugin {
     } else {
       self.doc().create_new_doc(object_id, txn).unwrap();
     }
-    self.did_load.store(true, Ordering::SeqCst);
+    // self.did_load.store(true, Ordering::SeqCst);
   }
 
   fn did_receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
-    if self.did_load.load(Ordering::SeqCst) {
-      self.doc().push_update(object_id, update).unwrap();
-    }
+    // if self.did_load.load(Ordering::SeqCst) {
+    //   self.doc().push_update(object_id, update).unwrap();
+    // }
+    self.doc().push_update(object_id, update).unwrap();
   }
 }

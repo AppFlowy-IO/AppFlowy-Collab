@@ -14,4 +14,7 @@ pub enum PersistenceError {
 
   #[error("invalid data")]
   InvalidData,
+
+  #[error("Internal error")]
+  InternalError,
 }

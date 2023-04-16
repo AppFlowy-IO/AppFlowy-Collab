@@ -1,20 +1,22 @@
-use crate::database::timestamp;
-use crate::rows::{
-  cell_from_map_ref, row_from_map_ref, row_from_value, row_order_from_value, BlockId, Cell, Cells,
-  Row, RowBuilder, RowId, RowMetaMap, RowUpdate,
-};
-use crate::views::RowOrder;
-use collab::plugin_impl::disk::CollabDiskPlugin;
-use collab::preclude::{
-  Collab, CollabBuilder, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
-};
-use collab_persistence::CollabKV;
-use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::sync::Arc;
+
+use collab::plugin_impl::disk::CollabDiskPlugin;
+use collab::preclude::{
+  Collab, CollabBuilder, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+};
+use collab_persistence::CollabKV;
+use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
+
+use crate::database::timestamp;
+use crate::rows::{
+  cell_from_map_ref, create_row_meta, get_row_meta, row_from_map_ref, row_from_value,
+  row_order_from_value, BlockId, Cell, Cells, Row, RowBuilder, RowId, RowMetaMap, RowUpdate,
+};
+use crate::views::RowOrder;
 
 const NUM_OF_BLOCKS: i64 = 10;
 
@@ -26,12 +28,11 @@ pub struct Blocks {
 impl Blocks {
   pub fn new(uid: i64, db: Arc<CollabKV>) -> Self {
     let blocks = RwLock::new(HashMap::new());
-    let disk_plugin = CollabDiskPlugin::new(uid, db).unwrap();
     let mut write_guard = blocks.write();
     for i in 0..NUM_OF_BLOCKS {
       let block_id = i;
       let collab = CollabBuilder::new(uid, format!("block_{}", block_id))
-        .with_plugin(disk_plugin.clone())
+        .with_plugin(CollabDiskPlugin::new(uid, db.clone()).unwrap())
         .build();
       collab.initial();
 
@@ -98,7 +99,7 @@ impl Blocks {
       let row: Row = (block_id, row).into();
       let row_order: RowOrder = RowOrder::from(&row);
 
-      println!("Insert row:{:?} to block:{:?}", row.id, block_id);
+      tracing::trace!("Insert row:{:?} to block:{:?}", row.id, block_id);
       block.create_row(row);
       Some(row_order)
     } else {
@@ -207,22 +208,43 @@ pub struct Block {
 
 impl Block {
   fn new(block_id: BlockId, collab: Collab) -> Block {
-    let (container, metas) = collab.with_transact_mut(|txn| {
-      let block = collab
-        .get_map_with_txn(txn, vec![BLOCK])
-        .unwrap_or_else(|| collab.create_map_with_txn(txn, BLOCK));
+    let (block, meta) = {
+      let txn = collab.transact();
+      let block = collab.get_map_with_txn(&txn, vec![BLOCK]);
+      let meta = match &block {
+        None => None,
+        Some(block) => get_row_meta(&txn, block),
+      };
+      (block, meta)
+    };
 
-      let metas = RowMetaMap::new_with_txn(txn, &block);
-
-      (block, metas)
-    });
-
-    Block {
-      collab,
-      container,
-      block_id,
-      metas,
-    }
+    return match block {
+      None => {
+        let (block, meta) = collab.with_transact_mut(|txn| {
+          let block = collab.create_map_with_txn(txn, BLOCK);
+          let meta = create_row_meta(txn, &block);
+          (block, meta)
+        });
+        Block {
+          collab,
+          container: block,
+          block_id,
+          metas: RowMetaMap::new(meta),
+        }
+      },
+      Some(block) => {
+        let meta = match meta {
+          None => collab.with_transact_mut(|txn| create_row_meta(txn, &block)),
+          Some(meta) => meta,
+        };
+        Block {
+          collab,
+          container: block,
+          block_id,
+          metas: RowMetaMap::new(meta),
+        }
+      },
+    };
   }
 
   pub fn insert_rows(&self, row: Vec<Row>) {

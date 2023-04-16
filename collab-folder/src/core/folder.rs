@@ -1,15 +1,17 @@
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::Arc;
+
+use collab::core::array_wrapper::ArrayRefExtension;
+use collab::preclude::*;
+use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
+
 use crate::core::trash::{TrashArray, TrashRecord};
 use crate::core::{
   Belonging, BelongingMap, FolderData, TrashChangeSender, View, ViewChangeSender, ViewsMap,
   Workspace, WorkspaceMap,
 };
-use collab::core::array_wrapper::ArrayRefExtension;
-use collab::preclude::*;
-use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::Arc;
 
 const FOLDER: &str = "folder";
 const WORKSPACES: &str = "workspaces";
@@ -193,7 +195,9 @@ impl Folder {
 
   pub fn set_current_view(&self, view_id: &str) {
     tracing::debug!("Set current view: {}", view_id);
-    self.meta.insert(CURRENT_VIEW, view_id);
+    self.meta.with_transact_mut(|txn| {
+      self.meta.insert_str_with_txn(txn, CURRENT_VIEW, view_id);
+    });
   }
 
   pub fn get_current_view(&self) -> Option<String> {

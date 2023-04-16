@@ -18,6 +18,7 @@ fn create_initial_database_test() {
   assert_json_eq!(
     json!( {
       "fields": [],
+      "inline_view": "v1",
       "rows": [],
       "views": [
         {

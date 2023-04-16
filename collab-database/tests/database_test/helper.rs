@@ -2,7 +2,7 @@
 
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 
 use anyhow::bail;
 use collab::core::any_map::AnyMapExtension;
@@ -19,8 +19,10 @@ use collab_database::views::{
   SortMapBuilder,
 };
 use collab_persistence::CollabKV;
+use tracing::level_filters::LevelFilter;
 
 use tempfile::TempDir;
+use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 
 pub struct DatabaseTest {
   database: Database,
@@ -70,6 +72,16 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
 }
 
 pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabKV>, DatabaseTest) {
+  static START: Once = Once::new();
+  START.call_once(|| {
+    std::env::set_var("RUST_LOG", "collab_persistence=trace");
+    let subscriber = Subscriber::builder()
+      .with_env_filter(EnvFilter::from_default_env())
+      .with_ansi(true)
+      .finish();
+    subscriber.try_init().unwrap();
+  });
+
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(CollabKV::open(path).unwrap());

@@ -26,17 +26,22 @@ impl<'a> YrsDocDB<'a> {
   ) -> Result<(), PersistenceError> {
     let doc_state = txn.encode_diff_v1(&StateVector::default());
     let sv = txn.state_vector().encode_v1();
-    let did = self.get_or_create_did(object_id.as_ref())?;
-    tracing::trace!("[{}] Create new doc for {:?}", did, object_id);
-    let doc_state_key = make_doc_state_key(did);
-    let sv_key = make_state_vector_key(did);
+    let doc_id = self.get_or_create_did(object_id.as_ref())?;
+    tracing::trace!(
+      "[doc:{}]:Create new doc {} for {:?}",
+      doc_id,
+      doc_id,
+      object_id
+    );
+    let doc_state_key = make_doc_state_key(doc_id);
+    let sv_key = make_state_vector_key(doc_id);
     self.context.db.write().insert(&doc_state_key, doc_state)?;
     self.context.db.write().insert(&sv_key, sv)?;
     Ok(())
   }
 
   pub fn is_exist<K: AsRef<[u8]> + ?Sized>(&self, doc_id: &K) -> bool {
-    self.get_did(doc_id).is_some()
+    self.get_doc_id(doc_id).is_some()
   }
 
   ///
@@ -58,14 +63,20 @@ impl<'a> YrsDocDB<'a> {
     object_id: &K,
     txn: &mut TransactionMut,
   ) -> Result<(), PersistenceError> {
-    if let Some(did) = self.get_did(object_id) {
+    if let Some(did) = self.get_doc_id(object_id) {
       let doc_state_key = make_doc_state_key(did);
       if let Some(doc_state) = self.context.db.read().get(doc_state_key)? {
         let update = Update::decode_v1(doc_state.as_ref())?;
         txn.apply_update(update);
 
         let update_start = make_doc_update_key(did, 0);
-        let update_end = make_doc_update_key(did, u32::MAX);
+        let update_end = make_doc_update_key(did, DocID::MAX);
+        tracing::trace!(
+          "[doc:{}]:Get update from {:?} to {:?}",
+          did,
+          update_start.as_ref(),
+          update_end.as_ref(),
+        );
         let encoded_updates = batch_get(&self.context.db.read(), &update_start, &update_end)?;
         tracing::trace!(
           "{:?}: Number of encoded_updates: {}",
@@ -90,7 +101,7 @@ impl<'a> YrsDocDB<'a> {
     update: &[u8],
   ) -> Result<(), PersistenceError> {
     let doc_id = self.get_or_create_did(object_id.as_ref())?;
-    tracing::trace!("[{}]:Insert update for {:?}", doc_id, object_id);
+    tracing::trace!("[doc:{}]:Insert update for {:?}", doc_id, object_id);
     self.context.insert_doc_update(doc_id, update.to_vec())?;
     Ok(())
   }
@@ -112,7 +123,7 @@ impl<'a> YrsDocDB<'a> {
     &self,
     object_id: &K,
   ) -> Result<(), PersistenceError> {
-    if let Some(did) = self.get_did(object_id) {
+    if let Some(did) = self.get_doc_id(object_id) {
       tracing::trace!("[{}] delete {:?} doc", did, object_id);
       let key = make_doc_id_key(&self.uid.to_be_bytes(), object_id.as_ref());
       let mut db = self.context.db.write();
@@ -142,9 +153,9 @@ impl<'a> YrsDocDB<'a> {
     &self,
     object_id: &K,
   ) -> Result<Vec<Update>, PersistenceError> {
-    if let Some(doc_id) = self.get_did(object_id) {
+    if let Some(doc_id) = self.get_doc_id(object_id) {
       let start = make_doc_update_key(doc_id, 0);
-      let end = make_doc_update_key(doc_id, u32::MAX);
+      let end = make_doc_update_key(doc_id, DocID::MAX);
       let encoded_updates = batch_get(&self.context.db.read(), &start, &end)?;
       let mut updates = vec![];
       for encoded_update in encoded_updates {
@@ -161,21 +172,19 @@ impl<'a> YrsDocDB<'a> {
     &self,
     object_id: &K,
   ) -> Result<DocID, PersistenceError> {
-    if let Some(did) = self.get_did(object_id.as_ref()) {
+    if let Some(did) = self.get_doc_id(object_id.as_ref()) {
       Ok(did)
     } else {
       let key = make_doc_id_key(&self.uid.to_be_bytes(), object_id.as_ref());
       let new_did = self.context.create_doc_id_for_key(key)?;
-      tracing::trace!("Create new doc_id: {} for object: {:?}", new_did, object_id);
       Ok(new_did)
     }
   }
 
-  fn get_did<K: AsRef<[u8]> + ?Sized>(&self, object_id: &K) -> Option<DocID> {
+  fn get_doc_id<K: AsRef<[u8]> + ?Sized>(&self, object_id: &K) -> Option<DocID> {
     let uid = &self.uid.to_be_bytes();
     let key = make_doc_id_key(uid, object_id.as_ref());
-    let value = self.context.db.read().get(key).ok()??;
-    Some(DocID::from_be_bytes(value.as_ref().try_into().unwrap()))
+    self.context.get_doc_id_for_key(key)
   }
 }
 

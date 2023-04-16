@@ -4,7 +4,7 @@ use std::sync::Arc;
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use collab::preclude::updates::decoder::Decode;
-use collab::preclude::{lib0Any, Collab, CollabBuilder, MapPrelim, Update};
+use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, Update};
 use collab_persistence::snapshot::CollabSnapshot;
 use collab_persistence::CollabKV;
 use parking_lot::RwLock;
@@ -32,26 +32,19 @@ const DATABASES: &str = "databases";
 impl UserDatabase {
   pub fn new(uid: i64, db: Arc<CollabKV>) -> Self {
     tracing::trace!("Init user database: {}", uid);
+    // user database
     let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
     let snapshot_plugin = CollabSnapshotPlugin::new(uid, db.clone(), 5).unwrap();
-    let collab = CollabBuilder::new(uid, "user_database")
+    let collab = CollabBuilder::new(uid, format!("{}_user_database", uid))
       .with_plugin(disk_plugin)
       .with_plugin(snapshot_plugin)
       .build();
     collab.initial();
-    let databases = collab.with_transact_mut(|txn| {
-      // { DATABASES: {:} }
-      let databases = collab
-        .get_array_with_txn(txn, vec![DATABASES])
-        .unwrap_or_else(|| {
-          collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn, DATABASES, vec![])
-        });
-
-      databases
-    });
+    let databases = create_user_database_if_not_exist(&collab);
     let database_vec = DatabaseArray::new(databases);
     let database_relation = DatabaseRelation::new(create_relations_collab(uid, db.clone()));
     let blocks = Blocks::new(uid, db.clone());
+
     Self {
       uid,
       db,
@@ -70,10 +63,10 @@ impl UserDatabase {
     let database = self.open_handlers.read().get(database_id).cloned();
     match database {
       None => {
-        let context = DatabaseContext {
-          collab: self.collab_for_database(database_id),
-          blocks: self.blocks.clone(),
-        };
+        let blocks = self.blocks.clone();
+        let collab = self.collab_for_database(database_id);
+        collab.initial();
+        let context = DatabaseContext { collab, blocks };
         let database = Arc::new(Database::get_or_create(database_id, context).ok()?);
         self
           .open_handlers
@@ -101,10 +94,14 @@ impl UserDatabase {
     &self,
     params: CreateDatabaseParams,
   ) -> Result<Arc<Database>, DatabaseError> {
-    let context = DatabaseContext {
-      collab: self.collab_for_database(&params.database_id),
-      blocks: self.blocks.clone(),
-    };
+    debug_assert!(!params.database_id.is_empty());
+    debug_assert!(!params.view_id.is_empty());
+
+    let collab = self.collab_for_database(&params.database_id);
+    let blocks = self.blocks.clone();
+    let context = DatabaseContext { collab, blocks };
+    context.collab.initial();
+
     self
       .database_records
       .add_database(&params.database_id, &params.view_id, &params.name);
@@ -219,6 +216,20 @@ impl UserDatabase {
       .with_plugin(disk_plugin)
       .with_plugin(snapshot_plugin)
       .build()
+  }
+}
+
+fn create_user_database_if_not_exist(collab: &Collab) -> ArrayRefWrapper {
+  let array = {
+    let txn = collab.transact();
+    collab.get_array_with_txn(&txn, vec![DATABASES])
+  };
+
+  match array {
+    None => collab.with_transact_mut(|txn| {
+      collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn, DATABASES, vec![])
+    }),
+    Some(array) => array,
   }
 }
 

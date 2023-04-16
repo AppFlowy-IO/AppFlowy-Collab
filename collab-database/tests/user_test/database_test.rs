@@ -1,11 +1,23 @@
-use collab_database::block::CreateRowParams;
+use collab_database::block::{Blocks, CreateRowParams};
 use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 
-use crate::helper::{user_database_test, user_database_test_with_default_data};
+use rand::Rng;
+
+use crate::helper::{
+  make_default_grid, make_kv_db, random_uid, user_database_test, user_database_test_with_db,
+  user_database_test_with_default_data,
+};
+
+#[test]
+fn create_database_test() {
+  let uid = random_uid();
+  let _ = user_database_test(uid);
+}
 
 #[test]
 fn create_multiple_database_test() {
-  let test = user_database_test(1);
+  let uid = random_uid();
+  let test = user_database_test(uid);
   test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -28,7 +40,8 @@ fn create_multiple_database_test() {
 
 #[test]
 fn delete_database_test() {
-  let test = user_database_test(1);
+  let uid = random_uid();
+  let test = user_database_test(uid);
   test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -51,7 +64,8 @@ fn delete_database_test() {
 
 #[test]
 fn duplicate_database_inline_view_test() {
-  let test = user_database_test(1);
+  let uid = random_uid();
+  let test = user_database_test(uid);
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -78,7 +92,7 @@ fn duplicate_database_inline_view_test() {
 
 #[test]
 fn duplicate_database_view_test() {
-  let test = user_database_test(1);
+  let test = user_database_test(random_uid());
 
   // create the database with inline view
   let database = test
@@ -109,7 +123,7 @@ fn duplicate_database_view_test() {
 
 #[test]
 fn delete_database_inline_view_test() {
-  let test = user_database_test(1);
+  let test = user_database_test(random_uid());
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -136,7 +150,7 @@ fn delete_database_inline_view_test() {
 
 #[test]
 fn duplicate_database_data_test() {
-  let test = user_database_test_with_default_data(1);
+  let test = user_database_test_with_default_data(random_uid());
   let original = test.get_database_with_view_id("v1").unwrap();
   let duplicated_data = test.make_duplicate_database_data("v1").unwrap();
   let duplicate = test
@@ -182,7 +196,7 @@ fn duplicate_database_data_test() {
 
 #[test]
 fn get_database_by_view_id_test() {
-  let test = user_database_test(1);
+  let test = user_database_test(random_uid());
   let _database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -199,4 +213,20 @@ fn get_database_by_view_id_test() {
 
   let database = test.get_database_with_view_id("v2");
   assert!(database.is_some());
+}
+
+#[test]
+fn reopen_database_test() {
+  let uid = random_uid();
+  let test = user_database_test(uid);
+  let params = make_default_grid("v1", "first view");
+  let database = test.create_database(params).unwrap();
+  let expect_json = database.to_json_value();
+  let db = test.db.clone();
+  drop(test);
+
+  let test = user_database_test_with_db(uid, db);
+  let database = test.get_database_with_view_id("v1");
+  let json = database.unwrap().to_json_value();
+  assert_json_diff::assert_json_eq!(expect_json, json);
 }
