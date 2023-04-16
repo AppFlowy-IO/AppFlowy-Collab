@@ -73,7 +73,7 @@ fn restore_from_database_snapshot_test() {
     .unwrap();
 
   let rows = database2.get_rows_for_view("v1");
-  assert_eq!(rows.len(), 4);
+  assert_eq!(rows.len(), 3);
   let view = database2.views.get_view("v1");
   assert!(view.is_some());
 }

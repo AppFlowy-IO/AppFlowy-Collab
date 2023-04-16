@@ -53,13 +53,13 @@ pub fn create_document(doc_id: &str) -> DocumentTest {
   );
 
   let first_text_id = nanoid!(10);
-  children_map.insert(page_children_id.clone(), vec![first_text_id.clone()]);
+  children_map.insert(page_children_id, vec![first_text_id.clone()]);
   let first_text_children_id = nanoid!(10);
   children_map.insert(first_text_children_id.clone(), vec![]);
   blocks.insert(
     first_text_id.clone(),
     Block {
-      id: first_text_id.clone(),
+      id: first_text_id,
       ty: "text".to_string(),
       parent: page_id.clone(),
       children: first_text_children_id,
@@ -102,7 +102,7 @@ pub fn get_document_data(
   let meta = document_data.meta;
   let children_map = Rc::new(meta.children_map);
 
-  return (page_id.to_owned(), blocks, children_map);
+  (page_id.to_owned(), blocks, children_map)
 }
 
 pub fn delete_block(document: &Document, block_id: &str) -> Result<(), DocumentError> {

@@ -76,11 +76,6 @@ impl Database {
       Some(database) => {
         let collab = context.collab;
         let (fields, views, metas) = collab.with_transact_mut(|txn| {
-          // { DATABASE: {:} }
-          let database = collab
-            .get_map_with_txn(txn, vec![DATABASE])
-            .unwrap_or_else(|| collab.create_map_with_txn(txn, DATABASE));
-
           // { DATABASE: { FIELDS: {:} } }
           let fields = collab
             .get_map_with_txn(txn, vec![DATABASE, FIELDS])
@@ -109,7 +104,7 @@ impl Database {
     }
   }
 
-  pub fn create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
+  fn create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
     if database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID);
     }

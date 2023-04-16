@@ -19,7 +19,6 @@ use collab_database::views::{
   SortMapBuilder,
 };
 use collab_persistence::CollabKV;
-use tracing::level_filters::LevelFilter;
 
 use tempfile::TempDir;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};

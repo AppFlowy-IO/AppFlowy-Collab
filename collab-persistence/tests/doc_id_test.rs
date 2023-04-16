@@ -136,6 +136,5 @@ fn db() -> CollabKV {
 
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = CollabKV::open(path).unwrap();
-  db
+  CollabKV::open(path).unwrap()
 }

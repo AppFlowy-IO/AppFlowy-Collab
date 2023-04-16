@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::{
-  Collab, CollabBuilder, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  Collab, CollabBuilder, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 use collab_persistence::CollabKV;
 use parking_lot::RwLock;
@@ -67,7 +67,7 @@ impl Blocks {
 
       block_rows
         .entry(block_id)
-        .or_insert_with(|| vec![])
+        .or_insert_with(std::vec::Vec::new)
         .push(params);
     }
 
@@ -218,7 +218,7 @@ impl Block {
       (block, meta)
     };
 
-    return match block {
+    match block {
       None => {
         let (block, meta) = collab.with_transact_mut(|txn| {
           let block = collab.create_map_with_txn(txn, BLOCK);
@@ -244,7 +244,7 @@ impl Block {
           metas: RowMetaMap::new(meta),
         }
       },
-    };
+    }
   }
 
   pub fn insert_rows(&self, row: Vec<Row>) {

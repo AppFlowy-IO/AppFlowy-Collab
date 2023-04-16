@@ -456,7 +456,7 @@ pub trait OrderArray {
     prev_object_id: Option<&String>,
   ) {
     if let Some(prev_object_id) = prev_object_id {
-      match self.get_position_with_txn(txn, &prev_object_id) {
+      match self.get_position_with_txn(txn, &prev_object_id.to_owned()) {
         None => {
           self.array_ref().push_back(txn, object);
         },

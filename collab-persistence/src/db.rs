@@ -11,8 +11,7 @@ use crate::doc::YrsDocDB;
 use crate::error::PersistenceError;
 use crate::keys::{
   clock_from_key, make_doc_update_key, make_doc_update_key_prefix, make_snapshot_update_key,
-  make_snapshot_update_key_prefix, DocID, Key, SnapshotID, DOC_SPACE, DOC_SPACE_OBJECT_KEY,
-  SNAPSHOT_SPACE, SNAPSHOT_SPACE_OBJECT, TERMINATOR,
+  make_snapshot_update_key_prefix, DocID, Key, SnapshotID, TERMINATOR,
 };
 use crate::snapshot::YrsSnapshotDB;
 
@@ -26,14 +25,8 @@ pub struct CollabKV {
 impl CollabKV {
   pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
     let db = sled::open(path)?;
-    let doc_context = Arc::new(DbContext::new(
-      [DOC_SPACE, DOC_SPACE_OBJECT_KEY],
-      db.clone(),
-    ));
-    let snapshot_context = Arc::new(DbContext::new(
-      [SNAPSHOT_SPACE, SNAPSHOT_SPACE_OBJECT],
-      db.clone(),
-    ));
+    let doc_context = Arc::new(DbContext::new(db.clone()));
+    let snapshot_context = Arc::new(DbContext::new(db.clone()));
     Ok(Self {
       db,
       doc_context,
@@ -65,15 +58,13 @@ impl Deref for CollabKV {
 }
 
 pub struct DbContext {
-  max_key: SmallVec<[u8; 2]>,
   pub(crate) db: RwLock<Db>,
 }
 
 pub type OID = u32;
 impl DbContext {
-  pub fn new(max_key: [u8; 2], db: Db) -> Self {
+  pub fn new(db: Db) -> Self {
     Self {
-      max_key: SmallVec::from(max_key),
       db: RwLock::new(db),
     }
   }

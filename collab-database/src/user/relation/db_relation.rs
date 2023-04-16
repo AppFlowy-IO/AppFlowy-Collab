@@ -1,5 +1,4 @@
-use collab::core::collab::Path;
-use collab::preclude::{Collab, MapRefWrapper};
+use collab::preclude::Collab;
 
 use crate::user::relation::RowRelationMap;
 
