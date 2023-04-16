@@ -1,18 +1,18 @@
-use crate::util::lib0_any_to_json_value;
+use std::ops::{Deref, DerefMut};
+
 use lib0::any::Any;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-
-use crate::core::array_wrapper::ArrayRefWrapper;
-use crate::core::text_wrapper::TextRefWrapper;
-use crate::preclude::*;
-use std::ops::{Deref, DerefMut};
-
 use yrs::block::Prelim;
 use yrs::types::{ToJson, Value};
 use yrs::{
   ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, ReadTxn, TextPrelim, Transaction, TransactionMut,
 };
+
+use crate::core::array_wrapper::ArrayRefWrapper;
+use crate::core::text_wrapper::TextRefWrapper;
+use crate::preclude::*;
+use crate::util::lib0_any_to_json_value;
 
 pub trait CustomMapRef {
   fn from_map_ref(map_ref: MapRefWrapper) -> Self;

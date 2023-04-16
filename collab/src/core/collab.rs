@@ -26,7 +26,6 @@ use yrs::{
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 pub type MapSubscription = Subscription<MapSubscriptionCallback>;
 
-#[derive(Clone)]
 pub struct Collab {
   doc: Doc,
   #[allow(dead_code)]

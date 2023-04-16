@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::*;
@@ -29,6 +28,7 @@ pub struct FolderContext {
 }
 
 pub struct Folder {
+  #[allow(dead_code)]
   inner: Collab,
   root: MapRefWrapper,
   pub workspaces: WorkspaceArray,
@@ -49,14 +49,6 @@ impl Folder {
     } else {
       create_folder(collab, context)
     }
-  }
-
-  pub fn add_plugins(&mut self, plugins: Vec<Arc<dyn CollabPlugin>>) {
-    self.inner.add_plugins(plugins);
-  }
-
-  pub fn initial(&self) {
-    self.inner.initial();
   }
 
   pub fn create_with_data(&self, data: FolderData) {
@@ -83,7 +75,11 @@ impl Folder {
 
   pub fn set_current_workspace(&self, workspace_id: &str) {
     tracing::debug!("Set current workspace: {}", workspace_id);
-    self.meta.insert(CURRENT_WORKSPACE, workspace_id);
+    self.meta.with_transact_mut(|txn| {
+      self
+        .meta
+        .insert_str_with_txn(txn, CURRENT_WORKSPACE, workspace_id);
+    });
   }
 
   pub fn get_current_workspace(&self) -> Option<Workspace> {
@@ -288,8 +284,7 @@ impl From<WorkspaceItem> for lib0Any {
 }
 
 fn create_folder(collab: Collab, context: FolderContext) -> Folder {
-  let cloned = collab.clone();
-  collab.with_transact_mut(|txn| {
+  let (folder, workspaces, views, trash, meta, belongings) = collab.with_transact_mut(|txn| {
     let folder = collab.create_map_with_txn(txn, FOLDER);
     let workspaces = folder.insert_array_with_txn::<WorkspaceItem>(txn, WORKSPACES, vec![]);
     let views = folder.insert_map_with_txn(txn, VIEWS);
@@ -305,16 +300,18 @@ fn create_folder(collab: Collab, context: FolderContext) -> Folder {
       belongings.clone(),
     ));
     let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx);
-    Folder {
-      inner: cloned,
-      root: folder,
-      workspaces,
-      views,
-      trash,
-      meta,
-      belongings,
-    }
-  })
+    (folder, workspaces, views, trash, meta, belongings)
+  });
+
+  Folder {
+    inner: collab,
+    root: folder,
+    workspaces,
+    views,
+    trash,
+    meta,
+    belongings,
+  }
 }
 
 fn is_folder_exist(txn: Transaction, collab: &Collab) -> bool {

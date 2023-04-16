@@ -197,7 +197,6 @@ impl From<(BlockId, CreateRowParams)> for Row {
   }
 }
 
-#[derive(Clone)]
 pub struct Block {
   #[allow(dead_code)]
   collab: Collab,
