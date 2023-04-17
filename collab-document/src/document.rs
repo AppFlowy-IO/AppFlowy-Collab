@@ -26,65 +26,24 @@ pub struct Document {
 }
 
 impl Document {
+  // Create or get a document.
   pub fn create(collab: Collab) -> Result<Document, DocumentError> {
-    let (root, blocks, children_map) = collab.with_transact_mut(|txn| {
-      // { document: {:} }
-      let root = collab
-        .get_map_with_txn(txn, vec![ROOT])
-        .unwrap_or_else(|| collab.create_map_with_txn(txn, ROOT));
-      // { document: { blocks: {:} } }
-      let blocks = collab
-        .get_map_with_txn(txn, vec![ROOT, BLOCKS])
-        .unwrap_or_else(|| root.insert_map_with_txn(txn, BLOCKS));
-      // { document: { blocks: {:}, meta: {:} } }
-      let meta = collab
-        .get_map_with_txn(txn, vec![ROOT, META])
-        .unwrap_or_else(|| root.insert_map_with_txn(txn, META));
-
-      // {document: { blocks: {:}, meta: { children_map: {:} } }
-      let children_map = collab
-        .get_map_with_txn(txn, vec![ROOT, META, CHILDREN_MAP])
-        .unwrap_or_else(|| meta.insert_map_with_txn(txn, CHILDREN_MAP));
-
-      (root, blocks, children_map)
-    });
-
-    let children_operation = Rc::new(ChildrenOperation::new(children_map));
-
-    let block_operation = BlockOperation::new(blocks, Rc::clone(&children_operation));
-
-    let subscription = RootDeepSubscription::default();
-
-    let document = Self {
-      inner: collab,
-      root,
-      block_operation,
-      children_operation,
-      subscription,
+    let is_exist = {
+      let txn = &collab.transact();
+      collab.get_map_with_txn(txn, vec![ROOT]).is_some()
     };
-
-    Ok(document)
+    if is_exist {
+      Ok(Document::get_document_with_txn(collab))
+    } else {
+      let document = Document::create_document(collab, None)?;
+      Ok(document)
+    }
   }
 
-  pub fn create_with_data(&self, data: DocumentData) -> Result<(), DocumentError> {
-    self.inner.with_transact_mut(|txn| {
-      let page_id = data.page_id;
-      self.root.insert_with_txn(txn, PAGE_ID, page_id);
-      for (_id, block) in data.blocks {
-        let res = self.block_operation.create_block_with_txn(txn, &block);
-
-        if res.is_err() {
-          return Err(res.err().unwrap());
-        }
-      }
-      for (id, child_ids) in data.meta.children_map {
-        let map = self.children_operation.get_children_with_txn(txn, &id);
-        child_ids.iter().for_each(|child_id| {
-          map.push_back(txn, child_id.to_string());
-        });
-      }
-      Ok(())
-    })
+  // Create a new document with the given data.
+  pub fn create_with_data(collab: Collab, data: DocumentData) -> Result<Document, DocumentError> {
+    let document = Document::create_document(collab, Some(data))?;
+    Ok(document)
   }
 
   pub fn open<F>(&mut self, callback: F) -> Result<DocumentData, DocumentError>
@@ -173,12 +132,15 @@ impl Document {
     prev_id: Option<String>,
   ) -> Result<Block, DocumentError> {
     let parent_id = &block.parent;
+    // If the parent is not found, return an error.
     if parent_id.is_empty() {
       return Err(DocumentError::ParentIsNotFound);
     }
+
     let parent = self.block_operation.get_block_with_txn(txn, parent_id);
 
     let parent_is_empty = parent.is_none();
+    // If the parent is not found, return an error.
     if parent_is_empty {
       return Err(DocumentError::ParentIsNotFound);
     }
@@ -186,6 +148,7 @@ impl Document {
     let parent = parent.unwrap();
     let parent_children_id = &parent.children;
     let mut index = 0;
+    // If the prev_id is not found, insert the block to the first.
     if let Some(prev_id) = prev_id {
       let prev_index =
         self
@@ -223,6 +186,7 @@ impl Document {
 
     let block = block.unwrap();
 
+    // Delete all children.
     let children = self
       .children_operation
       .get_children_with_txn(txn, &block.children);
@@ -231,12 +195,7 @@ impl Document {
       .map(|child| child.to_string(txn))
       .collect::<Vec<String>>()
       .iter()
-      .for_each(|child| match self.delete_block(txn, child) {
-        Ok(_) => (),
-        Err(_) => {
-          println!("delete block error");
-        },
-      });
+      .for_each(|child| self.delete_block(txn, child).unwrap_or_default());
 
     let parent_id = &block.parent;
     self.delete_block_from_parent(txn, block_id, parent_id);
@@ -293,6 +252,7 @@ impl Document {
     }
     let block = block.unwrap();
 
+    // If the parent is not found, return an error.
     if parent_id.is_none() {
       return Err(DocumentError::ParentIsNotFound);
     }
@@ -304,6 +264,7 @@ impl Document {
 
     let new_parent_children_id = parent.unwrap().children;
 
+    // If old parent is not found, return an error.
     let old_parent = self.block_operation.get_block_with_txn(txn, &block.parent);
     if old_parent.is_none() {
       return Err(DocumentError::ParentIsNotFound);
@@ -311,6 +272,7 @@ impl Document {
 
     let old_parent_children_id = old_parent.unwrap().children;
 
+    // If the prev_id is not found, insert the block to the first.
     let mut prev_index: Option<u32> = None;
     if let Some(prev_id) = prev_id {
       prev_index =
@@ -324,9 +286,12 @@ impl Document {
       None => 0,
     };
 
+    // Delete the block from the old parent.
     self
       .children_operation
       .delete_child_with_txn(txn, &old_parent_children_id, block_id);
+
+    // Insert the block to the new parent.
     self.children_operation.insert_child_with_txn(
       txn,
       &new_parent_children_id,
@@ -337,5 +302,86 @@ impl Document {
     self
       .block_operation
       .set_block_with_txn(txn, block_id, Some(block.data), Some(&parent_id))
+  }
+
+  fn create_document(collab: Collab, data: Option<DocumentData>) -> Result<Self, DocumentError> {
+    let res = collab.with_transact_mut(|txn| {
+      // { document: {:} }
+      let root = collab.create_map_with_txn(txn, ROOT);
+      // { document: { blocks: {:} } }
+      let blocks = root.insert_map_with_txn(txn, BLOCKS);
+      // { document: { blocks: {:}, meta: {:} } }
+      let meta = root.insert_map_with_txn(txn, META);
+      // {document: { blocks: {:}, meta: { children_map: {:} } }
+      let children_map = meta.insert_map_with_txn(txn, CHILDREN_MAP);
+
+      let children_operation = Rc::new(ChildrenOperation::new(children_map));
+
+      let block_operation = BlockOperation::new(blocks, Rc::clone(&children_operation));
+
+      // If the data is not None, insert the data to the document.
+      if let Some(data) = data {
+        let page_id = data.page_id;
+        root.insert_with_txn(txn, PAGE_ID, page_id);
+        for (_id, block) in data.blocks {
+          let res = block_operation.create_block_with_txn(txn, &block);
+          if res.is_err() {
+            return Err(res.err().unwrap());
+          }
+        }
+        for (id, child_ids) in data.meta.children_map {
+          let map = children_operation.get_children_with_txn(txn, &id);
+          child_ids.iter().for_each(|child_id| {
+            map.push_back(txn, child_id.to_string());
+          });
+        }
+      };
+
+      Ok((root, block_operation, children_operation))
+    });
+
+    if res.is_err() {
+      return Err(res.err().unwrap());
+    }
+
+    let (root, block_operation, children_operation) = res.unwrap();
+    let subscription = RootDeepSubscription::default();
+
+    let document = Self {
+      inner: collab,
+      root,
+      block_operation,
+      children_operation,
+      subscription,
+    };
+
+    Ok(document)
+  }
+
+  fn get_document_with_txn(collab: Collab) -> Self {
+    let txn = collab.transact();
+
+    let root = collab.get_map_with_txn(&txn, vec![ROOT]).unwrap();
+
+    let blocks = collab.get_map_with_txn(&txn, vec![ROOT, BLOCKS]).unwrap();
+
+    let children_map = collab
+      .get_map_with_txn(&txn, vec![ROOT, META, CHILDREN_MAP])
+      .unwrap();
+
+    let children_operation = Rc::new(ChildrenOperation::new(children_map));
+
+    let block_operation = BlockOperation::new(blocks, Rc::clone(&children_operation));
+
+    let subscription = RootDeepSubscription::default();
+
+    drop(txn);
+    Self {
+      inner: collab,
+      root,
+      block_operation,
+      children_operation,
+      subscription,
+    }
   }
 }
