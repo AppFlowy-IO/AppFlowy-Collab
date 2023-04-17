@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::Once;
 use std::time::Duration;
 
-use crate::helper::TestTextCell;
+use crate::helper::{make_kv_db, TestTextCell};
 
 use collab_database::block::CreateRowParams;
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
@@ -49,21 +49,6 @@ pub fn user_database_test_with_db(uid: i64, db: Arc<CollabKV>) -> UserDatabaseTe
     inner: UserDatabase::new(uid, db.clone()),
     db,
   }
-}
-
-pub fn make_kv_db() -> Arc<CollabKV> {
-  static START: Once = Once::new();
-  START.call_once(|| {
-    std::env::set_var("RUST_LOG", "collab_persistence=trace,collab_database=trace");
-    let subscriber = Subscriber::builder()
-      .with_env_filter(EnvFilter::from_default_env())
-      .with_ansi(true)
-      .finish();
-    subscriber.try_init().unwrap();
-  });
-  let tempdir = TempDir::new().unwrap();
-  let path = tempdir.into_path();
-  Arc::new(CollabKV::open(path).unwrap())
 }
 
 pub fn user_database_test_with_default_data(uid: i64) -> UserDatabaseTest {

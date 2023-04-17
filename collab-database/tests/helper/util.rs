@@ -7,6 +7,12 @@ use collab_database::views::{
   FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder, GroupSettingBuilder, GroupSettingMap,
   LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
 };
+use collab_persistence::CollabKV;
+use std::sync::{Arc, Once};
+use tempfile::TempDir;
+use tracing_subscriber::fmt::Subscriber;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Clone)]
 pub struct TestFilter {
@@ -522,4 +528,19 @@ impl std::convert::From<i64> for TestFieldType {
       },
     }
   }
+}
+
+pub fn make_kv_db() -> Arc<CollabKV> {
+  static START: Once = Once::new();
+  START.call_once(|| {
+    std::env::set_var("RUST_LOG", "collab_persistence=trace,collab_database=trace");
+    let subscriber = Subscriber::builder()
+      .with_env_filter(EnvFilter::from_default_env())
+      .with_ansi(true)
+      .finish();
+    subscriber.try_init().unwrap();
+  });
+  let tempdir = TempDir::new().unwrap();
+  let path = tempdir.into_path();
+  Arc::new(CollabKV::open(path).unwrap())
 }
