@@ -1,9 +1,7 @@
+use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
+use crate::helper::{TestGroup, TestGroupSetting, CONTENT, GROUPS};
 use collab::core::any_map::AnyMapExtension;
 use collab_database::views::{CreateViewParams, DatabaseLayout};
-
-use crate::helper::{
-  create_database_with_default_data, DatabaseTest, TestGroup, TestGroupSetting, CONTENT, GROUPS,
-};
 
 #[test]
 fn create_database_view_with_group_test() {

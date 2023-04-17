@@ -1,5 +1,5 @@
-use crate::helper::{create_database_with_default_data, DatabaseTest, TestCalendarLayoutSetting};
-
+use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
+use crate::helper::TestCalendarLayoutSetting;
 use collab_database::views::DatabaseLayout;
 
 #[test]

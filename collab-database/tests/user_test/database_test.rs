@@ -1,10 +1,9 @@
-use collab_database::block::CreateRowParams;
-use collab_database::views::{CreateDatabaseParams, CreateViewParams};
-
-use crate::helper::{
+use crate::user_test::helper::{
   make_default_grid, random_uid, user_database_test, user_database_test_with_db,
   user_database_test_with_default_data,
 };
+use collab_database::block::CreateRowParams;
+use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 
 #[test]
 fn create_database_test() {

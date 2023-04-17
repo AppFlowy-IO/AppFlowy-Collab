@@ -1,7 +1,6 @@
+use crate::user_test::helper::user_database_test;
 use collab_database::block::CreateRowParams;
 use collab_database::views::CreateDatabaseParams;
-
-use crate::helper::user_database_test;
 
 #[test]
 fn database_get_snapshot_test() {

@@ -1,4 +1,4 @@
-use crate::helper::create_database;
+use crate::database_test::helper::create_database;
 use collab_database::block::CreateRowParams;
 
 #[test]

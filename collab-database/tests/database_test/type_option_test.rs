@@ -1,9 +1,7 @@
-use crate::helper::{
-  create_database, DatabaseTest, TestCheckboxTypeOption, TestDateFormat, TestDateTypeOption,
-  TestTimeFormat,
-};
+use crate::helper::{TestCheckboxTypeOption, TestDateFormat, TestDateTypeOption, TestTimeFormat};
 use collab::core::any_map::AnyMapExtension;
 use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
+use crate::database_test::helper::{create_database, DatabaseTest};
 
 #[test]
 fn insert_checkbox_type_option_data_test() {
