@@ -1,8 +1,6 @@
+use collab_persistence::CollabKV;
 use std::ops::{Range, RangeTo};
 use std::sync::Once;
-
-use collab_persistence::CollabKV;
-
 use tempfile::TempDir;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 
@@ -18,16 +16,16 @@ fn id_test() {
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, 1];
   let last_entry_prior = db
-      .range::<&[u8;8],RangeTo<&[u8;8]>>(..given_key) // Create a range up to (excluding) the given key
-      .next_back() // Get the last entry in the range
-      .expect("No entry found prior to the given key").unwrap();
+        .range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key) // Create a range up to (excluding) the given key
+        .next_back()
+        .expect("No entry found prior to the given key").unwrap();
   println!("{:?}", last_entry_prior.1);
 
   let given_key: &[u8; 2] = &[0, 1];
   let last_entry_prior = db
-      .range::<&[u8;2],RangeTo<&[u8;2]>>(..given_key) // Create a range up to (excluding) the given key
-      .next_back() // Get the last entry in the range
-      .expect("No entry found prior to the given key").unwrap();
+        .range::<&[u8; 2], RangeTo<&[u8; 2]>>(..given_key) // Create a range up to (excluding) the given key
+        .next_back()
+        .expect("No entry found prior to the given key").unwrap();
   println!("{:?}", last_entry_prior.1);
 
   let prefix: &[u8] = &[0, 1, 0, 0, 0, 0, 0];
@@ -89,9 +87,9 @@ fn range_key_test() {
 
   let given_key: &[u8; 2] = &[0, 1];
   let last_entry_prior = db
-      .range::<&[u8;2],RangeTo<&[u8;2]>>(..given_key) // Create a range up to (excluding) the given key
-      .next_back()
-      .expect("No entry found prior to the given key").unwrap();
+        .range::<&[u8; 2], RangeTo<&[u8; 2]>>(..given_key) // Create a range up to (excluding) the given key
+        .next_back()
+        .expect("No entry found prior to the given key").unwrap();
   assert_eq!(last_entry_prior.1.as_ref(), &[0, 3, 3]);
 
   let prefix: &[u8] = &[0, 1, 0, 0, 0, 0, 0];
@@ -114,13 +112,6 @@ fn range_key_test() {
     &[0, 1, 0, 0, 0, 0, 0, 5]
   );
   assert!(iter.next().is_none());
-
-  // for i in 0..10 {
-  //   let oid = format!("block_{}", i);
-  //   let doc = Doc::new();
-  //   let txn = doc.transact();
-  //   db.doc(1).create_new_doc(&oid, &txn).unwrap();
-  // }
 }
 
 fn db() -> CollabKV {
