@@ -17,7 +17,7 @@ fn database_get_snapshot_test() {
   assert!(snapshots.is_empty());
 
   for i in 0..10 {
-    database.push_row(CreateRowParams {
+    database.create_row(CreateRowParams {
       id: i.into(),
       ..Default::default()
     });
@@ -39,7 +39,7 @@ fn delete_database_snapshot_test() {
     .unwrap();
 
   for i in 0..10 {
-    database.push_row(CreateRowParams {
+    database.create_row(CreateRowParams {
       id: i.into(),
       ..Default::default()
     });
@@ -60,7 +60,7 @@ fn restore_from_database_snapshot_test() {
     })
     .unwrap();
   for i in 0..5 {
-    database.push_row(CreateRowParams {
+    database.create_row(CreateRowParams {
       id: i.into(),
       ..Default::default()
     });

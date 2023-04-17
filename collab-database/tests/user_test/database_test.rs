@@ -73,7 +73,7 @@ fn duplicate_database_inline_view_test() {
 
   let duplicated_database = test.duplicate_database("v1").unwrap();
   let duplicated_view_id = duplicated_database.get_inline_view_id();
-  duplicated_database.push_row(CreateRowParams {
+  duplicated_database.create_row(CreateRowParams {
     id: 1.into(),
     ..Default::default()
   });
@@ -108,7 +108,7 @@ fn duplicate_database_view_test() {
 
   // Duplicate the linked view.
   let duplicated_view = database.duplicate_linked_view("v2").unwrap();
-  database.push_row(CreateRowParams {
+  database.create_row(CreateRowParams {
     id: 1.into(),
     ..Default::default()
   });
@@ -149,7 +149,7 @@ fn delete_database_inline_view_test() {
 fn duplicate_database_data_test() {
   let test = user_database_test_with_default_data(random_uid());
   let original = test.get_database_with_view_id("v1").unwrap();
-  let duplicated_data = test.make_duplicate_database_data("v1").unwrap();
+  let duplicated_data = test.get_database_duplicated_data("v1").unwrap();
   let duplicate = test
     .create_database_with_duplicated_data(duplicated_data)
     .unwrap();

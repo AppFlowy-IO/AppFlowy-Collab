@@ -6,7 +6,7 @@ use std::ops::{Deref, DerefMut};
 
 /// It's used to store lists of field's type option data
 /// The key is the [FieldType] string representation
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct TypeOptions(HashMap<String, TypeOptionData>);
 
 impl TypeOptions {

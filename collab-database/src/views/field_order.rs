@@ -74,7 +74,7 @@ impl DerefMut for FieldOrderArray {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct FieldOrder {
   pub id: String,
 }

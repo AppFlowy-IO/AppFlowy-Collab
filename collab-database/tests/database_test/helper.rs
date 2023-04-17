@@ -156,17 +156,17 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   };
 
   let database_test = create_database(uid, database_id);
-  database_test.push_row(row_1);
-  database_test.push_row(row_2);
-  database_test.push_row(row_3);
+  database_test.create_row(row_1);
+  database_test.create_row(row_2);
+  database_test.create_row(row_3);
 
   let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
 
-  database_test.push_field(field_1);
-  database_test.push_field(field_2);
-  database_test.push_field(field_3);
+  database_test.create_field(field_1);
+  database_test.create_field(field_2);
+  database_test.create_field(field_3);
 
   database_test
 }

@@ -1,8 +1,7 @@
+use crate::user_test::helper::{user_database_test, UserDatabaseTest};
 use collab::core::any_map::AnyMapExtension;
 use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
 use collab_database::views::CreateDatabaseParams;
-use crate::user_test::helper::{user_database_test, UserDatabaseTest};
-
 
 #[test]
 fn update_single_type_option_data_test() {
@@ -43,7 +42,7 @@ fn insert_multi_type_options_test() {
       .build(),
   );
 
-  database.push_field(Field {
+  database.create_field(Field {
     id: "f2".to_string(),
     name: "second field".to_string(),
     field_type: 0,

@@ -212,19 +212,19 @@ impl UserDatabase {
 
   /// Duplicate the database that contains the view.
   pub fn duplicate_database(&self, view_id: &str) -> Result<Arc<Database>, DatabaseError> {
-    let DuplicatedDatabase { view, fields, rows } = self.make_duplicate_database_data(view_id)?;
+    let DuplicatedDatabase { view, fields, rows } = self.get_database_duplicated_data(view_id)?;
     let params = CreateDatabaseParams::from_view(view, fields, rows);
     let database = self.create_database(params)?;
     Ok(database)
   }
 
-  /// Duplicate the view in the database.
-  pub fn make_duplicate_database_data(
+  /// Duplicate the database with the given view id.
+  pub fn get_database_duplicated_data(
     &self,
     view_id: &str,
   ) -> Result<DuplicatedDatabase, DatabaseError> {
     if let Some(database) = self.get_database_with_view_id(view_id) {
-      let data = database.duplicate_database_data();
+      let data = database.duplicate_database();
       Ok(data)
     } else {
       Err(DatabaseError::DatabaseNotExist)

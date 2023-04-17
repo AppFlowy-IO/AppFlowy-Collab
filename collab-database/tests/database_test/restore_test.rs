@@ -18,8 +18,8 @@ fn restore_row_from_disk_test() {
     id: 2.into(),
     ..Default::default()
   };
-  database_test.push_row(row_1.clone());
-  database_test.push_row(row_2.clone());
+  database_test.create_row(row_1.clone());
+  database_test.create_row(row_2.clone());
   drop(database_test);
 
   let database_test = restore_database_from_db(1, "1", db);

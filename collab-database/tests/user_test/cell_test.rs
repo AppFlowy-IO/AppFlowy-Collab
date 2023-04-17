@@ -79,7 +79,7 @@ fn user_database_with_default_row() -> UserDatabaseTest {
     })
     .unwrap();
 
-  database.create_row(
+  database.create_row_in_view(
     "v1",
     CreateRowParams {
       id: 1.into(),

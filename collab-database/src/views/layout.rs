@@ -64,7 +64,7 @@ impl From<DatabaseLayout> for lib0Any {
   }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct LayoutSettings(HashMap<DatabaseLayout, LayoutSetting>);
 
 impl LayoutSettings {
