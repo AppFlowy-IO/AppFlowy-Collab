@@ -53,12 +53,15 @@ impl DatabaseTest {
   }
 
   pub async fn run_scripts(&mut self, scripts: Vec<DatabaseScript>) {
+    let mut handles = vec![];
     for script in scripts {
       let user_database = self.user_database.clone();
-      tokio::spawn(async move {
+      let handle = tokio::spawn(async move {
         run_script(user_database, script);
       });
+      handles.push(handle);
     }
+    futures::future::join_all(handles).await;
   }
 }
 
