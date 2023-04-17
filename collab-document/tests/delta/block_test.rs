@@ -1,13 +1,15 @@
-use crate::util::{
-  apply_actions, create_document, delete_block, get_document_data, insert_block, move_block,
-  update_block,
-};
+use std::collections::HashMap;
+
 use collab_document::blocks::{
   Block, BlockAction, BlockActionPayload, BlockActionType, EXTERNAL_TYPE_TEXT,
 };
 use nanoid::nanoid;
 use serde_json::{json, to_value};
-use std::collections::HashMap;
+
+use crate::util::{
+  apply_actions, create_document, delete_block, get_document_data, insert_block, move_block,
+  update_block,
+};
 
 #[test]
 fn create_block_test() {
@@ -275,7 +277,7 @@ fn apply_actions_test() {
   let action_1 = BlockAction {
     action: BlockActionType::Move,
     payload: BlockActionPayload {
-      block,
+      block: block.clone(),
       prev_id: None,
       parent_id: Some(first_child_id.clone()),
     },
