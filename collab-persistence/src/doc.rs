@@ -8,7 +8,7 @@ use yrs::{ReadTxn, StateVector, TransactionMut, Update};
 use crate::db::{batch_get, batch_remove};
 use crate::keys::{
   doc_name_from_key, make_doc_end_key, make_doc_id_key, make_doc_start_key, make_doc_state_key,
-  make_doc_update_key, make_state_vector_key, DocID, Key, DOC_SPACE, DOC_SPACE_OBJECT,
+  make_doc_update_key, make_state_vector_key, Clock, DocID, Key, DOC_SPACE, DOC_SPACE_OBJECT,
   DOC_SPACE_OBJECT_KEY,
 };
 use crate::{DbContext, PersistenceError};
@@ -70,7 +70,7 @@ impl<'a> YrsDocDB<'a> {
         txn.apply_update(update);
 
         let update_start = make_doc_update_key(did, 0);
-        let update_end = make_doc_update_key(did, DocID::MAX);
+        let update_end = make_doc_update_key(did, Clock::MAX);
         tracing::trace!(
           "[doc:{}]:Get update from {:?} to {:?}",
           did,
@@ -155,7 +155,7 @@ impl<'a> YrsDocDB<'a> {
   ) -> Result<Vec<Update>, PersistenceError> {
     if let Some(doc_id) = self.get_doc_id(object_id) {
       let start = make_doc_update_key(doc_id, 0);
-      let end = make_doc_update_key(doc_id, DocID::MAX);
+      let end = make_doc_update_key(doc_id, Clock::MAX);
       let encoded_updates = batch_get(&self.context.db.read(), &start, &end)?;
       let mut updates = vec![];
       for encoded_update in encoded_updates {
