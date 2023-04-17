@@ -1,32 +1,39 @@
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
-use std::collections::HashMap;
-
 use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
 use collab_document::error::DocumentError;
 use collab_persistence::CollabKV;
 use nanoid::nanoid;
 use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use tempfile::TempDir;
+use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 
 pub struct DocumentTest {
   pub document: Document,
-  #[allow(dead_code)]
-  cleaner: Cleaner,
+  pub db: Arc<CollabKV>,
 }
 
-pub fn create_document(doc_id: &str) -> DocumentTest {
-  let uid = 1;
-  let tempdir = TempDir::new().unwrap();
-  let path = tempdir.into_path();
-  let db = Arc::new(CollabKV::open(path.clone()).unwrap());
-  let disk_plugin = CollabDiskPlugin::new(uid, db).unwrap();
-  let cleaner = Cleaner::new(path);
+impl Deref for DocumentTest {
+  type Target = Document;
 
+  fn deref(&self) -> &Self::Target {
+    &self.document
+  }
+}
+
+pub fn create_document(uid: i64, doc_id: &str) -> DocumentTest {
+  let db = db();
+  create_document_with_db(uid, doc_id, db)
+}
+
+pub fn create_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKV>) -> DocumentTest {
+  let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
   let collab = CollabBuilder::new(1, doc_id)
     .with_plugin(disk_plugin)
     .build();
@@ -76,9 +83,38 @@ pub fn create_document(doc_id: &str) -> DocumentTest {
   };
 
   match Document::create_with_data(collab, document_data) {
-    Ok(document) => DocumentTest { document, cleaner },
+    Ok(document) => DocumentTest { document, db },
     Err(e) => panic!("create document error: {}", e),
   }
+}
+
+pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKV>) -> DocumentTest {
+  let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
+  let collab = CollabBuilder::new(1, doc_id)
+    .with_plugin(disk_plugin)
+    .build();
+  collab.initial();
+
+  DocumentTest {
+    document: Document::create(collab).unwrap(),
+    db,
+  }
+}
+
+pub fn db() -> Arc<CollabKV> {
+  static START: Once = Once::new();
+  START.call_once(|| {
+    std::env::set_var("RUST_LOG", "collab_persistence=trace");
+    let subscriber = Subscriber::builder()
+      .with_env_filter(EnvFilter::from_default_env())
+      .with_ansi(true)
+      .finish();
+    subscriber.try_init().unwrap();
+  });
+
+  let tempdir = TempDir::new().unwrap();
+  let path = tempdir.into_path();
+  Arc::new(CollabKV::open(path).unwrap())
 }
 
 pub fn insert_block(
@@ -138,20 +174,20 @@ pub fn apply_actions(document: &Document, actions: Vec<BlockAction>) {
   document.apply_action(actions)
 }
 
-struct Cleaner(PathBuf);
-
-impl Cleaner {
-  fn new(dir: PathBuf) -> Self {
-    Cleaner(dir)
-  }
-
-  fn cleanup(dir: &PathBuf) {
-    let _ = std::fs::remove_dir_all(dir);
-  }
-}
-
-impl Drop for Cleaner {
-  fn drop(&mut self) {
-    Self::cleanup(&self.0)
-  }
-}
+// struct Cleaner(PathBuf);
+//
+// impl Cleaner {
+//   fn new(dir: PathBuf) -> Self {
+//     Cleaner(dir)
+//   }
+//
+//   fn cleanup(dir: &PathBuf) {
+//     let _ = std::fs::remove_dir_all(dir);
+//   }
+// }
+//
+// impl Drop for Cleaner {
+//   fn drop(&mut self) {
+//     Self::cleanup(&self.0)
+//   }
+// }

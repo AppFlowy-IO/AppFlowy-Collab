@@ -14,7 +14,7 @@ use crate::util::{
 #[test]
 fn create_block_test() {
   let doc_id = "1";
-  let test = create_document(doc_id);
+  let test = create_document(1, doc_id);
   let (page_id, blocks, children_map) = get_document_data(&test.document);
 
   let page_id = page_id.as_str();
@@ -41,7 +41,7 @@ fn create_block_test() {
 #[test]
 fn insert_block_test() {
   let doc_id = "1";
-  let test = create_document(doc_id);
+  let test = create_document(1, doc_id);
 
   let (page_id, blocks, children_map) = get_document_data(&test.document);
 
@@ -107,7 +107,7 @@ fn insert_block_test() {
 #[test]
 fn delete_block_test() {
   let doc_id = "1";
-  let test = create_document(doc_id);
+  let test = create_document(1, doc_id);
 
   let (page_id, blocks, children_map) = get_document_data(&test.document);
 
@@ -161,7 +161,7 @@ fn delete_block_test() {
 #[test]
 fn move_block_test() {
   let doc_id = "1";
-  let test = create_document(doc_id);
+  let test = create_document(1, doc_id);
   let (page_id, blocks, children_map) = get_document_data(&test.document);
 
   let page_id = page_id.as_str();
@@ -215,7 +215,7 @@ fn move_block_test() {
 #[test]
 fn update_block_data_test() {
   let doc_id = "1";
-  let test = create_document(doc_id);
+  let test = create_document(1, doc_id);
   let (page_id, blocks, children_map) = get_document_data(&test.document);
 
   let page_id = page_id.as_str();
@@ -251,7 +251,7 @@ fn update_block_data_test() {
 #[test]
 fn apply_actions_test() {
   let doc_id = "1";
-  let test = create_document(doc_id);
+  let test = create_document(1, doc_id);
   let document = &test.document;
   let (page_id, blocks, children_map) = get_document_data(&test.document);
   let first_child_id = &children_map[&blocks[&page_id].children][0];
@@ -306,10 +306,11 @@ fn apply_actions_test() {
   let first_child_children = &children_map[&blocks[first_child_id].children];
   assert_eq!(first_child_children.len(), 0);
 }
+
 #[test]
 fn open_document_test() {
   let doc_id = "1";
-  let mut test = create_document(doc_id);
+  let mut test = create_document(1, doc_id);
   let document = &mut test.document;
   let document_data = document.open(|block_events, _| {
     let block_events_json = serde_json::to_value(&block_events);
