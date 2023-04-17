@@ -129,11 +129,13 @@ const FIELD_VISIBILITY: &str = "visibility";
 const FIELD_WIDTH: &str = "width";
 const FIELD_PRIMARY: &str = "is_primary";
 
+/// Get field id from a value
 pub fn field_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<String> {
   let map_ref = value.to_ymap()?;
   map_ref.get_str_with_txn(txn, FIELD_ID)
 }
 
+/// Get primary field id from a value
 pub fn primary_field_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<String> {
   let map_ref = value.to_ymap()?;
   let is_primary = map_ref.get_bool_with_txn(txn, FIELD_PRIMARY)?;
@@ -144,11 +146,13 @@ pub fn primary_field_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Opti
   }
 }
 
+/// Get field from a [YrsValue]
 pub fn field_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Field> {
   let map_ref = value.to_ymap()?;
   field_from_map_ref(&map_ref, txn)
 }
 
+/// Get field from a [MapRef]
 pub fn field_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Field> {
   let id = map_ref.get_str_with_txn(txn, FIELD_ID)?;
   let name = map_ref

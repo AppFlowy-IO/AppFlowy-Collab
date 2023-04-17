@@ -4,14 +4,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-pub struct FieldTypeOptionKey(i64);
-
-impl ToString for FieldTypeOptionKey {
-  fn to_string(&self) -> String {
-    self.0.to_string()
-  }
-}
-
 /// It's used to store lists of field's type option data
 /// The key is the [FieldType] string representation
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -26,6 +18,7 @@ impl TypeOptions {
     self.0
   }
 
+  /// Returns a new instance of [TypeOptions] from a [MapRef]
   pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Self {
     let mut this = Self::new();
     map_ref.iter(txn).for_each(|(k, v)| {
@@ -36,6 +29,7 @@ impl TypeOptions {
     this
   }
 
+  /// Fill the [MapRef] with the [TypeOptions] data
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.into_inner().into_iter().for_each(|(k, v)| {
       let update = TypeOptionsUpdate::new(txn, map_ref);
@@ -68,6 +62,7 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
     Self { map_ref, txn }
   }
 
+  /// Insert a new cell's key/value into the [TypeOptionData]
   pub fn insert<T: Into<TypeOptionData>>(self, key: &str, value: T) -> Self {
     let value = value.into();
     let type_option_map = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
@@ -84,6 +79,7 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
     self
   }
 
+  /// Remove the cell's key/value from the [TypeOptionData]
   pub fn remove(self, key: &str) -> Self {
     self.map_ref.remove(self.txn, key);
     self

@@ -146,7 +146,7 @@ impl ViewMap {
       .map(|map_ref| {
         map_ref
           .get_array_ref_with_txn(txn, ROW_ORDERS)
-          .map(|array_ref| RowOrderArray::new(array_ref.into_inner()).get_orders_with_txn(txn))
+          .map(|array_ref| RowOrderArray::new(array_ref.into_inner()).get_objects_with_txn(txn))
           .unwrap_or_default()
       })
       .unwrap_or_default()
@@ -159,7 +159,7 @@ impl ViewMap {
       .map(|map_ref| {
         map_ref
           .get_array_ref_with_txn(txn, FIELD_ORDERS)
-          .map(|array_ref| FieldOrderArray::new(array_ref.into_inner()).get_orders_with_txn(txn))
+          .map(|array_ref| FieldOrderArray::new(array_ref.into_inner()).get_objects_with_txn(txn))
           .unwrap_or_default()
       })
       .unwrap_or_default()

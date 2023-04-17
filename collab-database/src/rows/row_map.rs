@@ -13,12 +13,14 @@ pub struct RowMetaMap {
   meta: MapRef,
 }
 
+/// Returns the row meta map if it exists
 pub(crate) fn get_row_meta<T: ReadTxn>(txn: &T, container: &MapRefWrapper) -> Option<MapRef> {
   container
     .get_map_with_txn(txn, ROW_META)
     .map(|map| map.into_inner())
 }
 
+/// Create a new row meta map
 pub(crate) fn create_row_meta(txn: &mut TransactionMut, container: &MapRefWrapper) -> MapRef {
   let meta = container.insert_map_with_txn(txn, ROW_META);
   meta.insert_map_with_txn(txn, ROW_DOC);

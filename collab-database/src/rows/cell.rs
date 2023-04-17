@@ -21,6 +21,7 @@ impl Cells {
     self.0
   }
 
+  /// Returns a new instance of [Cells] from a [MapRef]
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.into_inner().into_iter().for_each(|(k, v)| {
       let cell_map_ref = map_ref.get_or_insert_map_with_txn(txn, &k);
@@ -28,6 +29,7 @@ impl Cells {
     });
   }
 
+  /// Returns a [Cell] from the [Cells] by the [Field] id
   pub fn cell_for_field_id(&self, field_id: &str) -> Option<&Cell> {
     self.get(field_id)
   }
@@ -99,6 +101,7 @@ pub fn get_field_type_from_cell<T: From<i64>>(cell: &Cell) -> Option<T> {
   cell.get_i64_value("field_type").map(|value| T::from(value))
 }
 
+/// Create a new [CellBuilder] with the field type.
 pub fn new_cell_builder(field_type: impl Into<i64>) -> CellBuilder {
   let inner = AnyMapBuilder::new();
   inner.insert_i64_value("field_type", field_type.into())
