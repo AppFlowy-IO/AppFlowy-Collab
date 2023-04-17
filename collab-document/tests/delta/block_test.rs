@@ -280,23 +280,47 @@ fn apply_actions_test() {
       parent_id: Some(first_child_id.clone()),
     },
   };
-  let actions = vec![action_0, action_1];
+  let actions = vec![action_0, action_1.clone()];
+  let actions_json = serde_json::to_value(&actions);
+  assert!(actions_json.is_ok());
   apply_actions(document, actions);
   let (page_id, blocks, children_map) = get_document_data(&test.document);
   let page_children = &children_map[&blocks[&page_id].children];
   let first_child_children = &children_map[&blocks[first_child_id].children];
-
   assert_eq!(page_children.len(), 1);
   assert_eq!(first_child_children.len(), 1);
+
+  let delete_action = BlockAction {
+    action: BlockActionType::Delete,
+    payload: BlockActionPayload {
+      block: block.clone(),
+      prev_id: None,
+      parent_id: None,
+    },
+  };
+
+  apply_actions(document, vec![delete_action]);
+  let (_, blocks, children_map) = get_document_data(&test.document);
+  let first_child_children = &children_map[&blocks[first_child_id].children];
+  assert_eq!(first_child_children.len(), 0);
 }
 #[test]
 fn open_document_test() {
   let doc_id = "1";
   let mut test = create_document(doc_id);
   let document = &mut test.document;
-  let document_data = document.open(|_, _| {});
+  let document_data = document.open(|block_events, _| {
+    let block_events_json = serde_json::to_value(&block_events);
+    assert!(block_events_json.is_ok());
+    dbg!(block_events_json.unwrap());
+  });
   assert!(document_data.is_ok());
-  let page_id = document_data.unwrap().page_id;
+  let document_data = document_data.unwrap();
+  let document_data_json = serde_json::to_value(&document_data);
+  assert!(document_data_json.is_ok());
+  dbg!(document_data_json.unwrap());
+
+  let page_id = document_data.page_id;
   let block = insert_block(
     &test.document,
     Block {
