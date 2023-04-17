@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::ops::Deref;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Block {
   pub id: String,
   pub ty: String,
@@ -13,21 +13,25 @@ pub struct Block {
   pub external_type: Option<String>,
   pub data: HashMap<String, Value>,
 }
-#[derive(Debug, Clone, Serialize)]
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct DocumentMeta {
   pub children_map: HashMap<String, Vec<String>>,
 }
-#[derive(Debug, Clone, Serialize)]
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct DocumentData {
   pub page_id: String,
   pub blocks: HashMap<String, Block>,
   pub meta: DocumentMeta,
 }
+
 #[derive(Debug, Clone, Serialize)]
 pub struct BlockAction {
   pub action: BlockActionType,
   pub payload: BlockActionPayload,
 }
+
 #[derive(Debug, Clone, Serialize)]
 pub struct BlockActionPayload {
   pub block: Block,
