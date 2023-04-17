@@ -1,8 +1,9 @@
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
-use std::sync::Arc;
-
+use crate::database::timestamp;
+use crate::rows::{
+  cell_from_map_ref, create_row_meta, get_row_meta, row_from_map_ref, row_from_value,
+  row_order_from_value, BlockId, Cell, Cells, Row, RowBuilder, RowId, RowMetaMap, RowUpdate,
+};
+use crate::views::RowOrder;
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::{
   Collab, CollabBuilder, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
@@ -10,16 +11,14 @@ use collab::preclude::{
 use collab_persistence::CollabKV;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-
-use crate::database::timestamp;
-use crate::rows::{
-  cell_from_map_ref, create_row_meta, get_row_meta, row_from_map_ref, row_from_value,
-  row_order_from_value, BlockId, Cell, Cells, Row, RowBuilder, RowId, RowMetaMap, RowUpdate,
-};
-use crate::views::RowOrder;
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
+use std::sync::Arc;
 
 const NUM_OF_BLOCKS: i64 = 10;
 
+/// It's used to store the blocks. Each [Block] is indexed by the block_id.
 #[derive(Clone)]
 pub struct Blocks {
   pub blocks: Rc<RwLock<HashMap<BlockId, Rc<Block>>>>,
@@ -29,6 +28,8 @@ impl Blocks {
   pub fn new(uid: i64, db: Arc<CollabKV>) -> Self {
     let blocks = RwLock::new(HashMap::new());
     let mut write_guard = blocks.write();
+
+    // Create the [NUM_OF_BLOCKS] blocks if it's not exist.
     for i in 0..NUM_OF_BLOCKS {
       let block_id = i;
       let collab = CollabBuilder::new(uid, format!("block_{}", block_id))
@@ -36,6 +37,7 @@ impl Blocks {
         .build();
       collab.initial();
 
+      // Create a new [Block] with the given id.
       let block = Block::new(block_id, collab);
       write_guard.insert(block_id, Rc::new(block));
     }
@@ -45,12 +47,19 @@ impl Blocks {
     }
   }
 
+  /// Return the block with the given block_id.
+  /// If the block is not exist, return None.
   pub fn get_block<T: Into<BlockId>>(&self, block_id: T) -> Option<Rc<Block>> {
     let block_id = block_id.into();
     let blocks = self.blocks.read();
     blocks.get(&block_id).cloned()
   }
 
+  /// Create the given rows from the given [CreateRowParams]s.
+  /// Return the [RowOrder]s.
+  /// A row will be stored in the corresponding block base on its [RowId]. The rows stored
+  /// in the block are not ordered. We use the [RowOrder]s to keep track of the order of the rows.
+  /// The [RowOrder]s are stored in the [DatabaseView].
   pub fn create_rows(&self, create_row_params: Vec<CreateRowParams>) -> Vec<RowOrder> {
     if create_row_params.is_empty() {
       return vec![];
@@ -58,6 +67,7 @@ impl Blocks {
     let mut row_orders: Vec<RowOrder> = vec![];
     let mut block_rows: HashMap<BlockId, Vec<CreateRowParams>> = HashMap::new();
     for params in create_row_params {
+      // Get the block id base on the row id.
       let block_id = block_id_from_row_id(params.id);
       row_orders.push(RowOrder {
         id: params.id,
@@ -84,6 +94,8 @@ impl Blocks {
     row_orders
   }
 
+  /// Return the [Row] with the given [RowId].
+  /// If the row is not exist, return None.
   pub fn get_row(&self, row_id: RowId) -> Option<Row> {
     let block_id = block_id_from_row_id(row_id);
     if let Some(block) = self.get_block(block_id) {
@@ -93,6 +105,8 @@ impl Blocks {
     None
   }
 
+  /// Create a new row with the given [CreateRowParams].
+  /// Return the [RowOrder] of the new row.
   pub fn create_row(&self, row: CreateRowParams) -> Option<RowOrder> {
     let block_id = block_id_from_row_id(row.id);
     if let Some(block) = self.get_block(block_id) {
@@ -108,6 +122,7 @@ impl Blocks {
     }
   }
 
+  /// Remove the row with the given [RowId].
   pub fn remove_row(&self, row_id: RowId) {
     let block_id = block_id_from_row_id(row_id);
     if let Some(block) = self.get_block(block_id) {
@@ -116,6 +131,7 @@ impl Blocks {
     }
   }
 
+  /// Return the [Cell] with the given [RowId] and field_id.
   pub fn get_cell(&self, field_id: &str, row_id: RowId) -> Option<Cell> {
     let block_id = block_id_from_row_id(row_id);
     self
@@ -125,6 +141,7 @@ impl Blocks {
       .get_cell(row_id, field_id)
   }
 
+  /// Return the [Row]s with the given [RowOrder]s.
   pub fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
     let mut rows = Vec::new();
     for row_order in row_orders {
@@ -140,6 +157,7 @@ impl Blocks {
     rows
   }
 
+  /// Update the row with the given [RowId] and [RowUpdate].
   pub fn update_row<F, R: Into<RowId>>(&self, row_id: R, f: F)
   where
     F: FnOnce(RowUpdate),
@@ -154,6 +172,7 @@ impl Blocks {
   }
 }
 
+/// Return the block id base on the row id.
 fn block_id_from_row_id(row_id: RowId) -> BlockId {
   let row_id: i64 = row_id.into();
   row_id % NUM_OF_BLOCKS

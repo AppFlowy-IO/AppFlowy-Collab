@@ -42,35 +42,48 @@ pub struct DatabaseContext {
 }
 
 impl Database {
+  /// Create a new database with the given [CreateDatabaseParams]
+  /// The method will set the inline view id to the given view_id
+  /// from the [CreateDatabaseParams].
   pub fn create_with_inline_view(
     params: CreateDatabaseParams,
     context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
+    // Get or create a empty database with the given database_id
     let this = Self::get_or_create(&params.database_id, context)?;
     let (rows, fields, params) = params.split();
     let row_orders = this.blocks.create_rows(rows);
     let field_orders = fields.iter().map(FieldOrder::from).collect();
 
     this.root.with_transact_mut(|txn| {
+      // Set the inline view id. The inline view id should not be
+      // empty if the current database exists.
       this.set_inline_view_with_txn(txn, &params.view_id);
+
+      // Insert the given fields into the database
       for field in fields {
         this.fields.insert_field_with_txn(txn, field);
       }
-      this.create_linked_view_with_txn(txn, params, field_orders, row_orders);
+      // Create a inline view
+      this.create_view_with_txn(txn, params, field_orders, row_orders);
     });
     Ok(this)
   }
 
+  /// Get or Create a database with the given database_id.
   pub fn get_or_create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
     if database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID);
     }
 
+    // Get the database from the collab
     let database = {
       let txn = context.collab.transact();
       context.collab.get_map_with_txn(&txn, vec![DATABASE])
     };
 
+    // If the database exists, return the database.
+    // Otherwise, create a new database with the given database_id
     match database {
       None => Self::create(database_id, context),
       Some(database) => {
@@ -104,6 +117,7 @@ impl Database {
     }
   }
 
+  /// Create a new database with the given database_id and context.
   fn create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
     if database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID);
@@ -148,16 +162,22 @@ impl Database {
     })
   }
 
+  /// Return the database id
   pub fn get_database_id(&self) -> String {
     let txn = self.root.transact();
     // It's safe to unwrap. Because the database_id must exist
     self.root.get_str_with_txn(&txn, DATABASE_ID).unwrap()
   }
 
+  /// Return the database id with a transaction
   pub fn get_database_id_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
     self.root.get_str_with_txn(txn, DATABASE_ID).unwrap()
   }
 
+  /// Create a new row from the given params.
+  /// This row will be inserted to the end of rows of each view that
+  /// reference the given database. Return the row order if the row is
+  /// created successfully. Otherwise, return None.
   pub fn push_row(&self, params: CreateRowParams) -> Option<RowOrder> {
     let row_order = self.blocks.create_row(params)?;
     self.root.with_transact_mut(|txn| {
@@ -168,12 +188,18 @@ impl Database {
     Some(row_order)
   }
 
+  /// Create a new row from the given view.
+  /// This row will be inserted into corresponding [Block]. The [RowOrder] of this row will
+  /// be inserted to each view.
   pub fn create_row(&self, view_id: &str, params: CreateRowParams) -> Option<(usize, RowOrder)> {
     self
       .root
       .with_transact_mut(|txn| self.create_row_with_txn(txn, view_id, params))
   }
 
+  /// Create a new row from the given view.
+  /// This row will be inserted into corresponding [Block]. The [RowOrder] of this row will
+  /// be inserted to each view.
   pub fn create_row_with_txn(
     &self,
     txn: &mut TransactionMut,
@@ -195,6 +221,8 @@ impl Database {
     }
   }
 
+  /// Remove the row
+  /// The [RowOrder] of each view representing this row will be removed.
   pub fn remove_row(&self, row_id: RowId) -> Option<Row> {
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |update| {
@@ -206,6 +234,7 @@ impl Database {
     })
   }
 
+  /// Update the row
   pub fn update_row<R, F>(&self, row_id: R, f: F)
   where
     F: FnOnce(RowUpdate),
@@ -214,6 +243,8 @@ impl Database {
     self.blocks.update_row(row_id, f);
   }
 
+  /// Return the index of the row in the given view.
+  /// Return None if the row is not found.
   pub fn index_of_row(&self, view_id: &str, row_id: RowId) -> Option<usize> {
     let view = self.views.get_view(view_id)?;
     view.row_orders.iter().position(|order| order.id == row_id)
@@ -229,6 +260,7 @@ impl Database {
     view.row_orders.iter().position(|order| order.id == row_id)
   }
 
+  /// Return the [Row] with the given row id.
   pub fn get_row<R>(&self, row_id: R) -> Option<Row>
   where
     R: Into<RowId>,
@@ -236,26 +268,33 @@ impl Database {
     self.blocks.get_row(row_id.into())
   }
 
+  /// Return a list of [Row] for the given view.
+  /// The rows here is ordered by the [RowOrder] of the view.
   pub fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
     let txn = self.root.transact();
     self.get_rows_for_view_with_txn(&txn, view_id)
   }
 
+  /// Return a list of [Row] for the given view.
+  /// The rows here is ordered by the [RowOrder] of the view.
   pub fn get_rows_for_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<Row> {
     let row_orders = self.views.get_row_orders_with_txn(txn, view_id);
     self.blocks.get_rows_from_row_orders(&row_orders)
   }
 
+  /// Return a list of [RowCell] for the given view and field.
   pub fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<RowCell> {
     let txn = self.root.transact();
     self.get_cells_for_field_with_txn(&txn, view_id, field_id)
   }
 
+  /// Return the [RowCell] with the given row id and field id.
   pub fn get_cell(&self, field_id: &str, row_id: RowId) -> Option<RowCell> {
     let cell = self.blocks.get_cell(field_id, row_id)?;
     Some(RowCell::new(row_id, cell))
   }
 
+  /// Return list of [RowCell] for the given view and field.
   pub fn get_cells_for_field_with_txn<T: ReadTxn>(
     &self,
     txn: &T,
@@ -273,6 +312,7 @@ impl Database {
       .collect::<Vec<RowCell>>()
   }
 
+  /// Return the index of the field in the given view.
   pub fn index_of_field_with_txn<T: ReadTxn>(
     &self,
     txn: &T,
@@ -572,12 +612,12 @@ impl Database {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
       let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
       let field_orders = self.views.get_field_orders_txn(txn, &inline_view_id);
-      self.create_linked_view_with_txn(txn, params, field_orders, row_orders);
+      self.create_view_with_txn(txn, params, field_orders, row_orders);
     })
   }
 
-  /// Create a linked view to existing database.
-  pub fn create_linked_view_with_txn(
+  /// Create a [DatabaseView] for the current database.
+  pub fn create_view_with_txn(
     &self,
     txn: &mut TransactionMut,
     params: CreateViewParams,

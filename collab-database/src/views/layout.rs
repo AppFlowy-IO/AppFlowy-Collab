@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
+/// The [DatabaseLayout] enum is used to represent the layout of the database.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum DatabaseLayout {
@@ -18,9 +19,9 @@ pub enum DatabaseLayout {
 impl AsRef<str> for DatabaseLayout {
   fn as_ref(&self) -> &str {
     match self {
-      DatabaseLayout::Grid => "Grid",
-      DatabaseLayout::Board => "Board",
-      DatabaseLayout::Calendar => "Calendar",
+      DatabaseLayout::Grid => "0",
+      DatabaseLayout::Board => "1",
+      DatabaseLayout::Calendar => "2",
     }
   }
 }
@@ -30,9 +31,9 @@ impl FromStr for DatabaseLayout {
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     match s {
-      "Grid" => Ok(DatabaseLayout::Grid),
-      "Board" => Ok(DatabaseLayout::Board),
-      "Calendar" => Ok(DatabaseLayout::Calendar),
+      "0" => Ok(DatabaseLayout::Grid),
+      "1" => Ok(DatabaseLayout::Board),
+      "2" => Ok(DatabaseLayout::Calendar),
       _ => bail!("Invalid layout type"),
     }
   }
@@ -75,6 +76,7 @@ impl LayoutSettings {
     self.0
   }
 
+  /// Create a new [LayoutSettings] from a [MapRef].
   pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Self {
     let mut this = Self::new();
     map_ref.iter(txn).for_each(|(k, v)| {
@@ -87,6 +89,7 @@ impl LayoutSettings {
     this
   }
 
+  /// Fill a [MapRef] with the data from this [LayoutSettings].
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.0.into_iter().for_each(|(k, v)| {
       let inner_map = map_ref.get_or_insert_map_with_txn(txn, k.as_ref());
@@ -109,5 +112,7 @@ impl DerefMut for LayoutSettings {
   }
 }
 
+/// Each [LayoutSetting] is a [Map] of [String] to [lib0Any].
+/// This is used to store the settings for each layout.
 pub type LayoutSetting = AnyMap;
 pub type LayoutSettingBuilder = AnyMapBuilder;

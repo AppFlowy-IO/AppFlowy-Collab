@@ -1,19 +1,18 @@
+use crate::doc::YrsDocDB;
+use crate::error::PersistenceError;
+use crate::keys::DOC_KEY_SPACE;
+use crate::keys::{
+  clock_from_key, make_doc_update_key, make_doc_update_key_prefix, make_snapshot_update_key,
+  make_snapshot_update_key_prefix, Clock, DocID, Key, SnapshotID, TERMINATOR,
+};
+use crate::snapshot::YrsSnapshotDB;
+use parking_lot::RwLock;
+use sled::{Batch, Db, IVec};
+use smallvec::{smallvec, SmallVec};
 use std::io::Write;
 use std::ops::{Deref, RangeTo};
 use std::path::Path;
 use std::sync::Arc;
-
-use parking_lot::RwLock;
-use sled::{Batch, Db, IVec};
-use smallvec::{smallvec, SmallVec};
-
-use crate::doc::YrsDocDB;
-use crate::error::PersistenceError;
-use crate::keys::{
-  clock_from_key, make_doc_update_key, make_doc_update_key_prefix, make_snapshot_update_key,
-  make_snapshot_update_key_prefix, DocID, Key, SnapshotID, TERMINATOR,
-};
-use crate::snapshot::YrsSnapshotDB;
 
 #[derive(Clone)]
 pub struct CollabKV {
@@ -61,7 +60,9 @@ pub struct DbContext {
   pub(crate) db: RwLock<Db>,
 }
 
-pub type OID = u32;
+pub type OID = u64;
+const OID_LEN: usize = 8;
+
 impl DbContext {
   pub fn new(db: Db) -> Self {
     Self {
@@ -114,8 +115,8 @@ impl DbContext {
     let id_value = self.db.read().get(key_id.as_ref()).ok()??;
     // println!("get key:{:?}, value: {:?}", key_id.as_ref(), id_value);
 
-    let mut bytes = [0; 4];
-    bytes[0..4].copy_from_slice(id_value.as_ref());
+    let mut bytes = [0; OID_LEN];
+    bytes[0..OID_LEN].copy_from_slice(id_value.as_ref());
     Some(OID::from_be_bytes(bytes))
   }
 
@@ -140,10 +141,10 @@ impl DbContext {
     db: &Db,
     make_update_key: F1,
     make_update_key_prefix: F2,
-  ) -> Result<Key<12>, PersistenceError>
+  ) -> Result<Key<16>, PersistenceError>
   where
-    F1: Fn(OID, OID) -> Key<12>,
-    F2: Fn(OID) -> Key<8>,
+    F1: Fn(OID, Clock) -> Key<16>,
+    F2: Fn(OID) -> Key<12>,
   {
     let last_clock = {
       // let start = make_update_key(id, OID::MIN);
@@ -152,7 +153,7 @@ impl DbContext {
         .last()
       {
         let last_clock = clock_from_key(k.as_ref());
-        OID::from_be_bytes(last_clock.try_into().unwrap())
+        Clock::from_be_bytes(last_clock.try_into().unwrap())
       } else {
         0
       }
@@ -218,7 +219,7 @@ pub(crate) fn batch_remove<K: AsRef<[u8]>>(
 
 fn gen_new_key(db: &Db) -> Key<10> {
   let key_value = db.generate_id().unwrap();
-  let mut v: SmallVec<[u8; 10]> = smallvec![0, 0];
+  let mut v: SmallVec<[u8; 10]> = smallvec![DOC_KEY_SPACE, DOC_KEY_SPACE];
   v.write_all(&key_value.to_be_bytes()).unwrap();
   v.push(TERMINATOR);
   Key(v)

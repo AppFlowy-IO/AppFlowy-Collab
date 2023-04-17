@@ -5,7 +5,7 @@ use yrs::updates::encoder::{Encoder, EncoderV1};
 use yrs::ReadTxn;
 
 use crate::db::{batch_get, batch_remove};
-use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, SnapshotID};
+use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, SnapshotID};
 use crate::{DbContext, PersistenceError};
 
 pub struct YrsSnapshotDB<'a> {
@@ -31,7 +31,7 @@ impl<'a> YrsSnapshotDB<'a> {
     let mut snapshots = vec![];
     if let Some(snapshot_id) = self.get_snapshot_id(object_id) {
       let start = make_snapshot_update_key(snapshot_id, 0);
-      let end = make_snapshot_update_key(snapshot_id, SnapshotID::MAX);
+      let end = make_snapshot_update_key(snapshot_id, Clock::MAX);
       if let Ok(encoded_snapshots) = batch_get(&self.context.db.read(), &start, &end) {
         for encoded_snapshot in encoded_snapshots {
           if let Ok(snapshot) = CollabSnapshot::try_from(encoded_snapshot.as_ref()) {
@@ -49,7 +49,7 @@ impl<'a> YrsSnapshotDB<'a> {
   ) -> Result<(), PersistenceError> {
     if let Some(snapshot_id) = self.get_snapshot_id(object_id) {
       let start = make_snapshot_update_key(snapshot_id, 0);
-      let end = make_snapshot_update_key(snapshot_id, SnapshotID::MAX);
+      let end = make_snapshot_update_key(snapshot_id, Clock::MAX);
       batch_remove(&mut self.context.db.write(), &start, &end)?;
     }
     Ok(())

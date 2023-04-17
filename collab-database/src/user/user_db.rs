@@ -16,14 +16,22 @@ use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::user::relation::{DatabaseRelation, RowRelationMap};
 use crate::views::{CreateDatabaseParams, CreateViewParams};
 
+/// A [UserDatabase] represents a user's database.
 pub struct UserDatabase {
   uid: i64,
   db: Arc<CollabKV>,
   #[allow(dead_code)]
   collab: Collab,
+  /// It used to keep track of the blocks. Each block contains a list of [Row]s
+  /// A database rows will be stored in multiple blocks.
   blocks: Blocks,
+  /// It used to keep track of the database records.
   database_records: DatabaseArray,
+  /// It used to keep track of the database relations.
   database_relation: DatabaseRelation,
+  /// In memory database handlers.
+  /// The key is the database id. The handler will be added when the database is opened or created.
+  /// and the handler will be removed when the database is deleted or closed.
   open_handlers: RwLock<HashMap<String, Arc<Database>>>,
 }
 
@@ -41,7 +49,7 @@ impl UserDatabase {
       .build();
     collab.initial();
     let databases = create_user_database_if_not_exist(&collab);
-    let database_vec = DatabaseArray::new(databases);
+    let database_records = DatabaseArray::new(databases);
     let database_relation = DatabaseRelation::new(create_relations_collab(uid, db.clone()));
     let blocks = Blocks::new(uid, db.clone());
 
@@ -50,12 +58,14 @@ impl UserDatabase {
       db,
       collab,
       blocks,
-      database_records: database_vec,
+      database_records,
       open_handlers: Default::default(),
       database_relation,
     }
   }
 
+  /// Get the database with the given database id.
+  /// Return None if the database does not exist.
   pub fn get_database(&self, database_id: &str) -> Option<Arc<Database>> {
     if !self.database_records.contains(database_id) {
       return None;
@@ -77,11 +87,14 @@ impl UserDatabase {
       Some(database) => Some(database),
     }
   }
+  /// Return the database id with the given view id.
+  /// Multiple views can share the same database.
   pub fn get_database_with_view_id(&self, view_id: &str) -> Option<Arc<Database>> {
     let database_id = self.get_database_id_with_view_id(view_id)?;
     self.get_database(&database_id)
   }
 
+  /// Return the database id with the given view id.
   pub fn get_database_id_with_view_id(&self, view_id: &str) -> Option<String> {
     self
       .database_records
@@ -89,7 +102,10 @@ impl UserDatabase {
       .map(|record| record.database_id)
   }
 
-  /// Create database with inline view
+  /// Create database with inline view.
+  /// The inline view is the default view of the database.
+  /// If the inline view gets deleted, the database will be deleted too.
+  /// So the reference views will be deleted too.
   pub fn create_database(
     &self,
     params: CreateDatabaseParams,
@@ -97,11 +113,13 @@ impl UserDatabase {
     debug_assert!(!params.database_id.is_empty());
     debug_assert!(!params.view_id.is_empty());
 
+    // Create a [Collab] for the given database id.
     let collab = self.collab_for_database(&params.database_id);
     let blocks = self.blocks.clone();
     let context = DatabaseContext { collab, blocks };
     context.collab.initial();
 
+    // Add a new database record.
     self
       .database_records
       .add_database(&params.database_id, &params.view_id, &params.name);
@@ -114,6 +132,9 @@ impl UserDatabase {
     Ok(database)
   }
 
+  /// Create database with the data duplicated from the given database.
+  /// The [DuplicatedDatabase] contains all the database data. It can be
+  /// used to restore the database from the backup.
   pub fn create_database_with_duplicated_data(
     &self,
     data: DuplicatedDatabase,
@@ -137,6 +158,7 @@ impl UserDatabase {
     }
   }
 
+  /// Delete the database with the given database id.
   pub fn delete_database(&self, database_id: &str) {
     self.database_records.delete_database(database_id);
     match self.db.doc(self.uid).delete_doc(database_id) {
@@ -147,8 +169,10 @@ impl UserDatabase {
       Ok(_) => {},
       Err(err) => tracing::error!("Delete snapshot failed: {}", err),
     }
+    self.open_handlers.write().remove(database_id);
   }
 
+  /// Return all the database records.
   pub fn get_all_databases(&self) -> Vec<DatabaseRecord> {
     self.database_records.get_all_databases()
   }
@@ -175,6 +199,8 @@ impl UserDatabase {
     Database::get_or_create(database_id, context)
   }
 
+  /// Delete the view from the database with the given view id.
+  /// If the view is the inline view, the database will be deleted too.
   pub fn delete_view(&self, database_id: &str, view_id: &str) {
     if let Some(database) = self.get_database(database_id) {
       if database.is_inline_view(view_id) {
@@ -209,6 +235,7 @@ impl UserDatabase {
     self.database_relation.row_relations()
   }
 
+  /// Create a new [Collab] instance for given database id.
   fn collab_for_database(&self, database_id: &str) -> Collab {
     let disk_plugin = CollabDiskPlugin::new(self.uid, self.db.clone()).unwrap();
     let snapshot_plugin = CollabSnapshotPlugin::new(self.uid, self.db.clone(), 6).unwrap();

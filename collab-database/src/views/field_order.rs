@@ -4,6 +4,7 @@ use collab::preclude::{lib0Any, Array, ArrayRef, ReadTxn, TransactionMut, YrsVal
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 
+/// Keep track of the order of fields in a database view
 pub struct FieldOrderArray {
   array_ref: ArrayRef,
 }
@@ -11,10 +12,12 @@ pub struct FieldOrderArray {
 impl OrderArray for FieldOrderArray {
   type Object = FieldOrder;
 
+  /// Return a reference to the underlying array
   fn array_ref(&self) -> &ArrayRef {
     &self.array_ref
   }
 
+  /// Create a new [SFieldOrder] instance from the given value
   fn object_from_value_with_txn<T: ReadTxn>(
     &self,
     value: YrsValue,

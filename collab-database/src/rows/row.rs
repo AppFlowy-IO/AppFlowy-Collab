@@ -51,6 +51,10 @@ impl AsRef<i64> for RowId {
 
 pub type BlockId = i64;
 
+/// Represents a row in a [Block].
+/// A [Row] contains list of [Cell]s. Each [Cell] is associated with a [Field].
+/// So the number of [Cell]s in a [Row] is equal to the number of [Field]s.
+/// A [Database] contains list of rows that stored in multiple [Block]s.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Row {
   pub id: RowId,
@@ -62,6 +66,10 @@ pub struct Row {
 }
 
 impl Row {
+  /// Creates a new instance of [Row]
+  /// The default height of a [Row] is 60
+  /// The default visibility of a [Row] is true
+  /// The default created_at of a [Row] is the current timestamp
   pub fn new<R: Into<RowId>, B: Into<BlockId>>(id: R, block_id: B) -> Self {
     Row {
       id: id.into(),
@@ -102,6 +110,7 @@ impl<'a, 'b> RowBuilder<'a, 'b> {
   pub fn done(self) {}
 }
 
+/// It used to update a [Row]
 pub struct RowUpdate<'a, 'b, 'c> {
   map_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
@@ -144,6 +153,7 @@ const ROW_HEIGHT: &str = "height";
 const CREATED_AT: &str = "created_at";
 const ROW_CELLS: &str = "cells";
 
+/// Return row id and created_at from a [YrsValue]
 pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(String, i64)> {
   let map_ref = value.to_ymap()?;
   let id = map_ref.get_str_with_txn(txn, ROW_ID)?;
@@ -153,6 +163,7 @@ pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(String
   Some((id, crated_at))
 }
 
+/// Return a [RowOrder] and created_at from a [YrsValue]
 pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(RowOrder, i64)> {
   let map_ref = value.to_ymap()?;
   let id = RowId::from(map_ref.get_i64_with_txn(txn, ROW_ID)?);
@@ -164,17 +175,21 @@ pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(Row
   Some((RowOrder::new(id, block_id, height as i32), crated_at))
 }
 
+/// Return a [Row] from a [YrsValue]
 pub fn row_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Row> {
   let map_ref = value.to_ymap()?;
   row_from_map_ref(&map_ref, txn)
 }
 
+/// Return a [Cell] in a [Row] from a [YrsValue]
+/// The [Cell] is identified by the field_id
 pub fn cell_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T, field_id: &str) -> Option<Cell> {
   let cells_map_ref = map_ref.get_map_with_txn(txn, ROW_CELLS)?;
   let cell_map_ref = cells_map_ref.get_map_with_txn(txn, field_id)?;
   Some(Cell::from_map_ref(txn, &cell_map_ref))
 }
 
+/// Return a [Row] from a [MapRef]
 pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
   let id = RowId::from(map_ref.get_i64_with_txn(txn, ROW_ID)?);
   let block_id = map_ref.get_i64_with_txn(txn, BLOCK_ID)?;

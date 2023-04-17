@@ -1,11 +1,3 @@
-use collab::core::any_array::ArrayMapUpdate;
-use collab::preclude::map::MapPrelim;
-use collab::preclude::{
-  lib0Any, Array, ArrayRef, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
-  YrsValue,
-};
-use serde::{Deserialize, Serialize};
-
 use crate::block::CreateRowParams;
 use crate::fields::Field;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
@@ -14,6 +6,13 @@ use crate::views::{
   LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
+use collab::core::any_array::ArrayMapUpdate;
+use collab::preclude::map::MapPrelim;
+use collab::preclude::{
+  lib0Any, Array, ArrayRef, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  YrsValue,
+};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DatabaseView {
@@ -208,6 +207,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     FieldOrderArray
   );
 
+  /// Set layout settings of the current view
   pub fn set_layout_settings(self, layout_settings: LayoutSettings) -> Self {
     let map_ref = self
       .map_ref
@@ -216,6 +216,9 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
+  /// Update layout setting for the given [DatabaseLayout]
+  /// If the layout setting is not exist, it will be created
+  /// If the layout setting is exist, it will be updated
   pub fn update_layout_settings(
     self,
     layout_ty: &DatabaseLayout,
@@ -230,6 +233,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
+  /// Remove layout setting for the given [DatabaseLayout]
   pub fn remove_layout_setting(self, layout_ty: &DatabaseLayout) -> Self {
     let layout_settings = self
       .map_ref
@@ -239,6 +243,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
+  /// Set filters of the current view
   pub fn set_filters(mut self, filters: Vec<FilterMap>) -> Self {
     let array_ref = self.get_filter_array();
     let filter_array = FilterArray::from_any_maps(filters);
@@ -246,6 +251,8 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
+  /// Update filters
+  /// The given function,[ArrayMapUpdate], which can be used to update the filters
   pub fn update_filters<F>(mut self, f: F) -> Self
   where
     F: FnOnce(ArrayMapUpdate),
@@ -256,6 +263,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
+  /// Set groups of the current view
   pub fn set_groups(mut self, group_settings: Vec<GroupSettingMap>) -> Self {
     let array_ref = self.get_group_array();
     let group_settings = GroupSettingArray::from_any_maps(group_settings);
@@ -263,6 +271,8 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
+  /// Update groups
+  /// The given function,[ArrayMapUpdate], which can be used to update the groups
   pub fn update_groups<F>(mut self, f: F) -> Self
   where
     F: FnOnce(ArrayMapUpdate),
@@ -273,6 +283,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
+  /// Set sorts of the current view
   pub fn set_sorts(mut self, sorts: Vec<SortMap>) -> Self {
     let array_ref = self.get_sort_array();
     let sort_array = SortArray::from_any_maps(sorts);
@@ -280,6 +291,8 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
     self
   }
 
+  /// Update sorts
+  /// The given function,[ArrayMapUpdate], which can be used to update the sorts
   pub fn update_sorts<F>(mut self, f: F) -> Self
   where
     F: FnOnce(ArrayMapUpdate),
@@ -316,6 +329,8 @@ pub fn view_id_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Str
   map_ref.get_str_with_txn(txn, VIEW_ID)
 }
 
+/// Return a [ViewDescription] from a map ref
+/// A [ViewDescription] is a subset of a [DatabaseView]
 pub fn view_description_from_value<T: ReadTxn>(
   value: YrsValue,
   txn: &T,
@@ -326,11 +341,13 @@ pub fn view_description_from_value<T: ReadTxn>(
   Some(ViewDescription { id, name })
 }
 
+/// Return a [DatabaseView] from a map ref
 pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<DatabaseView> {
   let map_ref = value.to_ymap()?;
   view_from_map_ref(&map_ref, txn)
 }
 
+/// Return a list of [GroupSettingMap] from a map ref
 pub fn group_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<GroupSettingMap> {
   map_ref
     .get_array_ref_with_txn(txn, VIEW_GROUPS)
@@ -338,6 +355,7 @@ pub fn group_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<
     .unwrap_or_default()
 }
 
+/// Return a new list of [SortMap]s from a map ref
 pub fn sorts_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<SortMap> {
   map_ref
     .get_array_ref_with_txn(txn, VIEW_SORTS)
@@ -345,6 +363,7 @@ pub fn sorts_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<SortMap>
     .unwrap_or_default()
 }
 
+/// Return a new list of [FilterMap]s from a map ref
 pub fn filters_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<FilterMap> {
   map_ref
     .get_array_ref_with_txn(txn, VIEW_FILTERS)
@@ -352,6 +371,7 @@ pub fn filters_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<Filter
     .unwrap_or_default()
 }
 
+/// Creates a new layout settings from a map ref
 pub fn layout_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> LayoutSettings {
   map_ref
     .get_map_with_txn(txn, VIEW_LAYOUT_SETTINGS)
@@ -359,6 +379,7 @@ pub fn layout_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Lay
     .unwrap_or_default()
 }
 
+/// Creates a new view from a map ref
 pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<DatabaseView> {
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
   let name = map_ref.get_str_with_txn(txn, VIEW_NAME)?;
@@ -391,12 +412,12 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
 
   let row_orders = map_ref
     .get_array_ref_with_txn(txn, ROW_ORDERS)
-    .map(|array_ref| RowOrderArray::new(array_ref).get_orders_with_txn(txn))
+    .map(|array_ref| RowOrderArray::new(array_ref).get_objects_with_txn(txn))
     .unwrap_or_default();
 
   let field_orders = map_ref
     .get_array_ref_with_txn(txn, FIELD_ORDERS)
-    .map(|array_ref| FieldOrderArray::new(array_ref).get_orders_with_txn(txn))
+    .map(|array_ref| FieldOrderArray::new(array_ref).get_objects_with_txn(txn))
     .unwrap_or_default();
 
   let created_at = map_ref
@@ -427,17 +448,21 @@ pub trait OrderIdentifiable {
   fn identify_id(&self) -> String;
 }
 
+/// The [OrderArray] trait provides a set of methods to manipulate an array of [OrderIdentifiable] objects.
 pub trait OrderArray {
   type Object: OrderIdentifiable + Into<lib0Any>;
 
+  /// Returns the array reference.
   fn array_ref(&self) -> &ArrayRef;
 
+  /// Create a new [Self::Object] from given value
   fn object_from_value_with_txn<T: ReadTxn>(
     &self,
     value: YrsValue,
     txn: &T,
   ) -> Option<Self::Object>;
 
+  /// Extends the other objects to the end of the array.
   fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<Self::Object>) {
     let array_ref = self.array_ref();
     for order in others {
@@ -445,10 +470,14 @@ pub trait OrderArray {
     }
   }
 
+  /// Pushes the given object to the end of the array.
   fn push_with_txn(&self, txn: &mut TransactionMut, object: Self::Object) {
     self.array_ref().push_back(txn, object);
   }
 
+  /// Insert the given object to the array after the given previous object.
+  /// If the previous object is not found, the object will be inserted to the end of the array.
+  /// If the previous object is None, the object will be inserted to the beginning of the array.
   fn insert_with_txn(
     &self,
     txn: &mut TransactionMut,
@@ -470,7 +499,8 @@ pub trait OrderArray {
     }
   }
 
-  fn get_orders_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Self::Object> {
+  /// Returns a list of Objects with a transaction.
+  fn get_objects_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Self::Object> {
     self
       .array_ref()
       .iter(txn)
@@ -478,6 +508,7 @@ pub trait OrderArray {
       .collect::<Vec<Self::Object>>()
   }
 
+  // Remove the object with the given id from the array.
   fn remove_with_txn(&self, txn: &mut TransactionMut, id: &str) -> Option<()> {
     let pos = self.array_ref().iter(txn).position(|value| {
       match self.object_from_value_with_txn(value, txn) {
@@ -489,6 +520,9 @@ pub trait OrderArray {
     None
   }
 
+  /// Move the object with the given id to the given position.
+  /// If the object is not found, nothing will happen.
+  /// If the position is out of range, nothing will happen.
   fn move_to(&self, txn: &mut TransactionMut, from: u32, to: u32) {
     let array_ref = self.array_ref();
     if let Some(YrsValue::Any(value)) = array_ref.get(txn, from) {
@@ -499,6 +533,7 @@ pub trait OrderArray {
     }
   }
 
+  /// Returns the position of the object with the given id.
   fn get_position_with_txn<T: ReadTxn>(&self, txn: &T, id: &str) -> Option<u32> {
     self
       .array_ref()

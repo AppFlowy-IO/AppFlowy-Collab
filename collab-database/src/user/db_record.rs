@@ -1,11 +1,12 @@
 use crate::database::timestamp;
-
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::{
   Array, ArrayRefWrapper, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
 };
 use std::collections::HashSet;
 
+/// It used to keep track of the databases.
+/// Each record of a database is stored in a [DatabaseRecord]
 pub struct DatabaseArray {
   array_ref: ArrayRefWrapper,
 }
@@ -15,6 +16,7 @@ impl DatabaseArray {
     Self { array_ref }
   }
 
+  /// Create a new [DatabaseRecord] for the given database id and view id
   pub fn add_database(&self, database_id: &str, view_id: &str, name: &str) {
     self.array_ref.with_transact_mut(|txn| {
       let mut views = HashSet::new();
@@ -30,6 +32,7 @@ impl DatabaseArray {
     });
   }
 
+  /// Update the database by the given id
   pub fn update_database(&self, database_id: &str, mut f: impl FnMut(&mut DatabaseRecord)) {
     self.array_ref.with_transact_mut(|txn| {
       if let Some(index) = self.database_index_from_id(txn, database_id) {
@@ -45,6 +48,7 @@ impl DatabaseArray {
     });
   }
 
+  /// Delete the database by the given id
   pub fn delete_database(&self, database_id: &str) {
     self.array_ref.with_transact_mut(|txn| {
       if let Some(index) = self.database_index_from_id(txn, database_id) {
@@ -53,12 +57,14 @@ impl DatabaseArray {
     });
   }
 
+  /// Return all the databases
   pub fn get_all_databases(&self) -> Vec<DatabaseRecord> {
     self
       .array_ref
       .with_transact_mut(|txn| self.get_all_databases_with_txn(txn))
   }
 
+  /// Test if the database with the given id exists
   pub fn contains(&self, database_id: &str) -> bool {
     let txn = self.array_ref.transact();
     self
@@ -70,6 +76,7 @@ impl DatabaseArray {
       })
   }
 
+  /// Return all databases with a Transaction
   pub fn get_all_databases_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseRecord> {
     self
       .array_ref
@@ -81,6 +88,7 @@ impl DatabaseArray {
       .collect()
   }
 
+  /// Return the a [DatabaseRecord] with the given view id
   pub fn get_database_record_with_view_id(&self, view_id: &str) -> Option<DatabaseRecord> {
     let txn = self.array_ref.transact();
     let all = self.get_all_databases_with_txn(&txn);
