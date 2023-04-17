@@ -1,6 +1,6 @@
 use crate::database::timestamp;
 use crate::id_gen::ID_GEN;
-use crate::rows::{Cells, CellsUpdate};
+use crate::rows::{Cell, Cells, CellsUpdate};
 use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
@@ -51,7 +51,7 @@ impl AsRef<i64> for RowId {
 
 pub type BlockId = i64;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Row {
   pub id: RowId,
   pub block_id: BlockId,
@@ -167,6 +167,12 @@ pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(Row
 pub fn row_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Row> {
   let map_ref = value.to_ymap()?;
   row_from_map_ref(&map_ref, txn)
+}
+
+pub fn cell_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T, field_id: &str) -> Option<Cell> {
+  let cells_map_ref = map_ref.get_map_with_txn(txn, ROW_CELLS)?;
+  let cell_map_ref = cells_map_ref.get_map_with_txn(txn, field_id)?;
+  Some(Cell::from_map_ref(txn, &cell_map_ref))
 }
 
 pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {

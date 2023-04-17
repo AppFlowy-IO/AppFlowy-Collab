@@ -1,15 +1,16 @@
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use collab::core::array_wrapper::ArrayRefExtension;
+use collab::preclude::*;
+use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
+
 use crate::core::trash::{TrashArray, TrashRecord};
 use crate::core::{
   Belonging, BelongingMap, FolderData, TrashChangeSender, View, ViewChangeSender, ViewsMap,
   Workspace, WorkspaceMap,
 };
-use collab::core::array_wrapper::ArrayRefExtension;
-use collab::preclude::*;
-use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::Arc;
 
 const FOLDER: &str = "folder";
 const WORKSPACES: &str = "workspaces";
@@ -27,6 +28,7 @@ pub struct FolderContext {
 }
 
 pub struct Folder {
+  #[allow(dead_code)]
   inner: Collab,
   root: MapRefWrapper,
   pub workspaces: WorkspaceArray,
@@ -37,65 +39,16 @@ pub struct Folder {
 }
 
 impl Folder {
-  pub fn create(collab: Collab, context: FolderContext) -> Self {
-    let (folder, workspaces, views, trash, meta, belongings) = collab.with_transact_mut(|txn| {
-      // { FOLDER: {:} }
-      let folder = collab
-        .get_map_with_txn(txn, vec![FOLDER])
-        .unwrap_or_else(|| collab.create_map_with_txn(txn, FOLDER));
-
-      // { FOLDER: { WORKSPACES: [] } }
-      let workspaces = collab
-        .get_array_with_txn(txn, vec![FOLDER, WORKSPACES])
-        .unwrap_or_else(|| folder.insert_array_with_txn::<WorkspaceItem>(txn, WORKSPACES, vec![]));
-
-      // { FOLDER: { WORKSPACES: [], VIEWS: {:} } }
-      let views = collab
-        .get_map_with_txn(txn, vec![FOLDER, VIEWS])
-        .unwrap_or_else(|| folder.insert_map_with_txn(txn, VIEWS));
-
-      // { FOLDER: { WORKSPACES: [], VIEWS: {:}, TRASH: [] } }
-      let trash = collab
-        .get_array_with_txn(txn, vec![FOLDER, TRASH])
-        .unwrap_or_else(|| folder.insert_array_with_txn::<TrashRecord>(txn, TRASH, vec![]));
-
-      // { FOLDER: { WORKSPACES: [], VIEWS: {:}, TRASH: [], META: {:} } }
-      let meta = collab
-        .get_map_with_txn(txn, vec![FOLDER, META])
-        .unwrap_or_else(|| folder.insert_map_with_txn(txn, META));
-
-      // { FOLDER: { WORKSPACES: [], VIEWS: {:}, TRASH: [], META: {:}, BELONGINGS:{:} } }
-      let belongings = collab
-        .get_map_with_txn(txn, vec![FOLDER, BELONGINGS])
-        .unwrap_or_else(|| folder.insert_map_with_txn(txn, BELONGINGS));
-
-      (folder, workspaces, views, trash, meta, belongings)
-    });
-    let belongings = Rc::new(BelongingMap::new(belongings));
-    let workspaces = WorkspaceArray::new(workspaces, belongings.clone());
-    let views = Rc::new(ViewsMap::new(
-      views,
-      context.view_change_tx,
-      belongings.clone(),
-    ));
-    let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx);
-    Self {
-      inner: collab,
-      root: folder,
-      workspaces,
-      views,
-      trash,
-      meta,
-      belongings,
+  pub fn get_or_create(collab: Collab, context: FolderContext) -> Self {
+    let is_exist = {
+      let txn = collab.transact();
+      is_folder_exist(txn, &collab)
+    };
+    if is_exist {
+      get_folder(collab, context)
+    } else {
+      create_folder(collab, context)
     }
-  }
-
-  pub fn add_plugins(&mut self, plugins: Vec<Arc<dyn CollabPlugin>>) {
-    self.inner.add_plugins(plugins);
-  }
-
-  pub fn initial(&self) {
-    self.inner.initial();
   }
 
   pub fn create_with_data(&self, data: FolderData) {
@@ -122,7 +75,11 @@ impl Folder {
 
   pub fn set_current_workspace(&self, workspace_id: &str) {
     tracing::debug!("Set current workspace: {}", workspace_id);
-    self.meta.insert(CURRENT_WORKSPACE, workspace_id);
+    self.meta.with_transact_mut(|txn| {
+      self
+        .meta
+        .insert_str_with_txn(txn, CURRENT_WORKSPACE, workspace_id);
+    });
   }
 
   pub fn get_current_workspace(&self) -> Option<Workspace> {
@@ -193,7 +150,9 @@ impl Folder {
 
   pub fn set_current_view(&self, view_id: &str) {
     tracing::debug!("Set current view: {}", view_id);
-    self.meta.insert(CURRENT_VIEW, view_id);
+    self.meta.with_transact_mut(|txn| {
+      self.meta.insert_str_with_txn(txn, CURRENT_VIEW, view_id);
+    });
   }
 
   pub fn get_current_view(&self) -> Option<String> {
@@ -217,10 +176,13 @@ pub struct WorkspaceArray {
 }
 
 impl WorkspaceArray {
-  pub fn new(array_ref: ArrayRefWrapper, belongings: Rc<BelongingMap>) -> Self {
-    let txn = array_ref.transact();
+  pub fn new<T: ReadTxn>(
+    txn: &T,
+    array_ref: ArrayRefWrapper,
+    belongings: Rc<BelongingMap>,
+  ) -> Self {
     let workspace_maps = array_ref
-      .to_map_refs_with_txn(&txn)
+      .to_map_refs_with_txn(txn)
       .into_iter()
       .flat_map(|map_ref| {
         let workspace_map = WorkspaceMap::new(map_ref, belongings.clone());
@@ -229,7 +191,6 @@ impl WorkspaceArray {
           .map(|workspace_id| (workspace_id, workspace_map))
       })
       .collect::<HashMap<String, WorkspaceMap>>();
-    drop(txn);
     Self {
       container: array_ref,
       workspaces: RwLock::new(workspace_maps),
@@ -319,5 +280,75 @@ impl From<WorkspaceItem> for lib0Any {
   fn from(item: WorkspaceItem) -> Self {
     let json = serde_json::to_string(&item).unwrap();
     lib0Any::from_json(&json).unwrap()
+  }
+}
+
+fn create_folder(collab: Collab, context: FolderContext) -> Folder {
+  let (folder, workspaces, views, trash, meta, belongings) = collab.with_transact_mut(|txn| {
+    let folder = collab.create_map_with_txn(txn, FOLDER);
+    let workspaces = folder.insert_array_with_txn::<WorkspaceItem>(txn, WORKSPACES, vec![]);
+    let views = folder.insert_map_with_txn(txn, VIEWS);
+    let trash = folder.insert_array_with_txn::<TrashRecord>(txn, TRASH, vec![]);
+    let meta = folder.insert_map_with_txn(txn, META);
+    let belongings = folder.insert_map_with_txn(txn, BELONGINGS);
+
+    let belongings = Rc::new(BelongingMap::new(belongings));
+    let workspaces = WorkspaceArray::new(txn, workspaces, belongings.clone());
+    let views = Rc::new(ViewsMap::new(
+      views,
+      context.view_change_tx,
+      belongings.clone(),
+    ));
+    let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx);
+    (folder, workspaces, views, trash, meta, belongings)
+  });
+
+  Folder {
+    inner: collab,
+    root: folder,
+    workspaces,
+    views,
+    trash,
+    meta,
+    belongings,
+  }
+}
+
+fn is_folder_exist(txn: Transaction, collab: &Collab) -> bool {
+  collab.get_map_with_txn(&txn, vec![FOLDER]).is_some()
+}
+
+fn get_folder(collab: Collab, context: FolderContext) -> Folder {
+  let txn = collab.transact();
+  let folder = collab.get_map_with_txn(&txn, vec![FOLDER]).unwrap();
+  let workspaces = collab
+    .get_array_with_txn(&txn, vec![FOLDER, WORKSPACES])
+    .unwrap();
+  let views = collab.get_map_with_txn(&txn, vec![FOLDER, VIEWS]).unwrap();
+  let trash = collab
+    .get_array_with_txn(&txn, vec![FOLDER, TRASH])
+    .unwrap();
+  let meta = collab.get_map_with_txn(&txn, vec![FOLDER, META]).unwrap();
+  let belongings = collab
+    .get_map_with_txn(&txn, vec![FOLDER, BELONGINGS])
+    .unwrap();
+
+  let belongings = Rc::new(BelongingMap::new(belongings));
+  let workspaces = WorkspaceArray::new(&txn, workspaces, belongings.clone());
+  let views = Rc::new(ViewsMap::new(
+    views,
+    context.view_change_tx,
+    belongings.clone(),
+  ));
+  let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx);
+  drop(txn);
+  Folder {
+    inner: collab,
+    root: folder,
+    workspaces,
+    views,
+    trash,
+    meta,
+    belongings,
   }
 }

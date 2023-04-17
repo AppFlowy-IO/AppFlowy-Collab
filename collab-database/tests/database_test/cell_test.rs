@@ -2,7 +2,7 @@ use crate::helper::{create_database_with_default_data, TestTextCell};
 use collab::core::any_map::AnyMapExtension;
 
 #[test]
-fn get_cell_for_field_test() {
+fn get_cells_for_field_test() {
   let database_test = create_database_with_default_data(1, "1");
 
   let cells = database_test.get_cells_for_field("v1", "f1");
@@ -13,6 +13,14 @@ fn get_cell_for_field_test() {
 
   let cells = database_test.get_cells_for_field("v1", "f3");
   assert_eq!(cells.len(), 2);
+}
+
+#[test]
+fn get_cell_for_field_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let cell = database_test.get_cell("f1", 1.into()).unwrap().cell;
+  let text_cell = TestTextCell::from(cell);
+  assert_eq!(text_cell.0, "1f1cell");
 }
 
 #[test]

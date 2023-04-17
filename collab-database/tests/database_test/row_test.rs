@@ -1,8 +1,8 @@
-use crate::helper::{create_database, create_database_with_default_data};
 use collab_database::block::CreateRowParams;
 use collab_database::database::gen_row_id;
-
 use collab_database::views::CreateViewParams;
+
+use crate::helper::{create_database, create_database_with_default_data};
 
 #[test]
 fn create_row_shared_by_two_view_test() {
@@ -11,7 +11,7 @@ fn create_row_shared_by_two_view_test() {
     view_id: "v2".to_string(),
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
 
   let row_id = gen_row_id();
   database_test.push_row(CreateRowParams {
@@ -32,7 +32,7 @@ fn delete_row_shared_by_two_view_test() {
     view_id: "v2".to_string(),
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
 
   let row_order = database_test
     .push_row(CreateRowParams {
@@ -40,7 +40,7 @@ fn delete_row_shared_by_two_view_test() {
       ..Default::default()
     })
     .unwrap();
-  database_test.remove_row(row_order.id, row_order.block_id);
+  database_test.remove_row(row_order.id);
 
   let view_1 = database_test.views.get_view("v1").unwrap();
   let view_2 = database_test.views.get_view("v2").unwrap();
@@ -82,7 +82,7 @@ fn move_row_in_views_test() {
     view_id: "v2".to_string(),
     ..Default::default()
   };
-  database_test.create_view(params);
+  database_test.create_linked_view(params);
 
   database_test.views.update_view("v1", |update| {
     update.move_row_order(2, 1);
@@ -107,7 +107,7 @@ fn insert_row_in_views_test() {
     prev_row_id: Some(2.into()),
     ..Default::default()
   };
-  database_test.create_row(row);
+  database_test.create_row("v1", row);
 
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, 1.into());
@@ -123,7 +123,7 @@ fn insert_row_at_front_in_views_test() {
     id: 4.into(),
     ..Default::default()
   };
-  database_test.create_row(row);
+  database_test.create_row("v1", row);
 
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, 4.into());
@@ -140,11 +140,43 @@ fn insert_row_at_last_in_views_test() {
     prev_row_id: Some(3.into()),
     ..Default::default()
   };
-  database_test.create_row(row);
+  database_test.create_row("v1", row);
 
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, 1.into());
   assert_eq!(rows[1].id, 2.into());
   assert_eq!(rows[2].id, 3.into());
   assert_eq!(rows[3].id, 4.into());
+}
+
+#[test]
+fn duplicate_row_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let rows = database_test.get_rows_for_view("v1");
+  assert_eq!(rows.len(), 3);
+
+  let (index, row_order) = database_test.duplicate_row("v1", 2.into()).unwrap();
+  assert_eq!(index, 2);
+
+  let rows = database_test.get_rows_for_view("v1");
+  assert_eq!(rows.len(), 4);
+
+  assert_eq!(rows[0].id, 1.into());
+  assert_eq!(rows[1].id, 2.into());
+  assert_eq!(rows[2].id, row_order.id);
+  assert_eq!(rows[3].id, 3.into());
+}
+
+#[test]
+fn duplicate_last_row_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let rows = database_test.get_rows_for_view("v1");
+  assert_eq!(rows.len(), 3);
+
+  let (index, row_order) = database_test.duplicate_row("v1", 3.into()).unwrap();
+  assert_eq!(index, 3);
+
+  let rows = database_test.get_rows_for_view("v1");
+  assert_eq!(rows.len(), 4);
+  assert_eq!(rows[3].id, row_order.id);
 }

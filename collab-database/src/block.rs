@@ -1,9 +1,8 @@
-use crate::database::timestamp;
-use crate::rows::{
-  row_from_map_ref, row_from_value, row_order_from_value, BlockId, Cells, Row, RowBuilder, RowId,
-  RowMetaMap, RowUpdate,
-};
-use crate::views::RowOrder;
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
+use std::sync::Arc;
+
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::{
   Collab, CollabBuilder, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
@@ -11,10 +10,13 @@ use collab::preclude::{
 use collab_persistence::CollabKV;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
-use std::sync::Arc;
+
+use crate::database::timestamp;
+use crate::rows::{
+  cell_from_map_ref, create_row_meta, get_row_meta, row_from_map_ref, row_from_value,
+  row_order_from_value, BlockId, Cell, Cells, Row, RowBuilder, RowId, RowMetaMap, RowUpdate,
+};
+use crate::views::RowOrder;
 
 const NUM_OF_BLOCKS: i64 = 10;
 
@@ -26,12 +28,11 @@ pub struct Blocks {
 impl Blocks {
   pub fn new(uid: i64, db: Arc<CollabKV>) -> Self {
     let blocks = RwLock::new(HashMap::new());
-    let disk_plugin = CollabDiskPlugin::new(uid, db).unwrap();
     let mut write_guard = blocks.write();
     for i in 0..NUM_OF_BLOCKS {
       let block_id = i;
       let collab = CollabBuilder::new(uid, format!("block_{}", block_id))
-        .with_plugin(disk_plugin.clone())
+        .with_plugin(CollabDiskPlugin::new(uid, db.clone()).unwrap())
         .build();
       collab.initial();
 
@@ -50,24 +51,37 @@ impl Blocks {
     blocks.get(&block_id).cloned()
   }
 
-  pub fn create_rows(&self, params: Vec<CreateRowParams>) -> Vec<RowOrder> {
-    if params.is_empty() {
+  pub fn create_rows(&self, create_row_params: Vec<CreateRowParams>) -> Vec<RowOrder> {
+    if create_row_params.is_empty() {
       return vec![];
     }
+    let mut row_orders: Vec<RowOrder> = vec![];
+    let mut block_rows: HashMap<BlockId, Vec<CreateRowParams>> = HashMap::new();
+    for params in create_row_params {
+      let block_id = block_id_from_row_id(params.id);
+      row_orders.push(RowOrder {
+        id: params.id,
+        block_id,
+        height: params.height,
+      });
 
-    let block_id = block_id_from_row_id(params[0].id);
-    if let Some(block) = self.get_block(block_id) {
-      let rows = params
-        .into_iter()
-        .map(|params| Row::from((block_id, params)))
-        .collect::<Vec<Row>>();
-      let row_orders = rows.iter().map(RowOrder::from).collect();
-      block.insert_rows(rows);
-      row_orders
-    } else {
-      dbg!("Can't find the block with block_id: {}", block_id);
-      vec![]
+      block_rows
+        .entry(block_id)
+        .or_insert_with(std::vec::Vec::new)
+        .push(params);
     }
+
+    for (block_id, params) in block_rows.into_iter() {
+      if let Some(block) = self.get_block(block_id) {
+        let rows = params
+          .into_iter()
+          .map(|params| Row::from((block_id, params)))
+          .collect::<Vec<Row>>();
+        block.insert_rows(rows);
+      }
+    }
+
+    row_orders
   }
 
   pub fn get_row(&self, row_id: RowId) -> Option<Row> {
@@ -85,7 +99,7 @@ impl Blocks {
       let row: Row = (block_id, row).into();
       let row_order: RowOrder = RowOrder::from(&row);
 
-      println!("Insert row:{:?} to block:{:?}", row.id, block_id);
+      tracing::trace!("Insert row:{:?} to block:{:?}", row.id, block_id);
       block.create_row(row);
       Some(row_order)
     } else {
@@ -94,11 +108,21 @@ impl Blocks {
     }
   }
 
-  pub fn remove_row(&self, row_id: RowId, block_id: BlockId) {
+  pub fn remove_row(&self, row_id: RowId) {
+    let block_id = block_id_from_row_id(row_id);
     if let Some(block) = self.get_block(block_id) {
       let row_id = row_id.to_string();
       block.delete_row(&row_id);
     }
+  }
+
+  pub fn get_cell(&self, field_id: &str, row_id: RowId) -> Option<Cell> {
+    let block_id = block_id_from_row_id(row_id);
+    self
+      .blocks
+      .read()
+      .get(&block_id)?
+      .get_cell(row_id, field_id)
   }
 
   pub fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
@@ -143,15 +167,16 @@ pub struct CreateRowParams {
   pub cells: Cells,
   pub height: i32,
   pub visibility: bool,
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub prev_row_id: Option<RowId>,
 }
 
 impl CreateRowParams {
-  pub fn new(id: RowId, cells: Cells, height: i32) -> Self {
+  pub fn new(id: RowId) -> Self {
     Self {
       id,
-      cells,
-      height,
+      cells: Cells::default(),
+      height: 60,
       visibility: true,
       prev_row_id: None,
     }
@@ -172,19 +197,6 @@ impl From<(BlockId, CreateRowParams)> for Row {
   }
 }
 
-impl From<Row> for CreateRowParams {
-  fn from(row: Row) -> Self {
-    Self {
-      id: row.id,
-      cells: row.cells,
-      height: row.height,
-      visibility: row.visibility,
-      prev_row_id: None,
-    }
-  }
-}
-
-#[derive(Clone)]
 pub struct Block {
   #[allow(dead_code)]
   collab: Collab,
@@ -195,21 +207,42 @@ pub struct Block {
 
 impl Block {
   fn new(block_id: BlockId, collab: Collab) -> Block {
-    let (container, metas) = collab.with_transact_mut(|txn| {
-      let block = collab
-        .get_map_with_txn(txn, vec![BLOCK])
-        .unwrap_or_else(|| collab.create_map_with_txn(txn, BLOCK));
+    let (block, meta) = {
+      let txn = collab.transact();
+      let block = collab.get_map_with_txn(&txn, vec![BLOCK]);
+      let meta = match &block {
+        None => None,
+        Some(block) => get_row_meta(&txn, block),
+      };
+      (block, meta)
+    };
 
-      let metas = RowMetaMap::new_with_txn(txn, &block);
-
-      (block, metas)
-    });
-
-    Block {
-      collab,
-      container,
-      block_id,
-      metas,
+    match block {
+      None => {
+        let (block, meta) = collab.with_transact_mut(|txn| {
+          let block = collab.create_map_with_txn(txn, BLOCK);
+          let meta = create_row_meta(txn, &block);
+          (block, meta)
+        });
+        Block {
+          collab,
+          container: block,
+          block_id,
+          metas: RowMetaMap::new(meta),
+        }
+      },
+      Some(block) => {
+        let meta = match meta {
+          None => collab.with_transact_mut(|txn| create_row_meta(txn, &block)),
+          Some(meta) => meta,
+        };
+        Block {
+          collab,
+          container: block,
+          block_id,
+          metas: RowMetaMap::new(meta),
+        }
+      },
     }
   }
 
@@ -251,6 +284,13 @@ impl Block {
     let row_id = row_id.into().to_string();
     let map_ref = self.container.get_map_with_txn(txn, &row_id)?;
     row_from_map_ref(&map_ref.into_inner(), txn)
+  }
+
+  pub fn get_cell<R: Into<RowId>>(&self, row_id: R, field_id: &str) -> Option<Cell> {
+    let txn = self.container.transact();
+    let row_id = row_id.into().to_string();
+    let map_ref = self.container.get_map_with_txn(&txn, &row_id)?;
+    cell_from_map_ref(&map_ref.into_inner(), &txn, field_id)
   }
 
   pub fn get_all_rows(&self) -> Vec<Row> {

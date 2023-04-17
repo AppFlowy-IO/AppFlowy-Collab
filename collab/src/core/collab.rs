@@ -26,7 +26,6 @@ use yrs::{
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 pub type MapSubscription = Subscription<MapSubscriptionCallback>;
 
-#[derive(Clone)]
 pub struct Collab {
   doc: Doc,
   #[allow(dead_code)]
@@ -290,17 +289,17 @@ impl Collab {
 
 fn observe_doc(
   doc: &Doc,
-  cid: String,
+  oid: String,
   plugins: Plugins,
 ) -> (UpdateSubscription, AfterTransactionSubscription) {
-  let cloned_cid = cid.clone();
+  let cloned_oid = oid.clone();
   let cloned_plugins = plugins.clone();
   let update_sub = doc
     .observe_update_v1(move |txn, event| {
       cloned_plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.did_receive_update(&cloned_cid, txn, &event.update));
+        .for_each(|plugin| plugin.did_receive_update(&cloned_oid, txn, &event.update));
     })
     .unwrap();
 
@@ -309,7 +308,7 @@ fn observe_doc(
       plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.after_transaction(&cid, txn));
+        .for_each(|plugin| plugin.after_transaction(&oid, txn));
     })
     .unwrap();
 

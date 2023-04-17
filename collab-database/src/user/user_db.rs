@@ -1,18 +1,20 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use collab::plugin_impl::disk::CollabDiskPlugin;
+use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
+use collab::preclude::updates::decoder::Decode;
+use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, Update};
+use collab_persistence::snapshot::CollabSnapshot;
+use collab_persistence::CollabKV;
+use parking_lot::RwLock;
+
 use crate::block::Blocks;
 use crate::database::{Database, DatabaseContext, DuplicatedDatabase};
 use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::user::relation::{DatabaseRelation, RowRelationMap};
 use crate::views::{CreateDatabaseParams, CreateViewParams};
-use collab::plugin_impl::disk::CollabDiskPlugin;
-use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
-use collab::preclude::updates::decoder::Decode;
-use collab::preclude::{lib0Any, Collab, CollabBuilder, MapPrelim, Update};
-use collab_persistence::snapshot::CollabSnapshot;
-use collab_persistence::CollabKV;
-use parking_lot::RwLock;
-use std::collections::HashMap;
-use std::sync::Arc;
 
 pub struct UserDatabase {
   uid: i64,
@@ -29,28 +31,20 @@ const DATABASES: &str = "databases";
 
 impl UserDatabase {
   pub fn new(uid: i64, db: Arc<CollabKV>) -> Self {
+    tracing::trace!("Init user database: {}", uid);
+    // user database
     let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
     let snapshot_plugin = CollabSnapshotPlugin::new(uid, db.clone(), 5).unwrap();
-    let collab = CollabBuilder::new(uid, "user_database")
+    let collab = CollabBuilder::new(uid, format!("{}_user_database", uid))
       .with_plugin(disk_plugin)
       .with_plugin(snapshot_plugin)
       .build();
     collab.initial();
-    let (databases, relation) = collab.with_transact_mut(|txn| {
-      // { DATABASES: {:} }
-      let databases = collab
-        .get_array_with_txn(txn, vec![DATABASES])
-        .unwrap_or_else(|| {
-          collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn, DATABASES, vec![])
-        });
-
-      let relation = create_relations_collab(uid, db.clone());
-      (databases, relation)
-    });
-
+    let databases = create_user_database_if_not_exist(&collab);
     let database_vec = DatabaseArray::new(databases);
-    let database_relation = DatabaseRelation::new(relation);
+    let database_relation = DatabaseRelation::new(create_relations_collab(uid, db.clone()));
     let blocks = Blocks::new(uid, db.clone());
+
     Self {
       uid,
       db,
@@ -69,10 +63,10 @@ impl UserDatabase {
     let database = self.open_handlers.read().get(database_id).cloned();
     match database {
       None => {
-        let context = DatabaseContext {
-          collab: self.collab_for_database(database_id),
-          blocks: self.blocks.clone(),
-        };
+        let blocks = self.blocks.clone();
+        let collab = self.collab_for_database(database_id);
+        collab.initial();
+        let context = DatabaseContext { collab, blocks };
         let database = Arc::new(Database::get_or_create(database_id, context).ok()?);
         self
           .open_handlers
@@ -95,26 +89,43 @@ impl UserDatabase {
       .map(|record| record.database_id)
   }
 
+  /// Create database with inline view
   pub fn create_database(
     &self,
-    database_id: &str,
     params: CreateDatabaseParams,
   ) -> Result<Arc<Database>, DatabaseError> {
-    let context = DatabaseContext {
-      collab: self.collab_for_database(database_id),
-      blocks: self.blocks.clone(),
-    };
+    debug_assert!(!params.database_id.is_empty());
+    debug_assert!(!params.view_id.is_empty());
+
+    let collab = self.collab_for_database(&params.database_id);
+    let blocks = self.blocks.clone();
+    let context = DatabaseContext { collab, blocks };
+    context.collab.initial();
+
     self
       .database_records
-      .add_database(database_id, &params.view_id, &params.name);
-    let database = Arc::new(Database::create_with_view(database_id, params, context)?);
+      .add_database(&params.database_id, &params.view_id, &params.name);
+    let database_id = params.database_id.clone();
+    let database = Arc::new(Database::create_with_inline_view(params, context)?);
     self
       .open_handlers
       .write()
-      .insert(database_id.to_string(), database.clone());
+      .insert(database_id, database.clone());
     Ok(database)
   }
 
+  pub fn create_database_with_duplicated_data(
+    &self,
+    data: DuplicatedDatabase,
+  ) -> Result<Arc<Database>, DatabaseError> {
+    let DuplicatedDatabase { view, fields, rows } = data;
+    let params = CreateDatabaseParams::from_view(view, fields, rows);
+    let database = self.create_database(params)?;
+    Ok(database)
+  }
+
+  /// Create reference view that shares the same data with the inline view's database
+  /// If the inline view is deleted, the reference view will be deleted too.
   pub fn create_database_view(&self, params: CreateViewParams) {
     if let Some(database) = self.get_database(&params.database_id) {
       self
@@ -122,7 +133,7 @@ impl UserDatabase {
         .update_database(&params.database_id, |record| {
           record.views.insert(params.view_id.clone());
         });
-      database.create_view(params);
+      database.create_linked_view(params);
     }
   }
 
@@ -173,27 +184,22 @@ impl UserDatabase {
     }
   }
 
+  /// Duplicate the database that contains the view.
+  pub fn duplicate_database(&self, view_id: &str) -> Result<Arc<Database>, DatabaseError> {
+    let DuplicatedDatabase { view, fields, rows } = self.make_duplicate_database_data(view_id)?;
+    let params = CreateDatabaseParams::from_view(view, fields, rows);
+    let database = self.create_database(params)?;
+    Ok(database)
+  }
+
   /// Duplicate the view in the database.
-  /// If the id of the view equal to the inline view id of the database, then it will
-  /// duplicate the database view data and database data as well. Otherwise only
-  /// duplicate the view data.
-  pub fn duplicate_view(
+  pub fn make_duplicate_database_data(
     &self,
-    database_id: &str,
     view_id: &str,
-  ) -> Result<Arc<Database>, DatabaseError> {
-    if let Some(database) = self.get_database(database_id) {
-      if database.is_inline_view(view_id) {
-        let DuplicatedDatabase { view, fields } = database.duplicate_data();
-        let params = CreateDatabaseParams::from_view(view, fields);
-        let database = self.create_database(database_id, params)?;
-        Ok(database)
-      } else {
-        if database.duplicate_view(view_id).is_none() {
-          return Err(DatabaseError::DatabaseViewNotExist);
-        }
-        Ok(database)
-      }
+  ) -> Result<DuplicatedDatabase, DatabaseError> {
+    if let Some(database) = self.get_database_with_view_id(view_id) {
+      let data = database.duplicate_database_data();
+      Ok(data)
     } else {
       Err(DatabaseError::DatabaseNotExist)
     }
@@ -210,6 +216,20 @@ impl UserDatabase {
       .with_plugin(disk_plugin)
       .with_plugin(snapshot_plugin)
       .build()
+  }
+}
+
+fn create_user_database_if_not_exist(collab: &Collab) -> ArrayRefWrapper {
+  let array = {
+    let txn = collab.transact();
+    collab.get_array_with_txn(&txn, vec![DATABASES])
+  };
+
+  match array {
+    None => collab.with_transact_mut(|txn| {
+      collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn, DATABASES, vec![])
+    }),
+    Some(array) => array,
   }
 }
 

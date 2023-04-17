@@ -1,8 +1,9 @@
-use crate::helper::{user_database_test, UserDatabaseTest};
 use collab::core::any_map::AnyMapExtension;
 use collab_database::block::CreateRowParams;
 use collab_database::rows::new_cell_builder;
 use collab_database::views::CreateDatabaseParams;
+
+use crate::helper::{user_database_test, UserDatabaseTest};
 
 #[test]
 fn insert_cell_test() {
@@ -57,13 +58,11 @@ fn update_cell_test() {
 fn update_not_exist_row_test() {
   let test = user_database_test(1);
   let database = test
-    .create_database(
-      "d1",
-      CreateDatabaseParams {
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
 
   database.update_row(1, |_row_update| {});
@@ -74,19 +73,20 @@ fn update_not_exist_row_test() {
 fn user_database_with_default_row() -> UserDatabaseTest {
   let test = user_database_test(1);
   let database = test
-    .create_database(
-      "d1",
-      CreateDatabaseParams {
-        view_id: "v1".to_string(),
-        ..Default::default()
-      },
-    )
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      view_id: "v1".to_string(),
+      ..Default::default()
+    })
     .unwrap();
 
-  database.create_row(CreateRowParams {
-    id: 1.into(),
-    ..Default::default()
-  });
+  database.create_row(
+    "v1",
+    CreateRowParams {
+      id: 1.into(),
+      ..Default::default()
+    },
+  );
 
   test
 }

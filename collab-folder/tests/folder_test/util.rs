@@ -1,3 +1,7 @@
+use std::ops::Deref;
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
 use collab_folder::core::{
@@ -5,9 +9,7 @@ use collab_folder::core::{
   ViewLayout, Workspace,
 };
 use collab_persistence::CollabKV;
-use std::ops::Deref;
-use std::path::PathBuf;
-use std::sync::Arc;
+
 use tempfile::TempDir;
 
 pub struct FolderTest {
@@ -43,7 +45,7 @@ pub fn create_folder(id: &str) -> FolderTest {
     view_change_tx: Some(view_tx),
     trash_change_tx: Some(trash_tx),
   };
-  let folder = Folder::create(collab, context);
+  let folder = Folder::get_or_create(collab, context);
   FolderTest {
     folder,
     cleaner,

@@ -1,13 +1,15 @@
-use crate::util::{
-  apply_actions, create_document, delete_block, get_document_data, insert_block, move_block,
-  update_block,
-};
+use std::collections::HashMap;
+
 use collab_document::blocks::{
   Block, BlockAction, BlockActionPayload, BlockActionType, EXTERNAL_TYPE_TEXT,
 };
 use nanoid::nanoid;
 use serde_json::{json, to_value};
-use std::collections::HashMap;
+
+use crate::util::{
+  apply_actions, create_document, delete_block, get_document_data, insert_block, move_block,
+  update_block,
+};
 
 #[test]
 fn create_block_test() {
@@ -19,7 +21,7 @@ fn create_block_test() {
   let page = &blocks[page_id];
   assert_eq!(page.id, page_id);
   assert_eq!(page.ty, "page");
-  assert_eq!(page.data.is_empty(), false);
+  assert!(!page.data.is_empty());
   assert_eq!(&page.parent, "");
   let page_external_id = &page.external_id;
   let page_children_id = &page.children;
@@ -58,7 +60,7 @@ fn insert_block_test() {
       parent: page_id.to_string(),
       ty: "text".to_string(),
       data: HashMap::new(),
-      external_id: Some(block_external_id.to_string()),
+      external_id: Some(block_external_id),
       external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
       id: block_id.to_string(),
       children: block_children_id.to_string(),
@@ -73,8 +75,8 @@ fn insert_block_test() {
       data: HashMap::new(),
       external_id: None,
       external_type: None,
-      id: nanoid!(10).to_string(),
-      children: nanoid!(10).to_string(),
+      id: nanoid!(10),
+      children: nanoid!(10),
     },
     "".to_string(),
   );
@@ -83,7 +85,7 @@ fn insert_block_test() {
   assert!(block_child.is_ok());
   assert!(block.is_ok());
   let block = block.unwrap();
-  assert_eq!(block.parent, page_id.to_string());
+  assert_eq!(block.parent, page_id);
   assert_eq!(block.children, block_children_id);
   assert_eq!(block.external_id, None);
   assert_eq!(block.external_type, None);
@@ -123,7 +125,7 @@ fn delete_block_test() {
       parent: page_id.to_string(),
       ty: "text".to_string(),
       data: HashMap::new(),
-      external_id: Some(block_external_id.to_string()),
+      external_id: Some(block_external_id),
       external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
       id: block_id.to_string(),
       children: block_children_id.to_string(),
@@ -136,10 +138,10 @@ fn delete_block_test() {
       parent: block_id.to_string(),
       ty: "text".to_string(),
       data: HashMap::new(),
-      external_id: Some(nanoid!(10).to_string()),
+      external_id: Some(nanoid!(10)),
       external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
-      id: nanoid!(10).to_string(),
-      children: nanoid!(10).to_string(),
+      id: nanoid!(10),
+      children: nanoid!(10),
     },
     "".to_string(),
   )
@@ -173,10 +175,10 @@ fn move_block_test() {
       parent: page_id.to_string(),
       ty: "text".to_string(),
       data: HashMap::new(),
-      external_id: Some(nanoid!(10).to_string()),
+      external_id: Some(nanoid!(10)),
       external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
-      id: nanoid!(10).to_string(),
-      children: nanoid!(10).to_string(),
+      id: nanoid!(10),
+      children: nanoid!(10),
     },
     first_child_id.to_owned(),
   )
@@ -189,10 +191,10 @@ fn move_block_test() {
       parent: block_id.to_string(),
       ty: "text".to_string(),
       data: HashMap::new(),
-      external_id: Some(nanoid!(10).to_string()),
+      external_id: Some(nanoid!(10)),
       external_type: Some(EXTERNAL_TYPE_TEXT.to_string()),
-      id: nanoid!(10).to_string(),
-      children: nanoid!(10).to_string(),
+      id: nanoid!(10),
+      children: nanoid!(10),
     },
     "".to_string(),
   )
@@ -229,8 +231,8 @@ fn update_block_data_test() {
       data: HashMap::new(),
       external_id: None,
       external_type: None,
-      id: nanoid!(10).to_string(),
-      children: nanoid!(10).to_string(),
+      id: nanoid!(10),
+      children: nanoid!(10),
     },
     first_child_id.to_owned(),
   )
@@ -256,10 +258,10 @@ fn apply_actions_test() {
   let mut data = HashMap::new();
   data.insert("delta".to_string(), json!([]));
   let block = Block {
-    id: nanoid!(10).to_string(),
+    id: nanoid!(10),
     ty: "text".to_string(),
     parent: page_id.clone(),
-    children: nanoid!(10).to_string(),
+    children: nanoid!(10),
     external_id: None,
     external_type: None,
     data: data.clone(),
@@ -329,8 +331,8 @@ fn open_document_test() {
       data: HashMap::new(),
       external_id: None,
       external_type: None,
-      id: nanoid!(10).to_string(),
-      children: nanoid!(10).to_string(),
+      id: nanoid!(10),
+      children: nanoid!(10),
     },
     "".to_string(),
   );
@@ -341,13 +343,13 @@ fn open_document_test() {
   let second_block = insert_block(
     &test.document,
     Block {
-      parent: page_id.clone(),
+      parent: page_id,
       ty: "text".to_string(),
       data: HashMap::new(),
       external_id: None,
       external_type: None,
-      id: nanoid!(10).to_string(),
-      children: nanoid!(10).to_string(),
+      id: nanoid!(10),
+      children: nanoid!(10),
     },
     block.id.clone(),
   );

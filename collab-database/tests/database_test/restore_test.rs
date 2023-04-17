@@ -1,10 +1,12 @@
-use crate::helper::{create_database_with_db, restore_database_from_db, DatabaseTest};
-use assert_json_diff::assert_json_eq;
+use std::sync::Arc;
 
 use collab_database::block::CreateRowParams;
 use collab_persistence::CollabKV;
 use serde_json::{json, Value};
-use std::sync::Arc;
+
+use assert_json_diff::assert_json_eq;
+
+use crate::helper::{create_database_with_db, restore_database_from_db, DatabaseTest};
 
 #[test]
 fn restore_row_from_disk_test() {
@@ -46,6 +48,7 @@ fn restore_from_disk_with_different_database_id_test() {
   assert_json_eq!(
     json!( {
       "fields": [],
+      "inline_view": "v1",
       "rows": [],
       "views": [
         {
@@ -75,6 +78,7 @@ fn restore_from_disk_with_different_uid_test() {
   assert_json_eq!(
     json!( {
       "fields": [],
+      "inline_view": "v1",
       "rows": [],
       "views": [
         {
@@ -101,6 +105,7 @@ fn create_database_with_view() -> (Arc<CollabKV>, DatabaseTest, Value) {
   let (db, database_test) = create_database_with_db(1, "1");
   let expected = json!({
     "fields": [],
+    "inline_view": "v1",
     "rows": [],
     "views": [
       {

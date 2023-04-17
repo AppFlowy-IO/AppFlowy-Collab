@@ -1,4 +1,9 @@
 #![allow(clippy::upper_case_acronyms)]
+
+use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
+use std::sync::{Arc, Once};
+
 use anyhow::bail;
 use collab::core::any_map::AnyMapExtension;
 use collab::plugin_impl::disk::CollabDiskPlugin;
@@ -14,10 +19,9 @@ use collab_database::views::{
   SortMapBuilder,
 };
 use collab_persistence::CollabKV;
-use std::ops::{Deref, DerefMut};
-use std::path::PathBuf;
-use std::sync::Arc;
+
 use tempfile::TempDir;
+use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 
 pub struct DatabaseTest {
   database: Database,
@@ -56,9 +60,10 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
     view_id: "v1".to_string(),
+    name: "my first database view".to_string(),
     ..Default::default()
   };
-  let database = Database::create_with_view(database_id, params, context).unwrap();
+  let database = Database::create_with_inline_view(params, context).unwrap();
   DatabaseTest {
     database,
     cleaner: None,
@@ -66,6 +71,16 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
 }
 
 pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabKV>, DatabaseTest) {
+  static START: Once = Once::new();
+  START.call_once(|| {
+    std::env::set_var("RUST_LOG", "collab_persistence=trace");
+    let subscriber = Subscriber::builder()
+      .with_env_filter(EnvFilter::from_default_env())
+      .with_ansi(true)
+      .finish();
+    subscriber.try_init().unwrap();
+  });
+
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(CollabKV::open(path).unwrap());
@@ -82,9 +97,10 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabKV>, D
   let params = CreateDatabaseParams {
     view_id: "v1".to_string(),
     name: "my first grid".to_string(),
+    database_id: database_id.to_string(),
     ..Default::default()
   };
-  let database = Database::create_with_view(database_id, params, context).unwrap();
+  let database = Database::create_with_inline_view(params, context).unwrap();
   (
     db,
     DatabaseTest {
@@ -155,9 +171,9 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
 
-  database_test.insert_field(field_1);
-  database_test.insert_field(field_2);
-  database_test.insert_field(field_3);
+  database_test.push_field(field_1);
+  database_test.push_field(field_2);
+  database_test.push_field(field_3);
 
   database_test
 }

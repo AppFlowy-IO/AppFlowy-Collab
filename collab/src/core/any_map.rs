@@ -1,11 +1,13 @@
-use crate::preclude::{lib0Any, MapRefExtension, YrsValue};
-use lib0::any::Any;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
+
+use lib0::any::Any;
+use serde::{Deserialize, Serialize};
 use yrs::types::Value;
 use yrs::{Array, Map, MapRef, ReadTxn, TransactionMut};
+
+use crate::preclude::{lib0Any, MapRefExtension, YrsValue};
 
 /// A wrapper around `yrs::Map` that provides a more ergonomic API.
 pub trait AnyMapExtension {
@@ -219,7 +221,7 @@ impl<'a> AnyMapExtension for MutAnyMap<'a> {
 
 /// A map that can store any type of value.
 /// It uses [lib0Any] as the value type.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct AnyMap(HashMap<String, lib0Any>);
 
 impl AsRef<AnyMap> for AnyMap {
@@ -244,6 +246,8 @@ impl AnyMapExtension for AnyMap {
   }
 }
 
+// FixMe: https://github.com/georust/geo/issues/391
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for AnyMap {
   fn hash<H: Hasher>(&self, state: &mut H) {
     self.0.iter().for_each(|(_, v)| {

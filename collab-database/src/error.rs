@@ -12,6 +12,9 @@ pub enum DatabaseError {
   #[error("Can not decode the data to update")]
   DecodeUpdate(#[from] collab::preclude::lib0Error),
 
+  #[error(transparent)]
+  SerdeJson(#[from] serde_json::Error),
+
   #[error("Internal error")]
   Internal(#[from] anyhow::Error),
 }

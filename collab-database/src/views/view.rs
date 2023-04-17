@@ -1,12 +1,3 @@
-use crate::block::CreateRowParams;
-use crate::fields::Field;
-
-use crate::views::layout::{DatabaseLayout, LayoutSettings};
-use crate::views::{
-  FieldOrder, FieldOrderArray, FilterArray, FilterMap, GroupSettingArray, GroupSettingMap,
-  LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
-};
-use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 use collab::core::any_array::ArrayMapUpdate;
 use collab::preclude::map::MapPrelim;
 use collab::preclude::{
@@ -14,6 +5,15 @@ use collab::preclude::{
   YrsValue,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::block::CreateRowParams;
+use crate::fields::Field;
+use crate::views::layout::{DatabaseLayout, LayoutSettings};
+use crate::views::{
+  FieldOrder, FieldOrderArray, FilterArray, FilterMap, GroupSettingArray, GroupSettingMap,
+  LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
+};
+use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DatabaseView {
@@ -31,6 +31,11 @@ pub struct DatabaseView {
   pub modified_at: i64,
 }
 
+pub struct ViewDescription {
+  pub id: String,
+  pub name: String,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateViewParams {
   pub database_id: String,
@@ -41,6 +46,21 @@ pub struct CreateViewParams {
   pub filters: Vec<FilterMap>,
   pub groups: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
+}
+
+impl CreateViewParams {
+  pub fn new(database_id: String, view_id: String, name: String, layout: DatabaseLayout) -> Self {
+    Self {
+      database_id,
+      view_id,
+      name,
+      layout,
+      layout_settings: LayoutSettings::default(),
+      filters: vec![],
+      groups: vec![],
+      sorts: vec![],
+    }
+  }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -58,11 +78,13 @@ pub struct CreateDatabaseParams {
 }
 
 impl CreateDatabaseParams {
-  pub fn from_view(view: DatabaseView, fields: Vec<Field>) -> Self {
+  pub fn from_view(view: DatabaseView, fields: Vec<Field>, rows: Vec<CreateRowParams>) -> Self {
     let mut params: Self = view.into();
     params.fields = fields;
+    params.created_rows = rows;
     params
   }
+
   pub fn split(self) -> (Vec<CreateRowParams>, Vec<Field>, CreateViewParams) {
     (
       self.created_rows,
@@ -166,7 +188,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
 
   impl_order_update!(
     set_row_orders,
-    add_row_order,
+    push_row_order,
     remove_row_order,
     move_row_order,
     insert_row_order,
@@ -177,7 +199,7 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
 
   impl_order_update!(
     set_field_orders,
-    add_field_order,
+    push_field_order,
     remove_field_order,
     move_field_order,
     insert_field_order,
@@ -292,6 +314,16 @@ impl<'a, 'b> ViewUpdate<'a, 'b> {
 
 pub fn view_id_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<String> {
   map_ref.get_str_with_txn(txn, VIEW_ID)
+}
+
+pub fn view_description_from_value<T: ReadTxn>(
+  value: YrsValue,
+  txn: &T,
+) -> Option<ViewDescription> {
+  let map_ref = value.to_ymap()?;
+  let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
+  let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();
+  Some(ViewDescription { id, name })
 }
 
 pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<DatabaseView> {
@@ -421,10 +453,10 @@ pub trait OrderArray {
     &self,
     txn: &mut TransactionMut,
     object: Self::Object,
-    prev_object_id: Option<String>,
+    prev_object_id: Option<&String>,
   ) {
     if let Some(prev_object_id) = prev_object_id {
-      match self.get_row_position_with_txn(txn, &prev_object_id) {
+      match self.get_position_with_txn(txn, &prev_object_id.to_owned()) {
         None => {
           self.array_ref().push_back(txn, object);
         },
@@ -460,18 +492,20 @@ pub trait OrderArray {
   fn move_to(&self, txn: &mut TransactionMut, from: u32, to: u32) {
     let array_ref = self.array_ref();
     if let Some(YrsValue::Any(value)) = array_ref.get(txn, from) {
-      array_ref.remove(txn, from);
-      array_ref.insert(txn, to, value);
+      if to <= array_ref.len(txn) {
+        array_ref.remove(txn, from);
+        array_ref.insert(txn, to, value);
+      }
     }
   }
 
-  fn get_row_position_with_txn<T: ReadTxn>(&self, txn: &T, row_id: &str) -> Option<u32> {
+  fn get_position_with_txn<T: ReadTxn>(&self, txn: &T, id: &str) -> Option<u32> {
     self
       .array_ref()
       .iter(txn)
       .position(|value| match self.object_from_value_with_txn(value, txn) {
         None => false,
-        Some(order) => order.identify_id() == row_id,
+        Some(order) => order.identify_id() == id,
       })
       .map(|pos| pos as u32)
   }
