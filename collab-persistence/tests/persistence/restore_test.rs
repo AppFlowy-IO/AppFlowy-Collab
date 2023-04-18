@@ -1,11 +1,13 @@
-use crate::util::db;
-
 use std::thread;
+
+use collab_persistence::CollabKV;
 use yrs::{Doc, GetString, Text, Transact};
+
+use crate::util::db;
 
 #[test]
 fn single_thread_test() {
-  let db = db();
+  let (path, db) = db();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
     let doc = Doc::new();
@@ -21,7 +23,9 @@ fn single_thread_test() {
       db.doc(1).push_update(&oid, &update).unwrap();
     }
   }
+  drop(db);
 
+  let db = CollabKV::open(path.clone()).unwrap();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
     let doc = Doc::new();
@@ -37,7 +41,7 @@ fn single_thread_test() {
 
 #[test]
 fn multiple_thread_test() {
-  let db = db();
+  let (path, db) = db();
   let mut handles = vec![];
   for i in 0..100 {
     let cloned_db = db.clone();
@@ -62,7 +66,9 @@ fn multiple_thread_test() {
   for handle in handles {
     handle.join().unwrap();
   }
+  drop(db);
 
+  let db = CollabKV::open(path.clone()).unwrap();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
     let doc = Doc::new();

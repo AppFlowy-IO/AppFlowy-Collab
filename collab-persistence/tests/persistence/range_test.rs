@@ -4,7 +4,7 @@ use crate::util::db;
 
 #[test]
 fn id_test() {
-  let db = db();
+  let db = db().1;
   db.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
   db.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
   db.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
@@ -33,7 +33,7 @@ fn id_test() {
 
 #[test]
 fn range_key_test() {
-  let db = db();
+  let db = db().1;
   db.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
   db.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
   db.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
