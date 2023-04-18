@@ -16,10 +16,19 @@ pub struct DatabaseSerde {
 impl DatabaseSerde {
   pub fn from_database(database: &Database) -> DatabaseSerde {
     let txn = database.root.transact();
-    let views = database.views.get_all_views_with_txn(&txn);
-    let fields = database.fields.get_all_fields_with_txn(&txn);
     let inline_view = database.metas.get_inline_view_with_txn(&txn);
-    let rows = database.get_database_rows_with_txn(&txn);
+    let views = database.views.get_all_views_with_txn(&txn);
+
+    let fields = match &inline_view {
+      None => vec![],
+      Some(view_id) => database.get_fields_with_txn(&txn, view_id, None),
+    };
+
+    let rows = match &inline_view {
+      None => vec![],
+      Some(view_id) => database.get_rows_for_view_with_txn(&txn, view_id),
+    };
+
     Self {
       views,
       rows,

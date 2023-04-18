@@ -1,12 +1,11 @@
+use crate::database_test::helper::{create_database, create_database_with_default_data};
 use collab_database::fields::Field;
 use collab_database::views::CreateViewParams;
-
-use crate::helper::{create_database, create_database_with_default_data};
 
 #[test]
 fn create_single_field_test() {
   let database_test = create_database(1, "1");
-  database_test.push_field(Field::new(
+  database_test.create_field(Field::new(
     "f1".to_string(),
     "text field".to_string(),
     0,
@@ -56,7 +55,7 @@ fn duplicate_field_test2() {
 fn create_multiple_field_test() {
   let database_test = create_database(1, "1");
   for i in 0..10 {
-    database_test.push_field(Field::new(
+    database_test.create_field(Field::new(
       format!("f{}", i),
       format!("text field {}", i),
       0,
@@ -72,7 +71,7 @@ fn create_multiple_field_test() {
 fn delete_field_test() {
   let database_test = create_database(1, "1");
   for i in 0..3 {
-    database_test.push_field(Field::new(
+    database_test.create_field(Field::new(
       format!("f{}", i),
       format!("text field {}", i),
       0,
@@ -89,7 +88,7 @@ fn delete_field_test() {
 fn delete_field_in_views_test() {
   let database_test = create_database(1, "1");
   for i in 0..3 {
-    database_test.push_field(Field::new(
+    database_test.create_field(Field::new(
       format!("f{}", i),
       format!("text field {}", i),
       0,
@@ -119,7 +118,7 @@ fn field_order_in_view_test() {
   };
   database_test.create_linked_view(params);
   for i in 0..10 {
-    database_test.push_field(Field::new(
+    database_test.create_field(Field::new(
       format!("f{}", i),
       format!("text field {}", i),
       0,
@@ -140,7 +139,7 @@ fn field_order_in_view_test() {
 fn get_field_in_order_test() {
   let database_test = create_database(1, "1");
   for i in 0..3 {
-    database_test.push_field(Field::new(
+    database_test.create_field(Field::new(
       format!("f{}", i),
       format!("text field {}", i),
       0,
@@ -171,7 +170,7 @@ fn move_field_test() {
   database_test.create_linked_view(params);
 
   for i in 0..3 {
-    database_test.push_field(Field::new(
+    database_test.create_field(Field::new(
       format!("f{}", i),
       format!("text field {}", i),
       0,
@@ -198,7 +197,7 @@ fn move_field_test() {
 fn move_field_to_out_of_index_test() {
   let database_test = create_database(1, "1");
   for i in 0..3 {
-    database_test.push_field(Field::new(
+    database_test.create_field(Field::new(
       format!("f{}", i),
       format!("text field {}", i),
       0,

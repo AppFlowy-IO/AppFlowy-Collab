@@ -1,12 +1,11 @@
-use std::sync::Arc;
-
+use crate::database_test::helper::{
+  create_database_with_db, restore_database_from_db, DatabaseTest,
+};
+use assert_json_diff::assert_json_eq;
 use collab_database::block::CreateRowParams;
 use collab_persistence::CollabKV;
 use serde_json::{json, Value};
-
-use assert_json_diff::assert_json_eq;
-
-use crate::helper::{create_database_with_db, restore_database_from_db, DatabaseTest};
+use std::sync::Arc;
 
 #[test]
 fn restore_row_from_disk_test() {
@@ -19,8 +18,8 @@ fn restore_row_from_disk_test() {
     id: 2.into(),
     ..Default::default()
   };
-  database_test.push_row(row_1.clone());
-  database_test.push_row(row_2.clone());
+  database_test.create_row(row_1.clone());
+  database_test.create_row(row_2.clone());
   drop(database_test);
 
   let database_test = restore_database_from_db(1, "1", db);

@@ -1,9 +1,8 @@
-use crate::database::timestamp;
-use crate::rows::{
-  cell_from_map_ref, create_row_meta, get_row_meta, row_from_map_ref, row_from_value,
-  row_order_from_value, BlockId, Cell, Cells, Row, RowBuilder, RowId, RowMetaMap, RowUpdate,
-};
-use crate::views::RowOrder;
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
+use std::sync::Arc;
+
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::{
   Collab, CollabBuilder, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
@@ -11,10 +10,13 @@ use collab::preclude::{
 use collab_persistence::CollabKV;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
-use std::sync::Arc;
+
+use crate::database::timestamp;
+use crate::rows::{
+  cell_from_map_ref, create_row_meta, get_row_meta, row_from_map_ref, row_from_value,
+  row_order_from_value, BlockId, Cell, Cells, Row, RowBuilder, RowId, RowMetaMap, RowUpdate,
+};
+use crate::views::RowOrder;
 
 const NUM_OF_BLOCKS: i64 = 10;
 
@@ -188,6 +190,7 @@ pub struct CreateRowParams {
   pub visibility: bool,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub prev_row_id: Option<RowId>,
+  pub timestamp: i64,
 }
 
 impl CreateRowParams {
@@ -198,6 +201,7 @@ impl CreateRowParams {
       height: 60,
       visibility: true,
       prev_row_id: None,
+      timestamp: timestamp(),
     }
   }
 }
@@ -211,7 +215,7 @@ impl From<(BlockId, CreateRowParams)> for Row {
       cells: params.cells,
       height: params.height,
       visibility: params.visibility,
-      created_at: timestamp(),
+      created_at: params.timestamp,
     }
   }
 }

@@ -1,4 +1,4 @@
-use crate::helper::{poll_row_relation_rx, test_timeout, user_database_test};
+use crate::user_test::helper::{poll_row_relation_rx, test_timeout, user_database_test};
 use collab::preclude::MapRefExtension;
 use collab_database::user::{RowRelation, RowRelationChange};
 

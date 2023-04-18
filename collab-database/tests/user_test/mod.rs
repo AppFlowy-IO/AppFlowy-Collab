@@ -1,3 +1,4 @@
+mod async_test;
 mod cell_test;
 mod database_test;
 mod helper;

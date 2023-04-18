@@ -1,23 +1,20 @@
 use std::future::Future;
 use std::ops::Deref;
 use std::sync::Arc;
-use std::sync::Once;
 use std::time::Duration;
 
-use collab::core::any_map::AnyMapExtension;
-use collab::preclude::lib0Any;
 use collab_database::block::CreateRowParams;
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::fields::Field;
-use collab_database::rows::{Cell, CellsBuilder};
+use collab_database::rows::CellsBuilder;
 use collab_database::user::{RowRelationChange, RowRelationUpdateReceiver, UserDatabase};
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::CollabKV;
-use tokio::sync::mpsc::{channel, Receiver};
-
 use rand::Rng;
 use tempfile::TempDir;
-use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
+use tokio::sync::mpsc::{channel, Receiver};
+
+use crate::helper::{make_kv_db, TestTextCell};
 
 pub struct UserDatabaseTest {
   #[allow(dead_code)]
@@ -52,21 +49,6 @@ pub fn user_database_test_with_db(uid: i64, db: Arc<CollabKV>) -> UserDatabaseTe
   }
 }
 
-pub fn make_kv_db() -> Arc<CollabKV> {
-  static START: Once = Once::new();
-  START.call_once(|| {
-    std::env::set_var("RUST_LOG", "collab_persistence=trace,collab_database=trace");
-    let subscriber = Subscriber::builder()
-      .with_env_filter(EnvFilter::from_default_env())
-      .with_ansi(true)
-      .finish();
-    subscriber.try_init().unwrap();
-  });
-  let tempdir = TempDir::new().unwrap();
-  let path = tempdir.into_path();
-  Arc::new(CollabKV::open(path).unwrap())
-}
-
 pub fn user_database_test_with_default_data(uid: i64) -> UserDatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
@@ -95,6 +77,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
     height: 0,
     visibility: true,
     prev_row_id: None,
+    timestamp: 0,
   };
   let row_2 = CreateRowParams {
     id: 2.into(),
@@ -105,6 +88,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
     height: 0,
     visibility: true,
     prev_row_id: None,
+    timestamp: 0,
   };
   let row_3 = CreateRowParams {
     id: 3.into(),
@@ -115,6 +99,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
     height: 0,
     visibility: true,
     prev_row_id: None,
+    timestamp: 0,
   };
   let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
@@ -149,32 +134,6 @@ pub async fn test_timeout<F: Future>(f: F) -> F::Output {
   tokio::time::timeout(Duration::from_secs(2), f)
     .await
     .unwrap()
-}
-
-pub struct TestTextCell(pub String);
-
-impl From<TestTextCell> for Cell {
-  fn from(text_cell: TestTextCell) -> Self {
-    let mut cell = Self::new();
-    cell.insert(
-      "data".to_string(),
-      lib0Any::String(text_cell.0.into_boxed_str()),
-    );
-    cell
-  }
-}
-
-impl From<Cell> for TestTextCell {
-  fn from(cell: Cell) -> Self {
-    let data = cell.get_str_value("data").unwrap();
-    Self(data)
-  }
-}
-
-impl From<&str> for TestTextCell {
-  fn from(s: &str) -> Self {
-    Self(s.to_string())
-  }
 }
 
 pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {

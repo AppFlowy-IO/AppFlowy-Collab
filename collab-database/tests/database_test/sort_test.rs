@@ -1,6 +1,6 @@
+use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
+use crate::helper::{SortCondition, TestSort};
 use collab_database::views::{CreateViewParams, DatabaseLayout};
-
-use crate::helper::{create_database_with_default_data, DatabaseTest, SortCondition, TestSort};
 
 #[test]
 fn create_database_view_with_sort_test() {
@@ -60,6 +60,7 @@ fn remove_all_database_view_sort_test() {
   let view = database_test.views.get_view("v1").unwrap();
   assert!(view.sorts.is_empty());
 }
+
 #[test]
 fn remove_database_view_sort_test() {
   let database_test = create_database_with_two_sorts();

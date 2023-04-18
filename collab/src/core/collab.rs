@@ -78,8 +78,14 @@ impl Collab {
       .plugins
       .read()
       .iter()
-      .for_each(|plugin| plugin.did_init(&self.object_id, &mut txn));
+      .for_each(|plugin| plugin.init(&self.object_id, &mut txn));
     drop(txn);
+
+    self
+      .plugins
+      .read()
+      .iter()
+      .for_each(|plugin| plugin.did_init(&self.object_id));
   }
 
   pub fn observer_attrs<F>(&mut self, f: F) -> MapSubscription

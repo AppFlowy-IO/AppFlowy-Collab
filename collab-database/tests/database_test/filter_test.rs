@@ -1,6 +1,5 @@
-use crate::helper::{
-  create_database_with_default_data, DatabaseTest, TestFieldType, TestFilter, FILTER_CONTENT,
-};
+use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
+use crate::helper::{TestFieldType, TestFilter, FILTER_CONTENT};
 use collab::core::any_map::AnyMapExtension;
 
 #[test]

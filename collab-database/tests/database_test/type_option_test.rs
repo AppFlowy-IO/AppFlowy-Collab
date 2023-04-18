@@ -1,7 +1,5 @@
-use crate::helper::{
-  create_database, DatabaseTest, TestCheckboxTypeOption, TestDateFormat, TestDateTypeOption,
-  TestTimeFormat,
-};
+use crate::database_test::helper::{create_database, DatabaseTest};
+use crate::helper::{TestCheckboxTypeOption, TestDateFormat, TestDateTypeOption, TestTimeFormat};
 use collab::core::any_map::AnyMapExtension;
 use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
 
@@ -123,7 +121,7 @@ fn insert_multi_type_options_test() {
       .build(),
   );
 
-  test.push_field(Field {
+  test.create_field(Field {
     id: "f2".to_string(),
     name: "second field".to_string(),
     field_type: 0,

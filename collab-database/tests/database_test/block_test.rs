@@ -1,11 +1,11 @@
-use crate::helper::create_database;
+use crate::database_test::helper::create_database;
 use collab_database::block::CreateRowParams;
 
 #[test]
 fn create_rows_test() {
   let database_test = create_database(1, "1");
   for i in 0..100 {
-    database_test.create_row(
+    database_test.create_row_in_view(
       "v1",
       CreateRowParams {
         id: i.into(),

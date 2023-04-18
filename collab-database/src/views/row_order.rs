@@ -44,7 +44,7 @@ impl DerefMut for RowOrderArray {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct RowOrder {
   pub id: RowId,
   pub block_id: BlockId,

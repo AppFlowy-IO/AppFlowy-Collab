@@ -178,7 +178,7 @@ impl Database {
   /// This row will be inserted to the end of rows of each view that
   /// reference the given database. Return the row order if the row is
   /// created successfully. Otherwise, return None.
-  pub fn push_row(&self, params: CreateRowParams) -> Option<RowOrder> {
+  pub fn create_row(&self, params: CreateRowParams) -> Option<RowOrder> {
     let row_order = self.blocks.create_row(params)?;
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |update| {
@@ -191,7 +191,11 @@ impl Database {
   /// Create a new row from the given view.
   /// This row will be inserted into corresponding [Block]. The [RowOrder] of this row will
   /// be inserted to each view.
-  pub fn create_row(&self, view_id: &str, params: CreateRowParams) -> Option<(usize, RowOrder)> {
+  pub fn create_row_in_view(
+    &self,
+    view_id: &str,
+    params: CreateRowParams,
+  ) -> Option<(usize, RowOrder)> {
     self
       .root
       .with_transact_mut(|txn| self.create_row_with_txn(txn, view_id, params))
@@ -327,6 +331,7 @@ impl Database {
   }
 
   /// Get all fields in the database
+  /// These fields are ordered by the [FieldOrder] of the view
   /// If field_ids is None, return all fields
   /// If field_ids is Some, return the fields with the given ids
   pub fn get_fields(&self, view_id: &str, field_ids: Option<Vec<String>>) -> Vec<Field> {
@@ -334,6 +339,10 @@ impl Database {
     self.get_fields_with_txn(&txn, view_id, field_ids)
   }
 
+  /// Get all fields in the database
+  /// These fields are ordered by the [FieldOrder] of the view
+  /// If field_ids is None, return all fields
+  /// If field_ids is Some, return the fields with the given ids
   pub fn get_fields_with_txn<T: ReadTxn>(
     &self,
     txn: &T,
@@ -356,13 +365,13 @@ impl Database {
       .collect()
   }
 
-  pub fn push_field(&self, field: Field) {
+  pub fn create_field(&self, field: Field) {
     self.root.with_transact_mut(|txn| {
-      self.push_field_with_txn(txn, field);
+      self.create_field_with_txn(txn, field);
     })
   }
 
-  pub fn push_field_with_txn(&self, txn: &mut TransactionMut, field: Field) {
+  pub fn create_field_with_txn(&self, txn: &mut TransactionMut, field: Field) {
     self.views.update_all_views_with_txn(txn, |update| {
       update.push_field_order(&field);
     });
@@ -667,6 +676,7 @@ impl Database {
           height: row.height,
           visibility: row.visibility,
           prev_row_id: Some(row.id),
+          timestamp: timestamp(),
         };
         self.create_row_with_txn(txn, view_id, params)
       } else {
@@ -696,9 +706,10 @@ impl Database {
     })
   }
 
-  pub fn duplicate_database_data(&self) -> DuplicatedDatabase {
+  pub fn duplicate_database(&self) -> DuplicatedDatabase {
     let inline_view_id = self.get_inline_view_id();
     let txn = self.root.transact();
+    let timestamp = timestamp();
     let mut view = self.views.get_view_with_txn(&txn, &inline_view_id).unwrap();
     let fields = self.get_fields_with_txn(&txn, &inline_view_id, None);
     let row_orders = self.views.get_row_orders_with_txn(&txn, &view.id);
@@ -712,6 +723,7 @@ impl Database {
         height: row.height,
         visibility: row.visibility,
         prev_row_id: None,
+        timestamp,
       })
       .collect::<Vec<CreateRowParams>>();
 
@@ -735,7 +747,7 @@ impl Database {
     let mut field = Field::new(gen_field_id(), name, field_type, false);
     f(&mut field);
     let index = self.root.with_transact_mut(|txn| {
-      self.push_field_with_txn(txn, field.clone());
+      self.create_field_with_txn(txn, field.clone());
       self
         .index_of_field_with_txn(txn, view_id, &field.id)
         .unwrap_or_default()

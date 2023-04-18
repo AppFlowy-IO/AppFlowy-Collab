@@ -1,3 +1,6 @@
+use crate::database_test::helper::{create_database, create_database_with_default_data};
+use crate::helper::TestFilter;
+use assert_json_diff::assert_json_eq;
 use collab::preclude::lib0Any;
 use collab_database::block::CreateRowParams;
 use collab_database::database::{gen_row_id, DuplicatedDatabase};
@@ -7,10 +10,6 @@ use collab_database::views::{
 };
 use nanoid::nanoid;
 use serde_json::json;
-
-use assert_json_diff::assert_json_eq;
-
-use crate::helper::{create_database, create_database_with_default_data, TestFilter};
 
 #[test]
 fn create_initial_database_test() {
@@ -77,7 +76,7 @@ fn create_database_row_test() {
   let database_test = create_database_with_default_data(1, "1");
 
   let row_id = gen_row_id();
-  database_test.push_row(CreateRowParams {
+  database_test.create_row(CreateRowParams {
     id: row_id,
     ..Default::default()
   });
@@ -91,7 +90,7 @@ fn create_database_field_test() {
   let database_test = create_database_with_default_data(1, "1");
 
   let field_id = nanoid!(4);
-  database_test.push_field(Field {
+  database_test.create_field(Field {
     id: field_id.clone(),
     name: "my third field".to_string(),
     ..Default::default()
@@ -206,7 +205,7 @@ fn duplicate_database_view_test() {
 #[test]
 fn duplicate_database_data_serde_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let duplicated_database = database_test.duplicate_database_data();
+  let duplicated_database = database_test.duplicate_database();
 
   let json = duplicated_database.to_json().unwrap();
   let duplicated_database2 = DuplicatedDatabase::from_json(&json).unwrap();

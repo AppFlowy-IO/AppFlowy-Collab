@@ -1,4 +1,5 @@
-use crate::helper::{create_database_with_default_data, TestTextCell};
+use crate::database_test::helper::create_database_with_default_data;
+use crate::helper::TestTextCell;
 use collab::core::any_map::AnyMapExtension;
 
 #[test]

@@ -102,6 +102,9 @@ impl<'a> YrsDocDB<'a> {
   ) -> Result<(), PersistenceError> {
     let doc_id = self.get_or_create_did(object_id.as_ref())?;
     tracing::trace!("[doc:{}]:Insert update for {:?}", doc_id, object_id);
+    // if String::from_utf8(object_id.as_ref().to_vec()).unwrap() == "block_1" {
+    //   tracing::trace!("pause");
+    // }
     self.context.insert_doc_update(doc_id, update.to_vec())?;
     Ok(())
   }

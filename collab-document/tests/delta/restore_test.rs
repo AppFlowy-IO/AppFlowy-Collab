@@ -1,8 +1,10 @@
+use std::thread;
+
+use collab_document::blocks::Block;
+
 use crate::util::{
   create_document, create_document_with_db, db, get_document_data, open_document_with_db,
 };
-use collab_document::blocks::Block;
-use std::thread;
 
 #[test]
 fn restore_default_document_test() {
@@ -11,7 +13,7 @@ fn restore_default_document_test() {
   let test = create_document(uid, doc_id);
   let data1 = test.get_document().unwrap();
 
-  let restore_document = open_document_with_db(uid, doc_id, test.db.clone());
+  let restore_document = open_document_with_db(uid, doc_id, test.db);
   let data2 = restore_document.get_document().unwrap();
 
   assert_eq!(data1, data2);
@@ -37,7 +39,7 @@ fn restore_default_document_test2() {
     test.insert_block(txn, block.clone(), None).unwrap();
   });
 
-  let restore_document = open_document_with_db(uid, doc_id, test.db.clone());
+  let restore_document = open_document_with_db(uid, doc_id, test.db);
   let restore_block = restore_document.get_block("b1").unwrap();
   assert_eq!(restore_block, block);
 }
@@ -48,7 +50,7 @@ fn multiple_thread_create_document_test() {
   let mut handles = vec![];
 
   let create_block = |page_id: String, index: i64| Block {
-    id: format!("block_{}", index).to_string(),
+    id: format!("block_{}", index),
     ty: "".to_string(),
     parent: page_id,
     children: format!("children_{}", index),

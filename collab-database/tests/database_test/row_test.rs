@@ -1,8 +1,7 @@
+use crate::database_test::helper::{create_database, create_database_with_default_data};
 use collab_database::block::CreateRowParams;
 use collab_database::database::gen_row_id;
 use collab_database::views::CreateViewParams;
-
-use crate::helper::{create_database, create_database_with_default_data};
 
 #[test]
 fn create_row_shared_by_two_view_test() {
@@ -14,7 +13,7 @@ fn create_row_shared_by_two_view_test() {
   database_test.create_linked_view(params);
 
   let row_id = gen_row_id();
-  database_test.push_row(CreateRowParams {
+  database_test.create_row(CreateRowParams {
     id: row_id,
     ..Default::default()
   });
@@ -35,7 +34,7 @@ fn delete_row_shared_by_two_view_test() {
   database_test.create_linked_view(params);
 
   let row_order = database_test
-    .push_row(CreateRowParams {
+    .create_row(CreateRowParams {
       id: gen_row_id(),
       ..Default::default()
     })
@@ -107,7 +106,7 @@ fn insert_row_in_views_test() {
     prev_row_id: Some(2.into()),
     ..Default::default()
   };
-  database_test.create_row("v1", row);
+  database_test.create_row_in_view("v1", row);
 
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, 1.into());
@@ -123,7 +122,7 @@ fn insert_row_at_front_in_views_test() {
     id: 4.into(),
     ..Default::default()
   };
-  database_test.create_row("v1", row);
+  database_test.create_row_in_view("v1", row);
 
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, 4.into());
@@ -140,7 +139,7 @@ fn insert_row_at_last_in_views_test() {
     prev_row_id: Some(3.into()),
     ..Default::default()
   };
-  database_test.create_row("v1", row);
+  database_test.create_row_in_view("v1", row);
 
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, 1.into());
