@@ -36,10 +36,12 @@ impl CollabPlugin for CollabDiskPlugin {
   }
 
   fn did_init(&self, _object_id: &str) {
+    // Set the document did_load flag to true
     self.did_load.store(true, Ordering::SeqCst);
   }
 
   fn did_receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
+    // Only apply the update if the document is loaded
     if self.did_load.load(Ordering::SeqCst) {
       self.doc().push_update(object_id, update).unwrap();
     }

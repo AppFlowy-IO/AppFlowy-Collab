@@ -125,6 +125,7 @@ pub fn insert_block(
   document.with_transact_mut(|txn| document.insert_block(txn, block, Some(prev_id)))
 }
 
+#[allow(clippy::type_complexity)]
 pub fn get_document_data(
   document: &Document,
 ) -> (
@@ -191,3 +192,47 @@ pub fn apply_actions(document: &Document, actions: Vec<BlockAction>) {
 //     Self::cleanup(&self.0)
 //   }
 // }
+
+#[allow(dead_code)]
+pub fn make_test_document_data() -> DocumentData {
+  let mut blocks: HashMap<String, Block> = HashMap::new();
+  let mut meta: HashMap<String, Vec<String>> = HashMap::new();
+
+  // page block
+  let page_id = nanoid!(10);
+  let children_id = nanoid!(10);
+  let root = Block {
+    id: page_id.clone(),
+    ty: "page".to_string(),
+    parent: "".to_string(),
+    children: children_id.clone(),
+    external_id: None,
+    external_type: None,
+    data: HashMap::new(),
+  };
+  blocks.insert(page_id.clone(), root);
+
+  // text block
+  let text_block_id = nanoid!(10);
+  let text_0_children_id = nanoid!(10);
+  let text_block = Block {
+    id: text_block_id.clone(),
+    ty: "text".to_string(),
+    parent: page_id.clone(),
+    children: text_0_children_id.clone(),
+    external_id: None,
+    external_type: None,
+    data: HashMap::new(),
+  };
+  blocks.insert(text_block_id.clone(), text_block);
+
+  // meta
+  meta.insert(children_id, vec![text_block_id]);
+  meta.insert(text_0_children_id, vec![]);
+
+  DocumentData {
+    page_id,
+    blocks,
+    meta: DocumentMeta { children_map: meta },
+  }
+}

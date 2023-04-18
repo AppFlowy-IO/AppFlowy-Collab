@@ -1,3 +1,4 @@
+use nanoid::nanoid;
 use std::thread;
 
 use collab_document::blocks::Block;
@@ -9,11 +10,11 @@ use crate::util::{
 #[test]
 fn restore_default_document_test() {
   let uid = 1;
-  let doc_id = "1";
-  let test = create_document(uid, doc_id);
+  let doc_id = format!("v:{}", nanoid!(10));
+  let test = create_document(uid, &doc_id);
   let data1 = test.get_document().unwrap();
 
-  let restore_document = open_document_with_db(uid, doc_id, test.db);
+  let restore_document = open_document_with_db(uid, &doc_id, test.db);
   let data2 = restore_document.get_document().unwrap();
 
   assert_eq!(data1, data2);
@@ -22,8 +23,8 @@ fn restore_default_document_test() {
 #[test]
 fn restore_default_document_test2() {
   let uid = 1;
-  let doc_id = "1";
-  let test = create_document(uid, doc_id);
+  let doc_id = format!("v:{}", nanoid!(10));
+  let test = create_document(uid, &doc_id);
   let (page_id, _, _) = get_document_data(&test.document);
   let block = Block {
     id: "b1".to_string(),
@@ -39,7 +40,7 @@ fn restore_default_document_test2() {
     test.insert_block(txn, block.clone(), None).unwrap();
   });
 
-  let restore_document = open_document_with_db(uid, doc_id, test.db);
+  let restore_document = open_document_with_db(uid, &doc_id, test.db);
   let restore_block = restore_document.get_block("b1").unwrap();
   assert_eq!(restore_block, block);
 }
