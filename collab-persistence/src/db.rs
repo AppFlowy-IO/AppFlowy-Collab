@@ -1,3 +1,13 @@
+use std::fmt::Debug;
+use std::io::Write;
+use std::ops::{Deref, RangeTo};
+use std::path::Path;
+use std::sync::Arc;
+
+use parking_lot::RwLock;
+use sled::{Batch, Db, IVec};
+use smallvec::{smallvec, SmallVec};
+
 use crate::doc::YrsDocDB;
 use crate::error::PersistenceError;
 use crate::keys::DOC_KEY_SPACE;
@@ -6,13 +16,6 @@ use crate::keys::{
   make_snapshot_update_key_prefix, Clock, DocID, Key, SnapshotID, TERMINATOR,
 };
 use crate::snapshot::YrsSnapshotDB;
-use parking_lot::RwLock;
-use sled::{Batch, Db, IVec};
-use smallvec::{smallvec, SmallVec};
-use std::io::Write;
-use std::ops::{Deref, RangeTo};
-use std::path::Path;
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct CollabKV {
@@ -70,23 +73,35 @@ impl DbContext {
     }
   }
 
-  pub fn insert_doc_update(&self, doc_id: DocID, value: Vec<u8>) -> Result<(), PersistenceError> {
+  pub fn insert_doc_update<K: AsRef<[u8]> + ?Sized + Debug>(
+    &self,
+    doc_id: DocID,
+    object_id: &K,
+    value: Vec<u8>,
+  ) -> Result<(), PersistenceError> {
     let db = self.db.write();
-    let update_key =
-      self.create_update_key(doc_id, &db, make_doc_update_key, make_doc_update_key_prefix)?;
+    let update_key = self.create_update_key(
+      doc_id,
+      &db,
+      object_id,
+      make_doc_update_key,
+      make_doc_update_key_prefix,
+    )?;
     let _ = db.insert(update_key, value)?;
     Ok(())
   }
 
-  pub fn insert_snapshot_update(
+  pub fn insert_snapshot_update<K: AsRef<[u8]> + ?Sized + Debug>(
     &self,
     snapshot_id: SnapshotID,
+    object_id: &K,
     value: Vec<u8>,
   ) -> Result<(), PersistenceError> {
     let db = self.db.write();
     let update_key = self.create_update_key(
       snapshot_id,
       &db,
+      object_id,
       make_snapshot_update_key,
       make_snapshot_update_key_prefix,
     )?;
@@ -135,10 +150,11 @@ impl DbContext {
     Ok(new_id)
   }
 
-  fn create_update_key<F1, F2>(
+  fn create_update_key<F1, F2, K: AsRef<[u8]> + ?Sized + Debug>(
     &self,
     id: OID,
     db: &Db,
+    object_id: &K,
     make_update_key: F1,
     make_update_key_prefix: F2,
   ) -> Result<Key<16>, PersistenceError>
@@ -160,7 +176,12 @@ impl DbContext {
     };
     let clock = last_clock + 1;
     let new_key = make_update_key(id, clock);
-    tracing::trace!("[doc:{}] create new update key {:?}", id, new_key.as_ref());
+    tracing::debug!(
+      "[{}-{:?}]: create new update key {:?}",
+      id,
+      object_id,
+      new_key.as_ref()
+    );
     Ok(new_key)
   }
 

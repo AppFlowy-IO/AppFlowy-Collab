@@ -27,12 +27,7 @@ impl<'a> YrsDocDB<'a> {
     let doc_state = txn.encode_diff_v1(&StateVector::default());
     let sv = txn.state_vector().encode_v1();
     let doc_id = self.get_or_create_did(object_id.as_ref())?;
-    tracing::trace!(
-      "[doc:{}]:Create new doc {} for {:?}",
-      doc_id,
-      doc_id,
-      object_id
-    );
+    tracing::trace!("[doc:{}]: New doc:{} for {:?}", doc_id, doc_id, object_id);
     let doc_state_key = make_doc_state_key(doc_id);
     let sv_key = make_state_vector_key(doc_id);
     self.context.db.write().insert(&doc_state_key, doc_state)?;
@@ -78,8 +73,9 @@ impl<'a> YrsDocDB<'a> {
           update_end.as_ref(),
         );
         let encoded_updates = batch_get(&self.context.db.read(), &update_start, &update_end)?;
-        tracing::trace!(
-          "{:?}: Number of encoded_updates: {}",
+        tracing::debug!(
+          "[{:?}-{:?}]: num of updates: {}",
+          did,
           object_id,
           encoded_updates.len()
         );
@@ -101,11 +97,13 @@ impl<'a> YrsDocDB<'a> {
     update: &[u8],
   ) -> Result<(), PersistenceError> {
     let doc_id = self.get_or_create_did(object_id.as_ref())?;
-    tracing::trace!("[doc:{}]:Insert update for {:?}", doc_id, object_id);
+    tracing::debug!("[{}-{:?}]: insert update", doc_id, object_id);
     // if String::from_utf8(object_id.as_ref().to_vec()).unwrap() == "block_1" {
     //   tracing::trace!("pause");
     // }
-    self.context.insert_doc_update(doc_id, update.to_vec())?;
+    self
+      .context
+      .insert_doc_update(doc_id, object_id, update.to_vec())?;
     Ok(())
   }
 

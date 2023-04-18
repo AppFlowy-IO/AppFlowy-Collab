@@ -1,6 +1,7 @@
 #![allow(clippy::all)]
 
 use std::ops::Deref;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use collab_database::block::CreateRowParams;
@@ -13,7 +14,7 @@ use collab_persistence::CollabKV;
 use parking_lot::Mutex;
 use serde_json::Value;
 
-use crate::helper::{make_kv_db, TestTextCell};
+use crate::helper::{db_path, make_kv_db, TestTextCell};
 
 pub enum DatabaseScript {
   CreateDatabase {
@@ -44,7 +45,8 @@ pub enum DatabaseScript {
 
 #[derive(Clone)]
 pub struct DatabaseTest {
-  pub kv: Arc<CollabKV>,
+  pub db: Arc<CollabKV>,
+  pub db_path: PathBuf,
   pub user_database: UserDatabase,
 }
 
@@ -54,10 +56,15 @@ pub fn database_test() -> DatabaseTest {
 
 impl DatabaseTest {
   pub fn new() -> Self {
-    let kv = make_kv_db();
-    let inner = InnerUserDatabase::new(1, kv.clone());
+    let db_path = db_path();
+    let db = Arc::new(CollabKV::open(db_path.clone()).unwrap());
+    let inner = InnerUserDatabase::new(1, db.clone());
     let user_database = UserDatabase(Arc::new(Mutex::new(inner)));
-    Self { kv, user_database }
+    Self {
+      db,
+      user_database,
+      db_path,
+    }
   }
 
   #[allow(dead_code)]
@@ -70,7 +77,7 @@ impl DatabaseTest {
     let mut handles = vec![];
     for script in scripts {
       let user_database = self.user_database.clone();
-      let db = self.kv.clone();
+      let db = self.db.clone();
       let handle = tokio::spawn(async move {
         run_script(user_database, db, script);
       });

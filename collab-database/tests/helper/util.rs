@@ -1,5 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
 
+use std::path::PathBuf;
 use std::sync::{Arc, Once};
 
 use anyhow::bail;
@@ -12,6 +13,7 @@ use collab_database::views::{
   LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
 };
 use collab_persistence::CollabKV;
+
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -543,7 +545,21 @@ pub fn make_kv_db() -> Arc<CollabKV> {
       .finish();
     subscriber.try_init().unwrap();
   });
-  let tempdir = TempDir::new().unwrap();
-  let path = tempdir.into_path();
+  let path = db_path();
   Arc::new(CollabKV::open(path).unwrap())
+}
+
+pub fn db_path() -> PathBuf {
+  static START: Once = Once::new();
+  START.call_once(|| {
+    std::env::set_var("RUST_LOG", "collab_persistence=trace,collab_database=debug");
+    let subscriber = Subscriber::builder()
+      .with_env_filter(EnvFilter::from_default_env())
+      .with_ansi(true)
+      .finish();
+    subscriber.try_init().unwrap();
+  });
+
+  let tempdir = TempDir::new().unwrap();
+  tempdir.into_path()
 }

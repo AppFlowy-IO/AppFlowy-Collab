@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 use yrs::updates::encoder::{Encoder, EncoderV1};
@@ -14,7 +15,7 @@ pub struct YrsSnapshotDB<'a> {
 }
 
 impl<'a> YrsSnapshotDB<'a> {
-  pub fn push_snapshot<K: AsRef<[u8]> + ?Sized, T: ReadTxn>(
+  pub fn push_snapshot<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
     &self,
     object_id: &K,
     description: String,
@@ -23,7 +24,9 @@ impl<'a> YrsSnapshotDB<'a> {
     let data = encode_snapshot(txn);
     let snapshot = CollabSnapshot::new(data, description).to_vec();
     let snapshot_id = self.get_or_create_snapshot_id(object_id.as_ref())?;
-    self.context.insert_snapshot_update(snapshot_id, snapshot)?;
+    self
+      .context
+      .insert_snapshot_update(snapshot_id, object_id, snapshot)?;
     Ok(())
   }
 
