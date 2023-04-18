@@ -64,11 +64,11 @@ async fn edit_row_test() {
       },
       DatabaseScript::AssertNumOfUpdates {
         oid: database_id,
-        expected: 3,
+        expected: 2,
       },
       DatabaseScript::AssertNumOfUpdates {
         oid: "block_1".to_string(),
-        expected: 103,
+        expected: 102,
       },
     ])
     .await;

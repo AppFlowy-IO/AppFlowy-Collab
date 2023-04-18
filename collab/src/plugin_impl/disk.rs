@@ -26,13 +26,16 @@ impl CollabDiskPlugin {
 }
 
 impl CollabPlugin for CollabDiskPlugin {
-  fn did_init(&self, object_id: &str, txn: &mut TransactionMut) {
+  fn init(&self, object_id: &str, txn: &mut TransactionMut) {
     let doc = self.doc();
     if doc.is_exist(object_id) {
       doc.load_doc(object_id, txn).unwrap();
     } else {
       self.doc().create_new_doc(object_id, txn).unwrap();
     }
+  }
+
+  fn did_init(&self, _object_id: &str) {
     self.did_load.store(true, Ordering::SeqCst);
   }
 
