@@ -8,7 +8,7 @@ use collab_folder::core::{
   Belonging, Belongings, Folder, FolderContext, TrashChangeReceiver, View, ViewChangeReceiver,
   ViewLayout, Workspace,
 };
-use collab_persistence::CollabKV;
+use collab_persistence::CollabDB;
 
 use tempfile::TempDir;
 
@@ -32,7 +32,7 @@ pub fn create_folder(id: &str) -> FolderTest {
   let uid = 1;
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(CollabKV::open(path.clone()).unwrap());
+  let db = Arc::new(CollabDB::open(path.clone()).unwrap());
   let disk_plugin = CollabDiskPlugin::new(uid, db).unwrap();
   let cleaner = Cleaner::new(path);
 

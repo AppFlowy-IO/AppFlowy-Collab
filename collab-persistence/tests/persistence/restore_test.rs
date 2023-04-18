@@ -1,6 +1,6 @@
 use std::thread;
 
-use collab_persistence::CollabKV;
+use collab_persistence::CollabDB;
 use yrs::{Doc, GetString, Text, Transact};
 
 use crate::util::db;
@@ -25,7 +25,7 @@ fn single_thread_test() {
   }
   drop(db);
 
-  let db = CollabKV::open(path.clone()).unwrap();
+  let db = CollabDB::open(path.clone()).unwrap();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
     let doc = Doc::new();
@@ -68,7 +68,7 @@ fn multiple_thread_test() {
   }
   drop(db);
 
-  let db = CollabKV::open(path.clone()).unwrap();
+  let db = CollabDB::open(path.clone()).unwrap();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
     let doc = Doc::new();

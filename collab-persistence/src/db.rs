@@ -7,6 +7,8 @@ use crate::keys::{
 };
 use crate::snapshot::YrsSnapshotDB;
 use parking_lot::RwLock;
+use std::collections::HashMap;
+
 use sled::{Batch, Db, IVec};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
@@ -16,19 +18,19 @@ use std::path::Path;
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct CollabKV {
-  pub(crate) db: Db,
+pub struct CollabDB {
+  pub(crate) kv: Db,
   doc_context: Arc<DbContext>,
   snapshot_context: Arc<DbContext>,
 }
 
-impl CollabKV {
+impl CollabDB {
   pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
     let db = sled::open(path)?;
     let doc_context = Arc::new(DbContext::new(db.clone()));
     let snapshot_context = Arc::new(DbContext::new(db.clone()));
     Ok(Self {
-      db,
+      kv: db,
       doc_context,
       snapshot_context,
     })
@@ -49,25 +51,28 @@ impl CollabKV {
   }
 }
 
-impl Deref for CollabKV {
+impl Deref for CollabDB {
   type Target = Db;
 
   fn deref(&self) -> &Self::Target {
-    &self.db
+    &self.kv
   }
 }
 
 pub struct DbContext {
   pub(crate) db: RwLock<Db>,
+  used_keys: RwLock<HashMap<Vec<u8>, String>>,
 }
 
 pub type OID = u64;
+
 const OID_LEN: usize = 8;
 
 impl DbContext {
   pub fn new(db: Db) -> Self {
     Self {
       db: RwLock::new(db),
+      used_keys: Default::default(),
     }
   }
 
@@ -85,6 +90,18 @@ impl DbContext {
       make_doc_update_key,
       make_doc_update_key_prefix,
     )?;
+    if let Some(value) = self.used_keys.read().get(update_key.as_ref()) {
+      tracing::error!(
+        "Duplicate key: {:?} for value: {:?}",
+        update_key.as_ref(),
+        value
+      );
+    }
+
+    self
+      .used_keys
+      .write()
+      .insert(update_key.to_vec(), format!("{}:{:?}", doc_id, object_id));
     let _ = db.insert(update_key, value)?;
     Ok(())
   }
@@ -123,14 +140,17 @@ impl DbContext {
     self.get_id_for_key(key)
   }
 
+  #[tracing::instrument(level = "trace", skip(self))]
   fn get_id_for_key(&self, key: Key<20>) -> Option<OID> {
-    let key_id = self.db.read().get(key).ok()??;
+    let key_id = self.db.read().get(key.as_ref()).ok()??;
     let id_value = self.db.read().get(key_id.as_ref()).ok()??;
-    // println!("get key:{:?}, value: {:?}", key_id.as_ref(), id_value);
 
     let mut bytes = [0; OID_LEN];
     bytes[0..OID_LEN].copy_from_slice(id_value.as_ref());
-    Some(OID::from_be_bytes(bytes))
+    let oid = OID::from_be_bytes(bytes);
+
+    tracing::trace!("key_id:{:?}, value: {:?}", key_id.as_ref(), id_value);
+    Some(oid)
   }
 
   pub fn create_id_for_key(&self, key: Key<20>) -> Result<OID, PersistenceError> {
@@ -164,7 +184,7 @@ impl DbContext {
       // let start = make_update_key(id, OID::MIN);
       let start = make_update_key_prefix(id);
       if let Some(Ok((k, _v))) = db.scan_prefix(start) // Create a range up to (excluding) the given key
-        .last()
+          .last()
       {
         let last_clock = clock_from_key(k.as_ref());
         Clock::from_be_bytes(last_clock.try_into().unwrap())
@@ -186,7 +206,7 @@ impl DbContext {
   fn last_id(&self, db: &Db) -> Option<OID> {
     let given_key: &[u8; 2] = &[0, 1];
     let (_, v) = db
-        .range::<&[u8;2],RangeTo<&[u8;2]>>(..given_key) // Create a range up to (excluding) the given key
+        .range::<&[u8; 2], RangeTo<&[u8; 2]>>(..given_key) // Create a range up to (excluding) the given key
         .next_back()?.ok()?;
     // let (_, v) = db.scan_prefix(self.max_key.as_ref()).next_back()?.ok()?;
     Some(OID::from_be_bytes(v.as_ref().try_into().ok()?))

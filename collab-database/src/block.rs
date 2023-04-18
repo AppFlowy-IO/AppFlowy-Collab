@@ -7,7 +7,7 @@ use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::{
   Collab, CollabBuilder, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
-use collab_persistence::CollabKV;
+use collab_persistence::CollabDB;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +18,7 @@ use crate::rows::{
 };
 use crate::views::RowOrder;
 
-const NUM_OF_BLOCKS: i64 = 10;
+const NUM_OF_BLOCKS: i64 = 3;
 
 /// It's used to store the blocks. Each [Block] is indexed by the block_id.
 #[derive(Clone)]
@@ -27,7 +27,7 @@ pub struct Blocks {
 }
 
 impl Blocks {
-  pub fn new(uid: i64, db: Arc<CollabKV>) -> Self {
+  pub fn new(uid: i64, db: Arc<CollabDB>) -> Self {
     let blocks = RwLock::new(HashMap::new());
     let mut write_guard = blocks.write();
 

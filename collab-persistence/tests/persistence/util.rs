@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 use std::sync::Once;
 
-use collab_persistence::CollabKV;
+use collab_persistence::CollabDB;
 
 use tempfile::TempDir;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 
-pub fn db() -> (PathBuf, CollabKV) {
+pub fn db() -> (PathBuf, CollabDB) {
   static START: Once = Once::new();
   START.call_once(|| {
     std::env::set_var("RUST_LOG", "collab_persistence=trace");
@@ -20,5 +20,5 @@ pub fn db() -> (PathBuf, CollabKV) {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let cloned_path = path.clone();
-  (path, CollabKV::open(cloned_path).unwrap())
+  (path, CollabDB::open(cloned_path).unwrap())
 }

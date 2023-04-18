@@ -38,7 +38,7 @@ impl<'a> YrsDocDB<'a> {
         let sv_key = make_state_vector_key(doc_id);
         db.insert(doc_state_key.as_ref(), doc_state)?;
         db.insert(sv_key.as_ref(), sv)?;
-
+        db.flush();
         Ok::<(), ConflictableTransactionError<PersistenceError>>(())
       })
       .map_err(|_: TransactionError<PersistenceError>| PersistenceError::InternalError)?;
@@ -144,7 +144,6 @@ impl<'a> YrsDocDB<'a> {
     update: &[u8],
   ) -> Result<(), PersistenceError> {
     let doc_id = self.get_or_create_did(object_id.as_ref())?;
-    tracing::debug!("[{}-{:?}]: insert update", doc_id, object_id);
     // if String::from_utf8(object_id.as_ref().to_vec()).unwrap() == "block_1" {
     //   tracing::trace!("pause");
     // }

@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 use collab_persistence::doc::YrsDocDB;
-use collab_persistence::CollabKV;
+use collab_persistence::CollabDB;
 use yrs::{Transaction, TransactionMut};
 
 use crate::core::collab_plugin::CollabPlugin;
@@ -13,12 +13,12 @@ pub struct CollabDiskPlugin {
   uid: i64,
   did_load: Arc<AtomicBool>,
   initial_update_count: Arc<AtomicU32>,
-  db: Arc<CollabKV>,
+  db: Arc<CollabDB>,
   can_flush: bool,
 }
 
 impl CollabDiskPlugin {
-  pub fn new(uid: i64, db: Arc<CollabKV>) -> Result<Self, CollabError> {
+  pub fn new(uid: i64, db: Arc<CollabDB>) -> Result<Self, CollabError> {
     let did_load = Arc::new(AtomicBool::new(false));
     let initial_update_count = Arc::new(AtomicU32::new(0));
     Ok(Self {
@@ -31,7 +31,7 @@ impl CollabDiskPlugin {
   }
   pub fn new_with_config(
     uid: i64,
-    db: Arc<CollabKV>,
+    db: Arc<CollabDB>,
     can_flush: bool,
   ) -> Result<Self, CollabError> {
     let did_load = Arc::new(AtomicBool::new(false));

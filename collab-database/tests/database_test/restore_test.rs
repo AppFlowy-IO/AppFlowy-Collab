@@ -3,7 +3,7 @@ use crate::database_test::helper::{
 };
 use assert_json_diff::assert_json_eq;
 use collab_database::block::CreateRowParams;
-use collab_persistence::CollabKV;
+use collab_persistence::CollabDB;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -100,7 +100,7 @@ fn restore_from_disk_with_different_uid_test() {
   );
 }
 
-fn create_database_with_view() -> (Arc<CollabKV>, DatabaseTest, Value) {
+fn create_database_with_view() -> (Arc<CollabDB>, DatabaseTest, Value) {
   let (db, database_test) = create_database_with_db(1, "1");
   let expected = json!({
     "fields": [],

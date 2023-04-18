@@ -6,7 +6,7 @@ use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, Update};
 use collab_persistence::snapshot::CollabSnapshot;
-use collab_persistence::CollabKV;
+use collab_persistence::CollabDB;
 use parking_lot::RwLock;
 
 use crate::block::Blocks;
@@ -30,7 +30,7 @@ impl Default for Config {
 /// A [UserDatabase] represents a user's database.
 pub struct UserDatabase {
   uid: i64,
-  db: Arc<CollabKV>,
+  db: Arc<CollabDB>,
   #[allow(dead_code)]
   collab: Collab,
   /// It used to keep track of the blocks. Each block contains a list of [Row]s
@@ -50,7 +50,7 @@ pub struct UserDatabase {
 const DATABASES: &str = "databases";
 
 impl UserDatabase {
-  pub fn new(uid: i64, db: Arc<CollabKV>, config: Config) -> Self {
+  pub fn new(uid: i64, db: Arc<CollabDB>, config: Config) -> Self {
     tracing::trace!("Init user database: {}", uid);
     // user database
     let disk_plugin = CollabDiskPlugin::new_with_config(uid, db.clone(), config.can_flush).unwrap();
@@ -279,7 +279,7 @@ fn create_user_database_if_not_exist(collab: &Collab) -> ArrayRefWrapper {
   }
 }
 
-fn create_relations_collab(uid: i64, db: Arc<CollabKV>) -> Collab {
+fn create_relations_collab(uid: i64, db: Arc<CollabDB>) -> Collab {
   let disk_plugin = CollabDiskPlugin::new(uid, db).unwrap();
   let object_id = format!("{}_db_relations", uid);
   let collab = CollabBuilder::new(uid, object_id)

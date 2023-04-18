@@ -2,7 +2,7 @@ use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::*;
 use lib0::any::Any;
 
-use collab_persistence::CollabKV;
+use collab_persistence::CollabDB;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -67,7 +67,7 @@ impl CollabPersistenceTest {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let uid = 1;
-    let db = Arc::new(CollabKV::open(path.clone()).unwrap());
+    let db = Arc::new(CollabDB::open(path.clone()).unwrap());
     let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
     let snapshot_plugin = CollabSnapshotPlugin::new(uid, db, 5).unwrap();
     let cleaner = Cleaner::new(path.clone());
@@ -159,7 +159,7 @@ impl CollabPersistenceTest {
 pub fn disk_plugin(uid: i64) -> CollabDiskPlugin {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(CollabKV::open(path).unwrap());
+  let db = Arc::new(CollabDB::open(path).unwrap());
   CollabDiskPlugin::new(uid, db).unwrap()
 }
 

@@ -1,7 +1,6 @@
-use std::io::Write;
-use std::ops::{Range, RangeTo};
-
 use smallvec::{smallvec, SmallVec};
+use std::io::Write;
+use std::ops::{Deref, Range, RangeTo};
 
 use crate::util::db;
 
@@ -17,16 +16,16 @@ fn id_test() {
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, 1];
   let last_entry_prior = db
-        .range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key) // Create a range up to (excluding) the given key
-        .next_back()
-        .expect("No entry found prior to the given key").unwrap();
+      .range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key) // Create a range up to (excluding) the given key
+      .next_back()
+      .expect("No entry found prior to the given key").unwrap();
   assert_eq!(last_entry_prior.1.as_ref(), &[0, 1, 1]);
 
   let given_key: &[u8; 2] = &[0, 1];
   let last_entry_prior = db
-        .range::<&[u8; 2], RangeTo<&[u8; 2]>>(..given_key) // Create a range up to (excluding) the given key
-        .next_back()
-        .expect("No entry found prior to the given key").unwrap();
+      .range::<&[u8; 2], RangeTo<&[u8; 2]>>(..given_key) // Create a range up to (excluding) the given key
+      .next_back()
+      .expect("No entry found prior to the given key").unwrap();
   println!("{:?}", last_entry_prior.1);
 
   let prefix: &[u8] = &[0, 1, 0, 0, 0, 0, 0];
@@ -132,14 +131,17 @@ fn range_key_test() {
 
   let given_key: &[u8; 2] = &[0, 1];
   let last_entry_prior = db
-        .range::<&[u8; 2], RangeTo<&[u8; 2]>>(..given_key) // Create a range up to (excluding) the given key
-        .next_back()
-        .expect("No entry found prior to the given key").unwrap();
+      .range::<&[u8; 2], RangeTo<&[u8; 2]>>(..given_key) // Create a range up to (excluding) the given key
+      .next_back()
+      .expect("No entry found prior to the given key").unwrap();
   assert_eq!(last_entry_prior.1.as_ref(), &[0, 3, 3]);
 
-  let prefix: &[u8] = &[0, 1, 0, 0, 0, 0, 0];
-  let mut r = db.scan_prefix(prefix);
-  println!("{:?}", r.next_back());
+  let prefix: &[u8] = &[0, 0, 2, 0, 0, 0, 0];
+  let r = db.scan_prefix(prefix);
+  assert_eq!(
+    r.last().unwrap().unwrap().0.as_ref(),
+    &[0, 0, 2, 0, 0, 0, 0, 2]
+  );
 
   let start: &[u8; 8] = &[0, 1, 0, 0, 0, 0, 0, 3];
   let given_key: &[u8; 8] = &[0, 1, 0, 0, 0, 0, 0, u8::MAX];
@@ -157,4 +159,42 @@ fn range_key_test() {
     &[0, 1, 0, 0, 0, 0, 0, 5]
   );
   assert!(iter.next().is_none());
+}
+
+#[repr(transparent)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Key<const N: usize>(pub SmallVec<[u8; N]>);
+
+impl<const N: usize> Key<N> {
+  pub const fn from_const(src: [u8; N]) -> Self {
+    Key(SmallVec::from_const(src))
+  }
+}
+
+impl<const N: usize> Deref for Key<N> {
+  type Target = [u8];
+
+  fn deref(&self) -> &Self::Target {
+    self.0.as_ref()
+  }
+}
+
+impl<const N: usize> AsRef<[u8]> for Key<N> {
+  #[inline]
+  fn as_ref(&self) -> &[u8] {
+    self.0.as_ref()
+  }
+}
+
+impl<const N: usize> AsMut<[u8]> for Key<N> {
+  #[inline]
+  fn as_mut(&mut self) -> &mut [u8] {
+    self.0.as_mut()
+  }
+}
+
+impl<const N: usize> From<Key<N>> for Vec<u8> {
+  fn from(key: Key<N>) -> Self {
+    key.0.to_vec()
+  }
 }

@@ -9,7 +9,7 @@ use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::user::{Config, RowRelationChange, RowRelationUpdateReceiver, UserDatabase};
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
-use collab_persistence::CollabKV;
+use collab_persistence::CollabDB;
 use rand::Rng;
 use tempfile::TempDir;
 use tokio::sync::mpsc::{channel, Receiver};
@@ -20,7 +20,7 @@ pub struct UserDatabaseTest {
   #[allow(dead_code)]
   uid: i64,
   inner: UserDatabase,
-  pub db: Arc<CollabKV>,
+  pub db: Arc<CollabDB>,
 }
 
 impl Deref for UserDatabaseTest {
@@ -41,7 +41,7 @@ pub fn user_database_test(uid: i64) -> UserDatabaseTest {
   user_database_test_with_db(uid, db)
 }
 
-pub fn user_database_test_with_db(uid: i64, db: Arc<CollabKV>) -> UserDatabaseTest {
+pub fn user_database_test_with_db(uid: i64, db: Arc<CollabDB>) -> UserDatabaseTest {
   UserDatabaseTest {
     uid,
     inner: UserDatabase::new(uid, db.clone(), Config::default()),
@@ -52,7 +52,7 @@ pub fn user_database_test_with_db(uid: i64, db: Arc<CollabKV>) -> UserDatabaseTe
 pub fn user_database_test_with_default_data(uid: i64) -> UserDatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(CollabKV::open(path).unwrap());
+  let db = Arc::new(CollabDB::open(path).unwrap());
   let user_database = UserDatabaseTest {
     uid,
     inner: UserDatabase::new(uid, db.clone(), Config::default()),

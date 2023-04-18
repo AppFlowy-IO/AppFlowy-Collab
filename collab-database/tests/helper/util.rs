@@ -12,7 +12,7 @@ use collab_database::views::{
   FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder, GroupSettingBuilder, GroupSettingMap,
   LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
 };
-use collab_persistence::CollabKV;
+use collab_persistence::CollabDB;
 
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
@@ -535,9 +535,9 @@ impl std::convert::From<i64> for TestFieldType {
   }
 }
 
-pub fn make_kv_db() -> Arc<CollabKV> {
+pub fn make_kv_db() -> Arc<CollabDB> {
   let path = db_path();
-  Arc::new(CollabKV::open(path).unwrap())
+  Arc::new(CollabDB::open(path).unwrap())
 }
 
 pub fn db_path() -> PathBuf {
