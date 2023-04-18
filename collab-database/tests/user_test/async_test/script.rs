@@ -1,15 +1,19 @@
-use crate::helper::{make_kv_db, TestTextCell};
+#![allow(clippy::all)]
+
+use std::ops::Deref;
+use std::sync::Arc;
+
 use collab_database::block::CreateRowParams;
 use collab_database::database::DuplicatedDatabase;
 use collab_database::fields::Field;
-use collab_database::rows::CellsBuilder;
+use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::UserDatabase as InnerUserDatabase;
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::CollabKV;
 use parking_lot::Mutex;
 use serde_json::Value;
-use std::ops::Deref;
-use std::sync::Arc;
+
+use crate::helper::{make_kv_db, TestTextCell};
 
 pub enum DatabaseScript {
   CreateDatabase {
@@ -19,16 +23,26 @@ pub enum DatabaseScript {
     database_id: String,
     params: CreateRowParams,
   },
-  CreateField {
+  EditRow {
     database_id: String,
-    field: Field,
+    row_id: RowId,
+    cells: Cells,
   },
   AssertDatabase {
     database_id: String,
     expected: Value,
   },
+  AssertNumOfUpdates {
+    oid: String,
+    expected: usize,
+  },
+  IsExist {
+    oid: String,
+    expected: bool,
+  },
 }
 
+#[derive(Clone)]
 pub struct DatabaseTest {
   pub kv: Arc<CollabKV>,
   pub user_database: UserDatabase,
@@ -46,6 +60,7 @@ impl DatabaseTest {
     Self { kv, user_database }
   }
 
+  #[allow(dead_code)]
   pub fn get_database_data(&self, database_id: &str) -> DuplicatedDatabase {
     let database = self.user_database.lock().get_database(database_id).unwrap();
     database.duplicate_database()
@@ -55,16 +70,19 @@ impl DatabaseTest {
     let mut handles = vec![];
     for script in scripts {
       let user_database = self.user_database.clone();
+      let db = self.kv.clone();
       let handle = tokio::spawn(async move {
-        run_script(user_database, script);
+        run_script(user_database, db, script);
       });
       handles.push(handle);
     }
-    futures::future::join_all(handles).await;
+    for result in futures::future::join_all(handles).await {
+      assert!(result.is_ok());
+    }
   }
 }
 
-pub fn run_script(user_database: UserDatabase, script: DatabaseScript) {
+pub fn run_script(user_database: UserDatabase, db: Arc<CollabKV>, script: DatabaseScript) {
   match script {
     DatabaseScript::CreateDatabase { params } => {
       user_database.lock().create_database(params).unwrap();
@@ -79,20 +97,47 @@ pub fn run_script(user_database: UserDatabase, script: DatabaseScript) {
         .unwrap()
         .create_row(params);
     },
-    DatabaseScript::CreateField { database_id, field } => {
+    DatabaseScript::EditRow {
+      database_id,
+      row_id,
+      cells,
+    } => {
       user_database
         .lock()
         .get_database(&database_id)
         .unwrap()
-        .create_field(field);
+        .update_row(row_id, |row| {
+          row.set_cells(cells);
+        });
     },
+    // DatabaseScript::CreateField { database_id, field } => {
+    //   user_database
+    //     .lock()
+    //     .get_database(&database_id)
+    //     .unwrap()
+    //     .create_field(field);
+    // },
     DatabaseScript::AssertDatabase {
       database_id,
       expected,
     } => {
-      let database = user_database.lock().get_database(&database_id).unwrap();
+      let inner = InnerUserDatabase::new(1, db);
+      let database = inner.get_database(&database_id).unwrap();
       let actual = database.to_json_value();
       assert_json_diff::assert_json_eq!(actual, expected);
+    },
+    DatabaseScript::IsExist {
+      oid: database_id,
+      expected,
+    } => {
+      assert_eq!(db.doc(1).is_exist(&database_id), expected,)
+    },
+    DatabaseScript::AssertNumOfUpdates {
+      oid: database_id,
+      expected,
+    } => {
+      let updates = db.doc(1).get_updates(&database_id).unwrap();
+      assert_eq!(updates.len(), expected,);
     },
   }
 }
@@ -108,6 +153,7 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
     height: 0,
     visibility: true,
     prev_row_id: None,
+    timestamp: 0,
   };
   let row_2 = CreateRowParams {
     id: 2.into(),
@@ -118,6 +164,7 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
     height: 0,
     visibility: true,
     prev_row_id: None,
+    timestamp: 0,
   };
   let row_3 = CreateRowParams {
     id: 3.into(),
@@ -128,6 +175,7 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
     height: 0,
     visibility: true,
     prev_row_id: None,
+    timestamp: 0,
   };
   let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);

@@ -282,7 +282,7 @@ fn apply_actions_test() {
       parent_id: Some(first_child_id.clone()),
     },
   };
-  let actions = vec![action_0, action_1.clone()];
+  let actions = vec![action_0, action_1];
   let actions_json = serde_json::to_value(&actions);
   assert!(actions_json.is_ok());
   apply_actions(document, actions);
@@ -295,7 +295,7 @@ fn apply_actions_test() {
   let delete_action = BlockAction {
     action: BlockActionType::Delete,
     payload: BlockActionPayload {
-      block: block.clone(),
+      block,
       prev_id: None,
       parent_id: None,
     },
@@ -313,7 +313,7 @@ fn open_document_test() {
   let mut test = create_document(1, doc_id);
   let document = &mut test.document;
   let document_data = document.open(|block_events, _| {
-    let block_events_json = serde_json::to_value(&block_events);
+    let block_events_json = serde_json::to_value(block_events);
     assert!(block_events_json.is_ok());
     dbg!(block_events_json.unwrap());
   });

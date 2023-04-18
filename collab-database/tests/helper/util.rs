@@ -1,3 +1,7 @@
+#![allow(clippy::upper_case_acronyms)]
+
+use std::sync::{Arc, Once};
+
 use anyhow::bail;
 use collab::core::any_map::AnyMapExtension;
 use collab::preclude::lib0Any;
@@ -8,7 +12,6 @@ use collab_database::views::{
   LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
 };
 use collab_persistence::CollabKV;
-use std::sync::{Arc, Once};
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -533,7 +536,7 @@ impl std::convert::From<i64> for TestFieldType {
 pub fn make_kv_db() -> Arc<CollabKV> {
   static START: Once = Once::new();
   START.call_once(|| {
-    std::env::set_var("RUST_LOG", "collab_persistence=trace,collab_database=trace");
+    std::env::set_var("RUST_LOG", "collab_persistence=trace,collab_database=debug");
     let subscriber = Subscriber::builder()
       .with_env_filter(EnvFilter::from_default_env())
       .with_ansi(true)

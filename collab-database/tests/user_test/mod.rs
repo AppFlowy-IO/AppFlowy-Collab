@@ -1,7 +1,7 @@
+mod async_test;
 mod cell_test;
 mod database_test;
 mod helper;
 mod relation_test;
-mod script_test;
 mod snapshot_test;
 mod type_option_test;

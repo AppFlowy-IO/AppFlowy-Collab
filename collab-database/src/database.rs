@@ -331,6 +331,7 @@ impl Database {
   }
 
   /// Get all fields in the database
+  /// These fields are ordered by the [FieldOrder] of the view
   /// If field_ids is None, return all fields
   /// If field_ids is Some, return the fields with the given ids
   pub fn get_fields(&self, view_id: &str, field_ids: Option<Vec<String>>) -> Vec<Field> {
@@ -338,6 +339,10 @@ impl Database {
     self.get_fields_with_txn(&txn, view_id, field_ids)
   }
 
+  /// Get all fields in the database
+  /// These fields are ordered by the [FieldOrder] of the view
+  /// If field_ids is None, return all fields
+  /// If field_ids is Some, return the fields with the given ids
   pub fn get_fields_with_txn<T: ReadTxn>(
     &self,
     txn: &T,
@@ -671,6 +676,7 @@ impl Database {
           height: row.height,
           visibility: row.visibility,
           prev_row_id: Some(row.id),
+          timestamp: timestamp(),
         };
         self.create_row_with_txn(txn, view_id, params)
       } else {
@@ -703,6 +709,7 @@ impl Database {
   pub fn duplicate_database(&self) -> DuplicatedDatabase {
     let inline_view_id = self.get_inline_view_id();
     let txn = self.root.transact();
+    let timestamp = timestamp();
     let mut view = self.views.get_view_with_txn(&txn, &inline_view_id).unwrap();
     let fields = self.get_fields_with_txn(&txn, &inline_view_id, None);
     let row_orders = self.views.get_row_orders_with_txn(&txn, &view.id);
@@ -716,6 +723,7 @@ impl Database {
         height: row.height,
         visibility: row.visibility,
         prev_row_id: None,
+        timestamp,
       })
       .collect::<Vec<CreateRowParams>>();
 

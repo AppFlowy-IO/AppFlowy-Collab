@@ -1,4 +1,6 @@
-#![allow(clippy::upper_case_acronyms)]
+use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
@@ -9,11 +11,7 @@ use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::CollabKV;
-use std::ops::{Deref, DerefMut};
-use std::path::PathBuf;
-use std::sync::{Arc, Once};
 use tempfile::TempDir;
-use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 
 pub use crate::helper::*;
 
@@ -122,6 +120,7 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
     height: 0,
     visibility: true,
     prev_row_id: None,
+    timestamp: 0,
   };
   let row_2 = CreateRowParams {
     id: 2.into(),
@@ -132,6 +131,7 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
     height: 0,
     visibility: true,
     prev_row_id: None,
+    timestamp: 0,
   };
   let row_3 = CreateRowParams {
     id: 3.into(),
@@ -142,6 +142,7 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
     height: 0,
     visibility: true,
     prev_row_id: None,
+    timestamp: 0,
   };
 
   let database_test = create_database(uid, database_id);

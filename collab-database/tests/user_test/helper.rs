@@ -1,10 +1,7 @@
 use std::future::Future;
 use std::ops::Deref;
 use std::sync::Arc;
-use std::sync::Once;
 use std::time::Duration;
-
-use crate::helper::{make_kv_db, TestTextCell};
 
 use collab_database::block::CreateRowParams;
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
@@ -16,7 +13,8 @@ use collab_persistence::CollabKV;
 use rand::Rng;
 use tempfile::TempDir;
 use tokio::sync::mpsc::{channel, Receiver};
-use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
+
+use crate::helper::{make_kv_db, TestTextCell};
 
 pub struct UserDatabaseTest {
   #[allow(dead_code)]
@@ -79,6 +77,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
     height: 0,
     visibility: true,
     prev_row_id: None,
+    timestamp: 0,
   };
   let row_2 = CreateRowParams {
     id: 2.into(),
@@ -89,6 +88,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
     height: 0,
     visibility: true,
     prev_row_id: None,
+    timestamp: 0,
   };
   let row_3 = CreateRowParams {
     id: 3.into(),
@@ -99,6 +99,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
     height: 0,
     visibility: true,
     prev_row_id: None,
+    timestamp: 0,
   };
   let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);

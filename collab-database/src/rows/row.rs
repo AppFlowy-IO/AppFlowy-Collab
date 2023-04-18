@@ -1,19 +1,61 @@
+use std::fmt;
+use std::fmt::{Display, Formatter};
+use std::ops::Deref;
+
+use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
+use serde::de::{Error, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
 use crate::database::timestamp;
 use crate::id_gen::ID_GEN;
 use crate::rows::{Cell, Cells, CellsUpdate};
 use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
-use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
-use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
-use std::ops::Deref;
 
-#[derive(Copy, Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[derive(Copy, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct RowId(i64);
 
 impl Display for RowId {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     f.write_str(&self.0.to_string())
+  }
+}
+
+impl Serialize for RowId {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    serializer.serialize_str(&self.0.to_string())
+  }
+}
+
+impl<'de> Deserialize<'de> for RowId {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    struct RowIdVisitor();
+
+    impl<'de> Visitor<'de> for RowIdVisitor {
+      type Value = RowId;
+
+      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Expected i64 string")
+      }
+
+      fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+      where
+        E: Error,
+      {
+        match v.parse::<i64>() {
+          Ok(id) => Ok(RowId(id)),
+          Err(_) => Err(Error::custom("Expected i64 string")),
+        }
+      }
+    }
+
+    deserializer.deserialize_any(RowIdVisitor())
   }
 }
 
