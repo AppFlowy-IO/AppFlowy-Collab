@@ -14,6 +14,7 @@ use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
 
 pub const DATA_SECTION: &str = "data";
+
 use crate::preclude::{ArrayRefWrapper, JsonValue};
 
 type AfterTransactionSubscription = Subscription<Arc<dyn Fn(&mut TransactionMut)>>;
@@ -71,7 +72,7 @@ impl Collab {
     }
   }
 
-  ///  
+  ///
   pub fn initial(&self) {
     let mut txn = self.doc.transact_mut();
     self
@@ -81,11 +82,13 @@ impl Collab {
       .for_each(|plugin| plugin.init(&self.object_id, &mut txn));
     drop(txn);
 
+    let txn = self.doc.transact();
     self
       .plugins
       .read()
       .iter()
-      .for_each(|plugin| plugin.did_init(&self.object_id));
+      .for_each(|plugin| plugin.did_init(&self.object_id, &txn));
+    drop(txn);
   }
 
   pub fn observer_attrs<F>(&mut self, f: F) -> MapSubscription

@@ -58,7 +58,7 @@ async fn edit_row_test() {
         oid: database_id.clone(),
         expected: true,
       },
-      DatabaseScript::AssertDatabase {
+      DatabaseScript::AssertDatabaseInDisk {
         database_id: database_id.clone(),
         expected,
       },
@@ -105,7 +105,7 @@ async fn create_row_test() {
       let mut expected = create_row_test_expected();
       expected["views"][0]["database_id"] = Value::String(database_id.clone());
       cloned_test
-        .run_scripts(vec![DatabaseScript::AssertDatabase {
+        .run_scripts(vec![DatabaseScript::AssertDatabaseInDisk {
           database_id,
           expected,
         }])

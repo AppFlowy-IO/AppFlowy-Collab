@@ -1,9 +1,9 @@
 use std::sync::Arc;
-use yrs::TransactionMut;
+use yrs::{Transaction, TransactionMut};
 
 pub trait CollabPlugin: Send + Sync + 'static {
   fn init(&self, _object_id: &str, _txn: &mut TransactionMut) {}
-  fn did_init(&self, _object_id: &str) {}
+  fn did_init(&self, _object_id: &str, _txn: &Transaction) {}
   fn did_receive_update(&self, _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
 }
@@ -16,8 +16,8 @@ where
     (**self).init(object_id, txn)
   }
 
-  fn did_init(&self, object_id: &str) {
-    (**self).did_init(object_id)
+  fn did_init(&self, _object_id: &str, txn: &Transaction) {
+    (**self).did_init(_object_id, txn)
   }
 
   fn did_receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
@@ -33,8 +33,8 @@ where
     (**self).init(object_id, txn)
   }
 
-  fn did_init(&self, object_id: &str) {
-    (**self).did_init(object_id)
+  fn did_init(&self, _object_id: &str, txn: &Transaction) {
+    (**self).did_init(_object_id, txn)
   }
 
   fn did_receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {

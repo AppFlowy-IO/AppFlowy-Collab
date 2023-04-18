@@ -536,15 +536,6 @@ impl std::convert::From<i64> for TestFieldType {
 }
 
 pub fn make_kv_db() -> Arc<CollabKV> {
-  static START: Once = Once::new();
-  START.call_once(|| {
-    std::env::set_var("RUST_LOG", "collab_persistence=trace,collab_database=debug");
-    let subscriber = Subscriber::builder()
-      .with_env_filter(EnvFilter::from_default_env())
-      .with_ansi(true)
-      .finish();
-    subscriber.try_init().unwrap();
-  });
   let path = db_path();
   Arc::new(CollabKV::open(path).unwrap())
 }
@@ -552,7 +543,10 @@ pub fn make_kv_db() -> Arc<CollabKV> {
 pub fn db_path() -> PathBuf {
   static START: Once = Once::new();
   START.call_once(|| {
-    std::env::set_var("RUST_LOG", "collab_persistence=trace,collab_database=debug");
+    std::env::set_var(
+      "RUST_LOG",
+      "collab=trace,collab_persistence=trace,collab_database=debug",
+    );
     let subscriber = Subscriber::builder()
       .with_env_filter(EnvFilter::from_default_env())
       .with_ansi(true)

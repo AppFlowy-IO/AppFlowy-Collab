@@ -1,9 +1,9 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 use collab_persistence::doc::YrsDocDB;
 use collab_persistence::CollabKV;
-use yrs::TransactionMut;
+use yrs::{Transaction, TransactionMut};
 
 use crate::core::collab_plugin::CollabPlugin;
 use crate::error::CollabError;
@@ -12,12 +12,37 @@ use crate::error::CollabError;
 pub struct CollabDiskPlugin {
   uid: i64,
   did_load: Arc<AtomicBool>,
+  initial_update_count: Arc<AtomicU32>,
   db: Arc<CollabKV>,
+  can_flush: bool,
 }
+
 impl CollabDiskPlugin {
   pub fn new(uid: i64, db: Arc<CollabKV>) -> Result<Self, CollabError> {
     let did_load = Arc::new(AtomicBool::new(false));
-    Ok(Self { db, uid, did_load })
+    let initial_update_count = Arc::new(AtomicU32::new(0));
+    Ok(Self {
+      db,
+      uid,
+      did_load,
+      initial_update_count,
+      can_flush: false,
+    })
+  }
+  pub fn new_with_config(
+    uid: i64,
+    db: Arc<CollabKV>,
+    can_flush: bool,
+  ) -> Result<Self, CollabError> {
+    let did_load = Arc::new(AtomicBool::new(false));
+    let initial_update_count = Arc::new(AtomicU32::new(0));
+    Ok(Self {
+      db,
+      uid,
+      did_load,
+      initial_update_count,
+      can_flush,
+    })
   }
 
   pub fn doc(&self) -> YrsDocDB {
@@ -29,13 +54,25 @@ impl CollabPlugin for CollabDiskPlugin {
   fn init(&self, object_id: &str, txn: &mut TransactionMut) {
     let doc = self.doc();
     if doc.is_exist(object_id) {
-      doc.load_doc(object_id, txn).unwrap();
+      let update_count = doc.load_doc(object_id, txn).unwrap();
+      self
+        .initial_update_count
+        .store(update_count, Ordering::SeqCst);
     } else {
       self.doc().create_new_doc(object_id, txn).unwrap();
     }
   }
 
-  fn did_init(&self, _object_id: &str) {
+  fn did_init(&self, object_id: &str, txn: &Transaction) {
+    let update_count = self.initial_update_count.load(Ordering::SeqCst);
+    if update_count > 0 && self.can_flush {
+      if let Err(e) = self.doc().flush_doc(object_id, txn) {
+        tracing::error!("Failed to flush doc: {}, error: {:?}", object_id, e);
+      } else {
+        tracing::trace!("Flush doc: {}", object_id);
+      }
+    }
+
     self.did_load.store(true, Ordering::SeqCst);
   }
 

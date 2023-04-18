@@ -16,6 +16,17 @@ use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::user::relation::{DatabaseRelation, RowRelationMap};
 use crate::views::{CreateDatabaseParams, CreateViewParams};
 
+#[derive(Clone)]
+pub struct Config {
+  pub can_flush: bool,
+}
+
+impl Default for Config {
+  fn default() -> Self {
+    Self { can_flush: false }
+  }
+}
+
 /// A [UserDatabase] represents a user's database.
 pub struct UserDatabase {
   uid: i64,
@@ -33,15 +44,16 @@ pub struct UserDatabase {
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
   open_handlers: RwLock<HashMap<String, Arc<Database>>>,
+  config: Config,
 }
 
 const DATABASES: &str = "databases";
 
 impl UserDatabase {
-  pub fn new(uid: i64, db: Arc<CollabKV>) -> Self {
+  pub fn new(uid: i64, db: Arc<CollabKV>, config: Config) -> Self {
     tracing::trace!("Init user database: {}", uid);
     // user database
-    let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
+    let disk_plugin = CollabDiskPlugin::new_with_config(uid, db.clone(), config.can_flush).unwrap();
     let snapshot_plugin = CollabSnapshotPlugin::new(uid, db.clone(), 5).unwrap();
     let collab = CollabBuilder::new(uid, format!("{}_user_database", uid))
       .with_plugin(disk_plugin)
@@ -61,6 +73,7 @@ impl UserDatabase {
       database_records,
       open_handlers: Default::default(),
       database_relation,
+      config,
     }
   }
 
@@ -172,6 +185,11 @@ impl UserDatabase {
     self.open_handlers.write().remove(database_id);
   }
 
+  /// Close the database with the given database id.
+  pub fn close_database(&self, database_id: &str) {
+    self.open_handlers.write().remove(database_id);
+  }
+
   /// Return all the database records.
   pub fn get_all_databases(&self) -> Vec<DatabaseRecord> {
     self.database_records.get_all_databases()
@@ -237,7 +255,8 @@ impl UserDatabase {
 
   /// Create a new [Collab] instance for given database id.
   fn collab_for_database(&self, database_id: &str) -> Collab {
-    let disk_plugin = CollabDiskPlugin::new(self.uid, self.db.clone()).unwrap();
+    let disk_plugin =
+      CollabDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.can_flush).unwrap();
     let snapshot_plugin = CollabSnapshotPlugin::new(self.uid, self.db.clone(), 6).unwrap();
     CollabBuilder::new(self.uid, database_id)
       .with_plugin(disk_plugin)

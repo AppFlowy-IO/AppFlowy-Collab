@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
-use sled::Iter;
+use sled::transaction::{ConflictableTransactionError, TransactionError};
+use sled::{Batch, Iter};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{ReadTxn, StateVector, TransactionMut, Update};
@@ -24,14 +25,58 @@ impl<'a> YrsDocDB<'a> {
     object_id: &K,
     txn: &T,
   ) -> Result<(), PersistenceError> {
-    let doc_state = txn.encode_diff_v1(&StateVector::default());
-    let sv = txn.state_vector().encode_v1();
     let doc_id = self.get_or_create_did(object_id.as_ref())?;
-    tracing::trace!("[doc:{}]: New doc:{} for {:?}", doc_id, doc_id, object_id);
-    let doc_state_key = make_doc_state_key(doc_id);
-    let sv_key = make_state_vector_key(doc_id);
-    self.context.db.write().insert(&doc_state_key, doc_state)?;
-    self.context.db.write().insert(&sv_key, sv)?;
+    self
+      .context
+      .db
+      .write()
+      .transaction(|db| {
+        tracing::trace!("[doc:{}]: New doc:{} for {:?}", doc_id, doc_id, object_id);
+        let doc_state = txn.encode_diff_v1(&StateVector::default());
+        let sv = txn.state_vector().encode_v1();
+        let doc_state_key = make_doc_state_key(doc_id);
+        let sv_key = make_state_vector_key(doc_id);
+        db.insert(doc_state_key.as_ref(), doc_state)?;
+        db.insert(sv_key.as_ref(), sv)?;
+
+        Ok::<(), ConflictableTransactionError<PersistenceError>>(())
+      })
+      .map_err(|_: TransactionError<PersistenceError>| PersistenceError::InternalError)?;
+
+    Ok(())
+  }
+
+  pub fn flush_doc<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
+    &self,
+    object_id: &K,
+    txn: &T,
+  ) -> Result<(), PersistenceError> {
+    let doc_id = self.get_or_create_did(object_id)?;
+    self
+      .context
+      .db
+      .write()
+      .transaction(|db| {
+        let doc_state = txn.encode_state_as_update_v1(&StateVector::default());
+        let sv = txn.state_vector().encode_v1();
+        let doc_state_key = make_doc_state_key(doc_id);
+        let sv_key = make_state_vector_key(doc_id);
+        db.insert(doc_state_key.as_ref(), doc_state)?;
+        db.insert(sv_key.as_ref(), sv)?;
+
+        Ok::<(), ConflictableTransactionError<PersistenceError>>(())
+      })
+      .map_err(|_: TransactionError<PersistenceError>| PersistenceError::InternalError)?;
+
+    let start = make_doc_start_key(doc_id);
+    let end = make_doc_end_key(doc_id);
+    let mut batch = Batch::default();
+    let iter = self.context.db.read().range(start..=end);
+    for key in iter {
+      let key = key?.0;
+      batch.remove(key);
+    }
+    self.context.db.write().apply_batch(batch)?;
     Ok(())
   }
 
@@ -57,7 +102,8 @@ impl<'a> YrsDocDB<'a> {
     &self,
     object_id: &K,
     txn: &mut TransactionMut,
-  ) -> Result<(), PersistenceError> {
+  ) -> Result<u32, PersistenceError> {
+    let mut update_count = 0;
     if let Some(did) = self.get_doc_id(object_id) {
       let doc_state_key = make_doc_state_key(did);
       if let Some(doc_state) = self.context.db.read().get(doc_state_key)? {
@@ -80,12 +126,13 @@ impl<'a> YrsDocDB<'a> {
           encoded_updates.len()
         );
         for encoded_update in encoded_updates {
+          update_count += 1;
           let update = Update::decode_v1(encoded_update.as_ref())?;
           txn.apply_update(update);
         }
       }
 
-      Ok(())
+      Ok(update_count)
     } else {
       Err(PersistenceError::DocumentNotExist)
     }

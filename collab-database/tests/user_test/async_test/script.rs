@@ -8,17 +8,23 @@ use collab_database::block::CreateRowParams;
 use collab_database::database::DuplicatedDatabase;
 use collab_database::fields::Field;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
-use collab_database::user::UserDatabase as InnerUserDatabase;
+use collab_database::user::{Config, UserDatabase as InnerUserDatabase};
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::CollabKV;
 use parking_lot::Mutex;
 use serde_json::Value;
 
-use crate::helper::{db_path, make_kv_db, TestTextCell};
+use crate::helper::{db_path, TestTextCell};
 
 pub enum DatabaseScript {
   CreateDatabase {
     params: CreateDatabaseParams,
+  },
+  OpenDatabase {
+    database_id: String,
+  },
+  CloseDatabase {
+    database_id: String,
   },
   CreateRow {
     database_id: String,
@@ -28,6 +34,10 @@ pub enum DatabaseScript {
     database_id: String,
     row_id: RowId,
     cells: Cells,
+  },
+  AssertDatabaseInDisk {
+    database_id: String,
+    expected: Value,
   },
   AssertDatabase {
     database_id: String,
@@ -48,22 +58,28 @@ pub struct DatabaseTest {
   pub db: Arc<CollabKV>,
   pub db_path: PathBuf,
   pub user_database: UserDatabase,
+  pub config: Config,
 }
 
 pub fn database_test() -> DatabaseTest {
-  DatabaseTest::new()
+  DatabaseTest::new(Config::default())
+}
+
+pub fn flushable_database_test() -> DatabaseTest {
+  DatabaseTest::new(Config { can_flush: true })
 }
 
 impl DatabaseTest {
-  pub fn new() -> Self {
+  pub fn new(config: Config) -> Self {
     let db_path = db_path();
     let db = Arc::new(CollabKV::open(db_path.clone()).unwrap());
-    let inner = InnerUserDatabase::new(1, db.clone());
+    let inner = InnerUserDatabase::new(1, db.clone(), config.clone());
     let user_database = UserDatabase(Arc::new(Mutex::new(inner)));
     Self {
       db,
       user_database,
       db_path,
+      config,
     }
   }
 
@@ -78,8 +94,9 @@ impl DatabaseTest {
     for script in scripts {
       let user_database = self.user_database.clone();
       let db = self.db.clone();
+      let config = self.config.clone();
       let handle = tokio::spawn(async move {
-        run_script(user_database, db, script);
+        run_script(user_database, db, config, script);
       });
       handles.push(handle);
     }
@@ -89,10 +106,21 @@ impl DatabaseTest {
   }
 }
 
-pub fn run_script(user_database: UserDatabase, db: Arc<CollabKV>, script: DatabaseScript) {
+pub fn run_script(
+  user_database: UserDatabase,
+  db: Arc<CollabKV>,
+  config: Config,
+  script: DatabaseScript,
+) {
   match script {
     DatabaseScript::CreateDatabase { params } => {
       user_database.lock().create_database(params).unwrap();
+    },
+    DatabaseScript::OpenDatabase { database_id } => {
+      user_database.lock().get_database(&database_id).unwrap();
+    },
+    DatabaseScript::CloseDatabase { database_id } => {
+      user_database.lock().close_database(&database_id);
     },
     DatabaseScript::CreateRow {
       database_id,
@@ -124,12 +152,20 @@ pub fn run_script(user_database: UserDatabase, db: Arc<CollabKV>, script: Databa
     //     .unwrap()
     //     .create_field(field);
     // },
+    DatabaseScript::AssertDatabaseInDisk {
+      database_id,
+      expected,
+    } => {
+      let inner = InnerUserDatabase::new(1, db, config);
+      let database = inner.get_database(&database_id).unwrap();
+      let actual = database.to_json_value();
+      assert_json_diff::assert_json_eq!(actual, expected);
+    },
     DatabaseScript::AssertDatabase {
       database_id,
       expected,
     } => {
-      let inner = InnerUserDatabase::new(1, db);
-      let database = inner.get_database(&database_id).unwrap();
+      let database = user_database.lock().get_database(&database_id).unwrap();
       let actual = database.to_json_value();
       assert_json_diff::assert_json_eq!(actual, expected);
     },

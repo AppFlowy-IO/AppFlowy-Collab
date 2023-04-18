@@ -1,13 +1,3 @@
-use std::fmt::Debug;
-use std::io::Write;
-use std::ops::{Deref, RangeTo};
-use std::path::Path;
-use std::sync::Arc;
-
-use parking_lot::RwLock;
-use sled::{Batch, Db, IVec};
-use smallvec::{smallvec, SmallVec};
-
 use crate::doc::YrsDocDB;
 use crate::error::PersistenceError;
 use crate::keys::DOC_KEY_SPACE;
@@ -16,6 +6,14 @@ use crate::keys::{
   make_snapshot_update_key_prefix, Clock, DocID, Key, SnapshotID, TERMINATOR,
 };
 use crate::snapshot::YrsSnapshotDB;
+use parking_lot::RwLock;
+use sled::{Batch, Db, IVec};
+use smallvec::{smallvec, SmallVec};
+use std::fmt::Debug;
+use std::io::Write;
+use std::ops::{Deref, RangeTo};
+use std::path::Path;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct CollabKV {
