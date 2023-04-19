@@ -1,4 +1,5 @@
 mod belonging_test;
+mod load_disk;
 mod serde_test;
 mod trash_test;
 mod util;
