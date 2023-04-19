@@ -176,11 +176,11 @@ impl UserDatabase {
     self.database_records.delete_database(database_id);
     match self.db.doc(self.uid).delete_doc(database_id) {
       Ok(_) => {},
-      Err(err) => tracing::error!("Delete database failed: {}", err),
+      Err(err) => tracing::error!("🔴Delete database failed: {}", err),
     }
     match self.db.snapshot(self.uid).delete_snapshot(database_id) {
       Ok(_) => {},
-      Err(err) => tracing::error!("Delete snapshot failed: {}", err),
+      Err(err) => tracing::error!("🔴 Delete snapshot failed: {}", err),
     }
     self.open_handlers.write().remove(database_id);
   }

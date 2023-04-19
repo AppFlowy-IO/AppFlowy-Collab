@@ -18,7 +18,7 @@ use crate::rows::{
 };
 use crate::views::RowOrder;
 
-const NUM_OF_BLOCKS: i64 = 3;
+const NUM_OF_BLOCKS: i64 = 10;
 
 /// It's used to store the blocks. Each [Block] is indexed by the block_id.
 #[derive(Clone)]

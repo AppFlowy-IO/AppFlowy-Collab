@@ -90,7 +90,7 @@ pub fn create_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabDB>) -> Doc
 
 pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabDB>) -> DocumentTest {
   let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
-  let collab = CollabBuilder::new(1, doc_id)
+  let collab = CollabBuilder::new(uid, doc_id)
     .with_plugin(disk_plugin)
     .build();
   collab.initial();

@@ -1,6 +1,11 @@
+use collab_persistence::keys::{clock_from_key, make_doc_update_key, Clock};
+use parking_lot::RwLock;
 use smallvec::{smallvec, SmallVec};
+
 use std::io::Write;
 use std::ops::{Deref, Range, RangeTo};
+use std::sync::Arc;
+use std::thread;
 
 use crate::util::db;
 
@@ -75,6 +80,46 @@ fn scan_prefix() {
   db.insert(v.as_ref(), &[0, 1, 1]).unwrap();
   let val = db.scan_prefix(&[1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 2]).last();
   assert!(val.is_none());
+}
+
+#[test]
+fn scan_prefix_multi_thread() {
+  let db = Arc::new(RwLock::new(db().1));
+  let mut handles = vec![];
+  let doc_id: u64 = 1;
+
+  for i in 0..1000 {
+    let step: i64 = i;
+    let cloned_db = db.clone();
+    let update_data = i.to_be_bytes();
+
+    let handle = thread::spawn(move || {
+      let cloned_db = cloned_db.write();
+      {
+        println!("start: {}", step);
+        let max_key = make_doc_update_key(doc_id, Clock::MAX);
+        let last_clock = if let Some(Ok((k, _v))) = cloned_db.range(..max_key).next_back() {
+          let clock_byte = clock_from_key(k.as_ref());
+          Clock::from_be_bytes(clock_byte.try_into().unwrap())
+        } else {
+          0
+        };
+
+        let clock = last_clock + 1;
+        let new_key = make_doc_update_key(doc_id, clock);
+        println!("value: {}", clock);
+        cloned_db.insert(new_key.as_ref(), &update_data).unwrap();
+        println!("stop: {}", step);
+        println!("*****");
+      }
+      drop(cloned_db);
+    });
+
+    handles.push(handle);
+  }
+  for handle in handles {
+    handle.join().unwrap();
+  }
 }
 
 #[test]

@@ -44,7 +44,7 @@ impl CollabPlugin for CollabSnapshotPlugin {
         .snapshot()
         .push_snapshot(object_id, "".to_string(), txn)
       {
-        tracing::error!("Generate snapshot failed: {}", err);
+        tracing::error!("🔴Generate snapshot failed: {}", err);
       }
     }
   }

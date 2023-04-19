@@ -1,7 +1,7 @@
 mod db;
 pub mod doc;
 pub mod error;
-mod keys;
+pub mod keys;
 mod kv;
 mod range;
 pub mod snapshot;

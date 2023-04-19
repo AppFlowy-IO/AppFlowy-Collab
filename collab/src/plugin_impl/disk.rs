@@ -1,9 +1,11 @@
+use lib0::error::Error;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 use collab_persistence::doc::YrsDocDB;
 use collab_persistence::CollabDB;
-use yrs::{Transaction, TransactionMut};
+use yrs::updates::decoder::Decode;
+use yrs::{Transaction, TransactionMut, Update};
 
 use crate::core::collab_plugin::CollabPlugin;
 use crate::error::CollabError;
@@ -59,6 +61,7 @@ impl CollabPlugin for CollabDiskPlugin {
         .initial_update_count
         .store(update_count, Ordering::SeqCst);
     } else {
+      tracing::trace!("🤲collab => {:?} not exist", object_id);
       self.doc().create_new_doc(object_id, txn).unwrap();
     }
   }
@@ -72,6 +75,13 @@ impl CollabPlugin for CollabDiskPlugin {
         tracing::trace!("Flush doc: {}", object_id);
       }
     }
+    // if update_count > 0 {
+    //   if let Err(e) = self.doc().flush_doc(object_id, txn) {
+    //     tracing::error!("🔴 Flush doc failed: {}, error: {:?}", object_id, e);
+    //   } else {
+    //     tracing::trace!("Flush doc: {}", object_id);
+    //   }
+    // }
 
     self.did_load.store(true, Ordering::SeqCst);
   }

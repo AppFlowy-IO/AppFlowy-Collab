@@ -7,10 +7,13 @@ use yrs::ReadTxn;
 
 use crate::db::{batch_get, batch_remove};
 use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, SnapshotID};
-use crate::{DbContext, PersistenceError};
+use crate::{
+  create_snapshot_id_for_key, get_snapshot_id_for_key, insert_snapshot_update, KVStore,
+  PersistenceError,
+};
 
 pub struct YrsSnapshotDB<'a> {
-  pub(crate) context: &'a DbContext,
+  pub(crate) store: &'a KVStore,
   pub(crate) uid: i64,
 }
 
@@ -24,9 +27,7 @@ impl<'a> YrsSnapshotDB<'a> {
     let data = encode_snapshot(txn);
     let snapshot = CollabSnapshot::new(data, description).to_vec();
     let snapshot_id = self.get_or_create_snapshot_id(object_id.as_ref())?;
-    self
-      .context
-      .insert_snapshot_update(snapshot_id, object_id, snapshot)?;
+    insert_snapshot_update(&self.store.read(), snapshot_id, object_id, snapshot)?;
     Ok(())
   }
 
@@ -35,7 +36,7 @@ impl<'a> YrsSnapshotDB<'a> {
     if let Some(snapshot_id) = self.get_snapshot_id(object_id) {
       let start = make_snapshot_update_key(snapshot_id, 0);
       let end = make_snapshot_update_key(snapshot_id, Clock::MAX);
-      if let Ok(encoded_snapshots) = batch_get(&self.context.db.read(), &start, &end) {
+      if let Ok(encoded_snapshots) = batch_get(&self.store.read(), &start, &end) {
         for encoded_snapshot in encoded_snapshots {
           if let Ok(snapshot) = CollabSnapshot::try_from(encoded_snapshot.as_ref()) {
             snapshots.push(snapshot);
@@ -53,7 +54,7 @@ impl<'a> YrsSnapshotDB<'a> {
     if let Some(snapshot_id) = self.get_snapshot_id(object_id) {
       let start = make_snapshot_update_key(snapshot_id, 0);
       let end = make_snapshot_update_key(snapshot_id, Clock::MAX);
-      batch_remove(&mut self.context.db.write(), &start, &end)?;
+      batch_remove(&self.store.read(), &start, &end)?;
     }
     Ok(())
   }
@@ -66,14 +67,14 @@ impl<'a> YrsSnapshotDB<'a> {
       Ok(snapshot_id)
     } else {
       let key = make_snapshot_id_key(&self.uid.to_be_bytes(), object_id.as_ref());
-      let new_snapshot_id = self.context.create_snapshot_id_for_key(key)?;
+      let new_snapshot_id = create_snapshot_id_for_key(&self.store.read(), key)?;
       Ok(new_snapshot_id)
     }
   }
 
   fn get_snapshot_id<K: AsRef<[u8]> + ?Sized>(&self, object_id: &K) -> Option<SnapshotID> {
     let key = make_snapshot_id_key(&self.uid.to_be_bytes(), object_id.as_ref());
-    self.context.get_snapshot_id_for_key(key)
+    get_snapshot_id_for_key(&self.store.read(), key)
   }
 }
 

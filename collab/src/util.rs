@@ -38,7 +38,7 @@ pub fn insert_json_value_to_map_ref(
       Ok(value) => {
         map_ref.insert(txn, key, value);
       },
-      Err(e) => tracing::error!("{:?}", e),
+      Err(e) => tracing::error!("🔴{:?}", e),
     }
   }
 }

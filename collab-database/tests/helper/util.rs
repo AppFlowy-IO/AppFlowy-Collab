@@ -323,7 +323,7 @@ impl std::convert::From<i64> for TestDateFormat {
       2 => TestDateFormat::ISO,
       3 => TestDateFormat::Friendly,
       _ => {
-        tracing::error!("Unsupported date format, fallback to friendly");
+        tracing::error!("🔴Unsupported date format, fallback to friendly");
         TestDateFormat::Friendly
       },
     }
@@ -357,7 +357,7 @@ impl std::convert::From<i64> for TestTimeFormat {
       0 => TestTimeFormat::TwelveHour,
       1 => TestTimeFormat::TwentyFourHour,
       _ => {
-        tracing::error!("Unsupported time format, fallback to TwentyFourHour");
+        tracing::error!("🔴 Unsupported time format, fallback to TwentyFourHour");
         TestTimeFormat::TwentyFourHour
       },
     }
@@ -528,7 +528,7 @@ impl std::convert::From<i64> for TestFieldType {
       6 => TestFieldType::URL,
       7 => TestFieldType::Checklist,
       _ => {
-        tracing::error!("Can't parser FieldType from value: {}", ty);
+        tracing::error!("🔴Can't parser FieldType from value: {}", ty);
         TestFieldType::RichText
       },
     }

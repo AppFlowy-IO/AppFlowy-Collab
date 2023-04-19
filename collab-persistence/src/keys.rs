@@ -22,7 +22,8 @@ use smallvec::{smallvec, SmallVec};
 //     SNAPSHOT_SPACE_OBJECT        object_id       TERMINATOR
 //     SNAPSHOT_SPACE_OBJECT_KEY    snapshot_id     SNAPSHOT_UPDATE(snapshot)
 
-pub const DOC_KEY_SPACE: u8 = 0;
+pub const DOC_KEY_SPACE: u8 = 3;
+pub const DOC_KEY_SPACE2: u8 = 2;
 
 /// Prefix byte used for all of the yrs object entries.
 pub const DOC_SPACE: u8 = 1;
@@ -80,6 +81,7 @@ pub fn doc_name_from_key(key: &[u8]) -> &[u8] {
   &key[2..(key.len() - 1)]
 }
 
+// [1,1,  0,0,0,0,0,0,0,0,  0]
 pub fn make_doc_state_key(doc_id: DocID) -> Key<DOC_STATE_KEY_LEN> {
   let mut v: SmallVec<[u8; DOC_STATE_KEY_LEN]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT_KEY];
   v.write_all(&doc_id.to_be_bytes()).unwrap();
@@ -131,6 +133,7 @@ pub fn clock_from_key(key: &[u8]) -> &[u8] {
   &key[(len - 5)..(len - 1)]
 }
 
+// [2,0, uid,  object_id,  0]
 pub fn make_snapshot_id_key(uid: &[u8], object_id: &[u8]) -> Key<20> {
   let mut v: SmallVec<[u8; 20]> = smallvec![SNAPSHOT_SPACE, SNAPSHOT_SPACE_OBJECT];
   v.write_all(uid).unwrap();
@@ -139,6 +142,7 @@ pub fn make_snapshot_id_key(uid: &[u8], object_id: &[u8]) -> Key<20> {
   Key(v)
 }
 
+// [2,0,  0,0,0,0,0,0,0,0,  1   [0,0,0,0],  0]
 pub fn make_snapshot_update_key(
   snapshot_id: SnapshotID,
   clock: Clock,
