@@ -27,6 +27,9 @@ impl<'a> YrsDocDB<'a> {
     object_id: &K,
     txn: &T,
   ) -> Result<(), PersistenceError> {
+    if self.is_exist(object_id) {
+      tracing::warn!("🟡{:?} already exist", object_id);
+    }
     let store = self.store.write();
     let doc_id = get_or_create_did(self.uid, &store, object_id.as_ref())?;
     match store
@@ -125,20 +128,6 @@ impl<'a> YrsDocDB<'a> {
     }
   }
 
-  ///
-  ///
-  /// # Arguments
-  ///
-  /// * `object_id`:
-  /// * `txn`:
-  ///
-  /// returns: Result<(), PersistenceError>
-  ///
-  /// # Examples
-  ///
-  /// ```
-  ///
-  /// ```
   pub fn load_doc<K: AsRef<[u8]> + ?Sized + Debug>(
     &self,
     object_id: &K,

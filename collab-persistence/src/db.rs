@@ -226,7 +226,7 @@ pub(crate) fn batch_get<K: AsRef<[u8]>>(
   let mut items = vec![];
   for item in iter {
     let (key, value) = item?;
-    tracing::trace!("😄 key: {:?}", key);
+    // tracing::trace!("😄 key: {:?}", key);
     items.push(value)
   }
   Ok(items)
