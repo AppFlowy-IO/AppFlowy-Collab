@@ -120,10 +120,7 @@ impl<'a> YrsDocDB<'a> {
   pub fn is_exist<K: AsRef<[u8]> + ?Sized + Debug>(&self, object_id: &K) -> bool {
     let doc_id = get_doc_id(self.uid, &self.store.read(), object_id);
     match doc_id {
-      None => {
-        tracing::trace!("🤲collab => {:?} not exist", object_id);
-        false
-      },
+      None => false,
       Some(_) => true,
     }
   }

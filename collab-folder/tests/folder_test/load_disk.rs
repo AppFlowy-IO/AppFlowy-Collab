@@ -1,8 +1,9 @@
+use std::sync::Arc;
+
 use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::CollabBuilder;
 use collab_folder::core::{Folder, FolderContext};
 use collab_persistence::CollabDB;
-use std::sync::Arc;
 
 #[test]
 fn load_from_disk() {

@@ -22,8 +22,7 @@ use smallvec::{smallvec, SmallVec};
 //     SNAPSHOT_SPACE_OBJECT        object_id       TERMINATOR
 //     SNAPSHOT_SPACE_OBJECT_KEY    snapshot_id     SNAPSHOT_UPDATE(snapshot)
 
-pub const DOC_KEY_SPACE: u8 = 3;
-pub const DOC_KEY_SPACE2: u8 = 2;
+pub const DOC_KEY_SPACE: u8 = 0;
 
 /// Prefix byte used for all of the yrs object entries.
 pub const DOC_SPACE: u8 = 1;

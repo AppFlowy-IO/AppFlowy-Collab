@@ -79,6 +79,7 @@ fn multiple_thread_create_document_test() {
   for i in 0..100 {
     let block_id = format!("block_{}", i).to_string();
     let doc = open_document_with_db(i, &format!("doc_id_{}", i), db.clone());
+    println!("😄{}", format!("doc_id_{}", i));
     let restore_block = doc.get_block(&block_id).unwrap();
     assert_eq!(restore_block.children, format!("children_{}", i));
   }
