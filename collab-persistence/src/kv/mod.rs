@@ -28,6 +28,8 @@ pub trait KVStore<'a> {
 
   /// Return the entry prior to the given key
   fn next_back_entry(&self, key: &[u8]) -> Result<Option<Self::Entry>, Self::Error>;
+
+  fn commit(self) -> Result<(), Self::Error>;
 }
 
 pub trait KVRange<'a> {
@@ -44,36 +46,40 @@ pub trait KVEntry {
   fn value(&self) -> &[u8];
 }
 
-impl<T> KVStore<'static> for Arc<T>
-where
-  T: KVStore<'static>,
-{
-  type Range = <T as KVStore<'static>>::Range;
-  type Entry = <T as KVStore<'static>>::Entry;
-  type Value = <T as KVStore<'static>>::Value;
-  type Error = <T as KVStore<'static>>::Error;
-
-  fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<Self::Value>, Self::Error> {
-    (**self).get(key)
-  }
-
-  fn insert<K: AsRef<[u8]>, V: AsRef<[u8]>>(&self, key: K, value: V) -> Result<(), Self::Error> {
-    (**self).insert(key, value)
-  }
-
-  fn remove(&self, key: &[u8]) -> Result<(), Self::Error> {
-    (**self).remove(key)
-  }
-
-  fn remove_range(&self, from: &[u8], to: &[u8]) -> Result<(), Self::Error> {
-    (**self).remove_range(from, to)
-  }
-
-  fn range<K: AsRef<[u8]>, R: RangeBounds<K>>(&self, range: R) -> Result<Self::Range, Self::Error> {
-    self.as_ref().range(range)
-  }
-
-  fn next_back_entry(&self, key: &[u8]) -> Result<Option<Self::Entry>, Self::Error> {
-    (**self).next_back_entry(key)
-  }
-}
+// impl<T> KVStore<'static> for Arc<T>
+// where
+//   T: KVStore<'static>,
+// {
+//   type Range = <T as KVStore<'static>>::Range;
+//   type Entry = <T as KVStore<'static>>::Entry;
+//   type Value = <T as KVStore<'static>>::Value;
+//   type Error = <T as KVStore<'static>>::Error;
+//
+//   fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<Self::Value>, Self::Error> {
+//     (**self).get(key)
+//   }
+//
+//   fn insert<K: AsRef<[u8]>, V: AsRef<[u8]>>(&self, key: K, value: V) -> Result<(), Self::Error> {
+//     (**self).insert(key, value)
+//   }
+//
+//   fn remove(&self, key: &[u8]) -> Result<(), Self::Error> {
+//     (**self).remove(key)
+//   }
+//
+//   fn remove_range(&self, from: &[u8], to: &[u8]) -> Result<(), Self::Error> {
+//     (**self).remove_range(from, to)
+//   }
+//
+//   fn range<K: AsRef<[u8]>, R: RangeBounds<K>>(&self, range: R) -> Result<Self::Range, Self::Error> {
+//     self.as_ref().range(range)
+//   }
+//
+//   fn next_back_entry(&self, key: &[u8]) -> Result<Option<Self::Entry>, Self::Error> {
+//     (**self).next_back_entry(key)
+//   }
+//
+//   fn commit(self) -> Result<(), Self::Error> {
+//     (**self).commit()
+//   }
+// }

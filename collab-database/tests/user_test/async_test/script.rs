@@ -174,13 +174,13 @@ pub fn run_script(
       oid: database_id,
       expected,
     } => {
-      assert_eq!(db.doc_store.read().is_exist(1, &database_id), expected,)
+      assert_eq!(db.kv_store_impl().is_exist(1, &database_id), expected,)
     },
     DatabaseScript::AssertNumOfUpdates {
       oid: database_id,
       expected,
     } => {
-      let updates = db.doc_store.read().get_updates(1, &database_id).unwrap();
+      let updates = db.kv_store_impl().get_updates(1, &database_id).unwrap();
       assert_eq!(updates.len(), expected,);
     },
   }

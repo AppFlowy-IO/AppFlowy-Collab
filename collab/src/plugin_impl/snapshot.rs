@@ -35,7 +35,7 @@ impl CollabPlugin for CollabSnapshotPlugin {
   fn after_transaction(&self, object_id: &str, txn: &mut TransactionMut) {
     let count = self.increase_count();
     if count != 0 && count % self.snapshot_per_txn == 0 {
-      let snapshot = self.db.snapshot_store.write();
+      let snapshot = self.db.kv_store_impl();
       // generate snapshot
       if let Err(err) = snapshot.push_snapshot(self.uid, object_id, "".to_string(), txn) {
         tracing::error!("🔴Generate snapshot failed: {}", err);

@@ -118,8 +118,7 @@ impl CollabPersistenceTest {
       Script::DeleteDocument { id } => {
         self
           .disk_plugin
-          .doc_store
-          .write()
+          .kv_store_impl()
           .delete_doc(self.uid, &id)
           .unwrap();
       },
@@ -138,14 +137,13 @@ impl CollabPersistenceTest {
       Script::AssertNumOfUpdates { id, expected } => {
         let updates = self
           .disk_plugin
-          .doc_store
-          .read()
+          .kv_store_impl()
           .get_updates(self.uid, &id)
           .unwrap();
         assert_eq!(updates.len(), expected)
       },
       Script::AssertNumOfDocuments { expected } => {
-        let docs = self.disk_plugin.doc_store.read().get_all_docs().unwrap();
+        let docs = self.disk_plugin.kv_store_impl().get_all_docs().unwrap();
         assert_eq!(docs.count(), expected);
       },
       Script::AssertSnapshot {
@@ -153,7 +151,7 @@ impl CollabPersistenceTest {
         index,
         expected,
       } => {
-        let snapshot = self.snapshot_plugin.db.snapshot_store.read();
+        let snapshot = self.snapshot_plugin.db.kv_store_impl();
         let snapshots = snapshot.get_snapshots(self.snapshot_plugin.uid, &id);
         let collab = CollabBuilder::new(1, &id).build();
         collab.with_transact_mut(|txn| {

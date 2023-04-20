@@ -17,9 +17,7 @@ use crate::oid::{OID, OID_GEN, OID_LEN};
 
 #[derive(Clone)]
 pub struct CollabDB<S> {
-  pub(crate) store: S,
-  pub doc_store: Arc<SubStore<S>>,
-  pub snapshot_store: Arc<SubStore<S>>,
+  pub store: Arc<RwStore<S>>,
 }
 
 impl<S> CollabDB<S>
@@ -27,27 +25,22 @@ where
   S: KVStore<'static> + Clone,
 {
   pub fn new(store: S) -> Result<Self, PersistenceError> {
-    let doc_store = Arc::new(SubStore::new(store.clone()));
-    let snapshot_store = Arc::new(SubStore::new(store.clone()));
-    Ok(Self {
-      store,
-      doc_store,
-      snapshot_store,
-    })
+    let store = Arc::new(RwStore::new(store));
+    Ok(Self { store })
   }
 }
 
 impl<S> Deref for CollabDB<S> {
-  type Target = S;
+  type Target = Arc<RwStore<S>>;
 
   fn deref(&self) -> &Self::Target {
     &self.store
   }
 }
 
-pub struct SubStore<T>(RwLock<T>);
+pub struct RwStore<T>(RwLock<T>);
 
-impl<T> SubStore<T>
+impl<T> RwStore<T>
 where
   T: KVStore<'static>,
 {
@@ -56,7 +49,7 @@ where
   }
 }
 
-impl<T> Deref for SubStore<T>
+impl<T> Deref for RwStore<T>
 where
   T: KVStore<'static>,
 {

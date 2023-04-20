@@ -57,7 +57,7 @@ impl CollabDiskPlugin {
 
 impl CollabPlugin for CollabDiskPlugin {
   fn init(&self, object_id: &str, txn: &mut TransactionMut) {
-    let doc = self.db.doc_store.write();
+    let doc = self.db.kv_store_impl();
     if doc.is_exist(self.uid, object_id) {
       let update_count = doc.load_doc(self.uid, object_id, txn).unwrap();
       self
@@ -72,7 +72,7 @@ impl CollabPlugin for CollabDiskPlugin {
   fn did_init(&self, object_id: &str, txn: &Transaction) {
     let update_count = self.initial_update_count.load(Ordering::SeqCst);
     if update_count > 0 && self.can_flush {
-      let store = self.db.doc_store.write();
+      let store = self.db.kv_store_impl();
       if let Err(e) = store.flush_doc(self.uid, object_id, txn) {
         tracing::error!("Failed to flush doc: {}, error: {:?}", object_id, e);
       } else {
@@ -93,8 +93,7 @@ impl CollabPlugin for CollabDiskPlugin {
     if self.did_load.load(Ordering::SeqCst) {
       self
         .db
-        .doc_store
-        .write()
+        .kv_store_impl()
         .push_update(self.uid, object_id, update)
         .unwrap();
     }

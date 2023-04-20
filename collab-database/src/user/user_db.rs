@@ -173,13 +173,12 @@ impl UserDatabase {
   /// Delete the database with the given database id.
   pub fn delete_database(&self, database_id: &str) {
     self.database_records.delete_database(database_id);
-    let store = self.db.doc_store.write();
+    let store = self.db.kv_store_impl();
     match store.delete_doc(self.uid, database_id) {
       Ok(_) => {},
       Err(err) => tracing::error!("🔴Delete database failed: {}", err),
     }
 
-    let store = self.db.snapshot_store.write();
     match store.delete_snapshot(self.uid, database_id) {
       Ok(_) => {},
       Err(err) => tracing::error!("🔴 Delete snapshot failed: {}", err),
@@ -198,7 +197,7 @@ impl UserDatabase {
   }
 
   pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
-    let store = self.db.snapshot_store.write();
+    let store = self.db.kv_store_impl();
     store.get_snapshots(self.uid, database_id)
   }
 

@@ -1,5 +1,5 @@
 use crate::kv::{KVEntry, KVStore};
-use crate::PersistenceError;
+use crate::{CollabDB, PersistenceError};
 use rocksdb::Direction::Forward;
 use rocksdb::{
   DBAccess, DBCommon, DBIteratorWithThreadMode, Direction, IteratorMode, ReadOptions,
@@ -10,6 +10,9 @@ use std::ops::{Deref, RangeBounds};
 use std::path::Path;
 use std::sync::Arc;
 
+pub type RocksCollabDB = RocksKVStore;
+
+#[derive(Clone)]
 pub struct RocksKVStore {
   db: Arc<TransactionDB>,
 }
@@ -20,21 +23,15 @@ impl RocksKVStore {
     Ok(Self { db })
   }
 
-  pub fn kv_store_impl(&self) -> KVStoreImpl<'_, TransactionDB> {
+  pub fn kv_store_impl(&self) -> RocksKVStoreImpl<'_, TransactionDB> {
     let txn = self.db.transaction();
-    KVStoreImpl(txn)
+    RocksKVStoreImpl(txn)
   }
 }
 
-pub struct KVStoreImpl<'a, DB>(Transaction<'a, DB>);
+pub struct RocksKVStoreImpl<'a, DB>(Transaction<'a, DB>);
 
-impl<'a, DB> KVStoreImpl<'a, DB> {
-  pub fn commit(self) -> Result<(), rocksdb::Error> {
-    self.0.commit()
-  }
-}
-
-impl<'a, DB> KVStore<'a> for KVStoreImpl<'a, DB> {
+impl<'a, DB> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
   type Range = RocksDBRange<'a, DB>;
   type Entry = RocksDBEntry;
   type Value = RocksDBVec;
@@ -117,23 +114,28 @@ impl<'a, DB> KVStore<'a> for KVStoreImpl<'a, DB> {
       Ok(None)
     }
   }
-}
 
-impl<'a, DB> From<Transaction<'a, DB>> for KVStoreImpl<'a, DB> {
-  #[inline(always)]
-  fn from(txn: Transaction<'a, DB>) -> Self {
-    KVStoreImpl(txn)
+  fn commit(self) -> Result<(), Self::Error> {
+    self.0.commit()?;
+    Ok(())
   }
 }
 
-impl<'a, DB> Into<Transaction<'a, DB>> for KVStoreImpl<'a, DB> {
+impl<'a, DB> From<Transaction<'a, DB>> for RocksKVStoreImpl<'a, DB> {
+  #[inline(always)]
+  fn from(txn: Transaction<'a, DB>) -> Self {
+    RocksKVStoreImpl(txn)
+  }
+}
+
+impl<'a, DB> Into<Transaction<'a, DB>> for RocksKVStoreImpl<'a, DB> {
   #[inline(always)]
   fn into(self) -> Transaction<'a, DB> {
     self.0
   }
 }
 
-impl<'a, DB> Deref for KVStoreImpl<'a, DB> {
+impl<'a, DB> Deref for RocksKVStoreImpl<'a, DB> {
   type Target = Transaction<'a, DB>;
 
   #[inline(always)]
@@ -143,88 +145,6 @@ impl<'a, DB> Deref for KVStoreImpl<'a, DB> {
 }
 
 pub type RocksDBVec = Vec<u8>;
-
-impl KVStore<'static> for RocksKVStore {
-  type Range = RocksDBRange2;
-  type Entry = RocksDBEntry;
-  type Value = RocksDBVec;
-  type Error = PersistenceError;
-
-  fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<Self::Value>, Self::Error> {
-    if let Some(value) = self.db.get(key)? {
-      Ok(Some(value))
-    } else {
-      Ok(None)
-    }
-  }
-
-  fn insert<K: AsRef<[u8]>, V: AsRef<[u8]>>(&self, key: K, value: V) -> Result<(), Self::Error> {
-    self.db.put(key, value)?;
-    Ok(())
-  }
-
-  fn remove(&self, key: &[u8]) -> Result<(), Self::Error> {
-    self.db.delete(key)?;
-    Ok(())
-  }
-
-  fn remove_range(&self, from: &[u8], to: &[u8]) -> Result<(), Self::Error> {
-    let mut opt = ReadOptions::default();
-    opt.set_iterate_lower_bound(from);
-    opt.set_iterate_upper_bound(to);
-    let mut i = self
-      .db
-      .iterator_opt(IteratorMode::From(from, Direction::Forward), opt);
-    while let Some(res) = i.next() {
-      let (key, _) = res?;
-      self.db.delete(key)?;
-    }
-    Ok(())
-  }
-
-  fn range<K: AsRef<[u8]>, R: RangeBounds<K>>(&self, range: R) -> Result<Self::Range, Self::Error> {
-    let mut opt = ReadOptions::default();
-    let mut from: &[u8] = &[];
-    match range.start_bound() {
-      ops::Bound::Included(start) => {
-        from = start.as_ref();
-        opt.set_iterate_lower_bound(start.as_ref());
-      },
-      ops::Bound::Excluded(start) => {
-        from = start.as_ref();
-        opt.set_iterate_lower_bound(start.as_ref());
-      },
-      ops::Bound::Unbounded => {},
-    };
-
-    match range.end_bound() {
-      ops::Bound::Included(end) => {
-        opt.set_iterate_upper_bound(end.as_ref());
-      },
-      ops::Bound::Excluded(end) => {
-        opt.set_iterate_upper_bound(end.as_ref());
-      },
-      ops::Bound::Unbounded => {},
-    };
-    let iterator_mode = IteratorMode::From(from, rocksdb::Direction::Forward);
-    // let iter = self.db.iterator_opt(iterator_mode, opt);
-    // Ok(RocksDBRange {
-    //   iter: unsafe { std::mem::transmute(raw) },
-    // })
-    todo!()
-  }
-
-  fn next_back_entry(&self, key: &[u8]) -> Result<Option<Self::Entry>, Self::Error> {
-    let opt = ReadOptions::default();
-    let mut raw = self.db.raw_iterator_opt(opt);
-    raw.seek_for_prev(key);
-    if let Some((key, value)) = raw.item() {
-      Ok(Some(RocksDBEntry::new(key.to_vec(), value.to_vec())))
-    } else {
-      Ok(None)
-    }
-  }
-}
 
 pub struct RocksDBRange<'a, DB> {
   inner: DBIteratorWithThreadMode<'a, Transaction<'a, DB>>,
@@ -248,21 +168,6 @@ impl<'a, DB> Iterator for RocksDBRange<'a, DB> {
   }
 }
 
-//
-pub struct RocksDBRange2 {
-  db: Arc<DB>,
-  from: Vec<u8>,
-  options: ReadOptions,
-}
-
-impl Iterator for RocksDBRange2 {
-  type Item = RocksDBEntry;
-
-  fn next(&mut self) -> Option<Self::Item> {
-    todo!()
-  }
-}
-
 pub struct RocksDBEntry {
   key: Vec<u8>,
   value: Vec<u8>,
@@ -283,7 +188,3 @@ impl KVEntry for RocksDBEntry {
     self.value.as_ref()
   }
 }
-
-// #[cfg(test)]
-// mod tests {
-// }

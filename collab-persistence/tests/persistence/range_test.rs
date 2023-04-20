@@ -7,20 +7,23 @@ use std::ops::{Deref, Range, RangeTo};
 use std::sync::Arc;
 use std::thread;
 
-use crate::util::db;
+use crate::util::{db, rocks_db};
 
 #[test]
 fn id_test() {
-  let db = db().1;
-  db.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
-  db.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
-  db.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
-  db.insert([0, 0, 0, 0, 0, 0, 0, 3], &[0, 1, 4]).unwrap();
-  db.insert([0, 1, 0, 0, 0, 0, 0, 4], &[0, 1, 5]).unwrap();
-  db.insert([0, 1, 0, 0, 0, 0, 0, 5], &[0, 1, 6]).unwrap();
+  let db = rocks_db().1;
+  let store = db.kv_store_impl();
+  store.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
+  store.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
+  store.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
+  store.insert([0, 0, 0, 0, 0, 0, 0, 3], &[0, 1, 4]).unwrap();
+  store.insert([0, 1, 0, 0, 0, 0, 0, 4], &[0, 1, 5]).unwrap();
+  store.insert([0, 1, 0, 0, 0, 0, 0, 5], &[0, 1, 6]).unwrap();
+  store.commit().unwrap();
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, 1];
   let last_entry_prior = db
+    .kv_store_impl()
     .next_back_entry(given_key)
     .expect("No entry found prior to the given key")
     .unwrap();
@@ -28,6 +31,7 @@ fn id_test() {
 
   let given_key: &[u8; 2] = &[0, 1];
   let last_entry_prior = db
+    .kv_store_impl()
     .next_back_entry(given_key)
     .expect("No entry found prior to the given key")
     .unwrap();
@@ -37,9 +41,11 @@ fn id_test() {
 #[test]
 fn key_range_test() {
   let db = db().1;
+  let store = db.kv_store_impl();
   let next = || {
     let given_key: &[u8; 2] = &[0, 2];
     let val = db
+      .kv_store_impl()
       .next_back_entry(given_key)
       .expect("No entry found prior to the given key")
       .unwrap();
@@ -47,26 +53,30 @@ fn key_range_test() {
     u64::from_be_bytes(val.value().try_into().unwrap())
   };
 
-  db.insert([0, 0, 0, 0, 0, 0, 0, 0], &(1 as u64).to_be_bytes())
+  store
+    .insert([0, 0, 0, 0, 0, 0, 0, 0], &(1 as u64).to_be_bytes())
     .unwrap();
   assert_eq!(next(), 1);
 
-  db.insert([0, 0, 0, 0, 0, 0, 1, 1], &(2 as u64).to_be_bytes())
+  store
+    .insert([0, 0, 0, 0, 0, 0, 1, 1], &(2 as u64).to_be_bytes())
     .unwrap();
   assert_eq!(next(), 2);
 
-  db.insert([0, 0, 0, 0, 0, 0, 1, 2], &(3 as u64).to_be_bytes())
+  store
+    .insert([0, 0, 0, 0, 0, 0, 1, 2], &(3 as u64).to_be_bytes())
     .unwrap();
   assert_eq!(next(), 3);
 
-  db.insert([0, 0, 1, 0, 0, 0, 1, 2], &(4 as u64).to_be_bytes())
+  store
+    .insert([0, 0, 1, 0, 0, 0, 1, 2], &(4 as u64).to_be_bytes())
     .unwrap();
   assert_eq!(next(), 4);
 }
 
 #[test]
 fn scan_prefix_multi_thread() {
-  let db = Arc::new(RwLock::new(db().1));
+  let db = Arc::new(db().1);
   let mut handles = vec![];
   let doc_id: u64 = 1;
 
@@ -76,7 +86,7 @@ fn scan_prefix_multi_thread() {
     let update_data = i.to_be_bytes();
 
     let handle = thread::spawn(move || {
-      let cloned_db = cloned_db.write();
+      let cloned_db = cloned_db.kv_store_impl();
       {
         println!("start: {}", step);
         let max_key = make_doc_update_key(doc_id, Clock::MAX);
@@ -107,24 +117,27 @@ fn scan_prefix_multi_thread() {
 #[test]
 fn range_key_test() {
   let db = db().1;
-  db.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
-  db.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
-  db.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
+  let store = db.kv_store_impl();
+  store.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
+  store.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
+  store.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
 
-  db.insert([0, 0, 1, 0, 0, 0, 0, 0], &[0, 2, 1]).unwrap();
-  db.insert([0, 0, 1, 0, 0, 0, 0, 1], &[0, 2, 2]).unwrap();
-  db.insert([0, 0, 1, 0, 0, 0, 0, 2], &[0, 2, 3]).unwrap();
+  store.insert([0, 0, 1, 0, 0, 0, 0, 0], &[0, 2, 1]).unwrap();
+  store.insert([0, 0, 1, 0, 0, 0, 0, 1], &[0, 2, 2]).unwrap();
+  store.insert([0, 0, 1, 0, 0, 0, 0, 2], &[0, 2, 3]).unwrap();
 
-  db.insert([0, 0, 2, 0, 0, 0, 0, 0], &[0, 3, 1]).unwrap();
-  db.insert([0, 0, 2, 0, 0, 0, 0, 1], &[0, 3, 2]).unwrap();
-  db.insert([0, 0, 2, 0, 0, 0, 0, 2], &[0, 3, 3]).unwrap();
+  store.insert([0, 0, 2, 0, 0, 0, 0, 0], &[0, 3, 1]).unwrap();
+  store.insert([0, 0, 2, 0, 0, 0, 0, 1], &[0, 3, 2]).unwrap();
+  store.insert([0, 0, 2, 0, 0, 0, 0, 2], &[0, 3, 3]).unwrap();
 
-  db.insert([0, 1, 0, 0, 0, 0, 0, 3], &[0, 1, 4]).unwrap();
-  db.insert([0, 1, 0, 0, 0, 0, 0, 4], &[0, 1, 5]).unwrap();
-  db.insert([0, 1, 0, 0, 0, 0, 0, 5], &[0, 1, 6]).unwrap();
+  store.insert([0, 1, 0, 0, 0, 0, 0, 3], &[0, 1, 4]).unwrap();
+  store.insert([0, 1, 0, 0, 0, 0, 0, 4], &[0, 1, 5]).unwrap();
+  store.insert([0, 1, 0, 0, 0, 0, 0, 5], &[0, 1, 6]).unwrap();
+  store.commit().unwrap();
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, u8::MAX];
-  let mut iter = db
+  let store = db.kv_store_impl();
+  let mut iter = store
     .range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key)
     .unwrap();
   assert_eq!(iter.next().unwrap().value(), &[0, 1, 1]);
@@ -134,7 +147,7 @@ fn range_key_test() {
 
   let start: &[u8; 8] = &[0, 0, 1, 0, 0, 0, 0, 0];
   let given_key: &[u8; 8] = &[0, 0, 1, 0, 0, 0, 0, u8::MAX];
-  let mut iter = db
+  let mut iter = store
     .range::<&[u8; 8], Range<&[u8; 8]>>(start..given_key)
     .unwrap();
   assert_eq!(iter.next().unwrap().value(), &[0, 2, 1]);
@@ -143,14 +156,14 @@ fn range_key_test() {
   assert!(iter.next().is_none());
 
   let given_key: &[u8; 2] = &[0, 1];
-  let last_entry_prior = db
+  let last_entry_prior = store
       .next_back_entry(given_key) // Create a range up to (excluding) the given key
       .expect("No entry found prior to the given key").unwrap();
   assert_eq!(last_entry_prior.value(), &[0, 3, 3]);
 
   let start: &[u8; 8] = &[0, 1, 0, 0, 0, 0, 0, 3];
   let given_key: &[u8; 8] = &[0, 1, 0, 0, 0, 0, 0, u8::MAX];
-  let mut iter = db
+  let mut iter = store
     .range::<&[u8; 8], Range<&[u8; 8]>>(start..given_key)
     .unwrap();
   assert_eq!(iter.next().unwrap().value(), &[0, 1, 4]);

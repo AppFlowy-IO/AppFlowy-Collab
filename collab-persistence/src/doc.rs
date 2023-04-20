@@ -10,7 +10,7 @@ use crate::keys::{
 };
 use crate::kv::KVEntry;
 use crate::kv::KVStore;
-use crate::{create_id_for_key, get_id_for_key, insert_doc_update, PersistenceError, SubStore};
+use crate::{create_id_for_key, get_id_for_key, insert_doc_update, PersistenceError, RwStore};
 
 impl<'a, T> YrsDocAction<'a> for T
 where
