@@ -3,7 +3,8 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 use collab_persistence::doc::YrsDocDB;
-use collab_persistence::CollabDB;
+use collab_persistence::kv::kv_sled_impl::SledKV;
+use collab_persistence::{CollabDB, SledCollabDB};
 use yrs::updates::decoder::Decode;
 use yrs::{Transaction, TransactionMut, Update};
 
@@ -15,12 +16,12 @@ pub struct CollabDiskPlugin {
   uid: i64,
   did_load: Arc<AtomicBool>,
   initial_update_count: Arc<AtomicU32>,
-  db: Arc<CollabDB>,
+  db: Arc<SledCollabDB>,
   can_flush: bool,
 }
 
 impl CollabDiskPlugin {
-  pub fn new(uid: i64, db: Arc<CollabDB>) -> Result<Self, CollabError> {
+  pub fn new(uid: i64, db: Arc<SledCollabDB>) -> Result<Self, CollabError> {
     let did_load = Arc::new(AtomicBool::new(false));
     let initial_update_count = Arc::new(AtomicU32::new(0));
     Ok(Self {
@@ -33,7 +34,7 @@ impl CollabDiskPlugin {
   }
   pub fn new_with_config(
     uid: i64,
-    db: Arc<CollabDB>,
+    db: Arc<SledCollabDB>,
     can_flush: bool,
   ) -> Result<Self, CollabError> {
     let did_load = Arc::new(AtomicBool::new(false));
@@ -47,7 +48,7 @@ impl CollabDiskPlugin {
     })
   }
 
-  pub fn doc(&self) -> YrsDocDB {
+  pub fn doc(&self) -> YrsDocDB<SledKV> {
     self.db.doc(self.uid)
   }
 }
@@ -82,7 +83,6 @@ impl CollabPlugin for CollabDiskPlugin {
     //     tracing::trace!("Flush doc: {}", object_id);
     //   }
     // }
-
     self.did_load.store(true, Ordering::SeqCst);
   }
 

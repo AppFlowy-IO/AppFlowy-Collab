@@ -1,7 +1,8 @@
 use crate::error::CollabError;
 use crate::preclude::CollabPlugin;
+use collab_persistence::kv::kv_sled_impl::SledKV;
 use collab_persistence::snapshot::YrsSnapshotDB;
-use collab_persistence::CollabDB;
+use collab_persistence::{CollabDB, SledCollabDB};
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;
@@ -10,13 +11,13 @@ use yrs::TransactionMut;
 #[derive(Clone)]
 pub struct CollabSnapshotPlugin {
   uid: i64,
-  db: Arc<CollabDB>,
+  db: Arc<SledCollabDB>,
   update_count: Arc<AtomicU32>,
   snapshot_per_txn: u32,
 }
 
 impl CollabSnapshotPlugin {
-  pub fn new(uid: i64, db: Arc<CollabDB>, snapshot_per_txn: u32) -> Result<Self, CollabError> {
+  pub fn new(uid: i64, db: Arc<SledCollabDB>, snapshot_per_txn: u32) -> Result<Self, CollabError> {
     let update_count = Arc::new(AtomicU32::new(0));
     Ok(Self {
       uid,
@@ -26,7 +27,7 @@ impl CollabSnapshotPlugin {
     })
   }
 
-  pub fn snapshot(&self) -> YrsSnapshotDB {
+  pub fn snapshot(&self) -> YrsSnapshotDB<SledKV> {
     self.db.snapshot(self.uid)
   }
 

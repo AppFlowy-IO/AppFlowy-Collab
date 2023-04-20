@@ -2,11 +2,12 @@ use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::*;
 use lib0::any::Any;
 
-use collab_persistence::CollabDB;
+use collab_persistence::{CollabDB, SledCollabDB};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
+use collab_persistence::kv::kv_sled_impl::SledKV;
 use std::sync::Arc;
 use tempfile::TempDir;
 use yrs::updates::decoder::Decode;
@@ -67,7 +68,7 @@ impl CollabPersistenceTest {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let uid = 1;
-    let db = Arc::new(CollabDB::open(path.clone()).unwrap());
+    let db = Arc::new(SledCollabDB::open(path.clone()).unwrap());
     let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
     let snapshot_plugin = CollabSnapshotPlugin::new(uid, db, 5).unwrap();
     let cleaner = Cleaner::new(path.clone());
@@ -159,8 +160,8 @@ impl CollabPersistenceTest {
 pub fn disk_plugin(uid: i64) -> CollabDiskPlugin {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(CollabDB::open(path).unwrap());
-  CollabDiskPlugin::new(uid, db).unwrap()
+  let db = Arc::new(SledCollabDB::open(path).unwrap());
+  CollabDiskPlugin::new(uid, db.clone()).unwrap()
 }
 
 struct Cleaner(PathBuf);

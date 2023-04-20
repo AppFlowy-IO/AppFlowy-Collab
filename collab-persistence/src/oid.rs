@@ -15,6 +15,9 @@ const TIMESTAMP_SHIFT: u64 = NODE_BITS + SEQUENCE_BITS;
 const SCOPE_SHIFT: u64 = TIMESTAMP_BITS + TIMESTAMP_SHIFT;
 const SEQUENCE_MASK: u64 = (1 << SEQUENCE_BITS) - 1;
 
+pub type OID = u64;
+pub const OID_LEN: usize = 8;
+
 lazy_static! {
   pub static ref OID_GEN: Mutex<OIDGen> = Mutex::new(OIDGen::new(1));
 }

@@ -10,7 +10,7 @@ use collab_database::fields::Field;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::{Config, UserDatabase as InnerUserDatabase};
 use collab_database::views::CreateDatabaseParams;
-use collab_persistence::CollabDB;
+use collab_persistence::{CollabDB, SledCollabDB};
 use parking_lot::Mutex;
 use serde_json::Value;
 
@@ -55,7 +55,7 @@ pub enum DatabaseScript {
 
 #[derive(Clone)]
 pub struct DatabaseTest {
-  pub db: Arc<CollabDB>,
+  pub db: Arc<SledCollabDB>,
   pub db_path: PathBuf,
   pub user_database: UserDatabase,
   pub config: Config,
@@ -72,7 +72,7 @@ pub fn flushable_database_test() -> DatabaseTest {
 impl DatabaseTest {
   pub fn new(config: Config) -> Self {
     let db_path = db_path();
-    let db = Arc::new(CollabDB::open(db_path.clone()).unwrap());
+    let db = Arc::new(SledCollabDB::open(db_path.clone()).unwrap());
     let inner = InnerUserDatabase::new(1, db.clone(), config.clone());
     let user_database = UserDatabase(Arc::new(Mutex::new(inner)));
     Self {
@@ -108,7 +108,7 @@ impl DatabaseTest {
 
 pub fn run_script(
   user_database: UserDatabase,
-  db: Arc<CollabDB>,
+  db: Arc<SledCollabDB>,
   config: Config,
   script: DatabaseScript,
 ) {

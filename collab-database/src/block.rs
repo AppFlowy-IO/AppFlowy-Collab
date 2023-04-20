@@ -7,7 +7,7 @@ use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::{
   Collab, CollabBuilder, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
-use collab_persistence::CollabDB;
+use collab_persistence::{CollabDB, SledCollabDB};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
@@ -27,7 +27,7 @@ pub struct Blocks {
 }
 
 impl Blocks {
-  pub fn new(uid: i64, db: Arc<CollabDB>) -> Self {
+  pub fn new(uid: i64, db: Arc<SledCollabDB>) -> Self {
     let blocks = RwLock::new(HashMap::new());
     let mut write_guard = blocks.write();
 

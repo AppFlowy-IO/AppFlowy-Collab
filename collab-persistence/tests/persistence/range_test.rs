@@ -2,6 +2,7 @@ use collab_persistence::keys::{clock_from_key, make_doc_update_key, Clock};
 use parking_lot::RwLock;
 use smallvec::{smallvec, SmallVec};
 
+use collab_persistence::kv::{KVEntry, KV};
 use std::io::Write;
 use std::ops::{Deref, Range, RangeTo};
 use std::sync::Arc;
@@ -21,21 +22,17 @@ fn id_test() {
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, 1];
   let last_entry_prior = db
-      .range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key) // Create a range up to (excluding) the given key
-      .next_back()
-      .expect("No entry found prior to the given key").unwrap();
-  assert_eq!(last_entry_prior.1.as_ref(), &[0, 1, 1]);
+    .next_back_entry(given_key)
+    .expect("No entry found prior to the given key")
+    .unwrap();
+  assert_eq!(last_entry_prior.value(), &[0, 1, 1]);
 
   let given_key: &[u8; 2] = &[0, 1];
   let last_entry_prior = db
-      .range::<&[u8; 2], RangeTo<&[u8; 2]>>(..given_key) // Create a range up to (excluding) the given key
-      .next_back()
-      .expect("No entry found prior to the given key").unwrap();
-  println!("{:?}", last_entry_prior.1);
-
-  let prefix: &[u8] = &[0, 1, 0, 0, 0, 0, 0];
-  let mut r = db.scan_prefix(prefix);
-  println!("{:?}", r.next_back())
+    .next_back_entry(given_key)
+    .expect("No entry found prior to the given key")
+    .unwrap();
+  println!("{:?}", last_entry_prior.value());
 }
 
 #[test]
@@ -44,11 +41,11 @@ fn key_range_test() {
   let next = || {
     let given_key: &[u8; 2] = &[0, 2];
     let val = db
-        .range::<&[u8; 2], RangeTo<&[u8; 2]>>(..given_key) // Create a range up to (excluding) the given key
-        .next_back()
-        .expect("No entry found prior to the given key").unwrap();
+      .next_back_entry(given_key)
+      .expect("No entry found prior to the given key")
+      .unwrap();
 
-    u64::from_be_bytes(val.1.as_ref().try_into().unwrap())
+    u64::from_be_bytes(val.value().try_into().unwrap())
   };
 
   db.insert([0, 0, 0, 0, 0, 0, 0, 0], &(1 as u64).to_be_bytes())
@@ -69,20 +66,6 @@ fn key_range_test() {
 }
 
 #[test]
-fn scan_prefix() {
-  let db = db().1;
-  let doc_id: i64 = 1;
-  let mut v: SmallVec<[u8; 12]> = smallvec![1, 1];
-  v.write_all(&doc_id.to_be_bytes()).unwrap();
-  v.push(255);
-  assert_eq!(v.as_ref(), &[1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 255]);
-
-  db.insert(v.as_ref(), &[0, 1, 1]).unwrap();
-  let val = db.scan_prefix(&[1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 2]).last();
-  assert!(val.is_none());
-}
-
-#[test]
 fn scan_prefix_multi_thread() {
   let db = Arc::new(RwLock::new(db().1));
   let mut handles = vec![];
@@ -98,8 +81,8 @@ fn scan_prefix_multi_thread() {
       {
         println!("start: {}", step);
         let max_key = make_doc_update_key(doc_id, Clock::MAX);
-        let last_clock = if let Some(Ok((k, _v))) = cloned_db.range(..max_key).next_back() {
-          let clock_byte = clock_from_key(k.as_ref());
+        let last_clock = if let Ok(Some(entry)) = cloned_db.next_back_entry(max_key.as_ref()) {
+          let clock_byte = clock_from_key(entry.key());
           Clock::from_be_bytes(clock_byte.try_into().unwrap())
         } else {
           0
@@ -143,66 +126,31 @@ fn range_key_test() {
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, u8::MAX];
   let mut iter = db.range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key);
-  assert_eq!(
-    iter.next().unwrap().unwrap().0.as_ref(),
-    &[0, 0, 0, 0, 0, 0, 0, 0]
-  );
-  assert_eq!(
-    iter.next().unwrap().unwrap().0.as_ref(),
-    &[0, 0, 0, 0, 0, 0, 0, 1]
-  );
-  assert_eq!(
-    iter.next().unwrap().unwrap().0.as_ref(),
-    &[0, 0, 0, 0, 0, 0, 0, 2]
-  );
+  assert_eq!(iter.next().unwrap().value(), &[0, 1, 1]);
+  assert_eq!(iter.next().unwrap().value(), &[0, 1, 2]);
+  assert_eq!(iter.next().unwrap().value(), &[0, 1, 3]);
   assert!(iter.next().is_none());
 
   let start: &[u8; 8] = &[0, 0, 1, 0, 0, 0, 0, 0];
   let given_key: &[u8; 8] = &[0, 0, 1, 0, 0, 0, 0, u8::MAX];
   let mut iter = db.range::<&[u8; 8], Range<&[u8; 8]>>(start..given_key);
-  assert_eq!(
-    iter.next().unwrap().unwrap().0.as_ref(),
-    &[0, 0, 1, 0, 0, 0, 0, 0]
-  );
-  assert_eq!(
-    iter.next().unwrap().unwrap().0.as_ref(),
-    &[0, 0, 1, 0, 0, 0, 0, 1]
-  );
-  assert_eq!(
-    iter.next().unwrap().unwrap().0.as_ref(),
-    &[0, 0, 1, 0, 0, 0, 0, 2]
-  );
+  assert_eq!(iter.next().unwrap().value(), &[0, 2, 1]);
+  assert_eq!(iter.next().unwrap().value(), &[0, 2, 2]);
+  assert_eq!(iter.next().unwrap().value(), &[0, 2, 3]);
   assert!(iter.next().is_none());
 
   let given_key: &[u8; 2] = &[0, 1];
   let last_entry_prior = db
-      .range::<&[u8; 2], RangeTo<&[u8; 2]>>(..given_key) // Create a range up to (excluding) the given key
-      .next_back()
+      .next_back_entry(given_key) // Create a range up to (excluding) the given key
       .expect("No entry found prior to the given key").unwrap();
-  assert_eq!(last_entry_prior.1.as_ref(), &[0, 3, 3]);
-
-  let prefix: &[u8] = &[0, 0, 2, 0, 0, 0, 0];
-  let r = db.scan_prefix(prefix);
-  assert_eq!(
-    r.last().unwrap().unwrap().0.as_ref(),
-    &[0, 0, 2, 0, 0, 0, 0, 2]
-  );
+  assert_eq!(last_entry_prior.value(), &[0, 3, 3]);
 
   let start: &[u8; 8] = &[0, 1, 0, 0, 0, 0, 0, 3];
   let given_key: &[u8; 8] = &[0, 1, 0, 0, 0, 0, 0, u8::MAX];
   let mut iter = db.range::<&[u8; 8], Range<&[u8; 8]>>(start..given_key);
-  assert_eq!(
-    iter.next().unwrap().unwrap().0.as_ref(),
-    &[0, 1, 0, 0, 0, 0, 0, 3]
-  );
-  assert_eq!(
-    iter.next().unwrap().unwrap().0.as_ref(),
-    &[0, 1, 0, 0, 0, 0, 0, 4]
-  );
-  assert_eq!(
-    iter.next().unwrap().unwrap().0.as_ref(),
-    &[0, 1, 0, 0, 0, 0, 0, 5]
-  );
+  assert_eq!(iter.next().unwrap().value(), &[0, 1, 4]);
+  assert_eq!(iter.next().unwrap().value(), &[0, 1, 5]);
+  assert_eq!(iter.next().unwrap().value(), &[0, 1, 6]);
   assert!(iter.next().is_none());
 }
 

@@ -5,19 +5,23 @@ use serde::{Deserialize, Serialize};
 use yrs::updates::encoder::{Encoder, EncoderV1};
 use yrs::ReadTxn;
 
-use crate::db::{batch_get, batch_remove};
 use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, SnapshotID};
+use crate::kv::KVEntry;
+use crate::kv::KV;
 use crate::{
-  create_snapshot_id_for_key, get_snapshot_id_for_key, insert_snapshot_update, KVStore,
-  PersistenceError,
+  create_id_for_key, get_id_for_key, insert_snapshot_update, PersistenceError, SubStore,
 };
 
-pub struct YrsSnapshotDB<'a> {
-  pub(crate) store: &'a KVStore,
+pub struct YrsSnapshotDB<'a, S> {
+  pub(crate) store: &'a SubStore<S>,
   pub(crate) uid: i64,
 }
 
-impl<'a> YrsSnapshotDB<'a> {
+impl<'a, S> YrsSnapshotDB<'a, S>
+where
+  S: KV,
+  PersistenceError: From<<S as KV>::Error>,
+{
   pub fn push_snapshot<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
     &self,
     object_id: &K,
@@ -26,19 +30,20 @@ impl<'a> YrsSnapshotDB<'a> {
   ) -> Result<(), PersistenceError> {
     let data = encode_snapshot(txn);
     let snapshot = CollabSnapshot::new(data, description).to_vec();
-    let snapshot_id = self.get_or_create_snapshot_id(object_id.as_ref())?;
-    insert_snapshot_update(&self.store.read(), snapshot_id, object_id, snapshot)?;
+    let snapshot_id = self.create_snapshot_id(object_id.as_ref())?;
+    insert_snapshot_update(&*self.store.read(), snapshot_id, object_id, snapshot)?;
     Ok(())
   }
 
   pub fn get_snapshots<K: AsRef<[u8]> + ?Sized>(&self, object_id: &K) -> Vec<CollabSnapshot> {
     let mut snapshots = vec![];
-    if let Some(snapshot_id) = self.get_snapshot_id(object_id) {
+    if let Some(snapshot_id) = get_snapshot_id(self.uid, &*self.store.read(), object_id) {
       let start = make_snapshot_update_key(snapshot_id, 0);
       let end = make_snapshot_update_key(snapshot_id, Clock::MAX);
-      if let Ok(encoded_snapshots) = batch_get(&self.store.read(), &start, &end) {
-        for encoded_snapshot in encoded_snapshots {
-          if let Ok(snapshot) = CollabSnapshot::try_from(encoded_snapshot.as_ref()) {
+
+      if let Ok(encoded_updates) = self.store.read().iter_range(start.as_ref(), end.as_ref()) {
+        for encoded_snapshot in encoded_updates {
+          if let Ok(snapshot) = CollabSnapshot::try_from(encoded_snapshot.value()) {
             snapshots.push(snapshot);
           }
         }
@@ -51,31 +56,37 @@ impl<'a> YrsSnapshotDB<'a> {
     &self,
     object_id: &K,
   ) -> Result<(), PersistenceError> {
-    if let Some(snapshot_id) = self.get_snapshot_id(object_id) {
+    let store = self.store.write();
+    if let Some(snapshot_id) = get_snapshot_id(self.uid, &*store, object_id) {
       let start = make_snapshot_update_key(snapshot_id, 0);
       let end = make_snapshot_update_key(snapshot_id, Clock::MAX);
-      batch_remove(&self.store.read(), &start, &end)?;
+      store.remove_range(start.as_ref(), end.as_ref())?;
     }
     Ok(())
   }
 
-  fn get_or_create_snapshot_id<K: AsRef<[u8]> + ?Sized>(
+  fn create_snapshot_id<K: AsRef<[u8]> + ?Sized>(
     &self,
     object_id: &K,
   ) -> Result<SnapshotID, PersistenceError> {
-    if let Some(snapshot_id) = self.get_snapshot_id(object_id.as_ref()) {
+    let store = self.store.write();
+    if let Some(snapshot_id) = get_snapshot_id(self.uid, &*store, object_id.as_ref()) {
       Ok(snapshot_id)
     } else {
       let key = make_snapshot_id_key(&self.uid.to_be_bytes(), object_id.as_ref());
-      let new_snapshot_id = create_snapshot_id_for_key(&self.store.read(), key)?;
+      let new_snapshot_id = create_id_for_key(&*store, key)?;
       Ok(new_snapshot_id)
     }
   }
+}
 
-  fn get_snapshot_id<K: AsRef<[u8]> + ?Sized>(&self, object_id: &K) -> Option<SnapshotID> {
-    let key = make_snapshot_id_key(&self.uid.to_be_bytes(), object_id.as_ref());
-    get_snapshot_id_for_key(&self.store.read(), key)
-  }
+fn get_snapshot_id<K, S>(uid: i64, store: &S, object_id: &K) -> Option<SnapshotID>
+where
+  K: AsRef<[u8]> + ?Sized,
+  S: KV,
+{
+  let key = make_snapshot_id_key(&uid.to_be_bytes(), object_id.as_ref());
+  get_id_for_key(store, key)
 }
 
 fn encode_snapshot<T: ReadTxn>(txn: &T) -> Vec<u8> {

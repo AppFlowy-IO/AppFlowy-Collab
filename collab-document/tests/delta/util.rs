@@ -3,7 +3,7 @@ use collab::preclude::CollabBuilder;
 use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
 use collab_document::error::DocumentError;
-use collab_persistence::CollabDB;
+use collab_persistence::{CollabDB, SledCollabDB};
 use nanoid::nanoid;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -16,7 +16,7 @@ use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 
 pub struct DocumentTest {
   pub document: Document,
-  pub db: Arc<CollabDB>,
+  pub db: Arc<SledCollabDB>,
 }
 
 impl Deref for DocumentTest {
@@ -32,7 +32,7 @@ pub fn create_document(uid: i64, doc_id: &str) -> DocumentTest {
   create_document_with_db(uid, doc_id, db)
 }
 
-pub fn create_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabDB>) -> DocumentTest {
+pub fn create_document_with_db(uid: i64, doc_id: &str, db: Arc<SledCollabDB>) -> DocumentTest {
   let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
   let collab = CollabBuilder::new(1, doc_id)
     .with_plugin(disk_plugin)
@@ -88,7 +88,7 @@ pub fn create_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabDB>) -> Doc
   }
 }
 
-pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabDB>) -> DocumentTest {
+pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<SledCollabDB>) -> DocumentTest {
   let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
   let collab = CollabBuilder::new(uid, doc_id)
     .with_plugin(disk_plugin)
@@ -101,7 +101,7 @@ pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabDB>) -> Docum
   }
 }
 
-pub fn db() -> Arc<CollabDB> {
+pub fn db() -> Arc<SledCollabDB> {
   static START: Once = Once::new();
   START.call_once(|| {
     std::env::set_var("RUST_LOG", "collab_persistence=trace");
@@ -114,7 +114,7 @@ pub fn db() -> Arc<CollabDB> {
 
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  Arc::new(CollabDB::open(path).unwrap())
+  Arc::new(SledCollabDB::open(path).unwrap())
 }
 
 pub fn insert_block(

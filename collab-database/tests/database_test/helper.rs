@@ -10,7 +10,7 @@ use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::views::CreateDatabaseParams;
-use collab_persistence::CollabDB;
+use collab_persistence::{CollabDB, SledCollabDB};
 use tempfile::TempDir;
 
 pub use crate::helper::*;
@@ -44,7 +44,7 @@ impl DerefMut for DatabaseTest {
 pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(CollabDB::open(path).unwrap());
+  let db = Arc::new(SledCollabDB::open(path).unwrap());
   let collab = CollabBuilder::new(uid, database_id).build();
   collab.initial();
   let blocks = Blocks::new(uid, db);
@@ -62,7 +62,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   }
 }
 
-pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabDB>, DatabaseTest) {
+pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<SledCollabDB>, DatabaseTest) {
   let db = make_kv_db();
   let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
   let snapshot_plugin = CollabSnapshotPlugin::new(uid, db.clone(), 5).unwrap();
@@ -90,7 +90,11 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<CollabDB>, D
   )
 }
 
-pub fn restore_database_from_db(uid: i64, database_id: &str, db: Arc<CollabDB>) -> DatabaseTest {
+pub fn restore_database_from_db(
+  uid: i64,
+  database_id: &str,
+  db: Arc<SledCollabDB>,
+) -> DatabaseTest {
   let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
   let blocks = Blocks::new(uid, db.clone());
   let snapshot_plugin = CollabSnapshotPlugin::new(uid, db, 5).unwrap();
