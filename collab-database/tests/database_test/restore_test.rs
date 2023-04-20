@@ -3,7 +3,7 @@ use crate::database_test::helper::{
 };
 use assert_json_diff::assert_json_eq;
 use collab_database::block::CreateRowParams;
-use collab_persistence::{CollabDB, SledCollabDB};
+use collab_persistence::SledCollabDB;
 use serde_json::{json, Value};
 use std::sync::Arc;
 

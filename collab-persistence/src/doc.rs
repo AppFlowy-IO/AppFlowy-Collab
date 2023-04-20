@@ -1,6 +1,4 @@
 use std::fmt::Debug;
-
-use sled::Iter;
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{ReadTxn, StateVector, TransactionMut, Update};
@@ -124,7 +122,7 @@ where
           update_end.as_ref(),
         );
 
-        let encoded_updates = store.iter_range(update_start.as_ref(), update_end.as_ref())?;
+        let encoded_updates = store.range(update_start.as_ref()..=update_end.as_ref());
         for encoded_update in encoded_updates {
           update_count += 1;
           let update = Update::decode_v1(encoded_update.value())?;
@@ -198,7 +196,7 @@ where
   ) -> Result<NameIter<<S as KV>::Range, <S as KV>::Entry>, PersistenceError> {
     let from = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT]);
     let to = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT_KEY]);
-    let iter = self.store.read().iter_range(from.as_ref(), to.as_ref())?;
+    let iter = self.store.read().range(from.as_ref()..to.as_ref());
     Ok(NameIter { iter })
   }
 
@@ -211,7 +209,7 @@ where
       let start = make_doc_update_key(doc_id, 0);
       let end = make_doc_update_key(doc_id, Clock::MAX);
 
-      let encoded_updates = store.iter_range(start.as_ref(), end.as_ref())?;
+      let encoded_updates = store.range(start.as_ref()..=end.as_ref());
       let mut updates = vec![];
       for encoded_update in encoded_updates {
         updates.push(Update::decode_v1(encoded_update.value())?);

@@ -51,11 +51,6 @@ impl KV for SledKV {
     Ok(())
   }
 
-  fn iter_range(&self, from: &[u8], to: &[u8]) -> Result<Self::Range, Self::Error> {
-    let iter = self.0.range(from..=to);
-    Ok(SledRange(iter))
-  }
-
   fn range<K: AsRef<[u8]>, R: RangeBounds<K>>(&self, range: R) -> Self::Range {
     let iter = self.0.range(range);
     SledRange(iter)

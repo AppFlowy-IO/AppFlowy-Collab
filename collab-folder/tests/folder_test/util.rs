@@ -8,7 +8,7 @@ use collab_folder::core::{
   Belonging, Belongings, Folder, FolderContext, TrashChangeReceiver, View, ViewChangeReceiver,
   ViewLayout, Workspace,
 };
-use collab_persistence::{CollabDB, SledCollabDB};
+use collab_persistence::SledCollabDB;
 
 use tempfile::TempDir;
 

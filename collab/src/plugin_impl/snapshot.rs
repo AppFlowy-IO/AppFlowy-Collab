@@ -2,7 +2,7 @@ use crate::error::CollabError;
 use crate::preclude::CollabPlugin;
 use collab_persistence::kv::kv_sled_impl::SledKV;
 use collab_persistence::snapshot::YrsSnapshotDB;
-use collab_persistence::{CollabDB, SledCollabDB};
+use collab_persistence::SledCollabDB;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;

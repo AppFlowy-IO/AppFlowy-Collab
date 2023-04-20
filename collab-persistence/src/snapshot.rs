@@ -41,11 +41,10 @@ where
       let start = make_snapshot_update_key(snapshot_id, 0);
       let end = make_snapshot_update_key(snapshot_id, Clock::MAX);
 
-      if let Ok(encoded_updates) = self.store.read().iter_range(start.as_ref(), end.as_ref()) {
-        for encoded_snapshot in encoded_updates {
-          if let Ok(snapshot) = CollabSnapshot::try_from(encoded_snapshot.value()) {
-            snapshots.push(snapshot);
-          }
+      let encoded_updates = self.store.read().range(start.as_ref()..=end.as_ref());
+      for encoded_snapshot in encoded_updates {
+        if let Ok(snapshot) = CollabSnapshot::try_from(encoded_snapshot.value()) {
+          snapshots.push(snapshot);
         }
       }
     }

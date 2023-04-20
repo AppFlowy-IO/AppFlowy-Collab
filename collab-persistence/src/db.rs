@@ -1,19 +1,18 @@
 use std::fmt::Debug;
 use std::io::Write;
-use std::ops::{Deref, RangeTo};
+use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use sled::{Batch, Db, IVec};
-use smallvec::{smallvec, SmallVec};
+use sled::{Batch, Db};
+use smallvec::SmallVec;
 
 use crate::doc::YrsDocDB;
 use crate::error::PersistenceError;
-use crate::keys::DOC_KEY_SPACE;
+
 use crate::keys::{
-  clock_from_key, make_doc_update_key, make_doc_update_key_prefix, make_snapshot_update_key,
-  make_snapshot_update_key_prefix, Clock, DocID, Key, SnapshotID, TERMINATOR,
+  clock_from_key, make_doc_update_key, make_snapshot_update_key, Clock, DocID, Key, SnapshotID,
 };
 use crate::kv::kv_sled_impl::SledKV;
 use crate::kv::{KVEntry, KV};
@@ -30,6 +29,7 @@ pub struct CollabDB<S> {
 }
 
 pub type SledCollabDB = CollabDB<SledKV>;
+
 impl SledCollabDB {
   pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
     let db = sled::open(path)?;
@@ -158,22 +158,6 @@ where
     new_key.as_ref()
   );
   Ok(new_key)
-}
-
-fn last_id(db: &Db) -> Option<OID> {
-  let given_key: &[u8; 2] = &[DOC_KEY_SPACE, 1];
-  let (_, v) = db
-      .range::<&[u8; 2], RangeTo<&[u8; 2]>>(..given_key) // Create a range up to (excluding) the given key
-      .next_back()?.ok()?;
-  Some(OID::from_be_bytes(v.as_ref().try_into().ok()?))
-}
-
-fn gen_new_key(db: &Db) -> Key<10> {
-  let key_value = db.generate_id().unwrap();
-  let mut v: SmallVec<[u8; 10]> = smallvec![DOC_KEY_SPACE, 0];
-  v.write_all(&key_value.to_be_bytes()).unwrap();
-  v.push(TERMINATOR);
-  Key(v)
 }
 
 pub fn get_id_for_key<S>(store: &S, key: Key<20>) -> Option<DocID>

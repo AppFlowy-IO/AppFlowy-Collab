@@ -1,9 +1,8 @@
 use std::path::PathBuf;
 use std::sync::Once;
 
-use collab_persistence::{CollabDB, SledCollabDB};
+use collab_persistence::SledCollabDB;
 
-use collab_persistence::kv::kv_sled_impl::SledKV;
 use tempfile::TempDir;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 

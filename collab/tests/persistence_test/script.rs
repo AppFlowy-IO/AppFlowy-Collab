@@ -2,12 +2,12 @@ use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::*;
 use lib0::any::Any;
 
-use collab_persistence::{CollabDB, SledCollabDB};
+use collab_persistence::SledCollabDB;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
-use collab_persistence::kv::kv_sled_impl::SledKV;
+
 use std::sync::Arc;
 use tempfile::TempDir;
 use yrs::updates::decoder::Decode;

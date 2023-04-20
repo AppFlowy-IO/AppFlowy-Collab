@@ -1,7 +1,7 @@
 pub mod kv_sled_impl;
 
 use crate::PersistenceError;
-use std::error::Error;
+
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
@@ -28,8 +28,6 @@ pub trait KV: Send + Sync {
   fn remove_range(&self, from: &[u8], to: &[u8]) -> Result<(), Self::Error>;
 
   /// Return an iterator over the range of keys
-  fn iter_range(&self, from: &[u8], to: &[u8]) -> Result<Self::Range, Self::Error>;
-
   fn range<K: AsRef<[u8]>, R: RangeBounds<K>>(&self, range: R) -> Self::Range;
 
   /// Return the entry prior to the given key
@@ -69,10 +67,6 @@ where
 
   fn remove_range(&self, from: &[u8], to: &[u8]) -> Result<(), Self::Error> {
     (**self).remove_range(from, to)
-  }
-
-  fn iter_range(&self, from: &[u8], to: &[u8]) -> Result<Self::Range, Self::Error> {
-    self.as_ref().iter_range(from, to)
   }
 
   fn range<K: AsRef<[u8]>, R: RangeBounds<K>>(&self, range: R) -> Self::Range {

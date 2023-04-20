@@ -9,7 +9,7 @@ use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::user::{Config, RowRelationChange, RowRelationUpdateReceiver, UserDatabase};
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
-use collab_persistence::{CollabDB, SledCollabDB};
+use collab_persistence::SledCollabDB;
 use rand::Rng;
 use tempfile::TempDir;
 use tokio::sync::mpsc::{channel, Receiver};

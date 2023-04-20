@@ -6,7 +6,7 @@ use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, Update};
 use collab_persistence::snapshot::CollabSnapshot;
-use collab_persistence::{CollabDB, SledCollabDB};
+use collab_persistence::SledCollabDB;
 use parking_lot::RwLock;
 
 use crate::block::Blocks;

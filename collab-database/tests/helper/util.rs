@@ -12,7 +12,7 @@ use collab_database::views::{
   FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder, GroupSettingBuilder, GroupSettingMap,
   LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
 };
-use collab_persistence::{CollabDB, SledCollabDB};
+use collab_persistence::SledCollabDB;
 
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;

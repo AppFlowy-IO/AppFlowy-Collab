@@ -10,7 +10,7 @@ use collab_database::fields::Field;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::{Config, UserDatabase as InnerUserDatabase};
 use collab_database::views::CreateDatabaseParams;
-use collab_persistence::{CollabDB, SledCollabDB};
+use collab_persistence::SledCollabDB;
 use parking_lot::Mutex;
 use serde_json::Value;
 

@@ -1,7 +1,6 @@
 use std::thread;
 
-use collab_persistence::kv::kv_sled_impl::SledKV;
-use collab_persistence::{CollabDB, SledCollabDB};
+use collab_persistence::SledCollabDB;
 use yrs::{Doc, GetString, Text, Transact};
 
 use crate::util::db;

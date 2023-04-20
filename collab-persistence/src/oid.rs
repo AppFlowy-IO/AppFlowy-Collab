@@ -1,8 +1,6 @@
-use std::io::Write;
 use std::time::SystemTime;
 
 use parking_lot::Mutex;
-use smallvec::{smallvec, SmallVec};
 
 use lazy_static::lazy_static;
 

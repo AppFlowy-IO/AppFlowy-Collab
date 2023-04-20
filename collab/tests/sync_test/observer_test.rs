@@ -4,7 +4,7 @@ use yrs::types::{Change, ToJson};
 use yrs::updates::decoder::Decode;
 
 use collab::core::array_wrapper::ArrayRefExtension;
-use yrs::{Array, Doc, Map, Observable, ReadTxn, StateVector, Transact, Update};
+use yrs::{Array, Doc, Observable, ReadTxn, StateVector, Transact, Update};
 
 #[test]
 fn array_observer_test() {
@@ -56,11 +56,11 @@ fn array_observer_test() {
 #[test]
 fn apply_update_test() {
   let doc1 = Doc::with_client_id(1);
-  let mut updates = Arc::new(RwLock::new(vec![]));
+  let updates = Arc::new(RwLock::new(vec![]));
 
   let cloned_updates = updates.clone();
   let sub = doc1
-    .observe_update_v1(move |txn, event| {
+    .observe_update_v1(move |_txn, event| {
       cloned_updates.write().push(event.update.clone());
     })
     .unwrap();
@@ -106,7 +106,7 @@ fn apply_update_test() {
 
   let cloned_updates = updates.clone();
   let sub = doc2
-    .observe_update_v1(move |txn, event| {
+    .observe_update_v1(move |_txn, event| {
       cloned_updates.write().push(event.update.clone());
     })
     .unwrap();

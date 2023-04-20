@@ -10,7 +10,7 @@ use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::views::CreateDatabaseParams;
-use collab_persistence::{CollabDB, SledCollabDB};
+use collab_persistence::SledCollabDB;
 use tempfile::TempDir;
 
 pub use crate::helper::*;

@@ -1,12 +1,11 @@
-use lib0::error::Error;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 use collab_persistence::doc::YrsDocDB;
 use collab_persistence::kv::kv_sled_impl::SledKV;
-use collab_persistence::{CollabDB, SledCollabDB};
-use yrs::updates::decoder::Decode;
-use yrs::{Transaction, TransactionMut, Update};
+use collab_persistence::SledCollabDB;
+
+use yrs::{Transaction, TransactionMut};
 
 use crate::core::collab_plugin::CollabPlugin;
 use crate::error::CollabError;

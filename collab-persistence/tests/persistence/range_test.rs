@@ -1,9 +1,8 @@
 use collab_persistence::keys::{clock_from_key, make_doc_update_key, Clock};
 use parking_lot::RwLock;
-use smallvec::{smallvec, SmallVec};
+use smallvec::SmallVec;
 
 use collab_persistence::kv::{KVEntry, KV};
-use std::io::Write;
 use std::ops::{Deref, Range, RangeTo};
 use std::sync::Arc;
 use std::thread;
