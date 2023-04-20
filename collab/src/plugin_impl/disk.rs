@@ -1,10 +1,9 @@
+use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
-use collab_persistence::doc::YrsDocDB;
-use collab_persistence::kv::kv_sled_impl::SledKV;
-use collab_persistence::SledCollabDB;
-
+use collab_persistence::doc::YrsDocAction;
+use collab_persistence::kv::sled_lv::{SledCollabDB, SledKVStore};
 use yrs::{Transaction, TransactionMut};
 
 use crate::core::collab_plugin::CollabPlugin;
@@ -17,6 +16,14 @@ pub struct CollabDiskPlugin {
   initial_update_count: Arc<AtomicU32>,
   db: Arc<SledCollabDB>,
   can_flush: bool,
+}
+
+impl Deref for CollabDiskPlugin {
+  type Target = Arc<SledCollabDB>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.db
+  }
 }
 
 impl CollabDiskPlugin {
@@ -46,30 +53,27 @@ impl CollabDiskPlugin {
       can_flush,
     })
   }
-
-  pub fn doc(&self) -> YrsDocDB<SledKV> {
-    self.db.doc(self.uid)
-  }
 }
 
 impl CollabPlugin for CollabDiskPlugin {
   fn init(&self, object_id: &str, txn: &mut TransactionMut) {
-    let doc = self.doc();
-    if doc.is_exist(object_id) {
-      let update_count = doc.load_doc(object_id, txn).unwrap();
+    let doc = self.db.doc_store.write();
+    if doc.is_exist(self.uid, object_id) {
+      let update_count = doc.load_doc(self.uid, object_id, txn).unwrap();
       self
         .initial_update_count
         .store(update_count, Ordering::SeqCst);
     } else {
       tracing::trace!("🤲collab => {:?} not exist", object_id);
-      self.doc().create_new_doc(object_id, txn).unwrap();
+      doc.create_new_doc(self.uid, object_id, txn).unwrap();
     }
   }
 
   fn did_init(&self, object_id: &str, txn: &Transaction) {
     let update_count = self.initial_update_count.load(Ordering::SeqCst);
     if update_count > 0 && self.can_flush {
-      if let Err(e) = self.doc().flush_doc(object_id, txn) {
+      let store = self.db.doc_store.write();
+      if let Err(e) = store.flush_doc(self.uid, object_id, txn) {
         tracing::error!("Failed to flush doc: {}, error: {:?}", object_id, e);
       } else {
         tracing::trace!("Flush doc: {}", object_id);
@@ -87,7 +91,12 @@ impl CollabPlugin for CollabDiskPlugin {
 
   fn did_receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
     if self.did_load.load(Ordering::SeqCst) {
-      self.doc().push_update(object_id, update).unwrap();
+      self
+        .db
+        .doc_store
+        .write()
+        .push_update(self.uid, object_id, update)
+        .unwrap();
     }
   }
 }

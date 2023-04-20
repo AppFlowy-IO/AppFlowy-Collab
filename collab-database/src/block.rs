@@ -7,7 +7,7 @@ use collab::plugin_impl::disk::CollabDiskPlugin;
 use collab::preclude::{
   Collab, CollabBuilder, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
-use collab_persistence::SledCollabDB;
+use collab_persistence::kv::sled_lv::SledCollabDB;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 

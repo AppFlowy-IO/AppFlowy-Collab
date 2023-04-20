@@ -1,20 +1,19 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-
-use collab::plugin_impl::disk::CollabDiskPlugin;
-use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
-use collab::preclude::updates::decoder::Decode;
-use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, Update};
-use collab_persistence::snapshot::CollabSnapshot;
-use collab_persistence::SledCollabDB;
-use parking_lot::RwLock;
-
 use crate::block::Blocks;
 use crate::database::{Database, DatabaseContext, DuplicatedDatabase};
 use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::user::relation::{DatabaseRelation, RowRelationMap};
 use crate::views::{CreateDatabaseParams, CreateViewParams};
+use collab::plugin_impl::disk::CollabDiskPlugin;
+use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
+use collab::preclude::updates::decoder::Decode;
+use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, Update};
+use collab_persistence::doc::YrsDocAction;
+use collab_persistence::kv::sled_lv::SledCollabDB;
+use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
+use parking_lot::RwLock;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct Config {
@@ -174,11 +173,14 @@ impl UserDatabase {
   /// Delete the database with the given database id.
   pub fn delete_database(&self, database_id: &str) {
     self.database_records.delete_database(database_id);
-    match self.db.doc(self.uid).delete_doc(database_id) {
+    let store = self.db.doc_store.write();
+    match store.delete_doc(self.uid, database_id) {
       Ok(_) => {},
       Err(err) => tracing::error!("🔴Delete database failed: {}", err),
     }
-    match self.db.snapshot(self.uid).delete_snapshot(database_id) {
+
+    let store = self.db.snapshot_store.write();
+    match store.delete_snapshot(self.uid, database_id) {
       Ok(_) => {},
       Err(err) => tracing::error!("🔴 Delete snapshot failed: {}", err),
     }
@@ -196,7 +198,8 @@ impl UserDatabase {
   }
 
   pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
-    self.db.snapshot(self.uid).get_snapshots(database_id)
+    let store = self.db.snapshot_store.write();
+    store.get_snapshots(self.uid, database_id)
   }
 
   pub fn restore_database_from_snapshot(

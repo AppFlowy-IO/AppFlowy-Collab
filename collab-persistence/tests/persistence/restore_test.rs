@@ -1,9 +1,8 @@
-use std::thread;
-
-use collab_persistence::SledCollabDB;
-use yrs::{Doc, GetString, Text, Transact};
-
 use crate::util::db;
+use collab_persistence::doc::YrsDocAction;
+use collab_persistence::kv::sled_lv::SledCollabDB;
+use std::thread;
+use yrs::{Doc, GetString, Text, Transact};
 
 #[test]
 fn single_thread_test() {
@@ -13,14 +12,14 @@ fn single_thread_test() {
     let doc = Doc::new();
     {
       let txn = doc.transact();
-      db.doc(1).create_new_doc(&oid, &txn).unwrap();
+      db.doc_store.write().create_new_doc(1, &oid, &txn).unwrap();
     }
     {
       let text = doc.get_or_insert_text("text");
       let mut txn = doc.transact_mut();
       text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
       let update = txn.encode_update_v1();
-      db.doc(1).push_update(&oid, &update).unwrap();
+      db.doc_store.write().push_update(1, &oid, &update).unwrap();
     }
   }
   drop(db);
@@ -31,7 +30,7 @@ fn single_thread_test() {
     let doc = Doc::new();
     {
       let mut txn = doc.transact_mut();
-      db.doc(1).load_doc(&oid, &mut txn).unwrap();
+      db.doc_store.write().load_doc(1, &oid, &mut txn).unwrap();
     }
     let text = doc.get_or_insert_text("text");
     let txn = doc.transact();
@@ -50,14 +49,22 @@ fn multiple_thread_test() {
       let doc = Doc::new();
       {
         let txn = doc.transact();
-        cloned_db.doc(1).create_new_doc(&oid, &txn).unwrap();
+        cloned_db
+          .doc_store
+          .write()
+          .create_new_doc(1, &oid, &txn)
+          .unwrap();
       }
       {
         let text = doc.get_or_insert_text("text");
         let mut txn = doc.transact_mut();
         text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
         let update = txn.encode_update_v1();
-        cloned_db.doc(1).push_update(&oid, &update).unwrap();
+        cloned_db
+          .doc_store
+          .write()
+          .push_update(1, &oid, &update)
+          .unwrap();
       }
     });
     handles.push(handle);
@@ -74,7 +81,7 @@ fn multiple_thread_test() {
     let doc = Doc::new();
     {
       let mut txn = doc.transact_mut();
-      db.doc(1).load_doc(&oid, &mut txn).unwrap();
+      db.doc_store.write().load_doc(1, &oid, &mut txn).unwrap();
     }
     let text = doc.get_or_insert_text("text");
     let txn = doc.transact();

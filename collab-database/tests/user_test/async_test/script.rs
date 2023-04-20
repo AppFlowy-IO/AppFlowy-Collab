@@ -10,7 +10,8 @@ use collab_database::fields::Field;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::{Config, UserDatabase as InnerUserDatabase};
 use collab_database::views::CreateDatabaseParams;
-use collab_persistence::SledCollabDB;
+use collab_persistence::doc::YrsDocAction;
+use collab_persistence::kv::sled_lv::SledCollabDB;
 use parking_lot::Mutex;
 use serde_json::Value;
 
@@ -173,13 +174,13 @@ pub fn run_script(
       oid: database_id,
       expected,
     } => {
-      assert_eq!(db.doc(1).is_exist(&database_id), expected,)
+      assert_eq!(db.doc_store.read().is_exist(1, &database_id), expected,)
     },
     DatabaseScript::AssertNumOfUpdates {
       oid: database_id,
       expected,
     } => {
-      let updates = db.doc(1).get_updates(&database_id).unwrap();
+      let updates = db.doc_store.read().get_updates(1, &database_id).unwrap();
       assert_eq!(updates.len(), expected,);
     },
   }

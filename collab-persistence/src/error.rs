@@ -1,7 +1,10 @@
 #[derive(Debug, thiserror::Error)]
 pub enum PersistenceError {
   #[error(transparent)]
-  Db(#[from] sled::Error),
+  SledDb(#[from] sled::Error),
+
+  #[error(transparent)]
+  RocksDb(#[from] rocksdb::Error),
 
   #[error(transparent)]
   Bincode(#[from] bincode::Error),

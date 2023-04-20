@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::ops::RangeBounds;
 
 use serde::{Deserialize, Serialize};
 use yrs::updates::encoder::{Encoder, EncoderV1};
@@ -7,82 +8,89 @@ use yrs::ReadTxn;
 
 use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, SnapshotID};
 use crate::kv::KVEntry;
-use crate::kv::KV;
+use crate::kv::KVStore;
 use crate::{
   create_id_for_key, get_id_for_key, insert_snapshot_update, PersistenceError, SubStore,
 };
 
-pub struct YrsSnapshotDB<'a, S> {
-  pub(crate) store: &'a SubStore<S>,
-  pub(crate) uid: i64,
+impl<'a, T> SnapshotAction<'a> for T
+where
+  T: KVStore,
+  PersistenceError: From<<Self as KVStore>::Error>,
+{
 }
 
-impl<'a, S> YrsSnapshotDB<'a, S>
+pub trait SnapshotAction<'a>: KVStore + Sized
 where
-  S: KV,
-  PersistenceError: From<<S as KV>::Error>,
+  PersistenceError: From<<Self as KVStore>::Error>,
 {
-  pub fn push_snapshot<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
+  fn push_snapshot<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
     &self,
+    uid: i64,
     object_id: &K,
     description: String,
     txn: &T,
   ) -> Result<(), PersistenceError> {
     let data = encode_snapshot(txn);
     let snapshot = CollabSnapshot::new(data, description).to_vec();
-    let snapshot_id = self.create_snapshot_id(object_id.as_ref())?;
-    insert_snapshot_update(&*self.store.read(), snapshot_id, object_id, snapshot)?;
+    let snapshot_id = self.create_snapshot_id(uid, object_id.as_ref())?;
+    insert_snapshot_update(self, snapshot_id, object_id, snapshot)?;
     Ok(())
   }
 
-  pub fn get_snapshots<K: AsRef<[u8]> + ?Sized>(&self, object_id: &K) -> Vec<CollabSnapshot> {
+  fn get_snapshots<K: AsRef<[u8]> + ?Sized>(&self, uid: i64, object_id: &K) -> Vec<CollabSnapshot> {
     let mut snapshots = vec![];
-    if let Some(snapshot_id) = get_snapshot_id(self.uid, &*self.store.read(), object_id) {
+    if let Some(snapshot_id) = get_snapshot_id(uid, self, object_id) {
       let start = make_snapshot_update_key(snapshot_id, 0);
       let end = make_snapshot_update_key(snapshot_id, Clock::MAX);
 
-      let encoded_updates = self.store.read().range(start.as_ref()..=end.as_ref());
-      for encoded_snapshot in encoded_updates {
-        if let Ok(snapshot) = CollabSnapshot::try_from(encoded_snapshot.value()) {
-          snapshots.push(snapshot);
+      if let Ok(encoded_updates) = self.range(start.as_ref()..=end.as_ref()) {
+        for encoded_snapshot in encoded_updates {
+          if let Ok(snapshot) = CollabSnapshot::try_from(encoded_snapshot.value()) {
+            snapshots.push(snapshot);
+          }
         }
       }
     }
     snapshots
   }
 
-  pub fn delete_snapshot<K: AsRef<[u8]> + ?Sized>(
+  fn delete_snapshot<K: AsRef<[u8]> + ?Sized>(
     &self,
+    uid: i64,
     object_id: &K,
   ) -> Result<(), PersistenceError> {
-    let store = self.store.write();
-    if let Some(snapshot_id) = get_snapshot_id(self.uid, &*store, object_id) {
+    if let Some(snapshot_id) = get_snapshot_id(uid, self, object_id) {
       let start = make_snapshot_update_key(snapshot_id, 0);
       let end = make_snapshot_update_key(snapshot_id, Clock::MAX);
-      store.remove_range(start.as_ref(), end.as_ref())?;
+      self.remove_range(start.as_ref(), end.as_ref())?;
     }
     Ok(())
   }
 
   fn create_snapshot_id<K: AsRef<[u8]> + ?Sized>(
     &self,
+    uid: i64,
     object_id: &K,
   ) -> Result<SnapshotID, PersistenceError> {
-    let store = self.store.write();
-    if let Some(snapshot_id) = get_snapshot_id(self.uid, &*store, object_id.as_ref()) {
+    if let Some(snapshot_id) = get_snapshot_id(uid, self, object_id.as_ref()) {
       Ok(snapshot_id)
     } else {
-      let key = make_snapshot_id_key(&self.uid.to_be_bytes(), object_id.as_ref());
-      let new_snapshot_id = create_id_for_key(&*store, key)?;
+      let key = make_snapshot_id_key(&uid.to_be_bytes(), object_id.as_ref());
+      let new_snapshot_id = create_id_for_key(self, key)?;
       Ok(new_snapshot_id)
     }
   }
 }
 
+// pub trait DocOps<'a>: KVStore<'a> + Sized
+//   where
+//       Error: From<<Self as KVStore<'a>>::Error>,
+
 fn get_snapshot_id<K, S>(uid: i64, store: &S, object_id: &K) -> Option<SnapshotID>
 where
   K: AsRef<[u8]> + ?Sized,
-  S: KV,
+  S: KVStore,
 {
   let key = make_snapshot_id_key(&uid.to_be_bytes(), object_id.as_ref());
   get_id_for_key(store, key)

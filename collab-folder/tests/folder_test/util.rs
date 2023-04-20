@@ -8,8 +8,8 @@ use collab_folder::core::{
   Belonging, Belongings, Folder, FolderContext, TrashChangeReceiver, View, ViewChangeReceiver,
   ViewLayout, Workspace,
 };
-use collab_persistence::SledCollabDB;
 
+use collab_persistence::kv::sled_lv::SledCollabDB;
 use tempfile::TempDir;
 
 pub struct FolderTest {

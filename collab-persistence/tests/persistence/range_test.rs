@@ -2,7 +2,7 @@ use collab_persistence::keys::{clock_from_key, make_doc_update_key, Clock};
 use parking_lot::RwLock;
 use smallvec::SmallVec;
 
-use collab_persistence::kv::{KVEntry, KV};
+use collab_persistence::kv::{KVEntry, KVStore};
 use std::ops::{Deref, Range, RangeTo};
 use std::sync::Arc;
 use std::thread;
@@ -124,7 +124,9 @@ fn range_key_test() {
   db.insert([0, 1, 0, 0, 0, 0, 0, 5], &[0, 1, 6]).unwrap();
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, u8::MAX];
-  let mut iter = db.range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key);
+  let mut iter = db
+    .range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key)
+    .unwrap();
   assert_eq!(iter.next().unwrap().value(), &[0, 1, 1]);
   assert_eq!(iter.next().unwrap().value(), &[0, 1, 2]);
   assert_eq!(iter.next().unwrap().value(), &[0, 1, 3]);
@@ -132,7 +134,9 @@ fn range_key_test() {
 
   let start: &[u8; 8] = &[0, 0, 1, 0, 0, 0, 0, 0];
   let given_key: &[u8; 8] = &[0, 0, 1, 0, 0, 0, 0, u8::MAX];
-  let mut iter = db.range::<&[u8; 8], Range<&[u8; 8]>>(start..given_key);
+  let mut iter = db
+    .range::<&[u8; 8], Range<&[u8; 8]>>(start..given_key)
+    .unwrap();
   assert_eq!(iter.next().unwrap().value(), &[0, 2, 1]);
   assert_eq!(iter.next().unwrap().value(), &[0, 2, 2]);
   assert_eq!(iter.next().unwrap().value(), &[0, 2, 3]);
@@ -146,7 +150,9 @@ fn range_key_test() {
 
   let start: &[u8; 8] = &[0, 1, 0, 0, 0, 0, 0, 3];
   let given_key: &[u8; 8] = &[0, 1, 0, 0, 0, 0, 0, u8::MAX];
-  let mut iter = db.range::<&[u8; 8], Range<&[u8; 8]>>(start..given_key);
+  let mut iter = db
+    .range::<&[u8; 8], Range<&[u8; 8]>>(start..given_key)
+    .unwrap();
   assert_eq!(iter.next().unwrap().value(), &[0, 1, 4]);
   assert_eq!(iter.next().unwrap().value(), &[0, 1, 5]);
   assert_eq!(iter.next().unwrap().value(), &[0, 1, 6]);

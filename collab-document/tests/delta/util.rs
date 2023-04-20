@@ -3,12 +3,12 @@ use collab::preclude::CollabBuilder;
 use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
 use collab_document::error::DocumentError;
-use collab_persistence::SledCollabDB;
 use nanoid::nanoid;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::ops::Deref;
 
+use collab_persistence::kv::sled_lv::SledCollabDB;
 use std::rc::Rc;
 use std::sync::{Arc, Once};
 use tempfile::TempDir;
