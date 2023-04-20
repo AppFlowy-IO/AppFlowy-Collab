@@ -16,7 +16,7 @@ fn single_thread_test() {
     let doc = Doc::new();
     {
       let txn = doc.transact();
-      let store = db.kv_store_impl();
+      let store = db.read_txn();
       store.create_new_doc(1, &oid, &txn).unwrap();
     }
     {
@@ -24,7 +24,7 @@ fn single_thread_test() {
       let mut txn = doc.transact_mut();
       text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
       let update = txn.encode_update_v1();
-      db.kv_store_impl().push_update(1, &oid, &update).unwrap();
+      db.read_txn().push_update(1, &oid, &update).unwrap();
     }
   }
   drop(db);
@@ -35,7 +35,7 @@ fn single_thread_test() {
     let doc = Doc::new();
     {
       let mut txn = doc.transact_mut();
-      db.kv_store_impl().load_doc(1, &oid, &mut txn).unwrap();
+      db.read_txn().load_doc(1, &oid, &mut txn).unwrap();
     }
     let text = doc.get_or_insert_text("text");
     let txn = doc.transact();
@@ -54,7 +54,7 @@ fn sled_multiple_thread_test() {
       let doc = Doc::new();
       {
         let txn = doc.transact();
-        let store = cloned_db.kv_store_impl();
+        let store = cloned_db.read_txn();
         store.create_new_doc(1, &oid, &txn).unwrap();
         store.commit().unwrap();
       }
@@ -63,9 +63,9 @@ fn sled_multiple_thread_test() {
         let mut txn = doc.transact_mut();
         text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
         let update = txn.encode_update_v1();
-        let store = cloned_db.kv_store_impl();
-        store.push_update(1, &oid, &update).unwrap();
-        store.commit().unwrap();
+        cloned_db.with_write_txn(|store| {
+          store.push_update(1, &oid, &update).unwrap();
+        });
       }
     });
     handles.push(handle);
@@ -82,7 +82,7 @@ fn sled_multiple_thread_test() {
     let doc = Doc::new();
     {
       let mut txn = doc.transact_mut();
-      db.kv_store_impl().load_doc(1, &oid, &mut txn).unwrap();
+      db.read_txn().load_doc(1, &oid, &mut txn).unwrap();
     }
     let text = doc.get_or_insert_text("text");
     let txn = doc.transact();
@@ -101,18 +101,18 @@ fn rocks_multiple_thread_test() {
       let doc = Doc::new();
       {
         let txn = doc.transact();
-        let store = cloned_db.kv_store_impl();
-        store.create_new_doc(1, &oid, &txn).unwrap();
-        store.commit().unwrap();
+        cloned_db.with_write_txn(|store| {
+          store.create_new_doc(1, &oid, &txn).unwrap();
+        });
       }
       {
         let text = doc.get_or_insert_text("text");
         let mut txn = doc.transact_mut();
         text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
         let update = txn.encode_update_v1();
-        let store = cloned_db.kv_store_impl();
-        store.push_update(1, &oid, &update).unwrap();
-        store.commit().unwrap();
+        cloned_db.with_write_txn(|store| {
+          store.push_update(1, &oid, &update).unwrap();
+        });
       }
     });
     handles.push(handle);
@@ -129,7 +129,7 @@ fn rocks_multiple_thread_test() {
     let doc = Doc::new();
     {
       let mut txn = doc.transact_mut();
-      db.kv_store_impl().load_doc(1, &oid, &mut txn).unwrap();
+      db.read_txn().load_doc(1, &oid, &mut txn).unwrap();
     }
     let text = doc.get_or_insert_text("text");
     let txn = doc.transact();

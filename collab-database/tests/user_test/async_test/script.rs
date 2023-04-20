@@ -11,6 +11,7 @@ use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::{Config, UserDatabase as InnerUserDatabase};
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::doc::YrsDocAction;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::kv::sled_lv::SledCollabDB;
 use parking_lot::Mutex;
 use serde_json::Value;
@@ -56,7 +57,7 @@ pub enum DatabaseScript {
 
 #[derive(Clone)]
 pub struct DatabaseTest {
-  pub db: Arc<SledCollabDB>,
+  pub db: Arc<RocksCollabDB>,
   pub db_path: PathBuf,
   pub user_database: UserDatabase,
   pub config: Config,
@@ -73,7 +74,7 @@ pub fn flushable_database_test() -> DatabaseTest {
 impl DatabaseTest {
   pub fn new(config: Config) -> Self {
     let db_path = db_path();
-    let db = Arc::new(SledCollabDB::open(db_path.clone()).unwrap());
+    let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
     let inner = InnerUserDatabase::new(1, db.clone(), config.clone());
     let user_database = UserDatabase(Arc::new(Mutex::new(inner)));
     Self {
@@ -109,7 +110,7 @@ impl DatabaseTest {
 
 pub fn run_script(
   user_database: UserDatabase,
-  db: Arc<SledCollabDB>,
+  db: Arc<RocksCollabDB>,
   config: Config,
   script: DatabaseScript,
 ) {
@@ -174,13 +175,13 @@ pub fn run_script(
       oid: database_id,
       expected,
     } => {
-      assert_eq!(db.kv_store_impl().is_exist(1, &database_id), expected,)
+      assert_eq!(db.read_txn().is_exist(1, &database_id), expected,)
     },
     DatabaseScript::AssertNumOfUpdates {
       oid: database_id,
       expected,
     } => {
-      let updates = db.kv_store_impl().get_updates(1, &database_id).unwrap();
+      let updates = db.read_txn().get_updates(1, &database_id).unwrap();
       assert_eq!(updates.len(), expected,);
     },
   }

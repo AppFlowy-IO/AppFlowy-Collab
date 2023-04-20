@@ -9,18 +9,20 @@ use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::user::{Config, RowRelationChange, RowRelationUpdateReceiver, UserDatabase};
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::kv::sled_lv::SledCollabDB;
-use rand::Rng;
-use tempfile::TempDir;
 use tokio::sync::mpsc::{channel, Receiver};
 
-use crate::helper::{make_kv_db, TestTextCell};
+use rand::Rng;
+use tempfile::TempDir;
+
+use crate::helper::{make_rocks_db, make_sled_db, TestTextCell};
 
 pub struct UserDatabaseTest {
   #[allow(dead_code)]
   uid: i64,
   inner: UserDatabase,
-  pub db: Arc<SledCollabDB>,
+  pub db: Arc<RocksCollabDB>,
 }
 
 impl Deref for UserDatabaseTest {
@@ -37,11 +39,11 @@ pub fn random_uid() -> i64 {
 }
 
 pub fn user_database_test(uid: i64) -> UserDatabaseTest {
-  let db = make_kv_db();
+  let db = make_rocks_db();
   user_database_test_with_db(uid, db)
 }
 
-pub fn user_database_test_with_db(uid: i64, db: Arc<SledCollabDB>) -> UserDatabaseTest {
+pub fn user_database_test_with_db(uid: i64, db: Arc<RocksCollabDB>) -> UserDatabaseTest {
   UserDatabaseTest {
     uid,
     inner: UserDatabase::new(uid, db.clone(), Config::default()),
@@ -52,7 +54,7 @@ pub fn user_database_test_with_db(uid: i64, db: Arc<SledCollabDB>) -> UserDataba
 pub fn user_database_test_with_default_data(uid: i64) -> UserDatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(SledCollabDB::open(path).unwrap());
+  let db = Arc::new(RocksCollabDB::open(path).unwrap());
   let user_database = UserDatabaseTest {
     uid,
     inner: UserDatabase::new(uid, db.clone(), Config::default()),

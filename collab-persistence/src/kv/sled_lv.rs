@@ -25,8 +25,17 @@ impl SledKVStore {
     Self(Arc::new(RwLock::new(db)))
   }
 
-  pub fn kv_store_impl(&self) -> SledKVStoreImpl {
+  pub fn read_txn(&self) -> SledKVStoreImpl {
     SledKVStoreImpl(self.0.clone())
+  }
+
+  pub fn with_write_txn<F>(&self, f: F)
+  where
+    F: FnOnce(&SledKVStoreImpl),
+  {
+    let store = SledKVStoreImpl(self.0.clone());
+    f(&store);
+    store.commit();
   }
 }
 

@@ -12,8 +12,8 @@ use crate::util::{rocks_db, sled_db};
 #[test]
 fn sled_id_test() {
   let sled_db = sled_db().1;
-  let store = sled_db.kv_store_impl();
-  store.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
+  let store = sled_db.read_txn();
+  store.insert([0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 1]).unwrap();
   store.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
   store.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
   store.insert([0, 0, 0, 0, 0, 0, 0, 3], &[0, 1, 4]).unwrap();
@@ -23,7 +23,7 @@ fn sled_id_test() {
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, 1];
   let last_entry_prior = sled_db
-    .kv_store_impl()
+    .read_txn()
     .next_back_entry(given_key)
     .expect("No entry found prior to the given key")
     .unwrap();
@@ -31,7 +31,7 @@ fn sled_id_test() {
 
   let given_key: &[u8; 2] = &[0, 1];
   let last_entry_prior = sled_db
-    .kv_store_impl()
+    .read_txn()
     .next_back_entry(given_key)
     .expect("No entry found prior to the given key")
     .unwrap();
@@ -41,18 +41,18 @@ fn sled_id_test() {
 #[test]
 fn rocks_id_test() {
   let rocks_db = rocks_db().1;
-  let store = rocks_db.kv_store_impl();
-  store.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
-  store.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
-  store.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
-  store.insert([0, 0, 0, 0, 0, 0, 0, 3], &[0, 1, 4]).unwrap();
-  store.insert([0, 1, 0, 0, 0, 0, 0, 4], &[0, 1, 5]).unwrap();
-  store.insert([0, 1, 0, 0, 0, 0, 0, 5], &[0, 1, 6]).unwrap();
-  store.commit().unwrap();
+  rocks_db.with_write_txn(|store| {
+    store.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
+    store.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
+    store.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
+    store.insert([0, 0, 0, 0, 0, 0, 0, 3], &[0, 1, 4]).unwrap();
+    store.insert([0, 1, 0, 0, 0, 0, 0, 4], &[0, 1, 5]).unwrap();
+    store.insert([0, 1, 0, 0, 0, 0, 0, 5], &[0, 1, 6]).unwrap();
+  });
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, 1];
   let last_entry_prior = rocks_db
-    .kv_store_impl()
+    .read_txn()
     .next_back_entry(given_key)
     .expect("No entry found prior to the given key")
     .unwrap();
@@ -60,7 +60,7 @@ fn rocks_id_test() {
 
   let given_key: &[u8; 2] = &[0, 1];
   let last_entry_prior = rocks_db
-    .kv_store_impl()
+    .read_txn()
     .next_back_entry(given_key)
     .expect("No entry found prior to the given key")
     .unwrap();
@@ -70,11 +70,11 @@ fn rocks_id_test() {
 #[test]
 fn key_range_test() {
   let db = sled_db().1;
-  let store = db.kv_store_impl();
+  let store = db.read_txn();
   let next = || {
     let given_key: &[u8; 2] = &[0, 2];
     let val = db
-      .kv_store_impl()
+      .read_txn()
       .next_back_entry(given_key)
       .expect("No entry found prior to the given key")
       .unwrap();
@@ -83,22 +83,22 @@ fn key_range_test() {
   };
 
   store
-    .insert([0, 0, 0, 0, 0, 0, 0, 0], &(1 as u64).to_be_bytes())
+    .insert([0, 0, 0, 0, 0, 0, 0, 0], &1_u64.to_be_bytes())
     .unwrap();
   assert_eq!(next(), 1);
 
   store
-    .insert([0, 0, 0, 0, 0, 0, 1, 1], &(2 as u64).to_be_bytes())
+    .insert([0, 0, 0, 0, 0, 0, 1, 1], 2_u64.to_be_bytes())
     .unwrap();
   assert_eq!(next(), 2);
 
   store
-    .insert([0, 0, 0, 0, 0, 0, 1, 2], &(3 as u64).to_be_bytes())
+    .insert([0, 0, 0, 0, 0, 0, 1, 2], 3_u64.to_be_bytes())
     .unwrap();
   assert_eq!(next(), 3);
 
   store
-    .insert([0, 0, 1, 0, 0, 0, 1, 2], &(4 as u64).to_be_bytes())
+    .insert([0, 0, 1, 0, 0, 0, 1, 2], (4 as u64).to_be_bytes())
     .unwrap();
   assert_eq!(next(), 4);
 }
@@ -115,7 +115,7 @@ fn scan_prefix_multi_thread() {
     let update_data = i.to_be_bytes();
 
     let handle = thread::spawn(move || {
-      let cloned_db = cloned_db.kv_store_impl();
+      let cloned_db = cloned_db.read_txn();
       {
         println!("start: {}", step);
         let max_key = make_doc_update_key(doc_id, Clock::MAX);
@@ -146,7 +146,7 @@ fn scan_prefix_multi_thread() {
 #[test]
 fn range_key_test() {
   let db = sled_db().1;
-  let store = db.kv_store_impl();
+  let store = db.read_txn();
   store.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
   store.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
   store.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
@@ -165,7 +165,7 @@ fn range_key_test() {
   store.commit().unwrap();
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, u8::MAX];
-  let store = db.kv_store_impl();
+  let store = db.read_txn();
   let mut iter = store
     .range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key)
     .unwrap();

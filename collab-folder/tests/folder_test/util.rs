@@ -2,14 +2,14 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use collab::plugin_impl::disk::CollabDiskPlugin;
+use collab::plugin_impl::sled_disk::SledDiskPlugin;
 use collab::preclude::CollabBuilder;
 use collab_folder::core::{
   Belonging, Belongings, Folder, FolderContext, TrashChangeReceiver, View, ViewChangeReceiver,
   ViewLayout, Workspace,
 };
-
 use collab_persistence::kv::sled_lv::SledCollabDB;
+
 use tempfile::TempDir;
 
 pub struct FolderTest {
@@ -33,7 +33,7 @@ pub fn create_folder(id: &str) -> FolderTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(SledCollabDB::open(path.clone()).unwrap());
-  let disk_plugin = CollabDiskPlugin::new(uid, db).unwrap();
+  let disk_plugin = SledDiskPlugin::new(uid, db).unwrap();
   let cleaner = Cleaner::new(path);
 
   let collab = CollabBuilder::new(1, id).with_plugin(disk_plugin).build();

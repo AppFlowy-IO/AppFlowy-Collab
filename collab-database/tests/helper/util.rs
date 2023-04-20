@@ -12,8 +12,9 @@ use collab_database::views::{
   FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder, GroupSettingBuilder, GroupSettingMap,
   LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
 };
-
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::kv::sled_lv::SledCollabDB;
+
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -535,9 +536,14 @@ impl std::convert::From<i64> for TestFieldType {
   }
 }
 
-pub fn make_kv_db() -> Arc<SledCollabDB> {
+pub fn make_sled_db() -> Arc<SledCollabDB> {
   let path = db_path();
   Arc::new(SledCollabDB::open(path).unwrap())
+}
+
+pub fn make_rocks_db() -> Arc<RocksCollabDB> {
+  let path = db_path();
+  Arc::new(RocksCollabDB::open(path).unwrap())
 }
 
 pub fn db_path() -> PathBuf {

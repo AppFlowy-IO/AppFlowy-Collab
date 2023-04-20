@@ -2,8 +2,8 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use collab::plugin_impl::disk::CollabDiskPlugin;
-use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
+use collab::plugin_impl::sled_disk::SledDiskPlugin;
+use collab::plugin_impl::sled_snapshot::CollabSnapshotPlugin;
 use collab::preclude::CollabBuilder;
 use collab_database::block::{Blocks, CreateRowParams};
 use collab_database::database::{Database, DatabaseContext};
@@ -11,6 +11,10 @@ use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::kv::sled_lv::SledCollabDB;
+
+use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
+use collab::plugin_impl::rocks_snapshot::RocksSnapshotPlugin;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use tempfile::TempDir;
 
 pub use crate::helper::*;
@@ -44,7 +48,7 @@ impl DerefMut for DatabaseTest {
 pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(SledCollabDB::open(path).unwrap());
+  let db = Arc::new(RocksCollabDB::open(path).unwrap());
   let collab = CollabBuilder::new(uid, database_id).build();
   collab.initial();
   let blocks = Blocks::new(uid, db);
@@ -62,10 +66,10 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   }
 }
 
-pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<SledCollabDB>, DatabaseTest) {
-  let db = make_kv_db();
-  let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
-  let snapshot_plugin = CollabSnapshotPlugin::new(uid, db.clone(), 5).unwrap();
+pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<RocksCollabDB>, DatabaseTest) {
+  let db = make_rocks_db();
+  let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
+  let snapshot_plugin = RocksSnapshotPlugin::new(uid, db.clone(), 5).unwrap();
 
   let collab = CollabBuilder::new(1, database_id)
     .with_plugin(disk_plugin)
@@ -93,11 +97,11 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<SledCollabDB
 pub fn restore_database_from_db(
   uid: i64,
   database_id: &str,
-  db: Arc<SledCollabDB>,
+  db: Arc<RocksCollabDB>,
 ) -> DatabaseTest {
-  let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
+  let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
   let blocks = Blocks::new(uid, db.clone());
-  let snapshot_plugin = CollabSnapshotPlugin::new(uid, db, 5).unwrap();
+  let snapshot_plugin = RocksSnapshotPlugin::new(uid, db, 5).unwrap();
   let collab = CollabBuilder::new(uid, database_id)
     .with_plugin(disk_plugin)
     .with_plugin(snapshot_plugin)

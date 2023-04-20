@@ -1,14 +1,16 @@
-use crate::kv::{KVEntry, KVStore};
-use crate::{CollabDB, PersistenceError};
+use std::ops;
+use std::ops::{Deref, RangeBounds};
+use std::path::Path;
+use std::sync::Arc;
+
 use rocksdb::Direction::Forward;
 use rocksdb::{
   DBAccess, DBCommon, DBIteratorWithThreadMode, Direction, IteratorMode, ReadOptions,
   SingleThreaded, Transaction, TransactionDB, DB,
 };
-use std::ops;
-use std::ops::{Deref, RangeBounds};
-use std::path::Path;
-use std::sync::Arc;
+
+use crate::kv::{KVEntry, KVStore};
+use crate::{CollabDB, PersistenceError};
 
 pub type RocksCollabDB = RocksKVStore;
 
@@ -23,9 +25,19 @@ impl RocksKVStore {
     Ok(Self { db })
   }
 
-  pub fn kv_store_impl(&self) -> RocksKVStoreImpl<'_, TransactionDB> {
+  pub fn read_txn(&self) -> RocksKVStoreImpl<'_, TransactionDB> {
     let txn = self.db.transaction();
     RocksKVStoreImpl(txn)
+  }
+
+  pub fn with_write_txn<F>(&self, f: F)
+  where
+    F: FnOnce(&RocksKVStoreImpl<'_, TransactionDB>),
+  {
+    let txn = self.db.transaction();
+    let store = RocksKVStoreImpl(txn);
+    f(&store);
+    store.commit();
   }
 }
 
