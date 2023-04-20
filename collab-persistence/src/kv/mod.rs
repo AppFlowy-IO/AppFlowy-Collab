@@ -6,7 +6,7 @@ use crate::PersistenceError;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
-pub trait KVStore: Send + Sync {
+pub trait KVStore<'a> {
   type Range: Iterator<Item = Self::Entry>;
   type Entry: KVEntry;
   type Value: AsRef<[u8]>;
@@ -44,14 +44,14 @@ pub trait KVEntry {
   fn value(&self) -> &[u8];
 }
 
-impl<T> KVStore for Arc<T>
+impl<T> KVStore<'static> for Arc<T>
 where
-  T: KVStore,
+  T: KVStore<'static>,
 {
-  type Range = <T as KVStore>::Range;
-  type Entry = <T as KVStore>::Entry;
-  type Value = <T as KVStore>::Value;
-  type Error = <T as KVStore>::Error;
+  type Range = <T as KVStore<'static>>::Range;
+  type Entry = <T as KVStore<'static>>::Entry;
+  type Value = <T as KVStore<'static>>::Value;
+  type Error = <T as KVStore<'static>>::Error;
 
   fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<Self::Value>, Self::Error> {
     (**self).get(key)

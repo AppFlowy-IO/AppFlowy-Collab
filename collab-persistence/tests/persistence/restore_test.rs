@@ -12,7 +12,8 @@ fn single_thread_test() {
     let doc = Doc::new();
     {
       let txn = doc.transact();
-      db.doc_store.write().create_new_doc(1, &oid, &txn).unwrap();
+      let store = db.doc_store.write();
+      store.create_new_doc(1, &oid, &txn).unwrap();
     }
     {
       let text = doc.get_or_insert_text("text");

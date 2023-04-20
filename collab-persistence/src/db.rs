@@ -24,7 +24,7 @@ pub struct CollabDB<S> {
 
 impl<S> CollabDB<S>
 where
-  S: KVStore + Clone,
+  S: KVStore<'static> + Clone,
 {
   pub fn new(store: S) -> Result<Self, PersistenceError> {
     let doc_store = Arc::new(SubStore::new(store.clone()));
@@ -49,7 +49,7 @@ pub struct SubStore<T>(RwLock<T>);
 
 impl<T> SubStore<T>
 where
-  T: KVStore,
+  T: KVStore<'static>,
 {
   pub fn new(db: T) -> Self {
     Self(RwLock::new(db))
@@ -58,7 +58,7 @@ where
 
 impl<T> Deref for SubStore<T>
 where
-  T: KVStore,
+  T: KVStore<'static>,
 {
   type Target = RwLock<T>;
 
@@ -67,7 +67,7 @@ where
   }
 }
 
-pub fn insert_snapshot_update<K, S>(
+pub fn insert_snapshot_update<'a, K, S>(
   store: &S,
   snapshot_id: SnapshotID,
   object_id: &K,
@@ -75,15 +75,15 @@ pub fn insert_snapshot_update<K, S>(
 ) -> Result<(), PersistenceError>
 where
   K: AsRef<[u8]> + ?Sized + Debug,
-  S: KVStore,
-  PersistenceError: From<<S as KVStore>::Error>,
+  S: KVStore<'a>,
+  PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
   let update_key = create_update_key(snapshot_id, store, object_id, make_snapshot_update_key)?;
   let _ = store.insert(update_key, value)?;
   Ok(())
 }
 
-pub fn insert_doc_update<K, S>(
+pub fn insert_doc_update<'a, K, S>(
   db: &S,
   doc_id: DocID,
   object_id: &K,
@@ -91,15 +91,15 @@ pub fn insert_doc_update<K, S>(
 ) -> Result<(), PersistenceError>
 where
   K: AsRef<[u8]> + ?Sized + Debug,
-  S: KVStore,
-  PersistenceError: From<<S as KVStore>::Error>,
+  S: KVStore<'a>,
+  PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
   let update_key = create_update_key(doc_id, db, object_id, make_doc_update_key)?;
   let _ = db.insert(update_key, value)?;
   Ok(())
 }
 
-fn create_update_key<F, K, S>(
+fn create_update_key<'a, F, K, S>(
   id: OID,
   store: &S,
   object_id: &K,
@@ -108,8 +108,8 @@ fn create_update_key<F, K, S>(
 where
   F: Fn(OID, Clock) -> Key<16>,
   K: AsRef<[u8]> + ?Sized + Debug,
-  S: KVStore,
-  PersistenceError: From<<S as KVStore>::Error>,
+  S: KVStore<'a>,
+  PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
   let max_key = make_update_key(id, Clock::MAX);
   let last_clock = if let Ok(Some(entry)) = store.next_back_entry(max_key.as_ref()) {
@@ -130,9 +130,9 @@ where
   Ok(new_key)
 }
 
-pub fn get_id_for_key<S>(store: &S, key: Key<20>) -> Option<DocID>
+pub fn get_id_for_key<'a, S>(store: &S, key: Key<20>) -> Option<DocID>
 where
-  S: KVStore,
+  S: KVStore<'a>,
 {
   let value = store.get(key.as_ref()).ok()??;
   let mut bytes = [0; OID_LEN];
@@ -140,10 +140,10 @@ where
   Some(OID::from_be_bytes(bytes))
 }
 
-pub fn create_id_for_key<S>(store: &S, key: Key<20>) -> Result<DocID, PersistenceError>
+pub fn create_id_for_key<'a, S>(store: &S, key: Key<20>) -> Result<DocID, PersistenceError>
 where
-  S: KVStore,
-  PersistenceError: From<<S as KVStore>::Error>,
+  S: KVStore<'a>,
+  PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
   let new_id = OID_GEN.lock().next_id();
   let _ = store.insert(key.as_ref(), &new_id.to_be_bytes())?;

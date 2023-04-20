@@ -26,7 +26,7 @@ impl SledKVStore {
   }
 }
 
-impl KVStore for SledKVStore {
+impl KVStore<'static> for SledKVStore {
   type Range = SledRange;
   type Entry = SledEntry;
   type Value = IVec;

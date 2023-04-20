@@ -15,14 +15,14 @@ use crate::{
 
 impl<'a, T> SnapshotAction<'a> for T
 where
-  T: KVStore,
-  PersistenceError: From<<Self as KVStore>::Error>,
+  T: KVStore<'a>,
+  PersistenceError: From<<Self as KVStore<'a>>::Error>,
 {
 }
 
-pub trait SnapshotAction<'a>: KVStore + Sized
+pub trait SnapshotAction<'a>: KVStore<'a> + Sized
 where
-  PersistenceError: From<<Self as KVStore>::Error>,
+  PersistenceError: From<<Self as KVStore<'a>>::Error>,
 {
   fn push_snapshot<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
     &self,
@@ -87,10 +87,10 @@ where
 //   where
 //       Error: From<<Self as KVStore<'a>>::Error>,
 
-fn get_snapshot_id<K, S>(uid: i64, store: &S, object_id: &K) -> Option<SnapshotID>
+fn get_snapshot_id<'a, K, S>(uid: i64, store: &S, object_id: &K) -> Option<SnapshotID>
 where
   K: AsRef<[u8]> + ?Sized,
-  S: KVStore,
+  S: KVStore<'a>,
 {
   let key = make_snapshot_id_key(&uid.to_be_bytes(), object_id.as_ref());
   get_id_for_key(store, key)

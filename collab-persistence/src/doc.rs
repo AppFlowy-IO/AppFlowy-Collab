@@ -14,14 +14,14 @@ use crate::{create_id_for_key, get_id_for_key, insert_doc_update, PersistenceErr
 
 impl<'a, T> YrsDocAction<'a> for T
 where
-  T: KVStore,
-  PersistenceError: From<<Self as KVStore>::Error>,
+  T: KVStore<'a>,
+  PersistenceError: From<<Self as KVStore<'a>>::Error>,
 {
 }
 
-pub trait YrsDocAction<'a>: KVStore + Sized
+pub trait YrsDocAction<'a>: KVStore<'a> + Sized
 where
-  PersistenceError: From<<Self as KVStore>::Error>,
+  PersistenceError: From<<Self as KVStore<'a>>::Error>,
 {
   fn create_new_doc<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
     &self,
@@ -194,7 +194,8 @@ where
 
   fn get_all_docs(
     &self,
-  ) -> Result<NameIter<<Self as KVStore>::Range, <Self as KVStore>::Entry>, PersistenceError> {
+  ) -> Result<NameIter<<Self as KVStore<'a>>::Range, <Self as KVStore<'a>>::Entry>, PersistenceError>
+  {
     let from = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT]);
     let to = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT_KEY]);
     let iter = self.range(from.as_ref()..to.as_ref())?;
@@ -225,10 +226,14 @@ where
 }
 
 /// Get or create a document id for the given object id.
-fn get_or_create_did<K, S>(uid: i64, store: &S, object_id: &K) -> Result<DocID, PersistenceError>
+fn get_or_create_did<'a, K, S>(
+  uid: i64,
+  store: &S,
+  object_id: &K,
+) -> Result<DocID, PersistenceError>
 where
-  S: KVStore,
-  PersistenceError: From<<S as KVStore>::Error>,
+  S: KVStore<'a>,
+  PersistenceError: From<<S as KVStore<'a>>::Error>,
   K: AsRef<[u8]> + ?Sized + Debug,
 {
   if let Some(did) = get_doc_id(uid, store, object_id.as_ref()) {
@@ -240,9 +245,9 @@ where
   }
 }
 
-fn get_doc_id<K, S>(uid: i64, store: &S, object_id: &K) -> Option<DocID>
+fn get_doc_id<'a, K, S>(uid: i64, store: &S, object_id: &K) -> Option<DocID>
 where
-  S: KVStore,
+  S: KVStore<'a>,
   K: AsRef<[u8]> + ?Sized,
 {
   let uid = &uid.to_be_bytes();
