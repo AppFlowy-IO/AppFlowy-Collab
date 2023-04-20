@@ -1,18 +1,18 @@
-use collab_persistence::keys::{clock_from_key, make_doc_update_key, Clock};
-use parking_lot::RwLock;
-use smallvec::SmallVec;
-
-use collab_persistence::kv::{KVEntry, KVStore};
 use std::ops::{Deref, Range, RangeTo};
 use std::sync::Arc;
 use std::thread;
 
-use crate::util::{db, rocks_db};
+use collab_persistence::keys::{clock_from_key, make_doc_update_key, Clock};
+use collab_persistence::kv::{KVEntry, KVStore};
+use parking_lot::RwLock;
+use smallvec::SmallVec;
+
+use crate::util::{rocks_db, sled_db};
 
 #[test]
-fn id_test() {
-  let db = rocks_db().1;
-  let store = db.kv_store_impl();
+fn sled_id_test() {
+  let sled_db = sled_db().1;
+  let store = sled_db.kv_store_impl();
   store.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
   store.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
   store.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
@@ -22,15 +22,44 @@ fn id_test() {
   store.commit().unwrap();
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, 1];
-  let last_entry_prior = db
+  let last_entry_prior = sled_db
     .kv_store_impl()
     .next_back_entry(given_key)
     .expect("No entry found prior to the given key")
     .unwrap();
-  assert_eq!(last_entry_prior.value(), &[0, 1, 1]);
+  assert_eq!(last_entry_prior.value(), &[0, 1, 2]);
 
   let given_key: &[u8; 2] = &[0, 1];
-  let last_entry_prior = db
+  let last_entry_prior = sled_db
+    .kv_store_impl()
+    .next_back_entry(given_key)
+    .expect("No entry found prior to the given key")
+    .unwrap();
+  println!("{:?}", last_entry_prior.value());
+}
+
+#[test]
+fn rocks_id_test() {
+  let rocks_db = rocks_db().1;
+  let store = rocks_db.kv_store_impl();
+  store.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
+  store.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
+  store.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
+  store.insert([0, 0, 0, 0, 0, 0, 0, 3], &[0, 1, 4]).unwrap();
+  store.insert([0, 1, 0, 0, 0, 0, 0, 4], &[0, 1, 5]).unwrap();
+  store.insert([0, 1, 0, 0, 0, 0, 0, 5], &[0, 1, 6]).unwrap();
+  store.commit().unwrap();
+
+  let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, 1];
+  let last_entry_prior = rocks_db
+    .kv_store_impl()
+    .next_back_entry(given_key)
+    .expect("No entry found prior to the given key")
+    .unwrap();
+  assert_eq!(last_entry_prior.value(), &[0, 1, 2]);
+
+  let given_key: &[u8; 2] = &[0, 1];
+  let last_entry_prior = rocks_db
     .kv_store_impl()
     .next_back_entry(given_key)
     .expect("No entry found prior to the given key")
@@ -40,7 +69,7 @@ fn id_test() {
 
 #[test]
 fn key_range_test() {
-  let db = db().1;
+  let db = sled_db().1;
   let store = db.kv_store_impl();
   let next = || {
     let given_key: &[u8; 2] = &[0, 2];
@@ -76,7 +105,7 @@ fn key_range_test() {
 
 #[test]
 fn scan_prefix_multi_thread() {
-  let db = Arc::new(db().1);
+  let db = Arc::new(sled_db().1);
   let mut handles = vec![];
   let doc_id: u64 = 1;
 
@@ -116,7 +145,7 @@ fn scan_prefix_multi_thread() {
 
 #[test]
 fn range_key_test() {
-  let db = db().1;
+  let db = sled_db().1;
   let store = db.kv_store_impl();
   store.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
   store.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();

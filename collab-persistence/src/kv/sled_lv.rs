@@ -1,12 +1,13 @@
-use crate::kv::{KVEntry, KVRange, KVStore};
-use parking_lot::RwLock;
 use std::marker::PhantomData;
 use std::ops::{Deref, RangeBounds};
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::{CollabDB, PersistenceError};
+use parking_lot::RwLock;
 use sled::{Batch, Db, IVec, Iter};
+
+use crate::kv::{KVEntry, KVRange, KVStore};
+use crate::{CollabDB, PersistenceError};
 
 pub type SledCollabDB = SledKVStore;
 
@@ -78,8 +79,16 @@ impl KVStore<'static> for SledKVStoreImpl {
   }
 
   fn next_back_entry(&self, key: &[u8]) -> Result<Option<Self::Entry>, Self::Error> {
-    match self.0.read().range(..key).next_back() {
-      Some(Ok((k, v))) => Ok(Some(SledEntry { key: k, value: v })),
+    let db = self.0.read();
+    if let Ok(Some(v)) = db.get(key) {
+      return Ok(Some(SledEntry {
+        key: IVec::from(key),
+        value: v,
+      }));
+    }
+
+    match db.get_lt(key)? {
+      Some((k, v)) => Ok(Some(SledEntry { key: k, value: v })),
       _ => Ok(None),
     }
   }

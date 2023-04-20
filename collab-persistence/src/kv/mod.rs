@@ -1,16 +1,17 @@
-pub mod rocks_kv;
-pub mod sled_lv;
+use std::fmt::Debug;
+use std::ops::RangeBounds;
+use std::sync::Arc;
 
 use crate::PersistenceError;
 
-use std::ops::RangeBounds;
-use std::sync::Arc;
+pub mod rocks_kv;
+pub mod sled_lv;
 
 pub trait KVStore<'a> {
   type Range: Iterator<Item = Self::Entry>;
   type Entry: KVEntry;
   type Value: AsRef<[u8]>;
-  type Error: Into<PersistenceError>;
+  type Error: Into<PersistenceError> + Debug;
 
   /// Get a value by key
   fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<Self::Value>, Self::Error>;
