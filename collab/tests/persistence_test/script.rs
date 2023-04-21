@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 
 use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::plugin_impl::rocks_snapshot::RocksSnapshotPlugin;
@@ -12,6 +12,9 @@ use lib0::any::Any;
 use yrs::updates::decoder::Decode;
 
 use tempfile::TempDir;
+use tracing_subscriber::fmt::Subscriber;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
 pub enum Script {
   CreateDocumentWithDiskPlugin {
@@ -49,6 +52,10 @@ pub enum Script {
     id: String,
     expected: usize,
   },
+  AssertNumOfSnapshots {
+    id: String,
+    expected: usize,
+  },
   AssertNumOfDocuments {
     expected: usize,
   },
@@ -66,6 +73,7 @@ pub struct CollabPersistenceTest {
 
 impl CollabPersistenceTest {
   pub fn new() -> Self {
+    setup_log();
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let uid = 1;
@@ -143,6 +151,10 @@ impl CollabPersistenceTest {
           .unwrap();
         assert_eq!(updates.len(), expected)
       },
+      Script::AssertNumOfSnapshots { id, expected } => {
+        let snapshot = self.disk_plugin.read_txn().get_snapshots(self.uid, &id);
+        assert_eq!(snapshot.len(), expected);
+      },
       Script::AssertNumOfDocuments { expected } => {
         let docs = self.disk_plugin.read_txn().get_all_docs().unwrap();
         assert_eq!(docs.count(), expected);
@@ -189,4 +201,16 @@ impl Drop for Cleaner {
   fn drop(&mut self) {
     Self::cleanup(&self.0)
   }
+}
+
+fn setup_log() {
+  static START: Once = Once::new();
+  START.call_once(|| {
+    std::env::set_var("RUST_LOG", "collab_persistence=trace");
+    let subscriber = Subscriber::builder()
+      .with_env_filter(EnvFilter::from_default_env())
+      .with_ansi(true)
+      .finish();
+    subscriber.try_init().unwrap();
+  });
 }

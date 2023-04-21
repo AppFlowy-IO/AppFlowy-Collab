@@ -8,7 +8,7 @@ fn gen_snapshot_test() {
   let doc_id = "1".to_string();
   test.run_scripts(vec![OpenDocumentWithSnapshotPlugin { id: doc_id.clone() }]);
 
-  for i in 0..20 {
+  for i in 0..=20 {
     test.run_script(InsertKeyValue {
       id: doc_id.clone(),
       key: i.to_string(),
@@ -27,30 +27,36 @@ fn gen_snapshot_test() {
       "4": 4.0
     }),
   });
-  //
-  // test.run_script(AssertSnapshot {
-  //   id: doc_id,
-  //   index: 2,
-  //   expected: json!({
-  //     "0": 0.0,
-  //     "1": 1.0,
-  //     "10": 10.0,
-  //     "11": 11.0,
-  //     "12": 12.0,
-  //     "13": 13.0,
-  //     "14": 14.0,
-  //     "15": 15.0,
-  //     "16": 16.0,
-  //     "17": 17.0,
-  //     "18": 18.0,
-  //     "2": 2.0,
-  //     "3": 3.0,
-  //     "4": 4.0,
-  //     "5": 5.0,
-  //     "6": 6.0,
-  //     "7": 7.0,
-  //     "8": 8.0,
-  //     "9": 9.0
-  //   }),
-  // })
+
+  test.run_script(AssertNumOfSnapshots {
+    id: doc_id.clone(),
+    expected: 4,
+  });
+
+  test.run_script(AssertSnapshot {
+    id: doc_id,
+    index: 3,
+    expected: json!({
+      "0": 0.0,
+      "1": 1.0,
+      "10": 10.0,
+      "11": 11.0,
+      "12": 12.0,
+      "13": 13.0,
+      "14": 14.0,
+      "15": 15.0,
+      "16": 16.0,
+      "17": 17.0,
+      "18": 18.0,
+      "19": 19.0,
+      "2": 2.0,
+      "3": 3.0,
+      "4": 4.0,
+      "5": 5.0,
+      "6": 6.0,
+      "7": 7.0,
+      "8": 8.0,
+      "9": 9.0
+    }),
+  })
 }
