@@ -11,27 +11,29 @@ use collab_folder::core::{Folder, FolderContext};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
 #[test]
-fn load_from_disk() {
+fn test_set_current_view() {
   let uid: i64 = 185579439403307008;
   let source = "./tests/folder_test/dbs".to_string();
+  duplicate_db(source, &uid.to_string(), |duplicate_db| {
+    let folder = create_folder_with_object_id(uid, &duplicate_db);
 
+    // set current view
+    folder.set_current_view("abc");
+    let json1 = folder.to_json_value();
+    drop(folder);
+
+    // reopen
+    let folder = create_folder_with_object_id(uid, &duplicate_db);
+    let json2 = folder.to_json_value();
+    assert_json_diff::assert_json_eq!(json1, json2);
+  })
+}
+
+fn duplicate_db(source: String, folder: &str, f: impl FnOnce(&str)) {
   let dest = format!("temp/{}", nanoid!());
   let dest_path = format!("{}/{}", source, dest);
-  copy_folder_recursively(&source, &uid.to_string(), &dest).unwrap();
-
-  let folder = create_folder_with_object_id(uid, &dest_path);
-  let json = folder.to_json_value();
-  println!("{}", json);
-
-  // set current view
-  folder.set_current_view("abc");
-  drop(folder);
-
-  // reopen
-  let folder = create_folder_with_object_id(uid, &dest_path);
-  let json = folder.to_json_value();
-  println!("{}", json);
-
+  copy_folder_recursively(&source, folder, &dest).unwrap();
+  f(&dest_path);
   std::fs::remove_dir_all(dest_path).unwrap();
 }
 
@@ -57,7 +59,6 @@ fn copy_folder_recursively(
       file::copy(entry_path, target_path, &options).unwrap();
     }
   }
-
   Ok(())
 }
 
