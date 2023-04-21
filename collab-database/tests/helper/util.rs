@@ -1,5 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
 
+use std::path::PathBuf;
 use std::sync::{Arc, Once};
 
 use anyhow::bail;
@@ -11,7 +12,9 @@ use collab_database::views::{
   FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder, GroupSettingBuilder, GroupSettingMap,
   LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
 };
-use collab_persistence::CollabKV;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::kv::sled_lv::SledCollabDB;
+
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -321,7 +324,7 @@ impl std::convert::From<i64> for TestDateFormat {
       2 => TestDateFormat::ISO,
       3 => TestDateFormat::Friendly,
       _ => {
-        tracing::error!("Unsupported date format, fallback to friendly");
+        tracing::error!("🔴Unsupported date format, fallback to friendly");
         TestDateFormat::Friendly
       },
     }
@@ -355,7 +358,7 @@ impl std::convert::From<i64> for TestTimeFormat {
       0 => TestTimeFormat::TwelveHour,
       1 => TestTimeFormat::TwentyFourHour,
       _ => {
-        tracing::error!("Unsupported time format, fallback to TwentyFourHour");
+        tracing::error!("🔴 Unsupported time format, fallback to TwentyFourHour");
         TestTimeFormat::TwentyFourHour
       },
     }
@@ -526,24 +529,38 @@ impl std::convert::From<i64> for TestFieldType {
       6 => TestFieldType::URL,
       7 => TestFieldType::Checklist,
       _ => {
-        tracing::error!("Can't parser FieldType from value: {}", ty);
+        tracing::error!("🔴Can't parser FieldType from value: {}", ty);
         TestFieldType::RichText
       },
     }
   }
 }
 
-pub fn make_kv_db() -> Arc<CollabKV> {
+#[allow(dead_code)]
+pub fn make_sled_db() -> Arc<SledCollabDB> {
+  let path = db_path();
+  Arc::new(SledCollabDB::open(path).unwrap())
+}
+
+pub fn make_rocks_db() -> Arc<RocksCollabDB> {
+  let path = db_path();
+  Arc::new(RocksCollabDB::open(path).unwrap())
+}
+
+pub fn db_path() -> PathBuf {
   static START: Once = Once::new();
   START.call_once(|| {
-    std::env::set_var("RUST_LOG", "collab_persistence=trace,collab_database=debug");
+    std::env::set_var(
+      "RUST_LOG",
+      "collab=trace,collab_persistence=trace,collab_database=debug",
+    );
     let subscriber = Subscriber::builder()
       .with_env_filter(EnvFilter::from_default_env())
       .with_ansi(true)
       .finish();
     subscriber.try_init().unwrap();
   });
+
   let tempdir = TempDir::new().unwrap();
-  let path = tempdir.into_path();
-  Arc::new(CollabKV::open(path).unwrap())
+  tempdir.into_path()
 }

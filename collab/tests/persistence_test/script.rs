@@ -1,20 +1,22 @@
-use collab::plugin_impl::disk::CollabDiskPlugin;
-use collab::preclude::*;
-use lib0::any::Any;
-
-use collab_persistence::CollabKV;
 use std::collections::HashMap;
 use std::path::PathBuf;
-
-use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
 use std::sync::Arc;
-use tempfile::TempDir;
+
+use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
+use collab::plugin_impl::rocks_snapshot::RocksSnapshotPlugin;
+use collab::preclude::*;
+use collab_persistence::doc::YrsDocAction;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::snapshot::SnapshotAction;
+use lib0::any::Any;
 use yrs::updates::decoder::Decode;
+
+use tempfile::TempDir;
 
 pub enum Script {
   CreateDocumentWithDiskPlugin {
     id: String,
-    plugin: CollabDiskPlugin,
+    plugin: RocksDiskPlugin,
   },
   OpenDocumentWithDiskPlugin {
     id: String,
@@ -55,8 +57,8 @@ pub enum Script {
 pub struct CollabPersistenceTest {
   pub uid: i64,
   collabs: HashMap<String, Collab>,
-  disk_plugin: CollabDiskPlugin,
-  snapshot_plugin: CollabSnapshotPlugin,
+  disk_plugin: RocksDiskPlugin,
+  snapshot_plugin: RocksSnapshotPlugin,
   #[allow(dead_code)]
   cleaner: Cleaner,
   pub db_path: PathBuf,
@@ -67,9 +69,9 @@ impl CollabPersistenceTest {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let uid = 1;
-    let db = Arc::new(CollabKV::open(path.clone()).unwrap());
-    let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
-    let snapshot_plugin = CollabSnapshotPlugin::new(uid, db, 5).unwrap();
+    let db = Arc::new(RocksCollabDB::open(path.clone()).unwrap());
+    let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
+    let snapshot_plugin = RocksSnapshotPlugin::new(uid, db, 5).unwrap();
     let cleaner = Cleaner::new(path.clone());
     Self {
       uid,
@@ -116,7 +118,10 @@ impl CollabPersistenceTest {
         self.collabs.insert(id, collab);
       },
       Script::DeleteDocument { id } => {
-        self.disk_plugin.doc().delete_doc(&id).unwrap();
+        self
+          .disk_plugin
+          .with_write_txn(|store| store.delete_doc(self.uid, &id))
+          .unwrap();
       },
       Script::InsertKeyValue { id, key, value } => {
         self.collabs.get(&id).as_ref().unwrap().insert(&key, value);
@@ -131,11 +136,15 @@ impl CollabPersistenceTest {
         assert_eq!(text, expected)
       },
       Script::AssertNumOfUpdates { id, expected } => {
-        let updates = self.disk_plugin.doc().get_updates(&id).unwrap();
+        let updates = self
+          .disk_plugin
+          .read_txn()
+          .get_updates(self.uid, &id)
+          .unwrap();
         assert_eq!(updates.len(), expected)
       },
       Script::AssertNumOfDocuments { expected } => {
-        let docs = self.disk_plugin.doc().get_all_docs().unwrap();
+        let docs = self.disk_plugin.read_txn().get_all_docs().unwrap();
         assert_eq!(docs.count(), expected);
       },
       Script::AssertSnapshot {
@@ -143,7 +152,8 @@ impl CollabPersistenceTest {
         index,
         expected,
       } => {
-        let snapshots = self.snapshot_plugin.snapshot().get_snapshots(&id);
+        let snapshot = self.snapshot_plugin.db.read_txn();
+        let snapshots = snapshot.get_snapshots(self.snapshot_plugin.uid, &id);
         let collab = CollabBuilder::new(1, &id).build();
         collab.with_transact_mut(|txn| {
           txn.apply_update(Update::decode_v1(&snapshots[index as usize].data).unwrap());
@@ -156,11 +166,11 @@ impl CollabPersistenceTest {
   }
 }
 
-pub fn disk_plugin(uid: i64) -> CollabDiskPlugin {
+pub fn disk_plugin(uid: i64) -> RocksDiskPlugin {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(CollabKV::open(path).unwrap());
-  CollabDiskPlugin::new(uid, db).unwrap()
+  let db = Arc::new(RocksCollabDB::open(path).unwrap());
+  RocksDiskPlugin::new(uid, db).unwrap()
 }
 
 struct Cleaner(PathBuf);

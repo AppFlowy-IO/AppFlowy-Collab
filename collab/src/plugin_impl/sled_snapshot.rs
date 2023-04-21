@@ -1,22 +1,24 @@
-use crate::error::CollabError;
-use crate::preclude::CollabPlugin;
-use collab_persistence::snapshot::YrsSnapshotDB;
-use collab_persistence::CollabKV;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;
+
+use collab_persistence::kv::sled_lv::SledCollabDB;
+use collab_persistence::snapshot::SnapshotAction;
 use yrs::TransactionMut;
+
+use crate::error::CollabError;
+use crate::preclude::CollabPlugin;
 
 #[derive(Clone)]
 pub struct CollabSnapshotPlugin {
-  uid: i64,
-  db: Arc<CollabKV>,
+  pub uid: i64,
+  pub db: Arc<SledCollabDB>,
   update_count: Arc<AtomicU32>,
   snapshot_per_txn: u32,
 }
 
 impl CollabSnapshotPlugin {
-  pub fn new(uid: i64, db: Arc<CollabKV>, snapshot_per_txn: u32) -> Result<Self, CollabError> {
+  pub fn new(uid: i64, db: Arc<SledCollabDB>, snapshot_per_txn: u32) -> Result<Self, CollabError> {
     let update_count = Arc::new(AtomicU32::new(0));
     Ok(Self {
       uid,
@@ -24,10 +26,6 @@ impl CollabSnapshotPlugin {
       update_count,
       snapshot_per_txn,
     })
-  }
-
-  pub fn snapshot(&self) -> YrsSnapshotDB {
-    self.db.snapshot(self.uid)
   }
 
   fn increase_count(&self) -> u32 {
@@ -41,10 +39,10 @@ impl CollabPlugin for CollabSnapshotPlugin {
     if count != 0 && count % self.snapshot_per_txn == 0 {
       // generate snapshot
       if let Err(err) = self
-        .snapshot()
-        .push_snapshot(object_id, "".to_string(), txn)
+        .db
+        .with_write_txn(|store| store.push_snapshot(self.uid, object_id, "".to_string(), txn))
       {
-        tracing::error!("Generate snapshot failed: {}", err);
+        tracing::error!("🔴Generate snapshot failed: {}", err);
       }
     }
   }

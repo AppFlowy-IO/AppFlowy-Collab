@@ -1,33 +1,40 @@
-use crate::util::db;
-
 use std::thread;
+
+use collab_persistence::doc::YrsDocAction;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::kv::sled_lv::SledCollabDB;
 use yrs::{Doc, GetString, Text, Transact};
+
+use crate::util::{rocks_db, sled_db};
 
 #[test]
 fn single_thread_test() {
-  let db = db();
+  let (path, db) = sled_db();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
     let doc = Doc::new();
     {
       let txn = doc.transact();
-      db.doc(1).create_new_doc(&oid, &txn).unwrap();
+      let store = db.read_txn();
+      store.create_new_doc(1, &oid, &txn).unwrap();
     }
     {
       let text = doc.get_or_insert_text("text");
       let mut txn = doc.transact_mut();
       text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
       let update = txn.encode_update_v1();
-      db.doc(1).push_update(&oid, &update).unwrap();
+      db.read_txn().push_update(1, &oid, &update).unwrap();
     }
   }
+  drop(db);
 
+  let db = SledCollabDB::open(path).unwrap();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
     let doc = Doc::new();
     {
       let mut txn = doc.transact_mut();
-      db.doc(1).load_doc(&oid, &mut txn).unwrap();
+      db.read_txn().load_doc(1, &oid, &mut txn).unwrap();
     }
     let text = doc.get_or_insert_text("text");
     let txn = doc.transact();
@@ -36,8 +43,8 @@ fn single_thread_test() {
 }
 
 #[test]
-fn multiple_thread_test() {
-  let db = db();
+fn sled_multiple_thread_test() {
+  let (path, db) = sled_db();
   let mut handles = vec![];
   for i in 0..100 {
     let cloned_db = db.clone();
@@ -46,14 +53,18 @@ fn multiple_thread_test() {
       let doc = Doc::new();
       {
         let txn = doc.transact();
-        cloned_db.doc(1).create_new_doc(&oid, &txn).unwrap();
+        cloned_db
+          .with_write_txn(|store| store.create_new_doc(1, &oid, &txn))
+          .unwrap();
       }
       {
         let text = doc.get_or_insert_text("text");
         let mut txn = doc.transact_mut();
         text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
         let update = txn.encode_update_v1();
-        cloned_db.doc(1).push_update(&oid, &update).unwrap();
+        cloned_db
+          .with_write_txn(|store| store.push_update(1, &oid, &update))
+          .unwrap();
       }
     });
     handles.push(handle);
@@ -62,13 +73,62 @@ fn multiple_thread_test() {
   for handle in handles {
     handle.join().unwrap();
   }
+  drop(db);
 
+  let db = SledCollabDB::open(path).unwrap();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
     let doc = Doc::new();
     {
       let mut txn = doc.transact_mut();
-      db.doc(1).load_doc(&oid, &mut txn).unwrap();
+      db.read_txn().load_doc(1, &oid, &mut txn).unwrap();
+    }
+    let text = doc.get_or_insert_text("text");
+    let txn = doc.transact();
+    assert_eq!(text.get_string(&txn), format!("Hello, world! {}", i));
+  }
+}
+
+#[test]
+fn rocks_multiple_thread_test() {
+  let (path, db) = rocks_db();
+  let mut handles = vec![];
+  for i in 0..100 {
+    let cloned_db = db.clone();
+    let handle = thread::spawn(move || {
+      let oid = format!("doc_{}", i);
+      let doc = Doc::new();
+      {
+        let txn = doc.transact();
+        cloned_db
+          .with_write_txn(|store| store.create_new_doc(1, &oid, &txn))
+          .unwrap();
+      }
+      {
+        let text = doc.get_or_insert_text("text");
+        let mut txn = doc.transact_mut();
+        text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
+        let update = txn.encode_update_v1();
+        cloned_db
+          .with_write_txn(|store| store.push_update(1, &oid, &update))
+          .unwrap();
+      }
+    });
+    handles.push(handle);
+  }
+
+  for handle in handles {
+    handle.join().unwrap();
+  }
+  drop(db);
+
+  let db = RocksCollabDB::open(path).unwrap();
+  for i in 0..100 {
+    let oid = format!("doc_{}", i);
+    let doc = Doc::new();
+    {
+      let mut txn = doc.transact_mut();
+      db.read_txn().load_doc(1, &oid, &mut txn).unwrap();
     }
     let text = doc.get_or_insert_text("text");
     let txn = doc.transact();

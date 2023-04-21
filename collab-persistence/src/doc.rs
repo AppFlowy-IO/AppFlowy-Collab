@@ -1,210 +1,275 @@
 use std::fmt::Debug;
 
-use sled::Iter;
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{ReadTxn, StateVector, TransactionMut, Update};
 
-use crate::db::{batch_get, batch_remove};
 use crate::keys::{
   doc_name_from_key, make_doc_end_key, make_doc_id_key, make_doc_start_key, make_doc_state_key,
   make_doc_update_key, make_state_vector_key, Clock, DocID, Key, DOC_SPACE, DOC_SPACE_OBJECT,
   DOC_SPACE_OBJECT_KEY,
 };
-use crate::{DbContext, PersistenceError};
+use crate::kv::KVEntry;
+use crate::kv::KVStore;
+use crate::{create_id_for_key, get_id_for_key, insert_doc_update, PersistenceError};
 
-pub struct YrsDocDB<'a> {
-  pub(crate) uid: i64,
-  pub(crate) context: &'a DbContext,
+impl<'a, T> YrsDocAction<'a> for T
+where
+  T: KVStore<'a>,
+  PersistenceError: From<<Self as KVStore<'a>>::Error>,
+{
 }
 
-impl<'a> YrsDocDB<'a> {
-  pub fn create_new_doc<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
+pub trait YrsDocAction<'a>: KVStore<'a> + Sized
+where
+  PersistenceError: From<<Self as KVStore<'a>>::Error>,
+{
+  fn create_new_doc<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
     &self,
+    uid: i64,
     object_id: &K,
     txn: &T,
   ) -> Result<(), PersistenceError> {
+    if self.is_exist(uid, object_id) {
+      tracing::warn!("🟡{:?} already exist", object_id);
+    }
+    let doc_id = get_or_create_did(uid, self, object_id.as_ref())?;
+    tracing::trace!(
+      "🤲collab => [{}:{:?}]: New doc:{}",
+      doc_id,
+      object_id,
+      doc_id
+    );
     let doc_state = txn.encode_diff_v1(&StateVector::default());
     let sv = txn.state_vector().encode_v1();
-    let doc_id = self.get_or_create_did(object_id.as_ref())?;
-    tracing::trace!(
-      "[doc:{}]:Create new doc {} for {:?}",
-      doc_id,
-      doc_id,
-      object_id
-    );
     let doc_state_key = make_doc_state_key(doc_id);
     let sv_key = make_state_vector_key(doc_id);
-    self.context.db.write().insert(&doc_state_key, doc_state)?;
-    self.context.db.write().insert(&sv_key, sv)?;
+
+    tracing::trace!(
+      "🤲collab => [{}-{:?}] insert doc state: {:?}",
+      doc_id,
+      object_id,
+      doc_state_key
+    );
+    self.insert(doc_state_key, doc_state)?;
+    self.insert(sv_key, sv)?;
+
     Ok(())
   }
 
-  pub fn is_exist<K: AsRef<[u8]> + ?Sized>(&self, doc_id: &K) -> bool {
-    self.get_doc_id(doc_id).is_some()
+  fn flush_doc<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
+    &self,
+    uid: i64,
+    object_id: &K,
+    txn: &T,
+  ) -> Result<(), PersistenceError> {
+    let doc_id = get_or_create_did(uid, self, object_id)?;
+    tracing::trace!("🤲collab => [{}-{:?}]: flush doc", doc_id, object_id);
+
+    let doc_state = txn.encode_state_as_update_v1(&StateVector::default());
+    let sv = txn.state_vector().encode_v1();
+
+    let doc_state_key = make_doc_state_key(doc_id);
+    let sv_key = make_state_vector_key(doc_id);
+
+    tracing::trace!(
+      "🤲collab => [{}-{:?}] insert doc state: {:?} : {}",
+      doc_id,
+      object_id,
+      doc_state_key.as_ref(),
+      doc_state.len(),
+    );
+    // Insert new doc state and state vector
+    self.insert(doc_state_key, doc_state)?;
+    self.insert(sv_key, sv)?;
+
+    // Remove the updates
+    let start = make_doc_start_key(doc_id);
+    let end = make_doc_end_key(doc_id);
+    self.remove_range(start.as_ref(), end.as_ref())?;
+
+    Ok(())
   }
 
-  ///
-  ///
-  /// # Arguments
-  ///
-  /// * `object_id`:
-  /// * `txn`:
-  ///
-  /// returns: Result<(), PersistenceError>
-  ///
-  /// # Examples
-  ///
-  /// ```
-  ///
-  /// ```
-  pub fn load_doc<K: AsRef<[u8]> + ?Sized + Debug>(
+  fn is_exist<K: AsRef<[u8]> + ?Sized + Debug>(&self, uid: i64, object_id: &K) -> bool {
+    get_doc_id(uid, self, object_id).is_some()
+  }
+
+  fn load_doc<K: AsRef<[u8]> + ?Sized + Debug>(
     &self,
+    uid: i64,
     object_id: &K,
     txn: &mut TransactionMut,
-  ) -> Result<(), PersistenceError> {
-    if let Some(did) = self.get_doc_id(object_id) {
-      let doc_state_key = make_doc_state_key(did);
-      if let Some(doc_state) = self.context.db.read().get(doc_state_key)? {
+  ) -> Result<u32, PersistenceError> {
+    let mut update_count = 0;
+
+    if let Some(doc_id) = get_doc_id(uid, self, object_id) {
+      tracing::trace!("🤲collab => [{}-{:?}]: load doc", doc_id, object_id);
+      let doc_state_key = make_doc_state_key(doc_id);
+      if let Some(doc_state) = self.get(doc_state_key.as_ref())? {
         let update = Update::decode_v1(doc_state.as_ref())?;
         txn.apply_update(update);
 
-        let update_start = make_doc_update_key(did, 0);
-        let update_end = make_doc_update_key(did, Clock::MAX);
+        let update_start = make_doc_update_key(doc_id, 0);
+        let update_end = make_doc_update_key(doc_id, Clock::MAX);
         tracing::trace!(
-          "[doc:{}]:Get update from {:?} to {:?}",
-          did,
+          "🤲collab => [{}-{:?}]: Get update from {:?} to {:?}",
+          doc_id,
+          object_id,
           update_start.as_ref(),
           update_end.as_ref(),
         );
-        let encoded_updates = batch_get(&self.context.db.read(), &update_start, &update_end)?;
-        tracing::trace!(
-          "{:?}: Number of encoded_updates: {}",
-          object_id,
-          encoded_updates.len()
-        );
+
+        let encoded_updates = self.range(update_start.as_ref()..=update_end.as_ref())?;
         for encoded_update in encoded_updates {
-          let update = Update::decode_v1(encoded_update.as_ref())?;
+          update_count += 1;
+          let update = Update::decode_v1(encoded_update.value())?;
           txn.apply_update(update);
         }
+      } else {
+        tracing::error!(
+          "🔴collab => [{}-{:?}]: the doc state should not be empty",
+          doc_id,
+          object_id
+        );
       }
+      tracing::debug!(
+        "[{:?}-{:?}]: num of updates: {}",
+        doc_id,
+        object_id,
+        update_count,
+      );
 
-      Ok(())
+      Ok(update_count)
     } else {
+      tracing::trace!("🤲collab => {:?} not exist", object_id);
       Err(PersistenceError::DocumentNotExist)
     }
   }
 
-  pub fn push_update<K: AsRef<[u8]> + ?Sized + Debug>(
+  fn push_update<K: AsRef<[u8]> + ?Sized + Debug>(
     &self,
+    uid: i64,
     object_id: &K,
     update: &[u8],
   ) -> Result<(), PersistenceError> {
-    let doc_id = self.get_or_create_did(object_id.as_ref())?;
-    tracing::trace!("[doc:{}]:Insert update for {:?}", doc_id, object_id);
-    // if String::from_utf8(object_id.as_ref().to_vec()).unwrap() == "block_1" {
-    //   tracing::trace!("pause");
-    // }
-    self.context.insert_doc_update(doc_id, update.to_vec())?;
-    Ok(())
-  }
-
-  ///
-  ///
-  /// # Arguments
-  ///
-  /// * `object_id`:
-  ///
-  /// returns: Result<(), PersistenceError>
-  ///
-  /// # Examples
-  ///
-  /// ```
-  ///
-  /// ```
-  pub fn delete_doc<K: AsRef<[u8]> + ?Sized + Debug>(
-    &self,
-    object_id: &K,
-  ) -> Result<(), PersistenceError> {
-    if let Some(did) = self.get_doc_id(object_id) {
-      tracing::trace!("[{}] delete {:?} doc", did, object_id);
-      let key = make_doc_id_key(&self.uid.to_be_bytes(), object_id.as_ref());
-      let mut db = self.context.db.write();
-      let _ = db.remove(key);
-
-      let start = make_doc_start_key(did);
-      let end = make_doc_end_key(did);
-      let _ = batch_remove(&mut db, start, end);
-
-      let doc_state_key = make_doc_state_key(did);
-      let sv_key = make_state_vector_key(did);
-      let _ = db.remove(doc_state_key);
-      let _ = db.remove(sv_key);
+    match get_doc_id(uid, self, object_id.as_ref()) {
+      None => {
+        tracing::error!(
+          "🔴Insert update failed. Can't find the doc for {:?}",
+          object_id
+        );
+      },
+      Some(doc_id) => {
+        insert_doc_update(self, doc_id, object_id, update.to_vec())?;
+      },
     }
     Ok(())
   }
 
-  pub fn get_all_docs(&self) -> Result<DocsNameIter, PersistenceError> {
-    let from = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT]);
-    let to = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT_KEY]);
-    let iter = self.context.db.read().range(from..=to);
+  fn delete_doc<K: AsRef<[u8]> + ?Sized + Debug>(
+    &self,
+    uid: i64,
+    object_id: &K,
+  ) -> Result<(), PersistenceError> {
+    if let Some(did) = get_doc_id(uid, self, object_id) {
+      tracing::trace!("🤲collab => [{}] delete {:?} doc", did, object_id);
+      let key = make_doc_id_key(&uid.to_be_bytes(), object_id.as_ref());
+      let _ = self.remove(key.as_ref());
 
-    Ok(DocsNameIter { iter })
+      let start = make_doc_start_key(did);
+      let end = make_doc_end_key(did);
+      self.remove_range(start.as_ref(), end.as_ref())?;
+
+      let doc_state_key = make_doc_state_key(did);
+      let sv_key = make_state_vector_key(did);
+      let _ = self.remove(doc_state_key.as_ref());
+      let _ = self.remove(sv_key.as_ref());
+    }
+    Ok(())
   }
 
-  pub fn get_updates<K: AsRef<[u8]> + ?Sized>(
+  fn get_all_docs(
     &self,
+  ) -> Result<NameIter<<Self as KVStore<'a>>::Range, <Self as KVStore<'a>>::Entry>, PersistenceError>
+  {
+    let from = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT]);
+    let to = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT_KEY]);
+    let iter = self.range(from.as_ref()..to.as_ref())?;
+    Ok(NameIter { iter })
+  }
+
+  fn get_updates<K: AsRef<[u8]> + ?Sized>(
+    &self,
+    uid: i64,
     object_id: &K,
   ) -> Result<Vec<Update>, PersistenceError> {
-    if let Some(doc_id) = self.get_doc_id(object_id) {
+    if let Some(doc_id) = get_doc_id(uid, self, object_id) {
       let start = make_doc_update_key(doc_id, 0);
       let end = make_doc_update_key(doc_id, Clock::MAX);
-      let encoded_updates = batch_get(&self.context.db.read(), &start, &end)?;
+
       let mut updates = vec![];
-      for encoded_update in encoded_updates {
-        updates.push(Update::decode_v1(encoded_update.as_ref())?);
+      if let Ok(encoded_updates) = self.range(start.as_ref()..=end.as_ref()) {
+        for encoded_update in encoded_updates {
+          updates.push(Update::decode_v1(encoded_update.value())?);
+        }
       }
+
       Ok(updates)
     } else {
       Err(PersistenceError::DocumentNotExist)
     }
   }
+}
 
-  /// Get or create a document id for the given object id.
-  fn get_or_create_did<K: AsRef<[u8]> + ?Sized + Debug>(
-    &self,
-    object_id: &K,
-  ) -> Result<DocID, PersistenceError> {
-    if let Some(did) = self.get_doc_id(object_id.as_ref()) {
-      Ok(did)
-    } else {
-      let key = make_doc_id_key(&self.uid.to_be_bytes(), object_id.as_ref());
-      let new_did = self.context.create_doc_id_for_key(key)?;
-      Ok(new_did)
-    }
-  }
-
-  fn get_doc_id<K: AsRef<[u8]> + ?Sized>(&self, object_id: &K) -> Option<DocID> {
-    let uid = &self.uid.to_be_bytes();
-    let key = make_doc_id_key(uid, object_id.as_ref());
-    self.context.get_doc_id_for_key(key)
+/// Get or create a document id for the given object id.
+fn get_or_create_did<'a, K, S>(
+  uid: i64,
+  store: &S,
+  object_id: &K,
+) -> Result<DocID, PersistenceError>
+where
+  S: KVStore<'a>,
+  PersistenceError: From<<S as KVStore<'a>>::Error>,
+  K: AsRef<[u8]> + ?Sized + Debug,
+{
+  if let Some(did) = get_doc_id(uid, store, object_id.as_ref()) {
+    Ok(did)
+  } else {
+    let key = make_doc_id_key(&uid.to_be_bytes(), object_id.as_ref());
+    let new_did = create_id_for_key(store, key)?;
+    Ok(new_did)
   }
 }
 
-pub type DocName = String;
-
-pub struct DocsNameIter {
-  iter: Iter,
+fn get_doc_id<'a, K, S>(uid: i64, store: &S, object_id: &K) -> Option<DocID>
+where
+  S: KVStore<'a>,
+  K: AsRef<[u8]> + ?Sized,
+{
+  let uid = &uid.to_be_bytes();
+  let key = make_doc_id_key(uid, object_id.as_ref());
+  get_id_for_key(store, key)
 }
 
-impl DocsNameIter {}
+pub struct NameIter<I, E>
+where
+  I: Iterator<Item = E>,
+  E: KVEntry,
+{
+  iter: I,
+}
 
-impl Iterator for DocsNameIter {
-  type Item = DocName;
+impl<I, E> Iterator for NameIter<I, E>
+where
+  I: Iterator<Item = E>,
+  E: KVEntry,
+{
+  type Item = String;
 
   fn next(&mut self) -> Option<Self::Item> {
-    let (k, _) = self.iter.next()?.ok()?;
-    let content = doc_name_from_key(k.as_ref());
+    let entry = self.iter.next()?;
+    let content = doc_name_from_key(entry.key());
     Some(String::from_utf8_lossy(content).to_string())
   }
 }

@@ -80,6 +80,7 @@ pub fn doc_name_from_key(key: &[u8]) -> &[u8] {
   &key[2..(key.len() - 1)]
 }
 
+// [1,1,  0,0,0,0,0,0,0,0,  0]
 pub fn make_doc_state_key(doc_id: DocID) -> Key<DOC_STATE_KEY_LEN> {
   let mut v: SmallVec<[u8; DOC_STATE_KEY_LEN]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT_KEY];
   v.write_all(&doc_id.to_be_bytes()).unwrap();
@@ -91,7 +92,7 @@ pub fn make_doc_state_key(doc_id: DocID) -> Key<DOC_STATE_KEY_LEN> {
 pub fn make_doc_start_key(doc_id: DocID) -> Key<DOC_STATE_KEY_LEN> {
   make_doc_state_key(doc_id)
 }
-
+// [1,1,  0,0,0,0,0,0,0,0,  255]
 pub fn make_doc_end_key(doc_id: DocID) -> Key<DOC_STATE_KEY_LEN> {
   let mut v: SmallVec<[u8; DOC_STATE_KEY_LEN]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT_KEY];
   v.write_all(&doc_id.to_be_bytes()).unwrap();
@@ -99,6 +100,7 @@ pub fn make_doc_end_key(doc_id: DocID) -> Key<DOC_STATE_KEY_LEN> {
   Key(v)
 }
 
+// [1,1,  0,0,0,0,0,0,0,0,  1]
 pub fn make_state_vector_key(doc_id: DocID) -> Key<DOC_STATE_KEY_LEN> {
   let mut v: SmallVec<[u8; DOC_STATE_KEY_LEN]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT_KEY];
   v.write_all(&doc_id.to_be_bytes()).unwrap();
@@ -106,6 +108,7 @@ pub fn make_state_vector_key(doc_id: DocID) -> Key<DOC_STATE_KEY_LEN> {
   Key(v)
 }
 
+// [1,1,  0,0,0,0,0,0,0,0,  2   0,0,0,0,  0]
 pub fn make_doc_update_key(doc_id: DocID, clock: Clock) -> Key<DOC_UPDATE_KEY_LEN> {
   let mut v: SmallVec<[u8; DOC_UPDATE_KEY_LEN]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT_KEY];
   v.write_all(&doc_id.to_be_bytes()).unwrap();
@@ -115,6 +118,7 @@ pub fn make_doc_update_key(doc_id: DocID, clock: Clock) -> Key<DOC_UPDATE_KEY_LE
   Key(v)
 }
 
+// [1,1,  0,0,0,0,0,0,0,0,  2]
 pub fn make_doc_update_key_prefix(doc_id: DocID) -> Key<DOC_UPDATE_KEY_PREFIX_LEN> {
   let mut v: SmallVec<[u8; DOC_UPDATE_KEY_PREFIX_LEN]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT_KEY];
   v.write_all(&doc_id.to_be_bytes()).unwrap();
@@ -122,11 +126,13 @@ pub fn make_doc_update_key_prefix(doc_id: DocID) -> Key<DOC_UPDATE_KEY_PREFIX_LE
   Key(v)
 }
 
+// [1,1,  0,0,0,0,0,0,0,0,  2   [0,0,0,0],  0]
 pub fn clock_from_key(key: &[u8]) -> &[u8] {
   let len = key.len();
   &key[(len - 5)..(len - 1)]
 }
 
+// [2,0, uid,  object_id,  0]
 pub fn make_snapshot_id_key(uid: &[u8], object_id: &[u8]) -> Key<20> {
   let mut v: SmallVec<[u8; 20]> = smallvec![SNAPSHOT_SPACE, SNAPSHOT_SPACE_OBJECT];
   v.write_all(uid).unwrap();
@@ -135,6 +141,7 @@ pub fn make_snapshot_id_key(uid: &[u8], object_id: &[u8]) -> Key<20> {
   Key(v)
 }
 
+// [2,0,  0,0,0,0,0,0,0,0,  1   [0,0,0,0],  0]
 pub fn make_snapshot_update_key(
   snapshot_id: SnapshotID,
   clock: Clock,

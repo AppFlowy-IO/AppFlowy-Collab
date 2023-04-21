@@ -3,11 +3,11 @@ use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use collab::plugin_impl::disk::CollabDiskPlugin;
+use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::{
   Collab, CollabBuilder, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
-use collab_persistence::CollabKV;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
@@ -27,7 +27,7 @@ pub struct Blocks {
 }
 
 impl Blocks {
-  pub fn new(uid: i64, db: Arc<CollabKV>) -> Self {
+  pub fn new(uid: i64, db: Arc<RocksCollabDB>) -> Self {
     let blocks = RwLock::new(HashMap::new());
     let mut write_guard = blocks.write();
 
@@ -35,7 +35,7 @@ impl Blocks {
     for i in 0..NUM_OF_BLOCKS {
       let block_id = i;
       let collab = CollabBuilder::new(uid, format!("block_{}", block_id))
-        .with_plugin(CollabDiskPlugin::new(uid, db.clone()).unwrap())
+        .with_plugin(RocksDiskPlugin::new(uid, db.clone()).unwrap())
         .build();
       collab.initial();
 

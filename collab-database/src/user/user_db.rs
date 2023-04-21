@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use collab::plugin_impl::disk::CollabDiskPlugin;
-use collab::plugin_impl::snapshot::CollabSnapshotPlugin;
+use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
+use collab::plugin_impl::rocks_snapshot::RocksSnapshotPlugin;
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, Update};
-use collab_persistence::snapshot::CollabSnapshot;
-use collab_persistence::CollabKV;
+use collab_persistence::doc::YrsDocAction;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use parking_lot::RwLock;
 
 use crate::block::Blocks;
@@ -16,10 +17,15 @@ use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::user::relation::{DatabaseRelation, RowRelationMap};
 use crate::views::{CreateDatabaseParams, CreateViewParams};
 
+#[derive(Clone, Default)]
+pub struct Config {
+  pub can_flush: bool,
+}
+
 /// A [UserDatabase] represents a user's database.
 pub struct UserDatabase {
   uid: i64,
-  db: Arc<CollabKV>,
+  db: Arc<RocksCollabDB>,
   #[allow(dead_code)]
   collab: Collab,
   /// It used to keep track of the blocks. Each block contains a list of [Row]s
@@ -33,16 +39,17 @@ pub struct UserDatabase {
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
   open_handlers: RwLock<HashMap<String, Arc<Database>>>,
+  config: Config,
 }
 
 const DATABASES: &str = "databases";
 
 impl UserDatabase {
-  pub fn new(uid: i64, db: Arc<CollabKV>) -> Self {
+  pub fn new(uid: i64, db: Arc<RocksCollabDB>, config: Config) -> Self {
     tracing::trace!("Init user database: {}", uid);
     // user database
-    let disk_plugin = CollabDiskPlugin::new(uid, db.clone()).unwrap();
-    let snapshot_plugin = CollabSnapshotPlugin::new(uid, db.clone(), 5).unwrap();
+    let disk_plugin = RocksDiskPlugin::new_with_config(uid, db.clone(), config.can_flush).unwrap();
+    let snapshot_plugin = RocksSnapshotPlugin::new(uid, db.clone(), 5).unwrap();
     let collab = CollabBuilder::new(uid, format!("{}_user_database", uid))
       .with_plugin(disk_plugin)
       .with_plugin(snapshot_plugin)
@@ -61,6 +68,7 @@ impl UserDatabase {
       database_records,
       open_handlers: Default::default(),
       database_relation,
+      config,
     }
   }
 
@@ -161,14 +169,23 @@ impl UserDatabase {
   /// Delete the database with the given database id.
   pub fn delete_database(&self, database_id: &str) {
     self.database_records.delete_database(database_id);
-    match self.db.doc(self.uid).delete_doc(database_id) {
-      Ok(_) => {},
-      Err(err) => tracing::error!("Delete database failed: {}", err),
-    }
-    match self.db.snapshot(self.uid).delete_snapshot(database_id) {
-      Ok(_) => {},
-      Err(err) => tracing::error!("Delete snapshot failed: {}", err),
-    }
+    let _ = self.db.with_write_txn(|store| {
+      match store.delete_doc(self.uid, database_id) {
+        Ok(_) => {},
+        Err(err) => tracing::error!("🔴Delete database failed: {}", err),
+      }
+
+      match store.delete_snapshot(self.uid, database_id) {
+        Ok(_) => {},
+        Err(err) => tracing::error!("🔴 Delete snapshot failed: {}", err),
+      }
+      Ok(())
+    });
+    self.open_handlers.write().remove(database_id);
+  }
+
+  /// Close the database with the given database id.
+  pub fn close_database(&self, database_id: &str) {
     self.open_handlers.write().remove(database_id);
   }
 
@@ -178,7 +195,8 @@ impl UserDatabase {
   }
 
   pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
-    self.db.snapshot(self.uid).get_snapshots(database_id)
+    let store = self.db.read_txn();
+    store.get_snapshots(self.uid, database_id)
   }
 
   pub fn restore_database_from_snapshot(
@@ -237,8 +255,9 @@ impl UserDatabase {
 
   /// Create a new [Collab] instance for given database id.
   fn collab_for_database(&self, database_id: &str) -> Collab {
-    let disk_plugin = CollabDiskPlugin::new(self.uid, self.db.clone()).unwrap();
-    let snapshot_plugin = CollabSnapshotPlugin::new(self.uid, self.db.clone(), 6).unwrap();
+    let disk_plugin =
+      RocksDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.can_flush).unwrap();
+    let snapshot_plugin = RocksSnapshotPlugin::new(self.uid, self.db.clone(), 6).unwrap();
     CollabBuilder::new(self.uid, database_id)
       .with_plugin(disk_plugin)
       .with_plugin(snapshot_plugin)
@@ -260,8 +279,8 @@ fn create_user_database_if_not_exist(collab: &Collab) -> ArrayRefWrapper {
   }
 }
 
-fn create_relations_collab(uid: i64, db: Arc<CollabKV>) -> Collab {
-  let disk_plugin = CollabDiskPlugin::new(uid, db).unwrap();
+fn create_relations_collab(uid: i64, db: Arc<RocksCollabDB>) -> Collab {
+  let disk_plugin = RocksDiskPlugin::new(uid, db).unwrap();
   let object_id = format!("{}_db_relations", uid);
   let collab = CollabBuilder::new(uid, object_id)
     .with_plugin(disk_plugin)
