@@ -28,7 +28,7 @@ pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 pub type MapSubscription = Subscription<MapSubscriptionCallback>;
 
 pub struct Collab {
-  doc: Rc<Doc>,
+  doc: Doc,
   #[allow(dead_code)]
   object_id: String,
   data: MapRef,
@@ -53,7 +53,7 @@ impl Collab {
       observe_doc(&doc, object_id.clone(), plugins.clone());
     Self {
       object_id,
-      doc: Rc::new(doc),
+      doc,
       data,
       plugins,
       update_subscription,
@@ -374,13 +374,13 @@ impl CollabBuilder {
 
 #[derive(Clone)]
 pub struct CollabContext {
-  doc: Rc<Doc>,
+  doc: Doc,
   #[allow(dead_code)]
   plugins: Plugins,
 }
 
 impl CollabContext {
-  fn new(plugins: Plugins, doc: Rc<Doc>) -> Self {
+  fn new(plugins: Plugins, doc: Doc) -> Self {
     Self { plugins, doc }
   }
 

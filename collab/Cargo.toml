@@ -9,7 +9,7 @@ edition = "2021"
 yrs = "0.16.3"
 anyhow = "1.0.69"
 thiserror = "1.0.39"
-serde = {version = "1.0.157", features = ["derive"] }
+serde = { version = "1.0.157", features = ["derive"] }
 lib0 = { version = "0.16.3", features = ["lib0-serde"] }
 serde_json = "1.0.94"
 y-sync = "0.3.0"
@@ -21,8 +21,8 @@ collab-persistence = { path = "../collab-persistence" }
 
 [dev-dependencies]
 tempfile = "3.4.0"
-collab = { path = "."}
-collab-derive = { path = "../collab-derive"}
+collab = { path = "." }
+collab-derive = { path = "../collab-derive" }
 nanoid = "0.4.0"
 chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
 assert-json-diff = "2.0.2"
