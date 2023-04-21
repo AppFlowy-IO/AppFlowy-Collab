@@ -4,7 +4,8 @@ use yrs::types::{Change, ToJson};
 use yrs::updates::decoder::Decode;
 
 use collab::core::array_wrapper::ArrayRefExtension;
-use yrs::{Array, Doc, Observable, ReadTxn, StateVector, Transact, Update};
+use collab::preclude::MapRefExtension;
+use yrs::{Array, Doc, Map, Observable, ReadTxn, StateVector, Transact, Update};
 
 #[test]
 fn array_observer_test() {
@@ -69,7 +70,9 @@ fn apply_update_test() {
   let doc1_state = doc1.transact().encode_diff_v1(&StateVector::default());
   {
     let mut txn = doc1.transact_mut();
-    array.insert_map_with_txn(&mut txn);
+    let map1 = array.insert_map_with_txn(&mut txn);
+    // map1.insert(&mut txn, "m_k", "m_value");
+    map1.insert_map_with_txn(&mut txn, "m_k");
   }
 
   {
@@ -85,60 +88,91 @@ fn apply_update_test() {
   assert_eq!(updates.read().len(), 3);
   assert_eq!(
     doc1.to_json(&doc1.transact()).to_string(),
-    r#"{array: [{}, a, b]}"#
+    r#"{array: [{m_k: {}}, a, b]}"#
   );
   drop(sub);
 
   // *****************************************
-  let doc2 = Doc::new();
-  let array = doc2.get_or_insert_array("array");
   {
-    let mut txn = doc2.transact_mut();
-    txn.apply_update(Update::decode_v1(doc1_state.as_ref()).unwrap());
-    for update in updates.read().iter() {
-      txn.apply_update(Update::decode_v1(update).unwrap());
+    let doc2 = Doc::new();
+    let array = doc2.get_or_insert_array("array");
+    {
+      let mut txn = doc2.transact_mut();
+      txn.apply_update(Update::decode_v1(doc1_state.as_ref()).unwrap());
+      for update in updates.read().iter() {
+        txn.apply_update(Update::decode_v1(update).unwrap());
+      }
     }
-  }
-  assert_eq!(
-    doc2.to_json(&doc2.transact()).to_string(),
-    r#"{array: [{}, a, b]}"#
-  );
+    let map = {
+      let txn = doc2.transact();
+      let map = array
+        .get(&txn, 0)
+        .map(|value| value.to_ymap())
+        .unwrap()
+        .unwrap();
 
-  let cloned_updates = updates.clone();
-  let sub = doc2
-    .observe_update_v1(move |_txn, event| {
-      cloned_updates.write().push(event.update.clone());
-    })
-    .unwrap();
-  {
-    let mut txn = doc2.transact_mut();
-    array.push_back(&mut txn, "c");
-  }
-  assert_eq!(updates.read().len(), 4);
+      assert_eq!(map.to_json(&txn).to_string(), r#"{m_k: {}}"#);
+      map
+    };
 
-  assert_eq!(
-    doc2.to_json(&doc2.transact()).to_string(),
-    r#"{array: [{}, a, b, c]}"#
-  );
-  drop(sub);
+    let cloned_updates = updates.clone();
+    let sub = doc2
+      .observe_update_v1(move |_txn, event| {
+        cloned_updates.write().push(event.update.clone());
+      })
+      .unwrap();
+    let map_2 = {
+      // update map
+      let doc2 = doc2.clone();
+      let mut txn = doc2.transact_mut();
+      map.insert_map_with_txn(&mut txn, "m_m_k1")
+    };
+
+    {
+      let mut txn = doc2.transact_mut();
+      map_2.insert(&mut txn, "m_m_k2", "123");
+    }
+    {
+      let mut txn = doc2.transact_mut();
+      map_2.insert(&mut txn, "m_m_k2", "m_m_v2");
+    }
+
+    assert_eq!(updates.read().len(), 6);
+    // assert_eq!(
+    //   doc2.to_json(&doc2.transact()).to_string(),
+    //   r#"{array: [{m_m_k1: {m_m_k2: m_m_v2}, m_k: {}}, a, b]}"#
+    // );
+    drop(sub);
+  }
 
   // *****************************************
-  let doc3 = Doc::new();
-  let array = doc3.get_or_insert_array("array");
   {
-    let mut txn = doc3.transact_mut();
-    txn.apply_update(Update::decode_v1(doc1_state.as_ref()).unwrap());
-    for update in updates.read().iter() {
-      txn.apply_update(Update::decode_v1(update).unwrap());
+    let doc3 = Doc::new();
+    let array = doc3.get_or_insert_array("array");
+    {
+      let mut txn = doc3.transact_mut();
+      txn.apply_update(Update::decode_v1(doc1_state.as_ref()).unwrap());
+      for update in updates.read().iter() {
+        txn.apply_update(Update::decode_v1(update).unwrap());
+      }
     }
+
+    let map = {
+      let txn = doc3.transact();
+      array
+        .get(&txn, 0)
+        .map(|value| value.to_ymap())
+        .unwrap()
+        .unwrap()
+        .get(&txn, "m_m_k1")
+        .unwrap()
+        .to_ymap()
+        .unwrap()
+    };
+
+    assert_eq!(
+      map.to_json(&doc3.transact()).to_string(),
+      r#"{m_m_k2: m_m_v2}"#
+    );
   }
-  let map = array
-    .get(&doc3.transact(), 0)
-    .map(|value| value.to_ymap())
-    .unwrap();
-  assert!(map.is_some());
-  assert_eq!(
-    doc3.to_json(&doc3.transact()).to_string(),
-    r#"{array: [{}, a, b, c]}"#
-  );
 }
