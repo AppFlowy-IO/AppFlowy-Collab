@@ -33,10 +33,8 @@ pub struct Collab {
   object_id: String,
   data: MapRef,
   plugins: Plugins,
-  #[allow(dead_code)]
-  update_subscription: UpdateSubscription,
-  #[allow(dead_code)]
-  after_txn_subscription: AfterTransactionSubscription,
+  update_subscription: RwLock<Option<UpdateSubscription>>,
+  after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
 }
 
 impl Collab {
@@ -49,15 +47,13 @@ impl Collab {
     });
     let data = doc.get_or_insert_map(DATA_SECTION);
     let plugins = Plugins::new(plugins);
-    let (update_subscription, after_txn_subscription) =
-      observe_doc(&doc, object_id.clone(), plugins.clone());
     Self {
       object_id,
       doc,
       data,
       plugins,
-      update_subscription,
-      after_txn_subscription,
+      update_subscription: Default::default(),
+      after_txn_subscription: Default::default(),
     }
   }
 
@@ -84,13 +80,20 @@ impl Collab {
       drop(txn);
     }
 
-    let txn = self.doc.transact();
-    self
-      .plugins
-      .read()
-      .iter()
-      .for_each(|plugin| plugin.did_init(&self.object_id, &txn));
-    drop(txn);
+    let (update_subscription, after_txn_subscription) =
+      observe_doc(&self.doc, self.object_id.clone(), self.plugins.clone());
+
+    *self.update_subscription.write() = Some(update_subscription);
+    *self.after_txn_subscription.write() = Some(after_txn_subscription);
+
+    {
+      let txn = self.doc.transact();
+      self
+        .plugins
+        .read()
+        .iter()
+        .for_each(|plugin| plugin.did_init(&self.object_id, &txn));
+    }
   }
 
   pub fn observer_attrs<F>(&mut self, f: F) -> MapSubscription

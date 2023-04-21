@@ -25,3 +25,4 @@ assert-json-diff = "2.0.2"
 walkdir = "2.3.2"
 fs_extra = "1.2.0"
 nanoid = "0.4.0"
+tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }

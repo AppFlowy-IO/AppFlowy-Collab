@@ -118,20 +118,27 @@ fn apply_update_test() {
     let cloned_updates = updates.clone();
     let sub = doc2
       .observe_update_v1(move |_txn, event| {
+        let a = Update::decode_v1(&event.update).unwrap();
         cloned_updates.write().push(event.update.clone());
       })
       .unwrap();
     let map_2 = {
       // update map
+      let doc2 = doc2.clone();
       let mut txn = doc2.transact_mut();
       map.insert_map_with_txn(&mut txn, "m_m_k1")
     };
 
     {
       let mut txn = doc2.transact_mut();
+      map_2.insert(&mut txn, "m_m_k2", "123");
+    }
+    {
+      let mut txn = doc2.transact_mut();
       map_2.insert(&mut txn, "m_m_k2", "m_m_v2");
     }
-    assert_eq!(updates.read().len(), 5);
+
+    assert_eq!(updates.read().len(), 6);
     // assert_eq!(
     //   doc2.to_json(&doc2.transact()).to_string(),
     //   r#"{array: [{m_m_k1: {m_m_k2: m_m_v2}, m_k: {}}, a, b]}"#

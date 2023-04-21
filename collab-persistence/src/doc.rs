@@ -125,6 +125,7 @@ where
           // if update_count == 3 {
           //   continue;
           // }
+          // tracing::trace!("{:?}", encoded_update.key());
           update_count += 1;
           let update = Update::decode_v1(encoded_update.value())?;
           txn.apply_update(update);

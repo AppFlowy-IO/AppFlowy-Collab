@@ -4,6 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 use walkdir::WalkDir;
 
+use crate::util::setup_log;
 use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::CollabBuilder;
 use collab_folder::core::{Folder, FolderContext};
@@ -64,6 +65,7 @@ fn copy_folder_recursively(
 }
 
 fn create_folder_with_object_id(uid: i64, path: &str) -> Folder {
+  setup_log();
   let object_id = format!("{}:folder", uid);
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
   let mut collab = CollabBuilder::new(uid, &object_id).build();
