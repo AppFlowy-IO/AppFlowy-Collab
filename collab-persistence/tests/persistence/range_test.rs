@@ -4,7 +4,6 @@ use std::thread;
 
 use collab_persistence::keys::{clock_from_key, make_doc_update_key, Clock};
 use collab_persistence::kv::{KVEntry, KVStore};
-use parking_lot::RwLock;
 use smallvec::SmallVec;
 
 use crate::util::{rocks_db, sled_db};
@@ -12,14 +11,17 @@ use crate::util::{rocks_db, sled_db};
 #[test]
 fn sled_id_test() {
   let sled_db = sled_db().1;
-  let store = sled_db.read_txn();
-  store.insert([0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 1]).unwrap();
-  store.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
-  store.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
-  store.insert([0, 0, 0, 0, 0, 0, 0, 3], &[0, 1, 4]).unwrap();
-  store.insert([0, 1, 0, 0, 0, 0, 0, 4], &[0, 1, 5]).unwrap();
-  store.insert([0, 1, 0, 0, 0, 0, 0, 5], &[0, 1, 6]).unwrap();
-  store.commit().unwrap();
+  sled_db
+    .with_write_txn(|store| {
+      store.insert([0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 1]).unwrap();
+      store.insert([0, 0, 0, 0, 0, 0, 0, 1], [0, 1, 2]).unwrap();
+      store.insert([0, 0, 0, 0, 0, 0, 0, 2], [0, 1, 3]).unwrap();
+      store.insert([0, 0, 0, 0, 0, 0, 0, 3], [0, 1, 4]).unwrap();
+      store.insert([0, 1, 0, 0, 0, 0, 0, 4], [0, 1, 5]).unwrap();
+      store.insert([0, 1, 0, 0, 0, 0, 0, 5], [0, 1, 6]).unwrap();
+      Ok(())
+    })
+    .unwrap();
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, 1];
   let last_entry_prior = sled_db
@@ -41,14 +43,17 @@ fn sled_id_test() {
 #[test]
 fn rocks_id_test() {
   let rocks_db = rocks_db().1;
-  rocks_db.with_write_txn(|store| {
-    store.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
-    store.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
-    store.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
-    store.insert([0, 0, 0, 0, 0, 0, 0, 3], &[0, 1, 4]).unwrap();
-    store.insert([0, 1, 0, 0, 0, 0, 0, 4], &[0, 1, 5]).unwrap();
-    store.insert([0, 1, 0, 0, 0, 0, 0, 5], &[0, 1, 6]).unwrap();
-  });
+  rocks_db
+    .with_write_txn(|store| {
+      store.insert([0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 1]).unwrap();
+      store.insert([0, 0, 0, 0, 0, 0, 0, 1], [0, 1, 2]).unwrap();
+      store.insert([0, 0, 0, 0, 0, 0, 0, 2], [0, 1, 3]).unwrap();
+      store.insert([0, 0, 0, 0, 0, 0, 0, 3], [0, 1, 4]).unwrap();
+      store.insert([0, 1, 0, 0, 0, 0, 0, 4], [0, 1, 5]).unwrap();
+      store.insert([0, 1, 0, 0, 0, 0, 0, 5], [0, 1, 6]).unwrap();
+      Ok(())
+    })
+    .unwrap();
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, 1];
   let last_entry_prior = rocks_db
@@ -83,7 +88,7 @@ fn key_range_test() {
   };
 
   store
-    .insert([0, 0, 0, 0, 0, 0, 0, 0], &1_u64.to_be_bytes())
+    .insert([0, 0, 0, 0, 0, 0, 0, 0], 1_u64.to_be_bytes())
     .unwrap();
   assert_eq!(next(), 1);
 
@@ -98,7 +103,7 @@ fn key_range_test() {
   assert_eq!(next(), 3);
 
   store
-    .insert([0, 0, 1, 0, 0, 0, 1, 2], (4 as u64).to_be_bytes())
+    .insert([0, 0, 1, 0, 0, 0, 1, 2], 4_u64.to_be_bytes())
     .unwrap();
   assert_eq!(next(), 4);
 }
@@ -129,7 +134,7 @@ fn scan_prefix_multi_thread() {
         let clock = last_clock + 1;
         let new_key = make_doc_update_key(doc_id, clock);
         println!("value: {}", clock);
-        cloned_db.insert(new_key.as_ref(), &update_data).unwrap();
+        cloned_db.insert(new_key.as_ref(), update_data).unwrap();
         println!("stop: {}", step);
         println!("*****");
       }
@@ -146,23 +151,25 @@ fn scan_prefix_multi_thread() {
 #[test]
 fn range_key_test() {
   let db = sled_db().1;
-  let store = db.read_txn();
-  store.insert([0, 0, 0, 0, 0, 0, 0, 0], &[0, 1, 1]).unwrap();
-  store.insert([0, 0, 0, 0, 0, 0, 0, 1], &[0, 1, 2]).unwrap();
-  store.insert([0, 0, 0, 0, 0, 0, 0, 2], &[0, 1, 3]).unwrap();
+  db.with_write_txn(|store| {
+    store.insert([0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 1]).unwrap();
+    store.insert([0, 0, 0, 0, 0, 0, 0, 1], [0, 1, 2]).unwrap();
+    store.insert([0, 0, 0, 0, 0, 0, 0, 2], [0, 1, 3]).unwrap();
 
-  store.insert([0, 0, 1, 0, 0, 0, 0, 0], &[0, 2, 1]).unwrap();
-  store.insert([0, 0, 1, 0, 0, 0, 0, 1], &[0, 2, 2]).unwrap();
-  store.insert([0, 0, 1, 0, 0, 0, 0, 2], &[0, 2, 3]).unwrap();
+    store.insert([0, 0, 1, 0, 0, 0, 0, 0], [0, 2, 1]).unwrap();
+    store.insert([0, 0, 1, 0, 0, 0, 0, 1], [0, 2, 2]).unwrap();
+    store.insert([0, 0, 1, 0, 0, 0, 0, 2], [0, 2, 3]).unwrap();
 
-  store.insert([0, 0, 2, 0, 0, 0, 0, 0], &[0, 3, 1]).unwrap();
-  store.insert([0, 0, 2, 0, 0, 0, 0, 1], &[0, 3, 2]).unwrap();
-  store.insert([0, 0, 2, 0, 0, 0, 0, 2], &[0, 3, 3]).unwrap();
+    store.insert([0, 0, 2, 0, 0, 0, 0, 0], [0, 3, 1]).unwrap();
+    store.insert([0, 0, 2, 0, 0, 0, 0, 1], [0, 3, 2]).unwrap();
+    store.insert([0, 0, 2, 0, 0, 0, 0, 2], [0, 3, 3]).unwrap();
 
-  store.insert([0, 1, 0, 0, 0, 0, 0, 3], &[0, 1, 4]).unwrap();
-  store.insert([0, 1, 0, 0, 0, 0, 0, 4], &[0, 1, 5]).unwrap();
-  store.insert([0, 1, 0, 0, 0, 0, 0, 5], &[0, 1, 6]).unwrap();
-  store.commit().unwrap();
+    store.insert([0, 1, 0, 0, 0, 0, 0, 3], [0, 1, 4]).unwrap();
+    store.insert([0, 1, 0, 0, 0, 0, 0, 4], [0, 1, 5]).unwrap();
+    store.insert([0, 1, 0, 0, 0, 0, 0, 5], [0, 1, 6]).unwrap();
+    Ok(())
+  })
+  .unwrap();
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, u8::MAX];
   let store = db.read_txn();

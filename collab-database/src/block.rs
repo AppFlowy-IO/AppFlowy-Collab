@@ -3,15 +3,13 @@ use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use collab::plugin_impl::sled_disk::SledDiskPlugin;
+use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::{
   Collab, CollabBuilder, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
-use collab_persistence::kv::sled_lv::SledCollabDB;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
 use crate::database::timestamp;
 use crate::rows::{

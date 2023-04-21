@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::sled_lv::{SledCollabDB, SledKVStore};
+use collab_persistence::kv::sled_lv::SledCollabDB;
 use yrs::{Transaction, TransactionMut};
 
 use crate::core::collab_plugin::CollabPlugin;

@@ -2,19 +2,16 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use collab::plugin_impl::sled_disk::SledDiskPlugin;
-use collab::plugin_impl::sled_snapshot::CollabSnapshotPlugin;
+use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
+use collab::plugin_impl::rocks_snapshot::RocksSnapshotPlugin;
 use collab::preclude::CollabBuilder;
 use collab_database::block::{Blocks, CreateRowParams};
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::views::CreateDatabaseParams;
-use collab_persistence::kv::sled_lv::SledCollabDB;
-
-use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
-use collab::plugin_impl::rocks_snapshot::RocksSnapshotPlugin;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+
 use tempfile::TempDir;
 
 pub use crate::helper::*;

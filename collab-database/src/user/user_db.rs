@@ -3,14 +3,10 @@ use std::sync::Arc;
 
 use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::plugin_impl::rocks_snapshot::RocksSnapshotPlugin;
-use collab::plugin_impl::sled_disk::SledDiskPlugin;
-use collab::plugin_impl::sled_snapshot::CollabSnapshotPlugin;
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, Update};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_persistence::kv::sled_lv::SledCollabDB;
-use collab_persistence::kv::KVStore;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use parking_lot::RwLock;
 
@@ -21,15 +17,9 @@ use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::user::relation::{DatabaseRelation, RowRelationMap};
 use crate::views::{CreateDatabaseParams, CreateViewParams};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Config {
   pub can_flush: bool,
-}
-
-impl Default for Config {
-  fn default() -> Self {
-    Self { can_flush: false }
-  }
 }
 
 /// A [UserDatabase] represents a user's database.
@@ -179,7 +169,7 @@ impl UserDatabase {
   /// Delete the database with the given database id.
   pub fn delete_database(&self, database_id: &str) {
     self.database_records.delete_database(database_id);
-    self.db.with_write_txn(|store| {
+    let _ = self.db.with_write_txn(|store| {
       match store.delete_doc(self.uid, database_id) {
         Ok(_) => {},
         Err(err) => tracing::error!("🔴Delete database failed: {}", err),
@@ -189,6 +179,7 @@ impl UserDatabase {
         Ok(_) => {},
         Err(err) => tracing::error!("🔴 Delete snapshot failed: {}", err),
       }
+      Ok(())
     });
     self.open_handlers.write().remove(database_id);
   }

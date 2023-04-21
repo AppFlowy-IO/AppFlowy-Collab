@@ -2,8 +2,7 @@ use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;
 
-use collab_persistence::kv::sled_lv::{SledCollabDB, SledKVStore};
-use collab_persistence::kv::KVStore;
+use collab_persistence::kv::sled_lv::SledCollabDB;
 use collab_persistence::snapshot::SnapshotAction;
 use yrs::TransactionMut;
 
@@ -38,12 +37,13 @@ impl CollabPlugin for CollabSnapshotPlugin {
   fn after_transaction(&self, object_id: &str, txn: &mut TransactionMut) {
     let count = self.increase_count();
     if count != 0 && count % self.snapshot_per_txn == 0 {
-      let store = self.db.read_txn();
       // generate snapshot
-      if let Err(err) = store.push_snapshot(self.uid, object_id, "".to_string(), txn) {
+      if let Err(err) = self
+        .db
+        .with_write_txn(|store| store.push_snapshot(self.uid, object_id, "".to_string(), txn))
+      {
         tracing::error!("🔴Generate snapshot failed: {}", err);
       }
-      store.commit();
     }
   }
 }

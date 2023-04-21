@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::ops::RangeBounds;
 
 use serde::{Deserialize, Serialize};
 use yrs::updates::encoder::{Encoder, EncoderV1};
@@ -9,7 +8,7 @@ use yrs::ReadTxn;
 use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, SnapshotID};
 use crate::kv::KVEntry;
 use crate::kv::KVStore;
-use crate::{create_id_for_key, get_id_for_key, insert_snapshot_update, PersistenceError, RwStore};
+use crate::{create_id_for_key, get_id_for_key, insert_snapshot_update, PersistenceError};
 
 impl<'a, T> SnapshotAction<'a> for T
 where

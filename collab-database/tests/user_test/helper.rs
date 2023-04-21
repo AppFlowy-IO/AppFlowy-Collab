@@ -10,13 +10,12 @@ use collab_database::rows::CellsBuilder;
 use collab_database::user::{Config, RowRelationChange, RowRelationUpdateReceiver, UserDatabase};
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_persistence::kv::sled_lv::SledCollabDB;
 use tokio::sync::mpsc::{channel, Receiver};
 
 use rand::Rng;
 use tempfile::TempDir;
 
-use crate::helper::{make_rocks_db, make_sled_db, TestTextCell};
+use crate::helper::{make_rocks_db, TestTextCell};
 
 pub struct UserDatabaseTest {
   #[allow(dead_code)]

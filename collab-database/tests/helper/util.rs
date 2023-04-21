@@ -536,6 +536,7 @@ impl std::convert::From<i64> for TestFieldType {
   }
 }
 
+#[allow(dead_code)]
 pub fn make_sled_db() -> Arc<SledCollabDB> {
   let path = db_path();
   Arc::new(SledCollabDB::open(path).unwrap())

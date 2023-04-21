@@ -1,17 +1,16 @@
 use std::fmt::Debug;
 use std::io::Write;
 use std::ops::Deref;
+use std::sync::Arc;
 
 use parking_lot::RwLock;
 use sled::{Batch, Db};
 use smallvec::SmallVec;
-use std::sync::Arc;
 
 use crate::error::PersistenceError;
 use crate::keys::{
   clock_from_key, make_doc_update_key, make_snapshot_update_key, Clock, DocID, Key, SnapshotID,
 };
-
 use crate::kv::{KVEntry, KVStore};
 use crate::oid::{OID, OID_GEN, OID_LEN};
 
@@ -72,7 +71,7 @@ where
   PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
   let update_key = create_update_key(snapshot_id, store, object_id, make_snapshot_update_key)?;
-  let _ = store.insert(update_key, value)?;
+  store.insert(update_key, value)?;
   Ok(())
 }
 
@@ -88,7 +87,7 @@ where
   PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
   let update_key = create_update_key(doc_id, db, object_id, make_doc_update_key)?;
-  let _ = db.insert(update_key, value)?;
+  db.insert(update_key, value)?;
   Ok(())
 }
 
@@ -139,7 +138,7 @@ where
   PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
   let new_id = OID_GEN.lock().next_id();
-  let _ = store.insert(key.as_ref(), &new_id.to_be_bytes())?;
+  store.insert(key.as_ref(), new_id.to_be_bytes())?;
   Ok(new_id)
 }
 

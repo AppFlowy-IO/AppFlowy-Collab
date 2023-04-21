@@ -3,7 +3,6 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;
 
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_persistence::kv::KVStore;
 use collab_persistence::snapshot::SnapshotAction;
 use yrs::TransactionMut;
 
@@ -38,11 +37,13 @@ impl CollabPlugin for RocksSnapshotPlugin {
   fn after_transaction(&self, object_id: &str, txn: &mut TransactionMut) {
     let count = self.increase_count();
     if count != 0 && count % self.snapshot_per_txn == 0 {
-      self.db.with_write_txn(|store| {
-        if let Err(err) = store.push_snapshot(self.uid, object_id, "".to_string(), txn) {
-          tracing::error!("🔴Generate snapshot failed: {}", err);
-        }
-      });
+      match self
+        .db
+        .with_write_txn(|store| store.push_snapshot(self.uid, object_id, "".to_string(), txn))
+      {
+        Ok(_) => {},
+        Err(e) => tracing::error!("🔴Generate snapshot failed: {}", e),
+      }
     }
   }
 }

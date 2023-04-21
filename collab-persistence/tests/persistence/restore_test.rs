@@ -3,7 +3,6 @@ use std::thread;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::kv::sled_lv::SledCollabDB;
-use collab_persistence::kv::KVStore;
 use yrs::{Doc, GetString, Text, Transact};
 
 use crate::util::{rocks_db, sled_db};
@@ -54,18 +53,18 @@ fn sled_multiple_thread_test() {
       let doc = Doc::new();
       {
         let txn = doc.transact();
-        let store = cloned_db.read_txn();
-        store.create_new_doc(1, &oid, &txn).unwrap();
-        store.commit().unwrap();
+        cloned_db
+          .with_write_txn(|store| store.create_new_doc(1, &oid, &txn))
+          .unwrap();
       }
       {
         let text = doc.get_or_insert_text("text");
         let mut txn = doc.transact_mut();
         text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
         let update = txn.encode_update_v1();
-        cloned_db.with_write_txn(|store| {
-          store.push_update(1, &oid, &update).unwrap();
-        });
+        cloned_db
+          .with_write_txn(|store| store.push_update(1, &oid, &update))
+          .unwrap();
       }
     });
     handles.push(handle);
@@ -101,18 +100,18 @@ fn rocks_multiple_thread_test() {
       let doc = Doc::new();
       {
         let txn = doc.transact();
-        cloned_db.with_write_txn(|store| {
-          store.create_new_doc(1, &oid, &txn).unwrap();
-        });
+        cloned_db
+          .with_write_txn(|store| store.create_new_doc(1, &oid, &txn))
+          .unwrap();
       }
       {
         let text = doc.get_or_insert_text("text");
         let mut txn = doc.transact_mut();
         text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
         let update = txn.encode_update_v1();
-        cloned_db.with_write_txn(|store| {
-          store.push_update(1, &oid, &update).unwrap();
-        });
+        cloned_db
+          .with_write_txn(|store| store.push_update(1, &oid, &update))
+          .unwrap();
       }
     });
     handles.push(handle);

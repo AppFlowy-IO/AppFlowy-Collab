@@ -5,12 +5,11 @@ use std::sync::Arc;
 
 use rocksdb::Direction::Forward;
 use rocksdb::{
-  DBAccess, DBCommon, DBIteratorWithThreadMode, Direction, IteratorMode, ReadOptions,
-  SingleThreaded, Transaction, TransactionDB, DB,
+  DBIteratorWithThreadMode, Direction, IteratorMode, ReadOptions, Transaction, TransactionDB,
 };
 
 use crate::kv::{KVEntry, KVStore};
-use crate::{CollabDB, PersistenceError};
+use crate::PersistenceError;
 
 pub type RocksCollabDB = RocksKVStore;
 
@@ -30,14 +29,15 @@ impl RocksKVStore {
     RocksKVStoreImpl(txn)
   }
 
-  pub fn with_write_txn<F>(&self, f: F)
+  pub fn with_write_txn<F, O>(&self, f: F) -> Result<O, PersistenceError>
   where
-    F: FnOnce(&RocksKVStoreImpl<'_, TransactionDB>),
+    F: FnOnce(&RocksKVStoreImpl<'_, TransactionDB>) -> Result<O, PersistenceError>,
   {
     let txn = self.db.transaction();
     let store = RocksKVStoreImpl(txn);
-    f(&store);
-    store.commit();
+    let result = f(&store)?;
+    store.0.commit()?;
+    Ok(result)
   }
 }
 
@@ -71,10 +71,10 @@ impl<'a, DB> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
     let mut opt = ReadOptions::default();
     opt.set_iterate_lower_bound(from);
     opt.set_iterate_upper_bound(to);
-    let mut i = self
+    let i = self
       .0
       .iterator_opt(IteratorMode::From(from, Direction::Forward), opt);
-    while let Some(res) = i.next() {
+    for res in i {
       let (key, _) = res?;
       self.0.delete(key)?;
     }
@@ -126,11 +126,6 @@ impl<'a, DB> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
       Ok(None)
     }
   }
-
-  fn commit(self) -> Result<(), Self::Error> {
-    self.0.commit()?;
-    Ok(())
-  }
 }
 
 impl<'a, DB> From<Transaction<'a, DB>> for RocksKVStoreImpl<'a, DB> {
@@ -140,10 +135,9 @@ impl<'a, DB> From<Transaction<'a, DB>> for RocksKVStoreImpl<'a, DB> {
   }
 }
 
-impl<'a, DB> Into<Transaction<'a, DB>> for RocksKVStoreImpl<'a, DB> {
-  #[inline(always)]
-  fn into(self) -> Transaction<'a, DB> {
-    self.0
+impl<'a, DB> From<RocksKVStoreImpl<'a, DB>> for Transaction<'a, DB> {
+  fn from(store: RocksKVStoreImpl<'a, DB>) -> Self {
+    store.0
   }
 }
 

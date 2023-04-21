@@ -7,7 +7,7 @@ use parking_lot::RwLock;
 use sled::{Batch, Db, IVec, Iter};
 
 use crate::kv::{KVEntry, KVRange, KVStore};
-use crate::{CollabDB, PersistenceError};
+use crate::PersistenceError;
 
 pub type SledCollabDB = SledKVStore;
 
@@ -29,13 +29,13 @@ impl SledKVStore {
     SledKVStoreImpl(self.0.clone())
   }
 
-  pub fn with_write_txn<F>(&self, f: F)
+  pub fn with_write_txn<F, O>(&self, f: F) -> Result<O, PersistenceError>
   where
-    F: FnOnce(&SledKVStoreImpl),
+    F: FnOnce(&SledKVStoreImpl) -> Result<O, PersistenceError>,
   {
     let store = SledKVStoreImpl(self.0.clone());
-    f(&store);
-    store.commit();
+    let result = f(&store)?;
+    Ok(result)
   }
 }
 
@@ -100,10 +100,6 @@ impl KVStore<'static> for SledKVStoreImpl {
       Some((k, v)) => Ok(Some(SledEntry { key: k, value: v })),
       _ => Ok(None),
     }
-  }
-
-  fn commit(self) -> Result<(), Self::Error> {
-    Ok(())
   }
 }
 

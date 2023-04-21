@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 use std::ops::RangeBounds;
-use std::sync::Arc;
 
 use crate::PersistenceError;
 
@@ -29,8 +28,6 @@ pub trait KVStore<'a> {
 
   /// Return the entry prior to the given key
   fn next_back_entry(&self, key: &[u8]) -> Result<Option<Self::Entry>, Self::Error>;
-
-  fn commit(self) -> Result<(), Self::Error>;
 }
 
 pub trait KVRange<'a> {

@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{ReadTxn, StateVector, TransactionMut, Update};
@@ -10,7 +11,7 @@ use crate::keys::{
 };
 use crate::kv::KVEntry;
 use crate::kv::KVStore;
-use crate::{create_id_for_key, get_id_for_key, insert_doc_update, PersistenceError, RwStore};
+use crate::{create_id_for_key, get_id_for_key, insert_doc_update, PersistenceError};
 
 impl<'a, T> YrsDocAction<'a> for T
 where
@@ -91,11 +92,7 @@ where
   }
 
   fn is_exist<K: AsRef<[u8]> + ?Sized + Debug>(&self, uid: i64, object_id: &K) -> bool {
-    let doc_id = get_doc_id(uid, self, object_id);
-    match doc_id {
-      None => false,
-      Some(_) => true,
-    }
+    get_doc_id(uid, self, object_id).is_some()
   }
 
   fn load_doc<K: AsRef<[u8]> + ?Sized + Debug>(

@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use collab::plugin_impl::sled_disk::SledDiskPlugin;
-use collab::plugin_impl::sled_snapshot::CollabSnapshotPlugin;
+use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
+use collab::plugin_impl::rocks_snapshot::RocksSnapshotPlugin;
 use collab::preclude::*;
 use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::sled_lv::SledCollabDB;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::SnapshotAction;
 use lib0::any::Any;
 use yrs::updates::decoder::Decode;
@@ -16,7 +16,7 @@ use tempfile::TempDir;
 pub enum Script {
   CreateDocumentWithDiskPlugin {
     id: String,
-    plugin: SledDiskPlugin,
+    plugin: RocksDiskPlugin,
   },
   OpenDocumentWithDiskPlugin {
     id: String,
@@ -57,8 +57,8 @@ pub enum Script {
 pub struct CollabPersistenceTest {
   pub uid: i64,
   collabs: HashMap<String, Collab>,
-  disk_plugin: SledDiskPlugin,
-  snapshot_plugin: CollabSnapshotPlugin,
+  disk_plugin: RocksDiskPlugin,
+  snapshot_plugin: RocksSnapshotPlugin,
   #[allow(dead_code)]
   cleaner: Cleaner,
   pub db_path: PathBuf,
@@ -69,9 +69,9 @@ impl CollabPersistenceTest {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let uid = 1;
-    let db = Arc::new(SledCollabDB::open(path.clone()).unwrap());
-    let disk_plugin = SledDiskPlugin::new(uid, db.clone()).unwrap();
-    let snapshot_plugin = CollabSnapshotPlugin::new(uid, db, 5).unwrap();
+    let db = Arc::new(RocksCollabDB::open(path.clone()).unwrap());
+    let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
+    let snapshot_plugin = RocksSnapshotPlugin::new(uid, db, 5).unwrap();
     let cleaner = Cleaner::new(path.clone());
     Self {
       uid,
@@ -120,8 +120,7 @@ impl CollabPersistenceTest {
       Script::DeleteDocument { id } => {
         self
           .disk_plugin
-          .read_txn()
-          .delete_doc(self.uid, &id)
+          .with_write_txn(|store| store.delete_doc(self.uid, &id))
           .unwrap();
       },
       Script::InsertKeyValue { id, key, value } => {
@@ -167,11 +166,11 @@ impl CollabPersistenceTest {
   }
 }
 
-pub fn disk_plugin(uid: i64) -> SledDiskPlugin {
+pub fn disk_plugin(uid: i64) -> RocksDiskPlugin {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(SledCollabDB::open(path).unwrap());
-  SledDiskPlugin::new(uid, db.clone()).unwrap()
+  let db = Arc::new(RocksCollabDB::open(path).unwrap());
+  RocksDiskPlugin::new(uid, db).unwrap()
 }
 
 struct Cleaner(PathBuf);

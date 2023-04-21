@@ -1,8 +1,7 @@
-use std::time::SystemTime;
-
-use parking_lot::Mutex;
-
+#![allow(clippy::upper_case_acronyms)]
 use lazy_static::lazy_static;
+use parking_lot::Mutex;
+use std::time::SystemTime;
 
 const EPOCH: u64 = 1637806706000;
 const NODE_BITS: u64 = 8;

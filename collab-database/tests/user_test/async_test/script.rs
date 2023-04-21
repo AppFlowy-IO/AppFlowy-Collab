@@ -12,7 +12,6 @@ use collab_database::user::{Config, UserDatabase as InnerUserDatabase};
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_persistence::kv::sled_lv::SledCollabDB;
 use parking_lot::Mutex;
 use serde_json::Value;
 
