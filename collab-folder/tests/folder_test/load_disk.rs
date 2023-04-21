@@ -8,8 +8,7 @@ use crate::util::setup_log;
 use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::CollabBuilder;
 use collab_folder::core::{Folder, FolderContext};
-use collab_persistence::kv::rocks_kv::{RocksCollabDB, RocksKVStore};
-use collab_persistence::CollabDB;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
 #[test]
 fn load_from_disk() {
@@ -26,8 +25,6 @@ fn load_from_disk() {
 
   // set current view
   folder.set_current_view("abc");
-  let json = folder.to_json_value();
-  println!("{}", json);
   drop(folder);
 
   // reopen
@@ -73,8 +70,8 @@ fn create_folder_with_object_id(uid: i64, path: &str) -> Folder {
   collab.add_plugin(disk_plugin);
   collab.initial();
 
-  let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
-  let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
+  let (view_tx, _view_rx) = tokio::sync::broadcast::channel(100);
+  let (trash_tx, _trash_rx) = tokio::sync::broadcast::channel(100);
   let folder_context = FolderContext {
     view_change_tx: Some(view_tx),
     trash_change_tx: Some(trash_tx),

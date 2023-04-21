@@ -38,11 +38,15 @@ pub struct Collab {
 }
 
 impl Collab {
-  pub fn new<T: AsRef<str>>(uid: i64, object_id: T, plugins: Vec<Arc<dyn CollabPlugin>>) -> Collab {
+  pub fn new<T: AsRef<str>>(
+    _uid: i64,
+    object_id: T,
+    plugins: Vec<Arc<dyn CollabPlugin>>,
+  ) -> Collab {
     let object_id = object_id.as_ref().to_string();
     let doc = Doc::with_options(Options {
       skip_gc: true,
-      client_id: uid as u64, // in order to support revisions we cannot garbage collect deleted blocks
+      // client_id,
       ..Options::default()
     });
     let data = doc.get_or_insert_map(DATA_SECTION);

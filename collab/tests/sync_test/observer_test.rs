@@ -118,7 +118,6 @@ fn apply_update_test() {
     let cloned_updates = updates.clone();
     let sub = doc2
       .observe_update_v1(move |_txn, event| {
-        let a = Update::decode_v1(&event.update).unwrap();
         cloned_updates.write().push(event.update.clone());
       })
       .unwrap();

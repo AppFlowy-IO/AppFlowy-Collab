@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use yrs::updates::decoder::Decode;
-use yrs::{Transaction, TransactionMut, Update};
+
+use yrs::{Transaction, TransactionMut};
 
 use crate::core::collab_plugin::CollabPlugin;
 use crate::error::CollabError;
@@ -92,8 +92,6 @@ impl CollabPlugin for RocksDiskPlugin {
 
   fn did_receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
     if self.did_load.load(Ordering::SeqCst) {
-      let a = Update::decode_v1(update).unwrap();
-
       match self
         .db
         .with_write_txn(|store| store.push_update(self.uid, object_id, update))
