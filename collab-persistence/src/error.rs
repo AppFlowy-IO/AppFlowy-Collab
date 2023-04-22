@@ -1,8 +1,10 @@
 #[derive(Debug, thiserror::Error)]
 pub enum PersistenceError {
+  #[cfg(feature = "sled_db")]
   #[error(transparent)]
   SledDb(#[from] sled::Error),
 
+  #[cfg(feature = "rocksdb_db")]
   #[error(transparent)]
   RocksDb(#[from] rocksdb::Error),
 

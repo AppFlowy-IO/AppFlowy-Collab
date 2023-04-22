@@ -1,21 +1,23 @@
-use fs_extra::file;
-use nanoid::nanoid;
 use std::path::Path;
 use std::sync::Arc;
-use walkdir::WalkDir;
 
-use crate::util::setup_log;
 use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::CollabBuilder;
 use collab_folder::core::{Folder, FolderContext};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+
+use fs_extra::file;
+use nanoid::nanoid;
+use walkdir::WalkDir;
+
+use crate::util::setup_log;
 
 #[test]
 fn test_set_current_view() {
   let uid: i64 = 185579439403307008;
   let source = "./tests/folder_test/dbs".to_string();
   duplicate_db(source, &uid.to_string(), |duplicate_db| {
-    let folder = create_folder_with_object_id(uid, &duplicate_db);
+    let folder = create_folder_with_object_id(uid, duplicate_db);
 
     // set current view
     folder.set_current_view("abc");
@@ -23,7 +25,7 @@ fn test_set_current_view() {
     drop(folder);
 
     // reopen
-    let folder = create_folder_with_object_id(uid, &duplicate_db);
+    let folder = create_folder_with_object_id(uid, duplicate_db);
     let json2 = folder.to_json_value();
     assert_json_diff::assert_json_eq!(json1, json2);
   })

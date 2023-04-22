@@ -4,7 +4,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use sled::{Batch, Db};
 use smallvec::SmallVec;
 
 use crate::error::PersistenceError;
@@ -140,20 +139,6 @@ where
   let new_id = OID_GEN.lock().next_id();
   store.insert(key.as_ref(), new_id.to_be_bytes())?;
   Ok(new_id)
-}
-
-#[allow(dead_code)]
-pub(crate) fn batch_insert<'a, K: AsRef<[u8]>>(
-  db: &mut Db,
-  items: impl IntoIterator<Item = (K, &'a [u8])>,
-) -> Result<(), PersistenceError> {
-  let mut batch = Batch::default();
-  let items = items.into_iter();
-  items.for_each(|(key, value)| {
-    batch.insert(key.as_ref(), value);
-  });
-  db.apply_batch(batch)?;
-  Ok(())
 }
 
 pub fn make_update_key_prefix(prefix: &[u8], oid: OID) -> Key<12> {
