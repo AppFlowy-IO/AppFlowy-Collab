@@ -65,5 +65,20 @@ impl RowIDGen {
   }
 }
 
+fn node_id_from_row_id(row_id: i64) -> u64 {
+  let node_id = (row_id >> NODE_ID_SHIFT) & ((1 << NODE_BITS) - 1);
+  node_id as u64
+}
+
 #[cfg(test)]
-mod tests {}
+mod tests {
+  #[test]
+  fn node_id_test() {
+    for i in 0..64 {
+      let mut id_gen = super::RowIDGen::new(i);
+      let row_id = id_gen.next_id();
+      let node_id = super::node_id_from_row_id(row_id);
+      assert_eq!(node_id, i)
+    }
+  }
+}
