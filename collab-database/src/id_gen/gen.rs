@@ -2,27 +2,27 @@ use std::time::SystemTime;
 
 /// Equivalent to April 9, 2023 4:18:02 AM
 const EPOCH: u64 = 1637806706000;
-const NODE_BITS: u64 = 10;
-/// 14 bits. For every ID generated on that machine/process, the sequence number is incremented by 1.
+/// 12 bits. For every ID generated on that machine/process, the sequence number is incremented by 1.
 /// The number is reset to 0 every millisecond.
-const SEQUENCE_BITS: u64 = 12;
-const NODE_ID_SHIFT: u64 = SEQUENCE_BITS;
+const NODE_BITS: u64 = 6;
+const SEQUENCE_BITS: u64 = 16;
 const TIMESTAMP_SHIFT: u64 = NODE_BITS + SEQUENCE_BITS;
+const NODE_ID_SHIFT: u64 = SEQUENCE_BITS;
 
 /// SEQUENCE_MASK is a u64 integer representing a bitmask with the value 4095 (in binary, 111111111111).
 /// This mask can be used in bitwise operations (e.g., AND &, OR |, XOR ^) to manipulate or extract
 /// the least significant 12 bits of other u64 integers.
 const SEQUENCE_MASK: u64 = (1 << SEQUENCE_BITS) - 1;
 
-pub struct DatabaseIDGen {
+pub struct RowIDGen {
   node_id: u64,
   sequence: u64,
   last_timestamp: u64,
 }
 
-impl DatabaseIDGen {
-  pub fn new(node_id: u64) -> DatabaseIDGen {
-    DatabaseIDGen {
+impl RowIDGen {
+  pub fn new(node_id: u64) -> RowIDGen {
+    RowIDGen {
       node_id,
       sequence: 0,
       last_timestamp: 0,

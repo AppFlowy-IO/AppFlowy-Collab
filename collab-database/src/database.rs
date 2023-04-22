@@ -12,7 +12,7 @@ use crate::block::{Blocks, CreateRowParams};
 use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
-use crate::id_gen::ID_GEN;
+use crate::id_gen::ROW_ID_GEN;
 use crate::meta::MetaMap;
 use crate::rows::{Row, RowCell, RowId, RowUpdate};
 use crate::views::{
@@ -822,7 +822,7 @@ pub fn gen_field_id() -> String {
 }
 
 pub fn gen_row_id() -> RowId {
-  RowId::from(ID_GEN.lock().next_id())
+  RowId::from(ROW_ID_GEN.lock().next_id())
 }
 
 pub fn gen_database_filter_id() -> String {
