@@ -1,3 +1,4 @@
+use collab::plugin_impl::rocks_disk::Config;
 use collab_database::rows::CellsBuilder;
 use collab_database::rows::CreateRowParams;
 use serde_json::{json, Value};
@@ -10,7 +11,7 @@ use crate::user_test::async_test::script::{create_database, database_test, Datab
 
 #[tokio::test]
 async fn edit_row_test() {
-  let mut test = database_test();
+  let mut test = database_test(Config::default());
   let mut handles = FuturesUnordered::new();
   let database_id = "d2".to_string();
   let row_id = 1.into();
@@ -77,7 +78,7 @@ async fn edit_row_test() {
 
 #[tokio::test]
 async fn create_row_test() {
-  let test = database_test();
+  let test = database_test(Config::default());
   let mut handles = FuturesUnordered::new();
   // Create 20 database and save them to disk in unordered.
   for i in 0..20 {

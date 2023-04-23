@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
-use collab::plugin_impl::rocks_snapshot::RocksSnapshotPlugin;
+use collab::plugin_impl::rocks_disk::{Config, RocksDiskPlugin};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, Update};
 use collab_persistence::doc::YrsDocAction;
@@ -16,11 +15,6 @@ use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::user::relation::{DatabaseRelation, RowRelationMap};
 use crate::views::{CreateDatabaseParams, CreateViewParams};
-
-#[derive(Clone, Default)]
-pub struct Config {
-  pub can_flush: bool,
-}
 
 /// A [UserDatabase] represents a user's database.
 pub struct UserDatabase {
@@ -48,11 +42,9 @@ impl UserDatabase {
   pub fn new(uid: i64, db: Arc<RocksCollabDB>, config: Config) -> Self {
     tracing::trace!("Init user database: {}", uid);
     // user database
-    let disk_plugin = RocksDiskPlugin::new_with_config(uid, db.clone(), config.can_flush).unwrap();
-    let snapshot_plugin = RocksSnapshotPlugin::new(uid, db.clone(), 5).unwrap();
+    let disk_plugin = RocksDiskPlugin::new_with_config(uid, db.clone(), config.clone()).unwrap();
     let collab = CollabBuilder::new(uid, format!("{}_user_database", uid))
       .with_plugin(disk_plugin)
-      .with_plugin(snapshot_plugin)
       .build();
     collab.initial();
     let databases = create_user_database_if_not_exist(&collab);
@@ -262,11 +254,9 @@ impl UserDatabase {
   /// Create a new [Collab] instance for given database id.
   fn collab_for_database(&self, database_id: &str) -> Collab {
     let disk_plugin =
-      RocksDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.can_flush).unwrap();
-    let snapshot_plugin = RocksSnapshotPlugin::new(self.uid, self.db.clone(), 6).unwrap();
+      RocksDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.clone()).unwrap();
     CollabBuilder::new(self.uid, database_id)
       .with_plugin(disk_plugin)
-      .with_plugin(snapshot_plugin)
       .build()
   }
 }

@@ -1,11 +1,11 @@
-use crate::user_test::async_test::script::{
-  create_database, flushable_database_test, DatabaseScript::*,
-};
+use collab::plugin_impl::rocks_disk::Config;
 use serde_json::{json, Value};
+
+use crate::user_test::async_test::script::{create_database, database_test, DatabaseScript::*};
 
 #[tokio::test]
 async fn flush_doc_test() {
-  let mut test = flushable_database_test();
+  let mut test = database_test(Config::new().flush_doc(true));
   test
     .run_scripts(vec![
       CreateDatabase {

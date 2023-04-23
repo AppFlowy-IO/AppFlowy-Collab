@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use std::sync::{Arc, Once};
 
 use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
-use collab::plugin_impl::rocks_snapshot::RocksSnapshotPlugin;
 use collab::preclude::*;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -65,7 +64,6 @@ pub struct CollabPersistenceTest {
   pub uid: i64,
   collabs: HashMap<String, Collab>,
   disk_plugin: RocksDiskPlugin,
-  snapshot_plugin: RocksSnapshotPlugin,
   #[allow(dead_code)]
   cleaner: Cleaner,
   pub db_path: PathBuf,
@@ -78,14 +76,12 @@ impl CollabPersistenceTest {
     let path = tempdir.into_path();
     let uid = 1;
     let db = Arc::new(RocksCollabDB::open(path.clone()).unwrap());
-    let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
-    let snapshot_plugin = RocksSnapshotPlugin::new(uid, db, 5).unwrap();
+    let disk_plugin = RocksDiskPlugin::new(uid, db).unwrap();
     let cleaner = Cleaner::new(path.clone());
     Self {
       uid,
       collabs: HashMap::default(),
       disk_plugin,
-      snapshot_plugin,
       cleaner,
       db_path: path,
     }
@@ -109,7 +105,7 @@ impl CollabPersistenceTest {
       },
       Script::OpenDocumentWithSnapshotPlugin { id } => {
         let collab = CollabBuilder::new(1, &id)
-          .with_plugin(self.snapshot_plugin.clone())
+          .with_plugin(self.disk_plugin.clone())
           .build();
         collab.initial();
 
@@ -164,8 +160,7 @@ impl CollabPersistenceTest {
         index,
         expected,
       } => {
-        let snapshot = self.snapshot_plugin.db.read_txn();
-        let snapshots = snapshot.get_snapshots(self.snapshot_plugin.uid, &id);
+        let snapshots = self.disk_plugin.get_snapshots(&id);
         let collab = CollabBuilder::new(1, &id).build();
         collab.with_transact_mut(|txn| {
           txn.apply_update(Update::decode_v1(&snapshots[index as usize].data).unwrap());

@@ -2,8 +2,8 @@ use collab_database::rows::CreateRowParams;
 use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 
 use crate::user_test::helper::{
-  make_default_grid, random_uid, user_database_test, user_database_test_with_db,
-  user_database_test_with_default_data,
+  make_default_grid, random_uid, user_database_test, user_database_with_db,
+  user_database_with_default_data,
 };
 
 #[test]
@@ -148,7 +148,7 @@ fn delete_database_inline_view_test() {
 
 #[test]
 fn duplicate_database_data_test() {
-  let test = user_database_test_with_default_data(random_uid());
+  let test = user_database_with_default_data(random_uid());
   let original = test.get_database_with_view_id("v1").unwrap();
   let duplicated_data = test.get_database_duplicated_data("v1").unwrap();
   let duplicate = test
@@ -223,7 +223,7 @@ fn reopen_database_test() {
   let db = test.db.clone();
   drop(test);
 
-  let test = user_database_test_with_db(uid, db);
+  let test = user_database_with_db(uid, db);
   let database = test.get_database_with_view_id("v1");
   let _ = database.unwrap().to_json_value();
 }

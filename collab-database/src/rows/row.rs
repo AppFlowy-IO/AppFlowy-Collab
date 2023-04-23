@@ -1,6 +1,3 @@
-use std::fmt;
-use std::fmt::{Display, Formatter};
-use std::ops::Deref;
 use std::sync::Arc;
 
 use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
@@ -10,11 +7,9 @@ use collab::preclude::{
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use serde::de::{Error, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 use crate::database::timestamp;
-use crate::id_gen::ROW_ID_GEN;
 use crate::rows::{Cell, Cells, CellsUpdate, RowId};
 use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
@@ -67,6 +62,7 @@ impl RowDoc {
       let data = collab.get_map_with_txn(&txn, vec![DATA]);
       let meta = collab.get_map_with_txn(&txn, vec![META]);
       let comments = collab.get_array_with_txn(&txn, vec![COMMENT]);
+      drop(txn);
       (data, meta, comments)
     };
 

@@ -1,11 +1,11 @@
 #![allow(clippy::upper_case_acronyms)]
 
-use lazy_static::lazy_static;
-use parking_lot::Mutex;
 use std::time::SystemTime;
 
+use lazy_static::lazy_static;
+use parking_lot::Mutex;
+
 const EPOCH: u64 = 1637806706000;
-const SCOPE_BITS: u64 = 2;
 const NODE_BITS: u64 = 8;
 const SEQUENCE_BITS: u64 = 12;
 const TIMESTAMP_BITS: u64 = 42;

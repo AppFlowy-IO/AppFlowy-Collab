@@ -282,12 +282,18 @@ impl Collab {
     self.doc.transact()
   }
 
+  pub fn transact_mut(&self) -> TransactionMut {
+    self.doc.transact_mut()
+  }
+
   pub fn with_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let transact = CollabContext::new(self.plugins.clone(), self.doc.clone());
-    transact.with_transact_mut(f)
+    let mut txn = self.doc.transact_mut();
+    let ret = f(&mut txn);
+    drop(txn);
+    ret
   }
 
   fn map_wrapper_with(&self, map_ref: MapRef) -> MapRefWrapper {

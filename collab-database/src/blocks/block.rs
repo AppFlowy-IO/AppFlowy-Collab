@@ -2,14 +2,12 @@ use std::num::NonZeroUsize;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
-use collab::preclude::{Collab, CollabBuilder};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use parking_lot::Mutex;
 
 use lru::LruCache;
 
-use crate::rows::{Cell, CreateRowParams, Row, RowDoc, RowId, RowUpdate};
+use crate::rows::{Cell, Row, RowDoc, RowId, RowUpdate};
 use crate::views::RowOrder;
 
 #[derive(Clone)]

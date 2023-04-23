@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
-use collab::plugin_impl::rocks_snapshot::RocksSnapshotPlugin;
 use collab::preclude::CollabBuilder;
 use collab_database::blocks::Block;
 use collab_database::database::{Database, DatabaseContext};
@@ -66,11 +65,9 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
 pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<RocksCollabDB>, DatabaseTest) {
   let db = make_rocks_db();
   let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
-  let snapshot_plugin = RocksSnapshotPlugin::new(uid, db.clone(), 5).unwrap();
 
   let collab = CollabBuilder::new(1, database_id)
     .with_plugin(disk_plugin)
-    .with_plugin(snapshot_plugin)
     .build();
   collab.initial();
   let block = Block::new(uid, db.clone());
@@ -97,11 +94,9 @@ pub fn restore_database_from_db(
   db: Arc<RocksCollabDB>,
 ) -> DatabaseTest {
   let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
-  let block = Block::new(uid, db.clone());
-  let snapshot_plugin = RocksSnapshotPlugin::new(uid, db, 5).unwrap();
+  let block = Block::new(uid, db);
   let collab = CollabBuilder::new(uid, database_id)
     .with_plugin(disk_plugin)
-    .with_plugin(snapshot_plugin)
     .build();
   collab.initial();
   let context = DatabaseContext { collab, block };

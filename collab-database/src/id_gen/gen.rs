@@ -65,6 +65,7 @@ impl RowIDGen {
   }
 }
 
+#[allow(dead_code)]
 fn node_id_from_row_id(row_id: i64) -> u64 {
   let node_id = (row_id >> NODE_ID_SHIFT) & ((1 << NODE_BITS) - 1);
   node_id as u64

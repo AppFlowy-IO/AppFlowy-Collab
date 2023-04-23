@@ -24,6 +24,7 @@ pub trait YrsDocAction<'a>: KVStore<'a> + Sized
 where
   PersistenceError: From<<Self as KVStore<'a>>::Error>,
 {
+  /// Create a new document with the given object id.
   fn create_new_doc<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
     &self,
     uid: i64,
@@ -57,6 +58,9 @@ where
     Ok(())
   }
 
+  /// Load the document from the database and apply the updates to the transaction.
+  /// After loading the document, it will delete the document state vec and updates and
+  /// insert the new document state.
   fn flush_doc<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
     &self,
     uid: i64,
@@ -95,6 +99,8 @@ where
     get_doc_id(uid, self, object_id).is_some()
   }
 
+  /// Load the document from the database and apply the updates to the transaction.
+  /// Return the number of updates
   fn load_doc<K: AsRef<[u8]> + ?Sized + Debug>(
     &self,
     uid: i64,
@@ -151,6 +157,7 @@ where
     }
   }
 
+  /// Push an update to the persistence
   fn push_update<K: AsRef<[u8]> + ?Sized + Debug>(
     &self,
     uid: i64,
@@ -171,6 +178,22 @@ where
     Ok(())
   }
 
+  /// Remove all the updates for the given document
+  fn delete_all_updates<K: AsRef<[u8]> + ?Sized + Debug>(
+    &self,
+    uid: i64,
+    object_id: &K,
+  ) -> Result<(), PersistenceError> {
+    if let Some(doc_id) = get_doc_id(uid, self, object_id) {
+      let start = make_doc_start_key(doc_id);
+      let end = make_doc_end_key(doc_id);
+      self.remove_range(start.as_ref(), end.as_ref())?;
+    }
+    Ok(())
+  }
+
+  /// Delete the document from the persistence
+  /// This will remove all the updates and the document state
   fn delete_doc<K: AsRef<[u8]> + ?Sized + Debug>(
     &self,
     uid: i64,
@@ -203,6 +226,7 @@ where
     Ok(NameIter { iter })
   }
 
+  /// Return all the updates for the given document
   fn get_updates<K: AsRef<[u8]> + ?Sized>(
     &self,
     uid: i64,

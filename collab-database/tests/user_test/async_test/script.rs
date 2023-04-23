@@ -4,11 +4,12 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use collab::plugin_impl::rocks_disk::Config;
 use collab_database::database::DuplicatedDatabase;
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
-use collab_database::user::{Config, UserDatabase as InnerUserDatabase};
+use collab_database::user::UserDatabase as InnerUserDatabase;
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -62,12 +63,8 @@ pub struct DatabaseTest {
   pub config: Config,
 }
 
-pub fn database_test() -> DatabaseTest {
-  DatabaseTest::new(Config::default())
-}
-
-pub fn flushable_database_test() -> DatabaseTest {
-  DatabaseTest::new(Config { can_flush: true })
+pub fn database_test(config: Config) -> DatabaseTest {
+  DatabaseTest::new(config)
 }
 
 impl DatabaseTest {

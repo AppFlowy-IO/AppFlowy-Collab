@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use collab::preclude::{lib0Any, ArrayRef, ReadTxn, YrsValue};
 use serde::{Deserialize, Serialize};
 
-use crate::rows::{BlockId, Row, RowId};
+use crate::rows::{Row, RowId};
 use crate::views::{OrderArray, OrderIdentifiable};
 
 pub struct RowOrderArray {
