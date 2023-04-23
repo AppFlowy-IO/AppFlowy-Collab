@@ -10,7 +10,7 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use parking_lot::RwLock;
 
-use crate::block::Blocks;
+use crate::blocks::Block;
 use crate::database::{Database, DatabaseContext, DuplicatedDatabase};
 use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
@@ -30,7 +30,7 @@ pub struct UserDatabase {
   collab: Collab,
   /// It used to keep track of the blocks. Each block contains a list of [Row]s
   /// A database rows will be stored in multiple blocks.
-  blocks: Blocks,
+  block: Block,
   /// It used to keep track of the database records.
   database_records: DatabaseArray,
   /// It used to keep track of the database relations.
@@ -58,13 +58,13 @@ impl UserDatabase {
     let databases = create_user_database_if_not_exist(&collab);
     let database_records = DatabaseArray::new(databases);
     let database_relation = DatabaseRelation::new(create_relations_collab(uid, db.clone()));
-    let blocks = Blocks::new(uid, db.clone());
+    let block = Block::new(uid, db.clone());
 
     Self {
       uid,
       db,
       collab,
-      blocks,
+      block,
       database_records,
       open_handlers: Default::default(),
       database_relation,
@@ -81,10 +81,13 @@ impl UserDatabase {
     let database = self.open_handlers.read().get(database_id).cloned();
     match database {
       None => {
-        let blocks = self.blocks.clone();
+        let blocks = self.block.clone();
         let collab = self.collab_for_database(database_id);
         collab.initial();
-        let context = DatabaseContext { collab, blocks };
+        let context = DatabaseContext {
+          collab,
+          block: blocks,
+        };
         let database = Arc::new(Database::get_or_create(database_id, context).ok()?);
         self
           .open_handlers
@@ -123,8 +126,11 @@ impl UserDatabase {
 
     // Create a [Collab] for the given database id.
     let collab = self.collab_for_database(&params.database_id);
-    let blocks = self.blocks.clone();
-    let context = DatabaseContext { collab, blocks };
+    let blocks = self.block.clone();
+    let context = DatabaseContext {
+      collab,
+      block: blocks,
+    };
     context.collab.initial();
 
     // Add a new database record.
@@ -212,7 +218,7 @@ impl UserDatabase {
 
     let context = DatabaseContext {
       collab,
-      blocks: self.blocks.clone(),
+      block: self.block.clone(),
     };
     Database::get_or_create(database_id, context)
   }

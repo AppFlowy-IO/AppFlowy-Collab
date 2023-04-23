@@ -1,11 +1,3 @@
-use crate::block::CreateRowParams;
-use crate::fields::Field;
-use crate::views::layout::{DatabaseLayout, LayoutSettings};
-use crate::views::{
-  FieldOrder, FieldOrderArray, FilterArray, FilterMap, GroupSettingArray, GroupSettingMap,
-  LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
-};
-use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 use collab::core::any_array::ArrayMapUpdate;
 use collab::preclude::map::MapPrelim;
 use collab::preclude::{
@@ -13,6 +5,15 @@ use collab::preclude::{
   YrsValue,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::fields::Field;
+use crate::rows::CreateRowParams;
+use crate::views::layout::{DatabaseLayout, LayoutSettings};
+use crate::views::{
+  FieldOrder, FieldOrderArray, FilterArray, FilterMap, GroupSettingArray, GroupSettingMap,
+  LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
+};
+use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct DatabaseView {

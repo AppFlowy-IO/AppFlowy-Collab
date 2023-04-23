@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use collab_database::block::CreateRowParams;
+use collab_database::rows::CreateRowParams;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use serde_json::{json, Value};
 

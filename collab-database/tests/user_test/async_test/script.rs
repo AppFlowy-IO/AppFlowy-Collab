@@ -4,9 +4,9 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use collab_database::block::CreateRowParams;
 use collab_database::database::DuplicatedDatabase;
 use collab_database::fields::Field;
+use collab_database::rows::CreateRowParams;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::{Config, UserDatabase as InnerUserDatabase};
 use collab_database::views::CreateDatabaseParams;

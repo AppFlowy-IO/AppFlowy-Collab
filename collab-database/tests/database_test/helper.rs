@@ -5,10 +5,10 @@ use std::sync::Arc;
 use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::plugin_impl::rocks_snapshot::RocksSnapshotPlugin;
 use collab::preclude::CollabBuilder;
-use collab_database::block::{Blocks, CreateRowParams};
+use collab_database::blocks::Block;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
-use collab_database::rows::CellsBuilder;
+use collab_database::rows::{CellsBuilder, CreateRowParams};
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
@@ -48,8 +48,8 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
   let collab = CollabBuilder::new(uid, database_id).build();
   collab.initial();
-  let blocks = Blocks::new(uid, db);
-  let context = DatabaseContext { collab, blocks };
+  let block = Block::new(uid, db);
+  let context = DatabaseContext { collab, block };
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
     view_id: "v1".to_string(),
@@ -73,8 +73,8 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<RocksCollabD
     .with_plugin(snapshot_plugin)
     .build();
   collab.initial();
-  let blocks = Blocks::new(uid, db.clone());
-  let context = DatabaseContext { collab, blocks };
+  let block = Block::new(uid, db.clone());
+  let context = DatabaseContext { collab, block };
   let params = CreateDatabaseParams {
     view_id: "v1".to_string(),
     name: "my first grid".to_string(),
@@ -97,14 +97,14 @@ pub fn restore_database_from_db(
   db: Arc<RocksCollabDB>,
 ) -> DatabaseTest {
   let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
-  let blocks = Blocks::new(uid, db.clone());
+  let block = Block::new(uid, db.clone());
   let snapshot_plugin = RocksSnapshotPlugin::new(uid, db, 5).unwrap();
   let collab = CollabBuilder::new(uid, database_id)
     .with_plugin(disk_plugin)
     .with_plugin(snapshot_plugin)
     .build();
   collab.initial();
-  let context = DatabaseContext { collab, blocks };
+  let context = DatabaseContext { collab, block };
   let database = Database::get_or_create(database_id, context).unwrap();
   DatabaseTest {
     database,

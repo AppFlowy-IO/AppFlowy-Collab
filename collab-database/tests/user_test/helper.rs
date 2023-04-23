@@ -3,10 +3,10 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use collab_database::block::CreateRowParams;
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
+use collab_database::rows::CreateRowParams;
 use collab_database::user::{Config, RowRelationChange, RowRelationUpdateReceiver, UserDatabase};
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;

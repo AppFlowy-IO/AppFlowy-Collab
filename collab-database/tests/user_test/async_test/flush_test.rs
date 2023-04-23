@@ -76,7 +76,6 @@ fn expect() -> Value {
     "inline_view": "v1",
     "rows": [
       {
-        "block_id": 1,
         "cells": {
           "f1": {
             "data": "1f1cell"
@@ -94,7 +93,6 @@ fn expect() -> Value {
         "visibility": true
       },
       {
-        "block_id": 2,
         "cells": {
           "f1": {
             "data": "2f1cell"
@@ -109,7 +107,6 @@ fn expect() -> Value {
         "visibility": true
       },
       {
-        "block_id": 3,
         "cells": {
           "f1": {
             "data": "3f1cell"
@@ -148,17 +145,14 @@ fn expect() -> Value {
         "name": "my first database",
         "row_orders": [
           {
-            "block_id": 1,
             "height": 0,
             "id": "1"
           },
           {
-            "block_id": 2,
             "height": 0,
             "id": "2"
           },
           {
-            "block_id": 3,
             "height": 0,
             "id": "3"
           }

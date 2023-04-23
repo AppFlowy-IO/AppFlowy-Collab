@@ -1,97 +1,140 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
+use std::sync::Arc;
 
-use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
+use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
+use collab::preclude::{
+  lib0Any, ArrayRef, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, MapRef, MapRefExtension,
+  MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+};
+use collab_persistence::doc::YrsDocAction;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::database::timestamp;
 use crate::id_gen::ROW_ID_GEN;
-use crate::rows::{Cell, Cells, CellsUpdate};
+use crate::rows::{Cell, Cells, CellsUpdate, RowId};
 use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 
-#[derive(Copy, Debug, Clone, Eq, PartialEq, Hash)]
-pub struct RowId(i64);
-
-impl Display for RowId {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    f.write_str(&self.0.to_string())
-  }
-}
-
-impl Serialize for RowId {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: Serializer,
-  {
-    serializer.serialize_str(&self.0.to_string())
-  }
-}
-
-impl<'de> Deserialize<'de> for RowId {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: Deserializer<'de>,
-  {
-    struct RowIdVisitor();
-
-    impl<'de> Visitor<'de> for RowIdVisitor {
-      type Value = RowId;
-
-      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("Expected i64 string")
-      }
-
-      fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-      where
-        E: Error,
-      {
-        match v.parse::<i64>() {
-          Ok(id) => Ok(RowId(id)),
-          Err(_) => Err(Error::custom("Expected i64 string")),
-        }
-      }
-    }
-
-    deserializer.deserialize_any(RowIdVisitor())
-  }
-}
-
-impl Deref for RowId {
-  type Target = i64;
-
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-
-impl From<i64> for RowId {
-  fn from(data: i64) -> Self {
-    Self(data)
-  }
-}
-
-impl From<RowId> for i64 {
-  fn from(data: RowId) -> Self {
-    data.0
-  }
-}
-
-impl std::default::Default for RowId {
-  fn default() -> Self {
-    Self(ROW_ID_GEN.lock().next_id())
-  }
-}
-
-impl AsRef<i64> for RowId {
-  fn as_ref(&self) -> &i64 {
-    &self.0
-  }
-}
-
 pub type BlockId = i64;
+
+const DATA: &str = "data";
+const META: &str = "meta";
+const COMMENT: &str = "comment";
+
+pub struct RowDoc {
+  uid: i64,
+  row_id: RowId,
+  #[allow(dead_code)]
+  collab: Collab,
+  data: MapRef,
+  meta: MapRef,
+  comments: ArrayRef,
+  db: Arc<RocksCollabDB>,
+}
+
+impl RowDoc {
+  pub fn create<T: Into<Row>>(row: T, uid: i64, row_id: RowId, db: Arc<RocksCollabDB>) -> Self {
+    let row = row.into();
+    let doc = Self::new(uid, row_id, db);
+    let data = doc.data.clone();
+    doc.collab.with_transact_mut(|txn| {
+      RowBuilder::new(row.id, txn, data)
+        .update(|update| {
+          update
+            .set_height(row.height)
+            .set_visibility(row.visibility)
+            .set_created_at(row.created_at)
+            .set_cells(row.cells);
+        })
+        .done();
+    });
+
+    doc
+  }
+
+  pub fn new(uid: i64, row_id: RowId, db: Arc<RocksCollabDB>) -> Self {
+    let collab = CollabBuilder::new(uid, row_id.to_string())
+      .with_plugin(RocksDiskPlugin::new(uid, db.clone()).unwrap())
+      .build();
+    collab.initial();
+
+    let (data, meta, comments) = {
+      let txn = collab.transact();
+      let data = collab.get_map_with_txn(&txn, vec![DATA]);
+      let meta = collab.get_map_with_txn(&txn, vec![META]);
+      let comments = collab.get_array_with_txn(&txn, vec![COMMENT]);
+      (data, meta, comments)
+    };
+
+    let (data, meta, comments) = if data.is_none() || meta.is_none() || comments.is_none() {
+      collab.with_transact_mut(|txn| {
+        let data = match data {
+          None => collab.create_map_with_txn(txn, DATA),
+          Some(cells) => cells,
+        };
+        let meta = match meta {
+          None => collab.create_map_with_txn(txn, META),
+          Some(meta) => meta,
+        };
+        let comments = match comments {
+          None => collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn, COMMENT, vec![]),
+          Some(comments) => comments,
+        };
+
+        (data, meta, comments)
+      })
+    } else {
+      (data.unwrap(), meta.unwrap(), comments.unwrap())
+    };
+
+    Self {
+      uid,
+      row_id,
+      collab,
+      data: data.into_inner(),
+      meta: meta.into_inner(),
+      comments: comments.into_inner(),
+      db,
+    }
+  }
+
+  pub fn get_row(&self) -> Option<Row> {
+    let txn = self.collab.transact();
+    row_from_map_ref(&self.data, &txn)
+  }
+
+  pub fn get_row_order(&self) -> Option<RowOrder> {
+    let txn = self.collab.transact();
+    row_order_from_map_ref(&self.data, &txn).map(|value| value.0)
+  }
+
+  pub fn get_cell(&self, field_id: &str) -> Option<Cell> {
+    let txn = self.collab.transact();
+    cell_from_map_ref(&self.data, &txn, field_id)
+  }
+
+  pub fn update<F, R: Into<RowId>>(&self, f: F)
+  where
+    F: FnOnce(RowUpdate),
+  {
+    self.collab.with_transact_mut(|txn| {
+      let update = RowUpdate::new(txn, &self.data);
+      f(update)
+    })
+  }
+
+  pub fn delete(&self) {
+    let _ = self.db.with_write_txn(|txn| {
+      let row_id = self.row_id.to_string();
+      txn.delete_doc(self.uid, &row_id).unwrap();
+      Ok(())
+    });
+  }
+}
 
 /// Represents a row in a [Block].
 /// A [Row] contains list of [Cell]s. Each [Cell] is associated with a [Field].
@@ -100,7 +143,6 @@ pub type BlockId = i64;
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Row {
   pub id: RowId,
-  pub block_id: BlockId,
   pub cells: Cells,
   pub height: i32,
   pub visibility: bool,
@@ -112,10 +154,9 @@ impl Row {
   /// The default height of a [Row] is 60
   /// The default visibility of a [Row] is true
   /// The default created_at of a [Row] is the current timestamp
-  pub fn new<R: Into<RowId>, B: Into<BlockId>>(id: R, block_id: B) -> Self {
+  pub fn new<R: Into<RowId>>(id: R) -> Self {
     Row {
       id: id.into(),
-      block_id: block_id.into(),
       cells: Default::default(),
       height: 60,
       visibility: true,
@@ -125,19 +166,13 @@ impl Row {
 }
 
 pub struct RowBuilder<'a, 'b> {
-  map_ref: MapRefWrapper,
+  map_ref: MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b> RowBuilder<'a, 'b> {
-  pub fn new(
-    id: RowId,
-    block_id: BlockId,
-    txn: &'a mut TransactionMut<'b>,
-    map_ref: MapRefWrapper,
-  ) -> Self {
+  pub fn new(id: RowId, txn: &'a mut TransactionMut<'b>, map_ref: MapRef) -> Self {
     map_ref.insert_i64_with_txn(txn, ROW_ID, id);
-    map_ref.insert_i64_with_txn(txn, BLOCK_ID, block_id);
     Self { map_ref, txn }
   }
 
@@ -208,13 +243,17 @@ pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(String
 /// Return a [RowOrder] and created_at from a [YrsValue]
 pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(RowOrder, i64)> {
   let map_ref = value.to_ymap()?;
+  row_order_from_map_ref(&map_ref, txn)
+}
+
+/// Return a [RowOrder] and created_at from a [YrsValue]
+pub fn row_order_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<(RowOrder, i64)> {
   let id = RowId::from(map_ref.get_i64_with_txn(txn, ROW_ID)?);
-  let block_id = map_ref.get_i64_with_txn(txn, BLOCK_ID)?;
   let height = map_ref.get_i64_with_txn(txn, ROW_HEIGHT).unwrap_or(60);
   let crated_at = map_ref
     .get_i64_with_txn(txn, CREATED_AT)
     .unwrap_or_default();
-  Some((RowOrder::new(id, block_id, height as i32), crated_at))
+  Some((RowOrder::new(id, height as i32), crated_at))
 }
 
 /// Return a [Row] from a [YrsValue]
@@ -234,7 +273,6 @@ pub fn cell_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T, field_id: &str) 
 /// Return a [Row] from a [MapRef]
 pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
   let id = RowId::from(map_ref.get_i64_with_txn(txn, ROW_ID)?);
-  let block_id = map_ref.get_i64_with_txn(txn, BLOCK_ID)?;
   let visibility = map_ref
     .get_bool_with_txn(txn, ROW_VISIBILITY)
     .unwrap_or(true);
@@ -252,10 +290,45 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
 
   Some(Row {
     id,
-    block_id,
     cells,
     height: height as i32,
     visibility,
     created_at,
   })
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct CreateRowParams {
+  pub id: RowId,
+  pub cells: Cells,
+  pub height: i32,
+  pub visibility: bool,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub prev_row_id: Option<RowId>,
+  pub timestamp: i64,
+}
+
+impl CreateRowParams {
+  pub fn new(id: RowId) -> Self {
+    Self {
+      id,
+      cells: Cells::default(),
+      height: 60,
+      visibility: true,
+      prev_row_id: None,
+      timestamp: timestamp(),
+    }
+  }
+}
+
+impl From<CreateRowParams> for Row {
+  fn from(params: CreateRowParams) -> Self {
+    Row {
+      id: params.id,
+      cells: params.cells,
+      height: params.height,
+      visibility: params.visibility,
+      created_at: params.timestamp,
+    }
+  }
 }
