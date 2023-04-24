@@ -24,6 +24,7 @@ impl RocksKVStore {
     Ok(Self { db })
   }
 
+  /// Return a read transaction that accesses the database exclusively.
   pub fn read_txn(&self) -> RocksKVStoreImpl<'_, TransactionDB> {
     let txn = self.db.transaction();
     RocksKVStoreImpl(txn)

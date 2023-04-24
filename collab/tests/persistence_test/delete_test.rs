@@ -1,9 +1,10 @@
 use crate::script::Script::*;
 use crate::script::{disk_plugin, CollabPersistenceTest};
+use collab::plugin_impl::rocks_disk::Config;
 
 #[test]
 fn delete_single_doc_test() {
-  let mut test = CollabPersistenceTest::new();
+  let mut test = CollabPersistenceTest::new(Config::default());
   let doc_id = "1".to_string();
   test.run_scripts(vec![
     CreateDocumentWithDiskPlugin {
@@ -17,7 +18,7 @@ fn delete_single_doc_test() {
 }
 #[test]
 fn delete_multiple_docs_test() {
-  let mut test = CollabPersistenceTest::new();
+  let mut test = CollabPersistenceTest::new(Config::default());
   let disk_plugin = disk_plugin(test.uid);
   test.run_scripts(vec![
     CreateDocumentWithDiskPlugin {

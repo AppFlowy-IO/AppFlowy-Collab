@@ -73,7 +73,7 @@ impl KVStore<'static> for SledKVStoreImpl {
 
   fn remove_range(&self, from: &[u8], to: &[u8]) -> Result<(), Self::Error> {
     let mut batch = Batch::default();
-    let iter = self.0.write().range(from..=to);
+    let iter = self.0.write().range(from..to);
     for key in iter {
       let key = key?.0;
       batch.remove(key);

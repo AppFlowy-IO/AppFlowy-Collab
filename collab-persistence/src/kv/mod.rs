@@ -24,10 +24,12 @@ pub trait KVStore<'a> {
   /// Remove a key, returning the last value if it exists
   fn remove(&self, key: &[u8]) -> Result<(), Self::Error>;
 
-  /// Remove all keys in the range [from, to]
+  /// Remove all keys in the range [from..to]
+  /// The upper bound itself is not included on the iteration result.
   fn remove_range(&self, from: &[u8], to: &[u8]) -> Result<(), Self::Error>;
 
   /// Return an iterator over the range of keys
+  /// The upper bound itself is not included on the iteration result.
   fn range<K: AsRef<[u8]>, R: RangeBounds<K>>(&self, range: R) -> Result<Self::Range, Self::Error>;
 
   /// Return the entry prior to the given key

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
 
-use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
+use collab::plugin_impl::rocks_disk::{Config, RocksDiskPlugin};
 use collab::preclude::*;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -47,6 +47,10 @@ pub enum Script {
     index: u32,
     expected: JsonValue,
   },
+  ValidateSnapshot {
+    id: String,
+    snapshot_index: usize,
+  },
   AssertNumOfUpdates {
     id: String,
     expected: usize,
@@ -57,6 +61,10 @@ pub enum Script {
   },
   AssertNumOfDocuments {
     expected: usize,
+  },
+  AssertDocument {
+    id: String,
+    expected: JsonValue,
   },
 }
 
@@ -70,13 +78,13 @@ pub struct CollabPersistenceTest {
 }
 
 impl CollabPersistenceTest {
-  pub fn new() -> Self {
+  pub fn new(config: Config) -> Self {
     setup_log();
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let uid = 1;
     let db = Arc::new(RocksCollabDB::open(path.clone()).unwrap());
-    let disk_plugin = RocksDiskPlugin::new(uid, db).unwrap();
+    let disk_plugin = RocksDiskPlugin::new_with_config(uid, db, config).unwrap();
     let cleaner = Cleaner::new(path.clone());
     Self {
       uid,
@@ -167,6 +175,25 @@ impl CollabPersistenceTest {
         });
 
         let json = collab.to_json_value();
+        assert_json_diff::assert_json_eq!(json, expected);
+      },
+      Script::ValidateSnapshot { id, snapshot_index } => {
+        let snapshots = self.disk_plugin.get_snapshots(&id);
+        let snapshot = snapshots.get(snapshot_index).unwrap();
+        let key = self
+          .disk_plugin
+          .read_txn()
+          .get_doc_last_update_key(self.uid, &id)
+          .unwrap()
+          .to_vec();
+
+        assert_eq!(key, snapshot.update_key)
+      },
+      Script::AssertDocument { id, expected } => {
+        let mut doc = Collab::new(self.uid, id, vec![]);
+        doc.add_plugin(Arc::new(self.disk_plugin.clone()));
+        doc.initial();
+        let json = doc.to_json_value();
         assert_json_diff::assert_json_eq!(json, expected);
       },
     }

@@ -12,6 +12,7 @@ use crate::keys::{
 };
 use crate::kv::{KVEntry, KVStore};
 use crate::oid::{OID, OID_GEN, OID_LEN};
+use crate::snapshot::CollabSnapshot;
 
 #[derive(Clone)]
 pub struct CollabDB<S> {
@@ -58,19 +59,22 @@ where
   }
 }
 
-pub fn insert_snapshot_update<'a, K, S>(
+pub fn insert_snapshot_update<'a, K1, K2, S>(
   store: &S,
+  update_key: K2,
   snapshot_id: SnapshotID,
-  object_id: &K,
-  value: Vec<u8>,
+  object_id: &K1,
+  data: Vec<u8>,
 ) -> Result<(), PersistenceError>
 where
-  K: AsRef<[u8]> + ?Sized + Debug,
+  K1: AsRef<[u8]> + ?Sized + Debug,
+  K2: Into<Vec<u8>>,
   S: KVStore<'a>,
   PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
+  let snapshot = CollabSnapshot::new(data, update_key.into()).to_vec();
   let update_key = create_update_key(snapshot_id, store, object_id, make_snapshot_update_key)?;
-  store.insert(update_key, value)?;
+  store.insert(update_key, snapshot)?;
   Ok(())
 }
 
@@ -79,15 +83,29 @@ pub fn insert_doc_update<'a, K, S>(
   doc_id: DocID,
   object_id: &K,
   value: Vec<u8>,
-) -> Result<(), PersistenceError>
+) -> Result<Vec<u8>, PersistenceError>
 where
   K: AsRef<[u8]> + ?Sized + Debug,
   S: KVStore<'a>,
   PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
   let update_key = create_update_key(doc_id, db, object_id, make_doc_update_key)?;
-  db.insert(update_key, value)?;
-  Ok(())
+  db.insert(update_key.as_ref(), value)?;
+  Ok(update_key.to_vec())
+}
+
+pub fn get_last_update_key<'a, S, F>(
+  store: &S,
+  id: OID,
+  make_update_key: F,
+) -> Result<Key<16>, PersistenceError>
+where
+  F: Fn(OID, Clock) -> Key<16>,
+  S: KVStore<'a>,
+  PersistenceError: From<<S as KVStore<'a>>::Error>,
+{
+  let last_clock = get_last_update_clock(store, id, &make_update_key)?;
+  Ok(make_update_key(id, last_clock))
 }
 
 fn create_update_key<'a, F, K, S>(
@@ -102,14 +120,7 @@ where
   S: KVStore<'a>,
   PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
-  let max_key = make_update_key(id, Clock::MAX);
-  let last_clock = if let Ok(Some(entry)) = store.next_back_entry(max_key.as_ref()) {
-    let clock_byte = clock_from_key(entry.key());
-    Clock::from_be_bytes(clock_byte.try_into().unwrap())
-  } else {
-    0
-  };
-
+  let last_clock = get_last_update_clock(store, id, &make_update_key)?;
   let clock = last_clock + 1;
   let new_key = make_update_key(id, clock);
   tracing::debug!(
@@ -119,6 +130,26 @@ where
     new_key.as_ref()
   );
   Ok(new_key)
+}
+
+#[inline(always)]
+fn get_last_update_clock<'a, S, F>(
+  store: &S,
+  id: OID,
+  make_update_key: &F,
+) -> Result<Clock, PersistenceError>
+where
+  F: Fn(OID, Clock) -> Key<16>,
+  S: KVStore<'a>,
+  PersistenceError: From<<S as KVStore<'a>>::Error>,
+{
+  let max_key = make_update_key(id, Clock::MAX);
+  if let Ok(Some(entry)) = store.next_back_entry(max_key.as_ref()) {
+    let clock_byte = clock_from_key(entry.key());
+    Ok(Clock::from_be_bytes(clock_byte.try_into().unwrap()))
+  } else {
+    Ok(0)
+  }
 }
 
 pub fn get_id_for_key<'a, S>(store: &S, key: Key<20>) -> Option<DocID>

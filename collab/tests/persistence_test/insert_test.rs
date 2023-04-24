@@ -1,10 +1,11 @@
 use crate::script::Script::*;
 use crate::script::{disk_plugin, CollabPersistenceTest};
+use collab::plugin_impl::rocks_disk::Config;
 
 #[test]
 fn insert_single_change_and_restore_from_disk() {
   let doc_id = "1".to_string();
-  let mut test = CollabPersistenceTest::new();
+  let mut test = CollabPersistenceTest::new(Config::new());
   test.run_scripts(vec![
     CreateDocumentWithDiskPlugin {
       id: doc_id.clone(),
@@ -31,7 +32,7 @@ fn insert_single_change_and_restore_from_disk() {
 
 #[test]
 fn insert_multiple_changes_and_restore_from_disk() {
-  let mut test = CollabPersistenceTest::new();
+  let mut test = CollabPersistenceTest::new(Config::new());
   let doc_id = "1".to_string();
   test.run_scripts(vec![
     CreateDocumentWithDiskPlugin {
@@ -93,7 +94,7 @@ fn insert_multiple_changes_and_restore_from_disk() {
 
 #[test]
 fn insert_multiple_docs() {
-  let mut test = CollabPersistenceTest::new();
+  let mut test = CollabPersistenceTest::new(Config::new());
   let disk_plugin = disk_plugin(test.uid);
   test.run_scripts(vec![
     CreateDocumentWithDiskPlugin {

@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::{
-  lib0Any, ArrayRef, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, MapRef, MapRefExtension,
-  MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+  lib0Any, ArrayRef, Collab, CollabBuilder, MapPrelim, MapRef, MapRefExtension, ReadTxn,
+  TransactionMut, YrsValue,
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -26,7 +26,9 @@ pub struct RowDoc {
   #[allow(dead_code)]
   collab: Collab,
   data: MapRef,
+  #[allow(dead_code)]
   meta: MapRef,
+  #[allow(dead_code)]
   comments: ArrayRef,
   db: Arc<RocksCollabDB>,
 }
@@ -220,7 +222,6 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
 }
 
 const ROW_ID: &str = "id";
-const BLOCK_ID: &str = "bid";
 const ROW_VISIBILITY: &str = "visibility";
 const ROW_HEIGHT: &str = "height";
 const CREATED_AT: &str = "created_at";

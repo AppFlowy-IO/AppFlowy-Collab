@@ -11,7 +11,10 @@ use crate::keys::{
 };
 use crate::kv::KVEntry;
 use crate::kv::KVStore;
-use crate::{create_id_for_key, get_id_for_key, insert_doc_update, PersistenceError};
+use crate::snapshot::{get_snapshot_id, SnapshotAction};
+use crate::{
+  create_id_for_key, get_id_for_key, get_last_update_key, insert_doc_update, PersistenceError,
+};
 
 impl<'a, T> YrsDocAction<'a> for T
 where
@@ -100,11 +103,17 @@ where
   }
 
   /// Load the document from the database and apply the updates to the transaction.
+  /// It will try to load the document in these two ways:
+  ///   1. D = document state + updates
+  ///   2. D = document state + snapshot + updates
+  ///   The snapshot contains list of updates.
+  ///
   /// Return the number of updates
   fn load_doc<K: AsRef<[u8]> + ?Sized + Debug>(
     &self,
     uid: i64,
     object_id: &K,
+    enable_snapshot: bool,
     txn: &mut TransactionMut,
   ) -> Result<u32, PersistenceError> {
     let mut update_count = 0;
@@ -116,22 +125,32 @@ where
         let update = Update::decode_v1(doc_state.as_ref())?;
         txn.apply_update(update);
 
-        let update_start = make_doc_update_key(doc_id, 0);
+        // Find the latest snapshot
+        let mut update_start = make_doc_update_key(doc_id, 0).to_vec();
+        if enable_snapshot {
+          if let Some(snapshot) = get_snapshot_id(uid, self, object_id)
+            .and_then(|snapshot_id| self.get_last_snapshot_update(snapshot_id))
+          {
+            // Decode the data of the snapshot
+            let snapshot_update = Update::decode_v1(&snapshot.data)?;
+            txn.apply_update(snapshot_update);
+
+            // After applying the snapshot, we need to apply the updates after the snapshot
+            update_start = snapshot.update_key;
+          }
+        }
+
         let update_end = make_doc_update_key(doc_id, Clock::MAX);
         tracing::trace!(
           "🤲collab => [{}-{:?}]: Get update from {:?} to {:?}",
           doc_id,
           object_id,
-          update_start.as_ref(),
+          &update_start,
           update_end.as_ref(),
         );
 
-        let encoded_updates = self.range(update_start.as_ref()..=update_end.as_ref())?;
+        let encoded_updates = self.range(update_start.as_ref()..update_end.as_ref())?;
         for encoded_update in encoded_updates {
-          // if update_count == 3 {
-          //   continue;
-          // }
-          // tracing::trace!("{:?}", encoded_update.key());
           update_count += 1;
           let update = Update::decode_v1(encoded_update.value())?;
           txn.apply_update(update);
@@ -163,30 +182,28 @@ where
     uid: i64,
     object_id: &K,
     update: &[u8],
-  ) -> Result<(), PersistenceError> {
+  ) -> Result<Vec<u8>, PersistenceError> {
     match get_doc_id(uid, self, object_id.as_ref()) {
       None => {
         tracing::error!(
           "🔴Insert update failed. Can't find the doc for {:?}",
           object_id
         );
+        Err(PersistenceError::DocumentNotExist)
       },
-      Some(doc_id) => {
-        insert_doc_update(self, doc_id, object_id, update.to_vec())?;
-      },
+      Some(doc_id) => insert_doc_update(self, doc_id, object_id, update.to_vec()),
     }
-    Ok(())
   }
 
-  /// Remove all the updates for the given document
-  fn delete_all_updates<K: AsRef<[u8]> + ?Sized + Debug>(
+  /// Delete the updates that prior to the given key. The given key is not included.
+  fn delete_updates_to<K: AsRef<[u8]> + ?Sized + Debug>(
     &self,
     uid: i64,
     object_id: &K,
+    end: &[u8],
   ) -> Result<(), PersistenceError> {
     if let Some(doc_id) = get_doc_id(uid, self, object_id) {
-      let start = make_doc_start_key(doc_id);
-      let end = make_doc_end_key(doc_id);
+      let start = make_doc_update_key(doc_id, 0);
       self.remove_range(start.as_ref(), end.as_ref())?;
     }
     Ok(())
@@ -247,6 +264,15 @@ where
     } else {
       Err(PersistenceError::DocumentNotExist)
     }
+  }
+
+  fn get_doc_last_update_key<K: AsRef<[u8]> + ?Sized>(
+    &self,
+    uid: i64,
+    object_id: &K,
+  ) -> Option<Key<16>> {
+    let doc_id = get_doc_id(uid, self, object_id)?;
+    get_last_update_key(self, doc_id, make_doc_update_key).ok()
   }
 }
 

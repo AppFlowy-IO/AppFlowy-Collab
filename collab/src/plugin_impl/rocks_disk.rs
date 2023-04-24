@@ -38,7 +38,7 @@ impl RocksDiskPlugin {
     db: Arc<RocksCollabDB>,
     config: Config,
   ) -> Result<Self, CollabError> {
-    let update_count = Arc::new(AtomicU32::new(0));
+    let update_count = Arc::new(AtomicU32::new(1));
     let did_load = Arc::new(AtomicBool::new(false));
     Ok(Self {
       db,
@@ -54,18 +54,6 @@ impl RocksDiskPlugin {
     transaction.get_snapshots(self.uid, object_id)
   }
 
-  pub fn create_snapshot(&self, txn: &mut TransactionMut, object_id: &str) {
-    if let Err(e) = self.db.with_write_txn(|store| {
-      store.push_snapshot(self.uid, object_id, "".to_string(), txn)?;
-      if self.config.remove_updates_after_snapshot {
-        store.delete_all_updates(self.uid, object_id)?;
-      }
-      Ok(())
-    }) {
-      tracing::error!("🔴Generate snapshot failed: {}", e);
-    }
-  }
-
   fn increase_count(&self) -> u32 {
     self.update_count.fetch_add(1, SeqCst)
   }
@@ -74,8 +62,13 @@ impl RocksDiskPlugin {
 impl CollabPlugin for RocksDiskPlugin {
   fn init(&self, object_id: &str, txn: &mut TransactionMut) {
     let r_db_txn = self.db.read_txn();
+
+    // Check the document is exist or not
     if r_db_txn.is_exist(self.uid, object_id) {
-      let _ = r_db_txn.load_doc(self.uid, object_id, txn).unwrap();
+      // Safety: The document is exist, so it must be loaded successfully.
+      let _ = r_db_txn
+        .load_doc(self.uid, object_id, self.config.enable_snapshot, txn)
+        .unwrap();
       drop(r_db_txn);
 
       if self.config.flush_doc {
@@ -101,13 +94,26 @@ impl CollabPlugin for RocksDiskPlugin {
     self.did_load.store(true, Ordering::SeqCst);
   }
 
-  fn did_receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
+  fn did_receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
     // Only push update if the doc is loaded
     if !self.did_load.load(Ordering::SeqCst) {
       return;
     }
+    let count = self.increase_count();
+
+    // /Acquire a write txn to push update
     let result = self.db.with_write_txn(|w_db_txn| {
-      w_db_txn.push_update(self.uid, object_id, update)?;
+      let update_key = w_db_txn.push_update(self.uid, object_id, update)?;
+
+      if self.config.enable_snapshot {
+        // Insert snapshot if needed
+        if count != 0 && count % self.config.snapshot_per_update == 0 {
+          w_db_txn.push_snapshot(self.uid, object_id, update_key.clone(), txn)?;
+          if self.config.remove_updates_after_snapshot {
+            w_db_txn.delete_updates_to(self.uid, object_id, &update_key)?;
+          }
+        }
+      }
       Ok(())
     });
 
@@ -116,30 +122,25 @@ impl CollabPlugin for RocksDiskPlugin {
     }
   }
 
-  fn after_transaction(&self, object_id: &str, txn: &mut TransactionMut) {
-    // Only push update if the doc is loaded
-    if !self.did_load.load(Ordering::SeqCst) {
-      return;
-    }
-    let count = self.increase_count();
-    if count != 0 && count % self.config.snapshot_per_update == 0 {
-      self.create_snapshot(txn, object_id);
-    }
-  }
+  fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
 }
 
 #[derive(Clone)]
 pub struct Config {
+  /// Enable snapshot. Default is [false].
+  enable_snapshot: bool,
   /// Generate a snapshot every N updates
   /// Default is 100. The value must be greater than 0.
   snapshot_per_update: u32,
 
-  /// Remove updates after snapshot. Default is true.
+  /// Remove updates after snapshot. Default is [false].
   /// The snapshot contains all the updates before it. So it's safe to remove them.
   /// But if you want to keep the updates, you can set this to false.
   remove_updates_after_snapshot: bool,
 
-  /// Flush doc after init. Default is false.
+  /// Flush the document
+  /// After flush the document, all updates will be removed and the document state vector that
+  /// contains all the updates will be reset.
   flush_doc: bool,
 }
 
@@ -147,6 +148,11 @@ impl Config {
   pub fn new() -> Self {
     let config = Self::default();
     config
+  }
+
+  pub fn enable_snapshot(mut self, enable_snapshot: bool) -> Self {
+    self.enable_snapshot = enable_snapshot;
+    self
   }
 
   pub fn snapshot_per_update(mut self, snapshot_per_update: u32) -> Self {
@@ -169,6 +175,7 @@ impl Config {
 impl Default for Config {
   fn default() -> Self {
     Self {
+      enable_snapshot: false,
       snapshot_per_update: 100,
       remove_updates_after_snapshot: false,
       flush_doc: false,
