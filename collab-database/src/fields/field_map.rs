@@ -110,6 +110,17 @@ impl FieldMap {
     self.get_all_field_orders_with_txn(&txn)
   }
 
+  /// Returns the number of fields
+  pub fn number_of_fields(&self) -> usize {
+    let txn = self.container.transact();
+    self
+      .container
+      .iter(&txn)
+      .flat_map(|(_k, v)| field_id_from_value(v, &txn))
+      .collect::<Vec<String>>()
+      .len()
+  }
+
   /// Get all field orders with a transaction
   /// This is used to get the order of fields in the view
   pub fn get_all_field_orders_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<FieldOrder> {

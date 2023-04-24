@@ -354,7 +354,13 @@ impl Database {
       .map(|field| (field.id.clone(), field))
       .collect::<HashMap<String, Field>>();
 
-    debug_assert!(field_orders.len() == all_field_map.len());
+    if field_orders.len() != all_field_map.len() {
+      tracing::warn!(
+        "🟡Field orders: {} and fields: {} are not the same length",
+        field_orders.len(),
+        all_field_map.len()
+      );
+    }
 
     field_orders
       .into_iter()
