@@ -36,6 +36,7 @@ pub trait KVStore<'a> {
   fn next_back_entry(&self, key: &[u8]) -> Result<Option<Self::Entry>, Self::Error>;
 }
 
+/// This trait is used to represents as the generic Range of different implementation.
 pub trait KVRange<'a> {
   type Range: Iterator<Item = Self::Entry>;
   type Entry: KVEntry;
@@ -50,6 +51,7 @@ pub trait KVEntry {
   fn value(&self) -> &[u8];
 }
 
+/// Implement KVStore for Arc<T> where T: KVStore
 impl<T> KVStore<'static> for Arc<T>
 where
   T: KVStore<'static>,

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use rocksdb::Direction::Forward;
 use rocksdb::{
   DBIteratorWithThreadMode, Direction, IteratorMode, ReadOptions, Transaction, TransactionDB,
+  TransactionOptions, WriteOptions,
 };
 
 use crate::kv::{KVEntry, KVStore};
@@ -26,15 +27,29 @@ impl RocksKVStore {
 
   /// Return a read transaction that accesses the database exclusively.
   pub fn read_txn(&self) -> RocksKVStoreImpl<'_, TransactionDB> {
-    let txn = self.db.transaction();
+    let mut txn_options = TransactionOptions::default();
+    txn_options.set_snapshot(true);
+    let txn = self
+      .db
+      .transaction_opt(&WriteOptions::default(), &txn_options);
     RocksKVStoreImpl(txn)
   }
 
+  /// Create a write transaction that accesses the database exclusively.
+  /// The transaction will be committed when the closure [F] returns.
   pub fn with_write_txn<F, O>(&self, f: F) -> Result<O, PersistenceError>
   where
     F: FnOnce(&RocksKVStoreImpl<'_, TransactionDB>) -> Result<O, PersistenceError>,
   {
-    let txn = self.db.transaction();
+    let mut txn_options = TransactionOptions::default();
+    // Use snapshot to provides a consistent view of the data. This snapshot can then be used
+    // to perform read operations, and the returned data will be consistent with the database
+    // state at the time the snapshot was created, regardless of any subsequent modifications
+    // made by other transactions.
+    txn_options.set_snapshot(true);
+    let txn = self
+      .db
+      .transaction_opt(&WriteOptions::default(), &txn_options);
     let store = RocksKVStoreImpl(txn);
     let result = f(&store)?;
     store.0.commit()?;
@@ -42,8 +57,8 @@ impl RocksKVStore {
   }
 }
 
+/// Implementation of [KVStore] for [RocksKVStore]. This is a wrapper around [Transaction].
 pub struct RocksKVStoreImpl<'a, DB>(Transaction<'a, DB>);
-
 impl<'a, DB> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
   type Range = RocksDBRange<'a, DB>;
   type Entry = RocksDBEntry;
