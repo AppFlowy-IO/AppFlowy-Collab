@@ -119,7 +119,7 @@ fn remove_updates_after_each_snapshot_test() {
       expected: 4,
     },
     AssertDocument {
-      id: doc_id.clone(),
+      id: doc_id,
       expected: json!( {
         "1": 1.0,
         "2": 2.0,
@@ -252,7 +252,7 @@ fn gen_snapshot_test() {
   });
 
   test.run_script(AssertNumOfSnapshots {
-    id: doc_id.clone(),
+    id: doc_id,
     expected: 4,
   });
 }

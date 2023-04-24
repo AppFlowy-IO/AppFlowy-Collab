@@ -88,7 +88,7 @@ fn rocks_id_test() {
     .unwrap();
 
   let txn = rocks_db.read_txn();
-  let value = txn.get(&[0, 0, 0, 0, 0, 0, 0, 2]).unwrap().unwrap();
+  let value = txn.get([0, 0, 0, 0, 0, 0, 0, 2]).unwrap().unwrap();
   assert_eq!(value, &[0, 1, 3]);
 }
 

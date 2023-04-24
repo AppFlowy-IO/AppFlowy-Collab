@@ -68,26 +68,19 @@ impl RowDoc {
       (data, meta, comments)
     };
 
-    let (data, meta, comments) = if data.is_none() || meta.is_none() || comments.is_none() {
-      collab.with_transact_mut(|txn| {
-        let data = match data {
-          None => collab.create_map_with_txn(txn, DATA),
-          Some(cells) => cells,
-        };
-        let meta = match meta {
-          None => collab.create_map_with_txn(txn, META),
-          Some(meta) => meta,
-        };
-        let comments = match comments {
-          None => collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn, COMMENT, vec![]),
-          Some(comments) => comments,
-        };
-
-        (data, meta, comments)
-      })
+    let mut txn = if data.is_none() || meta.is_none() || comments.is_none() {
+      Some(collab.transact_mut())
     } else {
-      (data.unwrap(), meta.unwrap(), comments.unwrap())
+      None
     };
+
+    let data = data.unwrap_or_else(|| collab.create_map_with_txn(txn.as_mut().unwrap(), DATA));
+    let meta = meta.unwrap_or_else(|| collab.create_map_with_txn(txn.as_mut().unwrap(), META));
+    let comments = comments.unwrap_or_else(|| {
+      collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn.as_mut().unwrap(), COMMENT, vec![])
+    });
+
+    drop(txn);
 
     Self {
       uid,

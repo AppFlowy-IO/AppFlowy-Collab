@@ -85,12 +85,13 @@ impl Block {
 
   fn get_or_init_row(&self, row_id: RowId) -> Arc<RowDoc> {
     let row = self.cache.lock().get(&row_id).cloned();
-    if row.is_none() {
-      let row = Arc::new(RowDoc::new(self.uid, row_id, self.db.clone()));
-      self.cache.lock().put(row_id, row.clone());
-      row
-    } else {
-      row.unwrap()
+    match row {
+      None => {
+        let row = Arc::new(RowDoc::new(self.uid, row_id, self.db.clone()));
+        self.cache.lock().put(row_id, row.clone());
+        row
+      },
+      Some(row) => row,
     }
   }
 }

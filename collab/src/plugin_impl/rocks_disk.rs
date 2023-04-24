@@ -146,8 +146,7 @@ pub struct Config {
 
 impl Config {
   pub fn new() -> Self {
-    let config = Self::default();
-    config
+    Self::default()
   }
 
   pub fn enable_snapshot(mut self, enable_snapshot: bool) -> Self {
