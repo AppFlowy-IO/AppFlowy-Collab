@@ -152,9 +152,9 @@ where
 
         let encoded_updates = self.range(update_start.as_ref()..update_end.as_ref())?;
         for encoded_update in encoded_updates {
-          update_count += 1;
           let update = Update::decode_v1(encoded_update.value())?;
           txn.try_apply_update(update)?;
+          update_count += 1;
         }
       } else {
         tracing::error!(

@@ -17,6 +17,9 @@ pub struct RocksDiskPlugin {
   config: Config,
   db: Arc<RocksCollabDB>,
   did_load: Arc<AtomicBool>,
+  /// the number of updates on disk when opening the document
+  initial_update_count: Arc<AtomicU32>,
+  ///
   update_count: Arc<AtomicU32>,
 }
 
@@ -38,12 +41,14 @@ impl RocksDiskPlugin {
     db: Arc<RocksCollabDB>,
     config: Config,
   ) -> Result<Self, CollabError> {
-    let update_count = Arc::new(AtomicU32::new(1));
+    let initial_update_count = Arc::new(AtomicU32::new(0));
+    let update_count = Arc::new(AtomicU32::new(0));
     let did_load = Arc::new(AtomicBool::new(false));
     Ok(Self {
       db,
       uid,
       did_load,
+      initial_update_count,
       update_count,
       config,
     })
@@ -67,9 +72,10 @@ impl CollabPlugin for RocksDiskPlugin {
     // Check the document is exist or not
     if r_db_txn.is_exist(self.uid, object_id) {
       // Safety: The document is exist, so it must be loaded successfully.
-      let _ = r_db_txn
+      let update = r_db_txn
         .load_doc(self.uid, object_id, self.config.enable_snapshot, txn)
         .unwrap();
+      self.initial_update_count.store(update, Ordering::SeqCst);
       drop(r_db_txn);
 
       if self.config.flush_doc {
@@ -100,20 +106,24 @@ impl CollabPlugin for RocksDiskPlugin {
     if !self.did_load.load(Ordering::SeqCst) {
       return;
     }
-    let count = self.increase_count();
-
+    let mut count = self.increase_count();
     // /Acquire a write transaction to ensure consistency
     let result = self.db.with_write_txn(|w_db_txn| {
       let update_key = w_db_txn.push_update(self.uid, object_id, update)?;
-      if self.config.enable_snapshot && count != 0 && count % self.config.snapshot_per_update == 0 {
-        // Create a new snapshot that contains all the document data. This snapshot will be
-        // used to recover the document state. The new update is not included in the snapshot.
-        w_db_txn.push_snapshot(self.uid, object_id, update_key.clone(), txn)?;
-        if self.config.remove_updates_after_snapshot {
-          // Delete all the updates prior to the new update specified by the update key.
-          w_db_txn.delete_updates_to(self.uid, object_id, &update_key)?;
+
+      if self.config.enable_snapshot && count > 0 {
+        count += self.initial_update_count.load(Ordering::Acquire);
+        if count % self.config.snapshot_per_update == 0 {
+          // Create a new snapshot that contains all the document data. This snapshot will be
+          // used to recover the document state. The new update is not included in the snapshot.
+          w_db_txn.push_snapshot(self.uid, object_id, update_key.clone(), txn)?;
+          if self.config.remove_updates_after_snapshot {
+            // Delete all the updates prior to the new update specified by the update key.
+            w_db_txn.delete_updates_to(self.uid, object_id, &update_key)?;
+          }
         }
       }
+
       Ok(())
     });
 

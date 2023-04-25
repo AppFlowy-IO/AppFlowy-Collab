@@ -1,4 +1,6 @@
 use std::fmt::Debug;
+use std::panic;
+use std::panic::AssertUnwindSafe;
 
 use serde::{Deserialize, Serialize};
 use yrs::updates::encoder::{Encoder, EncoderV1};
@@ -38,7 +40,7 @@ where
     K2: Into<Vec<u8>>,
     T: ReadTxn,
   {
-    let data = encode_snapshot(txn);
+    let data = try_encode_snapshot(txn)?;
     let snapshot_id = self.create_snapshot_id(uid, object_id.as_ref())?;
     insert_snapshot_update(self, update_key, snapshot_id, object_id, data)?;
     Ok(())
@@ -116,13 +118,23 @@ where
   get_id_for_key(store, key)
 }
 
-fn encode_snapshot<T: ReadTxn>(txn: &T) -> Vec<u8> {
+fn try_encode_snapshot<T: ReadTxn>(txn: &T) -> Result<Vec<u8>, PersistenceError> {
   let snapshot = txn.snapshot();
   let mut encoder = EncoderV1::new();
-  txn
-    .encode_state_from_snapshot(&snapshot, &mut encoder)
-    .unwrap();
-  encoder.to_vec()
+  let mut encoded_data = vec![];
+  match {
+    let mut wrapper = AssertUnwindSafe(&mut encoded_data);
+    let wrapper_txn = AssertUnwindSafe(txn);
+    panic::catch_unwind(move || {
+      wrapper_txn
+        .encode_state_from_snapshot(&snapshot, &mut encoder)
+        .unwrap();
+      **wrapper = encoder.to_vec();
+    })
+  } {
+    Ok(_) => Ok(encoded_data),
+    Err(_) => Err(PersistenceError::InternalError),
+  }
 }
 
 #[derive(Serialize, Deserialize)]

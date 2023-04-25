@@ -74,24 +74,26 @@ pub struct CollabPersistenceTest {
   pub disk_plugin: RocksDiskPlugin,
   #[allow(dead_code)]
   cleaner: Cleaner,
-  pub db_path: PathBuf,
+  db: Arc<RocksCollabDB>,
+  config: Config,
 }
 
 impl CollabPersistenceTest {
   pub fn new(config: Config) -> Self {
     setup_log();
     let tempdir = TempDir::new().unwrap();
-    let path = tempdir.into_path();
+    let db_path = tempdir.into_path();
     let uid = 1;
-    let db = Arc::new(RocksCollabDB::open(path.clone()).unwrap());
-    let disk_plugin = RocksDiskPlugin::new_with_config(uid, db, config).unwrap();
-    let cleaner = Cleaner::new(path.clone());
+    let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
+    let disk_plugin = RocksDiskPlugin::new_with_config(uid, db.clone(), config.clone()).unwrap();
+    let cleaner = Cleaner::new(db_path);
     Self {
       uid,
       collabs: HashMap::default(),
       disk_plugin,
       cleaner,
-      db_path: path,
+      db,
+      config,
     }
   }
 
@@ -112,11 +114,13 @@ impl CollabPersistenceTest {
         self.collabs.insert(id, collab);
       },
       Script::OpenDocument { id } => {
+        self.disk_plugin =
+          RocksDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.clone()).unwrap();
+
         let collab = CollabBuilder::new(1, &id)
           .with_plugin(self.disk_plugin.clone())
           .build();
         collab.initial();
-
         self.collabs.insert(id, collab);
       },
       Script::CloseDocument { id } => {
