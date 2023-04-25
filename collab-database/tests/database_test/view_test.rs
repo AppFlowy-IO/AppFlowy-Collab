@@ -1,5 +1,5 @@
 use collab::preclude::lib0Any;
-use collab_database::database::{gen_row_id, DuplicatedDatabase};
+use collab_database::database::{gen_row_id, DatabaseData};
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
 use collab_database::views::{
@@ -210,7 +210,7 @@ fn duplicate_database_data_serde_test() {
   let duplicated_database = database_test.duplicate_database();
 
   let json = duplicated_database.to_json().unwrap();
-  let duplicated_database2 = DuplicatedDatabase::from_json(&json).unwrap();
+  let duplicated_database2 = DatabaseData::from_json(&json).unwrap();
   assert_eq!(
     duplicated_database.fields.len(),
     duplicated_database2.fields.len()

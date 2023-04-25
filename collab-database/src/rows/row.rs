@@ -7,6 +7,7 @@ use collab::preclude::{
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+
 use serde::{Deserialize, Serialize};
 
 use crate::database::timestamp;
@@ -121,7 +122,9 @@ impl RowDoc {
   pub fn delete(&self) {
     let _ = self.db.with_write_txn(|txn| {
       let row_id = self.row_id.to_string();
-      txn.delete_doc(self.uid, &row_id).unwrap();
+      if let Err(e) = txn.delete_doc(self.uid, &row_id) {
+        tracing::error!("🔴{}", e);
+      }
       Ok(())
     });
   }

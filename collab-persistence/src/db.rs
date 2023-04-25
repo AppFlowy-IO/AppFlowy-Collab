@@ -1,10 +1,13 @@
 use std::fmt::Debug;
 use std::io::Write;
 use std::ops::Deref;
+use std::panic;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
 use smallvec::SmallVec;
+use yrs::{TransactionMut, Update};
 
 use crate::error::PersistenceError;
 use crate::keys::{
@@ -90,6 +93,11 @@ where
   PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
   let update_key = create_update_key(doc_id, db, object_id, make_doc_update_key)?;
+  if let Ok(Some(_)) = db.get(update_key.as_ref()) {
+    // The duplicate key might corrupt the document data when restoring from the disk,
+    // So we return an error here.
+    return Err(PersistenceError::DuplicateUpdateKey);
+  }
   db.insert(update_key.as_ref(), value)?;
   Ok(update_key.to_vec())
 }
@@ -176,4 +184,22 @@ pub fn make_update_key_prefix(prefix: &[u8], oid: OID) -> Key<12> {
   let mut v: SmallVec<[u8; 12]> = SmallVec::from(prefix);
   v.write_all(&oid.to_be_bytes()).unwrap();
   Key(v)
+}
+
+// Extension trait for `TransactionMut`
+pub trait TransactionMutExt<'doc> {
+  /// Applies an update to the document. If the update is invalid, it will return an error.
+  /// It allows to catch panics from `apply_update`.
+  fn try_apply_update(&mut self, update: Update) -> Result<(), PersistenceError>;
+}
+
+impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
+  fn try_apply_update(&mut self, update: Update) -> Result<(), PersistenceError> {
+    match panic::catch_unwind(AssertUnwindSafe(|| {
+      self.apply_update(update);
+    })) {
+      Ok(_) => Ok(()),
+      Err(_) => Err(PersistenceError::InternalError),
+    }
+  }
 }

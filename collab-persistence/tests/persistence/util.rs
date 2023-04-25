@@ -16,7 +16,7 @@ pub fn sled_db() -> (PathBuf, SledCollabDB) {
   (path, SledCollabDB::open(cloned_path).unwrap())
 }
 
-pub fn rocks_db() -> (PathBuf, RocksCollabDB) {
+pub fn rocks_db(_uid: i64) -> (PathBuf, RocksCollabDB) {
   setup_log();
 
   let tempdir = TempDir::new().unwrap();

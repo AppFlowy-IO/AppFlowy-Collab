@@ -23,7 +23,7 @@ pub enum Script {
   OpenDocumentWithDiskPlugin {
     id: String,
   },
-  OpenDocumentWithSnapshotPlugin {
+  OpenDocument {
     id: String,
   },
   CloseDocument {
@@ -71,7 +71,7 @@ pub enum Script {
 pub struct CollabPersistenceTest {
   pub uid: i64,
   collabs: HashMap<String, Collab>,
-  disk_plugin: RocksDiskPlugin,
+  pub disk_plugin: RocksDiskPlugin,
   #[allow(dead_code)]
   cleaner: Cleaner,
   pub db_path: PathBuf,
@@ -111,7 +111,7 @@ impl CollabPersistenceTest {
         self.disk_plugin = plugin;
         self.collabs.insert(id, collab);
       },
-      Script::OpenDocumentWithSnapshotPlugin { id } => {
+      Script::OpenDocument { id } => {
         let collab = CollabBuilder::new(1, &id)
           .with_plugin(self.disk_plugin.clone())
           .build();

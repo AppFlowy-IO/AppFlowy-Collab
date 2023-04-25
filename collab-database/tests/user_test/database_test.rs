@@ -151,9 +151,7 @@ fn duplicate_database_data_test() {
   let test = user_database_with_default_data(random_uid());
   let original = test.get_database_with_view_id("v1").unwrap();
   let duplicated_data = test.get_database_duplicated_data("v1").unwrap();
-  let duplicate = test
-    .create_database_with_duplicated_data(duplicated_data)
-    .unwrap();
+  let duplicate = test.create_database_with_data(duplicated_data).unwrap();
 
   let duplicated_view_id = &duplicate.get_all_views_description()[0].id;
 

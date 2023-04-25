@@ -49,6 +49,7 @@ impl RocksDiskPlugin {
     })
   }
 
+  /// Return the snapshots for the given object id
   pub fn get_snapshots(&self, object_id: &str) -> Vec<CollabSnapshot> {
     let transaction = self.db.read_txn();
     transaction.get_snapshots(self.uid, object_id)
@@ -101,17 +102,16 @@ impl CollabPlugin for RocksDiskPlugin {
     }
     let count = self.increase_count();
 
-    // /Acquire a write txn to push update
+    // /Acquire a write transaction to ensure consistency
     let result = self.db.with_write_txn(|w_db_txn| {
       let update_key = w_db_txn.push_update(self.uid, object_id, update)?;
-
-      if self.config.enable_snapshot {
-        // Insert snapshot if needed
-        if count != 0 && count % self.config.snapshot_per_update == 0 {
-          w_db_txn.push_snapshot(self.uid, object_id, update_key.clone(), txn)?;
-          if self.config.remove_updates_after_snapshot {
-            w_db_txn.delete_updates_to(self.uid, object_id, &update_key)?;
-          }
+      if self.config.enable_snapshot && count != 0 && count % self.config.snapshot_per_update == 0 {
+        // Create a new snapshot that contains all the document data. This snapshot will be
+        // used to recover the document state. The new update is not included in the snapshot.
+        w_db_txn.push_snapshot(self.uid, object_id, update_key.clone(), txn)?;
+        if self.config.remove_updates_after_snapshot {
+          // Delete all the updates prior to the new update specified by the update key.
+          w_db_txn.delete_updates_to(self.uid, object_id, &update_key)?;
         }
       }
       Ok(())

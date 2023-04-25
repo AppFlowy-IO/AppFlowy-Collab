@@ -91,7 +91,7 @@ fn sled_multiple_thread_test() {
 
 #[test]
 fn rocks_multiple_thread_test() {
-  let (path, db) = rocks_db();
+  let (path, db) = rocks_db(1);
   let mut handles = vec![];
   for i in 0..100 {
     let cloned_db = db.clone();

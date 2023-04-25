@@ -14,6 +14,7 @@ use crate::kv::KVStore;
 use crate::snapshot::{get_snapshot_id, SnapshotAction};
 use crate::{
   create_id_for_key, get_id_for_key, get_last_update_key, insert_doc_update, PersistenceError,
+  TransactionMutExt,
 };
 
 impl<'a, T> YrsDocAction<'a> for T
@@ -106,7 +107,6 @@ where
   /// It will try to load the document in these two ways:
   ///   1. D = document state + updates
   ///   2. D = document state + snapshot + updates
-  ///   The snapshot contains list of updates.
   ///
   /// Return the number of updates
   fn load_doc<K: AsRef<[u8]> + ?Sized + Debug>(
@@ -123,9 +123,10 @@ where
       let doc_state_key = make_doc_state_key(doc_id);
       if let Some(doc_state) = self.get(doc_state_key.as_ref())? {
         let update = Update::decode_v1(doc_state.as_ref())?;
-        txn.apply_update(update);
+        txn.try_apply_update(update)?;
 
         // Find the latest snapshot
+        // TODO: retry load doc
         let mut update_start = make_doc_update_key(doc_id, 0).to_vec();
         if enable_snapshot {
           if let Some(snapshot) = get_snapshot_id(uid, self, object_id)
@@ -133,7 +134,7 @@ where
           {
             // Decode the data of the snapshot
             let snapshot_update = Update::decode_v1(&snapshot.data)?;
-            txn.apply_update(snapshot_update);
+            txn.try_apply_update(snapshot_update)?;
 
             // After applying the snapshot, we need to apply the updates after the snapshot
             update_start = snapshot.update_key;
@@ -153,7 +154,7 @@ where
         for encoded_update in encoded_updates {
           update_count += 1;
           let update = Update::decode_v1(encoded_update.value())?;
-          txn.apply_update(update);
+          txn.try_apply_update(update)?;
         }
       } else {
         tracing::error!(
@@ -221,14 +222,19 @@ where
       let key = make_doc_id_key(&uid.to_be_bytes(), object_id.as_ref());
       let _ = self.remove(key.as_ref());
 
+      // Delete the updates
       let start = make_doc_start_key(did);
       let end = make_doc_end_key(did);
       self.remove_range(start.as_ref(), end.as_ref())?;
 
+      // Delete the document state and the state vector
       let doc_state_key = make_doc_state_key(did);
       let sv_key = make_state_vector_key(did);
       let _ = self.remove(doc_state_key.as_ref());
       let _ = self.remove(sv_key.as_ref());
+
+      // Delete the snapshot
+      self.delete_snapshot(uid, object_id)?;
     }
     Ok(())
   }

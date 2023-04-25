@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use rocksdb::Direction::Forward;
 use rocksdb::{
-  DBIteratorWithThreadMode, Direction, IteratorMode, ReadOptions, Transaction, TransactionDB,
-  TransactionOptions, WriteOptions,
+  ColumnFamilyDescriptor, DBIteratorWithThreadMode, Direction, IteratorMode, Options, ReadOptions,
+  Transaction, TransactionDB, TransactionDBOptions, TransactionOptions, WriteOptions,
 };
 
 use crate::kv::{KVEntry, KVStore};
@@ -21,7 +21,34 @@ pub struct RocksKVStore {
 
 impl RocksKVStore {
   pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
-    let db = Arc::new(TransactionDB::open_default(path)?);
+    let txn_db_opts = TransactionDBOptions::default();
+    let mut db_opts = Options::default();
+    db_opts.create_if_missing(true);
+    let db = Arc::new(TransactionDB::open(&db_opts, &txn_db_opts, path)?);
+    Ok(Self { db })
+  }
+
+  pub fn open_with_cfs(
+    names: Vec<String>,
+    path: impl AsRef<Path>,
+  ) -> Result<Self, PersistenceError> {
+    let txn_db_opts = TransactionDBOptions::default();
+    let mut db_opts = Options::default();
+    db_opts.create_if_missing(true);
+    db_opts.create_missing_column_families(true);
+
+    // CFs
+    let cf_opts = Options::default();
+    let cfs = names
+      .into_iter()
+      .map(|name| ColumnFamilyDescriptor::new(name, cf_opts.clone()))
+      .collect::<Vec<_>>();
+    let db = Arc::new(TransactionDB::open_cf_descriptors(
+      &db_opts,
+      &txn_db_opts,
+      path,
+      cfs,
+    )?);
     Ok(Self { db })
   }
 
@@ -59,6 +86,7 @@ impl RocksKVStore {
 
 /// Implementation of [KVStore] for [RocksKVStore]. This is a wrapper around [Transaction].
 pub struct RocksKVStoreImpl<'a, DB>(Transaction<'a, DB>);
+
 impl<'a, DB> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
   type Range = RocksDBRange<'a, DB>;
   type Entry = RocksDBEntry;
@@ -125,9 +153,11 @@ impl<'a, DB> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
       ops::Bound::Unbounded => {},
     };
     let iterator_mode = IteratorMode::From(from, Forward);
-    let raw = self.0.iterator_opt(iterator_mode, opt);
+    let iter = self.0.iterator_opt(iterator_mode, opt);
     Ok(RocksDBRange {
-      inner: unsafe { std::mem::transmute(raw) },
+      // Safe to transmute because the lifetime of the iterator is the same as the lifetime of the
+      // transaction.
+      inner: unsafe { std::mem::transmute(iter) },
       to: to.to_vec(),
     })
   }

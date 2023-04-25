@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use collab::plugin_impl::rocks_disk::Config;
-use collab_database::database::DuplicatedDatabase;
+use collab_database::database::DatabaseData;
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
@@ -82,7 +82,7 @@ impl DatabaseTest {
   }
 
   #[allow(dead_code)]
-  pub fn get_database_data(&self, database_id: &str) -> DuplicatedDatabase {
+  pub fn get_database_data(&self, database_id: &str) -> DatabaseData {
     let database = self.user_database.lock().get_database(database_id).unwrap();
     database.duplicate_database()
   }

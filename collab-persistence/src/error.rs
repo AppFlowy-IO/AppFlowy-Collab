@@ -20,6 +20,9 @@ pub enum PersistenceError {
   #[error("invalid data")]
   InvalidData,
 
+  #[error("Duplicate update key")]
+  DuplicateUpdateKey,
+
   #[error("Internal error")]
   InternalError,
 }

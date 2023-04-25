@@ -4,6 +4,37 @@ use collab::plugin_impl::rocks_disk::Config;
 use serde_json::json;
 
 #[test]
+fn disable_snapshot_test() {
+  let mut test = CollabPersistenceTest::new(
+    Config::new()
+      .enable_snapshot(false)
+      .snapshot_per_update(5)
+      .remove_updates_after_snapshot(true),
+  );
+  let doc_id = "1".to_string();
+  test.run_scripts(vec![OpenDocument { id: doc_id.clone() }]);
+
+  for i in 1..=20 {
+    test.run_script(InsertKeyValue {
+      id: doc_id.clone(),
+      key: i.to_string(),
+      value: i.into(),
+    });
+  }
+
+  test.run_scripts(vec![
+    AssertNumOfUpdates {
+      id: doc_id.clone(),
+      expected: 20,
+    },
+    AssertNumOfSnapshots {
+      id: doc_id,
+      expected: 0,
+    },
+  ]);
+}
+
+#[test]
 fn remove_updates_after_each_snapshot_test() {
   let snapshot_per_update = 5;
   let mut test = CollabPersistenceTest::new(
@@ -13,7 +44,7 @@ fn remove_updates_after_each_snapshot_test() {
       .remove_updates_after_snapshot(true),
   );
   let doc_id = "1".to_string();
-  test.run_scripts(vec![OpenDocumentWithSnapshotPlugin { id: doc_id.clone() }]);
+  test.run_scripts(vec![OpenDocument { id: doc_id.clone() }]);
 
   for i in 1..=20 {
     test.run_script(InsertKeyValue {
@@ -28,6 +59,8 @@ fn remove_updates_after_each_snapshot_test() {
           id: doc_id.clone(),
           snapshot_index: (i / 5) as usize - 1,
         },
+        // When remove_updates_after_snapshot is true, the number of updates should be
+        // removed. So the number of updates should be 1.
         AssertNumOfUpdates {
           id: doc_id.clone(),
           expected: 1,
@@ -155,7 +188,7 @@ fn gen_snapshot_test() {
       .snapshot_per_update(snapshot_per_update),
   );
   let doc_id = "1".to_string();
-  test.run_scripts(vec![OpenDocumentWithSnapshotPlugin { id: doc_id.clone() }]);
+  test.run_scripts(vec![OpenDocument { id: doc_id.clone() }]);
 
   for i in 1..=20 {
     test.run_script(InsertKeyValue {

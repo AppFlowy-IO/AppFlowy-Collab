@@ -10,7 +10,7 @@ use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use parking_lot::RwLock;
 
 use crate::blocks::Block;
-use crate::database::{Database, DatabaseContext, DuplicatedDatabase};
+use crate::database::{Database, DatabaseContext, DatabaseData};
 use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::user::relation::{DatabaseRelation, RowRelationMap};
@@ -139,13 +139,13 @@ impl UserDatabase {
   }
 
   /// Create database with the data duplicated from the given database.
-  /// The [DuplicatedDatabase] contains all the database data. It can be
+  /// The [DatabaseData] contains all the database data. It can be
   /// used to restore the database from the backup.
-  pub fn create_database_with_duplicated_data(
+  pub fn create_database_with_data(
     &self,
-    data: DuplicatedDatabase,
+    data: DatabaseData,
   ) -> Result<Arc<Database>, DatabaseError> {
-    let DuplicatedDatabase { view, fields, rows } = data;
+    let DatabaseData { view, fields, rows } = data;
     let params = CreateDatabaseParams::from_view(view, fields, rows);
     let database = self.create_database(params)?;
     Ok(database)
@@ -167,15 +167,10 @@ impl UserDatabase {
   /// Delete the database with the given database id.
   pub fn delete_database(&self, database_id: &str) {
     self.database_records.delete_database(database_id);
-    let _ = self.db.with_write_txn(|store| {
-      match store.delete_doc(self.uid, database_id) {
+    let _ = self.db.with_write_txn(|w_db_txn| {
+      match w_db_txn.delete_doc(self.uid, database_id) {
         Ok(_) => {},
         Err(err) => tracing::error!("🔴Delete database failed: {}", err),
-      }
-
-      match store.delete_snapshot(self.uid, database_id) {
-        Ok(_) => {},
-        Err(err) => tracing::error!("🔴 Delete snapshot failed: {}", err),
       }
       Ok(())
     });
@@ -228,17 +223,14 @@ impl UserDatabase {
 
   /// Duplicate the database that contains the view.
   pub fn duplicate_database(&self, view_id: &str) -> Result<Arc<Database>, DatabaseError> {
-    let DuplicatedDatabase { view, fields, rows } = self.get_database_duplicated_data(view_id)?;
+    let DatabaseData { view, fields, rows } = self.get_database_duplicated_data(view_id)?;
     let params = CreateDatabaseParams::from_view(view, fields, rows);
     let database = self.create_database(params)?;
     Ok(database)
   }
 
   /// Duplicate the database with the given view id.
-  pub fn get_database_duplicated_data(
-    &self,
-    view_id: &str,
-  ) -> Result<DuplicatedDatabase, DatabaseError> {
+  pub fn get_database_duplicated_data(&self, view_id: &str) -> Result<DatabaseData, DatabaseError> {
     if let Some(database) = self.get_database_with_view_id(view_id) {
       let data = database.duplicate_database();
       Ok(data)

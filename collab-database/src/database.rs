@@ -709,7 +709,7 @@ impl Database {
     })
   }
 
-  pub fn duplicate_database(&self) -> DuplicatedDatabase {
+  pub fn duplicate_database(&self) -> DatabaseData {
     let inline_view_id = self.get_inline_view_id();
     let txn = self.root.transact();
     let timestamp = timestamp();
@@ -732,7 +732,7 @@ impl Database {
 
     view.id = gen_database_view_id();
     view.database_id = gen_database_id();
-    DuplicatedDatabase { view, fields, rows }
+    DatabaseData { view, fields, rows }
   }
 
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
@@ -848,14 +848,16 @@ pub fn timestamp() -> i64 {
   chrono::Utc::now().timestamp()
 }
 
+/// DatabaseData contains all the data of a database.
+/// It's used to export and import a database. For example, duplicating a database
 #[derive(Clone, Serialize, Deserialize)]
-pub struct DuplicatedDatabase {
+pub struct DatabaseData {
   pub view: DatabaseView,
   pub fields: Vec<Field>,
   pub rows: Vec<CreateRowParams>,
 }
 
-impl DuplicatedDatabase {
+impl DatabaseData {
   pub fn to_json(&self) -> Result<String, DatabaseError> {
     let s = serde_json::to_string(self)?;
     Ok(s)
