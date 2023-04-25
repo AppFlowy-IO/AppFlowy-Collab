@@ -73,7 +73,7 @@ impl KVStore<'static> for SledKVStoreImpl {
 
   fn remove_range(&self, from: &[u8], to: &[u8]) -> Result<(), Self::Error> {
     let mut batch = Batch::default();
-    let iter = self.0.write().range(from..=to);
+    let iter = self.0.write().range(from..to);
     for key in iter {
       let key = key?.0;
       batch.remove(key);
@@ -102,20 +102,6 @@ impl KVStore<'static> for SledKVStoreImpl {
     }
   }
 }
-
-// fn range2<'a, K, R, RI>(&self, range: R) -> Result<RI, Self::Error>
-// where
-//   K: AsRef<[u8]>,
-//   R: RangeBounds<K>,
-//   RI: KVRange<'a, Range = Self::Range, Entry = Self::Entry, Error = Self::Error>,
-// {
-//   let kv = SledKVRange {
-//     db: &self.0,
-//     range,
-//     phantom: Default::default(),
-//   };
-//   Ok(kv)
-// }
 
 pub struct SledKVRange<'a, K: AsRef<[u8]>, B: RangeBounds<K>> {
   db: &'a Arc<Db>,

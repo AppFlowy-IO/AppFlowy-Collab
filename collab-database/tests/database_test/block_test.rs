@@ -1,5 +1,6 @@
+use collab_database::rows::CreateRowParams;
+
 use crate::database_test::helper::create_database;
-use collab_database::block::CreateRowParams;
 
 #[test]
 fn create_rows_test() {

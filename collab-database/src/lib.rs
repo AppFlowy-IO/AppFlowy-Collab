@@ -8,6 +8,6 @@ pub mod views;
 
 #[macro_use]
 mod macros;
-pub mod block;
+pub mod blocks;
 mod database_serde;
 pub mod error;

@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
-use collab::plugin_impl::rocks_snapshot::RocksSnapshotPlugin;
+use collab::plugin_impl::rocks_disk::{Config, RocksDiskPlugin};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, Update};
 use collab_persistence::doc::YrsDocAction;
@@ -10,17 +9,12 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use parking_lot::RwLock;
 
-use crate::block::Blocks;
-use crate::database::{Database, DatabaseContext, DuplicatedDatabase};
+use crate::blocks::Block;
+use crate::database::{Database, DatabaseContext, DatabaseData};
 use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::user::relation::{DatabaseRelation, RowRelationMap};
 use crate::views::{CreateDatabaseParams, CreateViewParams};
-
-#[derive(Clone, Default)]
-pub struct Config {
-  pub can_flush: bool,
-}
 
 /// A [UserDatabase] represents a user's database.
 pub struct UserDatabase {
@@ -30,7 +24,7 @@ pub struct UserDatabase {
   collab: Collab,
   /// It used to keep track of the blocks. Each block contains a list of [Row]s
   /// A database rows will be stored in multiple blocks.
-  blocks: Blocks,
+  block: Block,
   /// It used to keep track of the database records.
   database_records: DatabaseArray,
   /// It used to keep track of the database relations.
@@ -48,23 +42,21 @@ impl UserDatabase {
   pub fn new(uid: i64, db: Arc<RocksCollabDB>, config: Config) -> Self {
     tracing::trace!("Init user database: {}", uid);
     // user database
-    let disk_plugin = RocksDiskPlugin::new_with_config(uid, db.clone(), config.can_flush).unwrap();
-    let snapshot_plugin = RocksSnapshotPlugin::new(uid, db.clone(), 5).unwrap();
+    let disk_plugin = RocksDiskPlugin::new_with_config(uid, db.clone(), config.clone()).unwrap();
     let collab = CollabBuilder::new(uid, format!("{}_user_database", uid))
       .with_plugin(disk_plugin)
-      .with_plugin(snapshot_plugin)
       .build();
     collab.initial();
     let databases = create_user_database_if_not_exist(&collab);
     let database_records = DatabaseArray::new(databases);
     let database_relation = DatabaseRelation::new(create_relations_collab(uid, db.clone()));
-    let blocks = Blocks::new(uid, db.clone());
+    let block = Block::new(uid, db.clone());
 
     Self {
       uid,
       db,
       collab,
-      blocks,
+      block,
       database_records,
       open_handlers: Default::default(),
       database_relation,
@@ -81,10 +73,13 @@ impl UserDatabase {
     let database = self.open_handlers.read().get(database_id).cloned();
     match database {
       None => {
-        let blocks = self.blocks.clone();
+        let blocks = self.block.clone();
         let collab = self.collab_for_database(database_id);
         collab.initial();
-        let context = DatabaseContext { collab, blocks };
+        let context = DatabaseContext {
+          collab,
+          block: blocks,
+        };
         let database = Arc::new(Database::get_or_create(database_id, context).ok()?);
         self
           .open_handlers
@@ -123,8 +118,11 @@ impl UserDatabase {
 
     // Create a [Collab] for the given database id.
     let collab = self.collab_for_database(&params.database_id);
-    let blocks = self.blocks.clone();
-    let context = DatabaseContext { collab, blocks };
+    let blocks = self.block.clone();
+    let context = DatabaseContext {
+      collab,
+      block: blocks,
+    };
     context.collab.initial();
 
     // Add a new database record.
@@ -141,13 +139,13 @@ impl UserDatabase {
   }
 
   /// Create database with the data duplicated from the given database.
-  /// The [DuplicatedDatabase] contains all the database data. It can be
+  /// The [DatabaseData] contains all the database data. It can be
   /// used to restore the database from the backup.
-  pub fn create_database_with_duplicated_data(
+  pub fn create_database_with_data(
     &self,
-    data: DuplicatedDatabase,
+    data: DatabaseData,
   ) -> Result<Arc<Database>, DatabaseError> {
-    let DuplicatedDatabase { view, fields, rows } = data;
+    let DatabaseData { view, fields, rows } = data;
     let params = CreateDatabaseParams::from_view(view, fields, rows);
     let database = self.create_database(params)?;
     Ok(database)
@@ -169,15 +167,10 @@ impl UserDatabase {
   /// Delete the database with the given database id.
   pub fn delete_database(&self, database_id: &str) {
     self.database_records.delete_database(database_id);
-    let _ = self.db.with_write_txn(|store| {
-      match store.delete_doc(self.uid, database_id) {
+    let _ = self.db.with_write_txn(|w_db_txn| {
+      match w_db_txn.delete_doc(self.uid, database_id) {
         Ok(_) => {},
         Err(err) => tracing::error!("🔴Delete database failed: {}", err),
-      }
-
-      match store.delete_snapshot(self.uid, database_id) {
-        Ok(_) => {},
-        Err(err) => tracing::error!("🔴 Delete snapshot failed: {}", err),
       }
       Ok(())
     });
@@ -212,7 +205,7 @@ impl UserDatabase {
 
     let context = DatabaseContext {
       collab,
-      blocks: self.blocks.clone(),
+      block: self.block.clone(),
     };
     Database::get_or_create(database_id, context)
   }
@@ -230,17 +223,14 @@ impl UserDatabase {
 
   /// Duplicate the database that contains the view.
   pub fn duplicate_database(&self, view_id: &str) -> Result<Arc<Database>, DatabaseError> {
-    let DuplicatedDatabase { view, fields, rows } = self.get_database_duplicated_data(view_id)?;
+    let DatabaseData { view, fields, rows } = self.get_database_duplicated_data(view_id)?;
     let params = CreateDatabaseParams::from_view(view, fields, rows);
     let database = self.create_database(params)?;
     Ok(database)
   }
 
   /// Duplicate the database with the given view id.
-  pub fn get_database_duplicated_data(
-    &self,
-    view_id: &str,
-  ) -> Result<DuplicatedDatabase, DatabaseError> {
+  pub fn get_database_duplicated_data(&self, view_id: &str) -> Result<DatabaseData, DatabaseError> {
     if let Some(database) = self.get_database_with_view_id(view_id) {
       let data = database.duplicate_database();
       Ok(data)
@@ -256,11 +246,9 @@ impl UserDatabase {
   /// Create a new [Collab] instance for given database id.
   fn collab_for_database(&self, database_id: &str) -> Collab {
     let disk_plugin =
-      RocksDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.can_flush).unwrap();
-    let snapshot_plugin = RocksSnapshotPlugin::new(self.uid, self.db.clone(), 6).unwrap();
+      RocksDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.clone()).unwrap();
     CollabBuilder::new(self.uid, database_id)
       .with_plugin(disk_plugin)
-      .with_plugin(snapshot_plugin)
       .build()
   }
 }

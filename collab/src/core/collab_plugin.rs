@@ -1,13 +1,25 @@
 use std::sync::Arc;
+
 use yrs::{Transaction, TransactionMut};
 
 pub trait CollabPlugin: Send + Sync + 'static {
+  /// Called when the plugin is initialized.
+  /// The will apply the updates to the current [TransactionMut] which will restore the state of
+  /// the document.
   fn init(&self, _object_id: &str, _txn: &mut TransactionMut) {}
+
+  /// Called when the plugin is initialized.
   fn did_init(&self, _object_id: &str, _txn: &Transaction) {}
+
+  /// Called when the plugin receives an update. It happens after the [TransactionMut] commit to
+  /// the Yjs document.
   fn did_receive_update(&self, _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
+
+  /// Called after each [TransactionMut]
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
 }
 
+/// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
 impl<T> CollabPlugin for Box<T>
 where
   T: CollabPlugin,

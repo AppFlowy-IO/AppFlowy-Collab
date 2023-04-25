@@ -42,7 +42,7 @@ fn sled_id_test() {
 
 #[test]
 fn rocks_id_test() {
-  let rocks_db = rocks_db().1;
+  let rocks_db = rocks_db(1).1;
   rocks_db
     .with_write_txn(|store| {
       store.insert([0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 1]).unwrap();
@@ -70,6 +70,29 @@ fn rocks_id_test() {
     .expect("No entry found prior to the given key")
     .unwrap();
   println!("{:?}", last_entry_prior.value());
+
+  // The start key is exclusive
+  let txn = rocks_db.read_txn();
+  let mut range = txn
+    .range([0, 0, 0, 0, 0, 0, 0, 0]..[0, 0, 0, 0, 0, 0, 0, 2])
+    .unwrap();
+  assert_eq!(range.next().unwrap().value(), &[0, 1, 1]);
+  assert_eq!(range.next().unwrap().value(), &[0, 1, 2]);
+  assert!(range.next().is_none());
+
+  // The end key is exclusive
+  rocks_db
+    .with_write_txn(|txn| {
+      txn
+        .remove_range(&[0, 0, 0, 0, 0, 0, 0, 0], &[0, 0, 0, 0, 0, 0, 0, 2])
+        .unwrap();
+      Ok(())
+    })
+    .unwrap();
+
+  let txn = rocks_db.read_txn();
+  let value = txn.get([0, 0, 0, 0, 0, 0, 0, 2]).unwrap().unwrap();
+  assert_eq!(value, &[0, 1, 3]);
 }
 
 #[test]

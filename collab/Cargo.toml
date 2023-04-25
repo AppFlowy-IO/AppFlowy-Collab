@@ -26,3 +26,9 @@ collab-derive = { path = "../collab-derive" }
 nanoid = "0.4.0"
 chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
 assert-json-diff = "2.0.2"
+tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+
+[features]
+default = ["rocksdb"]
+sled = ["collab-persistence/sled_db"]
+rocksdb = ["collab-persistence/rocksdb_db"]

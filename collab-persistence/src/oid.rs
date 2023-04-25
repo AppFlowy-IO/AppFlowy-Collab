@@ -1,7 +1,9 @@
 #![allow(clippy::upper_case_acronyms)]
+
+use std::time::SystemTime;
+
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
-use std::time::SystemTime;
 
 const EPOCH: u64 = 1637806706000;
 const NODE_BITS: u64 = 8;
@@ -13,10 +15,11 @@ const SCOPE_SHIFT: u64 = TIMESTAMP_BITS + TIMESTAMP_SHIFT;
 const SEQUENCE_MASK: u64 = (1 << SEQUENCE_BITS) - 1;
 
 pub type OID = u64;
+
 pub const OID_LEN: usize = 8;
 
 lazy_static! {
-  pub static ref OID_GEN: Mutex<OIDGen> = Mutex::new(OIDGen::new(1));
+  pub static ref OID_GEN: Mutex<OIDGen> = Mutex::new(OIDGen::new(0));
 }
 
 pub struct OIDGen {
@@ -78,24 +81,25 @@ impl OIDGen {
 //   use std::thread;
 //
 //   use parking_lot::RwLock;
-//
-//   use crate::oid::OID_GEN;
+//   use crate::oid::{EPOCH, OID_GEN};
 //
 //   #[test]
 //   fn test_oid_gen() {
 //     let mut map = Arc::new(RwLock::new(HashMap::new()));
 //
 //     let mut handles = vec![];
-//     for i in 0..1000 {
+//     for i in 0..1 {
 //       let cloned_map = map.clone();
 //       let handle = thread::spawn(move || {
-//         let id = OID_GEN.lock().next_id();
-//         println!("id: {}", id);
+//         let mut a = OID_GEN.lock();
+//         let id = a.next_id();
+//         println!("id: {:b}", a.last_timestamp - EPOCH);
 //         println!("id: {:b}", id);
-//         println!("id: {:?}", id.to_be_bytes().as_ref());
 //         if cloned_map.read().contains_key(&id) {
 //           panic!("id: {} is duplicated!", id);
 //         }
+//         //          101001010010110010010010100011100111
+//         // 10 000000101001010010110010010010100011100111 00000001 000000000000
 //         cloned_map.write().insert(id, id);
 //       });
 //       handles.push(handle);

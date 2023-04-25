@@ -8,13 +8,13 @@ use collab::preclude::{
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 
-use crate::block::{Blocks, CreateRowParams};
+use crate::blocks::Block;
 use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
-use crate::id_gen::ID_GEN;
+use crate::id_gen::ROW_ID_GEN;
 use crate::meta::MetaMap;
-use crate::rows::{Row, RowCell, RowId, RowUpdate};
+use crate::rows::{CreateRowParams, Row, RowCell, RowId, RowUpdate};
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, DatabaseLayout, DatabaseView, FieldOrder, FilterMap,
   GroupSettingMap, LayoutSetting, RowOrder, SortMap, ViewDescription, ViewMap,
@@ -27,7 +27,7 @@ pub struct Database {
   pub views: Rc<ViewMap>,
   pub fields: Rc<FieldMap>,
   pub metas: Rc<MetaMap>,
-  pub blocks: Blocks,
+  pub block: Block,
 }
 
 const DATABASE_ID: &str = "id";
@@ -38,7 +38,7 @@ const METAS: &str = "metas";
 
 pub struct DatabaseContext {
   pub collab: Collab,
-  pub blocks: Blocks,
+  pub block: Block,
 }
 
 impl Database {
@@ -52,7 +52,7 @@ impl Database {
     // Get or create a empty database with the given database_id
     let this = Self::get_or_create(&params.database_id, context)?;
     let (rows, fields, params) = params.split();
-    let row_orders = this.blocks.create_rows(rows);
+    let row_orders = this.block.create_rows(rows);
     let field_orders = fields.iter().map(FieldOrder::from).collect();
 
     this.root.with_transact_mut(|txn| {
@@ -108,7 +108,7 @@ impl Database {
         Ok(Self {
           inner: collab,
           root: database,
-          blocks: context.blocks,
+          block: context.block,
           views: Rc::new(views),
           fields: Rc::new(fields),
           metas: Rc::new(metas),
@@ -155,7 +155,7 @@ impl Database {
     Ok(Self {
       inner: collab,
       root: database,
-      blocks: context.blocks,
+      block: context.block,
       views: Rc::new(views),
       fields: Rc::new(fields),
       metas: Rc::new(metas),
@@ -179,7 +179,7 @@ impl Database {
   /// reference the given database. Return the row order if the row is
   /// created successfully. Otherwise, return None.
   pub fn create_row(&self, params: CreateRowParams) -> Option<RowOrder> {
-    let row_order = self.blocks.create_row(params)?;
+    let row_order = self.block.create_row(params);
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |update| {
         update.push_row_order(&row_order);
@@ -211,18 +211,15 @@ impl Database {
     params: CreateRowParams,
   ) -> Option<(usize, RowOrder)> {
     let prev_row_id = params.prev_row_id.map(|value| value.to_string());
-    if let Some(row_order) = self.blocks.create_row(params) {
-      self.views.update_all_views_with_txn(txn, |update| {
-        update.insert_row_order(&row_order, prev_row_id.as_ref());
-      });
+    let row_order = self.block.create_row(params);
+    self.views.update_all_views_with_txn(txn, |update| {
+      update.insert_row_order(&row_order, prev_row_id.as_ref());
+    });
 
-      let index = self
-        .index_of_row_with_txn(txn, view_id, row_order.id)
-        .unwrap_or_default();
-      Some((index, row_order))
-    } else {
-      None
-    }
+    let index = self
+      .index_of_row_with_txn(txn, view_id, row_order.id)
+      .unwrap_or_default();
+    Some((index, row_order))
   }
 
   /// Remove the row
@@ -232,8 +229,8 @@ impl Database {
       self.views.update_all_views_with_txn(txn, |update| {
         update.remove_row_order(&row_id.to_string());
       });
-      let row = self.blocks.get_row(row_id);
-      self.blocks.remove_row(row_id);
+      let row = self.block.get_row(row_id);
+      self.block.delete_row(&row_id);
       row
     })
   }
@@ -244,7 +241,7 @@ impl Database {
     F: FnOnce(RowUpdate),
     R: Into<RowId>,
   {
-    self.blocks.update_row(row_id, f);
+    self.block.update_row(row_id, f);
   }
 
   /// Return the index of the row in the given view.
@@ -269,7 +266,7 @@ impl Database {
   where
     R: Into<RowId>,
   {
-    self.blocks.get_row(row_id.into())
+    self.block.get_row(row_id.into())
   }
 
   /// Return a list of [Row] for the given view.
@@ -283,7 +280,7 @@ impl Database {
   /// The rows here is ordered by the [RowOrder] of the view.
   pub fn get_rows_for_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<Row> {
     let row_orders = self.views.get_row_orders_with_txn(txn, view_id);
-    self.blocks.get_rows_from_row_orders(&row_orders)
+    self.block.get_rows_from_row_orders(&row_orders)
   }
 
   /// Return a list of [RowCell] for the given view and field.
@@ -294,7 +291,7 @@ impl Database {
 
   /// Return the [RowCell] with the given row id and field id.
   pub fn get_cell(&self, field_id: &str, row_id: RowId) -> Option<RowCell> {
-    let cell = self.blocks.get_cell(field_id, row_id)?;
+    let cell = self.block.get_cell(row_id, field_id)?;
     Some(RowCell::new(row_id, cell))
   }
 
@@ -306,7 +303,7 @@ impl Database {
     field_id: &str,
   ) -> Vec<RowCell> {
     let row_orders = self.views.get_row_orders_with_txn(txn, view_id);
-    let rows = self.blocks.get_rows_from_row_orders(&row_orders);
+    let rows = self.block.get_rows_from_row_orders(&row_orders);
     rows
       .into_iter()
       .flat_map(|row| match row.cells.get(field_id).cloned() {
@@ -357,7 +354,13 @@ impl Database {
       .map(|field| (field.id.clone(), field))
       .collect::<HashMap<String, Field>>();
 
-    debug_assert!(field_orders.len() == all_field_map.len());
+    if field_orders.len() != all_field_map.len() {
+      tracing::warn!(
+        "🟡Field orders: {} and fields: {} are not the same length",
+        field_orders.len(),
+        all_field_map.len()
+      );
+    }
 
     field_orders
       .into_iter()
@@ -669,7 +672,7 @@ impl Database {
   /// Duplicate a row
   pub fn duplicate_row(&self, view_id: &str, row_id: RowId) -> Option<(usize, RowOrder)> {
     self.root.with_transact_mut(|txn| {
-      if let Some(row) = self.blocks.get_row(row_id) {
+      if let Some(row) = self.block.get_row(row_id) {
         let params = CreateRowParams {
           id: gen_row_id(),
           cells: row.cells,
@@ -706,7 +709,7 @@ impl Database {
     })
   }
 
-  pub fn duplicate_database(&self) -> DuplicatedDatabase {
+  pub fn duplicate_database(&self) -> DatabaseData {
     let inline_view_id = self.get_inline_view_id();
     let txn = self.root.transact();
     let timestamp = timestamp();
@@ -714,7 +717,7 @@ impl Database {
     let fields = self.get_fields_with_txn(&txn, &inline_view_id, None);
     let row_orders = self.views.get_row_orders_with_txn(&txn, &view.id);
     let rows = self
-      .blocks
+      .block
       .get_rows_from_row_orders(&row_orders)
       .into_iter()
       .map(|row| CreateRowParams {
@@ -729,7 +732,7 @@ impl Database {
 
     view.id = gen_database_view_id();
     view.database_id = gen_database_id();
-    DuplicatedDatabase { view, fields, rows }
+    DatabaseData { view, fields, rows }
   }
 
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
@@ -822,7 +825,7 @@ pub fn gen_field_id() -> String {
 }
 
 pub fn gen_row_id() -> RowId {
-  RowId::from(ID_GEN.lock().next_id())
+  RowId::from(ROW_ID_GEN.lock().next_id())
 }
 
 pub fn gen_database_filter_id() -> String {
@@ -845,14 +848,16 @@ pub fn timestamp() -> i64 {
   chrono::Utc::now().timestamp()
 }
 
+/// DatabaseData contains all the data of a database.
+/// It's used to export and import a database. For example, duplicating a database
 #[derive(Clone, Serialize, Deserialize)]
-pub struct DuplicatedDatabase {
+pub struct DatabaseData {
   pub view: DatabaseView,
   pub fields: Vec<Field>,
   pub rows: Vec<CreateRowParams>,
 }
 
-impl DuplicatedDatabase {
+impl DatabaseData {
   pub fn to_json(&self) -> Result<String, DatabaseError> {
     let s = serde_json::to_string(self)?;
     Ok(s)

@@ -1,28 +1,28 @@
-use crate::core::collab_plugin::CollabPlugin;
-use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
-use crate::util::insert_json_value_to_map_ref;
-use parking_lot::RwLock;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::vec::IntoIter;
+
+use parking_lot::RwLock;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
-
-pub const DATA_SECTION: &str = "data";
-
-use crate::preclude::{ArrayRefWrapper, JsonValue};
-
-type AfterTransactionSubscription = Subscription<Arc<dyn Fn(&mut TransactionMut)>>;
-
 use yrs::{
   ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, Subscription,
   Transact, Transaction, TransactionMut, Update, UpdateSubscription,
 };
+
+use crate::core::collab_plugin::CollabPlugin;
+use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
+use crate::preclude::{ArrayRefWrapper, JsonValue};
+use crate::util::insert_json_value_to_map_ref;
+
+pub const DATA_SECTION: &str = "data";
+
+type AfterTransactionSubscription = Subscription<Arc<dyn Fn(&mut TransactionMut)>>;
 
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 pub type MapSubscription = Subscription<MapSubscriptionCallback>;
@@ -46,7 +46,6 @@ impl Collab {
     let object_id = object_id.as_ref().to_string();
     let doc = Doc::with_options(Options {
       skip_gc: true,
-      // client_id,
       ..Options::default()
     });
     let data = doc.get_or_insert_map(DATA_SECTION);
@@ -283,12 +282,18 @@ impl Collab {
     self.doc.transact()
   }
 
+  pub fn transact_mut(&self) -> TransactionMut {
+    self.doc.transact_mut()
+  }
+
   pub fn with_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let transact = CollabContext::new(self.plugins.clone(), self.doc.clone());
-    transact.with_transact_mut(f)
+    let mut txn = self.doc.transact_mut();
+    let ret = f(&mut txn);
+    drop(txn);
+    ret
   }
 
   fn map_wrapper_with(&self, map_ref: MapRef) -> MapRefWrapper {

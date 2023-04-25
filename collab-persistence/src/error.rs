@@ -1,8 +1,10 @@
 #[derive(Debug, thiserror::Error)]
 pub enum PersistenceError {
+  #[cfg(feature = "sled_db")]
   #[error(transparent)]
   SledDb(#[from] sled::Error),
 
+  #[cfg(feature = "rocksdb_db")]
   #[error(transparent)]
   RocksDb(#[from] rocksdb::Error),
 
@@ -17,6 +19,9 @@ pub enum PersistenceError {
 
   #[error("invalid data")]
   InvalidData,
+
+  #[error("Duplicate update key")]
+  DuplicateUpdateKey,
 
   #[error("Internal error")]
   InternalError,

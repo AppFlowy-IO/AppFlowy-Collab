@@ -1,9 +1,10 @@
+use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+
 use crate::fields::{
   field_from_map_ref, field_from_value, field_id_from_value, primary_field_id_from_value, Field,
   FieldBuilder, FieldUpdate,
 };
 use crate::views::FieldOrder;
-use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 
 /// A map of fields
 pub struct FieldMap {
@@ -108,6 +109,16 @@ impl FieldMap {
   pub fn get_all_field_orders(&self) -> Vec<FieldOrder> {
     let txn = self.container.transact();
     self.get_all_field_orders_with_txn(&txn)
+  }
+
+  /// Returns all field ids
+  pub fn number_of_fields(&self) -> Vec<String> {
+    let txn = self.container.transact();
+    self
+      .container
+      .iter(&txn)
+      .flat_map(|(_k, v)| field_id_from_value(v, &txn))
+      .collect::<Vec<String>>()
   }
 
   /// Get all field orders with a transaction

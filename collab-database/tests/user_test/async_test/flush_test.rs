@@ -1,11 +1,11 @@
-use crate::user_test::async_test::script::{
-  create_database, flushable_database_test, DatabaseScript::*,
-};
+use collab::plugin_impl::rocks_disk::Config;
 use serde_json::{json, Value};
+
+use crate::user_test::async_test::script::{create_database, database_test, DatabaseScript::*};
 
 #[tokio::test]
 async fn flush_doc_test() {
-  let mut test = flushable_database_test();
+  let mut test = database_test(Config::new().flush_doc(true));
   test
     .run_scripts(vec![
       CreateDatabase {
@@ -76,7 +76,6 @@ fn expect() -> Value {
     "inline_view": "v1",
     "rows": [
       {
-        "block_id": 1,
         "cells": {
           "f1": {
             "data": "1f1cell"
@@ -94,7 +93,6 @@ fn expect() -> Value {
         "visibility": true
       },
       {
-        "block_id": 2,
         "cells": {
           "f1": {
             "data": "2f1cell"
@@ -109,7 +107,6 @@ fn expect() -> Value {
         "visibility": true
       },
       {
-        "block_id": 3,
         "cells": {
           "f1": {
             "data": "3f1cell"
@@ -148,17 +145,14 @@ fn expect() -> Value {
         "name": "my first database",
         "row_orders": [
           {
-            "block_id": 1,
             "height": 0,
             "id": "1"
           },
           {
-            "block_id": 2,
             "height": 0,
             "id": "2"
           },
           {
-            "block_id": 3,
             "height": 0,
             "id": "3"
           }

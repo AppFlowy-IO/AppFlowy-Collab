@@ -1,8 +1,10 @@
-use crate::rows::{BlockId, Row, RowId};
-use crate::views::{OrderArray, OrderIdentifiable};
+use std::ops::{Deref, DerefMut};
+
 use collab::preclude::{lib0Any, ArrayRef, ReadTxn, YrsValue};
 use serde::{Deserialize, Serialize};
-use std::ops::{Deref, DerefMut};
+
+use crate::rows::{Row, RowId};
+use crate::views::{OrderArray, OrderIdentifiable};
 
 pub struct RowOrderArray {
   array_ref: ArrayRef,
@@ -47,7 +49,6 @@ impl DerefMut for RowOrderArray {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct RowOrder {
   pub id: RowId,
-  pub block_id: BlockId,
   pub height: i32,
 }
 
@@ -58,12 +59,8 @@ impl OrderIdentifiable for RowOrder {
 }
 
 impl RowOrder {
-  pub fn new(id: RowId, block_id: BlockId, height: i32) -> RowOrder {
-    Self {
-      id,
-      block_id,
-      height,
-    }
+  pub fn new(id: RowId, height: i32) -> RowOrder {
+    Self { id, height }
   }
 }
 
@@ -86,7 +83,6 @@ impl From<&Row> for RowOrder {
   fn from(row: &Row) -> Self {
     Self {
       id: row.id,
-      block_id: row.block_id,
       height: row.height,
     }
   }

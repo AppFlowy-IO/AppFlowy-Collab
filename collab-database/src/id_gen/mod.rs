@@ -1,9 +1,9 @@
-mod database_id;
+mod gen;
 
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
 
-use database_id::DatabaseIDGen;
+use gen::RowIDGen;
 lazy_static! {
-  pub static ref ID_GEN: Mutex<DatabaseIDGen> = Mutex::new(DatabaseIDGen::new(1));
+  pub static ref ROW_ID_GEN: Mutex<RowIDGen> = Mutex::new(RowIDGen::new(0));
 }

@@ -1,14 +1,17 @@
-use std::collections::HashMap;
 use std::fmt::Debug;
+use std::panic;
+use std::panic::AssertUnwindSafe;
 
 use serde::{Deserialize, Serialize};
 use yrs::updates::encoder::{Encoder, EncoderV1};
 use yrs::ReadTxn;
 
-use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, SnapshotID};
+use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, Key, SnapshotID};
 use crate::kv::KVEntry;
 use crate::kv::KVStore;
-use crate::{create_id_for_key, get_id_for_key, insert_snapshot_update, PersistenceError};
+use crate::{
+  create_id_for_key, get_id_for_key, get_last_update_key, insert_snapshot_update, PersistenceError,
+};
 
 impl<'a, T> SnapshotAction<'a> for T
 where
@@ -21,20 +24,29 @@ pub trait SnapshotAction<'a>: KVStore<'a> + Sized
 where
   PersistenceError: From<<Self as KVStore<'a>>::Error>,
 {
-  fn push_snapshot<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
+  /// Create a snapshot for the given object id.
+  /// The snapshot contains the updates prior to the given update_key. For example,
+  /// if the update_key is 10, the snapshot will contain updates 0-9. So when restoring
+  /// the document from a snapshot, it should apply the update from key:10.
+  fn push_snapshot<K1, K2, T>(
     &self,
     uid: i64,
-    object_id: &K,
-    description: String,
+    object_id: &K1,
+    update_key: K2,
     txn: &T,
-  ) -> Result<(), PersistenceError> {
-    let data = encode_snapshot(txn);
-    let snapshot = CollabSnapshot::new(data, description).to_vec();
+  ) -> Result<(), PersistenceError>
+  where
+    K1: AsRef<[u8]> + ?Sized + Debug,
+    K2: Into<Vec<u8>>,
+    T: ReadTxn,
+  {
+    let data = try_encode_snapshot(txn)?;
     let snapshot_id = self.create_snapshot_id(uid, object_id.as_ref())?;
-    insert_snapshot_update(self, snapshot_id, object_id, snapshot)?;
+    insert_snapshot_update(self, update_key, snapshot_id, object_id, data)?;
     Ok(())
   }
 
+  /// Return list of snapshots for the given object id.
   fn get_snapshots<K: AsRef<[u8]> + ?Sized>(&self, uid: i64, object_id: &K) -> Vec<CollabSnapshot> {
     let mut snapshots = vec![];
     if let Some(snapshot_id) = get_snapshot_id(uid, self, object_id) {
@@ -52,6 +64,18 @@ where
     snapshots
   }
 
+  fn get_last_snapshot_update(&self, snapshot_id: SnapshotID) -> Option<CollabSnapshot> {
+    let last_update_key = self.get_snapshot_last_update_key(snapshot_id)?;
+    self.get(last_update_key.as_ref()).ok()?.and_then(|value| {
+      if let Ok(snapshot) = CollabSnapshot::try_from(value.as_ref()) {
+        Some(snapshot)
+      } else {
+        None
+      }
+    })
+  }
+
+  /// Delete all snapshots for the given object id.
   fn delete_snapshot<K: AsRef<[u8]> + ?Sized>(
     &self,
     uid: i64,
@@ -65,6 +89,7 @@ where
     Ok(())
   }
 
+  /// Create a snapshot id for the given object id.
   fn create_snapshot_id<K: AsRef<[u8]> + ?Sized>(
     &self,
     uid: i64,
@@ -78,13 +103,13 @@ where
       Ok(new_snapshot_id)
     }
   }
+
+  fn get_snapshot_last_update_key(&self, snapshot_id: SnapshotID) -> Option<Key<16>> {
+    get_last_update_key(self, snapshot_id, make_snapshot_update_key).ok()
+  }
 }
 
-// pub trait DocOps<'a>: KVStore<'a> + Sized
-//   where
-//       Error: From<<Self as KVStore<'a>>::Error>,
-
-fn get_snapshot_id<'a, K, S>(uid: i64, store: &S, object_id: &K) -> Option<SnapshotID>
+pub fn get_snapshot_id<'a, K, S>(uid: i64, store: &S, object_id: &K) -> Option<SnapshotID>
 where
   K: AsRef<[u8]> + ?Sized,
   S: KVStore<'a>,
@@ -93,31 +118,39 @@ where
   get_id_for_key(store, key)
 }
 
-fn encode_snapshot<T: ReadTxn>(txn: &T) -> Vec<u8> {
+fn try_encode_snapshot<T: ReadTxn>(txn: &T) -> Result<Vec<u8>, PersistenceError> {
   let snapshot = txn.snapshot();
   let mut encoder = EncoderV1::new();
-  txn
-    .encode_state_from_snapshot(&snapshot, &mut encoder)
-    .unwrap();
-  encoder.to_vec()
+  let mut encoded_data = vec![];
+  match {
+    let mut wrapper = AssertUnwindSafe(&mut encoded_data);
+    let wrapper_txn = AssertUnwindSafe(txn);
+    panic::catch_unwind(move || {
+      wrapper_txn
+        .encode_state_from_snapshot(&snapshot, &mut encoder)
+        .unwrap();
+      **wrapper = encoder.to_vec();
+    })
+  } {
+    Ok(_) => Ok(encoded_data),
+    Err(_) => Err(PersistenceError::InternalError),
+  }
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct CollabSnapshot {
   pub data: Vec<u8>,
   pub created_at: i64,
-  pub description: String,
-  pub meta: HashMap<String, String>,
+  pub update_key: Vec<u8>,
 }
 
 impl CollabSnapshot {
-  pub fn new(data: Vec<u8>, description: String) -> CollabSnapshot {
+  pub fn new(data: Vec<u8>, update_key: Vec<u8>) -> CollabSnapshot {
     let created_at = chrono::Utc::now().timestamp();
     Self {
       data,
       created_at,
-      description,
-      meta: Default::default(),
+      update_key,
     }
   }
 

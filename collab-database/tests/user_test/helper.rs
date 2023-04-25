@@ -3,11 +3,12 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use collab_database::block::CreateRowParams;
+use collab::plugin_impl::rocks_disk::Config;
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
-use collab_database::user::{Config, RowRelationChange, RowRelationUpdateReceiver, UserDatabase};
+use collab_database::rows::CreateRowParams;
+use collab_database::user::{RowRelationChange, RowRelationUpdateReceiver, UserDatabase};
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use tokio::sync::mpsc::{channel, Receiver};
@@ -39,24 +40,30 @@ pub fn random_uid() -> i64 {
 
 pub fn user_database_test(uid: i64) -> UserDatabaseTest {
   let db = make_rocks_db();
-  user_database_test_with_db(uid, db)
+  user_database_with_db(uid, db)
 }
 
-pub fn user_database_test_with_db(uid: i64, db: Arc<RocksCollabDB>) -> UserDatabaseTest {
+pub fn user_database_test_with_config(uid: i64, config: Config) -> UserDatabaseTest {
+  let db = make_rocks_db();
+  let inner = UserDatabase::new(uid, db.clone(), config);
+  UserDatabaseTest { uid, inner, db }
+}
+
+pub fn user_database_with_db(uid: i64, db: Arc<RocksCollabDB>) -> UserDatabaseTest {
   UserDatabaseTest {
     uid,
-    inner: UserDatabase::new(uid, db.clone(), Config::default()),
+    inner: UserDatabase::new(uid, db.clone(), Config::new().snapshot_per_update(5)),
     db,
   }
 }
 
-pub fn user_database_test_with_default_data(uid: i64) -> UserDatabaseTest {
+pub fn user_database_with_default_data(uid: i64) -> UserDatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
   let user_database = UserDatabaseTest {
     uid,
-    inner: UserDatabase::new(uid, db.clone(), Config::default()),
+    inner: UserDatabase::new(uid, db.clone(), Config::new()),
     db,
   };
 
