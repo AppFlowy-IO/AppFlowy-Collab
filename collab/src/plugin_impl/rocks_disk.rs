@@ -97,7 +97,7 @@ impl CollabPlugin for RocksDiskPlugin {
     }
   }
 
-  fn did_init(&self, _object_id: &str, _txn: &Transaction) {
+  fn did_init(&self, _doc: &yrs::Doc, _object_id: &str, _txn: &Transaction) {
     self.did_load.store(true, Ordering::SeqCst);
   }
 

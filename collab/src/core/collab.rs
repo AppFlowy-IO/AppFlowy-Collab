@@ -95,7 +95,7 @@ impl Collab {
         .plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.did_init(&self.object_id, &txn));
+        .for_each(|plugin| plugin.did_init(&self.doc, &self.object_id, &txn));
     }
   }
 

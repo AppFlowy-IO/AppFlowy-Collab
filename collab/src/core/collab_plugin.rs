@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use yrs::{Transaction, TransactionMut};
+use yrs::{Doc, Transaction, TransactionMut};
 
 pub trait CollabPlugin: Send + Sync + 'static {
   /// Called when the plugin is initialized.
@@ -9,7 +9,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
   fn init(&self, _object_id: &str, _txn: &mut TransactionMut) {}
 
   /// Called when the plugin is initialized.
-  fn did_init(&self, _object_id: &str, _txn: &Transaction) {}
+  fn did_init(&self, _doc: &Doc, _object_id: &str, _txn: &Transaction) {}
 
   /// Called when the plugin receives an update. It happens after the [TransactionMut] commit to
   /// the Yjs document.
@@ -28,8 +28,8 @@ where
     (**self).init(object_id, txn)
   }
 
-  fn did_init(&self, _object_id: &str, txn: &Transaction) {
-    (**self).did_init(_object_id, txn)
+  fn did_init(&self, doc: &Doc, _object_id: &str, txn: &Transaction) {
+    (**self).did_init(doc, _object_id, txn)
   }
 
   fn did_receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
@@ -45,8 +45,8 @@ where
     (**self).init(object_id, txn)
   }
 
-  fn did_init(&self, _object_id: &str, txn: &Transaction) {
-    (**self).did_init(_object_id, txn)
+  fn did_init(&self, doc: &Doc, _object_id: &str, txn: &Transaction) {
+    (**self).did_init(doc, _object_id, txn)
   }
 
   fn did_receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
