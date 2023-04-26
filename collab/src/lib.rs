@@ -1,4 +1,4 @@
-mod error;
+pub mod error;
 mod util;
 
 pub mod core;

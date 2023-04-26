@@ -1,0 +1,20 @@
+[package]
+name = "collab-sync"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+yrs = "0.16.3"
+y-sync = { version = "0.3.1", features = ["net"] }
+lib0 = "0.16.3"
+futures-util = { version = "0.3", features = ["sink"] }
+tokio = { version = "1.26.0", features = ["net", "sync"] }
+tracing = { version = "0.1" }
+thiserror = "1.0.39"
+
+[dev-dependencies]
+tokio = { version = "1.26.0", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+bytes = "1.4"

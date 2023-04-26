@@ -1,0 +1,23 @@
+[package]
+name = "collab-plugins"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+yrs = "0.16.3"
+y-sync = "0.3.1"
+collab = { path = "../collab" }
+collab-sync = { path = "../collab-sync", optional = true }
+futures-util = { version = "0.3", features = ["sink"], optional = true }
+tokio = { version = "1.26.0", features = ["net", "sync"], optional = true }
+
+[dev-dependencies]
+tempfile = "3.4.0"
+assert-json-diff = "2.0.2"
+tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+
+[features]
+default = ["sync"]
+sync = ["collab-sync", "futures-util", "tokio"]
