@@ -11,7 +11,8 @@ y-sync = { version = "0.3.1" }
 collab = { path = "../collab" }
 collab-sync = { path = "../collab-sync", optional = true }
 futures-util = { version = "0.3", features = ["sink"], optional = true }
-tokio = { version = "1.26.0", features = ["net", "sync"], optional = true }
+tokio = { version = "1.26.0", features = ["net", "sync", "time"], optional = true }
+tracing = { version = "0.1.37" }
 
 [dev-dependencies]
 tempfile = "3.4.0"
@@ -20,6 +21,7 @@ tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 bytes = "1.4"
 dashmap = "5.4.0"
+serde_json = "1.0.64"
 
 [features]
 default = ["sync"]

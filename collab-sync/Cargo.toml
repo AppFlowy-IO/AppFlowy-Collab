@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 yrs = "0.16.3"
 y-sync = { version = "0.3.1" }
+collab = {  path = "../collab" }
 lib0 = "0.16.3"
 futures-util = { version = "0.3", features = ["sink"] }
 tokio = { version = "1.26.0", features = ["net", "sync", "macros"] }

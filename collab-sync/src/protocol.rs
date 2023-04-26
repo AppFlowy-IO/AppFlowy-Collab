@@ -1,6 +1,5 @@
-use std::sync::Arc;
+use collab::core::collab_awareness::MutexCollabAwareness;
 
-use tokio::sync::RwLock;
 use y_sync::awareness::Awareness;
 use y_sync::sync::{Error, Message, Protocol, SyncMessage};
 use yrs::updates::decoder::Decode;
@@ -89,38 +88,38 @@ impl Protocol for CollabSyncProtocol {
 /// Handles incoming messages from the client/server
 pub async fn handle_msg<P: Protocol>(
   protocol: &P,
-  awareness: &Arc<RwLock<Awareness>>,
+  awareness: &MutexCollabAwareness,
   msg: Message,
 ) -> Result<Option<Message>, Error> {
   match msg {
     Message::Sync(msg) => match msg {
       SyncMessage::SyncStep1(sv) => {
-        let awareness = awareness.read().await;
+        let awareness = awareness.lock();
         protocol.handle_sync_step1(&awareness, sv)
       },
       SyncMessage::SyncStep2(update) => {
-        let mut awareness = awareness.write().await;
+        let mut awareness = awareness.lock();
         protocol.handle_sync_step2(&mut awareness, Update::decode_v1(&update)?)
       },
       SyncMessage::Update(update) => {
-        let mut awareness = awareness.write().await;
+        let mut awareness = awareness.lock();
         protocol.handle_update(&mut awareness, Update::decode_v1(&update)?)
       },
     },
     Message::Auth(reason) => {
-      let awareness = awareness.read().await;
+      let awareness = awareness.lock();
       protocol.handle_auth(&awareness, reason)
     },
     Message::AwarenessQuery => {
-      let awareness = awareness.read().await;
+      let awareness = awareness.lock();
       protocol.handle_awareness_query(&awareness)
     },
     Message::Awareness(update) => {
-      let mut awareness = awareness.write().await;
+      let mut awareness = awareness.lock();
       protocol.handle_awareness_update(&mut awareness, update)
     },
     Message::Custom(tag, data) => {
-      let mut awareness = awareness.write().await;
+      let mut awareness = awareness.lock();
       protocol.missing_handle(&mut awareness, tag, data)
     },
   }

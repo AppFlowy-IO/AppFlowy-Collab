@@ -1,12 +1,12 @@
-use crate::error::SyncError;
-use crate::protocol::{handle_msg, CollabSyncProtocol};
+use std::sync::Arc;
+
+use collab::core::collab_awareness::MutexCollabAwareness;
 use futures_util::{SinkExt, StreamExt};
 use lib0::encoding::Write;
-use std::sync::Arc;
 use tokio::select;
 use tokio::sync::broadcast::error::SendError;
-use tokio::sync::broadcast::{channel, Receiver, Sender};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::broadcast::{channel, Sender};
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use y_sync::awareness;
 use y_sync::awareness::{Awareness, AwarenessUpdate};
@@ -15,14 +15,18 @@ use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 use yrs::UpdateSubscription;
 
+use crate::error::SyncError;
+use crate::protocol::{handle_msg, CollabSyncProtocol};
+
 /// A broadcast group can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
 /// to subscribes.
 pub struct BroadcastGroup {
+  #[allow(dead_code)]
   awareness_sub: awareness::UpdateSubscription,
+  #[allow(dead_code)]
   doc_sub: UpdateSubscription,
-  awareness: Arc<RwLock<Awareness>>,
+  awareness: MutexCollabAwareness,
   sender: Sender<Vec<u8>>,
-  receiver: Receiver<Vec<u8>>,
 }
 
 impl BroadcastGroup {
@@ -32,10 +36,10 @@ impl BroadcastGroup {
   ///
   /// The overflow of the incoming events that needs to be propagates will be buffered up to a
   /// provided `buffer_capacity` size.
-  pub async fn new(awareness: Arc<RwLock<Awareness>>, buffer_capacity: usize) -> Self {
-    let (sender, receiver) = channel(buffer_capacity);
+  pub async fn new(awareness: MutexCollabAwareness, buffer_capacity: usize) -> Self {
+    let (sender, _) = channel(buffer_capacity);
     let (doc_sub, awareness_sub) = {
-      let mut awareness = awareness.write().await;
+      let mut awareness = awareness.lock();
 
       // Observer the document's update and broadcast it to all subscribers.
       let sink = sender.clone();
@@ -63,14 +67,13 @@ impl BroadcastGroup {
     BroadcastGroup {
       awareness,
       sender,
-      receiver,
       awareness_sub,
       doc_sub,
     }
   }
 
-  /// Returns a reference to an underlying [Awareness] instance.
-  pub fn awareness(&self) -> &Arc<RwLock<Awareness>> {
+  /// Returns a reference to an underlying [CollabAwareness] instance.
+  pub fn awareness(&self) -> &MutexCollabAwareness {
     &self.awareness
   }
 
@@ -98,6 +101,7 @@ impl BroadcastGroup {
     <Sink as futures_util::Sink<Vec<u8>>>::Error: std::error::Error + Send + Sync,
     E: std::error::Error + Send + Sync + 'static,
   {
+    tracing::trace!("Subscribe new connection to broadcast group");
     // Forward the message to the subscribers
     let sink_task = {
       let sink = sink.clone();
@@ -119,6 +123,7 @@ impl BroadcastGroup {
       let awareness = self.awareness().clone();
       tokio::spawn(async move {
         while let Some(res) = stream.next().await {
+          tracing::trace!("Receive subscribe message");
           let msg = Message::decode_v1(&res.map_err(|e| SyncError::Internal(Box::new(e)))?)?;
           let reply = handle_msg(&CollabSyncProtocol, &awareness, msg).await?;
           match reply {

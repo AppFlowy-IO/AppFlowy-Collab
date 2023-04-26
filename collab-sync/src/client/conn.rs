@@ -4,24 +4,23 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::task::{Context, Poll};
 
-use crate::error::SyncError;
+use collab::core::collab_awareness::MutexCollabAwareness;
 use futures_util::sink::SinkExt;
 use futures_util::StreamExt;
 use lib0::decoding::Cursor;
 use tokio::spawn;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use y_sync::awareness::Awareness;
-use y_sync::sync::{Message, MessageReader, Protocol, SyncMessage};
+use y_sync::sync::{MessageReader, Protocol};
 use yrs::updates::decoder::DecoderV1;
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
+use crate::error::SyncError;
 use crate::protocol::{handle_msg, CollabSyncProtocol};
 
-#[derive(Debug)]
 pub struct Connection<Sink, Stream> {
   processing_loop: JoinHandle<Result<(), SyncError>>,
-  awareness: Arc<RwLock<Awareness>>,
+  awareness: Arc<MutexCollabAwareness>,
   inbox: Arc<Mutex<Sink>>,
   _stream: PhantomData<Stream>,
 }
@@ -57,19 +56,19 @@ where
 {
   /// Wraps incoming [WebSocket] connection and supplied [Awareness] accessor into a new
   /// connection handler capable of exchanging Yrs/Yjs messages.
-  pub fn new(awareness: Arc<RwLock<Awareness>>, sink: Sink, stream: Stream) -> Self {
+  pub fn new(awareness: Arc<MutexCollabAwareness>, sink: Sink, stream: Stream) -> Self {
     Self::with_protocol(awareness, sink, stream, CollabSyncProtocol)
   }
 
   /// Returns an underlying [Awareness] structure, that contains client state of that connection.
-  pub fn awareness(&self) -> &Arc<RwLock<Awareness>> {
+  pub fn awareness(&self) -> &Arc<MutexCollabAwareness> {
     &self.awareness
   }
 
   /// Wraps incoming [WebSocket] connection and supplied [Awareness] accessor into a new
   /// connection handler capable of exchanging Yrs/Yjs messages.
   pub fn with_protocol<P>(
-    awareness: Arc<RwLock<Awareness>>,
+    awareness: Arc<MutexCollabAwareness>,
     sink: Sink,
     stream: Stream,
     protocol: P,
@@ -98,7 +97,7 @@ where
 /// To be called whenever a new connection has been accepted
 async fn send_local_doc_state<P, Sink, E>(
   weak_sink: &Weak<Mutex<Sink>>,
-  weak_awareness: &Weak<RwLock<Awareness>>,
+  weak_awareness: &Weak<MutexCollabAwareness>,
   protocol: &P,
 ) -> Result<(), SyncError>
 where
@@ -109,7 +108,7 @@ where
   let payload = {
     let awareness = weak_awareness.upgrade().unwrap();
     let mut encoder = EncoderV1::new();
-    let awareness = awareness.read().await;
+    let awareness = awareness.lock();
     protocol.start(&awareness, &mut encoder)?;
     encoder.to_vec()
   };
@@ -129,7 +128,7 @@ where
 async fn receive_remote_doc_changes<E, Sink, Stream, P>(
   mut stream: Stream,
   weak_sink: Weak<Mutex<Sink>>,
-  weak_awareness: Weak<RwLock<Awareness>>,
+  weak_awareness: Weak<MutexCollabAwareness>,
   protocol: P,
 ) -> Result<(), SyncError>
 where
@@ -164,7 +163,7 @@ where
 
 async fn process_message<P, E, Sink>(
   protocol: &P,
-  awareness: &Arc<RwLock<Awareness>>,
+  awareness: &Arc<MutexCollabAwareness>,
   sink: &mut Arc<Mutex<Sink>>,
   input: Vec<u8>,
 ) -> Result<(), SyncError>

@@ -1,2 +1,2 @@
 #[cfg(feature = "sync")]
-mod sync_plugin;
+pub mod sync_plugin;

@@ -1,22 +1,28 @@
+use std::net::SocketAddr;
+use std::sync::Arc;
+
 use bytes::{Bytes, BytesMut};
+use collab::core::collab_awareness::MutexCollabAwareness;
+
 use collab_sync::server::{BroadcastGroup, Subscription};
 use dashmap::DashMap;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::str::FromStr;
-use std::sync::Arc;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite, LengthDelimitedCodec};
+
 use y_sync::sync::Error;
+
+use crate::setup_log;
 
 pub struct TestServer {
   pub groups: Arc<DashMap<String, Group>>,
-  pub address: String,
+  pub address: SocketAddr,
   pub port: u16,
 }
 
 #[derive(Debug, Default)]
-struct YrsCodec(LengthDelimitedCodec);
+pub struct YrsCodec(LengthDelimitedCodec);
 
 impl Encoder<Vec<u8>> for YrsCodec {
   type Error = Error;
@@ -40,36 +46,62 @@ impl Decoder for YrsCodec {
   }
 }
 
-type WrappedStream = FramedRead<OwnedReadHalf, YrsCodec>;
-type WrappedSink = FramedWrite<OwnedWriteHalf, YrsCodec>;
+pub type WrappedStream = FramedRead<OwnedReadHalf, YrsCodec>;
+pub type WrappedSink = FramedWrite<OwnedWriteHalf, YrsCodec>;
 
 pub async fn spawn_server() -> std::io::Result<TestServer> {
-  let addr = SocketAddr::from(([127, 0, 0, 1], 0));
-  let listener = TcpListener::bind(addr).await?;
+  setup_log();
+
+  let address = SocketAddr::from(([127, 0, 0, 1], 0));
+  let listener = TcpListener::bind(address).await?;
   let port = listener.local_addr()?.port(); // Get the actual port number
   let groups = Arc::new(DashMap::new());
 
+  let (doc_id, group) = test_group().await;
+  groups.insert(doc_id.clone(), group);
+
   let weak_groups = Arc::downgrade(&groups);
   tokio::spawn(async move {
-    let mut subscribers = Vec::new();
     while let Ok((stream, _)) = listener.accept().await {
       let (reader, writer) = stream.into_split();
       let stream = WrappedStream::new(reader, YrsCodec::default());
       let sink = WrappedSink::new(writer, YrsCodec::default());
 
-      // let sub = bcast.subscribe(Arc::new(Mutex::new(sink)), stream);
-      // subscribers.push(sub);
+      // Hardcode doc_id 1 for test
+      let groups = weak_groups.upgrade().unwrap();
+      let sub = groups
+        .get(&doc_id)
+        .unwrap()
+        .broadcast
+        .subscribe(Arc::new(Mutex::new(sink)), stream);
+      groups.get_mut(&doc_id).unwrap().subscriptions.push(sub);
     }
   });
 
   Ok(TestServer {
-    address: "127.0.0.1".to_string(),
+    address: SocketAddr::from(([127, 0, 0, 1], port)),
     port,
     groups,
   })
 }
 
-struct Group {
+async fn test_group() -> (String, Group) {
+  let doc_id = "1".to_string();
+  let uid = 1;
+  let awareness = MutexCollabAwareness::new(uid, &doc_id, vec![]);
+  let broadcast = BroadcastGroup::new(awareness.clone(), 10).await;
+  (
+    doc_id,
+    Group {
+      awareness,
+      broadcast,
+      subscriptions: vec![],
+    },
+  )
+}
+
+pub struct Group {
+  pub awareness: MutexCollabAwareness,
   broadcast: BroadcastGroup,
   subscriptions: Vec<Subscription>,
 }
