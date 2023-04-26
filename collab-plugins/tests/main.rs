@@ -3,6 +3,7 @@ use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
+mod server;
 mod sync;
 
 pub fn setup_log() {

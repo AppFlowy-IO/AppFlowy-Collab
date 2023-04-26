@@ -10,7 +10,7 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 use y_sync::awareness;
 use y_sync::awareness::{Awareness, AwarenessUpdate};
-use y_sync::sync::{Error, Message, MSG_SYNC, MSG_SYNC_UPDATE};
+use y_sync::sync::{Message, MSG_SYNC, MSG_SYNC_UPDATE};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 use yrs::UpdateSubscription;
@@ -24,10 +24,6 @@ pub struct BroadcastGroup {
   sender: Sender<Vec<u8>>,
   receiver: Receiver<Vec<u8>>,
 }
-
-unsafe impl Send for BroadcastGroup {}
-
-unsafe impl Sync for BroadcastGroup {}
 
 impl BroadcastGroup {
   /// Creates a new [BroadcastGroup] over a provided `awareness` instance. All changes triggered
@@ -111,7 +107,7 @@ impl BroadcastGroup {
           let mut sink = sink.lock().await;
           if let Err(e) = sink.send(msg).await {
             println!("broadcast failed to sent sync message");
-            return Err(Error::Other(Box::new(e)));
+            return Err(SyncError::Internal(Box::new(e)));
           }
         }
         Ok(())
@@ -123,7 +119,7 @@ impl BroadcastGroup {
       let awareness = self.awareness().clone();
       tokio::spawn(async move {
         while let Some(res) = stream.next().await {
-          let msg = Message::decode_v1(&res.map_err(|e| Error::Other(Box::new(e)))?)?;
+          let msg = Message::decode_v1(&res.map_err(|e| SyncError::Internal(Box::new(e)))?)?;
           let reply = handle_msg(&CollabSyncProtocol, &awareness, msg).await?;
           match reply {
             None => {},
@@ -132,7 +128,7 @@ impl BroadcastGroup {
               sink
                 .send(reply.encode_v1())
                 .await
-                .map_err(|e| Error::Other(Box::new(e)))?;
+                .map_err(|e| SyncError::Internal(Box::new(e)))?;
             },
           }
         }
@@ -153,8 +149,8 @@ impl BroadcastGroup {
 /// connection error or closed connection).
 #[derive(Debug)]
 pub struct Subscription {
-  sink_task: JoinHandle<Result<(), Error>>,
-  stream_task: JoinHandle<Result<(), Error>>,
+  sink_task: JoinHandle<Result<(), SyncError>>,
+  stream_task: JoinHandle<Result<(), SyncError>>,
 }
 
 impl Subscription {
@@ -162,7 +158,7 @@ impl Subscription {
   /// closed because of failure, an error which caused it to happen will be returned.
   ///
   /// This method doesn't invoke close procedure. If you need that, drop current subscription instead.
-  pub async fn completed(self) -> Result<(), Error> {
+  pub async fn completed(self) -> Result<(), SyncError> {
     let res = select! {
         r1 = self.sink_task => r1?,
         r2 = self.stream_task => r2?,

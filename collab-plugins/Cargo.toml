@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 yrs = "0.16.3"
-y-sync = "0.3.1"
+y-sync = { version = "0.3.1" }
 collab = { path = "../collab" }
 collab-sync = { path = "../collab-sync", optional = true }
 futures-util = { version = "0.3", features = ["sink"], optional = true }
@@ -17,6 +17,9 @@ tokio = { version = "1.26.0", features = ["net", "sync"], optional = true }
 tempfile = "3.4.0"
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+bytes = "1.4"
+dashmap = "5.4.0"
 
 [features]
 default = ["sync"]

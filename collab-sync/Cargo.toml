@@ -7,14 +7,13 @@ edition = "2021"
 
 [dependencies]
 yrs = "0.16.3"
-y-sync = { version = "0.3.1", features = ["net"] }
+y-sync = { version = "0.3.1" }
 lib0 = "0.16.3"
 futures-util = { version = "0.3", features = ["sink"] }
-tokio = { version = "1.26.0", features = ["net", "sync"] }
+tokio = { version = "1.26.0", features = ["net", "sync", "macros"] }
 tracing = { version = "0.1" }
 thiserror = "1.0.39"
 
 [dev-dependencies]
 tokio = { version = "1.26.0", features = ["full"] }
-tokio-util = { version = "0.7", features = ["codec"] }
 bytes = "1.4"
