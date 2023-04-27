@@ -1,3 +1,3 @@
-mod conn;
+mod sync;
 
-pub use conn::*;
+pub use sync::*;

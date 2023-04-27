@@ -12,7 +12,7 @@ pub fn setup_log() {
   START.call_once(|| {
     std::env::set_var(
       "RUST_LOG",
-      "collab_persistence=trace,collab=trace,collab_sync=trace,collab_plugins=trace",
+      "collab_persistence=info,collab=trace,collab_sync=trace,collab_plugins=trace",
     );
     let subscriber = Subscriber::builder()
       .with_env_filter(EnvFilter::from_default_env())

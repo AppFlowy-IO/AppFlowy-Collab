@@ -29,7 +29,7 @@ pub type MapSubscription = Subscription<MapSubscriptionCallback>;
 pub struct Collab {
   doc: Doc,
   #[allow(dead_code)]
-  object_id: String,
+  pub object_id: String,
   data: MapRef,
   plugins: Plugins,
   update_subscription: RwLock<Option<UpdateSubscription>>,

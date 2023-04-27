@@ -2,6 +2,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use parking_lot::Mutex;
+use serde_json::Value;
 
 use y_sync::awareness::Awareness;
 
@@ -44,6 +45,10 @@ impl MutexCollabAwareness {
 
   pub fn initial(&self) {
     self.0.lock().collab.initial();
+  }
+
+  pub fn to_json_value(&self) -> Value {
+    self.0.lock().collab.to_json_value()
   }
 }
 

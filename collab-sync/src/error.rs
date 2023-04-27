@@ -10,6 +10,9 @@ pub enum SyncError {
   DecodingError(#[from] lib0::error::Error),
 
   #[error(transparent)]
+  SerdeError(#[from] serde_json::Error),
+
+  #[error(transparent)]
   TokioTask(#[from] tokio::task::JoinError),
 
   #[error("Internal failure: {0}")]
