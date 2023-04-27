@@ -20,7 +20,9 @@ use crate::message::{CollabClientMessage, CollabMessage};
 use crate::protocol::{handle_msg, CollabSyncProtocol};
 
 pub struct ClientSync<Sink, Stream> {
+  #[allow(dead_code)]
   uid: i64,
+  #[allow(dead_code)]
   object_id: String,
   processing_loop: JoinHandle<Result<(), SyncError>>,
   awareness: Arc<MutexCollabAwareness>,

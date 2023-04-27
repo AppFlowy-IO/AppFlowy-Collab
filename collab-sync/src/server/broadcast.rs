@@ -116,13 +116,13 @@ impl BroadcastGroup {
     E: std::error::Error + Send + Sync + 'static,
   {
     tracing::trace!("New client connected");
-    // Forward the message to the clients
+    // Receive a new message from client and forwarding the message to the other clients
     let sink_task = {
       let sink = sink.clone();
       let mut receiver = self.sender.subscribe();
       tokio::spawn(async move {
         while let Ok(msg) = receiver.recv().await {
-          tracing::trace!("Forward client message: {}", msg);
+          tracing::trace!("Broadcast client message: {}", msg);
           let mut sink = sink.lock().await;
           if let Err(e) = sink.send(msg).await {
             tracing::error!("Broadcast client message failed: {:?}", e);
