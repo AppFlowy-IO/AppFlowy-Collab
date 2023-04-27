@@ -1,21 +1,20 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use bytes::{Bytes, BytesMut};
+
 use collab::core::collab_awareness::MutexCollabAwareness;
 
-use collab_sync::server::{BroadcastGroup, Subscription};
+use collab_sync::server::{BroadcastGroup, CollabGroup, CollabMsgCodec, WrappedSink, WrappedStream};
 use dashmap::DashMap;
 use serde_json::Value;
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
-use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite, LengthDelimitedCodec};
 
-use collab::preclude::Collab;
 
-use collab_sync::message::CollabMessage;
-use y_sync::sync::Error;
+
+
+
 
 use crate::setup_log;
 
@@ -37,37 +36,6 @@ impl TestServer {
       .to_json_value()
   }
 }
-
-#[derive(Debug, Default)]
-pub struct CollabMsgCodec(LengthDelimitedCodec);
-
-impl Encoder<CollabMessage> for CollabMsgCodec {
-  type Error = Error;
-
-  fn encode(&mut self, item: CollabMessage, dst: &mut BytesMut) -> Result<(), Self::Error> {
-    let bytes = item.to_vec();
-    self.0.encode(Bytes::from(bytes), dst)?;
-    Ok(())
-  }
-}
-
-impl Decoder for CollabMsgCodec {
-  type Item = CollabMessage;
-  type Error = Error;
-
-  fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-    if let Some(bytes) = self.0.decode(src)? {
-      let bytes = bytes.freeze().to_vec();
-      let msg = CollabMessage::from_vec(bytes).ok();
-      Ok(msg)
-    } else {
-      Ok(None)
-    }
-  }
-}
-
-pub type WrappedStream = FramedRead<OwnedReadHalf, CollabMsgCodec>;
-pub type WrappedSink = FramedWrite<OwnedWriteHalf, CollabMsgCodec>;
 
 pub async fn spawn_server(uid: i64, object_id: &str) -> std::io::Result<TestServer> {
   let group = make_test_collab_group(uid, object_id).await;
@@ -117,21 +85,5 @@ pub async fn make_test_collab_group(uid: i64, object_id: &str) -> CollabGroup {
     awareness,
     broadcast,
     subscriptions: vec![],
-  }
-}
-
-pub struct CollabGroup {
-  pub awareness: MutexCollabAwareness,
-  pub broadcast: BroadcastGroup,
-  subscriptions: Vec<Subscription>,
-}
-
-impl CollabGroup {
-  pub fn mut_collab<F>(&self, f: F)
-  where
-    F: FnOnce(&Collab),
-  {
-    let awareness = self.awareness.lock();
-    f(&awareness.collab);
   }
 }
