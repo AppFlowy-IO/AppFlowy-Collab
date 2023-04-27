@@ -1,6 +1,5 @@
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
 use std::sync::Arc;
 use std::vec::IntoIter;
 
@@ -30,7 +29,7 @@ pub type MapSubscription = Subscription<MapSubscriptionCallback>;
 pub struct Collab {
   doc: Doc,
   #[allow(dead_code)]
-  object_id: String,
+  pub object_id: String,
   data: MapRef,
   plugins: Plugins,
   update_subscription: RwLock<Option<UpdateSubscription>>,
@@ -58,6 +57,10 @@ impl Collab {
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
     }
+  }
+
+  pub fn get_doc(&self) -> &Doc {
+    &self.doc
   }
 
   pub fn add_plugin(&mut self, plugin: Arc<dyn CollabPlugin>) {
@@ -95,7 +98,7 @@ impl Collab {
         .plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.did_init(&self.object_id, &txn));
+        .for_each(|plugin| plugin.did_init(&self.doc, &self.object_id, &txn));
     }
   }
 
@@ -454,16 +457,16 @@ impl DerefMut for Path {
 }
 
 #[derive(Default, Clone)]
-pub struct Plugins(Rc<RwLock<Vec<Arc<dyn CollabPlugin>>>>);
+pub struct Plugins(Arc<RwLock<Vec<Arc<dyn CollabPlugin>>>>);
 
 impl Plugins {
   pub fn new(plugins: Vec<Arc<dyn CollabPlugin>>) -> Plugins {
-    Self(Rc::new(RwLock::new(plugins)))
+    Self(Arc::new(RwLock::new(plugins)))
   }
 }
 
 impl Deref for Plugins {
-  type Target = Rc<RwLock<Vec<Arc<dyn CollabPlugin>>>>;
+  type Target = Arc<RwLock<Vec<Arc<dyn CollabPlugin>>>>;
 
   fn deref(&self) -> &Self::Target {
     &self.0

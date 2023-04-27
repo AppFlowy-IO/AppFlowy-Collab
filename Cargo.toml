@@ -6,4 +6,6 @@ members = [
     "collab-document",
     "collab-folder",
     "collab-database",
+    "collab-sync",
+    "collab-plugins",
 ]
