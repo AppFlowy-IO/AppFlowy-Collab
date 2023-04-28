@@ -322,10 +322,10 @@ fn observe_doc(
   let cloned_plugins = plugins.clone();
   let update_sub = doc
     .observe_update_v1(move |txn, event| {
-      cloned_plugins
-        .read()
-        .iter()
-        .for_each(|plugin| plugin.did_receive_update(&cloned_oid, txn, &event.update));
+      cloned_plugins.read().iter().for_each(|plugin| {
+        plugin.receive_update(&cloned_oid, txn, &event.update);
+        plugin.did_receive_update(&cloned_oid, &event.update);
+      });
     })
     .unwrap();
 

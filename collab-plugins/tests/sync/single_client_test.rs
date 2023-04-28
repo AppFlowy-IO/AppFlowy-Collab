@@ -13,7 +13,11 @@ async fn send_single_update_to_server_test() {
   let server = spawn_server(uid, object_id).await.unwrap();
   let client = spawn_client(uid, object_id, server.address).await.unwrap();
 
+  // client -> sync step 1 -> server
+  // client <- sync step 2 <- server
   wait_a_sec().await;
+  // client -> update -> server
+  // server apply update
   client.lock().collab.insert("1", "a");
   wait_a_sec().await;
 
@@ -96,8 +100,8 @@ async fn send_local_doc_initial_state_to_server() {
 
   let server = spawn_server(uid, object_id).await.unwrap();
   let (_db, client) = spawn_client_with_disk(uid, object_id, server.address, None)
-    .await
-    .unwrap();
+      .await
+      .unwrap();
   wait_a_sec().await;
   {
     let client = client.lock();
@@ -127,8 +131,8 @@ async fn send_local_doc_initial_state_to_server_multiple_times() {
 
   let server = spawn_server(uid, object_id).await.unwrap();
   let (db, client) = spawn_client_with_disk(uid, object_id, server.address, None)
-    .await
-    .unwrap();
+      .await
+      .unwrap();
   wait_a_sec().await;
   {
     let client = client.lock();
@@ -144,8 +148,8 @@ async fn send_local_doc_initial_state_to_server_multiple_times() {
 
   for _i in 0..3 {
     let (_, _client) = spawn_client_with_disk(uid, object_id, server.address, Some(db.clone()))
-      .await
-      .unwrap();
+        .await
+        .unwrap();
     wait_a_sec().await;
     assert_eq!(remote_doc_json, server.get_doc_json(object_id));
   }

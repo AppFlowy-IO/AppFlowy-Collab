@@ -115,17 +115,17 @@ impl BroadcastGroup {
     <Sink as futures_util::Sink<CollabMessage>>::Error: std::error::Error + Send + Sync,
     E: std::error::Error + Send + Sync + 'static,
   {
-    tracing::trace!("New client connected");
+    tracing::trace!("pServer]: new client connected");
     // Receive a new message from client and forwarding the message to the other clients
     let sink_task = {
       let sink = sink.clone();
       let mut receiver = self.sender.subscribe();
       tokio::spawn(async move {
         while let Ok(msg) = receiver.recv().await {
-          tracing::trace!("Broadcast client message: {}", msg);
+          tracing::trace!("[Server]: broadcast client message: {}", msg);
           let mut sink = sink.lock().await;
           if let Err(e) = sink.send(msg).await {
-            tracing::error!("Broadcast client message failed: {:?}", e);
+            tracing::error!("[Server]: broadcast client message failed: {:?}", e);
             return Err(SyncError::Internal(Box::new(e)));
           }
         }
@@ -133,28 +133,31 @@ impl BroadcastGroup {
       })
     };
 
-    // Receive the message from the client and reply with the response
+    // Receive messages from clients and reply with the response
     let stream_task = {
       let awareness = self.awareness().clone();
       let object_id = self.object_id.clone();
       tokio::spawn(async move {
         while let Some(res) = stream.next().await {
           let msg = res.map_err(|e| SyncError::Internal(Box::new(e)))?;
-          tracing::trace!("Client message: {}", msg);
-          let mut decoder = DecoderV1::from(msg.payload().as_ref());
-          while let Ok(msg) = Message::decode(&mut decoder) {
-            let reply = handle_msg(&CollabSyncProtocol, &awareness, msg).await?;
-            match reply {
-              None => {},
-              Some(reply) => {
-                let mut sink = sink.lock().await;
-                let payload = reply.encode_v1();
-                let msg = CollabServerMessage::new(object_id.clone(), payload);
-                sink
-                  .send(msg.into())
-                  .await
-                  .map_err(|e| SyncError::Internal(Box::new(e)))?;
-              },
+          tracing::trace!("[Server]: {}", msg);
+
+          if let Some(payload) = msg.payload() {
+            let mut decoder = DecoderV1::from(payload.as_ref());
+            while let Ok(msg) = Message::decode(&mut decoder) {
+              let reply = handle_msg(&CollabSyncProtocol, &awareness, msg).await?;
+              match reply {
+                None => {},
+                Some(reply) => {
+                  let mut sink = sink.lock().await;
+                  let payload = reply.encode_v1();
+                  let msg = CollabServerMessage::new(object_id.clone(), payload);
+                  sink
+                    .send(msg.into())
+                    .await
+                    .map_err(|e| SyncError::Internal(Box::new(e)))?;
+                },
+              }
             }
           }
         }
