@@ -1,4 +1,3 @@
-
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -9,10 +8,8 @@ use collab::preclude::MapRefExtension;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::sync_plugin::SyncPlugin;
 
-
 use collab_sync::server::{CollabMsgCodec, WrappedSink, WrappedStream};
 use tokio::net::TcpSocket;
-
 
 pub async fn spawn_client(
   uid: i64,

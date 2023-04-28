@@ -182,7 +182,7 @@ impl ViewMap {
       let update = ViewUpdate::new(view_id, txn, &map_ref);
       f(update)
     } else {
-      tracing::warn!("Can't update the view. The view is not found")
+      tracing::error!("Can't update the view. The view is not found")
     }
   }
 
