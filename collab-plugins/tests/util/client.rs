@@ -7,9 +7,9 @@ use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::MapRefExtension;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::sync_plugin::SyncPlugin;
-use tokio::net::TcpSocket;
 
-use crate::util::{CollabMsgCodec, WrappedSink, WrappedStream};
+use collab_sync::server::{CollabMsgCodec, WrappedSink, WrappedStream};
+use tokio::net::TcpSocket;
 
 pub async fn spawn_client(
   uid: i64,
@@ -25,7 +25,6 @@ pub async fn spawn_client(
   let sync_plugin = SyncPlugin::new(uid, object_id, collab.clone(), sink, stream);
   collab.lock().collab.add_plugin(Arc::new(sync_plugin));
   collab.initial();
-
   Ok(collab)
 }
 

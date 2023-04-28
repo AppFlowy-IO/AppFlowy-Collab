@@ -82,7 +82,7 @@ impl From<RowOrder> for lib0Any {
 impl From<&Row> for RowOrder {
   fn from(row: &Row) -> Self {
     Self {
-      id: row.id,
+      id: row.id.clone(),
       height: row.height,
     }
   }

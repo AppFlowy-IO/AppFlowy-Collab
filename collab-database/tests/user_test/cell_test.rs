@@ -18,7 +18,7 @@ fn insert_cell_test() {
     });
   });
 
-  let row = database.get_row(1).unwrap();
+  let row = database.get_row(&1.into()).unwrap();
   let cell = row.cells.get("f1").unwrap();
   assert_eq!(cell.get_i64_value("level").unwrap(), 1);
 }
@@ -48,7 +48,7 @@ fn update_cell_test() {
     });
   });
 
-  let row = database.get_row(1).unwrap();
+  let row = database.get_row(&1.into()).unwrap();
   let cell = row.cells.get("f1").unwrap();
   assert_eq!(cell.get_i64_value("level").unwrap(), 2);
   assert_eq!(cell.get_str_value("name").unwrap(), "appflowy");
@@ -66,7 +66,7 @@ fn update_not_exist_row_test() {
     .unwrap();
 
   database.update_row(1, |_row_update| {});
-  let row = database.get_row(1);
+  let row = database.get_row(&1.into());
   assert!(row.is_none())
 }
 

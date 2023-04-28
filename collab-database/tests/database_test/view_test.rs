@@ -79,7 +79,7 @@ fn create_database_row_test() {
 
   let row_id = gen_row_id();
   database_test.create_row(CreateRowParams {
-    id: row_id,
+    id: row_id.clone(),
     ..Default::default()
   });
 
