@@ -51,6 +51,9 @@ where
     sink: Sink,
     stream: Stream,
   ) -> Self {
+    let protocol = CollabSyncProtocol {
+      origin: origin.clone(),
+    };
     Self::with_protocol(
       origin,
       object_id,
@@ -58,7 +61,7 @@ where
       awareness,
       sink,
       stream,
-      CollabSyncProtocol,
+      protocol,
     )
   }
 
@@ -107,7 +110,6 @@ where
 
       // Spawn the stream that continuously reads the doc's updates.
       spawn_doc_stream(
-        cloned_origin,
         cloned_oid,
         weak_msg_id_counter,
         stream,
@@ -212,7 +214,6 @@ where
 /// returns: Result<(), SyncError>
 ///
 async fn spawn_doc_stream<E, Sink, Stream, P>(
-  origin: CollabOrigin,
   object_id: String,
   msg_id_counter: Weak<AtomicU32>,
   mut stream: Stream,

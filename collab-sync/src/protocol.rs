@@ -1,5 +1,6 @@
 use collab::core::collab_awareness::MutexCollabAwareness;
 
+use collab::core::collab::CollabOrigin;
 use y_sync::awareness::Awareness;
 use y_sync::sync::{Error, Message, Protocol, SyncMessage};
 use yrs::updates::decoder::Decode;
@@ -7,7 +8,9 @@ use yrs::updates::encoder::{Encode, Encoder};
 use yrs::{ReadTxn, StateVector, Transact, Update};
 
 /// A implementation of y-sync [Protocol].
-pub struct CollabSyncProtocol;
+pub struct CollabSyncProtocol {
+  pub origin: CollabOrigin,
+}
 // In a client-server model. The client is the initiator of the connection. The server is the
 // responder. The client sends a sync-step-1 message to the server. The server responds with a
 // sync-step-2 message. The client then sends an update message to the server. The server applies
@@ -69,7 +72,7 @@ impl Protocol for CollabSyncProtocol {
     awareness: &mut Awareness,
     update: Update,
   ) -> Result<Option<Message>, Error> {
-    let mut txn = awareness.doc().transact_mut();
+    let mut txn = awareness.doc().transact_mut_with(self.origin.clone());
     txn.apply_update(update);
     Ok(None)
   }

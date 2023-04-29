@@ -146,11 +146,12 @@ impl BroadcastGroup {
           }
 
           let origin = collab_msg.origin();
+          let protocol = CollabSyncProtocol { origin };
           tracing::trace!("[💭Server]: {}", collab_msg);
           let payload = collab_msg.payload().unwrap();
           let mut decoder = DecoderV1::from(payload.as_ref());
           while let Ok(msg) = Message::decode(&mut decoder) {
-            let resp = handle_msg(&CollabSyncProtocol, &awareness, msg).await?;
+            let resp = handle_msg(&protocol, &awareness, msg).await?;
             let mut sink = sink.lock().await;
 
             // Broadcast the response message to all clients
