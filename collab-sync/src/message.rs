@@ -5,9 +5,10 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CollabMessage {
-  ClientInit(CollabInitMessage),
-  Client(CollabClientMessage),
-  Server(CollabServerMessage),
+  ClientInit(ClientInitMessage),
+  ClientUpdate(ClientUpdateMessage),
+  AwarenessUpdate(AwarenessUpdateMessage),
+  ClientBroadcast(ClientBroadcastMessage),
   ServerAck(CollabAckMessage),
 }
 
@@ -19,8 +20,9 @@ impl CollabMessage {
   pub fn msg_id(&self) -> Option<u32> {
     match self {
       CollabMessage::ClientInit(value) => Some(value.msg_id),
-      CollabMessage::Client(value) => Some(value.msg_id),
-      CollabMessage::Server(_) => None,
+      CollabMessage::ClientUpdate(value) => Some(value.msg_id),
+      CollabMessage::ClientBroadcast(_) => None,
+      CollabMessage::AwarenessUpdate(_) => None,
       CollabMessage::ServerAck(value) => Some(value.msg_id),
     }
   }
@@ -28,8 +30,9 @@ impl CollabMessage {
   pub fn is_empty(&self) -> bool {
     match self {
       CollabMessage::ClientInit(value) => value.payload.is_empty(),
-      CollabMessage::Client(value) => value.payload.is_empty(),
-      CollabMessage::Server(value) => value.payload.is_empty(),
+      CollabMessage::ClientUpdate(value) => value.payload.is_empty(),
+      CollabMessage::ClientBroadcast(value) => value.payload.is_empty(),
+      CollabMessage::AwarenessUpdate(value) => value.payload.is_empty(),
       CollabMessage::ServerAck(_) => true,
     }
   }
@@ -37,8 +40,9 @@ impl CollabMessage {
   pub fn origin(&self) -> CollabOrigin {
     match self {
       CollabMessage::ClientInit(value) => value.origin.clone(),
-      CollabMessage::Client(value) => value.origin.clone(),
-      CollabMessage::Server(_) => CollabOrigin::default(),
+      CollabMessage::ClientUpdate(value) => value.origin.clone(),
+      CollabMessage::ClientBroadcast(value) => value.origin.clone(),
+      CollabMessage::AwarenessUpdate(_) => CollabOrigin::default(),
       CollabMessage::ServerAck(_) => CollabOrigin::default(),
     }
   }
@@ -48,28 +52,35 @@ impl Display for CollabMessage {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
       CollabMessage::ClientInit(value) => f.write_fmt(format_args!(
-        "Init|uid:{}|device_id:{}|oid:{}|payload_len:{}|msg_id:{}|",
+        "ClientInit: [uid:{}|device_id:{}|oid:{}|payload_len:{}|msg_id:{}]",
         value.origin.uid,
         value.origin.device_id,
         value.object_id,
         value.payload.len(),
         value.msg_id,
       )),
-      CollabMessage::Client(value) => f.write_fmt(format_args!(
-        "Client|uid:{}|device_id:{}|oid:{}|payload_len:{}|msg_id:{}|",
+      CollabMessage::ClientUpdate(value) => f.write_fmt(format_args!(
+        "Client: [uid:{}|device_id:{}|oid:{}|payload_len:{}|msg_id:{}]",
         value.origin.uid,
         value.origin.device_id,
         value.object_id,
         value.payload.len(),
         value.msg_id,
       )),
-      CollabMessage::Server(value) => f.write_fmt(format_args!(
-        "Server|oid:{}|payload_len:{}|",
+      CollabMessage::ClientBroadcast(value) => f.write_fmt(format_args!(
+        "ClientBroadcast: [uid:{}|device_id:{}|oid:{}|payload_len:{}]",
+        value.origin.uid,
+        value.origin.device_id,
+        value.object_id,
+        value.payload.len(),
+      )),
+      CollabMessage::AwarenessUpdate(value) => f.write_fmt(format_args!(
+        "Awareness: [oid:{}|payload_len:{}]",
         value.object_id,
         value.payload.len(),
       )),
       CollabMessage::ServerAck(value) => f.write_fmt(format_args!(
-        "Ack|oid:{}|msg_id:{}|",
+        "Ack: [oid:{}|msg_id:{}]",
         value.object_id, value.msg_id,
       )),
     }
@@ -88,49 +99,51 @@ impl CollabMessage {
   pub fn into_payload(self) -> Vec<u8> {
     match self {
       CollabMessage::ClientInit(value) => value.payload,
-      CollabMessage::Client(value) => value.payload,
-      CollabMessage::Server(value) => value.payload,
-      CollabMessage::ServerAck(_) => vec![],
+      CollabMessage::ClientUpdate(value) => value.payload,
+      CollabMessage::ClientBroadcast(value) => value.payload,
+      CollabMessage::AwarenessUpdate(value) => value.payload,
+      CollabMessage::ServerAck(_) => Vec::new(),
     }
   }
 
   pub fn payload(&self) -> Option<&Vec<u8>> {
     match self {
       CollabMessage::ClientInit(value) => Some(&value.payload),
-      CollabMessage::Client(value) => Some(&value.payload),
-      CollabMessage::Server(value) => Some(&value.payload),
+      CollabMessage::ClientUpdate(value) => Some(&value.payload),
+      CollabMessage::ClientBroadcast(value) => Some(&value.payload),
+      CollabMessage::AwarenessUpdate(value) => Some(&value.payload),
       CollabMessage::ServerAck(_) => None,
     }
   }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CollabServerMessage {
+pub struct AwarenessUpdateMessage {
   object_id: String,
   payload: Vec<u8>,
 }
 
-impl CollabServerMessage {
+impl AwarenessUpdateMessage {
   pub fn new(object_id: String, payload: Vec<u8>) -> Self {
     Self { object_id, payload }
   }
 }
 
-impl From<CollabServerMessage> for CollabMessage {
-  fn from(value: CollabServerMessage) -> Self {
-    CollabMessage::Server(value)
+impl From<AwarenessUpdateMessage> for CollabMessage {
+  fn from(value: AwarenessUpdateMessage) -> Self {
+    CollabMessage::AwarenessUpdate(value)
   }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CollabClientMessage {
+pub struct ClientUpdateMessage {
   origin: CollabOrigin,
   object_id: String,
   msg_id: u32,
   payload: Vec<u8>,
 }
 
-impl CollabClientMessage {
+impl ClientUpdateMessage {
   pub fn new(origin: CollabOrigin, object_id: String, msg_id: u32, payload: Vec<u8>) -> Self {
     Self {
       origin,
@@ -141,9 +154,9 @@ impl CollabClientMessage {
   }
 }
 
-impl From<CollabClientMessage> for CollabMessage {
-  fn from(value: CollabClientMessage) -> Self {
-    CollabMessage::Client(value)
+impl From<ClientUpdateMessage> for CollabMessage {
+  fn from(value: ClientUpdateMessage) -> Self {
+    CollabMessage::ClientUpdate(value)
   }
 }
 
@@ -166,7 +179,7 @@ impl From<CollabAckMessage> for CollabMessage {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CollabInitMessage {
+pub struct ClientInitMessage {
   pub origin: CollabOrigin,
   pub object_id: String,
   pub msg_id: u32,
@@ -174,7 +187,7 @@ pub struct CollabInitMessage {
   pub md5: String,
 }
 
-impl CollabInitMessage {
+impl ClientInitMessage {
   pub fn new(origin: CollabOrigin, object_id: String, msg_id: u32, payload: Vec<u8>) -> Self {
     let md5 = md5(&payload);
     Self {
@@ -187,8 +200,8 @@ impl CollabInitMessage {
   }
 }
 
-impl From<CollabInitMessage> for CollabMessage {
-  fn from(value: CollabInitMessage) -> Self {
+impl From<ClientInitMessage> for CollabMessage {
+  fn from(value: ClientInitMessage) -> Self {
     CollabMessage::ClientInit(value)
   }
 }
@@ -196,4 +209,27 @@ impl From<CollabInitMessage> for CollabMessage {
 pub fn md5<T: AsRef<[u8]>>(data: T) -> String {
   let digest = md5::compute(data);
   format!("{:x}", digest)
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ClientBroadcastMessage {
+  origin: CollabOrigin,
+  object_id: String,
+  payload: Vec<u8>,
+}
+
+impl ClientBroadcastMessage {
+  pub fn new(origin: CollabOrigin, object_id: String, payload: Vec<u8>) -> Self {
+    Self {
+      origin,
+      object_id,
+      payload,
+    }
+  }
+}
+
+impl From<ClientBroadcastMessage> for CollabMessage {
+  fn from(value: ClientBroadcastMessage) -> Self {
+    CollabMessage::ClientBroadcast(value)
+  }
 }

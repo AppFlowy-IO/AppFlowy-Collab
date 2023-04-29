@@ -3,6 +3,7 @@ use std::sync::Arc;
 use collab::core::collab_awareness::MutexCollabAwareness;
 use futures_util::{SinkExt, StreamExt};
 
+use collab::core::collab::CollabOrigin;
 use lib0::encoding::Write;
 use tokio::select;
 use tokio::sync::broadcast::error::SendError;
@@ -17,8 +18,10 @@ use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 use yrs::UpdateSubscription;
 
 use crate::error::SyncError;
-use crate::message::{CollabAckMessage, CollabMessage, CollabServerMessage};
-use crate::protocol::{handle_msg, CollabSyncProtocol};
+use crate::message::{
+  AwarenessUpdateMessage, ClientBroadcastMessage, CollabAckMessage, CollabMessage,
+};
+use crate::protocol::{handle_msg, DefaultProtocol};
 
 /// A broadcast group can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
 /// to subscribes.
@@ -54,9 +57,14 @@ impl BroadcastGroup {
       let sink = sender.clone();
       let doc_sub = awareness
         .doc_mut()
-        .observe_update_v1(move |_txn, event| {
+        .observe_update_v1(move |txn, event| {
+          let origin = txn
+            .origin()
+            .map(|origin| CollabOrigin::from(origin))
+            .unwrap_or_default();
+
           let payload = gen_update_message(&event.update);
-          let msg = CollabServerMessage::new(cloned_oid.clone(), payload);
+          let msg = ClientBroadcastMessage::new(origin, cloned_oid.clone(), payload);
           if let Err(_e) = sink.send(msg.into()) {
             tracing::trace!("Broadcast group is closed");
           }
@@ -69,7 +77,7 @@ impl BroadcastGroup {
       let awareness_sub = awareness.on_update(move |awareness, event| {
         if let Ok(awareness_update) = gen_awareness_update_message(awareness, event) {
           let payload = Message::Awareness(awareness_update).encode_v1();
-          let msg = CollabServerMessage::new(cloned_oid.clone(), payload);
+          let msg = AwarenessUpdateMessage::new(cloned_oid.clone(), payload);
           if let Err(_e) = sink.send(msg.into()) {
             tracing::trace!("Broadcast group is closed");
           }
@@ -93,7 +101,7 @@ impl BroadcastGroup {
 
   /// Broadcasts user message to all active subscribers. Returns error if message could not have
   /// been broadcast.
-  pub fn broadcast(&self, msg: CollabServerMessage) -> Result<(), SendError<CollabMessage>> {
+  pub fn broadcast(&self, msg: AwarenessUpdateMessage) -> Result<(), SendError<CollabMessage>> {
     self.sender.send(msg.into())?;
     Ok(())
   }
@@ -146,17 +154,18 @@ impl BroadcastGroup {
           }
 
           let origin = collab_msg.origin();
-          let protocol = CollabSyncProtocol { origin };
+          let protocol = DefaultProtocol;
           tracing::trace!("[💭Server]: {}", collab_msg);
           let payload = collab_msg.payload().unwrap();
           let mut decoder = DecoderV1::from(payload.as_ref());
           while let Ok(msg) = Message::decode(&mut decoder) {
-            let resp = handle_msg(&protocol, &awareness, msg).await?;
+            let resp = handle_msg(&origin, &protocol, &awareness, msg).await?;
             let mut sink = sink.lock().await;
 
             // Broadcast the response message to all clients
             if let Some(resp) = resp {
-              let msg = CollabServerMessage::new(object_id.clone(), resp.encode_v1());
+              let msg =
+                ClientBroadcastMessage::new(origin.clone(), object_id.clone(), resp.encode_v1());
               sink
                 .send(msg.into())
                 .await

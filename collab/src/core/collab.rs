@@ -16,7 +16,6 @@ use yrs::{
 
 use crate::core::collab_plugin::CollabPlugin;
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
-use crate::error::CollabError;
 use crate::preclude::{ArrayRefWrapper, JsonValue};
 use crate::util::insert_json_value_to_map_ref;
 
@@ -298,16 +297,14 @@ impl Collab {
   }
 
   pub fn transact_mut(&self) -> TransactionMut {
-    let origin = CollabOrigin::new(self.uid, &self.device_id);
-    self.doc.transact_mut_with(origin)
+    self.doc.transact_mut_with(self.make_origin())
   }
 
   pub fn with_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let origin = CollabOrigin::new(self.uid, &self.device_id);
-    let mut txn = self.doc.transact_mut_with(origin);
+    let mut txn = self.doc.transact_mut_with(self.make_origin());
     let ret = f(&mut txn);
     drop(txn);
     ret
@@ -316,14 +313,19 @@ impl Collab {
   fn map_wrapper_with(&self, map_ref: MapRef) -> MapRefWrapper {
     MapRefWrapper::new(
       map_ref,
-      CollabContext::new(self.uid, self.plugins.clone(), self.doc.clone()),
+      CollabContext::new(self.make_origin(), self.plugins.clone(), self.doc.clone()),
     )
   }
   fn array_wrapper_with(&self, array_ref: ArrayRef) -> ArrayRefWrapper {
     ArrayRefWrapper::new(
       array_ref,
-      CollabContext::new(self.uid, self.plugins.clone(), self.doc.clone()),
+      CollabContext::new(self.make_origin(), self.plugins.clone(), self.doc.clone()),
     )
+  }
+
+  #[inline(always)]
+  fn make_origin(&self) -> CollabOrigin {
+    CollabOrigin::new(self.uid, &self.device_id)
   }
 }
 
@@ -341,10 +343,7 @@ fn observe_doc(
     .observe_update_v1(move |txn, event| {
       // If the origin of the txn is none, it means that the update is coming from a remote source.
       // Otherwise, it's a local update. The plugins only handle the local update
-      if let Some(Some(origin)) = txn
-        .origin()
-        .map(|origin| CollabOrigin::try_from(origin).ok())
-      {
+      if let Some(origin) = txn.origin().map(|origin| CollabOrigin::from(origin)) {
         if origin.uid == uid && origin.device_id == local_device_id {
           cloned_plugins.read().iter().for_each(|plugin| {
             plugin.receive_local_update(&cloned_oid, txn, &event.update);
@@ -353,7 +352,7 @@ fn observe_doc(
         } else {
           let remote_origin = origin;
           tracing::trace!(
-            "[🦀Client]: {}|{}| did apply {}|{} update",
+            "[🦀Client]: [uid:{}|device_id:{}] did apply remote [uid:{}|device_id:{}] update",
             uid,
             local_device_id,
             remote_origin.uid,
@@ -426,15 +425,19 @@ impl CollabBuilder {
 
 #[derive(Clone)]
 pub struct CollabContext {
-  uid: i64,
+  origin: CollabOrigin,
   doc: Doc,
   #[allow(dead_code)]
   plugins: Plugins,
 }
 
 impl CollabContext {
-  fn new(uid: i64, plugins: Plugins, doc: Doc) -> Self {
-    Self { uid, plugins, doc }
+  fn new(origin: CollabOrigin, plugins: Plugins, doc: Doc) -> Self {
+    Self {
+      origin,
+      plugins,
+      doc,
+    }
   }
 
   pub fn transact(&self) -> Transaction {
@@ -445,7 +448,7 @@ impl CollabContext {
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let mut txn = self.doc.transact_mut_with(self.uid);
+    let mut txn = self.doc.transact_mut_with(self.origin.clone());
     let ret = f(&mut txn);
     drop(txn);
     ret
@@ -511,10 +514,19 @@ impl Deref for Plugins {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CollabOrigin {
   pub uid: i64,
   pub device_id: String,
+}
+
+impl Default for CollabOrigin {
+  fn default() -> Self {
+    Self {
+      uid: 0,
+      device_id: "default".to_string(),
+    }
+  }
 }
 
 impl CollabOrigin {
@@ -533,11 +545,8 @@ impl From<CollabOrigin> for Origin {
   }
 }
 
-impl TryFrom<&Origin> for CollabOrigin {
-  type Error = CollabError;
-
-  fn try_from(value: &Origin) -> Result<Self, Self::Error> {
-    let o = serde_json::from_slice(value.as_ref())?;
-    Ok(o)
+impl From<&Origin> for CollabOrigin {
+  fn from(value: &Origin) -> Self {
+    serde_json::from_slice(value.as_ref()).unwrap_or_default()
   }
 }

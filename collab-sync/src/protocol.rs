@@ -1,8 +1,8 @@
 use collab::core::collab_awareness::MutexCollabAwareness;
 
 use collab::core::collab::CollabOrigin;
-use y_sync::awareness::Awareness;
-use y_sync::sync::{Error, Message, Protocol, SyncMessage};
+use y_sync::awareness::{Awareness, AwarenessUpdate};
+use y_sync::sync::{Error, Message, SyncMessage};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::{Encode, Encoder};
 use yrs::{ReadTxn, StateVector, Transact, Update};
@@ -34,15 +34,11 @@ use yrs::{ReadTxn, StateVector, Transact, Update};
 // |        |<-(9) Broadcast Update
 // |        |             |
 // ********************************
-/// A implementation of y-sync [Protocol].
-pub struct CollabSyncProtocol {
-  pub origin: CollabOrigin,
-}
+/// A implementation of y-sync [CollabSyncProtocol].
+pub struct DefaultProtocol;
+impl CollabSyncProtocol for DefaultProtocol {}
 
-impl Protocol for CollabSyncProtocol {
-  /// To be called whenever a new connection has been accepted. Returns an encoded list of
-  /// messages to be send back to initiator. This binary may contain multiple messages inside,
-  /// stored one after another.
+pub trait CollabSyncProtocol {
   fn start<E: Encoder>(&self, awareness: &Awareness, encoder: &mut E) -> Result<(), Error> {
     let (sv, update) = {
       let sv = awareness.doc().transact().state_vector();
@@ -69,10 +65,11 @@ impl Protocol for CollabSyncProtocol {
   /// an update to current `awareness` document instance.
   fn handle_sync_step2(
     &self,
+    origin: &CollabOrigin,
     awareness: &mut Awareness,
     update: Update,
   ) -> Result<Option<Message>, Error> {
-    let mut txn = awareness.doc().transact_mut_with(self.origin.clone());
+    let mut txn = awareness.doc().transact_mut_with(origin.clone());
     // let mut txn = awareness.doc().transact_mut();
     txn.apply_update(update);
     Ok(None)
@@ -82,15 +79,57 @@ impl Protocol for CollabSyncProtocol {
   /// `awareness` document instance.
   fn handle_update(
     &self,
+    origin: &CollabOrigin,
     awareness: &mut Awareness,
     update: Update,
   ) -> Result<Option<Message>, Error> {
-    self.handle_sync_step2(awareness, update)
+    self.handle_sync_step2(origin, awareness, update)
+  }
+
+  fn handle_auth(
+    &self,
+    awareness: &Awareness,
+    deny_reason: Option<String>,
+  ) -> Result<Option<Message>, Error> {
+    if let Some(reason) = deny_reason {
+      Err(Error::PermissionDenied { reason })
+    } else {
+      Ok(None)
+    }
+  }
+
+  /// Returns an [AwarenessUpdate] which is a serializable representation of a current `awareness`
+  /// instance.
+  fn handle_awareness_query(&self, awareness: &Awareness) -> Result<Option<Message>, Error> {
+    let update = awareness.update()?;
+    Ok(Some(Message::Awareness(update)))
+  }
+
+  /// Reply to awareness query or just incoming [AwarenessUpdate], where current `awareness`
+  /// instance is being updated with incoming data.
+  fn handle_awareness_update(
+    &self,
+    awareness: &mut Awareness,
+    update: AwarenessUpdate,
+  ) -> Result<Option<Message>, Error> {
+    awareness.apply_update(update)?;
+    Ok(None)
+  }
+
+  /// Y-sync protocol enables to extend its own settings with custom handles. These can be
+  /// implemented here. By default it returns an [Error::Unsupported].
+  fn missing_handle(
+    &self,
+    awareness: &mut Awareness,
+    tag: u8,
+    data: Vec<u8>,
+  ) -> Result<Option<Message>, Error> {
+    Err(Error::Unsupported(tag))
   }
 }
-
 /// Handles incoming messages from the client/server
-pub async fn handle_msg<P: Protocol>(
+pub async fn handle_msg<P: CollabSyncProtocol>(
+  origin: &CollabOrigin,
   protocol: &P,
   awareness: &MutexCollabAwareness,
   msg: Message,
@@ -103,11 +142,11 @@ pub async fn handle_msg<P: Protocol>(
       },
       SyncMessage::SyncStep2(update) => {
         let mut awareness = awareness.lock();
-        protocol.handle_sync_step2(&mut awareness, Update::decode_v1(&update)?)
+        protocol.handle_sync_step2(origin, &mut awareness, Update::decode_v1(&update)?)
       },
       SyncMessage::Update(update) => {
         let mut awareness = awareness.lock();
-        protocol.handle_update(&mut awareness, Update::decode_v1(&update)?)
+        protocol.handle_update(origin, &mut awareness, Update::decode_v1(&update)?)
       },
     },
     Message::Auth(reason) => {

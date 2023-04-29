@@ -7,7 +7,7 @@ use collab::core::collab_awareness::MutexCollabAwareness;
 use collab::preclude::CollabPlugin;
 use collab_sync::client::ClientSync;
 use collab_sync::error::SyncError;
-use collab_sync::message::{CollabClientMessage, CollabMessage};
+use collab_sync::message::{ClientUpdateMessage, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
 use y_sync::sync::{Message, SyncMessage};
 use yrs::updates::encoder::Encode;
@@ -64,14 +64,14 @@ where
     tokio::spawn(async move {
       if let Some(weak_client_sync) = weak_client_sync.upgrade() {
         tracing::trace!(
-          "[🦀Client]: uid:{}|device_id:{}|msg_id:{}| send update",
+          "[🦀Client]: [uid:{}|device_id:{}|msg_id:{}] send update",
           cloned_origin.uid,
           cloned_origin.device_id,
           msg_id,
         );
         let payload = Message::Sync(SyncMessage::Update(update)).encode_v1();
         let msg: CollabMessage =
-          CollabClientMessage::new(cloned_origin, object_id, msg_id, payload).into();
+          ClientUpdateMessage::new(cloned_origin, object_id, msg_id, payload).into();
         weak_client_sync.send(msg).await.unwrap();
       }
     });

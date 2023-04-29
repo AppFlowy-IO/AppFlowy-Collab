@@ -14,13 +14,13 @@ use lib0::decoding::Cursor;
 use tokio::spawn;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use y_sync::sync::{MessageReader, Protocol};
+use y_sync::sync::MessageReader;
 use yrs::updates::decoder::DecoderV1;
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
 use crate::error::SyncError;
-use crate::message::{CollabClientMessage, CollabInitMessage, CollabMessage};
-use crate::protocol::{handle_msg, CollabClientProtocol, CollabSyncProtocol};
+use crate::message::{ClientInitMessage, ClientUpdateMessage, CollabMessage};
+use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultProtocol};
 
 /// [ClientSync] defines a connection handler capable of exchanging Yrs/Yjs messages.
 pub struct ClientSync<Sink, Stream> {
@@ -51,7 +51,7 @@ where
     sink: Sink,
     stream: Stream,
   ) -> Self {
-    let protocol = CollabClientProtocol;
+    let protocol = DefaultProtocol;
     Self::with_protocol(
       origin,
       object_id,
@@ -80,7 +80,7 @@ where
     protocol: P,
   ) -> Self
   where
-    P: Protocol + Send + Sync + 'static,
+    P: CollabSyncProtocol + Send + Sync + 'static,
   {
     let object_id = object_id.to_string();
     let sink = Arc::new(Mutex::new(sink));
@@ -164,7 +164,7 @@ async fn send_doc_state<P, Sink, E>(
   protocol: &P,
 ) -> Result<(), SyncError>
 where
-  P: Protocol,
+  P: CollabSyncProtocol,
   E: Into<SyncError> + Send + Sync,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
 {
@@ -182,7 +182,7 @@ where
       .upgrade()
       .unwrap()
       .fetch_add(1, Ordering::SeqCst);
-    let msg = CollabInitMessage::new(origin, object_id, msg_id, payload);
+    let msg = ClientInitMessage::new(origin, object_id, msg_id, payload);
     let _md5 = msg.md5.clone();
 
     if let Some(sink) = weak_sink.upgrade() {
@@ -220,7 +220,7 @@ async fn spawn_doc_stream<E, Sink, Stream, P>(
   protocol: P,
 ) -> Result<(), SyncError>
 where
-  P: Protocol,
+  P: CollabSyncProtocol,
   E: Into<SyncError> + Send + Sync,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
@@ -270,7 +270,7 @@ async fn process_message<P, E, Sink>(
   msg: CollabMessage,
 ) -> Result<(), SyncError>
 where
-  P: Protocol,
+  P: CollabSyncProtocol,
   E: Into<SyncError> + Send + Sync,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
 {
@@ -286,11 +286,11 @@ where
   for msg in reader {
     let msg = msg?;
 
-    if let Some(resp) = handle_msg(protocol, awareness, msg).await? {
+    if let Some(resp) = handle_msg(&origin, protocol, awareness, msg).await? {
       let mut sender = sink.lock().await;
       let msg_id = msg_id_counter.fetch_add(1, Ordering::SeqCst);
       let payload = resp.encode_v1();
-      let msg = CollabClientMessage::new(origin.clone(), object_id.to_string(), msg_id, payload);
+      let msg = ClientUpdateMessage::new(origin.clone(), object_id.to_string(), msg_id, payload);
       sender.send(msg.into()).await.map_err(|e| e.into())?;
     }
   }
