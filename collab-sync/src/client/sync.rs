@@ -20,7 +20,7 @@ use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
 use crate::error::SyncError;
 use crate::message::{CollabClientMessage, CollabInitMessage, CollabMessage};
-use crate::protocol::{handle_msg, CollabSyncProtocol};
+use crate::protocol::{handle_msg, CollabClientProtocol, CollabSyncProtocol};
 
 /// [ClientSync] defines a connection handler capable of exchanging Yrs/Yjs messages.
 pub struct ClientSync<Sink, Stream> {
@@ -51,9 +51,7 @@ where
     sink: Sink,
     stream: Stream,
   ) -> Self {
-    let protocol = CollabSyncProtocol {
-      origin: origin.clone(),
-    };
+    let protocol = CollabClientProtocol;
     Self::with_protocol(
       origin,
       object_id,
@@ -262,6 +260,7 @@ where
   Ok(())
 }
 
+/// Continuously handle messages from the remote doc
 async fn process_message<P, E, Sink>(
   object_id: &str,
   msg_id_counter: &Arc<AtomicU32>,

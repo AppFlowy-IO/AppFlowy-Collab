@@ -63,6 +63,12 @@ where
 
     tokio::spawn(async move {
       if let Some(weak_client_sync) = weak_client_sync.upgrade() {
+        tracing::trace!(
+          "[🦀Client]: uid:{}|device_id:{}|msg_id:{}| send update",
+          cloned_origin.uid,
+          cloned_origin.device_id,
+          msg_id,
+        );
         let payload = Message::Sync(SyncMessage::Update(update)).encode_v1();
         let msg: CollabMessage =
           CollabClientMessage::new(cloned_origin, object_id, msg_id, payload).into();

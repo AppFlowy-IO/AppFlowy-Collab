@@ -7,10 +7,6 @@ use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::{Encode, Encoder};
 use yrs::{ReadTxn, StateVector, Transact, Update};
 
-/// A implementation of y-sync [Protocol].
-pub struct CollabSyncProtocol {
-  pub origin: CollabOrigin,
-}
 // In a client-server model. The client is the initiator of the connection. The server is the
 // responder. The client sends a sync-step-1 message to the server. The server responds with a
 // sync-step-2 message. The client then sends an update message to the server. The server applies
@@ -38,6 +34,10 @@ pub struct CollabSyncProtocol {
 // |        |<-(9) Broadcast Update
 // |        |             |
 // ********************************
+/// A implementation of y-sync [Protocol].
+pub struct CollabSyncProtocol {
+  pub origin: CollabOrigin,
+}
 
 impl Protocol for CollabSyncProtocol {
   /// To be called whenever a new connection has been accepted. Returns an encoded list of
@@ -73,6 +73,7 @@ impl Protocol for CollabSyncProtocol {
     update: Update,
   ) -> Result<Option<Message>, Error> {
     let mut txn = awareness.doc().transact_mut_with(self.origin.clone());
+    // let mut txn = awareness.doc().transact_mut();
     txn.apply_update(update);
     Ok(None)
   }
