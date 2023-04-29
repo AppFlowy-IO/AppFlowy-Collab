@@ -2,6 +2,7 @@ use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;
 
+use collab::core::collab::CollabOrigin;
 use collab::core::collab_awareness::MutexCollabAwareness;
 use collab::preclude::CollabPlugin;
 use collab_sync::client::ClientSync;
@@ -12,7 +13,6 @@ use y_sync::sync::{Message, SyncMessage};
 use yrs::updates::encoder::Encode;
 
 pub struct SyncPlugin<Sink, Stream> {
-  uid: i64,
   object_id: String,
   client_sync: Arc<ClientSync<Sink, Stream>>,
   msg_id_counter: Arc<AtomicU32>,
@@ -20,7 +20,7 @@ pub struct SyncPlugin<Sink, Stream> {
 
 impl<Sink, Stream> SyncPlugin<Sink, Stream> {
   pub fn new<E>(
-    uid: i64,
+    origin: CollabOrigin,
     object_id: &str,
     awareness: Arc<MutexCollabAwareness>,
     sink: Sink,
@@ -33,18 +33,16 @@ impl<Sink, Stream> SyncPlugin<Sink, Stream> {
   {
     let msg_id_counter = Arc::new(AtomicU32::new(0));
     let client_sync = Arc::new(ClientSync::new(
-      uid,
+      origin,
       object_id,
       msg_id_counter.clone(),
       awareness,
       sink,
       stream,
     ));
-    let doc_id = object_id.to_string();
     Self {
-      uid,
       client_sync,
-      object_id: doc_id,
+      object_id: object_id.to_string(),
       msg_id_counter,
     }
   }
@@ -56,18 +54,18 @@ where
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {
-  fn did_receive_local_update(&self, _object_id: &str, update: &[u8]) {
+  fn did_receive_local_update(&self, origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
     let weak_client_sync = Arc::downgrade(&self.client_sync);
     let update = update.to_vec();
     let object_id = self.object_id.clone();
-    let from_uid = self.uid;
     let msg_id = self.msg_id_counter.fetch_add(1, SeqCst);
+    let cloned_origin = origin.clone();
 
     tokio::spawn(async move {
       if let Some(weak_client_sync) = weak_client_sync.upgrade() {
         let payload = Message::Sync(SyncMessage::Update(update)).encode_v1();
         let msg: CollabMessage =
-          CollabClientMessage::new(from_uid, object_id, msg_id, payload).into();
+          CollabClientMessage::new(cloned_origin, object_id, msg_id, payload).into();
         weak_client_sync.send(msg).await.unwrap();
       }
     });

@@ -14,6 +14,7 @@ use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite, LengthDelimit
 
 use collab::preclude::Collab;
 
+use collab::core::collab::CollabOrigin;
 use collab_sync::message::CollabMessage;
 use y_sync::sync::Error;
 
@@ -111,7 +112,7 @@ pub async fn spawn_server_with_data(group: CollabGroup) -> std::io::Result<TestS
 }
 
 pub async fn make_test_collab_group(uid: i64, object_id: &str) -> CollabGroup {
-  let awareness = MutexCollabAwareness::new(uid, object_id, vec![]);
+  let awareness = MutexCollabAwareness::new(CollabOrigin::new(uid, ""), object_id, vec![]);
   let broadcast = BroadcastGroup::new(object_id, awareness.clone(), 10).await;
   CollabGroup {
     awareness,

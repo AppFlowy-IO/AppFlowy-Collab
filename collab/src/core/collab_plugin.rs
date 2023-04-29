@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::core::collab::CollabOrigin;
 use yrs::{Doc, Transaction, TransactionMut};
 
 pub trait CollabPlugin: Send + Sync + 'static {
@@ -15,7 +16,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
   /// the Yjs document.
   fn receive_local_update(&self, _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
 
-  fn did_receive_local_update(&self, _object_id: &str, _update: &[u8]) {}
+  fn did_receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, _update: &[u8]) {}
 
   /// Called after each [TransactionMut]
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}

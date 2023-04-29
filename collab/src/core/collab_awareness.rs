@@ -4,6 +4,7 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use serde_json::Value;
 
+use crate::core::collab::CollabOrigin;
 use y_sync::awareness::Awareness;
 
 use crate::preclude::{Collab, CollabPlugin};
@@ -14,8 +15,8 @@ pub struct CollabAwareness {
 }
 
 impl CollabAwareness {
-  pub fn new(uid: i64, object_id: &str, plugins: Vec<Arc<dyn CollabPlugin>>) -> Self {
-    let collab = Collab::new(uid, object_id, plugins);
+  pub fn new(origin: CollabOrigin, object_id: &str, plugins: Vec<Arc<dyn CollabPlugin>>) -> Self {
+    let collab = Collab::new(origin.uid, object_id, plugins).with_device_id(origin.device_id);
     let awareness = Awareness::new(collab.get_doc().clone());
     CollabAwareness { collab, awareness }
   }
@@ -38,8 +39,8 @@ impl DerefMut for CollabAwareness {
 pub struct MutexCollabAwareness(Arc<Mutex<CollabAwareness>>);
 
 impl MutexCollabAwareness {
-  pub fn new(uid: i64, object_id: &str, plugins: Vec<Arc<dyn CollabPlugin>>) -> Self {
-    let awareness = CollabAwareness::new(uid, object_id, plugins);
+  pub fn new(origin: CollabOrigin, object_id: &str, plugins: Vec<Arc<dyn CollabPlugin>>) -> Self {
+    let awareness = CollabAwareness::new(origin, object_id, plugins);
     MutexCollabAwareness(Arc::new(Mutex::new(awareness)))
   }
 

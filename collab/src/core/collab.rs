@@ -29,6 +29,7 @@ pub type MapSubscription = Subscription<MapSubscriptionCallback>;
 
 pub struct Collab {
   uid: i64,
+  device_id: String,
   doc: Doc,
   #[allow(dead_code)]
   pub object_id: String,
@@ -47,8 +48,10 @@ impl Collab {
     });
     let data = doc.get_or_insert_map(DATA_SECTION);
     let plugins = Plugins::new(plugins);
+    let device_id = Default::default();
     Self {
       uid,
+      device_id,
       object_id,
       doc,
       data,
@@ -56,6 +59,11 @@ impl Collab {
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
     }
+  }
+
+  pub fn with_device_id(mut self, device_id: String) -> Self {
+    self.device_id = device_id;
+    self
   }
 
   pub fn get_doc(&self) -> &Doc {
@@ -87,6 +95,7 @@ impl Collab {
 
     let (update_subscription, after_txn_subscription) = observe_doc(
       self.uid,
+      &self.device_id,
       &self.doc,
       self.object_id.clone(),
       self.plugins.clone(),
@@ -289,7 +298,7 @@ impl Collab {
   }
 
   pub fn transact_mut(&self) -> TransactionMut {
-    let origin = CollabOrigin(self.uid);
+    let origin = CollabOrigin::new(self.uid, &self.device_id);
     self.doc.transact_mut_with(origin)
   }
 
@@ -297,7 +306,7 @@ impl Collab {
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let origin = CollabOrigin(self.uid);
+    let origin = CollabOrigin::new(self.uid, &self.device_id);
     let mut txn = self.doc.transact_mut_with(origin);
     let ret = f(&mut txn);
     drop(txn);
@@ -320,27 +329,39 @@ impl Collab {
 
 fn observe_doc(
   uid: i64,
+  device_id: &str,
   doc: &Doc,
   oid: String,
   plugins: Plugins,
 ) -> (UpdateSubscription, AfterTransactionSubscription) {
   let cloned_oid = oid.clone();
+  let local_device_id = device_id.to_string();
   let cloned_plugins = plugins.clone();
   let update_sub = doc
     .observe_update_v1(move |txn, event| {
+      // If the origin of the txn is none, it means that the update is coming from a remote source.
+      // Otherwise, it's a local update. The plugins only handle the local update
       if let Some(Some(origin)) = txn
         .origin()
         .map(|origin| CollabOrigin::try_from(origin).ok())
       {
-        // The plugins only handle the local update
-        if origin.0 == uid {
+        if origin.uid == uid && origin.device_id == local_device_id {
           cloned_plugins.read().iter().for_each(|plugin| {
             plugin.receive_local_update(&cloned_oid, txn, &event.update);
-            plugin.did_receive_local_update(&cloned_oid, &event.update);
+            plugin.did_receive_local_update(&origin, &cloned_oid, &event.update);
           });
+        } else {
+          let remote_origin = origin;
+          tracing::trace!(
+            "[🦀Client]: {}|{}| did apply {}|{} update",
+            uid,
+            local_device_id,
+            remote_origin.uid,
+            remote_origin.device_id,
+          );
         }
       } else {
-        tracing::warn!("🟡The origin is empty")
+        tracing::trace!("[🦀Client]: did apply remote update");
       }
     })
     .unwrap();
@@ -490,8 +511,20 @@ impl Deref for Plugins {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub(crate) struct CollabOrigin(i64);
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct CollabOrigin {
+  pub uid: i64,
+  pub device_id: String,
+}
+
+impl CollabOrigin {
+  pub fn new(uid: i64, device_id: &str) -> Self {
+    Self {
+      uid,
+      device_id: device_id.to_string(),
+    }
+  }
+}
 
 impl From<CollabOrigin> for Origin {
   fn from(o: CollabOrigin) -> Self {

@@ -67,8 +67,8 @@ impl BroadcastGroup {
       let sink = sender.clone();
       let cloned_oid = object_id.clone();
       let awareness_sub = awareness.on_update(move |awareness, event| {
-        if let Ok(u) = gen_awareness_update_message(awareness, event) {
-          let payload = Message::Awareness(u).encode_v1();
+        if let Ok(awareness_update) = gen_awareness_update_message(awareness, event) {
+          let payload = Message::Awareness(awareness_update).encode_v1();
           let msg = CollabServerMessage::new(cloned_oid.clone(), payload);
           if let Err(_e) = sink.send(msg.into()) {
             tracing::trace!("Broadcast group is closed");
@@ -115,17 +115,17 @@ impl BroadcastGroup {
     <Sink as futures_util::Sink<CollabMessage>>::Error: std::error::Error + Send + Sync,
     E: std::error::Error + Send + Sync + 'static,
   {
-    tracing::trace!("pServer]: new client connected");
+    tracing::trace!("[💭Server]: new client connected");
     // Receive a new message from client and forwarding the message to the other clients
     let sink_task = {
       let sink = sink.clone();
       let mut receiver = self.sender.subscribe();
       tokio::spawn(async move {
         while let Ok(msg) = receiver.recv().await {
-          tracing::trace!("[Server]: broadcast client message: {}", msg);
+          tracing::trace!("[💭Server]: broadcast client message: {}", msg);
           let mut sink = sink.lock().await;
           if let Err(e) = sink.send(msg).await {
-            tracing::error!("[Server]: broadcast client message failed: {:?}", e);
+            tracing::error!("[💭Server]: broadcast client message failed: {:?}", e);
             return Err(SyncError::Internal(Box::new(e)));
           }
         }
@@ -145,14 +145,15 @@ impl BroadcastGroup {
             continue;
           }
 
-          tracing::trace!("[Server]: {}", collab_msg);
+          let origin = collab_msg.origin();
+          tracing::trace!("[💭Server]: {}", collab_msg);
           let payload = collab_msg.payload().unwrap();
           let mut decoder = DecoderV1::from(payload.as_ref());
           while let Ok(msg) = Message::decode(&mut decoder) {
             let resp = handle_msg(&CollabSyncProtocol, &awareness, msg).await?;
             let mut sink = sink.lock().await;
 
-            // Send the doc response to the client if there is any
+            // Broadcast the response message to all clients
             if let Some(resp) = resp {
               let msg = CollabServerMessage::new(object_id.clone(), resp.encode_v1());
               sink

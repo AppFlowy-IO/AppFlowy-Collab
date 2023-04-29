@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::task::{Context, Poll};
 
+use collab::core::collab::CollabOrigin;
 use collab::core::collab_awareness::MutexCollabAwareness;
 use futures_util::sink::SinkExt;
 use futures_util::StreamExt;
@@ -23,6 +24,7 @@ use crate::protocol::{handle_msg, CollabSyncProtocol};
 
 /// [ClientSync] defines a connection handler capable of exchanging Yrs/Yjs messages.
 pub struct ClientSync<Sink, Stream> {
+  origin: CollabOrigin,
   runner: JoinHandle<Result<(), SyncError>>,
   awareness: Arc<MutexCollabAwareness>,
   inbox: Arc<Mutex<Sink>>,
@@ -42,7 +44,7 @@ where
   /// Wraps incoming [WebSocket] connection and supplied [Awareness] accessor into a new
   /// connection handler capable of exchanging Yrs/Yjs messages.
   pub fn new(
-    uid: i64,
+    origin: CollabOrigin,
     object_id: &str,
     msg_id_counter: Arc<AtomicU32>,
     awareness: Arc<MutexCollabAwareness>,
@@ -50,7 +52,7 @@ where
     stream: Stream,
   ) -> Self {
     Self::with_protocol(
-      uid,
+      origin,
       object_id,
       msg_id_counter,
       awareness,
@@ -68,7 +70,7 @@ where
   /// Wraps incoming [WebSocket] connection and supplied [Awareness] accessor into a new
   /// connection handler capable of exchanging Yrs/Yjs messages.
   pub fn with_protocol<P>(
-    uid: i64,
+    origin: CollabOrigin,
     object_id: &str,
     msg_id_counter: Arc<AtomicU32>,
     awareness: Arc<MutexCollabAwareness>,
@@ -86,6 +88,7 @@ where
     let weak_awareness = Arc::downgrade(&awareness);
     let weak_msg_id_counter = Arc::downgrade(&msg_id_counter);
     let cloned_oid = object_id;
+    let cloned_origin = origin.clone();
     let out_going_msg = Arc::new(DashMap::new());
 
     // Spawn the task that handles incoming messages. The stream will stop if the
@@ -93,7 +96,7 @@ where
     let runner: JoinHandle<Result<(), SyncError>> = spawn(async move {
       // Send the initial document state when the client connects
       send_doc_state::<P, Sink, E>(
-        uid,
+        cloned_origin.clone(),
         cloned_oid.clone(),
         weak_msg_id_counter.clone(),
         &weak_sink,
@@ -104,7 +107,7 @@ where
 
       // Spawn the stream that continuously reads the doc's updates.
       spawn_doc_stream(
-        uid,
+        cloned_origin,
         cloned_oid,
         weak_msg_id_counter,
         stream,
@@ -117,6 +120,7 @@ where
       Ok(())
     });
     ClientSync {
+      origin,
       msg_id_counter,
       runner,
       awareness,
@@ -152,7 +156,7 @@ where
 
 /// To be called whenever a new connection has been accepted
 async fn send_doc_state<P, Sink, E>(
-  uid: i64,
+  origin: CollabOrigin,
   object_id: String,
   msg_id_counter: Weak<AtomicU32>,
   weak_sink: &Weak<Mutex<Sink>>,
@@ -178,8 +182,8 @@ where
       .upgrade()
       .unwrap()
       .fetch_add(1, Ordering::SeqCst);
-    let msg = CollabInitMessage::new(uid, object_id, msg_id, payload);
-    let md5 = msg.md5.clone();
+    let msg = CollabInitMessage::new(origin, object_id, msg_id, payload);
+    let _md5 = msg.md5.clone();
 
     if let Some(sink) = weak_sink.upgrade() {
       let mut s = sink.lock().await;
@@ -193,7 +197,7 @@ where
   Ok(())
 }
 
-///
+/// Continuously read messages from the remote doc
 ///
 /// # Arguments
 ///
@@ -208,7 +212,7 @@ where
 /// returns: Result<(), SyncError>
 ///
 async fn spawn_doc_stream<E, Sink, Stream, P>(
-  uid: i64,
+  origin: CollabOrigin,
   object_id: String,
   msg_id_counter: Weak<AtomicU32>,
   mut stream: Stream,
@@ -232,7 +236,6 @@ where
         ) {
           (Some(mut sink), Some(awareness), Some(msg_id_counter)) => {
             process_message(
-              uid,
               &object_id,
               &msg_id_counter,
               &protocol,
@@ -259,7 +262,6 @@ where
 }
 
 async fn process_message<P, E, Sink>(
-  uid: i64,
   object_id: &str,
   msg_id_counter: &Arc<AtomicU32>,
   protocol: &P,
@@ -272,13 +274,13 @@ where
   E: Into<SyncError> + Send + Sync,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
 {
+  let origin = msg.origin();
   let payload = msg.into_payload();
 
   if payload.is_empty() {
     return Ok(());
   }
   //
-
   let mut decoder = DecoderV1::new(Cursor::new(&payload));
   let reader = MessageReader::new(&mut decoder);
   for msg in reader {
@@ -288,7 +290,7 @@ where
       let mut sender = sink.lock().await;
       let msg_id = msg_id_counter.fetch_add(1, Ordering::SeqCst);
       let payload = resp.encode_v1();
-      let msg = CollabClientMessage::new(uid, object_id.to_string(), msg_id, payload);
+      let msg = CollabClientMessage::new(origin.clone(), object_id.to_string(), msg_id, payload);
       sender.send(msg.into()).await.map_err(|e| e.into())?;
     }
   }
