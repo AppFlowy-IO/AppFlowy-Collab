@@ -81,6 +81,7 @@ impl CollabPlugin for RocksDiskPlugin {
       if self.config.flush_doc {
         let _ = self.db.with_write_txn(|w_db_txn| {
           w_db_txn.flush_doc(self.uid, object_id, txn)?;
+          self.initial_update_count.store(0, Ordering::SeqCst);
           Ok(())
         });
       }
@@ -101,7 +102,7 @@ impl CollabPlugin for RocksDiskPlugin {
     self.did_load.store(true, Ordering::SeqCst);
   }
 
-  fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
+  fn receive_local_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
     // Only push update if the doc is loaded
     if !self.did_load.load(Ordering::SeqCst) {
       return;
@@ -148,7 +149,7 @@ pub struct Config {
   /// But if you want to keep the updates, you can set this to false.
   remove_updates_after_snapshot: bool,
 
-  /// Flush the document
+  /// Flush the document. Default is [false].
   /// After flush the document, all updates will be removed and the document state vector that
   /// contains all the updates will be reset.
   flush_doc: bool,

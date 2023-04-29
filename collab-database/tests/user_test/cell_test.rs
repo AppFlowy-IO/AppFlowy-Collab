@@ -9,7 +9,7 @@ use crate::user_test::helper::{user_database_test, UserDatabaseTest};
 fn insert_cell_test() {
   let test = user_database_with_default_row();
   let database = test.get_database("d1").unwrap();
-  database.update_row(&1.into(), |row_update| {
+  database.update_row(1, |row_update| {
     row_update.update_cells(|cells_update| {
       cells_update.insert(
         "f1",
@@ -27,7 +27,7 @@ fn insert_cell_test() {
 fn update_cell_test() {
   let test = user_database_with_default_row();
   let database = test.get_database("d1").unwrap();
-  database.update_row(&1.into(), |row_update| {
+  database.update_row(1, |row_update| {
     row_update.update_cells(|cells_update| {
       cells_update.insert(
         "f1",
@@ -36,7 +36,7 @@ fn update_cell_test() {
     });
   });
 
-  database.update_row(&1.into(), |row_update| {
+  database.update_row(1, |row_update| {
     row_update.update_cells(|cells_update| {
       cells_update.update(
         "f1",
@@ -65,13 +65,8 @@ fn update_not_exist_row_test() {
     })
     .unwrap();
 
-<<<<<<< Updated upstream
   database.update_row(1, |_row_update| {});
   let row = database.get_row(1);
-=======
-  database.update_row(&1.into(), |_row_update| {});
-  let row = database.get_row(&1.into());
->>>>>>> Stashed changes
   assert!(row.is_none())
 }
 

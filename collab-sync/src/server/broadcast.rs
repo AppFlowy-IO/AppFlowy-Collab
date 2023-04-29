@@ -17,7 +17,7 @@ use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 use yrs::UpdateSubscription;
 
 use crate::error::SyncError;
-use crate::message::{CollabMessage, CollabServerMessage};
+use crate::message::{CollabAckMessage, CollabMessage, CollabServerMessage};
 use crate::protocol::{handle_msg, CollabSyncProtocol};
 
 /// A broadcast group can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
@@ -139,25 +139,32 @@ impl BroadcastGroup {
       let object_id = self.object_id.clone();
       tokio::spawn(async move {
         while let Some(res) = stream.next().await {
-          let msg = res.map_err(|e| SyncError::Internal(Box::new(e)))?;
-          tracing::trace!("[Server]: {}", msg);
+          let collab_msg = res.map_err(|e| SyncError::Internal(Box::new(e)))?;
+          // Continue if the message is empty
+          if collab_msg.is_empty() {
+            continue;
+          }
 
-          if let Some(payload) = msg.payload() {
-            let mut decoder = DecoderV1::from(payload.as_ref());
-            while let Ok(msg) = Message::decode(&mut decoder) {
-              let reply = handle_msg(&CollabSyncProtocol, &awareness, msg).await?;
-              match reply {
-                None => {},
-                Some(reply) => {
-                  let mut sink = sink.lock().await;
-                  let payload = reply.encode_v1();
-                  let msg = CollabServerMessage::new(object_id.clone(), payload);
-                  sink
-                    .send(msg.into())
-                    .await
-                    .map_err(|e| SyncError::Internal(Box::new(e)))?;
-                },
-              }
+          tracing::trace!("[Server]: {}", collab_msg);
+          let payload = collab_msg.payload().unwrap();
+          let mut decoder = DecoderV1::from(payload.as_ref());
+          while let Ok(msg) = Message::decode(&mut decoder) {
+            let resp = handle_msg(&CollabSyncProtocol, &awareness, msg).await?;
+            let mut sink = sink.lock().await;
+
+            // Send the doc response to the client if there is any
+            if let Some(resp) = resp {
+              let msg = CollabServerMessage::new(object_id.clone(), resp.encode_v1());
+              sink
+                .send(msg.into())
+                .await
+                .map_err(|e| SyncError::Internal(Box::new(e)))?;
+            }
+
+            // Send the ack message to the client
+            if let Some(msg_id) = collab_msg.msg_id() {
+              let ack = CollabAckMessage::new(object_id.clone(), msg_id);
+              let _ = sink.send(ack.into()).await;
             }
           }
         }

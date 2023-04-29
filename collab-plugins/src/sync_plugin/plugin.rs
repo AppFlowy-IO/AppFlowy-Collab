@@ -10,7 +10,6 @@ use collab_sync::message::{CollabClientMessage, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
 use y_sync::sync::{Message, SyncMessage};
 use yrs::updates::encoder::Encode;
-use yrs::TransactionMut;
 
 pub struct SyncPlugin<Sink, Stream> {
   uid: i64,
@@ -57,12 +56,13 @@ where
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {
-  fn did_receive_update(&self, _object_id: &str, update: &[u8]) {
+  fn did_receive_local_update(&self, _object_id: &str, update: &[u8]) {
     let weak_client_sync = Arc::downgrade(&self.client_sync);
     let update = update.to_vec();
     let object_id = self.object_id.clone();
     let from_uid = self.uid;
     let msg_id = self.msg_id_counter.fetch_add(1, SeqCst);
+
     tokio::spawn(async move {
       if let Some(weak_client_sync) = weak_client_sync.upgrade() {
         let payload = Message::Sync(SyncMessage::Update(update)).encode_v1();

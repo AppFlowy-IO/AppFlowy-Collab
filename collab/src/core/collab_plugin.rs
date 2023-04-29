@@ -13,9 +13,9 @@ pub trait CollabPlugin: Send + Sync + 'static {
 
   /// Called when the plugin receives an update. It happens after the [TransactionMut] commit to
   /// the Yjs document.
-  fn receive_update(&self, _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
+  fn receive_local_update(&self, _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
 
-  fn did_receive_update(&self, _object_id: &str, _update: &[u8]) {}
+  fn did_receive_local_update(&self, _object_id: &str, _update: &[u8]) {}
 
   /// Called after each [TransactionMut]
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
@@ -34,8 +34,8 @@ where
     (**self).did_init(doc, _object_id, txn)
   }
 
-  fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
-    (**self).receive_update(object_id, txn, update)
+  fn receive_local_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
+    (**self).receive_local_update(object_id, txn, update)
   }
 }
 
@@ -51,7 +51,7 @@ where
     (**self).did_init(doc, _object_id, txn)
   }
 
-  fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
-    (**self).receive_update(object_id, txn, update)
+  fn receive_local_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
+    (**self).receive_local_update(object_id, txn, update)
   }
 }

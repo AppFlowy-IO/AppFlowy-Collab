@@ -290,7 +290,8 @@ impl Database {
   }
 
   /// Return the [RowCell] with the given row id and field id.
-  pub fn get_cell(&self, field_id: &str, row_id: RowId) -> Option<RowCell> {
+  pub fn get_cell<R: Into<RowId>>(&self, field_id: &str, row_id: R) -> Option<RowCell> {
+    let row_id = row_id.into();
     let cell = self.block.get_cell(row_id, field_id)?;
     Some(RowCell::new(row_id, cell))
   }

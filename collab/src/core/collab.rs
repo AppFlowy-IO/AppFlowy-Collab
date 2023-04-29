@@ -5,17 +5,18 @@ use std::vec::IntoIter;
 
 use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
 use yrs::{
-  ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, Subscription,
-  Transact, Transaction, TransactionMut, Update, UpdateSubscription,
+  ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, Origin, ReadTxn,
+  Subscription, Transact, Transaction, TransactionMut, Update, UpdateSubscription,
 };
 
 use crate::core::collab_plugin::CollabPlugin;
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
+use crate::error::CollabError;
 use crate::preclude::{ArrayRefWrapper, JsonValue};
 use crate::util::insert_json_value_to_map_ref;
 
@@ -27,6 +28,7 @@ pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 pub type MapSubscription = Subscription<MapSubscriptionCallback>;
 
 pub struct Collab {
+  uid: i64,
   doc: Doc,
   #[allow(dead_code)]
   pub object_id: String,
@@ -37,11 +39,7 @@ pub struct Collab {
 }
 
 impl Collab {
-  pub fn new<T: AsRef<str>>(
-    _uid: i64,
-    object_id: T,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
-  ) -> Collab {
+  pub fn new<T: AsRef<str>>(uid: i64, object_id: T, plugins: Vec<Arc<dyn CollabPlugin>>) -> Collab {
     let object_id = object_id.as_ref().to_string();
     let doc = Doc::with_options(Options {
       skip_gc: true,
@@ -50,6 +48,7 @@ impl Collab {
     let data = doc.get_or_insert_map(DATA_SECTION);
     let plugins = Plugins::new(plugins);
     Self {
+      uid,
       object_id,
       doc,
       data,
@@ -77,7 +76,7 @@ impl Collab {
   ///
   pub fn initial(&self) {
     {
-      let mut txn = self.doc.transact_mut();
+      let mut txn = self.transact_mut();
       self
         .plugins
         .read()
@@ -86,8 +85,12 @@ impl Collab {
       drop(txn);
     }
 
-    let (update_subscription, after_txn_subscription) =
-      observe_doc(&self.doc, self.object_id.clone(), self.plugins.clone());
+    let (update_subscription, after_txn_subscription) = observe_doc(
+      self.uid,
+      &self.doc,
+      self.object_id.clone(),
+      self.plugins.clone(),
+    );
 
     *self.update_subscription.write() = Some(update_subscription);
     *self.after_txn_subscription.write() = Some(after_txn_subscription);
@@ -237,7 +240,7 @@ impl Collab {
   }
 
   pub fn remove(&mut self, key: &str) -> Option<Value> {
-    let mut txn = self.doc.transact_mut();
+    let mut txn = self.transact_mut();
     self.data.remove(&mut txn, key)
   }
 
@@ -286,14 +289,16 @@ impl Collab {
   }
 
   pub fn transact_mut(&self) -> TransactionMut {
-    self.doc.transact_mut()
+    let origin = CollabOrigin(self.uid);
+    self.doc.transact_mut_with(origin)
   }
 
   pub fn with_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let mut txn = self.doc.transact_mut();
+    let origin = CollabOrigin(self.uid);
+    let mut txn = self.doc.transact_mut_with(origin);
     let ret = f(&mut txn);
     drop(txn);
     ret
@@ -302,18 +307,19 @@ impl Collab {
   fn map_wrapper_with(&self, map_ref: MapRef) -> MapRefWrapper {
     MapRefWrapper::new(
       map_ref,
-      CollabContext::new(self.plugins.clone(), self.doc.clone()),
+      CollabContext::new(self.uid, self.plugins.clone(), self.doc.clone()),
     )
   }
   fn array_wrapper_with(&self, array_ref: ArrayRef) -> ArrayRefWrapper {
     ArrayRefWrapper::new(
       array_ref,
-      CollabContext::new(self.plugins.clone(), self.doc.clone()),
+      CollabContext::new(self.uid, self.plugins.clone(), self.doc.clone()),
     )
   }
 }
 
 fn observe_doc(
+  uid: i64,
   doc: &Doc,
   oid: String,
   plugins: Plugins,
@@ -322,10 +328,20 @@ fn observe_doc(
   let cloned_plugins = plugins.clone();
   let update_sub = doc
     .observe_update_v1(move |txn, event| {
-      cloned_plugins.read().iter().for_each(|plugin| {
-        plugin.receive_update(&cloned_oid, txn, &event.update);
-        plugin.did_receive_update(&cloned_oid, &event.update);
-      });
+      if let Some(Some(origin)) = txn
+        .origin()
+        .map(|origin| CollabOrigin::try_from(origin).ok())
+      {
+        // The plugins only handle the local update
+        if origin.0 == uid {
+          cloned_plugins.read().iter().for_each(|plugin| {
+            plugin.receive_local_update(&cloned_oid, txn, &event.update);
+            plugin.did_receive_local_update(&cloned_oid, &event.update);
+          });
+        }
+      } else {
+        tracing::warn!("🟡The origin is empty")
+      }
     })
     .unwrap();
 
@@ -349,8 +365,8 @@ impl Display for Collab {
 }
 
 pub struct CollabBuilder {
-  plugins: Vec<Arc<dyn CollabPlugin>>,
   uid: i64,
+  plugins: Vec<Arc<dyn CollabPlugin>>,
   object_id: String,
 }
 
@@ -374,7 +390,7 @@ impl CollabBuilder {
 
   pub fn build_with_updates(self, updates: Vec<Update>) -> Collab {
     let collab = Collab::new(self.uid, self.object_id, self.plugins);
-    let mut txn = collab.doc.transact_mut();
+    let mut txn = collab.transact_mut();
     for update in updates {
       txn.apply_update(update);
     }
@@ -389,14 +405,15 @@ impl CollabBuilder {
 
 #[derive(Clone)]
 pub struct CollabContext {
+  uid: i64,
   doc: Doc,
   #[allow(dead_code)]
   plugins: Plugins,
 }
 
 impl CollabContext {
-  fn new(plugins: Plugins, doc: Doc) -> Self {
-    Self { plugins, doc }
+  fn new(uid: i64, plugins: Plugins, doc: Doc) -> Self {
+    Self { uid, plugins, doc }
   }
 
   pub fn transact(&self) -> Transaction {
@@ -407,7 +424,7 @@ impl CollabContext {
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let mut txn = self.doc.transact_mut();
+    let mut txn = self.doc.transact_mut_with(self.uid);
     let ret = f(&mut txn);
     drop(txn);
     ret
@@ -470,5 +487,24 @@ impl Deref for Plugins {
 
   fn deref(&self) -> &Self::Target {
     &self.0
+  }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub(crate) struct CollabOrigin(i64);
+
+impl From<CollabOrigin> for Origin {
+  fn from(o: CollabOrigin) -> Self {
+    let data = serde_json::to_vec(&o).unwrap();
+    Origin::from(data.as_slice())
+  }
+}
+
+impl TryFrom<&Origin> for CollabOrigin {
+  type Error = CollabError;
+
+  fn try_from(value: &Origin) -> Result<Self, Self::Error> {
+    let o = serde_json::from_slice(value.as_ref())?;
+    Ok(o)
   }
 }

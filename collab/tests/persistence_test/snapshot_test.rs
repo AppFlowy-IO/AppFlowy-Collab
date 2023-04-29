@@ -5,12 +5,7 @@ use serde_json::json;
 
 #[test]
 fn disable_snapshot_test() {
-  let mut test = CollabPersistenceTest::new(
-    Config::new()
-      .enable_snapshot(false)
-      .snapshot_per_update(5)
-      .remove_updates_after_snapshot(true),
-  );
+  let mut test = CollabPersistenceTest::new(Config::new().enable_snapshot(false));
   let doc_id = "1".to_string();
   test.run_scripts(vec![OpenDocument { id: doc_id.clone() }]);
 

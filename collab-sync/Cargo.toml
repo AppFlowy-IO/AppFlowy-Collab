@@ -16,6 +16,8 @@ tracing = { version = "0.1" }
 thiserror = "1.0.39"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+md5 = "0.7.0"
+dashmap = "5.4.0"
 
 [dev-dependencies]
 tokio = { version = "1.26.0", features = ["full"] }

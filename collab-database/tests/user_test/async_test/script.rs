@@ -139,7 +139,7 @@ pub fn run_script(
         .lock()
         .get_database(&database_id)
         .unwrap()
-        .update_row(&row_id, |row| {
+        .update_row(row_id, |row| {
           row.set_cells(cells);
         });
     },
