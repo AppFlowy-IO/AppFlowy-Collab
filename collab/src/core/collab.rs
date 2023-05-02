@@ -343,7 +343,7 @@ fn observe_doc(
     .observe_update_v1(move |txn, event| {
       // If the origin of the txn is none, it means that the update is coming from a remote source.
       // Otherwise, it's a local update. The plugins only handle the local update
-      if let Some(origin) = txn.origin().map(|origin| CollabOrigin::from(origin)) {
+      if let Some(origin) = txn.origin().map(CollabOrigin::from) {
         if origin.uid == uid && origin.device_id == local_device_id {
           cloned_plugins.read().iter().for_each(|plugin| {
             plugin.receive_local_update(&cloned_oid, txn, &event.update);
@@ -514,7 +514,7 @@ impl Deref for Plugins {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub struct CollabOrigin {
   pub uid: i64,
   pub device_id: String,

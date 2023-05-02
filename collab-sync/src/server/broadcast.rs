@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
+use collab::core::collab::CollabOrigin;
 use collab::core::collab_awareness::MutexCollabAwareness;
 use futures_util::{SinkExt, StreamExt};
-
-use collab::core::collab::CollabOrigin;
 use lib0::encoding::Write;
 use tokio::select;
 use tokio::sync::broadcast::error::SendError;
@@ -18,9 +17,7 @@ use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 use yrs::UpdateSubscription;
 
 use crate::error::SyncError;
-use crate::message::{
-  AwarenessUpdateMessage, ClientBroadcastMessage, CollabAckMessage, CollabMessage,
-};
+use crate::msg::{AwarenessUpdateMessage, BroadcastUpdateMessage, CollabAckMessage, CollabMessage};
 use crate::protocol::{handle_msg, DefaultProtocol};
 
 /// A broadcast group can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
@@ -58,13 +55,10 @@ impl BroadcastGroup {
       let doc_sub = awareness
         .doc_mut()
         .observe_update_v1(move |txn, event| {
-          let origin = txn
-            .origin()
-            .map(|origin| CollabOrigin::from(origin))
-            .unwrap_or_default();
+          let origin = txn.origin().map(CollabOrigin::from).unwrap_or_default();
 
           let payload = gen_update_message(&event.update);
-          let msg = ClientBroadcastMessage::new(origin, cloned_oid.clone(), payload);
+          let msg = BroadcastUpdateMessage::new(origin, cloned_oid.clone(), payload);
           if let Err(_e) = sink.send(msg.into()) {
             tracing::trace!("Broadcast group is closed");
           }
@@ -124,7 +118,8 @@ impl BroadcastGroup {
     E: std::error::Error + Send + Sync + 'static,
   {
     tracing::trace!("[💭Server]: new client connected");
-    // Receive a new message from client and forwarding the message to the other clients
+    // Receive a update from the document observer and forward the applied update to all
+    // connected subscribers.
     let sink_task = {
       let sink = sink.clone();
       let mut receiver = self.sender.subscribe();
@@ -141,7 +136,11 @@ impl BroadcastGroup {
       })
     };
 
-    // Receive messages from clients and reply with the response
+    // Receive messages from clients and reply with the response. The message may alter the
+    // document that the current broadcast group is associated with. If the message alter
+    // the document state then the document observer will be triggered and the update will be
+    // broadcast to all connected subscribers. Check out the [observe_update_v1] and [sink_task]
+    // above.
     let stream_task = {
       let awareness = self.awareness().clone();
       let object_id = self.object_id.clone();
@@ -162,10 +161,10 @@ impl BroadcastGroup {
             let resp = handle_msg(&origin, &protocol, &awareness, msg).await?;
             let mut sink = sink.lock().await;
 
-            // Broadcast the response message to all clients
+            // Send the response to the corresponding client
             if let Some(resp) = resp {
               let msg =
-                ClientBroadcastMessage::new(origin.clone(), object_id.clone(), resp.encode_v1());
+                BroadcastUpdateMessage::new(origin.clone(), object_id.clone(), resp.encode_v1());
               sink
                 .send(msg.into())
                 .await

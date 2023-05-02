@@ -1,6 +1,5 @@
-use collab::core::collab_awareness::MutexCollabAwareness;
-
 use collab::core::collab::CollabOrigin;
+use collab::core::collab_awareness::MutexCollabAwareness;
 use y_sync::awareness::{Awareness, AwarenessUpdate};
 use y_sync::sync::{Error, Message, SyncMessage};
 use yrs::updates::decoder::Decode;
@@ -88,7 +87,7 @@ pub trait CollabSyncProtocol {
 
   fn handle_auth(
     &self,
-    awareness: &Awareness,
+    _awareness: &Awareness,
     deny_reason: Option<String>,
   ) -> Result<Option<Message>, Error> {
     if let Some(reason) = deny_reason {
@@ -120,9 +119,9 @@ pub trait CollabSyncProtocol {
   /// implemented here. By default it returns an [Error::Unsupported].
   fn missing_handle(
     &self,
-    awareness: &mut Awareness,
+    _awareness: &mut Awareness,
     tag: u8,
-    data: Vec<u8>,
+    _data: Vec<u8>,
   ) -> Result<Option<Message>, Error> {
     Err(Error::Unsupported(tag))
   }

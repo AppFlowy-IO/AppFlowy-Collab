@@ -1,3 +1,6 @@
-mod sync;
+pub use channel::*;
 
-pub use sync::*;
+mod channel;
+mod pending_msg;
+mod queue;
+pub mod sync;

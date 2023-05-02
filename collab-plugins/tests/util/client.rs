@@ -1,6 +1,5 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tempfile::TempDir;
 
 use collab::core::collab::CollabOrigin;
 use collab::core::collab_awareness::MutexCollabAwareness;
@@ -8,9 +7,9 @@ use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::MapRefExtension;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::sync_plugin::SyncPlugin;
+use collab_sync::msg_codec::{CollabMsgCodec, CollabSink, CollabStream};
+use tempfile::TempDir;
 use tokio::net::TcpSocket;
-
-use crate::util::{CollabMsgCodec, WrappedSink, WrappedStream};
 
 pub async fn spawn_client(
   origin: CollabOrigin,
@@ -21,8 +20,8 @@ pub async fn spawn_client(
   let (reader, writer) = stream.into_split();
   let collab = Arc::new(MutexCollabAwareness::new(origin.clone(), object_id, vec![]));
 
-  let stream = WrappedStream::new(reader, CollabMsgCodec::default());
-  let sink = WrappedSink::new(writer, CollabMsgCodec::default());
+  let stream = CollabStream::new(reader, CollabMsgCodec::default());
+  let sink = CollabSink::new(writer, CollabMsgCodec::default());
   let sync_plugin = SyncPlugin::new(origin, object_id, collab.clone(), sink, stream);
   collab.lock().collab.add_plugin(Arc::new(sync_plugin));
   collab.initial();
@@ -41,8 +40,8 @@ pub async fn spawn_client_with_disk(
   let collab = Arc::new(MutexCollabAwareness::new(origin.clone(), object_id, vec![]));
 
   // sync
-  let stream = WrappedStream::new(reader, CollabMsgCodec::default());
-  let sink = WrappedSink::new(writer, CollabMsgCodec::default());
+  let stream = CollabStream::new(reader, CollabMsgCodec::default());
+  let sink = CollabSink::new(writer, CollabMsgCodec::default());
   let sync_plugin = SyncPlugin::new(origin.clone(), object_id, collab.clone(), sink, stream);
   collab.lock().collab.add_plugin(Arc::new(sync_plugin));
 

@@ -1,4 +1,3 @@
-use dashmap::DashMap;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -19,7 +18,7 @@ use yrs::updates::decoder::DecoderV1;
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
 use crate::error::SyncError;
-use crate::message::{ClientInitMessage, ClientUpdateMessage, CollabMessage};
+use crate::msg::{ClientInitMessage, ClientUpdateMessage, CollabMessage};
 use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultProtocol};
 
 /// [ClientSync] defines a connection handler capable of exchanging Yrs/Yjs messages.
@@ -28,7 +27,6 @@ pub struct ClientSync<Sink, Stream> {
   runner: JoinHandle<Result<(), SyncError>>,
   awareness: Arc<MutexCollabAwareness>,
   inbox: Arc<Mutex<Sink>>,
-  out_going_msg: Arc<DashMap<u32, String>>,
   #[allow(dead_code)]
   phantom_stream: PhantomData<Stream>,
   #[allow(dead_code)]
@@ -90,7 +88,6 @@ where
     let weak_msg_id_counter = Arc::downgrade(&msg_id_counter);
     let cloned_oid = object_id;
     let cloned_origin = origin.clone();
-    let out_going_msg = Arc::new(DashMap::new());
 
     // Spawn the task that handles incoming messages. The stream will stop if the
     // runner is dropped.
@@ -125,7 +122,6 @@ where
       runner,
       awareness,
       inbox,
-      out_going_msg,
       phantom_stream: PhantomData::default(),
     }
   }
@@ -178,14 +174,20 @@ where
 
   // FIXME: if the payload is too big that may cause performance issues
   if !payload.is_empty() {
-    let msg_id = msg_id_counter
-      .upgrade()
-      .unwrap()
-      .fetch_add(1, Ordering::SeqCst);
-    let msg = ClientInitMessage::new(origin, object_id, msg_id, payload);
-    let _md5 = msg.md5.clone();
-
     if let Some(sink) = weak_sink.upgrade() {
+      let msg_id = msg_id_counter
+        .upgrade()
+        .unwrap()
+        .fetch_add(1, Ordering::SeqCst);
+      tracing::trace!(
+        "[🦀Client]: [uid:{}|device_id:{}|msg_id:{}] send Init",
+        origin.uid,
+        origin.device_id,
+        msg_id,
+      );
+
+      let msg = ClientInitMessage::new(origin, object_id, msg_id, payload);
+      let _md5 = msg.md5.clone();
       let mut s = sink.lock().await;
       if let Err(e) = s.send(msg.into()).await {
         return Err(e.into());
@@ -290,8 +292,9 @@ where
       let mut sender = sink.lock().await;
       let msg_id = msg_id_counter.fetch_add(1, Ordering::SeqCst);
       let payload = resp.encode_v1();
-      let msg = ClientUpdateMessage::new(origin.clone(), object_id.to_string(), msg_id, payload);
-      sender.send(msg.into()).await.map_err(|e| e.into())?;
+      // let msg = ClientUpdateMessage::new(origin.clone(), object_id.to_string(), msg_id, payload);
+      // sender.send(msg.into()).await.map_err(|e| e.into())?;
+      todo!()
     }
   }
   Ok(())
