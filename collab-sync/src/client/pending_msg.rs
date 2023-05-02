@@ -106,6 +106,7 @@ pub enum TaskState {
   Pending,
   Processing,
   Done,
+  Timeout,
 }
 
 impl TaskState {
@@ -114,5 +115,8 @@ impl TaskState {
   }
   pub fn is_processing(&self) -> bool {
     matches!(self, TaskState::Processing)
+  }
+  pub fn is_timeout(&self) -> bool {
+    matches!(self, TaskState::Timeout)
   }
 }

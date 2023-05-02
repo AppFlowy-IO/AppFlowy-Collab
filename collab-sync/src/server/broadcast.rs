@@ -88,7 +88,7 @@ impl BroadcastGroup {
     }
   }
 
-  /// Returns a reference to an underlying [CollabAwareness] instance.
+  /// Returns a reference to an underlying [MutexCollabAwareness] instance.
   pub fn awareness(&self) -> &MutexCollabAwareness {
     &self.awareness
   }

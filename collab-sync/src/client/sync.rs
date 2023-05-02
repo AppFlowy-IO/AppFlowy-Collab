@@ -21,6 +21,8 @@ use crate::error::SyncError;
 use crate::msg::{ClientInitMessage, ClientUpdateMessage, CollabMessage};
 use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultProtocol};
 
+pub const SYNC_TIMEOUT: u64 = 2;
+
 pub struct SyncQueue<Sink, Stream> {
   scheduler: Arc<SinkScheduler<Sink>>,
   #[allow(dead_code)]
@@ -55,7 +57,7 @@ where
       msg_id_counter,
       pending_msgs,
       notifier,
-      Duration::from_secs(5),
+      Duration::from_secs(SYNC_TIMEOUT),
     ));
     spawn(TaskRunner::run(scheduler.clone(), notifier_rx));
 
@@ -305,7 +307,12 @@ where
         // If the message is not acked within the timeout, resend the message.
         match tokio::time::timeout(self.timeout, rx).await {
           Ok(_) => self.notify(),
-          Err(_) => self.notify(),
+          Err(_) => {
+            if let Some(mut pending_msg) = self.pending_msgs.lock().await.peek_mut() {
+              pending_msg.set_state(TaskState::Timeout);
+            }
+            self.notify();
+          },
         }
         Ok(())
       },

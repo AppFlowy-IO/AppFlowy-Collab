@@ -1,24 +1,28 @@
+use std::fmt::Debug;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use crate::error::SyncError;
 use futures_util::{Sink, Stream};
-use tokio::sync::mpsc::error::TryRecvError;
-use tokio::sync::mpsc::{error::SendError, UnboundedReceiver, UnboundedSender};
+
+use tokio::sync::mpsc::UnboundedSender;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 pub trait CollabConnect<Item>: Sink<Item> + Stream {}
 
-struct TokioUnboundedSink<T> {
-  tx: UnboundedSender<T>,
-}
+pub struct TokioUnboundedSink<T>(pub UnboundedSender<T>);
 
 impl<T> TokioUnboundedSink<T> {
   pub fn new(tx: UnboundedSender<T>) -> Self {
-    Self { tx }
+    Self(tx)
   }
 }
 
-impl<T> Sink<T> for TokioUnboundedSink<T> {
-  type Error = SendError<T>;
+impl<T> Sink<T> for TokioUnboundedSink<T>
+where
+  T: Send + Sync + 'static + Debug,
+{
+  type Error = SyncError;
 
   fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
     // An unbounded channel can always accept messages without blocking, so we always return Ready.
@@ -26,7 +30,8 @@ impl<T> Sink<T> for TokioUnboundedSink<T> {
   }
 
   fn start_send(self: Pin<&mut Self>, item: T) -> Result<(), Self::Error> {
-    self.tx.send(item).map_err(|e| SendError(e.0))
+    let _ = self.0.send(item);
+    Ok(())
   }
 
   fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -40,24 +45,4 @@ impl<T> Sink<T> for TokioUnboundedSink<T> {
   }
 }
 
-struct TokioUnboundedStream<T> {
-  rx: UnboundedReceiver<T>,
-}
-
-impl<T> TokioUnboundedStream<T> {
-  pub fn new(rx: UnboundedReceiver<T>) -> Self {
-    Self { rx }
-  }
-}
-
-impl<T> Stream for TokioUnboundedStream<T> {
-  type Item = T;
-
-  fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-    match self.rx.try_recv() {
-      Ok(item) => Poll::Ready(Some(item)),
-      Err(TryRecvError::Empty) => Poll::Pending,
-      Err(TryRecvError::Disconnected) => Poll::Ready(None),
-    }
-  }
-}
+pub type TokioUnboundedStream<T> = UnboundedReceiverStream<T>;

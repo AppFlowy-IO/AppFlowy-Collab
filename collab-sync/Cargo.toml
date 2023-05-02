@@ -19,8 +19,7 @@ serde_json = "1.0"
 md5 = "0.7.0"
 tokio-util = { version = "0.7", features = ["codec"] }
 bytes = "1.4"
-tokio-retry = "0.3"
-
+tokio-stream = { version = "0.1.14" }
 
 [dev-dependencies]
 tokio = { version = "1.26.0", features = ["full"] }
