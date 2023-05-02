@@ -125,7 +125,7 @@ impl BroadcastGroup {
       let mut receiver = self.sender.subscribe();
       tokio::spawn(async move {
         while let Ok(msg) = receiver.recv().await {
-          tracing::trace!("[💭Server]: broadcast client message: {}", msg);
+          tracing::trace!("[💭Server]: {}", msg);
           let mut sink = sink.lock().await;
           if let Err(e) = sink.send(msg).await {
             tracing::error!("[💭Server]: broadcast client message failed: {:?}", e);
@@ -157,10 +157,9 @@ impl BroadcastGroup {
           tracing::trace!("[💭Server]: {}", collab_msg);
           let payload = collab_msg.payload().unwrap();
           let mut decoder = DecoderV1::from(payload.as_ref());
+          let mut sink = sink.lock().await;
           while let Ok(msg) = Message::decode(&mut decoder) {
             let resp = handle_msg(&origin, &protocol, &awareness, msg).await?;
-            let mut sink = sink.lock().await;
-
             // Send the response to the corresponding client
             if let Some(resp) = resp {
               let msg =
@@ -170,12 +169,11 @@ impl BroadcastGroup {
                 .await
                 .map_err(|e| SyncError::Internal(Box::new(e)))?;
             }
-
-            // Send the ack message to the client
-            if let Some(msg_id) = collab_msg.msg_id() {
-              let ack = CollabAckMessage::new(object_id.clone(), msg_id);
-              let _ = sink.send(ack.into()).await;
-            }
+          }
+          // Send the ack message to the client
+          if let Some(msg_id) = collab_msg.msg_id() {
+            let ack = CollabAckMessage::new(object_id.clone(), msg_id);
+            let _ = sink.send(ack.into()).await;
           }
         }
         Ok(())
