@@ -30,7 +30,6 @@ pub async fn spawn_client_with_empty_doc(
   let sync_plugin = SyncPlugin::new(origin, object_id, collab.clone(), sink, stream);
   collab.lock().add_plugin(Arc::new(sync_plugin));
   collab.initial();
-
   Ok(collab)
 }
 

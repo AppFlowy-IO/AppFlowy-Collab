@@ -12,7 +12,7 @@ use crate::blocks::Block;
 use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
-use crate::id_gen::ROW_ID_GEN;
+
 use crate::meta::MetaMap;
 use crate::rows::{CreateRowParams, Row, RowCell, RowId, RowUpdate};
 use crate::views::{
@@ -210,45 +210,44 @@ impl Database {
     view_id: &str,
     params: CreateRowParams,
   ) -> Option<(usize, RowOrder)> {
-    let prev_row_id = params.prev_row_id.map(|value| value.to_string());
+    let prev_row_id = params.prev_row_id.clone().map(|value| value.to_string());
     let row_order = self.block.create_row(params);
     self.views.update_all_views_with_txn(txn, |update| {
       update.insert_row_order(&row_order, prev_row_id.as_ref());
     });
 
     let index = self
-      .index_of_row_with_txn(txn, view_id, row_order.id)
+      .index_of_row_with_txn(txn, view_id, row_order.id.clone())
       .unwrap_or_default();
     Some((index, row_order))
   }
 
   /// Remove the row
   /// The [RowOrder] of each view representing this row will be removed.
-  pub fn remove_row(&self, row_id: RowId) -> Option<Row> {
+  pub fn remove_row(&self, row_id: &RowId) -> Option<Row> {
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |update| {
-        update.remove_row_order(&row_id.to_string());
+        update.remove_row_order(row_id);
       });
       let row = self.block.get_row(row_id);
-      self.block.delete_row(&row_id);
+      self.block.delete_row(row_id);
       row
     })
   }
 
   /// Update the row
-  pub fn update_row<R, F>(&self, row_id: R, f: F)
+  pub fn update_row<F>(&self, row_id: &RowId, f: F)
   where
     F: FnOnce(RowUpdate),
-    R: Into<RowId>,
   {
     self.block.update_row(row_id, f);
   }
 
   /// Return the index of the row in the given view.
   /// Return None if the row is not found.
-  pub fn index_of_row(&self, view_id: &str, row_id: RowId) -> Option<usize> {
+  pub fn index_of_row(&self, view_id: &str, row_id: &RowId) -> Option<usize> {
     let view = self.views.get_view(view_id)?;
-    view.row_orders.iter().position(|order| order.id == row_id)
+    view.row_orders.iter().position(|order| &order.id == row_id)
   }
 
   pub fn index_of_row_with_txn<T: ReadTxn>(
@@ -262,11 +261,8 @@ impl Database {
   }
 
   /// Return the [Row] with the given row id.
-  pub fn get_row<R>(&self, row_id: R) -> Option<Row>
-  where
-    R: Into<RowId>,
-  {
-    self.block.get_row(row_id.into())
+  pub fn get_row(&self, row_id: &RowId) -> Option<Row> {
+    self.block.get_row(row_id)
   }
 
   /// Return a list of [Row] for the given view.
@@ -290,10 +286,9 @@ impl Database {
   }
 
   /// Return the [RowCell] with the given row id and field id.
-  pub fn get_cell<R: Into<RowId>>(&self, field_id: &str, row_id: R) -> Option<RowCell> {
-    let row_id = row_id.into();
+  pub fn get_cell(&self, field_id: &str, row_id: &RowId) -> Option<RowCell> {
     let cell = self.block.get_cell(row_id, field_id)?;
-    Some(RowCell::new(row_id, cell))
+    Some(RowCell::new(row_id.clone(), cell))
   }
 
   /// Return list of [RowCell] for the given view and field.
@@ -671,7 +666,7 @@ impl Database {
   }
 
   /// Duplicate a row
-  pub fn duplicate_row(&self, view_id: &str, row_id: RowId) -> Option<(usize, RowOrder)> {
+  pub fn duplicate_row(&self, view_id: &str, row_id: &RowId) -> Option<(usize, RowOrder)> {
     self.root.with_transact_mut(|txn| {
       if let Some(row) = self.block.get_row(row_id) {
         let params = CreateRowParams {
@@ -826,7 +821,7 @@ pub fn gen_field_id() -> String {
 }
 
 pub fn gen_row_id() -> RowId {
-  RowId::from(ROW_ID_GEN.lock().next_id())
+  RowId::from(nanoid!(10))
 }
 
 pub fn gen_database_filter_id() -> String {

@@ -15,7 +15,7 @@ fn create_row_shared_by_two_view_test() {
 
   let row_id = gen_row_id();
   database_test.create_row(CreateRowParams {
-    id: row_id,
+    id: row_id.clone(),
     ..Default::default()
   });
 
@@ -40,7 +40,7 @@ fn delete_row_shared_by_two_view_test() {
       ..Default::default()
     })
     .unwrap();
-  database_test.remove_row(row_order.id);
+  database_test.remove_row(&row_order.id);
 
   let view_1 = database_test.views.get_view("v1").unwrap();
   let view_2 = database_test.views.get_view("v2").unwrap();
@@ -155,7 +155,7 @@ fn duplicate_row_test() {
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows.len(), 3);
 
-  let (index, row_order) = database_test.duplicate_row("v1", 2.into()).unwrap();
+  let (index, row_order) = database_test.duplicate_row("v1", &2.into()).unwrap();
   assert_eq!(index, 2);
 
   let rows = database_test.get_rows_for_view("v1");
@@ -173,7 +173,7 @@ fn duplicate_last_row_test() {
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows.len(), 3);
 
-  let (index, row_order) = database_test.duplicate_row("v1", 3.into()).unwrap();
+  let (index, row_order) = database_test.duplicate_row("v1", &3.into()).unwrap();
   assert_eq!(index, 3);
 
   let rows = database_test.get_rows_for_view("v1");

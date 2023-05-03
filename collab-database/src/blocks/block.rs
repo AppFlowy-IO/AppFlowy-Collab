@@ -35,25 +35,24 @@ impl Block {
 
   pub fn create_row<T: Into<Row>>(&self, row: T) -> RowOrder {
     let row = row.into();
+    let row_id = row.id.clone();
     let row_order = RowOrder {
-      id: row.id,
+      id: row.id.clone(),
       height: row.height,
     };
-    let row_id = row.id;
-    let row_doc = RowDoc::create(row, self.uid, row_id, self.db.clone());
+    let row_doc = RowDoc::create(row, self.uid, row_id.clone(), self.db.clone());
     self.cache.lock().put(row_id, Arc::new(row_doc));
     row_order
   }
 
-  pub fn get_row<R: Into<RowId>>(&self, row_id: R) -> Option<Row> {
-    let row_id = row_id.into();
+  pub fn get_row(&self, row_id: &RowId) -> Option<Row> {
     self.get_or_init_row(row_id).get_row()
   }
 
   pub fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
     let mut rows = Vec::new();
     for row_order in row_orders {
-      let row = self.get_or_init_row(row_order.id).get_row();
+      let row = self.get_or_init_row(&row_order.id).get_row();
       if let Some(row) = row {
         rows.push(row);
       }
@@ -61,8 +60,7 @@ impl Block {
     rows
   }
 
-  pub fn get_cell<R: Into<RowId>>(&self, row_id: R, field_id: &str) -> Option<Cell> {
-    let row_id = row_id.into();
+  pub fn get_cell(&self, row_id: &RowId, field_id: &str) -> Option<Cell> {
     self.get_or_init_row(row_id).get_cell(field_id)
   }
 
@@ -73,22 +71,22 @@ impl Block {
     }
   }
 
-  pub fn update_row<F, R: Into<RowId>>(&self, row_id: R, f: F)
+  pub fn update_row<F>(&self, row_id: &RowId, f: F)
   where
     F: FnOnce(RowUpdate),
   {
-    let row = self.cache.lock().get(&row_id.into()).cloned();
+    let row = self.cache.lock().get(row_id).cloned();
     if let Some(row) = row {
-      row.update::<F, R>(f);
+      row.update::<F>(f);
     }
   }
 
-  fn get_or_init_row(&self, row_id: RowId) -> Arc<RowDoc> {
-    let row = self.cache.lock().get(&row_id).cloned();
+  fn get_or_init_row(&self, row_id: &RowId) -> Arc<RowDoc> {
+    let row = self.cache.lock().get(row_id).cloned();
     match row {
       None => {
-        let row = Arc::new(RowDoc::new(self.uid, row_id, self.db.clone()));
-        self.cache.lock().put(row_id, row.clone());
+        let row = Arc::new(RowDoc::new(self.uid, row_id.clone(), self.db.clone()));
+        self.cache.lock().put(row_id.clone(), row.clone());
         row
       },
       Some(row) => row,

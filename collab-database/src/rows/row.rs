@@ -10,7 +10,7 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
 use serde::{Deserialize, Serialize};
 
-use crate::database::timestamp;
+use crate::database::{gen_row_id, timestamp};
 use crate::rows::{Cell, Cells, CellsUpdate, RowId};
 use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
@@ -55,7 +55,7 @@ impl RowDoc {
   }
 
   pub fn new(uid: i64, row_id: RowId, db: Arc<RocksCollabDB>) -> Self {
-    let collab = CollabBuilder::new(uid, row_id.to_string())
+    let collab = CollabBuilder::new(uid, &row_id)
       .with_plugin(RocksDiskPlugin::new(uid, db.clone()).unwrap())
       .build();
     collab.initial();
@@ -109,7 +109,7 @@ impl RowDoc {
     cell_from_map_ref(&self.data, &txn, field_id)
   }
 
-  pub fn update<F, R: Into<RowId>>(&self, f: F)
+  pub fn update<F>(&self, f: F)
   where
     F: FnOnce(RowUpdate),
   {
@@ -134,7 +134,7 @@ impl RowDoc {
 /// A [Row] contains list of [Cell]s. Each [Cell] is associated with a [Field].
 /// So the number of [Cell]s in a [Row] is equal to the number of [Field]s.
 /// A [Database] contains list of rows that stored in multiple [Block]s.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Row {
   pub id: RowId,
   pub cells: Cells,
@@ -166,7 +166,7 @@ pub struct RowBuilder<'a, 'b> {
 
 impl<'a, 'b> RowBuilder<'a, 'b> {
   pub fn new(id: RowId, txn: &'a mut TransactionMut<'b>, map_ref: MapRef) -> Self {
-    map_ref.insert_i64_with_txn(txn, ROW_ID, id);
+    map_ref.insert_str_with_txn(txn, ROW_ID, id);
     Self { map_ref, txn }
   }
 
@@ -241,7 +241,7 @@ pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(Row
 
 /// Return a [RowOrder] and created_at from a [YrsValue]
 pub fn row_order_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<(RowOrder, i64)> {
-  let id = RowId::from(map_ref.get_i64_with_txn(txn, ROW_ID)?);
+  let id = RowId::from(map_ref.get_str_with_txn(txn, ROW_ID)?);
   let height = map_ref.get_i64_with_txn(txn, ROW_HEIGHT).unwrap_or(60);
   let crated_at = map_ref
     .get_i64_with_txn(txn, CREATED_AT)
@@ -265,7 +265,7 @@ pub fn cell_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T, field_id: &str) 
 
 /// Return a [Row] from a [MapRef]
 pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
-  let id = RowId::from(map_ref.get_i64_with_txn(txn, ROW_ID)?);
+  let id = RowId::from(map_ref.get_str_with_txn(txn, ROW_ID)?);
   let visibility = map_ref
     .get_bool_with_txn(txn, ROW_VISIBILITY)
     .unwrap_or(true);
@@ -290,7 +290,7 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
   })
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CreateRowParams {
   pub id: RowId,
   pub cells: Cells,
@@ -299,6 +299,19 @@ pub struct CreateRowParams {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub prev_row_id: Option<RowId>,
   pub timestamp: i64,
+}
+
+impl Default for CreateRowParams {
+  fn default() -> Self {
+    Self {
+      id: gen_row_id(),
+      cells: Default::default(),
+      height: 60,
+      visibility: true,
+      prev_row_id: None,
+      timestamp: 0,
+    }
+  }
 }
 
 impl CreateRowParams {

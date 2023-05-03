@@ -1,6 +1,6 @@
 use collab::plugin_impl::rocks_disk::Config;
-use collab_database::rows::CellsBuilder;
 use collab_database::rows::CreateRowParams;
+use collab_database::rows::{CellsBuilder, RowId};
 use serde_json::{json, Value};
 
 use futures::stream::FuturesUnordered;
@@ -14,7 +14,7 @@ async fn edit_row_test() {
   let mut test = database_test(Config::default());
   let mut handles = FuturesUnordered::new();
   let database_id = "d2".to_string();
-  let row_id = 1.into();
+  let row_id: RowId = 1.into();
   test
     .run_scripts(vec![
       DatabaseScript::IsExist {
@@ -35,12 +35,13 @@ async fn edit_row_test() {
   for _ in 0..10 {
     let mut cloned_test = test.clone();
     let cloned_database_id = database_id.clone();
+    let cloned_row_id = row_id.clone();
     let handle = tokio::spawn(async move {
       let mut scripts = vec![];
       for _ in 0..10 {
         scripts.push(DatabaseScript::EditRow {
           database_id: cloned_database_id.clone(),
-          row_id,
+          row_id: cloned_row_id.clone(),
           cells: CellsBuilder::new()
             .insert_cell("f1", TestTextCell::from("hello world"))
             .build(),
