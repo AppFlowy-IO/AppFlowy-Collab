@@ -6,6 +6,7 @@ use std::sync::Arc;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
+use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
 
 use crate::core::collab_plugin::CollabPlugin;
@@ -98,7 +99,7 @@ impl CollabPlugin for RocksDiskPlugin {
     }
   }
 
-  fn did_init(&self, _doc: &yrs::Doc, _object_id: &str, _txn: &Transaction) {
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
     self.did_load.store(true, Ordering::SeqCst);
   }
 

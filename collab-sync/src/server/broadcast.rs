@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use collab::core::collab::CollabOrigin;
-use collab::core::collab_awareness::MutexCollabAwareness;
+use collab::core::collab_awareness::MutexCollab;
 use futures_util::{SinkExt, StreamExt};
 use lib0::encoding::Write;
 use tokio::select;
@@ -28,7 +28,7 @@ pub struct BroadcastGroup {
   awareness_sub: awareness::UpdateSubscription,
   #[allow(dead_code)]
   doc_sub: UpdateSubscription,
-  awareness: MutexCollabAwareness,
+  awareness: MutexCollab,
   sender: Sender<CollabMessage>,
 }
 
@@ -39,20 +39,17 @@ impl BroadcastGroup {
   ///
   /// The overflow of the incoming events that needs to be propagates will be buffered up to a
   /// provided `buffer_capacity` size.
-  pub async fn new(
-    object_id: &str,
-    awareness: MutexCollabAwareness,
-    buffer_capacity: usize,
-  ) -> Self {
+  pub async fn new(object_id: &str, collab: MutexCollab, buffer_capacity: usize) -> Self {
     let object_id = object_id.to_owned();
     let (sender, _) = channel(buffer_capacity);
     let (doc_sub, awareness_sub) = {
-      let mut awareness = awareness.lock();
+      let mut mutex_collab = collab.lock();
 
       // Observer the document's update and broadcast it to all subscribers.
       let cloned_oid = object_id.clone();
       let sink = sender.clone();
-      let doc_sub = awareness
+      let doc_sub = mutex_collab
+        .get_mut_awareness()
         .doc_mut()
         .observe_update_v1(move |txn, event| {
           let origin = txn.origin().map(CollabOrigin::from).unwrap_or_default();
@@ -68,28 +65,30 @@ impl BroadcastGroup {
       // Observer the awareness's update and broadcast it to all subscribers.
       let sink = sender.clone();
       let cloned_oid = object_id.clone();
-      let awareness_sub = awareness.on_update(move |awareness, event| {
-        if let Ok(awareness_update) = gen_awareness_update_message(awareness, event) {
-          let payload = Message::Awareness(awareness_update).encode_v1();
-          let msg = AwarenessUpdateMessage::new(cloned_oid.clone(), payload);
-          if let Err(_e) = sink.send(msg.into()) {
-            tracing::trace!("Broadcast group is closed");
+      let awareness_sub = mutex_collab
+        .get_mut_awareness()
+        .on_update(move |awareness, event| {
+          if let Ok(awareness_update) = gen_awareness_update_message(awareness, event) {
+            let payload = Message::Awareness(awareness_update).encode_v1();
+            let msg = AwarenessUpdateMessage::new(cloned_oid.clone(), payload);
+            if let Err(_e) = sink.send(msg.into()) {
+              tracing::trace!("Broadcast group is closed");
+            }
           }
-        }
-      });
+        });
       (doc_sub, awareness_sub)
     };
     BroadcastGroup {
       object_id,
-      awareness,
+      awareness: collab,
       sender,
       awareness_sub,
       doc_sub,
     }
   }
 
-  /// Returns a reference to an underlying [MutexCollabAwareness] instance.
-  pub fn awareness(&self) -> &MutexCollabAwareness {
+  /// Returns a reference to an underlying [MutexCollab] instance.
+  pub fn awareness(&self) -> &MutexCollab {
     &self.awareness
   }
 
@@ -142,7 +141,7 @@ impl BroadcastGroup {
     // broadcast to all connected subscribers. Check out the [observe_update_v1] and [sink_task]
     // above.
     let stream_task = {
-      let awareness = self.awareness().clone();
+      let collab = self.awareness().clone();
       let object_id = self.object_id.clone();
       tokio::spawn(async move {
         while let Some(res) = stream.next().await {
@@ -159,7 +158,7 @@ impl BroadcastGroup {
           let mut decoder = DecoderV1::from(payload.as_ref());
           let mut sink = sink.lock().await;
           while let Ok(msg) = Message::decode(&mut decoder) {
-            let resp = handle_msg(&origin, &protocol, &awareness, msg).await?;
+            let resp = handle_msg(&origin, &protocol, &collab, msg).await?;
             // Send the response to the corresponding client
             if let Some(resp) = resp {
               let msg =

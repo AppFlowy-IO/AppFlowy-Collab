@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::sled_lv::SledCollabDB;
+use y_sync::awareness::Awareness;
 use yrs::{Doc, Transaction, TransactionMut};
 
 use crate::core::collab_plugin::CollabPlugin;
@@ -42,7 +43,7 @@ impl CollabPlugin for SledDiskPlugin {
     }
   }
 
-  fn did_init(&self, doc: &Doc, object_id: &str, txn: &Transaction) {
+  fn did_init(&self, awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
     self.did_load.store(true, Ordering::SeqCst);
   }
 

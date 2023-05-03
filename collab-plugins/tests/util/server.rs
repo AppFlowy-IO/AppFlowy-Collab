@@ -2,14 +2,12 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use collab::core::collab::CollabOrigin;
-use collab::core::collab_awareness::MutexCollabAwareness;
+use collab::core::collab_awareness::MutexCollab;
 use collab::preclude::Collab;
-
 use collab_sync::msg_codec::{CollabMsgCodec, CollabSink, CollabStream};
 use collab_sync::server::{BroadcastGroup, Subscription};
 use dashmap::DashMap;
 use serde_json::Value;
-
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
@@ -29,7 +27,6 @@ impl TestServer {
       .unwrap()
       .awareness
       .lock()
-      .collab
       .to_json_value()
   }
 }
@@ -47,7 +44,7 @@ pub async fn spawn_server_with_data(group: CollabGroup) -> std::io::Result<TestS
   let port = listener.local_addr()?.port(); // Get the actual port number
   let groups = Arc::new(DashMap::new());
 
-  let object_id = group.awareness.lock().collab.object_id.clone();
+  let object_id = group.awareness.lock().object_id.clone();
   groups.insert(object_id.clone(), group);
 
   let weak_groups = Arc::downgrade(&groups);
@@ -76,7 +73,7 @@ pub async fn spawn_server_with_data(group: CollabGroup) -> std::io::Result<TestS
 }
 
 pub async fn make_test_collab_group(uid: i64, object_id: &str) -> CollabGroup {
-  let awareness = MutexCollabAwareness::new(CollabOrigin::new(uid, "remote"), object_id, vec![]);
+  let awareness = MutexCollab::new(CollabOrigin::new(uid, "remote"), object_id, vec![]);
   let broadcast = BroadcastGroup::new(object_id, awareness.clone(), 10).await;
   CollabGroup {
     awareness,
@@ -86,7 +83,7 @@ pub async fn make_test_collab_group(uid: i64, object_id: &str) -> CollabGroup {
 }
 
 pub struct CollabGroup {
-  pub awareness: MutexCollabAwareness,
+  pub awareness: MutexCollab,
   pub broadcast: BroadcastGroup,
   subscriptions: Vec<Subscription>,
 }
@@ -97,6 +94,6 @@ impl CollabGroup {
     F: FnOnce(&Collab),
   {
     let awareness = self.awareness.lock();
-    f(&awareness.collab);
+    f(&awareness);
   }
 }

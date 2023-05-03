@@ -1,7 +1,8 @@
-use crate::util::ScriptTest;
-use crate::util::TestScript::*;
 use collab_sync::client::sync::SYNC_TIMEOUT;
 use serde_json::json;
+
+use crate::util::ScriptTest;
+use crate::util::TestScript::*;
 
 #[tokio::test]
 async fn single_write_test() {
@@ -13,7 +14,7 @@ async fn single_write_test() {
   // 5. assert client equal to server
   test
     .run_scripts(vec![
-      AddClient {
+      CreateClient {
         uid: 1,
         device_id: "1".to_string(),
       },
@@ -50,7 +51,7 @@ async fn client_offline_test() {
   // 4. Check that the update is not sync with remote server
   test
     .run_scripts(vec![
-      AddClient {
+      CreateClient {
         uid: 1,
         device_id: "1".to_string(),
       },
@@ -74,7 +75,7 @@ async fn client_offline_test() {
         }),
       },
       AssertServerContent {
-        expected: json!("{}"),
+        expected: json!({}),
       },
     ])
     .await;
@@ -91,7 +92,7 @@ async fn client_offline_to_online_test() {
   // 6. check the server is sync or not
   test
     .run_scripts(vec![
-      AddClient {
+      CreateClient {
         uid: 1,
         device_id: "1".to_string(),
       },
@@ -126,7 +127,7 @@ async fn client_multiple_write_test() {
   let mut test = ScriptTest::new(1, "1").await;
   test
     .run_scripts(vec![
-      AddClient {
+      CreateClient {
         uid: 1,
         device_id: "1".to_string(),
       },
@@ -167,14 +168,15 @@ async fn client_multiple_write_test() {
 #[tokio::test]
 async fn client_unstable_network_write_test() {
   let mut test = ScriptTest::new(1, "1").await;
+  let device_id = "1".to_string();
   test
     .run_scripts(vec![
-      AddClient {
+      CreateClient {
         uid: 1,
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
       ModifyCollab {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         f: |collab| {
           collab.insert("1", "a");
         },
@@ -183,11 +185,11 @@ async fn client_unstable_network_write_test() {
       Wait { secs: 1 },
       // 1. set client online after modify the document.
       DisconnectClient {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
       // 2. The server should not sync with the latest updates.
       ModifyCollab {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         f: |collab| {
           collab.insert("2", "b");
         },
@@ -210,7 +212,7 @@ async fn client_unstable_network_write_test() {
       },
       // 3. reconnect client
       ConnectClient {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
       // 4. wait SYNC_TIMEOUT second (for sync). After the timeout, the client will resent
       // the update to the server
@@ -230,7 +232,45 @@ async fn client_unstable_network_write_test() {
         }),
       },
       AssertClientEqualToServer {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
+      },
+    ])
+    .await;
+}
+
+#[tokio::test]
+async fn client_reopen_test() {
+  let mut test = ScriptTest::new(1, "1").await;
+  let device_id = "1".to_string();
+  test
+    .run_scripts(vec![
+      CreateClient {
+        uid: 1,
+        device_id: device_id.clone(),
+      },
+      DisconnectClient {
+        device_id: device_id.clone(),
+      },
+      Wait { secs: 1 },
+      AssertServerContent {
+        expected: json!({}),
+      },
+    ])
+    .await;
+
+  let db = test.remove_client(&device_id).db;
+
+  test
+    .run_scripts(vec![
+      AddClient {
+        uid: 1,
+        device_id: device_id.clone(),
+        db,
+      },
+      // the server will be sync with the client within 1 second.
+      Wait { secs: 1 },
+      AssertServerContent {
+        expected: json!(""),
       },
     ])
     .await;

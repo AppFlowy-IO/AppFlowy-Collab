@@ -6,6 +6,7 @@ use std::vec::IntoIter;
 use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use y_sync::awareness::Awareness;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
@@ -30,6 +31,7 @@ pub struct Collab {
   uid: i64,
   device_id: String,
   doc: Doc,
+  awareness: Awareness,
   #[allow(dead_code)]
   pub object_id: String,
   data: MapRef,
@@ -48,11 +50,13 @@ impl Collab {
     let data = doc.get_or_insert_map(DATA_SECTION);
     let plugins = Plugins::new(plugins);
     let device_id = Default::default();
+    let awareness = Awareness::new(doc.clone());
     Self {
       uid,
       device_id,
       object_id,
       doc,
+      awareness,
       data,
       plugins,
       update_subscription: Default::default(),
@@ -67,6 +71,14 @@ impl Collab {
 
   pub fn get_doc(&self) -> &Doc {
     &self.doc
+  }
+
+  pub fn get_awareness(&self) -> &Awareness {
+    &self.awareness
+  }
+
+  pub fn get_mut_awareness(&mut self) -> &mut Awareness {
+    &mut self.awareness
   }
 
   pub fn add_plugin(&mut self, plugin: Arc<dyn CollabPlugin>) {
@@ -109,7 +121,7 @@ impl Collab {
         .plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.did_init(&self.doc, &self.object_id, &txn));
+        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id, &txn));
     }
   }
 

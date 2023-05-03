@@ -1,5 +1,5 @@
 use collab::core::collab::CollabOrigin;
-use collab::core::collab_awareness::MutexCollabAwareness;
+use collab::core::collab_awareness::MutexCollab;
 use y_sync::awareness::{Awareness, AwarenessUpdate};
 use y_sync::sync::{Error, Message, SyncMessage};
 use yrs::updates::decoder::Decode;
@@ -34,6 +34,7 @@ use yrs::{ReadTxn, StateVector, Transact, Update};
 // |        |             |
 // ********************************
 /// A implementation of y-sync [CollabSyncProtocol].
+#[derive(Clone)]
 pub struct DefaultProtocol;
 impl CollabSyncProtocol for DefaultProtocol {}
 
@@ -130,39 +131,30 @@ pub trait CollabSyncProtocol {
 pub async fn handle_msg<P: CollabSyncProtocol>(
   origin: &CollabOrigin,
   protocol: &P,
-  awareness: &MutexCollabAwareness,
+  collab: &MutexCollab,
   msg: Message,
 ) -> Result<Option<Message>, Error> {
   match msg {
     Message::Sync(msg) => match msg {
-      SyncMessage::SyncStep1(sv) => {
-        let awareness = awareness.lock();
-        protocol.handle_sync_step1(&awareness, sv)
-      },
-      SyncMessage::SyncStep2(update) => {
-        let mut awareness = awareness.lock();
-        protocol.handle_sync_step2(origin, &mut awareness, Update::decode_v1(&update)?)
-      },
-      SyncMessage::Update(update) => {
-        let mut awareness = awareness.lock();
-        protocol.handle_update(origin, &mut awareness, Update::decode_v1(&update)?)
-      },
+      SyncMessage::SyncStep1(sv) => protocol.handle_sync_step1(collab.lock().get_awareness(), sv),
+      SyncMessage::SyncStep2(update) => protocol.handle_sync_step2(
+        origin,
+        collab.lock().get_mut_awareness(),
+        Update::decode_v1(&update)?,
+      ),
+      SyncMessage::Update(update) => protocol.handle_update(
+        origin,
+        collab.lock().get_mut_awareness(),
+        Update::decode_v1(&update)?,
+      ),
     },
-    Message::Auth(reason) => {
-      let awareness = awareness.lock();
-      protocol.handle_auth(&awareness, reason)
-    },
-    Message::AwarenessQuery => {
-      let awareness = awareness.lock();
-      protocol.handle_awareness_query(&awareness)
-    },
+    Message::Auth(reason) => protocol.handle_auth(collab.lock().get_awareness(), reason),
+    Message::AwarenessQuery => protocol.handle_awareness_query(collab.lock().get_awareness()),
     Message::Awareness(update) => {
-      let mut awareness = awareness.lock();
-      protocol.handle_awareness_update(&mut awareness, update)
+      protocol.handle_awareness_update(collab.lock().get_mut_awareness(), update)
     },
     Message::Custom(tag, data) => {
-      let mut awareness = awareness.lock();
-      protocol.missing_handle(&mut awareness, tag, data)
+      protocol.missing_handle(collab.lock().get_mut_awareness(), tag, data)
     },
   }
 }

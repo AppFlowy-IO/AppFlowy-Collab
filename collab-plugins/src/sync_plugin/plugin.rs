@@ -1,15 +1,16 @@
 use std::sync::Arc;
 
 use collab::core::collab::CollabOrigin;
-use collab::core::collab_awareness::MutexCollabAwareness;
+use collab::core::collab_awareness::MutexCollab;
 use collab::preclude::CollabPlugin;
 use collab_sync::client::sync::SyncQueue;
-
 use collab_sync::error::SyncError;
 use collab_sync::msg::{ClientUpdateMessage, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
+use y_sync::awareness::Awareness;
 use y_sync::sync::{Message, SyncMessage};
 use yrs::updates::encoder::Encode;
+use yrs::Transaction;
 
 pub struct SyncPlugin<Sink, Stream> {
   object_id: String,
@@ -20,7 +21,7 @@ impl<Sink, Stream> SyncPlugin<Sink, Stream> {
   pub fn new<E>(
     origin: CollabOrigin,
     object_id: &str,
-    awareness: Arc<MutexCollabAwareness>,
+    awareness: Arc<MutexCollab>,
     sink: Sink,
     stream: Stream,
   ) -> Self
@@ -39,10 +40,14 @@ impl<Sink, Stream> SyncPlugin<Sink, Stream> {
 
 impl<E, Sink, Stream> CollabPlugin for SyncPlugin<Sink, Stream>
 where
-  E: Into<SyncError> + Send + Sync,
+  E: Into<SyncError> + Send + Sync + 'static,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {
+  fn did_init(&self, awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
+    self.sync_queue.notify(awareness);
+  }
+
   fn did_receive_local_update(&self, origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
     let weak_sync_queue = Arc::downgrade(&self.sync_queue);
     let update = update.to_vec();
@@ -52,11 +57,9 @@ where
     tokio::spawn(async move {
       if let Some(sync_queue) = weak_sync_queue.upgrade() {
         let payload = Message::Sync(SyncMessage::Update(update)).encode_v1();
-        sync_queue
-          .sync_msg(|msg_id| {
-            ClientUpdateMessage::new(cloned_origin, object_id, msg_id, payload).into()
-          })
-          .await;
+        sync_queue.sync_msg(|msg_id| {
+          ClientUpdateMessage::new(cloned_origin, object_id, msg_id, payload).into()
+        });
       }
     });
   }

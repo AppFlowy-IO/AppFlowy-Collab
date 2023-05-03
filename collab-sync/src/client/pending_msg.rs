@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::ops::{Deref, DerefMut};
+
 use tokio::sync::oneshot;
 
 use crate::msg::CollabMessage;
@@ -115,8 +116,5 @@ impl TaskState {
   }
   pub fn is_processing(&self) -> bool {
     matches!(self, TaskState::Processing)
-  }
-  pub fn is_timeout(&self) -> bool {
-    matches!(self, TaskState::Timeout)
   }
 }

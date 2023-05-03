@@ -42,8 +42,8 @@ async fn single_write_sync_with_server_test() {
   wait_a_sec().await;
   {
     let client = client_1.lock();
-    client.collab.with_transact_mut(|txn| {
-      let map = client.collab.get_map_with_txn(txn, vec!["map"]).unwrap();
+    client.with_transact_mut(|txn| {
+      let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task3", "c");
       map.insert_with_txn(txn, "task4", "d");
     });
@@ -79,15 +79,15 @@ async fn two_writers_test() {
 
   {
     let client = client_1.lock();
-    client.collab.with_transact_mut(|txn| {
-      let map = client.collab.get_map_with_txn(txn, vec!["map"]).unwrap();
+    client.with_transact_mut(|txn| {
+      let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task3", "c");
     });
   }
   {
     let client = client_2.lock();
-    client.collab.with_transact_mut(|txn| {
-      let map = client.collab.get_map_with_txn(txn, vec!["map"]).unwrap();
+    client.with_transact_mut(|txn| {
+      let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task4", "d");
     });
   }
@@ -127,16 +127,16 @@ async fn two_clients_last_write_win_test() {
   wait_a_sec().await;
   {
     let client = client_1.lock();
-    client.collab.with_transact_mut(|txn| {
-      let map = client.collab.get_map_with_txn(txn, vec!["map"]).unwrap();
+    client.with_transact_mut(|txn| {
+      let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task2", "bb");
     });
   }
   wait_a_sec().await;
   {
     let client = client_2.lock();
-    client.collab.with_transact_mut(|txn| {
-      let map = client.collab.get_map_with_txn(txn, vec!["map"]).unwrap();
+    client.with_transact_mut(|txn| {
+      let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task2", "bbb");
     });
   }
@@ -172,16 +172,16 @@ async fn last_write_win_test() {
   wait_a_sec().await;
   {
     let client = client_1.lock();
-    client.collab.with_transact_mut(|txn| {
-      let map = client.collab.get_map_with_txn(txn, vec!["map"]).unwrap();
+    client.with_transact_mut(|txn| {
+      let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task2", "bb");
     });
   }
   wait_a_sec().await;
   {
     let client = client_2.lock();
-    client.collab.with_transact_mut(|txn| {
-      let map = client.collab.get_map_with_txn(txn, vec!["map"]).unwrap();
+    client.with_transact_mut(|txn| {
+      let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task2", "bbb");
     });
   }

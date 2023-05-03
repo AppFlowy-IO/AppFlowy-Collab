@@ -1,19 +1,47 @@
-use crate::util::{spawn_server, TestClient, TestServer};
-use collab::core::collab::CollabOrigin;
-use collab::preclude::Collab;
-use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
+use collab::core::collab::CollabOrigin;
+use collab::preclude::Collab;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use serde_json::Value;
+
+use crate::util::{spawn_server, TestClient, TestServer};
+
 pub enum TestScript {
-  AddClient { uid: i64, device_id: String },
-  DisconnectClient { device_id: String },
-  ConnectClient { device_id: String },
-  Wait { secs: u64 },
-  AssertClientContent { device_id: String, expected: Value },
-  AssertServerContent { expected: Value },
-  ModifyCollab { device_id: String, f: fn(&Collab) },
-  AssertClientEqualToServer { device_id: String },
+  CreateClient {
+    uid: i64,
+    device_id: String,
+  },
+  AddClient {
+    uid: i64,
+    device_id: String,
+    db: Arc<RocksCollabDB>,
+  },
+  DisconnectClient {
+    device_id: String,
+  },
+  ConnectClient {
+    device_id: String,
+  },
+  Wait {
+    secs: u64,
+  },
+  AssertClientContent {
+    device_id: String,
+    expected: Value,
+  },
+  AssertServerContent {
+    expected: Value,
+  },
+  ModifyCollab {
+    device_id: String,
+    f: fn(&Collab),
+  },
+  AssertClientEqualToServer {
+    device_id: String,
+  },
 }
 
 pub struct ScriptTest {
@@ -32,30 +60,36 @@ impl ScriptTest {
     }
   }
 
-  pub async fn add_client(&mut self, uid: i64, device_id: &str) {
-    let origin = CollabOrigin::new(uid, device_id);
-    let client = TestClient::new(origin, &self.object_id, self.server.address)
-      .await
-      .unwrap();
-    self.clients.insert(device_id.to_string(), client);
+  pub fn remove_client(&mut self, device_id: &str) -> TestClient {
+    self.clients.remove(device_id).unwrap()
   }
 
   pub async fn run_script(&mut self, script: TestScript) {
     match script {
-      TestScript::AddClient { uid, device_id } => {
-        self.add_client(uid, &device_id).await;
+      TestScript::CreateClient { uid, device_id } => {
+        let origin = CollabOrigin::new(uid, &device_id);
+        let client = TestClient::new(origin, &self.object_id, self.server.address)
+          .await
+          .unwrap();
+        self.clients.insert(device_id.to_string(), client);
+      },
+      TestScript::AddClient { uid, device_id, db } => {
+        let origin = CollabOrigin::new(uid, &device_id);
+        let new_client = TestClient::with_db(origin, &self.object_id, self.server.address, db)
+          .await
+          .unwrap();
+        let old_client = self.clients.insert(device_id.to_string(), new_client);
+        assert!(old_client.is_none());
       },
       TestScript::DisconnectClient { device_id } => {
-        self
-          .clients
-          .get_mut(&device_id)
-          .map(|client| client.disconnect());
+        if let Some(client) = self.clients.get_mut(&device_id) {
+          client.disconnect()
+        }
       },
       TestScript::ConnectClient { device_id } => {
-        self
-          .clients
-          .get_mut(&device_id)
-          .map(|client| client.connect());
+        if let Some(client) = self.clients.get_mut(&device_id) {
+          client.connect()
+        }
       },
       TestScript::AssertClientContent {
         device_id,
@@ -81,7 +115,7 @@ impl ScriptTest {
       },
       TestScript::ModifyCollab { device_id, f } => {
         let client = self.clients.get_mut(&device_id).unwrap();
-        f(&client.lock().collab);
+        f(&client.lock());
       },
     }
   }

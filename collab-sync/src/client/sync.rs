@@ -5,13 +5,13 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use collab::core::collab::CollabOrigin;
-use collab::core::collab_awareness::MutexCollabAwareness;
+use collab::core::collab_awareness::MutexCollab;
 use futures_util::{SinkExt, StreamExt};
 use lib0::decoding::Cursor;
 use tokio::spawn;
 use tokio::sync::{oneshot, watch, Mutex};
 use tokio::task::JoinHandle;
-
+use y_sync::awareness::Awareness;
 use y_sync::sync::MessageReader;
 use yrs::updates::decoder::DecoderV1;
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
@@ -24,9 +24,12 @@ use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultProtocol};
 pub const SYNC_TIMEOUT: u64 = 2;
 
 pub struct SyncQueue<Sink, Stream> {
+  object_id: String,
+  origin: CollabOrigin,
   scheduler: Arc<SinkScheduler<Sink>>,
   #[allow(dead_code)]
   stream: SyncStream<Sink, Stream>,
+  protocol: DefaultProtocol,
 }
 
 impl<E, Sink, Stream> SyncQueue<Sink, Stream>
@@ -40,17 +43,12 @@ where
     origin: CollabOrigin,
     sink: Sink,
     stream: Stream,
-    awareness: Arc<MutexCollabAwareness>,
+    awareness: Arc<MutexCollab>,
   ) -> Self {
     let protocol = DefaultProtocol;
     let sender = Arc::new(Mutex::new(sink));
     let msg_id_counter = Arc::new(MsgIdCounter::new());
-    let msg_id = msg_id_counter.next();
-    let mut pending_msgs = PendingMsgQueue::new();
-    if let Some(payload) = doc_init_state(&awareness, &protocol) {
-      let msg = ClientInitMessage::new(origin, object_id.to_string(), msg_id, payload);
-      pending_msgs.push_msg(msg_id, msg.into());
-    }
+    let pending_msgs = PendingMsgQueue::new();
     let (notifier, notifier_rx) = watch::channel(false);
     let scheduler = Arc::new(SinkScheduler::new(
       sender,
@@ -60,7 +58,8 @@ where
       Duration::from_secs(SYNC_TIMEOUT),
     ));
     spawn(TaskRunner::run(scheduler.clone(), notifier_rx));
-
+    let cloned_protocol = protocol.clone();
+    let object_id = object_id.to_string();
     let stream = SyncStream::new(
       object_id.to_string(),
       stream,
@@ -69,18 +68,31 @@ where
       scheduler.clone(),
     );
 
-    Self { scheduler, stream }
+    Self {
+      object_id,
+      origin,
+      scheduler,
+      stream,
+      protocol: cloned_protocol,
+    }
+  }
+
+  pub fn notify(&self, awareness: &Awareness) {
+    let payload = doc_init_state(awareness, &self.protocol);
+    if let Some(payload) = payload {
+      self.scheduler.sync_msg(|msg_id| {
+        ClientInitMessage::new(self.origin.clone(), self.object_id.clone(), msg_id, payload).into()
+      });
+    } else {
+      self.scheduler.notify();
+    }
   }
 }
 
-fn doc_init_state<P: CollabSyncProtocol>(
-  awareness: &Arc<MutexCollabAwareness>,
-  protocol: &P,
-) -> Option<Vec<u8>> {
+fn doc_init_state<P: CollabSyncProtocol>(awareness: &Awareness, protocol: &P) -> Option<Vec<u8>> {
   let payload = {
     let mut encoder = EncoderV1::new();
-    let awareness = awareness.lock();
-    protocol.start(&awareness, &mut encoder).ok()?;
+    protocol.start(awareness, &mut encoder).ok()?;
     encoder.to_vec()
   };
   if payload.is_empty() {
@@ -100,7 +112,7 @@ impl<Sink, Stream> Deref for SyncQueue<Sink, Stream> {
 
 struct SyncStream<Sink, Stream> {
   #[allow(dead_code)]
-  awareness: Arc<MutexCollabAwareness>,
+  awareness: Arc<MutexCollab>,
   #[allow(dead_code)]
   runner: JoinHandle<Result<(), SyncError>>,
   phantom_sink: PhantomData<Sink>,
@@ -117,7 +129,7 @@ where
     object_id: String,
     stream: Stream,
     protocol: P,
-    awareness: Arc<MutexCollabAwareness>,
+    awareness: Arc<MutexCollab>,
     scheduler: Arc<SinkScheduler<Sink>>,
   ) -> Self
   where
@@ -144,7 +156,7 @@ where
   async fn spawn_doc_stream<P>(
     object_id: String,
     mut stream: Stream,
-    weak_awareness: Weak<MutexCollabAwareness>,
+    weak_awareness: Weak<MutexCollab>,
     weak_scheduler: Weak<SinkScheduler<Sink>>,
     protocol: P,
   ) -> Result<(), SyncError>
@@ -179,7 +191,7 @@ where
   async fn process_message<P>(
     object_id: &str,
     protocol: &P,
-    awareness: &Arc<MutexCollabAwareness>,
+    awareness: &Arc<MutexCollab>,
     scheduler: &Arc<SinkScheduler<Sink>>,
     msg: CollabMessage,
   ) -> Result<(), SyncError>
@@ -209,11 +221,9 @@ where
             let payload = resp.encode_v1();
             let object_id = object_id.to_string();
             let origin = origin.clone();
-            scheduler
-              .sync_msg(|msg_id| {
-                ClientUpdateMessage::new(origin, object_id, msg_id, payload).into()
-              })
-              .await;
+            scheduler.sync_msg(|msg_id| {
+              ClientUpdateMessage::new(origin, object_id, msg_id, payload).into()
+            });
           }
         }
         Ok(())
@@ -224,7 +234,7 @@ where
 
 pub struct SinkScheduler<Sink> {
   sender: Arc<Mutex<Sink>>,
-  pending_msgs: Arc<Mutex<PendingMsgQueue>>,
+  pending_msgs: Arc<parking_lot::Mutex<PendingMsgQueue>>,
   msg_id_counter: Arc<MsgIdCounter>,
   notifier: watch::Sender<bool>,
   timeout: Duration,
@@ -242,8 +252,7 @@ where
     notifier: watch::Sender<bool>,
     timeout: Duration,
   ) -> Self {
-    let pending_msgs = Arc::new(Mutex::new(pending_msgs));
-
+    let pending_msgs = Arc::new(parking_lot::Mutex::new(pending_msgs));
     Self {
       sender,
       pending_msgs,
@@ -253,19 +262,21 @@ where
     }
   }
 
-  pub async fn sync_msg(&self, f: impl FnOnce(u32) -> CollabMessage) {
-    let mut pending_msgs = self.pending_msgs.lock().await;
-    let msg_id = self.msg_id_counter.next();
-    let msg = f(msg_id);
-    pending_msgs.push_msg(msg_id, msg);
-    drop(pending_msgs);
+  pub fn sync_msg(&self, f: impl FnOnce(u32) -> CollabMessage) {
+    {
+      let mut pending_msgs = self.pending_msgs.lock();
+      let msg_id = self.msg_id_counter.next();
+      let msg = f(msg_id);
+      pending_msgs.push_msg(msg_id, msg);
+      drop(pending_msgs);
+    }
 
     self.notify();
   }
 
   /// Notify the scheduler to process the next message and mark the current message as done.
   pub async fn ack_msg(&self, msg_id: u32) {
-    if let Some(mut pending_msg) = self.pending_msgs.lock().await.peek_mut() {
+    if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {
       if pending_msg.msg_id() == msg_id {
         pending_msg.set_state(TaskState::Done);
       }
@@ -274,8 +285,7 @@ where
   }
 
   async fn process_next_msg(&self) -> Result<(), SyncError> {
-    let mut pending_msgs = self.pending_msgs.lock().await;
-    let pending_msg = pending_msgs.pop();
+    let pending_msg = self.pending_msgs.lock().pop();
     match pending_msg {
       Some(mut pending_msg) => {
         if pending_msg.state().is_done() {
@@ -296,8 +306,7 @@ where
 
         // Push back the pending message to the queue.
         let collab_msg = pending_msg.msg();
-        pending_msgs.push(pending_msg);
-        drop(pending_msgs);
+        self.pending_msgs.lock().push(pending_msg);
 
         let mut sender = self.sender.lock().await;
         tracing::trace!("[🦀Client]: {}", collab_msg);
@@ -308,7 +317,7 @@ where
         match tokio::time::timeout(self.timeout, rx).await {
           Ok(_) => self.notify(),
           Err(_) => {
-            if let Some(mut pending_msg) = self.pending_msgs.lock().await.peek_mut() {
+            if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {
               pending_msg.set_state(TaskState::Timeout);
             }
             self.notify();

@@ -1,15 +1,16 @@
-use collab_sync::error::SyncError;
-use collab_sync::msg::CollabMessage;
-use collab_sync::msg_codec::{CollabSink, CollabStream};
-use futures_util::{SinkExt, StreamExt};
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;
 
+use collab_sync::error::SyncError;
+use collab_sync::msg::CollabMessage;
+use collab_sync::msg_codec::{CollabSink, CollabStream};
+use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 
 pub struct TestStream {
+  #[allow(dead_code)]
   runner: JoinHandle<()>,
   is_conn: Arc<AtomicBool>,
 }
@@ -42,6 +43,7 @@ impl TestStream {
 }
 
 pub struct TestSink {
+  #[allow(dead_code)]
   runner: JoinHandle<()>,
   is_conn: Arc<AtomicBool>,
 }

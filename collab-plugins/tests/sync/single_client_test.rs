@@ -4,7 +4,7 @@ use serde_json::json;
 
 use crate::util::{
   make_test_collab_group, spawn_client, spawn_client_with_empty_doc, spawn_server,
-  spawn_server_with_data, wait_a_sec, ScriptTest, TestClient, TestScript::*,
+  spawn_server_with_data, wait_a_sec,
 };
 
 #[tokio::test]
@@ -21,7 +21,7 @@ async fn send_single_update_to_server_test() {
   wait_a_sec().await;
   // client -> update -> server
   // server apply update
-  client.lock().collab.insert("1", "a");
+  client.lock().insert("1", "a");
   wait_a_sec().await;
 
   let json1 = client.to_json_value();
@@ -47,8 +47,8 @@ async fn send_multiple_updates_to_server_test() {
   wait_a_sec().await;
   {
     let client = client.lock();
-    client.collab.with_transact_mut(|txn| {
-      let map = client.collab.create_map_with_txn(txn, "map");
+    client.with_transact_mut(|txn| {
+      let map = client.create_map_with_txn(txn, "map");
       map.insert_with_txn(txn, "task1", "a");
       map.insert_with_txn(txn, "task2", "b");
     });
@@ -56,8 +56,8 @@ async fn send_multiple_updates_to_server_test() {
   wait_a_sec().await;
   {
     let client = client.lock();
-    client.collab.with_transact_mut(|txn| {
-      let map = client.collab.get_map_with_txn(txn, vec!["map"]).unwrap();
+    client.with_transact_mut(|txn| {
+      let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task3", "c");
     });
   }
@@ -112,8 +112,8 @@ async fn send_local_doc_initial_state_to_server() {
   wait_a_sec().await;
   {
     let client = client.lock();
-    client.collab.with_transact_mut(|txn| {
-      let map = client.collab.create_map_with_txn(txn, "map");
+    client.with_transact_mut(|txn| {
+      let map = client.create_map_with_txn(txn, "map");
       map.insert_with_txn(txn, "task1", "a");
       map.insert_with_txn(txn, "task2", "b");
     });
@@ -143,8 +143,8 @@ async fn send_local_doc_initial_state_to_server_multiple_times() {
   wait_a_sec().await;
   {
     let client = client.lock();
-    client.collab.with_transact_mut(|txn| {
-      let map = client.collab.create_map_with_txn(txn, "map");
+    client.with_transact_mut(|txn| {
+      let map = client.create_map_with_txn(txn, "map");
       map.insert_with_txn(txn, "task1", "a");
       map.insert_with_txn(txn, "task2", "b");
     });
