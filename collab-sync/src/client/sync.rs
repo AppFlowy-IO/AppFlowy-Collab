@@ -61,6 +61,7 @@ where
     let cloned_protocol = protocol.clone();
     let object_id = object_id.to_string();
     let stream = SyncStream::new(
+      origin.clone(),
       object_id.to_string(),
       stream,
       protocol,
@@ -128,6 +129,7 @@ where
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {
   pub fn new<P>(
+    origin: CollabOrigin,
     object_id: String,
     stream: Stream,
     protocol: P,
@@ -140,6 +142,7 @@ where
     let weak_awareness = Arc::downgrade(&awareness);
     let weak_scheduler = Arc::downgrade(&scheduler);
     let runner = spawn(SyncStream::<Sink, Stream>::spawn_doc_stream::<P>(
+      origin,
       object_id,
       stream,
       weak_awareness,
@@ -156,6 +159,7 @@ where
 
   // Spawn the stream that continuously reads the doc's updates from remote.
   async fn spawn_doc_stream<P>(
+    _origin: CollabOrigin,
     object_id: String,
     mut stream: Stream,
     weak_awareness: Weak<MutexCollab>,
@@ -209,7 +213,6 @@ where
             if let Some(resp_msg) = handle_msg(&origin, protocol, awareness, msg).await? {
               let payload = resp_msg.encode_v1();
               let object_id = object_id.to_string();
-              let origin = origin.clone();
               scheduler.sync_msg(|msg_id| {
                 ServerSyncMessage::new(origin, object_id, payload, msg_id).into()
               });

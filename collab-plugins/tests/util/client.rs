@@ -82,6 +82,7 @@ impl TestClient {
     origin: CollabOrigin,
     object_id: &str,
     address: SocketAddr,
+    with_data: bool,
   ) -> std::io::Result<Self> {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
@@ -113,13 +114,15 @@ impl TestClient {
     collab.lock().add_plugin(Arc::new(sync_plugin));
 
     collab.initial();
-    {
-      let client = collab.lock();
-      client.with_transact_mut(|txn| {
-        let map = client.create_map_with_txn(txn, "map");
-        map.insert_with_txn(txn, "task1", "a");
-        map.insert_with_txn(txn, "task2", "b");
-      });
+    if with_data {
+      {
+        let client = collab.lock();
+        client.with_transact_mut(|txn| {
+          let map = client.create_map_with_txn(txn, "map");
+          map.insert_with_txn(txn, "task1", "a");
+          map.insert_with_txn(txn, "task2", "b");
+        });
+      }
     }
     Ok(Self {
       test_stream,

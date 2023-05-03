@@ -14,7 +14,11 @@ pub enum TestScript {
     uid: i64,
     device_id: String,
   },
-  AddClient {
+  CreateEmptyClient {
+    uid: i64,
+    device_id: String,
+  },
+  CreateClientWithDb {
     uid: i64,
     device_id: String,
     db: Arc<RocksCollabDB>,
@@ -71,12 +75,19 @@ impl ScriptTest {
     match script {
       TestScript::CreateClient { uid, device_id } => {
         let origin = CollabOrigin::new(uid, &device_id);
-        let client = TestClient::new(origin, &self.object_id, self.server.address)
+        let client = TestClient::new(origin, &self.object_id, self.server.address, true)
           .await
           .unwrap();
         self.clients.insert(device_id.to_string(), client);
       },
-      TestScript::AddClient { uid, device_id, db } => {
+      TestScript::CreateEmptyClient { uid, device_id } => {
+        let origin = CollabOrigin::new(uid, &device_id);
+        let client = TestClient::new(origin, &self.object_id, self.server.address, false)
+          .await
+          .unwrap();
+        self.clients.insert(device_id.to_string(), client);
+      },
+      TestScript::CreateClientWithDb { uid, device_id, db } => {
         let origin = CollabOrigin::new(uid, &device_id);
         let new_client = TestClient::with_db(origin, &self.object_id, self.server.address, db)
           .await

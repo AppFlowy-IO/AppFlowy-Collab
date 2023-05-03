@@ -266,7 +266,7 @@ async fn server_sync_state_vector_with_client_test() {
   let db = test.remove_client(&device_id).db;
   test
     .run_scripts(vec![
-      AddClient {
+      CreateClientWithDb {
         uid: 1,
         device_id: device_id.clone(),
         db,
@@ -317,7 +317,7 @@ async fn server_sync_state_vector_multiple_time_with_client_test() {
   for _ in 0..5 {
     test
       .run_scripts(vec![
-        AddClient {
+        CreateClientWithDb {
           uid: 1,
           device_id: device_id.clone(),
           db: db.clone(),
@@ -430,7 +430,7 @@ async fn server_state_vector_size_test() {
   let db = test.remove_client(&device_id).db;
 
   // Open the document with build-in data
-  let client = AddClient {
+  let client = CreateClientWithDb {
     uid: 1,
     device_id: device_id.clone(),
     db: db.clone(),
@@ -438,7 +438,7 @@ async fn server_state_vector_size_test() {
   test.run_scripts(vec![client, Wait { secs: 1 }]).await;
 
   // Open the document with build-in data
-  let client = AddClient {
+  let client = CreateClientWithDb {
     uid: 1,
     device_id: device_id.clone(),
     db: db.clone(),
