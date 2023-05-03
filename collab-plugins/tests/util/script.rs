@@ -49,6 +49,10 @@ pub enum TestScript {
   AssertClientEqualToServer {
     device_id: String,
   },
+  AssertClientEqual {
+    device_id_a: String,
+    device_id_b: String,
+  },
 }
 
 pub struct ScriptTest {
@@ -137,6 +141,14 @@ impl ScriptTest {
           .get_mut(&self.object_id)
           .unwrap()
           .mut_collab(f);
+      },
+      TestScript::AssertClientEqual {
+        device_id_a,
+        device_id_b,
+      } => {
+        let client_a = self.clients.get_mut(&device_id_a).unwrap().to_json_value();
+        let client_b = self.clients.get_mut(&device_id_b).unwrap().to_json_value();
+        assert_eq!(client_a, client_b);
       },
     }
   }
