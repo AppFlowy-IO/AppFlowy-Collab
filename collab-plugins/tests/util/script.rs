@@ -35,8 +35,11 @@ pub enum TestScript {
   AssertServerContent {
     expected: Value,
   },
-  ModifyCollab {
+  ModifyLocalCollab {
     device_id: String,
+    f: fn(&Collab),
+  },
+  ModifyRemoteCollab {
     f: fn(&Collab),
   },
   AssertClientEqualToServer {
@@ -78,8 +81,7 @@ impl ScriptTest {
         let new_client = TestClient::with_db(origin, &self.object_id, self.server.address, db)
           .await
           .unwrap();
-        let old_client = self.clients.insert(device_id.to_string(), new_client);
-        assert!(old_client.is_none());
+        let _ = self.clients.insert(device_id.to_string(), new_client);
       },
       TestScript::DisconnectClient { device_id } => {
         if let Some(client) = self.clients.get_mut(&device_id) {
@@ -113,9 +115,17 @@ impl ScriptTest {
       TestScript::Wait { secs } => {
         tokio::time::sleep(Duration::from_secs(secs)).await;
       },
-      TestScript::ModifyCollab { device_id, f } => {
+      TestScript::ModifyLocalCollab { device_id, f } => {
         let client = self.clients.get_mut(&device_id).unwrap();
         f(&client.lock());
+      },
+      TestScript::ModifyRemoteCollab { f } => {
+        self
+          .server
+          .groups
+          .get_mut(&self.object_id)
+          .unwrap()
+          .mut_collab(f);
       },
     }
   }

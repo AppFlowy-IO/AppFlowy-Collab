@@ -30,9 +30,9 @@ impl<Sink, Stream> SyncPlugin<Sink, Stream> {
     Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
     Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
   {
-    let sync_queue = Arc::new(SyncQueue::new(object_id, origin, sink, stream, awareness));
+    let sync_queue = SyncQueue::new(object_id, origin, sink, stream, awareness);
     Self {
-      sync_queue,
+      sync_queue: Arc::new(sync_queue),
       object_id: object_id.to_string(),
     }
   }

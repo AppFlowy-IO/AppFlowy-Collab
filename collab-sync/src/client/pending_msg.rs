@@ -78,6 +78,7 @@ impl PendingMessage {
     self.msg_id
   }
 }
+
 impl Eq for PendingMessage {}
 
 impl PartialEq for PendingMessage {
@@ -97,6 +98,10 @@ impl Ord for PendingMessage {
     match (&self.msg, &other.msg) {
       (CollabMessage::ClientInit { .. }, CollabMessage::ClientInit { .. }) => Ordering::Equal,
       (CollabMessage::ClientInit { .. }, _) => Ordering::Greater,
+      (_, CollabMessage::ClientInit { .. }) => Ordering::Less,
+      (CollabMessage::ServerSync { .. }, CollabMessage::ServerSync { .. }) => Ordering::Equal,
+      (CollabMessage::ServerSync { .. }, _) => Ordering::Greater,
+      (_, CollabMessage::ServerSync { .. }) => Ordering::Less,
       _ => self.msg_id.cmp(&other.msg_id).reverse(),
     }
   }

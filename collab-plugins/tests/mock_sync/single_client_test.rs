@@ -18,7 +18,7 @@ async fn single_write_test() {
         uid: 1,
         device_id: "1".to_string(),
       },
-      ModifyCollab {
+      ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
           collab.insert("1", "a");
@@ -58,7 +58,7 @@ async fn client_offline_test() {
       DisconnectClient {
         device_id: "1".to_string(),
       },
-      ModifyCollab {
+      ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
           collab.insert("1", "a");
@@ -99,7 +99,7 @@ async fn client_offline_to_online_test() {
       DisconnectClient {
         device_id: "1".to_string(),
       },
-      ModifyCollab {
+      ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
           collab.insert("1", "a");
@@ -131,19 +131,19 @@ async fn client_multiple_write_test() {
         uid: 1,
         device_id: "1".to_string(),
       },
-      ModifyCollab {
+      ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
           collab.insert("1", "a");
         },
       },
-      ModifyCollab {
+      ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
           collab.insert("2", "b");
         },
       },
-      ModifyCollab {
+      ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
           collab.insert("3", "c");
@@ -175,7 +175,7 @@ async fn client_unstable_network_write_test() {
         uid: 1,
         device_id: device_id.clone(),
       },
-      ModifyCollab {
+      ModifyLocalCollab {
         device_id: device_id.clone(),
         f: |collab| {
           collab.insert("1", "a");
@@ -188,13 +188,13 @@ async fn client_unstable_network_write_test() {
         device_id: device_id.clone(),
       },
       // 2. The server should not sync with the latest updates.
-      ModifyCollab {
+      ModifyLocalCollab {
         device_id: device_id.clone(),
         f: |collab| {
           collab.insert("2", "b");
         },
       },
-      ModifyCollab {
+      ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
           collab.insert("3", "c");
@@ -238,8 +238,66 @@ async fn client_unstable_network_write_test() {
     .await;
 }
 
+// The version of the local document is a ahead of the remote document. So the server need
+// to get the update from the client.
 #[tokio::test]
-async fn client_reopen_test() {
+async fn server_sync_state_vector_with_client_test() {
+  let mut test = ScriptTest::new(1, "1").await;
+  let device_id = "1".to_string();
+
+  test
+    .run_scripts(vec![
+      CreateClient {
+        uid: 1,
+        device_id: device_id.clone(),
+      },
+      DisconnectClient {
+        device_id: device_id.clone(),
+      },
+      Wait { secs: 1 },
+      // The server does not sync with the client
+      AssertServerContent {
+        expected: json!({}),
+      },
+    ])
+    .await;
+
+  // Open the document with build-in data
+  let db = test.remove_client(&device_id).db;
+  test
+    .run_scripts(vec![
+      AddClient {
+        uid: 1,
+        device_id: device_id.clone(),
+        db,
+      },
+      AssertClientContent {
+        device_id: device_id.clone(),
+        expected: json!({
+          "map": {
+            "task1": "a",
+            "task2": "b"
+          }
+        }),
+      },
+      // the server will be sync with the client within 1 second.
+      Wait { secs: 1 },
+      AssertServerContent {
+        expected: json!({
+          "map": {
+            "task1": "a",
+            "task2": "b"
+          }
+        }),
+      },
+    ])
+    .await;
+}
+
+// The version of the local document is a ahead of the remote document. The server will sync with
+// the the same client multiple times. Check out the content is same as the local document.
+#[tokio::test]
+async fn server_sync_state_vector_multiple_time_with_client_test() {
   let mut test = ScriptTest::new(1, "1").await;
   let device_id = "1".to_string();
   test
@@ -251,27 +309,149 @@ async fn client_reopen_test() {
       DisconnectClient {
         device_id: device_id.clone(),
       },
+    ])
+    .await;
+
+  // Open the document with build-in data
+  let db = test.remove_client(&device_id).db;
+  for _ in 0..5 {
+    test
+      .run_scripts(vec![
+        AddClient {
+          uid: 1,
+          device_id: device_id.clone(),
+          db: db.clone(),
+        },
+        Wait { secs: 1 },
+        AssertServerContent {
+          expected: json!({
+            "map": {
+              "task1": "a",
+              "task2": "b"
+            }
+          }),
+        },
+      ])
+      .await;
+  }
+}
+
+// The version of the local document is less than the remote document. So the client need to
+// sync with the remote document.
+#[tokio::test]
+async fn client_sync_with_server() {
+  let mut test = ScriptTest::new(1, "1").await;
+  let device_id = "1".to_string();
+  test
+    .run_scripts(vec![
+      ModifyRemoteCollab {
+        f: |collab| {
+          collab.insert("title", "hello world");
+        },
+      },
+      CreateClient {
+        uid: 1,
+        device_id: device_id.clone(),
+      },
       Wait { secs: 1 },
       AssertServerContent {
-        expected: json!({}),
+        expected: json!({
+          "map": {
+            "task1": "a",
+            "task2": "b"
+          },
+          "title": "hello world"
+        }),
+      },
+    ])
+    .await;
+}
+
+// The version of the local document is less than the remote document. So the client need to
+// sync with the remote document.
+#[tokio::test]
+async fn client_continuously_sync_with_server() {
+  let mut test = ScriptTest::new(1, "1").await;
+  let device_id = "1".to_string();
+  test
+    .run_scripts(vec![
+      ModifyRemoteCollab {
+        f: |collab| {
+          collab.insert("title", "hello world");
+        },
+      },
+      CreateClient {
+        uid: 1,
+        device_id: device_id.clone(),
+      },
+      ModifyRemoteCollab {
+        f: |collab| {
+          collab.insert("name", "appflowy");
+        },
+      },
+      ModifyRemoteCollab {
+        f: |collab| {
+          collab.insert("desc", "open source project");
+        },
+      },
+      Wait { secs: 1 },
+      AssertServerContent {
+        expected: json!({
+          "desc": "open source project",
+          "map": {
+            "task1": "a",
+            "task2": "b"
+          },
+          "name": "appflowy",
+          "title": "hello world"
+        }),
+      },
+    ])
+    .await;
+}
+
+#[tokio::test]
+async fn server_state_vector_size_test() {
+  let mut test = ScriptTest::new(1, "1").await;
+  let device_id = "1".to_string();
+
+  test
+    .run_scripts(vec![
+      CreateClient {
+        uid: 1,
+        device_id: device_id.clone(),
+      },
+      DisconnectClient {
+        device_id: device_id.clone(),
       },
     ])
     .await;
 
   let db = test.remove_client(&device_id).db;
 
+  // Open the document with build-in data
+  let client = AddClient {
+    uid: 1,
+    device_id: device_id.clone(),
+    db: db.clone(),
+  };
+  test.run_scripts(vec![client, Wait { secs: 1 }]).await;
+
+  // Open the document with build-in data
+  let client = AddClient {
+    uid: 1,
+    device_id: device_id.clone(),
+    db: db.clone(),
+  };
+  let assert_server_content = AssertServerContent {
+    expected: json!({
+      "map": {
+        "task1": "a",
+        "task2": "b"
+      }
+    }),
+  };
   test
-    .run_scripts(vec![
-      AddClient {
-        uid: 1,
-        device_id: device_id.clone(),
-        db,
-      },
-      // the server will be sync with the client within 1 second.
-      Wait { secs: 1 },
-      AssertServerContent {
-        expected: json!(""),
-      },
-    ])
+    .run_scripts(vec![client, Wait { secs: 1 }, assert_server_content])
     .await;
 }

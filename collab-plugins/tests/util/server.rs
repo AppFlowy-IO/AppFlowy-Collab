@@ -25,7 +25,7 @@ impl TestServer {
       .groups
       .get(object_id)
       .unwrap()
-      .awareness
+      .collab
       .lock()
       .to_json_value()
   }
@@ -44,7 +44,7 @@ pub async fn spawn_server_with_data(group: CollabGroup) -> std::io::Result<TestS
   let port = listener.local_addr()?.port(); // Get the actual port number
   let groups = Arc::new(DashMap::new());
 
-  let object_id = group.awareness.lock().object_id.clone();
+  let object_id = group.collab.lock().object_id.clone();
   groups.insert(object_id.clone(), group);
 
   let weak_groups = Arc::downgrade(&groups);
@@ -73,17 +73,17 @@ pub async fn spawn_server_with_data(group: CollabGroup) -> std::io::Result<TestS
 }
 
 pub async fn make_test_collab_group(uid: i64, object_id: &str) -> CollabGroup {
-  let awareness = MutexCollab::new(CollabOrigin::new(uid, "remote"), object_id, vec![]);
-  let broadcast = BroadcastGroup::new(object_id, awareness.clone(), 10).await;
+  let collab = MutexCollab::new(CollabOrigin::new(uid, "remote"), object_id, vec![]);
+  let broadcast = BroadcastGroup::new(object_id, collab.clone(), 10).await;
   CollabGroup {
-    awareness,
+    collab,
     broadcast,
     subscriptions: vec![],
   }
 }
 
 pub struct CollabGroup {
-  pub awareness: MutexCollab,
+  pub collab: MutexCollab,
   pub broadcast: BroadcastGroup,
   subscriptions: Vec<Subscription>,
 }
@@ -93,7 +93,7 @@ impl CollabGroup {
   where
     F: FnOnce(&Collab),
   {
-    let awareness = self.awareness.lock();
+    let awareness = self.collab.lock();
     f(&awareness);
   }
 }

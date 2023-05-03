@@ -10,7 +10,8 @@ use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, Key, Sn
 use crate::kv::KVEntry;
 use crate::kv::KVStore;
 use crate::{
-  create_id_for_key, get_id_for_key, get_last_update_key, insert_snapshot_update, PersistenceError,
+  get_id_for_key, get_last_update_key, insert_snapshot_update, make_doc_id_for_key,
+  PersistenceError,
 };
 
 impl<'a, T> SnapshotAction<'a> for T
@@ -99,7 +100,7 @@ where
       Ok(snapshot_id)
     } else {
       let key = make_snapshot_id_key(&uid.to_be_bytes(), object_id.as_ref());
-      let new_snapshot_id = create_id_for_key(self, key)?;
+      let new_snapshot_id = make_doc_id_for_key(self, key)?;
       Ok(new_snapshot_id)
     }
   }

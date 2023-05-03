@@ -12,14 +12,14 @@ use tokio::spawn;
 use tokio::sync::{oneshot, watch, Mutex};
 use tokio::task::JoinHandle;
 use y_sync::awareness::Awareness;
-use y_sync::sync::MessageReader;
-use yrs::updates::decoder::DecoderV1;
+use y_sync::sync::{Message, MessageReader};
+use yrs::updates::decoder::{Decode, DecoderV1};
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
 use crate::client::pending_msg::{PendingMsgQueue, TaskState};
 use crate::error::SyncError;
-use crate::msg::{ClientInitMessage, ClientUpdateMessage, CollabMessage};
-use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultProtocol};
+use crate::msg::{ClientInitMessage, ClientUpdateMessage, CollabMessage, ServerSyncMessage};
+use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
 
 pub const SYNC_TIMEOUT: u64 = 2;
 
@@ -29,7 +29,7 @@ pub struct SyncQueue<Sink, Stream> {
   scheduler: Arc<SinkScheduler<Sink>>,
   #[allow(dead_code)]
   stream: SyncStream<Sink, Stream>,
-  protocol: DefaultProtocol,
+  protocol: DefaultSyncProtocol,
 }
 
 impl<E, Sink, Stream> SyncQueue<Sink, Stream>
@@ -45,7 +45,7 @@ where
     stream: Stream,
     awareness: Arc<MutexCollab>,
   ) -> Self {
-    let protocol = DefaultProtocol;
+    let protocol = DefaultSyncProtocol;
     let sender = Arc::new(Mutex::new(sink));
     let msg_id_counter = Arc::new(MsgIdCounter::new());
     let pending_msgs = PendingMsgQueue::new();
@@ -78,8 +78,7 @@ where
   }
 
   pub fn notify(&self, awareness: &Awareness) {
-    let payload = doc_init_state(awareness, &self.protocol);
-    if let Some(payload) = payload {
+    if let Some(payload) = doc_init_state(awareness, &self.protocol) {
       self.scheduler.sync_msg(|msg_id| {
         ClientInitMessage::new(self.origin.clone(), self.object_id.clone(), msg_id, payload).into()
       });
@@ -93,6 +92,9 @@ fn doc_init_state<P: CollabSyncProtocol>(awareness: &Awareness, protocol: &P) ->
   let payload = {
     let mut encoder = EncoderV1::new();
     protocol.start(awareness, &mut encoder).ok()?;
+    // let sv = awareness.doc().transact().state_vector();
+    // let a = awareness.doc().transact().encode_state_as_update_v1(&sv);
+    // Message::Sync(SyncMessage::Update(a)).encode(&mut encoder);
     encoder.to_vec()
   };
   if payload.is_empty() {
@@ -152,7 +154,7 @@ where
     }
   }
 
-  // Spawn the stream that continuously reads the doc's updates.
+  // Spawn the stream that continuously reads the doc's updates from remote.
   async fn spawn_doc_stream<P>(
     object_id: String,
     mut stream: Stream,
@@ -201,10 +203,23 @@ where
     let origin = msg.origin();
     match msg {
       CollabMessage::ServerAck(ack) => {
+        if let Some(payload) = &ack.payload {
+          let mut decoder = DecoderV1::from(payload.as_ref());
+          if let Ok(msg) = Message::decode(&mut decoder) {
+            if let Some(resp_msg) = handle_msg(&origin, protocol, awareness, msg).await? {
+              let payload = resp_msg.encode_v1();
+              let object_id = object_id.to_string();
+              let origin = origin.clone();
+              scheduler.sync_msg(|msg_id| {
+                ServerSyncMessage::new(origin, object_id, payload, msg_id).into()
+              });
+            }
+          }
+        }
+
         let msg_id = ack.msg_id;
         tracing::trace!("[🦀Client]: {}", CollabMessage::ServerAck(ack));
         scheduler.ack_msg(msg_id).await;
-
         Ok(())
       },
       _ => {

@@ -4,6 +4,7 @@ use collab::core::collab::CollabOrigin;
 use collab::core::collab_awareness::MutexCollab;
 use futures_util::{SinkExt, StreamExt};
 use lib0::encoding::Write;
+
 use tokio::select;
 use tokio::sync::broadcast::error::SendError;
 use tokio::sync::broadcast::{channel, Sender};
@@ -11,14 +12,17 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use y_sync::awareness;
 use y_sync::awareness::{Awareness, AwarenessUpdate};
-use y_sync::sync::{Message, MSG_SYNC, MSG_SYNC_UPDATE};
-use yrs::updates::decoder::{Decode, DecoderV1};
+use y_sync::sync::{Message, MessageReader, SyncMessage, MSG_SYNC, MSG_SYNC_UPDATE};
+use yrs::updates::decoder::DecoderV1;
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
-use yrs::UpdateSubscription;
+use yrs::{ReadTxn, UpdateSubscription};
 
 use crate::error::SyncError;
-use crate::msg::{AwarenessUpdateMessage, BroadcastUpdateMessage, CollabAckMessage, CollabMessage};
-use crate::protocol::{handle_msg, DefaultProtocol};
+use crate::msg::{
+  AwarenessUpdateMessage, CollabAckMessage, CollabMessage, ServerBroadcastMessage,
+  ServerResponseMessage,
+};
+use crate::protocol::{handle_msg, DefaultSyncProtocol};
 
 /// A broadcast group can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
 /// to subscribes.
@@ -55,7 +59,7 @@ impl BroadcastGroup {
           let origin = txn.origin().map(CollabOrigin::from).unwrap_or_default();
 
           let payload = gen_update_message(&event.update);
-          let msg = BroadcastUpdateMessage::new(origin, cloned_oid.clone(), payload);
+          let msg = ServerBroadcastMessage::new(origin, cloned_oid.clone(), payload);
           if let Err(_e) = sink.send(msg.into()) {
             tracing::trace!("Broadcast group is closed");
           }
@@ -116,7 +120,7 @@ impl BroadcastGroup {
     <Sink as futures_util::Sink<CollabMessage>>::Error: std::error::Error + Send + Sync,
     E: std::error::Error + Send + Sync + 'static,
   {
-    tracing::trace!("[💭Server]: new client connected");
+    tracing::trace!("[💭Server]: new client");
     // Receive a update from the document observer and forward the applied update to all
     // connected subscribers.
     let sink_task = {
@@ -152,26 +156,39 @@ impl BroadcastGroup {
           }
 
           let origin = collab_msg.origin();
-          let protocol = DefaultProtocol;
+          let is_client_init = collab_msg.is_init();
           tracing::trace!("[💭Server]: {}", collab_msg);
+
           let payload = collab_msg.payload().unwrap();
           let mut decoder = DecoderV1::from(payload.as_ref());
           let mut sink = sink.lock().await;
-          while let Ok(msg) = Message::decode(&mut decoder) {
-            let resp = handle_msg(&origin, &protocol, &collab, msg).await?;
-            // Send the response to the corresponding client
-            if let Some(resp) = resp {
-              let msg =
-                BroadcastUpdateMessage::new(origin.clone(), object_id.clone(), resp.encode_v1());
-              sink
-                .send(msg.into())
-                .await
-                .map_err(|e| SyncError::Internal(Box::new(e)))?;
+          let reader = MessageReader::new(&mut decoder);
+          for msg in reader {
+            match msg {
+              Ok(msg) => {
+                let resp = handle_msg(&origin, &DefaultSyncProtocol, &collab, msg).await?;
+                // Send the response to the corresponding client
+                if let Some(resp) = resp {
+                  let msg =
+                    ServerResponseMessage::new(origin.clone(), object_id.clone(), resp.encode_v1());
+                  sink
+                    .send(msg.into())
+                    .await
+                    .map_err(|e| SyncError::Internal(Box::new(e)))?;
+                }
+              },
+              _ => break,
             }
           }
+
           // Send the ack message to the client
           if let Some(msg_id) = collab_msg.msg_id() {
-            let ack = CollabAckMessage::new(object_id.clone(), msg_id);
+            let payload = if is_client_init {
+              Some(encode_server_sv(&collab))
+            } else {
+              None
+            };
+            let ack = CollabAckMessage::new(object_id.clone(), msg_id, payload);
             let _ = sink.send(ack.into()).await;
           }
         }
@@ -184,6 +201,13 @@ impl BroadcastGroup {
       stream_task,
     }
   }
+}
+
+fn encode_server_sv(collab: &MutexCollab) -> Vec<u8> {
+  let mut encoder = EncoderV1::new();
+  let sv = collab.lock().transact().state_vector();
+  Message::Sync(SyncMessage::SyncStep1(sv)).encode(&mut encoder);
+  encoder.to_vec()
 }
 
 /// A subscription structure returned from [BroadcastGroup::subscribe], which represents a

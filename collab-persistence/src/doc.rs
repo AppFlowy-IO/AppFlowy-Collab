@@ -13,7 +13,7 @@ use crate::kv::KVEntry;
 use crate::kv::KVStore;
 use crate::snapshot::{get_snapshot_id, SnapshotAction};
 use crate::{
-  create_id_for_key, get_id_for_key, get_last_update_key, insert_doc_update, PersistenceError,
+  get_id_for_key, get_last_update_key, insert_doc_update, make_doc_id_for_key, PersistenceError,
   TransactionMutExt,
 };
 
@@ -297,7 +297,7 @@ where
     Ok(did)
   } else {
     let key = make_doc_id_key(&uid.to_be_bytes(), object_id.as_ref());
-    let new_did = create_id_for_key(store, key)?;
+    let new_did = make_doc_id_for_key(store, key)?;
     Ok(new_did)
   }
 }

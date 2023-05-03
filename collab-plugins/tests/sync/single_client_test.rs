@@ -3,8 +3,8 @@ use collab::preclude::MapRefExtension;
 use serde_json::json;
 
 use crate::util::{
-  make_test_collab_group, spawn_client, spawn_client_with_empty_doc, spawn_server,
-  spawn_server_with_data, wait_a_sec,
+  make_test_collab_group, spawn_client_with_empty_doc, spawn_server, spawn_server_with_data,
+  wait_a_sec,
 };
 
 #[tokio::test]
@@ -106,7 +106,7 @@ async fn send_local_doc_initial_state_to_server() {
   let object_id = "1";
 
   let server = spawn_server(uid, object_id).await.unwrap();
-  let (_db, client) = spawn_client(CollabOrigin::new(1, "1"), object_id, server.address)
+  let client = spawn_client_with_empty_doc(CollabOrigin::new(1, "1"), object_id, server.address)
     .await
     .unwrap();
   wait_a_sec().await;
@@ -137,7 +137,7 @@ async fn send_local_doc_initial_state_to_server_multiple_times() {
   let object_id = "1";
 
   let server = spawn_server(uid, object_id).await.unwrap();
-  let (_, client) = spawn_client(CollabOrigin::new(1, "1"), object_id, server.address)
+  let client = spawn_client_with_empty_doc(CollabOrigin::new(1, "1"), object_id, server.address)
     .await
     .unwrap();
   wait_a_sec().await;
@@ -154,7 +154,7 @@ async fn send_local_doc_initial_state_to_server_multiple_times() {
   let remote_doc_json = server.get_doc_json(object_id);
 
   for i in 0..3 {
-    let (_, _client) = spawn_client(
+    let _client = spawn_client_with_empty_doc(
       CollabOrigin::new(1, &i.to_string()),
       object_id,
       server.address,
