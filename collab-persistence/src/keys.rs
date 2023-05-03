@@ -42,6 +42,8 @@ pub const DOC_STATE: u8 = 0;
 /// Tag byte within [DOC_SPACE_OBJECT_KEY] used to identify object's state vector entry.
 pub const DOC_STATE_VEC: u8 = 1;
 
+pub const REMOTE_DOC_STATE_VEC: u8 = 2;
+
 /// Tag byte within [DOC_SPACE_OBJECT_KEY] used to identify object's update entries.
 pub const DOC_UPDATE: u8 = 2;
 
@@ -105,6 +107,14 @@ pub fn make_state_vector_key(doc_id: DocID) -> Key<DOC_STATE_KEY_LEN> {
   let mut v: SmallVec<[u8; DOC_STATE_KEY_LEN]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT_KEY];
   v.write_all(&doc_id.to_be_bytes()).unwrap();
   v.push(DOC_STATE_VEC);
+  Key(v)
+}
+
+// [1,1,  0,0,0,0,0,0,0,0,  2]
+pub fn make_remote_state_vector_key(doc_id: DocID) -> Key<DOC_STATE_KEY_LEN> {
+  let mut v: SmallVec<[u8; DOC_STATE_KEY_LEN]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT_KEY];
+  v.write_all(&doc_id.to_be_bytes()).unwrap();
+  v.push(REMOTE_DOC_STATE_VEC);
   Key(v)
 }
 

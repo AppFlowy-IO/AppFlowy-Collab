@@ -1,60 +1,65 @@
 use std::sync::Arc;
 
-use collab::core::collab_awareness::MutexCollabAwareness;
+use collab::core::collab::CollabOrigin;
+use collab::core::collab_awareness::MutexCollab;
 use collab::preclude::CollabPlugin;
-use collab_sync::client::ClientSync;
+use collab_sync::client::sync::SyncQueue;
 use collab_sync::error::SyncError;
-use collab_sync::message::{CollabClientMessage, CollabMessage};
+use collab_sync::msg::{ClientUpdateMessage, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
+use y_sync::awareness::Awareness;
 use y_sync::sync::{Message, SyncMessage};
 use yrs::updates::encoder::Encode;
-use yrs::TransactionMut;
+use yrs::Transaction;
 
 pub struct SyncPlugin<Sink, Stream> {
-  uid: i64,
   object_id: String,
-  client_sync: Arc<ClientSync<Sink, Stream>>,
+  sync_queue: Arc<SyncQueue<Sink, Stream>>,
 }
 
 impl<Sink, Stream> SyncPlugin<Sink, Stream> {
   pub fn new<E>(
-    uid: i64,
+    origin: CollabOrigin,
     object_id: &str,
-    awareness: Arc<MutexCollabAwareness>,
+    awareness: Arc<MutexCollab>,
     sink: Sink,
     stream: Stream,
   ) -> Self
   where
-    E: Into<SyncError> + Send + Sync,
+    E: Into<SyncError> + Send + Sync + 'static,
     Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
     Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
   {
-    let client_sync = Arc::new(ClientSync::new(uid, object_id, awareness, sink, stream));
-    let doc_id = object_id.to_string();
+    let sync_queue = SyncQueue::new(object_id, origin, sink, stream, awareness);
     Self {
-      uid,
-      client_sync,
-      object_id: doc_id,
+      sync_queue: Arc::new(sync_queue),
+      object_id: object_id.to_string(),
     }
   }
 }
 
 impl<E, Sink, Stream> CollabPlugin for SyncPlugin<Sink, Stream>
 where
-  E: Into<SyncError> + Send + Sync,
+  E: Into<SyncError> + Send + Sync + 'static,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {
-  fn did_receive_update(&self, _object_id: &str, _txn: &TransactionMut, update: &[u8]) {
-    let weak_client_sync = Arc::downgrade(&self.client_sync);
+  fn did_init(&self, awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
+    self.sync_queue.notify(awareness);
+  }
+
+  fn did_receive_local_update(&self, origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
+    let weak_sync_queue = Arc::downgrade(&self.sync_queue);
     let update = update.to_vec();
     let object_id = self.object_id.clone();
-    let from_uid = self.uid;
+    let cloned_origin = origin.clone();
+
     tokio::spawn(async move {
-      if let Some(weak_client_sync) = weak_client_sync.upgrade() {
+      if let Some(sync_queue) = weak_sync_queue.upgrade() {
         let payload = Message::Sync(SyncMessage::Update(update)).encode_v1();
-        let msg: CollabMessage = CollabClientMessage::new(from_uid, object_id, payload).into();
-        weak_client_sync.send(msg).await.unwrap();
+        sync_queue.sync_msg(|msg_id| {
+          ClientUpdateMessage::new(cloned_origin, object_id, msg_id, payload).into()
+        });
       }
     });
   }

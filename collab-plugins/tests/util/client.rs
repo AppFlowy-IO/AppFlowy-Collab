@@ -1,79 +1,191 @@
 use std::net::SocketAddr;
+use std::ops::Deref;
 use std::sync::Arc;
-use tempfile::TempDir;
 
-use collab::core::collab_awareness::MutexCollabAwareness;
+use collab::core::collab::CollabOrigin;
+use collab::core::collab_awareness::MutexCollab;
 use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::MapRefExtension;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::sync_plugin::SyncPlugin;
-
-use collab_sync::server::{CollabMsgCodec, WrappedSink, WrappedStream};
+use collab_sync::client::{TokioUnboundedSink, TokioUnboundedStream};
+use collab_sync::msg_codec::{CollabMsgCodec, CollabSink, CollabStream};
+use tempfile::TempDir;
 use tokio::net::TcpSocket;
+use tokio::sync::mpsc::unbounded_channel;
 
-pub async fn spawn_client(
-  uid: i64,
+use crate::util::{TestSink, TestStream};
+
+pub async fn spawn_client_with_empty_doc(
+  origin: CollabOrigin,
   object_id: &str,
   address: SocketAddr,
-) -> std::io::Result<Arc<MutexCollabAwareness>> {
+) -> std::io::Result<Arc<MutexCollab>> {
   let stream = TcpSocket::new_v4()?.connect(address).await?;
   let (reader, writer) = stream.into_split();
-  let collab = Arc::new(MutexCollabAwareness::new(uid, object_id, vec![]));
+  let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
 
-  let stream = WrappedStream::new(reader, CollabMsgCodec::default());
-  let sink = WrappedSink::new(writer, CollabMsgCodec::default());
-  let sync_plugin = SyncPlugin::new(uid, object_id, collab.clone(), sink, stream);
-  collab.lock().collab.add_plugin(Arc::new(sync_plugin));
+  let stream = CollabStream::new(reader, CollabMsgCodec::default());
+  let sink = CollabSink::new(writer, CollabMsgCodec::default());
+  let sync_plugin = SyncPlugin::new(origin, object_id, collab.clone(), sink, stream);
+  collab.lock().add_plugin(Arc::new(sync_plugin));
   collab.initial();
   Ok(collab)
 }
 
-pub async fn spawn_client_with_disk(
-  uid: i64,
+pub async fn spawn_client(
+  origin: CollabOrigin,
   object_id: &str,
   address: SocketAddr,
-  db: Option<Arc<RocksCollabDB>>,
-) -> std::io::Result<(Arc<RocksCollabDB>, Arc<MutexCollabAwareness>)> {
+) -> std::io::Result<(Arc<RocksCollabDB>, Arc<MutexCollab>)> {
   let stream = TcpSocket::new_v4()?.connect(address).await?;
   let (reader, writer) = stream.into_split();
-  let collab = Arc::new(MutexCollabAwareness::new(uid, object_id, vec![]));
+  let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
 
   // sync
-  let stream = WrappedStream::new(reader, CollabMsgCodec::default());
-  let sink = WrappedSink::new(writer, CollabMsgCodec::default());
-  let sync_plugin = SyncPlugin::new(uid, object_id, collab.clone(), sink, stream);
-  collab.lock().collab.add_plugin(Arc::new(sync_plugin));
+  let stream = CollabStream::new(reader, CollabMsgCodec::default());
+  let sink = CollabSink::new(writer, CollabMsgCodec::default());
+  let sync_plugin = SyncPlugin::new(origin.clone(), object_id, collab.clone(), sink, stream);
+  collab.lock().add_plugin(Arc::new(sync_plugin));
 
   // disk
-  let db = db.unwrap_or_else(|| {
-    let tempdir = TempDir::new().unwrap();
-    let path = tempdir.into_path();
-    Arc::new(RocksCollabDB::open(path).unwrap())
-  });
-  let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
-  collab.lock().collab.add_plugin(Arc::new(disk_plugin));
-
+  let tempdir = TempDir::new().unwrap();
+  let path = tempdir.into_path();
+  let db = Arc::new(RocksCollabDB::open(path).unwrap());
+  let disk_plugin = RocksDiskPlugin::new(origin.uid, db.clone()).unwrap();
+  collab.lock().add_plugin(Arc::new(disk_plugin));
   collab.initial();
-  Ok((db, collab))
-}
-
-pub async fn create_local_disk_document(
-  uid: i64,
-  object_id: &str,
-  address: SocketAddr,
-) -> Arc<RocksCollabDB> {
-  let (db, client) = spawn_client_with_disk(uid, object_id, address, None)
-    .await
-    .unwrap();
 
   {
-    let client = client.lock();
-    client.collab.with_transact_mut(|txn| {
-      let map = client.collab.create_map_with_txn(txn, "map");
+    let client = collab.lock();
+    client.with_transact_mut(|txn| {
+      let map = client.create_map_with_txn(txn, "map");
       map.insert_with_txn(txn, "task1", "a");
       map.insert_with_txn(txn, "task2", "b");
     });
   }
 
-  db
+  Ok((db, collab))
+}
+
+pub struct TestClient {
+  #[allow(dead_code)]
+  test_stream: TestStream,
+  #[allow(dead_code)]
+  test_sink: TestSink,
+  pub db: Arc<RocksCollabDB>,
+  pub collab: Arc<MutexCollab>,
+}
+
+impl TestClient {
+  pub async fn new(
+    origin: CollabOrigin,
+    object_id: &str,
+    address: SocketAddr,
+  ) -> std::io::Result<Self> {
+    let tempdir = TempDir::new().unwrap();
+    let path = tempdir.into_path();
+    let db = Arc::new(RocksCollabDB::open(path).unwrap());
+    let stream = TcpSocket::new_v4()?.connect(address).await?;
+    let (reader, writer) = stream.into_split();
+    let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
+    // disk
+    let disk_plugin = RocksDiskPlugin::new(origin.uid, db.clone()).unwrap();
+    collab.lock().add_plugin(Arc::new(disk_plugin));
+
+    // stream
+    let tcp_stream = CollabStream::new(reader, CollabMsgCodec::default());
+    let (tx, stream) = unbounded_channel();
+    let test_stream = TestStream::new(tcp_stream, tx);
+
+    // sink
+    let tck_sink = CollabSink::new(writer, CollabMsgCodec::default());
+    let (sink, rx) = unbounded_channel();
+    let test_sink = TestSink::new(tck_sink, rx);
+
+    let sync_plugin = SyncPlugin::new(
+      origin.clone(),
+      object_id,
+      collab.clone(),
+      TokioUnboundedSink(sink),
+      TokioUnboundedStream::new(stream),
+    );
+    collab.lock().add_plugin(Arc::new(sync_plugin));
+
+    collab.initial();
+    {
+      let client = collab.lock();
+      client.with_transact_mut(|txn| {
+        let map = client.create_map_with_txn(txn, "map");
+        map.insert_with_txn(txn, "task1", "a");
+        map.insert_with_txn(txn, "task2", "b");
+      });
+    }
+    Ok(Self {
+      test_stream,
+      test_sink,
+      collab,
+      db,
+    })
+  }
+
+  pub async fn with_db(
+    origin: CollabOrigin,
+    object_id: &str,
+    address: SocketAddr,
+    db: Arc<RocksCollabDB>,
+  ) -> std::io::Result<Self> {
+    let stream = TcpSocket::new_v4()?.connect(address).await?;
+    let (reader, writer) = stream.into_split();
+    let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
+
+    // disk
+    let disk_plugin = RocksDiskPlugin::new(origin.uid, db.clone()).unwrap();
+    collab.lock().add_plugin(Arc::new(disk_plugin));
+
+    // stream
+    let tcp_stream = CollabStream::new(reader, CollabMsgCodec::default());
+    let (tx, stream) = unbounded_channel();
+    let test_stream = TestStream::new(tcp_stream, tx);
+
+    // sink
+    let tck_sink = CollabSink::new(writer, CollabMsgCodec::default());
+    let (sink, rx) = unbounded_channel();
+    let test_sink = TestSink::new(tck_sink, rx);
+
+    let sync_plugin = SyncPlugin::new(
+      origin.clone(),
+      object_id,
+      collab.clone(),
+      TokioUnboundedSink(sink),
+      TokioUnboundedStream::new(stream),
+    );
+    collab.lock().add_plugin(Arc::new(sync_plugin));
+
+    collab.initial();
+    Ok(Self {
+      test_stream,
+      test_sink,
+      collab,
+      db,
+    })
+  }
+
+  pub fn disconnect(&mut self) {
+    self.test_stream.disconnect();
+    self.test_sink.disconnect();
+  }
+
+  pub fn connect(&mut self) {
+    self.test_stream.connect();
+    self.test_sink.connect();
+  }
+}
+
+impl Deref for TestClient {
+  type Target = Arc<MutexCollab>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.collab
+  }
 }

@@ -1,7 +1,10 @@
 mod client;
+mod conn;
+mod script;
 mod server;
-
 pub use client::*;
+pub use conn::*;
+pub use script::*;
 pub use server::*;
 use std::time::Duration;
 

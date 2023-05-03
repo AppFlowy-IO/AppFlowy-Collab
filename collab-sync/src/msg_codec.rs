@@ -1,27 +1,9 @@
-use crate::error::SyncError;
-use crate::msg::CollabMessage;
-use crate::server::{BroadcastGroup, Subscription};
 use bytes::{Bytes, BytesMut};
-use collab::core::collab_awareness::MutexCollab;
-use collab::preclude::Collab;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite, LengthDelimitedCodec};
 
-pub struct CollabGroup {
-  pub mutex_collab: MutexCollab,
-  pub broadcast: BroadcastGroup,
-  pub subscriptions: Vec<Subscription>,
-}
-
-impl CollabGroup {
-  pub fn mut_collab<F>(&self, f: F)
-  where
-    F: FnOnce(&Collab),
-  {
-    let collab = self.mutex_collab.lock();
-    f(&collab);
-  }
-}
+use crate::error::SyncError;
+use crate::msg::CollabMessage;
 
 #[derive(Debug, Default)]
 pub struct CollabMsgCodec(LengthDelimitedCodec);
@@ -51,5 +33,5 @@ impl Decoder for CollabMsgCodec {
   }
 }
 
-pub type WrappedStream = FramedRead<OwnedReadHalf, CollabMsgCodec>;
-pub type WrappedSink = FramedWrite<OwnedWriteHalf, CollabMsgCodec>;
+pub type CollabStream = FramedRead<OwnedReadHalf, CollabMsgCodec>;
+pub type CollabSink = FramedWrite<OwnedWriteHalf, CollabMsgCodec>;

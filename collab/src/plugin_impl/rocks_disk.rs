@@ -6,6 +6,7 @@ use std::sync::Arc;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
+use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
 
 use crate::core::collab_plugin::CollabPlugin;
@@ -81,6 +82,7 @@ impl CollabPlugin for RocksDiskPlugin {
       if self.config.flush_doc {
         let _ = self.db.with_write_txn(|w_db_txn| {
           w_db_txn.flush_doc(self.uid, object_id, txn)?;
+          self.initial_update_count.store(0, Ordering::SeqCst);
           Ok(())
         });
       }
@@ -97,11 +99,11 @@ impl CollabPlugin for RocksDiskPlugin {
     }
   }
 
-  fn did_init(&self, _doc: &yrs::Doc, _object_id: &str, _txn: &Transaction) {
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
     self.did_load.store(true, Ordering::SeqCst);
   }
 
-  fn did_receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
+  fn receive_local_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
     // Only push update if the doc is loaded
     if !self.did_load.load(Ordering::SeqCst) {
       return;
@@ -148,7 +150,7 @@ pub struct Config {
   /// But if you want to keep the updates, you can set this to false.
   remove_updates_after_snapshot: bool,
 
-  /// Flush the document
+  /// Flush the document. Default is [false].
   /// After flush the document, all updates will be removed and the document state vector that
   /// contains all the updates will be reset.
   flush_doc: bool,

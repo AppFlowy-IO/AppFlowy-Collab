@@ -1,249 +1,394 @@
-use std::future::Future;
 use std::marker::PhantomData;
-use std::pin::Pin;
+use std::ops::Deref;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
-use std::task::{Context, Poll};
+use std::time::Duration;
 
-use collab::core::collab_awareness::MutexCollabAwareness;
-use futures_util::sink::SinkExt;
-use futures_util::StreamExt;
+use collab::core::collab::CollabOrigin;
+use collab::core::collab_awareness::MutexCollab;
+use futures_util::{SinkExt, StreamExt};
 use lib0::decoding::Cursor;
 use tokio::spawn;
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, watch, Mutex};
 use tokio::task::JoinHandle;
-use y_sync::sync::{MessageReader, Protocol};
-use yrs::updates::decoder::DecoderV1;
+use y_sync::awareness::Awareness;
+use y_sync::sync::{Message, MessageReader};
+use yrs::updates::decoder::{Decode, DecoderV1};
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
+use crate::client::pending_msg::{PendingMsgQueue, TaskState};
 use crate::error::SyncError;
-use crate::message::{CollabClientMessage, CollabMessage};
-use crate::protocol::{handle_msg, CollabSyncProtocol};
+use crate::msg::{ClientInitMessage, ClientUpdateMessage, CollabMessage, ServerSyncMessage};
+use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
 
-pub struct ClientSync<Sink, Stream> {
-  #[allow(dead_code)]
-  uid: i64,
-  #[allow(dead_code)]
+pub const SYNC_TIMEOUT: u64 = 2;
+
+pub struct SyncQueue<Sink, Stream> {
   object_id: String,
-  processing_loop: JoinHandle<Result<(), SyncError>>,
-  awareness: Arc<MutexCollabAwareness>,
-  inbox: Arc<Mutex<Sink>>,
-  _stream: PhantomData<Stream>,
+  origin: CollabOrigin,
+  scheduler: Arc<SinkScheduler<Sink>>,
+  #[allow(dead_code)]
+  stream: SyncStream<Sink, Stream>,
+  protocol: DefaultSyncProtocol,
 }
 
-impl<Sink, Stream, E> ClientSync<Sink, Stream>
+impl<E, Sink, Stream> SyncQueue<Sink, Stream>
 where
-  E: Into<SyncError> + Send + Sync,
-  Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
-{
-  pub async fn send(&self, msg: CollabMessage) -> Result<(), SyncError> {
-    let mut inbox = self.inbox.lock().await;
-    match inbox.send(msg).await {
-      Ok(_) => Ok(()),
-      Err(err) => Err(err.into()),
-    }
-  }
-
-  pub async fn close(self) -> Result<(), E> {
-    let mut inbox = self.inbox.lock().await;
-    inbox.close().await
-  }
-
-  pub fn sink(&self) -> Weak<Mutex<Sink>> {
-    Arc::downgrade(&self.inbox)
-  }
-}
-
-impl<Sink, Stream, E> ClientSync<Sink, Stream>
-where
-  E: Into<SyncError> + Send + Sync,
+  E: Into<SyncError> + Send + Sync + 'static,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {
-  /// Wraps incoming [WebSocket] connection and supplied [Awareness] accessor into a new
-  /// connection handler capable of exchanging Yrs/Yjs messages.
   pub fn new(
-    uid: i64,
     object_id: &str,
-    awareness: Arc<MutexCollabAwareness>,
+    origin: CollabOrigin,
     sink: Sink,
     stream: Stream,
+    awareness: Arc<MutexCollab>,
   ) -> Self {
-    Self::with_protocol(uid, object_id, awareness, sink, stream, CollabSyncProtocol)
-  }
-
-  /// Returns an underlying [Awareness] structure, that contains client state of that connection.
-  pub fn awareness(&self) -> &Arc<MutexCollabAwareness> {
-    &self.awareness
-  }
-
-  /// Wraps incoming [WebSocket] connection and supplied [Awareness] accessor into a new
-  /// connection handler capable of exchanging Yrs/Yjs messages.
-  pub fn with_protocol<P>(
-    uid: i64,
-    object_id: &str,
-    awareness: Arc<MutexCollabAwareness>,
-    sink: Sink,
-    stream: Stream,
-    protocol: P,
-  ) -> Self
-  where
-    P: Protocol + Send + Sync + 'static,
-  {
+    let protocol = DefaultSyncProtocol;
+    let sender = Arc::new(Mutex::new(sink));
+    let msg_id_counter = Arc::new(MsgIdCounter::new());
+    let pending_msgs = PendingMsgQueue::new();
+    let (notifier, notifier_rx) = watch::channel(false);
+    let scheduler = Arc::new(SinkScheduler::new(
+      sender,
+      msg_id_counter,
+      pending_msgs,
+      notifier,
+      Duration::from_secs(SYNC_TIMEOUT),
+    ));
+    spawn(TaskRunner::run(scheduler.clone(), notifier_rx));
+    let cloned_protocol = protocol.clone();
     let object_id = object_id.to_string();
-    let sink = Arc::new(Mutex::new(sink));
-    let inbox = sink.clone();
-    let weak_sink = Arc::downgrade(&sink);
-    let weak_awareness = Arc::downgrade(&awareness);
-    let cloned_oid = object_id.clone();
-    let processing_loop: JoinHandle<Result<(), SyncError>> = spawn(async move {
-      send_local_doc_state::<P, Sink, E>(
-        uid,
-        cloned_oid.clone(),
-        &weak_sink,
-        &weak_awareness,
-        &protocol,
-      )
-      .await?;
-      receive_remote_doc_changes(uid, cloned_oid, stream, weak_sink, weak_awareness, protocol)
-        .await?;
-      Ok(())
-    });
-    ClientSync {
-      uid,
-      object_id,
-      processing_loop,
+    let stream = SyncStream::new(
+      object_id.to_string(),
+      stream,
+      protocol,
       awareness,
-      inbox,
-      _stream: PhantomData::default(),
+      scheduler.clone(),
+    );
+
+    Self {
+      object_id,
+      origin,
+      scheduler,
+      stream,
+      protocol: cloned_protocol,
+    }
+  }
+
+  pub fn notify(&self, awareness: &Awareness) {
+    if let Some(payload) = doc_init_state(awareness, &self.protocol) {
+      self.scheduler.sync_msg(|msg_id| {
+        ClientInitMessage::new(self.origin.clone(), self.object_id.clone(), msg_id, payload).into()
+      });
+    } else {
+      self.scheduler.notify();
     }
   }
 }
 
-/// To be called whenever a new connection has been accepted
-async fn send_local_doc_state<P, Sink, E>(
-  uid: i64,
-  object_id: String,
-  weak_sink: &Weak<Mutex<Sink>>,
-  weak_awareness: &Weak<MutexCollabAwareness>,
-  protocol: &P,
-) -> Result<(), SyncError>
-where
-  P: Protocol,
-  E: Into<SyncError> + Send + Sync,
-  Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
-{
+fn doc_init_state<P: CollabSyncProtocol>(awareness: &Awareness, protocol: &P) -> Option<Vec<u8>> {
   let payload = {
-    let awareness = weak_awareness.upgrade().unwrap();
     let mut encoder = EncoderV1::new();
-    let awareness = awareness.lock();
-    protocol.start(&awareness, &mut encoder)?;
+    protocol.start(awareness, &mut encoder).ok()?;
+    // let sv = awareness.doc().transact().state_vector();
+    // let a = awareness.doc().transact().encode_state_as_update_v1(&sv);
+    // Message::Sync(SyncMessage::Update(a)).encode(&mut encoder);
     encoder.to_vec()
   };
-
-  if !payload.is_empty() {
-    let msg: CollabMessage = CollabClientMessage::new(uid, object_id, payload).into();
-    if let Some(sink) = weak_sink.upgrade() {
-      let mut s = sink.lock().await;
-      if let Err(e) = s.send(msg).await {
-        return Err(e.into());
-      }
-    } else {
-      return Ok(());
-    }
+  if payload.is_empty() {
+    None
+  } else {
+    Some(payload)
   }
-  Ok(())
 }
 
-async fn receive_remote_doc_changes<E, Sink, Stream, P>(
-  uid: i64,
-  object_id: String,
-  mut stream: Stream,
-  weak_sink: Weak<Mutex<Sink>>,
-  weak_awareness: Weak<MutexCollabAwareness>,
-  protocol: P,
-) -> Result<(), SyncError>
+impl<Sink, Stream> Deref for SyncQueue<Sink, Stream> {
+  type Target = Arc<SinkScheduler<Sink>>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.scheduler
+  }
+}
+
+struct SyncStream<Sink, Stream> {
+  #[allow(dead_code)]
+  awareness: Arc<MutexCollab>,
+  #[allow(dead_code)]
+  runner: JoinHandle<Result<(), SyncError>>,
+  phantom_sink: PhantomData<Sink>,
+  phantom_stream: PhantomData<Stream>,
+}
+
+impl<E, Sink, Stream> SyncStream<Sink, Stream>
 where
-  P: Protocol,
-  E: Into<SyncError> + Send + Sync,
+  E: Into<SyncError> + Send + Sync + 'static,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {
-  while let Some(input) = stream.next().await {
-    match input {
-      Ok(data) => {
-        match (weak_sink.upgrade(), weak_awareness.upgrade()) {
-          (Some(mut sink), Some(awareness)) => {
-            match process_message(
-              uid,
-              &object_id,
-              &protocol,
-              &awareness,
-              &mut sink,
-              data.into_payload(),
-            )
-            .await
-            {
-              Ok(()) => { /* continue */ },
-              Err(e) => {
-                return Err(e);
-              },
-            }
-          },
-          _ => {
-            tracing::trace!("Doc is dropped. Stopping receive incoming doc changes.");
-            return Ok(());
-          }, // parent ConnHandler has been dropped
-        }
-      },
-      Err(e) => return Err(e.into()),
+  pub fn new<P>(
+    object_id: String,
+    stream: Stream,
+    protocol: P,
+    awareness: Arc<MutexCollab>,
+    scheduler: Arc<SinkScheduler<Sink>>,
+  ) -> Self
+  where
+    P: CollabSyncProtocol + Send + Sync + 'static,
+  {
+    let weak_awareness = Arc::downgrade(&awareness);
+    let weak_scheduler = Arc::downgrade(&scheduler);
+    let runner = spawn(SyncStream::<Sink, Stream>::spawn_doc_stream::<P>(
+      object_id,
+      stream,
+      weak_awareness,
+      weak_scheduler,
+      protocol,
+    ));
+    Self {
+      awareness,
+      runner,
+      phantom_sink: Default::default(),
+      phantom_stream: Default::default(),
     }
   }
-  Ok(())
+
+  // Spawn the stream that continuously reads the doc's updates from remote.
+  async fn spawn_doc_stream<P>(
+    object_id: String,
+    mut stream: Stream,
+    weak_awareness: Weak<MutexCollab>,
+    weak_scheduler: Weak<SinkScheduler<Sink>>,
+    protocol: P,
+  ) -> Result<(), SyncError>
+  where
+    P: CollabSyncProtocol + Send + Sync + 'static,
+  {
+    while let Some(input) = stream.next().await {
+      match input {
+        Ok(msg) => match (weak_awareness.upgrade(), weak_scheduler.upgrade()) {
+          (Some(awareness), Some(scheduler)) => {
+            SyncStream::<Sink, Stream>::process_message::<P>(
+              &object_id, &protocol, &awareness, &scheduler, msg,
+            )
+            .await?
+          },
+          _ => {
+            tracing::trace!("ClientSync is dropped. Stopping receive incoming changes.");
+            return Ok(());
+          },
+        },
+        Err(e) => {
+          // If the client has disconnected, the stream will return an error, So stop receiving
+          // messages if the client has disconnected.
+          return Err(e.into());
+        },
+      }
+    }
+    Ok(())
+  }
+
+  /// Continuously handle messages from the remote doc
+  async fn process_message<P>(
+    object_id: &str,
+    protocol: &P,
+    awareness: &Arc<MutexCollab>,
+    scheduler: &Arc<SinkScheduler<Sink>>,
+    msg: CollabMessage,
+  ) -> Result<(), SyncError>
+  where
+    P: CollabSyncProtocol + Send + Sync + 'static,
+  {
+    let origin = msg.origin();
+    match msg {
+      CollabMessage::ServerAck(ack) => {
+        if let Some(payload) = &ack.payload {
+          let mut decoder = DecoderV1::from(payload.as_ref());
+          if let Ok(msg) = Message::decode(&mut decoder) {
+            if let Some(resp_msg) = handle_msg(&origin, protocol, awareness, msg).await? {
+              let payload = resp_msg.encode_v1();
+              let object_id = object_id.to_string();
+              let origin = origin.clone();
+              scheduler.sync_msg(|msg_id| {
+                ServerSyncMessage::new(origin, object_id, payload, msg_id).into()
+              });
+            }
+          }
+        }
+
+        let msg_id = ack.msg_id;
+        tracing::trace!("[🦀Client]: {}", CollabMessage::ServerAck(ack));
+        scheduler.ack_msg(msg_id).await;
+        Ok(())
+      },
+      _ => {
+        let payload = msg.into_payload();
+        if payload.is_empty() {
+          return Ok(());
+        }
+
+        let mut decoder = DecoderV1::new(Cursor::new(&payload));
+        let reader = MessageReader::new(&mut decoder);
+        for msg in reader {
+          let msg = msg?;
+          if let Some(resp) = handle_msg(&origin, protocol, awareness, msg).await? {
+            let payload = resp.encode_v1();
+            let object_id = object_id.to_string();
+            let origin = origin.clone();
+            scheduler.sync_msg(|msg_id| {
+              ClientUpdateMessage::new(origin, object_id, msg_id, payload).into()
+            });
+          }
+        }
+        Ok(())
+      },
+    }
+  }
 }
 
-async fn process_message<P, E, Sink>(
-  uid: i64,
-  object_id: &str,
-  protocol: &P,
-  awareness: &Arc<MutexCollabAwareness>,
-  sink: &mut Arc<Mutex<Sink>>,
-  input: Vec<u8>,
-) -> Result<(), SyncError>
+pub struct SinkScheduler<Sink> {
+  sender: Arc<Mutex<Sink>>,
+  pending_msgs: Arc<parking_lot::Mutex<PendingMsgQueue>>,
+  msg_id_counter: Arc<MsgIdCounter>,
+  notifier: watch::Sender<bool>,
+  timeout: Duration,
+}
+
+impl<E, Sink> SinkScheduler<Sink>
 where
-  P: Protocol,
   E: Into<SyncError> + Send + Sync,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
 {
-  let mut decoder = DecoderV1::new(Cursor::new(&input));
-  let reader = MessageReader::new(&mut decoder);
-  for msg in reader {
-    let msg = msg?;
-    if let Some(reply) = handle_msg(protocol, awareness, msg).await? {
-      let mut sender = sink.lock().await;
-
-      let msg: CollabMessage =
-        CollabClientMessage::new(uid, object_id.to_string(), reply.encode_v1()).into();
-      if let Err(e) = sender.send(msg).await {
-        tracing::error!("Failed to send reply to the client");
-        return Err(e.into());
-      } else {
-        tracing::trace!("Reply to back to the client");
-      }
+  fn new(
+    sender: Arc<Mutex<Sink>>,
+    msg_id_counter: Arc<MsgIdCounter>,
+    pending_msgs: PendingMsgQueue,
+    notifier: watch::Sender<bool>,
+    timeout: Duration,
+  ) -> Self {
+    let pending_msgs = Arc::new(parking_lot::Mutex::new(pending_msgs));
+    Self {
+      sender,
+      pending_msgs,
+      msg_id_counter,
+      notifier,
+      timeout,
     }
   }
-  Ok(())
+
+  pub fn sync_msg(&self, f: impl FnOnce(u32) -> CollabMessage) {
+    {
+      let mut pending_msgs = self.pending_msgs.lock();
+      let msg_id = self.msg_id_counter.next();
+      let msg = f(msg_id);
+      pending_msgs.push_msg(msg_id, msg);
+      drop(pending_msgs);
+    }
+
+    self.notify();
+  }
+
+  /// Notify the scheduler to process the next message and mark the current message as done.
+  pub async fn ack_msg(&self, msg_id: u32) {
+    if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {
+      if pending_msg.msg_id() == msg_id {
+        pending_msg.set_state(TaskState::Done);
+      }
+    }
+    self.notify();
+  }
+
+  async fn process_next_msg(&self) -> Result<(), SyncError> {
+    let pending_msg = self.pending_msgs.lock().pop();
+    match pending_msg {
+      Some(mut pending_msg) => {
+        if pending_msg.state().is_done() {
+          // Notify to process the next pending message
+          self.notify();
+          return Ok(());
+        }
+
+        // Do nothing if the message is still processing.
+        if pending_msg.state().is_processing() {
+          return Ok(());
+        }
+
+        // Update the pending message's msg_id and send the message.
+        let (tx, rx) = oneshot::channel();
+        pending_msg.set_state(TaskState::Processing);
+        pending_msg.set_ret(tx);
+
+        // Push back the pending message to the queue.
+        let collab_msg = pending_msg.msg();
+        self.pending_msgs.lock().push(pending_msg);
+
+        let mut sender = self.sender.lock().await;
+        tracing::trace!("[🦀Client]: {}", collab_msg);
+        sender.send(collab_msg).await.map_err(|e| e.into())?;
+
+        // Wait for the message to be acked.
+        // If the message is not acked within the timeout, resend the message.
+        match tokio::time::timeout(self.timeout, rx).await {
+          Ok(_) => self.notify(),
+          Err(_) => {
+            if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {
+              pending_msg.set_state(TaskState::Timeout);
+            }
+            self.notify();
+          },
+        }
+        Ok(())
+      },
+      None => Ok(()),
+    }
+  }
+
+  /// Notify the scheduler to process the next message.
+  fn notify(&self) {
+    let _ = self.notifier.send(false);
+  }
+
+  /// Stop the scheduler.
+  #[allow(dead_code)]
+  fn stop(&self) {
+    let _ = self.notifier.send(true);
+  }
 }
 
-impl<Sink, Stream> Unpin for ClientSync<Sink, Stream> {}
+pub struct TaskRunner();
 
-impl<Sink, Stream> Future for ClientSync<Sink, Stream> {
-  type Output = Result<(), SyncError>;
+impl TaskRunner {
+  async fn run<E, Sink>(scheduler: Arc<SinkScheduler<Sink>>, mut notifier: watch::Receiver<bool>)
+  where
+    E: Into<SyncError> + Send + Sync + 'static,
+    Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
+  {
+    scheduler.notify();
+    loop {
+      // stops the runner if the notifier was closed.
+      if notifier.changed().await.is_err() {
+        break;
+      }
 
-  fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-    match Pin::new(&mut self.processing_loop).poll(cx) {
-      Poll::Pending => Poll::Pending,
-      Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
-      Poll::Ready(Ok(r)) => Poll::Ready(r),
+      // stops the runner if the value of notifier is `true`
+      if *notifier.borrow() {
+        break;
+      }
+
+      let _ = scheduler.process_next_msg().await;
     }
+  }
+}
+
+struct MsgIdCounter(Arc<AtomicU32>);
+
+impl MsgIdCounter {
+  fn new() -> Self {
+    Self(Arc::new(AtomicU32::new(0)))
+  }
+
+  fn next(&self) -> u32 {
+    self.0.fetch_add(1, Ordering::SeqCst)
   }
 }
