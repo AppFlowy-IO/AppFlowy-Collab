@@ -1,5 +1,5 @@
 use crate::error::SyncError;
-use crate::message::CollabMessage;
+use crate::msg::CollabMessage;
 use futures_util::{Sink, Stream};
 use std::pin::Pin;
 use std::task::{Context, Poll};

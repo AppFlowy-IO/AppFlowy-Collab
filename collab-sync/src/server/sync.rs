@@ -1,14 +1,14 @@
 use crate::error::SyncError;
-use crate::message::CollabMessage;
+use crate::msg::CollabMessage;
 use crate::server::{BroadcastGroup, Subscription};
 use bytes::{Bytes, BytesMut};
-use collab::core::collab_awareness::MutexCollabAwareness;
+use collab::core::collab_awareness::MutexCollab;
 use collab::preclude::Collab;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite, LengthDelimitedCodec};
 
 pub struct CollabGroup {
-  pub awareness: MutexCollabAwareness,
+  pub mutex_collab: MutexCollab,
   pub broadcast: BroadcastGroup,
   pub subscriptions: Vec<Subscription>,
 }
@@ -18,8 +18,8 @@ impl CollabGroup {
   where
     F: FnOnce(&Collab),
   {
-    let awareness = self.awareness.lock();
-    f(&awareness.collab);
+    let collab = self.mutex_collab.lock();
+    f(&collab);
   }
 }
 
