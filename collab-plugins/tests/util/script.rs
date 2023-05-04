@@ -58,7 +58,7 @@ pub enum TestScript {
 pub struct ScriptTest {
   object_id: String,
   server: TestServer,
-  clients: HashMap<String, TestClient>,
+  pub clients: HashMap<String, TestClient>,
 }
 
 impl ScriptTest {

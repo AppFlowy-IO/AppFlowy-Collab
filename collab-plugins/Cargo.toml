@@ -22,7 +22,9 @@ tokio-util = { version = "0.7", features = ["codec"] }
 bytes = "1.4"
 dashmap = "5.4.0"
 serde_json = "1.0.64"
+serde = "1.0.160"
 collab-persistence = { path = "../collab-persistence" }
+rand = "0.8"
 
 [features]
 default = ["sync"]

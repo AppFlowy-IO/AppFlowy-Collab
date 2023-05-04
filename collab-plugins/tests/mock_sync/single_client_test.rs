@@ -1,8 +1,9 @@
 use collab_sync::client::sync::SYNC_TIMEOUT;
 use serde_json::json;
+use yrs::Array;
 
-use crate::util::ScriptTest;
 use crate::util::TestScript::*;
+use crate::util::{create_db, Rng, ScriptTest};
 
 #[tokio::test]
 async fn single_write_test() {
@@ -334,6 +335,168 @@ async fn server_sync_state_vector_multiple_time_with_client_test() {
       ])
       .await;
   }
+}
+
+// Both the clients are offline, and then they become online and start syncing
+// with the server.
+#[tokio::test]
+async fn client_periodically_open_doc_test() {
+  let mut test = ScriptTest::new(1, "1").await;
+  let db = create_db();
+  test
+    .run_scripts(vec![
+      CreateClientWithDb {
+        uid: 1,
+        device_id: "1".to_string(),
+        db: db.clone(),
+      },
+      ModifyLocalCollab {
+        device_id: "1".to_string(),
+        f: |collab| {
+          collab.with_transact_mut(|txn| {
+            collab.create_array_with_txn(txn, "array", vec!["a"]);
+          });
+        },
+      },
+      Wait { secs: 1 },
+      AssertClientEqualToServer {
+        device_id: "1".to_string(),
+      },
+      DisconnectClient {
+        device_id: "1".to_string(),
+      },
+      ModifyLocalCollab {
+        device_id: "1".to_string(),
+        f: |collab| {
+          collab.with_transact_mut(|txn| {
+            let array = collab.get_array_with_txn(txn, vec!["array"]).unwrap();
+            array.push_back(txn, "b");
+            array.push_back(txn, "c");
+          });
+        },
+      },
+      Wait { secs: 1 },
+      AssertServerContent {
+        expected: json!({
+          "array": [
+            "a",
+          ]
+        }),
+      },
+    ])
+    .await;
+
+  test
+    .run_scripts(vec![
+      CreateClientWithDb {
+        uid: 1,
+        device_id: "1".to_string(),
+        db: db.clone(),
+      },
+      Wait { secs: 1 },
+      AssertClientEqualToServer {
+        device_id: "1".to_string(),
+      },
+      AssertServerContent {
+        expected: json!({
+          "array": [
+            "a",
+            "b",
+            "c"
+          ]
+        }),
+      },
+      DisconnectClient {
+        device_id: "1".to_string(),
+      },
+    ])
+    .await;
+
+  test
+    .run_scripts(vec![
+      CreateClientWithDb {
+        uid: 1,
+        device_id: "1".to_string(),
+        db: db.clone(),
+      },
+      Wait { secs: 1 },
+      ModifyLocalCollab {
+        device_id: "1".to_string(),
+        f: |collab| {
+          collab.with_transact_mut(|txn| {
+            let array = collab.get_array_with_txn(txn, vec!["array"]).unwrap();
+            array.push_back(txn, "d");
+            array.push_back(txn, "e");
+          });
+        },
+      },
+      Wait { secs: 1 },
+      AssertServerContent {
+        expected: json!({
+          "array": [
+            "a",
+            "b",
+            "c",
+            "d",
+            "e"
+          ]
+        }),
+      },
+    ])
+    .await
+}
+
+// Edit the document with the same client multiple times by inserting a random string to the array.
+#[tokio::test]
+async fn client_periodically_edit_test() {
+  let mut test = ScriptTest::new(1, "1").await;
+  let db = create_db();
+  test
+    .run_scripts(vec![
+      CreateClientWithDb {
+        uid: 1,
+        device_id: "1".to_string(),
+        db: db.clone(),
+      },
+      ModifyLocalCollab {
+        device_id: "1".to_string(),
+        f: |collab| {
+          collab.with_transact_mut(|txn| {
+            collab.create_array_with_txn::<String>(txn, "array", vec![]);
+          });
+        },
+      },
+    ])
+    .await;
+
+  let mut rng = Rng::default();
+  #[derive(serde::Serialize)]
+  struct MyArray {
+    array: Vec<String>,
+  }
+  let mut array = MyArray { array: vec![] };
+  for _ in 0..100 {
+    let s = rng.gen_string(1);
+    array.array.push(s.clone());
+
+    let client = test.clients.get_mut("1").unwrap();
+    let collab = client.lock();
+    collab.with_transact_mut(|txn| {
+      collab
+        .get_array_with_txn(txn, vec!["array"])
+        .unwrap()
+        .push_back(txn, s);
+    });
+  }
+
+  test
+    .run_scripts(vec![
+      Wait { secs: 2 },
+      AssertServerContent {
+        expected: serde_json::to_value(&array).unwrap(),
+      },
+    ])
+    .await;
 }
 
 // The version of the local document is less than the remote document. So the client need to

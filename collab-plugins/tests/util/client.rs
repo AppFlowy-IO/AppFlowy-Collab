@@ -10,6 +10,7 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::sync_plugin::SyncPlugin;
 use collab_sync::client::{TokioUnboundedSink, TokioUnboundedStream};
 use collab_sync::msg_codec::{CollabMsgCodec, CollabSink, CollabStream};
+use rand::{prelude::*, Rng as WrappedRng};
 use tempfile::TempDir;
 use tokio::net::TcpSocket;
 use tokio::sync::mpsc::unbounded_channel;
@@ -84,9 +85,7 @@ impl TestClient {
     address: SocketAddr,
     with_data: bool,
   ) -> std::io::Result<Self> {
-    let tempdir = TempDir::new().unwrap();
-    let path = tempdir.into_path();
-    let db = Arc::new(RocksCollabDB::open(path).unwrap());
+    let db = create_db();
     let stream = TcpSocket::new_v4()?.connect(address).await?;
     let (reader, writer) = stream.into_split();
     let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
@@ -190,5 +189,35 @@ impl Deref for TestClient {
 
   fn deref(&self) -> &Self::Target {
     &self.collab
+  }
+}
+
+pub fn create_db() -> Arc<RocksCollabDB> {
+  let tempdir = TempDir::new().unwrap();
+  let path = tempdir.into_path();
+  Arc::new(RocksCollabDB::open(path).unwrap())
+}
+
+pub struct Rng(StdRng);
+
+impl Default for Rng {
+  fn default() -> Self {
+    Rng(StdRng::from_rng(thread_rng()).unwrap())
+  }
+}
+
+impl Rng {
+  #[allow(dead_code)]
+  pub fn from_seed(seed: [u8; 32]) -> Self {
+    Rng(StdRng::from_seed(seed))
+  }
+
+  pub fn gen_string(&mut self, len: usize) -> String {
+    (0..len)
+      .map(|_| {
+        let c = self.0.gen::<char>();
+        format!("{:x}", c as u32)
+      })
+      .collect()
   }
 }
