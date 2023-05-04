@@ -1,8 +1,9 @@
-use crate::util::ScriptTest;
-use crate::util::TestScript::*;
 use collab_sync::client::sync::SYNC_TIMEOUT;
 use serde_json::json;
 use yrs::Array;
+
+use crate::util::ScriptTest;
+use crate::util::TestScript::*;
 
 #[tokio::test]
 async fn three_clients_on_line_test() {
@@ -185,6 +186,8 @@ async fn two_clients_remove_vec_element_at_same_pos_test() {
         device_id_a: "1".to_string(),
         device_id_b: "2".to_string(),
       },
+      // Both clients remove the first element of the array and push back a new
+      // element.
       ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
@@ -193,6 +196,10 @@ async fn two_clients_remove_vec_element_at_same_pos_test() {
               .get_array_with_txn(txn, vec!["array"])
               .unwrap()
               .remove(txn, 0);
+            collab
+              .get_array_with_txn(txn, vec!["array"])
+              .unwrap()
+              .push_back(txn, "aa".to_string());
           });
         },
       },
@@ -207,7 +214,7 @@ async fn two_clients_remove_vec_element_at_same_pos_test() {
             collab
               .get_array_with_txn(txn, vec!["array"])
               .unwrap()
-              .push_back(txn, "b".to_string());
+              .push_back(txn, "bb".to_string());
           });
         },
       },
@@ -218,9 +225,11 @@ async fn two_clients_remove_vec_element_at_same_pos_test() {
       },
       AssertClientContent {
         device_id: "1".to_string(),
+        // Last write wins
         expected: json!({
           "array": [
-            "b"
+            "bb",
+            "aa"
           ],
           "map": {
             "task1": "a",
