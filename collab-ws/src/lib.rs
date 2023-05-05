@@ -1,3 +1,9 @@
 pub mod error;
+mod handler;
+mod msg;
 mod retry;
-pub mod ws;
+mod ws;
+
+pub use handler::*;
+pub use msg::*;
+pub use ws::*;

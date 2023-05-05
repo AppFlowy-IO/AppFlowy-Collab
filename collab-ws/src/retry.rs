@@ -1,14 +1,19 @@
 use crate::error::WSError;
 use std::future::Future;
 use std::pin::Pin;
-use std::task::{ready, Context, Poll};
+
 use tokio::net::TcpStream;
 use tokio_retry::Action;
-use tokio_tungstenite::tungstenite::handshake::client::Response;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 
 pub(crate) struct ConnectAction {
   addr: String,
+}
+
+impl ConnectAction {
+  pub fn new(addr: String) -> Self {
+    Self { addr }
+  }
 }
 
 impl Action for ConnectAction {
@@ -20,7 +25,10 @@ impl Action for ConnectAction {
     let cloned_addr = self.addr.clone();
     Box::pin(async move {
       match connect_async(&cloned_addr).await {
-        Ok((stream, _)) => Ok(stream),
+        Ok((stream, response)) => {
+          tracing::trace!("{:?}", response);
+          Ok(stream)
+        },
         Err(e) => Err(e.into()),
       }
     })

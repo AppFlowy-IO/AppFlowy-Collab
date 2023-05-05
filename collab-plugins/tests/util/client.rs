@@ -9,7 +9,8 @@ use collab::preclude::MapRefExtension;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::sync_plugin::SyncPlugin;
 use collab_sync::client::{TokioUnboundedSink, TokioUnboundedStream};
-use collab_sync::server::CollabMsgCodec;
+use collab_sync::server::{CollabMsgCodec, CollabSink, CollabStream};
+
 use rand::{prelude::*, Rng as WrappedRng};
 use tempfile::TempDir;
 use tokio::net::TcpSocket;
@@ -99,9 +100,9 @@ impl TestClient {
     let test_stream = TestStream::new(tcp_stream, tx);
 
     // sink
-    let tck_sink = CollabSink::new(writer, CollabMsgCodec::default());
+    let tcp_sink = CollabSink::new(writer, CollabMsgCodec::default());
     let (sink, rx) = unbounded_channel();
-    let test_sink = TestSink::new(tck_sink, rx);
+    let test_sink = TestSink::new(tcp_sink, rx);
 
     let sync_plugin = SyncPlugin::new(
       origin.clone(),

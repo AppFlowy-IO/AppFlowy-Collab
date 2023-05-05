@@ -51,5 +51,5 @@ impl Decoder for CollabMsgCodec {
   }
 }
 
-pub type WrappedStream = FramedRead<OwnedReadHalf, CollabMsgCodec>;
-pub type WrappedSink = FramedWrite<OwnedWriteHalf, CollabMsgCodec>;
+pub type CollabStream = FramedRead<OwnedReadHalf, CollabMsgCodec>;
+pub type CollabSink = FramedWrite<OwnedWriteHalf, CollabMsgCodec>;

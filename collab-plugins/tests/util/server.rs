@@ -4,7 +4,7 @@ use std::sync::Arc;
 use collab::core::collab::CollabOrigin;
 use collab::core::collab_awareness::MutexCollab;
 use collab::preclude::Collab;
-use collab_sync::server::{BroadcastGroup, CollabMsgCodec, Subscription};
+use collab_sync::server::{BroadcastGroup, CollabMsgCodec, CollabSink, CollabStream, Subscription};
 use dashmap::DashMap;
 use serde_json::Value;
 
