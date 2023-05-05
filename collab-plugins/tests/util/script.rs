@@ -140,7 +140,7 @@ impl ScriptTest {
           .groups
           .get_mut(&self.object_id)
           .unwrap()
-          .mut_collab(f);
+          .get_mut_collab(f);
       },
       TestScript::AssertClientEqual {
         device_id_a,

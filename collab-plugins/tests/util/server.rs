@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use collab::core::collab::CollabOrigin;
 use collab::core::collab_awareness::MutexCollab;
-use collab::preclude::Collab;
-use collab_sync::server::{BroadcastGroup, CollabMsgCodec, CollabSink, CollabStream, Subscription};
+
+use collab_sync::server::{CollabBroadcast, CollabGroup, CollabMsgCodec, CollabSink, CollabStream};
 use dashmap::DashMap;
 use serde_json::Value;
 
@@ -61,7 +61,7 @@ pub async fn spawn_server_with_data(group: CollabGroup) -> std::io::Result<TestS
         .unwrap()
         .broadcast
         .subscribe(Arc::new(Mutex::new(sink)), stream);
-      groups.get_mut(&object_id).unwrap().subscriptions.push(sub);
+      groups.get_mut(&object_id).unwrap().subscribers.push(sub);
     }
   });
 
@@ -74,26 +74,10 @@ pub async fn spawn_server_with_data(group: CollabGroup) -> std::io::Result<TestS
 
 pub async fn make_test_collab_group(uid: i64, object_id: &str) -> CollabGroup {
   let collab = MutexCollab::new(CollabOrigin::new(uid, "remote"), object_id, vec![]);
-  let broadcast = BroadcastGroup::new(object_id, collab.clone(), 10).await;
+  let broadcast = CollabBroadcast::new(object_id, collab.clone(), 10).await;
   CollabGroup {
     collab,
     broadcast,
-    subscriptions: vec![],
-  }
-}
-
-pub struct CollabGroup {
-  pub collab: MutexCollab,
-  pub broadcast: BroadcastGroup,
-  subscriptions: Vec<Subscription>,
-}
-
-impl CollabGroup {
-  pub fn mut_collab<F>(&self, f: F)
-  where
-    F: FnOnce(&Collab),
-  {
-    let awareness = self.collab.lock();
-    f(&awareness);
+    subscribers: vec![],
   }
 }

@@ -1,24 +1,32 @@
 use crate::error::SyncError;
 use crate::msg::CollabMessage;
-use crate::server::{BroadcastGroup, Subscription};
+use crate::server::{CollabBroadcast, Subscription};
 use bytes::{Bytes, BytesMut};
 use collab::core::collab_awareness::MutexCollab;
 use collab::preclude::Collab;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite, LengthDelimitedCodec};
 
+/// A group used to manage a single document
 pub struct CollabGroup {
-  pub mutex_collab: MutexCollab,
-  pub broadcast: BroadcastGroup,
-  pub subscriptions: Vec<Subscription>,
+  /// [Collab] wrapped in a mutex
+  pub collab: MutexCollab,
+
+  /// A broadcast used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
+  /// to subscribes.
+  pub broadcast: CollabBroadcast,
+
+  /// A list of subscribers to this group. Each subscriber will receive updates from the
+  /// broadcast.
+  pub subscribers: Vec<Subscription>,
 }
 
 impl CollabGroup {
-  pub fn mut_collab<F>(&self, f: F)
+  pub fn get_mut_collab<F>(&self, f: F)
   where
     F: FnOnce(&Collab),
   {
-    let collab = self.mutex_collab.lock();
+    let collab = self.collab.lock();
     f(&collab);
   }
 }

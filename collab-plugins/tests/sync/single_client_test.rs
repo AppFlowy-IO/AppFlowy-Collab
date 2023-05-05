@@ -82,7 +82,7 @@ async fn fetch_initial_state_from_server_test() {
   let object_id = "1";
 
   let group = make_test_collab_group(uid, object_id).await;
-  group.mut_collab(|collab| {
+  group.get_mut_collab(|collab| {
     collab.insert("1", "a");
   });
   let server = spawn_server_with_data(group).await.unwrap();

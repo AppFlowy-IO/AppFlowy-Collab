@@ -24,22 +24,23 @@ use crate::msg::{
 };
 use crate::protocol::{handle_msg, DefaultSyncProtocol};
 
-/// A broadcast group can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
+/// A broadcast  can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
 /// to subscribes.
-pub struct BroadcastGroup {
+pub struct CollabBroadcast {
   object_id: String,
+  awareness: MutexCollab,
+  sender: Sender<CollabMessage>,
+
   #[allow(dead_code)]
   awareness_sub: awareness::UpdateSubscription,
   #[allow(dead_code)]
   doc_sub: UpdateSubscription,
-  awareness: MutexCollab,
-  sender: Sender<CollabMessage>,
 }
 
-impl BroadcastGroup {
-  /// Creates a new [BroadcastGroup] over a provided `awareness` instance. All changes triggered
+impl CollabBroadcast {
+  /// Creates a new [CollabBroadcast] over a provided `awareness` instance. All changes triggered
   /// by this awareness structure or its underlying document will be propagated to all subscribers
-  /// which have been registered via [BroadcastGroup::subscribe] method.
+  /// which have been registered via [CollabBroadcast::subscribe] method.
   ///
   /// The overflow of the incoming events that needs to be propagates will be buffered up to a
   /// provided `buffer_capacity` size.
@@ -82,7 +83,7 @@ impl BroadcastGroup {
         });
       (doc_sub, awareness_sub)
     };
-    BroadcastGroup {
+    CollabBroadcast {
       object_id,
       awareness: collab,
       sender,
@@ -122,7 +123,7 @@ impl BroadcastGroup {
   {
     tracing::trace!("[💭Server]: new client");
     // Receive a update from the document observer and forward the applied update to all
-    // connected subscribers.
+    // connected subscribers using its Sink.
     let sink_task = {
       let sink = sink.clone();
       let mut receiver = self.sender.subscribe();
@@ -210,7 +211,7 @@ fn encode_server_sv(collab: &MutexCollab) -> Vec<u8> {
   encoder.to_vec()
 }
 
-/// A subscription structure returned from [BroadcastGroup::subscribe], which represents a
+/// A subscription structure returned from [CollabBroadcast::subscribe], which represents a
 /// subscribed connection. It can be dropped in order to unsubscribe or awaited via
 /// [Subscription::completed] method in order to complete of its own volition (due to an internal
 /// connection error or closed connection).
