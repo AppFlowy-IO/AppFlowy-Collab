@@ -9,7 +9,7 @@ use collab::preclude::MapRefExtension;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::sync_plugin::SyncPlugin;
 use collab_sync::client::{TokioUnboundedSink, TokioUnboundedStream};
-use collab_sync::msg_codec::{CollabMsgCodec, CollabSink, CollabStream};
+use collab_sync::server::CollabMsgCodec;
 use rand::{prelude::*, Rng as WrappedRng};
 use tempfile::TempDir;
 use tokio::net::TcpSocket;
