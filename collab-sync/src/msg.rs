@@ -7,13 +7,13 @@ use crate::error::SyncError;
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub enum CollabMessage {
-  ClientInit(ClientInitMessage),
-  ServerSync(ServerSyncMessage),
-  ClientUpdate(ClientUpdateMessage),
-  AwarenessUpdate(AwarenessUpdateMessage),
-  ServerResponse(ServerResponseMessage),
-  ServerBroadcast(ServerBroadcastMessage),
-  ServerAck(CollabAckMessage),
+  ClientInit(CSClientInit),
+  ServerSync(CSServerSync),
+  ClientUpdate(CSClientUpdate),
+  AwarenessUpdate(CSAwarenessUpdate),
+  ServerResponse(CSServerResponse),
+  ServerBroadcast(CSServerBroadcast),
+  ServerAck(CSServerAck),
 }
 
 impl CollabMessage {
@@ -151,32 +151,32 @@ impl CollabMessage {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct AwarenessUpdateMessage {
+pub struct CSAwarenessUpdate {
   object_id: String,
   payload: Vec<u8>,
 }
 
-impl AwarenessUpdateMessage {
+impl CSAwarenessUpdate {
   pub fn new(object_id: String, payload: Vec<u8>) -> Self {
     Self { object_id, payload }
   }
 }
 
-impl From<AwarenessUpdateMessage> for CollabMessage {
-  fn from(value: AwarenessUpdateMessage) -> Self {
+impl From<CSAwarenessUpdate> for CollabMessage {
+  fn from(value: CSAwarenessUpdate) -> Self {
     CollabMessage::AwarenessUpdate(value)
   }
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct ClientUpdateMessage {
+pub struct CSClientUpdate {
   origin: CollabOrigin,
   object_id: String,
   msg_id: u32,
   payload: Vec<u8>,
 }
 
-impl ClientUpdateMessage {
+impl CSClientUpdate {
   pub fn new(origin: CollabOrigin, object_id: String, msg_id: u32, payload: Vec<u8>) -> Self {
     Self {
       origin,
@@ -187,20 +187,20 @@ impl ClientUpdateMessage {
   }
 }
 
-impl From<ClientUpdateMessage> for CollabMessage {
-  fn from(value: ClientUpdateMessage) -> Self {
+impl From<CSClientUpdate> for CollabMessage {
+  fn from(value: CSClientUpdate) -> Self {
     CollabMessage::ClientUpdate(value)
   }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CollabAckMessage {
+pub struct CSServerAck {
   pub object_id: String,
   pub msg_id: u32,
   pub payload: Option<Vec<u8>>,
 }
 
-impl CollabAckMessage {
+impl CSServerAck {
   pub fn new(object_id: String, msg_id: u32, payload: Option<Vec<u8>>) -> Self {
     Self {
       object_id,
@@ -210,14 +210,14 @@ impl CollabAckMessage {
   }
 }
 
-impl From<CollabAckMessage> for CollabMessage {
-  fn from(value: CollabAckMessage) -> Self {
+impl From<CSServerAck> for CollabMessage {
+  fn from(value: CSServerAck) -> Self {
     CollabMessage::ServerAck(value)
   }
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct ClientInitMessage {
+pub struct CSClientInit {
   pub origin: CollabOrigin,
   pub object_id: String,
   pub msg_id: u32,
@@ -225,7 +225,7 @@ pub struct ClientInitMessage {
   pub md5: String,
 }
 
-impl ClientInitMessage {
+impl CSClientInit {
   pub fn new(origin: CollabOrigin, object_id: String, msg_id: u32, payload: Vec<u8>) -> Self {
     let md5 = md5(&payload);
     Self {
@@ -238,8 +238,8 @@ impl ClientInitMessage {
   }
 }
 
-impl From<ClientInitMessage> for CollabMessage {
-  fn from(value: ClientInitMessage) -> Self {
+impl From<CSClientInit> for CollabMessage {
+  fn from(value: CSClientInit) -> Self {
     CollabMessage::ClientInit(value)
   }
 }
@@ -250,13 +250,13 @@ pub fn md5<T: AsRef<[u8]>>(data: T) -> String {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct ServerResponseMessage {
+pub struct CSServerResponse {
   origin: CollabOrigin,
   object_id: String,
   payload: Vec<u8>,
 }
 
-impl ServerResponseMessage {
+impl CSServerResponse {
   pub fn new(origin: CollabOrigin, object_id: String, payload: Vec<u8>) -> Self {
     Self {
       origin,
@@ -266,20 +266,20 @@ impl ServerResponseMessage {
   }
 }
 
-impl From<ServerResponseMessage> for CollabMessage {
-  fn from(value: ServerResponseMessage) -> Self {
+impl From<CSServerResponse> for CollabMessage {
+  fn from(value: CSServerResponse) -> Self {
     CollabMessage::ServerResponse(value)
   }
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct ServerBroadcastMessage {
+pub struct CSServerBroadcast {
   origin: CollabOrigin,
   object_id: String,
   payload: Vec<u8>,
 }
 
-impl ServerBroadcastMessage {
+impl CSServerBroadcast {
   pub fn new(origin: CollabOrigin, object_id: String, payload: Vec<u8>) -> Self {
     Self {
       origin,
@@ -289,21 +289,21 @@ impl ServerBroadcastMessage {
   }
 }
 
-impl From<ServerBroadcastMessage> for CollabMessage {
-  fn from(value: ServerBroadcastMessage) -> Self {
+impl From<CSServerBroadcast> for CollabMessage {
+  fn from(value: CSServerBroadcast) -> Self {
     CollabMessage::ServerBroadcast(value)
   }
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct ServerSyncMessage {
+pub struct CSServerSync {
   pub origin: CollabOrigin,
   pub object_id: String,
   pub payload: Vec<u8>,
   pub msg_id: u32,
 }
 
-impl ServerSyncMessage {
+impl CSServerSync {
   pub fn new(origin: CollabOrigin, object_id: String, payload: Vec<u8>, msg_id: u32) -> Self {
     Self {
       origin,
@@ -314,8 +314,8 @@ impl ServerSyncMessage {
   }
 }
 
-impl From<ServerSyncMessage> for CollabMessage {
-  fn from(value: ServerSyncMessage) -> Self {
+impl From<CSServerSync> for CollabMessage {
+  fn from(value: CSServerSync) -> Self {
     CollabMessage::ServerSync(value)
   }
 }

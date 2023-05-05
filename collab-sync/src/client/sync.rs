@@ -18,7 +18,7 @@ use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
 use crate::client::pending_msg::{PendingMsgQueue, TaskState};
 use crate::error::SyncError;
-use crate::msg::{ClientInitMessage, ClientUpdateMessage, CollabMessage, ServerSyncMessage};
+use crate::msg::{CSClientInit, CSClientUpdate, CSServerSync, CollabMessage};
 use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
 
 pub const SYNC_TIMEOUT: u64 = 2;
@@ -81,7 +81,7 @@ where
   pub fn notify(&self, awareness: &Awareness) {
     if let Some(payload) = doc_init_state(awareness, &self.protocol) {
       self.scheduler.sync_msg(|msg_id| {
-        ClientInitMessage::new(self.origin.clone(), self.object_id.clone(), msg_id, payload).into()
+        CSClientInit::new(self.origin.clone(), self.object_id.clone(), msg_id, payload).into()
       });
     } else {
       self.scheduler.notify();
@@ -213,9 +213,8 @@ where
             if let Some(resp_msg) = handle_msg(&origin, protocol, awareness, msg).await? {
               let payload = resp_msg.encode_v1();
               let object_id = object_id.to_string();
-              scheduler.sync_msg(|msg_id| {
-                ServerSyncMessage::new(origin, object_id, payload, msg_id).into()
-              });
+              scheduler
+                .sync_msg(|msg_id| CSServerSync::new(origin, object_id, payload, msg_id).into());
             }
           }
         }
@@ -239,9 +238,8 @@ where
             let payload = resp.encode_v1();
             let object_id = object_id.to_string();
             let origin = origin.clone();
-            scheduler.sync_msg(|msg_id| {
-              ClientUpdateMessage::new(origin, object_id, msg_id, payload).into()
-            });
+            scheduler
+              .sync_msg(|msg_id| CSClientUpdate::new(origin, object_id, msg_id, payload).into());
           }
         }
         Ok(())

@@ -19,8 +19,7 @@ use yrs::{ReadTxn, UpdateSubscription};
 
 use crate::error::SyncError;
 use crate::msg::{
-  AwarenessUpdateMessage, CollabAckMessage, CollabMessage, ServerBroadcastMessage,
-  ServerResponseMessage,
+  CSAwarenessUpdate, CSServerAck, CSServerBroadcast, CSServerResponse, CollabMessage,
 };
 use crate::protocol::{handle_msg, DefaultSyncProtocol};
 
@@ -60,7 +59,7 @@ impl CollabBroadcast {
           let origin = txn.origin().map(CollabOrigin::from).unwrap_or_default();
 
           let payload = gen_update_message(&event.update);
-          let msg = ServerBroadcastMessage::new(origin, cloned_oid.clone(), payload);
+          let msg = CSServerBroadcast::new(origin, cloned_oid.clone(), payload);
           if let Err(_e) = sink.send(msg.into()) {
             tracing::trace!("Broadcast group is closed");
           }
@@ -75,7 +74,7 @@ impl CollabBroadcast {
         .on_update(move |awareness, event| {
           if let Ok(awareness_update) = gen_awareness_update_message(awareness, event) {
             let payload = Message::Awareness(awareness_update).encode_v1();
-            let msg = AwarenessUpdateMessage::new(cloned_oid.clone(), payload);
+            let msg = CSAwarenessUpdate::new(cloned_oid.clone(), payload);
             if let Err(_e) = sink.send(msg.into()) {
               tracing::trace!("Broadcast group is closed");
             }
@@ -99,7 +98,7 @@ impl CollabBroadcast {
 
   /// Broadcasts user message to all active subscribers. Returns error if message could not have
   /// been broadcast.
-  pub fn broadcast(&self, msg: AwarenessUpdateMessage) -> Result<(), SendError<CollabMessage>> {
+  pub fn broadcast(&self, msg: CSAwarenessUpdate) -> Result<(), SendError<CollabMessage>> {
     self.sender.send(msg.into())?;
     Ok(())
   }
@@ -171,7 +170,7 @@ impl CollabBroadcast {
                 // Send the response to the corresponding client
                 if let Some(resp) = resp {
                   let msg =
-                    ServerResponseMessage::new(origin.clone(), object_id.clone(), resp.encode_v1());
+                    CSServerResponse::new(origin.clone(), object_id.clone(), resp.encode_v1());
                   sink
                     .send(msg.into())
                     .await
@@ -189,7 +188,7 @@ impl CollabBroadcast {
             } else {
               None
             };
-            let ack = CollabAckMessage::new(object_id.clone(), msg_id, payload);
+            let ack = CSServerAck::new(object_id.clone(), msg_id, payload);
             let _ = sink.send(ack.into()).await;
           }
         }
