@@ -2,8 +2,7 @@ use std::net::SocketAddr;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use collab::core::collab::CollabOrigin;
-use collab::core::collab_awareness::MutexCollab;
+use collab::core::collab::{ClientCollabOrigin, MutexCollab};
 use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::MapRefExtension;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -19,7 +18,7 @@ use tokio::sync::mpsc::unbounded_channel;
 use crate::util::{TestSink, TestStream};
 
 pub async fn spawn_client_with_empty_doc(
-  origin: CollabOrigin,
+  origin: ClientCollabOrigin,
   object_id: &str,
   address: SocketAddr,
 ) -> std::io::Result<Arc<MutexCollab>> {
@@ -36,7 +35,7 @@ pub async fn spawn_client_with_empty_doc(
 }
 
 pub async fn spawn_client(
-  origin: CollabOrigin,
+  origin: ClientCollabOrigin,
   object_id: &str,
   address: SocketAddr,
 ) -> std::io::Result<(Arc<RocksCollabDB>, Arc<MutexCollab>)> {
@@ -81,7 +80,7 @@ pub struct TestClient {
 
 impl TestClient {
   pub async fn new(
-    origin: CollabOrigin,
+    origin: ClientCollabOrigin,
     object_id: &str,
     address: SocketAddr,
     with_data: bool,
@@ -133,7 +132,7 @@ impl TestClient {
   }
 
   pub async fn with_db(
-    origin: CollabOrigin,
+    origin: ClientCollabOrigin,
     object_id: &str,
     address: SocketAddr,
     db: Arc<RocksCollabDB>,

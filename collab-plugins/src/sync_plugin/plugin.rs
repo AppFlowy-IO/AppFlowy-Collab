@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use collab::core::collab::CollabOrigin;
-use collab::core::collab_awareness::MutexCollab;
+use collab::core::collab::{ClientCollabOrigin, MutexCollab};
 use collab::preclude::CollabPlugin;
 use collab_sync::client::sync::SyncQueue;
 use collab_sync::error::SyncError;
@@ -19,9 +18,9 @@ pub struct SyncPlugin<Sink, Stream> {
 
 impl<Sink, Stream> SyncPlugin<Sink, Stream> {
   pub fn new<E>(
-    origin: CollabOrigin,
+    origin: ClientCollabOrigin,
     object_id: &str,
-    awareness: Arc<MutexCollab>,
+    collab: Arc<MutexCollab>,
     sink: Sink,
     stream: Stream,
   ) -> Self
@@ -30,7 +29,7 @@ impl<Sink, Stream> SyncPlugin<Sink, Stream> {
     Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
     Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
   {
-    let sync_queue = SyncQueue::new(object_id, origin, sink, stream, awareness);
+    let sync_queue = SyncQueue::new(object_id, origin, sink, stream, collab);
     Self {
       sync_queue: Arc::new(sync_queue),
       object_id: object_id.to_string(),
@@ -48,7 +47,7 @@ where
     self.sync_queue.notify(awareness);
   }
 
-  fn did_receive_local_update(&self, origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
+  fn did_receive_local_update(&self, origin: &ClientCollabOrigin, _object_id: &str, update: &[u8]) {
     let weak_sync_queue = Arc::downgrade(&self.sync_queue);
     let update = update.to_vec();
     let object_id = self.object_id.clone();

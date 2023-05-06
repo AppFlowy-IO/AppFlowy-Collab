@@ -4,8 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use collab::core::collab::CollabOrigin;
-use collab::core::collab_awareness::MutexCollab;
+use collab::core::collab::{ClientCollabOrigin, MutexCollab};
 use futures_util::{SinkExt, StreamExt};
 use lib0::decoding::Cursor;
 use tokio::spawn;
@@ -25,7 +24,7 @@ pub const SYNC_TIMEOUT: u64 = 2;
 
 pub struct SyncQueue<Sink, Stream> {
   object_id: String,
-  origin: CollabOrigin,
+  origin: ClientCollabOrigin,
   scheduler: Arc<SinkScheduler<Sink>>,
   #[allow(dead_code)]
   stream: SyncStream<Sink, Stream>,
@@ -40,10 +39,10 @@ where
 {
   pub fn new(
     object_id: &str,
-    origin: CollabOrigin,
+    origin: ClientCollabOrigin,
     sink: Sink,
     stream: Stream,
-    awareness: Arc<MutexCollab>,
+    collab: Arc<MutexCollab>,
   ) -> Self {
     let protocol = DefaultSyncProtocol;
     let sender = Arc::new(Mutex::new(sink));
@@ -65,7 +64,7 @@ where
       object_id.to_string(),
       stream,
       protocol,
-      awareness,
+      collab,
       scheduler.clone(),
     );
 
@@ -129,28 +128,28 @@ where
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {
   pub fn new<P>(
-    origin: CollabOrigin,
+    origin: ClientCollabOrigin,
     object_id: String,
     stream: Stream,
     protocol: P,
-    awareness: Arc<MutexCollab>,
+    collab: Arc<MutexCollab>,
     scheduler: Arc<SinkScheduler<Sink>>,
   ) -> Self
   where
     P: CollabSyncProtocol + Send + Sync + 'static,
   {
-    let weak_awareness = Arc::downgrade(&awareness);
+    let weak_collab = Arc::downgrade(&collab);
     let weak_scheduler = Arc::downgrade(&scheduler);
     let runner = spawn(SyncStream::<Sink, Stream>::spawn_doc_stream::<P>(
       origin,
       object_id,
       stream,
-      weak_awareness,
+      weak_collab,
       weak_scheduler,
       protocol,
     ));
     Self {
-      awareness,
+      awareness: collab,
       runner,
       phantom_sink: Default::default(),
       phantom_stream: Default::default(),
@@ -159,10 +158,10 @@ where
 
   // Spawn the stream that continuously reads the doc's updates from remote.
   async fn spawn_doc_stream<P>(
-    _origin: CollabOrigin,
+    _origin: ClientCollabOrigin,
     object_id: String,
     mut stream: Stream,
-    weak_awareness: Weak<MutexCollab>,
+    weak_collab: Weak<MutexCollab>,
     weak_scheduler: Weak<SinkScheduler<Sink>>,
     protocol: P,
   ) -> Result<(), SyncError>
@@ -171,7 +170,7 @@ where
   {
     while let Some(input) = stream.next().await {
       match input {
-        Ok(msg) => match (weak_awareness.upgrade(), weak_scheduler.upgrade()) {
+        Ok(msg) => match (weak_collab.upgrade(), weak_scheduler.upgrade()) {
           (Some(awareness), Some(scheduler)) => {
             SyncStream::<Sink, Stream>::process_message::<P>(
               &object_id, &protocol, &awareness, &scheduler, msg,
@@ -197,7 +196,7 @@ where
   async fn process_message<P>(
     object_id: &str,
     protocol: &P,
-    awareness: &Arc<MutexCollab>,
+    collab: &Arc<MutexCollab>,
     scheduler: &Arc<SinkScheduler<Sink>>,
     msg: CollabMessage,
   ) -> Result<(), SyncError>
@@ -210,7 +209,7 @@ where
         if let Some(payload) = &ack.payload {
           let mut decoder = DecoderV1::from(payload.as_ref());
           if let Ok(msg) = Message::decode(&mut decoder) {
-            if let Some(resp_msg) = handle_msg(&origin, protocol, awareness, msg).await? {
+            if let Some(resp_msg) = handle_msg(&origin, protocol, collab, msg).await? {
               let payload = resp_msg.encode_v1();
               let object_id = object_id.to_string();
               scheduler
@@ -234,7 +233,7 @@ where
         let reader = MessageReader::new(&mut decoder);
         for msg in reader {
           let msg = msg?;
-          if let Some(resp) = handle_msg(&origin, protocol, awareness, msg).await? {
+          if let Some(resp) = handle_msg(&origin, protocol, collab, msg).await? {
             let payload = resp.encode_v1();
             let object_id = object_id.to_string();
             let origin = origin.clone();

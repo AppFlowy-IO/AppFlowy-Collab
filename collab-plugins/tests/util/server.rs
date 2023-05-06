@@ -1,9 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use collab::core::collab::CollabOrigin;
-use collab::core::collab_awareness::MutexCollab;
-
+use collab::core::collab::{ClientCollabOrigin, MutexCollab};
 use collab_sync::server::{CollabBroadcast, CollabGroup, CollabMsgCodec, CollabSink, CollabStream};
 use dashmap::DashMap;
 use serde_json::Value;
@@ -61,7 +59,11 @@ pub async fn spawn_server_with_data(group: CollabGroup) -> std::io::Result<TestS
         .unwrap()
         .broadcast
         .subscribe(Arc::new(Mutex::new(sink)), stream);
-      groups.get_mut(&object_id).unwrap().subscribers.push(sub);
+      groups
+        .get_mut(&object_id)
+        .unwrap()
+        .subscribers
+        .insert("".to_string(), sub);
     }
   });
 
@@ -73,11 +75,11 @@ pub async fn spawn_server_with_data(group: CollabGroup) -> std::io::Result<TestS
 }
 
 pub async fn make_test_collab_group(uid: i64, object_id: &str) -> CollabGroup {
-  let collab = MutexCollab::new(CollabOrigin::new(uid, "remote"), object_id, vec![]);
+  let collab = MutexCollab::new(ClientCollabOrigin::new(uid, "remote"), object_id, vec![]);
   let broadcast = CollabBroadcast::new(object_id, collab.clone(), 10).await;
   CollabGroup {
     collab,
     broadcast,
-    subscribers: vec![],
+    subscribers: Default::default(),
   }
 }

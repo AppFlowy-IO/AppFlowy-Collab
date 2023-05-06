@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use collab::core::collab::CollabOrigin;
-use collab::core::collab_awareness::MutexCollab;
+use collab::core::collab::{ClientCollabOrigin, MutexCollab};
 use futures_util::{SinkExt, StreamExt};
 use lib0::encoding::Write;
 
@@ -27,7 +26,7 @@ use crate::protocol::{handle_msg, DefaultSyncProtocol};
 /// to subscribes.
 pub struct CollabBroadcast {
   object_id: String,
-  awareness: MutexCollab,
+  collab: MutexCollab,
   sender: Sender<CollabMessage>,
 
   #[allow(dead_code)]
@@ -37,9 +36,9 @@ pub struct CollabBroadcast {
 }
 
 impl CollabBroadcast {
-  /// Creates a new [CollabBroadcast] over a provided `awareness` instance. All changes triggered
-  /// by this awareness structure or its underlying document will be propagated to all subscribers
-  /// which have been registered via [CollabBroadcast::subscribe] method.
+  /// Creates a new [CollabBroadcast] over a provided `collab` instance. All changes triggered
+  /// by this collab will be propagated to all subscribers which have been registered via
+  /// [CollabBroadcast::subscribe] method.
   ///
   /// The overflow of the incoming events that needs to be propagates will be buffered up to a
   /// provided `buffer_capacity` size.
@@ -56,8 +55,10 @@ impl CollabBroadcast {
         .get_mut_awareness()
         .doc_mut()
         .observe_update_v1(move |txn, event| {
-          let origin = txn.origin().map(CollabOrigin::from).unwrap_or_default();
-
+          let origin = txn
+            .origin()
+            .map(ClientCollabOrigin::from)
+            .unwrap_or_default();
           let payload = gen_update_message(&event.update);
           let msg = CSServerBroadcast::new(origin, cloned_oid.clone(), payload);
           if let Err(_e) = sink.send(msg.into()) {
@@ -66,9 +67,10 @@ impl CollabBroadcast {
         })
         .unwrap();
 
-      // Observer the awareness's update and broadcast it to all subscribers.
       let sink = sender.clone();
       let cloned_oid = object_id.clone();
+
+      // Observer the awareness's update and broadcast it to all subscribers.
       let awareness_sub = mutex_collab
         .get_mut_awareness()
         .on_update(move |awareness, event| {
@@ -84,7 +86,7 @@ impl CollabBroadcast {
     };
     CollabBroadcast {
       object_id,
-      awareness: collab,
+      collab,
       sender,
       awareness_sub,
       doc_sub,
@@ -93,12 +95,15 @@ impl CollabBroadcast {
 
   /// Returns a reference to an underlying [MutexCollab] instance.
   pub fn awareness(&self) -> &MutexCollab {
-    &self.awareness
+    &self.collab
   }
 
   /// Broadcasts user message to all active subscribers. Returns error if message could not have
   /// been broadcast.
-  pub fn broadcast(&self, msg: CSAwarenessUpdate) -> Result<(), SendError<CollabMessage>> {
+  pub fn broadcast_awareness(
+    &self,
+    msg: CSAwarenessUpdate,
+  ) -> Result<(), SendError<CollabMessage>> {
     self.sender.send(msg.into())?;
     Ok(())
   }
@@ -181,13 +186,16 @@ impl CollabBroadcast {
             }
           }
 
-          // Send the ack message to the client
           if let Some(msg_id) = collab_msg.msg_id() {
+            // Send the server's state vector to the client. The client will calculate the missing
+            // updates and send them as a single update back to the server.
             let payload = if is_client_init {
               Some(encode_server_sv(&collab))
             } else {
               None
             };
+
+            // Send the ack message to the client
             let ack = CSServerAck::new(object_id.clone(), msg_id, payload);
             let _ = sink.send(ack.into()).await;
           }

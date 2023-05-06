@@ -1,4 +1,4 @@
-use collab::core::collab::CollabOrigin;
+use collab::core::collab::ClientCollabOrigin;
 use collab::preclude::MapRefExtension;
 use serde_json::json;
 
@@ -9,10 +9,10 @@ async fn open_existing_doc_with_different_client_test() {
   let object_id = "1";
 
   let server = spawn_server(1, object_id).await.unwrap();
-  let (_, _client_1) = spawn_client(CollabOrigin::new(1, "1"), object_id, server.address)
+  let (_, _client_1) = spawn_client(ClientCollabOrigin::new(1, "1"), object_id, server.address)
     .await
     .unwrap();
-  let (_, _client_2) = spawn_client(CollabOrigin::new(1, "2"), object_id, server.address)
+  let (_, _client_2) = spawn_client(ClientCollabOrigin::new(1, "2"), object_id, server.address)
     .await
     .unwrap();
   wait_a_sec().await;
@@ -33,10 +33,10 @@ async fn single_write_sync_with_server_test() {
   let object_id = "1";
 
   let server = spawn_server(1, object_id).await.unwrap();
-  let (_, client_1) = spawn_client(CollabOrigin::new(1, "1"), object_id, server.address)
+  let (_, client_1) = spawn_client(ClientCollabOrigin::new(1, "1"), object_id, server.address)
     .await
     .unwrap();
-  let (_, client2) = spawn_client(CollabOrigin::new(1, "2"), object_id, server.address)
+  let (_, client2) = spawn_client(ClientCollabOrigin::new(1, "2"), object_id, server.address)
     .await
     .unwrap();
   wait_a_sec().await;
@@ -69,10 +69,10 @@ async fn two_writers_test() {
   let object_id = "1";
 
   let server = spawn_server(1, object_id).await.unwrap();
-  let (_, client_1) = spawn_client(CollabOrigin::new(1, "1"), object_id, server.address)
+  let (_, client_1) = spawn_client(ClientCollabOrigin::new(1, "1"), object_id, server.address)
     .await
     .unwrap();
-  let (_, client_2) = spawn_client(CollabOrigin::new(1, "2"), object_id, server.address)
+  let (_, client_2) = spawn_client(ClientCollabOrigin::new(1, "2"), object_id, server.address)
     .await
     .unwrap();
   wait_a_sec().await;
@@ -118,10 +118,10 @@ async fn two_clients_last_write_win_test() {
   let object_id = "1";
   let server = spawn_server(1, object_id).await.unwrap();
   // let db = create_local_disk_document(1, object_id, server.address).await;
-  let (_, client_1) = spawn_client(CollabOrigin::new(1, "1"), object_id, server.address)
+  let (_, client_1) = spawn_client(ClientCollabOrigin::new(1, "1"), object_id, server.address)
     .await
     .unwrap();
-  let (_, client_2) = spawn_client(CollabOrigin::new(1, "2"), object_id, server.address)
+  let (_, client_2) = spawn_client(ClientCollabOrigin::new(1, "2"), object_id, server.address)
     .await
     .unwrap();
   wait_a_sec().await;
@@ -163,10 +163,10 @@ async fn last_write_win_test() {
   let uid = 1;
   let object_id = "1";
   let server = spawn_server(uid, object_id).await.unwrap();
-  let (_, client_1) = spawn_client(CollabOrigin::new(1, "1"), object_id, server.address)
+  let (_, client_1) = spawn_client(ClientCollabOrigin::new(1, "1"), object_id, server.address)
     .await
     .unwrap();
-  let (_, client_2) = spawn_client(CollabOrigin::new(1, "2"), object_id, server.address)
+  let (_, client_2) = spawn_client(ClientCollabOrigin::new(1, "2"), object_id, server.address)
     .await
     .unwrap();
   wait_a_sec().await;

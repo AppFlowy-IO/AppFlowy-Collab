@@ -3,7 +3,7 @@ use std::sync::Arc;
 use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
 
-use crate::core::collab::CollabOrigin;
+use crate::core::collab::ClientCollabOrigin;
 
 pub trait CollabPlugin: Send + Sync + 'static {
   /// Called when the plugin is initialized.
@@ -18,7 +18,13 @@ pub trait CollabPlugin: Send + Sync + 'static {
   /// the Yjs document.
   fn receive_local_update(&self, _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
 
-  fn did_receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, _update: &[u8]) {}
+  fn did_receive_local_update(
+    &self,
+    _origin: &ClientCollabOrigin,
+    _object_id: &str,
+    _update: &[u8],
+  ) {
+  }
 
   /// Called after each [TransactionMut]
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
