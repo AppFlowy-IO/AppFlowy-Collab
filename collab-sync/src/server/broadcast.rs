@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use collab::core::collab::{ClientCollabOrigin, MutexCollab};
+use collab::core::collab::{CollabOrigin, MutexCollab};
 use futures_util::{SinkExt, StreamExt};
 use lib0::encoding::Write;
 
@@ -55,10 +55,14 @@ impl CollabBroadcast {
         .get_mut_awareness()
         .doc_mut()
         .observe_update_v1(move |txn, event| {
-          let origin = txn
-            .origin()
-            .map(ClientCollabOrigin::from)
-            .unwrap_or_default();
+          let origin = match txn.origin() {
+            Some(value) => CollabOrigin::try_from(value).unwrap_or(server_origin()),
+            None => {
+              tracing::warn!("Missing origin in update event");
+              server_origin()
+            },
+          };
+
           let payload = gen_update_message(&event.update);
           let msg = CSServerBroadcast::new(origin, cloned_oid.clone(), payload);
           if let Err(_e) = sink.send(msg.into()) {
@@ -94,7 +98,7 @@ impl CollabBroadcast {
   }
 
   /// Returns a reference to an underlying [MutexCollab] instance.
-  pub fn awareness(&self) -> &MutexCollab {
+  pub fn collab(&self) -> &MutexCollab {
     &self.collab
   }
 
@@ -116,6 +120,7 @@ impl CollabBroadcast {
   /// an internal connection error or closed connection).
   pub fn subscribe<Sink, Stream, E>(
     &self,
+    origin: CollabOrigin,
     sink: Arc<Mutex<Sink>>,
     mut stream: Stream,
   ) -> Subscription
@@ -134,6 +139,14 @@ impl CollabBroadcast {
       tokio::spawn(async move {
         while let Ok(msg) = receiver.recv().await {
           tracing::trace!("[💭Server]: {}", msg);
+
+          // No need to broadcast the message back to the origin.
+          if let Some(msg_origin) = msg.origin() {
+            if msg_origin == &origin {
+              continue;
+            }
+          }
+
           let mut sink = sink.lock().await;
           if let Err(e) = sink.send(msg).await {
             tracing::error!("[💭Server]: broadcast client message failed: {:?}", e);
@@ -150,7 +163,7 @@ impl CollabBroadcast {
     // broadcast to all connected subscribers. Check out the [observe_update_v1] and [sink_task]
     // above.
     let stream_task = {
-      let collab = self.awareness().clone();
+      let collab = self.collab().clone();
       let object_id = self.object_id.clone();
       tokio::spawn(async move {
         while let Some(res) = stream.next().await {
@@ -175,7 +188,7 @@ impl CollabBroadcast {
                 // Send the response to the corresponding client
                 if let Some(resp) = resp {
                   let msg =
-                    CSServerResponse::new(origin.clone(), object_id.clone(), resp.encode_v1());
+                    CSServerResponse::new(origin.cloned(), object_id.clone(), resp.encode_v1());
                   sink
                     .send(msg.into())
                     .await
@@ -263,4 +276,11 @@ fn gen_awareness_update_message(
   changed.extend_from_slice(removed);
   let update = awareness.update_with_clients(changed)?;
   Ok(update)
+}
+
+pub fn server_origin() -> CollabOrigin {
+  CollabOrigin {
+    uid: 0,
+    device_id: "".to_string(),
+  }
 }

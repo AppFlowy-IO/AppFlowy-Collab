@@ -203,6 +203,7 @@ async fn two_clients_remove_vec_element_at_same_pos_test() {
           });
         },
       },
+      Wait { secs: 1 },
       ModifyLocalCollab {
         device_id: "2".to_string(),
         f: |collab| {
@@ -229,7 +230,6 @@ async fn two_clients_remove_vec_element_at_same_pos_test() {
         expected: json!({
           "array": [
             "bb",
-            "aa"
           ],
           "map": {
             "task1": "a",

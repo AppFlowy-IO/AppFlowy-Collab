@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use collab::core::collab::ClientCollabOrigin;
+use collab::core::collab::CollabOrigin;
 use collab::preclude::Collab;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use serde_json::Value;
@@ -78,21 +78,21 @@ impl ScriptTest {
   pub async fn run_script(&mut self, script: TestScript) {
     match script {
       TestScript::CreateClient { uid, device_id } => {
-        let origin = ClientCollabOrigin::new(uid, &device_id);
+        let origin = CollabOrigin::new(uid, &device_id);
         let client = TestClient::new(origin, &self.object_id, self.server.address, true)
           .await
           .unwrap();
         self.clients.insert(device_id.to_string(), client);
       },
       TestScript::CreateEmptyClient { uid, device_id } => {
-        let origin = ClientCollabOrigin::new(uid, &device_id);
+        let origin = CollabOrigin::new(uid, &device_id);
         let client = TestClient::new(origin, &self.object_id, self.server.address, false)
           .await
           .unwrap();
         self.clients.insert(device_id.to_string(), client);
       },
       TestScript::CreateClientWithDb { uid, device_id, db } => {
-        let origin = ClientCollabOrigin::new(uid, &device_id);
+        let origin = CollabOrigin::new(uid, &device_id);
         let new_client = TestClient::with_db(origin, &self.object_id, self.server.address, db)
           .await
           .unwrap();

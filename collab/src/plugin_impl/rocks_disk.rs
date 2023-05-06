@@ -103,7 +103,7 @@ impl CollabPlugin for RocksDiskPlugin {
     self.did_load.store(true, Ordering::SeqCst);
   }
 
-  fn receive_local_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
+  fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
     // Only push update if the doc is loaded
     if !self.did_load.load(Ordering::SeqCst) {
       return;

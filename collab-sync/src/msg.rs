@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use std::fmt::{Display, Formatter};
 
-use collab::core::collab::ClientCollabOrigin;
+use collab::core::collab::CollabOrigin;
 use serde::{Deserialize, Serialize};
 
 use crate::error::SyncError;
@@ -49,15 +49,15 @@ impl CollabMessage {
     }
   }
 
-  pub fn origin(&self) -> ClientCollabOrigin {
+  pub fn origin(&self) -> Option<&CollabOrigin> {
     match self {
-      CollabMessage::ClientInit(value) => value.origin.clone(),
-      CollabMessage::ServerSync(value) => value.origin.clone(),
-      CollabMessage::ClientUpdate(value) => value.origin.clone(),
-      CollabMessage::ServerResponse(value) => value.origin.clone(),
-      CollabMessage::ServerBroadcast(value) => value.origin.clone(),
-      CollabMessage::AwarenessUpdate(_) => ClientCollabOrigin::default(),
-      CollabMessage::ServerAck(_) => ClientCollabOrigin::default(),
+      CollabMessage::ClientInit(value) => Some(&value.origin),
+      CollabMessage::ServerSync(value) => Some(&value.origin),
+      CollabMessage::ClientUpdate(value) => Some(&value.origin),
+      CollabMessage::ServerResponse(value) => value.origin.as_ref(),
+      CollabMessage::ServerBroadcast(value) => Some(&value.origin),
+      CollabMessage::AwarenessUpdate(_) => None,
+      CollabMessage::ServerAck(_) => None,
     }
   }
 }
@@ -68,7 +68,7 @@ impl Display for CollabMessage {
       CollabMessage::ClientInit(value) => f.write_fmt(format_args!(
         "client init: [uid:{}|device_id:{}|oid:{}|payload_len:{}|msg_id:{}]",
         value.origin.uid,
-        value.origin.device_id.clone().unwrap_or_default(),
+        value.origin.device_id,
         value.object_id,
         value.payload.len(),
         value.msg_id,
@@ -82,22 +82,27 @@ impl Display for CollabMessage {
       CollabMessage::ClientUpdate(value) => f.write_fmt(format_args!(
         "send client update: [uid:{}|device_id:{}|oid:{}|payload_len:{}|msg_id:{}]",
         value.origin.uid,
-        value.origin.device_id.clone().unwrap_or_default(),
+        value.origin.device_id,
         value.object_id,
         value.payload.len(),
         value.msg_id,
       )),
+      // CollabMessage::ServerResponse(value) => f.write_fmt(format_args!(
+      //   "server response: [uid:{}|device_id:{}|oid:{}|payload_len:{}]",
+      //   value.origin.uid,
+      //   value.origin.device_id,
+      //   value.object_id,
+      //   value.payload.len(),
+      // )),
       CollabMessage::ServerResponse(value) => f.write_fmt(format_args!(
-        "server response: [uid:{}|device_id:{}|oid:{}|payload_len:{}]",
-        value.origin.uid,
-        value.origin.device_id.clone().unwrap_or_default(),
+        "server response: [oid:{}|payload_len:{}]",
         value.object_id,
         value.payload.len(),
       )),
       CollabMessage::ServerBroadcast(value) => f.write_fmt(format_args!(
         "broadcast update: [uid:{}|device_id:{}|oid:{}|payload_len:{}]",
         value.origin.uid,
-        value.origin.device_id.clone().unwrap_or_default(),
+        value.origin.device_id,
         value.object_id,
         value.payload.len(),
       )),
@@ -177,14 +182,14 @@ impl From<CSAwarenessUpdate> for CollabMessage {
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct CSClientUpdate {
-  origin: ClientCollabOrigin,
+  origin: CollabOrigin,
   object_id: String,
   msg_id: u32,
   payload: Vec<u8>,
 }
 
 impl CSClientUpdate {
-  pub fn new(origin: ClientCollabOrigin, object_id: String, msg_id: u32, payload: Vec<u8>) -> Self {
+  pub fn new(origin: CollabOrigin, object_id: String, msg_id: u32, payload: Vec<u8>) -> Self {
     Self {
       origin,
       object_id,
@@ -225,7 +230,7 @@ impl From<CSServerAck> for CollabMessage {
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct CSClientInit {
-  pub origin: ClientCollabOrigin,
+  pub origin: CollabOrigin,
   pub object_id: String,
   pub msg_id: u32,
   pub payload: Vec<u8>,
@@ -233,7 +238,7 @@ pub struct CSClientInit {
 }
 
 impl CSClientInit {
-  pub fn new(origin: ClientCollabOrigin, object_id: String, msg_id: u32, payload: Vec<u8>) -> Self {
+  pub fn new(origin: CollabOrigin, object_id: String, msg_id: u32, payload: Vec<u8>) -> Self {
     let md5 = md5(&payload);
     Self {
       origin,
@@ -258,13 +263,13 @@ pub fn md5<T: AsRef<[u8]>>(data: T) -> String {
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct CSServerResponse {
-  origin: ClientCollabOrigin,
+  origin: Option<CollabOrigin>,
   object_id: String,
   payload: Vec<u8>,
 }
 
 impl CSServerResponse {
-  pub fn new(origin: ClientCollabOrigin, object_id: String, payload: Vec<u8>) -> Self {
+  pub fn new(origin: Option<CollabOrigin>, object_id: String, payload: Vec<u8>) -> Self {
     Self {
       origin,
       object_id,
@@ -281,13 +286,13 @@ impl From<CSServerResponse> for CollabMessage {
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct CSServerBroadcast {
-  origin: ClientCollabOrigin,
+  origin: CollabOrigin,
   object_id: String,
   payload: Vec<u8>,
 }
 
 impl CSServerBroadcast {
-  pub fn new(origin: ClientCollabOrigin, object_id: String, payload: Vec<u8>) -> Self {
+  pub fn new(origin: CollabOrigin, object_id: String, payload: Vec<u8>) -> Self {
     Self {
       origin,
       object_id,
@@ -304,14 +309,15 @@ impl From<CSServerBroadcast> for CollabMessage {
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct CSServerSync {
-  pub origin: ClientCollabOrigin,
+  // Indicates the origin client of the message
+  pub origin: CollabOrigin,
   pub object_id: String,
   pub payload: Vec<u8>,
   pub msg_id: u32,
 }
 
 impl CSServerSync {
-  pub fn new(origin: ClientCollabOrigin, object_id: String, payload: Vec<u8>, msg_id: u32) -> Self {
+  pub fn new(origin: CollabOrigin, object_id: String, payload: Vec<u8>, msg_id: u32) -> Self {
     Self {
       origin,
       object_id,

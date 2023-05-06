@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use collab::core::collab::{ClientCollabOrigin, MutexCollab};
+use collab::core::collab::{CollabOrigin, MutexCollab};
 use futures_util::{SinkExt, StreamExt};
 use lib0::decoding::Cursor;
 use tokio::spawn;
@@ -24,7 +24,7 @@ pub const SYNC_TIMEOUT: u64 = 2;
 
 pub struct SyncQueue<Sink, Stream> {
   object_id: String,
-  origin: ClientCollabOrigin,
+  origin: CollabOrigin,
   scheduler: Arc<SinkScheduler<Sink>>,
   #[allow(dead_code)]
   stream: SyncStream<Sink, Stream>,
@@ -39,7 +39,7 @@ where
 {
   pub fn new(
     object_id: &str,
-    origin: ClientCollabOrigin,
+    origin: CollabOrigin,
     sink: Sink,
     stream: Stream,
     collab: Arc<MutexCollab>,
@@ -128,7 +128,7 @@ where
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {
   pub fn new<P>(
-    origin: ClientCollabOrigin,
+    origin: CollabOrigin,
     object_id: String,
     stream: Stream,
     protocol: P,
@@ -158,7 +158,7 @@ where
 
   // Spawn the stream that continuously reads the doc's updates from remote.
   async fn spawn_doc_stream<P>(
-    _origin: ClientCollabOrigin,
+    origin: CollabOrigin,
     object_id: String,
     mut stream: Stream,
     weak_collab: Weak<MutexCollab>,
@@ -173,7 +173,7 @@ where
         Ok(msg) => match (weak_collab.upgrade(), weak_scheduler.upgrade()) {
           (Some(awareness), Some(scheduler)) => {
             SyncStream::<Sink, Stream>::process_message::<P>(
-              &object_id, &protocol, &awareness, &scheduler, msg,
+              &origin, &object_id, &protocol, &awareness, &scheduler, msg,
             )
             .await?
           },
@@ -194,6 +194,7 @@ where
 
   /// Continuously handle messages from the remote doc
   async fn process_message<P>(
+    origin: &CollabOrigin,
     object_id: &str,
     protocol: &P,
     collab: &Arc<MutexCollab>,
@@ -203,17 +204,20 @@ where
   where
     P: CollabSyncProtocol + Send + Sync + 'static,
   {
-    let origin = msg.origin();
+    //FIXME: Should use the passed in origin instead of the origin from the message.
+    // let origin = msg.origin();
+
     match msg {
       CollabMessage::ServerAck(ack) => {
         if let Some(payload) = &ack.payload {
           let mut decoder = DecoderV1::from(payload.as_ref());
           if let Ok(msg) = Message::decode(&mut decoder) {
-            if let Some(resp_msg) = handle_msg(&origin, protocol, collab, msg).await? {
+            if let Some(resp_msg) = handle_msg(&Some(origin), protocol, collab, msg).await? {
               let payload = resp_msg.encode_v1();
               let object_id = object_id.to_string();
-              scheduler
-                .sync_msg(|msg_id| CSServerSync::new(origin, object_id, payload, msg_id).into());
+              scheduler.sync_msg(|msg_id| {
+                CSServerSync::new(origin.clone(), object_id, payload, msg_id).into()
+              });
             }
           }
         }
@@ -233,12 +237,12 @@ where
         let reader = MessageReader::new(&mut decoder);
         for msg in reader {
           let msg = msg?;
-          if let Some(resp) = handle_msg(&origin, protocol, collab, msg).await? {
+          if let Some(resp) = handle_msg(&Some(origin), protocol, collab, msg).await? {
             let payload = resp.encode_v1();
             let object_id = object_id.to_string();
-            let origin = origin.clone();
-            scheduler
-              .sync_msg(|msg_id| CSClientUpdate::new(origin, object_id, msg_id, payload).into());
+            scheduler.sync_msg(|msg_id| {
+              CSClientUpdate::new(origin.clone(), object_id, msg_id, payload).into()
+            });
           }
         }
         Ok(())

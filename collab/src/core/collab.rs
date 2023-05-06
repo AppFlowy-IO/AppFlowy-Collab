@@ -17,6 +17,7 @@ use yrs::{
 
 use crate::core::collab_plugin::CollabPlugin;
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
+use crate::error::CollabError;
 use crate::preclude::{ArrayRefWrapper, JsonValue};
 use crate::util::insert_json_value_to_map_ref;
 
@@ -35,9 +36,9 @@ pub struct Collab {
   /// each [Collab] instance.
   pub object_id: String,
 
-  /// This [ClientCollabOrigin] is used to verify the origin of a [Transaction] when
+  /// This [CollabOrigin] is used to verify the origin of a [Transaction] when
   /// applying a remote update.
-  origin: ClientCollabOrigin,
+  origin: CollabOrigin,
 
   /// The [Doc] is the main data structure that is used to store the data.
   doc: Doc,
@@ -56,12 +57,12 @@ pub struct Collab {
 
 impl Collab {
   pub fn new<T: AsRef<str>>(uid: i64, object_id: T, plugins: Vec<Arc<dyn CollabPlugin>>) -> Collab {
-    let origin = ClientCollabOrigin::new(uid, "");
+    let origin = CollabOrigin::new(uid, "");
     Self::new_with_origin(origin, object_id, plugins)
   }
 
   pub fn new_with_origin<T: AsRef<str>>(
-    origin: ClientCollabOrigin,
+    origin: CollabOrigin,
     object_id: T,
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Collab {
@@ -83,11 +84,6 @@ impl Collab {
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
     }
-  }
-
-  pub fn with_device_id(mut self, device_id: String) -> Self {
-    self.origin.device_id = Some(device_id);
-    self
   }
 
   /// Returns the [Doc] associated with the [Collab].
@@ -372,31 +368,30 @@ fn observe_doc(
   doc: &Doc,
   oid: String,
   plugins: Plugins,
-  local_origin: ClientCollabOrigin,
+  local_origin: CollabOrigin,
 ) -> (UpdateSubscription, AfterTransactionSubscription) {
   let cloned_oid = oid.clone();
   let cloned_plugins = plugins.clone();
   let update_sub = doc
     .observe_update_v1(move |txn, event| {
       // If the origin of the txn is none, it means that the update is coming from a remote source.
-      // Otherwise, it's a local update. The plugins only handle the local update
-      if let Some(origin) = txn.origin().map(ClientCollabOrigin::from) {
-        if origin == local_origin {
-          cloned_plugins.read().iter().for_each(|plugin| {
-            plugin.receive_local_update(&cloned_oid, txn, &event.update);
-            plugin.did_receive_local_update(&origin, &cloned_oid, &event.update);
-          });
+      cloned_plugins.read().iter().for_each(|plugin| {
+        plugin.receive_update(&cloned_oid, txn, &event.update);
+
+        if let Some(remote_origin) = CollabOrigin::try_from(txn).ok() {
+          if remote_origin == local_origin {
+            plugin.receive_local_update(&local_origin, &cloned_oid, &event.update);
+          } else {
+            tracing::trace!(
+              "[🦀Client]: {} did apply remote {} update",
+              local_origin,
+              remote_origin,
+            );
+          }
         } else {
-          let remote_origin = origin;
-          tracing::trace!(
-            "[🦀Client]: {} did apply remote {} update",
-            local_origin,
-            remote_origin,
-          );
+          tracing::trace!("[🦀Client]: did apply remote update");
         }
-      } else {
-        tracing::trace!("[🦀Client]: did apply remote update");
-      }
+      });
     })
     .unwrap();
 
@@ -461,14 +456,14 @@ impl CollabBuilder {
 
 #[derive(Clone)]
 pub struct CollabContext {
-  origin: ClientCollabOrigin,
+  origin: CollabOrigin,
   doc: Doc,
   #[allow(dead_code)]
   plugins: Plugins,
 }
 
 impl CollabContext {
-  fn new(origin: ClientCollabOrigin, plugins: Plugins, doc: Doc) -> Self {
+  fn new(origin: CollabOrigin, plugins: Plugins, doc: Doc) -> Self {
     Self {
       origin,
       plugins,
@@ -550,54 +545,56 @@ impl Deref for Plugins {
   }
 }
 
-pub trait CollabOrigin: Display + Serialize + Deserialize + Eq + PartialEq + Debug + Clone {}
-
-/// This [ClientCollabOrigin] is used to verify the origin of a [Transaction] when
+/// This [CollabOrigin] is used to verify the origin of a [Transaction] when
 /// applying a remote update.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct ClientCollabOrigin {
+pub struct CollabOrigin {
   pub uid: i64,
-  pub device_id: Option<String>,
+  pub device_id: String,
 }
 
-impl Default for ClientCollabOrigin {
-  fn default() -> Self {
-    Self {
-      uid: 0,
-      device_id: None,
-    }
-  }
-}
-
-impl Display for ClientCollabOrigin {
+impl Display for CollabOrigin {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     f.write_fmt(format_args!(
       "[uid:{}|device_id:{}]",
-      self.uid,
-      self.device_id.as_ref().unwrap_or(&"".to_string())
+      self.uid, self.device_id,
     ))
   }
 }
 
-impl ClientCollabOrigin {
+impl CollabOrigin {
   pub fn new(uid: i64, device_id: &str) -> Self {
     Self {
       uid,
-      device_id: Some(device_id.to_string()),
+      device_id: device_id.to_string(),
     }
   }
 }
 
-impl From<ClientCollabOrigin> for Origin {
-  fn from(o: ClientCollabOrigin) -> Self {
+impl From<CollabOrigin> for Origin {
+  fn from(o: CollabOrigin) -> Self {
     let data = serde_json::to_vec(&o).unwrap();
     Origin::from(data.as_slice())
   }
 }
 
-impl From<&Origin> for ClientCollabOrigin {
-  fn from(value: &Origin) -> Self {
-    serde_json::from_slice(value.as_ref()).unwrap_or_default()
+impl<'a> TryFrom<&TransactionMut<'a>> for CollabOrigin {
+  type Error = CollabError;
+
+  fn try_from(txn: &TransactionMut<'a>) -> Result<Self, Self::Error> {
+    match txn.origin() {
+      None => Err(CollabError::UnexpectedEmpty),
+      Some(origin) => Self::try_from(origin),
+    }
+  }
+}
+
+impl TryFrom<&Origin> for CollabOrigin {
+  type Error = CollabError;
+
+  fn try_from(value: &Origin) -> Result<Self, Self::Error> {
+    let origin = serde_json::from_slice::<CollabOrigin>(value.as_ref())?;
+    Ok(origin)
   }
 }
 
@@ -605,11 +602,7 @@ impl From<&Origin> for ClientCollabOrigin {
 pub struct MutexCollab(Arc<Mutex<Collab>>);
 
 impl MutexCollab {
-  pub fn new(
-    origin: ClientCollabOrigin,
-    object_id: &str,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
-  ) -> Self {
+  pub fn new(origin: CollabOrigin, object_id: &str, plugins: Vec<Arc<dyn CollabPlugin>>) -> Self {
     let collab = Collab::new_with_origin(origin, object_id, plugins);
     MutexCollab(Arc::new(Mutex::new(collab)))
   }

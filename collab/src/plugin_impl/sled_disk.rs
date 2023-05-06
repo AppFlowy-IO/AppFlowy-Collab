@@ -47,7 +47,7 @@ impl CollabPlugin for SledDiskPlugin {
     self.did_load.store(true, Ordering::SeqCst);
   }
 
-  fn receive_local_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
+  fn receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
     if self.did_load.load(Ordering::SeqCst) {
       self
         .db

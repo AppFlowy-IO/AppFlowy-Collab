@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use collab::core::collab::{ClientCollabOrigin, MutexCollab};
+use collab::core::collab::{CollabOrigin, MutexCollab};
 use collab::preclude::CollabPlugin;
 use collab_sync::client::sync::SyncQueue;
 use collab_sync::error::SyncError;
@@ -18,7 +18,7 @@ pub struct SyncPlugin<Sink, Stream> {
 
 impl<Sink, Stream> SyncPlugin<Sink, Stream> {
   pub fn new<E>(
-    origin: ClientCollabOrigin,
+    origin: CollabOrigin,
     object_id: &str,
     collab: Arc<MutexCollab>,
     sink: Sink,
@@ -47,7 +47,7 @@ where
     self.sync_queue.notify(awareness);
   }
 
-  fn did_receive_local_update(&self, origin: &ClientCollabOrigin, _object_id: &str, update: &[u8]) {
+  fn receive_local_update(&self, origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
     let weak_sync_queue = Arc::downgrade(&self.sync_queue);
     let update = update.to_vec();
     let object_id = self.object_id.clone();
