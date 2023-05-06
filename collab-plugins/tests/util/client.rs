@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use collab::core::collab::{CollabOrigin, MutexCollab};
+use collab::core::collab::MutexCollab;
 use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::MapRefExtension;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -10,6 +10,7 @@ use collab_plugins::sync_plugin::SyncPlugin;
 use collab_sync::client::{TokioUnboundedSink, TokioUnboundedStream};
 use collab_sync::server::{CollabMsgCodec, CollabSink, CollabStream};
 
+use collab::core::origin::{CollabClient, CollabOrigin};
 use rand::{prelude::*, Rng as WrappedRng};
 use tempfile::TempDir;
 use tokio::net::TcpSocket;
@@ -18,12 +19,13 @@ use tokio::sync::mpsc::unbounded_channel;
 use crate::util::{TestSink, TestStream};
 
 pub async fn spawn_client_with_empty_doc(
-  origin: CollabOrigin,
+  origin: CollabClient,
   object_id: &str,
   address: SocketAddr,
 ) -> std::io::Result<Arc<MutexCollab>> {
   let stream = TcpSocket::new_v4()?.connect(address).await?;
   let (reader, writer) = stream.into_split();
+  let origin = CollabOrigin::Client(origin);
   let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
 
   let stream = CollabStream::new(reader, CollabMsgCodec::default());
@@ -35,10 +37,12 @@ pub async fn spawn_client_with_empty_doc(
 }
 
 pub async fn spawn_client(
-  origin: CollabOrigin,
+  origin: CollabClient,
   object_id: &str,
   address: SocketAddr,
 ) -> std::io::Result<(Arc<RocksCollabDB>, Arc<MutexCollab>)> {
+  let uid = origin.uid;
+  let origin = CollabOrigin::Client(origin);
   let stream = TcpSocket::new_v4()?.connect(address).await?;
   let (reader, writer) = stream.into_split();
   let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
@@ -53,7 +57,7 @@ pub async fn spawn_client(
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
-  let disk_plugin = RocksDiskPlugin::new(origin.uid, db.clone()).unwrap();
+  let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
   collab.lock().add_plugin(Arc::new(disk_plugin));
   collab.initial();
 
@@ -80,7 +84,7 @@ pub struct TestClient {
 
 impl TestClient {
   pub async fn new(
-    origin: CollabOrigin,
+    origin: CollabClient,
     object_id: &str,
     address: SocketAddr,
     with_data: bool,
@@ -88,9 +92,10 @@ impl TestClient {
     let db = create_db();
     let stream = TcpSocket::new_v4()?.connect(address).await?;
     let (reader, writer) = stream.into_split();
-    let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
     // disk
     let disk_plugin = RocksDiskPlugin::new(origin.uid, db.clone()).unwrap();
+    let origin = CollabOrigin::Client(origin);
+    let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
     collab.lock().add_plugin(Arc::new(disk_plugin));
 
     // stream
@@ -104,7 +109,7 @@ impl TestClient {
     let test_sink = TestSink::new(tcp_sink, rx);
 
     let sync_plugin = SyncPlugin::new(
-      origin.clone(),
+      origin,
       object_id,
       collab.clone(),
       TokioUnboundedSink(sink),
@@ -132,17 +137,17 @@ impl TestClient {
   }
 
   pub async fn with_db(
-    origin: CollabOrigin,
+    origin: CollabClient,
     object_id: &str,
     address: SocketAddr,
     db: Arc<RocksCollabDB>,
   ) -> std::io::Result<Self> {
     let stream = TcpSocket::new_v4()?.connect(address).await?;
     let (reader, writer) = stream.into_split();
-    let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
-
     // disk
     let disk_plugin = RocksDiskPlugin::new(origin.uid, db.clone()).unwrap();
+    let origin = CollabOrigin::Client(origin);
+    let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
     collab.lock().add_plugin(Arc::new(disk_plugin));
 
     // stream
@@ -156,7 +161,7 @@ impl TestClient {
     let test_sink = TestSink::new(tck_sink, rx);
 
     let sync_plugin = SyncPlugin::new(
-      origin.clone(),
+      origin,
       object_id,
       collab.clone(),
       TokioUnboundedSink(sink),

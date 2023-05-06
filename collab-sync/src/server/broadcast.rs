@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use collab::core::collab::{CollabOrigin, MutexCollab};
+use collab::core::collab::MutexCollab;
 use futures_util::{SinkExt, StreamExt};
 use lib0::encoding::Write;
 
+use collab::core::origin::{CollabClient, CollabOrigin};
 use tokio::select;
 use tokio::sync::broadcast::error::SendError;
 use tokio::sync::broadcast::{channel, Sender};
@@ -55,14 +56,7 @@ impl CollabBroadcast {
         .get_mut_awareness()
         .doc_mut()
         .observe_update_v1(move |txn, event| {
-          let origin = match txn.origin() {
-            Some(value) => CollabOrigin::try_from(value).unwrap_or(server_origin()),
-            None => {
-              tracing::warn!("Missing origin in update event");
-              server_origin()
-            },
-          };
-
+          let origin = CollabOrigin::from(txn);
           let payload = gen_update_message(&event.update);
           let msg = CSServerBroadcast::new(origin, cloned_oid.clone(), payload);
           if let Err(_e) = sink.send(msg.into()) {
@@ -278,8 +272,8 @@ fn gen_awareness_update_message(
   Ok(update)
 }
 
-pub fn server_origin() -> CollabOrigin {
-  CollabOrigin {
+pub fn server_origin() -> CollabClient {
+  CollabClient {
     uid: 0,
     device_id: "".to_string(),
   }

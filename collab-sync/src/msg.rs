@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use std::fmt::{Display, Formatter};
 
-use collab::core::collab::CollabOrigin;
+use collab::core::origin::CollabOrigin;
 use serde::{Deserialize, Serialize};
 
 use crate::error::SyncError;
@@ -66,9 +66,8 @@ impl Display for CollabMessage {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
       CollabMessage::ClientInit(value) => f.write_fmt(format_args!(
-        "client init: [uid:{}|device_id:{}|oid:{}|payload_len:{}|msg_id:{}]",
-        value.origin.uid,
-        value.origin.device_id,
+        "client init: [{}|oid:{}|payload_len:{}|msg_id:{}]",
+        value.origin,
         value.object_id,
         value.payload.len(),
         value.msg_id,
@@ -80,29 +79,20 @@ impl Display for CollabMessage {
         value.msg_id,
       )),
       CollabMessage::ClientUpdate(value) => f.write_fmt(format_args!(
-        "send client update: [uid:{}|device_id:{}|oid:{}|payload_len:{}|msg_id:{}]",
-        value.origin.uid,
-        value.origin.device_id,
+        "send client update: [{}|oid:{}|payload_len:{}|msg_id:{}]",
+        value.origin,
         value.object_id,
         value.payload.len(),
         value.msg_id,
       )),
-      // CollabMessage::ServerResponse(value) => f.write_fmt(format_args!(
-      //   "server response: [uid:{}|device_id:{}|oid:{}|payload_len:{}]",
-      //   value.origin.uid,
-      //   value.origin.device_id,
-      //   value.object_id,
-      //   value.payload.len(),
-      // )),
       CollabMessage::ServerResponse(value) => f.write_fmt(format_args!(
         "server response: [oid:{}|payload_len:{}]",
         value.object_id,
         value.payload.len(),
       )),
       CollabMessage::ServerBroadcast(value) => f.write_fmt(format_args!(
-        "broadcast update: [uid:{}|device_id:{}|oid:{}|payload_len:{}]",
-        value.origin.uid,
-        value.origin.device_id,
+        "broadcast update: [{}|oid:{}|payload_len:{}]",
+        value.origin,
         value.object_id,
         value.payload.len(),
       )),

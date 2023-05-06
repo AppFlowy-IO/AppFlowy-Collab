@@ -1,4 +1,4 @@
-use collab::core::collab::CollabOrigin;
+use collab::core::origin::CollabClient;
 use collab::preclude::MapRefExtension;
 use serde_json::json;
 
@@ -11,8 +11,8 @@ use crate::util::{
 async fn send_single_update_to_server_test() {
   let uid = 1;
   let object_id = "1";
-  let server = spawn_server(uid, object_id).await.unwrap();
-  let client = spawn_client_with_empty_doc(CollabOrigin::new(1, "1"), object_id, server.address)
+  let server = spawn_server(object_id).await.unwrap();
+  let client = spawn_client_with_empty_doc(CollabClient::new(uid, "1"), object_id, server.address)
     .await
     .unwrap();
 
@@ -40,8 +40,8 @@ async fn send_single_update_to_server_test() {
 async fn send_multiple_updates_to_server_test() {
   let uid = 1;
   let object_id = "1";
-  let server = spawn_server(uid, object_id).await.unwrap();
-  let client = spawn_client_with_empty_doc(CollabOrigin::new(1, "1"), object_id, server.address)
+  let server = spawn_server(object_id).await.unwrap();
+  let client = spawn_client_with_empty_doc(CollabClient::new(uid, "1"), object_id, server.address)
     .await
     .unwrap();
   wait_a_sec().await;
@@ -81,12 +81,12 @@ async fn fetch_initial_state_from_server_test() {
   let uid = 1;
   let object_id = "1";
 
-  let group = make_test_collab_group(uid, object_id).await;
+  let group = make_test_collab_group(object_id).await;
   group.get_mut_collab(|collab| {
     collab.insert("1", "a");
   });
   let server = spawn_server_with_data(group).await.unwrap();
-  let client = spawn_client_with_empty_doc(CollabOrigin::new(1, "1"), object_id, server.address)
+  let client = spawn_client_with_empty_doc(CollabClient::new(uid, "1"), object_id, server.address)
     .await
     .unwrap();
   wait_a_sec().await;
@@ -105,8 +105,8 @@ async fn send_local_doc_initial_state_to_server() {
   let uid = 1;
   let object_id = "1";
 
-  let server = spawn_server(uid, object_id).await.unwrap();
-  let client = spawn_client_with_empty_doc(CollabOrigin::new(1, "1"), object_id, server.address)
+  let server = spawn_server(object_id).await.unwrap();
+  let client = spawn_client_with_empty_doc(CollabClient::new(uid, "1"), object_id, server.address)
     .await
     .unwrap();
   wait_a_sec().await;
@@ -136,8 +136,8 @@ async fn send_local_doc_initial_state_to_server_multiple_times() {
   let uid = 1;
   let object_id = "1";
 
-  let server = spawn_server(uid, object_id).await.unwrap();
-  let client = spawn_client_with_empty_doc(CollabOrigin::new(1, "1"), object_id, server.address)
+  let server = spawn_server(object_id).await.unwrap();
+  let client = spawn_client_with_empty_doc(CollabClient::new(uid, "1"), object_id, server.address)
     .await
     .unwrap();
   wait_a_sec().await;
@@ -155,7 +155,7 @@ async fn send_local_doc_initial_state_to_server_multiple_times() {
 
   for i in 0..3 {
     let _client = spawn_client_with_empty_doc(
-      CollabOrigin::new(1, &i.to_string()),
+      CollabClient::new(1, &i.to_string()),
       object_id,
       server.address,
     )

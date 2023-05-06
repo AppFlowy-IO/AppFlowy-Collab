@@ -3,7 +3,7 @@ use std::sync::Arc;
 use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
 
-use crate::core::collab::CollabOrigin;
+use crate::core::origin::CollabOrigin;
 
 pub trait CollabPlugin: Send + Sync + 'static {
   /// Called when the plugin is initialized.

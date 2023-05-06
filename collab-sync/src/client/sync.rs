@@ -4,7 +4,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use collab::core::collab::{CollabOrigin, MutexCollab};
+use collab::core::collab::MutexCollab;
+use collab::core::origin::CollabOrigin;
 use futures_util::{SinkExt, StreamExt};
 use lib0::decoding::Cursor;
 use tokio::spawn;

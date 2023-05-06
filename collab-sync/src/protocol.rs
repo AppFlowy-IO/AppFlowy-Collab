@@ -1,4 +1,5 @@
-use collab::core::collab::{CollabOrigin, MutexCollab};
+use collab::core::collab::MutexCollab;
+use collab::core::origin::CollabOrigin;
 use y_sync::awareness::{Awareness, AwarenessUpdate};
 use y_sync::sync::{Error, Message, SyncMessage};
 use yrs::updates::decoder::Decode;
