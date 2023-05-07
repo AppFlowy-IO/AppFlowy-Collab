@@ -1,6 +1,6 @@
-use collab_plugins::disk_plugin::rocks_disk::Config;
-use crate::disk::script::{CollabPersistenceTest, disk_plugin};
 use crate::disk::script::Script::*;
+use crate::disk::script::{disk_plugin, CollabPersistenceTest};
+use collab_plugins::disk_plugin::rocks_disk::Config;
 
 #[test]
 fn insert_single_change_and_restore_from_disk() {

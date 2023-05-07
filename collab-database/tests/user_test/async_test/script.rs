@@ -12,9 +12,9 @@ use collab_database::user::UserDatabase as InnerUserDatabase;
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::disk_plugin::rocks_disk::Config;
 use parking_lot::Mutex;
 use serde_json::Value;
-use collab_plugins::disk_plugin::rocks_disk::Config;
 
 use crate::helper::{db_path, TestTextCell};
 

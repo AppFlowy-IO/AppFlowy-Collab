@@ -2,11 +2,11 @@ use crate::error::SyncError;
 use crate::msg::CollabMessage;
 use crate::server::{CollabBroadcast, Subscription};
 use bytes::{Bytes, BytesMut};
+use collab::core::collab::MutexCollab;
 use collab::preclude::Collab;
 use std::collections::HashMap;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite, LengthDelimitedCodec};
-use collab::core::collab::MutexCollab;
 
 /// A group used to manage a single document
 pub struct CollabGroup {

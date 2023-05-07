@@ -3,14 +3,13 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
+use collab::error::CollabError;
+use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
-use collab::error::CollabError;
-use collab::preclude::CollabPlugin;
-
 
 #[derive(Clone)]
 pub struct RocksDiskPlugin {

@@ -6,7 +6,7 @@ use collab_sync::server::{CollabBroadcast, CollabGroup, CollabMsgCodec, CollabSi
 use dashmap::DashMap;
 use serde_json::Value;
 
-use collab::core::origin::CollabOrigin;
+use collab::core::origin::{CollabClient, CollabOrigin};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
@@ -48,15 +48,15 @@ pub async fn spawn_server_with_data(group: CollabGroup) -> std::io::Result<TestS
 
   let weak_groups = Arc::downgrade(&groups);
   tokio::spawn(async move {
-    while let Ok((stream, _)) = listener.accept().await {
+    while let Ok((stream, client_addr)) = listener.accept().await {
       let (reader, writer) = stream.into_split();
       let stream = CollabStream::new(reader, CollabMsgCodec::default());
       let sink = CollabSink::new(writer, CollabMsgCodec::default());
-
+      let client = CollabClient::new(client_addr.port() as i64, &client_addr.to_string());
       // Hardcode doc_id 1 for test
       let groups = weak_groups.upgrade().unwrap();
       let sub = groups.get(&object_id).unwrap().broadcast.subscribe(
-        CollabOrigin::Empty,
+        CollabOrigin::Client(client),
         Arc::new(Mutex::new(sink)),
         stream,
       );

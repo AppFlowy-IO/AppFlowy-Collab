@@ -132,8 +132,6 @@ impl CollabBroadcast {
       let mut receiver = self.sender.subscribe();
       tokio::spawn(async move {
         while let Ok(msg) = receiver.recv().await {
-          tracing::trace!("[💭Server]: {}", msg);
-
           // No need to broadcast the message back to the origin.
           if let Some(msg_origin) = msg.origin() {
             if msg_origin == &origin {
@@ -141,6 +139,7 @@ impl CollabBroadcast {
             }
           }
 
+          tracing::trace!("[💭Server]: {}", msg);
           let mut sink = sink.lock().await;
           if let Err(e) = sink.send(msg).await {
             tracing::error!("[💭Server]: broadcast client message failed: {:?}", e);

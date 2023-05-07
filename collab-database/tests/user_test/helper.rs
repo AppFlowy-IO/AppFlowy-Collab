@@ -12,9 +12,9 @@ use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use tokio::sync::mpsc::{channel, Receiver};
 
+use collab_plugins::disk_plugin::rocks_disk::Config;
 use rand::Rng;
 use tempfile::TempDir;
-use collab_plugins::disk_plugin::rocks_disk::Config;
 
 use crate::helper::{make_rocks_db, TestTextCell};
 

@@ -6,8 +6,8 @@ use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPreli
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
-use parking_lot::RwLock;
 use collab_plugins::disk_plugin::rocks_disk::{Config, RocksDiskPlugin};
+use parking_lot::RwLock;
 
 use crate::blocks::Block;
 use crate::database::{Database, DatabaseContext, DatabaseData};

@@ -2,13 +2,12 @@ use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use collab::error::CollabError;
+use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::sled_lv::SledCollabDB;
 use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
-use collab::error::CollabError;
-use collab::preclude::CollabPlugin;
-
 
 #[derive(Clone)]
 pub struct SledDiskPlugin {

@@ -1,4 +1,3 @@
-
 #[cfg(feature = "disk_rocksdb")]
 pub mod rocks_disk;
 

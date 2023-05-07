@@ -4,10 +4,10 @@ use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
+mod disk;
 mod mock_sync;
 mod sync;
 mod util;
-mod disk;
 
 pub fn setup_log() {
   static START: Once = Once::new();

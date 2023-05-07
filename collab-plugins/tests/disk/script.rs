@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc};
+use std::sync::Arc;
 
 use collab::preclude::*;
 use collab_persistence::doc::YrsDocAction;
@@ -11,10 +11,8 @@ use yrs::updates::decoder::Decode;
 
 use tempfile::TempDir;
 
-
-
-use collab_plugins::disk_plugin::rocks_disk::{Config, RocksDiskPlugin};
 use crate::setup_log;
+use collab_plugins::disk_plugin::rocks_disk::{Config, RocksDiskPlugin};
 
 pub enum Script {
   CreateDocumentWithDiskPlugin {

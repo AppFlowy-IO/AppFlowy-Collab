@@ -10,11 +10,11 @@ use collab_document::document::Document;
 use collab_document::error::DocumentError;
 
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::disk_plugin::rocks_disk::RocksDiskPlugin;
 use nanoid::nanoid;
 use serde_json::{json, Value};
 use tempfile::TempDir;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
-use collab_plugins::disk_plugin::rocks_disk::RocksDiskPlugin;
 
 pub struct DocumentTest {
   pub document: Document,
