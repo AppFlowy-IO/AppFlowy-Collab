@@ -7,7 +7,7 @@ use std::time::SystemTime;
 const EPOCH: u64 = 1637806706000;
 const NODE_BITS: u64 = 8;
 const SEQUENCE_BITS: u64 = 12;
-const TIMESTAMP_BITS: u64 = 42;
+const TIMESTAMP_BITS: u64 = 41;
 const NODE_ID_SHIFT: u64 = SEQUENCE_BITS;
 const TIMESTAMP_SHIFT: u64 = NODE_BITS + SEQUENCE_BITS;
 const SCOPE_SHIFT: u64 = TIMESTAMP_BITS + TIMESTAMP_SHIFT;
@@ -74,39 +74,40 @@ impl DocIDGen {
   }
 }
 
-// #[cfg(test)]
-// mod tests {
-//   use std::collections::HashMap;
-//   use std::sync::Arc;
-//   use std::thread;
-//
-//   use parking_lot::RwLock;
-//   use crate::oid::{EPOCH, OID_GEN};
-//
-//   #[test]
-//   fn test_oid_gen() {
-//     let mut map = Arc::new(RwLock::new(HashMap::new()));
-//
-//     let mut handles = vec![];
-//     for i in 0..1 {
-//       let cloned_map = map.clone();
-//       let handle = thread::spawn(move || {
-//         let mut a = OID_GEN.lock();
-//         let id = a.next_id();
-//         println!("id: {:b}", a.last_timestamp - EPOCH);
-//         println!("id: {:b}", id);
-//         if cloned_map.read().contains_key(&id) {
-//           panic!("id: {} is duplicated!", id);
-//         }
-//         //          101001010010110010010010100011100111
-//         // 10 000000101001010010110010010010100011100111 00000001 000000000000
-//         cloned_map.write().insert(id, id);
-//       });
-//       handles.push(handle);
-//     }
-//
-//     for handle in handles {
-//       handle.join().unwrap();
-//     }
-//   }
-// }
+#[cfg(test)]
+mod tests {
+  use std::collections::HashMap;
+  use std::sync::Arc;
+  use std::thread;
+
+  use crate::oid::LOCAL_DOC_ID_GEN;
+  use parking_lot::RwLock;
+
+  #[test]
+  fn test_oid_gen() {
+    let map = Arc::new(RwLock::new(HashMap::new()));
+
+    let mut handles = vec![];
+    for _i in 0..2 {
+      let cloned_map = map.clone();
+      let handle = thread::spawn(move || {
+        let mut a = LOCAL_DOC_ID_GEN.lock();
+        let id = a.next_id();
+        // println!("id: {:b}", a.last_timestamp - EPOCH);
+        // println!("id: {:b}", id);
+        if cloned_map.read().contains_key(&id) {
+          panic!("id: {} is duplicated!", id);
+        }
+        //   |<-7->| <-----------------41--------------->| <--8--> |<----12---->|
+        //           101010100000011010101111101100101000
+        // 0 1000000 101010100000011010101111101100101000 00000000 000000000000
+        cloned_map.write().insert(id, id);
+      });
+      handles.push(handle);
+    }
+
+    for handle in handles {
+      handle.join().unwrap();
+    }
+  }
+}

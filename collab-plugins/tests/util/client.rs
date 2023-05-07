@@ -48,7 +48,7 @@ pub async fn spawn_client(
   // sync
   let stream = CollabStream::new(reader, CollabMsgCodec::default());
   let sink = CollabSink::new(writer, CollabMsgCodec::default());
-  let sync_plugin = SyncPlugin::new(origin.clone(), object_id, collab.clone(), sink, stream);
+  let sync_plugin = SyncPlugin::new(origin, object_id, collab.clone(), sink, stream);
   collab.lock().add_plugin(Arc::new(sync_plugin));
 
   // disk

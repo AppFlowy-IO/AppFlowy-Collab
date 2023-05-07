@@ -7,7 +7,7 @@ use crate::util::TestScript::*;
 
 #[tokio::test]
 async fn three_clients_on_line_test() {
-  let mut test = ScriptTest::new(1, "1").await;
+  let mut test = ScriptTest::new("1").await;
   test
     .run_scripts(vec![
       CreateClient {
@@ -69,7 +69,7 @@ async fn three_clients_on_line_test() {
 // becomes online and receives the changes from the server.
 #[tokio::test]
 async fn one_online_and_another_client_offline_test() {
-  let mut test = ScriptTest::new(1, "1").await;
+  let mut test = ScriptTest::new("1").await;
   test
     .run_scripts(vec![
       CreateClient {
@@ -108,7 +108,7 @@ async fn one_online_and_another_client_offline_test() {
 // with the server.
 #[tokio::test]
 async fn two_clients_offline_test() {
-  let mut test = ScriptTest::new(1, "1").await;
+  let mut test = ScriptTest::new("1").await;
   test
     .run_scripts(vec![
       CreateClient {
@@ -162,7 +162,7 @@ async fn two_clients_offline_test() {
 // with the server.
 #[tokio::test]
 async fn two_clients_remove_vec_element_at_same_pos_test() {
-  let mut test = ScriptTest::new(1, "1").await;
+  let mut test = ScriptTest::new("1").await;
   test
     .run_scripts(vec![
       CreateClient {

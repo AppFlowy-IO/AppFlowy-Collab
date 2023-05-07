@@ -72,29 +72,29 @@ async fn send_multiple_updates_to_server_test() {
   );
 }
 
-// #[tokio::test]
-// async fn fetch_initial_state_from_server_test() {
-//   let _uid = 1;
-//   let object_id = "1";
-//
-//   let group = make_test_collab_group(object_id, None).await;
-//   group.get_mut_collab(|collab| {
-//     collab.insert("1", "a");
-//   });
-//   let server = spawn_server_with_data(group).await.unwrap();
-//   let client = spawn_client_with_empty_doc(object_id, server.address)
-//     .await
-//     .unwrap();
-//   wait_a_sec().await;
-//
-//   let json = client.to_json_value();
-//   assert_json_diff::assert_json_eq!(
-//     json,
-//     json!( {
-//       "1": "a"
-//     })
-//   );
-// }
+#[tokio::test]
+async fn fetch_initial_state_from_server_test() {
+  let _uid = 1;
+  let object_id = "1";
+
+  let server = spawn_server(object_id).await.unwrap();
+  server.mut_groups(object_id, |collab| {
+    collab.insert("1", "a");
+  });
+
+  let client = spawn_client_with_empty_doc(object_id, server.address)
+    .await
+    .unwrap();
+  wait_a_sec().await;
+
+  let json = client.to_json_value();
+  assert_json_diff::assert_json_eq!(
+    json,
+    json!( {
+      "1": "a"
+    })
+  );
+}
 
 #[tokio::test]
 async fn send_local_doc_initial_state_to_server() {
