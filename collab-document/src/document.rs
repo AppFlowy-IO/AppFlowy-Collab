@@ -85,19 +85,21 @@ impl Document {
     self.inner.with_transact_mut(|txn| {
       for action in actions {
         let payload = action.payload;
-        let block = payload.block;
+        let mut block = payload.block;
         let block_id = &block.id.clone();
         let data = &block.data;
         let parent_id = payload.parent_id;
         let prev_id = payload.prev_id;
+
+        // check if the block's parent_id is empty, if it is empty, assign the parent_id to the block
+        if block.parent.is_empty() {
+          if let Some(parent_id) = &parent_id {
+            block.parent = parent_id.clone();
+          }
+        }
+
         let res = match action.action {
-          BlockActionType::Insert => {
-            let block = self.insert_block(txn, block, prev_id);
-            match block {
-              Ok(_) => Ok(()),
-              Err(err) => Err(err),
-            }
-          },
+          BlockActionType::Insert => self.insert_block(txn, block, prev_id).map(|_| ()),
           BlockActionType::Update => self.update_block_data(txn, block_id, data.to_owned()),
           BlockActionType::Delete => self.delete_block(txn, block_id),
           BlockActionType::Move => self.move_block(txn, block_id, parent_id, prev_id),
