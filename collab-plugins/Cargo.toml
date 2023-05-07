@@ -10,11 +10,14 @@ yrs = "0.16.3"
 y-sync = { version = "0.3.1" }
 collab = { path = "../collab" }
 collab-sync = { path = "../collab-sync", optional = true }
+collab-persistence = { path = "../collab-persistence", optional = true }
+collab-ws = { path = "../collab-ws" }
 futures-util = { version = "0.3", features = ["sink"], optional = true }
 tokio = { version = "1.26.0", features = ["net", "sync", "time"], optional = true }
 tracing = { version = "0.1.37" }
 
 [dev-dependencies]
+collab-plugins = { path = ".", features = ["sync", "disk_rocksdb", "disk_sled",] }
 tempfile = "3.4.0"
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
@@ -25,7 +28,12 @@ serde_json = "1.0.64"
 serde = "1.0.160"
 collab-persistence = { path = "../collab-persistence" }
 rand = "0.8"
+anyhow = "1.0.71"
+lib0 = { version = "0.16.3", features = ["lib0-serde"] }
+parking_lot = "0.12.1"
 
 [features]
-default = ["sync"]
+default = []
 sync = ["collab-sync", "futures-util", "tokio"]
+disk_rocksdb = ["collab-persistence"]
+disk_sled = ["collab-persistence"]

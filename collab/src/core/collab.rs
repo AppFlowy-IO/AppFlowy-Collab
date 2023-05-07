@@ -3,20 +3,22 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::vec::IntoIter;
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use y_sync::awareness::Awareness;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
 use yrs::{
-  ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, Origin, ReadTxn,
-  Subscription, Transact, Transaction, TransactionMut, Update, UpdateSubscription,
+  ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, Subscription,
+  Transact, Transaction, TransactionMut, Update, UpdateSubscription,
 };
 
 use crate::core::collab_plugin::CollabPlugin;
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
+use crate::core::origin::{CollabClient, CollabOrigin};
+
 use crate::preclude::{ArrayRefWrapper, JsonValue};
 use crate::util::insert_json_value_to_map_ref;
 
@@ -27,21 +29,44 @@ type AfterTransactionSubscription = Subscription<Arc<dyn Fn(&mut TransactionMut)
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 pub type MapSubscription = Subscription<MapSubscriptionCallback>;
 
+/// A [Collab] is a wrapper around a [Doc] and [Awareness] that provides a set
+/// of helper methods for interacting with the [Doc] and [Awareness]. The [MutexCollab]
+/// is a thread-safe wrapper around the [Collab].
 pub struct Collab {
-  uid: i64,
-  device_id: String,
-  doc: Doc,
-  awareness: Awareness,
-  #[allow(dead_code)]
+  /// The object id can be the document id or the database id. It must be unique for
+  /// each [Collab] instance.
   pub object_id: String,
+
+  /// This [CollabClient] is used to verify the origin of a [Transaction] when
+  /// applying a remote update.
+  origin: CollabOrigin,
+
+  /// The [Doc] is the main data structure that is used to store the data.
+  doc: Doc,
+  /// The [Awareness] is used to track the awareness of the other peers.
+  awareness: Awareness,
+
+  /// Every [Collab] instance has a data section that can be used to store
   data: MapRef,
+
+  /// A list of plugins that are used to extend the functionality of the [Collab].
   plugins: Plugins,
+
   update_subscription: RwLock<Option<UpdateSubscription>>,
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
 }
 
 impl Collab {
   pub fn new<T: AsRef<str>>(uid: i64, object_id: T, plugins: Vec<Arc<dyn CollabPlugin>>) -> Collab {
+    let origin = CollabClient::new(uid, "");
+    Self::new_with_client(CollabOrigin::Client(origin), object_id, plugins)
+  }
+
+  pub fn new_with_client<T: AsRef<str>>(
+    origin: CollabOrigin,
+    object_id: T,
+    plugins: Vec<Arc<dyn CollabPlugin>>,
+  ) -> Collab {
     let object_id = object_id.as_ref().to_string();
     let doc = Doc::with_options(Options {
       skip_gc: true,
@@ -49,11 +74,9 @@ impl Collab {
     });
     let data = doc.get_or_insert_map(DATA_SECTION);
     let plugins = Plugins::new(plugins);
-    let device_id = Default::default();
     let awareness = Awareness::new(doc.clone());
     Self {
-      uid,
-      device_id,
+      origin,
       object_id,
       doc,
       awareness,
@@ -64,15 +87,12 @@ impl Collab {
     }
   }
 
-  pub fn with_device_id(mut self, device_id: String) -> Self {
-    self.device_id = device_id;
-    self
-  }
-
+  /// Returns the [Doc] associated with the [Collab].
   pub fn get_doc(&self) -> &Doc {
     &self.doc
   }
 
+  /// Returns the [Awareness] associated with the [Collab].
   pub fn get_awareness(&self) -> &Awareness {
     &self.awareness
   }
@@ -81,10 +101,12 @@ impl Collab {
     &mut self.awareness
   }
 
+  /// Add a plugin to the [Collab]. The plugin's callbacks will be called in the order they are added.
   pub fn add_plugin(&mut self, plugin: Arc<dyn CollabPlugin>) {
     self.plugins.write().push(plugin);
   }
 
+  /// Add plugins to the [Collab]. The plugin's callbacks will be called in the order they are added.
   pub fn add_plugins(&mut self, plugins: Vec<Arc<dyn CollabPlugin>>) {
     let mut write_guard = self.plugins.write();
     for plugin in plugins {
@@ -92,7 +114,10 @@ impl Collab {
     }
   }
 
+  /// When calling this method, the [Collab]'s doc will be initialized with the plugins. The plugin's
+  /// callbacks will be called in the order they are added..
   ///
+  /// This method should be called after all plugins are added.
   pub fn initial(&self) {
     {
       let mut txn = self.transact_mut();
@@ -105,11 +130,10 @@ impl Collab {
     }
 
     let (update_subscription, after_txn_subscription) = observe_doc(
-      self.uid,
-      &self.device_id,
       &self.doc,
       self.object_id.clone(),
       self.plugins.clone(),
+      self.origin.clone(),
     );
 
     *self.update_subscription.write() = Some(update_subscription);
@@ -308,15 +332,17 @@ impl Collab {
     self.doc.transact()
   }
 
+  /// Returns a transaction that can mutate the document. This transaction will carry the
+  /// origin of the current user.
   pub fn transact_mut(&self) -> TransactionMut {
-    self.doc.transact_mut_with(self.make_origin())
+    self.doc.transact_mut_with(self.origin.clone())
   }
 
   pub fn with_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let mut txn = self.doc.transact_mut_with(self.make_origin());
+    let mut txn = self.doc.transact_mut_with(self.origin.clone());
     let ret = f(&mut txn);
     drop(txn);
     ret
@@ -325,55 +351,58 @@ impl Collab {
   fn map_wrapper_with(&self, map_ref: MapRef) -> MapRefWrapper {
     MapRefWrapper::new(
       map_ref,
-      CollabContext::new(self.make_origin(), self.plugins.clone(), self.doc.clone()),
+      CollabContext::new(self.origin.clone(), self.plugins.clone(), self.doc.clone()),
     )
   }
   fn array_wrapper_with(&self, array_ref: ArrayRef) -> ArrayRefWrapper {
     ArrayRefWrapper::new(
       array_ref,
-      CollabContext::new(self.make_origin(), self.plugins.clone(), self.doc.clone()),
+      CollabContext::new(self.origin.clone(), self.plugins.clone(), self.doc.clone()),
     )
-  }
-
-  #[inline(always)]
-  fn make_origin(&self) -> CollabOrigin {
-    CollabOrigin::new(self.uid, &self.device_id)
   }
 }
 
+/// Observe a document for updates.
+/// Use the uid and the device_id to verify that the update is local or remote.
+/// If the update is local, the plugins will be notified.
 fn observe_doc(
-  uid: i64,
-  device_id: &str,
   doc: &Doc,
   oid: String,
   plugins: Plugins,
+  local_origin: CollabOrigin,
 ) -> (UpdateSubscription, AfterTransactionSubscription) {
   let cloned_oid = oid.clone();
-  let local_device_id = device_id.to_string();
   let cloned_plugins = plugins.clone();
   let update_sub = doc
     .observe_update_v1(move |txn, event| {
       // If the origin of the txn is none, it means that the update is coming from a remote source.
-      // Otherwise, it's a local update. The plugins only handle the local update
-      if let Some(origin) = txn.origin().map(CollabOrigin::from) {
-        if origin.uid == uid && origin.device_id == local_device_id {
-          cloned_plugins.read().iter().for_each(|plugin| {
-            plugin.receive_local_update(&cloned_oid, txn, &event.update);
-            plugin.did_receive_local_update(&origin, &cloned_oid, &event.update);
-          });
+      cloned_plugins.read().iter().for_each(|plugin| {
+        plugin.receive_update(&cloned_oid, txn, &event.update);
+
+        let remote_origin = CollabOrigin::from(txn);
+        if remote_origin == local_origin {
+          plugin.receive_local_update(&local_origin, &cloned_oid, &event.update);
         } else {
-          let remote_origin = origin;
           tracing::trace!(
-            "[🦀Client]: [uid:{}|device_id:{}] did apply remote [uid:{}|device_id:{}] update",
-            uid,
-            local_device_id,
-            remote_origin.uid,
-            remote_origin.device_id,
+            "[🦀Client]: {} did apply remote {} update",
+            local_origin,
+            remote_origin,
           );
         }
-      } else {
-        tracing::trace!("[🦀Client]: did apply remote update");
-      }
+        // if let Some(remote_origin) = CollabOrigin::from(txn) {
+        //   if remote_origin == local_origin {
+        //     plugin.receive_local_update(&local_origin, &cloned_oid, &event.update);
+        //   } else {
+        //     tracing::trace!(
+        //       "[🦀Client]: {} did apply remote {} update",
+        //       local_origin,
+        //       remote_origin,
+        //     );
+        //   }
+        // } else {
+        //   tracing::trace!("[🦀Client]: did apply remote update");
+        // }
+      });
     })
     .unwrap();
 
@@ -396,6 +425,7 @@ impl Display for Collab {
   }
 }
 
+/// A builder that used to create a new `Collab` instance.
 pub struct CollabBuilder {
   uid: i64,
   plugins: Vec<Arc<dyn CollabPlugin>>,
@@ -526,39 +556,31 @@ impl Deref for Plugins {
   }
 }
 
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct CollabOrigin {
-  pub uid: i64,
-  pub device_id: String,
-}
+#[derive(Clone)]
+pub struct MutexCollab(Arc<Mutex<Collab>>);
 
-impl Default for CollabOrigin {
-  fn default() -> Self {
-    Self {
-      uid: 0,
-      device_id: "default".to_string(),
-    }
+impl MutexCollab {
+  pub fn new(origin: CollabOrigin, object_id: &str, plugins: Vec<Arc<dyn CollabPlugin>>) -> Self {
+    let collab = Collab::new_with_client(origin, object_id, plugins);
+    MutexCollab(Arc::new(Mutex::new(collab)))
+  }
+
+  pub fn initial(&self) {
+    self.0.lock().initial();
+  }
+
+  pub fn to_json_value(&self) -> JsonValue {
+    self.0.lock().to_json_value()
   }
 }
 
-impl CollabOrigin {
-  pub fn new(uid: i64, device_id: &str) -> Self {
-    Self {
-      uid,
-      device_id: device_id.to_string(),
-    }
+impl Deref for MutexCollab {
+  type Target = Arc<Mutex<Collab>>;
+  fn deref(&self) -> &Self::Target {
+    &self.0
   }
 }
 
-impl From<CollabOrigin> for Origin {
-  fn from(o: CollabOrigin) -> Self {
-    let data = serde_json::to_vec(&o).unwrap();
-    Origin::from(data.as_slice())
-  }
-}
+unsafe impl Sync for MutexCollab {}
 
-impl From<&Origin> for CollabOrigin {
-  fn from(value: &Origin) -> Self {
-    serde_json::from_slice(value.as_ref()).unwrap_or_default()
-  }
-}
+unsafe impl Send for MutexCollab {}

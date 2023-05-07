@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::{
   lib0Any, ArrayRef, Collab, CollabBuilder, MapPrelim, MapRef, MapRefExtension, ReadTxn,
   TransactionMut, YrsValue,
@@ -8,6 +7,7 @@ use collab::preclude::{
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
+use collab_plugins::disk_plugin::rocksdb::RocksdbDiskPlugin;
 use serde::{Deserialize, Serialize};
 
 use crate::database::{gen_row_id, timestamp};
@@ -56,7 +56,7 @@ impl RowDoc {
 
   pub fn new(uid: i64, row_id: RowId, db: Arc<RocksCollabDB>) -> Self {
     let collab = CollabBuilder::new(uid, &row_id)
-      .with_plugin(RocksDiskPlugin::new(uid, db.clone()).unwrap())
+      .with_plugin(RocksdbDiskPlugin::new(uid, db.clone()).unwrap())
       .build();
     collab.initial();
 

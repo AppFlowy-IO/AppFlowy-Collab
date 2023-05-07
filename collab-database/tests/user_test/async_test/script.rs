@@ -4,7 +4,6 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use collab::plugin_impl::rocks_disk::Config;
 use collab_database::database::DatabaseData;
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
@@ -13,6 +12,7 @@ use collab_database::user::UserDatabase as InnerUserDatabase;
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::disk_plugin::rocksdb::Config;
 use parking_lot::Mutex;
 use serde_json::Value;
 

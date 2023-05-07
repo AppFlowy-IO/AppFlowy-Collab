@@ -69,7 +69,7 @@ impl CollabStateCachePlugin {
 }
 
 impl CollabPlugin for CollabStateCachePlugin {
-  fn receive_local_update(&self, _object_id: &str, txn: &TransactionMut, update: &[u8]) {
+  fn receive_update(&self, _object_id: &str, txn: &TransactionMut, update: &[u8]) {
     let mut write_guard = self.0.write();
     if write_guard.is_empty() {
       let doc_state = txn.encode_state_as_update_v1(&StateVector::default());

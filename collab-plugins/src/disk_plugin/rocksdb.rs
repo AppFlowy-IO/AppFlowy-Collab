@@ -3,17 +3,16 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
+use collab::error::CollabError;
+use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
 
-use crate::core::collab_plugin::CollabPlugin;
-use crate::error::CollabError;
-
 #[derive(Clone)]
-pub struct RocksDiskPlugin {
+pub struct RocksdbDiskPlugin {
   uid: i64,
   config: Config,
   db: Arc<RocksCollabDB>,
@@ -24,7 +23,7 @@ pub struct RocksDiskPlugin {
   update_count: Arc<AtomicU32>,
 }
 
-impl Deref for RocksDiskPlugin {
+impl Deref for RocksdbDiskPlugin {
   type Target = Arc<RocksCollabDB>;
 
   fn deref(&self) -> &Self::Target {
@@ -32,7 +31,7 @@ impl Deref for RocksDiskPlugin {
   }
 }
 
-impl RocksDiskPlugin {
+impl RocksdbDiskPlugin {
   pub fn new(uid: i64, db: Arc<RocksCollabDB>) -> Result<Self, CollabError> {
     Self::new_with_config(uid, db, Config::default())
   }
@@ -66,7 +65,7 @@ impl RocksDiskPlugin {
   }
 }
 
-impl CollabPlugin for RocksDiskPlugin {
+impl CollabPlugin for RocksdbDiskPlugin {
   fn init(&self, object_id: &str, txn: &mut TransactionMut) {
     let r_db_txn = self.db.read_txn();
 
@@ -103,7 +102,7 @@ impl CollabPlugin for RocksDiskPlugin {
     self.did_load.store(true, Ordering::SeqCst);
   }
 
-  fn receive_local_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
+  fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
     // Only push update if the doc is loaded
     if !self.did_load.load(Ordering::SeqCst) {
       return;
@@ -130,7 +129,7 @@ impl CollabPlugin for RocksDiskPlugin {
     });
 
     if let Err(e) = result {
-      tracing::error!("🔴Failed to push update: {:?}", e);
+      tracing::error!("🔴Save update failed: {:?}", e);
     }
   }
 

@@ -1,8 +1,8 @@
-use collab::plugin_impl::rocks_disk::Config;
 use collab_database::rows::CreateRowParams;
 use collab_database::rows::{CellsBuilder, RowId};
 use serde_json::{json, Value};
 
+use collab_plugins::disk_plugin::rocksdb::Config;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 

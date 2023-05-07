@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use collab::core::collab::CollabOrigin;
-use collab::core::collab_awareness::MutexCollab;
+use collab::core::collab::MutexCollab;
 use futures_util::{SinkExt, StreamExt};
 use lib0::encoding::Write;
 
+use collab::core::origin::{CollabClient, CollabOrigin};
 use tokio::select;
 use tokio::sync::broadcast::error::SendError;
 use tokio::sync::broadcast::{channel, Sender};
@@ -19,31 +19,31 @@ use yrs::{ReadTxn, UpdateSubscription};
 
 use crate::error::SyncError;
 use crate::msg::{
-  AwarenessUpdateMessage, CollabAckMessage, CollabMessage, ServerBroadcastMessage,
-  ServerResponseMessage,
+  CSAwarenessUpdate, CSServerAck, CSServerBroadcast, CSServerResponse, CollabMessage,
 };
 use crate::protocol::{handle_msg, DefaultSyncProtocol};
 
-/// A broadcast group can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
+/// A broadcast  can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
 /// to subscribes.
-pub struct BroadcastGroup {
+pub struct CollabBroadcast {
   object_id: String,
+  collab: MutexCollab,
+  sender: Sender<CollabMessage>,
+
   #[allow(dead_code)]
   awareness_sub: awareness::UpdateSubscription,
   #[allow(dead_code)]
   doc_sub: UpdateSubscription,
-  awareness: MutexCollab,
-  sender: Sender<CollabMessage>,
 }
 
-impl BroadcastGroup {
-  /// Creates a new [BroadcastGroup] over a provided `awareness` instance. All changes triggered
-  /// by this awareness structure or its underlying document will be propagated to all subscribers
-  /// which have been registered via [BroadcastGroup::subscribe] method.
+impl CollabBroadcast {
+  /// Creates a new [CollabBroadcast] over a provided `collab` instance. All changes triggered
+  /// by this collab will be propagated to all subscribers which have been registered via
+  /// [CollabBroadcast::subscribe] method.
   ///
   /// The overflow of the incoming events that needs to be propagates will be buffered up to a
   /// provided `buffer_capacity` size.
-  pub async fn new(object_id: &str, collab: MutexCollab, buffer_capacity: usize) -> Self {
+  pub fn new(object_id: &str, collab: MutexCollab, buffer_capacity: usize) -> Self {
     let object_id = object_id.to_owned();
     let (sender, _) = channel(buffer_capacity);
     let (doc_sub, awareness_sub) = {
@@ -56,25 +56,25 @@ impl BroadcastGroup {
         .get_mut_awareness()
         .doc_mut()
         .observe_update_v1(move |txn, event| {
-          let origin = txn.origin().map(CollabOrigin::from).unwrap_or_default();
-
+          let origin = CollabOrigin::from(txn);
           let payload = gen_update_message(&event.update);
-          let msg = ServerBroadcastMessage::new(origin, cloned_oid.clone(), payload);
+          let msg = CSServerBroadcast::new(origin, cloned_oid.clone(), payload);
           if let Err(_e) = sink.send(msg.into()) {
             tracing::trace!("Broadcast group is closed");
           }
         })
         .unwrap();
 
-      // Observer the awareness's update and broadcast it to all subscribers.
       let sink = sender.clone();
       let cloned_oid = object_id.clone();
+
+      // Observer the awareness's update and broadcast it to all subscribers.
       let awareness_sub = mutex_collab
         .get_mut_awareness()
         .on_update(move |awareness, event| {
           if let Ok(awareness_update) = gen_awareness_update_message(awareness, event) {
             let payload = Message::Awareness(awareness_update).encode_v1();
-            let msg = AwarenessUpdateMessage::new(cloned_oid.clone(), payload);
+            let msg = CSAwarenessUpdate::new(cloned_oid.clone(), payload);
             if let Err(_e) = sink.send(msg.into()) {
               tracing::trace!("Broadcast group is closed");
             }
@@ -82,9 +82,9 @@ impl BroadcastGroup {
         });
       (doc_sub, awareness_sub)
     };
-    BroadcastGroup {
+    CollabBroadcast {
       object_id,
-      awareness: collab,
+      collab,
       sender,
       awareness_sub,
       doc_sub,
@@ -92,13 +92,16 @@ impl BroadcastGroup {
   }
 
   /// Returns a reference to an underlying [MutexCollab] instance.
-  pub fn awareness(&self) -> &MutexCollab {
-    &self.awareness
+  pub fn collab(&self) -> &MutexCollab {
+    &self.collab
   }
 
   /// Broadcasts user message to all active subscribers. Returns error if message could not have
   /// been broadcast.
-  pub fn broadcast(&self, msg: AwarenessUpdateMessage) -> Result<(), SendError<CollabMessage>> {
+  pub fn broadcast_awareness(
+    &self,
+    msg: CSAwarenessUpdate,
+  ) -> Result<(), SendError<CollabMessage>> {
     self.sender.send(msg.into())?;
     Ok(())
   }
@@ -111,6 +114,7 @@ impl BroadcastGroup {
   /// an internal connection error or closed connection).
   pub fn subscribe<Sink, Stream, E>(
     &self,
+    origin: CollabOrigin,
     sink: Arc<Mutex<Sink>>,
     mut stream: Stream,
   ) -> Subscription
@@ -122,12 +126,19 @@ impl BroadcastGroup {
   {
     tracing::trace!("[💭Server]: new client");
     // Receive a update from the document observer and forward the applied update to all
-    // connected subscribers.
+    // connected subscribers using its Sink.
     let sink_task = {
       let sink = sink.clone();
       let mut receiver = self.sender.subscribe();
       tokio::spawn(async move {
         while let Ok(msg) = receiver.recv().await {
+          // No need to broadcast the message back to the origin.
+          if let Some(msg_origin) = msg.origin() {
+            if msg_origin == &origin {
+              continue;
+            }
+          }
+
           tracing::trace!("[💭Server]: {}", msg);
           let mut sink = sink.lock().await;
           if let Err(e) = sink.send(msg).await {
@@ -145,7 +156,7 @@ impl BroadcastGroup {
     // broadcast to all connected subscribers. Check out the [observe_update_v1] and [sink_task]
     // above.
     let stream_task = {
-      let collab = self.awareness().clone();
+      let collab = self.collab().clone();
       let object_id = self.object_id.clone();
       tokio::spawn(async move {
         while let Some(res) = stream.next().await {
@@ -170,7 +181,7 @@ impl BroadcastGroup {
                 // Send the response to the corresponding client
                 if let Some(resp) = resp {
                   let msg =
-                    ServerResponseMessage::new(origin.clone(), object_id.clone(), resp.encode_v1());
+                    CSServerResponse::new(origin.cloned(), object_id.clone(), resp.encode_v1());
                   sink
                     .send(msg.into())
                     .await
@@ -181,14 +192,17 @@ impl BroadcastGroup {
             }
           }
 
-          // Send the ack message to the client
           if let Some(msg_id) = collab_msg.msg_id() {
+            // Send the server's state vector to the client. The client will calculate the missing
+            // updates and send them as a single update back to the server.
             let payload = if is_client_init {
               Some(encode_server_sv(&collab))
             } else {
               None
             };
-            let ack = CollabAckMessage::new(object_id.clone(), msg_id, payload);
+
+            // Send the ack message to the client
+            let ack = CSServerAck::new(object_id.clone(), msg_id, payload);
             let _ = sink.send(ack.into()).await;
           }
         }
@@ -210,7 +224,7 @@ fn encode_server_sv(collab: &MutexCollab) -> Vec<u8> {
   encoder.to_vec()
 }
 
-/// A subscription structure returned from [BroadcastGroup::subscribe], which represents a
+/// A subscription structure returned from [CollabBroadcast::subscribe], which represents a
 /// subscribed connection. It can be dropped in order to unsubscribe or awaited via
 /// [Subscription::completed] method in order to complete of its own volition (due to an internal
 /// connection error or closed connection).
@@ -255,4 +269,11 @@ fn gen_awareness_update_message(
   changed.extend_from_slice(removed);
   let update = awareness.update_with_clients(changed)?;
   Ok(update)
+}
+
+pub fn server_origin() -> CollabClient {
+  CollabClient {
+    uid: 0,
+    device_id: "".to_string(),
+  }
 }

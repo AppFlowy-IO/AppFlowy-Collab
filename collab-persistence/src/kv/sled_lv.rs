@@ -9,15 +9,15 @@ use sled::{Batch, Db, IVec, Iter};
 use crate::kv::{KVEntry, KVRange, KVStore};
 use crate::PersistenceError;
 
-pub type SledCollabDB = SledKVStore;
+pub type SledCollabDB = SledStore;
 
 #[derive(Clone)]
-pub struct SledKVStore(pub Arc<RwLock<Db>>);
+pub struct SledStore(pub Arc<RwLock<Db>>);
 
-impl SledKVStore {
+impl SledStore {
   pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
     let db = sled::open(path)?;
-    let store = SledKVStore::new(db);
+    let store = SledStore::new(db);
     Ok(store)
   }
 

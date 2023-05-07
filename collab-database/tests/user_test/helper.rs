@@ -3,7 +3,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use collab::plugin_impl::rocks_disk::Config;
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
@@ -13,6 +12,7 @@ use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use tokio::sync::mpsc::{channel, Receiver};
 
+use collab_plugins::disk_plugin::rocksdb::Config;
 use rand::Rng;
 use tempfile::TempDir;
 

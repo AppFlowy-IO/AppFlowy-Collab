@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Once};
+use std::sync::Arc;
 
-use collab::plugin_impl::rocks_disk::{Config, RocksDiskPlugin};
 use collab::preclude::*;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -11,14 +10,14 @@ use lib0::any::Any;
 use yrs::updates::decoder::Decode;
 
 use tempfile::TempDir;
-use tracing_subscriber::fmt::Subscriber;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
+
+use crate::setup_log;
+use collab_plugins::disk_plugin::rocksdb::{Config, RocksdbDiskPlugin};
 
 pub enum Script {
   CreateDocumentWithDiskPlugin {
     id: String,
-    plugin: RocksDiskPlugin,
+    plugin: RocksdbDiskPlugin,
   },
   OpenDocumentWithDiskPlugin {
     id: String,
@@ -71,7 +70,7 @@ pub enum Script {
 pub struct CollabPersistenceTest {
   pub uid: i64,
   collabs: HashMap<String, Collab>,
-  pub disk_plugin: RocksDiskPlugin,
+  pub disk_plugin: RocksdbDiskPlugin,
   #[allow(dead_code)]
   cleaner: Cleaner,
   db: Arc<RocksCollabDB>,
@@ -85,7 +84,7 @@ impl CollabPersistenceTest {
     let db_path = tempdir.into_path();
     let uid = 1;
     let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
-    let disk_plugin = RocksDiskPlugin::new_with_config(uid, db.clone(), config.clone()).unwrap();
+    let disk_plugin = RocksdbDiskPlugin::new_with_config(uid, db.clone(), config.clone()).unwrap();
     let cleaner = Cleaner::new(db_path);
     Self {
       uid,
@@ -115,7 +114,8 @@ impl CollabPersistenceTest {
       },
       Script::OpenDocument { id } => {
         self.disk_plugin =
-          RocksDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.clone()).unwrap();
+          RocksdbDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.clone())
+            .unwrap();
 
         let collab = CollabBuilder::new(1, &id)
           .with_plugin(self.disk_plugin.clone())
@@ -204,11 +204,11 @@ impl CollabPersistenceTest {
   }
 }
 
-pub fn disk_plugin(uid: i64) -> RocksDiskPlugin {
+pub fn disk_plugin(uid: i64) -> RocksdbDiskPlugin {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
-  RocksDiskPlugin::new(uid, db).unwrap()
+  RocksdbDiskPlugin::new(uid, db).unwrap()
 }
 
 struct Cleaner(PathBuf);
@@ -227,16 +227,4 @@ impl Drop for Cleaner {
   fn drop(&mut self) {
     Self::cleanup(&self.0)
   }
-}
-
-fn setup_log() {
-  static START: Once = Once::new();
-  START.call_once(|| {
-    std::env::set_var("RUST_LOG", "collab_persistence=trace");
-    let subscriber = Subscriber::builder()
-      .with_env_filter(EnvFilter::from_default_env())
-      .with_ansi(true)
-      .finish();
-    subscriber.try_init().unwrap();
-  });
 }

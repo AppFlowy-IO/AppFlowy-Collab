@@ -1,5 +1,5 @@
-use collab::core::collab::CollabOrigin;
-use collab::core::collab_awareness::MutexCollab;
+use collab::core::collab::MutexCollab;
+use collab::core::origin::CollabOrigin;
 use y_sync::awareness::{Awareness, AwarenessUpdate};
 use y_sync::sync::{Error, Message, SyncMessage};
 use yrs::updates::decoder::Decode;
@@ -66,11 +66,14 @@ pub trait CollabSyncProtocol {
   /// an update to current `awareness` document instance.
   fn handle_sync_step2(
     &self,
-    origin: &CollabOrigin,
+    origin: &Option<&CollabOrigin>,
     awareness: &mut Awareness,
     update: Update,
   ) -> Result<Option<Message>, Error> {
-    let mut txn = awareness.doc().transact_mut_with(origin.clone());
+    let mut txn = match origin {
+      Some(origin) => awareness.doc().transact_mut_with((*origin).clone()),
+      None => awareness.doc().transact_mut(),
+    };
     txn.apply_update(update);
     Ok(None)
   }
@@ -79,7 +82,7 @@ pub trait CollabSyncProtocol {
   /// `awareness` document instance.
   fn handle_update(
     &self,
-    origin: &CollabOrigin,
+    origin: &Option<&CollabOrigin>,
     awareness: &mut Awareness,
     update: Update,
   ) -> Result<Option<Message>, Error> {
@@ -130,7 +133,7 @@ pub trait CollabSyncProtocol {
 
 /// Handles incoming messages from the client/server
 pub async fn handle_msg<P: CollabSyncProtocol>(
-  origin: &CollabOrigin,
+  origin: &Option<&CollabOrigin>,
   protocol: &P,
   collab: &MutexCollab,
   msg: Message,

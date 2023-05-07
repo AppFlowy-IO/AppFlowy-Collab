@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use collab::core::collab::CollabOrigin;
-use collab::core::collab_awareness::MutexCollab;
+use collab::core::collab::MutexCollab;
+use collab::core::origin::CollabOrigin;
 use futures_util::{SinkExt, StreamExt};
 use lib0::decoding::Cursor;
 use tokio::spawn;
@@ -18,7 +18,7 @@ use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
 use crate::client::pending_msg::{PendingMsgQueue, TaskState};
 use crate::error::SyncError;
-use crate::msg::{ClientInitMessage, ClientUpdateMessage, CollabMessage, ServerSyncMessage};
+use crate::msg::{CSClientInit, CSClientUpdate, CSServerSync, CollabMessage};
 use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
 
 pub const SYNC_TIMEOUT: u64 = 2;
@@ -43,7 +43,7 @@ where
     origin: CollabOrigin,
     sink: Sink,
     stream: Stream,
-    awareness: Arc<MutexCollab>,
+    collab: Arc<MutexCollab>,
   ) -> Self {
     let protocol = DefaultSyncProtocol;
     let sender = Arc::new(Mutex::new(sink));
@@ -65,7 +65,7 @@ where
       object_id.to_string(),
       stream,
       protocol,
-      awareness,
+      collab,
       scheduler.clone(),
     );
 
@@ -81,7 +81,7 @@ where
   pub fn notify(&self, awareness: &Awareness) {
     if let Some(payload) = doc_init_state(awareness, &self.protocol) {
       self.scheduler.sync_msg(|msg_id| {
-        ClientInitMessage::new(self.origin.clone(), self.object_id.clone(), msg_id, payload).into()
+        CSClientInit::new(self.origin.clone(), self.object_id.clone(), msg_id, payload).into()
       });
     } else {
       self.scheduler.notify();
@@ -133,24 +133,24 @@ where
     object_id: String,
     stream: Stream,
     protocol: P,
-    awareness: Arc<MutexCollab>,
+    collab: Arc<MutexCollab>,
     scheduler: Arc<SinkScheduler<Sink>>,
   ) -> Self
   where
     P: CollabSyncProtocol + Send + Sync + 'static,
   {
-    let weak_awareness = Arc::downgrade(&awareness);
+    let weak_collab = Arc::downgrade(&collab);
     let weak_scheduler = Arc::downgrade(&scheduler);
     let runner = spawn(SyncStream::<Sink, Stream>::spawn_doc_stream::<P>(
       origin,
       object_id,
       stream,
-      weak_awareness,
+      weak_collab,
       weak_scheduler,
       protocol,
     ));
     Self {
-      awareness,
+      awareness: collab,
       runner,
       phantom_sink: Default::default(),
       phantom_stream: Default::default(),
@@ -159,10 +159,10 @@ where
 
   // Spawn the stream that continuously reads the doc's updates from remote.
   async fn spawn_doc_stream<P>(
-    _origin: CollabOrigin,
+    origin: CollabOrigin,
     object_id: String,
     mut stream: Stream,
-    weak_awareness: Weak<MutexCollab>,
+    weak_collab: Weak<MutexCollab>,
     weak_scheduler: Weak<SinkScheduler<Sink>>,
     protocol: P,
   ) -> Result<(), SyncError>
@@ -171,10 +171,10 @@ where
   {
     while let Some(input) = stream.next().await {
       match input {
-        Ok(msg) => match (weak_awareness.upgrade(), weak_scheduler.upgrade()) {
+        Ok(msg) => match (weak_collab.upgrade(), weak_scheduler.upgrade()) {
           (Some(awareness), Some(scheduler)) => {
             SyncStream::<Sink, Stream>::process_message::<P>(
-              &object_id, &protocol, &awareness, &scheduler, msg,
+              &origin, &object_id, &protocol, &awareness, &scheduler, msg,
             )
             .await?
           },
@@ -195,26 +195,29 @@ where
 
   /// Continuously handle messages from the remote doc
   async fn process_message<P>(
+    origin: &CollabOrigin,
     object_id: &str,
     protocol: &P,
-    awareness: &Arc<MutexCollab>,
+    collab: &Arc<MutexCollab>,
     scheduler: &Arc<SinkScheduler<Sink>>,
     msg: CollabMessage,
   ) -> Result<(), SyncError>
   where
     P: CollabSyncProtocol + Send + Sync + 'static,
   {
-    let origin = msg.origin();
+    //FIXME: Should use the passed in origin instead of the origin from the message.
+    // let origin = msg.origin();
+
     match msg {
       CollabMessage::ServerAck(ack) => {
         if let Some(payload) = &ack.payload {
           let mut decoder = DecoderV1::from(payload.as_ref());
           if let Ok(msg) = Message::decode(&mut decoder) {
-            if let Some(resp_msg) = handle_msg(&origin, protocol, awareness, msg).await? {
+            if let Some(resp_msg) = handle_msg(&Some(origin), protocol, collab, msg).await? {
               let payload = resp_msg.encode_v1();
               let object_id = object_id.to_string();
               scheduler.sync_msg(|msg_id| {
-                ServerSyncMessage::new(origin, object_id, payload, msg_id).into()
+                CSServerSync::new(origin.clone(), object_id, payload, msg_id).into()
               });
             }
           }
@@ -235,12 +238,11 @@ where
         let reader = MessageReader::new(&mut decoder);
         for msg in reader {
           let msg = msg?;
-          if let Some(resp) = handle_msg(&origin, protocol, awareness, msg).await? {
+          if let Some(resp) = handle_msg(&Some(origin), protocol, collab, msg).await? {
             let payload = resp.encode_v1();
             let object_id = object_id.to_string();
-            let origin = origin.clone();
             scheduler.sync_msg(|msg_id| {
-              ClientUpdateMessage::new(origin, object_id, msg_id, payload).into()
+              CSClientUpdate::new(origin.clone(), object_id, msg_id, payload).into()
             });
           }
         }

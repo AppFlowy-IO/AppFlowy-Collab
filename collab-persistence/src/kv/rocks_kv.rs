@@ -12,14 +12,14 @@ use rocksdb::{
 use crate::kv::{KVEntry, KVStore};
 use crate::PersistenceError;
 
-pub type RocksCollabDB = RocksKVStore;
+pub type RocksCollabDB = RocksStore;
 
 #[derive(Clone)]
-pub struct RocksKVStore {
+pub struct RocksStore {
   db: Arc<TransactionDB>,
 }
 
-impl RocksKVStore {
+impl RocksStore {
   pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
     let txn_db_opts = TransactionDBOptions::default();
     let mut db_opts = Options::default();
@@ -84,7 +84,7 @@ impl RocksKVStore {
   }
 }
 
-/// Implementation of [KVStore] for [RocksKVStore]. This is a wrapper around [Transaction].
+/// Implementation of [KVStore] for [RocksStore]. This is a wrapper around [Transaction].
 pub struct RocksKVStoreImpl<'a, DB>(Transaction<'a, DB>);
 
 impl<'a, DB> KVStore<'a> for RocksKVStoreImpl<'a, DB> {

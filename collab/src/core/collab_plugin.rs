@@ -3,7 +3,7 @@ use std::sync::Arc;
 use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
 
-use crate::core::collab::CollabOrigin;
+use crate::core::origin::CollabOrigin;
 
 pub trait CollabPlugin: Send + Sync + 'static {
   /// Called when the plugin is initialized.
@@ -15,10 +15,11 @@ pub trait CollabPlugin: Send + Sync + 'static {
   fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {}
 
   /// Called when the plugin receives an update. It happens after the [TransactionMut] commit to
-  /// the Yjs document.
-  fn receive_local_update(&self, _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
+  /// the Yrs document.
+  fn receive_update(&self, _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
 
-  fn did_receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, _update: &[u8]) {}
+  /// Called when the plugin receives a local update
+  fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, _update: &[u8]) {}
 
   /// Called after each [TransactionMut]
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
@@ -37,8 +38,8 @@ where
     (**self).did_init(awareness, _object_id, _txn)
   }
 
-  fn receive_local_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
-    (**self).receive_local_update(object_id, txn, update)
+  fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
+    (**self).receive_update(object_id, txn, update)
   }
 }
 
@@ -54,7 +55,7 @@ where
     (**self).did_init(awareness, _object_id, _txn)
   }
 
-  fn receive_local_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
-    (**self).receive_local_update(object_id, txn, update)
+  fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
+    (**self).receive_update(object_id, txn, update)
   }
 }

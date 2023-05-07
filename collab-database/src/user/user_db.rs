@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use collab::plugin_impl::rocks_disk::{Config, RocksDiskPlugin};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, Update};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
+use collab_plugins::disk_plugin::rocksdb::{Config, RocksdbDiskPlugin};
 use parking_lot::RwLock;
 
 use crate::blocks::Block;
@@ -42,7 +42,7 @@ impl UserDatabase {
   pub fn new(uid: i64, db: Arc<RocksCollabDB>, config: Config) -> Self {
     tracing::trace!("Init user database: {}", uid);
     // user database
-    let disk_plugin = RocksDiskPlugin::new_with_config(uid, db.clone(), config.clone()).unwrap();
+    let disk_plugin = RocksdbDiskPlugin::new_with_config(uid, db.clone(), config.clone()).unwrap();
     let collab = CollabBuilder::new(uid, format!("{}_user_database", uid))
       .with_plugin(disk_plugin)
       .build();
@@ -246,7 +246,7 @@ impl UserDatabase {
   /// Create a new [Collab] instance for given database id.
   fn collab_for_database(&self, database_id: &str) -> Collab {
     let disk_plugin =
-      RocksDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.clone()).unwrap();
+      RocksdbDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.clone()).unwrap();
     CollabBuilder::new(self.uid, database_id)
       .with_plugin(disk_plugin)
       .build()
@@ -268,7 +268,7 @@ fn create_user_database_if_not_exist(collab: &Collab) -> ArrayRefWrapper {
 }
 
 fn create_relations_collab(uid: i64, db: Arc<RocksCollabDB>) -> Collab {
-  let disk_plugin = RocksDiskPlugin::new(uid, db).unwrap();
+  let disk_plugin = RocksdbDiskPlugin::new(uid, db).unwrap();
   let object_id = format!("{}_db_relations", uid);
   let collab = CollabBuilder::new(uid, object_id)
     .with_plugin(disk_plugin)
