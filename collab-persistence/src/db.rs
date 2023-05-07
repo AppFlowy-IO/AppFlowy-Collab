@@ -14,7 +14,7 @@ use crate::keys::{
   clock_from_key, make_doc_update_key, make_snapshot_update_key, Clock, DocID, Key, SnapshotID,
 };
 use crate::kv::{KVEntry, KVStore};
-use crate::oid::{OID, OID_GEN, OID_LEN};
+use crate::oid::{LOCAL_DOC_ID_GEN, OID, OID_LEN};
 use crate::snapshot::CollabSnapshot;
 
 #[derive(Clone)]
@@ -175,7 +175,7 @@ where
   S: KVStore<'a>,
   PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
-  let new_id = OID_GEN.lock().next_id();
+  let new_id = LOCAL_DOC_ID_GEN.lock().next_id();
   store.insert(key.as_ref(), new_id.to_be_bytes())?;
   Ok(new_id)
 }

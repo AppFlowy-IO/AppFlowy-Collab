@@ -7,6 +7,7 @@ use tracing_subscriber::EnvFilter;
 mod mock_sync;
 mod sync;
 mod util;
+mod disk;
 
 pub fn setup_log() {
   static START: Once = Once::new();

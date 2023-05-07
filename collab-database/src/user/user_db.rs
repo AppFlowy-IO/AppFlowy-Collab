@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use collab::plugin_impl::rocks_disk::{Config, RocksDiskPlugin};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, Update};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use parking_lot::RwLock;
+use collab_plugins::disk_plugin::rocks_disk::{Config, RocksDiskPlugin};
 
 use crate::blocks::Block;
 use crate::database::{Database, DatabaseContext, DatabaseData};

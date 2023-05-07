@@ -8,12 +8,12 @@ use collab_folder::core::{
   ViewLayout, Workspace,
 };
 
-use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
+use collab_plugins::disk_plugin::rocks_disk::RocksDiskPlugin;
 
 pub struct FolderTest {
   folder: Folder,

@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Once};
+use std::sync::{Arc};
 
-use collab::plugin_impl::rocks_disk::{Config, RocksDiskPlugin};
 use collab::preclude::*;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -11,9 +10,11 @@ use lib0::any::Any;
 use yrs::updates::decoder::Decode;
 
 use tempfile::TempDir;
-use tracing_subscriber::fmt::Subscriber;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
+
+
+
+use collab_plugins::disk_plugin::rocks_disk::{Config, RocksDiskPlugin};
+use crate::setup_log;
 
 pub enum Script {
   CreateDocumentWithDiskPlugin {
@@ -227,16 +228,4 @@ impl Drop for Cleaner {
   fn drop(&mut self) {
     Self::cleanup(&self.0)
   }
-}
-
-fn setup_log() {
-  static START: Once = Once::new();
-  START.call_once(|| {
-    std::env::set_var("RUST_LOG", "collab_persistence=trace");
-    let subscriber = Subscriber::builder()
-      .with_env_filter(EnvFilter::from_default_env())
-      .with_ansi(true)
-      .finish();
-    subscriber.try_init().unwrap();
-  });
 }

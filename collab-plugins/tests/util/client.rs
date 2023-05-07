@@ -3,7 +3,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
-use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::MapRefExtension;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::sync_plugin::SyncPlugin;
@@ -15,6 +14,7 @@ use rand::{prelude::*, Rng as WrappedRng};
 use tempfile::TempDir;
 use tokio::net::TcpSocket;
 use tokio::sync::mpsc::unbounded_channel;
+use collab_plugins::disk_plugin::rocks_disk::RocksDiskPlugin;
 
 use crate::util::{TestSink, TestStream};
 

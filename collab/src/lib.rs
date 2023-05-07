@@ -2,7 +2,6 @@ pub mod error;
 mod util;
 
 pub mod core;
-pub mod plugin_impl;
 
 pub mod preclude {
   pub use crate::core::array_wrapper::ArrayRefWrapper;

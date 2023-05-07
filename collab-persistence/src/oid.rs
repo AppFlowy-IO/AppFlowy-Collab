@@ -19,18 +19,39 @@ pub type OID = u64;
 pub const OID_LEN: usize = 8;
 
 lazy_static! {
-  pub static ref OID_GEN: Mutex<OIDGen> = Mutex::new(OIDGen::new(0));
+  pub static ref LOCAL_DOC_ID_GEN: Mutex<DocIDGen> = Mutex::new(DocIDGen::local(0));
 }
 
-pub struct OIDGen {
+#[allow(dead_code)]
+pub struct NonZeroNodeId(u64);
+
+impl NonZeroNodeId {
+  fn into_inner(self) -> u64 {
+    if self.0 == 0 {
+      panic!("Node ID cannot be zero!");
+    }
+    self.0
+  }
+}
+
+pub struct DocIDGen {
   node_id: u64,
   sequence: u64,
   last_timestamp: u64,
 }
 
-impl OIDGen {
-  pub fn new(node_id: u64) -> OIDGen {
-    OIDGen {
+impl DocIDGen {
+  #[allow(dead_code)]
+  pub fn new(node_id: NonZeroNodeId) -> DocIDGen {
+    DocIDGen {
+      node_id: node_id.into_inner(),
+      sequence: 0,
+      last_timestamp: 0,
+    }
+  }
+
+  fn local(node_id: u64) -> DocIDGen {
+    DocIDGen {
       node_id,
       sequence: 0,
       last_timestamp: 0,

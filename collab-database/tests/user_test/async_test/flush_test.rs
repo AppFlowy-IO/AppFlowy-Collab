@@ -1,5 +1,5 @@
-use collab::plugin_impl::rocks_disk::Config;
 use serde_json::{json, Value};
+use collab_plugins::disk_plugin::rocks_disk::Config;
 
 use crate::user_test::async_test::script::{create_database, database_test, DatabaseScript::*};
 

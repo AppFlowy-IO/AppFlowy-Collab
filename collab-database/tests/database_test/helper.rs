@@ -2,7 +2,6 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::CollabBuilder;
 use collab_database::blocks::Block;
 use collab_database::database::{Database, DatabaseContext};
@@ -12,6 +11,7 @@ use collab_database::views::CreateDatabaseParams;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
 use tempfile::TempDir;
+use collab_plugins::disk_plugin::rocks_disk::RocksDiskPlugin;
 
 pub use crate::helper::*;
 

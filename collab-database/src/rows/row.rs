@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use collab::plugin_impl::rocks_disk::RocksDiskPlugin;
 use collab::preclude::{
   lib0Any, ArrayRef, Collab, CollabBuilder, MapPrelim, MapRef, MapRefExtension, ReadTxn,
   TransactionMut, YrsValue,
@@ -9,6 +8,7 @@ use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
 use serde::{Deserialize, Serialize};
+use collab_plugins::disk_plugin::rocks_disk::RocksDiskPlugin;
 
 use crate::database::{gen_row_id, timestamp};
 use crate::rows::{Cell, Cells, CellsUpdate, RowId};

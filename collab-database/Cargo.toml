@@ -21,6 +21,7 @@ nanoid = "0.4.0"
 chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
 lazy_static = "1.4.0"
 lru = "0.10.0"
+collab-plugins = { path = "../collab-plugins", features = ["disk_rocksdb"] }
 
 [dev-dependencies]
 tempfile = "3.4.0"

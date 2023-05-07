@@ -8,9 +8,9 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
+use collab::error::CollabError;
+use collab::preclude::CollabPlugin;
 
-use crate::core::collab_plugin::CollabPlugin;
-use crate::error::CollabError;
 
 #[derive(Clone)]
 pub struct RocksDiskPlugin {

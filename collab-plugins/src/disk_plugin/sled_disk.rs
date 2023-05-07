@@ -1,14 +1,14 @@
 use std::ops::Deref;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::sled_lv::SledCollabDB;
 use y_sync::awareness::Awareness;
-use yrs::{Doc, Transaction, TransactionMut};
+use yrs::{Transaction, TransactionMut};
+use collab::error::CollabError;
+use collab::preclude::CollabPlugin;
 
-use crate::core::collab_plugin::CollabPlugin;
-use crate::error::CollabError;
 
 #[derive(Clone)]
 pub struct SledDiskPlugin {
@@ -43,7 +43,7 @@ impl CollabPlugin for SledDiskPlugin {
     }
   }
 
-  fn did_init(&self, awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
     self.did_load.store(true, Ordering::SeqCst);
   }
 

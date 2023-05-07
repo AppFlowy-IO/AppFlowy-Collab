@@ -1,6 +1,6 @@
-use crate::script::CollabPersistenceTest;
-use crate::script::Script::*;
-use collab::plugin_impl::rocks_disk::Config;
+use collab_plugins::disk_plugin::rocks_disk::Config;
+use crate::disk::script::{CollabPersistenceTest};
+use crate::disk::script::Script::*;
 use serde_json::json;
 
 #[test]
