@@ -10,7 +10,7 @@ use collab_sync::client::{TokioUnboundedSink, TokioUnboundedStream};
 use collab_sync::server::{CollabMsgCodec, CollabSink, CollabStream};
 
 use collab::core::origin::{CollabClient, CollabOrigin};
-use collab_plugins::disk_plugin::rocks_disk::RocksDiskPlugin;
+use collab_plugins::disk_plugin::rocksdb::RocksdbDiskPlugin;
 use rand::{prelude::*, Rng as WrappedRng};
 use tempfile::TempDir;
 use tokio::net::{TcpSocket, TcpStream};
@@ -55,7 +55,7 @@ pub async fn spawn_client(
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
-  let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
+  let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone()).unwrap();
   collab.lock().add_plugin(Arc::new(disk_plugin));
   collab.initial();
 
@@ -94,7 +94,7 @@ impl TestClient {
     let (reader, writer) = stream.into_split();
 
     // disk
-    let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
+    let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone()).unwrap();
     let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
     collab.lock().add_plugin(Arc::new(disk_plugin));
 
@@ -147,7 +147,7 @@ impl TestClient {
     let origin = origin_from_tcp_stream(&stream);
     let (reader, writer) = stream.into_split();
     // disk
-    let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
+    let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone()).unwrap();
     let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
     collab.lock().add_plugin(Arc::new(disk_plugin));
 

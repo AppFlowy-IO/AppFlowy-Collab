@@ -135,12 +135,7 @@ impl ScriptTest {
         f(&client.lock());
       },
       TestScript::ModifyRemoteCollab { f } => {
-        self
-          .server
-          .groups
-          .get_mut(&self.object_id)
-          .unwrap()
-          .get_mut_collab(f);
+        self.server.mut_groups(&self.object_id, f);
       },
       TestScript::AssertClientEqual {
         device_id_a,

@@ -10,7 +10,7 @@ use collab_database::rows::{CellsBuilder, CreateRowParams};
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
-use collab_plugins::disk_plugin::rocks_disk::RocksDiskPlugin;
+use collab_plugins::disk_plugin::rocksdb::RocksdbDiskPlugin;
 use tempfile::TempDir;
 
 pub use crate::helper::*;
@@ -64,7 +64,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
 
 pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<RocksCollabDB>, DatabaseTest) {
   let db = make_rocks_db();
-  let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
+  let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone()).unwrap();
 
   let collab = CollabBuilder::new(1, database_id)
     .with_plugin(disk_plugin)
@@ -93,7 +93,7 @@ pub fn restore_database_from_db(
   database_id: &str,
   db: Arc<RocksCollabDB>,
 ) -> DatabaseTest {
-  let disk_plugin = RocksDiskPlugin::new(uid, db.clone()).unwrap();
+  let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone()).unwrap();
   let block = Block::new(uid, db);
   let collab = CollabBuilder::new(uid, database_id)
     .with_plugin(disk_plugin)

@@ -12,12 +12,12 @@ use yrs::updates::decoder::Decode;
 use tempfile::TempDir;
 
 use crate::setup_log;
-use collab_plugins::disk_plugin::rocks_disk::{Config, RocksDiskPlugin};
+use collab_plugins::disk_plugin::rocksdb::{Config, RocksdbDiskPlugin};
 
 pub enum Script {
   CreateDocumentWithDiskPlugin {
     id: String,
-    plugin: RocksDiskPlugin,
+    plugin: RocksdbDiskPlugin,
   },
   OpenDocumentWithDiskPlugin {
     id: String,
@@ -70,7 +70,7 @@ pub enum Script {
 pub struct CollabPersistenceTest {
   pub uid: i64,
   collabs: HashMap<String, Collab>,
-  pub disk_plugin: RocksDiskPlugin,
+  pub disk_plugin: RocksdbDiskPlugin,
   #[allow(dead_code)]
   cleaner: Cleaner,
   db: Arc<RocksCollabDB>,
@@ -84,7 +84,7 @@ impl CollabPersistenceTest {
     let db_path = tempdir.into_path();
     let uid = 1;
     let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
-    let disk_plugin = RocksDiskPlugin::new_with_config(uid, db.clone(), config.clone()).unwrap();
+    let disk_plugin = RocksdbDiskPlugin::new_with_config(uid, db.clone(), config.clone()).unwrap();
     let cleaner = Cleaner::new(db_path);
     Self {
       uid,
@@ -114,7 +114,8 @@ impl CollabPersistenceTest {
       },
       Script::OpenDocument { id } => {
         self.disk_plugin =
-          RocksDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.clone()).unwrap();
+          RocksdbDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.clone())
+            .unwrap();
 
         let collab = CollabBuilder::new(1, &id)
           .with_plugin(self.disk_plugin.clone())
@@ -203,11 +204,11 @@ impl CollabPersistenceTest {
   }
 }
 
-pub fn disk_plugin(uid: i64) -> RocksDiskPlugin {
+pub fn disk_plugin(uid: i64) -> RocksdbDiskPlugin {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
-  RocksDiskPlugin::new(uid, db).unwrap()
+  RocksdbDiskPlugin::new(uid, db).unwrap()
 }
 
 struct Cleaner(PathBuf);

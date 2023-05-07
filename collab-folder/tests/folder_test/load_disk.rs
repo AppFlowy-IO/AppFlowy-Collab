@@ -5,7 +5,7 @@ use collab::preclude::CollabBuilder;
 use collab_folder::core::{Folder, FolderContext};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
-use collab_plugins::disk_plugin::rocks_disk::RocksDiskPlugin;
+use collab_plugins::disk_plugin::rocksdb::RocksdbDiskPlugin;
 use fs_extra::file;
 use nanoid::nanoid;
 use walkdir::WalkDir;
@@ -69,7 +69,7 @@ fn create_folder_with_object_id(uid: i64, path: &str) -> Folder {
   let object_id = format!("{}:folder", uid);
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
   let mut collab = CollabBuilder::new(uid, &object_id).build();
-  let disk_plugin = Arc::new(RocksDiskPlugin::new(uid, db).unwrap());
+  let disk_plugin = Arc::new(RocksdbDiskPlugin::new(uid, db).unwrap());
   collab.add_plugin(disk_plugin);
   collab.initial();
 

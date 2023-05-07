@@ -17,7 +17,7 @@ tokio = { version = "1.26.0", features = ["net", "sync", "time"], optional = tru
 tracing = { version = "0.1.37" }
 
 [dev-dependencies]
-collab-plugins = { path = ".", features = ["sync", "disk_rocksdb", "disk_sled"] }
+collab-plugins = { path = ".", features = ["sync", "disk_rocksdb", "disk_sled",] }
 tempfile = "3.4.0"
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
@@ -30,6 +30,7 @@ collab-persistence = { path = "../collab-persistence" }
 rand = "0.8"
 anyhow = "1.0.71"
 lib0 = { version = "0.16.3", features = ["lib0-serde"] }
+parking_lot = "0.12.1"
 
 [features]
 default = []

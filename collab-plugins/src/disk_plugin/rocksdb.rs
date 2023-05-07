@@ -12,7 +12,7 @@ use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
 
 #[derive(Clone)]
-pub struct RocksDiskPlugin {
+pub struct RocksdbDiskPlugin {
   uid: i64,
   config: Config,
   db: Arc<RocksCollabDB>,
@@ -23,7 +23,7 @@ pub struct RocksDiskPlugin {
   update_count: Arc<AtomicU32>,
 }
 
-impl Deref for RocksDiskPlugin {
+impl Deref for RocksdbDiskPlugin {
   type Target = Arc<RocksCollabDB>;
 
   fn deref(&self) -> &Self::Target {
@@ -31,7 +31,7 @@ impl Deref for RocksDiskPlugin {
   }
 }
 
-impl RocksDiskPlugin {
+impl RocksdbDiskPlugin {
   pub fn new(uid: i64, db: Arc<RocksCollabDB>) -> Result<Self, CollabError> {
     Self::new_with_config(uid, db, Config::default())
   }
@@ -65,7 +65,7 @@ impl RocksDiskPlugin {
   }
 }
 
-impl CollabPlugin for RocksDiskPlugin {
+impl CollabPlugin for RocksdbDiskPlugin {
   fn init(&self, object_id: &str, txn: &mut TransactionMut) {
     let r_db_txn = self.db.read_txn();
 
@@ -129,7 +129,7 @@ impl CollabPlugin for RocksDiskPlugin {
     });
 
     if let Err(e) = result {
-      tracing::error!("🔴Failed to push update: {:?}", e);
+      tracing::error!("🔴Save update failed: {:?}", e);
     }
   }
 

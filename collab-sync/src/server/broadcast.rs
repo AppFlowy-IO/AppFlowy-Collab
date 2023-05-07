@@ -43,7 +43,7 @@ impl CollabBroadcast {
   ///
   /// The overflow of the incoming events that needs to be propagates will be buffered up to a
   /// provided `buffer_capacity` size.
-  pub async fn new(object_id: &str, collab: MutexCollab, buffer_capacity: usize) -> Self {
+  pub fn new(object_id: &str, collab: MutexCollab, buffer_capacity: usize) -> Self {
     let object_id = object_id.to_owned();
     let (sender, _) = channel(buffer_capacity);
     let (doc_sub, awareness_sub) = {

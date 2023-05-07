@@ -9,7 +9,7 @@ use collab_folder::core::{
 };
 
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk_plugin::rocks_disk::RocksDiskPlugin;
+use collab_plugins::disk_plugin::rocksdb::RocksdbDiskPlugin;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -37,7 +37,7 @@ pub fn create_folder(id: &str) -> FolderTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path.clone()).unwrap());
-  let disk_plugin = RocksDiskPlugin::new(uid, db).unwrap();
+  let disk_plugin = RocksdbDiskPlugin::new(uid, db).unwrap();
   let cleaner: Cleaner = Cleaner::new(path);
 
   let collab = CollabBuilder::new(1, id).with_plugin(disk_plugin).build();

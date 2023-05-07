@@ -12,7 +12,7 @@ use collab_database::user::UserDatabase as InnerUserDatabase;
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk_plugin::rocks_disk::Config;
+use collab_plugins::disk_plugin::rocksdb::Config;
 use parking_lot::Mutex;
 use serde_json::Value;
 

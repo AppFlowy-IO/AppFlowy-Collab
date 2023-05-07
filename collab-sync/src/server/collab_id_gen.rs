@@ -1,7 +1,5 @@
 #![allow(clippy::upper_case_acronyms)]
 
-use lazy_static::lazy_static;
-use parking_lot::Mutex;
 use std::time::SystemTime;
 
 const EPOCH: u64 = 1637806706000;
@@ -13,31 +11,39 @@ const TIMESTAMP_SHIFT: u64 = NODE_BITS + SEQUENCE_BITS;
 const SCOPE_SHIFT: u64 = TIMESTAMP_BITS + TIMESTAMP_SHIFT;
 const SEQUENCE_MASK: u64 = (1 << SEQUENCE_BITS) - 1;
 
-pub type OID = u64;
+pub type CollabId = i64;
 
-pub const DOC_ID_LEN: usize = 8;
+pub const COLLAB_ID_LEN: usize = 8;
 
-lazy_static! {
-  pub static ref LOCAL_DOC_ID_GEN: Mutex<DocIDGen> = Mutex::new(DocIDGen::new());
+#[allow(dead_code)]
+pub struct NonZeroNodeId(pub u64);
+
+impl NonZeroNodeId {
+  fn into_inner(self) -> u64 {
+    if self.0 == 0 {
+      panic!("Node ID cannot be zero!");
+    }
+    self.0
+  }
 }
 
-pub struct DocIDGen {
+pub struct CollabIDGen {
   node_id: u64,
   sequence: u64,
   last_timestamp: u64,
 }
 
-impl DocIDGen {
+impl CollabIDGen {
   #[allow(dead_code)]
-  pub fn new() -> DocIDGen {
-    DocIDGen {
-      node_id: 0,
+  pub fn new(node_id: NonZeroNodeId) -> CollabIDGen {
+    CollabIDGen {
+      node_id: node_id.into_inner(),
       sequence: 0,
       last_timestamp: 0,
     }
   }
 
-  pub fn next_id(&mut self) -> u64 {
+  pub fn next_id(&mut self) -> CollabId {
     let timestamp = self.timestamp();
     if timestamp < self.last_timestamp {
       panic!("Clock moved backwards!");
@@ -53,10 +59,12 @@ impl DocIDGen {
     }
 
     self.last_timestamp = timestamp;
-    2 << SCOPE_SHIFT
+    let id = 2 << SCOPE_SHIFT
       | (timestamp - EPOCH) << TIMESTAMP_SHIFT
       | self.node_id << NODE_ID_SHIFT
-      | self.sequence
+      | self.sequence;
+
+    id as CollabId
   }
 
   fn wait_next_millis(&self) {

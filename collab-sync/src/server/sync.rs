@@ -3,6 +3,7 @@ use crate::msg::CollabMessage;
 use crate::server::{CollabBroadcast, Subscription};
 use bytes::{Bytes, BytesMut};
 use collab::core::collab::MutexCollab;
+use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use std::collections::HashMap;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -19,7 +20,7 @@ pub struct CollabGroup {
 
   /// A list of subscribers to this group. Each subscriber will receive updates from the
   /// broadcast.
-  pub subscribers: HashMap<String, Subscription>,
+  pub subscribers: HashMap<CollabOrigin, Subscription>,
 }
 
 impl CollabGroup {

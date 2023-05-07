@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use yrs::{Origin, TransactionMut};
 
-#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug, Serialize, Deserialize)]
 pub enum CollabOrigin {
   Client(CollabClient),
   Server,
@@ -49,7 +49,7 @@ impl From<&Origin> for CollabOrigin {
 
 /// This [CollabClient] is used to verify the origin of a [Transaction] when
 /// applying a remote update.
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Hash, Debug, Clone)]
 pub struct CollabClient {
   pub uid: i64,
   pub device_id: String,

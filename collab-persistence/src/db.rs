@@ -14,7 +14,7 @@ use crate::keys::{
   clock_from_key, make_doc_update_key, make_snapshot_update_key, Clock, DocID, Key, SnapshotID,
 };
 use crate::kv::{KVEntry, KVStore};
-use crate::oid::{LOCAL_DOC_ID_GEN, OID, OID_LEN};
+use crate::oid::{DOC_ID_LEN, LOCAL_DOC_ID_GEN, OID};
 use crate::snapshot::CollabSnapshot;
 
 #[derive(Clone)]
@@ -165,8 +165,8 @@ where
   S: KVStore<'a>,
 {
   let value = store.get(key.as_ref()).ok()??;
-  let mut bytes = [0; OID_LEN];
-  bytes[0..OID_LEN].copy_from_slice(value.as_ref());
+  let mut bytes = [0; DOC_ID_LEN];
+  bytes[0..DOC_ID_LEN].copy_from_slice(value.as_ref());
   Some(OID::from_be_bytes(bytes))
 }
 

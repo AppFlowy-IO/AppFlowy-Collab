@@ -1,6 +1,6 @@
 use collab_database::rows::CreateRowParams;
 use collab_database::views::CreateDatabaseParams;
-use collab_plugins::disk_plugin::rocks_disk::Config;
+use collab_plugins::disk_plugin::rocksdb::Config;
 
 use crate::user_test::helper::{user_database_test, user_database_test_with_config};
 
