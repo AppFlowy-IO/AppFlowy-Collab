@@ -12,19 +12,19 @@ use tokio::sync::{Mutex, RwLock};
 use tokio_retry::strategy::FixedInterval;
 use tokio_retry::Retry;
 
-pub struct WSConnect {
+pub struct WSClient {
   addr: String,
   state: Mutex<ConnectState>,
   sender: Sender<WSMessage>,
   handlers: Arc<RwLock<HashMap<TargetID, Weak<WSMessageHandler>>>>,
 }
 
-impl WSConnect {
+impl WSClient {
   pub fn new(addr: String, buffer_capacity: usize) -> Self {
     let (sender, _) = channel(buffer_capacity);
     let state = Mutex::new(ConnectState::Disconnected);
     let handlers = Arc::new(RwLock::new(HashMap::new()));
-    WSConnect {
+    WSClient {
       addr,
       state,
       sender,
@@ -32,9 +32,9 @@ impl WSConnect {
     }
   }
 
-  pub async fn start(&self) -> Result<(), WSError> {
+  pub async fn connect(&self) -> Result<(), WSError> {
     self.set_state(ConnectState::Connecting).await;
-    let retry_strategy = FixedInterval::new(Duration::from_secs(5)).take(3);
+    let retry_strategy = FixedInterval::new(Duration::from_secs(2)).take(3);
     let action = ConnectAction::new(self.addr.clone());
     let stream = Retry::spawn(retry_strategy, action).await?;
     let (mut sink, mut stream) = stream.split();

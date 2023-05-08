@@ -1,12 +1,12 @@
 [package]
-name = "collab-ws"
+name = "collab-client-ws"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tracing = { version = "0.1" }
+tracing = { version = "0.1", feature = ["log"] }
 thiserror = "1.0.39"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

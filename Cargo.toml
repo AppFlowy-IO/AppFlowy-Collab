@@ -8,5 +8,5 @@ members = [
     "collab-database",
     "collab-sync",
     "collab-plugins",
-    "collab-ws",
+    "collab-client-ws",
 ]
