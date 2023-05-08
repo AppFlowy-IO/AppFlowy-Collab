@@ -84,7 +84,6 @@ pub async fn spawn_server_with_db(
   db: Arc<RocksCollabDB>,
 ) -> std::io::Result<TestServer> {
   let cleaner = Cleaner::new(db_path.clone());
-
   setup_log();
   let collab_id_gen = Arc::new(Mutex::new(CollabIDGen::new(NonZeroNodeId(1))));
   let address = SocketAddr::from(([127, 0, 0, 1], 0));
@@ -93,9 +92,6 @@ pub async fn spawn_server_with_db(
   let groups = Arc::new(DashMap::new());
   let object_id = object_id.to_string();
   let cloned_db = db.clone();
-
-  //
-
   let weak_groups = Arc::downgrade(&groups);
   let weak_collab_id_gen = Arc::downgrade(&collab_id_gen);
   tokio::spawn(async move {
@@ -111,7 +107,6 @@ pub async fn spawn_server_with_db(
         .entry(object_id.clone())
         .or_insert_with(|| {
           let collab_id = collab_id_gen.lock().next_id();
-
           // Map the object_id to the collab_id
           cloned_db
             .with_write_txn(|w_txn| {
