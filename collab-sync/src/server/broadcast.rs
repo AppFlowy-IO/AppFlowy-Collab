@@ -115,7 +115,7 @@ impl CollabBroadcast {
   pub fn subscribe<Sink, Stream, E>(
     &self,
     origin: CollabOrigin,
-    sink: Arc<Mutex<Sink>>,
+    sink: Sink,
     mut stream: Stream,
   ) -> Subscription
   where
@@ -125,6 +125,7 @@ impl CollabBroadcast {
     E: std::error::Error + Send + Sync + 'static,
   {
     tracing::trace!("[💭Server]: new client");
+    let sink = Arc::new(Mutex::new(sink));
     // Receive a update from the document observer and forward the applied update to all
     // connected subscribers using its Sink.
     let sink_task = {

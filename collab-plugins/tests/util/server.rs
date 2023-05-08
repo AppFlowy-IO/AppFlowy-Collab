@@ -118,11 +118,7 @@ pub async fn spawn_server_with_db(
           make_collab_group(collab_id, &object_id, cloned_db.clone())
         })
         .broadcast
-        .subscribe(
-          CollabOrigin::Client(client.clone()),
-          Arc::new(tokio::sync::Mutex::new(sink)),
-          stream,
-        );
+        .subscribe(CollabOrigin::Client(client.clone()), sink, stream);
 
       groups
         .get_mut(&object_id)
