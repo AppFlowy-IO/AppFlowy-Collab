@@ -29,7 +29,11 @@ impl Action for ConnectAction {
           tracing::trace!("{:?}", response);
           Ok(stream)
         },
-        Err(e) => Err(e.into()),
+        Err(e) => {
+          //
+          tracing::error!("connect error: {:?}", e.to_string());
+          Err(e.into())
+        },
       }
     })
   }

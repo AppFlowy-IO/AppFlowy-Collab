@@ -60,6 +60,18 @@ impl CollabMessage {
       CollabMessage::ServerAck(_) => None,
     }
   }
+
+  pub fn object_id(&self) -> &str {
+    match self {
+      CollabMessage::ClientInit(value) => &value.object_id,
+      CollabMessage::ServerSync(value) => &value.object_id,
+      CollabMessage::ClientUpdate(value) => &value.object_id,
+      CollabMessage::ServerResponse(value) => &value.object_id,
+      CollabMessage::ServerBroadcast(value) => &value.object_id,
+      CollabMessage::AwarenessUpdate(value) => &value.object_id,
+      CollabMessage::ServerAck(value) => &value.object_id,
+    }
+  }
 }
 
 impl Display for CollabMessage {

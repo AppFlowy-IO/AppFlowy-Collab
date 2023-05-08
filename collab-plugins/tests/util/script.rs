@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,7 +8,7 @@ use collab::preclude::Collab;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use serde_json::Value;
 
-use crate::util::{spawn_server, TestClient, TestServer};
+use crate::util::{spawn_server, spawn_server_with_db, TestClient, TestServer};
 
 pub enum TestScript {
   CreateClient {
@@ -53,6 +54,7 @@ pub enum TestScript {
     device_id_a: String,
     device_id_b: String,
   },
+  RerunServer,
 }
 
 pub struct ScriptTest {
@@ -62,7 +64,7 @@ pub struct ScriptTest {
 }
 
 impl ScriptTest {
-  pub async fn new(_collab_id: i64, object_id: &str) -> Self {
+  pub async fn new(object_id: &str) -> Self {
     let server = spawn_server(object_id).await.unwrap();
     Self {
       object_id: object_id.to_string(),
@@ -144,6 +146,14 @@ impl ScriptTest {
         let client_a = self.clients.get_mut(&device_id_a).unwrap().to_json_value();
         let client_b = self.clients.get_mut(&device_id_b).unwrap().to_json_value();
         assert_eq!(client_a, client_b);
+      },
+      TestScript::RerunServer => {
+        self.server.cleaner.set_should_clean(false);
+        let db_path = self.server.db_path.clone();
+        let db = self.server.db.clone();
+        self.server = spawn_server_with_db(&self.object_id, db_path, db)
+          .await
+          .unwrap();
       },
     }
   }

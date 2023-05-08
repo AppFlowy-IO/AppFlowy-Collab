@@ -99,8 +99,8 @@ where
     Ok(())
   }
 
-  fn is_exist<K: AsRef<[u8]> + ?Sized + Debug>(&self, uid: i64, object_id: &K) -> bool {
-    get_doc_id(uid, self, object_id).is_some()
+  fn is_exist<K: AsRef<[u8]> + ?Sized + Debug>(&self, collab_id: i64, object_id: &K) -> bool {
+    get_doc_id(collab_id, self, object_id).is_some()
   }
 
   /// Load the document from the database and apply the updates to the transaction.
@@ -302,13 +302,13 @@ where
   }
 }
 
-fn get_doc_id<'a, K, S>(uid: i64, store: &S, object_id: &K) -> Option<DocID>
+fn get_doc_id<'a, K, S>(collab_id: i64, store: &S, object_id: &K) -> Option<DocID>
 where
   S: KVStore<'a>,
   K: AsRef<[u8]> + ?Sized,
 {
-  let uid = &uid.to_be_bytes();
-  let key = make_doc_id_key(uid, object_id.as_ref());
+  let collab_id_bytes = &collab_id.to_be_bytes();
+  let key = make_doc_id_key(collab_id_bytes, object_id.as_ref());
   get_id_for_key(store, key)
 }
 
