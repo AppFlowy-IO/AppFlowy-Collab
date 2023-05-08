@@ -6,7 +6,7 @@ use collab_document::blocks::{
 use nanoid::nanoid;
 use serde_json::{json, to_value};
 
-use crate::util::{
+use crate::document::util::{
   apply_actions, create_document, delete_block, get_document_data, insert_block, move_block,
   update_block,
 };
