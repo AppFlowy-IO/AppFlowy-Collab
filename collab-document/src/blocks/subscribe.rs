@@ -19,14 +19,12 @@ impl RootDeepSubscription {
   where
     F: Fn(&Vec<BlockEvent>, Option<&Origin>) + 'static,
   {
-    let subscription = Some(root.observe_deep(move |txn, events| {
+    self.subscription = Some(root.observe_deep(move |txn, events| {
       let block_events = events
         .iter()
         .map(|deep_event| parse_event(txn, deep_event))
         .collect::<Vec<BlockEvent>>();
-
       callback(&block_events, txn.origin());
     }));
-    self.subscription = subscription;
   }
 }

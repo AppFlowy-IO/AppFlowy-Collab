@@ -2,9 +2,9 @@ use std::thread;
 
 use collab_document::blocks::Block;
 
-use crate::document::util::{create_document, get_document_data, open_document_with_db};
-
-use super::util::{create_document_with_db, db};
+use crate::util::util::{
+  create_document, create_document_with_db, db, get_document_data, open_document_with_db,
+};
 
 #[test]
 fn restore_default_document_test() {

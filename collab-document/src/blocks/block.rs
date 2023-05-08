@@ -5,6 +5,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+pub const EXTERNAL_TYPE_TEXT: &str = "text";
+pub const EXTERNAL_TYPE_ARRAY: &str = "array";
+pub const EXTERNAL_TYPE_MAP: &str = "map";
+
 const ID: &str = "id";
 const TYPE: &str = "ty";
 const PARENT: &str = "parent";
@@ -12,10 +16,6 @@ const CHILDREN: &str = "children";
 const DATA: &str = "data";
 const EXTERNAL_ID: &str = "external_id";
 const EXTERNAL_TYPE: &str = "external_type";
-
-pub const EXTERNAL_TYPE_TEXT: &str = "text";
-pub const EXTERNAL_TYPE_ARRAY: &str = "array";
-pub const EXTERNAL_TYPE_MAP: &str = "map";
 
 pub struct BlockOperation {
   root: MapRefWrapper,
@@ -35,9 +35,10 @@ impl BlockOperation {
     self
       .root
       .iter(&txn)
-      .map(|(k, _)| {
-        let block = self.get_block_with_txn(&txn, k).unwrap();
-        (k.to_string(), block)
+      .filter_map(|(k, _)| {
+        self
+          .get_block_with_txn(&txn, k)
+          .map(|block| (k.to_string(), block))
       })
       .collect()
   }
@@ -71,9 +72,11 @@ impl BlockOperation {
     if self.root.get_map_with_txn(txn, id).is_some() {
       return Err(DocumentError::BlockIsExistedAlready);
     }
+
     let map = self.root.insert_map_with_txn(txn, id);
     let data = &block.data;
     let json_str = hashmap_to_json_str(data.clone())?;
+
     map.insert_with_txn(txn, ID, id.to_string());
     map.insert_with_txn(txn, TYPE, block.ty.to_string());
     map.insert_with_txn(txn, PARENT, block.parent.to_string());
@@ -84,7 +87,9 @@ impl BlockOperation {
       .children_operation
       .get_children_with_txn(txn, &block.children);
 
-    Ok(self.get_block_with_txn(txn, id).unwrap())
+    self
+      .get_block_with_txn(txn, id)
+      .ok_or(DocumentError::BlockCreateError)
   }
 
   pub fn delete_block_with_txn(
@@ -96,7 +101,6 @@ impl BlockOperation {
       .get_block_with_txn(txn, id)
       .ok_or(DocumentError::BlockIsNotFound)?;
     self.root.remove(txn, id);
-
     self
       .children_operation
       .delete_children_with_txn(txn, &block.children);
@@ -104,8 +108,10 @@ impl BlockOperation {
   }
 
   pub fn get_block_with_txn<T: ReadTxn>(&self, txn: &T, id: &str) -> Option<Block> {
-    let map = self.root.get_map_with_txn(txn, id);
-    map.map(|map| self.get_block_from_root(txn, map))
+    self
+      .root
+      .get_map_with_txn(txn, id)
+      .map(|map| self.get_block_from_root(txn, map))
   }
 
   pub fn set_block_with_txn(
