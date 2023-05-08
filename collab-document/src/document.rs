@@ -9,6 +9,7 @@ use crate::blocks::{
 use crate::error::DocumentError;
 use collab::preclude::*;
 use serde_json::Value;
+use tracing::log::trace;
 
 const ROOT: &str = "document";
 const PAGE_ID: &str = "page_id";
@@ -33,13 +34,13 @@ impl Document {
     };
     match is_document_exist {
       Some(_) => Ok(Document::get_document_with_collab(collab)),
-      None => Document::create_document(collab, None).map_err(|err| err.into()),
+      None => Document::create_document(collab, None),
     }
   }
 
   /// Create a new document with the given data.
   pub fn create_with_data(collab: Collab, data: DocumentData) -> Result<Document, DocumentError> {
-    Document::create_document(collab, Some(data)).map_err(|err| err.into())
+    Document::create_document(collab, Some(data))
   }
 
   /// open a document and subscribe to the document changes.
@@ -96,13 +97,14 @@ impl Document {
           }
         }
 
-        if let Err(_) = match action.action {
+        if let Err(err) = match action.action {
           BlockActionType::Insert => self.insert_block(txn, block, prev_id).map(|_| ()),
           BlockActionType::Update => self.update_block_data(txn, block_id, data.to_owned()),
           BlockActionType::Delete => self.delete_block(txn, block_id),
           BlockActionType::Move => self.move_block(txn, block_id, parent_id, prev_id),
         } {
           // todo: handle the error;
+          trace!("[Document] apply_action error: {:?}", err);
           return;
         }
       }
@@ -197,7 +199,6 @@ impl Document {
       .block_operation
       .delete_block_with_txn(txn, block_id)
       .map(|_| ())
-      .map_err(|_| DocumentError::DeleteBlockError.into())
   }
 
   /// remove the reference of the block from its parent.
@@ -313,9 +314,7 @@ impl Document {
         root.insert_with_txn(txn, PAGE_ID, data.page_id);
 
         for (_, block) in data.blocks {
-          if let Err(err) = block_operation.create_block_with_txn(txn, &block) {
-            return Err(err);
-          }
+          block_operation.create_block_with_txn(txn, &block)?;
         }
 
         for (id, child_ids) in data.meta.children_map {
@@ -326,7 +325,7 @@ impl Document {
         }
       }
 
-      Ok((root, block_operation, children_operation))
+      Ok::<_, DocumentError>((root, block_operation, children_operation))
     })?;
 
     let subscription = RootDeepSubscription::default();
