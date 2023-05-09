@@ -1,37 +1,38 @@
 use std::collections::HashMap;
 
 use collab_document::blocks::{
-  Block, BlockAction, BlockActionPayload, BlockActionType, EXTERNAL_TYPE_TEXT,
+  Block, BlockAction, BlockActionPayload, BlockActionType, BlockOperation, EXTERNAL_TYPE_TEXT,
 };
 use nanoid::nanoid;
 use serde_json::{json, to_value};
 
-use crate::document::util::{
+use crate::util::util::{
   apply_actions, create_document, delete_block, get_document_data, insert_block, move_block,
   update_block,
 };
 
 #[test]
-fn create_block_test() {
+fn create_default_document_test() {
   let doc_id = "1";
   let test = create_document(1, doc_id);
   let (page_id, blocks, children_map) = get_document_data(&test.document);
 
   let page_id = page_id.as_str();
   let page = &blocks[page_id];
+  assert!(!page.data.is_empty());
   assert_eq!(page.id, page_id);
   assert_eq!(page.ty, "page");
-  assert!(!page.data.is_empty());
   assert_eq!(&page.parent, "");
+
   let page_external_id = &page.external_id;
   let page_children_id = &page.children;
   let page_external_type = &page.external_type;
-
   assert!(&page_external_type.is_none());
   assert!(&page_external_id.is_none());
 
   let page_children = &children_map[page_children_id];
   assert_eq!(page_children.len(), 1);
+
   let first_child_id = page_children[0].as_str();
   assert_eq!(blocks[first_child_id].id, first_child_id);
   assert_eq!(blocks[first_child_id].parent, page_id.to_string());
@@ -42,7 +43,6 @@ fn create_block_test() {
 fn insert_block_test() {
   let doc_id = "1";
   let test = create_document(1, doc_id);
-
   let (page_id, blocks, children_map) = get_document_data(&test.document);
 
   let page_id = page_id.as_str();
