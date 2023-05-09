@@ -5,12 +5,12 @@ use std::sync::Arc;
 use collab::core::collab::MutexCollab;
 use collab::preclude::MapRefExtension;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::sync_plugin::SyncPlugin;
 use collab_sync::client::{TokioUnboundedSink, TokioUnboundedStream};
 use collab_sync::server::{CollabMsgCodec, CollabSink, CollabStream};
 
 use collab::core::origin::{CollabClient, CollabOrigin};
-use collab_plugins::disk_plugin::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::sync::SyncPlugin;
 use rand::{prelude::*, Rng as WrappedRng};
 use tempfile::TempDir;
 use tokio::net::{TcpSocket, TcpStream};

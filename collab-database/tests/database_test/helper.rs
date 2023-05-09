@@ -10,7 +10,7 @@ use collab_database::rows::{CellsBuilder, CreateRowParams};
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
-use collab_plugins::disk_plugin::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
 use tempfile::TempDir;
 
 pub use crate::helper::*;

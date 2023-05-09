@@ -12,7 +12,7 @@ use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use tokio::sync::mpsc::{channel, Receiver};
 
-use collab_plugins::disk_plugin::rocksdb::Config;
+use collab_plugins::disk::rocksdb::Config;
 use rand::Rng;
 use tempfile::TempDir;
 

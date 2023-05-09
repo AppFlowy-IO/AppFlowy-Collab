@@ -5,7 +5,7 @@ use collab::preclude::CollabBuilder;
 use collab_folder::core::{Folder, FolderContext};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
-use collab_plugins::disk_plugin::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
 use fs_extra::file;
 use nanoid::nanoid;
 use walkdir::WalkDir;

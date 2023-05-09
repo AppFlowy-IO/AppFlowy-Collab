@@ -34,7 +34,7 @@ pub struct SyncQueue<Sink, Stream> {
 
 impl<E, Sink, Stream> SyncQueue<Sink, Stream>
 where
-  E: Into<SyncError> + Send + Sync + 'static,
+  E: std::error::Error + Send + Sync + 'static,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {
@@ -124,7 +124,7 @@ struct SyncStream<Sink, Stream> {
 
 impl<E, Sink, Stream> SyncStream<Sink, Stream>
 where
-  E: Into<SyncError> + Send + Sync + 'static,
+  E: std::error::Error + Send + Sync + 'static,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {
@@ -186,7 +186,7 @@ where
         Err(e) => {
           // If the client has disconnected, the stream will return an error, So stop receiving
           // messages if the client has disconnected.
-          return Err(e.into());
+          return Err(SyncError::Internal(Box::new(e)));
         },
       }
     }
@@ -262,7 +262,7 @@ pub struct SinkScheduler<Sink> {
 
 impl<E, Sink> SinkScheduler<Sink>
 where
-  E: Into<SyncError> + Send + Sync,
+  E: std::error::Error + Send + Sync + 'static,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
 {
   fn new(
@@ -330,7 +330,10 @@ where
 
         let mut sender = self.sender.lock().await;
         tracing::trace!("[🦀Client]: {}", collab_msg);
-        sender.send(collab_msg).await.map_err(|e| e.into())?;
+        sender
+          .send(collab_msg)
+          .await
+          .map_err(|e| SyncError::Internal(Box::new(e)))?;
 
         // Wait for the message to be acked.
         // If the message is not acked within the timeout, resend the message.
@@ -366,7 +369,7 @@ pub struct TaskRunner();
 impl TaskRunner {
   async fn run<E, Sink>(scheduler: Arc<SinkScheduler<Sink>>, mut notifier: watch::Receiver<bool>)
   where
-    E: Into<SyncError> + Send + Sync + 'static,
+    E: std::error::Error + Send + Sync + 'static,
     Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   {
     scheduler.notify();

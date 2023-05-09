@@ -10,7 +10,7 @@ use collab_document::document::Document;
 use collab_document::error::DocumentError;
 
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk_plugin::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use serde_json::{json, Value};
 use tempfile::TempDir;

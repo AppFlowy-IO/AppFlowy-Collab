@@ -1,5 +1,5 @@
 use crate::error::WSError;
-use crate::{TargetID, WSMessage};
+use crate::{HandlerID, WSMessage};
 use futures_util::Sink;
 use std::fmt::Debug;
 use std::pin::Pin;
@@ -8,13 +8,13 @@ use tokio::sync::broadcast::{channel, Sender};
 use tokio_stream::wrappers::BroadcastStream;
 
 pub struct WSMessageHandler {
-  target_id: TargetID,
+  target_id: HandlerID,
   sender: Sender<WSMessage>,
   receiver: Sender<WSMessage>,
 }
 
 impl WSMessageHandler {
-  pub fn new(target_id: TargetID, sender: Sender<WSMessage>) -> Self {
+  pub fn new(target_id: HandlerID, sender: Sender<WSMessage>) -> Self {
     let (receiver, _) = channel(1000);
     Self {
       target_id,
@@ -31,8 +31,18 @@ impl WSMessageHandler {
     let _ = self.receiver.send(msg.clone());
   }
 
-  pub fn sink(&self) -> BroadcastSink<WSMessage> {
-    BroadcastSink::new(self.sender.clone())
+  pub fn sink<T>(&self) -> BroadcastSink<T>
+  where
+    T: Into<WSMessage> + Send + Sync + 'static + Clone,
+  {
+    let (tx, mut rx) = channel::<T>(1000);
+    let cloned_sender = self.sender.clone();
+    tokio::spawn(async move {
+      while let Ok(msg) = rx.recv().await {
+        let _ = cloned_sender.send(msg.into());
+      }
+    });
+    BroadcastSink::new(tx)
   }
 
   pub fn stream(&self) -> BroadcastStream<WSMessage> {

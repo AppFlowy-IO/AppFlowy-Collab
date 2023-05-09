@@ -9,10 +9,10 @@ use collab_persistence::snapshot::SnapshotAction;
 use lib0::any::Any;
 use yrs::updates::decoder::Decode;
 
+use collab_plugins::disk::rocksdb::{Config, RocksdbDiskPlugin};
 use tempfile::TempDir;
 
 use crate::setup_log;
-use collab_plugins::disk_plugin::rocksdb::{Config, RocksdbDiskPlugin};
 
 pub enum Script {
   CreateDocumentWithDiskPlugin {
