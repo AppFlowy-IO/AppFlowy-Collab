@@ -4,6 +4,7 @@ use futures_util::Sink;
 use std::fmt::Debug;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use tokio::sync::broadcast::error::SendError;
 use tokio::sync::broadcast::{channel, Sender};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -40,7 +41,10 @@ impl WSMessageHandler {
     let cloned_sender = self.sender.clone();
     tokio::spawn(async move {
       while let Some(msg) = rx.recv().await {
-        let _ = cloned_sender.send(msg.into());
+        match cloned_sender.send(msg.into()) {
+          Ok(_) => {},
+          Err(e) => tracing::error!("🔴Error sending message: {:?}", e),
+        }
       }
     });
     BroadcastSink::new(tx)

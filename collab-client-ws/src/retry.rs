@@ -31,7 +31,7 @@ impl Action for ConnectAction {
         },
         Err(e) => {
           //
-          tracing::error!("connect error: {:?}", e.to_string());
+          tracing::error!("🔴connect error: {:?}", e.to_string());
           Err(e.into())
         },
       }

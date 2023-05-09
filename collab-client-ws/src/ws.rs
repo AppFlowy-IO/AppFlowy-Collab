@@ -63,6 +63,8 @@ impl WSClient {
               handler.recv_msg(&msg);
             }
           }
+        } else {
+          tracing::error!("🔴Invalid message from websocket");
         }
       }
     });
@@ -70,6 +72,7 @@ impl WSClient {
     let mut sink_rx = self.sender.subscribe();
     tokio::spawn(async move {
       while let Ok(msg) = sink_rx.recv().await {
+        tracing::trace!("[WS]: send message to web server");
         sink.send(msg.into()).await.unwrap();
       }
     });
