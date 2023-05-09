@@ -17,7 +17,7 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
 use collab::preclude::Collab;
 use collab_persistence::kv::KVStore;
-use collab_plugins::disk_plugin::rocksdb_server::RocksdbServerDiskPlugin;
+use collab_plugins::disk::rocksdb_server::RocksdbServerDiskPlugin;
 use tokio::net::TcpListener;
 
 use crate::setup_log;

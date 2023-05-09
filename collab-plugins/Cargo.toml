@@ -35,5 +35,5 @@ parking_lot = "0.12.1"
 [features]
 default = []
 sync = ["collab-sync", "futures-util", "tokio"]
-disk_rocksdb = ["collab-sync","collab-persistence"]
+disk_rocksdb = ["collab-sync","collab-persistence/rocksdb_db"]
 disk_sled = ["collab-persistence"]

@@ -6,8 +6,7 @@ use collab::preclude::{
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-
-use collab_plugins::disk_plugin::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
 use serde::{Deserialize, Serialize};
 
 use crate::database::{gen_row_id, timestamp};

@@ -4,7 +4,7 @@ use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_sync::client::sync::SyncQueue;
-use collab_sync::error::SyncError;
+
 use collab_sync::msg::{CSClientUpdate, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
 use y_sync::awareness::Awareness;
@@ -26,7 +26,7 @@ impl<Sink, Stream> SyncPlugin<Sink, Stream> {
     stream: Stream,
   ) -> Self
   where
-    E: Into<SyncError> + Send + Sync + 'static,
+    E: std::error::Error + Send + Sync + 'static,
     Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
     Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
   {
@@ -40,7 +40,7 @@ impl<Sink, Stream> SyncPlugin<Sink, Stream> {
 
 impl<E, Sink, Stream> CollabPlugin for SyncPlugin<Sink, Stream>
 where
-  E: Into<SyncError> + Send + Sync + 'static,
+  E: std::error::Error + Send + Sync + 'static,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {

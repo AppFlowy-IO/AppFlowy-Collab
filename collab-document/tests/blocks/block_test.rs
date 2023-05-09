@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_document::blocks::{
-  Block, BlockAction, BlockActionPayload, BlockActionType, BlockOperation, EXTERNAL_TYPE_TEXT,
+  Block, BlockAction, BlockActionPayload, BlockActionType, EXTERNAL_TYPE_TEXT,
 };
 use nanoid::nanoid;
 use serde_json::{json, to_value};

@@ -1,23 +1,36 @@
 use crate::error::WSError;
 
+use collab_sync::msg::CollabMessage;
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Message;
 
-/// The ID of a target. Each target can be a document, a folder, or a database.
-/// The WSMessage carries the ID of the target, so that the server can dispatch
+/// The ID of the handler . Each handler can be a document, a folder, or a database.
+/// The WSMessage carries the ID of the handler, so that the server can dispatch
 /// the message to the corresponding target.
-pub type TargetID = String;
+pub type HandlerID = String;
 
 /// The message sent through WebSocket.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WSMessage {
-  pub id: TargetID,
+  pub handler_id: HandlerID,
   pub payload: Vec<u8>,
 }
 
 impl WSMessage {
-  pub fn new(id: TargetID, payload: Vec<u8>) -> Self {
-    Self { id, payload }
+  pub fn new(handler_id: HandlerID, payload: Vec<u8>) -> Self {
+    Self {
+      handler_id,
+      payload,
+    }
+  }
+}
+
+impl TryFrom<&[u8]> for WSMessage {
+  type Error = WSError;
+
+  fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+    let msg = serde_json::from_slice::<WSMessage>(bytes)?;
+    Ok(msg)
   }
 }
 
@@ -39,5 +52,31 @@ impl From<WSMessage> for Message {
   fn from(msg: WSMessage) -> Self {
     let bytes = serde_json::to_vec(&msg).unwrap_or_default();
     Message::Binary(bytes)
+  }
+}
+
+impl From<CollabMessage> for WSMessage {
+  fn from(msg: CollabMessage) -> Self {
+    let handler_id = msg.handler_id().to_string();
+    let payload = msg.to_vec();
+    Self {
+      handler_id,
+      payload,
+    }
+  }
+}
+
+impl TryFrom<WSMessage> for CollabMessage {
+  type Error = WSError;
+
+  fn try_from(value: WSMessage) -> Result<Self, Self::Error> {
+    let msg = CollabMessage::from_vec(value.payload).map_err(|e| WSError::Internal(Box::new(e)))?;
+    Ok(msg)
+  }
+}
+
+impl From<WSMessage> for Result<CollabMessage, WSError> {
+  fn from(msg: WSMessage) -> Self {
+    CollabMessage::try_from(msg)
   }
 }

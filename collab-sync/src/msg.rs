@@ -18,6 +18,10 @@ pub enum CollabMessage {
 }
 
 impl CollabMessage {
+  pub fn handler_id(&self) -> &str {
+    "collab"
+  }
+
   pub fn is_init(&self) -> bool {
     matches!(self, CollabMessage::ClientInit(_))
   }

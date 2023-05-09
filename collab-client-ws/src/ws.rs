@@ -1,22 +1,25 @@
 use crate::error::WSError;
-use crate::msg::{TargetID, WSMessage};
+use crate::msg::{HandlerID, WSMessage};
 use crate::retry::ConnectAction;
 use crate::WSMessageHandler;
 use futures_util::{SinkExt, StreamExt};
 
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
+
 use tokio::sync::broadcast::{channel, Sender};
 use tokio::sync::{Mutex, RwLock};
 use tokio_retry::strategy::FixedInterval;
 use tokio_retry::Retry;
+use tokio_tungstenite::MaybeTlsStream;
 
 pub struct WSClient {
   addr: String,
   state: Mutex<ConnectState>,
   sender: Sender<WSMessage>,
-  handlers: Arc<RwLock<HashMap<TargetID, Weak<WSMessageHandler>>>>,
+  handlers: Arc<RwLock<HashMap<HandlerID, Weak<WSMessageHandler>>>>,
 }
 
 impl WSClient {
@@ -32,11 +35,16 @@ impl WSClient {
     }
   }
 
-  pub async fn connect(&self) -> Result<(), WSError> {
+  pub async fn connect(&self) -> Result<Option<SocketAddr>, WSError> {
     self.set_state(ConnectState::Connecting).await;
     let retry_strategy = FixedInterval::new(Duration::from_secs(2)).take(3);
     let action = ConnectAction::new(self.addr.clone());
     let stream = Retry::spawn(retry_strategy, action).await?;
+    let addr = match stream.get_ref() {
+      MaybeTlsStream::Plain(s) => s.local_addr().ok(),
+      _ => None,
+    };
+
     let (mut sink, mut stream) = stream.split();
 
     self.set_state(ConnectState::Connected).await;
@@ -49,7 +57,7 @@ impl WSClient {
             if let Some(handler) = handlers
               .read()
               .await
-              .get(&msg.id)
+              .get(&msg.handler_id)
               .and_then(|handler| handler.upgrade())
             {
               handler.recv_msg(&msg);
@@ -66,13 +74,10 @@ impl WSClient {
       }
     });
 
-    Ok(())
+    Ok(addr)
   }
 
-  pub async fn subscribe_with_sender(
-    &self,
-    target_id: TargetID,
-  ) -> Result<Arc<WSMessageHandler>, WSError> {
+  pub async fn subscribe(&self, target_id: HandlerID) -> Result<Arc<WSMessageHandler>, WSError> {
     let handler = Arc::new(WSMessageHandler::new(
       target_id.clone(),
       self.sender.clone(),
