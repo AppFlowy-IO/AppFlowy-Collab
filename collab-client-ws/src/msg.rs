@@ -25,6 +25,15 @@ impl WSMessage {
   }
 }
 
+impl TryFrom<&[u8]> for WSMessage {
+  type Error = WSError;
+
+  fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+    let msg = serde_json::from_slice::<WSMessage>(bytes)?;
+    Ok(msg)
+  }
+}
+
 impl TryFrom<&Message> for WSMessage {
   type Error = WSError;
 
@@ -48,7 +57,7 @@ impl From<WSMessage> for Message {
 
 impl From<CollabMessage> for WSMessage {
   fn from(msg: CollabMessage) -> Self {
-    let handler_id = msg.object_id().to_string();
+    let handler_id = msg.handler_id().to_string();
     let payload = msg.to_vec();
     Self {
       handler_id,
@@ -63,5 +72,11 @@ impl TryFrom<WSMessage> for CollabMessage {
   fn try_from(value: WSMessage) -> Result<Self, Self::Error> {
     let msg = CollabMessage::from_vec(value.payload).map_err(|e| WSError::Internal(Box::new(e)))?;
     Ok(msg)
+  }
+}
+
+impl From<WSMessage> for Result<CollabMessage, WSError> {
+  fn from(msg: WSMessage) -> Self {
+    CollabMessage::try_from(msg)
   }
 }

@@ -5,7 +5,8 @@ use std::fmt::Debug;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::sync::broadcast::{channel, Sender};
-use tokio_stream::wrappers::BroadcastStream;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 pub struct WSMessageHandler {
   target_id: HandlerID,
@@ -35,25 +36,35 @@ impl WSMessageHandler {
   where
     T: Into<WSMessage> + Send + Sync + 'static + Clone,
   {
-    let (tx, mut rx) = channel::<T>(1000);
+    let (tx, mut rx) = unbounded_channel::<T>();
     let cloned_sender = self.sender.clone();
     tokio::spawn(async move {
-      while let Ok(msg) = rx.recv().await {
+      while let Some(msg) = rx.recv().await {
         let _ = cloned_sender.send(msg.into());
       }
     });
     BroadcastSink::new(tx)
   }
 
-  pub fn stream(&self) -> BroadcastStream<WSMessage> {
-    BroadcastStream::new(self.receiver.subscribe())
+  pub fn stream<T>(&self) -> UnboundedReceiverStream<T>
+  where
+    T: From<WSMessage> + Send + Sync + 'static,
+  {
+    let (tx, rx) = unbounded_channel::<T>();
+    let mut recv = self.receiver.subscribe();
+    tokio::spawn(async move {
+      while let Ok(msg) = recv.recv().await {
+        let _ = tx.send(T::from(msg));
+      }
+    });
+    UnboundedReceiverStream::new(rx)
   }
 }
 
-pub struct BroadcastSink<T>(pub Sender<T>);
+pub struct BroadcastSink<T>(pub UnboundedSender<T>);
 
 impl<T> BroadcastSink<T> {
-  pub fn new(tx: Sender<T>) -> Self {
+  pub fn new(tx: UnboundedSender<T>) -> Self {
     Self(tx)
   }
 }
