@@ -5,35 +5,13 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 pub fn json_str_to_hashmap(json_str: &str) -> Result<HashMap<String, Value>, DocumentError> {
-  let v = serde_json::from_str(json_str);
-  v.map_err(|_| DocumentError::ConvertDataError)
+  serde_json::from_str(json_str).map_err(|_| DocumentError::ConvertDataError)
 }
 
 pub fn hashmap_to_json_str(data: HashMap<String, Value>) -> Result<String, DocumentError> {
-  let v = serde_json::to_string(&data);
-  v.map_err(|_| DocumentError::ConvertDataError)
+  serde_json::to_string(&data).map_err(|_| DocumentError::ConvertDataError)
 }
 
-fn parse_yrs_value(txn: &TransactionMut, value: &YrsValue) -> String {
-  match value {
-    YrsValue::YArray(val) => {
-      let array = val
-        .iter(txn)
-        .map(|v| v.to_string(txn))
-        .collect::<Vec<String>>();
-      serde_json::to_string(&array).unwrap_or_default()
-    },
-    YrsValue::YMap(val) => {
-      let obj: HashMap<String, String> = HashMap::from_iter(
-        val
-          .iter(txn)
-          .map(|(k, v)| (k.to_string(), v.to_string(txn))),
-      );
-      serde_json::to_string(&obj).unwrap_or_default()
-    },
-    _ => "".to_string(),
-  }
-}
 pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
   let path = event
     .path()
@@ -89,4 +67,24 @@ pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
     _ => vec![],
   };
   BlockEvent::new(delta)
+}
+
+fn parse_yrs_value(txn: &TransactionMut, value: &YrsValue) -> String {
+  match value {
+    YrsValue::YArray(val) => {
+      let array = val
+        .iter(txn)
+        .map(|v| v.to_string(txn))
+        .collect::<Vec<String>>();
+      serde_json::to_string(&array).unwrap_or_default()
+    },
+    YrsValue::YMap(val) => {
+      let obj = val
+        .iter(txn)
+        .map(|(k, v)| (k.to_string(), v.to_string(txn)))
+        .collect::<HashMap<String, String>>();
+      serde_json::to_string(&obj).unwrap_or_default()
+    },
+    _ => "".to_string(),
+  }
 }
