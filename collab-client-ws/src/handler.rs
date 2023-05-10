@@ -1,32 +1,31 @@
 use crate::error::WSError;
-use crate::{HandlerID, WSMessage};
+use crate::{BusinessID, WSMessage};
 use futures_util::Sink;
 use std::fmt::Debug;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio::sync::broadcast::error::SendError;
 use tokio::sync::broadcast::{channel, Sender};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 pub struct WSMessageHandler {
-  target_id: HandlerID,
+  business_id: BusinessID,
   sender: Sender<WSMessage>,
   receiver: Sender<WSMessage>,
 }
 
 impl WSMessageHandler {
-  pub fn new(target_id: HandlerID, sender: Sender<WSMessage>) -> Self {
+  pub fn new(business_id: BusinessID, sender: Sender<WSMessage>) -> Self {
     let (receiver, _) = channel(1000);
     Self {
-      target_id,
+      business_id,
       sender,
       receiver,
     }
   }
 
-  pub fn target_id(&self) -> &str {
-    &self.target_id
+  pub fn business_id(&self) -> &str {
+    &self.business_id
   }
 
   pub(crate) fn recv_msg(&self, msg: &WSMessage) {

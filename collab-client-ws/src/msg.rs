@@ -4,22 +4,19 @@ use collab_sync::msg::CollabMessage;
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Message;
 
-/// The ID of the handler . Each handler can be a document, a folder, or a database.
-/// The WSMessage carries the ID of the handler, so that the server can dispatch
-/// the message to the corresponding target.
-pub type HandlerID = String;
+pub type BusinessID = String;
 
 /// The message sent through WebSocket.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WSMessage {
-  pub handler_id: HandlerID,
+  pub business_id: BusinessID,
   pub payload: Vec<u8>,
 }
 
 impl WSMessage {
-  pub fn new(handler_id: HandlerID, payload: Vec<u8>) -> Self {
+  pub fn new(business_id: BusinessID, payload: Vec<u8>) -> Self {
     Self {
-      handler_id,
+      business_id,
       payload,
     }
   }
@@ -57,10 +54,10 @@ impl From<WSMessage> for Message {
 
 impl From<CollabMessage> for WSMessage {
   fn from(msg: CollabMessage) -> Self {
-    let handler_id = msg.handler_id().to_string();
+    let business_id = msg.business_id().to_string();
     let payload = msg.to_vec();
     Self {
-      handler_id,
+      business_id,
       payload,
     }
   }
@@ -70,7 +67,8 @@ impl TryFrom<WSMessage> for CollabMessage {
   type Error = WSError;
 
   fn try_from(value: WSMessage) -> Result<Self, Self::Error> {
-    let msg = CollabMessage::from_vec(value.payload).map_err(|e| WSError::Internal(Box::new(e)))?;
+    let msg =
+      CollabMessage::from_vec(&value.payload).map_err(|e| WSError::Internal(Box::new(e)))?;
     Ok(msg)
   }
 }

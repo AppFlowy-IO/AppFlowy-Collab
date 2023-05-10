@@ -18,7 +18,7 @@ pub enum CollabMessage {
 }
 
 impl CollabMessage {
-  pub fn handler_id(&self) -> &str {
+  pub fn business_id(&self) -> &str {
     "collab"
   }
 
@@ -136,8 +136,8 @@ impl CollabMessage {
     serde_json::to_vec(self).unwrap_or_default()
   }
 
-  pub fn from_vec(data: Vec<u8>) -> Result<Self, SyncError> {
-    serde_json::from_slice(&data).map_err(SyncError::SerdeError)
+  pub fn from_vec(data: &[u8]) -> Result<Self, SyncError> {
+    serde_json::from_slice(data).map_err(SyncError::SerdeError)
   }
 
   pub fn into_payload(self) -> Vec<u8> {

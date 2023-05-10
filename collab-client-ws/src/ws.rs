@@ -1,5 +1,5 @@
 use crate::error::WSError;
-use crate::msg::{HandlerID, WSMessage};
+use crate::msg::{BusinessID, WSMessage};
 use crate::retry::ConnectAction;
 use crate::WSMessageHandler;
 use futures_util::{SinkExt, StreamExt};
@@ -19,7 +19,7 @@ pub struct WSClient {
   addr: String,
   state: Mutex<ConnectState>,
   sender: Sender<WSMessage>,
-  handlers: Arc<RwLock<HashMap<HandlerID, Weak<WSMessageHandler>>>>,
+  handlers: Arc<RwLock<HashMap<BusinessID, Weak<WSMessageHandler>>>>,
 }
 
 impl WSClient {
@@ -57,8 +57,11 @@ impl WSClient {
             if let Some(handler) = handlers
               .read()
               .await
-              .get(&msg.handler_id)
-              .and_then(|handler| handler.upgrade())
+              .get(&msg.business_id)
+              .and_then(|handler| {
+                let a = handler.upgrade();
+                a
+              })
             {
               handler.recv_msg(&msg);
             }
@@ -80,16 +83,18 @@ impl WSClient {
     Ok(addr)
   }
 
-  pub async fn subscribe(&self, target_id: HandlerID) -> Result<Arc<WSMessageHandler>, WSError> {
+  /// Return a [WSMessageHandler] that can be used to send messages to the websocket. Caller should
+  /// keep the handler alive as long as it wants to receive messages from the websocket.
+  pub async fn subscribe(&self, business_id: BusinessID) -> Result<Arc<WSMessageHandler>, WSError> {
     let handler = Arc::new(WSMessageHandler::new(
-      target_id.clone(),
+      business_id.clone(),
       self.sender.clone(),
     ));
     self
       .handlers
       .write()
       .await
-      .insert(target_id, Arc::downgrade(&handler));
+      .insert(business_id, Arc::downgrade(&handler));
     Ok(handler)
   }
 

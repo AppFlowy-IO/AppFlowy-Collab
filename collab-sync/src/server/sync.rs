@@ -53,7 +53,7 @@ impl Decoder for CollabMsgCodec {
   fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
     if let Some(bytes) = self.0.decode(src)? {
       let bytes = bytes.freeze().to_vec();
-      let msg = CollabMessage::from_vec(bytes).ok();
+      let msg = CollabMessage::from_vec(&bytes).ok();
       Ok(msg)
     } else {
       Ok(None)
