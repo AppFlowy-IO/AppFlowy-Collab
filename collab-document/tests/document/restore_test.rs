@@ -2,7 +2,7 @@ use std::thread;
 
 use collab_document::blocks::Block;
 
-use crate::util::util::{
+use crate::util::{
   create_document, create_document_with_db, db, get_document_data, open_document_with_db,
 };
 

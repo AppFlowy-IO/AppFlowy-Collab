@@ -58,10 +58,7 @@ impl WSClient {
               .read()
               .await
               .get(&msg.business_id)
-              .and_then(|handler| {
-                let a = handler.upgrade();
-                a
-              })
+              .and_then(|handler| handler.upgrade())
             {
               handler.recv_msg(&msg);
             }

@@ -24,6 +24,7 @@ pub struct CollabGroup {
 }
 
 impl CollabGroup {
+  /// Mutate the [Collab] by the given closure
   pub fn get_mut_collab<F>(&self, f: F)
   where
     F: FnOnce(&Collab),

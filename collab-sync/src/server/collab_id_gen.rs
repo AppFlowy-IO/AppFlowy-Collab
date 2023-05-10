@@ -11,6 +11,7 @@ const TIMESTAMP_SHIFT: u64 = NODE_BITS + SEQUENCE_BITS;
 const SCOPE_SHIFT: u64 = TIMESTAMP_BITS + TIMESTAMP_SHIFT;
 const SEQUENCE_MASK: u64 = (1 << SEQUENCE_BITS) - 1;
 
+/// The [CollabId] is the id of the object that save to disk.
 pub type CollabId = i64;
 
 pub const COLLAB_ID_LEN: usize = 8;
