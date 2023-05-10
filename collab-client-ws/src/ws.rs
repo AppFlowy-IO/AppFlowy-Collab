@@ -36,11 +36,13 @@ impl Default for WSClientConfig {
   }
 }
 
+type HandlerByObjectId = HashMap<String, Weak<WSBusinessHandler>>;
+
 pub struct WSClient {
   addr: String,
   state: Arc<Mutex<ConnectStateNotify>>,
   sender: Sender<Message>,
-  handlers: Arc<RwLock<HashMap<BusinessID, Weak<WSBusinessHandler>>>>,
+  handlers: Arc<RwLock<HashMap<BusinessID, HandlerByObjectId>>>,
   ping: Arc<Mutex<ServerFixIntervalPing>>,
 }
 
@@ -91,6 +93,7 @@ impl WSClient {
                   .read()
                   .await
                   .get(&msg.business_id)
+                  .and_then(|map| map.get(&msg.object_id))
                   .and_then(|handler| handler.upgrade())
                 {
                   handler.recv_msg(&msg);
@@ -128,17 +131,21 @@ impl WSClient {
   /// keep the handler alive as long as it wants to receive messages from the websocket.
   pub async fn subscribe_business(
     &self,
+    object_id: String,
     business_id: BusinessID,
   ) -> Result<Arc<WSBusinessHandler>, WSError> {
     let handler = Arc::new(WSBusinessHandler::new(
       business_id.clone(),
+      object_id.clone(),
       self.sender.clone(),
     ));
     self
       .handlers
       .write()
       .await
-      .insert(business_id, Arc::downgrade(&handler));
+      .entry(object_id.clone())
+      .or_insert_with(HashMap::new)
+      .insert(object_id, Arc::downgrade(&handler));
     Ok(handler)
   }
 

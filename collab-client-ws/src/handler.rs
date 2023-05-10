@@ -10,15 +10,18 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::tungstenite::Message;
 
 pub struct WSBusinessHandler {
+  #[allow(dead_code)]
+  object_id: String,
   business_id: BusinessID,
   sender: Sender<Message>,
   receiver: Sender<WSMessage>,
 }
 
 impl WSBusinessHandler {
-  pub fn new(business_id: BusinessID, sender: Sender<Message>) -> Self {
+  pub fn new(business_id: BusinessID, object_id: String, sender: Sender<Message>) -> Self {
     let (receiver, _) = channel(1000);
     Self {
+      object_id,
       business_id,
       sender,
       receiver,
