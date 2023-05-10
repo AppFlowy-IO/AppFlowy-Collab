@@ -35,13 +35,14 @@ impl WSBusinessHandler {
 
   pub fn sink<T>(&self) -> BroadcastSink<T>
   where
-    T: Into<Message> + Send + Sync + 'static + Clone,
+    T: Into<WSMessage> + Send + Sync + 'static + Clone,
   {
     let (tx, mut rx) = unbounded_channel::<T>();
     let cloned_sender = self.sender.clone();
     tokio::spawn(async move {
       while let Some(msg) = rx.recv().await {
-        match cloned_sender.send(msg.into()) {
+        let ws_msg: WSMessage = msg.into();
+        match cloned_sender.send(ws_msg.into()) {
           Ok(_) => {},
           Err(e) => tracing::error!("🔴Error sending message: {:?}", e),
         }

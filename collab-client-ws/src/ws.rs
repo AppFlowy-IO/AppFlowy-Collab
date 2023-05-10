@@ -16,6 +16,26 @@ use tokio_retry::Retry;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::MaybeTlsStream;
 
+pub struct WSClientConfig {
+  /// specifies the number of messages that the channel can hold at any given
+  /// time. It is used to set the initial size of the channel's internal buffer
+  pub buffer_capacity: usize,
+  /// specifies the number of seconds between each ping message
+  pub ping_per_secs: u64,
+  /// specifies the number of pings that the client will start reconnecting
+  pub retry_connect_per_pings: u32,
+}
+
+impl Default for WSClientConfig {
+  fn default() -> Self {
+    Self {
+      buffer_capacity: 1000,
+      ping_per_secs: 8,
+      retry_connect_per_pings: 10,
+    }
+  }
+}
+
 pub struct WSClient {
   addr: String,
   state: Arc<Mutex<ConnectStateNotify>>,
@@ -25,14 +45,15 @@ pub struct WSClient {
 }
 
 impl WSClient {
-  pub fn new(addr: String, buffer_capacity: usize) -> Self {
-    let (sender, _) = channel(buffer_capacity);
+  pub fn new(addr: String, config: WSClientConfig) -> Self {
+    let (sender, _) = channel(config.buffer_capacity);
     let state = Arc::new(Mutex::new(ConnectStateNotify::new()));
     let handlers = Arc::new(RwLock::new(HashMap::new()));
     let ping = Arc::new(Mutex::new(ServerFixIntervalPing::new(
-      Duration::from_secs(10),
+      Duration::from_secs(config.ping_per_secs),
       state.clone(),
       sender.clone(),
+      config.retry_connect_per_pings,
     )));
     WSClient {
       addr,
@@ -133,10 +154,12 @@ impl WSClient {
 struct ServerFixIntervalPing {
   duration: Duration,
   sender: Option<Sender<Message>>,
+  #[allow(dead_code)]
   stop_tx: tokio::sync::mpsc::Sender<()>,
   stop_rx: Option<tokio::sync::mpsc::Receiver<()>>,
   state: Arc<Mutex<ConnectStateNotify>>,
   ping_count: Arc<Mutex<u32>>,
+  retry_connect_per_pings: u32,
 }
 
 impl ServerFixIntervalPing {
@@ -144,6 +167,7 @@ impl ServerFixIntervalPing {
     duration: Duration,
     state: Arc<Mutex<ConnectStateNotify>>,
     sender: Sender<Message>,
+    retry_connect_per_pings: u32,
   ) -> Self {
     let (tx, rx) = tokio::sync::mpsc::channel(1000);
     Self {
@@ -153,6 +177,7 @@ impl ServerFixIntervalPing {
       state,
       sender: Some(sender),
       ping_count: Arc::new(Mutex::new(0)),
+      retry_connect_per_pings,
     }
   }
 
@@ -163,16 +188,18 @@ impl ServerFixIntervalPing {
     let mut receiver = sender.subscribe();
     let weak_ping_count = Arc::downgrade(&self.ping_count);
     let weak_state = Arc::downgrade(&self.state);
+    let reconnect_per_ping = self.retry_connect_per_pings;
     tokio::spawn(async move {
       loop {
         tokio::select! {
           _ = interval.tick() => {
             // Send the ping
+            tracing::trace!("🟢Send ping to server");
             let _ = sender.send(Message::Ping(vec![]));
             if let Some(ping_count) = weak_ping_count.upgrade() {
               let mut lock = ping_count.lock().await;
               // After ten ping were sent, mark the connection as disconnected
-              if *lock >= 10 {
+              if *lock >= reconnect_per_ping {
                 if let Some(state) =weak_state.upgrade() {
                   state.lock().await.set_state(ConnectState::Disconnected);
                 }
@@ -183,6 +210,7 @@ impl ServerFixIntervalPing {
           },
           msg = receiver.recv() => {
             if let Ok(Message::Pong(_)) = msg {
+              tracing::trace!("🟢Receive pong from server");
               if let Some(ping_count) = weak_ping_count.upgrade() {
                 let mut lock = ping_count.lock().await;
                 *lock = 0;
@@ -217,8 +245,11 @@ impl ConnectStateNotify {
   }
 
   fn set_state(&mut self, state: ConnectState) {
-    self.state = state.clone();
-    let _ = self.sender.send(state);
+    if self.state != state {
+      tracing::trace!("[WSClient]: connect state changed to {:?}", state);
+      self.state = state.clone();
+      let _ = self.sender.send(state);
+    }
   }
 
   fn subscribe(&self) -> Receiver<ConnectState> {
@@ -226,7 +257,7 @@ impl ConnectStateNotify {
   }
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum ConnectState {
   Connecting,
   Connected,
