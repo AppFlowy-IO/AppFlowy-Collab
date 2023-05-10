@@ -7,15 +7,16 @@ use std::task::{Context, Poll};
 use tokio::sync::broadcast::{channel, Sender};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio_tungstenite::tungstenite::Message;
 
-pub struct WSMessageHandler {
+pub struct WSBusinessHandler {
   business_id: BusinessID,
-  sender: Sender<WSMessage>,
+  sender: Sender<Message>,
   receiver: Sender<WSMessage>,
 }
 
-impl WSMessageHandler {
-  pub fn new(business_id: BusinessID, sender: Sender<WSMessage>) -> Self {
+impl WSBusinessHandler {
+  pub fn new(business_id: BusinessID, sender: Sender<Message>) -> Self {
     let (receiver, _) = channel(1000);
     Self {
       business_id,
@@ -40,7 +41,8 @@ impl WSMessageHandler {
     let cloned_sender = self.sender.clone();
     tokio::spawn(async move {
       while let Some(msg) = rx.recv().await {
-        match cloned_sender.send(msg.into()) {
+        let ws_msg: WSMessage = msg.into();
+        match cloned_sender.send(ws_msg.into()) {
           Ok(_) => {},
           Err(e) => tracing::error!("🔴Error sending message: {:?}", e),
         }
