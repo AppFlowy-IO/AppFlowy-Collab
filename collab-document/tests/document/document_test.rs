@@ -1,7 +1,7 @@
 use collab_document::blocks::{Block, BlockAction, BlockActionPayload, BlockActionType};
 use nanoid::nanoid;
 
-use crate::util::util::{apply_actions, create_document, get_document_data};
+use crate::util::{apply_actions, create_document, get_document_data};
 
 #[test]
 fn insert_block_with_empty_parent_id_and_empty_prev_id() {
