@@ -1,7 +1,7 @@
 use crate::error::WSError;
 use crate::msg::{BusinessID, WSMessage};
 use crate::retry::ConnectAction;
-use crate::WSBusinessHandler;
+use crate::WSObjectHandler;
 use futures_util::{SinkExt, StreamExt};
 
 use std::collections::HashMap;
@@ -36,11 +36,13 @@ impl Default for WSClientConfig {
   }
 }
 
+type HandlerByObjectId = HashMap<String, Weak<WSObjectHandler>>;
+
 pub struct WSClient {
   addr: String,
   state: Arc<Mutex<ConnectStateNotify>>,
   sender: Sender<Message>,
-  handlers: Arc<RwLock<HashMap<BusinessID, Weak<WSBusinessHandler>>>>,
+  handlers: Arc<RwLock<HashMap<BusinessID, HandlerByObjectId>>>,
   ping: Arc<Mutex<ServerFixIntervalPing>>,
 }
 
@@ -91,6 +93,7 @@ impl WSClient {
                   .read()
                   .await
                   .get(&msg.business_id)
+                  .and_then(|map| map.get(&msg.object_id))
                   .and_then(|handler| handler.upgrade())
                 {
                   handler.recv_msg(&msg);
@@ -116,7 +119,7 @@ impl WSClient {
     let mut sink_rx = self.sender.subscribe();
     tokio::spawn(async move {
       while let Ok(msg) = sink_rx.recv().await {
-        tracing::trace!("[WS]: send message to web server");
+        tracing::trace!("[WS Application]: send message to server");
         sink.send(msg).await.unwrap();
       }
     });
@@ -124,21 +127,25 @@ impl WSClient {
     Ok(addr)
   }
 
-  /// Return a [WSBusinessHandler] that can be used to send messages to the websocket. Caller should
+  /// Return a [WSObjectHandler] that can be used to send messages to the websocket. Caller should
   /// keep the handler alive as long as it wants to receive messages from the websocket.
-  pub async fn subscribe_business(
+  pub async fn subscribe(
     &self,
     business_id: BusinessID,
-  ) -> Result<Arc<WSBusinessHandler>, WSError> {
-    let handler = Arc::new(WSBusinessHandler::new(
-      business_id.clone(),
+    object_id: String,
+  ) -> Result<Arc<WSObjectHandler>, WSError> {
+    let handler = Arc::new(WSObjectHandler::new(
+      business_id,
+      object_id.clone(),
       self.sender.clone(),
     ));
     self
       .handlers
       .write()
       .await
-      .insert(business_id, Arc::downgrade(&handler));
+      .entry(business_id)
+      .or_insert_with(HashMap::new)
+      .insert(object_id, Arc::downgrade(&handler));
     Ok(handler)
   }
 

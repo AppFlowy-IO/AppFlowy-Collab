@@ -23,8 +23,9 @@ use crate::msg::{
 };
 use crate::protocol::{handle_msg, DefaultSyncProtocol};
 
-/// A broadcast  can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
-/// to subscribes.
+/// A broadcast can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
+/// to subscribes. One broadcast can be used to propagate updates for a single document with
+/// object_id.
 pub struct CollabBroadcast {
   object_id: String,
   collab: MutexCollab,
@@ -124,7 +125,7 @@ impl CollabBroadcast {
     <Sink as futures_util::Sink<CollabMessage>>::Error: std::error::Error + Send + Sync,
     E: std::error::Error + Send + Sync + 'static,
   {
-    tracing::trace!("[💭Server]: new client");
+    tracing::trace!("[💭Server]: new subscriber");
     let sink = Arc::new(Mutex::new(sink));
     // Receive a update from the document observer and forward the applied update to all
     // connected subscribers using its Sink.
@@ -169,8 +170,12 @@ impl CollabBroadcast {
 
           let origin = collab_msg.origin();
           let is_client_init = collab_msg.is_init();
-          tracing::trace!("[💭Server]: {}", collab_msg);
 
+          if object_id != collab_msg.object_id() {
+            tracing::error!("[🔴Server]: Incoming message's object id does not match the broadcast group's object id");
+            continue;
+          }
+          tracing::trace!("[💭Server]: {}", collab_msg,);
           let payload = collab_msg.payload().unwrap();
           let mut decoder = DecoderV1::from(payload.as_ref());
           let mut sink = sink.lock().await;

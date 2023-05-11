@@ -9,24 +9,27 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::tungstenite::Message;
 
-pub struct WSBusinessHandler {
+pub struct WSObjectHandler {
+  #[allow(dead_code)]
+  object_id: String,
   business_id: BusinessID,
   sender: Sender<Message>,
   receiver: Sender<WSMessage>,
 }
 
-impl WSBusinessHandler {
-  pub fn new(business_id: BusinessID, sender: Sender<Message>) -> Self {
+impl WSObjectHandler {
+  pub fn new(business_id: BusinessID, object_id: String, sender: Sender<Message>) -> Self {
     let (receiver, _) = channel(1000);
     Self {
+      object_id,
       business_id,
       sender,
       receiver,
     }
   }
 
-  pub fn business_id(&self) -> &str {
-    &self.business_id
+  pub fn business_id(&self) -> u8 {
+    self.business_id
   }
 
   pub(crate) fn recv_msg(&self, msg: &WSMessage) {
