@@ -4,7 +4,7 @@ use collab_sync::msg::CollabMessage;
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Message;
 
-pub type BusinessID = String;
+pub type BusinessID = u8;
 
 /// The message sent through WebSocket.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,7 +56,7 @@ impl From<WSMessage> for Message {
 
 impl From<CollabMessage> for WSMessage {
   fn from(msg: CollabMessage) -> Self {
-    let business_id = msg.business_id().to_string();
+    let business_id = msg.business_id();
     let object_id = msg.object_id().to_string();
     let payload = msg.to_vec();
     Self {

@@ -1,7 +1,7 @@
 use crate::error::WSError;
 use crate::msg::{BusinessID, WSMessage};
 use crate::retry::ConnectAction;
-use crate::WSBusinessHandler;
+use crate::WSObjectHandler;
 use futures_util::{SinkExt, StreamExt};
 
 use std::collections::HashMap;
@@ -36,7 +36,7 @@ impl Default for WSClientConfig {
   }
 }
 
-type HandlerByObjectId = HashMap<String, Weak<WSBusinessHandler>>;
+type HandlerByObjectId = HashMap<String, Weak<WSObjectHandler>>;
 
 pub struct WSClient {
   addr: String,
@@ -119,7 +119,7 @@ impl WSClient {
     let mut sink_rx = self.sender.subscribe();
     tokio::spawn(async move {
       while let Ok(msg) = sink_rx.recv().await {
-        tracing::trace!("[WS]: send message to web server");
+        tracing::trace!("[WS Application]: send message to server");
         sink.send(msg).await.unwrap();
       }
     });
@@ -127,15 +127,15 @@ impl WSClient {
     Ok(addr)
   }
 
-  /// Return a [WSBusinessHandler] that can be used to send messages to the websocket. Caller should
+  /// Return a [WSObjectHandler] that can be used to send messages to the websocket. Caller should
   /// keep the handler alive as long as it wants to receive messages from the websocket.
-  pub async fn subscribe_business(
+  pub async fn subscribe(
     &self,
-    object_id: String,
     business_id: BusinessID,
-  ) -> Result<Arc<WSBusinessHandler>, WSError> {
-    let handler = Arc::new(WSBusinessHandler::new(
-      business_id.clone(),
+    object_id: String,
+  ) -> Result<Arc<WSObjectHandler>, WSError> {
+    let handler = Arc::new(WSObjectHandler::new(
+      business_id,
       object_id.clone(),
       self.sender.clone(),
     ));
@@ -143,7 +143,7 @@ impl WSClient {
       .handlers
       .write()
       .await
-      .entry(object_id.clone())
+      .entry(business_id)
       .or_insert_with(HashMap::new)
       .insert(object_id, Arc::downgrade(&handler));
     Ok(handler)

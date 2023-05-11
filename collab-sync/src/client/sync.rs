@@ -205,9 +205,6 @@ where
   where
     P: CollabSyncProtocol + Send + Sync + 'static,
   {
-    //FIXME: Should use the passed in origin instead of the origin from the message.
-    // let origin = msg.origin();
-
     match msg {
       CollabMessage::ServerAck(ack) => {
         if let Some(payload) = &ack.payload {

@@ -18,8 +18,9 @@ pub enum CollabMessage {
 }
 
 impl CollabMessage {
-  pub fn business_id(&self) -> &str {
-    "collab"
+  /// Currently, only have one business id. So just return 1.
+  pub fn business_id(&self) -> u8 {
+    1
   }
 
   pub fn is_init(&self) -> bool {
@@ -89,17 +90,17 @@ impl Display for CollabMessage {
         value.msg_id,
       )),
       CollabMessage::ServerSync(value) => f.write_fmt(format_args!(
-        "sync state: [oid:{}|payload_len:{}|msg_id:{}]",
+        "server sync state: [oid:{}|payload_len:{}|msg_id:{}]",
         value.object_id,
         value.payload.len(),
         value.msg_id,
       )),
       CollabMessage::ClientUpdate(value) => f.write_fmt(format_args!(
-        "send client update: [{}|oid:{}|payload_len:{}|msg_id:{}]",
+        "send client update: [{}|oid:{}|msg_id:{}|payload_len:{}]",
         value.origin,
         value.object_id,
-        value.payload.len(),
         value.msg_id,
+        value.payload.len(),
       )),
       CollabMessage::ServerResponse(value) => f.write_fmt(format_args!(
         "server response: [oid:{}|payload_len:{}]",
