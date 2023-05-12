@@ -15,3 +15,6 @@ pub mod disk {
   pub use crate::disk_plugin::*;
   pub use collab_persistence::*;
 }
+
+#[cfg(feature = "aws")]
+mod aws_plugin;
