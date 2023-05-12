@@ -15,8 +15,11 @@ collab-client-ws = { path = "../collab-client-ws" }
 futures-util = { version = "0.3", features = ["sink"], optional = true }
 tokio = { version = "1.26.0", features = ["net", "sync", "time"], optional = true }
 tracing = { version = "0.1.37" }
-rusoto_core = {version = "0.48", optional = true }
-rusoto_dynamodb = {version = "0.48", optional = true }
+parking_lot = "0.12.1"
+aws-config = { version = "0.55.2", optional = true }
+aws-sdk-dynamodb = { version = "0.27.0", optional = true }
+anyhow = "1.0.71"
+tokio-retry = "0.3"
 
 [dev-dependencies]
 collab-plugins = { path = ".", features = ["sync", "disk_rocksdb", "disk_sled",] }
@@ -30,7 +33,6 @@ serde_json = "1.0.64"
 serde = "1.0.160"
 collab-persistence = { path = "../collab-persistence" }
 rand = "0.8"
-anyhow = "1.0.71"
 lib0 = { version = "0.16.3", features = ["lib0-serde"] }
 parking_lot = "0.12.1"
 
@@ -40,4 +42,4 @@ default = ["aws"]
 sync = ["collab-sync", "futures-util", "tokio"]
 disk_rocksdb = ["collab-sync","collab-persistence/rocksdb_db"]
 disk_sled = ["collab-persistence"]
-aws = ["rusoto_dynamodb", "rusoto_core"]
+aws = ["aws-config", "aws-sdk-dynamodb"]
