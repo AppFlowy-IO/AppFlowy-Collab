@@ -4,6 +4,7 @@ use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
+mod cloud_storage;
 mod disk;
 mod mock_sync;
 mod sync;

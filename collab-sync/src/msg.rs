@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
 use collab::core::origin::CollabOrigin;
@@ -6,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::SyncError;
 
-#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CollabMessage {
   ClientInit(CSClientInit),
   ServerSync(CSServerSync),
@@ -15,6 +16,34 @@ pub enum CollabMessage {
   ServerResponse(CSServerResponse),
   ServerBroadcast(CSServerBroadcast),
   ServerAck(CSServerAck),
+}
+
+impl Eq for CollabMessage {}
+
+impl PartialEq for CollabMessage {
+  fn eq(&self, other: &Self) -> bool {
+    self.msg_id() == other.msg_id()
+  }
+}
+
+impl PartialOrd for CollabMessage {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
+  }
+}
+
+impl Ord for CollabMessage {
+  fn cmp(&self, other: &Self) -> Ordering {
+    match (&self, &other) {
+      (CollabMessage::ClientInit { .. }, CollabMessage::ClientInit { .. }) => Ordering::Equal,
+      (CollabMessage::ClientInit { .. }, _) => Ordering::Greater,
+      (_, CollabMessage::ClientInit { .. }) => Ordering::Less,
+      (CollabMessage::ServerSync { .. }, CollabMessage::ServerSync { .. }) => Ordering::Equal,
+      (CollabMessage::ServerSync { .. }, _) => Ordering::Greater,
+      (_, CollabMessage::ServerSync { .. }) => Ordering::Less,
+      _ => self.msg_id().cmp(&other.msg_id()).reverse(),
+    }
+  }
 }
 
 impl CollabMessage {

@@ -16,5 +16,5 @@ pub mod disk {
   pub use collab_persistence::*;
 }
 
-#[cfg(feature = "aws")]
-mod aws_plugin;
+#[cfg(feature = "cloud_storage")]
+pub mod cloud_storage_plugin;

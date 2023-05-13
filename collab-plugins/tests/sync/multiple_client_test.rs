@@ -1,7 +1,7 @@
 use collab::preclude::MapRefExtension;
 use serde_json::json;
 
-use crate::util::{spawn_client, spawn_server, wait_a_sec};
+use crate::util::{spawn_client, spawn_server, wait_one_sec};
 
 #[tokio::test]
 async fn open_existing_doc_with_different_client_test() {
@@ -10,7 +10,7 @@ async fn open_existing_doc_with_different_client_test() {
   let server = spawn_server(object_id).await.unwrap();
   let (_, _client_1) = spawn_client(1, object_id, server.address).await.unwrap();
   let (_, _client_2) = spawn_client(1, object_id, server.address).await.unwrap();
-  wait_a_sec().await;
+  wait_one_sec().await;
 
   assert_json_diff::assert_json_eq!(
     server.get_doc_json(object_id),
@@ -30,7 +30,7 @@ async fn single_write_sync_with_server_test() {
   let server = spawn_server(object_id).await.unwrap();
   let (_, client_1) = spawn_client(1, object_id, server.address).await.unwrap();
   let (_, client2) = spawn_client(1, object_id, server.address).await.unwrap();
-  wait_a_sec().await;
+  wait_one_sec().await;
   {
     let client = client_1.lock();
     client.with_transact_mut(|txn| {
@@ -39,7 +39,7 @@ async fn single_write_sync_with_server_test() {
       map.insert_with_txn(txn, "task4", "d");
     });
   }
-  wait_a_sec().await;
+  wait_one_sec().await;
   assert_json_diff::assert_json_eq!(
     client_1.to_json_value(),
     json!( {
@@ -62,7 +62,7 @@ async fn two_writers_test() {
   let server = spawn_server(object_id).await.unwrap();
   let (_, client_1) = spawn_client(1, object_id, server.address).await.unwrap();
   let (_, client_2) = spawn_client(1, object_id, server.address).await.unwrap();
-  wait_a_sec().await;
+  wait_one_sec().await;
 
   {
     let client = client_1.lock();
@@ -79,7 +79,7 @@ async fn two_writers_test() {
     });
   }
 
-  wait_a_sec().await;
+  wait_one_sec().await;
 
   let client_1_json = client_1.to_json_value();
   let client_2_json = client_2.to_json_value();
@@ -107,7 +107,7 @@ async fn two_clients_last_write_win_test() {
   // let db = create_local_disk_document(1, object_id, server.address).await;
   let (_, client_1) = spawn_client(1, object_id, server.address).await.unwrap();
   let (_, client_2) = spawn_client(1, object_id, server.address).await.unwrap();
-  wait_a_sec().await;
+  wait_one_sec().await;
   {
     let client = client_1.lock();
     client.with_transact_mut(|txn| {
@@ -115,7 +115,7 @@ async fn two_clients_last_write_win_test() {
       map.insert_with_txn(txn, "task2", "bb");
     });
   }
-  wait_a_sec().await;
+  wait_one_sec().await;
   {
     let client = client_2.lock();
     client.with_transact_mut(|txn| {
@@ -124,7 +124,7 @@ async fn two_clients_last_write_win_test() {
     });
   }
 
-  wait_a_sec().await;
+  wait_one_sec().await;
   let client_1_json = client_1.to_json_value();
   let client_2_json = client_2.to_json_value();
   let server_json = server.get_doc_json(object_id);
@@ -148,7 +148,7 @@ async fn last_write_win_test() {
   let server = spawn_server(object_id).await.unwrap();
   let (_, client_1) = spawn_client(uid, object_id, server.address).await.unwrap();
   let (_, client_2) = spawn_client(uid, object_id, server.address).await.unwrap();
-  wait_a_sec().await;
+  wait_one_sec().await;
   {
     let client = client_1.lock();
     client.with_transact_mut(|txn| {
@@ -156,7 +156,7 @@ async fn last_write_win_test() {
       map.insert_with_txn(txn, "task2", "bb");
     });
   }
-  wait_a_sec().await;
+  wait_one_sec().await;
   {
     let client = client_2.lock();
     client.with_transact_mut(|txn| {
@@ -165,7 +165,7 @@ async fn last_write_win_test() {
     });
   }
 
-  wait_a_sec().await;
+  wait_one_sec().await;
   let client_1_json = client_1.to_json_value();
   let client_2_json = client_2.to_json_value();
   let server_json = server.get_doc_json(object_id);
