@@ -11,7 +11,7 @@ use tokio::spawn;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::watch;
 
-use collab_sync::client::sink::{SyncSink, TaskRunner};
+use collab_sync::client::sink::{SinkConfig, SyncSink, TaskRunner};
 use yrs::updates::decoder::Decode;
 use yrs::{ReadTxn, Update};
 
@@ -42,11 +42,8 @@ impl RemoteCollab {
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
     let (notifier, notifier_rx) = watch::channel(false);
-    let sink = Arc::new(SyncSink::new(
-      TokioUnboundedSink(sink),
-      notifier,
-      Duration::from_secs(timeout),
-    ));
+    let config = SinkConfig::new().with_timeout(timeout);
+    let sink = Arc::new(SyncSink::new(TokioUnboundedSink(sink), notifier, config));
 
     let weak_sink = Arc::downgrade(&sink);
     spawn(async move {

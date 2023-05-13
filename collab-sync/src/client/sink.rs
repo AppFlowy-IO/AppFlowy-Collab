@@ -6,16 +6,58 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use crate::client::pending_msg::{PendingMsgQueue, TaskState};
+use crate::client::sync::DEFAULT_SYNC_TIMEOUT;
 use crate::error::SyncError;
 use futures_util::SinkExt;
 use tokio::sync::{oneshot, watch, Mutex};
+
+pub struct SinkConfig {
+  /// `timeout` is the time to wait for the remote to ack the message. If the remote
+  /// does not ack the message in time, the message will be sent again.
+  pub timeout: Duration,
+  /// `mergeable` indicates whether the messages are mergeable. If the messages are
+  /// mergeable, the sink will try to merge the messages before sending them.
+  pub mergeable: bool,
+  /// `max_zip_size` is the maximum size of the messages to be merged.
+  pub max_merge_size: usize,
+}
+
+impl SinkConfig {
+  pub fn new() -> Self {
+    Self::default()
+  }
+  pub fn with_timeout(mut self, secs: u64) -> Self {
+    self.timeout = Duration::from_secs(secs);
+    self
+  }
+
+  pub fn with_mergeable(mut self, mergeable: bool) -> Self {
+    self.mergeable = mergeable;
+    self
+  }
+
+  pub fn with_max_merge_size(mut self, max_merge_size: usize) -> Self {
+    self.max_merge_size = max_merge_size;
+    self
+  }
+}
+
+impl Default for SinkConfig {
+  fn default() -> Self {
+    Self {
+      timeout: Duration::from_secs(DEFAULT_SYNC_TIMEOUT),
+      mergeable: false,
+      max_merge_size: 1024,
+    }
+  }
+}
 
 pub struct SyncSink<Sink, Msg> {
   sender: Arc<Mutex<Sink>>,
   pending_msgs: Arc<parking_lot::Mutex<PendingMsgQueue<Msg>>>,
   msg_id_counter: Arc<MsgIdCounter>,
   notifier: watch::Sender<bool>,
-  timeout: Duration,
+  config: SinkConfig,
 }
 
 impl<E, Sink, Msg> SyncSink<Sink, Msg>
@@ -24,7 +66,7 @@ where
   Sink: SinkExt<Msg, Error = E> + Send + Sync + Unpin + 'static,
   Msg: Clone + Send + Sync + 'static + Ord + Display,
 {
-  pub fn new(sink: Sink, notifier: watch::Sender<bool>, timeout: Duration) -> Self {
+  pub fn new(sink: Sink, notifier: watch::Sender<bool>, config: SinkConfig) -> Self {
     let sender = Arc::new(Mutex::new(sink));
     let pending_msgs = PendingMsgQueue::new();
     let msg_id_counter = Arc::new(MsgIdCounter::new());
@@ -34,7 +76,7 @@ where
       pending_msgs,
       msg_id_counter,
       notifier,
-      timeout,
+      config,
     }
   }
 
@@ -93,7 +135,7 @@ where
 
         // Wait for the message to be acked.
         // If the message is not acked within the timeout, resend the message.
-        match tokio::time::timeout(self.timeout, rx).await {
+        match tokio::time::timeout(self.config.timeout, rx).await {
           Ok(_) => self.notify(),
           Err(_) => {
             if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {

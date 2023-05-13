@@ -5,6 +5,7 @@ use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_sync::client::sync::{SyncQueue, DEFAULT_SYNC_TIMEOUT};
 
+use collab_sync::client::sink::SinkConfig;
 use collab_sync::msg::{CSClientUpdate, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
 use y_sync::awareness::Awareness;
@@ -36,7 +37,7 @@ impl<Sink, Stream> SyncPlugin<Sink, Stream> {
       sink,
       stream,
       collab,
-      DEFAULT_SYNC_TIMEOUT,
+      SinkConfig::default(),
     );
     Self {
       sync_queue: Arc::new(sync_queue),

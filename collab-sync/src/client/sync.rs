@@ -2,7 +2,6 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 
 use std::sync::{Arc, Weak};
-use std::time::Duration;
 
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
@@ -16,7 +15,7 @@ use y_sync::sync::{Message, MessageReader};
 use yrs::updates::decoder::{Decode, DecoderV1};
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
-use crate::client::sink::{SyncSink, TaskRunner};
+use crate::client::sink::{SinkConfig, SyncSink, TaskRunner};
 use crate::error::SyncError;
 use crate::msg::{CSClientInit, CSClientUpdate, CSServerSync, CollabMessage};
 use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
@@ -49,11 +48,11 @@ where
     sink: Sink,
     stream: Stream,
     collab: Arc<MutexCollab>,
-    timeout: u64,
+    config: SinkConfig,
   ) -> Self {
     let protocol = DefaultSyncProtocol;
     let (notifier, notifier_rx) = watch::channel(false);
-    let sink = Arc::new(SyncSink::new(sink, notifier, Duration::from_secs(timeout)));
+    let sink = Arc::new(SyncSink::new(sink, notifier, config));
     spawn(TaskRunner::run(Arc::downgrade(&sink), notifier_rx));
     let cloned_protocol = protocol.clone();
     let object_id = object_id.to_string();
