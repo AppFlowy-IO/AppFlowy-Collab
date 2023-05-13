@@ -93,9 +93,6 @@ fn doc_init_state<P: CollabSyncProtocol>(awareness: &Awareness, protocol: &P) ->
   let payload = {
     let mut encoder = EncoderV1::new();
     protocol.start(awareness, &mut encoder).ok()?;
-    // let sv = awareness.doc().transact().state_vector();
-    // let a = awareness.doc().transact().encode_state_as_update_v1(&sv);
-    // Message::Sync(SyncMessage::Update(a)).encode(&mut encoder);
     encoder.to_vec()
   };
   if payload.is_empty() {
@@ -115,7 +112,7 @@ impl<Sink, Stream> Deref for SyncQueue<Sink, Stream> {
 
 struct SyncStream<Sink, Stream> {
   #[allow(dead_code)]
-  awareness: Arc<MutexCollab>,
+  collab: Arc<MutexCollab>,
   #[allow(dead_code)]
   runner: JoinHandle<Result<(), SyncError>>,
   phantom_sink: PhantomData<Sink>,
@@ -150,7 +147,7 @@ where
       protocol,
     ));
     Self {
-      awareness: collab,
+      collab,
       runner,
       phantom_sink: Default::default(),
       phantom_stream: Default::default(),
