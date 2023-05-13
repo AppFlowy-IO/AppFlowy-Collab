@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use collab::core::collab::MutexCollab;
-use collab_sync::client::sync::{SyncSink, TaskRunner};
 use collab_sync::client::TokioUnboundedSink;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
@@ -12,6 +11,7 @@ use tokio::spawn;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::watch;
 
+use collab_sync::client::sink::{SyncSink, TaskRunner};
 use yrs::updates::decoder::Decode;
 use yrs::{ReadTxn, Update};
 
@@ -19,6 +19,7 @@ use yrs::{ReadTxn, Update};
 pub trait RemoteCollabStorage: Send + Sync + 'static {
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, anyhow::Error>;
   async fn send_update(&self, id: u32, update: Vec<u8>) -> Result<(), anyhow::Error>;
+  async fn flush(&self, object_id: &str);
 }
 
 pub struct RemoteCollab {

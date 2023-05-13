@@ -13,16 +13,15 @@ use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 
-use futures_util::SinkExt;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 use y_sync::awareness::Awareness;
 use yrs::Transaction;
 
-const DEFAULT_TABLE_NAME: &str = "collab";
+const DEFAULT_TABLE_NAME: &str = "collab_test";
 const OBJECT_ID: &str = "oid";
-const UPDATE_KEY: &str = "k";
-const UPDATE_VALUE: &str = "v";
+const UPDATE_KEY: &str = "key";
+const UPDATE_VALUE: &str = "value";
 
 /// A plugin that uses AWS DynamoDB as the backend.
 /// https://docs.aws.amazon.com/sdk-for-rust/latest/dg/rust_dynamodb_code_examples.html
@@ -51,7 +50,7 @@ impl AWSDynamoDBPlugin {
     table_name: &str,
     local_collab: Arc<MutexCollab>,
   ) -> Result<Self, anyhow::Error> {
-    let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
+    let region_provider = RegionProviderChain::default_provider().or_else("ap-southeast-2");
     let config = aws_config::from_env().region(region_provider).load().await;
     let client = Arc::new(Client::new(&config));
     let table_name = table_name.to_string();
@@ -81,7 +80,7 @@ impl AWSDynamoDBPlugin {
         (weak_local_collab.upgrade(), weak_remote_collab.upgrade())
       {
         remote_collab.sync(local_collab).await;
-        if let Some(mut ret) = ret {
+        if let Some(ret) = ret {
           let _ = ret.send(());
         }
       }
@@ -112,10 +111,14 @@ impl RemoteCollabStorage for CollabCloudStorageImpl {
     .await?;
     Ok(())
   }
+
+  async fn flush(&self, object_id: &str) {
+    todo!()
+  }
 }
 
 pub async fn get_aws_remote_doc(object_id: &str) -> Arc<MutexCollab> {
-  let local_collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, &object_id, vec![]));
+  let local_collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, object_id, vec![]));
   let plugin = AWSDynamoDBPlugin::new(object_id.to_string(), local_collab.clone())
     .await
     .unwrap();

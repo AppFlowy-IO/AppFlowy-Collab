@@ -64,7 +64,11 @@ impl CloudStorageTest {
       TestScript::RemoveCollab { object_id } => {
         self.collab_by_object_id.remove(&object_id);
       },
-      TestScript::ModifyCollab { uid, object_id, f } => {
+      TestScript::ModifyCollab {
+        uid: _,
+        object_id,
+        f,
+      } => {
         let collab = self.collab_by_object_id.get(&object_id).unwrap().lock();
         f(&collab);
       },
@@ -86,7 +90,7 @@ impl CloudStorageTest {
         let json = collab.lock().to_json_value();
         assert_json_diff::assert_json_eq!(json, expected,);
       },
-      TestScript::AssertLocalEqualToRemote { object_id } => {},
+      TestScript::AssertLocalEqualToRemote { object_id: _ } => {},
     }
   }
 
