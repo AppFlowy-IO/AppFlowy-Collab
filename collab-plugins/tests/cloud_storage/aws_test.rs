@@ -66,6 +66,9 @@ async fn collab_with_aws_plugin_test() {
 
 #[tokio::test]
 async fn edit_aws_doc_10_times_test() {
+  if !is_enable_aws_test().await {
+    return;
+  }
   let object_id = nanoid!(5);
   let mut test = CloudStorageTest::new();
   test
