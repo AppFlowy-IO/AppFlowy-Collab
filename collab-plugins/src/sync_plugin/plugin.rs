@@ -3,7 +3,7 @@ use std::sync::Arc;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
-use collab_sync::client::sync::{SyncQueue, DEFAULT_SYNC_TIMEOUT};
+use collab_sync::client::sync::SyncQueue;
 
 use collab_sync::client::sink::SinkConfig;
 use collab_sync::msg::{CSClientUpdate, CollabMessage};

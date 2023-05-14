@@ -13,7 +13,9 @@ use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 
+use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::oneshot;
 use y_sync::awareness::Awareness;
 use yrs::Transaction;
@@ -60,7 +62,11 @@ impl AWSDynamoDBPlugin {
       table_name: table_name.clone(),
       object_id: object_id.clone(),
     };
-    let remote_collab = Arc::new(RemoteCollab::new(object_id.clone(), storage, 10));
+
+    let config = SinkConfig::new()
+      .with_timeout(10)
+      .with_strategy(SinkStrategy::FixInterval(Duration::from_secs(1)));
+    let remote_collab = Arc::new(RemoteCollab::new(object_id.clone(), storage, config));
     create_table_if_not_exist(&client, &table_name).await?;
     Ok(Self {
       object_id,
@@ -100,7 +106,7 @@ impl RemoteCollabStorage for CollabCloudStorageImpl {
     Ok(aws_get_all_updates(&self.client, &self.table_name, object_id).await)
   }
 
-  async fn send_update(&self, msg_id: u32, update: Vec<u8>) -> Result<(), Error> {
+  async fn send_update(&self, msg_id: MsgId, update: Vec<u8>) -> Result<(), Error> {
     aws_send_update(
       &self.client,
       &self.table_name,
@@ -112,7 +118,7 @@ impl RemoteCollabStorage for CollabCloudStorageImpl {
     Ok(())
   }
 
-  async fn flush(&self, object_id: &str) {
+  async fn flush(&self, _object_id: &str) {
     todo!()
   }
 }
@@ -133,7 +139,7 @@ async fn aws_send_update<V: Into<Vec<u8>>>(
   client: &Client,
   table_name: &str,
   object_id: &str,
-  key: u32,
+  key: MsgId,
   value: V,
 ) -> Result<(), anyhow::Error> {
   let object_id = AttributeValue::S(object_id.to_string());

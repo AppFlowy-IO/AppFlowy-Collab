@@ -3,12 +3,16 @@ use crate::cloud_storage::script::TestScript::{
   AssertLocal, AssertRemote, CreateCollab, ModifyCollab, Wait,
 };
 
+use crate::cloud_storage::util::is_enable_aws_test;
 use nanoid::nanoid;
 use serde_json::json;
 use std::time::Duration;
 
 #[tokio::test]
 async fn collab_with_aws_plugin_test() {
+  if !is_enable_aws_test().await {
+    return;
+  }
   let object_id = nanoid!(5);
   let mut test = CloudStorageTest::new();
   println!("object_id: {}", object_id);

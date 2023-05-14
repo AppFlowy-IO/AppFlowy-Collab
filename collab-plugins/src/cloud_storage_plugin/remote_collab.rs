@@ -5,20 +5,23 @@ use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
 use collab::core::origin::CollabOrigin;
+use parking_lot::Mutex;
+
+use rand::Rng;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::SystemTime;
 use tokio::spawn;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::watch;
 
-use collab_sync::client::sink::{SinkConfig, SinkStrategy, SyncSink, TaskRunner};
+use collab_sync::client::sink::{MsgId, MsgIdCounter, SinkConfig, SyncSink, TaskRunner};
 use yrs::updates::decoder::Decode;
 use yrs::{ReadTxn, Update};
 
 #[async_trait]
 pub trait RemoteCollabStorage: Send + Sync + 'static {
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, anyhow::Error>;
-  async fn send_update(&self, id: u32, update: Vec<u8>) -> Result<(), anyhow::Error>;
+  async fn send_update(&self, id: MsgId, update: Vec<u8>) -> Result<(), anyhow::Error>;
   async fn flush(&self, object_id: &str);
 }
 
@@ -33,7 +36,7 @@ impl RemoteCollab {
   /// Create a new remote collab.
   /// `timeout` is the time to wait for the server to ack the message.
   /// If the server does not ack the message in time, the message will be sent again.
-  pub fn new<S>(object_id: String, storage: S, timeout: u64) -> Self
+  pub fn new<S>(object_id: String, storage: S, config: SinkConfig) -> Self
   where
     S: RemoteCollabStorage + Send + Sync + 'static,
   {
@@ -42,10 +45,12 @@ impl RemoteCollab {
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
     let (notifier, notifier_rx) = watch::channel(false);
-    let config = SinkConfig::new()
-      .with_timeout(timeout)
-      .with_strategy(SinkStrategy::FixInterval(Duration::from_secs(1)));
-    let sink = Arc::new(SyncSink::new(TokioUnboundedSink(sink), notifier, config));
+    let sink = Arc::new(SyncSink::new(
+      TokioUnboundedSink(sink),
+      notifier,
+      RngMsgIdCounter::new(),
+      config,
+    ));
 
     let weak_sink = Arc::downgrade(&sink);
     spawn(async move {
@@ -130,7 +135,7 @@ impl RemoteCollab {
 
 #[derive(Clone, Debug)]
 struct Message {
-  msg_id: u32,
+  msg_id: MsgId,
   payload: Vec<u8>,
 }
 
@@ -164,4 +169,26 @@ impl Display for Message {
 enum CollabError {
   #[error("Internal error")]
   Internal(#[from] anyhow::Error),
+}
+
+const RANDOM_MASK: u64 = (1 << 12) - 1;
+struct RngMsgIdCounter(Mutex<MsgId>);
+impl RngMsgIdCounter {
+  pub fn new() -> Self {
+    let timestamp = SystemTime::now()
+      .duration_since(SystemTime::UNIX_EPOCH)
+      .expect("Clock moved backwards!")
+      .as_millis() as u64;
+
+    let random: u64 = (rand::thread_rng().gen::<u16>() as u64) & RANDOM_MASK;
+    let value = timestamp << 16 | random;
+    Self(Mutex::new(value))
+  }
+}
+impl MsgIdCounter for RngMsgIdCounter {
+  fn next(&self) -> MsgId {
+    let next = *self.0.lock() + 1;
+    *self.0.lock() = next;
+    next
+  }
 }

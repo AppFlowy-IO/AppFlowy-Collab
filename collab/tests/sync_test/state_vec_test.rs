@@ -1,7 +1,5 @@
-use parking_lot::RwLock;
 use serde_json::json;
-use std::cell::RefCell;
-use std::sync::Arc;
+
 use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
 use yrs::{Doc, Map, ReadTxn, Transact, Update};
@@ -84,6 +82,11 @@ fn state_vec_apply_test() {
 //     map1.insert(&mut txn, "3", "c");
 //   }
 //
+//   {
+//     let mut txn = doc1.transact_mut();
+//     map1.insert(&mut txn, "4", "d");
+//   }
+//
 //   let o1 = updates.read()[0].clone();
 //   let o2 = updates.read()[1].clone();
 //   let o3 = updates.read()[2].clone();
@@ -98,14 +101,5 @@ fn state_vec_apply_test() {
 //   drop(txn);
 //
 //   let json = doc3.to_json(&doc3.transact());
-//   assert_json_diff::assert_json_eq!(
-//     json,
-//     json!( {
-//       "map": {
-//         "1": "a",
-//         "2": "b",
-//         "3": "c"
-//       }
-//     })
-//   );
+//   assert_json_diff::assert_json_eq!(json, json!(""));
 // }

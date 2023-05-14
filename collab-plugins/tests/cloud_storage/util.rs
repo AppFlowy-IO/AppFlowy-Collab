@@ -1,12 +1,14 @@
-use std::env::var;
+use aws_config::environment::EnvironmentVariableCredentialsProvider;
+use aws_credential_types::provider::ProvideCredentials;
+use rusoto_credential::{ProfileProvider, ProvideAwsCredentials};
 
-pub(crate) fn is_enable_aws_test() -> bool {
-  let value = var("AWS_ACCESS_KEY_ID").is_ok() && var("AWS_SECRET_ACCESS_KEY").is_ok();
-  if !value {}
-  value
-}
-
-struct CredentialConfig {
-  aws_access_key_id: String,
-  aws_secret_access_key: String,
+pub async fn is_enable_aws_test() -> bool {
+  let credentials_provider = EnvironmentVariableCredentialsProvider::new();
+  let result = credentials_provider.provide_credentials().await;
+  if result.is_err() {
+    if let Ok(profile_provider) = ProfileProvider::new() {
+      return profile_provider.credentials().await.is_ok();
+    }
+  }
+  result.is_ok()
 }

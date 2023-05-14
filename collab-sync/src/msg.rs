@@ -2,6 +2,7 @@ use bytes::Bytes;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
+use crate::client::sink::MsgId;
 use collab::core::origin::CollabOrigin;
 use serde::{Deserialize, Serialize};
 
@@ -56,7 +57,7 @@ impl CollabMessage {
     matches!(self, CollabMessage::ClientInit(_))
   }
 
-  pub fn msg_id(&self) -> Option<u32> {
+  pub fn msg_id(&self) -> Option<MsgId> {
     match self {
       CollabMessage::ClientInit(value) => Some(value.msg_id),
       CollabMessage::ServerSync(value) => Some(value.msg_id),
@@ -220,12 +221,12 @@ impl From<CSAwarenessUpdate> for CollabMessage {
 pub struct CSClientUpdate {
   origin: CollabOrigin,
   object_id: String,
-  msg_id: u32,
+  msg_id: MsgId,
   payload: Vec<u8>,
 }
 
 impl CSClientUpdate {
-  pub fn new(origin: CollabOrigin, object_id: String, msg_id: u32, payload: Vec<u8>) -> Self {
+  pub fn new(origin: CollabOrigin, object_id: String, msg_id: MsgId, payload: Vec<u8>) -> Self {
     Self {
       origin,
       object_id,
@@ -244,12 +245,12 @@ impl From<CSClientUpdate> for CollabMessage {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CSServerAck {
   pub object_id: String,
-  pub msg_id: u32,
+  pub msg_id: MsgId,
   pub payload: Option<Vec<u8>>,
 }
 
 impl CSServerAck {
-  pub fn new(object_id: String, msg_id: u32, payload: Option<Vec<u8>>) -> Self {
+  pub fn new(object_id: String, msg_id: MsgId, payload: Option<Vec<u8>>) -> Self {
     Self {
       object_id,
       msg_id,
@@ -268,13 +269,13 @@ impl From<CSServerAck> for CollabMessage {
 pub struct CSClientInit {
   pub origin: CollabOrigin,
   pub object_id: String,
-  pub msg_id: u32,
+  pub msg_id: MsgId,
   pub payload: Vec<u8>,
   pub md5: String,
 }
 
 impl CSClientInit {
-  pub fn new(origin: CollabOrigin, object_id: String, msg_id: u32, payload: Vec<u8>) -> Self {
+  pub fn new(origin: CollabOrigin, object_id: String, msg_id: MsgId, payload: Vec<u8>) -> Self {
     let md5 = md5(&payload);
     Self {
       origin,
@@ -349,11 +350,11 @@ pub struct CSServerSync {
   pub origin: CollabOrigin,
   pub object_id: String,
   pub payload: Vec<u8>,
-  pub msg_id: u32,
+  pub msg_id: MsgId,
 }
 
 impl CSServerSync {
-  pub fn new(origin: CollabOrigin, object_id: String, payload: Vec<u8>, msg_id: u32) -> Self {
+  pub fn new(origin: CollabOrigin, object_id: String, payload: Vec<u8>, msg_id: MsgId) -> Self {
     Self {
       origin,
       object_id,

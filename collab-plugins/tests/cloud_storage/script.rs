@@ -13,9 +13,6 @@ pub enum TestScript {
     uid: i64,
     object_id: String,
   },
-  RemoveCollab {
-    object_id: String,
-  },
   ModifyCollab {
     uid: i64,
     object_id: String,
@@ -31,9 +28,6 @@ pub enum TestScript {
   AssertRemote {
     object_id: String,
     expected: Value,
-  },
-  AssertLocalEqualToRemote {
-    object_id: String,
   },
 }
 
@@ -61,9 +55,6 @@ impl CloudStorageTest {
         local_collab.initial();
         self.collab_by_object_id.insert(object_id, local_collab);
       },
-      TestScript::RemoveCollab { object_id } => {
-        self.collab_by_object_id.remove(&object_id);
-      },
       TestScript::ModifyCollab {
         uid: _,
         object_id,
@@ -90,7 +81,6 @@ impl CloudStorageTest {
         let json = collab.lock().to_json_value();
         assert_json_diff::assert_json_eq!(json, expected,);
       },
-      TestScript::AssertLocalEqualToRemote { object_id: _ } => {},
     }
   }
 

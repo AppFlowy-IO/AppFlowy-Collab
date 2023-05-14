@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::ops::{Deref, DerefMut};
 
+use crate::client::sink::MsgId;
 use tokio::sync::oneshot;
 
 pub(crate) struct PendingMsgQueue<Msg> {
@@ -18,7 +19,7 @@ where
     }
   }
 
-  pub(crate) fn push_msg(&mut self, msg_id: u32, msg: Msg) {
+  pub(crate) fn push_msg(&mut self, msg_id: MsgId, msg: Msg) {
     self.queue.push(PendingMessage::new(msg, msg_id));
   }
 }
@@ -46,16 +47,16 @@ where
 #[derive(Debug)]
 pub(crate) struct PendingMessage<Msg> {
   msg: Msg,
-  msg_id: u32,
+  msg_id: MsgId,
   state: TaskState,
-  tx: Option<oneshot::Sender<u32>>,
+  tx: Option<oneshot::Sender<MsgId>>,
 }
 
 impl<Msg> PendingMessage<Msg>
 where
   Msg: Clone,
 {
-  pub fn new(msg: Msg, msg_id: u32) -> Self {
+  pub fn new(msg: Msg, msg_id: MsgId) -> Self {
     Self {
       msg,
       msg_id,
@@ -80,11 +81,11 @@ where
     }
   }
 
-  pub fn set_ret(&mut self, tx: oneshot::Sender<u32>) {
+  pub fn set_ret(&mut self, tx: oneshot::Sender<MsgId>) {
     self.tx = Some(tx);
   }
 
-  pub fn msg_id(&self) -> u32 {
+  pub fn msg_id(&self) -> MsgId {
     self.msg_id
   }
 }

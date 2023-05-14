@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::marker::PhantomData;
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -17,7 +17,7 @@ pub struct SyncSink<Sink, Msg> {
   sender: Arc<Mutex<Sink>>,
   // pending_msgs: Arc<parking_lot::Mutex<PendingMsgQueue<Msg>>>,
   pending_msgs: Arc<parking_lot::Mutex<PendingMsgQueue<Msg>>>,
-  msg_id_counter: Arc<MsgIdCounter>,
+  msg_id_counter: Arc<dyn MsgIdCounter>,
   notifier: Arc<watch::Sender<bool>>,
   config: SinkConfig,
   #[allow(dead_code)]
@@ -32,13 +32,20 @@ where
   Sink: SinkExt<Msg, Error = E> + Send + Sync + Unpin + 'static,
   Msg: Clone + Send + Sync + 'static + Ord + Display,
 {
-  pub fn new(sink: Sink, notifier: watch::Sender<bool>, config: SinkConfig) -> Self {
+  pub fn new<C>(
+    sink: Sink,
+    notifier: watch::Sender<bool>,
+    msg_id_counter: C,
+    config: SinkConfig,
+  ) -> Self
+  where
+    C: MsgIdCounter,
+  {
     let notifier = Arc::new(notifier);
     let sender = Arc::new(Mutex::new(sink));
     let pending_msgs = PendingMsgQueue::new();
-    let msg_id_counter = Arc::new(MsgIdCounter::new());
     let pending_msgs = Arc::new(parking_lot::Mutex::new(pending_msgs));
-
+    let msg_id_counter = Arc::new(msg_id_counter);
     //
     let instant = Mutex::new(Instant::now());
     let mut instant_stop = None;
@@ -46,7 +53,7 @@ where
       let weak_notifier = Arc::downgrade(&notifier);
       let (tx, rx) = mpsc::channel(1);
       instant_stop = Some(tx);
-      spawn(IntervalRunner::new(duration.clone()).run(weak_notifier, rx));
+      spawn(IntervalRunner::new(*duration).run(weak_notifier, rx));
     }
 
     Self {
@@ -61,7 +68,7 @@ where
   }
 
   /// Put the message into the queue and notify the sink to process the next message
-  pub fn queue_msg(&self, f: impl FnOnce(u32) -> Msg) {
+  pub fn queue_msg(&self, f: impl FnOnce(MsgId) -> Msg) {
     {
       let mut pending_msgs = self.pending_msgs.lock();
       let msg_id = self.msg_id_counter.next();
@@ -74,7 +81,7 @@ where
   }
 
   /// Notify the sink to process the next message and mark the current message as done.
-  pub async fn ack_msg(&self, msg_id: u32) {
+  pub async fn ack_msg(&self, msg_id: MsgId) {
     if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {
       if pending_msg.msg_id() == msg_id {
         pending_msg.set_state(TaskState::Done);
@@ -270,13 +277,23 @@ impl SinkStrategy {
   }
 }
 
-struct MsgIdCounter(Arc<AtomicU32>);
-impl MsgIdCounter {
-  fn new() -> Self {
-    Self(Arc::new(AtomicU32::new(0)))
-  }
+pub type MsgId = u64;
 
-  fn next(&self) -> u32 {
+pub trait MsgIdCounter: Send + Sync + 'static {
+  /// Get the next message id. The message id should be unique.
+  fn next(&self) -> MsgId;
+}
+
+#[derive(Debug, Default)]
+pub struct DefaultMsgIdCounter(Arc<AtomicU64>);
+impl DefaultMsgIdCounter {
+  pub fn new() -> Self {
+    Self::default()
+  }
+}
+
+impl MsgIdCounter for DefaultMsgIdCounter {
+  fn next(&self) -> MsgId {
     self.0.fetch_add(1, Ordering::SeqCst)
   }
 }
