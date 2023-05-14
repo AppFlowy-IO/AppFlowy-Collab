@@ -1,4 +1,4 @@
-use collab_sync::client::sync::SYNC_TIMEOUT;
+use collab_sync::client::sync::DEFAULT_SYNC_TIMEOUT;
 use serde_json::json;
 use yrs::Array;
 
@@ -95,7 +95,9 @@ async fn one_online_and_another_client_offline_test() {
       ConnectClient {
         device_id: "2".to_string(),
       },
-      Wait { secs: SYNC_TIMEOUT },
+      Wait {
+        secs: DEFAULT_SYNC_TIMEOUT,
+      },
       AssertClientEqual {
         device_id_a: "1".to_string(),
         device_id_b: "2".to_string(),
@@ -148,7 +150,7 @@ async fn two_clients_offline_test() {
         device_id: "2".to_string(),
       },
       Wait {
-        secs: SYNC_TIMEOUT * 2,
+        secs: DEFAULT_SYNC_TIMEOUT * 2,
       },
       AssertClientEqual {
         device_id_a: "1".to_string(),

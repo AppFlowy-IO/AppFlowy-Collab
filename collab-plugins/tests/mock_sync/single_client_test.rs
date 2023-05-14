@@ -1,4 +1,4 @@
-use collab_sync::client::sync::SYNC_TIMEOUT;
+use collab_sync::client::sync::DEFAULT_SYNC_TIMEOUT;
 use serde_json::json;
 use yrs::Array;
 
@@ -218,7 +218,7 @@ async fn client_unstable_network_write_test() {
       // 4. wait SYNC_TIMEOUT second (for sync). After the timeout, the client will resent
       // the update to the server
       Wait {
-        secs: SYNC_TIMEOUT * 2,
+        secs: DEFAULT_SYNC_TIMEOUT * 2,
       },
       // 5. check the server is sync or not
       AssertServerContent {

@@ -2,50 +2,61 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::ops::{Deref, DerefMut};
 
+use crate::client::sink::MsgId;
 use tokio::sync::oneshot;
 
-use crate::msg::CollabMessage;
-
-pub(crate) struct PendingMsgQueue {
-  queue: BinaryHeap<PendingMessage>,
+pub(crate) struct PendingMsgQueue<Msg> {
+  queue: BinaryHeap<PendingMessage<Msg>>,
 }
 
-impl PendingMsgQueue {
+impl<Msg> PendingMsgQueue<Msg>
+where
+  Msg: Ord + Clone,
+{
   pub(crate) fn new() -> Self {
     Self {
       queue: Default::default(),
     }
   }
 
-  pub(crate) fn push_msg(&mut self, msg_id: u32, msg: CollabMessage) {
+  pub(crate) fn push_msg(&mut self, msg_id: MsgId, msg: Msg) {
     self.queue.push(PendingMessage::new(msg, msg_id));
   }
 }
 
-impl Deref for PendingMsgQueue {
-  type Target = BinaryHeap<PendingMessage>;
+impl<Msg> Deref for PendingMsgQueue<Msg>
+where
+  Msg: Ord,
+{
+  type Target = BinaryHeap<PendingMessage<Msg>>;
 
   fn deref(&self) -> &Self::Target {
     &self.queue
   }
 }
 
-impl DerefMut for PendingMsgQueue {
+impl<Msg> DerefMut for PendingMsgQueue<Msg>
+where
+  Msg: Ord,
+{
   fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.queue
   }
 }
 
 #[derive(Debug)]
-pub(crate) struct PendingMessage {
-  msg: CollabMessage,
-  msg_id: u32,
+pub(crate) struct PendingMessage<Msg> {
+  msg: Msg,
+  msg_id: MsgId,
   state: TaskState,
-  tx: Option<oneshot::Sender<u32>>,
+  tx: Option<oneshot::Sender<MsgId>>,
 }
 
-impl PendingMessage {
-  pub fn new(msg: CollabMessage, msg_id: u32) -> Self {
+impl<Msg> PendingMessage<Msg>
+where
+  Msg: Clone,
+{
+  pub fn new(msg: Msg, msg_id: MsgId) -> Self {
     Self {
       msg,
       msg_id,
@@ -54,7 +65,7 @@ impl PendingMessage {
     }
   }
 
-  pub fn msg(&self) -> CollabMessage {
+  pub fn msg(&self) -> Msg {
     self.msg.clone()
   }
 
@@ -70,40 +81,41 @@ impl PendingMessage {
     }
   }
 
-  pub fn set_ret(&mut self, tx: oneshot::Sender<u32>) {
+  pub fn set_ret(&mut self, tx: oneshot::Sender<MsgId>) {
     self.tx = Some(tx);
   }
 
-  pub fn msg_id(&self) -> u32 {
+  pub fn msg_id(&self) -> MsgId {
     self.msg_id
   }
 }
 
-impl Eq for PendingMessage {}
+impl<Msg> Eq for PendingMessage<Msg> where Msg: Eq {}
 
-impl PartialEq for PendingMessage {
+impl<Msg> PartialEq for PendingMessage<Msg>
+where
+  Msg: PartialEq,
+{
   fn eq(&self, other: &Self) -> bool {
-    self.msg.msg_id() == other.msg.msg_id()
+    self.msg == other.msg
   }
 }
 
-impl PartialOrd for PendingMessage {
+impl<Msg> PartialOrd for PendingMessage<Msg>
+where
+  Msg: PartialOrd + Ord,
+{
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     Some(self.cmp(other))
   }
 }
 
-impl Ord for PendingMessage {
+impl<Msg> Ord for PendingMessage<Msg>
+where
+  Msg: Ord,
+{
   fn cmp(&self, other: &Self) -> Ordering {
-    match (&self.msg, &other.msg) {
-      (CollabMessage::ClientInit { .. }, CollabMessage::ClientInit { .. }) => Ordering::Equal,
-      (CollabMessage::ClientInit { .. }, _) => Ordering::Greater,
-      (_, CollabMessage::ClientInit { .. }) => Ordering::Less,
-      (CollabMessage::ServerSync { .. }, CollabMessage::ServerSync { .. }) => Ordering::Equal,
-      (CollabMessage::ServerSync { .. }, _) => Ordering::Greater,
-      (_, CollabMessage::ServerSync { .. }) => Ordering::Less,
-      _ => self.msg_id.cmp(&other.msg_id).reverse(),
-    }
+    self.msg.cmp(&other.msg)
   }
 }
 

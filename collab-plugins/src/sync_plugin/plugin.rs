@@ -5,6 +5,7 @@ use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_sync::client::sync::SyncQueue;
 
+use collab_sync::client::sink::SinkConfig;
 use collab_sync::msg::{CSClientUpdate, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
 use y_sync::awareness::Awareness;
@@ -30,7 +31,14 @@ impl<Sink, Stream> SyncPlugin<Sink, Stream> {
     Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
     Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
   {
-    let sync_queue = SyncQueue::new(object_id, origin, sink, stream, collab);
+    let sync_queue = SyncQueue::new(
+      object_id,
+      origin,
+      sink,
+      stream,
+      collab,
+      SinkConfig::default(),
+    );
     Self {
       sync_queue: Arc::new(sync_queue),
       object_id: object_id.to_string(),
@@ -57,8 +65,9 @@ where
     tokio::spawn(async move {
       if let Some(sync_queue) = weak_sync_queue.upgrade() {
         let payload = Message::Sync(SyncMessage::Update(update)).encode_v1();
-        sync_queue
-          .sync_msg(|msg_id| CSClientUpdate::new(cloned_origin, object_id, msg_id, payload).into());
+        sync_queue.queue_msg(|msg_id| {
+          CSClientUpdate::new(cloned_origin, object_id, msg_id, payload).into()
+        });
       }
     });
   }

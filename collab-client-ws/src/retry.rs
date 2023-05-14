@@ -38,39 +38,3 @@ impl Action for ConnectAction {
     })
   }
 }
-//
-// pub(crate) struct ConnectActionResult {
-//   stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
-// }
-//
-// #[pin_project]
-// struct ConnectActionFut {
-//   addr: String,
-//   #[pin]
-//   fut: Pin<Box<dyn Future<Output = ConnectActionResult> + Send + Sync>>,
-// }
-//
-// impl ConnectActionFut {
-//   fn new(addr: String) -> Self {
-//     let fut = Box::pin(async move { connect_async(&addr).await });
-//     Self { addr, fut }
-//   }
-// }
-//
-// impl Future for ConnectActionFut {
-//   type Output = Result<ConnectActionResult, WSError>;
-//   fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-//     loop {
-//       return match ready!(self.as_mut().project().fut.poll(cx)) {
-//         Ok((stream, _)) => {
-//           tracing::debug!("[WebSocket]: connect success");
-//           Poll::Ready(Ok(ConnectActionResult { stream }))
-//         },
-//         Err(error) => {
-//           tracing::debug!("[WebSocket]: ❌connect failed: {:?}", error);
-//           Poll::Ready(Err(error.into()))
-//         },
-//       };
-//     }
-//   }
-// }

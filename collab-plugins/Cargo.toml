@@ -12,12 +12,22 @@ collab = { path = "../collab" }
 collab-sync = { path = "../collab-sync", optional = true }
 collab-persistence = { path = "../collab-persistence", optional = true }
 collab-client-ws = { path = "../collab-client-ws" }
-futures-util = { version = "0.3", features = ["sink"], optional = true }
-tokio = { version = "1.26.0", features = ["net", "sync", "time"], optional = true }
+futures-util = { version = "0.3", features = ["sink"] }
+tokio = { version = "1.26.0", features = ["net", "sync", "time"] }
 tracing = { version = "0.1.37" }
+parking_lot = "0.12.1"
+aws-config = { version = "0.55.2", optional = true }
+aws-sdk-dynamodb = { version = "0.27.0", optional = true }
+aws-credential-types = { version ="0.55.2", optional = true }
+rusoto_credential = "0.48.0"
+anyhow = "1.0.71"
+tokio-retry = "0.3"
+async-trait = "0.1.51"
+thiserror = "1.0.39"
+rand = { version = "0.8", optional = true }
 
 [dev-dependencies]
-collab-plugins = { path = ".", features = ["sync", "disk_rocksdb", "disk_sled",] }
+collab-plugins = { path = ".", features = ["sync", "disk_rocksdb", "disk_sled","cloud_storage"] }
 tempfile = "3.4.0"
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
@@ -28,12 +38,15 @@ serde_json = "1.0.64"
 serde = "1.0.160"
 collab-persistence = { path = "../collab-persistence" }
 rand = "0.8"
-anyhow = "1.0.71"
 lib0 = { version = "0.16.3", features = ["lib0-serde"] }
 parking_lot = "0.12.1"
+nanoid = "0.4.0"
+config = { version = "0.13.3", default-features = false, features = ["yaml"] }
+
 
 [features]
-default = []
-sync = ["collab-sync", "futures-util", "tokio"]
+default = ["sync"]
+sync = ["collab-sync"]
 disk_rocksdb = ["collab-sync","collab-persistence/rocksdb_db"]
 disk_sled = ["collab-persistence"]
+cloud_storage = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types", "rand"]
