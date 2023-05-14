@@ -106,7 +106,13 @@ pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> 
 pub fn db() -> Arc<RocksCollabDB> {
   static START: Once = Once::new();
   START.call_once(|| {
-    std::env::set_var("RUST_LOG", "collab_persistence=trace");
+    let level = "info";
+    let mut filters = vec![];
+    filters.push(format!("collab_persistence={}", level));
+    filters.push(format!("collab={}", level));
+    filters.push(format!("collab_database={}", level));
+    std::env::set_var("RUST_LOG", filters.join(","));
+
     let subscriber = Subscriber::builder()
       .with_env_filter(EnvFilter::from_default_env())
       .with_ansi(true)

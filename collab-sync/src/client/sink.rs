@@ -9,55 +9,21 @@ use crate::client::pending_msg::{PendingMsgQueue, TaskState};
 use crate::client::sync::DEFAULT_SYNC_TIMEOUT;
 use crate::error::SyncError;
 use futures_util::SinkExt;
-use tokio::sync::{oneshot, watch, Mutex};
-
-pub struct SinkConfig {
-  /// `timeout` is the time to wait for the remote to ack the message. If the remote
-  /// does not ack the message in time, the message will be sent again.
-  pub timeout: Duration,
-  /// `mergeable` indicates whether the messages are mergeable. If the messages are
-  /// mergeable, the sink will try to merge the messages before sending them.
-  pub mergeable: bool,
-  /// `max_zip_size` is the maximum size of the messages to be merged.
-  pub max_merge_size: usize,
-}
-
-impl SinkConfig {
-  pub fn new() -> Self {
-    Self::default()
-  }
-  pub fn with_timeout(mut self, secs: u64) -> Self {
-    self.timeout = Duration::from_secs(secs);
-    self
-  }
-
-  pub fn with_mergeable(mut self, mergeable: bool) -> Self {
-    self.mergeable = mergeable;
-    self
-  }
-
-  pub fn with_max_merge_size(mut self, max_merge_size: usize) -> Self {
-    self.max_merge_size = max_merge_size;
-    self
-  }
-}
-
-impl Default for SinkConfig {
-  fn default() -> Self {
-    Self {
-      timeout: Duration::from_secs(DEFAULT_SYNC_TIMEOUT),
-      mergeable: false,
-      max_merge_size: 1024,
-    }
-  }
-}
+use tokio::spawn;
+use tokio::sync::{mpsc, oneshot, watch, Mutex};
+use tokio::time::{Instant, Interval};
 
 pub struct SyncSink<Sink, Msg> {
   sender: Arc<Mutex<Sink>>,
+  // pending_msgs: Arc<parking_lot::Mutex<PendingMsgQueue<Msg>>>,
   pending_msgs: Arc<parking_lot::Mutex<PendingMsgQueue<Msg>>>,
   msg_id_counter: Arc<MsgIdCounter>,
-  notifier: watch::Sender<bool>,
+  notifier: Arc<watch::Sender<bool>>,
   config: SinkConfig,
+  #[allow(dead_code)]
+  instant_stop: Option<mpsc::Sender<()>>,
+  #[allow(dead_code)]
+  instant: Mutex<Instant>,
 }
 
 impl<E, Sink, Msg> SyncSink<Sink, Msg>
@@ -67,19 +33,34 @@ where
   Msg: Clone + Send + Sync + 'static + Ord + Display,
 {
   pub fn new(sink: Sink, notifier: watch::Sender<bool>, config: SinkConfig) -> Self {
+    let notifier = Arc::new(notifier);
     let sender = Arc::new(Mutex::new(sink));
     let pending_msgs = PendingMsgQueue::new();
     let msg_id_counter = Arc::new(MsgIdCounter::new());
     let pending_msgs = Arc::new(parking_lot::Mutex::new(pending_msgs));
+
+    //
+    let instant = Mutex::new(Instant::now());
+    let mut instant_stop = None;
+    if let SinkStrategy::FixInterval(duration) = &config.strategy {
+      let weak_notifier = Arc::downgrade(&notifier);
+      let (tx, rx) = mpsc::channel(1);
+      instant_stop = Some(tx);
+      spawn(IntervalRunner::new(duration.clone()).run(weak_notifier, rx));
+    }
+
     Self {
       sender,
       pending_msgs,
       msg_id_counter,
       notifier,
       config,
+      instant,
+      instant_stop,
     }
   }
 
+  /// Put the message into the queue and notify the sink to process the next message
   pub fn queue_msg(&self, f: impl FnOnce(u32) -> Msg) {
     {
       let mut pending_msgs = self.pending_msgs.lock();
@@ -103,6 +84,18 @@ where
   }
 
   async fn process_next_msg(&self) -> Result<(), SyncError> {
+    if let SinkStrategy::FixInterval(duration) = &self.config.strategy {
+      let elapsed = self.instant.lock().await.elapsed();
+      // tracing::trace!(
+      //   "elapsed interval: {:?}, fix interval: {:?}",
+      //   elapsed,
+      //   duration
+      // );
+      if elapsed < *duration {
+        return Ok(());
+      }
+    }
+
     let pending_msg = self.pending_msgs.lock().pop();
     match pending_msg {
       Some(mut pending_msg) => {
@@ -144,6 +137,10 @@ where
             self.notify();
           },
         }
+
+        if self.config.strategy.is_fix_interval() {
+          *self.instant.lock().await = Instant::now();
+        }
         Ok(())
       },
       None => Ok(()),
@@ -163,7 +160,6 @@ where
 }
 
 pub struct TaskRunner<Msg>(PhantomData<Msg>);
-
 impl<Msg> TaskRunner<Msg> {
   /// The runner will stop if the [SyncSink] was dropped or the notifier was closed.
   pub async fn run<E, Sink>(
@@ -195,8 +191,86 @@ impl<Msg> TaskRunner<Msg> {
   }
 }
 
-struct MsgIdCounter(Arc<AtomicU32>);
+pub struct SinkConfig {
+  /// `timeout` is the time to wait for the remote to ack the message. If the remote
+  /// does not ack the message in time, the message will be sent again.
+  pub timeout: Duration,
+  /// `mergeable` indicates whether the messages are mergeable. If the messages are
+  /// mergeable, the sink will try to merge the messages before sending them.
+  pub mergeable: bool,
+  /// `max_zip_size` is the maximum size of the messages to be merged.
+  pub max_merge_size: usize,
+  /// `strategy` is the strategy to send the messages.
+  pub strategy: SinkStrategy,
+}
 
+impl SinkConfig {
+  pub fn new() -> Self {
+    Self::default()
+  }
+  pub fn with_timeout(mut self, secs: u64) -> Self {
+    let timeout_duration = Duration::from_secs(secs);
+    if let SinkStrategy::FixInterval(duration) = self.strategy {
+      if timeout_duration < duration {
+        tracing::warn!("The timeout duration should greater than the fix interval duration");
+      }
+    }
+    self.timeout = timeout_duration;
+    self
+  }
+
+  /// `mergeable` indicates whether the messages are mergeable. If the messages are
+  /// mergeable, the sink will try to merge the messages before sending them.
+  pub fn with_mergeable(mut self, mergeable: bool) -> Self {
+    self.mergeable = mergeable;
+    self
+  }
+
+  /// `max_zip_size` is the maximum size of the messages to be merged.
+  pub fn with_max_merge_size(mut self, max_merge_size: usize) -> Self {
+    self.max_merge_size = max_merge_size;
+    self
+  }
+
+  pub fn with_strategy(mut self, strategy: SinkStrategy) -> Self {
+    if let SinkStrategy::FixInterval(duration) = strategy {
+      if self.timeout < duration {
+        tracing::warn!("The timeout duration should greater than the fix interval duration");
+      }
+    }
+    self.strategy = strategy;
+    self
+  }
+}
+
+impl Default for SinkConfig {
+  fn default() -> Self {
+    Self {
+      timeout: Duration::from_secs(DEFAULT_SYNC_TIMEOUT),
+      mergeable: false,
+      max_merge_size: 1024,
+      strategy: SinkStrategy::ASAP,
+    }
+  }
+}
+
+pub enum SinkStrategy {
+  /// Send the message as soon as possible.
+  ASAP,
+  /// Send the message in a fixed interval.
+  /// This can reduce the number of times the message is sent. Especially if using the AWS
+  /// as the storage layer, the cost of sending the message is high. However, it may increase
+  /// the latency of the message.
+  FixInterval(Duration),
+}
+
+impl SinkStrategy {
+  pub fn is_fix_interval(&self) -> bool {
+    matches!(self, SinkStrategy::FixInterval(_))
+  }
+}
+
+struct MsgIdCounter(Arc<AtomicU32>);
 impl MsgIdCounter {
   fn new() -> Self {
     Self(Arc::new(AtomicU32::new(0)))
@@ -204,5 +278,40 @@ impl MsgIdCounter {
 
   fn next(&self) -> u32 {
     self.0.fetch_add(1, Ordering::SeqCst)
+  }
+}
+
+struct IntervalRunner {
+  interval: Option<Interval>,
+}
+
+impl IntervalRunner {
+  fn new(duration: Duration) -> Self {
+    Self {
+      interval: Some(tokio::time::interval(duration)),
+    }
+  }
+}
+
+impl IntervalRunner {
+  pub async fn run(mut self, sender: Weak<watch::Sender<bool>>, mut stop_rx: mpsc::Receiver<()>) {
+    let mut interval = self
+      .interval
+      .take()
+      .expect("Interval should only take once");
+    loop {
+      tokio::select! {
+        _ = stop_rx.recv() => {
+            break;
+        },
+        _ = interval.tick() => {
+          if let Some(sender) = sender.upgrade() {
+            let _ = sender.send(false);
+          } else {
+            break;
+          }
+        }
+      }
+    }
   }
 }

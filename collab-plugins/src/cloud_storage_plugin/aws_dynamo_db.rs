@@ -139,7 +139,6 @@ async fn aws_send_update<V: Into<Vec<u8>>>(
   let object_id = AttributeValue::S(object_id.to_string());
   let key = AttributeValue::N(key.to_string());
   let value = AttributeValue::B(Blob::new(value));
-
   let request = client
     .put_item()
     .table_name(table_name)

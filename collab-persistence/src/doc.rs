@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use tracing::trace;
 
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;

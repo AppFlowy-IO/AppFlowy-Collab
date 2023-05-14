@@ -214,10 +214,11 @@ impl UserDatabase {
   /// If the view is the inline view, the database will be deleted too.
   pub fn delete_view(&self, database_id: &str, view_id: &str) {
     if let Some(database) = self.get_database(database_id) {
+      database.delete_view(view_id);
       if database.is_inline_view(view_id) {
+        // Delete the database if the view is the inline view.
         self.delete_database(database_id);
       }
-      database.delete_view(view_id);
     }
   }
 

@@ -25,7 +25,6 @@ async fn collab_with_aws_plugin_test() {
           collab.insert("123", "abc");
         },
       },
-      Wait { secs: 1 },
       ModifyCollab {
         uid: 1,
         object_id: object_id.clone(),
@@ -33,7 +32,6 @@ async fn collab_with_aws_plugin_test() {
           collab.insert("456", "efg");
         },
       },
-      Wait { secs: 1 },
       ModifyCollab {
         uid: 1,
         object_id: object_id.clone(),
@@ -41,7 +39,7 @@ async fn collab_with_aws_plugin_test() {
           collab.insert("789", "hij");
         },
       },
-      Wait { secs: 1 },
+      Wait { secs: 6 },
       AssertLocal {
         object_id: object_id.clone(),
         expected: json!( {
