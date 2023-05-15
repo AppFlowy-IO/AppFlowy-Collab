@@ -13,7 +13,7 @@ mod util;
 pub fn setup_log() {
   static START: Once = Once::new();
   START.call_once(|| {
-    let level = "debug";
+    let level = "info";
     let mut filters = vec![];
     filters.push(format!("collab_persistence={}", level));
     filters.push(format!("collab={}", level));

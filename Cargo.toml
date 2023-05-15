@@ -9,4 +9,5 @@ members = [
     "collab-sync",
     "collab-plugins",
     "collab-client-ws",
+    "appflowy-integrate",
 ]

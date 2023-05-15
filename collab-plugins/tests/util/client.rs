@@ -3,18 +3,18 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
+use collab::core::origin::{CollabClient, CollabOrigin};
 use collab::preclude::MapRefExtension;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_sync::client::{TokioUnboundedSink, TokioUnboundedStream};
-use collab_sync::server::{CollabMsgCodec, CollabSink, CollabStream};
-
-use collab::core::origin::{CollabClient, CollabOrigin};
 use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::sync::SyncPlugin;
-use rand::{prelude::*, Rng as WrappedRng};
-use tempfile::TempDir;
+use collab_sync::client::{TokioUnboundedSink, TokioUnboundedStream};
+use collab_sync::server::{CollabMsgCodec, CollabSink, CollabStream};
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc::unbounded_channel;
+
+use rand::{prelude::*, Rng as WrappedRng};
+use tempfile::TempDir;
 
 use crate::util::{TestSink, TestStream};
 
@@ -55,7 +55,7 @@ pub async fn spawn_client(
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone()).unwrap();
+  let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone());
   collab.lock().add_plugin(Arc::new(disk_plugin));
   collab.initial();
 
@@ -94,7 +94,7 @@ impl TestClient {
     let (reader, writer) = stream.into_split();
 
     // disk
-    let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone()).unwrap();
+    let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone());
     let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
     collab.lock().add_plugin(Arc::new(disk_plugin));
 
@@ -147,7 +147,7 @@ impl TestClient {
     let origin = origin_from_tcp_stream(&stream);
     let (reader, writer) = stream.into_split();
     // disk
-    let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone()).unwrap();
+    let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone());
     let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
     collab.lock().add_plugin(Arc::new(disk_plugin));
 

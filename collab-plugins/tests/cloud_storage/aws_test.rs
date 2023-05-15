@@ -1,13 +1,14 @@
+use std::sync::Arc;
+use std::time::Duration;
+
+use tokio::sync::RwLock;
+
+use nanoid::nanoid;
+use serde_json::{json, Map, Value};
+
 use crate::cloud_storage::script::TestScript::*;
 use crate::cloud_storage::script::{make_id, CloudStorageTest};
-use std::sync::Arc;
-
 use crate::cloud_storage::util::{generate_random_string, is_enable_aws_test};
-use nanoid::nanoid;
-
-use serde_json::{json, Map, Value};
-use std::time::Duration;
-use tokio::sync::RwLock;
 
 #[tokio::test]
 async fn collab_with_aws_plugin_test() {
@@ -142,7 +143,7 @@ async fn multi_clients_edit_aws_doc_10_times_test() {
   let mut map_2 = Map::new();
   for uid in 1..3 {
     for i in 0..10 {
-      let key = i.to_string();
+      let key = format!("{}-{}", uid, i);
       let value = generate_random_string(10);
       map.insert(key.clone(), Value::String(value.clone()));
       if uid == 1 {

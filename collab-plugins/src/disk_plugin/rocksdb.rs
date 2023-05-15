@@ -3,7 +3,6 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
-use collab::error::CollabError;
 use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -32,26 +31,22 @@ impl Deref for RocksdbDiskPlugin {
 }
 
 impl RocksdbDiskPlugin {
-  pub fn new(uid: i64, db: Arc<RocksCollabDB>) -> Result<Self, CollabError> {
+  pub fn new(uid: i64, db: Arc<RocksCollabDB>) -> Self {
     Self::new_with_config(uid, db, Config::default())
   }
 
-  pub fn new_with_config(
-    uid: i64,
-    db: Arc<RocksCollabDB>,
-    config: Config,
-  ) -> Result<Self, CollabError> {
+  pub fn new_with_config(uid: i64, db: Arc<RocksCollabDB>, config: Config) -> Self {
     let initial_update_count = Arc::new(AtomicU32::new(0));
     let update_count = Arc::new(AtomicU32::new(0));
     let did_load = Arc::new(AtomicBool::new(false));
-    Ok(Self {
+    Self {
       db,
       uid,
       did_load,
       initial_update_count,
       update_count,
       config,
-    })
+    }
   }
 
   /// Return the snapshots for the given object id

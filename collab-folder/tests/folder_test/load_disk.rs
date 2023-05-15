@@ -68,9 +68,9 @@ fn create_folder_with_object_id(uid: i64, path: &str) -> Folder {
   setup_log();
   let object_id = format!("{}:folder", uid);
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
-  let mut collab = CollabBuilder::new(uid, &object_id).build();
-  let disk_plugin = Arc::new(RocksdbDiskPlugin::new(uid, db).unwrap());
-  collab.add_plugin(disk_plugin);
+  let collab = CollabBuilder::new(uid, &object_id)
+    .with_plugin(RocksdbDiskPlugin::new(uid, db))
+    .build();
   collab.initial();
 
   let (view_tx, _view_rx) = tokio::sync::broadcast::channel(100);
@@ -80,5 +80,5 @@ fn create_folder_with_object_id(uid: i64, path: &str) -> Folder {
     trash_change_tx: Some(trash_tx),
   };
 
-  Folder::get_or_create(collab, folder_context)
+  Folder::get_or_create(Arc::new(collab), folder_context)
 }

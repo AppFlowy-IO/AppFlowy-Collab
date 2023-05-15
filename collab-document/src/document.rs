@@ -1,15 +1,18 @@
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::vec;
+
+use collab::core::collab::MutexCollab;
+use collab::preclude::*;
+use serde_json::Value;
+use tracing::log::trace;
 
 use crate::blocks::{
   Block, BlockAction, BlockActionType, BlockEvent, BlockOperation, ChildrenOperation, DocumentData,
   DocumentMeta, RootDeepSubscription,
 };
 use crate::error::DocumentError;
-use collab::preclude::*;
-use serde_json::Value;
-use tracing::log::trace;
 
 const ROOT: &str = "document";
 const PAGE_ID: &str = "page_id";
@@ -18,7 +21,7 @@ const META: &str = "meta";
 const CHILDREN_MAP: &str = "children_map";
 
 pub struct Document {
-  inner: Collab,
+  inner: Arc<MutexCollab>,
   root: MapRefWrapper,
   subscription: RootDeepSubscription,
   children_operation: Rc<ChildrenOperation>,
@@ -27,10 +30,11 @@ pub struct Document {
 
 impl Document {
   /// Create or get a document.
-  pub fn create(collab: Collab) -> Result<Document, DocumentError> {
+  pub fn create(collab: Arc<MutexCollab>) -> Result<Document, DocumentError> {
     let is_document_exist = {
-      let txn = &collab.transact();
-      collab.get_map_with_txn(txn, vec![ROOT])
+      let collab_guard = collab.lock();
+      let txn = &collab_guard.transact();
+      collab_guard.get_map_with_txn(txn, vec![ROOT])
     };
     match is_document_exist {
       Some(_) => Ok(Document::get_document_with_collab(collab)),
@@ -39,7 +43,10 @@ impl Document {
   }
 
   /// Create a new document with the given data.
-  pub fn create_with_data(collab: Collab, data: DocumentData) -> Result<Document, DocumentError> {
+  pub fn create_with_data(
+    collab: Arc<MutexCollab>,
+    data: DocumentData,
+  ) -> Result<Document, DocumentError> {
     Document::create_document(collab, Some(data))
   }
 
@@ -65,11 +72,15 @@ impl Document {
   }
 
   pub fn get_document(&self) -> Result<DocumentData, DocumentError> {
-    let txn = self.inner.transact();
+    let collab_guard = self.inner.lock();
+    let txn = collab_guard.transact();
     let page_id = self
       .root
       .get_str_with_txn(&txn, PAGE_ID)
       .unwrap_or_default();
+    drop(txn);
+    drop(collab_guard);
+
     let blocks = self.block_operation.get_all_blocks();
     let children_map = self.children_operation.get_all_children();
     let document_data = DocumentData {
@@ -81,7 +92,7 @@ impl Document {
   }
 
   pub fn apply_action(&self, actions: Vec<BlockAction>) {
-    self.inner.with_transact_mut(|txn| {
+    self.inner.lock().with_transact_mut(|txn| {
       for action in actions {
         let payload = action.payload;
         let mut block = payload.block;
@@ -112,7 +123,8 @@ impl Document {
   }
 
   pub fn get_block(&self, block_id: &str) -> Option<Block> {
-    let txn = self.inner.transact();
+    let collab_guard = self.inner.lock();
+    let txn = collab_guard.transact();
     self.block_operation.get_block_with_txn(&txn, block_id)
   }
 
@@ -295,10 +307,14 @@ impl Document {
       .set_block_with_txn(txn, block_id, Some(block.data), Some(&new_parent.id))
   }
 
-  fn create_document(collab: Collab, data: Option<DocumentData>) -> Result<Self, DocumentError> {
-    let (root, block_operation, children_operation) = collab.with_transact_mut(|txn| {
+  fn create_document(
+    collab: Arc<MutexCollab>,
+    data: Option<DocumentData>,
+  ) -> Result<Self, DocumentError> {
+    let collab_guard = collab.lock();
+    let (root, block_operation, children_operation) = collab_guard.with_transact_mut(|txn| {
       // { document: {:} }
-      let root = collab.create_map_with_txn(txn, ROOT);
+      let root = collab_guard.create_map_with_txn(txn, ROOT);
       // { document: { blocks: {:} } }
       let blocks = root.insert_map_with_txn(txn, BLOCKS);
       // { document: { blocks: {:}, meta: {:} } }
@@ -327,6 +343,7 @@ impl Document {
 
       Ok::<_, DocumentError>((root, block_operation, children_operation))
     })?;
+    drop(collab_guard);
 
     let subscription = RootDeepSubscription::default();
     let document = Self {
@@ -339,12 +356,15 @@ impl Document {
     Ok(document)
   }
 
-  fn get_document_with_collab(collab: Collab) -> Self {
-    let txn = collab.transact();
+  fn get_document_with_collab(collab: Arc<MutexCollab>) -> Self {
+    let collab_guard = collab.lock();
+    let txn = collab_guard.transact();
 
-    let root = collab.get_map_with_txn(&txn, vec![ROOT]).unwrap();
-    let blocks = collab.get_map_with_txn(&txn, vec![ROOT, BLOCKS]).unwrap();
-    let children_map = collab
+    let root = collab_guard.get_map_with_txn(&txn, vec![ROOT]).unwrap();
+    let blocks = collab_guard
+      .get_map_with_txn(&txn, vec![ROOT, BLOCKS])
+      .unwrap();
+    let children_map = collab_guard
       .get_map_with_txn(&txn, vec![ROOT, META, CHILDREN_MAP])
       .unwrap();
     let children_operation = Rc::new(ChildrenOperation::new(children_map));
@@ -352,6 +372,7 @@ impl Document {
     let subscription = RootDeepSubscription::default();
 
     drop(txn);
+    drop(collab_guard);
 
     Self {
       inner: collab,

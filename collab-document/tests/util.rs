@@ -1,4 +1,5 @@
 #![allow(clippy::type_complexity)]
+
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -8,11 +9,11 @@ use collab::preclude::CollabBuilder;
 use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
 use collab_document::error::DocumentError;
-
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use serde_json::{json, Value};
+
+use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
 use tempfile::TempDir;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 
@@ -35,11 +36,11 @@ pub fn create_document(uid: i64, doc_id: &str) -> DocumentTest {
 }
 
 pub fn create_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> DocumentTest {
-  let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone()).unwrap();
+  let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone());
   let collab = CollabBuilder::new(1, doc_id)
     .with_plugin(disk_plugin)
     .build();
-  collab.initial();
+  collab.lock().initial();
 
   let mut blocks = HashMap::new();
   let mut children_map = HashMap::new();
@@ -84,21 +85,21 @@ pub fn create_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -
     meta,
   };
 
-  match Document::create_with_data(collab, document_data) {
+  match Document::create_with_data(Arc::new(collab), document_data) {
     Ok(document) => DocumentTest { document, db },
     Err(e) => panic!("create document error: {}", e),
   }
 }
 
 pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> DocumentTest {
-  let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone()).unwrap();
+  let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone());
   let collab = CollabBuilder::new(uid, doc_id)
     .with_plugin(disk_plugin)
     .build();
   collab.initial();
 
   DocumentTest {
-    document: Document::create(collab).unwrap(),
+    document: Document::create(Arc::new(collab)).unwrap(),
     db,
   }
 }

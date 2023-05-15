@@ -3,16 +3,20 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
+use collab::core::collab::MutexCollab;
+use collab::preclude::CollabBuilder;
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::rows::CreateRowParams;
-use collab_database::user::{RowRelationChange, RowRelationUpdateReceiver, UserDatabase};
+use collab_database::user::{
+  RowRelationChange, RowRelationUpdateReceiver, UserDatabase, UserDatabaseCollabBuilder,
+};
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::disk::rocksdb::{Config, RocksdbDiskPlugin};
 use tokio::sync::mpsc::{channel, Receiver};
 
-use collab_plugins::disk::rocksdb::Config;
 use rand::Rng;
 use tempfile::TempDir;
 
@@ -38,6 +42,28 @@ pub fn random_uid() -> i64 {
   rng.gen::<i64>()
 }
 
+pub struct UserDatabaseCollabBuilderImpl();
+
+impl UserDatabaseCollabBuilder for UserDatabaseCollabBuilderImpl {
+  fn build(&self, uid: i64, object_id: &str, db: Arc<RocksCollabDB>) -> Arc<MutexCollab> {
+    self.build_with_config(uid, object_id, db, &Config::default())
+  }
+
+  fn build_with_config(
+    &self,
+    uid: i64,
+    object_id: &str,
+    db: Arc<RocksCollabDB>,
+    config: &Config,
+  ) -> Arc<MutexCollab> {
+    let collab = CollabBuilder::new(uid, object_id)
+      .with_plugin(RocksdbDiskPlugin::new_with_config(uid, db, config.clone()))
+      .build();
+    collab.lock().initial();
+    Arc::new(collab)
+  }
+}
+
 pub fn user_database_test(uid: i64) -> UserDatabaseTest {
   let db = make_rocks_db();
   user_database_with_db(uid, db)
@@ -45,14 +71,19 @@ pub fn user_database_test(uid: i64) -> UserDatabaseTest {
 
 pub fn user_database_test_with_config(uid: i64, config: Config) -> UserDatabaseTest {
   let db = make_rocks_db();
-  let inner = UserDatabase::new(uid, db.clone(), config);
+  let inner = UserDatabase::new(uid, db.clone(), config, UserDatabaseCollabBuilderImpl());
   UserDatabaseTest { uid, inner, db }
 }
 
 pub fn user_database_with_db(uid: i64, db: Arc<RocksCollabDB>) -> UserDatabaseTest {
   UserDatabaseTest {
     uid,
-    inner: UserDatabase::new(uid, db.clone(), Config::new().snapshot_per_update(5)),
+    inner: UserDatabase::new(
+      uid,
+      db.clone(),
+      Config::new().snapshot_per_update(5),
+      UserDatabaseCollabBuilderImpl(),
+    ),
     db,
   }
 }
@@ -63,7 +94,12 @@ pub fn user_database_with_default_data(uid: i64) -> UserDatabaseTest {
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
   let user_database = UserDatabaseTest {
     uid,
-    inner: UserDatabase::new(uid, db.clone(), Config::new()),
+    inner: UserDatabase::new(
+      uid,
+      db.clone(),
+      Config::new(),
+      UserDatabaseCollabBuilderImpl(),
+    ),
     db,
   };
 
