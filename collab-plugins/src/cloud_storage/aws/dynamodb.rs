@@ -4,6 +4,7 @@ use std::time::Duration;
 use anyhow::Error;
 use async_trait::async_trait;
 use aws_config::meta::region::RegionProviderChain;
+use aws_sdk_dynamodb::config::Region;
 use aws_sdk_dynamodb::primitives::Blob;
 use aws_sdk_dynamodb::types::{
   AttributeDefinition, AttributeValue, ComparisonOperator, Condition, KeySchemaElement, KeyType,
@@ -18,7 +19,7 @@ use tokio::sync::oneshot;
 use y_sync::awareness::Awareness;
 use yrs::Transaction;
 
-use crate::cloud_storage_plugin::remote_collab::{RemoteCollab, RemoteCollabStorage};
+use crate::cloud_storage::remote_collab::{RemoteCollab, RemoteCollabStorage};
 
 const DEFAULT_TABLE_NAME: &str = "collab_test";
 const OBJECT_ID: &str = "oid";
@@ -44,8 +45,16 @@ impl AWSDynamoDBPlugin {
     object_id: String,
     local_collab: Arc<MutexCollab>,
     sync_per_secs: u64,
+    region: String,
   ) -> Result<Self, anyhow::Error> {
-    Self::new_with_table_name(object_id, DEFAULT_TABLE_NAME, local_collab, sync_per_secs).await
+    Self::new_with_table_name(
+      object_id,
+      DEFAULT_TABLE_NAME,
+      local_collab,
+      sync_per_secs,
+      region,
+    )
+    .await
   }
 
   pub async fn new_with_table_name(
@@ -53,8 +62,9 @@ impl AWSDynamoDBPlugin {
     table_name: &str,
     local_collab: Arc<MutexCollab>,
     sync_per_secs: u64,
+    region: String,
   ) -> Result<Self, anyhow::Error> {
-    let region_provider = RegionProviderChain::default_provider().or_else("ap-southeast-2");
+    let region_provider = RegionProviderChain::default_provider().or_else(Region::new(region));
     let config = aws_config::from_env().region(region_provider).load().await;
     let client = Arc::new(Client::new(&config));
     let table_name = table_name.to_string();
@@ -127,9 +137,9 @@ impl RemoteCollabStorage for CollabCloudStorageImpl {
   }
 }
 
-pub async fn get_aws_remote_doc(object_id: &str) -> Arc<MutexCollab> {
+pub async fn get_aws_remote_doc(object_id: &str, region: String) -> Arc<MutexCollab> {
   let local_collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, object_id, vec![]));
-  let plugin = AWSDynamoDBPlugin::new(object_id.to_string(), local_collab.clone(), 1)
+  let plugin = AWSDynamoDBPlugin::new(object_id.to_string(), local_collab.clone(), 1, region)
     .await
     .unwrap();
   let (tx, rx) = oneshot::channel();

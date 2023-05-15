@@ -10,10 +10,7 @@ pub struct AppFlowyCollabConfig {
 impl Default for AppFlowyCollabConfig {
   fn default() -> Self {
     Self {
-      aws_config: Some(AWSDynamoDBConfig {
-        access_key_id: "AKIAYLLYLXWA2LS3BV6O".to_string(),
-        secret_access_key: "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".to_string(),
-      }),
+      aws_config: Some(AWSDynamoDBConfig::new("".to_string(), "".to_string())),
     }
   }
 }
@@ -38,4 +35,16 @@ impl FromStr for AppFlowyCollabConfig {
 pub struct AWSDynamoDBConfig {
   pub access_key_id: String,
   pub secret_access_key: String,
+  // Region list: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.RegionsAndAvailabilityZones.html
+  pub region: String,
+}
+
+impl AWSDynamoDBConfig {
+  fn new(access_key_id: String, secret_access_key: String) -> Self {
+    Self {
+      access_key_id,
+      secret_access_key,
+      region: "us-east-1".to_string(),
+    }
+  }
 }

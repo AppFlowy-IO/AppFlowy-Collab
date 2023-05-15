@@ -1,12 +1,15 @@
-use crate::setup_log;
-use collab::core::collab::MutexCollab;
-use collab::core::origin::{CollabClient, CollabOrigin};
-use collab::preclude::Collab;
-use collab_plugins::cloud_storage_plugin::{get_aws_remote_doc, AWSDynamoDBPlugin};
-use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+
+use collab::core::collab::MutexCollab;
+use collab::core::origin::{CollabClient, CollabOrigin};
+use collab::preclude::Collab;
+use collab_plugins::cloud_storage::aws::{get_aws_remote_doc, AWSDynamoDBPlugin};
+
+use serde_json::Value;
+
+use crate::setup_log;
 
 pub enum TestScript {
   CreateCollab {
@@ -54,9 +57,14 @@ impl CloudStorageTest {
       } => {
         let origin = CollabOrigin::Client(CollabClient::new(uid, "1"));
         let local_collab = Arc::new(MutexCollab::new(origin, &object_id, vec![]));
-        let plugin = AWSDynamoDBPlugin::new(object_id.clone(), local_collab.clone(), sync_per_secs)
-          .await
-          .unwrap();
+        let plugin = AWSDynamoDBPlugin::new(
+          object_id.clone(),
+          local_collab.clone(),
+          sync_per_secs,
+          test_region(),
+        )
+        .await
+        .unwrap();
         local_collab.lock().add_plugin(Arc::new(plugin));
         local_collab.initial();
         self
@@ -87,7 +95,7 @@ impl CloudStorageTest {
         object_id,
         expected,
       } => {
-        let collab = get_aws_remote_doc(&object_id).await;
+        let collab = get_aws_remote_doc(&object_id, test_region()).await;
         let json = collab.lock().to_json_value();
         assert_json_diff::assert_json_eq!(json, expected,);
       },
@@ -99,6 +107,9 @@ impl CloudStorageTest {
       self.run_script(script).await;
     }
   }
+}
+fn test_region() -> String {
+  "ap-southeast-2".to_string()
 }
 
 pub fn make_id(uid: i64, object_id: &str) -> String {
