@@ -2,7 +2,7 @@ use bytes::Bytes;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
-use crate::client::sink::MsgId;
+use crate::client::sink::{MsgId, SinkMessage};
 use collab::core::origin::CollabOrigin;
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,16 @@ pub enum CollabMessage {
   ServerResponse(CSServerResponse),
   ServerBroadcast(CSServerBroadcast),
   ServerAck(CSServerAck),
+}
+
+impl SinkMessage for CollabMessage {
+  fn length(&self) -> usize {
+    self.payload().map(|p| p.len()).unwrap_or(0)
+  }
+
+  fn can_merge(&self) -> bool {
+    false
+  }
 }
 
 impl Eq for CollabMessage {}

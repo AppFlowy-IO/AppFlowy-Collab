@@ -3,9 +3,10 @@ use crate::cloud_storage::script::TestScript::{
   AssertLocal, AssertRemote, CreateCollab, ModifyCollab, Wait,
 };
 
-use crate::cloud_storage::util::is_enable_aws_test;
+use crate::cloud_storage::util::{generate_random_string, is_enable_aws_test};
 use nanoid::nanoid;
-use serde_json::json;
+
+use serde_json::{json, Map, Value};
 use std::time::Duration;
 
 #[tokio::test]
@@ -25,23 +26,23 @@ async fn collab_with_aws_plugin_test() {
       ModifyCollab {
         uid: 1,
         object_id: object_id.clone(),
-        f: |collab| {
+        f: Box::new(|collab| {
           collab.insert("123", "abc");
-        },
+        }),
       },
       ModifyCollab {
         uid: 1,
         object_id: object_id.clone(),
-        f: |collab| {
+        f: Box::new(|collab| {
           collab.insert("456", "efg");
-        },
+        }),
       },
       ModifyCollab {
         uid: 1,
         object_id: object_id.clone(),
-        f: |collab| {
+        f: Box::new(|collab| {
           collab.insert("789", "hij");
-        },
+        }),
       },
       Wait { secs: 6 },
       AssertLocal {
@@ -77,17 +78,32 @@ async fn edit_aws_doc_10_times_test() {
       object_id: object_id.clone(),
     }])
     .await;
-  tracing::trace!("object_id: {}", object_id);
-  for _ in 0..10 {
+  let mut map = Map::new();
+  for i in 0..10 {
+    let key = i.to_string();
+    let value = generate_random_string(10);
+    map.insert(key.clone(), Value::String(value.clone()));
     test
       .run_scripts(vec![ModifyCollab {
         uid: 1,
         object_id: object_id.clone(),
-        f: move |collab| {
-          collab.insert("a", "b");
-        },
+        f: Box::new(move |collab| {
+          collab.insert(&key, value);
+        }),
       }])
       .await;
   }
-  tokio::time::sleep(Duration::from_secs(5)).await;
+  tokio::time::sleep(Duration::from_secs(3)).await;
+  test
+    .run_scripts(vec![
+      AssertLocal {
+        object_id: object_id.clone(),
+        expected: Value::Object(map.clone()),
+      },
+      AssertRemote {
+        object_id: object_id.clone(),
+        expected: Value::Object(map),
+      },
+    ])
+    .await;
 }

@@ -241,6 +241,6 @@ impl CollabPlugin for AWSDynamoDBPlugin {
     self.start_sync(None);
   }
   fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
-    self.remote_collab.push_update(update.to_vec());
+    self.remote_collab.push_update(update);
   }
 }

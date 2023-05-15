@@ -14,9 +14,11 @@ use tokio::spawn;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::watch;
 
-use collab_sync::client::sink::{MsgId, MsgIdCounter, SinkConfig, SyncSink, TaskRunner};
+use collab_sync::client::sink::{
+  MsgId, MsgIdCounter, SinkConfig, SinkMessage, SyncSink, TaskRunner,
+};
 use yrs::updates::decoder::Decode;
-use yrs::{ReadTxn, Update};
+use yrs::{merge_updates_v1, ReadTxn, Update};
 
 #[async_trait]
 pub trait RemoteCollabStorage: Send + Sync + 'static {
@@ -125,11 +127,17 @@ impl RemoteCollab {
     }
   }
 
-  pub fn push_update(&self, update: Vec<u8>) {
-    self.sink.queue_msg(|msg_id| Message {
-      msg_id,
-      payload: update,
-    });
+  pub fn push_update(&self, update: &[u8]) {
+    self.sink.queue_or_merge_msg(
+      |prev| {
+        prev.payload = merge_updates_v1(&[&prev.payload, update])?;
+        Ok(())
+      },
+      |msg_id| Message {
+        msg_id,
+        payload: update.to_vec(),
+      },
+    );
   }
 }
 
@@ -137,6 +145,16 @@ impl RemoteCollab {
 struct Message {
   msg_id: MsgId,
   payload: Vec<u8>,
+}
+
+impl SinkMessage for Message {
+  fn length(&self) -> usize {
+    self.payload.len()
+  }
+
+  fn can_merge(&self) -> bool {
+    self.payload.len() < 1024
+  }
 }
 
 impl Eq for Message {}
@@ -160,8 +178,12 @@ impl Ord for Message {
 }
 
 impl Display for Message {
-  fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
-    Ok(())
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.write_fmt(format_args!(
+      "send client update: [msg_id:{}|payload_len:{}]",
+      self.msg_id,
+      self.payload.len(),
+    ))
   }
 }
 

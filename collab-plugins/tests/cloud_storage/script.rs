@@ -16,7 +16,7 @@ pub enum TestScript {
   ModifyCollab {
     uid: i64,
     object_id: String,
-    f: fn(&Collab),
+    f: Box<dyn FnOnce(&Collab)>,
   },
   Wait {
     secs: u64,
