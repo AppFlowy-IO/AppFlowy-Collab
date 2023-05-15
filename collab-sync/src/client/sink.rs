@@ -9,13 +9,21 @@ use crate::client::pending_msg::{PendingMsgQueue, TaskState};
 use crate::client::sync::DEFAULT_SYNC_TIMEOUT;
 use crate::error::SyncError;
 use futures_util::SinkExt;
+
 use tokio::spawn;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
-use tokio::time::{Instant, Interval};
+use tokio::time::{interval, Instant, Interval};
+
+pub trait SinkMessage: Clone + Send + Sync + 'static + Ord + Display {
+  /// Returns the length of the message in bytes.
+  fn length(&self) -> usize;
+  /// Returns true if the message can be merged with other messages.
+  /// Check the implementation of `queue_or_merge_msg` for more details.
+  fn can_merge(&self) -> bool;
+}
 
 pub struct SyncSink<Sink, Msg> {
   sender: Arc<Mutex<Sink>>,
-  // pending_msgs: Arc<parking_lot::Mutex<PendingMsgQueue<Msg>>>,
   pending_msgs: Arc<parking_lot::Mutex<PendingMsgQueue<Msg>>>,
   msg_id_counter: Arc<dyn MsgIdCounter>,
   notifier: Arc<watch::Sender<bool>>,
@@ -30,7 +38,7 @@ impl<E, Sink, Msg> SyncSink<Sink, Msg>
 where
   E: std::error::Error + Send + Sync + 'static,
   Sink: SinkExt<Msg, Error = E> + Send + Sync + Unpin + 'static,
-  Msg: Clone + Send + Sync + 'static + Ord + Display,
+  Msg: SinkMessage,
 {
   pub fn new<C>(
     sink: Sink,
@@ -80,6 +88,34 @@ where
     self.notify();
   }
 
+  /// Queue the message or merge it with the previous message if possible.
+  pub fn queue_or_merge_msg(
+    &self,
+    merge: impl FnOnce(&mut Msg) -> Result<(), SyncError>,
+    or_else: impl FnOnce(MsgId) -> Msg,
+  ) {
+    {
+      let mut pending_msgs = self.pending_msgs.lock();
+      if let Some(mut prev) = pending_msgs.peek_mut() {
+        // Only merge the message if the previous message is pending and can be merged.
+        // Otherwise, just queue the new message.
+        if prev.state().is_pending() {
+          let prev_msg = prev.get_mut_msg();
+          if prev_msg.can_merge() && merge(prev_msg).is_ok() {
+            tracing::trace!("Did merge new message, len: {}", prev_msg.length());
+            return;
+          }
+        }
+      }
+
+      let msg_id = self.msg_id_counter.next();
+      let msg = or_else(msg_id);
+      pending_msgs.push_msg(msg_id, msg);
+      drop(pending_msgs);
+    }
+    self.notify();
+  }
+
   /// Notify the sink to process the next message and mark the current message as done.
   pub async fn ack_msg(&self, msg_id: MsgId) {
     if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {
@@ -103,7 +139,21 @@ where
       }
     }
 
-    let pending_msg = self.pending_msgs.lock().pop();
+    let pending_msg = match self.pending_msgs.try_lock() {
+      None => {
+        // If acquire the lock failed, try to notify again after 100ms
+        let weak_notifier = Arc::downgrade(&self.notifier);
+        spawn(async move {
+          interval(Duration::from_millis(100)).tick().await;
+          if let Some(notifier) = weak_notifier.upgrade() {
+            let _ = notifier.send(false);
+          }
+        });
+        None
+      },
+      Some(mut pending_msg) => pending_msg.pop(),
+    };
+
     match pending_msg {
       Some(mut pending_msg) => {
         if pending_msg.state().is_done() {
@@ -175,7 +225,7 @@ impl<Msg> TaskRunner<Msg> {
   ) where
     E: std::error::Error + Send + Sync + 'static,
     Sink: SinkExt<Msg, Error = E> + Send + Sync + Unpin + 'static,
-    Msg: Clone + Send + Sync + 'static + Ord + Display,
+    Msg: SinkMessage,
   {
     sync_sink.upgrade().unwrap().notify();
     loop {

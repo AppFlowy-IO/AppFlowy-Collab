@@ -69,6 +69,10 @@ where
     self.msg.clone()
   }
 
+  pub fn get_mut_msg(&mut self) -> &mut Msg {
+    &mut self.msg
+  }
+
   pub fn state(&self) -> &TaskState {
     &self.state
   }
@@ -133,5 +137,8 @@ impl TaskState {
   }
   pub fn is_processing(&self) -> bool {
     matches!(self, TaskState::Processing)
+  }
+  pub fn is_pending(&self) -> bool {
+    matches!(self, TaskState::Pending)
   }
 }

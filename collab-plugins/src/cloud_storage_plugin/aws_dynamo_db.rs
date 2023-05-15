@@ -43,14 +43,16 @@ impl AWSDynamoDBPlugin {
   pub async fn new(
     object_id: String,
     local_collab: Arc<MutexCollab>,
+    sync_per_secs: u64,
   ) -> Result<Self, anyhow::Error> {
-    Self::new_with_table_name(object_id, DEFAULT_TABLE_NAME, local_collab).await
+    Self::new_with_table_name(object_id, DEFAULT_TABLE_NAME, local_collab, sync_per_secs).await
   }
 
   pub async fn new_with_table_name(
     object_id: String,
     table_name: &str,
     local_collab: Arc<MutexCollab>,
+    sync_per_secs: u64,
   ) -> Result<Self, anyhow::Error> {
     let region_provider = RegionProviderChain::default_provider().or_else("ap-southeast-2");
     let config = aws_config::from_env().region(region_provider).load().await;
@@ -65,7 +67,9 @@ impl AWSDynamoDBPlugin {
 
     let config = SinkConfig::new()
       .with_timeout(10)
-      .with_strategy(SinkStrategy::FixInterval(Duration::from_secs(1)));
+      .with_strategy(SinkStrategy::FixInterval(Duration::from_secs(
+        sync_per_secs,
+      )));
     let remote_collab = Arc::new(RemoteCollab::new(object_id.clone(), storage, config));
     create_table_if_not_exist(&client, &table_name).await?;
     Ok(Self {
@@ -125,7 +129,7 @@ impl RemoteCollabStorage for CollabCloudStorageImpl {
 
 pub async fn get_aws_remote_doc(object_id: &str) -> Arc<MutexCollab> {
   let local_collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, object_id, vec![]));
-  let plugin = AWSDynamoDBPlugin::new(object_id.to_string(), local_collab.clone())
+  let plugin = AWSDynamoDBPlugin::new(object_id.to_string(), local_collab.clone(), 1)
     .await
     .unwrap();
   let (tx, rx) = oneshot::channel();
@@ -241,6 +245,6 @@ impl CollabPlugin for AWSDynamoDBPlugin {
     self.start_sync(None);
   }
   fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
-    self.remote_collab.push_update(update.to_vec());
+    self.remote_collab.push_update(update);
   }
 }
