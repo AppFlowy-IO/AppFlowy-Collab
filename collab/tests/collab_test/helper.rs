@@ -1,11 +1,14 @@
-use crate::struct_define::{Document, Owner, TaskInfo};
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use bytes::Bytes;
+use collab::core::collab::MutexCollab;
 use collab::preclude::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
 use yrs::updates::decoder::Decode;
+
+use crate::struct_define::{Document, Owner, TaskInfo};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Person {
@@ -19,15 +22,17 @@ pub struct Position {
   pub(crate) level: u8,
 }
 
-pub fn make_collab_pair() -> (Collab, Collab, CollabStateCachePlugin) {
+pub fn make_collab_pair() -> (MutexCollab, MutexCollab, CollabStateCachePlugin) {
   let update_cache = CollabStateCachePlugin::new();
-  let mut local_collab = CollabBuilder::new(1, "1")
+  let local_collab = CollabBuilder::new(1, "1")
     .with_plugin(update_cache.clone())
     .build();
   local_collab.initial();
 
   // Insert document
-  local_collab.insert_json_with_path(vec![], "document", test_document());
+  local_collab
+    .lock()
+    .insert_json_with_path(vec![], "document", test_document());
   let updates = update_cache.get_updates();
   let remote_collab = CollabBuilder::new(1, "1").build_with_updates(updates.unwrap());
   remote_collab.initial();

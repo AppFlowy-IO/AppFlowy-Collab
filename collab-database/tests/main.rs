@@ -1,3 +1,3 @@
-mod database_test;
-mod helper;
-mod user_test;
+pub mod database_test;
+pub mod helper;
+pub mod user_test;

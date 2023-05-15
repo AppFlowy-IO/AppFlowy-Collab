@@ -1,8 +1,9 @@
-use aws_config::meta::region::RegionProviderChain;
+use std::sync::Arc;
+use std::time::Duration;
 
-use crate::cloud_storage_plugin::remote_collab::{RemoteCollab, RemoteCollabStorage};
 use anyhow::Error;
 use async_trait::async_trait;
+use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::primitives::Blob;
 use aws_sdk_dynamodb::types::{
   AttributeDefinition, AttributeValue, ComparisonOperator, Condition, KeySchemaElement, KeyType,
@@ -12,13 +13,12 @@ use aws_sdk_dynamodb::Client;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
-
 use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
-use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::oneshot;
 use y_sync::awareness::Awareness;
 use yrs::Transaction;
+
+use crate::cloud_storage_plugin::remote_collab::{RemoteCollab, RemoteCollabStorage};
 
 const DEFAULT_TABLE_NAME: &str = "collab_test";
 const OBJECT_ID: &str = "oid";

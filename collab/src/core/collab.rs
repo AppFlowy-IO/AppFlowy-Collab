@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::vec::IntoIter;
 
@@ -18,7 +19,6 @@ use yrs::{
 use crate::core::collab_plugin::CollabPlugin;
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
-
 use crate::preclude::{ArrayRefWrapper, JsonValue};
 use crate::util::insert_json_value_to_map_ref;
 
@@ -52,6 +52,8 @@ pub struct Collab {
   /// A list of plugins that are used to extend the functionality of the [Collab].
   plugins: Plugins,
 
+  is_initialized: AtomicBool,
+
   update_subscription: RwLock<Option<UpdateSubscription>>,
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
 }
@@ -82,6 +84,7 @@ impl Collab {
       awareness,
       data,
       plugins,
+      is_initialized: AtomicBool::new(false),
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
     }
@@ -119,6 +122,10 @@ impl Collab {
   ///
   /// This method should be called after all plugins are added.
   pub fn initial(&self) {
+    if self.is_initialized.load(Ordering::SeqCst) {
+      return;
+    }
+    self.is_initialized.store(true, Ordering::SeqCst);
     {
       let mut txn = self.transact_mut();
       self
@@ -428,6 +435,7 @@ impl Display for Collab {
 /// A builder that used to create a new `Collab` instance.
 pub struct CollabBuilder {
   uid: i64,
+  device_id: String,
   plugins: Vec<Arc<dyn CollabPlugin>>,
   object_id: String,
 }
@@ -439,7 +447,16 @@ impl CollabBuilder {
       uid,
       plugins: vec![],
       object_id: object_id.to_string(),
+      device_id: "".to_string(),
     }
+  }
+
+  pub fn with_device_id<T>(mut self, device_id: T) -> Self
+  where
+    T: AsRef<str>,
+  {
+    self.device_id = device_id.as_ref().to_string();
+    self
   }
 
   pub fn with_plugin<T>(mut self, plugin: T) -> Self
@@ -450,18 +467,22 @@ impl CollabBuilder {
     self
   }
 
-  pub fn build_with_updates(self, updates: Vec<Update>) -> Collab {
-    let collab = Collab::new(self.uid, self.object_id, self.plugins);
-    let mut txn = collab.transact_mut();
-    for update in updates {
-      txn.apply_update(update);
-    }
-    drop(txn);
+  pub fn build_with_updates(self, updates: Vec<Update>) -> MutexCollab {
+    let collab = self.build();
+    collab.lock().with_transact_mut(|txn| {
+      for update in updates {
+        txn.apply_update(update);
+      }
+    });
     collab
   }
 
-  pub fn build(self) -> Collab {
-    Collab::new(self.uid, self.object_id, self.plugins)
+  pub fn build(self) -> MutexCollab {
+    let origin = CollabOrigin::Client(CollabClient {
+      uid: self.uid,
+      device_id: self.device_id,
+    });
+    MutexCollab::new(origin, &self.object_id, self.plugins)
   }
 }
 

@@ -17,6 +17,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 
 use crate::helper::{db_path, TestTextCell};
+use crate::user_test::helper::UserDatabaseCollabBuilderImpl;
 
 pub enum DatabaseScript {
   CreateDatabase {
@@ -71,7 +72,8 @@ impl DatabaseTest {
   pub fn new(config: Config) -> Self {
     let db_path = db_path();
     let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
-    let inner = InnerUserDatabase::new(1, db.clone(), config.clone());
+    let collab_builder = UserDatabaseCollabBuilderImpl();
+    let inner = InnerUserDatabase::new(1, db.clone(), config.clone(), collab_builder);
     let user_database = UserDatabase(Arc::new(Mutex::new(inner)));
     Self {
       db,
@@ -154,7 +156,8 @@ pub fn run_script(
       database_id,
       expected,
     } => {
-      let inner = InnerUserDatabase::new(1, db, config);
+      let collab_builder = UserDatabaseCollabBuilderImpl();
+      let inner = InnerUserDatabase::new(1, db, config, collab_builder);
       let database = inner.get_database(&database_id).unwrap();
       let actual = database.to_json_value();
       assert_json_diff::assert_json_eq!(actual, expected);

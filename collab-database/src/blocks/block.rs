@@ -3,25 +3,35 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use lru::LruCache;
 use parking_lot::Mutex;
 
-use lru::LruCache;
-
 use crate::rows::{Cell, Row, RowDoc, RowId, RowUpdate};
+use crate::user::UserDatabaseCollabBuilder;
 use crate::views::RowOrder;
 
 #[derive(Clone)]
 pub struct Block {
   uid: i64,
   db: Arc<RocksCollabDB>,
+  collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
   pub cache: Rc<Mutex<LruCache<RowId, Arc<RowDoc>>>>,
 }
 
 impl Block {
-  pub fn new(uid: i64, db: Arc<RocksCollabDB>) -> Block {
+  pub fn new(
+    uid: i64,
+    db: Arc<RocksCollabDB>,
+    collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
+  ) -> Block {
     let cache = Rc::new(Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap())));
 
-    Self { uid, db, cache }
+    Self {
+      uid,
+      db,
+      cache,
+      collab_builder,
+    }
   }
 
   pub fn create_rows<T: Into<Row>>(&self, rows: Vec<T>) -> Vec<RowOrder> {
@@ -40,7 +50,13 @@ impl Block {
       id: row.id.clone(),
       height: row.height,
     };
-    let row_doc = RowDoc::create(row, self.uid, row_id.clone(), self.db.clone());
+    let row_doc = RowDoc::create(
+      row,
+      self.uid,
+      row_id.clone(),
+      self.db.clone(),
+      self.collab_builder.clone(),
+    );
     self.cache.lock().put(row_id, Arc::new(row_doc));
     row_order
   }
@@ -85,7 +101,12 @@ impl Block {
     let row = self.cache.lock().get(row_id).cloned();
     match row {
       None => {
-        let row = Arc::new(RowDoc::new(self.uid, row_id.clone(), self.db.clone()));
+        let row = Arc::new(RowDoc::new(
+          self.uid,
+          row_id.clone(),
+          self.db.clone(),
+          self.collab_builder.clone(),
+        ));
         self.cache.lock().put(row_id.clone(), row.clone());
         row
       },

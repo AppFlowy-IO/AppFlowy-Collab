@@ -7,8 +7,8 @@ use collab_folder::core::{
   Belonging, Belongings, Folder, FolderContext, TrashChangeReceiver, View, ViewChangeReceiver,
   ViewLayout, Workspace,
 };
-
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+
 use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
@@ -37,7 +37,7 @@ pub fn create_folder(id: &str) -> FolderTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path.clone()).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(uid, db).unwrap();
+  let disk_plugin = RocksdbDiskPlugin::new(uid, db);
   let cleaner: Cleaner = Cleaner::new(path);
 
   let collab = CollabBuilder::new(1, id).with_plugin(disk_plugin).build();
@@ -49,7 +49,7 @@ pub fn create_folder(id: &str) -> FolderTest {
     view_change_tx: Some(view_tx),
     trash_change_tx: Some(trash_tx),
   };
-  let folder = Folder::get_or_create(collab, context);
+  let folder = Folder::get_or_create(Arc::new(collab), context);
   FolderTest {
     folder,
     cleaner,

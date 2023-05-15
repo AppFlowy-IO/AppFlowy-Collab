@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
+use collab::core::collab::MutexCollab;
 use collab::preclude::{
-  lib0Any, ArrayRef, Collab, CollabBuilder, MapPrelim, MapRef, MapRefExtension, ReadTxn,
-  TransactionMut, YrsValue,
+  lib0Any, ArrayRef, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
 use serde::{Deserialize, Serialize};
 
 use crate::database::{gen_row_id, timestamp};
 use crate::rows::{Cell, Cells, CellsUpdate, RowId};
+use crate::user::UserDatabaseCollabBuilder;
 use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 
@@ -24,7 +24,7 @@ pub struct RowDoc {
   uid: i64,
   row_id: RowId,
   #[allow(dead_code)]
-  collab: Collab,
+  collab: Arc<MutexCollab>,
   data: MapRef,
   #[allow(dead_code)]
   meta: MapRef,
@@ -34,11 +34,17 @@ pub struct RowDoc {
 }
 
 impl RowDoc {
-  pub fn create<T: Into<Row>>(row: T, uid: i64, row_id: RowId, db: Arc<RocksCollabDB>) -> Self {
+  pub fn create<T: Into<Row>>(
+    row: T,
+    uid: i64,
+    row_id: RowId,
+    db: Arc<RocksCollabDB>,
+    collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
+  ) -> Self {
     let row = row.into();
-    let doc = Self::new(uid, row_id, db);
+    let doc = Self::new(uid, row_id, db, collab_builder);
     let data = doc.data.clone();
-    doc.collab.with_transact_mut(|txn| {
+    doc.collab.lock().with_transact_mut(|txn| {
       RowBuilder::new(row.id, txn, data)
         .update(|update| {
           update
@@ -53,34 +59,43 @@ impl RowDoc {
     doc
   }
 
-  pub fn new(uid: i64, row_id: RowId, db: Arc<RocksCollabDB>) -> Self {
-    let collab = CollabBuilder::new(uid, &row_id)
-      .with_plugin(RocksdbDiskPlugin::new(uid, db.clone()).unwrap())
-      .build();
-    collab.initial();
-
+  pub fn new(
+    uid: i64,
+    row_id: RowId,
+    db: Arc<RocksCollabDB>,
+    collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
+  ) -> Self {
+    let collab = collab_builder.build(uid, &row_id, db.clone());
+    let collab_guard = collab.lock();
     let (data, meta, comments) = {
-      let txn = collab.transact();
-      let data = collab.get_map_with_txn(&txn, vec![DATA]);
-      let meta = collab.get_map_with_txn(&txn, vec![META]);
-      let comments = collab.get_array_with_txn(&txn, vec![COMMENT]);
+      let txn = collab_guard.transact();
+      let data = collab_guard.get_map_with_txn(&txn, vec![DATA]);
+      let meta = collab_guard.get_map_with_txn(&txn, vec![META]);
+      let comments = collab_guard.get_array_with_txn(&txn, vec![COMMENT]);
       drop(txn);
       (data, meta, comments)
     };
 
     let mut txn = if data.is_none() || meta.is_none() || comments.is_none() {
-      Some(collab.transact_mut())
+      Some(collab_guard.transact_mut())
     } else {
       None
     };
 
-    let data = data.unwrap_or_else(|| collab.create_map_with_txn(txn.as_mut().unwrap(), DATA));
-    let meta = meta.unwrap_or_else(|| collab.create_map_with_txn(txn.as_mut().unwrap(), META));
+    let data =
+      data.unwrap_or_else(|| collab_guard.create_map_with_txn(txn.as_mut().unwrap(), DATA));
+    let meta =
+      meta.unwrap_or_else(|| collab_guard.create_map_with_txn(txn.as_mut().unwrap(), META));
     let comments = comments.unwrap_or_else(|| {
-      collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn.as_mut().unwrap(), COMMENT, vec![])
+      collab_guard.create_array_with_txn::<MapPrelim<lib0Any>>(
+        txn.as_mut().unwrap(),
+        COMMENT,
+        vec![],
+      )
     });
 
     drop(txn);
+    drop(collab_guard);
 
     Self {
       uid,
@@ -94,17 +109,20 @@ impl RowDoc {
   }
 
   pub fn get_row(&self) -> Option<Row> {
-    let txn = self.collab.transact();
+    let collab = self.collab.lock();
+    let txn = collab.transact();
     row_from_map_ref(&self.data, &txn)
   }
 
   pub fn get_row_order(&self) -> Option<RowOrder> {
-    let txn = self.collab.transact();
+    let collab = self.collab.lock();
+    let txn = collab.transact();
     row_order_from_map_ref(&self.data, &txn).map(|value| value.0)
   }
 
   pub fn get_cell(&self, field_id: &str) -> Option<Cell> {
-    let txn = self.collab.transact();
+    let collab = self.collab.lock();
+    let txn = collab.transact();
     cell_from_map_ref(&self.data, &txn, field_id)
   }
 
@@ -112,7 +130,7 @@ impl RowDoc {
   where
     F: FnOnce(RowUpdate),
   {
-    self.collab.with_transact_mut(|txn| {
+    self.collab.lock().with_transact_mut(|txn| {
       let update = RowUpdate::new(txn, &self.data);
       f(update)
     })

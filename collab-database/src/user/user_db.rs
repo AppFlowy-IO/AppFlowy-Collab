@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use collab::core::collab::MutexCollab;
 use collab::preclude::updates::decoder::Decode;
-use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, CollabBuilder, MapPrelim, Update};
+use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, MapPrelim, Update};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
-use collab_plugins::disk::rocksdb::{Config, RocksdbDiskPlugin};
+use collab_plugins::disk::rocksdb::Config;
 use parking_lot::RwLock;
 
 use crate::blocks::Block;
@@ -16,12 +17,23 @@ use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::user::relation::{DatabaseRelation, RowRelationMap};
 use crate::views::{CreateDatabaseParams, CreateViewParams};
 
+pub trait UserDatabaseCollabBuilder: Send + Sync + 'static {
+  fn build(&self, uid: i64, object_id: &str, db: Arc<RocksCollabDB>) -> Arc<MutexCollab>;
+  fn build_with_config(
+    &self,
+    uid: i64,
+    object_id: &str,
+    db: Arc<RocksCollabDB>,
+    config: &Config,
+  ) -> Arc<MutexCollab>;
+}
+
 /// A [UserDatabase] represents a user's database.
 pub struct UserDatabase {
   uid: i64,
   db: Arc<RocksCollabDB>,
   #[allow(dead_code)]
-  collab: Collab,
+  collab: Arc<MutexCollab>,
   /// It used to keep track of the blocks. Each block contains a list of [Row]s
   /// A database rows will be stored in multiple blocks.
   block: Block,
@@ -34,23 +46,31 @@ pub struct UserDatabase {
   /// and the handler will be removed when the database is deleted or closed.
   open_handlers: RwLock<HashMap<String, Arc<Database>>>,
   config: Config,
+  collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
 }
 
 const DATABASES: &str = "databases";
 
 impl UserDatabase {
-  pub fn new(uid: i64, db: Arc<RocksCollabDB>, config: Config) -> Self {
+  pub fn new<T>(uid: i64, db: Arc<RocksCollabDB>, config: Config, collab_builder: T) -> Self
+  where
+    T: UserDatabaseCollabBuilder,
+  {
     tracing::trace!("Init user database: {}", uid);
+    let collab_builder = Arc::new(collab_builder);
     // user database
-    let disk_plugin = RocksdbDiskPlugin::new_with_config(uid, db.clone(), config.clone()).unwrap();
-    let collab = CollabBuilder::new(uid, format!("{}_user_database", uid))
-      .with_plugin(disk_plugin)
-      .build();
-    collab.initial();
-    let databases = create_user_database_if_not_exist(&collab);
+    let collab =
+      collab_builder.build_with_config(uid, &format!("{}_user_database", uid), db.clone(), &config);
+    let collab_guard = collab.lock();
+    let databases = create_user_database_if_not_exist(&collab_guard);
     let database_records = DatabaseArray::new(databases);
-    let database_relation = DatabaseRelation::new(create_relations_collab(uid, db.clone()));
-    let block = Block::new(uid, db.clone());
+
+    let object_id = format!("{}_db_relations", uid);
+    let database_relation_collab =
+      collab_builder.build_with_config(uid, &object_id, db.clone(), &config);
+    let database_relation = DatabaseRelation::new(database_relation_collab);
+    let block = Block::new(uid, db.clone(), collab_builder.clone());
+    drop(collab_guard);
 
     Self {
       uid,
@@ -61,6 +81,7 @@ impl UserDatabase {
       open_handlers: Default::default(),
       database_relation,
       config,
+      collab_builder,
     }
   }
 
@@ -79,6 +100,7 @@ impl UserDatabase {
         let context = DatabaseContext {
           collab,
           block: blocks,
+          collab_builder: self.collab_builder.clone(),
         };
         let database = Arc::new(Database::get_or_create(database_id, context).ok()?);
         self
@@ -122,8 +144,8 @@ impl UserDatabase {
     let context = DatabaseContext {
       collab,
       block: blocks,
+      collab_builder: self.collab_builder.clone(),
     };
-    context.collab.initial();
 
     // Add a new database record.
     self
@@ -199,13 +221,14 @@ impl UserDatabase {
   ) -> Result<Database, DatabaseError> {
     let collab = self.collab_for_database(database_id);
     let update = Update::decode_v1(&snapshot.data)?;
-    collab.with_transact_mut(|txn| {
+    collab.lock().with_transact_mut(|txn| {
       txn.apply_update(update);
     });
 
     let context = DatabaseContext {
       collab,
       block: self.block.clone(),
+      collab_builder: self.collab_builder.clone(),
     };
     Database::get_or_create(database_id, context)
   }
@@ -245,12 +268,10 @@ impl UserDatabase {
   }
 
   /// Create a new [Collab] instance for given database id.
-  fn collab_for_database(&self, database_id: &str) -> Collab {
-    let disk_plugin =
-      RocksdbDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.clone()).unwrap();
-    CollabBuilder::new(self.uid, database_id)
-      .with_plugin(disk_plugin)
-      .build()
+  fn collab_for_database(&self, database_id: &str) -> Arc<MutexCollab> {
+    self
+      .collab_builder
+      .build_with_config(self.uid, database_id, self.db.clone(), &self.config)
   }
 }
 
@@ -266,14 +287,4 @@ fn create_user_database_if_not_exist(collab: &Collab) -> ArrayRefWrapper {
     }),
     Some(array) => array,
   }
-}
-
-fn create_relations_collab(uid: i64, db: Arc<RocksCollabDB>) -> Collab {
-  let disk_plugin = RocksdbDiskPlugin::new(uid, db).unwrap();
-  let object_id = format!("{}_db_relations", uid);
-  let collab = CollabBuilder::new(uid, object_id)
-    .with_plugin(disk_plugin)
-    .build();
-  collab.initial();
-  collab
 }
