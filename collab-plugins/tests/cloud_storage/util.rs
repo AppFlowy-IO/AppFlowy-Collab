@@ -3,6 +3,8 @@ use aws_credential_types::provider::ProvideCredentials;
 use rand::Rng;
 use rusoto_credential::{ProfileProvider, ProvideAwsCredentials};
 
+// To enable this test, you should set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in your environment variables.
+// or create the ~/.aws/credentials file following the instructions in https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credentials.html
 pub async fn is_enable_aws_test() -> bool {
   let credentials_provider = EnvironmentVariableCredentialsProvider::new();
   let result = credentials_provider.provide_credentials().await;

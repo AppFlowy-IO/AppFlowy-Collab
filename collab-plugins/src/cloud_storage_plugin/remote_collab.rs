@@ -56,19 +56,23 @@ impl RemoteCollab {
 
     let weak_sink = Arc::downgrade(&sink);
     spawn(async move {
-      while let Some(update) = stream.recv().await {
+      while let Some(message) = stream.recv().await {
         if let Some(storage) = weak_storage.upgrade() {
-          tracing::trace!("send update: {}", update.msg_id);
-          match storage.send_update(update.msg_id, update.payload).await {
-            Ok(_) => {
-              tracing::trace!("ack update: {}", update.msg_id);
-              if let Some(sink) = weak_sink.upgrade() {
-                sink.ack_msg(update.msg_id).await;
-              }
-            },
-            Err(e) => {
-              tracing::error!("send {} update failed: {:?}", update.msg_id, e);
-            },
+          if let Ok((msg_id, payload)) = message.into_payload() {
+            tracing::trace!("send update: {}", msg_id);
+            match storage.send_update(msg_id, payload).await {
+              Ok(_) => {
+                tracing::trace!("ack update: {}", msg_id);
+                if let Some(sink) = weak_sink.upgrade() {
+                  sink.ack_msg(msg_id).await;
+                }
+              },
+              Err(e) => {
+                tracing::error!("send {} update failed: {:?}", msg_id, e);
+              },
+            }
+          } else {
+            tracing::error!("Failed to get the payload from message");
           }
         }
       }
@@ -130,12 +134,12 @@ impl RemoteCollab {
   pub fn push_update(&self, update: &[u8]) {
     self.sink.queue_or_merge_msg(
       |prev| {
-        prev.payload = merge_updates_v1(&[&prev.payload, update])?;
+        prev.merge_payload(update.to_vec());
         Ok(())
       },
       |msg_id| Message {
         msg_id,
-        payload: update.to_vec(),
+        payloads: vec![update.to_vec()],
       },
     );
   }
@@ -144,16 +148,36 @@ impl RemoteCollab {
 #[derive(Clone, Debug)]
 struct Message {
   msg_id: MsgId,
-  payload: Vec<u8>,
+  payloads: Vec<Vec<u8>>,
+}
+
+impl Message {
+  fn merge_payload(&mut self, payload: Vec<u8>) {
+    self.payloads.push(payload);
+  }
+
+  fn payload_len(&self) -> usize {
+    self.payloads.iter().map(|p| p.len()).sum()
+  }
+
+  fn into_payload(self) -> Result<(MsgId, Vec<u8>), anyhow::Error> {
+    let updates = self
+      .payloads
+      .iter()
+      .map(|update| update.as_ref())
+      .collect::<Vec<&[u8]>>();
+    let update = merge_updates_v1(&updates)?;
+    Ok((self.msg_id, update))
+  }
 }
 
 impl SinkMessage for Message {
   fn length(&self) -> usize {
-    self.payload.len()
+    self.payload_len()
   }
 
   fn can_merge(&self) -> bool {
-    self.payload.len() < 1024
+    self.payload_len() < 1024
   }
 }
 
@@ -182,7 +206,7 @@ impl Display for Message {
     f.write_fmt(format_args!(
       "send client update: [msg_id:{}|payload_len:{}]",
       self.msg_id,
-      self.payload.len(),
+      self.payload_len(),
     ))
   }
 }

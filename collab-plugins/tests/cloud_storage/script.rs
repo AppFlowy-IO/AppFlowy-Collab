@@ -12,6 +12,7 @@ pub enum TestScript {
   CreateCollab {
     uid: i64,
     object_id: String,
+    sync_per_secs: u64,
   },
   ModifyCollab {
     uid: i64,
@@ -22,6 +23,7 @@ pub enum TestScript {
     secs: u64,
   },
   AssertLocal {
+    uid: i64,
     object_id: String,
     expected: Value,
   },
@@ -32,45 +34,53 @@ pub enum TestScript {
 }
 
 pub struct CloudStorageTest {
-  collab_by_object_id: HashMap<String, Arc<MutexCollab>>,
+  pub collab_by_id: HashMap<String, Arc<MutexCollab>>,
 }
 
 impl CloudStorageTest {
   pub fn new() -> Self {
     setup_log();
     Self {
-      collab_by_object_id: HashMap::new(),
+      collab_by_id: HashMap::new(),
     }
   }
 
   pub async fn run_script(&mut self, script: TestScript) {
     match script {
-      TestScript::CreateCollab { uid, object_id } => {
+      TestScript::CreateCollab {
+        uid,
+        object_id,
+        sync_per_secs,
+      } => {
         let origin = CollabOrigin::Client(CollabClient::new(uid, "1"));
         let local_collab = Arc::new(MutexCollab::new(origin, &object_id, vec![]));
-        let plugin = AWSDynamoDBPlugin::new(object_id.clone(), local_collab.clone())
+        let plugin = AWSDynamoDBPlugin::new(object_id.clone(), local_collab.clone(), sync_per_secs)
           .await
           .unwrap();
         local_collab.lock().add_plugin(Arc::new(plugin));
         local_collab.initial();
-        self.collab_by_object_id.insert(object_id, local_collab);
+        self
+          .collab_by_id
+          .insert(make_id(uid, &object_id), local_collab);
       },
-      TestScript::ModifyCollab {
-        uid: _,
-        object_id,
-        f,
-      } => {
-        let collab = self.collab_by_object_id.get(&object_id).unwrap().lock();
+      TestScript::ModifyCollab { uid, object_id, f } => {
+        let collab = self
+          .collab_by_id
+          .get(&make_id(uid, &object_id))
+          .unwrap()
+          .lock();
         f(&collab);
       },
       TestScript::Wait { secs } => {
         tokio::time::sleep(Duration::from_secs(secs)).await;
       },
       TestScript::AssertLocal {
+        uid,
         object_id,
         expected,
       } => {
-        let collab = self.collab_by_object_id.get(&object_id).unwrap().lock();
+        let id = format!("{}-{}", uid, object_id);
+        let collab = self.collab_by_id.get(&id).unwrap().lock();
         assert_json_diff::assert_json_eq!(collab.to_json_value(), expected,);
       },
       TestScript::AssertRemote {
@@ -89,4 +99,8 @@ impl CloudStorageTest {
       self.run_script(script).await;
     }
   }
+}
+
+pub fn make_id(uid: i64, object_id: &str) -> String {
+  format!("{}-{}", uid, object_id)
 }
