@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use collab_plugins::cloud_storage::aws::is_enable_aws_dynamodb;
 use tokio::sync::RwLock;
 
 use nanoid::nanoid;
@@ -8,11 +9,11 @@ use serde_json::{json, Map, Value};
 
 use crate::cloud_storage::script::TestScript::*;
 use crate::cloud_storage::script::{make_id, CloudStorageTest};
-use crate::cloud_storage::util::{generate_random_string, is_enable_aws_test};
+use crate::cloud_storage::util::generate_random_string;
 
 #[tokio::test]
 async fn collab_with_aws_plugin_test() {
-  if !is_enable_aws_test().await {
+  if !is_enable_aws_dynamodb().await {
     return;
   }
   let object_id = nanoid!(5);
@@ -70,7 +71,7 @@ async fn collab_with_aws_plugin_test() {
 
 #[tokio::test]
 async fn single_client_edit_aws_doc_10_times_test() {
-  if !is_enable_aws_test().await {
+  if !is_enable_aws_dynamodb().await {
     return;
   }
   let object_id = nanoid!(5);
@@ -116,7 +117,7 @@ async fn single_client_edit_aws_doc_10_times_test() {
 // Two clients edit the same doc
 #[tokio::test]
 async fn multi_clients_edit_aws_doc_10_times_test() {
-  if !is_enable_aws_test().await {
+  if !is_enable_aws_dynamodb().await {
     return;
   }
   let object_id = nanoid!(5);

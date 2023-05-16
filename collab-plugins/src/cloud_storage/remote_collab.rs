@@ -1,22 +1,20 @@
-use async_trait::async_trait;
-use collab::core::collab::MutexCollab;
-use collab_sync::client::TokioUnboundedSink;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
-
-use collab::core::origin::CollabOrigin;
-use parking_lot::Mutex;
-
-use rand::Rng;
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::spawn;
-use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::watch;
 
+use async_trait::async_trait;
+use collab::core::collab::MutexCollab;
+use collab::core::origin::CollabOrigin;
 use collab_sync::client::sink::{
   MsgId, MsgIdCounter, SinkConfig, SinkMessage, SyncSink, TaskRunner,
 };
+use collab_sync::client::TokioUnboundedSink;
+use parking_lot::Mutex;
+use rand::Rng;
+use tokio::spawn;
+use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::watch;
 use yrs::updates::decoder::Decode;
 use yrs::{merge_updates_v1, ReadTxn, Update};
 
@@ -142,6 +140,12 @@ impl RemoteCollab {
         payloads: vec![update.to_vec()],
       },
     );
+  }
+}
+
+impl Drop for RemoteCollab {
+  fn drop(&mut self) {
+    tracing::error!("RemoteCollab dropped");
   }
 }
 

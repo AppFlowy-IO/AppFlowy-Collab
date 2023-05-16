@@ -1,6 +1,5 @@
 use std::marker::PhantomData;
 use std::ops::Deref;
-
 use std::sync::{Arc, Weak};
 
 use collab::core::collab::MutexCollab;

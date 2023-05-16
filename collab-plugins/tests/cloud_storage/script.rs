@@ -62,9 +62,7 @@ impl CloudStorageTest {
           local_collab.clone(),
           sync_per_secs,
           test_region(),
-        )
-        .await
-        .unwrap();
+        );
         local_collab.lock().add_plugin(Arc::new(plugin));
         local_collab.initial();
         self

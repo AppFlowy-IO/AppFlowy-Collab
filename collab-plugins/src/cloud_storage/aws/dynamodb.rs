@@ -13,44 +13,32 @@ use aws_sdk_dynamodb::types::{
 use aws_sdk_dynamodb::Client;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
-use collab::preclude::CollabPlugin;
 use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
-use tokio::sync::oneshot;
-use y_sync::awareness::Awareness;
-use yrs::Transaction;
 
 use crate::cloud_storage::remote_collab::{RemoteCollab, RemoteCollabStorage};
 
-const DEFAULT_TABLE_NAME: &str = "collab_test";
+pub(crate) const DEFAULT_TABLE_NAME: &str = "collab_test";
 const OBJECT_ID: &str = "oid";
 const UPDATE_KEY: &str = "key";
 const UPDATE_VALUE: &str = "value";
 
 /// A plugin that uses AWS DynamoDB as the backend.
 /// https://docs.aws.amazon.com/sdk-for-rust/latest/dg/rust_dynamodb_code_examples.html
-/// https://github.com/awsdocs/aws-doc-sdk-examples/tree/main/rust_dev_preview/dynamodb#code-examples
-pub struct AWSDynamoDBPlugin {
-  #[allow(dead_code)]
-  object_id: String,
-  #[allow(dead_code)]
-  table_name: String,
+pub struct AWSDynamoDB {
   #[allow(dead_code)]
   client: Arc<Client>,
-  local_collab: Arc<MutexCollab>,
   remote_collab: Arc<RemoteCollab>,
 }
 
-impl AWSDynamoDBPlugin {
+impl AWSDynamoDB {
   pub async fn new(
     object_id: String,
-    local_collab: Arc<MutexCollab>,
     sync_per_secs: u64,
     region: String,
   ) -> Result<Self, anyhow::Error> {
     Self::new_with_table_name(
       object_id,
-      DEFAULT_TABLE_NAME,
-      local_collab,
+      DEFAULT_TABLE_NAME.to_string(),
       sync_per_secs,
       region,
     )
@@ -59,8 +47,7 @@ impl AWSDynamoDBPlugin {
 
   pub async fn new_with_table_name(
     object_id: String,
-    table_name: &str,
-    local_collab: Arc<MutexCollab>,
+    table_name: String,
     sync_per_secs: u64,
     region: String,
   ) -> Result<Self, anyhow::Error> {
@@ -68,6 +55,7 @@ impl AWSDynamoDBPlugin {
     let config = aws_config::from_env().region(region_provider).load().await;
     let client = Arc::new(Client::new(&config));
     let table_name = table_name.to_string();
+    create_table_if_not_exist(&client, &table_name).await?;
 
     let storage = CollabCloudStorageImpl {
       client: client.clone(),
@@ -80,31 +68,27 @@ impl AWSDynamoDBPlugin {
       .with_strategy(SinkStrategy::FixInterval(Duration::from_secs(
         sync_per_secs,
       )));
+
     let remote_collab = Arc::new(RemoteCollab::new(object_id.clone(), storage, config));
-    create_table_if_not_exist(&client, &table_name).await?;
     Ok(Self {
-      object_id,
-      table_name,
       client,
-      local_collab,
       remote_collab,
     })
   }
 
   /// Start syncing after the local collab is initialized.
-  pub fn start_sync(&self, ret: Option<oneshot::Sender<()>>) {
-    let weak_local_collab = Arc::downgrade(&self.local_collab);
-    let weak_remote_collab = Arc::downgrade(&self.remote_collab);
-    tokio::spawn(async move {
-      if let (Some(local_collab), Some(remote_collab)) =
-        (weak_local_collab.upgrade(), weak_remote_collab.upgrade())
-      {
-        remote_collab.sync(local_collab).await;
-        if let Some(ret) = ret {
-          let _ = ret.send(());
-        }
-      }
-    });
+  pub async fn start_sync(&self, local_collab: Arc<MutexCollab>) {
+    self.remote_collab.sync(local_collab).await;
+  }
+
+  pub fn push_update(&self, update: &[u8]) {
+    self.remote_collab.push_update(update);
+  }
+}
+
+impl Drop for AWSDynamoDB {
+  fn drop(&mut self) {
+    tracing::error!("AWSDynamoDB dropped");
   }
 }
 
@@ -139,12 +123,10 @@ impl RemoteCollabStorage for CollabCloudStorageImpl {
 
 pub async fn get_aws_remote_doc(object_id: &str, region: String) -> Arc<MutexCollab> {
   let local_collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, object_id, vec![]));
-  let plugin = AWSDynamoDBPlugin::new(object_id.to_string(), local_collab.clone(), 1, region)
+  let plugin = AWSDynamoDB::new(object_id.to_string(), 1, region)
     .await
     .unwrap();
-  let (tx, rx) = oneshot::channel();
-  plugin.start_sync(Some(tx));
-  let _ = rx.await;
+  plugin.start_sync(local_collab.clone()).await;
   local_collab
 }
 
@@ -169,6 +151,7 @@ async fn aws_send_update<V: Into<Vec<u8>>>(
   Ok(())
 }
 
+/// https://github.com/awsdocs/aws-doc-sdk-examples/tree/main/rust_dev_preview/dynamodb#code-examples
 #[inline(always)]
 pub async fn aws_get_all_updates(
   client: &Client,
@@ -248,13 +231,4 @@ async fn create_table_if_not_exist(client: &Client, table_name: &str) -> Result<
     .send()
     .await?;
   Ok(())
-}
-
-impl CollabPlugin for AWSDynamoDBPlugin {
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
-    self.start_sync(None);
-  }
-  fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
-    self.remote_collab.push_update(update);
-  }
 }

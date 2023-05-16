@@ -1,18 +1,17 @@
 use std::fmt::Display;
 use std::marker::PhantomData;
-
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use crate::client::pending_msg::{PendingMsgQueue, TaskState};
-use crate::client::sync::DEFAULT_SYNC_TIMEOUT;
-use crate::error::SyncError;
 use futures_util::SinkExt;
-
 use tokio::spawn;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tokio::time::{interval, Instant, Interval};
+
+use crate::client::pending_msg::{PendingMsgQueue, TaskState};
+use crate::client::sync::DEFAULT_SYNC_TIMEOUT;
+use crate::error::SyncError;
 
 pub trait SinkMessage: Clone + Send + Sync + 'static + Ord + Display {
   /// Returns the length of the message in bytes.
@@ -220,14 +219,14 @@ pub struct TaskRunner<Msg>(PhantomData<Msg>);
 impl<Msg> TaskRunner<Msg> {
   /// The runner will stop if the [SyncSink] was dropped or the notifier was closed.
   pub async fn run<E, Sink>(
-    sync_sink: Weak<SyncSink<Sink, Msg>>,
+    weak_sink: Weak<SyncSink<Sink, Msg>>,
     mut notifier: watch::Receiver<bool>,
   ) where
     E: std::error::Error + Send + Sync + 'static,
     Sink: SinkExt<Msg, Error = E> + Send + Sync + Unpin + 'static,
     Msg: SinkMessage,
   {
-    sync_sink.upgrade().unwrap().notify();
+    weak_sink.upgrade().unwrap().notify();
     loop {
       // stops the runner if the notifier was closed.
       if notifier.changed().await.is_err() {
@@ -239,7 +238,7 @@ impl<Msg> TaskRunner<Msg> {
         break;
       }
 
-      if let Some(sync_sink) = sync_sink.upgrade() {
+      if let Some(sync_sink) = weak_sink.upgrade() {
         let _ = sync_sink.process_next_msg().await;
       } else {
         break;
