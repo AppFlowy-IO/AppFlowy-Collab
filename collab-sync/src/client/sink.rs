@@ -1,13 +1,13 @@
 use std::fmt::Display;
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use futures_util::SinkExt;
 use tokio::spawn;
-use tokio::sync::{mpsc, oneshot, watch, Mutex};
-use tokio::time::{interval, Instant, Interval};
+use tokio::sync::{mpsc, Mutex, oneshot, watch};
+use tokio::time::{Instant, interval, Interval};
 
 use crate::client::pending_msg::{PendingMsgQueue, TaskState};
 use crate::client::sync::DEFAULT_SYNC_TIMEOUT;
@@ -21,19 +21,32 @@ pub trait SinkMessage: Clone + Send + Sync + 'static + Ord + Display {
   fn can_merge(&self) -> bool;
 }
 
-pub struct SyncSink<Sink, Msg> {
+/// Use to sync the [Msg] to the remote.
+pub struct CollabSink<Sink, Msg> {
+  /// The [Sink] is used to send the messages to the remote. It might be a websocket sink or
+  /// other sink that implements the [SinkExt] trait.
   sender: Arc<Mutex<Sink>>,
+
+  /// The [PendingMsgQueue] is used to queue the messages that are waiting to be sent to the
+  /// remote. It will merge the messages if possible.
   pending_msgs: Arc<parking_lot::Mutex<PendingMsgQueue<Msg>>>,
   msg_id_counter: Arc<dyn MsgIdCounter>,
+
+  /// The [watch::Sender] is used to notify the [CollabSinkRunner] to process the pending messages.
+  /// Sending `false` will stop the [CollabSinkRunner].
   notifier: Arc<watch::Sender<bool>>,
   config: SinkConfig,
+
+  /// Stop the [IntervalRunner] if the sink strategy is [SinkStrategy::FixInterval].
   #[allow(dead_code)]
-  instant_stop: Option<mpsc::Sender<()>>,
-  #[allow(dead_code)]
+  interval_runner_stop_tx: Option<mpsc::Sender<()>>,
+
+  /// Used to calculate the time interval between two messages. Only used when the sink strategy
+  /// is [SinkStrategy::FixInterval].
   instant: Mutex<Instant>,
 }
 
-impl<E, Sink, Msg> SyncSink<Sink, Msg>
+impl<E, Sink, Msg> CollabSink<Sink, Msg>
 where
   E: std::error::Error + Send + Sync + 'static,
   Sink: SinkExt<Msg, Error = E> + Send + Sync + Unpin + 'static,
@@ -55,11 +68,11 @@ where
     let msg_id_counter = Arc::new(msg_id_counter);
     //
     let instant = Mutex::new(Instant::now());
-    let mut instant_stop = None;
+    let mut interval_runner_stop_tx = None;
     if let SinkStrategy::FixInterval(duration) = &config.strategy {
       let weak_notifier = Arc::downgrade(&notifier);
       let (tx, rx) = mpsc::channel(1);
-      instant_stop = Some(tx);
+      interval_runner_stop_tx = Some(tx);
       spawn(IntervalRunner::new(*duration).run(weak_notifier, rx));
     }
 
@@ -70,7 +83,7 @@ where
       notifier,
       config,
       instant,
-      instant_stop,
+      interval_runner_stop_tx,
     }
   }
 
@@ -215,11 +228,11 @@ where
   }
 }
 
-pub struct TaskRunner<Msg>(PhantomData<Msg>);
-impl<Msg> TaskRunner<Msg> {
-  /// The runner will stop if the [SyncSink] was dropped or the notifier was closed.
+pub struct CollabSinkRunner<Msg>(PhantomData<Msg>);
+impl<Msg> CollabSinkRunner<Msg> {
+  /// The runner will stop if the [CollabSink] was dropped or the notifier was closed.
   pub async fn run<E, Sink>(
-    weak_sink: Weak<SyncSink<Sink, Msg>>,
+    weak_sink: Weak<CollabSink<Sink, Msg>>,
     mut notifier: watch::Receiver<bool>,
   ) where
     E: std::error::Error + Send + Sync + 'static,

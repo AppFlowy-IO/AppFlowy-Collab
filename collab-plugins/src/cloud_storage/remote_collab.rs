@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab_sync::client::sink::{
-  MsgId, MsgIdCounter, SinkConfig, SinkMessage, SyncSink, TaskRunner,
+  CollabSink, CollabSinkRunner, MsgId, MsgIdCounter, SinkConfig, SinkMessage,
 };
 use collab_sync::client::TokioUnboundedSink;
 use parking_lot::Mutex;
@@ -15,21 +15,29 @@ use rand::Rng;
 use tokio::spawn;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::watch;
-use yrs::updates::decoder::Decode;
 use yrs::{merge_updates_v1, ReadTxn, Update};
+use yrs::updates::decoder::Decode;
 
+/// The [RemoteCollabStorage] is used to store the updates of the remote collab. The [RemoteCollab]
+/// is the remote collab that maps to the local collab.
+/// Any storage that implements this trait can be used as the remote collab storage.
 #[async_trait]
 pub trait RemoteCollabStorage: Send + Sync + 'static {
+  /// Get all the updates of the remote collab.
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, anyhow::Error>;
+  /// Send the update to the remote storage.
   async fn send_update(&self, id: MsgId, update: Vec<u8>) -> Result<(), anyhow::Error>;
+  /// Flush all the updates into one update and remove all the updates stored in the storage.
   async fn flush(&self, object_id: &str);
 }
 
+/// The [RemoteCollab] is used to sync the local collab to the remote.
 pub struct RemoteCollab {
   object_id: String,
   inner: Arc<MutexCollab>,
   storage: Arc<dyn RemoteCollabStorage>,
-  sink: Arc<SyncSink<TokioUnboundedSink<Message>, Message>>,
+  /// The [CollabSink] is used to send the updates to the remote.
+  sink: Arc<CollabSink<TokioUnboundedSink<Message>, Message>>,
 }
 
 impl RemoteCollab {
@@ -45,7 +53,7 @@ impl RemoteCollab {
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
     let (notifier, notifier_rx) = watch::channel(false);
-    let sink = Arc::new(SyncSink::new(
+    let sink = Arc::new(CollabSink::new(
       TokioUnboundedSink(sink),
       notifier,
       RngMsgIdCounter::new(),
@@ -76,7 +84,7 @@ impl RemoteCollab {
       }
     });
 
-    spawn(TaskRunner::run(Arc::downgrade(&sink), notifier_rx));
+    spawn(CollabSinkRunner::run(Arc::downgrade(&sink), notifier_rx));
     Self {
       object_id,
       inner,
@@ -143,11 +151,6 @@ impl RemoteCollab {
   }
 }
 
-impl Drop for RemoteCollab {
-  fn drop(&mut self) {
-    tracing::error!("RemoteCollab dropped");
-  }
-}
 
 #[derive(Clone, Debug)]
 struct Message {

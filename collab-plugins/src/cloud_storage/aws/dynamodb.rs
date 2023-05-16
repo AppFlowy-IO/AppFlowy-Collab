@@ -4,13 +4,13 @@ use std::time::Duration;
 use anyhow::Error;
 use async_trait::async_trait;
 use aws_config::meta::region::RegionProviderChain;
+use aws_sdk_dynamodb::Client;
 use aws_sdk_dynamodb::config::Region;
 use aws_sdk_dynamodb::primitives::Blob;
 use aws_sdk_dynamodb::types::{
   AttributeDefinition, AttributeValue, ComparisonOperator, Condition, KeySchemaElement, KeyType,
   ProvisionedThroughput, ScalarAttributeType,
 };
-use aws_sdk_dynamodb::Client;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
@@ -83,12 +83,6 @@ impl AWSDynamoDB {
 
   pub fn push_update(&self, update: &[u8]) {
     self.remote_collab.push_update(update);
-  }
-}
-
-impl Drop for AWSDynamoDB {
-  fn drop(&mut self) {
-    tracing::error!("AWSDynamoDB dropped");
   }
 }
 

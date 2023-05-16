@@ -9,13 +9,13 @@ pub mod sync {
 }
 
 #[cfg(any(feature = "disk_rocksdb", feature = "disk_sled"))]
-mod disk_plugin;
+mod local_storage;
 
 #[cfg(any(feature = "disk_rocksdb", feature = "disk_sled"))]
 pub mod disk {
   pub use collab_persistence::*;
 
-  pub use crate::disk_plugin::*;
+  pub use crate::local_storage::*;
 }
 
 #[cfg(feature = "cloud_storage")]
