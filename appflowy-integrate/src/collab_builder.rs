@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::CollabBuilder;
-use collab_plugins::cloud_storage::aws::AWSDynamoDBPlugin;
+use collab_plugins::cloud_storage::aws::{AWSDynamoDBPlugin, is_enable_aws_dynamodb};
 // use collab_plugins::cloud_storage_plugin::AWSDynamoDBPlugin;
 use collab_plugins::disk::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::disk::rocksdb::{Config, RocksdbDiskPlugin};
@@ -36,23 +36,23 @@ impl AppFlowyCollabBuilder {
         .build(),
     );
 
-    // if is_enable_aws_dynamodb() {
-    //   if let Ok(plugin) = AWSDynamoDBPlugin::new(
-    //     object_id.to_string(),
-    //     collab.clone(),
-    //     5,
-    //     "ap-southeast-2".to_string(),
-    //   ) {
-    //     collab.lock().add_plugin(Arc::new(plugin));
-    //   }
-    // }
-    let aws_dynamodb_plugin = AWSDynamoDBPlugin::new(
-      object_id.to_string(),
-      collab.clone(),
-      5,
-      "ap-southeast-2".to_string(),
-    );
-    collab.lock().add_plugin(Arc::new(aws_dynamodb_plugin));
+    if is_enable_aws_dynamodb() {
+      if let Ok(plugin) = AWSDynamoDBPlugin::new(
+        object_id.to_string(),
+        collab.clone(),
+        5,
+        "ap-southeast-2".to_string(),
+      ) {
+        collab.lock().add_plugin(Arc::new(plugin));
+      }
+    }
+    // let aws_dynamodb_plugin = AWSDynamoDBPlugin::new(
+    //   object_id.to_string(),
+    //   collab.clone(),
+    //   5,
+    //   "ap-southeast-2".to_string(),
+    // );
+    // collab.lock().add_plugin(Arc::new(aws_dynamodb_plugin));
 
     collab.lock().initial();
     collab
