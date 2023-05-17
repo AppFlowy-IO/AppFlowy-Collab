@@ -25,9 +25,10 @@ tokio-retry = "0.3"
 async-trait = "0.1.51"
 thiserror = "1.0.39"
 rand = { version = "0.8", optional = true }
+postgrest = { version = "1.0", optional = true }
 
 [dev-dependencies]
-collab-plugins = { path = ".", features = ["sync", "disk_rocksdb", "disk_sled","cloud_storage"] }
+collab-plugins = { path = ".", features = ["sync", "disk_rocksdb", "disk_sled","aws_storage", "postgres_storage"] }
 tempfile = "3.4.0"
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
@@ -49,4 +50,5 @@ default = ["sync"]
 sync = ["collab-sync"]
 disk_rocksdb = ["collab-sync","collab-persistence/rocksdb_db"]
 disk_sled = ["collab-persistence"]
-cloud_storage = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types", "rand"]
+aws_storage = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types", "rand"]
+postgres_storage = ["postgrest"]

@@ -18,5 +18,4 @@ pub mod disk {
   pub use crate::local_storage::*;
 }
 
-#[cfg(feature = "cloud_storage")]
 pub mod cloud_storage;

@@ -6,8 +6,8 @@ use nanoid::nanoid;
 use serde_json::{json, Map, Value};
 use tokio::sync::RwLock;
 
-use crate::cloud_storage::script::{CloudStorageTest, make_id};
-use crate::cloud_storage::script::TestScript::*;
+use crate::cloud_storage::aws::script::{CloudStorageTest, make_id};
+use crate::cloud_storage::aws::script::TestScript::*;
 use crate::cloud_storage::util::generate_random_string;
 
 #[tokio::test]
