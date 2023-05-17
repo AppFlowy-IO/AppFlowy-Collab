@@ -10,6 +10,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_TOOLCHAIN: "1.65"
+  ROCKSDB_LIB_DIR: "/usr/lib"
 
 jobs:
   fmt:
@@ -28,6 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
@@ -39,7 +41,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Install Dependencies
+        run: sudo apt update && sudo apt install -y librocksdb-dev
       - uses: dtolnay/rust-toolchain@stable
       - name: Run tests
         run: cargo test
-
