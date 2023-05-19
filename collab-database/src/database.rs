@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use collab::core::any_map::AnyMapExtension;
 use collab::core::collab::MutexCollab;
-use collab::preclude::{JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{
+  uuid_v4, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+};
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 
@@ -818,8 +820,7 @@ impl Database {
 }
 
 pub fn gen_database_id() -> String {
-  // nanoid calculator https://zelark.github.io/nano-id-cc/
-  format!("d:{}", nanoid!(10))
+  uuid::Uuid::new_v4().to_string()
 }
 
 pub fn gen_database_view_id() -> String {
