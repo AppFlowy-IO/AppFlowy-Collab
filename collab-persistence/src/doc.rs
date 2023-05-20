@@ -151,12 +151,14 @@ where
         // Load the updates
         let encoded_updates = self.range(update_start.as_ref()..update_end.as_ref())?;
         for encoded_update in encoded_updates {
+          // Decode the update and apply it to the transaction. If the update is invalid, we will
+          // remove the update and the following updates.
           if let Err(e) = Update::decode_v1(encoded_update.value())
             .map_err(|e| PersistenceError::Yrs(e))
             .and_then(|update| txn.try_apply_update(update))
           {
             tracing::error!("🔴{:?} apply update error: {}", object_id, e);
-            //TODO: delete the update
+            self.remove_range(encoded_update.key().as_ref(), update_end.as_ref())?;
             break;
           }
           update_count += 1;
