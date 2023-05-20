@@ -7,6 +7,7 @@ use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
+use collab_persistence::PersistenceError;
 use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
 
@@ -67,12 +68,15 @@ impl CollabPlugin for RocksdbDiskPlugin {
     // Check the document is exist or not
     if r_db_txn.is_exist(self.uid, object_id) {
       // Safety: The document is exist, so it must be loaded successfully.
-      let update = r_db_txn
-        .load_doc(self.uid, object_id, self.config.enable_snapshot, txn)
-        .unwrap();
-      self.initial_update_count.store(update, Ordering::SeqCst);
+      match r_db_txn.load_doc(self.uid, object_id, self.config.enable_snapshot, txn) {
+        Ok(update_count) => {
+          self
+            .initial_update_count
+            .store(update_count, Ordering::SeqCst);
+        },
+        Err(e) => tracing::error!("🔴 load doc:{} failed: {}", object_id, e),
+      }
       drop(r_db_txn);
-
       if self.config.flush_doc {
         let _ = self.db.with_write_txn(|w_db_txn| {
           w_db_txn.flush_doc(self.uid, object_id, txn)?;
