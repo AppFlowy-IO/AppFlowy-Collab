@@ -7,7 +7,6 @@ use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
-use collab_persistence::PersistenceError;
 use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
 

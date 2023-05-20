@@ -1,4 +1,3 @@
-use lib0::error::Error;
 use std::fmt::Debug;
 
 use yrs::updates::decoder::Decode;
@@ -125,7 +124,7 @@ where
       if let Some(doc_state) = self.get(doc_state_key.as_ref())? {
         // Load the doc state
         if let Err(e) = Update::decode_v1(doc_state.as_ref())
-          .map_err(|e| PersistenceError::Yrs(e))
+          .map_err(PersistenceError::Yrs)
           .and_then(|update| txn.try_apply_update(update))
         {
           tracing::error!("🔴{:?} apply doc state error: {}", object_id, e)
@@ -154,7 +153,7 @@ where
           // Decode the update and apply it to the transaction. If the update is invalid, we will
           // remove the update and the following updates.
           if let Err(e) = Update::decode_v1(encoded_update.value())
-            .map_err(|e| PersistenceError::Yrs(e))
+            .map_err(PersistenceError::Yrs)
             .and_then(|update| txn.try_apply_update(update))
           {
             tracing::error!("🔴{:?} apply update error: {}", object_id, e);
