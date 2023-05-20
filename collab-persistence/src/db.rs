@@ -131,7 +131,7 @@ where
   let last_clock = get_last_update_clock(store, id, &make_update_key)?;
   let clock = last_clock + 1;
   let new_key = make_update_key(id, clock);
-  tracing::debug!(
+  tracing::trace!(
     "🤲collab => [{}-{:?}]: New update key {:?}",
     id,
     object_id,

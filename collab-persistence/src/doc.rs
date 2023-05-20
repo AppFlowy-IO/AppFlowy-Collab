@@ -122,22 +122,19 @@ where
       tracing::trace!("🤲collab => [{}-{:?}]: load doc", doc_id, object_id);
       let doc_state_key = make_doc_state_key(doc_id);
       if let Some(doc_state) = self.get(doc_state_key.as_ref())? {
-        let update = Update::decode_v1(doc_state.as_ref())?;
-        txn.try_apply_update(update)?;
+        // Load the doc state
+        if let Err(e) = Update::decode_v1(doc_state.as_ref())
+          .map_err(PersistenceError::Yrs)
+          .and_then(|update| txn.try_apply_update(update))
+        {
+          tracing::error!("🔴{:?} apply doc state error: {}", object_id, e)
+        }
 
-        // Find the latest snapshot
-        // TODO: retry load doc
+        // If the enable_snapshot is true, we will try to load the snapshot.
         let mut update_start = make_doc_update_key(doc_id, 0).to_vec();
         if enable_snapshot {
-          if let Some(snapshot) = get_snapshot_id(uid, self, object_id)
-            .and_then(|snapshot_id| self.get_last_snapshot_update(snapshot_id))
-          {
-            // Decode the data of the snapshot
-            let snapshot_update = Update::decode_v1(&snapshot.data)?;
-            txn.try_apply_update(snapshot_update)?;
-
-            // After applying the snapshot, we need to apply the updates after the snapshot
-            update_start = snapshot.update_key;
+          if let Some(update_key) = self.load_latest_snapshot(uid, object_id, txn) {
+            update_start = update_key;
           }
         }
 
@@ -150,10 +147,19 @@ where
           update_end.as_ref(),
         );
 
+        // Load the updates
         let encoded_updates = self.range(update_start.as_ref()..update_end.as_ref())?;
         for encoded_update in encoded_updates {
-          let update = Update::decode_v1(encoded_update.value())?;
-          txn.try_apply_update(update)?;
+          // Decode the update and apply it to the transaction. If the update is invalid, we will
+          // remove the update and the following updates.
+          if let Err(e) = Update::decode_v1(encoded_update.value())
+            .map_err(PersistenceError::Yrs)
+            .and_then(|update| txn.try_apply_update(update))
+          {
+            tracing::error!("🔴{:?} apply update error: {}", object_id, e);
+            self.remove_range(encoded_update.key().as_ref(), update_end.as_ref())?;
+            break;
+          }
           update_count += 1;
         }
       } else {
@@ -163,18 +169,47 @@ where
           object_id
         );
       }
-      tracing::debug!(
-        "[{:?}-{:?}]: num of updates: {}",
-        doc_id,
-        object_id,
-        update_count,
-      );
-
       Ok(update_count)
     } else {
       tracing::trace!("🤲collab => {:?} not exist", object_id);
       Err(PersistenceError::DocumentNotExist)
     }
+  }
+
+  fn load_latest_snapshot<K: AsRef<[u8]> + ?Sized + Debug>(
+    &self,
+    uid: i64,
+    object_id: &K,
+    txn: &mut TransactionMut,
+  ) -> Option<Vec<u8>> {
+    let snapshot_id = get_snapshot_id(uid, self, object_id)?;
+    let snapshot = self.get_last_snapshot_update(snapshot_id)?;
+    // Decode the data of the snapshot and apply it to the transaction.
+    // If the snapshot is invalid, the snapshot will be deleted. After delete the snapshot,
+    // try to load the next latest snapshot.
+    match Update::decode_v1(&snapshot.data) {
+      Ok(update) => match txn.try_apply_update(update) {
+        Ok(_) => {},
+        Err(e) => {
+          tracing::error!(
+            "🔴{:?} apply snapshot error: {}. try to load next snapshot",
+            object_id,
+            e
+          );
+          self.delete_last_snapshot_update(snapshot_id);
+          return self.load_latest_snapshot(uid, object_id, txn);
+        },
+      },
+      Err(_) => {
+        self.delete_last_snapshot_update(snapshot_id);
+        tracing::error!(
+          "🔴{:?} decode snapshot error, try to load next snapshot",
+          object_id
+        );
+        return self.load_latest_snapshot(uid, object_id, txn);
+      },
+    }
+    Some(snapshot.update_key)
   }
 
   /// Push an update to the persistence
@@ -234,7 +269,7 @@ where
       let _ = self.remove(sv_key.as_ref());
 
       // Delete the snapshot
-      self.delete_snapshot(uid, object_id)?;
+      self.delete_all_snapshots(uid, object_id)?;
     }
     Ok(())
   }
