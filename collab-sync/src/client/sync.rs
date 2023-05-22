@@ -16,8 +16,8 @@ use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
 use crate::client::sink::{CollabSink, CollabSinkRunner, DefaultMsgIdCounter, SinkConfig};
 use crate::error::SyncError;
-use crate::msg::{CollabMessage, CSClientInit, CSClientUpdate, CSServerSync};
-use crate::protocol::{CollabSyncProtocol, DefaultSyncProtocol, handle_msg};
+use crate::msg::{CSClientInit, CSClientUpdate, CSServerSync, CollabMessage};
+use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
 
 pub const DEFAULT_SYNC_TIMEOUT: u64 = 2;
 

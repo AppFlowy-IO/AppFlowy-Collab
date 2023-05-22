@@ -10,6 +10,7 @@ use nanoid::nanoid;
 use serde_json::{json, Map, Value};
 use tokio::sync::RwLock;
 
+/// ⚠️run this test, it will alter the remote table
 #[tokio::test]
 async fn collab_with_aws_plugin_test() {
   dotenv().ok();
@@ -69,6 +70,7 @@ async fn collab_with_aws_plugin_test() {
     .await;
 }
 
+/// ⚠️run this test, it will alter the remote table
 #[tokio::test]
 async fn single_client_edit_aws_doc_10_times_test() {
   dotenv().ok();
@@ -115,6 +117,7 @@ async fn single_client_edit_aws_doc_10_times_test() {
     .await;
 }
 
+/// ⚠️run this test, it will alter the remote table
 // Two clients edit the same doc
 #[tokio::test]
 async fn multi_clients_edit_aws_doc_10_times_test() {

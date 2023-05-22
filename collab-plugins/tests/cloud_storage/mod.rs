@@ -1,3 +1,3 @@
-mod util;
 mod aws;
 mod postgres;
+mod util;

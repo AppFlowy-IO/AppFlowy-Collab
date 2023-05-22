@@ -16,7 +16,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
 
   /// Called when the plugin receives an update. It happens after the [TransactionMut] commit to
   /// the Yrs document.
-  fn receive_update(&self,  _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
+  fn receive_update(&self, _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
 
   /// Called when the plugin receives a local update
   fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, _update: &[u8]) {}
