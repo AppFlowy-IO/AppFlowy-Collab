@@ -2,7 +2,9 @@ use crate::setup_log;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::{CollabClient, CollabOrigin};
 use collab::preclude::Collab;
-use collab_plugins::cloud_storage::aws::{get_aws_remote_doc, AWSDynamoDBPlugin};
+use collab_plugins::cloud_storage::postgres::{
+  get_postgres_remote_doc, SupabaseDBConfig, SupabaseDBPlugin,
+};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -13,6 +15,7 @@ pub enum TestScript {
     uid: i64,
     object_id: String,
     sync_per_secs: u64,
+    config: SupabaseDBConfig,
   },
   ModifyCollab {
     uid: i64,
@@ -30,14 +33,15 @@ pub enum TestScript {
   AssertRemote {
     object_id: String,
     expected: Value,
+    config: SupabaseDBConfig,
   },
 }
 
-pub struct AWSStorageTest {
+pub struct PostgresStorageTest {
   pub collab_by_id: HashMap<String, Arc<MutexCollab>>,
 }
 
-impl AWSStorageTest {
+impl PostgresStorageTest {
   pub fn new() -> Self {
     setup_log();
     Self {
@@ -51,14 +55,15 @@ impl AWSStorageTest {
         uid,
         object_id,
         sync_per_secs,
+        config,
       } => {
         let origin = CollabOrigin::Client(CollabClient::new(uid, "1"));
         let local_collab = Arc::new(MutexCollab::new(origin, &object_id, vec![]));
-        let plugin = AWSDynamoDBPlugin::new(
+        let plugin = SupabaseDBPlugin::new(
           object_id.clone(),
           local_collab.clone(),
           sync_per_secs,
-          test_region(),
+          config,
         );
         local_collab.lock().add_plugin(Arc::new(plugin));
         local_collab.initial();
@@ -89,8 +94,9 @@ impl AWSStorageTest {
       TestScript::AssertRemote {
         object_id,
         expected,
+        config,
       } => {
-        let collab = get_aws_remote_doc(&object_id, test_region()).await;
+        let collab = get_postgres_remote_doc(&object_id, config).await;
         let json = collab.lock().to_json_value();
         assert_json_diff::assert_json_eq!(json, expected,);
       },
@@ -102,9 +108,6 @@ impl AWSStorageTest {
       self.run_script(script).await;
     }
   }
-}
-fn test_region() -> String {
-  "ap-southeast-2".to_string()
 }
 
 pub fn make_id(uid: i64, object_id: &str) -> String {

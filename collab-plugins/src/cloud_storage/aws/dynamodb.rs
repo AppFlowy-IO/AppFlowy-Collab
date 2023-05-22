@@ -4,13 +4,13 @@ use std::time::Duration;
 use anyhow::Error;
 use async_trait::async_trait;
 use aws_config::meta::region::RegionProviderChain;
-use aws_sdk_dynamodb::Client;
 use aws_sdk_dynamodb::config::Region;
 use aws_sdk_dynamodb::primitives::Blob;
 use aws_sdk_dynamodb::types::{
   AttributeDefinition, AttributeValue, ComparisonOperator, Condition, KeySchemaElement, KeyType,
   ProvisionedThroughput, ScalarAttributeType,
 };
+use aws_sdk_dynamodb::Client;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
@@ -108,10 +108,6 @@ impl RemoteCollabStorage for CollabCloudStorageImpl {
     )
     .await?;
     Ok(())
-  }
-
-  async fn flush(&self, _object_id: &str) {
-    todo!()
   }
 }
 

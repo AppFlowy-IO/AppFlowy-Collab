@@ -1,21 +1,23 @@
+use dotenv::dotenv;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::cloud_storage::aws::script::TestScript::*;
+use crate::cloud_storage::aws::script::{make_id, AWSStorageTest};
+use crate::util::generate_random_string;
+use collab_plugins::cloud_storage::aws::is_enable_aws_dynamodb;
 use nanoid::nanoid;
 use serde_json::{json, Map, Value};
 use tokio::sync::RwLock;
-use collab_plugins::cloud_storage::aws::is_enable_aws_dynamodb;
-use crate::cloud_storage::aws::script::{CloudStorageTest, make_id};
-use crate::cloud_storage::aws::script::TestScript::*;
-use crate::util::generate_random_string;
 
 #[tokio::test]
 async fn collab_with_aws_plugin_test() {
+  dotenv().ok();
   if !is_enable_aws_dynamodb().await {
     return;
   }
   let object_id = nanoid!(5);
-  let mut test = CloudStorageTest::new();
+  let mut test = AWSStorageTest::new();
   println!("object_id: {}", object_id);
   test
     .run_scripts(vec![
@@ -69,11 +71,12 @@ async fn collab_with_aws_plugin_test() {
 
 #[tokio::test]
 async fn single_client_edit_aws_doc_10_times_test() {
+  dotenv().ok();
   if !is_enable_aws_dynamodb().await {
     return;
   }
   let object_id = nanoid!(5);
-  let mut test = CloudStorageTest::new();
+  let mut test = AWSStorageTest::new();
   test
     .run_scripts(vec![CreateCollab {
       uid: 1,
@@ -115,11 +118,12 @@ async fn single_client_edit_aws_doc_10_times_test() {
 // Two clients edit the same doc
 #[tokio::test]
 async fn multi_clients_edit_aws_doc_10_times_test() {
+  dotenv().ok();
   if !is_enable_aws_dynamodb().await {
     return;
   }
   let object_id = nanoid!(5);
-  let test = Arc::new(RwLock::new(CloudStorageTest::new()));
+  let test = Arc::new(RwLock::new(AWSStorageTest::new()));
   test
     .write()
     .await

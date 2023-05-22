@@ -15,8 +15,8 @@ use rand::Rng;
 use tokio::spawn;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::watch;
-use yrs::{merge_updates_v1, ReadTxn, Update};
 use yrs::updates::decoder::Decode;
+use yrs::{merge_updates_v1, ReadTxn, Update};
 
 /// The [RemoteCollabStorage] is used to store the updates of the remote collab. The [RemoteCollab]
 /// is the remote collab that maps to the local collab.
@@ -27,8 +27,6 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, anyhow::Error>;
   /// Send the update to the remote storage.
   async fn send_update(&self, id: MsgId, update: Vec<u8>) -> Result<(), anyhow::Error>;
-  /// Flush all the updates into one update and remove all the updates stored in the storage.
-  async fn flush(&self, object_id: &str);
 }
 
 /// The [RemoteCollab] is used to sync the local collab to the remote.
@@ -94,11 +92,14 @@ impl RemoteCollab {
   }
 
   pub async fn sync(&self, local_collab: Arc<MutexCollab>) {
-    let updates = self
-      .storage
-      .get_all_updates(&self.object_id)
-      .await
-      .unwrap_or_default();
+    let updates = match self.storage.get_all_updates(&self.object_id).await {
+      Ok(updates) => updates,
+      Err(e) => {
+        tracing::error!("🔴Failed to get updates: {:?}", e);
+        vec![]
+      },
+    };
+
     if !updates.is_empty() {
       self.inner.lock().with_transact_mut(|txn| {
         for update in updates {
@@ -150,7 +151,6 @@ impl RemoteCollab {
     );
   }
 }
-
 
 #[derive(Clone, Debug)]
 struct Message {
@@ -225,7 +225,9 @@ enum CollabError {
 }
 
 const RANDOM_MASK: u64 = (1 << 12) - 1;
+
 struct RngMsgIdCounter(Mutex<MsgId>);
+
 impl RngMsgIdCounter {
   pub fn new() -> Self {
     let timestamp = SystemTime::now()
@@ -238,6 +240,7 @@ impl RngMsgIdCounter {
     Self(Mutex::new(value))
   }
 }
+
 impl MsgIdCounter for RngMsgIdCounter {
   fn next(&self) -> MsgId {
     let next = *self.0.lock() + 1;

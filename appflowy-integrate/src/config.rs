@@ -56,6 +56,7 @@ impl FromStr for CollabPluginConfig {
 pub const AWS_ACCESS_KEY_ID: &str = "AWS_ACCESS_KEY_ID";
 pub const AWS_SECRET_ACCESS_KEY: &str = "AWS_SECRET_ACCESS_KEY";
 pub const AWS_REGION: &str = "AWS_REGION";
+
 // To enable this test, you should set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in your environment variables.
 // or create the ~/.aws/credentials file following the instructions in https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credentials.html
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
@@ -71,7 +72,7 @@ impl AWSDynamoDBConfig {
   pub fn from_env() -> Option<Self> {
     let access_key_id = std::env::var(AWS_ACCESS_KEY_ID).ok()?;
     let secret_access_key = std::env::var(AWS_SECRET_ACCESS_KEY).ok()?;
-    let region = std::env::var(AWS_REGION).unwrap_or("us-east-1".to_string());
+    let region = std::env::var(AWS_REGION).unwrap_or_else(|_| "us-east-1".to_string());
     Some(Self {
       access_key_id,
       secret_access_key,
