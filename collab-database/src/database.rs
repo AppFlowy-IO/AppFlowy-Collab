@@ -277,7 +277,7 @@ impl Database {
   }
 
   /// Return a list of [Row] for the given view.
-  /// The rows here is ordered by the [RowOrder] of the view.
+  /// The rows here are ordered by [RowOrder]s of the view.
   pub fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
     let txn = self.root.transact();
     self.get_rows_for_view_with_txn(&txn, view_id)

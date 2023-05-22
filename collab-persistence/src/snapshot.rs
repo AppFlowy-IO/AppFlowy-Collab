@@ -92,7 +92,7 @@ where
   }
 
   /// Delete all snapshots for the given object id.
-  fn delete_snapshot<K: AsRef<[u8]> + ?Sized>(
+  fn delete_all_snapshots<K: AsRef<[u8]> + ?Sized>(
     &self,
     uid: i64,
     object_id: &K,
@@ -103,6 +103,17 @@ where
       self.remove_range(start.as_ref(), end.as_ref())?;
     }
     Ok(())
+  }
+
+  fn delete_last_snapshot_update(&self, snapshot_id: SnapshotID) {
+    if let Some(last_update_key) = self.get_snapshot_last_update_key(snapshot_id) {
+      match self.remove(last_update_key.as_ref()) {
+        Ok(_) => {},
+        Err(e) => {
+          tracing::error!("Failed to delete last snapshot update: {:?}", e);
+        },
+      }
+    }
   }
 
   /// Create a snapshot id for the given object id.
