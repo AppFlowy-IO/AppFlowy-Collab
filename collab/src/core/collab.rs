@@ -396,19 +396,6 @@ fn observe_doc(
             remote_origin,
           );
         }
-        // if let Some(remote_origin) = CollabOrigin::from(txn) {
-        //   if remote_origin == local_origin {
-        //     plugin.receive_local_update(&local_origin, &cloned_oid, &event.update);
-        //   } else {
-        //     tracing::trace!(
-        //       "[🦀Client]: {} did apply remote {} update",
-        //       local_origin,
-        //       remote_origin,
-        //     );
-        //   }
-        // } else {
-        //   tracing::trace!("[🦀Client]: did apply remote update");
-        // }
       });
     })
     .unwrap();

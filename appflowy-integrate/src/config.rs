@@ -1,16 +1,16 @@
 use std::str::FromStr;
 
-use collab_plugins::cloud_storage::postgres::SupabasePostgresDBConfig;
+use collab_plugins::cloud_storage::postgres::SupabaseDBConfig;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct AppFlowyCollabConfig {
+pub struct CollabPluginConfig {
   /// Only one of the following two fields should be set.
   aws_config: Option<AWSDynamoDBConfig>,
-  supabase_config: Option<SupabasePostgresDBConfig>,
+  supabase_config: Option<SupabaseDBConfig>,
 }
 
-impl AppFlowyCollabConfig {
+impl CollabPluginConfig {
   pub fn aws_config(&self) -> Option<&AWSDynamoDBConfig> {
     self.aws_config.as_ref()
   }
@@ -25,13 +25,13 @@ impl AppFlowyCollabConfig {
     Ok(())
   }
 
-  pub fn supabase_config(&self) -> Option<&SupabasePostgresDBConfig> {
+  pub fn supabase_config(&self) -> Option<&SupabaseDBConfig> {
     self.supabase_config.as_ref()
   }
 
   pub fn set_supabase_config(
     &mut self,
-    supabase_config: SupabasePostgresDBConfig,
+    supabase_config: SupabaseDBConfig,
   ) -> Result<(), anyhow::Error> {
     if self.aws_config.is_some() {
       return Err(anyhow::anyhow!(
@@ -43,9 +43,9 @@ impl AppFlowyCollabConfig {
   }
 }
 
-impl AppFlowyCollabConfig {}
+impl CollabPluginConfig {}
 
-impl FromStr for AppFlowyCollabConfig {
+impl FromStr for CollabPluginConfig {
   type Err = serde_json::Error;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -55,6 +55,7 @@ impl FromStr for AppFlowyCollabConfig {
 
 pub const AWS_ACCESS_KEY_ID: &str = "AWS_ACCESS_KEY_ID";
 pub const AWS_SECRET_ACCESS_KEY: &str = "AWS_SECRET_ACCESS_KEY";
+pub const AWS_REGION: &str = "AWS_REGION";
 // To enable this test, you should set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in your environment variables.
 // or create the ~/.aws/credentials file following the instructions in https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credentials.html
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
@@ -67,12 +68,21 @@ pub struct AWSDynamoDBConfig {
 }
 
 impl AWSDynamoDBConfig {
-  fn new(access_key_id: String, secret_access_key: String) -> Self {
-    Self {
+  pub fn from_env() -> Option<Self> {
+    let access_key_id = std::env::var(AWS_ACCESS_KEY_ID).ok()?;
+    let secret_access_key = std::env::var(AWS_SECRET_ACCESS_KEY).ok()?;
+    let region = std::env::var(AWS_REGION).unwrap_or("us-east-1".to_string());
+    Some(Self {
       access_key_id,
       secret_access_key,
-      region: "us-east-1".to_string(),
+      region,
       enable: true,
-    }
+    })
+  }
+
+  pub fn write_env(&self) {
+    std::env::set_var(AWS_ACCESS_KEY_ID, &self.access_key_id);
+    std::env::set_var(AWS_SECRET_ACCESS_KEY, &self.secret_access_key);
+    std::env::set_var(AWS_REGION, &self.region);
   }
 }

@@ -12,7 +12,7 @@ use collab_database::user::UserDatabase as InnerUserDatabase;
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk::rocksdb::Config;
+use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
 use parking_lot::Mutex;
 use serde_json::Value;
 
@@ -61,15 +61,15 @@ pub struct DatabaseTest {
   pub db: Arc<RocksCollabDB>,
   pub db_path: PathBuf,
   pub user_database: UserDatabase,
-  pub config: Config,
+  pub config: CollabPersistenceConfig,
 }
 
-pub fn database_test(config: Config) -> DatabaseTest {
+pub fn database_test(config: CollabPersistenceConfig) -> DatabaseTest {
   DatabaseTest::new(config)
 }
 
 impl DatabaseTest {
-  pub fn new(config: Config) -> Self {
+  pub fn new(config: CollabPersistenceConfig) -> Self {
     let db_path = db_path();
     let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
     let collab_builder = UserDatabaseCollabBuilderImpl();
@@ -109,7 +109,7 @@ impl DatabaseTest {
 pub fn run_script(
   user_database: UserDatabase,
   db: Arc<RocksCollabDB>,
-  config: Config,
+  config: CollabPersistenceConfig,
   script: DatabaseScript,
 ) {
   match script {
@@ -180,7 +180,10 @@ pub fn run_script(
       oid: database_id,
       expected,
     } => {
-      let updates = db.read_txn().get_updates(1, &database_id).unwrap();
+      let updates = db
+        .read_txn()
+        .get_decoded_v1_updates(1, &database_id)
+        .unwrap();
       assert_eq!(updates.len(), expected,);
     },
   }

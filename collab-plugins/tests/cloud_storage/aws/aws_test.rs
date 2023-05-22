@@ -1,14 +1,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use collab_plugins::cloud_storage::aws::is_enable_aws_dynamodb;
 use nanoid::nanoid;
 use serde_json::{json, Map, Value};
 use tokio::sync::RwLock;
-
+use collab_plugins::cloud_storage::aws::is_enable_aws_dynamodb;
 use crate::cloud_storage::aws::script::{CloudStorageTest, make_id};
 use crate::cloud_storage::aws::script::TestScript::*;
-use crate::cloud_storage::util::generate_random_string;
+use crate::util::generate_random_string;
 
 #[tokio::test]
 async fn collab_with_aws_plugin_test() {

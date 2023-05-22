@@ -1,15 +1,13 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
-
+use crate::setup_log;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::{CollabClient, CollabOrigin};
 use collab::preclude::Collab;
-use collab_plugins::cloud_storage::aws::{get_aws_remote_doc, AWSDynamoDBPlugin};
-
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
+use collab_plugins::cloud_storage::aws::{AWSDynamoDBPlugin, get_aws_remote_doc};
 
-use crate::setup_log;
 
 pub enum TestScript {
   CreateCollab {

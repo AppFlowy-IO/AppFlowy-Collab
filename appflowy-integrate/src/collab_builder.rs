@@ -2,26 +2,25 @@ use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::CollabBuilder;
-use collab_plugins::cloud_storage::aws::{is_enable_aws_dynamodb, AWSDynamoDBPlugin};
-use collab_plugins::cloud_storage::postgres::SupabasePostgresDBPlugin;
-// use collab_plugins::cloud_storage_plugin::AWSDynamoDBPlugin;
+use collab_plugins::cloud_storage::aws::AWSDynamoDBPlugin;
+use collab_plugins::cloud_storage::postgres::SupabaseDBPlugin;
 use collab_plugins::disk::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk::rocksdb::{Config, RocksdbDiskPlugin};
+use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
 
-use crate::config::{AppFlowyCollabConfig, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::config::{CollabPluginConfig, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 
 pub struct AppFlowyCollabBuilder {
   #[allow(dead_code)]
-  collab_config: AppFlowyCollabConfig,
+  collab_config: CollabPluginConfig,
 }
 
 impl AppFlowyCollabBuilder {
-  pub fn new(collab_config: AppFlowyCollabConfig) -> Self {
+  pub fn new(collab_config: CollabPluginConfig) -> Self {
     Self { collab_config }
   }
 
   pub fn build(&self, uid: i64, object_id: &str, db: Arc<RocksCollabDB>) -> Arc<MutexCollab> {
-    self.build_with_config(uid, object_id, db, &Config::default())
+    self.build_with_config(uid, object_id, db, &CollabPersistenceConfig::default())
   }
 
   pub fn build_with_config(
@@ -29,7 +28,7 @@ impl AppFlowyCollabBuilder {
     uid: i64,
     object_id: &str,
     db: Arc<RocksCollabDB>,
-    config: &Config,
+    config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab> {
     let collab = Arc::new(
       CollabBuilder::new(uid, object_id)
@@ -55,9 +54,9 @@ impl AppFlowyCollabBuilder {
     }
 
     if let Some(config) = self.collab_config.supabase_config() {
-      if config.enable {
+      if config.update_table_config.enable {
         let plugin =
-          SupabasePostgresDBPlugin::new(object_id.to_string(), collab.clone(), 10, config.clone());
+          SupabaseDBPlugin::new(object_id.to_string(), collab.clone(), 10, config.clone());
         collab.lock().add_plugin(Arc::new(plugin));
       }
     }

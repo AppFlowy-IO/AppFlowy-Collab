@@ -5,7 +5,7 @@ use std::sync::Arc;
 use collab::core::any_map::AnyMapExtension;
 use collab::core::collab::MutexCollab;
 use collab::preclude::{
-  uuid_v4, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};

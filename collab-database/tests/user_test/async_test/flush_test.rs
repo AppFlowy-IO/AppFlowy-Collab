@@ -1,11 +1,11 @@
-use collab_plugins::disk::rocksdb::Config;
+use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
 use serde_json::{json, Value};
 
 use crate::user_test::async_test::script::{create_database, database_test, DatabaseScript::*};
 
 #[tokio::test]
 async fn flush_doc_test() {
-  let mut test = database_test(Config::new().flush_doc(true));
+  let mut test = database_test(CollabPersistenceConfig::new().flush_doc(true));
   test
     .run_scripts(vec![
       CreateDatabase {

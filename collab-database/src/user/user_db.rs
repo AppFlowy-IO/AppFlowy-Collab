@@ -7,7 +7,7 @@ use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, MapPrelim, Update};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
-use collab_plugins::disk::rocksdb::Config;
+use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
 use parking_lot::RwLock;
 
 use crate::blocks::Block;
@@ -24,7 +24,7 @@ pub trait UserDatabaseCollabBuilder: Send + Sync + 'static {
     uid: i64,
     object_id: &str,
     db: Arc<RocksCollabDB>,
-    config: &Config,
+    config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab>;
 }
 
@@ -45,14 +45,19 @@ pub struct UserDatabase {
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
   open_handlers: RwLock<HashMap<String, Arc<Database>>>,
-  config: Config,
+  config: CollabPersistenceConfig,
   collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
 }
 
 const DATABASES: &str = "databases";
 
 impl UserDatabase {
-  pub fn new<T>(uid: i64, db: Arc<RocksCollabDB>, config: Config, collab_builder: T) -> Self
+  pub fn new<T>(
+    uid: i64,
+    db: Arc<RocksCollabDB>,
+    config: CollabPersistenceConfig,
+    collab_builder: T,
+  ) -> Self
   where
     T: UserDatabaseCollabBuilder,
   {

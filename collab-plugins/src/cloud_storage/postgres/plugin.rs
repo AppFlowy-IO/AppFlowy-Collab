@@ -1,24 +1,24 @@
-use crate::cloud_storage::postgres::postgres_db::{PostgresDB, SupabasePostgresDBConfig};
+use crate::cloud_storage::postgres::postgres_db::{PostgresDB, SupabaseDBConfig};
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
-use parking_lot::RwLock;
+
 use std::sync::Arc;
 use y_sync::awareness::Awareness;
 use yrs::Transaction;
 
-pub struct SupabasePostgresDBPlugin {
+pub struct SupabaseDBPlugin {
   object_id: String,
   local_collab: Arc<MutexCollab>,
   postgres_db: Arc<PostgresDB>,
 }
 
-impl SupabasePostgresDBPlugin {
+impl SupabaseDBPlugin {
   pub fn new(
     object_id: String,
     local_collab: Arc<MutexCollab>,
     sync_per_secs: u64,
-    config: SupabasePostgresDBConfig,
+    config: SupabaseDBConfig,
   ) -> Self {
     let postgres_db = PostgresDB::new(object_id.clone(), sync_per_secs, config);
 
@@ -30,7 +30,7 @@ impl SupabasePostgresDBPlugin {
   }
 }
 
-impl CollabPlugin for SupabasePostgresDBPlugin {
+impl CollabPlugin for SupabaseDBPlugin {
   fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
     let weak_postgres_db = Arc::downgrade(&self.postgres_db);
     let weak_local_collab = Arc::downgrade(&self.local_collab);
@@ -38,7 +38,7 @@ impl CollabPlugin for SupabasePostgresDBPlugin {
       if let (Some(postgres_db), Some(local_collab)) =
         (weak_postgres_db.upgrade(), weak_local_collab.upgrade())
       {
-        postgres_db.start_sync(local_collab.clone());
+        postgres_db.start_sync(local_collab.clone()).await;
       }
     });
   }

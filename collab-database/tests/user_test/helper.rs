@@ -14,7 +14,7 @@ use collab_database::user::{
 };
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk::rocksdb::{Config, RocksdbDiskPlugin};
+use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
 use tokio::sync::mpsc::{channel, Receiver};
 
 use rand::Rng;
@@ -46,7 +46,7 @@ pub struct UserDatabaseCollabBuilderImpl();
 
 impl UserDatabaseCollabBuilder for UserDatabaseCollabBuilderImpl {
   fn build(&self, uid: i64, object_id: &str, db: Arc<RocksCollabDB>) -> Arc<MutexCollab> {
-    self.build_with_config(uid, object_id, db, &Config::default())
+    self.build_with_config(uid, object_id, db, &CollabPersistenceConfig::default())
   }
 
   fn build_with_config(
@@ -54,7 +54,7 @@ impl UserDatabaseCollabBuilder for UserDatabaseCollabBuilderImpl {
     uid: i64,
     object_id: &str,
     db: Arc<RocksCollabDB>,
-    config: &Config,
+    config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab> {
     let collab = CollabBuilder::new(uid, object_id)
       .with_plugin(RocksdbDiskPlugin::new_with_config(uid, db, config.clone()))
@@ -69,7 +69,10 @@ pub fn user_database_test(uid: i64) -> UserDatabaseTest {
   user_database_with_db(uid, db)
 }
 
-pub fn user_database_test_with_config(uid: i64, config: Config) -> UserDatabaseTest {
+pub fn user_database_test_with_config(
+  uid: i64,
+  config: CollabPersistenceConfig,
+) -> UserDatabaseTest {
   let db = make_rocks_db();
   let inner = UserDatabase::new(uid, db.clone(), config, UserDatabaseCollabBuilderImpl());
   UserDatabaseTest { uid, inner, db }
@@ -81,7 +84,7 @@ pub fn user_database_with_db(uid: i64, db: Arc<RocksCollabDB>) -> UserDatabaseTe
     inner: UserDatabase::new(
       uid,
       db.clone(),
-      Config::new().snapshot_per_update(5),
+      CollabPersistenceConfig::new().snapshot_per_update(5),
       UserDatabaseCollabBuilderImpl(),
     ),
     db,
@@ -97,7 +100,7 @@ pub fn user_database_with_default_data(uid: i64) -> UserDatabaseTest {
     inner: UserDatabase::new(
       uid,
       db.clone(),
-      Config::new(),
+      CollabPersistenceConfig::new(),
       UserDatabaseCollabBuilderImpl(),
     ),
     db,

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-yrs = "0.16.3"
+yrs = "0.16.5"
 y-sync = { version = "0.3.1" }
 collab = { path = "../collab" }
 collab-sync = { path = "../collab-sync", optional = true }
@@ -48,9 +48,10 @@ config = { version = "0.13.3", default-features = false, features = ["yaml"] }
 
 
 [features]
-default = ["sync"]
+default = []
 sync = ["collab-sync"]
 disk_rocksdb = ["collab-sync","collab-persistence/rocksdb_db"]
 disk_sled = ["collab-persistence"]
-aws_storage = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types", "rand"]
 postgres_storage = ["postgrest"]
+aws_storage = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types", "rand"]
+snapshot = ["collab-persistence/rocksdb_db"]
