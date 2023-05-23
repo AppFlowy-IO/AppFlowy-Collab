@@ -32,7 +32,7 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
 /// The [RemoteCollab] is used to sync the local collab to the remote.
 pub struct RemoteCollab {
   object_id: String,
-  inner: Arc<MutexCollab>,
+  collab: Arc<MutexCollab>,
   storage: Arc<dyn RemoteCollabStorage>,
   /// The [CollabSink] is used to send the updates to the remote.
   sink: Arc<CollabSink<TokioUnboundedSink<Message>, Message>>,
@@ -47,7 +47,7 @@ impl RemoteCollab {
     S: RemoteCollabStorage + Send + Sync + 'static,
   {
     let storage: Arc<dyn RemoteCollabStorage> = Arc::new(storage);
-    let inner = Arc::new(MutexCollab::new(CollabOrigin::Empty, &object_id, vec![]));
+    let collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, &object_id, vec![]));
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
     let (notifier, notifier_rx) = watch::channel(false);
@@ -84,7 +84,7 @@ impl RemoteCollab {
     spawn(CollabSinkRunner::run(Arc::downgrade(&sink), notifier_rx));
     Self {
       object_id,
-      inner,
+      collab,
       storage,
       sink,
     }
@@ -100,7 +100,7 @@ impl RemoteCollab {
     };
 
     if !updates.is_empty() {
-      self.inner.lock().with_transact_mut(|txn| {
+      self.collab.lock().with_transact_mut(|txn| {
         for update in updates {
           if let Ok(update) = Update::decode_v1(&update) {
             txn.apply_update(update);
@@ -112,12 +112,12 @@ impl RemoteCollab {
 
       // Update local collab
       let local_sv = local_collab.lock().transact().state_vector();
-      let update = self
-        .inner
+      let encode_update = self
+        .collab
         .lock()
         .transact()
         .encode_state_as_update_v1(&local_sv);
-      if let Ok(update) = Update::decode_v1(&update) {
+      if let Ok(update) = Update::decode_v1(&encode_update) {
         local_collab.lock().with_transact_mut(|txn| {
           txn.apply_update(update);
         });
@@ -125,15 +125,16 @@ impl RemoteCollab {
     }
 
     // Update remote collab
-    let remote_state_vector = self.inner.lock().transact().state_vector();
-    let update = local_collab
+    let remote_state_vector = self.collab.lock().transact().state_vector();
+    let encode_update = local_collab
       .lock()
       .transact()
       .encode_state_as_update_v1(&remote_state_vector);
-    if let Ok(update) = Update::decode_v1(&update) {
-      self.inner.lock().with_transact_mut(|txn| {
+    if let Ok(update) = Update::decode_v1(&encode_update) {
+      self.collab.lock().with_transact_mut(|txn| {
         txn.apply_update(update);
       });
+      self.push_update(&encode_update);
     }
   }
 
@@ -144,6 +145,7 @@ impl RemoteCollab {
         Ok(())
       },
       |msg_id| Message {
+        object_id: self.object_id.clone(),
         msg_id,
         payloads: vec![update.to_vec()],
       },
@@ -153,6 +155,7 @@ impl RemoteCollab {
 
 #[derive(Clone, Debug)]
 struct Message {
+  object_id: String,
   msg_id: MsgId,
   payloads: Vec<Vec<u8>>,
 }
@@ -210,7 +213,8 @@ impl Ord for Message {
 impl Display for Message {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     f.write_fmt(format_args!(
-      "send client update: [msg_id:{}|payload_len:{}]",
+      "send {} update: [msg_id:{}|payload_len:{}]",
+      self.object_id,
       self.msg_id,
       self.payload_len(),
     ))

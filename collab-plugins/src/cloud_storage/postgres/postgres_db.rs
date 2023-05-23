@@ -104,7 +104,7 @@ impl RemoteCollabStorage for PGCollabCloudStorageImpl {
 
   async fn send_update(&self, _id: MsgId, update: Vec<u8>) -> Result<(), Error> {
     tracing::debug!(
-      "postgres db: send update: {}:{:?}",
+      "postgres collab: send update: {}:{:?}",
       self.object_id,
       update.len()
     );

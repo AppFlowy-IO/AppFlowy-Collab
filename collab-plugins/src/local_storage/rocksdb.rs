@@ -111,6 +111,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
     let mut count = self.increase_count();
     // /Acquire a write transaction to ensure consistency
     let result = self.db.with_write_txn(|w_db_txn| {
+      tracing::trace!("Receive {} update", object_id);
       let update_key = w_db_txn.push_update(self.uid, object_id, update)?;
 
       if self.config.enable_snapshot && count > 0 {

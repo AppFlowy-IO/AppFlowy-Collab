@@ -50,10 +50,8 @@ impl Folder {
       is_exist
     };
     if is_exist {
-      tracing::trace!("Get folder from collab");
       get_folder(collab, context)
     } else {
-      tracing::trace!("Create folder in collab");
       create_folder(collab, context)
     }
   }

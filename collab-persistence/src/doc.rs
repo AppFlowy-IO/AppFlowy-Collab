@@ -139,13 +139,13 @@ where
         }
 
         let update_end = make_doc_update_key(doc_id, Clock::MAX);
-        tracing::trace!(
-          "🤲collab => [{}-{:?}]: Get update from {:?} to {:?}",
-          doc_id,
-          object_id,
-          &update_start,
-          update_end.as_ref(),
-        );
+        // tracing::trace!(
+        //   "🤲collab => [{}-{:?}]: Get update from {:?} to {:?}",
+        //   doc_id,
+        //   object_id,
+        //   &update_start,
+        //   update_end.as_ref(),
+        // );
 
         // Load the updates
         let encoded_updates = self.range(update_start.as_ref()..update_end.as_ref())?;
