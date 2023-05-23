@@ -7,14 +7,15 @@ edition = "2021"
 
 [dependencies]
 collab = { path = "../collab" }
-collab-persistence= { path = "../collab-persistence" }
+collab-persistence = { path = "../collab-persistence" }
 collab-folder = { path = "../collab-folder" }
-collab-database= { path = "../collab-database" }
-collab-plugins= { path = "../collab-plugins", features = ["disk_rocksdb", "postgres_storage", "aws_storage"] }
+collab-database = { path = "../collab-database" }
+collab-plugins = { path = "../collab-plugins", features = ["disk_rocksdb", "postgres_storage", "aws_storage"] }
 collab-document = { path = "../collab-document" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 anyhow = "1.0"
+tracing = "0.1"
 
 [features]
 default = []

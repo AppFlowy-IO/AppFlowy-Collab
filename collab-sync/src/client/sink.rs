@@ -151,6 +151,10 @@ where
       }
     }
 
+    if self.config.strategy.is_fix_interval() {
+      *self.instant.lock().await = Instant::now();
+    }
+
     let pending_msg = match self.pending_msgs.try_lock() {
       None => {
         // If acquire the lock failed, try to notify again after 100ms
@@ -207,9 +211,6 @@ where
           },
         }
 
-        if self.config.strategy.is_fix_interval() {
-          *self.instant.lock().await = Instant::now();
-        }
         Ok(())
       },
       None => Ok(()),
@@ -229,6 +230,7 @@ where
 }
 
 pub struct CollabSinkRunner<Msg>(PhantomData<Msg>);
+
 impl<Msg> CollabSinkRunner<Msg> {
   /// The runner will stop if the [CollabSink] was dropped or the notifier was closed.
   pub async fn run<E, Sink>(
@@ -348,6 +350,7 @@ pub trait MsgIdCounter: Send + Sync + 'static {
 
 #[derive(Debug, Default)]
 pub struct DefaultMsgIdCounter(Arc<AtomicU64>);
+
 impl DefaultMsgIdCounter {
   pub fn new() -> Self {
     Self::default()

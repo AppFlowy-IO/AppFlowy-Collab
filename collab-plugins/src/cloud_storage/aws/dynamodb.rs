@@ -57,7 +57,7 @@ impl AWSDynamoDB {
     let table_name = table_name.to_string();
     create_table_if_not_exist(&client, &table_name).await?;
 
-    let storage = CollabCloudStorageImpl {
+    let storage = AWSCollabCloudStorageImpl {
       client: client.clone(),
       table_name: table_name.clone(),
       object_id: object_id.clone(),
@@ -86,19 +86,20 @@ impl AWSDynamoDB {
   }
 }
 
-struct CollabCloudStorageImpl {
+struct AWSCollabCloudStorageImpl {
   client: Arc<Client>,
   table_name: String,
   object_id: String,
 }
 
 #[async_trait]
-impl RemoteCollabStorage for CollabCloudStorageImpl {
+impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, Error> {
     Ok(aws_get_all_updates(&self.client, &self.table_name, object_id).await)
   }
 
   async fn send_update(&self, msg_id: MsgId, update: Vec<u8>) -> Result<(), Error> {
+    tracing::debug!("aws: send_update: {:?}", update);
     aws_send_update(
       &self.client,
       &self.table_name,

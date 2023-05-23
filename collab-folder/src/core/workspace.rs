@@ -96,7 +96,7 @@ impl WorkspaceMap {
   }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Workspace {
   pub id: String,
   pub name: String,

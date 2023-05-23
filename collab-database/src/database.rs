@@ -826,7 +826,7 @@ pub fn gen_database_view_id() -> String {
 }
 
 pub fn gen_field_id() -> String {
-  format!("f:{}", nanoid!(6))
+  nanoid!(6)
 }
 
 pub fn gen_row_id() -> RowId {
