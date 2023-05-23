@@ -418,7 +418,7 @@ impl Database {
 
   /// Add a group setting to the view. If the setting already exists, it will be replaced.
   pub fn insert_group_setting(&self, view_id: &str, group_setting: impl Into<GroupSettingMap>) {
-    self.views.update_view(view_id, |update| {
+    self.views.update_database_view(view_id, |update| {
       update.update_groups(|group_update| {
         let group_setting = group_setting.into();
         if let Some(setting_id) = group_setting.get_str_value("id") {
@@ -435,7 +435,7 @@ impl Database {
   }
 
   pub fn delete_group_setting(&self, view_id: &str, group_setting_id: &str) {
-    self.views.update_view(view_id, |update| {
+    self.views.update_database_view(view_id, |update| {
       update.update_groups(|group_update| {
         group_update.remove(group_setting_id);
       });
@@ -448,7 +448,7 @@ impl Database {
     setting_id: &str,
     f: impl FnOnce(&mut GroupSettingMap),
   ) {
-    self.views.update_view(view_id, |view_update| {
+    self.views.update_database_view(view_id, |view_update| {
       view_update.update_groups(|group_update| {
         group_update.update(setting_id, |mut map| {
           f(&mut map);
@@ -459,7 +459,7 @@ impl Database {
   }
 
   pub fn remove_group_setting(&self, view_id: &str, setting_id: &str) {
-    self.views.update_view(view_id, |update| {
+    self.views.update_database_view(view_id, |update| {
       update.update_groups(|group_update| {
         group_update.remove(setting_id);
       });
@@ -467,7 +467,7 @@ impl Database {
   }
 
   pub fn insert_sort(&self, view_id: &str, sort: impl Into<SortMap>) {
-    self.views.update_view(view_id, |update| {
+    self.views.update_database_view(view_id, |update| {
       update.update_sorts(|sort_update| {
         let sort = sort.into();
         if let Some(sort_id) = sort.get_str_value("id") {
@@ -509,7 +509,7 @@ impl Database {
   }
 
   pub fn remove_sort(&self, view_id: &str, sort_id: &str) {
-    self.views.update_view(view_id, |update| {
+    self.views.update_database_view(view_id, |update| {
       update.update_sorts(|sort_update| {
         sort_update.remove(sort_id);
       });
@@ -517,7 +517,7 @@ impl Database {
   }
 
   pub fn remove_all_sorts(&self, view_id: &str) {
-    self.views.update_view(view_id, |update| {
+    self.views.update_database_view(view_id, |update| {
       update.update_sorts(|sort_update| {
         sort_update.clear();
       });
@@ -570,7 +570,7 @@ impl Database {
   }
 
   pub fn update_filter(&self, view_id: &str, filter_id: &str, f: impl FnOnce(&mut FilterMap)) {
-    self.views.update_view(view_id, |view_update| {
+    self.views.update_database_view(view_id, |view_update| {
       view_update.update_filters(|filter_update| {
         filter_update.update(filter_id, |mut map| {
           f(&mut map);
@@ -581,7 +581,7 @@ impl Database {
   }
 
   pub fn remove_filter(&self, view_id: &str, filter_id: &str) {
-    self.views.update_view(view_id, |update| {
+    self.views.update_database_view(view_id, |update| {
       update.update_filters(|filter_update| {
         filter_update.remove(filter_id);
       });
@@ -590,7 +590,7 @@ impl Database {
 
   /// Add a group setting to the view. If the setting already exists, it will be replaced.
   pub fn insert_filter(&self, view_id: &str, filter: impl Into<FilterMap>) {
-    self.views.update_view(view_id, |update| {
+    self.views.update_database_view(view_id, |update| {
       update.update_filters(|filter_update| {
         let filter = filter.into();
         if let Some(filter_id) = filter.get_str_value("id") {
@@ -612,7 +612,7 @@ impl Database {
     layout_ty: &DatabaseLayout,
     layout_setting: T,
   ) {
-    self.views.update_view(view_id, |update| {
+    self.views.update_database_view(view_id, |update| {
       update.update_layout_settings(layout_ty, layout_setting.into());
     });
   }

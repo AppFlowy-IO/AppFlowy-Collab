@@ -232,7 +232,7 @@ fn get_database_view_layout_test() {
 #[test]
 fn update_database_view_layout_test() {
   let database_test = create_database_with_default_data(1, "1");
-  database_test.views.update_view("v1", |update| {
+  database_test.views.update_database_view("v1", |update| {
     update.set_layout_type(DatabaseLayout::Calendar);
   });
 

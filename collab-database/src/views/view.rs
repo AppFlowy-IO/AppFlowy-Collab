@@ -147,23 +147,23 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
 
   pub fn update<F>(self, f: F) -> Self
   where
-    F: FnOnce(ViewUpdate),
+    F: FnOnce(DatabaseViewUpdate),
   {
-    let update = ViewUpdate::new(self.id, self.txn, &self.map_ref);
+    let update = DatabaseViewUpdate::new(self.id, self.txn, &self.map_ref);
     f(update);
     self
   }
   pub fn done(self) {}
 }
 
-pub struct ViewUpdate<'a, 'b> {
+pub struct DatabaseViewUpdate<'a, 'b> {
   #[allow(dead_code)]
   id: &'a str,
   map_ref: &'a MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
-impl<'a, 'b> ViewUpdate<'a, 'b> {
+impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'a MapRef) -> Self {
     Self { id, map_ref, txn }
   }

@@ -21,7 +21,7 @@ fn get_layout_setting_test() {
 #[test]
 fn remove_layout_setting_test() {
   let database_test = create_database_with_two_layout_settings();
-  database_test.views.update_view("v1", |view| {
+  database_test.views.update_database_view("v1", |view| {
     view.remove_layout_setting(&DatabaseLayout::Board);
   });
 
