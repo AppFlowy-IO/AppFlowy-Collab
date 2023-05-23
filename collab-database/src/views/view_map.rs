@@ -1,9 +1,9 @@
 use crate::views::{
   filters_from_map_ref, group_setting_from_map_ref, layout_setting_from_map_ref,
   sorts_from_map_ref, view_description_from_value, view_from_map_ref, view_from_value,
-  view_id_from_map_ref, DatabaseLayout, DatabaseView, FieldOrder, FieldOrderArray, FilterMap,
-  GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray, SortMap, ViewBuilder,
-  ViewDescription, ViewUpdate, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
+  view_id_from_map_ref, DatabaseLayout, DatabaseView, DatabaseViewUpdate, FieldOrder,
+  FieldOrderArray, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray,
+  SortMap, ViewBuilder, ViewDescription, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
 };
 use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 
@@ -165,9 +165,9 @@ impl ViewMap {
       .unwrap_or_default()
   }
 
-  pub fn update_view<F>(&self, view_id: &str, f: F)
+  pub fn update_database_view<F>(&self, view_id: &str, f: F)
   where
-    F: FnOnce(ViewUpdate),
+    F: FnOnce(DatabaseViewUpdate),
   {
     self
       .container
@@ -176,19 +176,22 @@ impl ViewMap {
 
   pub fn update_view_with_txn<F>(&self, txn: &mut TransactionMut, view_id: &str, f: F)
   where
-    F: FnOnce(ViewUpdate),
+    F: FnOnce(DatabaseViewUpdate),
   {
     if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
-      let update = ViewUpdate::new(view_id, txn, &map_ref);
+      let update = DatabaseViewUpdate::new(view_id, txn, &map_ref);
       f(update)
     } else {
-      tracing::error!("Can't update the view. The view is not found")
+      tracing::error!(
+        "Can't update the database view:{}. The view is not found",
+        view_id
+      )
     }
   }
 
   pub fn update_all_views_with_txn<F>(&self, txn: &mut TransactionMut, f: F)
   where
-    F: Fn(ViewUpdate),
+    F: Fn(DatabaseViewUpdate),
   {
     let map_refs = self
       .container
@@ -198,7 +201,7 @@ impl ViewMap {
 
     for map_ref in map_refs {
       if let Some(view_id) = view_id_from_map_ref(&map_ref, txn) {
-        let update = ViewUpdate::new(&view_id, txn, &map_ref);
+        let update = DatabaseViewUpdate::new(&view_id, txn, &map_ref);
         f(update)
       }
     }

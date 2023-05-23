@@ -151,7 +151,7 @@ fn get_field_in_order_test() {
   assert_eq!(fields[1].id, "f1");
   assert_eq!(fields[2].id, "f2");
 
-  database_test.views.update_view("v1", |update| {
+  database_test.views.update_database_view("v1", |update| {
     update.move_field_order(0, 2);
   });
   let fields = database_test.get_fields("v1", None);
@@ -178,7 +178,7 @@ fn move_field_test() {
     ));
   }
 
-  database_test.views.update_view("v1", |update| {
+  database_test.views.update_database_view("v1", |update| {
     update.move_field_order(2, 0);
   });
 
@@ -205,7 +205,7 @@ fn move_field_to_out_of_index_test() {
     ));
   }
 
-  database_test.views.update_view("v1", |update| {
+  database_test.views.update_database_view("v1", |update| {
     update.move_field_order(2, 10);
   });
   let view_1 = database_test.views.get_view("v1").unwrap();
@@ -213,7 +213,7 @@ fn move_field_to_out_of_index_test() {
   assert_eq!(view_1.field_orders[1].id, "f1");
   assert_eq!(view_1.field_orders[2].id, "f2");
 
-  database_test.views.update_view("v1", |update| {
+  database_test.views.update_database_view("v1", |update| {
     update.move_field_order(10, 1);
   });
   let view_1 = database_test.views.get_view("v1").unwrap();
