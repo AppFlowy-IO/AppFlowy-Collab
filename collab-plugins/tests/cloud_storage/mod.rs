@@ -1,3 +1,3 @@
-mod aws_test;
-mod script;
+mod aws;
+mod postgres;
 mod util;

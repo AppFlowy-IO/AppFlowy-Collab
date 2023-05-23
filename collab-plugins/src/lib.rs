@@ -1,20 +1,22 @@
 #[cfg(feature = "sync")]
-mod sync_plugin;
+mod ws_sync;
 
 #[cfg(feature = "sync")]
 pub mod sync {
-  pub use crate::sync_plugin::*;
+  pub use crate::ws_sync::*;
   pub use collab_sync::*;
 }
 
 #[cfg(any(feature = "disk_rocksdb", feature = "disk_sled"))]
-mod disk_plugin;
+mod local_storage;
 
 #[cfg(any(feature = "disk_rocksdb", feature = "disk_sled"))]
 pub mod disk {
-  pub use crate::disk_plugin::*;
+  pub use crate::local_storage::*;
   pub use collab_persistence::*;
 }
 
-#[cfg(feature = "cloud_storage")]
-pub mod cloud_storage_plugin;
+#[cfg(any(feature = "aws_storage", feature = "postgres_storage"))]
+pub mod cloud_storage;
+
+// mod snapshot;

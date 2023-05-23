@@ -285,7 +285,7 @@ where
   }
 
   /// Return all the updates for the given document
-  fn get_updates<K: AsRef<[u8]> + ?Sized>(
+  fn get_decoded_v1_updates<K: AsRef<[u8]> + ?Sized>(
     &self,
     uid: i64,
     object_id: &K,
@@ -300,7 +300,6 @@ where
           updates.push(Update::decode_v1(encoded_update.value())?);
         }
       }
-
       Ok(updates)
     } else {
       Err(PersistenceError::DocumentNotExist)
@@ -314,6 +313,20 @@ where
   ) -> Option<Key<16>> {
     let doc_id = get_doc_id(uid, self, object_id)?;
     get_last_update_key(self, doc_id, make_doc_update_key).ok()
+  }
+
+  /// Return the number of updates for the given document
+  fn number_of_updates<K: AsRef<[u8]> + ?Sized>(&self, uid: i64, object_id: &K) -> usize {
+    if let Some(doc_id) = get_doc_id(uid, self, object_id) {
+      let start = make_doc_update_key(doc_id, 0);
+      let end = make_doc_update_key(doc_id, Clock::MAX);
+      self
+        .range(start.as_ref()..=end.as_ref())
+        .map(|r| r.count())
+        .unwrap_or(0)
+    } else {
+      0
+    }
   }
 }
 

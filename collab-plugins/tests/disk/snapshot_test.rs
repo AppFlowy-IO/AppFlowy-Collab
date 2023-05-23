@@ -1,11 +1,12 @@
 use crate::disk::script::CollabPersistenceTest;
 use crate::disk::script::Script::*;
-use collab_plugins::disk::rocksdb::Config;
+use crate::util::generate_random_string;
+use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
 use serde_json::json;
 
 #[test]
 fn disable_snapshot_test() {
-  let mut test = CollabPersistenceTest::new(Config::new().enable_snapshot(false));
+  let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::new().enable_snapshot(false));
   let doc_id = "1".to_string();
   test.run_scripts(vec![OpenDocument { id: doc_id.clone() }]);
 
@@ -32,7 +33,7 @@ fn disable_snapshot_test() {
 #[test]
 fn gen_snapshot_after_load_from_disk_test() {
   let mut test = CollabPersistenceTest::new(
-    Config::new()
+    CollabPersistenceConfig::new()
       .enable_snapshot(true)
       .snapshot_per_update(5)
       .remove_updates_after_snapshot(true),
@@ -95,7 +96,7 @@ fn gen_snapshot_after_load_from_disk_test() {
 fn remove_updates_after_each_snapshot_test() {
   let snapshot_per_update = 5;
   let mut test = CollabPersistenceTest::new(
-    Config::new()
+    CollabPersistenceConfig::new()
       .enable_snapshot(true)
       .snapshot_per_update(snapshot_per_update)
       .remove_updates_after_snapshot(true),
@@ -112,7 +113,7 @@ fn remove_updates_after_each_snapshot_test() {
 
     if i != 1 && i % snapshot_per_update == 1 {
       test.run_scripts(vec![
-        ValidateSnapshot {
+        ValidateSnapshotUpdateKey {
           id: doc_id.clone(),
           snapshot_index: (i / 5) as usize - 1,
         },
@@ -218,7 +219,7 @@ fn remove_updates_after_each_snapshot_test() {
 fn gen_snapshot_test() {
   let snapshot_per_update = 5;
   let mut test = CollabPersistenceTest::new(
-    Config::new()
+    CollabPersistenceConfig::new()
       .enable_snapshot(true)
       .snapshot_per_update(snapshot_per_update),
   );
@@ -234,9 +235,9 @@ fn gen_snapshot_test() {
 
     if i != 0 && i % snapshot_per_update == 0 {
       test.run_scripts(vec![
-        ValidateSnapshot {
+        ValidateSnapshotUpdateKey {
           id: doc_id.clone(),
-          snapshot_index: (i / 5) as usize - 1,
+          snapshot_index: (i / snapshot_per_update) as usize - 1,
         },
         AssertNumOfUpdates {
           id: doc_id.clone(),
@@ -307,4 +308,37 @@ fn gen_snapshot_test() {
       expected: 20,
     },
   ]);
+}
+
+#[test]
+fn gen_big_snapshot_test() {
+  let snapshot_per_update = 5;
+  let mut test = CollabPersistenceTest::new(
+    CollabPersistenceConfig::new()
+      .enable_snapshot(true)
+      .snapshot_per_update(snapshot_per_update),
+  );
+  let doc_id = "1".to_string();
+  test.run_scripts(vec![OpenDocument { id: doc_id.clone() }]);
+
+  for i in 0..100 {
+    test.run_script(InsertKeyValue {
+      id: doc_id.clone(),
+      key: i.to_string(),
+      value: generate_random_string(1000).into(),
+    });
+
+    if i != 0 && i % snapshot_per_update == 0 {
+      test.run_scripts(vec![
+        ValidateSnapshotUpdateKey {
+          id: doc_id.clone(),
+          snapshot_index: (i / snapshot_per_update) as usize - 1,
+        },
+        AssertNumOfUpdates {
+          id: doc_id.clone(),
+          expected: i as usize + 1,
+        },
+      ]);
+    }
+  }
 }

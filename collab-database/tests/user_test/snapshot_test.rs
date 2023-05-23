@@ -1,6 +1,6 @@
 use collab_database::rows::CreateRowParams;
 use collab_database::views::CreateDatabaseParams;
-use collab_plugins::disk::rocksdb::Config;
+use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
 
 use crate::user_test::helper::{user_database_test, user_database_test_with_config};
 
@@ -8,7 +8,9 @@ use crate::user_test::helper::{user_database_test, user_database_test_with_confi
 fn create_database_row_snapshot_test() {
   let test = user_database_test_with_config(
     1,
-    Config::new().enable_snapshot(true).snapshot_per_update(5),
+    CollabPersistenceConfig::new()
+      .enable_snapshot(true)
+      .snapshot_per_update(5),
   );
   let database = test
     .create_database(CreateDatabaseParams {

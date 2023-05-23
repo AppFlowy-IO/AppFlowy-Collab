@@ -13,13 +13,12 @@ use yrs::{Transaction, TransactionMut};
 #[derive(Clone)]
 pub struct RocksdbDiskPlugin {
   uid: i64,
-  config: Config,
   db: Arc<RocksCollabDB>,
   did_load: Arc<AtomicBool>,
   /// the number of updates on disk when opening the document
   initial_update_count: Arc<AtomicU32>,
-  ///
   update_count: Arc<AtomicU32>,
+  config: CollabPersistenceConfig,
 }
 
 impl Deref for RocksdbDiskPlugin {
@@ -32,10 +31,14 @@ impl Deref for RocksdbDiskPlugin {
 
 impl RocksdbDiskPlugin {
   pub fn new(uid: i64, db: Arc<RocksCollabDB>) -> Self {
-    Self::new_with_config(uid, db, Config::default())
+    Self::new_with_config(uid, db, CollabPersistenceConfig::default())
   }
 
-  pub fn new_with_config(uid: i64, db: Arc<RocksCollabDB>, config: Config) -> Self {
+  pub fn new_with_config(
+    uid: i64,
+    db: Arc<RocksCollabDB>,
+    config: CollabPersistenceConfig,
+  ) -> Self {
     let initial_update_count = Arc::new(AtomicU32::new(0));
     let update_count = Arc::new(AtomicU32::new(0));
     let did_load = Arc::new(AtomicBool::new(false));
@@ -135,25 +138,25 @@ impl CollabPlugin for RocksdbDiskPlugin {
 }
 
 #[derive(Clone)]
-pub struct Config {
+pub struct CollabPersistenceConfig {
   /// Enable snapshot. Default is [false].
-  enable_snapshot: bool,
+  pub(crate) enable_snapshot: bool,
   /// Generate a snapshot every N updates
   /// Default is 100. The value must be greater than 0.
-  snapshot_per_update: u32,
+  pub(crate) snapshot_per_update: u32,
 
   /// Remove updates after snapshot. Default is [false].
   /// The snapshot contains all the updates before it. So it's safe to remove them.
   /// But if you want to keep the updates, you can set this to false.
-  remove_updates_after_snapshot: bool,
+  pub(crate) remove_updates_after_snapshot: bool,
 
   /// Flush the document. Default is [false].
   /// After flush the document, all updates will be removed and the document state vector that
   /// contains all the updates will be reset.
-  flush_doc: bool,
+  pub(crate) flush_doc: bool,
 }
 
-impl Config {
+impl CollabPersistenceConfig {
   pub fn new() -> Self {
     Self::default()
   }
@@ -180,7 +183,7 @@ impl Config {
   }
 }
 
-impl Default for Config {
+impl Default for CollabPersistenceConfig {
   fn default() -> Self {
     Self {
       enable_snapshot: false,

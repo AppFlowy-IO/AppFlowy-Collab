@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-yrs = "0.16.3"
+yrs = "0.16.5"
 y-sync = { version = "0.3.1" }
 collab = { path = "../collab" }
 collab-sync = { path = "../collab-sync", optional = true }
@@ -18,16 +18,20 @@ tracing = { version = "0.1.37" }
 parking_lot = "0.12.1"
 aws-config = { version = "0.55.2", optional = true }
 aws-sdk-dynamodb = { version = "0.27.0", optional = true }
-aws-credential-types = { version ="0.55.2", optional = true }
+aws-credential-types = { version = "0.55.2", optional = true }
 rusoto_credential = "0.48.0"
 anyhow = "1.0"
 tokio-retry = "0.3"
 async-trait = "0.1.51"
 thiserror = "1.0.39"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 rand = { version = "0.8", optional = true }
+postgrest = { version = "1.0", optional = true }
+base64 = { version = "^0.21", optional = true }
 
 [dev-dependencies]
-collab-plugins = { path = ".", features = ["sync", "disk_rocksdb", "disk_sled","cloud_storage"] }
+collab-plugins = { path = ".", features = ["sync", "disk_rocksdb", "disk_sled", "aws_storage", "postgres_storage"] }
 tempfile = "3.4.0"
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
@@ -42,11 +46,14 @@ lib0 = { version = "0.16.3", features = ["lib0-serde"] }
 parking_lot = "0.12.1"
 nanoid = "0.4.0"
 config = { version = "0.13.3", default-features = false, features = ["yaml"] }
+dotenv = "0.15.0"
 
 
 [features]
-default = ["sync"]
+default = []
 sync = ["collab-sync"]
-disk_rocksdb = ["collab-sync","collab-persistence/rocksdb_db"]
+disk_rocksdb = ["collab-sync", "collab-persistence/rocksdb_db"]
 disk_sled = ["collab-persistence"]
-cloud_storage = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types", "rand"]
+postgres_storage = ["postgrest", "base64"]
+aws_storage = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types", "rand"]
+snapshot = ["collab-persistence/rocksdb_db"]

@@ -1,6 +1,5 @@
 use std::marker::PhantomData;
 use std::ops::Deref;
-
 use std::sync::{Arc, Weak};
 
 use collab::core::collab::MutexCollab;
@@ -15,7 +14,7 @@ use y_sync::sync::{Message, MessageReader};
 use yrs::updates::decoder::{Decode, DecoderV1};
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
-use crate::client::sink::{DefaultMsgIdCounter, SinkConfig, SyncSink, TaskRunner};
+use crate::client::sink::{CollabSink, CollabSinkRunner, DefaultMsgIdCounter, SinkConfig};
 use crate::error::SyncError;
 use crate::msg::{CSClientInit, CSClientUpdate, CSServerSync, CollabMessage};
 use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
@@ -25,10 +24,10 @@ pub const DEFAULT_SYNC_TIMEOUT: u64 = 2;
 pub struct SyncQueue<Sink, Stream> {
   object_id: String,
   origin: CollabOrigin,
-  /// The [SyncSink] is used to send the updates to the remote. It will send the current
+  /// The [CollabSink] is used to send the updates to the remote. It will send the current
   /// update periodically if the timeout is reached or it will send the next update if
   /// it receive previous ack from the remote.
-  sink: Arc<SyncSink<Sink, CollabMessage>>,
+  sink: Arc<CollabSink<Sink, CollabMessage>>,
   /// The [SyncStream] will be spawned in a separate task It continuously receive
   /// the updates from the remote.
   #[allow(dead_code)]
@@ -52,14 +51,14 @@ where
   ) -> Self {
     let protocol = DefaultSyncProtocol;
     let (notifier, notifier_rx) = watch::channel(false);
-    let sink = Arc::new(SyncSink::new(
+    let sink = Arc::new(CollabSink::new(
       sink,
       notifier,
       DefaultMsgIdCounter::new(),
       config,
     ));
 
-    spawn(TaskRunner::run(Arc::downgrade(&sink), notifier_rx));
+    spawn(CollabSinkRunner::run(Arc::downgrade(&sink), notifier_rx));
     let cloned_protocol = protocol.clone();
     let object_id = object_id.to_string();
     let stream = SyncStream::new(
@@ -105,7 +104,7 @@ fn doc_init_state<P: CollabSyncProtocol>(awareness: &Awareness, protocol: &P) ->
 }
 
 impl<Sink, Stream> Deref for SyncQueue<Sink, Stream> {
-  type Target = Arc<SyncSink<Sink, CollabMessage>>;
+  type Target = Arc<CollabSink<Sink, CollabMessage>>;
 
   fn deref(&self) -> &Self::Target {
     &self.sink
@@ -134,7 +133,7 @@ where
     stream: Stream,
     protocol: P,
     collab: Arc<MutexCollab>,
-    sink: Arc<SyncSink<Sink, CollabMessage>>,
+    sink: Arc<CollabSink<Sink, CollabMessage>>,
   ) -> Self
   where
     P: CollabSyncProtocol + Send + Sync + 'static,
@@ -163,7 +162,7 @@ where
     object_id: String,
     mut stream: Stream,
     weak_collab: Weak<MutexCollab>,
-    weak_sink: Weak<SyncSink<Sink, CollabMessage>>,
+    weak_sink: Weak<CollabSink<Sink, CollabMessage>>,
     protocol: P,
   ) -> Result<(), SyncError>
   where
@@ -199,7 +198,7 @@ where
     object_id: &str,
     protocol: &P,
     collab: &Arc<MutexCollab>,
-    sink: &Arc<SyncSink<Sink, CollabMessage>>,
+    sink: &Arc<CollabSink<Sink, CollabMessage>>,
     msg: CollabMessage,
   ) -> Result<(), SyncError>
   where

@@ -7,7 +7,7 @@ use collab::preclude::*;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::SnapshotAction;
-use collab_plugins::disk::rocksdb::{Config, RocksdbDiskPlugin};
+use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
 use yrs::updates::decoder::Decode;
 
 use lib0::any::Any;
@@ -47,7 +47,7 @@ pub enum Script {
     index: u32,
     expected: JsonValue,
   },
-  ValidateSnapshot {
+  ValidateSnapshotUpdateKey {
     id: String,
     snapshot_index: usize,
   },
@@ -75,11 +75,11 @@ pub struct CollabPersistenceTest {
   #[allow(dead_code)]
   cleaner: Cleaner,
   db: Arc<RocksCollabDB>,
-  config: Config,
+  config: CollabPersistenceConfig,
 }
 
 impl CollabPersistenceTest {
-  pub fn new(config: Config) -> Self {
+  pub fn new(config: CollabPersistenceConfig) -> Self {
     setup_log();
     let tempdir = TempDir::new().unwrap();
     let db_path = tempdir.into_path();
@@ -162,7 +162,7 @@ impl CollabPersistenceTest {
         let updates = self
           .disk_plugin
           .read_txn()
-          .get_updates(self.uid, &id)
+          .get_decoded_v1_updates(self.uid, &id)
           .unwrap();
         assert_eq!(updates.len(), expected)
       },
@@ -188,7 +188,7 @@ impl CollabPersistenceTest {
         let json = collab.lock().to_json_value();
         assert_json_diff::assert_json_eq!(json, expected);
       },
-      Script::ValidateSnapshot { id, snapshot_index } => {
+      Script::ValidateSnapshotUpdateKey { id, snapshot_index } => {
         let snapshots = self.disk_plugin.get_snapshots(&id);
         let snapshot = snapshots.get(snapshot_index).unwrap();
         let key = self

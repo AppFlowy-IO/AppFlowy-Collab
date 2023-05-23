@@ -1,22 +1,24 @@
+use dotenv::dotenv;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::RwLock;
-
+use crate::cloud_storage::aws::script::TestScript::*;
+use crate::cloud_storage::aws::script::{make_id, AWSStorageTest};
+use crate::util::generate_random_string;
+use collab_plugins::cloud_storage::aws::is_enable_aws_dynamodb;
 use nanoid::nanoid;
 use serde_json::{json, Map, Value};
+use tokio::sync::RwLock;
 
-use crate::cloud_storage::script::TestScript::*;
-use crate::cloud_storage::script::{make_id, CloudStorageTest};
-use crate::cloud_storage::util::{generate_random_string, is_enable_aws_test};
-
+/// ⚠️run this test, it will alter the remote table
 #[tokio::test]
 async fn collab_with_aws_plugin_test() {
-  if !is_enable_aws_test().await {
+  dotenv().ok();
+  if !is_enable_aws_dynamodb().await {
     return;
   }
   let object_id = nanoid!(5);
-  let mut test = CloudStorageTest::new();
+  let mut test = AWSStorageTest::new();
   println!("object_id: {}", object_id);
   test
     .run_scripts(vec![
@@ -68,18 +70,20 @@ async fn collab_with_aws_plugin_test() {
     .await;
 }
 
+/// ⚠️run this test, it will alter the remote table
 #[tokio::test]
 async fn single_client_edit_aws_doc_10_times_test() {
-  if !is_enable_aws_test().await {
+  dotenv().ok();
+  if !is_enable_aws_dynamodb().await {
     return;
   }
   let object_id = nanoid!(5);
-  let mut test = CloudStorageTest::new();
+  let mut test = AWSStorageTest::new();
   test
     .run_scripts(vec![CreateCollab {
       uid: 1,
       object_id: object_id.clone(),
-      sync_per_secs: 2,
+      sync_per_secs: 1,
     }])
     .await;
   let mut map = Map::new();
@@ -113,14 +117,16 @@ async fn single_client_edit_aws_doc_10_times_test() {
     .await;
 }
 
+/// ⚠️run this test, it will alter the remote table
 // Two clients edit the same doc
 #[tokio::test]
 async fn multi_clients_edit_aws_doc_10_times_test() {
-  if !is_enable_aws_test().await {
+  dotenv().ok();
+  if !is_enable_aws_dynamodb().await {
     return;
   }
   let object_id = nanoid!(5);
-  let test = Arc::new(RwLock::new(CloudStorageTest::new()));
+  let test = Arc::new(RwLock::new(AWSStorageTest::new()));
   test
     .write()
     .await

@@ -41,14 +41,24 @@ where
     K2: Into<Vec<u8>>,
     T: ReadTxn,
   {
-    let data = try_encode_snapshot(txn)?;
-    if data.is_empty() {
-      tracing::warn!("🟡unexpected empty snapshot for object_id: {:?}", object_id);
-      return Ok(());
+    match try_encode_snapshot(txn) {
+      Ok(data) => {
+        if data.is_empty() {
+          tracing::warn!("🟡unexpected empty snapshot for object_id: {:?}", object_id);
+          return Ok(());
+        }
+        tracing::trace!("New snapshot for object:{:?}", object_id);
+        let snapshot_id = self.create_snapshot_id(uid, object_id.as_ref())?;
+        insert_snapshot_update(self, update_key, snapshot_id, object_id, data)?;
+      },
+      Err(e) => {
+        tracing::error!(
+          "🔴failed to encode snapshot for object_id: {:?}, error: {:?}",
+          object_id,
+          e
+        );
+      },
     }
-
-    let snapshot_id = self.create_snapshot_id(uid, object_id.as_ref())?;
-    insert_snapshot_update(self, update_key, snapshot_id, object_id, data)?;
     Ok(())
   }
 
@@ -137,12 +147,12 @@ where
 
 fn try_encode_snapshot<T: ReadTxn>(txn: &T) -> Result<Vec<u8>, PersistenceError> {
   let snapshot = txn.snapshot();
-  let mut encoder = EncoderV1::new();
   let mut encoded_data = vec![];
   match {
     let mut wrapper = AssertUnwindSafe(&mut encoded_data);
     let wrapper_txn = AssertUnwindSafe(txn);
     panic::catch_unwind(move || {
+      let mut encoder = EncoderV1::new();
       wrapper_txn
         .encode_state_from_snapshot(&snapshot, &mut encoder)
         .unwrap();
