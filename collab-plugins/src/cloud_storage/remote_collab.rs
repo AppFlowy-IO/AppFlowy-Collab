@@ -63,10 +63,9 @@ impl RemoteCollab {
       while let Some(message) = stream.recv().await {
         if let Some(storage) = weak_storage.upgrade() {
           if let Ok((msg_id, payload)) = message.into_payload() {
-            tracing::trace!("send update: {}", msg_id);
             match storage.send_update(msg_id, payload).await {
               Ok(_) => {
-                tracing::trace!("ack update: {}", msg_id);
+                tracing::debug!("ack update: {}", msg_id);
                 if let Some(sink) = weak_sink.upgrade() {
                   sink.ack_msg(msg_id).await;
                 }

@@ -37,9 +37,9 @@ impl PostgresDB {
       .insert_header("Authorization", auth);
     let postgrest = Arc::new(postgrest);
 
-    let storage = CollabCloudStorageImpl {
+    let storage = PGCollabCloudStorageImpl {
       postgrest: postgrest.clone(),
-      table_name: config.update_table_config.table_name,
+      table_name: config.collab_table_config.table_name,
       object_id: object_id.clone(),
     };
 
@@ -65,14 +65,14 @@ impl PostgresDB {
   }
 }
 
-struct CollabCloudStorageImpl {
+struct PGCollabCloudStorageImpl {
   postgrest: Arc<Postgrest>,
   table_name: String,
   object_id: String,
 }
 
 #[async_trait]
-impl RemoteCollabStorage for CollabCloudStorageImpl {
+impl RemoteCollabStorage for PGCollabCloudStorageImpl {
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, Error> {
     let response = self
       .postgrest
@@ -103,6 +103,11 @@ impl RemoteCollabStorage for CollabCloudStorageImpl {
   }
 
   async fn send_update(&self, _id: MsgId, update: Vec<u8>) -> Result<(), Error> {
+    tracing::debug!(
+      "postgres db: send update: {}:{:?}",
+      self.object_id,
+      update.len()
+    );
     if update.is_empty() {
       tracing::warn!("🟡Unexpected empty update");
       return Ok(());

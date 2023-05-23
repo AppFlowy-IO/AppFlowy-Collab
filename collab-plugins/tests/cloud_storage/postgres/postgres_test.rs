@@ -8,7 +8,7 @@ use serde_json::json;
 #[tokio::test]
 async fn create_doc_test() {
   dotenv().ok();
-  if let Ok(config) = SupabaseDBConfig::from_env() {
+  if let Some(config) = SupabaseDBConfig::from_env() {
     let mut test = PostgresStorageTest::new();
     let object_id = nanoid!(10);
     test
@@ -51,7 +51,7 @@ async fn create_doc_test() {
 #[tokio::test]
 async fn create_multi_docs_test() {
   dotenv().ok();
-  if let Ok(config) = SupabaseDBConfig::from_env() {
+  if let Some(config) = SupabaseDBConfig::from_env() {
     let mut test = PostgresStorageTest::new();
     let object_id_1 = nanoid!(10);
     let object_id_2 = nanoid!(10);
@@ -117,3 +117,21 @@ async fn create_multi_docs_test() {
       .await;
   }
 }
+
+// #[tokio::test]
+// async fn create_doc_test2() {
+//   dotenv().ok();
+//   if let Some(config) = SupabaseDBConfig::from_env() {
+//     let mut test = PostgresStorageTest::new();
+//     test
+//       .run_scripts(vec![
+//         AssertRemote {
+//           object_id: "nqzluJ2Z1H".to_string(),
+//           expected: json!(""),
+//           config,
+//         },
+//         Wait { secs: 2 },
+//       ])
+//       .await;
+//   }
+// }
