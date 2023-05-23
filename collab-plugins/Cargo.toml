@@ -50,7 +50,7 @@ dotenv = "0.15.0"
 
 
 [features]
-default = []
+default = ["postgres_storage", "disk_rocksdb"]
 sync = ["collab-sync"]
 disk_rocksdb = ["collab-sync", "collab-persistence/rocksdb_db"]
 disk_sled = ["collab-persistence"]

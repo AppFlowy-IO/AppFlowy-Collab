@@ -3,6 +3,11 @@ use std::str::FromStr;
 use collab_plugins::cloud_storage::postgres::SupabaseDBConfig;
 use serde::{Deserialize, Serialize};
 
+pub enum CollabDBPluginProvider {
+  AWS,
+  Supabase,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct CollabPluginConfig {
   /// Only one of the following two fields should be set.
@@ -11,35 +16,21 @@ pub struct CollabPluginConfig {
 }
 
 impl CollabPluginConfig {
+  pub fn from_env() -> Self {
+    let aws_config = AWSDynamoDBConfig::from_env();
+    let supabase_config = SupabaseDBConfig::from_env();
+    Self {
+      aws_config,
+      supabase_config,
+    }
+  }
+
   pub fn aws_config(&self) -> Option<&AWSDynamoDBConfig> {
     self.aws_config.as_ref()
   }
 
-  pub fn set_aws_config(&mut self, aws_config: AWSDynamoDBConfig) -> Result<(), anyhow::Error> {
-    if self.supabase_config.is_some() {
-      return Err(anyhow::anyhow!(
-        "Only one of the following two fields should be set: aws_config, supabase_config"
-      ));
-    }
-    self.aws_config = Some(aws_config);
-    Ok(())
-  }
-
   pub fn supabase_config(&self) -> Option<&SupabaseDBConfig> {
     self.supabase_config.as_ref()
-  }
-
-  pub fn set_supabase_config(
-    &mut self,
-    supabase_config: SupabaseDBConfig,
-  ) -> Result<(), anyhow::Error> {
-    if self.aws_config.is_some() {
-      return Err(anyhow::anyhow!(
-        "Only one of the following two fields should be set: aws_config, supabase_config"
-      ));
-    }
-    self.supabase_config = Some(supabase_config);
-    Ok(())
   }
 }
 

@@ -19,12 +19,12 @@ pub struct SupabaseDBConfig {
 }
 
 impl SupabaseDBConfig {
-  pub fn from_env() -> Result<Self, anyhow::Error> {
-    Ok(Self {
-      url: std::env::var(SUPABASE_URL)?,
-      key: std::env::var(SUPABASE_KEY)?,
-      jwt_secret: std::env::var(SUPABASE_JWT_SECRET)?,
-      update_table_config: UpdateTableConfig::from_env()?,
+  pub fn from_env() -> Option<Self> {
+    Some(Self {
+      url: std::env::var(SUPABASE_URL).ok()?,
+      key: std::env::var(SUPABASE_KEY).ok()?,
+      jwt_secret: std::env::var(SUPABASE_JWT_SECRET).ok()?,
+      update_table_config: UpdateTableConfig::from_env().ok()?,
     })
   }
 
