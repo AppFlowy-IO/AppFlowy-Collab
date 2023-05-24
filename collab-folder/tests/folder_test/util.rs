@@ -63,7 +63,7 @@ pub fn create_folder_with_workspace(id: &str, workspace_id: &str) -> FolderTest 
   let workspace = Workspace {
     id: workspace_id.to_string(),
     name: "My first workspace".to_string(),
-    belongings: Default::default(),
+    child_views: Default::default(),
     created_at: 123,
   };
 

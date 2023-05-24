@@ -130,7 +130,7 @@ impl RemoteCollab {
         {
           // Don't use the with_transact_mut here, because it carries the origin information. So
           // the update will consider as a local update. But here is apply the remote update.
-          // TODO: Will define a sync protocol for cloud storage.
+          // TODO: nathan define a sync protocol for cloud storage.
           tracing::trace!(
             "{}: apply remote update with len:{}",
             self.object,

@@ -7,7 +7,7 @@ fn folder_json_serde() {
   let folder_test = create_folder("1");
   assert_json_diff::assert_json_eq!(
     json!({
-      "children": {},
+      "relation": {},
       "meta": {},
       "trash": [],
       "views": {},
@@ -29,14 +29,14 @@ fn workspace_json_serde() {
   let workspace = Workspace {
     id: "w1".to_string(),
     name: "My first workspace".to_string(),
-    belongings,
+    child_views: belongings,
     created_at: 123,
   };
 
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(
     json!({
-      "children": {
+      "relation": {
         "w1": [
           {
             "id": "v1",
@@ -75,7 +75,7 @@ fn view_json_serde() {
   let workspace = Workspace {
     id: "w1".to_string(),
     name: "My first workspace".to_string(),
-    belongings,
+    child_views: belongings,
     created_at: 123,
   };
 
@@ -87,7 +87,7 @@ fn view_json_serde() {
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(
     json!({
-      "children": {
+      "relation": {
         "v1": [],
         "v2": [],
         "w1": [
@@ -145,7 +145,7 @@ fn child_view_json_serde() {
   let workspace = Workspace {
     id: "w1".to_string(),
     name: "My first workspace".to_string(),
-    belongings,
+    child_views: belongings,
     created_at: 123,
   };
 
@@ -161,7 +161,7 @@ fn child_view_json_serde() {
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(
     json!({
-      "children": {
+      "relation": {
         "v1": [],
         "v2": [
           {

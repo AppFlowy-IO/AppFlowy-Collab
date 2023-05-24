@@ -20,7 +20,7 @@ const WORKSPACES: &str = "workspaces";
 const VIEWS: &str = "views";
 const TRASH: &str = "trash";
 const META: &str = "meta";
-const CHILDREN: &str = "children";
+const VIEW_RELATION: &str = "relation";
 const CURRENT_WORKSPACE: &str = "current_workspace";
 const CURRENT_VIEW: &str = "current_view";
 
@@ -123,7 +123,7 @@ impl Folder {
   pub fn get_workspace_views_with_txn<T: ReadTxn>(&self, txn: &T, workspace_id: &str) -> Vec<View> {
     if let Some(workspace) = self.workspaces.get_workspace(workspace_id) {
       let view_ids = workspace
-        .belongings
+        .child_views
         .into_inner()
         .into_iter()
         .map(|be| be.id)
@@ -255,7 +255,7 @@ impl WorkspaceArray {
           update
             .set_name(workspace.name)
             .set_created_at(workspace.created_at)
-            .set_children(workspace.belongings);
+            .set_children(workspace.child_views);
         });
 
         let map_ref = MapRefWrapper::new(map_ref.clone(), self.container.collab_ctx.clone());
@@ -304,7 +304,9 @@ fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
       let trash = folder.insert_array_with_txn::<TrashRecord>(txn, TRASH, vec![]);
       let meta = folder.insert_map_with_txn(txn, META);
 
-      let children_map = Rc::new(ChildrenMap::new(folder.insert_map_with_txn(txn, CHILDREN)));
+      let children_map = Rc::new(ChildrenMap::new(
+        folder.insert_map_with_txn(txn, VIEW_RELATION),
+      ));
       let workspaces = WorkspaceArray::new(txn, workspaces, children_map.clone());
       let views = Rc::new(ViewsMap::new(
         views,
@@ -360,7 +362,7 @@ fn get_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
     .unwrap();
 
   let children_map = collab_guard
-    .get_map_with_txn(&txn, vec![FOLDER, CHILDREN])
+    .get_map_with_txn(&txn, vec![FOLDER, VIEW_RELATION])
     .unwrap();
   let children_map = Rc::new(ChildrenMap::new(children_map));
 

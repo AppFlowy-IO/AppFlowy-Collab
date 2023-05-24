@@ -29,6 +29,8 @@ type AfterTransactionSubscription = Subscription<Arc<dyn Fn(&mut TransactionMut)
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 pub type MapSubscription = Subscription<MapSubscriptionCallback>;
 
+pub enum CollabState {}
+
 /// A [Collab] is a wrapper around a [Doc] and [Awareness] that provides a set
 /// of helper methods for interacting with the [Doc] and [Awareness]. The [MutexCollab]
 /// is a thread-safe wrapper around the [Collab].

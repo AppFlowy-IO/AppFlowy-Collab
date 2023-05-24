@@ -81,7 +81,7 @@ impl WorkspaceMap {
       .get_i64_with_txn(txn, WORKSPACE_CREATED_AT)
       .unwrap_or_default();
 
-    let belongings = self
+    let child_views = self
       .belongings
       .get_children_with_txn(txn, &id)
       .map(|array| array.get_children())
@@ -90,7 +90,7 @@ impl WorkspaceMap {
     Some(Workspace {
       id,
       name,
-      belongings,
+      child_views,
       created_at,
     })
   }
@@ -100,7 +100,7 @@ impl WorkspaceMap {
 pub struct Workspace {
   pub id: String,
   pub name: String,
-  pub belongings: ChildViews,
+  pub child_views: ChildViews,
   pub created_at: i64,
 }
 

@@ -14,7 +14,7 @@ fn create_workspace_test() {
   let o_workspace = Workspace {
     id: "1".to_string(),
     name: "My first workspace".to_string(),
-    belongings,
+    child_views: belongings,
     created_at: 123,
   };
 
@@ -23,7 +23,7 @@ fn create_workspace_test() {
 
   assert_eq!(o_workspace.name, r_workspace.name);
   assert_eq!(o_workspace.id, r_workspace.id);
-  assert_eq!(o_workspace.belongings, r_workspace.belongings);
+  assert_eq!(o_workspace.child_views, r_workspace.child_views);
 }
 
 #[test]
@@ -32,7 +32,7 @@ fn update_workspace_test() {
   let workspace = Workspace {
     id: "1".to_string(),
     name: "My first workspace".to_string(),
-    belongings: ChildViews {
+    child_views: ChildViews {
       items: vec![
         ChildView::new("1".to_string()),
         ChildView::new("2".to_string()),
@@ -50,8 +50,8 @@ fn update_workspace_test() {
   // folder_test.workspaces.
   let workspace = folder_test.workspaces.get_workspace("1").unwrap();
   assert_eq!(workspace.name, "New workspace");
-  assert_eq!(workspace.belongings.len(), 1);
-  assert_eq!(workspace.belongings[0].id, "2");
+  assert_eq!(workspace.child_views.len(), 1);
+  assert_eq!(workspace.child_views[0].id, "2");
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn get_all_workspace_test() {
     let workspace = Workspace {
       id: i.to_string(),
       name: format!("My {} workspace", i),
-      belongings: Default::default(),
+      child_views: Default::default(),
       created_at: 123,
     };
     folder_test.workspaces.create_workspace(workspace);
@@ -78,7 +78,7 @@ fn delete_workspace_test() {
     let workspace = Workspace {
       id: i.to_string(),
       name: format!("My {} workspace", i),
-      belongings: Default::default(),
+      child_views: Default::default(),
       created_at: 123,
     };
     folder_test.workspaces.create_workspace(workspace);
