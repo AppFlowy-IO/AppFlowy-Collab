@@ -9,16 +9,19 @@ use tokio::spawn;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tokio::time::{interval, Instant, Interval};
 
-use crate::client::pending_msg::{PendingMsgQueue, TaskState};
+use crate::client::pending_msg::{MessageState, PendingMsgQueue};
 use crate::client::sync::DEFAULT_SYNC_TIMEOUT;
 use crate::error::SyncError;
 
-pub trait SinkMessage: Clone + Send + Sync + 'static + Ord + Display {
+pub trait CollabSinkMessage: Clone + Send + Sync + 'static + Ord + Display {
   /// Returns the length of the message in bytes.
   fn length(&self) -> usize;
   /// Returns true if the message can be merged with other messages.
   /// Check the implementation of `queue_or_merge_msg` for more details.
-  fn can_merge(&self) -> bool;
+  fn mergeable(&self) -> bool;
+
+  /// Determine if the message can be deferred base on the current state of the sink.
+  fn deferrable(&self) -> bool;
 }
 
 /// Use to sync the [Msg] to the remote.
@@ -50,7 +53,7 @@ impl<E, Sink, Msg> CollabSink<Sink, Msg>
 where
   E: std::error::Error + Send + Sync + 'static,
   Sink: SinkExt<Msg, Error = E> + Send + Sync + Unpin + 'static,
-  Msg: SinkMessage,
+  Msg: CollabSinkMessage,
 {
   pub fn new<C>(
     sink: Sink,
@@ -87,7 +90,11 @@ where
     }
   }
 
-  /// Put the message into the queue and notify the sink to process the next message
+  /// Put the message into the queue and notify the sink to process the next message.
+  /// After the [Msg] was pushed into the [PendingMsgQueue]. The queue will pop the next msg base on
+  /// its priority. And the message priority is determined by the [Msg] that implement the [Ord] and
+  /// [PartialOrd] trait. Check out the [CollabMessage] for more details.
+  ///
   pub fn queue_msg(&self, f: impl FnOnce(MsgId) -> Msg) {
     {
       let mut pending_msgs = self.pending_msgs.lock();
@@ -101,6 +108,10 @@ where
   }
 
   /// Queue the message or merge it with the previous message if possible.
+  /// After the [Msg] was pushed into the [PendingMsgQueue]. The queue will pop the next msg base on
+  /// its priority. And the message priority is determined by the [Msg] that implement the [Ord] and
+  /// [PartialOrd] trait. Check out the [CollabMessage] for more details.
+  ///  
   pub fn queue_or_merge_msg(
     &self,
     merge: impl FnOnce(&mut Msg) -> Result<(), SyncError>,
@@ -113,7 +124,7 @@ where
         // Otherwise, just queue the new message.
         if prev.state().is_pending() {
           let prev_msg = prev.get_mut_msg();
-          if prev_msg.can_merge() && merge(prev_msg).is_ok() {
+          if prev_msg.mergeable() && merge(prev_msg).is_ok() {
             tracing::trace!("Did merge new message, len: {}", prev_msg.length());
             return;
           }
@@ -132,13 +143,32 @@ where
   pub async fn ack_msg(&self, msg_id: MsgId) {
     if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {
       if pending_msg.msg_id() == msg_id {
-        pending_msg.set_state(TaskState::Done);
+        pending_msg.set_state(MessageState::Done);
       }
     }
     self.notify();
   }
 
   async fn process_next_msg(&self) -> Result<(), SyncError> {
+    // Check if the next message can be deferred. If not, try to send the message immediately. The
+    // default value is true.
+    let deferrable = self
+      .pending_msgs
+      .try_lock()
+      .map(|pending_msgs| {
+        pending_msgs
+          .peek()
+          .map(|msg| msg.get_msg().deferrable())
+          .unwrap_or(true)
+      })
+      .unwrap_or(true);
+
+    if !deferrable {
+      return self.try_send_next_msg().await;
+    }
+
+    // Check the elapsed time from the last message. Return if the elapsed time is less than
+    // the fix interval.
     if let SinkStrategy::FixInterval(duration) = &self.config.strategy {
       let elapsed = self.instant.lock().await.elapsed();
       // tracing::trace!(
@@ -151,10 +181,15 @@ where
       }
     }
 
+    // Reset the instant if the strategy is [SinkStrategy::FixInterval].
     if self.config.strategy.is_fix_interval() {
       *self.instant.lock().await = Instant::now();
     }
 
+    self.try_send_next_msg().await
+  }
+
+  async fn try_send_next_msg(&self) -> Result<(), SyncError> {
     let pending_msg = match self.pending_msgs.try_lock() {
       None => {
         // If acquire the lock failed, try to notify again after 100ms
@@ -185,11 +220,11 @@ where
 
         // Update the pending message's msg_id and send the message.
         let (tx, rx) = oneshot::channel();
-        pending_msg.set_state(TaskState::Processing);
+        pending_msg.set_state(MessageState::Processing);
         pending_msg.set_ret(tx);
 
         // Push back the pending message to the queue.
-        let collab_msg = pending_msg.msg();
+        let collab_msg = pending_msg.get_msg();
         self.pending_msgs.lock().push(pending_msg);
 
         let mut sender = self.sender.lock().await;
@@ -205,7 +240,7 @@ where
           Ok(_) => self.notify(),
           Err(_) => {
             if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {
-              pending_msg.set_state(TaskState::Timeout);
+              pending_msg.set_state(MessageState::Timeout);
             }
             self.notify();
           },
@@ -239,7 +274,7 @@ impl<Msg> CollabSinkRunner<Msg> {
   ) where
     E: std::error::Error + Send + Sync + 'static,
     Sink: SinkExt<Msg, Error = E> + Send + Sync + Unpin + 'static,
-    Msg: SinkMessage,
+    Msg: CollabSinkMessage,
   {
     weak_sink.upgrade().unwrap().notify();
     loop {

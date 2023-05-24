@@ -2,7 +2,7 @@ use bytes::Bytes;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
-use crate::client::sink::{MsgId, SinkMessage};
+use crate::client::sink::{CollabSinkMessage, MsgId};
 use collab::core::origin::CollabOrigin;
 use serde::{Deserialize, Serialize};
 
@@ -19,13 +19,18 @@ pub enum CollabMessage {
   ServerAck(CSServerAck),
 }
 
-impl SinkMessage for CollabMessage {
+impl CollabSinkMessage for CollabMessage {
   fn length(&self) -> usize {
     self.payload().map(|p| p.len()).unwrap_or(0)
   }
 
-  fn can_merge(&self) -> bool {
+  fn mergeable(&self) -> bool {
     false
+  }
+
+  fn deferrable(&self) -> bool {
+    // If the message is not init, it can be pending.
+    !self.is_init()
   }
 }
 

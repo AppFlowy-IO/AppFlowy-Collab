@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab_sync::client::sink::{
-  CollabSink, CollabSinkRunner, MsgId, MsgIdCounter, SinkConfig, SinkMessage,
+  CollabSink, CollabSinkMessage, CollabSinkRunner, MsgId, MsgIdCounter, SinkConfig,
 };
 use collab_sync::client::TokioUnboundedSink;
 use parking_lot::Mutex;
@@ -134,7 +134,12 @@ impl RemoteCollab {
       self.collab.lock().with_transact_mut(|txn| {
         txn.apply_update(update);
       });
-      self.push_update(&encode_update);
+
+      self.sink.queue_msg(|msg_id| Message {
+        object_id: self.object_id.clone(),
+        payloads: vec![encode_update],
+        meta: MessageMeta::Init(msg_id),
+      });
     }
   }
 
@@ -146,17 +151,37 @@ impl RemoteCollab {
       },
       |msg_id| Message {
         object_id: self.object_id.clone(),
-        msg_id,
         payloads: vec![update.to_vec()],
+        meta: MessageMeta::Update(msg_id),
       },
     );
   }
 }
 
 #[derive(Clone, Debug)]
+pub enum MessageMeta {
+  Init(MsgId),
+  Update(MsgId),
+}
+
+impl MessageMeta {
+  pub fn msg_id(&self) -> &MsgId {
+    match self {
+      Self::Init(msg_id) => msg_id,
+      Self::Update(msg_id) => msg_id,
+    }
+  }
+
+  pub fn is_init(&self) -> bool {
+    matches!(self, Self::Init(_))
+  }
+}
+
+/// A message that is sent to the remote.
+#[derive(Clone, Debug)]
 struct Message {
   object_id: String,
-  msg_id: MsgId,
+  meta: MessageMeta,
   payloads: Vec<Vec<u8>>,
 }
 
@@ -176,17 +201,26 @@ impl Message {
       .map(|update| update.as_ref())
       .collect::<Vec<&[u8]>>();
     let update = merge_updates_v1(&updates)?;
-    Ok((self.msg_id, update))
+    let msg_id = *self.meta.msg_id();
+    Ok((msg_id, update))
   }
 }
 
-impl SinkMessage for Message {
+impl CollabSinkMessage for Message {
   fn length(&self) -> usize {
     self.payload_len()
   }
 
-  fn can_merge(&self) -> bool {
-    self.payload_len() < 1024
+  fn mergeable(&self) -> bool {
+    match self.meta {
+      MessageMeta::Init(_) => false,
+      MessageMeta::Update(_) => self.payload_len() < 1024,
+    }
+  }
+
+  fn deferrable(&self) -> bool {
+    // If the message is not init message, it can be pending.
+    !self.meta.is_init()
   }
 }
 
@@ -194,7 +228,7 @@ impl Eq for Message {}
 
 impl PartialEq for Message {
   fn eq(&self, other: &Self) -> bool {
-    self.msg_id == other.msg_id
+    self.meta.msg_id() == other.meta.msg_id()
   }
 }
 
@@ -206,7 +240,13 @@ impl PartialOrd for Message {
 
 impl Ord for Message {
   fn cmp(&self, other: &Self) -> Ordering {
-    self.msg_id.cmp(&other.msg_id).reverse()
+    // Init message has higher priority than update message.
+    match (&self.meta, &other.meta) {
+      (MessageMeta::Init(a), MessageMeta::Init(b)) => a.cmp(b),
+      (MessageMeta::Init(_), MessageMeta::Update(_)) => Ordering::Greater,
+      (MessageMeta::Update(..), MessageMeta::Init(_)) => Ordering::Less,
+      (MessageMeta::Update(a), MessageMeta::Update(b)) => a.cmp(b),
+    }
   }
 }
 
@@ -215,7 +255,7 @@ impl Display for Message {
     f.write_fmt(format_args!(
       "send {} update: [msg_id:{}|payload_len:{}]",
       self.object_id,
-      self.msg_id,
+      self.meta.msg_id(),
       self.payload_len(),
     ))
   }
