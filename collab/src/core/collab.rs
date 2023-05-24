@@ -54,6 +54,10 @@ pub struct Collab {
 
   is_initialized: AtomicBool,
 
+  /// Just binding the data_subscription to the [Collab] struct to prevent it from
+  /// being dropped.
+  #[allow(dead_code)]
+  data_subscription: MapSubscription,
   update_subscription: RwLock<Option<UpdateSubscription>>,
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
 }
@@ -74,9 +78,15 @@ impl Collab {
       skip_gc: true,
       ..Options::default()
     });
-    let data = doc.get_or_insert_map(DATA_SECTION);
+    let mut data = doc.get_or_insert_map(DATA_SECTION);
     let plugins = Plugins::new(plugins);
     let awareness = Awareness::new(doc.clone());
+    let data_subscription = data.observe(|_txn, _event| {
+      // event.target().iter(txn).for_each(|(a, b)| {
+      //   tracing::trace!("folder data event: {}:{:?}", a, b);
+      // });
+    });
+
     Self {
       origin,
       object_id,
@@ -85,6 +95,7 @@ impl Collab {
       data,
       plugins,
       is_initialized: AtomicBool::new(false),
+      data_subscription,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
     }

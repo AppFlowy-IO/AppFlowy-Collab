@@ -1,5 +1,5 @@
 use crate::util::{create_folder, make_test_view};
-use collab_folder::core::{Belonging, Belongings, Workspace};
+use collab_folder::core::{ChildView, ChildViews, Workspace};
 use serde_json::json;
 
 #[test]
@@ -7,7 +7,7 @@ fn folder_json_serde() {
   let folder_test = create_folder("1");
   assert_json_diff::assert_json_eq!(
     json!({
-      "Belongings": {},
+      "children": {},
       "meta": {},
       "trash": [],
       "views": {},
@@ -20,10 +20,10 @@ fn folder_json_serde() {
 #[test]
 fn workspace_json_serde() {
   let folder_test = create_folder("1");
-  let belongings = Belongings {
+  let belongings = ChildViews {
     items: vec![
-      Belonging::new("v1".to_string()),
-      Belonging::new("v2".to_string()),
+      ChildView::new("v1".to_string()),
+      ChildView::new("v2".to_string()),
     ],
   };
   let workspace = Workspace {
@@ -36,7 +36,7 @@ fn workspace_json_serde() {
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(
     json!({
-      "Belongings": {
+      "children": {
         "w1": [
           {
             "id": "v1",
@@ -66,10 +66,10 @@ fn workspace_json_serde() {
 #[test]
 fn view_json_serde() {
   let folder_test = create_folder("1");
-  let belongings = Belongings {
+  let belongings = ChildViews {
     items: vec![
-      Belonging::new("v1".to_string()),
-      Belonging::new("v2".to_string()),
+      ChildView::new("v1".to_string()),
+      ChildView::new("v2".to_string()),
     ],
   };
   let workspace = Workspace {
@@ -87,7 +87,7 @@ fn view_json_serde() {
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(
     json!({
-      "Belongings": {
+      "children": {
         "v1": [],
         "v2": [],
         "w1": [
@@ -107,7 +107,6 @@ fn view_json_serde() {
         "v1": {
           "bid": "w1",
           "created_at": 0,
-          "database_id": null,
           "desc": "",
           "id": "v1",
           "layout": 0,
@@ -116,7 +115,6 @@ fn view_json_serde() {
         "v2": {
           "bid": "w1",
           "created_at": 0,
-          "database_id": null,
           "desc": "",
           "id": "v2",
           "layout": 0,
@@ -138,10 +136,10 @@ fn view_json_serde() {
 #[test]
 fn child_view_json_serde() {
   let folder_test = create_folder("1");
-  let belongings = Belongings {
+  let belongings = ChildViews {
     items: vec![
-      Belonging::new("v1".to_string()),
-      Belonging::new("v2".to_string()),
+      ChildView::new("v1".to_string()),
+      ChildView::new("v2".to_string()),
     ],
   };
   let workspace = Workspace {
@@ -163,7 +161,7 @@ fn child_view_json_serde() {
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(
     json!({
-      "Belongings": {
+      "children": {
         "v1": [],
         "v2": [
           {
@@ -194,7 +192,6 @@ fn child_view_json_serde() {
         "v1": {
           "bid": "w1",
           "created_at": 0,
-          "database_id": null,
           "desc": "",
           "id": "v1",
           "layout": 0,
@@ -203,7 +200,6 @@ fn child_view_json_serde() {
         "v2": {
           "bid": "w1",
           "created_at": 0,
-          "database_id": null,
           "desc": "",
           "id": "v2",
           "layout": 0,
@@ -212,7 +208,6 @@ fn child_view_json_serde() {
         "v2.1": {
           "bid": "v2",
           "created_at": 0,
-          "database_id": null,
           "desc": "",
           "id": "v2.1",
           "layout": 0,
@@ -221,7 +216,6 @@ fn child_view_json_serde() {
         "v2.2": {
           "bid": "v2",
           "created_at": 0,
-          "database_id": null,
           "desc": "",
           "id": "v2.2",
           "layout": 0,

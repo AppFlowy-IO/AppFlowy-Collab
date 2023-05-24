@@ -1,14 +1,14 @@
 use crate::util::create_folder;
-use collab_folder::core::{Belonging, Belongings, Workspace};
+use collab_folder::core::{ChildView, ChildViews, Workspace};
 
 #[test]
 fn create_workspace_test() {
   let folder_test = create_folder("1");
 
-  let belongings = Belongings {
+  let belongings = ChildViews {
     items: vec![
-      Belonging::new("1".to_string()),
-      Belonging::new("2".to_string()),
+      ChildView::new("1".to_string()),
+      ChildView::new("2".to_string()),
     ],
   };
   let o_workspace = Workspace {
@@ -32,10 +32,10 @@ fn update_workspace_test() {
   let workspace = Workspace {
     id: "1".to_string(),
     name: "My first workspace".to_string(),
-    belongings: Belongings {
+    belongings: ChildViews {
       items: vec![
-        Belonging::new("1".to_string()),
-        Belonging::new("2".to_string()),
+        ChildView::new("1".to_string()),
+        ChildView::new("2".to_string()),
       ],
     },
     created_at: 123,
@@ -44,7 +44,7 @@ fn update_workspace_test() {
   folder_test.workspaces.create_workspace(workspace);
   let workspace_map = folder_test.workspaces.edit_workspace("1").unwrap();
   workspace_map.update(|update| {
-    update.set_name("New workspace").delete_belongings(0);
+    update.set_name("New workspace").delete_child(0);
   });
 
   // folder_test.workspaces.

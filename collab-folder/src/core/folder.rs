@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use collab::core::array_wrapper::ArrayRefExtension;
-use collab::core::collab::{MapSubscription, MutexCollab};
+use collab::core::collab::MutexCollab;
 use collab::preclude::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::core::folder_observe::{TrashChangeSender, ViewChangeSender};
 use crate::core::trash::{TrashArray, TrashRecord};
 use crate::core::{
-  subscribe_folder_change, Belonging, BelongingMap, FolderData, View, ViewsMap, Workspace,
+  subscribe_folder_change, ChildView, ChildrenMap, FolderData, View, ViewsMap, Workspace,
   WorkspaceMap,
 };
 
@@ -20,7 +20,7 @@ const WORKSPACES: &str = "workspaces";
 const VIEWS: &str = "views";
 const TRASH: &str = "trash";
 const META: &str = "meta";
-const BELONGINGS: &str = "Belongings";
+const CHILDREN: &str = "children";
 const CURRENT_WORKSPACE: &str = "current_workspace";
 const CURRENT_VIEW: &str = "current_view";
 
@@ -35,13 +35,12 @@ pub struct Folder {
   root: MapRefWrapper,
   pub workspaces: WorkspaceArray,
   pub views: Rc<ViewsMap>,
-  pub belongings: Rc<BelongingMap>,
+  pub children_map: Rc<ChildrenMap>,
   pub trash: TrashArray,
   pub meta: MapRefWrapper,
+  /// Subscription for folder change. Like insert a new view
   #[allow(dead_code)]
   folder_sub: DeepEventsSubscription,
-  #[allow(dead_code)]
-  data_sub: MapSubscription,
 }
 
 impl Folder {
@@ -140,7 +139,7 @@ impl Folder {
       if view.bid == workspace_id {
         if let Some(workspace_map) = self.workspaces.edit_workspace(workspace_id) {
           workspace_map.update(|update| {
-            update.add_belongings(vec![Belonging {
+            update.add_children(vec![ChildView {
               id: view.id.clone(),
               name: view.name.clone(),
             }])
@@ -153,7 +152,7 @@ impl Folder {
 
   pub fn move_view(&self, view_id: &str, from: u32, to: u32) -> Option<View> {
     let view = self.views.get_view(view_id)?;
-    self.belongings.move_belonging(&view.bid, from, to);
+    self.children_map.move_child_view(&view.bid, from, to);
     Some(view)
   }
 
@@ -186,15 +185,11 @@ impl Folder {
 pub struct WorkspaceArray {
   container: ArrayRefWrapper,
   workspaces: RwLock<HashMap<String, WorkspaceMap>>,
-  belongings: Rc<BelongingMap>,
+  belongings: Rc<ChildrenMap>,
 }
 
 impl WorkspaceArray {
-  pub fn new<T: ReadTxn>(
-    txn: &T,
-    array_ref: ArrayRefWrapper,
-    belongings: Rc<BelongingMap>,
-  ) -> Self {
+  pub fn new<T: ReadTxn>(txn: &T, array_ref: ArrayRefWrapper, belongings: Rc<ChildrenMap>) -> Self {
     let workspace_maps = array_ref
       .to_map_refs_with_txn(txn)
       .into_iter()
@@ -260,7 +255,7 @@ impl WorkspaceArray {
           update
             .set_name(workspace.name)
             .set_created_at(workspace.created_at)
-            .set_belongings(workspace.belongings);
+            .set_children(workspace.belongings);
         });
 
         let map_ref = MapRefWrapper::new(map_ref.clone(), self.container.collab_ctx.clone());
@@ -298,12 +293,7 @@ impl From<WorkspaceItem> for lib0Any {
 }
 
 fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
-  let mut collab_guard = collab.lock();
-  let data_sub = collab_guard.observer_data(|observer_txn, event| {
-    event.target().iter(observer_txn).for_each(|(a, b)| {
-      tracing::trace!("folder data event: {}:{:?}", a, b.to_json(observer_txn));
-    });
-  });
+  let collab_guard = collab.lock();
 
   let (folder, workspaces, views, trash, meta, belongings, folder_sub) = collab_guard
     .with_transact_mut(|txn| {
@@ -313,18 +303,23 @@ fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
       let views = folder.insert_map_with_txn(txn, VIEWS);
       let trash = folder.insert_array_with_txn::<TrashRecord>(txn, TRASH, vec![]);
       let meta = folder.insert_map_with_txn(txn, META);
-      let belongings = folder.insert_map_with_txn(txn, BELONGINGS);
 
-      let belongings = Rc::new(BelongingMap::new(belongings));
-      let workspaces = WorkspaceArray::new(txn, workspaces, belongings.clone());
+      let children_map = Rc::new(ChildrenMap::new(folder.insert_map_with_txn(txn, CHILDREN)));
+      let workspaces = WorkspaceArray::new(txn, workspaces, children_map.clone());
       let views = Rc::new(ViewsMap::new(
         views,
         context.view_change_tx,
-        belongings.clone(),
+        children_map.clone(),
       ));
       let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx);
       (
-        folder, workspaces, views, trash, meta, belongings, folder_sub,
+        folder,
+        workspaces,
+        views,
+        trash,
+        meta,
+        children_map,
+        folder_sub,
       )
     });
   drop(collab_guard);
@@ -336,9 +331,8 @@ fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
     views,
     trash,
     meta,
-    belongings,
+    children_map: belongings,
     folder_sub,
-    data_sub,
   }
 }
 
@@ -347,16 +341,11 @@ fn is_folder_exist(txn: Transaction, collab: &Collab) -> bool {
 }
 
 fn get_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
-  let mut collab_guard = collab.lock();
-  let data_sub = collab_guard.observer_data(|txn, event| {
-    event.target().iter(txn).for_each(|(a, b)| {
-      tracing::trace!("folder data event: {}:{:?}", a, b);
-    });
-  });
-
+  let collab_guard = collab.lock();
   let txn = collab_guard.transact();
   let mut folder = collab_guard.get_map_with_txn(&txn, vec![FOLDER]).unwrap();
   let folder_sub = subscribe_folder_change(&mut folder, context.view_change_tx.clone());
+  // Folder: [workspaces: [], views: {}, trash: [], meta: {}, children: {}]
   let workspaces = collab_guard
     .get_array_with_txn(&txn, vec![FOLDER, WORKSPACES])
     .unwrap();
@@ -369,16 +358,17 @@ fn get_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
   let meta = collab_guard
     .get_map_with_txn(&txn, vec![FOLDER, META])
     .unwrap();
-  let belongings = collab_guard
-    .get_map_with_txn(&txn, vec![FOLDER, BELONGINGS])
-    .unwrap();
 
-  let belongings = Rc::new(BelongingMap::new(belongings));
-  let workspaces = WorkspaceArray::new(&txn, workspaces, belongings.clone());
+  let children_map = collab_guard
+    .get_map_with_txn(&txn, vec![FOLDER, CHILDREN])
+    .unwrap();
+  let children_map = Rc::new(ChildrenMap::new(children_map));
+
+  let workspaces = WorkspaceArray::new(&txn, workspaces, children_map.clone());
   let views = Rc::new(ViewsMap::new(
     views,
     context.view_change_tx,
-    belongings.clone(),
+    children_map.clone(),
   ));
 
   let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx);
@@ -391,8 +381,7 @@ fn get_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
     views,
     trash,
     meta,
-    belongings,
+    children_map,
     folder_sub,
-    data_sub,
   }
 }

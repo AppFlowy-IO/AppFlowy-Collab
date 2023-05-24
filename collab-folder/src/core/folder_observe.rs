@@ -1,4 +1,4 @@
-use crate::core::{view_from_map_ref, BelongingMap, View};
+use crate::core::{view_from_map_ref, ChildrenMap, View};
 use collab::preclude::array::ArraySubscription;
 use collab::preclude::{
   ArrayRefWrapper, Change, DeepEventsSubscription, DeepObservable, EntryChange, Event,
@@ -59,7 +59,7 @@ pub(crate) fn subscribe_folder_change(
 pub(crate) fn subscribe_view_change(
   root: &mut MapRefWrapper,
   change_tx: ViewChangeSender,
-  belonging_map: Rc<BelongingMap>,
+  belonging_map: Rc<ChildrenMap>,
 ) -> DeepEventsSubscription {
   root.observe_deep(move |txn, events| {
     for deep_event in events.iter() {

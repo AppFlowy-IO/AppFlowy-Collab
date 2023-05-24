@@ -1,4 +1,4 @@
-use crate::core::{Belonging, BelongingMap, Belongings};
+use crate::core::{ChildView, ChildViews, ChildrenMap};
 
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use std::rc::Rc;
 #[derive(Clone)]
 pub struct WorkspaceMap {
   container: MapRefWrapper,
-  belongings: Rc<BelongingMap>,
+  belongings: Rc<ChildrenMap>,
 }
 
 const WORKSPACE_ID: &str = "id";
@@ -15,7 +15,7 @@ const WORKSPACE_NAME: &str = "name";
 const WORKSPACE_CREATED_AT: &str = "created_at";
 
 impl WorkspaceMap {
-  pub fn new(container: MapRefWrapper, belongings: Rc<BelongingMap>) -> Self {
+  pub fn new(container: MapRefWrapper, belongings: Rc<ChildrenMap>) -> Self {
     Self {
       container,
       belongings,
@@ -35,7 +35,7 @@ impl WorkspaceMap {
     txn: &mut TransactionMut,
     container: &MapRef,
     workspace_id: &str,
-    belongings: Rc<BelongingMap>,
+    belongings: Rc<ChildrenMap>,
     f: F,
   ) -> Self
   where
@@ -83,8 +83,8 @@ impl WorkspaceMap {
 
     let belongings = self
       .belongings
-      .get_belongings_array_with_txn(txn, &id)
-      .map(|array| array.get_belongings())
+      .get_children_with_txn(txn, &id)
+      .map(|array| array.get_children())
       .unwrap_or_default();
 
     Some(Workspace {
@@ -100,7 +100,7 @@ impl WorkspaceMap {
 pub struct Workspace {
   pub id: String,
   pub name: String,
-  pub belongings: Belongings,
+  pub belongings: ChildViews,
   pub created_at: i64,
 }
 
@@ -108,7 +108,7 @@ pub struct WorkspaceBuilder<'a, 'b> {
   workspace_id: &'a str,
   map_ref: &'a MapRef,
   txn: &'a mut TransactionMut<'b>,
-  belongings: Rc<BelongingMap>,
+  belongings: Rc<ChildrenMap>,
 }
 
 impl<'a, 'b> WorkspaceBuilder<'a, 'b> {
@@ -116,7 +116,7 @@ impl<'a, 'b> WorkspaceBuilder<'a, 'b> {
     workspace_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'a MapRef,
-    belongings: Rc<BelongingMap>,
+    belongings: Rc<ChildrenMap>,
   ) -> Self {
     map_ref.insert_str_with_txn(txn, WORKSPACE_ID, workspace_id);
     Self {
@@ -146,7 +146,7 @@ pub struct WorkspaceUpdate<'a, 'b, 'c> {
   workspace_id: &'a str,
   map_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
-  belongings: Rc<BelongingMap>,
+  belongings: Rc<ChildrenMap>,
 }
 
 impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
@@ -154,7 +154,7 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
     workspace_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'c MapRef,
-    belongings: Rc<BelongingMap>,
+    belongings: Rc<ChildrenMap>,
   ) -> Self {
     Self {
       workspace_id,
@@ -178,24 +178,24 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
     self
   }
 
-  pub fn set_belongings(self, belongings: Belongings) -> Self {
+  pub fn set_children(self, children: ChildViews) -> Self {
     let array = self
       .belongings
-      .get_or_create_belongings_with_txn(self.txn, self.workspace_id);
-    array.add_belongings_with_txn(self.txn, belongings.into_inner());
+      .get_or_create_children_with_txn(self.txn, self.workspace_id);
+    array.add_children_with_txn(self.txn, children.into_inner());
     self
   }
 
-  pub fn delete_belongings(self, index: u32) -> Self {
+  pub fn delete_child(self, index: u32) -> Self {
     self
       .belongings
-      .delete_belongings_with_txn(self.txn, self.workspace_id, index);
+      .delete_children_with_txn(self.txn, self.workspace_id, index);
     self
   }
 
-  pub fn add_belongings(self, belongings: Vec<Belonging>) {
+  pub fn add_children(self, belongings: Vec<ChildView>) {
     self
       .belongings
-      .add_belongings(self.txn, self.workspace_id, belongings);
+      .add_children(self.txn, self.workspace_id, belongings);
   }
 }
