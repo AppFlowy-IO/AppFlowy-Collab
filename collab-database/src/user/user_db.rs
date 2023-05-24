@@ -1,3 +1,4 @@
+use base64::Engine;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -16,13 +17,22 @@ use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 
 use crate::views::{CreateDatabaseParams, CreateViewParams};
+use base64::engine::general_purpose::STANDARD;
 
 pub trait UserDatabaseCollabBuilder: Send + Sync + 'static {
-  fn build(&self, uid: i64, object_id: &str, db: Arc<RocksCollabDB>) -> Arc<MutexCollab>;
+  fn build(
+    &self,
+    uid: i64,
+    object_id: &str,
+    object_name: &str,
+    db: Arc<RocksCollabDB>,
+  ) -> Arc<MutexCollab>;
+
   fn build_with_config(
     &self,
     uid: i64,
     object_id: &str,
+    object_name: &str,
     db: Arc<RocksCollabDB>,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab>;
@@ -62,8 +72,14 @@ impl UserDatabase {
     tracing::trace!("Init user database: {}", uid);
     let collab_builder = Arc::new(collab_builder);
     // user database
-    let collab =
-      collab_builder.build_with_config(uid, &format!("{}_user_database", uid), db.clone(), &config);
+    let user_database_id = STANDARD.encode(format!("{}:user:database", uid));
+    let collab = collab_builder.build_with_config(
+      uid,
+      &user_database_id,
+      "user database",
+      db.clone(),
+      &config,
+    );
     let collab_guard = collab.lock();
     let databases = create_user_database_if_not_exist(&collab_guard);
     let database_array = DatabaseArray::new(databases);
@@ -263,9 +279,13 @@ impl UserDatabase {
 
   /// Create a new [Collab] instance for given database id.
   fn collab_for_database(&self, database_id: &str) -> Arc<MutexCollab> {
-    self
-      .collab_builder
-      .build_with_config(self.uid, database_id, self.db.clone(), &self.config)
+    self.collab_builder.build_with_config(
+      self.uid,
+      database_id,
+      "database",
+      self.db.clone(),
+      &self.config,
+    )
   }
 }
 

@@ -1,15 +1,14 @@
-use crate::core::{Belonging, BelongingMap, Belongings};
+use crate::core::{subscribe_view_change, Belonging, BelongingMap, Belongings};
 use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update};
 use anyhow::bail;
 
+use crate::core::folder_observe::{ViewChange, ViewChangeSender};
 use collab::preclude::{
-  lib0Any, DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRef, MapRefExtension,
-  MapRefWrapper, ReadTxn, ToJson, TransactionMut, YrsValue,
+  lib0Any, DeepEventsSubscription, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 use std::rc::Rc;
-use tokio::sync::broadcast;
 
 const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";
@@ -19,24 +18,21 @@ const VIEW_DATABASE_ID: &str = "database_id";
 const VIEW_LAYOUT: &str = "layout";
 const VIEW_CREATE_AT: &str = "created_at";
 
-pub type ViewChangeSender = broadcast::Sender<ViewChange>;
-pub type ViewChangeReceiver = broadcast::Receiver<ViewChange>;
-
 pub struct ViewsMap {
   container: MapRefWrapper,
   #[allow(dead_code)]
-  subscription: Option<DeepEventsSubscription>,
-  change_tx: Option<ViewChangeSender>,
+  subscription: DeepEventsSubscription,
+  change_tx: ViewChangeSender,
   belonging_map: Rc<BelongingMap>,
 }
 
 impl ViewsMap {
   pub fn new(
     mut root: MapRefWrapper,
-    change_tx: Option<ViewChangeSender>,
+    change_tx: ViewChangeSender,
     belongings: Rc<BelongingMap>,
   ) -> ViewsMap {
-    let subscription = subscribe_change(&mut root, change_tx.clone(), belongings.clone());
+    let subscription = subscribe_view_change(&mut root, change_tx.clone(), belongings.clone());
     Self {
       container: root,
       subscription,
@@ -147,9 +143,7 @@ impl ViewsMap {
       self.container.delete_with_txn(txn, view_id.as_ref());
     });
 
-    if let Some(tx) = &self.change_tx {
-      let _ = tx.send(ViewChange::DidDeleteView { views });
-    }
+    let _ = self.change_tx.send(ViewChange::DidDeleteView { views });
   }
 
   pub fn update_view<F>(&self, view_id: &str, f: F) -> Option<View>
@@ -164,54 +158,7 @@ impl ViewsMap {
   }
 }
 
-fn subscribe_change(
-  root: &mut MapRefWrapper,
-  change_tx: Option<ViewChangeSender>,
-  belonging_map: Rc<BelongingMap>,
-) -> Option<DeepEventsSubscription> {
-  change_tx.as_ref()?;
-  return Some(root.observe_deep(move |txn, events| {
-    for deep_event in events.iter() {
-      match deep_event {
-        Event::Text(_) => {},
-        Event::Array(_) => {},
-        Event::Map(event) => {
-          for c in event.keys(txn).values() {
-            let change_tx = change_tx.clone().unwrap();
-            match c {
-              EntryChange::Inserted(v) => {
-                if let YrsValue::YMap(map_ref) = v {
-                  if let Some(view) = view_from_map_ref(map_ref, txn, &belonging_map) {
-                    let _ = change_tx.send(ViewChange::DidCreateView { view });
-                  }
-                }
-              },
-              EntryChange::Updated(_k, v) => {
-                println!("update: {}", event.target().to_json(txn));
-                if let YrsValue::YMap(map_ref) = v {
-                  if let Some(view) = view_from_map_ref(map_ref, txn, &belonging_map) {
-                    let _ = change_tx.send(ViewChange::DidUpdate { view });
-                  }
-                }
-              },
-              EntryChange::Removed(v) => {
-                if let YrsValue::YMap(map_ref) = v {
-                  if let Some(view) = view_from_map_ref(map_ref, txn, &belonging_map) {
-                    let _ = change_tx.send(ViewChange::DidDeleteView { views: vec![view] });
-                  }
-                }
-              },
-            }
-          }
-        },
-        Event::XmlFragment(_) => {},
-        Event::XmlText(_) => {},
-      }
-    }
-  }));
-}
-
-fn view_from_map_ref<T: ReadTxn>(
+pub(crate) fn view_from_map_ref<T: ReadTxn>(
   map_ref: &MapRef,
   txn: &T,
   belonging_map: &Rc<BelongingMap>,
@@ -393,11 +340,4 @@ impl From<ViewLayout> for i64 {
   fn from(layout: ViewLayout) -> Self {
     layout as i64
   }
-}
-
-#[derive(Debug, Clone)]
-pub enum ViewChange {
-  DidCreateView { view: View },
-  DidDeleteView { views: Vec<View> },
-  DidUpdate { view: View },
 }

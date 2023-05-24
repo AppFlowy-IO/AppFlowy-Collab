@@ -45,14 +45,27 @@ pub fn random_uid() -> i64 {
 pub struct UserDatabaseCollabBuilderImpl();
 
 impl UserDatabaseCollabBuilder for UserDatabaseCollabBuilderImpl {
-  fn build(&self, uid: i64, object_id: &str, db: Arc<RocksCollabDB>) -> Arc<MutexCollab> {
-    self.build_with_config(uid, object_id, db, &CollabPersistenceConfig::default())
+  fn build(
+    &self,
+    uid: i64,
+    object_id: &str,
+    object_name: &str,
+    db: Arc<RocksCollabDB>,
+  ) -> Arc<MutexCollab> {
+    self.build_with_config(
+      uid,
+      object_id,
+      object_name,
+      db,
+      &CollabPersistenceConfig::default(),
+    )
   }
 
   fn build_with_config(
     &self,
     uid: i64,
     object_id: &str,
+    _object_name: &str,
     db: Arc<RocksCollabDB>,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab> {

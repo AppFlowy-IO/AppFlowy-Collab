@@ -144,7 +144,7 @@ pub fn make_collab_group(
   object_id: &str,
   db: Arc<RocksCollabDB>,
 ) -> CollabGroup {
-  let collab = MutexCollab::new(CollabOrigin::Empty, object_id, vec![]);
+  let collab = MutexCollab::new(CollabOrigin::Server, object_id, vec![]);
   let plugin = RocksdbServerDiskPlugin::new(collab_id, db).unwrap();
   collab.lock().add_plugin(Arc::new(plugin));
   collab.initial();

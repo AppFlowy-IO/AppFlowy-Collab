@@ -46,8 +46,8 @@ pub fn create_folder(id: &str) -> FolderTest {
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
   let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
   let context = FolderContext {
-    view_change_tx: Some(view_tx),
-    trash_change_tx: Some(trash_tx),
+    view_change_tx: view_tx,
+    trash_change_tx: trash_tx,
   };
   let folder = Folder::get_or_create(Arc::new(collab), context);
   FolderTest {

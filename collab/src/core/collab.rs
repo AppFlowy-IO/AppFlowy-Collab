@@ -156,7 +156,7 @@ impl Collab {
     }
   }
 
-  pub fn observer_attrs<F>(&mut self, f: F) -> MapSubscription
+  pub fn observer_data<F>(&mut self, f: F) -> MapSubscription
   where
     F: Fn(&TransactionMut, &MapEvent) + 'static,
   {
@@ -345,6 +345,11 @@ impl Collab {
     self.doc.transact_mut_with(self.origin.clone())
   }
 
+  /// Returns a transaction that can mutate the document. This transaction will carry the
+  /// origin of the current user.
+  ///
+  /// If applying the remote update, please use the `transact_mut` of `doc`. Ot
+  /// update will send to remote that the remote already has.
   pub fn with_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
@@ -388,10 +393,11 @@ fn observe_doc(
 
         let remote_origin = CollabOrigin::from(txn);
         if remote_origin == local_origin {
+          tracing::trace!("[🦀Collab]: did apply local {} update", local_origin);
           plugin.receive_local_update(&local_origin, &cloned_oid, &event.update);
         } else {
           tracing::trace!(
-            "[🦀Client]: {} did apply remote {} update",
+            "[🦀Collab]: {} did apply remote {} update",
             local_origin,
             remote_origin,
           );

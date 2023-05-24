@@ -1,45 +1,36 @@
-use crate::core::{TrashInfo, ViewsMap};
+use crate::core::folder_observe::{TrashChange, TrashChangeSender};
+use crate::core::{subscribe_trash_change, TrashInfo, ViewsMap};
 use anyhow::bail;
 use collab::preclude::array::ArrayEvent;
 use collab::preclude::{
-  lib0Any, Array, ArrayRefWrapper, Change, Observable, ReadTxn, Subscription, TransactionMut,
-  Value, YrsValue,
+  lib0Any, Array, ArrayRefWrapper, ReadTxn, Subscription, TransactionMut, Value, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 use std::sync::Arc;
-use tokio::sync::broadcast;
 
-pub type TrashChangeSender = broadcast::Sender<TrashChange>;
-pub type TrashChangeReceiver = broadcast::Receiver<TrashChange>;
 type ArraySubscription = Subscription<Arc<dyn Fn(&TransactionMut, &ArrayEvent)>>;
-
-#[derive(Debug, Clone)]
-pub enum TrashChange {
-  DidCreateTrash { ids: Vec<String> },
-  DidDeleteTrash { ids: Vec<String> },
-}
 
 pub struct TrashArray {
   container: ArrayRefWrapper,
   view_map: Rc<ViewsMap>,
   #[allow(dead_code)]
-  tx: Option<TrashChangeSender>,
+  change_tx: TrashChangeSender,
   #[allow(dead_code)]
-  subscription: Option<ArraySubscription>,
+  subscription: ArraySubscription,
 }
 
 impl TrashArray {
   pub fn new(
     mut root: ArrayRefWrapper,
     view_map: Rc<ViewsMap>,
-    tx: Option<TrashChangeSender>,
+    change_tx: TrashChangeSender,
   ) -> Self {
-    let subscription = subscribe_change(&mut root, tx.clone());
+    let subscription = subscribe_trash_change(&mut root, change_tx.clone());
     Self {
       container: root,
       view_map,
-      tx,
+      change_tx,
       subscription,
     }
   }
@@ -90,13 +81,13 @@ impl TrashArray {
       }
     }
 
-    if let Some(tx) = self.tx.as_ref() {
-      let record_ids = ids
-        .iter()
-        .map(|id| id.as_ref().to_string())
-        .collect::<Vec<String>>();
-      let _ = tx.send(TrashChange::DidDeleteTrash { ids: record_ids });
-    }
+    let record_ids = ids
+      .iter()
+      .map(|id| id.as_ref().to_string())
+      .collect::<Vec<String>>();
+    let _ = self
+      .change_tx
+      .send(TrashChange::DidDeleteTrash { ids: record_ids });
   }
 
   pub fn add_trash(&self, records: Vec<TrashRecord>) {
@@ -114,9 +105,9 @@ impl TrashArray {
       self.container.push_back(txn, record);
     }
 
-    if let Some(tx) = self.tx.as_ref() {
-      let _ = tx.send(TrashChange::DidCreateTrash { ids: record_ids });
-    }
+    let _ = self
+      .change_tx
+      .send(TrashChange::DidCreateTrash { ids: record_ids });
   }
 
   pub fn clear(&self) {
@@ -125,32 +116,6 @@ impl TrashArray {
       self.container.remove_range(txn, 0, len as u32);
     });
   }
-}
-
-fn subscribe_change(
-  array: &mut ArrayRefWrapper,
-  _tx: Option<TrashChangeSender>,
-) -> Option<ArraySubscription> {
-  Some(array.observe(move |txn, event| {
-    for change in event.delta(txn) {
-      match change {
-        Change::Added(_) => {
-          // let records = values
-          //     .iter()
-          //     .flat_map(|value| match value {
-          //         Value::Any(any) => Some(any),
-          //         _ => None,
-          //     })
-          //     .map(|any| TrashRecord::from(any.clone()))
-          //     .map(|record| record.id)
-          //     .collect::<Vec<String>>();
-          // let _ = tx.send(TrashChange::DidCreateTrash { ids: records });
-        },
-        Change::Removed(_) => {},
-        Change::Retain(_) => {},
-      }
-    }
-  }))
 }
 
 #[derive(Debug, Serialize, Deserialize)]

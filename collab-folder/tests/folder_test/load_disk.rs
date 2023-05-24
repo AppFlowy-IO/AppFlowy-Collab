@@ -76,8 +76,8 @@ fn create_folder_with_object_id(uid: i64, path: &str) -> Folder {
   let (view_tx, _view_rx) = tokio::sync::broadcast::channel(100);
   let (trash_tx, _trash_rx) = tokio::sync::broadcast::channel(100);
   let folder_context = FolderContext {
-    view_change_tx: Some(view_tx),
-    trash_change_tx: Some(trash_tx),
+    view_change_tx: view_tx,
+    trash_change_tx: trash_tx,
   };
 
   Folder::get_or_create(Arc::new(collab), folder_context)

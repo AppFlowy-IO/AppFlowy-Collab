@@ -4,6 +4,7 @@ use collab::preclude::CollabPlugin;
 
 use crate::cloud_storage::postgres::postgres_db::PostgresDB;
 use crate::cloud_storage::postgres::SupabaseDBConfig;
+use crate::cloud_storage::remote_collab::CollabObject;
 use parking_lot::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -19,12 +20,12 @@ pub struct SupabaseDBPlugin {
 
 impl SupabaseDBPlugin {
   pub fn new(
-    object_id: String,
+    object: CollabObject,
     local_collab: Arc<MutexCollab>,
     sync_per_secs: u64,
     config: SupabaseDBConfig,
   ) -> Self {
-    let postgres_db = PostgresDB::new(object_id, sync_per_secs, config);
+    let postgres_db = PostgresDB::new(object, sync_per_secs, config);
     let pending_updates = Arc::new(RwLock::new(Vec::new()));
     let is_first_sync_done = Arc::new(AtomicBool::new(false));
     Self {
@@ -66,6 +67,7 @@ impl CollabPlugin for SupabaseDBPlugin {
   }
 
   fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
+    tracing::trace!("Receive local update: {}", update.len());
     if self.is_first_sync_done.load(Ordering::SeqCst) {
       self.postgres_db.push_update(update);
     } else {

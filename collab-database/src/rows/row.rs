@@ -65,7 +65,7 @@ impl RowDoc {
     db: Arc<RocksCollabDB>,
     collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
   ) -> Self {
-    let collab = collab_builder.build(uid, &row_id, db.clone());
+    let collab = collab_builder.build(uid, &row_id, "row", db.clone());
     let collab_guard = collab.lock();
     let (data, meta, comments) = {
       let txn = collab_guard.transact();

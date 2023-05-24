@@ -100,6 +100,7 @@ where
       let mut pending_msgs = self.pending_msgs.lock();
       let msg_id = self.msg_id_counter.next();
       let msg = f(msg_id);
+      tracing::trace!("queue_msg: {}", msg);
       pending_msgs.push_msg(msg_id, msg);
       drop(pending_msgs);
     }
@@ -125,6 +126,7 @@ where
         if prev.state().is_pending() {
           let prev_msg = prev.get_mut_msg();
           if prev_msg.mergeable() && merge(prev_msg).is_ok() {
+            tracing::trace!("merge_msg: {}", prev_msg);
             tracing::trace!("Did merge new message, len: {}", prev_msg.length());
             return;
           }
@@ -133,6 +135,7 @@ where
 
       let msg_id = self.msg_id_counter.next();
       let msg = or_else(msg_id);
+      tracing::trace!("queue_msg: {}", msg);
       pending_msgs.push_msg(msg_id, msg);
       drop(pending_msgs);
     }
@@ -228,7 +231,7 @@ where
         self.pending_msgs.lock().push(pending_msg);
 
         let mut sender = self.sender.lock().await;
-        tracing::trace!("[🦀Client]: {}", collab_msg);
+        tracing::trace!("[🦀Collab]: {}", collab_msg);
         sender
           .send(collab_msg)
           .await

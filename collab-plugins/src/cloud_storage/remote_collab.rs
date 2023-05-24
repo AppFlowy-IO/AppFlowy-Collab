@@ -16,7 +16,7 @@ use tokio::spawn;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::watch;
 use yrs::updates::decoder::Decode;
-use yrs::{merge_updates_v1, ReadTxn, Update};
+use yrs::{merge_updates_v1, ReadTxn, Transact, Update};
 
 /// The [RemoteCollabStorage] is used to store the updates of the remote collab. The [RemoteCollab]
 /// is the remote collab that maps to the local collab.
@@ -31,7 +31,7 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
 
 /// The [RemoteCollab] is used to sync the local collab to the remote.
 pub struct RemoteCollab {
-  object_id: String,
+  object: CollabObject,
   collab: Arc<MutexCollab>,
   storage: Arc<dyn RemoteCollabStorage>,
   /// The [CollabSink] is used to send the updates to the remote.
@@ -42,12 +42,12 @@ impl RemoteCollab {
   /// Create a new remote collab.
   /// `timeout` is the time to wait for the server to ack the message.
   /// If the server does not ack the message in time, the message will be sent again.
-  pub fn new<S>(object_id: String, storage: S, config: SinkConfig) -> Self
+  pub fn new<S>(object: CollabObject, storage: S, config: SinkConfig) -> Self
   where
     S: RemoteCollabStorage + Send + Sync + 'static,
   {
     let storage: Arc<dyn RemoteCollabStorage> = Arc::new(storage);
-    let collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, &object_id, vec![]));
+    let collab = Arc::new(MutexCollab::new(CollabOrigin::Server, &object.id, vec![]));
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
     let (notifier, notifier_rx) = watch::channel(false);
@@ -62,10 +62,10 @@ impl RemoteCollab {
     spawn(async move {
       while let Some(message) = stream.recv().await {
         if let Some(storage) = weak_storage.upgrade() {
-          if let Ok((msg_id, payload)) = message.into_payload() {
+          if let Ok((object, msg_id, payload)) = message.split() {
             match storage.send_update(msg_id, payload).await {
               Ok(_) => {
-                tracing::debug!("ack update: {}", msg_id);
+                tracing::debug!("ack update {}: {}", object, msg_id);
                 if let Some(sink) = weak_sink.upgrade() {
                   sink.ack_msg(msg_id).await;
                 }
@@ -83,7 +83,7 @@ impl RemoteCollab {
 
     spawn(CollabSinkRunner::run(Arc::downgrade(&sink), notifier_rx));
     Self {
-      object_id,
+      object,
       collab,
       storage,
       sink,
@@ -91,7 +91,8 @@ impl RemoteCollab {
   }
 
   pub async fn sync(&self, local_collab: Arc<MutexCollab>) {
-    let updates = match self.storage.get_all_updates(&self.object_id).await {
+    tracing::trace!("{}: start sync with remote", self.object);
+    let updates = match self.storage.get_all_updates(&self.object.id).await {
       Ok(updates) => updates,
       Err(e) => {
         tracing::error!("🔴Failed to get updates: {:?}", e);
@@ -99,7 +100,15 @@ impl RemoteCollab {
       },
     };
 
+    tracing::trace!(
+      "{}: try apply remote updates with len:{}",
+      self.object,
+      updates.len(),
+    );
+
     if !updates.is_empty() {
+      // Apply remote updates to remote collab before encode the state as update
+      // for local collab.
       self.collab.lock().with_transact_mut(|txn| {
         for update in updates {
           if let Ok(update) = Update::decode_v1(&update) {
@@ -110,7 +119,7 @@ impl RemoteCollab {
         }
       });
 
-      // Update local collab
+      // Encode the remote collab state as update for local collab.
       let local_sv = local_collab.lock().transact().state_vector();
       let encode_update = self
         .collab
@@ -118,69 +127,91 @@ impl RemoteCollab {
         .transact()
         .encode_state_as_update_v1(&local_sv);
       if let Ok(update) = Update::decode_v1(&encode_update) {
-        local_collab.lock().with_transact_mut(|txn| {
+        {
+          // Don't use the with_transact_mut here, because it carries the origin information. So
+          // the update will consider as a local update. But here is apply the remote update.
+          // TODO: Will define a sync protocol for cloud storage.
+          tracing::trace!(
+            "{}: apply remote update with len:{}",
+            self.object,
+            encode_update.len()
+          );
+          let local_collab_guard = local_collab.lock();
+          let mut txn = local_collab_guard.get_doc().transact_mut();
           txn.apply_update(update);
-        });
+        }
       }
     }
 
-    // Update remote collab
+    // Encode the local collab state as update for remote collab.
     let remote_state_vector = self.collab.lock().transact().state_vector();
     let encode_update = local_collab
       .lock()
       .transact()
       .encode_state_as_update_v1(&remote_state_vector);
-    if let Ok(update) = Update::decode_v1(&encode_update) {
+    if let Ok(decode_update) = Update::decode_v1(&encode_update) {
+      tracing::trace!(
+        "{}: try sync local update with len:{}",
+        self.object,
+        encode_update.len()
+      );
+
       self.collab.lock().with_transact_mut(|txn| {
-        txn.apply_update(update);
+        txn.apply_update(decode_update);
       });
 
       self.sink.queue_msg(|msg_id| Message {
-        object_id: self.object_id.clone(),
+        object: self.object.clone(),
         payloads: vec![encode_update],
-        meta: MessageMeta::Init(msg_id),
+        meta: MessageMeta::Init { msg_id },
       });
     }
   }
 
   pub fn push_update(&self, update: &[u8]) {
-    self.sink.queue_or_merge_msg(
-      |prev| {
-        prev.merge_payload(update.to_vec());
-        Ok(())
-      },
-      |msg_id| Message {
-        object_id: self.object_id.clone(),
-        payloads: vec![update.to_vec()],
-        meta: MessageMeta::Update(msg_id),
-      },
-    );
+    if let Ok(decode_update) = Update::decode_v1(update) {
+      self.collab.lock().with_transact_mut(|txn| {
+        txn.apply_update(decode_update);
+      });
+
+      self.sink.queue_or_merge_msg(
+        |prev| {
+          prev.merge_payload(update.to_vec());
+          Ok(())
+        },
+        |msg_id| Message {
+          object: self.object.clone(),
+          payloads: vec![update.to_vec()],
+          meta: MessageMeta::Update { msg_id },
+        },
+      );
+    }
   }
 }
 
 #[derive(Clone, Debug)]
 pub enum MessageMeta {
-  Init(MsgId),
-  Update(MsgId),
+  Init { msg_id: MsgId },
+  Update { msg_id: MsgId },
 }
 
 impl MessageMeta {
   pub fn msg_id(&self) -> &MsgId {
     match self {
-      Self::Init(msg_id) => msg_id,
-      Self::Update(msg_id) => msg_id,
+      Self::Init { msg_id, .. } => msg_id,
+      Self::Update { msg_id, .. } => msg_id,
     }
   }
 
   pub fn is_init(&self) -> bool {
-    matches!(self, Self::Init(_))
+    matches!(self, Self::Init { .. })
   }
 }
 
 /// A message that is sent to the remote.
 #[derive(Clone, Debug)]
 struct Message {
-  object_id: String,
+  object: CollabObject,
   meta: MessageMeta,
   payloads: Vec<Vec<u8>>,
 }
@@ -194,7 +225,7 @@ impl Message {
     self.payloads.iter().map(|p| p.len()).sum()
   }
 
-  fn into_payload(self) -> Result<(MsgId, Vec<u8>), anyhow::Error> {
+  fn split(self) -> Result<(CollabObject, MsgId, Vec<u8>), anyhow::Error> {
     let updates = self
       .payloads
       .iter()
@@ -202,7 +233,7 @@ impl Message {
       .collect::<Vec<&[u8]>>();
     let update = merge_updates_v1(&updates)?;
     let msg_id = *self.meta.msg_id();
-    Ok((msg_id, update))
+    Ok((self.object, msg_id, update))
   }
 }
 
@@ -213,8 +244,8 @@ impl CollabSinkMessage for Message {
 
   fn mergeable(&self) -> bool {
     match self.meta {
-      MessageMeta::Init(_) => false,
-      MessageMeta::Update(_) => self.payload_len() < 1024,
+      MessageMeta::Init { .. } => false,
+      MessageMeta::Update { .. } => self.payload_len() < 1024,
     }
   }
 
@@ -242,10 +273,19 @@ impl Ord for Message {
   fn cmp(&self, other: &Self) -> Ordering {
     // Init message has higher priority than update message.
     match (&self.meta, &other.meta) {
-      (MessageMeta::Init(a), MessageMeta::Init(b)) => a.cmp(b),
-      (MessageMeta::Init(_), MessageMeta::Update(_)) => Ordering::Greater,
-      (MessageMeta::Update(..), MessageMeta::Init(_)) => Ordering::Less,
-      (MessageMeta::Update(a), MessageMeta::Update(b)) => a.cmp(b),
+      (MessageMeta::Init { msg_id: msg_id_a }, MessageMeta::Init { msg_id: msg_id_b }) => {
+        msg_id_a.cmp(msg_id_b)
+      },
+      (MessageMeta::Init { .. }, MessageMeta::Update { .. }) => Ordering::Greater,
+      (MessageMeta::Update { .. }, MessageMeta::Init { .. }) => Ordering::Less,
+      (
+        MessageMeta::Update {
+          msg_id: msg_id_a, ..
+        },
+        MessageMeta::Update {
+          msg_id: msg_id_b, ..
+        },
+      ) => msg_id_a.cmp(msg_id_b),
     }
   }
 }
@@ -253,8 +293,8 @@ impl Ord for Message {
 impl Display for Message {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     f.write_fmt(format_args!(
-      "send {} update: [msg_id:{}|payload_len:{}]",
-      self.object_id,
+      "{} update: [msg_id:{}|payload_len:{}]",
+      self.object,
       self.meta.msg_id(),
       self.payload_len(),
     ))
@@ -289,5 +329,31 @@ impl MsgIdCounter for RngMsgIdCounter {
     let next = *self.0.lock() + 1;
     *self.0.lock() = next;
     next
+  }
+}
+
+#[derive(Clone, Debug)]
+pub struct CollabObject {
+  pub(crate) id: String,
+  name: String,
+}
+
+impl CollabObject {
+  pub fn new(object_id: String) -> Self {
+    Self {
+      id: object_id,
+      name: "".to_string(),
+    }
+  }
+
+  pub fn with_name(mut self, name: &str) -> Self {
+    self.name = name.to_string();
+    self
+  }
+}
+
+impl Display for CollabObject {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.write_fmt(format_args!("{}:{}]", self.name, self.id,))
   }
 }
