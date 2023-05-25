@@ -4,34 +4,38 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-pub struct ChildrenMap {
+/// Used to keep track of the view hierarchy.
+/// Parent-child relationship is stored in the map and each child is stored in an array.
+/// relation {
+///   parent_id: [child_id1, child_id2, ...]
+///   parent_id: [child_id1, child_id2, ...]
+/// }
+///
+pub struct ViewsRelation {
   container: MapRefWrapper,
 }
 
-impl ChildrenMap {
+impl ViewsRelation {
   pub fn new(container: MapRefWrapper) -> Self {
     Self { container }
   }
 
-  pub fn move_child_view(&self, parent_id: &str, from: u32, to: u32) {
+  /// Move the child at `from` to `to` within the parent with `parent_id`.
+  pub fn move_child(&self, parent_id: &str, from: u32, to: u32) {
     self.container.with_transact_mut(|txn| {
-      self.move_child_view_with_txn(txn, parent_id, from, to);
+      self.move_child_with_txn(txn, parent_id, from, to);
     })
   }
 
-  pub fn move_child_view_with_txn(
-    &self,
-    txn: &mut TransactionMut,
-    parent_id: &str,
-    from: u32,
-    to: u32,
-  ) {
+  pub fn move_child_with_txn(&self, txn: &mut TransactionMut, parent_id: &str, from: u32, to: u32) {
     if let Some(belonging_array) = self.get_children_with_txn(txn, parent_id) {
       belonging_array.move_child_with_txn(txn, from, to);
     }
   }
 
-  pub fn get_children(&self, parent_id: &str) -> Option<ChildViewArray> {
+  /// Returns the children of the parent with `parent_id`.
+  /// The children are stored in an array.
+  pub fn get_children(&self, parent_id: &str) -> Option<ChildrenArray> {
     let txn = self.container.transact();
     self.get_children_with_txn(&txn, parent_id)
   }
@@ -40,25 +44,25 @@ impl ChildrenMap {
     &self,
     txn: &T,
     parent_id: &str,
-  ) -> Option<ChildViewArray> {
+  ) -> Option<ChildrenArray> {
     let array = self.container.get_array_ref_with_txn(txn, parent_id)?;
-    Some(ChildViewArray::from_array(array))
+    Some(ChildrenArray::from_array(array))
   }
 
   pub fn get_or_create_children_with_txn(
     &self,
     txn: &mut TransactionMut,
     parent_id: &str,
-  ) -> ChildViewArray {
+  ) -> ChildrenArray {
     let array_ref = self
       .container
       .get_array_ref_with_txn(txn, parent_id)
       .unwrap_or_else(|| {
         self
           .container
-          .insert_array_with_txn::<ChildView>(txn, parent_id, vec![])
+          .insert_array_with_txn::<ViewIdentifier>(txn, parent_id, vec![])
       });
-    ChildViewArray::from_array(array_ref)
+    ChildrenArray::from_array(array_ref)
   }
 
   pub fn delete_children_with_txn(&self, txn: &mut TransactionMut, parent_id: &str, index: u32) {
@@ -67,83 +71,87 @@ impl ChildrenMap {
     }
   }
 
-  pub fn add_children(&self, txn: &mut TransactionMut, parent_id: &str, children: Vec<ChildView>) {
+  /// Add children to the parent with `parent_id`.
+  pub fn add_children(
+    &self,
+    txn: &mut TransactionMut,
+    parent_id: &str,
+    children: Vec<ViewIdentifier>,
+  ) {
     let array = self.get_or_create_children_with_txn(txn, parent_id);
     array.add_children_with_txn(txn, children);
   }
 }
 
+/// Handy wrapper around an array of children.
+/// It provides methods to manipulate the array.
 #[derive(Clone)]
-pub struct ChildViewArray {
-  container: ArrayRefWrapper,
-}
+pub struct ChildrenArray(ArrayRefWrapper);
 
-impl ChildViewArray {
+impl ChildrenArray {
   pub fn from_array(belongings: ArrayRefWrapper) -> Self {
-    Self {
-      container: belongings,
-    }
+    Self { 0: belongings }
   }
 
-  pub fn get_children(&self) -> ChildViews {
-    let txn = self.container.transact();
+  pub fn get_children(&self) -> RepeatedView {
+    let txn = self.0.transact();
     self.get_children_with_txn(&txn)
   }
 
-  pub fn get_children_with_txn<T: ReadTxn>(&self, txn: &T) -> ChildViews {
-    children_from_array_ref(txn, &self.container)
+  pub fn get_children_with_txn<T: ReadTxn>(&self, txn: &T) -> RepeatedView {
+    children_from_array_ref(txn, &self.0)
   }
 
   pub fn move_child(&self, from: u32, to: u32) {
-    self.container.with_transact_mut(|txn| {
+    self.0.with_transact_mut(|txn| {
       self.move_child_with_txn(txn, from, to);
     });
   }
   pub fn move_child_with_txn(&self, txn: &mut TransactionMut, from: u32, to: u32) {
-    if let Some(YrsValue::Any(value)) = self.container.get(txn, from) {
-      self.container.remove(txn, from);
-      self.container.insert(txn, to, value);
+    if let Some(YrsValue::Any(value)) = self.0.get(txn, from) {
+      self.0.remove(txn, from);
+      self.0.insert(txn, to, value);
     }
   }
 
   pub fn remove_child_with_txn(&self, txn: &mut TransactionMut, index: u32) {
-    self.container.remove_with_txn(txn, index);
+    self.0.remove_with_txn(txn, index);
   }
 
   pub fn remove_child(&self, index: u32) {
-    self.container.with_transact_mut(|txn| {
-      self.container.remove_with_txn(txn, index);
+    self.0.with_transact_mut(|txn| {
+      self.0.remove_with_txn(txn, index);
     })
   }
 
-  pub fn add_children(&self, belongings: Vec<ChildView>) {
+  pub fn add_children(&self, belongings: Vec<ViewIdentifier>) {
     self
-      .container
+      .0
       .with_transact_mut(|txn| self.add_children_with_txn(txn, belongings))
   }
 
-  pub fn add_children_with_txn(&self, txn: &mut TransactionMut, children: Vec<ChildView>) {
+  pub fn add_children_with_txn(&self, txn: &mut TransactionMut, children: Vec<ViewIdentifier>) {
     let mut existing_children_ids = self
       .get_children_with_txn(txn)
       .into_inner()
       .into_iter()
-      .map(|belonging| belonging.id)
+      .map(|child_view| child_view.id)
       .collect::<Vec<String>>();
 
     for child in children {
       if !existing_children_ids.contains(&child.id) {
         existing_children_ids.push(child.id.clone());
-        self.container.push_back(txn, child);
+        self.0.push_back(txn, child);
       }
     }
   }
 }
 
-pub fn children_from_array_ref<T: ReadTxn>(txn: &T, array_ref: &ArrayRef) -> ChildViews {
-  let mut children = ChildViews::new(vec![]);
+pub fn children_from_array_ref<T: ReadTxn>(txn: &T, array_ref: &ArrayRef) -> RepeatedView {
+  let mut children = RepeatedView::new(vec![]);
   for value in array_ref.iter(txn) {
     if let YrsValue::Any(lib0Any::Map(map)) = value {
-      if let Some(belonging) = ChildView::from_map(&map) {
+      if let Some(belonging) = ViewIdentifier::from_map(&map) {
         children.items.push(belonging);
       }
     }
@@ -153,36 +161,36 @@ pub fn children_from_array_ref<T: ReadTxn>(txn: &T, array_ref: &ArrayRef) -> Chi
 
 #[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq, Debug)]
 #[repr(transparent)]
-pub struct ChildViews {
-  pub items: Vec<ChildView>,
+pub struct RepeatedView {
+  pub items: Vec<ViewIdentifier>,
 }
 
-impl ChildViews {
-  pub fn new(items: Vec<ChildView>) -> Self {
+impl RepeatedView {
+  pub fn new(items: Vec<ViewIdentifier>) -> Self {
     Self { items }
   }
 
-  pub fn into_inner(self) -> Vec<ChildView> {
+  pub fn into_inner(self) -> Vec<ViewIdentifier> {
     self.items
   }
 }
 
-impl Deref for ChildViews {
-  type Target = Vec<ChildView>;
+impl Deref for RepeatedView {
+  type Target = Vec<ViewIdentifier>;
 
   fn deref(&self) -> &Self::Target {
     &self.items
   }
 }
 
-impl DerefMut for ChildViews {
+impl DerefMut for RepeatedView {
   fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.items
   }
 }
 
-impl From<ChildViews> for Vec<lib0Any> {
-  fn from(values: ChildViews) -> Self {
+impl From<RepeatedView> for Vec<lib0Any> {
+  fn from(values: RepeatedView) -> Self {
     values
       .into_inner()
       .into_iter()
@@ -192,40 +200,27 @@ impl From<ChildViews> for Vec<lib0Any> {
 }
 
 #[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq, Debug)]
-pub struct ChildView {
+pub struct ViewIdentifier {
   pub id: String,
-  pub name: String,
 }
 
-impl ChildView {
+impl ViewIdentifier {
   pub fn new(id: String) -> Self {
-    Self {
-      id,
-      name: "".to_string(),
-    }
+    Self { id }
   }
   pub fn from_map(map: &HashMap<String, lib0Any>) -> Option<Self> {
     if let lib0Any::String(id) = map.get("id")? {
-      if let lib0Any::String(name) = map.get("name")? {
-        return Some(Self {
-          id: id.to_string(),
-          name: name.to_string(),
-        });
-      }
+      return Some(Self { id: id.to_string() });
     }
 
     None
   }
 }
 
-impl From<ChildView> for lib0Any {
-  fn from(value: ChildView) -> Self {
+impl From<ViewIdentifier> for lib0Any {
+  fn from(value: ViewIdentifier) -> Self {
     let mut map = HashMap::new();
     map.insert("id".to_string(), lib0Any::String(value.id.into_boxed_str()));
-    map.insert(
-      "name".to_string(),
-      lib0Any::String(value.name.into_boxed_str()),
-    );
     lib0Any::Map(Box::new(map))
   }
 }

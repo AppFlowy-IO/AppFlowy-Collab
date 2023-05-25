@@ -40,7 +40,7 @@ pub fn create_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -
   let collab = CollabBuilder::new(1, doc_id)
     .with_plugin(disk_plugin)
     .build();
-  collab.lock().initial();
+  collab.lock().initialize();
 
   let mut blocks = HashMap::new();
   let mut children_map = HashMap::new();

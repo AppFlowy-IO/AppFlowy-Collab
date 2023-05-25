@@ -1,4 +1,4 @@
-use crate::core::{view_from_map_ref, ChildrenMap, View};
+use crate::core::{view_from_map_ref, View, ViewsRelation};
 use collab::preclude::array::ArraySubscription;
 use collab::preclude::{
   ArrayRefWrapper, Change, DeepEventsSubscription, DeepObservable, EntryChange, Event,
@@ -59,7 +59,7 @@ pub(crate) fn subscribe_folder_change(
 pub(crate) fn subscribe_view_change(
   root: &mut MapRefWrapper,
   change_tx: ViewChangeSender,
-  belonging_map: Rc<ChildrenMap>,
+  views_relation: Rc<ViewsRelation>,
 ) -> DeepEventsSubscription {
   root.observe_deep(move |txn, events| {
     for deep_event in events.iter() {
@@ -72,7 +72,7 @@ pub(crate) fn subscribe_view_change(
             match c {
               EntryChange::Inserted(v) => {
                 if let YrsValue::YMap(map_ref) = v {
-                  if let Some(view) = view_from_map_ref(map_ref, txn, &belonging_map) {
+                  if let Some(view) = view_from_map_ref(map_ref, txn, &views_relation) {
                     let _ = change_tx.send(ViewChange::DidCreateView { view });
                   }
                 }
@@ -80,14 +80,14 @@ pub(crate) fn subscribe_view_change(
               EntryChange::Updated(_k, v) => {
                 println!("update: {}", event.target().to_json(txn));
                 if let YrsValue::YMap(map_ref) = v {
-                  if let Some(view) = view_from_map_ref(map_ref, txn, &belonging_map) {
+                  if let Some(view) = view_from_map_ref(map_ref, txn, &views_relation) {
                     let _ = change_tx.send(ViewChange::DidUpdate { view });
                   }
                 }
               },
               EntryChange::Removed(v) => {
                 if let YrsValue::YMap(map_ref) = v {
-                  if let Some(view) = view_from_map_ref(map_ref, txn, &belonging_map) {
+                  if let Some(view) = view_from_map_ref(map_ref, txn, &views_relation) {
                     let _ = change_tx.send(ViewChange::DidDeleteView { views: vec![view] });
                   }
                 }

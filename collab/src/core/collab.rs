@@ -1,12 +1,15 @@
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
-use std::sync::atomic::{AtomicBool, Ordering};
+
 use std::sync::Arc;
+
 use std::vec::IntoIter;
 
 use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use tokio::sync::watch;
+
 use y_sync::awareness::Awareness;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
@@ -17,6 +20,7 @@ use yrs::{
 };
 
 use crate::core::collab_plugin::CollabPlugin;
+use crate::core::collab_state::{CollabState, State};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
 use crate::preclude::{ArrayRefWrapper, JsonValue};
@@ -28,8 +32,6 @@ type AfterTransactionSubscription = Subscription<Arc<dyn Fn(&mut TransactionMut)
 
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 pub type MapSubscription = Subscription<MapSubscriptionCallback>;
-
-pub enum CollabState {}
 
 /// A [Collab] is a wrapper around a [Doc] and [Awareness] that provides a set
 /// of helper methods for interacting with the [Doc] and [Awareness]. The [MutexCollab]
@@ -54,7 +56,7 @@ pub struct Collab {
   /// A list of plugins that are used to extend the functionality of the [Collab].
   plugins: Plugins,
 
-  is_initialized: AtomicBool,
+  state: Arc<State>,
 
   /// Just binding the data_subscription to the [Collab] struct to prevent it from
   /// being dropped.
@@ -82,11 +84,20 @@ impl Collab {
     });
     let mut data = doc.get_or_insert_map(DATA_SECTION);
     let plugins = Plugins::new(plugins);
+    let state = Arc::new(State::new(&object_id));
     let awareness = Awareness::new(doc.clone());
-    let data_subscription = data.observe(|_txn, _event| {
-      // event.target().iter(txn).for_each(|(a, b)| {
-      //   tracing::trace!("folder data event: {}:{:?}", a, b);
-      // });
+
+    let cloned_state = state.clone();
+    let local_origin = origin.clone();
+    let data_subscription = data.observe(move |txn, event| {
+      // Only set the root changed flag if the remote origin is different from the local origin.
+      let remote_origin = CollabOrigin::from(txn);
+      if remote_origin != local_origin {
+        let cloned_state = cloned_state.clone();
+        tokio::spawn(async move {
+          cloned_state.set(CollabState::RootChanged);
+        });
+      }
     });
 
     Self {
@@ -96,11 +107,15 @@ impl Collab {
       awareness,
       data,
       plugins,
-      is_initialized: AtomicBool::new(false),
+      state,
       data_subscription,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
     }
+  }
+
+  pub fn subscribe_state_change(&self) -> watch::Receiver<CollabState> {
+    self.state.notifier.subscribe()
   }
 
   /// Returns the [Doc] associated with the [Collab].
@@ -134,11 +149,12 @@ impl Collab {
   /// callbacks will be called in the order they are added..
   ///
   /// This method should be called after all plugins are added.
-  pub fn initial(&self) {
-    if self.is_initialized.load(Ordering::SeqCst) {
+  pub fn initialize(&self) {
+    if !self.state.is_uninitialized() {
       return;
     }
-    self.is_initialized.store(true, Ordering::SeqCst);
+
+    self.state.set(CollabState::Loading);
     {
       let mut txn = self.transact_mut();
       self
@@ -167,6 +183,7 @@ impl Collab {
         .iter()
         .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id, &txn));
     }
+    self.state.set(CollabState::Initialized);
   }
 
   pub fn observer_data<F>(&mut self, f: F) -> MapSubscription
@@ -593,7 +610,7 @@ impl MutexCollab {
   }
 
   pub fn initial(&self) {
-    self.0.lock().initial();
+    self.0.lock().initialize();
   }
 
   pub fn to_json_value(&self) -> JsonValue {

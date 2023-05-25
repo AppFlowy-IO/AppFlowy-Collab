@@ -40,7 +40,7 @@ where
     }
     let doc_id = get_or_create_did(uid, self, object_id.as_ref())?;
     tracing::trace!(
-      "🤲collab => [{}:{:?}]: New doc:{}",
+      "[🦀Collab] => [{}:{:?}]: new doc:{}",
       doc_id,
       object_id,
       doc_id
@@ -51,7 +51,7 @@ where
     let sv_key = make_state_vector_key(doc_id);
 
     tracing::trace!(
-      "🤲collab => [{}-{:?}] insert doc state: {:?}",
+      "[🦀Collab] => [{}:{:?}] insert doc state: {:?}",
       doc_id,
       object_id,
       doc_state_key
@@ -72,7 +72,7 @@ where
     txn: &T,
   ) -> Result<(), PersistenceError> {
     let doc_id = get_or_create_did(uid, self, object_id)?;
-    tracing::trace!("🤲collab => [{}-{:?}]: flush doc", doc_id, object_id);
+    tracing::trace!("[🦀Collab] => [{}:{:?}]: flush doc", doc_id, object_id);
 
     let doc_state = txn.encode_state_as_update_v1(&StateVector::default());
     let sv = txn.state_vector().encode_v1();
@@ -81,7 +81,7 @@ where
     let sv_key = make_state_vector_key(doc_id);
 
     tracing::trace!(
-      "🤲collab => [{}-{:?}] insert doc state: {:?} : {}",
+      "[🦀Collab] => [{}:{:?}] insert doc state: {:?} : {}",
       doc_id,
       object_id,
       doc_state_key.as_ref(),
@@ -119,7 +119,7 @@ where
     let mut update_count = 0;
 
     if let Some(doc_id) = get_doc_id(uid, self, object_id) {
-      tracing::trace!("🤲collab => [{}-{:?}]: load doc", doc_id, object_id);
+      tracing::trace!("[🦀Collab] => [{}:{:?}]: load doc", doc_id, object_id);
       let doc_state_key = make_doc_state_key(doc_id);
       if let Some(doc_state) = self.get(doc_state_key.as_ref())? {
         // Load the doc state
@@ -140,7 +140,7 @@ where
 
         let update_end = make_doc_update_key(doc_id, Clock::MAX);
         // tracing::trace!(
-        //   "🤲collab => [{}-{:?}]: Get update from {:?} to {:?}",
+        //   "[🦀Collab] => [{}-{:?}]: Get update from {:?} to {:?}",
         //   doc_id,
         //   object_id,
         //   &update_start,
@@ -171,7 +171,7 @@ where
       }
       Ok(update_count)
     } else {
-      tracing::trace!("🤲collab => {:?} not exist", object_id);
+      tracing::trace!("[🦀Collab] => {:?} not exist", object_id);
       Err(PersistenceError::DocumentNotExist)
     }
   }
@@ -253,7 +253,7 @@ where
     object_id: &K,
   ) -> Result<(), PersistenceError> {
     if let Some(did) = get_doc_id(uid, self, object_id) {
-      tracing::trace!("🤲collab => [{}] delete {:?} doc", did, object_id);
+      tracing::trace!("[🦀Collab] => [{}] delete {:?} doc", did, object_id);
       let key = make_doc_id_key(&uid.to_be_bytes(), object_id.as_ref());
       let _ = self.remove(key.as_ref());
 

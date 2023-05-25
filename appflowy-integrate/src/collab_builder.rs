@@ -7,6 +7,7 @@ use collab_plugins::cloud_storage::postgres::SupabaseDBPlugin;
 use collab_plugins::cloud_storage::CollabObject;
 use collab_plugins::disk::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
+use parking_lot::RwLock;
 
 use crate::config::{CollabPluginConfig, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 
@@ -18,12 +19,18 @@ pub enum CloudStorageType {
 }
 
 pub struct AppFlowyCollabBuilder {
-  cloud_storage_type: CloudStorageType,
+  cloud_storage_type: RwLock<CloudStorageType>,
 }
 
 impl AppFlowyCollabBuilder {
   pub fn new(cloud_storage_type: CloudStorageType) -> Self {
-    Self { cloud_storage_type }
+    Self {
+      cloud_storage_type: RwLock::new(cloud_storage_type),
+    }
+  }
+
+  pub fn set_cloud_storage_type(&self, cloud_storage_type: CloudStorageType) {
+    *self.cloud_storage_type.write() = cloud_storage_type;
   }
 
   /// # Arguments
@@ -66,8 +73,9 @@ impl AppFlowyCollabBuilder {
     );
 
     let collab_config = CollabPluginConfig::from_env();
-    dbg!(&collab_config);
-    match self.cloud_storage_type {
+    let cloud_storage_type = self.cloud_storage_type.read().clone();
+    tracing::debug!("collab cloud storage type: {:?}", cloud_storage_type);
+    match cloud_storage_type {
       CloudStorageType::AWS => {
         if let Some(config) = collab_config.aws_config() {
           if !config.enable {
@@ -100,7 +108,7 @@ impl AppFlowyCollabBuilder {
       CloudStorageType::Local => {},
     }
 
-    collab.lock().initial();
+    collab.lock().initialize();
     collab
   }
 }

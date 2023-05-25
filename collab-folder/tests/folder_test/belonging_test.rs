@@ -1,5 +1,5 @@
 use crate::util::{create_folder_with_workspace, make_test_view};
-use collab_folder::core::ChildView;
+use collab_folder::core::ViewIdentifier;
 
 #[test]
 fn create_belongings_test() {
@@ -19,14 +19,14 @@ fn create_belongings_test() {
   folder_test.insert_view(view_1_3);
 
   let belongings = folder_test
-    .children_map
+    .views_relation
     .get_children(&view_1.id)
     .unwrap()
     .get_children();
   assert_eq!(belongings.len(), 3);
 
   let belongings = folder_test
-    .children_map
+    .views_relation
     .get_children(&view_1_2.id)
     .unwrap()
     .get_children();
@@ -50,7 +50,7 @@ fn move_belongings_test() {
   folder_test.insert_view(view_1_2);
   folder_test.insert_view(view_1_3);
 
-  let belonging_array = folder_test.children_map.get_children(&view_1.id).unwrap();
+  let belonging_array = folder_test.views_relation.get_children(&view_1.id).unwrap();
   let belongings = belonging_array.get_children();
   assert_eq!(belongings[0].id, "1_1");
   assert_eq!(belongings[1].id, "1_2");
@@ -68,11 +68,11 @@ fn move_belongings_test() {
 #[test]
 fn delete_belongings_test() {
   let folder_test = create_folder_with_workspace("1", "w1");
-  let belonging_array = folder_test.children_map.get_children("w1").unwrap();
+  let belonging_array = folder_test.views_relation.get_children("w1").unwrap();
   belonging_array.add_children(vec![
-    ChildView::new("1_1".to_string()),
-    ChildView::new("1_2".to_string()),
-    ChildView::new("1_3".to_string()),
+    ViewIdentifier::new("1_1".to_string()),
+    ViewIdentifier::new("1_2".to_string()),
+    ViewIdentifier::new("1_3".to_string()),
   ]);
 
   let view_1_1 = make_test_view("1_1", "w1", vec![]);
@@ -82,7 +82,7 @@ fn delete_belongings_test() {
   folder_test.insert_view(view_1_2);
   folder_test.insert_view(view_1_3);
 
-  let belonging_array = folder_test.children_map.get_children("w1").unwrap();
+  let belonging_array = folder_test.views_relation.get_children("w1").unwrap();
   belonging_array.remove_child(1);
   let belongings = belonging_array.get_children();
   assert_eq!(belongings[0].id, "1_1");
@@ -92,13 +92,13 @@ fn delete_belongings_test() {
 #[test]
 fn delete_duplicate_belongings_test() {
   let folder_test = create_folder_with_workspace("1", "w1");
-  let belonging_array = folder_test.children_map.get_children("w1").unwrap();
+  let belonging_array = folder_test.views_relation.get_children("w1").unwrap();
   belonging_array.add_children(vec![
-    ChildView::new("1_1".to_string()),
-    ChildView::new("1_2".to_string()),
-    ChildView::new("1_2".to_string()),
-    ChildView::new("1_3".to_string()),
-    ChildView::new("1_3".to_string()),
+    ViewIdentifier::new("1_1".to_string()),
+    ViewIdentifier::new("1_2".to_string()),
+    ViewIdentifier::new("1_2".to_string()),
+    ViewIdentifier::new("1_3".to_string()),
+    ViewIdentifier::new("1_3".to_string()),
   ]);
 
   let belongings = belonging_array.get_children();

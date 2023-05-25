@@ -37,7 +37,7 @@ impl CollabPlugin for SledDiskPlugin {
     if doc.is_exist(self.uid, object_id) {
       let _ = doc.load_doc(self.uid, object_id, false, txn).unwrap();
     } else {
-      tracing::trace!("🤲collab => {:?} not exist", object_id);
+      tracing::trace!("[🦀Collab] => {:?} not exist", object_id);
       doc.create_new_doc(self.uid, object_id, txn).unwrap();
     }
   }

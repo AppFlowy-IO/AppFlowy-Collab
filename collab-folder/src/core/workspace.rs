@@ -1,4 +1,4 @@
-use crate::core::{ChildView, ChildViews, ChildrenMap};
+use crate::core::{RepeatedView, ViewIdentifier, ViewsRelation};
 
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use std::rc::Rc;
 #[derive(Clone)]
 pub struct WorkspaceMap {
   container: MapRefWrapper,
-  belongings: Rc<ChildrenMap>,
+  views_relation: Rc<ViewsRelation>,
 }
 
 const WORKSPACE_ID: &str = "id";
@@ -15,10 +15,10 @@ const WORKSPACE_NAME: &str = "name";
 const WORKSPACE_CREATED_AT: &str = "created_at";
 
 impl WorkspaceMap {
-  pub fn new(container: MapRefWrapper, belongings: Rc<ChildrenMap>) -> Self {
+  pub fn new(container: MapRefWrapper, views_relation: Rc<ViewsRelation>) -> Self {
     Self {
       container,
-      belongings,
+      views_relation,
     }
   }
 
@@ -35,13 +35,13 @@ impl WorkspaceMap {
     txn: &mut TransactionMut,
     container: &MapRef,
     workspace_id: &str,
-    belongings: Rc<ChildrenMap>,
+    views_relation: Rc<ViewsRelation>,
     f: F,
   ) -> Self
   where
     F: FnOnce(WorkspaceBuilder) -> WorkspaceMap,
   {
-    let builder = WorkspaceBuilder::new(workspace_id, txn, container, belongings);
+    let builder = WorkspaceBuilder::new(workspace_id, txn, container, views_relation);
     f(builder)
   }
 
@@ -59,8 +59,12 @@ impl WorkspaceMap {
     F: FnOnce(WorkspaceUpdate),
   {
     if let Some(workspace_id) = self.get_workspace_id_with_txn(txn) {
-      let update =
-        WorkspaceUpdate::new(&workspace_id, txn, &self.container, self.belongings.clone());
+      let update = WorkspaceUpdate::new(
+        &workspace_id,
+        txn,
+        &self.container,
+        self.views_relation.clone(),
+      );
       f(update);
     }
   }
@@ -82,7 +86,7 @@ impl WorkspaceMap {
       .unwrap_or_default();
 
     let child_views = self
-      .belongings
+      .views_relation
       .get_children_with_txn(txn, &id)
       .map(|array| array.get_children())
       .unwrap_or_default();
@@ -100,7 +104,7 @@ impl WorkspaceMap {
 pub struct Workspace {
   pub id: String,
   pub name: String,
-  pub child_views: ChildViews,
+  pub child_views: RepeatedView,
   pub created_at: i64,
 }
 
@@ -108,7 +112,7 @@ pub struct WorkspaceBuilder<'a, 'b> {
   workspace_id: &'a str,
   map_ref: &'a MapRef,
   txn: &'a mut TransactionMut<'b>,
-  belongings: Rc<ChildrenMap>,
+  views_relation: Rc<ViewsRelation>,
 }
 
 impl<'a, 'b> WorkspaceBuilder<'a, 'b> {
@@ -116,14 +120,14 @@ impl<'a, 'b> WorkspaceBuilder<'a, 'b> {
     workspace_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'a MapRef,
-    belongings: Rc<ChildrenMap>,
+    views_relation: Rc<ViewsRelation>,
   ) -> Self {
     map_ref.insert_str_with_txn(txn, WORKSPACE_ID, workspace_id);
     Self {
       workspace_id,
       map_ref,
       txn,
-      belongings,
+      views_relation,
     }
   }
 
@@ -135,7 +139,7 @@ impl<'a, 'b> WorkspaceBuilder<'a, 'b> {
       self.workspace_id,
       self.txn,
       self.map_ref,
-      self.belongings.clone(),
+      self.views_relation.clone(),
     );
     f(update);
     self
@@ -146,7 +150,7 @@ pub struct WorkspaceUpdate<'a, 'b, 'c> {
   workspace_id: &'a str,
   map_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
-  belongings: Rc<ChildrenMap>,
+  views_relation: Rc<ViewsRelation>,
 }
 
 impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
@@ -154,13 +158,13 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
     workspace_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'c MapRef,
-    belongings: Rc<ChildrenMap>,
+    views_relation: Rc<ViewsRelation>,
   ) -> Self {
     Self {
       workspace_id,
       map_ref,
       txn,
-      belongings,
+      views_relation,
     }
   }
 
@@ -178,9 +182,9 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
     self
   }
 
-  pub fn set_children(self, children: ChildViews) -> Self {
+  pub fn set_children(self, children: RepeatedView) -> Self {
     let array = self
-      .belongings
+      .views_relation
       .get_or_create_children_with_txn(self.txn, self.workspace_id);
     array.add_children_with_txn(self.txn, children.into_inner());
     self
@@ -188,14 +192,14 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
 
   pub fn delete_child(self, index: u32) -> Self {
     self
-      .belongings
+      .views_relation
       .delete_children_with_txn(self.txn, self.workspace_id, index);
     self
   }
 
-  pub fn add_children(self, belongings: Vec<ChildView>) {
+  pub fn add_children(self, belongings: Vec<ViewIdentifier>) {
     self
-      .belongings
+      .views_relation
       .add_children(self.txn, self.workspace_id, belongings);
   }
 }

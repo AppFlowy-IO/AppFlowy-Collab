@@ -1,14 +1,14 @@
 use crate::util::create_folder;
-use collab_folder::core::{ChildView, ChildViews, Workspace};
+use collab_folder::core::{RepeatedView, ViewIdentifier, Workspace};
 
 #[test]
 fn create_workspace_test() {
   let folder_test = create_folder("1");
 
-  let belongings = ChildViews {
+  let belongings = RepeatedView {
     items: vec![
-      ChildView::new("1".to_string()),
-      ChildView::new("2".to_string()),
+      ViewIdentifier::new("1".to_string()),
+      ViewIdentifier::new("2".to_string()),
     ],
   };
   let o_workspace = Workspace {
@@ -32,10 +32,10 @@ fn update_workspace_test() {
   let workspace = Workspace {
     id: "1".to_string(),
     name: "My first workspace".to_string(),
-    child_views: ChildViews {
+    child_views: RepeatedView {
       items: vec![
-        ChildView::new("1".to_string()),
-        ChildView::new("2".to_string()),
+        ViewIdentifier::new("1".to_string()),
+        ViewIdentifier::new("2".to_string()),
       ],
     },
     created_at: 123,

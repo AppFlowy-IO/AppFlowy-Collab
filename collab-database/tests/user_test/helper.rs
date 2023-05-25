@@ -72,7 +72,7 @@ impl UserDatabaseCollabBuilder for UserDatabaseCollabBuilderImpl {
     let collab = CollabBuilder::new(uid, object_id)
       .with_plugin(RocksdbDiskPlugin::new_with_config(uid, db, config.clone()))
       .build();
-    collab.lock().initial();
+    collab.lock().initialize();
     Arc::new(collab)
   }
 }
