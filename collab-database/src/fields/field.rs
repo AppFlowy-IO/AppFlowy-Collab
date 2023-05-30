@@ -29,6 +29,15 @@ impl Field {
     }
   }
 
+  pub fn with_type_option_data(
+    mut self,
+    type_id: impl ToString,
+    type_options: TypeOptionData,
+  ) -> Self {
+    self.type_options.insert(type_id.to_string(), type_options);
+    self
+  }
+
   pub fn get_type_option<T: From<TypeOptionData>>(&self, type_id: impl ToString) -> Option<T> {
     let type_option_data = self.type_options.get(&type_id.to_string())?.clone();
     Some(T::from(type_option_data))

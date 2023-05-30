@@ -674,23 +674,20 @@ impl Database {
     Some(duplicated_view)
   }
 
-  /// Duplicate a row
-  pub fn duplicate_row(&self, view_id: &str, row_id: &RowId) -> Option<(usize, RowOrder)> {
-    self.root.with_transact_mut(|txn| {
-      if let Some(row) = self.block.get_row(row_id) {
-        let params = CreateRowParams {
-          id: gen_row_id(),
-          cells: row.cells,
-          height: row.height,
-          visibility: row.visibility,
-          prev_row_id: Some(row.id),
-          timestamp: timestamp(),
-        };
-        self.create_row_with_txn(txn, view_id, params)
-      } else {
-        None
-      }
-    })
+  /// Duplicate the row, and insert it after the original row.
+  pub fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
+    if let Some(row) = self.block.get_row(row_id) {
+      Some(CreateRowParams {
+        id: gen_row_id(),
+        cells: row.cells,
+        height: row.height,
+        visibility: row.visibility,
+        prev_row_id: Some(row.id),
+        timestamp: timestamp(),
+      })
+    } else {
+      None
+    }
   }
 
   pub fn duplicate_field(
