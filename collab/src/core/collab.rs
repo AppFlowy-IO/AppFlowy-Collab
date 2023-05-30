@@ -91,6 +91,7 @@ impl Collab {
     let local_origin = origin.clone();
     let data_subscription = data.observe(move |txn, _event| {
       // Only set the root changed flag if the remote origin is different from the local origin.
+      // println!("event target: {:?}, {:?}", event.target(), clone_data);
       let remote_origin = CollabOrigin::from(txn);
       if remote_origin != local_origin {
         let cloned_state = cloned_state.clone();
@@ -236,12 +237,6 @@ impl Collab {
     });
   }
 
-  pub fn create_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
-    let map = MapPrelim::<lib0::any::Any>::new();
-    let map_ref = self.data.insert(txn, key, map);
-    self.map_wrapper_with(map_ref)
-  }
-
   pub fn get_json_with_path<T: DeserializeOwned>(&self, path: impl Into<Path>) -> Option<T> {
     let path = path.into();
     if path.is_empty() {
@@ -254,6 +249,12 @@ impl Collab {
     let json_str = map.to_json();
     let object = serde_json::from_str::<T>(&json_str).ok()?;
     Some(object)
+  }
+
+  pub fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
+    let map = MapPrelim::<lib0::any::Any>::new();
+    let map_ref = self.data.insert(txn, key, map);
+    self.map_wrapper_with(map_ref)
   }
 
   pub fn get_map_with_path<M: CustomMapRef>(&self, path: impl Into<Path>) -> Option<M> {

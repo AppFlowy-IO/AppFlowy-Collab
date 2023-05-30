@@ -44,7 +44,7 @@ async fn send_multiple_updates_to_server_test() {
   {
     let client = client.lock();
     client.with_transact_mut(|txn| {
-      let map = client.create_map_with_txn(txn, "map");
+      let map = client.insert_map_with_txn(txn, "map");
       map.insert_with_txn(txn, "task1", "a");
       map.insert_with_txn(txn, "task2", "b");
     });
@@ -109,7 +109,7 @@ async fn send_local_doc_initial_state_to_server() {
   {
     let client = client.lock();
     client.with_transact_mut(|txn| {
-      let map = client.create_map_with_txn(txn, "map");
+      let map = client.insert_map_with_txn(txn, "map");
       map.insert_with_txn(txn, "task1", "a");
       map.insert_with_txn(txn, "task2", "b");
     });
@@ -140,7 +140,7 @@ async fn send_local_doc_initial_state_to_server_multiple_times() {
   {
     let client = client.lock();
     client.with_transact_mut(|txn| {
-      let map = client.create_map_with_txn(txn, "map");
+      let map = client.insert_map_with_txn(txn, "map");
       map.insert_with_txn(txn, "task1", "a");
       map.insert_with_txn(txn, "task2", "b");
     });

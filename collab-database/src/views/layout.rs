@@ -16,6 +16,12 @@ pub enum DatabaseLayout {
   Calendar = 2,
 }
 
+impl DatabaseLayout {
+  pub fn is_board(&self) -> bool {
+    matches!(self, DatabaseLayout::Board)
+  }
+}
+
 impl AsRef<str> for DatabaseLayout {
   fn as_ref(&self) -> &str {
     match self {

@@ -83,9 +83,9 @@ impl RowDoc {
     };
 
     let data =
-      data.unwrap_or_else(|| collab_guard.create_map_with_txn(txn.as_mut().unwrap(), DATA));
+      data.unwrap_or_else(|| collab_guard.insert_map_with_txn(txn.as_mut().unwrap(), DATA));
     let meta =
-      meta.unwrap_or_else(|| collab_guard.create_map_with_txn(txn.as_mut().unwrap(), META));
+      meta.unwrap_or_else(|| collab_guard.insert_map_with_txn(txn.as_mut().unwrap(), META));
     let comments = comments.unwrap_or_else(|| {
       collab_guard.create_array_with_txn::<MapPrelim<lib0Any>>(
         txn.as_mut().unwrap(),

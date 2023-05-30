@@ -111,105 +111,121 @@ fn root_change_test() {
   collab_2.lock().initialize();
 
   {
-    let collab_guard = collab_1.lock();
-    collab_guard.with_transact_mut(|txn| {
-      collab_guard.create_map_with_txn(txn, "map");
+    let collab_1_guard = collab_1.lock();
+    collab_1_guard.with_transact_mut(|txn| {
+      collab_1_guard.insert_map_with_txn(txn, "map");
     });
-    drop(collab_guard);
-
+    drop(collab_1_guard);
+  }
+  {
     let collab_2_guard = collab_2.lock();
     collab_2_guard.with_transact_mut(|txn| {
-      collab_2_guard.create_map_with_txn(txn, "map");
+      collab_2_guard.insert_map_with_txn(txn, "map");
     });
+    drop(collab_2_guard);
   }
 
   let map_2 = {
     let collab_guard = collab_2.lock();
     let txn = collab_guard.transact();
-    collab_guard.get_map_with_txn(&txn, vec!["map"]).unwrap()
-  };
+    let map_2 = collab_guard.get_map_with_txn(&txn, vec!["map"]).unwrap();
+    drop(txn);
 
-  {
-    collab_2.lock().with_transact_mut(|txn| {
+    collab_guard.with_transact_mut(|txn| {
       map_2.insert_with_txn(txn, "1", "a");
       map_2.insert_with_txn(txn, "2", "b");
     });
-  }
-
-  let map_1 = {
-    let collab_guard = collab_1.lock();
-    let txn = collab_guard.transact();
-    collab_guard.get_map_with_txn(&txn, vec!["map"]).unwrap()
+    map_2
   };
 
   let sv_1 = collab_1.lock().get_doc().transact().state_vector();
-  let sv_update = collab_2
+  let sv_1_update = collab_2
     .lock()
     .get_doc()
     .transact()
     .encode_state_as_update_v1(&sv_1);
-  {
-    let collab_guard = collab_1.lock();
-    collab_guard.with_transact_mut(|txn| {
-      let update = Update::decode_v1(&sv_update).unwrap();
+
+  let map_1 = {
+    let collab_1_guard = collab_1.lock();
+    collab_1_guard.with_transact_mut(|txn| {
+      let update = Update::decode_v1(&sv_1_update).unwrap();
       txn.apply_update(update);
     });
-  }
 
-  let map_3 = {
-    let collab_guard = collab_1.lock();
-    let txn = collab_guard.transact();
-    let map = collab_guard.get_map_with_txn(&txn, vec!["map"]).unwrap();
-    drop(txn);
-    drop(collab_guard);
-    map
+    let txn = collab_1_guard.transact();
+    collab_1_guard.get_map_with_txn(&txn, vec!["map"]).unwrap()
   };
 
   let a = map_1.to_json_value();
   let b = map_2.to_json_value();
-  let c = map_3.to_json_value();
 
   println!("a: {}", a);
   println!("b: {}", b);
-  println!("c: {}", c);
+  // assert_eq!(a, b);
 }
 
 // #[test]
 // fn root_change_test2() {
-//   let collab_1 = Doc::new();
-//   let collab_2 = Doc::new();
+//   let doc_1 = Doc::new();
+//   let doc_2 = Doc::new();
+//   let root_map_1 = doc_1.get_or_insert_map("root");
+//   let root_map_2 = doc_2.get_or_insert_map("root");
 //
-//   let map_1 = collab_1.get_or_insert_map("map");
-//   let map_2 = collab_2.get_or_insert_map("map");
+//   // root: { map:{ } }
+//   let mut map_1 = {
+//     let mut txn = doc_1.transact_mut();
+//     root_map_1.insert(&mut txn, "map", MapPrelim::<lib0::any::Any>::new())
+//   };
+//   // root: { map:{ } }
+//   let mut map_2 = {
+//     let mut txn = doc_2.transact_mut();
+//     root_map_2.insert(&mut txn, "map", MapPrelim::<lib0::any::Any>::new())
+//   };
+//
+//   // let cloned_map_1 = map_1.clone();
+//   // let cloned_map_2 = map_2.clone();
+//   // let map_1_sub = map_1.observe(move |txn, event| {
+//   //   // Only set the root changed flag if the remote origin is different from the local origin.
+//   //   println!(
+//   //     "1 event target: {:?}, map: {:?}",
+//   //     event.target(),
+//   //     cloned_map_1
+//   //   );
+//   // });
+//   // let map_2_sub = map_2.observe(move |txn, event| {
+//   //   // Only set the root changed flag if the remote origin is different from the local origin.
+//   //   println!(
+//   //     "2 event target: {:?}, map: {:?}",
+//   //     event.target(),
+//   //     cloned_map_2
+//   //   );
+//   // });
 //
 //   {
-//     let mut txn = collab_2.transact_mut();
-//     map_2.insert(&mut txn, "1", "a");
-//     map_2.insert(&mut txn, "2", "b");
+//     let mut txn = doc_2.transact_mut();
+//     map_2.insert(&mut txn, "key_1", "a");
+//     map_2.insert(&mut txn, "key_2", "b");
 //   }
 //
-//   let sv_1 = collab_1.transact().state_vector();
-//   let sv_update = collab_2.transact().encode_state_as_update_v1(&sv_1);
+//   let sv_1 = doc_1.transact().state_vector();
+//   let sv_update = doc_2.transact().encode_state_as_update_v1(&sv_1);
 //   {
-//     let mut txn = collab_1.transact_mut();
+//     let mut txn = doc_1.transact_mut();
 //     let update = Update::decode_v1(&sv_update).unwrap();
 //     txn.apply_update(update);
 //   }
+//
 //   let a = {
-//     let txn = collab_1.transact();
-//     map_1.to_json(&txn)
+//     let txn = doc_1.transact();
+//     root_map_1.to_json(&txn)
 //   };
 //
 //   let b = {
-//     let txn = collab_1.transact();
-//     collab_1.to_json(&txn)
-//   };
-//   let c = {
-//     let txn = collab_2.transact();
-//     map_2.to_json(&txn)
+//     let txn = doc_2.transact();
+//     root_map_2.to_json(&txn)
 //   };
 //
 //   println!("a: {}", a);
 //   println!("b: {}", b);
-//   println!("c: {}", c);
+//   assert_eq!(a, b);
 // }

@@ -316,7 +316,7 @@ fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
 
   let (folder, workspaces, views, trash, meta, views_relation, folder_sub) = collab_guard
     .with_transact_mut(|txn| {
-      let mut folder = collab_guard.create_map_with_txn(txn, FOLDER);
+      let mut folder = collab_guard.insert_map_with_txn(txn, FOLDER);
       let folder_sub = subscribe_folder_change(&mut folder, context.view_change_tx.clone());
       let workspaces = folder.insert_array_with_txn::<WorkspaceItem>(txn, WORKSPACES, vec![]);
       let views = folder.insert_map_with_txn(txn, VIEWS);

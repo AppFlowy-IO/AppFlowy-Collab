@@ -135,7 +135,7 @@ impl Database {
       // { DATABASE: {:} }
       let database = collab_guard
         .get_map_with_txn(txn, vec![DATABASE])
-        .unwrap_or_else(|| collab_guard.create_map_with_txn(txn, DATABASE));
+        .unwrap_or_else(|| collab_guard.insert_map_with_txn(txn, DATABASE));
 
       database.insert_str_with_txn(txn, DATABASE_ID, database_id);
 
