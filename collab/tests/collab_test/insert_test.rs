@@ -5,7 +5,7 @@ use yrs::{Map, Observable};
 #[test]
 fn insert_text() {
   let mut collab = Collab::new(1, "1", vec![]);
-  let _sub = collab.observer_attrs(|txn, event| {
+  let _sub = collab.observer_data(|txn, event| {
     event.target().iter(txn).for_each(|(a, b)| {
       println!("{}: {}", a, b);
     });

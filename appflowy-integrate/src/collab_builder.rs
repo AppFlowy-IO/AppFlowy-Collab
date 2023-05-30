@@ -4,8 +4,10 @@ use collab::core::collab::MutexCollab;
 use collab::preclude::CollabBuilder;
 use collab_plugins::cloud_storage::aws::AWSDynamoDBPlugin;
 use collab_plugins::cloud_storage::postgres::SupabaseDBPlugin;
+use collab_plugins::cloud_storage::CollabObject;
 use collab_plugins::disk::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
+use parking_lot::RwLock;
 
 use crate::config::{CollabPluginConfig, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 
@@ -17,22 +19,50 @@ pub enum CloudStorageType {
 }
 
 pub struct AppFlowyCollabBuilder {
-  cloud_storage_type: CloudStorageType,
+  cloud_storage_type: RwLock<CloudStorageType>,
 }
 
 impl AppFlowyCollabBuilder {
   pub fn new(cloud_storage_type: CloudStorageType) -> Self {
-    Self { cloud_storage_type }
+    Self {
+      cloud_storage_type: RwLock::new(cloud_storage_type),
+    }
   }
 
-  pub fn build(&self, uid: i64, object_id: &str, db: Arc<RocksCollabDB>) -> Arc<MutexCollab> {
-    self.build_with_config(uid, object_id, db, &CollabPersistenceConfig::default())
+  pub fn set_cloud_storage_type(&self, cloud_storage_type: CloudStorageType) {
+    *self.cloud_storage_type.write() = cloud_storage_type;
+  }
+
+  /// # Arguments
+  ///
+  /// * `uid`: user id
+  /// * `object_id`: the collab object id
+  /// * `object_name`: the collab object name. Currently only used to debug.
+  /// * `db`: the RocksCollabDB instance.
+  ///
+  /// returns: Arc<MutexCollab>
+  ///
+  pub fn build(
+    &self,
+    uid: i64,
+    object_id: &str,
+    object_name: &str,
+    db: Arc<RocksCollabDB>,
+  ) -> Arc<MutexCollab> {
+    self.build_with_config(
+      uid,
+      object_id,
+      object_name,
+      db,
+      &CollabPersistenceConfig::default(),
+    )
   }
 
   pub fn build_with_config(
     &self,
     uid: i64,
     object_id: &str,
+    object_name: &str,
     db: Arc<RocksCollabDB>,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab> {
@@ -43,7 +73,9 @@ impl AppFlowyCollabBuilder {
     );
 
     let collab_config = CollabPluginConfig::from_env();
-    match self.cloud_storage_type {
+    let cloud_storage_type = self.cloud_storage_type.read().clone();
+    tracing::debug!("collab cloud storage type: {:?}", cloud_storage_type);
+    match cloud_storage_type {
       CloudStorageType::AWS => {
         if let Some(config) = collab_config.aws_config() {
           if !config.enable {
@@ -66,8 +98,8 @@ impl AppFlowyCollabBuilder {
       CloudStorageType::Supabase => {
         if let Some(config) = collab_config.supabase_config() {
           if config.collab_table_config.enable {
-            let plugin =
-              SupabaseDBPlugin::new(object_id.to_string(), collab.clone(), 10, config.clone());
+            let collab_object = CollabObject::new(object_id.to_string()).with_name(object_name);
+            let plugin = SupabaseDBPlugin::new(collab_object, collab.clone(), 10, config.clone());
             collab.lock().add_plugin(Arc::new(plugin));
             tracing::debug!("add collab plugin: {:?}", self.cloud_storage_type);
           }
@@ -76,15 +108,7 @@ impl AppFlowyCollabBuilder {
       CloudStorageType::Local => {},
     }
 
-    // let aws_dynamodb_plugin = AWSDynamoDBPlugin::new(
-    //   object_id.to_string(),
-    //   collab.clone(),
-    //   5,
-    //   "ap-southeast-2".to_string(),
-    // );
-    // collab.lock().add_plugin(Arc::new(aws_dynamodb_plugin));
-
-    collab.lock().initial();
+    collab.lock().initialize();
     collab
   }
 }

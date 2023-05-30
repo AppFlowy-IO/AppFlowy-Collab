@@ -65,7 +65,7 @@ impl RowDoc {
     db: Arc<RocksCollabDB>,
     collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
   ) -> Self {
-    let collab = collab_builder.build(uid, &row_id, db.clone());
+    let collab = collab_builder.build(uid, &row_id, "row", db.clone());
     let collab_guard = collab.lock();
     let (data, meta, comments) = {
       let txn = collab_guard.transact();
@@ -83,9 +83,9 @@ impl RowDoc {
     };
 
     let data =
-      data.unwrap_or_else(|| collab_guard.create_map_with_txn(txn.as_mut().unwrap(), DATA));
+      data.unwrap_or_else(|| collab_guard.insert_map_with_txn(txn.as_mut().unwrap(), DATA));
     let meta =
-      meta.unwrap_or_else(|| collab_guard.create_map_with_txn(txn.as_mut().unwrap(), META));
+      meta.unwrap_or_else(|| collab_guard.insert_map_with_txn(txn.as_mut().unwrap(), META));
     let comments = comments.unwrap_or_else(|| {
       collab_guard.create_array_with_txn::<MapPrelim<lib0Any>>(
         txn.as_mut().unwrap(),

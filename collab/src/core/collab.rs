@@ -1,12 +1,15 @@
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
-use std::sync::atomic::{AtomicBool, Ordering};
+
 use std::sync::Arc;
+
 use std::vec::IntoIter;
 
 use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use tokio::sync::watch;
+
 use y_sync::awareness::Awareness;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
@@ -17,6 +20,7 @@ use yrs::{
 };
 
 use crate::core::collab_plugin::CollabPlugin;
+use crate::core::collab_state::{CollabState, State};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
 use crate::preclude::{ArrayRefWrapper, JsonValue};
@@ -52,8 +56,12 @@ pub struct Collab {
   /// A list of plugins that are used to extend the functionality of the [Collab].
   plugins: Plugins,
 
-  is_initialized: AtomicBool,
+  state: Arc<State>,
 
+  /// Just binding the data_subscription to the [Collab] struct to prevent it from
+  /// being dropped.
+  #[allow(dead_code)]
+  data_subscription: MapSubscription,
   update_subscription: RwLock<Option<UpdateSubscription>>,
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
 }
@@ -74,9 +82,25 @@ impl Collab {
       skip_gc: true,
       ..Options::default()
     });
-    let data = doc.get_or_insert_map(DATA_SECTION);
+    let mut data = doc.get_or_insert_map(DATA_SECTION);
     let plugins = Plugins::new(plugins);
+    let state = Arc::new(State::new(&object_id));
     let awareness = Awareness::new(doc.clone());
+
+    let cloned_state = state.clone();
+    let local_origin = origin.clone();
+    let data_subscription = data.observe(move |txn, _event| {
+      // Only set the root changed flag if the remote origin is different from the local origin.
+      // println!("event target: {:?}, {:?}", event.target(), clone_data);
+      let remote_origin = CollabOrigin::from(txn);
+      if remote_origin != local_origin {
+        let cloned_state = cloned_state.clone();
+        tokio::spawn(async move {
+          cloned_state.set(CollabState::RootChanged);
+        });
+      }
+    });
+
     Self {
       origin,
       object_id,
@@ -84,10 +108,15 @@ impl Collab {
       awareness,
       data,
       plugins,
-      is_initialized: AtomicBool::new(false),
+      state,
+      data_subscription,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
     }
+  }
+
+  pub fn subscribe_state_change(&self) -> watch::Receiver<CollabState> {
+    self.state.notifier.subscribe()
   }
 
   /// Returns the [Doc] associated with the [Collab].
@@ -121,11 +150,12 @@ impl Collab {
   /// callbacks will be called in the order they are added..
   ///
   /// This method should be called after all plugins are added.
-  pub fn initial(&self) {
-    if self.is_initialized.load(Ordering::SeqCst) {
+  pub fn initialize(&self) {
+    if !self.state.is_uninitialized() {
       return;
     }
-    self.is_initialized.store(true, Ordering::SeqCst);
+
+    self.state.set(CollabState::Loading);
     {
       let mut txn = self.transact_mut();
       self
@@ -154,9 +184,10 @@ impl Collab {
         .iter()
         .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id, &txn));
     }
+    self.state.set(CollabState::Initialized);
   }
 
-  pub fn observer_attrs<F>(&mut self, f: F) -> MapSubscription
+  pub fn observer_data<F>(&mut self, f: F) -> MapSubscription
   where
     F: Fn(&TransactionMut, &MapEvent) + 'static,
   {
@@ -206,12 +237,6 @@ impl Collab {
     });
   }
 
-  pub fn create_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
-    let map = MapPrelim::<lib0::any::Any>::new();
-    let map_ref = self.data.insert(txn, key, map);
-    self.map_wrapper_with(map_ref)
-  }
-
   pub fn get_json_with_path<T: DeserializeOwned>(&self, path: impl Into<Path>) -> Option<T> {
     let path = path.into();
     if path.is_empty() {
@@ -224,6 +249,12 @@ impl Collab {
     let json_str = map.to_json();
     let object = serde_json::from_str::<T>(&json_str).ok()?;
     Some(object)
+  }
+
+  pub fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
+    let map = MapPrelim::<lib0::any::Any>::new();
+    let map_ref = self.data.insert(txn, key, map);
+    self.map_wrapper_with(map_ref)
   }
 
   pub fn get_map_with_path<M: CustomMapRef>(&self, path: impl Into<Path>) -> Option<M> {
@@ -345,6 +376,11 @@ impl Collab {
     self.doc.transact_mut_with(self.origin.clone())
   }
 
+  /// Returns a transaction that can mutate the document. This transaction will carry the
+  /// origin of the current user.
+  ///
+  /// If applying the remote update, please use the `transact_mut` of `doc`. Ot
+  /// update will send to remote that the remote already has.
   pub fn with_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
@@ -388,10 +424,11 @@ fn observe_doc(
 
         let remote_origin = CollabOrigin::from(txn);
         if remote_origin == local_origin {
+          tracing::trace!("[🦀Collab]: did apply local {} update", local_origin);
           plugin.receive_local_update(&local_origin, &cloned_oid, &event.update);
         } else {
           tracing::trace!(
-            "[🦀Client]: {} did apply remote {} update",
+            "[🦀Collab]: {} did apply remote {} update",
             local_origin,
             remote_origin,
           );
@@ -574,7 +611,7 @@ impl MutexCollab {
   }
 
   pub fn initial(&self) {
-    self.0.lock().initial();
+    self.0.lock().initialize();
   }
 
   pub fn to_json_value(&self) -> JsonValue {

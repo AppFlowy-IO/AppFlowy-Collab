@@ -12,7 +12,7 @@ use collab::core::origin::CollabOrigin;
 use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
 use postgrest::Postgrest;
 
-use crate::cloud_storage::remote_collab::{RemoteCollab, RemoteCollabStorage};
+use crate::cloud_storage::remote_collab::{CollabObject, RemoteCollab, RemoteCollabStorage};
 
 /// The table must have the following columns:
 /// - oid: the object id
@@ -29,7 +29,7 @@ pub struct PostgresDB {
 }
 
 impl PostgresDB {
-  pub fn new(object_id: String, sync_per_secs: u64, config: SupabaseDBConfig) -> Self {
+  pub fn new(object: CollabObject, sync_per_secs: u64, config: SupabaseDBConfig) -> Self {
     let url = format!("{}/rest/v1/", config.url);
     let auth = format!("Bearer {}", config.key);
     let postgrest = Postgrest::new(url)
@@ -40,7 +40,7 @@ impl PostgresDB {
     let storage = PGCollabCloudStorageImpl {
       postgrest: postgrest.clone(),
       table_name: config.collab_table_config.table_name,
-      object_id: object_id.clone(),
+      object_id: object.id.clone(),
     };
 
     let config = SinkConfig::new()
@@ -49,7 +49,7 @@ impl PostgresDB {
         sync_per_secs,
       )));
 
-    let remote_collab = Arc::new(RemoteCollab::new(object_id, storage, config));
+    let remote_collab = Arc::new(RemoteCollab::new(object, storage, config));
     Self {
       postgrest,
       remote_collab,
@@ -144,8 +144,9 @@ pub async fn get_postgres_remote_doc(
   object_id: &str,
   config: SupabaseDBConfig,
 ) -> Arc<MutexCollab> {
-  let local_collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, object_id, vec![]));
-  let plugin = PostgresDB::new(object_id.to_string(), 1, config);
+  let object = CollabObject::new(object_id.to_string());
+  let local_collab = Arc::new(MutexCollab::new(CollabOrigin::Server, object_id, vec![]));
+  let plugin = PostgresDB::new(object, 1, config);
   plugin.start_sync(local_collab.clone()).await;
   local_collab
 }

@@ -1,15 +1,14 @@
-use crate::core::{Belonging, BelongingMap, Belongings};
+use crate::core::{subscribe_view_change, RepeatedView, ViewIdentifier, ViewRelations};
 use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update};
 use anyhow::bail;
 
+use crate::core::folder_observe::{ViewChange, ViewChangeSender};
 use collab::preclude::{
-  lib0Any, DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRef, MapRefExtension,
-  MapRefWrapper, ReadTxn, ToJson, TransactionMut, YrsValue,
+  lib0Any, DeepEventsSubscription, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 use std::rc::Rc;
-use tokio::sync::broadcast;
 
 const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";
@@ -19,29 +18,26 @@ const VIEW_DATABASE_ID: &str = "database_id";
 const VIEW_LAYOUT: &str = "layout";
 const VIEW_CREATE_AT: &str = "created_at";
 
-pub type ViewChangeSender = broadcast::Sender<ViewChange>;
-pub type ViewChangeReceiver = broadcast::Receiver<ViewChange>;
-
 pub struct ViewsMap {
   container: MapRefWrapper,
   #[allow(dead_code)]
-  subscription: Option<DeepEventsSubscription>,
-  change_tx: Option<ViewChangeSender>,
-  belonging_map: Rc<BelongingMap>,
+  subscription: DeepEventsSubscription,
+  change_tx: ViewChangeSender,
+  view_relations: Rc<ViewRelations>,
 }
 
 impl ViewsMap {
   pub fn new(
     mut root: MapRefWrapper,
-    change_tx: Option<ViewChangeSender>,
-    belongings: Rc<BelongingMap>,
+    change_tx: ViewChangeSender,
+    views_relation: Rc<ViewRelations>,
   ) -> ViewsMap {
-    let subscription = subscribe_change(&mut root, change_tx.clone(), belongings.clone());
+    let subscription = subscribe_view_change(&mut root, change_tx.clone(), views_relation.clone());
     Self {
       container: root,
       subscription,
       change_tx,
-      belonging_map: belongings,
+      view_relations: views_relation,
     }
   }
 
@@ -53,13 +49,13 @@ impl ViewsMap {
   pub fn get_views_belong_to_with_txn<T: ReadTxn>(&self, txn: &T, bid: &str) -> Vec<View> {
     match self.get_view_with_txn(txn, bid) {
       Some(root_view) => root_view
-        .belongings
+        .children
         .iter()
         .flat_map(|be| {
           self
             .container
             .get_map_with_txn(txn, &be.id)
-            .and_then(|map| view_from_map_ref(&map, txn, &self.belonging_map))
+            .and_then(|map| view_from_map_ref(&map, txn, &self.view_relations))
         })
         .collect::<Vec<View>>(),
       None => vec![],
@@ -89,7 +85,7 @@ impl ViewsMap {
 
   pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<View> {
     let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-    view_from_map_ref(&map_ref, txn, &self.belonging_map)
+    view_from_map_ref(&map_ref, txn, &self.view_relations)
   }
 
   pub fn get_view_name_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<String> {
@@ -105,17 +101,16 @@ impl ViewsMap {
 
   pub(crate) fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View) {
     if let Some(parent_map_ref) = self.container.get_map_with_txn(txn, &view.bid) {
-      let belonging = Belonging {
+      let belonging = ViewIdentifier {
         id: view.id.clone(),
-        name: view.name.clone(),
       };
-      ViewUpdate::new(&view.bid, txn, &parent_map_ref, self.belonging_map.clone())
+      ViewUpdate::new(&view.bid, txn, &parent_map_ref, self.view_relations.clone())
         .add_belonging(vec![belonging])
         .done();
     }
 
     let map_ref = self.container.insert_map_with_txn(txn, &view.id);
-    ViewBuilder::new(&view.id, txn, map_ref, self.belonging_map.clone())
+    ViewBuilder::new(&view.id, txn, map_ref, self.view_relations.clone())
       .update(|update| {
         update
           .set_name(view.name)
@@ -123,8 +118,7 @@ impl ViewsMap {
           .set_desc(view.desc)
           .set_layout(view.layout)
           .set_created_at(view.created_at)
-          .set_belongings(view.belongings)
-          .set_database_id(view.database_id)
+          .set_children(view.children)
           .done();
       })
       .done();
@@ -147,9 +141,7 @@ impl ViewsMap {
       self.container.delete_with_txn(txn, view_id.as_ref());
     });
 
-    if let Some(tx) = &self.change_tx {
-      let _ = tx.send(ViewChange::DidDeleteView { views });
-    }
+    let _ = self.change_tx.send(ViewChange::DidDeleteView { views });
   }
 
   pub fn update_view<F>(&self, view_id: &str, f: F) -> Option<View>
@@ -158,69 +150,21 @@ impl ViewsMap {
   {
     self.container.with_transact_mut(|txn| {
       let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-      let update = ViewUpdate::new(view_id, txn, &map_ref, self.belonging_map.clone());
+      let update = ViewUpdate::new(view_id, txn, &map_ref, self.view_relations.clone());
       f(update)
     })
   }
 }
 
-fn subscribe_change(
-  root: &mut MapRefWrapper,
-  change_tx: Option<ViewChangeSender>,
-  belonging_map: Rc<BelongingMap>,
-) -> Option<DeepEventsSubscription> {
-  change_tx.as_ref()?;
-  return Some(root.observe_deep(move |txn, events| {
-    for deep_event in events.iter() {
-      match deep_event {
-        Event::Text(_) => {},
-        Event::Array(_) => {},
-        Event::Map(event) => {
-          for c in event.keys(txn).values() {
-            let change_tx = change_tx.clone().unwrap();
-            match c {
-              EntryChange::Inserted(v) => {
-                if let YrsValue::YMap(map_ref) = v {
-                  if let Some(view) = view_from_map_ref(map_ref, txn, &belonging_map) {
-                    let _ = change_tx.send(ViewChange::DidCreateView { view });
-                  }
-                }
-              },
-              EntryChange::Updated(_k, v) => {
-                println!("update: {}", event.target().to_json(txn));
-                if let YrsValue::YMap(map_ref) = v {
-                  if let Some(view) = view_from_map_ref(map_ref, txn, &belonging_map) {
-                    let _ = change_tx.send(ViewChange::DidUpdate { view });
-                  }
-                }
-              },
-              EntryChange::Removed(v) => {
-                if let YrsValue::YMap(map_ref) = v {
-                  if let Some(view) = view_from_map_ref(map_ref, txn, &belonging_map) {
-                    let _ = change_tx.send(ViewChange::DidDeleteView { views: vec![view] });
-                  }
-                }
-              },
-            }
-          }
-        },
-        Event::XmlFragment(_) => {},
-        Event::XmlText(_) => {},
-      }
-    }
-  }));
-}
-
-fn view_from_map_ref<T: ReadTxn>(
+pub(crate) fn view_from_map_ref<T: ReadTxn>(
   map_ref: &MapRef,
   txn: &T,
-  belonging_map: &Rc<BelongingMap>,
+  belonging_map: &Rc<ViewRelations>,
 ) -> Option<View> {
   let bid = map_ref.get_str_with_txn(txn, VIEW_BID)?;
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
   let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();
   let desc = map_ref.get_str_with_txn(txn, VIEW_DESC).unwrap_or_default();
-  let database_id = map_ref.get_str_with_txn(txn, VIEW_DATABASE_ID);
   let created_at = map_ref
     .get_i64_with_txn(txn, VIEW_CREATE_AT)
     .unwrap_or_default();
@@ -229,8 +173,8 @@ fn view_from_map_ref<T: ReadTxn>(
     .map(|value| value.try_into().ok())??;
 
   let belongings = belonging_map
-    .get_belongings_array_with_txn(txn, &id)
-    .map(|array| array.get_belongings_with_txn(txn))
+    .get_children_with_txn(txn, &id)
+    .map(|array| array.get_children_with_txn(txn))
     .unwrap_or_default();
 
   Some(View {
@@ -238,10 +182,9 @@ fn view_from_map_ref<T: ReadTxn>(
     bid,
     name,
     desc,
-    belongings,
+    children: belongings,
     created_at,
     layout,
-    database_id,
   })
 }
 
@@ -249,7 +192,7 @@ pub struct ViewBuilder<'a, 'b> {
   view_id: &'a str,
   map_ref: MapRefWrapper,
   txn: &'a mut TransactionMut<'b>,
-  belongings: Rc<BelongingMap>,
+  belongings: Rc<ViewRelations>,
 }
 
 impl<'a, 'b> ViewBuilder<'a, 'b> {
@@ -257,7 +200,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: MapRefWrapper,
-    belongings: Rc<BelongingMap>,
+    belongings: Rc<ViewRelations>,
   ) -> Self {
     map_ref.insert_str_with_txn(txn, VIEW_ID, view_id);
     Self {
@@ -288,7 +231,7 @@ pub struct ViewUpdate<'a, 'b, 'c> {
   view_id: &'a str,
   map_ref: &'c MapRefWrapper,
   txn: &'a mut TransactionMut<'b>,
-  belonging_map: Rc<BelongingMap>,
+  children_map: Rc<ViewRelations>,
 }
 
 impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
@@ -307,34 +250,34 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'c MapRefWrapper,
-    belongings: Rc<BelongingMap>,
+    children_map: Rc<ViewRelations>,
   ) -> Self {
     Self {
       view_id,
       map_ref,
       txn,
-      belonging_map: belongings,
+      children_map,
     }
   }
 
-  pub fn set_belongings(self, belongings: Belongings) -> Self {
+  pub fn set_children(self, children: RepeatedView) -> Self {
     let array = self
-      .belonging_map
-      .get_or_create_belongings_with_txn(self.txn, self.view_id);
-    array.add_belongings_with_txn(self.txn, belongings.into_inner());
+      .children_map
+      .get_or_create_children_with_txn(self.txn, self.view_id);
+    array.add_children_with_txn(self.txn, children.into_inner());
 
     self
   }
 
-  pub fn add_belonging(self, belongings: Vec<Belonging>) -> Self {
+  pub fn add_belonging(self, belongings: Vec<ViewIdentifier>) -> Self {
     self
-      .belonging_map
-      .add_belongings(self.txn, self.view_id, belongings);
+      .children_map
+      .add_children(self.txn, self.view_id, belongings);
     self
   }
 
   pub fn done(self) -> Option<View> {
-    view_from_map_ref(self.map_ref, self.txn, &self.belonging_map)
+    view_from_map_ref(self.map_ref, self.txn, &self.children_map)
   }
 }
 
@@ -345,10 +288,9 @@ pub struct View {
   pub bid: String,
   pub name: String,
   pub desc: String,
-  pub belongings: Belongings,
+  pub children: RepeatedView,
   pub created_at: i64,
   pub layout: ViewLayout,
-  pub database_id: Option<String>,
 }
 
 #[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize_repr, Deserialize_repr)]
@@ -393,11 +335,4 @@ impl From<ViewLayout> for i64 {
   fn from(layout: ViewLayout) -> Self {
     layout as i64
   }
-}
-
-#[derive(Debug, Clone)]
-pub enum ViewChange {
-  DidCreateView { view: View },
-  DidDeleteView { views: Vec<View> },
-  DidUpdate { view: View },
 }

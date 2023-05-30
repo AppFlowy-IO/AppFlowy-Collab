@@ -119,7 +119,7 @@ where
 fn create_update_key<'a, F, K, S>(
   id: OID,
   store: &S,
-  object_id: &K,
+  _object_id: &K,
   make_update_key: F,
 ) -> Result<Key<16>, PersistenceError>
 where
@@ -131,12 +131,12 @@ where
   let last_clock = get_last_update_clock(store, id, &make_update_key)?;
   let clock = last_clock + 1;
   let new_key = make_update_key(id, clock);
-  tracing::trace!(
-    "🤲collab => [{}-{:?}]: New update key {:?}",
-    id,
-    object_id,
-    new_key.as_ref()
-  );
+  // tracing::trace!(
+  //   "[🦀Collab] => [{}-{:?}]: new update {:?}",
+  //   id,
+  //   object_id,
+  //   new_key.as_ref()
+  // );
   Ok(new_key)
 }
 

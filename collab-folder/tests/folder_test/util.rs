@@ -4,8 +4,8 @@ use std::sync::{Arc, Once};
 
 use collab::preclude::CollabBuilder;
 use collab_folder::core::{
-  Belonging, Belongings, Folder, FolderContext, TrashChangeReceiver, View, ViewChangeReceiver,
-  ViewLayout, Workspace,
+  Folder, FolderContext, RepeatedView, TrashChangeReceiver, View, ViewChangeReceiver,
+  ViewIdentifier, ViewLayout, Workspace,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
@@ -46,8 +46,8 @@ pub fn create_folder(id: &str) -> FolderTest {
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
   let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
   let context = FolderContext {
-    view_change_tx: Some(view_tx),
-    trash_change_tx: Some(trash_tx),
+    view_change_tx: view_tx,
+    trash_change_tx: trash_tx,
   };
   let folder = Folder::get_or_create(Arc::new(collab), context);
   FolderTest {
@@ -63,7 +63,7 @@ pub fn create_folder_with_workspace(id: &str, workspace_id: &str) -> FolderTest 
   let workspace = Workspace {
     id: workspace_id.to_string(),
     name: "My first workspace".to_string(),
-    belongings: Default::default(),
+    child_views: Default::default(),
     created_at: 123,
   };
 
@@ -74,17 +74,16 @@ pub fn create_folder_with_workspace(id: &str, workspace_id: &str) -> FolderTest 
 pub fn make_test_view(view_id: &str, bid: &str, belongings: Vec<String>) -> View {
   let belongings = belongings
     .into_iter()
-    .map(Belonging::new)
-    .collect::<Vec<Belonging>>();
+    .map(ViewIdentifier::new)
+    .collect::<Vec<ViewIdentifier>>();
   View {
     id: view_id.to_string(),
     bid: bid.to_string(),
     name: "".to_string(),
     desc: "".to_string(),
-    belongings: Belongings::new(belongings),
+    children: RepeatedView::new(belongings),
     created_at: 0,
     layout: ViewLayout::Document,
-    database_id: None,
   }
 }
 
@@ -114,6 +113,7 @@ impl Drop for Cleaner {
   }
 }
 
+#[allow(dead_code)]
 pub fn setup_log() {
   static START: Once = Once::new();
   START.call_once(|| {

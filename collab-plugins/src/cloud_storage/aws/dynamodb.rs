@@ -15,7 +15,7 @@ use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
 
-use crate::cloud_storage::remote_collab::{RemoteCollab, RemoteCollabStorage};
+use crate::cloud_storage::remote_collab::{CollabObject, RemoteCollab, RemoteCollabStorage};
 
 pub(crate) const DEFAULT_TABLE_NAME: &str = "collab_test";
 const OBJECT_ID: &str = "oid";
@@ -69,7 +69,8 @@ impl AWSDynamoDB {
         sync_per_secs,
       )));
 
-    let remote_collab = Arc::new(RemoteCollab::new(object_id.clone(), storage, config));
+    let object = CollabObject::new(object_id.clone());
+    let remote_collab = Arc::new(RemoteCollab::new(object, storage, config));
     Ok(Self {
       client,
       remote_collab,
@@ -113,7 +114,7 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
 }
 
 pub async fn get_aws_remote_doc(object_id: &str, region: String) -> Arc<MutexCollab> {
-  let local_collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, object_id, vec![]));
+  let local_collab = Arc::new(MutexCollab::new(CollabOrigin::Server, object_id, vec![]));
   let plugin = AWSDynamoDB::new(object_id.to_string(), 1, region)
     .await
     .unwrap();

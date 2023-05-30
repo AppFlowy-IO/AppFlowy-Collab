@@ -1,4 +1,4 @@
-use crate::core::{Belonging, BelongingMap, Belongings};
+use crate::core::{RepeatedView, ViewIdentifier, ViewRelations};
 
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use std::rc::Rc;
 #[derive(Clone)]
 pub struct WorkspaceMap {
   container: MapRefWrapper,
-  belongings: Rc<BelongingMap>,
+  view_relations: Rc<ViewRelations>,
 }
 
 const WORKSPACE_ID: &str = "id";
@@ -15,10 +15,10 @@ const WORKSPACE_NAME: &str = "name";
 const WORKSPACE_CREATED_AT: &str = "created_at";
 
 impl WorkspaceMap {
-  pub fn new(container: MapRefWrapper, belongings: Rc<BelongingMap>) -> Self {
+  pub fn new(container: MapRefWrapper, view_relations: Rc<ViewRelations>) -> Self {
     Self {
       container,
-      belongings,
+      view_relations,
     }
   }
 
@@ -35,13 +35,13 @@ impl WorkspaceMap {
     txn: &mut TransactionMut,
     container: &MapRef,
     workspace_id: &str,
-    belongings: Rc<BelongingMap>,
+    view_relations: Rc<ViewRelations>,
     f: F,
   ) -> Self
   where
     F: FnOnce(WorkspaceBuilder) -> WorkspaceMap,
   {
-    let builder = WorkspaceBuilder::new(workspace_id, txn, container, belongings);
+    let builder = WorkspaceBuilder::new(workspace_id, txn, container, view_relations);
     f(builder)
   }
 
@@ -59,8 +59,12 @@ impl WorkspaceMap {
     F: FnOnce(WorkspaceUpdate),
   {
     if let Some(workspace_id) = self.get_workspace_id_with_txn(txn) {
-      let update =
-        WorkspaceUpdate::new(&workspace_id, txn, &self.container, self.belongings.clone());
+      let update = WorkspaceUpdate::new(
+        &workspace_id,
+        txn,
+        &self.container,
+        self.view_relations.clone(),
+      );
       f(update);
     }
   }
@@ -81,16 +85,16 @@ impl WorkspaceMap {
       .get_i64_with_txn(txn, WORKSPACE_CREATED_AT)
       .unwrap_or_default();
 
-    let belongings = self
-      .belongings
-      .get_belongings_array_with_txn(txn, &id)
-      .map(|array| array.get_belongings())
+    let child_views = self
+      .view_relations
+      .get_children_with_txn(txn, &id)
+      .map(|array| array.get_children())
       .unwrap_or_default();
 
     Some(Workspace {
       id,
       name,
-      belongings,
+      child_views,
       created_at,
     })
   }
@@ -100,7 +104,7 @@ impl WorkspaceMap {
 pub struct Workspace {
   pub id: String,
   pub name: String,
-  pub belongings: Belongings,
+  pub child_views: RepeatedView,
   pub created_at: i64,
 }
 
@@ -108,7 +112,7 @@ pub struct WorkspaceBuilder<'a, 'b> {
   workspace_id: &'a str,
   map_ref: &'a MapRef,
   txn: &'a mut TransactionMut<'b>,
-  belongings: Rc<BelongingMap>,
+  view_relations: Rc<ViewRelations>,
 }
 
 impl<'a, 'b> WorkspaceBuilder<'a, 'b> {
@@ -116,14 +120,14 @@ impl<'a, 'b> WorkspaceBuilder<'a, 'b> {
     workspace_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'a MapRef,
-    belongings: Rc<BelongingMap>,
+    view_relations: Rc<ViewRelations>,
   ) -> Self {
     map_ref.insert_str_with_txn(txn, WORKSPACE_ID, workspace_id);
     Self {
       workspace_id,
       map_ref,
       txn,
-      belongings,
+      view_relations,
     }
   }
 
@@ -135,7 +139,7 @@ impl<'a, 'b> WorkspaceBuilder<'a, 'b> {
       self.workspace_id,
       self.txn,
       self.map_ref,
-      self.belongings.clone(),
+      self.view_relations.clone(),
     );
     f(update);
     self
@@ -146,7 +150,7 @@ pub struct WorkspaceUpdate<'a, 'b, 'c> {
   workspace_id: &'a str,
   map_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
-  belongings: Rc<BelongingMap>,
+  view_relations: Rc<ViewRelations>,
 }
 
 impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
@@ -154,13 +158,13 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
     workspace_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'c MapRef,
-    belongings: Rc<BelongingMap>,
+    view_relations: Rc<ViewRelations>,
   ) -> Self {
     Self {
       workspace_id,
       map_ref,
       txn,
-      belongings,
+      view_relations,
     }
   }
 
@@ -178,24 +182,24 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
     self
   }
 
-  pub fn set_belongings(self, belongings: Belongings) -> Self {
+  pub fn set_children(self, children: RepeatedView) -> Self {
     let array = self
-      .belongings
-      .get_or_create_belongings_with_txn(self.txn, self.workspace_id);
-    array.add_belongings_with_txn(self.txn, belongings.into_inner());
+      .view_relations
+      .get_or_create_children_with_txn(self.txn, self.workspace_id);
+    array.add_children_with_txn(self.txn, children.into_inner());
     self
   }
 
-  pub fn delete_belongings(self, index: u32) -> Self {
+  pub fn delete_child(self, index: u32) -> Self {
     self
-      .belongings
-      .delete_belongings_with_txn(self.txn, self.workspace_id, index);
+      .view_relations
+      .delete_children_with_txn(self.txn, self.workspace_id, index);
     self
   }
 
-  pub fn add_belongings(self, belongings: Vec<Belonging>) {
+  pub fn add_children(self, belongings: Vec<ViewIdentifier>) {
     self
-      .belongings
-      .add_belongings(self.txn, self.workspace_id, belongings);
+      .view_relations
+      .add_children(self.txn, self.workspace_id, belongings);
   }
 }

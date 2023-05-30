@@ -21,7 +21,7 @@ impl DatabaseRelation {
 
     let relation_map = match row_relation_map {
       None => collab_guard
-        .with_transact_mut(|txn| collab_guard.create_map_with_txn(txn, ROW_RELATION_MAP)),
+        .with_transact_mut(|txn| collab_guard.insert_map_with_txn(txn, ROW_RELATION_MAP)),
       Some(row_relation_map) => row_relation_map,
     };
 

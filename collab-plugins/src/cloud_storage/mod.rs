@@ -5,3 +5,4 @@ pub mod aws;
 pub mod postgres;
 
 mod remote_collab;
+pub use remote_collab::CollabObject;

@@ -1,5 +1,5 @@
 use crate::util::{create_folder, make_test_view};
-use collab_folder::core::{Belonging, Belongings, Workspace};
+use collab_folder::core::{RepeatedView, ViewIdentifier, Workspace};
 use serde_json::json;
 
 #[test]
@@ -7,7 +7,7 @@ fn folder_json_serde() {
   let folder_test = create_folder("1");
   assert_json_diff::assert_json_eq!(
     json!({
-      "Belongings": {},
+      "relation": {},
       "meta": {},
       "trash": [],
       "views": {},
@@ -20,35 +20,33 @@ fn folder_json_serde() {
 #[test]
 fn workspace_json_serde() {
   let folder_test = create_folder("1");
-  let belongings = Belongings {
+  let belongings = RepeatedView {
     items: vec![
-      Belonging::new("v1".to_string()),
-      Belonging::new("v2".to_string()),
+      ViewIdentifier::new("v1".to_string()),
+      ViewIdentifier::new("v2".to_string()),
     ],
   };
   let workspace = Workspace {
     id: "w1".to_string(),
     name: "My first workspace".to_string(),
-    belongings,
+    child_views: belongings,
     created_at: 123,
   };
 
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(
-    json!({
-      "Belongings": {
+    json!( {
+      "meta": {},
+      "relation": {
         "w1": [
           {
-            "id": "v1",
-            "name": ""
+            "id": "v1"
           },
           {
-            "id": "v2",
-            "name": ""
+            "id": "v2"
           }
         ]
       },
-      "meta": {},
       "trash": [],
       "views": {},
       "workspaces": [
@@ -66,16 +64,16 @@ fn workspace_json_serde() {
 #[test]
 fn view_json_serde() {
   let folder_test = create_folder("1");
-  let belongings = Belongings {
+  let belongings = RepeatedView {
     items: vec![
-      Belonging::new("v1".to_string()),
-      Belonging::new("v2".to_string()),
+      ViewIdentifier::new("v1".to_string()),
+      ViewIdentifier::new("v2".to_string()),
     ],
   };
   let workspace = Workspace {
     id: "w1".to_string(),
     name: "My first workspace".to_string(),
-    belongings,
+    child_views: belongings,
     created_at: 123,
   };
 
@@ -86,28 +84,25 @@ fn view_json_serde() {
 
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(
-    json!({
-      "Belongings": {
+    json!( {
+      "meta": {},
+      "relation": {
         "v1": [],
         "v2": [],
         "w1": [
           {
-            "id": "v1",
-            "name": ""
+            "id": "v1"
           },
           {
-            "id": "v2",
-            "name": ""
+            "id": "v2"
           }
         ]
       },
-      "meta": {},
       "trash": [],
       "views": {
         "v1": {
           "bid": "w1",
           "created_at": 0,
-          "database_id": null,
           "desc": "",
           "id": "v1",
           "layout": 0,
@@ -116,7 +111,6 @@ fn view_json_serde() {
         "v2": {
           "bid": "w1",
           "created_at": 0,
-          "database_id": null,
           "desc": "",
           "id": "v2",
           "layout": 0,
@@ -138,16 +132,16 @@ fn view_json_serde() {
 #[test]
 fn child_view_json_serde() {
   let folder_test = create_folder("1");
-  let belongings = Belongings {
+  let belongings = RepeatedView {
     items: vec![
-      Belonging::new("v1".to_string()),
-      Belonging::new("v2".to_string()),
+      ViewIdentifier::new("v1".to_string()),
+      ViewIdentifier::new("v2".to_string()),
     ],
   };
   let workspace = Workspace {
     id: "w1".to_string(),
     name: "My first workspace".to_string(),
-    belongings,
+    child_views: belongings,
     created_at: 123,
   };
 
@@ -162,39 +156,34 @@ fn child_view_json_serde() {
 
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(
-    json!({
-      "Belongings": {
+    json!( {
+      "meta": {},
+      "relation": {
         "v1": [],
         "v2": [
           {
-            "id": "v2.1",
-            "name": ""
+            "id": "v2.1"
           },
           {
-            "id": "v2.2",
-            "name": ""
+            "id": "v2.2"
           }
         ],
         "v2.1": [],
         "v2.2": [],
         "w1": [
           {
-            "id": "v1",
-            "name": ""
+            "id": "v1"
           },
           {
-            "id": "v2",
-            "name": ""
+            "id": "v2"
           }
         ]
       },
-      "meta": {},
       "trash": [],
       "views": {
         "v1": {
           "bid": "w1",
           "created_at": 0,
-          "database_id": null,
           "desc": "",
           "id": "v1",
           "layout": 0,
@@ -203,7 +192,6 @@ fn child_view_json_serde() {
         "v2": {
           "bid": "w1",
           "created_at": 0,
-          "database_id": null,
           "desc": "",
           "id": "v2",
           "layout": 0,
@@ -212,7 +200,6 @@ fn child_view_json_serde() {
         "v2.1": {
           "bid": "v2",
           "created_at": 0,
-          "database_id": null,
           "desc": "",
           "id": "v2.1",
           "layout": 0,
@@ -221,7 +208,6 @@ fn child_view_json_serde() {
         "v2.2": {
           "bid": "v2",
           "created_at": 0,
-          "database_id": null,
           "desc": "",
           "id": "v2.2",
           "layout": 0,

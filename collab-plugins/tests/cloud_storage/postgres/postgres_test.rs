@@ -128,7 +128,7 @@ async fn create_multi_docs_test() {
 //         CreateCollab {
 //           uid: 1,
 //           object_id: "124e1fb5-fb48-47fd-8fc7-436ae3ec6255".to_string(),
-//           sync_per_secs: 1,
+//           sync_per_secs: 10,
 //           config: config.clone(),
 //         },
 //         // AssertRemote {

@@ -1,3 +1,4 @@
+use base64::Engine;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -14,15 +15,24 @@ use crate::blocks::Block;
 use crate::database::{Database, DatabaseContext, DatabaseData};
 use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
-use crate::user::relation::{DatabaseRelation, RowRelationMap};
+
 use crate::views::{CreateDatabaseParams, CreateViewParams};
+use base64::engine::general_purpose::STANDARD;
 
 pub trait UserDatabaseCollabBuilder: Send + Sync + 'static {
-  fn build(&self, uid: i64, object_id: &str, db: Arc<RocksCollabDB>) -> Arc<MutexCollab>;
+  fn build(
+    &self,
+    uid: i64,
+    object_id: &str,
+    object_name: &str,
+    db: Arc<RocksCollabDB>,
+  ) -> Arc<MutexCollab>;
+
   fn build_with_config(
     &self,
     uid: i64,
     object_id: &str,
+    object_name: &str,
     db: Arc<RocksCollabDB>,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab>;
@@ -38,9 +48,7 @@ pub struct UserDatabase {
   /// A database rows will be stored in multiple blocks.
   block: Block,
   /// It used to keep track of the database records.
-  database_records: DatabaseArray,
-  /// It used to keep track of the database relations.
-  database_relation: DatabaseRelation,
+  database_array: DatabaseArray,
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
@@ -64,16 +72,18 @@ impl UserDatabase {
     tracing::trace!("Init user database: {}", uid);
     let collab_builder = Arc::new(collab_builder);
     // user database
-    let collab =
-      collab_builder.build_with_config(uid, &format!("{}_user_database", uid), db.clone(), &config);
+    let user_database_id = STANDARD.encode(format!("{}:user:database", uid));
+    let collab = collab_builder.build_with_config(
+      uid,
+      &user_database_id,
+      "user database",
+      db.clone(),
+      &config,
+    );
     let collab_guard = collab.lock();
     let databases = create_user_database_if_not_exist(&collab_guard);
-    let database_records = DatabaseArray::new(databases);
+    let database_array = DatabaseArray::new(databases);
 
-    let object_id = format!("{}_db_relations", uid);
-    let database_relation_collab =
-      collab_builder.build_with_config(uid, &object_id, db.clone(), &config);
-    let database_relation = DatabaseRelation::new(database_relation_collab);
     let block = Block::new(uid, db.clone(), collab_builder.clone());
     drop(collab_guard);
 
@@ -82,9 +92,8 @@ impl UserDatabase {
       db,
       collab,
       block,
-      database_records,
+      database_array,
       open_handlers: Default::default(),
-      database_relation,
       config,
       collab_builder,
     }
@@ -93,7 +102,7 @@ impl UserDatabase {
   /// Get the database with the given database id.
   /// Return None if the database does not exist.
   pub fn get_database(&self, database_id: &str) -> Option<Arc<Database>> {
-    if !self.database_records.contains(database_id) {
+    if !self.database_array.contains(database_id) {
       return None;
     }
     let database = self.open_handlers.read().get(database_id).cloned();
@@ -127,7 +136,7 @@ impl UserDatabase {
   /// Return the database id with the given view id.
   pub fn get_database_id_with_view_id(&self, view_id: &str) -> Option<String> {
     self
-      .database_records
+      .database_array
       .get_database_record_with_view_id(view_id)
       .map(|record| record.database_id)
   }
@@ -154,7 +163,7 @@ impl UserDatabase {
 
     // Add a new database record.
     self
-      .database_records
+      .database_array
       .add_database(&params.database_id, &params.view_id, &params.name);
     let database_id = params.database_id.clone();
     let database = Arc::new(Database::create_with_inline_view(params, context)?);
@@ -183,7 +192,7 @@ impl UserDatabase {
   pub fn create_database_view(&self, params: CreateViewParams) {
     if let Some(database) = self.get_database(&params.database_id) {
       self
-        .database_records
+        .database_array
         .update_database(&params.database_id, |record| {
           record.views.insert(params.view_id.clone());
         });
@@ -193,7 +202,7 @@ impl UserDatabase {
 
   /// Delete the database with the given database id.
   pub fn delete_database(&self, database_id: &str) {
-    self.database_records.delete_database(database_id);
+    self.database_array.delete_database(database_id);
     let _ = self.db.with_write_txn(|w_db_txn| {
       match w_db_txn.delete_doc(self.uid, database_id) {
         Ok(_) => {},
@@ -211,7 +220,7 @@ impl UserDatabase {
 
   /// Return all the database records.
   pub fn get_all_databases(&self) -> Vec<DatabaseRecord> {
-    self.database_records.get_all_databases()
+    self.database_array.get_all_databases()
   }
 
   pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
@@ -268,15 +277,15 @@ impl UserDatabase {
     }
   }
 
-  pub fn relations(&self) -> &RowRelationMap {
-    self.database_relation.row_relations()
-  }
-
   /// Create a new [Collab] instance for given database id.
   fn collab_for_database(&self, database_id: &str) -> Arc<MutexCollab> {
-    self
-      .collab_builder
-      .build_with_config(self.uid, database_id, self.db.clone(), &self.config)
+    self.collab_builder.build_with_config(
+      self.uid,
+      database_id,
+      "database",
+      self.db.clone(),
+      &self.config,
+    )
   }
 }
 

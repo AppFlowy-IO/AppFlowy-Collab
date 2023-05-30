@@ -48,7 +48,7 @@ where
 pub(crate) struct PendingMessage<Msg> {
   msg: Msg,
   msg_id: MsgId,
-  state: TaskState,
+  state: MessageState,
   tx: Option<oneshot::Sender<MsgId>>,
 }
 
@@ -60,12 +60,12 @@ where
     Self {
       msg,
       msg_id,
-      state: TaskState::Pending,
+      state: MessageState::Pending,
       tx: None,
     }
   }
 
-  pub fn msg(&self) -> Msg {
+  pub fn get_msg(&self) -> Msg {
     self.msg.clone()
   }
 
@@ -73,11 +73,11 @@ where
     &mut self.msg
   }
 
-  pub fn state(&self) -> &TaskState {
+  pub fn state(&self) -> &MessageState {
     &self.state
   }
 
-  pub fn set_state(&mut self, new_state: TaskState) {
+  pub fn set_state(&mut self, new_state: MessageState) {
     self.state = new_state;
 
     if self.state.is_done() && self.tx.is_some() {
@@ -124,21 +124,21 @@ where
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum TaskState {
+pub(crate) enum MessageState {
   Pending,
   Processing,
   Done,
   Timeout,
 }
 
-impl TaskState {
+impl MessageState {
   pub fn is_done(&self) -> bool {
-    matches!(self, TaskState::Done)
+    matches!(self, MessageState::Done)
   }
   pub fn is_processing(&self) -> bool {
-    matches!(self, TaskState::Processing)
+    matches!(self, MessageState::Processing)
   }
   pub fn is_pending(&self) -> bool {
-    matches!(self, TaskState::Pending)
+    matches!(self, MessageState::Pending)
   }
 }

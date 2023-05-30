@@ -62,7 +62,7 @@ pub async fn spawn_client(
   {
     let client = collab.lock();
     client.with_transact_mut(|txn| {
-      let map = client.create_map_with_txn(txn, "map");
+      let map = client.insert_map_with_txn(txn, "map");
       map.insert_with_txn(txn, "task1", "a");
       map.insert_with_txn(txn, "task2", "b");
     });
@@ -122,7 +122,7 @@ impl TestClient {
       {
         let client = collab.lock();
         client.with_transact_mut(|txn| {
-          let map = client.create_map_with_txn(txn, "map");
+          let map = client.insert_map_with_txn(txn, "map");
           map.insert_with_txn(txn, "task1", "a");
           map.insert_with_txn(txn, "task2", "b");
         });

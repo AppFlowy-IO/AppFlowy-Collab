@@ -109,7 +109,7 @@ impl CollabPersistenceTest {
         let collab = CollabBuilder::new(1, &id)
           .with_plugin(plugin.clone())
           .build();
-        collab.lock().initial();
+        collab.lock().initialize();
 
         self.disk_plugin = plugin;
         self.collabs.insert(id, collab);
@@ -203,7 +203,7 @@ impl CollabPersistenceTest {
       Script::AssertDocument { id, expected } => {
         let mut doc = Collab::new(self.uid, id, vec![]);
         doc.add_plugin(Arc::new(self.disk_plugin.clone()));
-        doc.initial();
+        doc.initialize();
         let json = doc.to_json_value();
         assert_json_diff::assert_json_eq!(json, expected);
       },

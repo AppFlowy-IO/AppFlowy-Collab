@@ -5,6 +5,7 @@ use collab::preclude::Collab;
 use collab_plugins::cloud_storage::postgres::{
   get_postgres_remote_doc, SupabaseDBConfig, SupabaseDBPlugin,
 };
+use collab_plugins::cloud_storage::CollabObject;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -60,7 +61,7 @@ impl PostgresStorageTest {
         let origin = CollabOrigin::Client(CollabClient::new(uid, "1"));
         let local_collab = Arc::new(MutexCollab::new(origin, &object_id, vec![]));
         let plugin = SupabaseDBPlugin::new(
-          object_id.clone(),
+          CollabObject::new(object_id.clone()),
           local_collab.clone(),
           sync_per_secs,
           config,

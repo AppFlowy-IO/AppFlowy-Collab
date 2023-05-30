@@ -71,7 +71,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
 pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<RocksCollabDB>, DatabaseTest) {
   let db = make_rocks_db();
   let collab_builder = Arc::new(UserDatabaseCollabBuilderImpl());
-  let collab = collab_builder.build(uid, database_id, db.clone());
+  let collab = collab_builder.build(uid, database_id, "database", db.clone());
   let block = Block::new(uid, db.clone(), collab_builder.clone());
   let context = DatabaseContext {
     collab,
@@ -100,7 +100,7 @@ pub fn restore_database_from_db(
   db: Arc<RocksCollabDB>,
 ) -> DatabaseTest {
   let collab_builder = Arc::new(UserDatabaseCollabBuilderImpl());
-  let collab = collab_builder.build(uid, database_id, db.clone());
+  let collab = collab_builder.build(uid, database_id, "database", db.clone());
   let block = Block::new(uid, db, collab_builder.clone());
   let context = DatabaseContext {
     collab,

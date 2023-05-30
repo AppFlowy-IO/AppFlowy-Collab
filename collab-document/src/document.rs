@@ -314,7 +314,7 @@ impl Document {
     let collab_guard = collab.lock();
     let (root, block_operation, children_operation) = collab_guard.with_transact_mut(|txn| {
       // { document: {:} }
-      let root = collab_guard.create_map_with_txn(txn, ROOT);
+      let root = collab_guard.insert_map_with_txn(txn, ROOT);
       // { document: { blocks: {:} } }
       let blocks = root.insert_map_with_txn(txn, BLOCKS);
       // { document: { blocks: {:}, meta: {:} } }

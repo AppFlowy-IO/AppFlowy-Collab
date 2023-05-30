@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-collab = { path = "../collab"}
+collab = { path = "../collab" }
 collab-derive = { path = "../collab-derive" }
 collab-persistence = { path = "../collab-persistence" }
 serde = { version = "1.0", features = ["derive"] }
@@ -17,6 +17,7 @@ serde_repr = "0.1"
 parking_lot = "0.12.1"
 tokio = { version = "1.26", features = ["rt", "sync"] }
 tracing = { version = "0.1", features = ["log"] }
+tokio-stream = { version = "0.1.14", features = ["sync"] }
 
 [dev-dependencies]
 tempfile = "3.4.0"
