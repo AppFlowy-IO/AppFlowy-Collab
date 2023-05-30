@@ -11,11 +11,11 @@ use std::ops::{Deref, DerefMut};
 ///   parent_id: [child_id1, child_id2, ...]
 /// }
 ///
-pub struct ViewsRelation {
+pub struct ViewRelations {
   container: MapRefWrapper,
 }
 
-impl ViewsRelation {
+impl ViewRelations {
   pub fn new(container: MapRefWrapper) -> Self {
     Self { container }
   }
@@ -89,8 +89,8 @@ impl ViewsRelation {
 pub struct ChildrenArray(ArrayRefWrapper);
 
 impl ChildrenArray {
-  pub fn from_array(belongings: ArrayRefWrapper) -> Self {
-    Self { 0: belongings }
+  pub fn from_array(array: ArrayRefWrapper) -> Self {
+    Self(array)
   }
 
   pub fn get_children(&self) -> RepeatedView {

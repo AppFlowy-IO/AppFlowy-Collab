@@ -3,9 +3,8 @@ use std::collections::HashMap;
 use collab::core::collab::CollabBuilder;
 use collab::preclude::MapRefExtension;
 use serde_json::json;
-use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
-use yrs::{Doc, Map, ReadTxn, Transact, Update};
+use yrs::{ReadTxn, Transact, Update};
 
 use crate::helper::{setup_log, CollabStateCachePlugin};
 

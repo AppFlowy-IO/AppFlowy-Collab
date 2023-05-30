@@ -9,12 +9,12 @@ use collab::preclude::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
-use tokio_stream::{wrappers::WatchStream, StreamExt};
+use tokio_stream::wrappers::WatchStream;
 
 use crate::core::folder_observe::{TrashChangeSender, ViewChangeSender};
 use crate::core::trash::{TrashArray, TrashRecord};
 use crate::core::{
-  subscribe_folder_change, FolderData, View, ViewIdentifier, ViewsMap, ViewsRelation, Workspace,
+  subscribe_folder_change, FolderData, View, ViewIdentifier, ViewRelations, ViewsMap, Workspace,
   WorkspaceMap,
 };
 
@@ -41,7 +41,7 @@ pub struct Folder {
   /// Keep track of each view's data. It's a map from view id to view data
   pub views: Rc<ViewsMap>,
   /// Keep track of each view's parent and children
-  pub views_relation: Rc<ViewsRelation>,
+  pub view_relations: Rc<ViewRelations>,
   pub trash: TrashArray,
   pub meta: MapRefWrapper,
   /// Subscription for folder change. Like insert a new view
@@ -167,7 +167,7 @@ impl Folder {
 
   pub fn move_view(&self, view_id: &str, from: u32, to: u32) -> Option<View> {
     let view = self.views.get_view(view_id)?;
-    self.views_relation.move_child(&view.bid, from, to);
+    self.view_relations.move_child(&view.bid, from, to);
     Some(view)
   }
 
@@ -200,20 +200,20 @@ impl Folder {
 pub struct WorkspaceArray {
   container: ArrayRefWrapper,
   workspaces: RwLock<HashMap<String, WorkspaceMap>>,
-  views_relation: Rc<ViewsRelation>,
+  view_relations: Rc<ViewRelations>,
 }
 
 impl WorkspaceArray {
   pub fn new<T: ReadTxn>(
     txn: &T,
     array_ref: ArrayRefWrapper,
-    views_relation: Rc<ViewsRelation>,
+    view_relations: Rc<ViewRelations>,
   ) -> Self {
     let workspace_maps = array_ref
       .to_map_refs_with_txn(txn)
       .into_iter()
       .flat_map(|map_ref| {
-        let workspace_map = WorkspaceMap::new(map_ref, views_relation.clone());
+        let workspace_map = WorkspaceMap::new(map_ref, view_relations.clone());
         workspace_map
           .workspace_id()
           .map(|workspace_id| (workspace_id, workspace_map))
@@ -222,7 +222,7 @@ impl WorkspaceArray {
     Self {
       container: array_ref,
       workspaces: RwLock::new(workspace_maps),
-      views_relation,
+      view_relations,
     }
   }
 
@@ -244,7 +244,7 @@ impl WorkspaceArray {
     map_refs
       .into_iter()
       .flat_map(|map_ref| {
-        WorkspaceMap::new(map_ref, self.views_relation.clone()).to_workspace_with_txn(txn)
+        WorkspaceMap::new(map_ref, self.view_relations.clone()).to_workspace_with_txn(txn)
       })
       .collect::<Vec<_>>()
   }
@@ -268,7 +268,7 @@ impl WorkspaceArray {
       txn,
       &map_ref,
       &workspace.id,
-      self.views_relation.clone(),
+      self.view_relations.clone(),
       |builder| {
         let _ = builder.update(|update| {
           update
@@ -278,7 +278,7 @@ impl WorkspaceArray {
         });
 
         let map_ref = MapRefWrapper::new(map_ref.clone(), self.container.collab_ctx.clone());
-        WorkspaceMap::new(map_ref, self.views_relation.clone())
+        WorkspaceMap::new(map_ref, self.view_relations.clone())
       },
     );
 
@@ -323,14 +323,14 @@ fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
       let trash = folder.insert_array_with_txn::<TrashRecord>(txn, TRASH, vec![]);
       let meta = folder.insert_map_with_txn(txn, META);
 
-      let views_relation = Rc::new(ViewsRelation::new(
+      let view_relations = Rc::new(ViewRelations::new(
         folder.insert_map_with_txn(txn, VIEW_RELATION),
       ));
-      let workspaces = WorkspaceArray::new(txn, workspaces, views_relation.clone());
+      let workspaces = WorkspaceArray::new(txn, workspaces, view_relations.clone());
       let views = Rc::new(ViewsMap::new(
         views,
         context.view_change_tx.clone(),
-        views_relation.clone(),
+        view_relations.clone(),
       ));
       let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx.clone());
       (
@@ -339,7 +339,7 @@ fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
         views,
         trash,
         meta,
-        views_relation,
+        view_relations,
         folder_sub,
       )
     });
@@ -352,7 +352,7 @@ fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
     views,
     trash,
     meta,
-    views_relation,
+    view_relations: views_relation,
     folder_sub,
     context,
   }
@@ -383,13 +383,13 @@ fn get_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
   let children_map = collab_guard
     .get_map_with_txn(&txn, vec![FOLDER, VIEW_RELATION])
     .unwrap();
-  let views_relation = Rc::new(ViewsRelation::new(children_map));
+  let view_relations = Rc::new(ViewRelations::new(children_map));
 
-  let workspaces = WorkspaceArray::new(&txn, workspaces, views_relation.clone());
+  let workspaces = WorkspaceArray::new(&txn, workspaces, view_relations.clone());
   let views = Rc::new(ViewsMap::new(
     views,
     context.view_change_tx.clone(),
-    views_relation.clone(),
+    view_relations.clone(),
   ));
 
   let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx.clone());
@@ -402,7 +402,7 @@ fn get_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
     views,
     trash,
     meta,
-    views_relation,
+    view_relations,
     folder_sub,
     context,
   }

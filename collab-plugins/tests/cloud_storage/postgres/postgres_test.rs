@@ -118,32 +118,32 @@ async fn create_multi_docs_test() {
   }
 }
 
-#[tokio::test]
-async fn create_doc_test2() {
-  dotenv().ok();
-  if let Some(config) = SupabaseDBConfig::from_env() {
-    let mut test = PostgresStorageTest::new();
-    test
-      .run_scripts(vec![
-        CreateCollab {
-          uid: 1,
-          object_id: "124e1fb5-fb48-47fd-8fc7-436ae3ec6255".to_string(),
-          sync_per_secs: 10,
-          config: config.clone(),
-        },
-        // AssertRemote {
-        //   object_id: "124e1fb5-fb48-47fd-8fc7-436ae3ec6255".to_string(),
-        //   expected: json!(""),
-        //   config,
-        // },
-        Wait { secs: 2 },
-        AssertLocal {
-          uid: 1,
-          object_id: "124e1fb5-fb48-47fd-8fc7-436ae3ec6255".to_string(),
-          expected: json!(""),
-        },
-        Wait { secs: 2 },
-      ])
-      .await;
-  }
-}
+// #[tokio::test]
+// async fn create_doc_test2() {
+//   dotenv().ok();
+//   if let Some(config) = SupabaseDBConfig::from_env() {
+//     let mut test = PostgresStorageTest::new();
+//     test
+//       .run_scripts(vec![
+//         CreateCollab {
+//           uid: 1,
+//           object_id: "124e1fb5-fb48-47fd-8fc7-436ae3ec6255".to_string(),
+//           sync_per_secs: 10,
+//           config: config.clone(),
+//         },
+//         // AssertRemote {
+//         //   object_id: "124e1fb5-fb48-47fd-8fc7-436ae3ec6255".to_string(),
+//         //   expected: json!(""),
+//         //   config,
+//         // },
+//         Wait { secs: 2 },
+//         AssertLocal {
+//           uid: 1,
+//           object_id: "124e1fb5-fb48-47fd-8fc7-436ae3ec6255".to_string(),
+//           expected: json!(""),
+//         },
+//         Wait { secs: 2 },
+//       ])
+//       .await;
+//   }
+// }

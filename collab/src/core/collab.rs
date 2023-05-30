@@ -89,7 +89,7 @@ impl Collab {
 
     let cloned_state = state.clone();
     let local_origin = origin.clone();
-    let data_subscription = data.observe(move |txn, event| {
+    let data_subscription = data.observe(move |txn, _event| {
       // Only set the root changed flag if the remote origin is different from the local origin.
       let remote_origin = CollabOrigin::from(txn);
       if remote_origin != local_origin {

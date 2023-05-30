@@ -1,4 +1,4 @@
-use crate::core::{subscribe_view_change, RepeatedView, ViewIdentifier, ViewsRelation};
+use crate::core::{subscribe_view_change, RepeatedView, ViewIdentifier, ViewRelations};
 use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update};
 use anyhow::bail;
 
@@ -23,21 +23,21 @@ pub struct ViewsMap {
   #[allow(dead_code)]
   subscription: DeepEventsSubscription,
   change_tx: ViewChangeSender,
-  views_relation: Rc<ViewsRelation>,
+  view_relations: Rc<ViewRelations>,
 }
 
 impl ViewsMap {
   pub fn new(
     mut root: MapRefWrapper,
     change_tx: ViewChangeSender,
-    views_relation: Rc<ViewsRelation>,
+    views_relation: Rc<ViewRelations>,
   ) -> ViewsMap {
     let subscription = subscribe_view_change(&mut root, change_tx.clone(), views_relation.clone());
     Self {
       container: root,
       subscription,
       change_tx,
-      views_relation,
+      view_relations: views_relation,
     }
   }
 
@@ -55,7 +55,7 @@ impl ViewsMap {
           self
             .container
             .get_map_with_txn(txn, &be.id)
-            .and_then(|map| view_from_map_ref(&map, txn, &self.views_relation))
+            .and_then(|map| view_from_map_ref(&map, txn, &self.view_relations))
         })
         .collect::<Vec<View>>(),
       None => vec![],
@@ -85,7 +85,7 @@ impl ViewsMap {
 
   pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<View> {
     let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-    view_from_map_ref(&map_ref, txn, &self.views_relation)
+    view_from_map_ref(&map_ref, txn, &self.view_relations)
   }
 
   pub fn get_view_name_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<String> {
@@ -104,13 +104,13 @@ impl ViewsMap {
       let belonging = ViewIdentifier {
         id: view.id.clone(),
       };
-      ViewUpdate::new(&view.bid, txn, &parent_map_ref, self.views_relation.clone())
+      ViewUpdate::new(&view.bid, txn, &parent_map_ref, self.view_relations.clone())
         .add_belonging(vec![belonging])
         .done();
     }
 
     let map_ref = self.container.insert_map_with_txn(txn, &view.id);
-    ViewBuilder::new(&view.id, txn, map_ref, self.views_relation.clone())
+    ViewBuilder::new(&view.id, txn, map_ref, self.view_relations.clone())
       .update(|update| {
         update
           .set_name(view.name)
@@ -150,7 +150,7 @@ impl ViewsMap {
   {
     self.container.with_transact_mut(|txn| {
       let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-      let update = ViewUpdate::new(view_id, txn, &map_ref, self.views_relation.clone());
+      let update = ViewUpdate::new(view_id, txn, &map_ref, self.view_relations.clone());
       f(update)
     })
   }
@@ -159,7 +159,7 @@ impl ViewsMap {
 pub(crate) fn view_from_map_ref<T: ReadTxn>(
   map_ref: &MapRef,
   txn: &T,
-  belonging_map: &Rc<ViewsRelation>,
+  belonging_map: &Rc<ViewRelations>,
 ) -> Option<View> {
   let bid = map_ref.get_str_with_txn(txn, VIEW_BID)?;
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
@@ -192,7 +192,7 @@ pub struct ViewBuilder<'a, 'b> {
   view_id: &'a str,
   map_ref: MapRefWrapper,
   txn: &'a mut TransactionMut<'b>,
-  belongings: Rc<ViewsRelation>,
+  belongings: Rc<ViewRelations>,
 }
 
 impl<'a, 'b> ViewBuilder<'a, 'b> {
@@ -200,7 +200,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: MapRefWrapper,
-    belongings: Rc<ViewsRelation>,
+    belongings: Rc<ViewRelations>,
   ) -> Self {
     map_ref.insert_str_with_txn(txn, VIEW_ID, view_id);
     Self {
@@ -231,7 +231,7 @@ pub struct ViewUpdate<'a, 'b, 'c> {
   view_id: &'a str,
   map_ref: &'c MapRefWrapper,
   txn: &'a mut TransactionMut<'b>,
-  children_map: Rc<ViewsRelation>,
+  children_map: Rc<ViewRelations>,
 }
 
 impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
@@ -250,7 +250,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'c MapRefWrapper,
-    children_map: Rc<ViewsRelation>,
+    children_map: Rc<ViewRelations>,
   ) -> Self {
     Self {
       view_id,

@@ -35,20 +35,18 @@ fn workspace_json_serde() {
 
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(
-    json!({
+    json!( {
+      "meta": {},
       "relation": {
         "w1": [
           {
-            "id": "v1",
-            "name": ""
+            "id": "v1"
           },
           {
-            "id": "v2",
-            "name": ""
+            "id": "v2"
           }
         ]
       },
-      "meta": {},
       "trash": [],
       "views": {},
       "workspaces": [
@@ -86,22 +84,20 @@ fn view_json_serde() {
 
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(
-    json!({
+    json!( {
+      "meta": {},
       "relation": {
         "v1": [],
         "v2": [],
         "w1": [
           {
-            "id": "v1",
-            "name": ""
+            "id": "v1"
           },
           {
-            "id": "v2",
-            "name": ""
+            "id": "v2"
           }
         ]
       },
-      "meta": {},
       "trash": [],
       "views": {
         "v1": {
@@ -160,33 +156,29 @@ fn child_view_json_serde() {
 
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(
-    json!({
+    json!( {
+      "meta": {},
       "relation": {
         "v1": [],
         "v2": [
           {
-            "id": "v2.1",
-            "name": ""
+            "id": "v2.1"
           },
           {
-            "id": "v2.2",
-            "name": ""
+            "id": "v2.2"
           }
         ],
         "v2.1": [],
         "v2.2": [],
         "w1": [
           {
-            "id": "v1",
-            "name": ""
+            "id": "v1"
           },
           {
-            "id": "v2",
-            "name": ""
+            "id": "v2"
           }
         ]
       },
-      "meta": {},
       "trash": [],
       "views": {
         "v1": {
