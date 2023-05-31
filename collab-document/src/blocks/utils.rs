@@ -26,7 +26,7 @@ pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
     .collect::<Vec<String>>();
   let delta = match event {
     Event::Array(_val) => {
-      /// Here use unwrap is safe, because we have checked the type of event.
+      // Here use unwrap is safe, because we have checked the type of event.
       let id = path.last().unwrap().to_string();
 
       vec![BlockEventPayload {
@@ -48,7 +48,7 @@ pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
             command: DeltaType::Inserted,
           },
           EntryChange::Updated(_, _value) => {
-            /// Here use unwrap is safe, because we have checked the type of event.
+            // Here use unwrap is safe, because we have checked the type of event.
             let id = path.last().unwrap().to_string();
 
             BlockEventPayload {

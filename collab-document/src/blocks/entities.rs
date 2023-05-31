@@ -24,7 +24,7 @@ pub struct DocumentMeta {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct DocumentData {
-  /// Document root block id.
+  /// Document [Block] id.
   pub page_id: String,
   /// Document blocks.
   pub blocks: HashMap<String, Block>,
@@ -45,9 +45,9 @@ pub struct BlockAction {
 pub struct BlockActionPayload {
   /// Block
   pub block: Block,
-  /// Previous block id.
+  /// Previous [Block] id.
   pub prev_id: Option<String>,
-  /// Parent block id.
+  /// Parent [Block] id.
   pub parent_id: Option<String>,
 }
 
@@ -83,7 +83,7 @@ pub struct BlockEventPayload {
   pub value: String,
   /// block map key or children map key
   pub id: String,
-  /// eg: ["blocks"] | ["meta", "children_map"]
+  /// eg: \["blocks"\] or \["meta", "children_map"\]
   pub path: Vec<String>,
   /// delta type
   pub command: DeltaType,

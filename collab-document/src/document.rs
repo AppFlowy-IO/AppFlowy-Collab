@@ -104,7 +104,7 @@ impl Document {
         let parent_id = payload.parent_id;
         let prev_id = payload.prev_id;
 
-        /// check if the block's parent_id is empty, if it is empty, assign the parent_id to the block
+        // check if the block's parent_id is empty, if it is empty, assign the parent_id to the block
         if block.parent.is_empty() {
           if let Some(parent_id) = &parent_id {
             block.parent = parent_id.clone();
@@ -117,7 +117,7 @@ impl Document {
           BlockActionType::Delete => self.delete_block(txn, block_id),
           BlockActionType::Move => self.move_block(txn, block_id, parent_id, prev_id),
         } {
-          /// todo: handle the error;
+          // todo: handle the error;
           tracing::error!("[Document] apply_action error: {:?}", err);
           return;
         }
@@ -151,7 +151,7 @@ impl Document {
     prev_id: Option<String>,
   ) -> Result<Block, DocumentError> {
     let parent_id = &block.parent;
-    /// If the parent is not found, return an error.
+    // If the parent is not found, return an error.
     if parent_id.is_empty() {
       return Err(DocumentError::ParentIsNotFound);
     }
@@ -162,8 +162,8 @@ impl Document {
     };
 
     let parent_children_id = &parent.children;
-    /// If the prev_id is not found, insert the block to the first position.
-    /// so the default index is 0.
+    // If the prev_id is not found, insert the block to the first position.
+    // so the default index is 0.
     let index = prev_id
       .and_then(|prev_id| {
         self
@@ -197,7 +197,7 @@ impl Document {
       None => return Err(DocumentError::BlockIsNotFound),
     };
 
-    /// Delete all the children of this block.
+    // Delete all the children of this block.
     let children = self
       .children_operation
       .get_children_with_txn(txn, &block.children);
@@ -208,11 +208,11 @@ impl Document {
       .iter()
       .for_each(|child| self.delete_block(txn, child).unwrap_or_default());
 
-    /// Delete the block from its parent.
+    // Delete the block from its parent.
     let parent_id = &block.parent;
     self.delete_block_from_parent(txn, block_id, parent_id);
 
-    /// Delete the block
+    // Delete the block
     self
       .block_operation
       .delete_block_with_txn(txn, block_id)
@@ -259,7 +259,7 @@ impl Document {
     parent_id: Option<String>,
     prev_id: Option<String>,
   ) -> Result<(), DocumentError> {
-    /// If the parent is not found, return an error.
+    // If the parent is not found, return an error.
     let new_parent = match parent_id {
       Some(parent_id) => match self.block_operation.get_block_with_txn(txn, &parent_id) {
         Some(parent) => parent,
@@ -273,7 +273,7 @@ impl Document {
       None => return Err(DocumentError::BlockIsNotFound),
     };
 
-    /// If the old parent is not found, return an error.
+    // If the old parent is not found, return an error.
     let old_parent = match self.block_operation.get_block_with_txn(txn, &block.parent) {
       Some(parent) => parent,
       None => return Err(DocumentError::ParentIsNotFound),
@@ -282,13 +282,13 @@ impl Document {
     let new_parent_children_id = new_parent.children;
     let old_parent_children_id = old_parent.children;
 
-    /// If the new parent is the same as the old parent, just return.
+    // If the new parent is the same as the old parent, just return.
     if new_parent_children_id == old_parent_children_id {
       return Ok(());
     }
 
-    /// If the prev_id is not found, insert the block to the first position.
-    /// so the default index is 0.
+    // If the prev_id is not found, insert the block to the first position.
+    // so the default index is 0.
     let index = prev_id
       .and_then(|prev_id| {
         self
@@ -298,17 +298,17 @@ impl Document {
       .map(|prev_index| prev_index + 1)
       .unwrap_or(0);
 
-    /// Delete the block from the old parent.
+    // Delete the block from the old parent.
     self
       .children_operation
       .delete_child_with_txn(txn, &old_parent_children_id, block_id);
 
-    /// Insert the block to the new parent.
+    // Insert the block to the new parent.
     self
       .children_operation
       .insert_child_with_txn(txn, &new_parent_children_id, block_id, index);
 
-    /// Update the parent of the block.
+    // Update the parent of the block.
     self
       .block_operation
       .set_block_with_txn(txn, block_id, Some(block.data), Some(&new_parent.id))
@@ -320,19 +320,19 @@ impl Document {
   ) -> Result<Self, DocumentError> {
     let collab_guard = collab.lock();
     let (root, block_operation, children_operation) = collab_guard.with_transact_mut(|txn| {
-      /// { document: {:} }
+      // { document: {:} }
       let root = collab_guard.insert_map_with_txn(txn, ROOT);
-      /// { document: { blocks: {:} } }
+      // { document: { blocks: {:} } }
       let blocks = root.insert_map_with_txn(txn, BLOCKS);
-      /// { document: { blocks: {:}, meta: {:} } }
+      // { document: { blocks: {:}, meta: {:} } }
       let meta = root.insert_map_with_txn(txn, META);
-      /// {document: { blocks: {:}, meta: { children_map: {:} } }
+      // {document: { blocks: {:}, meta: { children_map: {:} } }
       let children_map = meta.insert_map_with_txn(txn, CHILDREN_MAP);
 
       let children_operation = ChildrenOperation::new(children_map);
       let block_operation = BlockOperation::new(blocks, children_operation.clone());
 
-      /// If the data is not None, insert the data to the document.
+      // If the data is not None, insert the data to the document.
       if let Some(data) = data {
         root.insert_with_txn(txn, PAGE_ID, data.page_id);
 
