@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::ops::Deref;
 
-/// Block Struct.
+/// [Block] Struct.
 ///
 /// Every block has these fields, and every block is independent of each other.
 /// The relationship between blocks is maintained by the [DocumentMeta] children_map.
