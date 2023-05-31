@@ -15,8 +15,9 @@ use crate::error::DocumentError;
 
 const ROOT: &str = "document";
 
-/// This is a [Block] id, and it's also in [BlockOperation].
-/// It's the first block id in document and the data of this block is document's title.
+/// The page_id is a reference that points to the block’s id.
+/// The block that is referenced by this page_id is the first block of the document.
+/// Crossing this block, we can build the whole document tree.
 const PAGE_ID: &str = "page_id";
 /// Document's all [Block] Map.
 const BLOCKS: &str = "blocks";

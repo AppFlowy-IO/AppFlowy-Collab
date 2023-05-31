@@ -3,6 +3,12 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::ops::Deref;
 
+/// Block Struct.
+///
+/// Every block has these fields, and every block is independent of each other.
+/// The relationship between blocks is maintained by the [DocumentMeta] children_map.
+/// Every block has `children` field, and the `children` field is the key of the children map.
+/// The children map is a map of array, and the value of the children map is the id of the child block.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Block {
   pub id: String,
