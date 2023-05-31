@@ -9,45 +9,45 @@ pub struct Block {
   pub ty: String,
   pub parent: String,
   pub children: String,
-  // Optional external id and type for blocks that are not stored in the document
+  /// Optional external id and type for blocks that are not stored in the document
   pub external_id: Option<String>,
-  // Optional external type for blocks that are not stored in the document
+  /// Optional external type for blocks that are not stored in the document
   pub external_type: Option<String>,
   pub data: HashMap<String, Value>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct DocumentMeta {
-  // Meta has a children map.
+  /// Meta has a children map.
   pub children_map: HashMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct DocumentData {
-  // Document root block id.
+  /// Document root block id.
   pub page_id: String,
-  // Document blocks.
+  /// Document blocks.
   pub blocks: HashMap<String, Block>,
-  // Document meta.
+  /// Document meta.
   pub meta: DocumentMeta,
 }
 
-// Operate block action.
+/// Operate block action.
 #[derive(Debug, Clone, Serialize)]
 pub struct BlockAction {
-  // Block action type.
+  /// Block action type.
   pub action: BlockActionType,
-  // Block action payload.
+  /// Block action payload.
   pub payload: BlockActionPayload,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct BlockActionPayload {
-  // Block
+  /// Block
   pub block: Block,
-  // Previous block id.
+  /// Previous block id.
   pub prev_id: Option<String>,
-  // Parent block id.
+  /// Parent block id.
   pub parent_id: Option<String>,
 }
 
@@ -59,7 +59,7 @@ pub enum BlockActionType {
   Move,
 }
 
-// Block change event.
+/// Block change event.
 #[derive(Debug, Clone, Serialize)]
 pub struct BlockEvent(Vec<BlockEventPayload>);
 
@@ -76,16 +76,16 @@ impl Deref for BlockEvent {
   }
 }
 
-// Block change event payload.
+/// Block change event payload.
 #[derive(Debug, Clone, Serialize)]
 pub struct BlockEventPayload {
-  // change value
+  /// change value
   pub value: String,
-  // block map key or children map key
+  /// block map key or children map key
   pub id: String,
-  // eg: ["blocks"] | ["meta", "children_map"]
+  /// eg: ["blocks"] | ["meta", "children_map"]
   pub path: Vec<String>,
-  // delta type
+  /// delta type
   pub command: DeltaType,
 }
 
