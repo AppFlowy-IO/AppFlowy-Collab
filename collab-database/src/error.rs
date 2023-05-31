@@ -1,7 +1,13 @@
 #[derive(Debug, thiserror::Error)]
 pub enum DatabaseError {
-  #[error("The database's id is invalid")]
-  InvalidDatabaseID,
+  #[error("The database's id is invalid: {0}")]
+  InvalidDatabaseID(&'static str),
+
+  #[error("The database view's id is invalid: {0}")]
+  InvalidViewID(&'static str),
+
+  #[error("The database row's id is invalid: {0}")]
+  InvalidRowID(&'static str),
 
   #[error("The database is not existing")]
   DatabaseNotExist,

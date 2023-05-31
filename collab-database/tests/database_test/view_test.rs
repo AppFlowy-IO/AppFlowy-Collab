@@ -60,12 +60,13 @@ fn get_database_view_description_test() {
 fn create_same_database_view_twice_test() {
   let database_test = create_database_with_default_data(1, "1");
   let params = CreateViewParams {
+    database_id: "1".to_string(),
     view_id: "v1".to_string(),
     name: "my second grid".to_string(),
     layout: DatabaseLayout::Grid,
     ..Default::default()
   };
-  database_test.create_linked_view(params);
+  database_test.create_linked_view(params).unwrap();
   let view = database_test.views.get_view("v1").unwrap();
 
   assert_eq!(view.name, "my second grid");
@@ -76,10 +77,12 @@ fn create_database_row_test() {
   let database_test = create_database_with_default_data(1, "1");
 
   let row_id = gen_row_id();
-  database_test.create_row(CreateRowParams {
-    id: row_id.clone(),
-    ..Default::default()
-  });
+  database_test
+    .create_row(CreateRowParams {
+      id: row_id.clone(),
+      ..Default::default()
+    })
+    .unwrap();
 
   let view = database_test.views.get_view("v1").unwrap();
   assert_json_eq!(view.row_orders.last().unwrap().id, row_id);
@@ -120,13 +123,14 @@ fn create_database_view_with_filter_test() {
   };
 
   let params = CreateViewParams {
+    database_id: "1".to_string(),
     view_id: "v1".to_string(),
     name: "my first grid".to_string(),
     filters: vec![filter_1.into(), filter_2.into()],
     layout: DatabaseLayout::Grid,
     ..Default::default()
   };
-  database_test.create_linked_view(params);
+  database_test.create_linked_view(params).unwrap();
 
   let view = database_test.views.get_view("v1").unwrap();
   let filters = view
@@ -151,12 +155,13 @@ fn create_database_view_with_layout_setting_test() {
   layout_settings.insert(DatabaseLayout::Grid, grid_setting);
 
   let params = CreateViewParams {
+    database_id: "1".to_string(),
     view_id: "v1".to_string(),
     layout: DatabaseLayout::Grid,
     layout_settings,
     ..Default::default()
   };
-  database_test.create_linked_view(params);
+  database_test.create_linked_view(params).unwrap();
 
   let view = database_test.views.get_view("v1").unwrap();
   let grid_layout_setting = view.layout_settings.get(&DatabaseLayout::Grid).unwrap();
@@ -172,10 +177,11 @@ fn delete_inline_database_view_test() {
   let database_test = create_database_with_default_data(1, "1");
   for i in 0..3 {
     let params = CreateViewParams {
+      database_id: "1".to_string(),
       view_id: format!("v{}", i),
       ..Default::default()
     };
-    database_test.create_linked_view(params);
+    database_test.create_linked_view(params).unwrap();
   }
 
   let views = database_test.views.get_all_views();

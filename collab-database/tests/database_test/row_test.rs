@@ -8,16 +8,19 @@ use crate::database_test::helper::{create_database, create_database_with_default
 fn create_row_shared_by_two_view_test() {
   let database_test = create_database(1, "1");
   let params = CreateViewParams {
+    database_id: "1".to_string(),
     view_id: "v2".to_string(),
     ..Default::default()
   };
-  database_test.create_linked_view(params);
+  database_test.create_linked_view(params).unwrap();
 
   let row_id = gen_row_id();
-  database_test.create_row(CreateRowParams {
-    id: row_id.clone(),
-    ..Default::default()
-  });
+  database_test
+    .create_row(CreateRowParams {
+      id: row_id.clone(),
+      ..Default::default()
+    })
+    .unwrap();
 
   let view_1 = database_test.views.get_view("v1").unwrap();
   let view_2 = database_test.views.get_view("v2").unwrap();
@@ -29,10 +32,11 @@ fn create_row_shared_by_two_view_test() {
 fn delete_row_shared_by_two_view_test() {
   let database_test = create_database(1, "1");
   let params = CreateViewParams {
+    database_id: "1".to_string(),
     view_id: "v2".to_string(),
     ..Default::default()
   };
-  database_test.create_linked_view(params);
+  database_test.create_linked_view(params).unwrap();
 
   let row_order = database_test
     .create_row(CreateRowParams {
@@ -79,10 +83,11 @@ fn move_row_in_view_test() {
 fn move_row_in_views_test() {
   let database_test = create_database_with_default_data(1, "1");
   let params = CreateViewParams {
+    database_id: "1".to_string(),
     view_id: "v2".to_string(),
     ..Default::default()
   };
-  database_test.create_linked_view(params);
+  database_test.create_linked_view(params).unwrap();
 
   database_test.views.update_database_view("v1", |update| {
     update.move_row_order(2, 1);

@@ -16,7 +16,7 @@ use crate::database::{Database, DatabaseContext, DatabaseData};
 use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 
-use crate::views::{CreateDatabaseParams, CreateViewParams};
+use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 use base64::engine::general_purpose::STANDARD;
 
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
@@ -193,14 +193,17 @@ impl UserDatabase {
 
   /// Create reference view that shares the same data with the inline view's database
   /// If the inline view is deleted, the reference view will be deleted too.
-  pub fn create_database_view(&self, params: CreateViewParams) {
+  pub fn create_database_view(&self, params: CreateViewParams) -> Result<(), DatabaseError> {
+    let params = CreateViewParamsValidator::validate(params)?;
     if let Some(database) = self.get_database(&params.database_id) {
       self
         .database_array
         .update_database(&params.database_id, |record| {
           record.views.insert(params.view_id.clone());
         });
-      database.create_linked_view(params);
+      database.create_linked_view(params)
+    } else {
+      Err(DatabaseError::DatabaseNotExist)
     }
   }
 

@@ -29,8 +29,8 @@ impl ViewMap {
     ViewBuilder::new(&view.id, txn, map_ref).update(|update| {
       update
         .set_name(view.name)
-        .set_created_at(timestamp())
-        .set_modified_at(timestamp())
+        .set_created_at(view.created_at)
+        .set_modified_at(view.modified_at)
         .set_database_id(view.database_id)
         .set_layout_settings(view.layout_settings)
         .set_layout_type(view.layout)

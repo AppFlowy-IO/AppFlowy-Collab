@@ -9,6 +9,7 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use serde::{Deserialize, Serialize};
 
 use crate::database::{gen_row_id, timestamp};
+use crate::error::DatabaseError;
 use crate::rows::{Cell, Cells, CellsUpdate, RowId};
 use crate::user::DatabaseCollabBuilder;
 use crate::views::RowOrder;
@@ -327,6 +328,29 @@ pub struct CreateRowParams {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub prev_row_id: Option<RowId>,
   pub timestamp: i64,
+}
+
+pub(crate) struct CreateRowParamsValidator;
+
+impl CreateRowParamsValidator {
+  pub(crate) fn validate(mut params: CreateRowParams) -> Result<CreateRowParams, DatabaseError> {
+    if params.id.is_empty() {
+      return Err(DatabaseError::InvalidRowID("row_id is empty"));
+    }
+
+    if let Some(prev_row_id) = &params.prev_row_id {
+      if prev_row_id.is_empty() {
+        return Err(DatabaseError::InvalidRowID("prev_row_id is empty"));
+      }
+    }
+
+    if params.timestamp == 0 {
+      tracing::warn!("timestamp is 0, using current timestamp");
+      params.timestamp = timestamp();
+    }
+
+    Ok(params)
+  }
 }
 
 impl Default for CreateRowParams {
