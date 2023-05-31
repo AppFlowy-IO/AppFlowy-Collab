@@ -4,14 +4,17 @@ use collab::preclude::{Array, EntryChange, Event, Map, PathSegment, TransactionM
 use serde_json::Value;
 use std::collections::HashMap;
 
+/// block data json string to hashmap
 pub fn json_str_to_hashmap(json_str: &str) -> Result<HashMap<String, Value>, DocumentError> {
   serde_json::from_str(json_str).map_err(|_| DocumentError::ConvertDataError)
 }
 
+/// block data hashmap to json string
 pub fn hashmap_to_json_str(data: HashMap<String, Value>) -> Result<String, DocumentError> {
   serde_json::to_string(&data).map_err(|_| DocumentError::ConvertDataError)
 }
 
+/// parse block change event to BlockEvent
 pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
   let path = event
     .path()
@@ -69,6 +72,7 @@ pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
   BlockEvent::new(delta)
 }
 
+/// parse YrsValue to json string
 fn parse_yrs_value(txn: &TransactionMut, value: &YrsValue) -> String {
   match value {
     YrsValue::YArray(val) => {

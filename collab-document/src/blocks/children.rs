@@ -1,8 +1,9 @@
 use collab::preclude::*;
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct ChildrenOperation {
-  pub root: MapRefWrapper,
+  root: MapRefWrapper,
 }
 
 impl ChildrenOperation {
@@ -22,7 +23,7 @@ impl ChildrenOperation {
       .unwrap_or_else(|| self.create_children_with_txn(txn, children_id))
   }
 
-  /// get all the children of the root block
+  /// get children map of current root map
   pub fn get_all_children(&self) -> HashMap<String, Vec<String>> {
     let txn = self.root.transact();
     self
@@ -42,6 +43,7 @@ impl ChildrenOperation {
       .collect()
   }
 
+  /// Create children map of each block.
   pub fn create_children_with_txn(
     &self,
     txn: &mut TransactionMut,
@@ -52,10 +54,12 @@ impl ChildrenOperation {
       .insert_array_with_txn(txn, children_id, Vec::<String>::new())
   }
 
+  /// Delete children map when delete this block.
   pub fn delete_children_with_txn(&self, txn: &mut TransactionMut, children_id: &str) {
     self.root.delete_with_txn(txn, children_id);
   }
 
+  /// Get child index of current block's children map with given child id.
   pub fn get_child_index_with_txn<T: ReadTxn>(
     &self,
     txn: &T,
@@ -73,6 +77,7 @@ impl ChildrenOperation {
       .map(|index| index as u32)
   }
 
+  /// Insert child into current block's children map with given child id and index.
   pub fn insert_child_with_txn(
     &self,
     txn: &mut TransactionMut,
@@ -84,6 +89,7 @@ impl ChildrenOperation {
     children_ref.insert(txn, index, child_id);
   }
 
+  /// Delete child from current block's children map with given child id.
   pub fn delete_child_with_txn(&self, txn: &mut TransactionMut, children_id: &str, child_id: &str) {
     let children_ref = self.get_children_with_txn(txn, children_id);
     if let Some(index) = self.get_child_index_with_txn(txn, children_id, child_id) {

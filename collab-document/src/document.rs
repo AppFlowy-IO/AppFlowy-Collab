@@ -1,12 +1,11 @@
 use std::collections::HashMap;
-use std::rc::Rc;
+
 use std::sync::Arc;
 use std::vec;
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::*;
 use serde_json::Value;
-use tracing::log::trace;
 
 use crate::blocks::{
   Block, BlockAction, BlockActionType, BlockEvent, BlockOperation, ChildrenOperation, DocumentData,
@@ -15,16 +14,23 @@ use crate::blocks::{
 use crate::error::DocumentError;
 
 const ROOT: &str = "document";
+
+/// The page_id is a reference that points to the block’s id.
+/// The block that is referenced by this page_id is the first block of the document.
+/// Crossing this block, we can build the whole document tree.
 const PAGE_ID: &str = "page_id";
+/// Document's all [Block] Map.
 const BLOCKS: &str = "blocks";
+/// Document's meta data.
 const META: &str = "meta";
+/// [Block]'s children map. And it's also in [META].
 const CHILDREN_MAP: &str = "children_map";
 
 pub struct Document {
   inner: Arc<MutexCollab>,
   root: MapRefWrapper,
   subscription: RootDeepSubscription,
-  children_operation: Rc<ChildrenOperation>,
+  children_operation: ChildrenOperation,
   block_operation: BlockOperation,
 }
 
@@ -71,13 +77,15 @@ impl Document {
     self.root.with_transact_mut(f)
   }
 
+  /// Get document data.
   pub fn get_document(&self) -> Result<DocumentData, DocumentError> {
     let collab_guard = self.inner.lock();
     let txn = collab_guard.transact();
     let page_id = self
       .root
       .get_str_with_txn(&txn, PAGE_ID)
-      .unwrap_or_default();
+      .ok_or(DocumentError::PageIdIsEmpty)?;
+
     drop(txn);
     drop(collab_guard);
 
@@ -91,6 +99,7 @@ impl Document {
     Ok(document_data)
   }
 
+  /// Apply actions to the document.
   pub fn apply_action(&self, actions: Vec<BlockAction>) {
     self.inner.lock().with_transact_mut(|txn| {
       for action in actions {
@@ -115,29 +124,32 @@ impl Document {
           BlockActionType::Move => self.move_block(txn, block_id, parent_id, prev_id),
         } {
           // todo: handle the error;
-          trace!("[Document] apply_action error: {:?}", err);
+          tracing::error!("[Document] apply_action error: {:?}", err);
           return;
         }
       }
     })
   }
 
+  /// Get block with the given id.
   pub fn get_block(&self, block_id: &str) -> Option<Block> {
     let collab_guard = self.inner.lock();
     let txn = collab_guard.transact();
     self.block_operation.get_block_with_txn(&txn, block_id)
   }
 
+  /// Insert block to the document.
   pub fn insert_block(
     &self,
     txn: &mut TransactionMut,
     block: Block,
     prev_id: Option<String>,
   ) -> Result<Block, DocumentError> {
-    let block = self.block_operation.create_block_with_txn(txn, &block)?;
+    let block = self.block_operation.create_block_with_txn(txn, block)?;
     self.insert_block_to_parent(txn, &block, prev_id)
   }
 
+  /// Insert block with the given parent id and prev id.
   pub fn insert_block_to_parent(
     &self,
     txn: &mut TransactionMut,
@@ -229,6 +241,7 @@ impl Document {
     }
   }
 
+  /// update the block data.
   pub fn update_block_data(
     &self,
     txn: &mut TransactionMut,
@@ -322,15 +335,15 @@ impl Document {
       // {document: { blocks: {:}, meta: { children_map: {:} } }
       let children_map = meta.insert_map_with_txn(txn, CHILDREN_MAP);
 
-      let children_operation = Rc::new(ChildrenOperation::new(children_map));
-      let block_operation = BlockOperation::new(blocks, Rc::clone(&children_operation));
+      let children_operation = ChildrenOperation::new(children_map);
+      let block_operation = BlockOperation::new(blocks, children_operation.clone());
 
       // If the data is not None, insert the data to the document.
       if let Some(data) = data {
         root.insert_with_txn(txn, PAGE_ID, data.page_id);
 
         for (_, block) in data.blocks {
-          block_operation.create_block_with_txn(txn, &block)?;
+          block_operation.create_block_with_txn(txn, block)?;
         }
 
         for (id, child_ids) in data.meta.children_map {
@@ -367,8 +380,8 @@ impl Document {
     let children_map = collab_guard
       .get_map_with_txn(&txn, vec![ROOT, META, CHILDREN_MAP])
       .unwrap();
-    let children_operation = Rc::new(ChildrenOperation::new(children_map));
-    let block_operation = BlockOperation::new(blocks, Rc::clone(&children_operation));
+    let children_operation = ChildrenOperation::new(children_map);
+    let block_operation = BlockOperation::new(blocks, children_operation.clone());
     let subscription = RootDeepSubscription::default();
 
     drop(txn);

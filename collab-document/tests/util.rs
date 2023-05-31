@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::ops::Deref;
-use std::rc::Rc;
 use std::sync::{Arc, Once};
 
 use collab::preclude::CollabBuilder;
@@ -136,19 +135,15 @@ pub fn insert_block(
 
 pub fn get_document_data(
   document: &Document,
-) -> (
-  String,
-  Rc<HashMap<String, Block>>,
-  Rc<HashMap<String, Vec<String>>>,
-) {
+) -> (String, HashMap<String, Block>, HashMap<String, Vec<String>>) {
   let document_data = document.get_document().unwrap();
 
-  let page_id = document_data.page_id.as_str();
-  let blocks = Rc::new(document_data.blocks);
+  let page_id = document_data.page_id.clone();
+  let blocks = document_data.blocks;
   let meta = document_data.meta;
-  let children_map = Rc::new(meta.children_map);
+  let children_map = meta.children_map;
 
-  (page_id.to_owned(), blocks, children_map)
+  (page_id, blocks, children_map)
 }
 
 pub fn delete_block(document: &Document, block_id: &str) -> Result<(), DocumentError> {
