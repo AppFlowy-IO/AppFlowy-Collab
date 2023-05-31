@@ -24,10 +24,12 @@ fn create_database_row_snapshot_test() {
   assert!(snapshots.is_empty());
 
   for i in 0..10 {
-    database.create_row(CreateRowParams {
-      id: i.into(),
-      ..Default::default()
-    });
+    database
+      .create_row(CreateRowParams {
+        id: i.into(),
+        ..Default::default()
+      })
+      .unwrap();
   }
 
   let snapshots = test.get_database_snapshots("d1");
@@ -46,10 +48,12 @@ fn delete_database_snapshot_test() {
     .unwrap();
 
   for i in 0..10 {
-    database.create_row(CreateRowParams {
-      id: i.into(),
-      ..Default::default()
-    });
+    database
+      .create_row(CreateRowParams {
+        id: i.into(),
+        ..Default::default()
+      })
+      .unwrap();
   }
   test.delete_database("d1");
   let snapshots = test.get_database_snapshots("d1");

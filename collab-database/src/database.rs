@@ -13,11 +13,12 @@ use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::meta::MetaMap;
-use crate::rows::{CreateRowParams, Row, RowCell, RowId, RowUpdate};
+use crate::rows::{CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowId, RowUpdate};
 use crate::user::DatabaseCollabBuilder;
 use crate::views::{
-  CreateDatabaseParams, CreateViewParams, DatabaseLayout, DatabaseView, FieldOrder, FilterMap,
-  GroupSettingMap, LayoutSetting, RowOrder, SortMap, ViewDescription, ViewMap,
+  CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
+  FieldOrder, FilterMap, GroupSettingMap, LayoutSetting, RowOrder, SortMap, ViewDescription,
+  ViewMap,
 };
 
 pub struct Database {
@@ -66,15 +67,16 @@ impl Database {
         this.fields.insert_field_with_txn(txn, field);
       }
       // Create a inline view
-      this.create_view_with_txn(txn, params, field_orders, row_orders);
-    });
+      this.create_view_with_txn(txn, params, field_orders, row_orders)?;
+      Ok::<(), DatabaseError>(())
+    })?;
     Ok(this)
   }
 
   /// Get or Create a database with the given database_id.
   pub fn get_or_create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
     if database_id.is_empty() {
-      return Err(DatabaseError::InvalidDatabaseID);
+      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
     // Get the database from the collab
@@ -128,7 +130,7 @@ impl Database {
   /// Create a new database with the given database_id and context.
   fn create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
     if database_id.is_empty() {
-      return Err(DatabaseError::InvalidDatabaseID);
+      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
     let collab_guard = context.collab.lock();
     let (database, fields, views, metas) = collab_guard.with_transact_mut(|txn| {
@@ -187,14 +189,15 @@ impl Database {
   /// This row will be inserted to the end of rows of each view that
   /// reference the given database. Return the row order if the row is
   /// created successfully. Otherwise, return None.
-  pub fn create_row(&self, params: CreateRowParams) -> Option<RowOrder> {
+  pub fn create_row(&self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
+    let params = CreateRowParamsValidator::validate(params)?;
     let row_order = self.block.create_row(params);
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |update| {
         update.push_row_order(&row_order);
       });
     });
-    Some(row_order)
+    Ok(row_order)
   }
 
   /// Create a new row from the given view.
@@ -624,13 +627,16 @@ impl Database {
   }
 
   /// Create a linked view to existing database
-  pub fn create_linked_view(&self, params: CreateViewParams) {
+  pub fn create_linked_view(&self, params: CreateViewParams) -> Result<(), DatabaseError> {
+    let params = CreateViewParamsValidator::validate(params)?;
     self.root.with_transact_mut(|txn| {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
       let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
       let field_orders = self.views.get_field_orders_txn(txn, &inline_view_id);
-      self.create_view_with_txn(txn, params, field_orders, row_orders);
-    })
+      self.create_view_with_txn(txn, params, field_orders, row_orders)?;
+      Ok::<(), DatabaseError>(())
+    })?;
+    Ok(())
   }
 
   /// Create a [DatabaseView] for the current database.
@@ -640,7 +646,8 @@ impl Database {
     params: CreateViewParams,
     field_orders: Vec<FieldOrder>,
     row_orders: Vec<RowOrder>,
-  ) {
+  ) -> Result<(), DatabaseError> {
+    let params = CreateViewParamsValidator::validate(params)?;
     let timestamp = timestamp();
     let database_id = self.get_database_id_with_txn(txn);
     let view = DatabaseView {
@@ -658,6 +665,7 @@ impl Database {
       modified_at: timestamp,
     };
     self.views.insert_view_with_txn(txn, view);
+    Ok(())
   }
 
   /// Create a linked view that duplicate the target view's setting including filter, sort and

@@ -6,6 +6,7 @@ use collab::preclude::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::error::DatabaseError;
 use crate::fields::Field;
 use crate::rows::CreateRowParams;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
@@ -60,6 +61,22 @@ impl CreateViewParams {
       groups: vec![],
       sorts: vec![],
     }
+  }
+}
+
+pub(crate) struct CreateViewParamsValidator;
+
+impl CreateViewParamsValidator {
+  pub(crate) fn validate(params: CreateViewParams) -> Result<CreateViewParams, DatabaseError> {
+    if params.database_id.is_empty() {
+      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
+    }
+
+    if params.view_id.is_empty() {
+      return Err(DatabaseError::InvalidViewID("view_id is empty"));
+    }
+
+    Ok(params)
   }
 }
 

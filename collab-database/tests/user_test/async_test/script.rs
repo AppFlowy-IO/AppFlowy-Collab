@@ -130,7 +130,8 @@ pub fn run_script(
         .lock()
         .get_database(&database_id)
         .unwrap()
-        .create_row(params);
+        .create_row(params)
+        .unwrap();
     },
     DatabaseScript::EditRow {
       database_id,

@@ -86,11 +86,12 @@ fn create_database_with_two_sorts() -> DatabaseTest {
   };
 
   let params = CreateViewParams {
+    database_id: "1".to_string(),
     view_id: "v1".to_string(),
     sorts: vec![sort_1.into(), sort_2.into()],
     layout: DatabaseLayout::Grid,
     ..Default::default()
   };
-  database_test.create_linked_view(params);
+  database_test.create_linked_view(params).unwrap();
   database_test
 }

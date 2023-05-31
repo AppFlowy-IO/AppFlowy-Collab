@@ -153,9 +153,9 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   };
 
   let database_test = create_database(uid, database_id);
-  database_test.create_row(row_1);
-  database_test.create_row(row_2);
-  database_test.create_row(row_3);
+  database_test.create_row(row_1).unwrap();
+  database_test.create_row(row_2).unwrap();
+  database_test.create_row(row_3).unwrap();
 
   let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);

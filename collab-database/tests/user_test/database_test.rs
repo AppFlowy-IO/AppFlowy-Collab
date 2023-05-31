@@ -74,10 +74,12 @@ fn duplicate_database_inline_view_test() {
 
   let duplicated_database = test.duplicate_database("v1").unwrap();
   let duplicated_view_id = duplicated_database.get_inline_view_id();
-  duplicated_database.create_row(CreateRowParams {
-    id: 1.into(),
-    ..Default::default()
-  });
+  duplicated_database
+    .create_row(CreateRowParams {
+      id: 1.into(),
+      ..Default::default()
+    })
+    .unwrap();
 
   assert_eq!(
     duplicated_database
@@ -101,18 +103,22 @@ fn duplicate_database_view_test() {
     })
     .unwrap();
 
-  test.create_database_view(CreateViewParams {
-    database_id: "d1".to_string(),
-    view_id: "v2".to_string(),
-    ..Default::default()
-  });
+  test
+    .create_database_view(CreateViewParams {
+      database_id: "d1".to_string(),
+      view_id: "v2".to_string(),
+      ..Default::default()
+    })
+    .unwrap();
 
   // Duplicate the linked view.
   let duplicated_view = database.duplicate_linked_view("v2").unwrap();
-  database.create_row(CreateRowParams {
-    id: 1.into(),
-    ..Default::default()
-  });
+  database
+    .create_row(CreateRowParams {
+      id: 1.into(),
+      ..Default::default()
+    })
+    .unwrap();
 
   // Duplicated database should have the same rows as the original database
   assert_eq!(database.get_rows_for_view(&duplicated_view.id).len(), 1);
@@ -131,10 +137,13 @@ fn delete_database_inline_view_test() {
     .unwrap();
 
   for i in 2..5 {
-    database.create_linked_view(CreateViewParams {
-      view_id: format!("v{}", i),
-      ..Default::default()
-    });
+    database
+      .create_linked_view(CreateViewParams {
+        database_id: "d1".to_string(),
+        view_id: format!("v{}", i),
+        ..Default::default()
+      })
+      .unwrap();
   }
 
   let views = database.views.get_all_views();
@@ -201,11 +210,13 @@ fn get_database_by_view_id_test() {
     })
     .unwrap();
 
-  test.create_database_view(CreateViewParams {
-    database_id: "d1".to_string(),
-    view_id: "v2".to_string(),
-    ..Default::default()
-  });
+  test
+    .create_database_view(CreateViewParams {
+      database_id: "d1".to_string(),
+      view_id: "v2".to_string(),
+      ..Default::default()
+    })
+    .unwrap();
 
   let database = test.get_database_with_view_id("v2");
   assert!(database.is_some());
