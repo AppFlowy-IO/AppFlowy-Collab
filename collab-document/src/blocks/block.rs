@@ -16,6 +16,7 @@ const DATA: &str = "data";
 const EXTERNAL_ID: &str = "external_id";
 const EXTERNAL_TYPE: &str = "external_type";
 
+// for block operate, there has a root map, and a children map.
 pub struct BlockOperation {
   root: MapRefWrapper,
   children_operation: ChildrenOperation,
@@ -29,6 +30,7 @@ impl BlockOperation {
     }
   }
 
+  // get all blocks
   pub fn get_all_blocks(&self) -> HashMap<String, Block> {
     let txn = self.root.transact();
     self
@@ -42,6 +44,7 @@ impl BlockOperation {
       .collect()
   }
 
+  // create a block
   pub fn create_block_with_txn(
     &self,
     txn: &mut TransactionMut,
@@ -53,8 +56,12 @@ impl BlockOperation {
 
     let block_id = block.id.clone();
     let children_id = block.children.clone();
+    // Create block map.
     let map = self.root.insert_map_with_txn(txn, &block.id);
+    // Generate data json string.
     let json_str = hashmap_to_json_str(block.data)?;
+
+    // Insert block fields.
     map.insert_with_txn(txn, ID, block.id);
     map.insert_with_txn(txn, TYPE, block.ty);
     map.insert_with_txn(txn, PARENT, block.parent);
@@ -66,11 +73,13 @@ impl BlockOperation {
       .children_operation
       .create_children_with_txn(txn, &children_id);
 
+    // Return the created block.
     self
       .get_block_with_txn(txn, &block_id)
       .ok_or(DocumentError::BlockCreateError)
   }
 
+  // Delete a block
   pub fn delete_block_with_txn(
     &self,
     txn: &mut TransactionMut,
@@ -80,6 +89,8 @@ impl BlockOperation {
       .get_block_with_txn(txn, id)
       .ok_or(DocumentError::BlockIsNotFound)?;
     self.root.remove(txn, id);
+
+    // Delete the children for each block.
     self
       .children_operation
       .delete_children_with_txn(txn, &block.children);
@@ -94,6 +105,10 @@ impl BlockOperation {
       .map(|map| block_from_map(txn, map.into_inner()))
   }
 
+  /**
+   * Update the block with the given id.
+   * Except `data` and `parent`, other fields can not be updated
+   */
   pub fn set_block_with_txn(
     &self,
     txn: &mut TransactionMut,
@@ -105,9 +120,12 @@ impl BlockOperation {
       .root
       .get_map_with_txn(txn, id)
       .ok_or(DocumentError::BlockIsNotFound)?;
+
+    // Update parent field with the given parent id.
     if let Some(parent_id) = parent_id {
       map.insert_with_txn(txn, PARENT, parent_id);
     }
+    // Update data field with the given data.
     if let Some(data) = data {
       map.insert_with_txn(txn, DATA, hashmap_to_json_str(data)?);
     }

@@ -71,6 +71,7 @@ impl Document {
     self.root.with_transact_mut(f)
   }
 
+  // Get document data.
   pub fn get_document(&self) -> Result<DocumentData, DocumentError> {
     let collab_guard = self.inner.lock();
     let txn = collab_guard.transact();
@@ -92,6 +93,7 @@ impl Document {
     Ok(document_data)
   }
 
+  // Apply actions to the document.
   pub fn apply_action(&self, actions: Vec<BlockAction>) {
     self.inner.lock().with_transact_mut(|txn| {
       for action in actions {
@@ -123,12 +125,14 @@ impl Document {
     })
   }
 
+  // Get block with the given id.
   pub fn get_block(&self, block_id: &str) -> Option<Block> {
     let collab_guard = self.inner.lock();
     let txn = collab_guard.transact();
     self.block_operation.get_block_with_txn(&txn, block_id)
   }
 
+  // Insert block to the document.
   pub fn insert_block(
     &self,
     txn: &mut TransactionMut,
@@ -139,6 +143,7 @@ impl Document {
     self.insert_block_to_parent(txn, &block, prev_id)
   }
 
+  // Insert block with the given parent id and prev id.
   pub fn insert_block_to_parent(
     &self,
     txn: &mut TransactionMut,
@@ -230,6 +235,7 @@ impl Document {
     }
   }
 
+  // update the block data.
   pub fn update_block_data(
     &self,
     txn: &mut TransactionMut,
