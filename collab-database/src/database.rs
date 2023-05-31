@@ -14,7 +14,7 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::meta::MetaMap;
 use crate::rows::{CreateRowParams, Row, RowCell, RowId, RowUpdate};
-use crate::user::UserDatabaseCollabBuilder;
+use crate::user::DatabaseCollabBuilder;
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, DatabaseLayout, DatabaseView, FieldOrder, FilterMap,
   GroupSettingMap, LayoutSetting, RowOrder, SortMap, ViewDescription, ViewMap,
@@ -39,7 +39,7 @@ const METAS: &str = "metas";
 pub struct DatabaseContext {
   pub collab: Arc<MutexCollab>,
   pub block: Block,
-  pub collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
+  pub collab_builder: Arc<dyn DatabaseCollabBuilder>,
 }
 
 impl Database {

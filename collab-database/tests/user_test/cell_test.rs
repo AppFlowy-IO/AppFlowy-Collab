@@ -1,6 +1,6 @@
 use collab::core::any_map::AnyMapExtension;
-use collab_database::rows::new_cell_builder;
-use collab_database::rows::CreateRowParams;
+use collab_database::rows::{new_cell_builder, CREATED_AT};
+use collab_database::rows::{CreateRowParams, LAST_MODIFIED};
 use collab_database::views::CreateDatabaseParams;
 
 use crate::user_test::helper::{user_database_test, UserDatabaseTest};
@@ -11,7 +11,7 @@ fn insert_cell_test() {
   let database = test.get_database("d1").unwrap();
   database.update_row(&1.into(), |row_update| {
     row_update.update_cells(|cells_update| {
-      cells_update.insert(
+      cells_update.insert_cell(
         "f1",
         new_cell_builder(1).insert_i64_value("level", 1).build(),
       );
@@ -29,7 +29,7 @@ fn update_cell_test() {
   let database = test.get_database("d1").unwrap();
   database.update_row(&1.into(), |row_update| {
     row_update.update_cells(|cells_update| {
-      cells_update.insert(
+      cells_update.insert_cell(
         "f1",
         new_cell_builder(1).insert_i64_value("level", 1).build(),
       );
@@ -38,7 +38,7 @@ fn update_cell_test() {
 
   database.update_row(&1.into(), |row_update| {
     row_update.update_cells(|cells_update| {
-      cells_update.update(
+      cells_update.insert(
         "f1",
         new_cell_builder(1)
           .insert_i64_value("level", 2)
@@ -50,6 +50,10 @@ fn update_cell_test() {
 
   let row = database.get_row(&1.into()).unwrap();
   let cell = row.cells.get("f1").unwrap();
+  let created_at = cell.get_i64_value(CREATED_AT).unwrap();
+  let modified_at = cell.get_i64_value(LAST_MODIFIED).unwrap();
+  assert!(created_at > 0);
+  assert!(modified_at > 0);
   assert_eq!(cell.get_i64_value("level").unwrap(), 2);
   assert_eq!(cell.get_str_value("name").unwrap(), "appflowy");
 }

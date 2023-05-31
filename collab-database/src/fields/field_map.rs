@@ -1,3 +1,4 @@
+use crate::database::timestamp;
 use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 
 use crate::fields::{
@@ -30,6 +31,8 @@ impl FieldMap {
       .update(|update| {
         update
           .set_name(field.name)
+          .set_created_at(timestamp())
+          .set_last_modified(timestamp())
           .set_primary(field.is_primary)
           .set_field_type(field.field_type)
           .set_width(field.width)
@@ -141,7 +144,8 @@ impl FieldMap {
   {
     self.container.with_transact_mut(|txn| {
       let map_ref = self.container.get_or_insert_map_with_txn(txn, field_id);
-      let update = FieldUpdate::new(field_id, txn, &map_ref);
+      let mut update = FieldUpdate::new(field_id, txn, &map_ref);
+      update = update.set_last_modified(timestamp());
       f(update);
     })
   }

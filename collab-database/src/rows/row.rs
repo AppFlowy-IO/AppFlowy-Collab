@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::database::{gen_row_id, timestamp};
 use crate::rows::{Cell, Cells, CellsUpdate, RowId};
-use crate::user::UserDatabaseCollabBuilder;
+use crate::user::DatabaseCollabBuilder;
 use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 
@@ -19,8 +19,10 @@ pub type BlockId = i64;
 const DATA: &str = "data";
 const META: &str = "meta";
 const COMMENT: &str = "comment";
+pub const LAST_MODIFIED: &str = "last_modified";
+pub const CREATED_AT: &str = "created_at";
 
-pub struct RowDoc {
+pub struct DatabaseRow {
   uid: i64,
   row_id: RowId,
   #[allow(dead_code)]
@@ -33,13 +35,13 @@ pub struct RowDoc {
   db: Arc<RocksCollabDB>,
 }
 
-impl RowDoc {
+impl DatabaseRow {
   pub fn create<T: Into<Row>>(
     row: T,
     uid: i64,
     row_id: RowId,
     db: Arc<RocksCollabDB>,
-    collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
+    collab_builder: Arc<dyn DatabaseCollabBuilder>,
   ) -> Self {
     let row = row.into();
     let doc = Self::new(uid, row_id, db, collab_builder);
@@ -51,6 +53,7 @@ impl RowDoc {
             .set_height(row.height)
             .set_visibility(row.visibility)
             .set_created_at(row.created_at)
+            .set_last_modified(timestamp())
             .set_cells(row.cells);
         })
         .done();
@@ -63,7 +66,7 @@ impl RowDoc {
     uid: i64,
     row_id: RowId,
     db: Arc<RocksCollabDB>,
-    collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
+    collab_builder: Arc<dyn DatabaseCollabBuilder>,
   ) -> Self {
     let collab = collab_builder.build(uid, &row_id, "row", db.clone());
     let collab_guard = collab.lock();
@@ -76,6 +79,7 @@ impl RowDoc {
       (data, meta, comments)
     };
 
+    // If any of the data is missing, we need to create it.
     let mut txn = if data.is_none() || meta.is_none() || comments.is_none() {
       Some(collab_guard.transact_mut())
     } else {
@@ -131,7 +135,10 @@ impl RowDoc {
     F: FnOnce(RowUpdate),
   {
     self.collab.lock().with_transact_mut(|txn| {
-      let update = RowUpdate::new(txn, &self.data);
+      let mut update = RowUpdate::new(txn, &self.data);
+
+      // Update the last modified timestamp before we call the update function.
+      update = update.set_last_modified(timestamp());
       f(update)
     })
   }
@@ -212,6 +219,11 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
   impl_bool_update!(set_visibility, set_visibility_if_not_none, ROW_VISIBILITY);
   impl_i32_update!(set_height, set_height_at_if_not_none, ROW_HEIGHT);
   impl_i64_update!(set_created_at, set_created_at_if_not_none, CREATED_AT);
+  impl_i64_update!(
+    set_last_modified,
+    set_last_modified_if_not_none,
+    LAST_MODIFIED
+  );
 
   pub fn set_cells(self, cells: Cells) -> Self {
     let cell_map = self.map_ref.get_or_insert_map_with_txn(self.txn, ROW_CELLS);
@@ -237,7 +249,6 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
 const ROW_ID: &str = "id";
 const ROW_VISIBILITY: &str = "visibility";
 const ROW_HEIGHT: &str = "height";
-const CREATED_AT: &str = "created_at";
 const ROW_CELLS: &str = "cells";
 
 /// Return row id and created_at from a [YrsValue]

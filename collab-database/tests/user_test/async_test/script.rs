@@ -160,7 +160,7 @@ pub fn run_script(
       let inner = InnerUserDatabase::new(1, db, config, collab_builder);
       let database = inner.get_database(&database_id).unwrap();
       let actual = database.to_json_value();
-      assert_json_diff::assert_json_eq!(actual, expected);
+      assert_json_diff::assert_json_include!(actual: actual, expected: expected);
     },
     DatabaseScript::AssertDatabase {
       database_id,
@@ -168,7 +168,7 @@ pub fn run_script(
     } => {
       let database = user_database.lock().get_database(&database_id).unwrap();
       let actual = database.to_json_value();
-      assert_json_diff::assert_json_eq!(actual, expected);
+      assert_json_diff::assert_json_include!(actual: actual, expected: expected);
     },
     DatabaseScript::IsExist {
       oid: database_id,

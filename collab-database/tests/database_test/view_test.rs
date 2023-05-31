@@ -8,7 +8,7 @@ use collab_database::views::{
 use nanoid::nanoid;
 use serde_json::json;
 
-use assert_json_diff::assert_json_eq;
+use assert_json_diff::{assert_json_eq, assert_json_include};
 
 use crate::database_test::helper::{create_database, create_database_with_default_data};
 use crate::helper::TestFilter;
@@ -16,14 +16,13 @@ use crate::helper::TestFilter;
 #[test]
 fn create_initial_database_test() {
   let database_test = create_database(1, "1");
-  assert_json_eq!(
-    json!( {
+  assert_json_include!(
+    expected: json!( {
       "fields": [],
       "inline_view": "v1",
       "rows": [],
       "views": [
         {
-          "created_at": 0,
           "database_id": "1",
           "field_orders": [],
           "filters": [],
@@ -31,14 +30,13 @@ fn create_initial_database_test() {
           "id": "v1",
           "layout": 0,
           "layout_settings": {},
-          "modified_at": 0,
           "name": "my first database view",
           "row_orders": [],
           "sorts": []
         }
       ]
     }),
-    database_test.to_json_value()
+    actual: database_test.to_json_value()
   );
 }
 
