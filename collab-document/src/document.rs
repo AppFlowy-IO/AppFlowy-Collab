@@ -18,8 +18,11 @@ const ROOT: &str = "document";
 /// This is a [Block] id, and it's also in [BlockOperation].
 /// It's the first block id in document and the data of this block is document's title.
 const PAGE_ID: &str = "page_id";
+/// Document's all [Block] Map.
 const BLOCKS: &str = "blocks";
+/// Document's meta data.
 const META: &str = "meta";
+/// [Block]'s children map. And it's also in [META].
 const CHILDREN_MAP: &str = "children_map";
 
 pub struct Document {
