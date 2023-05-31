@@ -609,6 +609,14 @@ impl Database {
     });
   }
 
+  pub fn get_layout_setting<T: From<LayoutSetting>>(
+    &self,
+    view_id: &str,
+    layout_ty: &DatabaseLayout,
+  ) -> Option<T> {
+    self.views.get_layout_setting(view_id, layout_ty)
+  }
+
   pub fn insert_layout_setting<T: Into<LayoutSetting>>(
     &self,
     view_id: &str,
@@ -617,6 +625,13 @@ impl Database {
   ) {
     self.views.update_database_view(view_id, |update| {
       update.update_layout_settings(layout_ty, layout_setting.into());
+    });
+  }
+
+  /// Update the layout type of the view.
+  pub fn update_layout_type(&self, view_id: &str, layout_type: &DatabaseLayout) {
+    self.views.update_database_view(view_id, |update| {
+      update.set_layout_type(layout_type.clone());
     });
   }
 
