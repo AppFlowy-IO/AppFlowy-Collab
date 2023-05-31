@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
+use crate::database::timestamp;
 use collab::core::any_map::{AnyMap, AnyMapBuilder, AnyMapExtension, AnyMapUpdate};
 use collab::preclude::{Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 
-use crate::rows::RowId;
+use crate::rows::{RowId, CREATED_AT, LAST_MODIFIED};
 
 /// Store lists of cells
 /// The key is the id of the [Field]
@@ -77,19 +78,22 @@ impl<'a, 'b> CellsUpdate<'a, 'b> {
     Self { map_ref, txn }
   }
 
-  pub fn insert(self, key: &str, value: Cell) -> Self {
+  pub fn insert_cell(self, key: &str, cell: Cell) -> Self {
     let cell_map_ref = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
-    value.fill_map_ref(self.txn, &cell_map_ref);
+    if cell_map_ref.get(self.txn, CREATED_AT).is_none() {
+      cell_map_ref.insert_i64_with_txn(self.txn, CREATED_AT, timestamp());
+    }
+
+    cell.fill_map_ref(self.txn, &cell_map_ref);
+    cell_map_ref.insert_i64_with_txn(self.txn, LAST_MODIFIED, timestamp());
     self
   }
 
   /// Override the existing cell's key/value contained in the [Cell]
   /// It will create the cell if it's not exist
-  pub fn update<T: Into<Cell>>(self, key: &str, value: T) -> Self {
-    let cell_map_ref = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
+  pub fn insert<T: Into<Cell>>(self, key: &str, value: T) -> Self {
     let cell = value.into();
-    cell.fill_map_ref(self.txn, &cell_map_ref);
-    self
+    self.insert_cell(key, cell)
   }
 }
 

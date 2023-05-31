@@ -4,7 +4,7 @@ use collab_database::rows::CreateRowParams;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use serde_json::{json, Value};
 
-use assert_json_diff::assert_json_eq;
+use assert_json_diff::assert_json_include;
 
 use crate::database_test::helper::{
   create_database_with_db, restore_database_from_db, DatabaseTest,
@@ -36,25 +36,25 @@ fn restore_row_from_disk_test() {
 #[test]
 fn restore_from_disk_test() {
   let (db, database_test, expected) = create_database_with_view();
-  assert_json_eq!(expected, database_test.to_json_value());
+  assert_json_include!(actual:database_test.to_json_value(), expected:expected);
+  // assert_json_eq!(expected, database_test.to_json_value());
 
   // Restore from disk
   let database_test = restore_database_from_db(1, "1", db);
-  assert_json_eq!(expected, database_test.to_json_value());
+  assert_json_include!(actual:database_test.to_json_value(), expected:expected);
 }
 
 #[test]
 fn restore_from_disk_with_different_database_id_test() {
   let (db, _, _) = create_database_with_view();
   let database_test = restore_database_from_db(1, "1", db);
-  assert_json_eq!(
-    json!( {
+  assert_json_include!(
+    expected: json!( {
       "fields": [],
       "inline_view": "v1",
       "rows": [],
       "views": [
         {
-          "created_at": 0,
           "database_id": "1",
           "field_orders": [],
           "filters": [],
@@ -62,14 +62,13 @@ fn restore_from_disk_with_different_database_id_test() {
           "id": "v1",
           "layout": 0,
           "layout_settings": {},
-          "modified_at": 0,
           "name": "my first grid",
           "row_orders": [],
           "sorts": []
         }
       ]
     }),
-    database_test.to_json_value()
+    actual: database_test.to_json_value()
   );
 }
 
@@ -77,14 +76,13 @@ fn restore_from_disk_with_different_database_id_test() {
 fn restore_from_disk_with_different_uid_test() {
   let (db, _, _) = create_database_with_view();
   let database_test = restore_database_from_db(1, "1", db);
-  assert_json_eq!(
-    json!( {
+  assert_json_include!(
+    expected: json!( {
       "fields": [],
       "inline_view": "v1",
       "rows": [],
       "views": [
         {
-          "created_at": 0,
           "database_id": "1",
           "field_orders": [],
           "filters": [],
@@ -92,14 +90,13 @@ fn restore_from_disk_with_different_uid_test() {
           "id": "v1",
           "layout": 0,
           "layout_settings": {},
-          "modified_at": 0,
           "name": "my first grid",
           "row_orders": [],
           "sorts": []
         }
       ]
     }),
-    database_test.to_json_value()
+    actual: database_test.to_json_value()
   );
 }
 
@@ -111,7 +108,6 @@ fn create_database_with_view() -> (Arc<RocksCollabDB>, DatabaseTest, Value) {
     "rows": [],
     "views": [
       {
-        "created_at": 0,
         "database_id": "1",
         "field_orders": [],
         "filters": [],
@@ -119,7 +115,6 @@ fn create_database_with_view() -> (Arc<RocksCollabDB>, DatabaseTest, Value) {
         "id": "v1",
         "layout": 0,
         "layout_settings": {},
-        "modified_at": 0,
         "name": "my first grid",
         "row_orders": [],
         "sorts": []

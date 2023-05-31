@@ -19,7 +19,11 @@ use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::views::{CreateDatabaseParams, CreateViewParams};
 use base64::engine::general_purpose::STANDARD;
 
-pub trait UserDatabaseCollabBuilder: Send + Sync + 'static {
+/// Use this trait to build a [MutexCollab] for a database object including [Database],
+/// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
+/// different [CollabPlugin]s to the [MutexCollab] to support different features.
+///
+pub trait DatabaseCollabBuilder: Send + Sync + 'static {
   fn build(
     &self,
     uid: i64,
@@ -54,7 +58,7 @@ pub struct UserDatabase {
   /// and the handler will be removed when the database is deleted or closed.
   open_handlers: RwLock<HashMap<String, Arc<Database>>>,
   config: CollabPersistenceConfig,
-  collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
+  collab_builder: Arc<dyn DatabaseCollabBuilder>,
 }
 
 const DATABASES: &str = "databases";
@@ -67,7 +71,7 @@ impl UserDatabase {
     collab_builder: T,
   ) -> Self
   where
-    T: UserDatabaseCollabBuilder,
+    T: DatabaseCollabBuilder,
   {
     tracing::trace!("Init user database: {}", uid);
     let collab_builder = Arc::new(collab_builder);

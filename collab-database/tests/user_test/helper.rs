@@ -10,7 +10,7 @@ use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::rows::CreateRowParams;
 use collab_database::user::{
-  RowRelationChange, RowRelationUpdateReceiver, UserDatabase, UserDatabaseCollabBuilder,
+  DatabaseCollabBuilder, RowRelationChange, RowRelationUpdateReceiver, UserDatabase,
 };
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -44,7 +44,7 @@ pub fn random_uid() -> i64 {
 
 pub struct UserDatabaseCollabBuilderImpl();
 
-impl UserDatabaseCollabBuilder for UserDatabaseCollabBuilderImpl {
+impl DatabaseCollabBuilder for UserDatabaseCollabBuilderImpl {
   fn build(
     &self,
     uid: i64,

@@ -7,7 +7,7 @@ use collab_database::blocks::Block;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, CreateRowParams};
-use collab_database::user::UserDatabaseCollabBuilder;
+use collab_database::user::DatabaseCollabBuilder;
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 

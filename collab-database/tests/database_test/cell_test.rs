@@ -32,7 +32,7 @@ fn update_cell_for_field_test() {
 
   database_test.update_row(&1.into(), |row_update| {
     row_update.update_cells(|cells_update| {
-      cells_update.update("f1", TestTextCell("hello world".to_string()));
+      cells_update.insert("f1", TestTextCell("hello world".to_string()));
     });
   });
 
@@ -48,7 +48,7 @@ fn update_empty_cell_for_field_test() {
 
   database_test.update_row(&3.into(), |row_update| {
     row_update.update_cells(|cells_update| {
-      cells_update.update("f2", TestTextCell("hello world".to_string()));
+      cells_update.insert("f2", TestTextCell("hello world".to_string()));
     });
   });
 

@@ -90,6 +90,12 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
   impl_bool_update!(set_primary, set_primary_if_not_none, FIELD_PRIMARY);
   impl_i64_update!(set_width, set_width_at_if_not_none, FIELD_WIDTH);
   impl_i64_update!(set_field_type, set_field_type_if_not_none, FIELD_TYPE);
+  impl_i64_update!(set_created_at, set_created_at_if_not_none, CREATED_AT);
+  impl_i64_update!(
+    set_last_modified,
+    set_last_modified_if_not_none,
+    LAST_MODIFIED
+  );
 
   pub fn set_type_options(self, type_options: TypeOptions) -> Self {
     let map_ref = self
@@ -137,6 +143,8 @@ const FIELD_TYPE_OPTION: &str = "type_option";
 const FIELD_VISIBILITY: &str = "visibility";
 const FIELD_WIDTH: &str = "width";
 const FIELD_PRIMARY: &str = "is_primary";
+const CREATED_AT: &str = "created_at";
+const LAST_MODIFIED: &str = "last_modified";
 
 /// Get field id from a value
 pub fn field_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<String> {

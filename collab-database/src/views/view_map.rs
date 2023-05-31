@@ -1,3 +1,4 @@
+use crate::database::timestamp;
 use crate::views::{
   filters_from_map_ref, group_setting_from_map_ref, layout_setting_from_map_ref,
   sorts_from_map_ref, view_description_from_value, view_from_map_ref, view_from_value,
@@ -28,6 +29,8 @@ impl ViewMap {
     ViewBuilder::new(&view.id, txn, map_ref).update(|update| {
       update
         .set_name(view.name)
+        .set_created_at(timestamp())
+        .set_modified_at(timestamp())
         .set_database_id(view.database_id)
         .set_layout_settings(view.layout_settings)
         .set_layout_type(view.layout)
@@ -179,7 +182,8 @@ impl ViewMap {
     F: FnOnce(DatabaseViewUpdate),
   {
     if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
-      let update = DatabaseViewUpdate::new(view_id, txn, &map_ref);
+      let mut update = DatabaseViewUpdate::new(view_id, txn, &map_ref);
+      update = update.set_modified_at(timestamp());
       f(update)
     } else {
       tracing::error!(
@@ -201,7 +205,8 @@ impl ViewMap {
 
     for map_ref in map_refs {
       if let Some(view_id) = view_id_from_map_ref(&map_ref, txn) {
-        let update = DatabaseViewUpdate::new(&view_id, txn, &map_ref);
+        let mut update = DatabaseViewUpdate::new(&view_id, txn, &map_ref);
+        update = update.set_modified_at(timestamp());
         f(update)
       }
     }

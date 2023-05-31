@@ -200,7 +200,6 @@ fn edit_row_expected() -> Value {
     ],
     "views": [
       {
-        "created_at": 0,
         "database_id": "d2",
         "field_orders": [
           {
@@ -218,7 +217,6 @@ fn edit_row_expected() -> Value {
         "id": "v1",
         "layout": 0,
         "layout_settings": {},
-        "modified_at": 0,
         "name": "my first database",
         "row_orders": [
           {

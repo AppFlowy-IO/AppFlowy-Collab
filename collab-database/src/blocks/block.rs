@@ -6,23 +6,26 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use lru::LruCache;
 use parking_lot::Mutex;
 
-use crate::rows::{Cell, Row, RowDoc, RowId, RowUpdate};
-use crate::user::UserDatabaseCollabBuilder;
+use crate::rows::{Cell, DatabaseRow, Row, RowId, RowUpdate};
+use crate::user::DatabaseCollabBuilder;
 use crate::views::RowOrder;
 
+/// Each [Block] contains a list of [DatabaseRow]s. Each [DatabaseRow] represents a row in the database.
+/// Currently, we only use one [Block] to manage all the rows in the database. In the future, we
+/// might want to split the rows into multiple [Block]s to improve performance.
 #[derive(Clone)]
 pub struct Block {
   uid: i64,
   db: Arc<RocksCollabDB>,
-  collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
-  pub cache: Rc<Mutex<LruCache<RowId, Arc<RowDoc>>>>,
+  collab_builder: Arc<dyn DatabaseCollabBuilder>,
+  pub cache: Rc<Mutex<LruCache<RowId, Arc<DatabaseRow>>>>,
 }
 
 impl Block {
   pub fn new(
     uid: i64,
     db: Arc<RocksCollabDB>,
-    collab_builder: Arc<dyn UserDatabaseCollabBuilder>,
+    collab_builder: Arc<dyn DatabaseCollabBuilder>,
   ) -> Block {
     let cache = Rc::new(Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap())));
 
@@ -50,7 +53,7 @@ impl Block {
       id: row.id.clone(),
       height: row.height,
     };
-    let row_doc = RowDoc::create(
+    let row_doc = DatabaseRow::create(
       row,
       self.uid,
       row_id.clone(),
@@ -97,11 +100,11 @@ impl Block {
     }
   }
 
-  fn get_or_init_row(&self, row_id: &RowId) -> Arc<RowDoc> {
+  fn get_or_init_row(&self, row_id: &RowId) -> Arc<DatabaseRow> {
     let row = self.cache.lock().get(row_id).cloned();
     match row {
       None => {
-        let row = Arc::new(RowDoc::new(
+        let row = Arc::new(DatabaseRow::new(
           self.uid,
           row_id.clone(),
           self.db.clone(),
