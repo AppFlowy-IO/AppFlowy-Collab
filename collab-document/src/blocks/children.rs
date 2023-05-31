@@ -1,8 +1,9 @@
 use collab::preclude::*;
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct ChildrenOperation {
-  pub root: MapRefWrapper,
+  root: MapRefWrapper,
 }
 
 impl ChildrenOperation {
