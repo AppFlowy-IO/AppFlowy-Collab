@@ -14,7 +14,9 @@ use crate::blocks::{
 use crate::error::DocumentError;
 
 const ROOT: &str = "document";
-/// The root id of the document.
+
+/// This is a [Block] id, and it's also in [BlockOperation].
+/// It's the first block id in document and the data of this block is document's title.
 const PAGE_ID: &str = "page_id";
 const BLOCKS: &str = "blocks";
 const META: &str = "meta";
