@@ -78,7 +78,7 @@ pub fn make_test_view(view_id: &str, bid: &str, belongings: Vec<String>) -> View
     .collect::<Vec<ViewIdentifier>>();
   View {
     id: view_id.to_string(),
-    bid: bid.to_string(),
+    parent_view_id: bid.to_string(),
     name: "".to_string(),
     desc: "".to_string(),
     children: RepeatedView::new(belongings),

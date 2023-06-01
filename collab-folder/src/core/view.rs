@@ -100,13 +100,18 @@ impl ViewsMap {
   }
 
   pub(crate) fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View) {
-    if let Some(parent_map_ref) = self.container.get_map_with_txn(txn, &view.bid) {
+    if let Some(parent_map_ref) = self.container.get_map_with_txn(txn, &view.parent_view_id) {
       let belonging = ViewIdentifier {
         id: view.id.clone(),
       };
-      ViewUpdate::new(&view.bid, txn, &parent_map_ref, self.view_relations.clone())
-        .add_belonging(vec![belonging])
-        .done();
+      ViewUpdate::new(
+        &view.parent_view_id,
+        txn,
+        &parent_map_ref,
+        self.view_relations.clone(),
+      )
+      .add_belonging(vec![belonging])
+      .done();
     }
 
     let map_ref = self.container.insert_map_with_txn(txn, &view.id);
@@ -114,7 +119,7 @@ impl ViewsMap {
       .update(|update| {
         update
           .set_name(view.name)
-          .set_bid(view.bid)
+          .set_bid(view.parent_view_id)
           .set_desc(view.desc)
           .set_layout(view.layout)
           .set_created_at(view.created_at)
@@ -179,7 +184,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
 
   Some(View {
     id,
-    bid,
+    parent_view_id: bid,
     name,
     desc,
     children: belongings,
@@ -284,8 +289,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct View {
   pub id: String,
-  // bid short for belong to id
-  pub bid: String,
+  pub parent_view_id: String,
   pub name: String,
   pub desc: String,
   pub children: RepeatedView,
