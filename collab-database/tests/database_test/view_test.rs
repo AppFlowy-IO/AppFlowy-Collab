@@ -240,6 +240,6 @@ fn update_database_view_layout_test() {
     update.set_layout_type(DatabaseLayout::Calendar);
   });
 
-  let layout = database_test.views.get_database_view_layout("v1").unwrap();
+  let layout = database_test.views.get_database_view_layout("v1");
   assert_eq!(layout, DatabaseLayout::Calendar);
 }
