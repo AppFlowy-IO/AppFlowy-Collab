@@ -130,16 +130,21 @@ impl ViewMap {
       .collect::<Vec<_>>()
   }
 
-  pub fn get_view_layout(&self, view_id: &str) -> Option<DatabaseLayout> {
+  pub fn get_database_view_layout(&self, view_id: &str) -> DatabaseLayout {
     let txn = self.container.transact();
-    self
+    let layout_type = self
       .container
       .get_map_with_txn(&txn, view_id)
       .map(|map_ref| {
         map_ref
           .get_i64_with_txn(&txn, VIEW_LAYOUT)
           .map(|value| DatabaseLayout::try_from(value).ok())?
-      })?
+      });
+
+    match layout_type {
+      Some(Some(layout_type)) => layout_type,
+      _ => DatabaseLayout::Grid,
+    }
   }
 
   pub fn get_row_orders_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<RowOrder> {

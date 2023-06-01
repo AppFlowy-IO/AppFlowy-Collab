@@ -298,9 +298,9 @@ impl Database {
   }
 
   /// Return the [RowCell] with the given row id and field id.
-  pub fn get_cell(&self, field_id: &str, row_id: &RowId) -> Option<RowCell> {
-    let cell = self.block.get_cell(row_id, field_id)?;
-    Some(RowCell::new(row_id.clone(), cell))
+  pub fn get_cell(&self, field_id: &str, row_id: &RowId) -> RowCell {
+    let cell = self.block.get_cell(row_id, field_id);
+    RowCell::new(row_id.clone(), cell)
   }
 
   /// Return list of [RowCell] for the given view and field.
@@ -314,10 +314,7 @@ impl Database {
     let rows = self.block.get_rows_from_row_orders(&row_orders);
     rows
       .into_iter()
-      .flat_map(|row| match row.cells.get(field_id).cloned() {
-        None => None,
-        Some(cell) => Some(RowCell::new(row.id, cell)),
-      })
+      .map(|row| RowCell::new(row.id, row.cells.get(field_id).cloned()))
       .collect::<Vec<RowCell>>()
   }
 
@@ -609,6 +606,14 @@ impl Database {
     });
   }
 
+  pub fn get_layout_setting<T: From<LayoutSetting>>(
+    &self,
+    view_id: &str,
+    layout_ty: &DatabaseLayout,
+  ) -> Option<T> {
+    self.views.get_layout_setting(view_id, layout_ty)
+  }
+
   pub fn insert_layout_setting<T: Into<LayoutSetting>>(
     &self,
     view_id: &str,
@@ -617,6 +622,13 @@ impl Database {
   ) {
     self.views.update_database_view(view_id, |update| {
       update.update_layout_settings(layout_ty, layout_setting.into());
+    });
+  }
+
+  /// Update the layout type of the view.
+  pub fn update_layout_type(&self, view_id: &str, layout_type: &DatabaseLayout) {
+    self.views.update_database_view(view_id, |update| {
+      update.set_layout_type(layout_type.clone());
     });
   }
 

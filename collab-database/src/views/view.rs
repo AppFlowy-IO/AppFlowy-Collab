@@ -193,7 +193,6 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
 
   impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
   impl_i64_update!(set_modified_at, set_modified_at_if_not_none, VIEW_MODIFY_AT);
-
   impl_str_update!(set_name, set_name_if_not_none, VIEW_NAME);
 
   impl_any_update!(
@@ -246,8 +245,9 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
       .map_ref
       .get_or_insert_map_with_txn(self.txn, VIEW_LAYOUT_SETTINGS);
 
-    let inner_map = layout_settings.get_or_insert_map_with_txn(self.txn, layout_ty.as_ref());
-    layout_setting.fill_map_ref(self.txn, &inner_map);
+    let layout_setting_map =
+      layout_settings.get_or_insert_map_with_txn(self.txn, layout_ty.as_ref());
+    layout_setting.fill_map_ref(self.txn, &layout_setting_map);
     self
   }
 
