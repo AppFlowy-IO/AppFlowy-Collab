@@ -6,11 +6,14 @@ pub enum DocumentError {
   #[error("Could not create block")]
   BlockCreateError,
 
-  #[error("The block is existed already")]
-  BlockIsExistedAlready,
+  #[error("The block already exists")]
+  BlockAlreadyExists,
 
   #[error("The block is not found")]
   BlockIsNotFound,
+
+  #[error("The page id empty")]
+  PageIdIsEmpty,
 
   #[error("Could not convert json to data")]
   ConvertDataError,
@@ -18,7 +21,7 @@ pub enum DocumentError {
   #[error("The parent is not found")]
   ParentIsNotFound,
 
-  #[error("Could not create root block")]
+  #[error("Could not create the root block due to an unspecified error")]
   CreateRootBlockError,
 
   #[error("Could not delete block")]
