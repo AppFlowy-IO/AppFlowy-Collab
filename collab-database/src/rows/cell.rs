@@ -113,17 +113,18 @@ pub fn new_cell_builder(field_type: impl Into<i64>) -> CellBuilder {
 
 pub struct RowCell {
   pub row_id: RowId,
-  pub cell: Cell,
+  /// The cell might be empty if no value is written before
+  pub cell: Option<Cell>,
 }
 
 impl RowCell {
-  pub fn new(row_id: RowId, cell: Cell) -> Self {
+  pub fn new(row_id: RowId, cell: Option<Cell>) -> Self {
     Self { row_id, cell }
   }
 }
 
 impl Deref for RowCell {
-  type Target = Cell;
+  type Target = Option<Cell>;
 
   fn deref(&self) -> &Self::Target {
     &self.cell

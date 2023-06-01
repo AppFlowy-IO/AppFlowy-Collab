@@ -298,9 +298,9 @@ impl Database {
   }
 
   /// Return the [RowCell] with the given row id and field id.
-  pub fn get_cell(&self, field_id: &str, row_id: &RowId) -> Option<RowCell> {
-    let cell = self.block.get_cell(row_id, field_id)?;
-    Some(RowCell::new(row_id.clone(), cell))
+  pub fn get_cell(&self, field_id: &str, row_id: &RowId) -> RowCell {
+    let cell = self.block.get_cell(row_id, field_id);
+    RowCell::new(row_id.clone(), cell)
   }
 
   /// Return list of [RowCell] for the given view and field.
@@ -314,10 +314,7 @@ impl Database {
     let rows = self.block.get_rows_from_row_orders(&row_orders);
     rows
       .into_iter()
-      .flat_map(|row| match row.cells.get(field_id).cloned() {
-        None => None,
-        Some(cell) => Some(RowCell::new(row.id, cell)),
-      })
+      .map(|row| RowCell::new(row.id, row.cells.get(field_id).cloned()))
       .collect::<Vec<RowCell>>()
   }
 

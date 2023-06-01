@@ -229,7 +229,7 @@ fn duplicate_database_data_serde_test() {
 fn get_database_view_layout_test() {
   let database_test = create_database_with_default_data(1, "1");
 
-  let layout = database_test.views.get_view_layout("v1").unwrap();
+  let layout = database_test.views.get_database_view_layout("v1");
   assert_eq!(layout, DatabaseLayout::Grid);
 }
 
@@ -240,6 +240,6 @@ fn update_database_view_layout_test() {
     update.set_layout_type(DatabaseLayout::Calendar);
   });
 
-  let layout = database_test.views.get_view_layout("v1").unwrap();
+  let layout = database_test.views.get_database_view_layout("v1").unwrap();
   assert_eq!(layout, DatabaseLayout::Calendar);
 }

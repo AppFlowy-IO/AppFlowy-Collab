@@ -8,7 +8,7 @@ use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
 /// The [DatabaseLayout] enum is used to represent the layout of the database.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize_repr, Deserialize_repr)]
+#[derive(Debug, PartialEq, Copy, Eq, Hash, Clone, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum DatabaseLayout {
   Grid = 0,
