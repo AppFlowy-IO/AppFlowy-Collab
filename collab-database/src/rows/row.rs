@@ -166,6 +166,7 @@ pub struct Row {
   pub height: i32,
   pub visibility: bool,
   pub created_at: i64,
+  pub modified_at: i64,
 }
 
 impl Row {
@@ -174,12 +175,14 @@ impl Row {
   /// The default visibility of a [Row] is true
   /// The default created_at of a [Row] is the current timestamp
   pub fn new<R: Into<RowId>>(id: R) -> Self {
+    let timestamp = timestamp();
     Row {
       id: id.into(),
       cells: Default::default(),
       height: 60,
       visibility: true,
-      created_at: timestamp(),
+      created_at: timestamp,
+      modified_at: timestamp,
     }
   }
 }
@@ -305,6 +308,10 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
     .get_i64_with_txn(txn, CREATED_AT)
     .unwrap_or_else(|| chrono::Utc::now().timestamp());
 
+  let modified_at = map_ref
+    .get_i64_with_txn(txn, LAST_MODIFIED)
+    .unwrap_or_else(|| chrono::Utc::now().timestamp());
+
   let cells = map_ref
     .get_map_with_txn(txn, ROW_CELLS)
     .map(|map_ref| (txn, &map_ref).into())
@@ -316,6 +323,7 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
     height: height as i32,
     visibility,
     created_at,
+    modified_at,
   })
 }
 
@@ -387,6 +395,7 @@ impl From<CreateRowParams> for Row {
       height: params.height,
       visibility: params.visibility,
       created_at: params.timestamp,
+      modified_at: params.timestamp,
     }
   }
 }

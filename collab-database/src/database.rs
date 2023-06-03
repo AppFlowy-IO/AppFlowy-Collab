@@ -628,7 +628,7 @@ impl Database {
   /// Update the layout type of the view.
   pub fn update_layout_type(&self, view_id: &str, layout_type: &DatabaseLayout) {
     self.views.update_database_view(view_id, |update| {
-      update.set_layout_type(layout_type.clone());
+      update.set_layout_type(*layout_type);
     });
   }
 
