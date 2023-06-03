@@ -2,18 +2,18 @@ use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::{
-  lib0Any, ArrayRef, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
+  ArrayRef, lib0Any, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use serde::{Deserialize, Serialize};
 
+use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 use crate::database::{gen_row_id, timestamp};
 use crate::error::DatabaseError;
 use crate::rows::{Cell, Cells, CellsUpdate, RowId};
 use crate::user::DatabaseCollabBuilder;
 use crate::views::RowOrder;
-use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 
 pub type BlockId = i64;
 
@@ -54,7 +54,7 @@ impl DatabaseRow {
             .set_height(row.height)
             .set_visibility(row.visibility)
             .set_created_at(row.created_at)
-            .set_last_modified(timestamp())
+            .set_last_modified(row.created_at)
             .set_cells(row.cells);
         })
         .done();
