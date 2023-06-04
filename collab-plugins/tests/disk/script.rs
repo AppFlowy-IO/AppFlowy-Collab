@@ -1,17 +1,17 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::*;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_persistence::snapshot::SnapshotAction;
 use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
-use yrs::updates::decoder::Decode;
-
+use collab_plugins::snapshot::CollabSnapshotPlugin;
 use lib0::any::Any;
 use tempfile::TempDir;
+use yrs::updates::decoder::Decode;
 
 use crate::setup_log;
 
@@ -66,15 +66,16 @@ pub enum Script {
     id: String,
     expected: JsonValue,
   },
+  Wait(u64),
 }
 
 pub struct CollabPersistenceTest {
   pub uid: i64,
-  collabs: HashMap<String, MutexCollab>,
-  pub disk_plugin: RocksdbDiskPlugin,
+  collab_by_id: HashMap<String, Arc<MutexCollab>>,
   #[allow(dead_code)]
   cleaner: Cleaner,
   db: Arc<RocksCollabDB>,
+  disk_plugin: Arc<RocksdbDiskPlugin>,
   config: CollabPersistenceConfig,
 }
 
@@ -85,11 +86,11 @@ impl CollabPersistenceTest {
     let db_path = tempdir.into_path();
     let uid = 1;
     let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
-    let disk_plugin = RocksdbDiskPlugin::new_with_config(uid, db.clone(), config.clone());
+    let disk_plugin = Arc::new(RocksdbDiskPlugin::new_with_config(uid, db.clone(), config.clone()));
     let cleaner = Cleaner::new(db_path);
     Self {
       uid,
-      collabs: HashMap::default(),
+      collab_by_id: HashMap::default(),
       disk_plugin,
       cleaner,
       db,
@@ -97,52 +98,67 @@ impl CollabPersistenceTest {
     }
   }
 
-  pub fn run_scripts(&mut self, scripts: Vec<Script>) {
+  pub async fn run_scripts(&mut self, scripts: Vec<Script>) {
     for script in scripts {
-      self.run_script(script);
+      self.run_script(script).await;
     }
   }
 
-  pub fn run_script(&mut self, script: Script) {
+  fn make_snapshot_plugin(&self, collab: Arc<MutexCollab>) -> Arc<CollabSnapshotPlugin> {
+    Arc::new(CollabSnapshotPlugin::new(
+      self.uid,
+      self.db.clone(),
+      collab,
+      self.config.snapshot_per_update,
+      self.config.remove_updates_after_snapshot,
+    ))
+  }
+
+  pub async fn run_script(&mut self, script: Script) {
     match script {
       Script::CreateDocumentWithDiskPlugin { id, plugin } => {
-        let collab = CollabBuilder::new(1, &id)
-          .with_plugin(plugin.clone())
-          .build();
+        let collab = Arc::new(
+          CollabBuilder::new(1, &id)
+            .with_plugin(plugin.clone())
+            .build(),
+        );
+        self.disk_plugin = Arc::new(plugin);
+
+        collab
+          .lock()
+          .add_plugin(self.make_snapshot_plugin(collab.clone()));
         collab.lock().initialize();
 
-        self.disk_plugin = plugin;
-        self.collabs.insert(id, collab);
+        self.collab_by_id.insert(id, collab);
       },
       Script::OpenDocument { id } => {
-        self.disk_plugin =
-          RocksdbDiskPlugin::new_with_config(self.uid, self.db.clone(), self.config.clone());
-
-        let collab = CollabBuilder::new(1, &id)
-          .with_plugin(self.disk_plugin.clone())
-          .build();
+        let collab = Arc::new(CollabBuilder::new(1, &id).build());
+        collab.lock().add_plugin(self.disk_plugin.clone());
+        collab
+          .lock()
+          .add_plugin(self.make_snapshot_plugin(collab.clone()));
         collab.initial();
-        self.collabs.insert(id, collab);
+
+        self.collab_by_id.insert(id, collab);
       },
       Script::CloseDocument { id } => {
-        self.collabs.remove(&id);
+        self.collab_by_id.remove(&id);
       },
       Script::OpenDocumentWithDiskPlugin { id } => {
         let collab = CollabBuilder::new(1, &id)
           .with_plugin(self.disk_plugin.clone())
           .build();
         collab.initial();
-        self.collabs.insert(id, collab);
+        self.collab_by_id.insert(id, Arc::new(collab));
       },
       Script::DeleteDocument { id } => {
-        self
-          .disk_plugin
+       self.disk_plugin
           .with_write_txn(|store| store.delete_doc(self.uid, &id))
           .unwrap();
       },
       Script::InsertKeyValue { id, key, value } => {
         self
-          .collabs
+          .collab_by_id
           .get(&id)
           .as_ref()
           .unwrap()
@@ -150,7 +166,7 @@ impl CollabPersistenceTest {
           .insert(&key, value);
       },
       Script::GetValue { id, key, expected } => {
-        let collab = self.collabs.get(&id).unwrap().lock();
+        let collab = self.collab_by_id.get(&id).unwrap().lock();
         let txn = collab.transact();
         let text = collab
           .get(&key)
@@ -167,7 +183,9 @@ impl CollabPersistenceTest {
         assert_eq!(updates.len(), expected)
       },
       Script::AssertNumOfSnapshots { id, expected } => {
-        let snapshot = self.disk_plugin.read_txn().get_snapshots(self.uid, &id);
+        let snapshot_plugin =
+          self.make_snapshot_plugin(self.collab_by_id.get(&id).unwrap().clone());
+        let snapshot = snapshot_plugin.get_snapshots(&id);
         assert_eq!(snapshot.len(), expected);
       },
       Script::AssertNumOfDocuments { expected } => {
@@ -179,7 +197,9 @@ impl CollabPersistenceTest {
         index,
         expected,
       } => {
-        let snapshots = self.disk_plugin.get_snapshots(&id);
+        let snapshot_plugin =
+          self.make_snapshot_plugin(self.collab_by_id.get(&id).unwrap().clone());
+        let snapshots = snapshot_plugin.get_snapshots(&id);
         let collab = CollabBuilder::new(1, &id).build();
         collab.lock().with_transact_mut(|txn| {
           txn.apply_update(Update::decode_v1(&snapshots[index as usize].data).unwrap());
@@ -189,10 +209,12 @@ impl CollabPersistenceTest {
         assert_json_diff::assert_json_eq!(json, expected);
       },
       Script::ValidateSnapshotUpdateKey { id, snapshot_index } => {
-        let snapshots = self.disk_plugin.get_snapshots(&id);
+        let disk_plugin = self.disk_plugin.clone();
+        let snapshot_plugin =
+          self.make_snapshot_plugin(self.collab_by_id.get(&id).unwrap().clone());
+        let snapshots = snapshot_plugin.get_snapshots(&id);
         let snapshot = snapshots.get(snapshot_index).unwrap();
-        let key = self
-          .disk_plugin
+        let key = disk_plugin
           .read_txn()
           .get_doc_last_update_key(self.uid, &id)
           .unwrap()
@@ -201,11 +223,18 @@ impl CollabPersistenceTest {
         assert_eq!(key, snapshot.update_key)
       },
       Script::AssertDocument { id, expected } => {
-        let mut doc = Collab::new(self.uid, id, vec![]);
-        doc.add_plugin(Arc::new(self.disk_plugin.clone()));
-        doc.initialize();
-        let json = doc.to_json_value();
+        let collab = Arc::new(CollabBuilder::new(1, &id).build());
+        collab.lock().add_plugin(self.disk_plugin.clone());
+        collab
+          .lock()
+          .add_plugin(self.make_snapshot_plugin(collab.clone()));
+        collab.initial();
+
+        let json = collab.to_json_value();
         assert_json_diff::assert_json_eq!(json, expected);
+      },
+      Script::Wait(secs) => {
+        tokio::time::sleep(Duration::from_secs(secs)).await;
       },
     }
   }

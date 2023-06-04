@@ -23,6 +23,9 @@ pub enum PersistenceError {
   #[error("Duplicate update key")]
   DuplicateUpdateKey,
 
+  #[error("Can't find the latest update key")]
+  LatestUpdateKeyNotExist,
+
   #[error("Internal error")]
   InternalError,
 }

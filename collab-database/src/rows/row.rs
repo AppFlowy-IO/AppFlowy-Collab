@@ -353,7 +353,6 @@ impl CreateRowParamsValidator {
     }
 
     if params.timestamp == 0 {
-      tracing::warn!("timestamp is 0, using current timestamp");
       params.timestamp = timestamp();
     }
 
