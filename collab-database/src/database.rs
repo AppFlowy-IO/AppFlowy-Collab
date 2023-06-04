@@ -821,15 +821,22 @@ impl Database {
     self.metas.get_inline_view_with_txn(txn).unwrap()
   }
 
-  pub fn delete_view(&self, view_id: &str) {
+  /// Delete a view from the database and returns the deleted view ids.
+  /// If the view is the inline view, it will clear all the views. Otherwise,
+  /// just delete the view with given view id.
+  ///
+  pub fn delete_view(&self, view_id: &str) -> Vec<String> {
     if self.is_inline_view(view_id) {
       self.root.with_transact_mut(|txn| {
+        let views = self.views.get_all_views_description_with_txn(txn);
         self.views.clear_with_txn(txn);
-      });
+        views.into_iter().map(|view| view.id).collect()
+      })
     } else {
       self.root.with_transact_mut(|txn| {
         self.views.delete_view_with_txn(txn, view_id);
       });
+      vec![view_id.to_string()]
     }
   }
 }
