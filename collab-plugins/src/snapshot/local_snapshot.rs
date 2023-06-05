@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::CollabPlugin;
-use collab_persistence::doc::YrsDocAction;
+
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use collab_persistence::PersistenceError;
@@ -21,24 +21,33 @@ impl GenSnapshotState {
   }
 }
 
+pub trait SnapshotDB: Send + Sync {
+  fn get_snapshots(&self, uid: i64, object_id: &str) -> Vec<CollabSnapshot>;
+
+  fn create_snapshot(
+    &self,
+    uid: i64,
+    object_id: &str,
+    collab: Arc<MutexCollab>,
+  ) -> Result<(), PersistenceError>;
+}
+
 pub struct CollabSnapshotPlugin {
   uid: i64,
-  db: Arc<RocksCollabDB>,
+  db: Arc<dyn SnapshotDB>,
   local_collab: Arc<MutexCollab>,
   /// the number of updates on disk when opening the document
   update_count: Arc<AtomicU32>,
   snapshot_per_update: u32,
-  remove_updates_after_snapshot: bool,
   state: Arc<RwLock<GenSnapshotState>>,
 }
 
 impl CollabSnapshotPlugin {
   pub fn new(
     uid: i64,
-    db: Arc<RocksCollabDB>,
+    db: Arc<dyn SnapshotDB>,
     local_collab: Arc<MutexCollab>,
     snapshot_per_update: u32,
-    remove_updates_after_snapshot: bool,
   ) -> Self {
     let state = Arc::new(RwLock::new(GenSnapshotState::Idle));
     let initial_update_count = Arc::new(AtomicU32::new(0));
@@ -48,15 +57,13 @@ impl CollabSnapshotPlugin {
       local_collab,
       update_count: initial_update_count,
       snapshot_per_update,
-      remove_updates_after_snapshot,
       state,
     }
   }
 
   /// Return the snapshots for the given object id
   pub fn get_snapshots(&self, object_id: &str) -> Vec<CollabSnapshot> {
-    let transaction = self.db.read_txn();
-    transaction.get_snapshots(self.uid, object_id)
+    self.db.get_snapshots(self.uid, object_id)
   }
 }
 
@@ -76,7 +83,6 @@ impl CollabPlugin for CollabSnapshotPlugin {
         let weak_db = Arc::downgrade(&self.db);
         let uid = self.uid;
         let object_id = object_id.to_string();
-        let remove_updates_after_snapshot = self.remove_updates_after_snapshot;
 
         // We use a blocking task to generate the snapshot
         tokio::spawn(async move {
@@ -86,26 +92,8 @@ impl CollabPlugin for CollabSnapshotPlugin {
               weak_local_collab.upgrade(),
               weak_db.upgrade(),
             ) {
-              let result = db.with_write_txn(|w_db_txn| {
-                let update_key = w_db_txn
-                  .get_doc_last_update_key(uid, &object_id)
-                  .ok_or(PersistenceError::LatestUpdateKeyNotExist)?;
-
-                // Create a new snapshot that contains all the document data.
-                w_db_txn.push_snapshot(
-                  uid,
-                  &object_id,
-                  update_key.as_ref(),
-                  &local_collab.lock().transact(),
-                )?;
-
-                // Delete all the updates prior to the new update specified by the update key.
-                if remove_updates_after_snapshot {
-                  w_db_txn.delete_updates_to(uid, &object_id, update_key.as_ref())?;
-                }
-                Ok(())
-              });
-
+              // Create a new snapshot that contains all the document data.
+              let result = db.create_snapshot(uid, &object_id, local_collab);
               match result {
                 Ok(_) => tracing::trace!("{} snapshot generated", object_id),
                 Err(e) => tracing::error!("{} snapshot generation failed: {}", object_id, e),
@@ -118,5 +106,23 @@ impl CollabPlugin for CollabSnapshotPlugin {
         });
       }
     }
+  }
+}
+
+impl SnapshotDB for Arc<RocksCollabDB> {
+  fn get_snapshots(&self, uid: i64, object_id: &str) -> Vec<CollabSnapshot> {
+    self.read_txn().get_snapshots(uid, object_id)
+  }
+
+  fn create_snapshot(
+    &self,
+    uid: i64,
+    object_id: &str,
+    collab: Arc<MutexCollab>,
+  ) -> Result<(), PersistenceError> {
+    self.with_write_txn(|txn| {
+      txn.push_snapshot(uid, object_id, &collab.lock().transact())?;
+      Ok(())
+    })
   }
 }

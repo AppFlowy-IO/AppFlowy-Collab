@@ -7,6 +7,7 @@ use collab::core::collab::MutexCollab;
 use collab::preclude::*;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+
 use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
 use collab_plugins::snapshot::CollabSnapshotPlugin;
 use lib0::any::Any;
@@ -47,10 +48,6 @@ pub enum Script {
     index: u32,
     expected: JsonValue,
   },
-  ValidateSnapshotUpdateKey {
-    id: String,
-    snapshot_index: usize,
-  },
   AssertNumOfUpdates {
     id: String,
     expected: usize,
@@ -86,7 +83,11 @@ impl CollabPersistenceTest {
     let db_path = tempdir.into_path();
     let uid = 1;
     let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
-    let disk_plugin = Arc::new(RocksdbDiskPlugin::new_with_config(uid, db.clone(), config.clone()));
+    let disk_plugin = Arc::new(RocksdbDiskPlugin::new_with_config(
+      uid,
+      db.clone(),
+      config.clone(),
+    ));
     let cleaner = Cleaner::new(db_path);
     Self {
       uid,
@@ -107,10 +108,9 @@ impl CollabPersistenceTest {
   fn make_snapshot_plugin(&self, collab: Arc<MutexCollab>) -> Arc<CollabSnapshotPlugin> {
     Arc::new(CollabSnapshotPlugin::new(
       self.uid,
-      self.db.clone(),
+      Arc::new(self.db.clone()),
       collab,
       self.config.snapshot_per_update,
-      self.config.remove_updates_after_snapshot,
     ))
   }
 
@@ -152,7 +152,8 @@ impl CollabPersistenceTest {
         self.collab_by_id.insert(id, Arc::new(collab));
       },
       Script::DeleteDocument { id } => {
-       self.disk_plugin
+        self
+          .disk_plugin
           .with_write_txn(|store| store.delete_doc(self.uid, &id))
           .unwrap();
       },
@@ -207,20 +208,6 @@ impl CollabPersistenceTest {
 
         let json = collab.lock().to_json_value();
         assert_json_diff::assert_json_eq!(json, expected);
-      },
-      Script::ValidateSnapshotUpdateKey { id, snapshot_index } => {
-        let disk_plugin = self.disk_plugin.clone();
-        let snapshot_plugin =
-          self.make_snapshot_plugin(self.collab_by_id.get(&id).unwrap().clone());
-        let snapshots = snapshot_plugin.get_snapshots(&id);
-        let snapshot = snapshots.get(snapshot_index).unwrap();
-        let key = disk_plugin
-          .read_txn()
-          .get_doc_last_update_key(self.uid, &id)
-          .unwrap()
-          .to_vec();
-
-        assert_eq!(key, snapshot.update_key)
       },
       Script::AssertDocument { id, expected } => {
         let collab = Arc::new(CollabBuilder::new(1, &id).build());

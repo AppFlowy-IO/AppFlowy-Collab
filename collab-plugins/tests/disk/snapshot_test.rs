@@ -146,10 +146,6 @@ async fn periodically_gen_snapshot_tst() {
         .run_scripts(vec![
           // wait for snapshot to write to disk for 1 second for each snapshot trigger
           Wait(1),
-          ValidateSnapshotUpdateKey {
-            id: doc_id.clone(),
-            snapshot_index: (i / snapshot_per_update) as usize - 1,
-          },
           AssertNumOfUpdates {
             id: doc_id.clone(),
             expected: i as usize + 1,

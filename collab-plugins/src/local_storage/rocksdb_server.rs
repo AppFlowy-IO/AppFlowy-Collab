@@ -46,7 +46,7 @@ impl CollabPlugin for RocksdbServerDiskPlugin {
     if r_db_txn.is_exist(self.collab_id, object_id) {
       // Safety: The document is exist, so it must be loaded successfully.
       let _ = r_db_txn
-        .load_doc(self.collab_id, object_id, false, txn)
+        .load_doc(self.collab_id, object_id,  txn)
         .unwrap();
       drop(r_db_txn);
     } else {

@@ -34,7 +34,7 @@ fn single_thread_test() {
     let doc = Doc::new();
     {
       let mut txn = doc.transact_mut();
-      db.read_txn().load_doc(1, &oid, false, &mut txn).unwrap();
+      db.read_txn().load_doc(1, &oid, &mut txn).unwrap();
     }
     let text = doc.get_or_insert_text("text");
     let txn = doc.transact();
@@ -81,7 +81,7 @@ fn sled_multiple_thread_test() {
     let doc = Doc::new();
     {
       let mut txn = doc.transact_mut();
-      db.read_txn().load_doc(1, &oid, false, &mut txn).unwrap();
+      db.read_txn().load_doc(1, &oid, &mut txn).unwrap();
     }
     let text = doc.get_or_insert_text("text");
     let txn = doc.transact();
@@ -128,7 +128,7 @@ fn rocks_multiple_thread_test() {
     let doc = Doc::new();
     {
       let mut txn = doc.transact_mut();
-      db.read_txn().load_doc(1, &oid, false, &mut txn).unwrap();
+      db.read_txn().load_doc(1, &oid, &mut txn).unwrap();
     }
     let text = doc.get_or_insert_text("text");
     let txn = doc.transact();

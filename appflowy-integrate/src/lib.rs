@@ -1,6 +1,10 @@
+pub use collab::core::collab::MutexCollab;
+pub use collab_persistence::error::PersistenceError;
 pub use collab_persistence::kv::rocks_kv::RocksCollabDB;
+pub use collab_persistence::snapshot::CollabSnapshot;
 pub use collab_plugins::cloud_storage::postgres::{CollabTableConfig, SupabaseDBConfig};
 pub use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
+pub use collab_plugins::snapshot::SnapshotDB;
 
 pub mod collab_builder;
 pub mod config;

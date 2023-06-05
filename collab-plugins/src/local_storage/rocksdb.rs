@@ -63,7 +63,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
     // Check the document is exist or not
     if r_db_txn.is_exist(self.uid, object_id) {
       // Safety: The document is exist, so it must be loaded successfully.
-      match r_db_txn.load_doc(self.uid, object_id, false, txn) {
+      match r_db_txn.load_doc(self.uid, object_id,  txn) {
         Ok(update_count) => {
           self
             .initial_update_count
