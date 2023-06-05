@@ -4,7 +4,7 @@ use std::panic::AssertUnwindSafe;
 
 use serde::{Deserialize, Serialize};
 use yrs::updates::encoder::{Encoder, EncoderV1};
-use yrs::ReadTxn;
+use yrs::{ReadTxn, Transaction, TransactionMut, WriteTxn};
 
 use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, Key, SnapshotID};
 use crate::kv::KVEntry;
@@ -138,7 +138,7 @@ where
   get_id_for_key(store, key)
 }
 
-fn try_encode_snapshot<T: ReadTxn>(txn: &T) -> Result<Vec<u8>, PersistenceError> {
+pub fn try_encode_snapshot<T: ReadTxn>(txn: &T) -> Result<Vec<u8>, PersistenceError> {
   let snapshot = txn.snapshot();
   let mut encoded_data = vec![];
   match {
