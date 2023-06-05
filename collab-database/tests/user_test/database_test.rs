@@ -104,7 +104,7 @@ fn duplicate_database_view_test() {
     .unwrap();
 
   test
-    .create_database_view(CreateViewParams {
+    .create_database_linked_view(CreateViewParams {
       database_id: "d1".to_string(),
       view_id: "v2".to_string(),
       ..Default::default()
@@ -211,7 +211,7 @@ fn get_database_by_view_id_test() {
     .unwrap();
 
   test
-    .create_database_view(CreateViewParams {
+    .create_database_linked_view(CreateViewParams {
       database_id: "d1".to_string(),
       view_id: "v2".to_string(),
       ..Default::default()

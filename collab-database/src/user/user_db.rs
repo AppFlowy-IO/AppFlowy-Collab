@@ -191,9 +191,9 @@ impl UserDatabase {
     Ok(database)
   }
 
-  /// Create reference view that shares the same data with the inline view's database
+  /// Create linked view that shares the same data with the inline view's database
   /// If the inline view is deleted, the reference view will be deleted too.
-  pub fn create_database_view(&self, params: CreateViewParams) -> Result<(), DatabaseError> {
+  pub fn create_database_linked_view(&self, params: CreateViewParams) -> Result<(), DatabaseError> {
     let params = CreateViewParamsValidator::validate(params)?;
     if let Some(database) = self.get_database(&params.database_id) {
       self
