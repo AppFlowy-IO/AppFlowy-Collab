@@ -6,7 +6,6 @@ use std::sync::Arc;
 use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-
 use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
 
@@ -63,7 +62,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
     // Check the document is exist or not
     if r_db_txn.is_exist(self.uid, object_id) {
       // Safety: The document is exist, so it must be loaded successfully.
-      match r_db_txn.load_doc(self.uid, object_id,  txn) {
+      match r_db_txn.load_doc(self.uid, object_id, txn) {
         Ok(update_count) => {
           self
             .initial_update_count
@@ -121,15 +120,10 @@ impl CollabPlugin for RocksdbDiskPlugin {
 #[derive(Clone)]
 pub struct CollabPersistenceConfig {
   /// Enable snapshot. Default is [false].
-  pub(crate) enable_snapshot: bool,
+  pub enable_snapshot: bool,
   /// Generate a snapshot every N updates
-  /// Default is 100. The value must be greater than 0.
+  /// Default is 20. The value must be greater than 0.
   pub snapshot_per_update: u32,
-
-  /// Remove updates after snapshot. Default is [false].
-  /// The snapshot contains all the updates before it. So it's safe to remove them.
-  /// But if you want to keep the updates, you can set this to false.
-  pub remove_updates_after_snapshot: bool,
 
   /// Flush the document. Default is [false].
   /// After flush the document, all updates will be removed and the document state vector that
@@ -153,11 +147,6 @@ impl CollabPersistenceConfig {
     self
   }
 
-  pub fn remove_updates_after_snapshot(mut self, remove_updates_after_snapshot: bool) -> Self {
-    self.remove_updates_after_snapshot = remove_updates_after_snapshot;
-    self
-  }
-
   pub fn flush_doc(mut self, flush_doc: bool) -> Self {
     self.flush_doc = flush_doc;
     self
@@ -167,9 +156,8 @@ impl CollabPersistenceConfig {
 impl Default for CollabPersistenceConfig {
   fn default() -> Self {
     Self {
-      enable_snapshot: false,
+      enable_snapshot: true,
       snapshot_per_update: 100,
-      remove_updates_after_snapshot: false,
       flush_doc: false,
     }
   }

@@ -4,7 +4,7 @@ use std::panic::AssertUnwindSafe;
 
 use serde::{Deserialize, Serialize};
 use yrs::updates::encoder::{Encoder, EncoderV1};
-use yrs::{ReadTxn, Transaction, TransactionMut, WriteTxn};
+use yrs::ReadTxn;
 
 use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, Key, SnapshotID};
 use crate::kv::KVEntry;
@@ -153,7 +153,7 @@ pub fn try_encode_snapshot<T: ReadTxn>(txn: &T) -> Result<Vec<u8>, PersistenceEr
     })
   } {
     Ok(_) => Ok(encoded_data),
-    Err(_) => Err(PersistenceError::InternalError),
+    Err(e) => Err(PersistenceError::InvalidData(format!("{:?}", e))),
   }
 }
 

@@ -1,7 +1,8 @@
-use base64::Engine;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use collab::core::collab::MutexCollab;
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{lib0Any, ArrayRefWrapper, Collab, MapPrelim, Update};
@@ -15,23 +16,13 @@ use crate::blocks::Block;
 use crate::database::{Database, DatabaseContext, DatabaseData};
 use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
-
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
-use base64::engine::general_purpose::STANDARD;
 
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
 /// different [CollabPlugin]s to the [MutexCollab] to support different features.
 ///
 pub trait DatabaseCollabBuilder: Send + Sync + 'static {
-  fn build(
-    &self,
-    uid: i64,
-    object_id: &str,
-    object_name: &str,
-    db: Arc<RocksCollabDB>,
-  ) -> Arc<MutexCollab>;
-
   fn build_with_config(
     &self,
     uid: i64,

@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 use std::io::Write;
-
 use std::panic;
 use std::panic::AssertUnwindSafe;
 
@@ -150,7 +149,7 @@ impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
       self.apply_update(update);
     })) {
       Ok(_) => Ok(()),
-      Err(_) => Err(PersistenceError::InternalError),
+      Err(e) => Err(PersistenceError::InvalidData(format!("{:?}", e))),
     }
   }
 }

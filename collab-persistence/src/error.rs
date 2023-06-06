@@ -17,8 +17,8 @@ pub enum PersistenceError {
   #[error(transparent)]
   Yrs(#[from] lib0::error::Error),
 
-  #[error("invalid data")]
-  InvalidData,
+  #[error("invalid data: {0}")]
+  InvalidData(String),
 
   #[error("Duplicate update key")]
   DuplicateUpdateKey,
@@ -26,6 +26,6 @@ pub enum PersistenceError {
   #[error("Can't find the latest update key")]
   LatestUpdateKeyNotExist,
 
-  #[error("Internal error")]
-  InternalError,
+  #[error("Internal failure: {0}")]
+  Internal(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
