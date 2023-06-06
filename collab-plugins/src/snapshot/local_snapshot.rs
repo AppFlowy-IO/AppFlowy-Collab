@@ -1,11 +1,13 @@
-use crate::disk::rocksdb::CollabPersistenceConfig;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+
 use collab::core::collab::MutexCollab;
 use collab::preclude::CollabPlugin;
 
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
+use collab_persistence::PersistenceError;
 use parking_lot::RwLock;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
 use yrs::TransactionMut;
 
 enum GenSnapshotState {
@@ -19,57 +21,108 @@ impl GenSnapshotState {
   }
 }
 
+pub trait SnapshotDB: Send + Sync {
+  fn get_snapshots(&self, uid: i64, object_id: &str) -> Vec<CollabSnapshot>;
+
+  fn create_snapshot(
+    &self,
+    uid: i64,
+    object_id: &str,
+    collab: Arc<MutexCollab>,
+  ) -> Result<(), PersistenceError>;
+}
+
 pub struct CollabSnapshotPlugin {
-  db: Arc<RocksCollabDB>,
+  uid: i64,
+  db: Arc<dyn SnapshotDB>,
   local_collab: Arc<MutexCollab>,
   /// the number of updates on disk when opening the document
   update_count: Arc<AtomicU32>,
-  config: CollabPersistenceConfig,
+  snapshot_per_update: u32,
   state: Arc<RwLock<GenSnapshotState>>,
 }
 
 impl CollabSnapshotPlugin {
   pub fn new(
-    db: Arc<RocksCollabDB>,
+    uid: i64,
+    db: Arc<dyn SnapshotDB>,
     local_collab: Arc<MutexCollab>,
-    config: CollabPersistenceConfig,
+    snapshot_per_update: u32,
   ) -> Self {
     let state = Arc::new(RwLock::new(GenSnapshotState::Idle));
     let initial_update_count = Arc::new(AtomicU32::new(0));
     Self {
+      uid,
       db,
       local_collab,
       update_count: initial_update_count,
-      config,
+      snapshot_per_update,
       state,
     }
+  }
+
+  /// Return the snapshots for the given object id
+  pub fn get_snapshots(&self, object_id: &str) -> Vec<CollabSnapshot> {
+    self.db.get_snapshots(self.uid, object_id)
   }
 }
 
 impl CollabPlugin for CollabSnapshotPlugin {
-  fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {
+  fn after_transaction(&self, object_id: &str, _txn: &mut TransactionMut) {
+    // After each transaction, we increment the update count
     let old_value = self.update_count.fetch_add(1, Ordering::SeqCst);
-    if old_value > self.config.snapshot_per_update {
+
+    // If the number of updates is greater than the threshold, we generate a snapshot
+    // and push it to the database
+    if old_value != 0 && (old_value + 1) % self.snapshot_per_update == 0 {
       let is_idle = self.state.read().is_idle();
       if is_idle {
         *self.state.write() = GenSnapshotState::Processing;
-
-        let weak_update_count = Arc::downgrade(&self.update_count);
         let weak_local_collab = Arc::downgrade(&self.local_collab);
         let weak_state = Arc::downgrade(&self.state);
-        tokio::spawn(async move {
-          if let (Some(state), Some(_local_collab), Some(update_count)) = (
-            weak_state.upgrade(),
-            weak_local_collab.upgrade(),
-            weak_update_count.upgrade(),
-          ) {
-            // Generate snapshot
+        let weak_db = Arc::downgrade(&self.db);
+        let uid = self.uid;
+        let object_id = object_id.to_string();
 
-            *state.write() = GenSnapshotState::Idle;
-            update_count.store(0, Ordering::SeqCst);
-          };
+        // We use a blocking task to generate the snapshot
+        tokio::spawn(async move {
+          let _ = tokio::task::spawn_blocking(move || {
+            if let (Some(state), Some(local_collab), Some(db)) = (
+              weak_state.upgrade(),
+              weak_local_collab.upgrade(),
+              weak_db.upgrade(),
+            ) {
+              // Create a new snapshot that contains all the document data.
+              let result = db.create_snapshot(uid, &object_id, local_collab);
+              match result {
+                Ok(_) => tracing::trace!("{} snapshot generated", object_id),
+                Err(e) => tracing::error!("{} snapshot generation failed: {}", object_id, e),
+              }
+              *state.write() = GenSnapshotState::Idle;
+            };
+            Ok::<(), PersistenceError>(())
+          })
+          .await;
         });
       }
     }
+  }
+}
+
+impl SnapshotDB for Arc<RocksCollabDB> {
+  fn get_snapshots(&self, uid: i64, object_id: &str) -> Vec<CollabSnapshot> {
+    self.read_txn().get_snapshots(uid, object_id)
+  }
+
+  fn create_snapshot(
+    &self,
+    uid: i64,
+    object_id: &str,
+    collab: Arc<MutexCollab>,
+  ) -> Result<(), PersistenceError> {
+    self.with_write_txn(|txn| {
+      txn.push_snapshot(uid, object_id, &collab.lock().transact())?;
+      Ok(())
+    })
   }
 }

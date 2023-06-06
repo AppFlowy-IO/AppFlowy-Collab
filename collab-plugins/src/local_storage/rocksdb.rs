@@ -6,7 +6,6 @@ use std::sync::Arc;
 use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use y_sync::awareness::Awareness;
 use yrs::{Transaction, TransactionMut};
 
@@ -52,12 +51,6 @@ impl RocksdbDiskPlugin {
     }
   }
 
-  /// Return the snapshots for the given object id
-  pub fn get_snapshots(&self, object_id: &str) -> Vec<CollabSnapshot> {
-    let transaction = self.db.read_txn();
-    transaction.get_snapshots(self.uid, object_id)
-  }
-
   fn increase_count(&self) -> u32 {
     self.update_count.fetch_add(1, SeqCst)
   }
@@ -66,11 +59,10 @@ impl RocksdbDiskPlugin {
 impl CollabPlugin for RocksdbDiskPlugin {
   fn init(&self, object_id: &str, txn: &mut TransactionMut) {
     let r_db_txn = self.db.read_txn();
-
     // Check the document is exist or not
     if r_db_txn.is_exist(self.uid, object_id) {
       // Safety: The document is exist, so it must be loaded successfully.
-      match r_db_txn.load_doc(self.uid, object_id, self.config.enable_snapshot, txn) {
+      match r_db_txn.load_doc(self.uid, object_id, txn) {
         Ok(update_count) => {
           self
             .initial_update_count
@@ -79,6 +71,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
         Err(e) => tracing::error!("🔴 load doc:{} failed: {}", object_id, e),
       }
       drop(r_db_txn);
+
       if self.config.flush_doc {
         let _ = self.db.with_write_txn(|w_db_txn| {
           w_db_txn.flush_doc(self.uid, object_id, txn)?;
@@ -94,7 +87,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
       });
 
       if let Err(e) = result {
-        tracing::warn!("[🦀Collab] => create doc for {:?} failed: {}", object_id, e)
+        tracing::error!("🔴 create doc for {:?} failed: {}", object_id, e)
       }
     }
   }
@@ -103,30 +96,16 @@ impl CollabPlugin for RocksdbDiskPlugin {
     self.did_load.store(true, Ordering::SeqCst);
   }
 
-  fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
+  fn receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
     // Only push update if the doc is loaded
     if !self.did_load.load(Ordering::SeqCst) {
       return;
     }
-    let mut count = self.increase_count();
+    let _ = self.increase_count();
     // /Acquire a write transaction to ensure consistency
     let result = self.db.with_write_txn(|w_db_txn| {
       tracing::trace!("Receive {} update", object_id);
-      let update_key = w_db_txn.push_update(self.uid, object_id, update)?;
-
-      if self.config.enable_snapshot && count > 0 {
-        count += self.initial_update_count.load(Ordering::Acquire);
-        if count % self.config.snapshot_per_update == 0 {
-          // Create a new snapshot that contains all the document data. This snapshot will be
-          // used to recover the document state. The new update is not included in the snapshot.
-          w_db_txn.push_snapshot(self.uid, object_id, update_key.clone(), txn)?;
-          if self.config.remove_updates_after_snapshot {
-            // Delete all the updates prior to the new update specified by the update key.
-            w_db_txn.delete_updates_to(self.uid, object_id, &update_key)?;
-          }
-        }
-      }
-
+      let _ = w_db_txn.push_update(self.uid, object_id, update)?;
       Ok(())
     });
 
@@ -141,15 +120,10 @@ impl CollabPlugin for RocksdbDiskPlugin {
 #[derive(Clone)]
 pub struct CollabPersistenceConfig {
   /// Enable snapshot. Default is [false].
-  pub(crate) enable_snapshot: bool,
+  pub enable_snapshot: bool,
   /// Generate a snapshot every N updates
-  /// Default is 100. The value must be greater than 0.
-  pub(crate) snapshot_per_update: u32,
-
-  /// Remove updates after snapshot. Default is [false].
-  /// The snapshot contains all the updates before it. So it's safe to remove them.
-  /// But if you want to keep the updates, you can set this to false.
-  pub(crate) remove_updates_after_snapshot: bool,
+  /// Default is 20. The value must be greater than 0.
+  pub snapshot_per_update: u32,
 
   /// Flush the document. Default is [false].
   /// After flush the document, all updates will be removed and the document state vector that
@@ -173,11 +147,6 @@ impl CollabPersistenceConfig {
     self
   }
 
-  pub fn remove_updates_after_snapshot(mut self, remove_updates_after_snapshot: bool) -> Self {
-    self.remove_updates_after_snapshot = remove_updates_after_snapshot;
-    self
-  }
-
   pub fn flush_doc(mut self, flush_doc: bool) -> Self {
     self.flush_doc = flush_doc;
     self
@@ -187,9 +156,8 @@ impl CollabPersistenceConfig {
 impl Default for CollabPersistenceConfig {
   fn default() -> Self {
     Self {
-      enable_snapshot: false,
+      enable_snapshot: true,
       snapshot_per_update: 100,
-      remove_updates_after_snapshot: false,
       flush_doc: false,
     }
   }

@@ -7,6 +7,7 @@ use collab_plugins::cloud_storage::postgres::SupabaseDBPlugin;
 use collab_plugins::cloud_storage::CollabObject;
 use collab_plugins::disk::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
+use collab_plugins::snapshot::{CollabSnapshotPlugin, SnapshotDB};
 use parking_lot::RwLock;
 
 use crate::config::{CollabPluginConfig, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
@@ -20,12 +21,17 @@ pub enum CloudStorageType {
 
 pub struct AppFlowyCollabBuilder {
   cloud_storage_type: RwLock<CloudStorageType>,
+  snapshot_db: Option<Arc<dyn SnapshotDB>>,
 }
 
 impl AppFlowyCollabBuilder {
-  pub fn new(cloud_storage_type: CloudStorageType) -> Self {
+  pub fn new(
+    cloud_storage_type: CloudStorageType,
+    snapshot_db: Option<Arc<dyn SnapshotDB>>,
+  ) -> Self {
     Self {
       cloud_storage_type: RwLock::new(cloud_storage_type),
+      snapshot_db,
     }
   }
 
@@ -74,7 +80,7 @@ impl AppFlowyCollabBuilder {
 
     let collab_config = CollabPluginConfig::from_env();
     let cloud_storage_type = self.cloud_storage_type.read().clone();
-    tracing::debug!("collab cloud storage type: {:?}", cloud_storage_type);
+    tracing::trace!("collab cloud storage type: {:?}", cloud_storage_type);
     match cloud_storage_type {
       CloudStorageType::AWS => {
         if let Some(config) = collab_config.aws_config() {
@@ -91,7 +97,7 @@ impl AppFlowyCollabBuilder {
               config.region.clone(),
             );
             collab.lock().add_plugin(Arc::new(plugin));
-            tracing::debug!("add collab plugin: {:?}", self.cloud_storage_type);
+            tracing::debug!("add aws plugin: {:?}", self.cloud_storage_type);
           }
         }
       },
@@ -101,11 +107,24 @@ impl AppFlowyCollabBuilder {
             let collab_object = CollabObject::new(object_id.to_string()).with_name(object_name);
             let plugin = SupabaseDBPlugin::new(collab_object, collab.clone(), 10, config.clone());
             collab.lock().add_plugin(Arc::new(plugin));
-            tracing::debug!("add collab plugin: {:?}", self.cloud_storage_type);
+            tracing::trace!("add supabase plugin: {:?}", self.cloud_storage_type);
           }
         }
       },
       CloudStorageType::Local => {},
+    }
+
+    if let Some(snapshot_db) = &self.snapshot_db {
+      if config.enable_snapshot {
+        let snapshot_plugin = CollabSnapshotPlugin::new(
+          uid,
+          snapshot_db.clone(),
+          collab.clone(),
+          config.snapshot_per_update,
+        );
+        tracing::trace!("add snapshot plugin: {}", object_id);
+        collab.lock().add_plugin(Arc::new(snapshot_plugin));
+      }
     }
 
     collab.lock().initialize();

@@ -6,6 +6,7 @@ use collab::preclude::{
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
 use serde::{Deserialize, Serialize};
 
 use crate::database::{gen_row_id, timestamp};
@@ -69,7 +70,8 @@ impl DatabaseRow {
     db: Arc<RocksCollabDB>,
     collab_builder: Arc<dyn DatabaseCollabBuilder>,
   ) -> Self {
-    let collab = collab_builder.build(uid, &row_id, "row", db.clone());
+    let config = CollabPersistenceConfig::new().snapshot_per_update(5);
+    let collab = collab_builder.build_with_config(uid, &row_id, "row", db.clone(), &config);
     let collab_guard = collab.lock();
     let (data, meta, comments) = {
       let txn = collab_guard.transact();
@@ -353,7 +355,6 @@ impl CreateRowParamsValidator {
     }
 
     if params.timestamp == 0 {
-      tracing::warn!("timestamp is 0, using current timestamp");
       params.timestamp = timestamp();
     }
 

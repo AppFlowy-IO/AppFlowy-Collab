@@ -11,7 +11,7 @@ use crate::keys::{
 };
 use crate::kv::KVEntry;
 use crate::kv::KVStore;
-use crate::snapshot::{get_snapshot_id, SnapshotAction};
+use crate::snapshot::SnapshotAction;
 use crate::{
   get_id_for_key, get_last_update_key, insert_doc_update, make_doc_id_for_key, PersistenceError,
   TransactionMutExt,
@@ -113,7 +113,6 @@ where
     &self,
     uid: i64,
     object_id: &K,
-    enable_snapshot: bool,
     txn: &mut TransactionMut,
   ) -> Result<u32, PersistenceError> {
     let mut update_count = 0;
@@ -131,13 +130,7 @@ where
         }
 
         // If the enable_snapshot is true, we will try to load the snapshot.
-        let mut update_start = make_doc_update_key(doc_id, 0).to_vec();
-        if enable_snapshot {
-          if let Some(update_key) = self.load_latest_snapshot(uid, object_id, txn) {
-            update_start = update_key;
-          }
-        }
-
+        let update_start = make_doc_update_key(doc_id, 0).to_vec();
         let update_end = make_doc_update_key(doc_id, Clock::MAX);
         // tracing::trace!(
         //   "[🦀Collab] => [{}-{:?}]: Get update from {:?} to {:?}",
@@ -176,41 +169,41 @@ where
     }
   }
 
-  fn load_latest_snapshot<K: AsRef<[u8]> + ?Sized + Debug>(
-    &self,
-    uid: i64,
-    object_id: &K,
-    txn: &mut TransactionMut,
-  ) -> Option<Vec<u8>> {
-    let snapshot_id = get_snapshot_id(uid, self, object_id)?;
-    let snapshot = self.get_last_snapshot_update(snapshot_id)?;
-    // Decode the data of the snapshot and apply it to the transaction.
-    // If the snapshot is invalid, the snapshot will be deleted. After delete the snapshot,
-    // try to load the next latest snapshot.
-    match Update::decode_v1(&snapshot.data) {
-      Ok(update) => match txn.try_apply_update(update) {
-        Ok(_) => {},
-        Err(e) => {
-          tracing::error!(
-            "🔴{:?} apply snapshot error: {}. try to load next snapshot",
-            object_id,
-            e
-          );
-          self.delete_last_snapshot_update(snapshot_id);
-          return self.load_latest_snapshot(uid, object_id, txn);
-        },
-      },
-      Err(_) => {
-        self.delete_last_snapshot_update(snapshot_id);
-        tracing::error!(
-          "🔴{:?} decode snapshot error, try to load next snapshot",
-          object_id
-        );
-        return self.load_latest_snapshot(uid, object_id, txn);
-      },
-    }
-    Some(snapshot.update_key)
-  }
+  // fn load_latest_snapshot<K: AsRef<[u8]> + ?Sized + Debug>(
+  //   &self,
+  //   uid: i64,
+  //   object_id: &K,
+  //   txn: &mut TransactionMut,
+  // ) -> Option<Vec<u8>> {
+  //   let snapshot_id = get_snapshot_id(uid, self, object_id)?;
+  //   let snapshot = self.get_last_snapshot_update(snapshot_id)?;
+  //   // Decode the data of the snapshot and apply it to the transaction.
+  //   // If the snapshot is invalid, the snapshot will be deleted. After delete the snapshot,
+  //   // try to load the next latest snapshot.
+  //   match Update::decode_v1(&snapshot.data) {
+  //     Ok(update) => match txn.try_apply_update(update) {
+  //       Ok(_) => {},
+  //       Err(e) => {
+  //         tracing::error!(
+  //           "🔴{:?} apply snapshot error: {}. try to load next snapshot",
+  //           object_id,
+  //           e
+  //         );
+  //         self.delete_last_snapshot_update(snapshot_id);
+  //         return self.load_latest_snapshot(uid, object_id, txn);
+  //       },
+  //     },
+  //     Err(_) => {
+  //       self.delete_last_snapshot_update(snapshot_id);
+  //       tracing::error!(
+  //         "🔴{:?} decode snapshot error, try to load next snapshot",
+  //         object_id
+  //       );
+  //       return self.load_latest_snapshot(uid, object_id, txn);
+  //     },
+  //   }
+  //   Some(snapshot.update_key)
+  // }
 
   /// Push an update to the persistence
   fn push_update<K: AsRef<[u8]> + ?Sized + Debug>(

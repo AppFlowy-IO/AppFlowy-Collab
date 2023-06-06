@@ -29,16 +29,9 @@ where
   /// The snapshot contains the updates prior to the given update_key. For example,
   /// if the update_key is 10, the snapshot will contain updates 0-9. So when restoring
   /// the document from a snapshot, it should apply the update from key:10.
-  fn push_snapshot<K1, K2, T>(
-    &self,
-    uid: i64,
-    object_id: &K1,
-    update_key: K2,
-    txn: &T,
-  ) -> Result<(), PersistenceError>
+  fn push_snapshot<K, T>(&self, uid: i64, object_id: &K, txn: &T) -> Result<(), PersistenceError>
   where
-    K1: AsRef<[u8]> + ?Sized + Debug,
-    K2: Into<Vec<u8>>,
+    K: AsRef<[u8]> + ?Sized + Debug,
     T: ReadTxn,
   {
     match try_encode_snapshot(txn) {
@@ -49,7 +42,7 @@ where
         }
         tracing::trace!("New snapshot for object:{:?}", object_id);
         let snapshot_id = self.create_snapshot_id(uid, object_id.as_ref())?;
-        insert_snapshot_update(self, update_key, snapshot_id, object_id, data)?;
+        insert_snapshot_update(self, snapshot_id, object_id, data)?;
       },
       Err(e) => {
         tracing::error!(
@@ -145,7 +138,7 @@ where
   get_id_for_key(store, key)
 }
 
-fn try_encode_snapshot<T: ReadTxn>(txn: &T) -> Result<Vec<u8>, PersistenceError> {
+pub fn try_encode_snapshot<T: ReadTxn>(txn: &T) -> Result<Vec<u8>, PersistenceError> {
   let snapshot = txn.snapshot();
   let mut encoded_data = vec![];
   match {
@@ -160,7 +153,7 @@ fn try_encode_snapshot<T: ReadTxn>(txn: &T) -> Result<Vec<u8>, PersistenceError>
     })
   } {
     Ok(_) => Ok(encoded_data),
-    Err(_) => Err(PersistenceError::InternalError),
+    Err(e) => Err(PersistenceError::InvalidData(format!("{:?}", e))),
   }
 }
 
@@ -168,17 +161,12 @@ fn try_encode_snapshot<T: ReadTxn>(txn: &T) -> Result<Vec<u8>, PersistenceError>
 pub struct CollabSnapshot {
   pub data: Vec<u8>,
   pub created_at: i64,
-  pub update_key: Vec<u8>,
 }
 
 impl CollabSnapshot {
-  pub fn new(data: Vec<u8>, update_key: Vec<u8>) -> CollabSnapshot {
+  pub fn new(data: Vec<u8>) -> CollabSnapshot {
     let created_at = chrono::Utc::now().timestamp();
-    Self {
-      data,
-      created_at,
-      update_key,
-    }
+    Self { data, created_at }
   }
 
   pub fn to_vec(&self) -> Vec<u8> {

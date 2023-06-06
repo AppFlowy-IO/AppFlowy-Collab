@@ -1,11 +1,8 @@
 use std::fmt::Debug;
 use std::io::Write;
-use std::ops::Deref;
 use std::panic;
 use std::panic::AssertUnwindSafe;
-use std::sync::Arc;
 
-use parking_lot::RwLock;
 use smallvec::SmallVec;
 use yrs::{TransactionMut, Update};
 
@@ -17,65 +14,18 @@ use crate::kv::{KVEntry, KVStore};
 use crate::oid::{DOC_ID_LEN, LOCAL_DOC_ID_GEN, OID};
 use crate::snapshot::CollabSnapshot;
 
-#[derive(Clone)]
-pub struct CollabDB<S> {
-  pub store: Arc<RwStore<S>>,
-}
-
-impl<S> CollabDB<S>
-where
-  S: KVStore<'static> + Clone,
-{
-  pub fn new(store: S) -> Result<Self, PersistenceError> {
-    let store = Arc::new(RwStore::new(store));
-    Ok(Self { store })
-  }
-}
-
-impl<S> Deref for CollabDB<S> {
-  type Target = Arc<RwStore<S>>;
-
-  fn deref(&self) -> &Self::Target {
-    &self.store
-  }
-}
-
-pub struct RwStore<T>(RwLock<T>);
-
-impl<T> RwStore<T>
-where
-  T: KVStore<'static>,
-{
-  pub fn new(db: T) -> Self {
-    Self(RwLock::new(db))
-  }
-}
-
-impl<T> Deref for RwStore<T>
-where
-  T: KVStore<'static>,
-{
-  type Target = RwLock<T>;
-
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-
-pub fn insert_snapshot_update<'a, K1, K2, S>(
+pub fn insert_snapshot_update<'a, K, S>(
   store: &S,
-  update_key: K2,
   snapshot_id: SnapshotID,
-  object_id: &K1,
+  object_id: &K,
   data: Vec<u8>,
 ) -> Result<(), PersistenceError>
 where
-  K1: AsRef<[u8]> + ?Sized + Debug,
-  K2: Into<Vec<u8>>,
+  K: AsRef<[u8]> + ?Sized + Debug,
   S: KVStore<'a>,
   PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
-  let snapshot = CollabSnapshot::new(data, update_key.into()).to_vec();
+  let snapshot = CollabSnapshot::new(data).to_vec();
   let update_key = create_update_key(snapshot_id, store, object_id, make_snapshot_update_key)?;
   store.insert(update_key, snapshot)?;
   Ok(())
@@ -199,7 +149,7 @@ impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
       self.apply_update(update);
     })) {
       Ok(_) => Ok(()),
-      Err(_) => Err(PersistenceError::InternalError),
+      Err(e) => Err(PersistenceError::InvalidData(format!("{:?}", e))),
     }
   }
 }

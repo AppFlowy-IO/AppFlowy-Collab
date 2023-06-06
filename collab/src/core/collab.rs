@@ -1,15 +1,12 @@
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
-
 use std::sync::Arc;
-
 use std::vec::IntoIter;
 
 use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio::sync::watch;
-
 use y_sync::awareness::Awareness;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
