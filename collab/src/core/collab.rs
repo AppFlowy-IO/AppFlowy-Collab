@@ -20,6 +20,7 @@ use crate::core::collab_plugin::CollabPlugin;
 use crate::core::collab_state::{CollabState, State};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
+use crate::error::CollabError;
 use crate::preclude::{ArrayRefWrapper, JsonValue};
 use crate::util::insert_json_value_to_map_ref;
 
@@ -369,6 +370,13 @@ impl Collab {
 
   pub fn transact(&self) -> Transaction {
     self.doc.transact()
+  }
+
+  pub fn try_transaction(&self) -> Result<Transaction, CollabError> {
+    self
+      .doc
+      .try_transact()
+      .map_err(|e| CollabError::Internal(Box::new(e)))
   }
 
   /// Returns a transaction that can mutate the document. This transaction will carry the

@@ -13,14 +13,20 @@ use similar::{ChangeTag, TextDiff};
 use yrs::updates::decoder::Decode;
 use yrs::{ReadTxn, Snapshot, TransactionMut, Update};
 
+#[derive(Clone, Debug)]
 enum GenSnapshotState {
   Idle,
   Processing,
+  Fail,
 }
 
 impl GenSnapshotState {
   fn is_idle(&self) -> bool {
     matches!(self, Self::Idle)
+  }
+
+  fn is_fail(&self) -> bool {
+    matches!(self, Self::Fail)
   }
 }
 
@@ -84,10 +90,13 @@ impl CollabPlugin for CollabSnapshotPlugin {
     let old_value = self.update_count.fetch_add(1, Ordering::SeqCst);
 
     // If the number of updates is greater than the threshold, we generate a snapshot
-    // and push it to the database
-    if old_value != 0 && (old_value + 1) % self.snapshot_per_update == 0 {
-      let is_idle = self.state.read().is_idle();
-      if is_idle {
+    // and push it to the database. If the state is fail, which means the previous snapshot
+    // generation failed, we try to generate a new snapshot again on the next transaction.
+    let should_create_snapshot = old_value != 0 && (old_value + 1) % self.snapshot_per_update == 0;
+    let state = self.state.read().clone();
+    if should_create_snapshot || state.is_fail() {
+      let is_ready = state.is_fail() || state.is_idle();
+      if is_ready {
         *self.state.write() = GenSnapshotState::Processing;
         let weak_local_collab = Arc::downgrade(&self.local_collab);
         let weak_state = Arc::downgrade(&self.state);
@@ -106,12 +115,18 @@ impl CollabPlugin for CollabSnapshotPlugin {
               weak_snapshot.upgrade(),
             ) {
               if let Some(snapshot) = weak_snapshot.lock().take() {
-                // Create a new snapshot that contains all the document data.
+                // Create a new snapshot that contains all the document data. If the snapshot
+                // generation fails, we set the state to fail, so that the next transaction
+                // will try to generate a new snapshot again.
                 if let Err(e) = db.create_snapshot(uid, &object_id, snapshot, local_collab) {
-                  tracing::error!("{} snapshot generation failed: {}", object_id, e)
+                  tracing::error!("{} snapshot generation failed: {}", object_id, e);
+                  *state.write() = GenSnapshotState::Fail;
+                } else {
+                  *state.write() = GenSnapshotState::Idle;
                 }
+              } else {
+                *state.write() = GenSnapshotState::Idle;
               }
-              *state.write() = GenSnapshotState::Idle;
             };
             Ok::<(), PersistenceError>(())
           })

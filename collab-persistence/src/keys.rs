@@ -143,7 +143,7 @@ pub fn clock_from_key(key: &[u8]) -> &[u8] {
   &key[(len - 5)..(len - 1)]
 }
 
-// [2,0, uid,  object_id,  0]
+// [10,0, uid,  object_id,  0]
 pub fn make_snapshot_id_key(uid: &[u8], object_id: &[u8]) -> Key<20> {
   let mut v: SmallVec<[u8; 20]> = smallvec![SNAPSHOT_SPACE, SNAPSHOT_SPACE_OBJECT];
   v.write_all(uid).unwrap();
@@ -152,7 +152,7 @@ pub fn make_snapshot_id_key(uid: &[u8], object_id: &[u8]) -> Key<20> {
   Key(v)
 }
 
-// [2,0,  0,0,0,0,0,0,0,0,  1   [0,0,0,0],  0]
+// [10,0,  0,0,0,0,0,0,0,0,  1   [0,0,0,0],  0]
 pub fn make_snapshot_update_key(
   snapshot_id: SnapshotID,
   clock: Clock,
