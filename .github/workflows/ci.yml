@@ -39,7 +39,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust toolchain
+        id: rust_toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          override: true
+          profile: minimal
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: ${{ matrix.os }}
+
       - name: Run tests
         run: cargo test
 
