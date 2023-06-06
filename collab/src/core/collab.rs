@@ -358,6 +358,10 @@ impl Collab {
     self.data.to_json(&txn)
   }
 
+  pub fn to_plain_text(&self) -> String {
+    "".to_string()
+  }
+
   pub fn to_json_value(&self) -> JsonValue {
     let txn = self.transact();
     serde_json::to_value(&self.data.to_json(&txn)).unwrap()

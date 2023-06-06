@@ -106,13 +106,6 @@ async fn reopen_doc_snapshot_test() {
         index: 0,
         expected: json!({
           "1": 1.0,
-          "2": 2.0,
-          "3": 3.0,
-          "4": 4.0,
-          "5": 5.0,
-          "6": 6.0,
-          "7": 7.0,
-          "8": 8.0,
         }),
       },
     ])
@@ -120,7 +113,7 @@ async fn reopen_doc_snapshot_test() {
 }
 
 #[tokio::test]
-async fn periodically_gen_snapshot_tst() {
+async fn periodically_gen_snapshot_test() {
   let snapshot_per_update = 5;
   let mut test = CollabPersistenceTest::new(
     CollabPersistenceConfig::new()
@@ -159,12 +152,8 @@ async fn periodically_gen_snapshot_tst() {
     .run_script(AssertSnapshot {
       id: doc_id.clone(),
       index: 0,
-      expected: json!( {
-        "0": 0.0,
-        "1": 1.0,
-        "2": 2.0,
-        "3": 3.0,
-        "4": 4.0,
+      expected: json!({
+        "0": 0.0
       }),
     })
     .await;
@@ -173,17 +162,14 @@ async fn periodically_gen_snapshot_tst() {
     .run_script(AssertSnapshot {
       id: doc_id.clone(),
       index: 1,
-      expected: json!( {
+      expected: json!({
         "0": 0.0,
         "1": 1.0,
         "2": 2.0,
         "3": 3.0,
         "4": 4.0,
         "5": 5.0,
-        "6": 6.0,
-        "7": 7.0,
-        "8": 8.0,
-        "9": 9.0,
+        "6": 6.0
       }),
     })
     .await;
@@ -205,9 +191,6 @@ async fn periodically_gen_snapshot_tst() {
         "9": 9.0,
         "10": 10.0,
         "11": 11.0,
-        "12": 12.0,
-        "13": 13.0,
-        "14": 14.0,
       }),
     })
     .await;
@@ -228,7 +211,7 @@ async fn periodically_gen_snapshot_tst() {
 
 #[tokio::test]
 async fn gen_big_snapshot_test() {
-  let snapshot_per_update = 5;
+  let snapshot_per_update = 100;
   let mut test = CollabPersistenceTest::new(
     CollabPersistenceConfig::new()
       .enable_snapshot(true)
@@ -239,12 +222,26 @@ async fn gen_big_snapshot_test() {
     .run_scripts(vec![OpenDocument { id: doc_id.clone() }])
     .await;
 
+  let mut first_snapshot = serde_json::map::Map::new();
   let mut map = serde_json::map::Map::new();
-  for i in 0..100 {
-    let s = generate_random_string(1000);
-    if i != 99 {
+  for i in 0..300 {
+    let s = generate_random_string(100);
+    if i == 0 {
+      first_snapshot.insert(i.to_string(), json!(&s));
+    }
+    if i <= 100 {
       map.insert(i.to_string(), json!(&s));
     }
+
+    if i != 0 && i % snapshot_per_update == 0 {
+      test
+        .run_scripts(vec![
+          // wait for snapshot to write to disk for 1 second for each snapshot trigger
+          Wait(1),
+        ])
+        .await;
+    }
+
     test
       .run_script(InsertKeyValue {
         id: doc_id.clone(),
@@ -256,10 +253,15 @@ async fn gen_big_snapshot_test() {
 
   test
     .run_scripts(vec![
-      Wait(1),
+      Wait(2),
       AssertSnapshot {
         id: doc_id.clone(),
         index: 0,
+        expected: serde_json::Value::Object(first_snapshot),
+      },
+      AssertSnapshot {
+        id: doc_id.clone(),
+        index: 1,
         expected: serde_json::Value::Object(map),
       },
     ])

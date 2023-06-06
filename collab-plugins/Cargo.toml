@@ -29,6 +29,7 @@ serde_json = "1.0"
 rand = { version = "0.8" }
 postgrest = { version = "1.0", optional = true }
 base64 = { version = "^0.21", optional = true }
+similar = { version = "2.2.1" }
 
 [dev-dependencies]
 collab-plugins = { path = ".", features = ["sync", "disk_rocksdb", "disk_sled", "aws_storage", "postgres_storage"] }
@@ -55,4 +56,4 @@ disk_rocksdb = ["collab-sync", "collab-persistence/rocksdb_db"]
 disk_sled = ["collab-persistence"]
 postgres_storage = ["postgrest", "base64"]
 aws_storage = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types"]
-snapshot = ["collab-persistence/rocksdb_db"]
+snapshot = []

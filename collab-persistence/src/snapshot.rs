@@ -4,7 +4,7 @@ use std::panic::AssertUnwindSafe;
 
 use serde::{Deserialize, Serialize};
 use yrs::updates::encoder::{Encoder, EncoderV1};
-use yrs::ReadTxn;
+use yrs::{ReadTxn, Snapshot};
 
 use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, Key, SnapshotID};
 use crate::kv::KVEntry;
@@ -29,12 +29,18 @@ where
   /// The snapshot contains the updates prior to the given update_key. For example,
   /// if the update_key is 10, the snapshot will contain updates 0-9. So when restoring
   /// the document from a snapshot, it should apply the update from key:10.
-  fn push_snapshot<K, T>(&self, uid: i64, object_id: &K, txn: &T) -> Result<(), PersistenceError>
+  fn push_snapshot<K, T>(
+    &self,
+    uid: i64,
+    object_id: &K,
+    txn: &T,
+    snapshot: Snapshot,
+  ) -> Result<(), PersistenceError>
   where
     K: AsRef<[u8]> + ?Sized + Debug,
     T: ReadTxn,
   {
-    match try_encode_snapshot(txn) {
+    match try_encode_snapshot(txn, snapshot) {
       Ok(data) => {
         if data.is_empty() {
           tracing::warn!("🟡unexpected empty snapshot for object_id: {:?}", object_id);
@@ -73,7 +79,7 @@ where
     snapshots
   }
 
-  fn get_last_snapshot_update(&self, snapshot_id: SnapshotID) -> Option<CollabSnapshot> {
+  fn get_last_snapshot_by_snapshot_id(&self, snapshot_id: SnapshotID) -> Option<CollabSnapshot> {
     let last_update_key = self.get_snapshot_last_update_key(snapshot_id)?;
     self.get(last_update_key.as_ref()).ok()?.and_then(|value| {
       if let Ok(snapshot) = CollabSnapshot::try_from(value.as_ref()) {
@@ -82,6 +88,26 @@ where
         None
       }
     })
+  }
+
+  fn get_last_snapshot<K: AsRef<[u8]> + ?Sized>(
+    &self,
+    uid: i64,
+    object_id: &K,
+  ) -> Option<CollabSnapshot> {
+    let snapshot_id = get_snapshot_id(uid, self, object_id)?;
+    self.get_last_snapshot_by_snapshot_id(snapshot_id)
+  }
+
+  fn delete_last_snapshot_by_snapshot_id(&self, snapshot_id: SnapshotID) {
+    if let Some(last_update_key) = self.get_snapshot_last_update_key(snapshot_id) {
+      match self.remove(last_update_key.as_ref()) {
+        Ok(_) => {},
+        Err(e) => {
+          tracing::error!("Failed to delete last snapshot update: {:?}", e);
+        },
+      }
+    }
   }
 
   /// Delete all snapshots for the given object id.
@@ -96,17 +122,6 @@ where
       self.remove_range(start.as_ref(), end.as_ref())?;
     }
     Ok(())
-  }
-
-  fn delete_last_snapshot_update(&self, snapshot_id: SnapshotID) {
-    if let Some(last_update_key) = self.get_snapshot_last_update_key(snapshot_id) {
-      match self.remove(last_update_key.as_ref()) {
-        Ok(_) => {},
-        Err(e) => {
-          tracing::error!("Failed to delete last snapshot update: {:?}", e);
-        },
-      }
-    }
   }
 
   /// Create a snapshot id for the given object id.
@@ -138,8 +153,10 @@ where
   get_id_for_key(store, key)
 }
 
-pub fn try_encode_snapshot<T: ReadTxn>(txn: &T) -> Result<Vec<u8>, PersistenceError> {
-  let snapshot = txn.snapshot();
+pub fn try_encode_snapshot<T: ReadTxn>(
+  txn: &T,
+  snapshot: Snapshot,
+) -> Result<Vec<u8>, PersistenceError> {
   let mut encoded_data = vec![];
   match {
     let mut wrapper = AssertUnwindSafe(&mut encoded_data);
