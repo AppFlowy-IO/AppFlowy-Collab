@@ -854,7 +854,7 @@ pub fn gen_field_id() -> String {
 }
 
 pub fn gen_row_id() -> RowId {
-  RowId::from(nanoid!(10))
+  RowId::from(uuid::Uuid::new_v4().to_string())
 }
 
 pub fn gen_database_filter_id() -> String {

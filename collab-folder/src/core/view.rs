@@ -1,14 +1,15 @@
-use crate::core::{subscribe_view_change, RepeatedView, ViewIdentifier, ViewRelations};
-use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update};
-use anyhow::bail;
+use std::rc::Rc;
 
-use crate::core::folder_observe::{ViewChange, ViewChangeSender};
+use anyhow::bail;
 use collab::preclude::{
   lib0Any, DeepEventsSubscription, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
-use std::rc::Rc;
+
+use crate::core::folder_observe::{ViewChange, ViewChangeSender};
+use crate::core::{subscribe_view_change, RepeatedView, ViewIdentifier, ViewRelations};
+use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update};
 
 const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";
@@ -101,7 +102,7 @@ impl ViewsMap {
 
   pub(crate) fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View) {
     if let Some(parent_map_ref) = self.container.get_map_with_txn(txn, &view.parent_view_id) {
-      let belonging = ViewIdentifier {
+      let view_identifier = ViewIdentifier {
         id: view.id.clone(),
       };
       ViewUpdate::new(
@@ -110,7 +111,7 @@ impl ViewsMap {
         &parent_map_ref,
         self.view_relations.clone(),
       )
-      .add_belonging(vec![belonging])
+      .add_children(vec![view_identifier])
       .done();
     }
 
@@ -274,10 +275,10 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     self
   }
 
-  pub fn add_belonging(self, belongings: Vec<ViewIdentifier>) -> Self {
+  pub fn add_children(self, children: Vec<ViewIdentifier>) -> Self {
     self
       .children_map
-      .add_children(self.txn, self.view_id, belongings);
+      .add_children(self.txn, self.view_id, children);
     self
   }
 

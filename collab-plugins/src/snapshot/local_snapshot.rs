@@ -13,6 +13,8 @@ use similar::{ChangeTag, TextDiff};
 use yrs::updates::decoder::Decode;
 use yrs::{ReadTxn, Snapshot, TransactionMut, Update};
 
+use crate::cloud_storage::CollabObject;
+
 #[derive(Clone, Debug)]
 enum GenSnapshotState {
   Idle,
@@ -37,6 +39,8 @@ pub trait SnapshotDB: Send + Sync {
     &self,
     uid: i64,
     object_id: &str,
+    title: String,
+    collab_type: String,
     snapshot: Snapshot,
     collab: Arc<MutexCollab>,
   ) -> Result<(), PersistenceError>;
@@ -45,6 +49,7 @@ pub trait SnapshotDB: Send + Sync {
 pub struct CollabSnapshotPlugin {
   uid: i64,
   db: Arc<dyn SnapshotDB>,
+  object: CollabObject,
   local_collab: Arc<MutexCollab>,
   /// the number of updates on disk when opening the document
   update_count: Arc<AtomicU32>,
@@ -56,6 +61,7 @@ pub struct CollabSnapshotPlugin {
 impl CollabSnapshotPlugin {
   pub fn new(
     uid: i64,
+    object: CollabObject,
     db: Arc<dyn SnapshotDB>,
     local_collab: Arc<MutexCollab>,
     snapshot_per_update: u32,
@@ -65,6 +71,7 @@ impl CollabSnapshotPlugin {
     Self {
       uid,
       db,
+      object,
       local_collab,
       update_count: initial_update_count,
       snapshot_per_update,
@@ -80,7 +87,7 @@ impl CollabSnapshotPlugin {
 }
 
 impl CollabPlugin for CollabSnapshotPlugin {
-  fn after_transaction(&self, object_id: &str, txn: &mut TransactionMut) {
+  fn after_transaction(&self, _object_id: &str, txn: &mut TransactionMut) {
     let mut current_snapshot = self.current_snapshot.lock();
     if current_snapshot.is_none() {
       *current_snapshot = Some(txn.snapshot())
@@ -102,7 +109,7 @@ impl CollabPlugin for CollabSnapshotPlugin {
         let weak_state = Arc::downgrade(&self.state);
         let weak_db = Arc::downgrade(&self.db);
         let uid = self.uid;
-        let object_id = object_id.to_string();
+        let object = self.object.clone();
         let weak_snapshot = Arc::downgrade(&self.current_snapshot);
 
         // We use a blocking task to generate the snapshot
@@ -118,8 +125,15 @@ impl CollabPlugin for CollabSnapshotPlugin {
                 // Create a new snapshot that contains all the document data. If the snapshot
                 // generation fails, we set the state to fail, so that the next transaction
                 // will try to generate a new snapshot again.
-                if let Err(e) = db.create_snapshot(uid, &object_id, snapshot, local_collab) {
-                  tracing::error!("{} snapshot generation failed: {}", object_id, e);
+                if let Err(e) = db.create_snapshot(
+                  uid,
+                  &object.id,
+                  object.name,
+                  "".to_string(),
+                  snapshot,
+                  local_collab,
+                ) {
+                  tracing::error!("{} snapshot generation failed: {}", object.id, e);
                   *state.write() = GenSnapshotState::Fail;
                 } else {
                   *state.write() = GenSnapshotState::Idle;
@@ -146,6 +160,8 @@ impl SnapshotDB for Arc<RocksCollabDB> {
     &self,
     uid: i64,
     object_id: &str,
+    _title: String,
+    _collab_type: String,
     snapshot: Snapshot,
     collab: Arc<MutexCollab>,
   ) -> Result<(), PersistenceError> {

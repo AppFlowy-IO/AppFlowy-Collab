@@ -1,8 +1,9 @@
-use crate::core::{RepeatedView, ViewIdentifier, ViewRelations};
+use std::rc::Rc;
 
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
-use std::rc::Rc;
+
+use crate::core::{RepeatedView, ViewIdentifier, ViewRelations};
 
 #[derive(Clone)]
 pub struct WorkspaceMap {
@@ -197,9 +198,16 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
     self
   }
 
-  pub fn add_children(self, belongings: Vec<ViewIdentifier>) {
+  pub fn add_children(self, children: Vec<ViewIdentifier>) {
     self
       .view_relations
-      .add_children(self.txn, self.workspace_id, belongings);
+      .add_children(self.txn, self.workspace_id, children);
+  }
+
+  pub fn move_view(self, from: u32, to: u32) -> Self {
+    self
+      .view_relations
+      .move_child_with_txn(self.txn, self.workspace_id, from, to);
+    self
   }
 }

@@ -334,8 +334,8 @@ impl MsgIdCounter for RngMsgIdCounter {
 
 #[derive(Clone, Debug)]
 pub struct CollabObject {
-  pub(crate) id: String,
-  name: String,
+  pub id: String,
+  pub name: String,
 }
 
 impl CollabObject {

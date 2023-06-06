@@ -7,12 +7,13 @@ use collab::core::collab::MutexCollab;
 use collab::preclude::*;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-
+use collab_plugins::cloud_storage::CollabObject;
 use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
 use collab_plugins::snapshot::CollabSnapshotPlugin;
+use yrs::updates::decoder::Decode;
+
 use lib0::any::Any;
 use tempfile::TempDir;
-use yrs::updates::decoder::Decode;
 
 use crate::setup_log;
 
@@ -105,9 +106,15 @@ impl CollabPersistenceTest {
     }
   }
 
-  fn make_snapshot_plugin(&self, collab: Arc<MutexCollab>) -> Arc<CollabSnapshotPlugin> {
+  fn make_snapshot_plugin(
+    &self,
+    object_id: String,
+    collab: Arc<MutexCollab>,
+  ) -> Arc<CollabSnapshotPlugin> {
+    let object = CollabObject::new(object_id);
     Arc::new(CollabSnapshotPlugin::new(
       self.uid,
+      object,
       Arc::new(self.db.clone()),
       collab,
       self.config.snapshot_per_update,
@@ -123,10 +130,10 @@ impl CollabPersistenceTest {
             .build(),
         );
         self.disk_plugin = Arc::new(plugin);
-
+        let object_id = collab.lock().object_id.clone();
         collab
           .lock()
-          .add_plugin(self.make_snapshot_plugin(collab.clone()));
+          .add_plugin(self.make_snapshot_plugin(object_id, collab.clone()));
         collab.lock().initialize();
 
         self.collab_by_id.insert(id, collab);
@@ -134,9 +141,10 @@ impl CollabPersistenceTest {
       Script::OpenDocument { id } => {
         let collab = Arc::new(CollabBuilder::new(1, &id).build());
         collab.lock().add_plugin(self.disk_plugin.clone());
+        let object_id = collab.lock().object_id.clone();
         collab
           .lock()
-          .add_plugin(self.make_snapshot_plugin(collab.clone()));
+          .add_plugin(self.make_snapshot_plugin(object_id, collab.clone()));
         collab.initial();
 
         self.collab_by_id.insert(id, collab);
@@ -185,7 +193,7 @@ impl CollabPersistenceTest {
       },
       Script::AssertNumOfSnapshots { id, expected } => {
         let snapshot_plugin =
-          self.make_snapshot_plugin(self.collab_by_id.get(&id).unwrap().clone());
+          self.make_snapshot_plugin(id.clone(), self.collab_by_id.get(&id).unwrap().clone());
         let snapshot = snapshot_plugin.get_snapshots(&id);
         assert_eq!(snapshot.len(), expected);
       },
@@ -199,7 +207,7 @@ impl CollabPersistenceTest {
         expected,
       } => {
         let snapshot_plugin =
-          self.make_snapshot_plugin(self.collab_by_id.get(&id).unwrap().clone());
+          self.make_snapshot_plugin(id.clone(), self.collab_by_id.get(&id).unwrap().clone());
         let snapshots = snapshot_plugin.get_snapshots(&id);
         let collab = CollabBuilder::new(1, &id).build();
         collab.lock().with_transact_mut(|txn| {
@@ -214,7 +222,7 @@ impl CollabPersistenceTest {
         collab.lock().add_plugin(self.disk_plugin.clone());
         collab
           .lock()
-          .add_plugin(self.make_snapshot_plugin(collab.clone()));
+          .add_plugin(self.make_snapshot_plugin(id, collab.clone()));
         collab.initial();
 
         let json = collab.to_json_value();

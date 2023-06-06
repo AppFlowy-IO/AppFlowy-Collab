@@ -116,8 +116,10 @@ impl AppFlowyCollabBuilder {
 
     if let Some(snapshot_db) = &self.snapshot_db {
       if config.enable_snapshot {
+        let collab_object = CollabObject::new(object_id.to_string()).with_name(object_name);
         let snapshot_plugin = CollabSnapshotPlugin::new(
           uid,
+          collab_object,
           snapshot_db.clone(),
           collab.clone(),
           config.snapshot_per_update,

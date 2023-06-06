@@ -8,7 +8,6 @@ use collab::core::collab_state::CollabState;
 use collab::preclude::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-
 use tokio_stream::wrappers::WatchStream;
 
 use crate::core::folder_observe::{TrashChangeSender, ViewChangeSender};
@@ -167,6 +166,17 @@ impl Folder {
 
   pub fn move_view(&self, view_id: &str, from: u32, to: u32) -> Option<View> {
     let view = self.views.get_view(view_id)?;
+    if let Some(workspace_id) = self.get_current_workspace_id() {
+      if view.parent_view_id == workspace_id {
+        if let Some(workspace_map) = self.workspaces.edit_workspace(workspace_id) {
+          workspace_map.update(|update| {
+            update.move_view(from, to);
+          });
+          return Some(view);
+        }
+      }
+    }
+
     self
       .view_relations
       .move_child(&view.parent_view_id, from, to);
