@@ -189,7 +189,7 @@ pub fn try_decode_snapshot(
         txn.apply_update(update);
         drop(txn);
       }
-      **wrapper = collab.to_json().to_string();
+      **wrapper = collab.to_plain_text();
     })
   } {
     Ok(_) => Ok(decoded_str),
