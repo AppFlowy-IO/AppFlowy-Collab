@@ -10,10 +10,10 @@ use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::sync::SyncPlugin;
 use collab_sync::client::{TokioUnboundedSink, TokioUnboundedStream};
 use collab_sync::server::{CollabMsgCodec, CollabSink, CollabStream};
+use rand::{prelude::*, Rng as WrappedRng};
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc::unbounded_channel;
 
-use rand::{prelude::*, Rng as WrappedRng};
 use tempfile::TempDir;
 
 use crate::util::{TestSink, TestStream};

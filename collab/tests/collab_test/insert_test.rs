@@ -1,6 +1,13 @@
-use crate::helper::{Person, Position};
+use std::sync::Arc;
+use std::time::Duration;
+
+use collab::core::origin::CollabOrigin;
+use collab::core::transaction::TransactionRetry;
+use collab::error::CollabError;
 use collab::preclude::{Collab, MapRefWrapper};
 use yrs::{Map, Observable};
+
+use crate::helper::{setup_log, Person, Position};
 
 #[test]
 fn insert_text() {
@@ -89,4 +96,47 @@ fn remove_value() {
   let map =
     collab.get_map_with_path::<MapRefWrapper>(vec!["person".to_string(), "position".to_string()]);
   assert!(map.is_none());
+}
+
+#[tokio::test]
+async fn retry_write_txn_success_test() {
+  setup_log();
+  let collab = Arc::new(Collab::new(1, "1", vec![]));
+  let doc = collab.get_doc().clone();
+  let txn = TransactionRetry::new(&doc).get_write_txn_with(CollabOrigin::Empty);
+
+  let doc = collab.get_doc().clone();
+  let result = tokio::task::spawn_blocking(move || {
+    let _txn = TransactionRetry::new(&doc).try_get_write_txn_with(CollabOrigin::Empty)?;
+    Ok::<(), CollabError>(())
+  });
+
+  tokio::time::sleep(Duration::from_secs(1)).await;
+  drop(txn);
+
+  let result = result.await.unwrap();
+  assert!(result.is_ok());
+
+  tokio::time::sleep(Duration::from_secs(2)).await;
+}
+
+#[tokio::test]
+#[should_panic]
+async fn retry_write_txn_fail_test() {
+  setup_log();
+  let collab = Arc::new(Collab::new(1, "1", vec![]));
+  let doc = collab.get_doc().clone();
+  let _txn = TransactionRetry::new(&doc).get_write_txn_with(CollabOrigin::Empty);
+
+  let doc = collab.get_doc().clone();
+  let result = tokio::task::spawn_blocking(move || {
+    let _txn = TransactionRetry::new(&doc).try_get_write_txn_with(CollabOrigin::Empty)?;
+
+    Ok::<(), CollabError>(())
+  });
+
+  tokio::time::sleep(Duration::from_secs(1)).await;
+  let result = result.await.unwrap();
+  assert!(result.is_ok());
+  tokio::time::sleep(Duration::from_secs(2)).await;
 }
