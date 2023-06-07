@@ -20,6 +20,7 @@ use crate::core::collab_plugin::CollabPlugin;
 use crate::core::collab_state::{CollabState, State};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
+use crate::core::transaction::TransactionRetry;
 use crate::error::CollabError;
 use crate::preclude::{ArrayRefWrapper, JsonValue};
 use crate::util::insert_json_value_to_map_ref;
@@ -369,7 +370,7 @@ impl Collab {
   }
 
   pub fn transact(&self) -> Transaction {
-    self.doc.transact()
+    TransactionRetry::new(&self.doc).get_read_txn()
   }
 
   pub fn try_transaction(&self) -> Result<Transaction, CollabError> {
@@ -382,7 +383,7 @@ impl Collab {
   /// Returns a transaction that can mutate the document. This transaction will carry the
   /// origin of the current user.
   pub fn transact_mut(&self) -> TransactionMut {
-    self.doc.transact_mut_with(self.origin.clone())
+    TransactionRetry::new(&self.doc).get_write_txn_with(self.origin.clone())
   }
 
   /// Returns a transaction that can mutate the document. This transaction will carry the
@@ -394,7 +395,7 @@ impl Collab {
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let mut txn = self.doc.transact_mut_with(self.origin.clone());
+    let mut txn = TransactionRetry::new(&self.doc).get_write_txn_with(self.origin.clone());
     let ret = f(&mut txn);
     drop(txn);
     ret
@@ -537,14 +538,14 @@ impl CollabContext {
   }
 
   pub fn transact(&self) -> Transaction {
-    self.doc.transact()
+    TransactionRetry::new(&self.doc).get_read_txn()
   }
 
   pub fn with_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let mut txn = self.doc.transact_mut_with(self.origin.clone());
+    let mut txn = TransactionRetry::new(&self.doc).get_write_txn_with(self.origin.clone());
     let ret = f(&mut txn);
     drop(txn);
     ret

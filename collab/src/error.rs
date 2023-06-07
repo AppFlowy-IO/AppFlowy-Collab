@@ -6,6 +6,9 @@ pub enum CollabError {
   #[error("Unexpected empty value")]
   UnexpectedEmpty,
 
+  #[error("Get write txn failed")]
+  AcquiredWriteTxnFail,
+
   #[error("Internal failure: {0}")]
   Internal(#[from] Box<dyn std::error::Error + Send + Sync>),
 }

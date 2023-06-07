@@ -8,3 +8,4 @@ pub mod collab_state;
 pub mod map_wrapper;
 pub mod origin;
 pub mod text_wrapper;
+pub mod transaction;
