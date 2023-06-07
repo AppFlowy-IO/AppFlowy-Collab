@@ -29,7 +29,7 @@ where
   /// The snapshot contains the updates prior to the given update_key. For example,
   /// if the update_key is 10, the snapshot will contain updates 0-9. So when restoring
   /// the document from a snapshot, it should apply the update from key:10.
-  fn push_snapshot<K, T>(
+  fn create_snapshot<K, T>(
     &self,
     uid: i64,
     object_id: &K,
@@ -61,6 +61,20 @@ where
     Ok(())
   }
 
+  fn create_snapshot_with_data<K>(
+    &self,
+    uid: i64,
+    object_id: &K,
+    snapshot_data: Vec<u8>,
+  ) -> Result<(), PersistenceError>
+  where
+    K: AsRef<[u8]> + ?Sized + Debug,
+  {
+    tracing::trace!("New snapshot for object:{:?}", object_id);
+    let snapshot_id = self.create_snapshot_id(uid, object_id.as_ref())?;
+    insert_snapshot_update(self, snapshot_id, object_id, snapshot_data)?;
+    Ok(())
+  }
   /// Return list of snapshots for the given object id.
   fn get_snapshots<K: AsRef<[u8]> + ?Sized>(&self, uid: i64, object_id: &K) -> Vec<CollabSnapshot> {
     let mut snapshots = vec![];

@@ -6,10 +6,11 @@ use collab::core::collab::MutexCollab;
 use collab::preclude::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use yrs::updates::decoder::Decode;
+
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
-use yrs::updates::decoder::Decode;
 
 use crate::struct_define::{Document, Owner, TaskInfo};
 
@@ -164,7 +165,7 @@ mod tests {
 pub fn setup_log() {
   static START: Once = Once::new();
   START.call_once(|| {
-    let level = "trace";
+    let level = "info";
     let mut filters = vec![];
     filters.push(format!("collab={}", level));
     std::env::set_var("RUST_LOG", filters.join(","));

@@ -7,7 +7,7 @@ use collab_plugins::cloud_storage::postgres::SupabaseDBPlugin;
 use collab_plugins::cloud_storage::CollabObject;
 use collab_plugins::disk::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
-use collab_plugins::snapshot::{CollabSnapshotPlugin, SnapshotDB};
+use collab_plugins::snapshot::{CollabSnapshotPlugin, SnapshotPersistence};
 use parking_lot::RwLock;
 
 use crate::config::{CollabPluginConfig, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
@@ -21,17 +21,17 @@ pub enum CloudStorageType {
 
 pub struct AppFlowyCollabBuilder {
   cloud_storage_type: RwLock<CloudStorageType>,
-  snapshot_db: Option<Arc<dyn SnapshotDB>>,
+  snapshot_persistence: Option<Arc<dyn SnapshotPersistence>>,
 }
 
 impl AppFlowyCollabBuilder {
   pub fn new(
     cloud_storage_type: CloudStorageType,
-    snapshot_db: Option<Arc<dyn SnapshotDB>>,
+    snapshot_persistence: Option<Arc<dyn SnapshotPersistence>>,
   ) -> Self {
     Self {
       cloud_storage_type: RwLock::new(cloud_storage_type),
-      snapshot_db,
+      snapshot_persistence,
     }
   }
 
@@ -69,12 +69,16 @@ impl AppFlowyCollabBuilder {
     uid: i64,
     object_id: &str,
     object_name: &str,
-    db: Arc<RocksCollabDB>,
+    collab_db: Arc<RocksCollabDB>,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab> {
     let collab = Arc::new(
       CollabBuilder::new(uid, object_id)
-        .with_plugin(RocksdbDiskPlugin::new_with_config(uid, db, config.clone()))
+        .with_plugin(RocksdbDiskPlugin::new_with_config(
+          uid,
+          collab_db.clone(),
+          config.clone(),
+        ))
         .build(),
     );
 
@@ -114,14 +118,14 @@ impl AppFlowyCollabBuilder {
       CloudStorageType::Local => {},
     }
 
-    if let Some(snapshot_db) = &self.snapshot_db {
+    if let Some(snapshot_persistence) = &self.snapshot_persistence {
       if config.enable_snapshot {
         let collab_object = CollabObject::new(object_id.to_string()).with_name(object_name);
         let snapshot_plugin = CollabSnapshotPlugin::new(
           uid,
           collab_object,
-          snapshot_db.clone(),
-          collab.clone(),
+          snapshot_persistence.clone(),
+          collab_db,
           config.snapshot_per_update,
         );
         tracing::trace!("add snapshot plugin: {}", object_id);
