@@ -109,14 +109,14 @@ impl CollabPersistenceTest {
   fn make_snapshot_plugin(
     &self,
     object_id: String,
-    collab: Arc<MutexCollab>,
+    _collab: Arc<MutexCollab>,
   ) -> Arc<CollabSnapshotPlugin> {
     let object = CollabObject::new(object_id);
     Arc::new(CollabSnapshotPlugin::new(
       self.uid,
       object,
       Arc::new(self.db.clone()),
-      collab,
+      self.db.clone(),
       self.config.snapshot_per_update,
     ))
   }

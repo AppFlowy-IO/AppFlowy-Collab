@@ -118,7 +118,6 @@ where
     let mut update_count = 0;
 
     if let Some(doc_id) = get_doc_id(uid, self, object_id) {
-      tracing::trace!("[🦀Collab] => [{}:{:?}]: load doc", doc_id, object_id);
       let doc_state_key = make_doc_state_key(doc_id);
       if let Some(doc_state) = self.get(doc_state_key.as_ref())? {
         // Load the doc state
