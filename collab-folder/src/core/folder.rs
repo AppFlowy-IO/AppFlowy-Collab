@@ -13,8 +13,8 @@ use tokio_stream::wrappers::WatchStream;
 use crate::core::folder_observe::{TrashChangeSender, ViewChangeSender};
 use crate::core::trash::{TrashArray, TrashRecord};
 use crate::core::{
-  subscribe_folder_change, FolderData, View, ViewIdentifier, ViewRelations, ViewsMap, Workspace,
-  WorkspaceMap,
+  subscribe_folder_change, FolderData, TrashInfo, View, ViewIdentifier, ViewRelations, ViewsMap,
+  Workspace, WorkspaceMap, WorkspaceUpdate,
 };
 
 const FOLDER: &str = "folder";
@@ -41,7 +41,7 @@ pub struct Folder {
   pub views: Rc<ViewsMap>,
   /// Keep track of each view's parent and children
   pub view_relations: Rc<ViewRelations>,
-  pub trash: TrashArray,
+  trash: TrashArray,
   pub meta: MapRefWrapper,
   /// Subscription for folder change. Like insert a new view
   #[allow(dead_code)]
@@ -96,12 +96,20 @@ impl Folder {
     })
   }
 
+  /// Set the current workspace id. If the workspace id is not exist, do nothing.
   pub fn set_current_workspace(&self, workspace_id: &str) {
-    tracing::debug!("Set current workspace: {}", workspace_id);
     self.meta.with_transact_mut(|txn| {
-      self
-        .meta
-        .insert_str_with_txn(txn, CURRENT_WORKSPACE, workspace_id);
+      if self.workspaces.is_exist_with_txn(txn, workspace_id) {
+        tracing::debug!("Set current workspace: {}", workspace_id);
+        self
+          .meta
+          .insert_str_with_txn(txn, CURRENT_WORKSPACE, workspace_id);
+      } else {
+        tracing::error!(
+          "Trying to set current workspace that is not exist: {}",
+          workspace_id
+        );
+      }
     });
   }
 
@@ -152,13 +160,13 @@ impl Folder {
   pub fn insert_view(&self, view: View) {
     if let Some(workspace_id) = self.get_current_workspace_id() {
       if view.parent_view_id == workspace_id {
-        if let Some(workspace_map) = self.workspaces.edit_workspace(workspace_id) {
-          workspace_map.update(|update| {
-            update.add_children(vec![ViewIdentifier {
+        self
+          .workspaces
+          .update_workspace(workspace_id, |workspace_update| {
+            workspace_update.add_children(vec![ViewIdentifier {
               id: view.id.clone(),
             }])
           });
-        }
       }
     }
     self.views.insert_view(view)
@@ -168,12 +176,12 @@ impl Folder {
     let view = self.views.get_view(view_id)?;
     if let Some(workspace_id) = self.get_current_workspace_id() {
       if view.parent_view_id == workspace_id {
-        if let Some(workspace_map) = self.workspaces.edit_workspace(workspace_id) {
-          workspace_map.update(|update| {
-            update.move_view(from, to);
+        self
+          .workspaces
+          .update_workspace(workspace_id, |workspace_update| {
+            workspace_update.move_view(from, to);
           });
-          return Some(view);
-        }
+        return Some(view);
       }
     }
 
@@ -198,6 +206,32 @@ impl Folder {
   pub fn get_current_view(&self) -> Option<String> {
     let txn = self.meta.transact();
     self.meta.get_str_with_txn(&txn, CURRENT_VIEW)
+  }
+
+  pub fn add_trash(&self, trash_ids: Vec<String>) {
+    if let Some(workspace_id) = self.get_current_workspace_id() {
+      let trash = trash_ids
+        .into_iter()
+        .map(|trash_id| TrashRecord {
+          id: trash_id,
+          created_at: chrono::Utc::now().timestamp(),
+          workspace_id: workspace_id.clone(),
+        })
+        .collect::<Vec<TrashRecord>>();
+      self.trash.add_trash(trash);
+    }
+  }
+
+  pub fn delete_trash(&self, trash_ids: Vec<String>) {
+    self.trash.delete_trash(trash_ids);
+  }
+
+  pub fn get_all_trash(&self) -> Vec<TrashInfo> {
+    self.trash.get_all_trash()
+  }
+
+  pub fn remote_all_trash(&self) {
+    self.trash.clear();
   }
 
   pub fn to_json(&self) -> String {
@@ -243,6 +277,11 @@ impl WorkspaceArray {
     self.get_all_workspaces_with_txn(&txn)
   }
 
+  pub fn is_exist_with_txn<T: ReadTxn>(&self, txn: &T, workspace_id: &str) -> bool {
+    let ids = self.get_all_workspace_ids_with_txn(txn);
+    ids.contains(&workspace_id.to_string())
+  }
+
   pub fn get_workspace<T: AsRef<str>>(&self, workspace_id: T) -> Option<Workspace> {
     self
       .workspaces
@@ -257,6 +296,16 @@ impl WorkspaceArray {
       .into_iter()
       .flat_map(|map_ref| {
         WorkspaceMap::new(map_ref, self.view_relations.clone()).to_workspace_with_txn(txn)
+      })
+      .collect::<Vec<_>>()
+  }
+
+  pub fn get_all_workspace_ids_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<String> {
+    let map_refs = self.container.to_map_refs_with_txn(txn);
+    map_refs
+      .into_iter()
+      .flat_map(|map_ref| {
+        WorkspaceMap::new(map_ref, self.view_relations.clone()).to_workspace_id_with_txn(txn)
       })
       .collect::<Vec<_>>()
   }
@@ -297,8 +346,13 @@ impl WorkspaceArray {
     self.workspaces.write().insert(workspace_id, workspace_map);
   }
 
-  pub fn edit_workspace<T: AsRef<str>>(&self, workspace_id: T) -> Option<WorkspaceMap> {
-    self.workspaces.read().get(workspace_id.as_ref()).cloned()
+  pub fn update_workspace<T: AsRef<str>, F>(&self, workspace_id: T, f: F)
+  where
+    F: FnOnce(WorkspaceUpdate),
+  {
+    if let Some(workspace) = self.workspaces.read().get(workspace_id.as_ref()).cloned() {
+      workspace.update(f);
+    }
   }
 }
 

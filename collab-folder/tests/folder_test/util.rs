@@ -68,6 +68,7 @@ pub fn create_folder_with_workspace(id: &str, workspace_id: &str) -> FolderTest 
   };
 
   test.folder.workspaces.create_workspace(workspace);
+  test.folder.set_current_workspace(workspace_id);
   test
 }
 

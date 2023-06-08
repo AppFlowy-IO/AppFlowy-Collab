@@ -99,6 +99,10 @@ impl WorkspaceMap {
       created_at,
     })
   }
+
+  pub fn to_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+    self.container.get_str_with_txn(txn, WORKSPACE_ID)
+  }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

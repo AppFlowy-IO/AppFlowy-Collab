@@ -122,6 +122,8 @@ impl TrashArray {
 pub struct TrashRecord {
   pub id: String,
   pub created_at: i64,
+  #[serde(default)]
+  pub workspace_id: String,
 }
 
 impl From<lib0Any> for TrashRecord {
