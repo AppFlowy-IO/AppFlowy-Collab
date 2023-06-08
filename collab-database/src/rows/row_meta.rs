@@ -25,4 +25,8 @@ impl<'a, 'b, 'c> RowMetaUpdate<'a, 'b, 'c> {
   pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRef) -> Self {
     Self { map_ref, txn }
   }
+
+  pub fn insert_doc_id(&self, doc_id: &str) {
+    self.0.insert_str_with_txn(self.txn, DOCUMENT_ID, doc_id);
+  }
 }
