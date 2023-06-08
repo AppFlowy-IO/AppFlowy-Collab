@@ -187,3 +187,16 @@ fn duplicate_last_row_test() {
   assert_eq!(rows.len(), 4);
   assert_eq!(rows[3].id, row_order.id);
 }
+
+#[test]
+fn insert_row_meta_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let rows = database_test.get_rows_for_view("v1");
+  assert_eq!(rows.len(), 3);
+
+  database_test.update_row(&rows[0].id, |row_update| {
+    row_update.update_meta(|meta_update| {
+      meta_update.insert_doc_id("123");
+    });
+  });
+}

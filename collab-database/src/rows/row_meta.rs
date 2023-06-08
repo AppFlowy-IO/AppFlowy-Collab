@@ -26,7 +26,8 @@ impl<'a, 'b, 'c> RowMetaUpdate<'a, 'b, 'c> {
     Self { map_ref, txn }
   }
 
-  pub fn insert_doc_id(&self, doc_id: &str) {
+  pub fn insert_doc_id(self, doc_id: &str) -> Self {
     self.0.insert_str_with_txn(self.txn, DOCUMENT_ID, doc_id);
+    self
   }
 }

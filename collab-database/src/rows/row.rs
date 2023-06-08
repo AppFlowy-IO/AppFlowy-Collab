@@ -48,8 +48,9 @@ impl DatabaseRow {
     let row = row.into();
     let doc = Self::new(uid, row_id, db, collab_builder);
     let data = doc.data.clone();
+    let meta = doc.meta.clone();
     doc.collab.lock().with_transact_mut(|txn| {
-      RowBuilder::new(row.id, txn, data.into_inner())
+      RowBuilder::new(row.id, txn, data.into_inner(), meta.into_inner())
         .update(|update| {
           update
             .set_height(row.height)
@@ -138,7 +139,7 @@ impl DatabaseRow {
     F: FnOnce(RowUpdate),
   {
     self.collab.lock().with_transact_mut(|txn| {
-      let mut update = RowUpdate::new(txn, &self.data);
+      let mut update = RowUpdate::new(txn, &self.data, &self.meta);
 
       // Update the last modified timestamp before we call the update function.
       update = update.set_last_modified(timestamp());
@@ -201,20 +202,30 @@ impl Row {
 
 pub struct RowBuilder<'a, 'b> {
   map_ref: MapRef,
+  meta_ref: MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b> RowBuilder<'a, 'b> {
-  pub fn new(id: RowId, txn: &'a mut TransactionMut<'b>, map_ref: MapRef) -> Self {
+  pub fn new(
+    id: RowId,
+    txn: &'a mut TransactionMut<'b>,
+    map_ref: MapRef,
+    meta_ref: MapRef,
+  ) -> Self {
     map_ref.insert_str_with_txn(txn, ROW_ID, id);
-    Self { map_ref, txn }
+    Self {
+      map_ref,
+      meta_ref,
+      txn,
+    }
   }
 
   pub fn update<F>(self, f: F) -> Self
   where
     F: FnOnce(RowUpdate),
   {
-    let update = RowUpdate::new(self.txn, &self.map_ref);
+    let update = RowUpdate::new(self.txn, &self.map_ref, &self.map_ref);
     f(update);
     self
   }
@@ -224,12 +235,17 @@ impl<'a, 'b> RowBuilder<'a, 'b> {
 /// It used to update a [Row]
 pub struct RowUpdate<'a, 'b, 'c> {
   map_ref: &'c MapRef,
+  meta_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
-  pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRef) -> Self {
-    Self { map_ref, txn }
+  pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRef, meta_ref: &'c MapRef) -> Self {
+    Self {
+      map_ref,
+      txn,
+      meta_ref,
+    }
   }
 
   impl_bool_update!(set_visibility, set_visibility_if_not_none, ROW_VISIBILITY);
@@ -244,6 +260,15 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
   pub fn set_cells(self, cells: Cells) -> Self {
     let cell_map = self.map_ref.get_or_insert_map_with_txn(self.txn, ROW_CELLS);
     cells.fill_map_ref(self.txn, &cell_map);
+    self
+  }
+
+  pub fn update_meta<F>(self, f: F) -> Self
+  where
+    F: FnOnce(RowMetaUpdate),
+  {
+    let update = RowMetaUpdate::new(self.txn, &self.meta_ref);
+    f(update);
     self
   }
 
