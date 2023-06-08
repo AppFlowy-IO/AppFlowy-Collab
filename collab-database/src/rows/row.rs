@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::{
-  lib0Any, ArrayRef, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
+  lib0Any, ArrayRef, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  YrsValue,
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -11,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::database::{gen_row_id, timestamp};
 use crate::error::DatabaseError;
-use crate::rows::{Cell, Cells, CellsUpdate, RowId};
+use crate::rows::{Cell, Cells, CellsUpdate, RowId, RowMetaUpdate, DOCUMENT_ID};
 use crate::user::DatabaseCollabBuilder;
 use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
@@ -29,9 +30,8 @@ pub struct DatabaseRow {
   row_id: RowId,
   #[allow(dead_code)]
   collab: Arc<MutexCollab>,
-  data: MapRef,
-  #[allow(dead_code)]
-  meta: MapRef,
+  data: MapRefWrapper,
+  meta: MapRefWrapper,
   #[allow(dead_code)]
   comments: ArrayRef,
   db: Arc<RocksCollabDB>,
@@ -49,7 +49,7 @@ impl DatabaseRow {
     let doc = Self::new(uid, row_id, db, collab_builder);
     let data = doc.data.clone();
     doc.collab.lock().with_transact_mut(|txn| {
-      RowBuilder::new(row.id, txn, data)
+      RowBuilder::new(row.id, txn, data.into_inner())
         .update(|update| {
           update
             .set_height(row.height)
@@ -108,8 +108,8 @@ impl DatabaseRow {
       uid,
       row_id,
       collab,
-      data: data.into_inner(),
-      meta: meta.into_inner(),
+      data,
+      meta,
       comments: comments.into_inner(),
       db,
     }
@@ -142,6 +142,16 @@ impl DatabaseRow {
 
       // Update the last modified timestamp before we call the update function.
       update = update.set_last_modified(timestamp());
+      f(update)
+    })
+  }
+
+  pub fn update_meta<F>(&self, f: F)
+  where
+    F: FnOnce(RowMetaUpdate),
+  {
+    self.collab.lock().with_transact_mut(|txn| {
+      let update = RowMetaUpdate::new(txn, &self.meta);
       f(update)
     })
   }
