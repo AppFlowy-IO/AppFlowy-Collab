@@ -6,7 +6,7 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use lru::LruCache;
 use parking_lot::Mutex;
 
-use crate::rows::{Cell, DatabaseRow, Row, RowId, RowUpdate};
+use crate::rows::{Cell, DatabaseRow, Row, RowId, RowMeta, RowUpdate};
 use crate::user::DatabaseCollabBuilder;
 use crate::views::RowOrder;
 
@@ -65,14 +65,20 @@ impl Block {
   }
 
   pub fn get_row(&self, row_id: &RowId) -> Option<Row> {
-    self.get_or_init_row(row_id).get_row()
+    self.get_or_init_row(row_id)?.get_row()
+  }
+
+  pub fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
+    Some(self.get_or_init_row(row_id)?.get_row_meta())
   }
 
   pub fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
     let mut rows = Vec::new();
     for row_order in row_orders {
-      let row = self.get_or_init_row(&row_order.id).get_row();
-      if let Some(row) = row {
+      if let Some(row) = self
+        .get_or_init_row(&row_order.id)
+        .and_then(|row| row.get_row())
+      {
         rows.push(row);
       }
     }
@@ -80,7 +86,7 @@ impl Block {
   }
 
   pub fn get_cell(&self, row_id: &RowId, field_id: &str) -> Option<Cell> {
-    self.get_or_init_row(row_id).get_cell(field_id)
+    self.get_or_init_row(row_id)?.get_cell(field_id)
   }
 
   pub fn delete_row(&self, row_id: &RowId) {
@@ -101,7 +107,7 @@ impl Block {
   }
 
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
-  fn get_or_init_row(&self, row_id: &RowId) -> Arc<DatabaseRow> {
+  fn get_or_init_row(&self, row_id: &RowId) -> Option<Arc<DatabaseRow>> {
     let row = self.cache.lock().get(row_id).cloned();
     match row {
       None => {
@@ -112,9 +118,9 @@ impl Block {
           self.collab_builder.clone(),
         ));
         self.cache.lock().put(row_id.clone(), row.clone());
-        row
+        Some(row)
       },
-      Some(row) => row,
+      Some(row) => Some(row),
     }
   }
 }

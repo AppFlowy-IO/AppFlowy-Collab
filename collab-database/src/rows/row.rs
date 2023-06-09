@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::{
-  lib0Any, ArrayRef, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
+  lib0Any, ArrayRef, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  YrsValue,
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -11,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::database::{gen_row_id, timestamp};
 use crate::error::DatabaseError;
-use crate::rows::{Cell, Cells, CellsUpdate, RowId};
+use crate::rows::{Cell, Cells, CellsUpdate, RowId, RowMeta, RowMetaUpdate};
 use crate::user::DatabaseCollabBuilder;
 use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
@@ -29,9 +30,8 @@ pub struct DatabaseRow {
   row_id: RowId,
   #[allow(dead_code)]
   collab: Arc<MutexCollab>,
-  data: MapRef,
-  #[allow(dead_code)]
-  meta: MapRef,
+  data: MapRefWrapper,
+  meta: MapRefWrapper,
   #[allow(dead_code)]
   comments: ArrayRef,
   db: Arc<RocksCollabDB>,
@@ -48,8 +48,9 @@ impl DatabaseRow {
     let row = row.into();
     let doc = Self::new(uid, row_id, db, collab_builder);
     let data = doc.data.clone();
+    let meta = doc.meta.clone();
     doc.collab.lock().with_transact_mut(|txn| {
-      RowBuilder::new(row.id, txn, data)
+      RowBuilder::new(row.id, txn, data.into_inner(), meta.into_inner())
         .update(|update| {
           update
             .set_height(row.height)
@@ -108,8 +109,8 @@ impl DatabaseRow {
       uid,
       row_id,
       collab,
-      data: data.into_inner(),
-      meta: meta.into_inner(),
+      data,
+      meta,
       comments: comments.into_inner(),
       db,
     }
@@ -119,6 +120,12 @@ impl DatabaseRow {
     let collab = self.collab.lock();
     let txn = collab.transact();
     row_from_map_ref(&self.data, &txn)
+  }
+
+  pub fn get_row_meta(&self) -> RowMeta {
+    let collab = self.collab.lock();
+    let txn = collab.transact();
+    RowMeta::from_map_ref(&txn, &self.meta)
   }
 
   pub fn get_row_order(&self) -> Option<RowOrder> {
@@ -138,10 +145,20 @@ impl DatabaseRow {
     F: FnOnce(RowUpdate),
   {
     self.collab.lock().with_transact_mut(|txn| {
-      let mut update = RowUpdate::new(txn, &self.data);
+      let mut update = RowUpdate::new(txn, &self.data, &self.meta);
 
       // Update the last modified timestamp before we call the update function.
       update = update.set_last_modified(timestamp());
+      f(update)
+    })
+  }
+
+  pub fn update_meta<F>(&self, f: F)
+  where
+    F: FnOnce(RowMetaUpdate),
+  {
+    self.collab.lock().with_transact_mut(|txn| {
+      let update = RowMetaUpdate::new(txn, &self.meta);
       f(update)
     })
   }
@@ -191,20 +208,30 @@ impl Row {
 
 pub struct RowBuilder<'a, 'b> {
   map_ref: MapRef,
+  meta_ref: MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b> RowBuilder<'a, 'b> {
-  pub fn new(id: RowId, txn: &'a mut TransactionMut<'b>, map_ref: MapRef) -> Self {
+  pub fn new(
+    id: RowId,
+    txn: &'a mut TransactionMut<'b>,
+    map_ref: MapRef,
+    meta_ref: MapRef,
+  ) -> Self {
     map_ref.insert_str_with_txn(txn, ROW_ID, id);
-    Self { map_ref, txn }
+    Self {
+      map_ref,
+      meta_ref,
+      txn,
+    }
   }
 
   pub fn update<F>(self, f: F) -> Self
   where
     F: FnOnce(RowUpdate),
   {
-    let update = RowUpdate::new(self.txn, &self.map_ref);
+    let update = RowUpdate::new(self.txn, &self.map_ref, &self.meta_ref);
     f(update);
     self
   }
@@ -214,12 +241,17 @@ impl<'a, 'b> RowBuilder<'a, 'b> {
 /// It used to update a [Row]
 pub struct RowUpdate<'a, 'b, 'c> {
   map_ref: &'c MapRef,
+  meta_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
-  pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRef) -> Self {
-    Self { map_ref, txn }
+  pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRef, meta_ref: &'c MapRef) -> Self {
+    Self {
+      map_ref,
+      txn,
+      meta_ref,
+    }
   }
 
   impl_bool_update!(set_visibility, set_visibility_if_not_none, ROW_VISIBILITY);
@@ -234,6 +266,15 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
   pub fn set_cells(self, cells: Cells) -> Self {
     let cell_map = self.map_ref.get_or_insert_map_with_txn(self.txn, ROW_CELLS);
     cells.fill_map_ref(self.txn, &cell_map);
+    self
+  }
+
+  pub fn update_meta<F>(self, f: F) -> Self
+  where
+    F: FnOnce(RowMetaUpdate),
+  {
+    let update = RowMetaUpdate::new(self.txn, self.meta_ref);
+    f(update);
     self
   }
 
