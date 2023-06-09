@@ -13,7 +13,9 @@ use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::meta::MetaMap;
-use crate::rows::{CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowId, RowUpdate};
+use crate::rows::{
+  CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowId, RowMeta, RowUpdate,
+};
 use crate::user::DatabaseCollabBuilder;
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
@@ -275,6 +277,11 @@ impl Database {
   /// Return the [Row] with the given row id.
   pub fn get_row(&self, row_id: &RowId) -> Option<Row> {
     self.block.get_row(row_id)
+  }
+
+  /// Return the [RowMeta] with the given row id.
+  pub fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
+    self.block.get_row_meta(row_id)
   }
 
   /// Return a list of [Row] for the given view.

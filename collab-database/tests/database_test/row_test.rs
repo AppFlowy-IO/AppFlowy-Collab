@@ -199,4 +199,7 @@ fn insert_row_meta_test() {
       meta_update.insert_doc_id("123");
     });
   });
+
+  let row_meta = database_test.get_row_meta(&rows[0].id).unwrap();
+  assert_eq!(row_meta.doc_id, Some("123".to_string()));
 }

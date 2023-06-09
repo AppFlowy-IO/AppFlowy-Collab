@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::database::{gen_row_id, timestamp};
 use crate::error::DatabaseError;
-use crate::rows::{Cell, Cells, CellsUpdate, RowId, RowMetaUpdate, DOCUMENT_ID};
+use crate::rows::{Cell, Cells, CellsUpdate, RowId, RowMeta, RowMetaUpdate};
 use crate::user::DatabaseCollabBuilder;
 use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
@@ -122,6 +122,12 @@ impl DatabaseRow {
     row_from_map_ref(&self.data, &txn)
   }
 
+  pub fn get_row_meta(&self) -> RowMeta {
+    let collab = self.collab.lock();
+    let txn = collab.transact();
+    RowMeta::from_map_ref(&txn, &self.meta)
+  }
+
   pub fn get_row_order(&self) -> Option<RowOrder> {
     let collab = self.collab.lock();
     let txn = collab.transact();
@@ -225,7 +231,7 @@ impl<'a, 'b> RowBuilder<'a, 'b> {
   where
     F: FnOnce(RowUpdate),
   {
-    let update = RowUpdate::new(self.txn, &self.map_ref, &self.map_ref);
+    let update = RowUpdate::new(self.txn, &self.map_ref, &self.meta_ref);
     f(update);
     self
   }
@@ -267,7 +273,7 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
   where
     F: FnOnce(RowMetaUpdate),
   {
-    let update = RowMetaUpdate::new(self.txn, &self.meta_ref);
+    let update = RowMetaUpdate::new(self.txn, self.meta_ref);
     f(update);
     self
   }
