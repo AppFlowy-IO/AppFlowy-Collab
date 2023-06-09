@@ -1,4 +1,7 @@
+use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+
 use crate::database::timestamp;
+use crate::rows::RowId;
 use crate::views::{
   filters_from_map_ref, group_setting_from_map_ref, layout_setting_from_map_ref,
   sorts_from_map_ref, view_description_from_value, view_from_map_ref, view_from_value,
@@ -6,7 +9,6 @@ use crate::views::{
   FieldOrderArray, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray,
   SortMap, ViewBuilder, ViewDescription, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
 };
-use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 
 pub struct ViewMap {
   container: MapRefWrapper,
@@ -158,6 +160,20 @@ impl ViewMap {
           .unwrap_or_default()
       })
       .unwrap_or_default()
+  }
+
+  pub fn is_row_exist(&self, view_id: &str, row_id: &RowId) -> bool {
+    let txn = self.container.transact();
+    self.is_row_exist_with_txn(&txn, view_id, row_id)
+  }
+
+  pub fn is_row_exist_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str, row_id: &RowId) -> bool {
+    let f = || {
+      let map = self.container.get_map_with_txn(txn, view_id)?;
+      let row_order_array = map.get_array_ref_with_txn(txn, ROW_ORDERS)?;
+      RowOrderArray::new(row_order_array.into_inner()).get_position_with_txn(txn, row_id.as_str())
+    };
+    f().is_some()
   }
 
   pub fn get_field_orders_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FieldOrder> {

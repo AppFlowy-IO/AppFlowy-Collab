@@ -34,12 +34,11 @@ impl<'a> TransactionRetry<'a> {
           return txn;
         },
         Err(e) => {
-          tracing::error!("[Txn]: Failed to get read txn, retrying: {:?}", e);
           sleep(self.retry_interval);
         },
       }
     }
-    tracing::warn!("[Txn]: read txn retry timeout");
+    tracing::warn!("[Txn]: acquire read txn timeout");
     self.doc.transact()
   }
 
@@ -50,12 +49,11 @@ impl<'a> TransactionRetry<'a> {
           return txn;
         },
         Err(e) => {
-          tracing::error!("[Txn]: Failed to get write txn, retrying: {:?}", e);
           sleep(self.retry_interval);
         },
       }
     }
-    tracing::warn!("[Txn]: write txn retry timeout");
+    tracing::warn!("[Txn]: acquire write txn timeout");
     self.doc.transact_mut_with(origin)
   }
 
@@ -69,12 +67,11 @@ impl<'a> TransactionRetry<'a> {
           return Ok(txn);
         },
         Err(e) => {
-          tracing::error!("[Txn]: Failed to get write txn, retrying: {:?}", e);
           sleep(self.retry_interval);
         },
       }
     }
-    tracing::warn!("[Txn]: write txn retry timeout");
+    tracing::warn!("[Txn]: acquire write txn timeout");
     Err(CollabError::AcquiredWriteTxnFail)
   }
 }

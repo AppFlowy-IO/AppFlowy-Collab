@@ -100,6 +100,7 @@ impl Block {
     }
   }
 
+  /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
   fn get_or_init_row(&self, row_id: &RowId) -> Arc<DatabaseRow> {
     let row = self.cache.lock().get(row_id).cloned();
     match row {
