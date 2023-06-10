@@ -319,6 +319,34 @@ impl Document {
       .set_block_with_txn(txn, block_id, Some(block.data), Some(&new_parent.id))
   }
 
+  pub fn redo(&self) -> bool {
+    let can_redo = self.can_redo();
+    if can_redo {
+      if let Ok(redo) = self.inner.lock().redo() {
+        return redo;
+      }
+    }
+    false
+  }
+
+  pub fn undo(&self) -> bool {
+    let can_undo = self.can_undo();
+    if can_undo {
+      if let Ok(undo) = self.inner.lock().undo() {
+        return undo;
+      }
+    }
+    false
+  }
+
+  pub fn can_redo(&self) -> bool {
+    self.inner.lock().can_redo()
+  }
+
+  pub fn can_undo(&self) -> bool {
+    self.inner.lock().can_undo()
+  }
+
   fn create_document(
     collab: Arc<MutexCollab>,
     data: Option<DocumentData>,
