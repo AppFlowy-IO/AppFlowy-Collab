@@ -13,7 +13,7 @@ use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
 use yrs::{
   ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, Subscription,
-  Transact, Transaction, TransactionMut, Update, UpdateSubscription,
+  Transact, Transaction, TransactionMut, UndoManager, Update, UpdateSubscription,
 };
 
 use crate::core::collab_plugin::CollabPlugin;
@@ -57,6 +57,8 @@ pub struct Collab {
 
   state: Arc<State>,
 
+  undo_manager: UndoManager,
+
   /// Just binding the data_subscription to the [Collab] struct to prevent it from
   /// being dropped.
   #[allow(dead_code)]
@@ -82,6 +84,13 @@ impl Collab {
       ..Options::default()
     });
     let mut data = doc.get_or_insert_map(DATA_SECTION);
+
+    // a frequent case includes establishing a new transaction for every user key stroke. Meanwhile
+    // we may decide to use different granularity of undo/redo actions. These are grouped together
+    // on time-based ranges (configurable in undo::Options, which is 500ms by default).
+    let mut undo_manager = UndoManager::with_options(&doc, &data, yrs::undo::Options::default());
+    undo_manager.include_origin(origin.clone());
+
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
     let awareness = Awareness::new(doc.clone());
@@ -104,6 +113,7 @@ impl Collab {
       origin,
       object_id,
       doc,
+      undo_manager,
       awareness,
       data,
       plugins,
@@ -367,6 +377,28 @@ impl Collab {
   pub fn to_json_value(&self) -> JsonValue {
     let txn = self.transact();
     serde_json::to_value(&self.data.to_json(&txn)).unwrap()
+  }
+
+  pub fn can_undo(&self) -> bool {
+    self.undo_manager.can_undo()
+  }
+
+  pub fn can_redo(&self) -> bool {
+    self.undo_manager.can_redo()
+  }
+
+  pub fn undo(&mut self) -> Result<bool, CollabError> {
+    self
+      .undo_manager
+      .undo()
+      .map_err(|e| CollabError::Internal(Box::new(e)))
+  }
+
+  pub fn redo(&mut self) -> Result<bool, CollabError> {
+    self
+      .undo_manager
+      .redo()
+      .map_err(|e| CollabError::Internal(Box::new(e)))
   }
 
   pub fn transact(&self) -> Transaction {
