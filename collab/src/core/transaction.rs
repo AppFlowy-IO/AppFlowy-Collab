@@ -33,7 +33,7 @@ impl<'a> TransactionRetry<'a> {
         Ok(txn) => {
           return txn;
         },
-        Err(e) => {
+        Err(_e) => {
           sleep(self.retry_interval);
         },
       }
@@ -48,7 +48,7 @@ impl<'a> TransactionRetry<'a> {
         Ok(txn) => {
           return txn;
         },
-        Err(e) => {
+        Err(_e) => {
           sleep(self.retry_interval);
         },
       }
@@ -66,7 +66,7 @@ impl<'a> TransactionRetry<'a> {
         Ok(txn) => {
           return Ok(txn);
         },
-        Err(e) => {
+        Err(_e) => {
           sleep(self.retry_interval);
         },
       }

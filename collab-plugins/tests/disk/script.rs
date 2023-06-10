@@ -121,6 +121,62 @@ impl CollabPersistenceTest {
     ))
   }
 
+  pub async fn create_collab(&mut self, doc_id: String) {
+    let collab = Arc::new(CollabBuilder::new(1, &doc_id).build());
+    collab.lock().add_plugin(self.disk_plugin.clone());
+    let object_id = collab.lock().object_id.clone();
+    collab
+      .lock()
+      .add_plugin(self.make_snapshot_plugin(object_id, collab.clone()));
+    collab.initial();
+
+    self.collab_by_id.insert(doc_id, collab);
+  }
+
+  pub async fn insert(&mut self, id: &str, key: String, value: Any) {
+    self
+      .collab_by_id
+      .get(id)
+      .as_ref()
+      .unwrap()
+      .lock()
+      .insert(&key, value);
+  }
+
+  pub async fn assert_collab(&mut self, id: &str, expected: JsonValue) {
+    let collab = Arc::new(CollabBuilder::new(1, id).build());
+    collab.lock().add_plugin(self.disk_plugin.clone());
+    collab
+      .lock()
+      .add_plugin(self.make_snapshot_plugin(id.to_string(), collab.clone()));
+    collab.initial();
+
+    let json = collab.to_json_value();
+    assert_json_diff::assert_json_eq!(json, expected);
+  }
+
+  pub async fn undo(&mut self, id: &str) {
+    self
+      .collab_by_id
+      .get(id)
+      .as_ref()
+      .unwrap()
+      .lock()
+      .undo()
+      .unwrap();
+  }
+
+  pub async fn redo(&mut self, id: &str) {
+    self
+      .collab_by_id
+      .get(id)
+      .as_ref()
+      .unwrap()
+      .lock()
+      .redo()
+      .unwrap();
+  }
+
   pub async fn run_script(&mut self, script: Script) {
     match script {
       Script::CreateDocumentWithDiskPlugin { id, plugin } => {
@@ -139,15 +195,7 @@ impl CollabPersistenceTest {
         self.collab_by_id.insert(id, collab);
       },
       Script::OpenDocument { id } => {
-        let collab = Arc::new(CollabBuilder::new(1, &id).build());
-        collab.lock().add_plugin(self.disk_plugin.clone());
-        let object_id = collab.lock().object_id.clone();
-        collab
-          .lock()
-          .add_plugin(self.make_snapshot_plugin(object_id, collab.clone()));
-        collab.initial();
-
-        self.collab_by_id.insert(id, collab);
+        self.create_collab(id).await;
       },
       Script::CloseDocument { id } => {
         self.collab_by_id.remove(&id);
@@ -166,13 +214,7 @@ impl CollabPersistenceTest {
           .unwrap();
       },
       Script::InsertKeyValue { id, key, value } => {
-        self
-          .collab_by_id
-          .get(&id)
-          .as_ref()
-          .unwrap()
-          .lock()
-          .insert(&key, value);
+        self.insert(&id, key, value).await;
       },
       Script::GetValue { id, key, expected } => {
         let collab = self.collab_by_id.get(&id).unwrap().lock();

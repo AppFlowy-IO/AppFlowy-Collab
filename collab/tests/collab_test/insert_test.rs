@@ -9,8 +9,8 @@ use yrs::{Map, Observable};
 
 use crate::helper::{setup_log, Person, Position};
 
-#[test]
-fn insert_text() {
+#[tokio::test]
+async fn insert_text() {
   let mut collab = Collab::new(1, "1", vec![]);
   let _sub = collab.observer_data(|txn, event| {
     event.target().iter(txn).for_each(|(a, b)| {
@@ -24,8 +24,8 @@ fn insert_text() {
   assert_eq!(s, "hello world".to_string());
 }
 
-#[test]
-fn insert_json_attrs() {
+#[tokio::test]
+async fn insert_json_attrs() {
   let mut collab = Collab::new(1, "1", vec![]);
   let object = Person {
     name: "nathan".to_string(),
@@ -49,8 +49,8 @@ fn insert_json_attrs() {
   println!("{:?}", pos);
 }
 
-#[test]
-fn observer_attr_mut() {
+#[tokio::test]
+async fn observer_attr_mut() {
   let mut collab = Collab::new(1, "1", vec![]);
   let object = Person {
     name: "nathan".to_string(),
@@ -76,8 +76,8 @@ fn observer_attr_mut() {
   map.insert("title", "manager");
 }
 
-#[test]
-fn remove_value() {
+#[tokio::test]
+async fn remove_value() {
   let mut collab = Collab::new(1, "1", vec![]);
   let object = Person {
     name: "nathan".to_string(),
@@ -139,4 +139,45 @@ async fn retry_write_txn_fail_test() {
   let result = result.await.unwrap();
   assert!(result.is_ok());
   tokio::time::sleep(Duration::from_secs(2)).await;
+}
+
+#[tokio::test]
+async fn undo_single_insert_text() {
+  let mut collab = Collab::new(1, "1", vec![]);
+  collab.insert("text", "hello world");
+
+  assert_json_diff::assert_json_eq!(
+    collab.to_json(),
+    serde_json::json!({
+      "text": "hello world"
+    }),
+  );
+
+  // Undo the insert operation
+  assert!(collab.can_undo());
+  collab.undo().unwrap();
+
+  // The text should be empty
+  assert_json_diff::assert_json_eq!(collab.to_json(), serde_json::json!({}),);
+}
+
+#[tokio::test]
+async fn redo_single_insert_text() {
+  let mut collab = Collab::new(1, "1", vec![]);
+  collab.insert("text", "hello world");
+
+  // Undo the insert operation
+  assert!(collab.can_undo());
+  assert!(!collab.can_redo());
+
+  collab.undo().unwrap();
+  assert!(collab.can_redo());
+  collab.redo().unwrap();
+
+  assert_json_diff::assert_json_eq!(
+    collab.to_json(),
+    serde_json::json!({
+      "text": "hello world"
+    }),
+  );
 }
