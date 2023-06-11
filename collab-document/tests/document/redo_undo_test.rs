@@ -1,87 +1,66 @@
-use collab_document::blocks::Block;
 use nanoid::nanoid;
 use serde_json::to_value;
 use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::util::{
-  create_document, create_document_with_db, db, delete_block, get_document_data, insert_block,
-  open_document_with_db, update_block,
+  create_document, create_document_with_db, db, delete_block, insert_block_for_page,
+  open_document_with_db, update_block_with_data,
 };
+
+const WAIT_TIME: Duration = Duration::from_secs(1);
 
 #[tokio::test]
 async fn insert_undo_redo() {
   let doc_id = "1";
   let test = create_document(1, doc_id);
-
   tokio::time::sleep(Duration::from_secs(1)).await;
-
-  let (page_id, _, _) = get_document_data(&test.document);
+  let document = test.document;
   let block_id = nanoid!(10);
-  let block = Block {
-    id: block_id.clone(),
-    ty: "paragraph".to_string(),
-    parent: page_id.to_string(), // empty parent id
-    children: "".to_string(),
-    external_id: None,
-    external_type: None,
-    data: Default::default(),
-  };
 
-  insert_block(&test.document, block.clone(), "".to_string()).unwrap();
+  insert_block_for_page(&document, block_id.clone());
 
-  let can_undo = test.document.can_undo();
-  assert!(can_undo);
-  let undo = &test.document.undo();
-  assert_eq!(undo.to_owned(), true);
-  let insert_block = &test.document.get_block(&block_id);
-  assert_eq!(insert_block.is_none(), true);
+  assert!(document.can_undo());
+  assert!(document.undo());
 
-  let can_redo = test.document.can_redo();
-  assert!(can_redo);
-  let redo = &test.document.redo();
-  assert_eq!(redo.to_owned(), true);
-  let insert_block = &test.document.get_block(&block_id);
-  assert_eq!(insert_block.is_none(), false);
+  // after undo, the block should be deleted
+  let insert_block = document.get_block(&block_id);
+  assert!(insert_block.is_none());
+
+  assert!(document.can_redo());
+  assert!(document.redo());
+
+  // after redo, the block should be restored
+  let insert_block = document.get_block(&block_id);
+  assert!(insert_block.is_some());
 }
 
 #[tokio::test]
 async fn update_undo_redo() {
   let doc_id = "1";
   let test = create_document(1, doc_id);
-
-  let (page_id, _, _) = get_document_data(&test.document);
+  let document = test.document;
   let block_id = nanoid!(10);
-  let block = Block {
-    id: block_id.clone(),
-    ty: "paragraph".to_string(),
-    parent: page_id.to_string(), // empty parent id
-    children: "".to_string(),
-    external_id: None,
-    external_type: None,
-    data: Default::default(),
-  };
-  insert_block(&test.document, block.clone(), "".to_string()).unwrap();
+  insert_block_for_page(&document, block_id.clone());
 
-  tokio::time::sleep(Duration::from_secs(1)).await;
-
-  let block = test.document.get_block(&block_id).unwrap();
+  // after insert block 1 second, update the block
+  tokio::time::sleep(WAIT_TIME).await;
   let mut data = HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
-  update_block(&test.document, &block.id, data.clone()).unwrap();
+  update_block_with_data(&block_id, &document, data.clone());
 
-  let can_undo = test.document.can_undo();
-  assert!(can_undo);
-  let undo = &test.document.undo();
-  assert_eq!(undo.to_owned(), true);
-  let block = &test.document.get_block(&block_id).unwrap();
+  assert!(document.can_undo());
+  assert!(document.undo());
+
+  // after undo, the data of block should be default
+  let block = document.get_block(&block_id).unwrap();
   assert_eq!(block.data, Default::default());
 
-  let can_redo = test.document.can_redo();
-  assert!(can_redo);
-  let redo = &test.document.redo();
-  assert_eq!(redo.to_owned(), true);
-  let block = &test.document.get_block(&block_id).unwrap();
+  assert!(document.can_redo());
+  assert!(document.redo());
+
+  // after redo, the data of block should be updated
+  let block = document.get_block(&block_id).unwrap();
   assert_eq!(block.data, data);
 }
 
@@ -89,98 +68,85 @@ async fn update_undo_redo() {
 async fn delete_undo_redo() {
   let doc_id = "1";
   let test = create_document(1, doc_id);
-
-  let (page_id, _, _) = get_document_data(&test.document);
+  let document = test.document;
   let block_id = nanoid!(10);
-  let block = Block {
-    id: block_id.clone(),
-    ty: "paragraph".to_string(),
-    parent: page_id.to_string(), // empty parent id
-    children: "".to_string(),
-    external_id: None,
-    external_type: None,
-    data: Default::default(),
-  };
-  insert_block(&test.document, block.clone(), "".to_string()).unwrap();
+  insert_block_for_page(&document, block_id.clone());
 
-  tokio::time::sleep(Duration::from_secs(1)).await;
+  // after insert block 1 second, delete the block
+  tokio::time::sleep(WAIT_TIME).await;
+  delete_block(&document, &block_id).unwrap();
 
-  delete_block(&test.document, &block_id).unwrap();
+  assert!(document.can_undo());
+  assert!(document.undo());
 
-  let can_undo = test.document.can_undo();
-  assert!(can_undo);
-  let undo = &test.document.undo();
-  assert_eq!(undo.to_owned(), true);
-  let block = &test.document.get_block(&block_id);
-  assert_eq!(block.is_none(), false);
+  // after undo, the block should be restored
+  let block = document.get_block(&block_id);
+  assert!(block.is_some());
 
-  let can_redo = test.document.can_redo();
-  assert!(can_redo);
-  let redo = &test.document.redo();
-  assert_eq!(redo.to_owned(), true);
-  let block = &test.document.get_block(&block_id);
-  assert_eq!(block.is_none(), true);
+  assert!(document.can_redo());
+  assert!(document.redo());
+
+  // after redo, the block should be deleted
+  let block = document.get_block(&block_id);
+  assert!(block.is_none());
 }
 
 #[tokio::test]
 async fn mutilple_undo_redo_test() {
   let doc_id = "1";
   let test = create_document(1, doc_id);
+  let document = test.document;
 
-  tokio::time::sleep(Duration::from_secs(1)).await;
-
-  let (page_id, _, _) = get_document_data(&test.document);
   let block_id = nanoid!(10);
-  let block = Block {
-    id: block_id.clone(),
-    ty: "paragraph".to_string(),
-    parent: page_id.to_string(), // empty parent id
-    children: "".to_string(),
-    external_id: None,
-    external_type: None,
-    data: Default::default(),
-  };
+  insert_block_for_page(&document, block_id.clone());
 
-  insert_block(&test.document, block.clone(), "".to_string()).unwrap();
+  // after insert block 1 second, update the block
+  tokio::time::sleep(WAIT_TIME).await;
+  let data = HashMap::new();
+  update_block_with_data(&block_id, &document, data.clone());
 
-  tokio::time::sleep(Duration::from_secs(1)).await;
+  // after insert block 1 second, delete the block
+  tokio::time::sleep(WAIT_TIME).await;
+  delete_block(&document, &block_id).unwrap();
 
-  let block = test.document.get_block(&block_id).unwrap();
-  let mut data = HashMap::new();
-  data.insert("text".to_string(), to_value("hello").unwrap());
-  update_block(&test.document, &block.id, data.clone()).unwrap();
-
-  tokio::time::sleep(Duration::from_secs(1)).await;
-
-  delete_block(&test.document, &block_id).unwrap();
-
-  tokio::time::sleep(Duration::from_secs(1)).await;
-
-  let can_undo = test.document.can_undo();
-  assert!(can_undo);
-  let _ = &test.document.undo();
-  let block = &test.document.get_block(&block_id).unwrap();
+  assert!(document.can_undo());
+  assert!(document.undo());
+  // after first undo, action1: revert delete block
+  let block = document.get_block(&block_id).unwrap();
   assert_eq!(block.data, data);
-  let _ = &test.document.undo();
-  let block = &test.document.get_block(&block_id).unwrap();
+
+  assert!(document.can_undo());
+  assert!(document.undo());
+  // after second undo, action2: revert update block
+  let block = document.get_block(&block_id).unwrap();
   assert_eq!(block.data, Default::default());
-  let _ = &test.document.undo();
-  let block = &test.document.get_block(&block_id);
+
+  assert!(document.can_undo());
+  assert!(document.undo());
+  // after third undo, action3: revert insert block
+  let block = document.get_block(&block_id);
+  assert_eq!(block.is_none(), true);
+  assert_eq!(document.can_undo(), false);
+
+  assert!(document.can_redo());
+  assert!(document.redo());
+  // after first redo, revert action3, insert block
+  let block = document.get_block(&block_id).unwrap();
+  assert_eq!(block.data, Default::default());
+
+  assert!(document.can_redo());
+  assert!(document.redo());
+  // after second redo, revert action2, update block
+  let block = document.get_block(&block_id).unwrap();
+  assert_eq!(block.data, data);
+
+  assert!(document.can_redo());
+  assert!(document.redo());
+  // after third redo, revert action1, delete block
+  let block = document.get_block(&block_id);
   assert_eq!(block.is_none(), true);
 
-  let can_redo = test.document.can_redo();
-  assert!(can_redo);
-  let _ = &test.document.redo();
-  let block = &test.document.get_block(&block_id).unwrap();
-  assert_eq!(block.data, Default::default());
-  let _ = &test.document.redo();
-  let block = &test.document.get_block(&block_id).unwrap();
-  assert_eq!(block.data, data);
-  let _ = &test.document.redo();
-  let block = &test.document.get_block(&block_id);
-  assert_eq!(block.is_none(), true);
-  let redo = &test.document.redo();
-  assert_eq!(redo.to_owned(), false);
+  assert_eq!(document.can_redo(), false);
 }
 
 #[tokio::test]
@@ -188,51 +154,40 @@ async fn undo_redo_after_reopen_document() {
   let doc_id = "1";
   let db = db();
   let test = create_document_with_db(1, doc_id, db.clone());
+  let document = test.document;
+  // after create document, can't undo
+  assert_eq!(document.can_undo(), false);
 
-  let can_undo = test.document.can_undo();
-  assert_eq!(can_undo, false);
-
-  let (page_id, _, _) = get_document_data(&test.document);
+  // after insert block, can undo
   let block_id = nanoid!(10);
-  let block = Block {
-    id: block_id.clone(),
-    ty: "paragraph".to_string(),
-    parent: page_id.to_string(), // empty parent id
-    children: "".to_string(),
-    external_id: None,
-    external_type: None,
-    data: Default::default(),
-  };
-
-  insert_block(&test.document, block.clone(), "".to_string()).unwrap();
-
-  let can_undo = test.document.can_undo();
-  assert_eq!(can_undo, true);
+  insert_block_for_page(&document, block_id.clone());
+  assert!(document.can_undo());
 
   // close document
-  drop(test);
+  drop(document);
 
+  // reopen document, can't undo
   let test = open_document_with_db(1, doc_id, db.clone());
-  let can_undo = test.document.can_undo();
-  assert_eq!(can_undo, false);
+  let document = test.document;
+  assert_eq!(document.can_undo(), false);
 
-  let block = test.document.get_block(&block_id).unwrap();
-  let mut data = HashMap::new();
-  data.insert("text".to_string(), to_value("hello").unwrap());
-  update_block(&test.document, &block.id, data.clone()).unwrap();
+  // update block, can undo
+  let data = HashMap::new();
+  update_block_with_data(&block_id, &document, data.clone());
+  assert!(document.can_undo());
 
-  let can_undo = test.document.can_undo();
-  assert_eq!(can_undo, true);
+  // There is no undo action, so can't redo
+  assert_eq!(document.can_redo(), false);
 
-  let can_redo = test.document.can_redo();
-  assert_eq!(can_redo, false);
-
-  let _ = &test.document.undo();
-  let block = &test.document.get_block(&block_id).unwrap();
+  // after undo, the data of block should be default
+  assert!(document.undo());
+  let block = document.get_block(&block_id).unwrap();
   assert_eq!(block.data, Default::default());
-  let can_redo = test.document.can_redo();
-  assert_eq!(can_redo, true);
-  let _ = &test.document.redo();
-  let block = &test.document.get_block(&block_id).unwrap();
+
+  // There has undo action, so can redo
+  assert!(document.can_redo());
+  assert!(document.redo());
+  // after redo, the data of block should be updated
+  let block = document.get_block(&block_id).unwrap();
   assert_eq!(block.data, data);
 }

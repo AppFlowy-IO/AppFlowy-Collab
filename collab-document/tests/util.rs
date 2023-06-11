@@ -178,6 +178,26 @@ pub fn apply_actions(document: &Document, actions: Vec<BlockAction>) {
   document.apply_action(actions)
 }
 
+pub fn insert_block_for_page(document: &Document, block_id: String) {
+  let (page_id, _, _) = get_document_data(document);
+  let block = Block {
+    id: block_id.clone(),
+    ty: "paragraph".to_string(),
+    parent: page_id.to_string(), // empty parent id
+    children: "".to_string(),
+    external_id: None,
+    external_type: None,
+    data: Default::default(),
+  };
+
+  insert_block(document, block.clone(), "".to_string()).unwrap();
+}
+
+pub fn update_block_with_data(block_id: &str, document: &Document, data: HashMap<String, Value>) {
+  let block = document.get_block(block_id).unwrap();
+  update_block(document, &block.id, data.clone()).unwrap();
+}
+
 // struct Cleaner(PathBuf);
 //
 // impl Cleaner {

@@ -45,7 +45,7 @@ impl Document {
     match is_document_exist {
       Some(_) => {
         collab.lock().enable_undo_redo();
-        Ok(Document::get_document_with_collab(collab))
+        Ok(Document::open_document_with_collab(collab))
       },
       None => Document::create_document(collab, None),
     }
@@ -324,23 +324,19 @@ impl Document {
   }
 
   pub fn redo(&self) -> bool {
-    let can_redo = self.can_redo();
-    if can_redo {
-      if let Ok(redo) = self.inner.lock().redo() {
-        return redo;
-      }
+    if self.can_redo() {
+      self.inner.lock().redo().unwrap_or_default()
+    } else {
+      false
     }
-    false
   }
 
   pub fn undo(&self) -> bool {
-    let can_undo = self.can_undo();
-    if can_undo {
-      if let Ok(undo) = self.inner.lock().undo() {
-        return undo;
-      }
+    if self.can_undo() {
+      self.inner.lock().undo().unwrap_or_default()
+    } else {
+      false
     }
-    false
   }
 
   pub fn can_redo(&self) -> bool {
@@ -355,7 +351,7 @@ impl Document {
     collab: Arc<MutexCollab>,
     data: Option<DocumentData>,
   ) -> Result<Self, DocumentError> {
-    let collab_guard = collab.lock();
+    let mut collab_guard = collab.lock();
     let (root, block_operation, children_operation) = collab_guard.with_transact_mut(|txn| {
       // { document: {:} }
       let root = collab_guard.insert_map_with_txn(txn, ROOT);
@@ -387,10 +383,12 @@ impl Document {
 
       Ok::<_, DocumentError>((root, block_operation, children_operation))
     })?;
+
+    collab_guard.enable_undo_redo();
+
     drop(collab_guard);
 
     let subscription = RootDeepSubscription::default();
-    collab.lock().enable_undo_redo();
 
     let document = Self {
       inner: collab,
@@ -402,7 +400,7 @@ impl Document {
     Ok(document)
   }
 
-  fn get_document_with_collab(collab: Arc<MutexCollab>) -> Self {
+  fn open_document_with_collab(collab: Arc<MutexCollab>) -> Self {
     let collab_guard = collab.lock();
     let txn = collab_guard.transact();
 
