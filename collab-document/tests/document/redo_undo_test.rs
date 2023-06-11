@@ -176,4 +176,6 @@ async fn mutilple_undo_redo_test() {
   let _ = &test.document.redo();
   let block = &test.document.get_block(&block_id);
   assert_eq!(block.is_none(), true);
+  let can_redo = test.document.can_redo();
+  assert_eq!(can_redo, false);
 }
