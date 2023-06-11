@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::util::{
   create_document, create_document_with_db, db, delete_block, insert_block_for_page,
-  open_document_with_db, update_block_with_data,
+  open_document_with_db, update_block,
 };
 
 const WAIT_TIME: Duration = Duration::from_secs(1);
@@ -53,7 +53,7 @@ async fn update_undo_redo() {
   tokio::time::sleep(WAIT_TIME).await;
   let mut data = HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
-  update_block_with_data(&block_id, &document, data.clone());
+  update_block(&document, &block_id, data.clone());
 
   assert!(document.can_undo());
   assert!(document.undo());
@@ -108,8 +108,9 @@ async fn mutilple_undo_redo_test() {
 
   // after insert block 1 second, update the block
   tokio::time::sleep(WAIT_TIME).await;
-  let data = HashMap::new();
-  update_block_with_data(&block_id, &document, data.clone());
+  let mut data = HashMap::new();
+  data.insert("text".to_string(), to_value("hello").unwrap());
+  update_block(&document, &block_id, data.clone());
 
   // after insert block 1 second, delete the block
   tokio::time::sleep(WAIT_TIME).await;
@@ -178,8 +179,9 @@ async fn undo_redo_after_reopen_document() {
   assert!(!document.can_undo());
 
   // update block, can undo
-  let data = HashMap::new();
-  update_block_with_data(&block_id, &document, data.clone());
+  let mut data = HashMap::new();
+  data.insert("text".to_string(), to_value("hello").unwrap());
+  update_block(&document, &block_id, data.clone());
   assert!(document.can_undo());
 
   // There is no undo action, so can't redo

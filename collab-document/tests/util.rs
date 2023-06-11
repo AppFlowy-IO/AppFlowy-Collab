@@ -193,11 +193,6 @@ pub fn insert_block_for_page(document: &Document, block_id: String) {
   insert_block(document, block, "".to_string()).unwrap();
 }
 
-pub fn update_block_with_data(block_id: &str, document: &Document, data: HashMap<String, Value>) {
-  let block = document.get_block(block_id).unwrap();
-  update_block(document, &block.id, data).unwrap();
-}
-
 // struct Cleaner(PathBuf);
 //
 // impl Cleaner {
