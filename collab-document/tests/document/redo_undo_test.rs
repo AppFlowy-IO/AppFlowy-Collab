@@ -53,7 +53,7 @@ async fn update_undo_redo() {
   tokio::time::sleep(WAIT_TIME).await;
   let mut data = HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
-  update_block(&document, &block_id, data.clone());
+  update_block(&document, &block_id, data.clone()).unwrap();
 
   assert!(document.can_undo());
   assert!(document.undo());
@@ -110,7 +110,7 @@ async fn mutilple_undo_redo_test() {
   tokio::time::sleep(WAIT_TIME).await;
   let mut data = HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
-  update_block(&document, &block_id, data.clone());
+  update_block(&document, &block_id, data.clone()).unwrap();
 
   // after insert block 1 second, delete the block
   tokio::time::sleep(WAIT_TIME).await;
@@ -181,7 +181,7 @@ async fn undo_redo_after_reopen_document() {
   // update block, can undo
   let mut data = HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
-  update_block(&document, &block_id, data.clone());
+  update_block(&document, &block_id, data.clone()).unwrap();
   assert!(document.can_undo());
 
   // There is no undo action, so can't redo
