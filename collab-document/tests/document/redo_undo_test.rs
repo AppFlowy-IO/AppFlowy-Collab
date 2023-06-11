@@ -23,6 +23,9 @@ async fn insert_undo_redo() {
   assert!(document.can_undo());
   assert!(document.undo());
 
+  // there should be no undo action after undo
+  assert_eq!(document.undo(), false);
+
   // after undo, the block should be deleted
   let insert_block = document.get_block(&block_id);
   assert!(insert_block.is_none());
@@ -34,6 +37,7 @@ async fn insert_undo_redo() {
   let insert_block = document.get_block(&block_id);
   assert!(insert_block.is_some());
 
+  // there should be no redo action after redo
   assert_eq!(document.redo(), false);
 }
 
