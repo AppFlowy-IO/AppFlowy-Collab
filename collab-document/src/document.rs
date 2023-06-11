@@ -41,8 +41,12 @@ impl Document {
       let txn = &collab_guard.transact();
       collab_guard.get_map_with_txn(txn, vec![ROOT])
     };
+
     match is_document_exist {
-      Some(_) => Ok(Document::get_document_with_collab(collab)),
+      Some(_) => {
+        collab.lock().create_undo_manager();
+        Ok(Document::get_document_with_collab(collab))
+      },
       None => Document::create_document(collab, None),
     }
   }
@@ -386,6 +390,8 @@ impl Document {
     drop(collab_guard);
 
     let subscription = RootDeepSubscription::default();
+    collab.lock().create_undo_manager();
+
     let document = Self {
       inner: collab,
       root,

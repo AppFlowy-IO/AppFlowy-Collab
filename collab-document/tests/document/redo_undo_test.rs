@@ -4,7 +4,10 @@ use serde_json::to_value;
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::util::{create_document, delete_block, get_document_data, insert_block, update_block};
+use crate::util::{
+  create_document, create_document_with_db, db, delete_block, get_document_data, insert_block,
+  open_document_with_db, update_block,
+};
 
 #[tokio::test]
 async fn insert_undo_redo() {
@@ -176,6 +179,60 @@ async fn mutilple_undo_redo_test() {
   let _ = &test.document.redo();
   let block = &test.document.get_block(&block_id);
   assert_eq!(block.is_none(), true);
+  let redo = &test.document.redo();
+  assert_eq!(redo.to_owned(), false);
+}
+
+#[tokio::test]
+async fn undo_redo_after_reopen_document() {
+  let doc_id = "1";
+  let db = db();
+  let test = create_document_with_db(1, doc_id, db.clone());
+
+  let can_undo = test.document.can_undo();
+  assert_eq!(can_undo, false);
+
+  let (page_id, _, _) = get_document_data(&test.document);
+  let block_id = nanoid!(10);
+  let block = Block {
+    id: block_id.clone(),
+    ty: "paragraph".to_string(),
+    parent: page_id.to_string(), // empty parent id
+    children: "".to_string(),
+    external_id: None,
+    external_type: None,
+    data: Default::default(),
+  };
+
+  insert_block(&test.document, block.clone(), "".to_string()).unwrap();
+
+  let can_undo = test.document.can_undo();
+  assert_eq!(can_undo, true);
+
+  // close document
+  drop(test);
+
+  let test = open_document_with_db(1, doc_id, db.clone());
+  let can_undo = test.document.can_undo();
+  assert_eq!(can_undo, false);
+
+  let block = test.document.get_block(&block_id).unwrap();
+  let mut data = HashMap::new();
+  data.insert("text".to_string(), to_value("hello").unwrap());
+  update_block(&test.document, &block.id, data.clone()).unwrap();
+
+  let can_undo = test.document.can_undo();
+  assert_eq!(can_undo, true);
+
   let can_redo = test.document.can_redo();
   assert_eq!(can_redo, false);
+
+  let _ = &test.document.undo();
+  let block = &test.document.get_block(&block_id).unwrap();
+  assert_eq!(block.data, Default::default());
+  let can_redo = test.document.can_redo();
+  assert_eq!(can_redo, true);
+  let _ = &test.document.redo();
+  let block = &test.document.get_block(&block_id).unwrap();
+  assert_eq!(block.data, data);
 }
