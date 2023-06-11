@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use rocksdb::Direction::Forward;
 use rocksdb::{
-  ColumnFamilyDescriptor, DBIteratorWithThreadMode, Direction, IteratorMode, Options, ReadOptions,
-  Transaction, TransactionDB, TransactionDBOptions, TransactionOptions, WriteOptions,
+  ColumnFamilyDescriptor, DBIteratorWithThreadMode, Direction, ErrorKind, IteratorMode, Options,
+  ReadOptions, SingleThreaded, Transaction, TransactionDB, TransactionDBOptions,
+  TransactionOptions, WriteOptions,
 };
 
 use crate::kv::{KVEntry, KVStore};
@@ -20,12 +21,40 @@ pub struct RocksStore {
 }
 
 impl RocksStore {
+  /// Open a new RocksDB database at the given path.
+  /// If the database is corrupted, try to repair it. If it cannot be repaired, return an error.
   pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
     let txn_db_opts = TransactionDBOptions::default();
     let mut db_opts = Options::default();
     db_opts.create_if_missing(true);
-    let db = Arc::new(TransactionDB::open(&db_opts, &txn_db_opts, path)?);
-    Ok(Self { db })
+    let db = match TransactionDB::<SingleThreaded>::open(&db_opts, &txn_db_opts, &path) {
+      Ok(db) => Ok(db),
+      Err(e) => {
+        tracing::error!("open collab db error: {:?}", e);
+        match e.kind() {
+          // A few types of corruption that repair may be able to fix:
+          // 1. Missing files: If SST files or other vital files have been accidentally deleted or
+          // are missing due to a filesystem error, the repair function can often recover the database
+          // to a usable state.
+          // 2. Truncated files: If a file is truncated due to a crash or filesystem error, the repair
+          // function might be able to recover the database.
+          // 3. Incorrect file sizes: If the size of a file on disk is different from what RocksDB
+          // expects (like the "Sst file size mismatch" error), the repair function might be able
+          // to correct this.
+          ErrorKind::Corruption | ErrorKind::Unknown => {
+            // If the database is corrupted, try to repair it
+            tracing::info!("Trying to repair collab database");
+            match TransactionDB::<SingleThreaded>::repair(&db_opts, &path) {
+              Ok(_) => tracing::info!("Collab database repaired"),
+              Err(e) => tracing::error!("Failed to repair collab database: {:?}", e),
+            }
+          },
+          _ => {},
+        }
+        TransactionDB::<SingleThreaded>::open(&db_opts, &txn_db_opts, &path)
+      },
+    }?;
+    Ok(Self { db: Arc::new(db) })
   }
 
   pub fn open_with_cfs(
