@@ -33,6 +33,8 @@ async fn insert_undo_redo() {
   // after redo, the block should be restored
   let insert_block = document.get_block(&block_id);
   assert!(insert_block.is_some());
+
+  assert_eq!(document.redo(), false);
 }
 
 #[tokio::test]
