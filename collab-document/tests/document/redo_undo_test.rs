@@ -24,7 +24,7 @@ async fn insert_undo_redo() {
   assert!(document.undo());
 
   // there should be no undo action after undo
-  assert_eq!(document.undo(), false);
+  assert!(!document.undo());
 
   // after undo, the block should be deleted
   let insert_block = document.get_block(&block_id);
@@ -38,7 +38,7 @@ async fn insert_undo_redo() {
   assert!(insert_block.is_some());
 
   // there should be no redo action after redo
-  assert_eq!(document.redo(), false);
+  assert!(!document.redo());
 }
 
 #[tokio::test]
@@ -131,8 +131,8 @@ async fn mutilple_undo_redo_test() {
   assert!(document.undo());
   // after third undo, action3: revert insert block
   let block = document.get_block(&block_id);
-  assert_eq!(block.is_none(), true);
-  assert_eq!(document.can_undo(), false);
+  assert!(block.is_none());
+  assert!(!document.can_undo());
 
   assert!(document.can_redo());
   assert!(document.redo());
@@ -150,9 +150,9 @@ async fn mutilple_undo_redo_test() {
   assert!(document.redo());
   // after third redo, revert action1, delete block
   let block = document.get_block(&block_id);
-  assert_eq!(block.is_none(), true);
+  assert!(block.is_none());
 
-  assert_eq!(document.can_redo(), false);
+  assert!(!document.can_redo());
 }
 
 #[tokio::test]
@@ -162,7 +162,7 @@ async fn undo_redo_after_reopen_document() {
   let test = create_document_with_db(1, doc_id, db.clone());
   let document = test.document;
   // after create document, can't undo
-  assert_eq!(document.can_undo(), false);
+  assert!(!document.can_undo());
 
   // after insert block, can undo
   let block_id = nanoid!(10);
@@ -173,9 +173,9 @@ async fn undo_redo_after_reopen_document() {
   drop(document);
 
   // reopen document, can't undo
-  let test = open_document_with_db(1, doc_id, db.clone());
+  let test = open_document_with_db(1, doc_id, db);
   let document = test.document;
-  assert_eq!(document.can_undo(), false);
+  assert!(!document.can_undo());
 
   // update block, can undo
   let data = HashMap::new();
@@ -183,7 +183,7 @@ async fn undo_redo_after_reopen_document() {
   assert!(document.can_undo());
 
   // There is no undo action, so can't redo
-  assert_eq!(document.can_redo(), false);
+  assert!(!document.can_redo());
 
   // after undo, the data of block should be default
   assert!(document.undo());

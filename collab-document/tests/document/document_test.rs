@@ -54,7 +54,7 @@ fn reopen_document() {
   // close document
   drop(document);
 
-  let test = open_document_with_db(1, doc_id, db.clone());
+  let test = open_document_with_db(1, doc_id, db);
   let document = test.document;
   let (page_id2, _, _) = get_document_data(&document);
   assert_eq!(page_id, page_id2);
