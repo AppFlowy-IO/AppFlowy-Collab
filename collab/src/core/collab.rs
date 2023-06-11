@@ -57,7 +57,9 @@ pub struct Collab {
 
   state: Arc<State>,
 
-  undo_manager: UndoManager,
+  /// The [UndoManager] is used to undo and redo changes. By default, the [UndoManager]
+  /// is disabled. To enable it, call [Collab::enable_undo_manager].
+  undo_manager: Mutex<Option<UndoManager>>,
 
   /// Just binding the data_subscription to the [Collab] struct to prevent it from
   /// being dropped.
@@ -84,13 +86,7 @@ impl Collab {
       ..Options::default()
     });
     let mut data = doc.get_or_insert_map(DATA_SECTION);
-
-    // a frequent case includes establishing a new transaction for every user key stroke. Meanwhile
-    // we may decide to use different granularity of undo/redo actions. These are grouped together
-    // on time-based ranges (configurable in undo::Options, which is 500ms by default).
-    let mut undo_manager = UndoManager::with_options(&doc, &data, yrs::undo::Options::default());
-    undo_manager.include_origin(origin.clone());
-
+    let undo_manager = Mutex::new(None);
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
     let awareness = Awareness::new(doc.clone());
@@ -379,26 +375,58 @@ impl Collab {
     serde_json::to_value(&self.data.to_json(&txn)).unwrap()
   }
 
-  pub fn can_undo(&self) -> bool {
-    self.undo_manager.can_undo()
+  pub fn enable_undo_redo(&mut self) {
+    if self.undo_manager.lock().is_some() {
+      tracing::warn!("Undo manager already enabled");
+      return;
+    }
+    // a frequent case includes establishing a new transaction for every user key stroke. Meanwhile
+    // we may decide to use different granularity of undo/redo actions. These are grouped together
+    // on time-based ranges (configurable in undo::Options, which is 500ms by default).
+    let mut undo_manager =
+      UndoManager::with_options(&self.doc, &self.data, yrs::undo::Options::default());
+    undo_manager.include_origin(self.origin.clone());
+    *self.undo_manager.lock() = Some(undo_manager);
   }
 
+  /// Undo the previous change.
+  /// Returns true if the undo was successful, false if there was nothing to undo. If the
+  /// UndoManager is not enabled, returns false.
+  pub fn can_undo(&self) -> bool {
+    match &*self.undo_manager.lock() {
+      None => {
+        tracing::warn!("Undo manager not enabled, should enable_undo_redo first");
+        false
+      },
+      Some(undo_mgr) => undo_mgr.can_undo(),
+    }
+  }
+
+  /// Redo the previous change.
+  /// Returns true if the redo was successful, false if there was nothing to redo. If the
+  /// UndoManager is not enabled, returns false.
   pub fn can_redo(&self) -> bool {
-    self.undo_manager.can_redo()
+    match &*self.undo_manager.lock() {
+      None => {
+        tracing::warn!("Undo manager not enabled, should enable_undo_redo first");
+        false
+      },
+      Some(undo_mgr) => undo_mgr.can_redo(),
+    }
   }
 
   pub fn undo(&mut self) -> Result<bool, CollabError> {
-    self
-      .undo_manager
-      .undo()
-      .map_err(|e| CollabError::Internal(Box::new(e)))
+    match &mut *self.undo_manager.lock() {
+      None => Err(CollabError::UndoManagerNotEnabled),
+      Some(mgr) => mgr.undo().map_err(|e| CollabError::Internal(Box::new(e))),
+    }
   }
 
   pub fn redo(&mut self) -> Result<bool, CollabError> {
-    self
-      .undo_manager
-      .redo()
-      .map_err(|e| CollabError::Internal(Box::new(e)))
+    match &mut *self.undo_manager.lock() {
+      None => Err(CollabError::UndoManagerNotEnabled),
+      Some(mgr) => mgr.redo().map_err(|e| CollabError::Internal(Box::new(e))),
+    }
   }
 
   pub fn transact(&self) -> Transaction {

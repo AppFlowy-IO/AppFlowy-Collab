@@ -9,6 +9,9 @@ pub enum CollabError {
   #[error("Get write txn failed")]
   AcquiredWriteTxnFail,
 
+  #[error("UndoManager is not enabled")]
+  UndoManagerNotEnabled,
+
   #[error("Internal failure: {0}")]
   Internal(#[from] Box<dyn std::error::Error + Send + Sync>),
 }

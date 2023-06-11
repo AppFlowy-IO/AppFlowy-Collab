@@ -13,6 +13,8 @@ async fn undo_multiple_insert_test() {
   // These are grouped together on time-based ranges (configurable in undo::Options, which is 500ms
   // by default). check out the Collab::new_with_client for more details.
   test.create_collab(doc_id.clone()).await;
+  test.enable_undo_redo(&doc_id).await;
+
   test.insert(&doc_id, "1".to_string(), "a".into()).await;
   test.insert(&doc_id, "2".to_string(), "b".into()).await;
   test.insert(&doc_id, "3".to_string(), "3".into()).await;
@@ -38,6 +40,8 @@ async fn undo_multiple_insert_test2() {
   let doc_id = "1".to_string();
 
   test.create_collab(doc_id.clone()).await;
+  test.enable_undo_redo(&doc_id).await;
+
   test.insert(&doc_id, "1".to_string(), "a".into()).await;
 
   // Wait for 1000 ms to ensure that the undo is not grouped with the previous insert.
@@ -62,6 +66,8 @@ async fn redo_multiple_insert_test2() {
   let doc_id = "1".to_string();
 
   test.create_collab(doc_id.clone()).await;
+  test.enable_undo_redo(&doc_id).await;
+
   test.insert(&doc_id, "1".to_string(), "a".into()).await;
   test.insert(&doc_id, "2".to_string(), "b".into()).await;
 

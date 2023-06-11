@@ -144,6 +144,7 @@ async fn retry_write_txn_fail_test() {
 #[tokio::test]
 async fn undo_single_insert_text() {
   let mut collab = Collab::new(1, "1", vec![]);
+  collab.enable_undo_redo();
   collab.insert("text", "hello world");
 
   assert_json_diff::assert_json_eq!(
@@ -164,6 +165,7 @@ async fn undo_single_insert_text() {
 #[tokio::test]
 async fn redo_single_insert_text() {
   let mut collab = Collab::new(1, "1", vec![]);
+  collab.enable_undo_redo();
   collab.insert("text", "hello world");
 
   // Undo the insert operation
@@ -180,4 +182,31 @@ async fn redo_single_insert_text() {
       "text": "hello world"
     }),
   );
+}
+
+#[tokio::test]
+#[should_panic]
+async fn undo_manager_not_enable_test() {
+  let mut collab = Collab::new(1, "1", vec![]);
+  collab.insert("text", "hello world");
+  collab.undo().unwrap();
+}
+
+#[tokio::test]
+async fn undo_second_insert_text() {
+  let mut collab = Collab::new(1, "1", vec![]);
+  collab.insert("1", "a");
+
+  collab.enable_undo_redo();
+  collab.insert("2", "b");
+  collab.undo().unwrap();
+
+  assert_json_diff::assert_json_eq!(
+    collab.to_json(),
+    serde_json::json!({
+      "1": "a"
+    }),
+  );
+
+  assert!(!collab.can_undo());
 }

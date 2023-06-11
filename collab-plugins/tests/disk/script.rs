@@ -133,6 +133,16 @@ impl CollabPersistenceTest {
     self.collab_by_id.insert(doc_id, collab);
   }
 
+  pub async fn enable_undo_redo(&self, doc_id: &str) {
+    self
+      .collab_by_id
+      .get(doc_id)
+      .as_ref()
+      .unwrap()
+      .lock()
+      .enable_undo_redo();
+  }
+
   pub async fn insert(&mut self, id: &str, key: String, value: Any) {
     self
       .collab_by_id
