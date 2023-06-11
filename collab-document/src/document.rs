@@ -44,7 +44,7 @@ impl Document {
 
     match is_document_exist {
       Some(_) => {
-        collab.lock().create_undo_manager();
+        collab.lock().enable_undo_redo();
         Ok(Document::get_document_with_collab(collab))
       },
       None => Document::create_document(collab, None),
@@ -390,7 +390,7 @@ impl Document {
     drop(collab_guard);
 
     let subscription = RootDeepSubscription::default();
-    collab.lock().create_undo_manager();
+    collab.lock().enable_undo_redo();
 
     let document = Self {
       inner: collab,
