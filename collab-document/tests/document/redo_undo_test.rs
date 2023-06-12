@@ -17,7 +17,7 @@ async fn insert_undo_redo() {
   let document = test.document;
   let block_id = nanoid!(10);
 
-  insert_block_for_page(&document, block_id.clone());
+  let block = insert_block_for_page(&document, block_id.clone());
 
   assert!(document.can_undo());
   assert!(document.undo());
@@ -35,6 +35,7 @@ async fn insert_undo_redo() {
   // after redo, the block should be restored
   let insert_block = document.get_block(&block_id);
   assert!(insert_block.is_some());
+  assert!(insert_block.unwrap().eq(&block));
 
   // there should be no redo action after redo
   assert!(!document.redo());
@@ -46,7 +47,7 @@ async fn update_undo_redo() {
   let test = create_document(1, doc_id);
   let document = test.document;
   let block_id = nanoid!(10);
-  insert_block_for_page(&document, block_id.clone());
+  let insert_block = insert_block_for_page(&document, block_id.clone());
 
   // after insert block 1 second, update the block
   tokio::time::sleep(WAIT_TIME).await;
@@ -59,7 +60,7 @@ async fn update_undo_redo() {
 
   // after undo, the data of block should be default
   let block = document.get_block(&block_id).unwrap();
-  assert_eq!(block.data, Default::default());
+  assert!(insert_block.eq(&block));
 
   assert!(document.can_redo());
   assert!(document.redo());
@@ -75,7 +76,7 @@ async fn delete_undo_redo() {
   let test = create_document(1, doc_id);
   let document = test.document;
   let block_id = nanoid!(10);
-  insert_block_for_page(&document, block_id.clone());
+  let insert_block = insert_block_for_page(&document, block_id.clone());
 
   // after insert block 1 second, delete the block
   tokio::time::sleep(WAIT_TIME).await;
@@ -87,6 +88,7 @@ async fn delete_undo_redo() {
   // after undo, the block should be restored
   let block = document.get_block(&block_id);
   assert!(block.is_some());
+  assert!(insert_block.eq(&block.unwrap()));
 
   assert!(document.can_redo());
   assert!(document.redo());

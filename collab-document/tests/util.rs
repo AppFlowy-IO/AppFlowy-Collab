@@ -178,7 +178,7 @@ pub fn apply_actions(document: &Document, actions: Vec<BlockAction>) {
   document.apply_action(actions)
 }
 
-pub fn insert_block_for_page(document: &Document, block_id: String) {
+pub fn insert_block_for_page(document: &Document, block_id: String) -> Block {
   let (page_id, _, _) = get_document_data(document);
   let block = Block {
     id: block_id,
@@ -190,7 +190,7 @@ pub fn insert_block_for_page(document: &Document, block_id: String) {
     data: Default::default(),
   };
 
-  insert_block(document, block, "".to_string()).unwrap();
+  insert_block(document, block, "".to_string()).unwrap()
 }
 
 // struct Cleaner(PathBuf);
