@@ -1,7 +1,10 @@
 use collab_document::blocks::{Block, BlockAction, BlockActionPayload, BlockActionType};
 use nanoid::nanoid;
 
-use crate::util::{apply_actions, create_document, get_document_data};
+use crate::util::{
+  apply_actions, create_document, create_document_with_db, db, get_document_data,
+  open_document_with_db,
+};
 
 #[test]
 fn insert_block_with_empty_parent_id_and_empty_prev_id() {
@@ -38,4 +41,31 @@ fn insert_block_with_empty_parent_id_and_empty_prev_id() {
   let page_children_id = test.document.get_block(&page_id).unwrap().children;
   let page_children = meta.get(&page_children_id).unwrap().to_vec();
   assert!(page_children.contains(&block_id));
+}
+
+#[test]
+fn open_empty_document() {
+  let doc_id = "1";
+  let db = db();
+  let document_test = open_document_with_db(1, doc_id, db);
+  let document = document_test.document;
+  let data = document.get_document();
+  assert!(data.is_err());
+}
+
+#[test]
+fn reopen_document() {
+  let doc_id = "1";
+  let db = db();
+  let test = create_document_with_db(1, doc_id, db.clone());
+  let document = test.document;
+  let (page_id, _, _) = get_document_data(&document);
+
+  // close document
+  drop(document);
+
+  let test = open_document_with_db(1, doc_id, db);
+  let document = test.document;
+  let (page_id2, _, _) = get_document_data(&document);
+  assert_eq!(page_id, page_id2);
 }

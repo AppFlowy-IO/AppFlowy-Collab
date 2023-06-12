@@ -41,8 +41,9 @@ impl Document {
       let txn = &collab_guard.transact();
       collab_guard.get_map_with_txn(txn, vec![ROOT])
     };
+
     match is_document_exist {
-      Some(_) => Ok(Document::get_document_with_collab(collab)),
+      Some(_) => Ok(Document::open_document_with_collab(collab)),
       None => Document::create_document(collab, None),
     }
   }
@@ -319,11 +320,49 @@ impl Document {
       .set_block_with_txn(txn, block_id, Some(block.data), Some(&new_parent.id))
   }
 
+  pub fn redo(&self) -> bool {
+    if !self.can_redo() {
+      return false;
+    }
+    if let Some(mut collab_guard) = self.inner.try_lock() {
+      collab_guard.redo().unwrap_or_default()
+    } else {
+      false
+    }
+  }
+
+  pub fn undo(&self) -> bool {
+    if !self.can_undo() {
+      return false;
+    }
+    if let Some(mut collab_guard) = self.inner.try_lock() {
+      collab_guard.undo().unwrap_or_default()
+    } else {
+      false
+    }
+  }
+
+  pub fn can_redo(&self) -> bool {
+    if let Some(collab_guard) = self.inner.try_lock() {
+      collab_guard.can_redo()
+    } else {
+      false
+    }
+  }
+
+  pub fn can_undo(&self) -> bool {
+    if let Some(collab_guard) = self.inner.try_lock() {
+      collab_guard.can_undo()
+    } else {
+      false
+    }
+  }
+
   fn create_document(
     collab: Arc<MutexCollab>,
     data: Option<DocumentData>,
   ) -> Result<Self, DocumentError> {
-    let collab_guard = collab.lock();
+    let mut collab_guard = collab.lock();
     let (root, block_operation, children_operation) = collab_guard.with_transact_mut(|txn| {
       // { document: {:} }
       let root = collab_guard.insert_map_with_txn(txn, ROOT);
@@ -355,9 +394,12 @@ impl Document {
 
       Ok::<_, DocumentError>((root, block_operation, children_operation))
     })?;
+
+    collab_guard.enable_undo_redo();
+    let subscription = RootDeepSubscription::default();
+
     drop(collab_guard);
 
-    let subscription = RootDeepSubscription::default();
     let document = Self {
       inner: collab,
       root,
@@ -368,7 +410,7 @@ impl Document {
     Ok(document)
   }
 
-  fn get_document_with_collab(collab: Arc<MutexCollab>) -> Self {
+  fn open_document_with_collab(collab: Arc<MutexCollab>) -> Self {
     let collab_guard = collab.lock();
     let txn = collab_guard.transact();
 
@@ -385,6 +427,8 @@ impl Document {
 
     drop(txn);
     drop(collab_guard);
+
+    collab.lock().enable_undo_redo();
 
     Self {
       inner: collab,
