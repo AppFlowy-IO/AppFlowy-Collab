@@ -556,9 +556,12 @@ pub trait OrderArray {
     self
       .array_ref()
       .iter(txn)
-      .position(|value| match self.object_from_value_with_txn(value, txn) {
-        None => false,
-        Some(order) => order.identify_id() == id,
+      .position(|value| {
+        let object = self.object_from_value_with_txn(value, txn);
+        match object {
+          None => false,
+          Some(order) => order.identify_id() == id,
+        }
       })
       .map(|pos| pos as u32)
   }

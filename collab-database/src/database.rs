@@ -14,7 +14,7 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::meta::MetaMap;
 use crate::rows::{
-  CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowId, RowMeta, RowUpdate,
+  CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowId, RowMeta, RowMetaUpdate, RowUpdate,
 };
 use crate::user::DatabaseCollabBuilder;
 use crate::views::{
@@ -255,6 +255,14 @@ impl Database {
     F: FnOnce(RowUpdate),
   {
     self.block.update_row(row_id, f);
+  }
+
+  /// Update the meta of the row
+  pub fn update_row_meta<F>(&self, row_id: &RowId, f: F)
+  where
+    F: FnOnce(RowMetaUpdate),
+  {
+    self.block.update_row_meta(row_id, f);
   }
 
   /// Return the index of the row in the given view.

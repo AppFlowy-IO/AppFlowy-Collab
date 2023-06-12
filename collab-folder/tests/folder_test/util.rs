@@ -85,6 +85,8 @@ pub fn make_test_view(view_id: &str, bid: &str, belongings: Vec<String>) -> View
     children: RepeatedView::new(belongings),
     created_at: 0,
     layout: ViewLayout::Document,
+    icon_url: None,
+    cover_url: None,
   }
 }
 

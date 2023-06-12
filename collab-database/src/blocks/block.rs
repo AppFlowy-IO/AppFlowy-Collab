@@ -6,7 +6,7 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use lru::LruCache;
 use parking_lot::Mutex;
 
-use crate::rows::{Cell, DatabaseRow, Row, RowId, RowMeta, RowUpdate};
+use crate::rows::{Cell, DatabaseRow, Row, RowId, RowMeta, RowMetaUpdate, RowUpdate};
 use crate::user::DatabaseCollabBuilder;
 use crate::views::RowOrder;
 
@@ -69,7 +69,7 @@ impl Block {
   }
 
   pub fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
-    Some(self.get_or_init_row(row_id)?.get_row_meta())
+    self.get_or_init_row(row_id)?.get_row_meta()
   }
 
   pub fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
@@ -103,6 +103,16 @@ impl Block {
     let row = self.cache.lock().get(row_id).cloned();
     if let Some(row) = row {
       row.update::<F>(f);
+    }
+  }
+
+  pub fn update_row_meta<F>(&self, row_id: &RowId, f: F)
+  where
+    F: FnOnce(RowMetaUpdate),
+  {
+    let row = self.cache.lock().get(row_id).cloned();
+    if let Some(row) = row {
+      row.update_meta::<F>(f);
     }
   }
 
