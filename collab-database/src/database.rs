@@ -852,6 +852,13 @@ pub fn gen_database_id() -> String {
   uuid::Uuid::new_v4().to_string()
 }
 
+pub fn gen_row_document_id(row_id: &str) -> Result<String, DatabaseError> {
+  let row_id = uuid::Uuid::parse_str(row_id)?;
+  let mut bytes = row_id.as_bytes().to_vec();
+  bytes[0] = 0x01;
+  Ok(uuid::Uuid::from_slice(bytes.as_slice())?.to_string())
+}
+
 pub fn gen_database_view_id() -> String {
   format!("v:{}", nanoid!(6))
 }

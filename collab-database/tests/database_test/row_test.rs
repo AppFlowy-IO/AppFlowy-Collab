@@ -1,6 +1,7 @@
 use collab_database::database::gen_row_id;
-use collab_database::rows::CreateRowParams;
+use collab_database::rows::{document_id_from_row_id, CreateRowParams, RowId};
 use collab_database::views::CreateViewParams;
+use uuid::Uuid;
 
 use crate::database_test::helper::{create_database, create_database_with_default_data};
 
@@ -202,4 +203,33 @@ fn insert_row_meta_test() {
 
   let row_meta = database_test.get_row_meta(&rows[0].id).unwrap();
   assert_eq!(row_meta.doc_id, Some("123".to_string()));
+}
+
+#[test]
+fn document_id_of_row_test() {
+  let database_test = create_database(1, "1");
+  let row_id = Uuid::parse_str("43f6c30f-9d23-470c-a0dd-8819f08dcf2f").unwrap();
+  let row_order = database_test
+    .create_row(CreateRowParams {
+      id: RowId::from(row_id.clone().to_string()),
+      ..Default::default()
+    })
+    .unwrap();
+
+  let row = database_test.get_row(&row_order.id).unwrap();
+  let expected_document_id = document_id_from_row_id(&Uuid::parse_str(row.id.as_str()).unwrap());
+  assert_eq!(row.document_id(), expected_document_id,);
+  assert_eq!(row.document_id(), expected_document_id,);
+}
+
+#[test]
+fn row_document_id_test() {
+  for _ in 0..10 {
+    let namespace = Uuid::parse_str("43f6c30f-9d23-470c-a0dd-8819f08dcf2f").unwrap();
+    let derived_uuid = Uuid::new_v5(&namespace, b"document_id");
+    assert_eq!(
+      derived_uuid.to_string(),
+      "0b1903ac-0dc2-5643-b0b5-a3f893cac26b".to_string()
+    );
+  }
 }

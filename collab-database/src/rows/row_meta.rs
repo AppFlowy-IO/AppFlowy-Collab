@@ -1,10 +1,10 @@
 use collab::preclude::{MapRef, MapRefExtension, ReadTxn, TransactionMut};
 
 pub const DOCUMENT_ID: &str = "document_id";
-pub struct RowMetaMap(pub MapRef);
+pub struct RowMetaMap<'a>(pub &'a MapRef);
 
-impl RowMetaMap {
-  pub fn new(map_ref: MapRef) -> Self {
+impl<'a> RowMetaMap<'a> {
+  pub fn new(map_ref: &'a MapRef) -> Self {
     Self(map_ref)
   }
 
