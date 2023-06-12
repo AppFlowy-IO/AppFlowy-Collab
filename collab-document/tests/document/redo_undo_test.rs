@@ -14,7 +14,6 @@ const WAIT_TIME: Duration = Duration::from_secs(1);
 async fn insert_undo_redo() {
   let doc_id = "1";
   let test = create_document(1, doc_id);
-  tokio::time::sleep(Duration::from_secs(1)).await;
   let document = test.document;
   let block_id = nanoid!(10);
 
