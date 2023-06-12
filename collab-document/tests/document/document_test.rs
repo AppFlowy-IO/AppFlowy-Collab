@@ -44,6 +44,16 @@ fn insert_block_with_empty_parent_id_and_empty_prev_id() {
 }
 
 #[test]
+fn open_empty_document() {
+  let doc_id = "1";
+  let db = db();
+  let document_test = open_document_with_db(1, doc_id, db);
+  let document = document_test.document;
+  let data = document.get_document();
+  assert!(data.is_err());
+}
+
+#[test]
 fn reopen_document() {
   let doc_id = "1";
   let db = db();

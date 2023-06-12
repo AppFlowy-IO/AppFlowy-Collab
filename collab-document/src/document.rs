@@ -43,10 +43,7 @@ impl Document {
     };
 
     match is_document_exist {
-      Some(_) => {
-        collab.lock().enable_undo_redo();
-        Ok(Document::open_document_with_collab(collab))
-      },
+      Some(_) => Ok(Document::open_document_with_collab(collab)),
       None => Document::create_document(collab, None),
     }
   }
@@ -324,27 +321,41 @@ impl Document {
   }
 
   pub fn redo(&self) -> bool {
-    if self.can_redo() {
-      self.inner.lock().redo().unwrap_or_default()
+    if !self.can_redo() {
+      return false;
+    }
+    if let Some(mut collab_guard) = self.inner.try_lock() {
+      collab_guard.redo().unwrap_or_default()
     } else {
       false
     }
   }
 
   pub fn undo(&self) -> bool {
-    if self.can_undo() {
-      self.inner.lock().undo().unwrap_or_default()
+    if !self.can_undo() {
+      return false;
+    }
+    if let Some(mut collab_guard) = self.inner.try_lock() {
+      collab_guard.undo().unwrap_or_default()
     } else {
       false
     }
   }
 
   pub fn can_redo(&self) -> bool {
-    self.inner.lock().can_redo()
+    if let Some(collab_guard) = self.inner.try_lock() {
+      collab_guard.can_redo()
+    } else {
+      false
+    }
   }
 
   pub fn can_undo(&self) -> bool {
-    self.inner.lock().can_undo()
+    if let Some(collab_guard) = self.inner.try_lock() {
+      collab_guard.can_undo()
+    } else {
+      false
+    }
   }
 
   fn create_document(
@@ -385,10 +396,9 @@ impl Document {
     })?;
 
     collab_guard.enable_undo_redo();
+    let subscription = RootDeepSubscription::default();
 
     drop(collab_guard);
-
-    let subscription = RootDeepSubscription::default();
 
     let document = Self {
       inner: collab,
@@ -417,6 +427,8 @@ impl Document {
 
     drop(txn);
     drop(collab_guard);
+
+    collab.lock().enable_undo_redo();
 
     Self {
       inner: collab,
