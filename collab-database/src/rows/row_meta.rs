@@ -1,6 +1,7 @@
-use crate::rows::{meta_id_from_row_id, RowMetaKey};
 use collab::preclude::{MapRef, MapRefExtension, ReadTxn, TransactionMut};
 use uuid::Uuid;
+
+use crate::rows::{meta_id_from_row_id, RowMetaKey};
 
 pub struct RowMetaMap<'a>(pub &'a MapRef);
 
@@ -61,7 +62,9 @@ impl<'a, 'b, 'c> RowMetaUpdate<'a, 'b, 'c> {
   }
 }
 
+#[derive(Debug, Clone)]
 pub struct RowMeta {
+  pub row_id: String,
   pub document_id: String,
   pub icon_url: Option<String>,
   pub cover_url: Option<String>,
@@ -70,6 +73,7 @@ pub struct RowMeta {
 impl RowMeta {
   pub(crate) fn from_map_ref<T: ReadTxn>(txn: &T, row_id: &Uuid, map_ref: &MapRef) -> Self {
     Self {
+      row_id: row_id.to_string(),
       document_id: meta_id_from_row_id(row_id, RowMetaKey::DocumentId),
       icon_url: map_ref.get_str_with_txn(txn, &meta_id_from_row_id(row_id, RowMetaKey::IconId)),
       cover_url: map_ref.get_str_with_txn(txn, &meta_id_from_row_id(row_id, RowMetaKey::CoverId)),
