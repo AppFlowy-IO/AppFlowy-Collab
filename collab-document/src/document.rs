@@ -411,24 +411,24 @@ impl Document {
   }
 
   fn open_document_with_collab(collab: Arc<MutexCollab>) -> Self {
-    let collab_guard = collab.lock();
-    let txn = collab_guard.transact();
+    let mut collab_guard = collab.lock();
+    let (root, block_operation, children_operation, subscription) = {
+      let txn = collab_guard.transact();
+      let root = collab_guard.get_map_with_txn(&txn, vec![ROOT]).unwrap();
+      let blocks = collab_guard
+        .get_map_with_txn(&txn, vec![ROOT, BLOCKS])
+        .unwrap();
+      let children_map = collab_guard
+        .get_map_with_txn(&txn, vec![ROOT, META, CHILDREN_MAP])
+        .unwrap();
+      let children_operation = ChildrenOperation::new(children_map);
+      let block_operation = BlockOperation::new(blocks, children_operation.clone());
+      let subscription = RootDeepSubscription::default();
+      (root, block_operation, children_operation, subscription)
+    };
 
-    let root = collab_guard.get_map_with_txn(&txn, vec![ROOT]).unwrap();
-    let blocks = collab_guard
-      .get_map_with_txn(&txn, vec![ROOT, BLOCKS])
-      .unwrap();
-    let children_map = collab_guard
-      .get_map_with_txn(&txn, vec![ROOT, META, CHILDREN_MAP])
-      .unwrap();
-    let children_operation = ChildrenOperation::new(children_map);
-    let block_operation = BlockOperation::new(blocks, children_operation.clone());
-    let subscription = RootDeepSubscription::default();
-
-    drop(txn);
+    collab_guard.enable_undo_redo();
     drop(collab_guard);
-
-    collab.lock().enable_undo_redo();
 
     Self {
       inner: collab,
