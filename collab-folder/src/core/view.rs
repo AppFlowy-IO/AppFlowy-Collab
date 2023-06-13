@@ -18,6 +18,8 @@ const VIEW_DESC: &str = "desc";
 const VIEW_DATABASE_ID: &str = "database_id";
 const VIEW_LAYOUT: &str = "layout";
 const VIEW_CREATE_AT: &str = "created_at";
+const VIEW_ICON_URL: &str = "icon_url";
+const VIEW_COVER_URL: &str = "cover_url";
 
 pub struct ViewsMap {
   container: MapRefWrapper,
@@ -125,6 +127,8 @@ impl ViewsMap {
           .set_layout(view.layout)
           .set_created_at(view.created_at)
           .set_children(view.children)
+          .set_icon_url_if_not_none(view.icon_url)
+          .set_cover_url_if_not_none(view.cover_url)
           .done();
       })
       .done();
@@ -178,19 +182,24 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     .get_i64_with_txn(txn, VIEW_LAYOUT)
     .map(|value| value.try_into().ok())??;
 
-  let belongings = belonging_map
+  let children = belonging_map
     .get_children_with_txn(txn, &id)
     .map(|array| array.get_children_with_txn(txn))
     .unwrap_or_default();
+
+  let icon_url = map_ref.get_str_with_txn(txn, VIEW_ICON_URL);
+  let cover_url = map_ref.get_str_with_txn(txn, VIEW_COVER_URL);
 
   Some(View {
     id,
     parent_view_id: bid,
     name,
     desc,
-    children: belongings,
+    children,
     created_at,
     layout,
+    icon_url,
+    cover_url,
   })
 }
 
@@ -251,6 +260,8 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   impl_str_update!(set_desc, set_desc_if_not_none, VIEW_DESC);
   impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
   impl_any_update!(set_layout, set_layout_if_not_none, VIEW_LAYOUT, ViewLayout);
+  impl_str_update!(icon_url, set_icon_url_if_not_none, VIEW_ICON_URL);
+  impl_str_update!(cover_url, set_cover_url_if_not_none, VIEW_COVER_URL);
 
   pub fn new(
     view_id: &'a str,
@@ -296,6 +307,8 @@ pub struct View {
   pub children: RepeatedView,
   pub created_at: i64,
   pub layout: ViewLayout,
+  pub icon_url: Option<String>,
+  pub cover_url: Option<String>,
 }
 
 #[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize_repr, Deserialize_repr)]

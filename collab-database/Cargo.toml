@@ -23,7 +23,7 @@ lazy_static = "1.4.0"
 lru = "0.10.0"
 collab-plugins = { path = "../collab-plugins", features = ["disk_rocksdb"] }
 async-trait = "0.1"
-uuid = { version = "1.3.3", features = ["v4"] }
+uuid = { version = "1.3.3", features = ["v4", "v5"] }
 base64 = "^0.21"
 
 [dev-dependencies]

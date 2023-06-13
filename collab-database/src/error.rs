@@ -21,6 +21,9 @@ pub enum DatabaseError {
   #[error(transparent)]
   SerdeJson(#[from] serde_json::Error),
 
+  #[error(transparent)]
+  UuidError(#[from] uuid::Error),
+
   #[error("Internal error")]
   Internal(#[from] anyhow::Error),
 }
