@@ -21,7 +21,7 @@ impl DatabaseSerde {
 
     let fields = match &inline_view {
       None => vec![],
-      Some(view_id) => database.get_fields_with_txn(&txn, view_id, None),
+      Some(view_id) => database.get_fields_in_view_with_txn(&txn, view_id, None),
     };
 
     let rows = match &inline_view {

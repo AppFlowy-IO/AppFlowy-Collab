@@ -2,9 +2,7 @@ use collab::preclude::lib0Any;
 use collab_database::database::{gen_row_id, DatabaseData};
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
-use collab_database::views::{
-  CreateViewParams, DatabaseLayout, LayoutSettingBuilder, LayoutSettings,
-};
+use collab_database::views::{CreateViewParams, DatabaseLayout, LayoutSettingBuilder};
 use nanoid::nanoid;
 use serde_json::json;
 
@@ -146,21 +144,18 @@ fn create_database_view_with_filter_test() {
 #[test]
 fn create_database_view_with_layout_setting_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let mut layout_settings = LayoutSettings::new();
   let grid_setting = LayoutSettingBuilder::new()
     .insert_i64_value("1", 123)
     .insert_any("2", "abc")
     .build();
 
-  layout_settings.insert(DatabaseLayout::Grid, grid_setting);
-
-  let params = CreateViewParams {
-    database_id: "1".to_string(),
-    view_id: "v1".to_string(),
-    layout: DatabaseLayout::Grid,
-    layout_settings,
-    ..Default::default()
-  };
+  let params = CreateViewParams::new(
+    "1".to_string(),
+    "v1".to_string(),
+    "my first grid".to_string(),
+    DatabaseLayout::Grid,
+  )
+  .with_layout_setting(grid_setting);
   database_test.create_linked_view(params).unwrap();
 
   let view = database_test.views.get_view("v1").unwrap();
