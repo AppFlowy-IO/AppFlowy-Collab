@@ -8,7 +8,7 @@ use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, CreateRowParams};
 use collab_database::user::DatabaseCollabBuilder;
-use collab_database::views::CreateDatabaseParams;
+use collab_database::views::{CreateDatabaseParams, DatabaseLayout, LayoutSetting, LayoutSettings};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
 
@@ -19,9 +19,6 @@ use crate::user_test::helper::UserDatabaseCollabBuilderImpl;
 
 pub struct DatabaseTest {
   database: Database,
-
-  #[allow(dead_code)]
-  cleaner: Option<Cleaner>,
 }
 
 unsafe impl Send for DatabaseTest {}
@@ -63,10 +60,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     ..Default::default()
   };
   let database = Database::create_with_inline_view(params, context).unwrap();
-  DatabaseTest {
-    database,
-    cleaner: None,
-  }
+  DatabaseTest { database }
 }
 
 pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<RocksCollabDB>, DatabaseTest) {
@@ -92,13 +86,7 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<RocksCollabD
     ..Default::default()
   };
   let database = Database::create_with_inline_view(params, context).unwrap();
-  (
-    db,
-    DatabaseTest {
-      database,
-      cleaner: None,
-    },
-  )
+  (db, DatabaseTest { database })
 }
 
 pub fn restore_database_from_db(
@@ -121,9 +109,79 @@ pub fn restore_database_from_db(
     collab_builder,
   };
   let database = Database::get_or_create(database_id, context).unwrap();
-  DatabaseTest {
-    database,
-    cleaner: None,
+  DatabaseTest { database }
+}
+
+pub struct DatabaseTestBuilder {
+  uid: i64,
+  database_id: String,
+  view_id: String,
+  rows: Vec<CreateRowParams>,
+  layout_settings: LayoutSettings,
+  fields: Vec<Field>,
+  layout: DatabaseLayout,
+}
+
+impl DatabaseTestBuilder {
+  pub fn new(uid: i64, database_id: &str) -> Self {
+    Self {
+      uid,
+      database_id: database_id.to_string(),
+      view_id: "v1".to_string(),
+      rows: vec![],
+      layout_settings: Default::default(),
+      fields: vec![],
+      layout: DatabaseLayout::Grid,
+    }
+  }
+
+  pub fn with_row(mut self, row: CreateRowParams) -> Self {
+    self.rows.push(row);
+    self
+  }
+
+  pub fn with_layout_setting(mut self, layout_setting: LayoutSetting) -> Self {
+    self.layout_settings.insert(self.layout, layout_setting);
+    self
+  }
+
+  pub fn with_field(mut self, field: Field) -> Self {
+    self.fields.push(field);
+    self
+  }
+
+  pub fn with_layout(mut self, layout: DatabaseLayout) -> Self {
+    self.layout = layout;
+    self
+  }
+
+  pub fn build(self) -> DatabaseTest {
+    let tempdir = TempDir::new().unwrap();
+    let path = tempdir.into_path();
+    let db = Arc::new(RocksCollabDB::open(path).unwrap());
+    let collab = CollabBuilder::new(self.uid, &self.database_id).build();
+    collab.initial();
+    let collab_builder = Arc::new(UserDatabaseCollabBuilderImpl());
+    let block = Block::new(self.uid, db, collab_builder.clone());
+    let context = DatabaseContext {
+      collab: Arc::new(collab),
+      block,
+      collab_builder,
+    };
+    let params = CreateDatabaseParams {
+      database_id: self.database_id.clone(),
+      view_id: self.view_id,
+      name: "my first database view".to_string(),
+      layout: self.layout,
+      layout_settings: self.layout_settings,
+      filters: vec![],
+      groups: vec![],
+      sorts: vec![],
+      created_rows: self.rows,
+      fields: self.fields,
+    };
+    let database = Database::create_with_inline_view(params, context).unwrap();
+    DatabaseTest { database }
   }
 }
 

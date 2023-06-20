@@ -1,6 +1,10 @@
-use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
-use crate::helper::TestCalendarLayoutSetting;
+use collab_database::fields::Field;
 use collab_database::views::DatabaseLayout;
+
+use crate::database_test::helper::{
+  create_database_with_default_data, DatabaseTest, DatabaseTestBuilder,
+};
+use crate::helper::TestCalendarLayoutSetting;
 
 #[test]
 fn get_layout_setting_test() {
@@ -16,6 +20,26 @@ fn get_layout_setting_test() {
     .get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Grid)
     .unwrap();
   assert_eq!(layout_setting.field_id, "f2");
+}
+
+#[test]
+fn create_database_view_with_layout_setting_test() {
+  let database_test = DatabaseTestBuilder::new(1, "1")
+    .with_layout(DatabaseLayout::Calendar)
+    .with_field(Field::new(
+      "f1".to_string(),
+      "text field".to_string(),
+      0,
+      true,
+    ))
+    .with_layout_setting(TestCalendarLayoutSetting::new("f1".to_string()).into())
+    .build();
+
+  let layout_setting = database_test
+    .views
+    .get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Calendar)
+    .unwrap();
+  assert_eq!(layout_setting.field_id, "f1");
 }
 
 #[test]

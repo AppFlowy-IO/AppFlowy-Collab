@@ -47,6 +47,15 @@ pub struct CreateViewParams {
   pub filters: Vec<FilterMap>,
   pub groups: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
+  /// When creating a view for a database, it might need to create a new field for the view.
+  /// For example, if the view is calendar view, it must have a date field.
+  pub deps_fields: Vec<Field>,
+}
+
+impl CreateViewParams {
+  pub fn take_deps_fields(&mut self) -> Vec<Field> {
+    std::mem::take(&mut self.deps_fields)
+  }
 }
 
 impl CreateViewParams {
@@ -56,11 +65,28 @@ impl CreateViewParams {
       view_id,
       name,
       layout,
-      layout_settings: LayoutSettings::default(),
-      filters: vec![],
-      groups: vec![],
-      sorts: vec![],
+      ..Default::default()
     }
+  }
+
+  pub fn with_layout_setting(mut self, layout_setting: LayoutSetting) -> Self {
+    self.layout_settings.insert(self.layout, layout_setting);
+    self
+  }
+
+  pub fn with_filters(mut self, filters: Vec<FilterMap>) -> Self {
+    self.filters = filters;
+    self
+  }
+
+  pub fn with_groups(mut self, groups: Vec<GroupSettingMap>) -> Self {
+    self.groups = groups;
+    self
+  }
+
+  pub fn with_deps_fields(mut self, fields: Vec<Field>) -> Self {
+    self.deps_fields = fields;
+    self
   }
 }
 
@@ -115,6 +141,7 @@ impl CreateDatabaseParams {
         filters: self.filters,
         groups: self.groups,
         sorts: self.sorts,
+        deps_fields: vec![],
       },
     )
   }

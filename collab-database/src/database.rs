@@ -56,9 +56,12 @@ impl Database {
     // Get or create a empty database with the given database_id
     let this = Self::get_or_create(&params.database_id, context)?;
     let (rows, fields, params) = params.split();
+    if !params.deps_fields.is_empty() {
+      tracing::warn!("The deps_fields should be empty when creating a database with inline view.");
+    }
+
     let row_orders = this.block.create_rows(rows);
     let field_orders = fields.iter().map(FieldOrder::from).collect();
-
     this.root.with_transact_mut(|txn| {
       // Set the inline view id. The inline view id should not be
       // empty if the current database exists.
@@ -347,20 +350,39 @@ impl Database {
       .position(|order| order.id == field_id)
   }
 
-  /// Get all fields in the database
-  /// These fields are ordered by the [FieldOrder] of the view
-  /// If field_ids is None, return all fields
-  /// If field_ids is Some, return the fields with the given ids
-  pub fn get_fields(&self, view_id: &str, field_ids: Option<Vec<String>>) -> Vec<Field> {
+  /// Returns the [Field] with the given field ids.
+  /// The fields are unordered.
+  pub fn get_fields(&self, field_ids: Option<Vec<String>>) -> Vec<Field> {
     let txn = self.root.transact();
-    self.get_fields_with_txn(&txn, view_id, field_ids)
+    self.get_fields_with_txn(&txn, field_ids)
+  }
+
+  pub fn get_fields_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    field_ids: Option<Vec<String>>,
+  ) -> Vec<Field> {
+    self
+      .fields
+      .get_fields_with_txn(txn, field_ids)
+      .into_iter()
+      .collect::<Vec<Field>>()
   }
 
   /// Get all fields in the database
   /// These fields are ordered by the [FieldOrder] of the view
   /// If field_ids is None, return all fields
   /// If field_ids is Some, return the fields with the given ids
-  pub fn get_fields_with_txn<T: ReadTxn>(
+  pub fn get_fields_in_view(&self, view_id: &str, field_ids: Option<Vec<String>>) -> Vec<Field> {
+    let txn = self.root.transact();
+    self.get_fields_in_view_with_txn(&txn, view_id, field_ids)
+  }
+
+  /// Get all fields in the database
+  /// These fields are ordered by the [FieldOrder] of the view
+  /// If field_ids is None, return all fields
+  /// If field_ids is Some, return the fields with the given ids
+  pub fn get_fields_in_view_with_txn<T: ReadTxn>(
     &self,
     txn: &T,
     view_id: &str,
@@ -399,6 +421,25 @@ impl Database {
       update.push_field_order(&field);
     });
     self.fields.insert_field_with_txn(txn, field);
+  }
+
+  pub fn create_field_with_mut(
+    &self,
+    view_id: &str,
+    name: String,
+    field_type: i64,
+    f: impl FnOnce(&mut Field),
+  ) -> (usize, Field) {
+    let mut field = Field::new(gen_field_id(), name, field_type, false);
+    f(&mut field);
+    let index = self.root.with_transact_mut(|txn| {
+      self.create_field_with_txn(txn, field.clone());
+      self
+        .index_of_field_with_txn(txn, view_id, &field.id)
+        .unwrap_or_default()
+    });
+
+    (index, field)
   }
 
   fn insert_field_with_txn(
@@ -655,12 +696,22 @@ impl Database {
 
   /// Create a linked view to existing database
   pub fn create_linked_view(&self, params: CreateViewParams) -> Result<(), DatabaseError> {
-    let params = CreateViewParamsValidator::validate(params)?;
+    let mut params = CreateViewParamsValidator::validate(params)?;
     self.root.with_transact_mut(|txn| {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
       let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
+      let deps_fields = params.take_deps_fields();
+
       let field_orders = self.views.get_field_orders_txn(txn, &inline_view_id);
       self.create_view_with_txn(txn, params, field_orders, row_orders)?;
+
+      // After creating the view, we need to create the fields that are used in the view.
+      if !deps_fields.is_empty() {
+        tracing::trace!("create linked view with deps fields: {:?}", deps_fields);
+        deps_fields.into_iter().for_each(|field| {
+          self.create_field_with_txn(txn, field);
+        })
+      }
       Ok::<(), DatabaseError>(())
     })?;
     Ok(())
@@ -691,6 +742,7 @@ impl Database {
       created_at: timestamp,
       modified_at: timestamp,
     };
+    // tracing::trace!("create linked view with params {:?}", params);
     self.views.insert_view_with_txn(txn, view);
     Ok(())
   }
@@ -751,7 +803,7 @@ impl Database {
     let txn = self.root.transact();
     let timestamp = timestamp();
     let mut view = self.views.get_view_with_txn(&txn, &inline_view_id).unwrap();
-    let fields = self.get_fields_with_txn(&txn, &inline_view_id, None);
+    let fields = self.get_fields_in_view_with_txn(&txn, &inline_view_id, None);
     let row_orders = self.views.get_row_orders_with_txn(&txn, &view.id);
     let rows = self
       .block
@@ -775,25 +827,6 @@ impl Database {
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
     let txn = self.root.transact();
     self.views.get_view_with_txn(&txn, view_id)
-  }
-
-  pub fn create_default_field(
-    &self,
-    view_id: &str,
-    name: String,
-    field_type: i64,
-    f: impl FnOnce(&mut Field),
-  ) -> (usize, Field) {
-    let mut field = Field::new(gen_field_id(), name, field_type, false);
-    f(&mut field);
-    let index = self.root.with_transact_mut(|txn| {
-      self.create_field_with_txn(txn, field.clone());
-      self
-        .index_of_field_with_txn(txn, view_id, &field.id)
-        .unwrap_or_default()
-    });
-
-    (index, field)
   }
 
   pub fn to_json_value(&self) -> JsonValue {

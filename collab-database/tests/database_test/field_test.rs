@@ -1,6 +1,7 @@
-use crate::database_test::helper::{create_database, create_database_with_default_data};
 use collab_database::fields::Field;
 use collab_database::views::CreateViewParams;
+
+use crate::database_test::helper::{create_database, create_database_with_default_data};
 
 #[test]
 fn create_single_field_test() {
@@ -148,7 +149,7 @@ fn get_field_in_order_test() {
       true,
     ));
   }
-  let fields = database_test.get_fields("v1", None);
+  let fields = database_test.get_fields_in_view("v1", None);
   assert_eq!(fields[0].id, "f0");
   assert_eq!(fields[1].id, "f1");
   assert_eq!(fields[2].id, "f2");
@@ -156,7 +157,7 @@ fn get_field_in_order_test() {
   database_test.views.update_database_view("v1", |update| {
     update.move_field_order(0, 2);
   });
-  let fields = database_test.get_fields("v1", None);
+  let fields = database_test.get_fields_in_view("v1", None);
   assert_eq!(fields[0].id, "f1");
   assert_eq!(fields[1].id, "f2");
   assert_eq!(fields[2].id, "f0");
