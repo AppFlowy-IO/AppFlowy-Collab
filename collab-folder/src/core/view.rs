@@ -1,19 +1,22 @@
+use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use anyhow::bail;
 use collab::preclude::{
   lib0Any, DeepEventsSubscription, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
-use crate::core::folder_observe::{ViewChange, ViewChangeSender};
-use crate::core::{subscribe_view_change, RepeatedView, ViewIdentifier, ViewRelations};
+use crate::core::folder_observe::ViewChangeSender;
+use crate::core::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
 use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update};
 
 const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";
-const VIEW_BID: &str = "bid";
+const VIEW_PARENT_ID: &str = "bid";
 const VIEW_DESC: &str = "desc";
 const VIEW_DATABASE_ID: &str = "database_id";
 const VIEW_LAYOUT: &str = "layout";
@@ -23,49 +26,102 @@ const VIEW_COVER_URL: &str = "cover_url";
 
 pub struct ViewsMap {
   container: MapRefWrapper,
+  view_relations: Rc<ViewRelations>,
+  view_cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
+
   #[allow(dead_code)]
   subscription: DeepEventsSubscription,
+  #[allow(dead_code)]
   change_tx: ViewChangeSender,
-  view_relations: Rc<ViewRelations>,
 }
 
 impl ViewsMap {
   pub fn new(
     mut root: MapRefWrapper,
     change_tx: ViewChangeSender,
-    views_relation: Rc<ViewRelations>,
+    view_relations: Rc<ViewRelations>,
   ) -> ViewsMap {
-    let subscription = subscribe_view_change(&mut root, change_tx.clone(), views_relation.clone());
+    let view_cache = Arc::new(RwLock::new(HashMap::new()));
+    let subscription = subscribe_view_change(
+      &mut root,
+      view_cache.clone(),
+      change_tx.clone(),
+      view_relations.clone(),
+    );
     Self {
       container: root,
       subscription,
       change_tx,
-      view_relations: views_relation,
+      view_relations,
+      view_cache,
     }
   }
 
-  pub fn get_views_belong_to(&self, bid: &str) -> Vec<View> {
-    let txn = self.container.transact();
-    self.get_views_belong_to_with_txn(&txn, bid)
+  pub fn move_child(&self, parent_id: &str, from: u32, to: u32) {
+    self.view_relations.move_child(parent_id, from, to);
+    self.remove_cache_view(parent_id);
   }
 
-  pub fn get_views_belong_to_with_txn<T: ReadTxn>(&self, txn: &T, bid: &str) -> Vec<View> {
-    match self.get_view_with_txn(txn, bid) {
+  pub fn remove_child(&self, parent_id: &str, child_index: u32) {
+    self.container.with_transact_mut(|txn| {
+      if let Some(parent) = self.view_relations.get_children_with_txn(txn, parent_id) {
+        if let Some(identifier) = parent.remove_child_with_txn(txn, child_index) {
+          self.delete_views_with_txn(txn, vec![identifier.id])
+        }
+      }
+    });
+  }
+
+  pub fn get_views_belong_to(&self, parent_view_id: &str) -> Vec<Arc<View>> {
+    let txn = self.container.transact();
+    self.get_views_belong_to_with_txn(&txn, parent_view_id)
+  }
+
+  pub fn get_views_belong_to_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    parent_view_id: &str,
+  ) -> Vec<Arc<View>> {
+    match self.get_view_with_txn(txn, parent_view_id) {
       Some(root_view) => root_view
         .children
         .iter()
-        .flat_map(|be| {
-          self
-            .container
-            .get_map_with_txn(txn, &be.id)
-            .and_then(|map| view_from_map_ref(&map, txn, &self.view_relations))
+        .flat_map(|child| {
+          let cache_view = self.get_cache_view(txn, &child.id);
+          match cache_view {
+            None => {
+              let view = self
+                .container
+                .get_map_with_txn(txn, &child.id)
+                .and_then(|map| view_from_map_ref(&map, txn, &self.view_relations))
+                .map(Arc::new);
+              self.set_cache_view(view.clone());
+              view
+            },
+            Some(view) => Some(view),
+          }
         })
-        .collect::<Vec<View>>(),
-      None => vec![],
+        .collect::<Vec<Arc<View>>>(),
+      None => {
+        let child_view_ids = self
+          .view_relations
+          .get_children(parent_view_id)
+          .map(|array| {
+            array
+              .get_children_with_txn(txn)
+              .into_inner()
+              .into_iter()
+              .map(|identifier| identifier.id)
+              .collect::<Vec<String>>()
+          })
+          .unwrap_or_default();
+
+        self.get_views(&child_view_ids)
+      },
     }
   }
 
-  pub fn get_views<T: AsRef<str>>(&self, view_ids: &[T]) -> Vec<View> {
+  pub fn get_views<T: AsRef<str>>(&self, view_ids: &[T]) -> Vec<Arc<View>> {
     let txn = self.container.transact();
     self.get_views_with_txn(&txn, view_ids)
   }
@@ -74,21 +130,27 @@ impl ViewsMap {
     &self,
     txn: &T,
     view_ids: &[V],
-  ) -> Vec<View> {
+  ) -> Vec<Arc<View>> {
     view_ids
       .iter()
       .flat_map(|view_id| self.get_view_with_txn(txn, view_id.as_ref()))
       .collect::<Vec<_>>()
   }
 
-  pub fn get_view(&self, view_id: &str) -> Option<View> {
+  pub fn get_view(&self, view_id: &str) -> Option<Arc<View>> {
     let txn = self.container.transact();
     self.get_view_with_txn(&txn, view_id)
   }
 
-  pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<View> {
-    let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-    view_from_map_ref(&map_ref, txn, &self.view_relations)
+  pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<Arc<View>> {
+    let view = self.get_cache_view(txn, view_id);
+    if view.is_none() {
+      let map_ref = self.container.get_map_with_txn(txn, view_id)?;
+      let view = view_from_map_ref(&map_ref, txn, &self.view_relations).map(Arc::new);
+      self.set_cache_view(view.clone());
+      return view;
+    }
+    view
   }
 
   pub fn get_view_name_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<String> {
@@ -107,18 +169,20 @@ impl ViewsMap {
       let view_identifier = ViewIdentifier {
         id: view.id.clone(),
       };
-      ViewUpdate::new(
+      let view = ViewUpdate::new(
         &view.parent_view_id,
         txn,
         &parent_map_ref,
         self.view_relations.clone(),
       )
       .add_children(vec![view_identifier])
-      .done();
+      .done()
+      .map(Arc::new);
+      self.set_cache_view(view);
     }
 
     let map_ref = self.container.insert_map_with_txn(txn, &view.id);
-    ViewBuilder::new(&view.id, txn, map_ref, self.view_relations.clone())
+    let view = ViewBuilder::new(&view.id, txn, map_ref, self.view_relations.clone())
       .update(|update| {
         update
           .set_name(view.name)
@@ -129,9 +193,11 @@ impl ViewsMap {
           .set_children(view.children)
           .set_icon_url_if_not_none(view.icon_url)
           .set_cover_url_if_not_none(view.cover_url)
-          .done();
+          .done()
       })
-      .done();
+      .done()
+      .map(Arc::new);
+    self.set_cache_view(view);
   }
 
   pub fn delete_views<T: AsRef<str>>(&self, view_ids: Vec<T>) {
@@ -141,37 +207,45 @@ impl ViewsMap {
   }
 
   pub fn delete_views_with_txn<T: AsRef<str>>(&self, txn: &mut TransactionMut, view_ids: Vec<T>) {
-    // Get the view before deleting.
-    let views = view_ids
-      .iter()
-      .flat_map(|view_id| self.get_view_with_txn(txn, view_id.as_ref()))
-      .collect::<Vec<View>>();
-
     view_ids.iter().for_each(|view_id| {
       self.container.delete_with_txn(txn, view_id.as_ref());
     });
-
-    let _ = self.change_tx.send(ViewChange::DidDeleteView { views });
   }
 
-  pub fn update_view<F>(&self, view_id: &str, f: F) -> Option<View>
+  pub fn update_view<F>(&self, view_id: &str, f: F) -> Option<Arc<View>>
   where
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
     self.container.with_transact_mut(|txn| {
       let map_ref = self.container.get_map_with_txn(txn, view_id)?;
       let update = ViewUpdate::new(view_id, txn, &map_ref, self.view_relations.clone());
-      f(update)
+      let view = f(update).map(Arc::new);
+      self.set_cache_view(view.clone());
+      view
     })
+  }
+
+  fn set_cache_view(&self, view: Option<Arc<View>>) {
+    if let Some(view) = view {
+      self.view_cache.write().insert(view.id.clone(), view);
+    }
+  }
+
+  fn get_cache_view<T: ReadTxn>(&self, _txn: &T, view_id: &str) -> Option<Arc<View>> {
+    self.view_cache.read().get(view_id).cloned()
+  }
+
+  fn remove_cache_view(&self, view_id: &str) {
+    self.view_cache.write().remove(view_id);
   }
 }
 
 pub(crate) fn view_from_map_ref<T: ReadTxn>(
   map_ref: &MapRef,
   txn: &T,
-  belonging_map: &Rc<ViewRelations>,
+  view_relations: &Rc<ViewRelations>,
 ) -> Option<View> {
-  let bid = map_ref.get_str_with_txn(txn, VIEW_BID)?;
+  let parent_view_id = map_ref.get_str_with_txn(txn, VIEW_PARENT_ID)?;
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
   let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();
   let desc = map_ref.get_str_with_txn(txn, VIEW_DESC).unwrap_or_default();
@@ -182,7 +256,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     .get_i64_with_txn(txn, VIEW_LAYOUT)
     .map(|value| value.try_into().ok())??;
 
-  let children = belonging_map
+  let children = view_relations
     .get_children_with_txn(txn, &id)
     .map(|array| array.get_children_with_txn(txn))
     .unwrap_or_default();
@@ -192,7 +266,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
 
   Some(View {
     id,
-    parent_view_id: bid,
+    parent_view_id,
     name,
     desc,
     children,
@@ -208,6 +282,7 @@ pub struct ViewBuilder<'a, 'b> {
   map_ref: MapRefWrapper,
   txn: &'a mut TransactionMut<'b>,
   belongings: Rc<ViewRelations>,
+  view: Option<View>,
 }
 
 impl<'a, 'b> ViewBuilder<'a, 'b> {
@@ -223,12 +298,13 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
       map_ref,
       txn,
       belongings,
+      view: None,
     }
   }
 
-  pub fn update<F>(self, f: F) -> Self
+  pub fn update<F>(mut self, f: F) -> Self
   where
-    F: FnOnce(ViewUpdate),
+    F: FnOnce(ViewUpdate) -> Option<View>,
   {
     let update = ViewUpdate::new(
       self.view_id,
@@ -236,10 +312,12 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
       &self.map_ref,
       self.belongings.clone(),
     );
-    f(update);
+    self.view = f(update);
     self
   }
-  pub fn done(self) {}
+  pub fn done(self) -> Option<View> {
+    self.view
+  }
 }
 
 pub struct ViewUpdate<'a, 'b, 'c> {
@@ -251,7 +329,7 @@ pub struct ViewUpdate<'a, 'b, 'c> {
 
 impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   impl_str_update!(set_name, set_name_if_not_none, VIEW_NAME);
-  impl_str_update!(set_bid, set_bid_if_not_none, VIEW_BID);
+  impl_str_update!(set_bid, set_bid_if_not_none, VIEW_PARENT_ID);
   impl_option_str_update!(
     set_database_id,
     set_database_id_if_not_none,
@@ -277,7 +355,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     }
   }
 
-  pub fn set_children(self, children: RepeatedView) -> Self {
+  pub fn set_children(self, children: RepeatedViewIdentifier) -> Self {
     let array = self
       .children_map
       .get_or_create_children_with_txn(self.txn, self.view_id);
@@ -304,7 +382,7 @@ pub struct View {
   pub parent_view_id: String,
   pub name: String,
   pub desc: String,
-  pub children: RepeatedView,
+  pub children: RepeatedViewIdentifier,
   pub created_at: i64,
   pub layout: ViewLayout,
   pub icon_url: Option<String>,

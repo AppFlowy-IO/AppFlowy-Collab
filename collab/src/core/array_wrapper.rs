@@ -1,11 +1,13 @@
-use crate::preclude::{CollabContext, MapRefWrapper};
-use crate::util::insert_json_value_to_array_ref;
+use std::ops::{Deref, DerefMut};
+
 use anyhow::Result;
 use lib0::any::Any;
 use serde::Serialize;
-use std::ops::{Deref, DerefMut};
 use yrs::block::Prelim;
 use yrs::{Array, ArrayRef, MapPrelim, MapRef, ReadTxn, Transact, Transaction, TransactionMut};
+
+use crate::preclude::{CollabContext, MapRefWrapper, YrsValue};
+use crate::util::insert_json_value_to_array_ref;
 
 #[derive(Clone)]
 pub struct ArrayRefWrapper {
@@ -58,8 +60,10 @@ impl ArrayRefWrapper {
       .collect::<Vec<_>>()
   }
 
-  pub fn remove_with_txn(&self, txn: &mut TransactionMut, index: u32) {
+  pub fn remove_with_txn(&self, txn: &mut TransactionMut, index: u32) -> Option<YrsValue> {
+    let value = self.array_ref.get(txn, index);
     self.array_ref.remove(txn, index);
+    value
   }
 
   pub fn into_inner(self) -> ArrayRef {
