@@ -1,8 +1,9 @@
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
+
 use collab::preclude::{lib0Any, YrsValue};
 use collab::preclude::{Array, ArrayRef, ArrayRefWrapper, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
 
 /// Used to keep track of the view hierarchy.
 /// Parent-child relationship is stored in the map and each child is stored in an array.
@@ -93,12 +94,12 @@ impl ChildrenArray {
     Self(array)
   }
 
-  pub fn get_children(&self) -> RepeatedView {
+  pub fn get_children(&self) -> RepeatedViewIdentifier {
     let txn = self.0.transact();
     self.get_children_with_txn(&txn)
   }
 
-  pub fn get_children_with_txn<T: ReadTxn>(&self, txn: &T) -> RepeatedView {
+  pub fn get_children_with_txn<T: ReadTxn>(&self, txn: &T) -> RepeatedViewIdentifier {
     children_from_array_ref(txn, &self.0)
   }
 
@@ -114,8 +115,15 @@ impl ChildrenArray {
     }
   }
 
-  pub fn remove_child_with_txn(&self, txn: &mut TransactionMut, index: u32) {
-    self.0.remove_with_txn(txn, index);
+  pub fn remove_child_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    index: u32,
+  ) -> Option<ViewIdentifier> {
+    self
+      .0
+      .remove_with_txn(txn, index)
+      .and_then(view_identifier_from_value)
   }
 
   pub fn remove_child(&self, index: u32) {
@@ -147,25 +155,34 @@ impl ChildrenArray {
   }
 }
 
-pub fn children_from_array_ref<T: ReadTxn>(txn: &T, array_ref: &ArrayRef) -> RepeatedView {
-  let mut children = RepeatedView::new(vec![]);
+pub fn children_from_array_ref<T: ReadTxn>(
+  txn: &T,
+  array_ref: &ArrayRef,
+) -> RepeatedViewIdentifier {
+  let mut children = RepeatedViewIdentifier::new(vec![]);
   for value in array_ref.iter(txn) {
-    if let YrsValue::Any(lib0Any::Map(map)) = value {
-      if let Some(belonging) = ViewIdentifier::from_map(&map) {
-        children.items.push(belonging);
-      }
+    if let Some(identifier) = view_identifier_from_value(value) {
+      children.items.push(identifier);
     }
   }
   children
 }
 
+pub fn view_identifier_from_value(value: YrsValue) -> Option<ViewIdentifier> {
+  if let YrsValue::Any(lib0Any::Map(map)) = value {
+    ViewIdentifier::from_map(&map)
+  } else {
+    None
+  }
+}
+
 #[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq, Debug)]
 #[repr(transparent)]
-pub struct RepeatedView {
+pub struct RepeatedViewIdentifier {
   pub items: Vec<ViewIdentifier>,
 }
 
-impl RepeatedView {
+impl RepeatedViewIdentifier {
   pub fn new(items: Vec<ViewIdentifier>) -> Self {
     Self { items }
   }
@@ -175,7 +192,7 @@ impl RepeatedView {
   }
 }
 
-impl Deref for RepeatedView {
+impl Deref for RepeatedViewIdentifier {
   type Target = Vec<ViewIdentifier>;
 
   fn deref(&self) -> &Self::Target {
@@ -183,14 +200,14 @@ impl Deref for RepeatedView {
   }
 }
 
-impl DerefMut for RepeatedView {
+impl DerefMut for RepeatedViewIdentifier {
   fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.items
   }
 }
 
-impl From<RepeatedView> for Vec<lib0Any> {
-  fn from(values: RepeatedView) -> Self {
+impl From<RepeatedViewIdentifier> for Vec<lib0Any> {
+  fn from(values: RepeatedViewIdentifier) -> Self {
     values
       .into_inner()
       .into_iter()

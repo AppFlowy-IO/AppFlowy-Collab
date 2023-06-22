@@ -1,6 +1,7 @@
-use crate::util::{create_folder, make_test_view};
-use collab_folder::core::{RepeatedView, ViewIdentifier, Workspace};
+use collab_folder::core::{RepeatedViewIdentifier, ViewIdentifier, Workspace};
 use serde_json::json;
+
+use crate::util::{create_folder, make_test_view};
 
 #[test]
 fn folder_json_serde() {
@@ -20,7 +21,7 @@ fn folder_json_serde() {
 #[test]
 fn workspace_json_serde() {
   let folder_test = create_folder("1");
-  let belongings = RepeatedView {
+  let belongings = RepeatedViewIdentifier {
     items: vec![
       ViewIdentifier::new("v1".to_string()),
       ViewIdentifier::new("v2".to_string()),
@@ -64,7 +65,7 @@ fn workspace_json_serde() {
 #[test]
 fn view_json_serde() {
   let folder_test = create_folder("1");
-  let belongings = RepeatedView {
+  let belongings = RepeatedViewIdentifier {
     items: vec![
       ViewIdentifier::new("v1".to_string()),
       ViewIdentifier::new("v2".to_string()),
@@ -132,7 +133,7 @@ fn view_json_serde() {
 #[test]
 fn child_view_json_serde() {
   let folder_test = create_folder("1");
-  let belongings = RepeatedView {
+  let belongings = RepeatedViewIdentifier {
     items: vec![
       ViewIdentifier::new("v1".to_string()),
       ViewIdentifier::new("v2".to_string()),

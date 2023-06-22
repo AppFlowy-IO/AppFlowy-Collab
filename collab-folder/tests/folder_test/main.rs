@@ -1,4 +1,4 @@
-mod belonging_test;
+mod child_views_test;
 mod load_disk;
 mod serde_test;
 mod trash_test;

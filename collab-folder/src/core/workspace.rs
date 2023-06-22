@@ -3,7 +3,7 @@ use std::rc::Rc;
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 
-use crate::core::{RepeatedView, ViewIdentifier, ViewRelations};
+use crate::core::{RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
 
 #[derive(Clone)]
 pub struct WorkspaceMap {
@@ -109,7 +109,7 @@ impl WorkspaceMap {
 pub struct Workspace {
   pub id: String,
   pub name: String,
-  pub child_views: RepeatedView,
+  pub child_views: RepeatedViewIdentifier,
   pub created_at: i64,
 }
 
@@ -187,7 +187,7 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
     self
   }
 
-  pub fn set_children(self, children: RepeatedView) -> Self {
+  pub fn set_children(self, children: RepeatedViewIdentifier) -> Self {
     let array = self
       .view_relations
       .get_or_create_children_with_txn(self.txn, self.workspace_id);
