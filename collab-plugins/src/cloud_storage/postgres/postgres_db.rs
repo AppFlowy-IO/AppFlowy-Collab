@@ -1,8 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::cloud_storage::postgres::response::KeyValueListResponse;
-use crate::cloud_storage::postgres::SupabaseDBConfig;
 use anyhow::{Error, Result};
 use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD;
@@ -12,6 +10,8 @@ use collab::core::origin::CollabOrigin;
 use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
 use postgrest::Postgrest;
 
+use crate::cloud_storage::postgres::response::KeyValueListResponse;
+use crate::cloud_storage::postgres::SupabaseDBConfig;
 use crate::cloud_storage::remote_collab::{CollabObject, RemoteCollab, RemoteCollabStorage};
 
 /// The table must have the following columns:
@@ -22,13 +22,13 @@ const UPDATE_TABLE_PRIMARY_KEY_COL: &str = "oid";
 const UPDATE_TABLE_KEY_COL: &str = "key";
 const UPDATE_TABLE_VALUE_COL: &str = "value";
 
-pub struct PostgresDB {
+pub struct HttpPostgresDB {
   #[allow(dead_code)]
   postgrest: Arc<Postgrest>,
   remote_collab: Arc<RemoteCollab>,
 }
 
-impl PostgresDB {
+impl HttpPostgresDB {
   pub fn new(object: CollabObject, sync_per_secs: u64, config: SupabaseDBConfig) -> Self {
     let url = format!("{}/rest/v1/", config.url);
     let auth = format!("Bearer {}", config.key);
@@ -39,7 +39,7 @@ impl PostgresDB {
 
     let storage = PGCollabCloudStorageImpl {
       postgrest: postgrest.clone(),
-      table_name: config.collab_table_config.table_name,
+      table_name: "collab".to_string(),
       object_id: object.id.clone(),
     };
 
@@ -146,7 +146,7 @@ pub async fn get_postgres_remote_doc(
 ) -> Arc<MutexCollab> {
   let object = CollabObject::new(object_id.to_string());
   let local_collab = Arc::new(MutexCollab::new(CollabOrigin::Server, object_id, vec![]));
-  let plugin = PostgresDB::new(object, 1, config);
+  let plugin = HttpPostgresDB::new(object, 1, config);
   plugin.start_sync(local_collab.clone()).await;
   local_collab
 }

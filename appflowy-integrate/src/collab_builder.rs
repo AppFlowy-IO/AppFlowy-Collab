@@ -107,12 +107,10 @@ impl AppFlowyCollabBuilder {
       },
       CloudStorageType::Supabase => {
         if let Some(config) = collab_config.supabase_config() {
-          if config.collab_table_config.enable {
-            let collab_object = CollabObject::new(object_id.to_string()).with_name(object_name);
-            let plugin = SupabaseDBPlugin::new(collab_object, collab.clone(), 10, config.clone());
-            collab.lock().add_plugin(Arc::new(plugin));
-            tracing::trace!("add supabase plugin: {:?}", self.cloud_storage_type);
-          }
+          let collab_object = CollabObject::new(object_id.to_string()).with_name(object_name);
+          let plugin = SupabaseDBPlugin::new(collab_object, collab.clone(), 10, config.clone());
+          collab.lock().add_plugin(Arc::new(plugin));
+          tracing::trace!("add supabase plugin: {:?}", self.cloud_storage_type);
         }
       },
       CloudStorageType::Local => {},

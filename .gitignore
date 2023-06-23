@@ -12,3 +12,4 @@ Cargo.lock
 
 **/temp/**
 **/collab-plugins/.env
+**/collab-plugins/.env.test

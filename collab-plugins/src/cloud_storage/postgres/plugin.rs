@@ -1,19 +1,20 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
-
-use crate::cloud_storage::postgres::postgres_db::PostgresDB;
-use crate::cloud_storage::postgres::SupabaseDBConfig;
-use crate::cloud_storage::remote_collab::CollabObject;
 use parking_lot::RwLock;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use y_sync::awareness::Awareness;
 use yrs::Transaction;
 
+use crate::cloud_storage::postgres::postgres_db::HttpPostgresDB;
+use crate::cloud_storage::postgres::SupabaseDBConfig;
+use crate::cloud_storage::remote_collab::CollabObject;
+
 pub struct SupabaseDBPlugin {
   local_collab: Arc<MutexCollab>,
-  postgres_db: Arc<PostgresDB>,
+  postgres_db: Arc<HttpPostgresDB>,
   pending_updates: Arc<RwLock<Vec<Vec<u8>>>>,
   is_first_sync_done: Arc<AtomicBool>,
 }
@@ -25,7 +26,7 @@ impl SupabaseDBPlugin {
     sync_per_secs: u64,
     config: SupabaseDBConfig,
   ) -> Self {
-    let postgres_db = PostgresDB::new(object, sync_per_secs, config);
+    let postgres_db = HttpPostgresDB::new(object, sync_per_secs, config);
     let pending_updates = Arc::new(RwLock::new(Vec::new()));
     let is_first_sync_done = Arc::new(AtomicBool::new(false));
     Self {
