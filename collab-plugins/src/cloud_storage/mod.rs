@@ -1,3 +1,5 @@
+pub use remote_collab::{CollabObject, RemoteCollabStorage};
+
 #[cfg(feature = "aws_storage")]
 pub mod aws;
 
@@ -5,4 +7,3 @@ pub mod aws;
 pub mod postgres;
 
 mod remote_collab;
-pub use remote_collab::CollabObject;

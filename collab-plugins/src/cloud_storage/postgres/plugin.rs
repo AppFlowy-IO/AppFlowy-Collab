@@ -1,20 +1,20 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
+use collab_sync::client::sink::{SinkConfig, SinkStrategy};
 use parking_lot::RwLock;
 use y_sync::awareness::Awareness;
 use yrs::Transaction;
 
-use crate::cloud_storage::postgres::postgres_db::HttpPostgresDB;
-use crate::cloud_storage::postgres::SupabaseDBConfig;
-use crate::cloud_storage::remote_collab::CollabObject;
+use crate::cloud_storage::remote_collab::{CollabObject, RemoteCollab, RemoteCollabStorage};
 
 pub struct SupabaseDBPlugin {
   local_collab: Arc<MutexCollab>,
-  postgres_db: Arc<HttpPostgresDB>,
+  remote_collab: Arc<RemoteCollab>,
   pending_updates: Arc<RwLock<Vec<Vec<u8>>>>,
   is_first_sync_done: Arc<AtomicBool>,
 }
@@ -24,14 +24,20 @@ impl SupabaseDBPlugin {
     object: CollabObject,
     local_collab: Arc<MutexCollab>,
     sync_per_secs: u64,
-    config: SupabaseDBConfig,
+    storage: Arc<dyn RemoteCollabStorage>,
   ) -> Self {
-    let postgres_db = HttpPostgresDB::new(object, sync_per_secs, config);
     let pending_updates = Arc::new(RwLock::new(Vec::new()));
     let is_first_sync_done = Arc::new(AtomicBool::new(false));
+
+    let config = SinkConfig::new()
+      .with_timeout(15)
+      .with_strategy(SinkStrategy::FixInterval(Duration::from_secs(
+        sync_per_secs,
+      )));
+    let remote_collab = Arc::new(RemoteCollab::new(object, storage, config));
     Self {
       local_collab,
-      postgres_db: Arc::new(postgres_db),
+      remote_collab,
       pending_updates,
       is_first_sync_done,
     }
@@ -40,26 +46,26 @@ impl SupabaseDBPlugin {
 
 impl CollabPlugin for SupabaseDBPlugin {
   fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
-    let weak_postgres_db = Arc::downgrade(&self.postgres_db);
+    let weak_remote_collab = Arc::downgrade(&self.remote_collab);
     let weak_local_collab = Arc::downgrade(&self.local_collab);
     let weak_pending_updates = Arc::downgrade(&self.pending_updates);
     let weak_is_first_sync_done = Arc::downgrade(&self.is_first_sync_done);
 
     tokio::spawn(async move {
       if let (
-        Some(postgres_db),
+        Some(remote_collab),
         Some(local_collab),
         Some(pending_updates),
         Some(is_first_sync_done),
       ) = (
-        weak_postgres_db.upgrade(),
+        weak_remote_collab.upgrade(),
         weak_local_collab.upgrade(),
         weak_pending_updates.upgrade(),
         weak_is_first_sync_done.upgrade(),
       ) {
-        postgres_db.start_sync(local_collab.clone()).await;
+        remote_collab.sync(local_collab.clone()).await;
         for update in &*pending_updates.read() {
-          postgres_db.push_update(update);
+          remote_collab.push_update(update);
         }
 
         is_first_sync_done.store(true, Ordering::SeqCst)
@@ -70,7 +76,7 @@ impl CollabPlugin for SupabaseDBPlugin {
   fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
     tracing::trace!("Receive local update: {}", update.len());
     if self.is_first_sync_done.load(Ordering::SeqCst) {
-      self.postgres_db.push_update(update);
+      self.remote_collab.push_update(update);
     } else {
       self.pending_updates.write().push(update.to_vec());
     }

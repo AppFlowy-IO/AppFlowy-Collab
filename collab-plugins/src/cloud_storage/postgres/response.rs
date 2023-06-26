@@ -1,8 +1,10 @@
 use serde::{Deserialize, Deserializer};
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub(crate) struct KeyValueListResponse(pub Vec<KeyValueResponse>);
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub(crate) struct KeyValueResponse {
   #[serde(deserialize_with = "deserialize_null_or_default")]

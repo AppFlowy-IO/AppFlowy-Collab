@@ -57,11 +57,11 @@ impl AWSDynamoDB {
     let table_name = table_name.to_string();
     create_table_if_not_exist(&client, &table_name).await?;
 
-    let storage = AWSCollabCloudStorageImpl {
+    let storage = Arc::new(AWSCollabCloudStorageImpl {
       client: client.clone(),
       table_name: table_name.clone(),
       object_id: object_id.clone(),
-    };
+    });
 
     let config = SinkConfig::new()
       .with_timeout(10)

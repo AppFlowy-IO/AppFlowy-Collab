@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use anyhow::Error;
 use async_trait::async_trait;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
@@ -29,6 +30,20 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
   async fn send_update(&self, id: MsgId, update: Vec<u8>) -> Result<(), anyhow::Error>;
 }
 
+#[async_trait]
+impl<T> RemoteCollabStorage for Arc<T>
+where
+  T: RemoteCollabStorage,
+{
+  async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, Error> {
+    (**self).get_all_updates(object_id).await
+  }
+
+  async fn send_update(&self, id: MsgId, update: Vec<u8>) -> Result<(), Error> {
+    (**self).send_update(id, update).await
+  }
+}
+
 /// The [RemoteCollab] is used to sync the local collab to the remote.
 pub struct RemoteCollab {
   object: CollabObject,
@@ -42,11 +57,11 @@ impl RemoteCollab {
   /// Create a new remote collab.
   /// `timeout` is the time to wait for the server to ack the message.
   /// If the server does not ack the message in time, the message will be sent again.
-  pub fn new<S>(object: CollabObject, storage: S, config: SinkConfig) -> Self
-  where
-    S: RemoteCollabStorage + Send + Sync + 'static,
-  {
-    let storage: Arc<dyn RemoteCollabStorage> = Arc::new(storage);
+  pub fn new(
+    object: CollabObject,
+    storage: Arc<dyn RemoteCollabStorage>,
+    config: SinkConfig,
+  ) -> Self {
     let collab = Arc::new(MutexCollab::new(CollabOrigin::Server, &object.id, vec![]));
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
