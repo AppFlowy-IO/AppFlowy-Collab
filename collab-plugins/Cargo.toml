@@ -32,6 +32,7 @@ base64 = { version = "^0.21", optional = true }
 similar = { version = "2.2.1" }
 tokio-postgres = { version = "0.7.8", optional = true }
 refinery= { version = "0.8.10", optional = true, features = ["tokio-postgres"] }
+tokio-stream = { version = "0.1.14", features = ["sync"] }
 
 [dev-dependencies]
 collab-plugins = { path = ".", features = ["sync", "disk_rocksdb", "disk_sled", "aws_storage", "postgres_storage"] }

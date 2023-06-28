@@ -99,7 +99,12 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
     Ok(aws_get_all_updates(&self.client, &self.table_name, object_id).await)
   }
 
-  async fn send_update(&self, msg_id: MsgId, update: Vec<u8>) -> Result<(), Error> {
+  async fn send_update(
+    &self,
+    _object: &CollabObject,
+    msg_id: MsgId,
+    update: Vec<u8>,
+  ) -> Result<(), Error> {
     tracing::debug!("aws: send_update: {:?}", update);
     aws_send_update(
       &self.client,
@@ -110,6 +115,15 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
     )
     .await?;
     Ok(())
+  }
+
+  async fn send_init_sync(
+    &self,
+    _object: &CollabObject,
+    _id: MsgId,
+    _init_update: Vec<u8>,
+  ) -> Result<(), Error> {
+    todo!()
   }
 }
 

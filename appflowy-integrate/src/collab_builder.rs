@@ -38,17 +38,6 @@ where
   }
 }
 
-pub struct DefaultCollabStorageProvider();
-impl CollabStorageProvider for DefaultCollabStorageProvider {
-  fn storage_type(&self) -> CollabStorageType {
-    CollabStorageType::Local
-  }
-
-  fn get_storage(&self, _storage_type: &CollabStorageType) -> Option<Arc<dyn RemoteCollabStorage>> {
-    None
-  }
-}
-
 pub struct AppFlowyCollabBuilder {
   cloud_storage: RwLock<Arc<dyn CollabStorageProvider>>,
   snapshot_persistence: Option<Arc<dyn SnapshotPersistence>>,
@@ -111,7 +100,7 @@ impl AppFlowyCollabBuilder {
     let collab_config = CollabPluginConfig::from_env();
     let cloud_storage = self.cloud_storage.read();
     let cloud_storage_type = cloud_storage.storage_type();
-    tracing::trace!("collab cloud storage type: {:?}", cloud_storage_type);
+    tracing::trace!("collab storage type: {:?}", cloud_storage_type);
     match cloud_storage_type {
       CollabStorageType::AWS => {
         if let Some(config) = collab_config.aws_config() {
@@ -133,15 +122,13 @@ impl AppFlowyCollabBuilder {
         }
       },
       CollabStorageType::Supabase => {
+        tracing::trace!("try to add supabase plugin");
         let collab_object = CollabObject::new(object_id.to_string()).with_name(object_name);
-        let plugin = SupabaseDBPlugin::new(
-          collab_object,
-          collab.clone(),
-          10,
-          cloud_storage.get_storage(&cloud_storage_type).unwrap(),
-        );
-        collab.lock().add_plugin(Arc::new(plugin));
-        tracing::trace!("add supabase plugin: {:?}", cloud_storage_type);
+        if let Some(storage) = cloud_storage.get_storage(&cloud_storage_type) {
+          let plugin = SupabaseDBPlugin::new(collab_object, collab.clone(), 5, storage);
+          collab.lock().add_plugin(Arc::new(plugin));
+          tracing::trace!("did add supabase plugin: {:?}", cloud_storage_type);
+        }
       },
       CollabStorageType::Local => {},
     }
@@ -163,5 +150,16 @@ impl AppFlowyCollabBuilder {
 
     collab.lock().initialize();
     collab
+  }
+}
+
+pub struct DefaultCollabStorageProvider();
+impl CollabStorageProvider for DefaultCollabStorageProvider {
+  fn storage_type(&self) -> CollabStorageType {
+    CollabStorageType::Local
+  }
+
+  fn get_storage(&self, _storage_type: &CollabStorageType) -> Option<Arc<dyn RemoteCollabStorage>> {
+    None
   }
 }

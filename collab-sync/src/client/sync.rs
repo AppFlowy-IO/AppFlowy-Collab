@@ -14,7 +14,9 @@ use y_sync::sync::{Message, MessageReader};
 use yrs::updates::decoder::{Decode, DecoderV1};
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
-use crate::client::sink::{CollabSink, CollabSinkRunner, DefaultMsgIdCounter, SinkConfig};
+use crate::client::sink::{
+  CollabSink, CollabSinkRunner, DefaultMsgIdCounter, SinkConfig, SinkState,
+};
 use crate::error::SyncError;
 use crate::msg::{CSClientInit, CSClientUpdate, CSServerSync, CollabMessage};
 use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
@@ -51,9 +53,11 @@ where
   ) -> Self {
     let protocol = DefaultSyncProtocol;
     let (notifier, notifier_rx) = watch::channel(false);
+    let (state_tx, _) = watch::channel(SinkState::Syncing);
     let sink = Arc::new(CollabSink::new(
       sink,
       notifier,
+      state_tx,
       DefaultMsgIdCounter::new(),
       config,
     ));

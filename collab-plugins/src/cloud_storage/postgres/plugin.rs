@@ -3,12 +3,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use collab::core::collab::MutexCollab;
+use collab::core::collab_plugin::CollabPluginType;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_sync::client::sink::{SinkConfig, SinkStrategy};
 use parking_lot::RwLock;
 use y_sync::awareness::Awareness;
 use yrs::Transaction;
+
+use tokio_stream::wrappers::WatchStream;
+use tokio_stream::StreamExt;
 
 use crate::cloud_storage::remote_collab::{CollabObject, RemoteCollab, RemoteCollabStorage};
 
@@ -35,6 +39,19 @@ impl SupabaseDBPlugin {
         sync_per_secs,
       )));
     let remote_collab = Arc::new(RemoteCollab::new(object, storage, config));
+
+    // Subscribe the sync state from the remote collab
+    let receiver = remote_collab.subscribe_sync_state();
+    let mut receiver_stream = WatchStream::new(receiver);
+    let weak_local_collab = Arc::downgrade(&local_collab);
+    tokio::spawn(async move {
+      while let Some(new_state) = receiver_stream.next().await {
+        if let Some(local_collab) = weak_local_collab.upgrade() {
+          local_collab.lock().set_sync_state(new_state);
+        }
+      }
+    });
+
     Self {
       local_collab,
       remote_collab,
@@ -80,5 +97,9 @@ impl CollabPlugin for SupabaseDBPlugin {
     } else {
       self.pending_updates.write().push(update.to_vec());
     }
+  }
+
+  fn plugin_type(&self) -> CollabPluginType {
+    CollabPluginType::CloudStorage
   }
 }
