@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Error;
+use anyhow::{bail, Error};
 use async_trait::async_trait;
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::config::Region;
@@ -99,6 +99,16 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
     Ok(aws_get_all_updates(&self.client, &self.table_name, object_id).await)
   }
 
+  async fn get_latest_full_sync(&self, _object_id: &str) -> Result<Vec<u8>, Error> {
+    // TODO(nathan): support aws full sync
+    return bail!("aws full sync not supported");
+  }
+
+  async fn create_full_sync(&self, object: &CollabObject, _update: Vec<u8>) -> Result<(), Error> {
+    // TODO(nathan): support aws full sync
+    Ok(())
+  }
+
   async fn send_update(
     &self,
     _object: &CollabObject,
@@ -123,7 +133,8 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
     _id: MsgId,
     _init_update: Vec<u8>,
   ) -> Result<(), Error> {
-    todo!()
+    // TODO(nathan): support aws init sync
+    Ok(())
   }
 }
 

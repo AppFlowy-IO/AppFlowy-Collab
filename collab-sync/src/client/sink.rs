@@ -438,7 +438,6 @@ impl IntervalRunner {
     loop {
       tokio::select! {
         _ = stop_rx.recv() => {
-            tracing::trace!("IntervalRunner stopped");
             break;
         },
         _ = interval.tick() => {

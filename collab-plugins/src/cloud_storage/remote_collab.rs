@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
+use collab_persistence::TransactionMutExt;
 pub use collab_sync::client::sink::MsgId;
 use collab_sync::client::sink::{
   CollabSink, CollabSinkMessage, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState,
@@ -134,7 +135,6 @@ impl RemoteCollab {
   }
 
   pub async fn sync(&self, local_collab: Arc<MutexCollab>) {
-    tracing::trace!("{}: start sync with remote", self.object);
     let updates = match self.storage.get_all_updates(&self.object.id).await {
       Ok(updates) => updates,
       Err(e) => {
@@ -144,9 +144,9 @@ impl RemoteCollab {
     };
 
     tracing::trace!(
-      "{}: try apply remote updates with len:{}",
+      "{}: sync remote updates:{}",
       self.object,
-      updates.len(),
+      updates.iter().map(|update| update.len()).sum::<usize>()
     );
 
     if !updates.is_empty() {
@@ -154,7 +154,11 @@ impl RemoteCollab {
       self.collab.lock().with_transact_mut(|txn| {
         for update in updates {
           if let Ok(update) = Update::decode_v1(&update) {
-            txn.apply_update(update);
+            if let Err(e) = txn.try_apply_update(update) {
+              // restore from full backup?
+              tracing::error!("Failed to apply update: {:?}", e);
+              break;
+            }
           } else {
             tracing::error!("Failed to decode update");
           }
@@ -198,7 +202,7 @@ impl RemoteCollab {
       .encode_state_as_update_v1(&remote_state_vector);
     if let Ok(decode_update) = Update::decode_v1(&encode_update) {
       tracing::trace!(
-        "{}: try sync local update with len:{}",
+        "{}: sync local updates:{}",
         self.object,
         encode_update.len()
       );
@@ -237,6 +241,17 @@ impl RemoteCollab {
 pub trait RemoteCollabStorage: Send + Sync + 'static {
   /// Get all the updates of the remote collab.
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, anyhow::Error>;
+
+  /// Get the latest full sync of the remote collab.
+  async fn get_latest_full_sync(&self, object_id: &str) -> Result<Vec<u8>, anyhow::Error>;
+
+  /// Create a full sync of the remote collab. The update contains the full state of the [Collab]
+  async fn create_full_sync(
+    &self,
+    object: &CollabObject,
+    update: Vec<u8>,
+  ) -> Result<(), anyhow::Error>;
+
   /// Send the update to the remote storage.
   async fn send_update(
     &self,
@@ -245,6 +260,8 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
     update: Vec<u8>,
   ) -> Result<(), anyhow::Error>;
 
+  /// The init sync is used to send the initial state of the remote collab to the remote storage.
+  /// The init_update contains all the missing updates of the remote collab compared to the local.
   async fn send_init_sync(
     &self,
     object: &CollabObject,
@@ -260,6 +277,14 @@ where
 {
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, Error> {
     (**self).get_all_updates(object_id).await
+  }
+
+  async fn get_latest_full_sync(&self, object_id: &str) -> Result<Vec<u8>, Error> {
+    (**self).get_latest_full_sync(object_id).await
+  }
+
+  async fn create_full_sync(&self, object: &CollabObject, update: Vec<u8>) -> Result<(), Error> {
+    (**self).create_full_sync(object, update).await
   }
 
   async fn send_update(

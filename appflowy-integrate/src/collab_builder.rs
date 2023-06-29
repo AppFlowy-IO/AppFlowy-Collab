@@ -122,12 +122,19 @@ impl AppFlowyCollabBuilder {
         }
       },
       CollabStorageType::Supabase => {
-        tracing::trace!("try to add supabase plugin");
         let collab_object = CollabObject::new(object_id.to_string()).with_name(object_name);
-        if let Some(storage) = cloud_storage.get_storage(&cloud_storage_type) {
-          let plugin = SupabaseDBPlugin::new(collab_object, Arc::downgrade(&collab), 5, storage);
+        let local_collab_storage = collab_db.clone();
+        if let Some(remote_collab_storage) = cloud_storage.get_storage(&cloud_storage_type) {
+          let plugin = SupabaseDBPlugin::new(
+            uid,
+            collab_object,
+            Arc::downgrade(&collab),
+            5,
+            remote_collab_storage,
+            local_collab_storage,
+          );
           collab.lock().add_plugin(Arc::new(plugin));
-          tracing::trace!("did add supabase plugin: {:?}", cloud_storage_type);
+          tracing::trace!("add supabase plugin: {:?}", cloud_storage_type);
         }
       },
       CollabStorageType::Local => {},
