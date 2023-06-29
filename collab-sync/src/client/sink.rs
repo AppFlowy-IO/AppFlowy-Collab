@@ -30,6 +30,7 @@ pub trait CollabSinkMessage: Clone + Send + Sync + 'static + Ord + Display {
 
 #[derive(Clone, Debug)]
 pub enum SinkState {
+  Init,
   /// The sink is syncing the messages to the remote.
   Syncing,
   /// All the messages are synced to the remote.
@@ -60,6 +61,12 @@ pub struct CollabSink<Sink, Msg> {
   /// is [SinkStrategy::FixInterval].
   instant: Mutex<Instant>,
   state_notifier: Arc<watch::Sender<SinkState>>,
+}
+
+impl<Sink, Msg> Drop for CollabSink<Sink, Msg> {
+  fn drop(&mut self) {
+    let _ = self.notifier.send(true);
+  }
 }
 
 impl<E, Sink, Msg> CollabSink<Sink, Msg>
@@ -222,12 +229,15 @@ where
         let (tx, rx) = oneshot::channel();
         sending_msg.set_state(MessageState::Processing);
         sending_msg.set_ret(tx);
+        let is_init_msg = sending_msg.is_init();
 
         // Push back the pending message to the queue.
         let collab_msg = sending_msg.get_msg().clone();
         self.pending_msgs.lock().push(sending_msg);
 
-        let _ = self.state_notifier.send(SinkState::Syncing);
+        if !is_init_msg {
+          let _ = self.state_notifier.send(SinkState::Syncing);
+        }
         let mut sender = self.sender.lock().await;
         tracing::trace!("[🦀Collab]: {}", collab_msg);
         sender
@@ -238,7 +248,12 @@ where
         // Wait for the message to be acked.
         // If the message is not acked within the timeout, resend the message.
         match tokio::time::timeout(self.config.timeout, rx).await {
-          Ok(_) => self.notify(),
+          Ok(_) => {
+            if !is_init_msg {
+              let _ = self.state_notifier.send(SinkState::Finished);
+              self.notify()
+            }
+          },
           Err(_) => {
             if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {
               pending_msg.set_state(MessageState::Timeout);
@@ -423,6 +438,7 @@ impl IntervalRunner {
     loop {
       tokio::select! {
         _ = stop_rx.recv() => {
+            tracing::trace!("IntervalRunner stopped");
             break;
         },
         _ = interval.tick() => {

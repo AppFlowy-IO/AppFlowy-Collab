@@ -29,7 +29,7 @@ pub async fn spawn_client_with_empty_doc(
   let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
   let stream = CollabStream::new(reader, CollabMsgCodec::default());
   let sink = CollabSink::new(writer, CollabMsgCodec::default());
-  let sync_plugin = SyncPlugin::new(origin, object_id, collab.clone(), sink, stream);
+  let sync_plugin = SyncPlugin::new(origin, object_id, Arc::downgrade(&collab), sink, stream);
   collab.lock().add_plugin(Arc::new(sync_plugin));
   collab.initial();
   Ok(collab)
@@ -48,7 +48,7 @@ pub async fn spawn_client(
   // sync
   let stream = CollabStream::new(reader, CollabMsgCodec::default());
   let sink = CollabSink::new(writer, CollabMsgCodec::default());
-  let sync_plugin = SyncPlugin::new(origin, object_id, collab.clone(), sink, stream);
+  let sync_plugin = SyncPlugin::new(origin, object_id, Arc::downgrade(&collab), sink, stream);
   collab.lock().add_plugin(Arc::new(sync_plugin));
 
   // disk
@@ -111,7 +111,7 @@ impl TestClient {
     let sync_plugin = SyncPlugin::new(
       origin,
       object_id,
-      collab.clone(),
+      Arc::downgrade(&collab),
       TokioUnboundedSink(sink),
       TokioUnboundedStream::new(stream),
     );
@@ -164,7 +164,7 @@ impl TestClient {
     let sync_plugin = SyncPlugin::new(
       origin,
       object_id,
-      collab.clone(),
+      Arc::downgrade(&collab),
       TokioUnboundedSink(sink),
       TokioUnboundedStream::new(stream),
     );

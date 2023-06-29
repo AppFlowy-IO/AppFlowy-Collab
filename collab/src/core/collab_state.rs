@@ -20,17 +20,17 @@ impl InitState {
 }
 
 /// The [SyncState] describes the steps to change the state of the [Collab] object.
-/// [SyncState::InitSyncStart] -> [SyncState::InitSyncEnd] -> [SyncState::Syncing] -> [SyncState::SyncFinished]
+/// [SyncState::SyncInitStart] -> [SyncState::SyncInitEnd] -> [SyncState::SyncUpdate] -> [SyncState::SyncFinished]
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SyncState {
   /// The state indicates that the [Collab] is in the process of first sync. Each [Collab]
   /// will start with the first sync.
-  InitSyncStart,
+  SyncInitStart,
   /// Init sync is finished
-  InitSyncEnd,
+  SyncInitEnd,
   /// The [Collab] is in the process of syncing the data to remote
-  Syncing,
+  SyncUpdate,
   /// Indicates that the [Collab] is finished syncing the data to remote. All local updates
   /// are sent to the remote.
   SyncFinished,
@@ -60,11 +60,11 @@ pub struct State {
 
 impl State {
   pub fn new(object_id: &str) -> Self {
-    let (state_notifier, _) = watch::channel(SyncState::InitSyncStart);
+    let (state_notifier, _) = watch::channel(SyncState::SyncInitStart);
     Self {
       object_id: object_id.to_string(),
       init_state: Arc::new(RwLock::new(InitState::Uninitialized)),
-      sync_state: Arc::new(RwLock::new(SyncState::InitSyncStart)),
+      sync_state: Arc::new(RwLock::new(SyncState::SyncInitStart)),
       notifier: Arc::new(state_notifier),
     }
   }
@@ -85,7 +85,7 @@ impl State {
     let old_state = self.sync_state.read().clone();
     if old_state != new_state {
       tracing::trace!(
-        "[🦀Collab] {} sync state did change from {:?} to {:?}",
+        "[🌐Collab] {} sync state {:?} => {:?}",
         self.object_id,
         old_state,
         new_state

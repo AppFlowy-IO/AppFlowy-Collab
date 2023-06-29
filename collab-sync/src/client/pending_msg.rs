@@ -102,6 +102,10 @@ where
     self.msg.mergeable()
   }
 
+  pub fn is_init(&self) -> bool {
+    self.msg.is_init_msg()
+  }
+
   pub fn merge(&mut self, other: Self) {
     self.msg.merge(other.into_msg());
   }

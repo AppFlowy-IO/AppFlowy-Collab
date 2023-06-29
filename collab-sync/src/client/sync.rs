@@ -48,12 +48,12 @@ where
     origin: CollabOrigin,
     sink: Sink,
     stream: Stream,
-    collab: Arc<MutexCollab>,
+    collab: Weak<MutexCollab>,
     config: SinkConfig,
   ) -> Self {
     let protocol = DefaultSyncProtocol;
     let (notifier, notifier_rx) = watch::channel(false);
-    let (state_tx, _) = watch::channel(SinkState::Syncing);
+    let (state_tx, _) = watch::channel(SinkState::Init);
     let sink = Arc::new(CollabSink::new(
       sink,
       notifier,
@@ -118,7 +118,7 @@ impl<Sink, Stream> Deref for SyncQueue<Sink, Stream> {
 /// Use to continuously receive updates from remote.
 struct SyncStream<Sink, Stream> {
   #[allow(dead_code)]
-  collab: Arc<MutexCollab>,
+  weak_collab: Weak<MutexCollab>,
   #[allow(dead_code)]
   runner: JoinHandle<Result<(), SyncError>>,
   phantom_sink: PhantomData<Sink>,
@@ -136,24 +136,24 @@ where
     object_id: String,
     stream: Stream,
     protocol: P,
-    collab: Arc<MutexCollab>,
+    weak_collab: Weak<MutexCollab>,
     sink: Arc<CollabSink<Sink, CollabMessage>>,
   ) -> Self
   where
     P: CollabSyncProtocol + Send + Sync + 'static,
   {
-    let weak_collab = Arc::downgrade(&collab);
+    let cloned_weak_collab = weak_collab.clone();
     let weak_sink = Arc::downgrade(&sink);
     let runner = spawn(SyncStream::<Sink, Stream>::spawn_doc_stream::<P>(
       origin,
       object_id,
       stream,
-      weak_collab,
+      cloned_weak_collab,
       weak_sink,
       protocol,
     ));
     Self {
-      collab,
+      weak_collab,
       runner,
       phantom_sink: Default::default(),
       phantom_stream: Default::default(),

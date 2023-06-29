@@ -33,6 +33,12 @@ pub struct RemoteCollab {
   sync_state: Arc<watch::Sender<SyncState>>,
 }
 
+impl Drop for RemoteCollab {
+  fn drop(&mut self) {
+    tracing::trace!("{} remote collab dropped", self.object);
+  }
+}
+
 impl RemoteCollab {
   /// Create a new remote collab.
   /// `timeout` is the time to wait for the server to ack the message.
@@ -42,12 +48,12 @@ impl RemoteCollab {
     storage: Arc<dyn RemoteCollabStorage>,
     config: SinkConfig,
   ) -> Self {
-    let sync_state = Arc::new(watch::channel(SyncState::InitSyncStart).0);
+    let sync_state = Arc::new(watch::channel(SyncState::SyncInitStart).0);
     let collab = Arc::new(MutexCollab::new(CollabOrigin::Server, &object.id, vec![]));
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
     let (notifier, notifier_rx) = watch::channel(false);
-    let (state_tx, sink_state_rx) = watch::channel(SinkState::Syncing);
+    let (state_tx, sink_state_rx) = watch::channel(SinkState::Init);
     let sink = Arc::new(CollabSink::new(
       TokioUnboundedSink(sink),
       notifier,
@@ -64,11 +70,12 @@ impl RemoteCollab {
         if let Some(sync_state) = weak_sync_state.upgrade() {
           match collab_state {
             SinkState::Syncing => {
-              let _ = sync_state.send(SyncState::Syncing);
+              let _ = sync_state.send(SyncState::SyncUpdate);
             },
             SinkState::Finished => {
               let _ = sync_state.send(SyncState::SyncFinished);
             },
+            SinkState::Init => {},
           }
         }
       }
@@ -143,8 +150,7 @@ impl RemoteCollab {
     );
 
     if !updates.is_empty() {
-      // Apply remote updates to the remote [Collab] before encoding the remote [Collab] state as
-      // a update for local collab.
+      // Restore the remote collab state from updates
       self.collab.lock().with_transact_mut(|txn| {
         for update in updates {
           if let Ok(update) = Update::decode_v1(&update) {
@@ -155,7 +161,7 @@ impl RemoteCollab {
         }
       });
 
-      let _ = self.sync_state.send(SyncState::InitSyncStart);
+      let _ = self.sync_state.send(SyncState::SyncInitStart);
       // Encode the remote collab state as update for local collab.
       let local_sv = local_collab.lock().transact().state_vector();
       let encode_update = self
@@ -177,7 +183,7 @@ impl RemoteCollab {
           let mut txn = local_collab_guard.get_doc().transact_mut();
           txn.apply_update(update);
 
-          if let Err(e) = self.sync_state.send(SyncState::InitSyncEnd) {
+          if let Err(e) = self.sync_state.send(SyncState::SyncInitEnd) {
             tracing::error!("🔴Failed to send sync state: {:?}", e);
           }
         }

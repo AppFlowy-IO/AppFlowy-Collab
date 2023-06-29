@@ -1,11 +1,10 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
-use collab_sync::client::sync::SyncQueue;
-
 use collab_sync::client::sink::SinkConfig;
+use collab_sync::client::sync::SyncQueue;
 use collab_sync::msg::{CSClientUpdate, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
 use y_sync::awareness::Awareness;
@@ -22,7 +21,7 @@ impl<Sink, Stream> SyncPlugin<Sink, Stream> {
   pub fn new<E>(
     origin: CollabOrigin,
     object_id: &str,
-    collab: Arc<MutexCollab>,
+    collab: Weak<MutexCollab>,
     sink: Sink,
     stream: Stream,
   ) -> Self

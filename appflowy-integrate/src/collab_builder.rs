@@ -112,7 +112,7 @@ impl AppFlowyCollabBuilder {
             std::env::set_var(AWS_SECRET_ACCESS_KEY, &config.secret_access_key);
             let plugin = AWSDynamoDBPlugin::new(
               object_id.to_string(),
-              collab.clone(),
+              Arc::downgrade(&collab),
               10,
               config.region.clone(),
             );
@@ -125,7 +125,7 @@ impl AppFlowyCollabBuilder {
         tracing::trace!("try to add supabase plugin");
         let collab_object = CollabObject::new(object_id.to_string()).with_name(object_name);
         if let Some(storage) = cloud_storage.get_storage(&cloud_storage_type) {
-          let plugin = SupabaseDBPlugin::new(collab_object, collab.clone(), 5, storage);
+          let plugin = SupabaseDBPlugin::new(collab_object, Arc::downgrade(&collab), 5, storage);
           collab.lock().add_plugin(Arc::new(plugin));
           tracing::trace!("did add supabase plugin: {:?}", cloud_storage_type);
         }

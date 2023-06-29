@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use collab::core::collab::MutexCollab;
@@ -8,16 +8,15 @@ use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_sync::client::sink::{SinkConfig, SinkStrategy};
 use parking_lot::RwLock;
-use y_sync::awareness::Awareness;
-use yrs::Transaction;
-
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
+use y_sync::awareness::Awareness;
+use yrs::Transaction;
 
 use crate::cloud_storage::remote_collab::{CollabObject, RemoteCollab, RemoteCollabStorage};
 
 pub struct SupabaseDBPlugin {
-  local_collab: Arc<MutexCollab>,
+  local_collab: Weak<MutexCollab>,
   remote_collab: Arc<RemoteCollab>,
   pending_updates: Arc<RwLock<Vec<Vec<u8>>>>,
   is_first_sync_done: Arc<AtomicBool>,
@@ -26,7 +25,7 @@ pub struct SupabaseDBPlugin {
 impl SupabaseDBPlugin {
   pub fn new(
     object: CollabObject,
-    local_collab: Arc<MutexCollab>,
+    local_collab: Weak<MutexCollab>,
     sync_per_secs: u64,
     storage: Arc<dyn RemoteCollabStorage>,
   ) -> Self {
@@ -43,7 +42,7 @@ impl SupabaseDBPlugin {
     // Subscribe the sync state from the remote collab
     let receiver = remote_collab.subscribe_sync_state();
     let mut receiver_stream = WatchStream::new(receiver);
-    let weak_local_collab = Arc::downgrade(&local_collab);
+    let weak_local_collab = local_collab.clone();
     tokio::spawn(async move {
       while let Some(new_state) = receiver_stream.next().await {
         if let Some(local_collab) = weak_local_collab.upgrade() {
@@ -64,7 +63,7 @@ impl SupabaseDBPlugin {
 impl CollabPlugin for SupabaseDBPlugin {
   fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
     let weak_remote_collab = Arc::downgrade(&self.remote_collab);
-    let weak_local_collab = Arc::downgrade(&self.local_collab);
+    let weak_local_collab = self.local_collab.clone();
     let weak_pending_updates = Arc::downgrade(&self.pending_updates);
     let weak_is_first_sync_done = Arc::downgrade(&self.is_first_sync_done);
 
