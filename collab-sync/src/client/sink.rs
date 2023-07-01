@@ -249,10 +249,12 @@ where
         // If the message is not acked within the timeout, resend the message.
         match tokio::time::timeout(self.config.timeout, rx).await {
           Ok(_) => {
-            if !is_init_msg {
-              let _ = self.state_notifier.send(SinkState::Finished);
-              self.notify()
+            if let Some(pending_msg) = self.pending_msgs.try_lock() {
+              if pending_msg.is_empty() && !is_init_msg {
+                let _ = self.state_notifier.send(SinkState::Finished);
+              }
             }
+            self.notify()
           },
           Err(_) => {
             if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {

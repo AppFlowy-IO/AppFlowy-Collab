@@ -134,8 +134,9 @@ impl RemoteCollab {
     self.sync_state.subscribe()
   }
 
-  pub async fn sync(&self, local_collab: Arc<MutexCollab>) {
-    let updates = match self.storage.get_all_updates(&self.object.id).await {
+  pub async fn sync(&self, local_collab: Arc<MutexCollab>) -> Option<Vec<u8>> {
+    let mut remote_update = None;
+    let remote_updates = match self.storage.get_all_updates(&self.object.id).await {
       Ok(updates) => updates,
       Err(e) => {
         tracing::error!("🔴Failed to get updates: {:?}", e);
@@ -143,27 +144,29 @@ impl RemoteCollab {
       },
     };
 
-    tracing::trace!(
-      "{}: sync remote updates:{}",
-      self.object,
-      updates.iter().map(|update| update.len()).sum::<usize>()
-    );
+    if !remote_updates.is_empty() {
+      let updates = remote_updates
+        .iter()
+        .map(|update| update.as_ref())
+        .collect::<Vec<&[u8]>>();
 
-    if !updates.is_empty() {
-      // Restore the remote collab state from updates
-      self.collab.lock().with_transact_mut(|txn| {
-        for update in updates {
+      if let Ok(update) = merge_updates_v1(&updates) {
+        tracing::trace!("{}: sync remote updates:{}", self.object, update.len());
+        // Restore the remote collab state from updates
+        {
+          let remote_collab = self.collab.lock();
+          let mut txn = remote_collab.transact_mut();
           if let Ok(update) = Update::decode_v1(&update) {
             if let Err(e) = txn.try_apply_update(update) {
-              // restore from full backup?
               tracing::error!("Failed to apply update: {:?}", e);
-              break;
             }
           } else {
             tracing::error!("Failed to decode update");
           }
+
+          remote_update = Some(update);
         }
-      });
+      }
 
       let _ = self.sync_state.send(SyncState::SyncInitStart);
       // Encode the remote collab state as update for local collab.
@@ -186,6 +189,7 @@ impl RemoteCollab {
           let local_collab_guard = local_collab.lock();
           let mut txn = local_collab_guard.get_doc().transact_mut();
           txn.apply_update(update);
+          drop(txn);
 
           if let Err(e) = self.sync_state.send(SyncState::SyncInitEnd) {
             tracing::error!("🔴Failed to send sync state: {:?}", e);
@@ -200,6 +204,7 @@ impl RemoteCollab {
       .lock()
       .transact()
       .encode_state_as_update_v1(&remote_state_vector);
+
     if let Ok(decode_update) = Update::decode_v1(&encode_update) {
       tracing::trace!(
         "{}: sync local updates:{}",
@@ -207,6 +212,7 @@ impl RemoteCollab {
         encode_update.len()
       );
 
+      // Apply the update to the remote collab and send the update to the remote.
       self.collab.lock().with_transact_mut(|txn| {
         txn.apply_update(decode_update);
       });
@@ -217,6 +223,7 @@ impl RemoteCollab {
         meta: MessageMeta::Init { msg_id },
       });
     }
+    remote_update
   }
 
   pub fn push_update(&self, update: &[u8]) {
@@ -234,6 +241,17 @@ impl RemoteCollab {
   }
 }
 
+#[derive(Debug, Clone)]
+pub struct RemoteCollabState {
+  pub current_edit_count: i64,
+  pub last_snapshot_edit_count: i64,
+  pub last_snapshot_created_at: i64,
+}
+
+pub fn should_create_snapshot(state: &RemoteCollabState) -> bool {
+  state.current_edit_count > state.last_snapshot_edit_count + 50
+}
+
 /// The [RemoteCollabStorage] is used to store the updates of the remote collab. The [RemoteCollab]
 /// is the remote collab that maps to the local collab.
 /// Any storage that implements this trait can be used as the remote collab storage.
@@ -242,14 +260,19 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
   /// Get all the updates of the remote collab.
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, anyhow::Error>;
 
-  /// Get the latest full sync of the remote collab.
-  async fn get_latest_full_sync(&self, object_id: &str) -> Result<Vec<u8>, anyhow::Error>;
+  /// Get the latest snapshot of the remote collab.
+  async fn get_latest_snapshot(&self, object_id: &str) -> Result<Vec<u8>, anyhow::Error>;
 
-  /// Create a full sync of the remote collab. The update contains the full state of the [Collab]
-  async fn create_full_sync(
+  async fn get_collab_state(
+    &self,
+    object_id: &str,
+  ) -> Result<Option<RemoteCollabState>, anyhow::Error>;
+
+  /// Create a snapshot of the remote collab. The update contains the full state of the [Collab]
+  async fn create_snapshot(
     &self,
     object: &CollabObject,
-    update: Vec<u8>,
+    snapshot: Vec<u8>,
   ) -> Result<(), anyhow::Error>;
 
   /// Send the update to the remote storage.
@@ -279,12 +302,16 @@ where
     (**self).get_all_updates(object_id).await
   }
 
-  async fn get_latest_full_sync(&self, object_id: &str) -> Result<Vec<u8>, Error> {
-    (**self).get_latest_full_sync(object_id).await
+  async fn get_latest_snapshot(&self, object_id: &str) -> Result<Vec<u8>, Error> {
+    (**self).get_latest_snapshot(object_id).await
   }
 
-  async fn create_full_sync(&self, object: &CollabObject, update: Vec<u8>) -> Result<(), Error> {
-    (**self).create_full_sync(object, update).await
+  async fn get_collab_state(&self, object_id: &str) -> Result<Option<RemoteCollabState>, Error> {
+    (**self).get_collab_state(object_id).await
+  }
+
+  async fn create_snapshot(&self, object: &CollabObject, update: Vec<u8>) -> Result<(), Error> {
+    (**self).create_snapshot(object, update).await
   }
 
   async fn send_update(
@@ -358,8 +385,11 @@ impl CollabSinkMessage for Message {
   fn mergeable(&self) -> bool {
     match self.meta {
       MessageMeta::Init { .. } => false,
-      // Ensure each messages is less than 4KB.
-      MessageMeta::Update { .. } => self.payload_len() < 4096,
+      // Special characters, emojis, and characters from many other languages can take 2, 3, or
+      // even 4 bytes in UTF-8. So assuming that these are standard English characters and encoded
+      // using UTF-8, each character will take 1 byte. 4096 can hold 4096 characters.
+      // The default max message size is 4kb.
+      MessageMeta::Update { .. } => self.payload_len() < (1024 * 4),
     }
   }
 

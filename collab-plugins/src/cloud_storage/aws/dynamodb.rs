@@ -16,6 +16,7 @@ use collab::core::origin::CollabOrigin;
 use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
 
 use crate::cloud_storage::remote_collab::{CollabObject, RemoteCollab, RemoteCollabStorage};
+use crate::cloud_storage::RemoteCollabState;
 
 pub(crate) const DEFAULT_TABLE_NAME: &str = "collab_test";
 const OBJECT_ID: &str = "oid";
@@ -79,7 +80,7 @@ impl AWSDynamoDB {
 
   /// Start syncing after the local collab is initialized.
   pub async fn start_sync(&self, local_collab: Arc<MutexCollab>) {
-    self.remote_collab.sync(local_collab).await;
+    let _ = self.remote_collab.sync(local_collab).await;
   }
 
   pub fn push_update(&self, update: &[u8]) {
@@ -99,12 +100,17 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
     Ok(aws_get_all_updates(&self.client, &self.table_name, object_id).await)
   }
 
-  async fn get_latest_full_sync(&self, _object_id: &str) -> Result<Vec<u8>, Error> {
+  async fn get_latest_snapshot(&self, _object_id: &str) -> Result<Vec<u8>, Error> {
     // TODO(nathan): support aws full sync
     return bail!("aws full sync not supported");
   }
 
-  async fn create_full_sync(&self, object: &CollabObject, _update: Vec<u8>) -> Result<(), Error> {
+  async fn get_collab_state(&self, object_id: &str) -> Result<Option<RemoteCollabState>, Error> {
+    // TODO(nathan): support aws full sync
+    Ok(None)
+  }
+
+  async fn create_snapshot(&self, _object: &CollabObject, _update: Vec<u8>) -> Result<(), Error> {
     // TODO(nathan): support aws full sync
     Ok(())
   }

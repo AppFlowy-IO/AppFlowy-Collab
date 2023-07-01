@@ -197,6 +197,12 @@ impl Folder {
       return;
     }
 
+    if let Some(old_current_view) = self.get_current_view() {
+      if old_current_view == view_id {
+        return;
+      }
+    }
+
     self.meta.with_transact_mut(|txn| {
       self.meta.insert_with_txn(txn, CURRENT_VIEW, view_id);
     });

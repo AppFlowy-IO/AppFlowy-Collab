@@ -182,25 +182,6 @@ fn root_change_test() {
 //     root_map_2.insert(&mut txn, "map", MapPrelim::<lib0::any::Any>::new())
 //   };
 //
-//   // let cloned_map_1 = map_1.clone();
-//   // let cloned_map_2 = map_2.clone();
-//   // let map_1_sub = map_1.observe(move |txn, event| {
-//   //   // Only set the root changed flag if the remote origin is different from the local origin.
-//   //   println!(
-//   //     "1 event target: {:?}, map: {:?}",
-//   //     event.target(),
-//   //     cloned_map_1
-//   //   );
-//   // });
-//   // let map_2_sub = map_2.observe(move |txn, event| {
-//   //   // Only set the root changed flag if the remote origin is different from the local origin.
-//   //   println!(
-//   //     "2 event target: {:?}, map: {:?}",
-//   //     event.target(),
-//   //     cloned_map_2
-//   //   );
-//   // });
-//
 //   {
 //     let mut txn = doc_2.transact_mut();
 //     map_2.insert(&mut txn, "key_1", "a");
@@ -211,6 +192,22 @@ fn root_change_test() {
 //   let sv_update = doc_2.transact().encode_state_as_update_v1(&sv_1);
 //   {
 //     let mut txn = doc_1.transact_mut();
+//     let update = Update::decode_v1(&sv_update).unwrap();
+//     txn.apply_update(update);
+//   }
+//
+//   // When synchronizing updates, what happens is that a conflict has occurred - under the same key
+//   // "map" two different maps where inserted - map_1 and map_2 are logically different entities (in
+//   // Yjs/Yrs only root types are logically equivalent by their name). In order to resolve this conflict,
+//   // an update that created a nested map from the client with higher ID will override the one that came
+//   // from client with lower ID. If that happens, the overridden map will be tombstoned together with
+//   // all its elements.
+//   //
+//   // That Doc::new() generates random client ID for the document. So the two way sync is reuqired
+//   let sv_2 = doc_2.transact().state_vector();
+//   let sv_update = doc_1.transact().encode_state_as_update_v1(&sv_2);
+//   {
+//     let mut txn = doc_2.transact_mut();
 //     let update = Update::decode_v1(&sv_update).unwrap();
 //     txn.apply_update(update);
 //   }
