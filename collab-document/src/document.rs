@@ -3,8 +3,11 @@ use std::sync::Arc;
 use std::vec;
 
 use collab::core::collab::MutexCollab;
+use collab::core::collab_state::SyncState;
 use collab::preclude::*;
 use serde_json::Value;
+
+use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{
   Block, BlockAction, BlockActionType, BlockEvent, BlockOperation, ChildrenOperation, DocumentData,
@@ -68,6 +71,11 @@ impl Document {
         callback(block_events, is_remote);
       });
     self.get_document()
+  }
+
+  pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
+    let rx = self.inner.lock().subscribe_sync_state();
+    WatchStream::new(rx)
   }
 
   pub fn with_transact_mut<F, T>(&self, f: F) -> T

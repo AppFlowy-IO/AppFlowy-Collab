@@ -102,7 +102,7 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
 
   async fn get_latest_snapshot(&self, _object_id: &str) -> Result<Vec<u8>, Error> {
     // TODO(nathan): support aws full sync
-    return bail!("aws full sync not supported");
+    bail!("aws full sync not supported")
   }
 
   async fn get_collab_state(&self, object_id: &str) -> Result<Option<RemoteCollabState>, Error> {

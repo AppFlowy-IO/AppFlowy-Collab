@@ -4,9 +4,11 @@ use std::sync::Arc;
 
 use collab::core::any_map::AnyMapExtension;
 use collab::core::collab::MutexCollab;
+use collab::core::collab_state::SyncState;
 use collab::preclude::{JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
+pub use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::Block;
 use crate::database_serde::DatabaseSerde;
@@ -176,6 +178,11 @@ impl Database {
       fields: Rc::new(fields),
       metas: Rc::new(metas),
     })
+  }
+
+  pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
+    let rx = self.inner.lock().subscribe_sync_state();
+    WatchStream::new(rx)
   }
 
   /// Return the database id

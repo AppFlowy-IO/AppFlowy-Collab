@@ -506,7 +506,6 @@ fn observe_doc(
 
         let remote_origin = CollabOrigin::from(txn);
         if remote_origin == local_origin {
-          tracing::trace!("[🦀Collab]: did apply local {} update", local_origin);
           plugin.receive_local_update(&local_origin, &cloned_oid, &event.update);
         } else {
           tracing::trace!(

@@ -49,6 +49,9 @@ impl SyncState {
   pub fn is_full_sync(&self) -> bool {
     matches!(self, SyncState::FullSync)
   }
+  pub fn is_sync_finished(&self) -> bool {
+    matches!(self, SyncState::SyncFinished)
+  }
 }
 
 pub struct State {
@@ -60,11 +63,11 @@ pub struct State {
 
 impl State {
   pub fn new(object_id: &str) -> Self {
-    let (state_notifier, _) = watch::channel(SyncState::SyncInitStart);
+    let (state_notifier, _) = watch::channel(SyncState::SyncFinished);
     Self {
       object_id: object_id.to_string(),
       init_state: Arc::new(RwLock::new(InitState::Uninitialized)),
-      sync_state: Arc::new(RwLock::new(SyncState::SyncInitStart)),
+      sync_state: Arc::new(RwLock::new(SyncState::SyncFinished)),
       notifier: Arc::new(state_notifier),
     }
   }

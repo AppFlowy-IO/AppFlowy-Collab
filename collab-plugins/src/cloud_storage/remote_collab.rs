@@ -31,6 +31,8 @@ pub struct RemoteCollab {
   storage: Arc<dyn RemoteCollabStorage>,
   /// The [CollabSink] is used to send the updates to the remote.
   sink: Arc<CollabSink<TokioUnboundedSink<Message>, Message>>,
+  /// The [SyncStream] will be spawned in a separate task It continuously receive
+  /// the updates from the remote.
   sync_state: Arc<watch::Sender<SyncState>>,
 }
 
@@ -66,6 +68,7 @@ impl RemoteCollab {
     let weak_sink = Arc::downgrade(&sink);
     let weak_sync_state = Arc::downgrade(&sync_state);
     let mut sink_state_stream = WatchStream::new(sink_state_rx);
+    // Subscribe the sink state stream and update the sync state in the background.
     spawn(async move {
       while let Some(collab_state) = sink_state_stream.next().await {
         if let Some(sync_state) = weak_sync_state.upgrade() {
@@ -134,8 +137,15 @@ impl RemoteCollab {
     self.sync_state.subscribe()
   }
 
+  /// Return the update of the remote collab.
+  /// If the remote collab contains any updates, it will return None.
+  /// Otherwise, it will merge the updates into one and return the merged update.
   pub async fn sync(&self, local_collab: Arc<MutexCollab>) -> Option<Vec<u8>> {
     let mut remote_update = None;
+    // It would be better if creating a edge function that calculate the diff between the local and remote.
+    // The local only need to send its state vector to the remote. In this way, the local does not need to
+    // get all the updates from remote.
+    // TODO(nathan): create a edge function to calculate the diff between the local and remote.
     let remote_updates = match self.storage.get_all_updates(&self.object.id).await {
       Ok(updates) => updates,
       Err(e) => {
@@ -182,7 +192,7 @@ impl RemoteCollab {
           // the update will consider as a local update. But here is apply the remote update.
           // TODO: nathan define a sync protocol for cloud storage.
           tracing::trace!(
-            "{}: apply remote update with len:{}",
+            "{}: apply remote update with diff len:{}",
             self.object,
             encode_update.len()
           );
@@ -243,8 +253,11 @@ impl RemoteCollab {
 
 #[derive(Debug, Clone)]
 pub struct RemoteCollabState {
+  /// The current edit count of the remote collab.
   pub current_edit_count: i64,
+  /// The last edit count of the remote collab when the snapshot is created.
   pub last_snapshot_edit_count: i64,
+  /// The last snapshot of the remote collab.
   pub last_snapshot_created_at: i64,
 }
 
@@ -263,6 +276,8 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
   /// Get the latest snapshot of the remote collab.
   async fn get_latest_snapshot(&self, object_id: &str) -> Result<Vec<u8>, anyhow::Error>;
 
+  /// Return the remote state of the collab. It contains the current edit count, the last snapshot
+  /// edit count and the last snapshot created time.
   async fn get_collab_state(
     &self,
     object_id: &str,
