@@ -15,7 +15,7 @@ use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 use y_sync::awareness::Awareness;
 use yrs::updates::decoder::Decode;
-use yrs::{merge_updates_v1, ReadTxn, StateVector, Transaction, TransactionMut, Update};
+use yrs::{ReadTxn, StateVector, Transaction, Update};
 
 use crate::cloud_storage::remote_collab::{
   should_create_snapshot, CollabObject, RemoteCollab, RemoteCollabStorage,

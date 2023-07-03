@@ -274,7 +274,7 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, anyhow::Error>;
 
   /// Get the latest snapshot of the remote collab.
-  async fn get_latest_snapshot(&self, object_id: &str) -> Result<Vec<u8>, anyhow::Error>;
+  async fn get_latest_snapshot(&self, object_id: &str) -> Result<Option<Vec<u8>>, anyhow::Error>;
 
   /// Return the remote state of the collab. It contains the current edit count, the last snapshot
   /// edit count and the last snapshot created time.
@@ -317,7 +317,7 @@ where
     (**self).get_all_updates(object_id).await
   }
 
-  async fn get_latest_snapshot(&self, object_id: &str) -> Result<Vec<u8>, Error> {
+  async fn get_latest_snapshot(&self, object_id: &str) -> Result<Option<Vec<u8>>, Error> {
     (**self).get_latest_snapshot(object_id).await
   }
 

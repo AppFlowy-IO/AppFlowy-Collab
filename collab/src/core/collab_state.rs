@@ -52,6 +52,10 @@ impl SyncState {
   pub fn is_sync_finished(&self) -> bool {
     matches!(self, SyncState::SyncFinished)
   }
+
+  pub fn is_syncing(&self) -> bool {
+    !self.is_sync_finished()
+  }
 }
 
 pub struct State {
@@ -87,12 +91,17 @@ impl State {
   pub fn set_sync_state(&self, new_state: SyncState) {
     let old_state = self.sync_state.read().clone();
     if old_state != new_state {
-      tracing::debug!(
-        "{} sync state 🌐 {:?} => {:?}",
-        self.object_id,
-        old_state,
-        new_state
-      );
+      if new_state.is_sync_finished() {
+        tracing::debug!("{} sync finish 🌐", self.object_id,);
+      } else {
+        tracing::trace!(
+          "{} sync state 🌐 {:?} => {:?}",
+          self.object_id,
+          old_state,
+          new_state
+        );
+      }
+
       *self.sync_state.write() = new_state.clone();
       let _ = self.notifier.send(new_state);
     }
