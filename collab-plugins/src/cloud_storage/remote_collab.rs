@@ -31,8 +31,7 @@ pub struct RemoteCollab {
   storage: Arc<dyn RemoteCollabStorage>,
   /// The [CollabSink] is used to send the updates to the remote.
   sink: Arc<CollabSink<TokioUnboundedSink<Message>, Message>>,
-  /// The [SyncStream] will be spawned in a separate task It continuously receive
-  /// the updates from the remote.
+  /// It continuously receive the updates from the remote.
   sync_state: Arc<watch::Sender<SyncState>>,
 }
 
@@ -265,6 +264,13 @@ pub fn should_create_snapshot(state: &RemoteCollabState) -> bool {
   state.current_edit_count > state.last_snapshot_edit_count + 50
 }
 
+pub struct RemoteCollabSnapshot {
+  pub snapshot_id: i64,
+  pub oid: String,
+  pub data: Vec<u8>,
+  pub created_at: i64,
+}
+
 /// The [RemoteCollabStorage] is used to store the updates of the remote collab. The [RemoteCollab]
 /// is the remote collab that maps to the local collab.
 /// Any storage that implements this trait can be used as the remote collab storage.
@@ -274,7 +280,10 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, anyhow::Error>;
 
   /// Get the latest snapshot of the remote collab.
-  async fn get_latest_snapshot(&self, object_id: &str) -> Result<Option<Vec<u8>>, anyhow::Error>;
+  async fn get_latest_snapshot(
+    &self,
+    object_id: &str,
+  ) -> Result<Option<RemoteCollabSnapshot>, anyhow::Error>;
 
   /// Return the remote state of the collab. It contains the current edit count, the last snapshot
   /// edit count and the last snapshot created time.
@@ -288,7 +297,7 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
     &self,
     object: &CollabObject,
     snapshot: Vec<u8>,
-  ) -> Result<(), anyhow::Error>;
+  ) -> Result<i64, anyhow::Error>;
 
   /// Send the update to the remote storage.
   async fn send_update(
@@ -317,7 +326,10 @@ where
     (**self).get_all_updates(object_id).await
   }
 
-  async fn get_latest_snapshot(&self, object_id: &str) -> Result<Option<Vec<u8>>, Error> {
+  async fn get_latest_snapshot(
+    &self,
+    object_id: &str,
+  ) -> Result<Option<RemoteCollabSnapshot>, Error> {
     (**self).get_latest_snapshot(object_id).await
   }
 
@@ -325,7 +337,7 @@ where
     (**self).get_collab_state(object_id).await
   }
 
-  async fn create_snapshot(&self, object: &CollabObject, update: Vec<u8>) -> Result<(), Error> {
+  async fn create_snapshot(&self, object: &CollabObject, update: Vec<u8>) -> Result<i64, Error> {
     (**self).create_snapshot(object, update).await
   }
 

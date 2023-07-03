@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{bail, Error};
+use anyhow::Error;
 use async_trait::async_trait;
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::config::Region;
@@ -15,7 +15,9 @@ use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
 
-use crate::cloud_storage::remote_collab::{CollabObject, RemoteCollab, RemoteCollabStorage};
+use crate::cloud_storage::remote_collab::{
+  CollabObject, RemoteCollab, RemoteCollabSnapshot, RemoteCollabStorage,
+};
 use crate::cloud_storage::RemoteCollabState;
 
 pub(crate) const DEFAULT_TABLE_NAME: &str = "collab_test";
@@ -100,19 +102,22 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
     Ok(aws_get_all_updates(&self.client, &self.table_name, object_id).await)
   }
 
-  async fn get_latest_snapshot(&self, _object_id: &str) -> Result<Option<Vec<u8>>, Error> {
+  async fn get_latest_snapshot(
+    &self,
+    _object_id: &str,
+  ) -> Result<Option<RemoteCollabSnapshot>, Error> {
     // TODO(nathan): support aws full sync
     Ok(None)
   }
 
-  async fn get_collab_state(&self, object_id: &str) -> Result<Option<RemoteCollabState>, Error> {
+  async fn get_collab_state(&self, _object_id: &str) -> Result<Option<RemoteCollabState>, Error> {
     // TODO(nathan): support aws full sync
     Ok(None)
   }
 
-  async fn create_snapshot(&self, _object: &CollabObject, _update: Vec<u8>) -> Result<(), Error> {
+  async fn create_snapshot(&self, _object: &CollabObject, _update: Vec<u8>) -> Result<i64, Error> {
     // TODO(nathan): support aws full sync
-    Ok(())
+    Ok(0)
   }
 
   async fn send_update(

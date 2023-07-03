@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use collab::core::any_map::AnyMapExtension;
 use collab::core::collab::MutexCollab;
-use collab::core::collab_state::SyncState;
+use collab::core::collab_state::{SnapshotState, SyncState};
 use collab::preclude::{JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
@@ -182,6 +182,11 @@ impl Database {
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
     let rx = self.inner.lock().subscribe_sync_state();
+    WatchStream::new(rx)
+  }
+
+  pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
+    let rx = self.inner.lock().subscribe_snapshot_state();
     WatchStream::new(rx)
   }
 

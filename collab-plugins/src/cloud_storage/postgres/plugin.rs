@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use collab::core::collab::MutexCollab;
 use collab::core::collab_plugin::CollabPluginType;
+use collab::core::collab_state::SnapshotState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_persistence::doc::YrsDocAction;
@@ -103,15 +104,19 @@ impl CollabPlugin for SupabaseDBPlugin {
         weak_pending_updates.upgrade(),
         weak_is_first_sync_done.upgrade(),
       ) {
-        if let Some(remote_update) = remote_collab.sync(local_collab.clone()).await {
-          create_snapshot_if_need(
-            uid,
-            object,
-            remote_update,
-            weak_local_collab_storage,
-            weak_remote_collab_storage,
-          );
-        }
+        let remote_update = remote_collab
+          .sync(local_collab.clone())
+          .await
+          .unwrap_or_default();
+        create_snapshot_if_need(
+          uid,
+          object,
+          remote_update,
+          Arc::downgrade(&local_collab),
+          weak_local_collab_storage,
+          weak_remote_collab_storage,
+        );
+
         for update in &*pending_updates.read() {
           remote_collab.push_update(update);
         }
@@ -135,10 +140,14 @@ impl CollabPlugin for SupabaseDBPlugin {
   }
 }
 
+/// Create a snapshot for the object if need
+/// If the remote_update is empty which means the object is not sync. So crate a snapshot for it.
+/// If the remote_update is not empty, check the [RemoteCollabState] to decide whether create a snapshot.
 fn create_snapshot_if_need(
   uid: i64,
   object: CollabObject,
   remote_update: Vec<u8>,
+  weak_local_collab: Weak<MutexCollab>,
   weak_local_collab_storage: Weak<RocksCollabDB>,
   weak_remote_collab_storage: Weak<dyn RemoteCollabStorage>,
 ) {
@@ -172,17 +181,20 @@ fn create_snapshot_if_need(
           .load_doc(uid, &object.id, &mut txn)?;
         drop(txn);
 
-        let remote = Collab::new(uid, object.id.clone(), vec![]);
-        let mut txn = local.transact_mut();
-        txn.try_apply_update(Update::decode_v1(&remote_update)?)?;
-        drop(txn);
-
-        let local_sv = local.transact().state_vector();
-        let encode_update = remote.transact().encode_state_as_update_v1(&local_sv);
-        if let Ok(update) = Update::decode_v1(&encode_update) {
+        // Only sync with the remote if the remote update is not empty
+        if !remote_update.is_empty() {
+          let remote = Collab::new(uid, object.id.clone(), vec![]);
           let mut txn = local.transact_mut();
-          txn.try_apply_update(update)?;
+          txn.try_apply_update(Update::decode_v1(&remote_update)?)?;
           drop(txn);
+
+          let local_sv = local.transact().state_vector();
+          let encode_update = remote.transact().encode_state_as_update_v1(&local_sv);
+          if let Ok(update) = Update::decode_v1(&encode_update) {
+            let mut txn = local.transact_mut();
+            txn.try_apply_update(update)?;
+            drop(txn);
+          }
         }
 
         let txn = local.transact();
@@ -195,7 +207,14 @@ fn create_snapshot_if_need(
           .create_snapshot(&cloned_object, doc_state)
           .await
         {
-          Ok(_) => tracing::debug!("{} remote snapshot created", cloned_object.id),
+          Ok(snapshot_id) => {
+            tracing::debug!("{} remote snapshot created", cloned_object.id);
+            if let Some(local_collab) = weak_local_collab.upgrade() {
+              local_collab
+                .lock()
+                .set_snapshot_state(SnapshotState::DidCreateSnapshot { snapshot_id });
+            }
+          },
           Err(e) => tracing::error!("Failed to create remote snapshot: {}", e),
         }
       }

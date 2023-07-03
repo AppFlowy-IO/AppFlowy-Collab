@@ -45,6 +45,21 @@ pub enum SyncState {
   FullSync,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SnapshotState {
+  WaitingForSnapshot,
+  DidCreateSnapshot { snapshot_id: i64 },
+}
+
+impl SnapshotState {
+  pub fn snapshot_id(&self) -> Option<i64> {
+    match self {
+      SnapshotState::WaitingForSnapshot => None,
+      SnapshotState::DidCreateSnapshot { snapshot_id } => Some(*snapshot_id),
+    }
+  }
+}
+
 impl SyncState {
   pub fn is_full_sync(&self) -> bool {
     matches!(self, SyncState::FullSync)
@@ -62,17 +77,22 @@ pub struct State {
   object_id: String,
   init_state: Arc<RwLock<InitState>>,
   sync_state: Arc<RwLock<SyncState>>,
-  pub(crate) notifier: Arc<watch::Sender<SyncState>>,
+  snapshot_state: Arc<RwLock<SnapshotState>>,
+  pub(crate) sync_state_notifier: Arc<watch::Sender<SyncState>>,
+  pub(crate) snapshot_state_notifier: Arc<watch::Sender<SnapshotState>>,
 }
 
 impl State {
   pub fn new(object_id: &str) -> Self {
-    let (state_notifier, _) = watch::channel(SyncState::SyncFinished);
+    let (sync_state_notifier, _) = watch::channel(SyncState::SyncFinished);
+    let (snapshot_state_notifier, _) = watch::channel(SnapshotState::WaitingForSnapshot);
     Self {
       object_id: object_id.to_string(),
       init_state: Arc::new(RwLock::new(InitState::Uninitialized)),
       sync_state: Arc::new(RwLock::new(SyncState::SyncFinished)),
-      notifier: Arc::new(state_notifier),
+      snapshot_state: Arc::new(RwLock::new(SnapshotState::WaitingForSnapshot)),
+      sync_state_notifier: Arc::new(sync_state_notifier),
+      snapshot_state_notifier: Arc::new(snapshot_state_notifier),
     }
   }
 
@@ -103,7 +123,15 @@ impl State {
       }
 
       *self.sync_state.write() = new_state.clone();
-      let _ = self.notifier.send(new_state);
+      let _ = self.sync_state_notifier.send(new_state);
+    }
+  }
+
+  pub fn set_snapshot_state(&self, new_state: SnapshotState) {
+    let old_state = self.snapshot_state.read().clone();
+    if old_state != new_state {
+      *self.snapshot_state.write() = new_state.clone();
+      let _ = self.snapshot_state_notifier.send(new_state);
     }
   }
 }

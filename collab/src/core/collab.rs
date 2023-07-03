@@ -17,7 +17,7 @@ use yrs::{
 };
 
 use crate::core::collab_plugin::{CollabPlugin, CollabPluginType};
-use crate::core::collab_state::{InitState, State, SyncState};
+use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
 use crate::core::transaction::TransactionRetry;
@@ -120,7 +120,11 @@ impl Collab {
   }
 
   pub fn subscribe_sync_state(&self) -> watch::Receiver<SyncState> {
-    self.state.notifier.subscribe()
+    self.state.sync_state_notifier.subscribe()
+  }
+
+  pub fn subscribe_snapshot_state(&self) -> watch::Receiver<SnapshotState> {
+    self.state.snapshot_state_notifier.subscribe()
   }
 
   /// Returns the [Doc] associated with the [Collab].
@@ -202,6 +206,10 @@ impl Collab {
 
   pub fn set_sync_state(&self, sync_state: SyncState) {
     self.state.set_sync_state(sync_state);
+  }
+
+  pub fn set_snapshot_state(&self, snapshot_state: SnapshotState) {
+    self.state.set_snapshot_state(snapshot_state);
   }
 
   pub fn observer_data<F>(&mut self, f: F) -> MapSubscription
