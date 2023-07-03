@@ -49,7 +49,7 @@ fn open_empty_document() {
   let db = db();
   let document_test = open_document_with_db(1, doc_id, db);
   let document = document_test.document;
-  let data = document.get_document();
+  let data = document.get_document_data();
   assert!(data.is_err());
 }
 
