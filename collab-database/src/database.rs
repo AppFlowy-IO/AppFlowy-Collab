@@ -899,6 +899,12 @@ impl Database {
       vec![view_id.to_string()]
     }
   }
+
+  /// Only expose this function in test env
+  #[cfg(debug_assertions)]
+  pub fn get_mutex_collab(&self) -> &Arc<MutexCollab> {
+    &self.inner
+  }
 }
 
 pub fn gen_database_id() -> String {

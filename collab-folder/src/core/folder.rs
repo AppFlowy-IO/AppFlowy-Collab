@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::core::collab::MutexCollab;
-use collab::core::collab_state::SyncState;
+use collab::core::collab_state::{SnapshotState, SyncState};
 use collab::preclude::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -65,6 +65,11 @@ impl Folder {
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
     let rx = self.inner.lock().subscribe_sync_state();
+    WatchStream::new(rx)
+  }
+
+  pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
+    let rx = self.inner.lock().subscribe_snapshot_state();
     WatchStream::new(rx)
   }
 

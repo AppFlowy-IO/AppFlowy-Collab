@@ -312,13 +312,11 @@ fn open_document_test() {
   let doc_id = "1";
   let mut test = create_document(1, doc_id);
   let document = &mut test.document;
-  document
-    .subscribe_block_changed(|block_events, _| {
-      let block_events_json = serde_json::to_value(block_events);
-      assert!(block_events_json.is_ok());
-      dbg!(block_events_json.unwrap());
-    })
-    .unwrap();
+  document.subscribe_block_changed(|block_events, _| {
+    let block_events_json = serde_json::to_value(block_events);
+    assert!(block_events_json.is_ok());
+    dbg!(block_events_json.unwrap());
+  });
   let document_data = document.get_document_data();
   assert!(document_data.is_ok());
   let document_data = document_data.unwrap();
