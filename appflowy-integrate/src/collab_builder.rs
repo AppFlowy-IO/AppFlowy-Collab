@@ -54,14 +54,10 @@ impl AppFlowyCollabBuilder {
     }
   }
 
-  /// # Arguments
-  ///
-  /// * `uid`: user id
-  /// * `object_id`: the collab object id
-  /// * `object_name`: the collab object name. Currently only used to debug.
-  /// * `db`: the RocksCollabDB instance.
-  ///
-  /// returns: Arc<MutexCollab>
+  /// Create a new collab builder with default config.
+  /// The [MutexCollab] will be create if the object is not exist. So, if you need to check
+  /// the object is exist or not. You should use the transaction returned by the [read_txn] method of
+  /// [RocksCollabDB], and calling [is_exist] method.
   ///
   pub fn build(
     &self,
@@ -79,6 +75,11 @@ impl AppFlowyCollabBuilder {
     )
   }
 
+  /// Create a new collab builder with custom config.
+  /// The [MutexCollab] will be create if the object is not exist. So, if you need to check
+  /// the object is exist or not. You should use the transaction returned by the [read_txn] method of
+  /// [RocksCollabDB], and calling [is_exist] method.
+  ///
   pub fn build_with_config(
     &self,
     uid: i64,
