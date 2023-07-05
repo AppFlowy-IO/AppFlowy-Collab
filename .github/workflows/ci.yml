@@ -33,7 +33,7 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: clippy
       - name: Linting
-        run: cargo clippy --target-dir . --all-features -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
   test:
     name: Test
     runs-on: ubuntu-latest
