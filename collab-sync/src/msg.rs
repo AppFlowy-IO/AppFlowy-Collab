@@ -1,11 +1,11 @@
-use bytes::Bytes;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
-use crate::client::sink::{CollabSinkMessage, MsgId};
+use bytes::Bytes;
 use collab::core::origin::CollabOrigin;
 use serde::{Deserialize, Serialize};
 
+use crate::client::sink::{CollabSinkMessage, MsgId};
 use crate::error::SyncError;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -26,6 +26,14 @@ impl CollabSinkMessage for CollabMessage {
 
   fn mergeable(&self) -> bool {
     false
+  }
+
+  fn merge(&mut self, _other: Self) {
+    // Do nothing. Because mergeable is false.
+  }
+
+  fn is_init_msg(&self) -> bool {
+    self.is_init()
   }
 
   fn deferrable(&self) -> bool {

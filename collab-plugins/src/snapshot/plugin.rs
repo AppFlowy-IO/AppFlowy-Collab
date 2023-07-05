@@ -40,7 +40,6 @@ pub trait SnapshotPersistence: Send + Sync {
     uid: i64,
     object_id: &str,
     title: String,
-    collab_type: String,
     snapshot_data: Vec<u8>,
   ) -> Result<(), PersistenceError>;
 }
@@ -127,7 +126,6 @@ impl CollabPlugin for CollabSnapshotPlugin {
                 uid,
                 &object.id,
                 object.name,
-                "".to_string(),
                 snapshot_data,
               ) {
                 Ok(_) => *state.write() = GenSnapshotState::Idle,
@@ -156,7 +154,6 @@ impl SnapshotPersistence for Arc<RocksCollabDB> {
     uid: i64,
     object_id: &str,
     _title: String,
-    _collab_type: String,
     snapshot_data: Vec<u8>,
   ) -> Result<(), PersistenceError> {
     self.with_write_txn(|txn| {

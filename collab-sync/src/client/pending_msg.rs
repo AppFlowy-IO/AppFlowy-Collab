@@ -2,8 +2,9 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::ops::{Deref, DerefMut};
 
-use crate::client::sink::MsgId;
 use tokio::sync::oneshot;
+
+use crate::client::sink::{CollabSinkMessage, MsgId};
 
 pub(crate) struct PendingMsgQueue<Msg> {
   queue: BinaryHeap<PendingMessage<Msg>>,
@@ -65,12 +66,8 @@ where
     }
   }
 
-  pub fn get_msg(&self) -> Msg {
-    self.msg.clone()
-  }
-
-  pub fn get_mut_msg(&mut self) -> &mut Msg {
-    &mut self.msg
+  pub fn get_msg(&self) -> &Msg {
+    &self.msg
   }
 
   pub fn state(&self) -> &MessageState {
@@ -79,7 +76,6 @@ where
 
   pub fn set_state(&mut self, new_state: MessageState) {
     self.state = new_state;
-
     if self.state.is_done() && self.tx.is_some() {
       self.tx.take().map(|tx| tx.send(self.msg_id));
     }
@@ -91,6 +87,27 @@ where
 
   pub fn msg_id(&self) -> MsgId {
     self.msg_id
+  }
+
+  pub fn into_msg(self) -> Msg {
+    self.msg
+  }
+}
+
+impl<Msg> PendingMessage<Msg>
+where
+  Msg: CollabSinkMessage,
+{
+  pub fn is_mergeable(&self) -> bool {
+    self.msg.mergeable()
+  }
+
+  pub fn is_init(&self) -> bool {
+    self.msg.is_init_msg()
+  }
+
+  pub fn merge(&mut self, other: Self) {
+    self.msg.merge(other.into_msg());
   }
 }
 
@@ -137,8 +154,5 @@ impl MessageState {
   }
   pub fn is_processing(&self) -> bool {
     matches!(self, MessageState::Processing)
-  }
-  pub fn is_pending(&self) -> bool {
-    matches!(self, MessageState::Pending)
   }
 }

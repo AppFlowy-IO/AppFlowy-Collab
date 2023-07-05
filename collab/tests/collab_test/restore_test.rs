@@ -1,10 +1,13 @@
+#![allow(clippy::all)]
+
 use std::collections::HashMap;
 
 use collab::core::collab::CollabBuilder;
 use collab::preclude::MapRefExtension;
 use serde_json::json;
+use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
-use yrs::{ReadTxn, Transact, Update};
+use yrs::{Doc, Map, MapPrelim, ReadTxn, Transact, Update};
 
 use crate::helper::{setup_log, CollabStateCachePlugin};
 
@@ -164,68 +167,139 @@ fn root_change_test() {
   // assert_eq!(a, b);
 }
 
-// #[test]
-// fn root_change_test2() {
-//   let doc_1 = Doc::new();
-//   let doc_2 = Doc::new();
-//   let root_map_1 = doc_1.get_or_insert_map("root");
-//   let root_map_2 = doc_2.get_or_insert_map("root");
-//
-//   // root: { map:{ } }
-//   let mut map_1 = {
-//     let mut txn = doc_1.transact_mut();
-//     root_map_1.insert(&mut txn, "map", MapPrelim::<lib0::any::Any>::new())
-//   };
-//   // root: { map:{ } }
-//   let mut map_2 = {
-//     let mut txn = doc_2.transact_mut();
-//     root_map_2.insert(&mut txn, "map", MapPrelim::<lib0::any::Any>::new())
-//   };
-//
-//   // let cloned_map_1 = map_1.clone();
-//   // let cloned_map_2 = map_2.clone();
-//   // let map_1_sub = map_1.observe(move |txn, event| {
-//   //   // Only set the root changed flag if the remote origin is different from the local origin.
-//   //   println!(
-//   //     "1 event target: {:?}, map: {:?}",
-//   //     event.target(),
-//   //     cloned_map_1
-//   //   );
-//   // });
-//   // let map_2_sub = map_2.observe(move |txn, event| {
-//   //   // Only set the root changed flag if the remote origin is different from the local origin.
-//   //   println!(
-//   //     "2 event target: {:?}, map: {:?}",
-//   //     event.target(),
-//   //     cloned_map_2
-//   //   );
-//   // });
-//
-//   {
-//     let mut txn = doc_2.transact_mut();
-//     map_2.insert(&mut txn, "key_1", "a");
-//     map_2.insert(&mut txn, "key_2", "b");
-//   }
-//
-//   let sv_1 = doc_1.transact().state_vector();
-//   let sv_update = doc_2.transact().encode_state_as_update_v1(&sv_1);
-//   {
-//     let mut txn = doc_1.transact_mut();
-//     let update = Update::decode_v1(&sv_update).unwrap();
-//     txn.apply_update(update);
-//   }
-//
-//   let a = {
-//     let txn = doc_1.transact();
-//     root_map_1.to_json(&txn)
-//   };
-//
-//   let b = {
-//     let txn = doc_2.transact();
-//     root_map_2.to_json(&txn)
-//   };
-//
-//   println!("a: {}", a);
-//   println!("b: {}", b);
-//   assert_eq!(a, b);
-// }
+// The result is undetermined because the two peers are in a different state. Check out the
+// two_way_sync_test for a more detailed explanation.
+#[test]
+fn two_way_sync_result_undetermined() {
+  let doc_1 = Doc::new();
+  let doc_2 = Doc::new();
+  let root_map_1 = doc_1.get_or_insert_map("root");
+  let root_map_2 = doc_2.get_or_insert_map("root");
+
+  // root: { map:{ } }
+  let _map_1 = {
+    let mut txn = doc_1.transact_mut();
+    root_map_1.insert(&mut txn, "map", MapPrelim::<lib0::any::Any>::new())
+  };
+
+  // root: { map:{ } }
+  let map_2 = {
+    let mut txn = doc_2.transact_mut();
+    root_map_2.insert(&mut txn, "map", MapPrelim::<lib0::any::Any>::new())
+  };
+
+  {
+    let mut txn = doc_2.transact_mut();
+    map_2.insert(&mut txn, "key_1", "a");
+    map_2.insert(&mut txn, "key_2", "b");
+  }
+
+  {
+    let sv_1 = doc_1.transact().state_vector();
+    let sv_update = doc_2.transact().encode_state_as_update_v1(&sv_1);
+    let mut txn = doc_1.transact_mut();
+    let update = Update::decode_v1(&sv_update).unwrap();
+    txn.apply_update(update);
+  }
+
+  // When synchronizing updates, what happens is that a conflict has occurred - under the same key
+  // "map" two different maps where inserted - map_1 and map_2 are logically different entities (in
+  // Yjs/Yrs only root types are logically equivalent by their name). In order to resolve this conflict,
+  // an update that created a nested map from the client with higher ID will override the one that came
+  // from client with lower ID. If that happens, the overridden map will be tombstoned together with
+  // all its elements.
+  //
+  // That Doc::new() generates random client ID for the document. So the two way sync is reuqired
+  {
+    let sv_2 = doc_2.transact().state_vector();
+    let sv_update = doc_1.transact().encode_state_as_update_v1(&sv_2);
+    let mut txn = doc_2.transact_mut();
+    let update = Update::decode_v1(&sv_update).unwrap();
+    txn.apply_update(update);
+  }
+
+  // The a and b must be the same and might be empty. This is the result of the two way sync.
+  let a = {
+    let txn = doc_1.transact();
+    root_map_1.to_json(&txn)
+  };
+
+  let b = {
+    let txn = doc_2.transact();
+    root_map_2.to_json(&txn)
+  };
+
+  println!("a: {}", a);
+  println!("b: {}", b);
+  assert_eq!(a, b);
+}
+
+#[test]
+fn two_way_sync_test() {
+  let doc_1 = Doc::new();
+  let doc_2 = Doc::new();
+  let root_map_1 = doc_1.get_or_insert_map("root");
+  let root_map_2 = doc_2.get_or_insert_map("root");
+
+  // root: { map:{ } }
+  let _map_1 = {
+    let mut txn = doc_1.transact_mut();
+    root_map_1.insert(&mut txn, "map", MapPrelim::<lib0::any::Any>::new())
+  };
+
+  // sync the doc_1 local state to doc_2. Then the "map" will be treated as the same object.
+  {
+    let sv_1 = doc_1.transact().state_vector();
+    let sv_update = doc_2.transact().encode_state_as_update_v1(&sv_1);
+    let mut txn = doc_1.transact_mut();
+    let update = Update::decode_v1(&sv_update).unwrap();
+    txn.apply_update(update);
+  }
+  {
+    let sv_2 = doc_2.transact().state_vector();
+    let sv_update = doc_1.transact().encode_state_as_update_v1(&sv_2);
+    let mut txn = doc_2.transact_mut();
+    let update = Update::decode_v1(&sv_update).unwrap();
+    txn.apply_update(update);
+  }
+
+  // Update the "map" in doc_2 and then sync to doc_1
+  let map_2 = {
+    let txn = doc_2.transact();
+    root_map_2.get_map_with_txn(&txn, "map").unwrap()
+  };
+  {
+    let mut txn = doc_2.transact_mut();
+    map_2.insert(&mut txn, "key_1", "a");
+    map_2.insert(&mut txn, "key_2", "b");
+  }
+  {
+    let sv_1 = doc_1.transact().state_vector();
+    let sv_update = doc_2.transact().encode_state_as_update_v1(&sv_1);
+    let mut txn = doc_1.transact_mut();
+    let update = Update::decode_v1(&sv_update).unwrap();
+    txn.apply_update(update);
+  }
+  {
+    let sv_2 = doc_2.transact().state_vector();
+    let sv_update = doc_1.transact().encode_state_as_update_v1(&sv_2);
+    let mut txn = doc_2.transact_mut();
+    let update = Update::decode_v1(&sv_update).unwrap();
+    txn.apply_update(update);
+  }
+
+  // The a and b must be the same and not empty
+  let a = {
+    let txn = doc_1.transact();
+    root_map_1.to_json(&txn)
+  };
+
+  let b = {
+    let txn = doc_2.transact();
+    root_map_2.to_json(&txn)
+  };
+
+  println!("a: {}", a);
+  println!("b: {}", b);
+  assert_eq!(a, b);
+}

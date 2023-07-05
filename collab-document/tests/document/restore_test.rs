@@ -11,10 +11,10 @@ fn restore_default_document_test() {
   let uid = 1;
   let doc_id = "1";
   let test = create_document(uid, doc_id);
-  let data1 = test.get_document().unwrap();
+  let data1 = test.get_document_data().unwrap();
 
   let restore_document = open_document_with_db(uid, doc_id, test.db);
-  let data2 = restore_document.get_document().unwrap();
+  let data2 = restore_document.get_document_data().unwrap();
 
   assert_eq!(data1, data2);
 }

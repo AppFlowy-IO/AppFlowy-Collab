@@ -3,11 +3,15 @@ use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use anyhow::Error;
 use async_trait::async_trait;
 use collab::core::collab::MutexCollab;
+use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
+use collab_persistence::TransactionMutExt;
+pub use collab_sync::client::sink::MsgId;
 use collab_sync::client::sink::{
-  CollabSink, CollabSinkMessage, CollabSinkRunner, MsgId, MsgIdCounter, SinkConfig,
+  CollabSink, CollabSinkMessage, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState,
 };
 use collab_sync::client::TokioUnboundedSink;
 use parking_lot::Mutex;
@@ -15,19 +19,10 @@ use rand::Rng;
 use tokio::spawn;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::watch;
+use tokio_stream::wrappers::WatchStream;
+use tokio_stream::StreamExt;
 use yrs::updates::decoder::Decode;
 use yrs::{merge_updates_v1, ReadTxn, Transact, Update};
-
-/// The [RemoteCollabStorage] is used to store the updates of the remote collab. The [RemoteCollab]
-/// is the remote collab that maps to the local collab.
-/// Any storage that implements this trait can be used as the remote collab storage.
-#[async_trait]
-pub trait RemoteCollabStorage: Send + Sync + 'static {
-  /// Get all the updates of the remote collab.
-  async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, anyhow::Error>;
-  /// Send the update to the remote storage.
-  async fn send_update(&self, id: MsgId, update: Vec<u8>) -> Result<(), anyhow::Error>;
-}
 
 /// The [RemoteCollab] is used to sync the local collab to the remote.
 pub struct RemoteCollab {
@@ -36,46 +31,92 @@ pub struct RemoteCollab {
   storage: Arc<dyn RemoteCollabStorage>,
   /// The [CollabSink] is used to send the updates to the remote.
   sink: Arc<CollabSink<TokioUnboundedSink<Message>, Message>>,
+  /// It continuously receive the updates from the remote.
+  sync_state: Arc<watch::Sender<SyncState>>,
+}
+
+impl Drop for RemoteCollab {
+  fn drop(&mut self) {
+    tracing::trace!("{} remote collab dropped", self.object);
+  }
 }
 
 impl RemoteCollab {
   /// Create a new remote collab.
   /// `timeout` is the time to wait for the server to ack the message.
   /// If the server does not ack the message in time, the message will be sent again.
-  pub fn new<S>(object: CollabObject, storage: S, config: SinkConfig) -> Self
-  where
-    S: RemoteCollabStorage + Send + Sync + 'static,
-  {
-    let storage: Arc<dyn RemoteCollabStorage> = Arc::new(storage);
+  pub fn new(
+    object: CollabObject,
+    storage: Arc<dyn RemoteCollabStorage>,
+    config: SinkConfig,
+  ) -> Self {
+    let sync_state = Arc::new(watch::channel(SyncState::SyncInitStart).0);
     let collab = Arc::new(MutexCollab::new(CollabOrigin::Server, &object.id, vec![]));
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
     let (notifier, notifier_rx) = watch::channel(false);
+    let (state_tx, sink_state_rx) = watch::channel(SinkState::Init);
     let sink = Arc::new(CollabSink::new(
       TokioUnboundedSink(sink),
       notifier,
+      state_tx,
       RngMsgIdCounter::new(),
       config,
     ));
 
     let weak_sink = Arc::downgrade(&sink);
+    let weak_sync_state = Arc::downgrade(&sync_state);
+    let mut sink_state_stream = WatchStream::new(sink_state_rx);
+    // Subscribe the sink state stream and update the sync state in the background.
+    spawn(async move {
+      while let Some(collab_state) = sink_state_stream.next().await {
+        if let Some(sync_state) = weak_sync_state.upgrade() {
+          match collab_state {
+            SinkState::Syncing => {
+              let _ = sync_state.send(SyncState::SyncUpdate);
+            },
+            SinkState::Finished => {
+              let _ = sync_state.send(SyncState::SyncFinished);
+            },
+            SinkState::Init => {},
+          }
+        }
+      }
+    });
+
     spawn(async move {
       while let Some(message) = stream.recv().await {
         if let Some(storage) = weak_storage.upgrade() {
-          if let Ok((object, msg_id, payload)) = message.split() {
-            match storage.send_update(msg_id, payload).await {
-              Ok(_) => {
-                tracing::debug!("ack update {}: {}", object, msg_id);
-                if let Some(sink) = weak_sink.upgrade() {
-                  sink.ack_msg(msg_id).await;
+          let is_init_msg = message.is_init_msg();
+          match message.split() {
+            Ok((object, msg_id, payload)) => {
+              // If the message is init message, it will flush all the updates to the remote.
+              if is_init_msg {
+                tracing::trace!("send init sync {}:{}", object, msg_id);
+                match storage.send_init_sync(&object, msg_id, payload).await {
+                  Ok(_) => {
+                    if let Some(sink) = weak_sink.upgrade() {
+                      sink.ack_msg(msg_id).await;
+                    }
+                  },
+                  Err(e) => {
+                    tracing::error!("send {}:{} init sync failed: {:?}", object.id, msg_id, e)
+                  },
                 }
-              },
-              Err(e) => {
-                tracing::error!("send {} update failed: {:?}", msg_id, e);
-              },
-            }
-          } else {
-            tracing::error!("Failed to get the payload from message");
+              } else {
+                tracing::trace!("send update {}:{}", object, msg_id);
+                match storage.send_update(&object, msg_id, payload).await {
+                  Ok(_) => {
+                    tracing::debug!("ack update {}:{}", object, msg_id);
+                    if let Some(sink) = weak_sink.upgrade() {
+                      sink.ack_msg(msg_id).await;
+                    }
+                  },
+                  Err(e) => tracing::error!("send {}:{} update failed: {:?}", object.id, msg_id, e),
+                }
+              }
+            },
+            Err(e) => tracing::error!("🔴Failed to split message: {:?}", e),
           }
         }
       }
@@ -87,12 +128,24 @@ impl RemoteCollab {
       collab,
       storage,
       sink,
+      sync_state,
     }
   }
 
-  pub async fn sync(&self, local_collab: Arc<MutexCollab>) {
-    tracing::trace!("{}: start sync with remote", self.object);
-    let updates = match self.storage.get_all_updates(&self.object.id).await {
+  pub fn subscribe_sync_state(&self) -> watch::Receiver<SyncState> {
+    self.sync_state.subscribe()
+  }
+
+  /// Return the update of the remote collab.
+  /// If the remote collab contains any updates, it will return None.
+  /// Otherwise, it will merge the updates into one and return the merged update.
+  pub async fn sync(&self, local_collab: Arc<MutexCollab>) -> Option<Vec<u8>> {
+    let mut remote_update = None;
+    // It would be better if creating a edge function that calculate the diff between the local and remote.
+    // The local only need to send its state vector to the remote. In this way, the local does not need to
+    // get all the updates from remote.
+    // TODO(nathan): create a edge function to calculate the diff between the local and remote.
+    let remote_updates = match self.storage.get_all_updates(&self.object.id).await {
       Ok(updates) => updates,
       Err(e) => {
         tracing::error!("🔴Failed to get updates: {:?}", e);
@@ -100,25 +153,31 @@ impl RemoteCollab {
       },
     };
 
-    tracing::trace!(
-      "{}: try apply remote updates with len:{}",
-      self.object,
-      updates.len(),
-    );
+    if !remote_updates.is_empty() {
+      let updates = remote_updates
+        .iter()
+        .map(|update| update.as_ref())
+        .collect::<Vec<&[u8]>>();
 
-    if !updates.is_empty() {
-      // Apply remote updates to remote collab before encode the state as update
-      // for local collab.
-      self.collab.lock().with_transact_mut(|txn| {
-        for update in updates {
+      if let Ok(update) = merge_updates_v1(&updates) {
+        tracing::trace!("{}: sync remote updates:{}", self.object, update.len());
+        // Restore the remote collab state from updates
+        {
+          let remote_collab = self.collab.lock();
+          let mut txn = remote_collab.transact_mut();
           if let Ok(update) = Update::decode_v1(&update) {
-            txn.apply_update(update);
+            if let Err(e) = txn.try_apply_update(update) {
+              tracing::error!("Failed to apply update: {:?}", e);
+            }
           } else {
             tracing::error!("Failed to decode update");
           }
-        }
-      });
 
+          remote_update = Some(update);
+        }
+      }
+
+      let _ = self.sync_state.send(SyncState::SyncInitStart);
       // Encode the remote collab state as update for local collab.
       let local_sv = local_collab.lock().transact().state_vector();
       let encode_update = self
@@ -132,13 +191,18 @@ impl RemoteCollab {
           // the update will consider as a local update. But here is apply the remote update.
           // TODO: nathan define a sync protocol for cloud storage.
           tracing::trace!(
-            "{}: apply remote update with len:{}",
+            "{}: apply remote update with diff len:{}",
             self.object,
             encode_update.len()
           );
           let local_collab_guard = local_collab.lock();
           let mut txn = local_collab_guard.get_doc().transact_mut();
           txn.apply_update(update);
+          drop(txn);
+
+          if let Err(e) = self.sync_state.send(SyncState::SyncInitEnd) {
+            tracing::error!("🔴Failed to send sync state: {:?}", e);
+          }
         }
       }
     }
@@ -149,13 +213,15 @@ impl RemoteCollab {
       .lock()
       .transact()
       .encode_state_as_update_v1(&remote_state_vector);
+
     if let Ok(decode_update) = Update::decode_v1(&encode_update) {
       tracing::trace!(
-        "{}: try sync local update with len:{}",
+        "{}: sync local updates:{}",
         self.object,
         encode_update.len()
       );
 
+      // Apply the update to the remote collab and send the update to the remote.
       self.collab.lock().with_transact_mut(|txn| {
         txn.apply_update(decode_update);
       });
@@ -166,6 +232,7 @@ impl RemoteCollab {
         meta: MessageMeta::Init { msg_id },
       });
     }
+    remote_update
   }
 
   pub fn push_update(&self, update: &[u8]) {
@@ -174,18 +241,122 @@ impl RemoteCollab {
         txn.apply_update(decode_update);
       });
 
-      self.sink.queue_or_merge_msg(
-        |prev| {
-          prev.merge_payload(update.to_vec());
-          Ok(())
-        },
-        |msg_id| Message {
-          object: self.object.clone(),
-          payloads: vec![update.to_vec()],
-          meta: MessageMeta::Update { msg_id },
-        },
-      );
+      self.sink.queue_msg(|msg_id| Message {
+        object: self.object.clone(),
+        payloads: vec![update.to_vec()],
+        meta: MessageMeta::Update { msg_id },
+      });
     }
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteCollabState {
+  /// The current edit count of the remote collab.
+  pub current_edit_count: i64,
+  /// The last edit count of the remote collab when the snapshot is created.
+  pub last_snapshot_edit_count: i64,
+  /// The last snapshot of the remote collab.
+  pub last_snapshot_created_at: i64,
+}
+
+pub fn should_create_snapshot(state: &RemoteCollabState) -> bool {
+  state.current_edit_count > state.last_snapshot_edit_count + 50
+}
+
+pub struct RemoteCollabSnapshot {
+  pub snapshot_id: i64,
+  pub oid: String,
+  pub data: Vec<u8>,
+  pub created_at: i64,
+}
+
+/// The [RemoteCollabStorage] is used to store the updates of the remote collab. The [RemoteCollab]
+/// is the remote collab that maps to the local collab.
+/// Any storage that implements this trait can be used as the remote collab storage.
+#[async_trait]
+pub trait RemoteCollabStorage: Send + Sync + 'static {
+  /// Get all the updates of the remote collab.
+  async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, anyhow::Error>;
+
+  /// Get the latest snapshot of the remote collab.
+  async fn get_latest_snapshot(
+    &self,
+    object_id: &str,
+  ) -> Result<Option<RemoteCollabSnapshot>, anyhow::Error>;
+
+  /// Return the remote state of the collab. It contains the current edit count, the last snapshot
+  /// edit count and the last snapshot created time.
+  async fn get_collab_state(
+    &self,
+    object_id: &str,
+  ) -> Result<Option<RemoteCollabState>, anyhow::Error>;
+
+  /// Create a snapshot of the remote collab. The update contains the full state of the [Collab]
+  async fn create_snapshot(
+    &self,
+    object: &CollabObject,
+    snapshot: Vec<u8>,
+  ) -> Result<i64, anyhow::Error>;
+
+  /// Send the update to the remote storage.
+  async fn send_update(
+    &self,
+    object: &CollabObject,
+    id: MsgId,
+    update: Vec<u8>,
+  ) -> Result<(), anyhow::Error>;
+
+  /// The init sync is used to send the initial state of the remote collab to the remote storage.
+  /// The init_update contains all the missing updates of the remote collab compared to the local.
+  async fn send_init_sync(
+    &self,
+    object: &CollabObject,
+    id: MsgId,
+    init_update: Vec<u8>,
+  ) -> Result<(), anyhow::Error>;
+}
+
+#[async_trait]
+impl<T> RemoteCollabStorage for Arc<T>
+where
+  T: RemoteCollabStorage,
+{
+  async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, Error> {
+    (**self).get_all_updates(object_id).await
+  }
+
+  async fn get_latest_snapshot(
+    &self,
+    object_id: &str,
+  ) -> Result<Option<RemoteCollabSnapshot>, Error> {
+    (**self).get_latest_snapshot(object_id).await
+  }
+
+  async fn get_collab_state(&self, object_id: &str) -> Result<Option<RemoteCollabState>, Error> {
+    (**self).get_collab_state(object_id).await
+  }
+
+  async fn create_snapshot(&self, object: &CollabObject, update: Vec<u8>) -> Result<i64, Error> {
+    (**self).create_snapshot(object, update).await
+  }
+
+  async fn send_update(
+    &self,
+    object: &CollabObject,
+    id: MsgId,
+    update: Vec<u8>,
+  ) -> Result<(), Error> {
+    (**self).send_update(object, id, update).await
+  }
+
+  async fn send_init_sync(
+    &self,
+    object: &CollabObject,
+    id: MsgId,
+    init_update: Vec<u8>,
+  ) -> Result<(), Error> {
+    (**self).send_init_sync(object, id, init_update).await
   }
 }
 
@@ -217,10 +388,6 @@ struct Message {
 }
 
 impl Message {
-  fn merge_payload(&mut self, payload: Vec<u8>) {
-    self.payloads.push(payload);
-  }
-
   fn payload_len(&self) -> usize {
     self.payloads.iter().map(|p| p.len()).sum()
   }
@@ -245,8 +412,20 @@ impl CollabSinkMessage for Message {
   fn mergeable(&self) -> bool {
     match self.meta {
       MessageMeta::Init { .. } => false,
-      MessageMeta::Update { .. } => self.payload_len() < 1024,
+      // Special characters, emojis, and characters from many other languages can take 2, 3, or
+      // even 4 bytes in UTF-8. So assuming that these are standard English characters and encoded
+      // using UTF-8, each character will take 1 byte. 4096 can hold 4096 characters.
+      // The default max message size is 4kb.
+      MessageMeta::Update { .. } => self.payload_len() < (1024 * 4),
     }
+  }
+
+  fn merge(&mut self, other: Self) {
+    self.payloads.extend(other.payloads);
+  }
+
+  fn is_init_msg(&self) -> bool {
+    matches!(self.meta, MessageMeta::Init { .. })
   }
 
   fn deferrable(&self) -> bool {
@@ -285,7 +464,7 @@ impl Ord for Message {
         MessageMeta::Update {
           msg_id: msg_id_b, ..
         },
-      ) => msg_id_a.cmp(msg_id_b),
+      ) => msg_id_a.cmp(msg_id_b).reverse(),
     }
   }
 }

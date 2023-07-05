@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use collab_plugins::cloud_storage::postgres::SupabaseDBConfig;
 use serde::{Deserialize, Serialize};
 
 pub enum CollabDBPluginProvider {
@@ -12,25 +11,16 @@ pub enum CollabDBPluginProvider {
 pub struct CollabPluginConfig {
   /// Only one of the following two fields should be set.
   aws_config: Option<AWSDynamoDBConfig>,
-  supabase_config: Option<SupabaseDBConfig>,
 }
 
 impl CollabPluginConfig {
   pub fn from_env() -> Self {
     let aws_config = AWSDynamoDBConfig::from_env();
-    let supabase_config = SupabaseDBConfig::from_env();
-    Self {
-      aws_config,
-      supabase_config,
-    }
+    Self { aws_config }
   }
 
   pub fn aws_config(&self) -> Option<&AWSDynamoDBConfig> {
     self.aws_config.as_ref()
-  }
-
-  pub fn supabase_config(&self) -> Option<&SupabaseDBConfig> {
-    self.supabase_config.as_ref()
   }
 }
 

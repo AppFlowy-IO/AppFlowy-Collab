@@ -26,7 +26,7 @@ pub struct AWSDynamoDBPlugin {
   table_name: String,
   region: String,
   sync_per_secs: u64,
-  local_collab: Arc<MutexCollab>,
+  local_collab: Weak<MutexCollab>,
   aws_dynamodb: Arc<RwLock<Option<AWSDynamoDB>>>,
   state: Arc<RwLock<LoadingState>>,
   pending_updates: Arc<RwLock<Vec<Vec<u8>>>>,
@@ -35,7 +35,7 @@ pub struct AWSDynamoDBPlugin {
 impl AWSDynamoDBPlugin {
   pub fn new(
     object_id: String,
-    local_collab: Arc<MutexCollab>,
+    local_collab: Weak<MutexCollab>,
     sync_per_secs: u64,
     region: String,
   ) -> Self {
@@ -51,7 +51,7 @@ impl AWSDynamoDBPlugin {
   pub fn new_with_table_name(
     object_id: String,
     table_name: &str,
-    local_collab: Arc<MutexCollab>,
+    local_collab: Weak<MutexCollab>,
     sync_per_secs: u64,
     region: String,
   ) -> Self {
@@ -79,7 +79,7 @@ impl AWSDynamoDBPlugin {
       self.sync_per_secs,
     );
 
-    let weak_local_collab = Arc::downgrade(&self.local_collab);
+    let weak_local_collab = self.local_collab.clone();
     let weak_aws_dynamodb = Arc::downgrade(&self.aws_dynamodb);
     let weak_state = Arc::downgrade(&self.state);
     let weak_pending_updates = Arc::downgrade(&self.pending_updates);

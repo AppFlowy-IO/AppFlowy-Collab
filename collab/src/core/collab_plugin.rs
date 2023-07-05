@@ -5,6 +5,15 @@ use yrs::{Transaction, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum CollabPluginType {
+  /// The plugin is used for sync data with a remote storage. Only one plugin of this type can be
+  /// used per document.
+  CloudStorage,
+  /// The default plugin type. It can be used for any other purpose.
+  Other,
+}
+
 pub trait CollabPlugin: Send + Sync + 'static {
   /// Called when the plugin is initialized.
   /// The will apply the updates to the current [TransactionMut] which will restore the state of
@@ -23,6 +32,11 @@ pub trait CollabPlugin: Send + Sync + 'static {
 
   /// Called after each [TransactionMut]
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
+
+  /// Returns the type of the plugin.
+  fn plugin_type(&self) -> CollabPluginType {
+    CollabPluginType::Other
+  }
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
