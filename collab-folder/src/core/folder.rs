@@ -10,12 +10,15 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
-use crate::core::folder_observe::{TrashChangeSender, ViewChangeSender};
+use crate::core::favorites::{FavoriteRecord, FavoritesArray};
+use crate::core::folder_observe::{FavoriteChangeSender, TrashChangeSender, ViewChangeSender};
 use crate::core::trash::{TrashArray, TrashRecord};
 use crate::core::{
   subscribe_folder_change, FolderData, TrashInfo, View, ViewIdentifier, ViewRelations, ViewsMap,
   Workspace, WorkspaceMap, WorkspaceUpdate,
 };
+
+use super::FavoritesInfo;
 
 const FOLDER: &str = "folder";
 const WORKSPACES: &str = "workspaces";
@@ -25,10 +28,12 @@ const META: &str = "meta";
 const VIEW_RELATION: &str = "relation";
 const CURRENT_WORKSPACE: &str = "current_workspace";
 const CURRENT_VIEW: &str = "current_view";
+const FAVORITES: &str = "favorites";
 
 pub struct FolderContext {
   pub view_change_tx: ViewChangeSender,
   pub trash_change_tx: TrashChangeSender,
+  pub favorite_change_tx: FavoriteChangeSender,
 }
 
 /// The folder hierarchy is like this:
@@ -40,6 +45,7 @@ pub struct Folder {
   /// Keep track of each view's data. It's a map from view id to view data
   pub views: Rc<ViewsMap>,
   trash: TrashArray,
+  favorites: FavoritesArray,
   pub meta: MapRefWrapper,
   /// Subscription for folder change. Like insert a new view
   #[allow(dead_code)]
@@ -205,6 +211,32 @@ impl Folder {
   pub fn get_current_view(&self) -> Option<String> {
     let txn = self.meta.transact();
     self.meta.get_str_with_txn(&txn, CURRENT_VIEW)
+  }
+
+  pub fn add_favorites(&self, favorite_view_ids: Vec<String>) {
+    if let Some(workspace_id) = self.get_current_workspace_id() {
+      let favorite = favorite_view_ids
+        .into_iter()
+        .map(|favorite_view_id| FavoriteRecord {
+          id: favorite_view_id,
+          created_at: chrono::Utc::now().timestamp(),
+          workspace_id: workspace_id.clone(),
+        })
+        .collect::<Vec<FavoriteRecord>>();
+      self.favorites.add_favorites(favorite);
+    }
+  }
+
+  pub fn delete_favorites(&self, unfavorite_view_ids: Vec<String>) {
+    self.favorites.delete_favorites(unfavorite_view_ids);
+  }
+
+  pub fn get_all_favorites(&self) -> Vec<FavoritesInfo> {
+    self.favorites.get_all_favorites()
+  }
+
+  pub fn remove_all_favorites(&self) {
+    self.favorites.clear();
   }
 
   pub fn add_trash(&self, trash_ids: Vec<String>) {
@@ -379,13 +411,16 @@ impl From<WorkspaceItem> for lib0Any {
 fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
   let collab_guard = collab.lock();
 
-  let (folder, workspaces, views, trash, meta, subscription) =
-    collab_guard.with_transact_mut(|txn| {
+  let (folder, workspaces, views, trash, favorites, meta, subscription) = collab_guard
+    .with_transact_mut(|txn| {
       let mut folder = collab_guard.insert_map_with_txn(txn, FOLDER);
       let subscription = subscribe_folder_change(&mut folder, context.view_change_tx.clone());
       let workspaces = folder.insert_array_with_txn::<WorkspaceItem>(txn, WORKSPACES, vec![]);
       let views = folder.insert_map_with_txn(txn, VIEWS);
       let trash = folder.insert_array_with_txn::<TrashRecord>(txn, TRASH, vec![]);
+
+      let favorites_array = folder.insert_array_with_txn::<FavoriteRecord>(txn, FAVORITES, vec![]);
+
       let meta = folder.insert_map_with_txn(txn, META);
 
       let view_relations = Rc::new(ViewRelations::new(
@@ -398,7 +433,21 @@ fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
         view_relations,
       ));
       let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx.clone());
-      (folder, workspaces, views, trash, meta, subscription)
+
+      let favorites = FavoritesArray::new(
+        favorites_array,
+        views.clone(),
+        context.favorite_change_tx.clone(),
+      );
+      (
+        folder,
+        workspaces,
+        views,
+        trash,
+        favorites,
+        meta,
+        subscription,
+      )
     });
   drop(collab_guard);
 
@@ -408,6 +457,7 @@ fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
     workspaces,
     views,
     trash,
+    favorites,
     meta,
     subscription,
     context,
@@ -432,6 +482,11 @@ fn get_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
   let trash = collab_guard
     .get_array_with_txn(&txn, vec![FOLDER, TRASH])
     .unwrap();
+
+  let favorite_array = collab_guard
+    .get_array_with_txn(&txn, vec![FOLDER, FAVORITES])
+    .unwrap();
+
   let meta = collab_guard
     .get_map_with_txn(&txn, vec![FOLDER, META])
     .unwrap();
@@ -449,6 +504,13 @@ fn get_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
   ));
 
   let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx.clone());
+
+  let favorites = FavoritesArray::new(
+    favorite_array,
+    views.clone(),
+    context.favorite_change_tx.clone(),
+  );
+
   drop(txn);
   drop(collab_guard);
   Folder {
@@ -457,6 +519,7 @@ fn get_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
     workspaces,
     views,
     trash,
+    favorites,
     meta,
     subscription: folder_sub,
     context,
