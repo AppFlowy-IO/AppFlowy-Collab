@@ -78,7 +78,7 @@ where
   pub fn new<C>(
     sink: Sink,
     notifier: watch::Sender<bool>,
-    state: watch::Sender<SinkState>,
+    sync_state_tx: watch::Sender<SinkState>,
     msg_id_counter: C,
     config: SinkConfig,
   ) -> Self
@@ -86,7 +86,7 @@ where
     C: MsgIdCounter,
   {
     let notifier = Arc::new(notifier);
-    let state_notifier = Arc::new(state);
+    let state_notifier = Arc::new(sync_state_tx);
     let sender = Arc::new(Mutex::new(sink));
     let pending_msgs = PendingMsgQueue::new();
     let pending_msgs = Arc::new(parking_lot::Mutex::new(pending_msgs));
@@ -129,6 +129,10 @@ where
     }
 
     self.notify();
+  }
+
+  pub fn remove_all_pending_msgs(&self) {
+    self.pending_msgs.lock().clear();
   }
 
   /// Notify the sink to process the next message and mark the current message as done.

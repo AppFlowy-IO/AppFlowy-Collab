@@ -2,9 +2,11 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use anyhow::Error;
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::{SnapshotState, SyncState};
+pub use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -26,7 +28,7 @@ const VIEW_RELATION: &str = "relation";
 const CURRENT_WORKSPACE: &str = "current_workspace";
 const CURRENT_VIEW: &str = "current_view";
 
-pub struct FolderContext {
+pub struct FolderNotify {
   pub view_change_tx: ViewChangeSender,
   pub trash_change_tx: TrashChangeSender,
 }
@@ -44,11 +46,15 @@ pub struct Folder {
   /// Subscription for folder change. Like insert a new view
   #[allow(dead_code)]
   subscription: DeepEventsSubscription,
-  context: FolderContext,
+  notifier: Option<FolderNotify>,
 }
 
 impl Folder {
-  pub fn get_or_create(collab: Arc<MutexCollab>, context: FolderContext) -> Self {
+  pub fn get_or_create(
+    collab: Arc<MutexCollab>,
+    notifier: Option<FolderNotify>,
+    initial_folder_data: Option<FolderData>,
+  ) -> Self {
     let is_exist = {
       let collab_guard = collab.lock();
       let txn = collab_guard.transact();
@@ -57,10 +63,20 @@ impl Folder {
       is_exist
     };
     if is_exist {
-      get_folder(collab, context)
+      open_folder(collab, notifier)
     } else {
-      create_folder(collab, context)
+      create_folder(collab, notifier, initial_folder_data)
     }
+  }
+
+  pub fn from_update(
+    origin: CollabOrigin,
+    updates: Vec<Vec<u8>>,
+    workspace_id: &str,
+    plugins: Vec<Arc<dyn CollabPlugin>>,
+  ) -> Result<Self, Error> {
+    let collab = MutexCollab::new_with_updates(origin, workspace_id, updates, plugins)?;
+    Ok(open_folder(Arc::new(collab), None))
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
@@ -74,28 +90,29 @@ impl Folder {
   }
 
   pub fn reload(self) -> Self {
-    get_folder(self.inner, self.context)
+    open_folder(self.inner, self.notifier)
   }
 
-  pub fn create_with_data(&self, data: FolderData) {
-    self.root.with_transact_mut(|txn| {
-      for workspace in data.workspaces {
-        self.workspaces.create_workspace_with_txn(txn, workspace);
+  pub fn get_folder_data(&self) -> Option<FolderData> {
+    let txn = self.root.transact();
+    let current_workspace = self
+      .get_current_workspace_id_with_txn(&txn)
+      .unwrap_or_default();
+    let current_view = self.get_current_view_with_txn(&txn).unwrap_or_default();
+    let workspaces = self.workspaces.get_all_workspaces_with_txn(&txn);
+
+    let mut views = vec![];
+    for workspace in workspaces.iter() {
+      for view in self.get_workspace_views_with_txn(&txn, &workspace.id) {
+        views.extend(self.get_view_recursively_with_txn(&txn, &view.id));
       }
+    }
 
-      for view in data.views {
-        self.views.insert_view_with_txn(txn, view);
-      }
-
-      tracing::debug!("Set current workspace: {}", data.current_workspace);
-      self
-        .meta
-        .insert_str_with_txn(txn, CURRENT_WORKSPACE, data.current_workspace);
-
-      tracing::debug!("Set current view: {}", data.current_view);
-      self
-        .meta
-        .insert_str_with_txn(txn, CURRENT_VIEW, data.current_view);
+    Some(FolderData {
+      current_workspace,
+      current_view,
+      workspaces,
+      views,
     })
   }
 
@@ -125,7 +142,11 @@ impl Folder {
 
   pub fn get_current_workspace_id(&self) -> Option<String> {
     let txn = self.meta.transact();
-    self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE)
+    self.get_current_workspace_id_with_txn(&txn)
+  }
+
+  pub fn get_current_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+    self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE)
   }
 
   pub fn get_current_workspace_views(&self) -> Vec<Arc<View>> {
@@ -215,7 +236,11 @@ impl Folder {
 
   pub fn get_current_view(&self) -> Option<String> {
     let txn = self.meta.transact();
-    self.meta.get_str_with_txn(&txn, CURRENT_VIEW)
+    self.get_current_view_with_txn(&txn)
+  }
+
+  pub fn get_current_view_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+    self.meta.get_str_with_txn(txn, CURRENT_VIEW)
   }
 
   pub fn add_trash(&self, trash_ids: Vec<String>) {
@@ -250,6 +275,23 @@ impl Folder {
 
   pub fn to_json_value(&self) -> JsonValue {
     self.root.to_json_value()
+  }
+
+  pub fn get_view_recursively_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<View> {
+    match self.views.get_view_with_txn(txn, view_id) {
+      None => vec![],
+      Some(parent_view) => {
+        let mut views = vec![parent_view.as_ref().clone()];
+        let child_views = parent_view
+          .children
+          .items
+          .iter()
+          .flat_map(|child| self.get_view_recursively_with_txn(txn, &child.id))
+          .collect::<Vec<_>>();
+        views.extend(child_views);
+        views
+      },
+    }
   }
 }
 
@@ -387,13 +429,17 @@ impl From<WorkspaceItem> for lib0Any {
   }
 }
 
-fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
+fn create_folder(
+  collab: Arc<MutexCollab>,
+  notifier: Option<FolderNotify>,
+  folder_data: Option<FolderData>,
+) -> Folder {
   let collab_guard = collab.lock();
 
   let (folder, workspaces, views, trash, meta, subscription) =
     collab_guard.with_transact_mut(|txn| {
       let mut folder = collab_guard.insert_map_with_txn(txn, FOLDER);
-      let subscription = subscribe_folder_change(&mut folder, context.view_change_tx.clone());
+      let subscription = subscribe_folder_change(&mut folder);
       let workspaces = folder.insert_array_with_txn::<WorkspaceItem>(txn, WORKSPACES, vec![]);
       let views = folder.insert_map_with_txn(txn, VIEWS);
       let trash = folder.insert_array_with_txn::<TrashRecord>(txn, TRASH, vec![]);
@@ -405,10 +451,32 @@ fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
       let workspaces = WorkspaceArray::new(txn, workspaces, view_relations.clone());
       let views = Rc::new(ViewsMap::new(
         views,
-        context.view_change_tx.clone(),
+        notifier
+          .as_ref()
+          .map(|notifier| notifier.view_change_tx.clone()),
         view_relations,
       ));
-      let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx.clone());
+      let trash = TrashArray::new(
+        trash,
+        views.clone(),
+        notifier
+          .as_ref()
+          .map(|notifier| notifier.trash_change_tx.clone()),
+      );
+
+      if let Some(folder_data) = folder_data {
+        for workspace in folder_data.workspaces {
+          workspaces.create_workspace_with_txn(txn, workspace);
+        }
+
+        for view in folder_data.views {
+          views.insert_view_with_txn(txn, view);
+        }
+
+        meta.insert_str_with_txn(txn, CURRENT_WORKSPACE, folder_data.current_workspace);
+        meta.insert_str_with_txn(txn, CURRENT_VIEW, folder_data.current_view);
+      }
+
       (folder, workspaces, views, trash, meta, subscription)
     });
   drop(collab_guard);
@@ -421,7 +489,7 @@ fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
     trash,
     meta,
     subscription,
-    context,
+    notifier,
   }
 }
 
@@ -429,11 +497,11 @@ fn is_folder_exist(txn: Transaction, collab: &Collab) -> bool {
   collab.get_map_with_txn(&txn, vec![FOLDER]).is_some()
 }
 
-fn get_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
+fn open_folder(collab: Arc<MutexCollab>, notifier: Option<FolderNotify>) -> Folder {
   let collab_guard = collab.lock();
   let txn = collab_guard.transact();
   let mut folder = collab_guard.get_map_with_txn(&txn, vec![FOLDER]).unwrap();
-  let folder_sub = subscribe_folder_change(&mut folder, context.view_change_tx.clone());
+  let folder_sub = subscribe_folder_change(&mut folder);
   let workspaces = collab_guard
     .get_array_with_txn(&txn, vec![FOLDER, WORKSPACES])
     .unwrap();
@@ -455,11 +523,19 @@ fn get_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
   let workspaces = WorkspaceArray::new(&txn, workspaces, view_relations.clone());
   let views = Rc::new(ViewsMap::new(
     views,
-    context.view_change_tx.clone(),
+    notifier
+      .as_ref()
+      .map(|notifier| notifier.view_change_tx.clone()),
     view_relations,
   ));
 
-  let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx.clone());
+  let trash = TrashArray::new(
+    trash,
+    views.clone(),
+    notifier
+      .as_ref()
+      .map(|notifier| notifier.trash_change_tx.clone()),
+  );
   drop(txn);
   drop(collab_guard);
   Folder {
@@ -470,6 +546,6 @@ fn get_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
     trash,
     meta,
     subscription: folder_sub,
-    context,
+    notifier,
   }
 }

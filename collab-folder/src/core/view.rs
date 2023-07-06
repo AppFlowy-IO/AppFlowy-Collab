@@ -30,24 +30,26 @@ pub struct ViewsMap {
   view_cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
 
   #[allow(dead_code)]
-  subscription: DeepEventsSubscription,
+  subscription: Option<DeepEventsSubscription>,
   #[allow(dead_code)]
-  change_tx: ViewChangeSender,
+  change_tx: Option<ViewChangeSender>,
 }
 
 impl ViewsMap {
   pub fn new(
     mut root: MapRefWrapper,
-    change_tx: ViewChangeSender,
+    change_tx: Option<ViewChangeSender>,
     view_relations: Rc<ViewRelations>,
   ) -> ViewsMap {
     let view_cache = Arc::new(RwLock::new(HashMap::new()));
-    let subscription = subscribe_view_change(
-      &mut root,
-      view_cache.clone(),
-      change_tx.clone(),
-      view_relations.clone(),
-    );
+    let subscription = change_tx.as_ref().map(|change_tx| {
+      subscribe_view_change(
+        &mut root,
+        view_cache.clone(),
+        change_tx.clone(),
+        view_relations.clone(),
+      )
+    });
     Self {
       container: root,
       subscription,
@@ -142,6 +144,8 @@ impl ViewsMap {
     self.get_view_with_txn(&txn, view_id)
   }
 
+  /// Return the view with the given view id.
+  /// The view is support nested, by default, we only load the view and its children.
   pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<Arc<View>> {
     let view = self.get_cache_view(txn, view_id);
     if view.is_none() {

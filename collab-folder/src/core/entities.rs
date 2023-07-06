@@ -1,5 +1,8 @@
+use serde::Serialize;
+
 use crate::core::{View, Workspace};
 
+#[derive(Serialize)]
 pub struct FolderData {
   pub current_workspace: String,
   pub current_view: String,

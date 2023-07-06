@@ -1,16 +1,8 @@
 use std::path::Path;
-use std::sync::Arc;
 
-use collab::preclude::CollabBuilder;
-use collab_folder::core::{Folder, FolderContext};
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
-
-use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
 use fs_extra::file;
 use nanoid::nanoid;
 use walkdir::WalkDir;
-
-use crate::util::setup_log;
 
 // #[test]
 // fn test_set_current_view() {
@@ -64,24 +56,4 @@ fn copy_folder_recursively(
     }
   }
   Ok(())
-}
-
-#[allow(dead_code)]
-fn create_folder_with_object_id(uid: i64, path: &str) -> Folder {
-  setup_log();
-  let object_id = format!("{}:folder", uid);
-  let db = Arc::new(RocksCollabDB::open(path).unwrap());
-  let collab = CollabBuilder::new(uid, &object_id)
-    .with_plugin(RocksdbDiskPlugin::new(uid, db))
-    .build();
-  collab.initial();
-
-  let (view_tx, _view_rx) = tokio::sync::broadcast::channel(100);
-  let (trash_tx, _trash_rx) = tokio::sync::broadcast::channel(100);
-  let folder_context = FolderContext {
-    view_change_tx: view_tx,
-    trash_change_tx: trash_tx,
-  };
-
-  Folder::get_or_create(Arc::new(collab), folder_context)
 }

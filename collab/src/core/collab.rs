@@ -1,5 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
+use std::panic;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::vec::IntoIter;
 
@@ -11,6 +13,7 @@ use y_sync::awareness::Awareness;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
+use yrs::updates::decoder::Decode;
 use yrs::{
   ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, Subscription,
   Transact, Transaction, TransactionMut, UndoManager, Update, UpdateSubscription,
@@ -73,6 +76,23 @@ impl Collab {
   pub fn new<T: AsRef<str>>(uid: i64, object_id: T, plugins: Vec<Arc<dyn CollabPlugin>>) -> Collab {
     let origin = CollabClient::new(uid, "");
     Self::new_with_client(CollabOrigin::Client(origin), object_id, plugins)
+  }
+
+  pub fn new_with_updates(
+    origin: CollabOrigin,
+    object_id: &str,
+    updates: Vec<Vec<u8>>,
+    plugins: Vec<Arc<dyn CollabPlugin>>,
+  ) -> Result<Self, CollabError> {
+    let collab = Self::new_with_client(origin, object_id, plugins);
+    if !updates.is_empty() {
+      let mut txn = collab.transact_mut();
+      for update in updates {
+        let decoded_update = Update::decode_v1(&update)?;
+        txn.try_apply_update(decoded_update)?;
+      }
+    }
+    Ok(collab)
   }
 
   pub fn new_with_client<T: AsRef<str>>(
@@ -210,6 +230,14 @@ impl Collab {
 
   pub fn set_snapshot_state(&self, snapshot_state: SnapshotState) {
     self.state.set_snapshot_state(snapshot_state);
+  }
+
+  pub fn reset(&self) {
+    self
+      .plugins
+      .read()
+      .iter()
+      .for_each(|plugin| plugin.reset(&self.object_id));
   }
 
   pub fn observer_data<F>(&mut self, f: F) -> MapSubscription
@@ -699,6 +727,16 @@ impl MutexCollab {
     MutexCollab(Arc::new(Mutex::new(collab)))
   }
 
+  pub fn new_with_updates(
+    origin: CollabOrigin,
+    object_id: &str,
+    updates: Vec<Vec<u8>>,
+    plugins: Vec<Arc<dyn CollabPlugin>>,
+  ) -> Result<Self, CollabError> {
+    let collab = Collab::new_with_updates(origin, object_id, updates, plugins)?;
+    Ok(MutexCollab(Arc::new(Mutex::new(collab))))
+  }
+
   pub fn initial(&self) {
     self.0.lock().initialize();
   }
@@ -718,3 +756,21 @@ impl Deref for MutexCollab {
 unsafe impl Sync for MutexCollab {}
 
 unsafe impl Send for MutexCollab {}
+
+// Extension trait for `TransactionMut`
+pub trait TransactionMutExt<'doc> {
+  /// Applies an update to the document. If the update is invalid, it will return an error.
+  /// It allows to catch panics from `apply_update`.
+  fn try_apply_update(&mut self, update: Update) -> Result<(), CollabError>;
+}
+
+impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
+  fn try_apply_update(&mut self, update: Update) -> Result<(), CollabError> {
+    match panic::catch_unwind(AssertUnwindSafe(|| {
+      self.apply_update(update);
+    })) {
+      Ok(_) => Ok(()),
+      Err(e) => Err(CollabError::YrsTransactionError(format!("{:?}", e))),
+    }
+  }
+}

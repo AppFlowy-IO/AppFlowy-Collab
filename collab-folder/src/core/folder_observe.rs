@@ -28,10 +28,7 @@ pub enum TrashChange {
   DidDeleteTrash { ids: Vec<String> },
 }
 
-pub(crate) fn subscribe_folder_change(
-  root: &mut MapRefWrapper,
-  _change_tx: ViewChangeSender,
-) -> DeepEventsSubscription {
+pub(crate) fn subscribe_folder_change(root: &mut MapRefWrapper) -> DeepEventsSubscription {
   root.observe_deep(move |txn, events| {
     for deep_event in events.iter() {
       match deep_event {
@@ -118,10 +115,7 @@ pub(crate) fn subscribe_view_change(
 pub type TrashChangeSender = broadcast::Sender<TrashChange>;
 pub type TrashChangeReceiver = broadcast::Receiver<TrashChange>;
 
-pub(crate) fn subscribe_trash_change(
-  array: &mut ArrayRefWrapper,
-  _change_tx: TrashChangeSender,
-) -> ArraySubscription {
+pub(crate) fn subscribe_trash_change(array: &mut ArrayRefWrapper) -> ArraySubscription {
   array.observe(move |txn, event| {
     for change in event.delta(txn) {
       match change {

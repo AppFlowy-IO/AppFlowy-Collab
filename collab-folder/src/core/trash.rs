@@ -1,13 +1,15 @@
-use crate::core::folder_observe::{TrashChange, TrashChangeSender};
-use crate::core::{subscribe_trash_change, TrashInfo, ViewsMap};
+use std::rc::Rc;
+use std::sync::Arc;
+
 use anyhow::bail;
 use collab::preclude::array::ArrayEvent;
 use collab::preclude::{
   lib0Any, Array, ArrayRefWrapper, ReadTxn, Subscription, TransactionMut, Value, YrsValue,
 };
 use serde::{Deserialize, Serialize};
-use std::rc::Rc;
-use std::sync::Arc;
+
+use crate::core::folder_observe::{TrashChange, TrashChangeSender};
+use crate::core::{subscribe_trash_change, TrashInfo, ViewsMap};
 
 type ArraySubscription = Subscription<Arc<dyn Fn(&TransactionMut, &ArrayEvent)>>;
 
@@ -15,7 +17,7 @@ pub struct TrashArray {
   container: ArrayRefWrapper,
   view_map: Rc<ViewsMap>,
   #[allow(dead_code)]
-  change_tx: TrashChangeSender,
+  change_tx: Option<TrashChangeSender>,
   #[allow(dead_code)]
   subscription: ArraySubscription,
 }
@@ -24,9 +26,9 @@ impl TrashArray {
   pub fn new(
     mut root: ArrayRefWrapper,
     view_map: Rc<ViewsMap>,
-    change_tx: TrashChangeSender,
+    change_tx: Option<TrashChangeSender>,
   ) -> Self {
-    let subscription = subscribe_trash_change(&mut root, change_tx.clone());
+    let subscription = subscribe_trash_change(&mut root);
     Self {
       container: root,
       view_map,
@@ -85,9 +87,10 @@ impl TrashArray {
       .iter()
       .map(|id| id.as_ref().to_string())
       .collect::<Vec<String>>();
-    let _ = self
-      .change_tx
-      .send(TrashChange::DidDeleteTrash { ids: record_ids });
+
+    if let Some(change_tx) = &self.change_tx {
+      let _ = change_tx.send(TrashChange::DidDeleteTrash { ids: record_ids });
+    }
   }
 
   pub fn add_trash(&self, records: Vec<TrashRecord>) {
@@ -105,9 +108,9 @@ impl TrashArray {
       self.container.push_back(txn, record);
     }
 
-    let _ = self
-      .change_tx
-      .send(TrashChange::DidCreateTrash { ids: record_ids });
+    if let Some(change_tx) = &self.change_tx {
+      let _ = change_tx.send(TrashChange::DidCreateTrash { ids: record_ids });
+    }
   }
 
   pub fn clear(&self) {

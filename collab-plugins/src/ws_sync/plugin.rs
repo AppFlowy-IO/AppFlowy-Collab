@@ -70,4 +70,8 @@ where
       }
     });
   }
+
+  fn reset(&self, _object_id: &str) {
+    self.sync_queue.clear();
+  }
 }

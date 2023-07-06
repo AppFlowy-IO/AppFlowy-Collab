@@ -27,7 +27,8 @@ pub trait CollabPlugin: Send + Sync + 'static {
   /// the Yrs document.
   fn receive_update(&self, _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
 
-  /// Called when the plugin receives a local update
+  /// Called when the plugin receives a local update.
+  /// We use the [CollabOrigin] to know if the update comes from the local user or from a remote
   fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, _update: &[u8]) {}
 
   /// Called after each [TransactionMut]
@@ -37,6 +38,10 @@ pub trait CollabPlugin: Send + Sync + 'static {
   fn plugin_type(&self) -> CollabPluginType {
     CollabPluginType::Other
   }
+
+  /// Notifies the plugin that the collab object has been reset. It happens when the collab object
+  /// is ready to sync from the remote. When reset is called, the plugin should reset its state.
+  fn reset(&self, _object_id: &str) {}
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.

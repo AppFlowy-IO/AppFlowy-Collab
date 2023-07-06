@@ -138,6 +138,11 @@ impl CollabPlugin for SupabaseDBPlugin {
   fn plugin_type(&self) -> CollabPluginType {
     CollabPluginType::CloudStorage
   }
+
+  fn reset(&self, _object_id: &str) {
+    self.pending_updates.write().clear();
+    self.remote_collab.clear();
+  }
 }
 
 /// Create a snapshot for the object if need
@@ -163,7 +168,7 @@ fn create_snapshot_if_need(
           }
         },
         Err(e) => {
-          tracing::error!("Get remote collab state failed: {:?}", e);
+          tracing::error!("🔴fetch remote collab state failed: {:?}", e);
           return;
         },
         _ => {
@@ -215,7 +220,7 @@ fn create_snapshot_if_need(
                 .set_snapshot_state(SnapshotState::DidCreateSnapshot { snapshot_id });
             }
           },
-          Err(e) => tracing::error!("Failed to create remote snapshot: {}", e),
+          Err(e) => tracing::error!("🔴create remote snapshot failed: {}", e),
         }
       }
     }

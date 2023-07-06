@@ -115,6 +115,15 @@ impl CollabPlugin for RocksdbDiskPlugin {
   }
 
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
+
+  fn reset(&self, object_id: &str) {
+    if let Err(e) = self.db.with_write_txn(|w_db_txn| {
+      w_db_txn.delete_all_updates(self.uid, object_id)?;
+      Ok(())
+    }) {
+      tracing::error!("🔴Reset failed: {:?}", e);
+    }
+  }
 }
 
 #[derive(Clone)]

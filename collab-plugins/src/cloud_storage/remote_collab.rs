@@ -55,11 +55,11 @@ impl RemoteCollab {
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
     let (notifier, notifier_rx) = watch::channel(false);
-    let (state_tx, sink_state_rx) = watch::channel(SinkState::Init);
+    let (sync_state_tx, sink_state_rx) = watch::channel(SinkState::Init);
     let sink = Arc::new(CollabSink::new(
       TokioUnboundedSink(sink),
       notifier,
-      state_tx,
+      sync_state_tx,
       RngMsgIdCounter::new(),
       config,
     ));
@@ -78,7 +78,9 @@ impl RemoteCollab {
             SinkState::Finished => {
               let _ = sync_state.send(SyncState::SyncFinished);
             },
-            SinkState::Init => {},
+            SinkState::Init => {
+              let _ = sync_state.send(SyncState::SyncInitStart);
+            },
           }
         }
       }
@@ -167,10 +169,10 @@ impl RemoteCollab {
           let mut txn = remote_collab.transact_mut();
           if let Ok(update) = Update::decode_v1(&update) {
             if let Err(e) = txn.try_apply_update(update) {
-              tracing::error!("Failed to apply update: {:?}", e);
+              tracing::error!("apply update failed: {:?}", e);
             }
           } else {
-            tracing::error!("Failed to decode update");
+            tracing::error!("🔴decode update failed");
           }
 
           remote_update = Some(update);
@@ -215,11 +217,7 @@ impl RemoteCollab {
       .encode_state_as_update_v1(&remote_state_vector);
 
     if let Ok(decode_update) = Update::decode_v1(&encode_update) {
-      tracing::trace!(
-        "{}: sync local updates:{}",
-        self.object,
-        encode_update.len()
-      );
+      tracing::trace!("{}: sync updates:{}", self.object, encode_update.len());
 
       // Apply the update to the remote collab and send the update to the remote.
       self.collab.lock().with_transact_mut(|txn| {
@@ -247,6 +245,10 @@ impl RemoteCollab {
         meta: MessageMeta::Update { msg_id },
       });
     }
+  }
+
+  pub fn clear(&self) {
+    self.sink.remove_all_pending_msgs();
   }
 }
 

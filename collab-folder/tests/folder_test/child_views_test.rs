@@ -1,3 +1,7 @@
+use serde_json::json;
+
+use assert_json_diff::assert_json_eq;
+
 use crate::util::{create_folder_with_workspace, make_test_view};
 
 #[test]
@@ -22,6 +26,127 @@ fn create_child_views_test() {
 
   let v_1_2_child_views = folder_test.views.get_views_belong_to(&view_1_2.id);
   assert_eq!(v_1_2_child_views.len(), 2);
+
+  let folder_data = folder_test.get_folder_data().unwrap();
+  let value = serde_json::to_value(&folder_data).unwrap();
+  assert_json_eq!(
+    value,
+    json!({
+      "current_view": "",
+      "current_workspace": "w1",
+      "views": [
+        {
+          "children": {
+            "items": [
+              {
+                "id": "1_1"
+              },
+              {
+                "id": "1_2"
+              },
+              {
+                "id": "1_3"
+              }
+            ]
+          },
+          "cover_url": null,
+          "created_at": 0,
+          "desc": "",
+          "icon_url": null,
+          "id": "1",
+          "layout": 0,
+          "name": "",
+          "parent_view_id": "w1"
+        },
+        {
+          "children": {
+            "items": []
+          },
+          "cover_url": null,
+          "created_at": 0,
+          "desc": "",
+          "icon_url": null,
+          "id": "1_1",
+          "layout": 0,
+          "name": "",
+          "parent_view_id": "1"
+        },
+        {
+          "children": {
+            "items": [
+              {
+                "id": "1_2_1"
+              },
+              {
+                "id": "1_2_2"
+              }
+            ]
+          },
+          "cover_url": null,
+          "created_at": 0,
+          "desc": "",
+          "icon_url": null,
+          "id": "1_2",
+          "layout": 0,
+          "name": "",
+          "parent_view_id": "1"
+        },
+        {
+          "children": {
+            "items": []
+          },
+          "cover_url": null,
+          "created_at": 0,
+          "desc": "",
+          "icon_url": null,
+          "id": "1_2_1",
+          "layout": 0,
+          "name": "",
+          "parent_view_id": "1_2"
+        },
+        {
+          "children": {
+            "items": []
+          },
+          "cover_url": null,
+          "created_at": 0,
+          "desc": "",
+          "icon_url": null,
+          "id": "1_2_2",
+          "layout": 0,
+          "name": "",
+          "parent_view_id": "1_2"
+        },
+        {
+          "children": {
+            "items": []
+          },
+          "cover_url": null,
+          "created_at": 0,
+          "desc": "",
+          "icon_url": null,
+          "id": "1_3",
+          "layout": 0,
+          "name": "",
+          "parent_view_id": "1"
+        }
+      ],
+      "workspaces": [
+        {
+          "child_views": {
+            "items": [
+              {
+                "id": "1"
+              }
+            ]
+          },
+          "created_at": 123,
+          "id": "w1",
+          "name": "My first workspace"
+        }
+      ]
+    })
+  );
 }
 
 #[test]
