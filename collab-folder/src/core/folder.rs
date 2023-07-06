@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::core::collab::MutexCollab;
-use collab::core::collab_state::CollabState;
+use collab::core::collab_state::{SnapshotState, SyncState};
 use collab::preclude::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -69,8 +69,13 @@ impl Folder {
     }
   }
 
-  pub fn subscribe_state_change(&self) -> WatchStream<CollabState> {
-    let rx = self.inner.lock().subscribe_state_change();
+  pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
+    let rx = self.inner.lock().subscribe_sync_state();
+    WatchStream::new(rx)
+  }
+
+  pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
+    let rx = self.inner.lock().subscribe_snapshot_state();
     WatchStream::new(rx)
   }
 
@@ -201,6 +206,12 @@ impl Folder {
     if view_id.is_empty() {
       tracing::warn!("🟡 Set current view with empty id");
       return;
+    }
+
+    if let Some(old_current_view) = self.get_current_view() {
+      if old_current_view == view_id {
+        return;
+      }
     }
 
     self.meta.with_transact_mut(|txn| {

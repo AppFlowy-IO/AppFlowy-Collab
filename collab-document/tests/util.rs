@@ -98,7 +98,7 @@ pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> 
   collab.initial();
 
   DocumentTest {
-    document: Document::create(Arc::new(collab)).unwrap(),
+    document: Document::open(Arc::new(collab)).unwrap(),
     db,
   }
 }
@@ -136,7 +136,7 @@ pub fn insert_block(
 pub fn get_document_data(
   document: &Document,
 ) -> (String, HashMap<String, Block>, HashMap<String, Vec<String>>) {
-  let document_data = document.get_document().unwrap();
+  let document_data = document.get_document_data().unwrap();
 
   let page_id = document_data.page_id.clone();
   let blocks = document_data.blocks;

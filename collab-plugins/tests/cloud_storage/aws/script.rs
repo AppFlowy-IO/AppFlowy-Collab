@@ -1,12 +1,14 @@
-use crate::setup_log;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
+
 use collab::core::collab::MutexCollab;
 use collab::core::origin::{CollabClient, CollabOrigin};
 use collab::preclude::Collab;
 use collab_plugins::cloud_storage::aws::{get_aws_remote_doc, AWSDynamoDBPlugin};
 use serde_json::Value;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
+
+use crate::setup_log;
 
 pub enum TestScript {
   CreateCollab {
@@ -56,7 +58,7 @@ impl AWSStorageTest {
         let local_collab = Arc::new(MutexCollab::new(origin, &object_id, vec![]));
         let plugin = AWSDynamoDBPlugin::new(
           object_id.clone(),
-          local_collab.clone(),
+          Arc::downgrade(&local_collab),
           sync_per_secs,
           test_region(),
         );

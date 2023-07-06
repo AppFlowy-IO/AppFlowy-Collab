@@ -15,7 +15,10 @@ use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
 
-use crate::cloud_storage::remote_collab::{CollabObject, RemoteCollab, RemoteCollabStorage};
+use crate::cloud_storage::remote_collab::{
+  CollabObject, RemoteCollab, RemoteCollabSnapshot, RemoteCollabStorage,
+};
+use crate::cloud_storage::RemoteCollabState;
 
 pub(crate) const DEFAULT_TABLE_NAME: &str = "collab_test";
 const OBJECT_ID: &str = "oid";
@@ -57,11 +60,11 @@ impl AWSDynamoDB {
     let table_name = table_name.to_string();
     create_table_if_not_exist(&client, &table_name).await?;
 
-    let storage = AWSCollabCloudStorageImpl {
+    let storage = Arc::new(AWSCollabCloudStorageImpl {
       client: client.clone(),
       table_name: table_name.clone(),
       object_id: object_id.clone(),
-    };
+    });
 
     let config = SinkConfig::new()
       .with_timeout(10)
@@ -79,7 +82,7 @@ impl AWSDynamoDB {
 
   /// Start syncing after the local collab is initialized.
   pub async fn start_sync(&self, local_collab: Arc<MutexCollab>) {
-    self.remote_collab.sync(local_collab).await;
+    let _ = self.remote_collab.sync(local_collab).await;
   }
 
   pub fn push_update(&self, update: &[u8]) {
@@ -99,7 +102,30 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
     Ok(aws_get_all_updates(&self.client, &self.table_name, object_id).await)
   }
 
-  async fn send_update(&self, msg_id: MsgId, update: Vec<u8>) -> Result<(), Error> {
+  async fn get_latest_snapshot(
+    &self,
+    _object_id: &str,
+  ) -> Result<Option<RemoteCollabSnapshot>, Error> {
+    // TODO(nathan): support aws full sync
+    Ok(None)
+  }
+
+  async fn get_collab_state(&self, _object_id: &str) -> Result<Option<RemoteCollabState>, Error> {
+    // TODO(nathan): support aws full sync
+    Ok(None)
+  }
+
+  async fn create_snapshot(&self, _object: &CollabObject, _update: Vec<u8>) -> Result<i64, Error> {
+    // TODO(nathan): support aws full sync
+    Ok(0)
+  }
+
+  async fn send_update(
+    &self,
+    _object: &CollabObject,
+    msg_id: MsgId,
+    update: Vec<u8>,
+  ) -> Result<(), Error> {
     tracing::debug!("aws: send_update: {:?}", update);
     aws_send_update(
       &self.client,
@@ -109,6 +135,16 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
       update,
     )
     .await?;
+    Ok(())
+  }
+
+  async fn send_init_sync(
+    &self,
+    _object: &CollabObject,
+    _id: MsgId,
+    _init_update: Vec<u8>,
+  ) -> Result<(), Error> {
+    // TODO(nathan): support aws init sync
     Ok(())
   }
 }

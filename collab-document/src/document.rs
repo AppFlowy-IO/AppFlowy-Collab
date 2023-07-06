@@ -3,8 +3,10 @@ use std::sync::Arc;
 use std::vec;
 
 use collab::core::collab::MutexCollab;
+use collab::core::collab_state::SyncState;
 use collab::preclude::*;
 use serde_json::Value;
+use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{
   Block, BlockAction, BlockActionType, BlockEvent, BlockOperation, ChildrenOperation, DocumentData,
@@ -35,17 +37,8 @@ pub struct Document {
 
 impl Document {
   /// Create or get a document.
-  pub fn create(collab: Arc<MutexCollab>) -> Result<Document, DocumentError> {
-    let is_document_exist = {
-      let collab_guard = collab.lock();
-      let txn = &collab_guard.transact();
-      collab_guard.get_map_with_txn(txn, vec![ROOT])
-    };
-
-    match is_document_exist {
-      Some(_) => Ok(Document::open_document_with_collab(collab)),
-      None => Document::create_document(collab, None),
-    }
+  pub fn open(collab: Arc<MutexCollab>) -> Result<Document, DocumentError> {
+    Ok(Document::open_document_with_collab(collab))
   }
 
   /// Create a new document with the given data.
@@ -57,7 +50,7 @@ impl Document {
   }
 
   /// open a document and subscribe to the document changes.
-  pub fn open<F>(&mut self, callback: F) -> Result<DocumentData, DocumentError>
+  pub fn subscribe_block_changed<F>(&mut self, callback: F)
   where
     F: Fn(&Vec<BlockEvent>, bool) + 'static,
   {
@@ -67,7 +60,11 @@ impl Document {
         let is_remote = origin.is_some();
         callback(block_events, is_remote);
       });
-    self.get_document()
+  }
+
+  pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
+    let rx = self.inner.lock().subscribe_sync_state();
+    WatchStream::new(rx)
   }
 
   pub fn with_transact_mut<F, T>(&self, f: F) -> T
@@ -78,7 +75,7 @@ impl Document {
   }
 
   /// Get document data.
-  pub fn get_document(&self) -> Result<DocumentData, DocumentError> {
+  pub fn get_document_data(&self) -> Result<DocumentData, DocumentError> {
     let collab_guard = self.inner.lock();
     let txn = collab_guard.transact();
     let page_id = self

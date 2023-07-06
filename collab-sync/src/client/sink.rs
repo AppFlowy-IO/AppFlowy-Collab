@@ -20,8 +20,21 @@ pub trait CollabSinkMessage: Clone + Send + Sync + 'static + Ord + Display {
   /// Check the implementation of `queue_or_merge_msg` for more details.
   fn mergeable(&self) -> bool;
 
+  fn merge(&mut self, other: Self);
+
+  fn is_init_msg(&self) -> bool;
+
   /// Determine if the message can be deferred base on the current state of the sink.
   fn deferrable(&self) -> bool;
+}
+
+#[derive(Clone, Debug)]
+pub enum SinkState {
+  Init,
+  /// The sink is syncing the messages to the remote.
+  Syncing,
+  /// All the messages are synced to the remote.
+  Finished,
 }
 
 /// Use to sync the [Msg] to the remote.
@@ -47,6 +60,13 @@ pub struct CollabSink<Sink, Msg> {
   /// Used to calculate the time interval between two messages. Only used when the sink strategy
   /// is [SinkStrategy::FixInterval].
   instant: Mutex<Instant>,
+  state_notifier: Arc<watch::Sender<SinkState>>,
+}
+
+impl<Sink, Msg> Drop for CollabSink<Sink, Msg> {
+  fn drop(&mut self) {
+    let _ = self.notifier.send(true);
+  }
 }
 
 impl<E, Sink, Msg> CollabSink<Sink, Msg>
@@ -58,6 +78,7 @@ where
   pub fn new<C>(
     sink: Sink,
     notifier: watch::Sender<bool>,
+    state: watch::Sender<SinkState>,
     msg_id_counter: C,
     config: SinkConfig,
   ) -> Self
@@ -65,6 +86,7 @@ where
     C: MsgIdCounter,
   {
     let notifier = Arc::new(notifier);
+    let state_notifier = Arc::new(state);
     let sender = Arc::new(Mutex::new(sink));
     let pending_msgs = PendingMsgQueue::new();
     let pending_msgs = Arc::new(parking_lot::Mutex::new(pending_msgs));
@@ -84,6 +106,7 @@ where
       pending_msgs,
       msg_id_counter,
       notifier,
+      state_notifier,
       config,
       instant,
       interval_runner_stop_tx,
@@ -105,40 +128,6 @@ where
       drop(pending_msgs);
     }
 
-    self.notify();
-  }
-
-  /// Queue the message or merge it with the previous message if possible.
-  /// After the [Msg] was pushed into the [PendingMsgQueue]. The queue will pop the next msg base on
-  /// its priority. And the message priority is determined by the [Msg] that implement the [Ord] and
-  /// [PartialOrd] trait. Check out the [CollabMessage] for more details.
-  ///  
-  pub fn queue_or_merge_msg(
-    &self,
-    merge: impl FnOnce(&mut Msg) -> Result<(), SyncError>,
-    or_else: impl FnOnce(MsgId) -> Msg,
-  ) {
-    {
-      let mut pending_msgs = self.pending_msgs.lock();
-      if let Some(mut prev) = pending_msgs.peek_mut() {
-        // Only merge the message if the previous message is pending and can be merged.
-        // Otherwise, just queue the new message.
-        if prev.state().is_pending() {
-          let prev_msg = prev.get_mut_msg();
-          if prev_msg.mergeable() && merge(prev_msg).is_ok() {
-            tracing::trace!("merge_msg: {}", prev_msg);
-            tracing::trace!("Did merge new message, len: {}", prev_msg.length());
-            return;
-          }
-        }
-      }
-
-      let msg_id = self.msg_id_counter.next();
-      let msg = or_else(msg_id);
-      tracing::trace!("queue_msg: {}", msg);
-      pending_msgs.push_msg(msg_id, msg);
-      drop(pending_msgs);
-    }
     self.notify();
   }
 
@@ -209,27 +198,46 @@ where
     };
 
     match pending_msg {
-      Some(mut pending_msg) => {
-        if pending_msg.state().is_done() {
+      Some(mut sending_msg) => {
+        if sending_msg.state().is_done() {
           // Notify to process the next pending message
           self.notify();
           return Ok(());
         }
 
         // Do nothing if the message is still processing.
-        if pending_msg.state().is_processing() {
+        if sending_msg.state().is_processing() {
           return Ok(());
         }
 
-        // Update the pending message's msg_id and send the message.
+        // If the message can merge other messages, try to merge the next message until the
+        // message is not mergeable.
+        if sending_msg.is_mergeable() {
+          if let Some(mut pending_msgs) = self.pending_msgs.try_lock() {
+            while let Some(pending_msg) = pending_msgs.pop() {
+              tracing::trace!("merge_msg: {}", pending_msg.get_msg());
+              sending_msg.merge(pending_msg);
+
+              // Stop merging if the message is not mergeable.
+              if !sending_msg.is_mergeable() {
+                break;
+              }
+            }
+          }
+        }
+
         let (tx, rx) = oneshot::channel();
-        pending_msg.set_state(MessageState::Processing);
-        pending_msg.set_ret(tx);
+        sending_msg.set_state(MessageState::Processing);
+        sending_msg.set_ret(tx);
+        let is_init_msg = sending_msg.is_init();
 
         // Push back the pending message to the queue.
-        let collab_msg = pending_msg.get_msg();
-        self.pending_msgs.lock().push(pending_msg);
+        let collab_msg = sending_msg.get_msg().clone();
+        self.pending_msgs.lock().push(sending_msg);
 
+        if !is_init_msg {
+          let _ = self.state_notifier.send(SinkState::Syncing);
+        }
         let mut sender = self.sender.lock().await;
         tracing::trace!("[🦀Collab]: {}", collab_msg);
         sender
@@ -240,7 +248,14 @@ where
         // Wait for the message to be acked.
         // If the message is not acked within the timeout, resend the message.
         match tokio::time::timeout(self.config.timeout, rx).await {
-          Ok(_) => self.notify(),
+          Ok(_) => {
+            if let Some(pending_msg) = self.pending_msgs.try_lock() {
+              if pending_msg.is_empty() && !is_init_msg {
+                let _ = self.state_notifier.send(SinkState::Finished);
+              }
+            }
+            self.notify()
+          },
           Err(_) => {
             if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {
               pending_msg.set_state(MessageState::Timeout);
@@ -248,10 +263,13 @@ where
             self.notify();
           },
         }
-
         Ok(())
       },
-      None => Ok(()),
+      None => {
+        // All messages are processed.
+        let _ = self.state_notifier.send(SinkState::Finished);
+        Ok(())
+      },
     }
   }
 

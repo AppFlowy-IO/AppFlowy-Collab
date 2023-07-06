@@ -16,8 +16,8 @@ use yrs::{
   Transact, Transaction, TransactionMut, UndoManager, Update, UpdateSubscription,
 };
 
-use crate::core::collab_plugin::CollabPlugin;
-use crate::core::collab_state::{CollabState, State};
+use crate::core::collab_plugin::{CollabPlugin, CollabPluginType};
+use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
 use crate::core::transaction::TransactionRetry;
@@ -94,13 +94,12 @@ impl Collab {
     let cloned_state = state.clone();
     let local_origin = origin.clone();
     let data_subscription = data.observe(move |txn, _event| {
-      // Only set the root changed flag if the remote origin is different from the local origin.
-      // println!("event target: {:?}, {:?}", event.target(), clone_data);
+      // Only set the FullSync if the remote origin is different from the local origin.
       let remote_origin = CollabOrigin::from(txn);
       if remote_origin != local_origin {
         let cloned_state = cloned_state.clone();
         tokio::spawn(async move {
-          cloned_state.set(CollabState::RootChanged);
+          cloned_state.set_sync_state(SyncState::FullSync);
         });
       }
     });
@@ -120,8 +119,12 @@ impl Collab {
     }
   }
 
-  pub fn subscribe_state_change(&self) -> watch::Receiver<CollabState> {
-    self.state.notifier.subscribe()
+  pub fn subscribe_sync_state(&self) -> watch::Receiver<SyncState> {
+    self.state.sync_state_notifier.subscribe()
+  }
+
+  pub fn subscribe_snapshot_state(&self) -> watch::Receiver<SnapshotState> {
+    self.state.snapshot_state_notifier.subscribe()
   }
 
   /// Returns the [Doc] associated with the [Collab].
@@ -140,13 +143,22 @@ impl Collab {
 
   /// Add a plugin to the [Collab]. The plugin's callbacks will be called in the order they are added.
   pub fn add_plugin(&mut self, plugin: Arc<dyn CollabPlugin>) {
-    self.plugins.write().push(plugin);
+    self.add_plugins(vec![plugin]);
   }
 
   /// Add plugins to the [Collab]. The plugin's callbacks will be called in the order they are added.
   pub fn add_plugins(&mut self, plugins: Vec<Arc<dyn CollabPlugin>>) {
     let mut write_guard = self.plugins.write();
+
     for plugin in plugins {
+      if plugin.plugin_type() == CollabPluginType::CloudStorage {
+        let is_exist = write_guard
+          .iter()
+          .find(|plugin| plugin.plugin_type() == CollabPluginType::CloudStorage);
+        if is_exist.is_some() {
+          tracing::error!("Only one cloud storage plugin can be added to a collab instance.");
+        }
+      }
       write_guard.push(plugin);
     }
   }
@@ -160,7 +172,7 @@ impl Collab {
       return;
     }
 
-    self.state.set(CollabState::Loading);
+    self.state.set_init_state(InitState::Loading);
     {
       let mut txn = self.transact_mut();
       self
@@ -189,7 +201,15 @@ impl Collab {
         .iter()
         .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id, &txn));
     }
-    self.state.set(CollabState::Initialized);
+    self.state.set_init_state(InitState::Initialized);
+  }
+
+  pub fn set_sync_state(&self, sync_state: SyncState) {
+    self.state.set_sync_state(sync_state);
+  }
+
+  pub fn set_snapshot_state(&self, snapshot_state: SnapshotState) {
+    self.state.set_snapshot_state(snapshot_state);
   }
 
   pub fn observer_data<F>(&mut self, f: F) -> MapSubscription
@@ -494,7 +514,6 @@ fn observe_doc(
 
         let remote_origin = CollabOrigin::from(txn);
         if remote_origin == local_origin {
-          tracing::trace!("[🦀Collab]: did apply local {} update", local_origin);
           plugin.receive_local_update(&local_origin, &cloned_oid, &event.update);
         } else {
           tracing::trace!(
