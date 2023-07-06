@@ -219,7 +219,6 @@ impl Folder {
         .into_iter()
         .map(|favorite_view_id| FavoriteRecord {
           id: favorite_view_id,
-          created_at: chrono::Utc::now().timestamp(),
           workspace_id: workspace_id.clone(),
         })
         .collect::<Vec<FavoriteRecord>>();
