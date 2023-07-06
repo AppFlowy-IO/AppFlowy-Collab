@@ -22,8 +22,6 @@ impl AsRef<str> for TrashInfo {
 #[derive(Clone)]
 pub struct FavoritesInfo {
   pub id: String,
-  pub name: String,
-  pub created_at: i64,
 }
 impl AsRef<str> for FavoritesInfo {
   fn as_ref(&self) -> &str {

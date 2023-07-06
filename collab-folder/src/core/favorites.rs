@@ -46,11 +46,7 @@ impl FavoritesArray {
           .get_view_name_with_txn(&txn, &item.id)
           .unwrap_or_default();
 
-        FavoritesInfo {
-          id: item.id,
-          name,
-          created_at: item.created_at,
-        }
+        FavoritesInfo { id: item.id }
       })
       .collect::<Vec<_>>()
   }
@@ -129,7 +125,6 @@ impl FavoritesArray {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FavoriteRecord {
   pub id: String,
-  pub created_at: i64,
   #[serde(default)]
   pub workspace_id: String,
 }
