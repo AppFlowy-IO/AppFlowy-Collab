@@ -12,7 +12,9 @@ use serde_repr::*;
 
 use crate::core::folder_observe::ViewChangeSender;
 use crate::core::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
-use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update};
+use crate::{
+  impl_any_update, impl_bool_update, impl_i64_update, impl_option_str_update, impl_str_update,
+};
 
 const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";
@@ -23,6 +25,7 @@ const VIEW_LAYOUT: &str = "layout";
 const VIEW_CREATE_AT: &str = "created_at";
 const VIEW_ICON_URL: &str = "icon_url";
 const VIEW_COVER_URL: &str = "cover_url";
+const FAVORITE_STATUS: &str = "favorite_status";
 
 pub struct ViewsMap {
   container: MapRefWrapper,
@@ -261,6 +264,9 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     .map(|array| array.get_children_with_txn(txn))
     .unwrap_or_default();
 
+  let is_favorite = map_ref
+    .get_bool_with_txn(txn, FAVORITE_STATUS)
+    .unwrap_or_default();
   let icon_url = map_ref.get_str_with_txn(txn, VIEW_ICON_URL);
   let cover_url = map_ref.get_str_with_txn(txn, VIEW_COVER_URL);
 
@@ -274,6 +280,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     layout,
     icon_url,
     cover_url,
+    is_favorite,
   })
 }
 
@@ -340,7 +347,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   impl_any_update!(set_layout, set_layout_if_not_none, VIEW_LAYOUT, ViewLayout);
   impl_str_update!(icon_url, set_icon_url_if_not_none, VIEW_ICON_URL);
   impl_str_update!(cover_url, set_cover_url_if_not_none, VIEW_COVER_URL);
-
+  impl_bool_update!(is_favorite, set_favorite_if_not_none, FAVORITE_STATUS);
   pub fn new(
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
@@ -384,6 +391,7 @@ pub struct View {
   pub desc: String,
   pub children: RepeatedViewIdentifier,
   pub created_at: i64,
+  pub is_favorite: bool,
   pub layout: ViewLayout,
   pub icon_url: Option<String>,
   pub cover_url: Option<String>,

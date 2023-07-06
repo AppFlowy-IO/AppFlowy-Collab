@@ -4,8 +4,8 @@ use std::sync::{Arc, Once};
 
 use collab::preclude::CollabBuilder;
 use collab_folder::core::{
-  Folder, FolderContext, RepeatedViewIdentifier, TrashChangeReceiver, View, ViewChangeReceiver,
-  ViewIdentifier, ViewLayout, Workspace,
+  FavoriteChangeReciever, Folder, FolderContext, RepeatedViewIdentifier, TrashChangeReceiver, View,
+  ViewChangeReceiver, ViewIdentifier, ViewLayout, Workspace,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
@@ -26,6 +26,8 @@ pub struct FolderTest {
 
   #[allow(dead_code)]
   pub trash_rx: Option<TrashChangeReceiver>,
+
+  pub favorite_rx: Option<FavoriteChangeReciever>,
 }
 
 unsafe impl Send for FolderTest {}
@@ -44,10 +46,15 @@ pub fn create_folder(id: &str) -> FolderTest {
   collab.initial();
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
+
   let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
+
+  let (favorite_tx, favorite_rx) = tokio::sync::broadcast::channel(100);
+
   let context = FolderContext {
     view_change_tx: view_tx,
     trash_change_tx: trash_tx,
+    favorite_change_tx: favorite_tx,
   };
   let folder = Folder::get_or_create(Arc::new(collab), context);
   FolderTest {
@@ -55,6 +62,7 @@ pub fn create_folder(id: &str) -> FolderTest {
     cleaner,
     view_rx,
     trash_rx: Some(trash_rx),
+    favorite_rx: Some(favorite_tx),
   }
 }
 
@@ -87,6 +95,7 @@ pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<Strin
     layout: ViewLayout::Document,
     icon_url: None,
     cover_url: None,
+    is_favorite: false,
   }
 }
 

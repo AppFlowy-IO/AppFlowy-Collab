@@ -18,3 +18,13 @@ impl AsRef<str> for TrashInfo {
     &self.id
   }
 }
+
+#[derive(Clone)]
+pub struct FavoritesInfo {
+  pub id: String,
+}
+impl AsRef<str> for FavoritesInfo {
+  fn as_ref(&self) -> &str {
+    &self.id
+  }
+}
