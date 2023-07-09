@@ -217,7 +217,11 @@ impl RemoteCollab {
       .encode_state_as_update_v1(&remote_state_vector);
 
     if let Ok(decode_update) = Update::decode_v1(&encode_update) {
-      tracing::trace!("{}: sync updates:{}", self.object, encode_update.len());
+      tracing::trace!(
+        "{}: sync updates to remote:{}",
+        self.object,
+        encode_update.len()
+      );
 
       // Apply the update to the remote collab and send the update to the remote.
       self.collab.lock().with_transact_mut(|txn| {
@@ -516,13 +520,15 @@ impl MsgIdCounter for RngMsgIdCounter {
 #[derive(Clone, Debug)]
 pub struct CollabObject {
   pub id: String,
+  pub uid: i64,
   pub name: String,
 }
 
 impl CollabObject {
-  pub fn new(object_id: String) -> Self {
+  pub fn new(uid: i64, object_id: String) -> Self {
     Self {
       id: object_id,
+      uid,
       name: "".to_string(),
     }
   }

@@ -1,20 +1,20 @@
+use std::ops::Deref;
 use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::{
-  lib0Any, ArrayRef, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
-  YrsValue,
+  lib0Any, ArrayRef, Collab, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
+  Transaction, TransactionMut, YrsValue,
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::database::{gen_row_id, timestamp};
 use crate::error::DatabaseError;
 use crate::rows::{Cell, Cells, CellsUpdate, RowId, RowMeta, RowMetaUpdate};
-use crate::user::DatabaseCollabBuilder;
 use crate::views::RowOrder;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 
@@ -35,7 +35,7 @@ pub struct DatabaseRow {
   meta: MapRefWrapper,
   #[allow(dead_code)]
   comments: ArrayRef,
-  db: Arc<RocksCollabDB>,
+  collab_db: Arc<RocksCollabDB>,
 }
 
 impl DatabaseRow {
@@ -43,14 +43,14 @@ impl DatabaseRow {
     row: T,
     uid: i64,
     row_id: RowId,
-    db: Arc<RocksCollabDB>,
-    collab_builder: Arc<dyn DatabaseCollabBuilder>,
+    collab_db: Arc<RocksCollabDB>,
+    collab: Arc<MutexCollab>,
   ) -> Self {
     let row = row.into();
-    let doc = Self::new(uid, row_id, db, collab_builder);
-    let data = doc.data.clone();
-    let meta = doc.meta.clone();
-    doc.collab.lock().with_transact_mut(|txn| {
+    let database_row = Self::new(uid, row_id, collab_db, collab);
+    let data = database_row.data.clone();
+    let meta = database_row.meta.clone();
+    database_row.collab.lock().with_transact_mut(|txn| {
       RowBuilder::new(row.id, txn, data.into_inner(), meta.into_inner())
         .update(|update| {
           update
@@ -63,17 +63,15 @@ impl DatabaseRow {
         .done();
     });
 
-    doc
+    database_row
   }
 
   pub fn new(
     uid: i64,
     row_id: RowId,
-    db: Arc<RocksCollabDB>,
-    collab_builder: Arc<dyn DatabaseCollabBuilder>,
+    collab_db: Arc<RocksCollabDB>,
+    collab: Arc<MutexCollab>,
   ) -> Self {
-    let config = CollabPersistenceConfig::new().snapshot_per_update(5);
-    let collab = collab_builder.build_with_config(uid, &row_id, "row", db.clone(), &config);
     let collab_guard = collab.lock();
     let (data, meta, comments) = {
       let txn = collab_guard.transact();
@@ -113,7 +111,7 @@ impl DatabaseRow {
       data,
       meta,
       comments: comments.into_inner(),
-      db,
+      collab_db,
     }
   }
 
@@ -172,13 +170,31 @@ impl DatabaseRow {
   }
 
   pub fn delete(&self) {
-    let _ = self.db.with_write_txn(|txn| {
+    let _ = self.collab_db.with_write_txn(|txn| {
       let row_id = self.row_id.to_string();
       if let Err(e) = txn.delete_doc(self.uid, &row_id) {
         tracing::error!("🔴{}", e);
       }
       Ok(())
     });
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct RowDetail {
+  pub row: Row,
+  pub meta: RowMeta,
+}
+
+impl RowDetail {
+  pub fn from_collab(collab: &Collab, txn: &Transaction) -> Option<Self> {
+    let data = collab.get_map_with_txn(txn, vec![DATA])?;
+    let meta = collab.get_map_with_txn(txn, vec![META])?;
+    let row = row_from_map_ref(&data, &meta, txn)?;
+
+    let row_id = Uuid::parse_str(&row.id).ok()?;
+    let meta = RowMeta::from_map_ref(txn, &row_id, &meta);
+    Some(Self { row, meta })
   }
 }
 
@@ -212,7 +228,39 @@ impl RowMetaKey {
   }
 }
 
+const DEFAULT_ROW_HEIGHT: i32 = 60;
 impl Row {
+  /// Creates a new instance of [Row]
+  /// The default height of a [Row] is 60
+  /// The default visibility of a [Row] is true
+  /// The default created_at of a [Row] is the current timestamp
+  pub fn new<R: Into<RowId>>(id: R) -> Self {
+    let timestamp = timestamp();
+    Row {
+      id: id.into(),
+      cells: Default::default(),
+      height: DEFAULT_ROW_HEIGHT,
+      visibility: true,
+      created_at: timestamp,
+      modified_at: timestamp,
+    }
+  }
+
+  pub fn empty(row_id: RowId) -> Self {
+    Self {
+      id: row_id,
+      cells: Cells::new(),
+      height: DEFAULT_ROW_HEIGHT,
+      visibility: true,
+      created_at: 0,
+      modified_at: 0,
+    }
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.cells.is_empty()
+  }
+
   pub fn document_id(&self) -> String {
     self.meta_id_from_meta_type(RowMetaKey::DocumentId)
   }
@@ -242,24 +290,6 @@ impl Row {
 
 pub fn meta_id_from_row_id(row_id: &Uuid, key: RowMetaKey) -> String {
   Uuid::new_v5(row_id, key.as_str().as_bytes()).to_string()
-}
-
-impl Row {
-  /// Creates a new instance of [Row]
-  /// The default height of a [Row] is 60
-  /// The default visibility of a [Row] is true
-  /// The default created_at of a [Row] is the current timestamp
-  pub fn new<R: Into<RowId>>(id: R) -> Self {
-    let timestamp = timestamp();
-    Row {
-      id: id.into(),
-      cells: Default::default(),
-      height: 60,
-      visibility: true,
-      created_at: timestamp,
-      modified_at: timestamp,
-    }
-  }
 }
 
 pub struct RowBuilder<'a, 'b> {
@@ -482,3 +512,23 @@ impl From<CreateRowParams> for Row {
     }
   }
 }
+
+#[derive(Clone)]
+pub struct MutexDatabaseRow(Arc<Mutex<DatabaseRow>>);
+
+impl MutexDatabaseRow {
+  pub fn new(inner: DatabaseRow) -> Self {
+    Self(Arc::new(Mutex::new(inner)))
+  }
+}
+
+impl Deref for MutexDatabaseRow {
+  type Target = Arc<Mutex<DatabaseRow>>;
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+unsafe impl Sync for MutexDatabaseRow {}
+
+unsafe impl Send for MutexDatabaseRow {}

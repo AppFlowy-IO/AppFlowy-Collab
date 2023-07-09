@@ -30,16 +30,20 @@ pub fn make_collab_pair() -> (MutexCollab, MutexCollab, CollabStateCachePlugin) 
   let update_cache = CollabStateCachePlugin::new();
   let local_collab = CollabBuilder::new(1, "1")
     .with_plugin(update_cache.clone())
-    .build();
-  local_collab.initial();
+    .build()
+    .unwrap();
+  local_collab.lock().initialize();
 
   // Insert document
   local_collab
     .lock()
     .insert_json_with_path(vec![], "document", test_document());
   let updates = update_cache.get_updates();
-  let remote_collab = CollabBuilder::new(1, "1").build_with_updates(updates.unwrap());
-  remote_collab.initial();
+  let remote_collab = CollabBuilder::new(1, "1")
+    .with_raw_data(updates.unwrap())
+    .build()
+    .unwrap();
+  remote_collab.lock().initialize();
 
   (local_collab, remote_collab, update_cache)
 }
@@ -52,10 +56,10 @@ impl CollabStateCachePlugin {
     Self::default()
   }
 
-  pub fn get_updates(&self) -> Result<Vec<Update>, anyhow::Error> {
+  pub fn get_updates(&self) -> Result<Vec<Vec<u8>>, anyhow::Error> {
     let mut updates = vec![];
     for encoded_data in self.0.read().iter() {
-      updates.push(Update::decode_v1(encoded_data)?);
+      updates.push(encoded_data.to_vec());
     }
     Ok(updates)
   }

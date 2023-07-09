@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use collab::core::collab::MutexCollab;
+use anyhow::Error;
+use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::preclude::CollabBuilder;
 use collab_plugins::cloud_storage::aws::AWSDynamoDBPlugin;
 use collab_plugins::cloud_storage::postgres::SupabaseDBPlugin;
@@ -64,13 +65,15 @@ impl AppFlowyCollabBuilder {
     uid: i64,
     object_id: &str,
     object_name: &str,
+    raw_data: CollabRawData,
     db: Arc<RocksCollabDB>,
-  ) -> Arc<MutexCollab> {
+  ) -> Result<Arc<MutexCollab>, Error> {
     self.build_with_config(
       uid,
       object_id,
       object_name,
       db,
+      raw_data,
       &CollabPersistenceConfig::default(),
     )
   }
@@ -86,17 +89,24 @@ impl AppFlowyCollabBuilder {
     object_id: &str,
     object_name: &str,
     collab_db: Arc<RocksCollabDB>,
+    collab_raw_data: CollabRawData,
     config: &CollabPersistenceConfig,
-  ) -> Arc<MutexCollab> {
+  ) -> Result<Arc<MutexCollab>, Error> {
     let collab = Arc::new(
       CollabBuilder::new(uid, object_id)
+        .with_raw_data(collab_raw_data)
         .with_plugin(RocksdbDiskPlugin::new_with_config(
           uid,
           collab_db.clone(),
           config.clone(),
         ))
-        .build(),
+        .build()?,
     );
+
+    // collab_db.with_write_txn(|db_w_txn| {
+    //   db_w_txn.create_new_doc()
+    //   Ok(())
+    // });
 
     let collab_config = CollabPluginConfig::from_env();
     let cloud_storage = self.cloud_storage.read();
@@ -118,12 +128,12 @@ impl AppFlowyCollabBuilder {
               config.region.clone(),
             );
             collab.lock().add_plugin(Arc::new(plugin));
-            tracing::debug!("add aws plugin: {:?}", cloud_storage_type);
+            // tracing::debug!("add aws plugin: {:?}", cloud_storage_type);
           }
         }
       },
       CollabStorageType::Supabase => {
-        let collab_object = CollabObject::new(object_id.to_string()).with_name(object_name);
+        let collab_object = CollabObject::new(uid, object_id.to_string()).with_name(object_name);
         let local_collab_storage = collab_db.clone();
         if let Some(remote_collab_storage) = cloud_storage.get_storage(&cloud_storage_type) {
           let plugin = SupabaseDBPlugin::new(
@@ -135,7 +145,7 @@ impl AppFlowyCollabBuilder {
             local_collab_storage,
           );
           collab.lock().add_plugin(Arc::new(plugin));
-          tracing::trace!("add supabase plugin: {:?}", cloud_storage_type);
+          // tracing::trace!("add supabase plugin: {:?}", cloud_storage_type);
         }
       },
       CollabStorageType::Local => {},
@@ -143,7 +153,7 @@ impl AppFlowyCollabBuilder {
 
     if let Some(snapshot_persistence) = &self.snapshot_persistence {
       if config.enable_snapshot {
-        let collab_object = CollabObject::new(object_id.to_string()).with_name(object_name);
+        let collab_object = CollabObject::new(uid, object_id.to_string()).with_name(object_name);
         let snapshot_plugin = CollabSnapshotPlugin::new(
           uid,
           collab_object,
@@ -151,13 +161,13 @@ impl AppFlowyCollabBuilder {
           collab_db,
           config.snapshot_per_update,
         );
-        tracing::trace!("add snapshot plugin: {}", object_id);
+        // tracing::trace!("add snapshot plugin: {}", object_id);
         collab.lock().add_plugin(Arc::new(snapshot_plugin));
       }
     }
 
     collab.lock().initialize();
-    collab
+    Ok(collab)
   }
 }
 

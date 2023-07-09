@@ -4,8 +4,8 @@ use assert_json_diff::assert_json_eq;
 
 use crate::util::{create_folder_with_workspace, make_test_view};
 
-#[test]
-fn create_child_views_test() {
+#[tokio::test]
+async fn create_child_views_test() {
   let folder_test = create_folder_with_workspace("1", "w1");
   let view_1_1 = make_test_view("1_1", "1", vec![]);
   let view_1_2 = make_test_view("1_2", "1", vec![]);
@@ -149,8 +149,8 @@ fn create_child_views_test() {
   );
 }
 
-#[test]
-fn move_child_views_test() {
+#[tokio::test]
+async fn move_child_views_test() {
   let folder_test = create_folder_with_workspace("1", "w1");
   let view_1_1 = make_test_view("1_1", "1", vec![]);
   let view_1_2 = make_test_view("1_2", "1", vec![]);
@@ -180,8 +180,8 @@ fn move_child_views_test() {
   assert_eq!(v_1_child_views.children[2].id, "1_2");
 }
 
-#[test]
-fn delete_view_test() {
+#[tokio::test]
+async fn delete_view_test() {
   let folder_test = create_folder_with_workspace("1", "w1");
   let view_1 = make_test_view("1_1", "w1", vec![]);
   let view_2 = make_test_view("1_2", "w1", vec![]);
@@ -196,8 +196,8 @@ fn delete_view_test() {
   assert_eq!(w_1_child_views[1].id, "1_3");
 }
 
-#[test]
-fn delete_child_view_test() {
+#[tokio::test]
+async fn delete_child_view_test() {
   let folder_test = create_folder_with_workspace("1", "w1");
   let view_1 = make_test_view("v1", "w1", vec![]);
   let view_1_1 = make_test_view("v1_1", "v1", vec![]);

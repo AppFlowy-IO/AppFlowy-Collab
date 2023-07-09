@@ -4,8 +4,8 @@ use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
 
 use crate::user_test::helper::{user_database_test, user_database_test_with_config};
 
-#[test]
-fn create_database_row_snapshot_test() {
+#[tokio::test]
+async fn create_database_row_snapshot_test() {
   let test = user_database_test_with_config(
     1,
     CollabPersistenceConfig::new()
@@ -36,8 +36,8 @@ fn create_database_row_snapshot_test() {
   assert_eq!(snapshots.len(), 2);
 }
 
-#[test]
-fn delete_database_snapshot_test() {
+#[tokio::test]
+async fn delete_database_snapshot_test() {
   let test = user_database_test(1);
   let database = test
     .create_database(CreateDatabaseParams {

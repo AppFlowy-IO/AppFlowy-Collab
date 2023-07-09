@@ -24,6 +24,6 @@ pub enum DatabaseError {
   #[error(transparent)]
   UuidError(#[from] uuid::Error),
 
-  #[error("Internal error")]
-  Internal(#[from] anyhow::Error),
+  #[error("Internal failure: {0}")]
+  Internal(#[from] Box<dyn std::error::Error + Send + Sync>),
 }

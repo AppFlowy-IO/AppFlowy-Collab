@@ -3,6 +3,9 @@ pub enum DocumentError {
   #[error(transparent)]
   Internal(#[from] anyhow::Error),
 
+  #[error(transparent)]
+  Collab(#[from] collab::error::CollabError),
+
   #[error("Could not create block")]
   BlockCreateError,
 

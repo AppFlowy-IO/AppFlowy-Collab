@@ -1,7 +1,7 @@
 use crate::util::{create_folder_with_workspace, make_test_view};
 
-#[test]
-fn create_view_test() {
+#[tokio::test]
+async fn create_view_test() {
   let folder_test = create_folder_with_workspace("1", "w1");
   let o_view = make_test_view("v1", "w1", vec![]);
   folder_test.insert_view(o_view.clone());
@@ -12,8 +12,8 @@ fn create_view_test() {
   assert_eq!(o_view.children, r_view.children);
 }
 
-#[test]
-fn create_view_with_sub_view_test() {
+#[tokio::test]
+async fn create_view_with_sub_view_test() {
   let folder_test = create_folder_with_workspace("1", "w1");
   let child_view = make_test_view("v1_1", "v1", vec![]);
   let view = make_test_view("v1", "w1", vec![child_view.id.clone()]);
@@ -31,8 +31,8 @@ fn create_view_with_sub_view_test() {
   assert_eq!(child_view.parent_view_id, r_sub_view.parent_view_id);
 }
 
-#[test]
-fn delete_view_test() {
+#[tokio::test]
+async fn delete_view_test() {
   let folder_test = create_folder_with_workspace("1", "w1");
   let view_1 = make_test_view("v1", "w1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);
@@ -52,8 +52,8 @@ fn delete_view_test() {
   assert_eq!(views.len(), 0);
 }
 
-#[test]
-fn update_view_test() {
+#[tokio::test]
+async fn update_view_test() {
   let folder_test = create_folder_with_workspace("1", "w1");
   let o_view = make_test_view("v1", "w1", vec![]);
   folder_test.insert_view(o_view);

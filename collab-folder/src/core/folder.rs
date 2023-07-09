@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::Error;
 use collab::core::array_wrapper::ArrayRefExtension;
-use collab::core::collab::MutexCollab;
+use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::core::collab_state::{SnapshotState, SyncState};
 pub use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
@@ -46,36 +46,30 @@ pub struct Folder {
   /// Subscription for folder change. Like insert a new view
   #[allow(dead_code)]
   subscription: DeepEventsSubscription,
+  #[allow(dead_code)]
   notifier: Option<FolderNotify>,
 }
 
 impl Folder {
-  pub fn get_or_create(
+  pub fn open(collab: Arc<MutexCollab>, notifier: Option<FolderNotify>) -> Self {
+    open_folder(collab, notifier)
+  }
+
+  pub fn create(
     collab: Arc<MutexCollab>,
     notifier: Option<FolderNotify>,
     initial_folder_data: Option<FolderData>,
   ) -> Self {
-    let is_exist = {
-      let collab_guard = collab.lock();
-      let txn = collab_guard.transact();
-      let is_exist = is_folder_exist(txn, &collab_guard);
-      drop(collab_guard);
-      is_exist
-    };
-    if is_exist {
-      open_folder(collab, notifier)
-    } else {
-      create_folder(collab, notifier, initial_folder_data)
-    }
+    create_folder(collab, notifier, initial_folder_data)
   }
 
-  pub fn from_update(
+  pub fn from_collab_raw_data(
     origin: CollabOrigin,
-    updates: Vec<Vec<u8>>,
+    collab_raw_data: CollabRawData,
     workspace_id: &str,
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, Error> {
-    let collab = MutexCollab::new_with_updates(origin, workspace_id, updates, plugins)?;
+    let collab = MutexCollab::new_with_raw_data(origin, workspace_id, collab_raw_data, plugins)?;
     Ok(open_folder(Arc::new(collab), None))
   }
 
@@ -87,10 +81,6 @@ impl Folder {
   pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
     let rx = self.inner.lock().subscribe_snapshot_state();
     WatchStream::new(rx)
-  }
-
-  pub fn reload(self) -> Self {
-    open_folder(self.inner, self.notifier)
   }
 
   pub fn get_folder_data(&self) -> Option<FolderData> {
@@ -491,10 +481,6 @@ fn create_folder(
     subscription,
     notifier,
   }
-}
-
-fn is_folder_exist(txn: Transaction, collab: &Collab) -> bool {
-  collab.get_map_with_txn(&txn, vec![FOLDER]).is_some()
 }
 
 fn open_folder(collab: Arc<MutexCollab>, notifier: Option<FolderNotify>) -> Folder {

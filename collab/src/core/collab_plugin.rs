@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use y_sync::awareness::Awareness;
-use yrs::{Transaction, TransactionMut};
+use yrs::TransactionMut;
 
 use crate::core::origin::CollabOrigin;
 
@@ -21,7 +21,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
   fn init(&self, _object_id: &str, _txn: &mut TransactionMut) {}
 
   /// Called when the plugin is initialized.
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {}
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {}
 
   /// Called when the plugin receives an update. It happens after the [TransactionMut] commit to
   /// the Yrs document.
@@ -53,8 +53,8 @@ where
     (**self).init(object_id, txn)
   }
 
-  fn did_init(&self, awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
-    (**self).did_init(awareness, _object_id, _txn)
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
+    (**self).did_init(_awareness, _object_id)
   }
 
   fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
@@ -70,8 +70,8 @@ where
     (**self).init(object_id, txn)
   }
 
-  fn did_init(&self, awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
-    (**self).did_init(awareness, _object_id, _txn)
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
+    (**self).did_init(_awareness, _object_id)
   }
 
   fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {

@@ -301,7 +301,9 @@ impl<Msg> CollabSinkRunner<Msg> {
     Sink: SinkExt<Msg, Error = E> + Send + Sync + Unpin + 'static,
     Msg: CollabSinkMessage,
   {
-    weak_sink.upgrade().unwrap().notify();
+    if let Some(sink) = weak_sink.upgrade() {
+      sink.notify();
+    }
     loop {
       // stops the runner if the notifier was closed.
       if notifier.changed().await.is_err() {

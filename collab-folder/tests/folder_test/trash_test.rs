@@ -1,10 +1,12 @@
-use crate::util::create_folder_with_workspace;
-use collab_folder::core::{TrashChange, TrashChangeReceiver};
 use std::future::Future;
 use std::time::Duration;
 
-#[test]
-fn create_trash_test() {
+use collab_folder::core::{TrashChange, TrashChangeReceiver};
+
+use crate::util::create_folder_with_workspace;
+
+#[tokio::test]
+async fn create_trash_test() {
   let folder_test = create_folder_with_workspace("1", "w1");
   folder_test.add_trash(vec!["1".to_string(), "2".to_string(), "3".to_string()]);
 

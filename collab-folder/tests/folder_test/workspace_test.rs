@@ -2,8 +2,8 @@ use collab_folder::core::{RepeatedViewIdentifier, ViewIdentifier, Workspace};
 
 use crate::util::create_folder;
 
-#[test]
-fn create_workspace_test() {
+#[tokio::test]
+async fn create_workspace_test() {
   let folder_test = create_folder("1");
 
   let child_views = RepeatedViewIdentifier {
@@ -27,8 +27,8 @@ fn create_workspace_test() {
   assert_eq!(o_workspace.child_views, r_workspace.child_views);
 }
 
-#[test]
-fn set_current_workspace_test() {
+#[tokio::test]
+async fn set_current_workspace_test() {
   let folder_test = create_folder("1");
   let workspace = Workspace {
     id: "1".to_string(),
@@ -51,8 +51,8 @@ fn set_current_workspace_test() {
   );
 }
 
-#[test]
-fn update_workspace_test() {
+#[tokio::test]
+async fn update_workspace_test() {
   let folder_test = create_folder("1");
   let workspace = Workspace {
     id: "1".to_string(),
@@ -80,8 +80,8 @@ fn update_workspace_test() {
   assert_eq!(workspace.child_views[0].id, "2");
 }
 
-#[test]
-fn get_all_workspace_test() {
+#[tokio::test]
+async fn get_all_workspace_test() {
   let folder_test = create_folder("1");
   for i in 0..5 {
     let mut child_views = vec![];
@@ -114,8 +114,8 @@ fn get_all_workspace_test() {
   assert_eq!(workspaces[4].child_views.len(), 4);
 }
 
-#[test]
-fn delete_workspace_test() {
+#[tokio::test]
+async fn delete_workspace_test() {
   let folder_test = create_folder("1");
   for i in 0..10 {
     let workspace = Workspace {

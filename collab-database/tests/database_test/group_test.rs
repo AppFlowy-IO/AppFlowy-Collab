@@ -1,10 +1,11 @@
-use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
-use crate::helper::{TestGroup, TestGroupSetting, CONTENT, GROUPS};
 use collab::core::any_map::AnyMapExtension;
 use collab_database::views::{CreateViewParams, DatabaseLayout};
 
-#[test]
-fn create_database_view_with_group_test() {
+use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
+use crate::helper::{TestGroup, TestGroupSetting, CONTENT, GROUPS};
+
+#[tokio::test]
+async fn create_database_view_with_group_test() {
   let database_test = create_database_with_two_groups();
   let view = database_test.views.get_view("v1").unwrap();
   assert_eq!(view.group_settings.len(), 2);
@@ -21,8 +22,8 @@ fn create_database_view_with_group_test() {
   assert_eq!(group_settings[0].groups[1].id, "group_item2");
 }
 
-#[test]
-fn create_database_view_with_group_test2() {
+#[tokio::test]
+async fn create_database_view_with_group_test2() {
   let database_test = create_database_with_default_data(1, "1");
   let group_setting = TestGroupSetting {
     id: "g1".to_string(),
@@ -58,8 +59,8 @@ fn create_database_view_with_group_test2() {
   assert_eq!(group_settings[0].groups[1].id, "group_item2");
 }
 
-#[test]
-fn get_single_database_group_test() {
+#[tokio::test]
+async fn get_single_database_group_test() {
   let database_test = create_database_with_default_data(1, "1");
   let group_setting = TestGroupSetting {
     id: "g1".to_string(),
@@ -89,8 +90,8 @@ fn get_single_database_group_test() {
   assert_eq!(settings[0].groups[1].id, "group_item2");
 }
 
-#[test]
-fn get_multiple_database_group_test() {
+#[tokio::test]
+async fn get_multiple_database_group_test() {
   let database_test = create_database_with_default_data(1, "1");
   let group_setting_1 = TestGroupSetting {
     id: "g1".to_string(),
@@ -127,8 +128,8 @@ fn get_multiple_database_group_test() {
   assert_eq!(settings[1].groups.len(), 0);
 }
 
-#[test]
-fn extend_database_view_group_test() {
+#[tokio::test]
+async fn extend_database_view_group_test() {
   let database_test = create_database_with_two_groups();
   database_test.update_group_setting("v1", "g1", |object| {
     object.insert_str_value(CONTENT, "hello world".to_string());
@@ -157,8 +158,8 @@ fn extend_database_view_group_test() {
   assert_eq!(group_settings[0].groups[2].id, "group_item3");
 }
 
-#[test]
-fn remove_database_view_group_test() {
+#[tokio::test]
+async fn remove_database_view_group_test() {
   let database_test = create_database_with_two_groups();
   database_test.update_group_setting("v1", "g1", |object| {
     object.remove_array_element(GROUPS, vec!["group_item1"].as_slice());
@@ -176,8 +177,8 @@ fn remove_database_view_group_test() {
   assert_eq!(group_settings[0].groups[0].id, "group_item2");
 }
 
-#[test]
-fn update_database_view_group_test() {
+#[tokio::test]
+async fn update_database_view_group_test() {
   let database_test = create_database_with_two_groups();
   let view = database_test.views.get_view("v1").unwrap();
   let group_settings = view

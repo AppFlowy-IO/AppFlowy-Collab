@@ -11,29 +11,34 @@ use yrs::{Doc, Map, MapPrelim, ReadTxn, Transact, Update};
 
 use crate::helper::{setup_log, CollabStateCachePlugin};
 
-#[test]
-fn restore_from_update() {
+#[tokio::test]
+async fn restore_from_update() {
   let update_cache = CollabStateCachePlugin::new();
   let collab = CollabBuilder::new(1, "1")
     .with_plugin(update_cache.clone())
-    .build();
+    .build()
+    .unwrap();
   collab.lock().initialize();
   collab.lock().insert("text", "hello world");
 
   let updates = update_cache.get_updates().unwrap();
-  let restored_collab = CollabBuilder::new(1, "1").build_with_updates(updates);
+  let restored_collab = CollabBuilder::new(1, "1")
+    .with_raw_data(updates)
+    .build()
+    .unwrap();
   let value = restored_collab.lock().get("text").unwrap();
   let s = value.to_string(&collab.lock().transact());
   assert_eq!(s, "hello world");
 }
 
-#[test]
-fn restore_from_multiple_update() {
+#[tokio::test]
+async fn restore_from_multiple_update() {
   let update_cache = CollabStateCachePlugin::new();
   let collab = CollabBuilder::new(1, "1")
     .with_plugin(update_cache.clone())
-    .build();
-  collab.initial();
+    .build()
+    .unwrap();
+  collab.lock().initialize();
 
   // Insert map
   let mut map = HashMap::new();
@@ -42,39 +47,47 @@ fn restore_from_multiple_update() {
   collab.lock().insert_json_with_path(vec![], "bullet", map);
 
   let updates = update_cache.get_updates().unwrap();
-  let restored_collab = CollabBuilder::new(1, "1").build_with_updates(updates);
+  let restored_collab = CollabBuilder::new(1, "1")
+    .with_raw_data(updates)
+    .build()
+    .unwrap();
   assert_eq!(collab.lock().to_json(), restored_collab.lock().to_json());
 }
 
-#[test]
-fn apply_same_update_multiple_time() {
+#[tokio::test]
+async fn apply_same_update_multiple_time() {
   let update_cache = CollabStateCachePlugin::new();
   let collab = CollabBuilder::new(1, "1")
     .with_plugin(update_cache.clone())
-    .build();
-  collab.initial();
+    .build()
+    .unwrap();
+  collab.lock().initialize();
   collab.lock().insert("text", "hello world");
 
   let updates = update_cache.get_updates().unwrap();
-  let restored_collab = CollabBuilder::new(1, "1").build_with_updates(updates);
+  let restored_collab = CollabBuilder::new(1, "1")
+    .with_raw_data(updates)
+    .build()
+    .unwrap();
 
   // It's ok to apply the updates that were already applied
   let updates = update_cache.get_updates().unwrap();
   restored_collab.lock().with_transact_mut(|txn| {
     for update in updates {
-      txn.apply_update(update);
+      txn.apply_update(Update::decode_v1(&update).unwrap());
     }
   });
 
   assert_json_diff::assert_json_eq!(collab.lock().to_json(), restored_collab.lock().to_json(),);
 }
 
-#[test]
-fn apply_unordered_updates() {
+#[tokio::test]
+async fn apply_unordered_updates() {
   let update_cache = CollabStateCachePlugin::new();
   let collab = CollabBuilder::new(1, "1")
     .with_plugin(update_cache.clone())
-    .build();
+    .build()
+    .unwrap();
   collab.lock().initialize();
   collab.lock().insert("text", "hello world");
 
@@ -87,13 +100,13 @@ fn apply_unordered_updates() {
   let mut updates = update_cache.get_updates().unwrap();
   updates.reverse();
 
-  let restored_collab = CollabBuilder::new(1, "1").build();
+  let restored_collab = CollabBuilder::new(1, "1").build().unwrap();
   restored_collab.lock().initialize();
   restored_collab.lock().with_transact_mut(|txn| {
     //Out of order updates from the same peer will be stashed internally and their
     // integration will be postponed until missing blocks arrive first.
     for update in updates {
-      txn.apply_update(update);
+      txn.apply_update(Update::decode_v1(&update).unwrap());
     }
   });
 
@@ -105,12 +118,12 @@ fn apply_unordered_updates() {
   );
 }
 
-#[test]
-fn root_change_test() {
+#[tokio::test]
+async fn root_change_test() {
   setup_log();
-  let collab_1 = CollabBuilder::new(1, "1").build();
+  let collab_1 = CollabBuilder::new(1, "1").build().unwrap();
   collab_1.lock().initialize();
-  let collab_2 = CollabBuilder::new(1, "1").build();
+  let collab_2 = CollabBuilder::new(1, "1").build().unwrap();
   collab_2.lock().initialize();
 
   {
@@ -169,8 +182,8 @@ fn root_change_test() {
 
 // The result is undetermined because the two peers are in a different state. Check out the
 // two_way_sync_test for a more detailed explanation.
-#[test]
-fn two_way_sync_result_undetermined() {
+#[tokio::test]
+async fn two_way_sync_result_undetermined() {
   let doc_1 = Doc::new();
   let doc_2 = Doc::new();
   let root_map_1 = doc_1.get_or_insert_map("root");
@@ -234,8 +247,8 @@ fn two_way_sync_result_undetermined() {
   assert_eq!(a, b);
 }
 
-#[test]
-fn two_way_sync_test() {
+#[tokio::test]
+async fn two_way_sync_test() {
   let doc_1 = Doc::new();
   let doc_2 = Doc::new();
   let root_map_1 = doc_1.get_or_insert_map("root");

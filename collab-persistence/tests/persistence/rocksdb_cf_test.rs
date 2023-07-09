@@ -1,9 +1,10 @@
-use crate::util::rocks_db;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::kv::KVStore;
 
-#[test]
-fn open_same_cf_test() {
+use crate::util::rocks_db;
+
+#[tokio::test]
+async fn open_same_cf_test() {
   let uid = 1;
   let (path, db_a) = rocks_db(uid);
   db_a

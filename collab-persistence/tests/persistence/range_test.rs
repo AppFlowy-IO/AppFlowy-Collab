@@ -8,8 +8,8 @@ use smallvec::SmallVec;
 
 use crate::util::{rocks_db, sled_db};
 
-#[test]
-fn sled_id_test() {
+#[tokio::test]
+async fn sled_id_test() {
   let sled_db = sled_db().1;
   sled_db
     .with_write_txn(|store| {
@@ -40,8 +40,8 @@ fn sled_id_test() {
   println!("{:?}", last_entry_prior.value());
 }
 
-#[test]
-fn rocks_id_test() {
+#[tokio::test]
+async fn rocks_id_test() {
   let rocks_db = rocks_db(1).1;
   rocks_db
     .with_write_txn(|store| {
@@ -95,8 +95,8 @@ fn rocks_id_test() {
   assert_eq!(value, &[0, 1, 3]);
 }
 
-#[test]
-fn key_range_test() {
+#[tokio::test]
+async fn key_range_test() {
   let db = sled_db().1;
   let store = db.read_txn();
   let next = || {
@@ -131,8 +131,8 @@ fn key_range_test() {
   assert_eq!(next(), 4);
 }
 
-#[test]
-fn scan_prefix_multi_thread() {
+#[tokio::test]
+async fn scan_prefix_multi_thread() {
   let db = Arc::new(sled_db().1);
   let mut handles = vec![];
   let doc_id: u64 = 1;
@@ -171,8 +171,8 @@ fn scan_prefix_multi_thread() {
   }
 }
 
-#[test]
-fn range_key_test() {
+#[tokio::test]
+async fn range_key_test() {
   let db = sled_db().1;
   db.with_write_txn(|store| {
     store.insert([0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 1]).unwrap();

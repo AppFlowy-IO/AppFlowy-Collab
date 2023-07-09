@@ -10,8 +10,8 @@ use crate::database_test::helper::{
   create_database_with_db, restore_database_from_db, DatabaseTest,
 };
 
-#[test]
-fn restore_row_from_disk_test() {
+#[tokio::test]
+async fn restore_row_from_disk_test() {
   let (db, database_test) = create_database_with_db(1, "1");
   let row_1 = CreateRowParams {
     id: 1.into(),
@@ -33,8 +33,8 @@ fn restore_row_from_disk_test() {
   assert!(rows.iter().any(|row| row.id == row_2.id));
 }
 
-#[test]
-fn restore_from_disk_test() {
+#[tokio::test]
+async fn restore_from_disk_test() {
   let (db, database_test, expected) = create_database_with_view();
   assert_json_include!(actual:database_test.to_json_value(), expected:expected);
   // assert_json_eq!(expected, database_test.to_json_value());
@@ -44,8 +44,8 @@ fn restore_from_disk_test() {
   assert_json_include!(actual:database_test.to_json_value(), expected:expected);
 }
 
-#[test]
-fn restore_from_disk_with_different_database_id_test() {
+#[tokio::test]
+async fn restore_from_disk_with_different_database_id_test() {
   let (db, _, _) = create_database_with_view();
   let database_test = restore_database_from_db(1, "1", db);
   assert_json_include!(
@@ -72,8 +72,8 @@ fn restore_from_disk_with_different_database_id_test() {
   );
 }
 
-#[test]
-fn restore_from_disk_with_different_uid_test() {
+#[tokio::test]
+async fn restore_from_disk_with_different_uid_test() {
   let (db, _, _) = create_database_with_view();
   let database_test = restore_database_from_db(1, "1", db);
   assert_json_include!(

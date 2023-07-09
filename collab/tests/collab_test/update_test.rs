@@ -1,8 +1,8 @@
 use crate::helper::make_collab_pair;
 use crate::struct_define::{DocumentMapRef, Owner, OwnerMapRef, TaskInfoMapRef};
 
-#[test]
-fn derive_string_test() {
+#[tokio::test]
+async fn derive_string_test() {
   let (local, _remote, update_cache) = make_collab_pair();
   update_cache.clear();
 
@@ -22,8 +22,8 @@ fn derive_string_test() {
   assert_eq!(name, "Hello AppFlowy");
 }
 
-#[test]
-fn derive_hash_map_test() {
+#[tokio::test]
+async fn derive_hash_map_test() {
   let (local, _remote, update_cache) = make_collab_pair();
   update_cache.clear();
 
@@ -52,8 +52,8 @@ fn derive_hash_map_test() {
   assert_eq!(attributes.get("1").unwrap(), "task 1");
 }
 
-#[test]
-fn derive_hash_map_inner_json_value_test() {
+#[tokio::test]
+async fn derive_hash_map_inner_json_value_test() {
   let (local, _remote, _update_cache) = make_collab_pair();
 
   let mut map_ref = local
@@ -72,8 +72,8 @@ fn derive_hash_map_inner_json_value_test() {
   assert_eq!(title.unwrap(), "New Task 1".to_string());
 }
 
-#[test]
-fn derive_json_value_test() {
+#[tokio::test]
+async fn derive_json_value_test() {
   let (local, _remote, update_cache) = make_collab_pair();
   update_cache.clear();
 
@@ -96,8 +96,8 @@ fn derive_json_value_test() {
   assert_eq!(owner.name, "nathan.fu".to_string());
 }
 
-#[test]
-fn derive_option_value_test() {
+#[tokio::test]
+async fn derive_option_value_test() {
   let (local, _remote, update_cache) = make_collab_pair();
   update_cache.clear();
 
@@ -117,8 +117,8 @@ fn derive_option_value_test() {
   assert_eq!(location, "SG");
 }
 
-#[test]
-fn derive_into_inner_test() {
+#[tokio::test]
+async fn derive_into_inner_test() {
   let (local, _remote, update_cache) = make_collab_pair();
   update_cache.clear();
 

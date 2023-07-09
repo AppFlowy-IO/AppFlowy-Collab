@@ -6,8 +6,8 @@ use crate::util::{
   open_document_with_db,
 };
 
-#[test]
-fn insert_block_with_empty_parent_id_and_empty_prev_id() {
+#[tokio::test]
+async fn insert_block_with_empty_parent_id_and_empty_prev_id() {
   let uid = 1;
   let doc_id = "1";
   let test = create_document(uid, doc_id);
@@ -56,8 +56,8 @@ fn open_empty_document() {
   assert!(data.is_err());
 }
 
-#[test]
-fn reopen_document() {
+#[tokio::test]
+async fn reopen_document() {
   let doc_id = "1";
   let db = db();
   let test = create_document_with_db(1, doc_id, db.clone());

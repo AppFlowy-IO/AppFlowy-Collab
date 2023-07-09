@@ -16,7 +16,7 @@ use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 use y_sync::awareness::Awareness;
 use yrs::updates::decoder::Decode;
-use yrs::{ReadTxn, StateVector, Transaction, Update};
+use yrs::{ReadTxn, StateVector, Update};
 
 use crate::cloud_storage::remote_collab::{
   should_create_snapshot, CollabObject, RemoteCollab, RemoteCollabStorage,
@@ -82,7 +82,7 @@ impl SupabaseDBPlugin {
 }
 
 impl CollabPlugin for SupabaseDBPlugin {
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
     let uid = self.uid;
     let object = self.object.clone();
     let weak_remote_collab = Arc::downgrade(&self.remote_collab);
@@ -127,7 +127,6 @@ impl CollabPlugin for SupabaseDBPlugin {
   }
 
   fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
-    tracing::trace!("Receive local update: {}", update.len());
     if self.is_first_sync_done.load(Ordering::SeqCst) {
       self.remote_collab.push_update(update);
     } else {

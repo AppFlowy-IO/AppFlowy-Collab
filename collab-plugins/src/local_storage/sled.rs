@@ -7,7 +7,7 @@ use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::sled_lv::SledCollabDB;
 use y_sync::awareness::Awareness;
-use yrs::{Transaction, TransactionMut};
+use yrs::TransactionMut;
 
 #[derive(Clone)]
 pub struct SledDiskPlugin {
@@ -42,7 +42,7 @@ impl CollabPlugin for SledDiskPlugin {
     }
   }
 
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
     self.did_load.store(true, Ordering::SeqCst);
   }
 
