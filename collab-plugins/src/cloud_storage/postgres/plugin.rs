@@ -16,7 +16,7 @@ use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 use y_sync::awareness::Awareness;
 use yrs::updates::decoder::Decode;
-use yrs::{ReadTxn, StateVector, Transaction, Update};
+use yrs::{ReadTxn, StateVector, Update};
 
 use crate::cloud_storage::remote_collab::{
   should_create_snapshot, CollabObject, RemoteCollab, RemoteCollabStorage,
@@ -82,7 +82,7 @@ impl SupabaseDBPlugin {
 }
 
 impl CollabPlugin for SupabaseDBPlugin {
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
     let uid = self.uid;
     let object = self.object.clone();
     let weak_remote_collab = Arc::downgrade(&self.remote_collab);
@@ -127,7 +127,6 @@ impl CollabPlugin for SupabaseDBPlugin {
   }
 
   fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
-    tracing::trace!("Receive local update: {}", update.len());
     if self.is_first_sync_done.load(Ordering::SeqCst) {
       self.remote_collab.push_update(update);
     } else {
@@ -137,6 +136,11 @@ impl CollabPlugin for SupabaseDBPlugin {
 
   fn plugin_type(&self) -> CollabPluginType {
     CollabPluginType::CloudStorage
+  }
+
+  fn reset(&self, _object_id: &str) {
+    self.pending_updates.write().clear();
+    self.remote_collab.clear();
   }
 }
 
@@ -163,7 +167,7 @@ fn create_snapshot_if_need(
           }
         },
         Err(e) => {
-          tracing::error!("Get remote collab state failed: {:?}", e);
+          tracing::error!("🔴fetch remote collab state failed: {:?}", e);
           return;
         },
         _ => {
@@ -215,7 +219,7 @@ fn create_snapshot_if_need(
                 .set_snapshot_state(SnapshotState::DidCreateSnapshot { snapshot_id });
             }
           },
-          Err(e) => tracing::error!("Failed to create remote snapshot: {}", e),
+          Err(e) => tracing::error!("🔴create remote snapshot failed: {}", e),
         }
       }
     }

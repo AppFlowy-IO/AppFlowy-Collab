@@ -1,11 +1,10 @@
 use serde_json::json;
-
 use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
 use yrs::{Doc, Map, ReadTxn, Transact, Update};
 
-#[test]
-fn state_vec_apply_test() {
+#[tokio::test]
+async fn state_vec_apply_test() {
   let doc1 = Doc::with_client_id(1);
   let doc2 = Doc::with_client_id(1);
 

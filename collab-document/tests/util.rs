@@ -38,7 +38,8 @@ pub fn create_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -
   let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone());
   let collab = CollabBuilder::new(1, doc_id)
     .with_plugin(disk_plugin)
-    .build();
+    .build()
+    .unwrap();
   collab.lock().initialize();
 
   let mut blocks = HashMap::new();
@@ -94,8 +95,9 @@ pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> 
   let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone());
   let collab = CollabBuilder::new(uid, doc_id)
     .with_plugin(disk_plugin)
-    .build();
-  collab.initial();
+    .build()
+    .unwrap();
+  collab.lock().initialize();
 
   DocumentTest {
     document: Document::open(Arc::new(collab)).unwrap(),

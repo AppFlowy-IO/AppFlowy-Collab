@@ -55,11 +55,11 @@ impl RemoteCollab {
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
     let (notifier, notifier_rx) = watch::channel(false);
-    let (state_tx, sink_state_rx) = watch::channel(SinkState::Init);
+    let (sync_state_tx, sink_state_rx) = watch::channel(SinkState::Init);
     let sink = Arc::new(CollabSink::new(
       TokioUnboundedSink(sink),
       notifier,
-      state_tx,
+      sync_state_tx,
       RngMsgIdCounter::new(),
       config,
     ));
@@ -78,7 +78,9 @@ impl RemoteCollab {
             SinkState::Finished => {
               let _ = sync_state.send(SyncState::SyncFinished);
             },
-            SinkState::Init => {},
+            SinkState::Init => {
+              let _ = sync_state.send(SyncState::SyncInitStart);
+            },
           }
         }
       }
@@ -167,10 +169,10 @@ impl RemoteCollab {
           let mut txn = remote_collab.transact_mut();
           if let Ok(update) = Update::decode_v1(&update) {
             if let Err(e) = txn.try_apply_update(update) {
-              tracing::error!("Failed to apply update: {:?}", e);
+              tracing::error!("apply update failed: {:?}", e);
             }
           } else {
-            tracing::error!("Failed to decode update");
+            tracing::error!("🔴decode update failed");
           }
 
           remote_update = Some(update);
@@ -216,7 +218,7 @@ impl RemoteCollab {
 
     if let Ok(decode_update) = Update::decode_v1(&encode_update) {
       tracing::trace!(
-        "{}: sync local updates:{}",
+        "{}: sync updates to remote:{}",
         self.object,
         encode_update.len()
       );
@@ -247,6 +249,10 @@ impl RemoteCollab {
         meta: MessageMeta::Update { msg_id },
       });
     }
+  }
+
+  pub fn clear(&self) {
+    self.sink.remove_all_pending_msgs();
   }
 }
 
@@ -514,13 +520,15 @@ impl MsgIdCounter for RngMsgIdCounter {
 #[derive(Clone, Debug)]
 pub struct CollabObject {
   pub id: String,
+  pub uid: i64,
   pub name: String,
 }
 
 impl CollabObject {
-  pub fn new(object_id: String) -> Self {
+  pub fn new(uid: i64, object_id: String) -> Self {
     Self {
       id: object_id,
+      uid,
       name: "".to_string(),
     }
   }

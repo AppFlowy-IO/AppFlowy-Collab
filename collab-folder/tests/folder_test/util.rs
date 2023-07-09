@@ -4,7 +4,7 @@ use std::sync::{Arc, Once};
 
 use collab::preclude::CollabBuilder;
 use collab_folder::core::{
-  Folder, FolderContext, RepeatedViewIdentifier, TrashChangeReceiver, View, ViewChangeReceiver,
+  Folder, FolderNotify, RepeatedViewIdentifier, TrashChangeReceiver, View, ViewChangeReceiver,
   ViewIdentifier, ViewLayout, Workspace,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -40,16 +40,19 @@ pub fn create_folder(id: &str) -> FolderTest {
   let disk_plugin = RocksdbDiskPlugin::new(uid, db);
   let cleaner: Cleaner = Cleaner::new(path);
 
-  let collab = CollabBuilder::new(1, id).with_plugin(disk_plugin).build();
-  collab.initial();
+  let collab = CollabBuilder::new(1, id)
+    .with_plugin(disk_plugin)
+    .build()
+    .unwrap();
+  collab.lock().initialize();
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
   let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
-  let context = FolderContext {
+  let context = FolderNotify {
     view_change_tx: view_tx,
     trash_change_tx: trash_tx,
   };
-  let folder = Folder::get_or_create(Arc::new(collab), context);
+  let folder = Folder::create(Arc::new(collab), Some(context), None);
   FolderTest {
     folder,
     cleaner,

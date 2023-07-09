@@ -1,6 +1,5 @@
 #![allow(clippy::all)]
 
-use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -8,16 +7,15 @@ use collab_database::database::DatabaseData;
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
-use collab_database::user::UserDatabase as InnerUserDatabase;
+use collab_database::user::WorkspaceDatabase;
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
-use parking_lot::Mutex;
 use serde_json::Value;
 
 use crate::helper::{db_path, TestTextCell};
-use crate::user_test::helper::UserDatabaseCollabBuilderImpl;
+use crate::user_test::helper::workspace_database_with_db;
 
 pub enum DatabaseScript {
   CreateDatabase {
@@ -60,7 +58,7 @@ pub enum DatabaseScript {
 pub struct DatabaseTest {
   pub db: Arc<RocksCollabDB>,
   pub db_path: PathBuf,
-  pub user_database: UserDatabase,
+  pub workspace_database: Arc<WorkspaceDatabase>,
   pub config: CollabPersistenceConfig,
 }
 
@@ -72,31 +70,34 @@ impl DatabaseTest {
   pub fn new(config: CollabPersistenceConfig) -> Self {
     let db_path = db_path();
     let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
-    let collab_builder = UserDatabaseCollabBuilderImpl();
-    let inner = InnerUserDatabase::new(1, db.clone(), config.clone(), collab_builder);
-    let user_database = UserDatabase(Arc::new(Mutex::new(inner)));
+    let workspace_database = workspace_database_with_db(1, db.clone(), Some(config.clone()));
     Self {
       db,
-      user_database,
+      workspace_database: Arc::new(workspace_database),
       db_path,
       config,
     }
   }
 
   #[allow(dead_code)]
-  pub fn get_database_data(&self, database_id: &str) -> DatabaseData {
-    let database = self.user_database.lock().get_database(database_id).unwrap();
-    database.duplicate_database()
+  pub async fn get_database_data(&self, database_id: &str) -> DatabaseData {
+    let database = self
+      .workspace_database
+      .get_database(database_id)
+      .await
+      .unwrap();
+    let duplicated_database = database.lock().duplicate_database();
+    duplicated_database
   }
 
   pub async fn run_scripts(&mut self, scripts: Vec<DatabaseScript>) {
     let mut handles = vec![];
     for script in scripts {
-      let user_database = self.user_database.clone();
+      let workspace_database = self.workspace_database.clone();
       let db = self.db.clone();
       let config = self.config.clone();
       let handle = tokio::spawn(async move {
-        run_script(user_database, db, config, script);
+        run_script(workspace_database, db, config, script).await;
       });
       handles.push(handle);
     }
@@ -106,30 +107,31 @@ impl DatabaseTest {
   }
 }
 
-pub fn run_script(
-  user_database: UserDatabase,
+pub async fn run_script(
+  workspace_database: Arc<WorkspaceDatabase>,
   db: Arc<RocksCollabDB>,
   config: CollabPersistenceConfig,
   script: DatabaseScript,
 ) {
   match script {
     DatabaseScript::CreateDatabase { params } => {
-      user_database.lock().create_database(params).unwrap();
+      workspace_database.create_database(params).unwrap();
     },
     DatabaseScript::OpenDatabase { database_id } => {
-      user_database.lock().get_database(&database_id).unwrap();
+      workspace_database.get_database(&database_id).await.unwrap();
     },
     DatabaseScript::CloseDatabase { database_id } => {
-      user_database.lock().close_database(&database_id);
+      workspace_database.close_database(&database_id);
     },
     DatabaseScript::CreateRow {
       database_id,
       params,
     } => {
-      user_database
-        .lock()
+      workspace_database
         .get_database(&database_id)
+        .await
         .unwrap()
+        .lock()
         .create_row(params)
         .unwrap();
     },
@@ -138,37 +140,30 @@ pub fn run_script(
       row_id,
       cells,
     } => {
-      user_database
-        .lock()
+      workspace_database
         .get_database(&database_id)
+        .await
         .unwrap()
+        .lock()
         .update_row(&row_id, |row| {
           row.set_cells(cells);
         });
     },
-    // DatabaseScript::CreateField { database_id, field } => {
-    //   user_database
-    //     .lock()
-    //     .get_database(&database_id)
-    //     .unwrap()
-    //     .create_field(field);
-    // },
     DatabaseScript::AssertDatabaseInDisk {
       database_id,
       expected,
     } => {
-      let collab_builder = UserDatabaseCollabBuilderImpl();
-      let inner = InnerUserDatabase::new(1, db, config, collab_builder);
-      let database = inner.get_database(&database_id).unwrap();
-      let actual = database.to_json_value();
+      let w_database = workspace_database_with_db(1, db, Some(config.clone()));
+      let database = w_database.get_database(&database_id).await.unwrap();
+      let actual = database.lock().to_json_value();
       assert_json_diff::assert_json_include!(actual: actual, expected: expected);
     },
     DatabaseScript::AssertDatabase {
       database_id,
       expected,
     } => {
-      let database = user_database.lock().get_database(&database_id).unwrap();
-      let actual = database.to_json_value();
+      let database = workspace_database.get_database(&database_id).await.unwrap();
+      let actual = database.lock().to_json_value();
       assert_json_diff::assert_json_include!(actual: actual, expected: expected);
     },
     DatabaseScript::IsExist {
@@ -242,17 +237,3 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
     fields: vec![field_1, field_2, field_3],
   }
 }
-
-#[derive(Clone)]
-pub struct UserDatabase(Arc<Mutex<InnerUserDatabase>>);
-
-impl Deref for UserDatabase {
-  type Target = Arc<Mutex<InnerUserDatabase>>;
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-
-unsafe impl Sync for UserDatabase {}
-
-unsafe impl Send for UserDatabase {}

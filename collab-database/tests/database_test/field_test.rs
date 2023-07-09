@@ -3,8 +3,8 @@ use collab_database::views::CreateViewParams;
 
 use crate::database_test::helper::{create_database, create_database_with_default_data};
 
-#[test]
-fn create_single_field_test() {
+#[tokio::test]
+async fn create_single_field_test() {
   let database_test = create_database(1, "1");
   database_test.create_field(Field::new(
     "f1".to_string(),
@@ -20,8 +20,8 @@ fn create_single_field_test() {
   assert_eq!(view.field_orders[0].id, fields[0].id);
 }
 
-#[test]
-fn duplicate_field_test() {
+#[tokio::test]
+async fn duplicate_field_test() {
   let database_test = create_database_with_default_data(1, "1");
   let original_field = database_test.fields.get_field("f1").unwrap();
   let (index, duplicated_field) = database_test
@@ -36,8 +36,8 @@ fn duplicate_field_test() {
   );
 }
 
-#[test]
-fn duplicate_field_test2() {
+#[tokio::test]
+async fn duplicate_field_test2() {
   let database_test = create_database_with_default_data(1, "1");
   let original_field = database_test.fields.get_field("f3").unwrap();
   let (index, duplicated_field) = database_test
@@ -52,8 +52,8 @@ fn duplicate_field_test2() {
   );
 }
 
-#[test]
-fn create_multiple_field_test() {
+#[tokio::test]
+async fn create_multiple_field_test() {
   let database_test = create_database(1, "1");
   for i in 0..10 {
     database_test.create_field(Field::new(
@@ -68,8 +68,8 @@ fn create_multiple_field_test() {
   assert_eq!(fields.len(), 10);
 }
 
-#[test]
-fn delete_field_test() {
+#[tokio::test]
+async fn delete_field_test() {
   let database_test = create_database(1, "1");
   for i in 0..3 {
     database_test.create_field(Field::new(
@@ -85,8 +85,8 @@ fn delete_field_test() {
   assert_eq!(fields.len(), 1);
 }
 
-#[test]
-fn delete_field_in_views_test() {
+#[tokio::test]
+async fn delete_field_in_views_test() {
   let database_test = create_database(1, "1");
   for i in 0..3 {
     database_test.create_field(Field::new(
@@ -111,8 +111,8 @@ fn delete_field_in_views_test() {
   assert_eq!(view.field_orders.len(), 2);
 }
 
-#[test]
-fn field_order_in_view_test() {
+#[tokio::test]
+async fn field_order_in_view_test() {
   let database_test = create_database(1, "1");
   let params = CreateViewParams {
     database_id: "1".to_string(),
@@ -138,8 +138,8 @@ fn field_order_in_view_test() {
   }
 }
 
-#[test]
-fn get_field_in_order_test() {
+#[tokio::test]
+async fn get_field_in_order_test() {
   let database_test = create_database(1, "1");
   for i in 0..3 {
     database_test.create_field(Field::new(
@@ -163,8 +163,8 @@ fn get_field_in_order_test() {
   assert_eq!(fields[2].id, "f0");
 }
 
-#[test]
-fn move_field_test() {
+#[tokio::test]
+async fn move_field_test() {
   let database_test = create_database(1, "1");
   let params = CreateViewParams {
     database_id: "1".to_string(),
@@ -197,8 +197,8 @@ fn move_field_test() {
   assert_eq!(view_2.field_orders[2].id, "f2");
 }
 
-#[test]
-fn move_field_to_out_of_index_test() {
+#[tokio::test]
+async fn move_field_to_out_of_index_test() {
   let database_test = create_database(1, "1");
   for i in 0..3 {
     database_test.create_field(Field::new(

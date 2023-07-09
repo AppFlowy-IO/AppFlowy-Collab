@@ -1,13 +1,14 @@
-use crate::user_test::helper::{user_database_test, UserDatabaseTest};
 use collab::core::any_map::AnyMapExtension;
 use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
 use collab_database::views::CreateDatabaseParams;
 
-#[test]
-fn update_single_type_option_data_test() {
+use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
+
+#[tokio::test]
+async fn update_single_type_option_data_test() {
   let test = user_database_with_default_field();
-  let database = test.get_database("d1").unwrap();
-  database.fields.update_field("f1", |field_update| {
+  let database = test.get_database("d1").await.unwrap();
+  database.lock().fields.update_field("f1", |field_update| {
     field_update.update_type_options(|type_option_update| {
       type_option_update.insert(
         "0",
@@ -18,15 +19,15 @@ fn update_single_type_option_data_test() {
     });
   });
 
-  let field = database.fields.get_field("f1").unwrap();
+  let field = database.lock().fields.get_field("f1").unwrap();
   let type_option = field.type_options.get("0").unwrap();
   assert_eq!(type_option.get("task").unwrap().to_string(), "write code");
 }
 
-#[test]
-fn insert_multi_type_options_test() {
+#[tokio::test]
+async fn insert_multi_type_options_test() {
   let test = user_database_with_default_field();
-  let database = test.get_database("d1").unwrap();
+  let database = test.get_database("d1").await.unwrap();
 
   let mut type_options = TypeOptions::new();
   type_options.insert(
@@ -42,7 +43,7 @@ fn insert_multi_type_options_test() {
       .build(),
   );
 
-  database.create_field(Field {
+  database.lock().create_field(Field {
     id: "f2".to_string(),
     name: "second field".to_string(),
     field_type: 0,
@@ -50,7 +51,7 @@ fn insert_multi_type_options_test() {
     ..Default::default()
   });
 
-  let second_field = database.fields.get_field("f2").unwrap();
+  let second_field = database.lock().fields.get_field("f2").unwrap();
   assert_eq!(second_field.type_options.len(), 2);
 
   let type_option = second_field.type_options.get("0").unwrap();
@@ -60,8 +61,8 @@ fn insert_multi_type_options_test() {
   assert_eq!(type_option.get_f64_value("job 2").unwrap(), 456.0);
 }
 
-fn user_database_with_default_field() -> UserDatabaseTest {
-  let test = user_database_test(1);
+fn user_database_with_default_field() -> WorkspaceDatabaseTest {
+  let test = workspace_database_test(1);
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -76,6 +77,6 @@ fn user_database_with_default_field() -> UserDatabaseTest {
     field_type: 0,
     ..Default::default()
   };
-  database.fields.insert_field(field);
+  database.lock().fields.insert_field(field);
   test
 }

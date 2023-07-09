@@ -7,7 +7,7 @@ use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use y_sync::awareness::Awareness;
-use yrs::{Transaction, TransactionMut};
+use yrs::TransactionMut;
 
 #[derive(Clone)]
 pub struct RocksdbDiskPlugin {
@@ -92,7 +92,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
     }
   }
 
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
     self.did_load.store(true, Ordering::SeqCst);
   }
 
@@ -115,6 +115,15 @@ impl CollabPlugin for RocksdbDiskPlugin {
   }
 
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
+
+  fn reset(&self, object_id: &str) {
+    if let Err(e) = self.db.with_write_txn(|w_db_txn| {
+      w_db_txn.delete_all_updates(self.uid, object_id)?;
+      Ok(())
+    }) {
+      tracing::error!("🔴Reset failed: {:?}", e);
+    }
+  }
 }
 
 #[derive(Clone)]

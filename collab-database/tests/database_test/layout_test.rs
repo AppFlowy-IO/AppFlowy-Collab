@@ -6,8 +6,8 @@ use crate::database_test::helper::{
 };
 use crate::helper::TestCalendarLayoutSetting;
 
-#[test]
-fn get_layout_setting_test() {
+#[tokio::test]
+async fn get_layout_setting_test() {
   let database_test = create_database_with_two_layout_settings();
   let layout_setting = database_test
     .views
@@ -22,8 +22,8 @@ fn get_layout_setting_test() {
   assert_eq!(layout_setting.field_id, "f2");
 }
 
-#[test]
-fn create_database_view_with_layout_setting_test() {
+#[tokio::test]
+async fn create_database_view_with_layout_setting_test() {
   let database_test = DatabaseTestBuilder::new(1, "1")
     .with_layout(DatabaseLayout::Calendar)
     .with_field(Field::new(
@@ -42,8 +42,8 @@ fn create_database_view_with_layout_setting_test() {
   assert_eq!(layout_setting.field_id, "f1");
 }
 
-#[test]
-fn remove_layout_setting_test() {
+#[tokio::test]
+async fn remove_layout_setting_test() {
   let database_test = create_database_with_two_layout_settings();
   database_test.views.update_database_view("v1", |view| {
     view.remove_layout_setting(&DatabaseLayout::Board);
@@ -55,8 +55,8 @@ fn remove_layout_setting_test() {
   assert!(layout_setting.is_none());
 }
 
-#[test]
-fn update_layout_setting_test() {
+#[tokio::test]
+async fn update_layout_setting_test() {
   let database_test = create_database_with_two_layout_settings();
   let layout_setting = database_test
     .views

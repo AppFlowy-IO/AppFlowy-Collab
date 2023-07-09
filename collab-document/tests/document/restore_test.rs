@@ -6,8 +6,8 @@ use crate::util::{
   create_document, create_document_with_db, db, get_document_data, open_document_with_db,
 };
 
-#[test]
-fn restore_default_document_test() {
+#[tokio::test]
+async fn restore_default_document_test() {
   let uid = 1;
   let doc_id = "1";
   let test = create_document(uid, doc_id);
@@ -19,8 +19,8 @@ fn restore_default_document_test() {
   assert_eq!(data1, data2);
 }
 
-#[test]
-fn restore_default_document_test2() {
+#[tokio::test]
+async fn restore_default_document_test2() {
   let uid = 1;
   let doc_id = "1";
   let test = create_document(uid, doc_id);
@@ -44,8 +44,8 @@ fn restore_default_document_test2() {
   assert_eq!(restore_block, block);
 }
 
-#[test]
-fn multiple_thread_create_document_test() {
+#[tokio::test]
+async fn multiple_thread_create_document_test() {
   let db = db();
   let mut handles = vec![];
 

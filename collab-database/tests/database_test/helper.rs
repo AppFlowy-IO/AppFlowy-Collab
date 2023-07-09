@@ -2,12 +2,13 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use collab::core::collab::CollabRawData;
 use collab::preclude::CollabBuilder;
 use collab_database::blocks::Block;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, CreateRowParams};
-use collab_database::user::DatabaseCollabBuilder;
+use collab_database::user::DatabaseCollabService;
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout, LayoutSetting, LayoutSettings};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
@@ -15,7 +16,7 @@ use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
 use tempfile::TempDir;
 
 pub use crate::helper::*;
-use crate::user_test::helper::UserDatabaseCollabBuilderImpl;
+use crate::user_test::helper::TestUserDatabaseCollabBuilderImpl;
 
 pub struct DatabaseTest {
   database: Database,
@@ -44,9 +45,9 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
-  let collab = CollabBuilder::new(uid, database_id).build();
-  collab.initial();
-  let collab_builder = Arc::new(UserDatabaseCollabBuilderImpl());
+  let collab = CollabBuilder::new(uid, database_id).build().unwrap();
+  collab.lock().initialize();
+  let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let block = Block::new(uid, db, collab_builder.clone());
   let context = DatabaseContext {
     collab: Arc::new(collab),
@@ -65,12 +66,13 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
 
 pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<RocksCollabDB>, DatabaseTest) {
   let db = make_rocks_db();
-  let collab_builder = Arc::new(UserDatabaseCollabBuilderImpl());
-  let collab = collab_builder.build_with_config(
+  let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
+  let collab = collab_builder.build_collab_with_config(
     uid,
     database_id,
     "database",
     db.clone(),
+    CollabRawData::default(),
     &CollabPersistenceConfig::default(),
   );
   let block = Block::new(uid, db.clone(), collab_builder.clone());
@@ -94,12 +96,13 @@ pub fn restore_database_from_db(
   database_id: &str,
   db: Arc<RocksCollabDB>,
 ) -> DatabaseTest {
-  let collab_builder = Arc::new(UserDatabaseCollabBuilderImpl());
-  let collab = collab_builder.build_with_config(
+  let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
+  let collab = collab_builder.build_collab_with_config(
     uid,
     database_id,
     "database",
     db.clone(),
+    CollabRawData::default(),
     &CollabPersistenceConfig::default(),
   );
   let block = Block::new(uid, db, collab_builder.clone());
@@ -159,9 +162,11 @@ impl DatabaseTestBuilder {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let db = Arc::new(RocksCollabDB::open(path).unwrap());
-    let collab = CollabBuilder::new(self.uid, &self.database_id).build();
-    collab.initial();
-    let collab_builder = Arc::new(UserDatabaseCollabBuilderImpl());
+    let collab = CollabBuilder::new(self.uid, &self.database_id)
+      .build()
+      .unwrap();
+    collab.lock().initialize();
+    let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
     let block = Block::new(self.uid, db, collab_builder.clone());
     let context = DatabaseContext {
       collab: Arc::new(collab),

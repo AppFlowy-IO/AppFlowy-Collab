@@ -118,7 +118,7 @@ where
       match self.remove(last_update_key.as_ref()) {
         Ok(_) => {},
         Err(e) => {
-          tracing::error!("Failed to delete last snapshot update: {:?}", e);
+          tracing::error!("🔴delete last snapshot failed: {:?}", e);
         },
       }
     }

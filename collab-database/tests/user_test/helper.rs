@@ -3,18 +3,21 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use collab::core::collab::MutexCollab;
+use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::preclude::CollabBuilder;
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
+use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::rows::CreateRowParams;
 use collab_database::user::{
-  DatabaseCollabBuilder, RowRelationChange, RowRelationUpdateReceiver, UserDatabase,
+  make_workspace_database_id, CollabFuture, DatabaseCollabService, RowRelationChange,
+  RowRelationUpdateReceiver, WorkspaceDatabase,
 };
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
+use parking_lot::Mutex;
 use tokio::sync::mpsc::{channel, Receiver};
 
 use rand::Rng;
@@ -22,15 +25,15 @@ use tempfile::TempDir;
 
 use crate::helper::{make_rocks_db, TestTextCell};
 
-pub struct UserDatabaseTest {
+pub struct WorkspaceDatabaseTest {
   #[allow(dead_code)]
   uid: i64,
-  inner: UserDatabase,
+  inner: WorkspaceDatabase,
   pub db: Arc<RocksCollabDB>,
 }
 
-impl Deref for UserDatabaseTest {
-  type Target = UserDatabase;
+impl Deref for WorkspaceDatabaseTest {
+  type Target = WorkspaceDatabase;
 
   fn deref(&self) -> &Self::Target {
     &self.inner
@@ -42,72 +45,100 @@ pub fn random_uid() -> i64 {
   rng.gen::<i64>()
 }
 
-pub struct UserDatabaseCollabBuilderImpl();
+pub struct TestUserDatabaseCollabBuilderImpl();
 
-impl DatabaseCollabBuilder for UserDatabaseCollabBuilderImpl {
-  fn build_with_config(
+impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
+  fn get_collab_updates(
+    &self,
+    _object_id: &str,
+  ) -> CollabFuture<Result<Vec<Vec<u8>>, DatabaseError>> {
+    Box::pin(async move { Ok(vec![]) })
+  }
+
+  fn build_collab_with_config(
     &self,
     uid: i64,
     object_id: &str,
     _object_name: &str,
-    db: Arc<RocksCollabDB>,
+    collab_db: Arc<RocksCollabDB>,
+    collab_raw_data: CollabRawData,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab> {
     let collab = CollabBuilder::new(uid, object_id)
-      .with_plugin(RocksdbDiskPlugin::new_with_config(uid, db, config.clone()))
-      .build();
+      .with_raw_data(collab_raw_data)
+      .with_plugin(RocksdbDiskPlugin::new_with_config(
+        uid,
+        collab_db,
+        config.clone(),
+      ))
+      .build()
+      .unwrap();
     collab.lock().initialize();
     Arc::new(collab)
   }
 }
 
-pub fn user_database_test(uid: i64) -> UserDatabaseTest {
+pub fn workspace_database_test(uid: i64) -> WorkspaceDatabaseTest {
   let db = make_rocks_db();
-  user_database_with_db(uid, db)
+  user_database_test_with_db(uid, db)
 }
 
-pub fn user_database_test_with_config(
+pub fn workspace_database_test_with_config(
   uid: i64,
   config: CollabPersistenceConfig,
-) -> UserDatabaseTest {
-  let db = make_rocks_db();
-  let inner = UserDatabase::new(uid, db.clone(), config, UserDatabaseCollabBuilderImpl());
-  UserDatabaseTest { uid, inner, db }
-}
-
-pub fn user_database_with_db(uid: i64, db: Arc<RocksCollabDB>) -> UserDatabaseTest {
-  UserDatabaseTest {
+) -> WorkspaceDatabaseTest {
+  let collab_db = make_rocks_db();
+  let builder = TestUserDatabaseCollabBuilderImpl();
+  let collab = builder.build_collab_with_config(
     uid,
-    inner: UserDatabase::new(
-      uid,
-      db.clone(),
-      CollabPersistenceConfig::new().snapshot_per_update(5),
-      UserDatabaseCollabBuilderImpl(),
-    ),
-    db,
+    &make_workspace_database_id(uid),
+    "databases",
+    collab_db.clone(),
+    CollabRawData::default(),
+    &config,
+  );
+  let inner = WorkspaceDatabase::open(uid, collab, collab_db.clone(), config, builder);
+  WorkspaceDatabaseTest {
+    uid,
+    inner,
+    db: collab_db,
   }
 }
 
-pub fn user_database_with_default_data(uid: i64) -> UserDatabaseTest {
+pub fn workspace_database_with_db(
+  uid: i64,
+  collab_db: Arc<RocksCollabDB>,
+  config: Option<CollabPersistenceConfig>,
+) -> WorkspaceDatabase {
+  let config = config.unwrap_or_else(|| CollabPersistenceConfig::new().snapshot_per_update(5));
+  let builder = TestUserDatabaseCollabBuilderImpl();
+  let collab = builder.build_collab_with_config(
+    uid,
+    &make_workspace_database_id(uid),
+    "databases",
+    collab_db.clone(),
+    CollabRawData::default(),
+    &config,
+  );
+  WorkspaceDatabase::open(uid, collab, collab_db, config, builder)
+}
+
+pub fn user_database_test_with_db(uid: i64, db: Arc<RocksCollabDB>) -> WorkspaceDatabaseTest {
+  let inner = workspace_database_with_db(uid, db.clone(), None);
+  WorkspaceDatabaseTest { uid, inner, db }
+}
+
+pub fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
-  let user_database = UserDatabaseTest {
-    uid,
-    inner: UserDatabase::new(
-      uid,
-      db.clone(),
-      CollabPersistenceConfig::new(),
-      UserDatabaseCollabBuilderImpl(),
-    ),
-    db,
-  };
+  let w_database = user_database_test_with_db(uid, db);
 
-  user_database
+  w_database
     .create_database(create_database_params("d1"))
     .unwrap();
 
-  user_database
+  w_database
 }
 
 fn create_database_params(database_id: &str) -> CreateDatabaseParams {
@@ -228,3 +259,23 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
     fields: vec![text_field, single_select_field, checkbox_field],
   }
 }
+
+#[derive(Clone)]
+pub struct MutexUserDatabase(Arc<Mutex<WorkspaceDatabase>>);
+
+impl MutexUserDatabase {
+  pub fn new(inner: WorkspaceDatabase) -> Self {
+    Self(Arc::new(Mutex::new(inner)))
+  }
+}
+
+impl Deref for MutexUserDatabase {
+  type Target = Arc<Mutex<WorkspaceDatabase>>;
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+unsafe impl Sync for MutexUserDatabase {}
+
+unsafe impl Send for MutexUserDatabase {}

@@ -29,17 +29,21 @@ const UPDATE_VALUE: &str = "value";
 /// https://docs.aws.amazon.com/sdk-for-rust/latest/dg/rust_dynamodb_code_examples.html
 pub struct AWSDynamoDB {
   #[allow(dead_code)]
+  uid: i64,
+  #[allow(dead_code)]
   client: Arc<Client>,
   remote_collab: Arc<RemoteCollab>,
 }
 
 impl AWSDynamoDB {
   pub async fn new(
+    uid: i64,
     object_id: String,
     sync_per_secs: u64,
     region: String,
   ) -> Result<Self, anyhow::Error> {
     Self::new_with_table_name(
+      uid,
       object_id,
       DEFAULT_TABLE_NAME.to_string(),
       sync_per_secs,
@@ -49,6 +53,7 @@ impl AWSDynamoDB {
   }
 
   pub async fn new_with_table_name(
+    uid: i64,
     object_id: String,
     table_name: String,
     sync_per_secs: u64,
@@ -72,9 +77,10 @@ impl AWSDynamoDB {
         sync_per_secs,
       )));
 
-    let object = CollabObject::new(object_id.clone());
+    let object = CollabObject::new(uid, object_id.clone());
     let remote_collab = Arc::new(RemoteCollab::new(object, storage, config));
     Ok(Self {
+      uid,
       client,
       remote_collab,
     })
@@ -149,9 +155,9 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
   }
 }
 
-pub async fn get_aws_remote_doc(object_id: &str, region: String) -> Arc<MutexCollab> {
+pub async fn get_aws_remote_doc(uid: i64, object_id: &str, region: String) -> Arc<MutexCollab> {
   let local_collab = Arc::new(MutexCollab::new(CollabOrigin::Server, object_id, vec![]));
-  let plugin = AWSDynamoDB::new(object_id.to_string(), 1, region)
+  let plugin = AWSDynamoDB::new(uid, object_id.to_string(), 1, region)
     .await
     .unwrap();
   plugin.start_sync(local_collab.clone()).await;

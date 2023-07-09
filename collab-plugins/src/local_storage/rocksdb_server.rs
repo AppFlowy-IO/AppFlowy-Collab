@@ -1,5 +1,4 @@
 use std::ops::Deref;
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -7,10 +6,9 @@ use collab::error::CollabError;
 use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-
 use collab_sync::server::CollabId;
 use y_sync::awareness::Awareness;
-use yrs::{Transaction, TransactionMut};
+use yrs::TransactionMut;
 
 #[derive(Clone)]
 pub struct RocksdbServerDiskPlugin {
@@ -59,7 +57,7 @@ impl CollabPlugin for RocksdbServerDiskPlugin {
       }
     }
   }
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
     self.did_load.store(true, Ordering::SeqCst);
   }
 

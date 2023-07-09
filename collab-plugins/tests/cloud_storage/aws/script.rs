@@ -36,13 +36,15 @@ pub enum TestScript {
 }
 
 pub struct AWSStorageTest {
+  uid: i64,
   pub collab_by_id: HashMap<String, Arc<MutexCollab>>,
 }
 
 impl AWSStorageTest {
-  pub fn new() -> Self {
+  pub fn new(uid: i64) -> Self {
     setup_log();
     Self {
+      uid,
       collab_by_id: HashMap::new(),
     }
   }
@@ -63,7 +65,7 @@ impl AWSStorageTest {
           test_region(),
         );
         local_collab.lock().add_plugin(Arc::new(plugin));
-        local_collab.initial();
+        local_collab.lock().initialize();
         self
           .collab_by_id
           .insert(make_id(uid, &object_id), local_collab);
@@ -92,7 +94,7 @@ impl AWSStorageTest {
         object_id,
         expected,
       } => {
-        let collab = get_aws_remote_doc(&object_id, test_region()).await;
+        let collab = get_aws_remote_doc(self.uid, &object_id, test_region()).await;
         let json = collab.lock().to_json_value();
         assert_json_diff::assert_json_eq!(json, expected,);
       },

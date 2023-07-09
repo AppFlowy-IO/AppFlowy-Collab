@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use y_sync::awareness::Awareness;
-use yrs::{Transaction, TransactionMut};
+use yrs::TransactionMut;
 
 use crate::core::origin::CollabOrigin;
 
@@ -21,13 +21,14 @@ pub trait CollabPlugin: Send + Sync + 'static {
   fn init(&self, _object_id: &str, _txn: &mut TransactionMut) {}
 
   /// Called when the plugin is initialized.
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {}
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {}
 
   /// Called when the plugin receives an update. It happens after the [TransactionMut] commit to
   /// the Yrs document.
   fn receive_update(&self, _object_id: &str, _txn: &TransactionMut, _update: &[u8]) {}
 
-  /// Called when the plugin receives a local update
+  /// Called when the plugin receives a local update.
+  /// We use the [CollabOrigin] to know if the update comes from the local user or from a remote
   fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, _update: &[u8]) {}
 
   /// Called after each [TransactionMut]
@@ -37,6 +38,10 @@ pub trait CollabPlugin: Send + Sync + 'static {
   fn plugin_type(&self) -> CollabPluginType {
     CollabPluginType::Other
   }
+
+  /// Notifies the plugin that the collab object has been reset. It happens when the collab object
+  /// is ready to sync from the remote. When reset is called, the plugin should reset its state.
+  fn reset(&self, _object_id: &str) {}
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
@@ -48,8 +53,8 @@ where
     (**self).init(object_id, txn)
   }
 
-  fn did_init(&self, awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
-    (**self).did_init(awareness, _object_id, _txn)
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
+    (**self).did_init(_awareness, _object_id)
   }
 
   fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
@@ -65,8 +70,8 @@ where
     (**self).init(object_id, txn)
   }
 
-  fn did_init(&self, awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
-    (**self).did_init(awareness, _object_id, _txn)
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
+    (**self).did_init(_awareness, _object_id)
   }
 
   fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {

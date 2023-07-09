@@ -30,7 +30,7 @@ impl RocksStore {
     let db = match TransactionDB::<SingleThreaded>::open(&db_opts, &txn_db_opts, &path) {
       Ok(db) => Ok(db),
       Err(e) => {
-        tracing::error!("open collab db error: {:?}", e);
+        tracing::error!("🔴open collab db error: {:?}", e);
         match e.kind() {
           // A few types of corruption that repair may be able to fix:
           // 1. Missing files: If SST files or other vital files have been accidentally deleted or
@@ -46,7 +46,7 @@ impl RocksStore {
             tracing::info!("Trying to repair collab database");
             match TransactionDB::<SingleThreaded>::repair(&db_opts, &path) {
               Ok(_) => tracing::info!("Collab database repaired"),
-              Err(e) => tracing::error!("Failed to repair collab database: {:?}", e),
+              Err(e) => tracing::error!("🔴Failed to repair collab database: {:?}", e),
             }
           },
           _ => {},

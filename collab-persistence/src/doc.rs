@@ -237,6 +237,19 @@ where
     Ok(())
   }
 
+  fn delete_all_updates<K: AsRef<[u8]> + ?Sized + Debug>(
+    &self,
+    uid: i64,
+    object_id: &K,
+  ) -> Result<(), PersistenceError> {
+    if let Some(doc_id) = get_doc_id(uid, self, object_id) {
+      let start = make_doc_update_key(doc_id, 0);
+      let end = make_doc_update_key(doc_id, Clock::MAX);
+      self.remove_range(start.as_ref(), end.as_ref())?;
+    }
+    Ok(())
+  }
+
   /// Delete the document from the persistence
   /// This will remove all the updates and the document state
   fn delete_doc<K: AsRef<[u8]> + ?Sized + Debug>(

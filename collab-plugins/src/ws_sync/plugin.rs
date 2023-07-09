@@ -10,7 +10,6 @@ use futures_util::{SinkExt, StreamExt};
 use y_sync::awareness::Awareness;
 use y_sync::sync::{Message, SyncMessage};
 use yrs::updates::encoder::Encode;
-use yrs::Transaction;
 
 pub struct SyncPlugin<Sink, Stream> {
   object_id: String,
@@ -51,8 +50,8 @@ where
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {
-  fn did_init(&self, awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
-    self.sync_queue.notify(awareness);
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
+    self.sync_queue.notify(_awareness);
   }
 
   fn receive_local_update(&self, origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
@@ -69,5 +68,9 @@ where
         });
       }
     });
+  }
+
+  fn reset(&self, _object_id: &str) {
+    self.sync_queue.clear();
   }
 }
