@@ -250,6 +250,25 @@ where
     Ok(())
   }
 
+  fn get_all_updates<K: AsRef<[u8]> + ?Sized + Debug>(
+    &self,
+    uid: i64,
+    object_id: &K,
+  ) -> Result<Vec<Vec<u8>>, PersistenceError> {
+    if let Some(doc_id) = get_doc_id(uid, self, object_id) {
+      let start = make_doc_update_key(doc_id, 0);
+      let end = make_doc_update_key(doc_id, Clock::MAX);
+      let range = self.range(start.as_ref()..=end.as_ref())?;
+      let mut updates = vec![];
+      for update in range {
+        updates.push(update.value().to_vec());
+      }
+      Ok(updates)
+    } else {
+      Ok(vec![])
+    }
+  }
+
   /// Delete the document from the persistence
   /// This will remove all the updates and the document state
   fn delete_doc<K: AsRef<[u8]> + ?Sized + Debug>(
