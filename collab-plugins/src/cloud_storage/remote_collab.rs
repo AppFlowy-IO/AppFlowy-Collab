@@ -29,7 +29,8 @@ pub struct RemoteCollab {
   object: CollabObject,
   collab: Arc<MutexCollab>,
   storage: Arc<dyn RemoteCollabStorage>,
-  /// The [CollabSink] is used to send the updates to the remote.
+  /// The [CollabSink] is used to queue the [Message] and continuously try to send them
+  /// to the remote via the [RemoteCollabStorage].
   sink: Arc<CollabSink<TokioUnboundedSink<Message>, Message>>,
   /// It continuously receive the updates from the remote.
   sync_state: Arc<watch::Sender<SyncState>>,
@@ -86,6 +87,8 @@ impl RemoteCollab {
       }
     });
 
+    // Spawn a task to receive updates from the [CollabSink] and send updates to
+    // the remote storage.
     spawn(async move {
       while let Some(message) = stream.recv().await {
         if let Some(storage) = weak_storage.upgrade() {
@@ -124,6 +127,7 @@ impl RemoteCollab {
       }
     });
 
+    // Spawn a task that boost the [CollabSink]
     spawn(CollabSinkRunner::run(Arc::downgrade(&sink), notifier_rx));
     Self {
       object,
@@ -321,7 +325,12 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
     id: MsgId,
     init_update: Vec<u8>,
   ) -> Result<(), anyhow::Error>;
+
+  /// Subscribe the remote updates.
+  async fn subscribe_remote_updates(&self, object: &CollabObject) -> Option<RemoteUpdateReceiver>;
 }
+
+pub type RemoteUpdateReceiver = tokio::sync::mpsc::Receiver<Vec<u8>>;
 
 #[async_trait]
 impl<T> RemoteCollabStorage for Arc<T>
@@ -363,6 +372,10 @@ where
     init_update: Vec<u8>,
   ) -> Result<(), Error> {
     (**self).send_init_sync(object, id, init_update).await
+  }
+
+  async fn subscribe_remote_updates(&self, object: &CollabObject) -> Option<RemoteUpdateReceiver> {
+    (**self).subscribe_remote_updates(object).await
   }
 }
 
