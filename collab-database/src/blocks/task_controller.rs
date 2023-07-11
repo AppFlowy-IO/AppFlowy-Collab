@@ -3,7 +3,7 @@ use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
-use collab::core::collab::MutexCollab;
+use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::core::origin::CollabOrigin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -88,9 +88,16 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
 
     // The tasks that get the row with given row_id might be duplicated, so we need to check if the
     // task is already done.
-    let is_exist = collab_db
-      .read_txn()
-      .is_exist(task.payload.uid(), task.payload.row_id().as_ref());
+    let is_exist = match &task.payload {
+      BlockTask::FetchRow { uid, row_id, .. } => {
+        collab_db.read_txn().is_exist(*uid, row_id.as_ref())
+      },
+      BlockTask::BatchFetchRow { uid, row_ids, .. } => match row_ids.first() {
+        None => true,
+        Some(row_id) => collab_db.read_txn().is_exist(*uid, row_id.as_ref()),
+      },
+    };
+
     return if is_exist { None } else { Some(task) };
   }
 
@@ -98,48 +105,39 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
     task.set_state(TaskState::Processing);
     let collab_service = self.collab_service.upgrade()?;
     let collab_db = self.collab_db.upgrade()?;
-
-    tracing::trace!("fetching database row: {:?}", task.payload.row_id());
-    if let Ok(updates) = collab_service
-      .get_collab_updates(task.payload.row_id())
-      .await
-    {
-      tracing::trace!("did fetch database row: {:?}", task.payload.row_id());
-      let row = collab_db.with_write_txn(|write_txn| {
-        match MutexCollab::new_with_raw_data(
-          CollabOrigin::Empty,
-          task.payload.row_id(),
-          updates,
-          vec![],
-        ) {
-          Ok(collab) => {
-            let collab_guard = collab.lock();
-            let txn = collab_guard.transact();
-            let uid = task.payload.uid();
-            let object_id = task.payload.row_id().as_ref();
-            if let Err(e) = write_txn.create_new_doc(uid, object_id, &txn) {
-              tracing::error!("Failed to save the database row collab: {:?}", e);
-            }
-            Ok(RowDetail::from_collab(&collab_guard, &txn))
-          },
-
-          Err(e) => {
-            tracing::error!("Failed to create database row collab: {:?}", e);
-            Ok(None)
-          },
+    match &task.payload {
+      BlockTask::FetchRow {
+        row_id,
+        uid,
+        sender,
+        ..
+      } => {
+        tracing::trace!("fetching database row: {:?}", row_id);
+        if let Ok(updates) = collab_service.get_collab_update(row_id.as_ref()).await {
+          if let Some(row_detail) = save_row(&collab_db, updates, *uid, row_id) {
+            let _ = sender.send(row_detail).await;
+          }
         }
-      });
+      },
+      BlockTask::BatchFetchRow {
+        row_ids,
+        uid,
+        sender,
+        ..
+      } => {
+        tracing::trace!("batch fetching database row");
+        let object_ids = row_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
+        if let Ok(updates_by_oid) = collab_service.batch_get_collab_update(object_ids).await {
+          let mut row_details = vec![];
+          for (oid, updates) in updates_by_oid {
+            if let Some(row_detail) = save_row(&collab_db, updates, *uid, oid) {
+              row_details.push(row_detail);
+            }
+          }
 
-      match row {
-        Ok(None) => {
-          tracing::error!("Unexpected empty row. The row should not be empty at this point.")
-        },
-        Ok(Some(row)) => {
-          // Notify the row is fetched.
-          let _ = task.payload.ret().send(row).await;
-        },
-        Err(e) => tracing::error!("Failed to save the database row collab: {:?}", e),
-      }
+          let _ = sender.send(row_details).await;
+        }
+      },
     }
     task.set_state(TaskState::Done);
     Some(())
@@ -150,7 +148,51 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
   }
 }
 
-pub type BlockTaskSender = tokio::sync::mpsc::Sender<RowDetail>;
+fn save_row<R: AsRef<str>>(
+  collab_db: &Arc<RocksCollabDB>,
+  collab_raw_data: CollabRawData,
+  uid: i64,
+  row_id: R,
+) -> Option<RowDetail> {
+  let row = collab_db.with_write_txn(|write_txn| {
+    match MutexCollab::new_with_raw_data(
+      CollabOrigin::Empty,
+      row_id.as_ref(),
+      collab_raw_data,
+      vec![],
+    ) {
+      Ok(collab) => {
+        let collab_guard = collab.lock();
+        let txn = collab_guard.transact();
+        let object_id = row_id.as_ref();
+        if let Err(e) = write_txn.create_new_doc(uid, object_id, &txn) {
+          tracing::error!("Failed to save the database row collab: {:?}", e);
+        }
+        Ok(RowDetail::from_collab(&collab_guard, &txn))
+      },
+
+      Err(e) => {
+        tracing::error!("Failed to create database row collab: {:?}", e);
+        Ok(None)
+      },
+    }
+  });
+
+  match row {
+    Ok(None) => {
+      tracing::error!("Unexpected empty row. The row should not be empty at this point.");
+      None
+    },
+    Ok(row) => row,
+    Err(e) => {
+      tracing::error!("Failed to save the database row collab: {:?}", e);
+      None
+    },
+  }
+}
+
+pub type FetchRowSender = tokio::sync::mpsc::Sender<RowDetail>;
+pub type BatchFetchRowSender = tokio::sync::mpsc::Sender<Vec<RowDetail>>;
 
 #[derive(Clone)]
 pub enum BlockTask {
@@ -158,35 +200,21 @@ pub enum BlockTask {
     uid: i64,
     row_id: RowId,
     seq: u32,
-    collab_db: Weak<RocksCollabDB>,
-    collab_service: Weak<dyn DatabaseCollabService>,
-    sender: BlockTaskSender,
+    sender: FetchRowSender,
   },
-}
-
-impl BlockTask {
-  pub fn uid(&self) -> i64 {
-    match self {
-      BlockTask::FetchRow { uid, .. } => *uid,
-    }
-  }
-  pub fn row_id(&self) -> &RowId {
-    match self {
-      BlockTask::FetchRow { row_id, .. } => row_id,
-    }
-  }
-
-  pub fn ret(&self) -> &BlockTaskSender {
-    match self {
-      BlockTask::FetchRow { sender, .. } => sender,
-    }
-  }
+  BatchFetchRow {
+    uid: i64,
+    row_ids: Vec<RowId>,
+    seq: u32,
+    sender: BatchFetchRowSender,
+  },
 }
 
 impl Debug for BlockTask {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
       BlockTask::FetchRow { .. } => f.write_fmt(format_args!("Fetch database row")),
+      BlockTask::BatchFetchRow { .. } => f.write_fmt(format_args!("Batch fetch database row")),
     }
   }
 }
@@ -194,6 +222,11 @@ impl Debug for BlockTask {
 impl Ord for BlockTask {
   fn cmp(&self, other: &Self) -> Ordering {
     match (self, other) {
+      (BlockTask::BatchFetchRow { seq: seq1, .. }, BlockTask::BatchFetchRow { seq: seq2, .. }) => {
+        seq1.cmp(seq2).reverse()
+      },
+      (BlockTask::BatchFetchRow { .. }, BlockTask::FetchRow { .. }) => Ordering::Greater,
+      (BlockTask::FetchRow { .. }, BlockTask::BatchFetchRow { .. }) => Ordering::Less,
       (BlockTask::FetchRow { seq: seq1, .. }, BlockTask::FetchRow { seq: seq2, .. }) => {
         seq1.cmp(seq2).reverse()
       },
@@ -206,6 +239,11 @@ impl Eq for BlockTask {}
 impl PartialEq<Self> for BlockTask {
   fn eq(&self, other: &Self) -> bool {
     match (self, other) {
+      (BlockTask::BatchFetchRow { seq: seq1, .. }, BlockTask::BatchFetchRow { seq: seq2, .. }) => {
+        seq1 == seq2
+      },
+      (BlockTask::BatchFetchRow { .. }, BlockTask::FetchRow { .. }) => false,
+      (BlockTask::FetchRow { .. }, BlockTask::BatchFetchRow { .. }) => false,
       (BlockTask::FetchRow { seq: seq1, .. }, BlockTask::FetchRow { seq: seq2, .. }) => {
         seq1 == seq2
       },

@@ -18,7 +18,7 @@ use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
 use crate::cloud_storage::remote_collab::{
   CollabObject, RemoteCollab, RemoteCollabSnapshot, RemoteCollabStorage,
 };
-use crate::cloud_storage::RemoteCollabState;
+use crate::cloud_storage::{RemoteCollabState, RemoteUpdateReceiver};
 
 pub(crate) const DEFAULT_TABLE_NAME: &str = "collab_test";
 const OBJECT_ID: &str = "oid";
@@ -152,6 +152,10 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
   ) -> Result<(), Error> {
     // TODO(nathan): support aws init sync
     Ok(())
+  }
+
+  async fn subscribe_remote_updates(&self, _object: &CollabObject) -> Option<RemoteUpdateReceiver> {
+    None
   }
 }
 

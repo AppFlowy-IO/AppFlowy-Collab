@@ -160,7 +160,7 @@ where
       .unwrap_or(true);
 
     if !deferrable {
-      return self.try_send_next_msg().await;
+      return self.try_send_msg_immediately().await;
     }
 
     // Check the elapsed time from the last message. Return if the elapsed time is less than
@@ -182,10 +182,10 @@ where
       *self.instant.lock().await = Instant::now();
     }
 
-    self.try_send_next_msg().await
+    self.try_send_msg_immediately().await
   }
 
-  async fn try_send_next_msg(&self) -> Result<(), SyncError> {
+  async fn try_send_msg_immediately(&self) -> Result<(), SyncError> {
     let pending_msg = match self.pending_msgs.try_lock() {
       None => {
         // If acquire the lock failed, try to notify again after 100ms

@@ -20,16 +20,23 @@ use crate::error::DatabaseError;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 
+pub type CollabObjectUpdateByOid = HashMap<String, CollabObjectUpdate>;
+pub type CollabObjectUpdate = Vec<Vec<u8>>;
 pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
 /// different [CollabPlugin]s to the [MutexCollab] to support different features.
 ///
 pub trait DatabaseCollabService: Send + Sync + 'static {
-  fn get_collab_updates(
+  fn get_collab_update(
     &self,
     object_id: &str,
-  ) -> CollabFuture<Result<Vec<Vec<u8>>, DatabaseError>>;
+  ) -> CollabFuture<Result<CollabObjectUpdate, DatabaseError>>;
+
+  fn batch_get_collab_update(
+    &self,
+    object_ids: Vec<String>,
+  ) -> CollabFuture<Result<CollabObjectUpdateByOid, DatabaseError>>;
 
   fn build_collab_with_config(
     &self,
@@ -109,8 +116,12 @@ impl WorkspaceDatabase {
         let mut collab_raw_data = CollabRawData::default();
         let is_exist = self.collab_db.read_txn().is_exist(self.uid, &database_id);
         if !is_exist {
-          match self.collab_service.get_collab_updates(database_id).await {
-            Ok(updates) => collab_raw_data = updates,
+          // Try to load the database from the remote. The database doesn't exist in the local only
+          // when the user has deleted the database or the database is using a remote storage.
+          match self.collab_service.get_collab_update(database_id).await {
+            Ok(updates) => {
+              collab_raw_data = updates;
+            },
             Err(e) => {
               tracing::error!("Failed to get collab updates for database: {}", e);
               return None;
@@ -125,9 +136,21 @@ impl WorkspaceDatabase {
           block: blocks,
           collab_builder: self.collab_service.clone(),
         };
-        let database = Arc::new(MutexDatabase::new(
-          Database::get_or_create(database_id, context).ok()?,
-        ));
+        let database = Database::get_or_create(database_id, context).ok()?;
+
+        // The database is not exist in local disk, which means the rows of the database are not
+        // loaded yet. Load the rows from the remote with limit 100.
+        if !is_exist {
+          let row_ids = database
+            .get_inline_row_orders()
+            .into_iter()
+            .map(|row_order| row_order.id)
+            .take(100)
+            .collect::<Vec<_>>();
+          self.block.batch_load_rows(row_ids);
+        }
+
+        let database = Arc::new(MutexDatabase::new(database));
         self
           .open_handlers
           .write()
