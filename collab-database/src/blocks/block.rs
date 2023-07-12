@@ -21,7 +21,7 @@ use crate::views::RowOrder;
 #[derive(Clone)]
 pub enum BlockEvent {
   /// The Row is fetched from the remote.
-  DidFetchRow(RowDetail),
+  DidFetchRow(Vec<RowDetail>),
 }
 
 /// Each [Block] contains a list of [DatabaseRow]s. Each [DatabaseRow] represents a row in the database.
@@ -62,6 +62,32 @@ impl Block {
 
   pub fn subscribe_event(&self) -> broadcast::Receiver<BlockEvent> {
     self.notifier.subscribe()
+  }
+
+  pub fn batch_load_rows(&self, row_ids: Vec<RowId>) {
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    self.task_controller.add_task(BlockTask::BatchFetchRow {
+      uid: self.uid,
+      row_ids,
+      seq: self.sequence.fetch_add(1, Ordering::SeqCst),
+      sender: tx,
+    });
+
+    let weak_notifier = Arc::downgrade(&self.notifier);
+    tokio::spawn(async move {
+      while let Some(row_details) = rx.recv().await {
+        if let Some(notifier) = weak_notifier.upgrade() {
+          let _ = notifier.send(BlockEvent::DidFetchRow(row_details));
+        }
+      }
+    });
+  }
+
+  pub fn close_rows(&self, row_ids: &[RowId]) {
+    let mut cache_guard = self.cache.lock();
+    for row_id in row_ids {
+      cache_guard.pop(row_id);
+    }
   }
 
   pub fn create_rows<T: Into<Row>>(&self, rows: Vec<T>) -> Vec<RowOrder> {
@@ -172,14 +198,10 @@ impl Block {
         if !is_exist {
           //
           let (sender, mut rx) = tokio::sync::mpsc::channel(1);
-          let weak_collab_db = Arc::downgrade(&self.collab_db);
-          let weak_collab_service = Arc::downgrade(&self.collab_service);
           self.task_controller.add_task(BlockTask::FetchRow {
             uid: self.uid,
             row_id: row_id.clone(),
             seq: self.sequence.fetch_add(1, Ordering::SeqCst),
-            collab_db: weak_collab_db,
-            collab_service: weak_collab_service,
             sender,
           });
 
@@ -187,7 +209,7 @@ impl Block {
           tokio::spawn(async move {
             while let Some(row_detail) = rx.recv().await {
               if let Some(notifier) = weak_notifier.upgrade() {
-                let _ = notifier.send(BlockEvent::DidFetchRow(row_detail));
+                let _ = notifier.send(BlockEvent::DidFetchRow(vec![row_detail]));
               }
             }
           });

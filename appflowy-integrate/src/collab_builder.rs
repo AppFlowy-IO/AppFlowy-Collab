@@ -24,6 +24,7 @@ pub enum CollabStorageType {
 pub trait CollabStorageProvider: Send + Sync + 'static {
   fn storage_type(&self) -> CollabStorageType;
   fn get_storage(&self, storage_type: &CollabStorageType) -> Option<Arc<dyn RemoteCollabStorage>>;
+  fn is_sync_enabled(&self) -> bool;
 }
 
 impl<T> CollabStorageProvider for Arc<T>
@@ -36,6 +37,10 @@ where
 
   fn get_storage(&self, storage_type: &CollabStorageType) -> Option<Arc<dyn RemoteCollabStorage>> {
     (**self).get_storage(storage_type)
+  }
+
+  fn is_sync_enabled(&self) -> bool {
+    (**self).is_sync_enabled()
   }
 }
 
@@ -111,7 +116,7 @@ impl AppFlowyCollabBuilder {
     let collab_config = CollabPluginConfig::from_env();
     let cloud_storage = self.cloud_storage.read();
     let cloud_storage_type = cloud_storage.storage_type();
-    tracing::trace!("collab storage type: {:?}", cloud_storage_type);
+    // tracing::trace!("collab storage type: {:?}", cloud_storage_type);
     match cloud_storage_type {
       CollabStorageType::AWS => {
         if let Some(config) = collab_config.aws_config() {
@@ -145,7 +150,6 @@ impl AppFlowyCollabBuilder {
             local_collab_storage,
           );
           collab.lock().add_plugin(Arc::new(plugin));
-          // tracing::trace!("add supabase plugin: {:?}", cloud_storage_type);
         }
       },
       CollabStorageType::Local => {},
@@ -179,5 +183,9 @@ impl CollabStorageProvider for DefaultCollabStorageProvider {
 
   fn get_storage(&self, _storage_type: &CollabStorageType) -> Option<Arc<dyn RemoteCollabStorage>> {
     None
+  }
+
+  fn is_sync_enabled(&self) -> bool {
+    false
   }
 }

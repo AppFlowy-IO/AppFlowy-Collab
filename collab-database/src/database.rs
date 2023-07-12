@@ -862,6 +862,13 @@ impl Database {
     self.get_rows_for_view_with_txn(txn, &inline_view_id)
   }
 
+  pub fn get_inline_row_orders(&self) -> Vec<RowOrder> {
+    let collab = self.inner.lock();
+    let txn = collab.transact();
+    let inline_view_id = self.get_inline_view_id_with_txn(&txn);
+    self.views.get_row_orders_with_txn(&txn, &inline_view_id)
+  }
+
   pub fn set_inline_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
     tracing::trace!("Set inline view id: {}", view_id);
     self.metas.set_inline_view_with_txn(txn, view_id);

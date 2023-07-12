@@ -11,8 +11,8 @@ use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::rows::CreateRowParams;
 use collab_database::user::{
-  make_workspace_database_id, CollabFuture, DatabaseCollabService, RowRelationChange,
-  RowRelationUpdateReceiver, WorkspaceDatabase,
+  make_workspace_database_id, CollabFuture, CollabObjectUpdate, CollabObjectUpdateByOid,
+  DatabaseCollabService, RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
 };
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -48,11 +48,18 @@ pub fn random_uid() -> i64 {
 pub struct TestUserDatabaseCollabBuilderImpl();
 
 impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
-  fn get_collab_updates(
+  fn get_collab_update(
     &self,
     _object_id: &str,
-  ) -> CollabFuture<Result<Vec<Vec<u8>>, DatabaseError>> {
+  ) -> CollabFuture<Result<CollabObjectUpdate, DatabaseError>> {
     Box::pin(async move { Ok(vec![]) })
+  }
+
+  fn batch_get_collab_update(
+    &self,
+    _object_ids: Vec<String>,
+  ) -> CollabFuture<Result<CollabObjectUpdateByOid, DatabaseError>> {
+    Box::pin(async move { Ok(CollabObjectUpdateByOid::default()) })
   }
 
   fn build_collab_with_config(
