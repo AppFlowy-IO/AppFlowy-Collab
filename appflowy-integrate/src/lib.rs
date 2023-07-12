@@ -1,5 +1,6 @@
 pub use collab::core::collab::MutexCollab;
 pub use collab::preclude::Snapshot;
+pub use collab_persistence::doc::YrsDocAction;
 pub use collab_persistence::error::PersistenceError;
 pub use collab_persistence::kv::rocks_kv::RocksCollabDB;
 pub use collab_persistence::snapshot::CollabSnapshot;
