@@ -83,6 +83,13 @@ impl Block {
     });
   }
 
+  pub fn close_rows(&self, row_ids: &[RowId]) {
+    let mut cache_guard = self.cache.lock();
+    for row_id in row_ids {
+      cache_guard.pop(row_id);
+    }
+  }
+
   pub fn create_rows<T: Into<Row>>(&self, rows: Vec<T>) -> Vec<RowOrder> {
     let mut row_orders: Vec<RowOrder> = vec![];
     for row in rows.into_iter() {

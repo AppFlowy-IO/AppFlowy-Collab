@@ -17,6 +17,7 @@ use parking_lot::RwLock;
 use crate::blocks::{Block, BlockEvent};
 use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
 use crate::error::DatabaseError;
+use crate::rows::RowId;
 use crate::user::db_record::{DatabaseArray, DatabaseRecord};
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 
@@ -256,7 +257,15 @@ impl WorkspaceDatabase {
 
   /// Close the database with the given database id.
   pub fn close_database(&self, database_id: &str) {
-    self.open_handlers.write().remove(database_id);
+    if let Some(a) = self.open_handlers.write().remove(database_id) {
+      let row_ids: Vec<RowId> = a
+        .lock()
+        .get_inline_row_orders()
+        .into_iter()
+        .map(|row_order| row_order.id)
+        .collect();
+      self.block.close_rows(&row_ids);
+    }
   }
 
   /// Return all the database records.

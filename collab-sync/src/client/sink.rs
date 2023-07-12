@@ -100,7 +100,6 @@ where
       interval_runner_stop_tx = Some(tx);
       spawn(IntervalRunner::new(*duration).run(weak_notifier, rx));
     }
-
     Self {
       sender,
       pending_msgs,
@@ -243,7 +242,7 @@ where
           let _ = self.state_notifier.send(SinkState::Syncing);
         }
         let mut sender = self.sender.lock().await;
-        tracing::trace!("[🦀Collab]: {}", collab_msg);
+        tracing::trace!("[🦀Collab]: sync {}", collab_msg);
         sender
           .send(collab_msg)
           .await

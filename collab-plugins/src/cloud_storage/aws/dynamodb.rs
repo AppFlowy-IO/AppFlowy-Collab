@@ -104,6 +104,10 @@ struct AWSCollabCloudStorageImpl {
 
 #[async_trait]
 impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
+  fn is_enable(&self) -> bool {
+    true
+  }
+
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, Error> {
     Ok(aws_get_all_updates(&self.client, &self.table_name, object_id).await)
   }
