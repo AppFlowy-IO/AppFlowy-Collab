@@ -739,6 +739,10 @@ impl MutexCollab {
     Ok(MutexCollab(Arc::new(Mutex::new(collab))))
   }
 
+  pub fn from_collab(collab: Collab) -> Self {
+    MutexCollab(Arc::new(Mutex::new(collab)))
+  }
+
   pub fn to_json_value(&self) -> JsonValue {
     self.0.lock().to_json_value()
   }
