@@ -50,7 +50,7 @@ impl SupabaseDBPlugin {
     let is_first_sync_done = Arc::new(AtomicBool::new(false));
 
     let config = SinkConfig::new()
-      .with_timeout(15)
+      .with_timeout(10)
       .with_strategy(SinkStrategy::FixInterval(Duration::from_secs(
         sync_per_secs,
       )));

@@ -145,7 +145,7 @@ impl AppFlowyCollabBuilder {
             uid,
             collab_object,
             Arc::downgrade(&collab),
-            2,
+            1,
             remote_collab_storage,
             local_collab_storage,
           );
