@@ -37,6 +37,7 @@ where
   ) -> Result<(), PersistenceError> {
     if self.is_exist(uid, object_id) {
       tracing::warn!("🟡{:?} already exist", object_id);
+      return Err(PersistenceError::DocumentAlreadyExist);
     }
     let doc_id = get_or_create_did(uid, self, object_id.as_ref())?;
     tracing::trace!(
