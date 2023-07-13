@@ -33,7 +33,7 @@ async fn create_child_views_test() {
     value,
     json!({
       "current_view": "",
-      "current_workspace": "w1",
+      "current_workspace_id": "w1",
       "views": [
         {
           "children": {

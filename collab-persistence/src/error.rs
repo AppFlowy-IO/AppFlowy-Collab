@@ -14,6 +14,9 @@ pub enum PersistenceError {
   #[error("The document is not exist")]
   DocumentNotExist,
 
+  #[error("The document already exist")]
+  DocumentAlreadyExist,
+
   #[error(transparent)]
   Yrs(#[from] lib0::error::Error),
 

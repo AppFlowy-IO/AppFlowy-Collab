@@ -5,8 +5,8 @@ use yrs::updates::encoder::Encode;
 use yrs::{ReadTxn, StateVector, TransactionMut, Update};
 
 use crate::keys::{
-  doc_name_from_key, make_doc_end_key, make_doc_id_key, make_doc_start_key, make_doc_state_key,
-  make_doc_update_key, make_state_vector_key, Clock, DocID, Key, DOC_SPACE, DOC_SPACE_OBJECT,
+  make_doc_end_key, make_doc_id_key, make_doc_start_key, make_doc_state_key, make_doc_update_key,
+  make_state_vector_key, oid_from_key, Clock, DocID, Key, DOC_SPACE, DOC_SPACE_OBJECT,
   DOC_SPACE_OBJECT_KEY,
 };
 use crate::kv::KVEntry;
@@ -37,6 +37,7 @@ where
   ) -> Result<(), PersistenceError> {
     if self.is_exist(uid, object_id) {
       tracing::warn!("🟡{:?} already exist", object_id);
+      return Err(PersistenceError::DocumentAlreadyExist);
     }
     let doc_id = get_or_create_did(uid, self, object_id.as_ref())?;
     tracing::trace!(
@@ -258,7 +259,7 @@ where
     if let Some(doc_id) = get_doc_id(uid, self, object_id) {
       let start = make_doc_update_key(doc_id, 0);
       let end = make_doc_update_key(doc_id, Clock::MAX);
-      let range = self.range(start.as_ref()..=end.as_ref())?;
+      let range = self.range(start.as_ref()..end.as_ref())?;
       let mut updates = vec![];
       for update in range {
         updates.push(update.value().to_vec());
@@ -300,12 +301,12 @@ where
 
   fn get_all_docs(
     &self,
-  ) -> Result<NameIter<<Self as KVStore<'a>>::Range, <Self as KVStore<'a>>::Entry>, PersistenceError>
+  ) -> Result<OIDIter<<Self as KVStore<'a>>::Range, <Self as KVStore<'a>>::Entry>, PersistenceError>
   {
     let from = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT]);
     let to = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT_KEY]);
     let iter = self.range(from.as_ref()..to.as_ref())?;
-    Ok(NameIter { iter })
+    Ok(OIDIter { iter })
   }
 
   /// Return all the updates for the given document
@@ -384,7 +385,7 @@ where
   get_id_for_key(store, key)
 }
 
-pub struct NameIter<I, E>
+pub struct OIDIter<I, E>
 where
   I: Iterator<Item = E>,
   E: KVEntry,
@@ -392,7 +393,7 @@ where
   iter: I,
 }
 
-impl<I, E> Iterator for NameIter<I, E>
+impl<I, E> Iterator for OIDIter<I, E>
 where
   I: Iterator<Item = E>,
   E: KVEntry,
@@ -401,7 +402,7 @@ where
 
   fn next(&mut self) -> Option<Self::Item> {
     let entry = self.iter.next()?;
-    let content = doc_name_from_key(entry.key());
+    let content = oid_from_key(entry.key());
     Some(String::from_utf8_lossy(content).to_string())
   }
 }

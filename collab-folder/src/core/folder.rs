@@ -99,7 +99,7 @@ impl Folder {
     }
 
     Some(FolderData {
-      current_workspace,
+      current_workspace_id: current_workspace,
       current_view,
       workspaces,
       views,
@@ -463,7 +463,7 @@ fn create_folder(
           views.insert_view_with_txn(txn, view);
         }
 
-        meta.insert_str_with_txn(txn, CURRENT_WORKSPACE, folder_data.current_workspace);
+        meta.insert_str_with_txn(txn, CURRENT_WORKSPACE, folder_data.current_workspace_id);
         meta.insert_str_with_txn(txn, CURRENT_VIEW, folder_data.current_view);
       }
 
