@@ -3,8 +3,8 @@ use serde_json::json;
 
 use crate::util::{create_folder, make_test_view};
 
-#[test]
-fn folder_json_serde() {
+#[tokio::test]
+async fn folder_json_serde() {
   let folder_test = create_folder("1");
   assert_json_diff::assert_json_eq!(
     json!({
@@ -18,8 +18,8 @@ fn folder_json_serde() {
   );
 }
 
-#[test]
-fn workspace_json_serde() {
+#[tokio::test]
+async fn workspace_json_serde() {
   let folder_test = create_folder("1");
   let belongings = RepeatedViewIdentifier {
     items: vec![
@@ -62,8 +62,8 @@ fn workspace_json_serde() {
   );
 }
 
-#[test]
-fn view_json_serde() {
+#[tokio::test]
+async fn view_json_serde() {
   let folder_test = create_folder("1");
   let belongings = RepeatedViewIdentifier {
     items: vec![
@@ -130,8 +130,8 @@ fn view_json_serde() {
   );
 }
 
-#[test]
-fn child_view_json_serde() {
+#[tokio::test]
+async fn child_view_json_serde() {
   let folder_test = create_folder("1");
   let belongings = RepeatedViewIdentifier {
     items: vec![

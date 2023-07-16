@@ -71,6 +71,15 @@ pub struct RowMeta {
 }
 
 impl RowMeta {
+  pub(crate) fn empty(row_id: Uuid) -> Self {
+    Self {
+      row_id: row_id.to_string(),
+      document_id: meta_id_from_row_id(&row_id, RowMetaKey::DocumentId),
+      icon_url: None,
+      cover_url: None,
+    }
+  }
+
   pub(crate) fn from_map_ref<T: ReadTxn>(txn: &T, row_id: &Uuid, map_ref: &MapRef) -> Self {
     Self {
       row_id: row_id.to_string(),

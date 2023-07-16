@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -6,7 +7,9 @@ use collab::core::any_map::AnyMapExtension;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::{SnapshotState, SyncState};
 use collab::preclude::{JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+pub use collab_persistence::doc::YrsDocAction;
 use nanoid::nanoid;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 pub use tokio_stream::wrappers::WatchStream;
 
@@ -18,7 +21,7 @@ use crate::meta::MetaMap;
 use crate::rows::{
   CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowId, RowMeta, RowMetaUpdate, RowUpdate,
 };
-use crate::user::DatabaseCollabBuilder;
+use crate::user::DatabaseCollabService;
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
   FieldOrder, FilterMap, GroupSettingMap, LayoutSetting, RowOrder, SortMap, ViewDescription,
@@ -44,7 +47,7 @@ const METAS: &str = "metas";
 pub struct DatabaseContext {
   pub collab: Arc<MutexCollab>,
   pub block: Block,
-  pub collab_builder: Arc<dyn DatabaseCollabBuilder>,
+  pub collab_builder: Arc<dyn DatabaseCollabService>,
 }
 
 impl Database {
@@ -260,7 +263,7 @@ impl Database {
       });
       let row = self.block.get_row(row_id);
       self.block.delete_row(row_id);
-      row
+      Some(row)
     })
   }
 
@@ -298,7 +301,7 @@ impl Database {
   }
 
   /// Return the [Row] with the given row id.
-  pub fn get_row(&self, row_id: &RowId) -> Option<Row> {
+  pub fn get_row(&self, row_id: &RowId) -> Row {
     self.block.get_row(row_id)
   }
 
@@ -775,18 +778,15 @@ impl Database {
 
   /// Duplicate the row, and insert it after the original row.
   pub fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
-    if let Some(row) = self.block.get_row(row_id) {
-      Some(CreateRowParams {
-        id: gen_row_id(),
-        cells: row.cells,
-        height: row.height,
-        visibility: row.visibility,
-        prev_row_id: Some(row.id),
-        timestamp: timestamp(),
-      })
-    } else {
-      None
-    }
+    let row = self.block.get_row(row_id);
+    Some(CreateRowParams {
+      id: gen_row_id(),
+      cells: row.cells,
+      height: row.height,
+      visibility: row.visibility,
+      prev_row_id: Some(row.id),
+      timestamp: timestamp(),
+    })
   }
 
   pub fn duplicate_field(
@@ -862,6 +862,13 @@ impl Database {
     self.get_rows_for_view_with_txn(txn, &inline_view_id)
   }
 
+  pub fn get_inline_row_orders(&self) -> Vec<RowOrder> {
+    let collab = self.inner.lock();
+    let txn = collab.transact();
+    let inline_view_id = self.get_inline_view_id_with_txn(&txn);
+    self.views.get_row_orders_with_txn(&txn, &inline_view_id)
+  }
+
   pub fn set_inline_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
     tracing::trace!("Set inline view id: {}", view_id);
     self.metas.set_inline_view_with_txn(txn, view_id);
@@ -909,13 +916,6 @@ impl Database {
 
 pub fn gen_database_id() -> String {
   uuid::Uuid::new_v4().to_string()
-}
-
-pub fn gen_row_document_id(row_id: &str) -> Result<String, DatabaseError> {
-  let row_id = uuid::Uuid::parse_str(row_id)?;
-  let mut bytes = row_id.as_bytes().to_vec();
-  bytes[0] = 0x01;
-  Ok(uuid::Uuid::from_slice(bytes.as_slice())?.to_string())
 }
 
 pub fn gen_database_view_id() -> String {
@@ -979,3 +979,23 @@ impl DatabaseData {
     Ok(database)
   }
 }
+
+#[derive(Clone)]
+pub struct MutexDatabase(Arc<Mutex<Database>>);
+
+impl MutexDatabase {
+  pub fn new(inner: Database) -> Self {
+    Self(Arc::new(Mutex::new(inner)))
+  }
+}
+
+impl Deref for MutexDatabase {
+  type Target = Arc<Mutex<Database>>;
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+unsafe impl Sync for MutexDatabase {}
+
+unsafe impl Send for MutexDatabase {}

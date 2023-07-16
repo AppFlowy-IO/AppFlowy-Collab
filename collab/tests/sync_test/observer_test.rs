@@ -1,14 +1,14 @@
-use parking_lot::RwLock;
 use std::sync::Arc;
-use yrs::types::{Change, ToJson};
-use yrs::updates::decoder::Decode;
 
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::MapRefExtension;
+use parking_lot::RwLock;
+use yrs::types::{Change, ToJson};
+use yrs::updates::decoder::Decode;
 use yrs::{Array, Doc, Map, Observable, ReadTxn, StateVector, Transact, Update};
 
-#[test]
-fn array_observer_test() {
+#[tokio::test]
+async fn array_observer_test() {
   let doc1 = Doc::with_client_id(1);
   let block_1 = doc1.get_or_insert_array("blocks");
   let mut txn = doc1.transact_mut();
@@ -54,9 +54,9 @@ fn array_observer_test() {
   // remove: 1
 }
 
-#[test]
-fn apply_update_test() {
-  let doc1 = Doc::with_client_id(1);
+#[tokio::test]
+async fn apply_update_test() {
+  let doc1 = Doc::new();
   let updates = Arc::new(RwLock::new(vec![]));
 
   let cloned_updates = updates.clone();

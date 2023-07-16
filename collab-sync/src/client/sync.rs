@@ -92,6 +92,10 @@ where
       self.sink.notify();
     }
   }
+
+  pub fn clear(&self) {
+    self.sink.remove_all_pending_msgs();
+  }
 }
 
 fn doc_init_state<P: CollabSyncProtocol>(awareness: &Awareness, protocol: &P) -> Option<Vec<u8>> {

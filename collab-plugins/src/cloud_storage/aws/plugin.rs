@@ -10,7 +10,6 @@ use parking_lot::RwLock;
 use tokio_retry::strategy::FixedInterval;
 use tokio_retry::{Action, Condition, RetryIf};
 use y_sync::awareness::Awareness;
-use yrs::Transaction;
 
 use crate::cloud_storage::aws::{AWSDynamoDB, DEFAULT_TABLE_NAME};
 
@@ -111,7 +110,7 @@ impl AWSDynamoDBPlugin {
 }
 
 impl CollabPlugin for AWSDynamoDBPlugin {
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
     if matches!(&*self.state.read(), LoadingState::NotLoaded) {
       *self.state.write() = LoadingState::Loading;
       self.init_aws_dynamodb();
@@ -157,6 +156,7 @@ impl Action for AwsDynamodbConnectAction {
     let sync_per_secs = self.sync_per_secs;
     Box::pin(async move {
       AWSDynamoDB::new_with_table_name(
+        1,
         cloned_object_id,
         cloned_table_name,
         sync_per_secs,

@@ -1,14 +1,16 @@
-use dotenv::dotenv;
 use std::sync::Arc;
 use std::time::Duration;
+
+use collab_plugins::cloud_storage::aws::is_enable_aws_dynamodb;
+use serde_json::{json, Map, Value};
+use tokio::sync::RwLock;
+
+use dotenv::dotenv;
+use nanoid::nanoid;
 
 use crate::cloud_storage::aws::script::TestScript::*;
 use crate::cloud_storage::aws::script::{make_id, AWSStorageTest};
 use crate::util::generate_random_string;
-use collab_plugins::cloud_storage::aws::is_enable_aws_dynamodb;
-use nanoid::nanoid;
-use serde_json::{json, Map, Value};
-use tokio::sync::RwLock;
 
 /// ⚠️run this test, it will alter the remote table
 #[tokio::test]
@@ -18,31 +20,32 @@ async fn collab_with_aws_plugin_test() {
     return;
   }
   let object_id = nanoid!(5);
-  let mut test = AWSStorageTest::new();
+  let uid = 1;
+  let mut test = AWSStorageTest::new(uid);
   println!("object_id: {}", object_id);
   test
     .run_scripts(vec![
       CreateCollab {
-        uid: 1,
+        uid,
         object_id: object_id.clone(),
         sync_per_secs: 1,
       },
       ModifyCollab {
-        uid: 1,
+        uid,
         object_id: object_id.clone(),
         f: Box::new(|collab| {
           collab.insert("123", "abc");
         }),
       },
       ModifyCollab {
-        uid: 1,
+        uid,
         object_id: object_id.clone(),
         f: Box::new(|collab| {
           collab.insert("456", "efg");
         }),
       },
       ModifyCollab {
-        uid: 1,
+        uid,
         object_id: object_id.clone(),
         f: Box::new(|collab| {
           collab.insert("789", "hij");
@@ -50,7 +53,7 @@ async fn collab_with_aws_plugin_test() {
       },
       Wait { secs: 6 },
       AssertLocal {
-        uid: 1,
+        uid,
         object_id: object_id.clone(),
         expected: json!( {
           "123": "abc",
@@ -78,10 +81,11 @@ async fn single_client_edit_aws_doc_10_times_test() {
     return;
   }
   let object_id = nanoid!(5);
-  let mut test = AWSStorageTest::new();
+  let uid = 1;
+  let mut test = AWSStorageTest::new(uid);
   test
     .run_scripts(vec![CreateCollab {
-      uid: 1,
+      uid,
       object_id: object_id.clone(),
       sync_per_secs: 1,
     }])
@@ -93,7 +97,7 @@ async fn single_client_edit_aws_doc_10_times_test() {
     map.insert(key.clone(), Value::String(value.clone()));
     test
       .run_scripts(vec![ModifyCollab {
-        uid: 1,
+        uid,
         object_id: object_id.clone(),
         f: Box::new(move |collab| {
           collab.insert(&key, value);
@@ -105,7 +109,7 @@ async fn single_client_edit_aws_doc_10_times_test() {
   test
     .run_scripts(vec![
       AssertLocal {
-        uid: 1,
+        uid,
         object_id: object_id.clone(),
         expected: Value::Object(map.clone()),
       },
@@ -126,13 +130,14 @@ async fn multi_clients_edit_aws_doc_10_times_test() {
     return;
   }
   let object_id = nanoid!(5);
-  let test = Arc::new(RwLock::new(AWSStorageTest::new()));
+  let uid = 1;
+  let test = Arc::new(RwLock::new(AWSStorageTest::new(uid)));
   test
     .write()
     .await
     .run_scripts(vec![
       CreateCollab {
-        uid: 1,
+        uid,
         object_id: object_id.clone(),
         sync_per_secs: 1,
       },

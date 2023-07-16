@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use anyhow::Error;
 use async_trait::async_trait;
@@ -29,7 +29,8 @@ pub struct RemoteCollab {
   object: CollabObject,
   collab: Arc<MutexCollab>,
   storage: Arc<dyn RemoteCollabStorage>,
-  /// The [CollabSink] is used to send the updates to the remote.
+  /// The [CollabSink] is used to queue the [Message] and continuously try to send them
+  /// to the remote via the [RemoteCollabStorage].
   sink: Arc<CollabSink<TokioUnboundedSink<Message>, Message>>,
   /// It continuously receive the updates from the remote.
   sync_state: Arc<watch::Sender<SyncState>>,
@@ -55,11 +56,11 @@ impl RemoteCollab {
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
     let (notifier, notifier_rx) = watch::channel(false);
-    let (state_tx, sink_state_rx) = watch::channel(SinkState::Init);
+    let (sync_state_tx, sink_state_rx) = watch::channel(SinkState::Init);
     let sink = Arc::new(CollabSink::new(
       TokioUnboundedSink(sink),
       notifier,
-      state_tx,
+      sync_state_tx,
       RngMsgIdCounter::new(),
       config,
     ));
@@ -78,15 +79,25 @@ impl RemoteCollab {
             SinkState::Finished => {
               let _ = sync_state.send(SyncState::SyncFinished);
             },
-            SinkState::Init => {},
+            SinkState::Init => {
+              let _ = sync_state.send(SyncState::SyncInitStart);
+            },
           }
         }
       }
     });
 
+    // Spawn a task to receive updates from the [CollabSink] and send updates to
+    // the remote storage.
     spawn(async move {
       while let Some(message) = stream.recv().await {
         if let Some(storage) = weak_storage.upgrade() {
+          if !storage.is_enable() {
+            // If the storage is not enable, it will wait for 300ms and try again.
+            // Return the time slice to the tokio scheduler.
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            continue;
+          }
           let is_init_msg = message.is_init_msg();
           match message.split() {
             Ok((object, msg_id, payload)) => {
@@ -122,6 +133,7 @@ impl RemoteCollab {
       }
     });
 
+    // Spawn a task that boost the [CollabSink]
     spawn(CollabSinkRunner::run(Arc::downgrade(&sink), notifier_rx));
     Self {
       object,
@@ -139,20 +151,14 @@ impl RemoteCollab {
   /// Return the update of the remote collab.
   /// If the remote collab contains any updates, it will return None.
   /// Otherwise, it will merge the updates into one and return the merged update.
-  pub async fn sync(&self, local_collab: Arc<MutexCollab>) -> Option<Vec<u8>> {
-    let mut remote_update = None;
+  pub async fn sync(&self, local_collab: Arc<MutexCollab>) -> Result<Vec<u8>, Error> {
+    let mut remote_update = vec![];
     // It would be better if creating a edge function that calculate the diff between the local and remote.
     // The local only need to send its state vector to the remote. In this way, the local does not need to
     // get all the updates from remote.
     // TODO(nathan): create a edge function to calculate the diff between the local and remote.
-    let remote_updates = match self.storage.get_all_updates(&self.object.id).await {
-      Ok(updates) => updates,
-      Err(e) => {
-        tracing::error!("🔴Failed to get updates: {:?}", e);
-        vec![]
-      },
-    };
-
+    tracing::trace!("Try init sync:{}", self.object);
+    let remote_updates = self.storage.get_all_updates(&self.object.id).await?;
     if !remote_updates.is_empty() {
       let updates = remote_updates
         .iter()
@@ -167,13 +173,13 @@ impl RemoteCollab {
           let mut txn = remote_collab.transact_mut();
           if let Ok(update) = Update::decode_v1(&update) {
             if let Err(e) = txn.try_apply_update(update) {
-              tracing::error!("Failed to apply update: {:?}", e);
+              tracing::error!("apply update failed: {:?}", e);
             }
           } else {
-            tracing::error!("Failed to decode update");
+            tracing::error!("🔴decode update failed");
           }
 
-          remote_update = Some(update);
+          remote_update = update;
         }
       }
 
@@ -216,7 +222,7 @@ impl RemoteCollab {
 
     if let Ok(decode_update) = Update::decode_v1(&encode_update) {
       tracing::trace!(
-        "{}: sync local updates:{}",
+        "{}: sync updates to remote:{}",
         self.object,
         encode_update.len()
       );
@@ -232,7 +238,7 @@ impl RemoteCollab {
         meta: MessageMeta::Init { msg_id },
       });
     }
-    remote_update
+    Ok(remote_update)
   }
 
   pub fn push_update(&self, update: &[u8]) {
@@ -247,6 +253,10 @@ impl RemoteCollab {
         meta: MessageMeta::Update { msg_id },
       });
     }
+  }
+
+  pub fn clear(&self) {
+    self.sink.remove_all_pending_msgs();
   }
 }
 
@@ -276,6 +286,11 @@ pub struct RemoteCollabSnapshot {
 /// Any storage that implements this trait can be used as the remote collab storage.
 #[async_trait]
 pub trait RemoteCollabStorage: Send + Sync + 'static {
+  /// Return true if the remote storage is enabled.
+  /// If the remote storage is disabled, the [RemoteCollab] will not sync the updates to the remote
+  /// storage.
+  fn is_enable(&self) -> bool;
+
   /// Get all the updates of the remote collab.
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, anyhow::Error>;
 
@@ -315,13 +330,22 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
     id: MsgId,
     init_update: Vec<u8>,
   ) -> Result<(), anyhow::Error>;
+
+  /// Subscribe the remote updates.
+  async fn subscribe_remote_updates(&self, object: &CollabObject) -> Option<RemoteUpdateReceiver>;
 }
+
+pub type RemoteUpdateReceiver = tokio::sync::mpsc::Receiver<Vec<u8>>;
 
 #[async_trait]
 impl<T> RemoteCollabStorage for Arc<T>
 where
   T: RemoteCollabStorage,
 {
+  fn is_enable(&self) -> bool {
+    (**self).is_enable()
+  }
+
   async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, Error> {
     (**self).get_all_updates(object_id).await
   }
@@ -357,6 +381,10 @@ where
     init_update: Vec<u8>,
   ) -> Result<(), Error> {
     (**self).send_init_sync(object, id, init_update).await
+  }
+
+  async fn subscribe_remote_updates(&self, object: &CollabObject) -> Option<RemoteUpdateReceiver> {
+    (**self).subscribe_remote_updates(object).await
   }
 }
 
@@ -514,13 +542,15 @@ impl MsgIdCounter for RngMsgIdCounter {
 #[derive(Clone, Debug)]
 pub struct CollabObject {
   pub id: String,
+  pub uid: i64,
   pub name: String,
 }
 
 impl CollabObject {
-  pub fn new(object_id: String) -> Self {
+  pub fn new(uid: i64, object_id: String) -> Self {
     Self {
       id: object_id,
+      uid,
       name: "".to_string(),
     }
   }

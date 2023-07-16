@@ -79,8 +79,12 @@ pub fn make_doc_id_key(uid: &[u8], object_id: &[u8]) -> Key<20> {
   Key(v)
 }
 
-pub fn doc_name_from_key(key: &[u8]) -> &[u8] {
-  &key[2..(key.len() - 1)]
+pub fn oid_from_key(key: &[u8]) -> &[u8] {
+  // [DOC_SPACE, DOC_SPACE_OBJECT] = 2
+  // uid = 8
+  // 2 + 8 = 10
+  // TERMINATOR = 1
+  &key[10..(key.len() - 1)]
 }
 
 // [1,1,  0,0,0,0,0,0,0,0,  0]

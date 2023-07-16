@@ -1,9 +1,10 @@
-use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
-use crate::helper::{TestFieldType, TestFilter, FILTER_CONTENT};
 use collab::core::any_map::AnyMapExtension;
 
-#[test]
-fn create_database_view_with_filter_test() {
+use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
+use crate::helper::{TestFieldType, TestFilter, FILTER_CONTENT};
+
+#[tokio::test]
+async fn create_database_view_with_filter_test() {
   let database_test = create_database_with_two_filters();
   let filter_1 = database_test
     .get_filter::<TestFilter>("v1", "filter_1")
@@ -16,8 +17,8 @@ fn create_database_view_with_filter_test() {
   assert_eq!(filter_2.field_type, TestFieldType::Number);
 }
 
-#[test]
-fn insert_or_update_database_view_filter_test() {
+#[tokio::test]
+async fn insert_or_update_database_view_filter_test() {
   let database_test = create_database_with_two_filters();
   // Update
   database_test.update_filter("v1", "filter_1", |update| {
@@ -47,8 +48,8 @@ fn insert_or_update_database_view_filter_test() {
   assert_eq!(filter_1.content, "Override the existing filter");
 }
 
-#[test]
-fn get_database_view_filter_by_field_id_test() {
+#[tokio::test]
+async fn get_database_view_filter_by_field_id_test() {
   let database_test = create_database_with_two_filters();
   let filter_1 = database_test
     .get_filter_by_field_id::<TestFilter>("v1", "f1")
@@ -56,8 +57,8 @@ fn get_database_view_filter_by_field_id_test() {
   assert_eq!(filter_1.content, "hello filter");
 }
 
-#[test]
-fn insert_database_view_filter_with_occupied_field_id_test() {
+#[tokio::test]
+async fn insert_database_view_filter_with_occupied_field_id_test() {
   let database_test = create_database_with_two_filters();
 
   // The field id "f1" is already occupied by existing filter. So this filter
@@ -79,8 +80,8 @@ fn insert_database_view_filter_with_occupied_field_id_test() {
   assert_eq!(filter_1.content, "hello filter");
 }
 
-#[test]
-fn remove_database_view_filter_test() {
+#[tokio::test]
+async fn remove_database_view_filter_test() {
   let database_test = create_database_with_two_filters();
   database_test.remove_filter("v1", "filter_1");
   let filter_1 = database_test.get_filter::<TestFilter>("v1", "filter_1");

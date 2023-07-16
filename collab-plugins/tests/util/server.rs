@@ -3,22 +3,21 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
+use collab::core::origin::{CollabClient, CollabOrigin};
+use collab::preclude::Collab;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::kv::KVStore;
+use collab_plugins::disk::rocksdb_server::RocksdbServerDiskPlugin;
 use collab_sync::server::{
   CollabBroadcast, CollabGroup, CollabIDGen, CollabId, CollabMsgCodec, CollabSink, CollabStream,
   NonZeroNodeId, COLLAB_ID_LEN,
 };
-use dashmap::DashMap;
 use parking_lot::Mutex;
 use serde_json::Value;
-use tempfile::TempDir;
-
-use collab::core::origin::{CollabClient, CollabOrigin};
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
-
-use collab::preclude::Collab;
-use collab_persistence::kv::KVStore;
-use collab_plugins::disk::rocksdb_server::RocksdbServerDiskPlugin;
 use tokio::net::TcpListener;
+
+use dashmap::DashMap;
+use tempfile::TempDir;
 
 use crate::setup_log;
 
@@ -147,7 +146,7 @@ pub fn make_collab_group(
   let collab = MutexCollab::new(CollabOrigin::Server, object_id, vec![]);
   let plugin = RocksdbServerDiskPlugin::new(collab_id, db).unwrap();
   collab.lock().add_plugin(Arc::new(plugin));
-  collab.initial();
+  collab.lock().initialize();
 
   let broadcast = CollabBroadcast::new(object_id, collab.clone(), 10);
   CollabGroup {

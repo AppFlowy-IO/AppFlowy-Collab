@@ -2,20 +2,20 @@ use collab_database::rows::CreateRowParams;
 use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 
 use crate::user_test::helper::{
-  make_default_grid, random_uid, user_database_test, user_database_with_db,
-  user_database_with_default_data,
+  make_default_grid, random_uid, user_database_test_with_db, user_database_test_with_default_data,
+  workspace_database_test,
 };
 
-#[test]
-fn create_database_test() {
+#[tokio::test]
+async fn create_database_test() {
   let uid = random_uid();
-  let _ = user_database_test(uid);
+  let _ = workspace_database_test(uid);
 }
 
-#[test]
-fn create_multiple_database_test() {
+#[tokio::test]
+async fn create_multiple_database_test() {
   let uid = random_uid();
-  let test = user_database_test(uid);
+  let test = workspace_database_test(uid);
   test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -36,10 +36,10 @@ fn create_multiple_database_test() {
   assert_eq!(all_databases[1].database_id, "d2");
 }
 
-#[test]
-fn delete_database_test() {
+#[tokio::test]
+async fn delete_database_test() {
   let uid = random_uid();
-  let test = user_database_test(uid);
+  let test = workspace_database_test(uid);
   test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -60,10 +60,10 @@ fn delete_database_test() {
   assert_eq!(all_databases[0].database_id, "d2");
 }
 
-#[test]
-fn duplicate_database_inline_view_test() {
+#[tokio::test]
+async fn duplicate_database_inline_view_test() {
   let uid = random_uid();
-  let test = user_database_test(uid);
+  let test = workspace_database_test(uid);
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -72,9 +72,10 @@ fn duplicate_database_inline_view_test() {
     })
     .unwrap();
 
-  let duplicated_database = test.duplicate_database("v1").unwrap();
-  let duplicated_view_id = duplicated_database.get_inline_view_id();
+  let duplicated_database = test.duplicate_database("v1").await.unwrap();
+  let duplicated_view_id = duplicated_database.lock().get_inline_view_id();
   duplicated_database
+    .lock()
     .create_row(CreateRowParams {
       id: 1.into(),
       ..Default::default()
@@ -83,16 +84,17 @@ fn duplicate_database_inline_view_test() {
 
   assert_eq!(
     duplicated_database
+      .lock()
       .get_rows_for_view(&duplicated_view_id)
       .len(),
     1
   );
-  assert!(database.get_rows_for_view("v1").is_empty());
+  assert!(database.lock().get_rows_for_view("v1").is_empty());
 }
 
-#[test]
-fn duplicate_database_view_test() {
-  let test = user_database_test(random_uid());
+#[tokio::test]
+async fn duplicate_database_view_test() {
+  let test = workspace_database_test(random_uid());
 
   // create the database with inline view
   let database = test
@@ -109,11 +111,13 @@ fn duplicate_database_view_test() {
       view_id: "v2".to_string(),
       ..Default::default()
     })
+    .await
     .unwrap();
 
   // Duplicate the linked view.
-  let duplicated_view = database.duplicate_linked_view("v2").unwrap();
+  let duplicated_view = database.lock().duplicate_linked_view("v2").unwrap();
   database
+    .lock()
     .create_row(CreateRowParams {
       id: 1.into(),
       ..Default::default()
@@ -121,13 +125,16 @@ fn duplicate_database_view_test() {
     .unwrap();
 
   // Duplicated database should have the same rows as the original database
-  assert_eq!(database.get_rows_for_view(&duplicated_view.id).len(), 1);
-  assert_eq!(database.get_rows_for_view("v1").len(), 1);
+  assert_eq!(
+    database.lock().get_rows_for_view(&duplicated_view.id).len(),
+    1
+  );
+  assert_eq!(database.lock().get_rows_for_view("v1").len(), 1);
 }
 
-#[test]
-fn delete_database_inline_view_test() {
-  let test = user_database_test(random_uid());
+#[tokio::test]
+async fn delete_database_inline_view_test() {
+  let test = workspace_database_test(random_uid());
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -138,6 +145,7 @@ fn delete_database_inline_view_test() {
 
   for i in 2..5 {
     database
+      .lock()
       .create_linked_view(CreateViewParams {
         database_id: "d1".to_string(),
         view_id: format!("v{}", i),
@@ -146,27 +154,27 @@ fn delete_database_inline_view_test() {
       .unwrap();
   }
 
-  let views = database.views.get_all_views();
+  let views = database.lock().views.get_all_views();
   assert_eq!(views.len(), 4);
 
   // After deleting the inline view, all linked views will be removed
-  test.delete_view("d1", "v1");
-  let views = database.views.get_all_views();
+  test.delete_view("d1", "v1").await;
+  let views = database.lock().views.get_all_views();
   assert_eq!(views.len(), 0);
 }
 
-#[test]
-fn duplicate_database_data_test() {
-  let test = user_database_with_default_data(random_uid());
-  let original = test.get_database_with_view_id("v1").unwrap();
-  let duplicated_data = test.get_database_duplicated_data("v1").unwrap();
+#[tokio::test]
+async fn duplicate_database_data_test() {
+  let test = user_database_test_with_default_data(random_uid());
+  let original = test.get_database_with_view_id("v1").await.unwrap();
+  let duplicated_data = test.get_database_duplicated_data("v1").await.unwrap();
   let duplicate = test.create_database_with_data(duplicated_data).unwrap();
 
-  let duplicated_view_id = &duplicate.get_all_views_description()[0].id;
+  let duplicated_view_id = &duplicate.lock().get_all_views_description()[0].id;
 
   // compare rows
-  let original_rows = original.get_rows_for_view("v1");
-  let duplicate_rows = duplicate.get_rows_for_view(duplicated_view_id);
+  let original_rows = original.lock().get_rows_for_view("v1");
+  let duplicate_rows = duplicate.lock().get_rows_for_view(duplicated_view_id);
   assert_eq!(original_rows.len(), duplicate_rows.len());
   for (index, row) in original_rows.iter().enumerate() {
     assert_eq!(row.visibility, duplicate_rows[index].visibility);
@@ -175,15 +183,18 @@ fn duplicate_database_data_test() {
   }
 
   // compare views
-  let original_views = original.views.get_all_views();
-  let duplicated_views = duplicate.views.get_all_views();
+  let original_views = original.lock().views.get_all_views();
+  let duplicated_views = duplicate.lock().views.get_all_views();
   assert_eq!(original_views.len(), duplicated_views.len());
 
   // compare inline view
-  let original_inline_view_id = original.get_inline_view_id();
-  let original_inline_view = original.get_view(&original_inline_view_id).unwrap();
-  let duplicated_inline_view_id = duplicate.get_inline_view_id();
-  let duplicated_inline_view = duplicate.get_view(&duplicated_inline_view_id).unwrap();
+  let original_inline_view_id = original.lock().get_inline_view_id();
+  let original_inline_view = original.lock().get_view(&original_inline_view_id).unwrap();
+  let duplicated_inline_view_id = duplicate.lock().get_inline_view_id();
+  let duplicated_inline_view = duplicate
+    .lock()
+    .get_view(&duplicated_inline_view_id)
+    .unwrap();
   assert_eq!(
     original_inline_view.row_orders.len(),
     duplicated_inline_view.row_orders.len()
@@ -199,9 +210,9 @@ fn duplicate_database_data_test() {
   assert_eq!(duplicated_inline_view.field_orders[2].id, "f3");
 }
 
-#[test]
-fn get_database_by_view_id_test() {
-  let test = user_database_test(random_uid());
+#[tokio::test]
+async fn get_database_by_view_id_test() {
+  let test = workspace_database_test(random_uid());
   let _database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -216,23 +227,24 @@ fn get_database_by_view_id_test() {
       view_id: "v2".to_string(),
       ..Default::default()
     })
+    .await
     .unwrap();
 
-  let database = test.get_database_with_view_id("v2");
+  let database = test.get_database_with_view_id("v2").await;
   assert!(database.is_some());
 }
 
-#[test]
-fn reopen_database_test() {
+#[tokio::test]
+async fn reopen_database_test() {
   let uid = random_uid();
-  let test = user_database_test(uid);
+  let test = workspace_database_test(uid);
   let params = make_default_grid("v1", "first view");
   let _database = test.create_database(params).unwrap();
   // let expect_json = database.to_json_value();
   let db = test.db.clone();
   drop(test);
 
-  let test = user_database_with_db(uid, db);
-  let database = test.get_database_with_view_id("v1");
-  let _ = database.unwrap().to_json_value();
+  let test = user_database_test_with_db(uid, db);
+  let database = test.get_database_with_view_id("v1").await;
+  let _ = database.unwrap().lock().to_json_value();
 }

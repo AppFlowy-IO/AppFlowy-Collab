@@ -1,9 +1,10 @@
-use crate::user_test::helper::{poll_row_relation_rx, test_timeout, user_database_test};
 use collab::preclude::MapRefExtension;
 use collab_database::user::{RowRelation, RowRelationChange};
 
-#[test]
-fn insert_relation_data_test() {
+use crate::user_test::helper::{poll_row_relation_rx, test_timeout, user_database_test};
+
+#[tokio::test]
+async fn insert_relation_data_test() {
   let test = user_database_test(1);
   let relations = test.relations();
   relations.with_transact_mut(|txn| {
@@ -14,8 +15,8 @@ fn insert_relation_data_test() {
   assert_eq!(relations.get_str_with_txn(&txn, "version").unwrap(), "1.0");
 }
 
-#[test]
-fn restore_relation_data_test() {
+#[tokio::test]
+async fn restore_relation_data_test() {
   let test = user_database_test(1);
   let relations = test.relations();
   relations.with_transact_mut(|txn| {

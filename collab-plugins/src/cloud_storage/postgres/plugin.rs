@@ -1,3 +1,5 @@
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -12,11 +14,13 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::TransactionMutExt;
 use collab_sync::client::sink::{SinkConfig, SinkStrategy};
 use parking_lot::RwLock;
+use tokio_retry::strategy::FibonacciBackoff;
+use tokio_retry::{Action, Retry};
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 use y_sync::awareness::Awareness;
 use yrs::updates::decoder::Decode;
-use yrs::{ReadTxn, StateVector, Transaction, Update};
+use yrs::{ReadTxn, StateVector, Update};
 
 use crate::cloud_storage::remote_collab::{
   should_create_snapshot, CollabObject, RemoteCollab, RemoteCollabStorage,
@@ -46,7 +50,7 @@ impl SupabaseDBPlugin {
     let is_first_sync_done = Arc::new(AtomicBool::new(false));
 
     let config = SinkConfig::new()
-      .with_timeout(15)
+      .with_timeout(10)
       .with_strategy(SinkStrategy::FixInterval(Duration::from_secs(
         sync_per_secs,
       )));
@@ -82,52 +86,27 @@ impl SupabaseDBPlugin {
 }
 
 impl CollabPlugin for SupabaseDBPlugin {
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _txn: &Transaction) {
-    let uid = self.uid;
-    let object = self.object.clone();
-    let weak_remote_collab = Arc::downgrade(&self.remote_collab);
-    let weak_remote_collab_storage = Arc::downgrade(&self.remote_collab_storage);
-    let weak_local_collab = self.local_collab.clone();
-    let weak_local_collab_storage = Arc::downgrade(&self.local_collab_storage);
-    let weak_pending_updates = Arc::downgrade(&self.pending_updates);
-    let weak_is_first_sync_done = Arc::downgrade(&self.is_first_sync_done);
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
+    // TODO(nathan): retry action might take a long time even if the network is ready or enable of
+    // the [RemoteCollabStorage] is true
+    let retry_strategy = FibonacciBackoff::from_millis(2000);
+    let action = InitSyncAction {
+      uid: self.uid,
+      object: self.object.clone(),
+      remote_collab: Arc::downgrade(&self.remote_collab),
+      local_collab: self.local_collab.clone(),
+      local_collab_storage: Arc::downgrade(&self.local_collab_storage),
+      remote_collab_storage: Arc::downgrade(&self.remote_collab_storage),
+      pending_updates: Arc::downgrade(&self.pending_updates),
+      is_first_sync_done: Arc::downgrade(&self.is_first_sync_done),
+    };
 
     tokio::spawn(async move {
-      if let (
-        Some(remote_collab),
-        Some(local_collab),
-        Some(pending_updates),
-        Some(is_first_sync_done),
-      ) = (
-        weak_remote_collab.upgrade(),
-        weak_local_collab.upgrade(),
-        weak_pending_updates.upgrade(),
-        weak_is_first_sync_done.upgrade(),
-      ) {
-        let remote_update = remote_collab
-          .sync(local_collab.clone())
-          .await
-          .unwrap_or_default();
-        create_snapshot_if_need(
-          uid,
-          object,
-          remote_update,
-          Arc::downgrade(&local_collab),
-          weak_local_collab_storage,
-          weak_remote_collab_storage,
-        );
-
-        for update in &*pending_updates.read() {
-          remote_collab.push_update(update);
-        }
-
-        is_first_sync_done.store(true, Ordering::SeqCst)
-      }
+      let _ = Retry::spawn(retry_strategy, action).await;
     });
   }
 
   fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
-    tracing::trace!("Receive local update: {}", update.len());
     if self.is_first_sync_done.load(Ordering::SeqCst) {
       self.remote_collab.push_update(update);
     } else {
@@ -137,6 +116,11 @@ impl CollabPlugin for SupabaseDBPlugin {
 
   fn plugin_type(&self) -> CollabPluginType {
     CollabPluginType::CloudStorage
+  }
+
+  fn reset(&self, _object_id: &str) {
+    self.pending_updates.write().clear();
+    self.remote_collab.clear();
   }
 }
 
@@ -163,7 +147,7 @@ fn create_snapshot_if_need(
           }
         },
         Err(e) => {
-          tracing::error!("Get remote collab state failed: {:?}", e);
+          tracing::error!("🔴fetch remote collab state failed: {:?}", e);
           return;
         },
         _ => {
@@ -215,9 +199,71 @@ fn create_snapshot_if_need(
                 .set_snapshot_state(SnapshotState::DidCreateSnapshot { snapshot_id });
             }
           },
-          Err(e) => tracing::error!("Failed to create remote snapshot: {}", e),
+          Err(e) => tracing::error!("🔴{}", e),
         }
       }
     }
   });
+}
+
+struct InitSyncAction {
+  uid: i64,
+  object: CollabObject,
+  remote_collab: Weak<RemoteCollab>,
+  local_collab: Weak<MutexCollab>,
+  local_collab_storage: Weak<RocksCollabDB>,
+  remote_collab_storage: Weak<dyn RemoteCollabStorage>,
+  pending_updates: Weak<RwLock<Vec<Vec<u8>>>>,
+  is_first_sync_done: Weak<AtomicBool>,
+}
+
+impl Action for InitSyncAction {
+  type Future = Pin<Box<dyn Future<Output = Result<Self::Item, Self::Error>> + Send>>;
+  type Item = ();
+  type Error = anyhow::Error;
+
+  fn run(&mut self) -> Self::Future {
+    let uid = self.uid;
+    let object = self.object.clone();
+    let weak_remote_collab = self.remote_collab.clone();
+    let weak_local_collab = self.local_collab.clone();
+    let weak_local_collab_storage = self.local_collab_storage.clone();
+    let weak_remote_collab_storage = self.remote_collab_storage.clone();
+    let weak_pending_updates = self.pending_updates.clone();
+    let weak_is_first_sync_done = self.is_first_sync_done.clone();
+
+    Box::pin(async move {
+      if let (
+        Some(remote_collab),
+        Some(local_collab),
+        Some(pending_updates),
+        Some(is_first_sync_done),
+      ) = (
+        weak_remote_collab.upgrade(),
+        weak_local_collab.upgrade(),
+        weak_pending_updates.upgrade(),
+        weak_is_first_sync_done.upgrade(),
+      ) {
+        let remote_update = remote_collab.sync(local_collab.clone()).await?;
+
+        create_snapshot_if_need(
+          uid,
+          object,
+          remote_update,
+          Arc::downgrade(&local_collab),
+          weak_local_collab_storage,
+          weak_remote_collab_storage,
+        );
+
+        for update in &*pending_updates.read() {
+          remote_collab.push_update(update);
+        }
+
+        is_first_sync_done.store(true, Ordering::SeqCst);
+        Ok(())
+      } else {
+        Ok(())
+      }
+    })
+  }
 }

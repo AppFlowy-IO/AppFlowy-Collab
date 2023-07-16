@@ -1,5 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
+use std::panic;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::vec::IntoIter;
 
@@ -11,6 +13,7 @@ use y_sync::awareness::Awareness;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
+use yrs::updates::decoder::Decode;
 use yrs::{
   ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, Subscription,
   Transact, Transaction, TransactionMut, UndoManager, Update, UpdateSubscription,
@@ -73,6 +76,23 @@ impl Collab {
   pub fn new<T: AsRef<str>>(uid: i64, object_id: T, plugins: Vec<Arc<dyn CollabPlugin>>) -> Collab {
     let origin = CollabClient::new(uid, "");
     Self::new_with_client(CollabOrigin::Client(origin), object_id, plugins)
+  }
+
+  pub fn new_with_raw_data(
+    origin: CollabOrigin,
+    object_id: &str,
+    collab_raw_data: CollabRawData,
+    plugins: Vec<Arc<dyn CollabPlugin>>,
+  ) -> Result<Self, CollabError> {
+    let collab = Self::new_with_client(origin, object_id, plugins);
+    if !collab_raw_data.is_empty() {
+      let mut txn = collab.transact_mut();
+      for update in collab_raw_data {
+        let decoded_update = Update::decode_v1(&update)?;
+        txn.try_apply_update(decoded_update)?;
+      }
+    }
+    Ok(collab)
   }
 
   pub fn new_with_client<T: AsRef<str>>(
@@ -163,10 +183,12 @@ impl Collab {
     }
   }
 
-  /// When calling this method, the [Collab]'s doc will be initialized with the plugins. The plugin's
-  /// callbacks will be called in the order they are added..
+  /// Upon calling this method, the [Collab]'s document will be initialized with the plugins. The callbacks from the plugins
+  /// will be triggered in the order they were added. The input parameter, [init_sync], indicates whether the
+  /// [Collab] is initialized with local data or remote updates. If true, it suggests that the data doesn't need
+  /// further synchronization with the remote server.
   ///
-  /// This method should be called after all plugins are added.
+  /// This method must be called after all plugins have been added.
   pub fn initialize(&self) {
     if !self.state.is_uninitialized() {
       return;
@@ -194,12 +216,11 @@ impl Collab {
     *self.after_txn_subscription.write() = Some(after_txn_subscription);
 
     {
-      let txn = self.doc.transact();
       self
         .plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id, &txn));
+        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id));
     }
     self.state.set_init_state(InitState::Initialized);
   }
@@ -210,6 +231,14 @@ impl Collab {
 
   pub fn set_snapshot_state(&self, snapshot_state: SnapshotState) {
     self.state.set_snapshot_state(snapshot_state);
+  }
+
+  pub fn reset(&self) {
+    self
+      .plugins
+      .read()
+      .iter()
+      .for_each(|plugin| plugin.reset(&self.object_id));
   }
 
   pub fn observer_data<F>(&mut self, f: F) -> MapSubscription
@@ -551,7 +580,12 @@ pub struct CollabBuilder {
   device_id: String,
   plugins: Vec<Arc<dyn CollabPlugin>>,
   object_id: String,
+  updates: CollabRawData,
 }
+
+/// The raw data of a collab document. It is a list of updates. Each of them can be parsed by
+/// [Update::decode_v1].
+pub type CollabRawData = Vec<Vec<u8>>;
 
 impl CollabBuilder {
   pub fn new<T: AsRef<str>>(uid: i64, object_id: T) -> Self {
@@ -561,6 +595,7 @@ impl CollabBuilder {
       plugins: vec![],
       object_id: object_id.to_string(),
       device_id: "".to_string(),
+      updates: vec![],
     }
   }
 
@@ -580,22 +615,17 @@ impl CollabBuilder {
     self
   }
 
-  pub fn build_with_updates(self, updates: Vec<Update>) -> MutexCollab {
-    let collab = self.build();
-    collab.lock().with_transact_mut(|txn| {
-      for update in updates {
-        txn.apply_update(update);
-      }
-    });
-    collab
+  pub fn with_raw_data(mut self, updates: Vec<Vec<u8>>) -> Self {
+    self.updates = updates;
+    self
   }
 
-  pub fn build(self) -> MutexCollab {
+  pub fn build(self) -> Result<MutexCollab, CollabError> {
     let origin = CollabOrigin::Client(CollabClient {
       uid: self.uid,
       device_id: self.device_id,
     });
-    MutexCollab::new(origin, &self.object_id, self.plugins)
+    MutexCollab::new_with_raw_data(origin, &self.object_id, self.updates, self.plugins)
   }
 }
 
@@ -699,8 +729,18 @@ impl MutexCollab {
     MutexCollab(Arc::new(Mutex::new(collab)))
   }
 
-  pub fn initial(&self) {
-    self.0.lock().initialize();
+  pub fn new_with_raw_data(
+    origin: CollabOrigin,
+    object_id: &str,
+    collab_raw_data: CollabRawData,
+    plugins: Vec<Arc<dyn CollabPlugin>>,
+  ) -> Result<Self, CollabError> {
+    let collab = Collab::new_with_raw_data(origin, object_id, collab_raw_data, plugins)?;
+    Ok(MutexCollab(Arc::new(Mutex::new(collab))))
+  }
+
+  pub fn from_collab(collab: Collab) -> Self {
+    MutexCollab(Arc::new(Mutex::new(collab)))
   }
 
   pub fn to_json_value(&self) -> JsonValue {
@@ -718,3 +758,21 @@ impl Deref for MutexCollab {
 unsafe impl Sync for MutexCollab {}
 
 unsafe impl Send for MutexCollab {}
+
+// Extension trait for `TransactionMut`
+pub trait TransactionMutExt<'doc> {
+  /// Applies an update to the document. If the update is invalid, it will return an error.
+  /// It allows to catch panics from `apply_update`.
+  fn try_apply_update(&mut self, update: Update) -> Result<(), CollabError>;
+}
+
+impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
+  fn try_apply_update(&mut self, update: Update) -> Result<(), CollabError> {
+    match panic::catch_unwind(AssertUnwindSafe(|| {
+      self.apply_update(update);
+    })) {
+      Ok(_) => Ok(()),
+      Err(e) => Err(CollabError::YrsTransactionError(format!("{:?}", e))),
+    }
+  }
+}

@@ -9,8 +9,17 @@ pub enum CollabError {
   #[error("Get write txn failed")]
   AcquiredWriteTxnFail,
 
+  #[error("Try apply update failed: {0}")]
+  YrsTransactionError(String),
+
   #[error("UndoManager is not enabled")]
   UndoManagerNotEnabled,
+
+  #[error(transparent)]
+  DecodeUpdate(#[from] lib0::error::Error),
+
+  #[error(transparent)]
+  YSync(#[from] y_sync::sync::Error),
 
   #[error("Internal failure: {0}")]
   Internal(#[from] Box<dyn std::error::Error + Send + Sync>),

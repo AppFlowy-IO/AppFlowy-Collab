@@ -11,8 +11,8 @@ use crate::util::{
   update_block,
 };
 
-#[test]
-fn create_default_document_test() {
+#[tokio::test]
+async fn create_default_document_test() {
   let doc_id = "1";
   let test = create_document(1, doc_id);
   let (page_id, blocks, children_map) = get_document_data(&test.document);
@@ -39,8 +39,8 @@ fn create_default_document_test() {
   assert!(blocks[first_child_id].external_type.is_none());
 }
 
-#[test]
-fn insert_block_test() {
+#[tokio::test]
+async fn insert_block_test() {
   let doc_id = "1";
   let test = create_document(1, doc_id);
   let (page_id, blocks, children_map) = get_document_data(&test.document);
@@ -104,8 +104,8 @@ fn insert_block_test() {
   assert_eq!(page_children[1].as_str(), &block_id);
 }
 
-#[test]
-fn delete_block_test() {
+#[tokio::test]
+async fn delete_block_test() {
   let doc_id = "1";
   let test = create_document(1, doc_id);
 
@@ -158,8 +158,8 @@ fn delete_block_test() {
   assert_eq!(page_children[0].as_str(), first_child_id);
 }
 
-#[test]
-fn move_block_test() {
+#[tokio::test]
+async fn move_block_test() {
   let doc_id = "1";
   let test = create_document(1, doc_id);
   let (page_id, blocks, children_map) = get_document_data(&test.document);
@@ -212,8 +212,8 @@ fn move_block_test() {
   assert_eq!(page_children[2].as_str(), child_block_id);
 }
 
-#[test]
-fn update_block_data_test() {
+#[tokio::test]
+async fn update_block_data_test() {
   let doc_id = "1";
   let test = create_document(1, doc_id);
   let (page_id, blocks, children_map) = get_document_data(&test.document);
@@ -248,8 +248,8 @@ fn update_block_data_test() {
   assert_eq!(block.data["text"], "hello");
 }
 
-#[test]
-fn apply_actions_test() {
+#[tokio::test]
+async fn apply_actions_test() {
   let doc_id = "1";
   let test = create_document(1, doc_id);
   let document = &test.document;
@@ -307,8 +307,8 @@ fn apply_actions_test() {
   assert_eq!(first_child_children.len(), 0);
 }
 
-#[test]
-fn open_document_test() {
+#[tokio::test]
+async fn open_document_test() {
   let doc_id = "1";
   let mut test = create_document(1, doc_id);
   let document = &mut test.document;

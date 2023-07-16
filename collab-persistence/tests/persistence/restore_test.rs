@@ -7,8 +7,8 @@ use yrs::{Doc, GetString, Text, Transact};
 
 use crate::util::{rocks_db, sled_db};
 
-#[test]
-fn single_thread_test() {
+#[tokio::test]
+async fn single_thread_test() {
   let (path, db) = sled_db();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
@@ -42,8 +42,8 @@ fn single_thread_test() {
   }
 }
 
-#[test]
-fn sled_multiple_thread_test() {
+#[tokio::test]
+async fn sled_multiple_thread_test() {
   let (path, db) = sled_db();
   let mut handles = vec![];
   for i in 0..100 {
@@ -89,8 +89,8 @@ fn sled_multiple_thread_test() {
   }
 }
 
-#[test]
-fn rocks_multiple_thread_test() {
+#[tokio::test]
+async fn rocks_multiple_thread_test() {
   let (path, db) = rocks_db(1);
   let mut handles = vec![];
   for i in 0..100 {

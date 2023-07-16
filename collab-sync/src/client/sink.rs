@@ -78,7 +78,7 @@ where
   pub fn new<C>(
     sink: Sink,
     notifier: watch::Sender<bool>,
-    state: watch::Sender<SinkState>,
+    sync_state_tx: watch::Sender<SinkState>,
     msg_id_counter: C,
     config: SinkConfig,
   ) -> Self
@@ -86,7 +86,7 @@ where
     C: MsgIdCounter,
   {
     let notifier = Arc::new(notifier);
-    let state_notifier = Arc::new(state);
+    let state_notifier = Arc::new(sync_state_tx);
     let sender = Arc::new(Mutex::new(sink));
     let pending_msgs = PendingMsgQueue::new();
     let pending_msgs = Arc::new(parking_lot::Mutex::new(pending_msgs));
@@ -100,7 +100,6 @@ where
       interval_runner_stop_tx = Some(tx);
       spawn(IntervalRunner::new(*duration).run(weak_notifier, rx));
     }
-
     Self {
       sender,
       pending_msgs,
@@ -131,6 +130,10 @@ where
     self.notify();
   }
 
+  pub fn remove_all_pending_msgs(&self) {
+    self.pending_msgs.lock().clear();
+  }
+
   /// Notify the sink to process the next message and mark the current message as done.
   pub async fn ack_msg(&self, msg_id: MsgId) {
     if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {
@@ -156,7 +159,7 @@ where
       .unwrap_or(true);
 
     if !deferrable {
-      return self.try_send_next_msg().await;
+      return self.try_send_msg_immediately().await;
     }
 
     // Check the elapsed time from the last message. Return if the elapsed time is less than
@@ -178,10 +181,10 @@ where
       *self.instant.lock().await = Instant::now();
     }
 
-    self.try_send_next_msg().await
+    self.try_send_msg_immediately().await
   }
 
-  async fn try_send_next_msg(&self) -> Result<(), SyncError> {
+  async fn try_send_msg_immediately(&self) -> Result<(), SyncError> {
     let pending_msg = match self.pending_msgs.try_lock() {
       None => {
         // If acquire the lock failed, try to notify again after 100ms
@@ -239,7 +242,7 @@ where
           let _ = self.state_notifier.send(SinkState::Syncing);
         }
         let mut sender = self.sender.lock().await;
-        tracing::trace!("[🦀Collab]: {}", collab_msg);
+        tracing::trace!("[🦀Collab]: sync {}", collab_msg);
         sender
           .send(collab_msg)
           .await
@@ -297,7 +300,9 @@ impl<Msg> CollabSinkRunner<Msg> {
     Sink: SinkExt<Msg, Error = E> + Send + Sync + Unpin + 'static,
     Msg: CollabSinkMessage,
   {
-    weak_sink.upgrade().unwrap().notify();
+    if let Some(sink) = weak_sink.upgrade() {
+      sink.notify();
+    }
     loop {
       // stops the runner if the notifier was closed.
       if notifier.changed().await.is_err() {

@@ -4,6 +4,7 @@ use std::vec;
 
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::SyncState;
+use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
 use serde_json::Value;
 use tokio_stream::wrappers::WatchStream;
@@ -38,7 +39,7 @@ pub struct Document {
 impl Document {
   /// Create or get a document.
   pub fn open(collab: Arc<MutexCollab>) -> Result<Document, DocumentError> {
-    Ok(Document::open_document_with_collab(collab))
+    Document::open_document_with_collab(collab)
   }
 
   /// Create a new document with the given data.
@@ -47,6 +48,16 @@ impl Document {
     data: DocumentData,
   ) -> Result<Document, DocumentError> {
     Document::create_document(collab, Some(data))
+  }
+
+  pub fn from_updates(
+    origin: CollabOrigin,
+    updates: Vec<Vec<u8>>,
+    document_id: &str,
+    plugins: Vec<Arc<dyn CollabPlugin>>,
+  ) -> Result<Self, DocumentError> {
+    let collab = MutexCollab::new_with_raw_data(origin, document_id, updates, plugins)?;
+    Document::open(Arc::new(collab))
   }
 
   /// open a document and subscribe to the document changes.
@@ -407,17 +418,21 @@ impl Document {
     Ok(document)
   }
 
-  fn open_document_with_collab(collab: Arc<MutexCollab>) -> Self {
+  fn open_document_with_collab(collab: Arc<MutexCollab>) -> Result<Self, DocumentError> {
     let mut collab_guard = collab.lock();
     let (root, block_operation, children_operation, subscription) = {
       let txn = collab_guard.transact();
-      let root = collab_guard.get_map_with_txn(&txn, vec![ROOT]).unwrap();
+      let root = collab_guard
+        .get_map_with_txn(&txn, vec![ROOT])
+        .ok_or_else(|| {
+          DocumentError::Internal(anyhow::anyhow!("Unexpected empty document value"))
+        })?;
       let blocks = collab_guard
         .get_map_with_txn(&txn, vec![ROOT, BLOCKS])
-        .unwrap();
+        .ok_or(DocumentError::BlockIsNotFound)?;
       let children_map = collab_guard
         .get_map_with_txn(&txn, vec![ROOT, META, CHILDREN_MAP])
-        .unwrap();
+        .ok_or_else(|| DocumentError::Internal(anyhow::anyhow!("Unexpected empty child map")))?;
       let children_operation = ChildrenOperation::new(children_map);
       let block_operation = BlockOperation::new(blocks, children_operation.clone());
       let subscription = RootDeepSubscription::default();
@@ -427,12 +442,12 @@ impl Document {
     collab_guard.enable_undo_redo();
     drop(collab_guard);
 
-    Self {
+    Ok(Self {
       inner: collab,
       root,
       block_operation,
       children_operation,
       subscription,
-    }
+    })
   }
 }
