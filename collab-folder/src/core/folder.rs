@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
 use crate::core::favorites::{FavoriteRecord, FavoritesArray};
-use crate::core::folder_observe::{FavoriteChangeSender, TrashChangeSender, ViewChangeSender};
+use crate::core::folder_observe::{TrashChangeSender, ViewChangeSender};
 use crate::core::trash::{TrashArray, TrashRecord};
 use crate::core::{
   subscribe_folder_change, FolderData, TrashInfo, View, ViewIdentifier, ViewRelations, ViewsMap,
@@ -33,7 +33,6 @@ const FAVORITES: &str = "favorites";
 pub struct FolderContext {
   pub view_change_tx: ViewChangeSender,
   pub trash_change_tx: TrashChangeSender,
-  pub favorite_change_tx: FavoriteChangeSender,
 }
 
 /// The folder hierarchy is like this:
@@ -444,11 +443,7 @@ fn create_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
       ));
       let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx.clone());
 
-      let favorites = FavoritesArray::new(
-        favorites_array,
-        views.clone(),
-        context.favorite_change_tx.clone(),
-      );
+      let favorites = FavoritesArray::new(favorites_array, views.clone());
       (
         folder,
         workspaces,
@@ -515,11 +510,7 @@ fn get_folder(collab: Arc<MutexCollab>, context: FolderContext) -> Folder {
 
   let trash = TrashArray::new(trash, views.clone(), context.trash_change_tx.clone());
 
-  let favorites = FavoritesArray::new(
-    favorite_array,
-    views.clone(),
-    context.favorite_change_tx.clone(),
-  );
+  let favorites = FavoritesArray::new(favorite_array, views.clone());
 
   drop(txn);
   drop(collab_guard);

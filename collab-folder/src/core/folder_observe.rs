@@ -28,12 +28,6 @@ pub enum TrashChange {
   DidDeleteTrash { ids: Vec<String> },
 }
 
-#[derive(Debug, Clone)]
-pub enum FavoriteChange {
-  DidFavoriteView { ids: Vec<String> },
-  DidUnFavoriteView { ids: Vec<String> },
-}
-
 pub(crate) fn subscribe_folder_change(
   root: &mut MapRefWrapper,
   _change_tx: ViewChangeSender,
@@ -143,24 +137,6 @@ pub(crate) fn subscribe_trash_change(
           //     .collect::<Vec<String>>();
           // let _ = tx.send(TrashChange::DidCreateTrash { ids: records });
         },
-        Change::Removed(_) => {},
-        Change::Retain(_) => {},
-      }
-    }
-  })
-}
-
-pub type FavoriteChangeSender = broadcast::Sender<FavoriteChange>;
-pub type FavoriteChangeReciever = broadcast::Receiver<FavoriteChange>;
-
-pub(crate) fn subscribe_favorite_change(
-  array: &mut ArrayRefWrapper,
-  _change_tx: FavoriteChangeSender,
-) -> ArraySubscription {
-  array.observe(move |txn, event| {
-    for change in event.delta(txn) {
-      match change {
-        Change::Added(_) => {},
         Change::Removed(_) => {},
         Change::Retain(_) => {},
       }

@@ -1,37 +1,22 @@
-use crate::core::folder_observe::{FavoriteChange, FavoriteChangeSender};
-use crate::core::{subscribe_favorite_change, FavoritesInfo, ViewsMap};
+use crate::core::{FavoritesInfo, ViewsMap};
 use anyhow::bail;
 use collab::preclude::{
-  array::ArrayEvent, lib0Any, Array, ArrayRefWrapper, ReadTxn, Subscription, TransactionMut, Value,
-  YrsValue,
+  lib0Any, Array, ArrayRefWrapper, ReadTxn, Subscription, TransactionMut, Value, YrsValue,
 };
 
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
-use std::sync::Arc;
 
-type ArraySubscription = Subscription<Arc<dyn Fn(&TransactionMut, &ArrayEvent)>>;
 pub struct FavoritesArray {
   container: ArrayRefWrapper,
   view_map: Rc<ViewsMap>,
-  #[allow(dead_code)]
-  change_tx: FavoriteChangeSender,
-  #[allow(dead_code)]
-  subscription: ArraySubscription,
 }
 
 impl FavoritesArray {
-  pub fn new(
-    mut root: ArrayRefWrapper,
-    view_map: Rc<ViewsMap>,
-    change_tx: FavoriteChangeSender,
-  ) -> Self {
-    let subscription = subscribe_favorite_change(&mut root, change_tx.clone());
+  pub fn new(mut root: ArrayRefWrapper, view_map: Rc<ViewsMap>) -> Self {
     Self {
       container: root,
       view_map,
-      change_tx,
-      subscription,
     }
   }
   ///Gets all favorite views in form of FavoriteRecord[]
@@ -77,15 +62,6 @@ impl FavoritesArray {
         self.container.remove_with_txn(txn, pos as u32);
       }
     }
-
-    let record_ids = ids
-      .iter()
-      .map(|id| id.as_ref().to_string())
-      .collect::<Vec<String>>();
-
-    let _ = self
-      .change_tx
-      .send(FavoriteChange::DidUnFavoriteView { ids: record_ids });
   }
 
   /// Adds a favorited record to be used when a view / views is / are favorited
@@ -108,10 +84,6 @@ impl FavoritesArray {
     for favorite_record in favorite_records {
       self.container.push_back(txn, favorite_record);
     }
-
-    let _ = self.change_tx.send(FavoriteChange::DidFavoriteView {
-      ids: favorite_record_ids,
-    });
   }
 
   pub fn clear(&self) {
