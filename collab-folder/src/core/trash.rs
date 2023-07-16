@@ -123,7 +123,9 @@ impl TrashArray {
       let len = self.container.iter(txn).count();
       self.container.remove_range(txn, 0, len as u32);
     });
-    self.change_tx.send(TrashChange::DidDeleteTrash { ids });
+    if let Some(change_tx) = &self.change_tx {
+      let _ = change_tx.send(TrashChange::DidDeleteTrash { ids });
+    }
   }
 }
 
