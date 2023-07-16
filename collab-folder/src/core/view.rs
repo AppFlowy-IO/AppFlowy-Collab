@@ -194,6 +194,7 @@ impl ViewsMap {
           .set_layout(view.layout)
           .set_created_at(view.created_at)
           .set_children(view.children)
+          .is_favorite(view.is_favorite)
           .set_icon_url_if_not_none(view.icon_url)
           .set_cover_url_if_not_none(view.cover_url)
           .done()
