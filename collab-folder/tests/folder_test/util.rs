@@ -4,8 +4,8 @@ use std::sync::{Arc, Once};
 
 use collab::preclude::CollabBuilder;
 use collab_folder::core::{
-  Folder, FolderContext, FolderNotify, RepeatedViewIdentifier, TrashChangeReceiver, View,
-  ViewChangeReceiver, ViewIdentifier, ViewLayout, Workspace, Workspace,
+  Folder, FolderNotify, RepeatedViewIdentifier, TrashChangeReceiver, View, ViewChangeReceiver,
+  ViewIdentifier, ViewLayout, Workspace,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
