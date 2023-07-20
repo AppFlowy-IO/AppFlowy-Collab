@@ -296,10 +296,12 @@ impl Document {
     let new_parent_children_id = new_parent.children;
     let old_parent_children_id = old_parent.children;
 
-    // If the new parent is the same as the old parent, just return.
-    if new_parent_children_id == old_parent_children_id {
-      return Ok(());
-    }
+    // It must delete the block from the old parent.
+    // And this operation must be done before insert the block to the new parent,
+    // because the block may be moved to the same parent.
+    self
+      .children_operation
+      .delete_child_with_txn(txn, &old_parent_children_id, block_id);
 
     // If the prev_id is not found, insert the block to the first position.
     // so the default index is 0.
@@ -311,11 +313,6 @@ impl Document {
       })
       .map(|prev_index| prev_index + 1)
       .unwrap_or(0);
-
-    // Delete the block from the old parent.
-    self
-      .children_operation
-      .delete_child_with_txn(txn, &old_parent_children_id, block_id);
 
     // Insert the block to the new parent.
     self
