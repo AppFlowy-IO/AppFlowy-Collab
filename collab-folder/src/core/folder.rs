@@ -464,7 +464,7 @@ fn create_folder(
       let views = folder.insert_map_with_txn(txn, VIEWS);
       let trash = folder.insert_array_with_txn::<TrashRecord>(txn, TRASH, vec![]);
 
-      let favorites_array = folder.insert_array_with_txn::<FavoriteRecord>(txn, FAVORITES, vec![]);
+      let favorites = folder.insert_array_with_txn::<FavoriteRecord>(txn, FAVORITES, vec![]);
 
       let meta = folder.insert_map_with_txn(txn, META);
 
@@ -487,7 +487,7 @@ fn create_folder(
           .map(|notifier| notifier.trash_change_tx.clone()),
       );
 
-      let favorites = FavoritesArray::new(favorites_array, views.clone());
+      let favorites = FavoritesArray::new(favorites);
 
       if let Some(folder_data) = folder_data {
         for workspace in folder_data.workspaces {
@@ -564,7 +564,7 @@ fn open_folder(collab: Arc<MutexCollab>, notifier: Option<FolderNotify>) -> Fold
     view_relations,
   ));
 
-  let favorites = FavoritesArray::new(favorite_array, views.clone());
+  let favorites = FavoritesArray::new(favorite_array);
 
   let trash = TrashArray::new(
     trash,

@@ -1,23 +1,16 @@
-use crate::core::{FavoritesInfo, ViewsMap};
+use crate::core::FavoritesInfo;
 use anyhow::bail;
-use collab::preclude::{
-  lib0Any, Array, ArrayRefWrapper, ReadTxn, Subscription, TransactionMut, Value, YrsValue,
-};
+use collab::preclude::{lib0Any, Array, ArrayRefWrapper, ReadTxn, TransactionMut, Value, YrsValue};
 
 use serde::{Deserialize, Serialize};
-use std::rc::Rc;
 
 pub struct FavoritesArray {
   container: ArrayRefWrapper,
-  view_map: Rc<ViewsMap>,
 }
 
 impl FavoritesArray {
-  pub fn new(mut root: ArrayRefWrapper, view_map: Rc<ViewsMap>) -> Self {
-    Self {
-      container: root,
-      view_map,
-    }
+  pub fn new(root: ArrayRefWrapper) -> Self {
+    Self { container: root }
   }
   ///Gets all favorite views in form of FavoriteRecord[]
   pub fn get_all_favorites(&self) -> Vec<FavoritesInfo> {
@@ -25,14 +18,7 @@ impl FavoritesArray {
     let items = self.get_all_favorites_with_txn(&txn);
     items
       .into_iter()
-      .map(|item| {
-        let name = self
-          .view_map
-          .get_view_name_with_txn(&txn, &item.id)
-          .unwrap_or_default();
-
-        FavoritesInfo { id: item.id }
-      })
+      .map(|item| FavoritesInfo { id: item.id })
       .collect::<Vec<_>>()
   }
   pub fn get_all_favorites_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<FavoriteRecord> {
@@ -76,11 +62,6 @@ impl FavoritesArray {
     txn: &mut TransactionMut,
     favorite_records: Vec<FavoriteRecord>,
   ) {
-    let favorite_record_ids = favorite_records
-      .iter()
-      .map(|favorite_record| favorite_record.id.clone())
-      .collect::<Vec<String>>();
-
     for favorite_record in favorite_records {
       self.container.push_back(txn, favorite_record);
     }

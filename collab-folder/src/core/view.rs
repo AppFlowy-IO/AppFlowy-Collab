@@ -25,7 +25,7 @@ const VIEW_LAYOUT: &str = "layout";
 const VIEW_CREATE_AT: &str = "created_at";
 const VIEW_ICON_URL: &str = "icon_url";
 const VIEW_COVER_URL: &str = "cover_url";
-const FAVORITE_STATUS: &str = "favorite_status";
+const FAVORITE_STATUS: &str = "is_favorite";
 
 pub struct ViewsMap {
   container: MapRefWrapper,
@@ -198,7 +198,7 @@ impl ViewsMap {
           .set_layout(view.layout)
           .set_created_at(view.created_at)
           .set_children(view.children)
-          .is_favorite(view.is_favorite)
+          .set_favorite(view.is_favorite)
           .set_icon_url_if_not_none(view.icon_url)
           .set_cover_url_if_not_none(view.cover_url)
           .done()
@@ -352,7 +352,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   impl_any_update!(set_layout, set_layout_if_not_none, VIEW_LAYOUT, ViewLayout);
   impl_str_update!(icon_url, set_icon_url_if_not_none, VIEW_ICON_URL);
   impl_str_update!(cover_url, set_cover_url_if_not_none, VIEW_COVER_URL);
-  impl_bool_update!(is_favorite, set_favorite_if_not_none, FAVORITE_STATUS);
+  impl_bool_update!(set_favorite, set_favorite_if_not_none, FAVORITE_STATUS);
   pub fn new(
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
