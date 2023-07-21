@@ -28,6 +28,60 @@ impl ViewRelations {
     })
   }
 
+  /// Disconnect relation between parent_id and view_id
+  pub fn disconnect_child_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    parent_id: &str,
+    view_id: &str,
+  ) -> Option<ViewIdentifier> {
+    let child = ViewIdentifier {
+      id: view_id.to_string(),
+    };
+    if let Some(children) = self.get_children_with_txn(txn, parent_id) {
+      let index = children
+        .get_children_with_txn(txn)
+        .items
+        .iter()
+        .position(|i| i.id == view_id)
+        .map_or_else(|| -1, |v| v as i32);
+      match index {
+        -1 => {
+          tracing::warn!("🟡 The view {} is not in parent {}.", view_id, parent_id);
+        },
+        index => {
+          children.remove_child_with_txn(txn, index as u32);
+        },
+      }
+    }
+    Some(child)
+  }
+
+  /// Build relation between parent_id and view_id, and insert below prev_id
+  pub fn connect_child_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    parent_id: &str,
+    view_id: &str,
+    prev_id: Option<String>,
+  ) {
+    if let Some(children) = self.get_children_with_txn(txn, parent_id) {
+      let prev_index = match prev_id {
+        None => -1,
+        Some(prev_id) => children
+          .get_children_with_txn(txn)
+          .items
+          .iter()
+          .position(|i| i.id == prev_id)
+          .map_or_else(|| -1, |v| v as i32),
+      };
+      let child = ViewIdentifier {
+        id: view_id.to_string(),
+      };
+      children.insert_child_with_txn(txn, (prev_index + 1) as u32, child);
+    }
+  }
+
   pub fn move_child_with_txn(&self, txn: &mut TransactionMut, parent_id: &str, from: u32, to: u32) {
     if let Some(belonging_array) = self.get_children_with_txn(txn, parent_id) {
       belonging_array.move_child_with_txn(txn, from, to);
@@ -124,6 +178,10 @@ impl ChildrenArray {
       .0
       .remove_with_txn(txn, index)
       .and_then(view_identifier_from_value)
+  }
+
+  pub fn insert_child_with_txn(&self, txn: &mut TransactionMut, index: u32, child: ViewIdentifier) {
+    self.0.insert(txn, index, child);
   }
 
   pub fn remove_child(&self, index: u32) {

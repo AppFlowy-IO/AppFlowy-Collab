@@ -206,6 +206,62 @@ impl Folder {
     Some(view)
   }
 
+  /// New function for move view
+  /// Support move view to another parent
+  /// @param view_id: view id
+  /// @param new_parent_id: new parent id
+  /// @param new_prev_id: insert below prev view id, if None, insert first
+  pub fn move_nested_view(
+    &self,
+    view_id: &str,
+    new_parent_id: &str,
+    new_prev_id: Option<String>,
+  ) -> Option<Arc<View>> {
+    tracing::debug!("Move nested view: {}", view_id);
+    let view = self.views.get_view(view_id)?;
+    let current_workspace_id = self.get_current_workspace_id()?;
+    let parent_id = view.parent_view_id.as_str();
+
+    let new_parent_view = self.views.get_view(new_parent_id);
+
+    // if the new parent is not view, it must be workspace
+    // check if new parent is current workspace, unsupported move out current workspace yet
+    if new_parent_id != current_workspace_id && new_parent_view.is_none() {
+      tracing::error!("Unsupported move out current workspace: {}", view_id);
+      return None;
+    }
+
+    self.meta.with_transact_mut(|txn| {
+      // move view out from old parent
+      if parent_id == current_workspace_id {
+        self
+          .workspaces
+          .view_relations
+          .disconnect_child_with_txn(txn, parent_id, view_id);
+      } else {
+        self.views.move_child_out_with_txn(txn, parent_id, view_id);
+      }
+      // move view in new parent and insert below prev view or insert before first
+      if new_parent_id == current_workspace_id {
+        self.workspaces.view_relations.connect_child_with_txn(
+          txn,
+          new_parent_id,
+          view_id,
+          new_prev_id.clone(),
+        );
+      } else {
+        self
+          .views
+          .move_child_in_with_txn(txn, new_parent_id, view_id, new_prev_id.clone());
+      }
+      // update parent
+      self
+        .views
+        .update_view_with_txn(txn, view_id, |update| update.set_bid(new_parent_id).done());
+    });
+    Some(view)
+  }
+
   pub fn set_current_view(&self, view_id: &str) {
     tracing::debug!("Set current view: {}", view_id);
     if view_id.is_empty() {
