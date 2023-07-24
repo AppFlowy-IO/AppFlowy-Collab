@@ -221,7 +221,7 @@ impl Folder {
   ///
   /// * `view_id` - A string slice that holds the id of the view to be moved.
   /// * `new_parent_id` - A string slice that holds the id of the new parent view.
-  /// * `new_prev_id` - An `Option<String>` that holds the id of the view after which the `view_id` should be positioned.
+  /// * `prev_view_id` - An `Option<String>` that holds the id of the view after which the `view_id` should be positioned.
   ///
   pub fn move_nested_view(
     &self,
