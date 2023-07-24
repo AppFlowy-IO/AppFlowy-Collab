@@ -101,11 +101,11 @@ impl ViewsMap {
     txn: &mut TransactionMut,
     parent_id: &str,
     view_id: &str,
-    prev_id: Option<String>,
+    prev_view_id: Option<String>,
   ) {
     self
       .view_relations
-      .associate_parent_child_with_txn(txn, parent_id, view_id, prev_id);
+      .associate_parent_child_with_txn(txn, parent_id, view_id, prev_view_id);
     self.remove_cache_view(parent_id);
   }
 
@@ -270,6 +270,28 @@ impl ViewsMap {
       .with_transact_mut(|txn| self.update_view_with_txn(txn, view_id, f))
   }
 
+  /// Updates a view within a given transaction using a provided function.
+  ///
+  /// This function receives a mutable reference to a transaction, `txn`, a `view_id`,
+  /// and a function `f` which is applied to update the view. The function `f` takes a `ViewUpdate` as an argument
+  /// and should return an updated `Option<View>`.
+  ///
+  /// If the specified view exists and the update function `f` returns a `Some(View)`,
+  /// the function updates the cache with this new view and returns it wrapped in an `Arc<View>`.
+  /// If the update function returns `None`, the function doesn't update the cache and
+  /// returns `None` as well.
+  ///
+  /// # Type Parameters
+  ///
+  /// * `F` - The type of the function used to update the view. The function should accept a `ViewUpdate`
+  ///   and return an `Option<View>`.
+  ///
+  /// # Arguments
+  ///
+  /// * `txn` - A mutable reference to a transaction.
+  /// * `view_id` - A string slice that holds the id of the view to be updated.
+  /// * `f` - A function that will be used to update the view.
+  ///
   pub fn update_view_with_txn<F>(
     &self,
     txn: &mut TransactionMut,

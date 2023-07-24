@@ -28,7 +28,24 @@ impl ViewRelations {
     })
   }
 
-  /// Dissociate the relationship between parent_id and view_id.
+  /// Dissociates a parent-child relationship within a given transaction.
+  ///
+  /// The `ViewIdentifier` object representing the child view is returned, provided the child view
+  /// is successfully dissociated. If the child view is not present within the parent,
+  /// a warning is issued and the function still returns the `ViewIdentifier` object.
+  ///
+  /// # Arguments
+  ///
+  /// * `txn` - A mutable reference to a transaction.
+  /// * `parent_id` - A string slice that holds the id of the parent view.
+  /// * `view_id` - A string slice that holds the id of the child view to be dissociated from the parent.
+  ///
+  /// # Returns
+  ///
+  /// This function returns an `Option<ViewIdentifier>` which represents the child view that was dissociated
+  /// from the parent. If the child view was not originally part of the parent,
+  /// the `Option<ViewIdentifier>` will still be returned, containing the child view's id.
+  ///
   pub fn dissociate_parent_child_with_txn(
     &self,
     txn: &mut TransactionMut,
@@ -56,7 +73,20 @@ impl ViewRelations {
     Some(child)
   }
 
-  // Establish a relationship between the parent_id and view_id, and insert the view below the prev_id.
+  /// Associates a parent-child relationship within a given transaction.
+  ///
+  /// an optional `prev_view_id` as inputs, and attempts to associate a parent view with a child view
+  /// in the context of a transaction. The child view is placed in the list of children after the view identified by `prev_view_id`.
+  ///
+  /// If `prev_view_id` is not provided (`None`), the child view is placed at the start of the list of children.
+  ///
+  /// # Arguments
+  ///
+  /// * `txn` - A mutable reference to a transaction.
+  /// * `parent_id` - A string slice that holds the id of the parent view.
+  /// * `view_id` - A string slice that holds the id of the child view to be associated with the parent.
+  /// * `prev_view_id` - An `Option<String>` that holds the id of the view after which the child view will be placed.
+  ///
   pub fn associate_parent_child_with_txn(
     &self,
     txn: &mut TransactionMut,

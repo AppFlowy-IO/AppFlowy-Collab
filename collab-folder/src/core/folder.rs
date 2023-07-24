@@ -206,17 +206,28 @@ impl Folder {
     Some(view)
   }
 
-  /// New function for moving a view.
-  /// Supports moving a view to another parent.
+  /// Moves a nested view to a new location in the hierarchy.
+  ///
+  /// This function takes the `view_id` of the view to be moved,
+  /// `new_parent_id` of the view under which the `view_id` should be moved,
+  /// and an optional `new_prev_id` to position the `view_id` right after
+  /// this specific view.
+  ///
+  /// If `new_prev_id` is provided, the moved view will be placed right after
+  /// the view corresponding to `new_prev_id` under the `new_parent_id`.
+  /// If `new_prev_id` is `None`, the moved view will become the first child of the new parent.
+  ///
   /// # Arguments
-  /// - `view_id`: The ID of the view to be moved.
-  /// - `new_parent_id`: The ID of the new parent view.
-  /// - `new_prev_id`: The ID of the view below which the moved view will be inserted. If None, the view will be inserted as the first child of the new parent view.
+  ///
+  /// * `view_id` - A string slice that holds the id of the view to be moved.
+  /// * `new_parent_id` - A string slice that holds the id of the new parent view.
+  /// * `new_prev_id` - An `Option<String>` that holds the id of the view after which the `view_id` should be positioned.
+  ///
   pub fn move_nested_view(
     &self,
     view_id: &str,
     new_parent_id: &str,
-    new_prev_id: Option<String>,
+    prev_view_id: Option<String>,
   ) -> Option<Arc<View>> {
     tracing::debug!("Move nested view: {}", view_id);
     let view = self.views.get_view(view_id)?;
@@ -233,7 +244,7 @@ impl Folder {
     }
 
     self.meta.with_transact_mut(|txn| {
-      // Move the view out from its old parent.
+      // dissociate the child from its parent
       if parent_id == current_workspace_id {
         self
           .workspaces
@@ -244,18 +255,19 @@ impl Folder {
           .views
           .dissociate_parent_child_with_txn(txn, parent_id, view_id);
       }
-      // Move the view into the new parent and insert it below the previous view or insert it before the first view.
+      // associate the child with its new parent and place it after the prev_view_id. If the prev_view_id is None,
+      // place it as the first child.
       if new_parent_id == current_workspace_id {
         self
           .workspaces
           .view_relations
-          .associate_parent_child_with_txn(txn, new_parent_id, view_id, new_prev_id.clone());
+          .associate_parent_child_with_txn(txn, new_parent_id, view_id, prev_view_id.clone());
       } else {
         self.views.associate_parent_child_with_txn(
           txn,
           new_parent_id,
           view_id,
-          new_prev_id.clone(),
+          prev_view_id.clone(),
         );
       }
       // Update the view's parent ID.
