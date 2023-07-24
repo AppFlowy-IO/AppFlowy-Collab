@@ -82,7 +82,6 @@ impl ViewsMap {
     })
   }
 
-  /// move child view out
   pub fn move_child_out_with_txn(&self, txn: &mut TransactionMut, parent_id: &str, view_id: &str) {
     self
       .view_relations
@@ -90,7 +89,6 @@ impl ViewsMap {
     self.remove_cache_view(parent_id);
   }
 
-  /// move in child view from another parent
   pub fn move_child_in_with_txn(
     &self,
     txn: &mut TransactionMut,
