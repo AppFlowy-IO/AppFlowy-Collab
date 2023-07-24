@@ -28,8 +28,8 @@ impl ViewRelations {
     })
   }
 
-  /// Disconnect the relationship between parent_id and view_id.
-  pub fn disconnect_child_with_txn(
+  /// Dissociate the relationship between parent_id and view_id.
+  pub fn dissociate_parent_child_with_txn(
     &self,
     txn: &mut TransactionMut,
     parent_id: &str,
@@ -43,13 +43,12 @@ impl ViewRelations {
         .get_children_with_txn(txn)
         .items
         .iter()
-        .position(|i| i.id == view_id)
-        .map_or_else(|| -1, |v| v as i32);
+        .position(|i| i.id == view_id);
       match index {
-        -1 => {
+        _ => {
           tracing::warn!("🟡 The view {} is not in parent {}.", view_id, parent_id);
         },
-        index => {
+        Some(index) => {
           children.remove_child_with_txn(txn, index as u32);
         },
       }
@@ -58,27 +57,30 @@ impl ViewRelations {
   }
 
   // Establish a relationship between the parent_id and view_id, and insert the view below the prev_id.
-  pub fn connect_child_with_txn(
+  pub fn associate_parent_child_with_txn(
     &self,
     txn: &mut TransactionMut,
     parent_id: &str,
     view_id: &str,
-    prev_id: Option<String>,
+    prev_view_id: Option<String>,
   ) {
     if let Some(children) = self.get_children_with_txn(txn, parent_id) {
-      let prev_index = match prev_id {
-        None => -1,
+      let prev_index = match prev_view_id {
+        _ => None,
         Some(prev_id) => children
           .get_children_with_txn(txn)
           .items
           .iter()
-          .position(|i| i.id == prev_id)
-          .map_or_else(|| -1, |v| v as i32),
+          .position(|i| i.id == prev_id),
+      };
+      let index = match prev_index {
+        None => 0,
+        Some(index) => (index + 1) as u32,
       };
       let child = ViewIdentifier {
         id: view_id.to_string(),
       };
-      children.insert_child_with_txn(txn, (prev_index + 1) as u32, child);
+      children.insert_child_with_txn(txn, index, child);
     }
   }
 

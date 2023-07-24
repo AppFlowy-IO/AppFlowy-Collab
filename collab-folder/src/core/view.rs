@@ -64,32 +64,39 @@ impl ViewsMap {
     self.remove_cache_view(parent_id);
   }
 
-  /// Why we did not use move_child?
-  /// Because we need to move a child view from one parent to another parent,
-  /// but the new parent may not be a view, for example, moving from a view to a workspace.
-  pub fn move_child_out(&self, parent_id: &str, view_id: &str) {
+  /// Dissociate the relationship between parent_id and view_id.
+  /// Why don't we use the move method to replace dissociate_parent_child and associate_parent_child?
+  /// Because the views and workspaces are stored in two separate maps, we can't directly move a view from one map to another.
+  /// So, we have to dissociate the relationship between parent_id and view_id, and then associate the relationship between parent_id and view_id.
+  pub fn dissociate_parent_child(&self, parent_id: &str, view_id: &str) {
     self.container.with_transact_mut(|txn| {
-      self.move_child_out_with_txn(txn, parent_id, view_id);
+      self.dissociate_parent_child_with_txn(txn, parent_id, view_id);
     })
   }
 
-  /// Why did we not use move_child?
-  /// Because we need to move a child view from one parent to another parent,
-  /// but the old parent may not be a view, for example, moving a view from a workspace.
-  pub fn move_child_in(&self, parent_id: &str, view_id: &str, prev_id: Option<String>) {
+  /// Establish a relationship between the parent_id and view_id, and insert the view below the prev_id.
+  /// Why don't we use the move method to replace dissociate_parent_child and associate_parent_child?
+  /// Because the view and workspace are stored in two separate maps, we can't directly move the view from one map to another.
+  /// So we have to dissociate the relationship between parent_id and view_id, and then associate the relationship between parent_id and view_id.
+  pub fn associate_parent_child(&self, parent_id: &str, view_id: &str, prev_id: Option<String>) {
     self.container.with_transact_mut(|txn| {
-      self.move_child_in_with_txn(txn, parent_id, view_id, prev_id);
+      self.associate_parent_child_with_txn(txn, parent_id, view_id, prev_id);
     })
   }
 
-  pub fn move_child_out_with_txn(&self, txn: &mut TransactionMut, parent_id: &str, view_id: &str) {
+  pub fn dissociate_parent_child_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    parent_id: &str,
+    view_id: &str,
+  ) {
     self
       .view_relations
-      .disconnect_child_with_txn(txn, parent_id, view_id);
+      .dissociate_parent_child_with_txn(txn, parent_id, view_id);
     self.remove_cache_view(parent_id);
   }
 
-  pub fn move_child_in_with_txn(
+  pub fn associate_parent_child_with_txn(
     &self,
     txn: &mut TransactionMut,
     parent_id: &str,
@@ -98,7 +105,7 @@ impl ViewsMap {
   ) {
     self
       .view_relations
-      .connect_child_with_txn(txn, parent_id, view_id, prev_id);
+      .associate_parent_child_with_txn(txn, parent_id, view_id, prev_id);
     self.remove_cache_view(parent_id);
   }
 

@@ -70,7 +70,7 @@ async fn update_view_test() {
 }
 
 #[tokio::test]
-async fn move_view_out_and_move_view_in_test() {
+async fn dissociate_and_associate_view_test() {
   let workspace_id = "w1";
   let view_1_child_id = "v1_1";
   let view_1_id = "v1";
@@ -89,32 +89,38 @@ async fn move_view_out_and_move_view_in_test() {
   // move out not exist parent view
   folder_test
     .views
-    .move_child_out("not_exist_parent_view", "not_exist_view");
+    .dissociate_parent_child("not_exist_parent_view", "not_exist_view");
 
   // move in not exist parent view
   folder_test
     .views
-    .move_child_in("not_exist_parent_view", "not_exist_view", None);
+    .associate_parent_child("not_exist_parent_view", "not_exist_view", None);
 
   // move out view_1_child from view_2
-  folder_test.views.move_child_out(view_2_id, view_1_child_id);
+  folder_test
+    .views
+    .dissociate_parent_child(view_2_id, view_1_child_id);
   let r_view = folder_test.views.get_view(view_2_id).unwrap();
   assert_eq!(r_view.children.items.iter().len(), 0);
 
-  folder_test.views.move_child_in(view_1_id, view_2_id, None);
+  folder_test
+    .views
+    .associate_parent_child(view_1_id, view_2_id, None);
 
   let r_view = folder_test.views.get_view(view_1_id).unwrap();
   assert_eq!(r_view.children.items.iter().len(), 2);
   assert_eq!(r_view.children.items.get(0).unwrap().id, view_2_id);
   assert_eq!(r_view.children.items.get(1).unwrap().id, view_1_child_id);
 
-  folder_test.views.move_child_out(view_1_id, view_2_id);
+  folder_test
+    .views
+    .dissociate_parent_child(view_1_id, view_2_id);
   let r_view = folder_test.views.get_view(view_1_id).unwrap();
   assert_eq!(r_view.children.items.iter().len(), 1);
 
   folder_test
     .views
-    .move_child_in(view_1_id, view_2_id, Some(view_1_child_id.to_string()));
+    .associate_parent_child(view_1_id, view_2_id, Some(view_1_child_id.to_string()));
 
   let r_view = folder_test.views.get_view(view_1_id).unwrap();
   assert_eq!(r_view.children.items.iter().len(), 2);
@@ -123,7 +129,7 @@ async fn move_view_out_and_move_view_in_test() {
 }
 
 #[tokio::test]
-async fn move_view() {
+async fn move_view_across_parent_test() {
   let workspace_id = "w1";
   let view_1_child_id = "v1_1";
   let view_1_id = "v1";

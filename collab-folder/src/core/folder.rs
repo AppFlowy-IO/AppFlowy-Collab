@@ -227,7 +227,7 @@ impl Folder {
     // If the new parent is not a view, it must be a workspace.
     // Check if the new parent is the current workspace, as moving out of the current workspace is not supported yet.
     if new_parent_id != current_workspace_id && new_parent_view.is_none() {
-      tracing::error!("Unsupported move out current workspace: {}", view_id);
+      tracing::warn!("Unsupported move out current workspace: {}", view_id);
       return None;
     }
 
@@ -237,22 +237,25 @@ impl Folder {
         self
           .workspaces
           .view_relations
-          .disconnect_child_with_txn(txn, parent_id, view_id);
+          .dissociate_parent_child_with_txn(txn, parent_id, view_id);
       } else {
-        self.views.move_child_out_with_txn(txn, parent_id, view_id);
+        self
+          .views
+          .dissociate_parent_child_with_txn(txn, parent_id, view_id);
       }
       // Move the view into the new parent and insert it below the previous view or insert it before the first view.
       if new_parent_id == current_workspace_id {
-        self.workspaces.view_relations.connect_child_with_txn(
+        self
+          .workspaces
+          .view_relations
+          .associate_parent_child_with_txn(txn, new_parent_id, view_id, new_prev_id.clone());
+      } else {
+        self.views.associate_parent_child_with_txn(
           txn,
           new_parent_id,
           view_id,
           new_prev_id.clone(),
         );
-      } else {
-        self
-          .views
-          .move_child_in_with_txn(txn, new_parent_id, view_id, new_prev_id.clone());
       }
       // Update the view's parent ID.
       self
