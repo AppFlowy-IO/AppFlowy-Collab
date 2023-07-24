@@ -45,13 +45,13 @@ impl ViewRelations {
         .iter()
         .position(|i| i.id == view_id);
       match index {
-        _ => {
+        None => {
           tracing::warn!("🟡 The view {} is not in parent {}.", view_id, parent_id);
         },
-        Some(index) => {
-          children.remove_child_with_txn(txn, index as u32);
+        Some(i) => {
+          children.remove_child_with_txn(txn, i as u32);
         },
-      }
+      };
     }
     Some(child)
   }
@@ -66,7 +66,7 @@ impl ViewRelations {
   ) {
     if let Some(children) = self.get_children_with_txn(txn, parent_id) {
       let prev_index = match prev_view_id {
-        _ => None,
+        None => None,
         Some(prev_id) => children
           .get_children_with_txn(txn)
           .items
