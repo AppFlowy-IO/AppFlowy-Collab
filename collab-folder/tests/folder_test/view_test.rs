@@ -136,10 +136,10 @@ async fn move_view() {
   folder_test.insert_view(view_1);
   folder_test.insert_view(view_2);
 
-  // move out current workspace
+  // Move out of the current workspace.
   let res = folder_test.move_nested_view(view_1_child_id, "w2", None);
   assert!(res.is_none());
-  // move view_1_child from view_1 to view_2
+  // Move view_1_child from view_1 to view_2.
   folder_test.move_nested_view(view_1_child_id, view_2_id, None);
   let view_1 = folder_test.views.get_view(view_1_id).unwrap();
   let view_2 = folder_test.views.get_view(view_2_id).unwrap();
@@ -148,7 +148,7 @@ async fn move_view() {
   assert_eq!(view_2.children.items.iter().len(), 1);
   assert_eq!(view_1_child.parent_view_id, view_2_id);
 
-  // move view_1_child from view_2 to current workspace
+  // Move view_1_child from view_2 to current workspace
   folder_test.move_nested_view(view_1_child_id, workspace_id, None);
   let view_1 = folder_test.views.get_view(view_1_id).unwrap();
   let view_2 = folder_test.views.get_view(view_2_id).unwrap();
@@ -163,7 +163,7 @@ async fn move_view() {
     view_1_child_id
   );
 
-  // move view_1_child from 0 to 1 in current workspace
+  // Move view_1_child from position 0 to position 1 in the current workspace.
   folder_test.move_nested_view(view_1_child_id, workspace_id, Some(view_1_id.to_string()));
   let view_1 = folder_test.views.get_view(view_1_id).unwrap();
   let view_2 = folder_test.views.get_view(view_2_id).unwrap();
