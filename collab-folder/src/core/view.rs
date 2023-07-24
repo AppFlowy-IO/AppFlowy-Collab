@@ -64,18 +64,18 @@ impl ViewsMap {
     self.remove_cache_view(parent_id);
   }
 
-  /// why we did not use `move_child`?
-  /// because we need to move child view from one parent to another parent
-  /// but the new parent maybe not view, like move out from view to workspace
+  /// Why we did not use move_child?
+  /// Because we need to move a child view from one parent to another parent,
+  /// but the new parent may not be a view, for example, moving from a view to a workspace.
   pub fn move_child_out(&self, parent_id: &str, view_id: &str) {
     self.container.with_transact_mut(|txn| {
       self.move_child_out_with_txn(txn, parent_id, view_id);
     })
   }
 
-  /// why we did not use `move_child`?
-  /// because we need to move child view from one parent to another parent
-  /// but the old parent maybe not view, like move in view from workspace
+  /// Why did we not use move_child?
+  /// Because we need to move a child view from one parent to another parent,
+  /// but the old parent may not be a view, for example, moving a view from a workspace.
   pub fn move_child_in(&self, parent_id: &str, view_id: &str, prev_id: Option<String>) {
     self.container.with_transact_mut(|txn| {
       self.move_child_in_with_txn(txn, parent_id, view_id, prev_id);

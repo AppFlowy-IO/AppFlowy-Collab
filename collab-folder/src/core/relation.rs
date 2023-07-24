@@ -28,7 +28,7 @@ impl ViewRelations {
     })
   }
 
-  /// Disconnect relation between parent_id and view_id
+  /// Disconnect the relationship between parent_id and view_id.
   pub fn disconnect_child_with_txn(
     &self,
     txn: &mut TransactionMut,
@@ -57,7 +57,7 @@ impl ViewRelations {
     Some(child)
   }
 
-  /// Build relation between parent_id and view_id, and insert below prev_id
+  // Establish a relationship between the parent_id and view_id, and insert the view below the prev_id.
   pub fn connect_child_with_txn(
     &self,
     txn: &mut TransactionMut,

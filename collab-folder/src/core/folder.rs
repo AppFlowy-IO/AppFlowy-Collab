@@ -206,11 +206,11 @@ impl Folder {
     Some(view)
   }
 
-  /// New function for move view
-  /// Support move view to another parent
-  /// @param view_id: view id
-  /// @param new_parent_id: new parent id
-  /// @param new_prev_id: insert below prev view id, if None, insert first
+  /// New function for moving a view.
+  /// Supports moving a view to another parent.
+  /// @param view_id: The ID of the view to be moved.
+  /// @param new_parent_id: The ID of the new parent view.
+  /// @param new_prev_id: The ID of the view below which the moved view will be inserted. If None, the view will be inserted as the first child of the new parent view.
   pub fn move_nested_view(
     &self,
     view_id: &str,
@@ -224,15 +224,15 @@ impl Folder {
 
     let new_parent_view = self.views.get_view(new_parent_id);
 
-    // if the new parent is not view, it must be workspace
-    // check if new parent is current workspace, unsupported move out current workspace yet
+    // If the new parent is not a view, it must be a workspace.
+    // Check if the new parent is the current workspace, as moving out of the current workspace is not supported yet.
     if new_parent_id != current_workspace_id && new_parent_view.is_none() {
       tracing::error!("Unsupported move out current workspace: {}", view_id);
       return None;
     }
 
     self.meta.with_transact_mut(|txn| {
-      // move view out from old parent
+      // Move the view out from its old parent.
       if parent_id == current_workspace_id {
         self
           .workspaces
@@ -241,7 +241,7 @@ impl Folder {
       } else {
         self.views.move_child_out_with_txn(txn, parent_id, view_id);
       }
-      // move view in new parent and insert below prev view or insert before first
+      // Move the view into the new parent and insert it below the previous view or insert it before the first view.
       if new_parent_id == current_workspace_id {
         self.workspaces.view_relations.connect_child_with_txn(
           txn,
@@ -254,7 +254,7 @@ impl Folder {
           .views
           .move_child_in_with_txn(txn, new_parent_id, view_id, new_prev_id.clone());
       }
-      // update parent
+      // Update the view's parent ID.
       self
         .views
         .update_view_with_txn(txn, view_id, |update| update.set_bid(new_parent_id).done());
