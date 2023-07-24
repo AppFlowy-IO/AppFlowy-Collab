@@ -208,9 +208,10 @@ impl Folder {
 
   /// New function for moving a view.
   /// Supports moving a view to another parent.
-  /// @param view_id: The ID of the view to be moved.
-  /// @param new_parent_id: The ID of the new parent view.
-  /// @param new_prev_id: The ID of the view below which the moved view will be inserted. If None, the view will be inserted as the first child of the new parent view.
+  /// # Arguments
+  /// - `view_id`: The ID of the view to be moved.
+  /// - `new_parent_id`: The ID of the new parent view.
+  /// - `new_prev_id`: The ID of the view below which the moved view will be inserted. If None, the view will be inserted as the first child of the new parent view.
   pub fn move_nested_view(
     &self,
     view_id: &str,
