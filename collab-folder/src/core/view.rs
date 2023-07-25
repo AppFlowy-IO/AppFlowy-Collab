@@ -64,6 +64,51 @@ impl ViewsMap {
     self.remove_cache_view(parent_id);
   }
 
+  /// Dissociate the relationship between parent_id and view_id.
+  /// Why don't we use the move method to replace dissociate_parent_child and associate_parent_child?
+  /// Because the views and workspaces are stored in two separate maps, we can't directly move a view from one map to another.
+  /// So, we have to dissociate the relationship between parent_id and view_id, and then associate the relationship between parent_id and view_id.
+  pub fn dissociate_parent_child(&self, parent_id: &str, view_id: &str) {
+    self.container.with_transact_mut(|txn| {
+      self.dissociate_parent_child_with_txn(txn, parent_id, view_id);
+    })
+  }
+
+  /// Establish a relationship between the parent_id and view_id, and insert the view below the prev_id.
+  /// Why don't we use the move method to replace dissociate_parent_child and associate_parent_child?
+  /// Because the view and workspace are stored in two separate maps, we can't directly move the view from one map to another.
+  /// So we have to dissociate the relationship between parent_id and view_id, and then associate the relationship between parent_id and view_id.
+  pub fn associate_parent_child(&self, parent_id: &str, view_id: &str, prev_id: Option<String>) {
+    self.container.with_transact_mut(|txn| {
+      self.associate_parent_child_with_txn(txn, parent_id, view_id, prev_id);
+    })
+  }
+
+  pub fn dissociate_parent_child_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    parent_id: &str,
+    view_id: &str,
+  ) {
+    self
+      .view_relations
+      .dissociate_parent_child_with_txn(txn, parent_id, view_id);
+    self.remove_cache_view(parent_id);
+  }
+
+  pub fn associate_parent_child_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    parent_id: &str,
+    view_id: &str,
+    prev_view_id: Option<String>,
+  ) {
+    self
+      .view_relations
+      .associate_parent_child_with_txn(txn, parent_id, view_id, prev_view_id);
+    self.remove_cache_view(parent_id);
+  }
+
   pub fn remove_child(&self, parent_id: &str, child_index: u32) {
     self.container.with_transact_mut(|txn| {
       if let Some(parent) = self.view_relations.get_children_with_txn(txn, parent_id) {
@@ -220,13 +265,47 @@ impl ViewsMap {
   where
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
-    self.container.with_transact_mut(|txn| {
-      let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-      let update = ViewUpdate::new(view_id, txn, &map_ref, self.view_relations.clone());
-      let view = f(update).map(Arc::new);
-      self.set_cache_view(view.clone());
-      view
-    })
+    self
+      .container
+      .with_transact_mut(|txn| self.update_view_with_txn(txn, view_id, f))
+  }
+
+  /// Updates a view within a given transaction using a provided function.
+  ///
+  /// This function receives a mutable reference to a transaction, `txn`, a `view_id`,
+  /// and a function `f` which is applied to update the view. The function `f` takes a `ViewUpdate` as an argument
+  /// and should return an updated `Option<View>`.
+  ///
+  /// If the specified view exists and the update function `f` returns a `Some(View)`,
+  /// the function updates the cache with this new view and returns it wrapped in an `Arc<View>`.
+  /// If the update function returns `None`, the function doesn't update the cache and
+  /// returns `None` as well.
+  ///
+  /// # Type Parameters
+  ///
+  /// * `F` - The type of the function used to update the view. The function should accept a `ViewUpdate`
+  ///   and return an `Option<View>`.
+  ///
+  /// # Arguments
+  ///
+  /// * `txn` - A mutable reference to a transaction.
+  /// * `view_id` - A string slice that holds the id of the view to be updated.
+  /// * `f` - A function that will be used to update the view.
+  ///
+  pub fn update_view_with_txn<F>(
+    &self,
+    txn: &mut TransactionMut,
+    view_id: &str,
+    f: F,
+  ) -> Option<Arc<View>>
+  where
+    F: FnOnce(ViewUpdate) -> Option<View>,
+  {
+    let map_ref = self.container.get_map_with_txn(txn, view_id)?;
+    let update = ViewUpdate::new(view_id, txn, &map_ref, self.view_relations.clone());
+    let view = f(update).map(Arc::new);
+    self.set_cache_view(view.clone());
+    view
   }
 
   fn set_cache_view(&self, view: Option<Arc<View>>) {

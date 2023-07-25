@@ -28,6 +28,92 @@ impl ViewRelations {
     })
   }
 
+  /// Dissociates a parent-child relationship within a given transaction.
+  ///
+  /// The `ViewIdentifier` object representing the child view is returned, provided the child view
+  /// is successfully dissociated. If the child view is not present within the parent,
+  /// a warning is issued and the function still returns the `ViewIdentifier` object.
+  ///
+  /// # Arguments
+  ///
+  /// * `txn` - A mutable reference to a transaction.
+  /// * `parent_id` - A string slice that holds the id of the parent view.
+  /// * `view_id` - A string slice that holds the id of the child view to be dissociated from the parent.
+  ///
+  /// # Returns
+  ///
+  /// This function returns an `Option<ViewIdentifier>` which represents the child view that was dissociated
+  /// from the parent. If the child view was not originally part of the parent,
+  /// the `Option<ViewIdentifier>` will still be returned, containing the child view's id.
+  ///
+  pub fn dissociate_parent_child_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    parent_id: &str,
+    view_id: &str,
+  ) -> Option<ViewIdentifier> {
+    let child = ViewIdentifier {
+      id: view_id.to_string(),
+    };
+    if let Some(children) = self.get_children_with_txn(txn, parent_id) {
+      let index = children
+        .get_children_with_txn(txn)
+        .items
+        .iter()
+        .position(|i| i.id == view_id);
+      match index {
+        None => {
+          tracing::warn!("🟡 The view {} is not in parent {}.", view_id, parent_id);
+        },
+        Some(i) => {
+          children.remove_child_with_txn(txn, i as u32);
+        },
+      };
+    }
+    Some(child)
+  }
+
+  /// Associates a parent-child relationship within a given transaction.
+  ///
+  /// an optional `prev_view_id` as inputs, and attempts to associate a parent view with a child view
+  /// in the context of a transaction. The child view is placed in the list of children after the view identified by `prev_view_id`.
+  ///
+  /// If `prev_view_id` is not provided (`None`), the child view is placed at the start of the list of children.
+  ///
+  /// # Arguments
+  ///
+  /// * `txn` - A mutable reference to a transaction.
+  /// * `parent_id` - A string slice that holds the id of the parent view.
+  /// * `view_id` - A string slice that holds the id of the child view to be associated with the parent.
+  /// * `prev_view_id` - An `Option<String>` that holds the id of the view after which the child view will be placed.
+  ///
+  pub fn associate_parent_child_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    parent_id: &str,
+    view_id: &str,
+    prev_view_id: Option<String>,
+  ) {
+    if let Some(children) = self.get_children_with_txn(txn, parent_id) {
+      let prev_index = match prev_view_id {
+        None => None,
+        Some(prev_id) => children
+          .get_children_with_txn(txn)
+          .items
+          .iter()
+          .position(|i| i.id == prev_id),
+      };
+      let index = match prev_index {
+        None => 0,
+        Some(index) => (index + 1) as u32,
+      };
+      let child = ViewIdentifier {
+        id: view_id.to_string(),
+      };
+      children.insert_child_with_txn(txn, index, child);
+    }
+  }
+
   pub fn move_child_with_txn(&self, txn: &mut TransactionMut, parent_id: &str, from: u32, to: u32) {
     if let Some(belonging_array) = self.get_children_with_txn(txn, parent_id) {
       belonging_array.move_child_with_txn(txn, from, to);
@@ -124,6 +210,10 @@ impl ChildrenArray {
       .0
       .remove_with_txn(txn, index)
       .and_then(view_identifier_from_value)
+  }
+
+  pub fn insert_child_with_txn(&self, txn: &mut TransactionMut, index: u32, child: ViewIdentifier) {
+    self.0.insert(txn, index, child);
   }
 
   pub fn remove_child(&self, index: u32) {

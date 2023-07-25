@@ -206,6 +206,78 @@ impl Folder {
     Some(view)
   }
 
+  /// Moves a nested view to a new location in the hierarchy.
+  ///
+  /// This function takes the `view_id` of the view to be moved,
+  /// `new_parent_id` of the view under which the `view_id` should be moved,
+  /// and an optional `new_prev_id` to position the `view_id` right after
+  /// this specific view.
+  ///
+  /// If `new_prev_id` is provided, the moved view will be placed right after
+  /// the view corresponding to `new_prev_id` under the `new_parent_id`.
+  /// If `new_prev_id` is `None`, the moved view will become the first child of the new parent.
+  ///
+  /// # Arguments
+  ///
+  /// * `view_id` - A string slice that holds the id of the view to be moved.
+  /// * `new_parent_id` - A string slice that holds the id of the new parent view.
+  /// * `prev_view_id` - An `Option<String>` that holds the id of the view after which the `view_id` should be positioned.
+  ///
+  pub fn move_nested_view(
+    &self,
+    view_id: &str,
+    new_parent_id: &str,
+    prev_view_id: Option<String>,
+  ) -> Option<Arc<View>> {
+    tracing::debug!("Move nested view: {}", view_id);
+    let view = self.views.get_view(view_id)?;
+    let current_workspace_id = self.get_current_workspace_id()?;
+    let parent_id = view.parent_view_id.as_str();
+
+    let new_parent_view = self.views.get_view(new_parent_id);
+
+    // If the new parent is not a view, it must be a workspace.
+    // Check if the new parent is the current workspace, as moving out of the current workspace is not supported yet.
+    if new_parent_id != current_workspace_id && new_parent_view.is_none() {
+      tracing::warn!("Unsupported move out current workspace: {}", view_id);
+      return None;
+    }
+
+    self.meta.with_transact_mut(|txn| {
+      // dissociate the child from its parent
+      if parent_id == current_workspace_id {
+        self
+          .workspaces
+          .view_relations
+          .dissociate_parent_child_with_txn(txn, parent_id, view_id);
+      } else {
+        self
+          .views
+          .dissociate_parent_child_with_txn(txn, parent_id, view_id);
+      }
+      // associate the child with its new parent and place it after the prev_view_id. If the prev_view_id is None,
+      // place it as the first child.
+      if new_parent_id == current_workspace_id {
+        self
+          .workspaces
+          .view_relations
+          .associate_parent_child_with_txn(txn, new_parent_id, view_id, prev_view_id.clone());
+      } else {
+        self.views.associate_parent_child_with_txn(
+          txn,
+          new_parent_id,
+          view_id,
+          prev_view_id.clone(),
+        );
+      }
+      // Update the view's parent ID.
+      self
+        .views
+        .update_view_with_txn(txn, view_id, |update| update.set_bid(new_parent_id).done());
+    });
+    Some(view)
+  }
+
   pub fn set_current_view(&self, view_id: &str) {
     tracing::debug!("Set current view: {}", view_id);
     if view_id.is_empty() {
