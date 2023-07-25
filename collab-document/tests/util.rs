@@ -160,22 +160,6 @@ pub fn update_block(
   document.with_transact_mut(|txn| document.update_block_data(txn, block_id, data))
 }
 
-pub fn move_block(
-  document: &Document,
-  block_id: &str,
-  parent_id: &str,
-  prev_id: &str,
-) -> Result<(), DocumentError> {
-  document.with_transact_mut(|txn| {
-    document.move_block(
-      txn,
-      block_id,
-      Some(parent_id.to_owned()),
-      Some(prev_id.to_owned()),
-    )
-  })
-}
-
 pub fn apply_actions(document: &Document, actions: Vec<BlockAction>) {
   document.apply_action(actions)
 }
