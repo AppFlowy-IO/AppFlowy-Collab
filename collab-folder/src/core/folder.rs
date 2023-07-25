@@ -487,7 +487,7 @@ fn create_folder(
           .map(|notifier| notifier.trash_change_tx.clone()),
       );
 
-      let favorites = FavoritesArray::new(favorites);
+      let favorites = FavoritesArray::new(favorites, views.clone());
 
       if let Some(folder_data) = folder_data {
         for workspace in folder_data.workspaces {
@@ -564,7 +564,7 @@ fn open_folder(collab: Arc<MutexCollab>, notifier: Option<FolderNotify>) -> Fold
     view_relations,
   ));
 
-  let favorites = FavoritesArray::new(favorite_array);
+  let favorites = FavoritesArray::new(favorite_array, views.clone());
 
   let trash = TrashArray::new(
     trash,

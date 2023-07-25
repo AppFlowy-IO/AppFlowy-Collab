@@ -3,14 +3,21 @@ use anyhow::bail;
 use collab::preclude::{lib0Any, Array, ArrayRefWrapper, ReadTxn, TransactionMut, Value, YrsValue};
 
 use serde::{Deserialize, Serialize};
+use std::rc::Rc;
+use std::sync::Arc;
 
+use crate::core::ViewsMap;
 pub struct FavoritesArray {
   container: ArrayRefWrapper,
+  view_map: Rc<ViewsMap>,
 }
 
 impl FavoritesArray {
-  pub fn new(root: ArrayRefWrapper) -> Self {
-    Self { container: root }
+  pub fn new(root: ArrayRefWrapper, view_map: Rc<ViewsMap>) -> Self {
+    Self {
+      container: root,
+      view_map,
+    }
   }
   ///Gets all favorite views in form of FavoriteRecord[]
   pub fn get_all_favorites(&self) -> Vec<FavoritesInfo> {
@@ -33,6 +40,11 @@ impl FavoritesArray {
 
   /// Deletes a favorited record to be used when a view / views is / are unfavorited
   pub fn delete_favorites<T: AsRef<str>>(&self, ids: Vec<T>) {
+    ids.iter().for_each(|record| {
+      self.view_map.update_view(&record.as_ref(), |update| {
+        update.set_favorite_if_not_none(Some(false)).done()
+      });
+    });
     self.container.with_transact_mut(|txn| {
       self.delete_favorites_with_txn(txn, ids);
     })
@@ -52,6 +64,11 @@ impl FavoritesArray {
 
   /// Adds a favorited record to be used when a view / views is / are favorited
   pub fn add_favorites(&self, favorite_records: Vec<FavoriteRecord>) {
+    favorite_records.clone().iter().for_each(|record| {
+      self.view_map.update_view(&record.id, |update| {
+        update.set_favorite_if_not_none(Some(true)).done()
+      });
+    });
     self.container.with_transact_mut(|txn| {
       self.add_favorites_with_txn(txn, favorite_records);
     })
@@ -75,10 +92,9 @@ impl FavoritesArray {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FavoriteRecord {
   pub id: String,
-  #[serde(default)]
   pub workspace_id: String,
 }
 
