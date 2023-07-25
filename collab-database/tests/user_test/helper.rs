@@ -11,11 +11,12 @@ use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::rows::CreateRowParams;
 use collab_database::user::{
-  make_workspace_database_id, CollabFuture, CollabObjectUpdate, CollabObjectUpdateByOid,
-  DatabaseCollabService, RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
+  CollabFuture, CollabObjectUpdate, CollabObjectUpdateByOid, DatabaseCollabService,
+  RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
 };
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::cloud_storage::CollabType;
 use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
 use parking_lot::Mutex;
 use tokio::sync::mpsc::{channel, Receiver};
@@ -51,6 +52,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
   fn get_collab_update(
     &self,
     _object_id: &str,
+    _object_ty: CollabType,
   ) -> CollabFuture<Result<CollabObjectUpdate, DatabaseError>> {
     Box::pin(async move { Ok(vec![]) })
   }
@@ -58,6 +60,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
   fn batch_get_collab_update(
     &self,
     _object_ids: Vec<String>,
+    _object_ty: CollabType,
   ) -> CollabFuture<Result<CollabObjectUpdateByOid, DatabaseError>> {
     Box::pin(async move { Ok(CollabObjectUpdateByOid::default()) })
   }
@@ -66,7 +69,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     &self,
     uid: i64,
     object_id: &str,
-    _object_name: &str,
+    _object_type: CollabType,
     collab_db: Arc<RocksCollabDB>,
     collab_raw_data: CollabRawData,
     config: &CollabPersistenceConfig,
@@ -96,10 +99,11 @@ pub fn workspace_database_test_with_config(
 ) -> WorkspaceDatabaseTest {
   let collab_db = make_rocks_db();
   let builder = TestUserDatabaseCollabBuilderImpl();
+  let database_storage_id = uuid::Uuid::new_v4().to_string();
   let collab = builder.build_collab_with_config(
     uid,
-    &make_workspace_database_id(uid),
-    "databases",
+    &database_storage_id,
+    CollabType::WorkspaceDatabase,
     collab_db.clone(),
     CollabRawData::default(),
     &config,
@@ -119,10 +123,11 @@ pub fn workspace_database_with_db(
 ) -> WorkspaceDatabase {
   let config = config.unwrap_or_else(|| CollabPersistenceConfig::new().snapshot_per_update(5));
   let builder = TestUserDatabaseCollabBuilderImpl();
+  let database_storage_id = uuid::Uuid::new_v4().to_string();
   let collab = builder.build_collab_with_config(
     uid,
-    &make_workspace_database_id(uid),
-    "databases",
+    &database_storage_id,
+    CollabType::WorkspaceDatabase,
     collab_db.clone(),
     CollabRawData::default(),
     &config,

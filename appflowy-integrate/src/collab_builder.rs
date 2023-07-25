@@ -5,8 +5,9 @@ use anyhow::Error;
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::preclude::CollabBuilder;
 use collab_plugins::cloud_storage::aws::AWSDynamoDBPlugin;
+use collab_plugins::cloud_storage::network_state::{CollabNetworkReachability, CollabNetworkState};
 use collab_plugins::cloud_storage::postgres::SupabaseDBPlugin;
-use collab_plugins::cloud_storage::{CollabObject, RemoteCollabStorage};
+use collab_plugins::cloud_storage::{CollabObject, CollabType, RemoteCollabStorage};
 use collab_plugins::disk::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
 use collab_plugins::snapshot::{CollabSnapshotPlugin, SnapshotPersistence};
@@ -45,6 +46,8 @@ where
 }
 
 pub struct AppFlowyCollabBuilder {
+  network_reachability: CollabNetworkReachability,
+  workspace_id: RwLock<Option<String>>,
   cloud_storage: RwLock<Arc<dyn CollabStorageProvider>>,
   snapshot_persistence: Option<Arc<dyn SnapshotPersistence>>,
 }
@@ -55,8 +58,26 @@ impl AppFlowyCollabBuilder {
     snapshot_persistence: Option<Arc<dyn SnapshotPersistence>>,
   ) -> Self {
     Self {
+      network_reachability: CollabNetworkReachability::new(),
+      workspace_id: Default::default(),
       cloud_storage: RwLock::new(Arc::new(cloud_storage)),
       snapshot_persistence,
+    }
+  }
+
+  pub fn initialize(&self, workspace_id: String) {
+    *self.workspace_id.write() = Some(workspace_id);
+  }
+
+  pub fn update_network(&self, reachable: bool) {
+    if reachable {
+      self
+        .network_reachability
+        .set_state(CollabNetworkState::Connected)
+    } else {
+      self
+        .network_reachability
+        .set_state(CollabNetworkState::Disconnected)
     }
   }
 
@@ -69,14 +90,14 @@ impl AppFlowyCollabBuilder {
     &self,
     uid: i64,
     object_id: &str,
-    object_name: &str,
+    object_type: CollabType,
     raw_data: CollabRawData,
     db: Arc<RocksCollabDB>,
   ) -> Result<Arc<MutexCollab>, Error> {
     self.build_with_config(
       uid,
       object_id,
-      object_name,
+      object_type,
       db,
       raw_data,
       &CollabPersistenceConfig::default(),
@@ -92,7 +113,7 @@ impl AppFlowyCollabBuilder {
     &self,
     uid: i64,
     object_id: &str,
-    object_name: &str,
+    object_type: CollabType,
     collab_db: Arc<RocksCollabDB>,
     collab_raw_data: CollabRawData,
     config: &CollabPersistenceConfig,
@@ -107,11 +128,6 @@ impl AppFlowyCollabBuilder {
         ))
         .build()?,
     );
-
-    // collab_db.with_write_txn(|db_w_txn| {
-    //   db_w_txn.create_new_doc()
-    //   Ok(())
-    // });
 
     let collab_config = CollabPluginConfig::from_env();
     let cloud_storage = self.cloud_storage.read();
@@ -138,7 +154,11 @@ impl AppFlowyCollabBuilder {
         }
       },
       CollabStorageType::Supabase => {
-        let collab_object = CollabObject::new(uid, object_id.to_string()).with_name(object_name);
+        let workspace_id = self.workspace_id.read().clone().ok_or_else(|| {
+          anyhow::anyhow!("When using supabase plugin, the workspace_id should not be empty")
+        })?;
+        let collab_object = CollabObject::new(uid, object_id.to_string(), object_type.clone())
+          .with_workspace_id(workspace_id);
         let local_collab_storage = collab_db.clone();
         if let Some(remote_collab_storage) = cloud_storage.get_storage(&cloud_storage_type) {
           let plugin = SupabaseDBPlugin::new(
@@ -157,7 +177,7 @@ impl AppFlowyCollabBuilder {
 
     if let Some(snapshot_persistence) = &self.snapshot_persistence {
       if config.enable_snapshot {
-        let collab_object = CollabObject::new(uid, object_id.to_string()).with_name(object_name);
+        let collab_object = CollabObject::new(uid, object_id.to_string(), object_type);
         let snapshot_plugin = CollabSnapshotPlugin::new(
           uid,
           collab_object,

@@ -18,7 +18,7 @@ use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
 use crate::cloud_storage::remote_collab::{
   CollabObject, RemoteCollab, RemoteCollabSnapshot, RemoteCollabStorage,
 };
-use crate::cloud_storage::{RemoteCollabState, RemoteUpdateReceiver};
+use crate::cloud_storage::{CollabType, RemoteCollabState, RemoteUpdateReceiver};
 
 pub(crate) const DEFAULT_TABLE_NAME: &str = "collab_test";
 const OBJECT_ID: &str = "oid";
@@ -77,7 +77,7 @@ impl AWSDynamoDB {
         sync_per_secs,
       )));
 
-    let object = CollabObject::new(uid, object_id.clone());
+    let object = CollabObject::new(uid, object_id.clone(), CollabType::Document);
     let remote_collab = Arc::new(RemoteCollab::new(object, storage, config));
     Ok(Self {
       uid,
@@ -108,16 +108,14 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
     true
   }
 
-  async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, Error> {
-    Ok(aws_get_all_updates(&self.client, &self.table_name, object_id).await)
+  async fn get_all_updates(&self, _object: &CollabObject) -> Result<Vec<Vec<u8>>, Error> {
+    // TODO(nathan): support return all udpates
+    Ok(vec![])
   }
 
-  async fn get_latest_snapshot(
-    &self,
-    _object_id: &str,
-  ) -> Result<Option<RemoteCollabSnapshot>, Error> {
+  async fn get_latest_snapshot(&self, _object_id: &str) -> Option<RemoteCollabSnapshot> {
     // TODO(nathan): support aws full sync
-    Ok(None)
+    None
   }
 
   async fn get_collab_state(&self, _object_id: &str) -> Result<Option<RemoteCollabState>, Error> {

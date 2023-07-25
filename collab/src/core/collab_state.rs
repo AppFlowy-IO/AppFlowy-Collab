@@ -115,7 +115,7 @@ impl State {
         tracing::debug!("{} sync finish 🌐", self.object_id,);
       } else {
         tracing::trace!(
-          "{} sync state 🌐 {:?} => {:?}",
+          "{} sync state {:?} => {:?}",
           self.object_id,
           old_state,
           new_state

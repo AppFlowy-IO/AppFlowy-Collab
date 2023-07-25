@@ -5,6 +5,7 @@ use std::sync::Arc;
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::cloud_storage::CollabType;
 use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
 use lru::LruCache;
 use parking_lot::Mutex;
@@ -237,7 +238,7 @@ impl Block {
     self.collab_service.build_collab_with_config(
       self.uid,
       row_id,
-      "db row",
+      CollabType::DatabaseRow,
       self.collab_db.clone(),
       collab_raw_data,
       &config,

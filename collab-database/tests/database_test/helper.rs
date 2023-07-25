@@ -11,6 +11,7 @@ use collab_database::rows::{CellsBuilder, CreateRowParams};
 use collab_database::user::DatabaseCollabService;
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout, LayoutSetting, LayoutSettings};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::cloud_storage::CollabType;
 use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
 
 use tempfile::TempDir;
@@ -70,7 +71,7 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<RocksCollabD
   let collab = collab_builder.build_collab_with_config(
     uid,
     database_id,
-    "database",
+    CollabType::Database,
     db.clone(),
     CollabRawData::default(),
     &CollabPersistenceConfig::default(),
@@ -100,7 +101,7 @@ pub fn restore_database_from_db(
   let collab = collab_builder.build_collab_with_config(
     uid,
     database_id,
-    "database",
+    CollabType::Database,
     db.clone(),
     CollabRawData::default(),
     &CollabPersistenceConfig::default(),

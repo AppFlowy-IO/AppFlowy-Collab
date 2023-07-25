@@ -1,5 +1,5 @@
 pub use remote_collab::{
-  CollabObject, MsgId, RemoteCollabSnapshot, RemoteCollabState, RemoteCollabStorage,
+  CollabObject, CollabType, MsgId, RemoteCollabSnapshot, RemoteCollabState, RemoteCollabStorage,
   RemoteUpdateReceiver,
 };
 pub use yrs::merge_updates_v1;
@@ -12,4 +12,5 @@ pub mod aws;
 #[cfg(feature = "postgres_storage")]
 pub mod postgres;
 
+pub mod network_state;
 mod remote_collab;

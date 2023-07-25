@@ -3,14 +3,13 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{lib0Any, Collab, MapPrelim, Update};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
+use collab_plugins::cloud_storage::CollabType;
 use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
 use parking_lot::RwLock;
 
@@ -32,25 +31,27 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
   fn get_collab_update(
     &self,
     object_id: &str,
+    object_ty: CollabType,
   ) -> CollabFuture<Result<CollabObjectUpdate, DatabaseError>>;
 
   fn batch_get_collab_update(
     &self,
     object_ids: Vec<String>,
+    object_ty: CollabType,
   ) -> CollabFuture<Result<CollabObjectUpdateByOid, DatabaseError>>;
 
   fn build_collab_with_config(
     &self,
     uid: i64,
     object_id: &str,
-    object_name: &str,
+    object_type: CollabType,
     collab_db: Arc<RocksCollabDB>,
     collab_raw_data: CollabRawData,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab>;
 }
 
-/// A [WorkspaceDatabase] is used to index all the databases of a user.
+/// A [WorkspaceDatabase] is used to index databases of a workspace.
 pub struct WorkspaceDatabase {
   uid: i64,
   collab: Arc<MutexCollab>,
@@ -68,10 +69,6 @@ pub struct WorkspaceDatabase {
 
 const DATABASES: &str = "databases";
 
-pub fn make_workspace_database_id(uid: i64) -> String {
-  STANDARD.encode(format!("{}:user:database", uid))
-}
-
 impl WorkspaceDatabase {
   pub fn open<T>(
     uid: i64,
@@ -85,7 +82,6 @@ impl WorkspaceDatabase {
   {
     let collab_service = Arc::new(collab_service);
     let collab_guard = collab.lock();
-    let _ = get_database_array_ref(&collab_guard);
 
     let block = Block::new(uid, collab_db.clone(), collab_service.clone());
     drop(collab_guard);
@@ -119,7 +115,11 @@ impl WorkspaceDatabase {
         if !is_exist {
           // Try to load the database from the remote. The database doesn't exist in the local only
           // when the user has deleted the database or the database is using a remote storage.
-          match self.collab_service.get_collab_update(database_id).await {
+          match self
+            .collab_service
+            .get_collab_update(database_id, CollabType::Database)
+            .await
+          {
             Ok(updates) => {
               collab_raw_data = updates;
             },
@@ -342,7 +342,7 @@ impl WorkspaceDatabase {
     self.collab_service.build_collab_with_config(
       self.uid,
       database_id,
-      "database",
+      CollabType::Database,
       self.collab_db.clone(),
       collab_raw_data,
       &self.config,

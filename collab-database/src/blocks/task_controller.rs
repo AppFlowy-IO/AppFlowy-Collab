@@ -7,6 +7,7 @@ use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::core::origin::CollabOrigin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::cloud_storage::CollabType;
 use tokio::sync::watch;
 
 use crate::blocks::queue::{
@@ -113,7 +114,10 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
         ..
       } => {
         tracing::trace!("fetching database row: {:?}", row_id);
-        if let Ok(updates) = collab_service.get_collab_update(row_id.as_ref()).await {
+        if let Ok(updates) = collab_service
+          .get_collab_update(row_id.as_ref(), CollabType::DatabaseRow)
+          .await
+        {
           if let Some(row_detail) = save_row(&collab_db, updates, *uid, row_id) {
             let _ = sender.send(row_detail).await;
           }
@@ -127,7 +131,10 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
       } => {
         tracing::trace!("batch fetching database row");
         let object_ids = row_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
-        if let Ok(updates_by_oid) = collab_service.batch_get_collab_update(object_ids).await {
+        if let Ok(updates_by_oid) = collab_service
+          .batch_get_collab_update(object_ids, CollabType::DatabaseRow)
+          .await
+        {
           let mut row_details = vec![];
           for (oid, updates) in updates_by_oid {
             if let Some(row_detail) = save_row(&collab_db, updates, *uid, oid) {
