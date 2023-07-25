@@ -55,7 +55,7 @@ pub async fn spawn_client(
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone());
+  let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
   collab.lock().add_plugin(Arc::new(disk_plugin));
   collab.lock().initialize();
 
@@ -94,7 +94,7 @@ impl TestClient {
     let (reader, writer) = stream.into_split();
 
     // disk
-    let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone());
+    let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
     let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
     collab.lock().add_plugin(Arc::new(disk_plugin));
 
@@ -146,7 +146,7 @@ impl TestClient {
     let origin = origin_from_tcp_stream(&stream);
     let (reader, writer) = stream.into_split();
     // disk
-    let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone());
+    let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
     let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
     collab.lock().add_plugin(Arc::new(disk_plugin));
 

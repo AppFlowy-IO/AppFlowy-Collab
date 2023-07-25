@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use anyhow::Error;
 use collab::core::collab::{CollabRawData, MutexCollab};
@@ -92,7 +92,7 @@ impl AppFlowyCollabBuilder {
     object_id: &str,
     object_type: CollabType,
     raw_data: CollabRawData,
-    db: Arc<RocksCollabDB>,
+    db: Weak<RocksCollabDB>,
   ) -> Result<Arc<MutexCollab>, Error> {
     self.build_with_config(
       uid,
@@ -114,7 +114,7 @@ impl AppFlowyCollabBuilder {
     uid: i64,
     object_id: &str,
     object_type: CollabType,
-    collab_db: Arc<RocksCollabDB>,
+    collab_db: Weak<RocksCollabDB>,
     collab_raw_data: CollabRawData,
     config: &CollabPersistenceConfig,
   ) -> Result<Arc<MutexCollab>, Error> {

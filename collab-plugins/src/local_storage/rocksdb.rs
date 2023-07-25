@@ -1,7 +1,7 @@
 use std::ops::Deref;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
@@ -12,7 +12,7 @@ use yrs::TransactionMut;
 #[derive(Clone)]
 pub struct RocksdbDiskPlugin {
   uid: i64,
-  db: Arc<RocksCollabDB>,
+  db: Weak<RocksCollabDB>,
   did_load: Arc<AtomicBool>,
   /// the number of updates on disk when opening the document
   initial_update_count: Arc<AtomicU32>,
@@ -21,7 +21,7 @@ pub struct RocksdbDiskPlugin {
 }
 
 impl Deref for RocksdbDiskPlugin {
-  type Target = Arc<RocksCollabDB>;
+  type Target = Weak<RocksCollabDB>;
 
   fn deref(&self) -> &Self::Target {
     &self.db
@@ -29,13 +29,13 @@ impl Deref for RocksdbDiskPlugin {
 }
 
 impl RocksdbDiskPlugin {
-  pub fn new(uid: i64, db: Arc<RocksCollabDB>) -> Self {
+  pub fn new(uid: i64, db: Weak<RocksCollabDB>) -> Self {
     Self::new_with_config(uid, db, CollabPersistenceConfig::default())
   }
 
   pub fn new_with_config(
     uid: i64,
-    db: Arc<RocksCollabDB>,
+    db: Weak<RocksCollabDB>,
     config: CollabPersistenceConfig,
   ) -> Self {
     let initial_update_count = Arc::new(AtomicU32::new(0));
@@ -58,38 +58,42 @@ impl RocksdbDiskPlugin {
 
 impl CollabPlugin for RocksdbDiskPlugin {
   fn init(&self, object_id: &str, txn: &mut TransactionMut) {
-    let r_db_txn = self.db.read_txn();
-    // Check the document is exist or not
-    if r_db_txn.is_exist(self.uid, object_id) {
-      // Safety: The document is exist, so it must be loaded successfully.
-      match r_db_txn.load_doc(self.uid, object_id, txn) {
-        Ok(update_count) => {
-          self
-            .initial_update_count
-            .store(update_count, Ordering::SeqCst);
-        },
-        Err(e) => tracing::error!("🔴 load doc:{} failed: {}", object_id, e),
-      }
-      drop(r_db_txn);
+    if let Some(db) = self.db.upgrade() {
+      let r_db_txn = db.read_txn();
+      // Check the document is exist or not
+      if r_db_txn.is_exist(self.uid, object_id) {
+        // Safety: The document is exist, so it must be loaded successfully.
+        match r_db_txn.load_doc(self.uid, object_id, txn) {
+          Ok(update_count) => {
+            self
+              .initial_update_count
+              .store(update_count, Ordering::SeqCst);
+          },
+          Err(e) => tracing::error!("🔴 load doc:{} failed: {}", object_id, e),
+        }
+        drop(r_db_txn);
 
-      if self.config.flush_doc {
-        let _ = self.db.with_write_txn(|w_db_txn| {
-          w_db_txn.flush_doc(self.uid, object_id, txn)?;
-          self.initial_update_count.store(0, Ordering::SeqCst);
+        if self.config.flush_doc {
+          let _ = db.with_write_txn(|w_db_txn| {
+            w_db_txn.flush_doc(self.uid, object_id, txn)?;
+            self.initial_update_count.store(0, Ordering::SeqCst);
+            Ok(())
+          });
+        }
+      } else {
+        // Drop the read txn before write txn
+        let result = db.with_write_txn(|w_db_txn| {
+          w_db_txn.create_new_doc(self.uid, object_id, txn)?;
           Ok(())
         });
+
+        if let Err(e) = result {
+          tracing::error!("🔴 create doc for {:?} failed: {}", object_id, e)
+        }
       }
     } else {
-      // Drop the read txn before write txn
-      let result = self.db.with_write_txn(|w_db_txn| {
-        w_db_txn.create_new_doc(self.uid, object_id, txn)?;
-        Ok(())
-      });
-
-      if let Err(e) = result {
-        tracing::error!("🔴 create doc for {:?} failed: {}", object_id, e)
-      }
-    }
+      tracing::warn!("collab_db is dropped");
+    };
   }
 
   fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
@@ -101,27 +105,33 @@ impl CollabPlugin for RocksdbDiskPlugin {
     if !self.did_load.load(Ordering::SeqCst) {
       return;
     }
-    let _ = self.increase_count();
-    // /Acquire a write transaction to ensure consistency
-    let result = self.db.with_write_txn(|w_db_txn| {
-      tracing::trace!("Receive {} update", object_id);
-      let _ = w_db_txn.push_update(self.uid, object_id, update)?;
-      Ok(())
-    });
+    if let Some(db) = self.db.upgrade() {
+      let _ = self.increase_count();
+      // /Acquire a write transaction to ensure consistency
+      let result = db.with_write_txn(|w_db_txn| {
+        tracing::trace!("Receive {} update", object_id);
+        let _ = w_db_txn.push_update(self.uid, object_id, update)?;
+        Ok(())
+      });
 
-    if let Err(e) = result {
-      tracing::error!("🔴Save update failed: {:?}", e);
-    }
+      if let Err(e) = result {
+        tracing::error!("🔴Save update failed: {:?}", e);
+      }
+    } else {
+      tracing::warn!("collab_db is dropped");
+    };
   }
 
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
 
   fn reset(&self, object_id: &str) {
-    if let Err(e) = self.db.with_write_txn(|w_db_txn| {
-      w_db_txn.delete_all_updates(self.uid, object_id)?;
-      Ok(())
-    }) {
-      tracing::error!("🔴Reset failed: {:?}", e);
+    if let Some(db) = self.db.upgrade() {
+      if let Err(e) = db.with_write_txn(|w_db_txn| {
+        w_db_txn.delete_all_updates(self.uid, object_id)?;
+        Ok(())
+      }) {
+        tracing::error!("🔴Reset failed: {:?}", e);
+      }
     }
   }
 }

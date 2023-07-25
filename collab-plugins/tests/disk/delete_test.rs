@@ -7,11 +7,12 @@ use crate::disk::script::{disk_plugin, CollabPersistenceTest};
 async fn delete_single_doc_test() {
   let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::default());
   let doc_id = "1".to_string();
+  let (_db, disk_plugin) = disk_plugin(test.uid);
   test
     .run_scripts(vec![
       CreateDocumentWithDiskPlugin {
         id: doc_id.clone(),
-        plugin: disk_plugin(test.uid),
+        plugin: disk_plugin,
       },
       AssertNumOfDocuments { expected: 1 },
       DeleteDocument { id: doc_id },
@@ -22,7 +23,7 @@ async fn delete_single_doc_test() {
 #[tokio::test]
 async fn delete_multiple_docs_test() {
   let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::default());
-  let disk_plugin = disk_plugin(test.uid);
+  let (_db, disk_plugin) = disk_plugin(test.uid);
   test
     .run_scripts(vec![
       CreateDocumentWithDiskPlugin {

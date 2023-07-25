@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::preclude::updates::decoder::Decode;
@@ -45,7 +45,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     uid: i64,
     object_id: &str,
     object_type: CollabType,
-    collab_db: Arc<RocksCollabDB>,
+    collab_db: Weak<RocksCollabDB>,
     collab_raw_data: CollabRawData,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab>;
@@ -55,7 +55,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
 pub struct WorkspaceDatabase {
   uid: i64,
   collab: Arc<MutexCollab>,
-  collab_db: Arc<RocksCollabDB>,
+  inner_collab_db: Weak<RocksCollabDB>,
   /// It used to keep track of the blocks. Each block contains a list of [Row]s
   /// A database rows will be stored in multiple blocks.
   block: Block,
@@ -73,7 +73,7 @@ impl WorkspaceDatabase {
   pub fn open<T>(
     uid: i64,
     collab: Arc<MutexCollab>,
-    collab_db: Arc<RocksCollabDB>,
+    collab_db: Weak<RocksCollabDB>,
     config: CollabPersistenceConfig,
     collab_service: T,
   ) -> Self
@@ -88,7 +88,7 @@ impl WorkspaceDatabase {
 
     Self {
       uid,
-      collab_db,
+      inner_collab_db: collab_db,
       collab,
       block,
       open_handlers: Default::default(),
@@ -108,10 +108,11 @@ impl WorkspaceDatabase {
       return None;
     }
     let database = self.open_handlers.read().get(database_id).cloned();
+    let collab_db = self.inner_collab_db.upgrade()?;
     match database {
       None => {
         let mut collab_raw_data = CollabRawData::default();
-        let is_exist = self.collab_db.read_txn().is_exist(self.uid, &database_id);
+        let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
         if !is_exist {
           // Try to load the database from the remote. The database doesn't exist in the local only
           // when the user has deleted the database or the database is using a remote storage.
@@ -245,13 +246,15 @@ impl WorkspaceDatabase {
   /// Delete the database with the given database id.
   pub fn delete_database(&self, database_id: &str) {
     self.database_array().delete_database(database_id);
-    let _ = self.collab_db.with_write_txn(|w_db_txn| {
-      match w_db_txn.delete_doc(self.uid, database_id) {
-        Ok(_) => {},
-        Err(err) => tracing::error!("🔴Delete database failed: {}", err),
-      }
-      Ok(())
-    });
+    if let Some(collab_db) = self.inner_collab_db.upgrade() {
+      let _ = collab_db.with_write_txn(|w_db_txn| {
+        match w_db_txn.delete_doc(self.uid, database_id) {
+          Ok(_) => {},
+          Err(err) => tracing::error!("🔴Delete database failed: {}", err),
+        }
+        Ok(())
+      });
+    }
     self.open_handlers.write().remove(database_id);
   }
 
@@ -274,8 +277,13 @@ impl WorkspaceDatabase {
   }
 
   pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
-    let store = self.collab_db.read_txn();
-    store.get_snapshots(self.uid, database_id)
+    match self.inner_collab_db.upgrade() {
+      None => vec![],
+      Some(collab_db) => {
+        let store = collab_db.read_txn();
+        store.get_snapshots(self.uid, database_id)
+      },
+    }
   }
 
   pub fn restore_database_from_snapshot(
@@ -343,7 +351,7 @@ impl WorkspaceDatabase {
       self.uid,
       database_id,
       CollabType::Database,
-      self.collab_db.clone(),
+      self.inner_collab_db.clone(),
       collab_raw_data,
       &self.config,
     )

@@ -86,7 +86,7 @@ impl CollabPersistenceTest {
     let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
     let disk_plugin = Arc::new(RocksdbDiskPlugin::new_with_config(
       uid,
-      db.clone(),
+      Arc::downgrade(&db),
       config.clone(),
     ));
     let cleaner = Cleaner::new(db_path);
@@ -118,7 +118,7 @@ impl CollabPersistenceTest {
       self.uid,
       object,
       Arc::new(self.db.clone()),
-      self.db.clone(),
+      Arc::downgrade(&self.db),
       self.config.snapshot_per_update,
     ))
   }
@@ -232,8 +232,8 @@ impl CollabPersistenceTest {
         self.collab_by_id.insert(id, Arc::new(collab));
       },
       Script::DeleteDocument { id } => {
-        self
-          .disk_plugin
+        let collab_db = self.disk_plugin.upgrade().unwrap();
+        collab_db
           .with_write_txn(|store| store.delete_doc(self.uid, &id))
           .unwrap();
       },
@@ -250,8 +250,8 @@ impl CollabPersistenceTest {
         assert_eq!(text, expected)
       },
       Script::AssertNumOfUpdates { id, expected } => {
-        let updates = self
-          .disk_plugin
+        let collab_db = self.disk_plugin.upgrade().unwrap();
+        let updates = collab_db
           .read_txn()
           .get_decoded_v1_updates(self.uid, &id)
           .unwrap();
@@ -268,7 +268,9 @@ impl CollabPersistenceTest {
         assert_eq!(snapshot.len(), expected);
       },
       Script::AssertNumOfDocuments { expected } => {
-        let docs = self.disk_plugin.read_txn().get_all_docs().unwrap();
+        let collab_db = self.disk_plugin.upgrade().unwrap();
+
+        let docs = collab_db.read_txn().get_all_docs().unwrap();
         assert_eq!(docs.count(), expected);
       },
       Script::AssertSnapshot {
@@ -312,11 +314,12 @@ impl CollabPersistenceTest {
   }
 }
 
-pub fn disk_plugin(uid: i64) -> RocksdbDiskPlugin {
+pub fn disk_plugin(uid: i64) -> (Arc<RocksCollabDB>, RocksdbDiskPlugin) {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
-  RocksdbDiskPlugin::new(uid, db)
+  let plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
+  (db, plugin)
 }
 
 struct Cleaner(PathBuf);

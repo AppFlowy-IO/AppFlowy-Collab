@@ -19,6 +19,9 @@ pub struct FolderTest {
   folder: Folder,
 
   #[allow(dead_code)]
+  db: Arc<RocksCollabDB>,
+
+  #[allow(dead_code)]
   cleaner: Cleaner,
 
   #[allow(dead_code)]
@@ -37,7 +40,7 @@ pub fn create_folder(id: &str) -> FolderTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path.clone()).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(uid, db);
+  let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
   let cleaner: Cleaner = Cleaner::new(path);
 
   let collab = CollabBuilder::new(1, id)
@@ -55,6 +58,7 @@ pub fn create_folder(id: &str) -> FolderTest {
   let folder = Folder::create(Arc::new(collab), Some(context), None);
   FolderTest {
     folder,
+    db,
     cleaner,
     view_rx,
     trash_rx: Some(trash_rx),

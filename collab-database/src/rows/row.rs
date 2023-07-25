@@ -1,5 +1,5 @@
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::{
@@ -35,7 +35,7 @@ pub struct DatabaseRow {
   meta: MapRefWrapper,
   #[allow(dead_code)]
   comments: ArrayRef,
-  collab_db: Arc<RocksCollabDB>,
+  collab_db: Weak<RocksCollabDB>,
 }
 
 impl DatabaseRow {
@@ -43,7 +43,7 @@ impl DatabaseRow {
     row: T,
     uid: i64,
     row_id: RowId,
-    collab_db: Arc<RocksCollabDB>,
+    collab_db: Weak<RocksCollabDB>,
     collab: Arc<MutexCollab>,
   ) -> Self {
     let row = row.into();
@@ -69,7 +69,7 @@ impl DatabaseRow {
   pub fn new(
     uid: i64,
     row_id: RowId,
-    collab_db: Arc<RocksCollabDB>,
+    collab_db: Weak<RocksCollabDB>,
     collab: Arc<MutexCollab>,
   ) -> Self {
     let collab_guard = collab.lock();
@@ -170,13 +170,20 @@ impl DatabaseRow {
   }
 
   pub fn delete(&self) {
-    let _ = self.collab_db.with_write_txn(|txn| {
-      let row_id = self.row_id.to_string();
-      if let Err(e) = txn.delete_doc(self.uid, &row_id) {
-        tracing::error!("🔴{}", e);
-      }
-      Ok(())
-    });
+    match self.collab_db.upgrade() {
+      None => {
+        tracing::warn!("collab db is drop when delete a collab object");
+      },
+      Some(collab_db) => {
+        let _ = collab_db.with_write_txn(|txn| {
+          let row_id = self.row_id.to_string();
+          if let Err(e) = txn.delete_doc(self.uid, &row_id) {
+            tracing::error!("🔴{}", e);
+          }
+          Ok(())
+        });
+      },
+    }
   }
 }
 
