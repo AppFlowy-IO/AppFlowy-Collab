@@ -12,7 +12,7 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use nanoid::nanoid;
 use serde_json::{json, Value};
 
-use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use tempfile::TempDir;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 

@@ -1,7 +1,6 @@
-use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
-
 use crate::disk::script::Script::*;
 use crate::disk::script::{disk_plugin, CollabPersistenceTest};
+use collab_plugins::local_storage::CollabPersistenceConfig;
 
 #[tokio::test]
 async fn insert_single_change_and_restore_from_disk() {

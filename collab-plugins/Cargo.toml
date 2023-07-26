@@ -9,8 +9,8 @@ edition = "2021"
 yrs = "0.16.5"
 y-sync = { version = "0.3.1" }
 collab = { path = "../collab" }
-collab-sync = { path = "../collab-sync", optional = true }
-collab-persistence = { path = "../collab-persistence", optional = true }
+collab-sync = { path = "../collab-sync" }
+collab-persistence = { path = "../collab-persistence" }
 collab-client-ws = { path = "../collab-client-ws" }
 futures-util = { version = "0.3", features = ["sink"] }
 tokio = { version = "1.26.0", features = ["net", "sync", "time"] }
@@ -27,15 +27,11 @@ thiserror = "1.0.39"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = { version = "0.8" }
-postgrest = { version = "1.0", optional = true }
-base64 = { version = "^0.21", optional = true }
 similar = { version = "2.2.1" }
-tokio-postgres = { version = "0.7.8", optional = true }
-refinery= { version = "0.8.10", optional = true, features = ["tokio-postgres"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 
 [dev-dependencies]
-collab-plugins = { path = ".", features = ["sync", "disk_rocksdb", "disk_sled", "aws_storage", "postgres_storage"] }
+collab-plugins = { path = ".", features = ["disk_rocksdb", "disk_sled", "aws_storage_plugin"] }
 tempfile = "3.4.0"
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
@@ -44,7 +40,6 @@ bytes = "1.4"
 dashmap = "5.4.0"
 serde_json = "1.0.64"
 serde = "1.0.160"
-collab-persistence = { path = "../collab-persistence" }
 lib0 = { version = "0.16.3", features = ["lib0-serde"] }
 parking_lot = "0.12.1"
 nanoid = "0.4.0"
@@ -53,10 +48,10 @@ dotenv = "0.15.0"
 
 
 [features]
-default = ["postgres_storage", "disk_rocksdb"]
-sync = ["collab-sync"]
-disk_rocksdb = ["collab-sync", "collab-persistence/rocksdb_db"]
-disk_sled = ["collab-persistence"]
-postgres_storage = ["postgrest", "base64", "tokio-postgres", "refinery"]
-aws_storage = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types"]
+default = []
+disk_rocksdb = ["collab-persistence/rocksdb_persistence"]
+disk_sled = []
+aws_storage_plugin = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types"]
+postgres_storage_plugin = ["collab-persistence/rocksdb_persistence"]
+snapshot_plugin = ["collab-persistence/rocksdb_persistence"]
 snapshot = []

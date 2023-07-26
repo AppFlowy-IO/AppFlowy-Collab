@@ -2,7 +2,7 @@ use collab_database::rows::CreateRowParams;
 use collab_database::rows::{CellsBuilder, RowId};
 use serde_json::{json, Value};
 
-use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
+use collab_plugins::local_storage::CollabPersistenceConfig;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 

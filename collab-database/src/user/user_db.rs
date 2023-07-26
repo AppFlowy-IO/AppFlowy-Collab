@@ -10,7 +10,7 @@ use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use collab_plugins::cloud_storage::CollabType;
-use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
+use collab_plugins::local_storage::CollabPersistenceConfig;
 use parking_lot::RwLock;
 
 use crate::blocks::{Block, BlockEvent};

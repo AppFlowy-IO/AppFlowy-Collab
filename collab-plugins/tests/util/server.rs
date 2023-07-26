@@ -7,7 +7,6 @@ use collab::core::origin::{CollabClient, CollabOrigin};
 use collab::preclude::Collab;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::kv::KVStore;
-use collab_plugins::disk::rocksdb_server::RocksdbServerDiskPlugin;
 use collab_sync::server::{
   CollabBroadcast, CollabGroup, CollabIDGen, CollabId, CollabMsgCodec, CollabSink, CollabStream,
   NonZeroNodeId, COLLAB_ID_LEN,
@@ -16,6 +15,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 use tokio::net::TcpListener;
 
+use collab_plugins::local_storage::rocksdb_server::RocksdbServerDiskPlugin;
 use dashmap::DashMap;
 use tempfile::TempDir;
 
