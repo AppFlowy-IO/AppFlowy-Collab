@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -158,7 +159,7 @@ impl RemoteCollab {
     // get all the updates from remote.
     // TODO(nathan): create a edge function to calculate the diff between the local and remote.
     tracing::trace!("Try init sync:{}", self.object);
-    let remote_updates = self.storage.get_all_updates(&self.object.id).await?;
+    let remote_updates = self.storage.get_all_updates(&self.object).await?;
     if !remote_updates.is_empty() {
       let updates = remote_updates
         .iter()
@@ -292,13 +293,10 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
   fn is_enable(&self) -> bool;
 
   /// Get all the updates of the remote collab.
-  async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, anyhow::Error>;
+  async fn get_all_updates(&self, object: &CollabObject) -> Result<Vec<Vec<u8>>, anyhow::Error>;
 
   /// Get the latest snapshot of the remote collab.
-  async fn get_latest_snapshot(
-    &self,
-    object_id: &str,
-  ) -> Result<Option<RemoteCollabSnapshot>, anyhow::Error>;
+  async fn get_latest_snapshot(&self, object_id: &str) -> Option<RemoteCollabSnapshot>;
 
   /// Return the remote state of the collab. It contains the current edit count, the last snapshot
   /// edit count and the last snapshot created time.
@@ -346,14 +344,11 @@ where
     (**self).is_enable()
   }
 
-  async fn get_all_updates(&self, object_id: &str) -> Result<Vec<Vec<u8>>, Error> {
-    (**self).get_all_updates(object_id).await
+  async fn get_all_updates(&self, object: &CollabObject) -> Result<Vec<Vec<u8>>, Error> {
+    (**self).get_all_updates(object).await
   }
 
-  async fn get_latest_snapshot(
-    &self,
-    object_id: &str,
-  ) -> Result<Option<RemoteCollabSnapshot>, Error> {
+  async fn get_latest_snapshot(&self, object_id: &str) -> Option<RemoteCollabSnapshot> {
     (**self).get_latest_snapshot(object_id).await
   }
 
@@ -539,30 +534,71 @@ impl MsgIdCounter for RngMsgIdCounter {
   }
 }
 
+/// The type of the collab object. It will be used to determine what kind of services should be
+/// used to handle the object.
+/// The value of the enum can't be changed.
+#[derive(Clone, Debug)]
+pub enum CollabType {
+  Document = 0,
+  Database = 1,
+  WorkspaceDatabase = 2,
+  Folder = 3,
+  DatabaseRow = 4,
+}
+
+impl CollabType {
+  pub fn value(&self) -> i32 {
+    self.clone() as i32
+  }
+}
+
+impl Display for CollabType {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Document => f.write_str("Document"),
+      Self::Database => f.write_str("Database"),
+      Self::WorkspaceDatabase => f.write_str("WorkspaceDatabase"),
+      Self::DatabaseRow => f.write_str("DatabaseRow"),
+      Self::Folder => f.write_str("Folder"),
+    }
+  }
+}
+
 #[derive(Clone, Debug)]
 pub struct CollabObject {
   pub id: String,
   pub uid: i64,
-  pub name: String,
+  pub ty: CollabType,
+  pub meta: HashMap<String, String>,
 }
 
 impl CollabObject {
-  pub fn new(uid: i64, object_id: String) -> Self {
+  pub fn new(uid: i64, object_id: String, ty: CollabType) -> Self {
     Self {
       id: object_id,
       uid,
-      name: "".to_string(),
+      ty,
+      meta: Default::default(),
     }
   }
 
-  pub fn with_name(mut self, name: &str) -> Self {
-    self.name = name.to_string();
+  pub fn with_workspace_id(mut self, workspace_id: String) -> Self {
+    self.meta.insert("workspace_id".to_string(), workspace_id);
     self
+  }
+
+  pub fn with_meta(mut self, key: &str, value: String) -> Self {
+    self.meta.insert(key.to_string(), value);
+    self
+  }
+
+  pub fn get_workspace_id(&self) -> Option<String> {
+    self.meta.get("workspace_id").cloned()
   }
 }
 
 impl Display for CollabObject {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    f.write_fmt(format_args!("{}:{}]", self.name, self.id,))
+    f.write_fmt(format_args!("{:?}:{}]", self.ty, self.id,))
   }
 }

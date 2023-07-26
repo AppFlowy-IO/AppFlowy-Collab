@@ -11,6 +11,7 @@ use collab_database::rows::{CellsBuilder, CreateRowParams};
 use collab_database::user::DatabaseCollabService;
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout, LayoutSetting, LayoutSettings};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::cloud_storage::CollabType;
 use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
 
 use tempfile::TempDir;
@@ -19,6 +20,8 @@ pub use crate::helper::*;
 use crate::user_test::helper::TestUserDatabaseCollabBuilderImpl;
 
 pub struct DatabaseTest {
+  #[allow(dead_code)]
+  collab_db: Arc<RocksCollabDB>,
   database: Database,
 }
 
@@ -44,11 +47,11 @@ impl DerefMut for DatabaseTest {
 pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(RocksCollabDB::open(path).unwrap());
+  let collab_db = Arc::new(RocksCollabDB::open(path).unwrap());
   let collab = CollabBuilder::new(uid, database_id).build().unwrap();
   collab.lock().initialize();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
-  let block = Block::new(uid, db, collab_builder.clone());
+  let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder.clone());
   let context = DatabaseContext {
     collab: Arc::new(collab),
     block,
@@ -61,21 +64,24 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     ..Default::default()
   };
   let database = Database::create_with_inline_view(params, context).unwrap();
-  DatabaseTest { database }
+  DatabaseTest {
+    database,
+    collab_db,
+  }
 }
 
 pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<RocksCollabDB>, DatabaseTest) {
-  let db = make_rocks_db();
+  let collab_db = make_rocks_db();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let collab = collab_builder.build_collab_with_config(
     uid,
     database_id,
-    "database",
-    db.clone(),
+    CollabType::Database,
+    Arc::downgrade(&collab_db),
     CollabRawData::default(),
     &CollabPersistenceConfig::default(),
   );
-  let block = Block::new(uid, db.clone(), collab_builder.clone());
+  let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder.clone());
   let context = DatabaseContext {
     collab,
     block,
@@ -88,31 +94,40 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<RocksCollabD
     ..Default::default()
   };
   let database = Database::create_with_inline_view(params, context).unwrap();
-  (db, DatabaseTest { database })
+  (
+    collab_db.clone(),
+    DatabaseTest {
+      database,
+      collab_db,
+    },
+  )
 }
 
 pub fn restore_database_from_db(
   uid: i64,
   database_id: &str,
-  db: Arc<RocksCollabDB>,
+  collab_db: Arc<RocksCollabDB>,
 ) -> DatabaseTest {
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let collab = collab_builder.build_collab_with_config(
     uid,
     database_id,
-    "database",
-    db.clone(),
+    CollabType::Database,
+    Arc::downgrade(&collab_db),
     CollabRawData::default(),
     &CollabPersistenceConfig::default(),
   );
-  let block = Block::new(uid, db, collab_builder.clone());
+  let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder.clone());
   let context = DatabaseContext {
     collab,
     block,
     collab_builder,
   };
   let database = Database::get_or_create(database_id, context).unwrap();
-  DatabaseTest { database }
+  DatabaseTest {
+    database,
+    collab_db,
+  }
 }
 
 pub struct DatabaseTestBuilder {
@@ -161,13 +176,13 @@ impl DatabaseTestBuilder {
   pub fn build(self) -> DatabaseTest {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
-    let db = Arc::new(RocksCollabDB::open(path).unwrap());
+    let collab_db = Arc::new(RocksCollabDB::open(path).unwrap());
     let collab = CollabBuilder::new(self.uid, &self.database_id)
       .build()
       .unwrap();
     collab.lock().initialize();
     let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
-    let block = Block::new(self.uid, db, collab_builder.clone());
+    let block = Block::new(self.uid, Arc::downgrade(&collab_db), collab_builder.clone());
     let context = DatabaseContext {
       collab: Arc::new(collab),
       block,
@@ -186,7 +201,10 @@ impl DatabaseTestBuilder {
       fields: self.fields,
     };
     let database = Database::create_with_inline_view(params, context).unwrap();
-    DatabaseTest { database }
+    DatabaseTest {
+      database,
+      collab_db,
+    }
   }
 }
 

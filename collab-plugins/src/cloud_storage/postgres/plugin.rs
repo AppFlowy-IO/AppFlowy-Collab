@@ -15,7 +15,7 @@ use collab_persistence::TransactionMutExt;
 use collab_sync::client::sink::{SinkConfig, SinkStrategy};
 use parking_lot::RwLock;
 use tokio_retry::strategy::FibonacciBackoff;
-use tokio_retry::{Action, Retry};
+use tokio_retry::{Action, Condition, RetryIf};
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 use y_sync::awareness::Awareness;
@@ -30,7 +30,7 @@ pub struct SupabaseDBPlugin {
   uid: i64,
   object: CollabObject,
   local_collab: Weak<MutexCollab>,
-  local_collab_storage: Arc<RocksCollabDB>,
+  local_collab_storage: Weak<RocksCollabDB>,
   remote_collab: Arc<RemoteCollab>,
   remote_collab_storage: Arc<dyn RemoteCollabStorage>,
   pending_updates: Arc<RwLock<Vec<Vec<u8>>>>,
@@ -44,7 +44,7 @@ impl SupabaseDBPlugin {
     local_collab: Weak<MutexCollab>,
     sync_per_secs: u64,
     remote_collab_storage: Arc<dyn RemoteCollabStorage>,
-    local_collab_storage: Arc<RocksCollabDB>,
+    local_collab_storage: Weak<RocksCollabDB>,
   ) -> Self {
     let pending_updates = Arc::new(RwLock::new(Vec::new()));
     let is_first_sync_done = Arc::new(AtomicBool::new(false));
@@ -83,27 +83,28 @@ impl SupabaseDBPlugin {
       remote_collab_storage,
     }
   }
+
+  fn make_init_action(&self) -> InitSyncAction {
+    InitSyncAction {
+      uid: self.uid,
+      object: self.object.clone(),
+      remote_collab: Arc::downgrade(&self.remote_collab),
+      local_collab: self.local_collab.clone(),
+      local_collab_storage: self.local_collab_storage.clone(),
+      remote_collab_storage: Arc::downgrade(&self.remote_collab_storage),
+      pending_updates: Arc::downgrade(&self.pending_updates),
+      is_first_sync_done: Arc::downgrade(&self.is_first_sync_done),
+    }
+  }
 }
 
 impl CollabPlugin for SupabaseDBPlugin {
   fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
     // TODO(nathan): retry action might take a long time even if the network is ready or enable of
     // the [RemoteCollabStorage] is true
-    let retry_strategy = FibonacciBackoff::from_millis(2000);
-    let action = InitSyncAction {
-      uid: self.uid,
-      object: self.object.clone(),
-      remote_collab: Arc::downgrade(&self.remote_collab),
-      local_collab: self.local_collab.clone(),
-      local_collab_storage: Arc::downgrade(&self.local_collab_storage),
-      remote_collab_storage: Arc::downgrade(&self.remote_collab_storage),
-      pending_updates: Arc::downgrade(&self.pending_updates),
-      is_first_sync_done: Arc::downgrade(&self.is_first_sync_done),
-    };
-
-    tokio::spawn(async move {
-      let _ = Retry::spawn(retry_strategy, action).await;
-    });
+    let action = self.make_init_action();
+    let condition = RetryCondition(Arc::downgrade(&self.remote_collab));
+    init_sync(action, condition)
   }
 
   fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
@@ -187,20 +188,22 @@ fn create_snapshot_if_need(
       .await
       {
         // Send the full sync data to remote
-        match remote_collab_storage
-          .create_snapshot(&cloned_object, doc_state)
-          .await
-        {
-          Ok(snapshot_id) => {
-            tracing::debug!("{} remote snapshot created", cloned_object.id);
-            if let Some(local_collab) = weak_local_collab.upgrade() {
-              local_collab
-                .lock()
-                .set_snapshot_state(SnapshotState::DidCreateSnapshot { snapshot_id });
-            }
-          },
-          Err(e) => tracing::error!("🔴{}", e),
-        }
+        tokio::spawn(async move {
+          match remote_collab_storage
+            .create_snapshot(&cloned_object, doc_state)
+            .await
+          {
+            Ok(snapshot_id) => {
+              tracing::debug!("{} remote snapshot created", cloned_object.id);
+              if let Some(local_collab) = weak_local_collab.upgrade() {
+                local_collab
+                  .lock()
+                  .set_snapshot_state(SnapshotState::DidCreateSnapshot { snapshot_id });
+              }
+            },
+            Err(e) => tracing::error!("🔴{}", e),
+          }
+        });
       }
     }
   });
@@ -266,4 +269,18 @@ impl Action for InitSyncAction {
       }
     })
   }
+}
+
+struct RetryCondition(Weak<RemoteCollab>);
+impl Condition<anyhow::Error> for RetryCondition {
+  fn should_retry(&mut self, _error: &anyhow::Error) -> bool {
+    self.0.upgrade().is_some()
+  }
+}
+
+fn init_sync(action: InitSyncAction, condition: RetryCondition) {
+  let retry_strategy = FibonacciBackoff::from_millis(2000);
+  tokio::spawn(async move {
+    let _ = RetryIf::spawn(retry_strategy, action, condition).await;
+  });
 }

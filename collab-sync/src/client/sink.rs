@@ -5,6 +5,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use futures_util::SinkExt;
+
 use tokio::spawn;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tokio::time::{interval, Instant, Interval};
@@ -37,6 +38,12 @@ pub enum SinkState {
   Finished,
 }
 
+impl SinkState {
+  pub fn is_init(&self) -> bool {
+    matches!(self, SinkState::Init)
+  }
+}
+
 /// Use to sync the [Msg] to the remote.
 pub struct CollabSink<Sink, Msg> {
   /// The [Sink] is used to send the messages to the remote. It might be a websocket sink or
@@ -45,7 +52,7 @@ pub struct CollabSink<Sink, Msg> {
 
   /// The [PendingMsgQueue] is used to queue the messages that are waiting to be sent to the
   /// remote. It will merge the messages if possible.
-  pending_msgs: Arc<parking_lot::Mutex<PendingMsgQueue<Msg>>>,
+  pending_msg_queue: Arc<parking_lot::Mutex<PendingMsgQueue<Msg>>>,
   msg_id_counter: Arc<dyn MsgIdCounter>,
 
   /// The [watch::Sender] is used to notify the [CollabSinkRunner] to process the pending messages.
@@ -88,8 +95,8 @@ where
     let notifier = Arc::new(notifier);
     let state_notifier = Arc::new(sync_state_tx);
     let sender = Arc::new(Mutex::new(sink));
-    let pending_msgs = PendingMsgQueue::new();
-    let pending_msgs = Arc::new(parking_lot::Mutex::new(pending_msgs));
+    let pending_msg_queue = PendingMsgQueue::new();
+    let pending_msg_queue = Arc::new(parking_lot::Mutex::new(pending_msg_queue));
     let msg_id_counter = Arc::new(msg_id_counter);
     //
     let instant = Mutex::new(Instant::now());
@@ -102,7 +109,7 @@ where
     }
     Self {
       sender,
-      pending_msgs,
+      pending_msg_queue,
       msg_id_counter,
       notifier,
       state_notifier,
@@ -119,7 +126,7 @@ where
   ///
   pub fn queue_msg(&self, f: impl FnOnce(MsgId) -> Msg) {
     {
-      let mut pending_msgs = self.pending_msgs.lock();
+      let mut pending_msgs = self.pending_msg_queue.lock();
       let msg_id = self.msg_id_counter.next();
       let msg = f(msg_id);
       tracing::trace!("queue_msg: {}", msg);
@@ -131,12 +138,12 @@ where
   }
 
   pub fn remove_all_pending_msgs(&self) {
-    self.pending_msgs.lock().clear();
+    self.pending_msg_queue.lock().clear();
   }
 
   /// Notify the sink to process the next message and mark the current message as done.
   pub async fn ack_msg(&self, msg_id: MsgId) {
-    if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {
+    if let Some(mut pending_msg) = self.pending_msg_queue.lock().peek_mut() {
       if pending_msg.msg_id() == msg_id {
         pending_msg.set_state(MessageState::Done);
       }
@@ -148,7 +155,7 @@ where
     // Check if the next message can be deferred. If not, try to send the message immediately. The
     // default value is true.
     let deferrable = self
-      .pending_msgs
+      .pending_msg_queue
       .try_lock()
       .map(|pending_msgs| {
         pending_msgs
@@ -159,7 +166,8 @@ where
       .unwrap_or(true);
 
     if !deferrable {
-      return self.try_send_msg_immediately().await;
+      self.try_send_msg_immediately().await;
+      return Ok(());
     }
 
     // Check the elapsed time from the last message. Return if the elapsed time is less than
@@ -181,99 +189,85 @@ where
       *self.instant.lock().await = Instant::now();
     }
 
-    self.try_send_msg_immediately().await
+    self.try_send_msg_immediately().await;
+    Ok(())
   }
 
-  async fn try_send_msg_immediately(&self) -> Result<(), SyncError> {
-    let pending_msg = match self.pending_msgs.try_lock() {
-      None => {
-        // If acquire the lock failed, try to notify again after 100ms
-        let weak_notifier = Arc::downgrade(&self.notifier);
-        spawn(async move {
-          interval(Duration::from_millis(100)).tick().await;
-          if let Some(notifier) = weak_notifier.upgrade() {
-            let _ = notifier.send(false);
+  async fn try_send_msg_immediately(&self) -> Option<()> {
+    let (tx, rx) = oneshot::channel();
+    let collab_msg = {
+      let (mut pending_msg_queue, mut sending_msg) = match self.pending_msg_queue.try_lock() {
+        None => {
+          // If acquire the lock failed, try to notify again after 100ms
+          let weak_notifier = Arc::downgrade(&self.notifier);
+          spawn(async move {
+            interval(Duration::from_millis(100)).tick().await;
+            if let Some(notifier) = weak_notifier.upgrade() {
+              let _ = notifier.send(false);
+            }
+          });
+          None
+        },
+        Some(mut pending_msg_queue) => pending_msg_queue
+          .pop()
+          .map(|sending_msg| (pending_msg_queue, sending_msg)),
+      }?;
+      if sending_msg.state().is_done() {
+        // Notify to process the next pending message
+        self.notify();
+        return None;
+      }
+
+      // Do nothing if the message is still processing.
+      if sending_msg.state().is_processing() {
+        return None;
+      }
+
+      // If the message can merge other messages, try to merge the next message until the
+      // message is not mergeable.
+      if sending_msg.is_mergeable() {
+        while let Some(pending_msg) = pending_msg_queue.pop() {
+          tracing::trace!("merge_msg: {}", pending_msg.get_msg());
+          sending_msg.merge(pending_msg);
+          if !sending_msg.is_mergeable() {
+            break;
           }
-        });
-        None
-      },
-      Some(mut pending_msg) => pending_msg.pop(),
+        }
+      }
+
+      sending_msg.set_state(MessageState::Processing);
+      sending_msg.set_ret(tx);
+      if !sending_msg.is_init() {
+        let _ = self.state_notifier.send(SinkState::Syncing);
+      }
+      let collab_msg = sending_msg.get_msg().clone();
+      pending_msg_queue.push(sending_msg);
+      collab_msg
     };
 
-    match pending_msg {
-      Some(mut sending_msg) => {
-        if sending_msg.state().is_done() {
-          // Notify to process the next pending message
-          self.notify();
-          return Ok(());
-        }
-
-        // Do nothing if the message is still processing.
-        if sending_msg.state().is_processing() {
-          return Ok(());
-        }
-
-        // If the message can merge other messages, try to merge the next message until the
-        // message is not mergeable.
-        if sending_msg.is_mergeable() {
-          if let Some(mut pending_msgs) = self.pending_msgs.try_lock() {
-            while let Some(pending_msg) = pending_msgs.pop() {
-              tracing::trace!("merge_msg: {}", pending_msg.get_msg());
-              sending_msg.merge(pending_msg);
-
-              // Stop merging if the message is not mergeable.
-              if !sending_msg.is_mergeable() {
-                break;
-              }
-            }
+    let mut sender = self.sender.lock().await;
+    tracing::trace!("[🦀Collab]: sync {}", collab_msg);
+    sender.send(collab_msg).await.ok()?;
+    // Wait for the message to be acked.
+    // If the message is not acked within the timeout, resend the message.
+    match tokio::time::timeout(self.config.timeout, rx).await {
+      Ok(_) => {
+        if let Some(mut pending_msgs) = self.pending_msg_queue.try_lock() {
+          pending_msgs.pop();
+          if pending_msgs.is_empty() {
+            let _ = self.state_notifier.send(SinkState::Finished);
           }
         }
-
-        let (tx, rx) = oneshot::channel();
-        sending_msg.set_state(MessageState::Processing);
-        sending_msg.set_ret(tx);
-        let is_init_msg = sending_msg.is_init();
-
-        // Push back the pending message to the queue.
-        let collab_msg = sending_msg.get_msg().clone();
-        self.pending_msgs.lock().push(sending_msg);
-
-        if !is_init_msg {
-          let _ = self.state_notifier.send(SinkState::Syncing);
-        }
-        let mut sender = self.sender.lock().await;
-        tracing::trace!("[🦀Collab]: sync {}", collab_msg);
-        sender
-          .send(collab_msg)
-          .await
-          .map_err(|e| SyncError::Internal(Box::new(e)))?;
-
-        // Wait for the message to be acked.
-        // If the message is not acked within the timeout, resend the message.
-        match tokio::time::timeout(self.config.timeout, rx).await {
-          Ok(_) => {
-            if let Some(pending_msg) = self.pending_msgs.try_lock() {
-              if pending_msg.is_empty() && !is_init_msg {
-                let _ = self.state_notifier.send(SinkState::Finished);
-              }
-            }
-            self.notify()
-          },
-          Err(_) => {
-            if let Some(mut pending_msg) = self.pending_msgs.lock().peek_mut() {
-              pending_msg.set_state(MessageState::Timeout);
-            }
-            self.notify();
-          },
-        }
-        Ok(())
+        self.notify()
       },
-      None => {
-        // All messages are processed.
-        let _ = self.state_notifier.send(SinkState::Finished);
-        Ok(())
+      Err(_) => {
+        if let Some(mut pending_msg) = self.pending_msg_queue.lock().peek_mut() {
+          pending_msg.set_state(MessageState::Timeout);
+        }
+        self.notify();
       },
     }
+    None
   }
 
   /// Notify the sink to process the next message.

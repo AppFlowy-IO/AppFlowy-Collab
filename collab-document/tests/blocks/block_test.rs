@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::blocks::block_test_core::{BlockTestCore, TEXT_BLOCK_TYPE};
-
 use serde_json::json;
+
+use crate::blocks::block_test_core::{BlockTestCore, TEXT_BLOCK_TYPE};
 
 #[tokio::test]
 async fn create_default_document_test() {
@@ -25,7 +25,7 @@ async fn open_document_test() {
   let page = test.get_page();
   let page_id = page.id.as_str();
   let collab = test.collab;
-  let test = BlockTestCore::open(collab);
+  let test = BlockTestCore::open(collab, test.db);
   let page = test.get_page();
   let reopened_page_id = page.id.as_str();
   assert_eq!(page_id, reopened_page_id);
