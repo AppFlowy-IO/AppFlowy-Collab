@@ -28,7 +28,7 @@ base64 = "^0.21"
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 
 [dev-dependencies]
-collab-plugins = { path = "../collab-plugins", features = ["disk_rocksdb"] }
+collab-plugins = { path = "../collab-plugins", features = ["rocksdb_plugin"] }
 tempfile = "3.4.0"
 tokio = { version = "1.26", features = ["full"] }
 assert-json-diff = "2.0.2"

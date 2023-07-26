@@ -1,10 +1,10 @@
-#[cfg(feature = "disk_rocksdb")]
+#[cfg(feature = "rocksdb_plugin")]
 pub mod rocksdb;
 
 #[cfg(feature = "disk_sled")]
 pub mod sled;
 
-#[cfg(feature = "disk_rocksdb")]
+#[cfg(feature = "rocksdb_plugin")]
 pub mod rocksdb_server;
 
 #[derive(Clone)]

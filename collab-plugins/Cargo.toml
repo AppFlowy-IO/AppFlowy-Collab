@@ -31,7 +31,7 @@ similar = { version = "2.2.1" }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 
 [dev-dependencies]
-collab-plugins = { path = ".", features = ["disk_rocksdb", "disk_sled", "aws_storage_plugin"] }
+collab-plugins = { path = ".", features = ["rocksdb_plugin", "disk_sled", "aws_storage_plugin"] }
 tempfile = "3.4.0"
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
@@ -49,7 +49,7 @@ dotenv = "0.15.0"
 
 [features]
 default = []
-disk_rocksdb = ["collab-persistence/rocksdb_persistence"]
+rocksdb_plugin = ["collab-persistence/rocksdb_persistence"]
 disk_sled = []
 aws_storage_plugin = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types"]
 postgres_storage_plugin = ["collab-persistence/rocksdb_persistence"]
