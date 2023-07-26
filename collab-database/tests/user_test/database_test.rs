@@ -1,6 +1,3 @@
-
-
-
 use collab_database::rows::CreateRowParams;
 use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 
