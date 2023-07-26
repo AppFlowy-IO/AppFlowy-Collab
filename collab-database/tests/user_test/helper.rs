@@ -128,7 +128,7 @@ pub fn workspace_database_with_db(
   let database_storage_id = "database_storage_id";
   let collab = builder.build_collab_with_config(
     uid,
-    &database_storage_id,
+    database_storage_id,
     CollabType::WorkspaceDatabase,
     collab_db.clone(),
     CollabRawData::default(),
