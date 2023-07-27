@@ -7,6 +7,7 @@ use collab::preclude::CollabBuilder;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::cloud_storage::aws::AWSDynamoDBPlugin;
 use collab_plugins::cloud_storage::network_state::{CollabNetworkReachability, CollabNetworkState};
+use collab_plugins::cloud_storage::postgres::SupabaseDBPlugin;
 use collab_plugins::cloud_storage::{CollabObject, CollabType, RemoteCollabStorage};
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -157,7 +158,7 @@ impl AppFlowyCollabBuilder {
         }
       },
       CollabStorageType::Supabase => {
-        #[cfg(feature = "rocksdb_plugin")]
+        #[cfg(feature = "postgres_storage_plugin")]
         {
           let workspace_id = self.workspace_id.read().clone().ok_or_else(|| {
             anyhow::anyhow!("When using supabase plugin, the workspace_id should not be empty")

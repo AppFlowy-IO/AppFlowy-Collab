@@ -30,7 +30,7 @@ pub struct SupabaseDBPlugin {
   uid: i64,
   object: CollabObject,
   local_collab: Weak<MutexCollab>,
-  local_collab_storage: Arc<RocksCollabDB>,
+  local_collab_storage: Weak<RocksCollabDB>,
   remote_collab: Arc<RemoteCollab>,
   remote_collab_storage: Arc<dyn RemoteCollabStorage>,
   pending_updates: Arc<RwLock<Vec<Vec<u8>>>>,
@@ -44,7 +44,7 @@ impl SupabaseDBPlugin {
     local_collab: Weak<MutexCollab>,
     sync_per_secs: u64,
     remote_collab_storage: Arc<dyn RemoteCollabStorage>,
-    local_collab_storage: Arc<RocksCollabDB>,
+    local_collab_storage: Weak<RocksCollabDB>,
   ) -> Self {
     let pending_updates = Arc::new(RwLock::new(Vec::new()));
     let is_first_sync_done = Arc::new(AtomicBool::new(false));
@@ -95,7 +95,7 @@ impl CollabPlugin for SupabaseDBPlugin {
       object: self.object.clone(),
       remote_collab: Arc::downgrade(&self.remote_collab),
       local_collab: self.local_collab.clone(),
-      local_collab_storage: Arc::downgrade(&self.local_collab_storage),
+      local_collab_storage: self.local_collab_storage.clone(),
       remote_collab_storage: Arc::downgrade(&self.remote_collab_storage),
       pending_updates: Arc::downgrade(&self.pending_updates),
       is_first_sync_done: Arc::downgrade(&self.is_first_sync_done),
