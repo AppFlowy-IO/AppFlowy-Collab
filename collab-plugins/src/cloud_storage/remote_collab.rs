@@ -17,6 +17,7 @@ use collab_sync::client::sink::{
 use collab_sync::client::TokioUnboundedSink;
 use parking_lot::Mutex;
 use rand::Rng;
+use serde::Deserialize;
 use tokio::spawn;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::watch;
@@ -275,10 +276,11 @@ pub fn should_create_snapshot(state: &RemoteCollabState) -> bool {
   state.current_edit_count > state.last_snapshot_edit_count + 50
 }
 
+#[derive(Deserialize)]
 pub struct RemoteCollabSnapshot {
-  pub snapshot_id: i64,
+  pub sid: i64,
   pub oid: String,
-  pub data: Vec<u8>,
+  pub blob: Vec<u8>,
   pub created_at: i64,
 }
 
