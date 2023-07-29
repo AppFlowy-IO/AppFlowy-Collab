@@ -4,12 +4,13 @@ use std::sync::{Arc, Weak};
 use anyhow::Error;
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::preclude::CollabBuilder;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::cloud_storage::aws::AWSDynamoDBPlugin;
 use collab_plugins::cloud_storage::network_state::{CollabNetworkReachability, CollabNetworkState};
 use collab_plugins::cloud_storage::postgres::SupabaseDBPlugin;
 use collab_plugins::cloud_storage::{CollabObject, CollabType, RemoteCollabStorage};
-use collab_plugins::disk::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::snapshot::{CollabSnapshotPlugin, SnapshotPersistence};
 use parking_lot::RwLock;
 
@@ -135,41 +136,47 @@ impl AppFlowyCollabBuilder {
     // tracing::trace!("collab storage type: {:?}", cloud_storage_type);
     match cloud_storage_type {
       CollabStorageType::AWS => {
-        if let Some(config) = collab_config.aws_config() {
-          if !config.enable {
-            std::env::remove_var(AWS_ACCESS_KEY_ID);
-            std::env::remove_var(AWS_SECRET_ACCESS_KEY);
-          } else {
-            std::env::set_var(AWS_ACCESS_KEY_ID, &config.access_key_id);
-            std::env::set_var(AWS_SECRET_ACCESS_KEY, &config.secret_access_key);
-            let plugin = AWSDynamoDBPlugin::new(
-              object_id.to_string(),
-              Arc::downgrade(&collab),
-              10,
-              config.region.clone(),
-            );
-            collab.lock().add_plugin(Arc::new(plugin));
-            // tracing::debug!("add aws plugin: {:?}", cloud_storage_type);
+        #[cfg(feature = "aws_storage_plugin")]
+        {
+          if let Some(config) = collab_config.aws_config() {
+            if !config.enable {
+              std::env::remove_var(AWS_ACCESS_KEY_ID);
+              std::env::remove_var(AWS_SECRET_ACCESS_KEY);
+            } else {
+              std::env::set_var(AWS_ACCESS_KEY_ID, &config.access_key_id);
+              std::env::set_var(AWS_SECRET_ACCESS_KEY, &config.secret_access_key);
+              let plugin = AWSDynamoDBPlugin::new(
+                object_id.to_string(),
+                Arc::downgrade(&collab),
+                10,
+                config.region.clone(),
+              );
+              collab.lock().add_plugin(Arc::new(plugin));
+              // tracing::debug!("add aws plugin: {:?}", cloud_storage_type);
+            }
           }
         }
       },
       CollabStorageType::Supabase => {
-        let workspace_id = self.workspace_id.read().clone().ok_or_else(|| {
-          anyhow::anyhow!("When using supabase plugin, the workspace_id should not be empty")
-        })?;
-        let collab_object = CollabObject::new(uid, object_id.to_string(), object_type.clone())
-          .with_workspace_id(workspace_id);
-        let local_collab_storage = collab_db.clone();
-        if let Some(remote_collab_storage) = cloud_storage.get_storage(&cloud_storage_type) {
-          let plugin = SupabaseDBPlugin::new(
-            uid,
-            collab_object,
-            Arc::downgrade(&collab),
-            1,
-            remote_collab_storage,
-            local_collab_storage,
-          );
-          collab.lock().add_plugin(Arc::new(plugin));
+        #[cfg(feature = "postgres_storage_plugin")]
+        {
+          let workspace_id = self.workspace_id.read().clone().ok_or_else(|| {
+            anyhow::anyhow!("When using supabase plugin, the workspace_id should not be empty")
+          })?;
+          let collab_object = CollabObject::new(uid, object_id.to_string(), object_type.clone())
+            .with_workspace_id(workspace_id);
+          let local_collab_storage = collab_db.clone();
+          if let Some(remote_collab_storage) = cloud_storage.get_storage(&cloud_storage_type) {
+            let plugin = SupabaseDBPlugin::new(
+              uid,
+              collab_object,
+              Arc::downgrade(&collab),
+              1,
+              remote_collab_storage,
+              local_collab_storage,
+            );
+            collab.lock().add_plugin(Arc::new(plugin));
+          }
         }
       },
       CollabStorageType::Local => {},

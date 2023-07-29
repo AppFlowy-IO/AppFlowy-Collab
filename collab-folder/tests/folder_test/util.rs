@@ -9,7 +9,7 @@ use collab_folder::core::{
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
-use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;

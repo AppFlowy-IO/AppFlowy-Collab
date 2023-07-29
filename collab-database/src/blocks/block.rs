@@ -6,7 +6,7 @@ use collab::core::collab::{CollabRawData, MutexCollab};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::cloud_storage::CollabType;
-use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
+use collab_plugins::local_storage::CollabPersistenceConfig;
 use lru::LruCache;
 use parking_lot::Mutex;
 use tokio::sync::broadcast;

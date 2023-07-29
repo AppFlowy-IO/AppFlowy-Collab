@@ -11,7 +11,7 @@ use collab_database::user::WorkspaceDatabase;
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
+use collab_plugins::local_storage::CollabPersistenceConfig;
 use serde_json::Value;
 
 use crate::helper::{db_path, TestTextCell};

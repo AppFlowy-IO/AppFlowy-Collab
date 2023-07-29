@@ -23,4 +23,4 @@ tokio-stream = { version = "0.1.14", features = ["sync"] }
 tokio = { version = "1.26", features = ["full"] }
 tempfile = "3.4.0"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
-collab-plugins = { path = "../collab-plugins", features = ["disk_rocksdb"] }
+collab-plugins = { path = "../collab-plugins", features = ["rocksdb_plugin"] }

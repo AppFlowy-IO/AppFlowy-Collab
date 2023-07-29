@@ -8,10 +8,9 @@ use collab_document::blocks::{
 };
 use collab_document::document::Document;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use serde_json::json;
-
-use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
 
 use crate::util::db;
 
