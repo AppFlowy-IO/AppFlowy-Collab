@@ -4,16 +4,21 @@ use std::sync::{Arc, Once};
 
 use collab::preclude::CollabBuilder;
 use collab_folder::core::{
-  Folder, FolderNotify, RepeatedViewIdentifier, TrashChangeReceiver, View, ViewChangeReceiver,
-  ViewIdentifier, ViewLayout, Workspace,
+  Folder, FolderData, FolderNotify, RepeatedViewIdentifier, TrashChangeReceiver, View,
+  ViewChangeReceiver, ViewIdentifier, ViewLayout, Workspace,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
 use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
+use nanoid::nanoid;
+use std::fs::{create_dir_all, File};
+use std::io::copy;
+use std::path::Path;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
+use zip::read::ZipArchive;
 
 pub struct FolderTest {
   folder: Folder,
@@ -33,13 +38,16 @@ unsafe impl Send for FolderTest {}
 unsafe impl Sync for FolderTest {}
 
 pub fn create_folder(id: &str) -> FolderTest {
+  create_folder_with_data(id, None)
+}
+
+pub fn create_folder_with_data(id: &str, folder_data: Option<FolderData>) -> FolderTest {
   let uid = 1;
   let tempdir = TempDir::new().unwrap();
-  let path = tempdir.into_path();
-  let db = Arc::new(RocksCollabDB::open(path.clone()).unwrap());
+  let db_path = tempdir.into_path();
+  let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
   let disk_plugin = RocksdbDiskPlugin::new(uid, db);
-  let cleaner: Cleaner = Cleaner::new(path);
-
+  let cleaner: Cleaner = Cleaner::new(db_path);
   let collab = CollabBuilder::new(1, id)
     .with_plugin(disk_plugin)
     .build()
@@ -47,13 +55,37 @@ pub fn create_folder(id: &str) -> FolderTest {
   collab.lock().initialize();
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
-
   let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
   let context = FolderNotify {
     view_change_tx: view_tx,
     trash_change_tx: trash_tx,
   };
-  let folder = Folder::create(Arc::new(collab), Some(context), None);
+  let folder = Folder::create(Arc::new(collab), Some(context), folder_data);
+  FolderTest {
+    folder,
+    cleaner,
+    view_rx,
+    trash_rx: Some(trash_rx),
+  }
+}
+
+pub fn open_folder_with_db(uid: i64, object_id: &str, db_path: PathBuf) -> FolderTest {
+  let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
+  let disk_plugin = RocksdbDiskPlugin::new(uid, db);
+  let cleaner: Cleaner = Cleaner::new(db_path);
+  let collab = CollabBuilder::new(1, object_id)
+    .with_plugin(disk_plugin)
+    .build()
+    .unwrap();
+  collab.lock().initialize();
+
+  let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
+  let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
+  let context = FolderNotify {
+    view_change_tx: view_tx,
+    trash_change_tx: trash_tx,
+  };
+  let folder = Folder::open(Arc::new(collab), Some(context));
   FolderTest {
     folder,
     cleaner,
@@ -136,4 +168,39 @@ pub fn setup_log() {
       .finish();
     subscriber.try_init().unwrap();
   });
+}
+
+pub fn unzip_to_folder(zip_file_name: &str) -> std::io::Result<PathBuf> {
+  // Open the zip file
+  let zip_file_path = format!("./tests/folder_test/history_folder/{}.zip", zip_file_name);
+  let reader = File::open(zip_file_path)?;
+  let output_folder_path = format!(
+    "./tests/folder_test/history_folder/unit_test_{}",
+    nanoid!(6)
+  );
+
+  // Create a ZipArchive from the file
+  let mut archive = ZipArchive::new(reader)?;
+
+  // Iterate through each file in the zip
+  for i in 0..archive.len() {
+    let mut file = archive.by_index(i)?;
+    let outpath = Path::new(&output_folder_path).join(file.mangled_name());
+
+    if file.name().ends_with('/') {
+      // Create directory
+      create_dir_all(&outpath)?;
+    } else {
+      // Write file
+      if let Some(p) = outpath.parent() {
+        if !p.exists() {
+          create_dir_all(p)?;
+        }
+      }
+      let mut outfile = File::create(&outpath)?;
+      copy(&mut file, &mut outfile)?;
+    }
+  }
+  let path = format!("{}/{}", output_folder_path, zip_file_name);
+  Ok(PathBuf::from(path))
 }

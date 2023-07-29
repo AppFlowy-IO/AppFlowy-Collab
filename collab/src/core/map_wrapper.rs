@@ -68,6 +68,27 @@ impl MapRefWrapper {
     ArrayRefWrapper::new(array, self.collab_ctx.clone())
   }
 
+  pub fn insert_array_if_not_exist_with_txn<V: Prelim>(
+    &self,
+    txn: &mut TransactionMut,
+    key: &str,
+    values: Vec<V>,
+  ) -> ArrayRefWrapper {
+    let array_ref = self
+      .map_ref
+      .insert_array_if_not_exist_with_txn(txn, key, values);
+    ArrayRefWrapper::new(array_ref, self.collab_ctx.clone())
+  }
+
+  pub fn insert_map_with_txn_if_not_exist(
+    &self,
+    txn: &mut TransactionMut,
+    key: &str,
+  ) -> MapRefWrapper {
+    let map_ref = self.map_ref.insert_map_if_not_exist_with_txn(txn, key);
+    MapRefWrapper::new(map_ref, self.collab_ctx.clone())
+  }
+
   pub fn get_or_insert_array_with_txn<V: Prelim>(
     &self,
     txn: &mut TransactionMut,
@@ -159,6 +180,9 @@ impl MapRefExtension for MapRefWrapper {
   }
 }
 
+/// A trait defining an interface for interacting with a map reference.
+/// It provides various methods to insert and retrieve different data types to/from the map,
+/// leveraging transactions for maintaining consistency.
 pub trait MapRefExtension {
   fn map_ref(&self) -> &MapRef;
 
@@ -209,12 +233,61 @@ pub trait MapRefExtension {
     self.map_ref().get(txn, key).map(|value| value.to_ymap())?
   }
 
+  /// Retrieves a reference to a map associated with the given key from the underlying datastore,
+  /// or inserts a new, empty map if no map is associated with the key. This function is transactional,
+  /// meaning the changes made within the function won't be applied until the transaction is committed.
+  /// If the transaction is rolled back, the changes will be discarded.
+  ///
+  /// # Arguments
+  /// * `txn` - A mutable reference to a transaction that is currently in progress.
+  /// * `key` - The key associated with the map in the datastore.
+  ///
+  /// # Returns
+  /// A reference to the map. If a map was already associated with the given key, the returned reference is to the existing map.
+  /// Otherwise, it references the newly inserted empty map.
+  ///
   fn get_or_insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
     self
       .get_map_with_txn(txn, key)
       .unwrap_or_else(|| self.insert_map_with_txn(txn, key))
   }
 
+  /// Inserts a map into the underlying datastore if a map with the provided key does not already exist.
+  /// This function is transactional, meaning the changes made within the function won't be
+  /// applied until the transaction is committed. If the transaction is rolled back, the changes will be discarded.
+  ///
+  /// This function checks whether a map already exists associated with the given key. If the key does
+  /// not exist, it will create a new map and insert it into the datastore. If a map already exists,
+  /// it will not perform any insert operation.
+  ///
+  /// # Arguments
+  /// * `txn` - A mutable reference to a transaction that is currently in progress.
+  /// * `key` - The key to associate with the map in the datastore.
+  ///
+  fn insert_map_if_not_exist_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
+    match self
+      .map_ref()
+      .get(txn, key)
+      .and_then(|value| value.to_ymap())
+    {
+      None => self
+        .map_ref()
+        .insert(txn, key, MapPrelim::<lib0::any::Any>::new()),
+      Some(map_ref) => map_ref,
+    }
+  }
+
+  /// Retrieves a reference to an array associated with the given key from the underlying datastore,
+  /// or inserts a new, empty array if no array is associated with the key. This function is transactional,
+  /// meaning the changes made within the function won't be applied until the transaction is committed.
+  /// If the transaction is rolled back, the changes will be discarded.
+  ///
+  /// # Type Parameters
+  /// * `V` - The type of elements stored in the array. `V` must implement `Prelim` trait.
+  ///
+  /// # Arguments
+  /// * `txn` - A mutable reference to a transaction that is currently in progress.
+  /// * `key` - The key associated with the array in the datastore.
   fn get_or_insert_array_with_txn<V: Prelim>(
     &self,
     txn: &mut TransactionMut,
@@ -223,6 +296,36 @@ pub trait MapRefExtension {
     self
       .get_array_ref_with_txn(txn, key)
       .unwrap_or_else(|| self.insert_array_with_txn::<V>(txn, key, vec![]))
+  }
+
+  /// Inserts an array into the underlying datastore if an array with the provided key does not already exist.
+  /// This function is transactional, meaning the changes made within the function won't be applied
+  /// until the transaction is committed. If the transaction is rolled back, the changes will be discarded.
+  ///
+  /// This function checks whether an array already exists associated with the given key. If the key does not exist, it will create a new array and insert it into the datastore. If an array already exists, it will not perform any insert operation.
+  ///
+  /// # Type Parameters
+  /// * `V` - The type of elements stored in the array. `V` must implement `Prelim` trait.
+  ///
+  /// # Arguments
+  /// * `txn` - A mutable reference to a transaction that is currently in progress.
+  /// * `key` - The key to associate with the array in the datastore.
+  /// * `values` - The values to be stored in the array if a new array needs to be created.
+  ///
+  fn insert_array_if_not_exist_with_txn<V: Prelim>(
+    &self,
+    txn: &mut TransactionMut,
+    key: &str,
+    values: Vec<V>,
+  ) -> ArrayRef {
+    match self
+      .map_ref()
+      .get(txn, key)
+      .and_then(|value| value.to_yarray())
+    {
+      None => self.map_ref().insert(txn, key, ArrayPrelim::from(values)),
+      Some(array_ref) => array_ref,
+    }
   }
 
   fn get_str_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<String> {

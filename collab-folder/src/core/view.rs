@@ -475,6 +475,7 @@ pub struct View {
   pub desc: String,
   pub children: RepeatedViewIdentifier,
   pub created_at: i64,
+  #[serde(default)]
   pub is_favorite: bool,
   pub layout: ViewLayout,
   pub icon_url: Option<String>,

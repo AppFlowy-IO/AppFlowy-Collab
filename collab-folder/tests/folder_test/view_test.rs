@@ -71,7 +71,7 @@ async fn update_view_test() {
   let r_view = folder_test.views.get_view("v1").unwrap();
   assert_eq!(r_view.name, "Untitled");
   assert_eq!(r_view.desc, "My first view");
-  assert_eq!(r_view.is_favorite, true);
+  assert!(r_view.is_favorite);
 }
 
 #[tokio::test]
