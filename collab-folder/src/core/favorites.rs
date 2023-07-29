@@ -27,6 +27,7 @@ impl FavoritesArray {
       .map(|item| FavoritesInfo { id: item.id })
       .collect::<Vec<_>>()
   }
+
   pub fn get_all_favorites_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<FavoriteRecord> {
     let mut favorites = vec![];
     for value in self.container.iter(txn) {
@@ -47,10 +48,8 @@ impl FavoritesArray {
             update.set_favorite_if_not_none(Some(false)).done()
           });
       });
-    });
-    self.container.with_transact_mut(|txn| {
       self.delete_favorites_with_txn(txn, ids);
-    })
+    });
   }
 
   pub fn delete_favorites_with_txn<T: AsRef<str>>(&self, txn: &mut TransactionMut, ids: Vec<T>) {
@@ -68,17 +67,15 @@ impl FavoritesArray {
   /// Adds a favorited record to be used when a view / views is / are favorited
   pub fn add_favorites(&self, favorite_records: Vec<FavoriteRecord>) {
     self.container.with_transact_mut(|txn| {
-      favorite_records.clone().iter().for_each(|record| {
+      favorite_records.iter().for_each(|record| {
         self
           .view_map
           .update_view_with_txn(txn, &record.id, |update| {
             update.set_favorite_if_not_none(Some(true)).done()
           });
       });
-    });
-    self.container.with_transact_mut(|txn| {
       self.add_favorites_with_txn(txn, favorite_records);
-    })
+    });
   }
 
   pub fn add_favorites_with_txn(
@@ -120,6 +117,14 @@ impl From<FavoriteRecord> for lib0Any {
   }
 }
 
+impl From<&FavoriteRecord> for FavoriteRecord {
+  fn from(value: &FavoriteRecord) -> Self {
+    FavoriteRecord {
+      id: value.id.clone(),
+      workspace_id: value.workspace_id.clone(),
+    }
+  }
+}
 impl TryFrom<&YrsValue> for FavoriteRecord {
   type Error = anyhow::Error;
 
