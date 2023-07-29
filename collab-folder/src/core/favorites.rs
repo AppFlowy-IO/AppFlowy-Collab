@@ -44,7 +44,7 @@ impl FavoritesArray {
       ids.iter().for_each(|record| {
         self
           .view_map
-          .update_view_with_txn(txn, &record.as_ref(), |update| {
+          .update_view_with_txn(txn, record.as_ref(), |update| {
             update.set_favorite_if_not_none(Some(false)).done()
           });
       });
