@@ -1,6 +1,6 @@
 use std::future::Future;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use collab::core::collab::{CollabRawData, MutexCollab};
@@ -11,15 +11,17 @@ use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::rows::CreateRowParams;
 use collab_database::user::{
-  make_workspace_database_id, CollabFuture, CollabObjectUpdate, CollabObjectUpdateByOid,
-  DatabaseCollabService, RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
+  CollabFuture, CollabObjectUpdate, CollabObjectUpdateByOid, DatabaseCollabService,
+  RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
 };
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk::rocksdb::{CollabPersistenceConfig, RocksdbDiskPlugin};
+use collab_plugins::cloud_storage::CollabType;
 use parking_lot::Mutex;
 use tokio::sync::mpsc::{channel, Receiver};
 
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::local_storage::CollabPersistenceConfig;
 use rand::Rng;
 use tempfile::TempDir;
 
@@ -29,7 +31,7 @@ pub struct WorkspaceDatabaseTest {
   #[allow(dead_code)]
   uid: i64,
   inner: WorkspaceDatabase,
-  pub db: Arc<RocksCollabDB>,
+  pub collab_db: Arc<RocksCollabDB>,
 }
 
 impl Deref for WorkspaceDatabaseTest {
@@ -51,6 +53,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
   fn get_collab_update(
     &self,
     _object_id: &str,
+    _object_ty: CollabType,
   ) -> CollabFuture<Result<CollabObjectUpdate, DatabaseError>> {
     Box::pin(async move { Ok(vec![]) })
   }
@@ -58,6 +61,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
   fn batch_get_collab_update(
     &self,
     _object_ids: Vec<String>,
+    _object_ty: CollabType,
   ) -> CollabFuture<Result<CollabObjectUpdateByOid, DatabaseError>> {
     Box::pin(async move { Ok(CollabObjectUpdateByOid::default()) })
   }
@@ -66,8 +70,8 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     &self,
     uid: i64,
     object_id: &str,
-    _object_name: &str,
-    collab_db: Arc<RocksCollabDB>,
+    _object_type: CollabType,
+    collab_db: Weak<RocksCollabDB>,
     collab_raw_data: CollabRawData,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab> {
@@ -96,33 +100,37 @@ pub fn workspace_database_test_with_config(
 ) -> WorkspaceDatabaseTest {
   let collab_db = make_rocks_db();
   let builder = TestUserDatabaseCollabBuilderImpl();
+  let database_storage_id = uuid::Uuid::new_v4().to_string();
   let collab = builder.build_collab_with_config(
     uid,
-    &make_workspace_database_id(uid),
-    "databases",
-    collab_db.clone(),
+    &database_storage_id,
+    CollabType::WorkspaceDatabase,
+    Arc::downgrade(&collab_db),
     CollabRawData::default(),
     &config,
   );
-  let inner = WorkspaceDatabase::open(uid, collab, collab_db.clone(), config, builder);
+  let inner = WorkspaceDatabase::open(uid, collab, Arc::downgrade(&collab_db), config, builder);
   WorkspaceDatabaseTest {
     uid,
     inner,
-    db: collab_db,
+    collab_db,
   }
 }
 
 pub fn workspace_database_with_db(
   uid: i64,
-  collab_db: Arc<RocksCollabDB>,
+  collab_db: Weak<RocksCollabDB>,
   config: Option<CollabPersistenceConfig>,
 ) -> WorkspaceDatabase {
   let config = config.unwrap_or_else(|| CollabPersistenceConfig::new().snapshot_per_update(5));
   let builder = TestUserDatabaseCollabBuilderImpl();
+
+  // In test, we use a fixed database_storage_id
+  let database_storage_id = "database_storage_id";
   let collab = builder.build_collab_with_config(
     uid,
-    &make_workspace_database_id(uid),
-    "databases",
+    database_storage_id,
+    CollabType::WorkspaceDatabase,
     collab_db.clone(),
     CollabRawData::default(),
     &config,
@@ -130,9 +138,16 @@ pub fn workspace_database_with_db(
   WorkspaceDatabase::open(uid, collab, collab_db, config, builder)
 }
 
-pub fn user_database_test_with_db(uid: i64, db: Arc<RocksCollabDB>) -> WorkspaceDatabaseTest {
-  let inner = workspace_database_with_db(uid, db.clone(), None);
-  WorkspaceDatabaseTest { uid, inner, db }
+pub fn user_database_test_with_db(
+  uid: i64,
+  collab_db: Arc<RocksCollabDB>,
+) -> WorkspaceDatabaseTest {
+  let inner = workspace_database_with_db(uid, Arc::downgrade(&collab_db), None);
+  WorkspaceDatabaseTest {
+    uid,
+    inner,
+    collab_db,
+  }
 }
 
 pub fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabaseTest {

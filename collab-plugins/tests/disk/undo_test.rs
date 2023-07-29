@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
+use collab_plugins::local_storage::CollabPersistenceConfig;
 use serde_json::json;
 
 use crate::disk::script::CollabPersistenceTest;

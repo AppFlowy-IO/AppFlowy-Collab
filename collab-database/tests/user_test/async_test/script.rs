@@ -11,7 +11,7 @@ use collab_database::user::WorkspaceDatabase;
 use collab_database::views::CreateDatabaseParams;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
+use collab_plugins::local_storage::CollabPersistenceConfig;
 use serde_json::Value;
 
 use crate::helper::{db_path, TestTextCell};
@@ -56,7 +56,7 @@ pub enum DatabaseScript {
 
 #[derive(Clone)]
 pub struct DatabaseTest {
-  pub db: Arc<RocksCollabDB>,
+  pub collab_db: Arc<RocksCollabDB>,
   pub db_path: PathBuf,
   pub workspace_database: Arc<WorkspaceDatabase>,
   pub config: CollabPersistenceConfig,
@@ -69,10 +69,11 @@ pub fn database_test(config: CollabPersistenceConfig) -> DatabaseTest {
 impl DatabaseTest {
   pub fn new(config: CollabPersistenceConfig) -> Self {
     let db_path = db_path();
-    let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
-    let workspace_database = workspace_database_with_db(1, db.clone(), Some(config.clone()));
+    let collab_db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
+    let workspace_database =
+      workspace_database_with_db(1, Arc::downgrade(&collab_db), Some(config.clone()));
     Self {
-      db,
+      collab_db,
       workspace_database: Arc::new(workspace_database),
       db_path,
       config,
@@ -94,7 +95,7 @@ impl DatabaseTest {
     let mut handles = vec![];
     for script in scripts {
       let workspace_database = self.workspace_database.clone();
-      let db = self.db.clone();
+      let db = self.collab_db.clone();
       let config = self.config.clone();
       let handle = tokio::spawn(async move {
         run_script(workspace_database, db, config, script).await;
@@ -153,7 +154,7 @@ pub async fn run_script(
       database_id,
       expected,
     } => {
-      let w_database = workspace_database_with_db(1, db, Some(config.clone()));
+      let w_database = workspace_database_with_db(1, Arc::downgrade(&db), Some(config.clone()));
       let database = w_database.get_database(&database_id).await.unwrap();
       let actual = database.lock().to_json_value();
       assert_json_diff::assert_json_include!(actual: actual, expected: expected);

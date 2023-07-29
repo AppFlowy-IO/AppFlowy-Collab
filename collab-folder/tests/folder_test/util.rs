@@ -9,7 +9,7 @@ use collab_folder::core::{
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
-use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use std::fs::{create_dir_all, File};
 use std::io::copy;
@@ -22,6 +22,9 @@ use zip::read::ZipArchive;
 
 pub struct FolderTest {
   folder: Folder,
+
+  #[allow(dead_code)]
+  db: Arc<RocksCollabDB>,
 
   #[allow(dead_code)]
   cleaner: Cleaner,
@@ -44,10 +47,12 @@ pub fn create_folder(id: &str) -> FolderTest {
 pub fn create_folder_with_data(id: &str, folder_data: Option<FolderData>) -> FolderTest {
   let uid = 1;
   let tempdir = TempDir::new().unwrap();
-  let db_path = tempdir.into_path();
-  let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(uid, db);
-  let cleaner: Cleaner = Cleaner::new(db_path);
+
+  let path = tempdir.into_path();
+  let db = Arc::new(RocksCollabDB::open(path.clone()).unwrap());
+  let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
+  let cleaner: Cleaner = Cleaner::new(path);
+
   let collab = CollabBuilder::new(1, id)
     .with_plugin(disk_plugin)
     .build()
@@ -62,6 +67,7 @@ pub fn create_folder_with_data(id: &str, folder_data: Option<FolderData>) -> Fol
   };
   let folder = Folder::create(Arc::new(collab), Some(context), folder_data);
   FolderTest {
+    db,
     folder,
     cleaner,
     view_rx,
@@ -88,6 +94,7 @@ pub fn open_folder_with_db(uid: i64, object_id: &str, db_path: PathBuf) -> Folde
   let folder = Folder::open(Arc::new(collab), Some(context));
   FolderTest {
     folder,
+    db,
     cleaner,
     view_rx,
     trash_rx: Some(trash_rx),

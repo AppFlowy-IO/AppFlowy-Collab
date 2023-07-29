@@ -1,17 +1,17 @@
-use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
-
 use crate::disk::script::Script::*;
 use crate::disk::script::{disk_plugin, CollabPersistenceTest};
+use collab_plugins::local_storage::CollabPersistenceConfig;
 
 #[tokio::test]
 async fn insert_single_change_and_restore_from_disk() {
   let doc_id = "1".to_string();
   let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
+  let (_db, disk_plugin) = disk_plugin(test.uid);
   test
     .run_scripts(vec![
       CreateDocumentWithDiskPlugin {
         id: doc_id.clone(),
-        plugin: disk_plugin(test.uid),
+        plugin: disk_plugin,
       },
       InsertKeyValue {
         id: doc_id.clone(),
@@ -37,11 +37,12 @@ async fn insert_single_change_and_restore_from_disk() {
 async fn insert_multiple_changes_and_restore_from_disk() {
   let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
   let doc_id = "1".to_string();
+  let (_db, disk_plugin) = disk_plugin(test.uid);
   test
     .run_scripts(vec![
       CreateDocumentWithDiskPlugin {
         id: doc_id.clone(),
-        plugin: disk_plugin(test.uid),
+        plugin: disk_plugin,
       },
       InsertKeyValue {
         id: doc_id.clone(),
@@ -100,7 +101,7 @@ async fn insert_multiple_changes_and_restore_from_disk() {
 #[tokio::test]
 async fn insert_multiple_docs() {
   let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
-  let disk_plugin = disk_plugin(test.uid);
+  let (_db, disk_plugin) = disk_plugin(test.uid);
   test
     .run_scripts(vec![
       CreateDocumentWithDiskPlugin {

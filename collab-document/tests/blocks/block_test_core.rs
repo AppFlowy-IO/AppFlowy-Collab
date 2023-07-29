@@ -1,19 +1,23 @@
-use crate::util::db;
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use collab::core::collab::MutexCollab;
 use collab::preclude::CollabBuilder;
 use collab_document::blocks::{
   Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, DocumentData, DocumentMeta,
 };
 use collab_document::document::Document;
-use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use serde_json::json;
-use std::collections::HashMap;
-use std::sync::Arc;
+
+use crate::util::db;
 
 pub const TEXT_BLOCK_TYPE: &str = "paragraph";
 
 pub struct BlockTestCore {
+  pub db: Arc<RocksCollabDB>,
   document: Document,
   pub collab: Arc<MutexCollab>,
 }
@@ -22,7 +26,7 @@ impl BlockTestCore {
   pub fn new() -> Self {
     let db = db();
     let doc_id = "1";
-    let disk_plugin = RocksdbDiskPlugin::new(1, db);
+    let disk_plugin = RocksdbDiskPlugin::new(1, Arc::downgrade(&db));
     let collab = CollabBuilder::new(1, doc_id)
       .with_plugin(disk_plugin)
       .build()
@@ -35,13 +39,21 @@ impl BlockTestCore {
       Ok(document) => document,
       Err(e) => panic!("create document error: {:?}", e),
     };
-    BlockTestCore { document, collab }
+    BlockTestCore {
+      db,
+      document,
+      collab,
+    }
   }
 
-  pub fn open(collab: Arc<MutexCollab>) -> Self {
+  pub fn open(collab: Arc<MutexCollab>, db: Arc<RocksCollabDB>) -> Self {
     let open_res = Document::open(collab.clone());
     open_res
-      .map(|document| BlockTestCore { document, collab })
+      .map(|document| BlockTestCore {
+        db,
+        document,
+        collab,
+      })
       .unwrap_or_else(|e| panic!("open document error: {}", e))
   }
 

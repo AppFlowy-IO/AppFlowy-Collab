@@ -550,7 +550,7 @@ pub fn make_rocks_db() -> Arc<RocksCollabDB> {
 pub fn db_path() -> PathBuf {
   static START: Once = Once::new();
   START.call_once(|| {
-    let level = "info";
+    let level = "trace";
     let mut filters = vec![];
     filters.push(format!("collab_persistence={}", level));
     filters.push(format!("collab={}", level));

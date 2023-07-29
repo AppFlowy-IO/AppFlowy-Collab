@@ -1,11 +1,12 @@
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::disk::rocksdb::CollabPersistenceConfig;
+use collab_plugins::cloud_storage::CollabType;
+use collab_plugins::local_storage::CollabPersistenceConfig;
 use lru::LruCache;
 use parking_lot::Mutex;
 use tokio::sync::broadcast;
@@ -30,7 +31,7 @@ pub enum BlockEvent {
 #[derive(Clone)]
 pub struct Block {
   uid: i64,
-  collab_db: Arc<RocksCollabDB>,
+  collab_db: Weak<RocksCollabDB>,
   collab_service: Arc<dyn DatabaseCollabService>,
   task_controller: Arc<BlockTaskController>,
   sequence: Arc<AtomicU32>,
@@ -41,12 +42,11 @@ pub struct Block {
 impl Block {
   pub fn new(
     uid: i64,
-    collab_db: Arc<RocksCollabDB>,
+    collab_db: Weak<RocksCollabDB>,
     collab_service: Arc<dyn DatabaseCollabService>,
   ) -> Block {
     let cache = Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap())));
-    let controller =
-      BlockTaskController::new(Arc::downgrade(&collab_db), Arc::downgrade(&collab_service));
+    let controller = BlockTaskController::new(collab_db.clone(), Arc::downgrade(&collab_service));
     let task_controller = Arc::new(controller);
     let (notifier, _) = broadcast::channel(1000);
     Self {
@@ -188,13 +188,11 @@ impl Block {
 
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
   fn get_or_init_row(&self, row_id: &RowId) -> Option<Arc<MutexDatabaseRow>> {
+    let collab_db = self.collab_db.upgrade()?;
     let row = self.cache.lock().get(row_id).cloned();
     match row {
       None => {
-        let is_exist = self
-          .collab_db
-          .read_txn()
-          .is_exist(self.uid, row_id.as_ref());
+        let is_exist = collab_db.read_txn().is_exist(self.uid, row_id.as_ref());
         if !is_exist {
           //
           let (sender, mut rx) = tokio::sync::mpsc::channel(1);
@@ -237,7 +235,7 @@ impl Block {
     self.collab_service.build_collab_with_config(
       self.uid,
       row_id,
-      "db row",
+      CollabType::DatabaseRow,
       self.collab_db.clone(),
       collab_raw_data,
       &config,

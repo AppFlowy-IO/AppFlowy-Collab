@@ -12,7 +12,7 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use nanoid::nanoid;
 use serde_json::{json, Value};
 
-use collab_plugins::disk::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use tempfile::TempDir;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 
@@ -35,7 +35,7 @@ pub fn create_document(uid: i64, doc_id: &str) -> DocumentTest {
 }
 
 pub fn create_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> DocumentTest {
-  let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone());
+  let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
   let collab = CollabBuilder::new(1, doc_id)
     .with_plugin(disk_plugin)
     .build()
@@ -92,7 +92,7 @@ pub fn create_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -
 }
 
 pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> DocumentTest {
-  let disk_plugin = RocksdbDiskPlugin::new(uid, db.clone());
+  let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
   let collab = CollabBuilder::new(uid, doc_id)
     .with_plugin(disk_plugin)
     .build()

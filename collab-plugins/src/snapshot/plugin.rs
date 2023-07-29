@@ -1,7 +1,7 @@
 use std::panic;
 use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use collab::preclude::{Collab, CollabPlugin};
 use collab_persistence::doc::YrsDocAction;
@@ -47,7 +47,7 @@ pub trait SnapshotPersistence: Send + Sync {
 pub struct CollabSnapshotPlugin {
   uid: i64,
   object: CollabObject,
-  collab_db: Arc<RocksCollabDB>,
+  collab_db: Weak<RocksCollabDB>,
   /// the number of updates on disk when opening the document
   update_count: Arc<AtomicU32>,
   snapshot_per_update: u32,
@@ -60,7 +60,7 @@ impl CollabSnapshotPlugin {
     uid: i64,
     object: CollabObject,
     snapshot_persistence: Arc<dyn SnapshotPersistence>,
-    collab_db: Arc<RocksCollabDB>,
+    collab_db: Weak<RocksCollabDB>,
     snapshot_per_update: u32,
   ) -> Self {
     let state = Arc::new(RwLock::new(GenSnapshotState::Idle));
@@ -96,7 +96,7 @@ impl CollabPlugin for CollabSnapshotPlugin {
       let is_ready = state.is_fail() || state.is_idle();
       if is_ready {
         *self.state.write() = GenSnapshotState::Processing;
-        let weak_collab_db = Arc::downgrade(&self.collab_db);
+        let weak_collab_db = self.collab_db.clone();
         let weak_state = Arc::downgrade(&self.state);
         let weak_snapshot_persistence = Arc::downgrade(&self.snapshot_persistence);
         let uid = self.uid;
@@ -125,7 +125,7 @@ impl CollabPlugin for CollabSnapshotPlugin {
               match snapshot_persistence.create_snapshot(
                 uid,
                 &object.id,
-                object.name,
+                object.ty.to_string(),
                 snapshot_data,
               ) {
                 Ok(_) => *state.write() = GenSnapshotState::Idle,

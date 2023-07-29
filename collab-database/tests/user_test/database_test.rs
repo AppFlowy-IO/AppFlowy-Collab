@@ -238,13 +238,15 @@ async fn get_database_by_view_id_test() {
 async fn reopen_database_test() {
   let uid = random_uid();
   let test = workspace_database_test(uid);
-  let params = make_default_grid("v1", "first view");
+  let view_id = uuid::Uuid::new_v4().to_string();
+  let params = make_default_grid(&view_id, "first view");
+
+  // create the database with inline view
   let _database = test.create_database(params).unwrap();
-  // let expect_json = database.to_json_value();
-  let db = test.db.clone();
+  let db = test.collab_db.clone();
   drop(test);
 
   let test = user_database_test_with_db(uid, db);
-  let database = test.get_database_with_view_id("v1").await;
+  let database = test.get_database_with_view_id(&view_id).await;
   let _ = database.unwrap().lock().to_json_value();
 }
