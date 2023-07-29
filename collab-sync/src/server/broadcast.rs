@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
+use collab::core::origin::{CollabClient, CollabOrigin};
 use futures_util::{SinkExt, StreamExt};
 use lib0::encoding::Write;
-
-use collab::core::origin::{CollabClient, CollabOrigin};
 use tokio::select;
 use tokio::sync::broadcast::error::SendError;
 use tokio::sync::broadcast::{channel, Sender};
@@ -99,6 +98,7 @@ impl CollabBroadcast {
 
   /// Broadcasts user message to all active subscribers. Returns error if message could not have
   /// been broadcast.
+  #[allow(clippy::result_large_err)]
   pub fn broadcast_awareness(
     &self,
     msg: CSAwarenessUpdate,

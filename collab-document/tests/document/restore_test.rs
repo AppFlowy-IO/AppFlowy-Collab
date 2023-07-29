@@ -2,7 +2,7 @@ use collab_document::blocks::Block;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 
 use crate::util::{
-  document_storage, get_document_data, open_document_with_db, unzip_history_document_db_to_folder,
+  document_storage, get_document_data, open_document_with_db, unzip_history_document_db,
   DocumentTest,
 };
 
@@ -87,7 +87,7 @@ async fn multiple_thread_create_document_test() {
 const HISTORY_DOCUMENT_020: &str = "020_document";
 #[tokio::test]
 async fn open_020_history_document_test() {
-  let (_cleaner, db_path) = unzip_history_document_db_to_folder(HISTORY_DOCUMENT_020).unwrap();
+  let (_cleaner, db_path) = unzip_history_document_db(HISTORY_DOCUMENT_020).unwrap();
   let db = std::sync::Arc::new(RocksCollabDB::open(db_path).unwrap());
   let document = open_document_with_db(
     221439819971039232,

@@ -304,18 +304,13 @@ impl From<TestDateTypeOption> for TypeOptionData {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Clone, Debug, Copy, Eq, PartialEq)]
+#[derive(Clone, Debug, Copy, Eq, PartialEq, Default)]
 pub enum TestDateFormat {
   Local = 0,
   US = 1,
   ISO = 2,
+  #[default]
   Friendly = 3,
-}
-
-impl std::default::Default for TestDateFormat {
-  fn default() -> Self {
-    TestDateFormat::Friendly
-  }
 }
 
 impl std::convert::From<i64> for TestDateFormat {
@@ -496,7 +491,9 @@ pub const DEFAULT_SHOW_WEEK_NUMBERS: bool = true;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[repr(u8)]
+#[derive(Default)]
 pub enum TestFieldType {
+  #[default]
   RichText = 0,
   Number = 1,
   DateTime = 2,
@@ -505,12 +502,6 @@ pub enum TestFieldType {
   Checkbox = 5,
   URL = 6,
   Checklist = 7,
-}
-
-impl Default for TestFieldType {
-  fn default() -> Self {
-    TestFieldType::RichText
-  }
 }
 
 impl From<TestFieldType> for i64 {
