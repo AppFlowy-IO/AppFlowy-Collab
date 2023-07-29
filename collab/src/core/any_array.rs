@@ -1,10 +1,11 @@
+use std::ops::{Deref, DerefMut};
+
+use yrs::types::Value;
+use yrs::{Array, ArrayRef, ReadTxn, TransactionMut};
+
 use crate::core::any_map::AnyMap;
 use crate::core::array_wrapper::ArrayRefExtension;
 use crate::preclude::{MapRefExtension, YrsValue};
-
-use std::ops::{Deref, DerefMut};
-use yrs::types::Value;
-use yrs::{Array, ArrayRef, ReadTxn, TransactionMut};
 
 /// A wrapper around an `ArrayRef` that allows to store `AnyMap` in it.
 #[derive(Default, Debug)]
@@ -82,7 +83,7 @@ impl<'a, 'b> ArrayMapUpdate<'a, 'b> {
 
   pub fn remove(self, id: &str) -> Self {
     if let Some(pos) = self.index_of(id) {
-      self.array_ref.remove(self.txn, pos as u32);
+      self.array_ref.remove(self.txn, pos);
     }
     self
   }
@@ -98,7 +99,7 @@ impl<'a, 'b> ArrayMapUpdate<'a, 'b> {
     F: FnOnce(AnyMap) -> AnyMap,
   {
     if let Some(pos) = self.index_of(id) {
-      let pos = pos as u32;
+      let pos = pos;
       if let YrsValue::YMap(map_ref) = self.array_ref.get(self.txn, pos).unwrap() {
         let any_map = AnyMap::from_map_ref(self.txn, &map_ref);
         f(any_map).fill_map_ref(self.txn, &map_ref);

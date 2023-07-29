@@ -15,7 +15,6 @@ use collab_database::views::{
   LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_persistence::kv::sled_lv::SledCollabDB;
 use nanoid::nanoid;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
@@ -539,12 +538,6 @@ impl std::convert::From<i64> for TestFieldType {
   }
 }
 
-#[allow(dead_code)]
-pub fn make_sled_db() -> Arc<SledCollabDB> {
-  let path = db_path();
-  Arc::new(SledCollabDB::open(path).unwrap())
-}
-
 pub fn make_rocks_db() -> Arc<RocksCollabDB> {
   let path = db_path();
   Arc::new(RocksCollabDB::open(path).unwrap())
@@ -570,9 +563,7 @@ pub fn db_path() -> PathBuf {
   tempdir.into_path()
 }
 
-pub fn unzip_history_database_db_to_folder(
-  folder_name: &str,
-) -> std::io::Result<(Cleaner, PathBuf)> {
+pub fn unzip_history_database_db(folder_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
   // Open the zip file
   let zip_file_path = format!("./tests/history_database/{}.zip", folder_name);
   let reader = File::open(zip_file_path)?;

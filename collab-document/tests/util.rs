@@ -199,9 +199,7 @@ impl Drop for Cleaner {
   }
 }
 
-pub fn unzip_history_document_db_to_folder(
-  folder_name: &str,
-) -> std::io::Result<(Cleaner, PathBuf)> {
+pub fn unzip_history_document_db(folder_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
   // Open the zip file
   let zip_file_path = format!("./tests/history_document/{}.zip", folder_name);
   let reader = File::open(zip_file_path)?;

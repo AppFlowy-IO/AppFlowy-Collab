@@ -88,7 +88,7 @@ const HISTORY_DOCUMENT_020: &str = "020_document";
 #[tokio::test]
 async fn open_020_history_document_test() {
   let (_cleaner, db_path) = unzip_history_document_db_to_folder(HISTORY_DOCUMENT_020).unwrap();
-  let db = std::sync::Arc::new(RocksCollabDB::open(&db_path).unwrap());
+  let db = std::sync::Arc::new(RocksCollabDB::open(db_path).unwrap());
   let document = open_document_with_db(
     221439819971039232,
     "631584ec-af71-42c3-94f4-89dcfdafb988",

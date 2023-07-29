@@ -14,9 +14,9 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use tempfile::TempDir;
-use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 use zip::read::ZipArchive;
 
 pub struct FolderTest {
@@ -176,7 +176,7 @@ pub fn setup_log() {
   });
 }
 
-pub fn unzip_history_folder_to_folder(folder_name: &str) -> std::io::Result<PathBuf> {
+pub fn unzip_history_folder_db(folder_name: &str) -> std::io::Result<PathBuf> {
   // Open the zip file
   let zip_file_path = format!("./tests/folder_test/history_folder/{}.zip", folder_name);
   let reader = File::open(zip_file_path)?;
