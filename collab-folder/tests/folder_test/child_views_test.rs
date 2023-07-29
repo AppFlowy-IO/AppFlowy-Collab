@@ -53,6 +53,7 @@ async fn create_child_views_test() {
           "created_at": 0,
           "desc": "",
           "icon_url": null,
+          "is_favorite": false,
           "id": "1",
           "layout": 0,
           "name": "",
@@ -67,6 +68,7 @@ async fn create_child_views_test() {
           "desc": "",
           "icon_url": null,
           "id": "1_1",
+          "is_favorite": false,
           "layout": 0,
           "name": "",
           "parent_view_id": "1"
@@ -89,6 +91,7 @@ async fn create_child_views_test() {
           "id": "1_2",
           "layout": 0,
           "name": "",
+          "is_favorite": false,
           "parent_view_id": "1"
         },
         {
@@ -102,6 +105,7 @@ async fn create_child_views_test() {
           "id": "1_2_1",
           "layout": 0,
           "name": "",
+          "is_favorite": false,
           "parent_view_id": "1_2"
         },
         {
@@ -115,6 +119,7 @@ async fn create_child_views_test() {
           "id": "1_2_2",
           "layout": 0,
           "name": "",
+          "is_favorite": false,
           "parent_view_id": "1_2"
         },
         {
@@ -128,6 +133,7 @@ async fn create_child_views_test() {
           "id": "1_3",
           "layout": 0,
           "name": "",
+          "is_favorite": false,
           "parent_view_id": "1"
         }
       ],

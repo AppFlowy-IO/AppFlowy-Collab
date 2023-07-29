@@ -60,13 +60,18 @@ async fn update_view_test() {
   folder_test
     .views
     .update_view("v1", |update| {
-      update.set_name("Untitled").set_desc("My first view").done()
+      update
+        .set_name("Untitled")
+        .set_desc("My first view")
+        .set_favorite(true)
+        .done()
     })
     .unwrap();
 
   let r_view = folder_test.views.get_view("v1").unwrap();
   assert_eq!(r_view.name, "Untitled");
   assert_eq!(r_view.desc, "My first view");
+  assert!(r_view.is_favorite);
 }
 
 #[tokio::test]

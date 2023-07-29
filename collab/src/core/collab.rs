@@ -25,7 +25,7 @@ use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
 use crate::core::transaction::TransactionRetry;
 use crate::error::CollabError;
-use crate::preclude::{ArrayRefWrapper, JsonValue};
+use crate::preclude::{ArrayRefWrapper, JsonValue, MapRefExtension};
 use crate::util::insert_json_value_to_map_ref;
 
 pub const DATA_SECTION: &str = "data";
@@ -308,6 +308,15 @@ impl Collab {
   pub fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
     let map = MapPrelim::<lib0::any::Any>::new();
     let map_ref = self.data.insert(txn, key, map);
+    self.map_wrapper_with(map_ref)
+  }
+
+  pub fn insert_map_with_txn_if_not_exist(
+    &self,
+    txn: &mut TransactionMut,
+    key: &str,
+  ) -> MapRefWrapper {
+    let map_ref = self.data.insert_map_if_not_exist_with_txn(txn, key);
     self.map_wrapper_with(map_ref)
   }
 

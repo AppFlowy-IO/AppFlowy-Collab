@@ -1,4 +1,5 @@
 mod entities;
+mod favorites;
 mod folder;
 mod relation;
 mod trash;
@@ -6,6 +7,7 @@ mod view;
 mod workspace;
 
 pub use entities::*;
+pub use favorites::*;
 pub use folder::*;
 pub use folder_observe::*;
 pub use relation::*;

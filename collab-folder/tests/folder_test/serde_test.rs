@@ -12,7 +12,8 @@ async fn folder_json_serde() {
       "meta": {},
       "trash": [],
       "views": {},
-      "workspaces": []
+      "workspaces": [],
+      "favorites": []
     }),
     folder_test.to_json_value()
   );
@@ -56,7 +57,8 @@ async fn workspace_json_serde() {
           "id": "w1",
           "name": "My first workspace"
         }
-      ]
+      ],
+      "favorites": [],
     }),
     folder_test.to_json_value()
   );
@@ -107,7 +109,8 @@ async fn view_json_serde() {
           "desc": "",
           "id": "v1",
           "layout": 0,
-          "name": ""
+          "name": "",
+          "is_favorite": false,
         },
         "v2": {
           "bid": "w1",
@@ -115,7 +118,8 @@ async fn view_json_serde() {
           "desc": "",
           "id": "v2",
           "layout": 0,
-          "name": ""
+          "name": "",
+          "is_favorite": false
         }
       },
       "workspaces": [
@@ -124,7 +128,8 @@ async fn view_json_serde() {
           "id": "w1",
           "name": "My first workspace"
         }
-      ]
+      ],
+      "favorites": [],
     }),
     folder_test.to_json_value()
   );
@@ -188,7 +193,8 @@ async fn child_view_json_serde() {
           "desc": "",
           "id": "v1",
           "layout": 0,
-          "name": ""
+          "name": "",
+          "is_favorite":false,
         },
         "v2": {
           "bid": "w1",
@@ -196,7 +202,8 @@ async fn child_view_json_serde() {
           "desc": "",
           "id": "v2",
           "layout": 0,
-          "name": ""
+          "name": "",
+          "is_favorite":false,
         },
         "v2.1": {
           "bid": "v2",
@@ -204,7 +211,8 @@ async fn child_view_json_serde() {
           "desc": "",
           "id": "v2.1",
           "layout": 0,
-          "name": ""
+          "name": "",
+          "is_favorite":false,
         },
         "v2.2": {
           "bid": "v2",
@@ -212,7 +220,8 @@ async fn child_view_json_serde() {
           "desc": "",
           "id": "v2.2",
           "layout": 0,
-          "name": ""
+          "name": "",
+          "is_favorite":false,
         }
       },
       "workspaces": [
@@ -221,7 +230,8 @@ async fn child_view_json_serde() {
           "id": "w1",
           "name": "My first workspace"
         }
-      ]
+      ],
+      "favorites": []
     }),
     folder_test.to_json_value()
   );

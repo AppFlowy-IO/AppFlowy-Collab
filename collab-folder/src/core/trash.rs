@@ -114,10 +114,18 @@ impl TrashArray {
   }
 
   pub fn clear(&self) {
+    let ids = self
+      .get_all_trash()
+      .iter()
+      .map(|info| info.id.to_string())
+      .collect();
     self.container.with_transact_mut(|txn| {
       let len = self.container.iter(txn).count();
       self.container.remove_range(txn, 0, len as u32);
     });
+    if let Some(change_tx) = &self.change_tx {
+      let _ = change_tx.send(TrashChange::DidDeleteTrash { ids });
+    }
   }
 }
 
