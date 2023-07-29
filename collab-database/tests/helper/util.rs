@@ -1,6 +1,8 @@
 #![allow(clippy::upper_case_acronyms)]
 
-use std::path::PathBuf;
+use std::fs::{create_dir_all, File};
+use std::io::copy;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
 use anyhow::bail;
@@ -14,11 +16,12 @@ use collab_database::views::{
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::kv::sled_lv::SledCollabDB;
-
+use nanoid::nanoid;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
+use zip::ZipArchive;
 
 #[derive(Debug, Clone)]
 pub struct TestFilter {
@@ -565,4 +568,59 @@ pub fn db_path() -> PathBuf {
 
   let tempdir = TempDir::new().unwrap();
   tempdir.into_path()
+}
+
+pub fn unzip_history_database_db_to_folder(
+  folder_name: &str,
+) -> std::io::Result<(Cleaner, PathBuf)> {
+  // Open the zip file
+  let zip_file_path = format!("./tests/history_database/{}.zip", folder_name);
+  let reader = File::open(zip_file_path)?;
+  let output_folder_path = format!("./tests/history_document/unit_test_{}", nanoid!(6));
+
+  // Create a ZipArchive from the file
+  let mut archive = ZipArchive::new(reader)?;
+
+  // Iterate through each file in the zip
+  for i in 0..archive.len() {
+    let mut file = archive.by_index(i)?;
+    let outpath = Path::new(&output_folder_path).join(file.mangled_name());
+
+    if file.name().ends_with('/') {
+      // Create directory
+      create_dir_all(&outpath)?;
+    } else {
+      // Write file
+      if let Some(p) = outpath.parent() {
+        if !p.exists() {
+          create_dir_all(p)?;
+        }
+      }
+      let mut outfile = File::create(&outpath)?;
+      copy(&mut file, &mut outfile)?;
+    }
+  }
+  let path = format!("{}/{}", output_folder_path, folder_name);
+  Ok((
+    Cleaner::new(PathBuf::from(output_folder_path)),
+    PathBuf::from(path),
+  ))
+}
+
+pub struct Cleaner(PathBuf);
+
+impl Cleaner {
+  pub fn new(dir: PathBuf) -> Self {
+    Cleaner(dir)
+  }
+
+  fn cleanup(dir: &PathBuf) {
+    let _ = std::fs::remove_dir_all(dir);
+  }
+}
+
+impl Drop for Cleaner {
+  fn drop(&mut self) {
+    Self::cleanup(&self.0)
+  }
 }

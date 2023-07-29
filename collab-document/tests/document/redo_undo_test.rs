@@ -4,7 +4,7 @@ use nanoid::nanoid;
 use serde_json::to_value;
 
 use crate::util::{
-  delete_block, DocumentTest, insert_block_for_page, open_document_with_db, update_block,
+  delete_block, insert_block_for_page, open_document_with_db, update_block, DocumentTest,
 };
 
 const WAIT_TIME: Duration = Duration::from_secs(1);
@@ -173,7 +173,7 @@ async fn undo_redo_after_reopen_document() {
   drop(document);
 
   // reopen document, can't undo
-  let document = open_document_with_db(1, doc_id, test.db.clone());
+  let document = open_document_with_db(1, doc_id, test.db);
   assert!(!document.can_undo());
 
   // update block, can undo

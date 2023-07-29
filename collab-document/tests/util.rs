@@ -16,7 +16,7 @@ use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use serde_json::{json, Value};
 use tempfile::TempDir;
-use tracing_subscriber::{EnvFilter, fmt::Subscriber, util::SubscriberInitExt};
+use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 use zip::ZipArchive;
 
 pub struct DocumentTest {
@@ -27,65 +27,62 @@ pub struct DocumentTest {
 impl DocumentTest {
   pub fn new(uid: i64, doc_id: &str) -> Self {
     let db = document_storage();
-   Self::new_with_db(uid, doc_id, db)
+    Self::new_with_db(uid, doc_id, db)
   }
 
   pub fn new_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> Self {
-      let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
-      let collab = CollabBuilder::new(1, doc_id)
-          .with_plugin(disk_plugin)
-          .build()
-          .unwrap();
-      collab.lock().initialize();
+    let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
+    let collab = CollabBuilder::new(1, doc_id)
+      .with_plugin(disk_plugin)
+      .build()
+      .unwrap();
+    collab.lock().initialize();
 
-      let mut blocks = HashMap::new();
-      let mut children_map = HashMap::new();
+    let mut blocks = HashMap::new();
+    let mut children_map = HashMap::new();
 
-      let mut data = HashMap::new();
-      data.insert("delta".to_string(), json!([]));
-      let page_id = nanoid!(10);
-      let page_children_id = nanoid!(10);
-      blocks.insert(
-        page_id.clone(),
-        Block {
-          id: page_id.clone(),
-          ty: "page".to_string(),
-          parent: "".to_string(),
-          children: page_children_id.clone(),
-          data: data.clone(),
-          external_id: None,
-          external_type: None,
-        },
-      );
+    let mut data = HashMap::new();
+    data.insert("delta".to_string(), json!([]));
+    let page_id = nanoid!(10);
+    let page_children_id = nanoid!(10);
+    blocks.insert(
+      page_id.clone(),
+      Block {
+        id: page_id.clone(),
+        ty: "page".to_string(),
+        parent: "".to_string(),
+        children: page_children_id.clone(),
+        data: data.clone(),
+        external_id: None,
+        external_type: None,
+      },
+    );
 
-      let first_text_id = nanoid!(10);
-      children_map.insert(page_children_id, vec![first_text_id.clone()]);
-      let first_text_children_id = nanoid!(10);
-      children_map.insert(first_text_children_id.clone(), vec![]);
-      blocks.insert(
-        first_text_id.clone(),
-        Block {
-          id: first_text_id,
-          ty: "text".to_string(),
-          parent: page_id.clone(),
-          children: first_text_children_id,
-          data: data.clone(),
-          external_id: None,
-          external_type: None,
-        },
-      );
-      let meta = DocumentMeta { children_map };
-      let document_data = DocumentData {
-        page_id,
-        blocks,
-        meta,
-      };
-      let document = Document::create_with_data(Arc::new(collab), document_data).unwrap();
-      Self {
-        document,
-        db,
-      }
-    }
+    let first_text_id = nanoid!(10);
+    children_map.insert(page_children_id, vec![first_text_id.clone()]);
+    let first_text_children_id = nanoid!(10);
+    children_map.insert(first_text_children_id.clone(), vec![]);
+    blocks.insert(
+      first_text_id.clone(),
+      Block {
+        id: first_text_id,
+        ty: "text".to_string(),
+        parent: page_id.clone(),
+        children: first_text_children_id,
+        data: data.clone(),
+        external_id: None,
+        external_type: None,
+      },
+    );
+    let meta = DocumentMeta { children_map };
+    let document_data = DocumentData {
+      page_id,
+      blocks,
+      meta,
+    };
+    let document = Document::create_with_data(Arc::new(collab), document_data).unwrap();
+    Self { document, db }
+  }
 }
 
 impl Deref for DocumentTest {
@@ -125,9 +122,9 @@ fn setup_log() {
     std::env::set_var("RUST_LOG", filters.join(","));
 
     let subscriber = Subscriber::builder()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_ansi(true)
-        .finish();
+      .with_env_filter(EnvFilter::from_default_env())
+      .with_ansi(true)
+      .finish();
     subscriber.try_init().unwrap();
   });
 }
@@ -184,10 +181,10 @@ pub fn insert_block_for_page(document: &Document, block_id: String) -> Block {
   insert_block(document, block, "".to_string()).unwrap()
 }
 
-struct Cleaner(PathBuf);
+pub struct Cleaner(PathBuf);
 
 impl Cleaner {
-  fn new(dir: PathBuf) -> Self {
+  pub fn new(dir: PathBuf) -> Self {
     Cleaner(dir)
   }
 
@@ -202,15 +199,13 @@ impl Drop for Cleaner {
   }
 }
 
-
-pub fn unzip_history_folder_to_folder(folder_name: &str) -> std::io::Result<PathBuf> {
+pub fn unzip_history_document_db_to_folder(
+  folder_name: &str,
+) -> std::io::Result<(Cleaner, PathBuf)> {
   // Open the zip file
   let zip_file_path = format!("./tests/history_document/{}.zip", folder_name);
   let reader = File::open(zip_file_path)?;
-  let output_folder_path = format!(
-    "./tests/history_document/unit_test_{}",
-    nanoid!(6)
-  );
+  let output_folder_path = format!("./tests/history_document/unit_test_{}", nanoid!(6));
 
   // Create a ZipArchive from the file
   let mut archive = ZipArchive::new(reader)?;
@@ -235,6 +230,8 @@ pub fn unzip_history_folder_to_folder(folder_name: &str) -> std::io::Result<Path
     }
   }
   let path = format!("{}/{}", output_folder_path, folder_name);
-  Ok(PathBuf::from(path))
+  Ok((
+    Cleaner::new(PathBuf::from(output_folder_path)),
+    PathBuf::from(path),
+  ))
 }
-

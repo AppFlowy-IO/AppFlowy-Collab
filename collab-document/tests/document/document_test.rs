@@ -1,7 +1,7 @@
 use collab_document::blocks::{Block, BlockAction, BlockActionPayload, BlockActionType};
 use nanoid::nanoid;
 
-use crate::util::{apply_actions, DocumentTest, get_document_data, open_document_with_db};
+use crate::util::{apply_actions, get_document_data, open_document_with_db, DocumentTest};
 
 #[tokio::test]
 async fn insert_block_with_empty_parent_id_and_empty_prev_id() {
@@ -62,7 +62,7 @@ async fn reopen_document() {
   // close document
   drop(document);
 
-  let document = open_document_with_db(1, doc_id, test.db.clone());
+  let document = open_document_with_db(1, doc_id, test.db);
   let (page_id2, _, _) = get_document_data(&document);
   assert_eq!(page_id, page_id2);
 }
