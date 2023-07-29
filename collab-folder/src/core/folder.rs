@@ -37,18 +37,35 @@ pub struct FolderNotify {
   pub trash_change_tx: TrashChangeSender,
 }
 
-/// The folder hierarchy is like this:
-/// Folder: [workspaces: [], views: {}, trash: [], meta: {}, relation: {}]
+/// Represents the folder hierarchy in a workspace.
+///
+/// The `Folder` structure organizes different aspects of a workspace into individual components
+/// such as workspaces, views, trash, favorites, meta, and relation.
+///
+/// The folder hierarchy can be visualized as follows:
+/// Folder: [workspaces: [], views: {}, trash: [], favorites: [], meta: {}, relation: {}]
+///
+///
+/// # Fields
+///
+/// * `inner`: A mutex-protected shared pointer for managing access to the folder data.
+/// * `root`: Wrapper around the root map reference.
+/// * `workspaces`: An array of `WorkspaceArray` objects, representing different workspaces in the folder.
+/// Currently, we only use one workspace to manage all the views in the folder.
+/// * `views`: A shared pointer to a map (`ViewsMap`) from view id to view data, keeping track of each view's data.
+/// * `trash`: An array of `TrashArray` objects, representing the trash items in the folder.
+/// * `favorites`: An array of `FavoritesArray` objects, representing the favorite items in the folder.
+/// * `meta`: Wrapper around the metadata map reference.
+/// * `subscription`: A `DeepEventsSubscription` object, managing the subscription for folder changes, like inserting a new view.
+/// * `notifier`: An optional `FolderNotify` object for notifying about changes in the folder.
 pub struct Folder {
   inner: Arc<MutexCollab>,
   root: MapRefWrapper,
   pub workspaces: WorkspaceArray,
-  /// Keep track of each view's data. It's a map from view id to view data
   pub views: Rc<ViewsMap>,
   trash: TrashArray,
   favorites: FavoritesArray,
   pub meta: MapRefWrapper,
-  /// Subscription for folder change. Like insert a new view
   #[allow(dead_code)]
   subscription: DeepEventsSubscription,
   #[allow(dead_code)]
@@ -87,7 +104,20 @@ impl Folder {
     let rx = self.inner.lock().subscribe_snapshot_state();
     WatchStream::new(rx)
   }
-
+  /// Fetches the folder data based on the current workspace and view.
+  ///
+  /// This function initiates a transaction on the root node and uses it to fetch the current workspace
+  /// and view. It also fetches all workspaces and their respective views.
+  ///
+  /// It goes through all the workspaces and fetches the views recursively for each workspace.
+  ///
+  /// # Returns
+  ///
+  /// * `Some(FolderData)`: If the operation is successful, it returns `Some` variant wrapping `FolderData`
+  ///   object, which consists of current workspace ID, current view, a list of workspaces, and their respective views.
+  ///
+  /// * `None`: If the operation is unsuccessful (though it should typically not be the case as `Some`
+  ///   is returned explicitly), it returns `None`.
   pub fn get_folder_data(&self) -> Option<FolderData> {
     let txn = self.root.transact();
     let current_workspace = self
@@ -111,7 +141,14 @@ impl Folder {
     })
   }
 
-  /// Set the current workspace id. If the workspace id is not exist, do nothing.
+  /// Sets the current workspace.
+  ///
+  /// This function accepts a `workspace_id` as a string slice, which is used to
+  /// identify the workspace that needs to be set as the current workspace.
+  ///
+  /// If the workspace with the provided ID exists, the function sets it as the current workspace.
+  /// If not, it logs an error message.
+  ///
   pub fn set_current_workspace(&self, workspace_id: &str) {
     self.meta.with_transact_mut(|txn| {
       if self.workspaces.is_exist_with_txn(txn, workspace_id) {
@@ -128,6 +165,11 @@ impl Folder {
     });
   }
 
+  /// Fetches the current workspace.
+  ///
+  /// This function fetches the ID of the current workspace from the meta object,
+  /// and uses this ID to fetch the actual workspace object.
+  ///
   pub fn get_current_workspace(&self) -> Option<Workspace> {
     let txn = self.meta.transact();
     let workspace_id = self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE)?;
@@ -162,6 +204,17 @@ impl Folder {
     self.get_workspace_views_with_txn(&txn, workspace_id)
   }
 
+  /// Fetches all views associated with a specific workspace, using a provided transaction.
+  ///
+  /// It uses the workspace ID to fetch the relevant workspace. Then, it gets all the child view IDs
+  /// associated with this workspace and uses these IDs
+  /// to fetch the actual view objects.
+  ///
+  /// # Parameters
+  ///
+  /// * `txn`: A transaction that is used to ensure the consistency of the fetched data.
+  /// * `workspace_id`: A string slice that represents the ID of the workspace whose views are to be fetched.
+  ///
   pub fn get_workspace_views_with_txn<T: ReadTxn>(
     &self,
     txn: &T,
@@ -180,6 +233,18 @@ impl Folder {
     }
   }
 
+  /// Inserts a new view into the workspace.
+  ///
+  /// The function first checks if there is a current workspace ID. If there is, it then checks
+  /// if the `parent_view_id` of the new view matches the workspace ID. If they match,
+  /// the new view is added to the workspace's children.
+  ///
+  /// Finally, the view is inserted into the view storage regardless of its parent view ID
+  /// and workspace ID matching.
+  ///
+  /// # Parameters
+  ///
+  /// * `view`: The `View` object that is to be inserted into the storage.
   pub fn insert_view(&self, view: View) {
     if let Some(workspace_id) = self.get_current_workspace_id() {
       if view.parent_view_id == workspace_id {
@@ -369,6 +434,23 @@ impl Folder {
     self.root.to_json_value()
   }
 
+  /// Recursively retrieves all views associated with the provided `view_id` using a transaction.
+  ///
+  /// The function begins by attempting to retrieve the parent view associated with the `view_id`.
+  /// If the parent view is not found, an empty vector is returned.
+  /// If the parent view is found, the function proceeds to retrieve all of its child views recursively.
+  ///
+  /// The function finally returns a vector containing the parent view and all of its child views.
+  /// The views are clones of the original objects.
+  ///
+  /// # Parameters
+  ///
+  /// * `txn`: A read transaction object which is used to execute the view retrieval.
+  /// * `view_id`: The ID of the parent view.
+  ///
+  /// # Returns
+  ///
+  /// * `Vec<View>`: A vector of `View` objects that includes the parent view and all of its child views.
   pub fn get_view_recursively_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<View> {
     match self.views.get_view_with_txn(txn, view_id) {
       None => vec![],
@@ -521,6 +603,8 @@ impl From<WorkspaceItem> for lib0Any {
   }
 }
 
+/// Create a folder with initial [FolderData] if it's provided.
+/// Otherwise, create an empty folder.
 fn create_folder(
   collab: Arc<MutexCollab>,
   notifier: Option<FolderNotify>,
@@ -535,11 +619,8 @@ fn create_folder(
       let workspaces = folder.insert_array_with_txn::<WorkspaceItem>(txn, WORKSPACES, vec![]);
       let views = folder.insert_map_with_txn(txn, VIEWS);
       let trash = folder.insert_array_with_txn::<TrashRecord>(txn, TRASH, vec![]);
-
       let favorites = folder.insert_array_with_txn::<FavoriteRecord>(txn, FAVORITES, vec![]);
-
       let meta = folder.insert_map_with_txn(txn, META);
-
       let view_relations = Rc::new(ViewRelations::new(
         folder.insert_map_with_txn(txn, VIEW_RELATION),
       ));
@@ -558,7 +639,6 @@ fn create_folder(
           .as_ref()
           .map(|notifier| notifier.trash_change_tx.clone()),
       );
-
       let favorites = FavoritesArray::new(favorites, views.clone());
 
       if let Some(folder_data) = folder_data {
