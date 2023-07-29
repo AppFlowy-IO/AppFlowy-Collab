@@ -1,9 +1,11 @@
-use crate::database::timestamp;
+use std::collections::HashSet;
+
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::{
   Array, ArrayRefWrapper, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
 };
-use std::collections::HashSet;
+
+use crate::database::timestamp;
 
 /// It used to keep track of the databases.
 /// Each record of a database is stored in a [DatabaseRecord]
@@ -39,7 +41,7 @@ impl DatabaseArray {
         if let Some(Some(map_ref)) = self.array_ref.get(txn, index).map(|value| value.to_ymap()) {
           if let Some(mut record) = DatabaseRecord::from_map_ref(txn, &map_ref) {
             f(&mut record);
-            self.array_ref.remove(txn, index as u32);
+            self.array_ref.remove(txn, index);
             let map_ref = self.array_ref.insert_map_at_index_with_txn(txn, index);
             record.fill_map_ref(txn, &map_ref);
           }

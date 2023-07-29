@@ -1,4 +1,7 @@
+use std::fs::{create_dir_all, File};
+use std::io::copy;
 use std::ops::Deref;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
 
@@ -8,12 +11,8 @@ use collab_folder::core::{
   ViewChangeReceiver, ViewIdentifier, ViewLayout, Workspace,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
-use std::fs::{create_dir_all, File};
-use std::io::copy;
-use std::path::Path;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -177,9 +176,9 @@ pub fn setup_log() {
   });
 }
 
-pub fn unzip_to_folder(zip_file_name: &str) -> std::io::Result<PathBuf> {
+pub fn unzip_history_folder_db(folder_name: &str) -> std::io::Result<PathBuf> {
   // Open the zip file
-  let zip_file_path = format!("./tests/folder_test/history_folder/{}.zip", zip_file_name);
+  let zip_file_path = format!("./tests/folder_test/history_folder/{}.zip", folder_name);
   let reader = File::open(zip_file_path)?;
   let output_folder_path = format!(
     "./tests/folder_test/history_folder/unit_test_{}",
@@ -208,6 +207,6 @@ pub fn unzip_to_folder(zip_file_name: &str) -> std::io::Result<PathBuf> {
       copy(&mut file, &mut outfile)?;
     }
   }
-  let path = format!("{}/{}", output_folder_path, zip_file_name);
+  let path = format!("{}/{}", output_folder_path, folder_name);
   Ok(PathBuf::from(path))
 }

@@ -1,6 +1,8 @@
 #![allow(clippy::upper_case_acronyms)]
 
-use std::path::PathBuf;
+use std::fs::{create_dir_all, File};
+use std::io::copy;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
 use anyhow::bail;
@@ -13,12 +15,12 @@ use collab_database::views::{
   LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_persistence::kv::sled_lv::SledCollabDB;
-
+use nanoid::nanoid;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
+use zip::ZipArchive;
 
 #[derive(Debug, Clone)]
 pub struct TestFilter {
@@ -302,18 +304,13 @@ impl From<TestDateTypeOption> for TypeOptionData {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Clone, Debug, Copy, Eq, PartialEq)]
+#[derive(Clone, Debug, Copy, Eq, PartialEq, Default)]
 pub enum TestDateFormat {
   Local = 0,
   US = 1,
   ISO = 2,
+  #[default]
   Friendly = 3,
-}
-
-impl std::default::Default for TestDateFormat {
-  fn default() -> Self {
-    TestDateFormat::Friendly
-  }
 }
 
 impl std::convert::From<i64> for TestDateFormat {
@@ -494,7 +491,9 @@ pub const DEFAULT_SHOW_WEEK_NUMBERS: bool = true;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[repr(u8)]
+#[derive(Default)]
 pub enum TestFieldType {
+  #[default]
   RichText = 0,
   Number = 1,
   DateTime = 2,
@@ -503,12 +502,6 @@ pub enum TestFieldType {
   Checkbox = 5,
   URL = 6,
   Checklist = 7,
-}
-
-impl Default for TestFieldType {
-  fn default() -> Self {
-    TestFieldType::RichText
-  }
 }
 
 impl From<TestFieldType> for i64 {
@@ -536,12 +529,6 @@ impl std::convert::From<i64> for TestFieldType {
   }
 }
 
-#[allow(dead_code)]
-pub fn make_sled_db() -> Arc<SledCollabDB> {
-  let path = db_path();
-  Arc::new(SledCollabDB::open(path).unwrap())
-}
-
 pub fn make_rocks_db() -> Arc<RocksCollabDB> {
   let path = db_path();
   Arc::new(RocksCollabDB::open(path).unwrap())
@@ -565,4 +552,57 @@ pub fn db_path() -> PathBuf {
 
   let tempdir = TempDir::new().unwrap();
   tempdir.into_path()
+}
+
+pub fn unzip_history_database_db(folder_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
+  // Open the zip file
+  let zip_file_path = format!("./tests/history_database/{}.zip", folder_name);
+  let reader = File::open(zip_file_path)?;
+  let output_folder_path = format!("./tests/history_document/unit_test_{}", nanoid!(6));
+
+  // Create a ZipArchive from the file
+  let mut archive = ZipArchive::new(reader)?;
+
+  // Iterate through each file in the zip
+  for i in 0..archive.len() {
+    let mut file = archive.by_index(i)?;
+    let outpath = Path::new(&output_folder_path).join(file.mangled_name());
+
+    if file.name().ends_with('/') {
+      // Create directory
+      create_dir_all(&outpath)?;
+    } else {
+      // Write file
+      if let Some(p) = outpath.parent() {
+        if !p.exists() {
+          create_dir_all(p)?;
+        }
+      }
+      let mut outfile = File::create(&outpath)?;
+      copy(&mut file, &mut outfile)?;
+    }
+  }
+  let path = format!("{}/{}", output_folder_path, folder_name);
+  Ok((
+    Cleaner::new(PathBuf::from(output_folder_path)),
+    PathBuf::from(path),
+  ))
+}
+
+pub struct Cleaner(PathBuf);
+
+impl Cleaner {
+  pub fn new(dir: PathBuf) -> Self {
+    Cleaner(dir)
+  }
+
+  fn cleanup(dir: &PathBuf) {
+    let _ = std::fs::remove_dir_all(dir);
+  }
+}
+
+impl Drop for Cleaner {
+  fn drop(&mut self) {
+    Self::cleanup(&self.0)
+  }
 }

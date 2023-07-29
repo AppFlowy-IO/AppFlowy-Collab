@@ -1,8 +1,9 @@
+use std::collections::HashMap;
+
 use collab::core::map_wrapper::MapRefExtension;
 use collab_derive::Collab;
 use lib0::any::Any;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Collab, Serialize, Deserialize)]
 pub struct Document {
@@ -30,7 +31,7 @@ pub struct TaskInfo {
 
 impl From<TaskInfo> for Any {
   fn from(task_info: TaskInfo) -> Self {
-    let a = serde_json::to_value(&task_info).unwrap();
+    let a = serde_json::to_value(task_info).unwrap();
     serde_json::from_value(a).unwrap()
   }
 }

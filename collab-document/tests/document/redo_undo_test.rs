@@ -1,11 +1,10 @@
-use nanoid::nanoid;
-use serde_json::to_value;
-use std::collections::HashMap;
 use std::time::Duration;
 
+use nanoid::nanoid;
+use serde_json::to_value;
+
 use crate::util::{
-  create_document, create_document_with_db, db, delete_block, insert_block_for_page,
-  open_document_with_db, update_block,
+  delete_block, insert_block_for_page, open_document_with_db, update_block, DocumentTest,
 };
 
 const WAIT_TIME: Duration = Duration::from_secs(1);
@@ -13,7 +12,7 @@ const WAIT_TIME: Duration = Duration::from_secs(1);
 #[tokio::test]
 async fn insert_undo_redo() {
   let doc_id = "1";
-  let test = create_document(1, doc_id);
+  let test = DocumentTest::new(1, doc_id);
   let document = test.document;
   let block_id = nanoid!(10);
 
@@ -44,14 +43,14 @@ async fn insert_undo_redo() {
 #[tokio::test]
 async fn update_undo_redo() {
   let doc_id = "1";
-  let test = create_document(1, doc_id);
+  let test = DocumentTest::new(1, doc_id);
   let document = test.document;
   let block_id = nanoid!(10);
   let insert_block = insert_block_for_page(&document, block_id.clone());
 
   // after insert block 1 second, update the block
   tokio::time::sleep(WAIT_TIME).await;
-  let mut data = HashMap::new();
+  let mut data = std::collections::HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
   update_block(&document, &block_id, data.clone()).unwrap();
 
@@ -73,7 +72,7 @@ async fn update_undo_redo() {
 #[tokio::test]
 async fn delete_undo_redo() {
   let doc_id = "1";
-  let test = create_document(1, doc_id);
+  let test = DocumentTest::new(1, doc_id);
   let document = test.document;
   let block_id = nanoid!(10);
   let insert_block = insert_block_for_page(&document, block_id.clone());
@@ -101,7 +100,7 @@ async fn delete_undo_redo() {
 #[tokio::test]
 async fn mutilple_undo_redo_test() {
   let doc_id = "1";
-  let test = create_document(1, doc_id);
+  let test = DocumentTest::new(1, doc_id);
   let document = test.document;
 
   let block_id = nanoid!(10);
@@ -109,7 +108,7 @@ async fn mutilple_undo_redo_test() {
 
   // after insert block 1 second, update the block
   tokio::time::sleep(WAIT_TIME).await;
-  let mut data = HashMap::new();
+  let mut data = std::collections::HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
   update_block(&document, &block_id, data.clone()).unwrap();
 
@@ -160,8 +159,7 @@ async fn mutilple_undo_redo_test() {
 #[tokio::test]
 async fn undo_redo_after_reopen_document() {
   let doc_id = "1";
-  let db = db();
-  let test = create_document_with_db(1, doc_id, db.clone());
+  let test = DocumentTest::new(1, doc_id);
   let document = test.document;
   // after create document, can't undo
   assert!(!document.can_undo());
@@ -175,12 +173,11 @@ async fn undo_redo_after_reopen_document() {
   drop(document);
 
   // reopen document, can't undo
-  let test = open_document_with_db(1, doc_id, db);
-  let document = test.document;
+  let document = open_document_with_db(1, doc_id, test.db);
   assert!(!document.can_undo());
 
   // update block, can undo
-  let mut data = HashMap::new();
+  let mut data = std::collections::HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
   update_block(&document, &block_id, data.clone()).unwrap();
   assert!(document.can_undo());

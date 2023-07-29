@@ -1,6 +1,5 @@
-use serde_json::json;
-
 use assert_json_diff::assert_json_eq;
+use serde_json::json;
 
 use crate::util::{create_folder_with_workspace, make_test_view};
 
@@ -28,7 +27,7 @@ async fn create_child_views_test() {
   assert_eq!(v_1_2_child_views.len(), 2);
 
   let folder_data = folder_test.get_folder_data().unwrap();
-  let value = serde_json::to_value(&folder_data).unwrap();
+  let value = serde_json::to_value(folder_data).unwrap();
   assert_json_eq!(
     value,
     json!({

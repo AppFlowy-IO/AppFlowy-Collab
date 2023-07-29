@@ -1,16 +1,13 @@
 use collab_document::blocks::{Block, BlockAction, BlockActionPayload, BlockActionType};
 use nanoid::nanoid;
 
-use crate::util::{
-  apply_actions, create_document, create_document_with_db, db, get_document_data,
-  open_document_with_db,
-};
+use crate::util::{apply_actions, get_document_data, open_document_with_db, DocumentTest};
 
 #[tokio::test]
 async fn insert_block_with_empty_parent_id_and_empty_prev_id() {
   let uid = 1;
   let doc_id = "1";
-  let test = create_document(uid, doc_id);
+  let test = DocumentTest::new(uid, doc_id);
   let (page_id, _, _) = get_document_data(&test.document);
   let block_id = nanoid!(10);
   let block = Block {
@@ -47,10 +44,9 @@ async fn insert_block_with_empty_parent_id_and_empty_prev_id() {
 #[should_panic]
 fn open_empty_document() {
   let doc_id = "1";
-  let db = db();
 
   // the document is not exist, so this should panic
-  let document_test = open_document_with_db(1, doc_id, db);
+  let document_test = DocumentTest::new(1, doc_id);
   let document = document_test.document;
   let data = document.get_document_data();
   assert!(data.is_err());
@@ -59,16 +55,14 @@ fn open_empty_document() {
 #[tokio::test]
 async fn reopen_document() {
   let doc_id = "1";
-  let db = db();
-  let test = create_document_with_db(1, doc_id, db.clone());
+  let test = DocumentTest::new(1, doc_id);
   let document = test.document;
   let (page_id, _, _) = get_document_data(&document);
 
   // close document
   drop(document);
 
-  let test = open_document_with_db(1, doc_id, db);
-  let document = test.document;
+  let document = open_document_with_db(1, doc_id, test.db);
   let (page_id2, _, _) = get_document_data(&document);
   assert_eq!(page_id, page_id2);
 }

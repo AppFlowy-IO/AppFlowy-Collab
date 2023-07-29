@@ -180,7 +180,7 @@ impl Folder {
   pub fn get_current_workspace(&self) -> Option<Workspace> {
     let txn = self.meta.transact();
     let workspace_id = self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE)?;
-    let workspace = self.workspaces.get_workspace(&workspace_id)?;
+    let workspace = self.workspaces.get_workspace(workspace_id)?;
     Some(workspace)
   }
 

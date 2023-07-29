@@ -535,7 +535,7 @@ pub trait OrderArray {
           self.array_ref().push_back(txn, object);
         },
         Some(pos) => {
-          let next: u32 = pos as u32 + 1;
+          let next: u32 = pos + 1;
           self.array_ref().insert(txn, next, object);
         },
       }

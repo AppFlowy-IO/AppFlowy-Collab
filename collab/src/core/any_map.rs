@@ -247,7 +247,7 @@ impl AnyMapExtension for AnyMap {
 }
 
 // FixMe: https://github.com/georust/geo/issues/391
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl Hash for AnyMap {
   fn hash<H: Hasher>(&self, state: &mut H) {
     self.0.iter().for_each(|(_, v)| {
