@@ -77,7 +77,7 @@ pub fn create_folder_with_data(id: &str, folder_data: Option<FolderData>) -> Fol
 
 pub fn open_folder_with_db(uid: i64, object_id: &str, db_path: PathBuf) -> FolderTest {
   let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(uid, db);
+  let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
   let cleaner: Cleaner = Cleaner::new(db_path);
   let collab = CollabBuilder::new(1, object_id)
     .with_plugin(disk_plugin)
