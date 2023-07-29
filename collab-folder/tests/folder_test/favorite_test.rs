@@ -1,10 +1,10 @@
-use crate::util::{
-  create_folder_with_data, create_folder_with_workspace, open_folder_with_db, unzip_to_folder,
-};
 use assert_json_diff::assert_json_eq;
 use collab_folder::core::FolderData;
-
 use serde_json::json;
+
+use crate::util::{
+  create_folder_with_data, create_folder_with_workspace, open_folder_with_db, unzip_history_folder_to_folder,
+};
 
 #[tokio::test]
 async fn create_favorite_test() {
@@ -40,7 +40,7 @@ const FOLDER_WITHOUT_FAV: &str = "folder_without_fav";
 
 #[tokio::test]
 async fn migrate_from_old_version_folder_without_fav_test() {
-  let db_path = unzip_to_folder(FOLDER_WITHOUT_FAV).unwrap();
+  let db_path = unzip_history_folder_to_folder(FOLDER_WITHOUT_FAV).unwrap();
   let folder_test = open_folder_with_db(
     221439819971039232,
     "49af3b85-9343-447a-946d-038f63883399",

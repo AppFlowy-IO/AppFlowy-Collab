@@ -12,7 +12,7 @@ use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use serde_json::json;
 
-use crate::util::db;
+use crate::util::document_storage;
 
 pub const TEXT_BLOCK_TYPE: &str = "paragraph";
 
@@ -24,7 +24,7 @@ pub struct BlockTestCore {
 
 impl BlockTestCore {
   pub fn new() -> Self {
-    let db = db();
+    let db = document_storage();
     let doc_id = "1";
     let disk_plugin = RocksdbDiskPlugin::new(1, Arc::downgrade(&db));
     let collab = CollabBuilder::new(1, doc_id)
