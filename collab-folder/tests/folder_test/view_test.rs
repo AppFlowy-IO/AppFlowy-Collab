@@ -4,7 +4,7 @@ use crate::util::{create_folder_with_workspace, make_test_view};
 async fn create_view_test() {
   let folder_test = create_folder_with_workspace("1", "w1");
   let o_view = make_test_view("v1", "w1", vec![]);
-  folder_test.insert_view(o_view.clone());
+  folder_test.insert_view(o_view.clone(), None);
 
   let r_view = folder_test.views.get_view("v1").unwrap();
   assert_eq!(o_view.name, r_view.name);
@@ -18,8 +18,8 @@ async fn create_view_with_sub_view_test() {
   let child_view = make_test_view("v1_1", "v1", vec![]);
   let view = make_test_view("v1", "w1", vec![child_view.id.clone()]);
 
-  folder_test.insert_view(child_view.clone());
-  folder_test.insert_view(view.clone());
+  folder_test.insert_view(child_view.clone(), None);
+  folder_test.insert_view(view.clone(), None);
 
   let r_view = folder_test.views.get_view("v1").unwrap();
   assert_eq!(view.name, r_view.name);
@@ -37,9 +37,9 @@ async fn delete_view_test() {
   let view_1 = make_test_view("v1", "w1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);
   let view_3 = make_test_view("v3", "w1", vec![]);
-  folder_test.insert_view(view_1);
-  folder_test.insert_view(view_2);
-  folder_test.insert_view(view_3);
+  folder_test.insert_view(view_1, None);
+  folder_test.insert_view(view_2, None);
+  folder_test.insert_view(view_3, None);
 
   let views = folder_test.views.get_views(&["v1", "v2", "v3"]);
   assert_eq!(views[0].id, "v1");
@@ -56,7 +56,7 @@ async fn delete_view_test() {
 async fn update_view_test() {
   let folder_test = create_folder_with_workspace("1", "w1");
   let o_view = make_test_view("v1", "w1", vec![]);
-  folder_test.insert_view(o_view);
+  folder_test.insert_view(o_view, None);
   folder_test
     .views
     .update_view("v1", |update| {
@@ -84,9 +84,9 @@ async fn dissociate_and_associate_view_test() {
   let view_1_child = make_test_view(view_1_child_id, view_1_id, vec![]);
   let view_1 = make_test_view(view_1_id, workspace_id, vec![view_1_child_id.to_string()]);
   let view_2 = make_test_view(view_2_id, workspace_id, vec![]);
-  folder_test.insert_view(view_1_child);
-  folder_test.insert_view(view_1);
-  folder_test.insert_view(view_2);
+  folder_test.insert_view(view_1_child, None);
+  folder_test.insert_view(view_1, None);
+  folder_test.insert_view(view_2, None);
 
   let r_view = folder_test.views.get_view(view_1_id).unwrap();
   assert_eq!(r_view.children.items.iter().len(), 1);
@@ -143,9 +143,9 @@ async fn move_view_across_parent_test() {
   let view_1_child = make_test_view(view_1_child_id, view_1_id, vec![]);
   let view_1 = make_test_view(view_1_id, workspace_id, vec![view_1_child_id.to_string()]);
   let view_2 = make_test_view(view_2_id, workspace_id, vec![]);
-  folder_test.insert_view(view_1_child);
-  folder_test.insert_view(view_1);
-  folder_test.insert_view(view_2);
+  folder_test.insert_view(view_1_child, None);
+  folder_test.insert_view(view_1, None);
+  folder_test.insert_view(view_2, None);
 
   // Move out of the current workspace.
   let res = folder_test.move_nested_view(view_1_child_id, "w2", None);
@@ -201,4 +201,37 @@ async fn move_view_across_parent_test() {
   assert_eq!(view_1_child.parent_view_id, view_1_id);
   assert_eq!(view_2.children.items.iter().len(), 0);
   assert_eq!(workspace.child_views.items.len(), 2);
+}
+
+#[tokio::test]
+async fn create_view_test_with_index() {
+  // steps
+  // 1. v1
+  // 2. v2 -> v1
+  // 3. v2 -> v3 -> v1
+  // 4. v2 -> v3 -> v1 -> v4
+  // 5. v2 -> v3 -> v1 -> v4 -> v5
+  // 6. v2 -> v3 -> v1 -> v6 -> v4 -> v5
+  let folder_test = create_folder_with_workspace("1", "w1");
+  let view_1 = make_test_view("v1", "w1", vec![]);
+  let view_2 = make_test_view("v2", "w1", vec![]);
+  let view_3 = make_test_view("v3", "w1", vec![]);
+  let view_4 = make_test_view("v4", "w1", vec![]);
+  let view_5 = make_test_view("v5", "w1", vec![]);
+  let view_6 = make_test_view("v6", "w1", vec![]);
+
+  folder_test.insert_view(view_1.clone(), Some(0));
+  folder_test.insert_view(view_2.clone(), Some(0));
+  folder_test.insert_view(view_3.clone(), Some(1));
+  folder_test.insert_view(view_4.clone(), Some(100));
+  folder_test.insert_view(view_5.clone(), None);
+  folder_test.insert_view(view_6.clone(), Some(3));
+
+  let views = folder_test.get_current_workspace_views();
+  assert_eq!(views.get(0).unwrap().id, view_2.id);
+  assert_eq!(views.get(1).unwrap().id, view_3.id);
+  assert_eq!(views.get(2).unwrap().id, view_1.id);
+  assert_eq!(views.get(3).unwrap().id, view_6.id);
+  assert_eq!(views.get(4).unwrap().id, view_4.id);
+  assert_eq!(views.get(5).unwrap().id, view_5.id);
 }

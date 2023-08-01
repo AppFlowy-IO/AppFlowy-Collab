@@ -191,7 +191,7 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
     let array = self
       .view_relations
       .get_or_create_children_with_txn(self.txn, self.workspace_id);
-    array.add_children_with_txn(self.txn, children.into_inner());
+    array.add_children_with_txn(self.txn, children.into_inner(), None);
     self
   }
 
@@ -202,10 +202,10 @@ impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
     self
   }
 
-  pub fn add_children(self, children: Vec<ViewIdentifier>) {
+  pub fn add_children(self, children: Vec<ViewIdentifier>, index: Option<u32>) {
     self
       .view_relations
-      .add_children(self.txn, self.workspace_id, children);
+      .add_children(self.txn, self.workspace_id, children, index);
   }
 
   pub fn move_view(self, from: u32, to: u32) -> Self {

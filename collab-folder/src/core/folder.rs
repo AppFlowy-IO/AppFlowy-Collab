@@ -252,15 +252,18 @@ impl Folder {
   /// # Parameters
   ///
   /// * `view`: The `View` object that is to be inserted into the storage.
-  pub fn insert_view(&self, view: View) {
+  pub fn insert_view(&self, view: View, index: Option<u32>) {
     if let Some(workspace_id) = self.get_current_workspace_id() {
       if view.parent_view_id == workspace_id {
         self
           .workspaces
           .update_workspace(workspace_id, |workspace_update| {
-            workspace_update.add_children(vec![ViewIdentifier {
-              id: view.id.clone(),
-            }])
+            workspace_update.add_children(
+              vec![ViewIdentifier {
+                id: view.id.clone(),
+              }],
+              index,
+            )
           });
       }
     }
