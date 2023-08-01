@@ -23,8 +23,9 @@ const VIEW_DESC: &str = "desc";
 const VIEW_DATABASE_ID: &str = "database_id";
 const VIEW_LAYOUT: &str = "layout";
 const VIEW_CREATE_AT: &str = "created_at";
-const VIEW_ICON_URL: &str = "icon_url";
-const VIEW_COVER_URL: &str = "cover_url";
+const VIEW_ICON: &str = "icon";
+const ICON_TYPE: &str = "ty";
+const ICON_VALUE: &str = "value";
 const FAVORITE_STATUS: &str = "is_favorite";
 
 pub struct ViewsMap {
@@ -244,8 +245,7 @@ impl ViewsMap {
           .set_created_at(view.created_at)
           .set_children(view.children)
           .set_favorite(view.is_favorite)
-          .set_icon_url_if_not_none(view.icon_url)
-          .set_cover_url_if_not_none(view.cover_url)
+          .set_icon(view.icon)
           .done()
       })
       .done()
@@ -348,11 +348,10 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     .map(|array| array.get_children_with_txn(txn))
     .unwrap_or_default();
 
+  let icon = icon_from_view_map(map_ref, txn);
   let is_favorite = map_ref
     .get_bool_with_txn(txn, FAVORITE_STATUS)
     .unwrap_or_default();
-  let icon_url = map_ref.get_str_with_txn(txn, VIEW_ICON_URL);
-  let cover_url = map_ref.get_str_with_txn(txn, VIEW_COVER_URL);
 
   Some(View {
     id,
@@ -362,10 +361,17 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     children,
     created_at,
     layout,
-    icon_url,
-    cover_url,
+    icon,
     is_favorite,
   })
+}
+
+pub fn icon_from_view_map<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<ViewIcon> {
+  let icon = map_ref.get_str_with_txn(txn, VIEW_ICON);
+
+  icon
+    .map(|icon_str| ViewIcon::from_string(&icon_str))
+    .unwrap_or_default()
 }
 
 pub struct ViewBuilder<'a, 'b> {
@@ -429,9 +435,8 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   impl_str_update!(set_desc, set_desc_if_not_none, VIEW_DESC);
   impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
   impl_any_update!(set_layout, set_layout_if_not_none, VIEW_LAYOUT, ViewLayout);
-  impl_str_update!(icon_url, set_icon_url_if_not_none, VIEW_ICON_URL);
-  impl_str_update!(cover_url, set_cover_url_if_not_none, VIEW_COVER_URL);
   impl_bool_update!(set_favorite, set_favorite_if_not_none, FAVORITE_STATUS);
+
   pub fn new(
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
@@ -451,6 +456,26 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
       .children_map
       .get_or_create_children_with_txn(self.txn, self.view_id);
     array.add_children_with_txn(self.txn, children.into_inner(), None);
+
+    self
+  }
+
+  pub fn set_icon(self, icon: Option<ViewIcon>) -> Self {
+    match icon {
+      Some(icon) => {
+        let mut icon_hash = HashMap::new();
+        icon_hash.insert(ICON_TYPE, icon.ty.to_string());
+        icon_hash.insert(ICON_VALUE, &icon.value);
+        if let Ok(icon_str) = serde_json::to_string(&icon_hash) {
+          self
+            .map_ref
+            .insert_str_with_txn(self.txn, VIEW_ICON, &icon_str);
+        }
+      },
+      None => {
+        self.map_ref.insert_str_with_txn(self.txn, VIEW_ICON, "");
+      },
+    };
 
     self
   }
@@ -478,8 +503,51 @@ pub struct View {
   #[serde(default)]
   pub is_favorite: bool,
   pub layout: ViewLayout,
-  pub icon_url: Option<String>,
-  pub cover_url: Option<String>,
+  pub icon: Option<ViewIcon>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum IconType {
+  Emoji,
+  Url,
+  Icon,
+}
+
+impl IconType {
+  pub fn from_string(s: &str) -> Option<Self> {
+    match s {
+      "emoji" => Some(IconType::Emoji),
+      "url" => Some(IconType::Url),
+      "icon" => Some(IconType::Icon),
+      _ => None,
+    }
+  }
+
+  fn to_string(&self) -> &'static str {
+    match self {
+      IconType::Emoji => "emoji",
+      IconType::Url => "url",
+      IconType::Icon => "icon",
+    }
+  }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct ViewIcon {
+  pub ty: IconType,
+  pub value: String,
+}
+
+impl ViewIcon {
+  pub fn from_string(icon_str: &str) -> Option<Self> {
+    let icon = serde_json::from_str::<HashMap<String, String>>(icon_str).ok()?;
+    let ty = icon.get(ICON_TYPE)?;
+    let value = icon.get(ICON_VALUE)?;
+    Some(Self {
+      ty: IconType::from_string(ty.as_str())?,
+      value: value.to_string(),
+    })
+  }
 }
 
 #[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize_repr, Deserialize_repr)]
@@ -503,7 +571,7 @@ impl ViewLayout {
 impl TryFrom<i64> for ViewLayout {
   type Error = anyhow::Error;
 
-  fn try_from(value: i64) -> std::result::Result<Self, Self::Error> {
+  fn try_from(value: i64) -> Result<Self, Self::Error> {
     match value {
       0 => Ok(ViewLayout::Document),
       1 => Ok(ViewLayout::Grid),

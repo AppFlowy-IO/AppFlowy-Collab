@@ -6,10 +6,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Once};
 
 use collab::preclude::CollabBuilder;
-use collab_folder::core::{
-  Folder, FolderData, FolderNotify, RepeatedViewIdentifier, TrashChangeReceiver, View,
-  ViewChangeReceiver, ViewIdentifier, ViewLayout, Workspace,
-};
+use collab_folder::core::*;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
@@ -127,9 +124,8 @@ pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<Strin
     children: RepeatedViewIdentifier::new(belongings),
     created_at: 0,
     layout: ViewLayout::Document,
-    icon_url: None,
-    cover_url: None,
     is_favorite: false,
+    icon: None,
   }
 }
 
@@ -174,6 +170,11 @@ pub fn setup_log() {
       .finish();
     subscriber.try_init().unwrap();
   });
+}
+
+pub fn gen_view_icon(ty: String, value: String) -> ViewIcon {
+  let ty = IconType::from_string(&ty).unwrap();
+  ViewIcon { ty, value }
 }
 
 pub fn unzip_history_folder_db(folder_name: &str) -> std::io::Result<PathBuf> {

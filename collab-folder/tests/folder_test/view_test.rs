@@ -1,4 +1,4 @@
-use crate::util::{create_folder_with_workspace, make_test_view};
+use crate::util::{create_folder_with_workspace, gen_view_icon, make_test_view};
 
 #[tokio::test]
 async fn create_view_test() {
@@ -72,6 +72,37 @@ async fn update_view_test() {
   assert_eq!(r_view.name, "Untitled");
   assert_eq!(r_view.desc, "My first view");
   assert!(r_view.is_favorite);
+}
+
+#[tokio::test]
+async fn update_view_icon_test() {
+  let folder_test = create_folder_with_workspace("1", "w1");
+  let o_view = make_test_view("v1", "w1", vec![]);
+  folder_test.insert_view(o_view, None);
+
+  let icon = gen_view_icon("emoji".to_string(), "👍".to_string());
+  folder_test
+    .views
+    .update_view("v1", |update| update.set_icon(Some(icon.clone())).done())
+    .unwrap();
+  let r_view = folder_test.views.get_view("v1").unwrap();
+  assert_eq!(r_view.icon, Some(icon));
+
+  let new_icon = gen_view_icon("emoji".to_string(), "👎".to_string());
+  folder_test
+    .views
+    .update_view("v1", |update| {
+      update.set_icon(Some(new_icon.clone())).done()
+    })
+    .unwrap();
+  let r_view = folder_test.views.get_view("v1").unwrap();
+  assert_eq!(r_view.icon, Some(new_icon));
+  folder_test
+    .views
+    .update_view("v1", |update| update.set_icon(None).done())
+    .unwrap();
+  let r_view = folder_test.views.get_view("v1").unwrap();
+  assert_eq!(r_view.icon, None);
 }
 
 #[tokio::test]
