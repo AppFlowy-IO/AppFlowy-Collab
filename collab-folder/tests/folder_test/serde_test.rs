@@ -82,8 +82,8 @@ async fn view_json_serde() {
 
   let view_1 = make_test_view("v1", "w1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);
-  folder_test.insert_view(view_1);
-  folder_test.insert_view(view_2);
+  folder_test.insert_view(view_1, None);
+  folder_test.insert_view(view_2, None);
 
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(
@@ -155,10 +155,10 @@ async fn child_view_json_serde() {
   let view_2 = make_test_view("v2", "w1", vec![]);
   let view_2_1 = make_test_view("v2.1", "v2", vec![]);
   let view_2_2 = make_test_view("v2.2", "v2", vec![]);
-  folder_test.insert_view(view_1);
-  folder_test.insert_view(view_2);
-  folder_test.insert_view(view_2_1);
-  folder_test.insert_view(view_2_2);
+  folder_test.insert_view(view_1, None);
+  folder_test.insert_view(view_2, None);
+  folder_test.insert_view(view_2_1, None);
+  folder_test.insert_view(view_2_2, None);
 
   folder_test.workspaces.create_workspace(workspace);
   assert_json_diff::assert_json_eq!(

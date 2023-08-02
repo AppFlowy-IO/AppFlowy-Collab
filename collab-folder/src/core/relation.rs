@@ -164,9 +164,10 @@ impl ViewRelations {
     txn: &mut TransactionMut,
     parent_id: &str,
     children: Vec<ViewIdentifier>,
+    index: Option<u32>,
   ) {
     let array = self.get_or_create_children_with_txn(txn, parent_id);
-    array.add_children_with_txn(txn, children);
+    array.add_children_with_txn(txn, children, index);
   }
 }
 
@@ -225,22 +226,43 @@ impl ChildrenArray {
   pub fn add_children(&self, belongings: Vec<ViewIdentifier>) {
     self
       .0
-      .with_transact_mut(|txn| self.add_children_with_txn(txn, belongings))
+      .with_transact_mut(|txn| self.add_children_with_txn(txn, belongings, None))
   }
 
-  pub fn add_children_with_txn(&self, txn: &mut TransactionMut, children: Vec<ViewIdentifier>) {
-    let mut existing_children_ids = self
+  /// Add children to the views.
+  ///
+  /// if the index is provided, the children will be inserted at the index.
+  /// if the index is None or the index is greater than the length of the array, the children will be appended to the last of the views.
+  pub fn add_children_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    children: Vec<ViewIdentifier>,
+    index: Option<u32>,
+  ) {
+    let mut existing_children_ids: Vec<String> = self
       .get_children_with_txn(txn)
       .into_inner()
       .into_iter()
       .map(|child_view| child_view.id)
-      .collect::<Vec<String>>();
+      .collect();
 
-    for child in children {
-      if !existing_children_ids.contains(&child.id) {
+    let values = children.into_iter().filter(|child| {
+      let contains_child = existing_children_ids.contains(&child.id);
+      if !contains_child {
         existing_children_ids.push(child.id.clone());
-        self.0.push_back(txn, child);
       }
+      !contains_child
+    });
+
+    if let Some(index) = index {
+      if index < self.0.len(txn) {
+        self.0.insert_range(txn, index, values);
+        return;
+      }
+    }
+
+    for value in values {
+      self.0.push_back(txn, value);
     }
   }
 }

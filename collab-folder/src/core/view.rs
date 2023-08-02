@@ -450,7 +450,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     let array = self
       .children_map
       .get_or_create_children_with_txn(self.txn, self.view_id);
-    array.add_children_with_txn(self.txn, children.into_inner());
+    array.add_children_with_txn(self.txn, children.into_inner(), None);
 
     self
   }
@@ -458,7 +458,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   pub fn add_children(self, children: Vec<ViewIdentifier>) -> Self {
     self
       .children_map
-      .add_children(self.txn, self.view_id, children);
+      .add_children(self.txn, self.view_id, children, None);
     self
   }
 

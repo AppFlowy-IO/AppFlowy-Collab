@@ -13,12 +13,12 @@ async fn create_child_views_test() {
   let view_1_3 = make_test_view("1_3", "1", vec![]);
   let view_1 = make_test_view("1", "w1", vec![]);
 
-  folder_test.insert_view(view_1.clone());
-  folder_test.insert_view(view_1_1);
-  folder_test.insert_view(view_1_2.clone());
-  folder_test.insert_view(view_1_2_1);
-  folder_test.insert_view(view_1_2_2);
-  folder_test.insert_view(view_1_3);
+  folder_test.insert_view(view_1.clone(), None);
+  folder_test.insert_view(view_1_1, None);
+  folder_test.insert_view(view_1_2.clone(), None);
+  folder_test.insert_view(view_1_2_1, None);
+  folder_test.insert_view(view_1_2_2, None);
+  folder_test.insert_view(view_1_3, None);
 
   let v_1_child_views = folder_test.views.get_views_belong_to(&view_1.id);
   assert_eq!(v_1_child_views.len(), 3);
@@ -166,10 +166,10 @@ async fn move_child_views_test() {
     vec!["1_1".to_string(), "1_2".to_string(), "1_3".to_string()],
   );
 
-  folder_test.insert_view(view_1.clone());
-  folder_test.insert_view(view_1_1);
-  folder_test.insert_view(view_1_2);
-  folder_test.insert_view(view_1_3);
+  folder_test.insert_view(view_1.clone(), None);
+  folder_test.insert_view(view_1_1, None);
+  folder_test.insert_view(view_1_2, None);
+  folder_test.insert_view(view_1_3, None);
 
   let v_1_child_views = folder_test.views.get_views_belong_to(&view_1.id);
   assert_eq!(v_1_child_views[0].id, "1_1");
@@ -191,9 +191,9 @@ async fn delete_view_test() {
   let view_1 = make_test_view("1_1", "w1", vec![]);
   let view_2 = make_test_view("1_2", "w1", vec![]);
   let view_3 = make_test_view("1_3", "w1", vec![]);
-  folder_test.insert_view(view_1);
-  folder_test.insert_view(view_2);
-  folder_test.insert_view(view_3);
+  folder_test.insert_view(view_1, None);
+  folder_test.insert_view(view_2, None);
+  folder_test.insert_view(view_3, None);
 
   folder_test.views.remove_child("w1", 1);
   let w_1_child_views = folder_test.views.get_views_belong_to("w1");
@@ -207,9 +207,9 @@ async fn delete_child_view_test() {
   let view_1 = make_test_view("v1", "w1", vec![]);
   let view_1_1 = make_test_view("v1_1", "v1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);
-  folder_test.insert_view(view_1);
-  folder_test.insert_view(view_1_1);
-  folder_test.insert_view(view_2);
+  folder_test.insert_view(view_1, None);
+  folder_test.insert_view(view_1_1, None);
+  folder_test.insert_view(view_2, None);
 
   let views = folder_test.views.get_views_belong_to("v1");
   assert_eq!(views.len(), 1);
