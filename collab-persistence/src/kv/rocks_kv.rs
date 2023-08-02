@@ -91,6 +91,15 @@ impl RocksStore {
     RocksKVStoreImpl(txn)
   }
 
+  pub fn write_txn(&self) -> RocksKVStoreImpl<'_, TransactionDB> {
+    let mut txn_options = TransactionOptions::default();
+    txn_options.set_snapshot(true);
+    let txn = self
+      .db
+      .transaction_opt(&WriteOptions::default(), &txn_options);
+    RocksKVStoreImpl(txn)
+  }
+
   /// Create a write transaction that accesses the database exclusively.
   /// The transaction will be committed when the closure [F] returns.
   pub fn with_write_txn<F, O>(&self, f: F) -> Result<O, PersistenceError>
@@ -115,6 +124,13 @@ impl RocksStore {
 
 /// Implementation of [KVStore] for [RocksStore]. This is a wrapper around [Transaction].
 pub struct RocksKVStoreImpl<'a, DB>(Transaction<'a, DB>);
+
+impl<'a, DB> RocksKVStoreImpl<'a, DB> {
+  pub fn commit_transaction(self) -> Result<(), PersistenceError> {
+    self.0.commit()?;
+    Ok(())
+  }
+}
 
 impl<'a, DB> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
   type Range = RocksDBRange<'a, DB>;

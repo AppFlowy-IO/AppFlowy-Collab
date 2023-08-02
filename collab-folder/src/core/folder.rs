@@ -77,7 +77,7 @@ impl Folder {
   pub fn open(collab: Arc<MutexCollab>, notifier: Option<FolderNotify>) -> Self {
     match open_folder(collab.clone(), notifier.clone()) {
       None => {
-        tracing::info!("Missing collab object in folder, create a new one with existing data");
+        tracing::info!("Create missing attributes of folder");
         create_folder(collab, notifier, None)
       },
       Some(folder) => folder,

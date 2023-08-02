@@ -78,9 +78,13 @@ where
     let doc_state = txn.encode_state_as_update_v1(&StateVector::default());
     let sv = txn.state_vector().encode_v1();
 
+    // Remove the updates
+    let start = make_doc_start_key(doc_id);
+    let end = make_doc_end_key(doc_id);
+    self.remove_range(start.as_ref(), end.as_ref())?;
+
     let doc_state_key = make_doc_state_key(doc_id);
     let sv_key = make_state_vector_key(doc_id);
-
     tracing::trace!(
       "[🦀Collab] => [{}:{:?}] insert doc state: {:?} : {}",
       doc_id,
@@ -91,12 +95,6 @@ where
     // Insert new doc state and state vector
     self.insert(doc_state_key, doc_state)?;
     self.insert(sv_key, sv)?;
-
-    // Remove the updates
-    let start = make_doc_start_key(doc_id);
-    let end = make_doc_end_key(doc_id);
-    self.remove_range(start.as_ref(), end.as_ref())?;
-
     Ok(())
   }
 
@@ -248,6 +246,27 @@ where
       let end = make_doc_update_key(doc_id, Clock::MAX);
       self.remove_range(start.as_ref(), end.as_ref())?;
     }
+    Ok(())
+  }
+
+  fn flush_doc_with<K: AsRef<[u8]> + ?Sized + Debug>(
+    &self,
+    uid: i64,
+    object_id: &K,
+    doc_state: &[u8],
+    sv: &[u8],
+  ) -> Result<(), PersistenceError> {
+    let doc_id = get_or_create_did(uid, self, object_id)?;
+    let start = make_doc_start_key(doc_id);
+    let end = make_doc_end_key(doc_id);
+    self.remove_range(start.as_ref(), end.as_ref())?;
+
+    let doc_state_key = make_doc_state_key(doc_id);
+    let sv_key = make_state_vector_key(doc_id);
+
+    // Insert new doc state and state vector
+    self.insert(doc_state_key, doc_state)?;
+    self.insert(sv_key, sv)?;
     Ok(())
   }
 
