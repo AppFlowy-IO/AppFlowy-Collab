@@ -14,9 +14,10 @@ use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
 use yrs::updates::decoder::Decode;
+use yrs::updates::encoder::Encode;
 use yrs::{
-  ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, Subscription,
-  Transact, Transaction, TransactionMut, UndoManager, Update, UpdateSubscription,
+  ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, StateVector,
+  Subscription, Transact, Transaction, TransactionMut, UndoManager, Update, UpdateSubscription,
 };
 
 use crate::core::collab_plugin::{CollabPlugin, CollabPluginType};
@@ -750,6 +751,15 @@ impl MutexCollab {
 
   pub fn from_collab(collab: Collab) -> Self {
     MutexCollab(Arc::new(Mutex::new(collab)))
+  }
+
+  pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
+    let collab = self.0.lock();
+    let txn = collab.transact_mut();
+    (
+      txn.encode_state_as_update_v1(&StateVector::default()),
+      txn.state_vector().encode_v1(),
+    )
   }
 
   pub fn to_json_value(&self) -> JsonValue {

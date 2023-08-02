@@ -42,6 +42,10 @@ impl Document {
     Document::open_document_with_collab(collab)
   }
 
+  pub fn get_collab(&self) -> &Arc<MutexCollab> {
+    &self.inner
+  }
+
   /// Create a new document with the given data.
   pub fn create_with_data(
     collab: Arc<MutexCollab>,
