@@ -10,7 +10,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_TOOLCHAIN: "1.65"
+  RUST_TOOLCHAIN: "1.70"
 
 jobs:
   build_and_test:
@@ -46,9 +46,9 @@ jobs:
           rustup component add llvm-tools-preview
 
       - name: Generate code coverage report
-        run: | 
+        run: |
           cargo make run_coverage
-          
+
 
       - name: Upload code coverage report to codecov.io
         uses: codecov/codecov-action@v3

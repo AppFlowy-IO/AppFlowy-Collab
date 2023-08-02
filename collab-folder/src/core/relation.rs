@@ -4,7 +4,6 @@ use std::ops::{Deref, DerefMut};
 use collab::preclude::{lib0Any, YrsValue};
 use collab::preclude::{Array, ArrayRef, ArrayRefWrapper, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
-use serde_json::value::Index;
 
 /// Used to keep track of the view hierarchy.
 /// Parent-child relationship is stored in the map and each child is stored in an array.
