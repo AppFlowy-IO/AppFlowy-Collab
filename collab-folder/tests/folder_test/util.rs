@@ -172,9 +172,9 @@ pub fn setup_log() {
   });
 }
 
-pub fn gen_view_icon(ty: String, value: String) -> ViewIcon {
-  let ty = IconType::from_string(&ty).unwrap();
-  ViewIcon { ty, value }
+pub fn gen_view_icon(ty: String, value: String) -> Option<ViewIcon> {
+  let ty = IconType::from_string(&ty)?;
+  Some(ViewIcon { ty, value })
 }
 
 pub fn unzip_history_folder_db(folder_name: &str) -> std::io::Result<PathBuf> {

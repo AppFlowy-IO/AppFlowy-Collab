@@ -80,7 +80,7 @@ async fn update_view_icon_test() {
   let o_view = make_test_view("v1", "w1", vec![]);
   folder_test.insert_view(o_view, None);
 
-  let icon = gen_view_icon("emoji".to_string(), "👍".to_string());
+  let icon = gen_view_icon("emoji".to_string(), "👍".to_string()).unwrap();
   folder_test
     .views
     .update_view("v1", |update| update.set_icon(Some(icon.clone())).done())
@@ -88,7 +88,7 @@ async fn update_view_icon_test() {
   let r_view = folder_test.views.get_view("v1").unwrap();
   assert_eq!(r_view.icon, Some(icon));
 
-  let new_icon = gen_view_icon("emoji".to_string(), "👎".to_string());
+  let new_icon = gen_view_icon("emoji".to_string(), "👎".to_string()).unwrap();
   folder_test
     .views
     .update_view("v1", |update| {
@@ -103,6 +103,43 @@ async fn update_view_icon_test() {
     .unwrap();
   let r_view = folder_test.views.get_view("v1").unwrap();
   assert_eq!(r_view.icon, None);
+}
+
+#[tokio::test]
+async fn different_icon_ty_test() {
+  let folder_test = create_folder_with_workspace("1", "w1");
+  let o_view = make_test_view("v1", "w1", vec![]);
+  folder_test.insert_view(o_view, None);
+  let emoji = gen_view_icon("emoji".to_string(), "👍".to_string()).unwrap();
+  folder_test
+    .views
+    .update_view("v1", |update| update.set_icon(Some(emoji.clone())).done())
+    .unwrap();
+  let r_view = folder_test.views.get_view("v1").unwrap();
+  assert_eq!(r_view.icon, Some(emoji));
+
+  let icon = gen_view_icon("icon".to_string(), "👍".to_string()).unwrap();
+  folder_test
+    .views
+    .update_view("v1", |update| update.set_icon(Some(icon.clone())).done())
+    .unwrap();
+  let r_view = folder_test.views.get_view("v1").unwrap();
+  assert_eq!(r_view.icon, Some(icon));
+
+  let url = gen_view_icon(
+    "url".to_string(),
+    "https://www.notion.so/favicon.ico".to_string(),
+  )
+  .unwrap();
+  folder_test
+    .views
+    .update_view("v1", |update| update.set_icon(Some(url.clone())).done())
+    .unwrap();
+  let r_view = folder_test.views.get_view("v1").unwrap();
+  assert_eq!(r_view.icon, Some(url));
+
+  let unknow = gen_view_icon("unknow".to_string(), "👍".to_string());
+  assert!(unknow.is_none());
 }
 
 #[tokio::test]
