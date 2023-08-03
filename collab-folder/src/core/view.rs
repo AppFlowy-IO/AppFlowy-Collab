@@ -24,8 +24,6 @@ const VIEW_DATABASE_ID: &str = "database_id";
 const VIEW_LAYOUT: &str = "layout";
 const VIEW_CREATE_AT: &str = "created_at";
 const VIEW_ICON: &str = "icon";
-const ICON_TYPE: &str = "ty";
-const ICON_VALUE: &str = "value";
 const FAVORITE_STATUS: &str = "is_favorite";
 
 pub struct ViewsMap {
