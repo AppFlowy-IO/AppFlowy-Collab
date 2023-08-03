@@ -111,6 +111,7 @@ async fn view_json_serde() {
           "layout": 0,
           "name": "",
           "is_favorite": false,
+          "icon": ""
         },
         "v2": {
           "bid": "w1",
@@ -119,7 +120,8 @@ async fn view_json_serde() {
           "id": "v2",
           "layout": 0,
           "name": "",
-          "is_favorite": false
+          "is_favorite": false,
+          "icon": ""
         }
       },
       "workspaces": [
