@@ -346,7 +346,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     .map(|array| array.get_children_with_txn(txn))
     .unwrap_or_default();
 
-  let icon = icon_from_view_map(map_ref, txn);
+  let icon = get_icon_from_view_map(map_ref, txn);
   let is_favorite = map_ref
     .get_bool_with_txn(txn, FAVORITE_STATUS)
     .unwrap_or_default();
@@ -364,7 +364,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   })
 }
 
-pub fn icon_from_view_map<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<ViewIcon> {
+pub fn get_icon_from_view_map<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<ViewIcon> {
   let icon_str = map_ref.get_str_with_txn(txn, VIEW_ICON)?;
   serde_json::from_str::<ViewIcon>(&icon_str).ok()
 }
@@ -461,7 +461,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
       .unwrap_or_default();
     self
       .map_ref
-      .insert_str_with_txn(self.txn, VIEW_ICON, icon_str.as_str());
+      .insert_str_with_txn(self.txn, VIEW_ICON, icon_str);
 
     self
   }

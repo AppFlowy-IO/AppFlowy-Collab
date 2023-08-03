@@ -172,10 +172,6 @@ pub fn setup_log() {
   });
 }
 
-pub fn gen_view_icon(ty: IconType, value: String) -> ViewIcon {
-  ViewIcon { ty, value }
-}
-
 pub fn unzip_history_folder_db(folder_name: &str) -> std::io::Result<PathBuf> {
   // Open the zip file
   let zip_file_path = format!("./tests/folder_test/history_folder/{}.zip", folder_name);
