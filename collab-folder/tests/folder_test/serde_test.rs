@@ -195,6 +195,7 @@ async fn child_view_json_serde() {
           "layout": 0,
           "name": "",
           "is_favorite":false,
+          "icon": ""
         },
         "v2": {
           "bid": "w1",
@@ -204,6 +205,7 @@ async fn child_view_json_serde() {
           "layout": 0,
           "name": "",
           "is_favorite":false,
+          "icon": ""
         },
         "v2.1": {
           "bid": "v2",
@@ -213,6 +215,7 @@ async fn child_view_json_serde() {
           "layout": 0,
           "name": "",
           "is_favorite":false,
+          "icon": ""
         },
         "v2.2": {
           "bid": "v2",
@@ -222,6 +225,7 @@ async fn child_view_json_serde() {
           "layout": 0,
           "name": "",
           "is_favorite":false,
+          "icon": ""
         }
       },
       "workspaces": [
