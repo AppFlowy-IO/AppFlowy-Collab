@@ -367,11 +367,9 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
 }
 
 pub fn icon_from_view_map<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<ViewIcon> {
-  let icon = map_ref.get_str_with_txn(txn, VIEW_ICON);
+  let icon = map_ref.get_str_with_txn(txn, VIEW_ICON)?;
 
-  icon
-    .map(|icon_str| ViewIcon::from_string(&icon_str))
-    .unwrap_or_default()
+  ViewIcon::new(icon)
 }
 
 pub struct ViewBuilder<'a, 'b> {
@@ -464,8 +462,9 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     match icon {
       Some(icon) => {
         let mut icon_hash = HashMap::new();
-        icon_hash.insert(ICON_TYPE, icon.ty.to_string());
-        icon_hash.insert(ICON_VALUE, &icon.value);
+        let ty = serde_json::to_string(&icon.ty).unwrap_or_default();
+        icon_hash.insert(ICON_TYPE, ty);
+        icon_hash.insert(ICON_VALUE, icon.value);
         if let Ok(icon_str) = serde_json::to_string(&icon_hash) {
           self
             .map_ref
@@ -514,25 +513,6 @@ pub enum IconType {
   Icon,
 }
 
-impl IconType {
-  pub fn from_string(s: &str) -> Option<Self> {
-    match s {
-      "emoji" => Some(IconType::Emoji),
-      "url" => Some(IconType::Url),
-      "icon" => Some(IconType::Icon),
-      _ => None,
-    }
-  }
-
-  fn to_string(&self) -> &'static str {
-    match self {
-      IconType::Emoji => "emoji",
-      IconType::Url => "url",
-      IconType::Icon => "icon",
-    }
-  }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct ViewIcon {
   pub ty: IconType,
@@ -540,12 +520,13 @@ pub struct ViewIcon {
 }
 
 impl ViewIcon {
-  pub fn from_string(icon_str: &str) -> Option<Self> {
-    let icon = serde_json::from_str::<HashMap<String, String>>(icon_str).ok()?;
+  pub fn new(s: String) -> Option<Self> {
+    let icon = serde_json::from_str::<HashMap<String, String>>(&s).ok()?;
     let ty = icon.get(ICON_TYPE)?;
+    let ty = serde_json::from_str::<IconType>(ty).ok()?;
     let value = icon.get(ICON_VALUE)?;
     Some(Self {
-      ty: IconType::from_string(ty.as_str())?,
+      ty,
       value: value.to_string(),
     })
   }
