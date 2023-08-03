@@ -366,12 +366,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
 
 pub fn icon_from_view_map<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<ViewIcon> {
   let icon_str = map_ref.get_str_with_txn(txn, VIEW_ICON)?;
-
-  let icon = serde_json::from_str::<ViewIcon>(&icon_str);
-  if let Ok(icon) = icon {
-    return Some(icon);
-  }
-  None
+  serde_json::from_str::<ViewIcon>(&icon_str).ok()
 }
 
 pub struct ViewBuilder<'a, 'b> {
@@ -461,17 +456,12 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   }
 
   pub fn set_icon(self, icon: Option<ViewIcon>) -> Self {
-    match icon {
-      Some(icon) => {
-        let icon_str = serde_json::to_string(&icon).unwrap_or_default();
-        self
-          .map_ref
-          .insert_str_with_txn(self.txn, VIEW_ICON, icon_str.as_str());
-      },
-      None => {
-        self.map_ref.insert_str_with_txn(self.txn, VIEW_ICON, "");
-      },
-    };
+    let icon_str = icon
+      .and_then(|icon| serde_json::to_string(&icon).ok())
+      .unwrap_or_default();
+    self
+      .map_ref
+      .insert_str_with_txn(self.txn, VIEW_ICON, icon_str.as_str());
 
     self
   }
