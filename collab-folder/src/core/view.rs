@@ -369,14 +369,11 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
 pub fn icon_from_view_map<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<ViewIcon> {
   let icon_str = map_ref.get_str_with_txn(txn, VIEW_ICON)?;
 
-  let icon = serde_json::from_str::<HashMap<String, String>>(&icon_str).ok()?;
-  let ty = icon.get(ICON_TYPE)?;
-  let ty = serde_json::from_str::<IconType>(ty).ok()?;
-  let value = icon.get(ICON_VALUE)?;
-  Some(ViewIcon {
-    ty,
-    value: value.to_string(),
-  })
+  let icon = serde_json::from_str::<ViewIcon>(&icon_str);
+  if let Ok(icon) = icon {
+    return Some(icon);
+  }
+  None
 }
 
 pub struct ViewBuilder<'a, 'b> {
@@ -468,15 +465,10 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   pub fn set_icon(self, icon: Option<ViewIcon>) -> Self {
     match icon {
       Some(icon) => {
-        let mut icon_hash = HashMap::new();
-        let ty = serde_json::to_string(&icon.ty).unwrap_or_default();
-        icon_hash.insert(ICON_TYPE, ty);
-        icon_hash.insert(ICON_VALUE, icon.value);
-        if let Ok(icon_str) = serde_json::to_string(&icon_hash) {
-          self
-            .map_ref
-            .insert_str_with_txn(self.txn, VIEW_ICON, &icon_str);
-        }
+        let icon_str = serde_json::to_string(&icon).unwrap_or_default();
+        self
+          .map_ref
+          .insert_str_with_txn(self.txn, VIEW_ICON, icon_str.as_str());
       },
       None => {
         self.map_ref.insert_str_with_txn(self.txn, VIEW_ICON, "");
