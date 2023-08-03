@@ -367,9 +367,16 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
 }
 
 pub fn icon_from_view_map<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<ViewIcon> {
-  let icon = map_ref.get_str_with_txn(txn, VIEW_ICON)?;
+  let icon_str = map_ref.get_str_with_txn(txn, VIEW_ICON)?;
 
-  ViewIcon::new(icon)
+  let icon = serde_json::from_str::<HashMap<String, String>>(&icon_str).ok()?;
+  let ty = icon.get(ICON_TYPE)?;
+  let ty = serde_json::from_str::<IconType>(ty).ok()?;
+  let value = icon.get(ICON_VALUE)?;
+  Some(ViewIcon {
+    ty,
+    value: value.to_string(),
+  })
 }
 
 pub struct ViewBuilder<'a, 'b> {
@@ -517,19 +524,6 @@ pub enum IconType {
 pub struct ViewIcon {
   pub ty: IconType,
   pub value: String,
-}
-
-impl ViewIcon {
-  pub fn new(s: String) -> Option<Self> {
-    let icon = serde_json::from_str::<HashMap<String, String>>(&s).ok()?;
-    let ty = icon.get(ICON_TYPE)?;
-    let ty = serde_json::from_str::<IconType>(ty).ok()?;
-    let value = icon.get(ICON_VALUE)?;
-    Some(Self {
-      ty,
-      value: value.to_string(),
-    })
-  }
 }
 
 #[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize_repr, Deserialize_repr)]
