@@ -1,0 +1,170 @@
+@startuml
+'left to right direction
+package "AppFlowy Application" as appflowy {
+
+component "RustLib" as rustlib {
+  [flowy-folder]
+  [flowy-database]
+  [flowy-document]
+}
+
+component "Collab" as collab {
+  [Folder]
+  [Database]
+  [Document]
+}
+
+component "CollabPlugins" as plugins {
+  [RocksdbDiskPlugin]
+  [SupabaseDBPlugin]
+}
+
+cloud "Supabase Cloud" as supabase {
+}
+
+database "rocksdb" as rocksdb {
+}
+
+database "postgres" as postgres {
+}
+}
+
+[flowy-folder] --> [Folder]
+[flowy-database] --> [Database]
+[flowy-document] --> [Document]
+
+collab --> plugins
+RocksdbDiskPlugin --> rocksdb
+SupabaseDBPlugin --> supabase
+supabase --> postgres
+@enduml
+
+@startuml
+title CollabPlugins
+left to right direction
+component "CollabPlugins" as plugins {
+  [RocksdbDiskPlugin]
+  [SupabaseDBPlugin]
+  [IndexedDBPlugin]
+  [AWSDBPlugin]
+  [FirebaseDBPlugin]
+  [ContentIndexingPlugin]
+  [RealtimeSyncPlugin]
+}
+@enduml
+
+@startuml
+title Create Document
+actor User as user
+participant flowy_folder as folder
+participant flowy_document as fd
+participant collab_document as cd
+participant plugins as plugins
+participant RocksdbDiskPlugin as rdb
+participant SupabaseDBPlugin as supabase
+
+user --> folder:
+note left: 1.click create document button
+folder --> fd :
+note left: 2.create a view with document type
+fd --> cd :
+note left: 3.create document with the id of the view
+cd --> plugins
+plugins --> plugins :
+note left: 4.propagate the updates to all plugins
+plugins --> rdb :
+note left: 5.save the updates to disk
+plugins --> supabase :
+note left: 6.send the updates to server
+@enduml
+
+
+
+@startuml
+title Open Document
+actor User as user
+participant flowy_document as fd
+participant collab_document as cd
+participant plugins as plugins
+participant SupabaseDBPlugin as supabase
+
+user --> fd:
+note left: 1. open
+fd --> cd
+cd --> plugins
+plugins --> plugins :
+note left: 2. call did_init method of all plugins
+plugins --> supabase :
+note left: 3. send init sync request to server
+supabase --> plugins :
+note left: 4. receive init sync response from server
+@enduml
+
+@startuml
+title Edit Document
+actor User as user
+participant flowy_document as fd
+participant collab_document as cd
+collections plugins as plugins
+participant RocksdbDiskPlugin as rdb
+participant SupabaseDBPlugin as supabase_plugin
+participant SupabaseCloud as supabase
+
+user --> fd: 1.
+note left: type 'abc'
+fd --> cd :
+note left: 2. create a update containing 'abc'
+cd --> plugins
+plugins --> rdb
+rdb --> rdb:
+note left: 3.save updates
+plugins --> supabase_plugin
+supabase_plugin --> supabase_plugin:
+note left: 4. push updates to send queue
+supabase_plugin --> supabase
+note left: 5. send the updates to server with order
+@enduml
+
+
+@startuml
+title Sync Document
+actor User1 as user1
+actor User2 as user2
+actor User3 as user3
+participant Collab as collab
+collections plugins as plugins
+participant SupabaseDBPlugin as supabase_plugin
+participant SupabaseCloud as supabase
+
+== Generate updates ==
+user1 --> collab:
+note left: 1. type 'abc'
+collab --> collab :
+note left: 2. create a update containing 'abc'
+collab --> plugins
+plugins --> supabase_plugin
+supabase_plugin --> supabase:
+note left: 3. send the update to server
+supabase --> supabase_plugin:
+note left: 4. ack the update is send
+
+== broadcast the update to all clients ==
+supabase --> Realtime:
+note left: 5. broadcast the update
+
+== User2 receives the updates ==
+Realtime --> user2:
+note left: 6. receive the update
+user2 --> collab:
+note left: 7. apply the update
+collab --> user2:
+note left: 8.refresh the UI
+
+== User3 receives the updates ==
+Realtime --> user3:
+note left: 6.receive the update
+user3 --> collab:
+note left: 7.apply the update
+collab --> user3:
+note left: 8. refresh the UI
+@enduml
