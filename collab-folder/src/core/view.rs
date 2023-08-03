@@ -506,7 +506,8 @@ pub struct View {
   pub icon: Option<ViewIcon>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
 pub enum IconType {
   Emoji,
   Url,
