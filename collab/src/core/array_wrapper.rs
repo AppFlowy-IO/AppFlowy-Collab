@@ -6,7 +6,7 @@ use serde::Serialize;
 use yrs::block::Prelim;
 use yrs::{Array, ArrayRef, MapPrelim, MapRef, ReadTxn, Transact, Transaction, TransactionMut};
 
-use crate::preclude::{CollabContext, MapRefWrapper, YrsValue};
+use crate::preclude::{CollabContext, MapRefExtension, MapRefWrapper, YrsValue};
 use crate::util::insert_json_value_to_array_ref;
 
 #[derive(Clone)]
@@ -96,6 +96,26 @@ pub trait ArrayRefExtension {
   fn insert_map_at_index_with_txn(&self, txn: &mut TransactionMut, index: u32) -> MapRef {
     let array = MapPrelim::<Any>::new();
     self.array_ref().insert(txn, index, array)
+  }
+
+  fn remove_with_id(&self, txn: &mut TransactionMut, key: &str, id: &str) {
+    if let Some(index) = self
+      .array_ref()
+      .iter(txn)
+      .position(|value| {
+        if let YrsValue::YMap(map) = value {
+          map
+            .get_str_with_txn(txn, key)
+            .map(|value| value.as_str() == id)
+            .unwrap_or(false)
+        } else {
+          false
+        }
+      })
+      .map(|index| index as u32)
+    {
+      self.array_ref().remove(txn, index);
+    }
   }
 }
 

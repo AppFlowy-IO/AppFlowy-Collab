@@ -1,0 +1,49 @@
+@startuml
+title UserAwareness
+left to right direction
+class UserAwareness {
+   appearance_settings: Map<String, String>,
+   reminders: Vec<Reminder>,
+}
+
+struct Reminder {
+  id: String,
+  scheduled_at: i64,
+  is_ack: bool,
+  ty: i64,
+  title: String,
+  message: String,
+  reminder_object_id: String,
+}
+
+UserAwareness "1" -- "0..*" Reminder
+@enduml
+
+@startuml
+title CreateReminder
+actor User
+entity "User Device 1" as Device1
+entity "User Device 2" as Device2
+entity "User Device 3" as Device3
+database Server
+entity "User Interface" as UI
+
+User -> Device1: Logs in
+User -> Device2: Logs in with the same User ID
+User -> Device3: Logs in with the same User ID
+Device1 -> Server: Sends login information
+Device2 -> Server: Sends login information
+Device3 -> Server: Sends login information
+Server -> Device1: Synchronizes `UserAwareness` object
+Server -> Device2: Synchronizes `UserAwareness` object
+Server -> Device3: Synchronizes `UserAwareness` object
+
+User -> Device1: Creates a new reminder
+Device1 -> Server: Sends reminder update
+Server -> Device1: Broadcasts reminder update
+Server -> Device2: Broadcasts reminder update
+Server -> Device3: Broadcasts reminder update
+Device1 -> UI: Updates reminder list
+Device2 -> UI: Updates reminder list
+Device3 -> UI: Updates reminder list
+@enduml

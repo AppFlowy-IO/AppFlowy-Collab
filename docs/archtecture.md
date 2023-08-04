@@ -69,3 +69,94 @@ The real-time synchronization of a document across different users involves the 
 8. UI is refreshed to reflect the updates.
 
 ![](./collab_object-Sync_Document.png)
+
+## New Collab Object
+Each collab object is using the `collab` crate that is built on top of the [yrs](https://docs.rs/yrs/latest/yrs/) to build
+its collaboration structure. Let's say we want to create a new collab object called `UserAwareness`. It stores the data associated with user. For example, the appearance settings and the reminder setting. The `UserAwareness` can
+be synced between different devices for the given user_id.
+
+The `UserAwareness` contains the following fields, as shown below:
+
+![](./create_collab_object-UserAwareness.png)
+
+Your sentences are mostly clear, but there are a few minor areas where the grammar and punctuation could be improved. Here's my suggested revision:
+
+- `appearance_settings` is a [yrs map](https://docs.rs/yrs/latest/yrs/types/map/struct.MapRef.html) that contains the user's appearance settings.
+- `reminders` is a [yrs array](https://docs.rs/yrs/latest/yrs/types/array/struct.ArrayRef.html) that contains the user's reminders. Each reminder can be serialized or deserialized using the [yrs map](https://docs.rs/yrs/latest/yrs/types/map/struct.MapRef.html).
+
+Now, let's explore how to create the `UserAwareness` collab object.
+
+```rust
+
+pub struct UserAwareness {
+    container: MapRefWrapper,
+    appearance_settings: AppearanceSettings,
+    reminders: Reminders,
+}
+
+impl UserAwareness {
+    pub fn create(collab: Arc<MutexCollab>) -> Self {
+        let collab_guard = collab.lock();
+        let (container, appearance_settings, reminders) = collab_guard.with_transact_mut(|txn| {
+            let awareness = collab_guard.insert_map_with_txn_if_not_exist(txn, USER);
+
+            let appearance_settings_container =
+                awareness.insert_map_with_txn_if_not_exist(txn, APPEARANCE_SETTINGS);
+            let appearance_settings = AppearanceSettings {
+                container: appearance_settings_container,
+            };
+
+            let reminder_container =
+                awareness.insert_array_if_not_exist_with_txn::<Reminder>(txn, REMINDERS, vec![]);
+            let reminders = Reminders {
+                container: reminder_container,
+            };
+
+            (awareness, appearance_settings, reminders)
+        });
+        Self {
+            container,
+            appearance_settings,
+            reminders,
+        }
+    }
+
+    /// Adds a new reminder to the `UserAwareness` object.
+    ///
+    /// # Arguments
+    ///
+    /// * `reminder` - The `Reminder` object to be added.
+    pub fn add_reminder(&self, reminder: Reminder) {
+        self.reminders.add(reminder);
+    }
+
+    /// Removes an existing reminder from the `UserAwareness` object.
+    ///
+    /// # Arguments
+    ///
+    /// * `reminder_id` - A string reference to the ID of the reminder to be removed.
+    pub fn remove_reminder(&self, reminder_id: &str) {
+        self.reminders.remove(reminder_id);
+    }
+
+    /// Updates an existing reminder in the `UserAwareness` object.
+    ///
+    /// # Arguments
+    ///
+    /// * `reminder_id` - A string reference to the ID of the reminder to be updated.
+    /// * `f` - A function or closure that takes `ReminderUpdate` as its argument and implements the changes to the reminder.
+    pub fn update_reminder<F>(&self, reminder_id: &str, f: F)
+        where
+            F: FnOnce(ReminderUpdate),
+    {
+        self.reminders.update_reminder(reminder_id, f);
+    }
+}
+```
+Utilizing the `UserAwareness` object is simple and straightforward. A new `UserAwareness` object can be instantiated by calling the `create` method. Subsequently, reminders can be added, removed, or updated using the `add_reminder`, `remove_reminder`, and `update_reminder` methods, respectively. Each `UserAwareness` object is associated with a unique user ID, stored in `Arc<MutexCollab>`.
+
+In situations where a user logs into multiple devices using the same user ID, the `UserAwareness` object is synchronized across all these devices. For instance, creating a new reminder triggers an update, which is then sent to the server. The server, in turn, broadcasts this update to all connected devices through the realtime service (WebSocket). Each device subsequently applies this update to its `UserAwareness` object, ensuring consistency across all devices.
+
+Moreover, changes in the `Reminders` object can be subscribed to, enabling the user interface to refresh the reminder list whenever the `Reminders` object undergoes a change.
+
+![](./create_collab_object-CreateReminder.png)
