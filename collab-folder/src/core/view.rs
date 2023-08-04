@@ -495,9 +495,9 @@ pub struct View {
 #[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum IconType {
-  Emoji,
-  Url,
-  Icon,
+  Emoji = 0,
+  Url = 1,
+  Icon = 2,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
