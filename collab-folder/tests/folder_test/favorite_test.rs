@@ -64,10 +64,9 @@ async fn migrate_from_old_version_folder_without_fav_test() {
               }
             ]
           },
-          "cover_url": null,
+          "icon": null,
           "created_at": 1690602073,
           "desc": "",
-          "icon_url": null,
           "id": "5cf7eff5-954d-424d-a5e7-032527929019",
           "is_favorite": false,
           "layout": 0,
@@ -78,10 +77,9 @@ async fn migrate_from_old_version_folder_without_fav_test() {
           "children": {
             "items": []
           },
-          "cover_url": null,
+          "icon": null,
           "created_at": 1690602073,
           "desc": "",
-          "icon_url": null,
           "id": "631584ec-af71-42c3-94f4-89dcfdafb988",
           "is_favorite": false,
           "layout": 0,
@@ -132,10 +130,9 @@ async fn deserialize_folder_data_without_fav_test() {
               }
             ]
           },
-          "cover_url": null,
+          "icon": null,
           "created_at": 0,
           "desc": "",
-          "icon_url": null,
           "id": "1",
           "is_favorite": false,
           "layout": 0,
@@ -146,10 +143,9 @@ async fn deserialize_folder_data_without_fav_test() {
           "children": {
             "items": []
           },
-          "cover_url": null,
+          "icon": null,
           "created_at": 0,
           "desc": "",
-          "icon_url": null,
           "id": "1_1",
           "is_favorite": false,
           "layout": 0,
@@ -167,10 +163,9 @@ async fn deserialize_folder_data_without_fav_test() {
               }
             ]
           },
-          "cover_url": null,
+          "icon": null,
           "created_at": 0,
           "desc": "",
-          "icon_url": null,
           "id": "1_2",
           "is_favorite": false,
           "layout": 0,
@@ -181,10 +176,9 @@ async fn deserialize_folder_data_without_fav_test() {
           "children": {
             "items": []
           },
-          "cover_url": null,
+          "icon": null,
           "created_at": 0,
           "desc": "",
-          "icon_url": null,
           "id": "1_2_1",
           "is_favorite": false,
           "layout": 0,
@@ -195,10 +189,9 @@ async fn deserialize_folder_data_without_fav_test() {
           "children": {
             "items": []
           },
-          "cover_url": null,
+          "icon": null,
           "created_at": 0,
           "desc": "",
-          "icon_url": null,
           "id": "1_2_2",
           "is_favorite": false,
           "layout": 0,
@@ -209,10 +202,9 @@ async fn deserialize_folder_data_without_fav_test() {
           "children": {
             "items": []
           },
-          "cover_url": null,
+          "icon": null,
           "created_at": 0,
           "desc": "",
-          "icon_url": null,
           "id": "1_3",
           "is_favorite": false,
           "layout": 0,
@@ -257,10 +249,9 @@ fn folder_data_without_fav() -> FolderData {
             }
           ]
         },
-        "cover_url": null,
+        "icon": null,
         "created_at": 0,
         "desc": "",
-        "icon_url": null,
         "id": "1",
         "layout": 0,
         "name": "",
@@ -270,10 +261,9 @@ fn folder_data_without_fav() -> FolderData {
         "children": {
           "items": []
         },
-        "cover_url": null,
+        "icon": null,
         "created_at": 0,
         "desc": "",
-        "icon_url": null,
         "id": "1_1",
         "layout": 0,
         "name": "",
@@ -290,10 +280,9 @@ fn folder_data_without_fav() -> FolderData {
             }
           ]
         },
-        "cover_url": null,
+        "icon": null,
         "created_at": 0,
         "desc": "",
-        "icon_url": null,
         "id": "1_2",
         "layout": 0,
         "name": "",
@@ -303,10 +292,9 @@ fn folder_data_without_fav() -> FolderData {
         "children": {
           "items": []
         },
-        "cover_url": null,
         "created_at": 0,
         "desc": "",
-        "icon_url": null,
+        "icon": null,
         "id": "1_2_1",
         "layout": 0,
         "name": "",
@@ -316,10 +304,9 @@ fn folder_data_without_fav() -> FolderData {
         "children": {
           "items": []
         },
-        "cover_url": null,
         "created_at": 0,
         "desc": "",
-        "icon_url": null,
+        "icon": null,
         "id": "1_2_2",
         "layout": 0,
         "name": "",
@@ -329,10 +316,9 @@ fn folder_data_without_fav() -> FolderData {
         "children": {
           "items": []
         },
-        "cover_url": null,
         "created_at": 0,
         "desc": "",
-        "icon_url": null,
+        "icon": null,
         "id": "1_3",
         "layout": 0,
         "name": "",
