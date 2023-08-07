@@ -79,8 +79,6 @@ The `UserAwareness` contains the following fields, as shown below:
 
 ![](./create_collab_object-UserAwareness.png)
 
-Your sentences are mostly clear, but there are a few minor areas where the grammar and punctuation could be improved. Here's my suggested revision:
-
 - `appearance_settings` is a [yrs map](https://docs.rs/yrs/latest/yrs/types/map/struct.MapRef.html) that contains the user's appearance settings.
 - `reminders` is a [yrs array](https://docs.rs/yrs/latest/yrs/types/array/struct.ArrayRef.html) that contains the user's reminders. Each reminder can be serialized or deserialized using the [yrs map](https://docs.rs/yrs/latest/yrs/types/map/struct.MapRef.html).
 
