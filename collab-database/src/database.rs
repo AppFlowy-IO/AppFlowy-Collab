@@ -24,8 +24,8 @@ use crate::rows::{
 use crate::user::DatabaseCollabService;
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
-  FieldOrder, FilterMap, GroupSettingMap, LayoutSetting, RowOrder, SortMap, ViewDescription,
-  ViewMap,
+  FieldOrder, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, RowOrder, SortMap,
+  ViewDescription, ViewMap,
 };
 
 pub struct Database {
@@ -403,7 +403,7 @@ impl Database {
     view_id: &str,
     field_ids: Option<Vec<String>>,
   ) -> Vec<Field> {
-    let field_orders = self.views.get_field_orders_txn(txn, view_id);
+    let field_orders = self.views.get_field_orders_with_txn(txn, view_id);
     let mut all_field_map = self
       .fields
       .get_fields_with_txn(txn, field_ids)
@@ -659,7 +659,7 @@ impl Database {
     });
   }
 
-  /// Add a group setting to the view. If the setting already exists, it will be replaced.
+  /// Add a filter to the view. If the setting already exists, it will be replaced.
   pub fn insert_filter(&self, view_id: &str, filter: impl Into<FilterMap>) {
     self.views.update_database_view(view_id, |update| {
       update.update_filters(|filter_update| {
@@ -696,6 +696,52 @@ impl Database {
     });
   }
 
+  pub fn get_field_settings(
+    &self,
+    view_id: &str,
+    field_ids: Option<Vec<String>>,
+  ) -> FieldSettingsMap {
+    let field_settings = self.views.get_view_field_settings(view_id);
+    field_settings
+  }
+
+  pub fn insert_field_settings_for_fields(
+    &self,
+    view_id: &str,
+    field_ids: Vec<String>,
+    field_settings: impl Into<FieldSettingsMap>,
+  ) {
+    self.views.update_database_view(view_id, |update| {
+      update.update_field_settings(field_ids, |field_id, field_setting_update| {
+        let field_setting = field_setting.into();
+      });
+    });
+  }
+
+  pub fn update_field_settings(
+    &self,
+    view_id: &str,
+    field_ids: Vec<String>,
+    f: impl Fn(&mut FieldSettingsMap),
+  ) {
+    self.views.update_database_view(view_id, |update| {
+      update.update_field_settings(field_ids, |field_id, field_setting_update| {
+        field_setting_update.update(field_id, |mut map| {
+          f(&mut map);
+          map
+        });
+      });
+    })
+  }
+
+  pub fn remove_field_settings_for_fields(&self, view_id: &str, field_ids: Vec<String>) {
+    self.views.update_database_view(view_id, |update| {
+      update.update_field_settings(field_ids, |field_id, field_setting_update| {
+        field_setting_update.remove(field_id);
+      });
+    })
+  }
+
   /// Update the layout type of the view.
   pub fn update_layout_type(&self, view_id: &str, layout_type: &DatabaseLayout) {
     self.views.update_database_view(view_id, |update| {
@@ -715,9 +761,9 @@ impl Database {
     self.root.with_transact_mut(|txn| {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
       let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
+      let field_orders = self.views.get_field_orders_with_txn(txn, &inline_view_id);
       let deps_fields = params.take_deps_fields();
 
-      let field_orders = self.views.get_field_orders_txn(txn, &inline_view_id);
       self.create_view_with_txn(txn, params, field_orders, row_orders)?;
 
       // After creating the view, we need to create the fields that are used in the view.
@@ -752,6 +798,7 @@ impl Database {
       filters: params.filters,
       group_settings: params.groups,
       sorts: params.sorts,
+      field_settings: params.field_settings,
       row_orders,
       field_orders,
       created_at: timestamp,
