@@ -1,4 +1,3 @@
-Here is an improved and corrected version of the document:
 
 # AppFlowy-Collab
 
