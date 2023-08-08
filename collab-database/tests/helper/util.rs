@@ -11,8 +11,8 @@ use collab::preclude::lib0Any;
 use collab_database::fields::{TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::Cell;
 use collab_database::views::{
-  FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder, GroupSettingBuilder, GroupSettingMap,
-  LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
+  FieldSetting, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder, GroupSettingBuilder,
+  GroupSettingMap, LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use nanoid::nanoid;
@@ -526,6 +526,29 @@ impl std::convert::From<i64> for TestFieldType {
         TestFieldType::RichText
       },
     }
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct TestFieldSetting {
+  pub is_visible: bool,
+}
+
+const VISIBILITY: &str = "visibility";
+
+impl From<FieldSetting> for TestFieldSetting {
+  fn from(value: FieldSetting) -> Self {
+    TestFieldSetting {
+      is_visible: value.get_bool_value(VISIBILITY).unwrap_or(true),
+    }
+  }
+}
+
+impl From<TestFieldSetting> for FieldSetting {
+  fn from(data: TestFieldSetting) -> Self {
+    SortMapBuilder::new()
+      .insert_bool_value(VISIBILITY, data.is_visible)
+      .build()
   }
 }
 

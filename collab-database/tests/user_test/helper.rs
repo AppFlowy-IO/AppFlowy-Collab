@@ -14,7 +14,9 @@ use collab_database::user::{
   CollabFuture, CollabObjectUpdate, CollabObjectUpdateByOid, DatabaseCollabService,
   RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
 };
-use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
+use collab_database::views::{
+  CreateDatabaseParams, DatabaseLayout, FieldSetting, FieldSettingsMapBuilder,
+};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::cloud_storage::CollabType;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
@@ -25,6 +27,7 @@ use tokio::sync::mpsc::{channel, Receiver};
 use rand::Rng;
 use tempfile::TempDir;
 
+use crate::database_test::helper::TestFieldSetting;
 use crate::helper::{make_rocks_db, TestTextCell};
 
 pub struct WorkspaceDatabaseTest {
@@ -203,6 +206,13 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
 
+  let field_setting = FieldSetting::from(TestFieldSetting { is_visible: true });
+  let field_settings_map = FieldSettingsMapBuilder::new()
+    .insert_any("f1", field_setting.clone())
+    .insert_any("f2", field_setting.clone())
+    .insert_any("f3", field_setting.clone())
+    .build();
+
   CreateDatabaseParams {
     database_id: database_id.to_string(),
     view_id: "v1".to_string(),
@@ -212,6 +222,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
     filters: vec![],
     groups: vec![],
     sorts: vec![],
+    field_settings: field_settings_map,
     created_rows: vec![row_1, row_2, row_3],
     fields: vec![field_1, field_2, field_3],
   }
@@ -265,6 +276,13 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
     is_primary: false,
   };
 
+  let field_setting = FieldSetting::from(TestFieldSetting { is_visible: true });
+  let field_settings_map = FieldSettingsMapBuilder::new()
+    .insert_any(text_field.id.clone(), field_setting.clone())
+    .insert_any(single_select_field.id.clone(), field_setting.clone())
+    .insert_any(checkbox_field.id.clone(), field_setting.clone())
+    .build();
+
   CreateDatabaseParams {
     database_id: gen_database_id(),
     view_id: view_id.to_string(),
@@ -274,6 +292,7 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
     filters: vec![],
     groups: vec![],
     sorts: vec![],
+    field_settings: field_settings_map,
     created_rows: vec![
       CreateRowParams::new(gen_row_id()),
       CreateRowParams::new(gen_row_id()),

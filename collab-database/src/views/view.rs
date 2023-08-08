@@ -12,7 +12,7 @@ use crate::fields::Field;
 use crate::rows::CreateRowParams;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
 use crate::views::{
-  FieldOrder, FieldOrderArray, FieldSettingsMap, FilterArray, FilterMap, GroupSettingArray,
+  FieldOrder, FieldOrderArray, FieldSetting, FieldSettingsMap, FilterArray, FilterMap, GroupSettingArray,
   GroupSettingMap, LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
@@ -53,11 +53,16 @@ pub struct CreateViewParams {
   /// When creating a view for a database, it might need to create a new field for the view.
   /// For example, if the view is calendar view, it must have a date field.
   pub deps_fields: Vec<Field>,
+  pub deps_field_setting: Option<FieldSetting>,
 }
 
 impl CreateViewParams {
   pub fn take_deps_fields(&mut self) -> Vec<Field> {
     std::mem::take(&mut self.deps_fields)
+  }
+
+  pub fn take_deps_field_setting(&mut self) -> Option<FieldSetting> {
+    std::mem::take(&mut self.deps_field_setting)
   }
 }
 
@@ -147,6 +152,7 @@ impl CreateDatabaseParams {
         sorts: self.sorts,
         field_settings: self.field_settings,
         deps_fields: vec![],
+        deps_field_setting: None,
       },
     )
   }
@@ -371,6 +377,16 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
       let update = AnyMapUpdate::new(self.txn, &map_ref);
       f(field_id.as_str(), update);
     });
+    self
+  }
+
+  pub fn update_field_settings_one<F>(mut self, field_id: &str, f: F) -> Self
+  where
+    F: FnOnce(AnyMapUpdate),
+  {
+    let map_ref = self.get_field_settings();
+    let update = AnyMapUpdate::new(self.txn, &map_ref);
+    f(update);
     self
   }
 

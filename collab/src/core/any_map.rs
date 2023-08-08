@@ -297,6 +297,16 @@ impl From<lib0Any> for AnyMap {
   }
 }
 
+impl From<&lib0Any> for AnyMap {
+  fn from(value: &lib0Any) -> Self {
+    if let lib0Any::Map(map) = value {
+      Self(*map.to_owned())
+    } else {
+      Self::default()
+    }
+  }
+}
+
 impl<T: ReadTxn> From<(&'_ T, &MapRef)> for AnyMap {
   fn from(params: (&'_ T, &MapRef)) -> Self {
     let (txn, map_ref) = params;
@@ -304,6 +314,19 @@ impl<T: ReadTxn> From<(&'_ T, &MapRef)> for AnyMap {
     map_ref.iter(txn).for_each(|(k, v)| match v {
       Value::Any(any) => {
         this.insert(k.to_string(), any);
+      },
+      Value::YMap(map) => {
+        let map = map
+          .iter(txn)
+          .flat_map(|(inner_k, inner_v)| {
+            if let YrsValue::Any(any) = inner_v {
+              Some((inner_k.to_string(), any))
+            } else {
+              None
+            }
+          })
+          .collect::<HashMap<String, lib0Any>>();
+        this.insert(k.to_string(), lib0Any::Map(Box::new(map)));
       },
       Value::YArray(array) => {
         let array = array

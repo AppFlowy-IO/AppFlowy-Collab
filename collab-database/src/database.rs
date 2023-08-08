@@ -3,7 +3,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use collab::core::any_map::AnyMapExtension;
+use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::{SnapshotState, SyncState};
 use collab::preclude::{JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
@@ -24,8 +24,8 @@ use crate::rows::{
 use crate::user::DatabaseCollabService;
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
-  FieldOrder, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, RowOrder, SortMap,
-  ViewDescription, ViewMap,
+  FieldOrder, FieldSetting, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, RowOrder,
+  SortMap, ViewDescription, ViewMap,
 };
 
 pub struct Database {
@@ -425,15 +425,24 @@ impl Database {
       .collect()
   }
 
-  pub fn create_field(&self, field: Field) {
+  pub fn create_field(&self, field: Field, field_setting: impl Into<FieldSetting>) {
     self.root.with_transact_mut(|txn| {
-      self.create_field_with_txn(txn, field);
+      self.create_field_with_txn(txn, field, field_setting);
     })
   }
 
-  pub fn create_field_with_txn(&self, txn: &mut TransactionMut, field: Field) {
+  pub fn create_field_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    field: Field,
+    field_setting: impl Into<FieldSetting>,
+  ) {
+    let field_setting = field_setting.into();
     self.views.update_all_views_with_txn(txn, |update| {
       update.push_field_order(&field);
+      update.update_field_settings_one(field.id.as_str(), |field_setting_update| {
+        field_setting_update.update(field.id.as_str(), |_| field_setting.clone());
+      });
     });
     self.fields.insert_field_with_txn(txn, field);
   }
@@ -444,11 +453,12 @@ impl Database {
     name: String,
     field_type: i64,
     f: impl FnOnce(&mut Field),
+    field_setting: impl Into<FieldSetting>,
   ) -> (usize, Field) {
     let mut field = Field::new(gen_field_id(), name, field_type, false);
     f(&mut field);
     let index = self.root.with_transact_mut(|txn| {
-      self.create_field_with_txn(txn, field.clone());
+      self.create_field_with_txn(txn, field.clone(), field_setting);
       self
         .index_of_field_with_txn(txn, view_id, &field.id)
         .unwrap_or_default()
@@ -696,24 +706,43 @@ impl Database {
     });
   }
 
-  pub fn get_field_settings(
+  /// Returns the field settings for the given field ids.
+  /// If None, return field settings for all fields
+  pub fn get_field_settings<T: From<FieldSetting>>(
     &self,
     view_id: &str,
     field_ids: Option<Vec<String>>,
-  ) -> FieldSettingsMap {
-    let field_settings = self.views.get_view_field_settings(view_id);
-    field_settings
+  ) -> HashMap<String, T> {
+    let mut field_settings_map = self
+      .views
+      .get_view_field_settings(view_id)
+      .iter()
+      .map(|(field_id, field_setting)| {
+        let any_map = AnyMap::from(field_setting);
+        (field_id.clone(), T::from(any_map))
+      })
+      .collect::<HashMap<String, T>>();
+
+    if let Some(field_ids) = field_ids {
+      field_settings_map = field_settings_map
+        .into_iter()
+        .filter(|(field_id, _)| field_ids.contains(field_id))
+        .collect();
+    }
+
+    field_settings_map
   }
 
   pub fn insert_field_settings_for_fields(
     &self,
     view_id: &str,
     field_ids: Vec<String>,
-    field_settings: impl Into<FieldSettingsMap>,
+    field_setting: impl Into<FieldSetting>,
   ) {
+    let field_setting = field_setting.into();
     self.views.update_database_view(view_id, |update| {
       update.update_field_settings(field_ids, |field_id, field_setting_update| {
-        let field_setting = field_setting.into();
+        field_setting_update.update(field_id, |_| field_setting.clone());
       });
     });
   }
