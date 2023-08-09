@@ -266,9 +266,9 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
 
   let field_setting = FieldSetting::from(TestFieldSetting { is_visible: true });
-  database_test.create_field(field_1);
-  database_test.create_field(field_2);
-  database_test.create_field(field_3);
+  database_test.create_field(field_1, TestFieldSetting::new().into());
+  database_test.create_field(field_2, TestFieldSetting::new().into());
+  database_test.create_field(field_3, TestFieldSetting::new().into());
 
   database_test.insert_field_settings_for_fields(
     "v1",

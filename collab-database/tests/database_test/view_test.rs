@@ -8,7 +8,9 @@ use serde_json::json;
 
 use assert_json_diff::{assert_json_eq, assert_json_include};
 
-use crate::database_test::helper::{create_database, create_database_with_default_data};
+use crate::database_test::helper::{
+  create_database, create_database_with_default_data, TestFieldSetting,
+};
 use crate::helper::TestFilter;
 
 #[tokio::test]
@@ -91,11 +93,14 @@ async fn create_database_field_test() {
   let database_test = create_database_with_default_data(1, "1");
 
   let field_id = nanoid!(4);
-  database_test.create_field(Field {
-    id: field_id.clone(),
-    name: "my third field".to_string(),
-    ..Default::default()
-  });
+  database_test.create_field(
+    Field {
+      id: field_id.clone(),
+      name: "my third field".to_string(),
+      ..Default::default()
+    },
+    TestFieldSetting::new().into(),
+  );
 
   let view = database_test.views.get_view("v1").unwrap();
   assert_json_eq!(view.field_orders.last().unwrap().id, field_id);

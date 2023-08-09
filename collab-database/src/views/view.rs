@@ -12,8 +12,8 @@ use crate::fields::Field;
 use crate::rows::CreateRowParams;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
 use crate::views::{
-  FieldOrder, FieldOrderArray, FieldSetting, FieldSettingsMap, FilterArray, FilterMap, GroupSettingArray,
-  GroupSettingMap, LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
+  FieldOrder, FieldOrderArray, FieldSetting, FieldSettingsMap, FilterArray, FilterMap,
+  GroupSettingArray, GroupSettingMap, LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 
@@ -57,8 +57,11 @@ pub struct CreateViewParams {
 }
 
 impl CreateViewParams {
-  pub fn take_deps_fields(&mut self) -> Vec<Field> {
-    std::mem::take(&mut self.deps_fields)
+  pub fn take_deps_fields(&mut self) -> (Vec<Field>, Option<FieldSetting>) {
+    (
+      std::mem::take(&mut self.deps_fields),
+      std::mem::take(&mut self.deps_field_setting),
+    )
   }
 
   pub fn take_deps_field_setting(&mut self) -> Option<FieldSetting> {
@@ -362,8 +365,8 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   }
 
   /// Set the field settings of the current view
-  pub fn set_field_settings(mut self, field_settings: FieldSettingsMap) -> Self {
-    let map_ref = self.get_field_settings();
+  pub fn set_field_settings(mut self, field_id: &str, field_settings: FieldSetting) -> Self {
+    let map_ref = self.get_field_settings_map();
     field_settings.fill_map_ref(self.txn, &map_ref);
     self
   }
@@ -372,7 +375,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   where
     F: Fn(&str, AnyMapUpdate),
   {
-    let map_ref = self.get_field_settings();
+    let map_ref = self.get_field_settings_map();
     field_ids.iter().for_each(|field_id| {
       let update = AnyMapUpdate::new(self.txn, &map_ref);
       f(field_id.as_str(), update);
@@ -384,13 +387,11 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   where
     F: FnOnce(AnyMapUpdate),
   {
-    let map_ref = self.get_field_settings();
+    let map_ref = self.get_field_settings_map();
     let update = AnyMapUpdate::new(self.txn, &map_ref);
     f(update);
     self
   }
-
-  // TODO: set
 
   /// Get the sort array for the curent view, used when setting or updating
   /// sort array
@@ -418,10 +419,19 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
 
   /// Get the field settings for the curent view, used when setting or updating
   /// field settings
-  fn get_field_settings(&mut self) -> MapRef {
+  fn get_field_settings_map(&mut self) -> MapRef {
     self
       .map_ref
       .get_or_insert_map_with_txn(self.txn, VIEW_FIELD_SETTINGS)
+  }
+
+  /// Get the field settings for one field in the curent view, used when setting
+  /// or updating the field setting
+  fn get_field_setting_for_field(&mut self, field_id: &str) -> MapRef {
+    self
+      .map_ref
+      .get_or_insert_map_with_txn(self.txn, VIEW_FIELD_SETTINGS)
+      .get_or_insert_map_with_txn(self.txn, field_id)
   }
 
   pub fn done(self) -> Option<DatabaseView> {

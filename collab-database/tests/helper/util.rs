@@ -534,6 +534,12 @@ pub struct TestFieldSetting {
   pub is_visible: bool,
 }
 
+impl TestFieldSetting {
+  pub fn new() -> Self {
+    Self { is_visible: true }
+  }
+}
+
 const VISIBILITY: &str = "visibility";
 
 impl From<FieldSetting> for TestFieldSetting {
