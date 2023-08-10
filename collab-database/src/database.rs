@@ -24,7 +24,7 @@ use crate::rows::{
 use crate::user::DatabaseCollabService;
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
-  FieldOrder, FieldSetting, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, RowOrder,
+  FieldOrder, FieldSettings, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, RowOrder,
   SortMap, ViewDescription, ViewMap,
 };
 
@@ -425,7 +425,8 @@ impl Database {
       .collect()
   }
 
-  pub fn create_field(&self, field: Field, field_setting: FieldSetting) {
+  /// creates a new field and appends to the end of field order
+  pub fn create_field(&self, field: Field, field_setting: FieldSettings) {
     self.root.with_transact_mut(|txn| {
       self.create_field_with_txn(txn, field, field_setting);
     })
@@ -435,13 +436,14 @@ impl Database {
     &self,
     txn: &mut TransactionMut,
     field: Field,
-    field_setting: FieldSetting,
+    field_settings: FieldSettings,
   ) {
-    self.views.update_all_views_with_txn(txn, |mut update| {
-      update = update.push_field_order(&field);
-      update.update_field_settings_one(field.id.as_str(), |field_setting_update| {
-        field_setting_update.update(field.id.as_str(), |_| field_setting.clone());
-      });
+    self.views.update_all_views_with_txn(txn, |update| {
+      update
+        .push_field_order(&field)
+        .update_field_settings_for_field(field.id.as_str(), |field_setting_update| {
+          field_setting_update.update(field.id.as_str(), |_| field_settings.clone());
+        });
     });
     self.fields.insert_field_with_txn(txn, field);
   }
@@ -452,7 +454,7 @@ impl Database {
     name: String,
     field_type: i64,
     f: impl FnOnce(&mut Field),
-    field_setting: FieldSetting,
+    field_setting: FieldSettings,
   ) -> (usize, Field) {
     let mut field = Field::new(gen_field_id(), name, field_type, false);
     f(&mut field);
@@ -466,6 +468,7 @@ impl Database {
     (index, field)
   }
 
+  /// creates a new field and insert after a certain field
   fn insert_field_with_txn(
     &self,
     txn: &mut TransactionMut,
@@ -481,7 +484,9 @@ impl Database {
   pub fn delete_field(&self, field_id: &str) {
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |update| {
-        update.remove_field_order(field_id);
+        update
+          .remove_field_order(field_id)
+          .remove_field_setting(field_id);
       });
       self.fields.delete_field_with_txn(txn, field_id);
     })
@@ -707,7 +712,7 @@ impl Database {
 
   /// Returns the field settings for the given field ids.
   /// If None, return field settings for all fields
-  pub fn get_field_settings<T: From<FieldSetting>>(
+  pub fn get_field_settings<T: From<FieldSettings>>(
     &self,
     view_id: &str,
     field_ids: Option<Vec<String>>,
@@ -736,7 +741,7 @@ impl Database {
     &self,
     view_id: &str,
     field_ids: Vec<String>,
-    field_setting: impl Into<FieldSetting>,
+    field_setting: impl Into<FieldSettings>,
   ) {
     let field_setting = field_setting.into();
     self.views.update_database_view(view_id, |update| {
@@ -790,6 +795,7 @@ impl Database {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
       let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
       let field_orders = self.views.get_field_orders_with_txn(txn, &inline_view_id);
+      let layout_ty = params.layout.clone();
       let (deps_fields, deps_field_setting) = params.take_deps_fields();
 
       self.create_view_with_txn(txn, params, field_orders, row_orders)?;
@@ -798,7 +804,8 @@ impl Database {
       if !deps_fields.is_empty() {
         tracing::trace!("create linked view with deps fields: {:?}", deps_fields);
         deps_fields.into_iter().for_each(|field| {
-          self.create_field_with_txn(txn, field, deps_field_setting.clone().unwrap());
+          let field_settings = deps_field_setting.get(&layout_ty).unwrap().clone();
+          self.create_field_with_txn(txn, field, field_settings);
         })
       }
       Ok::<(), DatabaseError>(())

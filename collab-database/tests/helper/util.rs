@@ -11,7 +11,7 @@ use collab::preclude::lib0Any;
 use collab_database::fields::{TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::Cell;
 use collab_database::views::{
-  FieldSetting, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder, GroupSettingBuilder,
+  FieldSettings, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder, GroupSettingBuilder,
   GroupSettingMap, LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -542,15 +542,15 @@ impl TestFieldSetting {
 
 const VISIBILITY: &str = "visibility";
 
-impl From<FieldSetting> for TestFieldSetting {
-  fn from(value: FieldSetting) -> Self {
+impl From<FieldSettings> for TestFieldSetting {
+  fn from(value: FieldSettings) -> Self {
     TestFieldSetting {
       is_visible: value.get_bool_value(VISIBILITY).unwrap_or(true),
     }
   }
 }
 
-impl From<TestFieldSetting> for FieldSetting {
+impl From<TestFieldSetting> for FieldSettings {
   fn from(data: TestFieldSetting) -> Self {
     SortMapBuilder::new()
       .insert_bool_value(VISIBILITY, data.is_visible)

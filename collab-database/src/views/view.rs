@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use collab::core::any_array::ArrayMapUpdate;
 use collab::core::any_map::AnyMapUpdate;
 use collab::preclude::map::MapPrelim;
@@ -12,7 +14,7 @@ use crate::fields::Field;
 use crate::rows::CreateRowParams;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
 use crate::views::{
-  FieldOrder, FieldOrderArray, FieldSetting, FieldSettingsMap, FilterArray, FilterMap,
+  FieldOrder, FieldOrderArray, FieldSettings, FieldSettingsMap, FilterArray, FilterMap,
   GroupSettingArray, GroupSettingMap, LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
@@ -53,19 +55,15 @@ pub struct CreateViewParams {
   /// When creating a view for a database, it might need to create a new field for the view.
   /// For example, if the view is calendar view, it must have a date field.
   pub deps_fields: Vec<Field>,
-  pub deps_field_setting: Option<FieldSetting>,
+  pub deps_field_setting: HashMap<DatabaseLayout, FieldSettings>,
 }
 
 impl CreateViewParams {
-  pub fn take_deps_fields(&mut self) -> (Vec<Field>, Option<FieldSetting>) {
+  pub fn take_deps_fields(&mut self) -> (Vec<Field>, HashMap<DatabaseLayout, FieldSettings>) {
     (
       std::mem::take(&mut self.deps_fields),
       std::mem::take(&mut self.deps_field_setting),
     )
-  }
-
-  pub fn take_deps_field_setting(&mut self) -> Option<FieldSetting> {
-    std::mem::take(&mut self.deps_field_setting)
   }
 }
 
@@ -155,7 +153,7 @@ impl CreateDatabaseParams {
         sorts: self.sorts,
         field_settings: self.field_settings,
         deps_fields: vec![],
-        deps_field_setting: None,
+        deps_field_setting: HashMap::new(),
       },
     )
   }
@@ -365,8 +363,8 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   }
 
   /// Set the field settings of the current view
-  pub fn set_field_settings(mut self, field_id: &str, field_settings: FieldSetting) -> Self {
-    let map_ref = self.get_field_settings_map();
+  pub fn set_field_settings(mut self, field_id: &str, field_settings: FieldSettings) -> Self {
+    let map_ref = self.get_field_settings_for_field(field_id);
     field_settings.fill_map_ref(self.txn, &map_ref);
     self
   }
@@ -383,13 +381,19 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     self
   }
 
-  pub fn update_field_settings_one<F>(mut self, field_id: &str, f: F) -> Self
+  pub fn update_field_settings_for_field<F>(mut self, field_id: &str, f: F) -> Self
   where
     F: FnOnce(AnyMapUpdate),
   {
-    let map_ref = self.get_field_settings_map();
+    let map_ref = self.get_field_settings_for_field(field_id);
     let update = AnyMapUpdate::new(self.txn, &map_ref);
     f(update);
+    self
+  }
+
+  pub fn remove_field_setting(mut self, field_id: &str) -> Self {
+    let map_ref = self.get_field_settings_map();
+    map_ref.remove(self.txn, field_id);
     self
   }
 
@@ -427,7 +431,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
 
   /// Get the field settings for one field in the curent view, used when setting
   /// or updating the field setting
-  fn get_field_setting_for_field(&mut self, field_id: &str) -> MapRef {
+  fn get_field_settings_for_field(&mut self, field_id: &str) -> MapRef {
     self
       .map_ref
       .get_or_insert_map_with_txn(self.txn, VIEW_FIELD_SETTINGS)
