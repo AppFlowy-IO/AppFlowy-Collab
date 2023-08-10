@@ -363,13 +363,13 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   }
 
   /// Set the field settings of the current view
-  pub fn set_field_settings(mut self, field_id: &str, field_settings: FieldSettings) -> Self {
-    let map_ref = self.get_field_settings_for_field(field_id);
+  pub fn set_field_settings(mut self, field_settings: FieldSettingsMap) -> Self {
+    let map_ref = self.get_field_settings_map();
     field_settings.fill_map_ref(self.txn, &map_ref);
     self
   }
 
-  pub fn update_field_settings<F>(mut self, field_ids: Vec<String>, f: F) -> Self
+  pub fn update_field_settings_for_fields<F>(mut self, field_ids: Vec<String>, f: F) -> Self
   where
     F: Fn(&str, AnyMapUpdate),
   {
@@ -378,16 +378,6 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
       let update = AnyMapUpdate::new(self.txn, &map_ref);
       f(field_id.as_str(), update);
     });
-    self
-  }
-
-  pub fn update_field_settings_for_field<F>(mut self, field_id: &str, f: F) -> Self
-  where
-    F: FnOnce(AnyMapUpdate),
-  {
-    let map_ref = self.get_field_settings_for_field(field_id);
-    let update = AnyMapUpdate::new(self.txn, &map_ref);
-    f(update);
     self
   }
 
@@ -427,15 +417,6 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     self
       .map_ref
       .get_or_insert_map_with_txn(self.txn, VIEW_FIELD_SETTINGS)
-  }
-
-  /// Get the field settings for one field in the curent view, used when setting
-  /// or updating the field setting
-  fn get_field_settings_for_field(&mut self, field_id: &str) -> MapRef {
-    self
-      .map_ref
-      .get_or_insert_map_with_txn(self.txn, VIEW_FIELD_SETTINGS)
-      .get_or_insert_map_with_txn(self.txn, field_id)
   }
 
   pub fn done(self) -> Option<DatabaseView> {

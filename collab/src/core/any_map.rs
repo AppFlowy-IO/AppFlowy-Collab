@@ -431,11 +431,10 @@ impl<'a, 'b> AnyMapUpdate<'a, 'b> {
     self.map_ref.insert_with_txn(self.txn, key, value.into());
   }
 
-  pub fn update<K: AsRef<str>>(self, key: K, f: impl FnOnce(AnyMap) -> AnyMap) -> Self {
+  pub fn update<K: AsRef<str>>(self, key: K, value: AnyMap) -> Self {
     let key = key.as_ref();
     let field_setting_map = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
-    let any_map = AnyMap::from_map_ref(self.txn, &field_setting_map);
-    f(any_map).fill_map_ref(self.txn, &field_setting_map);
+    value.fill_map_ref(self.txn, &field_setting_map);
 
     self
   }

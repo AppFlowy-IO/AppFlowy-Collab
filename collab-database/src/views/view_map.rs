@@ -11,8 +11,6 @@ use crate::views::{
   ROW_ORDERS, VIEW_LAYOUT,
 };
 
-use super::layout;
-
 pub struct ViewMap {
   container: MapRefWrapper,
 }

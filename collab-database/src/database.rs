@@ -382,6 +382,8 @@ impl Database {
       .get_fields_with_txn(txn, field_ids)
       .into_iter()
       .collect::<Vec<Field>>()
+
+    // necessary?
   }
 
   /// Get all fields in the database
@@ -425,7 +427,8 @@ impl Database {
       .collect()
   }
 
-  /// creates a new field and appends to the end of field order
+  /// Creates a new field, appends the field_id to the end of field order
+  /// and adds a field setting
   pub fn create_field(&self, field: Field, field_setting: FieldSettings) {
     self.root.with_transact_mut(|txn| {
       self.create_field_with_txn(txn, field, field_setting);
@@ -439,10 +442,11 @@ impl Database {
     field_settings: FieldSettings,
   ) {
     self.views.update_all_views_with_txn(txn, |update| {
+      let field_id = field.id.clone();
       update
         .push_field_order(&field)
-        .update_field_settings_for_field(field.id.as_str(), |field_setting_update| {
-          field_setting_update.update(field.id.as_str(), |_| field_settings.clone());
+        .update_field_settings_for_fields(vec![field_id], |field_id, field_setting_update| {
+          field_setting_update.update(field_id, field_settings.clone());
         });
     });
     self.fields.insert_field_with_txn(txn, field);
@@ -468,7 +472,8 @@ impl Database {
     (index, field)
   }
 
-  /// creates a new field and insert after a certain field
+  /// Creates a new field, add a field setting, but inserts the field after a
+  /// certain field_id
   fn insert_field_with_txn(
     &self,
     txn: &mut TransactionMut,
@@ -728,13 +733,16 @@ impl Database {
       .collect::<HashMap<String, T>>();
 
     if let Some(field_ids) = field_ids {
-      field_settings_map = field_settings_map
-        .into_iter()
-        .filter(|(field_id, _)| field_ids.contains(field_id))
-        .collect();
+      field_settings_map.retain(|field_id, _| field_ids.contains(field_id));
     }
 
     field_settings_map
+  }
+
+  pub fn set_field_settings(&self, view_id: &str, field_settings_map: FieldSettingsMap) {
+    self.views.update_database_view(view_id, |update| {
+      update.set_field_settings(field_settings_map);
+    })
   }
 
   pub fn insert_field_settings_for_fields(
@@ -745,8 +753,8 @@ impl Database {
   ) {
     let field_setting = field_setting.into();
     self.views.update_database_view(view_id, |update| {
-      update.update_field_settings(field_ids, |field_id, field_setting_update| {
-        field_setting_update.update(field_id, |_| field_setting.clone());
+      update.update_field_settings_for_fields(field_ids, |field_id, field_setting_update| {
+        field_setting_update.update(field_id, field_setting.clone());
       });
     });
   }
@@ -754,22 +762,27 @@ impl Database {
   pub fn update_field_settings(
     &self,
     view_id: &str,
-    field_ids: Vec<String>,
-    f: impl Fn(&mut FieldSettingsMap),
+    field_ids: Option<Vec<String>>,
+    field_settings: impl Into<FieldSettings>,
   ) {
+    let field_ids = field_ids.unwrap_or(
+      self
+        .get_fields(None)
+        .into_iter()
+        .map(|field| field.id)
+        .collect(),
+    );
     self.views.update_database_view(view_id, |update| {
-      update.update_field_settings(field_ids, |field_id, field_setting_update| {
-        field_setting_update.update(field_id, |mut map| {
-          f(&mut map);
-          map
-        });
+      let field_settings = field_settings.into();
+      update.update_field_settings_for_fields(field_ids, |field_id, field_setting_update| {
+        field_setting_update.update(field_id, field_settings.clone());
       });
     })
   }
 
   pub fn remove_field_settings_for_fields(&self, view_id: &str, field_ids: Vec<String>) {
     self.views.update_database_view(view_id, |update| {
-      update.update_field_settings(field_ids, |field_id, field_setting_update| {
+      update.update_field_settings_for_fields(field_ids, |field_id, field_setting_update| {
         field_setting_update.remove(field_id);
       });
     })
@@ -795,7 +808,7 @@ impl Database {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
       let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
       let field_orders = self.views.get_field_orders_with_txn(txn, &inline_view_id);
-      let layout_ty = params.layout.clone();
+      let layout_ty = params.layout;
       let (deps_fields, deps_field_setting) = params.take_deps_fields();
 
       self.create_view_with_txn(txn, params, field_orders, row_orders)?;
@@ -844,8 +857,8 @@ impl Database {
     Ok(())
   }
 
-  /// Create a linked view that duplicate the target view's setting including filter, sort and
-  /// group. etc.
+  /// Create a linked view that duplicate the target view's setting including filter, sort,
+  /// group, field setting, etc.
   pub fn duplicate_linked_view(&self, view_id: &str) -> Option<DatabaseView> {
     let view = self.views.get_view(view_id)?;
     let mut duplicated_view = view.clone();

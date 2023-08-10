@@ -265,18 +265,24 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
 
-  let field_setting = FieldSettings::from(TestFieldSetting { is_visible: true });
   database_test.create_field(field_1, TestFieldSetting::new().into());
   database_test.create_field(field_2, TestFieldSetting::new().into());
   database_test.create_field(field_3, TestFieldSetting::new().into());
 
-  database_test.insert_field_settings_for_fields(
-    "v1",
-    vec!["f1".to_string(), "f2".to_string(), "f3".to_string()],
-    field_setting,
-  );
+  database_test.set_field_settings("v1", field_settings_for_default_database());
 
   database_test
+}
+
+/// Creates the default field settings for the database created by
+/// create_database_with_default_data
+pub fn field_settings_for_default_database() -> FieldSettingsMap {
+  let field_settings = FieldSettings::from(TestFieldSetting { is_visible: true });
+  FieldSettingsMapBuilder::new()
+    .insert_any("f1", field_settings.clone())
+    .insert_any("f2", field_settings.clone())
+    .insert_any("f3", field_settings.clone())
+    .build()
 }
 
 struct Cleaner(PathBuf);
