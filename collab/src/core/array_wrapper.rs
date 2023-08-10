@@ -117,6 +117,11 @@ pub trait ArrayRefExtension {
       self.array_ref().remove(txn, index);
     }
   }
+
+  fn clear(&self, txn: &mut TransactionMut) {
+    let len = self.array_ref().len(txn);
+    self.array_ref().remove_range(txn, 0, len);
+  }
 }
 
 impl ArrayRefExtension for ArrayRef {

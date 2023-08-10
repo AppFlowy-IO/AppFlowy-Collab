@@ -292,7 +292,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   pub fn set_filters(mut self, filters: Vec<FilterMap>) -> Self {
     let array_ref = self.get_filter_array();
     let filter_array = FilterArray::from_any_maps(filters);
-    filter_array.extend_array_ref(self.txn, array_ref);
+    filter_array.set_array_ref(self.txn, array_ref);
     self
   }
 
@@ -312,7 +312,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   pub fn set_groups(mut self, group_settings: Vec<GroupSettingMap>) -> Self {
     let array_ref = self.get_group_array();
     let group_settings = GroupSettingArray::from_any_maps(group_settings);
-    group_settings.extend_array_ref(self.txn, array_ref);
+    group_settings.set_array_ref(self.txn, array_ref);
     self
   }
 
@@ -332,7 +332,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   pub fn set_sorts(mut self, sorts: Vec<SortMap>) -> Self {
     let array_ref = self.get_sort_array();
     let sort_array = SortArray::from_any_maps(sorts);
-    sort_array.extend_array_ref(self.txn, array_ref);
+    sort_array.set_array_ref(self.txn, array_ref);
     self
   }
 
