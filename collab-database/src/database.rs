@@ -380,10 +380,6 @@ impl Database {
     self
       .fields
       .get_fields_with_txn(txn, field_ids)
-      .into_iter()
-      .collect::<Vec<Field>>()
-
-    // necessary?
   }
 
   /// Get all fields in the database

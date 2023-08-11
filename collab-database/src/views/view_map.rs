@@ -37,6 +37,7 @@ impl ViewMap {
         .set_database_id(view.database_id)
         .set_layout_settings(view.layout_settings)
         .set_layout_type(view.layout)
+        .set_field_settings(view.field_settings)
         .set_filters(view.filters)
         .set_groups(view.group_settings)
         .set_sorts(view.sorts)

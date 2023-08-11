@@ -14,10 +14,10 @@ async fn new_field_new_field_setting_test() {
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
+    field_settings: field_settings_for_default_database(),
     ..Default::default()
   };
   database_test.create_linked_view(params).unwrap();
-  database_test.set_field_settings("v2", field_settings_for_default_database());
 
   // Create a new field
   database_test.create_field(
@@ -40,10 +40,10 @@ async fn remove_field_remove_field_setting_test() {
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
+    field_settings: field_settings_for_default_database(),
     ..Default::default()
   };
   database_test.create_linked_view(params).unwrap();
-  database_test.set_field_settings("v2", field_settings_for_default_database());
 
   // Delete a field
   database_test.delete_field("f3");
@@ -64,10 +64,10 @@ async fn update_field_setting_for_some_fields_test() {
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
+    field_settings: field_settings_for_default_database(),
     ..Default::default()
   };
   database_test.create_linked_view(params).unwrap();
-  database_test.set_field_settings("v2", field_settings_for_default_database());
 
   // Update field settings for one field
   database_test.update_field_settings("v1", Some(vec!["f1".to_string()]), field_settings.clone());
@@ -128,7 +128,7 @@ async fn duplicate_view_duplicates_field_settings_test() {
     database_test.get_field_settings(&duplicate_view.id, None);
   let test_field_settings = field_settings_map.get("f1").unwrap();
   assert_eq!(field_settings_map.len(), 3);
-  assert!(test_field_settings.to_owned().is_visible);
+  assert!(!test_field_settings.to_owned().is_visible);
 }
 
 #[tokio::test]
@@ -138,6 +138,8 @@ async fn new_view_requires_deps_field_test() {
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
+    layout: DatabaseLayout::Calendar,
+    field_settings: field_settings_for_default_database(),
     deps_fields: vec![deps_field],
     deps_field_setting: default_field_settings_map(),
     ..Default::default()
@@ -147,14 +149,16 @@ async fn new_view_requires_deps_field_test() {
   // on v1, the new field should be created
   let field_settings_map: HashMap<String, TestFieldSetting> =
     database_test.get_field_settings("v1", None);
-  let test_field_settings = field_settings_map.get("f1").unwrap();
+  let test_field_settings = field_settings_map.get("f4").unwrap();
   assert_eq!(field_settings_map.len(), 4);
   assert!(test_field_settings.to_owned().is_visible);
 
   // on v2, the new field should also be created and is invisible
-  let field_settings: HashMap<String, TestFieldSetting> =
+  let field_settings_map: HashMap<String, TestFieldSetting> =
     database_test.get_field_settings("v2", None);
-  assert_eq!(field_settings.len(), 4);
+  let test_field_settings = field_settings_map.get("f4").unwrap();
+  println!("asdfasdf {:?}", field_settings_map);
+  assert_eq!(field_settings_map.len(), 4);
   assert!(!test_field_settings.to_owned().is_visible);
 }
 
