@@ -210,7 +210,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
   let field_settings_map = FieldSettingsMapBuilder::new()
     .insert_any("f1", field_setting.clone())
     .insert_any("f2", field_setting.clone())
-    .insert_any("f3", field_setting.clone())
+    .insert_any("f3", field_setting)
     .build();
 
   CreateDatabaseParams {
@@ -280,7 +280,7 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
   let field_settings_map = FieldSettingsMapBuilder::new()
     .insert_any(text_field.id.clone(), field_setting.clone())
     .insert_any(single_select_field.id.clone(), field_setting.clone())
-    .insert_any(checkbox_field.id.clone(), field_setting.clone())
+    .insert_any(checkbox_field.id.clone(), field_setting)
     .build();
 
   CreateDatabaseParams {

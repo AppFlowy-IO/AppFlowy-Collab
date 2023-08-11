@@ -93,7 +93,7 @@ async fn update_field_setting_for_some_fields_test() {
   field_settings_map
     .into_iter()
     .for_each(|(_field_id, test_field_settings)| {
-      assert!(!test_field_settings.to_owned().is_visible);
+      assert!(!test_field_settings.is_visible);
     });
 
   // All fields in v2 should still be visible
@@ -102,7 +102,7 @@ async fn update_field_setting_for_some_fields_test() {
   field_settings_map
     .into_iter()
     .for_each(|(_field_id, test_field_settings)| {
-      assert!(test_field_settings.to_owned().is_visible);
+      assert!(test_field_settings.is_visible);
     });
 }
 
@@ -112,7 +112,7 @@ async fn duplicate_view_duplicates_field_settings_test() {
   let field_settings = TestFieldSetting { is_visible: false };
 
   // Update field settings for one field
-  database_test.update_field_settings("v1", Some(vec!["f1".to_string()]), field_settings.clone());
+  database_test.update_field_settings("v1", Some(vec!["f1".to_string()]), field_settings);
 
   // the field settings for f1 should change
   let field_settings_map: HashMap<String, TestFieldSetting> =

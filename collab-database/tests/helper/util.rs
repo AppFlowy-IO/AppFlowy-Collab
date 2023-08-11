@@ -534,6 +534,12 @@ pub struct TestFieldSetting {
   pub is_visible: bool,
 }
 
+impl Default for TestFieldSetting {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 impl TestFieldSetting {
   pub fn new() -> Self {
     Self { is_visible: true }

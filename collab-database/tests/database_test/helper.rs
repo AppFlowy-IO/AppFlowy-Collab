@@ -284,7 +284,7 @@ pub fn field_settings_for_default_database() -> FieldSettingsMap {
   FieldSettingsMapBuilder::new()
     .insert_any("f1", field_settings.clone())
     .insert_any("f2", field_settings.clone())
-    .insert_any("f3", field_settings.clone())
+    .insert_any("f3", field_settings)
     .build()
 }
 
