@@ -156,7 +156,7 @@ impl RemoteCollabStorage for AWSCollabCloudStorageImpl {
     Ok(())
   }
 
-  async fn subscribe_remote_updates(&self, _object: &CollabObject) -> Option<RemoteUpdateReceiver> {
+  fn subscribe_remote_updates(&self, _object: &CollabObject) -> Option<RemoteUpdateReceiver> {
     None
   }
 }

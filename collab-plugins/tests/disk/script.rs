@@ -8,11 +8,11 @@ use collab::preclude::*;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::cloud_storage::{CollabObject, CollabType};
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::snapshot::CollabSnapshotPlugin;
 use yrs::updates::decoder::Decode;
 
-use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
-use collab_plugins::local_storage::CollabPersistenceConfig;
 use lib0::any::Any;
 use tempfile::TempDir;
 
@@ -287,7 +287,7 @@ impl CollabPersistenceTest {
         );
         let snapshots = snapshot_plugin.get_snapshots(&id);
         let collab = CollabBuilder::new(1, &id).build().unwrap();
-        collab.lock().with_transact_mut(|txn| {
+        collab.lock().with_origin_transact_mut(|txn| {
           txn.apply_update(Update::decode_v1(&snapshots[index as usize].data).unwrap());
         });
 

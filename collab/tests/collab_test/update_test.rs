@@ -14,7 +14,7 @@ async fn derive_string_test() {
   let name = map_ref.get_name(&local.lock().transact()).unwrap();
   assert_eq!(name, "Hello world");
 
-  local.lock().with_transact_mut(|txn| {
+  local.lock().with_origin_transact_mut(|txn| {
     map_ref.set_name(txn, "Hello AppFlowy".to_string());
   });
 
@@ -36,14 +36,14 @@ async fn derive_hash_map_test() {
   assert_eq!(attributes.get("1").unwrap(), "task 1");
   assert_eq!(attributes.get("2").unwrap(), "task 2");
 
-  local.lock().with_transact_mut(|txn| {
+  local.lock().with_origin_transact_mut(|txn| {
     map_ref.update_attributes_key_value(txn, "1", "Hello AppFlowy".to_string());
   });
 
   let mut attributes = map_ref.get_attributes(&local.lock().transact()).unwrap();
   assert_eq!(attributes.get("1").unwrap(), "Hello AppFlowy");
 
-  local.lock().with_transact_mut(|txn| {
+  local.lock().with_origin_transact_mut(|txn| {
     attributes.insert("1".to_string(), "task 1".to_string());
     map_ref.set_attributes(txn, attributes);
   });
@@ -64,7 +64,7 @@ async fn derive_hash_map_inner_json_value_test() {
   let title = map_ref.get_title(&local.lock().transact());
   assert_eq!(title.unwrap(), "Task 1".to_string());
 
-  local.lock().with_transact_mut(|txn| {
+  local.lock().with_origin_transact_mut(|txn| {
     map_ref.set_title(txn, "New Task 1".to_string());
   });
 
@@ -85,7 +85,7 @@ async fn derive_json_value_test() {
   let name = map_ref.get_name(&local.lock().transact()).unwrap();
   assert_eq!(name, "nathan".to_string());
 
-  local.lock().with_transact_mut(|txn| {
+  local.lock().with_origin_transact_mut(|txn| {
     map_ref.set_name(txn, "nathan.fu".to_string());
   });
 
@@ -109,7 +109,7 @@ async fn derive_option_value_test() {
   let location = map_ref.get_location(&local.lock().transact());
   assert!(location.is_none());
 
-  local.lock().with_transact_mut(|txn| {
+  local.lock().with_origin_transact_mut(|txn| {
     map_ref.set_location(txn, "SG".to_string());
   });
 
@@ -127,7 +127,7 @@ async fn derive_into_inner_test() {
     .get_map_with_path::<OwnerMapRef>(vec!["document", "owner"])
     .unwrap();
 
-  local.lock().with_transact_mut(|txn| {
+  local.lock().with_origin_transact_mut(|txn| {
     map_ref.set_name(txn, "nathan.fu".to_string());
   });
 

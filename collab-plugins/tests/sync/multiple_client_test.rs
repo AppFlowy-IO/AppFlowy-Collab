@@ -1,5 +1,4 @@
 use collab::preclude::MapRefExtension;
-use serde_json::json;
 
 use crate::util::{spawn_client, spawn_server, wait_one_sec};
 
@@ -33,7 +32,7 @@ async fn single_write_sync_with_server_test() {
   wait_one_sec().await;
   {
     let client = client_1.lock();
-    client.with_transact_mut(|txn| {
+    client.with_origin_transact_mut(|txn| {
       let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task3", "c");
       map.insert_with_txn(txn, "task4", "d");
@@ -66,14 +65,14 @@ async fn two_writers_test() {
 
   {
     let client = client_1.lock();
-    client.with_transact_mut(|txn| {
+    client.with_origin_transact_mut(|txn| {
       let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task3", "c");
     });
   }
   {
     let client = client_2.lock();
-    client.with_transact_mut(|txn| {
+    client.with_origin_transact_mut(|txn| {
       let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task4", "d");
     });
@@ -110,7 +109,7 @@ async fn two_clients_last_write_win_test() {
   wait_one_sec().await;
   {
     let client = client_1.lock();
-    client.with_transact_mut(|txn| {
+    client.with_origin_transact_mut(|txn| {
       let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task2", "bb");
     });
@@ -118,7 +117,7 @@ async fn two_clients_last_write_win_test() {
   wait_one_sec().await;
   {
     let client = client_2.lock();
-    client.with_transact_mut(|txn| {
+    client.with_origin_transact_mut(|txn| {
       let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task2", "bbb");
     });
@@ -151,7 +150,7 @@ async fn last_write_win_test() {
   wait_one_sec().await;
   {
     let client = client_1.lock();
-    client.with_transact_mut(|txn| {
+    client.with_origin_transact_mut(|txn| {
       let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task2", "bb");
     });
@@ -159,7 +158,7 @@ async fn last_write_win_test() {
   wait_one_sec().await;
   {
     let client = client_2.lock();
-    client.with_transact_mut(|txn| {
+    client.with_origin_transact_mut(|txn| {
       let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task2", "bbb");
     });

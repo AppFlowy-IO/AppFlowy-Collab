@@ -42,6 +42,21 @@ impl<'a> TransactionRetry<'a> {
     self.doc.transact()
   }
 
+  pub fn try_get_write_txn(&mut self) -> Result<TransactionMut<'a>, CollabError> {
+    while self.start.elapsed() < self.timeout {
+      match self.doc.try_transact_mut() {
+        Ok(txn) => {
+          return Ok(txn);
+        },
+        Err(_e) => {
+          sleep(self.retry_interval);
+        },
+      }
+    }
+    tracing::warn!("[Txn]: acquire write txn timeout");
+    Err(CollabError::AcquiredWriteTxnFail)
+  }
+
   pub fn get_write_txn_with(&mut self, origin: CollabOrigin) -> TransactionMut<'a> {
     while self.start.elapsed() < self.timeout {
       match self.doc.try_transact_mut_with(origin.clone()) {

@@ -50,7 +50,7 @@ impl DatabaseRow {
     let database_row = Self::new(uid, row_id, collab_db, collab);
     let data = database_row.data.clone();
     let meta = database_row.meta.clone();
-    database_row.collab.lock().with_transact_mut(|txn| {
+    database_row.collab.lock().with_origin_transact_mut(|txn| {
       RowBuilder::new(row.id, txn, data.into_inner(), meta.into_inner())
         .update(|update| {
           update
@@ -84,7 +84,7 @@ impl DatabaseRow {
 
     // If any of the data is missing, we need to create it.
     let mut txn = if data.is_none() || meta.is_none() || comments.is_none() {
-      Some(collab_guard.transact_mut())
+      Some(collab_guard.origin_transact_mut())
     } else {
       None
     };
@@ -144,7 +144,7 @@ impl DatabaseRow {
   where
     F: FnOnce(RowUpdate),
   {
-    self.collab.lock().with_transact_mut(|txn| {
+    self.collab.lock().with_origin_transact_mut(|txn| {
       let mut update = RowUpdate::new(txn, &self.data, &self.meta);
 
       // Update the last modified timestamp before we call the update function.
@@ -160,7 +160,7 @@ impl DatabaseRow {
     self
       .collab
       .lock()
-      .with_transact_mut(|txn| match Uuid::parse_str(&self.row_id) {
+      .with_origin_transact_mut(|txn| match Uuid::parse_str(&self.row_id) {
         Ok(row_id) => {
           let update = RowMetaUpdate::new(txn, &self.meta, row_id);
           f(update)
