@@ -377,9 +377,7 @@ impl Database {
     txn: &T,
     field_ids: Option<Vec<String>>,
   ) -> Vec<Field> {
-    self
-      .fields
-      .get_fields_with_txn(txn, field_ids)
+    self.fields.get_fields_with_txn(txn, field_ids)
   }
 
   /// Get all fields in the database
@@ -425,9 +423,13 @@ impl Database {
 
   /// Creates a new field, appends the field_id to the end of field order
   /// and adds a field setting
-  pub fn create_field(&self, field: Field, field_setting: FieldSettings) {
+  pub fn create_field(
+    &self,
+    field: Field,
+    field_settings_by_layout: HashMap<DatabaseLayout, FieldSettings>,
+  ) {
     self.root.with_transact_mut(|txn| {
-      self.create_field_with_txn(txn, field, field_setting);
+      self.create_field_with_txn(txn, field, &field_settings_by_layout);
     })
   }
 
@@ -435,15 +437,21 @@ impl Database {
     &self,
     txn: &mut TransactionMut,
     field: Field,
-    field_settings: FieldSettings,
+    field_settings_by_layout: &HashMap<DatabaseLayout, FieldSettings>,
   ) {
     self.views.update_all_views_with_txn(txn, |update| {
       let field_id = field.id.clone();
       update
         .push_field_order(&field)
-        .update_field_settings_for_fields(vec![field_id], |field_id, field_setting_update| {
-          field_setting_update.update(field_id, field_settings.clone());
-        });
+        .update_field_settings_for_fields(
+          vec![field_id],
+          |field_id, field_setting_update, layout_ty| {
+            field_setting_update.update(
+              field_id,
+              field_settings_by_layout.get(&layout_ty).unwrap().clone(),
+            );
+          },
+        );
     });
     self.fields.insert_field_with_txn(txn, field);
   }
@@ -454,12 +462,12 @@ impl Database {
     name: String,
     field_type: i64,
     f: impl FnOnce(&mut Field),
-    field_setting: FieldSettings,
+    field_settings_by_layout: HashMap<DatabaseLayout, FieldSettings>,
   ) -> (usize, Field) {
     let mut field = Field::new(gen_field_id(), name, field_type, false);
     f(&mut field);
     let index = self.root.with_transact_mut(|txn| {
-      self.create_field_with_txn(txn, field.clone(), field_setting);
+      self.create_field_with_txn(txn, field.clone(), &field_settings_by_layout);
       self
         .index_of_field_with_txn(txn, view_id, &field.id)
         .unwrap_or_default()
@@ -741,20 +749,6 @@ impl Database {
     })
   }
 
-  pub fn insert_field_settings_for_fields(
-    &self,
-    view_id: &str,
-    field_ids: Vec<String>,
-    field_setting: impl Into<FieldSettings>,
-  ) {
-    let field_setting = field_setting.into();
-    self.views.update_database_view(view_id, |update| {
-      update.update_field_settings_for_fields(field_ids, |field_id, field_setting_update| {
-        field_setting_update.update(field_id, field_setting.clone());
-      });
-    });
-  }
-
   pub fn update_field_settings(
     &self,
     view_id: &str,
@@ -770,17 +764,23 @@ impl Database {
     );
     self.views.update_database_view(view_id, |update| {
       let field_settings = field_settings.into();
-      update.update_field_settings_for_fields(field_ids, |field_id, field_setting_update| {
-        field_setting_update.update(field_id, field_settings.clone());
-      });
+      update.update_field_settings_for_fields(
+        field_ids,
+        |field_id, field_setting_update, _layout_ty| {
+          field_setting_update.update(field_id, field_settings.clone());
+        },
+      );
     })
   }
 
   pub fn remove_field_settings_for_fields(&self, view_id: &str, field_ids: Vec<String>) {
     self.views.update_database_view(view_id, |update| {
-      update.update_field_settings_for_fields(field_ids, |field_id, field_setting_update| {
-        field_setting_update.remove(field_id);
-      });
+      update.update_field_settings_for_fields(
+        field_ids,
+        |field_id, field_setting_update, _layout_ty| {
+          field_setting_update.remove(field_id);
+        },
+      );
     })
   }
 
@@ -804,7 +804,6 @@ impl Database {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
       let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
       let field_orders = self.views.get_field_orders_with_txn(txn, &inline_view_id);
-      let layout_ty = params.layout;
       let (deps_fields, deps_field_setting) = params.take_deps_fields();
 
       self.create_view_with_txn(txn, params, field_orders, row_orders)?;
@@ -813,8 +812,7 @@ impl Database {
       if !deps_fields.is_empty() {
         tracing::trace!("create linked view with deps fields: {:?}", deps_fields);
         deps_fields.into_iter().for_each(|field| {
-          let field_settings = deps_field_setting.get(&layout_ty).unwrap().clone();
-          self.create_field_with_txn(txn, field, field_settings);
+          self.create_field_with_txn(txn, field, &deps_field_setting);
         })
       }
       Ok::<(), DatabaseError>(())

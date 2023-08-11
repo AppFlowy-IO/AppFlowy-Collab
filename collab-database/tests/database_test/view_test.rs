@@ -9,7 +9,7 @@ use serde_json::json;
 use assert_json_diff::{assert_json_eq, assert_json_include};
 
 use crate::database_test::helper::{
-  create_database, create_database_with_default_data, TestFieldSetting,
+  create_database, create_database_with_default_data, default_field_settings_by_layout,
 };
 use crate::helper::TestFilter;
 
@@ -99,7 +99,7 @@ async fn create_database_field_test() {
       name: "my third field".to_string(),
       ..Default::default()
     },
-    TestFieldSetting::new().into(),
+    default_field_settings_by_layout(),
   );
 
   let view = database_test.views.get_view("v1").unwrap();

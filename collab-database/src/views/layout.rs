@@ -64,6 +64,21 @@ impl TryFrom<i64> for DatabaseLayout {
   }
 }
 
+impl From<lib0Any> for DatabaseLayout {
+  fn from(value: lib0Any) -> Self {
+    if let lib0Any::BigInt(layout_ty) = value {
+      match layout_ty {
+        0 => DatabaseLayout::Grid,
+        1 => DatabaseLayout::Board,
+        2 => DatabaseLayout::Calendar,
+        _ => Self::default(),
+      }
+    } else {
+      Self::default()
+    }
+  }
+}
+
 impl From<DatabaseLayout> for lib0Any {
   fn from(layout: DatabaseLayout) -> Self {
     lib0Any::BigInt(layout as i64)

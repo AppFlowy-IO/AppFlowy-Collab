@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -265,9 +266,11 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
 
-  database_test.create_field(field_1, TestFieldSetting::new().into());
-  database_test.create_field(field_2, TestFieldSetting::new().into());
-  database_test.create_field(field_3, TestFieldSetting::new().into());
+  let field_settings_by_layout = default_field_settings_by_layout();
+
+  database_test.create_field(field_1, field_settings_by_layout.clone());
+  database_test.create_field(field_2, field_settings_by_layout.clone());
+  database_test.create_field(field_3, field_settings_by_layout);
 
   database_test.set_field_settings("v1", field_settings_for_default_database());
 
@@ -283,6 +286,18 @@ pub fn field_settings_for_default_database() -> FieldSettingsMap {
     .insert_any("f2", field_settings.clone())
     .insert_any("f3", field_settings.clone())
     .build()
+}
+
+pub fn default_field_settings_by_layout() -> HashMap<DatabaseLayout, FieldSettings> {
+  let field_settings = TestFieldSetting { is_visible: true };
+  HashMap::from([
+    (DatabaseLayout::Grid, field_settings.clone().into()),
+    (DatabaseLayout::Board, field_settings.into()),
+    (
+      DatabaseLayout::Calendar,
+      TestFieldSetting { is_visible: false }.into(),
+    ),
+  ])
 }
 
 struct Cleaner(PathBuf);

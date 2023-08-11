@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 
 use collab_database::fields::Field;
-use collab_database::views::{CreateViewParams, DatabaseLayout, FieldSettings};
+use collab_database::views::{CreateViewParams, DatabaseLayout};
 
 use crate::database_test::helper::{
-  create_database_with_default_data, field_settings_for_default_database, TestFieldSetting,
+  create_database_with_default_data, default_field_settings_by_layout,
+  field_settings_for_default_database, TestFieldSetting,
 };
 
 #[tokio::test]
 async fn new_field_new_field_setting_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let field_setting = TestFieldSetting::new();
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
@@ -22,7 +22,7 @@ async fn new_field_new_field_setting_test() {
   // Create a new field
   database_test.create_field(
     Field::new("f4".to_string(), "text field".to_string(), 0, true),
-    field_setting.into(),
+    default_field_settings_by_layout(),
   );
 
   let field_settings_map: HashMap<String, TestFieldSetting> =
@@ -141,7 +141,7 @@ async fn new_view_requires_deps_field_test() {
     layout: DatabaseLayout::Calendar,
     field_settings: field_settings_for_default_database(),
     deps_fields: vec![deps_field],
-    deps_field_setting: default_field_settings_map(),
+    deps_field_setting: default_field_settings_by_layout(),
     ..Default::default()
   };
   database_test.create_linked_view(params).unwrap();
@@ -160,16 +160,4 @@ async fn new_view_requires_deps_field_test() {
   println!("asdfasdf {:?}", field_settings_map);
   assert_eq!(field_settings_map.len(), 4);
   assert!(!test_field_settings.to_owned().is_visible);
-}
-
-fn default_field_settings_map() -> HashMap<DatabaseLayout, FieldSettings> {
-  let field_settings = TestFieldSetting { is_visible: true };
-  HashMap::from([
-    (DatabaseLayout::Grid, field_settings.clone().into()),
-    (DatabaseLayout::Board, field_settings.into()),
-    (
-      DatabaseLayout::Calendar,
-      TestFieldSetting { is_visible: false }.into(),
-    ),
-  ])
 }

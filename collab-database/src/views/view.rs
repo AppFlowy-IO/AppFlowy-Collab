@@ -371,12 +371,13 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
 
   pub fn update_field_settings_for_fields<F>(mut self, field_ids: Vec<String>, f: F) -> Self
   where
-    F: Fn(&str, AnyMapUpdate),
+    F: Fn(&str, AnyMapUpdate, DatabaseLayout),
   {
     let map_ref = self.get_field_settings_map();
+    let layout_ty = self.get_layout_setting().unwrap();
     field_ids.iter().for_each(|field_id| {
       let update = AnyMapUpdate::new(self.txn, &map_ref);
-      f(field_id.as_str(), update);
+      f(field_id.as_str(), update, layout_ty);
     });
     self
   }
@@ -417,6 +418,14 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     self
       .map_ref
       .get_or_insert_map_with_txn(self.txn, VIEW_FIELD_SETTINGS)
+  }
+
+  fn get_layout_setting(&self) -> Option<DatabaseLayout> {
+    if let Some(YrsValue::Any(layout_ty)) = self.map_ref.get(self.txn, VIEW_LAYOUT) {
+      Some(layout_ty.into())
+    } else {
+      None
+    }
   }
 
   pub fn done(self) -> Option<DatabaseView> {
