@@ -110,7 +110,7 @@ async fn apply_unordered_updates() {
   });
 
   assert_json_diff::assert_json_eq!(
-    json!( {
+    serde_json::json!( {
       "text": "hello world"
     }),
     restored_collab.to_json_value()

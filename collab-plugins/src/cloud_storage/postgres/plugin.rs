@@ -58,6 +58,7 @@ impl SupabaseDBPlugin {
       object.clone(),
       remote_collab_storage.clone(),
       config,
+      local_collab.clone(),
     ));
 
     // Subscribe the sync state from the remote collab

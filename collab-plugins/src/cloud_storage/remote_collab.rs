@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
 use anyhow::Error;
@@ -35,6 +36,8 @@ pub struct RemoteCollab {
   sink: Arc<CollabSink<TokioUnboundedSink<Message>, Message>>,
   /// It continuously receive the updates from the remote.
   sync_state: Arc<watch::Sender<SyncState>>,
+  #[allow(dead_code)]
+  is_init_sync_finish: Arc<AtomicBool>,
 }
 
 impl Drop for RemoteCollab {
@@ -51,7 +54,9 @@ impl RemoteCollab {
     object: CollabObject,
     storage: Arc<dyn RemoteCollabStorage>,
     config: SinkConfig,
+    local_collab: Weak<MutexCollab>,
   ) -> Self {
+    let is_init_sync_finish = Arc::new(AtomicBool::new(false));
     let sync_state = Arc::new(watch::channel(SyncState::SyncInitStart).0);
     let collab = Arc::new(MutexCollab::new(
       CollabOrigin::Server,
@@ -72,18 +77,24 @@ impl RemoteCollab {
 
     // spawns an asynchronous task to continuously listen to the updates stream
     // and process them as they come in.
+    let cloned_is_init_sync_finish = is_init_sync_finish.clone();
     if let Some(mut collab_stream) = storage.subscribe_remote_updates(&object) {
-      let weak_collab = Arc::downgrade(&collab);
       spawn(async move {
         while let Some(update) = collab_stream.recv().await {
-          if let Some(collab) = weak_collab.upgrade() {
-            if let Some(collab) = collab.try_lock_for(Duration::from_secs(1)) {
+          if !cloned_is_init_sync_finish.load(std::sync::atomic::Ordering::SeqCst) {
+            continue;
+          }
+          if let Some(local_collab) = local_collab.upgrade() {
+            if let Some(collab) = local_collab.try_lock_for(Duration::from_secs(1)) {
               if let Ok(mut txn) = collab.try_transaction_mut() {
-                if let Ok(update) = Update::decode_v1(&update) {
-                  tracing::trace!("apply remote update: {:?}", update);
-                  if let Err(e) = txn.try_apply_update(update) {
-                    tracing::error!("apply remote update failed: {:?}", e);
-                  }
+                match Update::decode_v1(&update) {
+                  Ok(update) => {
+                    tracing::trace!("apply remote update: {:?}", update);
+                    if let Err(e) = txn.try_apply_update(update) {
+                      tracing::error!("apply remote update failed: {:?}", e);
+                    }
+                  },
+                  Err(e) => tracing::error!("🔴Failed to decode remote update: {:?}", e),
                 }
               }
             }
@@ -116,6 +127,7 @@ impl RemoteCollab {
 
     // Spawn a task to receive updates from the [CollabSink] and send updates to
     // the remote storage.
+    let cloned_is_init_sync_finish = is_init_sync_finish.clone();
     spawn(async move {
       while let Some(message) = stream.recv().await {
         if let Some(storage) = weak_storage.upgrade() {
@@ -135,6 +147,7 @@ impl RemoteCollab {
                   Ok(_) => {
                     if let Some(collab_sink) = weak_collab_sink.upgrade() {
                       collab_sink.ack_msg(msg_id).await;
+                      cloned_is_init_sync_finish.store(true, std::sync::atomic::Ordering::SeqCst);
                     }
                   },
                   Err(e) => {
@@ -181,6 +194,7 @@ impl RemoteCollab {
       storage,
       sink: collab_sink,
       sync_state,
+      is_init_sync_finish,
     }
   }
 

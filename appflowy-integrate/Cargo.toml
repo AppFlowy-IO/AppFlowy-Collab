@@ -19,7 +19,7 @@ tracing = "0.1"
 parking_lot = "0.12.1"
 
 [features]
-default = ["postgres_storage_plugin", "aws_storage_plugin", "snapshot_plugin"]
+default = ["postgres_storage_plugin", "snapshot_plugin"]
 postgres_storage_plugin = ["collab-plugins/postgres_storage_plugin", "collab-plugins/rocksdb_plugin"]
 aws_storage_plugin = ["collab-plugins/aws_storage_plugin", "collab-plugins/rocksdb_plugin"]
 snapshot_plugin = ["collab-plugins/snapshot_plugin"]

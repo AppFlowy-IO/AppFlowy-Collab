@@ -5,7 +5,6 @@ use anyhow::Error;
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::preclude::CollabBuilder;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::cloud_storage::aws::AWSDynamoDBPlugin;
 use collab_plugins::cloud_storage::network_state::{CollabNetworkReachability, CollabNetworkState};
 use collab_plugins::cloud_storage::postgres::SupabaseDBPlugin;
 use collab_plugins::cloud_storage::{CollabObject, CollabType, RemoteCollabStorage};
@@ -13,8 +12,6 @@ use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::snapshot::{CollabSnapshotPlugin, SnapshotPersistence};
 use parking_lot::{Mutex, RwLock};
-
-use crate::config::{CollabPluginConfig, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 
 #[derive(Clone, Debug)]
 pub enum CollabStorageType {
@@ -144,31 +141,30 @@ impl AppFlowyCollabBuilder {
         .build()?,
     );
 
-    let collab_config = CollabPluginConfig::from_env();
     let cloud_storage = self.cloud_storage.read();
     let cloud_storage_type = cloud_storage.storage_type();
-    // tracing::trace!("collab storage type: {:?}", cloud_storage_type);
     match cloud_storage_type {
       CollabStorageType::AWS => {
         #[cfg(feature = "aws_storage_plugin")]
         {
-          if let Some(config) = collab_config.aws_config() {
-            if !config.enable {
-              std::env::remove_var(AWS_ACCESS_KEY_ID);
-              std::env::remove_var(AWS_SECRET_ACCESS_KEY);
-            } else {
-              std::env::set_var(AWS_ACCESS_KEY_ID, &config.access_key_id);
-              std::env::set_var(AWS_SECRET_ACCESS_KEY, &config.secret_access_key);
-              let plugin = AWSDynamoDBPlugin::new(
-                object_id.to_string(),
-                Arc::downgrade(&collab),
-                10,
-                config.region.clone(),
-              );
-              collab.lock().add_plugin(Arc::new(plugin));
-              // tracing::debug!("add aws plugin: {:?}", cloud_storage_type);
-            }
-          }
+          // let collab_config = CollabPluginConfig::from_env();
+          // if let Some(config) = collab_config.aws_config() {
+          //   if !config.enable {
+          //     std::env::remove_var(AWS_ACCESS_KEY_ID);
+          //     std::env::remove_var(AWS_SECRET_ACCESS_KEY);
+          //   } else {
+          //     std::env::set_var(AWS_ACCESS_KEY_ID, &config.access_key_id);
+          //     std::env::set_var(AWS_SECRET_ACCESS_KEY, &config.secret_access_key);
+          //     let plugin = AWSDynamoDBPlugin::new(
+          //       object_id.to_string(),
+          //       Arc::downgrade(&collab),
+          //       10,
+          //       config.region.clone(),
+          //     );
+          //     collab.lock().add_plugin(Arc::new(plugin));
+          //     // tracing::debug!("add aws plugin: {:?}", cloud_storage_type);
+          //   }
+          // }
         }
       },
       CollabStorageType::Supabase => {
@@ -227,8 +223,8 @@ impl CollabStorageProvider for DefaultCollabStorageProvider {
 
   fn get_storage(
     &self,
-    collab_object: &CollabObject,
-    storage_type: &CollabStorageType,
+    _collab_object: &CollabObject,
+    _storage_type: &CollabStorageType,
   ) -> Option<Arc<dyn RemoteCollabStorage>> {
     None
   }

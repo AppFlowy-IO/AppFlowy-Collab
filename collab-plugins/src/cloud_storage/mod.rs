@@ -6,8 +6,8 @@ pub use yrs::merge_updates_v1;
 pub use yrs::updates::decoder::Decode;
 pub use yrs::Update as YrsUpdate;
 
-#[cfg(feature = "aws_storage_plugin")]
-pub mod aws;
+// #[cfg(feature = "aws_storage_plugin")]
+// pub mod aws;
 
 #[cfg(feature = "postgres_storage_plugin")]
 pub mod postgres;
