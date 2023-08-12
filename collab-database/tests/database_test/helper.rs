@@ -12,8 +12,8 @@ use collab_database::user::DatabaseCollabService;
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout, LayoutSetting, LayoutSettings};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::cloud_storage::CollabType;
-
 use collab_plugins::local_storage::CollabPersistenceConfig;
+
 use tempfile::TempDir;
 
 pub use crate::helper::*;
@@ -48,7 +48,10 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let collab_db = Arc::new(RocksCollabDB::open(path).unwrap());
-  let collab = CollabBuilder::new(uid, database_id).build().unwrap();
+  let collab = CollabBuilder::new(uid, database_id)
+    .with_device_id("1")
+    .build()
+    .unwrap();
   collab.lock().initialize();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder.clone());
@@ -178,6 +181,7 @@ impl DatabaseTestBuilder {
     let path = tempdir.into_path();
     let collab_db = Arc::new(RocksCollabDB::open(path).unwrap());
     let collab = CollabBuilder::new(self.uid, &self.database_id)
+      .with_device_id("1")
       .build()
       .unwrap();
     collab.lock().initialize();

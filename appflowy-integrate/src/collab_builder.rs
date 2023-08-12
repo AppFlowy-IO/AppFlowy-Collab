@@ -138,6 +138,7 @@ impl AppFlowyCollabBuilder {
           collab_db.clone(),
           config.clone(),
         ))
+        .with_device_id(self.device_id.lock().clone())
         .build()?,
     );
 
@@ -197,7 +198,8 @@ impl AppFlowyCollabBuilder {
 
     if let Some(snapshot_persistence) = &self.snapshot_persistence {
       if config.enable_snapshot {
-        let collab_object = CollabObject::new(uid, object_id.to_string(), object_type);
+        let collab_object = CollabObject::new(uid, object_id.to_string(), object_type)
+          .with_device_id(self.device_id.lock().clone());
         let snapshot_plugin = CollabSnapshotPlugin::new(
           uid,
           collab_object,

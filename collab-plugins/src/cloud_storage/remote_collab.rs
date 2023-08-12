@@ -89,7 +89,6 @@ impl RemoteCollab {
               if let Ok(mut txn) = collab.try_transaction_mut() {
                 match Update::decode_v1(&update) {
                   Ok(update) => {
-                    tracing::trace!("apply remote update: {:?}", update);
                     if let Err(e) = txn.try_apply_update(update) {
                       tracing::error!("apply remote update failed: {:?}", e);
                     }
@@ -656,8 +655,14 @@ impl CollabObject {
     self.meta.get("workspace_id").cloned()
   }
 
-  pub fn get_device_id(&self) -> Option<String> {
-    self.meta.get("device_id").cloned()
+  pub fn get_device_id(&self) -> String {
+    match self.meta.get("device_id").cloned() {
+      None => {
+        tracing::error!("Unexpected empty device id");
+        uuid::Uuid::new_v4().to_string()
+      },
+      Some(device_id) => device_id,
+    }
   }
 }
 

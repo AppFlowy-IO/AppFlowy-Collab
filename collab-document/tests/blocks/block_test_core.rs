@@ -8,9 +8,10 @@ use collab_document::blocks::{
 };
 use collab_document::document::Document;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use serde_json::json;
+
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 
 use crate::util::document_storage;
 
@@ -29,6 +30,7 @@ impl BlockTestCore {
     let disk_plugin = RocksdbDiskPlugin::new(1, Arc::downgrade(&db));
     let collab = CollabBuilder::new(1, doc_id)
       .with_plugin(disk_plugin)
+      .with_device_id("1")
       .build()
       .unwrap();
     collab.lock().initialize();

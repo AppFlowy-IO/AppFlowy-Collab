@@ -110,7 +110,7 @@ impl CollabPlugin for CollabSnapshotPlugin {
               weak_collab_db.upgrade(),
               weak_snapshot_persistence.upgrade(),
             ) {
-              let snapshot_collab = Collab::new(uid, object.object_id.clone(), vec![]);
+              let snapshot_collab = Collab::new(uid, object.object_id.clone(), "1", vec![]);
               let mut txn = snapshot_collab.origin_transact_mut();
               if let Err(e) = collab_db
                 .read_txn()
@@ -208,7 +208,7 @@ pub fn try_decode_snapshot(
   match {
     let mut wrapper = AssertUnwindSafe(&mut decoded_str);
     panic::catch_unwind(move || {
-      let collab = Collab::new(uid, object_id, vec![]);
+      let collab = Collab::new(uid, object_id, "1", vec![]);
       if let Ok(update) = Update::decode_v1(data) {
         let mut txn = collab.origin_transact_mut();
         txn.apply_update(update);

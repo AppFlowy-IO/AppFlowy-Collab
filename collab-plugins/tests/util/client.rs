@@ -228,7 +228,7 @@ impl Rng {
 
 fn origin_from_tcp_stream(stream: &TcpStream) -> CollabOrigin {
   let address = stream.local_addr().unwrap();
-  let origin = CollabClient::new(address.port() as i64, &address.to_string());
+  let origin = CollabClient::new(address.port() as i64, address.to_string());
   CollabOrigin::Client(origin)
 }
 

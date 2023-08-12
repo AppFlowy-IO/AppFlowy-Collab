@@ -74,8 +74,13 @@ pub struct Collab {
 }
 
 impl Collab {
-  pub fn new<T: AsRef<str>>(uid: i64, object_id: T, plugins: Vec<Arc<dyn CollabPlugin>>) -> Collab {
-    let origin = CollabClient::new(uid, "");
+  pub fn new<T: AsRef<str>>(
+    uid: i64,
+    object_id: T,
+    device_id: impl ToString,
+    plugins: Vec<Arc<dyn CollabPlugin>>,
+  ) -> Collab {
+    let origin = CollabClient::new(uid, device_id);
     Self::new_with_client(CollabOrigin::Client(origin), object_id, plugins)
   }
 
@@ -639,10 +644,7 @@ impl CollabBuilder {
   }
 
   pub fn build(self) -> Result<MutexCollab, CollabError> {
-    let origin = CollabOrigin::Client(CollabClient {
-      uid: self.uid,
-      device_id: self.device_id,
-    });
+    let origin = CollabOrigin::Client(CollabClient::new(self.uid, self.device_id));
     MutexCollab::new_with_raw_data(origin, &self.object_id, self.updates, self.plugins)
   }
 }

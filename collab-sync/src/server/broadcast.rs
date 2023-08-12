@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
-use collab::core::origin::{CollabClient, CollabOrigin};
+use collab::core::origin::CollabOrigin;
 use futures_util::{SinkExt, StreamExt};
 use lib0::encoding::Write;
 use tokio::select;
@@ -275,11 +275,4 @@ fn gen_awareness_update_message(
   changed.extend_from_slice(removed);
   let update = awareness.update_with_clients(changed)?;
   Ok(update)
-}
-
-pub fn server_origin() -> CollabClient {
-  CollabClient {
-    uid: 0,
-    device_id: "".to_string(),
-  }
 }

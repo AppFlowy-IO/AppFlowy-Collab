@@ -14,6 +14,7 @@ use crate::helper::{setup_log, CollabStateCachePlugin};
 async fn restore_from_update() {
   let update_cache = CollabStateCachePlugin::new();
   let collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
@@ -22,6 +23,7 @@ async fn restore_from_update() {
 
   let updates = update_cache.get_updates().unwrap();
   let restored_collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_raw_data(updates)
     .build()
     .unwrap();
@@ -34,6 +36,7 @@ async fn restore_from_update() {
 async fn restore_from_multiple_update() {
   let update_cache = CollabStateCachePlugin::new();
   let collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
@@ -47,6 +50,7 @@ async fn restore_from_multiple_update() {
 
   let updates = update_cache.get_updates().unwrap();
   let restored_collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_raw_data(updates)
     .build()
     .unwrap();
@@ -57,6 +61,7 @@ async fn restore_from_multiple_update() {
 async fn apply_same_update_multiple_time() {
   let update_cache = CollabStateCachePlugin::new();
   let collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
@@ -65,6 +70,7 @@ async fn apply_same_update_multiple_time() {
 
   let updates = update_cache.get_updates().unwrap();
   let restored_collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_raw_data(updates)
     .build()
     .unwrap();
@@ -84,6 +90,7 @@ async fn apply_same_update_multiple_time() {
 async fn apply_unordered_updates() {
   let update_cache = CollabStateCachePlugin::new();
   let collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
@@ -99,7 +106,10 @@ async fn apply_unordered_updates() {
   let mut updates = update_cache.get_updates().unwrap();
   updates.reverse();
 
-  let restored_collab = CollabBuilder::new(1, "1").build().unwrap();
+  let restored_collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
+    .build()
+    .unwrap();
   restored_collab.lock().initialize();
   restored_collab.lock().with_origin_transact_mut(|txn| {
     //Out of order updates from the same peer will be stashed internally and their
@@ -120,9 +130,15 @@ async fn apply_unordered_updates() {
 #[tokio::test]
 async fn root_change_test() {
   setup_log();
-  let collab_1 = CollabBuilder::new(1, "1").build().unwrap();
+  let collab_1 = CollabBuilder::new(1, "1")
+    .with_device_id("1")
+    .build()
+    .unwrap();
   collab_1.lock().initialize();
-  let collab_2 = CollabBuilder::new(1, "1").build().unwrap();
+  let collab_2 = CollabBuilder::new(1, "1")
+    .with_device_id("1")
+    .build()
+    .unwrap();
   collab_2.lock().initialize();
 
   {
