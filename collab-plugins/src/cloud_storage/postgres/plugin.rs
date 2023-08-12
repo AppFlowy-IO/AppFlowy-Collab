@@ -58,6 +58,7 @@ impl SupabaseDBPlugin {
       object.clone(),
       remote_collab_storage.clone(),
       config,
+      local_collab.clone(),
     ));
 
     // Subscribe the sync state from the remote collab
@@ -140,7 +141,10 @@ fn create_snapshot_if_need(
       weak_local_collab_storage.upgrade(),
       weak_remote_collab_storage.upgrade(),
     ) {
-      match remote_collab_storage.get_collab_state(&object.id).await {
+      match remote_collab_storage
+        .get_collab_state(&object.object_id)
+        .await
+      {
         Ok(Some(collab_state)) => {
           if !should_create_snapshot(&collab_state) {
             return;
@@ -155,27 +159,37 @@ fn create_snapshot_if_need(
         },
       }
 
-      tracing::trace!("Create remote snapshot for {}", object.id);
+      tracing::trace!("Create remote snapshot for {}", object.object_id);
       let cloned_object = object.clone();
       if let Ok(Ok(doc_state)) = tokio::task::spawn_blocking(move || {
-        let local = Collab::new(uid, object.id.clone(), vec![]);
-        let mut txn = local.transact_mut();
+        let local = Collab::new(
+          uid,
+          object.object_id.clone(),
+          object.get_device_id(),
+          vec![],
+        );
+        let mut txn = local.origin_transact_mut();
         let _ = local_collab_storage
           .read_txn()
-          .load_doc(uid, &object.id, &mut txn)?;
+          .load_doc(uid, &object.object_id, &mut txn)?;
         drop(txn);
 
         // Only sync with the remote if the remote update is not empty
         if !remote_update.is_empty() {
-          let remote = Collab::new(uid, object.id.clone(), vec![]);
-          let mut txn = local.transact_mut();
+          let remote = Collab::new(
+            uid,
+            object.object_id.clone(),
+            object.get_device_id(),
+            vec![],
+          );
+          let mut txn = local.origin_transact_mut();
           txn.try_apply_update(Update::decode_v1(&remote_update)?)?;
           drop(txn);
 
           let local_sv = local.transact().state_vector();
           let encode_update = remote.transact().encode_state_as_update_v1(&local_sv);
           if let Ok(update) = Update::decode_v1(&encode_update) {
-            let mut txn = local.transact_mut();
+            let mut txn = local.origin_transact_mut();
             txn.try_apply_update(update)?;
             drop(txn);
           }
@@ -192,7 +206,7 @@ fn create_snapshot_if_need(
           .await
         {
           Ok(snapshot_id) => {
-            tracing::debug!("{} remote snapshot created", cloned_object.id);
+            tracing::debug!("{} remote snapshot created", cloned_object.object_id);
             if let Some(local_collab) = weak_local_collab.upgrade() {
               local_collab
                 .lock()

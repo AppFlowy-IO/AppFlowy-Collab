@@ -102,7 +102,7 @@ impl Database {
       None => Self::create(database_id, context),
       Some(database) => {
         let collab_guard = context.collab.lock();
-        let (fields, views, metas) = collab_guard.with_transact_mut(|txn| {
+        let (fields, views, metas) = collab_guard.with_origin_transact_mut(|txn| {
           // { DATABASE: { FIELDS: {:} } }
           let fields = collab_guard
             .get_map_with_txn(txn, vec![DATABASE, FIELDS])
@@ -143,7 +143,7 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
     let collab_guard = context.collab.lock();
-    let (database, fields, views, metas) = collab_guard.with_transact_mut(|txn| {
+    let (database, fields, views, metas) = collab_guard.with_origin_transact_mut(|txn| {
       // { DATABASE: {:} }
       let database = collab_guard
         .get_map_with_txn(txn, vec![DATABASE])

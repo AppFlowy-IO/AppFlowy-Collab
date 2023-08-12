@@ -4,7 +4,6 @@ use std::collections::HashMap;
 
 use collab::core::collab::CollabBuilder;
 use collab::preclude::MapRefExtension;
-use serde_json::json;
 use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
 use yrs::{Doc, Map, MapPrelim, ReadTxn, Transact, Update};
@@ -15,6 +14,7 @@ use crate::helper::{setup_log, CollabStateCachePlugin};
 async fn restore_from_update() {
   let update_cache = CollabStateCachePlugin::new();
   let collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
@@ -23,6 +23,7 @@ async fn restore_from_update() {
 
   let updates = update_cache.get_updates().unwrap();
   let restored_collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_raw_data(updates)
     .build()
     .unwrap();
@@ -35,6 +36,7 @@ async fn restore_from_update() {
 async fn restore_from_multiple_update() {
   let update_cache = CollabStateCachePlugin::new();
   let collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
@@ -48,6 +50,7 @@ async fn restore_from_multiple_update() {
 
   let updates = update_cache.get_updates().unwrap();
   let restored_collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_raw_data(updates)
     .build()
     .unwrap();
@@ -58,6 +61,7 @@ async fn restore_from_multiple_update() {
 async fn apply_same_update_multiple_time() {
   let update_cache = CollabStateCachePlugin::new();
   let collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
@@ -66,13 +70,14 @@ async fn apply_same_update_multiple_time() {
 
   let updates = update_cache.get_updates().unwrap();
   let restored_collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_raw_data(updates)
     .build()
     .unwrap();
 
   // It's ok to apply the updates that were already applied
   let updates = update_cache.get_updates().unwrap();
-  restored_collab.lock().with_transact_mut(|txn| {
+  restored_collab.lock().with_origin_transact_mut(|txn| {
     for update in updates {
       txn.apply_update(Update::decode_v1(&update).unwrap());
     }
@@ -85,6 +90,7 @@ async fn apply_same_update_multiple_time() {
 async fn apply_unordered_updates() {
   let update_cache = CollabStateCachePlugin::new();
   let collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
@@ -100,9 +106,12 @@ async fn apply_unordered_updates() {
   let mut updates = update_cache.get_updates().unwrap();
   updates.reverse();
 
-  let restored_collab = CollabBuilder::new(1, "1").build().unwrap();
+  let restored_collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
+    .build()
+    .unwrap();
   restored_collab.lock().initialize();
-  restored_collab.lock().with_transact_mut(|txn| {
+  restored_collab.lock().with_origin_transact_mut(|txn| {
     //Out of order updates from the same peer will be stashed internally and their
     // integration will be postponed until missing blocks arrive first.
     for update in updates {
@@ -111,7 +120,7 @@ async fn apply_unordered_updates() {
   });
 
   assert_json_diff::assert_json_eq!(
-    json!( {
+    serde_json::json!( {
       "text": "hello world"
     }),
     restored_collab.to_json_value()
@@ -121,21 +130,27 @@ async fn apply_unordered_updates() {
 #[tokio::test]
 async fn root_change_test() {
   setup_log();
-  let collab_1 = CollabBuilder::new(1, "1").build().unwrap();
+  let collab_1 = CollabBuilder::new(1, "1")
+    .with_device_id("1")
+    .build()
+    .unwrap();
   collab_1.lock().initialize();
-  let collab_2 = CollabBuilder::new(1, "1").build().unwrap();
+  let collab_2 = CollabBuilder::new(1, "1")
+    .with_device_id("1")
+    .build()
+    .unwrap();
   collab_2.lock().initialize();
 
   {
     let collab_1_guard = collab_1.lock();
-    collab_1_guard.with_transact_mut(|txn| {
+    collab_1_guard.with_origin_transact_mut(|txn| {
       collab_1_guard.insert_map_with_txn(txn, "map");
     });
     drop(collab_1_guard);
   }
   {
     let collab_2_guard = collab_2.lock();
-    collab_2_guard.with_transact_mut(|txn| {
+    collab_2_guard.with_origin_transact_mut(|txn| {
       collab_2_guard.insert_map_with_txn(txn, "map");
     });
     drop(collab_2_guard);
@@ -147,7 +162,7 @@ async fn root_change_test() {
     let map_2 = collab_guard.get_map_with_txn(&txn, vec!["map"]).unwrap();
     drop(txn);
 
-    collab_guard.with_transact_mut(|txn| {
+    collab_guard.with_origin_transact_mut(|txn| {
       map_2.insert_with_txn(txn, "1", "a");
       map_2.insert_with_txn(txn, "2", "b");
     });
@@ -163,7 +178,7 @@ async fn root_change_test() {
 
   let map_1 = {
     let collab_1_guard = collab_1.lock();
-    collab_1_guard.with_transact_mut(|txn| {
+    collab_1_guard.with_origin_transact_mut(|txn| {
       let update = Update::decode_v1(&sv_1_update).unwrap();
       txn.apply_update(update);
     });

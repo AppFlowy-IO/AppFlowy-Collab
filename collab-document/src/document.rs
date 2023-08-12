@@ -113,7 +113,7 @@ impl Document {
 
   /// Apply actions to the document.
   pub fn apply_action(&self, actions: Vec<BlockAction>) {
-    self.inner.lock().with_transact_mut(|txn| {
+    self.inner.lock().with_origin_transact_mut(|txn| {
       for action in actions {
         let payload = action.payload;
         let mut block = payload.block;
@@ -372,37 +372,38 @@ impl Document {
     data: Option<DocumentData>,
   ) -> Result<Self, DocumentError> {
     let mut collab_guard = collab.lock();
-    let (root, block_operation, children_operation) = collab_guard.with_transact_mut(|txn| {
-      // { document: {:} }
-      let root = collab_guard.insert_map_with_txn(txn, ROOT);
-      // { document: { blocks: {:} } }
-      let blocks = root.insert_map_with_txn(txn, BLOCKS);
-      // { document: { blocks: {:}, meta: {:} } }
-      let meta = root.insert_map_with_txn(txn, META);
-      // {document: { blocks: {:}, meta: { children_map: {:} } }
-      let children_map = meta.insert_map_with_txn(txn, CHILDREN_MAP);
+    let (root, block_operation, children_operation) =
+      collab_guard.with_origin_transact_mut(|txn| {
+        // { document: {:} }
+        let root = collab_guard.insert_map_with_txn(txn, ROOT);
+        // { document: { blocks: {:} } }
+        let blocks = root.insert_map_with_txn(txn, BLOCKS);
+        // { document: { blocks: {:}, meta: {:} } }
+        let meta = root.insert_map_with_txn(txn, META);
+        // {document: { blocks: {:}, meta: { children_map: {:} } }
+        let children_map = meta.insert_map_with_txn(txn, CHILDREN_MAP);
 
-      let children_operation = ChildrenOperation::new(children_map);
-      let block_operation = BlockOperation::new(blocks, children_operation.clone());
+        let children_operation = ChildrenOperation::new(children_map);
+        let block_operation = BlockOperation::new(blocks, children_operation.clone());
 
-      // If the data is not None, insert the data to the document.
-      if let Some(data) = data {
-        root.insert_with_txn(txn, PAGE_ID, data.page_id);
+        // If the data is not None, insert the data to the document.
+        if let Some(data) = data {
+          root.insert_with_txn(txn, PAGE_ID, data.page_id);
 
-        for (_, block) in data.blocks {
-          block_operation.create_block_with_txn(txn, block)?;
+          for (_, block) in data.blocks {
+            block_operation.create_block_with_txn(txn, block)?;
+          }
+
+          for (id, child_ids) in data.meta.children_map {
+            let map = children_operation.get_children_with_txn(txn, &id);
+            child_ids.iter().for_each(|child_id| {
+              map.push_back(txn, child_id.to_string());
+            });
+          }
         }
 
-        for (id, child_ids) in data.meta.children_map {
-          let map = children_operation.get_children_with_txn(txn, &id);
-          child_ids.iter().for_each(|child_id| {
-            map.push_back(txn, child_id.to_string());
-          });
-        }
-      }
-
-      Ok::<_, DocumentError>((root, block_operation, children_operation))
-    })?;
+        Ok::<_, DocumentError>((root, block_operation, children_operation))
+      })?;
 
     collab_guard.enable_undo_redo();
     let subscription = RootDeepSubscription::default();

@@ -12,9 +12,10 @@ use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
 use collab_document::error::DocumentError;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use serde_json::{json, Value};
+
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use tempfile::TempDir;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 use zip::ZipArchive;
@@ -34,6 +35,7 @@ impl DocumentTest {
     let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
     let collab = CollabBuilder::new(1, doc_id)
       .with_plugin(disk_plugin)
+      .with_device_id("1")
       .build()
       .unwrap();
     collab.lock().initialize();
@@ -98,6 +100,7 @@ pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> 
   let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
   let collab = CollabBuilder::new(uid, doc_id)
     .with_plugin(disk_plugin)
+    .with_device_id("1")
     .build()
     .unwrap();
   collab.lock().initialize();

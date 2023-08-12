@@ -30,6 +30,7 @@ pub fn make_collab_pair() -> (MutexCollab, MutexCollab, CollabStateCachePlugin) 
   let update_cache = CollabStateCachePlugin::new();
   let local_collab = CollabBuilder::new(1, "1")
     .with_plugin(update_cache.clone())
+    .with_device_id("1")
     .build()
     .unwrap();
   local_collab.lock().initialize();
@@ -40,6 +41,7 @@ pub fn make_collab_pair() -> (MutexCollab, MutexCollab, CollabStateCachePlugin) 
     .insert_json_with_path(vec![], "document", test_document());
   let updates = update_cache.get_updates();
   let remote_collab = CollabBuilder::new(1, "1")
+    .with_device_id("1")
     .with_raw_data(updates.unwrap())
     .build()
     .unwrap();

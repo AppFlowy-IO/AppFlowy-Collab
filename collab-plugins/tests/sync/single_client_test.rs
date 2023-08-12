@@ -1,7 +1,6 @@
+use crate::util::{spawn_client_with_empty_doc, spawn_server, wait_one_sec};
 use collab::preclude::MapRefExtension;
 use serde_json::json;
-
-use crate::util::{spawn_client_with_empty_doc, spawn_server, wait_one_sec};
 
 #[tokio::test]
 async fn send_single_update_to_server_test() {
@@ -43,7 +42,7 @@ async fn send_multiple_updates_to_server_test() {
   wait_one_sec().await;
   {
     let client = client.lock();
-    client.with_transact_mut(|txn| {
+    client.with_origin_transact_mut(|txn| {
       let map = client.insert_map_with_txn(txn, "map");
       map.insert_with_txn(txn, "task1", "a");
       map.insert_with_txn(txn, "task2", "b");
@@ -52,7 +51,7 @@ async fn send_multiple_updates_to_server_test() {
   wait_one_sec().await;
   {
     let client = client.lock();
-    client.with_transact_mut(|txn| {
+    client.with_origin_transact_mut(|txn| {
       let map = client.get_map_with_txn(txn, vec!["map"]).unwrap();
       map.insert_with_txn(txn, "task3", "c");
     });
@@ -108,7 +107,7 @@ async fn send_local_doc_initial_state_to_server() {
   wait_one_sec().await;
   {
     let client = client.lock();
-    client.with_transact_mut(|txn| {
+    client.with_origin_transact_mut(|txn| {
       let map = client.insert_map_with_txn(txn, "map");
       map.insert_with_txn(txn, "task1", "a");
       map.insert_with_txn(txn, "task2", "b");
@@ -139,7 +138,7 @@ async fn send_local_doc_initial_state_to_server_multiple_times() {
   wait_one_sec().await;
   {
     let client = client.lock();
-    client.with_transact_mut(|txn| {
+    client.with_origin_transact_mut(|txn| {
       let map = client.insert_map_with_txn(txn, "map");
       map.insert_with_txn(txn, "task1", "a");
       map.insert_with_txn(txn, "task2", "b");

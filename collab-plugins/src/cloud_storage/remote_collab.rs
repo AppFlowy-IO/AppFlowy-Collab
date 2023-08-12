@@ -1,15 +1,15 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
 use anyhow::Error;
 use async_trait::async_trait;
-use collab::core::collab::MutexCollab;
+use collab::core::collab::{MutexCollab, TransactionMutExt};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
-use collab_persistence::TransactionMutExt;
 pub use collab_sync::client::sink::MsgId;
 use collab_sync::client::sink::{
   CollabSink, CollabSinkMessage, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState,
@@ -36,6 +36,8 @@ pub struct RemoteCollab {
   sink: Arc<CollabSink<TokioUnboundedSink<Message>, Message>>,
   /// It continuously receive the updates from the remote.
   sync_state: Arc<watch::Sender<SyncState>>,
+  #[allow(dead_code)]
+  is_init_sync_finish: Arc<AtomicBool>,
 }
 
 impl Drop for RemoteCollab {
@@ -52,14 +54,20 @@ impl RemoteCollab {
     object: CollabObject,
     storage: Arc<dyn RemoteCollabStorage>,
     config: SinkConfig,
+    local_collab: Weak<MutexCollab>,
   ) -> Self {
+    let is_init_sync_finish = Arc::new(AtomicBool::new(false));
     let sync_state = Arc::new(watch::channel(SyncState::SyncInitStart).0);
-    let collab = Arc::new(MutexCollab::new(CollabOrigin::Server, &object.id, vec![]));
+    let collab = Arc::new(MutexCollab::new(
+      CollabOrigin::Server,
+      &object.object_id,
+      vec![],
+    ));
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
     let (notifier, notifier_rx) = watch::channel(false);
     let (sync_state_tx, sink_state_rx) = watch::channel(SinkState::Init);
-    let sink = Arc::new(CollabSink::new(
+    let collab_sink = Arc::new(CollabSink::new(
       TokioUnboundedSink(sink),
       notifier,
       sync_state_tx,
@@ -67,7 +75,34 @@ impl RemoteCollab {
       config,
     ));
 
-    let weak_sink = Arc::downgrade(&sink);
+    // spawns an asynchronous task to continuously listen to the updates stream
+    // and process them as they come in.
+    let cloned_is_init_sync_finish = is_init_sync_finish.clone();
+    if let Some(mut collab_stream) = storage.subscribe_remote_updates(&object) {
+      spawn(async move {
+        while let Some(update) = collab_stream.recv().await {
+          if !cloned_is_init_sync_finish.load(std::sync::atomic::Ordering::SeqCst) {
+            continue;
+          }
+          if let Some(local_collab) = local_collab.upgrade() {
+            if let Some(collab) = local_collab.try_lock_for(Duration::from_secs(1)) {
+              if let Ok(mut txn) = collab.try_transaction_mut() {
+                match Update::decode_v1(&update) {
+                  Ok(update) => {
+                    if let Err(e) = txn.try_apply_update(update) {
+                      tracing::error!("apply remote update failed: {:?}", e);
+                    }
+                  },
+                  Err(e) => tracing::error!("🔴Failed to decode remote update: {:?}", e),
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    let weak_collab_sink = Arc::downgrade(&collab_sink);
     let weak_sync_state = Arc::downgrade(&sync_state);
     let mut sink_state_stream = WatchStream::new(sink_state_rx);
     // Subscribe the sink state stream and update the sync state in the background.
@@ -91,6 +126,7 @@ impl RemoteCollab {
 
     // Spawn a task to receive updates from the [CollabSink] and send updates to
     // the remote storage.
+    let cloned_is_init_sync_finish = is_init_sync_finish.clone();
     spawn(async move {
       while let Some(message) = stream.recv().await {
         if let Some(storage) = weak_storage.upgrade() {
@@ -108,12 +144,18 @@ impl RemoteCollab {
                 tracing::trace!("send init sync {}:{}", object, msg_id);
                 match storage.send_init_sync(&object, msg_id, payload).await {
                   Ok(_) => {
-                    if let Some(sink) = weak_sink.upgrade() {
-                      sink.ack_msg(msg_id).await;
+                    if let Some(collab_sink) = weak_collab_sink.upgrade() {
+                      collab_sink.ack_msg(msg_id).await;
+                      cloned_is_init_sync_finish.store(true, std::sync::atomic::Ordering::SeqCst);
                     }
                   },
                   Err(e) => {
-                    tracing::error!("send {}:{} init sync failed: {:?}", object.id, msg_id, e)
+                    tracing::error!(
+                      "send {}:{} init sync failed: {:?}",
+                      object.object_id,
+                      msg_id,
+                      e
+                    )
                   },
                 }
               } else {
@@ -121,11 +163,16 @@ impl RemoteCollab {
                 match storage.send_update(&object, msg_id, payload).await {
                   Ok(_) => {
                     tracing::debug!("ack update {}:{}", object, msg_id);
-                    if let Some(sink) = weak_sink.upgrade() {
-                      sink.ack_msg(msg_id).await;
+                    if let Some(collab_sink) = weak_collab_sink.upgrade() {
+                      collab_sink.ack_msg(msg_id).await;
                     }
                   },
-                  Err(e) => tracing::error!("send {}:{} update failed: {:?}", object.id, msg_id, e),
+                  Err(e) => tracing::error!(
+                    "send {}:{} update failed: {:?}",
+                    object.object_id,
+                    msg_id,
+                    e
+                  ),
                 }
               }
             },
@@ -136,13 +183,17 @@ impl RemoteCollab {
     });
 
     // Spawn a task that boost the [CollabSink]
-    spawn(CollabSinkRunner::run(Arc::downgrade(&sink), notifier_rx));
+    spawn(CollabSinkRunner::run(
+      Arc::downgrade(&collab_sink),
+      notifier_rx,
+    ));
     Self {
       object,
       collab,
       storage,
-      sink,
+      sink: collab_sink,
       sync_state,
+      is_init_sync_finish,
     }
   }
 
@@ -172,7 +223,7 @@ impl RemoteCollab {
         // Restore the remote collab state from updates
         {
           let remote_collab = self.collab.lock();
-          let mut txn = remote_collab.transact_mut();
+          let mut txn = remote_collab.origin_transact_mut();
           if let Ok(update) = Update::decode_v1(&update) {
             if let Err(e) = txn.try_apply_update(update) {
               tracing::error!("apply update failed: {:?}", e);
@@ -230,7 +281,7 @@ impl RemoteCollab {
       );
 
       // Apply the update to the remote collab and send the update to the remote.
-      self.collab.lock().with_transact_mut(|txn| {
+      self.collab.lock().with_origin_transact_mut(|txn| {
         txn.apply_update(decode_update);
       });
 
@@ -245,7 +296,7 @@ impl RemoteCollab {
 
   pub fn push_update(&self, update: &[u8]) {
     if let Ok(decode_update) = Update::decode_v1(update) {
-      self.collab.lock().with_transact_mut(|txn| {
+      self.collab.lock().with_origin_transact_mut(|txn| {
         txn.apply_update(decode_update);
       });
 
@@ -332,10 +383,11 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
   ) -> Result<(), anyhow::Error>;
 
   /// Subscribe the remote updates.
-  async fn subscribe_remote_updates(&self, object: &CollabObject) -> Option<RemoteUpdateReceiver>;
+  fn subscribe_remote_updates(&self, object: &CollabObject) -> Option<RemoteUpdateReceiver>;
 }
 
-pub type RemoteUpdateReceiver = tokio::sync::mpsc::Receiver<Vec<u8>>;
+pub type RemoteUpdateSender = tokio::sync::mpsc::UnboundedSender<Vec<u8>>;
+pub type RemoteUpdateReceiver = tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>;
 
 #[async_trait]
 impl<T> RemoteCollabStorage for Arc<T>
@@ -380,8 +432,8 @@ where
     (**self).send_init_sync(object, id, init_update).await
   }
 
-  async fn subscribe_remote_updates(&self, object: &CollabObject) -> Option<RemoteUpdateReceiver> {
-    (**self).subscribe_remote_updates(object).await
+  fn subscribe_remote_updates(&self, object: &CollabObject) -> Option<RemoteUpdateReceiver> {
+    (**self).subscribe_remote_updates(object)
   }
 }
 
@@ -568,7 +620,7 @@ impl Display for CollabType {
 
 #[derive(Clone, Debug)]
 pub struct CollabObject {
-  pub id: String,
+  pub object_id: String,
   pub uid: i64,
   pub ty: CollabType,
   pub meta: HashMap<String, String>,
@@ -577,11 +629,16 @@ pub struct CollabObject {
 impl CollabObject {
   pub fn new(uid: i64, object_id: String, ty: CollabType) -> Self {
     Self {
-      id: object_id,
+      object_id,
       uid,
       ty,
       meta: Default::default(),
     }
+  }
+
+  pub fn with_device_id(mut self, device_id: String) -> Self {
+    self.meta.insert("device_id".to_string(), device_id);
+    self
   }
 
   pub fn with_workspace_id(mut self, workspace_id: String) -> Self {
@@ -597,10 +654,20 @@ impl CollabObject {
   pub fn get_workspace_id(&self) -> Option<String> {
     self.meta.get("workspace_id").cloned()
   }
+
+  pub fn get_device_id(&self) -> String {
+    match self.meta.get("device_id").cloned() {
+      None => {
+        tracing::error!("Unexpected empty device id");
+        uuid::Uuid::new_v4().to_string()
+      },
+      Some(device_id) => device_id,
+    }
+  }
 }
 
 impl Display for CollabObject {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    f.write_fmt(format_args!("{:?}:{}]", self.ty, self.id,))
+    f.write_fmt(format_args!("{:?}:{}]", self.ty, self.object_id,))
   }
 }

@@ -6,6 +6,7 @@ use collab::core::collab::MutexCollab;
 use collab::core::origin::{CollabClient, CollabOrigin};
 use collab::preclude::MapRefExtension;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::sync::SyncPlugin;
 use collab_sync::client::{TokioUnboundedSink, TokioUnboundedStream};
 use collab_sync::server::{CollabMsgCodec, CollabSink, CollabStream};
@@ -13,7 +14,6 @@ use rand::{prelude::*, Rng as WrappedRng};
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc::unbounded_channel;
 
-use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use tempfile::TempDir;
 
 use crate::util::{TestSink, TestStream};
@@ -61,7 +61,7 @@ pub async fn spawn_client(
 
   {
     let client = collab.lock();
-    client.with_transact_mut(|txn| {
+    client.with_origin_transact_mut(|txn| {
       let map = client.insert_map_with_txn(txn, "map");
       map.insert_with_txn(txn, "task1", "a");
       map.insert_with_txn(txn, "task2", "b");
@@ -120,7 +120,7 @@ impl TestClient {
     if with_data {
       {
         let client = collab.lock();
-        client.with_transact_mut(|txn| {
+        client.with_origin_transact_mut(|txn| {
           let map = client.insert_map_with_txn(txn, "map");
           map.insert_with_txn(txn, "task1", "a");
           map.insert_with_txn(txn, "task2", "b");
@@ -228,7 +228,7 @@ impl Rng {
 
 fn origin_from_tcp_stream(stream: &TcpStream) -> CollabOrigin {
   let address = stream.local_addr().unwrap();
-  let origin = CollabClient::new(address.port() as i64, &address.to_string());
+  let origin = CollabClient::new(address.port() as i64, address.to_string());
   CollabOrigin::Client(origin)
 }
 

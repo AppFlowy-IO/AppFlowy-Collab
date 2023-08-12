@@ -623,7 +623,7 @@ fn create_folder(
   let collab_guard = collab.lock();
 
   let (folder, workspaces, views, trash, favorites, meta, subscription) = collab_guard
-    .with_transact_mut(|txn| {
+    .with_origin_transact_mut(|txn| {
       // create the folder
       let mut folder = collab_guard.insert_map_with_txn_if_not_exist(txn, FOLDER);
       let subscription = subscribe_folder_change(&mut folder);

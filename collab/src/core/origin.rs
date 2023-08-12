@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+
+use serde::{Deserialize, Serialize};
 use yrs::{Origin, TransactionMut};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Serialize, Deserialize)]
@@ -52,7 +53,7 @@ impl From<&Origin> for CollabOrigin {
 #[derive(Serialize, Deserialize, Eq, PartialEq, Hash, Debug, Clone)]
 pub struct CollabClient {
   pub uid: i64,
-  pub device_id: String,
+  device_id: String,
 }
 
 impl Display for CollabClient {
@@ -65,11 +66,13 @@ impl Display for CollabClient {
 }
 
 impl CollabClient {
-  pub fn new(uid: i64, device_id: &str) -> Self {
-    Self {
-      uid,
-      device_id: device_id.to_string(),
-    }
+  pub fn new(uid: i64, device_id: impl ToString) -> Self {
+    let device_id = device_id.to_string();
+    debug_assert!(
+      !device_id.is_empty(),
+      "device_id should not be empty string"
+    );
+    Self { uid, device_id }
   }
 }
 

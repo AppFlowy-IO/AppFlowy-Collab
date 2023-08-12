@@ -353,7 +353,7 @@ async fn client_periodically_open_doc_test() {
       ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
-          collab.with_transact_mut(|txn| {
+          collab.with_origin_transact_mut(|txn| {
             collab.create_array_with_txn(txn, "array", vec!["a"]);
           });
         },
@@ -368,7 +368,7 @@ async fn client_periodically_open_doc_test() {
       ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
-          collab.with_transact_mut(|txn| {
+          collab.with_origin_transact_mut(|txn| {
             let array = collab.get_array_with_txn(txn, vec!["array"]).unwrap();
             array.push_back(txn, "b");
             array.push_back(txn, "c");
@@ -423,7 +423,7 @@ async fn client_periodically_open_doc_test() {
       ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
-          collab.with_transact_mut(|txn| {
+          collab.with_origin_transact_mut(|txn| {
             let array = collab.get_array_with_txn(txn, vec!["array"]).unwrap();
             array.push_back(txn, "d");
             array.push_back(txn, "e");
@@ -461,7 +461,7 @@ async fn client_periodically_edit_test() {
       ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
-          collab.with_transact_mut(|txn| {
+          collab.with_origin_transact_mut(|txn| {
             collab.create_array_with_txn::<String>(txn, "array", vec![]);
           });
         },
@@ -481,7 +481,7 @@ async fn client_periodically_edit_test() {
 
     let client = test.clients.get_mut("1").unwrap();
     let collab = client.lock();
-    collab.with_transact_mut(|txn| {
+    collab.with_origin_transact_mut(|txn| {
       collab
         .get_array_with_txn(txn, vec!["array"])
         .unwrap()

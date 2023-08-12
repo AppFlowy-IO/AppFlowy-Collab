@@ -110,10 +110,13 @@ impl CollabPlugin for CollabSnapshotPlugin {
               weak_collab_db.upgrade(),
               weak_snapshot_persistence.upgrade(),
             ) {
-              let snapshot_collab = Collab::new(uid, object.id.clone(), vec![]);
-              let mut txn = snapshot_collab.transact_mut();
-              if let Err(e) = collab_db.read_txn().load_doc(uid, &object.id, &mut txn) {
-                tracing::error!("{} snapshot generation failed: {}", object.id, e);
+              let snapshot_collab = Collab::new(uid, object.object_id.clone(), "1", vec![]);
+              let mut txn = snapshot_collab.origin_transact_mut();
+              if let Err(e) = collab_db
+                .read_txn()
+                .load_doc(uid, &object.object_id, &mut txn)
+              {
+                tracing::error!("{} snapshot generation failed: {}", object.object_id, e);
                 *state.write() = GenSnapshotState::Fail;
                 return Ok::<(), PersistenceError>(());
               }
@@ -124,13 +127,13 @@ impl CollabPlugin for CollabSnapshotPlugin {
               let snapshot_data = txn.encode_state_as_update_v1(&StateVector::default());
               match snapshot_persistence.create_snapshot(
                 uid,
-                &object.id,
+                &object.object_id,
                 object.ty.to_string(),
                 snapshot_data,
               ) {
                 Ok(_) => *state.write() = GenSnapshotState::Idle,
                 Err(e) => {
-                  tracing::error!("{} snapshot generation failed: {}", object.id, e);
+                  tracing::error!("{} snapshot generation failed: {}", object.object_id, e);
                   *state.write() = GenSnapshotState::Fail;
                 },
               }
@@ -205,9 +208,9 @@ pub fn try_decode_snapshot(
   match {
     let mut wrapper = AssertUnwindSafe(&mut decoded_str);
     panic::catch_unwind(move || {
-      let collab = Collab::new(uid, object_id, vec![]);
+      let collab = Collab::new(uid, object_id, "1", vec![]);
       if let Ok(update) = Update::decode_v1(data) {
-        let mut txn = collab.transact_mut();
+        let mut txn = collab.origin_transact_mut();
         txn.apply_update(update);
         drop(txn);
       }

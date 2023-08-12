@@ -8,6 +8,7 @@ use std::sync::{Arc, Once};
 use collab::preclude::CollabBuilder;
 use collab_folder::core::*;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use tempfile::TempDir;
@@ -51,6 +52,7 @@ pub fn create_folder_with_data(id: &str, folder_data: Option<FolderData>) -> Fol
 
   let collab = CollabBuilder::new(1, id)
     .with_plugin(disk_plugin)
+    .with_device_id("1")
     .build()
     .unwrap();
   collab.lock().initialize();
@@ -77,6 +79,7 @@ pub fn open_folder_with_db(uid: i64, object_id: &str, db_path: PathBuf) -> Folde
   let cleaner: Cleaner = Cleaner::new(db_path);
   let collab = CollabBuilder::new(1, object_id)
     .with_plugin(disk_plugin)
+    .with_device_id("1")
     .build()
     .unwrap();
   collab.lock().initialize();

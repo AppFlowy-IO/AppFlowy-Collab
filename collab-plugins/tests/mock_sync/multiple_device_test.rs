@@ -178,7 +178,7 @@ async fn two_clients_remove_vec_element_at_same_pos_test() {
       ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
-          collab.with_transact_mut(|txn| {
+          collab.with_origin_transact_mut(|txn| {
             collab.create_array_with_txn(txn, "array", vec!["a"]);
           });
         },
@@ -193,7 +193,7 @@ async fn two_clients_remove_vec_element_at_same_pos_test() {
       ModifyLocalCollab {
         device_id: "1".to_string(),
         f: |collab| {
-          collab.with_transact_mut(|txn| {
+          collab.with_origin_transact_mut(|txn| {
             collab
               .get_array_with_txn(txn, vec!["array"])
               .unwrap()
@@ -209,7 +209,7 @@ async fn two_clients_remove_vec_element_at_same_pos_test() {
       ModifyLocalCollab {
         device_id: "2".to_string(),
         f: |collab| {
-          collab.with_transact_mut(|txn| {
+          collab.with_origin_transact_mut(|txn| {
             collab
               .get_array_with_txn(txn, vec!["array"])
               .unwrap()

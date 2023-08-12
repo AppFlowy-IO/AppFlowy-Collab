@@ -74,8 +74,13 @@ pub struct Collab {
 }
 
 impl Collab {
-  pub fn new<T: AsRef<str>>(uid: i64, object_id: T, plugins: Vec<Arc<dyn CollabPlugin>>) -> Collab {
-    let origin = CollabClient::new(uid, "");
+  pub fn new<T: AsRef<str>>(
+    uid: i64,
+    object_id: T,
+    device_id: impl ToString,
+    plugins: Vec<Arc<dyn CollabPlugin>>,
+  ) -> Collab {
+    let origin = CollabClient::new(uid, device_id);
     Self::new_with_client(CollabOrigin::Client(origin), object_id, plugins)
   }
 
@@ -87,7 +92,7 @@ impl Collab {
   ) -> Result<Self, CollabError> {
     let collab = Self::new_with_client(origin, object_id, plugins);
     if !collab_raw_data.is_empty() {
-      let mut txn = collab.transact_mut();
+      let mut txn = collab.origin_transact_mut();
       for update in collab_raw_data {
         let decoded_update = Update::decode_v1(&update)?;
         txn.try_apply_update(decoded_update)?;
@@ -197,7 +202,7 @@ impl Collab {
 
     self.state.set_init_state(InitState::Loading);
     {
-      let mut txn = self.transact_mut();
+      let mut txn = self.origin_transact_mut();
       self
         .plugins
         .read()
@@ -259,7 +264,7 @@ impl Collab {
   }
 
   pub fn insert<V: Prelim>(&self, key: &str, value: V) -> V::Return {
-    self.with_transact_mut(|txn| self.insert_with_txn(txn, key, value))
+    self.with_origin_transact_mut(|txn| self.insert_with_txn(txn, key, value))
   }
 
   pub fn insert_with_txn<V: Prelim>(
@@ -279,7 +284,7 @@ impl Collab {
       self.get_map_with_txn(&txn, path).map(|m| m.into_inner())
     };
 
-    self.with_transact_mut(|txn| {
+    self.with_origin_transact_mut(|txn| {
       if map.is_none() {
         map = Some(
           self
@@ -386,7 +391,7 @@ impl Collab {
   }
 
   pub fn remove(&mut self, key: &str) -> Option<Value> {
-    let mut txn = self.transact_mut();
+    let mut txn = self.origin_transact_mut();
     self.data.remove(&mut txn, key)
   }
 
@@ -397,7 +402,7 @@ impl Collab {
     }
     let len = path.len();
     if len == 1 {
-      self.with_transact_mut(|txn| self.data.remove(txn, &path[0]))
+      self.with_origin_transact_mut(|txn| self.data.remove(txn, &path[0]))
     } else {
       let txn = self.transact();
       let mut iter = path.into_iter();
@@ -416,7 +421,7 @@ impl Collab {
       drop(txn);
 
       let map_ref = map_ref?;
-      self.with_transact_mut(|txn| map_ref.remove(txn, &remove_path))
+      self.with_origin_transact_mut(|txn| map_ref.remove(txn, &remove_path))
     }
   }
 
@@ -499,9 +504,17 @@ impl Collab {
       .map_err(|e| CollabError::Internal(Box::new(e)))
   }
 
+  pub fn try_transaction_mut(&self) -> Result<TransactionMut, CollabError> {
+    TransactionRetry::new(&self.doc).try_get_write_txn()
+  }
+
+  pub fn try_origin_transaction_mut(&self) -> Result<TransactionMut, CollabError> {
+    TransactionRetry::new(&self.doc).try_get_write_txn_with(self.origin.clone())
+  }
+
   /// Returns a transaction that can mutate the document. This transaction will carry the
   /// origin of the current user.
-  pub fn transact_mut(&self) -> TransactionMut {
+  pub fn origin_transact_mut(&self) -> TransactionMut {
     TransactionRetry::new(&self.doc).get_write_txn_with(self.origin.clone())
   }
 
@@ -510,7 +523,7 @@ impl Collab {
   ///
   /// If applying the remote update, please use the `transact_mut` of `doc`. Ot
   /// update will send to remote that the remote already has.
-  pub fn with_transact_mut<F, T>(&self, f: F) -> T
+  pub fn with_origin_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
@@ -631,10 +644,7 @@ impl CollabBuilder {
   }
 
   pub fn build(self) -> Result<MutexCollab, CollabError> {
-    let origin = CollabOrigin::Client(CollabClient {
-      uid: self.uid,
-      device_id: self.device_id,
-    });
+    let origin = CollabOrigin::Client(CollabClient::new(self.uid, self.device_id));
     MutexCollab::new_with_raw_data(origin, &self.object_id, self.updates, self.plugins)
   }
 }
@@ -755,7 +765,7 @@ impl MutexCollab {
 
   pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
     let collab = self.0.lock();
-    let txn = collab.transact_mut();
+    let txn = collab.origin_transact_mut();
     (
       txn.encode_state_as_update_v1(&StateVector::default()),
       txn.state_vector().encode_v1(),

@@ -293,7 +293,7 @@ impl WorkspaceDatabase {
   ) -> Result<Database, DatabaseError> {
     let collab = self.collab_for_database(database_id, CollabRawData::default());
     let update = Update::decode_v1(&snapshot.data)?;
-    collab.lock().with_transact_mut(|txn| {
+    collab.lock().with_origin_transact_mut(|txn| {
       txn.apply_update(update);
     });
 
@@ -369,7 +369,7 @@ fn get_database_array_ref(collab: &Collab) -> DatabaseArray {
   };
 
   let databases = match array {
-    None => collab.with_transact_mut(|txn| {
+    None => collab.with_origin_transact_mut(|txn| {
       collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn, DATABASES, vec![])
     }),
     Some(array) => array,
