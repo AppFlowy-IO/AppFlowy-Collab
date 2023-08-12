@@ -833,6 +833,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "collab-user"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert-json-diff",
+ "collab",
+ "collab-plugins",
+ "fs_extra",
+ "nanoid",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+]
+
+[[package]]
 name = "config"
 version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
