@@ -560,7 +560,7 @@ impl WorkspaceArray {
 
   pub fn create_workspace_with_txn(&self, txn: &mut TransactionMut, workspace: Workspace) {
     let workspace_id = workspace.id.clone();
-    let map_ref = self.container.insert_map_with_txn(txn);
+    let map_ref = self.container.insert_map_with_txn(txn, None);
     let workspace_map = WorkspaceMap::create_with_txn(
       txn,
       &map_ref,

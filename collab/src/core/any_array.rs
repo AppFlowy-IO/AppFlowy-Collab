@@ -52,7 +52,7 @@ impl ArrayMap {
   pub fn set_array_ref(self, txn: &mut TransactionMut, array_ref: ArrayRef) {
     array_ref.clear(txn);
     for value in self.0 {
-      let map_ref = array_ref.insert_map_with_txn(txn);
+      let map_ref = array_ref.insert_map_with_txn(txn, None);
       value.fill_map_ref(txn, &map_ref);
     }
   }
@@ -99,13 +99,15 @@ impl<'a, 'b> ArrayMapUpdate<'a, 'b> {
   /// * `any_map`: The `AnyMap` object to be inserted.
   /// * `index`: The position where the map should be inserted.
   pub fn insert(self, any_map: AnyMap, index: u32) -> Self {
-    let map_ref = self.array_ref.insert_map_at_index_with_txn(self.txn, index);
+    let map_ref = self
+      .array_ref
+      .insert_map_at_index_with_txn(self.txn, index, None);
     any_map.fill_map_ref(self.txn, &map_ref);
     self
   }
 
   pub fn push(self, any_map: AnyMap) -> Self {
-    let map_ref = self.array_ref.insert_map_with_txn(self.txn);
+    let map_ref = self.array_ref.insert_map_with_txn(self.txn, None);
     any_map.fill_map_ref(self.txn, &map_ref);
     self
   }

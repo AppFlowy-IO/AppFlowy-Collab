@@ -842,6 +842,7 @@ dependencies = [
  "collab-plugins",
  "fs_extra",
  "nanoid",
+ "parking_lot 0.12.1",
  "serde",
  "serde_json",
  "tempfile",

@@ -1,9 +1,10 @@
+use std::collections::HashMap;
+
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::{
   lib0Any, Array, Map, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
   YrsValue,
 };
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct RowRelation {
@@ -152,7 +153,7 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
       .map_ref
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, LINKING_ROWS);
     for row in rows {
-      let map_ref = array_ref.insert_map_with_txn(self.txn);
+      let map_ref = array_ref.insert_map_with_txn(self.txn, None);
       row.fill_map_with_txn(self.txn, map_ref);
     }
     self
@@ -164,7 +165,7 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
       .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, LINKED_BY_ROWS);
 
     for row in rows {
-      let map_ref = array_ref.insert_map_with_txn(self.txn);
+      let map_ref = array_ref.insert_map_with_txn(self.txn, None);
       row.fill_map_with_txn(self.txn, map_ref);
     }
     self

@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::MapRefExtension;
 use parking_lot::RwLock;
+use std::sync::Arc;
 use yrs::types::{Change, ToJson};
 use yrs::updates::decoder::Decode;
 use yrs::{Array, Doc, Map, Observable, ReadTxn, StateVector, Transact, Update};
@@ -70,7 +69,7 @@ async fn apply_update_test() {
   let doc1_state = doc1.transact().encode_diff_v1(&StateVector::default());
   {
     let mut txn = doc1.transact_mut();
-    let map1 = array.insert_map_with_txn(&mut txn);
+    let map1 = array.insert_map_with_txn(&mut txn, None);
     // map1.insert(&mut txn, "m_k", "m_value");
     map1.insert_map_with_txn(&mut txn, "m_k");
   }

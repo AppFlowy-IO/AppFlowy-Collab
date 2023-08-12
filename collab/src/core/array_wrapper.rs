@@ -6,7 +6,7 @@ use serde::Serialize;
 use yrs::block::Prelim;
 use yrs::{Array, ArrayRef, MapPrelim, MapRef, ReadTxn, Transact, Transaction, TransactionMut};
 
-use crate::preclude::{lib0Any, CollabContext, MapRefExtension, MapRefWrapper, YrsValue};
+use crate::preclude::{CollabContext, MapRefExtension, MapRefWrapper, YrsValue};
 use crate::util::insert_json_value_to_array_ref;
 
 #[derive(Clone)]
@@ -88,41 +88,36 @@ impl DerefMut for ArrayRefWrapper {
 pub trait ArrayRefExtension {
   fn array_ref(&self) -> &ArrayRef;
 
-  fn insert_map_with_txn(&self, txn: &mut TransactionMut) -> MapRef {
-    let array = MapPrelim::<Any>::new();
-    self.array_ref().push_back(txn, array)
+  fn insert_map_with_txn(&self, txn: &mut TransactionMut, value: Option<MapPrelim<Any>>) -> MapRef {
+    let value = value.unwrap_or_else(MapPrelim::<Any>::new);
+    self.array_ref().push_back(txn, value)
   }
 
-  fn insert_map_at_index_with_txn(&self, txn: &mut TransactionMut, index: u32) -> MapRef {
-    let array = MapPrelim::<Any>::new();
-    self.array_ref().insert(txn, index, array)
+  fn insert_map_at_index_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    index: u32,
+    value: Option<MapPrelim<Any>>,
+  ) -> MapRef {
+    let value = value.unwrap_or_else(MapPrelim::<Any>::new);
+    self.array_ref().insert(txn, index, value)
   }
 
-  /// Modifies a specific element in the underlying data structure using a provided function.
-  ///
-  /// The `mut_with_txn` method allows modification of an element indexed by its ID and key,
-  /// using a user-provided transformation function. If the function returns an `Option`
-  /// containing a new value, the existing element at the specified position will be replaced
-  /// by the new value. Otherwise, no changes will be made.
-  ///
-  /// # Parameters
-  /// - `txn`: A mutable reference to a transaction object that is being modified.
-  /// - `id`: A string slice representing the ID of the target element.
-  /// - `key`: A string slice representing the key of the target element.
-  /// - `f`: A function that takes an element of type `YrsValue` and returns an `Option<YrsValue>`.
-  ///        This function determines how the target element will be modified.
-  ///
-  fn mut_with_txn<F, V, R>(&self, txn: &mut TransactionMut, id: &str, key: &str, f: F)
-  where
-    F: FnOnce(V) -> Option<R>,
-    V: From<lib0Any>,
+  fn mut_map_element_with_txn<'a, F, R>(
+    &'a self,
+    txn: &'a mut TransactionMut,
+    id: &str,
+    key: &str,
+    f: F,
+  ) where
+    F: FnOnce(&mut TransactionMut, &MapRef) -> Option<R>,
     R: Prelim,
   {
     if let Some(index) = self.position_with_txn(txn, id, key) {
-      if let Some(YrsValue::Any(any)) = self.array_ref().get(txn, index) {
-        if let Some(new) = f(V::from(any)) {
+      if let Some(YrsValue::YMap(map)) = self.array_ref().get(txn, index) {
+        if let Some(new_value) = f(txn, &map) {
           self.array_ref().remove(txn, index);
-          self.array_ref().insert(txn, index, new);
+          self.array_ref().insert(txn, index, new_value);
         }
       }
     }

@@ -217,6 +217,10 @@ pub trait MapRefExtension {
     self.map_ref().insert(txn, key, lib0Any::Number(value));
   }
 
+  fn insert_bool_with_txn(&self, txn: &mut TransactionMut, key: &str, value: bool) {
+    self.map_ref().insert(txn, key, lib0Any::Bool(value));
+  }
+
   fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
     let map = MapPrelim::<lib0::any::Any>::new();
     self.map_ref().insert(txn, key, map)

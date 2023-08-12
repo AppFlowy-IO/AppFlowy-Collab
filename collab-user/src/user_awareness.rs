@@ -1,9 +1,11 @@
+use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::Result;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::SyncState;
-use collab::preclude::MapRefWrapper;
+use collab::preclude::{lib0Any, MapPrelim, MapRefWrapper};
+use parking_lot::Mutex;
 use tokio_stream::wrappers::WatchStream;
 
 use crate::appearance::AppearanceSettings;
@@ -14,16 +16,36 @@ const USER: &str = "user_awareness";
 const REMINDERS: &str = "reminders";
 const APPEARANCE_SETTINGS: &str = "appearance_settings";
 
+/// A thread-safe wrapper around the `UserAwareness` struct.
+///
+/// This structure uses an `Arc<Mutex<T>>` pattern to ensure that the underlying `UserAwareness`
+/// can be safely shared and mutated across multiple threads.
 #[derive(Clone)]
-pub struct UserAwarenessNotifier {
-  pub reminder_change_tx: RemindersChangeSender,
+pub struct MutexUserAwareness(Arc<Mutex<UserAwareness>>);
+impl MutexUserAwareness {
+  pub fn new(inner: UserAwareness) -> Self {
+    Self(Arc::new(Mutex::new(inner)))
+  }
 }
+
+impl Deref for MutexUserAwareness {
+  type Target = Arc<Mutex<UserAwareness>>;
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+unsafe impl Sync for MutexUserAwareness {}
+unsafe impl Send for MutexUserAwareness {}
 
 pub struct UserAwareness {
   inner: Arc<MutexCollab>,
+  #[allow(dead_code)]
   container: MapRefWrapper,
+  #[allow(dead_code)]
   appearance_settings: AppearanceSettings,
   reminders: Reminders,
+  #[allow(dead_code)]
   notifier: Option<UserAwarenessNotifier>,
 }
 
@@ -59,8 +81,8 @@ impl UserAwareness {
           container: appearance_settings_container,
         };
 
-        let reminder_container =
-          awareness.insert_array_if_not_exist_with_txn::<Reminder>(txn, REMINDERS, vec![]);
+        let reminder_container = awareness
+          .insert_array_if_not_exist_with_txn::<MapPrelim<lib0Any>>(txn, REMINDERS, vec![]);
         let reminders = Reminders::new(
           reminder_container,
           notifier
@@ -152,6 +174,10 @@ impl UserAwareness {
     ))
   }
 
+  /// Converts the internal state of the `UserAwareness` into a JSON representation.
+  ///
+  /// This method constructs an instance of `UserAwarenessData` with the current data,
+  /// then serializes it into a JSON value.
   pub fn to_json(&self) -> Result<serde_json::Value> {
     let data = UserAwarenessData {
       appearance_settings: Default::default(),
@@ -196,4 +222,9 @@ impl UserAwareness {
   {
     self.reminders.update_reminder(reminder_id, f);
   }
+}
+
+#[derive(Clone)]
+pub struct UserAwarenessNotifier {
+  pub reminder_change_tx: RemindersChangeSender,
 }
