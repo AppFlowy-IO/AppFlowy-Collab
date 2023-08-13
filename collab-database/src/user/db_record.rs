@@ -29,7 +29,7 @@ impl DatabaseArray {
         created_at: timestamp(),
         views,
       };
-      let map_ref = self.array_ref.insert_map_with_txn(txn);
+      let map_ref = self.array_ref.insert_map_with_txn(txn, None);
       record.fill_map_ref(txn, &map_ref);
     });
   }
@@ -42,7 +42,9 @@ impl DatabaseArray {
           if let Some(mut record) = DatabaseRecord::from_map_ref(txn, &map_ref) {
             f(&mut record);
             self.array_ref.remove(txn, index);
-            let map_ref = self.array_ref.insert_map_at_index_with_txn(txn, index);
+            let map_ref = self
+              .array_ref
+              .insert_map_at_index_with_txn(txn, index, None);
             record.fill_map_ref(txn, &map_ref);
           }
         }

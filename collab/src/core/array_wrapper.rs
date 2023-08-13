@@ -88,18 +88,61 @@ impl DerefMut for ArrayRefWrapper {
 pub trait ArrayRefExtension {
   fn array_ref(&self) -> &ArrayRef;
 
-  fn insert_map_with_txn(&self, txn: &mut TransactionMut) -> MapRef {
-    let array = MapPrelim::<Any>::new();
-    self.array_ref().push_back(txn, array)
+  fn insert_map_with_txn(&self, txn: &mut TransactionMut, value: Option<MapPrelim<Any>>) -> MapRef {
+    let value = value.unwrap_or_else(MapPrelim::<Any>::new);
+    self.array_ref().push_back(txn, value)
   }
 
-  fn insert_map_at_index_with_txn(&self, txn: &mut TransactionMut, index: u32) -> MapRef {
-    let array = MapPrelim::<Any>::new();
-    self.array_ref().insert(txn, index, array)
+  fn insert_map_at_index_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    index: u32,
+    value: Option<MapPrelim<Any>>,
+  ) -> MapRef {
+    let value = value.unwrap_or_else(MapPrelim::<Any>::new);
+    self.array_ref().insert(txn, index, value)
   }
 
-  fn remove_with_id(&self, txn: &mut TransactionMut, key: &str, id: &str) {
-    if let Some(index) = self
+  fn mut_map_element_with_txn<'a, F, R>(
+    &'a self,
+    txn: &'a mut TransactionMut,
+    id: &str,
+    key: &str,
+    f: F,
+  ) where
+    F: FnOnce(&mut TransactionMut, &MapRef) -> Option<R>,
+    R: Prelim,
+  {
+    if let Some(index) = self.position_with_txn(txn, id, key) {
+      if let Some(YrsValue::YMap(map)) = self.array_ref().get(txn, index) {
+        if let Some(new_value) = f(txn, &map) {
+          self.array_ref().remove(txn, index);
+          self.array_ref().insert(txn, index, new_value);
+        }
+      }
+    }
+  }
+
+  /// Retrieves the position of an element in the underlying data structure
+  /// based on its ID and key.
+  ///
+  /// The `position_with_txn` method searches through the data structure and returns
+  /// the position (as a `u32`) of the element that matches the given ID and key.
+  /// If no match is found, the method returns `None`.
+  ///
+  /// The method specifically looks for elements of type `YrsValue::YMap` and checks
+  /// if the map contains the specified key with the corresponding ID value.
+  ///
+  /// # Parameters
+  /// - `txn`: A reference to a transaction object for reading.
+  /// - `id`: A string slice representing the ID value to match.
+  /// - `key`: A string slice representing the key to look up in the `YMap`.
+  ///
+  /// # Returns
+  /// - `Option<u32>`: The position of the matching element as a `u32` if found, or `None` otherwise.
+  ///
+  fn position_with_txn<T: ReadTxn>(&self, txn: &T, id: &str, key: &str) -> Option<u32> {
+    self
       .array_ref()
       .iter(txn)
       .position(|value| {
@@ -113,7 +156,10 @@ pub trait ArrayRefExtension {
         }
       })
       .map(|index| index as u32)
-    {
+  }
+
+  fn remove_with_id(&self, txn: &mut TransactionMut, id: &str, key: &str) {
+    if let Some(index) = self.position_with_txn(txn, id, key) {
       self.array_ref().remove(txn, index);
     }
   }
