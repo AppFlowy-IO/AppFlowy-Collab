@@ -11,8 +11,8 @@ use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, CreateRowParams};
 use collab_database::user::DatabaseCollabService;
 use collab_database::views::{
-  CreateDatabaseParams, DatabaseLayout, FieldSettings, FieldSettingsMap, FieldSettingsMapBuilder,
-  LayoutSetting, LayoutSettings,
+  CreateDatabaseParams, DatabaseLayout, FieldSettingsMap, FieldSettingsMapBuilder, LayoutSetting,
+  LayoutSettings,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::cloud_storage::CollabType;
@@ -280,7 +280,7 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
 /// Creates the default field settings for the database created by
 /// create_database_with_default_data
 pub fn field_settings_for_default_database() -> FieldSettingsMap {
-  let field_settings = FieldSettings::from(TestFieldSetting { is_visible: true });
+  let field_settings = FieldSettingsMap::from(TestFieldSetting { is_visible: true });
   FieldSettingsMapBuilder::new()
     .insert_any("f1", field_settings.clone())
     .insert_any("f2", field_settings.clone())
@@ -288,7 +288,7 @@ pub fn field_settings_for_default_database() -> FieldSettingsMap {
     .build()
 }
 
-pub fn default_field_settings_by_layout() -> HashMap<DatabaseLayout, FieldSettings> {
+pub fn default_field_settings_by_layout() -> HashMap<DatabaseLayout, FieldSettingsMap> {
   let field_settings = TestFieldSetting { is_visible: true };
   HashMap::from([
     (DatabaseLayout::Grid, field_settings.clone().into()),

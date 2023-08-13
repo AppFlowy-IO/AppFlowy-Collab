@@ -24,8 +24,8 @@ use crate::rows::{
 use crate::user::DatabaseCollabService;
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
-  FieldOrder, FieldSettings, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, RowOrder,
-  SortMap, ViewDescription, ViewMap,
+  FieldOrder, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, RowOrder, SortMap,
+  ViewDescription, ViewMap,
 };
 
 pub struct Database {
@@ -426,7 +426,7 @@ impl Database {
   pub fn create_field(
     &self,
     field: Field,
-    field_settings_by_layout: HashMap<DatabaseLayout, FieldSettings>,
+    field_settings_by_layout: HashMap<DatabaseLayout, FieldSettingsMap>,
   ) {
     self.root.with_transact_mut(|txn| {
       self.create_field_with_txn(txn, field, &field_settings_by_layout);
@@ -437,7 +437,7 @@ impl Database {
     &self,
     txn: &mut TransactionMut,
     field: Field,
-    field_settings_by_layout: &HashMap<DatabaseLayout, FieldSettings>,
+    field_settings_by_layout: &HashMap<DatabaseLayout, FieldSettingsMap>,
   ) {
     self.views.update_all_views_with_txn(txn, |update| {
       let field_id = field.id.clone();
@@ -462,7 +462,7 @@ impl Database {
     name: String,
     field_type: i64,
     f: impl FnOnce(&mut Field),
-    field_settings_by_layout: HashMap<DatabaseLayout, FieldSettings>,
+    field_settings_by_layout: HashMap<DatabaseLayout, FieldSettingsMap>,
   ) -> (usize, Field) {
     let mut field = Field::new(gen_field_id(), name, field_type, false);
     f(&mut field);
@@ -721,7 +721,7 @@ impl Database {
 
   /// Returns the field settings for the given field ids.
   /// If None, return field settings for all fields
-  pub fn get_field_settings<T: From<FieldSettings>>(
+  pub fn get_field_settings<T: From<FieldSettingsMap>>(
     &self,
     view_id: &str,
     field_ids: Option<Vec<String>>,
@@ -753,7 +753,7 @@ impl Database {
     &self,
     view_id: &str,
     field_ids: Option<Vec<String>>,
-    field_settings: impl Into<FieldSettings>,
+    field_settings: impl Into<FieldSettingsMap>,
   ) {
     let field_ids = field_ids.unwrap_or(
       self

@@ -51,30 +51,13 @@ impl Default for DatabaseLayout {
   }
 }
 
-impl TryFrom<i64> for DatabaseLayout {
-  type Error = anyhow::Error;
-
-  fn try_from(value: i64) -> std::result::Result<Self, Self::Error> {
+impl From<i64> for DatabaseLayout {
+  fn from(value: i64) -> Self {
     match value {
-      0 => Ok(DatabaseLayout::Grid),
-      1 => Ok(DatabaseLayout::Board),
-      2 => Ok(DatabaseLayout::Calendar),
-      _ => bail!("Unknown layout type {}", value),
-    }
-  }
-}
-
-impl From<lib0Any> for DatabaseLayout {
-  fn from(value: lib0Any) -> Self {
-    if let lib0Any::BigInt(layout_ty) = value {
-      match layout_ty {
-        0 => DatabaseLayout::Grid,
-        1 => DatabaseLayout::Board,
-        2 => DatabaseLayout::Calendar,
-        _ => Self::default(),
-      }
-    } else {
-      Self::default()
+      0 => DatabaseLayout::Grid,
+      1 => DatabaseLayout::Board,
+      2 => DatabaseLayout::Calendar,
+      _ => Self::default(),
     }
   }
 }

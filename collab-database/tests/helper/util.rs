@@ -11,8 +11,9 @@ use collab::preclude::lib0Any;
 use collab_database::fields::{TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::Cell;
 use collab_database::views::{
-  FieldSettings, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder, GroupSettingBuilder,
-  GroupSettingMap, LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
+  FieldSettingsMap, FieldSettingsMapBuilder, FilterMap, FilterMapBuilder, GroupMap,
+  GroupMapBuilder, GroupSettingBuilder, GroupSettingMap, LayoutSetting, LayoutSettingBuilder,
+  SortMap, SortMapBuilder,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use nanoid::nanoid;
@@ -548,17 +549,17 @@ impl TestFieldSetting {
 
 const VISIBILITY: &str = "visibility";
 
-impl From<FieldSettings> for TestFieldSetting {
-  fn from(value: FieldSettings) -> Self {
+impl From<FieldSettingsMap> for TestFieldSetting {
+  fn from(value: FieldSettingsMap) -> Self {
     TestFieldSetting {
       is_visible: value.get_bool_value(VISIBILITY).unwrap_or(true),
     }
   }
 }
 
-impl From<TestFieldSetting> for FieldSettings {
+impl From<TestFieldSetting> for FieldSettingsMap {
   fn from(data: TestFieldSetting) -> Self {
-    SortMapBuilder::new()
+    FieldSettingsMapBuilder::new()
       .insert_bool_value(VISIBILITY, data.is_visible)
       .build()
   }

@@ -8,7 +8,7 @@ use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::WorkspaceDatabase;
-use collab_database::views::{CreateDatabaseParams, FieldSettings, FieldSettingsMapBuilder};
+use collab_database::views::{CreateDatabaseParams, FieldSettingsMap, FieldSettingsMapBuilder};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -226,7 +226,7 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
 
-  let field_setting = FieldSettings::from(TestFieldSetting { is_visible: true });
+  let field_setting = FieldSettingsMap::from(TestFieldSetting { is_visible: true });
   let field_settings_map = FieldSettingsMapBuilder::new()
     .insert_any("f1", field_setting.clone())
     .insert_any("f2", field_setting.clone())

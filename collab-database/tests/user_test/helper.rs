@@ -15,7 +15,7 @@ use collab_database::user::{
   RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
 };
 use collab_database::views::{
-  CreateDatabaseParams, DatabaseLayout, FieldSettings, FieldSettingsMapBuilder,
+  CreateDatabaseParams, DatabaseLayout, FieldSettingsMap, FieldSettingsMapBuilder,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::cloud_storage::CollabType;
@@ -206,7 +206,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
 
-  let field_setting = FieldSettings::from(TestFieldSetting { is_visible: true });
+  let field_setting = FieldSettingsMap::from(TestFieldSetting { is_visible: true });
   let field_settings_map = FieldSettingsMapBuilder::new()
     .insert_any("f1", field_setting.clone())
     .insert_any("f2", field_setting.clone())
@@ -276,7 +276,7 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
     is_primary: false,
   };
 
-  let field_setting = FieldSettings::from(TestFieldSetting { is_visible: true });
+  let field_setting = FieldSettingsMap::from(TestFieldSetting { is_visible: true });
   let field_settings_map = FieldSettingsMapBuilder::new()
     .insert_any(text_field.id.clone(), field_setting.clone())
     .insert_any(single_select_field.id.clone(), field_setting.clone())

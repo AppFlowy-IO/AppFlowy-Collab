@@ -14,8 +14,8 @@ use crate::fields::Field;
 use crate::rows::CreateRowParams;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
 use crate::views::{
-  FieldOrder, FieldOrderArray, FieldSettings, FieldSettingsMap, FilterArray, FilterMap,
-  GroupSettingArray, GroupSettingMap, LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
+  FieldOrder, FieldOrderArray, FieldSettingsMap, FilterArray, FilterMap, GroupSettingArray,
+  GroupSettingMap, LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 
@@ -52,14 +52,18 @@ pub struct CreateViewParams {
   pub groups: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
   pub field_settings: FieldSettingsMap,
+
   /// When creating a view for a database, it might need to create a new field for the view.
   /// For example, if the view is calendar view, it must have a date field.
   pub deps_fields: Vec<Field>,
-  pub deps_field_setting: HashMap<DatabaseLayout, FieldSettings>,
+
+  /// Each new field in `deps_fields` must also have an associated FieldSettings
+  /// that will be inserted into each view according to the view's layout type
+  pub deps_field_setting: HashMap<DatabaseLayout, FieldSettingsMap>,
 }
 
 impl CreateViewParams {
-  pub fn take_deps_fields(&mut self) -> (Vec<Field>, HashMap<DatabaseLayout, FieldSettings>) {
+  pub fn take_deps_fields(&mut self) -> (Vec<Field>, HashMap<DatabaseLayout, FieldSettingsMap>) {
     (
       std::mem::take(&mut self.deps_fields),
       std::mem::take(&mut self.deps_field_setting),
@@ -421,11 +425,10 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   }
 
   fn get_layout_setting(&self) -> Option<DatabaseLayout> {
-    if let Some(YrsValue::Any(layout_ty)) = self.map_ref.get(self.txn, VIEW_LAYOUT) {
-      Some(layout_ty.into())
-    } else {
-      None
-    }
+    self
+      .map_ref
+      .get_i64_with_txn(self.txn, VIEW_LAYOUT)
+      .map(DatabaseLayout::from)
   }
 
   pub fn done(self) -> Option<DatabaseView> {
