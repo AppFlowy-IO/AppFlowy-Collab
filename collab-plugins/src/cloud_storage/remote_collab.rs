@@ -598,6 +598,7 @@ pub enum CollabType {
   WorkspaceDatabase = 2,
   Folder = 3,
   DatabaseRow = 4,
+  UserAwareness = 5,
 }
 
 impl CollabType {
@@ -614,6 +615,7 @@ impl Display for CollabType {
       Self::WorkspaceDatabase => f.write_str("WorkspaceDatabase"),
       Self::DatabaseRow => f.write_str("DatabaseRow"),
       Self::Folder => f.write_str("Folder"),
+      Self::UserAwareness => f.write_str("UserAwareness"),
     }
   }
 }

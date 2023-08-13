@@ -201,6 +201,11 @@ impl UserAwareness {
     self.reminders.add(reminder);
   }
 
+  /// Returns all reminders in the `UserAwareness` object.
+  pub fn get_all_reminders(&self) -> Vec<Reminder> {
+    self.reminders.get_all_reminders()
+  }
+
   /// Removes an existing reminder from the `UserAwareness` object.
   ///
   /// # Arguments

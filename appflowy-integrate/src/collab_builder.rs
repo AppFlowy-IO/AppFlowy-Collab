@@ -55,22 +55,23 @@ pub struct AppFlowyCollabBuilder {
   network_reachability: CollabNetworkReachability,
   workspace_id: RwLock<Option<String>>,
   cloud_storage: RwLock<Arc<dyn CollabStorageProvider>>,
-  snapshot_persistence: Option<Arc<dyn SnapshotPersistence>>,
+  snapshot_persistence: Mutex<Option<Arc<dyn SnapshotPersistence>>>,
   device_id: Mutex<String>,
 }
 
 impl AppFlowyCollabBuilder {
-  pub fn new<T: CollabStorageProvider>(
-    cloud_storage: T,
-    snapshot_persistence: Option<Arc<dyn SnapshotPersistence>>,
-  ) -> Self {
+  pub fn new<T: CollabStorageProvider>(cloud_storage: T) -> Self {
     Self {
       network_reachability: CollabNetworkReachability::new(),
       workspace_id: Default::default(),
       cloud_storage: RwLock::new(Arc::new(cloud_storage)),
-      snapshot_persistence,
+      snapshot_persistence: Default::default(),
       device_id: Default::default(),
     }
+  }
+
+  pub fn set_snapshot_persistence(&self, snapshot_persistence: Arc<dyn SnapshotPersistence>) {
+    *self.snapshot_persistence.lock() = Some(snapshot_persistence);
   }
 
   pub fn initialize(&self, workspace_id: String) {
@@ -104,13 +105,13 @@ impl AppFlowyCollabBuilder {
     object_id: &str,
     object_type: CollabType,
     raw_data: CollabRawData,
-    db: Weak<RocksCollabDB>,
+    collab_db: Weak<RocksCollabDB>,
   ) -> Result<Arc<MutexCollab>, Error> {
     self.build_with_config(
       uid,
       object_id,
       object_type,
-      db,
+      collab_db,
       raw_data,
       &CollabPersistenceConfig::default(),
     )
@@ -196,7 +197,7 @@ impl AppFlowyCollabBuilder {
       CollabStorageType::Local => {},
     }
 
-    if let Some(snapshot_persistence) = &self.snapshot_persistence {
+    if let Some(snapshot_persistence) = self.snapshot_persistence.lock().as_ref() {
       if config.enable_snapshot {
         let collab_object = CollabObject::new(uid, object_id.to_string(), object_type)
           .with_device_id(self.device_id.lock().clone());
