@@ -3,12 +3,13 @@ use collab::core::any_map::{AnyMap, AnyMapBuilder};
 use collab::preclude::{lib0Any, Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
+use strum::EnumIter;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
 /// The [DatabaseLayout] enum is used to represent the layout of the database.
-#[derive(Debug, PartialEq, Copy, Eq, Hash, Clone, Serialize_repr, Deserialize_repr)]
+#[derive(Debug, PartialEq, Copy, Eq, Hash, Clone, Serialize_repr, Deserialize_repr, EnumIter)]
 #[repr(u8)]
 pub enum DatabaseLayout {
   Grid = 0,
