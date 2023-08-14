@@ -154,12 +154,13 @@ async fn create_database_view_with_layout_setting_test() {
     .insert_any("2", "abc")
     .build();
 
-  let params = CreateViewParams::new(
-    "1".to_string(),
-    "v1".to_string(),
-    "my first grid".to_string(),
-    DatabaseLayout::Grid,
-  )
+  let params = CreateViewParams {
+    database_id: "1".to_string(),
+    view_id: "v1".to_string(),
+    name: "my first grid".to_string(),
+    layout: DatabaseLayout::Grid,
+    ..Default::default()
+  }
   .with_layout_setting(grid_setting);
   database_test.create_linked_view(params).unwrap();
 

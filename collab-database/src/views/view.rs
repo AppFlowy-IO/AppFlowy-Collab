@@ -72,12 +72,13 @@ impl CreateViewParams {
 }
 
 impl CreateViewParams {
-  pub fn new(database_id: String, view_id: String, name: String, layout: DatabaseLayout) -> Self {
+  pub fn new(database_id: String, view_id: String, name: String, layout: DatabaseLayout, field_settings: FieldSettingsMap) -> Self {
     Self {
       database_id,
       view_id,
       name,
       layout,
+      field_settings,
       ..Default::default()
     }
   }
