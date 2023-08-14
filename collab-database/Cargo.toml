@@ -26,7 +26,8 @@ async-trait = "0.1"
 uuid = { version = "1.3.3", features = ["v4", "v5"] }
 base64 = "^0.21"
 tokio-stream = { version = "0.1.14", features = ["sync"] }
-strum = { version = "0.25", features = ["derive"] }
+strum = "0.25"
+strum_macros = "0.25"
 
 [dev-dependencies]
 collab-plugins = { path = "../collab-plugins", features = ["rocksdb_plugin"] }
