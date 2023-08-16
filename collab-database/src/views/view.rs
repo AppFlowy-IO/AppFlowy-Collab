@@ -14,8 +14,8 @@ use crate::fields::Field;
 use crate::rows::CreateRowParams;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
 use crate::views::{
-  FieldOrder, FieldOrderArray, FieldSettingsMap, FilterArray, FilterMap, GroupSettingArray,
-  GroupSettingMap, LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
+  FieldOrder, FieldOrderArray, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterArray, FilterMap,
+  GroupSettingArray, GroupSettingMap, LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 
@@ -31,7 +31,7 @@ pub struct DatabaseView {
   pub sorts: Vec<SortMap>,
   pub row_orders: Vec<RowOrder>,
   pub field_orders: Vec<FieldOrder>,
-  pub field_settings: FieldSettingsMap,
+  pub field_settings: FieldSettingsByFieldIdMap,
   pub created_at: i64,
   pub modified_at: i64,
 }
