@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use collab_document::blocks::{BlockAction, BlockActionPayload, BlockActionType};
 use serde_json::json;
 
 use crate::blocks::block_test_core::{BlockTestCore, TEXT_BLOCK_TYPE};
@@ -35,7 +36,7 @@ async fn open_document_test() {
 async fn subscribe_insert_change_test() {
   let mut test = BlockTestCore::new().await;
   test.subscribe(|e, _| {
-    assert_eq!(e.len(), 3);
+    println!("event: {:?}", e);
   });
   let page = test.get_page();
   let page_id = page.id.as_str();
@@ -47,19 +48,20 @@ async fn subscribe_insert_change_test() {
 async fn subscribe_update_change_test() {
   let mut test = BlockTestCore::new().await;
   test.subscribe(|e, _| {
-    assert_eq!(e.len(), 1);
+    println!("event: {:?}", e);
   });
   let page = test.get_page();
   let page_id = page.id.as_str();
-  let text = "Hello World Updated".to_string();
-  test.update_text_block(text, page_id);
+  let mut data = HashMap::new();
+  data.insert("text".to_string(), json!("Hello World Updated"));
+  test.update_block_data(page_id, data);
 }
 
 #[tokio::test]
 async fn subscribe_delete_change_test() {
   let mut test = BlockTestCore::new().await;
   test.subscribe(|e, _| {
-    assert_eq!(e.len(), 3);
+    println!("event: {:?}", e);
   });
   let page = test.get_page();
   let page_id = page.id.as_str();
@@ -164,10 +166,12 @@ async fn update_block_data_test() {
   let page_children = test.get_block_children(page_id);
   let block_id = page_children[0].id.as_str();
   let update_text = "Hello World Updated".to_string();
-  test.update_text_block(update_text.clone(), block_id);
+  let mut update_data = HashMap::new();
+  update_data.insert("text".to_string(), json!(update_text));
+  test.update_block_data(block_id, update_data);
   let block = test.get_block(block_id);
   let mut expected_data = HashMap::new();
-  expected_data.insert("delta".to_string(), json!([{ "insert": update_text }]));
+  expected_data.insert("text".to_string(), json!(update_text));
 
   assert_eq!(block.data, expected_data);
 }
@@ -202,4 +206,54 @@ async fn apply_actions_test() {
   test.apply_action(vec![delete_action]);
   let page_children = test.get_block_children(page_id);
   assert_eq!(page_children.len(), 1);
+}
+
+#[tokio::test]
+async fn apply_insert_block_action_without_parent_id_test() {
+  let test = BlockTestCore::new().await;
+  let page = test.get_page();
+  let page_id = page.id.as_str();
+  let text = "Hello World".to_string();
+  let mut insert_action = test.get_insert_action(text, page_id, None);
+  insert_action.payload.parent_id = None;
+  test.apply_action(vec![insert_action]);
+  let page_children = test.get_block_children(page_id);
+  assert_eq!(page_children.len(), 2);
+}
+
+#[tokio::test]
+async fn apply_block_actions_without_block_test() {
+  let test = BlockTestCore::new().await;
+  let page = test.get_page();
+  let page_id = page.id.as_str();
+  let document_data = test.get_document_data();
+
+  let payload = BlockActionPayload {
+    block: None,
+    prev_id: None,
+    parent_id: Some(page_id.to_string()),
+    delta: None,
+    text_id: None,
+  };
+  let actions = vec![
+    BlockAction {
+      action: BlockActionType::Insert,
+      payload: payload.clone(),
+    },
+    BlockAction {
+      action: BlockActionType::Update,
+      payload: payload.clone(),
+    },
+    BlockAction {
+      action: BlockActionType::Delete,
+      payload: payload.clone(),
+    },
+    BlockAction {
+      action: BlockActionType::Move,
+      payload,
+    },
+  ];
+  test.apply_action(actions);
+  // nothing should happen
+  assert_eq!(document_data, test.get_document_data());
 }

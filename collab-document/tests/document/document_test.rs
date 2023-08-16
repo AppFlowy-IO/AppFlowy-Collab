@@ -22,9 +22,11 @@ async fn insert_block_with_empty_parent_id_and_empty_prev_id() {
   let insert_action = BlockAction {
     action: BlockActionType::Insert,
     payload: BlockActionPayload {
-      block,
       prev_id: None,
       parent_id: Some(page_id),
+      block: Some(block),
+      delta: None,
+      text_id: None,
     },
   };
   apply_actions(&test.document, vec![insert_action]);

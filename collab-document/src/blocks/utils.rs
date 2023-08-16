@@ -1,6 +1,11 @@
+use crate::blocks::text_entities::TextDelta;
 use crate::blocks::{BlockEvent, BlockEventPayload, DeltaType};
 use crate::error::DocumentError;
-use collab::preclude::{Array, EntryChange, Event, Map, PathSegment, TransactionMut, YrsValue};
+use collab::preclude::text::YChange;
+use collab::preclude::{
+  Array, Delta, EntryChange, Event, Map, PathSegment, ReadTxn, Text, TextRef, TransactionMut,
+  YrsDelta, YrsValue,
+};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -25,6 +30,27 @@ pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
     })
     .collect::<Vec<String>>();
   let delta = match event {
+    Event::Text(val) => {
+      // Extract the ID from the last element of the "path" vector
+      let id = path.last().unwrap().to_string();
+      // Calculate the delta for the "val" using the transaction "txn"
+      let delta = val
+        .delta(txn)
+        .iter()
+        .map(|v| TextDelta::from(txn, v.to_owned())) // Map each delta value to a TextDelta
+        .collect::<Vec<TextDelta>>(); // Collect the TextDelta values into a vector
+
+      // Serialize the delta vector to a JSON string or use an empty string if there's an error
+      let value = serde_json::to_string(&delta).unwrap_or_default();
+
+      // Create a vector containing a BlockEventPayload with the computed values
+      vec![BlockEventPayload {
+        value,
+        id,
+        path,
+        command: DeltaType::Updated,
+      }]
+    },
     Event::Array(_val) => {
       // Here use unwrap is safe, because we have checked the type of event.
       let id = path.last().unwrap().to_string();
@@ -89,6 +115,27 @@ fn parse_yrs_value(txn: &TransactionMut, value: &YrsValue) -> String {
         .collect::<HashMap<String, String>>();
       serde_json::to_string(&obj).unwrap_or_default()
     },
+    YrsValue::YText(val) => {
+      let delta: Vec<TextDelta> = get_delta_with_text_ref(val, txn)
+        .iter()
+        .map(|v| TextDelta::from(txn, v.to_owned()))
+        .collect();
+      serde_json::to_string(&delta).unwrap_or_default()
+    },
     _ => "".to_string(),
   }
+}
+
+pub fn get_delta_with_text_ref<T: ReadTxn>(text_ref: &TextRef, txn: &T) -> Vec<Delta> {
+  let changes = text_ref.diff(txn, YChange::identity);
+  let mut deltas = vec![];
+  for change in changes {
+    let delta = YrsDelta::Inserted(change.insert, change.attributes);
+    deltas.push(delta);
+  }
+  deltas
+}
+
+pub fn deserialize_text_delta(delta: &str) -> serde_json::Result<Vec<TextDelta>> {
+  serde_json::from_str::<Vec<TextDelta>>(delta)
 }

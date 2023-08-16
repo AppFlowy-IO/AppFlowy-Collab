@@ -1,6 +1,8 @@
 use serde::Serialize;
+use serde_json;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::ops::Deref;
 
 /// [Block] Struct.
@@ -26,6 +28,10 @@ pub struct Block {
 pub struct DocumentMeta {
   /// Meta has a children map.
   pub children_map: HashMap<String, Vec<String>>,
+  /// Meta has a text map.
+  /// - @key: [Block]'s `external_id`
+  /// - @value: text delta json string - "\[ { "insert": "Hello World!", "attributes": { "bold": true } } \]"
+  pub text_map: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -50,11 +56,14 @@ pub struct BlockAction {
 #[derive(Debug, Clone, Serialize)]
 pub struct BlockActionPayload {
   /// Block
-  pub block: Block,
+  pub block: Option<Block>,
   /// Previous [Block] id.
   pub prev_id: Option<String>,
   /// Parent [Block] id.
   pub parent_id: Option<String>,
+  /// Text Delta
+  pub delta: Option<String>,
+  pub text_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -63,6 +72,8 @@ pub enum BlockActionType {
   Update,
   Delete,
   Move,
+  InsertText,
+  ApplyTextDelta,
 }
 
 /// Block change event.

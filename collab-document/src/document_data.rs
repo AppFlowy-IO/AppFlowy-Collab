@@ -27,7 +27,8 @@ pub fn default_document_data() -> DocumentData {
   let text_type = PARAGRAPH_BLOCK_TYPE.to_string();
 
   let mut blocks: HashMap<String, Block> = HashMap::new();
-  let mut meta: HashMap<String, Vec<String>> = HashMap::new();
+  let mut children_map: HashMap<String, Vec<String>> = HashMap::new();
+  let mut text_map: HashMap<String, String> = HashMap::new();
 
   // page block
   let page_id = nanoid!(10);
@@ -46,25 +47,32 @@ pub fn default_document_data() -> DocumentData {
   // text block
   let text_block_id = nanoid!(10);
   let text_block_children_id = nanoid!(10);
+  let text_external_id = nanoid!(10);
   let text_block = Block {
     id: text_block_id.clone(),
     ty: text_type,
     parent: page_id.clone(),
     children: text_block_children_id.clone(),
-    external_id: None,
-    external_type: None,
+    external_id: Some(text_external_id.clone()),
+    external_type: Some("text".to_string()),
     data: HashMap::new(),
   };
   blocks.insert(text_block_id.clone(), text_block);
 
-  // meta
-  meta.insert(children_id, vec![text_block_id]);
-  meta.insert(text_block_children_id, vec![]);
+  // children_map
+  children_map.insert(children_id, vec![text_block_id]);
+  children_map.insert(text_block_children_id, vec![]);
+
+  // text_map
+  text_map.insert(text_external_id, "[]".to_string());
 
   DocumentData {
     page_id,
     blocks,
-    meta: DocumentMeta { children_map: meta },
+    meta: DocumentMeta {
+      children_map,
+      text_map: Some(text_map),
+    },
   }
 }
 
@@ -74,7 +82,8 @@ pub fn default_document_data2() -> DocumentData {
   let text_type = PARAGRAPH_BLOCK_TYPE.to_string();
 
   let mut blocks: HashMap<String, Block> = HashMap::new();
-  let mut meta: HashMap<String, Vec<String>> = HashMap::new();
+  let mut children_map: HashMap<String, Vec<String>> = HashMap::new();
+  let mut text_map: HashMap<String, String> = HashMap::new();
 
   // page block
   let page_id = nanoid!(10);
@@ -93,23 +102,30 @@ pub fn default_document_data2() -> DocumentData {
   // text block
   let text_block_id = nanoid!(10);
   let text_block_children_id = nanoid!(10);
+  let text_external_id = nanoid!(10);
   let text_block = Block {
     id: text_block_id.clone(),
     ty: text_type,
     parent: page_id.clone(),
     children: text_block_children_id.clone(),
-    external_id: None,
-    external_type: None,
+    external_id: Some(text_external_id.clone()),
+    external_type: Some("text".to_string()),
     data: HashMap::new(),
   };
   blocks.insert(text_block_id.clone(), text_block);
 
-  // meta
-  meta.insert(children_id, vec![text_block_id]);
-  meta.insert(text_block_children_id, vec![]);
+  // children_map
+  children_map.insert(children_id, vec![text_block_id]);
+  children_map.insert(text_block_children_id, vec![]);
+
+  // text_map
+  text_map.insert(text_external_id, "[]".to_string());
   DocumentData {
     page_id,
     blocks,
-    meta: DocumentMeta { children_map: meta },
+    meta: DocumentMeta {
+      children_map,
+      text_map: Some(text_map),
+    },
   }
 }
