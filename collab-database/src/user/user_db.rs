@@ -122,6 +122,10 @@ impl WorkspaceDatabase {
             .await
           {
             Ok(updates) => {
+              if updates.is_empty() {
+                tracing::error!("Failed to get updates for database: {}", database_id);
+                return None;
+              }
               collab_raw_data = updates;
             },
             Err(e) => {

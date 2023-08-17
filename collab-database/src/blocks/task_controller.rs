@@ -161,6 +161,10 @@ fn save_row<R: AsRef<str>>(
   uid: i64,
   row_id: R,
 ) -> Option<RowDetail> {
+  if collab_raw_data.is_empty() {
+    tracing::error!("Unexpected empty row: {} collab update", row_id.as_ref());
+    return None;
+  }
   let row = collab_db.with_write_txn(|write_txn| {
     match MutexCollab::new_with_raw_data(
       CollabOrigin::Empty,
