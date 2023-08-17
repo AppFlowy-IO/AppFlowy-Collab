@@ -94,10 +94,19 @@ impl AppFlowyCollabBuilder {
     }
   }
 
-  /// Create a new collab builder with default config.
-  /// The [MutexCollab] will be create if the object is not exist. So, if you need to check
-  /// the object is exist or not. You should use the transaction returned by the [read_txn] method of
-  /// [RocksCollabDB], and calling [is_exist] method.
+  /// Creates a new collaboration builder with the default configuration.
+  ///
+  /// This function will initiate the creation of a [MutexCollab] object if it does not already exist.
+  /// To check for the existence of the object prior to creation, you should utilize a transaction
+  /// returned by the [read_txn] method of the [RocksCollabDB]. Then, invoke the [is_exist] method
+  /// to confirm the object's presence.
+  ///
+  /// # Parameters
+  /// - `uid`: The user ID associated with the collaboration.
+  /// - `object_id`: A string reference representing the ID of the object.
+  /// - `object_type`: The type of the collaboration, defined by the [CollabType] enum.
+  /// - `raw_data`: The raw data of the collaboration object, defined by the [CollabRawData] type.
+  /// - `collab_db`: A weak reference to the [RocksCollabDB].
   ///
   pub fn build(
     &self,
@@ -117,10 +126,19 @@ impl AppFlowyCollabBuilder {
     )
   }
 
-  /// Create a new collab builder with custom config.
-  /// The [MutexCollab] will be create if the object is not exist. So, if you need to check
-  /// the object is exist or not. You should use the transaction returned by the [read_txn] method of
-  /// [RocksCollabDB], and calling [is_exist] method.
+  /// Creates a new collaboration builder with the custom configuration.
+  ///
+  /// This function will initiate the creation of a [MutexCollab] object if it does not already exist.
+  /// To check for the existence of the object prior to creation, you should utilize a transaction
+  /// returned by the [read_txn] method of the [RocksCollabDB]. Then, invoke the [is_exist] method
+  /// to confirm the object's presence.
+  ///
+  /// # Parameters
+  /// - `uid`: The user ID associated with the collaboration.
+  /// - `object_id`: A string reference representing the ID of the object.
+  /// - `object_type`: The type of the collaboration, defined by the [CollabType] enum.
+  /// - `raw_data`: The raw data of the collaboration object, defined by the [CollabRawData] type.
+  /// - `collab_db`: A weak reference to the [RocksCollabDB].
   ///
   pub fn build_with_config(
     &self,
