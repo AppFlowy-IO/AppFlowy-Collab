@@ -104,7 +104,11 @@ impl CreateViewParams {
     self
   }
 
-  pub fn with_deps_fields(mut self, fields: Vec<Field>, field_settings_by_layout: HashMap<DatabaseLayout, FieldSettingsMap>) -> Self {
+  pub fn with_deps_fields(
+    mut self,
+    fields: Vec<Field>,
+    field_settings_by_layout: HashMap<DatabaseLayout, FieldSettingsMap>,
+  ) -> Self {
     self.deps_fields = fields;
     self.deps_field_setting = field_settings_by_layout;
     self
