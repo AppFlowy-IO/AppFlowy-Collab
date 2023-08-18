@@ -686,6 +686,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "collab-define"
+version = "0.1.0"
+dependencies = [
+ "uuid",
+]
+
+[[package]]
 name = "collab-derive"
 version = "0.1.0"
 dependencies = [
@@ -783,6 +790,7 @@ dependencies = [
  "bytes",
  "collab",
  "collab-client-ws",
+ "collab-define",
  "collab-persistence",
  "collab-plugins",
  "collab-sync",

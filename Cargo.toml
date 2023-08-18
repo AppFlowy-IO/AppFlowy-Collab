@@ -11,4 +11,5 @@ members = [
     "collab-client-ws",
     "appflowy-integrate",
     "collab-user",
+    "collab-define"
 ]

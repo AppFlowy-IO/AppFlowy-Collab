@@ -10,6 +10,7 @@ yrs = "0.16.5"
 y-sync = { version = "0.3.1" }
 collab = { path = "../collab" }
 collab-sync = { path = "../collab-sync" }
+collab-define = { path = "../collab-define" }
 collab-persistence = { path = "../collab-persistence" }
 collab-client-ws = { path = "../collab-client-ws" }
 futures-util = { version = "0.3", features = ["sink"] }
