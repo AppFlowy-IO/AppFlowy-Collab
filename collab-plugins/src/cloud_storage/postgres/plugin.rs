@@ -9,6 +9,7 @@ use collab::core::collab_plugin::CollabPluginType;
 use collab::core::collab_state::SnapshotState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
+use collab_define::CollabObject;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::TransactionMutExt;
@@ -21,8 +22,6 @@ use tokio_stream::StreamExt;
 use y_sync::awareness::Awareness;
 use yrs::updates::decoder::Decode;
 use yrs::{ReadTxn, StateVector, Update};
-
-use collab_define::CollabObject;
 
 use crate::cloud_storage::remote_collab::{
   should_create_snapshot, RemoteCollab, RemoteCollabStorage,
@@ -148,7 +147,7 @@ fn create_snapshot_if_need(
         .await
       {
         Ok(Some(collab_state)) => {
-          if !should_create_snapshot(&collab_state) {
+          if !should_create_snapshot(&collab_state, &object) {
             return;
           }
         },
@@ -157,7 +156,7 @@ fn create_snapshot_if_need(
           return;
         },
         _ => {
-          // Create a snapshot if the remote state is empty
+          return;
         },
       }
 

@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use collab::core::collab::{MutexCollab, TransactionMutExt};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
-use collab_define::CollabObject;
+use collab_define::{CollabObject, CollabType};
 pub use collab_sync::client::sink::MsgId;
 use collab_sync::client::sink::{
   CollabSink, CollabSinkMessage, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState,
@@ -317,14 +317,22 @@ impl RemoteCollab {
 pub struct RemoteCollabState {
   /// The current edit count of the remote collab.
   pub current_edit_count: i64,
-  /// The last edit count of the remote collab when the snapshot is created.
-  pub last_snapshot_edit_count: i64,
+  /// The edit count of the remote collab when the snapshot is created.
+  pub snapshot_edit_count: i64,
   /// The last snapshot of the remote collab.
-  pub last_snapshot_created_at: i64,
+  pub snapshot_created_at: i64,
 }
 
-pub fn should_create_snapshot(state: &RemoteCollabState) -> bool {
-  state.current_edit_count > state.last_snapshot_edit_count + 50
+pub fn should_create_snapshot(state: &RemoteCollabState, collab_object: &CollabObject) -> bool {
+  let snapshot_per_edit_count = match collab_object.ty {
+    CollabType::Document => 150,
+    CollabType::Database => 50,
+    CollabType::WorkspaceDatabase => 10,
+    CollabType::Folder => 10,
+    CollabType::DatabaseRow => 50,
+    CollabType::UserAwareness => 20,
+  };
+  state.current_edit_count > state.snapshot_edit_count + snapshot_per_edit_count
 }
 
 #[derive(Deserialize)]
