@@ -22,8 +22,10 @@ use y_sync::awareness::Awareness;
 use yrs::updates::decoder::Decode;
 use yrs::{ReadTxn, StateVector, Update};
 
+use collab_define::CollabObject;
+
 use crate::cloud_storage::remote_collab::{
-  should_create_snapshot, CollabObject, RemoteCollab, RemoteCollabStorage,
+  should_create_snapshot, RemoteCollab, RemoteCollabStorage,
 };
 
 pub struct SupabaseDBPlugin {
