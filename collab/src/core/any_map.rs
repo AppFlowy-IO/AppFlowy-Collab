@@ -297,6 +297,16 @@ impl From<lib0Any> for AnyMap {
   }
 }
 
+impl From<&lib0Any> for AnyMap {
+  fn from(value: &lib0Any) -> Self {
+    if let lib0Any::Map(map) = value {
+      Self(*map.to_owned())
+    } else {
+      Self::default()
+    }
+  }
+}
+
 impl<T: ReadTxn> From<(&'_ T, &MapRef)> for AnyMap {
   fn from(params: (&'_ T, &MapRef)) -> Self {
     let (txn, map_ref) = params;
@@ -304,6 +314,19 @@ impl<T: ReadTxn> From<(&'_ T, &MapRef)> for AnyMap {
     map_ref.iter(txn).for_each(|(k, v)| match v {
       Value::Any(any) => {
         this.insert(k.to_string(), any);
+      },
+      Value::YMap(map) => {
+        let map = map
+          .iter(txn)
+          .flat_map(|(inner_k, inner_v)| {
+            if let YrsValue::Any(any) = inner_v {
+              Some((inner_k.to_string(), any))
+            } else {
+              None
+            }
+          })
+          .collect::<HashMap<String, lib0Any>>();
+        this.insert(k.to_string(), lib0Any::Map(Box::new(map)));
       },
       Value::YArray(array) => {
         let array = array
@@ -406,5 +429,19 @@ impl<'a, 'b> AnyMapUpdate<'a, 'b> {
   pub fn insert<K: AsRef<str>>(&mut self, key: K, value: impl Into<lib0Any>) {
     let key = key.as_ref();
     self.map_ref.insert_with_txn(self.txn, key, value.into());
+  }
+
+  pub fn update<K: AsRef<str>>(self, key: K, value: AnyMap) -> Self {
+    let key = key.as_ref();
+    let field_setting_map = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
+    value.fill_map_ref(self.txn, &field_setting_map);
+
+    self
+  }
+
+  pub fn remove<K: AsRef<str>>(self, key: K) -> Self {
+    let key = key.as_ref();
+    self.map_ref.remove(self.txn, key);
+    self
   }
 }

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -9,7 +10,10 @@ use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, CreateRowParams};
 use collab_database::user::DatabaseCollabService;
-use collab_database::views::{CreateDatabaseParams, DatabaseLayout, LayoutSetting, LayoutSettings};
+use collab_database::views::{
+  CreateDatabaseParams, DatabaseLayout, FieldSettingsByFieldIdMap,
+  FieldSettingsByFieldIdMapBuilder, FieldSettingsMap, LayoutSetting, LayoutSettings,
+};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::cloud_storage::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -141,6 +145,7 @@ pub struct DatabaseTestBuilder {
   layout_settings: LayoutSettings,
   fields: Vec<Field>,
   layout: DatabaseLayout,
+  field_settings: FieldSettingsMap,
 }
 
 impl DatabaseTestBuilder {
@@ -153,6 +158,7 @@ impl DatabaseTestBuilder {
       layout_settings: Default::default(),
       fields: vec![],
       layout: DatabaseLayout::Grid,
+      field_settings: Default::default(),
     }
   }
 
@@ -201,6 +207,7 @@ impl DatabaseTestBuilder {
       filters: vec![],
       groups: vec![],
       sorts: vec![],
+      field_settings: self.field_settings,
       created_rows: self.rows,
       fields: self.fields,
     };
@@ -259,11 +266,38 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
 
-  database_test.create_field(field_1);
-  database_test.create_field(field_2);
-  database_test.create_field(field_3);
+  let field_settings_by_layout = default_field_settings_by_layout();
+
+  database_test.create_field(field_1, field_settings_by_layout.clone());
+  database_test.create_field(field_2, field_settings_by_layout.clone());
+  database_test.create_field(field_3, field_settings_by_layout);
+
+  database_test.set_field_settings("v1", field_settings_for_default_database());
 
   database_test
+}
+
+/// Creates the default field settings for the database created by
+/// create_database_with_default_data
+pub fn field_settings_for_default_database() -> FieldSettingsByFieldIdMap {
+  let field_settings = FieldSettingsMap::from(TestFieldSetting { is_visible: true });
+  FieldSettingsByFieldIdMapBuilder::new()
+    .insert_any("f1", field_settings.clone())
+    .insert_any("f2", field_settings.clone())
+    .insert_any("f3", field_settings)
+    .build()
+}
+
+pub fn default_field_settings_by_layout() -> HashMap<DatabaseLayout, FieldSettingsMap> {
+  let field_settings = TestFieldSetting { is_visible: true };
+  HashMap::from([
+    (DatabaseLayout::Grid, field_settings.clone().into()),
+    (DatabaseLayout::Board, field_settings.into()),
+    (
+      DatabaseLayout::Calendar,
+      TestFieldSetting { is_visible: false }.into(),
+    ),
+  ])
 }
 
 struct Cleaner(PathBuf);

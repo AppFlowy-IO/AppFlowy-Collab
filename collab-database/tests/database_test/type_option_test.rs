@@ -1,7 +1,9 @@
 use collab::core::any_map::AnyMapExtension;
 use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
 
-use crate::database_test::helper::{create_database, DatabaseTest};
+use crate::database_test::helper::{
+  create_database, default_field_settings_by_layout, DatabaseTest,
+};
 use crate::helper::{TestCheckboxTypeOption, TestDateFormat, TestDateTypeOption, TestTimeFormat};
 
 #[tokio::test]
@@ -122,13 +124,16 @@ async fn insert_multi_type_options_test() {
       .build(),
   );
 
-  test.create_field(Field {
-    id: "f2".to_string(),
-    name: "second field".to_string(),
-    field_type: 0,
-    type_options,
-    ..Default::default()
-  });
+  test.create_field(
+    Field {
+      id: "f2".to_string(),
+      name: "second field".to_string(),
+      field_type: 0,
+      type_options,
+      ..Default::default()
+    },
+    default_field_settings_by_layout(),
+  );
 
   let second_field = test.fields.get_field("f2").unwrap();
   assert_eq!(second_field.type_options.len(), 2);

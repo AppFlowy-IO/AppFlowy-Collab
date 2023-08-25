@@ -6,9 +6,10 @@ use serde_repr::*;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
+use strum_macros::EnumIter;
 
 /// The [DatabaseLayout] enum is used to represent the layout of the database.
-#[derive(Debug, PartialEq, Copy, Eq, Hash, Clone, Serialize_repr, Deserialize_repr)]
+#[derive(Debug, PartialEq, Copy, Eq, Hash, Clone, Serialize_repr, Deserialize_repr, EnumIter)]
 #[repr(u8)]
 pub enum DatabaseLayout {
   Grid = 0,
@@ -51,15 +52,13 @@ impl Default for DatabaseLayout {
   }
 }
 
-impl TryFrom<i64> for DatabaseLayout {
-  type Error = anyhow::Error;
-
-  fn try_from(value: i64) -> std::result::Result<Self, Self::Error> {
+impl From<i64> for DatabaseLayout {
+  fn from(value: i64) -> Self {
     match value {
-      0 => Ok(DatabaseLayout::Grid),
-      1 => Ok(DatabaseLayout::Board),
-      2 => Ok(DatabaseLayout::Calendar),
-      _ => bail!("Unknown layout type {}", value),
+      0 => DatabaseLayout::Grid,
+      1 => DatabaseLayout::Board,
+      2 => DatabaseLayout::Calendar,
+      _ => Self::default(),
     }
   }
 }

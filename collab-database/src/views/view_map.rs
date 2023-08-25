@@ -3,11 +3,12 @@ use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, Tra
 use crate::database::timestamp;
 use crate::rows::RowId;
 use crate::views::{
-  filters_from_map_ref, group_setting_from_map_ref, layout_setting_from_map_ref,
-  sorts_from_map_ref, view_description_from_value, view_from_map_ref, view_from_value,
-  view_id_from_map_ref, DatabaseLayout, DatabaseView, DatabaseViewUpdate, FieldOrder,
-  FieldOrderArray, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray,
-  SortMap, ViewBuilder, ViewDescription, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
+  field_settings_from_map_ref, filters_from_map_ref, group_setting_from_map_ref,
+  layout_setting_from_map_ref, sorts_from_map_ref, view_description_from_value, view_from_map_ref,
+  view_from_value, view_id_from_map_ref, DatabaseLayout, DatabaseView, DatabaseViewUpdate,
+  FieldOrder, FieldOrderArray, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
+  OrderArray, RowOrder, RowOrderArray, SortMap, ViewBuilder, ViewDescription, FIELD_ORDERS,
+  ROW_ORDERS, VIEW_LAYOUT,
 };
 
 pub struct ViewMap {
@@ -36,6 +37,7 @@ impl ViewMap {
         .set_database_id(view.database_id)
         .set_layout_settings(view.layout_settings)
         .set_layout_type(view.layout)
+        .set_field_settings(view.field_settings)
         .set_filters(view.filters)
         .set_groups(view.group_settings)
         .set_sorts(view.sorts)
@@ -73,6 +75,7 @@ impl ViewMap {
       vec![]
     }
   }
+
   pub fn get_view_filters(&self, view_id: &str) -> Vec<FilterMap> {
     let txn = self.container.transact();
     self.get_view_filters_with_txn(&txn, view_id)
@@ -99,6 +102,15 @@ impl ViewMap {
     } else {
       None
     }
+  }
+
+  pub fn get_view_field_settings(&self, view_id: &str) -> FieldSettingsMap {
+    let txn = self.container.transact();
+    self
+      .container
+      .get_map_with_txn(&txn, view_id)
+      .map(|map_ref| field_settings_from_map_ref(&txn, &map_ref))
+      .unwrap_or_default()
   }
 
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
@@ -176,7 +188,7 @@ impl ViewMap {
     f().is_some()
   }
 
-  pub fn get_field_orders_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FieldOrder> {
+  pub fn get_field_orders_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FieldOrder> {
     self
       .container
       .get_map_with_txn(txn, view_id)

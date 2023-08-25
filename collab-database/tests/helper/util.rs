@@ -11,8 +11,9 @@ use collab::preclude::lib0Any;
 use collab_database::fields::{TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::Cell;
 use collab_database::views::{
-  FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder, GroupSettingBuilder, GroupSettingMap,
-  LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
+  FieldSettingsMap, FieldSettingsMapBuilder, FilterMap, FilterMapBuilder, GroupMap,
+  GroupMapBuilder, GroupSettingBuilder, GroupSettingMap, LayoutSetting, LayoutSettingBuilder,
+  SortMap, SortMapBuilder,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use nanoid::nanoid;
@@ -526,6 +527,41 @@ impl std::convert::From<i64> for TestFieldType {
         TestFieldType::RichText
       },
     }
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct TestFieldSetting {
+  pub is_visible: bool,
+}
+
+impl Default for TestFieldSetting {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
+impl TestFieldSetting {
+  pub fn new() -> Self {
+    Self { is_visible: true }
+  }
+}
+
+const VISIBILITY: &str = "visibility";
+
+impl From<FieldSettingsMap> for TestFieldSetting {
+  fn from(value: FieldSettingsMap) -> Self {
+    TestFieldSetting {
+      is_visible: value.get_bool_value(VISIBILITY).unwrap_or(true),
+    }
+  }
+}
+
+impl From<TestFieldSetting> for FieldSettingsMap {
+  fn from(data: TestFieldSetting) -> Self {
+    FieldSettingsMapBuilder::new()
+      .insert_bool_value(VISIBILITY, data.is_visible)
+      .build()
   }
 }
 

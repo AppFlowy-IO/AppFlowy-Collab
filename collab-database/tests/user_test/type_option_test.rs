@@ -2,6 +2,7 @@ use collab::core::any_map::AnyMapExtension;
 use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
 use collab_database::views::CreateDatabaseParams;
 
+use crate::database_test::helper::default_field_settings_by_layout;
 use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 
 #[tokio::test]
@@ -43,13 +44,16 @@ async fn insert_multi_type_options_test() {
       .build(),
   );
 
-  database.lock().create_field(Field {
-    id: "f2".to_string(),
-    name: "second field".to_string(),
-    field_type: 0,
-    type_options,
-    ..Default::default()
-  });
+  database.lock().create_field(
+    Field {
+      id: "f2".to_string(),
+      name: "second field".to_string(),
+      field_type: 0,
+      type_options,
+      ..Default::default()
+    },
+    default_field_settings_by_layout(),
+  );
 
   let second_field = database.lock().fields.get_field("f2").unwrap();
   assert_eq!(second_field.type_options.len(), 2);

@@ -401,7 +401,8 @@ async fn open_020_history_database_test() {
           "id": "s:4SJjUs",
           "ty": 0
         }
-      ]
+      ],
+      "field_settings": {}
     }
   });
   let expected_data: DatabaseData = serde_json::from_value(json_value).unwrap();
