@@ -24,8 +24,8 @@ use crate::rows::{
 use crate::user::DatabaseCollabService;
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
-  FieldOrder, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, RowOrder, SortMap,
-  ViewDescription, ViewMap,
+  FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap,
+  LayoutSetting, RowOrder, SortMap, ViewDescription, ViewMap,
 };
 
 pub struct Database {
@@ -67,6 +67,13 @@ impl Database {
 
     let row_orders = this.block.create_rows(rows);
     let field_orders = fields.iter().map(FieldOrder::from).collect();
+
+    // Create fieldSettingsByFieldIdMap from template FieldSettingsMap
+    let mut field_settings = FieldSettingsByFieldIdMap::new();
+    fields.iter().for_each(|field| {
+      field_settings.insert(field.id.clone(), params.field_settings.clone().into());
+    });
+
     this.root.with_transact_mut(|txn| {
       // Set the inline view id. The inline view id should not be
       // empty if the current database exists.
@@ -77,7 +84,7 @@ impl Database {
         this.fields.insert_field_with_txn(txn, field);
       }
       // Create a inline view
-      this.create_view_with_txn(txn, params, field_orders, row_orders)?;
+      this.create_view_with_txn(txn, params, field_settings, field_orders, row_orders)?;
       Ok::<(), DatabaseError>(())
     })?;
     Ok(this)
@@ -802,11 +809,16 @@ impl Database {
     let mut params = CreateViewParamsValidator::validate(params)?;
     self.root.with_transact_mut(|txn| {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
+      let fields = self.get_fields_with_txn(txn, None);
+      let mut field_settings = FieldSettingsByFieldIdMap::new();
+      fields.iter().for_each(|field| {
+        field_settings.insert(field.id.clone(), params.field_settings.clone().into());
+      });
       let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
       let field_orders = self.views.get_field_orders_with_txn(txn, &inline_view_id);
       let (deps_fields, deps_field_setting) = params.take_deps_fields();
 
-      self.create_view_with_txn(txn, params, field_orders, row_orders)?;
+      self.create_view_with_txn(txn, params, field_settings, field_orders, row_orders)?;
 
       // After creating the view, we need to create the fields that are used in the view.
       if !deps_fields.is_empty() {
@@ -825,6 +837,7 @@ impl Database {
     &self,
     txn: &mut TransactionMut,
     params: CreateViewParams,
+    field_settings: FieldSettingsByFieldIdMap,
     field_orders: Vec<FieldOrder>,
     row_orders: Vec<RowOrder>,
   ) -> Result<(), DatabaseError> {
@@ -840,7 +853,7 @@ impl Database {
       filters: params.filters,
       group_settings: params.groups,
       sorts: params.sorts,
-      field_settings: params.field_settings,
+      field_settings,
       row_orders,
       field_orders,
       created_at: timestamp,
