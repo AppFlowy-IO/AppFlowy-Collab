@@ -1,6 +1,4 @@
 use crate::util::{spawn_client_with_empty_doc, spawn_server, wait_one_sec};
-use collab::preclude::MapRefExtension;
-use serde_json::json;
 
 #[tokio::test]
 async fn send_single_update_to_server_test() {

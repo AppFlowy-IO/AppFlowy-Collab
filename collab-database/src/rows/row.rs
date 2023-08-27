@@ -371,7 +371,7 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
   pub fn set_row_id(self, new_row_id: RowId) -> Self {
     let old_row_meta = row_id_from_map_ref(self.txn, self.map_ref)
       .and_then(|row_id| row_id.parse::<Uuid>().ok())
-      .and_then(|row_id| Some(RowMeta::from_map_ref(self.txn, &row_id, &self.meta_ref)));
+      .map(|row_id| RowMeta::from_map_ref(self.txn, &row_id, self.meta_ref));
 
     self
       .map_ref
@@ -384,7 +384,7 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
         new_row_meta.icon_url = old_row_meta.icon_url;
         new_row_meta.cover_url = old_row_meta.cover_url;
       }
-      new_row_meta.fill_map_ref(self.txn, &new_row_id, &self.meta_ref);
+      new_row_meta.fill_map_ref(self.txn, &new_row_id, self.meta_ref);
     }
 
     self
@@ -451,9 +451,7 @@ pub fn cell_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T, field_id: &str) 
 }
 
 pub fn row_id_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<RowId> {
-  map_ref
-    .get_str_with_txn(txn, ROW_ID)
-    .map(|id| RowId::from(id))
+  map_ref.get_str_with_txn(txn, ROW_ID).map(RowId::from)
 }
 
 /// Return a [Row] from a [MapRef]

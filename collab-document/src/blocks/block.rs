@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde_json::Value;
 
-use crate::blocks::{Block, ChildrenOperation, hashmap_to_json_str, json_str_to_hashmap};
+use crate::blocks::{hashmap_to_json_str, json_str_to_hashmap, Block, ChildrenOperation};
 use crate::error::DocumentError;
 
 pub const EXTERNAL_TYPE_TEXT: &str = "text";

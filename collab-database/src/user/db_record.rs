@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::{
-  Array, ArrayRefWrapper, Collab, lib0Any, MapPrelim, MapRef, MapRefExtension, ReadTxn,
+  lib0Any, Array, ArrayRefWrapper, Collab, MapPrelim, MapRef, MapRefExtension, ReadTxn,
   TransactionMut, YrsValue,
 };
 

@@ -12,13 +12,13 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
-use crate::core::{
-  FolderData, subscribe_folder_change, TrashInfo, View, ViewIdentifier, ViewRelations, ViewsMap,
-  Workspace, WorkspaceMap, WorkspaceUpdate,
-};
 use crate::core::favorites::{FavoriteRecord, FavoritesArray};
 use crate::core::folder_observe::{TrashChangeSender, ViewChangeSender};
 use crate::core::trash::{TrashArray, TrashRecord};
+use crate::core::{
+  subscribe_folder_change, FolderData, TrashInfo, View, ViewIdentifier, ViewRelations, ViewsMap,
+  Workspace, WorkspaceMap, WorkspaceUpdate,
+};
 
 use super::FavoritesInfo;
 

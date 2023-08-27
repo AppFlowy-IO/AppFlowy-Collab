@@ -3,9 +3,9 @@ use std::sync::Arc;
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::MapRefExtension;
 use parking_lot::RwLock;
-use yrs::{Array, Doc, Map, Observable, ReadTxn, StateVector, Transact, Update};
 use yrs::types::{Change, ToJson};
 use yrs::updates::decoder::Decode;
+use yrs::{Array, Doc, Map, Observable, ReadTxn, StateVector, Transact, Update};
 
 #[tokio::test]
 async fn array_observer_test() {

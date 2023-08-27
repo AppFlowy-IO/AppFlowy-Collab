@@ -10,15 +10,15 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio::sync::watch;
 use y_sync::awareness::Awareness;
+use yrs::block::Prelim;
+use yrs::types::map::MapEvent;
+use yrs::types::{ToJson, Value};
+use yrs::updates::decoder::Decode;
+use yrs::updates::encoder::Encode;
 use yrs::{
   ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, StateVector,
   Subscription, Transact, Transaction, TransactionMut, UndoManager, Update, UpdateSubscription,
 };
-use yrs::block::Prelim;
-use yrs::types::{ToJson, Value};
-use yrs::types::map::MapEvent;
-use yrs::updates::decoder::Decode;
-use yrs::updates::encoder::Encode;
 
 use crate::core::collab_plugin::{CollabPlugin, CollabPluginType};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};

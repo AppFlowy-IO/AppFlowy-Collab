@@ -424,7 +424,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
       .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS)
   }
 
-  /// Get the filter array for the curent view, used when setting or updating
+  /// Get the filter array for the current view, used when setting or updating
   /// filter array
   fn get_filter_array(&mut self) -> ArrayRef {
     self
@@ -432,12 +432,12 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
       .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_FILTERS)
   }
 
-  /// Get the field settings for the curent view, used when setting or updating
+  /// Get the field settings for the current view, used when setting or updating
   /// field settings
   fn get_field_settings_map(&mut self) -> MapRef {
     self
       .map_ref
-      .get_or_insert_map_with_txn(self.txn, VIEW_FIELD_SETTINGS)
+      .get_or_create_map_with_txn(self.txn, VIEW_FIELD_SETTINGS)
   }
 
   fn get_layout_setting(&self) -> Option<DatabaseLayout> {

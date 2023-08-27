@@ -4,8 +4,8 @@ use std::ops::{Deref, DerefMut};
 
 use lib0::any::Any;
 use serde::{Deserialize, Serialize};
-use yrs::{Array, Map, MapRef, ReadTxn, TransactionMut};
 use yrs::types::Value;
+use yrs::{Array, Map, MapRef, ReadTxn, TransactionMut};
 
 use crate::preclude::{lib0Any, MapRefExtension, YrsValue};
 
@@ -433,7 +433,7 @@ impl<'a, 'b> AnyMapUpdate<'a, 'b> {
 
   pub fn update<K: AsRef<str>>(self, key: K, value: AnyMap) -> Self {
     let key = key.as_ref();
-    let field_setting_map = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
+    let field_setting_map = self.map_ref.get_or_create_map_with_txn(self.txn, key);
     value.fill_map_ref(self.txn, &field_setting_map);
 
     self

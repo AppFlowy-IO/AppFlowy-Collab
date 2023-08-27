@@ -1,8 +1,8 @@
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 
-use crate::{impl_bool_update, impl_i64_update, impl_str_update};
 use crate::fields::{TypeOptionData, TypeOptions, TypeOptionsUpdate};
+use crate::{impl_bool_update, impl_i64_update, impl_str_update};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Field {
