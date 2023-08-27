@@ -14,7 +14,8 @@ use uuid::Uuid;
 
 use crate::blocks::task_controller::{BlockTask, BlockTaskController};
 use crate::rows::{
-  Cell, DatabaseRow, MutexDatabaseRow, Row, RowDetail, RowId, RowMeta, RowMetaUpdate, RowUpdate,
+  meta_id_from_row_id, Cell, DatabaseRow, MutexDatabaseRow, Row, RowDetail, RowId, RowMeta,
+  RowMetaKey, RowMetaUpdate, RowUpdate,
 };
 use crate::user::DatabaseCollabService;
 use crate::views::RowOrder;
@@ -132,10 +133,12 @@ impl Block {
     self
       .get_or_init_row(row_id)
       .and_then(|row| row.lock().get_row_meta())
-      .or_else(|| {
-        let row_id = Uuid::parse_str(row_id).ok()?;
-        Some(RowMeta::empty(row_id))
-      })
+      .or_else(|| Some(RowMeta::empty()))
+  }
+
+  pub fn get_row_document_id(&self, row_id: &RowId) -> Option<String> {
+    let row_id = Uuid::parse_str(row_id).ok()?;
+    Some(meta_id_from_row_id(&row_id, RowMetaKey::DocumentId))
   }
 
   /// If the row with given id not exist. It will return an empty row with given id.

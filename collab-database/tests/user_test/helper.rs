@@ -104,10 +104,10 @@ pub fn workspace_database_test_with_config(
 ) -> WorkspaceDatabaseTest {
   let collab_db = make_rocks_db();
   let builder = TestUserDatabaseCollabBuilderImpl();
-  let database_storage_id = uuid::Uuid::new_v4().to_string();
+  let database_views_aggregate_id = uuid::Uuid::new_v4().to_string();
   let collab = builder.build_collab_with_config(
     uid,
-    &database_storage_id,
+    &database_views_aggregate_id,
     CollabType::WorkspaceDatabase,
     Arc::downgrade(&collab_db),
     CollabRawData::default(),
@@ -130,10 +130,10 @@ pub fn workspace_database_with_db(
   let builder = TestUserDatabaseCollabBuilderImpl();
 
   // In test, we use a fixed database_storage_id
-  let database_storage_id = "database_storage_id";
+  let database_views_aggregate_id = "database_views_aggregate_id";
   let collab = builder.build_collab_with_config(
     uid,
-    database_storage_id,
+    database_views_aggregate_id,
     CollabType::WorkspaceDatabase,
     collab_db.clone(),
     CollabRawData::default(),

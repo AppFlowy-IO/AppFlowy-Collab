@@ -1,18 +1,29 @@
-use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+use std::ops::Deref;
+
+use collab::preclude::{
+  Array, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+};
 
 use crate::database::timestamp;
 use crate::rows::RowId;
 use crate::views::{
   field_settings_from_map_ref, filters_from_map_ref, group_setting_from_map_ref,
   layout_setting_from_map_ref, sorts_from_map_ref, view_description_from_value, view_from_map_ref,
-  view_from_value, view_id_from_map_ref, DatabaseLayout, DatabaseView, DatabaseViewUpdate,
-  FieldOrder, FieldOrderArray, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
-  OrderArray, RowOrder, RowOrderArray, SortMap, ViewBuilder, ViewDescription, FIELD_ORDERS,
-  ROW_ORDERS, VIEW_LAYOUT,
+  view_from_value, DatabaseLayout, DatabaseView, DatabaseViewUpdate, FieldOrder, FieldOrderArray,
+  FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray,
+  SortMap, ViewBuilder, ViewDescription, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
 };
 
 pub struct ViewMap {
   container: MapRefWrapper,
+}
+
+impl Deref for ViewMap {
+  type Target = MapRefWrapper;
+
+  fn deref(&self) -> &Self::Target {
+    &self.container
+  }
 }
 
 impl ViewMap {
@@ -28,13 +39,14 @@ impl ViewMap {
   }
 
   pub fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: DatabaseView) {
-    let map_ref = self.container.insert_map_with_txn(txn, &view.id);
-    ViewBuilder::new(&view.id, txn, map_ref).update(|update| {
+    let map_ref = self.container.create_map_with_txn(txn, &view.id);
+    ViewBuilder::new(txn, map_ref).update(|update| {
       update
+        .set_view_id(&view.id)
+        .set_database_id(view.database_id)
         .set_name(view.name)
         .set_created_at(view.created_at)
         .set_modified_at(view.modified_at)
-        .set_database_id(view.database_id)
         .set_layout_settings(view.layout_settings)
         .set_layout_type(view.layout)
         .set_field_settings(view.field_settings)
@@ -174,6 +186,24 @@ impl ViewMap {
       .unwrap_or_default()
   }
 
+  pub fn update_row_orders_with_txn<F>(&self, txn: &mut TransactionMut, view_id: &str, f: &mut F)
+  where
+    F: FnMut(&mut RowOrder),
+  {
+    if let Some(row_order_map) = self
+      .container
+      .get_map_with_txn(txn, view_id)
+      .and_then(|map_ref| map_ref.get_array_ref_with_txn(txn, ROW_ORDERS))
+    {
+      let row_order_array = RowOrderArray::new(row_order_map.into_inner());
+      for mut row_order in row_order_array.get_objects_with_txn(txn) {
+        row_order_array.remove_with_txn(txn, row_order.id.as_str());
+        f(&mut row_order);
+        row_order_array.push_back(txn, row_order);
+      }
+    }
+  }
+
   pub fn is_row_exist(&self, view_id: &str, row_id: &RowId) -> bool {
     let txn = self.container.transact();
     self.is_row_exist_with_txn(&txn, view_id, row_id)
@@ -215,7 +245,7 @@ impl ViewMap {
     F: FnOnce(DatabaseViewUpdate),
   {
     if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
-      let mut update = DatabaseViewUpdate::new(view_id, txn, &map_ref);
+      let mut update = DatabaseViewUpdate::new(txn, &map_ref);
       update = update.set_modified_at(timestamp());
       f(update)
     } else {
@@ -224,6 +254,15 @@ impl ViewMap {
         view_id
       )
     }
+  }
+
+  pub fn update_all_views<F>(&self, f: F)
+  where
+    F: Fn(DatabaseViewUpdate),
+  {
+    self
+      .container
+      .with_transact_mut(|txn| self.update_all_views_with_txn(txn, f));
   }
 
   pub fn update_all_views_with_txn<F>(&self, txn: &mut TransactionMut, f: F)
@@ -237,11 +276,9 @@ impl ViewMap {
       .collect::<Vec<MapRef>>();
 
     for map_ref in map_refs {
-      if let Some(view_id) = view_id_from_map_ref(&map_ref, txn) {
-        let mut update = DatabaseViewUpdate::new(&view_id, txn, &map_ref);
-        update = update.set_modified_at(timestamp());
-        f(update)
-      }
+      let mut update = DatabaseViewUpdate::new(txn, &map_ref);
+      update = update.set_modified_at(timestamp());
+      f(update)
     }
   }
 

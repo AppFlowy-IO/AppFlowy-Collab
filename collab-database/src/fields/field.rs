@@ -1,8 +1,8 @@
-use crate::fields::{TypeOptionData, TypeOptions, TypeOptionsUpdate};
-use crate::{impl_bool_update, impl_i64_update, impl_str_update};
-
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
+
+use crate::fields::{TypeOptionData, TypeOptions, TypeOptionsUpdate};
+use crate::{impl_bool_update, impl_i64_update, impl_str_update};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Field {
@@ -100,7 +100,7 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
   pub fn set_type_options(self, type_options: TypeOptions) -> Self {
     let map_ref = self
       .map_ref
-      .get_or_insert_map_with_txn(self.txn, FIELD_TYPE_OPTION);
+      .get_or_create_map_with_txn(self.txn, FIELD_TYPE_OPTION);
     type_options.fill_map_ref(self.txn, &map_ref);
     self
   }
@@ -120,7 +120,7 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
   pub fn set_type_option(self, field_type: i64, type_option_data: Option<TypeOptionData>) -> Self {
     let map_ref = self
       .map_ref
-      .get_or_insert_map_with_txn(self.txn, FIELD_TYPE_OPTION);
+      .get_or_create_map_with_txn(self.txn, FIELD_TYPE_OPTION);
 
     let update = TypeOptionsUpdate::new(self.txn, &map_ref);
     if let Some(type_option_data) = type_option_data {

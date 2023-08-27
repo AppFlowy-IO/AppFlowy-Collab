@@ -17,6 +17,9 @@ pub enum PersistenceError {
   #[error("The document already exist")]
   DocumentAlreadyExist,
 
+  #[error("Unexpected empty updates")]
+  UnexpectedEmptyUpdates,
+
   #[error(transparent)]
   Yrs(#[from] lib0::error::Error),
 

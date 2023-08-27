@@ -272,7 +272,7 @@ impl AnyMap {
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.0.into_iter().for_each(|(k, v)| match v {
       Any::Array(array) => {
-        map_ref.insert_array_with_txn(txn, &k, array.to_vec());
+        map_ref.create_array_with_txn(txn, &k, array.to_vec());
       },
       _ => {
         map_ref.insert_with_txn(txn, &k, v);
@@ -433,7 +433,7 @@ impl<'a, 'b> AnyMapUpdate<'a, 'b> {
 
   pub fn update<K: AsRef<str>>(self, key: K, value: AnyMap) -> Self {
     let key = key.as_ref();
-    let field_setting_map = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
+    let field_setting_map = self.map_ref.get_or_create_map_with_txn(self.txn, key);
     value.fill_map_ref(self.txn, &field_setting_map);
 
     self

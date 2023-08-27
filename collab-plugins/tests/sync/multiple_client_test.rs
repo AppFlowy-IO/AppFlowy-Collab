@@ -1,5 +1,4 @@
 use crate::util::{spawn_client, spawn_server, wait_one_sec};
-use collab::preclude::MapRefExtension;
 use serde_json::json;
 
 #[tokio::test]

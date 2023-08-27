@@ -1,8 +1,10 @@
-use crate::blocks::{hashmap_to_json_str, json_str_to_hashmap, Block, ChildrenOperation};
-use crate::error::DocumentError;
+use std::collections::HashMap;
+
 use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde_json::Value;
-use std::collections::HashMap;
+
+use crate::blocks::{hashmap_to_json_str, json_str_to_hashmap, Block, ChildrenOperation};
+use crate::error::DocumentError;
 
 pub const EXTERNAL_TYPE_TEXT: &str = "text";
 pub const EXTERNAL_TYPE_ARRAY: &str = "array";
@@ -57,7 +59,7 @@ impl BlockOperation {
     let block_id = block.id.clone();
     let children_id = block.children.clone();
     // Create block map.
-    let map = self.root.insert_map_with_txn(txn, &block.id);
+    let map = self.root.create_map_with_txn(txn, &block.id);
     // Generate data json string.
     let json_str = hashmap_to_json_str(block.data)?;
 

@@ -15,6 +15,19 @@ macro_rules! impl_str_update {
 }
 
 #[macro_export]
+macro_rules! impl_replace_str_update {
+  ($replace_str: ident, $key: expr) => {
+    pub fn $replace_str<F: FnOnce(&str) -> String>(self, f: F) -> Self {
+      if let Some(s) = self.map_ref.get_str_with_txn(self.txn, $key) {
+        let new_id = f(&s);
+        self.map_ref.insert_with_txn(self.txn, $key, new_id);
+      }
+      self
+    }
+  };
+}
+
+#[macro_export]
 macro_rules! impl_option_str_update {
   ($setter1: ident, $setter2: ident, $key: expr) => {
     pub fn $setter1(self, value: Option<String>) -> Self {
@@ -120,13 +133,15 @@ macro_rules! impl_order_update {
     $remove: ident,
     $move_to: ident,
     $insert: ident,
-    $key:expr, $ty:ident,
+    $iter_mut: ident,
+    $key:expr,
+    $ty:ident,
     $array_ty:ident
   ) => {
     pub fn $set_orders(self, orders: Vec<$ty>) -> Self {
       let array_ref = self
         .map_ref
-        .get_or_insert_array_with_txn::<$ty>(self.txn, $key);
+        .get_or_create_array_with_txn::<$ty>(self.txn, $key);
       let array = $array_ty::new(array_ref);
       array.extends_with_txn(self.txn, orders);
       self
@@ -175,6 +190,22 @@ macro_rules! impl_order_update {
       {
         array.insert_with_txn(self.txn, object, prev_object_id)
       }
+      self
+    }
+
+    pub fn $iter_mut<F: FnMut(&mut $ty)>(self, mut f: F) -> Self {
+      if let Some(array) = self
+        .map_ref
+        .get_array_ref_with_txn(self.txn, $key)
+        .map(|array_ref| $array_ty::new(array_ref))
+      {
+        for mut row_order in array.get_objects_with_txn(self.txn) {
+          array.remove_with_txn(self.txn, row_order.id.as_str());
+          f(&mut row_order);
+          array.push_back(self.txn, row_order);
+        }
+      }
+
       self
     }
   };

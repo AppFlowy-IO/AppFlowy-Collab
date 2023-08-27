@@ -5,7 +5,7 @@ use std::sync::{Arc, Weak};
 
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::preclude::updates::decoder::Decode;
-use collab::preclude::{lib0Any, Collab, MapPrelim, Update};
+use collab::preclude::{Collab, Update};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
@@ -17,7 +17,7 @@ use crate::blocks::{Block, BlockEvent};
 use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
 use crate::error::DatabaseError;
 use crate::rows::RowId;
-use crate::user::db_record::{DatabaseArray, DatabaseRecord};
+use crate::user::db_record::{DatabaseWithViews, DatabaseWithViewsArray};
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 
 pub type CollabObjectUpdateByOid = HashMap<String, CollabObjectUpdate>;
@@ -66,8 +66,6 @@ pub struct WorkspaceDatabase {
   /// and the handler will be removed when the database is deleted or closed.
   open_handlers: RwLock<HashMap<String, Arc<MutexDatabase>>>,
 }
-
-const DATABASES: &str = "databases";
 
 impl WorkspaceDatabase {
   pub fn open<T>(
@@ -140,7 +138,6 @@ impl WorkspaceDatabase {
         let context = DatabaseContext {
           collab,
           block: blocks,
-          collab_builder: self.collab_service.clone(),
         };
         let database = Database::get_or_create(database_id, context).ok()?;
 
@@ -194,12 +191,8 @@ impl WorkspaceDatabase {
 
     // Create a [Collab] for the given database id.
     let collab = self.collab_for_database(&params.database_id, CollabRawData::default());
-    let blocks = self.block.clone();
-    let context = DatabaseContext {
-      collab,
-      block: blocks,
-      collab_builder: self.collab_service.clone(),
-    };
+    let block = self.block.clone();
+    let context = DatabaseContext { collab, block };
 
     // Add a new database record.
     self
@@ -239,7 +232,7 @@ impl WorkspaceDatabase {
       self
         .database_array()
         .update_database(&params.database_id, |record| {
-          record.views.insert(params.view_id.clone());
+          record.linked_views.insert(params.view_id.clone());
         });
       database.lock().create_linked_view(params)
     } else {
@@ -276,7 +269,7 @@ impl WorkspaceDatabase {
   }
 
   /// Return all the database records.
-  pub fn get_all_databases(&self) -> Vec<DatabaseRecord> {
+  pub fn get_all_databases(&self) -> Vec<DatabaseWithViews> {
     self.database_array().get_all_databases()
   }
 
@@ -304,7 +297,6 @@ impl WorkspaceDatabase {
     let context = DatabaseContext {
       collab,
       block: self.block.clone(),
-      collab_builder: self.collab_service.clone(),
     };
     Database::get_or_create(database_id, context)
   }
@@ -361,22 +353,11 @@ impl WorkspaceDatabase {
     )
   }
 
-  fn database_array(&self) -> DatabaseArray {
-    get_database_array_ref(&self.collab.lock())
+  fn database_array(&self) -> DatabaseWithViewsArray {
+    DatabaseWithViewsArray::from_collab(&self.collab.lock())
   }
 }
 
-fn get_database_array_ref(collab: &Collab) -> DatabaseArray {
-  let array = {
-    let txn = collab.transact();
-    collab.get_array_with_txn(&txn, vec![DATABASES])
-  };
-
-  let databases = match array {
-    None => collab.with_origin_transact_mut(|txn| {
-      collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn, DATABASES, vec![])
-    }),
-    Some(array) => array,
-  };
-  DatabaseArray::new(databases)
+pub fn get_database_with_views(collab: &Collab) -> Vec<DatabaseWithViews> {
+  DatabaseWithViewsArray::from_collab(collab).get_all_databases()
 }

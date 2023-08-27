@@ -48,7 +48,7 @@ Opening a document and keeping it in sync with the server is a multi-step proces
 Editing a document is an interactive process that involves user action and several components of the system:
 
 1. User types 'abc'.
-2. `flowy_document` creates an update containing 'abc'.
+2. `collab_document` creates an update containing 'abc'.
 3. Updates get saved locally via `RocksdbDiskPlugin`.
 4. Updates get pushed to send queue via `SupabaseDBPlugin`.
 5. The updates are sent to the server in order.

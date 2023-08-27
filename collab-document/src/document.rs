@@ -377,11 +377,11 @@ impl Document {
         // { document: {:} }
         let root = collab_guard.insert_map_with_txn(txn, ROOT);
         // { document: { blocks: {:} } }
-        let blocks = root.insert_map_with_txn(txn, BLOCKS);
+        let blocks = root.create_map_with_txn(txn, BLOCKS);
         // { document: { blocks: {:}, meta: {:} } }
-        let meta = root.insert_map_with_txn(txn, META);
+        let meta = root.create_map_with_txn(txn, META);
         // {document: { blocks: {:}, meta: { children_map: {:} } }
-        let children_map = meta.insert_map_with_txn(txn, CHILDREN_MAP);
+        let children_map = meta.create_map_with_txn(txn, CHILDREN_MAP);
 
         let children_operation = ChildrenOperation::new(children_map);
         let block_operation = BlockOperation::new(blocks, children_operation.clone());

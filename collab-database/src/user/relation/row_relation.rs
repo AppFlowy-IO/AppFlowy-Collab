@@ -66,7 +66,7 @@ impl<'a, 'b> RowRelationUpdate<'a, 'b> {
 
   pub fn set_row_connections(self, connections: HashMap<String, RowConnection>) -> Self {
     connections.into_iter().for_each(|(k, v)| {
-      let map_ref = self.map_ref.get_or_insert_map_with_txn(self.txn, &k);
+      let map_ref = self.map_ref.get_or_create_map_with_txn(self.txn, &k);
       RowConnectionBuilder::new(&v.row_id, self.txn, map_ref).update(|update| {
         update
           .set_linking_rows(v.linking_rows)
@@ -151,7 +151,7 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
   pub fn set_linking_rows(self, rows: Vec<LinkingRow>) -> Self {
     let array_ref = self
       .map_ref
-      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, LINKING_ROWS);
+      .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, LINKING_ROWS);
     for row in rows {
       let map_ref = array_ref.insert_map_with_txn(self.txn, None);
       row.fill_map_with_txn(self.txn, map_ref);
@@ -162,7 +162,7 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
   pub fn set_linked_by_rows(self, rows: Vec<LinkedByRow>) -> Self {
     let array_ref = self
       .map_ref
-      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, LINKED_BY_ROWS);
+      .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, LINKED_BY_ROWS);
 
     for row in rows {
       let map_ref = array_ref.insert_map_with_txn(self.txn, None);

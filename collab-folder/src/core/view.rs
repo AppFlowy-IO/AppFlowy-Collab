@@ -232,7 +232,7 @@ impl ViewsMap {
       self.set_cache_view(view);
     }
 
-    let map_ref = self.container.insert_map_with_txn(txn, &view.id);
+    let map_ref = self.container.create_map_with_txn(txn, &view.id);
     let view = ViewBuilder::new(&view.id, txn, map_ref, self.view_relations.clone())
       .update(|update| {
         update

@@ -1,8 +1,9 @@
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
+
 use collab::core::any_map::{AnyMap, AnyMapBuilder, AnyMapUpdate};
 use collab::preclude::{Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
 
 /// It's used to store lists of field's type option data
 /// The key is the [FieldType] string representation
@@ -65,7 +66,7 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
   /// Insert a new cell's key/value into the [TypeOptionData]
   pub fn insert<T: Into<TypeOptionData>>(self, key: &str, value: T) -> Self {
     let value = value.into();
-    let type_option_map = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
+    let type_option_map = self.map_ref.get_or_create_map_with_txn(self.txn, key);
     value.fill_map_ref(self.txn, &type_option_map);
     self
   }
@@ -74,7 +75,7 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
   /// It will create the type option if it's not exist
   pub fn update<T: Into<TypeOptionData>>(self, key: &str, value: T) -> Self {
     let value = value.into();
-    let type_option_map = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
+    let type_option_map = self.map_ref.get_or_create_map_with_txn(self.txn, key);
     value.fill_map_ref(self.txn, &type_option_map);
     self
   }
