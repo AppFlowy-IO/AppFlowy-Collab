@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+
 use collab::core::any_array::ArrayMapUpdate;
+use collab::core::any_map::AnyMapUpdate;
 use collab::preclude::map::MapPrelim;
 use collab::preclude::{
   lib0Any, Array, ArrayRef, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
@@ -11,8 +14,8 @@ use crate::fields::Field;
 use crate::rows::CreateRowParams;
 use crate::views::layout::{DatabaseLayout, LayoutSettings};
 use crate::views::{
-  FieldOrder, FieldOrderArray, FilterArray, FilterMap, GroupSettingArray, GroupSettingMap,
-  LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
+  FieldOrder, FieldOrderArray, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterArray, FilterMap,
+  GroupSettingArray, GroupSettingMap, LayoutSetting, RowOrder, RowOrderArray, SortArray, SortMap,
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 
@@ -28,6 +31,7 @@ pub struct DatabaseView {
   pub sorts: Vec<SortMap>,
   pub row_orders: Vec<RowOrder>,
   pub field_orders: Vec<FieldOrder>,
+  pub field_settings: FieldSettingsByFieldIdMap,
   pub created_at: i64,
   pub modified_at: i64,
 }
@@ -48,24 +52,40 @@ pub struct CreateViewParams {
   pub filters: Vec<FilterMap>,
   pub groups: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
+  pub field_settings: FieldSettingsMap,
+
   /// When creating a view for a database, it might need to create a new field for the view.
   /// For example, if the view is calendar view, it must have a date field.
   pub deps_fields: Vec<Field>,
+
+  /// Each new field in `deps_fields` must also have an associated FieldSettings
+  /// that will be inserted into each view according to the view's layout type
+  pub deps_field_setting: HashMap<DatabaseLayout, FieldSettingsMap>,
 }
 
 impl CreateViewParams {
-  pub fn take_deps_fields(&mut self) -> Vec<Field> {
-    std::mem::take(&mut self.deps_fields)
+  pub fn take_deps_fields(&mut self) -> (Vec<Field>, HashMap<DatabaseLayout, FieldSettingsMap>) {
+    (
+      std::mem::take(&mut self.deps_fields),
+      std::mem::take(&mut self.deps_field_setting),
+    )
   }
 }
 
 impl CreateViewParams {
-  pub fn new(database_id: String, view_id: String, name: String, layout: DatabaseLayout) -> Self {
+  pub fn new(
+    database_id: String,
+    view_id: String,
+    name: String,
+    layout: DatabaseLayout,
+    field_settings: FieldSettingsMap,
+  ) -> Self {
     Self {
       database_id,
       view_id,
       name,
       layout,
+      field_settings,
       ..Default::default()
     }
   }
@@ -85,8 +105,13 @@ impl CreateViewParams {
     self
   }
 
-  pub fn with_deps_fields(mut self, fields: Vec<Field>) -> Self {
+  pub fn with_deps_fields(
+    mut self,
+    fields: Vec<Field>,
+    field_settings_by_layout: HashMap<DatabaseLayout, FieldSettingsMap>,
+  ) -> Self {
     self.deps_fields = fields;
+    self.deps_field_setting = field_settings_by_layout;
     self
   }
 }
@@ -117,6 +142,7 @@ pub struct CreateDatabaseParams {
   pub filters: Vec<FilterMap>,
   pub groups: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
+  pub field_settings: FieldSettingsMap,
   pub created_rows: Vec<CreateRowParams>,
   pub fields: Vec<Field>,
 }
@@ -142,7 +168,9 @@ impl CreateDatabaseParams {
         filters: self.filters,
         groups: self.groups,
         sorts: self.sorts,
+        field_settings: self.field_settings,
         deps_fields: vec![],
+        deps_field_setting: HashMap::new(),
       },
     )
   }
@@ -159,6 +187,7 @@ impl From<DatabaseView> for CreateDatabaseParams {
       filters: view.filters,
       groups: view.group_settings,
       sorts: view.sorts,
+      field_settings: view.field_settings,
       created_rows: vec![],
       fields: vec![],
     }
@@ -173,6 +202,7 @@ const VIEW_LAYOUT_SETTINGS: &str = "layout_settings";
 const VIEW_FILTERS: &str = "filters";
 const VIEW_GROUPS: &str = "groups";
 const VIEW_SORTS: &str = "sorts";
+const VIEW_FIELD_SETTINGS: &str = "field_settings";
 pub const ROW_ORDERS: &str = "row_orders";
 pub const FIELD_ORDERS: &str = "field_orders";
 const VIEW_CREATE_AT: &str = "created_at";
@@ -301,7 +331,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   }
 
   /// Update filters
-  /// The given function,[ArrayMapUpdate], which can be used to update the filters
+  /// The given function, [ArrayMapUpdate], which can be used to update the filters
   pub fn update_filters<F>(mut self, f: F) -> Self
   where
     F: FnOnce(ArrayMapUpdate),
@@ -321,7 +351,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   }
 
   /// Update groups
-  /// The given function,[ArrayMapUpdate], which can be used to update the groups
+  /// The given function, [ArrayMapUpdate], which can be used to update the groups
   pub fn update_groups<F>(mut self, f: F) -> Self
   where
     F: FnOnce(ArrayMapUpdate),
@@ -341,7 +371,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   }
 
   /// Update sorts
-  /// The given function,[ArrayMapUpdate], which can be used to update the sorts
+  /// The given function, [ArrayMapUpdate], which can be used to update the sorts
   pub fn update_sorts<F>(mut self, f: F) -> Self
   where
     F: FnOnce(ArrayMapUpdate),
@@ -352,23 +382,71 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     self
   }
 
+  /// Set the field settings of the current view
+  pub fn set_field_settings(mut self, field_settings: FieldSettingsMap) -> Self {
+    let map_ref = self.get_field_settings_map();
+    field_settings.fill_map_ref(self.txn, &map_ref);
+    self
+  }
+
+  pub fn update_field_settings_for_fields<F>(mut self, field_ids: Vec<String>, f: F) -> Self
+  where
+    F: Fn(&str, AnyMapUpdate, DatabaseLayout),
+  {
+    let map_ref = self.get_field_settings_map();
+    let layout_ty = self.get_layout_setting().unwrap();
+    field_ids.iter().for_each(|field_id| {
+      let update = AnyMapUpdate::new(self.txn, &map_ref);
+      f(field_id.as_str(), update, layout_ty);
+    });
+    self
+  }
+
+  pub fn remove_field_setting(mut self, field_id: &str) -> Self {
+    let map_ref = self.get_field_settings_map();
+    map_ref.remove(self.txn, field_id);
+    self
+  }
+
+  /// Get the sort array for the curent view, used when setting or updating
+  /// sort array
   fn get_sort_array(&mut self) -> ArrayRef {
     self
       .map_ref
       .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_SORTS)
   }
 
+  /// Get the group array for the curent view, used when setting or updating
+  /// group array
   fn get_group_array(&mut self) -> ArrayRef {
     self
       .map_ref
       .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS)
   }
 
+  /// Get the filter array for the curent view, used when setting or updating
+  /// filter array
   fn get_filter_array(&mut self) -> ArrayRef {
     self
       .map_ref
       .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_FILTERS)
   }
+
+  /// Get the field settings for the curent view, used when setting or updating
+  /// field settings
+  fn get_field_settings_map(&mut self) -> MapRef {
+    self
+      .map_ref
+      .get_or_insert_map_with_txn(self.txn, VIEW_FIELD_SETTINGS)
+  }
+
+  fn get_layout_setting(&self) -> Option<DatabaseLayout> {
+    self
+      .map_ref
+      .get_i64_with_txn(self.txn, VIEW_LAYOUT)
+      .map(DatabaseLayout::from)
+  }
+
   pub fn done(self) -> Option<DatabaseView> {
     view_from_map_ref(self.map_ref, self.txn)
   }
@@ -428,6 +506,14 @@ pub fn layout_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Lay
     .unwrap_or_default()
 }
 
+/// Creates a new field settings from a map ref
+pub fn field_settings_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> FieldSettingsMap {
+  map_ref
+    .get_map_with_txn(txn, VIEW_FIELD_SETTINGS)
+    .map(|map_ref| FieldSettingsMap::from_map_ref(txn, &map_ref))
+    .unwrap_or_default()
+}
+
 /// Creates a new view from a map ref
 pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<DatabaseView> {
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
@@ -477,6 +563,11 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
     .get_i64_with_txn(txn, VIEW_MODIFY_AT)
     .unwrap_or_default();
 
+  let field_settings = map_ref
+    .get_map_with_txn(txn, VIEW_FIELD_SETTINGS)
+    .map(|map_ref| FieldSettingsMap::from_map_ref(txn, &map_ref))
+    .unwrap_or_default();
+
   Some(DatabaseView {
     id,
     database_id,
@@ -488,6 +579,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
     sorts,
     row_orders,
     field_orders,
+    field_settings,
     created_at,
     modified_at,
   })

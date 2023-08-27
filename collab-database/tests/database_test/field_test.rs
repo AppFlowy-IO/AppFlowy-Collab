@@ -1,17 +1,17 @@
 use collab_database::fields::Field;
 use collab_database::views::CreateViewParams;
 
-use crate::database_test::helper::{create_database, create_database_with_default_data};
+use crate::database_test::helper::{
+  create_database, create_database_with_default_data, default_field_settings_by_layout,
+};
 
 #[tokio::test]
 async fn create_single_field_test() {
   let database_test = create_database(1, "1");
-  database_test.create_field(Field::new(
-    "f1".to_string(),
-    "text field".to_string(),
-    0,
-    true,
-  ));
+  database_test.create_field(
+    Field::new("f1".to_string(), "text field".to_string(), 0, true),
+    default_field_settings_by_layout(),
+  );
 
   let fields = database_test.fields.get_all_fields();
   assert_eq!(fields.len(), 1);
@@ -56,12 +56,10 @@ async fn duplicate_field_test2() {
 async fn create_multiple_field_test() {
   let database_test = create_database(1, "1");
   for i in 0..10 {
-    database_test.create_field(Field::new(
-      format!("f{}", i),
-      format!("text field {}", i),
-      0,
-      true,
-    ));
+    database_test.create_field(
+      Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      default_field_settings_by_layout(),
+    );
   }
 
   let fields = database_test.fields.get_all_fields();
@@ -72,12 +70,10 @@ async fn create_multiple_field_test() {
 async fn delete_field_test() {
   let database_test = create_database(1, "1");
   for i in 0..3 {
-    database_test.create_field(Field::new(
-      format!("f{}", i),
-      format!("text field {}", i),
-      0,
-      true,
-    ));
+    database_test.create_field(
+      Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      default_field_settings_by_layout(),
+    );
   }
   database_test.delete_field("f0");
   database_test.delete_field("f1");
@@ -89,12 +85,10 @@ async fn delete_field_test() {
 async fn delete_field_in_views_test() {
   let database_test = create_database(1, "1");
   for i in 0..3 {
-    database_test.create_field(Field::new(
-      format!("f{}", i),
-      format!("text field {}", i),
-      0,
-      true,
-    ));
+    database_test.create_field(
+      Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      default_field_settings_by_layout(),
+    );
   }
 
   let params = CreateViewParams {
@@ -121,12 +115,10 @@ async fn field_order_in_view_test() {
   };
   database_test.create_linked_view(params).unwrap();
   for i in 0..10 {
-    database_test.create_field(Field::new(
-      format!("f{}", i),
-      format!("text field {}", i),
-      0,
-      true,
-    ));
+    database_test.create_field(
+      Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      default_field_settings_by_layout(),
+    );
   }
 
   let fields = database_test.fields.get_all_fields();
@@ -142,12 +134,10 @@ async fn field_order_in_view_test() {
 async fn get_field_in_order_test() {
   let database_test = create_database(1, "1");
   for i in 0..3 {
-    database_test.create_field(Field::new(
-      format!("f{}", i),
-      format!("text field {}", i),
-      0,
-      true,
-    ));
+    database_test.create_field(
+      Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      default_field_settings_by_layout(),
+    );
   }
   let fields = database_test.get_fields_in_view("v1", None);
   assert_eq!(fields[0].id, "f0");
@@ -174,12 +164,10 @@ async fn move_field_test() {
   database_test.create_linked_view(params).unwrap();
 
   for i in 0..3 {
-    database_test.create_field(Field::new(
-      format!("f{}", i),
-      format!("text field {}", i),
-      0,
-      true,
-    ));
+    database_test.create_field(
+      Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      default_field_settings_by_layout(),
+    );
   }
 
   database_test.views.update_database_view("v1", |update| {
@@ -201,12 +189,10 @@ async fn move_field_test() {
 async fn move_field_to_out_of_index_test() {
   let database_test = create_database(1, "1");
   for i in 0..3 {
-    database_test.create_field(Field::new(
-      format!("f{}", i),
-      format!("text field {}", i),
-      0,
-      true,
-    ));
+    database_test.create_field(
+      Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      default_field_settings_by_layout(),
+    );
   }
 
   database_test.views.update_database_view("v1", |update| {

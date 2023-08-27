@@ -8,7 +8,9 @@ use serde_json::json;
 
 use assert_json_diff::{assert_json_eq, assert_json_include};
 
-use crate::database_test::helper::{create_database, create_database_with_default_data};
+use crate::database_test::helper::{
+  create_database, create_database_with_default_data, default_field_settings_by_layout,
+};
 use crate::helper::TestFilter;
 
 #[tokio::test]
@@ -91,11 +93,14 @@ async fn create_database_field_test() {
   let database_test = create_database_with_default_data(1, "1");
 
   let field_id = nanoid!(4);
-  database_test.create_field(Field {
-    id: field_id.clone(),
-    name: "my third field".to_string(),
-    ..Default::default()
-  });
+  database_test.create_field(
+    Field {
+      id: field_id.clone(),
+      name: "my third field".to_string(),
+      ..Default::default()
+    },
+    default_field_settings_by_layout(),
+  );
 
   let view = database_test.views.get_view("v1").unwrap();
   assert_json_eq!(view.field_orders.last().unwrap().id, field_id);
@@ -149,12 +154,13 @@ async fn create_database_view_with_layout_setting_test() {
     .insert_any("2", "abc")
     .build();
 
-  let params = CreateViewParams::new(
-    "1".to_string(),
-    "v1".to_string(),
-    "my first grid".to_string(),
-    DatabaseLayout::Grid,
-  )
+  let params = CreateViewParams {
+    database_id: "1".to_string(),
+    view_id: "v1".to_string(),
+    name: "my first grid".to_string(),
+    layout: DatabaseLayout::Grid,
+    ..Default::default()
+  }
   .with_layout_setting(grid_setting);
   database_test.create_linked_view(params).unwrap();
 

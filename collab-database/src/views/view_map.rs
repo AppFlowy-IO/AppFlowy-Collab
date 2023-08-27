@@ -49,6 +49,7 @@ impl ViewMap {
         .set_modified_at(view.modified_at)
         .set_layout_settings(view.layout_settings)
         .set_layout_type(view.layout)
+        .set_field_settings(view.field_settings)
         .set_filters(view.filters)
         .set_groups(view.group_settings)
         .set_sorts(view.sorts)
@@ -86,6 +87,7 @@ impl ViewMap {
       vec![]
     }
   }
+
   pub fn get_view_filters(&self, view_id: &str) -> Vec<FilterMap> {
     let txn = self.container.transact();
     self.get_view_filters_with_txn(&txn, view_id)
@@ -112,6 +114,15 @@ impl ViewMap {
     } else {
       None
     }
+  }
+
+  pub fn get_view_field_settings(&self, view_id: &str) -> FieldSettingsMap {
+    let txn = self.container.transact();
+    self
+      .container
+      .get_map_with_txn(&txn, view_id)
+      .map(|map_ref| field_settings_from_map_ref(&txn, &map_ref))
+      .unwrap_or_default()
   }
 
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
@@ -207,7 +218,7 @@ impl ViewMap {
     f().is_some()
   }
 
-  pub fn get_field_orders_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FieldOrder> {
+  pub fn get_field_orders_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FieldOrder> {
     self
       .container
       .get_map_with_txn(txn, view_id)
