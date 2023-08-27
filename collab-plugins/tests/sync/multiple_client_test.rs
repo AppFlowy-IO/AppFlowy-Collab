@@ -1,4 +1,5 @@
 use crate::util::{spawn_client, spawn_server, wait_one_sec};
+use serde_json::json;
 
 #[tokio::test]
 async fn open_existing_doc_with_different_client_test() {
