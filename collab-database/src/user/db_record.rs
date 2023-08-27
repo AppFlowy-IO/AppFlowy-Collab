@@ -2,32 +2,51 @@ use std::collections::HashSet;
 
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::{
-  Array, ArrayRefWrapper, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue,
+  Array, ArrayRefWrapper, Collab, lib0Any, MapPrelim, MapRef, MapRefExtension, ReadTxn,
+  TransactionMut, YrsValue,
 };
 
 use crate::database::timestamp;
 
+const DATABASES: &str = "databases";
+
 /// It used to keep track of the databases.
-/// Each record of a database is stored in a [DatabaseRecord]
-pub struct DatabaseArray {
+/// Each record of a database is stored in a [DatabaseWithViews]
+pub struct DatabaseWithViewsArray {
   array_ref: ArrayRefWrapper,
 }
 
-impl DatabaseArray {
+impl DatabaseWithViewsArray {
   pub fn new(array_ref: ArrayRefWrapper) -> Self {
     Self { array_ref }
   }
 
-  /// Create a new [DatabaseRecord] for the given database id and view id
+  pub fn from_collab(collab: &Collab) -> Self {
+    let array = {
+      let txn = collab.transact();
+      collab.get_array_with_txn(&txn, vec![DATABASES])
+    };
+
+    let databases = match array {
+      None => collab.with_origin_transact_mut(|txn| {
+        collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn, DATABASES, vec![])
+      }),
+      Some(array) => array,
+    };
+
+    Self::new(databases)
+  }
+
+  /// Create a new [DatabaseWithViews] for the given database id and view id
   pub fn add_database(&self, database_id: &str, view_id: &str, name: &str) {
     self.array_ref.with_transact_mut(|txn| {
-      let mut views = HashSet::new();
-      views.insert(view_id.to_string());
-      let record = DatabaseRecord {
+      let mut linked_views = HashSet::new();
+      linked_views.insert(view_id.to_string());
+      let record = DatabaseWithViews {
         database_id: database_id.to_string(),
         name: name.to_string(),
         created_at: timestamp(),
-        views,
+        linked_views,
       };
       let map_ref = self.array_ref.insert_map_with_txn(txn, None);
       record.fill_map_ref(txn, &map_ref);
@@ -35,11 +54,11 @@ impl DatabaseArray {
   }
 
   /// Update the database by the given id
-  pub fn update_database(&self, database_id: &str, mut f: impl FnMut(&mut DatabaseRecord)) {
+  pub fn update_database(&self, database_id: &str, mut f: impl FnMut(&mut DatabaseWithViews)) {
     self.array_ref.with_transact_mut(|txn| {
       if let Some(index) = self.database_index_from_id(txn, database_id) {
         if let Some(Some(map_ref)) = self.array_ref.get(txn, index).map(|value| value.to_ymap()) {
-          if let Some(mut record) = DatabaseRecord::from_map_ref(txn, &map_ref) {
+          if let Some(mut record) = DatabaseWithViews::from_map_ref(txn, &map_ref) {
             f(&mut record);
             self.array_ref.remove(txn, index);
             let map_ref = self
@@ -62,7 +81,7 @@ impl DatabaseArray {
   }
 
   /// Return all the databases
-  pub fn get_all_databases(&self) -> Vec<DatabaseRecord> {
+  pub fn get_all_databases(&self) -> Vec<DatabaseWithViews> {
     self
       .array_ref
       .with_transact_mut(|txn| self.get_all_databases_with_txn(txn))
@@ -81,24 +100,24 @@ impl DatabaseArray {
   }
 
   /// Return all databases with a Transaction
-  pub fn get_all_databases_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseRecord> {
+  pub fn get_all_databases_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseWithViews> {
     self
       .array_ref
       .iter(txn)
       .flat_map(|value| {
         let map_ref = value.to_ymap()?;
-        DatabaseRecord::from_map_ref(txn, &map_ref)
+        DatabaseWithViews::from_map_ref(txn, &map_ref)
       })
       .collect()
   }
 
-  /// Return the a [DatabaseRecord] with the given view id
-  pub fn get_database_record_with_view_id(&self, view_id: &str) -> Option<DatabaseRecord> {
+  /// Return the a [DatabaseWithViews] with the given view id
+  pub fn get_database_record_with_view_id(&self, view_id: &str) -> Option<DatabaseWithViews> {
     let txn = self.array_ref.transact();
     let all = self.get_all_databases_with_txn(&txn);
     all
       .into_iter()
-      .find(|record| record.views.contains(view_id))
+      .find(|record| record.linked_views.contains(view_id))
   }
 
   fn database_index_from_id<T: ReadTxn>(&self, txn: &T, database_id: &str) -> Option<u32> {
@@ -113,11 +132,12 @@ impl DatabaseArray {
   }
 }
 
-pub struct DatabaseRecord {
+#[derive(Clone, Debug)]
+pub struct DatabaseWithViews {
   pub database_id: String,
   pub name: String,
   pub created_at: i64,
-  pub views: HashSet<String>,
+  pub linked_views: HashSet<String>,
 }
 
 const DATABASE_RECORD_ID: &str = "database_id";
@@ -125,13 +145,13 @@ const DATABASE_RECORD_NAME: &str = "name";
 const DATABASE_RECORD_CREATED_AT: &str = "created_at";
 const DATABASE_RECORD_VIEWS: &str = "views";
 
-impl DatabaseRecord {
+impl DatabaseWithViews {
   fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     map_ref.insert_str_with_txn(txn, DATABASE_RECORD_ID, self.database_id);
     map_ref.insert_str_with_txn(txn, DATABASE_RECORD_NAME, self.name);
     map_ref.insert_str_with_txn(txn, DATABASE_RECORD_CREATED_AT, self.created_at);
-    let views = self.views.into_iter().collect::<Vec<String>>();
-    map_ref.insert_array_with_txn(txn, DATABASE_RECORD_VIEWS, views);
+    let views = self.linked_views.into_iter().collect::<Vec<String>>();
+    map_ref.create_array_with_txn(txn, DATABASE_RECORD_VIEWS, views);
   }
 
   #[allow(clippy::needless_collect)]
@@ -153,7 +173,7 @@ impl DatabaseRecord {
       database_id: id,
       name,
       created_at,
-      views: views.into_iter().collect(),
+      linked_views: views.into_iter().collect(),
     })
   }
 }

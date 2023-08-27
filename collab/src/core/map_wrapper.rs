@@ -48,6 +48,10 @@ impl MapRefWrapper {
     })
   }
 
+  pub fn insert_with_txn<V: Prelim>(&self, txn: &mut TransactionMut, key: &str, value: V) {
+    self.map_ref.insert(txn, key, value);
+  }
+
   pub fn insert_text_with_txn(&self, txn: &mut TransactionMut, key: &str) -> TextRefWrapper {
     let text = TextPrelim::new("");
     let text_ref = self.map_ref.insert(txn, key, text);
@@ -56,6 +60,19 @@ impl MapRefWrapper {
 
   pub fn insert_array<V: Prelim>(&self, key: &str, values: Vec<V>) -> ArrayRefWrapper {
     self.with_transact_mut(|txn| self.insert_array_with_txn(txn, key, values))
+  }
+
+  pub fn insert_map<T: Into<MapPrelim<lib0Any>>>(&self, key: &str, value: T) {
+    self.with_transact_mut(|txn| self.insert_map_with_txn(txn, key, value));
+  }
+
+  pub fn insert_map_with_txn<T: Into<MapPrelim<lib0Any>>>(
+    &self,
+    txn: &mut TransactionMut,
+    key: &str,
+    value: T,
+  ) {
+    self.map_ref.insert(txn, key, value.into());
   }
 
   pub fn insert_array_with_txn<V: Prelim>(
@@ -68,7 +85,7 @@ impl MapRefWrapper {
     ArrayRefWrapper::new(array, self.collab_ctx.clone())
   }
 
-  pub fn insert_array_if_not_exist_with_txn<V: Prelim>(
+  pub fn create_array_if_not_exist_with_txn<V: Prelim>(
     &self,
     txn: &mut TransactionMut,
     key: &str,
@@ -76,16 +93,16 @@ impl MapRefWrapper {
   ) -> ArrayRefWrapper {
     let array_ref = self
       .map_ref
-      .insert_array_if_not_exist_with_txn(txn, key, values);
+      .create_array_if_not_exist_with_txn(txn, key, values);
     ArrayRefWrapper::new(array_ref, self.collab_ctx.clone())
   }
 
-  pub fn insert_map_with_txn_if_not_exist(
+  pub fn create_map_with_txn_if_not_exist(
     &self,
     txn: &mut TransactionMut,
     key: &str,
   ) -> MapRefWrapper {
-    let map_ref = self.map_ref.insert_map_if_not_exist_with_txn(txn, key);
+    let map_ref = self.map_ref.create_map_if_not_exist_with_txn(txn, key);
     MapRefWrapper::new(map_ref, self.collab_ctx.clone())
   }
 
@@ -99,14 +116,15 @@ impl MapRefWrapper {
       .unwrap_or_else(|| self.insert_array_with_txn::<V>(txn, key, vec![]))
   }
 
-  pub fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
+  pub fn create_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
     let map = MapPrelim::<lib0::any::Any>::new();
     let map_ref = self.map_ref.insert(txn, key, map);
     MapRefWrapper::new(map_ref, self.collab_ctx.clone())
   }
 
   pub fn get_map_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<MapRefWrapper> {
-    if let Some(Value::YMap(map_ref)) = self.map_ref.get(txn, key) {
+    let a = self.map_ref.get(txn, key);
+    if let Some(Value::YMap(map_ref)) = a {
       return Some(MapRefWrapper::new(map_ref, self.collab_ctx.clone()));
     }
     None
@@ -186,7 +204,7 @@ impl MapRefExtension for MapRefWrapper {
 pub trait MapRefExtension {
   fn map_ref(&self) -> &MapRef;
 
-  fn insert_array_with_txn<V: Prelim>(
+  fn create_array_with_txn<V: Prelim>(
     &self,
     txn: &mut TransactionMut,
     key: &str,
@@ -221,7 +239,7 @@ pub trait MapRefExtension {
     self.map_ref().insert(txn, key, lib0Any::Bool(value));
   }
 
-  fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
+  fn create_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
     let map = MapPrelim::<lib0::any::Any>::new();
     self.map_ref().insert(txn, key, map)
   }
@@ -250,10 +268,10 @@ pub trait MapRefExtension {
   /// A reference to the map. If a map was already associated with the given key, the returned reference is to the existing map.
   /// Otherwise, it references the newly inserted empty map.
   ///
-  fn get_or_insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
+  fn get_or_create_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
     self
       .get_map_with_txn(txn, key)
-      .unwrap_or_else(|| self.insert_map_with_txn(txn, key))
+      .unwrap_or_else(|| self.create_map_with_txn(txn, key))
   }
 
   /// Inserts a map into the underlying datastore if a map with the provided key does not already exist.
@@ -268,7 +286,7 @@ pub trait MapRefExtension {
   /// * `txn` - A mutable reference to a transaction that is currently in progress.
   /// * `key` - The key to associate with the map in the datastore.
   ///
-  fn insert_map_if_not_exist_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
+  fn create_map_if_not_exist_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
     match self
       .map_ref()
       .get(txn, key)
@@ -292,14 +310,14 @@ pub trait MapRefExtension {
   /// # Arguments
   /// * `txn` - A mutable reference to a transaction that is currently in progress.
   /// * `key` - The key associated with the array in the datastore.
-  fn get_or_insert_array_with_txn<V: Prelim>(
+  fn get_or_create_array_with_txn<V: Prelim>(
     &self,
     txn: &mut TransactionMut,
     key: &str,
   ) -> ArrayRef {
     self
       .get_array_ref_with_txn(txn, key)
-      .unwrap_or_else(|| self.insert_array_with_txn::<V>(txn, key, vec![]))
+      .unwrap_or_else(|| self.create_array_with_txn::<V>(txn, key, vec![]))
   }
 
   /// Inserts an array into the underlying datastore if an array with the provided key does not already exist.
@@ -316,7 +334,7 @@ pub trait MapRefExtension {
   /// * `key` - The key to associate with the array in the datastore.
   /// * `values` - The values to be stored in the array if a new array needs to be created.
   ///
-  fn insert_array_if_not_exist_with_txn<V: Prelim>(
+  fn create_array_if_not_exist_with_txn<V: Prelim>(
     &self,
     txn: &mut TransactionMut,
     key: &str,

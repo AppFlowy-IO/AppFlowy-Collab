@@ -1,8 +1,10 @@
-use crate::fields::Field;
-use crate::views::{OrderArray, OrderIdentifiable};
+use std::ops::{Deref, DerefMut};
+
 use collab::preclude::{lib0Any, Array, ArrayRef, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
-use std::ops::{Deref, DerefMut};
+
+use crate::fields::Field;
+use crate::views::{OrderArray, OrderIdentifiable};
 
 /// Keep track of the order of fields in a database view
 pub struct FieldOrderArray {
@@ -18,11 +20,7 @@ impl OrderArray for FieldOrderArray {
   }
 
   /// Create a new [SFieldOrder] instance from the given value
-  fn object_from_value_with_txn<T: ReadTxn>(
-    &self,
-    value: YrsValue,
-    txn: &T,
-  ) -> Option<Self::Object> {
+  fn object_from_value<T: ReadTxn>(&self, value: YrsValue, txn: &T) -> Option<Self::Object> {
     field_order_from_value(value, txn)
   }
 }

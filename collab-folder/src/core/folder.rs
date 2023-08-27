@@ -12,13 +12,13 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
+use crate::core::{
+  FolderData, subscribe_folder_change, TrashInfo, View, ViewIdentifier, ViewRelations, ViewsMap,
+  Workspace, WorkspaceMap, WorkspaceUpdate,
+};
 use crate::core::favorites::{FavoriteRecord, FavoritesArray};
 use crate::core::folder_observe::{TrashChangeSender, ViewChangeSender};
 use crate::core::trash::{TrashArray, TrashRecord};
-use crate::core::{
-  subscribe_folder_change, FolderData, TrashInfo, View, ViewIdentifier, ViewRelations, ViewsMap,
-  Workspace, WorkspaceMap, WorkspaceUpdate,
-};
 
 use super::FavoritesInfo;
 
@@ -630,14 +630,14 @@ fn create_folder(
 
       // create the folder data
       let workspaces =
-        folder.insert_array_if_not_exist_with_txn::<WorkspaceItem>(txn, WORKSPACES, vec![]);
-      let views = folder.insert_map_with_txn_if_not_exist(txn, VIEWS);
-      let trash = folder.insert_array_if_not_exist_with_txn::<TrashRecord>(txn, TRASH, vec![]);
+        folder.create_array_if_not_exist_with_txn::<WorkspaceItem>(txn, WORKSPACES, vec![]);
+      let views = folder.create_map_with_txn_if_not_exist(txn, VIEWS);
+      let trash = folder.create_array_if_not_exist_with_txn::<TrashRecord>(txn, TRASH, vec![]);
       let favorites =
-        folder.insert_array_if_not_exist_with_txn::<FavoriteRecord>(txn, FAVORITES, vec![]);
-      let meta = folder.insert_map_with_txn_if_not_exist(txn, META);
+        folder.create_array_if_not_exist_with_txn::<FavoriteRecord>(txn, FAVORITES, vec![]);
+      let meta = folder.create_map_with_txn_if_not_exist(txn, META);
       let view_relations = Rc::new(ViewRelations::new(
-        folder.insert_map_with_txn_if_not_exist(txn, VIEW_RELATION),
+        folder.create_map_with_txn_if_not_exist(txn, VIEW_RELATION),
       ));
 
       let workspaces = WorkspaceArray::new(txn, workspaces, view_relations.clone());
@@ -659,6 +659,8 @@ fn create_folder(
 
       // Insert the folder data if it's provided.
       if let Some(folder_data) = folder_data {
+        debug_assert_eq!(folder_data.workspaces.len(), 1);
+
         for workspace in folder_data.workspaces {
           workspaces.create_workspace_with_txn(txn, workspace);
         }

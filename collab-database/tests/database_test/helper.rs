@@ -54,11 +54,10 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     .unwrap();
   collab.lock().initialize();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
-  let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder.clone());
+  let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder);
   let context = DatabaseContext {
     collab: Arc::new(collab),
     block,
-    collab_builder,
   };
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
@@ -84,11 +83,11 @@ pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<RocksCollabD
     CollabRawData::default(),
     &CollabPersistenceConfig::default(),
   );
-  let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder.clone());
+  let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder);
   let context = DatabaseContext {
     collab,
     block,
-    collab_builder,
+    // collab_builder,
   };
   let params = CreateDatabaseParams {
     view_id: "v1".to_string(),
@@ -120,12 +119,8 @@ pub fn restore_database_from_db(
     CollabRawData::default(),
     &CollabPersistenceConfig::default(),
   );
-  let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder.clone());
-  let context = DatabaseContext {
-    collab,
-    block,
-    collab_builder,
-  };
+  let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder);
+  let context = DatabaseContext { collab, block };
   let database = Database::get_or_create(database_id, context).unwrap();
   DatabaseTest {
     database,
@@ -186,11 +181,11 @@ impl DatabaseTestBuilder {
       .unwrap();
     collab.lock().initialize();
     let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
-    let block = Block::new(self.uid, Arc::downgrade(&collab_db), collab_builder.clone());
+    let block = Block::new(self.uid, Arc::downgrade(&collab_db), collab_builder);
     let context = DatabaseContext {
       collab: Arc::new(collab),
       block,
-      collab_builder,
+      // collab_builder,
     };
     let params = CreateDatabaseParams {
       database_id: self.database_id.clone(),

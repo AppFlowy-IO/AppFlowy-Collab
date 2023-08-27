@@ -6,7 +6,9 @@ use std::sync::Arc;
 use collab::core::any_map::AnyMapExtension;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::{SnapshotState, SyncState};
-use collab::preclude::{JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{
+  Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+};
 pub use collab_persistence::doc::YrsDocAction;
 use nanoid::nanoid;
 use parking_lot::Mutex;
@@ -19,9 +21,9 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
 use crate::meta::MetaMap;
 use crate::rows::{
-  CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowId, RowMeta, RowMetaUpdate, RowUpdate,
+  CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowDetail, RowId, RowMeta,
+  RowMetaUpdate, RowUpdate,
 };
-use crate::user::DatabaseCollabService;
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
   FieldOrder, FilterMap, GroupSettingMap, LayoutSetting, RowOrder, SortMap, ViewDescription,
@@ -47,7 +49,6 @@ const METAS: &str = "metas";
 pub struct DatabaseContext {
   pub collab: Arc<MutexCollab>,
   pub block: Block,
-  pub collab_builder: Arc<dyn DatabaseCollabService>,
 }
 
 impl Database {
@@ -154,17 +155,17 @@ impl Database {
       // { DATABASE: { FIELDS: {:} } }
       let fields = collab_guard
         .get_map_with_txn(txn, vec![DATABASE, FIELDS])
-        .unwrap_or_else(|| database.insert_map_with_txn(txn, FIELDS));
+        .unwrap_or_else(|| database.create_map_with_txn(txn, FIELDS));
 
       // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
       let views = collab_guard
         .get_map_with_txn(txn, vec![DATABASE, VIEWS])
-        .unwrap_or_else(|| database.insert_map_with_txn(txn, VIEWS));
+        .unwrap_or_else(|| database.create_map_with_txn(txn, VIEWS));
 
       // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
       let metas = collab_guard
         .get_map_with_txn(txn, vec![DATABASE, METAS])
-        .unwrap_or_else(|| database.insert_map_with_txn(txn, METAS));
+        .unwrap_or_else(|| database.create_map_with_txn(txn, METAS));
 
       (database, fields, views, metas)
     });
@@ -308,6 +309,17 @@ impl Database {
   /// Return the [RowMeta] with the given row id.
   pub fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
     self.block.get_row_meta(row_id)
+  }
+
+  /// Return the [RowMeta] with the given row id.
+  pub fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
+    let row = self.block.get_row(row_id);
+    let meta = self.block.get_row_meta(row_id)?;
+    RowDetail::new(row, meta)
+  }
+
+  pub fn get_row_document_id(&self, row_id: &RowId) -> Option<String> {
+    self.block.get_row_document_id(row_id)
   }
 
   /// Return a list of [Row] for the given view.
@@ -999,3 +1011,57 @@ impl Deref for MutexDatabase {
 unsafe impl Sync for MutexDatabase {}
 
 unsafe impl Send for MutexDatabase {}
+
+pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
+  let txn = collab.transact();
+  let views = collab.get_map_with_txn(&txn, vec![DATABASE, VIEWS])?;
+  let metas = collab.get_map_with_txn(&txn, vec![DATABASE, METAS])?;
+
+  let views = ViewMap::new(views);
+  let meta = MetaMap::new(metas);
+
+  let inline_view_id = meta.get_inline_view_with_txn(&txn)?;
+  Some(
+    views
+      .get_row_orders_with_txn(&txn, &inline_view_id)
+      .into_iter()
+      .map(|order| order.id.to_string())
+      .collect(),
+  )
+}
+
+pub fn reset_inline_view_id<F>(collab: &Collab, f: F)
+where
+  F: Fn(String) -> String,
+{
+  collab.with_origin_transact_mut(|txn| {
+    if let Some(container) = collab.get_map_with_txn(txn, vec![DATABASE, METAS]) {
+      let map = MetaMap::new(container);
+      let inline_view_id = map.get_inline_view_with_txn(txn).unwrap();
+      let new_inline_view_id = f(inline_view_id);
+      map.set_inline_view_with_txn(txn, &new_inline_view_id);
+    }
+  })
+}
+
+pub fn mut_database_views_with_collab<F>(collab: &Collab, f: F)
+where
+  F: Fn(&mut DatabaseView),
+{
+  collab.with_origin_transact_mut(|txn| {
+    if let Some(container) = collab.get_map_with_txn(txn, vec![DATABASE, VIEWS]) {
+      let views = ViewMap::new(container);
+      let mut reset_views = views.get_all_views_with_txn(txn);
+
+      reset_views.iter_mut().for_each(f);
+      for view in reset_views {
+        views.insert_view_with_txn(txn, view);
+      }
+    }
+  });
+}
+
+pub fn is_database_collab(collab: &Collab) -> bool {
+  let txn = collab.transact();
+  collab.get_map_with_txn(&txn, vec![DATABASE]).is_some()
+}

@@ -2,16 +2,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::{View, Workspace};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FolderData {
   pub current_workspace_id: String,
   pub current_view: String,
   pub workspaces: Vec<Workspace>,
-  /// All views in the folder.
   pub views: Vec<View>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TrashInfo {
   pub id: String,
   pub name: String,
@@ -23,7 +22,7 @@ impl AsRef<str> for TrashInfo {
   }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct FavoritesInfo {
   pub id: String,
 }

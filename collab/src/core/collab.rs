@@ -10,15 +10,15 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio::sync::watch;
 use y_sync::awareness::Awareness;
-use yrs::block::Prelim;
-use yrs::types::map::MapEvent;
-use yrs::types::{ToJson, Value};
-use yrs::updates::decoder::Decode;
-use yrs::updates::encoder::Encode;
 use yrs::{
   ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, StateVector,
   Subscription, Transact, Transaction, TransactionMut, UndoManager, Update, UpdateSubscription,
 };
+use yrs::block::Prelim;
+use yrs::types::{ToJson, Value};
+use yrs::types::map::MapEvent;
+use yrs::updates::decoder::Decode;
+use yrs::updates::encoder::Encode;
 
 use crate::core::collab_plugin::{CollabPlugin, CollabPluginType};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
@@ -81,7 +81,7 @@ impl Collab {
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Collab {
     let origin = CollabClient::new(uid, device_id);
-    Self::new_with_client(CollabOrigin::Client(origin), object_id, plugins)
+    Self::new_with_origin(CollabOrigin::Client(origin), object_id, plugins)
   }
 
   pub fn new_with_raw_data(
@@ -90,7 +90,7 @@ impl Collab {
     collab_raw_data: CollabRawData,
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, CollabError> {
-    let collab = Self::new_with_client(origin, object_id, plugins);
+    let collab = Self::new_with_origin(origin, object_id, plugins);
     if !collab_raw_data.is_empty() {
       let mut txn = collab.origin_transact_mut();
       for update in collab_raw_data {
@@ -101,7 +101,7 @@ impl Collab {
     Ok(collab)
   }
 
-  pub fn new_with_client<T: AsRef<str>>(
+  pub fn new_with_origin<T: AsRef<str>>(
     origin: CollabOrigin,
     object_id: T,
     plugins: Vec<Arc<dyn CollabPlugin>>,
@@ -143,6 +143,14 @@ impl Collab {
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
     }
+  }
+
+  pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
+    let txn = self.transact();
+    (
+      txn.encode_state_as_update_v1(&StateVector::default()),
+      txn.state_vector().encode_v1(),
+    )
   }
 
   pub fn subscribe_sync_state(&self) -> watch::Receiver<SyncState> {
@@ -322,7 +330,7 @@ impl Collab {
     txn: &mut TransactionMut,
     key: &str,
   ) -> MapRefWrapper {
-    let map_ref = self.data.insert_map_if_not_exist_with_txn(txn, key);
+    let map_ref = self.data.create_map_if_not_exist_with_txn(txn, key);
     self.map_wrapper_with(map_ref)
   }
 
@@ -745,7 +753,7 @@ pub struct MutexCollab(Arc<Mutex<Collab>>);
 
 impl MutexCollab {
   pub fn new(origin: CollabOrigin, object_id: &str, plugins: Vec<Arc<dyn CollabPlugin>>) -> Self {
-    let collab = Collab::new_with_client(origin, object_id, plugins);
+    let collab = Collab::new_with_origin(origin, object_id, plugins);
     MutexCollab(Arc::new(Mutex::new(collab)))
   }
 
@@ -765,11 +773,7 @@ impl MutexCollab {
 
   pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
     let collab = self.0.lock();
-    let txn = collab.origin_transact_mut();
-    (
-      txn.encode_state_as_update_v1(&StateVector::default()),
-      txn.state_vector().encode_v1(),
-    )
+    collab.encode_as_update_v1()
   }
 
   pub fn to_json_value(&self) -> JsonValue {

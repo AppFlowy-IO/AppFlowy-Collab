@@ -1,11 +1,13 @@
-use crate::user::relation::{RowRelation, RowRelationBuilder};
-use crate::user::row_relation_from_map_ref;
+use std::ops::Deref;
+
 use collab::preclude::{
   DeepEventsSubscription, DeepObservable, EntryChange, Event, Map, MapRefWrapper, ToJson,
   TransactionMut, YrsValue,
 };
-use std::ops::Deref;
 use tokio::sync::broadcast;
+
+use crate::user::relation::{RowRelation, RowRelationBuilder};
+use crate::user::row_relation_from_map_ref;
 
 #[derive(Debug, Clone)]
 pub enum RowRelationChange {
@@ -45,7 +47,7 @@ impl RowRelationMap {
   }
 
   pub fn insert_relation_with_txn(&self, txn: &mut TransactionMut, relation: RowRelation) {
-    let map_ref = self.container.insert_map_with_txn(txn, &relation.id());
+    let map_ref = self.container.create_map_with_txn(txn, &relation.id());
     RowRelationBuilder::new(
       &relation.linking_database_id,
       &relation.linked_by_database_id,

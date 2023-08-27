@@ -1,11 +1,12 @@
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
+use std::str::FromStr;
+
 use anyhow::bail;
 use collab::core::any_map::{AnyMap, AnyMapBuilder};
 use collab::preclude::{lib0Any, Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
-use std::str::FromStr;
 
 /// The [DatabaseLayout] enum is used to represent the layout of the database.
 #[derive(Debug, PartialEq, Copy, Eq, Hash, Clone, Serialize_repr, Deserialize_repr)]
@@ -98,7 +99,7 @@ impl LayoutSettings {
   /// Fill a [MapRef] with the data from this [LayoutSettings].
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.0.into_iter().for_each(|(k, v)| {
-      let inner_map = map_ref.get_or_insert_map_with_txn(txn, k.as_ref());
+      let inner_map = map_ref.get_or_create_map_with_txn(txn, k.as_ref());
       v.fill_map_ref(txn, &inner_map);
     });
   }

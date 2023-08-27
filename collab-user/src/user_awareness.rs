@@ -76,13 +76,13 @@ impl UserAwareness {
         let awareness = collab_guard.insert_map_with_txn_if_not_exist(txn, USER);
 
         let appearance_settings_container =
-          awareness.insert_map_with_txn_if_not_exist(txn, APPEARANCE_SETTINGS);
+          awareness.create_map_with_txn_if_not_exist(txn, APPEARANCE_SETTINGS);
         let appearance_settings = AppearanceSettings {
           container: appearance_settings_container,
         };
 
         let reminder_container = awareness
-          .insert_array_if_not_exist_with_txn::<MapPrelim<lib0Any>>(txn, REMINDERS, vec![]);
+          .create_array_if_not_exist_with_txn::<MapPrelim<lib0Any>>(txn, REMINDERS, vec![]);
         let reminders = Reminders::new(
           reminder_container,
           notifier

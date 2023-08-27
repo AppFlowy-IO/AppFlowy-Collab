@@ -4,17 +4,17 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use collab::preclude::{
-  lib0Any, DeepEventsSubscription, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  DeepEventsSubscription, lib0Any, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
-use crate::core::folder_observe::ViewChangeSender;
-use crate::core::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
 use crate::{
   impl_any_update, impl_bool_update, impl_i64_update, impl_option_str_update, impl_str_update,
 };
+use crate::core::{RepeatedViewIdentifier, subscribe_view_change, ViewIdentifier, ViewRelations};
+use crate::core::folder_observe::ViewChangeSender;
 
 const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";
@@ -232,7 +232,7 @@ impl ViewsMap {
       self.set_cache_view(view);
     }
 
-    let map_ref = self.container.insert_map_with_txn(txn, &view.id);
+    let map_ref = self.container.create_map_with_txn(txn, &view.id);
     let view = ViewBuilder::new(&view.id, txn, map_ref, self.view_relations.clone())
       .update(|update| {
         update

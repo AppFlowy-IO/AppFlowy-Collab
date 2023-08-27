@@ -1,5 +1,7 @@
-use collab::preclude::{Doc, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use std::ops::Deref;
+
+use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+
 const DATABASE_INLINE_VIEW: &str = "iid";
 
 pub struct MetaMap {
@@ -9,10 +11,6 @@ pub struct MetaMap {
 impl MetaMap {
   pub fn new(container: MapRefWrapper) -> Self {
     Self { container }
-  }
-
-  pub fn insert_doc(&self, doc: Doc) {
-    self.container.insert("1", doc);
   }
 
   /// Set the inline view id

@@ -32,6 +32,7 @@ pub struct DatabaseView {
   pub modified_at: i64,
 }
 
+#[derive(Debug, Clone)]
 pub struct ViewDescription {
   pub id: String,
   pub name: String,
@@ -178,22 +179,20 @@ const VIEW_CREATE_AT: &str = "created_at";
 const VIEW_MODIFY_AT: &str = "modified_at";
 
 pub struct ViewBuilder<'a, 'b> {
-  id: &'a str,
   map_ref: MapRefWrapper,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b> ViewBuilder<'a, 'b> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRefWrapper) -> Self {
-    map_ref.insert_str_with_txn(txn, VIEW_ID, id);
-    Self { id, map_ref, txn }
+  pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: MapRefWrapper) -> Self {
+    Self { map_ref, txn }
   }
 
   pub fn update<F>(self, f: F) -> Self
   where
     F: FnOnce(DatabaseViewUpdate),
   {
-    let update = DatabaseViewUpdate::new(self.id, self.txn, &self.map_ref);
+    let update = DatabaseViewUpdate::new(self.txn, &self.map_ref);
     f(update);
     self
   }
@@ -201,15 +200,18 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
 }
 
 pub struct DatabaseViewUpdate<'a, 'b> {
-  #[allow(dead_code)]
-  id: &'a str,
   map_ref: &'a MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
 impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
-  pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: &'a MapRef) -> Self {
-    Self { id, map_ref, txn }
+  pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: &'a MapRef) -> Self {
+    Self { map_ref, txn }
+  }
+
+  pub fn set_view_id(self, view_id: &str) -> Self {
+    self.map_ref.insert_str_with_txn(self.txn, VIEW_ID, view_id);
+    self
   }
 
   impl_str_update!(
@@ -235,6 +237,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     remove_row_order,
     move_row_order,
     insert_row_order,
+    iter_mut_row_order,
     ROW_ORDERS,
     RowOrder,
     RowOrderArray
@@ -246,6 +249,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     remove_field_order,
     move_field_order,
     insert_field_order,
+    iter_mut_field_order,
     FIELD_ORDERS,
     FieldOrder,
     FieldOrderArray
@@ -255,7 +259,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   pub fn set_layout_settings(self, layout_settings: LayoutSettings) -> Self {
     let map_ref = self
       .map_ref
-      .get_or_insert_map_with_txn(self.txn, VIEW_LAYOUT_SETTINGS);
+      .get_or_create_map_with_txn(self.txn, VIEW_LAYOUT_SETTINGS);
     layout_settings.fill_map_ref(self.txn, &map_ref);
     self
   }
@@ -270,10 +274,10 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   ) -> Self {
     let layout_settings = self
       .map_ref
-      .get_or_insert_map_with_txn(self.txn, VIEW_LAYOUT_SETTINGS);
+      .get_or_create_map_with_txn(self.txn, VIEW_LAYOUT_SETTINGS);
 
     let layout_setting_map =
-      layout_settings.get_or_insert_map_with_txn(self.txn, layout_ty.as_ref());
+      layout_settings.get_or_create_map_with_txn(self.txn, layout_ty.as_ref());
     layout_setting.fill_map_ref(self.txn, &layout_setting_map);
     self
   }
@@ -282,7 +286,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   pub fn remove_layout_setting(self, layout_ty: &DatabaseLayout) -> Self {
     let layout_settings = self
       .map_ref
-      .get_or_insert_map_with_txn(self.txn, VIEW_LAYOUT_SETTINGS);
+      .get_or_create_map_with_txn(self.txn, VIEW_LAYOUT_SETTINGS);
 
     layout_settings.remove(self.txn, layout_ty.as_ref());
     self
@@ -351,19 +355,19 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   fn get_sort_array(&mut self) -> ArrayRef {
     self
       .map_ref
-      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_SORTS)
+      .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_SORTS)
   }
 
   fn get_group_array(&mut self) -> ArrayRef {
     self
       .map_ref
-      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS)
+      .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS)
   }
 
   fn get_filter_array(&mut self) -> ArrayRef {
     self
       .map_ref
-      .get_or_insert_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_FILTERS)
+      .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_FILTERS)
   }
   pub fn done(self) -> Option<DatabaseView> {
     view_from_map_ref(self.map_ref, self.txn)
@@ -501,11 +505,7 @@ pub trait OrderArray {
   fn array_ref(&self) -> &ArrayRef;
 
   /// Create a new [Self::Object] from given value
-  fn object_from_value_with_txn<T: ReadTxn>(
-    &self,
-    value: YrsValue,
-    txn: &T,
-  ) -> Option<Self::Object>;
+  fn object_from_value<T: ReadTxn>(&self, value: YrsValue, txn: &T) -> Option<Self::Object>;
 
   /// Extends the other objects to the end of the array.
   fn extends_with_txn(&self, txn: &mut TransactionMut, others: Vec<Self::Object>) {
@@ -549,18 +549,37 @@ pub trait OrderArray {
     self
       .array_ref()
       .iter(txn)
-      .flat_map(|v| self.object_from_value_with_txn(v, txn))
+      .flat_map(|v| self.object_from_value(v, txn))
       .collect::<Vec<Self::Object>>()
+  }
+
+  fn replace_with_txn(&self, txn: &mut TransactionMut, object: Self::Object) {
+    if let Some(pos) =
+      self
+        .array_ref()
+        .iter(txn)
+        .position(|value| match self.object_from_value(value, txn) {
+          None => false,
+          Some(order) => order.identify_id() == object.identify_id(),
+        })
+    {
+      self.array_ref().remove(txn, pos as u32);
+      self.array_ref().insert(txn, pos as u32, object);
+    } else {
+      tracing::warn!("Can't replace the object. The object is not found")
+    }
   }
 
   // Remove the object with the given id from the array.
   fn remove_with_txn(&self, txn: &mut TransactionMut, id: &str) -> Option<()> {
-    let pos = self.array_ref().iter(txn).position(|value| {
-      match self.object_from_value_with_txn(value, txn) {
-        None => false,
-        Some(order) => order.identify_id() == id,
-      }
-    })?;
+    let pos =
+      self
+        .array_ref()
+        .iter(txn)
+        .position(|value| match self.object_from_value(value, txn) {
+          None => false,
+          Some(order) => order.identify_id() == id,
+        })?;
     self.array_ref().remove(txn, pos as u32);
     None
   }
@@ -584,7 +603,7 @@ pub trait OrderArray {
       .array_ref()
       .iter(txn)
       .position(|value| {
-        let object = self.object_from_value_with_txn(value, txn);
+        let object = self.object_from_value(value, txn);
         match object {
           None => false,
           Some(order) => order.identify_id() == id,

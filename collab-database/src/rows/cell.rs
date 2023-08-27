@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-use crate::database::timestamp;
 use collab::core::any_map::{AnyMap, AnyMapBuilder, AnyMapExtension, AnyMapUpdate};
 use collab::preclude::{Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 
+use crate::database::timestamp;
 use crate::rows::{RowId, CREATED_AT, LAST_MODIFIED};
 
 /// Store lists of cells
@@ -25,7 +25,7 @@ impl Cells {
   /// Returns a new instance of [Cells] from a [MapRef]
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.into_inner().into_iter().for_each(|(k, v)| {
-      let cell_map_ref = map_ref.get_or_insert_map_with_txn(txn, &k);
+      let cell_map_ref = map_ref.get_or_create_map_with_txn(txn, &k);
       v.fill_map_ref(txn, &cell_map_ref);
     });
   }
@@ -79,7 +79,7 @@ impl<'a, 'b> CellsUpdate<'a, 'b> {
   }
 
   pub fn insert_cell(self, key: &str, cell: Cell) -> Self {
-    let cell_map_ref = self.map_ref.get_or_insert_map_with_txn(self.txn, key);
+    let cell_map_ref = self.map_ref.get_or_create_map_with_txn(self.txn, key);
     if cell_map_ref.get(self.txn, CREATED_AT).is_none() {
       cell_map_ref.insert_i64_with_txn(self.txn, CREATED_AT, timestamp());
     }

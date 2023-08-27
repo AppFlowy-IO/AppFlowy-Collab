@@ -1,6 +1,6 @@
-use crate::database::timestamp;
 use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 
+use crate::database::timestamp;
 use crate::fields::{
   field_from_map_ref, field_from_value, field_id_from_value, primary_field_id_from_value, Field,
   FieldBuilder, FieldUpdate,
@@ -26,7 +26,7 @@ impl FieldMap {
 
   /// Insert a field into the map with a transaction
   pub fn insert_field_with_txn(&self, txn: &mut TransactionMut, field: Field) {
-    let map_ref = self.container.insert_map_with_txn(txn, &field.id);
+    let map_ref = self.container.create_map_with_txn(txn, &field.id);
     FieldBuilder::new(&field.id, txn, map_ref)
       .update(|update| {
         update
@@ -143,7 +143,7 @@ impl FieldMap {
     F: FnOnce(FieldUpdate),
   {
     self.container.with_transact_mut(|txn| {
-      let map_ref = self.container.get_or_insert_map_with_txn(txn, field_id);
+      let map_ref = self.container.get_or_create_map_with_txn(txn, field_id);
       let mut update = FieldUpdate::new(field_id, txn, &map_ref);
       update = update.set_last_modified(timestamp());
       f(update);

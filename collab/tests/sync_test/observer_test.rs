@@ -1,10 +1,11 @@
+use std::sync::Arc;
+
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::MapRefExtension;
 use parking_lot::RwLock;
-use std::sync::Arc;
+use yrs::{Array, Doc, Map, Observable, ReadTxn, StateVector, Transact, Update};
 use yrs::types::{Change, ToJson};
 use yrs::updates::decoder::Decode;
-use yrs::{Array, Doc, Map, Observable, ReadTxn, StateVector, Transact, Update};
 
 #[tokio::test]
 async fn array_observer_test() {
@@ -71,7 +72,7 @@ async fn apply_update_test() {
     let mut txn = doc1.transact_mut();
     let map1 = array.insert_map_with_txn(&mut txn, None);
     // map1.insert(&mut txn, "m_k", "m_value");
-    map1.insert_map_with_txn(&mut txn, "m_k");
+    map1.create_map_with_txn(&mut txn, "m_k");
   }
 
   {
@@ -124,7 +125,7 @@ async fn apply_update_test() {
       // update map
       let doc2 = doc2.clone();
       let mut txn = doc2.transact_mut();
-      map.insert_map_with_txn(&mut txn, "m_m_k1")
+      map.create_map_with_txn(&mut txn, "m_m_k1")
     };
 
     {

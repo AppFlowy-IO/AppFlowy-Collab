@@ -17,11 +17,7 @@ impl OrderArray for RowOrderArray {
     &self.array_ref
   }
 
-  fn object_from_value_with_txn<T: ReadTxn>(
-    &self,
-    value: YrsValue,
-    txn: &T,
-  ) -> Option<Self::Object> {
+  fn object_from_value<T: ReadTxn>(&self, value: YrsValue, txn: &T) -> Option<Self::Object> {
     row_order_from_value(value, txn)
   }
 }

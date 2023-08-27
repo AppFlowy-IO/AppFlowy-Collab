@@ -4,8 +4,8 @@ use std::ops::{Deref, DerefMut};
 
 use lib0::any::Any;
 use serde::{Deserialize, Serialize};
-use yrs::types::Value;
 use yrs::{Array, Map, MapRef, ReadTxn, TransactionMut};
+use yrs::types::Value;
 
 use crate::preclude::{lib0Any, MapRefExtension, YrsValue};
 
@@ -272,7 +272,7 @@ impl AnyMap {
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.0.into_iter().for_each(|(k, v)| match v {
       Any::Array(array) => {
-        map_ref.insert_array_with_txn(txn, &k, array.to_vec());
+        map_ref.create_array_with_txn(txn, &k, array.to_vec());
       },
       _ => {
         map_ref.insert_with_txn(txn, &k, v);
