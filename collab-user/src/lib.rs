@@ -1,5 +1,4 @@
 mod appearance;
-mod entities;
 mod reminder;
 mod user_awareness;
 

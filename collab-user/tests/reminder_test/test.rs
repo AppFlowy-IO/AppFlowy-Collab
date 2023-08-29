@@ -1,13 +1,13 @@
-use assert_json_diff::assert_json_eq;
-use collab_user::core::Reminder;
-use serde_json::json;
+use collab_define::reminder::{ObjectType, Reminder};
 
 use crate::util::UserAwarenessTest;
+use assert_json_diff::assert_json_eq;
+use serde_json::json;
 
 #[tokio::test]
 async fn add_reminder_test() {
   let test = UserAwarenessTest::new(1);
-  let reminder = Reminder::new("1".to_string(), 123, 0)
+  let reminder = Reminder::new("1".to_string(), "o1".to_string(), 123, ObjectType::Document)
     .with_key_value("block_id", "fake_block_id")
     .with_key_value("id", "fake_id");
   test.lock().add_reminder(reminder);
@@ -20,6 +20,7 @@ async fn add_reminder_test() {
       "reminders": [
         {
           "id": "1",
+          "object_id": "o1",
           "is_ack": false,
           "message": "",
           "meta": {
@@ -28,7 +29,7 @@ async fn add_reminder_test() {
           },
           "scheduled_at": 123,
           "title": "",
-          "ty": 0
+          "ty": 1
         }
       ]
     })
@@ -38,7 +39,7 @@ async fn add_reminder_test() {
 #[tokio::test]
 async fn update_reminder_test() {
   let test = UserAwarenessTest::new(1);
-  let reminder = Reminder::new("1".to_string(), 123, 0)
+  let reminder = Reminder::new("1".to_string(), "o1".to_string(), 123, ObjectType::Document)
     .with_key_value("block_id", "fake_block_id")
     .with_key_value("id", "fake_id");
   test.lock().add_reminder(reminder);
@@ -58,6 +59,7 @@ async fn update_reminder_test() {
       "reminders": [
         {
           "id": "1",
+          "object_id": "o1",
           "is_ack": false,
           "message": "new message",
           "meta": {
@@ -66,7 +68,7 @@ async fn update_reminder_test() {
           },
           "scheduled_at": 123,
           "title": "new title",
-          "ty": 0
+          "ty": 1
         }
       ]
     })
@@ -77,9 +79,12 @@ async fn update_reminder_test() {
 async fn delete_reminder_test() {
   let test = UserAwarenessTest::new(1);
   for i in 0..3 {
-    test
-      .lock()
-      .add_reminder(Reminder::new(i.to_string(), 123, 0));
+    test.lock().add_reminder(Reminder::new(
+      i.to_string(),
+      "o1".to_string(),
+      123,
+      ObjectType::Document,
+    ));
   }
   test.lock().remove_reminder("1");
   let json = test.lock().to_json().unwrap();
@@ -90,21 +95,23 @@ async fn delete_reminder_test() {
       "reminders": [
         {
           "id": "0",
+          "object_id": "o1",
           "is_ack": false,
           "message": "",
           "meta": {},
           "scheduled_at": 123,
           "title": "",
-          "ty": 0
+          "ty": 1
         },
         {
           "id": "2",
+          "object_id": "o1",
           "is_ack": false,
           "message": "",
           "meta": {},
           "scheduled_at": 123,
           "title": "",
-          "ty": 0
+          "ty": 1
         }
       ]
     })

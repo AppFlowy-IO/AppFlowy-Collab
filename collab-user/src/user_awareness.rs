@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -5,12 +6,13 @@ use anyhow::Result;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::SyncState;
 use collab::preclude::{lib0Any, MapPrelim, MapRefWrapper};
+use collab_define::reminder::Reminder;
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
 use crate::appearance::AppearanceSettings;
-use crate::entities::UserAwarenessData;
-use crate::reminder::{Reminder, Reminders, RemindersChangeSender};
+use crate::reminder::{Reminders, RemindersChangeSender};
 
 const USER: &str = "user_awareness";
 const REMINDERS: &str = "reminders";
@@ -232,4 +234,10 @@ impl UserAwareness {
 #[derive(Clone)]
 pub struct UserAwarenessNotifier {
   pub reminder_change_tx: RemindersChangeSender,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserAwarenessData {
+  pub appearance_settings: HashMap<String, String>,
+  pub reminders: Vec<Reminder>,
 }
