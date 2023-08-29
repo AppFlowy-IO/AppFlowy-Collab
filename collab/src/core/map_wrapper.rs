@@ -255,6 +255,13 @@ pub trait MapRefExtension {
     self.map_ref().get(txn, key).map(|value| value.to_ymap())?
   }
 
+  fn get_any_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<lib0Any> {
+    self.map_ref().get(txn, key).and_then(|value| match value {
+      Value::Any(any) => Some(any),
+      _ => None,
+    })
+  }
+
   /// Retrieves a reference to a map associated with the given key from the underlying datastore,
   /// or inserts a new, empty map if no map is associated with the key. This function is transactional,
   /// meaning the changes made within the function won't be applied until the transaction is committed.

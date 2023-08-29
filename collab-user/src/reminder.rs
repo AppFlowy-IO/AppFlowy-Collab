@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 
 use anyhow::Result;
 use collab::core::array_wrapper::ArrayRefExtension;
@@ -136,11 +137,12 @@ pub struct Reminder {
   pub ty: i64,
   pub title: String,
   pub message: String,
-  pub reminder_object_id: String,
+  /// The meta field is used to store arbitrary key-value pairs.
+  pub meta: ReminderMeta,
 }
 
 impl Reminder {
-  pub fn new(id: String, scheduled_at: i64, ty: i64, reminder_object_id: String) -> Self {
+  pub fn new(id: String, scheduled_at: i64, ty: i64) -> Self {
     Self {
       id,
       scheduled_at,
@@ -148,7 +150,7 @@ impl Reminder {
       ty,
       title: "".to_string(),
       message: "".to_string(),
-      reminder_object_id,
+      meta: ReminderMeta::default(),
     }
   }
 
@@ -158,6 +160,13 @@ impl Reminder {
 
   pub fn with_message(self, message: String) -> Self {
     Self { message, ..self }
+  }
+
+  pub fn with_key_value<K: AsRef<str>, V: ToString>(mut self, key: K, value: V) -> Self {
+    self
+      .meta
+      .insert(key.as_ref().to_string(), value.to_string());
+    self
   }
 }
 
@@ -191,13 +200,66 @@ impl<'a> TryFrom<(&TransactionMut<'a>, &MapRef)> for Reminder {
   }
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ReminderMeta(HashMap<String, String>);
+
+impl ReminderMeta {
+  pub fn new() -> Self {
+    Self::default()
+  }
+
+  pub fn into_inner(self) -> HashMap<String, String> {
+    self.0
+  }
+}
+impl Deref for ReminderMeta {
+  type Target = HashMap<String, String>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl DerefMut for ReminderMeta {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.0
+  }
+}
+
+impl From<HashMap<String, String>> for ReminderMeta {
+  fn from(value: HashMap<String, String>) -> Self {
+    Self(value)
+  }
+}
+
+impl From<ReminderMeta> for lib0Any {
+  fn from(value: ReminderMeta) -> Self {
+    let map = value.0.into_iter().map(|(k, v)| (k, v.into())).collect();
+    lib0Any::Map(Box::new(map))
+  }
+}
+
+impl From<lib0Any> for ReminderMeta {
+  fn from(value: lib0Any) -> Self {
+    match value {
+      lib0Any::Map(map) => ReminderMeta(
+        map
+          .into_iter()
+          .map(|(k, v)| (k, v.to_string()))
+          .collect::<HashMap<String, String>>(),
+      ),
+      _ => Default::default(),
+    }
+  }
+}
+
 const REMINDER_ID: &str = "id";
 const REMINDER_SCHEDULED_AT: &str = "scheduled_at";
 const REMINDER_IS_ACK: &str = "is_ack";
 const REMINDER_TY: &str = "ty";
 const REMINDER_TITLE: &str = "title";
 const REMINDER_MESSAGE: &str = "message";
-const REMINDER_OBJECT_ID: &str = "reminder_object_id";
+const REMINDER_META: &str = "meta";
 
 fn reminder_from_map<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Result<Reminder> {
   let id = map_ref
@@ -218,9 +280,11 @@ fn reminder_from_map<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Result<Reminder> 
   let message = map_ref
     .get_str_with_txn(txn, REMINDER_MESSAGE)
     .unwrap_or_default();
-  let reminder_object_id = map_ref
-    .get_str_with_txn(txn, REMINDER_OBJECT_ID)
-    .ok_or(anyhow::anyhow!("{} not found", REMINDER_OBJECT_ID))?;
+
+  let meta = map_ref
+    .get_any_with_txn(txn, REMINDER_META)
+    .map(ReminderMeta::from)
+    .unwrap_or_default();
 
   Ok(Reminder {
     id,
@@ -229,7 +293,7 @@ fn reminder_from_map<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Result<Reminder> 
     ty,
     title,
     message,
-    reminder_object_id,
+    meta,
   })
 }
 
@@ -254,10 +318,9 @@ impl From<Reminder> for MapPrelim<lib0Any> {
       REMINDER_MESSAGE.to_string(),
       lib0Any::String(item.message.into_boxed_str()),
     );
-    map.insert(
-      REMINDER_OBJECT_ID.to_string(),
-      lib0Any::String(item.reminder_object_id.into_boxed_str()),
-    );
+
+    map.insert(REMINDER_META.to_string(), item.meta.into());
+
     MapPrelim::from(map)
   }
 }

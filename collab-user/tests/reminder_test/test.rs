@@ -7,23 +7,25 @@ use crate::util::UserAwarenessTest;
 #[tokio::test]
 async fn add_reminder_test() {
   let test = UserAwarenessTest::new(1);
-  test.lock().add_reminder(Reminder::new(
-    "1".to_string(),
-    123,
-    0,
-    "reminder object id".to_string(),
-  ));
+  let reminder = Reminder::new("1".to_string(), 123, 0)
+    .with_key_value("block_id", "fake_block_id")
+    .with_key_value("id", "fake_id");
+  test.lock().add_reminder(reminder);
+
   let json = test.lock().to_json().unwrap();
   assert_json_eq!(
     json,
-    json!( {
+    json!({
       "appearance_settings": {},
       "reminders": [
         {
           "id": "1",
           "is_ack": false,
           "message": "",
-          "reminder_object_id": "reminder object id",
+          "meta": {
+            "block_id": "fake_block_id",
+            "id": "fake_id"
+          },
           "scheduled_at": 123,
           "title": "",
           "ty": 0
@@ -36,16 +38,17 @@ async fn add_reminder_test() {
 #[tokio::test]
 async fn update_reminder_test() {
   let test = UserAwarenessTest::new(1);
-  test.lock().add_reminder(Reminder::new(
-    "1".to_string(),
-    123,
-    0,
-    "reminder object id".to_string(),
-  ));
+  let reminder = Reminder::new("1".to_string(), 123, 0)
+    .with_key_value("block_id", "fake_block_id")
+    .with_key_value("id", "fake_id");
+  test.lock().add_reminder(reminder);
 
   test.lock().update_reminder("1", |reminder| {
     reminder.title = "new title".to_string();
     reminder.message = "new message".to_string();
+    reminder
+      .meta
+      .insert("block_id".to_string(), "fake_block_id2".to_string());
   });
   let json = test.lock().to_json().unwrap();
   assert_json_eq!(
@@ -57,7 +60,10 @@ async fn update_reminder_test() {
           "id": "1",
           "is_ack": false,
           "message": "new message",
-          "reminder_object_id": "reminder object id",
+          "meta": {
+            "block_id": "fake_block_id2",
+            "id": "fake_id"
+          },
           "scheduled_at": 123,
           "title": "new title",
           "ty": 0
@@ -71,12 +77,9 @@ async fn update_reminder_test() {
 async fn delete_reminder_test() {
   let test = UserAwarenessTest::new(1);
   for i in 0..3 {
-    test.lock().add_reminder(Reminder::new(
-      i.to_string(),
-      123,
-      0,
-      format!("reminder object id {}", i),
-    ));
+    test
+      .lock()
+      .add_reminder(Reminder::new(i.to_string(), 123, 0));
   }
   test.lock().remove_reminder("1");
   let json = test.lock().to_json().unwrap();
@@ -89,7 +92,7 @@ async fn delete_reminder_test() {
           "id": "0",
           "is_ack": false,
           "message": "",
-          "reminder_object_id": "reminder object id 0",
+          "meta": {},
           "scheduled_at": 123,
           "title": "",
           "ty": 0
@@ -98,7 +101,7 @@ async fn delete_reminder_test() {
           "id": "2",
           "is_ack": false,
           "message": "",
-          "reminder_object_id": "reminder object id 2",
+          "meta": {},
           "scheduled_at": 123,
           "title": "",
           "ty": 0
