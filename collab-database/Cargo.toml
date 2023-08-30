@@ -31,7 +31,7 @@ strum_macros = "0.25"
 
 [dev-dependencies]
 collab-plugins = { path = "../collab-plugins", features = ["rocksdb_plugin"] }
-tempfile = "3.4.0"
+tempfile = "3.8.0"
 tokio = { version = "1.26", features = ["full"] }
 assert-json-diff = "2.0.2"
 lazy_static = "1.4.0"

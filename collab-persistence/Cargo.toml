@@ -22,7 +22,7 @@ lazy_static = "1.4.0"
 
 [dev-dependencies]
 collab-persistence = { path = ".", features = ["sled_db_persistence", "rocksdb_persistence"] }
-tempfile = "3.4.0"
+tempfile = "3.8.0"
 futures = "0.3.18"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 tokio = { version = "1.26", features = ["full"] }

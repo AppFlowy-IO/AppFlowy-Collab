@@ -21,7 +21,7 @@ tokio-stream = { version = "0.1.14", features = ["sync"] }
 
 [dev-dependencies]
 tokio = { version = "1.26", features = ["full"] }
-tempfile = "3.4.0"
+tempfile = "3.8.0"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 collab-plugins = { path = "../collab-plugins", features = ["rocksdb_plugin"] }
 zip = "0.6.6"
