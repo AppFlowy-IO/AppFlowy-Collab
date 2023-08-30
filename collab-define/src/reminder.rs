@@ -166,8 +166,8 @@ fn reminder_from_map<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Result<Reminder> 
     .get_str_with_txn(txn, REMINDER_ID)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_ID))?;
   let object_id = map_ref
-      .get_str_with_txn(txn, REMINDER_OBJECT_ID)
-      .ok_or(anyhow::anyhow!("{} not found", REMINDER_OBJECT_ID))?;
+    .get_str_with_txn(txn, REMINDER_OBJECT_ID)
+    .ok_or(anyhow::anyhow!("{} not found", REMINDER_OBJECT_ID))?;
   let scheduled_at = map_ref
     .get_i64_with_txn(txn, REMINDER_SCHEDULED_AT)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_SCHEDULED_AT))?;
