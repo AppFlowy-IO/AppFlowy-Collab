@@ -20,7 +20,7 @@ parking_lot = "0.12.1"
 aws-config = { version = "0.55.2", optional = true }
 aws-sdk-dynamodb = { version = "0.27.0", optional = true }
 aws-credential-types = { version = "0.55.2", optional = true }
-rusoto_credential = "0.48.0"
+rusoto_credential = { version = "0.48.0", optional = true }
 anyhow = "1.0"
 tokio-retry = "0.3"
 async-trait = "0.1.51"
@@ -53,7 +53,7 @@ dotenv = "0.15.0"
 default = []
 rocksdb_plugin = ["collab-persistence/rocksdb_persistence"]
 disk_sled = []
-aws_storage_plugin = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types"]
+aws_storage_plugin = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types", "rusoto_credential"]
 postgres_storage_plugin = ["collab-persistence/rocksdb_persistence"]
 snapshot_plugin = ["collab-persistence/rocksdb_persistence"]
 snapshot = []
