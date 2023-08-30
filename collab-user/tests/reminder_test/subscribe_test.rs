@@ -1,4 +1,5 @@
-use collab_user::core::{Reminder, ReminderChange};
+use collab_define::reminder::{ObjectType, Reminder};
+use collab_user::core::ReminderChange;
 
 use crate::util::{receive_with_timeout, UserAwarenessTest};
 
@@ -6,7 +7,7 @@ use crate::util::{receive_with_timeout, UserAwarenessTest};
 async fn subscribe_insert_reminder_test() {
   let test = UserAwarenessTest::new(1);
   let mut rx = test.reminder_change_tx.subscribe();
-  let reminder = Reminder::new("1".to_string(), 123, 0, "reminder object id".to_string());
+  let reminder = Reminder::new("1".to_string(), "o1".to_string(), 123, ObjectType::Document);
   let cloned_test = test.clone();
   let cloned_reminder = reminder.clone();
   tokio::spawn(async move {
@@ -32,9 +33,9 @@ async fn subscribe_delete_reminder_test() {
   for i in 0..5 {
     let reminder = Reminder::new(
       format!("{}", i),
+      "o1".to_string(),
       123,
-      0,
-      format!("reminder object id {}", i),
+      ObjectType::Document,
     );
     test.lock().add_reminder(reminder);
   }
