@@ -8,13 +8,13 @@ use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::WorkspaceDatabase;
-use collab_database::views::{CreateDatabaseParams, FieldSettingsMap, FieldSettingsMapBuilder};
+use collab_database::views::CreateDatabaseParams;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use serde_json::Value;
 
-use crate::database_test::helper::TestFieldSetting;
+use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{db_path, TestTextCell};
 use crate::user_test::helper::workspace_database_with_db;
 
@@ -226,12 +226,7 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
 
-  let field_setting = FieldSettingsMap::from(TestFieldSetting { is_visible: true });
-  let field_settings_map = FieldSettingsMapBuilder::new()
-    .insert_any("f1", field_setting.clone())
-    .insert_any("f2", field_setting.clone())
-    .insert_any("f3", field_setting.clone())
-    .build();
+  let field_settings_map = field_settings_for_default_database();
 
   CreateDatabaseParams {
     database_id: database_id.to_string(),
@@ -242,7 +237,7 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
     filters: vec![],
     groups: vec![],
     sorts: vec![],
-    field_settings: field_settings_map,
+    field_settings: field_settings_map.into(),
     created_rows: vec![row_1, row_2, row_3],
     fields: vec![field_1, field_2, field_3],
   }

@@ -11,8 +11,8 @@ use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, CreateRowParams};
 use collab_database::user::DatabaseCollabService;
 use collab_database::views::{
-  CreateDatabaseParams, DatabaseLayout, FieldSettingsByFieldIdMap,
-  FieldSettingsByFieldIdMapBuilder, FieldSettingsMap, LayoutSetting, LayoutSettings,
+  CreateDatabaseParams, DatabaseLayout, FieldSettingsByFieldIdMap, FieldSettingsMap, LayoutSetting,
+  LayoutSettings,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::cloud_storage::CollabType;
@@ -140,7 +140,7 @@ pub struct DatabaseTestBuilder {
   layout_settings: LayoutSettings,
   fields: Vec<Field>,
   layout: DatabaseLayout,
-  field_settings: FieldSettingsMap,
+  field_settings: FieldSettingsByFieldIdMap,
 }
 
 impl DatabaseTestBuilder {
@@ -276,11 +276,11 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
 /// create_database_with_default_data
 pub fn field_settings_for_default_database() -> FieldSettingsByFieldIdMap {
   let field_settings = FieldSettingsMap::from(TestFieldSetting { is_visible: true });
-  FieldSettingsByFieldIdMapBuilder::new()
-    .insert_any("f1", field_settings.clone())
-    .insert_any("f2", field_settings.clone())
-    .insert_any("f3", field_settings)
-    .build()
+  let mut field_settings_map = HashMap::new();
+  field_settings_map.insert("f1".to_string(), field_settings.clone());
+  field_settings_map.insert("f2".to_string(), field_settings.clone());
+  field_settings_map.insert("f3".to_string(), field_settings);
+  field_settings_map.into()
 }
 
 pub fn default_field_settings_by_layout() -> HashMap<DatabaseLayout, FieldSettingsMap> {

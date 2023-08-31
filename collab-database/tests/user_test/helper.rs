@@ -14,9 +14,7 @@ use collab_database::user::{
   CollabFuture, CollabObjectUpdate, CollabObjectUpdateByOid, DatabaseCollabService,
   RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
 };
-use collab_database::views::{
-  CreateDatabaseParams, DatabaseLayout, FieldSettingsMap, FieldSettingsMapBuilder,
-};
+use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::cloud_storage::CollabType;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
@@ -27,7 +25,7 @@ use tokio::sync::mpsc::{channel, Receiver};
 use rand::Rng;
 use tempfile::TempDir;
 
-use crate::database_test::helper::TestFieldSetting;
+use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{make_rocks_db, TestTextCell};
 
 pub struct WorkspaceDatabaseTest {
@@ -206,12 +204,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
 
-  let field_setting = FieldSettingsMap::from(TestFieldSetting { is_visible: true });
-  let field_settings_map = FieldSettingsMapBuilder::new()
-    .insert_any("f1", field_setting.clone())
-    .insert_any("f2", field_setting.clone())
-    .insert_any("f3", field_setting)
-    .build();
+  let field_settings_map = field_settings_for_default_database();
 
   CreateDatabaseParams {
     database_id: database_id.to_string(),
@@ -276,12 +269,7 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
     is_primary: false,
   };
 
-  let field_setting = FieldSettingsMap::from(TestFieldSetting { is_visible: true });
-  let field_settings_map = FieldSettingsMapBuilder::new()
-    .insert_any(text_field.id.clone(), field_setting.clone())
-    .insert_any(single_select_field.id.clone(), field_setting.clone())
-    .insert_any(checkbox_field.id.clone(), field_setting)
-    .build();
+  let field_settings_map = field_settings_for_default_database();
 
   CreateDatabaseParams {
     database_id: gen_database_id(),

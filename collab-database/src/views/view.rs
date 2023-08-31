@@ -52,7 +52,7 @@ pub struct CreateViewParams {
   pub filters: Vec<FilterMap>,
   pub groups: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
-  pub field_settings: FieldSettingsMap,
+  pub field_settings: FieldSettingsByFieldIdMap,
 
   /// When creating a view for a database, it might need to create a new field for the view.
   /// For example, if the view is calendar view, it must have a date field.
@@ -73,19 +73,12 @@ impl CreateViewParams {
 }
 
 impl CreateViewParams {
-  pub fn new(
-    database_id: String,
-    view_id: String,
-    name: String,
-    layout: DatabaseLayout,
-    field_settings: FieldSettingsMap,
-  ) -> Self {
+  pub fn new(database_id: String, view_id: String, name: String, layout: DatabaseLayout) -> Self {
     Self {
       database_id,
       view_id,
       name,
       layout,
-      field_settings,
       ..Default::default()
     }
   }
@@ -112,6 +105,11 @@ impl CreateViewParams {
   ) -> Self {
     self.deps_fields = fields;
     self.deps_field_setting = field_settings_by_layout;
+    self
+  }
+
+  pub fn with_field_settings_map(mut self, field_settings_map: FieldSettingsByFieldIdMap) -> Self {
+    self.field_settings = field_settings_map;
     self
   }
 }
@@ -142,7 +140,7 @@ pub struct CreateDatabaseParams {
   pub filters: Vec<FilterMap>,
   pub groups: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
-  pub field_settings: FieldSettingsMap,
+  pub field_settings: FieldSettingsByFieldIdMap,
   pub created_rows: Vec<CreateRowParams>,
   pub fields: Vec<Field>,
 }
@@ -383,7 +381,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   }
 
   /// Set the field settings of the current view
-  pub fn set_field_settings(mut self, field_settings: FieldSettingsMap) -> Self {
+  pub fn set_field_settings(mut self, field_settings: FieldSettingsByFieldIdMap) -> Self {
     let map_ref = self.get_field_settings_map();
     field_settings.fill_map_ref(self.txn, &map_ref);
     self
@@ -565,7 +563,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
 
   let field_settings = map_ref
     .get_map_with_txn(txn, VIEW_FIELD_SETTINGS)
-    .map(|map_ref| FieldSettingsMap::from_map_ref(txn, &map_ref))
+    .map(|map_ref| FieldSettingsByFieldIdMap::from((txn, &map_ref)))
     .unwrap_or_default();
 
   Some(DatabaseView {
