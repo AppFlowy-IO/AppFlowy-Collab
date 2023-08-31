@@ -3,7 +3,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use collab::core::any_map::{AnyMap, AnyMapExtension};
+use collab::core::any_map::AnyMapExtension;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::{SnapshotState, SyncState};
 use collab::preclude::{
@@ -736,16 +736,14 @@ impl Database {
   pub fn get_field_settings<T: From<FieldSettingsMap>>(
     &self,
     view_id: &str,
-    field_ids: Option<Vec<String>>,
+    field_ids: Option<&Vec<String>>,
   ) -> HashMap<String, T> {
     let mut field_settings_map = self
       .views
       .get_view_field_settings(view_id)
-      .iter()
-      .map(|(field_id, field_setting)| {
-        let any_map = AnyMap::from(field_setting);
-        (field_id.clone(), T::from(any_map))
-      })
+      .into_inner()
+      .into_iter()
+      .map(|(field_id, field_setting)| (field_id, T::from(field_setting)))
       .collect::<HashMap<String, T>>();
 
     if let Some(field_ids) = field_ids {
@@ -816,16 +814,19 @@ impl Database {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
       let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
       let field_orders = self.views.get_field_orders_with_txn(txn, &inline_view_id);
-      let (deps_fields, deps_field_setting) = params.take_deps_fields();
+      let (deps_fields, deps_field_settings) = params.take_deps_fields();
 
       self.create_view_with_txn(txn, params, field_orders, row_orders)?;
 
       // After creating the view, we need to create the fields that are used in the view.
       if !deps_fields.is_empty() {
         tracing::trace!("create linked view with deps fields: {:?}", deps_fields);
-        deps_fields.into_iter().for_each(|field| {
-          self.create_field_with_txn(txn, field, &deps_field_setting);
-        })
+        deps_fields
+          .into_iter()
+          .zip(deps_field_settings.into_iter())
+          .for_each(|(field, field_settings)| {
+            self.create_field_with_txn(txn, field, &field_settings);
+          })
       }
       Ok::<(), DatabaseError>(())
     })?;

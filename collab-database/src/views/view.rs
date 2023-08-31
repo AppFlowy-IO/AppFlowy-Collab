@@ -60,11 +60,13 @@ pub struct CreateViewParams {
 
   /// Each new field in `deps_fields` must also have an associated FieldSettings
   /// that will be inserted into each view according to the view's layout type
-  pub deps_field_setting: HashMap<DatabaseLayout, FieldSettingsMap>,
+  pub deps_field_setting: Vec<HashMap<DatabaseLayout, FieldSettingsMap>>,
 }
 
 impl CreateViewParams {
-  pub fn take_deps_fields(&mut self) -> (Vec<Field>, HashMap<DatabaseLayout, FieldSettingsMap>) {
+  pub fn take_deps_fields(
+    &mut self,
+  ) -> (Vec<Field>, Vec<HashMap<DatabaseLayout, FieldSettingsMap>>) {
     (
       std::mem::take(&mut self.deps_fields),
       std::mem::take(&mut self.deps_field_setting),
@@ -101,10 +103,10 @@ impl CreateViewParams {
   pub fn with_deps_fields(
     mut self,
     fields: Vec<Field>,
-    field_settings_by_layout: HashMap<DatabaseLayout, FieldSettingsMap>,
+    field_settings: Vec<HashMap<DatabaseLayout, FieldSettingsMap>>,
   ) -> Self {
     self.deps_fields = fields;
-    self.deps_field_setting = field_settings_by_layout;
+    self.deps_field_setting = field_settings;
     self
   }
 
@@ -168,7 +170,7 @@ impl CreateDatabaseParams {
         sorts: self.sorts,
         field_settings: self.field_settings,
         deps_fields: vec![],
-        deps_field_setting: HashMap::new(),
+        deps_field_setting: vec![],
       },
     )
   }
@@ -505,10 +507,13 @@ pub fn layout_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Lay
 }
 
 /// Creates a new field settings from a map ref
-pub fn field_settings_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> FieldSettingsMap {
+pub fn field_settings_from_map_ref<T: ReadTxn>(
+  txn: &T,
+  map_ref: &MapRef,
+) -> FieldSettingsByFieldIdMap {
   map_ref
     .get_map_with_txn(txn, VIEW_FIELD_SETTINGS)
-    .map(|map_ref| FieldSettingsMap::from_map_ref(txn, &map_ref))
+    .map(|map_ref| FieldSettingsByFieldIdMap::from((txn, &map_ref)))
     .unwrap_or_default()
 }
 
