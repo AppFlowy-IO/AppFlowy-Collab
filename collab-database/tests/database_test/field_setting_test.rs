@@ -141,7 +141,7 @@ async fn new_view_requires_deps_field_test() {
     layout: DatabaseLayout::Calendar,
     field_settings: field_settings_for_default_database(),
     deps_fields: vec![deps_field],
-    deps_field_setting: default_field_settings_by_layout(),
+    deps_field_setting: vec![default_field_settings_by_layout()],
     ..Default::default()
   };
   database_test.create_linked_view(params).unwrap();

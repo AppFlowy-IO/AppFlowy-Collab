@@ -3,7 +3,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use collab::core::any_map::{AnyMap, AnyMapExtension};
+use collab::core::any_map::AnyMapExtension;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::{SnapshotState, SyncState};
 use collab::preclude::{
@@ -68,13 +68,6 @@ impl Database {
 
     let row_orders = this.block.create_rows(rows);
     let field_orders = fields.iter().map(FieldOrder::from).collect();
-
-    // Create fieldSettingsByFieldIdMap from template FieldSettingsMap
-    let mut field_settings = FieldSettingsByFieldIdMap::new();
-    fields.iter().for_each(|field| {
-      field_settings.insert(field.id.clone(), params.field_settings.clone().into());
-    });
-
     this.root.with_transact_mut(|txn| {
       // Set the inline view id. The inline view id should not be
       // empty if the current database exists.
@@ -85,7 +78,7 @@ impl Database {
         this.fields.insert_field_with_txn(txn, field);
       }
       // Create a inline view
-      this.create_view_with_txn(txn, params, field_settings, field_orders, row_orders)?;
+      this.create_view_with_txn(txn, params, field_orders, row_orders)?;
       Ok::<(), DatabaseError>(())
     })?;
     Ok(this)
@@ -743,16 +736,14 @@ impl Database {
   pub fn get_field_settings<T: From<FieldSettingsMap>>(
     &self,
     view_id: &str,
-    field_ids: Option<Vec<String>>,
+    field_ids: Option<&Vec<String>>,
   ) -> HashMap<String, T> {
     let mut field_settings_map = self
       .views
       .get_view_field_settings(view_id)
-      .iter()
-      .map(|(field_id, field_setting)| {
-        let any_map = AnyMap::from(field_setting);
-        (field_id.clone(), T::from(any_map))
-      })
+      .into_inner()
+      .into_iter()
+      .map(|(field_id, field_setting)| (field_id, T::from(field_setting)))
       .collect::<HashMap<String, T>>();
 
     if let Some(field_ids) = field_ids {
@@ -762,7 +753,7 @@ impl Database {
     field_settings_map
   }
 
-  pub fn set_field_settings(&self, view_id: &str, field_settings_map: FieldSettingsMap) {
+  pub fn set_field_settings(&self, view_id: &str, field_settings_map: FieldSettingsByFieldIdMap) {
     self.views.update_database_view(view_id, |update| {
       update.set_field_settings(field_settings_map);
     })
@@ -821,23 +812,21 @@ impl Database {
     let mut params = CreateViewParamsValidator::validate(params)?;
     self.root.with_transact_mut(|txn| {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
-      let fields = self.get_fields_with_txn(txn, None);
-      let mut field_settings = FieldSettingsByFieldIdMap::new();
-      fields.iter().for_each(|field| {
-        field_settings.insert(field.id.clone(), params.field_settings.clone().into());
-      });
       let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
       let field_orders = self.views.get_field_orders_with_txn(txn, &inline_view_id);
-      let (deps_fields, deps_field_setting) = params.take_deps_fields();
+      let (deps_fields, deps_field_settings) = params.take_deps_fields();
 
-      self.create_view_with_txn(txn, params, field_settings, field_orders, row_orders)?;
+      self.create_view_with_txn(txn, params, field_orders, row_orders)?;
 
       // After creating the view, we need to create the fields that are used in the view.
       if !deps_fields.is_empty() {
         tracing::trace!("create linked view with deps fields: {:?}", deps_fields);
-        deps_fields.into_iter().for_each(|field| {
-          self.create_field_with_txn(txn, field, &deps_field_setting);
-        })
+        deps_fields
+          .into_iter()
+          .zip(deps_field_settings.into_iter())
+          .for_each(|(field, field_settings)| {
+            self.create_field_with_txn(txn, field, &field_settings);
+          })
       }
       Ok::<(), DatabaseError>(())
     })?;
@@ -849,7 +838,6 @@ impl Database {
     &self,
     txn: &mut TransactionMut,
     params: CreateViewParams,
-    field_settings: FieldSettingsByFieldIdMap,
     field_orders: Vec<FieldOrder>,
     row_orders: Vec<RowOrder>,
   ) -> Result<(), DatabaseError> {
@@ -865,7 +853,7 @@ impl Database {
       filters: params.filters,
       group_settings: params.groups,
       sorts: params.sorts,
-      field_settings,
+      field_settings: params.field_settings,
       row_orders,
       field_orders,
       created_at: timestamp,

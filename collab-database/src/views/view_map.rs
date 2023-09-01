@@ -10,8 +10,8 @@ use crate::views::{
   field_settings_from_map_ref, filters_from_map_ref, group_setting_from_map_ref,
   layout_setting_from_map_ref, sorts_from_map_ref, view_description_from_value, view_from_map_ref,
   view_from_value, DatabaseLayout, DatabaseView, DatabaseViewUpdate, FieldOrder, FieldOrderArray,
-  FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray,
-  SortMap, ViewBuilder, ViewDescription, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
+  FieldSettingsByFieldIdMap, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder,
+  RowOrderArray, SortMap, ViewBuilder, ViewDescription, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
 };
 
 pub struct ViewMap {
@@ -116,7 +116,7 @@ impl ViewMap {
     }
   }
 
-  pub fn get_view_field_settings(&self, view_id: &str) -> FieldSettingsMap {
+  pub fn get_view_field_settings(&self, view_id: &str) -> FieldSettingsByFieldIdMap {
     let txn = self.container.transact();
     self
       .container

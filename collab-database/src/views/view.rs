@@ -52,7 +52,7 @@ pub struct CreateViewParams {
   pub filters: Vec<FilterMap>,
   pub groups: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
-  pub field_settings: FieldSettingsMap,
+  pub field_settings: FieldSettingsByFieldIdMap,
 
   /// When creating a view for a database, it might need to create a new field for the view.
   /// For example, if the view is calendar view, it must have a date field.
@@ -60,11 +60,13 @@ pub struct CreateViewParams {
 
   /// Each new field in `deps_fields` must also have an associated FieldSettings
   /// that will be inserted into each view according to the view's layout type
-  pub deps_field_setting: HashMap<DatabaseLayout, FieldSettingsMap>,
+  pub deps_field_setting: Vec<HashMap<DatabaseLayout, FieldSettingsMap>>,
 }
 
 impl CreateViewParams {
-  pub fn take_deps_fields(&mut self) -> (Vec<Field>, HashMap<DatabaseLayout, FieldSettingsMap>) {
+  pub fn take_deps_fields(
+    &mut self,
+  ) -> (Vec<Field>, Vec<HashMap<DatabaseLayout, FieldSettingsMap>>) {
     (
       std::mem::take(&mut self.deps_fields),
       std::mem::take(&mut self.deps_field_setting),
@@ -73,19 +75,12 @@ impl CreateViewParams {
 }
 
 impl CreateViewParams {
-  pub fn new(
-    database_id: String,
-    view_id: String,
-    name: String,
-    layout: DatabaseLayout,
-    field_settings: FieldSettingsMap,
-  ) -> Self {
+  pub fn new(database_id: String, view_id: String, name: String, layout: DatabaseLayout) -> Self {
     Self {
       database_id,
       view_id,
       name,
       layout,
-      field_settings,
       ..Default::default()
     }
   }
@@ -108,10 +103,15 @@ impl CreateViewParams {
   pub fn with_deps_fields(
     mut self,
     fields: Vec<Field>,
-    field_settings_by_layout: HashMap<DatabaseLayout, FieldSettingsMap>,
+    field_settings: Vec<HashMap<DatabaseLayout, FieldSettingsMap>>,
   ) -> Self {
     self.deps_fields = fields;
-    self.deps_field_setting = field_settings_by_layout;
+    self.deps_field_setting = field_settings;
+    self
+  }
+
+  pub fn with_field_settings_map(mut self, field_settings_map: FieldSettingsByFieldIdMap) -> Self {
+    self.field_settings = field_settings_map;
     self
   }
 }
@@ -142,7 +142,7 @@ pub struct CreateDatabaseParams {
   pub filters: Vec<FilterMap>,
   pub groups: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
-  pub field_settings: FieldSettingsMap,
+  pub field_settings: FieldSettingsByFieldIdMap,
   pub created_rows: Vec<CreateRowParams>,
   pub fields: Vec<Field>,
 }
@@ -170,7 +170,7 @@ impl CreateDatabaseParams {
         sorts: self.sorts,
         field_settings: self.field_settings,
         deps_fields: vec![],
-        deps_field_setting: HashMap::new(),
+        deps_field_setting: vec![],
       },
     )
   }
@@ -383,7 +383,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   }
 
   /// Set the field settings of the current view
-  pub fn set_field_settings(mut self, field_settings: FieldSettingsMap) -> Self {
+  pub fn set_field_settings(mut self, field_settings: FieldSettingsByFieldIdMap) -> Self {
     let map_ref = self.get_field_settings_map();
     field_settings.fill_map_ref(self.txn, &map_ref);
     self
@@ -507,10 +507,13 @@ pub fn layout_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Lay
 }
 
 /// Creates a new field settings from a map ref
-pub fn field_settings_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> FieldSettingsMap {
+pub fn field_settings_from_map_ref<T: ReadTxn>(
+  txn: &T,
+  map_ref: &MapRef,
+) -> FieldSettingsByFieldIdMap {
   map_ref
     .get_map_with_txn(txn, VIEW_FIELD_SETTINGS)
-    .map(|map_ref| FieldSettingsMap::from_map_ref(txn, &map_ref))
+    .map(|map_ref| FieldSettingsByFieldIdMap::from((txn, &map_ref)))
     .unwrap_or_default()
 }
 
@@ -565,7 +568,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
 
   let field_settings = map_ref
     .get_map_with_txn(txn, VIEW_FIELD_SETTINGS)
-    .map(|map_ref| FieldSettingsMap::from_map_ref(txn, &map_ref))
+    .map(|map_ref| FieldSettingsByFieldIdMap::from((txn, &map_ref)))
     .unwrap_or_default();
 
   Some(DatabaseView {
