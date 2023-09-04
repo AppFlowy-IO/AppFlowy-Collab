@@ -2,13 +2,14 @@ use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use collab::core::origin::CollabOrigin;
 use collab::error::CollabError;
 use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_sync::server::CollabId;
 use y_sync::awareness::Awareness;
-use yrs::TransactionMut;
+use yrs::{Doc, Transact, TransactionMut};
 
 #[derive(Clone)]
 pub struct RocksdbServerDiskPlugin {
@@ -37,18 +38,21 @@ impl RocksdbServerDiskPlugin {
 }
 
 impl CollabPlugin for RocksdbServerDiskPlugin {
-  fn init(&self, object_id: &str, txn: &mut TransactionMut) {
+  fn init(&self, object_id: &str, original: &CollabOrigin, doc: &Doc) {
+    let mut txn = doc.transact_mut_with(original.clone());
     let r_db_txn = self.db.read_txn();
 
     // Check the document is exist or not
     if r_db_txn.is_exist(self.collab_id, object_id) {
       // Safety: The document is exist, so it must be loaded successfully.
-      let _ = r_db_txn.load_doc(self.collab_id, object_id, txn).unwrap();
+      let _ = r_db_txn
+        .load_doc_with_txn(self.collab_id, object_id, &mut txn)
+        .unwrap();
       drop(r_db_txn);
     } else {
       // Drop the read txn before write txn
       let result = self.db.with_write_txn(|w_db_txn| {
-        w_db_txn.create_new_doc(self.collab_id, object_id, txn)?;
+        w_db_txn.create_new_doc(self.collab_id, object_id, &txn)?;
         Ok(())
       });
 

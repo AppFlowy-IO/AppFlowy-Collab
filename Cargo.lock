@@ -798,6 +798,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "chrono",
+ "collab",
  "collab-persistence",
  "futures",
  "lazy_static",

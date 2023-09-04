@@ -210,13 +210,11 @@ impl Collab {
 
     self.state.set_init_state(InitState::Loading);
     {
-      let mut txn = self.origin_transact_mut();
       self
         .plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.init(&self.object_id, &mut txn));
-      drop(txn);
+        .for_each(|plugin| plugin.init(&self.object_id, &self.origin, &self.doc));
     }
 
     let (update_subscription, after_txn_subscription) = observe_doc(

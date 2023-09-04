@@ -123,16 +123,16 @@ impl RocksStore {
 }
 
 /// Implementation of [KVStore] for [RocksStore]. This is a wrapper around [Transaction].
-pub struct RocksKVStoreImpl<'a, DB>(Transaction<'a, DB>);
+pub struct RocksKVStoreImpl<'a, DB: Send + Sync>(Transaction<'a, DB>);
 
-impl<'a, DB> RocksKVStoreImpl<'a, DB> {
+impl<'a, DB: Send + Sync> RocksKVStoreImpl<'a, DB> {
   pub fn commit_transaction(self) -> Result<(), PersistenceError> {
     self.0.commit()?;
     Ok(())
   }
 }
 
-impl<'a, DB> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
+impl<'a, DB: Send + Sync> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
   type Range = RocksDBRange<'a, DB>;
   type Entry = RocksDBEntry;
   type Value = RocksDBVec;
@@ -219,20 +219,20 @@ impl<'a, DB> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
   }
 }
 
-impl<'a, DB> From<Transaction<'a, DB>> for RocksKVStoreImpl<'a, DB> {
+impl<'a, DB: Send + Sync> From<Transaction<'a, DB>> for RocksKVStoreImpl<'a, DB> {
   #[inline(always)]
   fn from(txn: Transaction<'a, DB>) -> Self {
     RocksKVStoreImpl(txn)
   }
 }
 
-impl<'a, DB> From<RocksKVStoreImpl<'a, DB>> for Transaction<'a, DB> {
+impl<'a, DB: Send + Sync> From<RocksKVStoreImpl<'a, DB>> for Transaction<'a, DB> {
   fn from(store: RocksKVStoreImpl<'a, DB>) -> Self {
     store.0
   }
 }
 
-impl<'a, DB> Deref for RocksKVStoreImpl<'a, DB> {
+impl<'a, DB: Send + Sync> Deref for RocksKVStoreImpl<'a, DB> {
   type Target = Transaction<'a, DB>;
 
   #[inline(always)]
@@ -248,13 +248,13 @@ pub struct RocksDBRange<'a, DB> {
   to: Vec<u8>,
 }
 
-impl<'a, DB> Iterator for RocksDBRange<'a, DB> {
+impl<'a, DB: Send + Sync> Iterator for RocksDBRange<'a, DB> {
   type Item = RocksDBEntry;
 
   fn next(&mut self) -> Option<Self::Item> {
     let n = self.inner.next()?;
     if let Ok((key, value)) = n {
-      if key.as_ref() >= &self.to {
+      if key.as_ref() >= self.to.as_slice() {
         None
       } else {
         Some(RocksDBEntry::new(key.to_vec(), value.to_vec()))

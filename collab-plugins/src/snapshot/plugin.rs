@@ -112,9 +112,10 @@ impl CollabPlugin for CollabSnapshotPlugin {
             ) {
               let snapshot_collab = Collab::new(uid, object.object_id.clone(), "1", vec![]);
               let mut txn = snapshot_collab.origin_transact_mut();
-              if let Err(e) = collab_db
-                .read_txn()
-                .load_doc(uid, &object.object_id, &mut txn)
+              if let Err(e) =
+                collab_db
+                  .read_txn()
+                  .load_doc_with_txn(uid, &object.object_id, &mut txn)
               {
                 tracing::error!("{} snapshot generation failed: {}", object.object_id, e);
                 *state.write() = GenSnapshotState::Fail;

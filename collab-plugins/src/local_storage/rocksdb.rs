@@ -4,11 +4,12 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
 use crate::local_storage::CollabPersistenceConfig;
+use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use y_sync::awareness::Awareness;
-use yrs::TransactionMut;
+use yrs::{Doc, Transact, TransactionMut};
 
 #[derive(Clone)]
 pub struct RocksdbDiskPlugin {
@@ -58,13 +59,14 @@ impl RocksdbDiskPlugin {
 }
 
 impl CollabPlugin for RocksdbDiskPlugin {
-  fn init(&self, object_id: &str, txn: &mut TransactionMut) {
+  fn init(&self, object_id: &str, original: &CollabOrigin, doc: &Doc) {
     if let Some(db) = self.db.upgrade() {
-      let r_db_txn = db.read_txn();
+      let rocksdb_read = db.read_txn();
+      let mut txn = doc.transact_mut_with(original.clone());
       // Check the document is exist or not
-      if r_db_txn.is_exist(self.uid, object_id) {
+      if rocksdb_read.is_exist(self.uid, object_id) {
         // Safety: The document is exist, so it must be loaded successfully.
-        match r_db_txn.load_doc(self.uid, object_id, txn) {
+        match rocksdb_read.load_doc_with_txn(self.uid, object_id, &mut txn) {
           Ok(update_count) => {
             self
               .initial_update_count
@@ -72,11 +74,11 @@ impl CollabPlugin for RocksdbDiskPlugin {
           },
           Err(e) => tracing::error!("🔴 load doc:{} failed: {}", object_id, e),
         }
-        drop(r_db_txn);
+        drop(rocksdb_read);
 
         if self.config.flush_doc {
           let _ = db.with_write_txn(|w_db_txn| {
-            w_db_txn.flush_doc(self.uid, object_id, txn)?;
+            w_db_txn.flush_doc_with_txn(self.uid, object_id, &txn)?;
             self.initial_update_count.store(0, Ordering::SeqCst);
             Ok(())
           });
@@ -84,7 +86,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
       } else {
         // Drop the read txn before write txn
         let result = db.with_write_txn(|w_db_txn| {
-          w_db_txn.create_new_doc(self.uid, object_id, txn)?;
+          w_db_txn.create_new_doc(self.uid, object_id, &txn)?;
           Ok(())
         });
 

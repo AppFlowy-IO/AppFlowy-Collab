@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use y_sync::awareness::Awareness;
-use yrs::TransactionMut;
+use yrs::{Doc, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
 
@@ -18,7 +18,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
   /// Called when the plugin is initialized.
   /// The will apply the updates to the current [TransactionMut] which will restore the state of
   /// the document.
-  fn init(&self, _object_id: &str, _txn: &mut TransactionMut) {}
+  fn init(&self, _object_id: &str, _origin: &CollabOrigin, _doc: &Doc) {}
 
   /// Called when the plugin is initialized.
   fn did_init(&self, _awareness: &Awareness, _object_id: &str) {}
@@ -49,8 +49,8 @@ impl<T> CollabPlugin for Box<T>
 where
   T: CollabPlugin,
 {
-  fn init(&self, object_id: &str, txn: &mut TransactionMut) {
-    (**self).init(object_id, txn)
+  fn init(&self, _object_id: &str, origin: &CollabOrigin, doc: &Doc) {
+    (**self).init(_object_id, origin, doc)
   }
 
   fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
@@ -66,8 +66,8 @@ impl<T> CollabPlugin for Arc<T>
 where
   T: CollabPlugin,
 {
-  fn init(&self, object_id: &str, txn: &mut TransactionMut) {
-    (**self).init(object_id, txn)
+  fn init(&self, _object_id: &str, origin: &CollabOrigin, doc: &Doc) {
+    (**self).init(_object_id, origin, doc)
   }
 
   fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
