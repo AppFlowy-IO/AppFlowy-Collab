@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sled = { version = "0.34.7" }
 rocksdb = { version = "0.21.0", optional = true, default-features = false, features = ["zstd"] }
 thiserror = "1.0.30"
 serde = { version = "1.0", features = ["derive"] }
@@ -21,7 +20,7 @@ parking_lot = "0.12.1"
 lazy_static = "1.4.0"
 
 [dev-dependencies]
-collab-persistence = { path = ".", features = ["sled_db_persistence", "rocksdb_persistence"] }
+collab-persistence = { path = ".", features = ["rocksdb_persistence"] }
 tempfile = "3.8.0"
 futures = "0.3.18"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
@@ -30,5 +29,4 @@ test-case = "3.1.0"
 
 [features]
 default = []
-sled_db_persistence = []
 rocksdb_persistence = ["rocksdb"]

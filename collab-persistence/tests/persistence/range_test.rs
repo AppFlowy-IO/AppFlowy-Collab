@@ -6,43 +6,11 @@ use collab_persistence::keys::{clock_from_key, make_doc_update_key, Clock};
 use collab_persistence::kv::{KVEntry, KVStore};
 use smallvec::SmallVec;
 
-use crate::util::{rocks_db, sled_db};
-
-#[tokio::test]
-async fn sled_id_test() {
-  let sled_db = sled_db().1;
-  sled_db
-    .with_write_txn(|store| {
-      store.insert([0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 1]).unwrap();
-      store.insert([0, 0, 0, 0, 0, 0, 0, 1], [0, 1, 2]).unwrap();
-      store.insert([0, 0, 0, 0, 0, 0, 0, 2], [0, 1, 3]).unwrap();
-      store.insert([0, 0, 0, 0, 0, 0, 0, 3], [0, 1, 4]).unwrap();
-      store.insert([0, 1, 0, 0, 0, 0, 0, 4], [0, 1, 5]).unwrap();
-      store.insert([0, 1, 0, 0, 0, 0, 0, 5], [0, 1, 6]).unwrap();
-      Ok(())
-    })
-    .unwrap();
-
-  let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, 1];
-  let last_entry_prior = sled_db
-    .read_txn()
-    .next_back_entry(given_key)
-    .expect("No entry found prior to the given key")
-    .unwrap();
-  assert_eq!(last_entry_prior.value(), &[0, 1, 2]);
-
-  let given_key: &[u8; 2] = &[0, 1];
-  let last_entry_prior = sled_db
-    .read_txn()
-    .next_back_entry(given_key)
-    .expect("No entry found prior to the given key")
-    .unwrap();
-  println!("{:?}", last_entry_prior.value());
-}
+use crate::util::rocks_db;
 
 #[tokio::test]
 async fn rocks_id_test() {
-  let rocks_db = rocks_db(1).1;
+  let rocks_db = rocks_db().1;
   rocks_db
     .with_write_txn(|store| {
       store.insert([0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 1]).unwrap();
@@ -97,8 +65,7 @@ async fn rocks_id_test() {
 
 #[tokio::test]
 async fn key_range_test() {
-  let db = sled_db().1;
-  let store = db.read_txn();
+  let db = rocks_db().1;
   let next = || {
     let given_key: &[u8; 2] = &[0, 2];
     let val = db
@@ -110,30 +77,27 @@ async fn key_range_test() {
     u64::from_be_bytes(val.value().try_into().unwrap())
   };
 
-  store
-    .insert([0, 0, 0, 0, 0, 0, 0, 0], 1_u64.to_be_bytes())
+  db.with_write_txn(|w| w.insert([0, 0, 0, 0, 0, 0, 0, 0], 1_u64.to_be_bytes()))
     .unwrap();
+
   assert_eq!(next(), 1);
 
-  store
-    .insert([0, 0, 0, 0, 0, 0, 1, 1], 2_u64.to_be_bytes())
+  db.with_write_txn(|w| w.insert([0, 0, 0, 0, 0, 0, 1, 1], 2_u64.to_be_bytes()))
     .unwrap();
   assert_eq!(next(), 2);
 
-  store
-    .insert([0, 0, 0, 0, 0, 0, 1, 2], 3_u64.to_be_bytes())
+  db.with_write_txn(|w| w.insert([0, 0, 0, 0, 0, 0, 1, 2], 3_u64.to_be_bytes()))
     .unwrap();
   assert_eq!(next(), 3);
 
-  store
-    .insert([0, 0, 1, 0, 0, 0, 1, 2], 4_u64.to_be_bytes())
+  db.with_write_txn(|w| w.insert([0, 0, 1, 0, 0, 0, 1, 2], 4_u64.to_be_bytes()))
     .unwrap();
   assert_eq!(next(), 4);
 }
 
 #[tokio::test]
 async fn scan_prefix_multi_thread() {
-  let db = Arc::new(sled_db().1);
+  let db = Arc::new(rocks_db().1);
   let mut handles = vec![];
   let doc_id: u64 = 1;
 
@@ -173,7 +137,7 @@ async fn scan_prefix_multi_thread() {
 
 #[tokio::test]
 async fn range_key_test() {
-  let db = sled_db().1;
+  let db = rocks_db().1;
   db.with_write_txn(|store| {
     store.insert([0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 1]).unwrap();
     store.insert([0, 0, 0, 0, 0, 0, 0, 1], [0, 1, 2]).unwrap();

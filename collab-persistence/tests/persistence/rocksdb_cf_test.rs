@@ -6,7 +6,7 @@ use crate::util::rocks_db;
 #[tokio::test]
 async fn open_same_cf_test() {
   let uid = 1;
-  let (path, db_a) = rocks_db(uid);
+  let (path, db_a) = rocks_db();
   db_a
     .with_write_txn(|txn| {
       txn.insert("1", "a")?;
