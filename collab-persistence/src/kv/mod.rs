@@ -7,9 +7,6 @@ use crate::PersistenceError;
 #[cfg(feature = "rocksdb_persistence")]
 pub mod rocks_kv;
 
-#[cfg(feature = "sled_db_persistence")]
-pub mod sled_lv;
-
 pub trait KVStore<'a> {
   type Range: Iterator<Item = Self::Entry>;
   type Entry: KVEntry;

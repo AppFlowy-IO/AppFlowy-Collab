@@ -1,4 +1,4 @@
-#[cfg(any(feature = "rocksdb_plugin", feature = "disk_sled"))]
+#[cfg(any(feature = "rocksdb_plugin"))]
 pub use collab_persistence::*;
 
 mod ws_sync;

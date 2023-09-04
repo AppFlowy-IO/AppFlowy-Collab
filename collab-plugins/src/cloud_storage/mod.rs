@@ -1,3 +1,4 @@
+pub use collab_define::*;
 pub use remote_collab::{
   MsgId, RemoteCollabSnapshot, RemoteCollabState, RemoteCollabStorage, RemoteUpdateReceiver,
   RemoteUpdateSender,
@@ -5,8 +6,6 @@ pub use remote_collab::{
 pub use yrs::merge_updates_v1;
 pub use yrs::updates::decoder::Decode;
 pub use yrs::Update as YrsUpdate;
-
-pub use collab_define::*;
 
 // #[cfg(feature = "aws_storage_plugin")]
 // pub mod aws;

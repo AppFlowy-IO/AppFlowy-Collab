@@ -1,9 +1,6 @@
 #[cfg(feature = "rocksdb_plugin")]
 pub mod rocksdb;
 
-#[cfg(feature = "disk_sled")]
-pub mod sled;
-
 #[cfg(feature = "rocksdb_plugin")]
 pub mod rocksdb_server;
 
