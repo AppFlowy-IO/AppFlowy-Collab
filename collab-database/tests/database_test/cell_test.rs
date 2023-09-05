@@ -5,7 +5,7 @@ use crate::helper::TestTextCell;
 
 #[tokio::test]
 async fn get_cells_for_field_test() {
-  let database_test = create_database_with_default_data(1, "1");
+  let database_test = create_database_with_default_data(1, "1").await;
 
   let cells = database_test.get_cells_for_field("v1", "f1");
   assert_eq!(cells.len(), 3);
@@ -19,7 +19,7 @@ async fn get_cells_for_field_test() {
 
 #[tokio::test]
 async fn get_cell_for_field_test() {
-  let database_test = create_database_with_default_data(1, "1");
+  let database_test = create_database_with_default_data(1, "1").await;
   let cell = database_test.get_cell("f1", &1.into()).cell.unwrap();
   let text_cell = TestTextCell::from(cell);
   assert_eq!(text_cell.0, "1f1cell");
@@ -27,7 +27,7 @@ async fn get_cell_for_field_test() {
 
 #[tokio::test]
 async fn update_cell_for_field_test() {
-  let database_test = create_database_with_default_data(1, "1");
+  let database_test = create_database_with_default_data(1, "1").await;
   let cells = database_test.get_cells_for_field("v1", "f1");
   assert_eq!(cells.len(), 3);
 
@@ -51,7 +51,7 @@ async fn update_cell_for_field_test() {
 
 #[tokio::test]
 async fn update_empty_cell_for_field_test() {
-  let database_test = create_database_with_default_data(1, "1");
+  let database_test = create_database_with_default_data(1, "1").await;
   let cells = database_test.get_cells_for_field("v1", "f2");
   assert_eq!(cells.len(), 3);
 

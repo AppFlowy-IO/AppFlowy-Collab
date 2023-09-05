@@ -3,7 +3,7 @@ use crate::struct_define::{DocumentMapRef, Owner, OwnerMapRef, TaskInfoMapRef};
 
 #[tokio::test]
 async fn derive_string_test() {
-  let (local, _remote, update_cache) = make_collab_pair();
+  let (local, _remote, update_cache) = make_collab_pair().await;
   update_cache.clear();
 
   let mut map_ref = local
@@ -24,7 +24,7 @@ async fn derive_string_test() {
 
 #[tokio::test]
 async fn derive_hash_map_test() {
-  let (local, _remote, update_cache) = make_collab_pair();
+  let (local, _remote, update_cache) = make_collab_pair().await;
   update_cache.clear();
 
   let mut map_ref = local
@@ -54,7 +54,7 @@ async fn derive_hash_map_test() {
 
 #[tokio::test]
 async fn derive_hash_map_inner_json_value_test() {
-  let (local, _remote, _update_cache) = make_collab_pair();
+  let (local, _remote, _update_cache) = make_collab_pair().await;
 
   let mut map_ref = local
     .lock()
@@ -74,7 +74,7 @@ async fn derive_hash_map_inner_json_value_test() {
 
 #[tokio::test]
 async fn derive_json_value_test() {
-  let (local, _remote, update_cache) = make_collab_pair();
+  let (local, _remote, update_cache) = make_collab_pair().await;
   update_cache.clear();
 
   let mut map_ref = local
@@ -98,7 +98,7 @@ async fn derive_json_value_test() {
 
 #[tokio::test]
 async fn derive_option_value_test() {
-  let (local, _remote, update_cache) = make_collab_pair();
+  let (local, _remote, update_cache) = make_collab_pair().await;
   update_cache.clear();
 
   let mut map_ref = local
@@ -119,7 +119,7 @@ async fn derive_option_value_test() {
 
 #[tokio::test]
 async fn derive_into_inner_test() {
-  let (local, _remote, update_cache) = make_collab_pair();
+  let (local, _remote, update_cache) = make_collab_pair().await;
   update_cache.clear();
 
   let mut map_ref = local

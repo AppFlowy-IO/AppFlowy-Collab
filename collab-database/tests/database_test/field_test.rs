@@ -7,7 +7,7 @@ use crate::database_test::helper::{
 
 #[tokio::test]
 async fn create_single_field_test() {
-  let database_test = create_database(1, "1");
+  let database_test = create_database(1, "1").await;
   database_test.create_field(
     Field::new("f1".to_string(), "text field".to_string(), 0, true),
     default_field_settings_by_layout(),
@@ -22,7 +22,7 @@ async fn create_single_field_test() {
 
 #[tokio::test]
 async fn duplicate_field_test() {
-  let database_test = create_database_with_default_data(1, "1");
+  let database_test = create_database_with_default_data(1, "1").await;
   let original_field = database_test.fields.get_field("f1").unwrap();
   let (index, duplicated_field) = database_test
     .duplicate_field("v1", "f1", |field| format!("{} (copy)", field.name))
@@ -38,7 +38,7 @@ async fn duplicate_field_test() {
 
 #[tokio::test]
 async fn duplicate_field_test2() {
-  let database_test = create_database_with_default_data(1, "1");
+  let database_test = create_database_with_default_data(1, "1").await;
   let original_field = database_test.fields.get_field("f3").unwrap();
   let (index, duplicated_field) = database_test
     .duplicate_field("v1", "f3", |field| format!("{} (copy)", field.name))
@@ -54,7 +54,7 @@ async fn duplicate_field_test2() {
 
 #[tokio::test]
 async fn create_multiple_field_test() {
-  let database_test = create_database(1, "1");
+  let database_test = create_database(1, "1").await;
   for i in 0..10 {
     database_test.create_field(
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
@@ -68,7 +68,7 @@ async fn create_multiple_field_test() {
 
 #[tokio::test]
 async fn delete_field_test() {
-  let database_test = create_database(1, "1");
+  let database_test = create_database(1, "1").await;
   for i in 0..3 {
     database_test.create_field(
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
@@ -83,7 +83,7 @@ async fn delete_field_test() {
 
 #[tokio::test]
 async fn delete_field_in_views_test() {
-  let database_test = create_database(1, "1");
+  let database_test = create_database(1, "1").await;
   for i in 0..3 {
     database_test.create_field(
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
@@ -107,7 +107,7 @@ async fn delete_field_in_views_test() {
 
 #[tokio::test]
 async fn field_order_in_view_test() {
-  let database_test = create_database(1, "1");
+  let database_test = create_database(1, "1").await;
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v1".to_string(),
@@ -132,7 +132,7 @@ async fn field_order_in_view_test() {
 
 #[tokio::test]
 async fn get_field_in_order_test() {
-  let database_test = create_database(1, "1");
+  let database_test = create_database(1, "1").await;
   for i in 0..3 {
     database_test.create_field(
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
@@ -155,7 +155,7 @@ async fn get_field_in_order_test() {
 
 #[tokio::test]
 async fn move_field_test() {
-  let database_test = create_database(1, "1");
+  let database_test = create_database(1, "1").await;
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
@@ -187,7 +187,7 @@ async fn move_field_test() {
 
 #[tokio::test]
 async fn move_field_to_out_of_index_test() {
-  let database_test = create_database(1, "1");
+  let database_test = create_database(1, "1").await;
   for i in 0..3 {
     database_test.create_field(
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),

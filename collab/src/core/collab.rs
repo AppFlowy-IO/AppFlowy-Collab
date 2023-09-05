@@ -203,20 +203,17 @@ impl Collab {
   /// further synchronization with the remote server.
   ///
   /// This method must be called after all plugins have been added.
-  pub fn initialize(&self) {
+  pub async fn initialize(&self) {
     if !self.state.is_uninitialized() {
       return;
     }
 
     self.state.set_init_state(InitState::Loading);
     {
-      let mut txn = self.origin_transact_mut();
-      self
-        .plugins
-        .read()
-        .iter()
-        .for_each(|plugin| plugin.init(&self.object_id, &mut txn));
-      drop(txn);
+      let plugins = self.plugins.read().clone();
+      for plugin in plugins {
+        plugin.init(&self.object_id, &self.origin, &self.doc).await;
+      }
     }
 
     let (update_subscription, after_txn_subscription) = observe_doc(
@@ -774,6 +771,11 @@ impl MutexCollab {
   pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
     let collab = self.0.lock();
     collab.encode_as_update_v1()
+  }
+
+  pub async fn async_initialize(&self) {
+    let lock_guard = self.0.lock_arc();
+    lock_guard.initialize().await
   }
 
   pub fn to_json_value(&self) -> JsonValue {

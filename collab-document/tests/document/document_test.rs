@@ -7,7 +7,7 @@ use crate::util::{apply_actions, get_document_data, open_document_with_db, Docum
 async fn insert_block_with_empty_parent_id_and_empty_prev_id() {
   let uid = 1;
   let doc_id = "1";
-  let test = DocumentTest::new(uid, doc_id);
+  let test = DocumentTest::new(uid, doc_id).await;
   let (page_id, _, _) = get_document_data(&test.document);
   let block_id = nanoid!(10);
   let block = Block {
@@ -40,13 +40,13 @@ async fn insert_block_with_empty_parent_id_and_empty_prev_id() {
   assert!(page_children.contains(&block_id));
 }
 
-#[test]
+#[tokio::test]
 #[should_panic]
-fn open_empty_document() {
+async fn open_empty_document() {
   let doc_id = "1";
 
   // the document is not exist, so this should panic
-  let document_test = DocumentTest::new(1, doc_id);
+  let document_test = DocumentTest::new(1, doc_id).await;
   let document = document_test.document;
   let data = document.get_document_data();
   assert!(data.is_err());
@@ -55,14 +55,14 @@ fn open_empty_document() {
 #[tokio::test]
 async fn reopen_document() {
   let doc_id = "1";
-  let test = DocumentTest::new(1, doc_id);
+  let test = DocumentTest::new(1, doc_id).await;
   let document = test.document;
   let (page_id, _, _) = get_document_data(&document);
 
   // close document
   drop(document);
 
-  let document = open_document_with_db(1, doc_id, test.db);
+  let document = open_document_with_db(1, doc_id, test.db).await;
   let (page_id2, _, _) = get_document_data(&document);
   assert_eq!(page_id, page_id2);
 }

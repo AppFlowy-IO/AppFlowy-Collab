@@ -26,14 +26,14 @@ pub struct Position {
   pub(crate) level: u8,
 }
 
-pub fn make_collab_pair() -> (MutexCollab, MutexCollab, CollabStateCachePlugin) {
+pub async fn make_collab_pair() -> (MutexCollab, MutexCollab, CollabStateCachePlugin) {
   let update_cache = CollabStateCachePlugin::new();
   let local_collab = CollabBuilder::new(1, "1")
     .with_plugin(update_cache.clone())
     .with_device_id("1")
     .build()
     .unwrap();
-  local_collab.lock().initialize();
+  local_collab.async_initialize().await;
 
   // Insert document
   local_collab
@@ -45,7 +45,7 @@ pub fn make_collab_pair() -> (MutexCollab, MutexCollab, CollabStateCachePlugin) 
     .with_raw_data(updates.unwrap())
     .build()
     .unwrap();
-  remote_collab.lock().initialize();
+  remote_collab.async_initialize().await;
 
   (local_collab, remote_collab, update_cache)
 }

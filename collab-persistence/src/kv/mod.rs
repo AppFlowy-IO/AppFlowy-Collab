@@ -48,7 +48,6 @@ pub trait KVEntry {
   fn value(&self) -> &[u8];
 }
 
-/// Implement KVStore for Arc<T> where T: KVStore
 impl<T> KVStore<'static> for Arc<T>
 where
   T: KVStore<'static>,

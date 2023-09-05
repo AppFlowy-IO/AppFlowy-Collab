@@ -26,19 +26,19 @@ pub struct DocumentTest {
 }
 
 impl DocumentTest {
-  pub fn new(uid: i64, doc_id: &str) -> Self {
+  pub async fn new(uid: i64, doc_id: &str) -> Self {
     let db = document_storage();
-    Self::new_with_db(uid, doc_id, db)
+    Self::new_with_db(uid, doc_id, db).await
   }
 
-  pub fn new_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> Self {
+  pub async fn new_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> Self {
     let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
     let collab = CollabBuilder::new(1, doc_id)
       .with_plugin(disk_plugin)
       .with_device_id("1")
       .build()
       .unwrap();
-    collab.lock().initialize();
+    collab.async_initialize().await;
 
     let mut blocks = HashMap::new();
     let mut children_map = HashMap::new();
@@ -95,7 +95,7 @@ impl Deref for DocumentTest {
   }
 }
 
-pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> Document {
+pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> Document {
   setup_log();
   let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
   let collab = CollabBuilder::new(uid, doc_id)
@@ -103,7 +103,7 @@ pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> 
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.lock().initialize();
+  collab.async_initialize().await;
 
   Document::open(Arc::new(collab)).unwrap()
 }

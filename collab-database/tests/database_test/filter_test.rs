@@ -5,7 +5,7 @@ use crate::helper::{TestFieldType, TestFilter, FILTER_CONTENT};
 
 #[tokio::test]
 async fn create_database_view_with_filter_test() {
-  let database_test = create_database_with_two_filters();
+  let database_test = create_database_with_two_filters().await;
   let filter_1 = database_test
     .get_filter::<TestFilter>("v1", "filter_1")
     .unwrap();
@@ -19,7 +19,7 @@ async fn create_database_view_with_filter_test() {
 
 #[tokio::test]
 async fn insert_or_update_database_view_filter_test() {
-  let database_test = create_database_with_two_filters();
+  let database_test = create_database_with_two_filters().await;
   // Update
   database_test.update_filter("v1", "filter_1", |update| {
     update.insert_str_value(FILTER_CONTENT, "Text filter".to_string());
@@ -50,7 +50,7 @@ async fn insert_or_update_database_view_filter_test() {
 
 #[tokio::test]
 async fn get_database_view_filter_by_field_id_test() {
-  let database_test = create_database_with_two_filters();
+  let database_test = create_database_with_two_filters().await;
   let filter_1 = database_test
     .get_filter_by_field_id::<TestFilter>("v1", "f1")
     .unwrap();
@@ -59,7 +59,7 @@ async fn get_database_view_filter_by_field_id_test() {
 
 #[tokio::test]
 async fn insert_database_view_filter_with_occupied_field_id_test() {
-  let database_test = create_database_with_two_filters();
+  let database_test = create_database_with_two_filters().await;
 
   // The field id "f1" is already occupied by existing filter. So this filter
   // will be ignored
@@ -82,14 +82,14 @@ async fn insert_database_view_filter_with_occupied_field_id_test() {
 
 #[tokio::test]
 async fn remove_database_view_filter_test() {
-  let database_test = create_database_with_two_filters();
+  let database_test = create_database_with_two_filters().await;
   database_test.remove_filter("v1", "filter_1");
   let filter_1 = database_test.get_filter::<TestFilter>("v1", "filter_1");
   assert!(filter_1.is_none());
 }
 
-fn create_database_with_two_filters() -> DatabaseTest {
-  let database_test = create_database_with_default_data(1, "1");
+async fn create_database_with_two_filters() -> DatabaseTest {
+  let database_test = create_database_with_default_data(1, "1").await;
   let filter_1 = TestFilter {
     id: "filter_1".to_string(),
     field_id: "f1".to_string(),

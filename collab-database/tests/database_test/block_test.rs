@@ -4,7 +4,7 @@ use crate::database_test::helper::create_database;
 
 #[tokio::test]
 async fn create_rows_test() {
-  let database_test = create_database(1, "1");
+  let database_test = create_database(1, "1").await;
   for i in 0..100 {
     database_test.create_row_in_view(
       "v1",

@@ -7,7 +7,7 @@ use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 
 #[tokio::test]
 async fn insert_cell_test() {
-  let test = user_database_with_default_row();
+  let test = user_database_with_default_row().await;
   let database = test.get_database("d1").await.unwrap();
   database.lock().update_row(&1.into(), |row_update| {
     row_update.update_cells(|cells_update| {
@@ -25,7 +25,7 @@ async fn insert_cell_test() {
 
 #[tokio::test]
 async fn update_cell_test() {
-  let test = user_database_with_default_row();
+  let test = user_database_with_default_row().await;
   let database = test.get_database("d1").await.unwrap();
   database.lock().update_row(&1.into(), |row_update| {
     row_update.update_cells(|cells_update| {
@@ -60,7 +60,7 @@ async fn update_cell_test() {
 
 #[tokio::test]
 async fn update_not_exist_row_test() {
-  let test = workspace_database_test(1);
+  let test = workspace_database_test(1).await;
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -75,8 +75,8 @@ async fn update_not_exist_row_test() {
   assert!(row.is_empty())
 }
 
-fn user_database_with_default_row() -> WorkspaceDatabaseTest {
-  let test = workspace_database_test(1);
+async fn user_database_with_default_row() -> WorkspaceDatabaseTest {
+  let test = workspace_database_test(1).await;
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),

@@ -5,7 +5,7 @@ use crate::util::{create_folder_with_workspace, make_test_view};
 
 #[tokio::test]
 async fn create_child_views_test() {
-  let folder_test = create_folder_with_workspace("1", "w1");
+  let folder_test = create_folder_with_workspace("1", "w1").await;
   let view_1_1 = make_test_view("1_1", "1", vec![]);
   let view_1_2 = make_test_view("1_2", "1", vec![]);
   let view_1_2_1 = make_test_view("1_2_1", "1_2", vec![]);
@@ -150,7 +150,7 @@ async fn create_child_views_test() {
 
 #[tokio::test]
 async fn move_child_views_test() {
-  let folder_test = create_folder_with_workspace("1", "w1");
+  let folder_test = create_folder_with_workspace("1", "w1").await;
   let view_1_1 = make_test_view("1_1", "1", vec![]);
   let view_1_2 = make_test_view("1_2", "1", vec![]);
   let view_1_3 = make_test_view("1_3", "1", vec![]);
@@ -181,7 +181,7 @@ async fn move_child_views_test() {
 
 #[tokio::test]
 async fn delete_view_test() {
-  let folder_test = create_folder_with_workspace("1", "w1");
+  let folder_test = create_folder_with_workspace("1", "w1").await;
   let view_1 = make_test_view("1_1", "w1", vec![]);
   let view_2 = make_test_view("1_2", "w1", vec![]);
   let view_3 = make_test_view("1_3", "w1", vec![]);
@@ -197,7 +197,7 @@ async fn delete_view_test() {
 
 #[tokio::test]
 async fn delete_child_view_test() {
-  let folder_test = create_folder_with_workspace("1", "w1");
+  let folder_test = create_folder_with_workspace("1", "w1").await;
   let view_1 = make_test_view("v1", "w1", vec![]);
   let view_1_1 = make_test_view("v1_1", "v1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);

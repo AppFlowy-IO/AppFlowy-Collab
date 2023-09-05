@@ -17,6 +17,7 @@ use tokio::net::TcpListener;
 
 use collab_plugins::local_storage::rocksdb_server::RocksdbServerDiskPlugin;
 use dashmap::DashMap;
+use futures::executor::block_on;
 use tempfile::TempDir;
 
 use crate::setup_log;
@@ -38,7 +39,7 @@ impl TestServer {
       .entry(object_id.to_string())
       .or_insert_with(|| {
         let collab_id = self.collab_id_from_object_id(object_id);
-        make_collab_group(collab_id, object_id, self.db.clone())
+        block_on(make_collab_group(collab_id, object_id, self.db.clone()))
       })
       .collab
       .to_json_value()
@@ -50,7 +51,7 @@ impl TestServer {
       .entry(object_id.to_string())
       .or_insert_with(|| {
         let collab_id = self.collab_id_from_object_id(object_id);
-        make_collab_group(collab_id, object_id, self.db.clone())
+        block_on(make_collab_group(collab_id, object_id, self.db.clone()))
       })
       .get_mut_collab(f);
   }
@@ -114,7 +115,7 @@ pub async fn spawn_server_with_db(
             })
             .unwrap();
 
-          make_collab_group(collab_id, &object_id, cloned_db.clone())
+          block_on(make_collab_group(collab_id, &object_id, cloned_db.clone()))
         })
         .broadcast
         .subscribe(CollabOrigin::Client(client.clone()), sink, stream);
@@ -138,7 +139,7 @@ pub async fn spawn_server_with_db(
   })
 }
 
-pub fn make_collab_group(
+pub async fn make_collab_group(
   collab_id: CollabId,
   object_id: &str,
   db: Arc<RocksCollabDB>,
@@ -146,7 +147,7 @@ pub fn make_collab_group(
   let collab = MutexCollab::new(CollabOrigin::Server, object_id, vec![]);
   let plugin = RocksdbServerDiskPlugin::new(collab_id, db).unwrap();
   collab.lock().add_plugin(Arc::new(plugin));
-  collab.lock().initialize();
+  collab.async_initialize().await;
 
   let broadcast = CollabBroadcast::new(object_id, collab.clone(), 10);
   CollabGroup {

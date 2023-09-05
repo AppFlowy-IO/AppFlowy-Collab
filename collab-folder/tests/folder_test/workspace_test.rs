@@ -4,7 +4,7 @@ use crate::util::create_folder;
 
 #[tokio::test]
 async fn create_workspace_test() {
-  let folder_test = create_folder("1");
+  let folder_test = create_folder("1").await;
 
   let child_views = RepeatedViewIdentifier {
     items: vec![
@@ -29,7 +29,7 @@ async fn create_workspace_test() {
 
 #[tokio::test]
 async fn set_current_workspace_test() {
-  let folder_test = create_folder("1");
+  let folder_test = create_folder("1").await;
   let workspace = Workspace {
     id: "1".to_string(),
     name: "My first workspace".to_string(),
@@ -53,7 +53,7 @@ async fn set_current_workspace_test() {
 
 #[tokio::test]
 async fn update_workspace_test() {
-  let folder_test = create_folder("1");
+  let folder_test = create_folder("1").await;
   let workspace = Workspace {
     id: "1".to_string(),
     name: "My first workspace".to_string(),
@@ -82,7 +82,7 @@ async fn update_workspace_test() {
 
 #[tokio::test]
 async fn get_all_workspace_test() {
-  let folder_test = create_folder("1");
+  let folder_test = create_folder("1").await;
   for i in 0..5 {
     let mut child_views = vec![];
     for j in 0..i {
@@ -116,7 +116,7 @@ async fn get_all_workspace_test() {
 
 #[tokio::test]
 async fn delete_workspace_test() {
-  let folder_test = create_folder("1");
+  let folder_test = create_folder("1").await;
   for i in 0..10 {
     let workspace = Workspace {
       id: i.to_string(),

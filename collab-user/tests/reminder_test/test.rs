@@ -6,7 +6,7 @@ use serde_json::json;
 
 #[tokio::test]
 async fn add_reminder_test() {
-  let test = UserAwarenessTest::new(1);
+  let test = UserAwarenessTest::new(1).await;
   let reminder = Reminder::new("1".to_string(), "o1".to_string(), 123, ObjectType::Document)
     .with_key_value("block_id", "fake_block_id")
     .with_key_value("id", "fake_id");
@@ -38,7 +38,7 @@ async fn add_reminder_test() {
 
 #[tokio::test]
 async fn update_reminder_test() {
-  let test = UserAwarenessTest::new(1);
+  let test = UserAwarenessTest::new(1).await;
   let reminder = Reminder::new("1".to_string(), "o1".to_string(), 123, ObjectType::Document)
     .with_key_value("block_id", "fake_block_id")
     .with_key_value("id", "fake_id");
@@ -77,7 +77,7 @@ async fn update_reminder_test() {
 
 #[tokio::test]
 async fn delete_reminder_test() {
-  let test = UserAwarenessTest::new(1);
+  let test = UserAwarenessTest::new(1).await;
   for i in 0..3 {
     test.lock().add_reminder(Reminder::new(
       i.to_string(),

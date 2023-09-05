@@ -30,7 +30,7 @@ pub async fn spawn_client_with_empty_doc(
   let sink = CollabSink::new(writer, CollabMsgCodec::default());
   let sync_plugin = SyncPlugin::new(origin, object_id, Arc::downgrade(&collab), sink, stream);
   collab.lock().add_plugin(Arc::new(sync_plugin));
-  collab.lock().initialize();
+  collab.async_initialize().await;
   Ok(collab)
 }
 
@@ -56,7 +56,7 @@ pub async fn spawn_client(
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
   let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
   collab.lock().add_plugin(Arc::new(disk_plugin));
-  collab.lock().initialize();
+  collab.async_initialize().await;
 
   {
     let client = collab.lock();
@@ -115,7 +115,7 @@ impl TestClient {
       TokioUnboundedStream::new(stream),
     );
     collab.lock().add_plugin(Arc::new(sync_plugin));
-    collab.lock().initialize();
+    collab.async_initialize().await;
     if with_data {
       {
         let client = collab.lock();
@@ -167,7 +167,7 @@ impl TestClient {
       TokioUnboundedStream::new(stream),
     );
     collab.lock().add_plugin(Arc::new(sync_plugin));
-    collab.lock().initialize();
+    collab.async_initialize().await;
     Ok(Self {
       test_stream,
       test_sink,

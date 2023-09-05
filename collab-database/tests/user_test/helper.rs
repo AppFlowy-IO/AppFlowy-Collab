@@ -1,3 +1,5 @@
+use async_trait::async_trait;
+use futures::executor::block_on;
 use std::future::Future;
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
@@ -50,6 +52,7 @@ pub fn random_uid() -> i64 {
 
 pub struct TestUserDatabaseCollabBuilderImpl();
 
+#[async_trait]
 impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
   fn get_collab_update(
     &self,
@@ -86,17 +89,17 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
       ))
       .build()
       .unwrap();
-    collab.lock().initialize();
+    block_on(collab.async_initialize());
     Arc::new(collab)
   }
 }
 
-pub fn workspace_database_test(uid: i64) -> WorkspaceDatabaseTest {
+pub async fn workspace_database_test(uid: i64) -> WorkspaceDatabaseTest {
   let db = make_rocks_db();
-  user_database_test_with_db(uid, db)
+  user_database_test_with_db(uid, db).await
 }
 
-pub fn workspace_database_test_with_config(
+pub async fn workspace_database_test_with_config(
   uid: i64,
   config: CollabPersistenceConfig,
 ) -> WorkspaceDatabaseTest {
@@ -119,7 +122,7 @@ pub fn workspace_database_test_with_config(
   }
 }
 
-pub fn workspace_database_with_db(
+pub async fn workspace_database_with_db(
   uid: i64,
   collab_db: Weak<RocksCollabDB>,
   config: Option<CollabPersistenceConfig>,
@@ -140,11 +143,11 @@ pub fn workspace_database_with_db(
   WorkspaceDatabase::open(uid, collab, collab_db, config, builder)
 }
 
-pub fn user_database_test_with_db(
+pub async fn user_database_test_with_db(
   uid: i64,
   collab_db: Arc<RocksCollabDB>,
 ) -> WorkspaceDatabaseTest {
-  let inner = workspace_database_with_db(uid, Arc::downgrade(&collab_db), None);
+  let inner = workspace_database_with_db(uid, Arc::downgrade(&collab_db), None).await;
   WorkspaceDatabaseTest {
     uid,
     inner,
@@ -152,11 +155,11 @@ pub fn user_database_test_with_db(
   }
 }
 
-pub fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabaseTest {
+pub async fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
-  let w_database = user_database_test_with_db(uid, db);
+  let w_database = user_database_test_with_db(uid, db).await;
 
   w_database
     .create_database(create_database_params("d1"))

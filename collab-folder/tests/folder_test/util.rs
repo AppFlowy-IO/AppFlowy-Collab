@@ -37,11 +37,11 @@ unsafe impl Send for FolderTest {}
 
 unsafe impl Sync for FolderTest {}
 
-pub fn create_folder(id: &str) -> FolderTest {
-  create_folder_with_data(id, None)
+pub async fn create_folder(id: &str) -> FolderTest {
+  create_folder_with_data(id, None).await
 }
 
-pub fn create_folder_with_data(id: &str, folder_data: Option<FolderData>) -> FolderTest {
+pub async fn create_folder_with_data(id: &str, folder_data: Option<FolderData>) -> FolderTest {
   let uid = 1;
   let tempdir = TempDir::new().unwrap();
 
@@ -55,7 +55,7 @@ pub fn create_folder_with_data(id: &str, folder_data: Option<FolderData>) -> Fol
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.lock().initialize();
+  collab.async_initialize().await;
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
   let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
@@ -73,7 +73,7 @@ pub fn create_folder_with_data(id: &str, folder_data: Option<FolderData>) -> Fol
   }
 }
 
-pub fn open_folder_with_db(uid: i64, object_id: &str, db_path: PathBuf) -> FolderTest {
+pub async fn open_folder_with_db(uid: i64, object_id: &str, db_path: PathBuf) -> FolderTest {
   let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
   let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
   let cleaner: Cleaner = Cleaner::new(db_path);
@@ -82,7 +82,7 @@ pub fn open_folder_with_db(uid: i64, object_id: &str, db_path: PathBuf) -> Folde
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.lock().initialize();
+  collab.async_initialize().await;
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
   let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
@@ -100,8 +100,8 @@ pub fn open_folder_with_db(uid: i64, object_id: &str, db_path: PathBuf) -> Folde
   }
 }
 
-pub fn create_folder_with_workspace(id: &str, workspace_id: &str) -> FolderTest {
-  let test = create_folder(id);
+pub async fn create_folder_with_workspace(id: &str, workspace_id: &str) -> FolderTest {
+  let test = create_folder(id).await;
   let workspace = Workspace {
     id: workspace_id.to_string(),
     name: "My first workspace".to_string(),

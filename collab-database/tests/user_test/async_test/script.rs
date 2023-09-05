@@ -63,16 +63,16 @@ pub struct DatabaseTest {
   pub config: CollabPersistenceConfig,
 }
 
-pub fn database_test(config: CollabPersistenceConfig) -> DatabaseTest {
-  DatabaseTest::new(config)
+pub async fn database_test(config: CollabPersistenceConfig) -> DatabaseTest {
+  DatabaseTest::new(config).await
 }
 
 impl DatabaseTest {
-  pub fn new(config: CollabPersistenceConfig) -> Self {
+  pub async fn new(config: CollabPersistenceConfig) -> Self {
     let db_path = db_path();
     let collab_db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
     let workspace_database =
-      workspace_database_with_db(1, Arc::downgrade(&collab_db), Some(config.clone()));
+      workspace_database_with_db(1, Arc::downgrade(&collab_db), Some(config.clone())).await;
     Self {
       collab_db,
       workspace_database: Arc::new(workspace_database),
@@ -155,7 +155,8 @@ pub async fn run_script(
       database_id,
       expected,
     } => {
-      let w_database = workspace_database_with_db(1, Arc::downgrade(&db), Some(config.clone()));
+      let w_database =
+        workspace_database_with_db(1, Arc::downgrade(&db), Some(config.clone())).await;
       let database = w_database.get_database(&database_id).await.unwrap();
       let actual = database.lock().to_json_value();
       assert_json_diff::assert_json_include!(actual: actual, expected: expected);

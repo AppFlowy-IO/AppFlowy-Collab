@@ -13,7 +13,7 @@ use crate::helper::unzip_history_database_db;
 
 #[tokio::test]
 async fn restore_row_from_disk_test() {
-  let (db, database_test) = create_database_with_db(1, "1");
+  let (db, database_test) = create_database_with_db(1, "1").await;
   let row_1 = CreateRowParams {
     id: 1.into(),
     ..Default::default()
@@ -36,7 +36,7 @@ async fn restore_row_from_disk_test() {
 
 #[tokio::test]
 async fn restore_from_disk_test() {
-  let (db, database_test, expected) = create_database_with_view();
+  let (db, database_test, expected) = create_database_with_view().await;
   assert_json_include!(actual:database_test.to_json_value(), expected:expected);
   // assert_json_eq!(expected, database_test.to_json_value());
 
@@ -47,7 +47,7 @@ async fn restore_from_disk_test() {
 
 #[tokio::test]
 async fn restore_from_disk_with_different_database_id_test() {
-  let (db, _, _) = create_database_with_view();
+  let (db, _, _) = create_database_with_view().await;
   let database_test = restore_database_from_db(1, "1", db);
   assert_json_include!(
     expected: json!( {
@@ -75,7 +75,7 @@ async fn restore_from_disk_with_different_database_id_test() {
 
 #[tokio::test]
 async fn restore_from_disk_with_different_uid_test() {
-  let (db, _, _) = create_database_with_view();
+  let (db, _, _) = create_database_with_view().await;
   let database_test = restore_database_from_db(1, "1", db);
   assert_json_include!(
     expected: json!( {
@@ -101,8 +101,8 @@ async fn restore_from_disk_with_different_uid_test() {
   );
 }
 
-fn create_database_with_view() -> (Arc<RocksCollabDB>, DatabaseTest, Value) {
-  let (db, database_test) = create_database_with_db(1, "1");
+async fn create_database_with_view() -> (Arc<RocksCollabDB>, DatabaseTest, Value) {
+  let (db, database_test) = create_database_with_db(1, "1").await;
   let expected = json!({
     "fields": [],
     "inline_view": "v1",

@@ -11,6 +11,7 @@ use collab_plugins::cloud_storage::{CollabObject, CollabType, RemoteCollabStorag
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::snapshot::{CollabSnapshotPlugin, SnapshotPersistence};
+use futures::executor::block_on;
 use parking_lot::{Mutex, RwLock};
 
 #[derive(Clone, Debug)]
@@ -160,78 +161,79 @@ impl AppFlowyCollabBuilder {
         .with_device_id(self.device_id.lock().clone())
         .build()?,
     );
-
-    let cloud_storage = self.cloud_storage.read();
-    let cloud_storage_type = cloud_storage.storage_type();
-    match cloud_storage_type {
-      CollabStorageType::AWS => {
-        #[cfg(feature = "aws_storage_plugin")]
-        {
-          // let collab_config = CollabPluginConfig::from_env();
-          // if let Some(config) = collab_config.aws_config() {
-          //   if !config.enable {
-          //     std::env::remove_var(AWS_ACCESS_KEY_ID);
-          //     std::env::remove_var(AWS_SECRET_ACCESS_KEY);
-          //   } else {
-          //     std::env::set_var(AWS_ACCESS_KEY_ID, &config.access_key_id);
-          //     std::env::set_var(AWS_SECRET_ACCESS_KEY, &config.secret_access_key);
-          //     let plugin = AWSDynamoDBPlugin::new(
-          //       object_id.to_string(),
-          //       Arc::downgrade(&collab),
-          //       10,
-          //       config.region.clone(),
-          //     );
-          //     collab.lock().add_plugin(Arc::new(plugin));
-          //     // tracing::debug!("add aws plugin: {:?}", cloud_storage_type);
-          //   }
-          // }
-        }
-      },
-      CollabStorageType::Supabase => {
-        #[cfg(feature = "postgres_storage_plugin")]
-        {
-          let workspace_id = self.workspace_id.read().clone().ok_or_else(|| {
-            anyhow::anyhow!("When using supabase plugin, the workspace_id should not be empty")
-          })?;
-          let collab_object = CollabObject::new(uid, object_id.to_string(), object_type.clone())
-            .with_workspace_id(workspace_id)
-            .with_device_id(self.device_id.lock().clone());
-          let local_collab_storage = collab_db.clone();
-          if let Some(remote_collab_storage) =
-            cloud_storage.get_storage(&collab_object, &cloud_storage_type)
+    {
+      let cloud_storage = self.cloud_storage.read();
+      let cloud_storage_type = cloud_storage.storage_type();
+      match cloud_storage_type {
+        CollabStorageType::AWS => {
+          #[cfg(feature = "aws_storage_plugin")]
           {
-            let plugin = SupabaseDBPlugin::new(
-              uid,
-              collab_object,
-              Arc::downgrade(&collab),
-              1,
-              remote_collab_storage,
-              local_collab_storage,
-            );
-            collab.lock().add_plugin(Arc::new(plugin));
+            // let collab_config = CollabPluginConfig::from_env();
+            // if let Some(config) = collab_config.aws_config() {
+            //   if !config.enable {
+            //     std::env::remove_var(AWS_ACCESS_KEY_ID);
+            //     std::env::remove_var(AWS_SECRET_ACCESS_KEY);
+            //   } else {
+            //     std::env::set_var(AWS_ACCESS_KEY_ID, &config.access_key_id);
+            //     std::env::set_var(AWS_SECRET_ACCESS_KEY, &config.secret_access_key);
+            //     let plugin = AWSDynamoDBPlugin::new(
+            //       object_id.to_string(),
+            //       Arc::downgrade(&collab),
+            //       10,
+            //       config.region.clone(),
+            //     );
+            //     collab.lock().add_plugin(Arc::new(plugin));
+            //     // tracing::debug!("add aws plugin: {:?}", cloud_storage_type);
+            //   }
+            // }
           }
-        }
-      },
-      CollabStorageType::Local => {},
-    }
+        },
+        CollabStorageType::Supabase => {
+          #[cfg(feature = "postgres_storage_plugin")]
+          {
+            let workspace_id = self.workspace_id.read().clone().ok_or_else(|| {
+              anyhow::anyhow!("When using supabase plugin, the workspace_id should not be empty")
+            })?;
+            let collab_object = CollabObject::new(uid, object_id.to_string(), object_type.clone())
+              .with_workspace_id(workspace_id)
+              .with_device_id(self.device_id.lock().clone());
+            let local_collab_storage = collab_db.clone();
+            if let Some(remote_collab_storage) =
+              cloud_storage.get_storage(&collab_object, &cloud_storage_type)
+            {
+              let plugin = SupabaseDBPlugin::new(
+                uid,
+                collab_object,
+                Arc::downgrade(&collab),
+                1,
+                remote_collab_storage,
+                local_collab_storage,
+              );
+              collab.lock().add_plugin(Arc::new(plugin));
+            }
+          }
+        },
+        CollabStorageType::Local => {},
+      }
 
-    if let Some(snapshot_persistence) = self.snapshot_persistence.lock().as_ref() {
-      if config.enable_snapshot {
-        let collab_object = CollabObject::new(uid, object_id.to_string(), object_type)
-          .with_device_id(self.device_id.lock().clone());
-        let snapshot_plugin = CollabSnapshotPlugin::new(
-          uid,
-          collab_object,
-          snapshot_persistence.clone(),
-          collab_db,
-          config.snapshot_per_update,
-        );
-        // tracing::trace!("add snapshot plugin: {}", object_id);
-        collab.lock().add_plugin(Arc::new(snapshot_plugin));
+      if let Some(snapshot_persistence) = self.snapshot_persistence.lock().as_ref() {
+        if config.enable_snapshot {
+          let collab_object = CollabObject::new(uid, object_id.to_string(), object_type)
+            .with_device_id(self.device_id.lock().clone());
+          let snapshot_plugin = CollabSnapshotPlugin::new(
+            uid,
+            collab_object,
+            snapshot_persistence.clone(),
+            collab_db,
+            config.snapshot_per_update,
+          );
+          // tracing::trace!("add snapshot plugin: {}", object_id);
+          collab.lock().add_plugin(Arc::new(snapshot_plugin));
+        }
       }
     }
 
-    collab.lock().initialize();
+    block_on(collab.async_initialize());
     Ok(collab)
   }
 }

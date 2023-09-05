@@ -9,13 +9,13 @@ use crate::user_test::helper::{
 #[tokio::test]
 async fn create_database_test() {
   let uid = random_uid();
-  let _ = workspace_database_test(uid);
+  let _ = workspace_database_test(uid).await;
 }
 
 #[tokio::test]
 async fn create_multiple_database_test() {
   let uid = random_uid();
-  let test = workspace_database_test(uid);
+  let test = workspace_database_test(uid).await;
   test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -39,7 +39,7 @@ async fn create_multiple_database_test() {
 #[tokio::test]
 async fn delete_database_test() {
   let uid = random_uid();
-  let test = workspace_database_test(uid);
+  let test = workspace_database_test(uid).await;
   test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -63,7 +63,7 @@ async fn delete_database_test() {
 #[tokio::test]
 async fn duplicate_database_inline_view_test() {
   let uid = random_uid();
-  let test = workspace_database_test(uid);
+  let test = workspace_database_test(uid).await;
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -94,7 +94,7 @@ async fn duplicate_database_inline_view_test() {
 
 #[tokio::test]
 async fn duplicate_database_view_test() {
-  let test = workspace_database_test(random_uid());
+  let test = workspace_database_test(random_uid()).await;
 
   // create the database with inline view
   let database = test
@@ -134,7 +134,7 @@ async fn duplicate_database_view_test() {
 
 #[tokio::test]
 async fn delete_database_inline_view_test() {
-  let test = workspace_database_test(random_uid());
+  let test = workspace_database_test(random_uid()).await;
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -165,7 +165,7 @@ async fn delete_database_inline_view_test() {
 
 #[tokio::test]
 async fn duplicate_database_data_test() {
-  let test = user_database_test_with_default_data(random_uid());
+  let test = user_database_test_with_default_data(random_uid()).await;
   let original = test.get_database_with_view_id("v1").await.unwrap();
   let duplicated_data = test.get_database_duplicated_data("v1").await.unwrap();
   let duplicate = test.create_database_with_data(duplicated_data).unwrap();
@@ -212,7 +212,7 @@ async fn duplicate_database_data_test() {
 
 #[tokio::test]
 async fn get_database_by_view_id_test() {
-  let test = workspace_database_test(random_uid());
+  let test = workspace_database_test(random_uid()).await;
   let _database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -237,7 +237,7 @@ async fn get_database_by_view_id_test() {
 #[tokio::test]
 async fn reopen_database_test() {
   let uid = random_uid();
-  let test = workspace_database_test(uid);
+  let test = workspace_database_test(uid).await;
   let view_id = uuid::Uuid::new_v4().to_string();
   let params = make_default_grid(&view_id, "first view");
 
@@ -246,7 +246,7 @@ async fn reopen_database_test() {
   let db = test.collab_db.clone();
   drop(test);
 
-  let test = user_database_test_with_db(uid, db);
+  let test = user_database_test_with_db(uid, db).await;
   let database = test.get_database_with_view_id(&view_id).await;
   let _ = database.unwrap().lock().to_json_value();
 }

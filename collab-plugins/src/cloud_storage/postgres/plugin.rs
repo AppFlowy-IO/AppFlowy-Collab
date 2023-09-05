@@ -170,9 +170,10 @@ fn create_snapshot_if_need(
           vec![],
         );
         let mut txn = local.origin_transact_mut();
-        let _ = local_collab_storage
-          .read_txn()
-          .load_doc(uid, &object.object_id, &mut txn)?;
+        let _ =
+          local_collab_storage
+            .read_txn()
+            .load_doc_with_txn(uid, &object.object_id, &mut txn)?;
         drop(txn);
 
         // Only sync with the remote if the remote update is not empty

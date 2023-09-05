@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -27,6 +28,7 @@ pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'stati
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
 /// different [CollabPlugin]s to the [MutexCollab] to support different features.
 ///
+#[async_trait]
 pub trait DatabaseCollabService: Send + Sync + 'static {
   fn get_collab_update(
     &self,

@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
-use yrs::{ReadTxn, StateVector, TransactionMut, Update};
+use yrs::{Doc, ReadTxn, StateVector, Transact, Transaction, TransactionMut, Update};
 
 use crate::keys::{
   make_doc_end_key, make_doc_id_key, make_doc_start_key, make_doc_state_key, make_doc_update_key,
@@ -16,6 +16,20 @@ use crate::{
   get_id_for_key, get_last_update_key, insert_doc_update, make_doc_id_for_key, PersistenceError,
   TransactionMutExt,
 };
+
+pub trait DocTransaction: Send + Sync {
+  fn doc_transaction(&self) -> Transaction;
+  fn doc_transaction_mut(&self) -> TransactionMut;
+}
+
+impl DocTransaction for Doc {
+  fn doc_transaction(&self) -> Transaction {
+    self.transact()
+  }
+  fn doc_transaction_mut(&self) -> TransactionMut {
+    self.transact_mut()
+  }
+}
 
 impl<'a, T> YrsDocAction<'a> for T
 where
@@ -66,7 +80,7 @@ where
   /// Load the document from the database and apply the updates to the transaction.
   /// After loading the document, it will delete the document state vec and updates and
   /// insert the new document state.
-  fn flush_doc<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
+  fn flush_doc_with_txn<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
     &self,
     uid: i64,
     object_id: &K,
@@ -98,6 +112,16 @@ where
     Ok(())
   }
 
+  fn flush_doc<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
+    &self,
+    uid: i64,
+    object_id: &K,
+    doc: &Doc,
+  ) -> Result<(), PersistenceError> {
+    let txn = doc.transact_mut();
+    self.flush_doc_with_txn(uid, object_id, &txn)
+  }
+
   fn is_exist<K: AsRef<[u8]> + ?Sized + Debug>(&self, collab_id: i64, object_id: &K) -> bool {
     get_doc_id(collab_id, self, object_id).is_some()
   }
@@ -108,7 +132,7 @@ where
   ///   2. D = document state + snapshot + updates
   ///
   /// Return the number of updates
-  fn load_doc<K: AsRef<[u8]> + ?Sized + Debug>(
+  fn load_doc_with_txn<K: AsRef<[u8]> + ?Sized + Debug>(
     &self,
     uid: i64,
     object_id: &K,
@@ -130,13 +154,6 @@ where
         // If the enable_snapshot is true, we will try to load the snapshot.
         let update_start = make_doc_update_key(doc_id, 0).to_vec();
         let update_end = make_doc_update_key(doc_id, Clock::MAX);
-        // tracing::trace!(
-        //   "[🦀Collab] => [{}-{:?}]: Get update from {:?} to {:?}",
-        //   doc_id,
-        //   object_id,
-        //   &update_start,
-        //   update_end.as_ref(),
-        // );
 
         // Load the updates
         let encoded_updates = self.range(update_start.as_ref()..update_end.as_ref())?;
@@ -165,6 +182,16 @@ where
       tracing::trace!("[🦀Collab] => {:?} not exist", object_id);
       Err(PersistenceError::DocumentNotExist)
     }
+  }
+
+  fn load_doc<K: AsRef<[u8]> + ?Sized + Debug>(
+    &self,
+    uid: i64,
+    object_id: &K,
+    doc: Doc,
+  ) -> Result<u32, PersistenceError> {
+    let mut txn = doc.transact_mut();
+    self.load_doc_with_txn(uid, object_id, &mut txn)
   }
 
   // fn load_latest_snapshot<K: AsRef<[u8]> + ?Sized + Debug>(

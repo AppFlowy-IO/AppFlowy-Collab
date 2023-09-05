@@ -5,7 +5,7 @@ use crate::user_test::async_test::script::{create_database, database_test, Datab
 
 #[tokio::test]
 async fn flush_doc_test() {
-  let mut test = database_test(CollabPersistenceConfig::new().flush_doc(true));
+  let mut test = database_test(CollabPersistenceConfig::new().flush_doc(true)).await;
   test
     .run_scripts(vec![
       CreateDatabase {

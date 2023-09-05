@@ -32,7 +32,7 @@ impl Deref for UserAwarenessTest {
 }
 
 impl UserAwarenessTest {
-  pub fn new(uid: i64) -> Self {
+  pub async fn new(uid: i64) -> Self {
     let tempdir = TempDir::new().unwrap();
 
     let path = tempdir.into_path();
@@ -45,7 +45,7 @@ impl UserAwarenessTest {
       .with_device_id("1")
       .build()
       .unwrap();
-    collab.lock().initialize();
+    collab.async_initialize().await;
 
     let (reminder_change_tx, _) = tokio::sync::broadcast::channel(100);
     let notifier = UserAwarenessNotifier {
