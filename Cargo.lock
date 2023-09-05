@@ -868,6 +868,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "collab-sync-protocol"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "collab",
+ "md5",
+ "serde",
+ "serde_json",
+ "y-sync",
+ "yrs",
+]
+
+[[package]]
 name = "collab-user"
 version = "0.1.0"
 dependencies = [

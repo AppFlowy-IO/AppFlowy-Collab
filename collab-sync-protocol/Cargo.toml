@@ -1,0 +1,15 @@
+[package]
+name = "collab-sync-protocol"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+yrs = "0.16.5"
+y-sync = { version = "0.3.1" }
+collab = { path = "../collab" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bytes = "1.4"
+md5 = "0.7.0"
