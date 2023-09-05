@@ -65,6 +65,7 @@ dependencies = [
  "collab-folder",
  "collab-persistence",
  "collab-plugins",
+ "futures",
  "parking_lot",
  "serde",
  "serde_json",
@@ -671,23 +672,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "collab-client-ws"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "collab-sync",
- "futures-util",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tokio-retry",
- "tokio-stream",
- "tokio-tungstenite",
- "tracing",
-]
-
-[[package]]
 name = "collab-database"
 version = "0.1.0"
 dependencies = [
@@ -831,11 +815,11 @@ dependencies = [
  "aws-sdk-dynamodb",
  "bytes",
  "collab",
- "collab-client-ws",
  "collab-define",
  "collab-persistence",
  "collab-plugins",
  "collab-sync",
+ "collab-ws",
  "config",
  "dashmap",
  "dotenv",
@@ -900,6 +884,23 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-stream",
+ "tracing",
+]
+
+[[package]]
+name = "collab-ws"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "collab-sync",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-retry",
+ "tokio-stream",
+ "tokio-tungstenite",
  "tracing",
 ]
 

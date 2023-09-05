@@ -11,6 +11,7 @@ use collab_plugins::cloud_storage::{CollabObject, CollabType, RemoteCollabStorag
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::snapshot::{CollabSnapshotPlugin, SnapshotPersistence};
+use futures::executor::block_on;
 use parking_lot::{Mutex, RwLock};
 
 #[derive(Clone, Debug)]
@@ -108,7 +109,7 @@ impl AppFlowyCollabBuilder {
   /// - `raw_data`: The raw data of the collaboration object, defined by the [CollabRawData] type.
   /// - `collab_db`: A weak reference to the [RocksCollabDB].
   ///
-  pub async fn build(
+  pub fn build(
     &self,
     uid: i64,
     object_id: &str,
@@ -116,16 +117,14 @@ impl AppFlowyCollabBuilder {
     raw_data: CollabRawData,
     collab_db: Weak<RocksCollabDB>,
   ) -> Result<Arc<MutexCollab>, Error> {
-    self
-      .build_with_config(
-        uid,
-        object_id,
-        object_type,
-        collab_db,
-        raw_data,
-        &CollabPersistenceConfig::default(),
-      )
-      .await
+    self.build_with_config(
+      uid,
+      object_id,
+      object_type,
+      collab_db,
+      raw_data,
+      &CollabPersistenceConfig::default(),
+    )
   }
 
   /// Creates a new collaboration builder with the custom configuration.
@@ -142,7 +141,7 @@ impl AppFlowyCollabBuilder {
   /// - `raw_data`: The raw data of the collaboration object, defined by the [CollabRawData] type.
   /// - `collab_db`: A weak reference to the [RocksCollabDB].
   ///
-  pub async fn build_with_config(
+  pub fn build_with_config(
     &self,
     uid: i64,
     object_id: &str,
@@ -234,7 +233,7 @@ impl AppFlowyCollabBuilder {
       }
     }
 
-    collab.async_initialize().await;
+    block_on(collab.async_initialize());
     Ok(collab)
   }
 }

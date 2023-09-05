@@ -736,7 +736,7 @@ impl Database {
   pub fn get_field_settings<T: From<FieldSettingsMap>>(
     &self,
     view_id: &str,
-    field_ids: Option<&Vec<String>>,
+    field_ids: Option<&[String]>,
   ) -> HashMap<String, T> {
     let mut field_settings_map = self
       .views

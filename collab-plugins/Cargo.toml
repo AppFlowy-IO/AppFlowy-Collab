@@ -12,7 +12,7 @@ collab = { path = "../collab" }
 collab-sync = { path = "../collab-sync" }
 collab-define = { path = "../collab-define" }
 collab-persistence = { path = "../collab-persistence" }
-collab-client-ws = { path = "../collab-client-ws" }
+collab-ws = { path = "../collab-ws" }
 futures-util = { version = "0.3", features = ["sink"] }
 tokio = { version = "1.26.0", features = ["net", "sync", "time"] }
 tracing = { version = "0.1.37" }
