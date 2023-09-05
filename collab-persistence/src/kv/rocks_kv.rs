@@ -1,5 +1,7 @@
+use async_trait::async_trait;
+use parking_lot::Mutex;
 use std::ops;
-use std::ops::{Deref, RangeBounds};
+use std::ops::RangeBounds;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -88,7 +90,7 @@ impl RocksStore {
     let txn = self
       .db
       .transaction_opt(&WriteOptions::default(), &txn_options);
-    RocksKVStoreImpl(txn)
+    MutexRocksKVStoreImpl::new(txn)
   }
 
   pub fn write_txn(&self) -> RocksKVStoreImpl<'_, TransactionDB> {
@@ -97,7 +99,7 @@ impl RocksStore {
     let txn = self
       .db
       .transaction_opt(&WriteOptions::default(), &txn_options);
-    RocksKVStoreImpl(txn)
+    MutexRocksKVStoreImpl::new(txn)
   }
 
   /// Create a write transaction that accesses the database exclusively.
@@ -115,44 +117,68 @@ impl RocksStore {
     let txn = self
       .db
       .transaction_opt(&WriteOptions::default(), &txn_options);
-    let store = RocksKVStoreImpl(txn);
+    let store = MutexRocksKVStoreImpl(Mutex::new(txn));
     let result = f(&store)?;
-    store.0.commit()?;
+    store.0.into_inner().commit()?;
     Ok(result)
   }
 }
 
 /// Implementation of [KVStore] for [RocksStore]. This is a wrapper around [Transaction].
-pub struct RocksKVStoreImpl<'a, DB: Send + Sync>(Transaction<'a, DB>);
+// pub struct RocksKVStoreImpl<'a, DB: Send + Sync>(Transaction<'a, DB>);
+pub type RocksKVStoreImpl<'a, DB> = MutexRocksKVStoreImpl<'a, DB>;
+pub struct MutexRocksKVStoreImpl<'a, DB: Send + Sync>(Mutex<Transaction<'a, DB>>);
 
-impl<'a, DB: Send + Sync> RocksKVStoreImpl<'a, DB> {
+impl<'a, DB: Send + Sync> MutexRocksKVStoreImpl<'a, DB> {
+  pub fn new(txn: Transaction<'a, DB>) -> Self {
+    Self(Mutex::new(txn))
+  }
   pub fn commit_transaction(self) -> Result<(), PersistenceError> {
-    self.0.commit()?;
+    self.0.into_inner().commit()?;
     Ok(())
   }
 }
 
-impl<'a, DB: Send + Sync> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
+#[async_trait]
+impl<'a, DB: Send + Sync> KVStore<'a> for MutexRocksKVStoreImpl<'a, DB> {
   type Range = RocksDBRange<'a, DB>;
   type Entry = RocksDBEntry;
   type Value = RocksDBVec;
   type Error = PersistenceError;
 
   fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<Self::Value>, Self::Error> {
-    if let Some(value) = self.0.get(key)? {
+    if let Some(value) = self.0.lock().get(key)? {
       Ok(Some(value))
     } else {
       Ok(None)
     }
   }
 
+  async fn async_get<K>(&self, key: K) -> Result<Option<Self::Value>, Self::Error>
+  where
+    K: AsRef<[u8]> + Send + Sync,
+  {
+    self.get(key)
+  }
+
   fn insert<K: AsRef<[u8]>, V: AsRef<[u8]>>(&self, key: K, value: V) -> Result<(), Self::Error> {
-    self.0.put(key, value)?;
+    self.0.lock().put(key, value)?;
+    Ok(())
+  }
+
+  async fn async_insert<K, V>(&self, key: K, value: V) -> Result<(), Self::Error>
+  where
+    K: AsRef<[u8]> + Send + Sync,
+    V: AsRef<[u8]> + Send + Sync,
+  {
+    {
+      self.0.lock().put(key, value)?;
+    }
     Ok(())
   }
 
   fn remove(&self, key: &[u8]) -> Result<(), Self::Error> {
-    self.0.delete(key)?;
+    self.0.lock().delete(key)?;
     Ok(())
   }
 
@@ -160,12 +186,11 @@ impl<'a, DB: Send + Sync> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
     let mut opt = ReadOptions::default();
     opt.set_iterate_lower_bound(from);
     opt.set_iterate_upper_bound(to);
-    let i = self
-      .0
-      .iterator_opt(IteratorMode::From(from, Direction::Forward), opt);
+    let lock_guard = self.0.lock();
+    let i = lock_guard.iterator_opt(IteratorMode::From(from, Direction::Forward), opt);
     for res in i {
       let (key, _) = res?;
-      self.0.delete(key)?;
+      self.0.lock().delete(key)?;
     }
     Ok(())
   }
@@ -198,7 +223,8 @@ impl<'a, DB: Send + Sync> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
       ops::Bound::Unbounded => {},
     };
     let iterator_mode = IteratorMode::From(from, Forward);
-    let iter = self.0.iterator_opt(iterator_mode, opt);
+    let lock_guard = self.0.lock();
+    let iter = lock_guard.iterator_opt(iterator_mode, opt);
     Ok(RocksDBRange {
       // Safe to transmute because the lifetime of the iterator is the same as the lifetime of the
       // transaction.
@@ -209,7 +235,8 @@ impl<'a, DB: Send + Sync> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
 
   fn next_back_entry(&self, key: &[u8]) -> Result<Option<Self::Entry>, Self::Error> {
     let opt = ReadOptions::default();
-    let mut raw = self.0.raw_iterator_opt(opt);
+    let lock_guard = self.0.lock();
+    let mut raw = lock_guard.raw_iterator_opt(opt);
     raw.seek_for_prev(key);
     if let Some((key, value)) = raw.item() {
       Ok(Some(RocksDBEntry::new(key.to_vec(), value.to_vec())))
@@ -222,24 +249,24 @@ impl<'a, DB: Send + Sync> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
 impl<'a, DB: Send + Sync> From<Transaction<'a, DB>> for RocksKVStoreImpl<'a, DB> {
   #[inline(always)]
   fn from(txn: Transaction<'a, DB>) -> Self {
-    RocksKVStoreImpl(txn)
+    MutexRocksKVStoreImpl::new(txn)
   }
 }
 
-impl<'a, DB: Send + Sync> From<RocksKVStoreImpl<'a, DB>> for Transaction<'a, DB> {
-  fn from(store: RocksKVStoreImpl<'a, DB>) -> Self {
-    store.0
-  }
-}
+// impl<'a, DB: Send + Sync> From<RocksKVStoreImpl<'a, DB>> for Transaction<'a, DB> {
+//   fn from(store: RocksKVStoreImpl<'a, DB>) -> Self {
+//     store.0.lock()
+//   }
+// }
 
-impl<'a, DB: Send + Sync> Deref for RocksKVStoreImpl<'a, DB> {
-  type Target = Transaction<'a, DB>;
-
-  #[inline(always)]
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
+// impl<'a, DB: Send + Sync> Deref for RocksKVStoreImpl<'a, DB> {
+//   type Target = Transaction<'a, DB>;
+//
+//   #[inline(always)]
+//   fn deref(&self) -> &Self::Target {
+//     &self.0
+//   }
+// }
 
 pub type RocksDBVec = Vec<u8>;
 

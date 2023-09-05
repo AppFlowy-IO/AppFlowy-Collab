@@ -3,7 +3,7 @@ use collab_folder::core::{IconType, ViewIcon};
 
 #[tokio::test]
 async fn create_view_test() {
-  let folder_test = create_folder_with_workspace("1", "w1");
+  let folder_test = create_folder_with_workspace("1", "w1").await;
   let o_view = make_test_view("v1", "w1", vec![]);
   folder_test.insert_view(o_view.clone(), None);
 
@@ -15,7 +15,7 @@ async fn create_view_test() {
 
 #[tokio::test]
 async fn create_view_with_sub_view_test() {
-  let folder_test = create_folder_with_workspace("1", "w1");
+  let folder_test = create_folder_with_workspace("1", "w1").await;
   let child_view = make_test_view("v1_1", "v1", vec![]);
   let view = make_test_view("v1", "w1", vec![child_view.id.clone()]);
 
@@ -34,7 +34,7 @@ async fn create_view_with_sub_view_test() {
 
 #[tokio::test]
 async fn delete_view_test() {
-  let folder_test = create_folder_with_workspace("1", "w1");
+  let folder_test = create_folder_with_workspace("1", "w1").await;
   let view_1 = make_test_view("v1", "w1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);
   let view_3 = make_test_view("v3", "w1", vec![]);
@@ -55,7 +55,7 @@ async fn delete_view_test() {
 
 #[tokio::test]
 async fn update_view_test() {
-  let folder_test = create_folder_with_workspace("1", "w1");
+  let folder_test = create_folder_with_workspace("1", "w1").await;
   let o_view = make_test_view("v1", "w1", vec![]);
   folder_test.insert_view(o_view, None);
   folder_test
@@ -77,7 +77,7 @@ async fn update_view_test() {
 
 #[tokio::test]
 async fn update_view_icon_test() {
-  let folder_test = create_folder_with_workspace("1", "w1");
+  let folder_test = create_folder_with_workspace("1", "w1").await;
   let o_view = make_test_view("v1", "w1", vec![]);
   folder_test.insert_view(o_view, None);
 
@@ -114,7 +114,7 @@ async fn update_view_icon_test() {
 
 #[tokio::test]
 async fn different_icon_ty_test() {
-  let folder_test = create_folder_with_workspace("1", "w1");
+  let folder_test = create_folder_with_workspace("1", "w1").await;
   let o_view = make_test_view("v1", "w1", vec![]);
   folder_test.insert_view(o_view, None);
   let emoji = ViewIcon {
@@ -157,7 +157,7 @@ async fn dissociate_and_associate_view_test() {
   let view_1_child_id = "v1_1";
   let view_1_id = "v1";
   let view_2_id = "v2";
-  let folder_test = create_folder_with_workspace("1", workspace_id);
+  let folder_test = create_folder_with_workspace("1", workspace_id).await;
   let view_1_child = make_test_view(view_1_child_id, view_1_id, vec![]);
   let view_1 = make_test_view(view_1_id, workspace_id, vec![view_1_child_id.to_string()]);
   let view_2 = make_test_view(view_2_id, workspace_id, vec![]);
@@ -216,7 +216,7 @@ async fn move_view_across_parent_test() {
   let view_1_child_id = "v1_1";
   let view_1_id = "v1";
   let view_2_id = "v2";
-  let folder_test = create_folder_with_workspace("1", workspace_id);
+  let folder_test = create_folder_with_workspace("1", workspace_id).await;
   let view_1_child = make_test_view(view_1_child_id, view_1_id, vec![]);
   let view_1 = make_test_view(view_1_id, workspace_id, vec![view_1_child_id.to_string()]);
   let view_2 = make_test_view(view_2_id, workspace_id, vec![]);
@@ -289,7 +289,7 @@ async fn create_view_test_with_index() {
   // 4. v2 -> v3 -> v1 -> v4
   // 5. v2 -> v3 -> v1 -> v4 -> v5
   // 6. v2 -> v3 -> v1 -> v6 -> v4 -> v5
-  let folder_test = create_folder_with_workspace("1", "w1");
+  let folder_test = create_folder_with_workspace("1", "w1").await;
   let view_1 = make_test_view("v1", "w1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);
   let view_3 = make_test_view("v3", "w1", vec![]);

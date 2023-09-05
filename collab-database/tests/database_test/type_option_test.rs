@@ -8,7 +8,7 @@ use crate::helper::{TestCheckboxTypeOption, TestDateFormat, TestDateTypeOption, 
 
 #[tokio::test]
 async fn insert_checkbox_type_option_data_test() {
-  let test = user_database_with_default_field();
+  let test = user_database_with_default_field().await;
   test.fields.update_field("f1", |field_update| {
     field_update.update_type_options(|type_option_update| {
       type_option_update.insert("0", TestCheckboxTypeOption { is_selected: true });
@@ -24,7 +24,7 @@ async fn insert_checkbox_type_option_data_test() {
 
 #[tokio::test]
 async fn insert_date_type_option_data_test() {
-  let test = user_database_with_default_field();
+  let test = user_database_with_default_field().await;
   let type_option = TestDateTypeOption {
     date_format: TestDateFormat::ISO,
     time_format: TestTimeFormat::TwelveHour,
@@ -45,7 +45,7 @@ async fn insert_date_type_option_data_test() {
 
 #[tokio::test]
 async fn update_date_type_option_data_test() {
-  let test = user_database_with_default_field();
+  let test = user_database_with_default_field().await;
   let type_option = TestDateTypeOption {
     date_format: Default::default(),
     time_format: TestTimeFormat::TwelveHour,
@@ -77,7 +77,7 @@ async fn update_date_type_option_data_test() {
 
 #[tokio::test]
 async fn single_field_contains_multiple_type_options_test() {
-  let test = user_database_with_default_field();
+  let test = user_database_with_default_field().await;
   let date_tp = TestDateTypeOption {
     date_format: Default::default(),
     time_format: TestTimeFormat::TwelveHour,
@@ -108,7 +108,7 @@ async fn single_field_contains_multiple_type_options_test() {
 
 #[tokio::test]
 async fn insert_multi_type_options_test() {
-  let test = user_database_with_default_field();
+  let test = user_database_with_default_field().await;
 
   let mut type_options = TypeOptions::new();
   type_options.insert(
@@ -145,8 +145,8 @@ async fn insert_multi_type_options_test() {
   assert_eq!(type_option.get_f64_value("job 2").unwrap(), 456.0);
 }
 
-fn user_database_with_default_field() -> DatabaseTest {
-  let test = create_database(1, "1");
+async fn user_database_with_default_field() -> DatabaseTest {
+  let test = create_database(1, "1").await;
 
   let field = Field {
     id: "f1".to_string(),

@@ -6,7 +6,7 @@ use crate::blocks::block_test_core::{BlockTestCore, TEXT_BLOCK_TYPE};
 
 #[tokio::test]
 async fn create_default_document_test() {
-  let test = BlockTestCore::new();
+  let test = BlockTestCore::new().await;
   let document_data = test.get_document_data();
   let page = test.get_page();
   let page_id = page.id.as_str();
@@ -21,7 +21,7 @@ async fn create_default_document_test() {
 
 #[tokio::test]
 async fn open_document_test() {
-  let test = BlockTestCore::new();
+  let test = BlockTestCore::new().await;
   let page = test.get_page();
   let page_id = page.id.as_str();
   let collab = test.collab;
@@ -33,7 +33,7 @@ async fn open_document_test() {
 
 #[tokio::test]
 async fn subscribe_insert_change_test() {
-  let mut test = BlockTestCore::new();
+  let mut test = BlockTestCore::new().await;
   test.subscribe(|e, _| {
     assert_eq!(e.len(), 3);
   });
@@ -45,7 +45,7 @@ async fn subscribe_insert_change_test() {
 
 #[tokio::test]
 async fn subscribe_update_change_test() {
-  let mut test = BlockTestCore::new();
+  let mut test = BlockTestCore::new().await;
   test.subscribe(|e, _| {
     assert_eq!(e.len(), 1);
   });
@@ -57,7 +57,7 @@ async fn subscribe_update_change_test() {
 
 #[tokio::test]
 async fn subscribe_delete_change_test() {
-  let mut test = BlockTestCore::new();
+  let mut test = BlockTestCore::new().await;
   test.subscribe(|e, _| {
     assert_eq!(e.len(), 3);
   });
@@ -70,7 +70,7 @@ async fn subscribe_delete_change_test() {
 
 #[tokio::test]
 async fn insert_block_test() {
-  let test = BlockTestCore::new();
+  let test = BlockTestCore::new().await;
   let page = test.get_page();
   let page_id = page.id.as_str();
   let page_children = test.get_block_children(page_id);
@@ -97,7 +97,7 @@ async fn insert_block_test() {
 
 #[tokio::test]
 async fn delete_block_test() {
-  let test = BlockTestCore::new();
+  let test = BlockTestCore::new().await;
   let page = test.get_page();
   let page_id = page.id.as_str();
   let text = "Hello World".to_string();
@@ -116,7 +116,7 @@ async fn delete_block_test() {
 
 #[tokio::test]
 async fn move_block_test() {
-  let test = BlockTestCore::new();
+  let test = BlockTestCore::new().await;
   let page = test.get_page();
   let page_id = page.id.as_str();
   let text = "Hello World".to_string();
@@ -158,7 +158,7 @@ async fn move_block_test() {
 
 #[tokio::test]
 async fn update_block_data_test() {
-  let test = BlockTestCore::new();
+  let test = BlockTestCore::new().await;
   let page = test.get_page();
   let page_id = page.id.as_str();
   let page_children = test.get_block_children(page_id);
@@ -174,7 +174,7 @@ async fn update_block_data_test() {
 
 #[tokio::test]
 async fn apply_actions_test() {
-  let test = BlockTestCore::new();
+  let test = BlockTestCore::new().await;
   let page = test.get_page();
   let page_id = page.id.as_str();
   let text = "Hello World".to_string();

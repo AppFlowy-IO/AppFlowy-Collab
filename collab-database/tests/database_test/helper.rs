@@ -48,7 +48,7 @@ impl DerefMut for DatabaseTest {
 }
 
 /// Create a database with a single view.
-pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
+pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let collab_db = Arc::new(RocksCollabDB::open(path).unwrap());
@@ -56,7 +56,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.lock().initialize();
+  collab.async_initialize().await;
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder);
   let context = DatabaseContext {
@@ -76,7 +76,10 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   }
 }
 
-pub fn create_database_with_db(uid: i64, database_id: &str) -> (Arc<RocksCollabDB>, DatabaseTest) {
+pub async fn create_database_with_db(
+  uid: i64,
+  database_id: &str,
+) -> (Arc<RocksCollabDB>, DatabaseTest) {
   let collab_db = make_rocks_db();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let collab = collab_builder.build_collab_with_config(
@@ -177,7 +180,7 @@ impl DatabaseTestBuilder {
     self
   }
 
-  pub fn build(self) -> DatabaseTest {
+  pub async fn build(self) -> DatabaseTest {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let collab_db = Arc::new(RocksCollabDB::open(path).unwrap());
@@ -185,7 +188,7 @@ impl DatabaseTestBuilder {
       .with_device_id("1")
       .build()
       .unwrap();
-    collab.lock().initialize();
+    collab.async_initialize().await;
     let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
     let block = Block::new(self.uid, Arc::downgrade(&collab_db), collab_builder);
     let context = DatabaseContext {
@@ -216,7 +219,7 @@ impl DatabaseTestBuilder {
 
 /// Create a database with default data
 /// It will create a default view with id 'v1'
-pub fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
+pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
   let row_1 = CreateRowParams {
     id: 1.into(),
     cells: CellsBuilder::new()
@@ -252,7 +255,7 @@ pub fn create_database_with_default_data(uid: i64, database_id: &str) -> Databas
     timestamp: 0,
   };
 
-  let database_test = create_database(uid, database_id);
+  let database_test = create_database(uid, database_id).await;
   database_test.create_row(row_1).unwrap();
   database_test.create_row(row_2).unwrap();
   database_test.create_row(row_3).unwrap();

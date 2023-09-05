@@ -1,11 +1,10 @@
 use collab_database::views::{CreateViewParams, DatabaseLayout};
-
 use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
 use crate::helper::{SortCondition, TestSort};
 
 #[tokio::test]
 async fn create_database_view_with_sort_test() {
-  let database_test = create_database_with_two_sorts();
+  let database_test = create_database_with_two_sorts().await;
   let sorts = database_test.get_all_sorts::<TestSort>("v1");
   assert_eq!(sorts.len(), 2);
   assert_eq!(sorts[0].condition, SortCondition::Ascending);
@@ -14,7 +13,7 @@ async fn create_database_view_with_sort_test() {
 
 #[tokio::test]
 async fn get_database_view_sort_test() {
-  let database_test = create_database_with_two_sorts();
+  let database_test = create_database_with_two_sorts().await;
 
   database_test.insert_sort(
     "v1",
@@ -32,7 +31,7 @@ async fn get_database_view_sort_test() {
 
 #[tokio::test]
 async fn update_database_view_sort_test() {
-  let database_test = create_database_with_two_sorts();
+  let database_test = create_database_with_two_sorts().await;
   let sort_1 = TestSort {
     id: "s1".to_string(),
     field_id: "f1".to_string(),
@@ -55,7 +54,7 @@ async fn update_database_view_sort_test() {
 
 #[tokio::test]
 async fn remove_all_database_view_sort_test() {
-  let database_test = create_database_with_two_sorts();
+  let database_test = create_database_with_two_sorts().await;
   database_test.remove_all_sorts("v1");
 
   let view = database_test.views.get_view("v1").unwrap();
@@ -64,15 +63,15 @@ async fn remove_all_database_view_sort_test() {
 
 #[tokio::test]
 async fn remove_database_view_sort_test() {
-  let database_test = create_database_with_two_sorts();
+  let database_test = create_database_with_two_sorts().await;
   database_test.remove_sort("v1", "s1");
 
   let view = database_test.views.get_view("v1").unwrap();
   assert_eq!(view.sorts.len(), 1);
 }
 
-fn create_database_with_two_sorts() -> DatabaseTest {
-  let database_test = create_database_with_default_data(1, "1");
+async fn create_database_with_two_sorts() -> DatabaseTest {
+  let database_test = create_database_with_default_data(1, "1").await;
   let sort_1 = TestSort {
     id: "s1".to_string(),
     field_id: "f1".to_string(),

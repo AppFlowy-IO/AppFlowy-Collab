@@ -139,7 +139,7 @@ impl CollabPersistenceTest {
       CollabType::Document,
       collab.clone(),
     ));
-    collab.lock().initialize();
+    collab.async_initialize().await;
 
     self.collab_by_id.insert(doc_id, collab);
   }
@@ -178,7 +178,7 @@ impl CollabPersistenceTest {
       CollabType::Document,
       collab.clone(),
     ));
-    collab.lock().initialize();
+    collab.async_initialize().await;
 
     let json = collab.to_json_value();
     assert_json_diff::assert_json_eq!(json, expected);
@@ -225,7 +225,7 @@ impl CollabPersistenceTest {
           collab.clone(),
         ));
 
-        collab.lock().initialize();
+        collab.async_initialize().await;
 
         self.collab_by_id.insert(id, collab);
       },
@@ -241,7 +241,7 @@ impl CollabPersistenceTest {
           .with_plugin(self.disk_plugin.clone())
           .build()
           .unwrap();
-        collab.lock().initialize();
+        collab.async_initialize().await;
         self.collab_by_id.insert(id, Arc::new(collab));
       },
       Script::DeleteDocument { id } => {
@@ -323,7 +323,7 @@ impl CollabPersistenceTest {
           CollabType::Document,
           collab.clone(),
         ));
-        collab.lock().initialize();
+        collab.async_initialize().await;
 
         let json = collab.to_json_value();
         assert_json_diff::assert_json_eq!(json, expected);

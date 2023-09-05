@@ -7,7 +7,7 @@ use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 
 #[tokio::test]
 async fn update_single_type_option_data_test() {
-  let test = user_database_with_default_field();
+  let test = user_database_with_default_field().await;
   let database = test.get_database("d1").await.unwrap();
   database.lock().fields.update_field("f1", |field_update| {
     field_update.update_type_options(|type_option_update| {
@@ -27,7 +27,7 @@ async fn update_single_type_option_data_test() {
 
 #[tokio::test]
 async fn insert_multi_type_options_test() {
-  let test = user_database_with_default_field();
+  let test = user_database_with_default_field().await;
   let database = test.get_database("d1").await.unwrap();
 
   let mut type_options = TypeOptions::new();
@@ -65,8 +65,8 @@ async fn insert_multi_type_options_test() {
   assert_eq!(type_option.get_f64_value("job 2").unwrap(), 456.0);
 }
 
-fn user_database_with_default_field() -> WorkspaceDatabaseTest {
-  let test = workspace_database_test(1);
+async fn user_database_with_default_field() -> WorkspaceDatabaseTest {
+  let test = workspace_database_test(1).await;
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),

@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::fmt::Debug;
 use std::ops::RangeBounds;
 use std::sync::Arc;
@@ -7,7 +8,8 @@ use crate::PersistenceError;
 #[cfg(feature = "rocksdb_persistence")]
 pub mod rocks_kv;
 
-pub trait KVStore<'a> {
+#[async_trait]
+pub trait KVStore<'a>: Send + Sync {
   type Range: Iterator<Item = Self::Entry>;
   type Entry: KVEntry;
   type Value: AsRef<[u8]>;
@@ -16,7 +18,16 @@ pub trait KVStore<'a> {
   /// Get a value by key
   fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<Self::Value>, Self::Error>;
 
+  async fn async_get<K>(&self, key: K) -> Result<Option<Self::Value>, Self::Error>
+  where
+    K: AsRef<[u8]> + Send + Sync;
+
   fn insert<K: AsRef<[u8]>, V: AsRef<[u8]>>(&self, key: K, value: V) -> Result<(), Self::Error>;
+
+  async fn async_insert<K, V>(&self, key: K, value: V) -> Result<(), Self::Error>
+  where
+    K: AsRef<[u8]> + Send + Sync,
+    V: AsRef<[u8]> + Send + Sync;
 
   /// Remove a key, returning the last value if it exists
   fn remove(&self, key: &[u8]) -> Result<(), Self::Error>;
@@ -49,6 +60,7 @@ pub trait KVEntry {
 }
 
 /// Implement KVStore for Arc<T> where T: KVStore
+#[async_trait]
 impl<T> KVStore<'static> for Arc<T>
 where
   T: KVStore<'static>,
@@ -62,8 +74,23 @@ where
     (**self).get(key)
   }
 
+  async fn async_get<K>(&self, key: K) -> Result<Option<Self::Value>, Self::Error>
+  where
+    K: AsRef<[u8]> + Send + Sync,
+  {
+    (**self).async_get(key).await
+  }
+
   fn insert<K: AsRef<[u8]>, V: AsRef<[u8]>>(&self, key: K, value: V) -> Result<(), Self::Error> {
     (**self).insert(key, value)
+  }
+
+  async fn async_insert<K, V>(&self, key: K, value: V) -> Result<(), Self::Error>
+  where
+    K: AsRef<[u8]> + Send + Sync,
+    V: AsRef<[u8]> + Send + Sync,
+  {
+    (**self).async_insert(key, value).await
   }
 
   fn remove(&self, key: &[u8]) -> Result<(), Self::Error> {

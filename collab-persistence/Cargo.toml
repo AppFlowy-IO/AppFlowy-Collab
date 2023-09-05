@@ -19,6 +19,7 @@ tokio = { version = "1.26", features = ["rt", "sync"] }
 tracing = { version = "0.1.37" }
 parking_lot = "0.12.1"
 lazy_static = "1.4.0"
+async-trait = "0.1.73"
 
 [dev-dependencies]
 collab-persistence = { path = ".", features = ["rocksdb_persistence"] }

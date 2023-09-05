@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -37,9 +38,10 @@ impl RocksdbServerDiskPlugin {
   }
 }
 
+#[async_trait]
 impl CollabPlugin for RocksdbServerDiskPlugin {
-  fn init(&self, object_id: &str, original: &CollabOrigin, doc: &Doc) {
-    let mut txn = doc.transact_mut_with(original.clone());
+  async fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
+    let mut txn = doc.transact_mut_with(origin.clone());
     let r_db_txn = self.db.read_txn();
 
     // Check the document is exist or not

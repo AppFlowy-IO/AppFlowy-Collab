@@ -7,7 +7,7 @@ use crate::database_test::helper::{create_database, create_database_with_default
 
 #[tokio::test]
 async fn create_row_shared_by_two_view_test() {
-  let database_test = create_database(1, "1");
+  let database_test = create_database(1, "1").await;
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
@@ -31,7 +31,7 @@ async fn create_row_shared_by_two_view_test() {
 
 #[tokio::test]
 async fn delete_row_shared_by_two_view_test() {
-  let database_test = create_database(1, "1");
+  let database_test = create_database(1, "1").await;
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
@@ -55,7 +55,7 @@ async fn delete_row_shared_by_two_view_test() {
 
 #[tokio::test]
 async fn move_row_in_view_test() {
-  let database_test = create_database_with_default_data(1, "1");
+  let database_test = create_database_with_default_data(1, "1").await;
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows[0].id, 1.into());
   assert_eq!(rows[1].id, 2.into());
@@ -82,7 +82,7 @@ async fn move_row_in_view_test() {
 
 #[tokio::test]
 async fn move_row_in_views_test() {
-  let database_test = create_database_with_default_data(1, "1");
+  let database_test = create_database_with_default_data(1, "1").await;
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
@@ -107,7 +107,7 @@ async fn move_row_in_views_test() {
 
 #[tokio::test]
 async fn insert_row_in_views_test() {
-  let database_test = create_database_with_default_data(1, "1");
+  let database_test = create_database_with_default_data(1, "1").await;
   let row = CreateRowParams {
     id: 4.into(),
     prev_row_id: Some(2.into()),
@@ -124,7 +124,7 @@ async fn insert_row_in_views_test() {
 
 #[tokio::test]
 async fn insert_row_at_front_in_views_test() {
-  let database_test = create_database_with_default_data(1, "1");
+  let database_test = create_database_with_default_data(1, "1").await;
   let row = CreateRowParams {
     id: 4.into(),
     ..Default::default()
@@ -140,7 +140,7 @@ async fn insert_row_at_front_in_views_test() {
 
 #[tokio::test]
 async fn insert_row_at_last_in_views_test() {
-  let database_test = create_database_with_default_data(1, "1");
+  let database_test = create_database_with_default_data(1, "1").await;
   let row = CreateRowParams {
     id: 4.into(),
     prev_row_id: Some(3.into()),
@@ -157,7 +157,7 @@ async fn insert_row_at_last_in_views_test() {
 
 #[tokio::test]
 async fn duplicate_row_test() {
-  let database_test = create_database_with_default_data(1, "1");
+  let database_test = create_database_with_default_data(1, "1").await;
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows.len(), 3);
 
@@ -176,7 +176,7 @@ async fn duplicate_row_test() {
 
 #[tokio::test]
 async fn duplicate_last_row_test() {
-  let database_test = create_database_with_default_data(1, "1");
+  let database_test = create_database_with_default_data(1, "1").await;
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows.len(), 3);
 
@@ -191,7 +191,7 @@ async fn duplicate_last_row_test() {
 
 #[tokio::test]
 async fn document_id_of_row_test() {
-  let database_test = create_database(1, "1");
+  let database_test = create_database(1, "1").await;
   let row_id = Uuid::parse_str("43f6c30f-9d23-470c-a0dd-8819f08dcf2f").unwrap();
   let row_order = database_test
     .create_row(CreateRowParams {
@@ -211,7 +211,7 @@ async fn document_id_of_row_test() {
 
 #[tokio::test]
 async fn update_row_meta_test() {
-  let database_test = create_database(1, "1");
+  let database_test = create_database(1, "1").await;
   let row_id = Uuid::parse_str("43f6c30f-9d23-470c-a0dd-8819f08dcf2f").unwrap();
   let row_order = database_test
     .create_row(CreateRowParams {

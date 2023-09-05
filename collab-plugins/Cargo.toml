@@ -47,6 +47,7 @@ parking_lot = "0.12.1"
 nanoid = "0.4.0"
 config = { version = "0.13.3", default-features = false, features = ["yaml"] }
 dotenv = "0.15.0"
+futures = "0.3.17"
 
 
 [features]

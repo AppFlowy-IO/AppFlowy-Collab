@@ -5,7 +5,7 @@ use crate::util::{receive_with_timeout, UserAwarenessTest};
 
 #[tokio::test]
 async fn subscribe_insert_reminder_test() {
-  let test = UserAwarenessTest::new(1);
+  let test = UserAwarenessTest::new(1).await;
   let mut rx = test.reminder_change_tx.subscribe();
   let reminder = Reminder::new("1".to_string(), "o1".to_string(), 123, ObjectType::Document);
   let cloned_test = test.clone();
@@ -28,7 +28,7 @@ async fn subscribe_insert_reminder_test() {
 
 #[tokio::test]
 async fn subscribe_delete_reminder_test() {
-  let test = UserAwarenessTest::new(1);
+  let test = UserAwarenessTest::new(1).await;
   let mut rx = test.reminder_change_tx.subscribe();
   for i in 0..5 {
     let reminder = Reminder::new(

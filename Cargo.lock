@@ -651,6 +651,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
+ "async-trait",
  "bytes",
  "chrono",
  "collab",
@@ -752,6 +753,7 @@ dependencies = [
  "collab-derive",
  "collab-persistence",
  "collab-plugins",
+ "futures",
  "nanoid",
  "parking_lot",
  "serde",
@@ -796,6 +798,7 @@ dependencies = [
 name = "collab-persistence"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "bincode",
  "chrono",
  "collab",
@@ -836,6 +839,7 @@ dependencies = [
  "config",
  "dashmap",
  "dotenv",
+ "futures",
  "futures-util",
  "lib0",
  "nanoid",

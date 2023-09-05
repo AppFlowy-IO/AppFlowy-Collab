@@ -5,7 +5,7 @@ use crate::util::{create_folder, make_test_view};
 
 #[tokio::test]
 async fn folder_json_serde() {
-  let folder_test = create_folder("1");
+  let folder_test = create_folder("1").await;
   assert_json_diff::assert_json_eq!(
     json!({
       "relation": {},
@@ -21,7 +21,7 @@ async fn folder_json_serde() {
 
 #[tokio::test]
 async fn workspace_json_serde() {
-  let folder_test = create_folder("1");
+  let folder_test = create_folder("1").await;
   let belongings = RepeatedViewIdentifier {
     items: vec![
       ViewIdentifier::new("v1".to_string()),
@@ -66,7 +66,7 @@ async fn workspace_json_serde() {
 
 #[tokio::test]
 async fn view_json_serde() {
-  let folder_test = create_folder("1");
+  let folder_test = create_folder("1").await;
   let belongings = RepeatedViewIdentifier {
     items: vec![
       ViewIdentifier::new("v1".to_string()),
@@ -139,7 +139,7 @@ async fn view_json_serde() {
 
 #[tokio::test]
 async fn child_view_json_serde() {
-  let folder_test = create_folder("1");
+  let folder_test = create_folder("1").await;
   let belongings = RepeatedViewIdentifier {
     items: vec![
       ViewIdentifier::new("v1".to_string()),
