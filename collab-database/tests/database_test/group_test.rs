@@ -2,7 +2,7 @@ use collab::core::any_map::AnyMapExtension;
 use collab_database::views::{CreateViewParams, DatabaseLayout};
 
 use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
-use crate::helper::{CONTENT, GROUPS, TestGroup, TestGroupSetting};
+use crate::helper::{TestGroup, TestGroupSetting, CONTENT, GROUPS};
 
 #[tokio::test]
 async fn create_database_view_with_group_test() {

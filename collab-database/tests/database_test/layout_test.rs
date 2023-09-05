@@ -1,7 +1,9 @@
 use collab_database::fields::Field;
 use collab_database::views::DatabaseLayout;
 
-use crate::database_test::helper::{create_database_with_default_data, DatabaseTest, DatabaseTestBuilder};
+use crate::database_test::helper::{
+  create_database_with_default_data, DatabaseTest, DatabaseTestBuilder,
+};
 use crate::helper::TestCalendarLayoutSetting;
 
 #[tokio::test]

@@ -1,6 +1,6 @@
-use collab_database::views::{CreateViewParams, DatabaseLayout};
 use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
 use crate::helper::{SortCondition, TestSort};
+use collab_database::views::{CreateViewParams, DatabaseLayout};
 
 #[tokio::test]
 async fn create_database_view_with_sort_test() {
