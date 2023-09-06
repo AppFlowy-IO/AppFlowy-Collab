@@ -3,7 +3,7 @@ use bytes::{Bytes, BytesMut};
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
-use collab_plugins::sync::client::SyncError;
+use collab_plugins::sync_plugin::client::SyncError;
 use collab_sync_protocol::CollabMessage;
 use std::collections::HashMap;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
-use collab_plugins::sync::client::SyncError;
+use collab_plugins::sync_plugin::client::SyncError;
 use futures_util::{SinkExt, StreamExt};
 use lib0::encoding::Write;
 use tokio::select;
