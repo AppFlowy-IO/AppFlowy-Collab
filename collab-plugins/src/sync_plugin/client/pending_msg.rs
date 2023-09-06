@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut};
 use collab_sync_protocol::CollabSinkMessage;
 use tokio::sync::oneshot;
 
-use crate::sink::MsgId;
+use crate::sync_plugin::client::MsgId;
 
 pub(crate) struct PendingMsgQueue<Msg> {
   queue: BinaryHeap<PendingMessage<Msg>>,

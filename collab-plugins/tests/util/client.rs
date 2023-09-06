@@ -8,11 +8,11 @@ use collab::core::origin::{CollabClient, CollabOrigin};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::sync::SyncPlugin;
-use collab_sync_client::channel::{TokioUnboundedSink, TokioUnboundedStream};
 use rand::{prelude::*, Rng as WrappedRng};
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc::unbounded_channel;
 
+use collab_plugins::sync::client::{TokioUnboundedSink, TokioUnboundedStream};
 use tempfile::TempDir;
 
 use crate::util::{TestSink, TestStream};

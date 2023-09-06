@@ -10,9 +10,9 @@ use tokio::spawn;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tokio::time::{interval, Instant, Interval};
 
-use crate::error::SyncError;
-use crate::pending_msg::{MessageState, PendingMsgQueue};
-use crate::sync::DEFAULT_SYNC_TIMEOUT;
+use crate::sync_plugin::client::SyncError;
+use crate::sync_plugin::client::DEFAULT_SYNC_TIMEOUT;
+use crate::sync_plugin::client::{MessageState, PendingMsgQueue};
 
 #[derive(Clone, Debug)]
 pub enum SinkState {

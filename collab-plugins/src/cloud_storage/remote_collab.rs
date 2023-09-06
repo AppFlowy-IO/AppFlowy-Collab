@@ -4,15 +4,17 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
+pub use crate::sync_plugin::client::MsgId;
+use crate::sync_plugin::client::TokioUnboundedSink;
+use crate::sync_plugin::client::{
+  CollabSink, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState,
+};
 use anyhow::Error;
 use async_trait::async_trait;
 use collab::core::collab::{MutexCollab, TransactionMutExt};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab_define::{CollabObject, CollabType};
-use collab_sync_client::channel::TokioUnboundedSink;
-pub use collab_sync_client::sink::MsgId;
-use collab_sync_client::sink::{CollabSink, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState};
 use collab_sync_protocol::CollabSinkMessage;
 use parking_lot::Mutex;
 use rand::Rng;

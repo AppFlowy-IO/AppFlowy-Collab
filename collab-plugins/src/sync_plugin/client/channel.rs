@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use crate::error::SyncError;
+use crate::sync_plugin::client::error::SyncError;
 use futures_util::{Sink, Stream};
 
 use tokio::sync::mpsc::UnboundedSender;

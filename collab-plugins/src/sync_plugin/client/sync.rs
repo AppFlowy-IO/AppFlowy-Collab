@@ -14,8 +14,10 @@ use y_sync::sync::{Message, MessageReader};
 use yrs::updates::decoder::{Decode, DecoderV1};
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
-use crate::error::SyncError;
-use crate::sink::{CollabSink, CollabSinkRunner, DefaultMsgIdCounter, SinkConfig, SinkState};
+use crate::sync_plugin::client::SyncError;
+use crate::sync_plugin::client::{
+  CollabSink, CollabSinkRunner, DefaultMsgIdCounter, SinkConfig, SinkState,
+};
 use collab_sync_protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
 use collab_sync_protocol::{CSClientInit, CSClientUpdate, CSServerSync, CollabMessage};
 

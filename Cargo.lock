@@ -818,7 +818,6 @@ dependencies = [
  "collab-define",
  "collab-persistence",
  "collab-plugins",
- "collab-sync-client",
  "collab-sync-protocol",
  "collab-ws",
  "config",
@@ -843,26 +842,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
- "y-sync",
- "yrs",
-]
-
-[[package]]
-name = "collab-sync-client"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "collab",
- "collab-sync-protocol",
- "futures-util",
- "lib0",
- "parking_lot",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tracing",
  "y-sync",
  "yrs",
 ]
@@ -905,7 +884,6 @@ name = "collab-ws"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "collab-sync-client",
  "collab-sync-protocol",
  "futures-util",
  "serde",

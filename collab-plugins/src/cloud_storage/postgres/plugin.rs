@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use crate::sync_plugin::client::{SinkConfig, SinkStrategy};
 use collab::core::collab::MutexCollab;
 use collab::core::collab_plugin::CollabPluginType;
 use collab::core::collab_state::SnapshotState;
@@ -13,7 +14,6 @@ use collab_define::CollabObject;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::TransactionMutExt;
-use collab_sync_client::sink::{SinkConfig, SinkStrategy};
 use parking_lot::RwLock;
 use tokio_retry::strategy::FibonacciBackoff;
 use tokio_retry::{Action, Retry};
