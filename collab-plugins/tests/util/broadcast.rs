@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
+use collab_plugins::sync_plugin::client::SyncError;
 use futures_util::{SinkExt, StreamExt};
 use lib0::encoding::Write;
 use tokio::select;
@@ -16,11 +17,10 @@ use yrs::updates::decoder::DecoderV1;
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 use yrs::{ReadTxn, UpdateSubscription};
 
-use crate::error::SyncError;
-use crate::msg::{
+use collab_sync_protocol::{handle_msg, DefaultSyncProtocol};
+use collab_sync_protocol::{
   CSAwarenessUpdate, CSServerAck, CSServerBroadcast, CSServerResponse, CollabMessage,
 };
-use crate::protocol::{handle_msg, DefaultSyncProtocol};
 
 /// A broadcast can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
 /// to subscribes. One broadcast can be used to propagate updates for a single document with
@@ -99,6 +99,7 @@ impl CollabBroadcast {
   /// Broadcasts user message to all active subscribers. Returns error if message could not have
   /// been broadcast.
   #[allow(clippy::result_large_err)]
+  #[allow(dead_code)]
   pub fn broadcast_awareness(
     &self,
     msg: CSAwarenessUpdate,
@@ -236,6 +237,7 @@ fn encode_server_sv(collab: &MutexCollab) -> Vec<u8> {
 /// connection error or closed connection).
 #[derive(Debug)]
 pub struct Subscription {
+  #[allow(dead_code)]
   sink_task: JoinHandle<Result<(), SyncError>>,
   stream_task: JoinHandle<Result<(), SyncError>>,
 }
@@ -245,6 +247,7 @@ impl Subscription {
   /// closed because of failure, an error which caused it to happen will be returned.
   ///
   /// This method doesn't invoke close procedure. If you need that, drop current subscription instead.
+  #[allow(dead_code)]
   pub async fn completed(self) -> Result<(), SyncError> {
     let res = select! {
         r1 = self.sink_task => r1?,

@@ -1,11 +1,11 @@
 use std::sync::{Arc, Weak};
 
+use crate::sync_plugin::client::SinkConfig;
+use crate::sync_plugin::client::SyncQueue;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
-use collab_sync::client::sink::SinkConfig;
-use collab_sync::client::sync::SyncQueue;
-use collab_sync::msg::{CSClientUpdate, CollabMessage};
+use collab_sync_protocol::{CSClientUpdate, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
 use y_sync::awareness::Awareness;
 use y_sync::sync::{Message, SyncMessage};

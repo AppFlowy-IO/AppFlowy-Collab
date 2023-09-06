@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
@@ -6,28 +5,14 @@ use std::time::Duration;
 
 use futures_util::SinkExt;
 
+use collab_sync_protocol::CollabSinkMessage;
 use tokio::spawn;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tokio::time::{interval, Instant, Interval};
 
-use crate::client::pending_msg::{MessageState, PendingMsgQueue};
-use crate::client::sync::DEFAULT_SYNC_TIMEOUT;
-use crate::error::SyncError;
-
-pub trait CollabSinkMessage: Clone + Send + Sync + 'static + Ord + Display {
-  /// Returns the length of the message in bytes.
-  fn length(&self) -> usize;
-  /// Returns true if the message can be merged with other messages.
-  /// Check the implementation of `queue_or_merge_msg` for more details.
-  fn mergeable(&self) -> bool;
-
-  fn merge(&mut self, other: Self);
-
-  fn is_init_msg(&self) -> bool;
-
-  /// Determine if the message can be deferred base on the current state of the sink.
-  fn deferrable(&self) -> bool;
-}
+use crate::sync_plugin::client::SyncError;
+use crate::sync_plugin::client::DEFAULT_SYNC_TIMEOUT;
+use crate::sync_plugin::client::{MessageState, PendingMsgQueue};
 
 #[derive(Clone, Debug)]
 pub enum SinkState {

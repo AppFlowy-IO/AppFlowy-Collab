@@ -13,7 +13,7 @@ use aws_sdk_dynamodb::types::{
 use aws_sdk_dynamodb::Client;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
-use collab_sync::client::sink::{MsgId, SinkConfig, SinkStrategy};
+use collab_sync_client::client::sink::{MsgId, SinkConfig, SinkStrategy};
 
 use crate::cloud_storage::remote_collab::{
   CollabObject, RemoteCollab, RemoteCollabSnapshot, RemoteCollabStorage,

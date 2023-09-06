@@ -33,7 +33,7 @@ use yrs::{ReadTxn, StateVector, Transact, Update};
 // |        |<-(9) Broadcast Update
 // |        |             |
 // ********************************
-/// A implementation of y-sync [CollabSyncProtocol].
+/// A implementation of [CollabSyncProtocol].
 #[derive(Clone)]
 pub struct DefaultSyncProtocol;
 

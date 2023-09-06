@@ -1,9 +1,6 @@
 #[cfg(feature = "rocksdb_plugin")]
 pub mod rocksdb;
 
-#[cfg(feature = "rocksdb_plugin")]
-pub mod rocksdb_server;
-
 #[derive(Clone)]
 pub struct CollabPersistenceConfig {
   /// Enable snapshot. Default is [false].

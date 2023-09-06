@@ -5,9 +5,22 @@ use bytes::Bytes;
 use collab::core::origin::CollabOrigin;
 use serde::{Deserialize, Serialize};
 
-use crate::client::sink::{CollabSinkMessage, MsgId};
-use crate::error::SyncError;
+pub trait CollabSinkMessage: Clone + Send + Sync + 'static + Ord + Display {
+  /// Returns the length of the message in bytes.
+  fn length(&self) -> usize;
+  /// Returns true if the message can be merged with other messages.
+  /// Check the implementation of `queue_or_merge_msg` for more details.
+  fn mergeable(&self) -> bool;
 
+  fn merge(&mut self, other: Self);
+
+  fn is_init_msg(&self) -> bool;
+
+  /// Determine if the message can be deferred base on the current state of the sink.
+  fn deferrable(&self) -> bool;
+}
+
+pub type MsgId = u64;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CollabMessage {
   ClientInit(CSClientInit),
@@ -190,8 +203,8 @@ impl CollabMessage {
     serde_json::to_vec(self).unwrap_or_default()
   }
 
-  pub fn from_vec(data: &[u8]) -> Result<Self, SyncError> {
-    serde_json::from_slice(data).map_err(SyncError::SerdeError)
+  pub fn from_vec(data: &[u8]) -> Result<Self, serde_json::Error> {
+    serde_json::from_slice(data)
   }
 
   pub fn into_payload(self) -> Vec<u8> {

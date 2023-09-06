@@ -1,6 +1,6 @@
 use crate::error::WSError;
 
-use collab_sync::msg::CollabMessage;
+use collab_sync_protocol::CollabMessage;
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Message;
 

@@ -1,13 +1,8 @@
 #[cfg(any(feature = "rocksdb_plugin"))]
 pub use collab_persistence::*;
 
-mod ws_sync;
-
-pub mod sync {
-  pub use collab_sync::*;
-
-  pub use crate::ws_sync::*;
-}
+#[cfg(feature = "sync_plugin")]
+pub mod sync_plugin;
 
 pub mod local_storage;
 

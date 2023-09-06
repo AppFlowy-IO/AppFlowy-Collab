@@ -2,17 +2,17 @@ use std::net::SocketAddr;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use crate::util::{CollabMsgCodec, CollabSink, CollabStream};
 use collab::core::collab::MutexCollab;
 use collab::core::origin::{CollabClient, CollabOrigin};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
-use collab_plugins::sync::SyncPlugin;
-use collab_sync::client::{TokioUnboundedSink, TokioUnboundedStream};
-use collab_sync::server::{CollabMsgCodec, CollabSink, CollabStream};
 use rand::{prelude::*, Rng as WrappedRng};
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc::unbounded_channel;
 
+use collab_plugins::sync_plugin::client::{TokioUnboundedSink, TokioUnboundedStream};
+use collab_plugins::sync_plugin::SyncPlugin;
 use tempfile::TempDir;
 
 use crate::util::{TestSink, TestStream};

@@ -6,7 +6,7 @@ members = [
     "collab-document",
     "collab-folder",
     "collab-database",
-    "collab-sync",
+    "collab-sync-protocol",
     "collab-plugins",
     "collab-ws",
     "appflowy-integrate",
