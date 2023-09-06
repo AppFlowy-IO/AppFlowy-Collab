@@ -4,9 +4,8 @@ pub use collab_persistence::*;
 mod ws_sync;
 
 pub mod sync {
-  pub use collab_sync::*;
-
   pub use crate::ws_sync::*;
+  pub use collab_sync_client::*;
 }
 
 pub mod local_storage;

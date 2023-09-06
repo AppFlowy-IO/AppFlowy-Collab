@@ -1,10 +1,10 @@
-use crate::error::SyncError;
-use crate::msg::CollabMessage;
-use crate::server::{CollabBroadcast, Subscription};
+use crate::util::broadcast::{CollabBroadcast, Subscription};
 use bytes::{Bytes, BytesMut};
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
+use collab_sync_client::error::SyncError;
+use collab_sync_protocol::CollabMessage;
 use std::collections::HashMap;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite, LengthDelimitedCodec};

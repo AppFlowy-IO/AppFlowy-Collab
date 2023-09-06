@@ -1,5 +1,5 @@
 [package]
-name = "collab-sync"
+name = "collab-sync-client"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,17 +11,14 @@ y-sync = { version = "0.3.1" }
 collab = { path = "../collab" }
 lib0 = "0.16.3"
 futures-util = { version = "0.3", features = ["sink"] }
-tokio = { version = "1.26.0", features = ["net", "sync", "macros"] }
+tokio = { version = "1.26.0", features = ["sync"] }
 parking_lot = "0.12.1"
 tracing = { version = "0.1" }
 thiserror = "1.0.39"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-md5 = "0.7.0"
-tokio-util = { version = "0.7", features = ["codec"] }
 bytes = "1.4"
 tokio-stream = { version = "0.1.14" }
+collab-sync-protocol = { path = "../collab-sync-protocol" }
 
-[dev-dependencies]
-tokio = { version = "1.26.0", features = ["full"] }
 

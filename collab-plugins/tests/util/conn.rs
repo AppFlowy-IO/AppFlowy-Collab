@@ -2,9 +2,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;
 
-use collab_sync::error::SyncError;
-use collab_sync::msg::CollabMessage;
-use collab_sync::server::{CollabSink, CollabStream};
+use crate::util::{CollabSink, CollabStream};
+use collab_sync_client::error::SyncError;
+use collab_sync_protocol::CollabMessage;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;

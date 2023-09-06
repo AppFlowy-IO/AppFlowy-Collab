@@ -16,4 +16,5 @@ futures-util = "0.3.26"
 tokio-retry = "0.3"
 bytes = "1.0"
 tokio-stream = { version = "0.1.14", features = ["sync"] }
-collab-sync = { path = "../collab-sync" }
+collab-sync-client = { path = "../collab-sync-client" }
+collab-sync-protocol = { path = "../collab-sync-protocol" }

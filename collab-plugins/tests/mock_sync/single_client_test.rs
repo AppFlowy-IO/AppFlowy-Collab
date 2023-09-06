@@ -1,4 +1,4 @@
-use collab_sync::client::sync::DEFAULT_SYNC_TIMEOUT;
+use collab_sync_client::sync::DEFAULT_SYNC_TIMEOUT;
 use serde_json::json;
 use yrs::Array;
 

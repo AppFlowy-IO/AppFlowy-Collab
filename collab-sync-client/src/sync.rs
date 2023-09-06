@@ -14,12 +14,10 @@ use y_sync::sync::{Message, MessageReader};
 use yrs::updates::decoder::{Decode, DecoderV1};
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
-use crate::client::sink::{
-  CollabSink, CollabSinkRunner, DefaultMsgIdCounter, SinkConfig, SinkState,
-};
 use crate::error::SyncError;
-use crate::msg::{CSClientInit, CSClientUpdate, CSServerSync, CollabMessage};
-use crate::protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
+use crate::sink::{CollabSink, CollabSinkRunner, DefaultMsgIdCounter, SinkConfig, SinkState};
+use collab_sync_protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
+use collab_sync_protocol::{CSClientInit, CSClientUpdate, CSServerSync, CollabMessage};
 
 pub const DEFAULT_SYNC_TIMEOUT: u64 = 2;
 

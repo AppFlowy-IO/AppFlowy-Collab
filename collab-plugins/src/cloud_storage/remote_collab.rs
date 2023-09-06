@@ -10,11 +10,10 @@ use collab::core::collab::{MutexCollab, TransactionMutExt};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab_define::{CollabObject, CollabType};
-pub use collab_sync::client::sink::MsgId;
-use collab_sync::client::sink::{
-  CollabSink, CollabSinkMessage, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState,
-};
-use collab_sync::client::TokioUnboundedSink;
+use collab_sync_client::channel::TokioUnboundedSink;
+pub use collab_sync_client::sink::MsgId;
+use collab_sync_client::sink::{CollabSink, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState};
+use collab_sync_protocol::CollabSinkMessage;
 use parking_lot::Mutex;
 use rand::Rng;
 use serde::Deserialize;

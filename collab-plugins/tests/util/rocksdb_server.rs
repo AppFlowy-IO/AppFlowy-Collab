@@ -3,12 +3,12 @@ use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use crate::util::CollabId;
 use collab::core::origin::CollabOrigin;
 use collab::error::CollabError;
 use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_sync::server::CollabId;
 use y_sync::awareness::Awareness;
 use yrs::{Doc, Transact, TransactionMut};
 

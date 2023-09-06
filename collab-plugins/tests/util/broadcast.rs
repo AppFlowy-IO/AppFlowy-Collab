@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
+use collab_sync_client::error::SyncError;
 use futures_util::{SinkExt, StreamExt};
 use lib0::encoding::Write;
 use tokio::select;
@@ -16,11 +17,10 @@ use yrs::updates::decoder::DecoderV1;
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 use yrs::{ReadTxn, UpdateSubscription};
 
-use crate::error::SyncError;
-use crate::msg::{
+use collab_sync_protocol::{handle_msg, DefaultSyncProtocol};
+use collab_sync_protocol::{
   CSAwarenessUpdate, CSServerAck, CSServerBroadcast, CSServerResponse, CollabMessage,
 };
-use crate::protocol::{handle_msg, DefaultSyncProtocol};
 
 /// A broadcast can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
 /// to subscribes. One broadcast can be used to propagate updates for a single document with
