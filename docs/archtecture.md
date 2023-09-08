@@ -6,7 +6,7 @@ different components and how they interact to create, open, edit, and synchroniz
 
 ### Architecture of AppFlowy
 
-![](./collab_object.png)
+![](collab_object.png)
 
 At its core, the AppFlowy application comprises three essential components: `flowy-folder`, `flowy-database`, and `flowy-document`. Alongside these, the `Collab` and `CollabPlugins` components play pivotal roles in data management and synchronization, connecting the core components of AppFlowy to a variety of data storage and synchronization plugins.
 
@@ -16,7 +16,7 @@ The core components of the AppFlowy application interact with their correspondin
 
 For example, the integration of specific plugins could enable the storage of collaborative data in services like AWS or Firebase. Peer-to-peer synchronization could be made possible through the `RealtimePlugin`, while the `ContentIndexingPlugin` could be used to index the content of the collaboration, thereby supporting search functionality.
 
-![](./collab_object-CollabPlugins.png)
+![](collab_object-CollabPlugins.png)
 
 To illustrate how collaboration works within AppFlowy, let's walk through the process of creating a document. The other kind of collab object workflow is similar to this one, so we will not go through it in detail.
 
@@ -31,7 +31,7 @@ The creation of a new document in AppFlowy involves a series of steps, initiated
 5. `RocksdbDiskPlugin` captures these updates and saves them to the local disk.
 6. Finally, `SupabaseDBPlugin` sends the updates to the server, ensuring that the document is stored and ready for collaboration.
 
-![](./collab_object-Create_Document.png)
+![](collab_object-Create_Document.png)
 
 ### Opening a Document
 
@@ -42,7 +42,7 @@ Opening a document and keeping it in sync with the server is a multi-step proces
 3. `SupabaseDBPlugin` sends an initial synchronization request to the server.
 4. The server sends back an initial synchronization response, which is received by the `SupabaseDBPlugin`.
 
-![](./collab_object-Open_Document.png)
+![](collab_object-Open_Document.png)
 ### Editing a Document
 
 Editing a document is an interactive process that involves user action and several components of the system:
@@ -53,7 +53,7 @@ Editing a document is an interactive process that involves user action and sever
 4. Updates get pushed to send queue via `SupabaseDBPlugin`.
 5. The updates are sent to the server in order.
 
-![](./collab_object-Edit_Document.png)
+![](collab_object-Edit_Document.png)
 
 ### Document Synchronization
 
@@ -68,7 +68,7 @@ The real-time synchronization of a document across different users involves the 
 7. Users apply the update.
 8. UI is refreshed to reflect the updates.
 
-![](./collab_object-Sync_Document.png)
+![](collab_object-Sync_Document.png)
 
 ## New Collab Object
 Each collab object is using the `collab` crate that is built on top of the [yrs](https://docs.rs/yrs/latest/yrs/) to build
@@ -77,7 +77,7 @@ be synced between different devices for the given user_id.
 
 The `UserAwareness` contains the following fields, as shown below:
 
-![](./create_collab_object-UserAwareness.png)
+![](create_collab_object-UserAwareness.png)
 
 - `appearance_settings` is a [yrs map](https://docs.rs/yrs/latest/yrs/types/map/struct.MapRef.html) that contains the user's appearance settings.
 - `reminders` is a [yrs array](https://docs.rs/yrs/latest/yrs/types/array/struct.ArrayRef.html) that contains the user's reminders. Each reminder can be serialized or deserialized using the [yrs map](https://docs.rs/yrs/latest/yrs/types/map/struct.MapRef.html).
@@ -157,4 +157,4 @@ In situations where a user logs into multiple devices using the same user ID, th
 
 Moreover, changes in the `Reminders` object can be subscribed to, enabling the user interface to refresh the reminder list whenever the `Reminders` object undergoes a change.
 
-![](./create_collab_object-CreateReminder.png)
+![](create_collab_object-CreateReminder.png)

@@ -23,7 +23,7 @@ async-trait = "0.1.73"
 [dev-dependencies]
 tokio = { version = "1.26", features = ["full"] }
 tempfile = "3.8.0"
-collab = { path = "." }
+collab = { path = "" }
 collab-derive = { path = "../collab-derive" }
 nanoid = "0.4.0"
 chrono = { version = "0.4.22", default-features = false, features = ["clock"] }

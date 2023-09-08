@@ -6,6 +6,7 @@ use std::time::Duration;
 use collab::core::origin::CollabClient;
 use collab::preclude::Collab;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::sync_plugin::SyncObject;
 use serde_json::Value;
 
 use crate::util::{spawn_server, spawn_server_with_db, TestClient, TestServer};
@@ -58,16 +59,17 @@ pub enum TestScript {
 }
 
 pub struct ScriptTest {
-  object_id: String,
+  object: SyncObject,
   server: TestServer,
   pub clients: HashMap<String, TestClient>,
 }
 
 impl ScriptTest {
   pub async fn new(object_id: &str) -> Self {
-    let server = spawn_server(object_id).await.unwrap();
+    let object = SyncObject::new(object_id, "1");
+    let server = spawn_server(object.clone()).await.unwrap();
     Self {
-      object_id: object_id.to_string(),
+      object,
       server,
       clients: HashMap::new(),
     }
@@ -81,21 +83,21 @@ impl ScriptTest {
     match script {
       TestScript::CreateClient { uid, device_id } => {
         let origin = CollabClient::new(uid, &device_id);
-        let client = TestClient::new(origin, &self.object_id, self.server.address, true)
+        let client = TestClient::new(origin, self.object.clone(), self.server.address, true)
           .await
           .unwrap();
         self.clients.insert(device_id.to_string(), client);
       },
       TestScript::CreateEmptyClient { uid, device_id } => {
         let origin = CollabClient::new(uid, &device_id);
-        let client = TestClient::new(origin, &self.object_id, self.server.address, false)
+        let client = TestClient::new(origin, self.object.clone(), self.server.address, false)
           .await
           .unwrap();
         self.clients.insert(device_id.to_string(), client);
       },
       TestScript::CreateClientWithDb { uid, device_id, db } => {
         let origin = CollabClient::new(uid, &device_id);
-        let new_client = TestClient::with_db(origin, &self.object_id, self.server.address, db)
+        let new_client = TestClient::with_db(origin, self.object.clone(), self.server.address, db)
           .await
           .unwrap();
         let _ = self.clients.insert(device_id.to_string(), new_client);
@@ -119,14 +121,14 @@ impl ScriptTest {
         assert_json_diff::assert_json_eq!(json, expected,);
       },
       TestScript::AssertServerContent { expected } => {
-        let server_json = self.server.get_doc_json(&self.object_id);
+        let server_json = self.server.get_doc_json(&self.object.object_id);
         assert_json_diff::assert_json_eq!(server_json, expected,);
       },
       TestScript::AssertClientEqualToServer { device_id } => {
         let client = self.clients.get_mut(&device_id).unwrap();
         let client_json = client.to_json_value();
 
-        let server_json = self.server.get_doc_json(&self.object_id);
+        let server_json = self.server.get_doc_json(&self.object.object_id);
         assert_eq!(client_json, server_json);
       },
       TestScript::Wait { secs } => {
@@ -137,7 +139,7 @@ impl ScriptTest {
         f(&client.lock());
       },
       TestScript::ModifyRemoteCollab { f } => {
-        self.server.mut_groups(&self.object_id, f);
+        self.server.mut_groups(&self.object.object_id, f);
       },
       TestScript::AssertClientEqual {
         device_id_a,
@@ -151,7 +153,7 @@ impl ScriptTest {
         self.server.cleaner.set_should_clean(false);
         let db_path = self.server.db_path.clone();
         let db = self.server.db.clone();
-        self.server = spawn_server_with_db(&self.object_id, db_path, db)
+        self.server = spawn_server_with_db(self.object.clone(), db_path, db)
           .await
           .unwrap();
       },

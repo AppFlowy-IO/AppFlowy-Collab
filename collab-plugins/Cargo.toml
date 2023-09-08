@@ -42,7 +42,7 @@ tokio-stream = { version = "0.1.14", features = ["sync"] }
 uuid = { version = "1.3.3", features = ["v4"] }
 
 [dev-dependencies]
-collab-plugins = { path = ".", features = ["rocksdb_plugin"] }
+collab-plugins = { path = "", features = ["rocksdb_plugin"] }
 tempfile = "3.8.0"
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }

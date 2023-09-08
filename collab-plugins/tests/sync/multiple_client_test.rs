@@ -1,17 +1,22 @@
 use crate::util::{spawn_client, spawn_server, wait_one_sec};
+use collab_plugins::sync_plugin::SyncObject;
 use serde_json::json;
 
 #[tokio::test]
 async fn open_existing_doc_with_different_client_test() {
-  let object_id = "1";
-
-  let server = spawn_server(object_id).await.unwrap();
-  let (_, _client_1) = spawn_client(1, object_id, server.address).await.unwrap();
-  let (_, _client_2) = spawn_client(1, object_id, server.address).await.unwrap();
+  let uid = 1;
+  let object = SyncObject::new("1", "1");
+  let server = spawn_server(object.clone()).await.unwrap();
+  let (_, _client_1) = spawn_client(uid, object.clone(), server.address)
+    .await
+    .unwrap();
+  let (_, _client_2) = spawn_client(uid, object.clone(), server.address)
+    .await
+    .unwrap();
   wait_one_sec().await;
 
   assert_json_diff::assert_json_eq!(
-    server.get_doc_json(object_id),
+    server.get_doc_json(&object.object_id),
     json!( {
       "map": {
         "task1": "a",
@@ -23,11 +28,15 @@ async fn open_existing_doc_with_different_client_test() {
 
 #[tokio::test]
 async fn single_write_sync_with_server_test() {
-  let object_id = "1";
-
-  let server = spawn_server(object_id).await.unwrap();
-  let (_, client_1) = spawn_client(1, object_id, server.address).await.unwrap();
-  let (_, client2) = spawn_client(1, object_id, server.address).await.unwrap();
+  let uid = 1;
+  let object = SyncObject::new("1", "1");
+  let server = spawn_server(object.clone()).await.unwrap();
+  let (_, client_1) = spawn_client(uid, object.clone(), server.address)
+    .await
+    .unwrap();
+  let (_, client_2) = spawn_client(uid, object.clone(), server.address)
+    .await
+    .unwrap();
   wait_one_sec().await;
   {
     let client = client_1.lock();
@@ -49,17 +58,21 @@ async fn single_write_sync_with_server_test() {
       }
     })
   );
-  assert_eq!(client_1.to_json_value(), client2.to_json_value());
+  assert_eq!(client_1.to_json_value(), client_2.to_json_value());
 }
 
 // Different clients write to the same document
 #[tokio::test]
 async fn two_writers_test() {
-  let object_id = "1";
-
-  let server = spawn_server(object_id).await.unwrap();
-  let (_, client_1) = spawn_client(1, object_id, server.address).await.unwrap();
-  let (_, client_2) = spawn_client(1, object_id, server.address).await.unwrap();
+  let uid = 1;
+  let object = SyncObject::new("1", "1");
+  let server = spawn_server(object.clone()).await.unwrap();
+  let (_, client_1) = spawn_client(uid, object.clone(), server.address)
+    .await
+    .unwrap();
+  let (_, client_2) = spawn_client(uid, object.clone(), server.address)
+    .await
+    .unwrap();
   wait_one_sec().await;
 
   {
@@ -81,7 +94,7 @@ async fn two_writers_test() {
 
   let client_1_json = client_1.to_json_value();
   let client_2_json = client_2.to_json_value();
-  let server_json = server.get_doc_json(object_id);
+  let server_json = server.get_doc_json(&object.object_id);
 
   assert_eq!(client_1_json, client_2_json);
   assert_eq!(client_1_json, server_json);
@@ -100,11 +113,15 @@ async fn two_writers_test() {
 
 #[tokio::test]
 async fn two_clients_last_write_win_test() {
-  let object_id = "1";
-  let server = spawn_server(object_id).await.unwrap();
-  // let db = create_local_disk_document(1, object_id, server.address).await;
-  let (_, client_1) = spawn_client(1, object_id, server.address).await.unwrap();
-  let (_, client_2) = spawn_client(1, object_id, server.address).await.unwrap();
+  let uid = 1;
+  let object = SyncObject::new("1", "1");
+  let server = spawn_server(object.clone()).await.unwrap();
+  let (_, client_1) = spawn_client(uid, object.clone(), server.address)
+    .await
+    .unwrap();
+  let (_, client_2) = spawn_client(uid, object.clone(), server.address)
+    .await
+    .unwrap();
   wait_one_sec().await;
   {
     let client = client_1.lock();
@@ -125,7 +142,7 @@ async fn two_clients_last_write_win_test() {
   wait_one_sec().await;
   let client_1_json = client_1.to_json_value();
   let client_2_json = client_2.to_json_value();
-  let server_json = server.get_doc_json(object_id);
+  let server_json = server.get_doc_json(&object.object_id);
   assert_eq!(client_1_json, client_2_json);
   assert_eq!(client_1_json, server_json);
   assert_json_diff::assert_json_eq!(
@@ -142,10 +159,14 @@ async fn two_clients_last_write_win_test() {
 #[tokio::test]
 async fn last_write_win_test() {
   let uid = 1;
-  let object_id = "1";
-  let server = spawn_server(object_id).await.unwrap();
-  let (_, client_1) = spawn_client(uid, object_id, server.address).await.unwrap();
-  let (_, client_2) = spawn_client(uid, object_id, server.address).await.unwrap();
+  let object = SyncObject::new("1", "1");
+  let server = spawn_server(object.clone()).await.unwrap();
+  let (_, client_1) = spawn_client(uid, object.clone(), server.address)
+    .await
+    .unwrap();
+  let (_, client_2) = spawn_client(uid, object.clone(), server.address)
+    .await
+    .unwrap();
   wait_one_sec().await;
   {
     let client = client_1.lock();
@@ -166,7 +187,7 @@ async fn last_write_win_test() {
   wait_one_sec().await;
   let client_1_json = client_1.to_json_value();
   let client_2_json = client_2.to_json_value();
-  let server_json = server.get_doc_json(object_id);
+  let server_json = server.get_doc_json(&object.object_id);
   assert_eq!(client_1_json, client_2_json);
   assert_eq!(client_1_json, server_json);
   assert_json_diff::assert_json_eq!(

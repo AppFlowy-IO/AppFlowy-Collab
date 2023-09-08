@@ -18,13 +18,14 @@ use crate::sync_plugin::client::SyncError;
 use crate::sync_plugin::client::{
   CollabSink, CollabSinkRunner, DefaultMsgIdCounter, SinkConfig, SinkState,
 };
+use crate::sync_plugin::SyncObject;
 use collab_sync_protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
-use collab_sync_protocol::{CSClientInit, CSClientUpdate, CSServerSync, CollabMessage};
+use collab_sync_protocol::{ClientCollabInit, ClientCollabUpdate, CollabMessage, CollabServerSync};
 
 pub const DEFAULT_SYNC_TIMEOUT: u64 = 2;
 
 pub struct SyncQueue<Sink, Stream> {
-  object_id: String,
+  object: SyncObject,
   origin: CollabOrigin,
   /// The [CollabSink] is used to send the updates to the remote. It will send the current
   /// update periodically if the timeout is reached or it will send the next update if
@@ -44,7 +45,7 @@ where
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
 {
   pub fn new(
-    object_id: &str,
+    object: SyncObject,
     origin: CollabOrigin,
     sink: Sink,
     stream: Stream,
@@ -64,10 +65,10 @@ where
 
     spawn(CollabSinkRunner::run(Arc::downgrade(&sink), notifier_rx));
     let cloned_protocol = protocol.clone();
-    let object_id = object_id.to_string();
+    let object_id = object.object_id.clone();
     let stream = SyncStream::new(
       origin.clone(),
-      object_id.to_string(),
+      object_id,
       stream,
       protocol,
       collab,
@@ -75,7 +76,7 @@ where
     );
 
     Self {
-      object_id,
+      object,
       origin,
       sink,
       stream,
@@ -86,7 +87,14 @@ where
   pub fn notify(&self, awareness: &Awareness) {
     if let Some(payload) = doc_init_state(awareness, &self.protocol) {
       self.sink.queue_msg(|msg_id| {
-        CSClientInit::new(self.origin.clone(), self.object_id.clone(), msg_id, payload).into()
+        ClientCollabInit::new(
+          self.origin.clone(),
+          self.object.object_id.clone(),
+          self.object.workspace_id.clone(),
+          msg_id,
+          payload,
+        )
+        .into()
       });
     } else {
       self.sink.notify();
@@ -221,7 +229,7 @@ where
               let payload = resp_msg.encode_v1();
               let object_id = object_id.to_string();
               sink.queue_msg(|msg_id| {
-                CSServerSync::new(origin.clone(), object_id, payload, msg_id).into()
+                CollabServerSync::new(origin.clone(), object_id, payload, msg_id).into()
               });
             }
           }
@@ -246,7 +254,7 @@ where
             let payload = resp.encode_v1();
             let object_id = object_id.to_string();
             sink.queue_msg(|msg_id| {
-              CSClientUpdate::new(origin.clone(), object_id, msg_id, payload).into()
+              ClientCollabUpdate::new(origin.clone(), object_id, msg_id, payload).into()
             });
           }
         }

@@ -5,21 +5,36 @@ use crate::sync_plugin::client::SyncQueue;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
-use collab_sync_protocol::{CSClientUpdate, CollabMessage};
+use collab_sync_protocol::{ClientCollabUpdate, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
 use y_sync::awareness::Awareness;
 use y_sync::sync::{Message, SyncMessage};
 use yrs::updates::encoder::Encode;
 
+#[derive(Clone, Debug)]
+pub struct SyncObject {
+  pub object_id: String,
+  pub workspace_id: String,
+}
+
+impl SyncObject {
+  pub fn new(object_id: &str, workspace_id: &str) -> Self {
+    Self {
+      object_id: object_id.to_string(),
+      workspace_id: workspace_id.to_string(),
+    }
+  }
+}
+
 pub struct SyncPlugin<Sink, Stream> {
-  object_id: String,
+  object: SyncObject,
   sync_queue: Arc<SyncQueue<Sink, Stream>>,
 }
 
 impl<Sink, Stream> SyncPlugin<Sink, Stream> {
   pub fn new<E>(
     origin: CollabOrigin,
-    object_id: &str,
+    object: SyncObject,
     collab: Weak<MutexCollab>,
     sink: Sink,
     stream: Stream,
@@ -30,7 +45,7 @@ impl<Sink, Stream> SyncPlugin<Sink, Stream> {
     Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
   {
     let sync_queue = SyncQueue::new(
-      object_id,
+      object.clone(),
       origin,
       sink,
       stream,
@@ -39,7 +54,7 @@ impl<Sink, Stream> SyncPlugin<Sink, Stream> {
     );
     Self {
       sync_queue: Arc::new(sync_queue),
-      object_id: object_id.to_string(),
+      object,
     }
   }
 }
@@ -57,14 +72,14 @@ where
   fn receive_local_update(&self, origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
     let weak_sync_queue = Arc::downgrade(&self.sync_queue);
     let update = update.to_vec();
-    let object_id = self.object_id.clone();
+    let object_id = self.object.object_id.clone();
     let cloned_origin = origin.clone();
 
     tokio::spawn(async move {
       if let Some(sync_queue) = weak_sync_queue.upgrade() {
         let payload = Message::Sync(SyncMessage::Update(update)).encode_v1();
         sync_queue.queue_msg(|msg_id| {
-          CSClientUpdate::new(cloned_origin, object_id, msg_id, payload).into()
+          ClientCollabUpdate::new(cloned_origin, object_id, msg_id, payload).into()
         });
       }
     });
