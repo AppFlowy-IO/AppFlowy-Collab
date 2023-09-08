@@ -1,12 +1,12 @@
 use crate::util::{spawn_client_with_empty_doc, spawn_server, wait_one_sec};
+use collab_plugins::sync_plugin::SyncObject;
 use serde_json::json;
 
 #[tokio::test]
 async fn send_single_update_to_server_test() {
-  let _uid = 1;
-  let object_id = "1";
-  let server = spawn_server(object_id).await.unwrap();
-  let client = spawn_client_with_empty_doc(object_id, server.address)
+  let object = SyncObject::new("1", "1");
+  let server = spawn_server(object.clone()).await.unwrap();
+  let client = spawn_client_with_empty_doc(object.clone(), server.address)
     .await
     .unwrap();
 
@@ -26,16 +26,15 @@ async fn send_single_update_to_server_test() {
     })
   );
 
-  let json2 = server.get_doc_json(object_id);
+  let json2 = server.get_doc_json(&object.object_id);
   assert_eq!(json1, json2);
 }
 
 #[tokio::test]
 async fn send_multiple_updates_to_server_test() {
-  let _uid = 1;
-  let object_id = "1";
-  let server = spawn_server(object_id).await.unwrap();
-  let client = spawn_client_with_empty_doc(object_id, server.address)
+  let object = SyncObject::new("1", "1");
+  let server = spawn_server(object.clone()).await.unwrap();
+  let client = spawn_client_with_empty_doc(object.clone(), server.address)
     .await
     .unwrap();
   wait_one_sec().await;
@@ -57,7 +56,7 @@ async fn send_multiple_updates_to_server_test() {
   }
   wait_one_sec().await;
 
-  let json = server.get_doc_json(object_id);
+  let json = server.get_doc_json(&object.object_id);
   assert_json_diff::assert_json_eq!(
     json,
     json!( {
@@ -72,15 +71,13 @@ async fn send_multiple_updates_to_server_test() {
 
 #[tokio::test]
 async fn fetch_initial_state_from_server_test() {
-  let _uid = 1;
-  let object_id = "1";
-
-  let server = spawn_server(object_id).await.unwrap();
-  server.mut_groups(object_id, |collab| {
+  let object = SyncObject::new("1", "1");
+  let server = spawn_server(object.clone()).await.unwrap();
+  server.mut_groups(&object.object_id, |collab| {
     collab.insert("1", "a");
   });
 
-  let client = spawn_client_with_empty_doc(object_id, server.address)
+  let client = spawn_client_with_empty_doc(object.clone(), server.address)
     .await
     .unwrap();
   wait_one_sec().await;
@@ -96,11 +93,9 @@ async fn fetch_initial_state_from_server_test() {
 
 #[tokio::test]
 async fn send_local_doc_initial_state_to_server() {
-  let _uid = 1;
-  let object_id = "1";
-
-  let server = spawn_server(object_id).await.unwrap();
-  let client = spawn_client_with_empty_doc(object_id, server.address)
+  let object = SyncObject::new("1", "1");
+  let server = spawn_server(object.clone()).await.unwrap();
+  let client = spawn_client_with_empty_doc(object.clone(), server.address)
     .await
     .unwrap();
   wait_one_sec().await;
@@ -113,7 +108,7 @@ async fn send_local_doc_initial_state_to_server() {
     });
   }
   wait_one_sec().await;
-  let json = server.get_doc_json(object_id);
+  let json = server.get_doc_json(&object.object_id);
   assert_json_diff::assert_json_eq!(
     json,
     json!( {
@@ -127,11 +122,9 @@ async fn send_local_doc_initial_state_to_server() {
 
 #[tokio::test]
 async fn send_local_doc_initial_state_to_server_multiple_times() {
-  let _uid = 1;
-  let object_id = "1";
-
-  let server = spawn_server(object_id).await.unwrap();
-  let client = spawn_client_with_empty_doc(object_id, server.address)
+  let object = SyncObject::new("1", "1");
+  let server = spawn_server(object.clone()).await.unwrap();
+  let client = spawn_client_with_empty_doc(object.clone(), server.address)
     .await
     .unwrap();
   wait_one_sec().await;
@@ -145,10 +138,11 @@ async fn send_local_doc_initial_state_to_server_multiple_times() {
   }
   wait_one_sec().await;
 
+  let object_id = object.object_id.as_str();
   let remote_doc_json = server.get_doc_json(object_id);
 
   for _i in 0..3 {
-    let _client = spawn_client_with_empty_doc(object_id, server.address)
+    let _client = spawn_client_with_empty_doc(object.clone(), server.address)
       .await
       .unwrap();
     wait_one_sec().await;

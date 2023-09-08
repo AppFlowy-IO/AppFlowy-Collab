@@ -44,6 +44,8 @@ pub trait CollabPlugin: Send + Sync + 'static {
   /// Notifies the plugin that the collab object has been reset. It happens when the collab object
   /// is ready to sync from the remote. When reset is called, the plugin should reset its state.
   fn reset(&self, _object_id: &str) {}
+
+  fn flush(&self, _object_id: &str, _update: &[u8]) {}
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.

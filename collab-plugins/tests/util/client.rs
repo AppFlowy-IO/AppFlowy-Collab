@@ -12,23 +12,23 @@ use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc::unbounded_channel;
 
 use collab_plugins::sync_plugin::client::{TokioUnboundedSink, TokioUnboundedStream};
-use collab_plugins::sync_plugin::SyncPlugin;
+use collab_plugins::sync_plugin::{SyncObject, SyncPlugin};
 use tempfile::TempDir;
 
 use crate::util::{TestSink, TestStream};
 
 pub async fn spawn_client_with_empty_doc(
-  object_id: &str,
+  object: SyncObject,
   address: SocketAddr,
 ) -> std::io::Result<Arc<MutexCollab>> {
   let stream = TcpSocket::new_v4()?.connect(address).await?;
   let origin = origin_from_tcp_stream(&stream);
   let (reader, writer) = stream.into_split();
 
-  let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
+  let collab = Arc::new(MutexCollab::new(origin.clone(), &object.object_id, vec![]));
   let stream = CollabStream::new(reader, CollabMsgCodec::default());
   let sink = CollabSink::new(writer, CollabMsgCodec::default());
-  let sync_plugin = SyncPlugin::new(origin, object_id, Arc::downgrade(&collab), sink, stream);
+  let sync_plugin = SyncPlugin::new(origin, object, Arc::downgrade(&collab), sink, stream);
   collab.lock().add_plugin(Arc::new(sync_plugin));
   collab.async_initialize().await;
   Ok(collab)
@@ -36,18 +36,18 @@ pub async fn spawn_client_with_empty_doc(
 
 pub async fn spawn_client(
   uid: i64,
-  object_id: &str,
+  object: SyncObject,
   address: SocketAddr,
 ) -> std::io::Result<(Arc<RocksCollabDB>, Arc<MutexCollab>)> {
   let stream = TcpSocket::new_v4()?.connect(address).await?;
   let origin = origin_from_tcp_stream(&stream);
   let (reader, writer) = stream.into_split();
-  let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
+  let collab = Arc::new(MutexCollab::new(origin.clone(), &object.object_id, vec![]));
 
   // sync
   let stream = CollabStream::new(reader, CollabMsgCodec::default());
   let sink = CollabSink::new(writer, CollabMsgCodec::default());
-  let sync_plugin = SyncPlugin::new(origin, object_id, Arc::downgrade(&collab), sink, stream);
+  let sync_plugin = SyncPlugin::new(origin, object, Arc::downgrade(&collab), sink, stream);
   collab.lock().add_plugin(Arc::new(sync_plugin));
 
   // disk
@@ -82,7 +82,7 @@ pub struct TestClient {
 impl TestClient {
   pub async fn new(
     origin: CollabClient,
-    object_id: &str,
+    object: SyncObject,
     address: SocketAddr,
     with_data: bool,
   ) -> std::io::Result<Self> {
@@ -94,7 +94,7 @@ impl TestClient {
 
     // disk
     let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
-    let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
+    let collab = Arc::new(MutexCollab::new(origin.clone(), &object.object_id, vec![]));
     collab.lock().add_plugin(Arc::new(disk_plugin));
 
     // stream
@@ -109,7 +109,7 @@ impl TestClient {
 
     let sync_plugin = SyncPlugin::new(
       origin,
-      object_id,
+      object,
       Arc::downgrade(&collab),
       TokioUnboundedSink(sink),
       TokioUnboundedStream::new(stream),
@@ -136,7 +136,7 @@ impl TestClient {
 
   pub async fn with_db(
     origin: CollabClient,
-    object_id: &str,
+    object: SyncObject,
     address: SocketAddr,
     db: Arc<RocksCollabDB>,
   ) -> std::io::Result<Self> {
@@ -146,7 +146,7 @@ impl TestClient {
     let (reader, writer) = stream.into_split();
     // disk
     let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
-    let collab = Arc::new(MutexCollab::new(origin.clone(), object_id, vec![]));
+    let collab = Arc::new(MutexCollab::new(origin.clone(), &object.object_id, vec![]));
     collab.lock().add_plugin(Arc::new(disk_plugin));
 
     // stream
@@ -161,7 +161,7 @@ impl TestClient {
 
     let sync_plugin = SyncPlugin::new(
       origin,
-      object_id,
+      object,
       Arc::downgrade(&collab),
       TokioUnboundedSink(sink),
       TokioUnboundedStream::new(stream),

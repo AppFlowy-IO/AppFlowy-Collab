@@ -15,6 +15,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 use tokio::net::TcpListener;
 
+use collab_plugins::sync_plugin::SyncObject;
 use dashmap::DashMap;
 use futures::executor::block_on;
 use tempfile::TempDir;
@@ -70,15 +71,15 @@ impl TestServer {
   }
 }
 
-pub async fn spawn_server(object_id: &str) -> std::io::Result<TestServer> {
+pub async fn spawn_server(object: SyncObject) -> std::io::Result<TestServer> {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path.clone()).unwrap());
-  spawn_server_with_db(object_id, path, db).await
+  spawn_server_with_db(object, path, db).await
 }
 
 pub async fn spawn_server_with_db(
-  object_id: &str,
+  object: SyncObject,
   db_path: PathBuf,
   db: Arc<RocksCollabDB>,
 ) -> std::io::Result<TestServer> {
@@ -89,7 +90,7 @@ pub async fn spawn_server_with_db(
   let listener = TcpListener::bind(address).await?;
   let port = listener.local_addr()?.port(); // Get the actual port number
   let groups = Arc::new(DashMap::new());
-  let object_id = object_id.to_string();
+  let object_id = object.object_id.clone();
   let cloned_db = db.clone();
   let weak_groups = Arc::downgrade(&groups);
   let weak_collab_id_gen = Arc::downgrade(&collab_id_gen);

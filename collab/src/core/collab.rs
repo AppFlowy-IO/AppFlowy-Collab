@@ -252,6 +252,17 @@ impl Collab {
       .for_each(|plugin| plugin.reset(&self.object_id));
   }
 
+  /// Make a full update with the current state of the [Collab].
+  /// It invokes the [CollabPlugin::flush] method of each plugin.
+  pub fn flush(&self) {
+    let update = self.encode_as_update_v1().0;
+    self
+      .plugins
+      .read()
+      .iter()
+      .for_each(|plugin| plugin.flush(&self.object_id, &update));
+  }
+
   pub fn observer_data<F>(&mut self, f: F) -> MapSubscription
   where
     F: Fn(&TransactionMut, &MapEvent) + 'static,

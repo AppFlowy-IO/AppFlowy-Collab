@@ -19,7 +19,7 @@ use yrs::{ReadTxn, UpdateSubscription};
 
 use collab_sync_protocol::{handle_msg, DefaultSyncProtocol};
 use collab_sync_protocol::{
-  CSAwarenessUpdate, CSServerAck, CSServerBroadcast, CSServerResponse, CollabMessage,
+  CSAwarenessUpdate, CollabMessage, CollabServerAck, CollabServerBroadcast, CollabServerResponse,
 };
 
 /// A broadcast can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
@@ -58,7 +58,7 @@ impl CollabBroadcast {
         .observe_update_v1(move |txn, event| {
           let origin = CollabOrigin::from(txn);
           let payload = gen_update_message(&event.update);
-          let msg = CSServerBroadcast::new(origin, cloned_oid.clone(), payload);
+          let msg = CollabServerBroadcast::new(origin, cloned_oid.clone(), payload);
           if let Err(_e) = sink.send(msg.into()) {
             tracing::trace!("Broadcast group is closed");
           }
@@ -188,7 +188,7 @@ impl CollabBroadcast {
                 // Send the response to the corresponding client
                 if let Some(resp) = resp {
                   let msg =
-                    CSServerResponse::new(origin.cloned(), object_id.clone(), resp.encode_v1());
+                    CollabServerResponse::new(origin.cloned(), object_id.clone(), resp.encode_v1());
                   sink
                     .send(msg.into())
                     .await
@@ -209,7 +209,7 @@ impl CollabBroadcast {
             };
 
             // Send the ack message to the client
-            let ack = CSServerAck::new(object_id.clone(), msg_id, payload);
+            let ack = CollabServerAck::new(object_id.clone(), msg_id, payload);
             let _ = sink.send(ack.into()).await;
           }
         }

@@ -11,7 +11,7 @@
 * `collab-plugins`
 * `collab-sync`
 
-![architecture.png](./resources/crate_arch.png)
+![architecture.png](resources/crate_arch.png)
 
 As the project is still a work in progress, it is rapidly evolving to improve its features and functionality. Therefore,
 it may still have some bugs and limitations, and its API may change frequently as new features are added and existing
