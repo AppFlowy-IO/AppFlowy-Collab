@@ -184,12 +184,11 @@ impl<'de> Deserialize<'de> for TextDelta {
               // Deserialize the "attrs_val" value as a HashMap<String, Any>
               let attrs_val = map.next_value::<HashMap<String, Any>>()?;
               // Iterate through the attributes and insert them into the HashMap
-              attrs_val.iter().for_each(|(key, val)| {
-                attrs
-                  .as_mut()
-                  .unwrap()
-                  .insert(Rc::from(key.to_string()), val.clone());
-              });
+              attrs.get_or_insert(HashMap::new()).extend(
+                attrs_val
+                  .iter()
+                  .map(|(key, val)| (Rc::from(key.to_string()), val.clone())),
+              );
             },
             // Handle unknown fields by returning an error
             _ => {
@@ -204,37 +203,20 @@ impl<'de> Deserialize<'de> for TextDelta {
             // If "delta_type" is "insert," construct an "Inserted" TextDelta variant
             FIELD_INSERT => {
               // If "attrs" is Some, include attributes in the variant; otherwise, use None
-              if let Some(attrs) = attrs {
-                Ok(TextDelta::Inserted(
-                  content.ok_or_else(|| de::Error::missing_field(FIELD_INSERT))?,
-                  Some(attrs),
-                ))
-              } else {
-                Ok(TextDelta::Inserted(
-                  content.ok_or_else(|| de::Error::missing_field(FIELD_INSERT))?,
-                  None,
-                ))
-              }
+              Ok(TextDelta::Inserted(
+                content.ok_or_else(|| de::Error::missing_field(FIELD_INSERT))?,
+                attrs,
+              ))
             },
             // If "delta_type" is "delete," construct a "Deleted" TextDelta variant
             FIELD_DELETE => Ok(TextDelta::Deleted(
               len.ok_or_else(|| de::Error::missing_field(FIELD_DELETE))? as u32,
             )),
             // If "delta_type" is "retain," construct a "Retain" TextDelta variant
-            FIELD_RETAIN => {
-              // If "attrs" is Some, include attributes in the variant; otherwise, use None
-              if let Some(attrs) = attrs {
-                Ok(TextDelta::Retain(
-                  len.ok_or_else(|| de::Error::missing_field(FIELD_RETAIN))? as u32,
-                  Some(attrs),
-                ))
-              } else {
-                Ok(TextDelta::Retain(
-                  len.ok_or_else(|| de::Error::missing_field(FIELD_RETAIN))? as u32,
-                  None,
-                ))
-              }
-            },
+            FIELD_RETAIN => Ok(TextDelta::Retain(
+              len.ok_or_else(|| de::Error::missing_field(FIELD_RETAIN))? as u32,
+              attrs,
+            )),
             // If "delta_type" is an unknown variant, return an error
             _ => Err(de::Error::unknown_variant(
               &delta_type,

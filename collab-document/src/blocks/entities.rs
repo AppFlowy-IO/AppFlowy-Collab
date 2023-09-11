@@ -55,14 +55,15 @@ pub struct BlockAction {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct BlockActionPayload {
-  /// Block
+  // [Block] When action = Insert, Update, Delete or Move, block needs to be passed.
   pub block: Option<Block>,
-  /// Previous [Block] id.
+  /// Previous [Block] id. When action = Insert or Move, prev_id needs to be passed.
   pub prev_id: Option<String>,
-  /// Parent [Block] id.
+  /// Parent [Block] id. When action = Insert or Move, parent_id needs to be passed.
   pub parent_id: Option<String>,
-  /// Text Delta
+  /// Text Delta When action = InsertText or ApplyTextDelta, delta needs to be passed.
   pub delta: Option<String>,
+  /// Text id. When action = InsertText or ApplyTextDelta, text_id needs to be passed.
   pub text_id: Option<String>,
 }
 

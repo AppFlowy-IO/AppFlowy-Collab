@@ -127,13 +127,11 @@ fn parse_yrs_value(txn: &TransactionMut, value: &YrsValue) -> String {
 }
 
 pub fn get_delta_with_text_ref<T: ReadTxn>(text_ref: &TextRef, txn: &T) -> Vec<Delta> {
-  let changes = text_ref.diff(txn, YChange::identity);
-  let mut deltas = vec![];
-  for change in changes {
-    let delta = YrsDelta::Inserted(change.insert, change.attributes);
-    deltas.push(delta);
-  }
-  deltas
+  text_ref
+    .diff(txn, YChange::identity)
+    .into_iter()
+    .map(|change| YrsDelta::Inserted(change.insert, change.attributes))
+    .collect()
 }
 
 pub fn deserialize_text_delta(delta: &str) -> serde_json::Result<Vec<TextDelta>> {
