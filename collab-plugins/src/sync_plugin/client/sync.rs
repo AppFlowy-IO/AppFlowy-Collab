@@ -236,7 +236,7 @@ where
         }
 
         let msg_id = ack.msg_id;
-        tracing::trace!("[🦀Collab]: {}", CollabMessage::ServerAck(ack));
+        tracing::trace!("[🙂Client]: {}", CollabMessage::ServerAck(ack));
         sink.ack_msg(msg_id).await;
         Ok(())
       },

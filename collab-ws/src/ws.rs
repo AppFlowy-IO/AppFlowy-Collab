@@ -119,8 +119,12 @@ impl WSClient {
     let mut sink_rx = self.sender.subscribe();
     tokio::spawn(async move {
       while let Ok(msg) = sink_rx.recv().await {
-        tracing::trace!("[WS Application]: send message to server");
-        sink.send(msg).await.unwrap();
+        match sink.send(msg).await {
+          Ok(_) => {},
+          Err(e) => {
+            tracing::error!("🔴Failed to send message via websocket: {:?}", e);
+          },
+        }
       }
     });
 
@@ -253,7 +257,7 @@ impl ConnectStateNotify {
 
   fn set_state(&mut self, state: ConnectState) {
     if self.state != state {
-      tracing::trace!("[WSClient]: connect state changed to {:?}", state);
+      tracing::trace!("[🙂Client]: connect state changed to {:?}", state);
       self.state = state.clone();
       let _ = self.sender.send(state);
     }

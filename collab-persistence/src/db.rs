@@ -82,7 +82,7 @@ where
   let clock = last_clock + 1;
   let new_key = make_update_key(id, clock);
   // tracing::trace!(
-  //   "[🦀Collab] => [{}-{:?}]: new update {:?}",
+  //   "[🙂Client] => [{}-{:?}]: new update {:?}",
   //   id,
   //   object_id,
   //   new_key.as_ref()

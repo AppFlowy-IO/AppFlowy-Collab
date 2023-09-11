@@ -59,7 +59,7 @@ impl CollabPlugin for RocksdbServerDiskPlugin {
       });
 
       if let Err(e) = result {
-        tracing::warn!("[🦀Collab] => create doc for {:?} failed: {}", object_id, e)
+        tracing::warn!("[🙂Client] => create doc for {:?} failed: {}", object_id, e)
       }
     }
   }
