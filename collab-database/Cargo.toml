@@ -9,6 +9,7 @@ edition = "2021"
 collab = { path = "../collab" }
 collab-derive = { path = "../collab-derive" }
 collab-persistence = { path = "../collab-persistence" }
+collab-define = { path = "../collab-define" }
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = "1.0.94"
 thiserror = "1.0.30"

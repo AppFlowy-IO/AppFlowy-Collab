@@ -31,6 +31,7 @@ impl SinkState {
 
 /// Use to sync the [Msg] to the remote.
 pub struct CollabSink<Sink, Msg> {
+  uid: i64,
   /// The [Sink] is used to send the messages to the remote. It might be a websocket sink or
   /// other sink that implements the [SinkExt] trait.
   sender: Arc<Mutex<Sink>>,
@@ -68,6 +69,7 @@ where
   Msg: CollabSinkMessage,
 {
   pub fn new<C>(
+    uid: i64,
     sink: Sink,
     notifier: watch::Sender<bool>,
     sync_state_tx: watch::Sender<SinkState>,
@@ -93,6 +95,7 @@ where
       spawn(IntervalRunner::new(*duration).run(weak_notifier, rx));
     }
     Self {
+      uid,
       sender,
       pending_msg_queue,
       msg_id_counter,
@@ -231,7 +234,7 @@ where
     };
 
     let mut sender = self.sender.lock().await;
-    tracing::trace!("[🙂Client]: sync {}", collab_msg);
+    tracing::debug!("[🙂Client {}]: sync {}", self.uid, collab_msg);
     sender.send(collab_msg).await.ok()?;
     // Wait for the message to be acked.
     // If the message is not acked within the timeout, resend the message.

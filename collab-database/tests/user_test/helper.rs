@@ -18,12 +18,12 @@ use collab_database::user::{
 };
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::cloud_storage::CollabType;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use parking_lot::Mutex;
 use tokio::sync::mpsc::{channel, Receiver};
 
+use collab_define::CollabType;
 use rand::Rng;
 use tempfile::TempDir;
 

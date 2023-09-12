@@ -5,9 +5,9 @@ use std::sync::{Arc, Weak};
 use async_trait::async_trait;
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::core::origin::CollabOrigin;
+use collab_define::CollabType;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::cloud_storage::CollabType;
 use tokio::sync::watch;
 
 use crate::blocks::queue::{

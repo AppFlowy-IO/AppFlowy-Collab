@@ -3,9 +3,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
 use collab::core::collab::{CollabRawData, MutexCollab};
+use collab_define::CollabType;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::cloud_storage::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use lru::LruCache;
 use parking_lot::Mutex;

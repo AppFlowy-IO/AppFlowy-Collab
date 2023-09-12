@@ -15,9 +15,9 @@ use collab_database::views::{
   LayoutSettings,
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::cloud_storage::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 
+use collab_define::CollabType;
 use tempfile::TempDir;
 
 pub use crate::helper::*;

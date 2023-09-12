@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use bytes::Bytes;
 use std::sync::Arc;
 
 use y_sync::awareness::Awareness;
@@ -45,7 +46,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
   /// is ready to sync from the remote. When reset is called, the plugin should reset its state.
   fn reset(&self, _object_id: &str) {}
 
-  fn flush(&self, _object_id: &str, _update: &[u8]) {}
+  fn flush(&self, _object_id: &str, _update: &Bytes) {}
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.

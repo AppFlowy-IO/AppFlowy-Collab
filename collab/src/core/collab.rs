@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::panic;
@@ -255,7 +256,7 @@ impl Collab {
   /// Make a full update with the current state of the [Collab].
   /// It invokes the [CollabPlugin::flush] method of each plugin.
   pub fn flush(&self) {
-    let update = self.encode_as_update_v1().0;
+    let update = Bytes::from(self.encode_as_update_v1().0);
     self
       .plugins
       .read()

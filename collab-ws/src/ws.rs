@@ -205,7 +205,7 @@ impl ServerFixIntervalPing {
         tokio::select! {
           _ = interval.tick() => {
             // Send the ping
-            tracing::trace!("🟢Send ping to server");
+            tracing::trace!("🙂ping");
             let _ = sender.send(Message::Ping(vec![]));
             if let Some(ping_count) = weak_ping_count.upgrade() {
               let mut lock = ping_count.lock().await;
