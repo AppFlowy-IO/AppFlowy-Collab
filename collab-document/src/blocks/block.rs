@@ -69,6 +69,8 @@ impl BlockOperation {
     map.insert_with_txn(txn, PARENT, block.parent);
     map.insert_with_txn(txn, CHILDREN, block.children);
     map.insert_with_txn(txn, DATA, json_str);
+    map.insert_with_txn(txn, EXTERNAL_ID, block.external_id);
+    map.insert_with_txn(txn, EXTERNAL_TYPE, block.external_type);
 
     // Create the children for each block.
     self
@@ -108,7 +110,7 @@ impl BlockOperation {
   }
 
   /// Update the block with the given id.
-  /// Except \`data\` and \`parent\`, other fields can not be updated.
+  /// Except \`data\` and \`parent\` and \'external_id\' and \'external_type\' field, other fields can be updated.
   /// If you want to turn into other block, you should delete the block and create a new block.
   pub fn set_block_with_txn(
     &self,
@@ -116,6 +118,8 @@ impl BlockOperation {
     id: &str,
     data: Option<HashMap<String, Value>>,
     parent_id: Option<&str>,
+    external_id: Option<String>,
+    external_type: Option<String>,
   ) -> Result<(), DocumentError> {
     let map = self
       .root
@@ -129,6 +133,15 @@ impl BlockOperation {
     // Update data field with the given data.
     if let Some(data) = data {
       map.insert_with_txn(txn, DATA, hashmap_to_json_str(data)?);
+    }
+
+    // Update external id and external type.
+    if let Some(external_id) = external_id {
+      map.insert_with_txn(txn, EXTERNAL_ID, external_id);
+    }
+
+    if let Some(external_type) = external_type {
+      map.insert_with_txn(txn, EXTERNAL_TYPE, external_type);
     }
     Ok(())
   }

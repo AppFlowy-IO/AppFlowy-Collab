@@ -11,6 +11,7 @@ collab-derive = { path = "../collab-derive" }
 collab-persistence = { path = "../collab-persistence" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.94"
+lib0 = { version = "0.16.3", features = ["lib0-serde"] }
 nanoid = "0.4.0"
 thiserror = "1.0.30"
 anyhow = "1.0"

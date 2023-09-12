@@ -9,7 +9,7 @@ use collab_document::blocks::{
 use collab_document::document::Document;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use nanoid::nanoid;
-use serde_json::json;
+use serde_json::{json, Value};
 
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 
@@ -19,7 +19,7 @@ pub const TEXT_BLOCK_TYPE: &str = "paragraph";
 
 pub struct BlockTestCore {
   pub db: Arc<RocksCollabDB>,
-  document: Document,
+  pub document: Document,
   pub collab: Arc<MutexCollab>,
 }
 
@@ -69,14 +69,8 @@ impl BlockTestCore {
   pub fn get_default_data() -> DocumentData {
     let mut blocks = HashMap::new();
     let mut children_map = HashMap::new();
-
-    let mut data = HashMap::new();
-    data.insert(
-      "delta".to_string(),
-      json!([{
-        "insert": "Hello World"
-      }]),
-    );
+    let mut text_map = HashMap::new();
+    let data = HashMap::new();
     let page_id = generate_id();
     let page_children_id = generate_id();
     blocks.insert(
@@ -96,6 +90,9 @@ impl BlockTestCore {
     children_map.insert(page_children_id, vec![first_text_id.clone()]);
     let first_text_children_id = generate_id();
     children_map.insert(first_text_children_id.clone(), vec![]);
+    let first_text_external_id = generate_id();
+    let empty_text_delta = "[]".to_string();
+    text_map.insert(first_text_external_id.clone(), empty_text_delta);
     blocks.insert(
       first_text_id.clone(),
       Block {
@@ -103,12 +100,15 @@ impl BlockTestCore {
         ty: TEXT_BLOCK_TYPE.to_string(),
         parent: page_id.clone(),
         children: first_text_children_id,
-        data: data.clone(),
-        external_id: None,
-        external_type: None,
+        data,
+        external_id: Some(first_text_external_id),
+        external_type: Some("text".to_string()),
       },
     );
-    let meta = DocumentMeta { children_map };
+    let meta = DocumentMeta {
+      children_map,
+      text_map: Some(text_map),
+    };
     DocumentData {
       page_id,
       blocks,
@@ -136,6 +136,15 @@ impl BlockTestCore {
       .unwrap_or_else(|| panic!("get block error: {}", block_id))
   }
 
+  pub fn get_text_delta_with_text_id(&self, text_id: &str) -> String {
+    let document_data = self.get_document_data();
+    let text_map = document_data.meta.text_map.unwrap();
+    text_map
+      .get(text_id)
+      .unwrap_or_else(|| panic!("get text delta error: {}", text_id))
+      .clone()
+  }
+
   pub fn get_block_children(&self, block_id: &str) -> Vec<Block> {
     let block = self.get_block(block_id);
     let block_children_id = block.children;
@@ -152,16 +161,27 @@ impl BlockTestCore {
     children
   }
 
+  pub fn create_text(&self, delta: String) -> String {
+    let external_id = generate_id();
+    self.document.create_text(&external_id, delta);
+    external_id
+  }
+
+  pub fn apply_text_delta(&self, text_id: &str, delta: String) {
+    self.document.apply_text_delta(text_id, delta);
+  }
+
   pub fn get_text_block(&self, text: String, parent_id: &str) -> Block {
-    let mut data = HashMap::new();
-    data.insert("delta".to_string(), json!([{ "insert": text }]));
+    let data = HashMap::new();
+    let delta = json!([{ "insert": text }]).to_string();
+    let external_id = self.create_text(delta);
     Block {
       id: generate_id(),
       ty: TEXT_BLOCK_TYPE.to_string(),
       parent: parent_id.to_string(),
       children: generate_id(),
-      external_id: None,
-      external_type: None,
+      external_id: Some(external_id),
+      external_type: Some("text".to_string()),
       data,
     }
   }
@@ -176,10 +196,8 @@ impl BlockTestCore {
     })
   }
 
-  pub fn update_text_block(&self, text: String, block_id: &str) {
+  pub fn update_block_data(&self, block_id: &str, data: HashMap<String, Value>) {
     let block = self.get_block(block_id);
-    let mut data = block.data;
-    data.insert("delta".to_string(), json!([{ "insert": text }]));
 
     self.document.with_transact_mut(|txn| {
       self
@@ -221,9 +239,11 @@ impl BlockTestCore {
     BlockAction {
       action: BlockActionType::Insert,
       payload: BlockActionPayload {
-        block,
+        block: Some(block),
+        delta: None,
         prev_id,
         parent_id: Some(parent_id.to_string()),
+        text_id: None,
       },
     }
   }
@@ -237,9 +257,11 @@ impl BlockTestCore {
     BlockAction {
       action: BlockActionType::Update,
       payload: BlockActionPayload {
-        block: Block { data, ..block },
+        block: Some(Block { data, ..block }),
+        delta: None,
         prev_id: None,
         parent_id: Some(parent_id),
+        text_id: None,
       },
     }
   }
@@ -248,9 +270,11 @@ impl BlockTestCore {
     BlockAction {
       action: BlockActionType::Delete,
       payload: BlockActionPayload {
-        block: self.get_block(block_id),
         prev_id: None,
         parent_id: None,
+        block: Some(self.get_block(block_id)),
+        delta: None,
+        text_id: None,
       },
     }
   }
@@ -264,9 +288,11 @@ impl BlockTestCore {
     BlockAction {
       action: BlockActionType::Move,
       payload: BlockActionPayload {
-        block: self.get_block(block_id),
+        block: Some(self.get_block(block_id)),
+        delta: None,
         prev_id,
         parent_id: Some(parent_id.to_string()),
+        text_id: None,
       },
     }
   }

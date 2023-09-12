@@ -738,6 +738,7 @@ dependencies = [
  "collab-persistence",
  "collab-plugins",
  "futures",
+ "lib0",
  "nanoid",
  "parking_lot",
  "serde",

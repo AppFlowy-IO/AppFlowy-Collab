@@ -1,23 +1,13 @@
 use crate::preclude::{CollabContext, YrsDelta};
+use lib0::any::Any;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 use std::sync::Arc;
 use yrs::types::text::{TextEvent, YChange};
 use yrs::types::{Attrs, Delta};
 use yrs::{ReadTxn, Subscription, Text, TextRef, Transaction, TransactionMut};
 pub type TextSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &TextEvent)>;
 pub type TextSubscription = Subscription<TextSubscriptionCallback>;
-
-pub enum TextDelta {
-  Inserted(String, Attrs),
-
-  /// Determines a change that resulted in removing a consecutive range of characters.
-  Deleted(u32),
-
-  /// Determines a number of consecutive unchanged characters. Used to recognize non-edited spaces
-  /// between [Delta::Inserted] and/or [Delta::Deleted] chunks. Can contain an optional set of
-  /// attributes, which have been used to format an existing piece of text.
-  Retain(u32, Attrs),
-}
 
 pub struct TextRefWrapper {
   text_ref: TextRef,
@@ -53,23 +43,37 @@ impl TextRefWrapper {
     deltas
   }
 
-  pub fn apply_delta_with_txn(&self, txn: &mut TransactionMut, delta: Vec<TextDelta>) {
+  pub fn apply_delta_with_txn(&self, txn: &mut TransactionMut, delta: Vec<Delta>) {
     let mut index = 0;
     for d in delta {
       match d {
-        TextDelta::Inserted(content, attrs) => {
-          let value = content.to_string();
+        Delta::Inserted(content, attrs) => {
+          let value = content.to_string(txn);
           let len = value.len() as u32;
-          self.text_ref.insert(txn, index, &value);
-          self.text_ref.format(txn, index, len, attrs);
+          if let Some(attrs) = attrs {
+            self
+              .text_ref
+              .insert_with_attributes(txn, index, &value, *attrs)
+          } else {
+            // TODO: This is a hack to get around the fact that Yrs doesn't
+            // By setting empty attributes, prevent it from encountering a bug where it gets appended to the previous op.
+            let attrs = Attrs::from([(Rc::from(""), Any::Null)]);
+            self
+              .text_ref
+              .insert_with_attributes(txn, index, &value, attrs);
+          }
+
           index += len;
         },
-        TextDelta::Deleted(len) => {
+        Delta::Deleted(len) => {
           self.text_ref.remove_range(txn, index, len);
           index += len;
         },
-        TextDelta::Retain(len, attrs) => {
-          self.text_ref.format(txn, index, len, attrs);
+        Delta::Retain(len, attrs) => {
+          attrs.map(|attrs| {
+            self.text_ref.format(txn, index, len, *attrs);
+            Some(())
+          });
           index += len;
         },
       }

@@ -10,8 +10,9 @@ use serde_json::Value;
 use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{
-  Block, BlockAction, BlockActionType, BlockEvent, BlockOperation, ChildrenOperation, DocumentData,
-  DocumentMeta, RootDeepSubscription,
+  deserialize_text_delta, Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent,
+  BlockOperation, ChildrenOperation, DocumentData, DocumentMeta, RootDeepSubscription,
+  TextOperation,
 };
 use crate::error::DocumentError;
 
@@ -25,8 +26,12 @@ const PAGE_ID: &str = "page_id";
 const BLOCKS: &str = "blocks";
 /// Document's meta data.
 const META: &str = "meta";
-/// [Block]'s children map. And it's also in [META].
+/// [Block]'s relation map. And it's also in [META].
+/// The key is the parent block's children_id, and the value is the children block's id.
 const CHILDREN_MAP: &str = "children_map";
+/// [Block]'s yText map. And it's also in [META].
+/// The key is the text block's external_id, and the value is the text block's yText.
+const TEXT_MAP: &str = "text_map";
 
 pub struct Document {
   inner: Arc<MutexCollab>,
@@ -34,6 +39,7 @@ pub struct Document {
   subscription: RootDeepSubscription,
   children_operation: ChildrenOperation,
   block_operation: BlockOperation,
+  text_operation: TextOperation,
 }
 
 impl Document {
@@ -103,39 +109,77 @@ impl Document {
 
     let blocks = self.block_operation.get_all_blocks();
     let children_map = self.children_operation.get_all_children();
+    let text_map = self.text_operation.serialize_all_text_delta();
     let document_data = DocumentData {
       page_id,
       blocks,
-      meta: DocumentMeta { children_map },
+      meta: DocumentMeta {
+        children_map,
+        text_map: Some(text_map),
+      },
     };
     Ok(document_data)
+  }
+
+  /// Create a yText for incremental synchronization.
+  /// - @param text_id: The text block's external_id.
+  /// - @param delta: The text block's delta. "\[{"insert": "Hello", "attributes": { "bold": true, "italic": true } }, {"insert": " World!"}]".
+  pub fn create_text(&self, text_id: &str, delta: String) {
+    self.inner.lock().with_origin_transact_mut(|txn| {
+      self.create_text_with_txn(txn, text_id, delta);
+    })
+  }
+
+  pub fn create_text_with_txn(&self, txn: &mut TransactionMut, text_id: &str, delta: String) {
+    let delta = deserialize_text_delta(&delta).ok();
+    self.text_operation.create_text_with_txn(txn, text_id);
+    if let Some(delta) = delta {
+      self
+        .text_operation
+        .apply_delta_with_txn(txn, text_id, delta);
+    }
+  }
+
+  /// Apply a delta to the yText.
+  /// - @param text_id: The text block's external_id.
+  /// - @param delta: The text block's delta. "\[{"insert": "Hello", "attributes": { "bold": true, "italic": true } }, {"insert": " World!"}]".
+  pub fn apply_text_delta(&self, text_id: &str, delta: String) {
+    self
+      .inner
+      .lock()
+      .with_origin_transact_mut(|txn| self.apply_text_delta_with_txn(txn, text_id, delta))
+  }
+
+  pub fn apply_text_delta_with_txn(&self, txn: &mut TransactionMut, text_id: &str, delta: String) {
+    let delta = deserialize_text_delta(&delta).ok();
+    if let Some(delta) = delta {
+      self
+        .text_operation
+        .apply_delta_with_txn(txn, text_id, delta);
+    } else {
+      self
+        .text_operation
+        .apply_delta_with_txn(txn, text_id, vec![]);
+    }
   }
 
   /// Apply actions to the document.
   pub fn apply_action(&self, actions: Vec<BlockAction>) {
     self.inner.lock().with_origin_transact_mut(|txn| {
       for action in actions {
-        let payload = action.payload;
-        let mut block = payload.block;
-        let block_id = &block.id.clone();
-        let data = &block.data;
-        let parent_id = payload.parent_id;
-        let prev_id = payload.prev_id;
+        let result = match action.action {
+          BlockActionType::Insert => self.handle_insert_action(txn, action.payload),
+          BlockActionType::Update => self.handle_update_action(txn, action.payload),
+          BlockActionType::Delete => self.handle_delete_action(txn, action.payload),
+          BlockActionType::Move => self.handle_move_action(txn, action.payload),
+          BlockActionType::InsertText => self.handle_insert_text_action(txn, action.payload),
+          BlockActionType::ApplyTextDelta => {
+            self.handle_apply_text_delta_action(txn, action.payload)
+          },
+        };
 
-        // check if the block's parent_id is empty, if it is empty, assign the parent_id to the block
-        if block.parent.is_empty() {
-          if let Some(parent_id) = &parent_id {
-            block.parent = parent_id.clone();
-          }
-        }
-
-        if let Err(err) = match action.action {
-          BlockActionType::Insert => self.insert_block(txn, block, prev_id).map(|_| ()),
-          BlockActionType::Update => self.update_block_data(txn, block_id, data.to_owned()),
-          BlockActionType::Delete => self.delete_block(txn, block_id),
-          BlockActionType::Move => self.move_block(txn, block_id, parent_id, prev_id),
-        } {
-          // todo: handle the error;
+        if let Err(err) = result {
+          // Handle the error
           tracing::error!("[Document] apply_action error: {:?}", err);
           return;
         }
@@ -215,6 +259,8 @@ impl Document {
       None => return Err(DocumentError::BlockIsNotFound),
     };
 
+    let external_id = &block.external_id;
+
     // Delete all the children of this block.
     let children = self
       .children_operation
@@ -230,6 +276,10 @@ impl Document {
     let parent_id = &block.parent;
     self.delete_block_from_parent(txn, block_id, parent_id);
 
+    // Delete the text
+    if let Some(external_id) = external_id {
+      self.text_operation.delete_text_with_txn(txn, external_id);
+    }
     // Delete the block
     self
       .block_operation
@@ -264,9 +314,14 @@ impl Document {
       Some(block) => block,
       None => return Err(DocumentError::BlockIsNotFound),
     };
-    self
-      .block_operation
-      .set_block_with_txn(txn, &block.id, Some(data), None)
+    self.block_operation.set_block_with_txn(
+      txn,
+      &block.id,
+      Some(data),
+      None,
+      block.external_id,
+      block.external_type,
+    )
   }
 
   /// move the block to the new parent.
@@ -324,9 +379,14 @@ impl Document {
       .insert_child_with_txn(txn, &new_parent_children_id, block_id, index);
 
     // Update the parent of the block.
-    self
-      .block_operation
-      .set_block_with_txn(txn, block_id, Some(block.data), Some(&new_parent.id))
+    self.block_operation.set_block_with_txn(
+      txn,
+      block_id,
+      Some(block.data),
+      Some(&new_parent.id),
+      None,
+      None,
+    )
   }
 
   pub fn redo(&self) -> bool {
@@ -372,8 +432,8 @@ impl Document {
     data: Option<DocumentData>,
   ) -> Result<Self, DocumentError> {
     let mut collab_guard = collab.lock();
-    let (root, block_operation, children_operation) =
-      collab_guard.with_origin_transact_mut(|txn| {
+    let (root, block_operation, children_operation, text_operation) = collab_guard
+      .with_origin_transact_mut(|txn| {
         // { document: {:} }
         let root = collab_guard.insert_map_with_txn(txn, ROOT);
         // { document: { blocks: {:} } }
@@ -382,8 +442,11 @@ impl Document {
         let meta = root.create_map_with_txn(txn, META);
         // {document: { blocks: {:}, meta: { children_map: {:} } }
         let children_map = meta.create_map_with_txn(txn, CHILDREN_MAP);
+        // { document: { blocks: {:}, meta: { text_map: {:} } }
+        let text_map = meta.create_map_with_txn(txn, TEXT_MAP);
 
         let children_operation = ChildrenOperation::new(children_map);
+        let text_operation = TextOperation::new(text_map);
         let block_operation = BlockOperation::new(blocks, children_operation.clone());
 
         // If the data is not None, insert the data to the document.
@@ -400,9 +463,15 @@ impl Document {
               map.push_back(txn, child_id.to_string());
             });
           }
+          if let Some(text_map) = data.meta.text_map {
+            for (id, delta) in text_map {
+              let delta = serde_json::from_str(&delta).unwrap_or_else(|_| vec![]);
+              text_operation.apply_delta_with_txn(txn, &id, delta)
+            }
+          }
         }
 
-        Ok::<_, DocumentError>((root, block_operation, children_operation))
+        Ok::<_, DocumentError>((root, block_operation, children_operation, text_operation))
       })?;
 
     collab_guard.enable_undo_redo();
@@ -415,6 +484,7 @@ impl Document {
       root,
       block_operation,
       children_operation,
+      text_operation,
       subscription,
     };
     Ok(document)
@@ -422,34 +492,156 @@ impl Document {
 
   fn open_document_with_collab(collab: Arc<MutexCollab>) -> Result<Self, DocumentError> {
     let mut collab_guard = collab.lock();
-    let (root, block_operation, children_operation, subscription) = {
-      let txn = collab_guard.transact();
-      let root = collab_guard
-        .get_map_with_txn(&txn, vec![ROOT])
-        .ok_or_else(|| {
-          DocumentError::Internal(anyhow::anyhow!("Unexpected empty document value"))
-        })?;
-      let blocks = collab_guard
-        .get_map_with_txn(&txn, vec![ROOT, BLOCKS])
-        .ok_or(DocumentError::BlockIsNotFound)?;
-      let children_map = collab_guard
-        .get_map_with_txn(&txn, vec![ROOT, META, CHILDREN_MAP])
-        .ok_or_else(|| DocumentError::Internal(anyhow::anyhow!("Unexpected empty child map")))?;
-      let children_operation = ChildrenOperation::new(children_map);
-      let block_operation = BlockOperation::new(blocks, children_operation.clone());
-      let subscription = RootDeepSubscription::default();
-      (root, block_operation, children_operation, subscription)
-    };
+    let (root, block_operation, children_operation, text_operation, subscription) = collab_guard
+      .with_origin_transact_mut(|txn| {
+        let root = collab_guard.get_map_with_txn(txn, vec![ROOT]);
+
+        if root.is_none() {
+          return (None, None, None, None, None);
+        }
+        let root = root.unwrap();
+        let blocks = root.create_map_with_txn_if_not_exist(txn, BLOCKS);
+        let meta = root.create_map_with_txn_if_not_exist(txn, META);
+
+        let children_map = meta.create_map_with_txn_if_not_exist(txn, CHILDREN_MAP);
+        let text_map = meta.create_map_with_txn_if_not_exist(txn, TEXT_MAP);
+        let children_operation = ChildrenOperation::new(children_map);
+        let text_operation = TextOperation::new(text_map);
+        let block_operation = BlockOperation::new(blocks, children_operation.clone());
+        let subscription = RootDeepSubscription::default();
+        (
+          Some(root),
+          Some(block_operation),
+          Some(children_operation),
+          Some(text_operation),
+          Some(subscription),
+        )
+      });
 
     collab_guard.enable_undo_redo();
     drop(collab_guard);
 
+    if root.is_none() {
+      return Err(DocumentError::Internal(anyhow::anyhow!(
+        "Unexpected empty document value"
+      )));
+    }
+
+    if block_operation.is_none() {
+      return Err(DocumentError::BlockIsNotFound);
+    }
+
+    if children_operation.is_none() {
+      return Err(DocumentError::Internal(anyhow::anyhow!(
+        "Unexpected empty child map"
+      )));
+    }
+
+    if text_operation.is_none() {
+      return Err(DocumentError::Internal(anyhow::anyhow!(
+        "Unexpected empty text map"
+      )));
+    }
+
+    if subscription.is_none() {
+      return Err(DocumentError::Internal(anyhow::anyhow!(
+        "Unexpected empty subscription"
+      )));
+    }
     Ok(Self {
       inner: collab,
-      root,
-      block_operation,
-      children_operation,
-      subscription,
+      root: root.unwrap(),
+      block_operation: block_operation.unwrap(),
+      children_operation: children_operation.unwrap(),
+      text_operation: text_operation.unwrap(),
+      subscription: subscription.unwrap(),
     })
+  }
+
+  fn handle_insert_action(
+    &self,
+    txn: &mut TransactionMut,
+    payload: BlockActionPayload,
+  ) -> Result<(), DocumentError> {
+    if let Some(mut block) = payload.block {
+      // Check if the block's parent_id is empty, if it is empty, assign the parent_id to the block
+      if block.parent.is_empty() && payload.parent_id.is_some() {
+        block.parent = payload.parent_id.unwrap();
+      }
+      self.insert_block(txn, block, payload.prev_id).map(|_| ())
+    } else {
+      Err(DocumentError::BlockIsNotFound)
+    }
+  }
+
+  fn handle_update_action(
+    &self,
+    txn: &mut TransactionMut,
+    payload: BlockActionPayload,
+  ) -> Result<(), DocumentError> {
+    if let Some(block) = payload.block {
+      let data = &block.data;
+      self.update_block_data(txn, &block.id, data.to_owned())
+    } else {
+      Err(DocumentError::BlockIsNotFound)
+    }
+  }
+
+  fn handle_delete_action(
+    &self,
+    txn: &mut TransactionMut,
+    payload: BlockActionPayload,
+  ) -> Result<(), DocumentError> {
+    if let Some(block) = payload.block {
+      self.delete_block(txn, &block.id)
+    } else {
+      Err(DocumentError::BlockIsNotFound)
+    }
+  }
+
+  fn handle_move_action(
+    &self,
+    txn: &mut TransactionMut,
+    payload: BlockActionPayload,
+  ) -> Result<(), DocumentError> {
+    if let Some(block) = payload.block {
+      self.move_block(txn, &block.id, payload.parent_id, payload.prev_id)
+    } else {
+      Err(DocumentError::BlockIsNotFound)
+    }
+  }
+
+  fn handle_insert_text_action(
+    &self,
+    txn: &mut TransactionMut,
+    payload: BlockActionPayload,
+  ) -> Result<(), DocumentError> {
+    if let Some(text_id) = payload.text_id {
+      if let Some(delta) = payload.delta {
+        self.create_text_with_txn(txn, &text_id, delta);
+        Ok(())
+      } else {
+        Err(DocumentError::TextActionParamsError)
+      }
+    } else {
+      Err(DocumentError::TextActionParamsError)
+    }
+  }
+
+  fn handle_apply_text_delta_action(
+    &self,
+    txn: &mut TransactionMut,
+    payload: BlockActionPayload,
+  ) -> Result<(), DocumentError> {
+    if let Some(text_id) = payload.text_id {
+      if let Some(delta) = payload.delta {
+        self.apply_text_delta_with_txn(txn, &text_id, delta);
+        Ok(())
+      } else {
+        Err(DocumentError::TextActionParamsError)
+      }
+    } else {
+      Err(DocumentError::TextActionParamsError)
+    }
   }
 }

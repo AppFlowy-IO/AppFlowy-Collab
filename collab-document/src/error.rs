@@ -29,4 +29,7 @@ pub enum DocumentError {
 
   #[error("Could not delete block")]
   DeleteBlockError,
+
+  #[error("text_id or delta is empty")]
+  TextActionParamsError,
 }

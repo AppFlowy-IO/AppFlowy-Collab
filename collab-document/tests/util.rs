@@ -42,6 +42,7 @@ impl DocumentTest {
 
     let mut blocks = HashMap::new();
     let mut children_map = HashMap::new();
+    let mut text_map = HashMap::new();
 
     let mut data = HashMap::new();
     data.insert("delta".to_string(), json!([]));
@@ -64,6 +65,9 @@ impl DocumentTest {
     children_map.insert(page_children_id, vec![first_text_id.clone()]);
     let first_text_children_id = nanoid!(10);
     children_map.insert(first_text_children_id.clone(), vec![]);
+    let first_text_external_id = nanoid!(10);
+    let empty_text_delta = "[]".to_string();
+    text_map.insert(first_text_external_id.clone(), empty_text_delta);
     blocks.insert(
       first_text_id.clone(),
       Block {
@@ -72,11 +76,14 @@ impl DocumentTest {
         parent: page_id.clone(),
         children: first_text_children_id,
         data: data.clone(),
-        external_id: None,
-        external_type: None,
+        external_id: Some(first_text_external_id),
+        external_type: Some("text".to_string()),
       },
     );
-    let meta = DocumentMeta { children_map };
+    let meta = DocumentMeta {
+      children_map,
+      text_map: Some(text_map),
+    };
     let document_data = DocumentData {
       page_id,
       blocks,
