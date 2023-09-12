@@ -35,8 +35,8 @@ async fn open_document_test() {
 #[tokio::test]
 async fn subscribe_insert_change_test() {
   let mut test = BlockTestCore::new().await;
-  test.subscribe(|e, _| {
-    println!("event: {:?}", e);
+  test.subscribe(|_e, _| {
+    // do nothing
   });
   let page = test.get_page();
   let page_id = page.id.as_str();
@@ -47,8 +47,8 @@ async fn subscribe_insert_change_test() {
 #[tokio::test]
 async fn subscribe_update_change_test() {
   let mut test = BlockTestCore::new().await;
-  test.subscribe(|e, _| {
-    println!("event: {:?}", e);
+  test.subscribe(|_e, _| {
+    // do nothing
   });
   let page = test.get_page();
   let page_id = page.id.as_str();
@@ -60,8 +60,8 @@ async fn subscribe_update_change_test() {
 #[tokio::test]
 async fn subscribe_delete_change_test() {
   let mut test = BlockTestCore::new().await;
-  test.subscribe(|e, _| {
-    println!("event: {:?}", e);
+  test.subscribe(|_e, _| {
+    // do nothing
   });
   let page = test.get_page();
   let page_id = page.id.as_str();

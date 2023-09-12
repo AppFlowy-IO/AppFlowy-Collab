@@ -31,8 +31,8 @@ pub fn default_document_data() -> DocumentData {
   let mut text_map: HashMap<String, String> = HashMap::new();
 
   // page block
-  let page_id = nanoid!(10);
-  let children_id = nanoid!(10);
+  let page_id = generate_id();
+  let children_id = generate_id();
   let root = Block {
     id: page_id.clone(),
     ty: page_type,
@@ -45,9 +45,9 @@ pub fn default_document_data() -> DocumentData {
   blocks.insert(page_id.clone(), root);
 
   // text block
-  let text_block_id = nanoid!(10);
-  let text_block_children_id = nanoid!(10);
-  let text_external_id = nanoid!(10);
+  let text_block_id = generate_id();
+  let text_block_children_id = generate_id();
+  let text_external_id = generate_id();
   let text_block = Block {
     id: text_block_id.clone(),
     ty: text_type,
@@ -86,8 +86,8 @@ pub fn default_document_data2() -> DocumentData {
   let mut text_map: HashMap<String, String> = HashMap::new();
 
   // page block
-  let page_id = nanoid!(10);
-  let children_id = nanoid!(10);
+  let page_id = generate_id();
+  let children_id = generate_id();
   let root = Block {
     id: page_id.clone(),
     ty: page_type,
@@ -100,9 +100,9 @@ pub fn default_document_data2() -> DocumentData {
   blocks.insert(page_id.clone(), root);
 
   // text block
-  let text_block_id = nanoid!(10);
-  let text_block_children_id = nanoid!(10);
-  let text_external_id = nanoid!(10);
+  let text_block_id = generate_id();
+  let text_block_children_id = generate_id();
+  let text_external_id = generate_id();
   let text_block = Block {
     id: text_block_id.clone(),
     ty: text_type,
@@ -128,4 +128,8 @@ pub fn default_document_data2() -> DocumentData {
       text_map: Some(text_map),
     },
   }
+}
+
+pub fn generate_id() -> String {
+  nanoid!(10)
 }

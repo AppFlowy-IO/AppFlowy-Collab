@@ -32,7 +32,8 @@ pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
   let delta = match event {
     Event::Text(val) => {
       // Extract the ID from the last element of the "path" vector
-      let id = path.last().unwrap().to_string();
+      let id = path.last().map(|v| v.to_string()).unwrap_or_default();
+
       // Calculate the delta for the "val" using the transaction "txn"
       let delta = val
         .delta(txn)
@@ -52,8 +53,7 @@ pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
       }]
     },
     Event::Array(_val) => {
-      // Here use unwrap is safe, because we have checked the type of event.
-      let id = path.last().unwrap().to_string();
+      let id = path.last().map(|v| v.to_string()).unwrap_or_default();
 
       vec![BlockEventPayload {
         value: parse_yrs_value(txn, &event.target()),
@@ -65,32 +65,29 @@ pub fn parse_event(txn: &TransactionMut, event: &Event) -> BlockEvent {
     Event::Map(val) => val
       .keys(txn)
       .iter()
-      .map(|(key, change)| {
-        match change {
-          EntryChange::Inserted(value) => BlockEventPayload {
-            value: parse_yrs_value(txn, value),
-            id: key.to_string(),
-            path: path.clone(),
-            command: DeltaType::Inserted,
-          },
-          EntryChange::Updated(_, _value) => {
-            // Here use unwrap is safe, because we have checked the type of event.
-            let id = path.last().unwrap().to_string();
+      .map(|(key, change)| match change {
+        EntryChange::Inserted(value) => BlockEventPayload {
+          value: parse_yrs_value(txn, value),
+          id: key.to_string(),
+          path: path.clone(),
+          command: DeltaType::Inserted,
+        },
+        EntryChange::Updated(_, _value) => {
+          let id = path.last().map(|v| v.to_string()).unwrap_or_default();
 
-            BlockEventPayload {
-              value: parse_yrs_value(txn, &event.target()),
-              id,
-              path: path.clone(),
-              command: DeltaType::Updated,
-            }
-          },
-          EntryChange::Removed(value) => BlockEventPayload {
-            value: parse_yrs_value(txn, value),
-            id: key.to_string(),
+          BlockEventPayload {
+            value: parse_yrs_value(txn, &event.target()),
+            id,
             path: path.clone(),
-            command: DeltaType::Removed,
-          },
-        }
+            command: DeltaType::Updated,
+          }
+        },
+        EntryChange::Removed(value) => BlockEventPayload {
+          value: parse_yrs_value(txn, value),
+          id: key.to_string(),
+          path: path.clone(),
+          command: DeltaType::Removed,
+        },
       })
       .collect::<Vec<BlockEventPayload>>(),
     _ => vec![],
