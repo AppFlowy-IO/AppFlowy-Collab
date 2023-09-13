@@ -157,6 +157,10 @@ impl WSClient {
     self.state.lock().await.subscribe()
   }
 
+  pub async fn disconnect(&self) {
+    let _ = self.sender.send(Message::Close(None));
+  }
+
   async fn set_state(&self, state: ConnectState) {
     self.state.lock().await.set_state(state);
   }
