@@ -1,5 +1,5 @@
 use crate::error::WSError;
-use crate::msg::{BusinessID, WSMessage};
+use crate::msg::{BusinessID, RealtimeMessage};
 use crate::retry::ConnectAction;
 use crate::WSObjectHandler;
 use futures_util::{SinkExt, StreamExt};
@@ -87,7 +87,7 @@ impl WSClient {
         match msg {
           Message::Text(_) => {},
           Message::Binary(_) => {
-            if let Ok(msg) = WSMessage::try_from(&msg) {
+            if let Ok(msg) = RealtimeMessage::try_from(&msg) {
               if let Some(handlers) = weak_handlers.upgrade() {
                 if let Some(handler) = handlers
                   .read()

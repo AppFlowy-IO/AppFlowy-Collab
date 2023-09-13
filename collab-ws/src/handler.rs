@@ -1,5 +1,5 @@
 use crate::error::WSError;
-use crate::{BusinessID, WSMessage};
+use crate::{BusinessID, RealtimeMessage};
 use futures_util::Sink;
 use std::fmt::Debug;
 use std::pin::Pin;
@@ -14,7 +14,7 @@ pub struct WSObjectHandler {
   object_id: String,
   business_id: BusinessID,
   sender: Sender<Message>,
-  receiver: Sender<WSMessage>,
+  receiver: Sender<RealtimeMessage>,
 }
 
 impl WSObjectHandler {
@@ -32,19 +32,19 @@ impl WSObjectHandler {
     self.business_id
   }
 
-  pub(crate) fn recv_msg(&self, msg: &WSMessage) {
+  pub(crate) fn recv_msg(&self, msg: &RealtimeMessage) {
     let _ = self.receiver.send(msg.clone());
   }
 
   pub fn sink<T>(&self) -> BroadcastSink<T>
   where
-    T: Into<WSMessage> + Send + Sync + 'static + Clone,
+    T: Into<RealtimeMessage> + Send + Sync + 'static + Clone,
   {
     let (tx, mut rx) = unbounded_channel::<T>();
     let cloned_sender = self.sender.clone();
     tokio::spawn(async move {
       while let Some(msg) = rx.recv().await {
-        let ws_msg: WSMessage = msg.into();
+        let ws_msg: RealtimeMessage = msg.into();
         match cloned_sender.send(ws_msg.into()) {
           Ok(_) => {},
           Err(e) => tracing::error!("🔴Error sending message: {:?}", e),
@@ -56,7 +56,7 @@ impl WSObjectHandler {
 
   pub fn stream<T>(&self) -> UnboundedReceiverStream<T>
   where
-    T: From<WSMessage> + Send + Sync + 'static,
+    T: From<RealtimeMessage> + Send + Sync + 'static,
   {
     let (tx, rx) = unbounded_channel::<T>();
     let mut recv = self.receiver.subscribe();
