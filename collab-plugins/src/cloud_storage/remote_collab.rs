@@ -69,6 +69,7 @@ impl RemoteCollab {
     let (notifier, notifier_rx) = watch::channel(false);
     let (sync_state_tx, sink_state_rx) = watch::channel(SinkState::Init);
     let collab_sink = Arc::new(CollabSink::new(
+      object.uid,
       TokioUnboundedSink(sink),
       notifier,
       sync_state_tx,

@@ -81,12 +81,6 @@ where
   let last_clock = get_last_update_clock(store, id, &make_update_key)?;
   let clock = last_clock + 1;
   let new_key = make_update_key(id, clock);
-  // tracing::trace!(
-  //   "[🙂Client] => [{}-{:?}]: new update {:?}",
-  //   id,
-  //   object_id,
-  //   new_key.as_ref()
-  // );
   Ok(new_key)
 }
 

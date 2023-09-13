@@ -55,7 +55,10 @@ where
     let protocol = DefaultSyncProtocol;
     let (notifier, notifier_rx) = watch::channel(false);
     let (state_tx, _) = watch::channel(SinkState::Init);
+    debug_assert!(origin.client_user_id().is_some());
+
     let sink = Arc::new(CollabSink::new(
+      origin.client_user_id().unwrap_or(0),
       sink,
       notifier,
       state_tx,
@@ -236,7 +239,14 @@ where
         }
 
         let msg_id = ack.msg_id;
-        tracing::trace!("[🙂Client]: {}", CollabMessage::ServerAck(ack));
+        tracing::trace!(
+          "[🙂Client {}]: {}",
+          origin
+            .client_user_id()
+            .map(|uid| uid.to_string())
+            .unwrap_or_default(),
+          CollabMessage::ServerAck(ack)
+        );
         sink.ack_msg(msg_id).await;
         Ok(())
       },

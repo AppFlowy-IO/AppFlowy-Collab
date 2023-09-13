@@ -1,4 +1,3 @@
-pub use collab_define::*;
 pub use remote_collab::{
   MsgId, RemoteCollabSnapshot, RemoteCollabState, RemoteCollabStorage, RemoteUpdateReceiver,
   RemoteUpdateSender,

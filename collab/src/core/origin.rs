@@ -10,6 +10,16 @@ pub enum CollabOrigin {
   Empty,
 }
 
+impl CollabOrigin {
+  pub fn client_user_id(&self) -> Option<i64> {
+    match self {
+      CollabOrigin::Client(origin) => Some(origin.uid),
+      CollabOrigin::Server => None,
+      CollabOrigin::Empty => None,
+    }
+  }
+}
+
 impl Display for CollabOrigin {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
