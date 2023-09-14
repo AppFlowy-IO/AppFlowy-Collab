@@ -1,4 +1,5 @@
 use crate::util::{spawn_client_with_empty_doc, spawn_server, wait_one_sec};
+use collab_define::CollabType;
 use collab_plugins::sync_plugin::SyncObject;
 use serde_json::json;
 
