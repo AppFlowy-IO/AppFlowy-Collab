@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 
 use bytes::Bytes;
 use collab::core::origin::CollabOrigin;
+use collab_define::CollabType;
 use serde::{Deserialize, Serialize};
 
 pub trait CollabSinkMessage: Clone + Send + Sync + 'static + Ord + Display {
@@ -305,6 +306,7 @@ impl From<CollabServerAck> for CollabMessage {
 pub struct ClientCollabInit {
   pub origin: CollabOrigin,
   pub object_id: String,
+  pub collab_type: CollabType,
   pub workspace_id: String,
   pub msg_id: MsgId,
   pub payload: Vec<u8>,
@@ -315,6 +317,7 @@ impl ClientCollabInit {
   pub fn new(
     origin: CollabOrigin,
     object_id: String,
+    collab_type: CollabType,
     workspace_id: String,
     msg_id: MsgId,
     payload: Vec<u8>,
@@ -323,6 +326,7 @@ impl ClientCollabInit {
     Self {
       origin,
       object_id,
+      collab_type,
       workspace_id,
       msg_id,
       payload,

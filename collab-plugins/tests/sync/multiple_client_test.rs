@@ -1,11 +1,12 @@
 use crate::util::{spawn_client, spawn_server, wait_one_sec};
+use collab_define::CollabType;
 use collab_plugins::sync_plugin::SyncObject;
 use serde_json::json;
 
 #[tokio::test]
 async fn open_existing_doc_with_different_client_test() {
   let uid = 1;
-  let object = SyncObject::new("1", "1");
+  let object = SyncObject::new("1", "1", CollabType::Document);
   let server = spawn_server(object.clone()).await.unwrap();
   let (_, _client_1) = spawn_client(uid, object.clone(), server.address)
     .await
@@ -29,7 +30,7 @@ async fn open_existing_doc_with_different_client_test() {
 #[tokio::test]
 async fn single_write_sync_with_server_test() {
   let uid = 1;
-  let object = SyncObject::new("1", "1");
+  let object = SyncObject::new("1", "1", CollabType::Document);
   let server = spawn_server(object.clone()).await.unwrap();
   let (_, client_1) = spawn_client(uid, object.clone(), server.address)
     .await
@@ -65,7 +66,7 @@ async fn single_write_sync_with_server_test() {
 #[tokio::test]
 async fn two_writers_test() {
   let uid = 1;
-  let object = SyncObject::new("1", "1");
+  let object = SyncObject::new("1", "1", CollabType::Document);
   let server = spawn_server(object.clone()).await.unwrap();
   let (_, client_1) = spawn_client(uid, object.clone(), server.address)
     .await
@@ -114,7 +115,7 @@ async fn two_writers_test() {
 #[tokio::test]
 async fn two_clients_last_write_win_test() {
   let uid = 1;
-  let object = SyncObject::new("1", "1");
+  let object = SyncObject::new("1", "1", CollabType::Document);
   let server = spawn_server(object.clone()).await.unwrap();
   let (_, client_1) = spawn_client(uid, object.clone(), server.address)
     .await
@@ -159,7 +160,7 @@ async fn two_clients_last_write_win_test() {
 #[tokio::test]
 async fn last_write_win_test() {
   let uid = 1;
-  let object = SyncObject::new("1", "1");
+  let object = SyncObject::new("1", "1", CollabType::Document);
   let server = spawn_server(object.clone()).await.unwrap();
   let (_, client_1) = spawn_client(uid, object.clone(), server.address)
     .await

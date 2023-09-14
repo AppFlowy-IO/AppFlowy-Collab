@@ -4,7 +4,7 @@ use serde_json::json;
 
 #[tokio::test]
 async fn send_single_update_to_server_test() {
-  let object = SyncObject::new("1", "1");
+  let object = SyncObject::new("1", "1", CollabType::Document);
   let server = spawn_server(object.clone()).await.unwrap();
   let client = spawn_client_with_empty_doc(object.clone(), server.address)
     .await
@@ -32,7 +32,7 @@ async fn send_single_update_to_server_test() {
 
 #[tokio::test]
 async fn send_multiple_updates_to_server_test() {
-  let object = SyncObject::new("1", "1");
+  let object = SyncObject::new("1", "1", CollabType::Document);
   let server = spawn_server(object.clone()).await.unwrap();
   let client = spawn_client_with_empty_doc(object.clone(), server.address)
     .await
@@ -71,7 +71,7 @@ async fn send_multiple_updates_to_server_test() {
 
 #[tokio::test]
 async fn fetch_initial_state_from_server_test() {
-  let object = SyncObject::new("1", "1");
+  let object = SyncObject::new("1", "1", CollabType::Document);
   let server = spawn_server(object.clone()).await.unwrap();
   server.mut_groups(&object.object_id, |collab| {
     collab.insert("1", "a");
@@ -93,7 +93,7 @@ async fn fetch_initial_state_from_server_test() {
 
 #[tokio::test]
 async fn send_local_doc_initial_state_to_server() {
-  let object = SyncObject::new("1", "1");
+  let object = SyncObject::new("1", "1", CollabType::Document);
   let server = spawn_server(object.clone()).await.unwrap();
   let client = spawn_client_with_empty_doc(object.clone(), server.address)
     .await
@@ -122,7 +122,7 @@ async fn send_local_doc_initial_state_to_server() {
 
 #[tokio::test]
 async fn send_local_doc_initial_state_to_server_multiple_times() {
-  let object = SyncObject::new("1", "1");
+  let object = SyncObject::new("1", "1", CollabType::Document);
   let server = spawn_server(object.clone()).await.unwrap();
   let client = spawn_client_with_empty_doc(object.clone(), server.address)
     .await
