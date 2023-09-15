@@ -16,7 +16,6 @@ collab-define = { path = "../collab-define" }
 collab-persistence = { path = "../collab-persistence", optional = true }
 
 #sync plugin
-collab-ws = { path = "../collab-ws", optional = true }
 collab-sync-protocol = { path = "../collab-sync-protocol" }
 
 futures-util = { version = "0.3", features = ["sink"] }
@@ -62,5 +61,5 @@ rocksdb_plugin = ["collab-persistence/rocksdb_persistence"]
 aws_storage_plugin = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types", "rusoto_credential"]
 postgres_storage_plugin = ["collab-persistence/rocksdb_persistence", "sync_plugin"]
 snapshot_plugin = ["collab-persistence/rocksdb_persistence"]
-sync_plugin = ["collab-ws"]
+sync_plugin = []
 snapshot = []
