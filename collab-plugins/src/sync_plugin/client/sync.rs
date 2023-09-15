@@ -93,6 +93,7 @@ where
         ClientCollabInit::new(
           self.origin.clone(),
           self.object.object_id.clone(),
+          self.object.collab_type.clone(),
           self.object.workspace_id.clone(),
           msg_id,
           payload,

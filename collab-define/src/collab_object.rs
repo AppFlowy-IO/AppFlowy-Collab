@@ -5,7 +5,7 @@ use std::fmt::{Display, Formatter};
 /// The type of the collab object. It will be used to determine what kind of services should be
 /// used to handle the object.
 /// The value of the enum can't be changed.
-#[derive(Clone, Debug, Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(i32)]
 pub enum CollabType {
   Document = 0,

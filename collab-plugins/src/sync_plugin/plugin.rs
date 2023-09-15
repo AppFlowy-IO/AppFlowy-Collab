@@ -5,6 +5,7 @@ use crate::sync_plugin::client::SyncQueue;
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
+use collab_define::CollabType;
 use collab_sync_protocol::{ClientCollabUpdate, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
 use y_sync::awareness::Awareness;
@@ -15,13 +16,15 @@ use yrs::updates::encoder::Encode;
 pub struct SyncObject {
   pub object_id: String,
   pub workspace_id: String,
+  pub collab_type: CollabType,
 }
 
 impl SyncObject {
-  pub fn new(object_id: &str, workspace_id: &str) -> Self {
+  pub fn new(object_id: &str, workspace_id: &str, collab_type: CollabType) -> Self {
     Self {
       object_id: object_id.to_string(),
       workspace_id: workspace_id.to_string(),
+      collab_type,
     }
   }
 }
