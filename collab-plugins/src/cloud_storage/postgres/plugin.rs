@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use crate::sync_plugin::client::{SinkConfig, SinkStrategy};
 use collab::core::collab::MutexCollab;
 use collab::core::collab_plugin::CollabPluginType;
 use collab::core::collab_state::SnapshotState;
@@ -26,6 +25,7 @@ use yrs::{ReadTxn, StateVector, Update};
 use crate::cloud_storage::remote_collab::{
   should_create_snapshot, RemoteCollab, RemoteCollabStorage,
 };
+use crate::sync_plugin::client::{SinkConfig, SinkStrategy};
 
 pub struct SupabaseDBPlugin {
   uid: i64,
@@ -163,12 +163,7 @@ fn create_snapshot_if_need(
       tracing::trace!("Create remote snapshot for {}", object.object_id);
       let cloned_object = object.clone();
       if let Ok(Ok(doc_state)) = tokio::task::spawn_blocking(move || {
-        let local = Collab::new(
-          uid,
-          object.object_id.clone(),
-          object.get_device_id(),
-          vec![],
-        );
+        let local = Collab::new(uid, object.object_id.clone(), &object.device_id, vec![]);
         let mut txn = local.origin_transact_mut();
         let _ =
           local_collab_storage
@@ -178,12 +173,7 @@ fn create_snapshot_if_need(
 
         // Only sync with the remote if the remote update is not empty
         if !remote_update.is_empty() {
-          let remote = Collab::new(
-            uid,
-            object.object_id.clone(),
-            object.get_device_id(),
-            vec![],
-          );
+          let remote = Collab::new(uid, object.object_id.clone(), &object.device_id, vec![]);
           let mut txn = local.origin_transact_mut();
           txn.try_apply_update(Update::decode_v1(&remote_update)?)?;
           drop(txn);

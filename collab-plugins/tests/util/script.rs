@@ -67,7 +67,7 @@ pub struct ScriptTest {
 
 impl ScriptTest {
   pub async fn new(object_id: &str) -> Self {
-    let object = SyncObject::new(object_id, "1", CollabType::Document);
+    let object = SyncObject::new(object_id, "1", CollabType::Document, "fake_device_id");
     let server = spawn_server(object.clone()).await.unwrap();
     Self {
       object,

@@ -4,11 +4,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
-pub use crate::sync_plugin::client::MsgId;
-use crate::sync_plugin::client::TokioUnboundedSink;
-use crate::sync_plugin::client::{
-  CollabSink, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState,
-};
 use anyhow::Error;
 use async_trait::async_trait;
 use collab::core::collab::{MutexCollab, TransactionMutExt};
@@ -26,6 +21,12 @@ use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 use yrs::updates::decoder::Decode;
 use yrs::{merge_updates_v1, ReadTxn, Transact, Update};
+
+pub use crate::sync_plugin::client::MsgId;
+use crate::sync_plugin::client::TokioUnboundedSink;
+use crate::sync_plugin::client::{
+  CollabSink, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState,
+};
 
 /// The [RemoteCollab] is used to sync the local collab to the remote.
 pub struct RemoteCollab {
@@ -326,7 +327,7 @@ pub struct RemoteCollabState {
 }
 
 pub fn should_create_snapshot(state: &RemoteCollabState, collab_object: &CollabObject) -> bool {
-  let snapshot_per_edit_count = match collab_object.ty {
+  let snapshot_per_edit_count = match collab_object.collab_type {
     CollabType::Document => 150,
     CollabType::Database => 50,
     CollabType::WorkspaceDatabase => 10,

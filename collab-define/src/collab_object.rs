@@ -1,6 +1,7 @@
-use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 /// The type of the collab object. It will be used to determine what kind of services should be
 /// used to handle the object.
@@ -39,49 +40,38 @@ impl Display for CollabType {
 pub struct CollabObject {
   pub object_id: String,
   pub uid: i64,
-  pub ty: CollabType,
+  pub collab_type: CollabType,
+  pub device_id: String,
+  pub workspace_id: String,
   pub meta: HashMap<String, String>,
 }
 
 impl CollabObject {
-  pub fn new(uid: i64, object_id: String, ty: CollabType) -> Self {
+  pub fn new(
+    uid: i64,
+    object_id: String,
+    collab_type: CollabType,
+    workspace_id: String,
+    device_id: String,
+  ) -> Self {
     Self {
       object_id,
       uid,
-      ty,
+      collab_type,
+      workspace_id,
+      device_id,
       meta: Default::default(),
     }
-  }
-
-  pub fn with_device_id(mut self, device_id: String) -> Self {
-    self.meta.insert("device_id".to_string(), device_id);
-    self
-  }
-
-  pub fn with_workspace_id(mut self, workspace_id: String) -> Self {
-    self.meta.insert("workspace_id".to_string(), workspace_id);
-    self
   }
 
   pub fn with_meta(mut self, key: &str, value: String) -> Self {
     self.meta.insert(key.to_string(), value);
     self
   }
-
-  pub fn get_workspace_id(&self) -> Option<String> {
-    self.meta.get("workspace_id").cloned()
-  }
-
-  pub fn get_device_id(&self) -> String {
-    match self.meta.get("device_id").cloned() {
-      None => uuid::Uuid::new_v4().to_string(),
-      Some(device_id) => device_id,
-    }
-  }
 }
 
 impl Display for CollabObject {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    f.write_fmt(format_args!("{:?}:{}]", self.ty, self.object_id,))
+    f.write_fmt(format_args!("{:?}:{}]", self.collab_type, self.object_id,))
   }
 }
