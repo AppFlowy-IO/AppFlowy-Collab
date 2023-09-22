@@ -12,5 +12,5 @@ collab = { path = "../collab" }
 collab-define = { path = "../collab-define" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-bytes = "1.4"
+bytes = { version = "1.5", features = ["serde"] }
 md5 = "0.7.0"

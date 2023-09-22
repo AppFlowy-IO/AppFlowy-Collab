@@ -178,7 +178,7 @@ impl CollabBroadcast {
           }
           tracing::trace!("[💭Server]: {}", collab_msg,);
           let payload = collab_msg.payload().unwrap();
-          let mut decoder = DecoderV1::from(payload.as_ref());
+          let mut decoder = DecoderV1::from(payload);
           let mut sink = sink.lock().await;
           let reader = MessageReader::new(&mut decoder);
           for msg in reader {
