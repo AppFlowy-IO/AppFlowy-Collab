@@ -12,6 +12,7 @@ pub struct Reminder {
   pub id: String,
   pub scheduled_at: i64,
   pub is_ack: bool,
+  pub is_read: bool,
   pub ty: ObjectType,
   pub title: String,
   pub message: String,
@@ -45,6 +46,7 @@ impl Reminder {
       id,
       scheduled_at,
       is_ack: false,
+      is_read: false,
       ty,
       title: "".to_string(),
       message: "".to_string(),
@@ -156,6 +158,7 @@ pub const REMINDER_ID: &str = "id";
 pub const REMINDER_OBJECT_ID: &str = "object_id";
 pub const REMINDER_SCHEDULED_AT: &str = "scheduled_at";
 pub const REMINDER_IS_ACK: &str = "is_ack";
+pub const REMINDER_IS_READ: &str = "is_read";
 pub const REMINDER_TY: &str = "ty";
 pub const REMINDER_TITLE: &str = "title";
 pub const REMINDER_MESSAGE: &str = "message";
@@ -174,6 +177,9 @@ fn reminder_from_map<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Result<Reminder> 
   let is_ack = map_ref
     .get_bool_with_txn(txn, REMINDER_IS_ACK)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_IS_ACK))?;
+  let is_read = map_ref
+    .get_bool_with_txn(txn, REMINDER_IS_READ)
+    .ok_or(anyhow::anyhow!("{} not found", REMINDER_IS_READ))?;
   let ty = map_ref
     .get_i64_with_txn(txn, REMINDER_TY)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_TY))?;
@@ -194,6 +200,7 @@ fn reminder_from_map<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Result<Reminder> 
     object_id,
     scheduled_at,
     is_ack,
+    is_read,
     ty: ObjectType::from(ty),
     title,
     message,
@@ -217,6 +224,7 @@ impl From<Reminder> for MapPrelim<lib0Any> {
       lib0Any::BigInt(item.scheduled_at),
     );
     map.insert(REMINDER_IS_ACK.to_string(), lib0Any::Bool(item.is_ack));
+    map.insert(REMINDER_IS_READ.to_string(), lib0Any::Bool(item.is_read));
     map.insert(REMINDER_TY.to_string(), lib0Any::BigInt(item.ty as i64));
     map.insert(
       REMINDER_TITLE.to_string(),
