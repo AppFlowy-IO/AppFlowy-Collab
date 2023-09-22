@@ -114,7 +114,13 @@ impl CollabPersistenceTest {
     object_ty: CollabType,
     _collab: Arc<MutexCollab>,
   ) -> Arc<CollabSnapshotPlugin> {
-    let object = CollabObject::new(uid, object_id, object_ty);
+    let object = CollabObject::new(
+      uid,
+      object_id,
+      object_ty,
+      "".to_string(),
+      "fake_device_id".to_string(),
+    );
     Arc::new(CollabSnapshotPlugin::new(
       self.uid,
       object,

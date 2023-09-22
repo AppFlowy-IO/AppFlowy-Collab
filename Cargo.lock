@@ -55,25 +55,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
-name = "appflowy-integrate"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "collab",
- "collab-database",
- "collab-define",
- "collab-document",
- "collab-folder",
- "collab-persistence",
- "collab-plugins",
- "futures",
- "parking_lot",
- "serde",
- "serde_json",
- "tracing",
-]
-
-[[package]]
 name = "assert-json-diff"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

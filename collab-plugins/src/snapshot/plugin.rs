@@ -128,7 +128,7 @@ impl CollabPlugin for CollabSnapshotPlugin {
               match snapshot_persistence.create_snapshot(
                 uid,
                 &object.object_id,
-                object.ty.to_string(),
+                object.collab_type.to_string(),
                 snapshot_data,
               ) {
                 Ok(_) => *state.write() = GenSnapshotState::Idle,

@@ -8,8 +8,6 @@ members = [
     "collab-database",
     "collab-sync-protocol",
     "collab-plugins",
-#    "collab-ws",
-    "appflowy-integrate",
     "collab-user",
     "collab-define"
 ]
