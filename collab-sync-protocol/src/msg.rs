@@ -208,7 +208,7 @@ impl CollabMessage {
     serde_json::from_slice(data)
   }
 
-  pub fn into_payload(self) -> Vec<u8> {
+  pub fn into_payload(self) -> Bytes {
     match self {
       CollabMessage::ClientInit(value) => value.payload,
       CollabMessage::ServerSync(value) => value.payload,
@@ -218,12 +218,12 @@ impl CollabMessage {
       CollabMessage::AwarenessUpdate(value) => value.payload,
       CollabMessage::ServerAck(value) => match value.payload {
         Some(payload) => payload,
-        None => vec![],
+        None => Bytes::from(vec![]),
       },
     }
   }
 
-  pub fn payload(&self) -> Option<&Vec<u8>> {
+  pub fn payload(&self) -> Option<&[u8]> {
     match self {
       CollabMessage::ClientInit(value) => Some(&value.payload),
       CollabMessage::ServerSync(value) => Some(&value.payload),
@@ -231,7 +231,7 @@ impl CollabMessage {
       CollabMessage::ServerResponse(value) => Some(&value.payload),
       CollabMessage::ServerBroadcast(value) => Some(&value.payload),
       CollabMessage::AwarenessUpdate(value) => Some(&value.payload),
-      CollabMessage::ServerAck(value) => value.payload.as_ref(),
+      CollabMessage::ServerAck(value) => value.payload.as_ref().map(|p| p.as_ref()),
     }
   }
 }
@@ -239,12 +239,15 @@ impl CollabMessage {
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct CSAwarenessUpdate {
   object_id: String,
-  payload: Vec<u8>,
+  payload: Bytes,
 }
 
 impl CSAwarenessUpdate {
   pub fn new(object_id: String, payload: Vec<u8>) -> Self {
-    Self { object_id, payload }
+    Self {
+      object_id,
+      payload: Bytes::from(payload),
+    }
   }
 }
 
@@ -259,7 +262,7 @@ pub struct ClientCollabUpdate {
   origin: CollabOrigin,
   object_id: String,
   msg_id: MsgId,
-  payload: Vec<u8>,
+  payload: Bytes,
 }
 
 impl ClientCollabUpdate {
@@ -268,7 +271,7 @@ impl ClientCollabUpdate {
       origin,
       object_id,
       msg_id,
-      payload,
+      payload: Bytes::from(payload),
     }
   }
 }
@@ -283,7 +286,7 @@ impl From<ClientCollabUpdate> for CollabMessage {
 pub struct CollabServerAck {
   pub object_id: String,
   pub msg_id: MsgId,
-  pub payload: Option<Vec<u8>>,
+  pub payload: Option<Bytes>,
 }
 
 impl CollabServerAck {
@@ -291,7 +294,7 @@ impl CollabServerAck {
     Self {
       object_id,
       msg_id,
-      payload,
+      payload: payload.map(Bytes::from),
     }
   }
 }
@@ -309,7 +312,7 @@ pub struct ClientCollabInit {
   pub collab_type: CollabType,
   pub workspace_id: String,
   pub msg_id: MsgId,
-  pub payload: Vec<u8>,
+  pub payload: Bytes,
   pub md5: String,
 }
 
@@ -323,6 +326,7 @@ impl ClientCollabInit {
     payload: Vec<u8>,
   ) -> Self {
     let md5 = md5(&payload);
+    let payload = Bytes::from(payload);
     Self {
       origin,
       object_id,
@@ -350,7 +354,7 @@ pub fn md5<T: AsRef<[u8]>>(data: T) -> String {
 pub struct CollabServerResponse {
   origin: Option<CollabOrigin>,
   object_id: String,
-  payload: Vec<u8>,
+  payload: Bytes,
 }
 
 impl CollabServerResponse {
@@ -358,7 +362,7 @@ impl CollabServerResponse {
     Self {
       origin,
       object_id,
-      payload,
+      payload: Bytes::from(payload),
     }
   }
 }
@@ -373,7 +377,7 @@ impl From<CollabServerResponse> for CollabMessage {
 pub struct CollabServerBroadcast {
   origin: CollabOrigin,
   object_id: String,
-  payload: Vec<u8>,
+  payload: Bytes,
 }
 
 impl CollabServerBroadcast {
@@ -381,7 +385,7 @@ impl CollabServerBroadcast {
     Self {
       origin,
       object_id,
-      payload,
+      payload: Bytes::from(payload),
     }
   }
 }
@@ -397,7 +401,7 @@ pub struct CollabServerSync {
   // Indicates the origin client of the message
   pub origin: CollabOrigin,
   pub object_id: String,
-  pub payload: Vec<u8>,
+  pub payload: Bytes,
   pub msg_id: MsgId,
 }
 
@@ -406,7 +410,7 @@ impl CollabServerSync {
     Self {
       origin,
       object_id,
-      payload,
+      payload: Bytes::from(payload),
       msg_id,
     }
   }
