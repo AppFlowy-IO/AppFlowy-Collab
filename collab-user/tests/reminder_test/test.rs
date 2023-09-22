@@ -22,6 +22,7 @@ async fn add_reminder_test() {
           "id": "1",
           "object_id": "o1",
           "is_ack": false,
+          "is_read": false,
           "message": "",
           "meta": {
             "block_id": "fake_block_id",
@@ -61,6 +62,7 @@ async fn update_reminder_test() {
           "id": "1",
           "object_id": "o1",
           "is_ack": false,
+          "is_read": false,
           "message": "new message",
           "meta": {
             "block_id": "fake_block_id2",
@@ -97,6 +99,7 @@ async fn delete_reminder_test() {
           "id": "0",
           "object_id": "o1",
           "is_ack": false,
+          "is_read": false,
           "message": "",
           "meta": {},
           "scheduled_at": 123,
@@ -107,6 +110,7 @@ async fn delete_reminder_test() {
           "id": "2",
           "object_id": "o1",
           "is_ack": false,
+          "is_read": false,
           "message": "",
           "meta": {},
           "scheduled_at": 123,
