@@ -7,7 +7,7 @@ use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab_sync_protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
 use collab_sync_protocol::{
-  ClientCollabInit, ClientUpdateRequest, CollabMessage, CollabServerInitAck,
+  ClientCollabInit, ClientUpdateRequest, CollabMessage, ServerCollabInitResponse,
 };
 use futures_util::{SinkExt, StreamExt};
 use lib0::decoding::Cursor;
@@ -15,7 +15,7 @@ use tokio::spawn;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::WatchStream;
-use tracing::trace;
+use tracing::{debug, trace};
 use y_sync::awareness::Awareness;
 use y_sync::sync::{Message, MessageReader};
 use yrs::updates::decoder::{Decode, DecoderV1};
@@ -257,9 +257,9 @@ where
   where
     P: CollabSyncProtocol + Send + Sync + 'static,
   {
-    trace!("Received message from remote: {}", msg);
+    debug!("Received message from remote: {}", msg);
     match msg {
-      CollabMessage::ServerInitSync(init_sync) => {
+      CollabMessage::ServerInit(init_sync) => {
         if let Some(payload) = &init_sync.payload {
           let mut decoder = DecoderV1::from(payload.as_ref());
           if let Ok(msg) = Message::decode(&mut decoder) {
@@ -267,7 +267,7 @@ where
               let payload = resp_msg.encode_v1();
               let object_id = object_id.to_string();
               sink.queue_msg(|msg_id| {
-                CollabServerInitAck::new(origin.clone(), object_id, payload, msg_id).into()
+                ServerCollabInitResponse::new(origin.clone(), object_id, payload, msg_id).into()
               });
             }
           }

@@ -20,7 +20,7 @@ use yrs::{ReadTxn, UpdateSubscription};
 use collab_sync_protocol::{handle_msg, DefaultSyncProtocol};
 use collab_sync_protocol::{
   CSAwarenessUpdate, ClientUpdateResponse, CollabMessage, CollabServerBroadcast,
-  CollabServerInitSync,
+  ServerCollabInit,
 };
 
 /// A broadcast can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
@@ -214,7 +214,7 @@ impl CollabBroadcast {
             };
 
             // Send the ack message to the client
-            let ack = CollabServerInitSync::new(object_id.clone(), msg_id, payload);
+            let ack = ServerCollabInit::new(object_id.clone(), msg_id, payload);
             let _ = sink.send(ack.into()).await;
           }
         }
