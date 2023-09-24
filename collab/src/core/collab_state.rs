@@ -123,7 +123,9 @@ impl State {
       }
 
       *self.sync_state.write() = new_state.clone();
-      let _ = self.sync_state_notifier.send(new_state);
+      if let Err(e) = self.sync_state_notifier.send(new_state) {
+        tracing::warn!("{} sync state notifier error: {:?}", self.object_id, e);
+      }
     }
   }
 

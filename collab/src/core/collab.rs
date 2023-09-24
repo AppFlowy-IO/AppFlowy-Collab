@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::panic;
@@ -6,6 +5,7 @@ use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::vec::IntoIter;
 
+use bytes::Bytes;
 use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -238,6 +238,7 @@ impl Collab {
   }
 
   pub fn set_sync_state(&self, sync_state: SyncState) {
+    tracing::trace!("{} sync state: {:?}", self.object_id, sync_state);
     self.state.set_sync_state(sync_state);
   }
 

@@ -13,6 +13,7 @@ use tokio::spawn;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::WatchStream;
+use tracing::trace;
 use y_sync::awareness::Awareness;
 use y_sync::sync::{Message, MessageReader};
 use yrs::updates::decoder::{Decode, DecoderV1};
@@ -228,7 +229,7 @@ where
             .await?
           },
           _ => {
-            tracing::trace!("ClientSync is dropped. Stopping receive incoming changes.");
+            tracing::warn!("ClientSync is dropped. Stopping receive incoming changes.");
             return Ok(());
           },
         },
@@ -254,6 +255,7 @@ where
   where
     P: CollabSyncProtocol + Send + Sync + 'static,
   {
+    trace!("Received message from remote: {}", msg);
     match msg {
       CollabMessage::ServerAck(ack) => {
         if let Some(payload) = &ack.payload {
