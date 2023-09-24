@@ -6,7 +6,9 @@ use collab::core::collab::MutexCollab;
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab_sync_protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
-use collab_sync_protocol::{ClientCollabInit, ClientCollabUpdate, CollabMessage, CollabServerSync};
+use collab_sync_protocol::{
+  ClientCollabInit, ClientUpdateRequest, CollabMessage, CollabServerInitAck,
+};
 use futures_util::{SinkExt, StreamExt};
 use lib0::decoding::Cursor;
 use tokio::spawn;
@@ -257,30 +259,28 @@ where
   {
     trace!("Received message from remote: {}", msg);
     match msg {
-      CollabMessage::ServerAck(ack) => {
-        if let Some(payload) = &ack.payload {
+      CollabMessage::ServerInitSync(init_sync) => {
+        if let Some(payload) = &init_sync.payload {
           let mut decoder = DecoderV1::from(payload.as_ref());
           if let Ok(msg) = Message::decode(&mut decoder) {
             if let Some(resp_msg) = handle_msg(&Some(origin), protocol, collab, msg).await? {
               let payload = resp_msg.encode_v1();
               let object_id = object_id.to_string();
               sink.queue_msg(|msg_id| {
-                CollabServerSync::new(origin.clone(), object_id, payload, msg_id).into()
+                CollabServerInitAck::new(origin.clone(), object_id, payload, msg_id).into()
               });
             }
           }
         }
 
-        let msg_id = ack.msg_id;
-        tracing::trace!(
-          "[🙂Client {}]: {}",
-          origin
-            .client_user_id()
-            .map(|uid| uid.to_string())
-            .unwrap_or_default(),
-          CollabMessage::ServerAck(ack)
-        );
-        sink.ack_msg(msg_id).await;
+        sink.ack_msg(init_sync.msg_id).await;
+        Ok(())
+      },
+      CollabMessage::ClientUpdateResponse(resp) => {
+        debug_assert!(resp.msg_id.is_some());
+        if let Some(msg_id) = resp.msg_id {
+          sink.ack_msg(msg_id).await;
+        }
         Ok(())
       },
       _ => {
@@ -297,7 +297,7 @@ where
             let payload = resp.encode_v1();
             let object_id = object_id.to_string();
             sink.queue_msg(|msg_id| {
-              ClientCollabUpdate::new(origin.clone(), object_id, msg_id, payload).into()
+              ClientUpdateRequest::new(origin.clone(), object_id, msg_id, payload).into()
             });
           }
         }

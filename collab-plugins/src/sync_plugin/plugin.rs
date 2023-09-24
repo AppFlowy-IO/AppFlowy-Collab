@@ -5,7 +5,7 @@ use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_define::{CollabObject, CollabType};
-use collab_sync_protocol::{ClientCollabUpdate, CollabMessage};
+use collab_sync_protocol::{ClientUpdateRequest, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
 
 use tokio_stream::wrappers::WatchStream;
@@ -109,7 +109,7 @@ where
       if let Some(sync_queue) = weak_sync_queue.upgrade() {
         let payload = Message::Sync(SyncMessage::Update(update)).encode_v1();
         sync_queue.queue_msg(|msg_id| {
-          ClientCollabUpdate::new(cloned_origin, object_id, msg_id, payload).into()
+          ClientUpdateRequest::new(cloned_origin, object_id, msg_id, payload).into()
         });
       }
     });
