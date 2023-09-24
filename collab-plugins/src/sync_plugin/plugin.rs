@@ -1,11 +1,14 @@
 use std::sync::{Arc, Weak};
 
 use collab::core::collab::MutexCollab;
+use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_define::{CollabObject, CollabType};
 use collab_sync_protocol::{ClientCollabUpdate, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
+
+use tokio_stream::wrappers::WatchStream;
 use y_sync::awareness::Awareness;
 use y_sync::sync::{Message, SyncMessage};
 use yrs::updates::encoder::Encode;
@@ -53,19 +56,19 @@ pub struct SyncPlugin<Sink, Stream> {
   sync_queue: Arc<SyncQueue<Sink, Stream>>,
 }
 
-impl<Sink, Stream> SyncPlugin<Sink, Stream> {
-  pub fn new<E>(
+impl<E, Sink, Stream> SyncPlugin<Sink, Stream>
+where
+  E: std::error::Error + Send + Sync + 'static,
+  Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
+  Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
+{
+  pub fn new(
     origin: CollabOrigin,
     object: SyncObject,
     collab: Weak<MutexCollab>,
     sink: Sink,
     stream: Stream,
-  ) -> Self
-  where
-    E: std::error::Error + Send + Sync + 'static,
-    Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
-    Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
-  {
+  ) -> Self {
     let sync_queue = SyncQueue::new(
       object.clone(),
       origin,
@@ -78,6 +81,11 @@ impl<Sink, Stream> SyncPlugin<Sink, Stream> {
       sync_queue: Arc::new(sync_queue),
       object,
     }
+  }
+
+  pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
+    let rx = self.sync_queue.subscribe_sync_state();
+    WatchStream::new(rx)
   }
 }
 

@@ -36,7 +36,6 @@ pub struct RemoteCollab {
   /// The [CollabSink] is used to queue the [Message] and continuously try to send them
   /// to the remote via the [RemoteCollabStorage].
   sink: Arc<CollabSink<TokioUnboundedSink<Message>, Message>>,
-  /// It continuously receive the updates from the remote.
   sync_state: Arc<watch::Sender<SyncState>>,
   #[allow(dead_code)]
   is_init_sync_finish: Arc<AtomicBool>,
