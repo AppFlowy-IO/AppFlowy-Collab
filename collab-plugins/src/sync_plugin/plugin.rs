@@ -6,7 +6,8 @@ use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_define::{CollabObject, CollabType};
 use collab_sync_protocol::{ClientUpdateRequest, CollabMessage};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::SinkExt;
+use tokio_stream::StreamExt;
 
 use tokio_stream::wrappers::WatchStream;
 use y_sync::awareness::Awareness;
@@ -73,7 +74,7 @@ where
     let weak_local_collab = collab.clone();
     let sync_queue = SyncQueue::new(object.clone(), origin, sink, stream, collab, sink_config);
 
-    let mut sync_state_stream = sync_queue.subscribe_sync_state();
+    let mut sync_state_stream = WatchStream::new(sync_queue.subscribe_sync_state());
     tokio::spawn(async move {
       while let Some(new_state) = sync_state_stream.next().await {
         if let Some(local_collab) = weak_local_collab.upgrade() {
