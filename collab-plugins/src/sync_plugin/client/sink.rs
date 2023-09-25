@@ -132,8 +132,10 @@ where
   /// Notify the sink to process the next message and mark the current message as done.
   pub async fn ack_msg(&self, msg_id: MsgId) {
     if let Some(mut pending_msg) = self.pending_msg_queue.lock().peek_mut() {
+      tracing::trace!("ack_msg: {}", msg_id);
+      debug_assert!(pending_msg.msg_id() == msg_id);
+
       if pending_msg.msg_id() == msg_id {
-        tracing::trace!("ack_msg: {}", msg_id);
         pending_msg.set_state(MessageState::Done);
       }
     }

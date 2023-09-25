@@ -226,7 +226,6 @@ where
       match input {
         Ok(msg) => match (weak_collab.upgrade(), weak_sink.upgrade()) {
           (Some(awareness), Some(sink)) => {
-            trace!("Receive message from remote: {}", msg);
             SyncStream::<Sink, Stream>::process_message::<P>(
               &origin, &object_id, &protocol, &awareness, &sink, msg,
             )
@@ -238,7 +237,7 @@ where
           },
         },
         Err(e) => {
-          error!("Spawn doc stream failed: {}", e);
+          panic!("Spawn doc stream failed: {}", e);
           // If the client has disconnected, the stream will return an error, So stop receiving
           // messages if the client has disconnected.
           return Err(SyncError::Internal(Box::new(e)));
