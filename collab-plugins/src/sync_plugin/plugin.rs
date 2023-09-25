@@ -55,6 +55,8 @@ impl From<CollabObject> for SyncObject {
 pub struct SyncPlugin<Sink, Stream, C> {
   object: SyncObject,
   sync_queue: Arc<SyncQueue<Sink, Stream>>,
+  // Used to keep the lifetime of the channel
+  #[allow(dead_code)]
   channel: Option<Arc<C>>,
 }
 
