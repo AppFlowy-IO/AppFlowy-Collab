@@ -70,7 +70,20 @@ where
     sink_config: SinkConfig,
     stream: Stream,
   ) -> Self {
+    let weak_local_collab = collab.clone();
     let sync_queue = SyncQueue::new(object.clone(), origin, sink, stream, collab, sink_config);
+
+    let mut sync_state_stream = sync_queue.subscribe_sync_state();
+    tokio::spawn(async move {
+      while let Some(new_state) = sync_state_stream.next().await {
+        if let Some(local_collab) = weak_local_collab.upgrade() {
+          if let Some(local_collab) = local_collab.try_lock() {
+            local_collab.set_sync_state(new_state);
+          }
+        }
+      }
+    });
+
     Self {
       sync_queue: Arc::new(sync_queue),
       object,
