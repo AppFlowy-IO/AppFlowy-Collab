@@ -19,8 +19,7 @@ use yrs::{ReadTxn, UpdateSubscription};
 
 use collab_sync_protocol::{handle_msg, DefaultSyncProtocol};
 use collab_sync_protocol::{
-  CSAwarenessUpdate, ClientUpdateResponse, CollabMessage, CollabServerBroadcast,
-  ServerCollabInit,
+  CSAwarenessUpdate, ClientUpdateResponse, CollabMessage, CollabServerBroadcast, ServerCollabInit,
 };
 
 /// A broadcast can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
