@@ -52,16 +52,18 @@ impl From<CollabObject> for SyncObject {
   }
 }
 
-pub struct SyncPlugin<Sink, Stream> {
+pub struct SyncPlugin<Sink, Stream, C> {
   object: SyncObject,
   sync_queue: Arc<SyncQueue<Sink, Stream>>,
+  channel: Option<Arc<C>>,
 }
 
-impl<E, Sink, Stream> SyncPlugin<Sink, Stream>
+impl<E, Sink, Stream, C> SyncPlugin<Sink, Stream, C>
 where
   E: std::error::Error + Send + Sync + 'static,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
+  C: Send + Sync + 'static,
 {
   pub fn new(
     origin: CollabOrigin,
@@ -70,6 +72,7 @@ where
     sink: Sink,
     sink_config: SinkConfig,
     stream: Stream,
+    channel: Option<Arc<C>>,
   ) -> Self {
     let weak_local_collab = collab.clone();
     let sync_queue = SyncQueue::new(object.clone(), origin, sink, stream, collab, sink_config);
@@ -88,6 +91,7 @@ where
     Self {
       sync_queue: Arc::new(sync_queue),
       object,
+      channel,
     }
   }
 
@@ -97,11 +101,12 @@ where
   }
 }
 
-impl<E, Sink, Stream> CollabPlugin for SyncPlugin<Sink, Stream>
+impl<E, Sink, Stream, C> CollabPlugin for SyncPlugin<Sink, Stream, C>
 where
   E: std::error::Error + Send + Sync + 'static,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
+  C: Send + Sync + 'static,
 {
   fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
     self.sync_queue.notify(_awareness);
