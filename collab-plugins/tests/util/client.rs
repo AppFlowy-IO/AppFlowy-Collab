@@ -35,7 +35,7 @@ pub async fn spawn_client_with_empty_doc(
     sink,
     SinkConfig::default(),
     stream,
-    None,
+    Option::<Arc<String>>::None,
   );
   collab.lock().add_plugin(Arc::new(sync_plugin));
   collab.async_initialize().await;
@@ -62,7 +62,7 @@ pub async fn spawn_client(
     sink,
     SinkConfig::default(),
     stream,
-    None,
+    Option::<Arc<String>>::None,
   );
   collab.lock().add_plugin(Arc::new(sync_plugin));
 
@@ -130,7 +130,7 @@ impl TestClient {
       TokioUnboundedSink(sink),
       SinkConfig::default(),
       TokioUnboundedStream::new(stream),
-      None,
+      Option::<Arc<String>>::None,
     );
     collab.lock().add_plugin(Arc::new(sync_plugin));
     collab.async_initialize().await;
@@ -184,7 +184,7 @@ impl TestClient {
       TokioUnboundedSink(sink),
       SinkConfig::default(),
       TokioUnboundedStream::new(stream),
-      None,
+      Option::<Arc<String>>::None,
     );
     collab.lock().add_plugin(Arc::new(sync_plugin));
     collab.async_initialize().await;
