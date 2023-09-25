@@ -91,6 +91,7 @@ where
     spawn(async move {
       while let Some(collab_state) = sink_state_stream.next().await {
         if let Some(sync_state) = weak_sync_state.upgrade() {
+          trace!("collab state change: {:?}", collab_state);
           match collab_state {
             SinkState::Syncing => {
               let _ = sync_state.send(SyncState::SyncUpdate);

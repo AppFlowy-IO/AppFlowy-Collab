@@ -9,7 +9,7 @@ use bytes::Bytes;
 use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use tokio::sync::watch;
+use tokio_stream::wrappers::WatchStream;
 use y_sync::awareness::Awareness;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
@@ -154,12 +154,12 @@ impl Collab {
     )
   }
 
-  pub fn subscribe_sync_state(&self) -> watch::Receiver<SyncState> {
-    self.state.sync_state_notifier.subscribe()
+  pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
+    WatchStream::new(self.state.sync_state_notifier.subscribe())
   }
 
-  pub fn subscribe_snapshot_state(&self) -> watch::Receiver<SnapshotState> {
-    self.state.snapshot_state_notifier.subscribe()
+  pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
+    WatchStream::new(self.state.snapshot_state_notifier.subscribe())
   }
 
   /// Returns the [Doc] associated with the [Collab].

@@ -131,9 +131,9 @@ where
 
   /// Notify the sink to process the next message and mark the current message as done.
   pub async fn ack_msg(&self, msg_id: MsgId) {
-    tracing::trace!("ack_msg: {}", msg_id);
     if let Some(mut pending_msg) = self.pending_msg_queue.lock().peek_mut() {
       if pending_msg.msg_id() == msg_id {
+        tracing::trace!("ack_msg: {}", msg_id);
         pending_msg.set_state(MessageState::Done);
       }
     }
@@ -235,7 +235,7 @@ where
     };
 
     let mut sender = self.sender.lock().await;
-    tracing::debug!("[🙂Client {}]: sync {}", self.uid, collab_msg);
+    tracing::debug!("[🙂Client {}]: {}", self.uid, collab_msg);
     sender.send(collab_msg).await.ok()?;
     // Wait for the message to be acked.
     // If the message is not acked within the timeout, resend the message.
@@ -243,8 +243,11 @@ where
       Ok(_) => {
         if let Some(mut pending_msgs) = self.pending_msg_queue.try_lock() {
           pending_msgs.pop();
+          tracing::trace!("pending messages: {}", pending_msgs.len());
           if pending_msgs.is_empty() {
-            let _ = self.state_notifier.send(SinkState::Finished);
+            if let Err(e) = self.state_notifier.send(SinkState::Finished) {
+              tracing::error!("send sink state failed: {}", e);
+            }
           }
         }
         self.notify()

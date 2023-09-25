@@ -84,8 +84,7 @@ impl Document {
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
-    let rx = self.inner.lock().subscribe_sync_state();
-    WatchStream::new(rx)
+    self.inner.lock().subscribe_sync_state()
   }
 
   pub fn with_transact_mut<F, T>(&self, f: F) -> T
