@@ -179,7 +179,7 @@ fn reminder_from_map<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Result<Reminder> 
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_IS_ACK))?;
   let is_read = map_ref
     .get_bool_with_txn(txn, REMINDER_IS_READ)
-    .ok_or(anyhow::anyhow!("{} not found", REMINDER_IS_READ))?;
+    .unwrap_or_default();
   let ty = map_ref
     .get_i64_with_txn(txn, REMINDER_TY)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_TY))?;
