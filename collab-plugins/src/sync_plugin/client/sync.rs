@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
@@ -259,7 +260,6 @@ where
   where
     P: CollabSyncProtocol + Send + Sync + 'static,
   {
-    debug!("Received message from remote: {}", msg);
     match msg {
       CollabMessage::ServerInit(init_sync) => {
         if let Some(payload) = &init_sync.payload {
@@ -275,36 +275,70 @@ where
           }
         }
 
-        sink.ack_msg(init_sync.msg_id).await;
+        sink.ack_msg(object_id, init_sync.msg_id).await;
         Ok(())
       },
-      // CollabMessage::ClientUpdateResponse(resp) => {
-      //   debug_assert!(resp.msg_id.is_some());
-      //   if let Some(msg_id) = resp.msg_id {
-      //     sink.ack_msg(msg_id).await;
-      //   }
-      //   Ok(())
-      // },
-      _ => {
-        let payload = msg.into_payload();
-        if payload.is_empty() {
-          return Ok(());
-        }
+      CollabMessage::ClientUpdateResponse(resp) => {
+        SyncStream::<Sink, Stream>::process_payload(
+          origin,
+          resp.payload,
+          object_id,
+          protocol,
+          collab,
+          sink,
+        )
+        .await?;
 
-        let mut decoder = DecoderV1::new(Cursor::new(&payload));
-        let reader = MessageReader::new(&mut decoder);
-        for msg in reader {
-          let msg = msg?;
-          if let Some(resp) = handle_msg(&Some(origin), protocol, collab, msg).await? {
-            let payload = resp.encode_v1();
-            let object_id = object_id.to_string();
-            sink.queue_msg(|msg_id| {
-              ClientUpdateRequest::new(origin.clone(), object_id, msg_id, payload).into()
-            });
+        if origin == &resp.origin {
+          debug_assert!(resp.msg_id.is_some(), "msg_id should not be None");
+          if let Some(msg_id) = resp.msg_id {
+            sink.ack_msg(&resp.object_id, msg_id).await;
           }
         }
+
         Ok(())
       },
+      _ => {
+        SyncStream::<Sink, Stream>::process_payload(
+          origin,
+          msg.into_payload(),
+          object_id,
+          protocol,
+          collab,
+          sink,
+        )
+        .await
+      },
     }
+  }
+
+  async fn process_payload<P>(
+    origin: &CollabOrigin,
+    payload: Bytes,
+    object_id: &str,
+    protocol: &P,
+    collab: &Arc<MutexCollab>,
+    sink: &Arc<CollabSink<Sink, CollabMessage>>,
+  ) -> Result<(), SyncError>
+  where
+    P: CollabSyncProtocol + Send + Sync + 'static,
+  {
+    if payload.is_empty() {
+      return Ok(());
+    }
+
+    let mut decoder = DecoderV1::new(Cursor::new(&payload));
+    let reader = MessageReader::new(&mut decoder);
+    for msg in reader {
+      let msg = msg?;
+      if let Some(resp) = handle_msg(&Some(origin), protocol, collab, msg).await? {
+        let payload = resp.encode_v1();
+        let object_id = object_id.to_string();
+        sink.queue_msg(|msg_id| {
+          ClientUpdateRequest::new(origin.clone(), object_id, msg_id, payload).into()
+        });
+      }
+    }
+    Ok(())
   }
 }

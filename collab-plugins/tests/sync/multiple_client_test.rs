@@ -1,4 +1,4 @@
-use crate::sync::single_client_test::test_sync_object;
+use crate::sync::single_client_test::{test_sync_object, test_sync_object_pair};
 use crate::util::{spawn_client, spawn_server, wait_one_sec};
 use serde_json::json;
 
@@ -29,14 +29,11 @@ async fn open_existing_doc_with_different_client_test() {
 #[tokio::test]
 async fn single_write_sync_with_server_test() {
   let uid = 1;
-  let object = test_sync_object();
-  let server = spawn_server(object.clone()).await.unwrap();
-  let (_, client_1) = spawn_client(uid, object.clone(), server.address)
-    .await
-    .unwrap();
-  let (_, client_2) = spawn_client(uid, object.clone(), server.address)
-    .await
-    .unwrap();
+  let (object_1, object_2) = test_sync_object_pair();
+
+  let server = spawn_server(object_1.clone()).await.unwrap();
+  let (_, client_1) = spawn_client(uid, object_1, server.address).await.unwrap();
+  let (_, client_2) = spawn_client(uid, object_2, server.address).await.unwrap();
   wait_one_sec().await;
   {
     let client = client_1.lock();

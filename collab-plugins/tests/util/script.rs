@@ -62,7 +62,7 @@ pub enum TestScript {
 pub struct ScriptTest {
   object: SyncObject,
   server: TestServer,
-  pub clients: HashMap<String, TestClient>,
+  pub client_by_device_id: HashMap<String, TestClient>,
 }
 
 impl ScriptTest {
@@ -72,12 +72,12 @@ impl ScriptTest {
     Self {
       object,
       server,
-      clients: HashMap::new(),
+      client_by_device_id: HashMap::new(),
     }
   }
 
   pub fn remove_client(&mut self, device_id: &str) -> TestClient {
-    self.clients.remove(device_id).unwrap()
+    self.client_by_device_id.remove(device_id).unwrap()
   }
 
   pub async fn run_script(&mut self, script: TestScript) {
@@ -87,29 +87,35 @@ impl ScriptTest {
         let client = TestClient::new(origin, self.object.clone(), self.server.address, true)
           .await
           .unwrap();
-        self.clients.insert(device_id.to_string(), client);
+        self
+          .client_by_device_id
+          .insert(device_id.to_string(), client);
       },
       TestScript::CreateEmptyClient { uid, device_id } => {
         let origin = CollabClient::new(uid, &device_id);
         let client = TestClient::new(origin, self.object.clone(), self.server.address, false)
           .await
           .unwrap();
-        self.clients.insert(device_id.to_string(), client);
+        self
+          .client_by_device_id
+          .insert(device_id.to_string(), client);
       },
       TestScript::CreateClientWithDb { uid, device_id, db } => {
         let origin = CollabClient::new(uid, &device_id);
         let new_client = TestClient::with_db(origin, self.object.clone(), self.server.address, db)
           .await
           .unwrap();
-        let _ = self.clients.insert(device_id.to_string(), new_client);
+        let _ = self
+          .client_by_device_id
+          .insert(device_id.to_string(), new_client);
       },
       TestScript::DisconnectClient { device_id } => {
-        if let Some(client) = self.clients.get_mut(&device_id) {
+        if let Some(client) = self.client_by_device_id.get_mut(&device_id) {
           client.disconnect()
         }
       },
       TestScript::ConnectClient { device_id } => {
-        if let Some(client) = self.clients.get_mut(&device_id) {
+        if let Some(client) = self.client_by_device_id.get_mut(&device_id) {
           client.connect()
         }
       },
@@ -117,7 +123,7 @@ impl ScriptTest {
         device_id,
         expected,
       } => {
-        let client = self.clients.get_mut(&device_id).unwrap();
+        let client = self.client_by_device_id.get_mut(&device_id).unwrap();
         let json = client.to_json_value();
         assert_json_diff::assert_json_eq!(json, expected,);
       },
@@ -126,7 +132,7 @@ impl ScriptTest {
         assert_json_diff::assert_json_eq!(server_json, expected,);
       },
       TestScript::AssertClientEqualToServer { device_id } => {
-        let client = self.clients.get_mut(&device_id).unwrap();
+        let client = self.client_by_device_id.get_mut(&device_id).unwrap();
         let client_json = client.to_json_value();
 
         let server_json = self.server.get_doc_json(&self.object.object_id);
@@ -136,7 +142,7 @@ impl ScriptTest {
         tokio::time::sleep(Duration::from_secs(secs)).await;
       },
       TestScript::ModifyLocalCollab { device_id, f } => {
-        let client = self.clients.get_mut(&device_id).unwrap();
+        let client = self.client_by_device_id.get_mut(&device_id).unwrap();
         f(&client.lock());
       },
       TestScript::ModifyRemoteCollab { f } => {
@@ -146,8 +152,16 @@ impl ScriptTest {
         device_id_a,
         device_id_b,
       } => {
-        let client_a = self.clients.get_mut(&device_id_a).unwrap().to_json_value();
-        let client_b = self.clients.get_mut(&device_id_b).unwrap().to_json_value();
+        let client_a = self
+          .client_by_device_id
+          .get_mut(&device_id_a)
+          .unwrap()
+          .to_json_value();
+        let client_b = self
+          .client_by_device_id
+          .get_mut(&device_id_b)
+          .unwrap()
+          .to_json_value();
         assert_eq!(client_a, client_b);
       },
       TestScript::RerunServer => {

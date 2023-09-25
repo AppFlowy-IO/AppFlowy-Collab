@@ -186,9 +186,9 @@ impl CollabBroadcast {
               Ok(msg) => {
                 let resp = handle_msg(&origin, &DefaultSyncProtocol, &collab, msg).await?;
                 // Send the response to the corresponding client
-                if let Some(resp) = resp {
+                if let (Some(origin), Some(resp)) = (origin, resp) {
                   let msg = ClientUpdateResponse::new(
-                    origin.cloned(),
+                    origin.clone(),
                     object_id.clone(),
                     resp.encode_v1(),
                     collab_msg.msg_id(),

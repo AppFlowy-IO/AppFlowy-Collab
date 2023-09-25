@@ -128,7 +128,7 @@ impl CollabMessage {
       CollabMessage::ClientInit(value) => Some(&value.origin),
       CollabMessage::ServerInitResponse(value) => Some(&value.origin),
       CollabMessage::ClientUpdateRequest(value) => Some(&value.origin),
-      CollabMessage::ClientUpdateResponse(value) => value.origin.as_ref(),
+      CollabMessage::ClientUpdateResponse(value) => Some(&value.origin),
       CollabMessage::ServerBroadcast(value) => Some(&value.origin),
       CollabMessage::AwarenessUpdate(_) => None,
       CollabMessage::ServerInit(_) => None,
@@ -354,15 +354,15 @@ pub fn md5<T: AsRef<[u8]>>(data: T) -> String {
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct ClientUpdateResponse {
-  origin: Option<CollabOrigin>,
-  object_id: String,
+  pub origin: CollabOrigin,
+  pub object_id: String,
   pub msg_id: Option<MsgId>,
-  payload: Bytes,
+  pub payload: Bytes,
 }
 
 impl ClientUpdateResponse {
   pub fn new(
-    origin: Option<CollabOrigin>,
+    origin: CollabOrigin,
     object_id: String,
     payload: Vec<u8>,
     msg_id: Option<MsgId>,

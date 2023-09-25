@@ -147,7 +147,7 @@ impl RemoteCollab {
                 match storage.send_init_sync(&object, msg_id, payload).await {
                   Ok(_) => {
                     if let Some(collab_sink) = weak_collab_sink.upgrade() {
-                      collab_sink.ack_msg(msg_id).await;
+                      collab_sink.ack_msg(&object.object_id, msg_id).await;
                       cloned_is_init_sync_finish.store(true, std::sync::atomic::Ordering::SeqCst);
                     }
                   },
@@ -166,7 +166,7 @@ impl RemoteCollab {
                   Ok(_) => {
                     tracing::debug!("ack update {}:{}", object, msg_id);
                     if let Some(collab_sink) = weak_collab_sink.upgrade() {
-                      collab_sink.ack_msg(msg_id).await;
+                      collab_sink.ack_msg(&object.object_id, msg_id).await;
                     }
                   },
                   Err(e) => tracing::error!(
