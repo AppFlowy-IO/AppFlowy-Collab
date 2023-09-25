@@ -382,6 +382,16 @@ impl From<ClientUpdateResponse> for CollabMessage {
   }
 }
 
+impl Display for ClientUpdateResponse {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.write_fmt(format_args!(
+      "client update response: [oid:{}|payload_len:{}]",
+      self.object_id,
+      self.payload.len(),
+    ))
+  }
+}
+
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct CollabServerBroadcast {
   origin: CollabOrigin,

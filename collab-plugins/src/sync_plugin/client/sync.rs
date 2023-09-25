@@ -15,7 +15,7 @@ use tokio::spawn;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::WatchStream;
-use tracing::{debug, trace};
+use tracing::{debug, error, trace, warn};
 use y_sync::awareness::Awareness;
 use y_sync::sync::{Message, MessageReader};
 use yrs::updates::decoder::{Decode, DecoderV1};
@@ -226,17 +226,19 @@ where
       match input {
         Ok(msg) => match (weak_collab.upgrade(), weak_sink.upgrade()) {
           (Some(awareness), Some(sink)) => {
+            trace!("Receive message from remote: {}", msg);
             SyncStream::<Sink, Stream>::process_message::<P>(
               &origin, &object_id, &protocol, &awareness, &sink, msg,
             )
             .await?
           },
           _ => {
-            tracing::warn!("ClientSync is dropped. Stopping receive incoming changes.");
+            warn!("ClientSync is dropped. Stopping receive incoming changes.");
             return Ok(());
           },
         },
         Err(e) => {
+          error!("Spawn doc stream failed: {}", e);
           // If the client has disconnected, the stream will return an error, So stop receiving
           // messages if the client has disconnected.
           return Err(SyncError::Internal(Box::new(e)));
