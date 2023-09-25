@@ -278,13 +278,13 @@ where
         sink.ack_msg(init_sync.msg_id).await;
         Ok(())
       },
-      CollabMessage::ClientUpdateResponse(resp) => {
-        debug_assert!(resp.msg_id.is_some());
-        if let Some(msg_id) = resp.msg_id {
-          sink.ack_msg(msg_id).await;
-        }
-        Ok(())
-      },
+      // CollabMessage::ClientUpdateResponse(resp) => {
+      //   debug_assert!(resp.msg_id.is_some());
+      //   if let Some(msg_id) = resp.msg_id {
+      //     sink.ack_msg(msg_id).await;
+      //   }
+      //   Ok(())
+      // },
       _ => {
         let payload = msg.into_payload();
         if payload.is_empty() {

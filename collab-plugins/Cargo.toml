@@ -45,6 +45,7 @@ collab-plugins = { path = "", features = ["rocksdb_plugin", "snapshot_plugin"] }
 tempfile = "3.8.0"
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+tokio = { version = "1.26.0", features = ["macros", "net"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 bytes = "1.4"
 dashmap = "5.4.0"
