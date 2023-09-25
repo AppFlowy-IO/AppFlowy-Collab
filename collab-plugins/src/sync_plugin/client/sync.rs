@@ -237,7 +237,7 @@ where
           },
         },
         Err(e) => {
-          panic!("Spawn doc stream failed: {}", e);
+          error!("Spawn doc stream failed: {}", e);
           // If the client has disconnected, the stream will return an error, So stop receiving
           // messages if the client has disconnected.
           return Err(SyncError::Internal(Box::new(e)));
