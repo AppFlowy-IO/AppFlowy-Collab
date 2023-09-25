@@ -238,7 +238,6 @@ impl Collab {
   }
 
   pub fn set_sync_state(&self, sync_state: SyncState) {
-    tracing::trace!("{} sync state: {:?}", self.object_id, sync_state);
     self.state.set_sync_state(sync_state);
   }
 
