@@ -11,7 +11,7 @@ use rand::{prelude::*, Rng as WrappedRng};
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc::unbounded_channel;
 
-use collab_plugins::sync_plugin::client::{TokioUnboundedSink, TokioUnboundedStream};
+use collab_plugins::sync_plugin::client::{SinkConfig, TokioUnboundedSink, TokioUnboundedStream};
 use collab_plugins::sync_plugin::{SyncObject, SyncPlugin};
 use tempfile::TempDir;
 
@@ -28,7 +28,14 @@ pub async fn spawn_client_with_empty_doc(
   let collab = Arc::new(MutexCollab::new(origin.clone(), &object.object_id, vec![]));
   let stream = CollabStream::new(reader, CollabMsgCodec::default());
   let sink = CollabSink::new(writer, CollabMsgCodec::default());
-  let sync_plugin = SyncPlugin::new(origin, object, Arc::downgrade(&collab), sink, stream);
+  let sync_plugin = SyncPlugin::new(
+    origin,
+    object,
+    Arc::downgrade(&collab),
+    sink,
+    SinkConfig::default(),
+    stream,
+  );
   collab.lock().add_plugin(Arc::new(sync_plugin));
   collab.async_initialize().await;
   Ok(collab)
@@ -47,7 +54,14 @@ pub async fn spawn_client(
   // sync
   let stream = CollabStream::new(reader, CollabMsgCodec::default());
   let sink = CollabSink::new(writer, CollabMsgCodec::default());
-  let sync_plugin = SyncPlugin::new(origin, object, Arc::downgrade(&collab), sink, stream);
+  let sync_plugin = SyncPlugin::new(
+    origin,
+    object,
+    Arc::downgrade(&collab),
+    sink,
+    SinkConfig::default(),
+    stream,
+  );
   collab.lock().add_plugin(Arc::new(sync_plugin));
 
   // disk
@@ -112,6 +126,7 @@ impl TestClient {
       object,
       Arc::downgrade(&collab),
       TokioUnboundedSink(sink),
+      SinkConfig::default(),
       TokioUnboundedStream::new(stream),
     );
     collab.lock().add_plugin(Arc::new(sync_plugin));
@@ -164,6 +179,7 @@ impl TestClient {
       object,
       Arc::downgrade(&collab),
       TokioUnboundedSink(sink),
+      SinkConfig::default(),
       TokioUnboundedStream::new(stream),
     );
     collab.lock().add_plugin(Arc::new(sync_plugin));

@@ -67,16 +67,10 @@ where
     object: SyncObject,
     collab: Weak<MutexCollab>,
     sink: Sink,
+    sink_config: SinkConfig,
     stream: Stream,
   ) -> Self {
-    let sync_queue = SyncQueue::new(
-      object.clone(),
-      origin,
-      sink,
-      stream,
-      collab,
-      SinkConfig::default(),
-    );
+    let sync_queue = SyncQueue::new(object.clone(), origin, sink, stream, collab, sink_config);
     Self {
       sync_queue: Arc::new(sync_queue),
       object,
