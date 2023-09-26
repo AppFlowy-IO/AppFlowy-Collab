@@ -16,17 +16,17 @@ use tokio::spawn;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::WatchStream;
-use tracing::{debug, error, trace, warn};
+use tracing::{error, trace, warn};
 use y_sync::awareness::Awareness;
 use y_sync::sync::{Message, MessageReader};
 use yrs::updates::decoder::{Decode, DecoderV1};
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 
-use crate::sync_plugin::client::SyncError;
-use crate::sync_plugin::client::{
+use crate::sync_plugin::SyncError;
+use crate::sync_plugin::SyncObject;
+use crate::sync_plugin::{
   CollabSink, CollabSinkRunner, DefaultMsgIdCounter, SinkConfig, SinkState,
 };
-use crate::sync_plugin::SyncObject;
 
 pub const DEFAULT_SYNC_TIMEOUT: u64 = 2;
 
@@ -289,9 +289,7 @@ where
         )
         .await?;
         if let Some(msg_id) = msg.msg_id() {
-          if Some(origin) == msg.origin() {
-            sink.ack_msg(msg.object_id(), msg_id).await;
-          }
+          sink.ack_msg(msg.object_id(), msg_id).await;
         }
         Ok(())
       },

@@ -22,11 +22,9 @@ use tokio_stream::StreamExt;
 use yrs::updates::decoder::Decode;
 use yrs::{merge_updates_v1, ReadTxn, Transact, Update};
 
-pub use crate::sync_plugin::client::MsgId;
-use crate::sync_plugin::client::TokioUnboundedSink;
-use crate::sync_plugin::client::{
-  CollabSink, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState,
-};
+pub use crate::sync_plugin::MsgId;
+use crate::sync_plugin::TokioUnboundedSink;
+use crate::sync_plugin::{CollabSink, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState};
 
 /// The [RemoteCollab] is used to sync the local collab to the remote.
 pub struct RemoteCollab {

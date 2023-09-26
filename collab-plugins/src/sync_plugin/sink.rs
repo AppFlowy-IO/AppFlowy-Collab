@@ -10,9 +10,9 @@ use tokio::spawn;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tokio::time::{interval, Instant, Interval};
 
-use crate::sync_plugin::client::SyncError;
-use crate::sync_plugin::client::DEFAULT_SYNC_TIMEOUT;
-use crate::sync_plugin::client::{MessageState, PendingMsgQueue};
+use crate::sync_plugin::SyncError;
+use crate::sync_plugin::DEFAULT_SYNC_TIMEOUT;
+use crate::sync_plugin::{MessageState, PendingMsgQueue};
 
 #[derive(Clone, Debug)]
 pub enum SinkState {
@@ -132,6 +132,9 @@ where
   /// Notify the sink to process the next message and mark the current message as done.
   pub async fn ack_msg(&self, object_id: &str, msg_id: MsgId) {
     if let Some(mut pending_msg) = self.pending_msg_queue.lock().peek_mut() {
+      // In most cases, the msg_id of the pending_msg is the same as the passed-in msg_id. However,
+      // due to network issues, the client might send multiple messages with the same msg_id.
+      // Therefore, the msg_id might not always match the msg_id of the pending_msg.
       if pending_msg.msg_id() == msg_id {
         tracing::debug!("{} message:{} was received", object_id, msg_id);
         pending_msg.set_state(MessageState::Done);

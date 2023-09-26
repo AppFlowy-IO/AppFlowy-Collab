@@ -11,7 +11,7 @@ use rand::{prelude::*, Rng as WrappedRng};
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc::unbounded_channel;
 
-use collab_plugins::sync_plugin::client::{SinkConfig, TokioUnboundedSink, TokioUnboundedStream};
+use collab_plugins::sync_plugin::{SinkConfig, TokioUnboundedSink, TokioUnboundedStream};
 use collab_plugins::sync_plugin::{SyncObject, SyncPlugin};
 use tempfile::TempDir;
 

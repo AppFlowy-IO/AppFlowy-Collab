@@ -25,7 +25,7 @@ use yrs::{ReadTxn, StateVector, Update};
 use crate::cloud_storage::remote_collab::{
   should_create_snapshot, RemoteCollab, RemoteCollabStorage,
 };
-use crate::sync_plugin::client::{SinkConfig, SinkStrategy};
+use crate::sync_plugin::{SinkConfig, SinkStrategy};
 
 pub struct SupabaseDBPlugin {
   uid: i64,

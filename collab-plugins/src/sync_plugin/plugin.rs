@@ -14,8 +14,8 @@ use y_sync::awareness::Awareness;
 use y_sync::sync::{Message, SyncMessage};
 use yrs::updates::encoder::Encode;
 
-use crate::sync_plugin::client::SinkConfig;
-use crate::sync_plugin::client::SyncQueue;
+use crate::sync_plugin::SinkConfig;
+use crate::sync_plugin::SyncQueue;
 
 #[derive(Clone, Debug)]
 pub struct SyncObject {
