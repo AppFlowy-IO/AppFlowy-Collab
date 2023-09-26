@@ -35,7 +35,7 @@ pub enum CollabMessage {
 
 impl CollabSinkMessage for CollabMessage {
   fn length(&self) -> usize {
-    self.payload().map(|p| p.len()).unwrap_or(0)
+    self.payload().len()
   }
 
   fn mergeable(&self) -> bool {
@@ -109,18 +109,7 @@ impl CollabMessage {
   }
 
   pub fn is_empty(&self) -> bool {
-    match self {
-      CollabMessage::ClientInit(value) => value.payload.is_empty(),
-      CollabMessage::ServerInitResponse(value) => value.payload.is_empty(),
-      CollabMessage::ClientUpdateRequest(value) => value.payload.is_empty(),
-      CollabMessage::ClientUpdateResponse(value) => value.payload.is_empty(),
-      CollabMessage::ServerBroadcast(value) => value.payload.is_empty(),
-      CollabMessage::AwarenessUpdate(value) => value.payload.is_empty(),
-      CollabMessage::ServerInit(value) => match value.payload {
-        Some(ref payload) => payload.is_empty(),
-        None => true,
-      },
-    }
+    self.payload().is_empty()
   }
 
   pub fn origin(&self) -> Option<&CollabOrigin> {
@@ -210,30 +199,15 @@ impl CollabMessage {
     serde_json::from_slice(data)
   }
 
-  pub fn into_payload(self) -> Bytes {
+  pub fn payload(&self) -> &Bytes {
     match self {
-      CollabMessage::ClientInit(value) => value.payload,
-      CollabMessage::ServerInitResponse(value) => value.payload,
-      CollabMessage::ClientUpdateRequest(value) => value.payload,
-      CollabMessage::ClientUpdateResponse(value) => value.payload,
-      CollabMessage::ServerBroadcast(value) => value.payload,
-      CollabMessage::AwarenessUpdate(value) => value.payload,
-      CollabMessage::ServerInit(value) => match value.payload {
-        Some(payload) => payload,
-        None => Bytes::from(vec![]),
-      },
-    }
-  }
-
-  pub fn payload(&self) -> Option<&[u8]> {
-    match self {
-      CollabMessage::ClientInit(value) => Some(&value.payload),
-      CollabMessage::ServerInitResponse(value) => Some(&value.payload),
-      CollabMessage::ClientUpdateRequest(value) => Some(&value.payload),
-      CollabMessage::ClientUpdateResponse(value) => Some(&value.payload),
-      CollabMessage::ServerBroadcast(value) => Some(&value.payload),
-      CollabMessage::AwarenessUpdate(value) => Some(&value.payload),
-      CollabMessage::ServerInit(value) => value.payload.as_ref().map(|p| p.as_ref()),
+      CollabMessage::ClientInit(value) => &value.payload,
+      CollabMessage::ServerInitResponse(value) => &value.payload,
+      CollabMessage::ClientUpdateRequest(value) => &value.payload,
+      CollabMessage::ClientUpdateResponse(value) => &value.payload,
+      CollabMessage::ServerBroadcast(value) => &value.payload,
+      CollabMessage::AwarenessUpdate(value) => &value.payload,
+      CollabMessage::ServerInit(value) => &value.payload,
     }
   }
 }
@@ -288,15 +262,15 @@ impl From<ClientUpdateRequest> for CollabMessage {
 pub struct ServerCollabInit {
   pub object_id: String,
   pub msg_id: MsgId,
-  pub payload: Option<Bytes>,
+  pub payload: Bytes,
 }
 
 impl ServerCollabInit {
-  pub fn new(object_id: String, msg_id: MsgId, payload: Option<Vec<u8>>) -> Self {
+  pub fn new(object_id: String, msg_id: MsgId, payload: Vec<u8>) -> Self {
     Self {
       object_id,
       msg_id,
-      payload: payload.map(Bytes::from),
+      payload: Bytes::from(payload),
     }
   }
 }

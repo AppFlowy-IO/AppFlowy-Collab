@@ -262,8 +262,8 @@ where
   {
     match msg {
       CollabMessage::ServerInit(init_sync) => {
-        if let Some(payload) = &init_sync.payload {
-          let mut decoder = DecoderV1::from(payload.as_ref());
+        if !init_sync.payload.is_empty() {
+          let mut decoder = DecoderV1::from(init_sync.payload.as_ref());
           if let Ok(msg) = Message::decode(&mut decoder) {
             if let Some(resp_msg) = handle_msg(&Some(origin), protocol, collab, msg).await? {
               let payload = resp_msg.encode_v1();
@@ -278,43 +278,29 @@ where
         sink.ack_msg(object_id, init_sync.msg_id).await;
         Ok(())
       },
-      CollabMessage::ClientUpdateResponse(resp) => {
+      _ => {
         SyncStream::<Sink, Stream>::process_payload(
           origin,
-          resp.payload,
+          msg.payload(),
           object_id,
           protocol,
           collab,
           sink,
         )
         .await?;
-
-        if origin == &resp.origin {
-          debug_assert!(resp.msg_id.is_some(), "msg_id should not be None");
-          if let Some(msg_id) = resp.msg_id {
-            sink.ack_msg(&resp.object_id, msg_id).await;
+        if let Some(msg_id) = msg.msg_id() {
+          if Some(origin) == msg.origin() {
+            sink.ack_msg(msg.object_id(), msg_id).await;
           }
         }
-
         Ok(())
-      },
-      _ => {
-        SyncStream::<Sink, Stream>::process_payload(
-          origin,
-          msg.into_payload(),
-          object_id,
-          protocol,
-          collab,
-          sink,
-        )
-        .await
       },
     }
   }
 
   async fn process_payload<P>(
     origin: &CollabOrigin,
-    payload: Bytes,
+    payload: &Bytes,
     object_id: &str,
     protocol: &P,
     collab: &Arc<MutexCollab>,
@@ -327,7 +313,7 @@ where
       return Ok(());
     }
 
-    let mut decoder = DecoderV1::new(Cursor::new(&payload));
+    let mut decoder = DecoderV1::new(Cursor::new(payload));
     let reader = MessageReader::new(&mut decoder);
     for msg in reader {
       let msg = msg?;
