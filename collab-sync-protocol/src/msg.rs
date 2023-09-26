@@ -76,10 +76,10 @@ impl Ord for CollabMessage {
       (CollabMessage::ClientInit { .. }, CollabMessage::ClientInit { .. }) => Ordering::Equal,
       (CollabMessage::ClientInit { .. }, _) => Ordering::Greater,
       (_, CollabMessage::ClientInit { .. }) => Ordering::Less,
-      (CollabMessage::ServerInitResponse { .. }, CollabMessage::ServerInitResponse { .. }) => {
-        Ordering::Equal
+      (CollabMessage::ServerInitResponse(l_resp), CollabMessage::ServerInitResponse(r_resp)) => {
+        l_resp.msg_id.cmp(&r_resp.msg_id).reverse()
       },
-      (CollabMessage::ServerInitResponse { .. }, _) => Ordering::Greater,
+      (CollabMessage::ServerInitResponse(_), _) => Ordering::Greater,
       (_, CollabMessage::ServerInitResponse { .. }) => Ordering::Less,
       _ => self.msg_id().cmp(&other.msg_id()).reverse(),
     }
