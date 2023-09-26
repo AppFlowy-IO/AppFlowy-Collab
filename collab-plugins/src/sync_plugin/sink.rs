@@ -8,6 +8,7 @@ use futures_util::SinkExt;
 use tokio::spawn;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tokio::time::{interval, Instant, Interval};
+use tracing::{debug, trace};
 
 use crate::sync_plugin::SyncError;
 use crate::sync_plugin::DEFAULT_SYNC_TIMEOUT;
@@ -116,7 +117,6 @@ where
       let mut pending_msgs = self.pending_msg_queue.lock();
       let msg_id = self.msg_id_counter.next();
       let msg = f(msg_id);
-      tracing::trace!("queue_msg: {}", msg);
       pending_msgs.push_msg(msg_id, msg);
       drop(pending_msgs);
     }
@@ -130,6 +130,7 @@ where
 
   /// Notify the sink to process the next message and mark the current message as done.
   pub async fn ack_msg(&self, object_id: &str, msg_id: MsgId) {
+    trace!("receive {} message:{}", object_id, msg_id);
     if let Some(mut pending_msg) = self.pending_msg_queue.lock().peek_mut() {
       // In most cases, the msg_id of the pending_msg is the same as the passed-in msg_id. However,
       // due to network issues, the client might send multiple messages with the same msg_id.
@@ -142,11 +143,11 @@ where
         msg_id
       );
       if pending_msg.msg_id() == msg_id {
-        tracing::trace!("{} message:{} was sent", object_id, msg_id);
+        debug!("{} message:{} was sent", object_id, msg_id);
         pending_msg.set_state(MessageState::Done);
+        self.notify();
       }
     }
-    self.notify();
   }
 
   async fn process_next_msg(&self) -> Result<(), SyncError> {
@@ -172,7 +173,7 @@ where
     // the fix interval.
     if let SinkStrategy::FixInterval(duration) = &self.config.strategy {
       let elapsed = self.instant.lock().await.elapsed();
-      // tracing::trace!(
+      // trace!(
       //   "elapsed interval: {:?}, fix interval: {:?}",
       //   elapsed,
       //   duration
@@ -225,7 +226,7 @@ where
       // message is not mergeable.
       if sending_msg.is_mergeable() {
         while let Some(pending_msg) = pending_msg_queue.pop() {
-          tracing::trace!("merge_msg: {}", pending_msg.get_msg());
+          debug!("merge_msg: {}", pending_msg.get_msg());
           sending_msg.merge(pending_msg);
           if !sending_msg.is_mergeable() {
             break;
@@ -251,8 +252,14 @@ where
     match tokio::time::timeout(self.config.timeout, rx).await {
       Ok(_) => {
         if let Some(mut pending_msgs) = self.pending_msg_queue.try_lock() {
-          pending_msgs.pop();
-          tracing::trace!("pending messages: {}", pending_msgs.len());
+          let pending_msg = pending_msgs.pop();
+          trace!(
+            "{} was sent, current pending messages: {}",
+            pending_msg
+              .map(|msg| msg.get_msg().to_string())
+              .unwrap_or("".to_string()),
+            pending_msgs.len()
+          );
           if pending_msgs.is_empty() {
             if let Err(e) = self.state_notifier.send(SinkState::Finished) {
               tracing::error!("send sink state failed: {}", e);

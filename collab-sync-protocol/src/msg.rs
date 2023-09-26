@@ -101,7 +101,7 @@ impl CollabMessage {
       CollabMessage::ClientInit(value) => Some(value.msg_id),
       CollabMessage::ServerInitResponse(value) => Some(value.msg_id),
       CollabMessage::ClientUpdateRequest(value) => Some(value.msg_id),
-      CollabMessage::ClientUpdateResponse(_) => None,
+      CollabMessage::ClientUpdateResponse(value) => value.msg_id,
       CollabMessage::ServerBroadcast(_) => None,
       CollabMessage::AwarenessUpdate(_) => None,
       CollabMessage::ServerInit(value) => Some(value.msg_id),
