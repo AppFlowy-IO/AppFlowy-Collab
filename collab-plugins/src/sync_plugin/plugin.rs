@@ -5,10 +5,10 @@ use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_define::{CollabObject, CollabType};
-use collab_sync_protocol::{ClientUpdateRequest, CollabMessage};
 use futures_util::SinkExt;
 use tokio_stream::StreamExt;
 
+use collab_define::collab_msg::{ClientUpdateRequest, CollabMessage};
 use tokio_stream::wrappers::WatchStream;
 use y_sync::awareness::Awareness;
 use y_sync::sync::{Message, SyncMessage};

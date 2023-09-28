@@ -2,6 +2,9 @@ use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
+use collab_define::collab_msg::{
+  CSAwarenessUpdate, ClientUpdateResponse, CollabMessage, CollabServerBroadcast,
+};
 use collab_plugins::sync_plugin::SyncError;
 use futures_util::{SinkExt, StreamExt};
 use lib0::encoding::Write;
@@ -10,17 +13,15 @@ use tokio::sync::broadcast::error::SendError;
 use tokio::sync::broadcast::{channel, Sender};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
+use tracing::error;
 use y_sync::awareness;
 use y_sync::awareness::{Awareness, AwarenessUpdate};
-use y_sync::sync::{Message, MessageReader, SyncMessage, MSG_SYNC, MSG_SYNC_UPDATE};
+use y_sync::sync::{Message, MessageReader, MSG_SYNC, MSG_SYNC_UPDATE};
 use yrs::updates::decoder::DecoderV1;
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
-use yrs::{ReadTxn, UpdateSubscription};
+use yrs::UpdateSubscription;
 
-use collab_sync_protocol::{handle_msg, DefaultSyncProtocol};
-use collab_sync_protocol::{
-  CSAwarenessUpdate, ClientUpdateResponse, CollabMessage, CollabServerBroadcast, ServerCollabInit,
-};
+use collab_sync_protocol::{handle_msg, ServerSyncProtocol};
 
 /// A broadcast can be used to propagate updates produced by yrs [yrs::Doc] and [Awareness]
 /// to subscribes. One broadcast can be used to propagate updates for a single document with
@@ -145,7 +146,7 @@ impl CollabBroadcast {
           tracing::debug!("[💭Server]: {}", msg);
           let mut sink = sink.lock().await;
           if let Err(e) = sink.send(msg).await {
-            tracing::error!("[💭Server]: broadcast client message failed: {:?}", e);
+            error!("[💭Server]: broadcast client message failed: {:?}", e);
             return Err(SyncError::Internal(Box::new(e)));
           }
         }
@@ -170,10 +171,8 @@ impl CollabBroadcast {
           }
 
           let origin = collab_msg.origin();
-          let is_client_init = collab_msg.is_init();
-
           if object_id != collab_msg.object_id() {
-            tracing::error!("[🔴Server]: Incoming message's object id does not match the broadcast group's object id");
+            error!("[🔴Server]: Incoming message's object id does not match the broadcast group's object id");
             continue;
           }
           tracing::trace!("[💭Server]: {}", collab_msg,);
@@ -184,37 +183,27 @@ impl CollabBroadcast {
           for msg in reader {
             match msg {
               Ok(msg) => {
-                let resp = handle_msg(&origin, &DefaultSyncProtocol, &collab, msg).await?;
+                let payload = handle_msg(&origin, &ServerSyncProtocol, &collab, msg).await?;
                 // Send the response to the corresponding client
-                if let (Some(origin), Some(resp)) = (origin, resp) {
+                if let (Some(origin), Some(payload)) = (origin, payload) {
                   let msg = ClientUpdateResponse::new(
                     origin.clone(),
                     object_id.clone(),
-                    resp.encode_v1(),
+                    payload,
                     collab_msg.msg_id(),
                   );
-                  sink
+
+                  if let Err(err) = sink
                     .send(msg.into())
                     .await
-                    .map_err(|e| SyncError::Internal(Box::new(e)))?;
+                    .map_err(|e| SyncError::Internal(Box::new(e)))
+                  {
+                    error!("send client response failed: {:?}", err);
+                  }
                 }
               },
               _ => break,
             }
-          }
-
-          if let Some(msg_id) = collab_msg.msg_id() {
-            // Send the server's state vector to the client. The client will calculate the missing
-            // updates and send them as a single update back to the server.
-            let payload = if is_client_init {
-              encode_server_sv(&collab)
-            } else {
-              vec![]
-            };
-
-            // Send the ack message to the client
-            let ack = ServerCollabInit::new(object_id.clone(), msg_id, payload);
-            let _ = sink.send(ack.into()).await;
           }
         }
         Ok(())
@@ -226,13 +215,6 @@ impl CollabBroadcast {
       stream_task,
     }
   }
-}
-
-fn encode_server_sv(collab: &MutexCollab) -> Vec<u8> {
-  let mut encoder = EncoderV1::new();
-  let sv = collab.lock().transact().state_vector();
-  Message::Sync(SyncMessage::SyncStep1(sv)).encode(&mut encoder);
-  encoder.to_vec()
 }
 
 /// A subscription structure returned from [CollabBroadcast::subscribe], which represents a

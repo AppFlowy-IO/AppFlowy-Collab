@@ -3,8 +3,6 @@ members = [
     "collab",
     "collab-derive",
     "collab-persistence",
-    "collab-document",
-    "collab-folder",
     "collab-database",
     "collab-sync-protocol",
     "collab-plugins",

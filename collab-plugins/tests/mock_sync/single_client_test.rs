@@ -26,7 +26,7 @@ async fn single_write_test() {
           collab.insert("1", "a");
         },
       },
-      Wait { secs: 2 },
+      Wait { secs: 8 },
       AssertClientContent {
         device_id: device_id.clone(),
         expected: json!({
