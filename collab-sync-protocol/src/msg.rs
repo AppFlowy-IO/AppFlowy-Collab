@@ -359,7 +359,8 @@ impl From<ClientUpdateResponse> for CollabMessage {
 impl Display for ClientUpdateResponse {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     f.write_fmt(format_args!(
-      "client update response: [oid:{}|payload_len:{}|msg_id:{:?}]",
+      "client update response: [uid:{:?}oid:{}|payload_len:{}|msg_id:{:?}]",
+      self.origin.client_user_id(),
       self.object_id,
       self.payload.len(),
       self.msg_id,
