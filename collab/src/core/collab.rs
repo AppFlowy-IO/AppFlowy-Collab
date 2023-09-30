@@ -65,11 +65,6 @@ pub struct Collab {
   /// The [UndoManager] is used to undo and redo changes. By default, the [UndoManager]
   /// is disabled. To enable it, call [Collab::enable_undo_manager].
   undo_manager: Mutex<Option<UndoManager>>,
-
-  /// Just binding the data_subscription to the [Collab] struct to prevent it from
-  /// being dropped.
-  #[allow(dead_code)]
-  data_subscription: MapSubscription,
   update_subscription: RwLock<Option<UpdateSubscription>>,
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
 }
@@ -112,24 +107,11 @@ impl Collab {
       skip_gc: true,
       ..Options::default()
     });
-    let mut data = doc.get_or_insert_map(DATA_SECTION);
+    let data = doc.get_or_insert_map(DATA_SECTION);
     let undo_manager = Mutex::new(None);
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
     let awareness = Awareness::new(doc.clone());
-
-    let cloned_state = state.clone();
-    let local_origin = origin.clone();
-    let data_subscription = data.observe(move |txn, _event| {
-      // Only set the FullSync if the remote origin is different from the local origin.
-      let remote_origin = CollabOrigin::from(txn);
-      if remote_origin != local_origin {
-        let cloned_state = cloned_state.clone();
-        tokio::spawn(async move {
-          cloned_state.set_sync_state(SyncState::FullSync);
-        });
-      }
-    });
 
     Self {
       origin,
@@ -140,7 +122,6 @@ impl Collab {
       data,
       plugins,
       state,
-      data_subscription,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
     }
