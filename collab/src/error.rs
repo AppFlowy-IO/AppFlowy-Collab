@@ -18,9 +18,6 @@ pub enum CollabError {
   #[error(transparent)]
   DecodeUpdate(#[from] lib0::error::Error),
 
-  #[error(transparent)]
-  YSync(#[from] y_sync::sync::Error),
-
   #[error("Internal failure: {0}")]
   Internal(#[from] Box<dyn std::error::Error + Send + Sync>),
 }

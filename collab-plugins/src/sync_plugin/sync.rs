@@ -6,8 +6,10 @@ use std::sync::{Arc, Weak};
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
-use collab_define::collab_msg::{ClientCollabInit, ClientUpdateRequest, CollabMessage};
-use collab_sync_protocol::{handle_msg, ClientSyncProtocol, CollabSyncProtocol};
+use collab::sync_protocol::awareness::Awareness;
+use collab::sync_protocol::message::MessageReader;
+use collab::sync_protocol::{handle_msg, ClientSyncProtocol, CollabSyncProtocol};
+use collab_define::collab_msg::{ClientCollabInit, ClientUpdate, CollabMessage};
 use futures_util::{SinkExt, StreamExt};
 use lib0::decoding::Cursor;
 use tokio::spawn;
@@ -15,8 +17,6 @@ use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::WatchStream;
 use tracing::{error, trace, warn};
-use y_sync::awareness::Awareness;
-use y_sync::sync::MessageReader;
 use yrs::updates::decoder::DecoderV1;
 use yrs::updates::encoder::{Encoder, EncoderV1};
 
@@ -294,9 +294,8 @@ where
       let msg = msg?;
       if let Some(payload) = handle_msg(&Some(origin), protocol, collab, msg).await? {
         let object_id = object_id.to_string();
-        sink.queue_msg(|msg_id| {
-          ClientUpdateRequest::new(origin.clone(), object_id, msg_id, payload).into()
-        });
+        sink
+          .queue_msg(|msg_id| ClientUpdate::new(origin.clone(), object_id, payload, msg_id).into());
       }
     }
     Ok(())

@@ -4,8 +4,16 @@ members = [
     "collab-derive",
     "collab-persistence",
     "collab-database",
-    "collab-sync-protocol",
     "collab-plugins",
     "collab-user",
     "collab-define"
 ]
+
+[workspace.dependencies]
+collab = { workspace = true, path = "collab" }
+collab-derive = { workspace = true, path = "collab-derive" }
+collab-persistence = { workspace = true, path = "collab-persistence" }
+collab-database = { workspace = true, path = "collab-database" }
+collab-plugins = { workspace = true, path = "collab-plugins" }
+collab-user = { workspace = true, path = "collab-user" }
+collab-define = { workspace = true, path = "collab-define" }

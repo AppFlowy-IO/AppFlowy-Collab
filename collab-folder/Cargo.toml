@@ -22,7 +22,7 @@ tracing = {version = "0.1", features = ["log"]}
 
 [dev-dependencies]
 assert-json-diff = "2.0.2"
-collab-plugins = {path = "../collab-plugins", features = ["rocksdb_plugin"]}
+collab-plugins = { workspace = true, features = ["rocksdb_plugin"]}
 fs_extra = "1.2.0"
 nanoid = "0.4.0"
 tempfile = "3.8.0"

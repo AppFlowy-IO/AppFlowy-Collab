@@ -8,10 +8,10 @@ use collab_define::{CollabObject, CollabType};
 use futures_util::SinkExt;
 use tokio_stream::StreamExt;
 
-use collab_define::collab_msg::{ClientUpdateRequest, CollabMessage};
+use collab::sync_protocol::awareness::Awareness;
+use collab::sync_protocol::message::{Message, SyncMessage};
+use collab_define::collab_msg::{ClientUpdate, CollabMessage};
 use tokio_stream::wrappers::WatchStream;
-use y_sync::awareness::Awareness;
-use y_sync::sync::{Message, SyncMessage};
 use yrs::updates::encoder::Encode;
 
 use crate::sync_plugin::SinkConfig;
@@ -123,9 +123,8 @@ where
     tokio::spawn(async move {
       if let Some(sync_queue) = weak_sync_queue.upgrade() {
         let payload = Message::Sync(SyncMessage::Update(update)).encode_v1();
-        sync_queue.queue_msg(|msg_id| {
-          ClientUpdateRequest::new(cloned_origin, object_id, msg_id, payload).into()
-        });
+        sync_queue
+          .queue_msg(|msg_id| ClientUpdate::new(cloned_origin, object_id, payload, msg_id).into());
       }
     });
   }

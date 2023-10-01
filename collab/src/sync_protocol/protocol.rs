@@ -1,7 +1,7 @@
-use collab::core::collab::MutexCollab;
-use collab::core::origin::CollabOrigin;
-use y_sync::awareness::{Awareness, AwarenessUpdate};
-use y_sync::sync::{Error, Message, SyncMessage};
+use crate::core::collab::MutexCollab;
+use crate::core::origin::CollabOrigin;
+use crate::sync_protocol::awareness::{Awareness, AwarenessUpdate};
+use crate::sync_protocol::message::{Error, Message, SyncMessage};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 use yrs::{ReadTxn, StateVector, Transact, Update};
@@ -129,8 +129,6 @@ pub trait CollabSyncProtocol {
     Ok(None)
   }
 
-  /// Y-sync protocol enables to extend its own settings with custom handles. These can be
-  /// implemented here. By default it returns an [Error::Unsupported].
   fn missing_handle(
     &self,
     _awareness: &mut Awareness,

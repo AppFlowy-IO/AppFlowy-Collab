@@ -7,9 +7,9 @@ use std::sync::{Arc, Weak};
 use crate::local_storage::CollabPersistenceConfig;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
+use collab::sync_protocol::awareness::Awareness;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use y_sync::awareness::Awareness;
 use yrs::{Doc, Transact, TransactionMut};
 
 #[derive(Clone)]

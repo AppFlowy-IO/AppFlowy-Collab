@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 yrs = "0.16.5"
-y-sync = "0.3.1"
 anyhow = "1.0"
 thiserror = "1.0.39"
 serde = { version = "1.0.157", features = ["derive"] }

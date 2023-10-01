@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use std::sync::Arc;
 
-use y_sync::awareness::Awareness;
 use yrs::{Doc, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
+use crate::sync_protocol::awareness::Awareness;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum CollabPluginType {

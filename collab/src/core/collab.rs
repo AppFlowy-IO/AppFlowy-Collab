@@ -10,7 +10,6 @@ use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio_stream::wrappers::WatchStream;
-use y_sync::awareness::Awareness;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
@@ -28,6 +27,7 @@ use crate::core::origin::{CollabClient, CollabOrigin};
 use crate::core::transaction::TransactionRetry;
 use crate::error::CollabError;
 use crate::preclude::{ArrayRefWrapper, JsonValue, MapRefExtension};
+use crate::sync_protocol::awareness::Awareness;
 use crate::util::insert_json_value_to_map_ref;
 
 pub const DATA_SECTION: &str = "data";

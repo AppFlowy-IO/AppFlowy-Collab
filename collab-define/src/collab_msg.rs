@@ -25,10 +25,11 @@ pub type MsgId = u64;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CollabMessage {
   ClientInit(ClientCollabInit),
-  ClientUpdateRequest(ClientUpdateRequest),
-  ClientUpdateResponse(ClientUpdateResponse),
-  AwarenessUpdate(CSAwarenessUpdate),
-  ServerBroadcast(CollabServerBroadcast),
+  ClientUpdateSync(ClientUpdate),
+  ClientUpdateAck(ClientUpdate),
+  ServerInit(ServerCollabInit),
+  ServerAwareness(CollabAwarenessData),
+  ServerBroadcast(CollabBroadcastData),
 }
 
 impl CollabSinkMessage for CollabMessage {
@@ -74,6 +75,9 @@ impl Ord for CollabMessage {
       (CollabMessage::ClientInit { .. }, CollabMessage::ClientInit { .. }) => Ordering::Equal,
       (CollabMessage::ClientInit { .. }, _) => Ordering::Greater,
       (_, CollabMessage::ClientInit { .. }) => Ordering::Less,
+      (CollabMessage::ServerInit(_), CollabMessage::ServerInit(_)) => Ordering::Equal,
+      (CollabMessage::ServerInit { .. }, _) => Ordering::Greater,
+      (_, CollabMessage::ServerInit { .. }) => Ordering::Less,
       _ => self.msg_id().cmp(&other.msg_id()).reverse(),
     }
   }
@@ -92,10 +96,11 @@ impl CollabMessage {
   pub fn msg_id(&self) -> Option<MsgId> {
     match self {
       CollabMessage::ClientInit(value) => Some(value.msg_id),
-      CollabMessage::ClientUpdateRequest(value) => Some(value.msg_id),
-      CollabMessage::ClientUpdateResponse(value) => value.msg_id,
+      CollabMessage::ClientUpdateSync(value) => Some(value.msg_id),
+      CollabMessage::ClientUpdateAck(value) => Some(value.msg_id),
+      CollabMessage::ServerInit(value) => Some(value.msg_id),
       CollabMessage::ServerBroadcast(_) => None,
-      CollabMessage::AwarenessUpdate(_) => None,
+      CollabMessage::ServerAwareness(_) => None,
     }
   }
 
@@ -106,22 +111,22 @@ impl CollabMessage {
   pub fn origin(&self) -> Option<&CollabOrigin> {
     match self {
       CollabMessage::ClientInit(value) => Some(&value.origin),
-      CollabMessage::ClientUpdateRequest(value) => Some(&value.origin),
-      CollabMessage::ClientUpdateResponse(value) => Some(&value.origin),
+      CollabMessage::ClientUpdateSync(value) => Some(&value.origin),
+      CollabMessage::ClientUpdateAck(value) => Some(&value.origin),
+      CollabMessage::ServerInit(value) => Some(&value.origin),
       CollabMessage::ServerBroadcast(value) => Some(&value.origin),
-      CollabMessage::AwarenessUpdate(_) => None,
+      CollabMessage::ServerAwareness(_) => None,
     }
   }
 
   pub fn object_id(&self) -> &str {
     match self {
       CollabMessage::ClientInit(value) => &value.object_id,
-      // CollabMessage::ServerInitResponse(value) => &value.object_id,
-      CollabMessage::ClientUpdateRequest(value) => &value.object_id,
-      CollabMessage::ClientUpdateResponse(value) => &value.object_id,
+      CollabMessage::ClientUpdateSync(value) => &value.object_id,
+      CollabMessage::ClientUpdateAck(value) => &value.object_id,
+      CollabMessage::ServerInit(value) => &value.object_id,
       CollabMessage::ServerBroadcast(value) => &value.object_id,
-      CollabMessage::AwarenessUpdate(value) => &value.object_id,
-      // CollabMessage::ServerInit(value) => &value.object_id,
+      CollabMessage::ServerAwareness(value) => &value.object_id,
     }
   }
 }
@@ -136,16 +141,22 @@ impl Display for CollabMessage {
         value.payload.len(),
         value.msg_id,
       )),
-      CollabMessage::ClientUpdateRequest(value) => f.write_fmt(format_args!(
-        "client update request: [{}|oid:{}|msg_id:{}|payload_len:{}]",
-        value.origin,
+      CollabMessage::ClientUpdateSync(value) => f.write_fmt(format_args!(
+        "client update send: [oid:{}|msg_id:{:?}|payload_len:{}]",
         value.object_id,
         value.msg_id,
         value.payload.len(),
       )),
-      CollabMessage::ClientUpdateResponse(value) => f.write_fmt(format_args!(
-        "client update response: [oid:{}|payload_len:{}]",
+      CollabMessage::ClientUpdateAck(value) => f.write_fmt(format_args!(
+        "ack: [oid:{}|msg_id:{:?}|payload_len:{}]",
         value.object_id,
+        value.msg_id,
+        value.payload.len(),
+      )),
+      CollabMessage::ServerInit(value) => f.write_fmt(format_args!(
+        "server init: [oid:{}|msg_id:{:?}|payload_len:{}]",
+        value.object_id,
+        value.msg_id,
         value.payload.len(),
       )),
       CollabMessage::ServerBroadcast(value) => f.write_fmt(format_args!(
@@ -154,7 +165,7 @@ impl Display for CollabMessage {
         value.object_id,
         value.payload.len(),
       )),
-      CollabMessage::AwarenessUpdate(value) => f.write_fmt(format_args!(
+      CollabMessage::ServerAwareness(value) => f.write_fmt(format_args!(
         "awareness: [oid:{}|payload_len:{}]",
         value.object_id,
         value.payload.len(),
@@ -181,21 +192,22 @@ impl CollabMessage {
   pub fn payload(&self) -> &Bytes {
     match self {
       CollabMessage::ClientInit(value) => &value.payload,
-      CollabMessage::ClientUpdateRequest(value) => &value.payload,
-      CollabMessage::ClientUpdateResponse(value) => &value.payload,
+      CollabMessage::ClientUpdateSync(value) => &value.payload,
+      CollabMessage::ClientUpdateAck(value) => &value.payload,
+      CollabMessage::ServerInit(value) => &value.payload,
       CollabMessage::ServerBroadcast(value) => &value.payload,
-      CollabMessage::AwarenessUpdate(value) => &value.payload,
+      CollabMessage::ServerAwareness(value) => &value.payload,
     }
   }
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct CSAwarenessUpdate {
+pub struct CollabAwarenessData {
   object_id: String,
   payload: Bytes,
 }
 
-impl CSAwarenessUpdate {
+impl CollabAwarenessData {
   pub fn new(object_id: String, payload: Vec<u8>) -> Self {
     Self {
       object_id,
@@ -204,34 +216,9 @@ impl CSAwarenessUpdate {
   }
 }
 
-impl From<CSAwarenessUpdate> for CollabMessage {
-  fn from(value: CSAwarenessUpdate) -> Self {
-    CollabMessage::AwarenessUpdate(value)
-  }
-}
-
-#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct ClientUpdateRequest {
-  origin: CollabOrigin,
-  object_id: String,
-  msg_id: MsgId,
-  payload: Bytes,
-}
-
-impl ClientUpdateRequest {
-  pub fn new(origin: CollabOrigin, object_id: String, msg_id: MsgId, payload: Vec<u8>) -> Self {
-    Self {
-      origin,
-      object_id,
-      msg_id,
-      payload: Bytes::from(payload),
-    }
-  }
-}
-
-impl From<ClientUpdateRequest> for CollabMessage {
-  fn from(value: ClientUpdateRequest) -> Self {
-    CollabMessage::ClientUpdateRequest(value)
+impl From<CollabAwarenessData> for CollabMessage {
+  fn from(value: CollabAwarenessData) -> Self {
+    CollabMessage::ServerAwareness(value)
   }
 }
 
@@ -273,20 +260,15 @@ impl From<ClientCollabInit> for CollabMessage {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct ClientUpdateResponse {
+pub struct ServerCollabInit {
   pub origin: CollabOrigin,
   pub object_id: String,
-  pub msg_id: Option<MsgId>,
+  pub msg_id: MsgId,
   pub payload: Bytes,
 }
 
-impl ClientUpdateResponse {
-  pub fn new(
-    origin: CollabOrigin,
-    object_id: String,
-    payload: Vec<u8>,
-    msg_id: Option<MsgId>,
-  ) -> Self {
+impl ServerCollabInit {
+  pub fn new(origin: CollabOrigin, object_id: String, payload: Vec<u8>, msg_id: MsgId) -> Self {
     Self {
       origin,
       object_id,
@@ -296,13 +278,50 @@ impl ClientUpdateResponse {
   }
 }
 
-impl From<ClientUpdateResponse> for CollabMessage {
-  fn from(value: ClientUpdateResponse) -> Self {
-    CollabMessage::ClientUpdateResponse(value)
+impl From<ServerCollabInit> for CollabMessage {
+  fn from(value: ServerCollabInit) -> Self {
+    CollabMessage::ServerInit(value)
   }
 }
 
-impl Display for ClientUpdateResponse {
+impl Display for ServerCollabInit {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.write_fmt(format_args!(
+      "server init: [uid:{:?}|oid:{}|msg_id:{:?}|payload_len:{}]",
+      self.origin.client_user_id(),
+      self.object_id,
+      self.msg_id,
+      self.payload.len(),
+    ))
+  }
+}
+
+#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
+pub struct ClientUpdate {
+  pub origin: CollabOrigin,
+  pub object_id: String,
+  pub msg_id: MsgId,
+  pub payload: Bytes,
+}
+
+impl ClientUpdate {
+  pub fn new(origin: CollabOrigin, object_id: String, payload: Vec<u8>, msg_id: MsgId) -> Self {
+    Self {
+      origin,
+      object_id,
+      payload: Bytes::from(payload),
+      msg_id,
+    }
+  }
+}
+
+impl From<ClientUpdate> for CollabMessage {
+  fn from(value: ClientUpdate) -> Self {
+    CollabMessage::ClientUpdateAck(value)
+  }
+}
+
+impl Display for ClientUpdate {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     f.write_fmt(format_args!(
       "client update response: [uid:{:?}|oid:{}|msg_id:{:?}|payload_len:{}]",
@@ -315,13 +334,13 @@ impl Display for ClientUpdateResponse {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct CollabServerBroadcast {
+pub struct CollabBroadcastData {
   origin: CollabOrigin,
   object_id: String,
   payload: Bytes,
 }
 
-impl CollabServerBroadcast {
+impl CollabBroadcastData {
   pub fn new(origin: CollabOrigin, object_id: String, payload: Vec<u8>) -> Self {
     Self {
       origin,
@@ -331,8 +350,8 @@ impl CollabServerBroadcast {
   }
 }
 
-impl From<CollabServerBroadcast> for CollabMessage {
-  fn from(value: CollabServerBroadcast) -> Self {
+impl From<CollabBroadcastData> for CollabMessage {
+  fn from(value: CollabBroadcastData) -> Self {
     CollabMessage::ServerBroadcast(value)
   }
 }
