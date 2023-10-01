@@ -1,4 +1,5 @@
 use crate::sync_protocol::awareness::AwarenessUpdate;
+use std::fmt::{Display, Formatter};
 use thiserror::Error;
 use yrs::updates::decoder::{Decode, Decoder};
 use yrs::updates::encoder::{Encode, Encoder};
@@ -98,6 +99,22 @@ pub enum SyncMessage {
   SyncStep1(StateVector),
   SyncStep2(Vec<u8>),
   Update(Vec<u8>),
+}
+
+impl Display for SyncMessage {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      SyncMessage::SyncStep1(sv) => {
+        write!(f, "SyncStep1({:?})", sv)
+      },
+      SyncMessage::SyncStep2(data) => {
+        write!(f, "SyncStep2({})", data.len())
+      },
+      SyncMessage::Update(data) => {
+        write!(f, "Update({})", data.len())
+      },
+    }
+  }
 }
 
 impl Encode for SyncMessage {
