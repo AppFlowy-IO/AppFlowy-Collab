@@ -1,5 +1,5 @@
 use crate::sync_protocol::awareness::AwarenessUpdate;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use thiserror::Error;
 use yrs::updates::decoder::{Decode, Decoder};
 use yrs::updates::encoder::{Encode, Encoder};
@@ -83,6 +83,18 @@ impl Decode for Message {
         let data = decoder.read_buf()?;
         Ok(Message::Custom(tag, data.to_vec()))
       },
+    }
+  }
+}
+
+impl Display for Message {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Message::Sync(sync_msg) => f.write_str(&sync_msg.to_string()),
+      Message::Auth(_) => f.write_str("Auth"),
+      Message::AwarenessQuery => f.write_str("AwarenessQuery"),
+      Message::Awareness(_) => f.write_str("Awareness"),
+      Message::Custom(_, _) => f.write_str("Custom"),
     }
   }
 }
