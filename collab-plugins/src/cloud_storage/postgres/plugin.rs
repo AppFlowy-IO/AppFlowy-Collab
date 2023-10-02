@@ -9,6 +9,7 @@ use collab::core::collab_plugin::CollabPluginType;
 use collab::core::collab_state::SnapshotState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
+use collab::sync_protocol::awareness::Awareness;
 use collab_define::CollabObject;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -18,7 +19,6 @@ use tokio_retry::strategy::FibonacciBackoff;
 use tokio_retry::{Action, Retry};
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
-use y_sync::awareness::Awareness;
 use yrs::updates::decoder::Decode;
 use yrs::{ReadTxn, StateVector, Update};
 
