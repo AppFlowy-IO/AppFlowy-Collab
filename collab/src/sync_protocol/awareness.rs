@@ -5,10 +5,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use thiserror::Error;
-use yrs::{Doc, Observer, Subscription};
 use yrs::block::ClientID;
 use yrs::updates::decoder::{Decode, Decoder};
 use yrs::updates::encoder::{Encode, Encoder};
+use yrs::{Doc, Observer, Subscription};
 
 const NULL_STR: &str = "null";
 
