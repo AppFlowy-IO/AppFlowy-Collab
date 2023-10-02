@@ -9,7 +9,7 @@ use collab::core::origin::CollabOrigin;
 use collab::sync_protocol::awareness::Awareness;
 use collab::sync_protocol::message::MessageReader;
 use collab::sync_protocol::{handle_msg, ClientSyncProtocol, CollabSyncProtocol};
-use collab_define::collab_msg::{ClientCollabInit, ClientUpdate, CollabMessage};
+use collab_define::collab_msg::{ClientCollabInit, CollabMessage, UpdateSync};
 use futures_util::{SinkExt, StreamExt};
 use lib0::decoding::Cursor;
 use tokio::spawn;
@@ -294,8 +294,7 @@ where
       let msg = msg?;
       if let Some(payload) = handle_msg(&Some(origin), protocol, collab, msg).await? {
         let object_id = object_id.to_string();
-        sink
-          .queue_msg(|msg_id| ClientUpdate::new(origin.clone(), object_id, payload, msg_id).into());
+        sink.queue_msg(|msg_id| UpdateSync::new(origin.clone(), object_id, payload, msg_id).into());
       }
     }
     Ok(())

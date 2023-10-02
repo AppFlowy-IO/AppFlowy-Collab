@@ -25,8 +25,8 @@ pub type MsgId = u64;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CollabMessage {
   ClientInit(ClientCollabInit),
-  ClientUpdateSync(ClientUpdate),
-  ClientUpdateAck(ClientUpdate),
+  ClientUpdateSync(UpdateSync),
+  ClientUpdateAck(UpdateAck),
   ServerInit(ServerCollabInit),
   ServerAwareness(CollabAwarenessData),
   ServerBroadcast(CollabBroadcastData),
@@ -297,14 +297,14 @@ impl Display for ServerCollabInit {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub struct ClientUpdate {
+pub struct UpdateSync {
   pub origin: CollabOrigin,
   pub object_id: String,
   pub msg_id: MsgId,
   pub payload: Bytes,
 }
 
-impl ClientUpdate {
+impl UpdateSync {
   pub fn new(origin: CollabOrigin, object_id: String, payload: Vec<u8>, msg_id: MsgId) -> Self {
     Self {
       origin,
@@ -315,16 +315,53 @@ impl ClientUpdate {
   }
 }
 
-impl From<ClientUpdate> for CollabMessage {
-  fn from(value: ClientUpdate) -> Self {
+impl From<UpdateSync> for CollabMessage {
+  fn from(value: UpdateSync) -> Self {
+    CollabMessage::ClientUpdateSync(value)
+  }
+}
+
+impl Display for UpdateSync {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.write_fmt(format_args!(
+      "client update sync: [uid:{:?}|oid:{}|msg_id:{:?}|payload_len:{}]",
+      self.origin.client_user_id(),
+      self.object_id,
+      self.msg_id,
+      self.payload.len(),
+    ))
+  }
+}
+
+#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
+pub struct UpdateAck {
+  pub origin: CollabOrigin,
+  pub object_id: String,
+  pub msg_id: MsgId,
+  pub payload: Bytes,
+}
+
+impl UpdateAck {
+  pub fn new(origin: CollabOrigin, object_id: String, payload: Vec<u8>, msg_id: MsgId) -> Self {
+    Self {
+      origin,
+      object_id,
+      payload: Bytes::from(payload),
+      msg_id,
+    }
+  }
+}
+
+impl From<UpdateAck> for CollabMessage {
+  fn from(value: UpdateAck) -> Self {
     CollabMessage::ClientUpdateAck(value)
   }
 }
 
-impl Display for ClientUpdate {
+impl Display for UpdateAck {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     f.write_fmt(format_args!(
-      "client update response: [uid:{:?}|oid:{}|msg_id:{:?}|payload_len:{}]",
+      "client update ack: [uid:{:?}|oid:{}|msg_id:{:?}|payload_len:{}]",
       self.origin.client_user_id(),
       self.object_id,
       self.msg_id,

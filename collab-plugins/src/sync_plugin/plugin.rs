@@ -10,7 +10,7 @@ use tokio_stream::StreamExt;
 
 use collab::sync_protocol::awareness::Awareness;
 use collab::sync_protocol::message::{Message, SyncMessage};
-use collab_define::collab_msg::{ClientUpdate, CollabMessage};
+use collab_define::collab_msg::{CollabMessage, UpdateSync};
 use tokio_stream::wrappers::WatchStream;
 use yrs::updates::encoder::Encode;
 
@@ -124,7 +124,7 @@ where
       if let Some(sync_queue) = weak_sync_queue.upgrade() {
         let payload = Message::Sync(SyncMessage::Update(update)).encode_v1();
         sync_queue
-          .queue_msg(|msg_id| ClientUpdate::new(cloned_origin, object_id, payload, msg_id).into());
+          .queue_msg(|msg_id| UpdateSync::new(cloned_origin, object_id, payload, msg_id).into());
       }
     });
   }
