@@ -8,7 +8,7 @@ use collab::preclude::CollabBuilder;
 use collab_plugins::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_user::core::{
-  MutexUserAwareness, RemindersChangeSender, UserAwareness, UserAwarenessNotifier,
+    MutexUserAwareness, RemindersChangeSender, UserAwareness, UserAwarenessNotifier,
 };
 use tempfile::TempDir;
 use tokio::sync::broadcast::Receiver;
@@ -45,7 +45,7 @@ impl UserAwarenessTest {
       .with_device_id("1")
       .build()
       .unwrap();
-    collab.async_initialize().await;
+    collab.lock().initialize();
 
     let (reminder_change_tx, _) = tokio::sync::broadcast::channel(100);
     let notifier = UserAwarenessNotifier {

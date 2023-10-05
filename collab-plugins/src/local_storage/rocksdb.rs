@@ -1,16 +1,17 @@
-use async_trait::async_trait;
 use std::ops::Deref;
-use std::sync::atomic::Ordering::SeqCst;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::Ordering::SeqCst;
 
-use crate::local_storage::CollabPersistenceConfig;
+
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use y_sync::awareness::Awareness;
 use yrs::{Doc, Transact, TransactionMut};
+
+use crate::local_storage::CollabPersistenceConfig;
 
 #[derive(Clone)]
 pub struct RocksdbDiskPlugin {
@@ -59,9 +60,8 @@ impl RocksdbDiskPlugin {
   }
 }
 
-#[async_trait]
 impl CollabPlugin for RocksdbDiskPlugin {
-  async fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
+  fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
     if let Some(db) = self.db.upgrade() {
       let rocksdb_read = db.read_txn();
       let mut txn = doc.transact_mut_with(origin.clone());

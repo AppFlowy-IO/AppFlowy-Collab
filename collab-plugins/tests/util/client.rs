@@ -2,19 +2,18 @@ use std::net::SocketAddr;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use crate::util::{CollabMsgCodec, CollabSink, CollabStream};
 use collab::core::collab::MutexCollab;
 use collab::core::origin::{CollabClient, CollabOrigin};
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::sync_plugin::{SyncObject, SyncPlugin};
+use collab_plugins::sync_plugin::client::{TokioUnboundedSink, TokioUnboundedStream};
 use rand::{prelude::*, Rng as WrappedRng};
+use tempfile::TempDir;
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc::unbounded_channel;
 
-use collab_plugins::sync_plugin::client::{TokioUnboundedSink, TokioUnboundedStream};
-use collab_plugins::sync_plugin::{SyncObject, SyncPlugin};
-use tempfile::TempDir;
-
+use crate::util::{CollabMsgCodec, CollabSink, CollabStream};
 use crate::util::{TestSink, TestStream};
 
 pub async fn spawn_client_with_empty_doc(
@@ -30,7 +29,7 @@ pub async fn spawn_client_with_empty_doc(
   let sink = CollabSink::new(writer, CollabMsgCodec::default());
   let sync_plugin = SyncPlugin::new(origin, object, Arc::downgrade(&collab), sink, stream);
   collab.lock().add_plugin(Arc::new(sync_plugin));
-  collab.async_initialize().await;
+  collab.lock().initialize();
   Ok(collab)
 }
 
@@ -56,7 +55,7 @@ pub async fn spawn_client(
   let db = Arc::new(RocksCollabDB::open(path).unwrap());
   let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
   collab.lock().add_plugin(Arc::new(disk_plugin));
-  collab.async_initialize().await;
+  collab.lock().initialize();
 
   {
     let client = collab.lock();
@@ -115,7 +114,7 @@ impl TestClient {
       TokioUnboundedStream::new(stream),
     );
     collab.lock().add_plugin(Arc::new(sync_plugin));
-    collab.async_initialize().await;
+    collab.lock().initialize();
     if with_data {
       {
         let client = collab.lock();
@@ -167,7 +166,7 @@ impl TestClient {
       TokioUnboundedStream::new(stream),
     );
     collab.lock().add_plugin(Arc::new(sync_plugin));
-    collab.async_initialize().await;
+    collab.lock().initialize();
     Ok(Self {
       test_stream,
       test_sink,

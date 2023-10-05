@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::panic;
@@ -6,20 +5,21 @@ use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::vec::IntoIter;
 
+use bytes::Bytes;
 use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio::sync::watch;
 use y_sync::awareness::Awareness;
-use yrs::block::Prelim;
-use yrs::types::map::MapEvent;
-use yrs::types::{ToJson, Value};
-use yrs::updates::decoder::Decode;
-use yrs::updates::encoder::Encode;
 use yrs::{
   ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, StateVector,
   Subscription, Transact, Transaction, TransactionMut, UndoManager, Update, UpdateSubscription,
 };
+use yrs::block::Prelim;
+use yrs::types::{ToJson, Value};
+use yrs::types::map::MapEvent;
+use yrs::updates::decoder::Decode;
+use yrs::updates::encoder::Encode;
 
 use crate::core::collab_plugin::{CollabPlugin, CollabPluginType};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
@@ -204,7 +204,7 @@ impl Collab {
   /// further synchronization with the remote server.
   ///
   /// This method must be called after all plugins have been added.
-  pub async fn initialize(&self) {
+  pub fn initialize(&self) {
     if !self.state.is_uninitialized() {
       return;
     }
@@ -213,7 +213,7 @@ impl Collab {
     {
       let plugins = self.plugins.read().clone();
       for plugin in plugins {
-        plugin.init(&self.object_id, &self.origin, &self.doc).await;
+        plugin.init(&self.object_id, &self.origin, &self.doc);
       }
     }
 
@@ -783,11 +783,6 @@ impl MutexCollab {
   pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
     let collab = self.0.lock();
     collab.encode_as_update_v1()
-  }
-
-  pub async fn async_initialize(&self) {
-    let lock_guard = self.0.lock_arc();
-    lock_guard.initialize().await
   }
 
   pub fn to_json_value(&self) -> JsonValue {
