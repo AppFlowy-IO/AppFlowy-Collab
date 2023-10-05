@@ -4,14 +4,13 @@ use std::sync::Arc;
 use collab::core::collab::MutexCollab;
 use collab::preclude::CollabBuilder;
 use collab_document::blocks::{
-  Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, DocumentData, DocumentMeta,
+    Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, DocumentData, DocumentMeta,
 };
 use collab_document::document::Document;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use serde_json::{json, Value};
-
-use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 
 use crate::util::document_storage;
 
@@ -33,7 +32,7 @@ impl BlockTestCore {
       .with_device_id("1")
       .build()
       .unwrap();
-    collab.async_initialize().await;
+    collab.lock().initialize();
 
     let collab = Arc::new(collab);
     let document_data = BlockTestCore::get_default_data();

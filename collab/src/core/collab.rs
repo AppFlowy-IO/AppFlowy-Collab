@@ -185,7 +185,7 @@ impl Collab {
   /// further synchronization with the remote server.
   ///
   /// This method must be called after all plugins have been added.
-  pub async fn initialize(&self) {
+  pub fn initialize(&self) {
     if !self.state.is_uninitialized() {
       return;
     }
@@ -194,7 +194,7 @@ impl Collab {
     {
       let plugins = self.plugins.read().clone();
       for plugin in plugins {
-        plugin.init(&self.object_id, &self.origin, &self.doc).await;
+        plugin.init(&self.object_id, &self.origin, &self.doc);
       }
     }
 
@@ -764,11 +764,6 @@ impl MutexCollab {
   pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
     let collab = self.0.lock();
     collab.encode_as_update_v1()
-  }
-
-  pub async fn async_initialize(&self) {
-    let lock_guard = self.0.lock_arc();
-    lock_guard.initialize().await
   }
 
   pub fn to_json_value(&self) -> JsonValue {

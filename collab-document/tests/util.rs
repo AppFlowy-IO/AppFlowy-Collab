@@ -12,12 +12,11 @@ use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
 use collab_document::error::DocumentError;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use serde_json::{json, Value};
-
-use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use tempfile::TempDir;
-use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt::Subscriber, util::SubscriberInitExt};
 use zip::ZipArchive;
 
 pub struct DocumentTest {
@@ -38,7 +37,7 @@ impl DocumentTest {
       .with_device_id("1")
       .build()
       .unwrap();
-    collab.async_initialize().await;
+    collab.lock().initialize();
 
     let mut blocks = HashMap::new();
     let mut children_map = HashMap::new();
@@ -110,7 +109,7 @@ pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.async_initialize().await;
+  collab.lock().initialize();
 
   Document::open(Arc::new(collab)).unwrap()
 }

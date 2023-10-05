@@ -8,13 +8,12 @@ use std::sync::{Arc, Once};
 use collab::preclude::CollabBuilder;
 use collab_folder::core::*;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use tempfile::TempDir;
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 use zip::read::ZipArchive;
 
 pub struct FolderTest {
@@ -55,7 +54,7 @@ pub async fn create_folder_with_data(id: &str, folder_data: Option<FolderData>) 
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.async_initialize().await;
+  collab.lock().initialize();
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
   let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
@@ -82,7 +81,7 @@ pub async fn open_folder_with_db(uid: i64, object_id: &str, db_path: PathBuf) ->
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.async_initialize().await;
+  collab.lock().initialize();
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
   let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
