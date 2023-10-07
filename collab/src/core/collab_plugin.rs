@@ -1,6 +1,6 @@
-use std::sync::Arc;
-
+use async_trait::async_trait;
 use bytes::Bytes;
+use std::sync::Arc;
 use yrs::{Doc, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
@@ -15,11 +15,16 @@ pub enum CollabPluginType {
   Other,
 }
 
+#[async_trait]
 pub trait CollabPlugin: Send + Sync + 'static {
   /// Called when the plugin is initialized.
   /// The will apply the updates to the current [TransactionMut] which will restore the state of
   /// the document.
+  #[cfg(not(feature = "async-plugin"))]
   fn init(&self, _object_id: &str, _origin: &CollabOrigin, _doc: &Doc) {}
+
+  #[cfg(feature = "async-plugin")]
+  async fn init(&self, _object_id: &str, _origin: &CollabOrigin, _doc: &Doc) {}
 
   /// Called when the plugin is initialized.
   fn did_init(&self, _awareness: &Awareness, _object_id: &str) {}
@@ -48,12 +53,19 @@ pub trait CollabPlugin: Send + Sync + 'static {
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
+#[async_trait]
 impl<T> CollabPlugin for Box<T>
 where
   T: CollabPlugin,
 {
+  #[cfg(not(feature = "async-plugin"))]
   fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
-    (**self).init(object_id, origin, doc)
+    (**self).init(object_id, origin, doc);
+  }
+
+  #[cfg(feature = "async-plugin")]
+  async fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
+    (**self).init(object_id, origin, doc).await;
   }
 
   fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
@@ -65,12 +77,19 @@ where
   }
 }
 
+#[async_trait]
 impl<T> CollabPlugin for Arc<T>
 where
   T: CollabPlugin,
 {
+  #[cfg(not(feature = "async-plugin"))]
   fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
-    (**self).init(object_id, origin, doc)
+    (**self).init(object_id, origin, doc);
+  }
+
+  #[cfg(feature = "async-plugin")]
+  async fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
+    (**self).init(object_id, origin, doc).await;
   }
 
   fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
