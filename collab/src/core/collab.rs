@@ -185,6 +185,7 @@ impl Collab {
   /// further synchronization with the remote server.
   ///
   /// This method must be called after all plugins have been added.
+  #[cfg(not(feature = "async-plugin"))]
   pub fn initialize(&self) {
     if !self.state.is_uninitialized() {
       return;
@@ -195,6 +196,40 @@ impl Collab {
       let plugins = self.plugins.read().clone();
       for plugin in plugins {
         plugin.init(&self.object_id, &self.origin, &self.doc);
+      }
+    }
+
+    let (update_subscription, after_txn_subscription) = observe_doc(
+      &self.doc,
+      self.object_id.clone(),
+      self.plugins.clone(),
+      self.origin.clone(),
+    );
+
+    *self.update_subscription.write() = Some(update_subscription);
+    *self.after_txn_subscription.write() = Some(after_txn_subscription);
+
+    {
+      self
+        .plugins
+        .read()
+        .iter()
+        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id));
+    }
+    self.state.set_init_state(InitState::Initialized);
+  }
+
+  #[cfg(feature = "async-plugin")]
+  pub async fn initialize(&self) {
+    if !self.state.is_uninitialized() {
+      return;
+    }
+
+    self.state.set_init_state(InitState::Loading);
+    {
+      let plugins = self.plugins.read().clone();
+      for plugin in plugins {
+        plugin.init(&self.object_id, &self.origin, &self.doc).await;
       }
     }
 
