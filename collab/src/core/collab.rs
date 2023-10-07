@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::panic;
@@ -6,11 +5,11 @@ use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::vec::IntoIter;
 
+use bytes::Bytes;
 use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use tokio::sync::watch;
-use y_sync::awareness::Awareness;
+use tokio_stream::wrappers::WatchStream;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
@@ -28,6 +27,7 @@ use crate::core::origin::{CollabClient, CollabOrigin};
 use crate::core::transaction::TransactionRetry;
 use crate::error::CollabError;
 use crate::preclude::{ArrayRefWrapper, JsonValue, MapRefExtension};
+use crate::sync_protocol::awareness::Awareness;
 use crate::util::insert_json_value_to_map_ref;
 
 pub const DATA_SECTION: &str = "data";
@@ -65,11 +65,6 @@ pub struct Collab {
   /// The [UndoManager] is used to undo and redo changes. By default, the [UndoManager]
   /// is disabled. To enable it, call [Collab::enable_undo_manager].
   undo_manager: Mutex<Option<UndoManager>>,
-
-  /// Just binding the data_subscription to the [Collab] struct to prevent it from
-  /// being dropped.
-  #[allow(dead_code)]
-  data_subscription: MapSubscription,
   update_subscription: RwLock<Option<UpdateSubscription>>,
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
 }
@@ -112,24 +107,11 @@ impl Collab {
       skip_gc: true,
       ..Options::default()
     });
-    let mut data = doc.get_or_insert_map(DATA_SECTION);
+    let data = doc.get_or_insert_map(DATA_SECTION);
     let undo_manager = Mutex::new(None);
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
     let awareness = Awareness::new(doc.clone());
-
-    let cloned_state = state.clone();
-    let local_origin = origin.clone();
-    let data_subscription = data.observe(move |txn, _event| {
-      // Only set the FullSync if the remote origin is different from the local origin.
-      let remote_origin = CollabOrigin::from(txn);
-      if remote_origin != local_origin {
-        let cloned_state = cloned_state.clone();
-        tokio::spawn(async move {
-          cloned_state.set_sync_state(SyncState::FullSync);
-        });
-      }
-    });
 
     Self {
       origin,
@@ -140,7 +122,6 @@ impl Collab {
       data,
       plugins,
       state,
-      data_subscription,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
     }
@@ -154,12 +135,12 @@ impl Collab {
     )
   }
 
-  pub fn subscribe_sync_state(&self) -> watch::Receiver<SyncState> {
-    self.state.sync_state_notifier.subscribe()
+  pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
+    WatchStream::new(self.state.sync_state_notifier.subscribe())
   }
 
-  pub fn subscribe_snapshot_state(&self) -> watch::Receiver<SnapshotState> {
-    self.state.snapshot_state_notifier.subscribe()
+  pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
+    WatchStream::new(self.state.snapshot_state_notifier.subscribe())
   }
 
   /// Returns the [Doc] associated with the [Collab].
@@ -204,7 +185,7 @@ impl Collab {
   /// further synchronization with the remote server.
   ///
   /// This method must be called after all plugins have been added.
-  pub async fn initialize(&self) {
+  pub fn initialize(&self) {
     if !self.state.is_uninitialized() {
       return;
     }
@@ -213,7 +194,7 @@ impl Collab {
     {
       let plugins = self.plugins.read().clone();
       for plugin in plugins {
-        plugin.init(&self.object_id, &self.origin, &self.doc).await;
+        plugin.init(&self.object_id, &self.origin, &self.doc);
       }
     }
 
@@ -783,11 +764,6 @@ impl MutexCollab {
   pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
     let collab = self.0.lock();
     collab.encode_as_update_v1()
-  }
-
-  pub async fn async_initialize(&self) {
-    let lock_guard = self.0.lock_arc();
-    lock_guard.initialize().await
   }
 
   pub fn to_json_value(&self) -> JsonValue {

@@ -5,16 +5,15 @@ use std::time::Duration;
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::*;
+use collab_define::{CollabObject, CollabType};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::snapshot::CollabSnapshotPlugin;
-use yrs::updates::decoder::Decode;
-
-use collab_define::{CollabObject, CollabType};
 use lib0::any::Any;
 use tempfile::TempDir;
+use yrs::updates::decoder::Decode;
 
 use crate::setup_log;
 
@@ -145,7 +144,7 @@ impl CollabPersistenceTest {
       CollabType::Document,
       collab.clone(),
     ));
-    collab.async_initialize().await;
+    collab.lock().initialize();
 
     self.collab_by_id.insert(doc_id, collab);
   }
@@ -184,7 +183,7 @@ impl CollabPersistenceTest {
       CollabType::Document,
       collab.clone(),
     ));
-    collab.async_initialize().await;
+    collab.lock().initialize();
 
     let json = collab.to_json_value();
     assert_json_diff::assert_json_eq!(json, expected);
@@ -231,7 +230,7 @@ impl CollabPersistenceTest {
           collab.clone(),
         ));
 
-        collab.async_initialize().await;
+        collab.lock().initialize();
 
         self.collab_by_id.insert(id, collab);
       },
@@ -247,7 +246,7 @@ impl CollabPersistenceTest {
           .with_plugin(self.disk_plugin.clone())
           .build()
           .unwrap();
-        collab.async_initialize().await;
+        collab.lock().initialize();
         self.collab_by_id.insert(id, Arc::new(collab));
       },
       Script::DeleteDocument { id } => {
@@ -329,7 +328,7 @@ impl CollabPersistenceTest {
           CollabType::Document,
           collab.clone(),
         ));
-        collab.async_initialize().await;
+        collab.lock().initialize();
 
         let json = collab.to_json_value();
         assert_json_diff::assert_json_eq!(json, expected);

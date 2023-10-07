@@ -6,11 +6,10 @@ use collab::core::collab::MutexCollab;
 use collab::preclude::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use yrs::updates::decoder::Decode;
-
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
+use yrs::updates::decoder::Decode;
 
 use crate::struct_define::{Document, Owner, TaskInfo};
 
@@ -33,7 +32,7 @@ pub async fn make_collab_pair() -> (MutexCollab, MutexCollab, CollabStateCachePl
     .with_device_id("1")
     .build()
     .unwrap();
-  local_collab.async_initialize().await;
+  local_collab.lock().initialize();
 
   // Insert document
   local_collab
@@ -45,7 +44,7 @@ pub async fn make_collab_pair() -> (MutexCollab, MutexCollab, CollabStateCachePl
     .with_raw_data(updates.unwrap())
     .build()
     .unwrap();
-  remote_collab.async_initialize().await;
+  remote_collab.lock().initialize();
 
   (local_collab, remote_collab, update_cache)
 }

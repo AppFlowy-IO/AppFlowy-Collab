@@ -14,10 +14,9 @@ use collab_database::views::{
   CreateDatabaseParams, DatabaseLayout, FieldSettingsByFieldIdMap, FieldSettingsMap, LayoutSetting,
   LayoutSettings,
 };
+use collab_define::CollabType;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
-
-use collab_define::CollabType;
 use tempfile::TempDir;
 
 pub use crate::helper::*;
@@ -56,7 +55,7 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.async_initialize().await;
+  collab.lock().initialize();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder);
   let context = DatabaseContext {
@@ -188,7 +187,7 @@ impl DatabaseTestBuilder {
       .with_device_id("1")
       .build()
       .unwrap();
-    collab.async_initialize().await;
+    collab.lock().initialize();
     let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
     let block = Block::new(self.uid, Arc::downgrade(&collab_db), collab_builder);
     let context = DatabaseContext {

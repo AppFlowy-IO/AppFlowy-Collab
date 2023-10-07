@@ -1,44 +1,52 @@
-use collab::core::collab::MutexCollab;
-use collab::core::origin::CollabOrigin;
-use y_sync::awareness::{Awareness, AwarenessUpdate};
-use y_sync::sync::{Error, Message, SyncMessage};
+use crate::core::collab::MutexCollab;
+use crate::core::origin::CollabOrigin;
+use crate::sync_protocol::awareness::{Awareness, AwarenessUpdate};
+use crate::sync_protocol::message::{Error, Message, SyncMessage};
 use yrs::updates::decoder::Decode;
-use yrs::updates::encoder::{Encode, Encoder};
+use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
 use yrs::{ReadTxn, StateVector, Transact, Update};
 
-// In a client-server model. The client is the initiator of the connection. The server is the
-// responder. The client sends a sync-step-1 message to the server. The server responds with a
-// sync-step-2 message. The client then sends an update message to the server. The server applies
-// the update.
-// ********************************
+// ***************************
 // Client A  Client B  Server
-// |        |             |
-// |---(1) Sync Step1--->
-// |        |             |
-// |<--(2) Sync Step2---  |
-// |        |             |
-// |---(3) Update------>  |
-// |        |             |
-// |        |---(4) Apply Update
-// |        |             |
-// ********************************
-// |        |---(5) Sync Step1--->
-// |        |             |
-// |        |<--(6) Sync Step2---|
-// |        |             |
-// |---(7) Update------>  |
-// |        |             |
-// |        |---(8) Apply Update
-// |        |             |
-// |        |<-(9) Broadcast Update
-// |        |             |
-// ********************************
+// |          |             |
+// |---(1)--Sync Step1----->|
+// |          |             |
+// |<--(2)--Sync Step2------|
+// |<-------Sync Step1------|
+// |          |             |
+// |---(3)--Sync Step2----->|
+// |          |             |
+// **************************
+// |---(1)-- Update-------->|
+// |          |             |
+// |          |  (2) Apply->|
+// |          |             |
+// |          |<-(3) Broadcast
+// |          |             |
+// |          |< (4) Apply  |
 /// A implementation of [CollabSyncProtocol].
 #[derive(Clone)]
-pub struct DefaultSyncProtocol;
+pub struct ClientSyncProtocol;
+impl CollabSyncProtocol for ClientSyncProtocol {}
 
-impl CollabSyncProtocol for DefaultSyncProtocol {}
+#[derive(Clone)]
+pub struct ServerSyncProtocol;
+impl CollabSyncProtocol for ServerSyncProtocol {
+  fn handle_sync_step1(
+    &self,
+    awareness: &Awareness,
+    sv: StateVector,
+  ) -> Result<Option<Vec<u8>>, Error> {
+    let txn = awareness.doc().transact();
+    let step2_update = txn.encode_state_as_update_v1(&sv);
+    let step1_update = txn.state_vector();
 
+    let mut encoder = EncoderV1::new();
+    Message::Sync(SyncMessage::SyncStep2(step2_update)).encode(&mut encoder);
+    Message::Sync(SyncMessage::SyncStep1(step1_update)).encode(&mut encoder);
+    Ok(Some(encoder.to_vec()))
+  }
+}
 pub trait CollabSyncProtocol {
   fn start<E: Encoder>(&self, awareness: &Awareness, encoder: &mut E) -> Result<(), Error> {
     let (sv, update) = {
@@ -57,9 +65,11 @@ pub trait CollabSyncProtocol {
     &self,
     awareness: &Awareness,
     sv: StateVector,
-  ) -> Result<Option<Message>, Error> {
+  ) -> Result<Option<Vec<u8>>, Error> {
     let update = awareness.doc().transact().encode_state_as_update_v1(&sv);
-    Ok(Some(Message::Sync(SyncMessage::SyncStep2(update))))
+    Ok(Some(
+      Message::Sync(SyncMessage::SyncStep2(update)).encode_v1(),
+    ))
   }
 
   /// Handle reply for a sync-step-1 send from this replica previously. By default just apply
@@ -69,7 +79,7 @@ pub trait CollabSyncProtocol {
     origin: &Option<&CollabOrigin>,
     awareness: &mut Awareness,
     update: Update,
-  ) -> Result<Option<Message>, Error> {
+  ) -> Result<Option<Vec<u8>>, Error> {
     let mut txn = match origin {
       Some(origin) => awareness.doc().transact_mut_with((*origin).clone()),
       None => awareness.doc().transact_mut(),
@@ -85,7 +95,7 @@ pub trait CollabSyncProtocol {
     origin: &Option<&CollabOrigin>,
     awareness: &mut Awareness,
     update: Update,
-  ) -> Result<Option<Message>, Error> {
+  ) -> Result<Option<Vec<u8>>, Error> {
     self.handle_sync_step2(origin, awareness, update)
   }
 
@@ -93,7 +103,7 @@ pub trait CollabSyncProtocol {
     &self,
     _awareness: &Awareness,
     deny_reason: Option<String>,
-  ) -> Result<Option<Message>, Error> {
+  ) -> Result<Option<Vec<u8>>, Error> {
     if let Some(reason) = deny_reason {
       Err(Error::PermissionDenied { reason })
     } else {
@@ -103,9 +113,9 @@ pub trait CollabSyncProtocol {
 
   /// Returns an [AwarenessUpdate] which is a serializable representation of a current `awareness`
   /// instance.
-  fn handle_awareness_query(&self, awareness: &Awareness) -> Result<Option<Message>, Error> {
+  fn handle_awareness_query(&self, awareness: &Awareness) -> Result<Option<Vec<u8>>, Error> {
     let update = awareness.update()?;
-    Ok(Some(Message::Awareness(update)))
+    Ok(Some(Message::Awareness(update).encode_v1()))
   }
 
   /// Reply to awareness query or just incoming [AwarenessUpdate], where current `awareness`
@@ -114,19 +124,17 @@ pub trait CollabSyncProtocol {
     &self,
     awareness: &mut Awareness,
     update: AwarenessUpdate,
-  ) -> Result<Option<Message>, Error> {
+  ) -> Result<Option<Vec<u8>>, Error> {
     awareness.apply_update(update)?;
     Ok(None)
   }
 
-  /// Y-sync protocol enables to extend its own settings with custom handles. These can be
-  /// implemented here. By default it returns an [Error::Unsupported].
   fn missing_handle(
     &self,
     _awareness: &mut Awareness,
     tag: u8,
     _data: Vec<u8>,
-  ) -> Result<Option<Message>, Error> {
+  ) -> Result<Option<Vec<u8>>, Error> {
     Err(Error::Unsupported(tag))
   }
 }
@@ -137,7 +145,7 @@ pub async fn handle_msg<P: CollabSyncProtocol>(
   protocol: &P,
   collab: &MutexCollab,
   msg: Message,
-) -> Result<Option<Message>, Error> {
+) -> Result<Option<Vec<u8>>, Error> {
   match msg {
     Message::Sync(msg) => match msg {
       SyncMessage::SyncStep1(sv) => {

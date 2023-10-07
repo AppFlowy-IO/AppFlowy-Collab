@@ -1,17 +1,21 @@
 use std::sync::{Arc, Weak};
 
 use collab::core::collab::MutexCollab;
+use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_define::{CollabObject, CollabType};
-use collab_sync_protocol::{ClientCollabUpdate, CollabMessage};
-use futures_util::{SinkExt, StreamExt};
-use y_sync::awareness::Awareness;
-use y_sync::sync::{Message, SyncMessage};
+use futures_util::SinkExt;
+use tokio_stream::StreamExt;
+
+use collab::sync_protocol::awareness::Awareness;
+use collab::sync_protocol::message::{Message, SyncMessage};
+use collab_define::collab_msg::{CollabMessage, UpdateSync};
+use tokio_stream::wrappers::WatchStream;
 use yrs::updates::encoder::Encode;
 
-use crate::sync_plugin::client::SinkConfig;
-use crate::sync_plugin::client::SyncQueue;
+use crate::sync_plugin::SinkConfig;
+use crate::sync_plugin::SyncQueue;
 
 #[derive(Clone, Debug)]
 pub struct SyncObject {
@@ -48,44 +52,63 @@ impl From<CollabObject> for SyncObject {
   }
 }
 
-pub struct SyncPlugin<Sink, Stream> {
+pub struct SyncPlugin<Sink, Stream, C> {
   object: SyncObject,
   sync_queue: Arc<SyncQueue<Sink, Stream>>,
+  // Used to keep the lifetime of the channel
+  #[allow(dead_code)]
+  channel: Option<Arc<C>>,
 }
 
-impl<Sink, Stream> SyncPlugin<Sink, Stream> {
-  pub fn new<E>(
-    origin: CollabOrigin,
-    object: SyncObject,
-    collab: Weak<MutexCollab>,
-    sink: Sink,
-    stream: Stream,
-  ) -> Self
-  where
-    E: std::error::Error + Send + Sync + 'static,
-    Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
-    Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
-  {
-    let sync_queue = SyncQueue::new(
-      object.clone(),
-      origin,
-      sink,
-      stream,
-      collab,
-      SinkConfig::default(),
-    );
-    Self {
-      sync_queue: Arc::new(sync_queue),
-      object,
-    }
-  }
-}
-
-impl<E, Sink, Stream> CollabPlugin for SyncPlugin<Sink, Stream>
+impl<E, Sink, Stream, C> SyncPlugin<Sink, Stream, C>
 where
   E: std::error::Error + Send + Sync + 'static,
   Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
   Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
+  C: Send + Sync + 'static,
+{
+  pub fn new(
+    origin: CollabOrigin,
+    object: SyncObject,
+    collab: Weak<MutexCollab>,
+    sink: Sink,
+    sink_config: SinkConfig,
+    stream: Stream,
+    channel: Option<Arc<C>>,
+  ) -> Self {
+    let weak_local_collab = collab.clone();
+    let sync_queue = SyncQueue::new(object.clone(), origin, sink, stream, collab, sink_config);
+
+    let mut sync_state_stream = WatchStream::new(sync_queue.subscribe_sync_state());
+    tokio::spawn(async move {
+      while let Some(new_state) = sync_state_stream.next().await {
+        if let Some(local_collab) = weak_local_collab.upgrade() {
+          if let Some(local_collab) = local_collab.try_lock() {
+            local_collab.set_sync_state(new_state);
+          }
+        }
+      }
+    });
+
+    Self {
+      sync_queue: Arc::new(sync_queue),
+      object,
+      channel,
+    }
+  }
+
+  pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
+    let rx = self.sync_queue.subscribe_sync_state();
+    WatchStream::new(rx)
+  }
+}
+
+impl<E, Sink, Stream, C> CollabPlugin for SyncPlugin<Sink, Stream, C>
+where
+  E: std::error::Error + Send + Sync + 'static,
+  Sink: SinkExt<CollabMessage, Error = E> + Send + Sync + Unpin + 'static,
+  Stream: StreamExt<Item = Result<CollabMessage, E>> + Send + Sync + Unpin + 'static,
+  C: Send + Sync + 'static,
 {
   fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
     self.sync_queue.notify(_awareness);
@@ -100,9 +123,8 @@ where
     tokio::spawn(async move {
       if let Some(sync_queue) = weak_sync_queue.upgrade() {
         let payload = Message::Sync(SyncMessage::Update(update)).encode_v1();
-        sync_queue.queue_msg(|msg_id| {
-          ClientCollabUpdate::new(cloned_origin, object_id, msg_id, payload).into()
-        });
+        sync_queue
+          .queue_msg(|msg_id| UpdateSync::new(cloned_origin, object_id, payload, msg_id).into());
       }
     });
   }

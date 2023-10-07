@@ -103,13 +103,11 @@ impl Folder {
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
-    let rx = self.inner.lock().subscribe_sync_state();
-    WatchStream::new(rx)
+    self.inner.lock().subscribe_sync_state()
   }
 
   pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
-    let rx = self.inner.lock().subscribe_snapshot_state();
-    WatchStream::new(rx)
+    self.inner.lock().subscribe_snapshot_state()
   }
   /// Fetches the folder data based on the current workspace and view.
   ///

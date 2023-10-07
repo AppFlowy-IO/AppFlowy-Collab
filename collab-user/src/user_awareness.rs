@@ -190,8 +190,7 @@ impl UserAwareness {
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
-    let rx = self.inner.lock().subscribe_sync_state();
-    WatchStream::new(rx)
+    self.inner.lock().subscribe_sync_state()
   }
 
   /// Adds a new reminder to the `UserAwareness` object.

@@ -1,9 +1,9 @@
 use collab_plugins::local_storage::CollabPersistenceConfig;
+use rand::Rng;
 use serde_json::json;
 
 use crate::disk::script::CollabPersistenceTest;
 use crate::disk::script::Script::*;
-use crate::util::generate_random_string;
 
 #[tokio::test]
 async fn disable_snapshot_test() {
@@ -286,4 +286,17 @@ async fn gen_big_snapshot_test() {
       },
     ])
     .await;
+}
+
+fn generate_random_string(length: usize) -> String {
+  const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let mut rng = rand::thread_rng();
+  let random_string: String = (0..length)
+    .map(|_| {
+      let index = rng.gen_range(0..CHARSET.len());
+      CHARSET[index] as char
+    })
+    .collect();
+
+  random_string
 }

@@ -9,8 +9,8 @@ pub use yrs::Update as YrsUpdate;
 // #[cfg(feature = "aws_storage_plugin")]
 // pub mod aws;
 
-#[cfg(feature = "postgres_storage_plugin")]
 pub mod postgres;
 
 pub mod network_state;
+
 mod remote_collab;

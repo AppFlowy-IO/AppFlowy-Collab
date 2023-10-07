@@ -9,8 +9,8 @@ use async_trait::async_trait;
 use collab::core::collab::{MutexCollab, TransactionMutExt};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
+use collab_define::collab_msg::CollabSinkMessage;
 use collab_define::{CollabObject, CollabType};
-use collab_sync_protocol::CollabSinkMessage;
 use parking_lot::Mutex;
 use rand::Rng;
 use serde::Deserialize;
@@ -22,11 +22,9 @@ use tokio_stream::StreamExt;
 use yrs::updates::decoder::Decode;
 use yrs::{merge_updates_v1, ReadTxn, Transact, Update};
 
-pub use crate::sync_plugin::client::MsgId;
-use crate::sync_plugin::client::TokioUnboundedSink;
-use crate::sync_plugin::client::{
-  CollabSink, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState,
-};
+pub use crate::sync_plugin::MsgId;
+use crate::sync_plugin::TokioUnboundedSink;
+use crate::sync_plugin::{CollabSink, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState};
 
 /// The [RemoteCollab] is used to sync the local collab to the remote.
 pub struct RemoteCollab {
@@ -36,7 +34,6 @@ pub struct RemoteCollab {
   /// The [CollabSink] is used to queue the [Message] and continuously try to send them
   /// to the remote via the [RemoteCollabStorage].
   sink: Arc<CollabSink<TokioUnboundedSink<Message>, Message>>,
-  /// It continuously receive the updates from the remote.
   sync_state: Arc<watch::Sender<SyncState>>,
   #[allow(dead_code)]
   is_init_sync_finish: Arc<AtomicBool>,
@@ -148,7 +145,7 @@ impl RemoteCollab {
                 match storage.send_init_sync(&object, msg_id, payload).await {
                   Ok(_) => {
                     if let Some(collab_sink) = weak_collab_sink.upgrade() {
-                      collab_sink.ack_msg(msg_id).await;
+                      collab_sink.ack_msg(&object.object_id, msg_id).await;
                       cloned_is_init_sync_finish.store(true, std::sync::atomic::Ordering::SeqCst);
                     }
                   },
@@ -167,7 +164,7 @@ impl RemoteCollab {
                   Ok(_) => {
                     tracing::debug!("ack update {}:{}", object, msg_id);
                     if let Some(collab_sink) = weak_collab_sink.upgrade() {
-                      collab_sink.ack_msg(msg_id).await;
+                      collab_sink.ack_msg(&object.object_id, msg_id).await;
                     }
                   },
                   Err(e) => tracing::error!(

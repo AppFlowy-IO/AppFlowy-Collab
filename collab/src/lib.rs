@@ -2,6 +2,7 @@ pub mod error;
 mod util;
 
 pub mod core;
+pub mod sync_protocol;
 
 pub mod preclude {
   pub use lib0::any::Any as lib0Any;

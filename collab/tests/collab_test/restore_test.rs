@@ -1,9 +1,8 @@
 #![allow(clippy::all)]
 
-use std::collections::HashMap;
-
 use collab::core::collab::CollabBuilder;
 use collab::preclude::MapRefExtension;
+use std::collections::HashMap;
 use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
 use yrs::{Doc, Map, MapPrelim, ReadTxn, Transact, Update};
@@ -18,7 +17,7 @@ async fn restore_from_update() {
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
-  collab.lock().initialize().await;
+  collab.lock().initialize();
   collab.lock().insert("text", "hello world");
 
   let updates = update_cache.get_updates().unwrap();
@@ -40,7 +39,7 @@ async fn restore_from_multiple_update() {
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
-  collab.lock().initialize().await;
+  collab.lock().initialize();
 
   // Insert map
   let mut map = HashMap::new();
@@ -65,7 +64,7 @@ async fn apply_same_update_multiple_time() {
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
-  collab.lock().initialize().await;
+  collab.lock().initialize();
   collab.lock().insert("text", "hello world");
 
   let updates = update_cache.get_updates().unwrap();
@@ -94,7 +93,7 @@ async fn apply_unordered_updates() {
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
-  collab.lock().initialize().await;
+  collab.lock().initialize();
   collab.lock().insert("text", "hello world");
 
   // Insert map
@@ -110,7 +109,7 @@ async fn apply_unordered_updates() {
     .with_device_id("1")
     .build()
     .unwrap();
-  restored_collab.lock().initialize().await;
+  restored_collab.lock().initialize();
   restored_collab.lock().with_origin_transact_mut(|txn| {
     //Out of order updates from the same peer will be stashed internally and their
     // integration will be postponed until missing blocks arrive first.
@@ -134,12 +133,12 @@ async fn root_change_test() {
     .with_device_id("1")
     .build()
     .unwrap();
-  collab_1.lock().initialize().await;
+  collab_1.lock().initialize();
   let collab_2 = CollabBuilder::new(1, "1")
     .with_device_id("1")
     .build()
     .unwrap();
-  collab_2.lock().initialize().await;
+  collab_2.lock().initialize();
 
   {
     let collab_1_guard = collab_1.lock();

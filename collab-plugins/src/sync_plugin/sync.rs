@@ -1,26 +1,30 @@
+use bytes::Bytes;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
 
 use collab::core::collab::MutexCollab;
+use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
+use collab::sync_protocol::awareness::Awareness;
+use collab::sync_protocol::message::MessageReader;
+use collab::sync_protocol::{handle_msg, ClientSyncProtocol, CollabSyncProtocol};
+use collab_define::collab_msg::{ClientCollabInit, CollabMessage, UpdateSync};
 use futures_util::{SinkExt, StreamExt};
 use lib0::decoding::Cursor;
 use tokio::spawn;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
-use y_sync::awareness::Awareness;
-use y_sync::sync::{Message, MessageReader};
-use yrs::updates::decoder::{Decode, DecoderV1};
-use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
+use tokio_stream::wrappers::WatchStream;
+use tracing::{error, trace, warn};
+use yrs::updates::decoder::DecoderV1;
+use yrs::updates::encoder::{Encoder, EncoderV1};
 
-use crate::sync_plugin::client::SyncError;
-use crate::sync_plugin::client::{
+use crate::sync_plugin::SyncError;
+use crate::sync_plugin::SyncObject;
+use crate::sync_plugin::{
   CollabSink, CollabSinkRunner, DefaultMsgIdCounter, SinkConfig, SinkState,
 };
-use crate::sync_plugin::SyncObject;
-use collab_sync_protocol::{handle_msg, CollabSyncProtocol, DefaultSyncProtocol};
-use collab_sync_protocol::{ClientCollabInit, ClientCollabUpdate, CollabMessage, CollabServerSync};
 
 pub const DEFAULT_SYNC_TIMEOUT: u64 = 2;
 
@@ -35,7 +39,8 @@ pub struct SyncQueue<Sink, Stream> {
   /// the updates from the remote.
   #[allow(dead_code)]
   stream: SyncStream<Sink, Stream>,
-  protocol: DefaultSyncProtocol,
+  protocol: ClientSyncProtocol,
+  sync_state: Arc<watch::Sender<SyncState>>,
 }
 
 impl<E, Sink, Stream> SyncQueue<Sink, Stream>
@@ -52,16 +57,17 @@ where
     collab: Weak<MutexCollab>,
     config: SinkConfig,
   ) -> Self {
-    let protocol = DefaultSyncProtocol;
+    let protocol = ClientSyncProtocol;
     let (notifier, notifier_rx) = watch::channel(false);
-    let (state_tx, _) = watch::channel(SinkState::Init);
+    let sync_state = Arc::new(watch::channel(SyncState::SyncInitStart).0);
+    let (sync_state_tx, sink_state_rx) = watch::channel(SinkState::Init);
     debug_assert!(origin.client_user_id().is_some());
 
     let sink = Arc::new(CollabSink::new(
       origin.client_user_id().unwrap_or(0),
       sink,
       notifier,
-      state_tx,
+      sync_state_tx,
       DefaultMsgIdCounter::new(),
       config,
     ));
@@ -78,13 +84,40 @@ where
       sink.clone(),
     );
 
+    let weak_sync_state = Arc::downgrade(&sync_state);
+    let mut sink_state_stream = WatchStream::new(sink_state_rx);
+    // Subscribe the sink state stream and update the sync state in the background.
+    spawn(async move {
+      while let Some(collab_state) = sink_state_stream.next().await {
+        if let Some(sync_state) = weak_sync_state.upgrade() {
+          trace!("collab state change: {:?}", collab_state);
+          match collab_state {
+            SinkState::Syncing => {
+              let _ = sync_state.send(SyncState::SyncUpdate);
+            },
+            SinkState::Finished => {
+              let _ = sync_state.send(SyncState::SyncFinished);
+            },
+            SinkState::Init => {
+              let _ = sync_state.send(SyncState::SyncInitStart);
+            },
+          }
+        }
+      }
+    });
+
     Self {
       object,
       origin,
       sink,
       stream,
       protocol: cloned_protocol,
+      sync_state,
     }
+  }
+
+  pub fn subscribe_sync_state(&self) -> watch::Receiver<SyncState> {
+    self.sync_state.subscribe()
   }
 
   pub fn notify(&self, awareness: &Awareness) {
@@ -198,11 +231,12 @@ where
             .await?
           },
           _ => {
-            tracing::trace!("ClientSync is dropped. Stopping receive incoming changes.");
+            warn!("ClientSync is dropped. Stopping receive incoming changes.");
             return Ok(());
           },
         },
         Err(e) => {
+          error!("Spawn doc stream failed: {}", e);
           // If the client has disconnected, the stream will return an error, So stop receiving
           // messages if the client has disconnected.
           return Err(SyncError::Internal(Box::new(e)));
@@ -224,53 +258,45 @@ where
   where
     P: CollabSyncProtocol + Send + Sync + 'static,
   {
-    match msg {
-      CollabMessage::ServerAck(ack) => {
-        if let Some(payload) = &ack.payload {
-          let mut decoder = DecoderV1::from(payload.as_ref());
-          if let Ok(msg) = Message::decode(&mut decoder) {
-            if let Some(resp_msg) = handle_msg(&Some(origin), protocol, collab, msg).await? {
-              let payload = resp_msg.encode_v1();
-              let object_id = object_id.to_string();
-              sink.queue_msg(|msg_id| {
-                CollabServerSync::new(origin.clone(), object_id, payload, msg_id).into()
-              });
-            }
-          }
-        }
-
-        let msg_id = ack.msg_id;
-        tracing::trace!(
-          "[🙂Client {}]: {}",
-          origin
-            .client_user_id()
-            .map(|uid| uid.to_string())
-            .unwrap_or_default(),
-          CollabMessage::ServerAck(ack)
-        );
-        sink.ack_msg(msg_id).await;
-        Ok(())
-      },
-      _ => {
-        let payload = msg.into_payload();
-        if payload.is_empty() {
-          return Ok(());
-        }
-
-        let mut decoder = DecoderV1::new(Cursor::new(&payload));
-        let reader = MessageReader::new(&mut decoder);
-        for msg in reader {
-          let msg = msg?;
-          if let Some(resp) = handle_msg(&Some(origin), protocol, collab, msg).await? {
-            let payload = resp.encode_v1();
-            let object_id = object_id.to_string();
-            sink.queue_msg(|msg_id| {
-              ClientCollabUpdate::new(origin.clone(), object_id, msg_id, payload).into()
-            });
-          }
-        }
-        Ok(())
-      },
+    SyncStream::<Sink, Stream>::process_payload(
+      origin,
+      msg.payload(),
+      object_id,
+      protocol,
+      collab,
+      sink,
+    )
+    .await?;
+    if let Some(msg_id) = msg.msg_id() {
+      sink.ack_msg(msg.object_id(), msg_id).await;
     }
+    Ok(())
+  }
+
+  async fn process_payload<P>(
+    origin: &CollabOrigin,
+    payload: &Bytes,
+    object_id: &str,
+    protocol: &P,
+    collab: &Arc<MutexCollab>,
+    sink: &Arc<CollabSink<Sink, CollabMessage>>,
+  ) -> Result<(), SyncError>
+  where
+    P: CollabSyncProtocol + Send + Sync + 'static,
+  {
+    if payload.is_empty() {
+      return Ok(());
+    }
+
+    let mut decoder = DecoderV1::new(Cursor::new(payload));
+    let reader = MessageReader::new(&mut decoder);
+    for msg in reader {
+      let msg = msg?;
+      if let Some(payload) = handle_msg(&Some(origin), protocol, collab, msg).await? {
+        let object_id = object_id.to_string();
+        sink.queue_msg(|msg_id| UpdateSync::new(origin.clone(), object_id, payload, msg_id).into());
+      }
+    }
+    Ok(())
   }
 }

@@ -72,7 +72,7 @@ async fn send_multiple_updates_to_server_test() {
 
 #[tokio::test]
 async fn fetch_initial_state_from_server_test() {
-  let object = SyncObject::new("1", "1", CollabType::Document, "1");
+  let object = test_sync_object();
   let server = spawn_server(object.clone()).await.unwrap();
   server.mut_groups(&object.object_id, |collab| {
     collab.insert("1", "a");
@@ -152,5 +152,22 @@ async fn send_local_doc_initial_state_to_server_multiple_times() {
 }
 
 pub(crate) fn test_sync_object() -> SyncObject {
-  SyncObject::new("1", "1", CollabType::Document, "1")
+  SyncObject::new(
+    &uuid::Uuid::new_v4().to_string(),
+    "1",
+    CollabType::Document,
+    &uuid::Uuid::new_v4().to_string(),
+  )
+}
+
+pub(crate) fn test_sync_object_pair() -> (SyncObject, SyncObject) {
+  let a = SyncObject::new(
+    &uuid::Uuid::new_v4().to_string(),
+    "1",
+    CollabType::Document,
+    &uuid::Uuid::new_v4().to_string(),
+  );
+  let mut b = a.clone();
+  b.device_id = uuid::Uuid::new_v4().to_string();
+  (a, b)
 }

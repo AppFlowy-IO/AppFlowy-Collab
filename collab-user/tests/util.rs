@@ -45,7 +45,7 @@ impl UserAwarenessTest {
       .with_device_id("1")
       .build()
       .unwrap();
-    collab.async_initialize().await;
+    collab.lock().initialize();
 
     let (reminder_change_tx, _) = tokio::sync::broadcast::channel(100);
     let notifier = UserAwarenessNotifier {

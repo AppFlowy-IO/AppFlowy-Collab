@@ -1,3 +1,13 @@
-pub mod client;
+mod channel;
+mod error;
+mod pending_msg;
 mod plugin;
+mod sink;
+mod sync;
+
+pub use channel::*;
+pub use error::*;
+pub(crate) use pending_msg::*;
 pub use plugin::*;
+pub use sink::*;
+pub use sync::*;

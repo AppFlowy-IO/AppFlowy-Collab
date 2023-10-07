@@ -34,15 +34,6 @@ pub enum SyncState {
   /// Indicates that the [Collab] is finished syncing the data to remote. All local updates
   /// are sent to the remote.
   SyncFinished,
-  /// The root of [Collab] was changed. This happens when root that hold by the `data` property
-  /// of the [Collab] was updated by the remote.
-  ///
-  /// For example, when opening a document with empty data section, the [Collab] will try to load
-  /// the all the data from the remote if it has the cloud storage plugin. When the remote
-  /// update(The full data) is received, the root will be reset. When the root is reset, the [Collab]
-  /// will emit [SyncState::FullSync] event and the subscribers must reload themselves.
-  ///
-  FullSync,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -61,9 +52,6 @@ impl SnapshotState {
 }
 
 impl SyncState {
-  pub fn is_full_sync(&self) -> bool {
-    matches!(self, SyncState::FullSync)
-  }
   pub fn is_sync_finished(&self) -> bool {
     matches!(self, SyncState::SyncFinished)
   }

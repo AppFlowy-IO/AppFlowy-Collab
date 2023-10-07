@@ -3,8 +3,8 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Arc;
 
 use crate::util::{CollabSink, CollabStream};
-use collab_plugins::sync_plugin::client::SyncError;
-use collab_sync_protocol::CollabMessage;
+use collab_define::collab_msg::CollabMessage;
+use collab_plugins::sync_plugin::SyncError;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;

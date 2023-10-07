@@ -1,10 +1,9 @@
-use async_trait::async_trait;
-use futures::executor::block_on;
 use std::future::Future;
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use async_trait::async_trait;
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::preclude::CollabBuilder;
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
@@ -17,15 +16,15 @@ use collab_database::user::{
   RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
 };
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
+use collab_define::CollabType;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::local_storage::CollabPersistenceConfig;
-use parking_lot::Mutex;
-use tokio::sync::mpsc::{channel, Receiver};
 
-use collab_define::CollabType;
+use parking_lot::Mutex;
 use rand::Rng;
 use tempfile::TempDir;
+use tokio::sync::mpsc::{channel, Receiver};
 
 use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{make_rocks_db, TestTextCell};
@@ -89,7 +88,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
       ))
       .build()
       .unwrap();
-    block_on(collab.async_initialize());
+    collab.lock().initialize();
     Arc::new(collab)
   }
 }

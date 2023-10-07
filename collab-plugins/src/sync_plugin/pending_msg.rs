@@ -1,11 +1,12 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 
-use collab_sync_protocol::CollabSinkMessage;
+use collab_define::collab_msg::CollabSinkMessage;
 use tokio::sync::oneshot;
 
-use crate::sync_plugin::client::MsgId;
+use crate::sync_plugin::MsgId;
 
 pub(crate) struct PendingMsgQueue<Msg> {
   queue: BinaryHeap<PendingMessage<Msg>>,
@@ -13,7 +14,7 @@ pub(crate) struct PendingMsgQueue<Msg> {
 
 impl<Msg> PendingMsgQueue<Msg>
 where
-  Msg: Ord + Clone,
+  Msg: Ord + Clone + Display,
 {
   pub(crate) fn new() -> Self {
     Self {
@@ -56,7 +57,7 @@ pub(crate) struct PendingMessage<Msg> {
 
 impl<Msg> PendingMessage<Msg>
 where
-  Msg: Clone,
+  Msg: Clone + Display,
 {
   pub fn new(msg: Msg, msg_id: MsgId) -> Self {
     Self {

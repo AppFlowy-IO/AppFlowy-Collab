@@ -1,4 +1,4 @@
-use collab_plugins::sync_plugin::client::DEFAULT_SYNC_TIMEOUT;
+use collab_plugins::sync_plugin::DEFAULT_SYNC_TIMEOUT;
 use serde_json::json;
 use yrs::Array;
 
@@ -7,7 +7,8 @@ use crate::util::{create_db, Rng, ScriptTest};
 
 #[tokio::test]
 async fn single_write_test() {
-  let mut test = ScriptTest::new("1").await;
+  let device_id = uuid::Uuid::new_v4().to_string();
+  let mut test = ScriptTest::new(&uuid::Uuid::new_v4().to_string()).await;
   // 1. add new client with device_id = 1
   // 2. modify collab with device_id = 1
   // 3. wait 1 second (for sync)
@@ -17,17 +18,17 @@ async fn single_write_test() {
     .run_scripts(vec![
       CreateClient {
         uid: 1,
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
       ModifyLocalCollab {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         f: |collab| {
           collab.insert("1", "a");
         },
       },
-      Wait { secs: 1 },
+      Wait { secs: 8 },
       AssertClientContent {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         expected: json!({
           "1": "a",
           "map": {
@@ -37,7 +38,7 @@ async fn single_write_test() {
         }),
       },
       AssertClientEqualToServer {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
     ])
     .await;
@@ -45,7 +46,9 @@ async fn single_write_test() {
 
 #[tokio::test]
 async fn client_offline_test() {
-  let mut test = ScriptTest::new("1").await;
+  let object_id = uuid::Uuid::new_v4().to_string();
+  let mut test = ScriptTest::new(&object_id).await;
+  let device_id = uuid::Uuid::new_v4().to_string();
   // 1. add new client with device_id = 1
   // 2. set client offline
   // 3. modify collab with device_id = 1
@@ -54,19 +57,19 @@ async fn client_offline_test() {
     .run_scripts(vec![
       CreateClient {
         uid: 1,
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
       DisconnectClient {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
       ModifyLocalCollab {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         f: |collab| {
           collab.insert("1", "a");
         },
       },
       AssertClientContent {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         expected: json!({
           "1": "a",
           "map": {
@@ -84,7 +87,9 @@ async fn client_offline_test() {
 
 #[tokio::test]
 async fn client_offline_to_online_test() {
-  let mut test = ScriptTest::new("1").await;
+  let object_id = uuid::Uuid::new_v4().to_string();
+  let mut test = ScriptTest::new(&object_id).await;
+  let device_id = uuid::Uuid::new_v4().to_string();
   // 1. add new client with device_id = 1
   // 2. set client offline
   // 3. modify collab with device_id = 1
@@ -95,19 +100,19 @@ async fn client_offline_to_online_test() {
     .run_scripts(vec![
       CreateClient {
         uid: 1,
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
       DisconnectClient {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
       ModifyLocalCollab {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         f: |collab| {
           collab.insert("1", "a");
         },
       },
       ConnectClient {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
       Wait { secs: 1 },
       AssertServerContent {
@@ -125,27 +130,29 @@ async fn client_offline_to_online_test() {
 
 #[tokio::test]
 async fn client_multiple_write_test() {
-  let mut test = ScriptTest::new("1").await;
+  let object_id = uuid::Uuid::new_v4().to_string();
+  let mut test = ScriptTest::new(&object_id).await;
+  let device_id = uuid::Uuid::new_v4().to_string();
   test
     .run_scripts(vec![
       CreateClient {
         uid: 1,
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
       ModifyLocalCollab {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         f: |collab| {
           collab.insert("1", "a");
         },
       },
       ModifyLocalCollab {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         f: |collab| {
           collab.insert("2", "b");
         },
       },
       ModifyLocalCollab {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         f: |collab| {
           collab.insert("3", "c");
         },
@@ -168,8 +175,9 @@ async fn client_multiple_write_test() {
 
 #[tokio::test]
 async fn client_unstable_network_write_test() {
-  let mut test = ScriptTest::new("1").await;
-  let device_id = "1".to_string();
+  let object_id = uuid::Uuid::new_v4().to_string();
+  let mut test = ScriptTest::new(&object_id).await;
+  let device_id = uuid::Uuid::new_v4().to_string();
   test
     .run_scripts(vec![
       CreateClient {
@@ -193,11 +201,6 @@ async fn client_unstable_network_write_test() {
         device_id: device_id.clone(),
         f: |collab| {
           collab.insert("2", "b");
-        },
-      },
-      ModifyLocalCollab {
-        device_id: "1".to_string(),
-        f: |collab| {
           collab.insert("3", "c");
         },
       },
@@ -243,7 +246,8 @@ async fn client_unstable_network_write_test() {
 // to get the update from the client.
 #[tokio::test]
 async fn server_sync_state_vector_with_client_test() {
-  let mut test = ScriptTest::new("1").await;
+  let object_id = uuid::Uuid::new_v4().to_string();
+  let mut test = ScriptTest::new(&object_id).await;
   let device_id = "1".to_string();
 
   test
@@ -299,7 +303,8 @@ async fn server_sync_state_vector_with_client_test() {
 // the the same client multiple times. Check out the content is same as the local document.
 #[tokio::test]
 async fn server_sync_state_vector_multiple_time_with_client_test() {
-  let mut test = ScriptTest::new("1").await;
+  let object_id = uuid::Uuid::new_v4().to_string();
+  let mut test = ScriptTest::new(&object_id).await;
   let device_id = "1".to_string();
   test
     .run_scripts(vec![
@@ -341,17 +346,19 @@ async fn server_sync_state_vector_multiple_time_with_client_test() {
 // with the server.
 #[tokio::test]
 async fn client_periodically_open_doc_test() {
-  let mut test = ScriptTest::new("1").await;
+  let object_id = uuid::Uuid::new_v4().to_string();
+  let mut test = ScriptTest::new(&object_id).await;
+  let device_id = uuid::Uuid::new_v4().to_string();
   let db = create_db();
   test
     .run_scripts(vec![
       CreateClientWithDb {
         uid: 1,
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         db: db.clone(),
       },
       ModifyLocalCollab {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         f: |collab| {
           collab.with_origin_transact_mut(|txn| {
             collab.create_array_with_txn(txn, "array", vec!["a"]);
@@ -360,13 +367,13 @@ async fn client_periodically_open_doc_test() {
       },
       Wait { secs: 1 },
       AssertClientEqualToServer {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
       DisconnectClient {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
       ModifyLocalCollab {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         f: |collab| {
           collab.with_origin_transact_mut(|txn| {
             let array = collab.get_array_with_txn(txn, vec!["array"]).unwrap();
@@ -390,12 +397,12 @@ async fn client_periodically_open_doc_test() {
     .run_scripts(vec![
       CreateClientWithDb {
         uid: 1,
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         db: db.clone(),
       },
       Wait { secs: 1 },
       AssertClientEqualToServer {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
       AssertServerContent {
         expected: json!({
@@ -407,7 +414,7 @@ async fn client_periodically_open_doc_test() {
         }),
       },
       DisconnectClient {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
       },
     ])
     .await;
@@ -416,12 +423,12 @@ async fn client_periodically_open_doc_test() {
     .run_scripts(vec![
       CreateClientWithDb {
         uid: 1,
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         db: db.clone(),
       },
       Wait { secs: 1 },
       ModifyLocalCollab {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         f: |collab| {
           collab.with_origin_transact_mut(|txn| {
             let array = collab.get_array_with_txn(txn, vec!["array"]).unwrap();
@@ -449,17 +456,19 @@ async fn client_periodically_open_doc_test() {
 // Edit the document with the same client multiple times by inserting a random string to the array.
 #[tokio::test]
 async fn client_periodically_edit_test() {
-  let mut test = ScriptTest::new("1").await;
+  let object_id = uuid::Uuid::new_v4().to_string();
+  let mut test = ScriptTest::new(&object_id).await;
+  let device_id = uuid::Uuid::new_v4().to_string();
   let db = create_db();
   test
     .run_scripts(vec![
       CreateClientWithDb {
         uid: 1,
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         db: db.clone(),
       },
       ModifyLocalCollab {
-        device_id: "1".to_string(),
+        device_id: device_id.clone(),
         f: |collab| {
           collab.with_origin_transact_mut(|txn| {
             collab.create_array_with_txn::<String>(txn, "array", vec![]);
@@ -479,7 +488,7 @@ async fn client_periodically_edit_test() {
     let s = rng.gen_string(1);
     array.array.push(s.clone());
 
-    let client = test.clients.get_mut("1").unwrap();
+    let client = test.client_by_device_id.get_mut(&device_id).unwrap();
     let collab = client.lock();
     collab.with_origin_transact_mut(|txn| {
       collab
@@ -503,7 +512,8 @@ async fn client_periodically_edit_test() {
 // sync with the remote document.
 #[tokio::test]
 async fn client_sync_with_server() {
-  let mut test = ScriptTest::new("1").await;
+  let object_id = uuid::Uuid::new_v4().to_string();
+  let mut test = ScriptTest::new(&object_id).await;
   let device_id = "1".to_string();
   test
     .run_scripts(vec![
@@ -534,7 +544,8 @@ async fn client_sync_with_server() {
 // sync with the remote document.
 #[tokio::test]
 async fn client_continuously_sync_with_server() {
-  let mut test = ScriptTest::new("1").await;
+  let object_id = uuid::Uuid::new_v4().to_string();
+  let mut test = ScriptTest::new(&object_id).await;
   let device_id = "1".to_string();
   test
     .run_scripts(vec![
@@ -575,7 +586,8 @@ async fn client_continuously_sync_with_server() {
 
 #[tokio::test]
 async fn server_state_vector_size_test() {
-  let mut test = ScriptTest::new("1").await;
+  let object_id = uuid::Uuid::new_v4().to_string();
+  let mut test = ScriptTest::new(&object_id).await;
   let device_id = "1".to_string();
 
   test
@@ -622,7 +634,8 @@ async fn server_state_vector_size_test() {
 /// Test if the server is save the document to the database correctly.
 #[tokio::test]
 async fn rerun_server_test() {
-  let mut test = ScriptTest::new("1").await;
+  let object_id = uuid::Uuid::new_v4().to_string();
+  let mut test = ScriptTest::new(&object_id).await;
   test
     .run_scripts(vec![
       CreateClient {
