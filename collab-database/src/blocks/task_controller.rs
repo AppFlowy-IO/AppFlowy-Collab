@@ -5,7 +5,7 @@ use std::sync::{Arc, Weak};
 use async_trait::async_trait;
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::core::origin::CollabOrigin;
-use collab_define::CollabType;
+use collab_entity::CollabType;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use tokio::sync::watch;

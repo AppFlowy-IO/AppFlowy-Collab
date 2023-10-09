@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::*;
-use collab_define::{CollabObject, CollabType};
+use collab_entity::{CollabObject, CollabType};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;

@@ -7,7 +7,7 @@ use std::sync::{Arc, Weak};
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{Collab, Update};
-use collab_define::CollabType;
+use collab_entity::CollabType;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};

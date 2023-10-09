@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
-use collab_define::collab_msg::{
+use collab_entity::collab_msg::{
   CSAwarenessUpdate, ClientUpdateResponse, CollabMessage, CollabServerBroadcast,
 };
 use collab_plugins::sync_plugin::SyncError;

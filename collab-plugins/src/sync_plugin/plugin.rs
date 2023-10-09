@@ -4,13 +4,13 @@ use collab::core::collab::MutexCollab;
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
-use collab_define::{CollabObject, CollabType};
+use collab_entity::{CollabObject, CollabType};
 use futures_util::SinkExt;
 use tokio_stream::StreamExt;
 
 use collab::sync_protocol::awareness::Awareness;
 use collab::sync_protocol::message::{Message, SyncMessage};
-use collab_define::collab_msg::{CollabMessage, UpdateSync};
+use collab_entity::collab_msg::{CollabMessage, UpdateSync};
 use tokio_stream::wrappers::WatchStream;
 use yrs::updates::encoder::Encode;
 

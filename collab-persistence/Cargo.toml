@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-collab = { path = "../collab" }
+collab = { workspace = true }
 rocksdb = { version = "0.21.0", optional = true, default-features = false, features = ["zstd"] }
 thiserror = "1.0.30"
 serde = { version = "1.0", features = ["derive"] }

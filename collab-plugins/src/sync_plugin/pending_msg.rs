@@ -3,7 +3,7 @@ use std::collections::BinaryHeap;
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 
-use collab_define::collab_msg::CollabSinkMessage;
+use collab_entity::collab_msg::CollabSinkMessage;
 use tokio::sync::oneshot;
 
 use crate::sync_plugin::MsgId;

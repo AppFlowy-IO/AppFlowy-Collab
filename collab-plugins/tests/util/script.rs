@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use collab::core::origin::CollabClient;
 use collab::preclude::Collab;
-use collab_define::CollabType;
+use collab_entity::CollabType;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::sync_plugin::SyncObject;
 use serde_json::Value;

@@ -3,7 +3,7 @@ use collab::preclude::{
   Array, ArrayRefWrapper, Change, DeepEventsSubscription, DeepObservable, Event, MapPrelim,
   YrsValue,
 };
-use collab_define::reminder::{Reminder, REMINDER_ID};
+use collab_entity::reminder::{Reminder, REMINDER_ID};
 use tokio::sync::broadcast;
 
 pub type RemindersChangeSender = broadcast::Sender<ReminderChange>;

@@ -14,7 +14,7 @@ use collab_database::views::{
   CreateDatabaseParams, DatabaseLayout, FieldSettingsByFieldIdMap, FieldSettingsMap, LayoutSetting,
   LayoutSettings,
 };
-use collab_define::CollabType;
+use collab_entity::CollabType;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use tempfile::TempDir;
