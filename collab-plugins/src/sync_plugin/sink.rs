@@ -1,18 +1,18 @@
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use collab_entity::collab_msg::CollabSinkMessage;
 use futures_util::SinkExt;
 use tokio::spawn;
-use tokio::sync::{mpsc, oneshot, watch, Mutex};
-use tokio::time::{interval, Instant, Interval};
+use tokio::sync::{mpsc, Mutex, oneshot, watch};
+use tokio::time::{Instant, interval, Interval};
 use tracing::{debug, trace};
 
-use crate::sync_plugin::SyncError;
-use crate::sync_plugin::DEFAULT_SYNC_TIMEOUT;
 use crate::sync_plugin::{MessageState, PendingMsgQueue};
+use crate::sync_plugin::DEFAULT_SYNC_TIMEOUT;
+use crate::sync_plugin::SyncError;
 
 #[derive(Clone, Debug)]
 pub enum SinkState {
@@ -329,9 +329,6 @@ pub struct SinkConfig {
   /// `timeout` is the time to wait for the remote to ack the message. If the remote
   /// does not ack the message in time, the message will be sent again.
   pub timeout: Duration,
-  /// `mergeable` indicates whether the messages are mergeable. If the messages are
-  /// mergeable, the sink will try to merge the messages before sending them.
-  pub mergeable: bool,
   /// `max_zip_size` is the maximum size of the messages to be merged.
   pub max_merge_size: usize,
   /// `strategy` is the strategy to send the messages.
@@ -350,13 +347,6 @@ impl SinkConfig {
       }
     }
     self.timeout = timeout_duration;
-    self
-  }
-
-  /// `mergeable` indicates whether the messages are mergeable. If the messages are
-  /// mergeable, the sink will try to merge the messages before sending them.
-  pub fn with_mergeable(mut self, mergeable: bool) -> Self {
-    self.mergeable = mergeable;
     self
   }
 
@@ -381,8 +371,7 @@ impl Default for SinkConfig {
   fn default() -> Self {
     Self {
       timeout: Duration::from_secs(DEFAULT_SYNC_TIMEOUT),
-      mergeable: false,
-      max_merge_size: 1024,
+      max_merge_size: 4096,
       strategy: SinkStrategy::ASAP,
     }
   }
