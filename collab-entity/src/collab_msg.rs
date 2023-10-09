@@ -1,19 +1,20 @@
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
-use crate::CollabType;
 use bytes::Bytes;
 use collab::core::origin::CollabOrigin;
+use collab::preclude::merge_updates_v1;
 use serde::{Deserialize, Serialize};
+
+use crate::CollabType;
 
 pub trait CollabSinkMessage: Clone + Send + Sync + 'static + Ord + Display {
   /// Returns the length of the message in bytes.
   fn length(&self) -> usize;
   /// Returns true if the message can be merged with other messages.
-  /// Check the implementation of `queue_or_merge_msg` for more details.
   fn mergeable(&self) -> bool;
 
-  fn merge(&mut self, other: Self);
+  fn merge(&mut self, other: Self) -> bool;
 
   fn is_init_msg(&self) -> bool;
 
@@ -38,11 +39,19 @@ impl CollabSinkMessage for CollabMessage {
   }
 
   fn mergeable(&self) -> bool {
-    false
+    match self {
+      CollabMessage::ClientUpdateSync(sync) => sync.payload.len() < 4096,
+      _ => false,
+    }
   }
 
-  fn merge(&mut self, _other: Self) {
-    // Do nothing. Because mergeable is false.
+  fn merge(&mut self, other: Self) -> bool {
+    match (self, other) {
+      (CollabMessage::ClientUpdateSync(value), CollabMessage::ClientUpdateSync(other)) => {
+        value.merge_payload(other.payload)
+      },
+      _ => false,
+    }
   }
 
   fn is_init_msg(&self) -> bool {
@@ -311,6 +320,16 @@ impl UpdateSync {
       object_id,
       payload: Bytes::from(payload),
       msg_id,
+    }
+  }
+
+  pub fn merge_payload(&mut self, other: Bytes) -> bool {
+    match merge_updates_v1(&[self.payload.as_ref(), other.as_ref()]) {
+      Ok(payload) => {
+        self.payload = Bytes::from(payload);
+        true
+      },
+      Err(_) => false,
     }
   }
 }

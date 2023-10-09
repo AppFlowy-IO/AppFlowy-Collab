@@ -505,8 +505,9 @@ impl CollabSinkMessage for Message {
     }
   }
 
-  fn merge(&mut self, other: Self) {
+  fn merge(&mut self, other: Self) -> bool {
     self.payloads.extend(other.payloads);
+    true
   }
 
   fn is_init_msg(&self) -> bool {

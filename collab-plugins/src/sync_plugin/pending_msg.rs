@@ -108,8 +108,8 @@ where
     self.msg.is_init_msg()
   }
 
-  pub fn merge(&mut self, other: Self) {
-    self.msg.merge(other.into_msg());
+  pub fn merge(&mut self, other: Self) -> bool {
+    self.msg.merge(other.into_msg())
   }
 }
 
