@@ -1,18 +1,18 @@
 use std::marker::PhantomData;
-use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use collab_entity::collab_msg::CollabSinkMessage;
 use futures_util::SinkExt;
 use tokio::spawn;
-use tokio::sync::{mpsc, Mutex, oneshot, watch};
-use tokio::time::{Instant, interval, Interval};
+use tokio::sync::{mpsc, oneshot, watch, Mutex};
+use tokio::time::{interval, Instant, Interval};
 use tracing::{debug, trace};
 
-use crate::sync_plugin::{MessageState, PendingMsgQueue};
-use crate::sync_plugin::DEFAULT_SYNC_TIMEOUT;
 use crate::sync_plugin::SyncError;
+use crate::sync_plugin::DEFAULT_SYNC_TIMEOUT;
+use crate::sync_plugin::{MessageState, PendingMsgQueue};
 
 #[derive(Clone, Debug)]
 pub enum SinkState {
