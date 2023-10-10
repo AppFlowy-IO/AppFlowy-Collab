@@ -6,7 +6,7 @@ use anyhow::Result;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::SyncState;
 use collab::preclude::{lib0Any, MapPrelim, MapRefWrapper};
-use collab_define::reminder::Reminder;
+use collab_entity::reminder::Reminder;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;

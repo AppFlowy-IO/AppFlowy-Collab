@@ -10,9 +10,9 @@ yrs = "0.16.5"
 lib0 = { version = "0.16.3", features = ["lib0-serde"] }
 
 #collab
-collab = { path = "../collab" }
-collab-define = { path = "../collab-define" }
-collab-persistence = { path = "../collab-persistence", optional = true }
+collab = { workspace = true }
+collab-entity = { workspace = true }
+collab-persistence = { workspace = true, optional = true }
 
 futures-util = { version = "0.3", features = ["sink"] }
 tokio = { version = "1.26.0", features = ["sync"] }
@@ -54,10 +54,8 @@ chrono = "0.4.31"
 
 
 [features]
-default = ["sync_plugin"]
+default = ["postgres_storage_plugin"]
 rocksdb_plugin = ["collab-persistence/rocksdb_persistence"]
 aws_storage_plugin = ["aws-config", "aws-sdk-dynamodb", "aws-credential-types", "rusoto_credential"]
 postgres_storage_plugin = ["collab-persistence/rocksdb_persistence"]
 snapshot_plugin = ["collab-persistence/rocksdb_persistence"]
-sync_plugin = []
-snapshot = []

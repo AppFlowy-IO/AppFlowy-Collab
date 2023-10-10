@@ -3,11 +3,23 @@ use std::collections::BinaryHeap;
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 
-use collab_define::collab_msg::CollabSinkMessage;
 use tokio::sync::oneshot;
 
-use crate::sync_plugin::MsgId;
+pub type MsgId = u64;
 
+pub trait CollabSinkMessage: Clone + Send + Sync + 'static + Ord + Display {
+  /// Returns the length of the message in bytes.
+  fn length(&self) -> usize;
+  /// Returns true if the message can be merged with other messages.
+  fn mergeable(&self) -> bool;
+
+  fn merge(&mut self, other: Self) -> bool;
+
+  fn is_init_msg(&self) -> bool;
+
+  /// Determine if the message can be deferred base on the current state of the sink.
+  fn deferrable(&self) -> bool;
+}
 pub(crate) struct PendingMsgQueue<Msg> {
   queue: BinaryHeap<PendingMessage<Msg>>,
 }
@@ -108,8 +120,8 @@ where
     self.msg.is_init_msg()
   }
 
-  pub fn merge(&mut self, other: Self) {
-    self.msg.merge(other.into_msg());
+  pub fn merge(&mut self, other: Self) -> bool {
+    self.msg.merge(other.into_msg())
   }
 }
 

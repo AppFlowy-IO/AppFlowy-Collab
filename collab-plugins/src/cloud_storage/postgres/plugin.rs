@@ -10,7 +10,7 @@ use collab::core::collab_state::SnapshotState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
 use collab::sync_protocol::awareness::Awareness;
-use collab_define::CollabObject;
+use collab_entity::CollabObject;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::TransactionMutExt;
@@ -25,7 +25,7 @@ use yrs::{ReadTxn, StateVector, Update};
 use crate::cloud_storage::remote_collab::{
   should_create_snapshot, RemoteCollab, RemoteCollabStorage,
 };
-use crate::sync_plugin::{SinkConfig, SinkStrategy};
+use crate::cloud_storage::sink::{SinkConfig, SinkStrategy};
 
 pub struct SupabaseDBPlugin {
   uid: i64,

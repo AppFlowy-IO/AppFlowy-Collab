@@ -3,17 +3,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use collab_define::collab_msg::CollabSinkMessage;
 use futures_util::SinkExt;
 use tokio::spawn;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tokio::time::{interval, Instant, Interval};
 use tracing::{debug, trace};
 
-use crate::sync_plugin::SyncError;
-use crate::sync_plugin::DEFAULT_SYNC_TIMEOUT;
-use crate::sync_plugin::{MessageState, PendingMsgQueue};
+use crate::cloud_storage::error::SyncError;
+use crate::cloud_storage::msg::{CollabSinkMessage, MessageState, PendingMsgQueue};
 
+pub const DEFAULT_SYNC_TIMEOUT: u64 = 2;
 #[derive(Clone, Debug)]
 pub enum SinkState {
   Init,
@@ -24,6 +23,7 @@ pub enum SinkState {
 }
 
 impl SinkState {
+  #[allow(dead_code)]
   pub fn is_init(&self) -> bool {
     matches!(self, SinkState::Init)
   }
@@ -226,9 +226,9 @@ where
       // message is not mergeable.
       if sending_msg.is_mergeable() {
         while let Some(pending_msg) = pending_msg_queue.pop() {
-          debug!("merge_msg: {}", pending_msg.get_msg());
-          sending_msg.merge(pending_msg);
-          if !sending_msg.is_mergeable() {
+          debug!("Try merge collab message: {}", pending_msg.get_msg());
+
+          if !sending_msg.merge(pending_msg) {
             break;
           }
         }
@@ -329,9 +329,6 @@ pub struct SinkConfig {
   /// `timeout` is the time to wait for the remote to ack the message. If the remote
   /// does not ack the message in time, the message will be sent again.
   pub timeout: Duration,
-  /// `mergeable` indicates whether the messages are mergeable. If the messages are
-  /// mergeable, the sink will try to merge the messages before sending them.
-  pub mergeable: bool,
   /// `max_zip_size` is the maximum size of the messages to be merged.
   pub max_merge_size: usize,
   /// `strategy` is the strategy to send the messages.
@@ -353,14 +350,8 @@ impl SinkConfig {
     self
   }
 
-  /// `mergeable` indicates whether the messages are mergeable. If the messages are
-  /// mergeable, the sink will try to merge the messages before sending them.
-  pub fn with_mergeable(mut self, mergeable: bool) -> Self {
-    self.mergeable = mergeable;
-    self
-  }
-
-  /// `max_zip_size` is the maximum size of the messages to be merged.
+  /// `with_max_merge_size` is the maximum size of the messages to be merged.
+  #[allow(dead_code)]
   pub fn with_max_merge_size(mut self, max_merge_size: usize) -> Self {
     self.max_merge_size = max_merge_size;
     self
@@ -381,16 +372,15 @@ impl Default for SinkConfig {
   fn default() -> Self {
     Self {
       timeout: Duration::from_secs(DEFAULT_SYNC_TIMEOUT),
-      mergeable: false,
-      max_merge_size: 1024,
-      strategy: SinkStrategy::ASAP,
+      max_merge_size: 4096,
+      strategy: SinkStrategy::Asap,
     }
   }
 }
 
 pub enum SinkStrategy {
   /// Send the message as soon as possible.
-  ASAP,
+  Asap,
   /// Send the message in a fixed interval.
   /// This can reduce the number of times the message is sent. Especially if using the AWS
   /// as the storage layer, the cost of sending the message is high. However, it may increase
@@ -413,12 +403,6 @@ pub trait MsgIdCounter: Send + Sync + 'static {
 
 #[derive(Debug, Default)]
 pub struct DefaultMsgIdCounter(Arc<AtomicU64>);
-
-impl DefaultMsgIdCounter {
-  pub fn new() -> Self {
-    Self::default()
-  }
-}
 
 impl MsgIdCounter for DefaultMsgIdCounter {
   fn next(&self) -> MsgId {

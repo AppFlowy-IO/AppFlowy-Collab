@@ -20,9 +20,6 @@ pub enum SyncError {
   #[error(transparent)]
   IO(#[from] std::io::Error),
 
-  #[error("Workspace id is not found")]
-  NoWorkspaceId,
-
   #[error("Internal failure: {0}")]
   Internal(#[from] Box<dyn std::error::Error + Send + Sync>),
 }

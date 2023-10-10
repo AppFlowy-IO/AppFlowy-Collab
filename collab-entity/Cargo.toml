@@ -1,5 +1,5 @@
 [package]
-name = "collab-define"
+name = "collab-entity"
 version = "0.1.0"
 edition = "2021"
 

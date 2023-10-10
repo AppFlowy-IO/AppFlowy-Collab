@@ -6,9 +6,6 @@ use tracing_subscriber::EnvFilter;
 
 mod cloud_storage;
 mod disk;
-// mod mock_sync;
-// mod sync;
-// mod util;
 
 pub fn setup_log() {
   static START: Once = Once::new();

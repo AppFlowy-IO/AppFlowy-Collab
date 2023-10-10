@@ -1,4 +1,4 @@
-use collab_define::reminder::{ObjectType, Reminder};
+use collab_entity::reminder::{ObjectType, Reminder};
 use collab_user::core::ReminderChange;
 
 use crate::util::{receive_with_timeout, UserAwarenessTest};

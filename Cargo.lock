@@ -668,8 +668,8 @@ dependencies = [
  "base64",
  "chrono",
  "collab",
- "collab-define",
  "collab-derive",
+ "collab-entity",
  "collab-persistence",
  "collab-plugins",
  "futures",
@@ -694,19 +694,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "collab-define"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytes",
- "collab",
- "serde",
- "serde_json",
- "serde_repr",
- "uuid",
-]
-
-[[package]]
 name = "collab-derive"
 version = "0.1.0"
 dependencies = [
@@ -716,6 +703,19 @@ dependencies = [
  "serde_json",
  "syn 1.0.109",
  "yrs",
+]
+
+[[package]]
+name = "collab-entity"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "collab",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "uuid",
 ]
 
 [[package]]
@@ -756,7 +756,7 @@ dependencies = [
  "bytes",
  "chrono",
  "collab",
- "collab-define",
+ "collab-entity",
  "collab-persistence",
  "collab-plugins",
  "config",
@@ -791,7 +791,7 @@ dependencies = [
  "anyhow",
  "assert-json-diff",
  "collab",
- "collab-define",
+ "collab-entity",
  "collab-plugins",
  "fs_extra",
  "nanoid",

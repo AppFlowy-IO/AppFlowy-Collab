@@ -2,21 +2,14 @@ use std::fmt::Debug;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use crate::sync_plugin::error::SyncError;
 use futures_util::{Sink, Stream};
-
 use tokio::sync::mpsc::UnboundedSender;
-use tokio_stream::wrappers::UnboundedReceiverStream;
+
+use crate::cloud_storage::error::SyncError;
 
 pub trait CollabConnect<Item>: Sink<Item> + Stream {}
 
 pub struct TokioUnboundedSink<T>(pub UnboundedSender<T>);
-
-impl<T> TokioUnboundedSink<T> {
-  pub fn new(tx: UnboundedSender<T>) -> Self {
-    Self(tx)
-  }
-}
 
 impl<T> Sink<T> for TokioUnboundedSink<T>
 where
@@ -44,5 +37,3 @@ where
     Poll::Ready(Ok(()))
   }
 }
-
-pub type TokioUnboundedStream<T> = UnboundedReceiverStream<T>;
