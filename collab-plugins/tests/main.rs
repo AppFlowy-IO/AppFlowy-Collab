@@ -1,14 +1,11 @@
 use std::sync::Once;
 
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 
 mod cloud_storage;
 mod disk;
-// mod mock_sync;
-// mod sync;
-// mod util;
 
 pub fn setup_log() {
   static START: Once = Once::new();
