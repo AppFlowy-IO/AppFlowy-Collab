@@ -1,12 +1,12 @@
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use futures_util::SinkExt;
 use tokio::spawn;
-use tokio::sync::{mpsc, oneshot, watch, Mutex};
-use tokio::time::{interval, Instant, Interval};
+use tokio::sync::{mpsc, Mutex, oneshot, watch};
+use tokio::time::{Instant, interval, Interval};
 use tracing::{debug, trace};
 
 use crate::cloud_storage::error::SyncError;
@@ -23,6 +23,7 @@ pub enum SinkState {
 }
 
 impl SinkState {
+  #[allow(dead_code)]
   pub fn is_init(&self) -> bool {
     matches!(self, SinkState::Init)
   }
@@ -349,7 +350,8 @@ impl SinkConfig {
     self
   }
 
-  /// `max_merge_size` is the maximum size of the messages to be merged.
+  /// `with_max_merge_size` is the maximum size of the messages to be merged.
+  #[allow(dead_code)]
   pub fn with_max_merge_size(mut self, max_merge_size: usize) -> Self {
     self.max_merge_size = max_merge_size;
     self
@@ -371,14 +373,14 @@ impl Default for SinkConfig {
     Self {
       timeout: Duration::from_secs(DEFAULT_SYNC_TIMEOUT),
       max_merge_size: 4096,
-      strategy: SinkStrategy::ASAP,
+      strategy: SinkStrategy::Asap,
     }
   }
 }
 
 pub enum SinkStrategy {
   /// Send the message as soon as possible.
-  ASAP,
+  Asap,
   /// Send the message in a fixed interval.
   /// This can reduce the number of times the message is sent. Especially if using the AWS
   /// as the storage layer, the cost of sending the message is high. However, it may increase
@@ -401,12 +403,6 @@ pub trait MsgIdCounter: Send + Sync + 'static {
 
 #[derive(Debug, Default)]
 pub struct DefaultMsgIdCounter(Arc<AtomicU64>);
-
-impl DefaultMsgIdCounter {
-  pub fn new() -> Self {
-    Self::default()
-  }
-}
 
 impl MsgIdCounter for DefaultMsgIdCounter {
   fn next(&self) -> MsgId {

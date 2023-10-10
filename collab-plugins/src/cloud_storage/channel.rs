@@ -11,12 +11,6 @@ pub trait CollabConnect<Item>: Sink<Item> + Stream {}
 
 pub struct TokioUnboundedSink<T>(pub UnboundedSender<T>);
 
-impl<T> TokioUnboundedSink<T> {
-  pub fn new(tx: UnboundedSender<T>) -> Self {
-    Self(tx)
-  }
-}
-
 impl<T> Sink<T> for TokioUnboundedSink<T>
 where
   T: Send + Sync + 'static + Debug,
