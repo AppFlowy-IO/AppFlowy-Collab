@@ -9,7 +9,6 @@ use async_trait::async_trait;
 use collab::core::collab::{MutexCollab, TransactionMutExt};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
-use collab_entity::collab_msg::CollabSinkMessage;
 use collab_entity::{CollabObject, CollabType};
 use parking_lot::Mutex;
 use rand::Rng;
@@ -22,9 +21,11 @@ use tokio_stream::StreamExt;
 use yrs::updates::decoder::Decode;
 use yrs::{merge_updates_v1, ReadTxn, Transact, Update};
 
-pub use crate::sync_plugin::MsgId;
-use crate::sync_plugin::TokioUnboundedSink;
-use crate::sync_plugin::{CollabSink, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState};
+use crate::cloud_storage::channel::TokioUnboundedSink;
+use crate::cloud_storage::msg::{CollabSinkMessage, MsgId};
+use crate::cloud_storage::sink::{
+  CollabSink, CollabSinkRunner, MsgIdCounter, SinkConfig, SinkState,
+};
 
 /// The [RemoteCollab] is used to sync the local collab to the remote.
 pub struct RemoteCollab {
