@@ -706,6 +706,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "collab-document"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "collab",
+ "collab-derive",
+ "collab-persistence",
+ "collab-plugins",
+ "futures",
+ "lib0",
+ "nanoid",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "tracing-subscriber",
+ "zip",
+]
+
+[[package]]
 name = "collab-entity"
 version = "0.1.0"
 dependencies = [

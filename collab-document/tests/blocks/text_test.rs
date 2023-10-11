@@ -128,6 +128,26 @@ async fn apply_delete_delta_test() {
 }
 
 #[tokio::test]
+async fn apply_delete_chinese_delta_test() {
+  let test = BlockTestCore::new().await;
+  let origin_delta =
+    json!([{"insert": "Hello World 嗨", "attributes": { "bold": true }}]).to_string();
+  let text_id = test.create_text(origin_delta);
+  let delete_delta = json!([
+    {"retain": 12},
+    {"delete": 1},
+  ])
+  .to_string();
+  test.apply_text_delta(&text_id, delete_delta);
+  let delta = test.get_text_delta_with_text_id(&text_id);
+  let expect = json!([{"insert": "Hello World ", "attributes": { "bold": true }}]).to_string();
+  assert_eq!(
+    deserialize_text_delta(&delta).unwrap(),
+    deserialize_text_delta(&expect).unwrap()
+  );
+}
+
+#[tokio::test]
 async fn apply_insert_delta_test() {
   let test = BlockTestCore::new().await;
   let _text = "Hello World".to_string();
