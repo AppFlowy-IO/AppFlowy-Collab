@@ -4,7 +4,7 @@ use std::sync::Arc;
 use collab::core::collab::MutexCollab;
 use collab::preclude::CollabBuilder;
 use collab_document::blocks::{
-    Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, DocumentData, DocumentMeta,
+  Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, DocumentData, DocumentMeta,
 };
 use collab_document::document::Document;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;

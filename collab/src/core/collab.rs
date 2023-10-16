@@ -16,8 +16,9 @@ use yrs::types::{ToJson, Value};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{
-  ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, Options, ReadTxn, StateVector,
-  Subscription, Transact, Transaction, TransactionMut, UndoManager, Update, UpdateSubscription,
+  ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options, ReadTxn,
+  StateVector, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
+  UpdateSubscription,
 };
 
 use crate::core::collab_plugin::{CollabPlugin, CollabPluginType};
@@ -105,6 +106,7 @@ impl Collab {
     let object_id = object_id.as_ref().to_string();
     let doc = Doc::with_options(Options {
       skip_gc: true,
+      offset_kind: OffsetKind::Utf16,
       ..Options::default()
     });
     let data = doc.get_or_insert_map(DATA_SECTION);

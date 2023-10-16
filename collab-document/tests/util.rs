@@ -16,7 +16,7 @@ use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use serde_json::{json, Value};
 use tempfile::TempDir;
-use tracing_subscriber::{EnvFilter, fmt::Subscriber, util::SubscriberInitExt};
+use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 use zip::ZipArchive;
 
 pub struct DocumentTest {

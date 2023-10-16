@@ -6,7 +6,8 @@ members = [
     "collab-database",
     "collab-plugins",
     "collab-user",
-    "collab-entity"
+    "collab-entity",
+    "collab-document",
 ]
 
 [workspace.dependencies]
@@ -17,3 +18,4 @@ collab-database = { workspace = true, path = "collab-database" }
 collab-plugins = { workspace = true, path = "collab-plugins" }
 collab-user = { workspace = true, path = "collab-user" }
 collab-entity = { workspace = true, path = "collab-entity" }
+collab-document = { workspace = true, path = "collab-document" }
