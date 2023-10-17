@@ -157,13 +157,13 @@ macro_rules! impl_order_update {
       self
     }
 
-    pub fn $move_to(self, from: u32, to: u32) -> Self {
+    pub fn $move_to(self, from_id: &str, to_id: &str) -> Self {
       if let Some(array) = self
         .map_ref
         .get_array_ref_with_txn(self.txn, $key)
         .map(|array_ref| $array_ty::new(array_ref))
       {
-        array.move_to(self.txn, from, to);
+        array.move_to(self.txn, from_id, to_id);
       }
       self
     }

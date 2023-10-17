@@ -697,29 +697,20 @@ pub trait OrderArray {
 
   // Remove the object with the given id from the array.
   fn remove_with_txn(&self, txn: &mut TransactionMut, id: &str) -> Option<()> {
-    let pos =
-      self
-        .array_ref()
-        .iter(txn)
-        .position(|value| match self.object_from_value(value, txn) {
-          None => false,
-          Some(order) => order.identify_id() == id,
-        })?;
-    self.array_ref().remove(txn, pos as u32);
+    let pos = self.get_position_with_txn(txn, id)?;
+    self.array_ref().remove(txn, pos);
     None
   }
 
   /// Move the object with the given id to the given position.
   /// If the object is not found, nothing will happen.
   /// If the position is out of range, nothing will happen.
-  fn move_to(&self, txn: &mut TransactionMut, from: u32, to: u32) {
-    let array_ref = self.array_ref();
-    if let Some(YrsValue::Any(value)) = array_ref.get(txn, from) {
-      if to <= array_ref.len(txn) {
-        array_ref.remove(txn, from);
-        array_ref.insert(txn, to, value);
-      }
-    }
+  fn move_to(&self, txn: &mut TransactionMut, from_id: &str, to_id: &str) -> Option<()> {
+    let from = self.get_position_with_txn(txn, from_id)?;
+    let to = self.get_position_with_txn(txn, to_id)?;
+    let to = if from < to { to + 1 } else { to };
+    self.array_ref().move_to(txn, from, to);
+    None
   }
 
   /// Returns the position of the object with the given id.

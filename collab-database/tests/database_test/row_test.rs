@@ -62,7 +62,7 @@ async fn move_row_in_view_test() {
   assert_eq!(rows[2].id, 3.into());
 
   database_test.views.update_database_view("v1", |update| {
-    update.move_row_order(2, 1);
+    update.move_row_order("3", "2");
   });
 
   let rows2 = database_test.get_rows_for_view("v1");
@@ -71,7 +71,7 @@ async fn move_row_in_view_test() {
   assert_eq!(rows2[2].id, 2.into());
 
   database_test.views.update_database_view("v1", |update| {
-    update.move_row_order(2, 0);
+    update.move_row_order("2", "1");
   });
 
   let row3 = database_test.get_rows_for_view("v1");
@@ -91,7 +91,7 @@ async fn move_row_in_views_test() {
   database_test.create_linked_view(params).unwrap();
 
   database_test.views.update_database_view("v1", |update| {
-    update.move_row_order(2, 1);
+    update.move_row_order("3", "2");
   });
 
   let rows_1 = database_test.get_rows_for_view("v1");
