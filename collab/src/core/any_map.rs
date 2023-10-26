@@ -4,8 +4,8 @@ use std::ops::{Deref, DerefMut};
 
 use lib0::any::Any;
 use serde::{Deserialize, Serialize};
-use yrs::types::Value;
 use yrs::{Array, Map, MapRef, ReadTxn, TransactionMut};
+use yrs::types::Value;
 
 use crate::preclude::{lib0Any, MapRefExtension, YrsValue};
 
@@ -233,6 +233,13 @@ impl AsRef<AnyMap> for AnyMap {
 impl AnyMap {
   pub fn new() -> Self {
     Self::default()
+  }
+  pub fn into_inner(self) -> HashMap<String, lib0Any> {
+    self.0
+  }
+
+  pub fn extend(&mut self, other: AnyMap) {
+    self.0.extend(other.into_inner());
   }
 }
 
