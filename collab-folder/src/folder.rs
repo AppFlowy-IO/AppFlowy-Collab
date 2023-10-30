@@ -12,7 +12,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
-use crate::favorites::{FavoriteRecord, FavoritesMap};
+use crate::favorites::{FavoriteId, FavoritesMap};
 use crate::folder_observe::{TrashChangeSender, ViewChangeSender};
 use crate::trash::{TrashArray, TrashRecord};
 use crate::{
@@ -20,11 +20,18 @@ use crate::{
   Workspace, WorkspaceMap, WorkspaceUpdate,
 };
 
-#[derive(Debug, Clone)]
-pub struct UserId(String);
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[serde(transparent)]
+pub struct UserId(pub(crate) String);
 
 impl From<i64> for UserId {
   fn from(value: i64) -> Self {
+    Self(value.to_string())
+  }
+}
+
+impl From<&i64> for UserId {
+  fn from(value: &i64) -> Self {
     Self(value.to_string())
   }
 }
@@ -99,7 +106,12 @@ pub struct Folder {
 }
 
 impl Folder {
-  pub fn open(uid: UserId, collab: Arc<MutexCollab>, notifier: Option<FolderNotify>) -> Self {
+  pub fn open<T: Into<UserId>>(
+    uid: T,
+    collab: Arc<MutexCollab>,
+    notifier: Option<FolderNotify>,
+  ) -> Self {
+    let uid = uid.into();
     match open_folder(uid.clone(), collab.clone(), notifier.clone()) {
       None => {
         tracing::info!("Create missing attributes of folder");
@@ -109,8 +121,8 @@ impl Folder {
     }
   }
 
-  pub fn create(
-    uid: UserId,
+  pub fn create<T: Into<UserId>>(
+    uid: T,
     collab: Arc<MutexCollab>,
     notifier: Option<FolderNotify>,
     initial_folder_data: Option<FolderData>,
@@ -118,8 +130,8 @@ impl Folder {
     create_folder(uid, collab, notifier, initial_folder_data)
   }
 
-  pub fn from_collab_raw_data(
-    uid: UserId,
+  pub fn from_collab_raw_data<T: Into<UserId>>(
+    uid: T,
     origin: CollabOrigin,
     collab_raw_data: CollabRawData,
     workspace_id: &str,
@@ -165,11 +177,13 @@ impl Folder {
       }
     }
 
+    let favorites = self.favorites.get_favorite_data_with_txn(&txn);
     Some(FolderData {
       current_workspace_id: current_workspace,
       current_view,
       workspaces,
       views,
+      favorites,
     })
   }
 
@@ -259,7 +273,7 @@ impl Folder {
         .into_iter()
         .map(|be| be.id)
         .collect::<Vec<String>>();
-      self.views.get_views_with_txn(txn, &view_ids, &self.uid)
+      self.views.get_views_with_txn(txn, &view_ids)
     } else {
       vec![]
     }
@@ -296,7 +310,7 @@ impl Folder {
   }
 
   pub fn move_view(&self, view_id: &str, from: u32, to: u32) -> Option<Arc<View>> {
-    let view = self.views.get_view(view_id, &self.uid)?;
+    let view = self.views.get_view(view_id)?;
     if let Some(workspace_id) = self.get_current_workspace_id() {
       if view.parent_view_id == workspace_id {
         self
@@ -335,11 +349,11 @@ impl Folder {
     prev_view_id: Option<String>,
   ) -> Option<Arc<View>> {
     tracing::debug!("Move nested view: {}", view_id);
-    let view = self.views.get_view(view_id, &self.uid)?;
+    let view = self.views.get_view(view_id)?;
     let current_workspace_id = self.get_current_workspace_id()?;
     let parent_id = view.parent_view_id.as_str();
 
-    let new_parent_view = self.views.get_view(new_parent_id, &self.uid);
+    let new_parent_view = self.views.get_view(new_parent_id);
 
     // If the new parent is not a view, it must be a workspace.
     // Check if the new parent is the current workspace, as moving out of the current workspace is not supported yet.
@@ -413,23 +427,18 @@ impl Folder {
   }
 
   pub fn add_favorites(&self, favorite_view_ids: Vec<String>) {
-    if let Some(workspace_id) = self.get_current_workspace_id() {
-      let favorite = favorite_view_ids
-        .into_iter()
-        .map(|view_id| FavoriteRecord {
-          id: view_id,
-          workspace_id: workspace_id.clone(),
-        })
-        .collect::<Vec<FavoriteRecord>>();
-      self.favorites.add_favorites(&self.uid, favorite);
-    }
+    let favorite = favorite_view_ids
+      .into_iter()
+      .map(|view_id| FavoriteId { id: view_id })
+      .collect::<Vec<FavoriteId>>();
+    self.favorites.add_favorites(favorite);
   }
 
   pub fn delete_favorites(&self, unfavorite_view_ids: Vec<String>) {
     self.favorites.delete_favorites(unfavorite_view_ids);
   }
 
-  pub fn get_all_favorites(&self) -> Vec<FavoriteRecord> {
+  pub fn get_all_favorites(&self) -> Vec<FavoriteId> {
     self.favorites.get_all_favorites()
   }
 
@@ -489,7 +498,7 @@ impl Folder {
   ///
   /// * `Vec<View>`: A vector of `View` objects that includes the parent view and all of its child views.
   pub fn get_view_recursively_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<View> {
-    match self.views.get_view_with_txn(txn, view_id, &self.uid) {
+    match self.views.get_view_with_txn(txn, view_id) {
       None => vec![],
       Some(parent_view) => {
         let mut views = vec![parent_view.as_ref().clone()];
@@ -642,12 +651,13 @@ impl From<WorkspaceItem> for lib0Any {
 
 /// Create a folder with initial [FolderData] if it's provided.
 /// Otherwise, create an empty folder.
-fn create_folder(
-  uid: UserId,
+fn create_folder<T: Into<UserId>>(
+  uid: T,
   collab: Arc<MutexCollab>,
   notifier: Option<FolderNotify>,
   folder_data: Option<FolderData>,
 ) -> Folder {
+  let uid = uid.into();
   let collab_guard = collab.lock();
   let (folder, workspaces, views, trash, favorites, meta, subscription) = collab_guard
     .with_origin_transact_mut(|txn| {
@@ -698,6 +708,11 @@ fn create_folder(
 
         meta.insert_str_with_txn(txn, CURRENT_WORKSPACE, folder_data.current_workspace_id);
         meta.insert_str_with_txn(txn, CURRENT_VIEW, folder_data.current_view);
+
+        for (uid, view_ids) in folder_data.favorites {
+          let favorite_records = view_ids.into_iter().map(|id| FavoriteId { id }).collect();
+          favorites.add_favorites_for_user_with_txn(txn, &uid, favorite_records);
+        }
       }
 
       (
@@ -726,11 +741,12 @@ fn create_folder(
   }
 }
 
-fn open_folder(
-  uid: UserId,
+fn open_folder<T: Into<UserId>>(
+  uid: T,
   collab: Arc<MutexCollab>,
   notifier: Option<FolderNotify>,
 ) -> Option<Folder> {
+  let uid = uid.into();
   let collab_guard = collab.lock();
   let txn = collab_guard.transact();
 

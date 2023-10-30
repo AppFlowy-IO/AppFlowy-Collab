@@ -22,10 +22,10 @@ async fn create_child_views_test() {
   folder_test.insert_view(view_1_2_2, None);
   folder_test.insert_view(view_1_3, None);
 
-  let v_1_child_views = folder_test.views.get_views_belong_to(&view_1.id, &uid);
+  let v_1_child_views = folder_test.views.get_views_belong_to(&view_1.id);
   assert_eq!(v_1_child_views.len(), 3);
 
-  let v_1_2_child_views = folder_test.views.get_views_belong_to(&view_1_2.id, &uid);
+  let v_1_2_child_views = folder_test.views.get_views_belong_to(&view_1_2.id);
   assert_eq!(v_1_2_child_views.len(), 2);
 
   let folder_data = folder_test.get_folder_data().unwrap();
@@ -145,7 +145,8 @@ async fn create_child_views_test() {
           "id": "w1",
           "name": "My first workspace"
         }
-      ]
+      ],
+      "favorites": {}
     })
   );
 }
@@ -168,7 +169,7 @@ async fn move_child_views_test() {
   folder_test.insert_view(view_1_2, None);
   folder_test.insert_view(view_1_3, None);
 
-  let v_1_child_views = folder_test.views.get_views_belong_to(&view_1.id, &uid);
+  let v_1_child_views = folder_test.views.get_views_belong_to(&view_1.id);
   assert_eq!(v_1_child_views[0].id, "1_1");
   assert_eq!(v_1_child_views[1].id, "1_2");
   assert_eq!(v_1_child_views[2].id, "1_3");
@@ -176,7 +177,7 @@ async fn move_child_views_test() {
   folder_test.views.move_child(&view_1.id, 2, 0);
   folder_test.views.move_child(&view_1.id, 0, 1);
 
-  let v_1_child_views = folder_test.views.get_view(&view_1.id, &uid).unwrap();
+  let v_1_child_views = folder_test.views.get_view(&view_1.id).unwrap();
   assert_eq!(v_1_child_views.children[0].id, "1_1");
   assert_eq!(v_1_child_views.children[1].id, "1_3");
   assert_eq!(v_1_child_views.children[2].id, "1_2");
@@ -194,7 +195,7 @@ async fn delete_view_test() {
   folder_test.insert_view(view_3, None);
 
   folder_test.views.remove_child("w1", 1);
-  let w_1_child_views = folder_test.views.get_views_belong_to("w1", &uid);
+  let w_1_child_views = folder_test.views.get_views_belong_to("w1");
   assert_eq!(w_1_child_views[0].id, "1_1");
   assert_eq!(w_1_child_views[1].id, "1_3");
 }
@@ -210,10 +211,10 @@ async fn delete_child_view_test() {
   folder_test.insert_view(view_1_1, None);
   folder_test.insert_view(view_2, None);
 
-  let views = folder_test.views.get_views_belong_to("v1", &uid);
+  let views = folder_test.views.get_views_belong_to("v1");
   assert_eq!(views.len(), 1);
 
   folder_test.views.delete_views(vec!["v1_1".to_string()]);
-  let views = folder_test.views.get_views_belong_to("v1", &uid);
+  let views = folder_test.views.get_views_belong_to("v1");
   assert!(views.is_empty());
 }
