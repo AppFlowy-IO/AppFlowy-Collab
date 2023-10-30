@@ -10,11 +10,9 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
-use crate::core::folder_observe::ViewChangeSender;
-use crate::core::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
-use crate::{
-  impl_any_update, impl_bool_update, impl_i64_update, impl_option_str_update, impl_str_update,
-};
+use crate::folder_observe::ViewChangeSender;
+use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update, UserId};
+use crate::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
 
 const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";
@@ -27,6 +25,7 @@ const VIEW_ICON: &str = "icon";
 const FAVORITE_STATUS: &str = "is_favorite";
 
 pub struct ViewsMap {
+  uid: UserId,
   container: MapRefWrapper,
   view_relations: Rc<ViewRelations>,
   view_cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
@@ -39,6 +38,7 @@ pub struct ViewsMap {
 
 impl ViewsMap {
   pub fn new(
+    uid: &UserId,
     mut root: MapRefWrapper,
     change_tx: Option<ViewChangeSender>,
     view_relations: Rc<ViewRelations>,
@@ -46,6 +46,7 @@ impl ViewsMap {
     let view_cache = Arc::new(RwLock::new(HashMap::new()));
     let subscription = change_tx.as_ref().map(|change_tx| {
       subscribe_view_change(
+        uid,
         &mut root,
         view_cache.clone(),
         change_tx.clone(),
@@ -53,6 +54,7 @@ impl ViewsMap {
       )
     });
     Self {
+      uid: uid.clone(),
       container: root,
       subscription,
       change_tx,
@@ -142,7 +144,7 @@ impl ViewsMap {
               let view = self
                 .container
                 .get_map_with_txn(txn, &child.id)
-                .and_then(|map| view_from_map_ref(&map, txn, &self.view_relations))
+                .and_then(|map| view_from_map_ref(&self.uid, &map, txn, &self.view_relations))
                 .map(Arc::new);
               self.set_cache_view(view.clone());
               view
@@ -197,7 +199,7 @@ impl ViewsMap {
     let view = self.get_cache_view(txn, view_id);
     if view.is_none() {
       let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-      let view = view_from_map_ref(&map_ref, txn, &self.view_relations).map(Arc::new);
+      let view = view_from_map_ref(&self.uid, &map_ref, txn, &self.view_relations).map(Arc::new);
       self.set_cache_view(view.clone());
       return view;
     }
@@ -209,18 +211,19 @@ impl ViewsMap {
     map_ref.get_str_with_txn(txn, VIEW_NAME)
   }
 
-  pub(crate) fn insert_view(&self, view: View) {
+  pub(crate) fn insert_view(&self, view: View, uid: &UserId) {
     self
       .container
-      .with_transact_mut(|txn| self.insert_view_with_txn(txn, view));
+      .with_transact_mut(|txn| self.insert_view_with_txn(txn, view, uid));
   }
 
-  pub(crate) fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View) {
+  pub(crate) fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View, uid: &UserId) {
     if let Some(parent_map_ref) = self.container.get_map_with_txn(txn, &view.parent_view_id) {
       let view_identifier = ViewIdentifier {
         id: view.id.clone(),
       };
       let view = ViewUpdate::new(
+        uid,
         &view.parent_view_id,
         txn,
         &parent_map_ref,
@@ -234,7 +237,7 @@ impl ViewsMap {
 
     let map_ref = self.container.create_map_with_txn(txn, &view.id);
     let view = ViewBuilder::new(&view.id, txn, map_ref, self.view_relations.clone())
-      .update(|update| {
+      .update(uid, |update| {
         update
           .set_name(view.name)
           .set_bid(view.parent_view_id)
@@ -269,7 +272,7 @@ impl ViewsMap {
   {
     self
       .container
-      .with_transact_mut(|txn| self.update_view_with_txn(txn, view_id, f))
+      .with_transact_mut(|txn| self.update_view_with_txn(&self.uid, txn, view_id, f))
   }
 
   /// Updates a view within a given transaction using a provided function.
@@ -296,6 +299,7 @@ impl ViewsMap {
   ///
   pub fn update_view_with_txn<F>(
     &self,
+    uid: &UserId,
     txn: &mut TransactionMut,
     view_id: &str,
     f: F,
@@ -304,7 +308,7 @@ impl ViewsMap {
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
     let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-    let update = ViewUpdate::new(view_id, txn, &map_ref, self.view_relations.clone());
+    let update = ViewUpdate::new(uid, view_id, txn, &map_ref, self.view_relations.clone());
     let view = f(update).map(Arc::new);
     self.set_cache_view(view.clone());
     view
@@ -326,6 +330,7 @@ impl ViewsMap {
 }
 
 pub(crate) fn view_from_map_ref<T: ReadTxn>(
+  uid: &UserId,
   map_ref: &MapRef,
   txn: &T,
   view_relations: &Rc<ViewRelations>,
@@ -347,8 +352,10 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     .unwrap_or_default();
 
   let icon = get_icon_from_view_map(map_ref, txn);
+
   let is_favorite = map_ref
-    .get_bool_with_txn(txn, FAVORITE_STATUS)
+    .get_map_with_txn(txn, FAVORITE_STATUS)
+    .and_then(|map| map.get_bool_with_txn(txn, uid))
     .unwrap_or_default();
 
   Some(View {
@@ -394,11 +401,12 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
     }
   }
 
-  pub fn update<F>(mut self, f: F) -> Self
+  pub fn update<F>(mut self, uid: &UserId, f: F) -> Self
   where
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
     let update = ViewUpdate::new(
+      uid,
       self.view_id,
       self.txn,
       &self.map_ref,
@@ -413,6 +421,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
 }
 
 pub struct ViewUpdate<'a, 'b, 'c> {
+  uid: &'a UserId,
   view_id: &'a str,
   map_ref: &'c MapRefWrapper,
   txn: &'a mut TransactionMut<'b>,
@@ -430,19 +439,36 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   impl_str_update!(set_desc, set_desc_if_not_none, VIEW_DESC);
   impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
   impl_any_update!(set_layout, set_layout_if_not_none, VIEW_LAYOUT, ViewLayout);
-  impl_bool_update!(set_favorite, set_favorite_if_not_none, FAVORITE_STATUS);
 
   pub fn new(
+    uid: &'a UserId,
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'c MapRefWrapper,
     children_map: Rc<ViewRelations>,
   ) -> Self {
     Self {
+      uid,
       view_id,
       map_ref,
       txn,
       children_map,
+    }
+  }
+
+  pub fn set_favorite(self, is_favorite: bool) -> Self {
+    let favorite_map = self
+      .map_ref
+      .create_map_with_txn_if_not_exist(self.txn, FAVORITE_STATUS);
+    favorite_map.insert_bool_with_txn(self.txn, self.uid, is_favorite);
+    self
+  }
+
+  pub fn set_favorite_if_not_none(self, is_favorite: Option<bool>) -> Self {
+    if let Some(is_favorite) = is_favorite {
+      self.set_favorite(is_favorite)
+    } else {
+      self
     }
   }
 
@@ -474,11 +500,11 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   }
 
   pub fn done(self) -> Option<View> {
-    view_from_map_ref(self.map_ref, self.txn, &self.children_map)
+    view_from_map_ref(self.uid, self.map_ref, self.txn, &self.children_map)
   }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct View {
   pub id: String,
   pub parent_view_id: String,

@@ -8,8 +8,8 @@ use collab::preclude::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::core::folder_observe::{TrashChange, TrashChangeSender};
-use crate::core::{subscribe_trash_change, TrashInfo, ViewsMap};
+use crate::folder_observe::{TrashChange, TrashChangeSender};
+use crate::{subscribe_trash_change, TrashInfo, ViewsMap};
 
 type ArraySubscription = Subscription<Arc<dyn Fn(&TransactionMut, &ArrayEvent)>>;
 

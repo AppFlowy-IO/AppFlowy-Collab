@@ -6,14 +6,14 @@ use std::path::PathBuf;
 use std::sync::{Arc, Once};
 
 use collab::preclude::CollabBuilder;
-use collab_folder::core::*;
+use collab_folder::*;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use tempfile::TempDir;
-use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 use zip::read::ZipArchive;
 
 pub struct FolderTest {
@@ -36,20 +36,23 @@ unsafe impl Send for FolderTest {}
 
 unsafe impl Sync for FolderTest {}
 
-pub async fn create_folder(id: &str) -> FolderTest {
-  create_folder_with_data(id, None).await
+pub async fn create_folder(uid: UserId, workspace_id: &str) -> FolderTest {
+  create_folder_with_data(uid, workspace_id, None).await
 }
 
-pub async fn create_folder_with_data(id: &str, folder_data: Option<FolderData>) -> FolderTest {
-  let uid = 1;
+pub async fn create_folder_with_data(
+  uid: UserId,
+  workspace_id: &str,
+  folder_data: Option<FolderData>,
+) -> FolderTest {
   let tempdir = TempDir::new().unwrap();
 
   let path = tempdir.into_path();
   let db = Arc::new(RocksCollabDB::open(path.clone()).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
+  let disk_plugin = RocksdbDiskPlugin::new(uid.as_i64(), Arc::downgrade(&db));
   let cleaner: Cleaner = Cleaner::new(path);
 
-  let collab = CollabBuilder::new(1, id)
+  let collab = CollabBuilder::new(uid.as_i64(), workspace_id)
     .with_plugin(disk_plugin)
     .with_device_id("1")
     .build()
@@ -62,7 +65,7 @@ pub async fn create_folder_with_data(id: &str, folder_data: Option<FolderData>) 
     view_change_tx: view_tx,
     trash_change_tx: trash_tx,
   };
-  let folder = Folder::create(Arc::new(collab), Some(context), folder_data);
+  let folder = Folder::create(uid, Arc::new(collab), Some(context), folder_data);
   FolderTest {
     db,
     folder,
@@ -72,9 +75,9 @@ pub async fn create_folder_with_data(id: &str, folder_data: Option<FolderData>) 
   }
 }
 
-pub async fn open_folder_with_db(uid: i64, object_id: &str, db_path: PathBuf) -> FolderTest {
+pub async fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf) -> FolderTest {
   let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
+  let disk_plugin = RocksdbDiskPlugin::new(uid.as_i64(), Arc::downgrade(&db));
   let cleaner: Cleaner = Cleaner::new(db_path);
   let collab = CollabBuilder::new(1, object_id)
     .with_plugin(disk_plugin)
@@ -89,7 +92,7 @@ pub async fn open_folder_with_db(uid: i64, object_id: &str, db_path: PathBuf) ->
     view_change_tx: view_tx,
     trash_change_tx: trash_tx,
   };
-  let folder = Folder::open(Arc::new(collab), Some(context));
+  let folder = Folder::open(uid, Arc::new(collab), Some(context));
   FolderTest {
     folder,
     db,
@@ -99,8 +102,8 @@ pub async fn open_folder_with_db(uid: i64, object_id: &str, db_path: PathBuf) ->
   }
 }
 
-pub async fn create_folder_with_workspace(id: &str, workspace_id: &str) -> FolderTest {
-  let test = create_folder(id).await;
+pub async fn create_folder_with_workspace(uid: UserId, workspace_id: &str) -> FolderTest {
+  let test = create_folder(uid, workspace_id).await;
   let workspace = Workspace {
     id: workspace_id.to_string(),
     name: "My first workspace".to_string(),
@@ -139,7 +142,7 @@ impl Deref for FolderTest {
   }
 }
 
-struct Cleaner(PathBuf);
+pub struct Cleaner(PathBuf);
 
 impl Cleaner {
   fn new(dir: PathBuf) -> Self {
@@ -174,7 +177,7 @@ pub fn setup_log() {
   });
 }
 
-pub fn unzip_history_folder_db(folder_name: &str) -> std::io::Result<PathBuf> {
+pub fn unzip_history_folder_db(folder_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
   // Open the zip file
   let zip_file_path = format!("./tests/folder_test/history_folder/{}.zip", folder_name);
   let reader = File::open(zip_file_path)?;
@@ -206,5 +209,8 @@ pub fn unzip_history_folder_db(folder_name: &str) -> std::io::Result<PathBuf> {
     }
   }
   let path = format!("{}/{}", output_folder_path, folder_name);
-  Ok(PathBuf::from(path))
+  Ok((
+    Cleaner::new(PathBuf::from(output_folder_path)),
+    PathBuf::from(path),
+  ))
 }

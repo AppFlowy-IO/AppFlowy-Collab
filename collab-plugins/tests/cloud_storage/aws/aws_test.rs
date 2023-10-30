@@ -20,7 +20,7 @@ async fn collab_with_aws_plugin_test() {
     return;
   }
   let object_id = nanoid!(5);
-  let uid = 1;
+  let uid = UserId::from(1);
   let mut test = AWSStorageTest::new(uid);
   println!("object_id: {}", object_id);
   test
@@ -81,7 +81,7 @@ async fn single_client_edit_aws_doc_10_times_test() {
     return;
   }
   let object_id = nanoid!(5);
-  let uid = 1;
+  let uid = UserId::from(1);
   let mut test = AWSStorageTest::new(uid);
   test
     .run_scripts(vec![CreateCollab {
@@ -130,7 +130,7 @@ async fn multi_clients_edit_aws_doc_10_times_test() {
     return;
   }
   let object_id = nanoid!(5);
-  let uid = 1;
+  let uid = UserId::from(1);
   let test = Arc::new(RwLock::new(AWSStorageTest::new(uid)));
   test
     .write()

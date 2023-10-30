@@ -85,15 +85,15 @@ impl MapRefWrapper {
     ArrayRefWrapper::new(array, self.collab_ctx.clone())
   }
 
-  pub fn create_array_if_not_exist_with_txn<V: Prelim>(
+  pub fn create_array_if_not_exist_with_txn<V: Prelim, K: AsRef<str>>(
     &self,
     txn: &mut TransactionMut,
-    key: &str,
+    key: K,
     values: Vec<V>,
   ) -> ArrayRefWrapper {
     let array_ref = self
       .map_ref
-      .create_array_if_not_exist_with_txn(txn, key, values);
+      .create_array_if_not_exist_with_txn(txn, key.as_ref(), values);
     ArrayRefWrapper::new(array_ref, self.collab_ctx.clone())
   }
 
@@ -122,18 +122,26 @@ impl MapRefWrapper {
     MapRefWrapper::new(map_ref, self.collab_ctx.clone())
   }
 
-  pub fn get_map_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<MapRefWrapper> {
-    let a = self.map_ref.get(txn, key);
+  pub fn get_map_with_txn<T: ReadTxn, K: AsRef<str>>(
+    &self,
+    txn: &T,
+    key: K,
+  ) -> Option<MapRefWrapper> {
+    let a = self.map_ref.get(txn, key.as_ref());
     if let Some(Value::YMap(map_ref)) = a {
       return Some(MapRefWrapper::new(map_ref, self.collab_ctx.clone()));
     }
     None
   }
 
-  pub fn get_array_ref_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<ArrayRefWrapper> {
+  pub fn get_array_ref_with_txn<T: ReadTxn, K: AsRef<str>>(
+    &self,
+    txn: &T,
+    key: K,
+  ) -> Option<ArrayRefWrapper> {
     let array_ref = self
       .map_ref
-      .get(txn, key)
+      .get(txn, key.as_ref())
       .map(|value| value.to_yarray())??;
     Some(ArrayRefWrapper::new(array_ref, self.collab_ctx.clone()))
   }
@@ -235,8 +243,10 @@ pub trait MapRefExtension {
     self.map_ref().insert(txn, key, lib0Any::Number(value));
   }
 
-  fn insert_bool_with_txn(&self, txn: &mut TransactionMut, key: &str, value: bool) {
-    self.map_ref().insert(txn, key, lib0Any::Bool(value));
+  fn insert_bool_with_txn<K: AsRef<str>>(&self, txn: &mut TransactionMut, key: K, value: bool) {
+    self
+      .map_ref()
+      .insert(txn, key.as_ref(), lib0Any::Bool(value));
   }
 
   fn create_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
@@ -382,8 +392,8 @@ pub trait MapRefExtension {
     None
   }
 
-  fn get_bool_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<bool> {
-    if let Some(Value::Any(Any::Bool(value))) = self.map_ref().get(txn, key) {
+  fn get_bool_with_txn<T: ReadTxn, K: AsRef<str>>(&self, txn: &T, key: K) -> Option<bool> {
+    if let Some(Value::Any(Any::Bool(value))) = self.map_ref().get(txn, key.as_ref()) {
       return Some(value);
     }
     None
