@@ -10,11 +10,11 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
-use crate::core::folder_observe::ViewChangeSender;
-use crate::core::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
+use crate::folder_observe::ViewChangeSender;
 use crate::{
   impl_any_update, impl_bool_update, impl_i64_update, impl_option_str_update, impl_str_update,
 };
+use crate::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
 
 const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";

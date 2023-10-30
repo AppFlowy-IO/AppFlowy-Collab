@@ -1,11 +1,11 @@
-use crate::core::FavoritesInfo;
+use crate::FavoritesInfo;
 use anyhow::bail;
 use collab::preclude::{lib0Any, Array, ArrayRefWrapper, ReadTxn, TransactionMut, Value, YrsValue};
 
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 
-use crate::core::ViewsMap;
+use crate::ViewsMap;
 pub struct FavoritesArray {
   container: ArrayRefWrapper,
   view_map: Rc<ViewsMap>,

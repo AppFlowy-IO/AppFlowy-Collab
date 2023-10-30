@@ -10,7 +10,7 @@ use collab::preclude::{
 use parking_lot::RwLock;
 use tokio::sync::broadcast;
 
-use crate::core::{view_from_map_ref, View, ViewRelations};
+use crate::{view_from_map_ref, View, ViewRelations};
 
 #[derive(Debug, Clone)]
 pub enum ViewChange {

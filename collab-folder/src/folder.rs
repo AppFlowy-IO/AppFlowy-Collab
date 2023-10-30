@@ -12,10 +12,10 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
-use crate::core::favorites::{FavoriteRecord, FavoritesArray};
-use crate::core::folder_observe::{TrashChangeSender, ViewChangeSender};
-use crate::core::trash::{TrashArray, TrashRecord};
-use crate::core::{
+use crate::favorites::{FavoriteRecord, FavoritesArray};
+use crate::folder_observe::{TrashChangeSender, ViewChangeSender};
+use crate::trash::{TrashArray, TrashRecord};
+use crate::{
   subscribe_folder_change, FolderData, TrashInfo, View, ViewIdentifier, ViewRelations, ViewsMap,
   Workspace, WorkspaceMap, WorkspaceUpdate,
 };
@@ -66,7 +66,7 @@ pub struct Folder {
   pub views: Rc<ViewsMap>,
   trash: TrashArray,
   favorites: FavoritesArray,
-  pub meta: MapRefWrapper,
+  meta: MapRefWrapper,
   #[allow(dead_code)]
   subscription: DeepEventsSubscription,
   #[allow(dead_code)]

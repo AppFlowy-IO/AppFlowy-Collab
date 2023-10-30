@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::core::{View, Workspace};
+use crate::{View, Workspace};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FolderData {

@@ -3,7 +3,7 @@ use std::rc::Rc;
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 
-use crate::core::{RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
+use crate::{RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
 
 #[derive(Clone)]
 pub struct WorkspaceMap {
