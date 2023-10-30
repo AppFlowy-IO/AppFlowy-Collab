@@ -1,7 +1,7 @@
 use collab_folder::{FolderData, UserId};
 use serde_json::json;
 
-use assert_json_diff::assert_json_eq;
+use assert_json_diff::{assert_json_eq, assert_json_include};
 
 use crate::util::{
   create_folder_with_data, create_folder_with_workspace, open_folder_with_db,
@@ -99,10 +99,11 @@ async fn delete_favorite_test() {
 }
 
 const FOLDER_WITHOUT_FAV: &str = "folder_without_fav";
+const FOLDER_WITH_FAV_V1: &str = "folder_with_fav_v1";
 
 #[tokio::test]
 async fn migrate_from_old_version_folder_without_fav_test() {
-  let db_path = unzip_history_folder_db(FOLDER_WITHOUT_FAV).unwrap();
+  let (_cleaner, db_path) = unzip_history_folder_db(FOLDER_WITHOUT_FAV).unwrap();
   let folder_test = open_folder_with_db(
     221439819971039232.into(),
     "49af3b85-9343-447a-946d-038f63883399",
@@ -164,6 +165,94 @@ async fn migrate_from_old_version_folder_without_fav_test() {
         }
       ],
       "favorites": {}
+    })
+  );
+}
+
+#[tokio::test]
+async fn migrate_favorite_v1_test() {
+  let (_cleaner, db_path) = unzip_history_folder_db(FOLDER_WITH_FAV_V1).unwrap();
+  let folder_test = open_folder_with_db(
+    254954554859196416.into(),
+    "835f64ab-9efc-4365-8055-1e66ee03c555",
+    db_path,
+  )
+  .await;
+
+  // Migrate the favorites from v1 to v2
+  let favorites = folder_test.get_favorite_v1();
+  assert_eq!(favorites.len(), 2);
+  folder_test.add_favorites(favorites.into_iter().map(|fav| fav.id).collect::<Vec<_>>());
+
+  let folder_data = folder_test.get_folder_data().unwrap();
+  let value = serde_json::to_value(folder_data).unwrap();
+  assert_json_include!(
+    actual: value,
+    expected: json!({
+      "views": [
+        {
+          "children": {
+            "items": [
+              {
+                "id": "36e0a35e-c636-48d6-9e50-e2e2ee8a1d9f"
+              },
+              {
+                "id": "9330d783-d10d-4a15-84d3-1fa4fa2e8cc4"
+              },
+              {
+                "id": "c96d9587-0f6a-4d6b-8d59-6d72f5dcaa4e"
+              }
+            ]
+          },
+          "created_at": 1698592608,
+          "desc": "",
+          "icon": null,
+          "id": "ddf06dcf-1a01-4d0d-b973-9d6a892f68b5",
+          "is_favorite": false,
+          "layout": 0,
+          "name": "⭐️ Getting started",
+          "parent_view_id": "835f64ab-9efc-4365-8055-1e66ee03c555"
+        },
+        {
+          "children": {
+            "items": []
+          },
+          "created_at": 1698661285,
+          "desc": "",
+          "icon": null,
+          "id": "36e0a35e-c636-48d6-9e50-e2e2ee8a1d9f",
+          "is_favorite": true,
+          "layout": 1,
+          "name": "database 1",
+          "parent_view_id": "ddf06dcf-1a01-4d0d-b973-9d6a892f68b5"
+        },
+        {
+          "children": {
+            "items": []
+          },
+          "created_at": 1698661296,
+          "desc": "",
+          "icon": null,
+          "id": "9330d783-d10d-4a15-84d3-1fa4fa2e8cc4",
+          "is_favorite": true,
+          "layout": 0,
+          "name": "document 1",
+          "parent_view_id": "ddf06dcf-1a01-4d0d-b973-9d6a892f68b5"
+        },
+        {
+          "children": {
+            "items": []
+          },
+          "created_at": 1698661316,
+          "desc": "",
+          "icon": null,
+          "id": "c96d9587-0f6a-4d6b-8d59-6d72f5dcaa4e",
+          "is_favorite": false,
+          "layout": 1,
+          "name": "Untitled",
+          "parent_view_id": "ddf06dcf-1a01-4d0d-b973-9d6a892f68b5"
+        }
+      ],
     })
   );
 }

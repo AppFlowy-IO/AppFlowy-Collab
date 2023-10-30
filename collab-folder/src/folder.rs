@@ -57,11 +57,8 @@ const VIEW_RELATION: &str = "relation";
 const CURRENT_WORKSPACE: &str = "current_workspace";
 const CURRENT_VIEW: &str = "current_view";
 
-/// favorites is used as favorites_v1 to store array of favorite view ids.
-/// favorites_v2 is used to store a map that contains uid and array of favorite view ids.
-#[allow(dead_code)]
-const FAVORITES_V1: &str = "favorites";
-const FAVORITES: &str = "favorites_v2";
+pub(crate) const FAVORITES_V1: &str = "favorites";
+pub(crate) const FAVORITES_V2: &str = "favorites_v2";
 
 #[derive(Clone)]
 pub struct FolderNotify {
@@ -93,7 +90,7 @@ pub struct FolderNotify {
 pub struct Folder {
   uid: UserId,
   inner: Arc<MutexCollab>,
-  root: MapRefWrapper,
+  pub(crate) root: MapRefWrapper,
   pub workspaces: WorkspaceArray,
   pub views: Rc<ViewsMap>,
   trash: TrashArray,
@@ -670,7 +667,7 @@ fn create_folder<T: Into<UserId>>(
         folder.create_array_if_not_exist_with_txn::<WorkspaceItem, _>(txn, WORKSPACES, vec![]);
       let views = folder.create_map_with_txn_if_not_exist(txn, VIEWS);
       let trash = folder.create_array_if_not_exist_with_txn::<TrashRecord, _>(txn, TRASH, vec![]);
-      let favorites = folder.create_map_with_txn_if_not_exist(txn, FAVORITES);
+      let favorites = folder.create_map_with_txn_if_not_exist(txn, FAVORITES_V2);
       let meta = folder.create_map_with_txn_if_not_exist(txn, META);
       let view_relations = Rc::new(ViewRelations::new(
         folder.create_map_with_txn_if_not_exist(txn, VIEW_RELATION),
@@ -758,7 +755,7 @@ fn open_folder<T: Into<UserId>>(
   let workspaces = collab_guard.get_array_with_txn(&txn, vec![FOLDER, WORKSPACES])?;
   let views = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEWS])?;
   let trash = collab_guard.get_array_with_txn(&txn, vec![FOLDER, TRASH])?;
-  let favorite_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, FAVORITES])?;
+  let favorite_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, FAVORITES_V2])?;
   let meta = collab_guard.get_map_with_txn(&txn, vec![FOLDER, META])?;
   let children_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEW_RELATION])?;
 

@@ -142,7 +142,7 @@ impl Deref for FolderTest {
   }
 }
 
-struct Cleaner(PathBuf);
+pub struct Cleaner(PathBuf);
 
 impl Cleaner {
   fn new(dir: PathBuf) -> Self {
@@ -177,7 +177,7 @@ pub fn setup_log() {
   });
 }
 
-pub fn unzip_history_folder_db(folder_name: &str) -> std::io::Result<PathBuf> {
+pub fn unzip_history_folder_db(folder_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
   // Open the zip file
   let zip_file_path = format!("./tests/folder_test/history_folder/{}.zip", folder_name);
   let reader = File::open(zip_file_path)?;
@@ -209,5 +209,8 @@ pub fn unzip_history_folder_db(folder_name: &str) -> std::io::Result<PathBuf> {
     }
   }
   let path = format!("{}/{}", output_folder_path, folder_name);
-  Ok(PathBuf::from(path))
+  Ok((
+    Cleaner::new(PathBuf::from(output_folder_path)),
+    PathBuf::from(path),
+  ))
 }
