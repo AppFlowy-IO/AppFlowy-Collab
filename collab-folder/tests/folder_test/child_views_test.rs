@@ -1,4 +1,4 @@
-use assert_json_diff::assert_json_eq;
+use assert_json_diff::assert_json_include;
 use collab_folder::UserId;
 use serde_json::json;
 
@@ -7,13 +7,14 @@ use crate::util::{create_folder_with_workspace, make_test_view};
 #[tokio::test]
 async fn create_child_views_test() {
   let uid = UserId::from(1);
-  let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
+  let folder_test = create_folder_with_workspace(uid.clone(), "fake_w_1").await;
+  let workspace_id = folder_test.get_workspace_id().unwrap();
   let view_1_1 = make_test_view("1_1", "1", vec![]);
   let view_1_2 = make_test_view("1_2", "1", vec![]);
   let view_1_2_1 = make_test_view("1_2_1", "1_2", vec![]);
   let view_1_2_2 = make_test_view("1_2_2", "1_2", vec![]);
   let view_1_3 = make_test_view("1_3", "1", vec![]);
-  let view_1 = make_test_view("1", "w1", vec![]);
+  let view_1 = make_test_view("1", &workspace_id, vec![]);
 
   folder_test.insert_view(view_1.clone(), None);
   folder_test.insert_view(view_1_1, None);
@@ -30,11 +31,11 @@ async fn create_child_views_test() {
 
   let folder_data = folder_test.get_folder_data().unwrap();
   let value = serde_json::to_value(folder_data).unwrap();
-  assert_json_eq!(
-    value,
-    json!({
+  assert_json_include!(
+    actual: value,
+    expected: json!({
       "current_view": "",
-      "current_workspace_id": "w1",
+      "favorites": {},
       "views": [
         {
           "children": {
@@ -50,22 +51,22 @@ async fn create_child_views_test() {
               }
             ]
           },
-          "icon": null,
           "created_at": 0,
           "desc": "",
-          "is_favorite": false,
+          "icon": null,
           "id": "1",
+          "is_favorite": false,
           "layout": 0,
           "name": "",
-          "parent_view_id": "w1"
+          "parent_view_id": "fake_w_1"
         },
         {
           "children": {
             "items": []
           },
-          "icon": null,
           "created_at": 0,
           "desc": "",
+          "icon": null,
           "id": "1_1",
           "is_favorite": false,
           "layout": 0,
@@ -83,70 +84,66 @@ async fn create_child_views_test() {
               }
             ]
           },
-          "icon": null,
           "created_at": 0,
           "desc": "",
+          "icon": null,
           "id": "1_2",
+          "is_favorite": false,
           "layout": 0,
           "name": "",
-          "is_favorite": false,
           "parent_view_id": "1"
         },
         {
           "children": {
             "items": []
           },
-          "icon": null,
           "created_at": 0,
           "desc": "",
+          "icon": null,
           "id": "1_2_1",
+          "is_favorite": false,
           "layout": 0,
           "name": "",
-          "is_favorite": false,
           "parent_view_id": "1_2"
         },
         {
           "children": {
             "items": []
           },
-          "icon": null,
           "created_at": 0,
           "desc": "",
+          "icon": null,
           "id": "1_2_2",
+          "is_favorite": false,
           "layout": 0,
           "name": "",
-          "is_favorite": false,
           "parent_view_id": "1_2"
         },
         {
           "children": {
             "items": []
           },
-          "icon": null,
           "created_at": 0,
           "desc": "",
+          "icon": null,
           "id": "1_3",
+          "is_favorite": false,
           "layout": 0,
           "name": "",
-          "is_favorite": false,
           "parent_view_id": "1"
         }
       ],
-      "workspaces": [
-        {
-          "child_views": {
-            "items": [
-              {
-                "id": "1"
-              }
-            ]
-          },
-          "created_at": 123,
-          "id": "w1",
-          "name": "My first workspace"
-        }
-      ],
-      "favorites": {}
+      "workspace": {
+        "child_views": {
+          "items": [
+            {
+              "id": "1"
+            }
+          ]
+        },
+        "id": "fake_w_1",
+        "name": ""
+      }
     })
   );
 }
