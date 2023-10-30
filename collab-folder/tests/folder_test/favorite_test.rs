@@ -1,5 +1,5 @@
 use assert_json_diff::assert_json_eq;
-use collab_folder::core::FolderData;
+use collab_folder::{FolderData, UserId};
 use serde_json::json;
 
 use crate::util::{
@@ -9,7 +9,8 @@ use crate::util::{
 
 #[tokio::test]
 async fn create_favorite_test() {
-  let folder_test = create_folder_with_workspace("1", "w1").await;
+  let uid = UserId::from(1);
+  let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
   folder_test.add_favorites(vec!["1".to_string(), "2".to_string()]);
 
   let favorites = folder_test.get_all_favorites();
@@ -17,9 +18,11 @@ async fn create_favorite_test() {
   assert_eq!(favorites[0].id, "1");
   assert_eq!(favorites[1].id, "2");
 }
+
 #[tokio::test]
 async fn delete_favorite_test() {
-  let folder_test = create_folder_with_workspace("1", "w1").await;
+  let uid = UserId::from(1);
+  let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
   folder_test.add_favorites(vec!["1".to_string(), "2".to_string()]);
 
   let favorites = folder_test.get_all_favorites();
@@ -43,7 +46,7 @@ const FOLDER_WITHOUT_FAV: &str = "folder_without_fav";
 async fn migrate_from_old_version_folder_without_fav_test() {
   let db_path = unzip_history_folder_db(FOLDER_WITHOUT_FAV).unwrap();
   let folder_test = open_folder_with_db(
-    221439819971039232,
+    221439819971039232.into(),
     "49af3b85-9343-447a-946d-038f63883399",
     db_path,
   )
@@ -108,7 +111,7 @@ async fn migrate_from_old_version_folder_without_fav_test() {
 
 #[tokio::test]
 async fn deserialize_folder_data_without_fav_test() {
-  let folder_test = create_folder_with_data("1", Some(folder_data_without_fav())).await;
+  let folder_test = create_folder_with_data(1.into(), "1", Some(folder_data_without_fav())).await;
   let folder_data = folder_test.get_folder_data().unwrap();
   let value = serde_json::to_value(folder_data).unwrap();
   assert_json_eq!(

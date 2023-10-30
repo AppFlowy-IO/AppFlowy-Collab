@@ -11,9 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
 use crate::folder_observe::ViewChangeSender;
-use crate::{
-  impl_any_update, impl_bool_update, impl_i64_update, impl_option_str_update, impl_str_update,
-};
+use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update, UserId};
 use crate::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
 
 const VIEW_ID: &str = "id";
@@ -39,6 +37,7 @@ pub struct ViewsMap {
 
 impl ViewsMap {
   pub fn new(
+    uid: &UserId,
     mut root: MapRefWrapper,
     change_tx: Option<ViewChangeSender>,
     view_relations: Rc<ViewRelations>,
@@ -46,6 +45,7 @@ impl ViewsMap {
     let view_cache = Arc::new(RwLock::new(HashMap::new()));
     let subscription = change_tx.as_ref().map(|change_tx| {
       subscribe_view_change(
+        uid,
         &mut root,
         view_cache.clone(),
         change_tx.clone(),
@@ -121,17 +121,18 @@ impl ViewsMap {
     });
   }
 
-  pub fn get_views_belong_to(&self, parent_view_id: &str) -> Vec<Arc<View>> {
+  pub fn get_views_belong_to(&self, parent_view_id: &str, uid: &UserId) -> Vec<Arc<View>> {
     let txn = self.container.transact();
-    self.get_views_belong_to_with_txn(&txn, parent_view_id)
+    self.get_views_belong_to_with_txn(&txn, parent_view_id, uid)
   }
 
   pub fn get_views_belong_to_with_txn<T: ReadTxn>(
     &self,
     txn: &T,
     parent_view_id: &str,
+    uid: &UserId,
   ) -> Vec<Arc<View>> {
-    match self.get_view_with_txn(txn, parent_view_id) {
+    match self.get_view_with_txn(txn, parent_view_id, uid) {
       Some(root_view) => root_view
         .children
         .iter()
@@ -142,7 +143,7 @@ impl ViewsMap {
               let view = self
                 .container
                 .get_map_with_txn(txn, &child.id)
-                .and_then(|map| view_from_map_ref(&map, txn, &self.view_relations))
+                .and_then(|map| view_from_map_ref(uid, &map, txn, &self.view_relations))
                 .map(Arc::new);
               self.set_cache_view(view.clone());
               view
@@ -165,39 +166,45 @@ impl ViewsMap {
           })
           .unwrap_or_default();
 
-        self.get_views(&child_view_ids)
+        self.get_views(&child_view_ids, uid)
       },
     }
   }
 
-  pub fn get_views<T: AsRef<str>>(&self, view_ids: &[T]) -> Vec<Arc<View>> {
+  pub fn get_views<T: AsRef<str>>(&self, view_ids: &[T], uid: &UserId) -> Vec<Arc<View>> {
     let txn = self.container.transact();
-    self.get_views_with_txn(&txn, view_ids)
+    self.get_views_with_txn(&txn, view_ids, uid)
   }
 
   pub fn get_views_with_txn<T: ReadTxn, V: AsRef<str>>(
     &self,
     txn: &T,
     view_ids: &[V],
+    uid: &UserId,
   ) -> Vec<Arc<View>> {
     view_ids
       .iter()
-      .flat_map(|view_id| self.get_view_with_txn(txn, view_id.as_ref()))
+      .flat_map(|view_id| self.get_view_with_txn(txn, view_id.as_ref(), uid))
       .collect::<Vec<_>>()
   }
 
-  pub fn get_view(&self, view_id: &str) -> Option<Arc<View>> {
+  pub fn get_view(&self, view_id: &str, uid: &UserId) -> Option<Arc<View>> {
     let txn = self.container.transact();
-    self.get_view_with_txn(&txn, view_id)
+    self.get_view_with_txn(&txn, view_id, uid)
   }
 
   /// Return the view with the given view id.
   /// The view is support nested, by default, we only load the view and its children.
-  pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<Arc<View>> {
+  pub fn get_view_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+    uid: &UserId,
+  ) -> Option<Arc<View>> {
     let view = self.get_cache_view(txn, view_id);
     if view.is_none() {
       let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-      let view = view_from_map_ref(&map_ref, txn, &self.view_relations).map(Arc::new);
+      let view = view_from_map_ref(uid, &map_ref, txn, &self.view_relations).map(Arc::new);
       self.set_cache_view(view.clone());
       return view;
     }
@@ -209,18 +216,19 @@ impl ViewsMap {
     map_ref.get_str_with_txn(txn, VIEW_NAME)
   }
 
-  pub(crate) fn insert_view(&self, view: View) {
+  pub(crate) fn insert_view(&self, view: View, uid: &UserId) {
     self
       .container
-      .with_transact_mut(|txn| self.insert_view_with_txn(txn, view));
+      .with_transact_mut(|txn| self.insert_view_with_txn(txn, view, uid));
   }
 
-  pub(crate) fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View) {
+  pub(crate) fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View, uid: &UserId) {
     if let Some(parent_map_ref) = self.container.get_map_with_txn(txn, &view.parent_view_id) {
       let view_identifier = ViewIdentifier {
         id: view.id.clone(),
       };
       let view = ViewUpdate::new(
+        uid,
         &view.parent_view_id,
         txn,
         &parent_map_ref,
@@ -234,7 +242,7 @@ impl ViewsMap {
 
     let map_ref = self.container.create_map_with_txn(txn, &view.id);
     let view = ViewBuilder::new(&view.id, txn, map_ref, self.view_relations.clone())
-      .update(|update| {
+      .update(uid, |update| {
         update
           .set_name(view.name)
           .set_bid(view.parent_view_id)
@@ -263,13 +271,13 @@ impl ViewsMap {
     });
   }
 
-  pub fn update_view<F>(&self, view_id: &str, f: F) -> Option<Arc<View>>
+  pub fn update_view<F>(&self, uid: &UserId, view_id: &str, f: F) -> Option<Arc<View>>
   where
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
     self
       .container
-      .with_transact_mut(|txn| self.update_view_with_txn(txn, view_id, f))
+      .with_transact_mut(|txn| self.update_view_with_txn(uid, txn, view_id, f))
   }
 
   /// Updates a view within a given transaction using a provided function.
@@ -296,6 +304,7 @@ impl ViewsMap {
   ///
   pub fn update_view_with_txn<F>(
     &self,
+    uid: &UserId,
     txn: &mut TransactionMut,
     view_id: &str,
     f: F,
@@ -304,7 +313,7 @@ impl ViewsMap {
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
     let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-    let update = ViewUpdate::new(view_id, txn, &map_ref, self.view_relations.clone());
+    let update = ViewUpdate::new(uid, view_id, txn, &map_ref, self.view_relations.clone());
     let view = f(update).map(Arc::new);
     self.set_cache_view(view.clone());
     view
@@ -326,6 +335,7 @@ impl ViewsMap {
 }
 
 pub(crate) fn view_from_map_ref<T: ReadTxn>(
+  uid: &UserId,
   map_ref: &MapRef,
   txn: &T,
   view_relations: &Rc<ViewRelations>,
@@ -347,8 +357,10 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     .unwrap_or_default();
 
   let icon = get_icon_from_view_map(map_ref, txn);
+
   let is_favorite = map_ref
-    .get_bool_with_txn(txn, FAVORITE_STATUS)
+    .get_map_with_txn(txn, FAVORITE_STATUS)
+    .and_then(|map| map.get_bool_with_txn(txn, uid))
     .unwrap_or_default();
 
   Some(View {
@@ -394,11 +406,12 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
     }
   }
 
-  pub fn update<F>(mut self, f: F) -> Self
+  pub fn update<F>(mut self, uid: &UserId, f: F) -> Self
   where
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
     let update = ViewUpdate::new(
+      uid,
       self.view_id,
       self.txn,
       &self.map_ref,
@@ -413,6 +426,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
 }
 
 pub struct ViewUpdate<'a, 'b, 'c> {
+  uid: &'a UserId,
   view_id: &'a str,
   map_ref: &'c MapRefWrapper,
   txn: &'a mut TransactionMut<'b>,
@@ -430,20 +444,29 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   impl_str_update!(set_desc, set_desc_if_not_none, VIEW_DESC);
   impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
   impl_any_update!(set_layout, set_layout_if_not_none, VIEW_LAYOUT, ViewLayout);
-  impl_bool_update!(set_favorite, set_favorite_if_not_none, FAVORITE_STATUS);
 
   pub fn new(
+    uid: &'a UserId,
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'c MapRefWrapper,
     children_map: Rc<ViewRelations>,
   ) -> Self {
     Self {
+      uid,
       view_id,
       map_ref,
       txn,
       children_map,
     }
+  }
+
+  pub fn set_favorite(self, is_favorite: bool) -> Self {
+    let favorite_map = self
+      .map_ref
+      .create_map_with_txn_if_not_exist(self.txn, FAVORITE_STATUS);
+    favorite_map.insert_bool_with_txn(self.txn, self.uid, is_favorite);
+    self
   }
 
   pub fn set_children(self, children: RepeatedViewIdentifier) -> Self {
@@ -474,7 +497,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   }
 
   pub fn done(self) -> Option<View> {
-    view_from_map_ref(self.map_ref, self.txn, &self.children_map)
+    view_from_map_ref(self.uid, self.map_ref, self.txn, &self.children_map)
   }
 }
 

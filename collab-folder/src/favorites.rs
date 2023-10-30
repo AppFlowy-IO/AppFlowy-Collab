@@ -1,41 +1,43 @@
-use crate::FavoritesInfo;
 use anyhow::bail;
-use collab::preclude::{lib0Any, Array, ArrayRefWrapper, ReadTxn, TransactionMut, Value, YrsValue};
+use collab::preclude::{lib0Any, Array, MapRefWrapper, ReadTxn, TransactionMut, Value, YrsValue};
 
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 
-use crate::ViewsMap;
-pub struct FavoritesArray {
-  container: ArrayRefWrapper,
+use crate::{UserId, ViewsMap};
+pub struct FavoritesMap {
+  uid: UserId,
+  container: MapRefWrapper,
   view_map: Rc<ViewsMap>,
 }
 
-impl FavoritesArray {
-  pub fn new(root: ArrayRefWrapper, view_map: Rc<ViewsMap>) -> Self {
+impl FavoritesMap {
+  pub fn new(uid: &UserId, root: MapRefWrapper, view_map: Rc<ViewsMap>) -> Self {
     Self {
+      uid: uid.clone(),
       container: root,
       view_map,
     }
   }
   ///Gets all favorite views in form of FavoriteRecord[]
-  pub fn get_all_favorites(&self) -> Vec<FavoritesInfo> {
+  pub fn get_all_favorites(&self) -> Vec<FavoriteRecord> {
     let txn = self.container.transact();
-    let items = self.get_all_favorites_with_txn(&txn);
-    items
-      .into_iter()
-      .map(|item| FavoritesInfo { id: item.id })
-      .collect::<Vec<_>>()
+    self.get_all_favorites_with_txn(&txn)
   }
 
   pub fn get_all_favorites_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<FavoriteRecord> {
-    let mut favorites = vec![];
-    for value in self.container.iter(txn) {
-      if let YrsValue::Any(any) = value {
-        favorites.push(FavoriteRecord::from(any))
-      }
+    match self.container.get_array_ref_with_txn(txn, &self.uid) {
+      None => vec![],
+      Some(fav_array) => {
+        let mut favorites = vec![];
+        for value in fav_array.iter(txn) {
+          if let YrsValue::Any(any) = value {
+            favorites.push(FavoriteRecord::from(any))
+          }
+        }
+        favorites
+      },
     }
-    favorites
   }
 
   /// Deletes a favorited record to be used when a view / views is / are unfavorited
@@ -44,8 +46,8 @@ impl FavoritesArray {
       ids.iter().for_each(|record| {
         self
           .view_map
-          .update_view_with_txn(txn, record.as_ref(), |update| {
-            update.set_favorite_if_not_none(Some(false)).done()
+          .update_view_with_txn(&self.uid, txn, record.as_ref(), |update| {
+            update.set_favorite(false).done()
           });
       });
       self.delete_favorites_with_txn(txn, ids);
@@ -53,25 +55,27 @@ impl FavoritesArray {
   }
 
   pub fn delete_favorites_with_txn<T: AsRef<str>>(&self, txn: &mut TransactionMut, ids: Vec<T>) {
-    for id in &ids {
-      if let Some(pos) = self
-        .get_all_favorites_with_txn(txn)
-        .into_iter()
-        .position(|item| item.id == id.as_ref())
-      {
-        self.container.remove_with_txn(txn, pos as u32);
+    if let Some(fav_array) = self.container.get_array_ref_with_txn(txn, &self.uid) {
+      for id in &ids {
+        if let Some(pos) = self
+          .get_all_favorites_with_txn(txn)
+          .into_iter()
+          .position(|item| item.id == id.as_ref())
+        {
+          fav_array.remove_with_txn(txn, pos as u32);
+        }
       }
     }
   }
 
   /// Adds a favorited record to be used when a view / views is / are favorited
-  pub fn add_favorites(&self, favorite_records: Vec<FavoriteRecord>) {
+  pub fn add_favorites(&self, uid: &UserId, favorite_records: Vec<FavoriteRecord>) {
     self.container.with_transact_mut(|txn| {
       favorite_records.iter().for_each(|record| {
         self
           .view_map
-          .update_view_with_txn(txn, &record.id, |update| {
-            update.set_favorite_if_not_none(Some(true)).done()
+          .update_view_with_txn(uid, txn, &record.id, |update| {
+            update.set_favorite(true).done()
           });
       });
       self.add_favorites_with_txn(txn, favorite_records);
@@ -83,15 +87,21 @@ impl FavoritesArray {
     txn: &mut TransactionMut,
     favorite_records: Vec<FavoriteRecord>,
   ) {
+    let fav_array = self
+      .container
+      .create_array_if_not_exist_with_txn::<FavoriteRecord, _>(txn, &self.uid, vec![]);
+
     for favorite_record in favorite_records {
-      self.container.push_back(txn, favorite_record);
+      fav_array.push_back(txn, favorite_record);
     }
   }
 
   pub fn clear(&self) {
     self.container.with_transact_mut(|txn| {
-      let len = self.container.iter(txn).count();
-      self.container.remove_range(txn, 0, len as u32);
+      if let Some(fav_array) = self.container.get_array_ref_with_txn(txn, &self.uid) {
+        let len = fav_array.iter(txn).count();
+        fav_array.remove_range(txn, 0, len as u32);
+      }
     });
   }
 }

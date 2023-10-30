@@ -4,8 +4,8 @@ use std::ops::{Deref, DerefMut};
 
 use lib0::any::Any;
 use serde::{Deserialize, Serialize};
-use yrs::{Array, Map, MapRef, ReadTxn, TransactionMut};
 use yrs::types::Value;
+use yrs::{Array, Map, MapRef, ReadTxn, TransactionMut};
 
 use crate::preclude::{lib0Any, MapRefExtension, YrsValue};
 

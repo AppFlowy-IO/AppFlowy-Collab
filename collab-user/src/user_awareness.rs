@@ -84,7 +84,7 @@ impl UserAwareness {
         };
 
         let reminder_container = awareness
-          .create_array_if_not_exist_with_txn::<MapPrelim<lib0Any>>(txn, REMINDERS, vec![]);
+          .create_array_if_not_exist_with_txn::<MapPrelim<lib0Any>, _>(txn, REMINDERS, vec![]);
         let reminders = Reminders::new(
           reminder_container,
           notifier

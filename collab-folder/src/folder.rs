@@ -12,7 +12,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
-use crate::favorites::{FavoriteRecord, FavoritesArray};
+use crate::favorites::{FavoriteRecord, FavoritesMap};
 use crate::folder_observe::{TrashChangeSender, ViewChangeSender};
 use crate::trash::{TrashArray, TrashRecord};
 use crate::{
@@ -20,7 +20,26 @@ use crate::{
   Workspace, WorkspaceMap, WorkspaceUpdate,
 };
 
-use super::FavoritesInfo;
+#[derive(Debug, Clone)]
+pub struct UserId(String);
+
+impl From<i64> for UserId {
+  fn from(value: i64) -> Self {
+    Self(value.to_string())
+  }
+}
+
+impl UserId {
+  pub fn as_i64(&self) -> i64 {
+    self.0.parse::<i64>().unwrap()
+  }
+}
+
+impl AsRef<str> for UserId {
+  fn as_ref(&self) -> &str {
+    &self.0
+  }
+}
 
 const FOLDER: &str = "folder";
 const WORKSPACES: &str = "workspaces";
@@ -30,7 +49,12 @@ const META: &str = "meta";
 const VIEW_RELATION: &str = "relation";
 const CURRENT_WORKSPACE: &str = "current_workspace";
 const CURRENT_VIEW: &str = "current_view";
-const FAVORITES: &str = "favorites";
+
+/// favorites is used as favorites_v1 to store array of favorite view ids.
+/// favorites_v2 is used to store a map that contains uid and array of favorite view ids.
+#[allow(dead_code)]
+const FAVORITES_V1: &str = "favorites";
+const FAVORITES: &str = "favorites_v2";
 
 #[derive(Clone)]
 pub struct FolderNotify {
@@ -44,7 +68,7 @@ pub struct FolderNotify {
 /// such as workspaces, views, trash, favorites, meta, and relation.
 ///
 /// The folder hierarchy can be visualized as follows:
-/// Folder: [workspaces: [], views: {}, trash: [], favorites: [], meta: {}, relation: {}]
+/// Folder: [workspaces: [], views: {}, trash: [], favorites: { uid: [] }, meta: {}, relation: {}]
 ///
 ///
 /// # Fields
@@ -55,17 +79,18 @@ pub struct FolderNotify {
 /// Currently, we only use one workspace to manage all the views in the folder.
 /// * `views`: A shared pointer to a map (`ViewsMap`) from view id to view data, keeping track of each view's data.
 /// * `trash`: An array of `TrashArray` objects, representing the trash items in the folder.
-/// * `favorites`: An array of `FavoritesArray` objects, representing the favorite items in the folder.
+/// * `favorites`: An map of `FavoritesMap` objects, representing the favorite items in the folder.
 /// * `meta`: Wrapper around the metadata map reference.
 /// * `subscription`: A `DeepEventsSubscription` object, managing the subscription for folder changes, like inserting a new view.
 /// * `notifier`: An optional `FolderNotify` object for notifying about changes in the folder.
 pub struct Folder {
+  uid: UserId,
   inner: Arc<MutexCollab>,
   root: MapRefWrapper,
   pub workspaces: WorkspaceArray,
   pub views: Rc<ViewsMap>,
   trash: TrashArray,
-  favorites: FavoritesArray,
+  favorites: FavoritesMap,
   meta: MapRefWrapper,
   #[allow(dead_code)]
   subscription: DeepEventsSubscription,
@@ -74,32 +99,34 @@ pub struct Folder {
 }
 
 impl Folder {
-  pub fn open(collab: Arc<MutexCollab>, notifier: Option<FolderNotify>) -> Self {
-    match open_folder(collab.clone(), notifier.clone()) {
+  pub fn open(uid: UserId, collab: Arc<MutexCollab>, notifier: Option<FolderNotify>) -> Self {
+    match open_folder(uid.clone(), collab.clone(), notifier.clone()) {
       None => {
         tracing::info!("Create missing attributes of folder");
-        create_folder(collab, notifier, None)
+        create_folder(uid, collab, notifier, None)
       },
       Some(folder) => folder,
     }
   }
 
   pub fn create(
+    uid: UserId,
     collab: Arc<MutexCollab>,
     notifier: Option<FolderNotify>,
     initial_folder_data: Option<FolderData>,
   ) -> Self {
-    create_folder(collab, notifier, initial_folder_data)
+    create_folder(uid, collab, notifier, initial_folder_data)
   }
 
   pub fn from_collab_raw_data(
+    uid: UserId,
     origin: CollabOrigin,
     collab_raw_data: CollabRawData,
     workspace_id: &str,
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, Error> {
     let collab = MutexCollab::new_with_raw_data(origin, workspace_id, collab_raw_data, plugins)?;
-    Ok(Self::open(Arc::new(collab), None))
+    Ok(Self::open(uid, Arc::new(collab), None))
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
@@ -232,7 +259,7 @@ impl Folder {
         .into_iter()
         .map(|be| be.id)
         .collect::<Vec<String>>();
-      self.views.get_views_with_txn(txn, &view_ids)
+      self.views.get_views_with_txn(txn, &view_ids, &self.uid)
     } else {
       vec![]
     }
@@ -265,11 +292,11 @@ impl Folder {
           });
       }
     }
-    self.views.insert_view(view)
+    self.views.insert_view(view, &self.uid)
   }
 
   pub fn move_view(&self, view_id: &str, from: u32, to: u32) -> Option<Arc<View>> {
-    let view = self.views.get_view(view_id)?;
+    let view = self.views.get_view(view_id, &self.uid)?;
     if let Some(workspace_id) = self.get_current_workspace_id() {
       if view.parent_view_id == workspace_id {
         self
@@ -308,11 +335,11 @@ impl Folder {
     prev_view_id: Option<String>,
   ) -> Option<Arc<View>> {
     tracing::debug!("Move nested view: {}", view_id);
-    let view = self.views.get_view(view_id)?;
+    let view = self.views.get_view(view_id, &self.uid)?;
     let current_workspace_id = self.get_current_workspace_id()?;
     let parent_id = view.parent_view_id.as_str();
 
-    let new_parent_view = self.views.get_view(new_parent_id);
+    let new_parent_view = self.views.get_view(new_parent_id, &self.uid);
 
     // If the new parent is not a view, it must be a workspace.
     // Check if the new parent is the current workspace, as moving out of the current workspace is not supported yet.
@@ -351,7 +378,9 @@ impl Folder {
       // Update the view's parent ID.
       self
         .views
-        .update_view_with_txn(txn, view_id, |update| update.set_bid(new_parent_id).done());
+        .update_view_with_txn(&self.uid, txn, view_id, |update| {
+          update.set_bid(new_parent_id).done()
+        });
     });
     Some(view)
   }
@@ -387,12 +416,12 @@ impl Folder {
     if let Some(workspace_id) = self.get_current_workspace_id() {
       let favorite = favorite_view_ids
         .into_iter()
-        .map(|favorite_view_id| FavoriteRecord {
-          id: favorite_view_id,
+        .map(|view_id| FavoriteRecord {
+          id: view_id,
           workspace_id: workspace_id.clone(),
         })
         .collect::<Vec<FavoriteRecord>>();
-      self.favorites.add_favorites(favorite);
+      self.favorites.add_favorites(&self.uid, favorite);
     }
   }
 
@@ -400,7 +429,7 @@ impl Folder {
     self.favorites.delete_favorites(unfavorite_view_ids);
   }
 
-  pub fn get_all_favorites(&self) -> Vec<FavoritesInfo> {
+  pub fn get_all_favorites(&self) -> Vec<FavoriteRecord> {
     self.favorites.get_all_favorites()
   }
 
@@ -460,7 +489,7 @@ impl Folder {
   ///
   /// * `Vec<View>`: A vector of `View` objects that includes the parent view and all of its child views.
   pub fn get_view_recursively_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<View> {
-    match self.views.get_view_with_txn(txn, view_id) {
+    match self.views.get_view_with_txn(txn, view_id, &self.uid) {
       None => vec![],
       Some(parent_view) => {
         let mut views = vec![parent_view.as_ref().clone()];
@@ -614,12 +643,12 @@ impl From<WorkspaceItem> for lib0Any {
 /// Create a folder with initial [FolderData] if it's provided.
 /// Otherwise, create an empty folder.
 fn create_folder(
+  uid: UserId,
   collab: Arc<MutexCollab>,
   notifier: Option<FolderNotify>,
   folder_data: Option<FolderData>,
 ) -> Folder {
   let collab_guard = collab.lock();
-
   let (folder, workspaces, views, trash, favorites, meta, subscription) = collab_guard
     .with_origin_transact_mut(|txn| {
       // create the folder
@@ -628,11 +657,10 @@ fn create_folder(
 
       // create the folder data
       let workspaces =
-        folder.create_array_if_not_exist_with_txn::<WorkspaceItem>(txn, WORKSPACES, vec![]);
+        folder.create_array_if_not_exist_with_txn::<WorkspaceItem, _>(txn, WORKSPACES, vec![]);
       let views = folder.create_map_with_txn_if_not_exist(txn, VIEWS);
-      let trash = folder.create_array_if_not_exist_with_txn::<TrashRecord>(txn, TRASH, vec![]);
-      let favorites =
-        folder.create_array_if_not_exist_with_txn::<FavoriteRecord>(txn, FAVORITES, vec![]);
+      let trash = folder.create_array_if_not_exist_with_txn::<TrashRecord, _>(txn, TRASH, vec![]);
+      let favorites = folder.create_map_with_txn_if_not_exist(txn, FAVORITES);
       let meta = folder.create_map_with_txn_if_not_exist(txn, META);
       let view_relations = Rc::new(ViewRelations::new(
         folder.create_map_with_txn_if_not_exist(txn, VIEW_RELATION),
@@ -640,6 +668,7 @@ fn create_folder(
 
       let workspaces = WorkspaceArray::new(txn, workspaces, view_relations.clone());
       let views = Rc::new(ViewsMap::new(
+        &uid,
         views,
         notifier
           .as_ref()
@@ -653,7 +682,7 @@ fn create_folder(
           .as_ref()
           .map(|notifier| notifier.trash_change_tx.clone()),
       );
-      let favorites = FavoritesArray::new(favorites, views.clone());
+      let favorites = FavoritesMap::new(&uid, favorites, views.clone());
 
       // Insert the folder data if it's provided.
       if let Some(folder_data) = folder_data {
@@ -664,7 +693,7 @@ fn create_folder(
         }
 
         for view in folder_data.views {
-          views.insert_view_with_txn(txn, view);
+          views.insert_view_with_txn(txn, view, &uid);
         }
 
         meta.insert_str_with_txn(txn, CURRENT_WORKSPACE, folder_data.current_workspace_id);
@@ -684,6 +713,7 @@ fn create_folder(
   drop(collab_guard);
 
   Folder {
+    uid,
     inner: collab,
     root: folder,
     workspaces,
@@ -696,7 +726,11 @@ fn create_folder(
   }
 }
 
-fn open_folder(collab: Arc<MutexCollab>, notifier: Option<FolderNotify>) -> Option<Folder> {
+fn open_folder(
+  uid: UserId,
+  collab: Arc<MutexCollab>,
+  notifier: Option<FolderNotify>,
+) -> Option<Folder> {
   let collab_guard = collab.lock();
   let txn = collab_guard.transact();
 
@@ -708,20 +742,21 @@ fn open_folder(collab: Arc<MutexCollab>, notifier: Option<FolderNotify>) -> Opti
   let workspaces = collab_guard.get_array_with_txn(&txn, vec![FOLDER, WORKSPACES])?;
   let views = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEWS])?;
   let trash = collab_guard.get_array_with_txn(&txn, vec![FOLDER, TRASH])?;
-  let favorite_array = collab_guard.get_array_with_txn(&txn, vec![FOLDER, FAVORITES])?;
+  let favorite_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, FAVORITES])?;
   let meta = collab_guard.get_map_with_txn(&txn, vec![FOLDER, META])?;
   let children_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEW_RELATION])?;
 
   let view_relations = Rc::new(ViewRelations::new(children_map));
   let workspaces = WorkspaceArray::new(&txn, workspaces, view_relations.clone());
   let views = Rc::new(ViewsMap::new(
+    &uid,
     views,
     notifier
       .as_ref()
       .map(|notifier| notifier.view_change_tx.clone()),
     view_relations,
   ));
-  let favorites = FavoritesArray::new(favorite_array, views.clone());
+  let favorites = FavoritesMap::new(&uid, favorite_map, views.clone());
   let trash = TrashArray::new(
     trash,
     views.clone(),
@@ -733,6 +768,7 @@ fn open_folder(collab: Arc<MutexCollab>, notifier: Option<FolderNotify>) -> Opti
   drop(collab_guard);
 
   Some(Folder {
+    uid,
     inner: collab,
     root: folder,
     workspaces,

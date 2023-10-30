@@ -1,13 +1,14 @@
 use std::future::Future;
 use std::time::Duration;
 
-use collab_folder::core::{TrashChange, TrashChangeReceiver};
+use collab_folder::{TrashChange, TrashChangeReceiver, UserId};
 
 use crate::util::create_folder_with_workspace;
 
 #[tokio::test]
 async fn create_trash_test() {
-  let folder_test = create_folder_with_workspace("1", "w1").await;
+  let uid = UserId::from(1);
+  let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
   folder_test.add_trash(vec!["1".to_string(), "2".to_string(), "3".to_string()]);
 
   let trash = folder_test.get_all_trash();
@@ -19,7 +20,8 @@ async fn create_trash_test() {
 
 #[tokio::test]
 async fn delete_trash_test() {
-  let folder_test = create_folder_with_workspace("1", "w1").await;
+  let uid = UserId::from(1);
+  let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
   folder_test.add_trash(vec!["1".to_string(), "2".to_string()]);
 
   let trash = folder_test.get_all_trash();
@@ -33,7 +35,8 @@ async fn delete_trash_test() {
 
 #[tokio::test]
 async fn create_trash_callback_test() {
-  let mut folder_test = create_folder_with_workspace("1", "w1").await;
+  let uid = UserId::from(1);
+  let mut folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
   let trash_rx = folder_test.trash_rx.take().unwrap();
   tokio::spawn(async move {
     folder_test.add_trash(vec!["1".to_string(), "2".to_string()]);
@@ -50,7 +53,8 @@ async fn create_trash_callback_test() {
 
 #[tokio::test]
 async fn delete_trash_callback_test() {
-  let mut folder_test = create_folder_with_workspace("1", "w1").await;
+  let uid = UserId::from(1);
+  let mut folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
   let trash_rx = folder_test.trash_rx.take().unwrap();
   tokio::spawn(async move {
     folder_test.add_trash(vec!["1".to_string(), "2".to_string()]);

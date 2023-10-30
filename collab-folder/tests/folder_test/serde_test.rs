@@ -1,11 +1,11 @@
-use collab_folder::core::{RepeatedViewIdentifier, ViewIdentifier, Workspace};
+use collab_folder::{RepeatedViewIdentifier, UserId, ViewIdentifier, Workspace};
 use serde_json::json;
 
 use crate::util::{create_folder, make_test_view};
 
 #[tokio::test]
 async fn folder_json_serde() {
-  let folder_test = create_folder("1").await;
+  let folder_test = create_folder(1.into(), "1").await;
   assert_json_diff::assert_json_eq!(
     json!({
       "relation": {},
@@ -13,7 +13,7 @@ async fn folder_json_serde() {
       "trash": [],
       "views": {},
       "workspaces": [],
-      "favorites": []
+      "favorites_v2": {}
     }),
     folder_test.to_json_value()
   );
@@ -21,7 +21,8 @@ async fn folder_json_serde() {
 
 #[tokio::test]
 async fn workspace_json_serde() {
-  let folder_test = create_folder("1").await;
+  let uid = UserId::from(1);
+  let folder_test = create_folder(uid, "1").await;
   let belongings = RepeatedViewIdentifier {
     items: vec![
       ViewIdentifier::new("v1".to_string()),
@@ -58,7 +59,7 @@ async fn workspace_json_serde() {
           "name": "My first workspace"
         }
       ],
-      "favorites": [],
+      "favorites_v2": {},
     }),
     folder_test.to_json_value()
   );
@@ -66,7 +67,8 @@ async fn workspace_json_serde() {
 
 #[tokio::test]
 async fn view_json_serde() {
-  let folder_test = create_folder("1").await;
+  let uid = UserId::from(1);
+  let folder_test = create_folder(uid, "1").await;
   let belongings = RepeatedViewIdentifier {
     items: vec![
       ViewIdentifier::new("v1".to_string()),
@@ -110,7 +112,9 @@ async fn view_json_serde() {
           "id": "v1",
           "layout": 0,
           "name": "",
-          "is_favorite": false,
+           "is_favorite": {
+            "1": false
+          },
           "icon": ""
         },
         "v2": {
@@ -120,7 +124,9 @@ async fn view_json_serde() {
           "id": "v2",
           "layout": 0,
           "name": "",
-          "is_favorite": false,
+           "is_favorite": {
+            "1": false
+          },
           "icon": ""
         }
       },
@@ -131,7 +137,7 @@ async fn view_json_serde() {
           "name": "My first workspace"
         }
       ],
-      "favorites": [],
+      "favorites_v2": {},
     }),
     folder_test.to_json_value()
   );
@@ -139,7 +145,8 @@ async fn view_json_serde() {
 
 #[tokio::test]
 async fn child_view_json_serde() {
-  let folder_test = create_folder("1").await;
+  let uid = UserId::from(1);
+  let folder_test = create_folder(uid, "1").await;
   let belongings = RepeatedViewIdentifier {
     items: vec![
       ViewIdentifier::new("v1".to_string()),
@@ -196,7 +203,9 @@ async fn child_view_json_serde() {
           "id": "v1",
           "layout": 0,
           "name": "",
-          "is_favorite":false,
+          "is_favorite": {
+            "1": false
+          },
           "icon": ""
         },
         "v2": {
@@ -206,7 +215,9 @@ async fn child_view_json_serde() {
           "id": "v2",
           "layout": 0,
           "name": "",
-          "is_favorite":false,
+          "is_favorite": {
+            "1": false
+          },
           "icon": ""
         },
         "v2.1": {
@@ -216,7 +227,9 @@ async fn child_view_json_serde() {
           "id": "v2.1",
           "layout": 0,
           "name": "",
-          "is_favorite":false,
+          "is_favorite": {
+            "1": false
+          },
           "icon": ""
         },
         "v2.2": {
@@ -226,7 +239,9 @@ async fn child_view_json_serde() {
           "id": "v2.2",
           "layout": 0,
           "name": "",
-          "is_favorite":false,
+          "is_favorite": {
+            "1": false
+          },
           "icon": ""
         }
       },
@@ -237,7 +252,7 @@ async fn child_view_json_serde() {
           "name": "My first workspace"
         }
       ],
-      "favorites": []
+      "favorites_v2": {}
     }),
     folder_test.to_json_value()
   );
