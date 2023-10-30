@@ -37,7 +37,6 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --all-features
 
       - name: Install prerequisites
         run: |

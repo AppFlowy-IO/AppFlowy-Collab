@@ -145,6 +145,12 @@ impl Folder {
   pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
     self.inner.lock().subscribe_snapshot_state()
   }
+
+  /// Returns the doc state and the state vector.
+  pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
+    self.inner.lock().encode_as_update_v1()
+  }
+
   /// Fetches the folder data based on the current workspace and view.
   ///
   /// This function initiates a transaction on the root node and uses it to fetch the current workspace

@@ -129,6 +129,7 @@ impl Collab {
     }
   }
 
+  /// Returns the doc state and the state vector.
   pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
     let txn = self.transact();
     (
