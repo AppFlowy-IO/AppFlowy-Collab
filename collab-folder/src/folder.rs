@@ -258,16 +258,7 @@ impl Folder {
     txn: &T,
     workspace_id: &str,
   ) -> Vec<Arc<View>> {
-    if let Some(view) = self.views.get_view_with_txn(txn, workspace_id) {
-      let view_ids = view
-        .children
-        .iter()
-        .map(|v| v.id.as_str())
-        .collect::<Vec<&str>>();
-      self.views.get_views_with_txn(txn, &view_ids)
-    } else {
-      vec![]
-    }
+    self.views.get_views_belong_to_with_txn(txn, workspace_id)
   }
 
   /// Inserts a new view into the workspace.
