@@ -24,9 +24,6 @@ async fn folder_json_serde() {
           "desc": "",
           "icon": "",
           "id": "fake_w_1",
-          "is_favorite": {
-            "1": false
-          },
           "layout": 0,
           "name": ""
         }
@@ -76,9 +73,6 @@ async fn view_json_serde() {
               "desc": "",
               "icon": "",
               "id": "fake_workspace_id",
-              "is_favorite": {
-                "1": false
-              },
               "layout": 0,
               "name": ""
             },
@@ -88,9 +82,6 @@ async fn view_json_serde() {
               "desc": "",
               "icon": "",
               "id": "v1",
-              "is_favorite": {
-                "1": false
-              },
               "layout": 0,
               "name": ""
             },
@@ -100,9 +91,6 @@ async fn view_json_serde() {
               "desc": "",
               "icon": "",
               "id": "v2",
-              "is_favorite": {
-                "1": false
-              },
               "layout": 0,
               "name": ""
             }
@@ -127,7 +115,7 @@ async fn child_view_json_serde() {
   folder_test.insert_view(view_2_2, None);
 
   // folder_test.workspaces.create_workspace(workspace);
-  assert_json_diff::assert_json_include!(actual: folder_test.to_json_value(), expected: json!({
+  assert_json_diff::assert_json_include!(actual: folder_test.to_json_value(), expected: json!( {
     "favorites_v2": {},
     "meta": {
       "current_view": "",
@@ -158,12 +146,10 @@ async fn child_view_json_serde() {
     "views": {
       "fake_workspace_id": {
         "bid": "",
+        "created_at": 0,
         "desc": "",
         "icon": "",
         "id": "fake_workspace_id",
-        "is_favorite": {
-          "1": false
-        },
         "layout": 0,
         "name": ""
       },
@@ -173,9 +159,6 @@ async fn child_view_json_serde() {
         "desc": "",
         "icon": "",
         "id": "v1",
-        "is_favorite": {
-          "1": false
-        },
         "layout": 0,
         "name": ""
       },
@@ -185,9 +168,6 @@ async fn child_view_json_serde() {
         "desc": "",
         "icon": "",
         "id": "v2",
-        "is_favorite": {
-          "1": false
-        },
         "layout": 0,
         "name": ""
       },
@@ -197,9 +177,6 @@ async fn child_view_json_serde() {
         "desc": "",
         "icon": "",
         "id": "v2.1",
-        "is_favorite": {
-          "1": false
-        },
         "layout": 0,
         "name": ""
       },
@@ -209,9 +186,6 @@ async fn child_view_json_serde() {
         "desc": "",
         "icon": "",
         "id": "v2.2",
-        "is_favorite": {
-          "1": false
-        },
         "layout": 0,
         "name": ""
       }
