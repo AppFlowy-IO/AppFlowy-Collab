@@ -10,7 +10,7 @@ use collab::preclude::{
 use parking_lot::RwLock;
 use tokio::sync::broadcast;
 
-use crate::{view_from_map_ref, UserId, View, ViewRelations};
+use crate::{view_from_map_ref, FavoritesMap, UserId, View, ViewRelations};
 
 #[derive(Debug, Clone)]
 pub enum ViewChange {
@@ -64,6 +64,7 @@ pub(crate) fn subscribe_view_change(
   view_cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
   change_tx: ViewChangeSender,
   view_relations: Rc<ViewRelations>,
+  fav_map: Rc<FavoritesMap>,
 ) -> DeepEventsSubscription {
   let uid = uid.clone();
   root.observe_deep(move |txn, events| {
@@ -77,7 +78,9 @@ pub(crate) fn subscribe_view_change(
             match c {
               EntryChange::Inserted(v) => {
                 if let YrsValue::YMap(map_ref) = v {
-                  if let Some(view) = view_from_map_ref(&uid, map_ref, txn, &view_relations) {
+                  if let Some(view) =
+                    view_from_map_ref(&uid, map_ref, txn, &view_relations, &fav_map)
+                  {
                     view_cache
                       .write()
                       .insert(view.id.clone(), Arc::new(view.clone()));
@@ -86,7 +89,9 @@ pub(crate) fn subscribe_view_change(
                 }
               },
               EntryChange::Updated(_, _) => {
-                if let Some(view) = view_from_map_ref(&uid, event.target(), txn, &view_relations) {
+                if let Some(view) =
+                  view_from_map_ref(&uid, event.target(), txn, &view_relations, &fav_map)
+                {
                   view_cache
                     .write()
                     .insert(view.id.clone(), Arc::new(view.clone()));

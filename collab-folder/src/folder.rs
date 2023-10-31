@@ -88,7 +88,7 @@ pub struct Folder {
   pub(crate) root: MapRefWrapper,
   pub views: Rc<ViewsMap>,
   trash: TrashArray,
-  favorites: FavoritesMap,
+  fav_map: Rc<FavoritesMap>,
   pub(crate) meta: MapRefWrapper,
   #[allow(dead_code)]
   subscription: DeepEventsSubscription,
@@ -186,7 +186,7 @@ impl Folder {
       views.extend(self.get_view_recursively_with_txn(&txn, &view.id));
     }
 
-    let favorites = self.favorites.get_favorite_data_with_txn(&txn);
+    let favorites = self.fav_map.get_favorite_data_with_txn(&txn);
     Some(FolderData {
       workspace,
       current_view,
@@ -368,23 +368,32 @@ impl Folder {
   }
 
   pub fn add_favorites(&self, favorite_view_ids: Vec<String>) {
-    let favorite = favorite_view_ids
+    let fav_ids = favorite_view_ids
       .into_iter()
       .map(|view_id| FavoriteId { id: view_id })
       .collect::<Vec<FavoriteId>>();
-    self.favorites.add_favorites(favorite);
+
+    for fav in fav_ids {
+      self
+        .views
+        .update_view(&fav.id, |update| update.set_favorite(true).done());
+    }
   }
 
   pub fn delete_favorites(&self, unfavorite_view_ids: Vec<String>) {
-    self.favorites.delete_favorites(unfavorite_view_ids);
+    for fav_id in unfavorite_view_ids {
+      self
+        .views
+        .update_view(&fav_id, |update| update.set_favorite(false).done());
+    }
   }
 
   pub fn get_all_favorites(&self) -> Vec<FavoriteId> {
-    self.favorites.get_all_favorites()
+    self.fav_map.get_all_favorites()
   }
 
   pub fn remove_all_favorites(&self) {
-    self.favorites.clear();
+    self.fav_map.clear();
   }
 
   pub fn add_trash(&self, trash_ids: Vec<String>) {
@@ -463,8 +472,8 @@ fn create_folder<T: Into<UserId>>(
 ) -> Folder {
   let uid = uid.into();
   let collab_guard = collab.lock();
-  let (folder, views, trash, favorites, meta, subscription) = collab_guard
-    .with_origin_transact_mut(|txn| {
+  let (folder, views, trash, fav_map, meta, subscription) =
+    collab_guard.with_origin_transact_mut(|txn| {
       // create the folder
       let mut folder = collab_guard.insert_map_with_txn_if_not_exist(txn, FOLDER);
       let subscription = subscribe_folder_change(&mut folder);
@@ -478,6 +487,7 @@ fn create_folder<T: Into<UserId>>(
         folder.create_map_with_txn_if_not_exist(txn, VIEW_RELATION),
       ));
 
+      let fav_map = Rc::new(FavoritesMap::new(&uid, favorites));
       let views = Rc::new(ViewsMap::new(
         &uid,
         views,
@@ -485,6 +495,7 @@ fn create_folder<T: Into<UserId>>(
           .as_ref()
           .map(|notifier| notifier.view_change_tx.clone()),
         view_relations,
+        fav_map.clone(),
       ));
       let trash = TrashArray::new(
         trash,
@@ -493,7 +504,6 @@ fn create_folder<T: Into<UserId>>(
           .as_ref()
           .map(|notifier| notifier.trash_change_tx.clone()),
       );
-      let favorites = FavoritesMap::new(&uid, favorites, views.clone());
 
       if let Some(folder_data) = folder_data {
         let workspace_id = folder_data.workspace.id.clone();
@@ -508,11 +518,11 @@ fn create_folder<T: Into<UserId>>(
 
         for (uid, view_ids) in folder_data.favorites {
           let favorite_records = view_ids.into_iter().map(|id| FavoriteId { id }).collect();
-          favorites.add_favorites_for_user_with_txn(txn, &uid, favorite_records);
+          fav_map.add_favorites_for_user_with_txn(txn, &uid, favorite_records);
         }
       }
 
-      (folder, views, trash, favorites, meta, subscription)
+      (folder, views, trash, fav_map, meta, subscription)
     });
   drop(collab_guard);
 
@@ -522,7 +532,7 @@ fn create_folder<T: Into<UserId>>(
     root: folder,
     views,
     trash,
-    favorites,
+    fav_map,
     meta,
     subscription,
     notifier,
@@ -550,6 +560,7 @@ fn open_folder<T: Into<UserId>>(
   let children_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEW_RELATION])?;
 
   let view_relations = Rc::new(ViewRelations::new(children_map));
+  let fav_map = Rc::new(FavoritesMap::new(&uid, favorite_map));
   let views = Rc::new(ViewsMap::new(
     &uid,
     views,
@@ -557,8 +568,8 @@ fn open_folder<T: Into<UserId>>(
       .as_ref()
       .map(|notifier| notifier.view_change_tx.clone()),
     view_relations,
+    fav_map.clone(),
   ));
-  let favorites = FavoritesMap::new(&uid, favorite_map, views.clone());
   let trash = TrashArray::new(
     trash,
     views.clone(),
@@ -575,7 +586,7 @@ fn open_folder<T: Into<UserId>>(
     root: folder,
     views,
     trash,
-    favorites,
+    fav_map,
     meta,
     subscription: folder_sub,
     notifier,

@@ -4,7 +4,7 @@ use serde_json::json;
 use assert_json_diff::assert_json_include;
 
 use crate::util::{
-  create_folder_with_data, create_folder_with_workspace, open_folder_with_db,
+  create_folder_with_data, create_folder_with_workspace, make_test_view, open_folder_with_db,
   unzip_history_folder_db,
 };
 
@@ -12,18 +12,62 @@ use crate::util::{
 async fn create_favorite_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
-  folder_test.add_favorites(vec!["1".to_string(), "2".to_string()]);
+  let workspace_id = folder_test.get_workspace_id();
+
+  // Insert view_1
+  let view_1 = make_test_view("1", workspace_id.as_str(), vec![]);
+  folder_test.insert_view(view_1, None);
+  folder_test.add_favorites(vec!["1".to_string()]);
+
+  // Insert view_2
+  let view_2 = make_test_view("2", workspace_id.as_str(), vec![]);
+  folder_test.insert_view(view_2, None);
+
+  let views = folder_test.get_workspace_views(&workspace_id);
+  assert_eq!(views.len(), 2);
+  assert_eq!(views[0].id, "1");
+  assert!(views[0].is_favorite);
+  assert_eq!(views[1].id, "2");
+  assert!(!views[1].is_favorite);
 
   let favorites = folder_test.get_all_favorites();
-  assert_eq!(favorites.len(), 2);
-  assert_eq!(favorites[0].id, "1");
-  assert_eq!(favorites[1].id, "2");
+  assert_eq!(favorites.len(), 1);
+}
+
+#[tokio::test]
+async fn add_favorite_view_and_then_remove_test() {
+  let uid = UserId::from(1);
+  let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
+  let workspace_id = folder_test.get_workspace_id();
+
+  // Insert view_1
+  let view_1 = make_test_view("1", workspace_id.as_str(), vec![]);
+  folder_test.insert_view(view_1, None);
+  folder_test.add_favorites(vec!["1".to_string()]);
+
+  let views = folder_test.get_workspace_views(&workspace_id);
+  assert_eq!(views.len(), 1);
+  assert_eq!(views[0].id, "1");
+  assert!(views[0].is_favorite);
+
+  folder_test.delete_favorites(vec!["1".to_string()]);
+  let views = folder_test.get_workspace_views(&workspace_id);
+  assert!(!views[0].is_favorite);
 }
 
 #[tokio::test]
 async fn create_multiple_user_favorite_test() {
   let uid_1 = UserId::from(1);
   let folder_test_1 = create_folder_with_workspace(uid_1.clone(), "w1").await;
+  let workspace_id = folder_test_1.get_workspace_id();
+  // Insert view_1
+  let view_1 = make_test_view("1", workspace_id.as_str(), vec![]);
+  folder_test_1.insert_view(view_1, None);
+
+  // Insert view_2
+  let view_2 = make_test_view("2", workspace_id.as_str(), vec![]);
+  folder_test_1.insert_view(view_2, None);
+
   folder_test_1.add_favorites(vec!["1".to_string(), "2".to_string()]);
   let favorites = folder_test_1.get_all_favorites();
   assert_eq!(favorites.len(), 2);
@@ -42,9 +86,19 @@ async fn create_multiple_user_favorite_test() {
 #[tokio::test]
 async fn favorite_data_serde_test() {
   let uid_1 = UserId::from(1);
-  let folder_test_1 = create_folder_with_workspace(uid_1.clone(), "w1").await;
-  folder_test_1.add_favorites(vec!["1".to_string(), "2".to_string()]);
-  let folder_data = folder_test_1.get_folder_data().unwrap();
+  let folder_test = create_folder_with_workspace(uid_1.clone(), "w1").await;
+  let workspace_id = folder_test.get_workspace_id();
+
+  // Insert view_1
+  let view_1 = make_test_view("1", workspace_id.as_str(), vec![]);
+  folder_test.insert_view(view_1, None);
+
+  // Insert view_2
+  let view_2 = make_test_view("2", workspace_id.as_str(), vec![]);
+  folder_test.insert_view(view_2, None);
+
+  folder_test.add_favorites(vec!["1".to_string(), "2".to_string()]);
+  let folder_data = folder_test.get_folder_data().unwrap();
   let value = serde_json::to_value(&folder_data).unwrap();
   assert_json_include!(
     actual: value,
@@ -77,8 +131,16 @@ async fn favorite_data_serde_test() {
 async fn delete_favorite_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
-  folder_test.add_favorites(vec!["1".to_string(), "2".to_string()]);
+  let workspace_id = folder_test.get_workspace_id();
+  // Insert view_1
+  let view_1 = make_test_view("1", workspace_id.as_str(), vec![]);
+  folder_test.insert_view(view_1, None);
 
+  // Insert view_2
+  let view_2 = make_test_view("2", workspace_id.as_str(), vec![]);
+  folder_test.insert_view(view_2, None);
+
+  folder_test.add_favorites(vec!["1".to_string(), "2".to_string()]);
   let favorites = folder_test.get_all_favorites();
   assert_eq!(favorites.len(), 2);
   assert_eq!(favorites[0].id, "1");

@@ -1,26 +1,23 @@
-use crate::{UserId, ViewsMap};
+use crate::UserId;
 use anyhow::bail;
 use collab::preclude::{
   lib0Any, Array, Map, MapRefWrapper, ReadTxn, TransactionMut, Value, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::rc::Rc;
 
 pub type FavoritesByUid = HashMap<UserId, Vec<String>>;
 
 pub struct FavoritesMap {
   uid: UserId,
   container: MapRefWrapper,
-  view_map: Rc<ViewsMap>,
 }
 
 impl FavoritesMap {
-  pub fn new(uid: &UserId, root: MapRefWrapper, view_map: Rc<ViewsMap>) -> Self {
+  pub fn new(uid: &UserId, root: MapRefWrapper) -> Self {
     Self {
       uid: uid.clone(),
       container: root,
-      view_map,
     }
   }
 
@@ -42,6 +39,27 @@ impl FavoritesMap {
       }
     }
     favorites_by_uid
+  }
+
+  pub fn is_favorite(&self, view_id: &str) -> bool {
+    let txn = self.container.transact();
+    self.is_favorite_with_txn(&txn, view_id)
+  }
+
+  pub fn is_favorite_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> bool {
+    match self.container.get_array_ref_with_txn(txn, &self.uid) {
+      None => false,
+      Some(fav_array) => {
+        for value in fav_array.iter(txn) {
+          if let Ok(favorite_id) = FavoriteId::try_from(&value) {
+            if favorite_id.id == view_id {
+              return true;
+            }
+          }
+        }
+        false
+      },
+    }
   }
 
   ///Gets all favorite views in form of FavoriteRecord[]
@@ -68,13 +86,6 @@ impl FavoritesMap {
   /// Deletes a favorited record to be used when a view / views is / are unfavorited
   pub fn delete_favorites<T: AsRef<str>>(&self, ids: Vec<T>) {
     self.container.with_transact_mut(|txn| {
-      ids.iter().for_each(|record| {
-        self
-          .view_map
-          .update_view_with_txn(&self.uid, txn, record.as_ref(), |update| {
-            update.set_favorite(false).done()
-          });
-      });
       self.delete_favorites_with_txn(txn, ids);
     });
   }
@@ -96,13 +107,6 @@ impl FavoritesMap {
   /// Adds a favorited record to be used when a view / views is / are favorited
   pub fn add_favorites(&self, favorite_records: Vec<FavoriteId>) {
     self.container.with_transact_mut(|txn| {
-      favorite_records.iter().for_each(|record| {
-        self
-          .view_map
-          .update_view_with_txn(&self.uid, txn, &record.id, |update| {
-            update.set_favorite(true).done()
-          });
-      });
       self.add_favorites_with_txn(txn, favorite_records);
     });
   }
