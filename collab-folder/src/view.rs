@@ -296,6 +296,7 @@ impl ViewsMap {
   where
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
+    self.remove_cache_view(view_id);
     self
       .container
       .with_transact_mut(|txn| self.update_view_with_txn(&self.uid, txn, view_id, f))
