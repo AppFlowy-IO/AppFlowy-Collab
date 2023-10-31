@@ -12,6 +12,7 @@ pub struct Workspace {
 
 impl Workspace {
   pub fn new(id: String, name: String) -> Self {
+    debug_assert!(!id.is_empty());
     Self {
       id,
       name,

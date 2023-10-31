@@ -8,6 +8,7 @@ use std::sync::{Arc, Once};
 use collab::preclude::CollabBuilder;
 use collab_folder::*;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use tempfile::TempDir;
@@ -37,7 +38,8 @@ unsafe impl Send for FolderTest {}
 unsafe impl Sync for FolderTest {}
 
 pub async fn create_folder(uid: UserId, workspace_id: &str) -> FolderTest {
-  let workspace = Workspace::new(workspace_id.to_string(), "".to_string());
+  let mut workspace = Workspace::new(workspace_id.to_string(), "".to_string());
+  workspace.created_at = 0;
   let folder_data = FolderData::new(workspace);
   create_folder_with_data(uid, workspace_id, folder_data).await
 }
@@ -94,7 +96,7 @@ pub async fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf)
     view_change_tx: view_tx,
     trash_change_tx: trash_tx,
   };
-  let folder = Folder::open(uid, Arc::new(collab), Some(context));
+  let folder = Folder::open(uid, Arc::new(collab), Some(context)).unwrap();
   FolderTest {
     folder,
     db,

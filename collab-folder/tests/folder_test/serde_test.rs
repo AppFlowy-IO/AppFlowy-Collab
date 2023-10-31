@@ -39,7 +39,7 @@ async fn folder_json_serde() {
 async fn view_json_serde() {
   let uid = UserId::from(1);
   let folder_test = create_folder(uid, "fake_workspace_id").await;
-  let workspace_id = folder_test.get_workspace_id().unwrap();
+  let workspace_id = folder_test.get_workspace_id();
 
   let view_1 = make_test_view("v1", &workspace_id, vec![]);
   let view_2 = make_test_view("v2", &workspace_id, vec![]);
@@ -115,7 +115,7 @@ async fn view_json_serde() {
 async fn child_view_json_serde() {
   let uid = UserId::from(1);
   let folder_test = create_folder(uid, "fake_workspace_id").await;
-  let workspace_id = folder_test.get_workspace_id().unwrap();
+  let workspace_id = folder_test.get_workspace_id();
 
   let view_1 = make_test_view("v1", &workspace_id, vec![]);
   let view_2 = make_test_view("v2", &workspace_id, vec![]);

@@ -1,6 +1,8 @@
+use collab::preclude::{Array, MapRefExtension, MapRefWrapper, ReadTxn};
+use tracing::error;
+
 use crate::folder::FAVORITES_V1;
 use crate::{FavoriteId, Folder, View, ViewRelations, Workspace};
-use collab::preclude::{Array, MapRefExtension, MapRefWrapper, ReadTxn};
 
 const WORKSPACES: &str = "workspaces";
 const WORKSPACE_ID: &str = "id";
@@ -35,12 +37,15 @@ impl Folder {
         .flat_map(|map_ref| to_workspace_with_txn(&txn, &map_ref, &self.views.view_relations))
         .collect::<Vec<_>>()
     };
-    debug_assert!(workspace.len() == 1);
-    if !workspace.is_empty() {
-      let view = View::from(workspace.pop().unwrap());
-      self
-        .root
-        .with_transact_mut(|txn| self.views.insert_view_with_txn(txn, view, None))
+    if workspace.is_empty() {
+      error!("No workspace found. When migrating from v1 to v2, the workspace must be present.");
+    } else {
+      let workspace = workspace.pop().unwrap();
+      self.root.with_transact_mut(|txn| {
+        self
+          .views
+          .insert_view_with_txn(txn, View::from(workspace), None);
+      })
     }
 
     Some(())

@@ -8,7 +8,7 @@ use crate::util::{create_folder_with_workspace, make_test_view};
 async fn create_child_views_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "fake_w_1").await;
-  let workspace_id = folder_test.get_workspace_id().unwrap();
+  let workspace_id = folder_test.get_workspace_id();
   let view_1_1 = make_test_view("1_1", "1", vec![]);
   let view_1_2 = make_test_view("1_2", "1", vec![]);
   let view_1_2_1 = make_test_view("1_2_1", "1_2", vec![]);

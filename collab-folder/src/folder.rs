@@ -6,7 +6,6 @@ use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::core::collab_state::{SnapshotState, SyncState};
 pub use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
-
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
@@ -50,8 +49,8 @@ const VIEWS: &str = "views";
 const TRASH: &str = "trash";
 const META: &str = "meta";
 const VIEW_RELATION: &str = "relation";
-const CURRENT_WORKSPACE: &str = "current_workspace";
 const CURRENT_VIEW: &str = "current_view";
+const CURRENT_WORKSPACE: &str = "current_workspace";
 
 pub(crate) const FAVORITES_V1: &str = "favorites";
 pub(crate) const FAVORITES_V2: &str = "favorites_v2";
@@ -90,7 +89,7 @@ pub struct Folder {
   pub views: Rc<ViewsMap>,
   trash: TrashArray,
   favorites: FavoritesMap,
-  meta: MapRefWrapper,
+  pub(crate) meta: MapRefWrapper,
   #[allow(dead_code)]
   subscription: DeepEventsSubscription,
   #[allow(dead_code)]
@@ -102,15 +101,19 @@ impl Folder {
     uid: T,
     collab: Arc<MutexCollab>,
     notifier: Option<FolderNotify>,
-  ) -> Self {
+  ) -> Result<Self, Error> {
     let uid = uid.into();
-    match open_folder(uid.clone(), collab.clone(), notifier.clone()) {
+    let folder = match open_folder(uid.clone(), collab.clone(), notifier.clone()) {
       None => {
         tracing::info!("Create missing attributes of folder");
         create_folder(uid, collab, notifier, None)
       },
       Some(folder) => folder,
-    }
+    };
+
+    // When the folder is opened, the workspace id must be present.
+    folder.try_get_workspace_id()?;
+    Ok(folder)
   }
 
   pub fn create<T: Into<UserId>>(
@@ -130,7 +133,7 @@ impl Folder {
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, Error> {
     let collab = MutexCollab::new_with_raw_data(origin, workspace_id, collab_raw_data, plugins)?;
-    Ok(Self::open(uid, Arc::new(collab), None))
+    Self::open(uid, Arc::new(collab), None)
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
@@ -148,13 +151,12 @@ impl Folder {
 
   pub fn update_workspace(&self, name: &str) {
     self.root.with_transact_mut(|txn| {
-      if let Some(workspace_id) = self.get_workspace_id_with_txn(txn) {
-        self
-          .views
-          .update_view_with_txn(&self.uid, txn, &workspace_id, |update| {
-            update.set_name(name).done()
-          });
-      }
+      let workspace_id = self.get_workspace_id_with_txn(txn);
+      self
+        .views
+        .update_view_with_txn(&self.uid, txn, &workspace_id, |update| {
+          update.set_name(name).done()
+        });
     });
   }
 
@@ -174,7 +176,7 @@ impl Folder {
   ///   is returned explicitly), it returns `None`.
   pub fn get_folder_data(&self) -> Option<FolderData> {
     let txn = self.root.transact();
-    let workspace_id = self.get_workspace_id_with_txn(&txn).unwrap_or_default();
+    let workspace_id = self.get_workspace_id_with_txn(&txn);
     let workspace = Workspace::from(self.views.get_view_with_txn(&txn, &workspace_id)?.as_ref());
 
     let current_view = self.get_current_view_with_txn(&txn).unwrap_or_default();
@@ -205,13 +207,21 @@ impl Folder {
     Some(Workspace::from(view.as_ref()))
   }
 
-  pub fn get_workspace_id(&self) -> Option<String> {
+  pub fn get_workspace_id(&self) -> String {
     let txn = self.meta.transact();
     self.get_workspace_id_with_txn(&txn)
   }
 
-  pub fn get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
-    self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE)
+  pub fn get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
+    self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE).unwrap()
+  }
+
+  pub fn try_get_workspace_id(&self) -> Result<String, Error> {
+    let txn = self.meta.transact();
+    match self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE) {
+      None => Err(anyhow::anyhow!("No workspace")),
+      Some(workspace_id) => Ok(workspace_id),
+    }
   }
 
   pub fn get_current_workspace_views(&self) -> Vec<Arc<View>> {
@@ -307,7 +317,7 @@ impl Folder {
   ) -> Option<Arc<View>> {
     tracing::debug!("Move nested view: {}", view_id);
     let view = self.views.get_view(view_id)?;
-    let current_workspace_id = self.get_workspace_id()?;
+    let current_workspace_id = self.get_workspace_id();
     let parent_id = view.parent_view_id.as_str();
 
     let new_parent_view = self.views.get_view(new_parent_id);
@@ -387,17 +397,15 @@ impl Folder {
   }
 
   pub fn add_trash(&self, trash_ids: Vec<String>) {
-    if let Some(workspace_id) = self.get_workspace_id() {
-      let trash = trash_ids
-        .into_iter()
-        .map(|trash_id| TrashRecord {
-          id: trash_id,
-          created_at: chrono::Utc::now().timestamp(),
-          workspace_id: workspace_id.clone(),
-        })
-        .collect::<Vec<TrashRecord>>();
-      self.trash.add_trash(trash);
-    }
+    let trash = trash_ids
+      .into_iter()
+      .map(|trash_id| TrashRecord {
+        id: trash_id,
+        created_at: chrono::Utc::now().timestamp(),
+        workspace_id: self.get_workspace_id(),
+      })
+      .collect::<Vec<TrashRecord>>();
+    self.trash.add_trash(trash);
   }
 
   pub fn delete_trash(&self, trash_ids: Vec<String>) {
@@ -570,7 +578,7 @@ fn open_folder<T: Into<UserId>>(
   drop(txn);
   drop(collab_guard);
 
-  Some(Folder {
+  let folder = Folder {
     uid,
     inner: collab,
     root: folder,
@@ -580,5 +588,7 @@ fn open_folder<T: Into<UserId>>(
     meta,
     subscription: folder_sub,
     notifier,
-  })
+  };
+
+  Some(folder)
 }
