@@ -1,7 +1,7 @@
 use collab_folder::{FolderData, UserId};
 use serde_json::json;
 
-use assert_json_diff::{assert_json_eq, assert_json_include};
+use assert_json_diff::assert_json_include;
 
 use crate::util::{
   create_folder_with_data, create_folder_with_workspace, open_folder_with_db,
@@ -32,7 +32,7 @@ async fn create_multiple_user_favorite_test() {
   let folder_data = folder_test_1.get_folder_data().unwrap();
 
   let uid_2 = UserId::from(2);
-  let folder_test2 = create_folder_with_data(uid_2.clone(), "w1", Some(folder_data)).await;
+  let folder_test2 = create_folder_with_data(uid_2.clone(), "w1", folder_data).await;
   let favorites = folder_test2.get_all_favorites();
 
   // User 2 can't see user 1's favorites
@@ -46,11 +46,10 @@ async fn favorite_data_serde_test() {
   folder_test_1.add_favorites(vec!["1".to_string(), "2".to_string()]);
   let folder_data = folder_test_1.get_folder_data().unwrap();
   let value = serde_json::to_value(&folder_data).unwrap();
-  assert_json_eq!(
-    value,
-    json!({
+  assert_json_include!(
+    actual: value,
+    expected: json!({
       "current_view": "",
-      "current_workspace_id": "w1",
       "favorites": {
         "1": [
           "1",
@@ -58,16 +57,13 @@ async fn favorite_data_serde_test() {
         ]
       },
       "views": [],
-      "workspaces": [
-        {
-          "child_views": {
-            "items": []
-          },
-          "created_at": 123,
-          "id": "w1",
-          "name": "My first workspace"
-        }
-      ]
+      "workspace": {
+        "child_views": {
+          "items": []
+        },
+        "id": "w1",
+        "name": ""
+      }
     })
   );
 
@@ -110,14 +106,15 @@ async fn migrate_from_old_version_folder_without_fav_test() {
     db_path,
   )
   .await;
+  folder_test.migrate_workspace_to_view();
   let folder_data = folder_test.get_folder_data().unwrap();
   let value = serde_json::to_value(folder_data).unwrap();
 
-  assert_json_eq!(
-    value,
-    json!({
+  assert_json_include!(
+    actual: value,
+    expected: json!({
       "current_view": "631584ec-af71-42c3-94f4-89dcfdafb988",
-      "current_workspace_id": "49af3b85-9343-447a-946d-038f63883399",
+      "favorites": {},
       "views": [
         {
           "children": {
@@ -127,9 +124,9 @@ async fn migrate_from_old_version_folder_without_fav_test() {
               }
             ]
           },
-          "icon": null,
           "created_at": 1690602073,
           "desc": "",
+          "icon": null,
           "id": "5cf7eff5-954d-424d-a5e7-032527929019",
           "is_favorite": false,
           "layout": 0,
@@ -140,9 +137,9 @@ async fn migrate_from_old_version_folder_without_fav_test() {
           "children": {
             "items": []
           },
-          "icon": null,
           "created_at": 1690602073,
           "desc": "",
+          "icon": null,
           "id": "631584ec-af71-42c3-94f4-89dcfdafb988",
           "is_favorite": false,
           "layout": 0,
@@ -150,21 +147,17 @@ async fn migrate_from_old_version_folder_without_fav_test() {
           "parent_view_id": "5cf7eff5-954d-424d-a5e7-032527929019"
         }
       ],
-      "workspaces": [
-        {
-          "child_views": {
-            "items": [
-              {
-                "id": "5cf7eff5-954d-424d-a5e7-032527929019"
-              }
-            ]
-          },
-          "created_at": 1690602073,
-          "id": "49af3b85-9343-447a-946d-038f63883399",
-          "name": "Workspace"
-        }
-      ],
-      "favorites": {}
+      "workspace": {
+        "child_views": {
+          "items": [
+            {
+              "id": "5cf7eff5-954d-424d-a5e7-032527929019"
+            }
+          ]
+        },
+        "id": "49af3b85-9343-447a-946d-038f63883399",
+        "name": "Workspace"
+      }
     })
   );
 }
@@ -183,12 +176,20 @@ async fn migrate_favorite_v1_test() {
   let favorites = folder_test.get_favorite_v1();
   assert_eq!(favorites.len(), 2);
   folder_test.add_favorites(favorites.into_iter().map(|fav| fav.id).collect::<Vec<_>>());
+  folder_test.migrate_workspace_to_view();
 
   let folder_data = folder_test.get_folder_data().unwrap();
   let value = serde_json::to_value(folder_data).unwrap();
   assert_json_include!(
     actual: value,
-    expected: json!({
+    expected: json!( {
+      "current_view": "9330d783-d10d-4a15-84d3-1fa4fa2e8cc4",
+      "favorites": {
+        "254954554859196416": [
+          "36e0a35e-c636-48d6-9e50-e2e2ee8a1d9f",
+          "9330d783-d10d-4a15-84d3-1fa4fa2e8cc4"
+        ]
+      },
       "views": [
         {
           "children": {
@@ -253,245 +254,17 @@ async fn migrate_favorite_v1_test() {
           "parent_view_id": "ddf06dcf-1a01-4d0d-b973-9d6a892f68b5"
         }
       ],
-    })
-  );
-}
-
-#[tokio::test]
-async fn deserialize_folder_data_without_fav_test() {
-  let folder_test = create_folder_with_data(1.into(), "1", Some(folder_data_without_fav())).await;
-  let folder_data = folder_test.get_folder_data().unwrap();
-  let value = serde_json::to_value(folder_data).unwrap();
-  assert_json_eq!(
-    value,
-    json!({
-      "current_view": "",
-      "current_workspace_id": "w1",
-      "views": [
-        {
-          "children": {
-            "items": [
-              {
-                "id": "1_1"
-              },
-              {
-                "id": "1_2"
-              },
-              {
-                "id": "1_3"
-              }
-            ]
-          },
-          "icon": null,
-          "created_at": 0,
-          "desc": "",
-          "id": "1",
-          "is_favorite": false,
-          "layout": 0,
-          "name": "",
-          "parent_view_id": "w1"
-        },
-        {
-          "children": {
-            "items": []
-          },
-          "icon": null,
-          "created_at": 0,
-          "desc": "",
-          "id": "1_1",
-          "is_favorite": false,
-          "layout": 0,
-          "name": "",
-          "parent_view_id": "1"
-        },
-        {
-          "children": {
-            "items": [
-              {
-                "id": "1_2_1"
-              },
-              {
-                "id": "1_2_2"
-              }
-            ]
-          },
-          "icon": null,
-          "created_at": 0,
-          "desc": "",
-          "id": "1_2",
-          "is_favorite": false,
-          "layout": 0,
-          "name": "",
-          "parent_view_id": "1"
-        },
-        {
-          "children": {
-            "items": []
-          },
-          "icon": null,
-          "created_at": 0,
-          "desc": "",
-          "id": "1_2_1",
-          "is_favorite": false,
-          "layout": 0,
-          "name": "",
-          "parent_view_id": "1_2"
-        },
-        {
-          "children": {
-            "items": []
-          },
-          "icon": null,
-          "created_at": 0,
-          "desc": "",
-          "id": "1_2_2",
-          "is_favorite": false,
-          "layout": 0,
-          "name": "",
-          "parent_view_id": "1_2"
-        },
-        {
-          "children": {
-            "items": []
-          },
-          "icon": null,
-          "created_at": 0,
-          "desc": "",
-          "id": "1_3",
-          "is_favorite": false,
-          "layout": 0,
-          "name": "",
-          "parent_view_id": "1"
-        }
-      ],
-      "workspaces": [
-        {
-          "child_views": {
-            "items": [
-              {
-                "id": "1"
-              }
-            ]
-          },
-          "created_at": 123,
-          "id": "w1",
-          "name": "My first workspace"
-        }
-      ],
-      "favorites": {}
-    })
-  )
-}
-
-fn folder_data_without_fav() -> FolderData {
-  let json = json!({
-    "current_view": "",
-    "current_workspace_id": "w1",
-    "views": [
-      {
-        "children": {
-          "items": [
-            {
-              "id": "1_1"
-            },
-            {
-              "id": "1_2"
-            },
-            {
-              "id": "1_3"
-            }
-          ]
-        },
-        "icon": null,
-        "created_at": 0,
-        "desc": "",
-        "id": "1",
-        "layout": 0,
-        "name": "",
-        "parent_view_id": "w1"
-      },
-      {
-        "children": {
-          "items": []
-        },
-        "icon": null,
-        "created_at": 0,
-        "desc": "",
-        "id": "1_1",
-        "layout": 0,
-        "name": "",
-        "parent_view_id": "1"
-      },
-      {
-        "children": {
-          "items": [
-            {
-              "id": "1_2_1"
-            },
-            {
-              "id": "1_2_2"
-            }
-          ]
-        },
-        "icon": null,
-        "created_at": 0,
-        "desc": "",
-        "id": "1_2",
-        "layout": 0,
-        "name": "",
-        "parent_view_id": "1"
-      },
-      {
-        "children": {
-          "items": []
-        },
-        "created_at": 0,
-        "desc": "",
-        "icon": null,
-        "id": "1_2_1",
-        "layout": 0,
-        "name": "",
-        "parent_view_id": "1_2"
-      },
-      {
-        "children": {
-          "items": []
-        },
-        "created_at": 0,
-        "desc": "",
-        "icon": null,
-        "id": "1_2_2",
-        "layout": 0,
-        "name": "",
-        "parent_view_id": "1_2"
-      },
-      {
-        "children": {
-          "items": []
-        },
-        "created_at": 0,
-        "desc": "",
-        "icon": null,
-        "id": "1_3",
-        "layout": 0,
-        "name": "",
-        "parent_view_id": "1"
-      }
-    ],
-    "workspaces": [
-      {
+      "workspace": {
         "child_views": {
           "items": [
             {
-              "id": "1"
+              "id": "ddf06dcf-1a01-4d0d-b973-9d6a892f68b5"
             }
           ]
         },
-        "created_at": 123,
-        "id": "w1",
-        "name": "My first workspace"
+        "id": "835f64ab-9efc-4365-8055-1e66ee03c555",
+        "name": "Workspace"
       }
-    ]
-  });
-  serde_json::from_value::<FolderData>(json).unwrap()
+    })
+  );
 }

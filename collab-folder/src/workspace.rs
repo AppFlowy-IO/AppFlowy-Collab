@@ -1,109 +1,6 @@
-use std::rc::Rc;
-
-use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
-
-#[derive(Clone)]
-pub struct WorkspaceMap {
-  container: MapRefWrapper,
-  view_relations: Rc<ViewRelations>,
-}
-
-const WORKSPACE_ID: &str = "id";
-const WORKSPACE_NAME: &str = "name";
-const WORKSPACE_CREATED_AT: &str = "created_at";
-
-impl WorkspaceMap {
-  pub fn new(container: MapRefWrapper, view_relations: Rc<ViewRelations>) -> Self {
-    Self {
-      container,
-      view_relations,
-    }
-  }
-
-  pub fn workspace_id(&self) -> Option<String> {
-    let txn = self.container.transact();
-    self.container.get_str_with_txn(&txn, WORKSPACE_ID)
-  }
-
-  pub fn get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
-    self.container.get_str_with_txn(txn, WORKSPACE_ID)
-  }
-
-  pub fn create_with_txn<F>(
-    txn: &mut TransactionMut,
-    container: &MapRef,
-    workspace_id: &str,
-    view_relations: Rc<ViewRelations>,
-    f: F,
-  ) -> Self
-  where
-    F: FnOnce(WorkspaceBuilder) -> WorkspaceMap,
-  {
-    let builder = WorkspaceBuilder::new(workspace_id, txn, container, view_relations);
-    f(builder)
-  }
-
-  pub fn update<F>(&self, f: F)
-  where
-    F: FnOnce(WorkspaceUpdate),
-  {
-    self
-      .container
-      .with_transact_mut(|txn| self.update_with_txn(txn, f))
-  }
-
-  pub fn update_with_txn<F>(&self, txn: &mut TransactionMut, f: F)
-  where
-    F: FnOnce(WorkspaceUpdate),
-  {
-    if let Some(workspace_id) = self.get_workspace_id_with_txn(txn) {
-      let update = WorkspaceUpdate::new(
-        &workspace_id,
-        txn,
-        &self.container,
-        self.view_relations.clone(),
-      );
-      f(update);
-    }
-  }
-
-  pub fn to_workspace(&self) -> Option<Workspace> {
-    let txn = self.container.transact();
-    self.to_workspace_with_txn(&txn)
-  }
-
-  pub fn to_workspace_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<Workspace> {
-    let id = self.container.get_str_with_txn(txn, WORKSPACE_ID)?;
-    let name = self
-      .container
-      .get_str_with_txn(txn, WORKSPACE_NAME)
-      .unwrap_or_default();
-    let created_at = self
-      .container
-      .get_i64_with_txn(txn, WORKSPACE_CREATED_AT)
-      .unwrap_or_default();
-
-    let child_views = self
-      .view_relations
-      .get_children_with_txn(txn, &id)
-      .map(|array| array.get_children())
-      .unwrap_or_default();
-
-    Some(Workspace {
-      id,
-      name,
-      child_views,
-      created_at,
-    })
-  }
-
-  pub fn to_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
-    self.container.get_str_with_txn(txn, WORKSPACE_ID)
-  }
-}
+use crate::{RepeatedViewIdentifier, View, ViewLayout};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Workspace {
@@ -113,105 +10,40 @@ pub struct Workspace {
   pub created_at: i64,
 }
 
-pub struct WorkspaceBuilder<'a, 'b> {
-  workspace_id: &'a str,
-  map_ref: &'a MapRef,
-  txn: &'a mut TransactionMut<'b>,
-  view_relations: Rc<ViewRelations>,
-}
-
-impl<'a, 'b> WorkspaceBuilder<'a, 'b> {
-  pub fn new(
-    workspace_id: &'a str,
-    txn: &'a mut TransactionMut<'b>,
-    map_ref: &'a MapRef,
-    view_relations: Rc<ViewRelations>,
-  ) -> Self {
-    map_ref.insert_str_with_txn(txn, WORKSPACE_ID, workspace_id);
+impl Workspace {
+  pub fn new(id: String, name: String) -> Self {
+    debug_assert!(!id.is_empty());
     Self {
-      workspace_id,
-      map_ref,
-      txn,
-      view_relations,
+      id,
+      name,
+      child_views: Default::default(),
+      created_at: chrono::Utc::now().timestamp(),
     }
   }
-
-  pub fn update<F>(self, f: F) -> Self
-  where
-    F: FnOnce(WorkspaceUpdate),
-  {
-    let update = WorkspaceUpdate::new(
-      self.workspace_id,
-      self.txn,
-      self.map_ref,
-      self.view_relations.clone(),
-    );
-    f(update);
-    self
-  }
 }
 
-pub struct WorkspaceUpdate<'a, 'b, 'c> {
-  workspace_id: &'a str,
-  map_ref: &'c MapRef,
-  txn: &'a mut TransactionMut<'b>,
-  view_relations: Rc<ViewRelations>,
-}
-
-impl<'a, 'b, 'c> WorkspaceUpdate<'a, 'b, 'c> {
-  pub fn new(
-    workspace_id: &'a str,
-    txn: &'a mut TransactionMut<'b>,
-    map_ref: &'c MapRef,
-    view_relations: Rc<ViewRelations>,
-  ) -> Self {
+impl From<&View> for Workspace {
+  fn from(value: &View) -> Self {
     Self {
-      workspace_id,
-      map_ref,
-      txn,
-      view_relations,
+      id: value.id.clone(),
+      name: value.name.clone(),
+      child_views: value.children.clone(),
+      created_at: value.created_at,
     }
   }
-
-  pub fn set_name<T: AsRef<str>>(self, name: T) -> Self {
-    self
-      .map_ref
-      .insert_str_with_txn(self.txn, WORKSPACE_NAME, name.as_ref());
-    self
-  }
-
-  pub fn set_created_at(self, created_at: i64) -> Self {
-    self
-      .map_ref
-      .insert_i64_with_txn(self.txn, WORKSPACE_CREATED_AT, created_at);
-    self
-  }
-
-  pub fn set_children(self, children: RepeatedViewIdentifier) -> Self {
-    let array = self
-      .view_relations
-      .get_or_create_children_with_txn(self.txn, self.workspace_id);
-    array.add_children_with_txn(self.txn, children.into_inner(), None);
-    self
-  }
-
-  pub fn delete_child(self, index: u32) -> Self {
-    self
-      .view_relations
-      .delete_children_with_txn(self.txn, self.workspace_id, index);
-    self
-  }
-
-  pub fn add_children(self, children: Vec<ViewIdentifier>, index: Option<u32>) {
-    self
-      .view_relations
-      .add_children(self.txn, self.workspace_id, children, index);
-  }
-
-  pub fn move_view(self, from: u32, to: u32) -> Self {
-    self
-      .view_relations
-      .move_child_with_txn(self.txn, self.workspace_id, from, to);
-    self
+}
+impl From<Workspace> for View {
+  fn from(value: Workspace) -> Self {
+    Self {
+      id: value.id,
+      parent_view_id: "".to_string(),
+      name: value.name,
+      desc: "".to_string(),
+      children: value.child_views,
+      created_at: value.created_at,
+      is_favorite: false,
+      layout: ViewLayout::Document,
+      icon: None,
+    }
   }
 }

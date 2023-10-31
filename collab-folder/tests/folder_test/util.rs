@@ -8,6 +8,7 @@ use std::sync::{Arc, Once};
 use collab::preclude::CollabBuilder;
 use collab_folder::*;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use tempfile::TempDir;
@@ -37,13 +38,16 @@ unsafe impl Send for FolderTest {}
 unsafe impl Sync for FolderTest {}
 
 pub async fn create_folder(uid: UserId, workspace_id: &str) -> FolderTest {
-  create_folder_with_data(uid, workspace_id, None).await
+  let mut workspace = Workspace::new(workspace_id.to_string(), "".to_string());
+  workspace.created_at = 0;
+  let folder_data = FolderData::new(workspace);
+  create_folder_with_data(uid, workspace_id, folder_data).await
 }
 
 pub async fn create_folder_with_data(
   uid: UserId,
   workspace_id: &str,
-  folder_data: Option<FolderData>,
+  folder_data: FolderData,
 ) -> FolderTest {
   let tempdir = TempDir::new().unwrap();
 
@@ -92,7 +96,7 @@ pub async fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf)
     view_change_tx: view_tx,
     trash_change_tx: trash_tx,
   };
-  let folder = Folder::open(uid, Arc::new(collab), Some(context));
+  let folder = Folder::open(uid, Arc::new(collab), Some(context)).unwrap();
   FolderTest {
     folder,
     db,
@@ -103,17 +107,7 @@ pub async fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf)
 }
 
 pub async fn create_folder_with_workspace(uid: UserId, workspace_id: &str) -> FolderTest {
-  let test = create_folder(uid, workspace_id).await;
-  let workspace = Workspace {
-    id: workspace_id.to_string(),
-    name: "My first workspace".to_string(),
-    child_views: Default::default(),
-    created_at: 123,
-  };
-
-  test.folder.workspaces.create_workspace(workspace);
-  test.folder.set_current_workspace(workspace_id);
-  test
+  create_folder(uid, workspace_id).await
 }
 
 pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<String>) -> View {

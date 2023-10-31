@@ -27,7 +27,7 @@ const FAVORITE_STATUS: &str = "is_favorite";
 pub struct ViewsMap {
   uid: UserId,
   container: MapRefWrapper,
-  view_relations: Rc<ViewRelations>,
+  pub(crate) view_relations: Rc<ViewRelations>,
   view_cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
 
   #[allow(dead_code)]
@@ -211,25 +211,30 @@ impl ViewsMap {
     map_ref.get_str_with_txn(txn, VIEW_NAME)
   }
 
-  pub(crate) fn insert_view(&self, view: View, uid: &UserId) {
+  pub(crate) fn insert_view(&self, view: View, index: Option<u32>) {
     self
       .container
-      .with_transact_mut(|txn| self.insert_view_with_txn(txn, view, uid));
+      .with_transact_mut(|txn| self.insert_view_with_txn(txn, view, index));
   }
 
-  pub(crate) fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: View, uid: &UserId) {
+  pub(crate) fn insert_view_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    view: View,
+    index: Option<u32>,
+  ) {
     if let Some(parent_map_ref) = self.container.get_map_with_txn(txn, &view.parent_view_id) {
       let view_identifier = ViewIdentifier {
         id: view.id.clone(),
       };
       let view = ViewUpdate::new(
-        uid,
+        &self.uid,
         &view.parent_view_id,
         txn,
         &parent_map_ref,
         self.view_relations.clone(),
       )
-      .add_children(vec![view_identifier])
+      .add_children(vec![view_identifier], index)
       .done()
       .map(Arc::new);
       self.set_cache_view(view);
@@ -237,7 +242,7 @@ impl ViewsMap {
 
     let map_ref = self.container.create_map_with_txn(txn, &view.id);
     let view = ViewBuilder::new(&view.id, txn, map_ref, self.view_relations.clone())
-      .update(uid, |update| {
+      .update(&self.uid, |update| {
         update
           .set_name(view.name)
           .set_bid(view.parent_view_id)
@@ -492,10 +497,10 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     self
   }
 
-  pub fn add_children(self, children: Vec<ViewIdentifier>) -> Self {
+  pub fn add_children(self, children: Vec<ViewIdentifier>, index: Option<u32>) -> Self {
     self
       .children_map
-      .add_children(self.txn, self.view_id, children, None);
+      .add_children(self.txn, self.view_id, children, index);
     self
   }
 

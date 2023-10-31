@@ -1,14 +1,11 @@
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use anyhow::Error;
-use collab::core::array_wrapper::ArrayRefExtension;
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::core::collab_state::{SnapshotState, SyncState};
 pub use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
@@ -16,8 +13,7 @@ use crate::favorites::{FavoriteId, FavoritesMap};
 use crate::folder_observe::{TrashChangeSender, ViewChangeSender};
 use crate::trash::{TrashArray, TrashRecord};
 use crate::{
-  subscribe_folder_change, FolderData, TrashInfo, View, ViewIdentifier, ViewRelations, ViewsMap,
-  Workspace, WorkspaceMap, WorkspaceUpdate,
+  subscribe_folder_change, FolderData, TrashInfo, View, ViewRelations, ViewsMap, Workspace,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -49,13 +45,12 @@ impl AsRef<str> for UserId {
 }
 
 const FOLDER: &str = "folder";
-const WORKSPACES: &str = "workspaces";
 const VIEWS: &str = "views";
 const TRASH: &str = "trash";
 const META: &str = "meta";
 const VIEW_RELATION: &str = "relation";
-const CURRENT_WORKSPACE: &str = "current_workspace";
 const CURRENT_VIEW: &str = "current_view";
+const CURRENT_WORKSPACE: &str = "current_workspace";
 
 pub(crate) const FAVORITES_V1: &str = "favorites";
 pub(crate) const FAVORITES_V2: &str = "favorites_v2";
@@ -91,11 +86,10 @@ pub struct Folder {
   uid: UserId,
   inner: Arc<MutexCollab>,
   pub(crate) root: MapRefWrapper,
-  pub workspaces: WorkspaceArray,
   pub views: Rc<ViewsMap>,
   trash: TrashArray,
   favorites: FavoritesMap,
-  meta: MapRefWrapper,
+  pub(crate) meta: MapRefWrapper,
   #[allow(dead_code)]
   subscription: DeepEventsSubscription,
   #[allow(dead_code)]
@@ -107,24 +101,28 @@ impl Folder {
     uid: T,
     collab: Arc<MutexCollab>,
     notifier: Option<FolderNotify>,
-  ) -> Self {
+  ) -> Result<Self, Error> {
     let uid = uid.into();
-    match open_folder(uid.clone(), collab.clone(), notifier.clone()) {
+    let folder = match open_folder(uid.clone(), collab.clone(), notifier.clone()) {
       None => {
         tracing::info!("Create missing attributes of folder");
         create_folder(uid, collab, notifier, None)
       },
       Some(folder) => folder,
-    }
+    };
+
+    // When the folder is opened, the workspace id must be present.
+    folder.try_get_workspace_id()?;
+    Ok(folder)
   }
 
   pub fn create<T: Into<UserId>>(
     uid: T,
     collab: Arc<MutexCollab>,
     notifier: Option<FolderNotify>,
-    initial_folder_data: Option<FolderData>,
+    initial_folder_data: FolderData,
   ) -> Self {
-    create_folder(uid, collab, notifier, initial_folder_data)
+    create_folder(uid, collab, notifier, Some(initial_folder_data))
   }
 
   pub fn from_collab_raw_data<T: Into<UserId>>(
@@ -135,7 +133,7 @@ impl Folder {
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, Error> {
     let collab = MutexCollab::new_with_raw_data(origin, workspace_id, collab_raw_data, plugins)?;
-    Ok(Self::open(uid, Arc::new(collab), None))
+    Self::open(uid, Arc::new(collab), None)
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
@@ -149,6 +147,17 @@ impl Folder {
   /// Returns the doc state and the state vector.
   pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
     self.inner.lock().encode_as_update_v1()
+  }
+
+  pub fn update_workspace(&self, name: &str) {
+    self.root.with_transact_mut(|txn| {
+      let workspace_id = self.get_workspace_id_with_txn(txn);
+      self
+        .views
+        .update_view_with_txn(&self.uid, txn, &workspace_id, |update| {
+          update.set_name(name).done()
+        });
+    });
   }
 
   /// Fetches the folder data based on the current workspace and view.
@@ -167,51 +176,23 @@ impl Folder {
   ///   is returned explicitly), it returns `None`.
   pub fn get_folder_data(&self) -> Option<FolderData> {
     let txn = self.root.transact();
-    let current_workspace = self
-      .get_current_workspace_id_with_txn(&txn)
-      .unwrap_or_default();
+    let workspace_id = self.get_workspace_id_with_txn(&txn);
+    let workspace = Workspace::from(self.views.get_view_with_txn(&txn, &workspace_id)?.as_ref());
+
     let current_view = self.get_current_view_with_txn(&txn).unwrap_or_default();
-    let workspaces = self.workspaces.get_all_workspaces_with_txn(&txn);
 
     let mut views = vec![];
-    for workspace in workspaces.iter() {
-      for view in self.get_workspace_views_with_txn(&txn, &workspace.id) {
-        views.extend(self.get_view_recursively_with_txn(&txn, &view.id));
-      }
+    for view in self.get_workspace_views_with_txn(&txn, &workspace_id) {
+      views.extend(self.get_view_recursively_with_txn(&txn, &view.id));
     }
 
     let favorites = self.favorites.get_favorite_data_with_txn(&txn);
     Some(FolderData {
-      current_workspace_id: current_workspace,
+      workspace,
       current_view,
-      workspaces,
       views,
       favorites,
     })
-  }
-
-  /// Sets the current workspace.
-  ///
-  /// This function accepts a `workspace_id` as a string slice, which is used to
-  /// identify the workspace that needs to be set as the current workspace.
-  ///
-  /// If the workspace with the provided ID exists, the function sets it as the current workspace.
-  /// If not, it logs an error message.
-  ///
-  pub fn set_current_workspace(&self, workspace_id: &str) {
-    self.meta.with_transact_mut(|txn| {
-      if self.workspaces.is_exist_with_txn(txn, workspace_id) {
-        tracing::debug!("Set current workspace: {}", workspace_id);
-        self
-          .meta
-          .insert_str_with_txn(txn, CURRENT_WORKSPACE, workspace_id);
-      } else {
-        tracing::error!(
-          "Trying to set current workspace that is not exist: {}",
-          workspace_id
-        );
-      }
-    });
   }
 
   /// Fetches the current workspace.
@@ -222,17 +203,25 @@ impl Folder {
   pub fn get_current_workspace(&self) -> Option<Workspace> {
     let txn = self.meta.transact();
     let workspace_id = self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE)?;
-    let workspace = self.workspaces.get_workspace(workspace_id)?;
-    Some(workspace)
+    let view = self.views.get_view_with_txn(&txn, &workspace_id)?;
+    Some(Workspace::from(view.as_ref()))
   }
 
-  pub fn get_current_workspace_id(&self) -> Option<String> {
+  pub fn get_workspace_id(&self) -> String {
     let txn = self.meta.transact();
-    self.get_current_workspace_id_with_txn(&txn)
+    self.get_workspace_id_with_txn(&txn)
   }
 
-  pub fn get_current_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
-    self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE)
+  pub fn get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
+    self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE).unwrap()
+  }
+
+  pub fn try_get_workspace_id(&self) -> Result<String, Error> {
+    let txn = self.meta.transact();
+    match self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE) {
+      None => Err(anyhow::anyhow!("No workspace")),
+      Some(workspace_id) => Ok(workspace_id),
+    }
   }
 
   pub fn get_current_workspace_views(&self) -> Vec<Arc<View>> {
@@ -269,13 +258,12 @@ impl Folder {
     txn: &T,
     workspace_id: &str,
   ) -> Vec<Arc<View>> {
-    if let Some(workspace) = self.workspaces.get_workspace(workspace_id) {
-      let view_ids = workspace
-        .child_views
-        .into_inner()
-        .into_iter()
-        .map(|be| be.id)
-        .collect::<Vec<String>>();
+    if let Some(view) = self.views.get_view_with_txn(txn, workspace_id) {
+      let view_ids = view
+        .children
+        .iter()
+        .map(|v| v.id.as_str())
+        .collect::<Vec<&str>>();
       self.views.get_views_with_txn(txn, &view_ids)
     } else {
       vec![]
@@ -295,35 +283,11 @@ impl Folder {
   ///
   /// * `view`: The `View` object that is to be inserted into the storage.
   pub fn insert_view(&self, view: View, index: Option<u32>) {
-    if let Some(workspace_id) = self.get_current_workspace_id() {
-      if view.parent_view_id == workspace_id {
-        self
-          .workspaces
-          .update_workspace(workspace_id, |workspace_update| {
-            workspace_update.add_children(
-              vec![ViewIdentifier {
-                id: view.id.clone(),
-              }],
-              index,
-            )
-          });
-      }
-    }
-    self.views.insert_view(view, &self.uid)
+    self.views.insert_view(view, index)
   }
 
   pub fn move_view(&self, view_id: &str, from: u32, to: u32) -> Option<Arc<View>> {
     let view = self.views.get_view(view_id)?;
-    if let Some(workspace_id) = self.get_current_workspace_id() {
-      if view.parent_view_id == workspace_id {
-        self
-          .workspaces
-          .update_workspace(workspace_id, |workspace_update| {
-            workspace_update.move_view(from, to);
-          });
-        return Some(view);
-      }
-    }
     self.views.move_child(&view.parent_view_id, from, to);
     Some(view)
   }
@@ -353,7 +317,7 @@ impl Folder {
   ) -> Option<Arc<View>> {
     tracing::debug!("Move nested view: {}", view_id);
     let view = self.views.get_view(view_id)?;
-    let current_workspace_id = self.get_current_workspace_id()?;
+    let current_workspace_id = self.get_workspace_id();
     let parent_id = view.parent_view_id.as_str();
 
     let new_parent_view = self.views.get_view(new_parent_id);
@@ -367,31 +331,14 @@ impl Folder {
 
     self.meta.with_transact_mut(|txn| {
       // dissociate the child from its parent
-      if parent_id == current_workspace_id {
-        self
-          .workspaces
-          .view_relations
-          .dissociate_parent_child_with_txn(txn, parent_id, view_id);
-      } else {
-        self
-          .views
-          .dissociate_parent_child_with_txn(txn, parent_id, view_id);
-      }
+      self
+        .views
+        .dissociate_parent_child_with_txn(txn, parent_id, view_id);
       // associate the child with its new parent and place it after the prev_view_id. If the prev_view_id is None,
       // place it as the first child.
-      if new_parent_id == current_workspace_id {
-        self
-          .workspaces
-          .view_relations
-          .associate_parent_child_with_txn(txn, new_parent_id, view_id, prev_view_id.clone());
-      } else {
-        self.views.associate_parent_child_with_txn(
-          txn,
-          new_parent_id,
-          view_id,
-          prev_view_id.clone(),
-        );
-      }
+      self
+        .views
+        .associate_parent_child_with_txn(txn, new_parent_id, view_id, prev_view_id.clone());
       // Update the view's parent ID.
       self
         .views
@@ -450,17 +397,15 @@ impl Folder {
   }
 
   pub fn add_trash(&self, trash_ids: Vec<String>) {
-    if let Some(workspace_id) = self.get_current_workspace_id() {
-      let trash = trash_ids
-        .into_iter()
-        .map(|trash_id| TrashRecord {
-          id: trash_id,
-          created_at: chrono::Utc::now().timestamp(),
-          workspace_id: workspace_id.clone(),
-        })
-        .collect::<Vec<TrashRecord>>();
-      self.trash.add_trash(trash);
-    }
+    let trash = trash_ids
+      .into_iter()
+      .map(|trash_id| TrashRecord {
+        id: trash_id,
+        created_at: chrono::Utc::now().timestamp(),
+        workspace_id: self.get_workspace_id(),
+      })
+      .collect::<Vec<TrashRecord>>();
+    self.trash.add_trash(trash);
   }
 
   pub fn delete_trash(&self, trash_ids: Vec<String>) {
@@ -517,141 +462,6 @@ impl Folder {
     }
   }
 }
-
-pub struct WorkspaceArray {
-  container: ArrayRefWrapper,
-  workspaces: RwLock<HashMap<String, WorkspaceMap>>,
-  view_relations: Rc<ViewRelations>,
-}
-
-impl WorkspaceArray {
-  pub fn new<T: ReadTxn>(
-    txn: &T,
-    array_ref: ArrayRefWrapper,
-    view_relations: Rc<ViewRelations>,
-  ) -> Self {
-    let workspace_maps = array_ref
-      .to_map_refs_with_txn(txn)
-      .into_iter()
-      .flat_map(|map_ref| {
-        let workspace_map = WorkspaceMap::new(map_ref, view_relations.clone());
-        workspace_map
-          .get_workspace_id_with_txn(txn)
-          .map(|workspace_id| (workspace_id, workspace_map))
-      })
-      .collect::<HashMap<String, WorkspaceMap>>();
-    Self {
-      container: array_ref,
-      workspaces: RwLock::new(workspace_maps),
-      view_relations,
-    }
-  }
-
-  pub fn get_all_workspaces(&self) -> Vec<Workspace> {
-    let txn = self.container.transact();
-    self.get_all_workspaces_with_txn(&txn)
-  }
-
-  pub fn is_exist_with_txn<T: ReadTxn>(&self, txn: &T, workspace_id: &str) -> bool {
-    let ids = self.get_all_workspace_ids_with_txn(txn);
-    ids.contains(&workspace_id.to_string())
-  }
-
-  pub fn get_workspace<T: AsRef<str>>(&self, workspace_id: T) -> Option<Workspace> {
-    self
-      .workspaces
-      .read()
-      .get(workspace_id.as_ref())
-      .map(|workspace_map| workspace_map.to_workspace())?
-  }
-
-  pub fn get_all_workspaces_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Workspace> {
-    let map_refs = self.container.to_map_refs();
-    map_refs
-      .into_iter()
-      .flat_map(|map_ref| {
-        WorkspaceMap::new(map_ref, self.view_relations.clone()).to_workspace_with_txn(txn)
-      })
-      .collect::<Vec<_>>()
-  }
-
-  pub fn get_all_workspace_ids_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<String> {
-    let map_refs = self.container.to_map_refs_with_txn(txn);
-    map_refs
-      .into_iter()
-      .flat_map(|map_ref| {
-        WorkspaceMap::new(map_ref, self.view_relations.clone()).to_workspace_id_with_txn(txn)
-      })
-      .collect::<Vec<_>>()
-  }
-
-  pub fn create_workspace(&self, workspace: Workspace) {
-    self
-      .container
-      .with_transact_mut(|txn| self.create_workspace_with_txn(txn, workspace))
-  }
-
-  pub fn delete_workspace(&self, index: u32) {
-    self.container.with_transact_mut(|txn| {
-      self.container.remove_with_txn(txn, index);
-    })
-  }
-
-  pub fn create_workspace_with_txn(&self, txn: &mut TransactionMut, workspace: Workspace) {
-    let workspace_id = workspace.id.clone();
-    let map_ref = self.container.insert_map_with_txn(txn, None);
-    let workspace_map = WorkspaceMap::create_with_txn(
-      txn,
-      &map_ref,
-      &workspace.id,
-      self.view_relations.clone(),
-      |builder| {
-        let _ = builder.update(|update| {
-          update
-            .set_name(workspace.name)
-            .set_created_at(workspace.created_at)
-            .set_children(workspace.child_views);
-        });
-
-        let map_ref = MapRefWrapper::new(map_ref.clone(), self.container.collab_ctx.clone());
-        WorkspaceMap::new(map_ref, self.view_relations.clone())
-      },
-    );
-
-    self.workspaces.write().insert(workspace_id, workspace_map);
-  }
-
-  pub fn update_workspace<T: AsRef<str>, F>(&self, workspace_id: T, f: F)
-  where
-    F: FnOnce(WorkspaceUpdate),
-  {
-    if let Some(workspace) = self.workspaces.read().get(workspace_id.as_ref()).cloned() {
-      workspace.update(f);
-    }
-  }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct WorkspaceItem {
-  workspace_id: String,
-  name: String,
-}
-
-impl From<lib0Any> for WorkspaceItem {
-  fn from(any: lib0Any) -> Self {
-    let mut json = String::new();
-    any.to_json(&mut json);
-    serde_json::from_str(&json).unwrap()
-  }
-}
-
-impl From<WorkspaceItem> for lib0Any {
-  fn from(item: WorkspaceItem) -> Self {
-    let json = serde_json::to_string(&item).unwrap();
-    lib0Any::from_json(&json).unwrap()
-  }
-}
-
 /// Create a folder with initial [FolderData] if it's provided.
 /// Otherwise, create an empty folder.
 fn create_folder<T: Into<UserId>>(
@@ -662,15 +472,13 @@ fn create_folder<T: Into<UserId>>(
 ) -> Folder {
   let uid = uid.into();
   let collab_guard = collab.lock();
-  let (folder, workspaces, views, trash, favorites, meta, subscription) = collab_guard
+  let (folder, views, trash, favorites, meta, subscription) = collab_guard
     .with_origin_transact_mut(|txn| {
       // create the folder
       let mut folder = collab_guard.insert_map_with_txn_if_not_exist(txn, FOLDER);
       let subscription = subscribe_folder_change(&mut folder);
 
       // create the folder data
-      let workspaces =
-        folder.create_array_if_not_exist_with_txn::<WorkspaceItem, _>(txn, WORKSPACES, vec![]);
       let views = folder.create_map_with_txn_if_not_exist(txn, VIEWS);
       let trash = folder.create_array_if_not_exist_with_txn::<TrashRecord, _>(txn, TRASH, vec![]);
       let favorites = folder.create_map_with_txn_if_not_exist(txn, FAVORITES_V2);
@@ -679,7 +487,6 @@ fn create_folder<T: Into<UserId>>(
         folder.create_map_with_txn_if_not_exist(txn, VIEW_RELATION),
       ));
 
-      let workspaces = WorkspaceArray::new(txn, workspaces, view_relations.clone());
       let views = Rc::new(ViewsMap::new(
         &uid,
         views,
@@ -697,19 +504,15 @@ fn create_folder<T: Into<UserId>>(
       );
       let favorites = FavoritesMap::new(&uid, favorites, views.clone());
 
-      // Insert the folder data if it's provided.
       if let Some(folder_data) = folder_data {
-        debug_assert_eq!(folder_data.workspaces.len(), 1);
-
-        for workspace in folder_data.workspaces {
-          workspaces.create_workspace_with_txn(txn, workspace);
-        }
+        let workspace_id = folder_data.workspace.id.clone();
+        views.insert_view_with_txn(txn, folder_data.workspace.into(), None);
 
         for view in folder_data.views {
-          views.insert_view_with_txn(txn, view, &uid);
+          views.insert_view_with_txn(txn, view, None);
         }
 
-        meta.insert_str_with_txn(txn, CURRENT_WORKSPACE, folder_data.current_workspace_id);
+        meta.insert_str_with_txn(txn, CURRENT_WORKSPACE, workspace_id);
         meta.insert_str_with_txn(txn, CURRENT_VIEW, folder_data.current_view);
 
         for (uid, view_ids) in folder_data.favorites {
@@ -718,15 +521,7 @@ fn create_folder<T: Into<UserId>>(
         }
       }
 
-      (
-        folder,
-        workspaces,
-        views,
-        trash,
-        favorites,
-        meta,
-        subscription,
-      )
+      (folder, views, trash, favorites, meta, subscription)
     });
   drop(collab_guard);
 
@@ -734,7 +529,6 @@ fn create_folder<T: Into<UserId>>(
     uid,
     inner: collab,
     root: folder,
-    workspaces,
     views,
     trash,
     favorites,
@@ -758,7 +552,6 @@ fn open_folder<T: Into<UserId>>(
   let folder_sub = subscribe_folder_change(&mut folder);
 
   // create the folder collab objects
-  let workspaces = collab_guard.get_array_with_txn(&txn, vec![FOLDER, WORKSPACES])?;
   let views = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEWS])?;
   let trash = collab_guard.get_array_with_txn(&txn, vec![FOLDER, TRASH])?;
   let favorite_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, FAVORITES_V2])?;
@@ -766,7 +559,6 @@ fn open_folder<T: Into<UserId>>(
   let children_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEW_RELATION])?;
 
   let view_relations = Rc::new(ViewRelations::new(children_map));
-  let workspaces = WorkspaceArray::new(&txn, workspaces, view_relations.clone());
   let views = Rc::new(ViewsMap::new(
     &uid,
     views,
@@ -786,16 +578,17 @@ fn open_folder<T: Into<UserId>>(
   drop(txn);
   drop(collab_guard);
 
-  Some(Folder {
+  let folder = Folder {
     uid,
     inner: collab,
     root: folder,
-    workspaces,
     views,
     trash,
     favorites,
     meta,
     subscription: folder_sub,
     notifier,
-  })
+  };
+
+  Some(folder)
 }
