@@ -799,6 +799,7 @@ impl MutexCollab {
     MutexCollab(Arc::new(Mutex::new(collab)))
   }
 
+  /// Returns the doc state and the state vector.
   pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
     let collab = self.0.lock();
     collab.encode_as_update_v1()
