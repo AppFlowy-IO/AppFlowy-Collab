@@ -1,7 +1,6 @@
+use assert_json_diff::assert_json_include;
 use collab_folder::{FolderData, UserId};
 use serde_json::json;
-
-use assert_json_diff::assert_json_include;
 
 use crate::util::{
   create_folder_with_data, create_folder_with_workspace, make_test_view, open_folder_with_db,
@@ -17,7 +16,15 @@ async fn create_favorite_test() {
   // Insert view_1
   let view_1 = make_test_view("1", workspace_id.as_str(), vec![]);
   folder_test.insert_view(view_1, None);
+
+  // Get view_1 from folder
+  let view_1 = folder_test.views.get_view("1").unwrap();
+  assert!(!view_1.is_favorite);
   folder_test.add_favorites(vec!["1".to_string()]);
+
+  // Check if view_1 is favorite
+  let view_1 = folder_test.views.get_view("1").unwrap();
+  assert!(view_1.is_favorite);
 
   // Insert view_2
   let view_2 = make_test_view("2", workspace_id.as_str(), vec![]);
@@ -27,6 +34,7 @@ async fn create_favorite_test() {
   assert_eq!(views.len(), 2);
   assert_eq!(views[0].id, "1");
   assert!(views[0].is_favorite);
+
   assert_eq!(views[1].id, "2");
   assert!(!views[1].is_favorite);
 

@@ -9,8 +9,8 @@ use collab::preclude::*;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
-use crate::favorites::{FavoriteId, FavoritesMap};
 use crate::folder_observe::{TrashChangeSender, ViewChangeSender};
+use crate::section::{Section, SectionItem, SectionMap, SectionOperation};
 use crate::trash::{TrashArray, TrashRecord};
 use crate::{
   subscribe_folder_change, FolderData, TrashInfo, View, ViewRelations, ViewsMap, Workspace,
@@ -53,7 +53,7 @@ const CURRENT_VIEW: &str = "current_view";
 const CURRENT_WORKSPACE: &str = "current_workspace";
 
 pub(crate) const FAVORITES_V1: &str = "favorites";
-pub(crate) const FAVORITES_V2: &str = "favorites_v2";
+const SECTION: &str = "section";
 
 #[derive(Clone)]
 pub struct FolderNotify {
@@ -78,7 +78,7 @@ pub struct FolderNotify {
 /// Currently, we only use one workspace to manage all the views in the folder.
 /// * `views`: A shared pointer to a map (`ViewsMap`) from view id to view data, keeping track of each view's data.
 /// * `trash`: An array of `TrashArray` objects, representing the trash items in the folder.
-/// * `favorites`: An map of `FavoritesMap` objects, representing the favorite items in the folder.
+/// * `section`: An map of `SectionMap` objects, representing the favorite items in the folder.
 /// * `meta`: Wrapper around the metadata map reference.
 /// * `subscription`: A `DeepEventsSubscription` object, managing the subscription for folder changes, like inserting a new view.
 /// * `notifier`: An optional `FolderNotify` object for notifying about changes in the folder.
@@ -88,7 +88,7 @@ pub struct Folder {
   pub(crate) root: MapRefWrapper,
   pub views: Rc<ViewsMap>,
   trash: TrashArray,
-  fav_map: Rc<FavoritesMap>,
+  section: Rc<SectionMap>,
   pub(crate) meta: MapRefWrapper,
   #[allow(dead_code)]
   subscription: DeepEventsSubscription,
@@ -186,7 +186,11 @@ impl Folder {
       views.extend(self.get_view_recursively_with_txn(&txn, &view.id));
     }
 
-    let favorites = self.fav_map.get_favorite_data_with_txn(&txn);
+    let favorites = self
+      .section
+      .section_op_with_txn(&txn, Section::Favorite)
+      .map(|op| op.get_item_ids_with_txn(&txn))
+      .unwrap_or_default();
     Some(FolderData {
       workspace,
       current_view,
@@ -370,8 +374,8 @@ impl Folder {
   pub fn add_favorites(&self, favorite_view_ids: Vec<String>) {
     let fav_ids = favorite_view_ids
       .into_iter()
-      .map(|view_id| FavoriteId { id: view_id })
-      .collect::<Vec<FavoriteId>>();
+      .map(|view_id| SectionItem { id: view_id })
+      .collect::<Vec<SectionItem>>();
 
     for fav in fav_ids {
       self
@@ -388,12 +392,18 @@ impl Folder {
     }
   }
 
-  pub fn get_all_favorites(&self) -> Vec<FavoriteId> {
-    self.fav_map.get_all_favorites()
+  pub fn get_all_favorites(&self) -> Vec<SectionItem> {
+    self
+      .section
+      .section_op(Section::Favorite)
+      .map(|op| op.get_all_section_item())
+      .unwrap_or_default()
   }
 
   pub fn remove_all_favorites(&self) {
-    self.fav_map.clear();
+    if let Some(op) = self.section.section_op(Section::Favorite) {
+      op.clear()
+    }
   }
 
   pub fn add_trash(&self, trash_ids: Vec<String>) {
@@ -461,6 +471,16 @@ impl Folder {
       },
     }
   }
+
+  pub fn create_section<S: Into<Section>>(&self, section: S) -> MapRefWrapper {
+    self
+      .root
+      .with_transact_mut(|txn| self.section.create_section_with_txn(txn, section.into()))
+  }
+
+  pub fn section_op<S: Into<Section>>(&self, section: S) -> Option<SectionOperation> {
+    self.section.section_op(section.into())
+  }
 }
 /// Create a folder with initial [FolderData] if it's provided.
 /// Otherwise, create an empty folder.
@@ -472,7 +492,7 @@ fn create_folder<T: Into<UserId>>(
 ) -> Folder {
   let uid = uid.into();
   let collab_guard = collab.lock();
-  let (folder, views, trash, fav_map, meta, subscription) =
+  let (folder, views, trash, section, meta, subscription) =
     collab_guard.with_origin_transact_mut(|txn| {
       // create the folder
       let mut folder = collab_guard.insert_map_with_txn_if_not_exist(txn, FOLDER);
@@ -481,13 +501,13 @@ fn create_folder<T: Into<UserId>>(
       // create the folder data
       let views = folder.create_map_with_txn_if_not_exist(txn, VIEWS);
       let trash = folder.create_array_if_not_exist_with_txn::<TrashRecord, _>(txn, TRASH, vec![]);
-      let favorites = folder.create_map_with_txn_if_not_exist(txn, FAVORITES_V2);
+      let section = folder.create_map_with_txn_if_not_exist(txn, SECTION);
       let meta = folder.create_map_with_txn_if_not_exist(txn, META);
       let view_relations = Rc::new(ViewRelations::new(
         folder.create_map_with_txn_if_not_exist(txn, VIEW_RELATION),
       ));
 
-      let fav_map = Rc::new(FavoritesMap::new(&uid, favorites));
+      let section = Rc::new(SectionMap::create(txn, &uid, section));
       let views = Rc::new(ViewsMap::new(
         &uid,
         views,
@@ -495,7 +515,7 @@ fn create_folder<T: Into<UserId>>(
           .as_ref()
           .map(|notifier| notifier.view_change_tx.clone()),
         view_relations,
-        fav_map.clone(),
+        section.clone(),
       ));
       let trash = TrashArray::new(
         trash,
@@ -516,13 +536,15 @@ fn create_folder<T: Into<UserId>>(
         meta.insert_str_with_txn(txn, CURRENT_WORKSPACE, workspace_id);
         meta.insert_str_with_txn(txn, CURRENT_VIEW, folder_data.current_view);
 
-        for (uid, view_ids) in folder_data.favorites {
-          let favorite_records = view_ids.into_iter().map(|id| FavoriteId { id }).collect();
-          fav_map.add_favorites_for_user_with_txn(txn, &uid, favorite_records);
+        if let Some(fav_section) = section.section_op_with_txn(txn, Section::Favorite) {
+          for (uid, view_ids) in folder_data.favorites {
+            let items = view_ids.into_iter().map(|id| SectionItem { id }).collect();
+            fav_section.add_items_for_user_with_txn(txn, &uid, items);
+          }
         }
       }
 
-      (folder, views, trash, fav_map, meta, subscription)
+      (folder, views, trash, section, meta, subscription)
     });
   drop(collab_guard);
 
@@ -532,7 +554,7 @@ fn create_folder<T: Into<UserId>>(
     root: folder,
     views,
     trash,
-    fav_map,
+    section,
     meta,
     subscription,
     notifier,
@@ -555,12 +577,12 @@ fn open_folder<T: Into<UserId>>(
   // create the folder collab objects
   let views = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEWS])?;
   let trash = collab_guard.get_array_with_txn(&txn, vec![FOLDER, TRASH])?;
-  let favorite_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, FAVORITES_V2])?;
+  let section = collab_guard.get_map_with_txn(&txn, vec![FOLDER, SECTION])?;
   let meta = collab_guard.get_map_with_txn(&txn, vec![FOLDER, META])?;
   let children_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEW_RELATION])?;
 
   let view_relations = Rc::new(ViewRelations::new(children_map));
-  let fav_map = Rc::new(FavoritesMap::new(&uid, favorite_map));
+  let section_map = Rc::new(SectionMap::new(&uid, section));
   let views = Rc::new(ViewsMap::new(
     &uid,
     views,
@@ -568,7 +590,7 @@ fn open_folder<T: Into<UserId>>(
       .as_ref()
       .map(|notifier| notifier.view_change_tx.clone()),
     view_relations,
-    fav_map.clone(),
+    section_map.clone(),
   ));
   let trash = TrashArray::new(
     trash,
@@ -586,7 +608,7 @@ fn open_folder<T: Into<UserId>>(
     root: folder,
     views,
     trash,
-    fav_map,
+    section: section_map,
     meta,
     subscription: folder_sub,
     notifier,

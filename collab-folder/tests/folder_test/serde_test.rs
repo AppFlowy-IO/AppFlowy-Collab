@@ -8,27 +8,30 @@ async fn folder_json_serde() {
   let folder_test = create_folder(1.into(), "fake_w_1").await;
   assert_json_diff::assert_json_include!(
     actual: folder_test.to_json_value(),
-    expected: json!({
-      "favorites_v2": {},
-      "meta": {
-        "current_view": "",
-        "current_workspace": "fake_w_1"
-      },
-      "relation": {
-        "fake_w_1": []
-      },
-      "trash": [],
-      "views": {
-        "fake_w_1": {
-          "bid": "",
-          "desc": "",
-          "icon": "",
-          "id": "fake_w_1",
-          "layout": 0,
-          "name": ""
-        }
-      }
-    }),
+    expected: json!( {
+          "meta": {
+            "current_view": "",
+            "current_workspace": "fake_w_1"
+          },
+          "relation": {
+            "fake_w_1": []
+          },
+          "section": {
+            "favorite": {}
+          },
+          "trash": [],
+          "views": {
+            "fake_w_1": {
+              "bid": "",
+              "created_at": 0,
+              "desc": "",
+              "icon": "",
+              "id": "fake_w_1",
+              "layout": 0,
+              "name": ""
+            }
+          }
+        }),
   );
 }
 
@@ -49,7 +52,6 @@ async fn view_json_serde() {
   assert_json_diff::assert_json_include!(
     actual: folder_test.to_json_value(),
     expected: json!({
-          "favorites_v2": {},
           "meta": {
             "current_view": "",
             "current_workspace": "fake_workspace_id"
@@ -66,10 +68,14 @@ async fn view_json_serde() {
             "v1": [],
             "v2": []
           },
+          "section": {
+            "favorite": {}
+          },
           "trash": [],
           "views": {
             "fake_workspace_id": {
               "bid": "",
+              "created_at": 0,
               "desc": "",
               "icon": "",
               "id": "fake_workspace_id",
@@ -115,8 +121,7 @@ async fn child_view_json_serde() {
   folder_test.insert_view(view_2_2, None);
 
   // folder_test.workspaces.create_workspace(workspace);
-  assert_json_diff::assert_json_include!(actual: folder_test.to_json_value(), expected: json!( {
-    "favorites_v2": {},
+  assert_json_diff::assert_json_include!(actual: folder_test.to_json_value(), expected: json!({
     "meta": {
       "current_view": "",
       "current_workspace": "fake_workspace_id"
@@ -141,6 +146,9 @@ async fn child_view_json_serde() {
       ],
       "v2.1": [],
       "v2.2": []
+    },
+    "section": {
+      "favorite": {}
     },
     "trash": [],
     "views": {

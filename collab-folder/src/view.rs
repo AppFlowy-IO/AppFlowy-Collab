@@ -11,10 +11,8 @@ use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
 use crate::folder_observe::ViewChangeSender;
-use crate::{
-  impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update, FavoriteId,
-  FavoritesMap, UserId,
-};
+use crate::section::{Section, SectionItem, SectionMap};
+use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update, UserId};
 use crate::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
 
 const VIEW_ID: &str = "id";
@@ -30,7 +28,7 @@ pub struct ViewsMap {
   uid: UserId,
   container: MapRefWrapper,
   pub(crate) view_relations: Rc<ViewRelations>,
-  pub(crate) fav_map: Rc<FavoritesMap>,
+  pub(crate) section_map: Rc<SectionMap>,
   view_cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
 
   #[allow(dead_code)]
@@ -45,7 +43,7 @@ impl ViewsMap {
     mut root: MapRefWrapper,
     change_tx: Option<ViewChangeSender>,
     view_relations: Rc<ViewRelations>,
-    fav_map: Rc<FavoritesMap>,
+    section_map: Rc<SectionMap>,
   ) -> ViewsMap {
     let view_cache = Arc::new(RwLock::new(HashMap::new()));
     let subscription = change_tx.as_ref().map(|change_tx| {
@@ -55,7 +53,7 @@ impl ViewsMap {
         view_cache.clone(),
         change_tx.clone(),
         view_relations.clone(),
-        fav_map.clone(),
+        section_map.clone(),
       )
     });
     Self {
@@ -65,7 +63,7 @@ impl ViewsMap {
       change_tx,
       view_relations,
       view_cache,
-      fav_map,
+      section_map,
     }
   }
 
@@ -151,7 +149,13 @@ impl ViewsMap {
                 .container
                 .get_map_with_txn(txn, &child.id)
                 .and_then(|map| {
-                  view_from_map_ref(&self.uid, &map, txn, &self.view_relations, &self.fav_map)
+                  view_from_map_ref(
+                    &self.uid,
+                    &map,
+                    txn,
+                    &self.view_relations,
+                    &self.section_map,
+                  )
                 })
                 .map(Arc::new);
               self.set_cache_view(view.clone());
@@ -212,7 +216,7 @@ impl ViewsMap {
         &map_ref,
         txn,
         &self.view_relations,
-        &self.fav_map,
+        &self.section_map,
       )
       .map(Arc::new);
       self.set_cache_view(view.clone());
@@ -248,7 +252,7 @@ impl ViewsMap {
         txn,
         &parent_map_ref,
         self.view_relations.clone(),
-        &self.fav_map,
+        &self.section_map,
       )
       .add_children(vec![view_identifier], index)
       .done()
@@ -262,7 +266,7 @@ impl ViewsMap {
       txn,
       map_ref,
       self.view_relations.clone(),
-      &self.fav_map,
+      &self.section_map,
     )
     .update(&self.uid, |update| {
       update
@@ -341,7 +345,7 @@ impl ViewsMap {
       txn,
       &map_ref,
       self.view_relations.clone(),
-      &self.fav_map,
+      &self.section_map,
     );
     let view = f(update).map(Arc::new);
     self.set_cache_view(view.clone());
@@ -368,7 +372,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   map_ref: &MapRef,
   txn: &T,
   view_relations: &Rc<ViewRelations>,
-  fav_maps: &FavoritesMap,
+  section_map: &SectionMap,
 ) -> Option<View> {
   let parent_view_id = map_ref.get_str_with_txn(txn, VIEW_PARENT_ID)?;
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
@@ -387,7 +391,10 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     .unwrap_or_default();
 
   let icon = get_icon_from_view_map(map_ref, txn);
-  let is_favorite = fav_maps.is_favorite_with_txn(txn, &id);
+  let is_favorite = section_map
+    .section_op_with_txn(txn, Section::Favorite)
+    .map(|op| op.contains_with_txn(txn, &id))
+    .unwrap_or(false);
 
   Some(View {
     id,
@@ -413,7 +420,7 @@ pub struct ViewBuilder<'a, 'b> {
   txn: &'a mut TransactionMut<'b>,
   belongings: Rc<ViewRelations>,
   view: Option<View>,
-  fav_map: &'a FavoritesMap,
+  section_map: &'a SectionMap,
 }
 
 impl<'a, 'b> ViewBuilder<'a, 'b> {
@@ -422,7 +429,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
     txn: &'a mut TransactionMut<'b>,
     map_ref: MapRefWrapper,
     belongings: Rc<ViewRelations>,
-    fav_map: &'a FavoritesMap,
+    section_map: &'a SectionMap,
   ) -> Self {
     map_ref.insert_str_with_txn(txn, VIEW_ID, view_id);
     Self {
@@ -431,7 +438,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
       txn,
       belongings,
       view: None,
-      fav_map,
+      section_map,
     }
   }
 
@@ -445,7 +452,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
       self.txn,
       &self.map_ref,
       self.belongings.clone(),
-      self.fav_map,
+      self.section_map,
     );
     self.view = f(update);
     self
@@ -461,7 +468,7 @@ pub struct ViewUpdate<'a, 'b, 'c> {
   map_ref: &'c MapRefWrapper,
   txn: &'a mut TransactionMut<'b>,
   children_map: Rc<ViewRelations>,
-  fav_maps: &'c FavoritesMap,
+  section_map: &'c SectionMap,
 }
 
 impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
@@ -482,7 +489,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'c MapRefWrapper,
     children_map: Rc<ViewRelations>,
-    fav_maps: &'c FavoritesMap,
+    section_map: &'c SectionMap,
   ) -> Self {
     Self {
       uid,
@@ -490,7 +497,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
       map_ref,
       txn,
       children_map,
-      fav_maps,
+      section_map,
     }
   }
 
@@ -515,18 +522,22 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   }
 
   pub fn set_favorite(self, is_favorite: bool) -> Self {
-    if is_favorite {
-      self.fav_maps.add_favorites_with_txn(
-        self.txn,
-        vec![FavoriteId {
-          id: self.view_id.to_string(),
-        }],
-      );
-    } else {
-      self
-        .fav_maps
-        .delete_favorites_with_txn(self.txn, vec![self.view_id]);
+    if let Some(fav_section) = self
+      .section_map
+      .section_op_with_txn(self.txn, Section::Favorite)
+    {
+      if is_favorite {
+        fav_section.add_sections_item_with_txn(
+          self.txn,
+          vec![SectionItem {
+            id: self.view_id.to_string(),
+          }],
+        );
+      } else {
+        fav_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
+      }
     }
+
     self
   }
 
@@ -551,7 +562,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
       self.map_ref,
       self.txn,
       &self.children_map,
-      self.fav_maps,
+      self.section_map,
     )
   }
 }
