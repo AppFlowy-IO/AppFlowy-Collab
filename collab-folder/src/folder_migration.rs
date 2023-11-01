@@ -1,8 +1,10 @@
-use collab::preclude::{Array, MapRefExtension, MapRefWrapper, ReadTxn};
+use anyhow::bail;
+use collab::preclude::{lib0Any, Array, MapRefExtension, MapRefWrapper, ReadTxn, YrsValue};
+use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use crate::folder::FAVORITES_V1;
-use crate::{FavoriteId, Folder, View, ViewRelations, Workspace};
+use crate::{Folder, View, ViewRelations, Workspace};
 
 const WORKSPACES: &str = "workspaces";
 const WORKSPACE_ID: &str = "id";
@@ -76,4 +78,35 @@ pub fn to_workspace_with_txn<T: ReadTxn>(
     child_views,
     created_at,
   })
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FavoriteId {
+  pub id: String,
+}
+
+impl From<lib0Any> for FavoriteId {
+  fn from(any: lib0Any) -> Self {
+    let mut json = String::new();
+    any.to_json(&mut json);
+    serde_json::from_str(&json).unwrap()
+  }
+}
+
+impl From<FavoriteId> for lib0Any {
+  fn from(item: FavoriteId) -> Self {
+    let json = serde_json::to_string(&item).unwrap();
+    lib0Any::from_json(&json).unwrap()
+  }
+}
+
+impl TryFrom<&YrsValue> for FavoriteId {
+  type Error = anyhow::Error;
+
+  fn try_from(value: &YrsValue) -> Result<Self, Self::Error> {
+    match value {
+      YrsValue::Any(any) => Ok(FavoriteId::from(any.clone())),
+      _ => bail!("Invalid favorite yrs value"),
+    }
+  }
 }

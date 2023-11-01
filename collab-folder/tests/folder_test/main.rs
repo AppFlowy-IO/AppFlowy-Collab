@@ -1,4 +1,5 @@
 mod child_views_test;
+mod custom_section;
 mod favorite_test;
 mod load_disk;
 mod serde_test;
