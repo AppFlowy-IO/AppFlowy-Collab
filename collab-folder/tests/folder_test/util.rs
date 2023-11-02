@@ -38,7 +38,7 @@ unsafe impl Send for FolderTest {}
 unsafe impl Sync for FolderTest {}
 
 pub async fn create_folder(uid: UserId, workspace_id: &str) -> FolderTest {
-  let mut workspace = Workspace::new(workspace_id.to_string(), "".to_string());
+  let mut workspace = Workspace::new(workspace_id.to_string(), "".to_string(), Some(uid.as_i64()));
   workspace.created_at = 0;
   let folder_data = FolderData::new(workspace);
   create_folder_with_data(uid, workspace_id, folder_data).await
@@ -118,13 +118,9 @@ pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<Strin
   View {
     id: view_id.to_string(),
     parent_view_id: parent_view_id.to_string(),
-    name: "".to_string(),
-    desc: "".to_string(),
     children: RepeatedViewIdentifier::new(belongings),
-    created_at: 0,
     layout: ViewLayout::Document,
-    is_favorite: false,
-    icon: None,
+    ..Default::default()
   }
 }
 

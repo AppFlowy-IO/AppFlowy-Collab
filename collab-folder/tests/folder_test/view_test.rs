@@ -1,5 +1,5 @@
 use crate::util::{create_folder_with_workspace, make_test_view};
-use collab_folder::{IconType, UserId, ViewIcon};
+use collab_folder::{timestamp, IconType, UserId, ViewIcon};
 
 #[tokio::test]
 async fn create_view_test() {
@@ -60,6 +60,7 @@ async fn delete_view_test() {
 async fn update_view_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
+  let time = timestamp();
   let o_view = make_test_view("v1", "w1", vec![]);
   folder_test.insert_view(o_view, None);
   folder_test
@@ -77,6 +78,8 @@ async fn update_view_test() {
   assert_eq!(r_view.name, "Untitled");
   assert_eq!(r_view.desc, "My first view");
   assert!(r_view.is_favorite);
+  assert_eq!(r_view.created_at, time);
+  assert_eq!(r_view.last_edited_time, time);
 }
 
 #[tokio::test]
@@ -86,6 +89,7 @@ async fn update_view_icon_test() {
   let o_view = make_test_view("v1", "w1", vec![]);
   folder_test.insert_view(o_view, None);
 
+  let time = timestamp();
   let icon = ViewIcon {
     ty: IconType::Emoji,
     value: "👍".to_string(),
@@ -115,6 +119,8 @@ async fn update_view_icon_test() {
     .unwrap();
   let r_view = folder_test.views.get_view("v1").unwrap();
   assert_eq!(r_view.icon, None);
+  assert_eq!(r_view.last_edited_by, Some(uid.as_i64()));
+  assert!(r_view.last_edited_time >= time);
 }
 
 #[tokio::test]
@@ -320,4 +326,17 @@ async fn create_view_test_with_index() {
   assert_eq!(views.get(3).unwrap().id, view_6.id);
   assert_eq!(views.get(4).unwrap().id, view_4.id);
   assert_eq!(views.get(5).unwrap().id, view_5.id);
+}
+
+#[tokio::test]
+async fn check_created_and_edited_time_test() {
+  let uid = UserId::from(12345);
+  let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
+  let view = make_test_view("v1", "w1", vec![]);
+  folder_test.insert_view(view.clone(), Some(0));
+  let views = folder_test.get_current_workspace_views();
+  let v1 = views.get(0).unwrap();
+  assert_eq!(v1.created_by.unwrap(), uid.as_i64());
+  assert_eq!(v1.last_edited_by.unwrap(), uid.as_i64());
+  assert_eq!(v1.last_edited_time, v1.created_at);
 }

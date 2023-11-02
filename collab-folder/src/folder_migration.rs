@@ -10,6 +10,7 @@ const WORKSPACES: &str = "workspaces";
 const WORKSPACE_ID: &str = "id";
 const WORKSPACE_NAME: &str = "name";
 const WORKSPACE_CREATED_AT: &str = "created_at";
+
 impl Folder {
   /// Retrieves historical favorite data from the key `FAVORITES_V1`.
   /// Note: `FAVORITES_V1` is deprecated. Use `FAVORITES_V2` for storing favorite data.
@@ -77,6 +78,10 @@ pub fn to_workspace_with_txn<T: ReadTxn>(
     name,
     child_views,
     created_at,
+    // TODO: Support last_modified_time, created_by, last_edited_by fields in workspace
+    last_edited_time: created_at,
+    last_edited_by: None,
+    created_by: None,
   })
 }
 

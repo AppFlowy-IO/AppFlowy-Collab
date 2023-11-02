@@ -15,7 +15,11 @@ pub struct SectionMap {
 
 impl SectionMap {
   pub fn create(txn: &mut TransactionMut, uid: &UserId, root: MapRefWrapper) -> Self {
+    // Favorite Section
     root.create_map_with_txn_if_not_exist(txn, Section::Favorite.as_ref());
+    // Recent Section
+    root.create_map_with_txn_if_not_exist(txn, Section::Recent.as_ref());
+
     Self {
       uid: uid.clone(),
       container: root,
@@ -62,6 +66,7 @@ impl SectionMap {
 
 pub enum Section {
   Favorite,
+  Recent,
   Custom(String),
 }
 
@@ -75,12 +80,13 @@ impl AsRef<str> for Section {
   fn as_ref(&self) -> &str {
     match self {
       Section::Favorite => "favorite",
+      Section::Recent => "recent",
       Section::Custom(s) => s.as_str(),
     }
   }
 }
 
-pub type SectionIdsByUid = HashMap<UserId, Vec<String>>;
+pub type SectionsByUid = HashMap<UserId, Vec<SectionItem>>;
 
 pub struct SectionOperation<'a> {
   uid: &'a UserId,
@@ -95,7 +101,8 @@ impl<'a> SectionOperation<'a> {
   fn uid(&self) -> &UserId {
     self.uid
   }
-  pub fn get_item_ids_with_txn<T: ReadTxn>(&self, txn: &T) -> SectionIdsByUid {
+
+  pub fn get_sections_with_txn<T: ReadTxn>(&self, txn: &T) -> SectionsByUid {
     let mut section_id_by_uid = HashMap::new();
     for (uid, value) in self.container().iter(txn) {
       if let Value::YArray(array) = value {
@@ -108,7 +115,7 @@ impl<'a> SectionOperation<'a> {
 
         section_id_by_uid.insert(
           UserId(uid.to_string()),
-          items.into_iter().map(|item| item.id).collect(),
+          items.into_iter().map(|item| item).collect(),
         );
       }
     }
@@ -116,7 +123,7 @@ impl<'a> SectionOperation<'a> {
   }
 
   #[allow(dead_code)]
-  pub fn is_favorite(&self, view_id: &str) -> bool {
+  pub fn contains_view_id(&self, view_id: &str) -> bool {
     let txn = self.container().transact();
     self.contains_with_txn(&txn, view_id)
   }
@@ -124,8 +131,8 @@ impl<'a> SectionOperation<'a> {
   pub fn contains_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> bool {
     match self.container().get_array_ref_with_txn(txn, self.uid()) {
       None => false,
-      Some(fav_array) => {
-        for value in fav_array.iter(txn) {
+      Some(array) => {
+        for value in array.iter(txn) {
           if let Ok(section_id) = SectionItem::try_from(&value) {
             if section_id.id == view_id {
               return true;
@@ -146,14 +153,14 @@ impl<'a> SectionOperation<'a> {
   pub fn get_all_section_item_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<SectionItem> {
     match self.container().get_array_ref_with_txn(txn, self.uid()) {
       None => vec![],
-      Some(fav_array) => {
-        let mut favorites = vec![];
-        for value in fav_array.iter(txn) {
+      Some(array) => {
+        let mut sections = vec![];
+        for value in array.iter(txn) {
           if let YrsValue::Any(any) = value {
-            favorites.push(SectionItem::from(any))
+            sections.push(SectionItem::from(any))
           }
         }
-        favorites
+        sections
       },
     }
   }
@@ -191,10 +198,10 @@ impl<'a> SectionOperation<'a> {
   }
 
   pub fn add_sections_item_with_txn(&self, txn: &mut TransactionMut, items: Vec<SectionItem>) {
-    self.add_items_for_user_with_txn(txn, self.uid(), items);
+    self.add_sections_for_user_with_txn(txn, self.uid(), items);
   }
 
-  pub fn add_items_for_user_with_txn(
+  pub fn add_sections_for_user_with_txn(
     &self,
     txn: &mut TransactionMut,
     uid: &UserId,
@@ -219,10 +226,26 @@ impl<'a> SectionOperation<'a> {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct SectionItem {
+  // view_id
   pub id: String,
+
+  // the timestamp when the item was added to the section
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub timestamp: Option<i64>,
 }
+
+impl SectionItem {
+  pub fn new(id: String) -> Self {
+    Self {
+      id,
+      timestamp: None,
+    }
+  }
+}
+
+impl Eq for SectionItem {}
 
 impl From<lib0Any> for SectionItem {
   fn from(any: lib0Any) -> Self {
@@ -238,6 +261,7 @@ impl From<SectionItem> for lib0Any {
     lib0Any::from_json(&json).unwrap()
   }
 }
+
 impl TryFrom<&YrsValue> for SectionItem {
   type Error = anyhow::Error;
 

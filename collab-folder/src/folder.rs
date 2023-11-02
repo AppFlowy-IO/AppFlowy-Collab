@@ -13,7 +13,8 @@ use crate::folder_observe::{TrashChangeSender, ViewChangeSender};
 use crate::section::{Section, SectionItem, SectionMap, SectionOperation};
 use crate::trash::{TrashArray, TrashRecord};
 use crate::{
-  subscribe_folder_change, FolderData, TrashInfo, View, ViewRelations, ViewsMap, Workspace,
+  subscribe_folder_change, timestamp, FolderData, TrashInfo, View, ViewRelations, ViewsMap,
+  Workspace,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -189,13 +190,20 @@ impl Folder {
     let favorites = self
       .section
       .section_op_with_txn(&txn, Section::Favorite)
-      .map(|op| op.get_item_ids_with_txn(&txn))
+      .map(|op| op.get_sections_with_txn(&txn))
       .unwrap_or_default();
+    let recent = self
+      .section
+      .section_op_with_txn(&txn, Section::Recent)
+      .map(|op| op.get_sections_with_txn(&txn))
+      .unwrap_or_default();
+
     Some(FolderData {
       workspace,
       current_view,
       views,
       favorites,
+      recent,
     })
   }
 
@@ -372,15 +380,10 @@ impl Folder {
   }
 
   pub fn add_favorites(&self, favorite_view_ids: Vec<String>) {
-    let fav_ids = favorite_view_ids
-      .into_iter()
-      .map(|view_id| SectionItem { id: view_id })
-      .collect::<Vec<SectionItem>>();
-
-    for fav in fav_ids {
+    for fav_id in favorite_view_ids {
       self
         .views
-        .update_view(&fav.id, |update| update.set_favorite(true).done());
+        .update_view(&fav_id, |update| update.set_favorite(true).done());
     }
   }
 
@@ -403,6 +406,45 @@ impl Folder {
   pub fn remove_all_favorites(&self) {
     if let Some(op) = self.section.section_op(Section::Favorite) {
       op.clear()
+    }
+  }
+
+  // if the view_id has been marked as recent, this function will update it's timestamp
+  pub fn add_recent_view_ids(&self, view_ids: Vec<String>) {
+    for id in view_ids {
+      self
+        .views
+        .update_view(&id, |update| update.set_recent(true).done());
+    }
+  }
+
+  pub fn delete_recent_view_ids(&self, view_ids: Vec<String>) {
+    for id in view_ids {
+      self
+        .views
+        .update_view(&id, |update| update.set_recent(false).done());
+    }
+  }
+
+  pub fn get_all_recent_sections(&self) -> Vec<SectionItem> {
+    self
+      .section
+      .section_op(Section::Recent)
+      .map(|op| op.get_all_section_item())
+      .unwrap_or_default()
+  }
+
+  pub fn remove_all_recent_sections(&self) {
+    if let Some(op) = self.section.section_op(Section::Recent) {
+      op.clear()
+    }
+  }
+
+  pub fn is_view_in_section(&self, section: Section, view_id: &str) -> bool {
+    if let Some(op) = self.section.section_op(section) {
+      op.contains_view_id(view_id)
+    } else {
+      false
     }
   }
 
@@ -537,9 +579,8 @@ fn create_folder<T: Into<UserId>>(
         meta.insert_str_with_txn(txn, CURRENT_VIEW, folder_data.current_view);
 
         if let Some(fav_section) = section.section_op_with_txn(txn, Section::Favorite) {
-          for (uid, view_ids) in folder_data.favorites {
-            let items = view_ids.into_iter().map(|id| SectionItem { id }).collect();
-            fav_section.add_items_for_user_with_txn(txn, &uid, items);
+          for (uid, sections) in folder_data.favorites {
+            fav_section.add_sections_for_user_with_txn(txn, &uid, sections);
           }
         }
       }

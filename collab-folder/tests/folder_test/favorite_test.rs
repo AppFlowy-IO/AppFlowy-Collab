@@ -114,8 +114,12 @@ async fn favorite_data_serde_test() {
       "current_view": "",
       "favorites": {
         "1": [
-          "1",
-          "2"
+          {
+            "id": "1",
+          },
+          {
+            "id": "2",
+          },
         ]
       },
       "views": [],
@@ -256,8 +260,12 @@ async fn migrate_favorite_v1_test() {
       "current_view": "9330d783-d10d-4a15-84d3-1fa4fa2e8cc4",
       "favorites": {
         "254954554859196416": [
-          "36e0a35e-c636-48d6-9e50-e2e2ee8a1d9f",
-          "9330d783-d10d-4a15-84d3-1fa4fa2e8cc4"
+          {
+            "id": "36e0a35e-c636-48d6-9e50-e2e2ee8a1d9f"
+          },
+          {
+            "id": "9330d783-d10d-4a15-84d3-1fa4fa2e8cc4"
+          }
         ]
       },
       "views": [

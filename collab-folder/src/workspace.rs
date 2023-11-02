@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{RepeatedViewIdentifier, View, ViewLayout};
+use crate::{timestamp, RepeatedViewIdentifier, View, ViewLayout};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Workspace {
@@ -8,16 +8,23 @@ pub struct Workspace {
   pub name: String,
   pub child_views: RepeatedViewIdentifier,
   pub created_at: i64,
+  pub created_by: Option<i64>,
+  pub last_edited_time: i64,
+  pub last_edited_by: Option<i64>,
 }
 
 impl Workspace {
-  pub fn new(id: String, name: String) -> Self {
+  pub fn new(id: String, name: String, uid: Option<i64>) -> Self {
     debug_assert!(!id.is_empty());
+    let time = timestamp();
     Self {
       id,
       name,
       child_views: Default::default(),
-      created_at: chrono::Utc::now().timestamp(),
+      created_at: time,
+      last_edited_time: time,
+      created_by: uid,
+      last_edited_by: uid,
     }
   }
 }
@@ -29,6 +36,9 @@ impl From<&View> for Workspace {
       name: value.name.clone(),
       child_views: value.children.clone(),
       created_at: value.created_at,
+      created_by: value.created_by,
+      last_edited_time: value.last_edited_time,
+      last_edited_by: value.last_edited_by,
     }
   }
 }
@@ -36,14 +46,15 @@ impl From<Workspace> for View {
   fn from(value: Workspace) -> Self {
     Self {
       id: value.id,
-      parent_view_id: "".to_string(),
       name: value.name,
-      desc: "".to_string(),
       children: value.child_views,
       created_at: value.created_at,
-      is_favorite: false,
       layout: ViewLayout::Document,
       icon: None,
+      created_by: value.created_by,
+      last_edited_time: value.last_edited_time,
+      last_edited_by: value.last_edited_by,
+      ..Default::default()
     }
   }
 }

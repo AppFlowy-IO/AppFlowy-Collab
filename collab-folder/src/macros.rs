@@ -48,6 +48,16 @@ macro_rules! impl_i64_update {
 }
 
 #[macro_export]
+macro_rules! impl_option_i64_update {
+  ($setter1: ident, $key: expr) => {
+    pub fn $setter1(self, value: Option<i64>) -> Self {
+      self.map_ref.insert_with_txn(self.txn, $key, value);
+      self
+    }
+  };
+}
+
+#[macro_export]
 macro_rules! impl_bool_update {
   ($setter1: ident, $setter2: ident, $key: expr) => {
     pub fn $setter1(self, value: bool) -> Self {
