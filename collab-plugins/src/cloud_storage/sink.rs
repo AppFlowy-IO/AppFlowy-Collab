@@ -228,7 +228,8 @@ where
         while let Some(pending_msg) = pending_msg_queue.pop() {
           debug!("Try merge collab message: {}", pending_msg.get_msg());
 
-          if !sending_msg.merge(pending_msg) {
+          if !sending_msg.merge(&pending_msg) {
+            pending_msg_queue.push(pending_msg);
             break;
           }
         }
