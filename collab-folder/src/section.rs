@@ -113,10 +113,7 @@ impl<'a> SectionOperation<'a> {
           }
         }
 
-        section_id_by_uid.insert(
-          UserId(uid.to_string()),
-          items.into_iter().map(|item| item).collect(),
-        );
+        section_id_by_uid.insert(UserId(uid.to_string()), items);
       }
     }
     section_id_by_uid

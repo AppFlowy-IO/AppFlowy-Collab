@@ -333,7 +333,7 @@ async fn check_created_and_edited_time_test() {
   let uid = UserId::from(12345);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
   let view = make_test_view("v1", "w1", vec![]);
-  folder_test.insert_view(view.clone(), Some(0));
+  folder_test.insert_view(view, Some(0));
   let views = folder_test.get_current_workspace_views();
   let v1 = views.get(0).unwrap();
   assert_eq!(v1.created_by.unwrap(), uid.as_i64());
