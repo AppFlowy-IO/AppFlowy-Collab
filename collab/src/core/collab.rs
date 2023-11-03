@@ -10,6 +10,7 @@ use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio_stream::wrappers::WatchStream;
+use tracing::event;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
@@ -88,6 +89,11 @@ impl Collab {
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, CollabError> {
     let collab = Self::new_with_origin(origin, object_id, plugins);
+    event!(
+      tracing::Level::TRACE,
+      "collab_raw_data len: {}",
+      collab_raw_data.len()
+    );
     if !collab_raw_data.is_empty() {
       let mut txn = collab.origin_transact_mut();
       for update in collab_raw_data {
@@ -799,6 +805,7 @@ impl MutexCollab {
     MutexCollab(Arc::new(Mutex::new(collab)))
   }
 
+  /// Returns the doc state and the state vector.
   pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
     let collab = self.0.lock();
     collab.encode_as_update_v1()

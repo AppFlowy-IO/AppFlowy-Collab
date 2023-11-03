@@ -13,7 +13,7 @@ pub trait CollabSinkMessage: Clone + Send + Sync + 'static + Ord + Display {
   /// Returns true if the message can be merged with other messages.
   fn mergeable(&self) -> bool;
 
-  fn merge(&mut self, other: Self) -> bool;
+  fn merge(&mut self, other: &Self) -> bool;
 
   fn is_init_msg(&self) -> bool;
 
@@ -102,10 +102,6 @@ where
   pub fn msg_id(&self) -> MsgId {
     self.msg_id
   }
-
-  pub fn into_msg(self) -> Msg {
-    self.msg
-  }
 }
 
 impl<Msg> PendingMessage<Msg>
@@ -120,8 +116,8 @@ where
     self.msg.is_init_msg()
   }
 
-  pub fn merge(&mut self, other: Self) -> bool {
-    self.msg.merge(other.into_msg())
+  pub fn merge(&mut self, other: &Self) -> bool {
+    self.msg.merge(other.get_msg())
   }
 }
 
