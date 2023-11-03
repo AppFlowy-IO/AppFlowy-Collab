@@ -82,6 +82,8 @@ pub fn default_document_data() -> DocumentData {
   }
 }
 
+/// Generates default collab data for a document. This document only contains the initial state
+/// of the document.
 pub fn default_document_collab_data(document_id: &str) -> CollabRawData {
   let document_data = default_document_data();
   let collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, document_id, vec![]));
