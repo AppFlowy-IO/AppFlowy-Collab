@@ -21,7 +21,7 @@ use yrs::{
   UpdateSubscription,
 };
 
-use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedDocV1};
+use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedCollabV1};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
@@ -135,9 +135,9 @@ impl Collab {
   }
 
   /// Returns the doc state and the state vector.
-  pub fn encode_as_update_v1(&self) -> EncodedDocV1 {
+  pub fn encode_collab_v1(&self) -> EncodedCollabV1 {
     let txn = self.transact();
-    EncodedDocV1::new(
+    EncodedCollabV1::new(
       txn.state_vector().encode_v1(),
       txn.encode_state_as_update_v1(&StateVector::default()),
     )
@@ -280,7 +280,7 @@ impl Collab {
   /// Make a full update with the current state of the [Collab].
   /// It invokes the [CollabPlugin::flush] method of each plugin.
   pub fn flush(&self) {
-    let data = self.encode_as_update_v1();
+    let data = self.encode_collab_v1();
     self
       .plugins
       .read()
@@ -805,9 +805,9 @@ impl MutexCollab {
   }
 
   /// Returns the doc state and the state vector.
-  pub fn encode_as_update_v1(&self) -> EncodedDocV1 {
+  pub fn encode_collab_v1(&self) -> EncodedCollabV1 {
     let collab = self.0.lock();
-    collab.encode_as_update_v1()
+    collab.encode_collab_v1()
   }
 
   pub fn to_json_value(&self) -> JsonValue {

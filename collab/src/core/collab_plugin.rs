@@ -51,8 +51,8 @@ pub trait CollabPlugin: Send + Sync + 'static {
   fn reset(&self, _object_id: &str) {}
 
   /// Flush the data to the storage. It will remove all existing updates and insert the state vector
-  /// and doc_state from the [EncodedDocV1].
-  fn flush(&self, _object_id: &str, _data: &EncodedDocV1) {}
+  /// and doc_state from the [EncodedCollabV1].
+  fn flush(&self, _object_id: &str, _data: &EncodedCollabV1) {}
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
@@ -105,12 +105,12 @@ where
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct EncodedDocV1 {
+pub struct EncodedCollabV1 {
   pub state_vector: Bytes,
   pub doc_state: Bytes,
 }
 
-impl EncodedDocV1 {
+impl EncodedCollabV1 {
   pub fn new<T: Into<Bytes>>(state_vector: T, state: T) -> Self {
     Self {
       state_vector: state_vector.into(),
@@ -124,7 +124,7 @@ impl EncodedDocV1 {
   }
 
   #[allow(dead_code)]
-  pub fn decode_from_bytes(encoded: &[u8]) -> Result<EncodedDocV1, bincode::Error> {
+  pub fn decode_from_bytes(encoded: &[u8]) -> Result<EncodedCollabV1, bincode::Error> {
     bincode::deserialize(encoded)
   }
 }
