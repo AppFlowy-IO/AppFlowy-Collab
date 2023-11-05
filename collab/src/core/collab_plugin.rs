@@ -49,7 +49,9 @@ pub trait CollabPlugin: Send + Sync + 'static {
   /// is ready to sync from the remote. When reset is called, the plugin should reset its state.
   fn reset(&self, _object_id: &str) {}
 
-  fn flush(&self, _object_id: &str, _update: &Bytes) {}
+  /// Flush the data to the storage. It will remove all existing updates and insert the state vector
+  /// and doc_state from the [EncodedDocV1].
+  fn flush(&self, _object_id: &str, _data: &EncodedDocV1) {}
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
@@ -98,5 +100,19 @@ where
 
   fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
     (**self).receive_update(object_id, txn, update)
+  }
+}
+
+pub struct EncodedDocV1 {
+  pub state_vector: Bytes,
+  pub doc_state: Bytes,
+}
+
+impl EncodedDocV1 {
+  pub fn new<T: Into<Bytes>>(state_vector: T, state: T) -> Self {
+    Self {
+      state_vector: state_vector.into(),
+      doc_state: state.into(),
+    }
   }
 }

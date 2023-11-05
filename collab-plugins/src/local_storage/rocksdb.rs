@@ -1,8 +1,9 @@
 use std::ops::Deref;
-use std::sync::atomic::Ordering::SeqCst;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::Ordering::SeqCst;
 
+use collab::core::collab_plugin::EncodedDocV1;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab::sync_protocol::awareness::Awareness;
@@ -136,6 +137,16 @@ impl CollabPlugin for RocksdbDiskPlugin {
       }) {
         tracing::error!("🔴Reset failed: {:?}", e);
       }
+    }
+  }
+
+  fn flush(&self, object_id: &str, data: &EncodedDocV1) {
+    let EncodedDocV1 { state_vector, doc_state } = data;
+    if let Some(db) = self.db.upgrade() {
+      let _ = db.with_write_txn(|w_db_txn| {
+        w_db_txn.flush_doc(self.uid, object_id, state_vector.to_vec(), doc_state.to_vec())?;
+        Ok(())
+      });
     }
   }
 }

@@ -5,7 +5,6 @@ use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::vec::IntoIter;
 
-use bytes::Bytes;
 use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -22,7 +21,7 @@ use yrs::{
   UpdateSubscription,
 };
 
-use crate::core::collab_plugin::{CollabPlugin, CollabPluginType};
+use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedDocV1};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
@@ -136,11 +135,11 @@ impl Collab {
   }
 
   /// Returns the doc state and the state vector.
-  pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
+  pub fn encode_as_update_v1(&self) -> EncodedDocV1 {
     let txn = self.transact();
-    (
-      txn.encode_state_as_update_v1(&StateVector::default()),
+    EncodedDocV1::new(
       txn.state_vector().encode_v1(),
+      txn.encode_state_as_update_v1(&StateVector::default()),
     )
   }
 
@@ -281,12 +280,12 @@ impl Collab {
   /// Make a full update with the current state of the [Collab].
   /// It invokes the [CollabPlugin::flush] method of each plugin.
   pub fn flush(&self) {
-    let update = Bytes::from(self.encode_as_update_v1().0);
+    let data = self.encode_as_update_v1();
     self
       .plugins
       .read()
       .iter()
-      .for_each(|plugin| plugin.flush(&self.object_id, &update));
+      .for_each(|plugin| plugin.flush(&self.object_id, &data));
   }
 
   pub fn observer_data<F>(&mut self, f: F) -> MapSubscription
@@ -806,7 +805,7 @@ impl MutexCollab {
   }
 
   /// Returns the doc state and the state vector.
-  pub fn encode_as_update_v1(&self) -> (Vec<u8>, Vec<u8>) {
+  pub fn encode_as_update_v1(&self) -> EncodedDocV1 {
     let collab = self.0.lock();
     collab.encode_as_update_v1()
   }

@@ -1,12 +1,12 @@
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use futures_util::SinkExt;
 use tokio::spawn;
-use tokio::sync::{mpsc, oneshot, watch, Mutex};
-use tokio::time::{interval, Instant, Interval};
+use tokio::sync::{mpsc, Mutex, oneshot, watch};
+use tokio::time::{Instant, interval, Interval};
 use tracing::{debug, trace};
 
 use crate::cloud_storage::error::SyncError;
@@ -246,7 +246,7 @@ where
     };
 
     let mut sender = self.sender.lock().await;
-    tracing::debug!("[🙂Client {}]: {}", self.uid, collab_msg);
+    tracing::debug!("[Client {}]: {}", self.uid, collab_msg);
     sender.send(collab_msg).await.ok()?;
     // Wait for the message to be acked.
     // If the message is not acked within the timeout, resend the message.
