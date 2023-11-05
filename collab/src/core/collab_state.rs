@@ -99,16 +99,12 @@ impl State {
   pub fn set_sync_state(&self, new_state: SyncState) {
     let old_state = self.sync_state.read().clone();
     if old_state != new_state {
-      if new_state.is_sync_finished() {
-        tracing::debug!("{} sync finish 🌐", self.object_id,);
-      } else {
-        tracing::trace!(
-          "{} sync state {:?} => {:?}",
-          self.object_id,
-          old_state,
-          new_state
-        );
-      }
+      tracing::trace!(
+        "{} sync state {:?} => {:?}",
+        self.object_id,
+        old_state,
+        new_state
+      );
 
       *self.sync_state.write() = new_state.clone();
       let _ = self.sync_state_notifier.send(new_state);

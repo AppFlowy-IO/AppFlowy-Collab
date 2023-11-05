@@ -491,6 +491,10 @@ impl Message {
 }
 
 impl CollabSinkMessage for Message {
+  fn object_id(&self) -> &str {
+    self.object.object_id.as_str()
+  }
+
   fn length(&self) -> usize {
     self.payload_len()
   }
