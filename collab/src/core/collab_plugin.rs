@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use yrs::{Doc, TransactionMut};
 
@@ -49,7 +50,9 @@ pub trait CollabPlugin: Send + Sync + 'static {
   /// is ready to sync from the remote. When reset is called, the plugin should reset its state.
   fn reset(&self, _object_id: &str) {}
 
-  fn flush(&self, _object_id: &str, _update: &Bytes) {}
+  /// Flush the data to the storage. It will remove all existing updates and insert the state vector
+  /// and doc_state from the [EncodedCollabV1].
+  fn flush(&self, _object_id: &str, _data: &EncodedCollabV1) {}
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
@@ -98,5 +101,30 @@ where
 
   fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
     (**self).receive_update(object_id, txn, update)
+  }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub struct EncodedCollabV1 {
+  pub state_vector: Bytes,
+  pub doc_state: Bytes,
+}
+
+impl EncodedCollabV1 {
+  pub fn new<T: Into<Bytes>>(state_vector: T, state: T) -> Self {
+    Self {
+      state_vector: state_vector.into(),
+      doc_state: state.into(),
+    }
+  }
+
+  #[allow(dead_code)]
+  pub fn encode_to_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
+    bincode::serialize(self)
+  }
+
+  #[allow(dead_code)]
+  pub fn decode_from_bytes(encoded: &[u8]) -> Result<EncodedCollabV1, bincode::Error> {
+    bincode::deserialize(encoded)
   }
 }

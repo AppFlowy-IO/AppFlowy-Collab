@@ -640,6 +640,7 @@ dependencies = [
  "anyhow",
  "assert-json-diff",
  "async-trait",
+ "bincode",
  "bytes",
  "chrono",
  "collab",

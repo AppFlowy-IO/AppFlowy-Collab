@@ -246,7 +246,7 @@ where
     };
 
     let mut sender = self.sender.lock().await;
-    tracing::debug!("[🙂Client {}]: {}", self.uid, collab_msg);
+    tracing::debug!("[Client {}]: {}", self.uid, collab_msg);
     sender.send(collab_msg).await.ok()?;
     // Wait for the message to be acked.
     // If the message is not acked within the timeout, resend the message.

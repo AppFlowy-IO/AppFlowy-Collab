@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use collab::core::collab::{CollabRawData, MutexCollab};
+use collab::core::collab::MutexCollab;
+use collab::core::collab_plugin::EncodedCollabV1;
 use collab::core::origin::CollabOrigin;
 use nanoid::nanoid;
 
@@ -84,11 +85,11 @@ pub fn default_document_data() -> DocumentData {
 
 /// Generates default collab data for a document. This document only contains the initial state
 /// of the document.
-pub fn default_document_collab_data(document_id: &str) -> CollabRawData {
+pub fn default_document_collab_data(document_id: &str) -> EncodedCollabV1 {
   let document_data = default_document_data();
   let collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, document_id, vec![]));
   let _ = Document::create_with_data(collab.clone(), document_data);
-  vec![collab.encode_as_update_v1().0]
+  collab.encode_collab_v1()
 }
 
 pub fn generate_id() -> String {

@@ -3,6 +3,7 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
+use collab::core::collab_plugin::EncodedCollabV1;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab::sync_protocol::awareness::Awareness;
@@ -136,6 +137,24 @@ impl CollabPlugin for RocksdbDiskPlugin {
       }) {
         tracing::error!("🔴Reset failed: {:?}", e);
       }
+    }
+  }
+
+  fn flush(&self, object_id: &str, data: &EncodedCollabV1) {
+    let EncodedCollabV1 {
+      state_vector,
+      doc_state,
+    } = data;
+    if let Some(db) = self.db.upgrade() {
+      let _ = db.with_write_txn(|w_db_txn| {
+        w_db_txn.flush_doc(
+          self.uid,
+          object_id,
+          state_vector.to_vec(),
+          doc_state.to_vec(),
+        )?;
+        Ok(())
+      });
     }
   }
 }

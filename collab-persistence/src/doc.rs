@@ -55,7 +55,7 @@ where
     }
     let doc_id = get_or_create_did(uid, self, object_id.as_ref())?;
     tracing::trace!(
-      "[🙂Client {}] => [{}:{:?}]: new doc:{}",
+      "[Client {}] => [{}:{:?}]: new doc:{}",
       uid,
       doc_id,
       object_id,
@@ -67,7 +67,7 @@ where
     let sv_key = make_state_vector_key(doc_id);
 
     tracing::trace!(
-      "[🙂Client {}] => [{}:{:?}] insert doc state: {:?}",
+      "[Client {}] => [{}:{:?}] insert doc state: {:?}",
       uid,
       doc_id,
       object_id,
@@ -79,25 +79,45 @@ where
     Ok(())
   }
 
-  /// Load the document from the database and apply the updates to the transaction.
-  /// After loading the document, it will delete the document state vec and updates and
-  /// insert the new document state.
+  /// Flushes the document state and state vector to the storage.
+  ///
+  /// This function writes the state of a document, identified by a unique `object_id`, along with its
+  /// associated state vector to the persistent storage. It first ensures that a document ID is
+  /// assigned or retrieved for the given user ID and object identifier. Then, it proceeds to clear any
+  /// existing state for that document from the storage before inserting the new state and state vector.
+  ///
   fn flush_doc_with_txn<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
     &self,
     uid: i64,
     object_id: &K,
     txn: &T,
   ) -> Result<(), PersistenceError> {
+    let doc_state = txn.encode_state_as_update_v1(&StateVector::default());
+    let state_vector = txn.state_vector().encode_v1();
+    self.flush_doc(uid, object_id, state_vector, doc_state)
+  }
+
+  /// Flushes the document state and state vector to the storage.
+  ///
+  /// This function writes the state of a document, identified by a unique `object_id`, along with its
+  /// associated state vector to the persistent storage. It first ensures that a document ID is
+  /// assigned or retrieved for the given user ID and object identifier. Then, it proceeds to clear any
+  /// existing state for that document from the storage before inserting the new state and state vector.
+  ///
+  fn flush_doc<K: AsRef<[u8]> + ?Sized + Debug>(
+    &self,
+    uid: i64,
+    object_id: &K,
+    state_vector: Vec<u8>,
+    doc_state: Vec<u8>,
+  ) -> Result<(), PersistenceError> {
     let doc_id = get_or_create_did(uid, self, object_id)?;
     tracing::debug!(
-      "[🙂Client {}] => [{}:{:?}]: flush doc",
+      "[Client {}] => [{}:{:?}]: flush doc",
       uid,
       doc_id,
       object_id
     );
-
-    let doc_state = txn.encode_state_as_update_v1(&StateVector::default());
-    let sv = txn.state_vector().encode_v1();
 
     // Remove the updates
     let start = make_doc_start_key(doc_id);
@@ -107,7 +127,7 @@ where
     let doc_state_key = make_doc_state_key(doc_id);
     let sv_key = make_state_vector_key(doc_id);
     tracing::trace!(
-      "[🙂Client {}] => [{}:{:?}] insert doc state: {:?} : {}",
+      "[Client {}] => [{}:{:?}] insert doc state: {:?} : {}",
       uid,
       doc_id,
       object_id,
@@ -116,18 +136,8 @@ where
     );
     // Insert new doc state and state vector
     self.insert(doc_state_key, doc_state)?;
-    self.insert(sv_key, sv)?;
+    self.insert(sv_key, state_vector)?;
     Ok(())
-  }
-
-  fn flush_doc<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
-    &self,
-    uid: i64,
-    object_id: &K,
-    doc: &Doc,
-  ) -> Result<(), PersistenceError> {
-    let txn = doc.transact_mut();
-    self.flush_doc_with_txn(uid, object_id, &txn)
   }
 
   fn is_exist<K: AsRef<[u8]> + ?Sized + Debug>(&self, collab_id: i64, object_id: &K) -> bool {
@@ -332,7 +342,7 @@ where
     object_id: &K,
   ) -> Result<(), PersistenceError> {
     if let Some(did) = get_doc_id(uid, self, object_id) {
-      tracing::trace!("[🙂Client {}] => [{}] delete {:?} doc", uid, did, object_id);
+      tracing::trace!("[Client {}] => [{}] delete {:?} doc", uid, did, object_id);
       let key = make_doc_id_key(&uid.to_be_bytes(), object_id.as_ref());
       let _ = self.remove(key.as_ref());
 
