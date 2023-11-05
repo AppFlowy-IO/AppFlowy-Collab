@@ -10,12 +10,12 @@ use collab::preclude::*;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
-use crate::{
-  FolderData, subscribe_folder_change, TrashInfo, View, ViewRelations, ViewsMap, Workspace,
-};
 use crate::folder_observe::{TrashChangeSender, ViewChangeSender};
 use crate::section::{Section, SectionItem, SectionMap, SectionOperation};
 use crate::trash::{TrashArray, TrashRecord};
+use crate::{
+  subscribe_folder_change, FolderData, TrashInfo, View, ViewRelations, ViewsMap, Workspace,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
 #[serde(transparent)]
