@@ -187,7 +187,7 @@ where
       }
       Ok(update_count)
     } else {
-      tracing::trace!("[🙂Client] => {:?} not exist", object_id);
+      tracing::trace!("[Client] => {:?} not exist", object_id);
       Err(PersistenceError::DocumentNotExist)
     }
   }

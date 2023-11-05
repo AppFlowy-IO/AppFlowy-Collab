@@ -611,7 +611,7 @@ fn observe_doc(
           plugin.receive_local_update(&local_origin, &cloned_oid, &event.update);
         } else {
           tracing::trace!(
-            "[🙂Client]: {} did apply remote {} update",
+            "[Client]: {} did apply remote {} update",
             local_origin,
             remote_origin,
           );
