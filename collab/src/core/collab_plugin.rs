@@ -104,7 +104,7 @@ where
   }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EncodedCollabV1 {
   pub state_vector: Bytes,
   pub doc_state: Bytes,
