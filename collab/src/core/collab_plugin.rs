@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use yrs::{Doc, TransactionMut};
 
@@ -103,6 +104,7 @@ where
   }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct EncodedDocV1 {
   pub state_vector: Bytes,
   pub doc_state: Bytes,
@@ -114,5 +116,15 @@ impl EncodedDocV1 {
       state_vector: state_vector.into(),
       doc_state: state.into(),
     }
+  }
+
+  #[allow(dead_code)]
+  pub fn encode_to_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
+    bincode::serialize(self)
+  }
+
+  #[allow(dead_code)]
+  pub fn decode_from_bytes(encoded: &[u8]) -> Result<EncodedDocV1, bincode::Error> {
+    bincode::deserialize(encoded)
   }
 }
