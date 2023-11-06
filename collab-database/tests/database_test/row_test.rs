@@ -233,7 +233,7 @@ async fn update_row_meta_test() {
   let row_meta = database_test.get_row_meta(&row_order.id).unwrap();
   assert_eq!(row_meta.cover_url, Some("cover 123".to_string()));
   assert_eq!(row_meta.icon_url, Some("icon 123".to_string()));
-  assert_eq!(row_meta.is_document_empty, false);
+  assert!(!row_meta.is_document_empty);
 }
 
 #[tokio::test]
