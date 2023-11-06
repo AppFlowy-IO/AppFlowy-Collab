@@ -220,15 +220,20 @@ async fn update_row_meta_test() {
     })
     .unwrap();
 
+  let row_meta_before = database_test.get_row_meta(&row_order.id).unwrap();
+  assert_eq!(row_meta_before.is_document_empty, true);
+
   database_test.update_row_meta(&row_order.id, |meta_update| {
     meta_update
-      .insert_cover("conver 123")
-      .insert_icon("icon 123");
+      .insert_cover("cover 123")
+      .insert_icon("icon 123")
+      .update_is_document_empty(false);
   });
 
   let row_meta = database_test.get_row_meta(&row_order.id).unwrap();
-  assert_eq!(row_meta.cover_url, Some("conver 123".to_string()));
+  assert_eq!(row_meta.cover_url, Some("cover 123".to_string()));
   assert_eq!(row_meta.icon_url, Some("icon 123".to_string()));
+  assert_eq!(row_meta.is_document_empty, false);
 }
 
 #[tokio::test]
