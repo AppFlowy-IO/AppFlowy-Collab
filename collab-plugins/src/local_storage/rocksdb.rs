@@ -1,7 +1,7 @@
 use std::ops::Deref;
-use std::sync::atomic::Ordering::SeqCst;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::Ordering::SeqCst;
 
 use collab::core::collab_plugin::EncodedCollabV1;
 use collab::core::origin::CollabOrigin;
@@ -114,7 +114,6 @@ impl CollabPlugin for RocksdbDiskPlugin {
       let _ = self.increase_count();
       // /Acquire a write transaction to ensure consistency
       let result = db.with_write_txn(|w_db_txn| {
-        tracing::trace!("Receive {} update", object_id);
         let _ = w_db_txn.push_update(self.uid, object_id, update)?;
         Ok(())
       });
