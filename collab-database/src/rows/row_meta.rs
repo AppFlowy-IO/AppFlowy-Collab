@@ -95,7 +95,7 @@ impl RowMeta {
           txn,
           meta_id_from_row_id(row_id, RowMetaKey::IsDocumentEmpty),
         )
-        .unwrap_or_else(|| true),
+        .unwrap_or(true),
     }
   }
 

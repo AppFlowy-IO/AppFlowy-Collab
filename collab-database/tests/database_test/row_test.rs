@@ -221,7 +221,7 @@ async fn update_row_meta_test() {
     .unwrap();
 
   let row_meta_before = database_test.get_row_meta(&row_order.id).unwrap();
-  assert_eq!(row_meta_before.is_document_empty, true);
+  assert!(row_meta_before.is_document_empty);
 
   database_test.update_row_meta(&row_order.id, |meta_update| {
     meta_update
