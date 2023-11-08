@@ -38,7 +38,7 @@ unsafe impl Send for FolderTest {}
 unsafe impl Sync for FolderTest {}
 
 pub async fn create_folder(uid: UserId, workspace_id: &str) -> FolderTest {
-  let mut workspace = Workspace::new(workspace_id.to_string(), "".to_string(), Some(uid.as_i64()));
+  let mut workspace = Workspace::new(workspace_id.to_string(), "".to_string(), uid.as_i64());
   workspace.created_at = 0;
   let folder_data = FolderData::new(workspace);
   create_folder_with_data(uid, workspace_id, folder_data).await
