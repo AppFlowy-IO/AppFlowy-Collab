@@ -4,19 +4,19 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use collab::preclude::{
-  lib0Any, DeepEventsSubscription, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  DeepEventsSubscription, lib0Any, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
-use crate::folder_observe::ViewChangeSender;
-use crate::section::{Section, SectionItem, SectionMap};
 use crate::{
   impl_any_update, impl_i64_update, impl_option_i64_update, impl_option_str_update,
   impl_str_update, UserId,
 };
-use crate::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
+use crate::{RepeatedViewIdentifier, subscribe_view_change, ViewIdentifier, ViewRelations};
+use crate::folder_observe::ViewChangeSender;
+use crate::section::{Section, SectionItem, SectionMap};
 
 const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";
@@ -432,7 +432,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   let created_by = map_ref.get_i64_with_txn(txn, VIEW_CREATED_BY);
   let last_edited_time = map_ref
     .get_i64_with_txn(txn, VIEW_LAST_EDITED_TIME)
-    .unwrap_or_default();
+    .unwrap_or(timestamp());
   let last_edited_by = map_ref.get_i64_with_txn(txn, VIEW_LAST_EDITED_BY);
 
   Some(View {
