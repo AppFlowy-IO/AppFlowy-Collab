@@ -4,19 +4,19 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use collab::preclude::{
-  DeepEventsSubscription, lib0Any, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  lib0Any, DeepEventsSubscription, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
+use crate::folder_observe::ViewChangeSender;
+use crate::section::{Section, SectionItem, SectionMap};
 use crate::{
   impl_any_update, impl_i64_update, impl_option_i64_update, impl_option_str_update,
   impl_str_update, UserId,
 };
-use crate::{RepeatedViewIdentifier, subscribe_view_change, ViewIdentifier, ViewRelations};
-use crate::folder_observe::ViewChangeSender;
-use crate::section::{Section, SectionItem, SectionMap};
+use crate::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
 
 const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";
