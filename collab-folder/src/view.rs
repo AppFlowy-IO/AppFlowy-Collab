@@ -607,13 +607,8 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
 
       // add the section if add_in_recent is true since we have removed the section before.
       if add_in_recent {
-        recent_section.add_sections_item_with_txn(
-          self.txn,
-          vec![SectionItem {
-            id: self.view_id.to_string(),
-            timestamp: Some(timestamp()),
-          }],
-        );
+        recent_section
+          .add_sections_item_with_txn(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
       }
     }
 

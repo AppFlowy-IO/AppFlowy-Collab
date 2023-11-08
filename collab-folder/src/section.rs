@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
 use anyhow::bail;
+use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::preclude::{
   lib0Any, Array, Map, MapRefWrapper, ReadTxn, Transact, TransactionMut, Value, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::UserId;
+use crate::{timestamp, UserId};
 
 pub struct SectionMap {
   uid: UserId,
@@ -109,7 +110,9 @@ impl<'a> SectionOperation<'a> {
         let mut items = vec![];
         for value in array.iter(txn) {
           if let YrsValue::Any(any) = value {
-            items.push(SectionItem::from(any))
+            if let Ok(item) = SectionItem::try_from(&any) {
+              items.push(item)
+            }
           }
         }
 
@@ -154,7 +157,9 @@ impl<'a> SectionOperation<'a> {
         let mut sections = vec![];
         for value in array.iter(txn) {
           if let YrsValue::Any(any) = value {
-            sections.push(SectionItem::from(any))
+            if let Ok(item) = SectionItem::try_from(&any) {
+              sections.push(item)
+            }
           }
         }
         sections
@@ -223,39 +228,56 @@ impl<'a> SectionOperation<'a> {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SectionItem {
-  // view_id
   pub id: String,
-
-  // the timestamp when the item was added to the section
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub timestamp: Option<i64>,
+  pub timestamp: i64,
 }
 
 impl SectionItem {
   pub fn new(id: String) -> Self {
     Self {
       id,
-      timestamp: None,
+      timestamp: timestamp(),
     }
   }
 }
 
-impl Eq for SectionItem {}
+/// Uses [AnyMap] to store key-value pairs of section items, making it easy to extend in the future.
+impl TryFrom<AnyMap> for SectionItem {
+  type Error = anyhow::Error;
 
-impl From<lib0Any> for SectionItem {
-  fn from(any: lib0Any) -> Self {
-    let mut json = String::new();
-    any.to_json(&mut json);
-    serde_json::from_str(&json).unwrap()
+  fn try_from(value: AnyMap) -> Result<Self, Self::Error> {
+    let id = value
+      .get_str_value("id")
+      .ok_or(anyhow::anyhow!("missing section item id"))?;
+    let timestamp = value.get_i64_value("timestamp").unwrap_or(timestamp());
+    Ok(Self { id, timestamp })
+  }
+}
+
+impl From<SectionItem> for AnyMap {
+  fn from(item: SectionItem) -> Self {
+    let mut map = AnyMap::new();
+    map.insert_str_value("id", item.id);
+    map.insert_i64_value("timestamp", item.timestamp);
+    map
+  }
+}
+
+impl TryFrom<&lib0Any> for SectionItem {
+  type Error = anyhow::Error;
+
+  fn try_from(any: &lib0Any) -> Result<Self, Self::Error> {
+    let any_map = AnyMap::from(any);
+    Self::try_from(any_map)
   }
 }
 
 impl From<SectionItem> for lib0Any {
-  fn from(item: SectionItem) -> Self {
-    let json = serde_json::to_string(&item).unwrap();
-    lib0Any::from_json(&json).unwrap()
+  fn from(value: SectionItem) -> Self {
+    let any_map = AnyMap::from(value);
+    any_map.into()
   }
 }
 
@@ -264,7 +286,7 @@ impl TryFrom<&YrsValue> for SectionItem {
 
   fn try_from(value: &Value) -> Result<Self, Self::Error> {
     match value {
-      Value::Any(any) => Ok(SectionItem::from(any.clone())),
+      Value::Any(any) => SectionItem::try_from(any),
       _ => bail!("Invalid section yrs value"),
     }
   }
