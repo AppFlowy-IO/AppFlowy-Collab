@@ -90,7 +90,8 @@ impl Collab {
     let collab = Self::new_with_origin(origin, object_id, plugins);
     event!(
       tracing::Level::TRACE,
-      "collab_raw_data len: {}",
+      "{}: new with raw data. len: {}",
+      object_id,
       collab_raw_data.len()
     );
     if !collab_raw_data.is_empty() {
