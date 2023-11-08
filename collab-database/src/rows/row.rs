@@ -239,6 +239,7 @@ pub enum RowMetaKey {
   DocumentId,
   IconId,
   CoverId,
+  IsDocumentEmpty,
 }
 
 impl RowMetaKey {
@@ -247,6 +248,7 @@ impl RowMetaKey {
       Self::DocumentId => "document_id",
       Self::IconId => "icon_id",
       Self::CoverId => "cover_id",
+      Self::IsDocumentEmpty => "is_document_empty",
     }
   }
 }

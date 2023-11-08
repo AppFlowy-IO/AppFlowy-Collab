@@ -37,6 +37,14 @@ impl<'a, 'b, 'c> RowMetaUpdate<'a, 'b, 'c> {
     }
   }
 
+  pub fn update_is_document_empty_if_not_none(self, is_document_empty: Option<bool>) -> Self {
+    if let Some(is_empty) = is_document_empty {
+      self.update_is_document_empty(is_empty)
+    } else {
+      self
+    }
+  }
+
   pub fn insert_icon(self, icon_url: &str) -> Self {
     let icon_id = meta_id_from_row_id(&self.row_id, RowMetaKey::IconId);
     self
@@ -52,12 +60,21 @@ impl<'a, 'b, 'c> RowMetaUpdate<'a, 'b, 'c> {
       .insert_str_with_txn(self.txn, &cover_id, cover_url);
     self
   }
+
+  pub fn update_is_document_empty(self, is_document_empty: bool) -> Self {
+    let is_document_empty_id = meta_id_from_row_id(&self.row_id, RowMetaKey::IsDocumentEmpty);
+    self
+      .map_ref
+      .insert_bool_with_txn(self.txn, &is_document_empty_id, is_document_empty);
+    self
+  }
 }
 
 #[derive(Debug, Clone)]
 pub struct RowMeta {
   pub icon_url: Option<String>,
   pub cover_url: Option<String>,
+  pub is_document_empty: bool,
 }
 
 impl RowMeta {
@@ -65,6 +82,7 @@ impl RowMeta {
     Self {
       icon_url: None,
       cover_url: None,
+      is_document_empty: true,
     }
   }
 
@@ -72,6 +90,12 @@ impl RowMeta {
     Self {
       icon_url: map_ref.get_str_with_txn(txn, &meta_id_from_row_id(row_id, RowMetaKey::IconId)),
       cover_url: map_ref.get_str_with_txn(txn, &meta_id_from_row_id(row_id, RowMetaKey::CoverId)),
+      is_document_empty: map_ref
+        .get_bool_with_txn(
+          txn,
+          meta_id_from_row_id(row_id, RowMetaKey::IsDocumentEmpty),
+        )
+        .unwrap_or(true),
     }
   }
 
