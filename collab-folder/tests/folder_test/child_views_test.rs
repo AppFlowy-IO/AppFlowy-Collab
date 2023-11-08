@@ -1,5 +1,5 @@
 use assert_json_diff::assert_json_include;
-use collab_folder::UserId;
+use collab_folder::{timestamp, UserId};
 use serde_json::json;
 
 use crate::util::{create_folder_with_workspace, make_test_view};
@@ -16,6 +16,7 @@ async fn create_child_views_test() {
   let view_1_3 = make_test_view("1_3", "1", vec![]);
   let view_1 = make_test_view("1", &workspace_id, vec![]);
 
+  let time = timestamp();
   folder_test.insert_view(view_1.clone(), None);
   folder_test.insert_view(view_1_1, None);
   folder_test.insert_view(view_1_2.clone(), None);
@@ -51,7 +52,7 @@ async fn create_child_views_test() {
               }
             ]
           },
-          "created_at": 0,
+          "created_at": time,
           "desc": "",
           "icon": null,
           "id": "1",
@@ -64,7 +65,7 @@ async fn create_child_views_test() {
           "children": {
             "items": []
           },
-          "created_at": 0,
+          "created_at": time,
           "desc": "",
           "icon": null,
           "id": "1_1",
@@ -84,7 +85,7 @@ async fn create_child_views_test() {
               }
             ]
           },
-          "created_at": 0,
+          "created_at": time,
           "desc": "",
           "icon": null,
           "id": "1_2",
@@ -97,7 +98,7 @@ async fn create_child_views_test() {
           "children": {
             "items": []
           },
-          "created_at": 0,
+          "created_at": time,
           "desc": "",
           "icon": null,
           "id": "1_2_1",
@@ -110,7 +111,7 @@ async fn create_child_views_test() {
           "children": {
             "items": []
           },
-          "created_at": 0,
+          "created_at": time,
           "desc": "",
           "icon": null,
           "id": "1_2_2",
@@ -123,7 +124,7 @@ async fn create_child_views_test() {
           "children": {
             "items": []
           },
-          "created_at": 0,
+          "created_at": time,
           "desc": "",
           "icon": null,
           "id": "1_3",

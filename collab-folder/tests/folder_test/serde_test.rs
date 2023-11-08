@@ -1,4 +1,4 @@
-use collab_folder::UserId;
+use collab_folder::{timestamp, UserId};
 use serde_json::json;
 
 use crate::util::{create_folder, make_test_view};
@@ -6,6 +6,7 @@ use crate::util::{create_folder, make_test_view};
 #[tokio::test]
 async fn folder_json_serde() {
   let folder_test = create_folder(1.into(), "fake_w_1").await;
+  let time = timestamp();
   assert_json_diff::assert_json_include!(
     actual: folder_test.to_json_value(),
     expected: json!( {
@@ -23,7 +24,7 @@ async fn folder_json_serde() {
           "views": {
             "fake_w_1": {
               "bid": "",
-              "created_at": 0,
+              "created_at": time,
               "desc": "",
               "icon": "",
               "id": "fake_w_1",
@@ -43,6 +44,7 @@ async fn view_json_serde() {
 
   let view_1 = make_test_view("v1", &workspace_id, vec![]);
   let view_2 = make_test_view("v2", &workspace_id, vec![]);
+  let time = timestamp();
   folder_test.insert_view(view_1, None);
   folder_test.insert_view(view_2, None);
 
@@ -75,7 +77,7 @@ async fn view_json_serde() {
           "views": {
             "fake_workspace_id": {
               "bid": "",
-              "created_at": 0,
+              "created_at": time,
               "desc": "",
               "icon": "",
               "id": "fake_workspace_id",
@@ -84,7 +86,7 @@ async fn view_json_serde() {
             },
             "v1": {
               "bid": "fake_workspace_id",
-              "created_at": 0,
+              "created_at": time,
               "desc": "",
               "icon": "",
               "id": "v1",
@@ -93,7 +95,7 @@ async fn view_json_serde() {
             },
             "v2": {
               "bid": "fake_workspace_id",
-              "created_at": 0,
+              "created_at": time,
               "desc": "",
               "icon": "",
               "id": "v2",
@@ -115,6 +117,7 @@ async fn child_view_json_serde() {
   let view_2 = make_test_view("v2", &workspace_id, vec![]);
   let view_2_1 = make_test_view("v2.1", "v2", vec![]);
   let view_2_2 = make_test_view("v2.2", "v2", vec![]);
+  let time = timestamp();
   folder_test.insert_view(view_1, None);
   folder_test.insert_view(view_2, None);
   folder_test.insert_view(view_2_1, None);
@@ -154,7 +157,7 @@ async fn child_view_json_serde() {
     "views": {
       "fake_workspace_id": {
         "bid": "",
-        "created_at": 0,
+        "created_at": time,
         "desc": "",
         "icon": "",
         "id": "fake_workspace_id",
@@ -163,7 +166,7 @@ async fn child_view_json_serde() {
       },
       "v1": {
         "bid": "fake_workspace_id",
-        "created_at": 0,
+        "created_at": time,
         "desc": "",
         "icon": "",
         "id": "v1",
@@ -172,7 +175,7 @@ async fn child_view_json_serde() {
       },
       "v2": {
         "bid": "fake_workspace_id",
-        "created_at": 0,
+        "created_at": time,
         "desc": "",
         "icon": "",
         "id": "v2",
@@ -181,7 +184,7 @@ async fn child_view_json_serde() {
       },
       "v2.1": {
         "bid": "v2",
-        "created_at": 0,
+        "created_at": time,
         "desc": "",
         "icon": "",
         "id": "v2.1",
@@ -190,7 +193,7 @@ async fn child_view_json_serde() {
       },
       "v2.2": {
         "bid": "v2",
-        "created_at": 0,
+        "created_at": time,
         "desc": "",
         "icon": "",
         "id": "v2.2",

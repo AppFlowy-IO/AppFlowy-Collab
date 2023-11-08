@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
 use anyhow::bail;
+use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::preclude::{
   lib0Any, Array, Map, MapRefWrapper, ReadTxn, Transact, TransactionMut, Value, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::UserId;
+use crate::{timestamp, UserId};
 
 pub struct SectionMap {
   uid: UserId,
@@ -15,7 +16,11 @@ pub struct SectionMap {
 
 impl SectionMap {
   pub fn create(txn: &mut TransactionMut, uid: &UserId, root: MapRefWrapper) -> Self {
+    // Favorite Section
     root.create_map_with_txn_if_not_exist(txn, Section::Favorite.as_ref());
+    // Recent Section
+    root.create_map_with_txn_if_not_exist(txn, Section::Recent.as_ref());
+
     Self {
       uid: uid.clone(),
       container: root,
@@ -62,6 +67,7 @@ impl SectionMap {
 
 pub enum Section {
   Favorite,
+  Recent,
   Custom(String),
 }
 
@@ -75,12 +81,13 @@ impl AsRef<str> for Section {
   fn as_ref(&self) -> &str {
     match self {
       Section::Favorite => "favorite",
+      Section::Recent => "recent",
       Section::Custom(s) => s.as_str(),
     }
   }
 }
 
-pub type SectionIdsByUid = HashMap<UserId, Vec<String>>;
+pub type SectionsByUid = HashMap<UserId, Vec<SectionItem>>;
 
 pub struct SectionOperation<'a> {
   uid: &'a UserId,
@@ -95,28 +102,28 @@ impl<'a> SectionOperation<'a> {
   fn uid(&self) -> &UserId {
     self.uid
   }
-  pub fn get_item_ids_with_txn<T: ReadTxn>(&self, txn: &T) -> SectionIdsByUid {
+
+  pub fn get_sections_with_txn<T: ReadTxn>(&self, txn: &T) -> SectionsByUid {
     let mut section_id_by_uid = HashMap::new();
     for (uid, value) in self.container().iter(txn) {
       if let Value::YArray(array) = value {
         let mut items = vec![];
         for value in array.iter(txn) {
           if let YrsValue::Any(any) = value {
-            items.push(SectionItem::from(any))
+            if let Ok(item) = SectionItem::try_from(&any) {
+              items.push(item)
+            }
           }
         }
 
-        section_id_by_uid.insert(
-          UserId(uid.to_string()),
-          items.into_iter().map(|item| item.id).collect(),
-        );
+        section_id_by_uid.insert(UserId(uid.to_string()), items);
       }
     }
     section_id_by_uid
   }
 
   #[allow(dead_code)]
-  pub fn is_favorite(&self, view_id: &str) -> bool {
+  pub fn contains_view_id(&self, view_id: &str) -> bool {
     let txn = self.container().transact();
     self.contains_with_txn(&txn, view_id)
   }
@@ -124,8 +131,8 @@ impl<'a> SectionOperation<'a> {
   pub fn contains_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> bool {
     match self.container().get_array_ref_with_txn(txn, self.uid()) {
       None => false,
-      Some(fav_array) => {
-        for value in fav_array.iter(txn) {
+      Some(array) => {
+        for value in array.iter(txn) {
           if let Ok(section_id) = SectionItem::try_from(&value) {
             if section_id.id == view_id {
               return true;
@@ -146,14 +153,16 @@ impl<'a> SectionOperation<'a> {
   pub fn get_all_section_item_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<SectionItem> {
     match self.container().get_array_ref_with_txn(txn, self.uid()) {
       None => vec![],
-      Some(fav_array) => {
-        let mut favorites = vec![];
-        for value in fav_array.iter(txn) {
+      Some(array) => {
+        let mut sections = vec![];
+        for value in array.iter(txn) {
           if let YrsValue::Any(any) = value {
-            favorites.push(SectionItem::from(any))
+            if let Ok(item) = SectionItem::try_from(&any) {
+              sections.push(item)
+            }
           }
         }
-        favorites
+        sections
       },
     }
   }
@@ -191,10 +200,10 @@ impl<'a> SectionOperation<'a> {
   }
 
   pub fn add_sections_item_with_txn(&self, txn: &mut TransactionMut, items: Vec<SectionItem>) {
-    self.add_items_for_user_with_txn(txn, self.uid(), items);
+    self.add_sections_for_user_with_txn(txn, self.uid(), items);
   }
 
-  pub fn add_items_for_user_with_txn(
+  pub fn add_sections_for_user_with_txn(
     &self,
     txn: &mut TransactionMut,
     uid: &UserId,
@@ -219,31 +228,65 @@ impl<'a> SectionOperation<'a> {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SectionItem {
   pub id: String,
+  pub timestamp: i64,
 }
 
-impl From<lib0Any> for SectionItem {
-  fn from(any: lib0Any) -> Self {
-    let mut json = String::new();
-    any.to_json(&mut json);
-    serde_json::from_str(&json).unwrap()
+impl SectionItem {
+  pub fn new(id: String) -> Self {
+    Self {
+      id,
+      timestamp: timestamp(),
+    }
+  }
+}
+
+/// Uses [AnyMap] to store key-value pairs of section items, making it easy to extend in the future.
+impl TryFrom<AnyMap> for SectionItem {
+  type Error = anyhow::Error;
+
+  fn try_from(value: AnyMap) -> Result<Self, Self::Error> {
+    let id = value
+      .get_str_value("id")
+      .ok_or(anyhow::anyhow!("missing section item id"))?;
+    let timestamp = value.get_i64_value("timestamp").unwrap_or(timestamp());
+    Ok(Self { id, timestamp })
+  }
+}
+
+impl From<SectionItem> for AnyMap {
+  fn from(item: SectionItem) -> Self {
+    let mut map = AnyMap::new();
+    map.insert_str_value("id", item.id);
+    map.insert_i64_value("timestamp", item.timestamp);
+    map
+  }
+}
+
+impl TryFrom<&lib0Any> for SectionItem {
+  type Error = anyhow::Error;
+
+  fn try_from(any: &lib0Any) -> Result<Self, Self::Error> {
+    let any_map = AnyMap::from(any);
+    Self::try_from(any_map)
   }
 }
 
 impl From<SectionItem> for lib0Any {
-  fn from(item: SectionItem) -> Self {
-    let json = serde_json::to_string(&item).unwrap();
-    lib0Any::from_json(&json).unwrap()
+  fn from(value: SectionItem) -> Self {
+    let any_map = AnyMap::from(value);
+    any_map.into()
   }
 }
+
 impl TryFrom<&YrsValue> for SectionItem {
   type Error = anyhow::Error;
 
   fn try_from(value: &Value) -> Result<Self, Self::Error> {
     match value {
-      Value::Any(any) => Ok(SectionItem::from(any.clone())),
+      Value::Any(any) => SectionItem::try_from(any),
       _ => bail!("Invalid section yrs value"),
     }
   }

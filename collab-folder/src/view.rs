@@ -12,7 +12,10 @@ use serde_repr::*;
 
 use crate::folder_observe::ViewChangeSender;
 use crate::section::{Section, SectionItem, SectionMap};
-use crate::{impl_any_update, impl_i64_update, impl_option_str_update, impl_str_update, UserId};
+use crate::{
+  impl_any_update, impl_i64_update, impl_option_i64_update, impl_option_str_update,
+  impl_str_update, UserId,
+};
 use crate::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
 
 const VIEW_ID: &str = "id";
@@ -22,7 +25,15 @@ const VIEW_DESC: &str = "desc";
 const VIEW_DATABASE_ID: &str = "database_id";
 const VIEW_LAYOUT: &str = "layout";
 const VIEW_CREATE_AT: &str = "created_at";
+const VIEW_CREATED_BY: &str = "created_by";
 const VIEW_ICON: &str = "icon";
+const VIEW_LAST_EDITED_TIME: &str = "last_edited_time";
+const VIEW_LAST_EDITED_BY: &str = "last_edited_by";
+// const VIEW_LAST_VIEWED_TIME: &str = "last_viewed_time";
+
+pub fn timestamp() -> i64 {
+  chrono::Utc::now().timestamp()
+}
 
 pub struct ViewsMap {
   uid: UserId,
@@ -242,6 +253,7 @@ impl ViewsMap {
     view: View,
     index: Option<u32>,
   ) {
+    let time = timestamp();
     if let Some(parent_map_ref) = self.container.get_map_with_txn(txn, &view.parent_view_id) {
       let view_identifier = ViewIdentifier {
         id: view.id.clone(),
@@ -255,13 +267,15 @@ impl ViewsMap {
         &self.section_map,
       )
       .add_children(vec![view_identifier], index)
+      .set_created_at(time)
+      .set_last_edited_time(time)
       .done()
       .map(Arc::new);
       self.set_cache_view(view);
     }
 
     let map_ref = self.container.create_map_with_txn(txn, &view.id);
-    let view = ViewBuilder::new(
+    let view_builder = ViewBuilder::new(
       &view.id,
       txn,
       map_ref,
@@ -269,18 +283,26 @@ impl ViewsMap {
       &self.section_map,
     )
     .update(&self.uid, |update| {
+      let uid = self.uid.as_i64();
+      let create_by = view.created_by.unwrap_or(uid);
+      let last_edited_by = view.last_edited_by.unwrap_or(uid);
+      let created_at = self.normalize_timestamp(view.created_at);
+      let last_edited_time = self.normalize_timestamp(view.last_edited_time);
       update
         .set_name(view.name)
         .set_bid(view.parent_view_id)
         .set_desc(view.desc)
         .set_layout(view.layout)
-        .set_created_at(view.created_at)
+        .set_created_at(created_at)
         .set_children(view.children)
         .set_icon(view.icon)
+        .set_created_by(Some(create_by))
+        .set_last_edited_time(last_edited_time)
+        .set_last_edited_by(Some(last_edited_by))
         .done()
     })
-    .done()
-    .map(Arc::new);
+    .done();
+    let view = view_builder.map(Arc::new);
     self.set_cache_view(view);
   }
 
@@ -346,7 +368,9 @@ impl ViewsMap {
       &map_ref,
       self.view_relations.clone(),
       &self.section_map,
-    );
+    )
+    .set_last_edited_by(Some(uid.as_i64()))
+    .set_last_edited_time(timestamp());
     let view = f(update).map(Arc::new);
     self.set_cache_view(view.clone());
     view
@@ -364,6 +388,15 @@ impl ViewsMap {
 
   fn remove_cache_view(&self, view_id: &str) {
     self.view_cache.write().remove(view_id);
+  }
+
+  // some history data may not have the timestamp and it's value equal to 0, so we should normalize the timestamp.
+  fn normalize_timestamp(&self, timestamp: i64) -> i64 {
+    if timestamp == 0 {
+      chrono::Utc::now().timestamp()
+    } else {
+      timestamp
+    }
   }
 }
 
@@ -396,6 +429,12 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     .map(|op| op.contains_with_txn(txn, &id))
     .unwrap_or(false);
 
+  let created_by = map_ref.get_i64_with_txn(txn, VIEW_CREATED_BY);
+  let last_edited_time = map_ref
+    .get_i64_with_txn(txn, VIEW_LAST_EDITED_TIME)
+    .unwrap_or(timestamp());
+  let last_edited_by = map_ref.get_i64_with_txn(txn, VIEW_LAST_EDITED_BY);
+
   Some(View {
     id,
     parent_view_id,
@@ -406,6 +445,9 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     layout,
     icon,
     is_favorite,
+    created_by,
+    last_edited_time,
+    last_edited_by,
   })
 }
 
@@ -480,8 +522,15 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     VIEW_DATABASE_ID
   );
   impl_str_update!(set_desc, set_desc_if_not_none, VIEW_DESC);
-  impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
   impl_any_update!(set_layout, set_layout_if_not_none, VIEW_LAYOUT, ViewLayout);
+  impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
+  impl_option_i64_update!(set_created_by, VIEW_CREATED_BY);
+  impl_i64_update!(
+    set_last_edited_time,
+    set_last_edited_time_if_not_none,
+    VIEW_LAST_EDITED_TIME
+  );
+  impl_option_i64_update!(set_last_edited_by, VIEW_LAST_EDITED_BY);
 
   pub fn new(
     uid: &'a UserId,
@@ -527,12 +576,8 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
       .section_op_with_txn(self.txn, Section::Favorite)
     {
       if is_favorite {
-        fav_section.add_sections_item_with_txn(
-          self.txn,
-          vec![SectionItem {
-            id: self.view_id.to_string(),
-          }],
-        );
+        fav_section
+          .add_sections_item_with_txn(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
       } else {
         fav_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
       }
@@ -547,6 +592,27 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     } else {
       self
     }
+  }
+
+  /// Add or remove the view_id from the recent section.
+  ///
+  /// If the view is in the recent section, it's timestamp will be updated.
+  pub fn set_recent(self, add_in_recent: bool) -> Self {
+    if let Some(recent_section) = self
+      .section_map
+      .section_op_with_txn(self.txn, Section::Recent)
+    {
+      // try to remove the section, if the section is not found, it will be ignored.
+      recent_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
+
+      // add the section if add_in_recent is true since we have removed the section before.
+      if add_in_recent {
+        recent_section
+          .add_sections_item_with_txn(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
+      }
+    }
+
+    self
   }
 
   pub fn add_children(self, children: Vec<ViewIdentifier>, index: Option<u32>) -> Self {
@@ -579,6 +645,28 @@ pub struct View {
   pub is_favorite: bool,
   pub layout: ViewLayout,
   pub icon: Option<ViewIcon>,
+  pub created_by: Option<i64>, // user id
+  pub last_edited_time: i64,
+  pub last_edited_by: Option<i64>, // user id
+}
+
+impl Default for View {
+  fn default() -> Self {
+    Self {
+      id: "".to_string(),
+      parent_view_id: "".to_string(),
+      name: "".to_string(),
+      desc: "".to_string(),
+      children: Default::default(),
+      created_at: 0,
+      is_favorite: false,
+      layout: ViewLayout::Document,
+      icon: None,
+      created_by: None,
+      last_edited_time: 0,
+      last_edited_by: None,
+    }
+  }
 }
 
 #[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize_repr, Deserialize_repr)]

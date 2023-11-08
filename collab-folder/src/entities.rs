@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{SectionIdsByUid, View, Workspace};
+use crate::{SectionsByUid, View, Workspace};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct FolderData {
@@ -8,7 +8,9 @@ pub struct FolderData {
   pub current_view: String,
   pub views: Vec<View>,
   #[serde(default)]
-  pub favorites: SectionIdsByUid,
+  pub favorites: SectionsByUid,
+  #[serde(default)]
+  pub recent: SectionsByUid,
 }
 
 impl FolderData {
@@ -17,7 +19,8 @@ impl FolderData {
       workspace,
       current_view: "".to_string(),
       views: vec![],
-      favorites: SectionIdsByUid::new(),
+      favorites: SectionsByUid::new(),
+      recent: SectionsByUid::new(),
     }
   }
 }

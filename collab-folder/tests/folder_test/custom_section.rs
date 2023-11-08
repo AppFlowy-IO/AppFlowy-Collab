@@ -11,17 +11,13 @@ async fn custom_section_test() {
 
   // By default, the folder has a favorite section
   let op = folder_test.section_op(Section::Favorite).unwrap();
-  op.add_section_items(vec![SectionItem {
-    id: "1".to_string(),
-  }]);
+  op.add_section_items(vec![SectionItem::new("1".to_string())]);
 
   let _ = folder_test.create_section(Section::Custom("private".to_string()));
   let op = folder_test
     .section_op(Section::Custom("private".to_string()))
     .unwrap();
-  op.add_section_items(vec![SectionItem {
-    id: "2".to_string(),
-  }]);
+  op.add_section_items(vec![SectionItem::new("2".to_string())]);
 
   let json = folder_test.to_json_value();
   assert_json_include!(
