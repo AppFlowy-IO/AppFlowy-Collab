@@ -6,15 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = {version = "1.0", features = ["derive"]}
-serde_json = "1.0.94"
-anyhow = "1.0"
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
 collab = {path = "../collab" }
 collab-entity = { workspace = true }
 tokio = {version = "1.26", features = ["rt", "sync"]}
 tokio-stream = {version = "0.1.14", features = ["sync"]}
-tracing = {version = "0.1", features = ["log"]}
-parking_lot = "0.12.1"
+tracing.workspace = true
+parking_lot.workspace = true
 
 [dev-dependencies]
 assert-json-diff = "2.0.2"

@@ -6,19 +6,19 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0"
-chrono = {version = "0.4.22", default-features = false, features = ["clock"]}
+anyhow.workspace = true
+chrono.workspace = true
 collab = {path = "../collab" }
 collab-derive = {path = "../collab-derive" }
 collab-persistence = { workspace = true }
-parking_lot = "0.12.1"
-serde = {version = "1.0", features = ["derive"]}
-serde_json = "1.0.94"
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 serde_repr = "0.1"
 thiserror = "1.0.30"
 tokio = {version = "1.26", features = ["rt", "sync"]}
 tokio-stream = {version = "0.1.14", features = ["sync"]}
-tracing = {version = "0.1", features = ["log"]}
+tracing.workspace = true
 
 [dev-dependencies]
 assert-json-diff = "2.0.2"

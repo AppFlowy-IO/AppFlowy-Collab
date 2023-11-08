@@ -280,7 +280,7 @@ impl Collab {
 
   /// Make a full update with the current state of the [Collab].
   /// It invokes the [CollabPlugin::flush] method of each plugin.
-  pub fn flush<'a>(&'a self) {
+  pub fn flush(&self) {
     let data = self.encode_collab_v1();
     self
       .plugins

@@ -6,18 +6,18 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-yrs = "0.16.5"
-anyhow = "1.0"
-thiserror = "1.0.39"
-serde = { version = "1.0.157", features = ["derive"] }
+yrs.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
 lib0 = { version = "0.16.3", features = ["lib0-serde"] }
-serde_json = "1.0.94"
-parking_lot = { version = "0.12.1", features = ["arc_lock"] }
-bytes = "1.4.0"
-tracing = { version = "0.1.37" }
+serde_json.workspace = true
+parking_lot.workspace = true
+bytes.workspace = true
+tracing.workspace = true
 tokio = { version = "1.26", features = ["time", "sync", "rt"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
-async-trait = "0.1.73"
+async-trait.workspace = true
 bincode = "1.3.3"
 
 
@@ -27,7 +27,7 @@ tempfile = "3.8.0"
 collab = { path = "", features = ["default"] }
 collab-derive = { path = "../collab-derive" }
 nanoid = "0.4.0"
-chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
+chrono.workspace = true
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 
