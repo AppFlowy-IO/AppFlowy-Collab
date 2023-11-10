@@ -1,9 +1,11 @@
-use crate::sync_protocol::awareness::AwarenessUpdate;
 use std::fmt::{Debug, Display, Formatter};
+
 use thiserror::Error;
 use yrs::updates::decoder::{Decode, Decoder};
 use yrs::updates::encoder::{Encode, Encoder};
 use yrs::StateVector;
+
+use crate::sync_protocol::awareness::AwarenessUpdate;
 
 /// Tag id for [Message::Sync].
 pub const MSG_SYNC: u8 = 0;
@@ -187,6 +189,9 @@ pub enum Error {
   /// Thrown whenever an unknown message tag has been sent.
   #[error("unsupported message tag identifier: {0}")]
   Unsupported(u8),
+
+  #[error("{0}")]
+  YrsTransaction(String),
 
   /// Custom dynamic kind of error, usually related to a warp internal error messages.
   #[error("internal failure: {0}")]

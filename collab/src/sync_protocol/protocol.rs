@@ -1,4 +1,4 @@
-use crate::core::collab::MutexCollab;
+use crate::core::collab::{MutexCollab, TransactionMutExt};
 use crate::core::origin::CollabOrigin;
 use crate::sync_protocol::awareness::{Awareness, AwarenessUpdate};
 use crate::sync_protocol::message::{Error, Message, SyncMessage};
@@ -66,7 +66,11 @@ pub trait CollabSyncProtocol {
     awareness: &Awareness,
     sv: StateVector,
   ) -> Result<Option<Vec<u8>>, Error> {
-    let update = awareness.doc().transact().encode_state_as_update_v1(&sv);
+    let update = awareness
+      .doc()
+      .try_transact()
+      .map_err(|err| Error::YrsTransaction(err.to_string()))?
+      .encode_state_as_update_v1(&sv);
     Ok(Some(
       Message::Sync(SyncMessage::SyncStep2(update)).encode_v1(),
     ))
@@ -81,10 +85,13 @@ pub trait CollabSyncProtocol {
     update: Update,
   ) -> Result<Option<Vec<u8>>, Error> {
     let mut txn = match origin {
-      Some(origin) => awareness.doc().transact_mut_with((*origin).clone()),
-      None => awareness.doc().transact_mut(),
-    };
-    txn.apply_update(update);
+      Some(origin) => awareness.doc().try_transact_mut_with((*origin).clone()),
+      None => awareness.doc().try_transact_mut(),
+    }
+    .map_err(|err| Error::YrsTransaction(err.to_string()))?;
+    txn
+      .try_apply_update(update)
+      .map_err(|err| Error::YrsTransaction(err.to_string()))?;
     Ok(None)
   }
 
