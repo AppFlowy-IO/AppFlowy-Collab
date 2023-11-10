@@ -1,10 +1,14 @@
+use std::time::Duration;
+
+use anyhow::anyhow;
+use yrs::updates::decoder::Decode;
+use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
+use yrs::{ReadTxn, StateVector, Transact, Update};
+
 use crate::core::collab::{MutexCollab, TransactionMutExt};
 use crate::core::origin::CollabOrigin;
 use crate::sync_protocol::awareness::{Awareness, AwarenessUpdate};
 use crate::sync_protocol::message::{Error, Message, SyncMessage};
-use yrs::updates::decoder::Decode;
-use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
-use yrs::{ReadTxn, StateVector, Transact, Update};
 
 // ***************************
 // Client A  Client B  Server
@@ -156,11 +160,19 @@ pub fn handle_msg<P: CollabSyncProtocol>(
   match msg {
     Message::Sync(msg) => match msg {
       SyncMessage::SyncStep1(sv) => {
-        let collab = collab.lock();
+        let collab = collab
+          .try_lock_for(Duration::from_millis(400))
+          .ok_or(Error::Internal(anyhow!(
+            "Timeout while trying to acquire lock"
+          )))?;
         protocol.handle_sync_step1(collab.get_awareness(), sv)
       },
       SyncMessage::SyncStep2(update) => {
-        let mut collab = collab.lock();
+        let mut collab = collab
+          .try_lock_for(Duration::from_millis(400))
+          .ok_or(Error::Internal(anyhow!(
+            "Timeout while trying to acquire lock"
+          )))?;
         protocol.handle_sync_step2(
           origin,
           collab.get_mut_awareness(),
@@ -168,7 +180,11 @@ pub fn handle_msg<P: CollabSyncProtocol>(
         )
       },
       SyncMessage::Update(update) => {
-        let mut collab = collab.lock();
+        let mut collab = collab
+          .try_lock_for(Duration::from_millis(400))
+          .ok_or(Error::Internal(anyhow!(
+            "Timeout while trying to acquire lock"
+          )))?;
         protocol.handle_update(
           origin,
           collab.get_mut_awareness(),

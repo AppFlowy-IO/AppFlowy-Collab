@@ -193,15 +193,14 @@ pub enum Error {
   #[error("{0}")]
   YrsTransaction(String),
 
-  /// Custom dynamic kind of error, usually related to a warp internal error messages.
-  #[error("internal failure: {0}")]
-  Other(#[from] Box<dyn std::error::Error + Send + Sync>),
+  #[error(transparent)]
+  Internal(#[from] anyhow::Error),
 }
 
 #[cfg(feature = "net")]
 impl From<tokio::task::JoinError> for Error {
   fn from(value: tokio::task::JoinError) -> Self {
-    Error::Other(value.into())
+    Error::Internal(value.into())
   }
 }
 
