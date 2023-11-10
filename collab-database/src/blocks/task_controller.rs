@@ -1,13 +1,16 @@
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Weak};
+use std::time::Duration;
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::core::origin::CollabOrigin;
 use collab_entity::CollabType;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::PersistenceError;
 use tokio::sync::watch;
 
 use crate::blocks::queue::{
@@ -173,8 +176,19 @@ fn save_row<R: AsRef<str>>(
       vec![],
     ) {
       Ok(collab) => {
-        let collab_guard = collab.lock();
-        let txn = collab_guard.transact();
+        let collab_guard =
+          collab
+            .try_lock_for(Duration::from_secs(1))
+            .ok_or(PersistenceError::Internal(anyhow!(
+              "Timeout while trying to acquire lock for saving database row"
+            )))?;
+
+        let txn = collab_guard.try_transaction().map_err(|err| {
+          PersistenceError::Internal(anyhow!(
+            "Failed to get transaction for saving database row: {:?}",
+            err
+          ))
+        })?;
         let object_id = row_id.as_ref();
         if let Err(e) = write_txn.create_new_doc(uid, object_id, &txn) {
           tracing::error!("Failed to save the database row collab: {:?}", e);

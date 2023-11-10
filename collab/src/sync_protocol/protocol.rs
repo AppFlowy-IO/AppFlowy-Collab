@@ -73,7 +73,12 @@ pub trait CollabSyncProtocol {
     let update = awareness
       .doc()
       .try_transact()
-      .map_err(|err| Error::YrsTransaction(err.to_string()))?
+      .map_err(|err| {
+        Error::YrsTransaction(format!(
+          "fail to handle sync step1. error: {}",
+          err.to_string()
+        ))
+      })?
       .encode_state_as_update_v1(&sv);
     Ok(Some(
       Message::Sync(SyncMessage::SyncStep2(update)).encode_v1(),
@@ -92,10 +97,18 @@ pub trait CollabSyncProtocol {
       Some(origin) => awareness.doc().try_transact_mut_with((*origin).clone()),
       None => awareness.doc().try_transact_mut(),
     }
-    .map_err(|err| Error::YrsTransaction(err.to_string()))?;
-    txn
-      .try_apply_update(update)
-      .map_err(|err| Error::YrsTransaction(err.to_string()))?;
+    .map_err(|err| {
+      Error::YrsTransaction(format!(
+        "fail to handle sync step2. error: {}",
+        err.to_string()
+      ))
+    })?;
+    txn.try_apply_update(update).map_err(|err| {
+      Error::YrsTransaction(format!(
+        "fail to apply sync step2 update. error: {}",
+        err.to_string()
+      ))
+    })?;
     Ok(None)
   }
 
@@ -193,19 +206,35 @@ pub fn handle_msg<P: CollabSyncProtocol>(
       },
     },
     Message::Auth(reason) => {
-      let collab = collab.lock();
+      let mut collab = collab
+        .try_lock_for(Duration::from_millis(400))
+        .ok_or(Error::Internal(anyhow!(
+          "Timeout while trying to acquire lock"
+        )))?;
       protocol.handle_auth(collab.get_awareness(), reason)
     },
     Message::AwarenessQuery => {
-      let collab = collab.lock();
+      let mut collab = collab
+        .try_lock_for(Duration::from_millis(400))
+        .ok_or(Error::Internal(anyhow!(
+          "Timeout while trying to acquire lock"
+        )))?;
       protocol.handle_awareness_query(collab.get_awareness())
     },
     Message::Awareness(update) => {
-      let mut collab = collab.lock();
+      let mut collab = collab
+        .try_lock_for(Duration::from_millis(400))
+        .ok_or(Error::Internal(anyhow!(
+          "Timeout while trying to acquire lock"
+        )))?;
       protocol.handle_awareness_update(collab.get_mut_awareness(), update)
     },
     Message::Custom(tag, data) => {
-      let mut collab = collab.lock();
+      let mut collab = collab
+        .try_lock_for(Duration::from_millis(400))
+        .ok_or(Error::Internal(anyhow!(
+          "Timeout while trying to acquire lock"
+        )))?;
       protocol.missing_handle(collab.get_mut_awareness(), tag, data)
     },
   }
