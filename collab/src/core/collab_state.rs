@@ -20,17 +20,17 @@ impl InitState {
 }
 
 /// The [SyncState] describes the steps to change the state of the [Collab] object.
-/// [SyncState::SyncInitStart] -> [SyncState::SyncInitEnd] -> [SyncState::SyncUpdate] -> [SyncState::SyncFinished]
+/// [SyncState::InitSyncBegin] -> [SyncState::InitSyncEnd] -> [SyncState::Syncing] -> [SyncState::SyncFinished]
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SyncState {
   /// The state indicates that the [Collab] is in the process of first sync. Each [Collab]
   /// will start with the first sync.
-  SyncInitStart,
+  InitSyncBegin,
   /// Init sync is finished
-  SyncInitEnd,
+  InitSyncEnd,
   /// The [Collab] is in the process of syncing the data to remote
-  SyncUpdate,
+  Syncing,
   /// Indicates that the [Collab] is finished syncing the data to remote. All local updates
   /// are sent to the remote.
   SyncFinished,
@@ -72,12 +72,12 @@ pub struct State {
 
 impl State {
   pub fn new(object_id: &str) -> Self {
-    let (sync_state_notifier, _) = watch::channel(SyncState::SyncInitStart);
+    let (sync_state_notifier, _) = watch::channel(SyncState::InitSyncBegin);
     let (snapshot_state_notifier, _) = watch::channel(SnapshotState::WaitingForSnapshot);
     Self {
       object_id: object_id.to_string(),
       init_state: Arc::new(RwLock::new(InitState::Uninitialized)),
-      sync_state: Arc::new(RwLock::new(SyncState::SyncInitStart)),
+      sync_state: Arc::new(RwLock::new(SyncState::InitSyncBegin)),
       snapshot_state: Arc::new(RwLock::new(SnapshotState::WaitingForSnapshot)),
       sync_state_notifier: Arc::new(sync_state_notifier),
       snapshot_state_notifier: Arc::new(snapshot_state_notifier),

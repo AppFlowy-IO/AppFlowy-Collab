@@ -57,7 +57,7 @@ impl RemoteCollab {
     local_collab: Weak<MutexCollab>,
   ) -> Self {
     let is_init_sync_finish = Arc::new(AtomicBool::new(false));
-    let sync_state = Arc::new(watch::channel(SyncState::SyncInitStart).0);
+    let sync_state = Arc::new(watch::channel(SyncState::InitSyncBegin).0);
     let collab = Arc::new(MutexCollab::new(
       CollabOrigin::Server,
       &object.object_id,
@@ -112,13 +112,13 @@ impl RemoteCollab {
         if let Some(sync_state) = weak_sync_state.upgrade() {
           match collab_state {
             SinkState::Syncing => {
-              let _ = sync_state.send(SyncState::SyncUpdate);
+              let _ = sync_state.send(SyncState::Syncing);
             },
             SinkState::Finished => {
               let _ = sync_state.send(SyncState::SyncFinished);
             },
             SinkState::Init => {
-              let _ = sync_state.send(SyncState::SyncInitStart);
+              let _ = sync_state.send(SyncState::InitSyncBegin);
             },
           }
         }
@@ -237,7 +237,7 @@ impl RemoteCollab {
         }
       }
 
-      let _ = self.sync_state.send(SyncState::SyncInitStart);
+      let _ = self.sync_state.send(SyncState::InitSyncBegin);
       // Encode the remote collab state as update for local collab.
       let local_sv = local_collab.lock().transact().state_vector();
       let encode_update = self
@@ -260,7 +260,7 @@ impl RemoteCollab {
           txn.apply_update(update);
           drop(txn);
 
-          if let Err(e) = self.sync_state.send(SyncState::SyncInitEnd) {
+          if let Err(e) = self.sync_state.send(SyncState::InitSyncEnd) {
             tracing::error!("🔴Failed to send sync state: {:?}", e);
           }
         }
