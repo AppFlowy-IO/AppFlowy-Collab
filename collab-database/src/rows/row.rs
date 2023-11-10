@@ -3,22 +3,22 @@ use std::sync::{Arc, Weak};
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::{
-  lib0Any, ArrayRef, Collab, Map, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
+  ArrayRef, Collab, lib0Any, Map, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
   Transaction, TransactionMut, YrsValue,
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use parking_lot::lock_api::MutexGuard;
-use parking_lot::{Mutex, RawMutex};
+use parking_lot::{Mutex};
+
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use uuid::Uuid;
 
+use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 use crate::database::{gen_row_id, timestamp};
 use crate::error::DatabaseError;
 use crate::rows::{Cell, Cells, CellsUpdate, RowId, RowMeta, RowMetaUpdate};
 use crate::views::RowOrder;
-use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 
 pub type BlockId = i64;
 
@@ -126,7 +126,7 @@ impl DatabaseRow {
 
   pub fn get_row_meta(&self) -> Option<RowMeta> {
     let collab = self.collab.try_lock()?;
-    let txn = collab.try_transaction()?;
+    let txn = collab.try_transaction().ok()?;
     let row_id = Uuid::parse_str(&self.row_id).ok()?;
     Some(RowMeta::from_map_ref(&txn, &row_id, &self.meta))
   }

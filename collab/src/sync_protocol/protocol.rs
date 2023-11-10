@@ -76,7 +76,7 @@ pub trait CollabSyncProtocol {
       .map_err(|err| {
         Error::YrsTransaction(format!(
           "fail to handle sync step1. error: {}",
-          err.to_string()
+          err
         ))
       })?
       .encode_state_as_update_v1(&sv);
@@ -100,13 +100,13 @@ pub trait CollabSyncProtocol {
     .map_err(|err| {
       Error::YrsTransaction(format!(
         "fail to handle sync step2. error: {}",
-        err.to_string()
+        err
       ))
     })?;
     txn.try_apply_update(update).map_err(|err| {
       Error::YrsTransaction(format!(
         "fail to apply sync step2 update. error: {}",
-        err.to_string()
+        err
       ))
     })?;
     Ok(None)
@@ -206,7 +206,7 @@ pub fn handle_msg<P: CollabSyncProtocol>(
       },
     },
     Message::Auth(reason) => {
-      let mut collab = collab
+      let collab = collab
         .try_lock_for(Duration::from_millis(400))
         .ok_or(Error::Internal(anyhow!(
           "Timeout while trying to acquire lock"
@@ -214,7 +214,7 @@ pub fn handle_msg<P: CollabSyncProtocol>(
       protocol.handle_auth(collab.get_awareness(), reason)
     },
     Message::AwarenessQuery => {
-      let mut collab = collab
+      let collab = collab
         .try_lock_for(Duration::from_millis(400))
         .ok_or(Error::Internal(anyhow!(
           "Timeout while trying to acquire lock"
