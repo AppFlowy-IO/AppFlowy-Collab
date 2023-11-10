@@ -323,14 +323,16 @@ impl Database {
   /// Return a list of [Row] for the given view.
   /// The rows here are ordered by [RowOrder]s of the view.
   pub fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
-    let txn = self.root.transact();
-    self.get_rows_for_view_with_txn(&txn, view_id)
+    let row_orders = {
+      let txn = self.root.transact();
+      self.views.get_row_orders_with_txn(&txn, view_id)
+    };
+    self.get_rows_from_row_orders(row_orders)
   }
 
   /// Return a list of [Row] for the given view.
   /// The rows here is ordered by the [RowOrder] of the view.
-  pub fn get_rows_for_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<Row> {
-    let row_orders = self.views.get_row_orders_with_txn(txn, view_id);
+  pub fn get_rows_from_row_orders(&self, row_orders: Vec<RowOrder>) -> Vec<Row> {
     self.block.get_rows_from_row_orders(&row_orders)
   }
 
@@ -952,14 +954,13 @@ impl Database {
   }
 
   pub fn get_database_rows(&self) -> Vec<Row> {
-    let collab = self.inner.lock();
-    let txn = collab.transact();
-    self.get_database_rows_with_txn(&txn)
-  }
+    let row_orders = {
+      let txn = self.root.transact();
+      let inline_view_id = self.get_inline_view_id_with_txn(&txn);
+      self.views.get_row_orders_with_txn(&txn, &inline_view_id)
+    };
 
-  pub fn get_database_rows_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Row> {
-    let inline_view_id = self.get_inline_view_id_with_txn(txn);
-    self.get_rows_for_view_with_txn(txn, &inline_view_id)
+    self.get_rows_from_row_orders(row_orders)
   }
 
   pub fn get_inline_row_orders(&self) -> Vec<RowOrder> {

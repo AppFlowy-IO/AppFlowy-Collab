@@ -1,6 +1,6 @@
 use std::num::NonZeroUsize;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab_entity::CollabType;
@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::blocks::task_controller::{BlockTask, BlockTaskController};
 use crate::rows::{
-  meta_id_from_row_id, Cell, DatabaseRow, MutexDatabaseRow, Row, RowDetail, RowId, RowMeta,
+  Cell, DatabaseRow, meta_id_from_row_id, MutexDatabaseRow, Row, RowDetail, RowId, RowMeta,
   RowMetaKey, RowMetaUpdate, RowUpdate,
 };
 use crate::user::DatabaseCollabService;
@@ -46,7 +46,7 @@ impl Block {
     collab_db: Weak<RocksCollabDB>,
     collab_service: Arc<dyn DatabaseCollabService>,
   ) -> Block {
-    let cache = Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap())));
+    let cache = Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(200).unwrap())));
     let controller = BlockTaskController::new(collab_db.clone(), Arc::downgrade(&collab_service));
     let task_controller = Arc::new(controller);
     let (notifier, _) = broadcast::channel(1000);

@@ -73,12 +73,7 @@ pub trait CollabSyncProtocol {
     let update = awareness
       .doc()
       .try_transact()
-      .map_err(|err| {
-        Error::YrsTransaction(format!(
-          "fail to handle sync step1. error: {}",
-          err
-        ))
-      })?
+      .map_err(|err| Error::YrsTransaction(format!("fail to handle sync step1. error: {}", err)))?
       .encode_state_as_update_v1(&sv);
     Ok(Some(
       Message::Sync(SyncMessage::SyncStep2(update)).encode_v1(),
@@ -97,17 +92,9 @@ pub trait CollabSyncProtocol {
       Some(origin) => awareness.doc().try_transact_mut_with((*origin).clone()),
       None => awareness.doc().try_transact_mut(),
     }
-    .map_err(|err| {
-      Error::YrsTransaction(format!(
-        "fail to handle sync step2. error: {}",
-        err
-      ))
-    })?;
+    .map_err(|err| Error::YrsTransaction(format!("fail to handle sync step2. error: {}", err)))?;
     txn.try_apply_update(update).map_err(|err| {
-      Error::YrsTransaction(format!(
-        "fail to apply sync step2 update. error: {}",
-        err
-      ))
+      Error::YrsTransaction(format!("fail to apply sync step2 update. error: {}", err))
     })?;
     Ok(None)
   }
