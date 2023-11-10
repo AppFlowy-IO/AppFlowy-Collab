@@ -140,7 +140,7 @@ pub trait CollabSyncProtocol {
 }
 
 /// Handles incoming messages from the client/server
-pub async fn handle_msg<P: CollabSyncProtocol>(
+pub fn handle_msg<P: CollabSyncProtocol>(
   origin: &Option<&CollabOrigin>,
   protocol: &P,
   collab: &MutexCollab,
