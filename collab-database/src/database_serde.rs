@@ -25,7 +25,7 @@ impl DatabaseSerde {
 
     let row_orders = match &inline_view {
       None => vec![],
-      Some(view_id) => database.views.get_row_orders_with_txn(&txn, &view_id),
+      Some(view_id) => database.views.get_row_orders_with_txn(&txn, view_id),
     };
     drop(txn);
     let rows = database.get_rows_from_row_orders(&row_orders);

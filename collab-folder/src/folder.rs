@@ -623,7 +623,7 @@ fn open_folder<T: Into<UserId>>(
   let children_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEW_RELATION])?;
 
   let view_relations = Rc::new(ViewRelations::new(children_map));
-  let section_map = Rc::new(SectionMap::new(&uid, section));
+  let section_map = Rc::new(SectionMap::new(&txn, &uid, section)?);
   let views = Rc::new(ViewsMap::new(
     &uid,
     views,

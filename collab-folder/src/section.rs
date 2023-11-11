@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
+use crate::{timestamp, UserId};
 use anyhow::bail;
 use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::preclude::{
   lib0Any, Array, Map, MapRefWrapper, ReadTxn, Transact, TransactionMut, Value, YrsValue,
 };
 use serde::{Deserialize, Serialize};
-
-use crate::{timestamp, UserId};
+use tracing::info;
 
 pub struct SectionMap {
   uid: UserId,
@@ -15,22 +15,43 @@ pub struct SectionMap {
 }
 
 impl SectionMap {
+  /// Creates a new section map and initializes it with default sections.
+  ///
+  /// This function will iterate over a predefined list of sections and
+  /// create them in the provided `MapRefWrapper` if they do not exist.
   pub fn create(txn: &mut TransactionMut, uid: &UserId, root: MapRefWrapper) -> Self {
-    // Favorite Section
-    root.create_map_with_txn_if_not_exist(txn, Section::Favorite.as_ref());
-    // Recent Section
-    root.create_map_with_txn_if_not_exist(txn, Section::Recent.as_ref());
+    for section in predefined_sections() {
+      root.create_map_with_txn_if_not_exist(txn, section.as_ref());
+    }
 
     Self {
       uid: uid.clone(),
       container: root,
     }
   }
-  pub fn new(uid: &UserId, root: MapRefWrapper) -> Self {
-    Self {
+
+  /// Attempts to create a new `SectionMap` from the given `MapRefWrapper`.
+  ///
+  /// Iterates over a list of predefined sections. If any section does not exist in the `MapRefWrapper`,
+  /// logs an informational message and returns `None`. Otherwise, returns `Some(SectionMap)`.
+  ///
+  /// When returning None, the caller should call the [Self::create] method to create the section.
+  pub fn new<T: ReadTxn>(txn: &T, uid: &UserId, root: MapRefWrapper) -> Option<Self> {
+    for section in predefined_sections() {
+      if root.get_map_with_txn(txn, section.as_ref()).is_none() {
+        info!(
+          "Section {} not exist for user {}",
+          section.as_ref(),
+          uid.as_ref()
+        );
+        return None;
+      }
+    }
+
+    Some(Self {
       uid: uid.clone(),
       container: root,
-    }
+    })
   }
 
   pub fn section_op(&self, section: Section) -> Option<SectionOperation> {
@@ -69,6 +90,10 @@ pub enum Section {
   Favorite,
   Recent,
   Custom(String),
+}
+
+pub(crate) fn predefined_sections() -> Vec<Section> {
+  vec![Section::Favorite, Section::Recent]
 }
 
 impl From<String> for Section {
