@@ -18,17 +18,17 @@ impl DatabaseSerde {
     let txn = database.root.transact();
     let inline_view = database.metas.get_inline_view_with_txn(&txn);
     let views = database.views.get_all_views_with_txn(&txn);
-
     let fields = match &inline_view {
       None => vec![],
       Some(view_id) => database.get_fields_in_view_with_txn(&txn, view_id, None),
     };
 
-    let rows = match &inline_view {
+    let row_orders = match &inline_view {
       None => vec![],
-      Some(view_id) => database.get_rows_for_view_with_txn(&txn, view_id),
+      Some(view_id) => database.views.get_row_orders_with_txn(&txn, &view_id),
     };
-
+    drop(txn);
+    let rows = database.get_rows_from_row_orders(&row_orders);
     Self {
       views,
       rows,

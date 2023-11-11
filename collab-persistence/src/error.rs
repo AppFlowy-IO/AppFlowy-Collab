@@ -32,6 +32,6 @@ pub enum PersistenceError {
   #[error("Can't find the latest update key")]
   LatestUpdateKeyNotExist,
 
-  #[error("Internal failure: {0}")]
-  Internal(#[from] Box<dyn std::error::Error + Send + Sync>),
+  #[error(transparent)]
+  Internal(#[from] anyhow::Error),
 }

@@ -20,6 +20,7 @@ tracing.workspace = true
 parking_lot.workspace = true
 lazy_static = "1.4.0"
 async-trait.workspace = true
+anyhow = "1.0.75"
 
 [dev-dependencies]
 collab-persistence = { path = "", features = ["rocksdb_persistence"] }
