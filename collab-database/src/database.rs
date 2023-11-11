@@ -324,7 +324,7 @@ impl Database {
   /// The rows here are ordered by [RowOrder]s of the view.
   pub fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
     let row_orders = self.get_row_orders_for_view(view_id);
-    self.get_rows_from_row_orders(row_orders)
+    self.get_rows_from_row_orders(&row_orders)
   }
 
   pub fn get_row_orders_for_view(&self, view_id: &str) -> Vec<RowOrder> {
@@ -334,8 +334,8 @@ impl Database {
 
   /// Return a list of [Row] for the given view.
   /// The rows here is ordered by the [RowOrder] of the view.
-  pub fn get_rows_from_row_orders(&self, row_orders: Vec<RowOrder>) -> Vec<Row> {
-    self.block.get_rows_from_row_orders(&row_orders)
+  pub fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
+    self.block.get_rows_from_row_orders(row_orders)
   }
 
   /// Return a list of [RowCell] for the given view and field.
@@ -962,7 +962,7 @@ impl Database {
       self.views.get_row_orders_with_txn(&txn, &inline_view_id)
     };
 
-    self.get_rows_from_row_orders(row_orders)
+    self.get_rows_from_row_orders(&row_orders)
   }
 
   pub fn get_inline_row_orders(&self) -> Vec<RowOrder> {

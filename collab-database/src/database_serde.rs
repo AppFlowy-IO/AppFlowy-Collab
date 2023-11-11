@@ -28,7 +28,7 @@ impl DatabaseSerde {
       Some(view_id) => database.views.get_row_orders_with_txn(&txn, &view_id),
     };
     drop(txn);
-    let rows = database.get_rows_from_row_orders(row_orders);
+    let rows = database.get_rows_from_row_orders(&row_orders);
     Self {
       views,
       rows,
