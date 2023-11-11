@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
+use crate::{timestamp, UserId};
 use anyhow::bail;
 use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::preclude::{
-  Array, lib0Any, Map, MapRefWrapper, ReadTxn, Transact, TransactionMut, Value, YrsValue,
+  lib0Any, Array, Map, MapRefWrapper, ReadTxn, Transact, TransactionMut, Value, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;
-use crate::{timestamp, UserId};
 
 pub struct SectionMap {
   uid: UserId,
@@ -15,7 +15,6 @@ pub struct SectionMap {
 }
 
 impl SectionMap {
-
   /// Creates a new section map and initializes it with default sections.
   ///
   /// This function will iterate over a predefined list of sections and
@@ -40,7 +39,11 @@ impl SectionMap {
   pub fn new<T: ReadTxn>(txn: &T, uid: &UserId, root: MapRefWrapper) -> Option<Self> {
     for section in predefined_sections() {
       if root.get_map_with_txn(txn, section.as_ref()).is_none() {
-        info!("Section {} not exist for user {}", section.as_ref(), uid.as_ref());
+        info!(
+          "Section {} not exist for user {}",
+          section.as_ref(),
+          uid.as_ref()
+        );
         return None;
       }
     }
