@@ -323,11 +323,13 @@ impl Database {
   /// Return a list of [Row] for the given view.
   /// The rows here are ordered by [RowOrder]s of the view.
   pub fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
-    let row_orders = {
-      let txn = self.root.transact();
-      self.views.get_row_orders_with_txn(&txn, view_id)
-    };
+    let row_orders = self.get_row_orders_for_view(view_id);
     self.get_rows_from_row_orders(row_orders)
+  }
+
+  pub fn get_row_orders_for_view(&self, view_id: &str) -> Vec<RowOrder> {
+    let txn = self.root.transact();
+    self.views.get_row_orders_with_txn(&txn, view_id)
   }
 
   /// Return a list of [Row] for the given view.

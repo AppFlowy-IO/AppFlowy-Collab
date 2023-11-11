@@ -1,6 +1,6 @@
 use std::num::NonZeroUsize;
-use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Weak};
 
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab_entity::CollabType;
@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::blocks::task_controller::{BlockTask, BlockTaskController};
 use crate::rows::{
-  Cell, DatabaseRow, meta_id_from_row_id, MutexDatabaseRow, Row, RowDetail, RowId, RowMeta,
+  meta_id_from_row_id, Cell, DatabaseRow, MutexDatabaseRow, Row, RowDetail, RowId, RowMeta,
   RowMetaKey, RowMetaUpdate, RowUpdate,
 };
 use crate::user::DatabaseCollabService;
