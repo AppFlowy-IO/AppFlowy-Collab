@@ -2,13 +2,13 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use yrs::updates::decoder::Decode;
-use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
+use yrs::updates::encoder::{Encode, Encoder};
 use yrs::{ReadTxn, StateVector, Transact, Update};
 
 use crate::core::collab::{MutexCollab, TransactionMutExt};
 use crate::core::origin::CollabOrigin;
 use crate::sync_protocol::awareness::{Awareness, AwarenessUpdate};
-use crate::sync_protocol::message::{Error, Message, SyncMessage};
+use crate::sync_protocol::message::{CustomMessage, Error, Message, SyncMessage, SyncMeta};
 
 // ***************************
 // Client A  Client B  Server
@@ -31,33 +31,26 @@ use crate::sync_protocol::message::{Error, Message, SyncMessage};
 /// A implementation of [CollabSyncProtocol].
 #[derive(Clone)]
 pub struct ClientSyncProtocol;
-impl CollabSyncProtocol for ClientSyncProtocol {}
-
-#[derive(Clone)]
-pub struct ServerSyncProtocol;
-impl CollabSyncProtocol for ServerSyncProtocol {
-  fn handle_sync_step1(
-    &self,
-    awareness: &Awareness,
-    sv: StateVector,
-  ) -> Result<Option<Vec<u8>>, Error> {
-    let txn = awareness.doc().transact();
-    let step2_update = txn.encode_state_as_update_v1(&sv);
-    let step1_update = txn.state_vector();
-
-    let mut encoder = EncoderV1::new();
-    Message::Sync(SyncMessage::SyncStep2(step2_update)).encode(&mut encoder);
-    Message::Sync(SyncMessage::SyncStep1(step1_update)).encode(&mut encoder);
-    Ok(Some(encoder.to_vec()))
+impl CollabSyncProtocol for ClientSyncProtocol {
+  fn check<E: Encoder>(&self, encoder: &mut E, last_sync_at: i64) -> Result<(), Error> {
+    let meta = SyncMeta { last_sync_at };
+    Message::Custom(CustomMessage::SyncCheck(meta)).encode(encoder);
+    Ok(())
   }
 }
+
 pub trait CollabSyncProtocol {
+  fn check<E: Encoder>(&self, _encoder: &mut E, _last_sync_at: i64) -> Result<(), Error> {
+    Ok(())
+  }
+
   fn start<E: Encoder>(&self, awareness: &Awareness, encoder: &mut E) -> Result<(), Error> {
     let (sv, update) = {
       let sv = awareness.doc().transact().state_vector();
       let update = awareness.update()?;
       (sv, update)
     };
+
     Message::Sync(SyncMessage::SyncStep1(sv)).encode(encoder);
     Message::Awareness(update).encode(encoder);
     Ok(())
@@ -122,13 +115,6 @@ pub trait CollabSyncProtocol {
     }
   }
 
-  /// Returns an [AwarenessUpdate] which is a serializable representation of a current `awareness`
-  /// instance.
-  fn handle_awareness_query(&self, awareness: &Awareness) -> Result<Option<Vec<u8>>, Error> {
-    let update = awareness.update()?;
-    Ok(Some(Message::Awareness(update).encode_v1()))
-  }
-
   /// Reply to awareness query or just incoming [AwarenessUpdate], where current `awareness`
   /// instance is being updated with incoming data.
   fn handle_awareness_update(
@@ -140,13 +126,12 @@ pub trait CollabSyncProtocol {
     Ok(None)
   }
 
-  fn missing_handle(
+  fn handle_custom_message(
     &self,
     _awareness: &mut Awareness,
-    tag: u8,
-    _data: Vec<u8>,
+    _msg: CustomMessage,
   ) -> Result<Option<Vec<u8>>, Error> {
-    Err(Error::Unsupported(tag))
+    Ok(None)
   }
 }
 
@@ -200,14 +185,6 @@ pub fn handle_msg<P: CollabSyncProtocol>(
         )))?;
       protocol.handle_auth(collab.get_awareness(), reason)
     },
-    Message::AwarenessQuery => {
-      let collab = collab
-        .try_lock_for(Duration::from_millis(400))
-        .ok_or(Error::Internal(anyhow!(
-          "Timeout while trying to acquire lock"
-        )))?;
-      protocol.handle_awareness_query(collab.get_awareness())
-    },
     Message::Awareness(update) => {
       let mut collab = collab
         .try_lock_for(Duration::from_millis(400))
@@ -216,13 +193,13 @@ pub fn handle_msg<P: CollabSyncProtocol>(
         )))?;
       protocol.handle_awareness_update(collab.get_mut_awareness(), update)
     },
-    Message::Custom(tag, data) => {
+    Message::Custom(msg) => {
       let mut collab = collab
         .try_lock_for(Duration::from_millis(400))
         .ok_or(Error::Internal(anyhow!(
           "Timeout while trying to acquire lock"
         )))?;
-      protocol.missing_handle(collab.get_mut_awareness(), tag, data)
+      protocol.handle_custom_message(collab.get_mut_awareness(), msg)
     },
   }
 }
