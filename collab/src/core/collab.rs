@@ -225,12 +225,13 @@ impl Collab {
     *self.update_subscription.write() = Some(update_subscription);
     *self.after_txn_subscription.write() = Some(after_txn_subscription);
 
+    let last_sync_at = self.get_last_sync_at();
     {
       self
         .plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id));
+        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id, last_sync_at));
     }
     self.state.set_init_state(InitState::Initialized);
   }
@@ -259,12 +260,13 @@ impl Collab {
     *self.update_subscription.write() = Some(update_subscription);
     *self.after_txn_subscription.write() = Some(after_txn_subscription);
 
+    let last_sync_at = self.get_last_sync_at();
     {
       self
         .plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id));
+        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id, last_sync_at));
     }
     self.state.set_init_state(InitState::Initialized);
   }

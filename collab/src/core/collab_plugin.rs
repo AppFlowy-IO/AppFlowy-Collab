@@ -28,7 +28,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
   async fn init(&self, _object_id: &str, _origin: &CollabOrigin, _doc: &Doc) {}
 
   /// Called when the plugin is initialized.
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {}
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _last_sync_at: i64) {}
 
   /// Called when the plugin receives an update. It happens after the [TransactionMut] commit to
   /// the Yrs document.
@@ -71,8 +71,8 @@ where
     (**self).init(object_id, origin, doc).await;
   }
 
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
-    (**self).did_init(_awareness, _object_id)
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str, last_sync_at: i64) {
+    (**self).did_init(_awareness, _object_id, last_sync_at)
   }
 
   fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
@@ -95,8 +95,8 @@ where
     (**self).init(object_id, origin, doc).await;
   }
 
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str) {
-    (**self).did_init(_awareness, _object_id)
+  fn did_init(&self, _awareness: &Awareness, _object_id: &str, last_sync_at: i64) {
+    (**self).did_init(_awareness, _object_id, last_sync_at)
   }
 
   fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
