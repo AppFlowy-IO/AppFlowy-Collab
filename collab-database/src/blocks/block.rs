@@ -46,7 +46,7 @@ impl Block {
     collab_db: Weak<RocksCollabDB>,
     collab_service: Arc<dyn DatabaseCollabService>,
   ) -> Block {
-    let cache = Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(200).unwrap())));
+    let cache = Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap())));
     let controller = BlockTaskController::new(collab_db.clone(), Arc::downgrade(&collab_service));
     let task_controller = Arc::new(controller);
     let (notifier, _) = broadcast::channel(1000);
