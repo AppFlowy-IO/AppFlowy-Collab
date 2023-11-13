@@ -9,7 +9,7 @@ use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio_stream::wrappers::WatchStream;
-use tracing::event;
+use tracing::error;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
@@ -32,6 +32,9 @@ use crate::sync_protocol::awareness::Awareness;
 use crate::util::insert_json_value_to_map_ref;
 
 pub const DATA_SECTION: &str = "data";
+pub const META_SECTION: &str = "meta";
+
+const LAST_SYNC_AT: &str = "last_sync_at";
 
 type AfterTransactionSubscription = Subscription<Arc<dyn Fn(&mut TransactionMut)>>;
 
@@ -57,6 +60,8 @@ pub struct Collab {
 
   /// Every [Collab] instance has a data section that can be used to store
   data: MapRef,
+
+  meta: MapRef,
 
   /// A list of plugins that are used to extend the functionality of the [Collab].
   plugins: Plugins,
@@ -88,12 +93,6 @@ impl Collab {
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, CollabError> {
     let collab = Self::new_with_origin(origin, object_id, plugins);
-    event!(
-      tracing::Level::TRACE,
-      "{}: new with raw data. len: {}",
-      object_id,
-      collab_raw_data.len()
-    );
     if !collab_raw_data.is_empty() {
       let mut txn = collab.origin_transact_mut();
       for update in collab_raw_data {
@@ -116,6 +115,7 @@ impl Collab {
       ..Options::default()
     });
     let data = doc.get_or_insert_map(DATA_SECTION);
+    let meta = doc.get_or_insert_map(META_SECTION);
     let undo_manager = Mutex::new(None);
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
@@ -128,6 +128,7 @@ impl Collab {
       undo_manager,
       awareness,
       data,
+      meta,
       plugins,
       state,
       update_subscription: Default::default(),
@@ -218,12 +219,13 @@ impl Collab {
     *self.update_subscription.write() = Some(update_subscription);
     *self.after_txn_subscription.write() = Some(after_txn_subscription);
 
+    let last_sync_at = self.get_last_sync_at();
     {
       self
         .plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id));
+        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id, last_sync_at));
     }
     self.state.set_init_state(InitState::Initialized);
   }
@@ -252,14 +254,39 @@ impl Collab {
     *self.update_subscription.write() = Some(update_subscription);
     *self.after_txn_subscription.write() = Some(after_txn_subscription);
 
+    let last_sync_at = self.get_last_sync_at();
     {
       self
         .plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id));
+        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id, last_sync_at));
     }
     self.state.set_init_state(InitState::Initialized);
+  }
+
+  pub fn set_last_sync_at(&self, last_sync_at: i64) {
+    match self.try_origin_transaction_mut() {
+      Ok(mut txn) => {
+        self.set_last_sync_at_with_txn(&mut txn, last_sync_at);
+      },
+      Err(_) => {
+        error!("Fail to set last sync at");
+      },
+    }
+  }
+
+  pub fn set_last_sync_at_with_txn(&self, txn: &mut TransactionMut, last_sync_at: i64) {
+    self
+      .meta
+      .insert_i64_with_txn(txn, LAST_SYNC_AT, last_sync_at);
+  }
+
+  pub fn get_last_sync_at(&self) -> i64 {
+    match self.try_transaction() {
+      Ok(txn) => self.meta.get_i64_with_txn(&txn, LAST_SYNC_AT).unwrap_or(0),
+      Err(_) => 0,
+    }
   }
 
   pub fn set_sync_state(&self, sync_state: SyncState) {

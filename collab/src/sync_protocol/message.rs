@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
 
+use crate::preclude::lib0Error;
 use thiserror::Error;
 use yrs::updates::decoder::{Decode, Decoder};
 use yrs::updates::encoder::{Encode, Encoder};
@@ -13,8 +15,7 @@ pub const MSG_SYNC: u8 = 0;
 pub const MSG_AWARENESS: u8 = 1;
 /// Tag id for [Message::Auth].
 pub const MSG_AUTH: u8 = 2;
-/// Tag id for [Message::AwarenessQuery].
-pub const MSG_QUERY_AWARENESS: u8 = 3;
+pub const MSG_CUSTOM: u8 = 3;
 
 pub const PERMISSION_DENIED: u8 = 0;
 pub const PERMISSION_GRANTED: u8 = 1;
@@ -23,9 +24,8 @@ pub const PERMISSION_GRANTED: u8 = 1;
 pub enum Message {
   Sync(SyncMessage),
   Auth(Option<String>),
-  AwarenessQuery,
   Awareness(AwarenessUpdate),
-  Custom(u8, Vec<u8>),
+  Custom(CustomMessage),
 }
 
 impl Encode for Message {
@@ -44,16 +44,13 @@ impl Encode for Message {
           encoder.write_var(PERMISSION_GRANTED);
         }
       },
-      Message::AwarenessQuery => {
-        encoder.write_var(MSG_QUERY_AWARENESS);
-      },
       Message::Awareness(update) => {
         encoder.write_var(MSG_AWARENESS);
         encoder.write_buf(&update.encode_v1())
       },
-      Message::Custom(tag, data) => {
-        encoder.write_u8(*tag);
-        encoder.write_buf(data);
+      Message::Custom(msg) => {
+        encoder.write_var(MSG_CUSTOM);
+        msg.encode(encoder)
       },
     }
   }
@@ -80,11 +77,11 @@ impl Decode for Message {
         };
         Ok(Message::Auth(reason))
       },
-      MSG_QUERY_AWARENESS => Ok(Message::AwarenessQuery),
-      tag => {
-        let data = decoder.read_buf()?;
-        Ok(Message::Custom(tag, data.to_vec()))
+      MSG_CUSTOM => {
+        let msg = CustomMessage::decode(decoder)?;
+        Ok(Message::Custom(msg))
       },
+      _ => Err(lib0::error::Error::UnexpectedValue),
     }
   }
 }
@@ -94,10 +91,65 @@ impl Display for Message {
     match self {
       Message::Sync(sync_msg) => f.write_str(&sync_msg.to_string()),
       Message::Auth(_) => f.write_str("Auth"),
-      Message::AwarenessQuery => f.write_str("AwarenessQuery"),
       Message::Awareness(_) => f.write_str("Awareness"),
-      Message::Custom(_, _) => f.write_str("Custom"),
+      Message::Custom(msg) => f.write_str(&msg.to_string()),
     }
+  }
+}
+
+/// Tag id for [CustomMessage::MSG_CUSTOM_START_SYNC].
+pub const MSG_CUSTOM_START_SYNC: u8 = 0;
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum CustomMessage {
+  SyncCheck(SyncMeta),
+}
+
+impl Display for CustomMessage {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      CustomMessage::SyncCheck(_) => f.write_str("SyncCheck"),
+    }
+  }
+}
+impl Encode for CustomMessage {
+  fn encode<E: Encoder>(&self, encoder: &mut E) {
+    match self {
+      CustomMessage::SyncCheck(msg) => {
+        encoder.write_var(MSG_CUSTOM_START_SYNC);
+        encoder.write_buf(msg.to_vec());
+      },
+    }
+  }
+}
+
+impl Decode for CustomMessage {
+  fn decode<D: Decoder>(decoder: &mut D) -> Result<Self, lib0::error::Error> {
+    let tag: u8 = decoder.read_var()?;
+    match tag {
+      MSG_CUSTOM_START_SYNC => {
+        let buf = decoder.read_buf()?;
+        let meta = SyncMeta::from_vec(buf)?;
+        Ok(CustomMessage::SyncCheck(meta))
+      },
+      _ => Err(lib0::error::Error::UnexpectedValue),
+    }
+  }
+}
+
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct SyncMeta {
+  pub(crate) last_sync_at: i64,
+}
+
+impl SyncMeta {
+  pub fn to_vec(&self) -> Vec<u8> {
+    bincode::serialize(self).unwrap()
+  }
+
+  pub fn from_vec(data: &[u8]) -> Result<Self, lib0Error> {
+    let meta = bincode::deserialize(data).map_err(|err| lib0Error::Other(err.to_string()))?;
+    Ok(meta)
   }
 }
 
@@ -192,6 +244,9 @@ pub enum Error {
 
   #[error("{0}")]
   YrsTransaction(String),
+
+  #[error(transparent)]
+  BinCodeSerde(#[from] bincode::Error),
 
   #[error(transparent)]
   Internal(#[from] anyhow::Error),
