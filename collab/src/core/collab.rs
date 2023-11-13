@@ -10,16 +10,16 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio_stream::wrappers::WatchStream;
 use tracing::{error, event};
-use yrs::block::Prelim;
-use yrs::types::map::MapEvent;
-use yrs::types::{ToJson, Value};
-use yrs::updates::decoder::Decode;
-use yrs::updates::encoder::Encode;
 use yrs::{
   ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options, ReadTxn,
   StateVector, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
   UpdateSubscription,
 };
+use yrs::block::Prelim;
+use yrs::types::{ToJson, Value};
+use yrs::types::map::MapEvent;
+use yrs::updates::decoder::Decode;
+use yrs::updates::encoder::Encode;
 
 use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedCollabV1};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
@@ -93,12 +93,6 @@ impl Collab {
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, CollabError> {
     let collab = Self::new_with_origin(origin, object_id, plugins);
-    event!(
-      tracing::Level::TRACE,
-      "{}: new with raw data. len: {}",
-      object_id,
-      collab_raw_data.len()
-    );
     if !collab_raw_data.is_empty() {
       let mut txn = collab.origin_transact_mut();
       for update in collab_raw_data {
