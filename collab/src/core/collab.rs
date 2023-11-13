@@ -9,7 +9,7 @@ use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio_stream::wrappers::WatchStream;
-use tracing::{error};
+use tracing::error;
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
