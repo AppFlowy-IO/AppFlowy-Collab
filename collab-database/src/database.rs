@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use collab::core::any_map::AnyMapExtension;
 use collab::core::collab::MutexCollab;
@@ -10,12 +10,13 @@ use collab::preclude::{
   Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 pub use collab_persistence::doc::YrsDocAction;
+use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use nanoid::nanoid;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 pub use tokio_stream::wrappers::WatchStream;
 
-use crate::blocks::Block;
+use crate::blocks::{Block, BlockEvent};
 use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
@@ -24,6 +25,7 @@ use crate::rows::{
   CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowDetail, RowId, RowMeta,
   RowMetaUpdate, RowUpdate,
 };
+use crate::user::DatabaseCollabService;
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
   FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap,
@@ -37,6 +39,8 @@ pub struct Database {
   pub views: Rc<ViewMap>,
   pub fields: Rc<FieldMap>,
   pub metas: Rc<MetaMap>,
+  /// It used to keep track of the blocks. Each block contains a list of [Row]s
+  /// A database rows will be stored in multiple blocks.
   pub block: Block,
 }
 
@@ -47,8 +51,10 @@ const VIEWS: &str = "views";
 const METAS: &str = "metas";
 
 pub struct DatabaseContext {
+  pub uid: i64,
+  pub db: Weak<RocksCollabDB>,
   pub collab: Arc<MutexCollab>,
-  pub block: Block,
+  pub collab_service: Arc<dyn DatabaseCollabService>,
 }
 
 impl Database {
@@ -82,6 +88,20 @@ impl Database {
       Ok::<(), DatabaseError>(())
     })?;
     Ok(this)
+  }
+
+  pub fn load_all_rows(&self) {
+    let row_ids = self
+      .get_inline_row_orders()
+      .into_iter()
+      .map(|row_order| row_order.id)
+      .take(100)
+      .collect::<Vec<_>>();
+    self.block.batch_load_rows(row_ids);
+  }
+
+  pub fn subscribe_block_event(&self) -> tokio::sync::broadcast::Receiver<BlockEvent> {
+    self.block.subscribe_event()
   }
 
   /// Get or Create a database with the given database_id.
@@ -124,12 +144,17 @@ impl Database {
         let views = ViewMap::new(views);
         let fields = FieldMap::new(fields);
         let metas = MetaMap::new(metas);
+        let block = Block::new(
+          context.uid,
+          context.db.clone(),
+          context.collab_service.clone(),
+        );
         drop(collab_guard);
 
         Ok(Self {
           inner: context.collab,
           root: database,
-          block: context.block,
+          block,
           views: Rc::new(views),
           fields: Rc::new(fields),
           metas: Rc::new(metas),
@@ -174,14 +199,29 @@ impl Database {
     let fields = FieldMap::new(fields);
     let metas = MetaMap::new(metas);
 
+    let block = Block::new(
+      context.uid,
+      context.db.clone(),
+      context.collab_service.clone(),
+    );
+
     Ok(Self {
       inner: context.collab,
       root: database,
-      block: context.block,
+      block,
       views: Rc::new(views),
       fields: Rc::new(fields),
       metas: Rc::new(metas),
     })
+  }
+
+  pub fn close(&self) {
+    let row_ids = self
+      .get_inline_row_orders()
+      .into_iter()
+      .map(|row_order| row_order.id)
+      .collect::<Vec<_>>();
+    self.block.close_rows(&row_ids);
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
