@@ -1,6 +1,8 @@
 use async_trait::async_trait;
+use lru::LruCache;
 use std::collections::HashMap;
 use std::future::Future;
+use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
@@ -12,12 +14,11 @@ use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use collab_plugins::local_storage::CollabPersistenceConfig;
-use parking_lot::RwLock;
+use parking_lot::Mutex;
 
-use crate::blocks::{Block, BlockEvent};
 use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
 use crate::error::DatabaseError;
-use crate::rows::RowId;
+
 use crate::user::db_record::{DatabaseWithViews, DatabaseWithViewsArray};
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 
@@ -57,16 +58,13 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
 pub struct WorkspaceDatabase {
   uid: i64,
   collab: Arc<MutexCollab>,
-  inner_collab_db: Weak<RocksCollabDB>,
-  /// It used to keep track of the blocks. Each block contains a list of [Row]s
-  /// A database rows will be stored in multiple blocks.
-  block: Block,
+  collab_db: Weak<RocksCollabDB>,
   config: CollabPersistenceConfig,
   collab_service: Arc<dyn DatabaseCollabService>,
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
-  open_handlers: RwLock<HashMap<String, Arc<MutexDatabase>>>,
+  open_handlers: Mutex<LruCache<String, Arc<MutexDatabase>>>,
 }
 
 impl WorkspaceDatabase {
@@ -82,23 +80,17 @@ impl WorkspaceDatabase {
   {
     let collab_service = Arc::new(collab_service);
     let collab_guard = collab.lock();
-
-    let block = Block::new(uid, collab_db.clone(), collab_service.clone());
     drop(collab_guard);
 
+    let open_handlers = Mutex::new(LruCache::new(NonZeroUsize::new(5).unwrap()));
     Self {
       uid,
-      inner_collab_db: collab_db,
+      collab_db,
       collab,
-      block,
-      open_handlers: Default::default(),
+      open_handlers,
       config,
       collab_service,
     }
-  }
-
-  pub fn subscribe_block_event(&self) -> tokio::sync::broadcast::Receiver<BlockEvent> {
-    self.block.subscribe_event()
   }
 
   /// Get the database with the given database id.
@@ -107,8 +99,8 @@ impl WorkspaceDatabase {
     if !self.database_array().contains(database_id) {
       return None;
     }
-    let database = self.open_handlers.read().get(database_id).cloned();
-    let collab_db = self.inner_collab_db.upgrade()?;
+    let database = self.open_handlers.lock().get(database_id).cloned();
+    let collab_db = self.collab_db.upgrade()?;
     match database {
       None => {
         let mut collab_raw_data = CollabRawData::default();
@@ -135,31 +127,26 @@ impl WorkspaceDatabase {
           }
         }
 
-        let blocks = self.block.clone();
         let collab = self.collab_for_database(database_id, collab_raw_data);
         let context = DatabaseContext {
+          uid: self.uid,
+          db: self.collab_db.clone(),
           collab,
-          block: blocks,
+          collab_service: self.collab_service.clone(),
         };
         let database = Database::get_or_create(database_id, context).ok()?;
 
         // The database is not exist in local disk, which means the rows of the database are not
         // loaded yet. Load the rows from the remote with limit 100.
         if !is_exist {
-          let row_ids = database
-            .get_inline_row_orders()
-            .into_iter()
-            .map(|row_order| row_order.id)
-            .take(100)
-            .collect::<Vec<_>>();
-          self.block.batch_load_rows(row_ids);
+          database.load_all_rows();
         }
 
         let database = Arc::new(MutexDatabase::new(database));
         self
           .open_handlers
-          .write()
-          .insert(database_id.to_string(), database.clone());
+          .lock()
+          .put(database_id.to_string(), database.clone());
         Some(database)
       },
       Some(database) => Some(database),
@@ -193,8 +180,12 @@ impl WorkspaceDatabase {
 
     // Create a [Collab] for the given database id.
     let collab = self.collab_for_database(&params.database_id, CollabRawData::default());
-    let block = self.block.clone();
-    let context = DatabaseContext { collab, block };
+    let context = DatabaseContext {
+      uid: self.uid,
+      db: self.collab_db.clone(),
+      collab,
+      collab_service: self.collab_service.clone(),
+    };
 
     // Add a new database record.
     self
@@ -203,10 +194,7 @@ impl WorkspaceDatabase {
     let database_id = params.database_id.clone();
     let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);
     let database = Arc::new(mutex_database);
-    self
-      .open_handlers
-      .write()
-      .insert(database_id, database.clone());
+    self.open_handlers.lock().put(database_id, database.clone());
     Ok(database)
   }
 
@@ -245,7 +233,7 @@ impl WorkspaceDatabase {
   /// Delete the database with the given database id.
   pub fn delete_database(&self, database_id: &str) {
     self.database_array().delete_database(database_id);
-    if let Some(collab_db) = self.inner_collab_db.upgrade() {
+    if let Some(collab_db) = self.collab_db.upgrade() {
       let _ = collab_db.with_write_txn(|w_db_txn| {
         match w_db_txn.delete_doc(self.uid, database_id) {
           Ok(_) => {},
@@ -254,19 +242,15 @@ impl WorkspaceDatabase {
         Ok(())
       });
     }
-    self.open_handlers.write().remove(database_id);
+    if let Some(database) = self.open_handlers.lock().pop(database_id) {
+      database.lock().close();
+    }
   }
 
   /// Close the database with the given database id.
   pub fn close_database(&self, database_id: &str) {
-    if let Some(a) = self.open_handlers.write().remove(database_id) {
-      let row_ids: Vec<RowId> = a
-        .lock()
-        .get_inline_row_orders()
-        .into_iter()
-        .map(|row_order| row_order.id)
-        .collect();
-      self.block.close_rows(&row_ids);
+    if let Some(database) = self.open_handlers.lock().pop(database_id) {
+      database.lock().close();
     }
   }
 
@@ -276,7 +260,7 @@ impl WorkspaceDatabase {
   }
 
   pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
-    match self.inner_collab_db.upgrade() {
+    match self.collab_db.upgrade() {
       None => vec![],
       Some(collab_db) => {
         let store = collab_db.read_txn();
@@ -297,8 +281,10 @@ impl WorkspaceDatabase {
     });
 
     let context = DatabaseContext {
+      uid: self.uid,
+      db: self.collab_db.clone(),
       collab,
-      block: self.block.clone(),
+      collab_service: self.collab_service.clone(),
     };
     Database::get_or_create(database_id, context)
   }
@@ -349,7 +335,7 @@ impl WorkspaceDatabase {
       self.uid,
       database_id,
       CollabType::Database,
-      self.inner_collab_db.clone(),
+      self.collab_db.clone(),
       collab_raw_data,
       &self.config,
     )

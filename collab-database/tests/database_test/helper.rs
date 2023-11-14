@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use collab::core::collab::CollabRawData;
 use collab::preclude::CollabBuilder;
-use collab_database::blocks::Block;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, CreateRowParams};
@@ -57,10 +56,11 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     .unwrap();
   collab.lock().initialize();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
-  let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder);
   let context = DatabaseContext {
+    uid,
+    db: Arc::downgrade(&collab_db),
     collab: Arc::new(collab),
-    block,
+    collab_service: collab_builder,
   };
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
@@ -89,11 +89,11 @@ pub async fn create_database_with_db(
     CollabRawData::default(),
     &CollabPersistenceConfig::default(),
   );
-  let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder);
   let context = DatabaseContext {
+    uid,
+    db: Arc::downgrade(&collab_db),
     collab,
-    block,
-    // collab_builder,
+    collab_service: collab_builder,
   };
   let params = CreateDatabaseParams {
     view_id: "v1".to_string(),
@@ -125,8 +125,12 @@ pub fn restore_database_from_db(
     CollabRawData::default(),
     &CollabPersistenceConfig::default(),
   );
-  let block = Block::new(uid, Arc::downgrade(&collab_db), collab_builder);
-  let context = DatabaseContext { collab, block };
+  let context = DatabaseContext {
+    uid,
+    db: Arc::downgrade(&collab_db),
+    collab,
+    collab_service: collab_builder,
+  };
   let database = Database::get_or_create(database_id, context).unwrap();
   DatabaseTest {
     database,
@@ -189,11 +193,11 @@ impl DatabaseTestBuilder {
       .unwrap();
     collab.lock().initialize();
     let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
-    let block = Block::new(self.uid, Arc::downgrade(&collab_db), collab_builder);
     let context = DatabaseContext {
+      uid: self.uid,
+      db: Arc::downgrade(&collab_db),
       collab: Arc::new(collab),
-      block,
-      // collab_builder,
+      collab_service: collab_builder,
     };
     let params = CreateDatabaseParams {
       database_id: self.database_id.clone(),
