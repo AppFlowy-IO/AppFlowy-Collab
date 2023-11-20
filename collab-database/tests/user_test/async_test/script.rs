@@ -70,7 +70,7 @@ pub async fn database_test(config: CollabPersistenceConfig) -> DatabaseTest {
 impl DatabaseTest {
   pub async fn new(config: CollabPersistenceConfig) -> Self {
     let db_path = db_path();
-    let collab_db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
+    let collab_db = Arc::new(RocksCollabDB::open_opt(db_path.clone(), false).unwrap());
     let workspace_database =
       workspace_database_with_db(1, Arc::downgrade(&collab_db), Some(config.clone())).await;
     Self {

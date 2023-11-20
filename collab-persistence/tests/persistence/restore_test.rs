@@ -1,6 +1,7 @@
+use std::thread;
+
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use std::thread;
 use yrs::{Doc, GetString, Text, Transact};
 
 use crate::util::rocks_db;
@@ -31,7 +32,7 @@ async fn single_thread_test() {
   }
   drop(db);
 
-  let db = RocksCollabDB::open(path).unwrap();
+  let db = RocksCollabDB::open_opt(path, false).unwrap();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
     let doc = Doc::new();
@@ -78,7 +79,7 @@ async fn rocks_multiple_thread_test() {
   }
   drop(db);
 
-  let db = RocksCollabDB::open(path).unwrap();
+  let db = RocksCollabDB::open_opt(path, false).unwrap();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
     let doc = Doc::new();

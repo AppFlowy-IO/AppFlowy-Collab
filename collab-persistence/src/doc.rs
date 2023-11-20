@@ -79,24 +79,6 @@ where
   /// assigned or retrieved for the given user ID and object identifier. Then, it proceeds to clear any
   /// existing state for that document from the storage before inserting the new state and state vector.
   ///
-  fn flush_doc_with_txn<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
-    &self,
-    uid: i64,
-    object_id: &K,
-    txn: &T,
-  ) -> Result<(), PersistenceError> {
-    let doc_state = txn.encode_state_as_update_v1(&StateVector::default());
-    let state_vector = txn.state_vector().encode_v1();
-    self.flush_doc(uid, object_id, state_vector, doc_state)
-  }
-
-  /// Flushes the document state and state vector to the storage.
-  ///
-  /// This function writes the state of a document, identified by a unique `object_id`, along with its
-  /// associated state vector to the persistent storage. It first ensures that a document ID is
-  /// assigned or retrieved for the given user ID and object identifier. Then, it proceeds to clear any
-  /// existing state for that document from the storage before inserting the new state and state vector.
-  ///
   fn flush_doc<K: AsRef<[u8]> + ?Sized + Debug>(
     &self,
     uid: i64,

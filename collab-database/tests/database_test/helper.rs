@@ -16,6 +16,7 @@ use collab_database::views::{
 use collab_entity::CollabType;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
+
 use tempfile::TempDir;
 
 pub use crate::helper::*;
@@ -49,7 +50,7 @@ impl DerefMut for DatabaseTest {
 pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let collab_db = Arc::new(RocksCollabDB::open(path).unwrap());
+  let collab_db = Arc::new(RocksCollabDB::open_opt(path, false).unwrap());
   let collab = CollabBuilder::new(uid, database_id)
     .with_device_id("1")
     .build()
@@ -186,7 +187,7 @@ impl DatabaseTestBuilder {
   pub async fn build(self) -> DatabaseTest {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
-    let collab_db = Arc::new(RocksCollabDB::open(path).unwrap());
+    let collab_db = Arc::new(RocksCollabDB::open_opt(path, false).unwrap());
     let collab = CollabBuilder::new(self.uid, &self.database_id)
       .with_device_id("1")
       .build()

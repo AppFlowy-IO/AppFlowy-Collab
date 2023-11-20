@@ -3,10 +3,11 @@ use std::ops::RangeBounds;
 use std::path::Path;
 use std::sync::Arc;
 
+use rocksdb::backup::{BackupEngine, BackupEngineOptions};
 use rocksdb::Direction::Forward;
 use rocksdb::{
-  ColumnFamilyDescriptor, DBIteratorWithThreadMode, Direction, ErrorKind, IteratorMode, Options,
-  ReadOptions, SingleThreaded, Transaction, TransactionDB, TransactionDBOptions,
+  ColumnFamilyDescriptor, DBIteratorWithThreadMode, Direction, Env, ErrorKind, IteratorMode,
+  Options, ReadOptions, SingleThreaded, Transaction, TransactionDB, TransactionDBOptions,
   TransactionOptions, WriteOptions,
 };
 
@@ -23,11 +24,19 @@ pub struct RocksStore {
 impl RocksStore {
   /// Open a new RocksDB database at the given path.
   /// If the database is corrupted, try to repair it. If it cannot be repaired, return an error.
-  pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
+  pub fn open_opt(path: impl AsRef<Path>, auto_repair: bool) -> Result<Self, PersistenceError> {
     let txn_db_opts = TransactionDBOptions::default();
     let mut db_opts = Options::default();
+    // This option sets the upper limit for the total number of background jobs (both flushes and compactions)
+    // that can run concurrently. If you set this value too low, you might limit the ability of RocksDB to
+    // efficiently flush and compact data, potentially leading to increased write latency or larger disk space usage.
+    // On the other hand, setting it too high could lead to excessive CPU and I/O usage, impacting the overall
+    // performance of the system.
+    db_opts.set_max_background_jobs(4);
     db_opts.create_if_missing(true);
-    let db = match TransactionDB::<SingleThreaded>::open(&db_opts, &txn_db_opts, &path) {
+
+    let open_result = TransactionDB::<SingleThreaded>::open(&db_opts, &txn_db_opts, &path);
+    let db = match open_result {
       Ok(db) => Ok(db),
       Err(e) => {
         tracing::error!("🔴open collab db error: {:?}", e);
@@ -42,19 +51,58 @@ impl RocksStore {
           // expects (like the "Sst file size mismatch" error), the repair function might be able
           // to correct this.
           ErrorKind::Corruption | ErrorKind::Unknown => {
-            // If the database is corrupted, try to repair it
-            tracing::info!("Trying to repair collab database");
-            match TransactionDB::<SingleThreaded>::repair(&db_opts, &path) {
-              Ok(_) => tracing::info!("Collab database repaired"),
-              Err(e) => tracing::error!("🔴Failed to repair collab database: {:?}", e),
+            if auto_repair {
+              // If the database is corrupted, try to repair it
+              // tracing::info!("Trying to repair collab database");
+              TransactionDB::<SingleThreaded>::repair(&db_opts, &path).map_err(|err| {
+                PersistenceError::RocksdbRepairFail(format!(
+                  "Failed to repair collab database: {:?}",
+                  err
+                ))
+              })?;
+              TransactionDB::<SingleThreaded>::open(&db_opts, &txn_db_opts, &path).map_err(|err| {
+                PersistenceError::RocksdbRepairFail(format!(
+                  "Failed to repair collab database: {:?}",
+                  err
+                ))
+              })
+            } else {
+              Err(PersistenceError::RocksdbCorruption(e.to_string()))
             }
           },
-          _ => {},
+          ErrorKind::IOError => {
+            // If the database is already locked by another process, it will return an IO error. It
+            // happens when the database is already opened by another process.
+            Err(PersistenceError::RocksdbIOError(e.to_string()))
+          },
+          ErrorKind::Busy => {
+            //
+            Err(PersistenceError::RocksdbBusy(e.to_string()))
+          },
+          _ => Err(PersistenceError::RocksDb(e)),
         }
-        TransactionDB::<SingleThreaded>::open(&db_opts, &txn_db_opts, &path)
       },
     }?;
+
     Ok(Self { db: Arc::new(db) })
+  }
+
+  /// Open a new RocksDB database at the given path.
+  /// If the database is corrupted, try to repair it. If it cannot be repaired, return an error.
+  pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
+    Self::open_opt(path, false)
+  }
+
+  pub fn flush(&self) -> Result<(), PersistenceError> {
+    Ok(())
+  }
+
+  #[allow(dead_code)]
+  fn backup_engine(backup_dir: impl AsRef<Path>) -> Result<BackupEngine, PersistenceError> {
+    let backup_opts = BackupEngineOptions::new(backup_dir)?;
+    let env = Env::new()?;
+    let backup_engine = BackupEngine::open(&backup_opts, &env)?;
+    Ok(backup_engine)
   }
 
   pub fn open_with_cfs(

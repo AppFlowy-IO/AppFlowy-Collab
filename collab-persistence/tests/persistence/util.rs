@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Once;
 
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
+
 use tempfile::TempDir;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 
@@ -11,7 +12,7 @@ pub fn rocks_db() -> (PathBuf, RocksCollabDB) {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let cloned_path = path.clone();
-  (path, RocksCollabDB::open(cloned_path).unwrap())
+  (path, RocksCollabDB::open_opt(cloned_path, false).unwrap())
 }
 
 fn setup_log() {
