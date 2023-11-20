@@ -31,7 +31,7 @@ impl DocumentTest {
   }
 
   pub async fn new_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> Self {
-    let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
+    let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db), None);
     let collab = CollabBuilder::new(1, doc_id)
       .with_plugin(disk_plugin)
       .with_device_id("1")
@@ -103,7 +103,7 @@ impl Deref for DocumentTest {
 
 pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> Document {
   setup_log();
-  let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
+  let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db), None);
   let collab = CollabBuilder::new(uid, doc_id)
     .with_plugin(disk_plugin)
     .with_device_id("1")
@@ -117,7 +117,7 @@ pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB
 pub fn document_storage() -> Arc<RocksCollabDB> {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  Arc::new(RocksCollabDB::open(path).unwrap())
+  Arc::new(RocksCollabDB::open_opt(path, false).unwrap())
 }
 
 fn setup_log() {

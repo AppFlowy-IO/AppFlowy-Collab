@@ -12,8 +12,9 @@ use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::snapshot::CollabSnapshotPlugin;
 use lib0::any::Any;
-use tempfile::TempDir;
 use yrs::updates::decoder::Decode;
+
+use tempfile::TempDir;
 
 use crate::setup_log;
 
@@ -83,11 +84,12 @@ impl CollabPersistenceTest {
     let tempdir = TempDir::new().unwrap();
     let db_path = tempdir.into_path();
     let uid = 1;
-    let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
+    let db = Arc::new(RocksCollabDB::open_opt(db_path.clone(), false).unwrap());
     let disk_plugin = Arc::new(RocksdbDiskPlugin::new_with_config(
       uid,
       Arc::downgrade(&db),
       config.clone(),
+      None,
     ));
     let cleaner = Cleaner::new(db_path);
     Self {
@@ -343,8 +345,13 @@ impl CollabPersistenceTest {
 pub fn disk_plugin(uid: i64) -> (Arc<RocksCollabDB>, RocksdbDiskPlugin) {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(RocksCollabDB::open(path).unwrap());
-  let plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
+  let db = Arc::new(RocksCollabDB::open_opt(path, false).unwrap());
+  let plugin = RocksdbDiskPlugin::new_with_config(
+    uid,
+    Arc::downgrade(&db),
+    CollabPersistenceConfig::default(),
+    None,
+  );
   (db, plugin)
 }
 

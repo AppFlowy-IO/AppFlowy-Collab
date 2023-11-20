@@ -20,11 +20,11 @@ use collab_entity::CollabType;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::local_storage::CollabPersistenceConfig;
-
 use parking_lot::Mutex;
+use tokio::sync::mpsc::{channel, Receiver};
+
 use rand::Rng;
 use tempfile::TempDir;
-use tokio::sync::mpsc::{channel, Receiver};
 
 use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{make_rocks_db, TestTextCell};
@@ -85,6 +85,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
         uid,
         collab_db,
         config.clone(),
+        None,
       ))
       .build()
       .unwrap();
@@ -157,7 +158,7 @@ pub async fn user_database_test_with_db(
 pub async fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(RocksCollabDB::open(path).unwrap());
+  let db = Arc::new(RocksCollabDB::open_opt(path, false).unwrap());
   let w_database = user_database_test_with_db(uid, db).await;
 
   w_database

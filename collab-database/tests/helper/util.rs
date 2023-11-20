@@ -17,6 +17,7 @@ use collab_database::views::{
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use nanoid::nanoid;
+
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -567,7 +568,7 @@ impl From<TestFieldSetting> for FieldSettingsMap {
 
 pub fn make_rocks_db() -> Arc<RocksCollabDB> {
   let path = db_path();
-  Arc::new(RocksCollabDB::open(path).unwrap())
+  Arc::new(RocksCollabDB::open_opt(path, false).unwrap())
 }
 
 pub fn db_path() -> PathBuf {

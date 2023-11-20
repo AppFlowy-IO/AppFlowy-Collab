@@ -52,6 +52,11 @@ impl Document {
     &self.inner
   }
 
+  pub fn flush(&self) -> Result<(), DocumentError> {
+    self.inner.lock().flush();
+    Ok(())
+  }
+
   /// Create a new document with the given data.
   pub fn create_with_data(
     collab: Arc<MutexCollab>,

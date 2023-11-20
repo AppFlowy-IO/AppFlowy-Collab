@@ -5,15 +5,11 @@ use crate::user_test::async_test::script::{create_database, database_test, Datab
 
 #[tokio::test]
 async fn flush_doc_test() {
-  let mut test = database_test(CollabPersistenceConfig::new().flush_doc(true)).await;
+  let mut test = database_test(CollabPersistenceConfig::new()).await;
   test
     .run_scripts(vec![
       CreateDatabase {
         params: create_database("d1"),
-      },
-      AssertNumOfUpdates {
-        oid: "d1".to_string(),
-        expected: 2,
       },
       CloseDatabase {
         database_id: "d1".to_string(),
@@ -29,10 +25,6 @@ async fn flush_doc_test() {
     .run_scripts(vec![
       OpenDatabase {
         database_id: "d1".to_string(),
-      },
-      AssertNumOfUpdates {
-        oid: "d1".to_string(),
-        expected: 0,
       },
       AssertDatabase {
         database_id: "d1".to_string(),

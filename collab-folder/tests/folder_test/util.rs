@@ -8,7 +8,6 @@ use std::sync::{Arc, Once};
 use collab::preclude::CollabBuilder;
 use collab_folder::*;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use tempfile::TempDir;
@@ -52,8 +51,8 @@ pub async fn create_folder_with_data(
   let tempdir = TempDir::new().unwrap();
 
   let path = tempdir.into_path();
-  let db = Arc::new(RocksCollabDB::open(path.clone()).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(uid.as_i64(), Arc::downgrade(&db));
+  let db = Arc::new(RocksCollabDB::open_opt(path.clone(), false).unwrap());
+  let disk_plugin = RocksdbDiskPlugin::new(uid.as_i64(), Arc::downgrade(&db), None);
   let cleaner: Cleaner = Cleaner::new(path);
 
   let collab = CollabBuilder::new(uid.as_i64(), workspace_id)
@@ -80,8 +79,8 @@ pub async fn create_folder_with_data(
 }
 
 pub async fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf) -> FolderTest {
-  let db = Arc::new(RocksCollabDB::open(db_path.clone()).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(uid.as_i64(), Arc::downgrade(&db));
+  let db = Arc::new(RocksCollabDB::open_opt(db_path.clone(), false).unwrap());
+  let disk_plugin = RocksdbDiskPlugin::new(uid.as_i64(), Arc::downgrade(&db), None);
   let cleaner: Cleaner = Cleaner::new(db_path);
   let collab = CollabBuilder::new(1, object_id)
     .with_plugin(disk_plugin)

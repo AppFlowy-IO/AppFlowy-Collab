@@ -26,7 +26,7 @@ impl BlockTestCore {
   pub async fn new() -> Self {
     let db = document_storage();
     let doc_id = "1";
-    let disk_plugin = RocksdbDiskPlugin::new(1, Arc::downgrade(&db));
+    let disk_plugin = RocksdbDiskPlugin::new(1, Arc::downgrade(&db), None);
     let collab = CollabBuilder::new(1, doc_id)
       .with_plugin(disk_plugin)
       .with_device_id("1")
