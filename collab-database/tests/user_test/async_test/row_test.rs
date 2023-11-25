@@ -1,5 +1,6 @@
 use collab_database::rows::CreateRowParams;
 use collab_database::rows::{CellsBuilder, RowId};
+use collab_database::views::OrderObjectPosition;
 use serde_json::{json, Value};
 
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -99,7 +100,7 @@ async fn create_row_test() {
             cells: Default::default(),
             height: 0,
             visibility: false,
-            prev_row_id: None,
+            row_position: OrderObjectPosition::default(),
             timestamp: 0,
           },
         });

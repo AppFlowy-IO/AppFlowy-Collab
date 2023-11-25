@@ -15,7 +15,7 @@ use collab_database::user::{
   CollabFuture, CollabObjectUpdate, CollabObjectUpdateByOid, DatabaseCollabService,
   RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
 };
-use collab_database::views::{CreateDatabaseParams, DatabaseLayout};
+use collab_database::views::{CreateDatabaseParams, DatabaseLayout, OrderObjectPosition};
 use collab_entity::CollabType;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
@@ -177,7 +177,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
       .build(),
     height: 0,
     visibility: true,
-    prev_row_id: None,
+    row_position: OrderObjectPosition::default(),
     timestamp: 0,
   };
   let row_2 = CreateRowParams {
@@ -188,7 +188,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
       .build(),
     height: 0,
     visibility: true,
-    prev_row_id: None,
+    row_position: OrderObjectPosition::default(),
     timestamp: 0,
   };
   let row_3 = CreateRowParams {
@@ -199,7 +199,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
       .build(),
     height: 0,
     visibility: true,
-    prev_row_id: None,
+    row_position: OrderObjectPosition::default(),
     timestamp: 0,
   };
   let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);

@@ -1,5 +1,5 @@
-use collab_database::fields::Field;
 use collab_database::views::CreateViewParams;
+use collab_database::{fields::Field, views::OrderObjectPosition};
 
 use crate::database_test::helper::{
   create_database, create_database_with_default_data, default_field_settings_by_layout,
@@ -9,7 +9,9 @@ use crate::database_test::helper::{
 async fn create_single_field_test() {
   let database_test = create_database(1, "1").await;
   database_test.create_field(
+    None,
     Field::new("f1".to_string(), "text field".to_string(), 0, true),
+    OrderObjectPosition::default(),
     default_field_settings_by_layout(),
   );
 
@@ -57,7 +59,9 @@ async fn create_multiple_field_test() {
   let database_test = create_database(1, "1").await;
   for i in 0..10 {
     database_test.create_field(
+      None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }
@@ -71,7 +75,9 @@ async fn delete_field_test() {
   let database_test = create_database(1, "1").await;
   for i in 0..3 {
     database_test.create_field(
+      None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }
@@ -86,7 +92,9 @@ async fn delete_field_in_views_test() {
   let database_test = create_database(1, "1").await;
   for i in 0..3 {
     database_test.create_field(
+      None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }
@@ -116,7 +124,9 @@ async fn field_order_in_view_test() {
   database_test.create_linked_view(params).unwrap();
   for i in 0..10 {
     database_test.create_field(
+      None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }
@@ -135,7 +145,9 @@ async fn get_field_in_order_test() {
   let database_test = create_database(1, "1").await;
   for i in 0..3 {
     database_test.create_field(
+      None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }
@@ -165,7 +177,9 @@ async fn move_field_test() {
 
   for i in 0..3 {
     database_test.create_field(
+      None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }
@@ -190,7 +204,9 @@ async fn move_field_to_out_of_index_test() {
   let database_test = create_database(1, "1").await;
   for i in 0..3 {
     database_test.create_field(
+      None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }

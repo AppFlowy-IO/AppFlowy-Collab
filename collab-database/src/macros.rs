@@ -112,7 +112,7 @@ macro_rules! impl_bool_update {
 
 #[macro_export]
 macro_rules! impl_any_update {
-  ($setter1: ident,  $setter2: ident,  $key:expr, $value: ident) => {
+  ($setter1: ident, $setter2: ident, $key:expr, $value: ident) => {
     pub fn $setter1(self, value: $value) -> Self {
       self.map_ref.insert_with_txn(self.txn, $key, value);
       self
@@ -129,14 +129,13 @@ macro_rules! impl_any_update {
 #[macro_export]
 macro_rules! impl_order_update {
   ($set_orders: ident,
-    $push_back: ident,
     $remove: ident,
     $move_to: ident,
     $insert: ident,
     $iter_mut: ident,
-    $key:expr,
-    $ty:ident,
-    $array_ty:ident
+    $key: expr,
+    $ty: ident,
+    $array_ty: ident
   ) => {
     pub fn $set_orders(self, orders: Vec<$ty>) -> Self {
       let array_ref = self
@@ -144,18 +143,6 @@ macro_rules! impl_order_update {
         .get_or_create_array_with_txn::<$ty>(self.txn, $key);
       let array = $array_ty::new(array_ref);
       array.extends_with_txn(self.txn, orders);
-      self
-    }
-
-    pub fn $push_back<T: Into<$ty>>(self, order: T) -> Self {
-      let order = order.into();
-      if let Some(array) = self
-        .map_ref
-        .get_array_ref_with_txn(self.txn, $key)
-        .map(|array_ref| $array_ty::new(array_ref))
-      {
-        array.push_with_txn(self.txn, order);
-      }
       self
     }
 
@@ -181,14 +168,23 @@ macro_rules! impl_order_update {
       self
     }
 
-    pub fn $insert<T: Into<$ty>>(self, object: T, prev_object_id: Option<&String>) -> Self {
+    pub fn $insert<T: Into<$ty>>(self, object: T, position: &OrderObjectPosition) -> Self {
       let object = object.into();
       if let Some(array) = self
         .map_ref
         .get_array_ref_with_txn(self.txn, $key)
         .map(|array_ref| $array_ty::new(array_ref))
       {
-        array.insert_with_txn(self.txn, object, prev_object_id)
+        match position {
+          OrderObjectPosition::Start => array.push_front_with_txn(self.txn, object),
+          OrderObjectPosition::Before(next_object_id) => {
+            array.insert_before_with_txn(self.txn, object, &next_object_id)
+          },
+          OrderObjectPosition::After(prev_object_id) => {
+            array.insert_after_with_txn(self.txn, object, &prev_object_id)
+          },
+          OrderObjectPosition::End => array.push_back_with_txn(self.txn, object),
+        };
       }
       self
     }

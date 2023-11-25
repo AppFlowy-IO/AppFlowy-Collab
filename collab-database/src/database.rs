@@ -29,7 +29,7 @@ use crate::user::DatabaseCollabService;
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
   FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap,
-  LayoutSetting, RowOrder, SortMap, ViewDescription, ViewMap,
+  LayoutSetting, OrderObjectPosition, RowOrder, SortMap, ViewDescription, ViewMap,
 };
 
 pub struct Database {
@@ -252,9 +252,11 @@ impl Database {
     let params = CreateRowParamsValidator::validate(params)?;
     let row_order = self.block.create_row(params);
     self.root.with_transact_mut(|txn| {
-      self.views.update_all_views_with_txn(txn, |update| {
-        update.push_row_order(&row_order);
-      });
+      self
+        .views
+        .update_all_views_with_txn(txn, |_view_id, update| {
+          update.insert_row_order(&row_order, &OrderObjectPosition::default());
+        });
     });
     Ok(row_order)
   }
@@ -281,12 +283,14 @@ impl Database {
     view_id: &str,
     params: CreateRowParams,
   ) -> Option<(usize, RowOrder)> {
-    let prev_row_id = params.prev_row_id.clone().map(|value| value.to_string());
+    let row_position = params.row_position.clone();
     let row_order = self.block.create_row(params);
-    self.views.update_all_views_with_txn(txn, |update| {
-      update.insert_row_order(&row_order, prev_row_id.as_ref());
-    });
 
+    self
+      .views
+      .update_all_views_with_txn(txn, |_view_id, update| {
+        update.insert_row_order(&row_order, &row_position);
+      });
     let index = self
       .index_of_row_with_txn(txn, view_id, row_order.id.clone())
       .unwrap_or_default();
@@ -297,9 +301,11 @@ impl Database {
   /// The [RowOrder] of each view representing this row will be removed.
   pub fn remove_row(&self, row_id: &RowId) -> Option<Row> {
     self.root.with_transact_mut(|txn| {
-      self.views.update_all_views_with_txn(txn, |update| {
-        update.remove_row_order(row_id);
-      });
+      self
+        .views
+        .update_all_views_with_txn(txn, |_view_id, update| {
+          update.remove_row_order(row_id);
+        });
       let row = self.block.get_row(row_id);
       self.block.delete_row(row_id);
       Some(row)
@@ -475,37 +481,57 @@ impl Database {
       .collect()
   }
 
-  /// Creates a new field, appends the field_id to the end of field order
-  /// and adds a field setting
+  /// Creates a new field, inserts field order and adds a field setting. See
+  /// `create_field_with_txn` for more information.
   pub fn create_field(
     &self,
+    view_id: Option<&str>,
     field: Field,
+    position: OrderObjectPosition,
     field_settings_by_layout: HashMap<DatabaseLayout, FieldSettingsMap>,
   ) {
     self.root.with_transact_mut(|txn| {
-      self.create_field_with_txn(txn, field, &field_settings_by_layout);
+      self.create_field_with_txn(txn, view_id, field, position, &field_settings_by_layout);
     })
   }
 
+  /// Create a new field that is used by `create_field`, `create_field_with_mut`, and
+  /// `create_linked_view`. In all the database views, insert the field order and add a field setting.
+  /// Then, add the field to the field map.
+  ///
+  /// # Arguments
+  ///
+  /// - `txn`: Read-write transaction in which this field creation will be performed.
+  /// - `view_id`: If specified, the field order will only be inserted according to `position` in that
+  /// specific view. For the others, the field order will be pushed back. If `None`, the field order will
+  /// be inserted according to `position` for all the views.
+  /// - `field`: Field to be inserted.
+  /// - `position`: The position of the new field in the field order array.
+  /// - `field_settings_by_layout`: Helps to create the field settings for the field.
   pub fn create_field_with_txn(
     &self,
     txn: &mut TransactionMut,
+    view_id: Option<&str>,
     field: Field,
+    position: OrderObjectPosition,
     field_settings_by_layout: &HashMap<DatabaseLayout, FieldSettingsMap>,
   ) {
-    self.views.update_all_views_with_txn(txn, |update| {
-      let field_id = field.id.clone();
-      update
-        .push_field_order(&field)
-        .update_field_settings_for_fields(
-          vec![field_id],
-          |field_id, field_setting_update, layout_ty| {
-            field_setting_update.update(
-              field_id,
-              field_settings_by_layout.get(&layout_ty).unwrap().clone(),
-            );
-          },
-        );
+    self.views.update_all_views_with_txn(txn, |id, update| {
+      let update = match view_id {
+        Some(view_id) if id == view_id => update.insert_field_order(&field, &position),
+        Some(_) => update.insert_field_order(&field, &OrderObjectPosition::default()),
+        None => update.insert_field_order(&field, &position),
+      };
+
+      update.update_field_settings_for_fields(
+        vec![field.id.clone()],
+        |field_id, field_setting_update, layout_ty| {
+          field_setting_update.update(
+            field_id,
+            field_settings_by_layout.get(&layout_ty).unwrap().clone(),
+          );
+        },
+      );
     });
     self.fields.insert_field_with_txn(txn, field);
   }
@@ -515,13 +541,20 @@ impl Database {
     view_id: &str,
     name: String,
     field_type: i64,
+    position: OrderObjectPosition,
     f: impl FnOnce(&mut Field),
     field_settings_by_layout: HashMap<DatabaseLayout, FieldSettingsMap>,
   ) -> (usize, Field) {
     let mut field = Field::new(gen_field_id(), name, field_type, false);
     f(&mut field);
     let index = self.root.with_transact_mut(|txn| {
-      self.create_field_with_txn(txn, field.clone(), &field_settings_by_layout);
+      self.create_field_with_txn(
+        txn,
+        Some(view_id),
+        field.clone(),
+        position,
+        &field_settings_by_layout,
+      );
       self
         .index_of_field_with_txn(txn, view_id, &field.id)
         .unwrap_or_default()
@@ -532,25 +565,27 @@ impl Database {
 
   /// Creates a new field, add a field setting, but inserts the field after a
   /// certain field_id
-  fn insert_field_with_txn(
-    &self,
-    txn: &mut TransactionMut,
-    field: Field,
-    prev_field_id: Option<String>,
-  ) {
-    self.views.update_all_views_with_txn(txn, |update| {
-      update.insert_field_order(&field, prev_field_id.as_ref());
-    });
+  fn insert_field_with_txn(&self, txn: &mut TransactionMut, field: Field, prev_field_id: &str) {
+    self
+      .views
+      .update_all_views_with_txn(txn, |_view_id, update| {
+        update.insert_field_order(
+          &field,
+          &OrderObjectPosition::After(prev_field_id.to_string()),
+        );
+      });
     self.fields.insert_field_with_txn(txn, field);
   }
 
   pub fn delete_field(&self, field_id: &str) {
     self.root.with_transact_mut(|txn| {
-      self.views.update_all_views_with_txn(txn, |update| {
-        update
-          .remove_field_order(field_id)
-          .remove_field_setting(field_id);
-      });
+      self
+        .views
+        .update_all_views_with_txn(txn, |_view_id, update| {
+          update
+            .remove_field_order(field_id)
+            .remove_field_setting(field_id);
+        });
       self.fields.delete_field_with_txn(txn, field_id);
     })
   }
@@ -867,7 +902,13 @@ impl Database {
           .into_iter()
           .zip(deps_field_settings.into_iter())
           .for_each(|(field, field_settings)| {
-            self.create_field_with_txn(txn, field, &field_settings);
+            self.create_field_with_txn(
+              txn,
+              None,
+              field,
+              OrderObjectPosition::default(),
+              &field_settings,
+            );
           })
       }
       Ok::<(), DatabaseError>(())
@@ -928,7 +969,7 @@ impl Database {
       cells: row.cells,
       height: row.height,
       visibility: row.visibility,
-      prev_row_id: Some(row.id),
+      row_position: OrderObjectPosition::After(row.id.into()),
       timestamp: timestamp(),
     })
   }
@@ -943,7 +984,7 @@ impl Database {
       if let Some(mut field) = self.fields.get_field_with_txn(txn, field_id) {
         field.id = gen_field_id();
         field.name = f(&field);
-        self.insert_field_with_txn(txn, field.clone(), Some(field_id.to_string()));
+        self.insert_field_with_txn(txn, field.clone(), field_id);
         let index = self
           .index_of_field_with_txn(txn, view_id, &field.id)
           .unwrap_or_default();
@@ -970,7 +1011,7 @@ impl Database {
         cells: row.cells,
         height: row.height,
         visibility: row.visibility,
-        prev_row_id: None,
+        row_position: OrderObjectPosition::End,
         timestamp,
       })
       .collect::<Vec<CreateRowParams>>();

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_database::fields::Field;
-use collab_database::views::{CreateViewParams, DatabaseLayout};
+use collab_database::views::{CreateViewParams, DatabaseLayout, OrderObjectPosition};
 
 use crate::database_test::helper::{
   create_database_with_default_data, default_field_settings_by_layout,
@@ -21,7 +21,9 @@ async fn new_field_new_field_setting_test() {
 
   // Create a new field
   database_test.create_field(
+    None,
     Field::new("f4".to_string(), "text field".to_string(), 0, true),
+    OrderObjectPosition::default(),
     default_field_settings_by_layout(),
   );
 
