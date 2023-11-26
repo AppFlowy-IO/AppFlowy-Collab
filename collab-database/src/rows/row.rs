@@ -501,6 +501,7 @@ pub struct CreateRowParams {
   pub cells: Cells,
   pub height: i32,
   pub visibility: bool,
+  #[serde(skip)]
   pub row_position: OrderObjectPosition,
   pub timestamp: i64,
 }

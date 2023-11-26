@@ -276,4 +276,3 @@ async fn move_field_to_out_of_index_test() {
   assert_eq!(view_1.field_orders[1].id, "f1");
   assert_eq!(view_1.field_orders[2].id, "f2");
 }
-

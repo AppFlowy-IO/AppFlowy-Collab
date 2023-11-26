@@ -229,7 +229,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
   pub fn done(self) {}
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone)]
 pub enum OrderObjectPosition {
   Start,
   Before(String),
