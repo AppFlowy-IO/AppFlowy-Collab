@@ -90,6 +90,13 @@ impl Database {
     Ok(this)
   }
 
+  pub fn flush(&self) -> Result<(), DatabaseError> {
+    if let Some(collab) = self.inner.try_lock() {
+      collab.flush();
+    }
+    Ok(())
+  }
+
   pub fn load_all_rows(&self) {
     let row_ids = self
       .get_inline_row_orders()

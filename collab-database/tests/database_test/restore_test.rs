@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use assert_json_diff::assert_json_include;
 use collab_database::database::DatabaseData;
 use collab_database::rows::CreateRowParams;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use serde_json::{json, Value};
+
+use assert_json_diff::assert_json_include;
 
 use crate::database_test::helper::{
   create_database_with_db, restore_database_from_db, DatabaseTest,
@@ -129,7 +130,7 @@ const HISTORY_DOCUMENT_020: &str = "020_database";
 #[tokio::test]
 async fn open_020_history_database_test() {
   let (_cleaner, db_path) = unzip_history_database_db(HISTORY_DOCUMENT_020).unwrap();
-  let db = std::sync::Arc::new(RocksCollabDB::open(db_path).unwrap());
+  let db = std::sync::Arc::new(RocksCollabDB::open_opt(db_path, false).unwrap());
   let database_test = restore_database_from_db(
     221439819971039232,
     "c0e69740-49f0-4790-a488-702e2750ba8d",

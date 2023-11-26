@@ -1,7 +1,8 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use yrs::{Doc, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
@@ -111,19 +112,17 @@ pub struct EncodedCollabV1 {
 }
 
 impl EncodedCollabV1 {
-  pub fn new<T: Into<Bytes>>(state_vector: T, state: T) -> Self {
+  pub fn new<T: Into<Bytes>>(state_vector: T, doc_state: T) -> Self {
     Self {
       state_vector: state_vector.into(),
-      doc_state: state.into(),
+      doc_state: doc_state.into(),
     }
   }
 
-  #[allow(dead_code)]
   pub fn encode_to_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
     bincode::serialize(self)
   }
 
-  #[allow(dead_code)]
   pub fn decode_from_bytes(encoded: &[u8]) -> Result<EncodedCollabV1, bincode::Error> {
     bincode::deserialize(encoded)
   }

@@ -8,6 +8,24 @@ pub enum PersistenceError {
   #[error(transparent)]
   RocksDb(#[from] rocksdb::Error),
 
+  #[cfg(feature = "rocksdb_persistence")]
+  #[error("Rocksdb corruption:{0}")]
+  RocksdbCorruption(String),
+
+  #[cfg(feature = "rocksdb_persistence")]
+  #[error("Rocksdb repair:{0}")]
+  RocksdbRepairFail(String),
+
+  #[cfg(feature = "rocksdb_persistence")]
+  #[error("{0}")]
+  RocksdbBusy(String),
+
+  // If the database is already locked by another process, it will return an IO error. It
+  // happens when the database is already opened by another process.
+  #[cfg(feature = "rocksdb_persistence")]
+  #[error("{0}")]
+  RocksdbIOError(String),
+
   #[error(transparent)]
   Bincode(#[from] bincode::Error),
 
