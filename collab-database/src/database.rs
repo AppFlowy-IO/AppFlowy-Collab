@@ -525,9 +525,9 @@ impl Database {
   ) {
     self.views.update_all_views_with_txn(txn, |id, update| {
       let update = match view_id {
-        Some(view_id) if id == view_id => update.insert_field_order(&field, &position),
+        Some(view_id) if id == view_id => update.insert_field_order(&field, position),
         Some(_) => update.insert_field_order(&field, &OrderObjectPosition::default()),
-        None => update.insert_field_order(&field, &position),
+        None => update.insert_field_order(&field, position),
       };
 
       update.update_field_settings_for_fields(
