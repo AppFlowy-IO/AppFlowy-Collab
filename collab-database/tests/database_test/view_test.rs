@@ -102,7 +102,7 @@ async fn create_database_field_test() {
       name: "my third field".to_string(),
       ..Default::default()
     },
-    OrderObjectPosition::default(),
+    &OrderObjectPosition::default(),
     default_field_settings_by_layout(),
   );
 

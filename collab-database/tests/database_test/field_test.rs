@@ -11,7 +11,7 @@ async fn create_single_field_test() {
   database_test.create_field(
     None,
     Field::new("f1".to_string(), "text field".to_string(), 0, true),
-    OrderObjectPosition::default(),
+    &OrderObjectPosition::default(),
     default_field_settings_by_layout(),
   );
 
@@ -61,7 +61,7 @@ async fn create_multiple_field_test() {
     database_test.create_field(
       None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
-      OrderObjectPosition::default(),
+      &OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }
@@ -84,7 +84,7 @@ async fn create_field_in_view_test() {
     database_test.create_field(
       None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
-      OrderObjectPosition::default(),
+      &OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }
@@ -102,7 +102,7 @@ async fn create_field_in_view_test() {
   database_test.create_field(
     Some("v2"),
     Field::new("f4".to_string(), "text field 4".to_string(), 0, false),
-    OrderObjectPosition::Start,
+    &OrderObjectPosition::Start,
     default_field_settings_by_layout(),
   );
 
@@ -126,7 +126,7 @@ async fn delete_field_test() {
     database_test.create_field(
       None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
-      OrderObjectPosition::default(),
+      &OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }
@@ -143,7 +143,7 @@ async fn delete_field_in_views_test() {
     database_test.create_field(
       None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
-      OrderObjectPosition::default(),
+      &OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }
@@ -175,7 +175,7 @@ async fn field_order_in_view_test() {
     database_test.create_field(
       None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
-      OrderObjectPosition::default(),
+      &OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }
@@ -196,7 +196,7 @@ async fn get_field_in_order_test() {
     database_test.create_field(
       None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
-      OrderObjectPosition::default(),
+      &OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }
@@ -228,7 +228,7 @@ async fn move_field_test() {
     database_test.create_field(
       None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
-      OrderObjectPosition::default(),
+      &OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }
@@ -255,7 +255,7 @@ async fn move_field_to_out_of_index_test() {
     database_test.create_field(
       None,
       Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
-      OrderObjectPosition::default(),
+      &OrderObjectPosition::default(),
       default_field_settings_by_layout(),
     );
   }

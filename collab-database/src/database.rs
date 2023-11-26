@@ -494,7 +494,7 @@ impl Database {
     &self,
     view_id: Option<&str>,
     field: Field,
-    position: OrderObjectPosition,
+    position: &OrderObjectPosition,
     field_settings_by_layout: HashMap<DatabaseLayout, FieldSettingsMap>,
   ) {
     self.root.with_transact_mut(|txn| {
@@ -520,7 +520,7 @@ impl Database {
     txn: &mut TransactionMut,
     view_id: Option<&str>,
     field: Field,
-    position: OrderObjectPosition,
+    position: &OrderObjectPosition,
     field_settings_by_layout: &HashMap<DatabaseLayout, FieldSettingsMap>,
   ) {
     self.views.update_all_views_with_txn(txn, |id, update| {
@@ -548,7 +548,7 @@ impl Database {
     view_id: &str,
     name: String,
     field_type: i64,
-    position: OrderObjectPosition,
+    position: &OrderObjectPosition,
     f: impl FnOnce(&mut Field),
     field_settings_by_layout: HashMap<DatabaseLayout, FieldSettingsMap>,
   ) -> (usize, Field) {
@@ -913,7 +913,7 @@ impl Database {
               txn,
               None,
               field,
-              OrderObjectPosition::default(),
+              &OrderObjectPosition::default(),
               &field_settings,
             );
           })

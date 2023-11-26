@@ -134,7 +134,7 @@ async fn insert_multi_type_options_test() {
       type_options,
       ..Default::default()
     },
-    OrderObjectPosition::default(),
+    &OrderObjectPosition::default(),
     default_field_settings_by_layout(),
   );
 

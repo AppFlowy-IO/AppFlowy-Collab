@@ -273,19 +273,19 @@ pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> D
   database_test.create_field(
     None,
     field_1,
-    OrderObjectPosition::default(),
+    &OrderObjectPosition::default(),
     field_settings_by_layout.clone(),
   );
   database_test.create_field(
     None,
     field_2,
-    OrderObjectPosition::default(),
+    &OrderObjectPosition::default(),
     field_settings_by_layout.clone(),
   );
   database_test.create_field(
     None,
     field_3,
-    OrderObjectPosition::default(),
+    &OrderObjectPosition::default(),
     field_settings_by_layout,
   );
 

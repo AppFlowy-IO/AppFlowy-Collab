@@ -23,7 +23,7 @@ async fn new_field_new_field_setting_test() {
   database_test.create_field(
     None,
     Field::new("f4".to_string(), "text field".to_string(), 0, true),
-    OrderObjectPosition::default(),
+    &OrderObjectPosition::default(),
     default_field_settings_by_layout(),
   );
 
