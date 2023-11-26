@@ -71,6 +71,55 @@ async fn create_multiple_field_test() {
 }
 
 #[tokio::test]
+async fn create_field_in_view_test() {
+  let database_test = create_database(1, "1").await;
+  let params = CreateViewParams {
+    database_id: "1".to_string(),
+    view_id: "v2".to_string(),
+    ..Default::default()
+  };
+  database_test.create_linked_view(params).unwrap();
+
+  for i in 0..3 {
+    database_test.create_field(
+      None,
+      Field::new(format!("f{}", i), format!("text field {}", i), 0, true),
+      OrderObjectPosition::default(),
+      default_field_settings_by_layout(),
+    );
+  }
+
+  let fields = database_test.get_fields_in_view("v1", None);
+  assert_eq!(fields[0].id, "f0");
+  assert_eq!(fields[1].id, "f1");
+  assert_eq!(fields[2].id, "f2");
+
+  let fields = database_test.get_fields_in_view("v2", None);
+  assert_eq!(fields[0].id, "f0");
+  assert_eq!(fields[1].id, "f1");
+  assert_eq!(fields[2].id, "f2");
+
+  database_test.create_field(
+    Some("v2"),
+    Field::new("f4".to_string(), "text field 4".to_string(), 0, false),
+    OrderObjectPosition::Start,
+    default_field_settings_by_layout(),
+  );
+
+  let fields = database_test.get_fields_in_view("v1", None);
+  assert_eq!(fields[0].id, "f0");
+  assert_eq!(fields[1].id, "f1");
+  assert_eq!(fields[2].id, "f2");
+  assert_eq!(fields[3].id, "f4");
+
+  let fields = database_test.get_fields_in_view("v2", None);
+  assert_eq!(fields[0].id, "f4");
+  assert_eq!(fields[1].id, "f0");
+  assert_eq!(fields[2].id, "f1");
+  assert_eq!(fields[3].id, "f2");
+}
+
+#[tokio::test]
 async fn delete_field_test() {
   let database_test = create_database(1, "1").await;
   for i in 0..3 {
@@ -227,3 +276,4 @@ async fn move_field_to_out_of_index_test() {
   assert_eq!(view_1.field_orders[1].id, "f1");
   assert_eq!(view_1.field_orders[2].id, "f2");
 }
+
