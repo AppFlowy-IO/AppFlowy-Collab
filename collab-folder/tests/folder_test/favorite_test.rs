@@ -30,7 +30,7 @@ async fn create_favorite_test() {
   let view_2 = make_test_view("2", workspace_id.as_str(), vec![]);
   folder_test.insert_view(view_2, None);
 
-  let views = folder_test.get_workspace_views(&workspace_id);
+  let views = folder_test.get_workspace_views();
   assert_eq!(views.len(), 2);
   assert_eq!(views[0].id, "1");
   assert!(views[0].is_favorite);
@@ -53,13 +53,13 @@ async fn add_favorite_view_and_then_remove_test() {
   folder_test.insert_view(view_1, None);
   folder_test.add_favorites(vec!["1".to_string()]);
 
-  let views = folder_test.get_workspace_views(&workspace_id);
+  let views = folder_test.get_workspace_views();
   assert_eq!(views.len(), 1);
   assert_eq!(views[0].id, "1");
   assert!(views[0].is_favorite);
 
   folder_test.delete_favorites(vec!["1".to_string()]);
-  let views = folder_test.get_workspace_views(&workspace_id);
+  let views = folder_test.get_workspace_views();
   assert!(!views[0].is_favorite);
 }
 

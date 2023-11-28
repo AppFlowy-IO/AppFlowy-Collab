@@ -1,9 +1,10 @@
-use serde::Serialize;
-use serde_json;
-use serde_json::Value;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Deref;
+
+use serde::{Deserialize, Serialize};
+use serde_json;
+use serde_json::Value;
 
 /// [Block] Struct.
 ///
@@ -11,7 +12,7 @@ use std::ops::Deref;
 /// The relationship between blocks is maintained by the [DocumentMeta] children_map.
 /// Every block has `children` field, and the `children` field is the key of the children map.
 /// The children map is a map of array, and the value of the children map is the id of the child [Block].
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Block {
   pub id: String,
   pub ty: String,

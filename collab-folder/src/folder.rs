@@ -183,7 +183,7 @@ impl Folder {
     let current_view = self.get_current_view_with_txn(&txn).unwrap_or_default();
 
     let mut views = vec![];
-    for view in self.get_workspace_views_with_txn(&txn, &workspace_id) {
+    for view in self.get_workspace_views_with_txn(&txn) {
       views.extend(self.get_view_recursively_with_txn(&txn, &view.id));
     }
 
@@ -236,22 +236,25 @@ impl Folder {
     }
   }
 
+  pub fn try_get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Result<String, Error> {
+    match self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE) {
+      None => Err(anyhow::anyhow!("No workspace")),
+      Some(workspace_id) => Ok(workspace_id),
+    }
+  }
+
   pub fn get_current_workspace_views(&self) -> Vec<Arc<View>> {
     let txn = self.meta.transact();
     self.get_current_workspace_views_with_txn(&txn)
   }
 
   pub fn get_current_workspace_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Arc<View>> {
-    if let Some(workspace_id) = self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE) {
-      self.get_workspace_views_with_txn(txn, &workspace_id)
-    } else {
-      vec![]
-    }
+    self.get_workspace_views_with_txn(txn)
   }
 
-  pub fn get_workspace_views(&self, workspace_id: &str) -> Vec<Arc<View>> {
+  pub fn get_workspace_views(&self) -> Vec<Arc<View>> {
     let txn = self.meta.transact();
-    self.get_workspace_views_with_txn(&txn, workspace_id)
+    self.get_workspace_views_with_txn(&txn)
   }
 
   /// Fetches all views associated with a specific workspace, using a provided transaction.
@@ -265,12 +268,11 @@ impl Folder {
   /// * `txn`: A transaction that is used to ensure the consistency of the fetched data.
   /// * `workspace_id`: A string slice that represents the ID of the workspace whose views are to be fetched.
   ///
-  pub fn get_workspace_views_with_txn<T: ReadTxn>(
-    &self,
-    txn: &T,
-    workspace_id: &str,
-  ) -> Vec<Arc<View>> {
-    self.views.get_views_belong_to_with_txn(txn, workspace_id)
+  pub fn get_workspace_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Arc<View>> {
+    match self.try_get_workspace_id() {
+      Ok(workspace_id) => self.views.get_views_belong_to_with_txn(txn, &workspace_id),
+      Err(_) => vec![],
+    }
   }
 
   /// Inserts a new view into the workspace.

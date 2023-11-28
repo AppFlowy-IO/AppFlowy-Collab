@@ -31,7 +31,7 @@ async fn create_recent_views_test() {
   let view_2 = make_test_view(id_2, workspace_id.as_str(), vec![]);
   folder_test.insert_view(view_2, None);
 
-  let views = folder_test.get_workspace_views(&workspace_id);
+  let views = folder_test.get_workspace_views();
   assert_eq!(views.len(), 2);
   assert_eq!(views[0].id, id_1);
   assert_eq!(views[1].id, id_2);
@@ -53,14 +53,14 @@ async fn add_view_into_recent_and_then_remove_it_test() {
   folder_test.insert_view(view_1, None);
   folder_test.add_recent_view_ids(vec![id_1.to_string()]);
 
-  let views = folder_test.get_workspace_views(&workspace_id);
+  let views = folder_test.get_workspace_views();
   assert_eq!(views.len(), 1);
   assert_eq!(views[0].id, id_1);
   // in recent section
   assert!(folder_test.is_view_in_section(Section::Recent, &views[0].id));
 
   folder_test.delete_recent_view_ids(vec![id_1.to_string()]);
-  let views = folder_test.get_workspace_views(&workspace_id);
+  let views = folder_test.get_workspace_views();
   // not in recent section
   assert!(!folder_test.is_view_in_section(Section::Recent, &views[0].id));
 }
