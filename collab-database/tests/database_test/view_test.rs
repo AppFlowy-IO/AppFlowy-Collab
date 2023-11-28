@@ -2,7 +2,9 @@ use collab::preclude::lib0Any;
 use collab_database::database::{gen_row_id, DatabaseData};
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
-use collab_database::views::{CreateViewParams, DatabaseLayout, LayoutSettingBuilder};
+use collab_database::views::{
+  CreateViewParams, DatabaseLayout, LayoutSettingBuilder, OrderObjectPosition,
+};
 use nanoid::nanoid;
 use serde_json::json;
 
@@ -94,11 +96,13 @@ async fn create_database_field_test() {
 
   let field_id = nanoid!(4);
   database_test.create_field(
+    None,
     Field {
       id: field_id.clone(),
       name: "my third field".to_string(),
       ..Default::default()
     },
+    &OrderObjectPosition::default(),
     default_field_settings_by_layout(),
   );
 

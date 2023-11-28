@@ -11,7 +11,7 @@ use collab_database::rows::{CellsBuilder, CreateRowParams};
 use collab_database::user::DatabaseCollabService;
 use collab_database::views::{
   CreateDatabaseParams, DatabaseLayout, FieldSettingsByFieldIdMap, FieldSettingsMap, LayoutSetting,
-  LayoutSettings,
+  LayoutSettings, OrderObjectPosition,
 };
 use collab_entity::CollabType;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -233,7 +233,7 @@ pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> D
       .build(),
     height: 0,
     visibility: true,
-    prev_row_id: None,
+    row_position: OrderObjectPosition::default(),
     timestamp: 0,
   };
   let row_2 = CreateRowParams {
@@ -244,7 +244,7 @@ pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> D
       .build(),
     height: 0,
     visibility: true,
-    prev_row_id: None,
+    row_position: OrderObjectPosition::default(),
     timestamp: 0,
   };
   let row_3 = CreateRowParams {
@@ -255,7 +255,7 @@ pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> D
       .build(),
     height: 0,
     visibility: true,
-    prev_row_id: None,
+    row_position: OrderObjectPosition::default(),
     timestamp: 0,
   };
 
@@ -270,9 +270,24 @@ pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> D
 
   let field_settings_by_layout = default_field_settings_by_layout();
 
-  database_test.create_field(field_1, field_settings_by_layout.clone());
-  database_test.create_field(field_2, field_settings_by_layout.clone());
-  database_test.create_field(field_3, field_settings_by_layout);
+  database_test.create_field(
+    None,
+    field_1,
+    &OrderObjectPosition::default(),
+    field_settings_by_layout.clone(),
+  );
+  database_test.create_field(
+    None,
+    field_2,
+    &OrderObjectPosition::default(),
+    field_settings_by_layout.clone(),
+  );
+  database_test.create_field(
+    None,
+    field_3,
+    &OrderObjectPosition::default(),
+    field_settings_by_layout,
+  );
 
   database_test.set_field_settings("v1", field_settings_for_default_database());
 

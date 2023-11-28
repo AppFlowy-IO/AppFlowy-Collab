@@ -1,6 +1,6 @@
 use collab::core::any_map::AnyMapExtension;
 use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
-use collab_database::views::CreateDatabaseParams;
+use collab_database::views::{CreateDatabaseParams, OrderObjectPosition};
 
 use crate::database_test::helper::default_field_settings_by_layout;
 use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
@@ -45,6 +45,7 @@ async fn insert_multi_type_options_test() {
   );
 
   database.lock().create_field(
+    None,
     Field {
       id: "f2".to_string(),
       name: "second field".to_string(),
@@ -52,6 +53,7 @@ async fn insert_multi_type_options_test() {
       type_options,
       ..Default::default()
     },
+    &OrderObjectPosition::default(),
     default_field_settings_by_layout(),
   );
 

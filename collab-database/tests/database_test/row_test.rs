@@ -1,6 +1,6 @@
 use collab_database::database::gen_row_id;
 use collab_database::rows::{meta_id_from_row_id, CreateRowParams, RowId, RowMetaKey};
-use collab_database::views::CreateViewParams;
+use collab_database::views::{CreateViewParams, OrderObjectPosition};
 use uuid::Uuid;
 
 use crate::database_test::helper::{create_database, create_database_with_default_data};
@@ -110,7 +110,7 @@ async fn insert_row_in_views_test() {
   let database_test = create_database_with_default_data(1, "1").await;
   let row = CreateRowParams {
     id: 4.into(),
-    prev_row_id: Some(2.into()),
+    row_position: OrderObjectPosition::After("2".to_string()),
     ..Default::default()
   };
   database_test.create_row_in_view("v1", row);
@@ -120,6 +120,35 @@ async fn insert_row_in_views_test() {
   assert_eq!(rows[1].id, 2.into());
   assert_eq!(rows[2].id, 4.into());
   assert_eq!(rows[3].id, 3.into());
+
+  let row = CreateRowParams {
+    id: 5.into(),
+    row_position: OrderObjectPosition::Before(2.to_string()),
+    ..Default::default()
+  };
+  database_test.create_row_in_view("v1", row);
+
+  let rows = database_test.get_rows_for_view("v1");
+  assert_eq!(rows[0].id, 1.into());
+  assert_eq!(rows[1].id, 5.into());
+  assert_eq!(rows[2].id, 2.into());
+  assert_eq!(rows[3].id, 4.into());
+  assert_eq!(rows[4].id, 3.into());
+
+  let row = CreateRowParams {
+    id: 6.into(),
+    row_position: OrderObjectPosition::After(10.to_string()),
+    ..Default::default()
+  };
+  database_test.create_row_in_view("v1", row);
+
+  let rows = database_test.get_rows_for_view("v1");
+  assert_eq!(rows[0].id, 1.into());
+  assert_eq!(rows[1].id, 5.into());
+  assert_eq!(rows[2].id, 2.into());
+  assert_eq!(rows[3].id, 4.into());
+  assert_eq!(rows[4].id, 3.into());
+  assert_eq!(rows[5].id, 6.into());
 }
 
 #[tokio::test]
@@ -127,6 +156,7 @@ async fn insert_row_at_front_in_views_test() {
   let database_test = create_database_with_default_data(1, "1").await;
   let row = CreateRowParams {
     id: 4.into(),
+    row_position: OrderObjectPosition::Start,
     ..Default::default()
   };
   database_test.create_row_in_view("v1", row);
@@ -143,7 +173,6 @@ async fn insert_row_at_last_in_views_test() {
   let database_test = create_database_with_default_data(1, "1").await;
   let row = CreateRowParams {
     id: 4.into(),
-    prev_row_id: Some(3.into()),
     ..Default::default()
   };
   database_test.create_row_in_view("v1", row);

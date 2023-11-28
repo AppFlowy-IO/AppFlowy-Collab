@@ -229,6 +229,15 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
   pub fn done(self) {}
 }
 
+#[derive(Debug, Default, Clone)]
+pub enum OrderObjectPosition {
+  Start,
+  Before(String),
+  After(String),
+  #[default]
+  End,
+}
+
 pub struct DatabaseViewUpdate<'a, 'b> {
   map_ref: &'a MapRef,
   txn: &'a mut TransactionMut<'b>,
@@ -263,7 +272,6 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
 
   impl_order_update!(
     set_row_orders,
-    push_row_order,
     remove_row_order,
     move_row_order,
     insert_row_order,
@@ -275,7 +283,6 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
 
   impl_order_update!(
     set_field_orders,
-    push_field_order,
     remove_field_order,
     move_field_order,
     insert_field_order,
@@ -452,8 +459,8 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   }
 }
 
-pub fn view_id_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<String> {
-  map_ref.get_str_with_txn(txn, VIEW_ID)
+pub fn view_id_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> String {
+  map_ref.get_str_with_txn(txn, VIEW_ID).unwrap_or_default()
 }
 
 /// Return a [ViewDescription] from a map ref
@@ -610,33 +617,55 @@ pub trait OrderArray {
     }
   }
 
+  /// Pushes the given object to the front of the array.
+  fn push_front_with_txn(&self, txn: &mut TransactionMut, object: Self::Object) {
+    self.array_ref().push_front(txn, object);
+  }
+
   /// Pushes the given object to the end of the array.
-  fn push_with_txn(&self, txn: &mut TransactionMut, object: Self::Object) {
+  fn push_back_with_txn(&self, txn: &mut TransactionMut, object: Self::Object) {
     self.array_ref().push_back(txn, object);
   }
 
-  /// Insert the given object to the array after the given previous object.
-  /// If the previous object is not found, the object will be inserted to the end of the array.
-  /// If the previous object is None, the object will be inserted to the beginning of the array.
-  fn insert_with_txn(
+  /// Insert the given object to the array before the given previous object.
+  fn insert_before_with_txn(
     &self,
     txn: &mut TransactionMut,
     object: Self::Object,
-    prev_object_id: Option<&String>,
+    next_object_id: &str,
   ) {
-    if let Some(prev_object_id) = prev_object_id {
-      match self.get_position_with_txn(txn, &prev_object_id.to_owned()) {
-        None => {
-          self.array_ref().push_back(txn, object);
-        },
-        Some(pos) => {
-          let next: u32 = pos + 1;
-          self.array_ref().insert(txn, next, object);
-        },
-      }
-    } else {
-      self.array_ref().push_front(txn, object);
-    }
+    match self.get_position_with_txn(txn, next_object_id) {
+      Some(pos) => self.array_ref().insert(txn, pos, object),
+      None => {
+        tracing::warn!(
+          "\"{}\" isn't found in the order array, appending to the end instead",
+          next_object_id
+        );
+        self.array_ref().push_back(txn, object)
+      },
+    };
+  }
+
+  /// Insert the given object to the array after the given previous object.
+  fn insert_after_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    object: Self::Object,
+    prev_object_id: &str,
+  ) {
+    match self.get_position_with_txn(txn, prev_object_id) {
+      Some(pos) => {
+        let next: u32 = pos + 1;
+        self.array_ref().insert(txn, next, object)
+      },
+      None => {
+        tracing::warn!(
+          "\"{}\" isn't found in the order array, appending to the end instead",
+          prev_object_id
+        );
+        self.array_ref().push_back(txn, object)
+      },
+    };
   }
 
   /// Returns a list of Objects with a transaction.

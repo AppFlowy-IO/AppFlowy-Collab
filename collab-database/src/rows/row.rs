@@ -17,7 +17,7 @@ use uuid::Uuid;
 use crate::database::{gen_row_id, timestamp};
 use crate::error::DatabaseError;
 use crate::rows::{Cell, Cells, CellsUpdate, RowId, RowMeta, RowMetaUpdate};
-use crate::views::RowOrder;
+use crate::views::{OrderObjectPosition, RowOrder};
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 
 pub type BlockId = i64;
@@ -501,8 +501,8 @@ pub struct CreateRowParams {
   pub cells: Cells,
   pub height: i32,
   pub visibility: bool,
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub prev_row_id: Option<RowId>,
+  #[serde(skip)]
+  pub row_position: OrderObjectPosition,
   pub timestamp: i64,
 }
 
@@ -512,12 +512,6 @@ impl CreateRowParamsValidator {
   pub(crate) fn validate(mut params: CreateRowParams) -> Result<CreateRowParams, DatabaseError> {
     if params.id.is_empty() {
       return Err(DatabaseError::InvalidRowID("row_id is empty"));
-    }
-
-    if let Some(prev_row_id) = &params.prev_row_id {
-      if prev_row_id.is_empty() {
-        return Err(DatabaseError::InvalidRowID("prev_row_id is empty"));
-      }
     }
 
     if params.timestamp == 0 {
@@ -535,7 +529,7 @@ impl Default for CreateRowParams {
       cells: Default::default(),
       height: 60,
       visibility: true,
-      prev_row_id: None,
+      row_position: OrderObjectPosition::default(),
       timestamp: 0,
     }
   }
@@ -548,7 +542,7 @@ impl CreateRowParams {
       cells: Cells::default(),
       height: 60,
       visibility: true,
-      prev_row_id: None,
+      row_position: OrderObjectPosition::default(),
       timestamp: timestamp(),
     }
   }

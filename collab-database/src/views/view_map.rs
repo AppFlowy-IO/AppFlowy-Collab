@@ -14,6 +14,8 @@ use crate::views::{
   RowOrderArray, SortMap, ViewBuilder, ViewDescription, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
 };
 
+use super::view_id_from_map_ref;
+
 pub struct ViewMap {
   container: MapRefWrapper,
 }
@@ -258,7 +260,7 @@ impl ViewMap {
 
   pub fn update_all_views<F>(&self, f: F)
   where
-    F: Fn(DatabaseViewUpdate),
+    F: Fn(String, DatabaseViewUpdate),
   {
     self
       .container
@@ -267,7 +269,7 @@ impl ViewMap {
 
   pub fn update_all_views_with_txn<F>(&self, txn: &mut TransactionMut, f: F)
   where
-    F: Fn(DatabaseViewUpdate),
+    F: Fn(String, DatabaseViewUpdate),
   {
     let map_refs = self
       .container
@@ -276,9 +278,10 @@ impl ViewMap {
       .collect::<Vec<MapRef>>();
 
     for map_ref in map_refs {
+      let view_id = view_id_from_map_ref(&map_ref, txn);
       let mut update = DatabaseViewUpdate::new(txn, &map_ref);
       update = update.set_modified_at(timestamp());
-      f(update)
+      f(view_id, update)
     }
   }
 

@@ -8,7 +8,7 @@ use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::WorkspaceDatabase;
-use collab_database::views::CreateDatabaseParams;
+use collab_database::views::{CreateDatabaseParams, OrderObjectPosition};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -198,7 +198,7 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
       .build(),
     height: 0,
     visibility: true,
-    prev_row_id: None,
+    row_position: OrderObjectPosition::default(),
     timestamp: 0,
   };
   let row_2 = CreateRowParams {
@@ -209,7 +209,7 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
       .build(),
     height: 0,
     visibility: true,
-    prev_row_id: None,
+    row_position: OrderObjectPosition::default(),
     timestamp: 0,
   };
   let row_3 = CreateRowParams {
@@ -220,7 +220,7 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
       .build(),
     height: 0,
     visibility: true,
-    prev_row_id: None,
+    row_position: OrderObjectPosition::default(),
     timestamp: 0,
   };
   let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);
