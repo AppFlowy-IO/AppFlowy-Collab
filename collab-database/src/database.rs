@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 pub use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{Block, BlockEvent};
+use crate::database_observer::DatabaseNotify;
 use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldMap};
@@ -55,6 +56,7 @@ pub struct DatabaseContext {
   pub db: Weak<RocksCollabDB>,
   pub collab: Arc<MutexCollab>,
   pub collab_service: Arc<dyn DatabaseCollabService>,
+  pub notifier: DatabaseNotify,
 }
 
 impl Database {
@@ -155,6 +157,7 @@ impl Database {
           context.uid,
           context.db.clone(),
           context.collab_service.clone(),
+          context.notifier.row_change_tx.clone(),
         );
         drop(collab_guard);
 
@@ -210,6 +213,7 @@ impl Database {
       context.uid,
       context.db.clone(),
       context.collab_service.clone(),
+      context.notifier.row_change_tx.clone()
     );
 
     Ok(Self {

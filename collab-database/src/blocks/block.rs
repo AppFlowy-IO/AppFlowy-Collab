@@ -13,6 +13,7 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use crate::blocks::task_controller::{BlockTask, BlockTaskController};
+use crate::database_observer::RowChangeSender;
 use crate::rows::{
   meta_id_from_row_id, Cell, DatabaseRow, MutexDatabaseRow, Row, RowDetail, RowId, RowMeta,
   RowMetaKey, RowMetaUpdate, RowUpdate,
@@ -45,6 +46,7 @@ impl Block {
     uid: i64,
     collab_db: Weak<RocksCollabDB>,
     collab_service: Arc<dyn DatabaseCollabService>,
+    row_change_tx: RowChangeSender,
   ) -> Block {
     let cache = Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap())));
     let controller = BlockTaskController::new(collab_db.clone(), Arc::downgrade(&collab_service));
