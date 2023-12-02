@@ -13,9 +13,10 @@ use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use serde_json::Value;
+use tempfile::TempDir;
 
 use crate::database_test::helper::field_settings_for_default_database;
-use crate::helper::{db_path, TestTextCell};
+use crate::helper::{make_rocks_db, TestTextCell};
 use crate::user_test::helper::workspace_database_with_db;
 
 pub enum DatabaseScript {
@@ -69,7 +70,8 @@ pub async fn database_test(config: CollabPersistenceConfig) -> DatabaseTest {
 
 impl DatabaseTest {
   pub async fn new(config: CollabPersistenceConfig) -> Self {
-    let db_path = db_path();
+    let tempdir = TempDir::new().unwrap();
+    let db_path = tempdir.into_path();
     let collab_db = Arc::new(RocksCollabDB::open_opt(db_path.clone(), false).unwrap());
     let workspace_database =
       workspace_database_with_db(1, Arc::downgrade(&collab_db), Some(config.clone())).await;

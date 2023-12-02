@@ -7,6 +7,7 @@ mod row_order;
 mod sort;
 mod view;
 mod view_map;
+mod view_observer;
 
 pub use field_order::*;
 pub use field_settings::*;
@@ -17,3 +18,4 @@ pub use row_order::*;
 pub use sort::*;
 pub use view::*;
 pub use view_map::*;
+pub use view_observer::*;

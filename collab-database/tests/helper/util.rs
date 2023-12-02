@@ -567,14 +567,15 @@ impl From<TestFieldSetting> for FieldSettingsMap {
 }
 
 pub fn make_rocks_db() -> Arc<RocksCollabDB> {
-  let path = db_path();
+  let tempdir = TempDir::new().unwrap();
+  let path = tempdir.into_path();
   Arc::new(RocksCollabDB::open_opt(path, false).unwrap())
 }
 
-pub fn db_path() -> PathBuf {
+pub fn setup_log() {
   static START: Once = Once::new();
   START.call_once(|| {
-    let level = "debug";
+    let level = "trace";
     let mut filters = vec![];
     filters.push(format!("collab_persistence={}", level));
     filters.push(format!("collab={}", level));
@@ -586,9 +587,6 @@ pub fn db_path() -> PathBuf {
       .finish();
     subscriber.try_init().unwrap();
   });
-
-  let tempdir = TempDir::new().unwrap();
-  tempdir.into_path()
 }
 
 pub fn unzip_history_database_db(folder_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {

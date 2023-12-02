@@ -3,8 +3,8 @@ use std::sync::{Arc, Weak};
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::{
-  lib0Any, ArrayRef, Collab, Map, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
-  Transaction, TransactionMut, YrsValue,
+  lib0Any, ArrayRefWrapper, Collab, DeepEventsSubscription, Map, MapPrelim, MapRef,
+  MapRefExtension, MapRefWrapper, ReadTxn, Transaction, TransactionMut, YrsValue,
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -16,7 +16,10 @@ use uuid::Uuid;
 
 use crate::database::{gen_row_id, timestamp};
 use crate::error::DatabaseError;
-use crate::rows::{Cell, Cells, CellsUpdate, RowId, RowMeta, RowMetaUpdate};
+use crate::rows::{
+  subscribe_row_data_change, Cell, Cells, CellsUpdate, RowChangeSender, RowId, RowMeta,
+  RowMetaUpdate,
+};
 use crate::views::{OrderObjectPosition, RowOrder};
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 
@@ -36,8 +39,10 @@ pub struct DatabaseRow {
   data: MapRefWrapper,
   meta: MapRefWrapper,
   #[allow(dead_code)]
-  comments: ArrayRef,
+  comments: ArrayRefWrapper,
   collab_db: Weak<RocksCollabDB>,
+  #[allow(dead_code)]
+  subscription: Option<DeepEventsSubscription>,
 }
 
 impl DatabaseRow {
@@ -47,9 +52,10 @@ impl DatabaseRow {
     row_id: RowId,
     collab_db: Weak<RocksCollabDB>,
     collab: Arc<MutexCollab>,
+    change_tx: Option<RowChangeSender>,
   ) -> Self {
     let row = row.into();
-    let database_row = Self::new(uid, row_id, collab_db, collab);
+    let database_row = Self::new(uid, row_id, collab_db, collab, change_tx);
     let data = database_row.data.clone();
     let meta = database_row.meta.clone();
     database_row.collab.lock().with_origin_transact_mut(|txn| {
@@ -74,6 +80,7 @@ impl DatabaseRow {
     row_id: RowId,
     collab_db: Weak<RocksCollabDB>,
     collab: Arc<MutexCollab>,
+    change_tx: Option<RowChangeSender>,
   ) -> Self {
     let collab_guard = collab.lock();
     let (data, meta, comments) = {
@@ -92,7 +99,7 @@ impl DatabaseRow {
       None
     };
 
-    let data =
+    let mut data =
       data.unwrap_or_else(|| collab_guard.insert_map_with_txn(txn.as_mut().unwrap(), DATA));
     let meta =
       meta.unwrap_or_else(|| collab_guard.insert_map_with_txn(txn.as_mut().unwrap(), META));
@@ -107,14 +114,16 @@ impl DatabaseRow {
     drop(txn);
     drop(collab_guard);
 
+    let subscription = change_tx.map(|sender| subscribe_row_data_change(&mut data, sender));
     Self {
       uid,
       row_id,
       collab,
       data,
       meta,
-      comments: comments.into_inner(),
+      comments,
       collab_db,
+      subscription,
     }
   }
 

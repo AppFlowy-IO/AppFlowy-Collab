@@ -1,73 +1,24 @@
+use crate::fields::FieldChangeSender;
 use tokio::sync::broadcast;
 
-use crate::rows::Row;
-use crate::views::{FieldOrder, FilterMap, GroupMap, LayoutSetting, SortMap};
+use crate::rows::RowChangeSender;
+use crate::views::ViewChangeSender;
 
-pub enum DatabaseViewChange {
-  LayoutSettingChanged {
-    view_id: String,
-    setting: LayoutSetting,
-  },
-  // filter
-  DidCreateFilter {
-    view_id: String,
-    filter: FilterMap,
-  },
-  DidDeleteFilter {
-    view_id: String,
-    filter: FilterMap,
-  },
-  DidUpdateFilter {
-    view_id: String,
-    filter: FilterMap,
-  },
-  // group
-  DidCreateGroupSetting {
-    view_id: String,
-    group_setting: GroupMap,
-  },
-  DidDeleteGroupSetting {
-    view_id: String,
-    group_setting: GroupMap,
-  },
-  DidUpdateGroupSetting {
-    view_id: String,
-    group_setting: GroupMap,
-  },
-  // Sort
-  DidCreateSort {
-    view_id: String,
-    sort: SortMap,
-  },
-  DidDeleteSort {
-    view_id: String,
-    sort: SortMap,
-  },
-  DidUpdateSort {
-    view_id: String,
-    sort: SortMap,
-  },
-  // field order
-  DidCreateFieldOrder {
-    view_id: String,
-    field_order: FieldOrder,
-  },
-  DidDeleteFieldOrder {
-    view_id: String,
-    field_order: FieldOrder,
-  },
-}
-
-pub enum RowChange {
-  DidCreateRow { row: Row },
-  DidDeleteRow { row: Row },
-  DidUpdateRow { row: Row },
-}
-
-pub type RowChangeSender = broadcast::Sender<RowChange>;
-
-#[derive(Clone)]
 pub struct DatabaseNotify {
-  pub view_change_tx: broadcast::Sender<DatabaseViewChange>,
+  pub view_change_tx: ViewChangeSender,
   pub row_change_tx: RowChangeSender,
+  pub field_change_tx: FieldChangeSender,
+}
+
+impl Default for DatabaseNotify {
+  fn default() -> Self {
+    let (view_change_tx, _) = broadcast::channel(100);
+    let (row_change_tx, _) = broadcast::channel(100);
+    let (field_change_tx, _) = broadcast::channel(100);
+    Self {
+      view_change_tx,
+      row_change_tx,
+      field_change_tx,
+    }
+  }
 }

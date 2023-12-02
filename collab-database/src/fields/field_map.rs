@@ -1,20 +1,28 @@
-use collab::preclude::{Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{
+  DeepEventsSubscription, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+};
 
 use crate::database::timestamp;
 use crate::fields::{
-  field_from_map_ref, field_from_value, field_id_from_value, primary_field_id_from_value, Field,
-  FieldBuilder, FieldUpdate,
+  field_from_map_ref, field_from_value, field_id_from_value, primary_field_id_from_value,
+  subscribe_field_change, Field, FieldBuilder, FieldChangeSender, FieldUpdate,
 };
 use crate::views::FieldOrder;
 
 /// A map of fields
 pub struct FieldMap {
   container: MapRefWrapper,
+  #[allow(dead_code)]
+  subscription: Option<DeepEventsSubscription>,
 }
 
 impl FieldMap {
-  pub fn new(container: MapRefWrapper) -> Self {
-    Self { container }
+  pub fn new(mut container: MapRefWrapper, field_change_tx: Option<FieldChangeSender>) -> Self {
+    let subscription = field_change_tx.map(|sender| subscribe_field_change(&mut container, sender));
+    Self {
+      container,
+      subscription,
+    }
   }
 
   /// Get all fields in the map

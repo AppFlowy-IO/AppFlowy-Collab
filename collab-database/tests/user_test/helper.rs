@@ -27,7 +27,7 @@ use rand::Rng;
 use tempfile::TempDir;
 
 use crate::database_test::helper::field_settings_for_default_database;
-use crate::helper::{make_rocks_db, TestTextCell};
+use crate::helper::{make_rocks_db, setup_log, TestTextCell};
 
 pub struct WorkspaceDatabaseTest {
   #[allow(dead_code)]
@@ -95,6 +95,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
 }
 
 pub async fn workspace_database_test(uid: i64) -> WorkspaceDatabaseTest {
+  setup_log();
   let db = make_rocks_db();
   user_database_test_with_db(uid, db).await
 }
@@ -103,6 +104,7 @@ pub async fn workspace_database_test_with_config(
   uid: i64,
   config: CollabPersistenceConfig,
 ) -> WorkspaceDatabaseTest {
+  setup_log();
   let collab_db = make_rocks_db();
   let builder = TestUserDatabaseCollabBuilderImpl();
   let database_views_aggregate_id = uuid::Uuid::new_v4().to_string();

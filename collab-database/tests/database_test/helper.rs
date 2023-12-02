@@ -17,6 +17,7 @@ use collab_entity::CollabType;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 
+use collab_database::database_observer::DatabaseNotify;
 use tempfile::TempDir;
 
 pub use crate::helper::*;
@@ -48,9 +49,8 @@ impl DerefMut for DatabaseTest {
 
 /// Create a database with a single view.
 pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
-  let tempdir = TempDir::new().unwrap();
-  let path = tempdir.into_path();
-  let collab_db = Arc::new(RocksCollabDB::open_opt(path, false).unwrap());
+  setup_log();
+  let collab_db = make_rocks_db();
   let collab = CollabBuilder::new(uid, database_id)
     .with_device_id("1")
     .build()
@@ -62,6 +62,7 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     db: Arc::downgrade(&collab_db),
     collab: Arc::new(collab),
     collab_service: collab_builder,
+    notifier: Some(DatabaseNotify::default()),
   };
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
@@ -80,6 +81,7 @@ pub async fn create_database_with_db(
   uid: i64,
   database_id: &str,
 ) -> (Arc<RocksCollabDB>, DatabaseTest) {
+  setup_log();
   let collab_db = make_rocks_db();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let collab = collab_builder.build_collab_with_config(
@@ -95,6 +97,7 @@ pub async fn create_database_with_db(
     db: Arc::downgrade(&collab_db),
     collab,
     collab_service: collab_builder,
+    notifier: Some(DatabaseNotify::default()),
   };
   let params = CreateDatabaseParams {
     view_id: "v1".to_string(),
@@ -131,6 +134,7 @@ pub fn restore_database_from_db(
     db: Arc::downgrade(&collab_db),
     collab,
     collab_service: collab_builder,
+    notifier: Some(DatabaseNotify::default()),
   };
   let database = Database::get_or_create(database_id, context).unwrap();
   DatabaseTest {
@@ -199,6 +203,7 @@ impl DatabaseTestBuilder {
       db: Arc::downgrade(&collab_db),
       collab: Arc::new(collab),
       collab_service: collab_builder,
+      notifier: Some(DatabaseNotify::default()),
     };
     let params = CreateDatabaseParams {
       database_id: self.database_id.clone(),
