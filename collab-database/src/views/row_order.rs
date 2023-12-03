@@ -18,7 +18,7 @@ impl OrderArray for RowOrderArray {
   }
 
   fn object_from_value<T: ReadTxn>(&self, value: YrsValue, txn: &T) -> Option<Self::Object> {
-    row_order_from_value(value, txn)
+    row_order_from_value(&value, txn)
   }
 }
 
@@ -60,8 +60,8 @@ impl RowOrder {
   }
 }
 
-impl From<lib0Any> for RowOrder {
-  fn from(any: lib0Any) -> Self {
+impl From<&lib0Any> for RowOrder {
+  fn from(any: &lib0Any) -> Self {
     let mut json = String::new();
     any.to_json(&mut json);
     serde_json::from_str(&json).unwrap()
@@ -89,7 +89,7 @@ impl From<&RowOrder> for RowOrder {
     row.clone()
   }
 }
-pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, _txn: &T) -> Option<RowOrder> {
+pub fn row_order_from_value<T: ReadTxn>(value: &YrsValue, _txn: &T) -> Option<RowOrder> {
   if let YrsValue::Any(value) = value {
     Some(RowOrder::from(value))
   } else {

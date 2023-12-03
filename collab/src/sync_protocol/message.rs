@@ -57,7 +57,7 @@ impl Encode for Message {
 }
 
 impl Decode for Message {
-  fn decode<D: Decoder>(decoder: &mut D) -> Result<Self, lib0::error::Error> {
+  fn decode<D: Decoder>(decoder: &mut D) -> Result<Self, yrs::encoding::read::Error> {
     let tag: u8 = decoder.read_var()?;
     match tag {
       MSG_SYNC => {
@@ -124,7 +124,7 @@ impl Encode for CustomMessage {
 }
 
 impl Decode for CustomMessage {
-  fn decode<D: Decoder>(decoder: &mut D) -> Result<Self, lib0::error::Error> {
+  fn decode<D: Decoder>(decoder: &mut D) -> Result<Self, yrs::encoding::read::Error> {
     let tag: u8 = decoder.read_var()?;
     match tag {
       MSG_CUSTOM_START_SYNC => {
@@ -203,7 +203,7 @@ impl Encode for SyncMessage {
 }
 
 impl Decode for SyncMessage {
-  fn decode<D: Decoder>(decoder: &mut D) -> Result<Self, lib0::error::Error> {
+  fn decode<D: Decoder>(decoder: &mut D) -> Result<Self, yrs::encoding::read::Error> {
     let tag: u8 = decoder.read_var()?;
     match tag {
       MSG_SYNC_STEP_1 => {

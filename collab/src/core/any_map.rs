@@ -268,9 +268,9 @@ impl AnyMap {
     (txn, map_ref).into()
   }
 
-  pub fn from_value<T: ReadTxn>(txn: &T, value: YrsValue) -> Option<Self> {
+  pub fn from_value<T: ReadTxn>(txn: &T, value: &YrsValue) -> Option<Self> {
     if let YrsValue::YMap(map_ref) = value {
-      Some(Self::from_map_ref(txn, &map_ref))
+      Some(Self::from_map_ref(txn, map_ref))
     } else {
       None
     }

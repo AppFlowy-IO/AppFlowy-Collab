@@ -55,7 +55,7 @@ impl DatabaseRow {
     change_tx: Option<RowChangeSender>,
   ) -> Self {
     let row = row.into();
-    let database_row = Self::new(uid, row_id, collab_db, collab, change_tx);
+    let mut database_row = Self::inner_new(uid, row_id, collab_db, collab);
     let data = database_row.data.clone();
     let meta = database_row.meta.clone();
     database_row.collab.lock().with_origin_transact_mut(|txn| {
@@ -72,6 +72,9 @@ impl DatabaseRow {
         .done();
     });
 
+    database_row.subscription =
+      change_tx.map(|sender| subscribe_row_data_change(&mut database_row.data, sender));
+
     database_row
   }
 
@@ -81,6 +84,17 @@ impl DatabaseRow {
     collab_db: Weak<RocksCollabDB>,
     collab: Arc<MutexCollab>,
     change_tx: Option<RowChangeSender>,
+  ) -> Self {
+    let mut this = Self::inner_new(uid, row_id, collab_db, collab);
+    this.subscription = change_tx.map(|sender| subscribe_row_data_change(&mut this.data, sender));
+    this
+  }
+
+  fn inner_new(
+    uid: i64,
+    row_id: RowId,
+    collab_db: Weak<RocksCollabDB>,
+    collab: Arc<MutexCollab>,
   ) -> Self {
     let collab_guard = collab.lock();
     let (data, meta, comments) = {
@@ -114,7 +128,6 @@ impl DatabaseRow {
     drop(txn);
     drop(collab_guard);
 
-    let subscription = change_tx.map(|sender| subscribe_row_data_change(&mut data, sender));
     Self {
       uid,
       row_id,
@@ -123,7 +136,7 @@ impl DatabaseRow {
       meta,
       comments,
       collab_db,
-      subscription,
+      subscription: None,
     }
   }
 
@@ -430,9 +443,10 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
 }
 
 pub(crate) const ROW_ID: &str = "id";
-const ROW_VISIBILITY: &str = "visibility";
-const ROW_HEIGHT: &str = "height";
-const ROW_CELLS: &str = "cells";
+pub(crate) const ROW_VISIBILITY: &str = "visibility";
+
+pub const ROW_HEIGHT: &str = "height";
+pub const ROW_CELLS: &str = "cells";
 
 /// Return row id and created_at from a [YrsValue]
 pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(String, i64)> {
