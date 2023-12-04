@@ -7,6 +7,7 @@ use std::sync::{Arc, Once};
 
 use anyhow::bail;
 use collab::core::any_map::AnyMapExtension;
+use collab::preclude::Any;
 use collab_database::fields::{TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::Cell;
 use collab_database::views::{
@@ -16,8 +17,6 @@ use collab_database::views::{
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use nanoid::nanoid;
-
-use collab::preclude::Any;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -530,7 +529,8 @@ impl std::convert::From<i64> for TestFieldType {
 
 #[derive(Debug, Clone)]
 pub struct TestFieldSetting {
-  pub is_visible: bool,
+  pub width: i32,
+  pub visibility: u8,
 }
 
 impl Default for TestFieldSetting {
@@ -541,7 +541,10 @@ impl Default for TestFieldSetting {
 
 impl TestFieldSetting {
   pub fn new() -> Self {
-    Self { is_visible: true }
+    Self {
+      width: 0,
+      visibility: 0,
+    }
   }
 }
 
@@ -550,7 +553,8 @@ const VISIBILITY: &str = "visibility";
 impl From<FieldSettingsMap> for TestFieldSetting {
   fn from(value: FieldSettingsMap) -> Self {
     TestFieldSetting {
-      is_visible: value.get_bool_value(VISIBILITY).unwrap_or(true),
+      width: value.get_i64_value("width").unwrap_or(0) as i32,
+      visibility: value.get_i64_value(VISIBILITY).unwrap_or(0) as u8,
     }
   }
 }
@@ -558,7 +562,8 @@ impl From<FieldSettingsMap> for TestFieldSetting {
 impl From<TestFieldSetting> for FieldSettingsMap {
   fn from(data: TestFieldSetting) -> Self {
     FieldSettingsMapBuilder::new()
-      .insert_bool_value(VISIBILITY, data.is_visible)
+      .insert_i64_value("width", data.width as i64)
+      .insert_i64_value(VISIBILITY, data.visibility as i64)
       .build()
   }
 }

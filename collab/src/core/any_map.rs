@@ -261,6 +261,12 @@ impl AnyMap {
       Any::Array(array) => {
         map_ref.create_array_with_txn(txn, k, array.to_vec());
       },
+      Any::BigInt(num) => {
+        map_ref.insert_i64_with_txn(txn, k, *num);
+      },
+      Any::Number(num) => {
+        map_ref.insert_f64_with_txn(txn, k, *num);
+      },
       _ => {
         map_ref.insert_with_txn(txn, k, v.clone());
       },

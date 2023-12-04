@@ -302,7 +302,10 @@ pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> D
 /// Creates the default field settings for the database created by
 /// create_database_with_default_data
 pub fn field_settings_for_default_database() -> FieldSettingsByFieldIdMap {
-  let field_settings = FieldSettingsMap::from(TestFieldSetting { is_visible: true });
+  let field_settings = FieldSettingsMap::from(TestFieldSetting {
+    width: 0,
+    visibility: 0,
+  });
   let mut field_settings_map = HashMap::new();
   field_settings_map.insert("f1".to_string(), field_settings.clone());
   field_settings_map.insert("f2".to_string(), field_settings.clone());
@@ -311,13 +314,20 @@ pub fn field_settings_for_default_database() -> FieldSettingsByFieldIdMap {
 }
 
 pub fn default_field_settings_by_layout() -> HashMap<DatabaseLayout, FieldSettingsMap> {
-  let field_settings = TestFieldSetting { is_visible: true };
+  let field_settings = FieldSettingsMap::from(TestFieldSetting {
+    width: 0,
+    visibility: 0,
+  });
   HashMap::from([
     (DatabaseLayout::Grid, field_settings.clone().into()),
     (DatabaseLayout::Board, field_settings.into()),
     (
       DatabaseLayout::Calendar,
-      TestFieldSetting { is_visible: false }.into(),
+      TestFieldSetting {
+        width: 0,
+        visibility: 0,
+      }
+      .into(),
     ),
   ])
 }
