@@ -202,7 +202,7 @@ async fn observer_delete_consecutive_rows_test() {
       })
       .unwrap();
 
-    cloned_database_test.remove_rows(&vec![row_id_2, row_id_3]);
+    cloned_database_test.remove_rows(&[row_id_2, row_id_3]);
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -252,7 +252,7 @@ async fn observer_delete_non_consecutive_rows_test() {
       })
       .unwrap();
 
-    cloned_database_test.remove_rows(&vec![row_id_2, row_id_4]);
+    cloned_database_test.remove_rows(&[row_id_2, row_id_4]);
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
