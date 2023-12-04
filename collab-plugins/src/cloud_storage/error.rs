@@ -9,7 +9,7 @@ pub enum SyncError {
   YAwareness(#[from] sync_protocol::awareness::Error),
 
   #[error("failed to deserialize message: {0}")]
-  DecodingError(#[from] lib0::error::Error),
+  DecodingError(#[from] yrs::encoding::read::Error),
 
   #[error(transparent)]
   SerdeError(#[from] serde_json::Error),

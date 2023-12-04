@@ -16,8 +16,8 @@ use yrs::types::{ToJson, Value};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{
-  ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options, ReadTxn,
-  StateVector, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
+  Any, ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options,
+  ReadTxn, StateVector, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
   UpdateSubscription,
 };
 
@@ -26,6 +26,7 @@ use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
 use crate::core::transaction::TransactionRetry;
+use crate::core::value::YrsValueExtension;
 use crate::error::CollabError;
 use crate::preclude::{ArrayRefWrapper, JsonValue, MapRefExtension};
 use crate::sync_protocol::awareness::Awareness;
@@ -355,11 +356,7 @@ impl Collab {
 
     self.with_origin_transact_mut(|txn| {
       if map.is_none() {
-        map = Some(
-          self
-            .data
-            .insert(txn, key, MapPrelim::<lib0::any::Any>::new()),
-        );
+        map = Some(self.data.insert(txn, key, MapPrelim::<Any>::new()));
       }
       let value = serde_json::to_value(&value).unwrap();
       insert_json_value_to_map_ref(key, &value, map.unwrap(), txn);
@@ -381,7 +378,7 @@ impl Collab {
   }
 
   pub fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
-    let map = MapPrelim::<lib0::any::Any>::new();
+    let map = MapPrelim::<Any>::new();
     let map_ref = self.data.insert(txn, key, map);
     self.map_wrapper_with(map_ref)
   }
@@ -411,9 +408,10 @@ impl Collab {
       return None;
     }
     let mut iter = path.into_iter();
-    let mut map_ref = self.data.get(txn, &iter.next().unwrap())?.to_ymap();
+    let value = self.data.get(txn, &iter.next().unwrap())?;
+    let mut map_ref = value.to_ymap().cloned();
     for path in iter {
-      map_ref = map_ref?.get(txn, &path)?.to_ymap();
+      map_ref = map_ref?.get(txn, &path)?.to_ymap().cloned();
     }
     map_ref.map(|map_ref| self.map_wrapper_with(map_ref))
   }
@@ -424,11 +422,9 @@ impl Collab {
     path: P,
   ) -> Option<ArrayRefWrapper> {
     let path = path.into();
-    let array_ref = self
-      .get_ref_from_path_with_txn(txn, path)
-      .map(|value| value.to_yarray())?;
-
-    array_ref.map(|array_ref| self.array_wrapper_with(array_ref))
+    let value = self.get_ref_from_path_with_txn(txn, path)?;
+    let array_ref = value.to_yarray();
+    array_ref.map(|array_ref| self.array_wrapper_with(array_ref.clone()))
   }
 
   pub fn create_array_with_txn<V: Prelim>(
@@ -452,9 +448,13 @@ impl Collab {
 
     let last = path.pop().unwrap();
     let mut iter = path.into_iter();
-    let mut map_ref = self.data.get(txn, &iter.next().unwrap())?.to_ymap();
+    let mut map_ref = self
+      .data
+      .get(txn, &iter.next().unwrap())?
+      .to_ymap()
+      .cloned();
     for path in iter {
-      map_ref = map_ref?.get(txn, &path)?.to_ymap();
+      map_ref = map_ref?.get(txn, &path)?.to_ymap().cloned();
     }
     map_ref?.get(txn, &last)
   }
@@ -476,7 +476,7 @@ impl Collab {
       let txn = self.transact();
       let mut iter = path.into_iter();
       let mut remove_path = iter.next().unwrap();
-      let mut map_ref = self.data.get(&txn, &remove_path)?.to_ymap();
+      let mut map_ref = self.data.get(&txn, &remove_path)?.to_ymap().cloned();
 
       let remove_index = len - 2;
       for (index, path) in iter.enumerate() {
@@ -484,7 +484,7 @@ impl Collab {
           remove_path = path;
           break;
         } else {
-          map_ref = map_ref?.get(&txn, &path)?.to_ymap();
+          map_ref = map_ref?.get(&txn, &path)?.to_ymap().cloned();
         }
       }
       drop(txn);
@@ -494,7 +494,7 @@ impl Collab {
     }
   }
 
-  pub fn to_json(&self) -> lib0::any::Any {
+  pub fn to_json(&self) -> Any {
     let txn = self.transact();
     self.data.to_json(&txn)
   }

@@ -16,7 +16,7 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 use crate::database_test::helper::field_settings_for_default_database;
-use crate::helper::{make_rocks_db, TestTextCell};
+use crate::helper::TestTextCell;
 use crate::user_test::helper::workspace_database_with_db;
 
 pub enum DatabaseScript {

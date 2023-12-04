@@ -1,11 +1,12 @@
-use collab::preclude::{Attrs, Delta, ReadTxn, Value as YrsValue};
-use lib0::any::Any;
+use collab::preclude::{Any, Attrs, Delta, ReadTxn, Value as YrsValue};
 use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
-use std::rc::Rc;
+use std::ops::Deref;
+
+use std::sync::Arc;
 
 const FIELD_INSERT: &str = "insert";
 const FIELD_DELETE: &str = "delete";
@@ -104,7 +105,7 @@ where
     // If there are attributes, serialize them as a HashMap.
     let attrs_hash = attrs
       .iter()
-      .map(|(k, v)| (k.to_string(), v.to_owned()))
+      .map(|(k, v)| (k.deref().to_string(), v.clone()))
       .collect::<HashMap<String, Any>>();
     // Serialize the "attributes" field.
     map.serialize_entry(FIELD_ATTRIBUTES, &attrs_hash)?;
@@ -137,7 +138,7 @@ impl<'de> Deserialize<'de> for TextDelta {
         let mut delta_type: Option<String> = None;
         let mut content: Option<String> = None;
         let mut len: Option<usize> = None;
-        let mut attrs: Option<HashMap<Rc<str>, Any>> = None;
+        let mut attrs: Option<HashMap<Arc<str>, Any>> = None;
 
         // Deserialize each key-value pair in the map
         while let Some(key) = map.next_key::<String>()? {
@@ -187,7 +188,7 @@ impl<'de> Deserialize<'de> for TextDelta {
               attrs.get_or_insert(HashMap::new()).extend(
                 attrs_val
                   .iter()
-                  .map(|(key, val)| (Rc::from(key.to_string()), val.clone())),
+                  .map(|(key, val)| (Arc::from(key.to_string()), val.clone())),
               );
             },
             // Handle unknown fields by returning an error

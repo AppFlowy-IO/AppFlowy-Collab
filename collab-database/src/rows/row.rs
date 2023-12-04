@@ -3,13 +3,14 @@ use std::sync::{Arc, Weak};
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::{
-  lib0Any, ArrayRefWrapper, Collab, DeepEventsSubscription, Map, MapPrelim, MapRef,
-  MapRefExtension, MapRefWrapper, ReadTxn, Transaction, TransactionMut, YrsValue,
+  Any, ArrayRefWrapper, Collab, DeepEventsSubscription, Map, MapPrelim, MapRef, MapRefExtension,
+  MapRefWrapper, ReadTxn, Transaction, TransactionMut, YrsValue,
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use parking_lot::Mutex;
 
+use collab::core::value::YrsValueExtension;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use uuid::Uuid;
@@ -113,16 +114,12 @@ impl DatabaseRow {
       None
     };
 
-    let mut data =
+    let data =
       data.unwrap_or_else(|| collab_guard.insert_map_with_txn(txn.as_mut().unwrap(), DATA));
     let meta =
       meta.unwrap_or_else(|| collab_guard.insert_map_with_txn(txn.as_mut().unwrap(), META));
     let comments = comments.unwrap_or_else(|| {
-      collab_guard.create_array_with_txn::<MapPrelim<lib0Any>>(
-        txn.as_mut().unwrap(),
-        COMMENT,
-        vec![],
-      )
+      collab_guard.create_array_with_txn::<MapPrelim<Any>>(txn.as_mut().unwrap(), COMMENT, vec![])
     });
 
     drop(txn);
@@ -461,7 +458,7 @@ pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(String
 /// Return a [RowOrder] and created_at from a [YrsValue]
 pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(RowOrder, i64)> {
   let map_ref = value.to_ymap()?;
-  row_order_from_map_ref(&map_ref, txn)
+  row_order_from_map_ref(map_ref, txn)
 }
 
 /// Return a [RowOrder] and created_at from a [YrsValue]

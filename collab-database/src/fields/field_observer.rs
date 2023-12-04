@@ -22,7 +22,7 @@ pub(crate) fn subscribe_field_change(
         Event::Map(event) => {
           let keys = event.keys(txn);
           for (key, value) in keys.iter() {
-            let change_tx = change_tx.clone();
+            let _change_tx = change_tx.clone();
             match value {
               EntryChange::Inserted(value) => {
                 tracing::trace!("field observer: Inserted: {}:{}", key, value);
@@ -30,7 +30,7 @@ pub(crate) fn subscribe_field_change(
               EntryChange::Updated(_, value) => {
                 tracing::trace!("field observer: update: {}:{}", key, value);
               },
-              EntryChange::Removed(value) => {
+              EntryChange::Removed(_value) => {
                 tracing::trace!("field observer: delete: {}", key);
               },
             }

@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
 
-use crate::preclude::lib0Error;
 use thiserror::Error;
+
 use yrs::updates::decoder::{Decode, Decoder};
 use yrs::updates::encoder::{Encode, Encoder};
 use yrs::StateVector;
@@ -81,7 +81,7 @@ impl Decode for Message {
         let msg = CustomMessage::decode(decoder)?;
         Ok(Message::Custom(msg))
       },
-      _ => Err(lib0::error::Error::UnexpectedValue),
+      _ => Err(yrs::encoding::read::Error::UnexpectedValue),
     }
   }
 }
@@ -132,7 +132,7 @@ impl Decode for CustomMessage {
         let meta = SyncMeta::from_vec(buf)?;
         Ok(CustomMessage::SyncCheck(meta))
       },
-      _ => Err(lib0::error::Error::UnexpectedValue),
+      _ => Err(yrs::encoding::read::Error::UnexpectedValue),
     }
   }
 }
@@ -147,8 +147,9 @@ impl SyncMeta {
     bincode::serialize(self).unwrap()
   }
 
-  pub fn from_vec(data: &[u8]) -> Result<Self, lib0Error> {
-    let meta = bincode::deserialize(data).map_err(|err| lib0Error::Other(err.to_string()))?;
+  pub fn from_vec(data: &[u8]) -> Result<Self, yrs::encoding::read::Error> {
+    let meta =
+      bincode::deserialize(data).map_err(|_| yrs::encoding::read::Error::UnexpectedValue)?;
     Ok(meta)
   }
 }
@@ -219,7 +220,7 @@ impl Decode for SyncMessage {
         let buf = decoder.read_buf()?;
         Ok(SyncMessage::Update(buf.into()))
       },
-      _ => Err(lib0::error::Error::UnexpectedValue),
+      _ => Err(yrs::encoding::read::Error::UnexpectedValue),
     }
   }
 }
@@ -228,7 +229,7 @@ impl Decode for SyncMessage {
 pub enum Error {
   /// Incoming Y-protocol message couldn't be deserialized.
   #[error("failed to deserialize message: {0}")]
-  DecodingError(#[from] lib0::error::Error),
+  DecodingError(#[from] yrs::encoding::read::Error),
 
   /// Applying incoming Y-protocol awareness update has failed.
   #[error("failed to process awareness update: {0}")]
@@ -261,7 +262,7 @@ impl From<tokio::task::JoinError> for Error {
 
 impl From<std::io::Error> for Error {
   fn from(value: std::io::Error) -> Self {
-    Error::DecodingError(lib0::error::Error::IO(value))
+    Error::Internal(value.into())
   }
 }
 
@@ -276,12 +277,12 @@ impl<'a, D: Decoder> MessageReader<'a, D> {
 }
 
 impl<'a, D: Decoder> Iterator for MessageReader<'a, D> {
-  type Item = Result<Message, lib0::error::Error>;
+  type Item = Result<Message, yrs::encoding::read::Error>;
 
   fn next(&mut self) -> Option<Self::Item> {
     match Message::decode(self.0) {
       Ok(msg) => Some(Ok(msg)),
-      Err(lib0::error::Error::EndOfBuffer(_)) => None,
+      Err(yrs::encoding::read::Error::EndOfBuffer(_)) => None,
       Err(error) => Some(Err(error)),
     }
   }

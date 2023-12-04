@@ -279,7 +279,8 @@ impl WorkspaceDatabase {
     snapshot: CollabSnapshot,
   ) -> Result<Database, DatabaseError> {
     let collab = self.collab_for_database(database_id, CollabRawData::default());
-    let update = Update::decode_v1(&snapshot.data)?;
+    let update =
+      Update::decode_v1(&snapshot.data).map_err(|err| DatabaseError::Internal(err.into()))?;
     collab.lock().with_origin_transact_mut(|txn| {
       txn.apply_update(update);
     });

@@ -1,5 +1,5 @@
 use anyhow::bail;
-use collab::preclude::{lib0Any, Array, MapRefExtension, MapRefWrapper, ReadTxn, YrsValue};
+use collab::preclude::{Any, Array, MapRefExtension, MapRefWrapper, ReadTxn, YrsValue};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
@@ -90,18 +90,18 @@ pub struct FavoriteId {
   pub id: String,
 }
 
-impl From<lib0Any> for FavoriteId {
-  fn from(any: lib0Any) -> Self {
+impl From<Any> for FavoriteId {
+  fn from(any: Any) -> Self {
     let mut json = String::new();
     any.to_json(&mut json);
     serde_json::from_str(&json).unwrap()
   }
 }
 
-impl From<FavoriteId> for lib0Any {
+impl From<FavoriteId> for Any {
   fn from(item: FavoriteId) -> Self {
     let json = serde_json::to_string(&item).unwrap();
-    lib0Any::from_json(&json).unwrap()
+    Any::from_json(&json).unwrap()
   }
 }
 

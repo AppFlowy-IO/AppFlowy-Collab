@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::core::origin::CollabOrigin;
 use collab::core::transaction::TransactionRetry;
 use collab::error::CollabError;
@@ -35,13 +36,9 @@ async fn insert_json_attrs() {
     },
   };
   collab.insert_json_with_path(vec![], "person", object);
-  println!("{}", collab);
-
-  let person = collab
+  let _ = collab
     .get_json_with_path::<Person>(vec!["person".to_string()])
     .unwrap();
-
-  println!("{:?}", person);
 
   let pos = collab
     .get_json_with_path::<Position>(vec!["person".to_string(), "position".to_string()])
@@ -209,4 +206,21 @@ async fn undo_second_insert_text() {
   );
 
   assert!(!collab.can_undo());
+}
+#[tokio::test]
+async fn any_map_extend_test() {
+  let mut map_1 = AnyMap::new();
+  map_1.insert_i64_value("a", 1);
+
+  let map_1_ptr = map_1.clone();
+
+  let mut map_2 = AnyMap::new();
+  map_2.insert_i64_value("b", 2);
+
+  map_1.extend(map_2);
+  assert_eq!(map_1.get_i64_value("a"), Some(1));
+  assert_eq!(map_1.get_i64_value("b"), Some(2));
+
+  assert_eq!(map_1_ptr.get_i64_value("a"), Some(1));
+  assert_eq!(map_1_ptr.get_i64_value("b"), None);
 }

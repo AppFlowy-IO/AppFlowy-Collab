@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use collab::core::any_array::ArrayMapUpdate;
 use collab::core::any_map::AnyMapUpdate;
+use collab::core::value::YrsValueExtension;
 use collab::preclude::map::MapPrelim;
 use collab::preclude::{
-  lib0Any, Array, ArrayRef, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  Any, Array, ArrayRef, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
   YrsValue,
 };
 use serde::{Deserialize, Serialize};
@@ -420,7 +421,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   fn get_sort_array(&mut self) -> ArrayRef {
     self
       .map_ref
-      .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_SORTS)
+      .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, VIEW_SORTS)
   }
 
   /// Get the group array for the curent view, used when setting or updating
@@ -428,7 +429,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   fn get_group_array(&mut self) -> ArrayRef {
     self
       .map_ref
-      .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_GROUPS)
+      .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, VIEW_GROUPS)
   }
 
   /// Get the filter array for the current view, used when setting or updating
@@ -436,7 +437,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   fn get_filter_array(&mut self) -> ArrayRef {
     self
       .map_ref
-      .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, VIEW_FILTERS)
+      .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, VIEW_FILTERS)
   }
 
   /// Get the field settings for the current view, used when setting or updating
@@ -478,7 +479,7 @@ pub fn view_description_from_value<T: ReadTxn>(
 /// Return a [DatabaseView] from a map ref
 pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<DatabaseView> {
   let map_ref = value.to_ymap()?;
-  view_from_map_ref(&map_ref, txn)
+  view_from_map_ref(map_ref, txn)
 }
 
 /// Return a list of [GroupSettingMap] from a map ref
@@ -601,7 +602,7 @@ pub trait OrderIdentifiable {
 
 /// The [OrderArray] trait provides a set of methods to manipulate an array of [OrderIdentifiable] objects.
 pub trait OrderArray {
-  type Object: OrderIdentifiable + Into<lib0Any>;
+  type Object: OrderIdentifiable + Into<Any>;
 
   /// Returns the array reference.
   fn array_ref(&self) -> &ArrayRef;

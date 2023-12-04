@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
-use collab::preclude::{lib0Any, ArrayRef, ReadTxn, YrsValue};
+use collab::preclude::{Any, ArrayRef, ReadTxn, YrsValue};
+use collab::util::deserialize_i32_from_numeric;
 use serde::{Deserialize, Serialize};
 
 use crate::rows::{Row, RowId};
@@ -45,6 +46,8 @@ impl DerefMut for RowOrderArray {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct RowOrder {
   pub id: RowId,
+
+  #[serde(deserialize_with = "deserialize_i32_from_numeric")]
   pub height: i32,
 }
 
@@ -60,18 +63,18 @@ impl RowOrder {
   }
 }
 
-impl From<&lib0Any> for RowOrder {
-  fn from(any: &lib0Any) -> Self {
+impl From<&Any> for RowOrder {
+  fn from(any: &Any) -> Self {
     let mut json = String::new();
     any.to_json(&mut json);
     serde_json::from_str(&json).unwrap()
   }
 }
 
-impl From<RowOrder> for lib0Any {
+impl From<RowOrder> for Any {
   fn from(item: RowOrder) -> Self {
     let json = serde_json::to_string(&item).unwrap();
-    lib0Any::from_json(&json).unwrap()
+    Any::from_json(&json).unwrap()
   }
 }
 

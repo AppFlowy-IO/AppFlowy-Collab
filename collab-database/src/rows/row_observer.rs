@@ -1,12 +1,10 @@
 use crate::rows::{Cell, Row, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY};
 use collab::core::value::YrsValueExtension;
-use collab::preclude::map::MapEvent;
-use collab::preclude::{
-  DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRefWrapper, Value,
-};
+
+use collab::preclude::{DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRefWrapper};
 use collab::preclude::{PathSegment, ToJson};
 use std::ops::Deref;
-use std::rc::Rc;
+
 use tokio::sync::broadcast;
 use tracing::trace;
 
@@ -39,14 +37,14 @@ pub(crate) fn subscribe_row_data_change(
           let path = RowChangePath::from(event);
           for (key, enctry_change) in map_event.keys(txn).iter() {
             match &path {
-              RowChangePath::Unknown(s) => {
+              RowChangePath::Unknown(_s) => {
                 // When the event path is identified as [RowChangePath::Unknown], it indicates that the path itself remains unchanged.
                 // In this scenario, the modification is confined to the key/value pairs within the map at the existing path.
                 // Essentially, even though the overall path stays the same, the contents (specific key/value pairs) at this path are the ones being updated.
                 if let EntryChange::Updated(_, value) = enctry_change {
                   let change_value = RowChangeValue::from(key.deref());
                   match change_value {
-                    RowChangeValue::Unknown(s) => {
+                    RowChangeValue::Unknown(_s) => {
                       trace!("row observe value update: {}:{:?}", key, value.to_json(txn))
                     },
                     RowChangeValue::Height => {
@@ -96,7 +94,7 @@ pub(crate) fn subscribe_row_data_change(
                     }
                     //
                   },
-                  EntryChange::Removed(value) => {
+                  EntryChange::Removed(_value) => {
                     trace!("row observe delete: {}", key);
                   },
                 }

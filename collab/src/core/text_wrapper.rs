@@ -1,11 +1,9 @@
 use crate::preclude::{CollabContext, YrsDelta};
-use lib0::any::Any;
 use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
 use std::sync::Arc;
 use yrs::types::text::{TextEvent, YChange};
 use yrs::types::{Attrs, Delta};
-use yrs::{ReadTxn, Subscription, Text, TextRef, Transaction, TransactionMut};
+use yrs::{Any, ReadTxn, Subscription, Text, TextRef, Transaction, TransactionMut};
 pub type TextSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &TextEvent)>;
 pub type TextSubscription = Subscription<TextSubscriptionCallback>;
 
@@ -57,7 +55,7 @@ impl TextRefWrapper {
           } else {
             // TODO: This is a hack to get around the fact that Yrs doesn't
             // By setting empty attributes, prevent it from encountering a bug where it gets appended to the previous op.
-            let attrs = Attrs::from([(Rc::from(""), Any::Null)]);
+            let attrs = Attrs::from([(Arc::from(""), Any::Null)]);
             self
               .text_ref
               .insert_with_attributes(txn, index, &value, attrs);

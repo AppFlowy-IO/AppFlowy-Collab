@@ -9,11 +9,11 @@ edition = "2021"
 yrs.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
-serde.workspace = true
+serde = { workspace = true, features = ["rc"] }
 lib0 = { version = "0.16.3", features = ["lib0-serde"] }
 serde_json.workspace = true
 parking_lot.workspace = true
-bytes.workspace = true
+bytes = { workspace = true, features = ["serde"] }
 tracing.workspace = true
 tokio = { version = "1.26", features = ["time", "sync", "rt"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }

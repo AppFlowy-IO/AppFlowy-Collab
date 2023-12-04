@@ -11,7 +11,6 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::snapshot::CollabSnapshotPlugin;
-use lib0::any::Any;
 use yrs::updates::decoder::Decode;
 
 use tempfile::TempDir;
@@ -266,7 +265,7 @@ impl CollabPersistenceTest {
         let text = collab
           .get(&key)
           .map(|value| value.to_string(&txn))
-          .map(|value| Any::String(value.into_boxed_str()));
+          .map(|value| Any::String(Arc::from(value)));
         assert_eq!(text, expected)
       },
       Script::AssertNumOfUpdates { id, expected } => {

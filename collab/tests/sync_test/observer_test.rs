@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use collab::core::array_wrapper::ArrayRefExtension;
+use collab::core::value::YrsValueExtension;
 use collab::preclude::MapRefExtension;
 use parking_lot::RwLock;
 use yrs::types::{Change, ToJson};
@@ -107,7 +108,7 @@ async fn apply_update_test() {
       let txn = doc2.transact();
       let map = array
         .get(&txn, 0)
-        .map(|value| value.to_ymap())
+        .map(|value| value.to_ymap().cloned())
         .unwrap()
         .unwrap();
 
@@ -161,12 +162,13 @@ async fn apply_update_test() {
       let txn = doc3.transact();
       array
         .get(&txn, 0)
-        .map(|value| value.to_ymap())
+        .map(|value| value.to_ymap().cloned())
         .unwrap()
         .unwrap()
         .get(&txn, "m_m_k1")
         .unwrap()
         .to_ymap()
+        .cloned()
         .unwrap()
     };
 

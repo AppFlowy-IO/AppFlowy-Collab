@@ -16,7 +16,7 @@ pub enum CollabError {
   UndoManagerNotEnabled,
 
   #[error(transparent)]
-  DecodeUpdate(#[from] lib0::error::Error),
+  DecodeUpdate(#[from] yrs::encoding::read::Error),
 
   #[error("Internal failure: {0}")]
   Internal(#[from] Box<dyn std::error::Error + Send + Sync>),

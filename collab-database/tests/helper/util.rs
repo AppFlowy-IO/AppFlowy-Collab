@@ -7,7 +7,6 @@ use std::sync::{Arc, Once};
 
 use anyhow::bail;
 use collab::core::any_map::AnyMapExtension;
-use collab::preclude::lib0Any;
 use collab_database::fields::{TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::Cell;
 use collab_database::views::{
@@ -18,6 +17,7 @@ use collab_database::views::{
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use nanoid::nanoid;
 
+use collab::preclude::Any;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -383,10 +383,7 @@ pub struct TestTextCell(pub String);
 impl From<TestTextCell> for Cell {
   fn from(text_cell: TestTextCell) -> Self {
     let mut cell = Self::new();
-    cell.insert(
-      "data".to_string(),
-      lib0Any::String(text_cell.0.into_boxed_str()),
-    );
+    cell.insert("data".to_string(), Any::String(Arc::from(text_cell.0)));
     cell
   }
 }

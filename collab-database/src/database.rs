@@ -23,8 +23,8 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldChangeReceiver, FieldMap};
 use crate::meta::MetaMap;
 use crate::rows::{
-  CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowChange, RowChangeReceiver, RowDetail,
-  RowId, RowMeta, RowMetaUpdate, RowUpdate,
+  CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowChangeReceiver, RowDetail, RowId,
+  RowMeta, RowMetaUpdate, RowUpdate,
 };
 use crate::user::DatabaseCollabService;
 use crate::views::{

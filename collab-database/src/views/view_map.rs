@@ -1,3 +1,4 @@
+use collab::core::value::YrsValueExtension;
 use std::ops::Deref;
 
 use collab::preclude::{
@@ -282,7 +283,7 @@ impl ViewMap {
     let map_refs = self
       .container
       .iter(txn)
-      .flat_map(|(_k, v)| v.to_ymap())
+      .flat_map(|(_k, v)| v.to_ymap().cloned())
       .collect::<Vec<MapRef>>();
 
     for map_ref in map_refs {

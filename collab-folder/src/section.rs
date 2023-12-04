@@ -4,8 +4,9 @@ use crate::{timestamp, UserId};
 use anyhow::bail;
 use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::preclude::{
-  lib0Any, Array, Map, MapRefWrapper, ReadTxn, Transact, TransactionMut, Value, YrsValue,
+  Any, Array, Map, MapRefWrapper, ReadTxn, Transact, TransactionMut, Value, YrsValue,
 };
+use collab::util::deserialize_i64_from_numeric;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -256,6 +257,7 @@ impl<'a> SectionOperation<'a> {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SectionItem {
   pub id: String,
+  #[serde(deserialize_with = "deserialize_i64_from_numeric")]
   pub timestamp: i64,
 }
 
@@ -290,16 +292,16 @@ impl From<SectionItem> for AnyMap {
   }
 }
 
-impl TryFrom<&lib0Any> for SectionItem {
+impl TryFrom<&Any> for SectionItem {
   type Error = anyhow::Error;
 
-  fn try_from(any: &lib0Any) -> Result<Self, Self::Error> {
+  fn try_from(any: &Any) -> Result<Self, Self::Error> {
     let any_map = AnyMap::from(any);
     Self::try_from(any_map)
   }
 }
 
-impl From<SectionItem> for lib0Any {
+impl From<SectionItem> for Any {
   fn from(value: SectionItem) -> Self {
     let any_map = AnyMap::from(value);
     any_map.into()

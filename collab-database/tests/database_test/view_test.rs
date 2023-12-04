@@ -1,4 +1,3 @@
-use collab::preclude::lib0Any;
 use collab_database::database::{gen_row_id, DatabaseData};
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
@@ -7,8 +6,10 @@ use collab_database::views::{
 };
 use nanoid::nanoid;
 use serde_json::json;
+use std::sync::Arc;
 
 use assert_json_diff::{assert_json_eq, assert_json_include};
+use collab::preclude::Any;
 
 use crate::database_test::helper::{
   create_database, create_database_with_default_data, default_field_settings_by_layout,
@@ -170,10 +171,10 @@ async fn create_database_view_with_layout_setting_test() {
 
   let view = database_test.views.get_view("v1").unwrap();
   let grid_layout_setting = view.layout_settings.get(&DatabaseLayout::Grid).unwrap();
-  assert_eq!(grid_layout_setting.get("1").unwrap(), &lib0Any::BigInt(123));
+  assert_eq!(grid_layout_setting.get("1").unwrap(), &Any::BigInt(123));
   assert_eq!(
     grid_layout_setting.get("2").unwrap(),
-    &lib0Any::String("abc".to_string().into_boxed_str())
+    &Any::String(Arc::from("abc".to_string()))
   );
 }
 

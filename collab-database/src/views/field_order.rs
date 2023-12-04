@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use collab::preclude::{lib0Any, Array, ArrayRef, ReadTxn, TransactionMut, YrsValue};
+use collab::preclude::{Any, Array, ArrayRef, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 
 use crate::fields::Field;
@@ -97,18 +97,18 @@ impl From<&Field> for FieldOrder {
   }
 }
 
-impl From<lib0Any> for FieldOrder {
-  fn from(any: lib0Any) -> Self {
+impl From<Any> for FieldOrder {
+  fn from(any: Any) -> Self {
     let mut json = String::new();
     any.to_json(&mut json);
     serde_json::from_str(&json).unwrap()
   }
 }
 
-impl From<FieldOrder> for lib0Any {
+impl From<FieldOrder> for Any {
   fn from(item: FieldOrder) -> Self {
     let json = serde_json::to_string(&item).unwrap();
-    lib0Any::from_json(&json).unwrap()
+    Any::from_json(&json).unwrap()
   }
 }
 

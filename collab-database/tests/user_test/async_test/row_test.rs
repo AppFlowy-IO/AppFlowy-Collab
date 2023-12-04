@@ -166,7 +166,7 @@ fn edit_row_expected() -> Value {
           }
         },
         "created_at": 0,
-        "height": 60,
+        "height": 0,
         "id": "1",
         "visibility": true
       },
@@ -180,7 +180,7 @@ fn edit_row_expected() -> Value {
           }
         },
         "created_at": 0,
-        "height": 60,
+        "height": 0,
         "id": "2",
         "visibility": true
       },
@@ -194,7 +194,7 @@ fn edit_row_expected() -> Value {
           }
         },
         "created_at": 0,
-        "height": 60,
+        "height": 0,
         "id": "3",
         "visibility": true
       }

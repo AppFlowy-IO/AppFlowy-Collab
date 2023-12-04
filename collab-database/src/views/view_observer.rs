@@ -4,7 +4,7 @@ use collab::preclude::{
   DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRefWrapper, PathSegment,
 };
 use std::ops::Deref;
-use std::rc::Rc;
+
 use tokio::sync::broadcast;
 use tracing::trace;
 
@@ -109,7 +109,7 @@ pub(crate) fn subscribe_view_change(
                   trace!("database view observe unknown insert: {}", s);
                 },
               },
-              Change::Removed(index) => {
+              Change::Removed(len) => {
                 //
                 trace!(
                   "database view observe array delete: {:?}:{:?}",
@@ -124,15 +124,14 @@ pub(crate) fn subscribe_view_change(
                     trace!(
                       "database view observe array delete: {:?}:{}",
                       array_event.path(),
-                      index,
+                      len,
                     );
-                    let _ =
-                      change_tx.send(DatabaseViewChange::DidDeleteRowAtIndex { index: *index });
+                    let _ = change_tx.send(DatabaseViewChange::DidDeleteRowAtIndex { index: *len });
                   },
                 }
               },
-              Change::Retain(value) => match &key {
-                ArrayChangeKey::Unknown(s) => {},
+              Change::Retain(_value) => match &key {
+                ArrayChangeKey::Unknown(_s) => {},
                 ArrayChangeKey::RowOrder => {
                   trace!(
                     "database view observe array retain: {:?}:{:?}",
@@ -146,7 +145,7 @@ pub(crate) fn subscribe_view_change(
         Event::Map(event) => {
           let keys = event.keys(txn);
           for (key, value) in keys.iter() {
-            let change_tx = change_tx.clone();
+            let _change_tx = change_tx.clone();
             match value {
               EntryChange::Inserted(value) => {
                 trace!(
@@ -158,7 +157,7 @@ pub(crate) fn subscribe_view_change(
               EntryChange::Updated(_, value) => {
                 trace!("database view map update: {}:{}", key, value);
               },
-              EntryChange::Removed(value) => {
+              EntryChange::Removed(_value) => {
                 trace!("database view map delete: {}", key);
               },
             }
