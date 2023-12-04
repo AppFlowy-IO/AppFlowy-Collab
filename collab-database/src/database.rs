@@ -368,15 +368,33 @@ impl Database {
   /// The [RowOrder] of each view representing this row will be removed.
   pub fn remove_row(&self, row_id: &RowId) -> Option<Row> {
     self.root.with_transact_mut(|txn| {
-      self
-        .views
-        .update_all_views_with_txn(txn, |_view_id, update| {
-          update.remove_row_order(row_id);
-        });
-      let row = self.block.get_row(row_id);
-      self.block.delete_row(row_id);
-      Some(row)
-    })
+      self.views.update_all_views_with_txn(txn, |_, update| {
+        update.remove_row_order(row_id);
+      });
+    });
+
+    let row = self.block.get_row(row_id);
+    self.block.delete_row(row_id);
+    Some(row)
+  }
+
+  pub fn remove_rows(&self, row_ids: &[RowId]) -> Vec<Row> {
+    self.root.with_transact_mut(|txn| {
+      self.views.update_all_views_with_txn(txn, |_, mut update| {
+        for row_id in row_ids {
+          update = update.remove_row_order(row_id);
+        }
+      });
+    });
+
+    row_ids
+      .iter()
+      .map(|row_id| {
+        let row = self.block.get_row(row_id);
+        self.block.delete_row(row_id);
+        row
+      })
+      .collect()
   }
 
   /// Update the row

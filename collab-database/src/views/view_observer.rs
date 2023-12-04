@@ -23,7 +23,7 @@ pub enum DatabaseViewChange {
     row_orders: Vec<RowOrder>,
   },
   DidDeleteRowAtIndex {
-    index: u32,
+    index: Vec<u32>,
   },
   // filter
   DidCreateFilter {
@@ -129,6 +129,7 @@ fn handle_array_event(
 ) {
   let mut offset = 0;
   let key = ArrayChangeKey::from(array_event);
+  let mut deleted_row_index: Vec<u32> = vec![];
   array_event
     .delta(txn)
     .iter()
@@ -141,21 +142,36 @@ fn handle_array_event(
             .collect::<Vec<_>>();
           let _ = change_tx.send(DatabaseViewChange::DidInsertRowOrders { row_orders });
         },
-        ArrayChangeKey::Unknown(s) => {
+        ArrayChangeKey::Unhandle(s) => {
           trace!("database view observe unknown insert: {}", s);
         },
       },
       Change::Removed(len) => {
-        debug_assert!(*len == 1, "For our scenario, the len should be 1");
         // https://github.com/y-crdt/y-crdt/issues/341
         trace!("database view observe array remove: {}", len);
-        let _ = change_tx.send(DatabaseViewChange::DidDeleteRowAtIndex { index: offset });
+        match &key {
+          ArrayChangeKey::RowOrder => {
+            if *len > 0 {
+              deleted_row_index.extend((offset..=(offset + len - 1)).collect::<Vec<_>>());
+            }
+            offset += len;
+          },
+          ArrayChangeKey::Unhandle(s) => {
+            trace!("database view observe unhandle delete: {}", s);
+          },
+        }
       },
       Change::Retain(value) => {
         offset += value;
         trace!("database view observe array retain: {}", value);
       },
     });
+
+  if !deleted_row_index.is_empty() {
+    let _ = change_tx.send(DatabaseViewChange::DidDeleteRowAtIndex {
+      index: deleted_row_index,
+    });
+  }
 }
 
 fn handle_map_event(change_tx: &ViewChangeSender, txn: &TransactionMut, event: &MapEvent) {
@@ -181,7 +197,7 @@ fn handle_map_event(change_tx: &ViewChangeSender, txn: &TransactionMut, event: &
 }
 
 enum ArrayChangeKey {
-  Unknown(String),
+  Unhandle(String),
   RowOrder,
 }
 
@@ -191,11 +207,11 @@ impl From<&ArrayEvent> for ArrayChangeKey {
       Some(segment) => match segment {
         PathSegment::Key(s) => match s.deref() {
           ROW_ORDERS => Self::RowOrder,
-          _ => Self::Unknown(s.deref().to_string()),
+          _ => Self::Unhandle(s.deref().to_string()),
         },
-        PathSegment::Index(_) => Self::Unknown("index".to_string()),
+        PathSegment::Index(_) => Self::Unhandle("index".to_string()),
       },
-      None => Self::Unknown("empty path".to_string()),
+      None => Self::Unhandle("empty path".to_string()),
     }
   }
 }
