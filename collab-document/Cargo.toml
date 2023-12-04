@@ -11,7 +11,6 @@ collab-derive = { path = "../collab-derive" }
 collab-persistence = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
-lib0 = { version = "0.16.3", features = ["lib0-serde"] }
 nanoid = "0.4.0"
 thiserror = "1.0.30"
 anyhow.workspace = true
