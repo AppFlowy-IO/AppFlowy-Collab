@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use collab::preclude::{
-  lib0Any, DeepEventsSubscription, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  Any, DeepEventsSubscription, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -715,9 +715,9 @@ impl TryFrom<i64> for ViewLayout {
   }
 }
 
-impl From<ViewLayout> for lib0Any {
+impl From<ViewLayout> for Any {
   fn from(layout: ViewLayout) -> Self {
-    lib0Any::BigInt(layout as i64)
+    Any::BigInt(layout as i64)
   }
 }
 

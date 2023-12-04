@@ -34,13 +34,13 @@ macro_rules! impl_option_str_update {
 macro_rules! impl_i64_update {
   ($setter1: ident, $setter2: ident, $key: expr) => {
     pub fn $setter1(self, value: i64) -> Self {
-      self.map_ref.insert_with_txn(self.txn, $key, value);
+      self.map_ref.insert_i64_with_txn(self.txn, $key, value);
       self
     }
 
     pub fn $setter2(self, value: Option<i64>) -> Self {
       if let Some(value) = value {
-        self.map_ref.insert_with_txn(self.txn, $key, value);
+        self.map_ref.insert_i64_with_txn(self.txn, $key, value);
       }
       self
     }
@@ -51,7 +51,9 @@ macro_rules! impl_i64_update {
 macro_rules! impl_option_i64_update {
   ($setter1: ident, $key: expr) => {
     pub fn $setter1(self, value: Option<i64>) -> Self {
-      self.map_ref.insert_with_txn(self.txn, $key, value);
+      if let Some(value) = value {
+        self.map_ref.insert_i64_with_txn(self.txn, $key, value);
+      }
       self
     }
   };

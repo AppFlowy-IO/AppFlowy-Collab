@@ -1,3 +1,4 @@
+use collab::core::value::YrsValueExtension;
 use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 
@@ -166,7 +167,7 @@ pub fn primary_field_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Opti
 /// Get field from a [YrsValue]
 pub fn field_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Field> {
   let map_ref = value.to_ymap()?;
-  field_from_map_ref(&map_ref, txn)
+  field_from_map_ref(map_ref, txn)
 }
 
 /// Get field from a [MapRef]

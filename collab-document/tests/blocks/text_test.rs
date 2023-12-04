@@ -5,7 +5,7 @@ use collab_document::blocks::{
 };
 
 use serde_json::json;
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn insert_text_test() {
@@ -234,7 +234,7 @@ async fn text_delta_trans_delta_test() {
     assert_eq!(result, text_delta);
     assert_eq!(result.to_delta(), delta);
 
-    let attrs = Attrs::from([(Rc::from("bold"), true.into())]);
+    let attrs = Attrs::from([(Arc::from("bold"), true.into())]);
     let delta = Delta::Retain(6, Some(Box::from(attrs.clone())));
     let result = TextDelta::from(txn, delta.clone());
     let text_delta = TextDelta::Retain(6, Some(attrs));
@@ -255,7 +255,7 @@ async fn serialize_delta_test() {
   let json = serde_json::to_string(&delta).unwrap();
   assert_eq!(json, r#"{"insert":"Hello World"}"#);
 
-  let delta = TextDelta::Retain(6, Some(Attrs::from([(Rc::from("bold"), true.into())])));
+  let delta = TextDelta::Retain(6, Some(Attrs::from([(Arc::from("bold"), true.into())])));
   let json = serde_json::to_string(&delta).unwrap();
   assert_eq!(json, r#"{"retain":6,"attributes":{"bold":true}}"#);
 
@@ -274,7 +274,7 @@ async fn deserialize_delta_test() {
   let delta: TextDelta = serde_json::from_str(json).unwrap();
   assert_eq!(
     delta,
-    TextDelta::Retain(6, Some(Attrs::from([(Rc::from("bold"), true.into())])))
+    TextDelta::Retain(6, Some(Attrs::from([(Arc::from("bold"), true.into())])))
   );
 
   let json = r#"{"delete":4}"#;

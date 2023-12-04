@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
 use anyhow::bail;
-use collab::core::any_map::AnyMapExtension;
-use collab::preclude::lib0Any;
+use collab::core::any_map::{AnyMap, AnyMapExtension};
+use collab::preclude::Any;
 use collab_database::fields::{TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::Cell;
 use collab_database::views::{
@@ -17,7 +17,6 @@ use collab_database::views::{
 };
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use nanoid::nanoid;
-
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -383,10 +382,7 @@ pub struct TestTextCell(pub String);
 impl From<TestTextCell> for Cell {
   fn from(text_cell: TestTextCell) -> Self {
     let mut cell = Self::new();
-    cell.insert(
-      "data".to_string(),
-      lib0Any::String(text_cell.0.into_boxed_str()),
-    );
+    cell.insert("data".to_string(), Any::String(Arc::from(text_cell.0)));
     cell
   }
 }
@@ -401,6 +397,22 @@ impl From<Cell> for TestTextCell {
 impl From<&str> for TestTextCell {
   fn from(s: &str) -> Self {
     Self(s.to_string())
+  }
+}
+pub struct TestNumberCell(pub i64);
+
+impl From<TestNumberCell> for Cell {
+  fn from(text_cell: TestNumberCell) -> Self {
+    let mut cell = Self::new();
+    cell.insert_i64_value("data", text_cell.0);
+    cell
+  }
+}
+
+impl From<&Cell> for TestNumberCell {
+  fn from(cell: &Cell) -> Self {
+    let data = cell.get_i64_value("data").unwrap();
+    Self(data)
   }
 }
 
@@ -533,7 +545,8 @@ impl std::convert::From<i64> for TestFieldType {
 
 #[derive(Debug, Clone)]
 pub struct TestFieldSetting {
-  pub is_visible: bool,
+  pub width: i32,
+  pub visibility: u8,
 }
 
 impl Default for TestFieldSetting {
@@ -544,7 +557,10 @@ impl Default for TestFieldSetting {
 
 impl TestFieldSetting {
   pub fn new() -> Self {
-    Self { is_visible: true }
+    Self {
+      width: 0,
+      visibility: 0,
+    }
   }
 }
 
@@ -553,28 +569,31 @@ const VISIBILITY: &str = "visibility";
 impl From<FieldSettingsMap> for TestFieldSetting {
   fn from(value: FieldSettingsMap) -> Self {
     TestFieldSetting {
-      is_visible: value.get_bool_value(VISIBILITY).unwrap_or(true),
+      width: value.get_i64_value("width").unwrap_or(0) as i32,
+      visibility: value.get_i64_value(VISIBILITY).unwrap_or(0) as u8,
     }
   }
 }
 
-impl From<TestFieldSetting> for FieldSettingsMap {
+impl From<TestFieldSetting> for AnyMap {
   fn from(data: TestFieldSetting) -> Self {
     FieldSettingsMapBuilder::new()
-      .insert_bool_value(VISIBILITY, data.is_visible)
+      .insert_i64_value("width", data.width as i64)
+      .insert_i64_value(VISIBILITY, data.visibility as i64)
       .build()
   }
 }
 
 pub fn make_rocks_db() -> Arc<RocksCollabDB> {
-  let path = db_path();
+  let tempdir = TempDir::new().unwrap();
+  let path = tempdir.into_path();
   Arc::new(RocksCollabDB::open_opt(path, false).unwrap())
 }
 
-pub fn db_path() -> PathBuf {
+pub fn setup_log() {
   static START: Once = Once::new();
   START.call_once(|| {
-    let level = "debug";
+    let level = "trace";
     let mut filters = vec![];
     filters.push(format!("collab_persistence={}", level));
     filters.push(format!("collab={}", level));
@@ -586,9 +605,6 @@ pub fn db_path() -> PathBuf {
       .finish();
     subscriber.try_init().unwrap();
   });
-
-  let tempdir = TempDir::new().unwrap();
-  tempdir.into_path()
 }
 
 pub fn unzip_history_database_db(folder_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {

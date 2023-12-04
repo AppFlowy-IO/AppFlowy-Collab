@@ -39,7 +39,7 @@ pub enum PersistenceError {
   UnexpectedEmptyUpdates,
 
   #[error(transparent)]
-  Yrs(#[from] lib0::error::Error),
+  Yrs(#[from] yrs::encoding::read::Error),
 
   #[error("invalid data: {0}")]
   InvalidData(String),

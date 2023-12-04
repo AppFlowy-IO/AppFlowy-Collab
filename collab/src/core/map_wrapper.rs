@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
-use lib0::any::Any;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use yrs::block::Prelim;
@@ -11,8 +11,9 @@ use yrs::{
 
 use crate::core::array_wrapper::ArrayRefWrapper;
 use crate::core::text_wrapper::TextRefWrapper;
+use crate::core::value::YrsValueExtension;
 use crate::preclude::*;
-use crate::util::lib0_any_to_json_value;
+use crate::util::any_to_json_value;
 
 pub trait CustomMapRef {
   fn from_map_ref(map_ref: MapRefWrapper) -> Self;
@@ -62,11 +63,11 @@ impl MapRefWrapper {
     self.with_transact_mut(|txn| self.insert_array_with_txn(txn, key, values))
   }
 
-  pub fn insert_map<T: Into<MapPrelim<lib0Any>>>(&self, key: &str, value: T) {
+  pub fn insert_map<T: Into<MapPrelim<Any>>>(&self, key: &str, value: T) {
     self.with_transact_mut(|txn| self.insert_map_with_txn(txn, key, value));
   }
 
-  pub fn insert_map_with_txn<T: Into<MapPrelim<lib0Any>>>(
+  pub fn insert_map_with_txn<T: Into<MapPrelim<Any>>>(
     &self,
     txn: &mut TransactionMut,
     key: &str,
@@ -117,7 +118,7 @@ impl MapRefWrapper {
   }
 
   pub fn create_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
-    let map = MapPrelim::<lib0::any::Any>::new();
+    let map = MapPrelim::<Any>::new();
     let map_ref = self.map_ref.insert(txn, key, map);
     MapRefWrapper::new(map_ref, self.collab_ctx.clone())
   }
@@ -139,15 +140,16 @@ impl MapRefWrapper {
     txn: &T,
     key: K,
   ) -> Option<ArrayRefWrapper> {
-    let array_ref = self
-      .map_ref
-      .get(txn, key.as_ref())
-      .map(|value| value.to_yarray())??;
+    let value = self.map_ref.get(txn, key.as_ref());
+    let array_ref = value?.to_yarray().cloned()?;
     Some(ArrayRefWrapper::new(array_ref, self.collab_ctx.clone()))
   }
 
   pub fn get_text_ref_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<TextRefWrapper> {
-    let text_ref = self.map_ref.get(txn, key).map(|value| value.to_ytext())??;
+    let text_ref = self
+      .map_ref
+      .get(txn, key)
+      .map(|value| value.to_ytext().cloned())??;
     Some(TextRefWrapper::new(text_ref, self.collab_ctx.clone()))
   }
 
@@ -171,7 +173,7 @@ impl MapRefWrapper {
 
   pub fn get_json_with_txn<T: DeserializeOwned>(&self, txn: &Transaction, key: &str) -> Option<T> {
     let map_ref = self.get_map_with_txn(txn, key)?;
-    let json_value = lib0_any_to_json_value(map_ref.into_inner().to_json(txn)).ok()?;
+    let json_value = any_to_json_value(map_ref.into_inner().to_json(txn)).ok()?;
     serde_json::from_value::<T>(json_value).ok()
   }
 
@@ -186,17 +188,17 @@ impl MapRefWrapper {
     self.collab_ctx.with_transact_mut(f)
   }
 
-  pub fn to_json_value(&self) -> JsonValue {
-    let txn = self.collab_ctx.transact();
-    serde_json::to_value(&self.map_ref.to_json(&txn)).unwrap()
-  }
-
-  pub fn to_json(&self) -> String {
+  pub fn to_json_str(&self) -> String {
     let txn = self.collab_ctx.transact();
     let value = self.map_ref.to_json(&txn);
     let mut json_str = String::new();
     value.to_json(&mut json_str);
     json_str
+  }
+  pub fn to_json_value(&self) -> anyhow::Result<serde_json::Value> {
+    let txn = self.collab_ctx.transact();
+    let value = self.map_ref.to_json(&txn);
+    any_to_json_value(value)
   }
 }
 
@@ -226,31 +228,25 @@ pub trait MapRefExtension {
   }
 
   fn insert_str_with_txn<T: ToString>(&self, txn: &mut TransactionMut, key: &str, value: T) {
-    self.map_ref().insert(
-      txn,
-      key,
-      lib0Any::String(value.to_string().into_boxed_str()),
-    );
+    self
+      .map_ref()
+      .insert(txn, key, Any::String(Arc::from(value.to_string())));
   }
 
   fn insert_i64_with_txn<T: Into<i64>>(&self, txn: &mut TransactionMut, key: &str, value: T) {
-    self
-      .map_ref()
-      .insert(txn, key, lib0Any::BigInt(value.into()));
+    self.map_ref().insert(txn, key, Any::BigInt(value.into()));
   }
 
   fn insert_f64_with_txn(&self, txn: &mut TransactionMut, key: &str, value: f64) {
-    self.map_ref().insert(txn, key, lib0Any::Number(value));
+    self.map_ref().insert(txn, key, Any::Number(value));
   }
 
   fn insert_bool_with_txn<K: AsRef<str>>(&self, txn: &mut TransactionMut, key: K, value: bool) {
-    self
-      .map_ref()
-      .insert(txn, key.as_ref(), lib0Any::Bool(value));
+    self.map_ref().insert(txn, key.as_ref(), Any::Bool(value));
   }
 
   fn create_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
-    let map = MapPrelim::<lib0::any::Any>::new();
+    let map = MapPrelim::<Any>::new();
     self.map_ref().insert(txn, key, map)
   }
 
@@ -258,14 +254,17 @@ pub trait MapRefExtension {
     self
       .map_ref()
       .get(txn, key)
-      .map(|value| value.to_yarray())?
+      .map(|value| value.to_yarray().cloned())?
   }
 
   fn get_map_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<MapRef> {
-    self.map_ref().get(txn, key).map(|value| value.to_ymap())?
+    self
+      .map_ref()
+      .get(txn, key)
+      .map(|value| value.to_ymap().cloned())?
   }
 
-  fn get_any_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<lib0Any> {
+  fn get_any_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<Any> {
     self.map_ref().get(txn, key).and_then(|value| match value {
       Value::Any(any) => Some(any),
       _ => None,
@@ -307,11 +306,9 @@ pub trait MapRefExtension {
     match self
       .map_ref()
       .get(txn, key)
-      .and_then(|value| value.to_ymap())
+      .and_then(|value| value.to_ymap().cloned())
     {
-      None => self
-        .map_ref()
-        .insert(txn, key, MapPrelim::<lib0::any::Any>::new()),
+      None => self.map_ref().insert(txn, key, MapPrelim::<Any>::new()),
       Some(map_ref) => map_ref,
     }
   }
@@ -360,7 +357,7 @@ pub trait MapRefExtension {
     match self
       .map_ref()
       .get(txn, key)
-      .and_then(|value| value.to_yarray())
+      .and_then(|value| value.to_yarray().cloned())
     {
       None => self.map_ref().insert(txn, key, ArrayPrelim::from(values)),
       Some(array_ref) => array_ref,
@@ -375,7 +372,10 @@ pub trait MapRefExtension {
   }
 
   fn get_text_ref_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<TextRef> {
-    self.map_ref().get(txn, key).map(|value| value.to_ytext())?
+    self
+      .map_ref()
+      .get(txn, key)
+      .map(|value| value.to_ytext().cloned())?
   }
 
   fn get_i64_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<i64> {

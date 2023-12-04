@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 
 use collab::core::array_wrapper::ArrayRefExtension;
+use collab::core::value::YrsValueExtension;
 use collab::preclude::{
-  lib0Any, Array, ArrayRefWrapper, Collab, MapPrelim, MapRef, MapRefExtension, ReadTxn,
-  TransactionMut, YrsValue,
+  Any, Array, ArrayRefWrapper, Collab, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut,
+  YrsValue,
 };
 
 use crate::database::timestamp;
@@ -29,7 +30,7 @@ impl DatabaseWithViewsArray {
 
     let databases = match array {
       None => collab.with_origin_transact_mut(|txn| {
-        collab.create_array_with_txn::<MapPrelim<lib0Any>>(txn, DATABASES, vec![])
+        collab.create_array_with_txn::<MapPrelim<Any>>(txn, DATABASES, vec![])
       }),
       Some(array) => array,
     };
@@ -57,7 +58,11 @@ impl DatabaseWithViewsArray {
   pub fn update_database(&self, database_id: &str, mut f: impl FnMut(&mut DatabaseWithViews)) {
     self.array_ref.with_transact_mut(|txn| {
       if let Some(index) = self.database_index_from_id(txn, database_id) {
-        if let Some(Some(map_ref)) = self.array_ref.get(txn, index).map(|value| value.to_ymap()) {
+        if let Some(Some(map_ref)) = self
+          .array_ref
+          .get(txn, index)
+          .map(|value| value.to_ymap().cloned())
+        {
           if let Some(mut record) = DatabaseWithViews::from_map_ref(txn, &map_ref) {
             f(&mut record);
             self.array_ref.remove(txn, index);
@@ -106,7 +111,7 @@ impl DatabaseWithViewsArray {
       .iter(txn)
       .flat_map(|value| {
         let map_ref = value.to_ymap()?;
-        DatabaseWithViews::from_map_ref(txn, &map_ref)
+        DatabaseWithViews::from_map_ref(txn, map_ref)
       })
       .collect()
   }

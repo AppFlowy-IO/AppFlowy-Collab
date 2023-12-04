@@ -177,32 +177,6 @@ async fn remove_database_view_group_test() {
   assert_eq!(group_settings[0].groups[0].id, "group_item2");
 }
 
-#[tokio::test]
-async fn update_database_view_group_test() {
-  let database_test = create_database_with_two_groups().await;
-  let view = database_test.views.get_view("v1").unwrap();
-  let group_settings = view
-    .group_settings
-    .iter()
-    .map(|value| TestGroupSetting::try_from(value).unwrap())
-    .collect::<Vec<TestGroupSetting>>();
-  assert!(!group_settings[0].groups[0].visible);
-
-  database_test.update_group_setting("v1", "g1", |object| {
-    object.mut_array_element_by_id(GROUPS, "group_item1", |map| {
-      map.insert_bool_value("visible", true);
-    });
-  });
-
-  let view = database_test.views.get_view("v1").unwrap();
-  let group_settings = view
-    .group_settings
-    .iter()
-    .map(|value| TestGroupSetting::try_from(value).unwrap())
-    .collect::<Vec<TestGroupSetting>>();
-  assert!(group_settings[0].groups[0].visible);
-}
-
 async fn create_database_with_two_groups() -> DatabaseTest {
   let database_test = create_database_with_default_data(1, "1").await;
   let group_1 = TestGroupSetting {

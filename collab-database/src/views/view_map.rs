@@ -1,23 +1,28 @@
+use collab::core::value::YrsValueExtension;
 use std::ops::Deref;
 
 use collab::preclude::{
-  Array, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  Array, DeepEventsSubscription, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
+  TransactionMut,
 };
 
 use crate::database::timestamp;
 use crate::rows::RowId;
 use crate::views::{
   field_settings_from_map_ref, filters_from_map_ref, group_setting_from_map_ref,
-  layout_setting_from_map_ref, sorts_from_map_ref, view_description_from_value, view_from_map_ref,
-  view_from_value, DatabaseLayout, DatabaseView, DatabaseViewUpdate, FieldOrder, FieldOrderArray,
-  FieldSettingsByFieldIdMap, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder,
-  RowOrderArray, SortMap, ViewBuilder, ViewDescription, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
+  layout_setting_from_map_ref, sorts_from_map_ref, subscribe_view_change,
+  view_description_from_value, view_from_map_ref, view_from_value, DatabaseLayout, DatabaseView,
+  DatabaseViewUpdate, FieldOrder, FieldOrderArray, FieldSettingsByFieldIdMap, FilterMap,
+  GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray, SortMap, ViewBuilder,
+  ViewChangeSender, ViewDescription, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
 };
 
 use super::view_id_from_map_ref;
 
 pub struct ViewMap {
   container: MapRefWrapper,
+  #[allow(dead_code)]
+  subscription: Option<DeepEventsSubscription>,
 }
 
 impl Deref for ViewMap {
@@ -29,9 +34,13 @@ impl Deref for ViewMap {
 }
 
 impl ViewMap {
-  pub fn new(container: MapRefWrapper) -> Self {
-    // let field_order = FieldOrderArray::new(field_order);
-    Self { container }
+  pub fn new(mut container: MapRefWrapper, view_change_sender: Option<ViewChangeSender>) -> Self {
+    let subscription =
+      view_change_sender.map(|sender| subscribe_view_change(&mut container, sender));
+    Self {
+      container,
+      subscription,
+    }
   }
 
   pub fn insert_view(&self, view: DatabaseView) {
@@ -274,7 +283,7 @@ impl ViewMap {
     let map_refs = self
       .container
       .iter(txn)
-      .flat_map(|(_k, v)| v.to_ymap())
+      .flat_map(|(_k, v)| v.to_ymap().cloned())
       .collect::<Vec<MapRef>>();
 
     for map_ref in map_refs {

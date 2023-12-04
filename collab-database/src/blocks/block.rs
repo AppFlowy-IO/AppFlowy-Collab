@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
 use collab::core::collab::{CollabRawData, MutexCollab};
+
 use collab_entity::CollabType;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -14,8 +15,8 @@ use uuid::Uuid;
 
 use crate::blocks::task_controller::{BlockTask, BlockTaskController};
 use crate::rows::{
-  meta_id_from_row_id, Cell, DatabaseRow, MutexDatabaseRow, Row, RowDetail, RowId, RowMeta,
-  RowMetaKey, RowMetaUpdate, RowUpdate,
+  meta_id_from_row_id, Cell, DatabaseRow, MutexDatabaseRow, Row, RowChangeSender, RowDetail, RowId,
+  RowMeta, RowMetaKey, RowMetaUpdate, RowUpdate,
 };
 use crate::user::DatabaseCollabService;
 use crate::views::RowOrder;
@@ -38,6 +39,7 @@ pub struct Block {
   sequence: Arc<AtomicU32>,
   pub cache: Arc<Mutex<LruCache<RowId, Arc<MutexDatabaseRow>>>>,
   pub notifier: Arc<broadcast::Sender<BlockEvent>>,
+  row_change_tx: Option<RowChangeSender>,
 }
 
 impl Block {
@@ -45,6 +47,7 @@ impl Block {
     uid: i64,
     collab_db: Weak<RocksCollabDB>,
     collab_service: Arc<dyn DatabaseCollabService>,
+    row_change_tx: Option<RowChangeSender>,
   ) -> Block {
     let cache = Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap())));
     let controller = BlockTaskController::new(collab_db.clone(), Arc::downgrade(&collab_service));
@@ -58,6 +61,7 @@ impl Block {
       collab_service,
       sequence: Arc::new(Default::default()),
       notifier: Arc::new(notifier),
+      row_change_tx,
     }
   }
 
@@ -115,6 +119,7 @@ impl Block {
       row_id.clone(),
       self.collab_db.clone(),
       collab,
+      self.row_change_tx.clone(),
     ));
     self.cache.lock().put(row_id, Arc::new(database_row));
     row_order
@@ -224,6 +229,7 @@ impl Block {
           row_id.clone(),
           self.collab_db.clone(),
           collab,
+          self.row_change_tx.clone(),
         )));
         self.cache.lock().put(row_id.clone(), row.clone());
         Some(row)

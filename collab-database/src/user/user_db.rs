@@ -17,6 +17,7 @@ use collab_plugins::local_storage::CollabPersistenceConfig;
 use parking_lot::Mutex;
 
 use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
+use crate::database_observer::DatabaseNotify;
 use crate::error::DatabaseError;
 
 use crate::user::db_record::{DatabaseWithViews, DatabaseWithViewsArray};
@@ -126,13 +127,14 @@ impl WorkspaceDatabase {
             },
           }
         }
-
+        let notifier = DatabaseNotify::default();
         let collab = self.collab_for_database(database_id, collab_raw_data);
         let context = DatabaseContext {
           uid: self.uid,
           db: self.collab_db.clone(),
           collab,
           collab_service: self.collab_service.clone(),
+          notifier: Some(notifier),
         };
         let database = Database::get_or_create(database_id, context).ok()?;
 
@@ -180,11 +182,13 @@ impl WorkspaceDatabase {
 
     // Create a [Collab] for the given database id.
     let collab = self.collab_for_database(&params.database_id, CollabRawData::default());
+    let notifier = DatabaseNotify::default();
     let context = DatabaseContext {
       uid: self.uid,
       db: self.collab_db.clone(),
       collab,
       collab_service: self.collab_service.clone(),
+      notifier: Some(notifier),
     };
 
     // Add a new database record.
@@ -275,7 +279,8 @@ impl WorkspaceDatabase {
     snapshot: CollabSnapshot,
   ) -> Result<Database, DatabaseError> {
     let collab = self.collab_for_database(database_id, CollabRawData::default());
-    let update = Update::decode_v1(&snapshot.data)?;
+    let update =
+      Update::decode_v1(&snapshot.data).map_err(|err| DatabaseError::Internal(err.into()))?;
     collab.lock().with_origin_transact_mut(|txn| {
       txn.apply_update(update);
     });
@@ -285,6 +290,7 @@ impl WorkspaceDatabase {
       db: self.collab_db.clone(),
       collab,
       collab_service: self.collab_service.clone(),
+      notifier: None,
     };
     Database::get_or_create(database_id, context)
   }

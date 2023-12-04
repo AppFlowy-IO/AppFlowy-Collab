@@ -17,19 +17,21 @@ use serde::{Deserialize, Serialize};
 pub use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{Block, BlockEvent};
+use crate::database_observer::DatabaseNotify;
 use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
-use crate::fields::{Field, FieldMap};
+use crate::fields::{Field, FieldChangeReceiver, FieldMap};
 use crate::meta::MetaMap;
 use crate::rows::{
-  CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowDetail, RowId, RowMeta,
-  RowMetaUpdate, RowUpdate,
+  CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowChangeReceiver, RowDetail, RowId,
+  RowMeta, RowMetaUpdate, RowUpdate,
 };
 use crate::user::DatabaseCollabService;
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
   FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap,
-  LayoutSetting, OrderObjectPosition, RowOrder, SortMap, ViewDescription, ViewMap,
+  LayoutSetting, OrderObjectPosition, RowOrder, SortMap, ViewChangeReceiver, ViewDescription,
+  ViewMap,
 };
 
 pub struct Database {
@@ -42,6 +44,7 @@ pub struct Database {
   /// It used to keep track of the blocks. Each block contains a list of [Row]s
   /// A database rows will be stored in multiple blocks.
   pub block: Block,
+  pub notifier: Option<DatabaseNotify>,
 }
 
 const DATABASE_ID: &str = "id";
@@ -55,6 +58,7 @@ pub struct DatabaseContext {
   pub db: Weak<RocksCollabDB>,
   pub collab: Arc<MutexCollab>,
   pub collab_service: Arc<dyn DatabaseCollabService>,
+  pub notifier: Option<DatabaseNotify>,
 }
 
 impl Database {
@@ -95,6 +99,27 @@ impl Database {
       collab.flush();
     }
     Ok(())
+  }
+
+  pub fn subscribe_row_change(&self) -> Option<RowChangeReceiver> {
+    self
+      .notifier
+      .as_ref()
+      .map(|notifier| notifier.row_change_tx.subscribe())
+  }
+
+  pub fn subscribe_field_change(&self) -> Option<FieldChangeReceiver> {
+    self
+      .notifier
+      .as_ref()
+      .map(|notifier| notifier.field_change_tx.subscribe())
+  }
+
+  pub fn subscribe_view_change(&self) -> Option<ViewChangeReceiver> {
+    self
+      .notifier
+      .as_ref()
+      .map(|notifier| notifier.view_change_tx.subscribe())
   }
 
   pub fn load_all_rows(&self) {
@@ -148,13 +173,30 @@ impl Database {
 
           (fields, views, metas)
         });
-        let views = ViewMap::new(views);
-        let fields = FieldMap::new(fields);
+        let views = ViewMap::new(
+          views,
+          context
+            .notifier
+            .as_ref()
+            .map(|notifier| notifier.view_change_tx.clone()),
+        );
+        let fields = FieldMap::new(
+          fields,
+          context
+            .notifier
+            .as_ref()
+            .as_ref()
+            .map(|notifier| notifier.field_change_tx.clone()),
+        );
         let metas = MetaMap::new(metas);
         let block = Block::new(
           context.uid,
           context.db.clone(),
           context.collab_service.clone(),
+          context
+            .notifier
+            .as_ref()
+            .map(|notifier| notifier.row_change_tx.clone()),
         );
         drop(collab_guard);
 
@@ -165,6 +207,7 @@ impl Database {
           views: Rc::new(views),
           fields: Rc::new(fields),
           metas: Rc::new(metas),
+          notifier: context.notifier,
         })
       },
     }
@@ -202,14 +245,30 @@ impl Database {
       (database, fields, views, metas)
     });
     drop(collab_guard);
-    let views = ViewMap::new(views);
-    let fields = FieldMap::new(fields);
+    let views = ViewMap::new(
+      views,
+      context
+        .notifier
+        .as_ref()
+        .map(|notifier| notifier.view_change_tx.clone()),
+    );
+    let fields = FieldMap::new(
+      fields,
+      context
+        .notifier
+        .as_ref()
+        .map(|notifier| notifier.field_change_tx.clone()),
+    );
     let metas = MetaMap::new(metas);
 
     let block = Block::new(
       context.uid,
       context.db.clone(),
       context.collab_service.clone(),
+      context
+        .notifier
+        .as_ref()
+        .map(|notifier| notifier.row_change_tx.clone()),
     );
 
     Ok(Self {
@@ -219,6 +278,7 @@ impl Database {
       views: Rc::new(views),
       fields: Rc::new(fields),
       metas: Rc::new(metas),
+      notifier: context.notifier,
     })
   }
 
@@ -308,15 +368,33 @@ impl Database {
   /// The [RowOrder] of each view representing this row will be removed.
   pub fn remove_row(&self, row_id: &RowId) -> Option<Row> {
     self.root.with_transact_mut(|txn| {
-      self
-        .views
-        .update_all_views_with_txn(txn, |_view_id, update| {
-          update.remove_row_order(row_id);
-        });
-      let row = self.block.get_row(row_id);
-      self.block.delete_row(row_id);
-      Some(row)
-    })
+      self.views.update_all_views_with_txn(txn, |_, update| {
+        update.remove_row_order(row_id);
+      });
+    });
+
+    let row = self.block.get_row(row_id);
+    self.block.delete_row(row_id);
+    Some(row)
+  }
+
+  pub fn remove_rows(&self, row_ids: &[RowId]) -> Vec<Row> {
+    self.root.with_transact_mut(|txn| {
+      self.views.update_all_views_with_txn(txn, |_, mut update| {
+        for row_id in row_ids {
+          update = update.remove_row_order(row_id);
+        }
+      });
+    });
+
+    row_ids
+      .iter()
+      .map(|row_id| {
+        let row = self.block.get_row(row_id);
+        self.block.delete_row(row_id);
+        row
+      })
+      .collect()
   }
 
   /// Update the row
@@ -1196,7 +1274,7 @@ pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
   let views = collab.get_map_with_txn(&txn, vec![DATABASE, VIEWS])?;
   let metas = collab.get_map_with_txn(&txn, vec![DATABASE, METAS])?;
 
-  let views = ViewMap::new(views);
+  let views = ViewMap::new(views, None);
   let meta = MetaMap::new(metas);
 
   let inline_view_id = meta.get_inline_view_with_txn(&txn)?;
@@ -1229,7 +1307,7 @@ where
 {
   collab.with_origin_transact_mut(|txn| {
     if let Some(container) = collab.get_map_with_txn(txn, vec![DATABASE, VIEWS]) {
-      let views = ViewMap::new(container);
+      let views = ViewMap::new(container, None);
       let mut reset_views = views.get_all_views_with_txn(txn);
 
       reset_views.iter_mut().for_each(f);

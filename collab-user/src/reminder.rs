@@ -96,10 +96,10 @@ fn subscribe_reminder_change(
   change_tx: RemindersChangeSender,
 ) -> DeepEventsSubscription {
   root.observe_deep(move |txn, events| {
-    for deep_event in events.iter() {
-      if let Event::Array(event) = deep_event {
-        for change in event.delta(txn) {
-          let _change_tx = change_tx.clone();
+    for event in events.iter() {
+      if let Event::Array(array_event) = event {
+        for change in array_event.delta(txn) {
+          let change_tx = change_tx.clone();
           match change {
             Change::Added(values) => {
               let reminders = values
@@ -112,10 +112,10 @@ fn subscribe_reminder_change(
                   }
                 })
                 .collect();
-              let _ = _change_tx.send(ReminderChange::DidCreateReminders { reminders });
+              let _ = change_tx.send(ReminderChange::DidCreateReminders { reminders });
             },
             Change::Removed(index) => {
-              let _ = _change_tx.send(ReminderChange::DidDeleteReminder { index: *index });
+              let _ = change_tx.send(ReminderChange::DidDeleteReminder { index: *index });
             },
             Change::Retain(_) => {},
           }

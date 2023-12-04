@@ -475,11 +475,11 @@ impl Folder {
   }
 
   pub fn to_json(&self) -> String {
-    self.root.to_json()
+    self.root.to_json_str()
   }
 
   pub fn to_json_value(&self) -> JsonValue {
-    self.root.to_json_value()
+    self.root.to_json_value().unwrap()
   }
 
   /// Recursively retrieves all views associated with the provided `view_id` using a transaction.

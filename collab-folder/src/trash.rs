@@ -4,12 +4,13 @@ use std::sync::Arc;
 use anyhow::bail;
 use collab::preclude::array::ArrayEvent;
 use collab::preclude::{
-  lib0Any, Array, ArrayRefWrapper, ReadTxn, Subscription, TransactionMut, Value, YrsValue,
+  Any, Array, ArrayRefWrapper, ReadTxn, Subscription, TransactionMut, Value, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::folder_observe::{TrashChange, TrashChangeSender};
 use crate::{subscribe_trash_change, TrashInfo, ViewsMap};
+use collab::util::deserialize_i64_from_numeric;
 
 type ArraySubscription = Subscription<Arc<dyn Fn(&TransactionMut, &ArrayEvent)>>;
 
@@ -132,23 +133,24 @@ impl TrashArray {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TrashRecord {
   pub id: String,
+  #[serde(deserialize_with = "deserialize_i64_from_numeric")]
   pub created_at: i64,
   #[serde(default)]
   pub workspace_id: String,
 }
 
-impl From<lib0Any> for TrashRecord {
-  fn from(any: lib0Any) -> Self {
+impl From<Any> for TrashRecord {
+  fn from(any: Any) -> Self {
     let mut json = String::new();
     any.to_json(&mut json);
     serde_json::from_str(&json).unwrap()
   }
 }
 
-impl From<TrashRecord> for lib0Any {
+impl From<TrashRecord> for Any {
   fn from(item: TrashRecord) -> Self {
     let json = serde_json::to_string(&item).unwrap();
-    lib0Any::from_json(&json).unwrap()
+    Any::from_json(&json).unwrap()
   }
 }
 

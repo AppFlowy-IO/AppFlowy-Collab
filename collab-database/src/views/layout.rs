@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use anyhow::bail;
 use collab::core::any_map::{AnyMap, AnyMapBuilder};
-use collab::preclude::{lib0Any, Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
+use collab::preclude::{Any, Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
@@ -65,9 +65,9 @@ impl From<i64> for DatabaseLayout {
   }
 }
 
-impl From<DatabaseLayout> for lib0Any {
+impl From<DatabaseLayout> for Any {
   fn from(layout: DatabaseLayout) -> Self {
-    lib0Any::BigInt(layout as i64)
+    Any::BigInt(layout as i64)
   }
 }
 
@@ -119,7 +119,7 @@ impl DerefMut for LayoutSettings {
   }
 }
 
-/// Each [LayoutSetting] is a [Map] of [String] to [lib0Any].
+/// Each [LayoutSetting] is a [Map] of [String] to [Any].
 /// This is used to store the settings for each layout.
 pub type LayoutSetting = AnyMap;
 pub type LayoutSettingBuilder = AnyMapBuilder;

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
-use collab::preclude::{lib0Any, YrsValue};
+use collab::preclude::{Any, YrsValue};
 use collab::preclude::{Array, ArrayRef, ArrayRefWrapper, MapRefWrapper, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 
@@ -281,7 +282,7 @@ pub fn children_from_array_ref<T: ReadTxn>(
 }
 
 pub fn view_identifier_from_value(value: YrsValue) -> Option<ViewIdentifier> {
-  if let YrsValue::Any(lib0Any::Map(map)) = value {
+  if let YrsValue::Any(Any::Map(map)) = value {
     ViewIdentifier::from_map(&map)
   } else {
     None
@@ -318,7 +319,7 @@ impl DerefMut for RepeatedViewIdentifier {
   }
 }
 
-impl From<RepeatedViewIdentifier> for Vec<lib0Any> {
+impl From<RepeatedViewIdentifier> for Vec<Any> {
   fn from(values: RepeatedViewIdentifier) -> Self {
     values
       .into_inner()
@@ -337,8 +338,8 @@ impl ViewIdentifier {
   pub fn new(id: String) -> Self {
     Self { id }
   }
-  pub fn from_map(map: &HashMap<String, lib0Any>) -> Option<Self> {
-    if let lib0Any::String(id) = map.get("id")? {
+  pub fn from_map(map: &HashMap<String, Any>) -> Option<Self> {
+    if let Any::String(id) = map.get("id")? {
       return Some(Self { id: id.to_string() });
     }
 
@@ -346,10 +347,10 @@ impl ViewIdentifier {
   }
 }
 
-impl From<ViewIdentifier> for lib0Any {
+impl From<ViewIdentifier> for Any {
   fn from(value: ViewIdentifier) -> Self {
     let mut map = HashMap::new();
-    map.insert("id".to_string(), lib0Any::String(value.id.into_boxed_str()));
-    lib0Any::Map(Box::new(map))
+    map.insert("id".to_string(), Any::String(Arc::from(value.id)));
+    Any::Map(Arc::new(map))
   }
 }

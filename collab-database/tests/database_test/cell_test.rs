@@ -1,7 +1,8 @@
 use collab::core::any_map::AnyMapExtension;
+use collab_database::rows::Cells;
 
 use crate::database_test::helper::create_database_with_default_data;
-use crate::helper::TestTextCell;
+use crate::helper::{TestNumberCell, TestTextCell};
 
 #[tokio::test]
 async fn get_cells_for_field_test() {
@@ -72,4 +73,16 @@ async fn update_empty_cell_for_field_test() {
       .unwrap(),
     "hello world"
   );
+}
+
+#[tokio::test]
+async fn cells_serde_test() {
+  let mut cells = Cells::new();
+  cells.insert("f1".to_string(), TestNumberCell(1).into());
+
+  let json = serde_json::to_string(&cells).unwrap();
+  let de_cells: Cells = serde_json::from_str(&json).unwrap();
+  let cell = de_cells.get("f1").unwrap();
+  let number_cell = TestNumberCell::from(cell);
+  assert_eq!(number_cell.0, 1);
 }

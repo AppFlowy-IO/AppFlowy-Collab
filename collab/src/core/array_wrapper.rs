@@ -1,10 +1,12 @@
 use std::ops::{Deref, DerefMut};
 
+use crate::core::value::YrsValueExtension;
 use anyhow::Result;
-use lib0::any::Any;
 use serde::Serialize;
 use yrs::block::Prelim;
-use yrs::{Array, ArrayRef, MapPrelim, MapRef, ReadTxn, Transact, Transaction, TransactionMut};
+use yrs::{
+  Any, Array, ArrayRef, MapPrelim, MapRef, ReadTxn, Transact, Transaction, TransactionMut,
+};
 
 use crate::preclude::{CollabContext, MapRefExtension, MapRefWrapper, YrsValue};
 use crate::util::insert_json_value_to_array_ref;
@@ -55,7 +57,7 @@ impl ArrayRefWrapper {
     self
       .array_ref
       .iter(txn)
-      .flat_map(|value| value.to_ymap())
+      .flat_map(|value| value.to_ymap().cloned())
       .map(|map_ref| MapRefWrapper::new(map_ref, self.collab_ctx.clone()))
       .collect::<Vec<_>>()
   }

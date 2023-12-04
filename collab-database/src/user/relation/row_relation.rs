@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use collab::core::array_wrapper::ArrayRefExtension;
+use collab::core::value::YrsValueExtension;
 use collab::preclude::{
-  lib0Any, Array, Map, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  Any, Array, Map, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
   YrsValue,
 };
 
@@ -91,7 +92,7 @@ pub fn row_relation_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Optio
         .iter(txn)
         .flat_map(|(k, v)| {
           let map_ref = v.to_ymap()?;
-          let row_connection = row_connection_from_map_ref(txn, &map_ref)?;
+          let row_connection = row_connection_from_map_ref(txn, map_ref)?;
           Some((k.to_string(), row_connection))
         })
         .collect::<HashMap<String, RowConnection>>()
@@ -151,7 +152,7 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
   pub fn set_linking_rows(self, rows: Vec<LinkingRow>) -> Self {
     let array_ref = self
       .map_ref
-      .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, LINKING_ROWS);
+      .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, LINKING_ROWS);
     for row in rows {
       let map_ref = array_ref.insert_map_with_txn(self.txn, None);
       row.fill_map_with_txn(self.txn, map_ref);
@@ -162,7 +163,7 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
   pub fn set_linked_by_rows(self, rows: Vec<LinkedByRow>) -> Self {
     let array_ref = self
       .map_ref
-      .get_or_create_array_with_txn::<MapPrelim<lib0Any>>(self.txn, LINKED_BY_ROWS);
+      .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, LINKED_BY_ROWS);
 
     for row in rows {
       let map_ref = array_ref.insert_map_with_txn(self.txn, None);

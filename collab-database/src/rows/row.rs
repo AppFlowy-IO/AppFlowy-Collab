@@ -3,20 +3,24 @@ use std::sync::{Arc, Weak};
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::{
-  lib0Any, ArrayRef, Collab, Map, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
-  Transaction, TransactionMut, YrsValue,
+  Any, ArrayRefWrapper, Collab, DeepEventsSubscription, Map, MapPrelim, MapRef, MapRefExtension,
+  MapRefWrapper, ReadTxn, Transaction, TransactionMut, YrsValue,
 };
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use parking_lot::Mutex;
 
+use collab::core::value::YrsValueExtension;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use uuid::Uuid;
 
 use crate::database::{gen_row_id, timestamp};
 use crate::error::DatabaseError;
-use crate::rows::{Cell, Cells, CellsUpdate, RowId, RowMeta, RowMetaUpdate};
+use crate::rows::{
+  subscribe_row_data_change, Cell, Cells, CellsUpdate, RowChangeSender, RowId, RowMeta,
+  RowMetaUpdate,
+};
 use crate::views::{OrderObjectPosition, RowOrder};
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 
@@ -36,8 +40,10 @@ pub struct DatabaseRow {
   data: MapRefWrapper,
   meta: MapRefWrapper,
   #[allow(dead_code)]
-  comments: ArrayRef,
+  comments: ArrayRefWrapper,
   collab_db: Weak<RocksCollabDB>,
+  #[allow(dead_code)]
+  subscription: Option<DeepEventsSubscription>,
 }
 
 impl DatabaseRow {
@@ -47,9 +53,10 @@ impl DatabaseRow {
     row_id: RowId,
     collab_db: Weak<RocksCollabDB>,
     collab: Arc<MutexCollab>,
+    change_tx: Option<RowChangeSender>,
   ) -> Self {
     let row = row.into();
-    let database_row = Self::new(uid, row_id, collab_db, collab);
+    let mut database_row = Self::inner_new(uid, row_id, collab_db, collab);
     let data = database_row.data.clone();
     let meta = database_row.meta.clone();
     database_row.collab.lock().with_origin_transact_mut(|txn| {
@@ -66,10 +73,25 @@ impl DatabaseRow {
         .done();
     });
 
+    database_row.subscription =
+      change_tx.map(|sender| subscribe_row_data_change(&mut database_row.data, sender));
+
     database_row
   }
 
   pub fn new(
+    uid: i64,
+    row_id: RowId,
+    collab_db: Weak<RocksCollabDB>,
+    collab: Arc<MutexCollab>,
+    change_tx: Option<RowChangeSender>,
+  ) -> Self {
+    let mut this = Self::inner_new(uid, row_id, collab_db, collab);
+    this.subscription = change_tx.map(|sender| subscribe_row_data_change(&mut this.data, sender));
+    this
+  }
+
+  fn inner_new(
     uid: i64,
     row_id: RowId,
     collab_db: Weak<RocksCollabDB>,
@@ -97,11 +119,7 @@ impl DatabaseRow {
     let meta =
       meta.unwrap_or_else(|| collab_guard.insert_map_with_txn(txn.as_mut().unwrap(), META));
     let comments = comments.unwrap_or_else(|| {
-      collab_guard.create_array_with_txn::<MapPrelim<lib0Any>>(
-        txn.as_mut().unwrap(),
-        COMMENT,
-        vec![],
-      )
+      collab_guard.create_array_with_txn::<MapPrelim<Any>>(txn.as_mut().unwrap(), COMMENT, vec![])
     });
 
     drop(txn);
@@ -113,8 +131,9 @@ impl DatabaseRow {
       collab,
       data,
       meta,
-      comments: comments.into_inner(),
+      comments,
       collab_db,
+      subscription: None,
     }
   }
 
@@ -421,9 +440,10 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
 }
 
 pub(crate) const ROW_ID: &str = "id";
-const ROW_VISIBILITY: &str = "visibility";
-const ROW_HEIGHT: &str = "height";
-const ROW_CELLS: &str = "cells";
+pub(crate) const ROW_VISIBILITY: &str = "visibility";
+
+pub const ROW_HEIGHT: &str = "height";
+pub const ROW_CELLS: &str = "cells";
 
 /// Return row id and created_at from a [YrsValue]
 pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(String, i64)> {
@@ -438,7 +458,7 @@ pub fn row_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(String
 /// Return a [RowOrder] and created_at from a [YrsValue]
 pub fn row_order_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<(RowOrder, i64)> {
   let map_ref = value.to_ymap()?;
-  row_order_from_map_ref(&map_ref, txn)
+  row_order_from_map_ref(map_ref, txn)
 }
 
 /// Return a [RowOrder] and created_at from a [YrsValue]

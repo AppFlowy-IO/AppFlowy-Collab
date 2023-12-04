@@ -1,32 +1,34 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
-use lib0::any::Any;
-use serde::{Deserialize, Serialize};
+use serde::de::{MapAccess, Visitor};
+use serde::ser::SerializeMap;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use yrs::types::Value;
-use yrs::{Array, Map, MapRef, ReadTxn, TransactionMut};
+use yrs::{Any, Array, Map, MapRef, ReadTxn, TransactionMut};
 
-use crate::preclude::{lib0Any, MapRefExtension, YrsValue};
+use crate::preclude::{JsonValue, MapRefExtension, YrsValue};
 
 /// A wrapper around `yrs::Map` that provides a more ergonomic API.
 pub trait AnyMapExtension {
-  fn value(&self) -> &HashMap<String, lib0Any>;
+  fn value(&self) -> &HashMap<String, Any>;
 
-  fn mut_value(&mut self) -> &mut HashMap<String, lib0Any>;
+  fn mut_value(&mut self) -> &mut HashMap<String, Any>;
 
   /// Insert the string value with the given key.
   fn insert_str_value<K: AsRef<str>>(&mut self, key: K, s: String) {
-    let _ = self.mut_value().insert(
-      key.as_ref().to_string(),
-      lib0Any::String(s.into_boxed_str()),
-    );
+    let _ = self
+      .mut_value()
+      .insert(key.as_ref().to_string(), Any::String(Arc::<str>::from(s)));
   }
 
   /// Get the string value with the given key.
   fn get_str_value<K: AsRef<str>>(&self, key: K) -> Option<String> {
     let value = self.value().get(key.as_ref())?;
-    if let lib0Any::String(s) = value {
+    if let Any::String(s) = value {
       Some(s.to_string())
     } else {
       None
@@ -37,13 +39,13 @@ pub trait AnyMapExtension {
   fn insert_i64_value<K: AsRef<str>>(&mut self, key: K, value: i64) {
     let _ = self
       .mut_value()
-      .insert(key.as_ref().to_string(), lib0Any::BigInt(value));
+      .insert(key.as_ref().to_string(), Any::BigInt(value));
   }
 
   /// Get the i64 value with the given key.
   fn get_i64_value<K: AsRef<str>>(&self, key: K) -> Option<i64> {
     let value = self.value().get(key.as_ref())?;
-    if let lib0Any::BigInt(num) = value {
+    if let Any::BigInt(num) = value {
       Some(*num)
     } else {
       None
@@ -54,13 +56,13 @@ pub trait AnyMapExtension {
   fn insert_f64_value<K: AsRef<str>>(&mut self, key: K, value: f64) {
     let _ = self
       .mut_value()
-      .insert(key.as_ref().to_string(), lib0Any::Number(value));
+      .insert(key.as_ref().to_string(), Any::Number(value));
   }
 
   /// Get the f64 value with the given key.
   fn get_f64_value<K: AsRef<str>>(&self, key: K) -> Option<f64> {
     let value = self.value().get(key.as_ref())?;
-    if let lib0Any::Number(num) = value {
+    if let Any::Number(num) = value {
       Some(*num)
     } else {
       None
@@ -71,13 +73,13 @@ pub trait AnyMapExtension {
   fn insert_bool_value<K: AsRef<str>>(&mut self, key: K, value: bool) {
     let _ = self
       .mut_value()
-      .insert(key.as_ref().to_string(), lib0Any::Bool(value));
+      .insert(key.as_ref().to_string(), Any::Bool(value));
   }
 
   /// Get the bool value with the given key.
   fn get_bool_value<K: AsRef<str>>(&self, key: K) -> Option<bool> {
     let value = self.value().get(key.as_ref())?;
-    if let lib0Any::Bool(value) = value {
+    if let Any::Bool(value) = value {
       Some(*value)
     } else {
       None
@@ -86,12 +88,12 @@ pub trait AnyMapExtension {
 
   /// Get the maps with the given key.
   fn get_array<K: AsRef<str>, T: From<AnyMap>>(&self, key: K) -> Vec<T> {
-    if let Some(lib0Any::Array(array)) = self.value().get(key.as_ref()) {
+    if let Some(Any::Array(array)) = self.value().get(key.as_ref()) {
       return array
         .iter()
         .flat_map(|item| {
-          if let lib0Any::Map(map) = item {
-            Some(T::from(AnyMap((**map).clone())))
+          if let Any::Map(map) = item {
+            Some(T::from(AnyMap(map.clone())))
           } else {
             None
           }
@@ -104,12 +106,12 @@ pub trait AnyMapExtension {
   /// Try to get the maps with the given key.
   /// It [T] can't be converted from [AnyMap], it will be ignored.
   fn try_get_array<K: AsRef<str>, T: TryFrom<AnyMap>>(&self, key: K) -> Vec<T> {
-    if let Some(lib0Any::Array(array)) = self.value().get(key.as_ref()) {
+    if let Some(Any::Array(array)) = self.value().get(key.as_ref()) {
       return array
         .iter()
         .flat_map(|item| {
-          if let lib0Any::Map(map) = item {
-            T::try_from(AnyMap((**map).clone())).ok()
+          if let Any::Map(map) = item {
+            T::try_from(AnyMap(map.clone())).ok()
           } else {
             None
           }
@@ -131,13 +133,12 @@ pub trait AnyMapExtension {
   fn extend_with_array<K: AsRef<str>, T: Into<AnyMap>>(&mut self, key: K, items: Vec<T>) {
     let key = key.as_ref();
     let items = items_to_anys(items);
-    if let Some(lib0Any::Array(old_items)) = self.value().get(key) {
+    if let Some(Any::Array(old_items)) = self.value().get(key) {
       let mut new_items = old_items.to_vec();
       new_items.extend(items);
-      self.mut_value().insert(
-        key.to_string(),
-        lib0Any::Array(new_items.into_boxed_slice()),
-      );
+      self
+        .mut_value()
+        .insert(key.to_string(), Any::Array(Arc::from(new_items)));
     } else {
       self
         .mut_value()
@@ -148,81 +149,60 @@ pub trait AnyMapExtension {
   /// Remove the maps with the given ids.
   /// It requires the element to have an [id] field. Otherwise, it will be ignored.
   fn remove_array_element<K: AsRef<str>>(&mut self, key: K, ids: &[&str]) {
-    if let Some(lib0Any::Array(array)) = self.value().get(key.as_ref()) {
+    if let Some(Any::Array(array)) = self.value().get(key.as_ref()) {
       let new_array = array
         .iter()
         .filter(|item| {
-          if let lib0Any::Map(map) = item {
-            if let Some(lib0Any::String(s)) = map.get("id") {
+          if let Any::Map(map) = item {
+            if let Some(Any::String(s)) = map.get("id") {
               return !ids.contains(&(*s).as_ref());
             }
           }
           true
         })
         .cloned()
-        .collect::<Vec<lib0Any>>();
+        .collect::<Vec<Any>>();
 
       self.mut_value().insert(
         key.as_ref().to_string(),
-        lib0Any::Array(new_array.into_boxed_slice()),
+        Any::Array(Arc::<[Any]>::from(new_array)),
       );
     }
   }
-
-  /// Mutate the maps with the given id.
-  /// It requires the element to have an [id] field. Otherwise, it will be ignored.
-  fn mut_array_element_by_id<K: AsRef<str>, F>(&mut self, key: K, id: &str, mut f: F)
-  where
-    F: FnMut(&mut MutAnyMap),
-  {
-    if let Some(lib0Any::Array(array)) = self.mut_value().get_mut(key.as_ref()) {
-      array.iter_mut().for_each(|item| {
-        if let lib0Any::Map(map) = item {
-          if let Some(lib0Any::String(s)) = map.get("id") {
-            if (*s).as_ref() == id {
-              let mut any_map = MutAnyMap(map);
-              f(&mut any_map);
-            }
-          }
-        }
-      });
-    }
-  }
 }
 
 #[inline]
-fn items_to_lib_0_array<T: Into<AnyMap>>(items: Vec<T>) -> lib0Any {
+fn items_to_lib_0_array<T: Into<AnyMap>>(items: Vec<T>) -> Any {
   let items = items_to_anys(items);
-  lib0Any::Array(items.into_boxed_slice())
+  Any::Array(Arc::from(items))
 }
 
 #[inline]
-fn items_to_anys<T: Into<AnyMap>>(items: Vec<T>) -> Vec<lib0Any> {
+fn items_to_anys<T: Into<AnyMap>>(items: Vec<T>) -> Vec<Any> {
   items
     .into_iter()
     .map(|item| {
       let any_map: AnyMap = item.into();
-      any_map.into() // lib0Any::Map
+      any_map.into() // Any::Map
     })
     .collect::<Vec<_>>()
 }
 
-pub struct MutAnyMap<'a>(&'a mut HashMap<String, lib0Any>);
+pub struct MutAnyMap<'a>(&'a mut HashMap<String, Any>);
 
 impl<'a> AnyMapExtension for MutAnyMap<'a> {
-  fn value(&self) -> &HashMap<String, lib0Any> {
+  fn value(&self) -> &HashMap<String, Any> {
     self.0
   }
 
-  fn mut_value(&mut self) -> &mut HashMap<String, lib0Any> {
+  fn mut_value(&mut self) -> &mut HashMap<String, Any> {
     self.0
   }
 }
 
 /// A map that can store any type of value.
-/// It uses [lib0Any] as the value type.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-pub struct AnyMap(HashMap<String, lib0Any>);
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AnyMap(Arc<HashMap<String, Any>>);
 
 impl AsRef<AnyMap> for AnyMap {
   fn as_ref(&self) -> &AnyMap {
@@ -234,22 +214,25 @@ impl AnyMap {
   pub fn new() -> Self {
     Self::default()
   }
-  pub fn into_inner(self) -> HashMap<String, lib0Any> {
+  pub fn into_inner(self) -> Arc<HashMap<String, Any>> {
     self.0
   }
 
   pub fn extend(&mut self, other: AnyMap) {
-    self.0.extend(other.into_inner());
+    let mut_map = Arc::make_mut(&mut self.0);
+    other.0.iter().for_each(|(k, v)| {
+      mut_map.insert(k.to_string(), v.clone());
+    });
   }
 }
 
 impl AnyMapExtension for AnyMap {
-  fn value(&self) -> &HashMap<String, lib0Any> {
+  fn value(&self) -> &HashMap<String, Any> {
     &self.0
   }
 
-  fn mut_value(&mut self) -> &mut HashMap<String, lib0Any> {
-    &mut self.0
+  fn mut_value(&mut self) -> &mut HashMap<String, Any> {
+    Arc::make_mut(&mut self.0)
   }
 }
 
@@ -268,46 +251,52 @@ impl AnyMap {
     (txn, map_ref).into()
   }
 
-  pub fn from_value<T: ReadTxn>(txn: &T, value: YrsValue) -> Option<Self> {
+  pub fn from_value<T: ReadTxn>(txn: &T, value: &YrsValue) -> Option<Self> {
     if let YrsValue::YMap(map_ref) = value {
-      Some(Self::from_map_ref(txn, &map_ref))
+      Some(Self::from_map_ref(txn, map_ref))
     } else {
       None
     }
   }
 
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
-    self.0.into_iter().for_each(|(k, v)| match v {
+    self.0.iter().for_each(|(k, v)| match v {
       Any::Array(array) => {
-        map_ref.create_array_with_txn(txn, &k, array.to_vec());
+        map_ref.create_array_with_txn(txn, k, array.to_vec());
+      },
+      Any::BigInt(num) => {
+        map_ref.insert_i64_with_txn(txn, k, *num);
+      },
+      Any::Number(num) => {
+        map_ref.insert_f64_with_txn(txn, k, *num);
       },
       _ => {
-        map_ref.insert_with_txn(txn, &k, v);
+        map_ref.insert_with_txn(txn, k, v.clone());
       },
     })
   }
 }
 
-impl From<AnyMap> for lib0Any {
+impl From<AnyMap> for Any {
   fn from(map: AnyMap) -> Self {
-    lib0Any::Map(Box::new(map.0))
+    Any::Map(map.0)
   }
 }
 
-impl From<lib0Any> for AnyMap {
-  fn from(value: lib0Any) -> Self {
-    if let lib0Any::Map(map) = value {
-      Self(*map)
+impl From<Any> for AnyMap {
+  fn from(value: Any) -> Self {
+    if let Any::Map(map) = value {
+      Self(map)
     } else {
       Self::default()
     }
   }
 }
 
-impl From<&lib0Any> for AnyMap {
-  fn from(value: &lib0Any) -> Self {
-    if let lib0Any::Map(map) = value {
-      Self(*map.to_owned())
+impl From<&Any> for AnyMap {
+  fn from(value: &Any) -> Self {
+    if let Any::Map(map) = value {
+      Self(map.clone())
     } else {
       Self::default()
     }
@@ -332,8 +321,8 @@ impl<T: ReadTxn> From<(&'_ T, &MapRef)> for AnyMap {
               None
             }
           })
-          .collect::<HashMap<String, lib0Any>>();
-        this.insert(k.to_string(), lib0Any::Map(Box::new(map)));
+          .collect::<HashMap<String, Any>>();
+        this.insert(k.to_string(), Any::Map(Arc::new(map)));
       },
       Value::YArray(array) => {
         let array = array
@@ -345,8 +334,8 @@ impl<T: ReadTxn> From<(&'_ T, &MapRef)> for AnyMap {
               None
             }
           })
-          .collect::<Vec<lib0Any>>();
-        this.insert(k.to_string(), lib0Any::Array(array.into_boxed_slice()));
+          .collect::<Vec<Any>>();
+        this.insert(k.to_string(), Any::Array(Arc::from(array)));
       },
       _ => {
         debug_assert!(false, "Unsupported");
@@ -356,8 +345,85 @@ impl<T: ReadTxn> From<(&'_ T, &MapRef)> for AnyMap {
   }
 }
 
+impl Serialize for AnyMap {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let map = Arc::as_ref(&self.0);
+    let mut serialize_map = serializer.serialize_map(Some(map.len()))?;
+    for (k, v) in map {
+      match v {
+        Any::Number(num) => {
+          serialize_map.serialize_entry(k, num)?;
+        },
+        Any::BigInt(num) => {
+          serialize_map.serialize_entry(k, num)?;
+        },
+        _ => {
+          serialize_map.serialize_entry(k, v)?;
+        },
+      }
+    }
+    serialize_map.end()
+  }
+}
+
+struct AnyMapVisitor;
+
+impl<'de> Visitor<'de> for AnyMapVisitor {
+  type Value = AnyMap;
+
+  fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    formatter.write_str("a map with string keys and mixed value types")
+  }
+
+  fn visit_map<V>(self, mut map: V) -> Result<AnyMap, V::Error>
+  where
+    V: MapAccess<'de>,
+  {
+    let mut any_map = HashMap::new();
+    let mut error = None;
+
+    // Custom Serialization/Deserialization for `Any`:
+    // The default serde implementation for `Any` converts integer values to floating-point values.
+    // For instance, an integer like 1 would be serialized as 1.0 (a float), which is not desirable in our use case.
+    // To prevent this, we implement custom serialization and deserialization for `Any` to ensure that
+    // integers remain as integers and floats as floats, preserving their original types during the process.
+    while let Some((key, value)) = map.next_entry::<String, JsonValue>()? {
+      let any_value = match &value {
+        JsonValue::Number(num) => {
+          if let Some(n) = num.as_i64() {
+            Any::BigInt(n)
+          } else if let Some(n) = num.as_f64() {
+            Any::Number(n)
+          } else {
+            error = Some(serde::de::Error::custom("number is too big"));
+            break;
+          }
+        },
+        _ => serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+      };
+      any_map.insert(key, any_value);
+    }
+
+    if let Some(err) = error {
+      Err(err)
+    } else {
+      Ok(AnyMap(Arc::new(any_map)))
+    }
+  }
+}
+impl<'de> Deserialize<'de> for AnyMap {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    deserializer.deserialize_map(AnyMapVisitor)
+  }
+}
 impl Deref for AnyMap {
-  type Target = HashMap<String, lib0Any>;
+  type Target = HashMap<String, Any>;
 
   fn deref(&self) -> &Self::Target {
     &self.0
@@ -366,7 +432,7 @@ impl Deref for AnyMap {
 
 impl DerefMut for AnyMap {
   fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.0
+    Arc::make_mut(&mut self.0)
   }
 }
 
@@ -381,11 +447,11 @@ impl AnyMapBuilder {
     Self::default()
   }
 
-  /// Insert the lib0Any into the map.
+  /// Insert the Any into the map.
   /// Sometimes you need a integer or a float into the map, you should use [insert_i64_value] or
   /// [insert_f64_value]. Because the integer value will be treated as a float value when calling
   /// this method.
-  pub fn insert_any<K: AsRef<str>>(mut self, key: K, value: impl Into<lib0Any>) -> Self {
+  pub fn insert_any<K: AsRef<str>>(mut self, key: K, value: impl Into<Any>) -> Self {
     let key = key.as_ref();
     self.inner.insert(key.to_string(), value.into());
     self
@@ -433,7 +499,7 @@ impl<'a, 'b> AnyMapUpdate<'a, 'b> {
     Self { txn, map_ref }
   }
 
-  pub fn insert<K: AsRef<str>>(&mut self, key: K, value: impl Into<lib0Any>) {
+  pub fn insert<K: AsRef<str>>(&mut self, key: K, value: impl Into<Any>) {
     let key = key.as_ref();
     self.map_ref.insert_with_txn(self.txn, key, value.into());
   }

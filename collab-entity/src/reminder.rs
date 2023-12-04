@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
 use anyhow::Result;
-use collab::preclude::{lib0Any, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut};
+use collab::preclude::{Any, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
@@ -133,20 +134,20 @@ impl From<HashMap<String, String>> for ReminderMeta {
   }
 }
 
-impl From<ReminderMeta> for lib0Any {
+impl From<ReminderMeta> for Any {
   fn from(value: ReminderMeta) -> Self {
     let map = value.0.into_iter().map(|(k, v)| (k, v.into())).collect();
-    lib0Any::Map(Box::new(map))
+    Any::Map(Arc::new(map))
   }
 }
 
-impl From<lib0Any> for ReminderMeta {
-  fn from(value: lib0Any) -> Self {
+impl From<Any> for ReminderMeta {
+  fn from(value: Any) -> Self {
     match value {
-      lib0Any::Map(map) => ReminderMeta(
+      Any::Map(map) => ReminderMeta(
         map
-          .into_iter()
-          .map(|(k, v)| (k, v.to_string()))
+          .iter()
+          .map(|(k, v)| (k.clone(), v.to_string()))
           .collect::<HashMap<String, String>>(),
       ),
       _ => Default::default(),
@@ -208,31 +209,28 @@ fn reminder_from_map<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Result<Reminder> 
   })
 }
 
-impl From<Reminder> for MapPrelim<lib0Any> {
+impl From<Reminder> for MapPrelim<Any> {
   fn from(item: Reminder) -> Self {
     let mut map = HashMap::new();
-    map.insert(
-      REMINDER_ID.to_string(),
-      lib0Any::String(item.id.into_boxed_str()),
-    );
+    map.insert(REMINDER_ID.to_string(), Any::String(Arc::from(item.id)));
     map.insert(
       REMINDER_OBJECT_ID.to_string(),
-      lib0Any::String(item.object_id.into_boxed_str()),
+      Any::String(Arc::from(item.object_id)),
     );
     map.insert(
       REMINDER_SCHEDULED_AT.to_string(),
-      lib0Any::BigInt(item.scheduled_at),
+      Any::BigInt(item.scheduled_at),
     );
-    map.insert(REMINDER_IS_ACK.to_string(), lib0Any::Bool(item.is_ack));
-    map.insert(REMINDER_IS_READ.to_string(), lib0Any::Bool(item.is_read));
-    map.insert(REMINDER_TY.to_string(), lib0Any::BigInt(item.ty as i64));
+    map.insert(REMINDER_IS_ACK.to_string(), Any::Bool(item.is_ack));
+    map.insert(REMINDER_IS_READ.to_string(), Any::Bool(item.is_read));
+    map.insert(REMINDER_TY.to_string(), Any::BigInt(item.ty as i64));
     map.insert(
       REMINDER_TITLE.to_string(),
-      lib0Any::String(item.title.into_boxed_str()),
+      Any::String(Arc::from(item.title)),
     );
     map.insert(
       REMINDER_MESSAGE.to_string(),
-      lib0Any::String(item.message.into_boxed_str()),
+      Any::String(Arc::from(item.message)),
     );
 
     map.insert(REMINDER_META.to_string(), item.meta.into());

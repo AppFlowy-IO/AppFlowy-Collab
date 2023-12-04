@@ -4,6 +4,7 @@ use std::sync::{Arc, Once};
 use bytes::Bytes;
 use collab::core::collab::MutexCollab;
 use collab::preclude::*;
+use collab::util::deserialize_i32_from_numeric;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::fmt::Subscriber;
@@ -22,7 +23,8 @@ pub struct Person {
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Position {
   pub(crate) title: String,
-  pub(crate) level: u8,
+  #[serde(deserialize_with = "deserialize_i32_from_numeric")]
+  pub(crate) level: i32,
 }
 
 pub async fn make_collab_pair() -> (MutexCollab, MutexCollab, CollabStateCachePlugin) {

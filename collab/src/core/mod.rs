@@ -9,3 +9,4 @@ pub mod map_wrapper;
 pub mod origin;
 pub mod text_wrapper;
 pub mod transaction;
+pub mod value;
