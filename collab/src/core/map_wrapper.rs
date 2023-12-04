@@ -188,17 +188,17 @@ impl MapRefWrapper {
     self.collab_ctx.with_transact_mut(f)
   }
 
-  pub fn to_json_value(&self) -> JsonValue {
-    let txn = self.collab_ctx.transact();
-    serde_json::to_value(&self.map_ref.to_json(&txn)).unwrap()
-  }
-
-  pub fn to_json(&self) -> String {
+  pub fn to_json_str(&self) -> String {
     let txn = self.collab_ctx.transact();
     let value = self.map_ref.to_json(&txn);
     let mut json_str = String::new();
     value.to_json(&mut json_str);
     json_str
+  }
+  pub fn to_json_value(&self) -> anyhow::Result<serde_json::Value> {
+    let txn = self.collab_ctx.transact();
+    let value = self.map_ref.to_json(&txn);
+    any_to_json_value(value)
   }
 }
 

@@ -186,8 +186,8 @@ async fn root_change_test() {
     collab_1_guard.get_map_with_txn(&txn, vec!["map"]).unwrap()
   };
 
-  let a = map_1.to_json_value();
-  let b = map_2.to_json_value();
+  let a = map_1.to_json_value().unwrap();
+  let b = map_2.to_json_value().unwrap();
 
   println!("a: {}", a);
   println!("b: {}", b);

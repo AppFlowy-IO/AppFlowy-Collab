@@ -1,13 +1,16 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
+use serde::de::{MapAccess, Visitor};
+use serde::ser::SerializeMap;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use yrs::types::Value;
 use yrs::{Any, Array, Map, MapRef, ReadTxn, TransactionMut};
 
-use crate::preclude::{MapRefExtension, YrsValue};
+use crate::preclude::{JsonValue, MapRefExtension, YrsValue};
 
 /// A wrapper around `yrs::Map` that provides a more ergonomic API.
 pub trait AnyMapExtension {
@@ -198,7 +201,7 @@ impl<'a> AnyMapExtension for MutAnyMap<'a> {
 }
 
 /// A map that can store any type of value.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct AnyMap(Arc<HashMap<String, Any>>);
 
 impl AsRef<AnyMap> for AnyMap {
@@ -342,6 +345,70 @@ impl<T: ReadTxn> From<(&'_ T, &MapRef)> for AnyMap {
   }
 }
 
+impl Serialize for AnyMap {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let map = Arc::as_ref(&self.0);
+    let mut serialize_map = serializer.serialize_map(Some(map.len()))?;
+    for (k, v) in map {
+      match v {
+        Any::Number(num) => {
+          serialize_map.serialize_entry(k, num)?;
+        },
+        Any::BigInt(num) => {
+          serialize_map.serialize_entry(k, num)?;
+        },
+        _ => {
+          serialize_map.serialize_entry(k, v)?;
+        },
+      }
+    }
+    serialize_map.end()
+  }
+}
+
+struct AnyMapVisitor;
+
+impl<'de> Visitor<'de> for AnyMapVisitor {
+  type Value = AnyMap;
+
+  fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    formatter.write_str("a map with string keys and mixed value types")
+  }
+
+  fn visit_map<V>(self, mut map: V) -> Result<AnyMap, V::Error>
+  where
+    V: MapAccess<'de>,
+  {
+    let mut any_map = HashMap::new();
+    while let Some((key, value)) = map.next_entry::<String, JsonValue>()? {
+      let any_value = match &value {
+        JsonValue::Number(num) => {
+          if let Some(n) = num.as_i64() {
+            Any::BigInt(n)
+          } else if let Some(n) = num.as_f64() {
+            Any::Number(n)
+          } else {
+            serde_json::from_value(value).map_err(serde::de::Error::custom)?
+          }
+        },
+        _ => serde_json::from_value(value).map_err(serde::de::Error::custom)?,
+      };
+      any_map.insert(key, any_value);
+    }
+    Ok(AnyMap(Arc::new(any_map)))
+  }
+}
+impl<'de> Deserialize<'de> for AnyMap {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    deserializer.deserialize_map(AnyMapVisitor)
+  }
+}
 impl Deref for AnyMap {
   type Target = HashMap<String, Any>;
 

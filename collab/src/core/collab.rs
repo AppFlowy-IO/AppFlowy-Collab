@@ -372,7 +372,7 @@ impl Collab {
     let map = self.get_map_with_txn(&txn, path)?;
     drop(txn);
 
-    let json_str = map.to_json();
+    let json_str = map.to_json_str();
     let object = serde_json::from_str::<T>(&json_str).ok()?;
     Some(object)
   }

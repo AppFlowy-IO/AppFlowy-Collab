@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
 use anyhow::bail;
-use collab::core::any_map::AnyMapExtension;
+use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::preclude::Any;
 use collab_database::fields::{TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::Cell;
@@ -399,6 +399,22 @@ impl From<&str> for TestTextCell {
     Self(s.to_string())
   }
 }
+pub struct TestNumberCell(pub i64);
+
+impl From<TestNumberCell> for Cell {
+  fn from(text_cell: TestNumberCell) -> Self {
+    let mut cell = Self::new();
+    cell.insert_i64_value("data", text_cell.0);
+    cell
+  }
+}
+
+impl From<&Cell> for TestNumberCell {
+  fn from(cell: &Cell) -> Self {
+    let data = cell.get_i64_value("data").unwrap();
+    Self(data)
+  }
+}
 
 #[derive(Debug, Clone)]
 pub struct TestCalendarLayoutSetting {
@@ -559,7 +575,7 @@ impl From<FieldSettingsMap> for TestFieldSetting {
   }
 }
 
-impl From<TestFieldSetting> for FieldSettingsMap {
+impl From<TestFieldSetting> for AnyMap {
   fn from(data: TestFieldSetting) -> Self {
     FieldSettingsMapBuilder::new()
       .insert_i64_value("width", data.width as i64)

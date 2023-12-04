@@ -2983,8 +2983,7 @@ dependencies = [
 [[package]]
 name = "yrs"
 version = "0.17.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86f2fbea97ed32722d4f09fcf1aace9daf36e8b2e72b1f605d5a1bee575fa0da"
+source = "git+https://github.com/appflowy/y-crdt?rev=c7f1e510a49d12ea738a95806b535b6a557ccf86#c7f1e510a49d12ea738a95806b535b6a557ccf86"
 dependencies = [
  "atomic_refcell",
  "rand 0.7.3",

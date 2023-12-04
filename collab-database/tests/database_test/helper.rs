@@ -319,8 +319,8 @@ pub fn default_field_settings_by_layout() -> HashMap<DatabaseLayout, FieldSettin
     visibility: 0,
   });
   HashMap::from([
-    (DatabaseLayout::Grid, field_settings.clone().into()),
-    (DatabaseLayout::Board, field_settings.into()),
+    (DatabaseLayout::Grid, field_settings.clone()),
+    (DatabaseLayout::Board, field_settings),
     (
       DatabaseLayout::Calendar,
       TestFieldSetting {
