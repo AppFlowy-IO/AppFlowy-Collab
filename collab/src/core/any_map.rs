@@ -383,6 +383,13 @@ impl<'de> Visitor<'de> for AnyMapVisitor {
     V: MapAccess<'de>,
   {
     let mut any_map = HashMap::new();
+    let mut error = None;
+
+    // Custom Serialization/Deserialization for `Any`:
+    // The default serde implementation for `Any` converts integer values to floating-point values.
+    // For instance, an integer like 1 would be serialized as 1.0 (a float), which is not desirable in our use case.
+    // To prevent this, we implement custom serialization and deserialization for `Any` to ensure that
+    // integers remain as integers and floats as floats, preserving their original types during the process.
     while let Some((key, value)) = map.next_entry::<String, JsonValue>()? {
       let any_value = match &value {
         JsonValue::Number(num) => {
@@ -391,14 +398,20 @@ impl<'de> Visitor<'de> for AnyMapVisitor {
           } else if let Some(n) = num.as_f64() {
             Any::Number(n)
           } else {
-            serde_json::from_value(value).map_err(serde::de::Error::custom)?
+            error = Some(serde::de::Error::custom("number is too big"));
+            break;
           }
         },
         _ => serde_json::from_value(value).map_err(serde::de::Error::custom)?,
       };
       any_map.insert(key, any_value);
     }
-    Ok(AnyMap(Arc::new(any_map)))
+
+    if let Some(err) = error {
+      Err(err)
+    } else {
+      Ok(AnyMap(Arc::new(any_map)))
+    }
   }
 }
 impl<'de> Deserialize<'de> for AnyMap {
