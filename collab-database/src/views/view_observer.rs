@@ -1,10 +1,10 @@
 use collab::preclude::array::ArrayEvent;
-use collab::preclude::{Change, ToJson};
+use collab::preclude::map::MapEvent;
+use collab::preclude::{Change, ToJson, TransactionMut};
 use collab::preclude::{
   DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRefWrapper, PathSegment,
 };
 use std::ops::Deref;
-
 use tokio::sync::broadcast;
 use tracing::trace;
 
@@ -84,90 +84,100 @@ pub(crate) fn subscribe_view_change(
 ) -> DeepEventsSubscription {
   view_map.observe_deep(move |txn, events| {
     for event in events.iter() {
-      trace!(
-        "view observe event: {:?}, {:?}",
-        event.path(),
-        event.target().to_json(txn)
-      );
       match event {
         Event::Text(_) => {},
         Event::Array(array_event) => {
-          let key = ArrayChangeKey::from(array_event);
-          array_event
-            .delta(txn)
-            .iter()
-            .for_each(|change| match change {
-              Change::Added(values) => match &key {
-                ArrayChangeKey::RowOrder => {
-                  let row_orders = values
-                    .iter()
-                    .flat_map(|value| row_order_from_value(value, txn))
-                    .collect::<Vec<_>>();
-                  let _ = change_tx.send(DatabaseViewChange::DidInsertRowOrders { row_orders });
-                },
-                ArrayChangeKey::Unknown(s) => {
-                  trace!("database view observe unknown insert: {}", s);
-                },
-              },
-              Change::Removed(len) => {
-                //
-                trace!(
-                  "database view observe array delete: {:?}:{:?}",
-                  array_event.path(),
-                  array_event.target().to_json(txn)
-                );
-                match &key {
-                  ArrayChangeKey::Unknown(s) => {
-                    trace!("database view observe unknown remove: {}", s);
-                  },
-                  ArrayChangeKey::RowOrder => {
-                    trace!(
-                      "database view observe array delete: {:?}:{}",
-                      array_event.path(),
-                      len,
-                    );
-                    let _ = change_tx.send(DatabaseViewChange::DidDeleteRowAtIndex { index: *len });
-                  },
-                }
-              },
-              Change::Retain(_value) => match &key {
-                ArrayChangeKey::Unknown(_s) => {},
-                ArrayChangeKey::RowOrder => {
-                  trace!(
-                    "database view observe array retain: {:?}:{:?}",
-                    array_event.path(),
-                    event.target().to_json(txn)
-                  );
-                },
-              },
-            });
+          handle_array_event(&change_tx, txn, event, array_event);
         },
         Event::Map(event) => {
-          let keys = event.keys(txn);
-          for (key, value) in keys.iter() {
-            let _change_tx = change_tx.clone();
-            match value {
-              EntryChange::Inserted(value) => {
-                trace!(
-                  "database view map inserted: {}:{:?}",
-                  key,
-                  value.to_json(txn)
-                );
-              },
-              EntryChange::Updated(_, value) => {
-                trace!("database view map update: {}:{}", key, value);
-              },
-              EntryChange::Removed(_value) => {
-                trace!("database view map delete: {}", key);
-              },
-            }
-          }
+          handle_map_event(&change_tx, txn, event);
         },
         Event::XmlFragment(_) => {},
         Event::XmlText(_) => {},
       }
     }
   })
+}
+
+/// Handles an array modification process consisting of retain and remove operations.
+///
+/// # Process
+/// 1. Initial Array State:
+///    - Starts with the array `[A B C]`.
+///    - Offset is initially at position 0.
+///
+/// 2. Retain Operation:
+///    - Retain 1: Retains the first element (`A`), moving the offset to the next element.
+///    - After operation: `[A B C]`
+///    - Offset is now at position 1 (pointing to `B`).
+///
+/// 3. Remove Operation:
+///    - Remove 1: Removes one element at the current offset.
+///    - `B` (at offset position 1) is removed from the array.
+///    - After operation: `[A   C]`
+///    - Offset remains at position 1.
+///
+/// 4. Final Array State:
+///    - Resulting array after the remove operation: `[A C]`
+///    - This reflects the removal of `B` from the original array.
+
+fn handle_array_event(
+  change_tx: &ViewChangeSender,
+  txn: &TransactionMut,
+  _event: &Event,
+  array_event: &ArrayEvent,
+) {
+  let mut offset = 0;
+  let key = ArrayChangeKey::from(array_event);
+  array_event
+    .delta(txn)
+    .iter()
+    .for_each(|change| match change {
+      Change::Added(values) => match &key {
+        ArrayChangeKey::RowOrder => {
+          let row_orders = values
+            .iter()
+            .flat_map(|value| row_order_from_value(value, txn))
+            .collect::<Vec<_>>();
+          let _ = change_tx.send(DatabaseViewChange::DidInsertRowOrders { row_orders });
+        },
+        ArrayChangeKey::Unknown(s) => {
+          trace!("database view observe unknown insert: {}", s);
+        },
+      },
+      Change::Removed(len) => {
+        debug_assert!(*len == 1, "For our scenario, the len should be 1");
+        // https://github.com/y-crdt/y-crdt/issues/341
+        trace!("database view observe array remove: {}", len);
+        let _ = change_tx.send(DatabaseViewChange::DidDeleteRowAtIndex { index: offset });
+      },
+      Change::Retain(value) => {
+        offset += value;
+        trace!("database view observe array retain: {}", value);
+      },
+    });
+}
+
+fn handle_map_event(change_tx: &ViewChangeSender, txn: &TransactionMut, event: &MapEvent) {
+  let keys = event.keys(txn);
+  for (key, value) in keys.iter() {
+    let _change_tx = change_tx.clone();
+    match value {
+      EntryChange::Inserted(value) => {
+        trace!(
+          "database view map inserted: {}:{:?}",
+          key,
+          value.to_json(txn)
+        );
+      },
+      EntryChange::Updated(_, value) => {
+        trace!("database view map update: {}:{}", key, value);
+      },
+      EntryChange::Removed(_value) => {
+        trace!("database view map delete: {}", key);
+      },
+    }
+  }
 }
 
 enum ArrayChangeKey {

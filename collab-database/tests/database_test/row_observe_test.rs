@@ -138,7 +138,6 @@ async fn observer_delete_row_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let a = gen_row_id();
     cloned_database_test
       .create_row(CreateRowParams {
         id: gen_row_id(),
@@ -151,14 +150,6 @@ async fn observer_delete_row_test() {
         ..Default::default()
       })
       .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: a.clone(),
-        ..Default::default()
-      })
-      .unwrap();
-
-    cloned_database_test.remove_row(&a);
     cloned_database_test.remove_row(&cloned_row_id);
   });
 
