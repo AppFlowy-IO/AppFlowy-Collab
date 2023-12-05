@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use yrs::{Doc, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
-use crate::sync_protocol::awareness::Awareness;
+use crate::core::awareness::Awareness;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum CollabPluginType {

@@ -29,7 +29,7 @@ use crate::core::transaction::TransactionRetry;
 use crate::core::value::YrsValueExtension;
 use crate::error::CollabError;
 use crate::preclude::{ArrayRefWrapper, JsonValue, MapRefExtension};
-use crate::sync_protocol::awareness::Awareness;
+use crate::core::awareness::Awareness;
 use crate::util::insert_json_value_to_map_ref;
 
 pub const DATA_SECTION: &str = "data";

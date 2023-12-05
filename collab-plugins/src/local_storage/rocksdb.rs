@@ -7,12 +7,12 @@ use collab::core::collab::make_yrs_doc;
 use collab::core::collab_plugin::EncodedCollabV1;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
-use collab::sync_protocol::awareness::Awareness;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use tracing::{error, instrument};
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
+use collab::core::awareness::Awareness;
 
 use crate::local_storage::CollabPersistenceConfig;
 
