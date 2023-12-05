@@ -53,7 +53,9 @@ impl Document {
   }
 
   pub fn flush(&self) -> Result<(), DocumentError> {
-    self.inner.lock().flush();
+    if let Some(collab_guard) = self.inner.try_lock() {
+      collab_guard.flush();
+    }
     Ok(())
   }
 
