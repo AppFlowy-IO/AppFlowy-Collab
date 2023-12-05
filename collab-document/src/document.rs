@@ -496,7 +496,7 @@ impl Document {
 
   fn open_document_with_collab(collab: Arc<MutexCollab>) -> Result<Self, DocumentError> {
     let mut collab_guard = collab.lock();
-    let (root, block_operation, children_operation, text_operation ) = collab_guard
+    let (root, block_operation, children_operation, text_operation) = collab_guard
       .with_origin_transact_mut(|txn| {
         let root = collab_guard.get_map_with_txn(txn, vec![ROOT]);
         if root.is_none() {
