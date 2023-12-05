@@ -76,6 +76,14 @@ pub struct Collab {
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
 }
 
+pub fn make_yrs_doc() -> Doc {
+  Doc::with_options(Options {
+    skip_gc: true,
+    offset_kind: OffsetKind::Utf16,
+    ..Options::default()
+  })
+}
+
 impl Collab {
   pub fn new<T: AsRef<str>>(
     uid: i64,
@@ -110,11 +118,7 @@ impl Collab {
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Collab {
     let object_id = object_id.as_ref().to_string();
-    let doc = Doc::with_options(Options {
-      skip_gc: true,
-      offset_kind: OffsetKind::Utf16,
-      ..Options::default()
-    });
+    let doc = make_yrs_doc();
     let data = doc.get_or_insert_map(DATA_SECTION);
     let meta = doc.get_or_insert_map(META_SECTION);
     let undo_manager = Mutex::new(None);
@@ -309,12 +313,11 @@ impl Collab {
   /// Make a full update with the current state of the [Collab].
   /// It invokes the [CollabPlugin::flush] method of each plugin.
   pub fn flush(&self) {
-    let data = self.encode_collab_v1();
     self
       .plugins
       .read()
       .iter()
-      .for_each(|plugin| plugin.flush(&self.object_id, &data));
+      .for_each(|plugin| plugin.flush(&self.object_id));
   }
 
   pub fn observer_data<F>(&mut self, f: F) -> MapSubscription
