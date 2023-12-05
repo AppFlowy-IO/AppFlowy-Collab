@@ -32,4 +32,7 @@ pub enum DocumentError {
 
   #[error("text_id or delta is empty")]
   TextActionParamsError,
+
+  #[error("Lack of document required data")]
+  NoRequiredData,
 }

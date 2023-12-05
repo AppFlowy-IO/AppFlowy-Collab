@@ -496,12 +496,11 @@ impl Document {
 
   fn open_document_with_collab(collab: Arc<MutexCollab>) -> Result<Self, DocumentError> {
     let mut collab_guard = collab.lock();
-    let (root, block_operation, children_operation, text_operation, subscription) = collab_guard
+    let (root, block_operation, children_operation, text_operation) = collab_guard
       .with_origin_transact_mut(|txn| {
         let root = collab_guard.get_map_with_txn(txn, vec![ROOT]);
-
         if root.is_none() {
-          return (None, None, None, None, None);
+          return (None, None, None, None);
         }
         let root = root.unwrap();
         let blocks = root.create_map_with_txn_if_not_exist(txn, BLOCKS);
@@ -512,13 +511,11 @@ impl Document {
         let children_operation = ChildrenOperation::new(children_map);
         let text_operation = TextOperation::new(text_map);
         let block_operation = BlockOperation::new(blocks, children_operation.clone());
-        let subscription = RootDeepSubscription::default();
         (
           Some(root),
           Some(block_operation),
           Some(children_operation),
           Some(text_operation),
-          Some(subscription),
         )
       });
 
@@ -526,9 +523,7 @@ impl Document {
     drop(collab_guard);
 
     if root.is_none() {
-      return Err(DocumentError::Internal(anyhow::anyhow!(
-        "Unexpected empty document value"
-      )));
+      return Err(DocumentError::NoRequiredData);
     }
 
     if block_operation.is_none() {
@@ -547,18 +542,14 @@ impl Document {
       )));
     }
 
-    if subscription.is_none() {
-      return Err(DocumentError::Internal(anyhow::anyhow!(
-        "Unexpected empty subscription"
-      )));
-    }
+    let subscription = RootDeepSubscription::default();
     Ok(Self {
       inner: collab,
       root: root.unwrap(),
       block_operation: block_operation.unwrap(),
       children_operation: children_operation.unwrap(),
       text_operation: text_operation.unwrap(),
-      subscription: subscription.unwrap(),
+      subscription,
     })
   }
 
