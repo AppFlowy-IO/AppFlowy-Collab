@@ -10,3 +10,4 @@ pub mod origin;
 pub mod text_wrapper;
 pub mod transaction;
 pub mod value;
+pub mod awareness;
