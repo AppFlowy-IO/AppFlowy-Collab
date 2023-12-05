@@ -1,12 +1,10 @@
+use rocksdb::{ErrorKind};
+
 #[derive(Debug, thiserror::Error)]
 pub enum PersistenceError {
   #[cfg(feature = "sled_db_persistence")]
   #[error(transparent)]
   SledDb(#[from] sled::Error),
-
-  #[cfg(feature = "rocksdb_persistence")]
-  #[error(transparent)]
-  RocksDb(#[from] rocksdb::Error),
 
   #[cfg(feature = "rocksdb_persistence")]
   #[error("Rocksdb corruption:{0}")]
@@ -52,4 +50,18 @@ pub enum PersistenceError {
 
   #[error(transparent)]
   Internal(#[from] anyhow::Error),
+}
+
+
+#[cfg(feature = "rocksdb_persistence")]
+impl From<rocksdb::Error> for PersistenceError {
+  fn from(value: rocksdb::Error) -> Self {
+    match value.kind() {
+      ErrorKind::NotFound => PersistenceError::UnexpectedEmptyUpdates,
+      ErrorKind::Corruption => PersistenceError::RocksdbCorruption(value.into_string()),
+      ErrorKind::IOError => PersistenceError::RocksdbIOError(value.into_string()),
+      ErrorKind::Busy => PersistenceError::RocksdbBusy(value.into_string()),
+      _ => PersistenceError::Internal(value.into()),
+    }
+  }
 }

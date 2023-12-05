@@ -70,16 +70,7 @@ impl RocksStore {
               Err(PersistenceError::RocksdbCorruption(e.to_string()))
             }
           },
-          ErrorKind::IOError => {
-            // If the database is already locked by another process, it will return an IO error. It
-            // happens when the database is already opened by another process.
-            Err(PersistenceError::RocksdbIOError(e.to_string()))
-          },
-          ErrorKind::Busy => {
-            //
-            Err(PersistenceError::RocksdbBusy(e.to_string()))
-          },
-          _ => Err(PersistenceError::RocksDb(e)),
+          _ => Err(e.into()),
         }
       },
     }?;
