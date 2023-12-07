@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use collab::core::awareness::Awareness;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_plugin::CollabPluginType;
 use collab::core::collab_state::SnapshotState;
@@ -20,7 +21,6 @@ use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 use yrs::updates::decoder::Decode;
 use yrs::{ReadTxn, StateVector, Update};
-use collab::core::awareness::Awareness;
 
 use crate::cloud_storage::remote_collab::{
   should_create_snapshot, RemoteCollab, RemoteCollabStorage,

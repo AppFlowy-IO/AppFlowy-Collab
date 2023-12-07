@@ -50,7 +50,6 @@ pub enum PersistenceError {
   Internal(#[from] anyhow::Error),
 }
 
-
 #[cfg(feature = "rocksdb_persistence")]
 impl From<rocksdb::Error> for PersistenceError {
   fn from(value: rocksdb::Error) -> Self {

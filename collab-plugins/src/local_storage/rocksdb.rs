@@ -3,6 +3,7 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Weak};
 
+use collab::core::awareness::Awareness;
 use collab::core::collab::make_yrs_doc;
 use collab::core::collab_plugin::EncodedCollabV1;
 use collab::core::origin::CollabOrigin;
@@ -12,7 +13,6 @@ use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use tracing::{error, instrument};
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
-use collab::core::awareness::Awareness;
 
 use crate::local_storage::CollabPersistenceConfig;
 
