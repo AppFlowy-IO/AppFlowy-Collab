@@ -4,12 +4,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use collab::core::awareness::Awareness;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_plugin::CollabPluginType;
 use collab::core::collab_state::SnapshotState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
-use collab::sync_protocol::awareness::Awareness;
 use collab_entity::CollabObject;
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
