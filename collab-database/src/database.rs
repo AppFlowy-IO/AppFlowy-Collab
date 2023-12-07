@@ -496,6 +496,11 @@ impl Database {
       .collect::<Vec<RowCell>>()
   }
 
+  pub fn index_of_field(&self, view_id: &str, field_id: &str) -> Option<usize> {
+    let txn = self.root.transact();
+    self.index_of_field_with_txn(&txn, view_id, field_id)
+  }
+
   /// Return the index of the field in the given view.
   pub fn index_of_field_with_txn<T: ReadTxn>(
     &self,
