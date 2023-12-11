@@ -178,7 +178,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
     }
   }
 
-  fn flush(&self, object_id: &str) {
+  fn flush(&self, object_id: &str, _doc: &Doc) {
     if let Some(db) = self.db.upgrade() {
       self.flush_doc(&db, object_id);
     }

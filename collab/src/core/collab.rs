@@ -317,7 +317,7 @@ impl Collab {
       .plugins
       .read()
       .iter()
-      .for_each(|plugin| plugin.flush(&self.object_id));
+      .for_each(|plugin| plugin.flush(&self.object_id, &self.doc));
   }
 
   pub fn observer_data<F>(&mut self, f: F) -> MapSubscription

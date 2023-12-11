@@ -53,7 +53,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
 
   /// Flush the data to the storage. It will remove all existing updates and insert the state vector
   /// and doc_state.
-  fn flush(&self, _object_id: &str) {}
+  fn flush(&self, _object_id: &str, _doc: &Doc) {}
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
