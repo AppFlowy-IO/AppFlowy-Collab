@@ -1,7 +1,9 @@
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use yrs::{Doc, Transact, Transaction, TransactionMut};
+use crate::core::collab_plugin::EncodedCollabV1;
+use yrs::updates::encoder::Encode;
+use yrs::{Doc, ReadTxn, StateVector, Transact, Transaction, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
 use crate::error::CollabError;
@@ -88,5 +90,27 @@ impl<'a> TransactionRetry<'a> {
     }
     tracing::warn!("[Txn]: acquire write txn timeout");
     Err(CollabError::AcquiredWriteTxnFail)
+  }
+}
+
+pub trait DocTransactionExtension: Send + Sync {
+  fn doc_transaction(&self) -> Transaction;
+  fn doc_transaction_mut(&self) -> TransactionMut;
+
+  fn get_encoded_collab_v1(&self) -> EncodedCollabV1 {
+    let txn = self.doc_transaction();
+    EncodedCollabV1::new(
+      txn.state_vector().encode_v1(),
+      txn.encode_state_as_update_v1(&StateVector::default()),
+    )
+  }
+}
+
+impl DocTransactionExtension for Doc {
+  fn doc_transaction(&self) -> Transaction {
+    self.transact()
+  }
+  fn doc_transaction_mut(&self) -> TransactionMut {
+    self.transact_mut()
   }
 }

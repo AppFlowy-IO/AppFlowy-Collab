@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
-use yrs::{Doc, ReadTxn, StateVector, Transact, Transaction, TransactionMut, Update};
+use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut, Update};
 
 use crate::keys::{
   make_doc_end_key, make_doc_id_key, make_doc_start_key, make_doc_state_key, make_doc_update_key,
@@ -16,20 +16,6 @@ use crate::{
   get_id_for_key, get_last_update_key, insert_doc_update, make_doc_id_for_key, PersistenceError,
   TransactionMutExt,
 };
-
-pub trait DocTransaction: Send + Sync {
-  fn doc_transaction(&self) -> Transaction;
-  fn doc_transaction_mut(&self) -> TransactionMut;
-}
-
-impl DocTransaction for Doc {
-  fn doc_transaction(&self) -> Transaction {
-    self.transact()
-  }
-  fn doc_transaction_mut(&self) -> TransactionMut {
-    self.transact_mut()
-  }
-}
 
 impl<'a, T> YrsDocAction<'a> for T
 where

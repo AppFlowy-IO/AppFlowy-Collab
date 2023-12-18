@@ -14,10 +14,10 @@ use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
 use yrs::updates::decoder::Decode;
-use yrs::updates::encoder::Encode;
+
 use yrs::{
   Any, ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options,
-  ReadTxn, StateVector, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
+  ReadTxn, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
   UpdateSubscription,
 };
 
@@ -26,7 +26,7 @@ use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedCollabV1
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
-use crate::core::transaction::TransactionRetry;
+use crate::core::transaction::{DocTransactionExtension, TransactionRetry};
 use crate::core::value::YrsValueExtension;
 use crate::error::CollabError;
 use crate::preclude::{ArrayRefWrapper, JsonValue, MapRefExtension};
@@ -143,11 +143,7 @@ impl Collab {
 
   /// Returns the doc state and the state vector.
   pub fn encode_collab_v1(&self) -> EncodedCollabV1 {
-    let txn = self.transact();
-    EncodedCollabV1::new(
-      txn.state_vector().encode_v1(),
-      txn.encode_state_as_update_v1(&StateVector::default()),
-    )
+    self.doc.get_encoded_collab_v1()
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
