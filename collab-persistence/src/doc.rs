@@ -4,7 +4,6 @@ use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut, Update};
 
-
 use crate::keys::{
   make_doc_end_key, make_doc_id_key, make_doc_start_key, make_doc_state_key, make_doc_update_key,
   make_state_vector_key, oid_from_key, Clock, DocID, Key, DOC_SPACE, DOC_SPACE_OBJECT,

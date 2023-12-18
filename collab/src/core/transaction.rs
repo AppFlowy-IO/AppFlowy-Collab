@@ -1,9 +1,9 @@
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use yrs::{Doc, ReadTxn, StateVector, Transact, Transaction, TransactionMut};
-use yrs::updates::encoder::Encode;
 use crate::core::collab_plugin::EncodedCollabV1;
+use yrs::updates::encoder::Encode;
+use yrs::{Doc, ReadTxn, StateVector, Transact, Transaction, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
 use crate::error::CollabError;
@@ -97,7 +97,7 @@ pub trait DocTransactionExtension: Send + Sync {
   fn doc_transaction(&self) -> Transaction;
   fn doc_transaction_mut(&self) -> TransactionMut;
 
-  fn get_encoded_collab_v1(&self) ->EncodedCollabV1 {
+  fn get_encoded_collab_v1(&self) -> EncodedCollabV1 {
     let txn = self.doc_transaction();
     EncodedCollabV1::new(
       txn.state_vector().encode_v1(),
