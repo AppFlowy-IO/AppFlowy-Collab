@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use anyhow::Error;
-use collab::core::collab::{CollabDocState, MutexCollab};
+use collab::core::collab::{CollabDocState, IndexContentReceiver, MutexCollab};
 use collab::core::collab_plugin::EncodedCollab;
 use collab::core::collab_state::{SnapshotState, SyncState};
 pub use collab::core::origin::CollabOrigin;
@@ -138,6 +138,10 @@ impl Folder {
 
   pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
     self.inner.lock().subscribe_snapshot_state()
+  }
+
+  pub fn subscribe_index_content(&self) -> IndexContentReceiver {
+    self.inner.lock().subscribe_index_content()
   }
 
   /// Returns the doc state and the state vector.
@@ -564,6 +568,7 @@ fn create_folder<T: Into<UserId>>(
 ) -> Folder {
   let uid = uid.into();
   let collab_guard = collab.lock();
+  let index_json_sender = collab_guard.index_json_sender.clone();
   let (folder, views, section, meta, subscription) = collab_guard.with_origin_transact_mut(|txn| {
     // create the folder
     let mut folder = collab_guard.insert_map_with_txn_if_not_exist(txn, FOLDER);
@@ -593,6 +598,7 @@ fn create_folder<T: Into<UserId>>(
         .map(|notifier| notifier.view_change_tx.clone()),
       view_relations,
       section.clone(),
+      index_json_sender,
     ));
 
     if let Some(folder_data) = folder_data {
@@ -642,6 +648,7 @@ fn open_folder<T: Into<UserId>>(
 ) -> Option<Folder> {
   let uid = uid.into();
   let collab_guard = collab.lock();
+  let index_json_sender = collab_guard.index_json_sender.clone();
   let txn = collab_guard.transact();
 
   // create the folder
@@ -672,6 +679,7 @@ fn open_folder<T: Into<UserId>>(
       .map(|notifier| notifier.view_change_tx.clone()),
     view_relations,
     section_map.clone(),
+    index_json_sender.clone(),
   ));
   drop(txn);
   drop(collab_guard);

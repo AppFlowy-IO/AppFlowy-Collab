@@ -3,11 +3,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use anyhow::bail;
+use collab::core::collab::IndexContentSender;
 use collab::preclude::{
   Any, DeepEventsSubscription, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use serde_repr::*;
 
 use crate::folder_observe::ViewChangeSender;
@@ -46,6 +48,7 @@ pub struct ViewsMap {
   subscription: Option<DeepEventsSubscription>,
   #[allow(dead_code)]
   change_tx: Option<ViewChangeSender>,
+  index_json_sender: IndexContentSender,
 }
 
 impl ViewsMap {
@@ -55,6 +58,7 @@ impl ViewsMap {
     change_tx: Option<ViewChangeSender>,
     view_relations: Rc<ViewRelations>,
     section_map: Rc<SectionMap>,
+    index_json_sender: IndexContentSender,
   ) -> ViewsMap {
     let view_cache = Arc::new(RwLock::new(HashMap::new()));
     let subscription = change_tx.as_ref().map(|change_tx| {
@@ -65,6 +69,7 @@ impl ViewsMap {
         change_tx.clone(),
         view_relations.clone(),
         section_map.clone(),
+        index_json_sender.clone(),
       )
     });
     Self {
@@ -75,6 +80,7 @@ impl ViewsMap {
       view_relations,
       view_cache,
       section_map,
+      index_json_sender,
     }
   }
 
@@ -275,6 +281,7 @@ impl ViewsMap {
     }
 
     let map_ref = self.container.create_map_with_txn(txn, &view.id);
+    let index_content = ViewIndexContent::from(&view);
     let view_builder = ViewBuilder::new(
       &view.id,
       txn,
@@ -303,6 +310,7 @@ impl ViewsMap {
     })
     .done();
     let view = view_builder.map(Arc::new);
+    let _ = self.index_json_sender.send(json!(index_content));
     self.set_cache_view(view);
   }
 
@@ -648,6 +656,28 @@ pub struct View {
   pub created_by: Option<i64>, // user id
   pub last_edited_time: i64,
   pub last_edited_by: Option<i64>, // user id
+}
+
+/// Represents a the index of a view.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ViewIndexContent {
+  pub id: String,
+  pub parent_view_id: String,
+  pub name: String,
+  pub is_favorite: bool,
+  pub layout: ViewLayout,
+}
+
+impl From<&View> for ViewIndexContent {
+  fn from(value: &View) -> Self {
+    Self {
+      id: value.id.clone(),
+      parent_view_id: value.parent_view_id.clone(),
+      name: value.name.clone(),
+      is_favorite: value.is_favorite,
+      layout: value.layout.clone(),
+    }
+  }
 }
 
 impl Default for View {
