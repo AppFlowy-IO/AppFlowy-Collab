@@ -679,7 +679,7 @@ fn open_folder<T: Into<UserId>>(
       .map(|notifier| notifier.view_change_tx.clone()),
     view_relations,
     section_map.clone(),
-    index_json_sender.clone(),
+    index_json_sender,
   ));
   drop(txn);
   drop(collab_guard);

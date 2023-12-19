@@ -367,5 +367,6 @@ async fn create_view_and_then_sub_index_content_test() {
   // check the index content
   let index_content = rx.await.unwrap();
   assert_eq!(index_content.id, o_view.id);
+  assert_eq!(index_content.parent_view_id, o_view.parent_view_id);
   assert_eq!(index_content.name, o_view.name);
 }

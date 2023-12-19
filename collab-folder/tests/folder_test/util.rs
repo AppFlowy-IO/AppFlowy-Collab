@@ -119,7 +119,6 @@ pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<Strin
     parent_view_id: parent_view_id.to_string(),
     children: RepeatedViewIdentifier::new(belongings),
     layout: ViewLayout::Document,
-    name: "unit test view".to_string(),
     ..Default::default()
   }
 }
