@@ -65,7 +65,6 @@ impl TextRefWrapper {
         },
         Delta::Deleted(len) => {
           self.text_ref.remove_range(txn, index, len);
-          index += len;
         },
         Delta::Retain(len, attrs) => {
           attrs.map(|attrs| {

@@ -128,6 +128,39 @@ async fn apply_delete_delta_test() {
 }
 
 #[tokio::test]
+async fn apply_mark_delta_test() {
+  let test = BlockTestCore::new().await;
+  let origin_delta = json!([{"insert": "123456"}]).to_string();
+  let text_id = test.create_text(origin_delta);
+  let delta = json!([
+    {"retain": 3},
+    {"insert": "*"},
+  ])
+  .to_string();
+  test.apply_text_delta(&text_id, delta);
+
+  let delta = json!([
+    {"retain": 3},
+    {"delete": 2},
+    {"insert": "4", "attributes": { "bold": true }},
+  ])
+  .to_string();
+  test.apply_text_delta(&text_id, delta);
+
+  let delta = test.get_text_delta_with_text_id(&text_id);
+  let expect = json!([{
+      "insert": "123",
+  }, {"insert": "4", "attributes": { "bold": true }}, {
+      "insert": "56",
+  }])
+  .to_string();
+  assert_eq!(
+    deserialize_text_delta(&delta).unwrap(),
+    deserialize_text_delta(&expect).unwrap()
+  );
+}
+
+#[tokio::test]
 async fn apply_delete_chinese_delta_test() {
   let test = BlockTestCore::new().await;
   let origin_delta =
