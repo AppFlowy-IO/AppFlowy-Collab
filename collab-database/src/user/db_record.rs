@@ -8,6 +8,7 @@ use collab::preclude::{
 };
 
 use crate::database::timestamp;
+use crate::views::CreateDatabaseParams;
 
 const DATABASES: &str = "databases";
 
@@ -39,13 +40,20 @@ impl DatabaseWithViewsArray {
   }
 
   /// Create a new [DatabaseWithViews] for the given database id and view id
-  pub fn add_database(&self, database_id: &str, view_id: &str, name: &str) {
+  pub fn add_database(&self, params: &CreateDatabaseParams) {
     self.array_ref.with_transact_mut(|txn| {
       let mut linked_views = HashSet::new();
-      linked_views.insert(view_id.to_string());
+      linked_views.insert(params.inline_view_id.to_string());
+      linked_views.extend(
+        params
+          .views
+          .iter()
+          .filter(|view| view.view_id != params.inline_view_id)
+          .map(|view| view.view_id.clone()),
+      );
       let record = DatabaseWithViews {
-        database_id: database_id.to_string(),
-        name: name.to_string(),
+        database_id: params.database_id.to_string(),
+        name: "".to_string(), // TODO(RS): database name
         created_at: timestamp(),
         linked_views,
       };

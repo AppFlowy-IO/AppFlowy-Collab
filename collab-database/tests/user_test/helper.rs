@@ -6,7 +6,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use collab::core::collab::{CollabRawData, MutexCollab};
 use collab::preclude::CollabBuilder;
-use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
+use collab_database::database::{gen_database_id, gen_database_view_id, gen_field_id, gen_row_id};
 use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
@@ -15,7 +15,7 @@ use collab_database::user::{
   CollabFuture, CollabObjectUpdate, CollabObjectUpdateByOid, DatabaseCollabService,
   RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
 };
-use collab_database::views::{CreateDatabaseParams, DatabaseLayout, OrderObjectPosition};
+use collab_database::views::{CreateDatabaseParams, CreateViewParams, DatabaseLayout};
 use collab_entity::CollabType;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
@@ -179,9 +179,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
       .insert_cell("f3", TestTextCell::from("1f3cell"))
       .build(),
     height: 0,
-    visibility: true,
-    row_position: OrderObjectPosition::default(),
-    timestamp: 0,
+    ..Default::default()
   };
   let row_2 = CreateRowParams {
     id: 2.into(),
@@ -190,9 +188,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
       .insert_cell("f2", TestTextCell::from("2f2cell"))
       .build(),
     height: 0,
-    visibility: true,
-    row_position: OrderObjectPosition::default(),
-    timestamp: 0,
+    ..Default::default()
   };
   let row_3 = CreateRowParams {
     id: 3.into(),
@@ -201,9 +197,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
       .insert_cell("f3", TestTextCell::from("3f3cell"))
       .build(),
     height: 0,
-    visibility: true,
-    row_position: OrderObjectPosition::default(),
-    timestamp: 0,
+    ..Default::default()
   };
   let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
@@ -213,15 +207,15 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
 
   CreateDatabaseParams {
     database_id: database_id.to_string(),
-    view_id: "v1".to_string(),
-    name: "my first database".to_string(),
-    layout: Default::default(),
-    layout_settings: Default::default(),
-    filters: vec![],
-    groups: vec![],
-    sorts: vec![],
-    field_settings: field_settings_map,
-    created_rows: vec![row_1, row_2, row_3],
+    inline_view_id: gen_database_view_id(),
+    views: vec![CreateViewParams {
+      database_id: database_id.to_string(),
+      view_id: "v1".to_string(),
+      name: "my first database".to_string(),
+      field_settings: field_settings_map,
+      ..Default::default()
+    }],
+    rows: vec![row_1, row_2, row_3],
     fields: vec![field_1, field_2, field_3],
   }
 }
@@ -244,6 +238,8 @@ pub async fn test_timeout<F: Future>(f: F) -> F::Output {
 }
 
 pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
+  let database_id = gen_database_id();
+
   let text_field = Field {
     id: gen_field_id(),
     name: "Name".to_string(),
@@ -277,16 +273,17 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
   let field_settings_map = field_settings_for_default_database();
 
   CreateDatabaseParams {
-    database_id: gen_database_id(),
-    view_id: view_id.to_string(),
-    name: name.to_string(),
-    layout: DatabaseLayout::Grid,
-    layout_settings: Default::default(),
-    filters: vec![],
-    groups: vec![],
-    sorts: vec![],
-    field_settings: field_settings_map,
-    created_rows: vec![
+    database_id: database_id.clone(),
+    inline_view_id: gen_database_view_id(),
+    views: vec![CreateViewParams {
+      database_id: database_id.clone(),
+      view_id: view_id.to_string(),
+      name: name.to_string(),
+      layout: DatabaseLayout::Grid,
+      field_settings: field_settings_map,
+      ..Default::default()
+    }],
+    rows: vec![
       CreateRowParams::new(gen_row_id()),
       CreateRowParams::new(gen_row_id()),
       CreateRowParams::new(gen_row_id()),

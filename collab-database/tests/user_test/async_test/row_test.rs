@@ -1,6 +1,5 @@
 use collab_database::rows::CreateRowParams;
 use collab_database::rows::{CellsBuilder, RowId};
-use collab_database::views::OrderObjectPosition;
 use serde_json::{json, Value};
 
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -100,8 +99,7 @@ async fn create_row_test() {
             cells: Default::default(),
             height: 0,
             visibility: false,
-            row_position: OrderObjectPosition::default(),
-            timestamp: 0,
+            ..Default::default()
           },
         });
       }
@@ -151,7 +149,7 @@ fn edit_row_expected() -> Value {
         "width": 120
       }
     ],
-    "inline_view": "v1",
+    "inline_view": "inline_view_id",
     "rows": [
       {
         "cells": {
@@ -218,7 +216,7 @@ fn edit_row_expected() -> Value {
         "id": "v1",
         "layout": 0,
         "layout_settings": {},
-        "name": "my first database",
+        "name": "my first database view",
         "row_orders": [
           {
             "height": 0,
@@ -238,6 +236,7 @@ fn edit_row_expected() -> Value {
     ]
   })
 }
+
 fn create_row_test_expected() -> Value {
   json!(
   {
@@ -270,7 +269,7 @@ fn create_row_test_expected() -> Value {
         "width": 120
       }
     ],
-    "inline_view": "v1",
+    "inline_view": "inline_view_id",
     "rows": [
       {
         "block_id": 1,
@@ -350,7 +349,7 @@ fn create_row_test_expected() -> Value {
         "layout": 0,
         "layout_settings": {},
         "modified_at": 0,
-        "name": "my first database",
+        "name": "my first database view",
         "row_orders": [
           {
             "block_id": 1,

@@ -10,8 +10,8 @@ use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, CreateRowParams};
 use collab_database::user::DatabaseCollabService;
 use collab_database::views::{
-  CreateDatabaseParams, DatabaseLayout, FieldSettingsByFieldIdMap, FieldSettingsMap, LayoutSetting,
-  LayoutSettings, OrderObjectPosition,
+  CreateDatabaseParams, CreateViewParams, DatabaseLayout, FieldSettingsByFieldIdMap,
+  FieldSettingsMap, LayoutSetting, LayoutSettings, OrderObjectPosition,
 };
 use collab_entity::CollabType;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
@@ -66,8 +66,13 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   };
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
-    view_id: "v1".to_string(),
-    name: "my first database view".to_string(),
+    inline_view_id: "inline_view_id".to_string(),
+    views: vec![CreateViewParams {
+      database_id: database_id.to_string(),
+      view_id: "v1".to_string(),
+      name: "my first database view".to_string(),
+      ..Default::default()
+    }],
     ..Default::default()
   };
   let database = Database::create_with_inline_view(params, context).unwrap();
@@ -100,9 +105,14 @@ pub async fn create_database_with_db(
     notifier: Some(DatabaseNotify::default()),
   };
   let params = CreateDatabaseParams {
-    view_id: "v1".to_string(),
-    name: "my first grid".to_string(),
     database_id: database_id.to_string(),
+    inline_view_id: "inline_view_id".to_string(),
+    views: vec![CreateViewParams {
+      database_id: database_id.to_string(),
+      view_id: "v1".to_string(),
+      name: "my first grid".to_string(),
+      ..Default::default()
+    }],
     ..Default::default()
   };
   let database = Database::create_with_inline_view(params, context).unwrap();
@@ -207,15 +217,17 @@ impl DatabaseTestBuilder {
     };
     let params = CreateDatabaseParams {
       database_id: self.database_id.clone(),
-      view_id: self.view_id,
-      name: "my first database view".to_string(),
-      layout: self.layout,
-      layout_settings: self.layout_settings,
-      filters: vec![],
-      groups: vec![],
-      sorts: vec![],
-      field_settings: self.field_settings,
-      created_rows: self.rows,
+      inline_view_id: "inline_view_id".to_string(),
+      views: vec![CreateViewParams {
+        database_id: self.database_id,
+        view_id: self.view_id,
+        name: "my first database view".to_string(),
+        layout: self.layout,
+        layout_settings: self.layout_settings,
+        field_settings: self.field_settings,
+        ..Default::default()
+      }],
+      rows: self.rows,
       fields: self.fields,
     };
     let database = Database::create_with_inline_view(params, context).unwrap();
@@ -237,9 +249,7 @@ pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> D
       .insert_cell("f3", TestTextCell::from("1f3cell"))
       .build(),
     height: 0,
-    visibility: true,
-    row_position: OrderObjectPosition::default(),
-    timestamp: 0,
+    ..Default::default()
   };
   let row_2 = CreateRowParams {
     id: 2.into(),
@@ -248,9 +258,7 @@ pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> D
       .insert_cell("f2", TestTextCell::from("2f2cell"))
       .build(),
     height: 0,
-    visibility: true,
-    row_position: OrderObjectPosition::default(),
-    timestamp: 0,
+    ..Default::default()
   };
   let row_3 = CreateRowParams {
     id: 3.into(),
@@ -259,9 +267,7 @@ pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> D
       .insert_cell("f3", TestTextCell::from("3f3cell"))
       .build(),
     height: 0,
-    visibility: true,
-    row_position: OrderObjectPosition::default(),
-    timestamp: 0,
+    ..Default::default()
   };
 
   let database_test = create_database(uid, database_id).await;

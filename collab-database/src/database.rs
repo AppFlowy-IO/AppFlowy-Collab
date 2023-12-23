@@ -71,24 +71,51 @@ impl Database {
   ) -> Result<Self, DatabaseError> {
     // Get or create a empty database with the given database_id
     let this = Self::get_or_create(&params.database_id, context)?;
-    let (rows, fields, params) = params.split();
-    if !params.deps_fields.is_empty() {
-      tracing::warn!("The deps_fields should be empty when creating a database with inline view.");
-    }
+
+    let CreateDatabaseParams {
+      database_id,
+      rows,
+      fields,
+      inline_view_id,
+      mut views,
+    } = params;
+
+    let inline_view =
+      if let Some(index) = views.iter().position(|view| view.view_id == inline_view_id) {
+        views.remove(index)
+      } else {
+        CreateViewParams::new(
+          database_id,
+          inline_view_id.clone(),
+          "".to_string(),
+          DatabaseLayout::Grid,
+        )
+      };
 
     let row_orders = this.block.create_rows(rows);
-    let field_orders = fields.iter().map(FieldOrder::from).collect();
+    let field_orders: Vec<FieldOrder> = fields.iter().map(FieldOrder::from).collect();
     this.root.with_transact_mut(|txn| {
       // Set the inline view id. The inline view id should not be
       // empty if the current database exists.
-      this.set_inline_view_with_txn(txn, &params.view_id);
+      this.set_inline_view_with_txn(txn, &inline_view_id);
 
       // Insert the given fields into the database
       for field in fields {
         this.fields.insert_field_with_txn(txn, field);
       }
-      // Create a inline view
-      this.create_view_with_txn(txn, params, field_orders, row_orders)?;
+      // Create the inline view
+      this.create_view_with_txn(txn, inline_view, field_orders.clone(), row_orders.clone())?;
+
+      // create the linked views
+      for linked_view in views {
+        this.create_linked_view_with_txn(
+          txn,
+          linked_view,
+          field_orders.clone(),
+          row_orders.clone(),
+        )?;
+      }
+
       Ok::<(), DatabaseError>(())
     })?;
     Ok(this)
@@ -976,33 +1003,67 @@ impl Database {
 
   /// Create a linked view to existing database
   pub fn create_linked_view(&self, params: CreateViewParams) -> Result<(), DatabaseError> {
-    let mut params = CreateViewParamsValidator::validate(params)?;
     self.root.with_transact_mut(|txn| {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
       let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
       let field_orders = self.views.get_field_orders_with_txn(txn, &inline_view_id);
-      let (deps_fields, deps_field_settings) = params.take_deps_fields();
 
-      self.create_view_with_txn(txn, params, field_orders, row_orders)?;
-
-      // After creating the view, we need to create the fields that are used in the view.
-      if !deps_fields.is_empty() {
-        tracing::trace!("create linked view with deps fields: {:?}", deps_fields);
-        deps_fields
-          .into_iter()
-          .zip(deps_field_settings.into_iter())
-          .for_each(|(field, field_settings)| {
-            self.create_field_with_txn(
-              txn,
-              None,
-              field,
-              &OrderObjectPosition::default(),
-              &field_settings,
-            );
-          })
-      }
+      self.create_linked_view_with_txn(txn, params, field_orders, row_orders)?;
       Ok::<(), DatabaseError>(())
     })?;
+    Ok(())
+  }
+
+  pub fn create_linked_view_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    params: CreateViewParams,
+    field_orders: Vec<FieldOrder>,
+    row_orders: Vec<RowOrder>,
+  ) -> Result<(), DatabaseError> {
+    let mut params = CreateViewParamsValidator::validate(params)?;
+    let (deps_fields, deps_field_settings) = params.take_deps_fields();
+
+    self.create_view_with_txn(txn, params, field_orders, row_orders)?;
+
+    // After creating the view, we need to create the fields that are used in the view.
+    if !deps_fields.is_empty() {
+      tracing::trace!("create linked view with deps fields: {:?}", deps_fields);
+      deps_fields
+        .into_iter()
+        .zip(deps_field_settings.into_iter())
+        .for_each(|(field, field_settings)| {
+          self.create_field_with_txn(
+            txn,
+            None,
+            field,
+            &OrderObjectPosition::default(),
+            &field_settings,
+          );
+        });
+    }
+    Ok(())
+  }
+
+  /// When the last linked view of a database is deleted, a new one is created and its
+  /// contents is duplicated from the inline view.
+  pub fn create_new_view_if_needed_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+  ) -> Result<(), DatabaseError> {
+    if self.views.get_all_views_description_with_txn(txn).len() > 1 {
+      return Ok(());
+    }
+    let inline_view_id = self.get_inline_view_id_with_txn(txn);
+    let mut view = self
+      .views
+      .get_view_with_txn(txn, &inline_view_id)
+      .ok_or(DatabaseError::DatabaseViewNotExist)?;
+    view.id = gen_database_view_id();
+    view.created_at = timestamp();
+    view.modified_at = timestamp();
+    self.views.insert_view_with_txn(txn, view);
+
     Ok(())
   }
 
@@ -1015,7 +1076,6 @@ impl Database {
     row_orders: Vec<RowOrder>,
   ) -> Result<(), DatabaseError> {
     let params = CreateViewParamsValidator::validate(params)?;
-    let timestamp = timestamp();
     let database_id = self.get_database_id_with_txn(txn);
     let view = DatabaseView {
       id: params.view_id,
@@ -1024,13 +1084,13 @@ impl Database {
       layout: params.layout,
       layout_settings: params.layout_settings,
       filters: params.filters,
-      group_settings: params.groups,
+      group_settings: params.group_settings,
       sorts: params.sorts,
       field_settings: params.field_settings,
       row_orders,
       field_orders,
-      created_at: timestamp,
-      modified_at: timestamp,
+      created_at: params.created_at,
+      modified_at: params.modified_at,
     };
     // tracing::trace!("create linked view with params {:?}", params);
     self.views.insert_view_with_txn(txn, view);
@@ -1054,13 +1114,15 @@ impl Database {
   /// Duplicate the row, and insert it after the original row.
   pub fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
     let row = self.block.get_row(row_id);
+    let timestamp = timestamp();
     Some(CreateRowParams {
       id: gen_row_id(),
       cells: row.cells,
       height: row.height,
       visibility: row.visibility,
       row_position: OrderObjectPosition::After(row.id.into()),
-      timestamp: timestamp(),
+      created_at: timestamp,
+      modified_at: timestamp,
     })
   }
 
@@ -1085,30 +1147,22 @@ impl Database {
     })
   }
 
-  pub fn duplicate_database(&self) -> DatabaseData {
-    let inline_view_id = self.get_inline_view_id();
+  pub fn get_all_database_data(&self) -> DatabaseData {
     let txn = self.root.transact();
-    let timestamp = timestamp();
-    let mut view = self.views.get_view_with_txn(&txn, &inline_view_id).unwrap();
-    let fields = self.get_fields_in_view_with_txn(&txn, &inline_view_id, None);
-    let row_orders = self.views.get_row_orders_with_txn(&txn, &view.id);
-    let rows = self
-      .block
-      .get_rows_from_row_orders(&row_orders)
-      .into_iter()
-      .map(|row| CreateRowParams {
-        id: gen_row_id(),
-        cells: row.cells,
-        height: row.height,
-        visibility: row.visibility,
-        row_position: OrderObjectPosition::End,
-        timestamp,
-      })
-      .collect::<Vec<CreateRowParams>>();
 
-    view.id = gen_database_view_id();
-    view.database_id = gen_database_id();
-    DatabaseData { view, fields, rows }
+    let database_id = self.get_database_id_with_txn(&txn);
+    let inline_view_id = self.get_inline_view_id_with_txn(&txn);
+    let views = self.views.get_all_views_with_txn(&txn);
+    let fields = self.get_fields_in_view_with_txn(&txn, &inline_view_id, None);
+    let rows = self.get_database_rows();
+
+    DatabaseData {
+      database_id,
+      inline_view_id,
+      fields,
+      rows,
+      views,
+    }
   }
 
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
@@ -1176,6 +1230,7 @@ impl Database {
     } else {
       self.root.with_transact_mut(|txn| {
         self.views.delete_view_with_txn(txn, view_id);
+        let _ = self.create_new_view_if_needed_with_txn(txn);
       });
       vec![view_id.to_string()]
     }
@@ -1225,15 +1280,109 @@ pub fn timestamp() -> i64 {
 }
 
 /// DatabaseData contains all the data of a database.
-/// It's used to export and import a database. For example, duplicating a database
+/// It's used when duplicating a database, or during import and export.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DatabaseData {
-  pub view: DatabaseView,
+  pub database_id: String,
+  pub inline_view_id: String,
+  pub views: Vec<DatabaseView>,
   pub fields: Vec<Field>,
-  pub rows: Vec<CreateRowParams>,
+  pub rows: Vec<Row>,
 }
 
 impl DatabaseData {
+  pub fn from_database(database: &Database) -> Self {
+    let txn = database.root.transact();
+    let database_id = database.get_database_id_with_txn(&txn);
+    let inline_view_id = database.metas.get_inline_view_with_txn(&txn).unwrap();
+    let views = database.views.get_all_views_with_txn(&txn);
+    let fields = database.get_fields_in_view_with_txn(&txn, &inline_view_id, None);
+    let rows = database.get_rows_for_view(&inline_view_id);
+
+    drop(txn);
+
+    Self {
+      database_id,
+      inline_view_id,
+      views,
+      rows,
+      fields,
+    }
+  }
+
+  /// Converts DatabaseData to CreateDatabaseParams. If `regenerate` is true,
+  /// the timestamps and view_ids will all be regenerated. This will be used
+  /// when duplicating a database. If false, these fields remain the same.
+  /// This is used in an importing scenario.
+  pub fn to_create_database_params(self, regenerate: bool) -> CreateDatabaseParams {
+    let (database_id, inline_view_id) = if regenerate {
+      (gen_database_id(), gen_database_view_id())
+    } else {
+      (self.database_id, self.inline_view_id.clone())
+    };
+
+    let timestamp = timestamp();
+    let create_row_params = self
+      .rows
+      .into_iter()
+      .map(|row| {
+        let (id, created_at, modified_at) = if regenerate {
+          (gen_row_id(), timestamp, timestamp)
+        } else {
+          (row.id, row.created_at, row.modified_at)
+        };
+        CreateRowParams {
+          id,
+          created_at,
+          modified_at,
+          cells: row.cells,
+          height: row.height,
+          visibility: row.visibility,
+          row_position: OrderObjectPosition::End,
+        }
+      })
+      .collect::<Vec<CreateRowParams>>();
+
+    let create_view_params = self
+      .views
+      .into_iter()
+      .map(|view| {
+        let view_id = if regenerate && view.id == self.inline_view_id {
+          inline_view_id.clone()
+        } else {
+          view.id
+        };
+        let (created_at, modified_at) = if regenerate {
+          (timestamp, timestamp)
+        } else {
+          (view.created_at, view.modified_at)
+        };
+        CreateViewParams {
+          database_id: database_id.clone(),
+          view_id,
+          name: view.name,
+          layout: view.layout,
+          layout_settings: view.layout_settings,
+          filters: view.filters,
+          group_settings: view.group_settings,
+          sorts: view.sorts,
+          field_settings: view.field_settings,
+          created_at,
+          modified_at,
+          ..Default::default()
+        }
+      })
+      .collect();
+
+    CreateDatabaseParams {
+      database_id,
+      inline_view_id,
+      rows: create_row_params,
+      fields: self.fields,
+      views: create_view_params,
+    }
+  }
+
   pub fn to_json(&self) -> Result<String, DatabaseError> {
     let s = serde_json::to_string(self)?;
     Ok(s)

@@ -5,10 +5,9 @@ use collab_database::views::{
   CreateViewParams, DatabaseLayout, LayoutSettingBuilder, OrderObjectPosition,
 };
 use nanoid::nanoid;
-use serde_json::json;
 use std::sync::Arc;
 
-use assert_json_diff::{assert_json_eq, assert_json_include};
+use assert_json_diff::assert_json_eq;
 use collab::preclude::Any;
 
 use crate::database_test::helper::{
@@ -19,28 +18,31 @@ use crate::helper::TestFilter;
 #[tokio::test]
 async fn create_initial_database_test() {
   let database_test = create_database(1, "1").await;
-  assert_json_include!(
-    expected: json!( {
-      "fields": [],
-      "inline_view": "v1",
-      "rows": [],
-      "views": [
-        {
-          "database_id": "1",
-          "field_orders": [],
-          "filters": [],
-          "group_settings": [],
-          "id": "v1",
-          "layout": 0,
-          "layout_settings": {},
-          "name": "my first database view",
-          "row_orders": [],
-          "sorts": []
-        }
-      ]
-    }),
-    actual: database_test.to_json_value()
+  assert_eq!(database_test.fields.get_all_field_orders().len(), 0);
+  assert_eq!(database_test.get_database_rows().len(), 0);
+  assert_eq!(database_test.get_database_id(), "1".to_string());
+
+  let inline_view_id = database_test.get_inline_view_id();
+  assert_eq!(inline_view_id, "inline_view_id".to_string());
+
+  let mut views = database_test.views.get_all_views();
+  assert_eq!(views.len(), 2);
+
+  let inline_view = views.remove(
+    views
+      .iter()
+      .position(|view| view.id == inline_view_id)
+      .unwrap(),
   );
+  let linked_view = views.pop().unwrap();
+
+  assert_eq!(inline_view.database_id, "1".to_string(),);
+  assert_eq!(inline_view.id, "inline_view_id".to_string());
+  assert_eq!(inline_view.name, "".to_string());
+
+  assert_eq!(linked_view.database_id, "1".to_string(),);
+  assert_eq!(linked_view.id, "v1".to_string());
+  assert_eq!(linked_view.name, "my first database view".to_string());
 }
 
 #[tokio::test]
@@ -55,8 +57,8 @@ async fn create_database_with_single_view_test() {
 async fn get_database_view_description_test() {
   let database_test = create_database_with_default_data(1, "1").await;
   let views = database_test.get_all_views_description();
-  assert_eq!(views.len(), 1);
-  assert_eq!(views[0].name, "my first database view");
+  assert_eq!(views.len(), 2);
+  assert_eq!(views[1].name, "my first database view");
 }
 
 #[tokio::test]
@@ -179,9 +181,9 @@ async fn create_database_view_with_layout_setting_test() {
 }
 
 #[tokio::test]
-async fn delete_inline_database_view_test() {
+async fn delete_database_view_test() {
   let database_test = create_database_with_default_data(1, "1").await;
-  for i in 0..3 {
+  for i in 2..5 {
     let params = CreateViewParams {
       database_id: "1".to_string(),
       view_id: format!("v{}", i),
@@ -191,33 +193,42 @@ async fn delete_inline_database_view_test() {
   }
 
   let views = database_test.views.get_all_views();
-  let view_id = views[1].id.clone();
-  assert_eq!(views.len(), 3);
+  assert_eq!(views.len(), 5);
 
-  database_test.views.delete_view(&view_id);
+  let deleted_view_id = "v3".to_string();
+  database_test.views.delete_view(&deleted_view_id);
   let views = database_test
     .views
     .get_all_views()
     .iter()
     .map(|view| view.id.clone())
     .collect::<Vec<String>>();
-  assert_eq!(views.len(), 2);
-  assert!(!views.contains(&view_id));
+  assert_eq!(views.len(), 4);
+  assert!(!views.contains(&deleted_view_id));
 }
 
 #[tokio::test]
 async fn duplicate_database_view_test() {
   let database_test = create_database_with_default_data(1, "1").await;
-  database_test.duplicate_linked_view("v1");
 
   let views = database_test.views.get_all_views();
   assert_eq!(views.len(), 2);
+
+  let view = database_test.get_view("v1").unwrap();
+  let duplicated_view = database_test.duplicate_linked_view("v1").unwrap();
+
+  let views = database_test.views.get_all_views();
+  assert_eq!(views.len(), 3);
+
+  assert_eq!(duplicated_view.name, format!("{}-copy", view.name));
+  assert_ne!(view.id, duplicated_view.id);
+  // modified and created time should also be different but the test completes within one second.
 }
 
 #[tokio::test]
 async fn duplicate_database_data_serde_test() {
   let database_test = create_database_with_default_data(1, "1").await;
-  let duplicated_database = database_test.duplicate_database();
+  let duplicated_database = database_test.get_all_database_data();
 
   let json = duplicated_database.to_json().unwrap();
   let duplicated_database2 = DatabaseData::from_json(&json).unwrap();

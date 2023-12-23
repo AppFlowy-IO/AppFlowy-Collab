@@ -10,6 +10,7 @@ use collab::preclude::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::database::gen_database_view_id;
 use crate::error::DatabaseError;
 use crate::fields::Field;
 use crate::rows::CreateRowParams;
@@ -51,9 +52,11 @@ pub struct CreateViewParams {
   pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<FilterMap>,
-  pub groups: Vec<GroupSettingMap>,
+  pub group_settings: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
   pub field_settings: FieldSettingsByFieldIdMap,
+  pub created_at: i64,
+  pub modified_at: i64,
 
   /// When creating a view for a database, it might need to create a new field for the view.
   /// For example, if the view is calendar view, it must have a date field.
@@ -97,7 +100,7 @@ impl CreateViewParams {
   }
 
   pub fn with_groups(mut self, groups: Vec<GroupSettingMap>) -> Self {
-    self.groups = groups;
+    self.group_settings = groups;
     self
   }
 
@@ -114,6 +117,23 @@ impl CreateViewParams {
   pub fn with_field_settings_map(mut self, field_settings_map: FieldSettingsByFieldIdMap) -> Self {
     self.field_settings = field_settings_map;
     self
+  }
+}
+
+impl From<DatabaseView> for CreateViewParams {
+  fn from(view: DatabaseView) -> Self {
+    Self {
+      database_id: view.database_id,
+      view_id: view.id,
+      name: view.name,
+      layout: view.layout,
+      filters: view.filters,
+      layout_settings: view.layout_settings,
+      group_settings: view.group_settings,
+      sorts: view.sorts,
+      field_settings: view.field_settings,
+      ..Default::default()
+    }
   }
 }
 
@@ -136,61 +156,45 @@ impl CreateViewParamsValidator {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateDatabaseParams {
   pub database_id: String,
-  pub view_id: String,
-  pub name: String,
-  pub layout: DatabaseLayout,
-  pub layout_settings: LayoutSettings,
-  pub filters: Vec<FilterMap>,
-  pub groups: Vec<GroupSettingMap>,
-  pub sorts: Vec<SortMap>,
-  pub field_settings: FieldSettingsByFieldIdMap,
-  pub created_rows: Vec<CreateRowParams>,
   pub fields: Vec<Field>,
+  pub rows: Vec<CreateRowParams>,
+  pub inline_view_id: String,
+  pub views: Vec<CreateViewParams>,
 }
 
 impl CreateDatabaseParams {
-  pub fn from_view(view: DatabaseView, fields: Vec<Field>, rows: Vec<CreateRowParams>) -> Self {
-    let mut params: Self = view.into();
-    params.fields = fields;
-    params.created_rows = rows;
-    params
-  }
-
-  pub fn split(self) -> (Vec<CreateRowParams>, Vec<Field>, CreateViewParams) {
-    (
-      self.created_rows,
-      self.fields,
-      CreateViewParams {
-        database_id: self.database_id,
-        view_id: self.view_id,
-        name: self.name,
-        layout: self.layout,
-        layout_settings: self.layout_settings,
-        filters: self.filters,
-        groups: self.groups,
-        sorts: self.sorts,
-        field_settings: self.field_settings,
-        deps_fields: vec![],
-        deps_field_setting: vec![],
-      },
-    )
+  pub fn from_single_view(
+    view: DatabaseView,
+    fields: Vec<Field>,
+    rows: Vec<CreateRowParams>,
+  ) -> Self {
+    Self {
+      fields,
+      rows,
+      ..view.into()
+    }
   }
 }
 
 impl From<DatabaseView> for CreateDatabaseParams {
   fn from(view: DatabaseView) -> Self {
     Self {
-      database_id: view.database_id,
-      view_id: view.id,
-      name: view.name,
-      layout: view.layout,
-      layout_settings: view.layout_settings,
-      filters: view.filters,
-      groups: view.group_settings,
-      sorts: view.sorts,
-      field_settings: view.field_settings,
-      created_rows: vec![],
+      database_id: view.database_id.clone(),
+      inline_view_id: gen_database_view_id(),
+      rows: vec![],
       fields: vec![],
+      views: vec![CreateViewParams {
+        database_id: view.database_id,
+        view_id: view.id,
+        name: view.name,
+        layout: view.layout,
+        layout_settings: view.layout_settings,
+        filters: view.filters,
+        group_settings: view.group_settings,
+        sorts: view.sorts,
+        field_settings: view.field_settings,
+        ..Default::default()
+      }],
     }
   }
 }

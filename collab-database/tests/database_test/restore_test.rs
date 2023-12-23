@@ -1,11 +1,8 @@
-use std::sync::Arc;
-
 use collab_database::database::DatabaseData;
 use collab_database::rows::CreateRowParams;
+use collab_database::views::DatabaseLayout;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use serde_json::{json, Value};
-
-use assert_json_diff::assert_json_include;
+use serde_json::json;
 
 use crate::database_test::helper::{
   create_database_with_db, restore_database_from_db, DatabaseTest,
@@ -37,93 +34,70 @@ async fn restore_row_from_disk_test() {
 
 #[tokio::test]
 async fn restore_from_disk_test() {
-  let (db, database_test, expected) = create_database_with_view().await;
-  assert_json_include!(actual:database_test.to_json_value(), expected:expected);
-  // assert_json_eq!(expected, database_test.to_json_value());
+  let (db, database_test) = create_database_with_db(1, "1").await;
+  assert_database_eq(database_test);
 
   // Restore from disk
   let database_test = restore_database_from_db(1, "1", db);
-  assert_json_include!(actual:database_test.to_json_value(), expected:expected);
+  assert_database_eq(database_test);
 }
 
 #[tokio::test]
 async fn restore_from_disk_with_different_database_id_test() {
-  let (db, _, _) = create_database_with_view().await;
+  let (db, _) = create_database_with_db(1, "1").await;
   let database_test = restore_database_from_db(1, "1", db);
-  assert_json_include!(
-    expected: json!( {
-      "fields": [],
-      "inline_view": "v1",
-      "rows": [],
-      "views": [
-        {
-          "database_id": "1",
-          "field_orders": [],
-          "filters": [],
-          "group_settings": [],
-          "id": "v1",
-          "layout": 0,
-          "layout_settings": {},
-          "name": "my first grid",
-          "row_orders": [],
-          "sorts": []
-        }
-      ]
-    }),
-    actual: database_test.to_json_value()
-  );
+
+  assert_database_eq(database_test);
 }
 
 #[tokio::test]
 async fn restore_from_disk_with_different_uid_test() {
-  let (db, _, _) = create_database_with_view().await;
+  let (db, _) = create_database_with_db(1, "1").await;
   let database_test = restore_database_from_db(1, "1", db);
-  assert_json_include!(
-    expected: json!( {
-      "fields": [],
-      "inline_view": "v1",
-      "rows": [],
-      "views": [
-        {
-          "database_id": "1",
-          "field_orders": [],
-          "filters": [],
-          "group_settings": [],
-          "id": "v1",
-          "layout": 0,
-          "layout_settings": {},
-          "name": "my first grid",
-          "row_orders": [],
-          "sorts": []
-        }
-      ]
-    }),
-    actual: database_test.to_json_value()
-  );
+
+  assert_database_eq(database_test);
 }
 
-async fn create_database_with_view() -> (Arc<RocksCollabDB>, DatabaseTest, Value) {
-  let (db, database_test) = create_database_with_db(1, "1").await;
-  let expected = json!({
-    "fields": [],
-    "inline_view": "v1",
-    "rows": [],
-    "views": [
-      {
-        "database_id": "1",
-        "field_orders": [],
-        "filters": [],
-        "group_settings": [],
-        "id": "v1",
-        "layout": 0,
-        "layout_settings": {},
-        "name": "my first grid",
-        "row_orders": [],
-        "sorts": []
-      }
-    ]
-  });
-  (db, database_test, expected)
+fn assert_database_eq(database_test: DatabaseTest) {
+  assert_eq!(database_test.fields.get_all_field_orders().len(), 0);
+  assert_eq!(database_test.get_database_rows().len(), 0);
+  assert_eq!(database_test.get_database_id(), "1".to_string());
+
+  let inline_view_id = database_test.get_inline_view_id();
+  assert_eq!(inline_view_id, "inline_view_id".to_string());
+
+  let mut views = database_test.views.get_all_views();
+  assert_eq!(views.len(), 2);
+
+  let inline_view = views.remove(
+    views
+      .iter()
+      .position(|view| view.id == inline_view_id)
+      .unwrap(),
+  );
+  let linked_view = views.pop().unwrap();
+
+  assert_eq!(inline_view.database_id, "1".to_string(),);
+  assert_eq!(inline_view.id, "inline_view_id".to_string());
+  assert_eq!(inline_view.name, "".to_string());
+  assert_eq!(inline_view.layout, DatabaseLayout::Grid);
+  assert!(inline_view.field_orders.is_empty());
+  assert!(inline_view.row_orders.is_empty());
+  assert!(inline_view.filters.is_empty());
+  assert!(inline_view.group_settings.is_empty());
+  assert!(inline_view.sorts.is_empty());
+  assert!(inline_view.layout_settings.is_empty());
+
+  assert_eq!(linked_view.database_id, "1".to_string(),);
+  assert_eq!(linked_view.id, "v1".to_string());
+  assert_eq!(linked_view.name, "my first grid".to_string());
+  assert_eq!(linked_view.layout, DatabaseLayout::Grid);
+  assert!(linked_view.field_orders.is_empty());
+  assert!(linked_view.row_orders.is_empty());
+  assert!(linked_view.filters.is_empty());
+  assert!(linked_view.group_settings.is_empty());
+  assert!(linked_view.sorts.is_empty());
+  assert!(linked_view.layout_settings.is_empty());
 }
 
 const HISTORY_DOCUMENT_020: &str = "020_database";
@@ -136,7 +110,15 @@ async fn open_020_history_database_test() {
     "c0e69740-49f0-4790-a488-702e2750ba8d",
     db,
   );
-  let data = database_test.duplicate_database();
+  let mut data = database_test.get_all_database_data();
+
+  let view = data.views.remove(
+    data
+      .views
+      .iter()
+      .position(|view| view.id != data.inline_view_id)
+      .unwrap(),
+  );
 
   let json_value = json!({
     "fields": [
@@ -406,29 +388,31 @@ async fn open_020_history_database_test() {
       "field_settings": {}
     }
   });
-  let expected_data: DatabaseData = serde_json::from_value(json_value).unwrap();
+
+  let mut expected_data: DatabaseData = serde_json::from_value(json_value).unwrap();
+
+  let expected_view = expected_data.views.remove(
+    expected_data
+      .views
+      .iter()
+      .position(|view| view.id != expected_data.inline_view_id)
+      .unwrap(),
+  );
+
   assert_eq!(data.rows.len(), expected_data.rows.len());
   assert_eq!(data.fields.len(), expected_data.fields.len());
-  assert_eq!(data.view.name, expected_data.view.name);
-  assert_eq!(data.view.layout, expected_data.view.layout);
+
+  assert_eq!(view.name, expected_view.name);
+  assert_eq!(view.layout, expected_view.layout);
+  assert_eq!(view.layout_settings, expected_view.layout_settings);
+  assert_eq!(view.filters.len(), expected_view.filters.len());
+  assert_eq!(view.sorts.len(), expected_view.sorts.len());
   assert_eq!(
-    data.view.layout_settings,
-    expected_data.view.layout_settings
+    view.group_settings.len(),
+    expected_view.group_settings.len()
   );
-  assert_eq!(data.view.filters.len(), expected_data.view.filters.len());
-  assert_eq!(data.view.sorts.len(), expected_data.view.sorts.len());
-  assert_eq!(
-    data.view.group_settings.len(),
-    expected_data.view.group_settings.len()
-  );
-  assert_eq!(
-    data.view.field_orders.len(),
-    expected_data.view.field_orders.len()
-  );
-  assert_eq!(
-    data.view.row_orders.len(),
-    expected_data.view.row_orders.len()
-  );
-  assert_eq!(data.view.modified_at, expected_data.view.modified_at);
-  assert_eq!(data.view.created_at, expected_data.view.created_at);
+  assert_eq!(view.field_orders.len(), expected_view.field_orders.len());
+  assert_eq!(view.row_orders.len(), expected_view.row_orders.len());
+  assert_eq!(view.modified_at, expected_view.modified_at);
+  assert_eq!(view.created_at, expected_view.created_at);
 }

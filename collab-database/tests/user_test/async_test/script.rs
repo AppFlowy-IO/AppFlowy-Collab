@@ -3,12 +3,11 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use collab_database::database::DatabaseData;
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::WorkspaceDatabase;
-use collab_database::views::{CreateDatabaseParams, OrderObjectPosition};
+use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 use collab_persistence::doc::YrsDocAction;
 use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -44,7 +43,6 @@ pub enum DatabaseScript {
   },
   AssertDatabase {
     database_id: String,
-    expected: Value,
   },
   AssertNumOfUpdates {
     oid: String,
@@ -81,17 +79,6 @@ impl DatabaseTest {
       db_path,
       config,
     }
-  }
-
-  #[allow(dead_code)]
-  pub async fn get_database_data(&self, database_id: &str) -> DatabaseData {
-    let database = self
-      .workspace_database
-      .get_database(database_id)
-      .await
-      .unwrap();
-    let duplicated_database = database.lock().duplicate_database();
-    duplicated_database
   }
 
   pub async fn run_scripts(&mut self, scripts: Vec<DatabaseScript>) {
@@ -163,13 +150,45 @@ pub async fn run_script(
       let actual = database.lock().to_json_value();
       assert_json_diff::assert_json_include!(actual: actual, expected: expected);
     },
-    DatabaseScript::AssertDatabase {
-      database_id,
-      expected,
-    } => {
-      let database = workspace_database.get_database(&database_id).await.unwrap();
-      let actual = database.lock().to_json_value();
-      assert_json_diff::assert_json_include!(actual: actual, expected: expected);
+    DatabaseScript::AssertDatabase { database_id } => {
+      let mut actual_data = workspace_database
+        .get_database(&database_id)
+        .await
+        .unwrap()
+        .lock()
+        .get_all_database_data();
+
+      let actual_view = actual_data.views.remove(
+        actual_data
+          .views
+          .iter()
+          .position(|view| view.id != actual_data.inline_view_id)
+          .unwrap(),
+      );
+
+      let mut expected_data = create_database("d1");
+
+      let expected_view = expected_data.views.remove(
+        expected_data
+          .views
+          .iter()
+          .position(|view| view.view_id != expected_data.inline_view_id)
+          .unwrap(),
+      );
+
+      assert_eq!(actual_data.rows.len(), expected_data.rows.len());
+      assert_eq!(actual_data.fields.len(), expected_data.fields.len());
+      assert_eq!(actual_view.name, expected_view.name);
+      assert_eq!(actual_view.layout, expected_view.layout);
+      assert_eq!(actual_view.layout_settings, expected_view.layout_settings);
+      assert_eq!(actual_view.filters.len(), expected_view.filters.len());
+      assert_eq!(actual_view.sorts.len(), expected_view.sorts.len());
+      assert_eq!(
+        actual_view.group_settings.len(),
+        expected_view.group_settings.len()
+      );
+      assert_eq!(actual_view.field_orders.len(), 3);
+      assert_eq!(actual_view.row_orders.len(), 3);
     },
     DatabaseScript::IsExist {
       oid: database_id,
@@ -199,9 +218,7 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
       .insert_cell("f3", TestTextCell::from("1f3cell"))
       .build(),
     height: 0,
-    visibility: true,
-    row_position: OrderObjectPosition::default(),
-    timestamp: 0,
+    ..Default::default()
   };
   let row_2 = CreateRowParams {
     id: 2.into(),
@@ -210,9 +227,7 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
       .insert_cell("f2", TestTextCell::from("2f2cell"))
       .build(),
     height: 0,
-    visibility: true,
-    row_position: OrderObjectPosition::default(),
-    timestamp: 0,
+    ..Default::default()
   };
   let row_3 = CreateRowParams {
     id: 3.into(),
@@ -221,9 +236,7 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
       .insert_cell("f3", TestTextCell::from("3f3cell"))
       .build(),
     height: 0,
-    visibility: true,
-    row_position: OrderObjectPosition::default(),
-    timestamp: 0,
+    ..Default::default()
   };
   let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
@@ -233,15 +246,15 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
 
   CreateDatabaseParams {
     database_id: database_id.to_string(),
-    view_id: "v1".to_string(),
-    name: "my first database".to_string(),
-    layout: Default::default(),
-    layout_settings: Default::default(),
-    filters: vec![],
-    groups: vec![],
-    sorts: vec![],
-    field_settings: field_settings_map.into(),
-    created_rows: vec![row_1, row_2, row_3],
+    inline_view_id: "inline_view_id".to_string(),
+    views: vec![CreateViewParams {
+      database_id: database_id.to_string(),
+      view_id: "v1".to_string(),
+      name: "my first database view".to_string(),
+      field_settings: field_settings_map.into(),
+      ..Default::default()
+    }],
+    rows: vec![row_1, row_2, row_3],
     fields: vec![field_1, field_2, field_3],
   }
 }
