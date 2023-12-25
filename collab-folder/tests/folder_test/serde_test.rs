@@ -9,7 +9,7 @@ async fn folder_json_serde() {
   let time = timestamp();
   assert_json_diff::assert_json_include!(
     actual: folder_test.to_json_value(),
-    expected: json!( {
+    expected: json!({
           "meta": {
             "current_view": "",
             "current_workspace": "fake_w_1"
@@ -20,7 +20,6 @@ async fn folder_json_serde() {
           "section": {
             "favorite": {}
           },
-          "trash": [],
           "views": {
             "fake_w_1": {
               "bid": "",
@@ -73,7 +72,6 @@ async fn view_json_serde() {
           "section": {
             "favorite": {}
           },
-          "trash": [],
           "views": {
             "fake_workspace_id": {
               "bid": "",
@@ -153,7 +151,6 @@ async fn child_view_json_serde() {
     "section": {
       "favorite": {}
     },
-    "trash": [],
     "views": {
       "fake_workspace_id": {
         "bid": "",

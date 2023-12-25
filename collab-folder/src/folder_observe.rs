@@ -2,10 +2,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use collab::preclude::array::ArraySubscription;
 use collab::preclude::{
-  ArrayRefWrapper, Change, DeepEventsSubscription, DeepObservable, EntryChange, Event,
-  MapRefWrapper, Observable, ToJson, YrsValue,
+  DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRefWrapper, ToJson, YrsValue,
 };
 use parking_lot::RwLock;
 use tokio::sync::broadcast;
@@ -22,12 +20,6 @@ pub enum ViewChange {
 
 pub type ViewChangeSender = broadcast::Sender<ViewChange>;
 pub type ViewChangeReceiver = broadcast::Receiver<ViewChange>;
-
-#[derive(Debug, Clone)]
-pub enum TrashChange {
-  DidCreateTrash { ids: Vec<String> },
-  DidDeleteTrash { ids: Vec<String> },
-}
 
 pub(crate) fn subscribe_folder_change(root: &mut MapRefWrapper) -> DeepEventsSubscription {
   root.observe_deep(move |txn, events| {
@@ -115,32 +107,6 @@ pub(crate) fn subscribe_view_change(
         },
         Event::XmlFragment(_) => {},
         Event::XmlText(_) => {},
-      }
-    }
-  })
-}
-
-pub type TrashChangeSender = broadcast::Sender<TrashChange>;
-pub type TrashChangeReceiver = broadcast::Receiver<TrashChange>;
-
-pub(crate) fn subscribe_trash_change(array: &mut ArrayRefWrapper) -> ArraySubscription {
-  array.observe(move |txn, event| {
-    for change in event.delta(txn) {
-      match change {
-        Change::Added(_) => {
-          // let records = values
-          //     .iter()
-          //     .flat_map(|value| match value {
-          //         Value::Any(any) => Some(any),
-          //         _ => None,
-          //     })
-          //     .map(|any| TrashRecord::from(any.clone()))
-          //     .map(|record| record.id)
-          //     .collect::<Vec<String>>();
-          // let _ = tx.send(TrashChange::DidCreateTrash { ids: records });
-        },
-        Change::Removed(_) => {},
-        Change::Retain(_) => {},
       }
     }
   })
