@@ -12,9 +12,9 @@ async fn create_trash_test() {
   let view_1 = make_test_view("v1", "w1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);
   let view_3 = make_test_view("v3", "w1", vec![]);
-  folder_test.insert_view(view_1.clone(), Some(0));
-  folder_test.insert_view(view_2.clone(), Some(0));
-  folder_test.insert_view(view_3.clone(), Some(0));
+  folder_test.insert_view(view_1, Some(0));
+  folder_test.insert_view(view_2, Some(0));
+  folder_test.insert_view(view_3, Some(0));
   folder_test.add_trash(vec!["v1".to_string(), "v2".to_string(), "v3".to_string()]);
 
   let trash = folder_test.get_all_trash();
@@ -30,8 +30,8 @@ async fn delete_trash_test() {
   let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
   let view_1 = make_test_view("v1", "w1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);
-  folder_test.insert_view(view_1.clone(), Some(0));
-  folder_test.insert_view(view_2.clone(), Some(0));
+  folder_test.insert_view(view_1, Some(0));
+  folder_test.insert_view(view_2, Some(0));
 
   folder_test.add_trash(vec!["v1".to_string(), "v2".to_string()]);
 

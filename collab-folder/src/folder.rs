@@ -485,14 +485,11 @@ impl Folder {
         .flat_map(|item| {
           self
             .views
-            .get_view_name_with_txn(&txn, &item.id)
-            .and_then(|name| {
-              Some(TrashInfo {
+            .get_view_name_with_txn(&txn, &item.id).map(|name| TrashInfo {
                 id: item.id,
                 name,
                 created_at: item.timestamp,
               })
-            })
         })
         .collect::<Vec<_>>(),
     }
@@ -675,13 +672,6 @@ fn open_folder<T: Into<UserId>>(
     view_relations,
     section_map.clone(),
   ));
-  // let trash = TrashArray::new(
-  //   trash,
-  //   views.clone(),
-  //   notifier
-  //     .as_ref()
-  //     .map(|notifier| notifier.trash_change_tx.clone()),
-  // );
   drop(txn);
   drop(collab_guard);
 
