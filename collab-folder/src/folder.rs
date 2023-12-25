@@ -485,11 +485,12 @@ impl Folder {
         .flat_map(|item| {
           self
             .views
-            .get_view_name_with_txn(&txn, &item.id).map(|name| TrashInfo {
-                id: item.id,
-                name,
-                created_at: item.timestamp,
-              })
+            .get_view_name_with_txn(&txn, &item.id)
+            .map(|name| TrashInfo {
+              id: item.id,
+              name,
+              created_at: item.timestamp,
+            })
         })
         .collect::<Vec<_>>(),
     }

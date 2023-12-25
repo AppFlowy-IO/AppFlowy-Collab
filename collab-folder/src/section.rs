@@ -130,10 +130,11 @@ impl From<String> for Section {
 
 impl AsRef<str> for Section {
   fn as_ref(&self) -> &str {
+    // Must be unique
     match self {
       Section::Favorite => "favorite",
       Section::Recent => "recent",
-      Section::Trash => "recent",
+      Section::Trash => "trash",
       Section::Custom(s) => s.as_str(),
     }
   }
