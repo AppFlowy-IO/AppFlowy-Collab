@@ -10,11 +10,11 @@ use collab::preclude::*;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
-use crate::folder_observe::{TrashChangeSender, ViewChangeSender};
+use crate::folder_observe::ViewChangeSender;
 use crate::section::{Section, SectionItem, SectionMap, SectionOperation};
-use crate::trash::{TrashArray, TrashRecord};
 use crate::{
-  subscribe_folder_change, FolderData, TrashInfo, View, ViewRelations, ViewsMap, Workspace,
+  subscribe_folder_change, FolderData, SectionChangeSender, TrashInfo, View, ViewRelations,
+  ViewsMap, Workspace,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -47,7 +47,6 @@ impl AsRef<str> for UserId {
 
 const FOLDER: &str = "folder";
 const VIEWS: &str = "views";
-const TRASH: &str = "trash";
 const META: &str = "meta";
 const VIEW_RELATION: &str = "relation";
 const CURRENT_VIEW: &str = "current_view";
@@ -59,7 +58,7 @@ const SECTION: &str = "section";
 #[derive(Clone)]
 pub struct FolderNotify {
   pub view_change_tx: ViewChangeSender,
-  pub trash_change_tx: TrashChangeSender,
+  pub section_change_tx: SectionChangeSender,
 }
 
 /// Represents the folder hierarchy in a workspace.
@@ -88,7 +87,6 @@ pub struct Folder {
   inner: Arc<MutexCollab>,
   pub(crate) root: MapRefWrapper,
   pub views: Rc<ViewsMap>,
-  trash: TrashArray,
   section: Rc<SectionMap>,
   pub(crate) meta: MapRefWrapper,
   #[allow(dead_code)]
@@ -104,13 +102,10 @@ impl Folder {
     notifier: Option<FolderNotify>,
   ) -> Result<Self, Error> {
     let uid = uid.into();
-    let folder = match open_folder(uid.clone(), collab.clone(), notifier.clone()) {
-      None => {
-        tracing::info!("Create missing attributes of folder");
-        create_folder(uid, collab, notifier, None)
-      },
-      Some(folder) => folder,
-    };
+    let folder = open_folder(uid.clone(), collab.clone(), notifier.clone()).unwrap_or_else(|| {
+      tracing::info!("Create missing attributes of folder");
+      create_folder(uid, collab, notifier, None)
+    });
 
     // When the folder is opened, the workspace id must be present.
     folder.try_get_workspace_id()?;
@@ -198,12 +193,18 @@ impl Folder {
       .map(|op| op.get_sections_with_txn(&txn))
       .unwrap_or_default();
 
+    let trash = self
+      .section
+      .section_op_with_txn(&txn, Section::Trash)
+      .map(|op| op.get_sections_with_txn(&txn))
+      .unwrap_or_default();
     Some(FolderData {
       workspace,
       current_view,
       views,
       favorites,
       recent,
+      trash,
     })
   }
 
@@ -451,27 +452,54 @@ impl Folder {
   }
 
   pub fn add_trash(&self, trash_ids: Vec<String>) {
-    let trash = trash_ids
-      .into_iter()
-      .map(|trash_id| TrashRecord {
-        id: trash_id,
-        created_at: chrono::Utc::now().timestamp(),
-        workspace_id: self.get_workspace_id(),
-      })
-      .collect::<Vec<TrashRecord>>();
-    self.trash.add_trash(trash);
+    let mut txn = self.root.transact_mut();
+    if let Some(section) = self.section.section_op_with_txn(&txn, Section::Trash) {
+      let items = trash_ids
+        .into_iter()
+        .map(|trash_id| SectionItem {
+          id: trash_id,
+          timestamp: chrono::Utc::now().timestamp(),
+        })
+        .collect::<Vec<_>>();
+      section.add_sections_item_with_txn(&mut txn, items);
+    }
   }
 
   pub fn delete_trash(&self, trash_ids: Vec<String>) {
-    self.trash.delete_trash(trash_ids);
+    let mut txn = self.root.transact_mut();
+    if let Some(section) = self.section.section_op_with_txn(&txn, Section::Trash) {
+      section.delete_section_items_with_txn(&mut txn, trash_ids);
+    }
   }
 
   pub fn get_all_trash(&self) -> Vec<TrashInfo> {
-    self.trash.get_all_trash()
+    let txn = self.root.transact();
+    match self
+      .section
+      .section_op(Section::Trash)
+      .map(|op| op.get_all_section_item_with_txn(&txn))
+    {
+      None => vec![],
+      Some(items) => items
+        .into_iter()
+        .flat_map(|item| {
+          self
+            .views
+            .get_view_name_with_txn(&txn, &item.id)
+            .map(|name| TrashInfo {
+              id: item.id,
+              name,
+              created_at: item.timestamp,
+            })
+        })
+        .collect::<Vec<_>>(),
+    }
   }
 
   pub fn remote_all_trash(&self) {
-    self.trash.clear();
+    if let Some(section) = self.section.section_op(Section::Trash) {
+      section.clear()
+    }
   }
 
   pub fn to_json(&self) -> String {
@@ -536,59 +564,63 @@ fn create_folder<T: Into<UserId>>(
 ) -> Folder {
   let uid = uid.into();
   let collab_guard = collab.lock();
-  let (folder, views, trash, section, meta, subscription) =
-    collab_guard.with_origin_transact_mut(|txn| {
-      // create the folder
-      let mut folder = collab_guard.insert_map_with_txn_if_not_exist(txn, FOLDER);
-      let subscription = subscribe_folder_change(&mut folder);
+  let (folder, views, section, meta, subscription) = collab_guard.with_origin_transact_mut(|txn| {
+    // create the folder
+    let mut folder = collab_guard.insert_map_with_txn_if_not_exist(txn, FOLDER);
+    let subscription = subscribe_folder_change(&mut folder);
 
-      // create the folder data
-      let views = folder.create_map_with_txn_if_not_exist(txn, VIEWS);
-      let trash = folder.create_array_if_not_exist_with_txn::<TrashRecord, _>(txn, TRASH, vec![]);
-      let section = folder.create_map_with_txn_if_not_exist(txn, SECTION);
-      let meta = folder.create_map_with_txn_if_not_exist(txn, META);
-      let view_relations = Rc::new(ViewRelations::new(
-        folder.create_map_with_txn_if_not_exist(txn, VIEW_RELATION),
-      ));
+    // create the folder data
+    let views = folder.create_map_with_txn_if_not_exist(txn, VIEWS);
+    let section = folder.create_map_with_txn_if_not_exist(txn, SECTION);
+    let meta = folder.create_map_with_txn_if_not_exist(txn, META);
+    let view_relations = Rc::new(ViewRelations::new(
+      folder.create_map_with_txn_if_not_exist(txn, VIEW_RELATION),
+    ));
 
-      let section = Rc::new(SectionMap::create(txn, &uid, section));
-      let views = Rc::new(ViewsMap::new(
-        &uid,
-        views,
-        notifier
-          .as_ref()
-          .map(|notifier| notifier.view_change_tx.clone()),
-        view_relations,
-        section.clone(),
-      ));
-      let trash = TrashArray::new(
-        trash,
-        views.clone(),
-        notifier
-          .as_ref()
-          .map(|notifier| notifier.trash_change_tx.clone()),
-      );
+    let section = Rc::new(SectionMap::create(
+      txn,
+      &uid,
+      section,
+      notifier
+        .as_ref()
+        .map(|notifier| notifier.section_change_tx.clone()),
+    ));
+    let views = Rc::new(ViewsMap::new(
+      &uid,
+      views,
+      notifier
+        .as_ref()
+        .map(|notifier| notifier.view_change_tx.clone()),
+      view_relations,
+      section.clone(),
+    ));
 
-      if let Some(folder_data) = folder_data {
-        let workspace_id = folder_data.workspace.id.clone();
-        views.insert_view_with_txn(txn, folder_data.workspace.into(), None);
+    if let Some(folder_data) = folder_data {
+      let workspace_id = folder_data.workspace.id.clone();
+      views.insert_view_with_txn(txn, folder_data.workspace.into(), None);
 
-        for view in folder_data.views {
-          views.insert_view_with_txn(txn, view, None);
-        }
+      for view in folder_data.views {
+        views.insert_view_with_txn(txn, view, None);
+      }
 
-        meta.insert_str_with_txn(txn, CURRENT_WORKSPACE, workspace_id);
-        meta.insert_str_with_txn(txn, CURRENT_VIEW, folder_data.current_view);
+      meta.insert_str_with_txn(txn, CURRENT_WORKSPACE, workspace_id);
+      meta.insert_str_with_txn(txn, CURRENT_VIEW, folder_data.current_view);
 
-        if let Some(fav_section) = section.section_op_with_txn(txn, Section::Favorite) {
-          for (uid, sections) in folder_data.favorites {
-            fav_section.add_sections_for_user_with_txn(txn, &uid, sections);
-          }
+      if let Some(fav_section) = section.section_op_with_txn(txn, Section::Favorite) {
+        for (uid, sections) in folder_data.favorites {
+          fav_section.add_sections_for_user_with_txn(txn, &uid, sections);
         }
       }
 
-      (folder, views, trash, section, meta, subscription)
-    });
+      if let Some(trash_section) = section.section_op_with_txn(txn, Section::Trash) {
+        for (uid, sections) in folder_data.trash {
+          trash_section.add_sections_for_user_with_txn(txn, &uid, sections);
+        }
+      }
+    }
+
+    (folder, views, section, meta, subscription)
+  });
   drop(collab_guard);
 
   Folder {
@@ -596,7 +628,6 @@ fn create_folder<T: Into<UserId>>(
     inner: collab,
     root: folder,
     views,
-    trash,
     section,
     meta,
     subscription,
@@ -619,13 +650,20 @@ fn open_folder<T: Into<UserId>>(
 
   // create the folder collab objects
   let views = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEWS])?;
-  let trash = collab_guard.get_array_with_txn(&txn, vec![FOLDER, TRASH])?;
+  // let trash = collab_guard.get_array_with_txn(&txn, vec![FOLDER, TRASH])?;
   let section = collab_guard.get_map_with_txn(&txn, vec![FOLDER, SECTION])?;
   let meta = collab_guard.get_map_with_txn(&txn, vec![FOLDER, META])?;
   let children_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEW_RELATION])?;
 
   let view_relations = Rc::new(ViewRelations::new(children_map));
-  let section_map = Rc::new(SectionMap::new(&txn, &uid, section)?);
+  let section_map = Rc::new(SectionMap::new(
+    &txn,
+    &uid,
+    section,
+    notifier
+      .as_ref()
+      .map(|notifier| notifier.section_change_tx.clone()),
+  )?);
   let views = Rc::new(ViewsMap::new(
     &uid,
     views,
@@ -635,13 +673,6 @@ fn open_folder<T: Into<UserId>>(
     view_relations,
     section_map.clone(),
   ));
-  let trash = TrashArray::new(
-    trash,
-    views.clone(),
-    notifier
-      .as_ref()
-      .map(|notifier| notifier.trash_change_tx.clone()),
-  );
   drop(txn);
   drop(collab_guard);
 
@@ -650,7 +681,6 @@ fn open_folder<T: Into<UserId>>(
     inner: collab,
     root: folder,
     views,
-    trash,
     section: section_map,
     meta,
     subscription: folder_sub,

@@ -29,7 +29,7 @@ pub struct FolderTest {
   view_rx: ViewChangeReceiver,
 
   #[allow(dead_code)]
-  pub trash_rx: Option<TrashChangeReceiver>,
+  pub(crate) section_rx: Option<SectionChangeReceiver>,
 }
 
 unsafe impl Send for FolderTest {}
@@ -63,10 +63,10 @@ pub async fn create_folder_with_data(
   collab.lock().initialize();
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
-  let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
+  let (section_tx, section_rx) = tokio::sync::broadcast::channel(100);
   let context = FolderNotify {
     view_change_tx: view_tx,
-    trash_change_tx: trash_tx,
+    section_change_tx: section_tx,
   };
   let folder = Folder::create(uid, Arc::new(collab), Some(context), folder_data);
   FolderTest {
@@ -74,7 +74,7 @@ pub async fn create_folder_with_data(
     folder,
     cleaner,
     view_rx,
-    trash_rx: Some(trash_rx),
+    section_rx: Some(section_rx),
   }
 }
 
@@ -90,10 +90,10 @@ pub async fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf)
   collab.lock().initialize();
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
-  let (trash_tx, trash_rx) = tokio::sync::broadcast::channel(100);
+  let (section_tx, section_rx) = tokio::sync::broadcast::channel(100);
   let context = FolderNotify {
     view_change_tx: view_tx,
-    trash_change_tx: trash_tx,
+    section_change_tx: section_tx,
   };
   let folder = Folder::open(uid, Arc::new(collab), Some(context)).unwrap();
   FolderTest {
@@ -101,7 +101,7 @@ pub async fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf)
     db,
     cleaner,
     view_rx,
-    trash_rx: Some(trash_rx),
+    section_rx: Some(section_rx),
   }
 }
 

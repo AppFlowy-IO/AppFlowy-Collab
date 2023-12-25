@@ -108,13 +108,10 @@ impl UserAwareness {
   /// proceeds to create them. The method encapsulates the logic to seamlessly handle existing
   /// or missing attributes, offering a single point of access.
   pub fn open(collab: Arc<MutexCollab>, notifier: Option<UserAwarenessNotifier>) -> Self {
-    match Self::try_open(collab.clone(), notifier.clone()) {
-      None => {
-        tracing::info!("Create missing attributes of user awareness");
-        Self::create(collab, notifier)
-      },
-      Some(awareness) => awareness,
-    }
+    Self::try_open(collab.clone(), notifier.clone()).unwrap_or_else(|| {
+      tracing::info!("Create missing attributes of user awareness");
+      Self::create(collab, notifier)
+    })
   }
 
   /// Constructs a new instance with the provided parameters.

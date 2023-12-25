@@ -4,15 +4,21 @@ use crate::{timestamp, UserId};
 use anyhow::bail;
 use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::preclude::{
-  Any, Array, Map, MapRefWrapper, ReadTxn, Transact, TransactionMut, Value, YrsValue,
+  Any, Array, DeepEventsSubscription, DeepObservable, Map, MapRefWrapper, ReadTxn, Transact,
+  TransactionMut, Value, YrsValue,
 };
 use collab::util::deserialize_i64_from_numeric;
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
 use tracing::info;
 
 pub struct SectionMap {
   uid: UserId,
   container: MapRefWrapper,
+  #[allow(dead_code)]
+  change_tx: Option<SectionChangeSender>,
+  #[allow(dead_code)]
+  subscription: DeepEventsSubscription,
 }
 
 impl SectionMap {
@@ -20,14 +26,22 @@ impl SectionMap {
   ///
   /// This function will iterate over a predefined list of sections and
   /// create them in the provided `MapRefWrapper` if they do not exist.
-  pub fn create(txn: &mut TransactionMut, uid: &UserId, root: MapRefWrapper) -> Self {
+  pub fn create(
+    txn: &mut TransactionMut,
+    uid: &UserId,
+    mut root: MapRefWrapper,
+    change_tx: Option<SectionChangeSender>,
+  ) -> Self {
     for section in predefined_sections() {
       root.create_map_with_txn_if_not_exist(txn, section.as_ref());
     }
 
+    let subscription = subscribe_section_change(&mut root);
     Self {
       uid: uid.clone(),
       container: root,
+      change_tx,
+      subscription,
     }
   }
 
@@ -37,7 +51,12 @@ impl SectionMap {
   /// logs an informational message and returns `None`. Otherwise, returns `Some(SectionMap)`.
   ///
   /// When returning None, the caller should call the [Self::create] method to create the section.
-  pub fn new<T: ReadTxn>(txn: &T, uid: &UserId, root: MapRefWrapper) -> Option<Self> {
+  pub fn new<T: ReadTxn>(
+    txn: &T,
+    uid: &UserId,
+    mut root: MapRefWrapper,
+    change_tx: Option<SectionChangeSender>,
+  ) -> Option<Self> {
     for section in predefined_sections() {
       if root.get_map_with_txn(txn, section.as_ref()).is_none() {
         info!(
@@ -49,9 +68,12 @@ impl SectionMap {
       }
     }
 
+    let subscription = subscribe_section_change(&mut root);
     Some(Self {
       uid: uid.clone(),
       container: root,
+      change_tx,
+      subscription,
     })
   }
 
@@ -69,6 +91,8 @@ impl SectionMap {
     Some(SectionOperation {
       uid: &self.uid,
       container,
+      section,
+      change_tx: self.change_tx.clone(),
     })
   }
 
@@ -90,11 +114,12 @@ impl SectionMap {
 pub enum Section {
   Favorite,
   Recent,
+  Trash,
   Custom(String),
 }
 
 pub(crate) fn predefined_sections() -> Vec<Section> {
-  vec![Section::Favorite, Section::Recent]
+  vec![Section::Favorite, Section::Recent, Section::Trash]
 }
 
 impl From<String> for Section {
@@ -105,12 +130,28 @@ impl From<String> for Section {
 
 impl AsRef<str> for Section {
   fn as_ref(&self) -> &str {
+    // Must be unique
     match self {
       Section::Favorite => "favorite",
       Section::Recent => "recent",
+      Section::Trash => "trash",
       Section::Custom(s) => s.as_str(),
     }
   }
+}
+
+#[derive(Clone, Debug)]
+pub enum SectionChange {
+  Trash(TrashSectionChange),
+}
+
+pub type SectionChangeSender = broadcast::Sender<SectionChange>;
+pub type SectionChangeReceiver = broadcast::Receiver<SectionChange>;
+
+#[derive(Clone, Debug)]
+pub enum TrashSectionChange {
+  TrashItemAdded { ids: Vec<String> },
+  TrashItemRemoved { ids: Vec<String> },
 }
 
 pub type SectionsByUid = HashMap<UserId, Vec<SectionItem>>;
@@ -118,6 +159,8 @@ pub type SectionsByUid = HashMap<UserId, Vec<SectionItem>>;
 pub struct SectionOperation<'a> {
   uid: &'a UserId,
   container: MapRefWrapper,
+  section: Section,
+  change_tx: Option<SectionChangeSender>,
 }
 
 impl<'a> SectionOperation<'a> {
@@ -215,6 +258,19 @@ impl<'a> SectionOperation<'a> {
           fav_array.remove_with_txn(txn, pos as u32);
         }
       }
+
+      if let Some(change_tx) = self.change_tx.as_ref() {
+        match self.section {
+          Section::Favorite => {},
+          Section::Recent => {},
+          Section::Trash => {
+            let _ = change_tx.send(SectionChange::Trash(TrashSectionChange::TrashItemRemoved {
+              ids: ids.into_iter().map(|id| id.as_ref().to_string()).collect(),
+            }));
+          },
+          Section::Custom(_) => {},
+        }
+      }
     }
   }
 
@@ -226,29 +282,42 @@ impl<'a> SectionOperation<'a> {
   }
 
   pub fn add_sections_item_with_txn(&self, txn: &mut TransactionMut, items: Vec<SectionItem>) {
+    let item_ids = items.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
     self.add_sections_for_user_with_txn(txn, self.uid(), items);
+    if let Some(change_tx) = self.change_tx.as_ref() {
+      match self.section {
+        Section::Favorite => {},
+        Section::Recent => {},
+        Section::Trash => {
+          let _ = change_tx.send(SectionChange::Trash(TrashSectionChange::TrashItemAdded {
+            ids: item_ids,
+          }));
+        },
+        Section::Custom(_) => {},
+      }
+    }
   }
 
   pub fn add_sections_for_user_with_txn(
     &self,
     txn: &mut TransactionMut,
     uid: &UserId,
-    favorite_records: Vec<SectionItem>,
+    items: Vec<SectionItem>,
   ) {
-    let fav_array = self
+    let array = self
       .container()
       .create_array_if_not_exist_with_txn::<SectionItem, _>(txn, uid, vec![]);
 
-    for favorite_record in favorite_records {
-      fav_array.push_back(txn, favorite_record);
+    for item in items {
+      array.push_back(txn, item);
     }
   }
 
   pub fn clear(&self) {
     self.container().with_transact_mut(|txn| {
-      if let Some(fav_array) = self.container().get_array_ref_with_txn(txn, self.uid()) {
-        let len = fav_array.iter(txn).count();
-        fav_array.remove_range(txn, 0, len as u32);
+      if let Some(array) = self.container().get_array_ref_with_txn(txn, self.uid()) {
+        let len = array.iter(txn).count();
+        array.remove_range(txn, 0, len as u32);
       }
     });
   }
@@ -317,4 +386,8 @@ impl TryFrom<&YrsValue> for SectionItem {
       _ => bail!("Invalid section yrs value"),
     }
   }
+}
+
+fn subscribe_section_change(map: &mut MapRefWrapper) -> DeepEventsSubscription {
+  map.observe_deep(move |_txn, _events| {})
 }

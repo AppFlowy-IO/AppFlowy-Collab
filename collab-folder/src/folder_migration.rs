@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use crate::folder::FAVORITES_V1;
-use crate::{Folder, View, ViewRelations, Workspace};
+use crate::{Folder, SectionItem, View, ViewRelations, Workspace};
 
 const WORKSPACES: &str = "workspaces";
 const WORKSPACE_ID: &str = "id";
@@ -52,6 +52,26 @@ impl Folder {
     }
 
     Some(())
+  }
+
+  /// Retrieves historical trash data from the key `trash`.
+  /// v1 trash data is stored in the key `trash`.
+  pub fn get_trash_v1(&self) -> Vec<SectionItem> {
+    let txn = self.root.transact();
+    let mut trash = vec![];
+    if let Some(trash_array) = self.root.get_array_ref_with_txn(&txn, "trash") {
+      for record in trash_array.iter(&txn) {
+        if let YrsValue::Any(any) = record {
+          if let Ok(record) = TrashRecord::from_any(any) {
+            trash.push(SectionItem {
+              id: record.id,
+              timestamp: record.created_at,
+            });
+          }
+        }
+      }
+    }
+    trash
   }
 }
 
@@ -113,5 +133,22 @@ impl TryFrom<&YrsValue> for FavoriteId {
       YrsValue::Any(any) => Ok(FavoriteId::from(any.clone())),
       _ => bail!("Invalid favorite yrs value"),
     }
+  }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct TrashRecord {
+  pub id: String,
+  #[serde(deserialize_with = "collab::util::deserialize_i64_from_numeric")]
+  pub created_at: i64,
+  #[serde(default)]
+  pub workspace_id: String,
+}
+
+impl TrashRecord {
+  pub fn from_any(any: Any) -> Result<Self, serde_json::Error> {
+    let mut json = String::new();
+    any.to_json(&mut json);
+    serde_json::from_str(&json)
   }
 }
