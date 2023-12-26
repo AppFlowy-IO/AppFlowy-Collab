@@ -9,7 +9,6 @@ use collab::preclude::{
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use serde_repr::*;
 
 use crate::folder_observe::ViewChangeSender;
@@ -48,7 +47,6 @@ pub struct ViewsMap {
   subscription: Option<DeepEventsSubscription>,
   #[allow(dead_code)]
   change_tx: Option<ViewChangeSender>,
-  index_json_sender: IndexContentSender,
 }
 
 impl ViewsMap {
@@ -80,7 +78,6 @@ impl ViewsMap {
       view_relations,
       view_cache,
       section_map,
-      index_json_sender,
     }
   }
 
@@ -281,7 +278,6 @@ impl ViewsMap {
     }
 
     let map_ref = self.container.create_map_with_txn(txn, &view.id);
-    let index_content = ViewIndexContent::from(&view);
     let view_builder = ViewBuilder::new(
       &view.id,
       txn,
@@ -310,7 +306,6 @@ impl ViewsMap {
     })
     .done();
     let view = view_builder.map(Arc::new);
-    let _ = self.index_json_sender.send(json!(index_content));
     self.set_cache_view(view);
   }
 
