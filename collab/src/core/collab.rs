@@ -43,7 +43,12 @@ type AfterTransactionSubscription = Subscription<Arc<dyn Fn(&mut TransactionMut)
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 pub type MapSubscription = Subscription<MapSubscriptionCallback>;
 
-pub type IndexContent = serde_json::Value;
+#[derive(Debug, Clone)]
+pub enum IndexContent {
+  Create(serde_json::Value),
+  Update(serde_json::Value),
+  Delete(Vec<String>),
+}
 pub type IndexContentSender = tokio::sync::broadcast::Sender<IndexContent>;
 pub type IndexContentReceiver = tokio::sync::broadcast::Receiver<IndexContent>;
 /// A [Collab] is a wrapper around a [Doc] and [Awareness] that provides a set

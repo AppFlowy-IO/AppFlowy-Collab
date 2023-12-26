@@ -1,4 +1,5 @@
 use crate::util::{create_folder_with_workspace, make_test_view};
+use collab::core::collab::IndexContent;
 use collab_folder::{timestamp, IconType, UserId, ViewIcon, ViewIndexContent};
 
 #[tokio::test]
@@ -351,9 +352,12 @@ async fn create_view_and_then_sub_index_content_test() {
   // subscribe the index content
   let (tx, rx) = tokio::sync::oneshot::channel();
   tokio::spawn(async move {
-    let json = index_content_rx.recv().await.unwrap();
-    tx.send(serde_json::from_value::<ViewIndexContent>(json).unwrap())
-      .unwrap();
+    if let IndexContent::Create(json) = index_content_rx.recv().await.unwrap() {
+      tx.send(serde_json::from_value::<ViewIndexContent>(json).unwrap())
+        .unwrap();
+    } else {
+      panic!("expected IndexContent::Create");
+    }
   });
 
   // Insert a new view
