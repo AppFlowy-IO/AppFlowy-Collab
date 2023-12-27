@@ -234,7 +234,7 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
   CreateDatabaseParams {
     database_id: database_id.to_string(),
     view_id: "v1".to_string(),
-    name: "my first database".to_string(),
+    view_name: "my first database".to_string(),
     layout: Default::default(),
     layout_settings: Default::default(),
     filters: vec![],

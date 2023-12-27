@@ -67,7 +67,7 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
     view_id: "v1".to_string(),
-    name: "my first database view".to_string(),
+    view_name: "my first database view".to_string(),
     ..Default::default()
   };
   let database = Database::create_with_inline_view(params, context).unwrap();
@@ -101,7 +101,6 @@ pub async fn create_database_with_db(
   };
   let params = CreateDatabaseParams {
     view_id: "v1".to_string(),
-    name: "my first grid".to_string(),
     database_id: database_id.to_string(),
     ..Default::default()
   };
@@ -208,7 +207,7 @@ impl DatabaseTestBuilder {
     let params = CreateDatabaseParams {
       database_id: self.database_id.clone(),
       view_id: self.view_id,
-      name: "my first database view".to_string(),
+      view_name: "my first database view".to_string(),
       layout: self.layout,
       layout_settings: self.layout_settings,
       filters: vec![],

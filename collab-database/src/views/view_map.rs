@@ -10,11 +10,11 @@ use crate::database::timestamp;
 use crate::rows::RowId;
 use crate::views::{
   field_settings_from_map_ref, filters_from_map_ref, group_setting_from_map_ref,
-  layout_setting_from_map_ref, sorts_from_map_ref, subscribe_view_change,
-  view_description_from_value, view_from_map_ref, view_from_value, DatabaseLayout, DatabaseView,
+  layout_setting_from_map_ref, sorts_from_map_ref, subscribe_view_change, view_from_map_ref,
+  view_from_value, view_meta_from_value, DatabaseLayout, DatabaseView, DatabaseViewMeta,
   DatabaseViewUpdate, FieldOrder, FieldOrderArray, FieldSettingsByFieldIdMap, FilterMap,
   GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray, SortMap, ViewBuilder,
-  ViewChangeSender, ViewDescription, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
+  ViewChangeSender, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
 };
 
 use super::view_id_from_map_ref;
@@ -159,11 +159,11 @@ impl ViewMap {
       .collect::<Vec<_>>()
   }
 
-  pub fn get_all_views_description_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<ViewDescription> {
+  pub fn get_all_views_meta_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseViewMeta> {
     self
       .container
       .iter(txn)
-      .flat_map(|(_k, v)| view_description_from_value(v, txn))
+      .flat_map(|(_k, v)| view_meta_from_value(v, txn))
       .collect::<Vec<_>>()
   }
 

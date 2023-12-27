@@ -64,7 +64,6 @@ async fn restore_from_disk_with_different_database_id_test() {
           "id": "v1",
           "layout": 0,
           "layout_settings": {},
-          "name": "my first grid",
           "row_orders": [],
           "sorts": []
         }
@@ -92,7 +91,6 @@ async fn restore_from_disk_with_different_uid_test() {
           "id": "v1",
           "layout": 0,
           "layout_settings": {},
-          "name": "my first grid",
           "row_orders": [],
           "sorts": []
         }
@@ -117,7 +115,6 @@ async fn create_database_with_view() -> (Arc<RocksCollabDB>, DatabaseTest, Value
         "id": "v1",
         "layout": 0,
         "layout_settings": {},
-        "name": "my first grid",
         "row_orders": [],
         "sorts": []
       }

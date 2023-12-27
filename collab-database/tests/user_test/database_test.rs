@@ -170,7 +170,7 @@ async fn duplicate_database_data_test() {
   let duplicated_data = test.get_database_duplicated_data("v1").await.unwrap();
   let duplicate = test.create_database_with_data(duplicated_data).unwrap();
 
-  let duplicated_view_id = &duplicate.lock().get_all_views_description()[0].id;
+  let duplicated_view_id = &duplicate.lock().get_all_database_views_meta()[0].id;
 
   // compare rows
   let original_rows = original.lock().get_rows_for_view("v1");

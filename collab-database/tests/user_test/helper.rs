@@ -214,7 +214,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
   CreateDatabaseParams {
     database_id: database_id.to_string(),
     view_id: "v1".to_string(),
-    name: "my first database".to_string(),
+    view_name: "my first database".to_string(),
     layout: Default::default(),
     layout_settings: Default::default(),
     filters: vec![],
@@ -279,7 +279,7 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
   CreateDatabaseParams {
     database_id: gen_database_id(),
     view_id: view_id.to_string(),
-    name: name.to_string(),
+    view_name: name.to_string(),
     layout: DatabaseLayout::Grid,
     layout_settings: Default::default(),
     filters: vec![],
