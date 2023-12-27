@@ -37,8 +37,9 @@ pub struct DatabaseView {
   pub modified_at: i64,
 }
 
+/// A meta of [DatabaseView]
 #[derive(Debug, Clone)]
-pub struct ViewDescription {
+pub struct DatabaseViewMeta {
   pub id: String,
   pub name: String,
 }
@@ -137,7 +138,7 @@ impl CreateViewParamsValidator {
 pub struct CreateDatabaseParams {
   pub database_id: String,
   pub view_id: String,
-  pub name: String,
+  pub view_name: String,
   pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<FilterMap>,
@@ -163,7 +164,7 @@ impl CreateDatabaseParams {
       CreateViewParams {
         database_id: self.database_id,
         view_id: self.view_id,
-        name: self.name,
+        name: self.view_name,
         layout: self.layout,
         layout_settings: self.layout_settings,
         filters: self.filters,
@@ -182,7 +183,7 @@ impl From<DatabaseView> for CreateDatabaseParams {
     Self {
       database_id: view.database_id,
       view_id: view.id,
-      name: view.name,
+      view_name: view.name,
       layout: view.layout,
       layout_settings: view.layout_settings,
       filters: view.filters,
@@ -464,16 +465,13 @@ pub fn view_id_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> String {
   map_ref.get_str_with_txn(txn, VIEW_ID).unwrap_or_default()
 }
 
-/// Return a [ViewDescription] from a map ref
-/// A [ViewDescription] is a subset of a [DatabaseView]
-pub fn view_description_from_value<T: ReadTxn>(
-  value: YrsValue,
-  txn: &T,
-) -> Option<ViewDescription> {
+/// Return a [DatabaseViewMeta] from a map ref
+/// A [DatabaseViewMeta] is a subset of a [DatabaseView]
+pub fn view_meta_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<DatabaseViewMeta> {
   let map_ref = value.to_ymap()?;
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
   let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();
-  Some(ViewDescription { id, name })
+  Some(DatabaseViewMeta { id, name })
 }
 
 /// Return a [DatabaseView] from a map ref

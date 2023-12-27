@@ -29,8 +29,8 @@ use crate::rows::{
 use crate::user::DatabaseCollabService;
 use crate::views::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
-  FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap,
-  LayoutSetting, OrderObjectPosition, RowOrder, SortMap, ViewChangeReceiver, ViewDescription,
+  DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap,
+  GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder, SortMap, ViewChangeReceiver,
   ViewMap,
 };
 
@@ -969,9 +969,10 @@ impl Database {
   }
 
   /// Returns all the views that the current database has.
-  pub fn get_all_views_description(&self) -> Vec<ViewDescription> {
+  // TODO (RS): Implement the creation of a default view when fetching all database views returns an empty result, with the exception of inline views.
+  pub fn get_all_database_views_meta(&self) -> Vec<DatabaseViewMeta> {
     let txn = self.root.transact();
-    self.views.get_all_views_description_with_txn(&txn)
+    self.views.get_all_views_meta_with_txn(&txn)
   }
 
   /// Create a linked view to existing database
@@ -1169,7 +1170,7 @@ impl Database {
   pub fn delete_view(&self, view_id: &str) -> Vec<String> {
     if self.is_inline_view(view_id) {
       self.root.with_transact_mut(|txn| {
-        let views = self.views.get_all_views_description_with_txn(txn);
+        let views = self.views.get_all_views_meta_with_txn(txn);
         self.views.clear_with_txn(txn);
         views.into_iter().map(|view| view.id).collect()
       })
