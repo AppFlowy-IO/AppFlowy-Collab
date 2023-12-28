@@ -194,7 +194,7 @@ impl WorkspaceDatabase {
     // Add a new database record.
     self
       .database_tracker_list()
-      .add_database(&params.database_id, &params.view_id);
+      .add_database(&params.database_id, vec![params.view_id.clone()]);
     let database_id = params.database_id.clone();
     // TODO(RS): insert the first view of the database.
     let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);

@@ -37,10 +37,11 @@ impl DatabaseViewTrackerList {
   }
 
   /// Create a new [DatabaseViewTracker] for the given database id and view id
-  pub fn add_database(&self, database_id: &str, view_id: &str) {
+  /// use [Self::update_database] to attach more views to the existing database.
+  ///
+  pub fn add_database(&self, database_id: &str, view_ids: Vec<String>) {
     self.array_ref.with_transact_mut(|txn| {
-      let mut linked_views = HashSet::new();
-      linked_views.insert(view_id.to_string());
+      let linked_views: HashSet<String> = view_ids.into_iter().collect();
       let record = DatabaseViewTracker {
         database_id: database_id.to_string(),
         created_at: timestamp(),
