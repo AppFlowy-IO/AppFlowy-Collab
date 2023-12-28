@@ -20,10 +20,10 @@ async fn restore_from_update() {
   collab.lock().initialize();
   collab.lock().insert("text", "hello world");
 
-  let updates = update_cache.get_updates().unwrap();
+  let updates = update_cache.get_doc_state().unwrap();
   let restored_collab = CollabBuilder::new(1, "1")
     .with_device_id("1")
-    .with_raw_data(updates)
+    .with_doc_state(updates)
     .build()
     .unwrap();
   let value = restored_collab.lock().get("text").unwrap();
@@ -47,10 +47,10 @@ async fn restore_from_multiple_update() {
   map.insert("2".to_string(), "task 2".to_string());
   collab.lock().insert_json_with_path(vec![], "bullet", map);
 
-  let updates = update_cache.get_updates().unwrap();
+  let updates = update_cache.get_doc_state().unwrap();
   let restored_collab = CollabBuilder::new(1, "1")
     .with_device_id("1")
-    .with_raw_data(updates)
+    .with_doc_state(updates)
     .build()
     .unwrap();
   assert_eq!(collab.lock().to_json(), restored_collab.lock().to_json());
@@ -67,63 +67,20 @@ async fn apply_same_update_multiple_time() {
   collab.lock().initialize();
   collab.lock().insert("text", "hello world");
 
-  let updates = update_cache.get_updates().unwrap();
+  let updates = update_cache.get_doc_state().unwrap();
   let restored_collab = CollabBuilder::new(1, "1")
     .with_device_id("1")
-    .with_raw_data(updates)
+    .with_doc_state(updates)
     .build()
     .unwrap();
 
   // It's ok to apply the updates that were already applied
-  let updates = update_cache.get_updates().unwrap();
+  let doc_state = update_cache.get_doc_state().unwrap();
   restored_collab.lock().with_origin_transact_mut(|txn| {
-    for update in updates {
-      txn.apply_update(Update::decode_v1(&update).unwrap());
-    }
+    txn.apply_update(Update::decode_v1(&doc_state).unwrap());
   });
 
   assert_json_diff::assert_json_eq!(collab.lock().to_json(), restored_collab.lock().to_json(),);
-}
-
-#[tokio::test]
-async fn apply_unordered_updates() {
-  let update_cache = CollabStateCachePlugin::new();
-  let collab = CollabBuilder::new(1, "1")
-    .with_device_id("1")
-    .with_plugin(update_cache.clone())
-    .build()
-    .unwrap();
-  collab.lock().initialize();
-  collab.lock().insert("text", "hello world");
-
-  // Insert map
-  let mut map = HashMap::new();
-  map.insert("1".to_string(), "task 1".to_string());
-  map.insert("2".to_string(), "task 2".to_string());
-  collab.lock().insert("bullet", map);
-
-  let mut updates = update_cache.get_updates().unwrap();
-  updates.reverse();
-
-  let restored_collab = CollabBuilder::new(1, "1")
-    .with_device_id("1")
-    .build()
-    .unwrap();
-  restored_collab.lock().initialize();
-  restored_collab.lock().with_origin_transact_mut(|txn| {
-    //Out of order updates from the same peer will be stashed internally and their
-    // integration will be postponed until missing blocks arrive first.
-    for update in updates {
-      txn.apply_update(Update::decode_v1(&update).unwrap());
-    }
-  });
-
-  assert_json_diff::assert_json_eq!(
-    serde_json::json!( {
-      "text": "hello world"
-    }),
-    restored_collab.to_json_value()
-  );
 }
 
 #[tokio::test]

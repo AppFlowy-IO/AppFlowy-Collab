@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Once};
 
 use bytes::Bytes;
-use collab::core::collab::MutexCollab;
+use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::preclude::*;
 use collab::util::deserialize_i32_from_numeric;
 use parking_lot::RwLock;
@@ -40,10 +40,10 @@ pub async fn make_collab_pair() -> (MutexCollab, MutexCollab, CollabStateCachePl
   local_collab
     .lock()
     .insert_json_with_path(vec![], "document", test_document());
-  let updates = update_cache.get_updates();
+  let doc_state = update_cache.get_doc_state().unwrap();
   let remote_collab = CollabBuilder::new(1, "1")
     .with_device_id("1")
-    .with_raw_data(updates.unwrap())
+    .with_doc_state(doc_state)
     .build()
     .unwrap();
   remote_collab.lock().initialize();
@@ -59,12 +59,21 @@ impl CollabStateCachePlugin {
     Self::default()
   }
 
-  pub fn get_updates(&self) -> Result<Vec<Vec<u8>>, anyhow::Error> {
+  pub fn get_doc_state(&self) -> Result<CollabDocState, anyhow::Error> {
     let mut updates = vec![];
     for encoded_data in self.0.read().iter() {
       updates.push(encoded_data.to_vec());
     }
-    Ok(updates)
+
+    let updates = updates
+      .iter()
+      .map(|update| update.as_ref())
+      .collect::<Vec<&[u8]>>();
+
+    let doc_state = merge_updates_v1(&updates)
+      .map_err(|err| anyhow::anyhow!("merge updates failed: {:?}", err))
+      .unwrap();
+    Ok(doc_state)
   }
 
   #[allow(dead_code)]

@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::Error;
 use async_trait::async_trait;
-use collab::core::collab::{MutexCollab, TransactionMutExt};
+use collab::core::collab::{CollabDocState, MutexCollab, TransactionMutExt};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab_entity::{CollabObject, CollabType};
@@ -212,29 +212,20 @@ impl RemoteCollab {
     // get all the updates from remote.
     // TODO(nathan): create a edge function to calculate the diff between the local and remote.
     tracing::trace!("Try init sync:{}", self.object);
-    let remote_updates = self.storage.get_all_updates(&self.object).await?;
-    if !remote_updates.is_empty() {
-      let updates = remote_updates
-        .iter()
-        .map(|update| update.as_ref())
-        .collect::<Vec<&[u8]>>();
-
-      if let Ok(update) = merge_updates_v1(&updates) {
-        tracing::trace!("{}: sync remote updates:{}", self.object, update.len());
-        // Restore the remote collab state from updates
-        {
-          let remote_collab = self.collab.lock();
-          let mut txn = remote_collab.origin_transact_mut();
-          if let Ok(update) = Update::decode_v1(&update) {
-            if let Err(e) = txn.try_apply_update(update) {
-              tracing::error!("apply update failed: {:?}", e);
-            }
-          } else {
-            tracing::error!("🔴decode update failed");
+    let collab_doc_state = self.storage.get_doc_state(&self.object).await?;
+    if !collab_doc_state.is_empty() {
+      {
+        let remote_collab = self.collab.lock();
+        let mut txn = remote_collab.origin_transact_mut();
+        if let Ok(update) = Update::decode_v1(&collab_doc_state) {
+          if let Err(e) = txn.try_apply_update(update) {
+            tracing::error!("apply update failed: {:?}", e);
           }
-
-          remote_update = update;
+        } else {
+          tracing::error!("🔴decode update failed");
         }
+
+        remote_update = collab_doc_state;
       }
 
       let _ = self.sync_state.send(SyncState::InitSyncBegin);
@@ -355,7 +346,7 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
   fn is_enable(&self) -> bool;
 
   /// Get all the updates of the remote collab.
-  async fn get_all_updates(&self, object: &CollabObject) -> Result<Vec<Vec<u8>>, anyhow::Error>;
+  async fn get_doc_state(&self, object: &CollabObject) -> Result<CollabDocState, anyhow::Error>;
 
   /// Get the latest snapshot of the remote collab.
   async fn get_snapshots(&self, object_id: &str, limit: usize) -> Vec<RemoteCollabSnapshot>;
@@ -407,8 +398,8 @@ where
     (**self).is_enable()
   }
 
-  async fn get_all_updates(&self, object: &CollabObject) -> Result<Vec<Vec<u8>>, Error> {
-    (**self).get_all_updates(object).await
+  async fn get_doc_state(&self, object: &CollabObject) -> Result<CollabDocState, anyhow::Error> {
+    (**self).get_doc_state(object).await
   }
 
   async fn get_snapshots(&self, object_id: &str, limit: usize) -> Vec<RemoteCollabSnapshot> {

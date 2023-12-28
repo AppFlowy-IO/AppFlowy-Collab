@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use anyhow::Error;
-use collab::core::collab::{CollabRawData, MutexCollab};
+use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::core::collab_plugin::EncodedCollabV1;
 use collab::core::collab_state::{SnapshotState, SyncState};
 pub use collab::core::origin::CollabOrigin;
@@ -124,7 +124,7 @@ impl Folder {
   pub fn from_collab_raw_data<T: Into<UserId>>(
     uid: T,
     origin: CollabOrigin,
-    collab_raw_data: CollabRawData,
+    collab_raw_data: CollabDocState,
     workspace_id: &str,
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, Error> {

@@ -4,7 +4,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use collab::core::collab::{CollabRawData, MutexCollab};
+use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::preclude::CollabBuilder;
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::error::DatabaseError;
@@ -12,8 +12,8 @@ use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::rows::CreateRowParams;
 use collab_database::user::{
-  CollabFuture, CollabObjectUpdate, CollabObjectUpdateByOid, DatabaseCollabService,
-  RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
+  CollabDocStateByOid, CollabFuture, DatabaseCollabService, RowRelationChange,
+  RowRelationUpdateReceiver, WorkspaceDatabase,
 };
 use collab_database::views::{CreateDatabaseParams, DatabaseLayout, OrderObjectPosition};
 use collab_entity::CollabType;
@@ -53,11 +53,11 @@ pub struct TestUserDatabaseCollabBuilderImpl();
 
 #[async_trait]
 impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
-  fn get_collab_update(
+  fn get_collab_doc_state(
     &self,
     _object_id: &str,
     _object_ty: CollabType,
-  ) -> CollabFuture<Result<CollabObjectUpdate, DatabaseError>> {
+  ) -> CollabFuture<Result<CollabDocState, DatabaseError>> {
     Box::pin(async move { Ok(vec![]) })
   }
 
@@ -65,8 +65,8 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     &self,
     _object_ids: Vec<String>,
     _object_ty: CollabType,
-  ) -> CollabFuture<Result<CollabObjectUpdateByOid, DatabaseError>> {
-    Box::pin(async move { Ok(CollabObjectUpdateByOid::default()) })
+  ) -> CollabFuture<Result<CollabDocStateByOid, DatabaseError>> {
+    Box::pin(async move { Ok(CollabDocStateByOid::default()) })
   }
 
   fn build_collab_with_config(
@@ -75,12 +75,12 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     object_id: &str,
     _object_type: CollabType,
     collab_db: Weak<RocksCollabDB>,
-    collab_raw_data: CollabRawData,
+    collab_raw_data: CollabDocState,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab> {
     let collab = CollabBuilder::new(uid, object_id)
       .with_device_id("1")
-      .with_raw_data(collab_raw_data)
+      .with_doc_state(collab_raw_data)
       .with_plugin(RocksdbDiskPlugin::new_with_config(
         uid,
         collab_db,
@@ -113,7 +113,7 @@ pub async fn workspace_database_test_with_config(
     &database_views_aggregate_id,
     CollabType::WorkspaceDatabase,
     Arc::downgrade(&collab_db),
-    CollabRawData::default(),
+    CollabDocState::default(),
     &config,
   );
   let inner = WorkspaceDatabase::open(uid, collab, Arc::downgrade(&collab_db), config, builder);
@@ -139,7 +139,7 @@ pub async fn workspace_database_with_db(
     database_views_aggregate_id,
     CollabType::WorkspaceDatabase,
     collab_db.clone(),
-    CollabRawData::default(),
+    CollabDocState::default(),
     &config,
   );
   WorkspaceDatabase::open(uid, collab, collab_db, config, builder)
