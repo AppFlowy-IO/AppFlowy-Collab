@@ -198,24 +198,38 @@ impl Database {
             .get_map_with_txn(txn, vec![DATABASE, METAS])
             .unwrap();
 
+          let fields = FieldMap::new(
+            fields,
+            context
+              .notifier
+              .as_ref()
+              .map(|notifier| notifier.field_change_tx.clone()),
+          );
+
+          let views = ViewMap::new(
+            views,
+            context
+              .notifier
+              .as_ref()
+              .map(|notifier| notifier.view_change_tx.clone()),
+          );
+          let metas = MetaMap::new(metas);
+
+          if views.get_all_views_meta_with_txn(txn).len() < 2 {
+            let inline_view_id = metas.get_inline_view_id_with_txn(txn).unwrap();
+            let mut view = views
+              .get_view_with_txn(txn, &inline_view_id)
+              .ok_or(DatabaseError::DatabaseViewNotExist)
+              .unwrap();
+            view.id = gen_database_view_id();
+            view.created_at = timestamp();
+            view.modified_at = timestamp();
+            views.insert_view_with_txn(txn, view);
+          }
+
           (fields, views, metas)
         });
-        let views = ViewMap::new(
-          views,
-          context
-            .notifier
-            .as_ref()
-            .map(|notifier| notifier.view_change_tx.clone()),
-        );
-        let fields = FieldMap::new(
-          fields,
-          context
-            .notifier
-            .as_ref()
-            .as_ref()
-            .map(|notifier| notifier.field_change_tx.clone()),
-        );
-        let metas = MetaMap::new(metas);
+
         let block = Block::new(
           context.uid,
           context.db.clone(),
@@ -1200,7 +1214,7 @@ impl Database {
 
   pub fn set_inline_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
     tracing::trace!("Set inline view id: {}", view_id);
-    self.metas.set_inline_view_with_txn(txn, view_id);
+    self.metas.set_inline_view_id_with_txn(txn, view_id);
   }
 
   /// The inline view is the view that create with the database when initializing
@@ -1208,13 +1222,13 @@ impl Database {
     let txn = self.root.transact();
     // It's safe to unwrap because each database inline view id was set
     // when initializing the database
-    self.metas.get_inline_view_with_txn(&txn).unwrap()
+    self.metas.get_inline_view_id_with_txn(&txn).unwrap()
   }
 
   fn get_inline_view_id_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
     // It's safe to unwrap because each database inline view id was set
     // when initializing the database
-    self.metas.get_inline_view_with_txn(txn).unwrap()
+    self.metas.get_inline_view_id_with_txn(txn).unwrap()
   }
 
   /// Delete a view from the database and returns the deleted view ids.
@@ -1295,7 +1309,7 @@ impl DatabaseData {
   pub fn from_database(database: &Database) -> Self {
     let txn = database.root.transact();
     let database_id = database.get_database_id_with_txn(&txn);
-    let inline_view_id = database.metas.get_inline_view_with_txn(&txn).unwrap();
+    let inline_view_id = database.metas.get_inline_view_id_with_txn(&txn).unwrap();
     let views = database.views.get_all_views_with_txn(&txn);
     let fields = database.get_fields_in_view_with_txn(&txn, &inline_view_id, None);
     let rows = database.get_rows_for_view(&inline_view_id);
@@ -1330,7 +1344,7 @@ impl DatabaseData {
         let (id, created_at, modified_at) = if regenerate {
           (gen_row_id(), timestamp, timestamp)
         } else {
-          (row.id, row.created_at, row.modified_at)
+          (row.id, row.created_at, row.last_modified)
         };
         CreateRowParams {
           id,
@@ -1432,7 +1446,7 @@ pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
   let views = ViewMap::new(views, None);
   let meta = MetaMap::new(metas);
 
-  let inline_view_id = meta.get_inline_view_with_txn(&txn)?;
+  let inline_view_id = meta.get_inline_view_id_with_txn(&txn)?;
   Some(
     views
       .get_row_orders_with_txn(&txn, &inline_view_id)
@@ -1449,9 +1463,9 @@ where
   collab.with_origin_transact_mut(|txn| {
     if let Some(container) = collab.get_map_with_txn(txn, vec![DATABASE, METAS]) {
       let map = MetaMap::new(container);
-      let inline_view_id = map.get_inline_view_with_txn(txn).unwrap();
+      let inline_view_id = map.get_inline_view_id_with_txn(txn).unwrap();
       let new_inline_view_id = f(inline_view_id);
-      map.set_inline_view_with_txn(txn, &new_inline_view_id);
+      map.set_inline_view_id_with_txn(txn, &new_inline_view_id);
     }
   })
 }

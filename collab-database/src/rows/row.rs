@@ -67,7 +67,7 @@ impl DatabaseRow {
             .set_height(row.height)
             .set_visibility(row.visibility)
             .set_created_at(row.created_at)
-            .set_last_modified(row.created_at)
+            .set_last_modified(row.last_modified)
             .set_cells(row.cells);
         })
         .done();
@@ -258,7 +258,7 @@ pub struct Row {
   pub height: i32,
   pub visibility: bool,
   pub created_at: i64,
-  pub modified_at: i64,
+  pub last_modified: i64,
 }
 
 pub enum RowMetaKey {
@@ -293,7 +293,7 @@ impl Row {
       height: DEFAULT_ROW_HEIGHT,
       visibility: true,
       created_at: timestamp,
-      modified_at: timestamp,
+      last_modified: timestamp,
     }
   }
 
@@ -304,7 +304,7 @@ impl Row {
       height: DEFAULT_ROW_HEIGHT,
       visibility: true,
       created_at: 0,
-      modified_at: 0,
+      last_modified: 0,
     }
   }
 
@@ -511,7 +511,7 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, _meta_ref: &MapRef, txn: &
     height: height as i32,
     visibility,
     created_at,
-    modified_at,
+    last_modified: modified_at,
   })
 }
 
@@ -581,7 +581,7 @@ impl From<CreateRowParams> for Row {
       height: params.height,
       visibility: params.visibility,
       created_at: params.created_at,
-      modified_at: params.modified_at,
+      last_modified: params.modified_at,
     }
   }
 }
