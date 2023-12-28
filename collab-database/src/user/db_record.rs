@@ -11,13 +11,12 @@ use crate::database::timestamp;
 
 const DATABASES: &str = "databases";
 
-/// It used to keep track of the databases.
-/// Each record of a database is stored in a [DatabaseViewTracker]
-pub struct DatabaseWithViewsArray {
+/// Used to store list of [DatabaseViewTracker].
+pub struct DatabaseViewTrackerList {
   array_ref: ArrayRefWrapper,
 }
 
-impl DatabaseWithViewsArray {
+impl DatabaseViewTrackerList {
   pub fn new(array_ref: ArrayRefWrapper) -> Self {
     Self { array_ref }
   }
