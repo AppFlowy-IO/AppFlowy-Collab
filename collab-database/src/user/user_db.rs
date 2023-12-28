@@ -203,6 +203,12 @@ impl WorkspaceDatabase {
     Ok(database)
   }
 
+  pub fn trace_database(&self, database_id: &str, database_view_ids: Vec<String>) {
+    self
+      .database_tracker_list()
+      .add_database(database_id, database_view_ids);
+  }
+
   /// Create database with the data duplicated from the given database.
   /// The [DatabaseData] contains all the database data. It can be
   /// used to restore the database from the backup.
