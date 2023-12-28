@@ -276,7 +276,7 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
     database_id: database_id.clone(),
     inline_view_id: gen_database_view_id(),
     views: vec![CreateViewParams {
-      database_id: database_id.clone(),
+      database_id,
       view_id: view_id.to_string(),
       name: name.to_string(),
       layout: DatabaseLayout::Grid,

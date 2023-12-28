@@ -269,7 +269,7 @@ pub(crate) fn create_database(database_id: &str) -> CreateDatabaseParams {
       database_id: database_id.to_string(),
       view_id: "v1".to_string(),
       name: "my first database view".to_string(),
-      field_settings: field_settings_map.into(),
+      field_settings: field_settings_map,
       ..Default::default()
     }],
     rows: vec![row_1, row_2, row_3],
