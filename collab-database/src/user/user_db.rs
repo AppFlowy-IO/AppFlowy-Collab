@@ -165,7 +165,7 @@ impl WorkspaceDatabase {
   pub fn get_database_id_with_view_id(&self, view_id: &str) -> Option<String> {
     self
       .database_tracker_list()
-      .get_database_record_with_view_id(view_id)
+      .get_database_view_tracker_with_view_id(view_id)
       .map(|record| record.database_id)
   }
 
@@ -261,7 +261,7 @@ impl WorkspaceDatabase {
 
   /// Return all the database records.
   pub fn get_all_databases(&self) -> Vec<DatabaseViewTracker> {
-    self.database_tracker_list().get_all_databases()
+    self.database_tracker_list().get_all_database_tracker()
   }
 
   pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
@@ -354,5 +354,5 @@ impl WorkspaceDatabase {
 }
 
 pub fn get_all_database_view_trackers(collab: &Collab) -> Vec<DatabaseViewTracker> {
-  DatabaseViewTrackerList::from_collab(collab).get_all_databases()
+  DatabaseViewTrackerList::from_collab(collab).get_all_database_tracker()
 }
