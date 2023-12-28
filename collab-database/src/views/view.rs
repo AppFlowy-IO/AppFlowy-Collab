@@ -38,8 +38,9 @@ pub struct DatabaseView {
   pub modified_at: i64,
 }
 
+/// A meta of [DatabaseView]
 #[derive(Debug, Clone)]
-pub struct ViewDescription {
+pub struct DatabaseViewMeta {
   pub id: String,
   pub name: String,
 }
@@ -468,16 +469,13 @@ pub fn view_id_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> String {
   map_ref.get_str_with_txn(txn, VIEW_ID).unwrap_or_default()
 }
 
-/// Return a [ViewDescription] from a map ref
-/// A [ViewDescription] is a subset of a [DatabaseView]
-pub fn view_description_from_value<T: ReadTxn>(
-  value: YrsValue,
-  txn: &T,
-) -> Option<ViewDescription> {
+/// Return a [DatabaseViewMeta] from a map ref
+/// A [DatabaseViewMeta] is a subset of a [DatabaseView]
+pub fn view_meta_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<DatabaseViewMeta> {
   let map_ref = value.to_ymap()?;
   let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
   let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();
-  Some(ViewDescription { id, name })
+  Some(DatabaseViewMeta { id, name })
 }
 
 /// Return a [DatabaseView] from a map ref

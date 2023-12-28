@@ -56,7 +56,7 @@ async fn create_database_with_single_view_test() {
 #[tokio::test]
 async fn get_database_view_description_test() {
   let database_test = create_database_with_default_data(1, "1").await;
-  let views = database_test.get_all_views_description();
+  let views = database_test.get_all_database_views_meta();
   assert_eq!(views.len(), 2);
   assert_eq!(views[1].name, "my first database view");
 }

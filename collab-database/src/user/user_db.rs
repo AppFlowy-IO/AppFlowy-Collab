@@ -20,7 +20,7 @@ use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
 use crate::database_observer::DatabaseNotify;
 use crate::error::DatabaseError;
 
-use crate::user::db_record::{DatabaseWithViews, DatabaseWithViewsArray};
+use crate::user::db_record::{DatabaseViewTracker, DatabaseWithViewsArray};
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 
 pub type CollabObjectUpdateByOid = HashMap<String, CollabObjectUpdate>;
@@ -193,6 +193,7 @@ impl WorkspaceDatabase {
     // Add a new database record.
     self.database_array().add_database(&params);
     let database_id = params.database_id.clone();
+    // TODO(RS): insert the first view of the database.
     let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);
     let database = Arc::new(mutex_database);
     self.open_handlers.lock().put(database_id, database.clone());
@@ -243,7 +244,7 @@ impl WorkspaceDatabase {
   }
 
   /// Return all the database records.
-  pub fn get_all_databases(&self) -> Vec<DatabaseWithViews> {
+  pub fn get_all_databases(&self) -> Vec<DatabaseViewTracker> {
     self.database_array().get_all_databases()
   }
 
@@ -335,6 +336,6 @@ impl WorkspaceDatabase {
   }
 }
 
-pub fn get_database_with_views(collab: &Collab) -> Vec<DatabaseWithViews> {
+pub fn get_database_with_views(collab: &Collab) -> Vec<DatabaseViewTracker> {
   DatabaseWithViewsArray::from_collab(collab).get_all_databases()
 }

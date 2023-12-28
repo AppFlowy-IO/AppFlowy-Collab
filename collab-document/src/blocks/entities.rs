@@ -25,7 +25,7 @@ pub struct Block {
   pub data: HashMap<String, Value>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DocumentMeta {
   /// Meta has a children map.
   pub children_map: HashMap<String, Vec<String>>,
@@ -35,7 +35,7 @@ pub struct DocumentMeta {
   pub text_map: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DocumentData {
   /// Document [Block] id.
   pub page_id: String,

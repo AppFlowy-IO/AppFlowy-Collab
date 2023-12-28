@@ -261,7 +261,7 @@ async fn duplicate_database_data_test() {
   let original = test.get_database_with_view_id("v1").await.unwrap();
   let duplicate = test.duplicate_database("v1").await.unwrap();
 
-  let duplicated_view_id = &duplicate.lock().get_all_views_description()[0].id;
+  let duplicated_view_id = &duplicate.lock().get_all_database_views_meta()[0].id;
 
   // compare rows
   let original_rows = original.lock().get_rows_for_view("v1");
