@@ -177,7 +177,7 @@ impl DatabaseViewTracker {
 
     Some(Self {
       database_id: id,
-      created_at,[]
+      created_at,
       linked_views: views.into_iter().collect(),
     })
   }
