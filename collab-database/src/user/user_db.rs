@@ -203,7 +203,7 @@ impl WorkspaceDatabase {
     Ok(database)
   }
 
-  pub fn trace_database(&self, database_id: &str, database_view_ids: Vec<String>) {
+  pub fn track_database(&self, database_id: &str, database_view_ids: Vec<String>) {
     self
       .database_tracker_list()
       .add_database(database_id, database_view_ids);
