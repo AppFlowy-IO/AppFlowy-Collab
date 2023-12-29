@@ -190,9 +190,7 @@ impl WorkspaceDatabase {
     };
 
     // Add a new database record.
-    self
-      .database_tracker_list()
-      .add_database(&params);
+    self.database_tracker_list().add_database(&params);
     let database_id = params.database_id.clone();
     let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);
     let database = Arc::new(mutex_database);
