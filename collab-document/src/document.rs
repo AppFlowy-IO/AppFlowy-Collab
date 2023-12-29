@@ -6,13 +6,14 @@ use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{
   deserialize_text_delta, Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent,
   BlockOperation, ChildrenOperation, DocumentData, DocumentMeta, RootDeepSubscription,
-  TextOperation,
+  TextOperation, EXTERNAL_TYPE_TEXT,
 };
 use crate::error::DocumentError;
 
@@ -640,5 +641,56 @@ impl Document {
     } else {
       Err(DocumentError::TextActionParamsError)
     }
+  }
+}
+
+/// Represents a the index content of a document.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DocumentIndexContent {
+  pub page_id: String,
+  pub text: String,
+}
+
+impl From<&Document> for DocumentIndexContent {
+  fn from(value: &Document) -> Self {
+    let collab_guard = value.inner.lock();
+    let txn = collab_guard.transact();
+    let page_id = value
+      .root
+      .get_str_with_txn(&txn, PAGE_ID)
+      .expect("document should have page_id");
+
+    drop(txn);
+    drop(collab_guard);
+
+    let blocks = value.block_operation.get_all_blocks();
+    let children_map = value.children_operation.get_all_children();
+    let text_map = value.text_operation.stringify_all_text_delta();
+
+    let page_block = blocks
+      .get(&page_id)
+      .expect("document data should contain page block");
+    let children_key = &page_block.children;
+    let children_ids = children_map
+      .get(children_key)
+      .expect("children map should contain page's children key");
+
+    let text: Vec<_> = children_ids
+      .into_iter()
+      .filter_map(|id| blocks.get(id)) // get block of child
+      .filter_map(|block| { // get external id of blocks with external type text
+        let Some(ty) = block.external_type.as_ref() else { return None;};
+        if ty == EXTERNAL_TYPE_TEXT {
+          return block.external_id.as_ref();
+        }
+        None
+      })
+      .filter_map(|ext_id| text_map.get(ext_id).filter(|t| !t.is_empty())) // get text of block
+      .cloned()
+      .collect();
+
+    let text = text.join(" "); // all text of document
+
+    Self { page_id, text }
   }
 }
