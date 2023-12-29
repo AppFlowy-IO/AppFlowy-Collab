@@ -4,7 +4,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use async_trait::async_trait;
 use collab::core::collab::{CollabDocState, MutexCollab, TransactionMutExt};
 use collab::core::collab_state::SyncState;
@@ -207,7 +207,7 @@ impl RemoteCollab {
   /// Return the update of the remote collab.
   /// If the remote collab contains any updates, it will return None.
   /// Otherwise, it will merge the updates into one and return the merged update.
-  pub async fn sync(&self, local_collab: Arc<MutexCollab>) -> Result<Vec<u8>, Error> {
+  pub async fn sync(&self, local_collab: Weak<MutexCollab>) -> Result<Vec<u8>, Error> {
     let mut remote_update = vec![];
     // It would be better if creating a edge function that calculate the diff between the local and remote.
     // The local only need to send its state vector to the remote. In this way, the local does not need to
@@ -232,7 +232,12 @@ impl RemoteCollab {
 
       let _ = self.sync_state.send(SyncState::InitSyncBegin);
       // Encode the remote collab state as update for local collab.
-      let local_sv = local_collab.lock().transact().state_vector();
+      let local_sv = local_collab
+        .upgrade()
+        .ok_or(anyhow!("local collab is drop"))?
+        .lock()
+        .transact()
+        .state_vector();
       let encode_update = self
         .collab
         .lock()
@@ -248,10 +253,13 @@ impl RemoteCollab {
             self.object,
             encode_update.len()
           );
-          let local_collab_guard = local_collab.lock();
-          let mut txn = local_collab_guard.get_doc().transact_mut();
-          txn.apply_update(update);
-          drop(txn);
+          local_collab
+            .upgrade()
+            .ok_or(anyhow!("local collab is drop"))?
+            .lock()
+            .get_doc()
+            .transact_mut()
+            .apply_update(update);
 
           if let Err(e) = self.sync_state.send(SyncState::InitSyncEnd) {
             tracing::error!("🔴Failed to send sync state: {:?}", e);
@@ -263,6 +271,8 @@ impl RemoteCollab {
     // Encode the local collab state as update for remote collab.
     let remote_state_vector = self.collab.lock().transact().state_vector();
     let encode_update = local_collab
+      .upgrade()
+      .ok_or(anyhow!("local collab is drop"))?
       .lock()
       .transact()
       .encode_state_as_update_v1(&remote_state_vector);

@@ -239,24 +239,18 @@ impl Action for InitSyncAction {
     let weak_is_first_sync_done = self.is_first_sync_done.clone();
 
     Box::pin(async move {
-      if let (
-        Some(remote_collab),
-        Some(local_collab),
-        Some(pending_updates),
-        Some(is_first_sync_done),
-      ) = (
+      if let (Some(remote_collab), Some(pending_updates), Some(is_first_sync_done)) = (
         weak_remote_collab.upgrade(),
-        weak_local_collab.upgrade(),
         weak_pending_updates.upgrade(),
         weak_is_first_sync_done.upgrade(),
       ) {
-        let remote_update = remote_collab.sync(local_collab.clone()).await?;
+        let remote_update = remote_collab.sync(weak_local_collab.clone()).await?;
 
         create_snapshot_if_need(
           uid,
           object,
           remote_update,
-          Arc::downgrade(&local_collab),
+          weak_local_collab,
           weak_local_collab_storage,
           weak_remote_collab_storage,
         );
