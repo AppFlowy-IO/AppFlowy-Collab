@@ -169,7 +169,7 @@ fn save_row<R: AsRef<str>>(
     return None;
   }
   let row = collab_db.with_write_txn(|write_txn| {
-    match MutexCollab::new_with_raw_data(
+    match MutexCollab::new_with_doc_state(
       CollabOrigin::Empty,
       row_id.as_ref(),
       collab_doc_state,

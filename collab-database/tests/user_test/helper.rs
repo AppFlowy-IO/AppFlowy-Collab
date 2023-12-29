@@ -75,12 +75,12 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     object_id: &str,
     _object_type: CollabType,
     collab_db: Weak<RocksCollabDB>,
-    collab_raw_data: CollabDocState,
+    doc_state: CollabDocState,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab> {
     let collab = CollabBuilder::new(uid, object_id)
       .with_device_id("1")
-      .with_doc_state(collab_raw_data)
+      .with_doc_state(doc_state)
       .with_plugin(RocksdbDiskPlugin::new_with_config(
         uid,
         collab_db,

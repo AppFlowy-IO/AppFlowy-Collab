@@ -18,6 +18,7 @@ use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
+use tracing::trace;
 use yrs::updates::decoder::Decode;
 use yrs::{merge_updates_v1, ReadTxn, Transact, Update};
 
@@ -138,6 +139,7 @@ impl RemoteCollab {
             continue;
           }
           let is_init_msg = message.is_init_msg();
+          trace!("send message: {}", message);
           match message.split() {
             Ok((object, msg_id, payload)) => {
               // If the message is init message, it will flush all the updates to the remote.

@@ -95,7 +95,7 @@ impl Collab {
     Self::new_with_origin(CollabOrigin::Client(origin), object_id, plugins)
   }
 
-  pub fn new_with_raw_data(
+  pub fn new_with_doc_state(
     origin: CollabOrigin,
     object_id: &str,
     collab_doc_state: CollabDocState,
@@ -711,7 +711,7 @@ impl CollabBuilder {
 
   pub fn build(self) -> Result<MutexCollab, CollabError> {
     let origin = CollabOrigin::Client(CollabClient::new(self.uid, self.device_id));
-    MutexCollab::new_with_raw_data(origin, &self.object_id, self.doc_state, self.plugins)
+    MutexCollab::new_with_doc_state(origin, &self.object_id, self.doc_state, self.plugins)
   }
 }
 
@@ -815,13 +815,13 @@ impl MutexCollab {
     MutexCollab(Arc::new(Mutex::new(collab)))
   }
 
-  pub fn new_with_raw_data(
+  pub fn new_with_doc_state(
     origin: CollabOrigin,
     object_id: &str,
     collab_doc_state: CollabDocState,
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, CollabError> {
-    let collab = Collab::new_with_raw_data(origin, object_id, collab_doc_state, plugins)?;
+    let collab = Collab::new_with_doc_state(origin, object_id, collab_doc_state, plugins)?;
     Ok(MutexCollab(Arc::new(Mutex::new(collab))))
   }
 

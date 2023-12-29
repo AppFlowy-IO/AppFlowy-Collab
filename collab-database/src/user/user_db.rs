@@ -49,7 +49,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     object_id: &str,
     object_type: CollabType,
     collab_db: Weak<RocksCollabDB>,
-    collab_raw_data: CollabDocState,
+    collab_doc_state: CollabDocState,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab>;
 }
@@ -338,17 +338,13 @@ impl WorkspaceDatabase {
   }
 
   /// Create a new [Collab] instance for given database id.
-  fn collab_for_database(
-    &self,
-    database_id: &str,
-    collab_raw_data: CollabDocState,
-  ) -> Arc<MutexCollab> {
+  fn collab_for_database(&self, database_id: &str, doc_state: CollabDocState) -> Arc<MutexCollab> {
     self.collab_service.build_collab_with_config(
       self.uid,
       database_id,
       CollabType::Database,
       self.collab_db.clone(),
-      collab_raw_data,
+      doc_state,
       &self.config,
     )
   }
