@@ -10,7 +10,6 @@ use collab::preclude::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::database::gen_database_view_id;
 use crate::error::DatabaseError;
 use crate::fields::Field;
 use crate::rows::CreateRowParams;
@@ -161,43 +160,6 @@ pub struct CreateDatabaseParams {
   pub rows: Vec<CreateRowParams>,
   pub inline_view_id: String,
   pub views: Vec<CreateViewParams>,
-}
-
-impl CreateDatabaseParams {
-  pub fn from_single_view(
-    view: DatabaseView,
-    fields: Vec<Field>,
-    rows: Vec<CreateRowParams>,
-  ) -> Self {
-    Self {
-      fields,
-      rows,
-      ..view.into()
-    }
-  }
-}
-
-impl From<DatabaseView> for CreateDatabaseParams {
-  fn from(view: DatabaseView) -> Self {
-    Self {
-      database_id: view.database_id.clone(),
-      inline_view_id: gen_database_view_id(),
-      rows: vec![],
-      fields: vec![],
-      views: vec![CreateViewParams {
-        database_id: view.database_id,
-        view_id: view.id,
-        name: view.name,
-        layout: view.layout,
-        layout_settings: view.layout_settings,
-        filters: view.filters,
-        group_settings: view.group_settings,
-        sorts: view.sorts,
-        field_settings: view.field_settings,
-        ..Default::default()
-      }],
-    }
-  }
 }
 
 const VIEW_ID: &str = "id";
