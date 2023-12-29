@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use collab::core::collab::{CollabRawData, MutexCollab};
+use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::core::origin::CollabOrigin;
 use collab_entity::CollabType;
 use collab_persistence::doc::YrsDocAction;
@@ -118,7 +118,7 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
       } => {
         tracing::trace!("fetching database row: {:?}", row_id);
         if let Ok(updates) = collab_service
-          .get_collab_update(row_id.as_ref(), CollabType::DatabaseRow)
+          .get_collab_doc_state(row_id.as_ref(), CollabType::DatabaseRow)
           .await
         {
           if let Some(row_detail) = save_row(&collab_db, updates, *uid, row_id) {
@@ -160,19 +160,19 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
 
 fn save_row<R: AsRef<str>>(
   collab_db: &Arc<RocksCollabDB>,
-  collab_raw_data: CollabRawData,
+  collab_doc_state: CollabDocState,
   uid: i64,
   row_id: R,
 ) -> Option<RowDetail> {
-  if collab_raw_data.is_empty() {
+  if collab_doc_state.is_empty() {
     tracing::error!("Unexpected empty row: {} collab update", row_id.as_ref());
     return None;
   }
   let row = collab_db.with_write_txn(|write_txn| {
-    match MutexCollab::new_with_raw_data(
+    match MutexCollab::new_with_doc_state(
       CollabOrigin::Empty,
       row_id.as_ref(),
-      collab_raw_data,
+      collab_doc_state,
       vec![],
     ) {
       Ok(collab) => {

@@ -95,19 +95,17 @@ impl Collab {
     Self::new_with_origin(CollabOrigin::Client(origin), object_id, plugins)
   }
 
-  pub fn new_with_raw_data(
+  pub fn new_with_doc_state(
     origin: CollabOrigin,
     object_id: &str,
-    collab_raw_data: CollabRawData,
+    collab_doc_state: CollabDocState,
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, CollabError> {
     let collab = Self::new_with_origin(origin, object_id, plugins);
-    if !collab_raw_data.is_empty() {
+    if !collab_doc_state.is_empty() {
       let mut txn = collab.origin_transact_mut();
-      for update in collab_raw_data {
-        let decoded_update = Update::decode_v1(&update)?;
-        txn.try_apply_update(decoded_update)?;
-      }
+      let decoded_update = Update::decode_v1(&collab_doc_state)?;
+      txn.try_apply_update(decoded_update)?;
     }
     Ok(collab)
   }
@@ -671,12 +669,12 @@ pub struct CollabBuilder {
   device_id: String,
   plugins: Vec<Arc<dyn CollabPlugin>>,
   object_id: String,
-  updates: CollabRawData,
+  doc_state: CollabDocState,
 }
 
 /// The raw data of a collab document. It is a list of updates. Each of them can be parsed by
 /// [Update::decode_v1].
-pub type CollabRawData = Vec<Vec<u8>>;
+pub type CollabDocState = Vec<u8>;
 
 impl CollabBuilder {
   pub fn new<T: AsRef<str>>(uid: i64, object_id: T) -> Self {
@@ -686,7 +684,7 @@ impl CollabBuilder {
       plugins: vec![],
       object_id: object_id.to_string(),
       device_id: "".to_string(),
-      updates: vec![],
+      doc_state: vec![],
     }
   }
 
@@ -706,14 +704,14 @@ impl CollabBuilder {
     self
   }
 
-  pub fn with_raw_data(mut self, updates: Vec<Vec<u8>>) -> Self {
-    self.updates = updates;
+  pub fn with_doc_state(mut self, doc_state: CollabDocState) -> Self {
+    self.doc_state = doc_state;
     self
   }
 
   pub fn build(self) -> Result<MutexCollab, CollabError> {
     let origin = CollabOrigin::Client(CollabClient::new(self.uid, self.device_id));
-    MutexCollab::new_with_raw_data(origin, &self.object_id, self.updates, self.plugins)
+    MutexCollab::new_with_doc_state(origin, &self.object_id, self.doc_state, self.plugins)
   }
 }
 
@@ -817,13 +815,13 @@ impl MutexCollab {
     MutexCollab(Arc::new(Mutex::new(collab)))
   }
 
-  pub fn new_with_raw_data(
+  pub fn new_with_doc_state(
     origin: CollabOrigin,
     object_id: &str,
-    collab_raw_data: CollabRawData,
+    collab_doc_state: CollabDocState,
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, CollabError> {
-    let collab = Collab::new_with_raw_data(origin, object_id, collab_raw_data, plugins)?;
+    let collab = Collab::new_with_doc_state(origin, object_id, collab_doc_state, plugins)?;
     Ok(MutexCollab(Arc::new(Mutex::new(collab))))
   }
 

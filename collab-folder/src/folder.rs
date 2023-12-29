@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use anyhow::Error;
-use collab::core::collab::{CollabRawData, MutexCollab};
+use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::core::collab_plugin::EncodedCollabV1;
 use collab::core::collab_state::{SnapshotState, SyncState};
 pub use collab::core::origin::CollabOrigin;
@@ -121,14 +121,14 @@ impl Folder {
     create_folder(uid, collab, notifier, Some(initial_folder_data))
   }
 
-  pub fn from_collab_raw_data<T: Into<UserId>>(
+  pub fn from_collab_doc_state<T: Into<UserId>>(
     uid: T,
     origin: CollabOrigin,
-    collab_raw_data: CollabRawData,
+    collab_doc_state: CollabDocState,
     workspace_id: &str,
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, Error> {
-    let collab = MutexCollab::new_with_raw_data(origin, workspace_id, collab_raw_data, plugins)?;
+    let collab = MutexCollab::new_with_doc_state(origin, workspace_id, collab_doc_state, plugins)?;
     Self::open(uid, Arc::new(collab), None)
   }
 

@@ -12,13 +12,12 @@ use crate::views::CreateDatabaseParams;
 
 const DATABASES: &str = "databases";
 
-/// It used to keep track of the databases.
-/// Each record of a database is stored in a [DatabaseViewTracker]
-pub struct DatabaseWithViewsArray {
+/// Used to store list of [DatabaseViewTracker].
+pub struct DatabaseViewTrackerList {
   array_ref: ArrayRefWrapper,
 }
 
-impl DatabaseWithViewsArray {
+impl DatabaseViewTrackerList {
   pub fn new(array_ref: ArrayRefWrapper) -> Self {
     Self { array_ref }
   }
@@ -38,7 +37,9 @@ impl DatabaseWithViewsArray {
     Self::new(databases)
   }
 
-  /// Create a new [DatabaseWithViews] for the given database id and view id
+  /// Create a new [DatabaseViewTracker] for the given database id and view id
+  /// use [Self::update_database] to attach more views to the existing database.
+  ///
   pub fn add_database(&self, params: &CreateDatabaseParams) {
     self.array_ref.with_transact_mut(|txn| {
       let mut linked_views = HashSet::new();
@@ -91,11 +92,11 @@ impl DatabaseWithViewsArray {
     });
   }
 
-  /// Return all the databases
-  pub fn get_all_databases(&self) -> Vec<DatabaseViewTracker> {
+  /// Return all the database view trackers
+  pub fn get_all_database_tracker(&self) -> Vec<DatabaseViewTracker> {
     self
       .array_ref
-      .with_transact_mut(|txn| self.get_all_databases_with_txn(txn))
+      .with_transact_mut(|txn| self.get_all_database_view_tracker_with_txn(txn))
   }
 
   /// Test if the database with the given id exists
@@ -111,7 +112,10 @@ impl DatabaseWithViewsArray {
   }
 
   /// Return all databases with a Transaction
-  pub fn get_all_databases_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseViewTracker> {
+  pub fn get_all_database_view_tracker_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+  ) -> Vec<DatabaseViewTracker> {
     self
       .array_ref
       .iter(txn)
@@ -123,9 +127,12 @@ impl DatabaseWithViewsArray {
   }
 
   /// Return the a [DatabaseViewTracker] with the given view id
-  pub fn get_database_record_with_view_id(&self, view_id: &str) -> Option<DatabaseViewTracker> {
+  pub fn get_database_view_tracker_with_view_id(
+    &self,
+    view_id: &str,
+  ) -> Option<DatabaseViewTracker> {
     let txn = self.array_ref.transact();
-    let all = self.get_all_databases_with_txn(&txn);
+    let all = self.get_all_database_view_tracker_with_txn(&txn);
     all
       .into_iter()
       .find(|record| record.linked_views.contains(view_id))

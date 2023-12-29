@@ -2,7 +2,7 @@ use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
-use collab::core::collab::{CollabRawData, MutexCollab};
+use collab::core::collab::{CollabDocState, MutexCollab};
 
 use collab_entity::CollabType;
 use collab_persistence::doc::YrsDocAction;
@@ -240,13 +240,13 @@ impl Block {
 
   fn collab_for_row(&self, row_id: &RowId) -> Arc<MutexCollab> {
     let config = CollabPersistenceConfig::new().snapshot_per_update(5);
-    let collab_raw_data = CollabRawData::default();
+    let doc_state = CollabDocState::default();
     self.collab_service.build_collab_with_config(
       self.uid,
       row_id,
       CollabType::DatabaseRow,
       self.collab_db.clone(),
-      collab_raw_data,
+      doc_state,
       &config,
     )
   }

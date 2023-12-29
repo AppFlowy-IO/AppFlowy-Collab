@@ -6,7 +6,7 @@ use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
-use collab::core::collab::{CollabRawData, MutexCollab};
+use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{Collab, Update};
 use collab_entity::CollabType;
@@ -20,11 +20,10 @@ use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
 use crate::database_observer::DatabaseNotify;
 use crate::error::DatabaseError;
 
-use crate::user::db_record::{DatabaseViewTracker, DatabaseWithViewsArray};
+use crate::user::db_record::{DatabaseViewTracker, DatabaseViewTrackerList};
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 
-pub type CollabObjectUpdateByOid = HashMap<String, CollabObjectUpdate>;
-pub type CollabObjectUpdate = Vec<Vec<u8>>;
+pub type CollabDocStateByOid = HashMap<String, CollabDocState>;
 pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
@@ -32,17 +31,17 @@ pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'stati
 ///
 #[async_trait]
 pub trait DatabaseCollabService: Send + Sync + 'static {
-  fn get_collab_update(
+  fn get_collab_doc_state(
     &self,
     object_id: &str,
     object_ty: CollabType,
-  ) -> CollabFuture<Result<CollabObjectUpdate, DatabaseError>>;
+  ) -> CollabFuture<Result<CollabDocState, DatabaseError>>;
 
   fn batch_get_collab_update(
     &self,
     object_ids: Vec<String>,
     object_ty: CollabType,
-  ) -> CollabFuture<Result<CollabObjectUpdateByOid, DatabaseError>>;
+  ) -> CollabFuture<Result<CollabDocStateByOid, DatabaseError>>;
 
   fn build_collab_with_config(
     &self,
@@ -50,7 +49,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     object_id: &str,
     object_type: CollabType,
     collab_db: Weak<RocksCollabDB>,
-    collab_raw_data: CollabRawData,
+    collab_doc_state: CollabDocState,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab>;
 }
@@ -97,29 +96,29 @@ impl WorkspaceDatabase {
   /// Get the database with the given database id.
   /// Return None if the database does not exist.
   pub async fn get_database(&self, database_id: &str) -> Option<Arc<MutexDatabase>> {
-    if !self.database_array().contains(database_id) {
+    if !self.database_tracker_list().contains(database_id) {
       return None;
     }
     let database = self.open_handlers.lock().get(database_id).cloned();
     let collab_db = self.collab_db.upgrade()?;
     match database {
       None => {
-        let mut collab_raw_data = CollabRawData::default();
+        let mut collab_doc_state = CollabDocState::default();
         let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
         if !is_exist {
           // Try to load the database from the remote. The database doesn't exist in the local only
           // when the user has deleted the database or the database is using a remote storage.
           match self
             .collab_service
-            .get_collab_update(database_id, CollabType::Database)
+            .get_collab_doc_state(database_id, CollabType::Database)
             .await
           {
-            Ok(updates) => {
-              if updates.is_empty() {
+            Ok(fetched_doc_state) => {
+              if fetched_doc_state.is_empty() {
                 tracing::error!("Failed to get updates for database: {}", database_id);
                 return None;
               }
-              collab_raw_data = updates;
+              collab_doc_state = fetched_doc_state;
             },
             Err(e) => {
               tracing::error!("Failed to get collab updates for database: {}", e);
@@ -128,7 +127,7 @@ impl WorkspaceDatabase {
           }
         }
         let notifier = DatabaseNotify::default();
-        let collab = self.collab_for_database(database_id, collab_raw_data);
+        let collab = self.collab_for_database(database_id, collab_doc_state);
         let context = DatabaseContext {
           uid: self.uid,
           db: self.collab_db.clone(),
@@ -164,8 +163,8 @@ impl WorkspaceDatabase {
   /// Return the database id with the given view id.
   pub fn get_database_id_with_view_id(&self, view_id: &str) -> Option<String> {
     self
-      .database_array()
-      .get_database_record_with_view_id(view_id)
+      .database_tracker_list()
+      .get_database_view_tracker_with_view_id(view_id)
       .map(|record| record.database_id)
   }
 
@@ -180,7 +179,7 @@ impl WorkspaceDatabase {
     debug_assert!(!params.database_id.is_empty());
 
     // Create a [Collab] for the given database id.
-    let collab = self.collab_for_database(&params.database_id, CollabRawData::default());
+    let collab = self.collab_for_database(&params.database_id, CollabDocState::default());
     let notifier = DatabaseNotify::default();
     let context = DatabaseContext {
       uid: self.uid,
@@ -191,7 +190,9 @@ impl WorkspaceDatabase {
     };
 
     // Add a new database record.
-    self.database_array().add_database(&params);
+    self
+      .database_tracker_list()
+      .add_database(&params);
     let database_id = params.database_id.clone();
     let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);
     let database = Arc::new(mutex_database);
@@ -208,7 +209,7 @@ impl WorkspaceDatabase {
     let params = CreateViewParamsValidator::validate(params)?;
     if let Some(database) = self.get_database(&params.database_id).await {
       self
-        .database_array()
+        .database_tracker_list()
         .update_database(&params.database_id, |record| {
           record.linked_views.insert(params.view_id.clone());
         });
@@ -220,7 +221,7 @@ impl WorkspaceDatabase {
 
   /// Delete the database with the given database id.
   pub fn delete_database(&self, database_id: &str) {
-    self.database_array().delete_database(database_id);
+    self.database_tracker_list().delete_database(database_id);
     if let Some(collab_db) = self.collab_db.upgrade() {
       let _ = collab_db.with_write_txn(|w_db_txn| {
         match w_db_txn.delete_doc(self.uid, database_id) {
@@ -244,7 +245,7 @@ impl WorkspaceDatabase {
 
   /// Return all the database records.
   pub fn get_all_databases(&self) -> Vec<DatabaseViewTracker> {
-    self.database_array().get_all_databases()
+    self.database_tracker_list().get_all_database_tracker()
   }
 
   pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
@@ -262,7 +263,7 @@ impl WorkspaceDatabase {
     database_id: &str,
     snapshot: CollabSnapshot,
   ) -> Result<Database, DatabaseError> {
-    let collab = self.collab_for_database(database_id, CollabRawData::default());
+    let collab = self.collab_for_database(database_id, CollabDocState::default());
     let update =
       Update::decode_v1(&snapshot.data).map_err(|err| DatabaseError::Internal(err.into()))?;
     collab.lock().with_origin_transact_mut(|txn| {
@@ -315,26 +316,22 @@ impl WorkspaceDatabase {
   }
 
   /// Create a new [Collab] instance for given database id.
-  fn collab_for_database(
-    &self,
-    database_id: &str,
-    collab_raw_data: CollabRawData,
-  ) -> Arc<MutexCollab> {
+  fn collab_for_database(&self, database_id: &str, doc_state: CollabDocState) -> Arc<MutexCollab> {
     self.collab_service.build_collab_with_config(
       self.uid,
       database_id,
       CollabType::Database,
       self.collab_db.clone(),
-      collab_raw_data,
+      doc_state,
       &self.config,
     )
   }
 
-  fn database_array(&self) -> DatabaseWithViewsArray {
-    DatabaseWithViewsArray::from_collab(&self.collab.lock())
+  fn database_tracker_list(&self) -> DatabaseViewTrackerList {
+    DatabaseViewTrackerList::from_collab(&self.collab.lock())
   }
 }
 
-pub fn get_database_with_views(collab: &Collab) -> Vec<DatabaseViewTracker> {
-  DatabaseWithViewsArray::from_collab(collab).get_all_databases()
+pub fn get_all_database_view_trackers(collab: &Collab) -> Vec<DatabaseViewTracker> {
+  DatabaseViewTrackerList::from_collab(collab).get_all_database_tracker()
 }

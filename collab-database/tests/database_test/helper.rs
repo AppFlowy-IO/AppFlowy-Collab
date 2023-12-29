@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use collab::core::collab::CollabRawData;
+use collab::core::collab::CollabDocState;
 use collab::preclude::CollabBuilder;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
@@ -94,7 +94,7 @@ pub async fn create_database_with_db(
     database_id,
     CollabType::Database,
     Arc::downgrade(&collab_db),
-    CollabRawData::default(),
+    CollabDocState::default(),
     &CollabPersistenceConfig::default(),
   );
   let context = DatabaseContext {
@@ -136,7 +136,7 @@ pub fn restore_database_from_db(
     database_id,
     CollabType::Database,
     Arc::downgrade(&collab_db),
-    CollabRawData::default(),
+    CollabDocState::default(),
     &CollabPersistenceConfig::default(),
   );
   let context = DatabaseContext {

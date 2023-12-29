@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
-use collab::core::collab::MutexCollab;
+use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
@@ -67,13 +67,13 @@ impl Document {
     Document::create_document(collab, Some(data))
   }
 
-  pub fn from_updates(
+  pub fn from_doc_state(
     origin: CollabOrigin,
-    updates: Vec<Vec<u8>>,
+    doc_state: CollabDocState,
     document_id: &str,
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, DocumentError> {
-    let collab = MutexCollab::new_with_raw_data(origin, document_id, updates, plugins)?;
+    let collab = MutexCollab::new_with_doc_state(origin, document_id, doc_state, plugins)?;
     Document::open(Arc::new(collab))
   }
 
