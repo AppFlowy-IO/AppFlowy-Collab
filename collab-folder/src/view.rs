@@ -693,6 +693,10 @@ pub enum ViewLayout {
 }
 
 impl ViewLayout {
+  pub fn is_document(&self) -> bool {
+    matches!(self, ViewLayout::Document)
+  }
+
   pub fn is_database(&self) -> bool {
     matches!(
       self,
