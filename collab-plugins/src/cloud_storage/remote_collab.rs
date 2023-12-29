@@ -471,13 +471,17 @@ impl Message {
     self.payloads.iter().map(|p| p.len()).sum()
   }
 
-  fn split(self) -> Result<(CollabObject, MsgId, Vec<u8>), anyhow::Error> {
-    let updates = self
-      .payloads
-      .iter()
-      .map(|update| update.as_ref())
-      .collect::<Vec<&[u8]>>();
-    let update = merge_updates_v1(&updates)?;
+  fn split(mut self) -> Result<(CollabObject, MsgId, Vec<u8>), anyhow::Error> {
+    let update = if self.payloads.len() == 1 {
+      self.payloads.pop().unwrap()
+    } else {
+      let updates = self
+        .payloads
+        .iter()
+        .map(|update| update.as_ref())
+        .collect::<Vec<&[u8]>>();
+      merge_updates_v1(&updates)?
+    };
     let msg_id = *self.meta.msg_id();
     Ok((self.object, msg_id, update))
   }
