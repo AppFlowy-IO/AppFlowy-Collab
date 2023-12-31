@@ -1065,21 +1065,22 @@ impl Database {
   pub fn create_new_view_if_needed_with_txn(
     &self,
     txn: &mut TransactionMut,
-  ) -> Result<(), DatabaseError> {
+  ) -> Result<bool, DatabaseError> {
     if self.views.get_all_views_meta_with_txn(txn).len() > 1 {
-      return Ok(());
+      return Ok(false);
     }
     let inline_view_id = self.get_inline_view_id_with_txn(txn);
     let mut view = self
       .views
       .get_view_with_txn(txn, &inline_view_id)
       .ok_or(DatabaseError::DatabaseViewNotExist)?;
+    let timestamp = timestamp();
     view.id = gen_database_view_id();
-    view.created_at = timestamp();
-    view.modified_at = timestamp();
+    view.created_at = timestamp;
+    view.modified_at = timestamp;
     self.views.insert_view_with_txn(txn, view);
 
-    Ok(())
+    Ok(true)
   }
 
   /// Create a [DatabaseView] for the current database.
@@ -1116,11 +1117,14 @@ impl Database {
   /// group, field setting, etc.
   pub fn duplicate_linked_view(&self, view_id: &str) -> Option<DatabaseView> {
     let view = self.views.get_view(view_id)?;
-    let mut duplicated_view = view.clone();
-    duplicated_view.id = gen_database_view_id();
-    duplicated_view.created_at = timestamp();
-    duplicated_view.modified_at = timestamp();
-    duplicated_view.name = format!("{}-copy", view.name);
+    let timestamp = timestamp();
+    let duplicated_view = DatabaseView{
+      id: gen_database_view_id(),
+      name: format!("{}-copy", view.name),
+      created_at: timestamp,
+      modified_at: timestamp,
+      ..view
+    };
     self.views.insert_view(duplicated_view.clone());
 
     Some(duplicated_view)
@@ -1231,23 +1235,22 @@ impl Database {
     self.metas.get_inline_view_id_with_txn(txn).unwrap()
   }
 
-  /// Delete a view from the database and returns the deleted view ids.
-  /// If the view is the inline view, it will clear all the views. Otherwise,
-  /// just delete the view with given view id.
+  /// Delete a view from the database. If the view is the inline view it will clear all
+  /// the linked views as well. Otherwise, just delete the view with given view id.
+  /// Return whether a new linked view was created
   ///
-  pub fn delete_view(&self, view_id: &str) -> Vec<String> {
+  pub fn delete_view(&self, view_id: &str) -> bool {
     if self.is_inline_view(view_id) {
       self.root.with_transact_mut(|txn| {
-        let views = self.views.get_all_views_meta_with_txn(txn);
         self.views.clear_with_txn(txn);
-        views.into_iter().map(|view| view.id).collect()
+        false
       })
     } else {
       self.root.with_transact_mut(|txn| {
         self.views.delete_view_with_txn(txn, view_id);
-        let _ = self.create_new_view_if_needed_with_txn(txn);
-      });
-      vec![view_id.to_string()]
+        let did_create_new_linked_view = self.create_new_view_if_needed_with_txn(txn);
+        did_create_new_linked_view.unwrap_or(false)
+      })
     }
   }
 
