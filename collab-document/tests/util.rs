@@ -11,8 +11,8 @@ use collab::preclude::CollabBuilder;
 use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
 use collab_document::error::DocumentError;
-use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
-use collab_plugins::local_storage::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use serde_json::{json, Value};
 use tempfile::TempDir;
@@ -21,7 +21,7 @@ use zip::ZipArchive;
 
 pub struct DocumentTest {
   pub document: Document,
-  pub db: Arc<RocksCollabDB>,
+  pub db: Arc<CollabKVDB>,
 }
 
 impl DocumentTest {
@@ -30,7 +30,7 @@ impl DocumentTest {
     Self::new_with_db(uid, doc_id, db).await
   }
 
-  pub async fn new_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> Self {
+  pub async fn new_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Self {
     let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db), None);
     let collab = CollabBuilder::new(1, doc_id)
       .with_plugin(disk_plugin)
@@ -101,7 +101,7 @@ impl Deref for DocumentTest {
   }
 }
 
-pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB>) -> Document {
+pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Document {
   setup_log();
   let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db), None);
   let collab = CollabBuilder::new(uid, doc_id)
@@ -114,10 +114,10 @@ pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<RocksCollabDB
   Document::open(Arc::new(collab)).unwrap()
 }
 
-pub fn document_storage() -> Arc<RocksCollabDB> {
+pub fn document_storage() -> Arc<CollabKVDB> {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  Arc::new(RocksCollabDB::open_opt(path, false).unwrap())
+  Arc::new(CollabKVDB::open_opt(path, false).unwrap())
 }
 
 fn setup_log() {

@@ -6,13 +6,13 @@ use std::time::Duration;
 use collab::core::collab::MutexCollab;
 use collab::preclude::*;
 use collab_entity::{CollabObject, CollabType};
-use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
-use collab_plugins::local_storage::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use yrs::updates::decoder::Decode;
 
-use collab_plugins::local_storage::snapshot_plugin::CollabSnapshotPlugin;
+use collab_plugins_core::local_storage::kv::doc::YrsDocAction;
+use collab_plugins_core::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins_core::local_storage::rocksdb::snapshot_plugin::CollabSnapshotPlugin;
+use collab_plugins_core::CollabKVDB;
 use tempfile::TempDir;
 
 use crate::setup_log;
@@ -72,7 +72,7 @@ pub struct CollabPersistenceTest {
   collab_by_id: HashMap<String, Arc<MutexCollab>>,
   #[allow(dead_code)]
   cleaner: Cleaner,
-  db: Arc<RocksCollabDB>,
+  db: Arc<CollabKVDB>,
   disk_plugin: Arc<RocksdbDiskPlugin>,
   config: CollabPersistenceConfig,
 }
@@ -83,7 +83,7 @@ impl CollabPersistenceTest {
     let tempdir = TempDir::new().unwrap();
     let db_path = tempdir.into_path();
     let uid = 1;
-    let db = Arc::new(RocksCollabDB::open_opt(db_path.clone(), false).unwrap());
+    let db = Arc::new(CollabKVDB::open_opt(db_path.clone(), false).unwrap());
     let disk_plugin = Arc::new(RocksdbDiskPlugin::new_with_config(
       uid,
       Arc::downgrade(&db),
@@ -341,10 +341,10 @@ impl CollabPersistenceTest {
   }
 }
 
-pub fn disk_plugin(uid: i64) -> (Arc<RocksCollabDB>, RocksdbDiskPlugin) {
+pub fn disk_plugin(uid: i64) -> (Arc<CollabKVDB>, RocksdbDiskPlugin) {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(RocksCollabDB::open_opt(path, false).unwrap());
+  let db = Arc::new(CollabKVDB::open_opt(path, false).unwrap());
   let plugin = RocksdbDiskPlugin::new_with_config(
     uid,
     Arc::downgrade(&db),

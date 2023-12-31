@@ -1,24 +1,20 @@
 #[derive(Debug, thiserror::Error)]
 pub enum PersistenceError {
-  #[cfg(feature = "sled_db_persistence")]
-  #[error(transparent)]
-  SledDb(#[from] sled::Error),
-
-  #[cfg(feature = "rocksdb_persistence")]
+  #[cfg(feature = "rocksdb_plugin")]
   #[error("Rocksdb corruption:{0}")]
   RocksdbCorruption(String),
 
-  #[cfg(feature = "rocksdb_persistence")]
+  #[cfg(feature = "rocksdb_plugin")]
   #[error("Rocksdb repair:{0}")]
   RocksdbRepairFail(String),
 
-  #[cfg(feature = "rocksdb_persistence")]
+  #[cfg(feature = "rocksdb_plugin")]
   #[error("{0}")]
   RocksdbBusy(String),
 
   // If the database is already locked by another process, it will return an IO error. It
   // happens when the database is already opened by another process.
-  #[cfg(feature = "rocksdb_persistence")]
+  #[cfg(feature = "rocksdb_plugin")]
   #[error("{0}")]
   RocksdbIOError(String),
 
@@ -50,7 +46,7 @@ pub enum PersistenceError {
   Internal(#[from] anyhow::Error),
 }
 
-#[cfg(feature = "rocksdb_persistence")]
+#[cfg(feature = "rocksdb_plugin")]
 impl From<rocksdb::Error> for PersistenceError {
   fn from(value: rocksdb::Error) -> Self {
     match value.kind() {

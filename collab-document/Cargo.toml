@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 collab = { workspace = true }
-collab-persistence = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 nanoid = "0.4.0"

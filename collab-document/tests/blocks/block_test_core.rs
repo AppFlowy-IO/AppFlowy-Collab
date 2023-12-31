@@ -7,8 +7,8 @@ use collab_document::blocks::{
   Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, DocumentData, DocumentMeta,
 };
 use collab_document::document::Document;
-use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
-use collab_plugins::local_storage::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use serde_json::{json, Value};
 
@@ -17,7 +17,7 @@ use crate::util::document_storage;
 pub const TEXT_BLOCK_TYPE: &str = "paragraph";
 
 pub struct BlockTestCore {
-  pub db: Arc<RocksCollabDB>,
+  pub db: Arc<CollabKVDB>,
   pub document: Document,
   pub collab: Arc<MutexCollab>,
 }
@@ -47,7 +47,7 @@ impl BlockTestCore {
     }
   }
 
-  pub fn open(collab: Arc<MutexCollab>, db: Arc<RocksCollabDB>) -> Self {
+  pub fn open(collab: Arc<MutexCollab>, db: Arc<CollabKVDB>) -> Self {
     let open_res = Document::open(collab.clone());
     open_res
       .map(|document| BlockTestCore {

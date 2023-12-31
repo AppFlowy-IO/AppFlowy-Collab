@@ -9,9 +9,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 collab = { workspace = true }
-collab-persistence = { workspace = true }
 collab-entity = { workspace = true }
-collab-plugins = { workspace = true }
+collab-plugins = { workspace = true,  features = ["rocksdb_plugin"] }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json.workspace = true
 thiserror.workspace = true

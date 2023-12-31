@@ -1,7 +1,7 @@
+pub mod kv;
+
 #[cfg(feature = "rocksdb_plugin")]
-pub mod rocksdb_plugin;
-#[cfg(feature = "rocksdb_plugin")]
-pub mod snapshot_plugin;
+pub mod rocksdb;
 
 #[derive(Clone)]
 pub struct CollabPersistenceConfig {

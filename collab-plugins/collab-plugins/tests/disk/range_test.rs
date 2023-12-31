@@ -2,11 +2,10 @@ use std::ops::{Deref, Range, RangeTo};
 use std::sync::Arc;
 use std::thread;
 
-use collab_persistence::keys::{clock_from_key, make_doc_update_key, Clock};
-use collab_persistence::kv_impls::{KVEntry, KVStore};
+use crate::disk::util::rocks_db;
+use collab_plugins_core::local_storage::kv::keys::{clock_from_key, make_doc_update_key, Clock};
+use collab_plugins_core::local_storage::kv::{KVEntry, KVStore};
 use smallvec::SmallVec;
-
-use crate::util::rocks_db;
 
 #[tokio::test]
 async fn rocks_id_test() {

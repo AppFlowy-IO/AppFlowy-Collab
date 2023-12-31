@@ -3,6 +3,7 @@ use std::ops::RangeBounds;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::local_storage::kv::{KVEntry, KVStore, PersistenceError};
 use rocksdb::backup::{BackupEngine, BackupEngineOptions};
 use rocksdb::Direction::Forward;
 use rocksdb::{
@@ -10,11 +11,6 @@ use rocksdb::{
   Options, ReadOptions, SingleThreaded, Transaction, TransactionDB, TransactionDBOptions,
   TransactionOptions, WriteOptions,
 };
-
-use crate::kv_impls::{KVEntry, KVStore};
-use crate::PersistenceError;
-
-pub type RocksCollabDB = RocksStore;
 
 #[derive(Clone)]
 pub struct RocksStore {

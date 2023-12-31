@@ -9,8 +9,7 @@ use collab::core::collab_state::{SnapshotState, SyncState};
 use collab::preclude::{
   Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
-pub use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
+use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -55,7 +54,7 @@ const METAS: &str = "metas";
 
 pub struct DatabaseContext {
   pub uid: i64,
-  pub db: Weak<RocksCollabDB>,
+  pub db: Weak<CollabKVDB>,
   pub collab: Arc<MutexCollab>,
   pub collab_service: Arc<dyn DatabaseCollabService>,
   pub notifier: Option<DatabaseNotify>,

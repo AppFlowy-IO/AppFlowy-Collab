@@ -15,7 +15,7 @@ use collab_database::views::{
   GroupMapBuilder, GroupSettingBuilder, GroupSettingMap, LayoutSetting, LayoutSettingBuilder,
   SortMap, SortMapBuilder,
 };
-use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
+use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
@@ -584,10 +584,10 @@ impl From<TestFieldSetting> for AnyMap {
   }
 }
 
-pub fn make_rocks_db() -> Arc<RocksCollabDB> {
+pub fn make_rocks_db() -> Arc<CollabKVDB> {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  Arc::new(RocksCollabDB::open_opt(path, false).unwrap())
+  Arc::new(CollabKVDB::open_opt(path, false).unwrap())
 }
 
 pub fn setup_log() {

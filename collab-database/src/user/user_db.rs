@@ -10,10 +10,10 @@ use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{Collab, Update};
 use collab_entity::CollabType;
-use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
-use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
+use collab_plugins::local_storage::kv::doc::YrsDocAction;
+use collab_plugins::local_storage::kv::snapshot::{CollabSnapshot, SnapshotAction};
 use collab_plugins::local_storage::CollabPersistenceConfig;
+use collab_plugins::CollabKVDB;
 use parking_lot::Mutex;
 
 use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
@@ -48,7 +48,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     uid: i64,
     object_id: &str,
     object_type: CollabType,
-    collab_db: Weak<RocksCollabDB>,
+    collab_db: Weak<CollabKVDB>,
     collab_doc_state: CollabDocState,
     config: &CollabPersistenceConfig,
   ) -> Arc<MutexCollab>;
@@ -58,7 +58,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
 pub struct WorkspaceDatabase {
   uid: i64,
   collab: Arc<MutexCollab>,
-  collab_db: Weak<RocksCollabDB>,
+  collab_db: Weak<CollabKVDB>,
   config: CollabPersistenceConfig,
   collab_service: Arc<dyn DatabaseCollabService>,
   /// In memory database handlers.
@@ -71,7 +71,7 @@ impl WorkspaceDatabase {
   pub fn open<T>(
     uid: i64,
     collab: Arc<MutexCollab>,
-    collab_db: Weak<RocksCollabDB>,
+    collab_db: Weak<CollabKVDB>,
     config: CollabPersistenceConfig,
     collab_service: T,
   ) -> Self

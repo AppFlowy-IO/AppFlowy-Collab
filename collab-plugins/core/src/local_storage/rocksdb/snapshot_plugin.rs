@@ -3,12 +3,12 @@ use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
+use crate::local_storage::kv::doc::YrsDocAction;
+use crate::local_storage::kv::snapshot::{CollabSnapshot, SnapshotAction};
+use crate::local_storage::kv::PersistenceError;
+use crate::CollabKVDB;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabObject;
-use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
-use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
-use collab_persistence::PersistenceError;
 use parking_lot::RwLock;
 use similar::{ChangeTag, TextDiff};
 use yrs::updates::decoder::Decode;
@@ -46,7 +46,7 @@ pub trait SnapshotPersistence: Send + Sync {
 pub struct CollabSnapshotPlugin {
   uid: i64,
   object: CollabObject,
-  collab_db: Weak<RocksCollabDB>,
+  collab_db: Weak<CollabKVDB>,
   /// the number of updates on disk when opening the document
   update_count: Arc<AtomicU32>,
   snapshot_per_update: u32,
@@ -59,7 +59,7 @@ impl CollabSnapshotPlugin {
     uid: i64,
     object: CollabObject,
     snapshot_persistence: Arc<dyn SnapshotPersistence>,
-    collab_db: Weak<RocksCollabDB>,
+    collab_db: Weak<CollabKVDB>,
     snapshot_per_update: u32,
   ) -> Self {
     let state = Arc::new(RwLock::new(GenSnapshotState::Idle));
@@ -147,7 +147,7 @@ impl CollabPlugin for CollabSnapshotPlugin {
   }
 }
 
-impl SnapshotPersistence for Arc<RocksCollabDB> {
+impl SnapshotPersistence for Arc<CollabKVDB> {
   fn get_snapshots(&self, uid: i64, object_id: &str) -> Vec<CollabSnapshot> {
     self.read_txn().get_snapshots(uid, object_id)
   }

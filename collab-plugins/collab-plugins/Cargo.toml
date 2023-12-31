@@ -9,7 +9,7 @@ edition = "2021"
 collab-plugins-core.workspace = true
 
 [dev-dependencies]
-collab-plugins-core = { workspace = true, features = ["rocksdb_plugin"] }
+collab-plugins-core = { workspace = true }
 tempfile = "3.8.0"
 assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
@@ -21,10 +21,10 @@ futures = "0.3.17"
 chrono.workspace = true
 collab = { workspace = true }
 collab-entity = { workspace = true }
-collab-persistence = { workspace = true }
 yrs.workspace = true
 serde_json.workspace = true
 rand = { version = "0.8" }
+smallvec = { version = "1.10", features = ["write", "union", "const_generics", "const_new"] }
 
 [features]
 default = []

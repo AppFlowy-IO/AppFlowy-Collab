@@ -7,7 +7,6 @@
 * `collab-database`
 * `collab-document`
 * `collab-folder`
-* `collab-persistence`
 * `collab-plugins`
 * `collab-sync`
 
@@ -35,12 +34,7 @@ The `collab-folder` crate provides a simple API for creating and managing collab
 the `collab` crate.
 
 ## collab-plugins
-The `collab-plugins` crate contains a list of plugins that can be used with the `collab` crate. Currently, it includes
-two plugins: the `disk plugin` that uses `collab-persistence` to persist the collaborative documents to disk, and the
-`sync plugin` that uses `collab-sync` to sync the collaborative documents to a remote server.
-
-## collab-persistence
-The `collab-persistence` crate uses [rocksdb](https://docs.rs/rocksdb/latest/rocksdb/) or [sled](https://github.com/spacejam/sled) to implement a persistence layer for the `collab` crate. It is easy to extend to support other key/value storage.
+The `collab-plugins` crate contains a list of plugins that can be used with the `collab` crate. 
 
 ## collab-sync
 The `collab-sync` crate supports syncing the collaborative documents to a remote server.

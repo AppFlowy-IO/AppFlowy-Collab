@@ -6,11 +6,11 @@ use collab::preclude::{
   Any, ArrayRefWrapper, Collab, DeepEventsSubscription, Map, MapPrelim, MapRef, MapRefExtension,
   MapRefWrapper, ReadTxn, Transaction, TransactionMut, YrsValue,
 };
-use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
 use parking_lot::Mutex;
 
 use collab::core::value::YrsValueExtension;
+use collab_plugins::local_storage::kv::doc::YrsDocAction;
+use collab_plugins::CollabKVDB;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 use uuid::Uuid;
@@ -41,7 +41,7 @@ pub struct DatabaseRow {
   meta: MapRefWrapper,
   #[allow(dead_code)]
   comments: ArrayRefWrapper,
-  collab_db: Weak<RocksCollabDB>,
+  collab_db: Weak<CollabKVDB>,
   #[allow(dead_code)]
   subscription: Option<DeepEventsSubscription>,
 }
@@ -51,7 +51,7 @@ impl DatabaseRow {
     row: T,
     uid: i64,
     row_id: RowId,
-    collab_db: Weak<RocksCollabDB>,
+    collab_db: Weak<CollabKVDB>,
     collab: Arc<MutexCollab>,
     change_tx: Option<RowChangeSender>,
   ) -> Self {
@@ -82,7 +82,7 @@ impl DatabaseRow {
   pub fn new(
     uid: i64,
     row_id: RowId,
-    collab_db: Weak<RocksCollabDB>,
+    collab_db: Weak<CollabKVDB>,
     collab: Arc<MutexCollab>,
     change_tx: Option<RowChangeSender>,
   ) -> Self {
@@ -94,7 +94,7 @@ impl DatabaseRow {
   fn inner_new(
     uid: i64,
     row_id: RowId,
-    collab_db: Weak<RocksCollabDB>,
+    collab_db: Weak<CollabKVDB>,
     collab: Arc<MutexCollab>,
   ) -> Self {
     let collab_guard = collab.lock();

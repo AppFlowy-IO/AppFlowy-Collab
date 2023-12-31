@@ -15,8 +15,6 @@ const SEQUENCE_MASK: u64 = (1 << SEQUENCE_BITS) - 1;
 
 pub type OID = u64;
 
-pub const DOC_ID_LEN: usize = 8;
-
 lazy_static! {
   pub static ref LOCAL_DOC_ID_GEN: Mutex<DocIDGen> = Mutex::new(DocIDGen::new());
 }
@@ -80,7 +78,7 @@ mod tests {
   use std::sync::Arc;
   use std::thread;
 
-  use crate::oid::LOCAL_DOC_ID_GEN;
+  use crate::local_storage::kv::oid::LOCAL_DOC_ID_GEN;
   use parking_lot::RwLock;
 
   #[test]
