@@ -1065,9 +1065,9 @@ impl Database {
   pub fn create_new_view_if_needed_with_txn(
     &self,
     txn: &mut TransactionMut,
-  ) -> Result<bool, DatabaseError> {
+  ) -> Result<Option<DatabaseView>, DatabaseError> {
     if self.views.get_all_views_meta_with_txn(txn).len() > 1 {
-      return Ok(false);
+      return Ok(None);
     }
     let inline_view_id = self.get_inline_view_id_with_txn(txn);
     let mut view = self
@@ -1078,9 +1078,9 @@ impl Database {
     view.id = gen_database_view_id();
     view.created_at = timestamp;
     view.modified_at = timestamp;
-    self.views.insert_view_with_txn(txn, view);
+    self.views.insert_view_with_txn(txn, view.clone());
 
-    Ok(true)
+    Ok(Some(view))
   }
 
   /// Create a [DatabaseView] for the current database.
@@ -1118,7 +1118,7 @@ impl Database {
   pub fn duplicate_linked_view(&self, view_id: &str) -> Option<DatabaseView> {
     let view = self.views.get_view(view_id)?;
     let timestamp = timestamp();
-    let duplicated_view = DatabaseView{
+    let duplicated_view = DatabaseView {
       id: gen_database_view_id(),
       name: format!("{}-copy", view.name),
       created_at: timestamp,
@@ -1239,17 +1239,17 @@ impl Database {
   /// the linked views as well. Otherwise, just delete the view with given view id.
   /// Return whether a new linked view was created
   ///
-  pub fn delete_view(&self, view_id: &str) -> bool {
+  pub fn delete_view(&self, view_id: &str) -> Option<DatabaseView> {
     if self.is_inline_view(view_id) {
       self.root.with_transact_mut(|txn| {
         self.views.clear_with_txn(txn);
-        false
+        None
       })
     } else {
       self.root.with_transact_mut(|txn| {
         self.views.delete_view_with_txn(txn, view_id);
         let did_create_new_linked_view = self.create_new_view_if_needed_with_txn(txn);
-        did_create_new_linked_view.unwrap_or(false)
+        did_create_new_linked_view.unwrap_or(None)
       })
     }
   }
