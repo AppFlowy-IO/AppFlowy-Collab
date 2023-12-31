@@ -432,6 +432,7 @@ dependencies = [
  "collab-persistence",
  "futures-util",
  "parking_lot",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "similar",
