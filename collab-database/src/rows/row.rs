@@ -7,7 +7,7 @@ use collab::preclude::{
   MapRefWrapper, ReadTxn, Transaction, TransactionMut, YrsValue,
 };
 use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
 use parking_lot::Mutex;
 
 use collab::core::value::YrsValueExtension;

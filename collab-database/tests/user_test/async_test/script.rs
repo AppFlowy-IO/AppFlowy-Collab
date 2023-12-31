@@ -10,7 +10,7 @@ use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::WorkspaceDatabase;
 use collab_database::views::{CreateDatabaseParams, OrderObjectPosition};
 use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use serde_json::Value;
 use tempfile::TempDir;

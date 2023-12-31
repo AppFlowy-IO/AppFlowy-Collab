@@ -9,8 +9,8 @@ use crate::keys::{
   make_state_vector_key, oid_from_key, Clock, DocID, Key, DOC_SPACE, DOC_SPACE_OBJECT,
   DOC_SPACE_OBJECT_KEY,
 };
-use crate::kv::KVEntry;
-use crate::kv::KVStore;
+use crate::kv_impls::KVEntry;
+use crate::kv_impls::KVStore;
 use crate::snapshot::SnapshotAction;
 use crate::{
   get_id_for_key, get_last_update_key, insert_doc_update, make_doc_id_for_key, PersistenceError,

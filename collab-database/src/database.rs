@@ -10,7 +10,7 @@ use collab::preclude::{
   Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 pub use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
 use nanoid::nanoid;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};

@@ -11,7 +11,7 @@ use rocksdb::{
   TransactionOptions, WriteOptions,
 };
 
-use crate::kv::{KVEntry, KVStore};
+use crate::kv_impls::{KVEntry, KVStore};
 use crate::PersistenceError;
 
 pub type RocksCollabDB = RocksStore;

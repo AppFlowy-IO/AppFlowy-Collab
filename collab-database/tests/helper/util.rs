@@ -15,7 +15,7 @@ use collab_database::views::{
   GroupMapBuilder, GroupSettingBuilder, GroupSettingMap, LayoutSetting, LayoutSettingBuilder,
   SortMap, SortMapBuilder,
 };
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
 use nanoid::nanoid;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;

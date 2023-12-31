@@ -10,7 +10,7 @@ use crate::error::PersistenceError;
 use crate::keys::{
   clock_from_key, make_doc_update_key, make_snapshot_update_key, Clock, DocID, Key, SnapshotID,
 };
-use crate::kv::{KVEntry, KVStore};
+use crate::kv_impls::{KVEntry, KVStore};
 use crate::oid::{DOC_ID_LEN, LOCAL_DOC_ID_GEN, OID};
 use crate::snapshot::CollabSnapshot;
 

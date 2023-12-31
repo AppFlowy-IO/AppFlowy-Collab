@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use collab_database::database::DatabaseData;
 use collab_database::rows::CreateRowParams;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
 use serde_json::{json, Value};
 
 use assert_json_diff::assert_json_include;

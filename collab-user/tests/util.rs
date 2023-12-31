@@ -5,8 +5,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use collab::preclude::CollabBuilder;
-use collab_plugins::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb_plugin::{RocksCollabDB, RocksdbDiskPlugin};
 use collab_user::core::{
   MutexUserAwareness, RemindersChangeSender, UserAwareness, UserAwarenessNotifier,
 };

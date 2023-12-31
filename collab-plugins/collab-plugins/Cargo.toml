@@ -1,0 +1,32 @@
+[package]
+name = "collab-plugins"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+collab-plugins-core.workspace = true
+
+[dev-dependencies]
+collab-plugins-core = { workspace = true, features = ["rocksdb_plugin"] }
+tempfile = "3.8.0"
+assert-json-diff = "2.0.2"
+tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+tokio = { version = "1.26.0", features = ["macros", "net"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+config = { version = "0.13.3", default-features = false, features = ["yaml"] }
+dotenv = "0.15.0"
+futures = "0.3.17"
+chrono.workspace = true
+collab = { workspace = true }
+collab-entity = { workspace = true }
+collab-persistence = { workspace = true }
+yrs.workspace = true
+serde_json.workspace = true
+rand = { version = "0.8" }
+
+[features]
+default = []
+rocksdb_plugin = ["collab-plugins-core/rocksdb_plugin"]
+postgres_plugin = ["collab-plugins-core/postgres_plugin"]

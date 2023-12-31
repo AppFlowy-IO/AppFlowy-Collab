@@ -1,5 +1,5 @@
 use collab_document::blocks::Block;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
 
 use futures::executor::block_on;
 

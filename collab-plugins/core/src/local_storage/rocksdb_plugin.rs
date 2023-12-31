@@ -9,12 +9,12 @@ use collab::core::collab_plugin::EncodedCollabV1;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use tracing::{error, instrument};
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
 
 use crate::local_storage::CollabPersistenceConfig;
+pub use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
 
 pub trait RocksdbBackup: Send + Sync {
   fn save_doc(&self, uid: i64, object_id: &str, data: EncodedCollabV1)

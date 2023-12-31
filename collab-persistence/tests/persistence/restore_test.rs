@@ -1,7 +1,7 @@
 use std::thread;
 
 use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
 use yrs::{Doc, GetString, Text, Transact};
 
 use crate::util::rocks_db;

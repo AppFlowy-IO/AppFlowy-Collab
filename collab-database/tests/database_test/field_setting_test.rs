@@ -4,8 +4,9 @@ use std::collections::HashMap;
 
 use crate::database_test::helper::{
   create_database_with_default_data, default_field_settings_by_layout,
-  field_settings_for_default_database, TestFieldSetting,
+  field_settings_for_default_database,
 };
+use crate::helper::TestFieldSetting;
 
 #[tokio::test]
 async fn new_field_new_field_setting_test() {

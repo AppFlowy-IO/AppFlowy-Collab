@@ -6,7 +6,7 @@ use std::sync::{Arc, Weak};
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabObject;
 use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
 use collab_persistence::snapshot::{CollabSnapshot, SnapshotAction};
 use collab_persistence::PersistenceError;
 use parking_lot::RwLock;

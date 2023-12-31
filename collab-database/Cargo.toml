@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 collab = { workspace = true }
@@ -24,7 +26,6 @@ lazy_static = "1.4.0"
 lru = "0.12.0"
 async-trait.workspace = true
 uuid = { version = "1.3.3", features = ["v4", "v5"] }
-base64 = "^0.21"
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 strum = "0.25"
 strum_macros = "0.25"
@@ -32,10 +33,13 @@ strum_macros = "0.25"
 [dev-dependencies]
 collab-plugins = { workspace = true, features = ["rocksdb_plugin"] }
 tempfile = "3.8.0"
-tokio = { version = "1.26", features = ["full"] }
+tokio = { version = "1.26", features = ["sync"] }
 assert-json-diff = "2.0.2"
 lazy_static = "1.4.0"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 rand = "0.8.4"
 futures = "0.3.18"
 zip = "0.6.6"
+
+[features]
+enable_wasm = []

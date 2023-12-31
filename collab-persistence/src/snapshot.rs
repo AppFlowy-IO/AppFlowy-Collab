@@ -7,8 +7,8 @@ use yrs::updates::encoder::{Encoder, EncoderV1};
 use yrs::{ReadTxn, Snapshot};
 
 use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, Key, SnapshotID};
-use crate::kv::KVEntry;
-use crate::kv::KVStore;
+use crate::kv_impls::KVEntry;
+use crate::kv_impls::KVStore;
 use crate::{
   get_id_for_key, get_last_update_key, insert_snapshot_update, make_doc_id_for_key,
   PersistenceError,

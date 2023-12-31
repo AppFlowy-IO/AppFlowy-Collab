@@ -6,7 +6,7 @@ use collab::core::collab::{CollabDocState, MutexCollab};
 
 use collab_entity::CollabType;
 use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use lru::LruCache;
 use parking_lot::Mutex;

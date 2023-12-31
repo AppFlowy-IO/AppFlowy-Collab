@@ -4,7 +4,10 @@ use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
+#[cfg(not(target_arch = "wasm32"))]
 mod disk;
+
+#[cfg(not(target_arch = "wasm32"))]
 
 pub fn setup_log() {
   static START: Once = Once::new();

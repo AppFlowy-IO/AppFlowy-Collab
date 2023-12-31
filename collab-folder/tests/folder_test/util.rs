@@ -7,8 +7,8 @@ use std::sync::{Arc, Once};
 
 use collab::preclude::CollabBuilder;
 use collab_folder::*;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
+use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
+use collab_plugins::local_storage::rocksdb_plugin::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;

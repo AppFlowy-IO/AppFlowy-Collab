@@ -1,5 +1,7 @@
 #[cfg(feature = "rocksdb_plugin")]
-pub mod rocksdb;
+pub mod rocksdb_plugin;
+#[cfg(feature = "rocksdb_plugin")]
+pub mod snapshot_plugin;
 
 #[derive(Clone)]
 pub struct CollabPersistenceConfig {
@@ -12,6 +14,7 @@ pub struct CollabPersistenceConfig {
   /// Flush the document. Default is [true].
   /// After flush the document, all updates will be removed and the document state vector that
   /// contains all the updates will be reset.
+  #[allow(dead_code)]
   pub(crate) flush_doc: bool,
 }
 

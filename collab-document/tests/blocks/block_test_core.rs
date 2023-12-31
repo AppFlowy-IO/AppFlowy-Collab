@@ -7,8 +7,8 @@ use collab_document::blocks::{
   Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, DocumentData, DocumentMeta,
 };
 use collab_document::document::Document;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
+use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
+use collab_plugins::local_storage::rocksdb_plugin::RocksdbDiskPlugin;
 use nanoid::nanoid;
 use serde_json::{json, Value};
 

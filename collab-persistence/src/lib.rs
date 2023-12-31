@@ -6,7 +6,7 @@ mod db;
 pub mod doc;
 pub mod error;
 pub mod keys;
-pub mod kv;
+pub mod kv_impls;
 mod oid;
 mod range;
 pub mod snapshot;

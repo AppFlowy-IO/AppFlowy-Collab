@@ -7,12 +7,12 @@ use collab::core::collab::MutexCollab;
 use collab::preclude::*;
 use collab_entity::{CollabObject, CollabType};
 use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
+use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
+use collab_plugins::local_storage::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::local_storage::CollabPersistenceConfig;
-use collab_plugins::snapshot::CollabSnapshotPlugin;
 use yrs::updates::decoder::Decode;
 
+use collab_plugins::local_storage::snapshot_plugin::CollabSnapshotPlugin;
 use tempfile::TempDir;
 
 use crate::setup_log;

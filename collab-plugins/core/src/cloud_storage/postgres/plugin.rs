@@ -12,7 +12,7 @@ use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabObject;
 use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_persistence::kv_impls::rocks_kv::RocksCollabDB;
 use collab_persistence::TransactionMutExt;
 use parking_lot::RwLock;
 use tokio_retry::strategy::FibonacciBackoff;

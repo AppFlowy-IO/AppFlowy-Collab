@@ -22,12 +22,13 @@ async-trait.workspace = true
 anyhow = "1.0.75"
 
 [dev-dependencies]
-collab-persistence = { path = "", features = ["rocksdb_persistence"] }
 tempfile = "3.8.0"
 futures = "0.3.18"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
-tokio = { version = "1.26", features = ["full"] }
+tokio = { version = "1.26", features = ["rt"] }
 test-case = "3.1.0"
+
+
 
 [features]
 default = []
