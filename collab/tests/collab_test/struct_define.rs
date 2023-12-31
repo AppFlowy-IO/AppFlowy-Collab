@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 
-use collab::core::map_wrapper::MapRefExtension;
-use collab_derive::Collab;
 use serde::{Deserialize, Serialize};
 use yrs::Any;
 
-#[derive(Collab, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Document {
   pub(crate) doc_id: String,
   pub(crate) name: String,
@@ -15,7 +13,7 @@ pub struct Document {
   pub(crate) owner: Owner,
 }
 
-#[derive(Collab, Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct Owner {
   pub id: String,
   pub name: String,
@@ -23,7 +21,7 @@ pub struct Owner {
   pub location: Option<String>,
 }
 
-#[derive(Debug, Collab, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TaskInfo {
   pub title: String,
   pub repeated: bool,

@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 collab = { workspace = true }
-collab-derive = { workspace = true }
 collab-persistence = { workspace = true }
 collab-entity = { workspace = true }
 collab-plugins = { workspace = true }
