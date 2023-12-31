@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Once};
 
 use bytes::Bytes;
-use collab::core::collab::{CollabDocState, MutexCollab};
+use collab::core::collab::CollabDocState;
 use collab::preclude::*;
 use collab::util::deserialize_i32_from_numeric;
 use parking_lot::RwLock;
@@ -12,7 +12,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 use yrs::updates::decoder::Decode;
 
-use crate::struct_define::{Document, Owner, TaskInfo};
+use crate::struct_define::TaskInfo;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Person {
@@ -25,30 +25,6 @@ pub struct Position {
   pub(crate) title: String,
   #[serde(deserialize_with = "deserialize_i32_from_numeric")]
   pub(crate) level: i32,
-}
-
-pub async fn make_collab_pair() -> (MutexCollab, MutexCollab, CollabStateCachePlugin) {
-  let update_cache = CollabStateCachePlugin::new();
-  let local_collab = CollabBuilder::new(1, "1")
-    .with_plugin(update_cache.clone())
-    .with_device_id("1")
-    .build()
-    .unwrap();
-  local_collab.lock().initialize();
-
-  // Insert document
-  local_collab
-    .lock()
-    .insert_json_with_path(vec![], "document", test_document());
-  let doc_state = update_cache.get_doc_state().unwrap();
-  let remote_collab = CollabBuilder::new(1, "1")
-    .with_device_id("1")
-    .with_doc_state(doc_state)
-    .build()
-    .unwrap();
-  remote_collab.lock().initialize();
-
-  (local_collab, remote_collab, update_cache)
 }
 
 #[derive(Debug, Default, Clone)]
@@ -87,10 +63,6 @@ impl CollabStateCachePlugin {
     let update = Update::decode_v1(&encoded_data)?;
     Ok(update)
   }
-
-  pub fn clear(&self) {
-    self.0.write().clear()
-  }
 }
 
 impl CollabPlugin for CollabStateCachePlugin {
@@ -101,44 +73,6 @@ impl CollabPlugin for CollabStateCachePlugin {
       write_guard.push(Bytes::from(doc_state));
     }
     write_guard.push(Bytes::from(update.to_vec()));
-  }
-}
-
-fn test_document() -> Document {
-  let owner = Owner {
-    id: "owner_id".to_string(),
-    name: "nathan".to_string(),
-    email: "nathan@appflowy.io".to_string(),
-    location: None,
-  };
-
-  let mut attributes = HashMap::new();
-  attributes.insert("1".to_string(), "task 1".to_string());
-  attributes.insert("2".to_string(), "task 2".to_string());
-
-  let mut tasks = HashMap::new();
-  tasks.insert(
-    "1".to_string(),
-    TaskInfo {
-      title: "Task 1".to_string(),
-      repeated: true,
-    },
-  );
-  tasks.insert(
-    "2".to_string(),
-    TaskInfo {
-      title: "Task 2".to_string(),
-      repeated: false,
-    },
-  );
-
-  Document {
-    doc_id: "doc_id".to_string(),
-    name: "Hello world".to_string(),
-    created_at: 0,
-    attributes,
-    tasks,
-    owner,
   }
 }
 
