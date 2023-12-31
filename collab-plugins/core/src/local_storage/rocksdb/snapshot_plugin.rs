@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
 use crate::local_storage::kv::doc::YrsDocAction;
-use crate::local_storage::kv::snapshot::{CollabSnapshot, SnapshotAction};
+use crate::local_storage::kv::snapshot::{CollabSnapshot, SnapshotAction, SnapshotPersistence};
 use crate::local_storage::kv::PersistenceError;
 use crate::CollabKVDB;
 use collab::preclude::{Collab, CollabPlugin};
@@ -29,18 +29,6 @@ impl GenSnapshotState {
   fn is_fail(&self) -> bool {
     matches!(self, Self::Fail)
   }
-}
-
-pub trait SnapshotPersistence: Send + Sync {
-  fn get_snapshots(&self, uid: i64, object_id: &str) -> Vec<CollabSnapshot>;
-
-  fn create_snapshot(
-    &self,
-    uid: i64,
-    object_id: &str,
-    title: String,
-    snapshot_data: Vec<u8>,
-  ) -> Result<(), PersistenceError>;
 }
 
 pub struct CollabSnapshotPlugin {

@@ -182,6 +182,18 @@ pub fn try_encode_snapshot<T: ReadTxn>(
   }
 }
 
+pub trait SnapshotPersistence: Send + Sync {
+  fn get_snapshots(&self, uid: i64, object_id: &str) -> Vec<CollabSnapshot>;
+
+  fn create_snapshot(
+    &self,
+    uid: i64,
+    object_id: &str,
+    title: String,
+    snapshot_data: Vec<u8>,
+  ) -> Result<(), PersistenceError>;
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct CollabSnapshot {
   pub data: Vec<u8>,
