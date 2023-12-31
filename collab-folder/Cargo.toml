@@ -9,7 +9,6 @@ version = "0.1.0"
 anyhow.workspace = true
 chrono.workspace = true
 collab = {path = "../collab" }
-collab-derive = {path = "../collab-derive" }
 collab-persistence = { workspace = true }
 parking_lot.workspace = true
 serde.workspace = true
