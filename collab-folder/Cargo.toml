@@ -4,6 +4,8 @@ name = "collab-folder"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow.workspace = true
@@ -20,11 +22,15 @@ tracing.workspace = true
 
 [dev-dependencies]
 assert-json-diff = "2.0.2"
-collab-plugins = { workspace = true, features = ["rocksdb_plugin"]}
+collab-plugins = { workspace = true }
 fs_extra = "1.2.0"
 nanoid = "0.4.0"
 tempfile = "3.8.0"
-tokio = {version = "1.26", features = ["full"]}
+tokio = {version = "1.26", features = ["rt"]}
 tracing-subscriber = {version = "0.3.3", features = ["env-filter"]}
 walkdir = "2.3.2"
 zip = "0.6.6"
+
+[features]
+wasm_build = []
+

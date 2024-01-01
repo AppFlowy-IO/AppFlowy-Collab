@@ -4,12 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 collab = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 nanoid = "0.4.0"
+getrandom = { version = "0.2", optional = true }
 thiserror = "1.0.30"
 anyhow.workspace = true
 parking_lot.workspace = true
@@ -17,10 +20,15 @@ tracing.workspace = true
 tokio = { version = "1.26", features = ["time", "sync", "rt"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 
+
 [dev-dependencies]
-tokio = { version = "1.26", features = ["full"] }
+tokio = { version = "1.26", features = ["rt"] }
 tempfile = "3.8.0"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
-collab-plugins = { workspace = true, features = ["rocksdb_plugin"] }
+collab-plugins = { workspace = true }
 zip = "0.6.6"
 futures = "0.3.17"
+
+
+[features]
+wasm_build = ["getrandom/js"]

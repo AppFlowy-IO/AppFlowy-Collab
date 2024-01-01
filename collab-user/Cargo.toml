@@ -18,7 +18,7 @@ parking_lot.workspace = true
 
 [dev-dependencies]
 assert-json-diff = "2.0.2"
-collab-plugins = { workspace = true, features = ["rocksdb_plugin"]}
+collab-plugins = { workspace = true }
 fs_extra = "1.2.0"
 nanoid = "0.4.0"
 tempfile = "3.8.0"

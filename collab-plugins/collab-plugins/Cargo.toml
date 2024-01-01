@@ -28,5 +28,4 @@ smallvec = { version = "1.10", features = ["write", "union", "const_generics", "
 
 [features]
 default = []
-rocksdb_plugin = ["collab-plugins-core/rocksdb_plugin"]
 postgres_plugin = ["collab-plugins-core/postgres_plugin"]

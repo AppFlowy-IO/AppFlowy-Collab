@@ -1,6 +1,6 @@
 pub mod kv;
 
-#[cfg(feature = "rocksdb_plugin")]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod rocksdb;
 
 #[derive(Clone)]
