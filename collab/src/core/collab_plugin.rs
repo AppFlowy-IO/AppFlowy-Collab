@@ -3,6 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
+use serde_repr::*;
 use yrs::{Doc, TransactionMut};
 
 use crate::core::awareness::Awareness;
@@ -106,16 +107,35 @@ where
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
-pub struct EncodedCollabV1 {
+pub struct EncodedCollab {
   pub state_vector: Bytes,
   pub doc_state: Bytes,
+  #[serde(default)]
+  pub version: EncoderVersion,
 }
 
-impl EncodedCollabV1 {
-  pub fn new<T: Into<Bytes>>(state_vector: T, doc_state: T) -> Self {
+#[derive(Default, Serialize_repr, Deserialize_repr, Eq, PartialEq, Debug, Clone)]
+#[repr(u8)]
+pub enum EncoderVersion {
+  #[default]
+  V1 = 0,
+  V2 = 1,
+}
+
+impl EncodedCollab {
+  pub fn new_v1<T: Into<Bytes>>(state_vector: T, doc_state: T) -> Self {
     Self {
       state_vector: state_vector.into(),
       doc_state: doc_state.into(),
+      version: EncoderVersion::V1,
+    }
+  }
+
+  pub fn new_v2<T: Into<Bytes>>(state_vector: T, doc_state: T) -> Self {
+    Self {
+      state_vector: state_vector.into(),
+      doc_state: doc_state.into(),
+      version: EncoderVersion::V2,
     }
   }
 
@@ -123,7 +143,7 @@ impl EncodedCollabV1 {
     bincode::serialize(self)
   }
 
-  pub fn decode_from_bytes(encoded: &[u8]) -> Result<EncodedCollabV1, bincode::Error> {
+  pub fn decode_from_bytes(encoded: &[u8]) -> Result<EncodedCollab, bincode::Error> {
     bincode::deserialize(encoded)
   }
 }
