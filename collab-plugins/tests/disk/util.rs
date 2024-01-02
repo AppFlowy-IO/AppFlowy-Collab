@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use collab_plugins_core::CollabKVDB;
+use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
 
 pub fn rocks_db() -> (PathBuf, CollabKVDB) {

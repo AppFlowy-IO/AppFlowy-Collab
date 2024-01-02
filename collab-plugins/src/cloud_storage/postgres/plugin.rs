@@ -23,7 +23,7 @@ use crate::cloud_storage::remote_collab::{
   should_create_snapshot, RemoteCollab, RemoteCollabStorage,
 };
 use crate::cloud_storage::sink::{SinkConfig, SinkStrategy};
-use crate::local_storage::kv::doc::YrsDocAction;
+use crate::local_storage::kv::doc::CollabKVStore;
 use crate::local_storage::kv::TransactionMutExt;
 use crate::CollabKVDB;
 

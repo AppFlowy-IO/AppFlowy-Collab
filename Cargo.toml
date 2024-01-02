@@ -6,17 +6,13 @@ members = [
     "collab-entity",
     "collab-document",
     "collab-folder",
-    "collab-plugins/core",
-    "collab-plugins/collab-plugins",
-    "collab-plugins/collab-plugins-wasm"
+    "collab-plugins",
 ]
 
 [workspace.dependencies]
 collab = { workspace = true, path = "collab" }
 collab-database = { workspace = true, path = "collab-database" }
-collab-plugins-core = { workspace = true, path = "collab-plugins/core" }
-collab-plugins = { workspace = true, path = "collab-plugins/collab-plugins" }
-collab-plugins-wasm = { workspace = true, path = "collab-plugins/collab-plugins-wasm" }
+collab-plugins = { workspace = true, path = "collab-plugins" }
 collab-user = { workspace = true, path = "collab-user" }
 collab-entity = { workspace = true, path = "collab-entity" }
 collab-document = { workspace = true, path = "collab-document" }

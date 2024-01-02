@@ -9,7 +9,7 @@ use collab::preclude::{
 use parking_lot::Mutex;
 
 use collab::core::value::YrsValueExtension;
-use collab_plugins::local_storage::kv::doc::YrsDocAction;
+use collab_plugins::local_storage::kv::doc::CollabKVStore;
 use collab_plugins::CollabKVDB;
 use serde::{Deserialize, Serialize};
 use tracing::error;

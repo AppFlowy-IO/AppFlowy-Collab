@@ -9,7 +9,7 @@ use collab_database::rows::CreateRowParams;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::WorkspaceDatabase;
 use collab_database::views::{CreateDatabaseParams, OrderObjectPosition};
-use collab_plugins::local_storage::kv::doc::YrsDocAction;
+use collab_plugins::local_storage::kv::doc::CollabKVStore;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use serde_json::Value;

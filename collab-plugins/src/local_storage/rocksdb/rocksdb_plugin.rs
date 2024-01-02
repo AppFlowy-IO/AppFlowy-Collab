@@ -13,7 +13,7 @@ use tracing::{error, instrument};
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
 
-use crate::local_storage::kv::doc::YrsDocAction;
+use crate::local_storage::kv::doc::CollabKVStore;
 use crate::local_storage::CollabPersistenceConfig;
 
 pub trait RocksdbBackup: Send + Sync {

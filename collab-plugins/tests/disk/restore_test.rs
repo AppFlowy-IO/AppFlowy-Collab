@@ -1,8 +1,8 @@
 use std::thread;
 
 use crate::disk::util::rocks_db;
-use collab_plugins_core::local_storage::kv::doc::YrsDocAction;
-use collab_plugins_core::CollabKVDB;
+use collab_plugins::local_storage::kv::doc::CollabKVStore;
+use collab_plugins::CollabKVDB;
 use yrs::{Doc, GetString, Text, Transact};
 
 #[tokio::test]
@@ -13,9 +13,11 @@ async fn single_thread_test() {
     let doc = Doc::new();
     {
       let txn = doc.transact();
-      let store = db.write_txn();
-      store.create_new_doc(1, &oid, &txn).unwrap();
-      store.commit_transaction().unwrap();
+      db.with_write_txn(|db_w_txn| {
+        db_w_txn.create_new_doc(1, &oid, &txn).unwrap();
+        Ok(())
+      })
+      .unwrap();
     }
     {
       let text = doc.get_or_insert_text("text");

@@ -75,3 +75,18 @@ run_task = { name = ["clean_profraw_files"] }
 
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+
+
+[tasks.wasm_build]
+script_runner = "bash"
+script = [
+"""
+crates=("collab" "collab-document" "collab-folder" "collab-user")
+  cd ..
+  for crate in "${crates[@]}"; do
+    echo "🔥🔥🔥  Building $crate with wasm-pack..."
+    cd ./$crate && wasm-pack build --features="wasm_build" || exit 1
+    cd .. || exit 1
+  done
+"""
+]

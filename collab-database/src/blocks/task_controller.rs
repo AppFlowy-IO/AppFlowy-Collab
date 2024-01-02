@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::core::origin::CollabOrigin;
 use collab_entity::CollabType;
-use collab_plugins::local_storage::kv::doc::YrsDocAction;
+use collab_plugins::local_storage::kv::doc::CollabKVStore;
 use collab_plugins::local_storage::kv::PersistenceError;
 use collab_plugins::CollabKVDB;
 use tokio::sync::watch;

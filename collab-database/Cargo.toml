@@ -33,7 +33,7 @@ getrandom = { version = "0.2", optional = true }
 [dev-dependencies]
 collab-plugins = { workspace = true }
 tempfile = "3.8.0"
-tokio = { version = "1.26", features = ["test-util", "macros"] }
+tokio = { version = "1.26", features = ["macros"] }
 assert-json-diff = "2.0.2"
 lazy_static = "1.4.0"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }

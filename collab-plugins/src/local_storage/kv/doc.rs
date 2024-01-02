@@ -7,14 +7,7 @@ use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut, Update};
 
-impl<'a, T> YrsDocAction<'a> for T
-where
-  T: KVStore<'a>,
-  PersistenceError: From<<Self as KVStore<'a>>::Error>,
-{
-}
-
-pub trait YrsDocAction<'a>: KVStore<'a> + Sized
+pub trait CollabKVStore<'a>: KVStore<'a> + Sized
 where
   PersistenceError: From<<Self as KVStore<'a>>::Error>,
 {
@@ -360,6 +353,13 @@ where
       0
     }
   }
+}
+
+impl<'a, T> CollabKVStore<'a> for T
+where
+  T: KVStore<'a>,
+  PersistenceError: From<<Self as KVStore<'a>>::Error>,
+{
 }
 
 /// Get or create a document id for the given object id.
