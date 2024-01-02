@@ -3,11 +3,9 @@ use collab_document::{
   document::DocumentIndexContent,
 };
 use nanoid::nanoid;
-use serde_json::to_value;
 
 use crate::util::{
-  apply_actions, get_document_data, insert_block, insert_block_for_page, open_document_with_db,
-  update_block, DocumentTest,
+  apply_actions, get_document_data, insert_block, open_document_with_db, DocumentTest,
 };
 
 #[tokio::test]

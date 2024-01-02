@@ -676,7 +676,7 @@ impl From<&Document> for DocumentIndexContent {
       .expect("children map should contain page's children key");
 
     let text: Vec<_> = children_ids
-      .into_iter()
+      .iter()
       .filter_map(|id| blocks.get(id)) // get block of child
       .filter_map(|block| { // get external id of blocks with external type text
         let Some(ty) = block.external_type.as_ref() else { return None;};
