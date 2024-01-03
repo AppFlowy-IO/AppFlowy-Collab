@@ -144,6 +144,26 @@ impl EncodedCollab {
   }
 
   pub fn decode_from_bytes(encoded: &[u8]) -> Result<EncodedCollab, bincode::Error> {
-    bincode::deserialize(encoded)
+    // The deserialize_encoded_collab function first tries to deserialize the data as EncodedCollab.
+    // If it fails (presumably because the data was serialized with EncodedCollabV0), it then tries to deserialize as EncodedCollabV0.
+    // After successfully deserializing as EncodedCollabV0, it constructs a new EncodedCollab object with the data from
+    // EncodedCollabV0 and sets the version to a default value.
+    match bincode::deserialize::<EncodedCollab>(encoded) {
+      Ok(new_collab) => Ok(new_collab),
+      Err(_) => {
+        let old_collab: EncodedCollabV0 = bincode::deserialize(encoded)?;
+        Ok(EncodedCollab {
+          state_vector: old_collab.state_vector,
+          doc_state: old_collab.doc_state,
+          version: EncoderVersion::V1,
+        })
+      },
+    }
   }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct EncodedCollabV0 {
+  pub state_vector: Bytes,
+  pub doc_state: Bytes,
 }
