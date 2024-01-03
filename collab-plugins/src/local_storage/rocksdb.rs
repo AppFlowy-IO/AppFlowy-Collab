@@ -5,7 +5,7 @@ use std::sync::{Arc, Weak};
 
 use collab::core::awareness::Awareness;
 use collab::core::collab::make_yrs_doc;
-use collab::core::collab_plugin::EncodedCollabV1;
+use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_persistence::doc::YrsDocAction;
@@ -17,9 +17,8 @@ use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
 use crate::local_storage::CollabPersistenceConfig;
 
 pub trait RocksdbBackup: Send + Sync {
-  fn save_doc(&self, uid: i64, object_id: &str, data: EncodedCollabV1)
-    -> Result<(), anyhow::Error>;
-  fn get_doc(&self, uid: i64, object_id: &str) -> Result<EncodedCollabV1, anyhow::Error>;
+  fn save_doc(&self, uid: i64, object_id: &str, data: EncodedCollab) -> Result<(), anyhow::Error>;
+  fn get_doc(&self, uid: i64, object_id: &str) -> Result<EncodedCollab, anyhow::Error>;
 }
 
 #[derive(Clone)]
@@ -79,7 +78,7 @@ impl RocksdbDiskPlugin {
       if let Ok(read_txn) = doc.try_transact() {
         let doc_state = read_txn.encode_state_as_update_v1(&StateVector::default());
         let state_vector = read_txn.state_vector().encode_v1();
-        let encoded = EncodedCollabV1::new(state_vector, doc_state);
+        let encoded = EncodedCollab::new_v1(state_vector, doc_state);
 
         w_db_txn.flush_doc(
           self.uid,
@@ -185,12 +184,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
   }
 }
 
-fn backup_doc(
-  uid: i64,
-  backup: &Arc<dyn RocksdbBackup>,
-  object_id: &str,
-  encoded: EncodedCollabV1,
-) {
+fn backup_doc(uid: i64, backup: &Arc<dyn RocksdbBackup>, object_id: &str, encoded: EncodedCollab) {
   let weak_backup = Arc::downgrade(backup);
   let object_id = object_id.to_string();
   tokio::spawn(async move {
