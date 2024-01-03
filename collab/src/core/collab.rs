@@ -22,7 +22,7 @@ use yrs::{
 };
 
 use crate::core::awareness::Awareness;
-use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedCollabV1};
+use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedCollab};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
@@ -140,8 +140,12 @@ impl Collab {
   }
 
   /// Returns the doc state and the state vector.
-  pub fn encode_collab_v1(&self) -> EncodedCollabV1 {
+  pub fn encode_collab_v1(&self) -> EncodedCollab {
     self.doc.get_encoded_collab_v1()
+  }
+
+  pub fn encode_collab_v2(&self) -> EncodedCollab {
+    self.doc.get_encoded_collab_v2()
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
@@ -830,9 +834,14 @@ impl MutexCollab {
   }
 
   /// Returns the doc state and the state vector.
-  pub fn encode_collab_v1(&self) -> EncodedCollabV1 {
+  pub fn encode_collab_v1(&self) -> EncodedCollab {
     let collab = self.0.lock();
     collab.encode_collab_v1()
+  }
+
+  pub fn encode_collab_v2(&self) -> EncodedCollab {
+    let collab = self.0.lock();
+    collab.encode_collab_v2()
   }
 
   pub fn to_json_value(&self) -> JsonValue {
