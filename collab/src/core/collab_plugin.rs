@@ -167,3 +167,46 @@ pub struct EncodedCollabV0 {
   pub state_vector: Bytes,
   pub doc_state: Bytes,
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  #[test]
+  fn old_encoded_collab_decoded_into_new_encoded_collab() {
+    let old_encoded_collab = EncodedCollabV0 {
+      state_vector: Bytes::from(vec![1, 2, 3]),
+      doc_state: Bytes::from(vec![4, 5, 6]),
+    };
+
+    let old_encoded_collab_bytes = bincode::serialize(&old_encoded_collab).unwrap();
+    let new_encoded_collab = EncodedCollab::decode_from_bytes(&old_encoded_collab_bytes).unwrap();
+
+    assert_eq!(
+      new_encoded_collab,
+      EncodedCollab {
+        state_vector: Bytes::from(vec![1, 2, 3]),
+        doc_state: Bytes::from(vec![4, 5, 6]),
+        version: EncoderVersion::V1,
+      }
+    );
+  }
+
+  #[test]
+  fn new_encoded_collab_decoded_into_old_encoded_collab() {
+    let new_encoded_collab = EncodedCollab {
+      state_vector: Bytes::from(vec![1, 2, 3]),
+      doc_state: Bytes::from(vec![4, 5, 6]),
+      version: EncoderVersion::V1,
+    };
+
+    let new_encoded_collab_bytes = new_encoded_collab.encode_to_bytes().unwrap();
+    let old_encoded_collab: EncodedCollabV0 =
+      bincode::deserialize(&new_encoded_collab_bytes).unwrap();
+
+    assert_eq!(old_encoded_collab.doc_state, new_encoded_collab.doc_state);
+    assert_eq!(
+      old_encoded_collab.state_vector,
+      new_encoded_collab.state_vector
+    );
+  }
+}
