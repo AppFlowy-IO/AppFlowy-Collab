@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use anyhow::Error;
 use collab::core::collab::{CollabDocState, MutexCollab};
-use collab::core::collab_plugin::EncodedCollabV1;
+use collab::core::collab_plugin::EncodedCollab;
 use collab::core::collab_state::{SnapshotState, SyncState};
 pub use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
@@ -141,7 +141,7 @@ impl Folder {
   }
 
   /// Returns the doc state and the state vector.
-  pub fn encode_collab_v1(&self) -> EncodedCollabV1 {
+  pub fn encode_collab_v1(&self) -> EncodedCollab {
     self.inner.lock().encode_collab_v1()
   }
 
