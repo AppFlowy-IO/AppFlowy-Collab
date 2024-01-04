@@ -3,18 +3,14 @@ use std::ops::RangeBounds;
 use std::path::Path;
 use std::sync::Arc;
 
-use rocksdb::backup::{BackupEngine, BackupEngineOptions};
+use crate::local_storage::kv::doc::CollabKVAction;
+use crate::local_storage::kv::{KVEntry, KVStore, PersistenceError};
 use rocksdb::Direction::Forward;
 use rocksdb::{
-  ColumnFamilyDescriptor, DBIteratorWithThreadMode, Direction, Env, ErrorKind, IteratorMode,
-  Options, ReadOptions, SingleThreaded, Transaction, TransactionDB, TransactionDBOptions,
-  TransactionOptions, WriteOptions,
+  DBIteratorWithThreadMode, Direction, ErrorKind, IteratorMode, Options, ReadOptions,
+  SingleThreaded, Transaction, TransactionDB, TransactionDBOptions, TransactionOptions,
+  WriteOptions,
 };
-
-use crate::kv::{KVEntry, KVStore};
-use crate::PersistenceError;
-
-pub type RocksCollabDB = RocksStore;
 
 #[derive(Clone)]
 pub struct RocksStore {
@@ -88,55 +84,14 @@ impl RocksStore {
     Ok(())
   }
 
-  #[allow(dead_code)]
-  fn backup_engine(backup_dir: impl AsRef<Path>) -> Result<BackupEngine, PersistenceError> {
-    let backup_opts = BackupEngineOptions::new(backup_dir)?;
-    let env = Env::new()?;
-    let backup_engine = BackupEngine::open(&backup_opts, &env)?;
-    Ok(backup_engine)
-  }
-
-  pub fn open_with_cfs(
-    names: Vec<String>,
-    path: impl AsRef<Path>,
-  ) -> Result<Self, PersistenceError> {
-    let txn_db_opts = TransactionDBOptions::default();
-    let mut db_opts = Options::default();
-    db_opts.create_if_missing(true);
-    db_opts.create_missing_column_families(true);
-
-    // CFs
-    let cf_opts = Options::default();
-    let cfs = names
-      .into_iter()
-      .map(|name| ColumnFamilyDescriptor::new(name, cf_opts.clone()))
-      .collect::<Vec<_>>();
-    let db = Arc::new(TransactionDB::open_cf_descriptors(
-      &db_opts,
-      &txn_db_opts,
-      path,
-      cfs,
-    )?);
-    Ok(Self { db })
-  }
-
   /// Return a read transaction that accesses the database exclusively.
-  pub fn read_txn(&self) -> RocksKVStoreImpl<'_, TransactionDB> {
+  pub fn read_txn(&self) -> impl CollabKVAction<'_, Error = PersistenceError> {
     let mut txn_options = TransactionOptions::default();
     txn_options.set_snapshot(true);
     let txn = self
       .db
       .transaction_opt(&WriteOptions::default(), &txn_options);
-    MutexRocksKVStoreImpl::new(txn)
-  }
-
-  pub fn write_txn(&self) -> RocksKVStoreImpl<'_, TransactionDB> {
-    let mut txn_options = TransactionOptions::default();
-    txn_options.set_snapshot(true);
-    let txn = self
-      .db
-      .transaction_opt(&WriteOptions::default(), &txn_options);
-    MutexRocksKVStoreImpl::new(txn)
+    RocksKVStoreImpl::new(txn)
   }
 
   /// Create a write transaction that accesses the database exclusively.
@@ -154,7 +109,7 @@ impl RocksStore {
     let txn = self
       .db
       .transaction_opt(&WriteOptions::default(), &txn_options);
-    let store = MutexRocksKVStoreImpl::new(txn);
+    let store = RocksKVStoreImpl::new(txn);
     let result = f(&store)?;
     store.0.commit()?;
     Ok(result)
@@ -163,12 +118,11 @@ impl RocksStore {
 
 /// Implementation of [KVStore] for [RocksStore]. This is a wrapper around [Transaction].
 // pub struct RocksKVStoreImpl<'a, DB: Send + Sync>(Transaction<'a, DB>);
-pub type RocksKVStoreImpl<'a, DB> = MutexRocksKVStoreImpl<'a, DB>;
-pub struct MutexRocksKVStoreImpl<'a, DB: Send>(Transaction<'a, DB>);
+pub struct RocksKVStoreImpl<'a, DB: Send>(Transaction<'a, DB>);
 
-unsafe impl<'db, DB: Send> Send for MutexRocksKVStoreImpl<'db, DB> {}
+unsafe impl<'a, DB: Send> Send for RocksKVStoreImpl<'a, DB> {}
 
-impl<'a, DB: Send + Sync> MutexRocksKVStoreImpl<'a, DB> {
+impl<'a, DB: Send + Sync> RocksKVStoreImpl<'a, DB> {
   pub fn new(txn: Transaction<'a, DB>) -> Self {
     Self(txn)
   }
@@ -179,7 +133,7 @@ impl<'a, DB: Send + Sync> MutexRocksKVStoreImpl<'a, DB> {
   }
 }
 
-impl<'a, DB: Send + Sync> KVStore<'a> for MutexRocksKVStoreImpl<'a, DB> {
+impl<'a, DB: Send + Sync> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
   type Range = RocksDBRange<'a, DB>;
   type Entry = RocksDBEntry;
   type Value = RocksDBVec;
@@ -269,24 +223,9 @@ impl<'a, DB: Send + Sync> KVStore<'a> for MutexRocksKVStoreImpl<'a, DB> {
 impl<'a, DB: Send + Sync> From<Transaction<'a, DB>> for RocksKVStoreImpl<'a, DB> {
   #[inline(always)]
   fn from(txn: Transaction<'a, DB>) -> Self {
-    MutexRocksKVStoreImpl::new(txn)
+    RocksKVStoreImpl::new(txn)
   }
 }
-
-// impl<'a, DB: Send + Sync> From<RocksKVStoreImpl<'a, DB>> for Transaction<'a, DB> {
-//   fn from(store: RocksKVStoreImpl<'a, DB>) -> Self {
-//     store.0.lock()
-//   }
-// }
-
-// impl<'a, DB: Send + Sync> Deref for RocksKVStoreImpl<'a, DB> {
-//   type Target = Transaction<'a, DB>;
-//
-//   #[inline(always)]
-//   fn deref(&self) -> &Self::Target {
-//     &self.0
-//   }
-// }
 
 pub type RocksDBVec = Vec<u8>;
 

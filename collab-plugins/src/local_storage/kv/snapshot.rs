@@ -2,17 +2,11 @@ use std::fmt::Debug;
 use std::panic;
 use std::panic::AssertUnwindSafe;
 
+use crate::local_storage::kv::keys::*;
+use crate::local_storage::kv::*;
 use serde::{Deserialize, Serialize};
 use yrs::updates::encoder::{Encoder, EncoderV1};
 use yrs::{ReadTxn, Snapshot};
-
-use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, Key, SnapshotID};
-use crate::kv::KVEntry;
-use crate::kv::KVStore;
-use crate::{
-  get_id_for_key, get_last_update_key, insert_snapshot_update, make_doc_id_for_key,
-  PersistenceError,
-};
 
 impl<'a, T> SnapshotAction<'a> for T
 where
@@ -186,6 +180,18 @@ pub fn try_encode_snapshot<T: ReadTxn>(
     Ok(_) => Ok(encoded_data),
     Err(e) => Err(PersistenceError::InvalidData(format!("{:?}", e))),
   }
+}
+
+pub trait SnapshotPersistence: Send + Sync {
+  fn get_snapshots(&self, uid: i64, object_id: &str) -> Vec<CollabSnapshot>;
+
+  fn create_snapshot(
+    &self,
+    uid: i64,
+    object_id: &str,
+    title: String,
+    snapshot_data: Vec<u8>,
+  ) -> Result<(), PersistenceError>;
 }
 
 #[derive(Serialize, Deserialize)]

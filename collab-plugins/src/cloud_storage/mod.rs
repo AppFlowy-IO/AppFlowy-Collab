@@ -8,8 +8,6 @@ pub use yrs::Update as YrsUpdate;
 
 pub mod postgres;
 
-pub mod network_state;
-
 mod channel;
 mod error;
 mod msg;

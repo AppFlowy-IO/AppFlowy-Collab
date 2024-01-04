@@ -7,8 +7,8 @@ use std::sync::{Arc, Once};
 
 use collab::preclude::CollabBuilder;
 use collab_folder::*;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
@@ -20,7 +20,7 @@ pub struct FolderTest {
   folder: Folder,
 
   #[allow(dead_code)]
-  db: Arc<RocksCollabDB>,
+  db: Arc<CollabKVDB>,
 
   #[allow(dead_code)]
   cleaner: Cleaner,
@@ -51,7 +51,7 @@ pub async fn create_folder_with_data(
   let tempdir = TempDir::new().unwrap();
 
   let path = tempdir.into_path();
-  let db = Arc::new(RocksCollabDB::open_opt(path.clone(), false).unwrap());
+  let db = Arc::new(CollabKVDB::open_opt(path.clone(), false).unwrap());
   let disk_plugin = RocksdbDiskPlugin::new(uid.as_i64(), Arc::downgrade(&db), None);
   let cleaner: Cleaner = Cleaner::new(path);
 
@@ -79,7 +79,7 @@ pub async fn create_folder_with_data(
 }
 
 pub async fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf) -> FolderTest {
-  let db = Arc::new(RocksCollabDB::open_opt(db_path.clone(), false).unwrap());
+  let db = Arc::new(CollabKVDB::open_opt(db_path.clone(), false).unwrap());
   let disk_plugin = RocksdbDiskPlugin::new(uid.as_i64(), Arc::downgrade(&db), None);
   let cleaner: Cleaner = Cleaner::new(db_path);
   let collab = CollabBuilder::new(1, object_id)

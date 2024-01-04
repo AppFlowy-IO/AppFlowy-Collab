@@ -2,11 +2,10 @@ use std::ops::{Deref, Range, RangeTo};
 use std::sync::Arc;
 use std::thread;
 
-use collab_persistence::keys::{clock_from_key, make_doc_update_key, Clock};
-use collab_persistence::kv::{KVEntry, KVStore};
+use crate::disk::util::rocks_db;
+use collab_plugins::local_storage::kv::keys::{clock_from_key, make_doc_update_key, Clock};
+use collab_plugins::local_storage::kv::{KVEntry, KVStore};
 use smallvec::SmallVec;
-
-use crate::util::rocks_db;
 
 #[tokio::test]
 async fn rocks_id_test() {
@@ -60,7 +59,7 @@ async fn rocks_id_test() {
 
   let txn = rocks_db.read_txn();
   let value = txn.get([0, 0, 0, 0, 0, 0, 0, 2]).unwrap().unwrap();
-  assert_eq!(value, &[0, 1, 3]);
+  assert_eq!(value.as_ref(), &[0, 1, 3]);
 }
 
 #[tokio::test]

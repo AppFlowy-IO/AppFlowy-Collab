@@ -1,10 +1,10 @@
-#[cfg(any(feature = "rocksdb_plugin"))]
-pub use collab_persistence::*;
-
 pub mod local_storage;
 
-#[cfg(feature = "postgres_storage_plugin")]
+#[cfg(feature = "postgres_plugin")]
 pub mod cloud_storage;
+pub mod connect_state;
 
-#[cfg(feature = "snapshot_plugin")]
-pub mod snapshot;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::local_storage::rocksdb::kv_impl::RocksStore;
+#[cfg(not(target_arch = "wasm32"))]
+pub type CollabKVDB = RocksStore;

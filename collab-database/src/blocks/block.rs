@@ -5,9 +5,9 @@ use std::sync::{Arc, Weak};
 use collab::core::collab::{CollabDocState, MutexCollab};
 
 use collab_entity::CollabType;
-use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::CollabPersistenceConfig;
+use collab_plugins::CollabKVDB;
 use lru::LruCache;
 use parking_lot::Mutex;
 use tokio::sync::broadcast;
@@ -33,7 +33,7 @@ pub enum BlockEvent {
 #[derive(Clone)]
 pub struct Block {
   uid: i64,
-  collab_db: Weak<RocksCollabDB>,
+  collab_db: Weak<CollabKVDB>,
   collab_service: Arc<dyn DatabaseCollabService>,
   task_controller: Arc<BlockTaskController>,
   sequence: Arc<AtomicU32>,
@@ -45,7 +45,7 @@ pub struct Block {
 impl Block {
   pub fn new(
     uid: i64,
-    collab_db: Weak<RocksCollabDB>,
+    collab_db: Weak<CollabKVDB>,
     collab_service: Arc<dyn DatabaseCollabService>,
     row_change_tx: Option<RowChangeSender>,
   ) -> Block {

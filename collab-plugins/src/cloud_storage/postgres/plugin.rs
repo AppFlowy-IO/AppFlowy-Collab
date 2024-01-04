@@ -11,9 +11,6 @@ use collab::core::collab_state::SnapshotState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabObject;
-use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_persistence::TransactionMutExt;
 use parking_lot::RwLock;
 use tokio_retry::strategy::FibonacciBackoff;
 use tokio_retry::{Action, Retry};
@@ -26,12 +23,15 @@ use crate::cloud_storage::remote_collab::{
   should_create_snapshot, RemoteCollab, RemoteCollabStorage,
 };
 use crate::cloud_storage::sink::{SinkConfig, SinkStrategy};
+use crate::local_storage::kv::doc::CollabKVAction;
+use crate::local_storage::kv::TransactionMutExt;
+use crate::CollabKVDB;
 
 pub struct SupabaseDBPlugin {
   uid: i64,
   object: CollabObject,
   local_collab: Weak<MutexCollab>,
-  local_collab_storage: Weak<RocksCollabDB>,
+  local_collab_storage: Weak<CollabKVDB>,
   remote_collab: Arc<RemoteCollab>,
   remote_collab_storage: Arc<dyn RemoteCollabStorage>,
   pending_updates: Arc<RwLock<Vec<Vec<u8>>>>,
@@ -45,7 +45,7 @@ impl SupabaseDBPlugin {
     local_collab: Weak<MutexCollab>,
     sync_per_secs: u64,
     remote_collab_storage: Arc<dyn RemoteCollabStorage>,
-    local_collab_storage: Weak<RocksCollabDB>,
+    local_collab_storage: Weak<CollabKVDB>,
   ) -> Self {
     let pending_updates = Arc::new(RwLock::new(Vec::new()));
     let is_first_sync_done = Arc::new(AtomicBool::new(false));
@@ -134,7 +134,7 @@ fn create_snapshot_if_need(
   object: CollabObject,
   remote_update: Vec<u8>,
   weak_local_collab: Weak<MutexCollab>,
-  weak_local_collab_storage: Weak<RocksCollabDB>,
+  weak_local_collab_storage: Weak<CollabKVDB>,
   weak_remote_collab_storage: Weak<dyn RemoteCollabStorage>,
 ) {
   tokio::spawn(async move {
@@ -217,7 +217,7 @@ struct InitSyncAction {
   object: CollabObject,
   remote_collab: Weak<RemoteCollab>,
   local_collab: Weak<MutexCollab>,
-  local_collab_storage: Weak<RocksCollabDB>,
+  local_collab_storage: Weak<CollabKVDB>,
   remote_collab_storage: Weak<dyn RemoteCollabStorage>,
   pending_updates: Weak<RwLock<Vec<Vec<u8>>>>,
   is_first_sync_done: Weak<AtomicBool>,

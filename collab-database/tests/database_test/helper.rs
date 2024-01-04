@@ -14,18 +14,17 @@ use collab_database::views::{
   LayoutSettings, OrderObjectPosition,
 };
 use collab_entity::CollabType;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 
-use collab_database::database_observer::DatabaseNotify;
-use tempfile::TempDir;
-
-pub use crate::helper::*;
+use crate::helper::{make_rocks_db, setup_log, TestFieldSetting, TestTextCell};
 use crate::user_test::helper::TestUserDatabaseCollabBuilderImpl;
+use collab_database::database_observer::DatabaseNotify;
+use collab_plugins::CollabKVDB;
+use tempfile::TempDir;
 
 pub struct DatabaseTest {
   #[allow(dead_code)]
-  collab_db: Arc<RocksCollabDB>,
+  collab_db: Arc<CollabKVDB>,
   database: Database,
 }
 
@@ -80,7 +79,7 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
 pub async fn create_database_with_db(
   uid: i64,
   database_id: &str,
-) -> (Arc<RocksCollabDB>, DatabaseTest) {
+) -> (Arc<CollabKVDB>, DatabaseTest) {
   setup_log();
   let collab_db = make_rocks_db();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
@@ -117,7 +116,7 @@ pub async fn create_database_with_db(
 pub fn restore_database_from_db(
   uid: i64,
   database_id: &str,
-  collab_db: Arc<RocksCollabDB>,
+  collab_db: Arc<CollabKVDB>,
 ) -> DatabaseTest {
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let collab = collab_builder.build_collab_with_config(
@@ -190,7 +189,7 @@ impl DatabaseTestBuilder {
   pub async fn build(self) -> DatabaseTest {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
-    let collab_db = Arc::new(RocksCollabDB::open_opt(path, false).unwrap());
+    let collab_db = Arc::new(CollabKVDB::open_opt(path, false).unwrap());
     let collab = CollabBuilder::new(self.uid, &self.database_id)
       .with_device_id("1")
       .build()

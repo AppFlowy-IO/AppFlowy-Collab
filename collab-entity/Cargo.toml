@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 uuid = { version = "1.3.3", features = ["v4"] }
@@ -13,4 +15,8 @@ serde_repr = "0.1"
 collab = { version = "0.1.0", path = "../collab" }
 anyhow.workspace = true
 bytes = { workspace = true, features = ["serde"] }
+getrandom = { version = "0.2", optional = true }
+
+[features]
+wasm_build = ["getrandom/js"]
 

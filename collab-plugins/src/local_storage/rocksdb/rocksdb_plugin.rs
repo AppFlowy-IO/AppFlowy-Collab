@@ -3,17 +3,17 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Weak};
 
+use crate::CollabKVDB;
 use collab::core::awareness::Awareness;
 use collab::core::collab::make_yrs_doc;
 use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
-use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use tracing::{error, instrument};
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
 
+use crate::local_storage::kv::doc::CollabKVAction;
 use crate::local_storage::CollabPersistenceConfig;
 
 pub trait RocksdbBackup: Send + Sync {
@@ -24,7 +24,7 @@ pub trait RocksdbBackup: Send + Sync {
 #[derive(Clone)]
 pub struct RocksdbDiskPlugin {
   uid: i64,
-  db: Weak<RocksCollabDB>,
+  db: Weak<CollabKVDB>,
   did_load: Arc<AtomicBool>,
   /// the number of updates on disk when opening the document
   initial_update_count: Arc<AtomicU32>,
@@ -34,7 +34,7 @@ pub struct RocksdbDiskPlugin {
 }
 
 impl Deref for RocksdbDiskPlugin {
-  type Target = Weak<RocksCollabDB>;
+  type Target = Weak<CollabKVDB>;
 
   fn deref(&self) -> &Self::Target {
     &self.db
@@ -44,7 +44,7 @@ impl Deref for RocksdbDiskPlugin {
 impl RocksdbDiskPlugin {
   pub fn new_with_config(
     uid: i64,
-    db: Weak<RocksCollabDB>,
+    db: Weak<CollabKVDB>,
     config: CollabPersistenceConfig,
     backup: Option<Arc<dyn RocksdbBackup>>,
   ) -> Self {
@@ -62,7 +62,7 @@ impl RocksdbDiskPlugin {
     }
   }
 
-  pub fn new(uid: i64, db: Weak<RocksCollabDB>, backup: Option<Arc<dyn RocksdbBackup>>) -> Self {
+  pub fn new(uid: i64, db: Weak<CollabKVDB>, backup: Option<Arc<dyn RocksdbBackup>>) -> Self {
     Self::new_with_config(uid, db, CollabPersistenceConfig::default(), backup)
   }
 
@@ -71,7 +71,7 @@ impl RocksdbDiskPlugin {
   }
 
   #[instrument(skip_all)]
-  fn flush_doc(&self, db: &Arc<RocksCollabDB>, object_id: &str) {
+  fn flush_doc(&self, db: &Arc<CollabKVDB>, object_id: &str) {
     let _ = db.with_write_txn(|w_db_txn| {
       let doc = make_yrs_doc();
       w_db_txn.load_doc_with_txn(self.uid, object_id, &mut doc.transact_mut())?;
