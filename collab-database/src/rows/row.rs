@@ -586,6 +586,7 @@ pub struct MutexDatabaseRow(Arc<Mutex<DatabaseRow>>);
 
 impl MutexDatabaseRow {
   pub fn new(inner: DatabaseRow) -> Self {
+    #[allow(clippy::arc_with_non_send_sync)]
     Self(Arc::new(Mutex::new(inner)))
   }
 }

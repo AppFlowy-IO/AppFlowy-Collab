@@ -810,12 +810,14 @@ impl Deref for Plugins {
   }
 }
 
+#[allow(clippy::arc_with_non_send_sync)]
 #[derive(Clone)]
 pub struct MutexCollab(Arc<Mutex<Collab>>);
 
 impl MutexCollab {
   pub fn new(origin: CollabOrigin, object_id: &str, plugins: Vec<Arc<dyn CollabPlugin>>) -> Self {
     let collab = Collab::new_with_origin(origin, object_id, plugins);
+    #[allow(clippy::arc_with_non_send_sync)]
     MutexCollab(Arc::new(Mutex::new(collab)))
   }
 
@@ -826,10 +828,12 @@ impl MutexCollab {
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, CollabError> {
     let collab = Collab::new_with_doc_state(origin, object_id, collab_doc_state, plugins)?;
+    #[allow(clippy::arc_with_non_send_sync)]
     Ok(MutexCollab(Arc::new(Mutex::new(collab))))
   }
 
   pub fn from_collab(collab: Collab) -> Self {
+    #[allow(clippy::arc_with_non_send_sync)]
     MutexCollab(Arc::new(Mutex::new(collab)))
   }
 
