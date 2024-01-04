@@ -3,6 +3,7 @@ use std::ops::RangeBounds;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::local_storage::kv::doc::CollabKVAction;
 use crate::local_storage::kv::{KVEntry, KVStore, PersistenceError};
 use rocksdb::Direction::Forward;
 use rocksdb::{
@@ -84,7 +85,7 @@ impl RocksStore {
   }
 
   /// Return a read transaction that accesses the database exclusively.
-  pub fn read_txn(&self) -> RocksKVStoreImpl<'_, TransactionDB> {
+  pub fn read_txn(&self) -> impl CollabKVAction<'_, Error = PersistenceError> + '_ {
     let mut txn_options = TransactionOptions::default();
     txn_options.set_snapshot(true);
     let txn = self
