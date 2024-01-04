@@ -5,7 +5,7 @@ use std::sync::{Arc, Weak};
 use collab::core::collab::{CollabDocState, MutexCollab};
 
 use collab_entity::CollabType;
-use collab_plugins::local_storage::kv::doc::CollabKVStore;
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use lru::LruCache;

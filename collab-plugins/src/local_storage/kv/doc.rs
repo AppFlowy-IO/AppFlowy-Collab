@@ -7,7 +7,7 @@ use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut, Update};
 
-pub trait CollabKVStore<'a>: KVStore<'a> + Sized
+pub trait CollabKVAction<'a>: KVStore<'a> + Sized
 where
   PersistenceError: From<<Self as KVStore<'a>>::Error>,
 {
@@ -355,7 +355,7 @@ where
   }
 }
 
-impl<'a, T> CollabKVStore<'a> for T
+impl<'a, T> CollabKVAction<'a> for T
 where
   T: KVStore<'a>,
   PersistenceError: From<<Self as KVStore<'a>>::Error>,

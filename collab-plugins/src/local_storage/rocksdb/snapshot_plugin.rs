@@ -3,7 +3,7 @@ use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
-use crate::local_storage::kv::doc::CollabKVStore;
+use crate::local_storage::kv::doc::CollabKVAction;
 use crate::local_storage::kv::snapshot::{CollabSnapshot, SnapshotAction, SnapshotPersistence};
 use crate::local_storage::kv::PersistenceError;
 use crate::CollabKVDB;

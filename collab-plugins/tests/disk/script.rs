@@ -9,7 +9,7 @@ use collab_entity::{CollabObject, CollabType};
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use yrs::updates::decoder::Decode;
 
-use collab_plugins::local_storage::kv::doc::CollabKVStore;
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::local_storage::rocksdb::snapshot_plugin::CollabSnapshotPlugin;
 use collab_plugins::CollabKVDB;

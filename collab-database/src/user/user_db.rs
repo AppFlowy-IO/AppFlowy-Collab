@@ -10,7 +10,7 @@ use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{Collab, Update};
 use collab_entity::CollabType;
-use collab_plugins::local_storage::kv::doc::CollabKVStore;
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::snapshot::{CollabSnapshot, SnapshotAction};
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;

@@ -1,7 +1,7 @@
 use std::thread;
 
 use crate::disk::util::rocks_db;
-use collab_plugins::local_storage::kv::doc::CollabKVStore;
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::CollabKVDB;
 use yrs::{Doc, GetString, Text, Transact};
 
