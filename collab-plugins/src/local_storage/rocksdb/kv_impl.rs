@@ -85,7 +85,7 @@ impl RocksStore {
   }
 
   /// Return a read transaction that accesses the database exclusively.
-  pub fn read_txn(&self) -> impl CollabKVAction<'_, Error = PersistenceError> {
+  pub fn read_txn(&self) -> impl CollabKVAction<'_, Error = PersistenceError> + '_ {
     let mut txn_options = TransactionOptions::default();
     txn_options.set_snapshot(true);
     let txn = self
@@ -120,7 +120,7 @@ impl RocksStore {
 // pub struct RocksKVStoreImpl<'a, DB: Send + Sync>(Transaction<'a, DB>);
 pub struct RocksKVStoreImpl<'a, DB: Send>(Transaction<'a, DB>);
 
-unsafe impl<'db, DB: Send> Send for RocksKVStoreImpl<'db, DB> {}
+unsafe impl<'a, DB: Send> Send for RocksKVStoreImpl<'a, DB> {}
 
 impl<'a, DB: Send + Sync> RocksKVStoreImpl<'a, DB> {
   pub fn new(txn: Transaction<'a, DB>) -> Self {
