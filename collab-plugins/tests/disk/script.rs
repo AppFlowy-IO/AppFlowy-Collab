@@ -1,17 +1,15 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::*;
-use collab_entity::{CollabObject, CollabType};
+
 use collab_plugins::local_storage::CollabPersistenceConfig;
-use yrs::updates::decoder::Decode;
 
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
-use collab_plugins::local_storage::rocksdb::snapshot_plugin::CollabSnapshotPlugin;
+
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
 
@@ -25,6 +23,7 @@ pub enum Script {
   OpenDocumentWithDiskPlugin {
     id: String,
   },
+  #[allow(dead_code)]
   OpenDocument {
     id: String,
   },
@@ -44,27 +43,13 @@ pub enum Script {
     key: String,
     expected: Option<Any>,
   },
-  AssertSnapshot {
-    id: String,
-    index: u32,
-    expected: JsonValue,
-  },
   AssertNumOfUpdates {
-    id: String,
-    expected: usize,
-  },
-  AssertNumOfSnapshots {
     id: String,
     expected: usize,
   },
   AssertNumOfDocuments {
     expected: usize,
   },
-  AssertDocument {
-    id: String,
-    expected: JsonValue,
-  },
-  Wait(u64),
 }
 
 pub struct CollabPersistenceTest {
@@ -72,8 +57,10 @@ pub struct CollabPersistenceTest {
   collab_by_id: HashMap<String, Arc<MutexCollab>>,
   #[allow(dead_code)]
   cleaner: Cleaner,
+  #[allow(dead_code)]
   db: Arc<CollabKVDB>,
   disk_plugin: Arc<RocksdbDiskPlugin>,
+  #[allow(dead_code)]
   config: CollabPersistenceConfig,
 }
 
@@ -88,7 +75,6 @@ impl CollabPersistenceTest {
       uid,
       Arc::downgrade(&db),
       config.clone(),
-      None,
     ));
     let cleaner = Cleaner::new(db_path);
     Self {
@@ -107,29 +93,6 @@ impl CollabPersistenceTest {
     }
   }
 
-  fn make_snapshot_plugin(
-    &self,
-    uid: i64,
-    object_id: String,
-    object_ty: CollabType,
-    _collab: Arc<MutexCollab>,
-  ) -> Arc<CollabSnapshotPlugin> {
-    let object = CollabObject::new(
-      uid,
-      object_id,
-      object_ty,
-      "".to_string(),
-      "fake_device_id".to_string(),
-    );
-    Arc::new(CollabSnapshotPlugin::new(
-      self.uid,
-      object,
-      Arc::new(self.db.clone()),
-      Arc::downgrade(&self.db),
-      self.config.snapshot_per_update,
-    ))
-  }
-
   pub async fn create_collab(&mut self, doc_id: String) {
     let collab = Arc::new(
       CollabBuilder::new(1, &doc_id)
@@ -138,13 +101,6 @@ impl CollabPersistenceTest {
         .unwrap(),
     );
     collab.lock().add_plugin(self.disk_plugin.clone());
-    let object_id = collab.lock().object_id.clone();
-    collab.lock().add_plugin(self.make_snapshot_plugin(
-      self.uid,
-      object_id,
-      CollabType::Document,
-      collab.clone(),
-    ));
     collab.lock().initialize();
 
     self.collab_by_id.insert(doc_id, collab);
@@ -178,12 +134,6 @@ impl CollabPersistenceTest {
         .unwrap(),
     );
     collab.lock().add_plugin(self.disk_plugin.clone());
-    collab.lock().add_plugin(self.make_snapshot_plugin(
-      self.uid,
-      id.to_string(),
-      CollabType::Document,
-      collab.clone(),
-    ));
     collab.lock().initialize();
 
     let json = collab.to_json_value();
@@ -223,16 +173,7 @@ impl CollabPersistenceTest {
             .unwrap(),
         );
         self.disk_plugin = Arc::new(plugin);
-        let object_id = collab.lock().object_id.clone();
-        collab.lock().add_plugin(self.make_snapshot_plugin(
-          self.uid,
-          object_id,
-          CollabType::Document,
-          collab.clone(),
-        ));
-
         collab.lock().initialize();
-
         self.collab_by_id.insert(id, collab);
       },
       Script::OpenDocument { id } => {
@@ -276,66 +217,11 @@ impl CollabPersistenceTest {
           .unwrap();
         assert_eq!(updates.len(), expected)
       },
-      Script::AssertNumOfSnapshots { id, expected } => {
-        let snapshot_plugin = self.make_snapshot_plugin(
-          self.uid,
-          id.clone(),
-          CollabType::Document,
-          self.collab_by_id.get(&id).unwrap().clone(),
-        );
-        let snapshot = snapshot_plugin.get_snapshots(&id);
-        assert_eq!(snapshot.len(), expected);
-      },
       Script::AssertNumOfDocuments { expected } => {
         let collab_db = self.disk_plugin.upgrade().unwrap();
 
         let docs = collab_db.read_txn().get_all_docs().unwrap();
         assert_eq!(docs.count(), expected);
-      },
-      Script::AssertSnapshot {
-        id,
-        index,
-        expected,
-      } => {
-        let snapshot_plugin = self.make_snapshot_plugin(
-          self.uid,
-          id.clone(),
-          CollabType::Document,
-          self.collab_by_id.get(&id).unwrap().clone(),
-        );
-        let snapshots = snapshot_plugin.get_snapshots(&id);
-        let collab = CollabBuilder::new(1, &id)
-          .with_device_id("1")
-          .build()
-          .unwrap();
-        collab.lock().with_origin_transact_mut(|txn| {
-          txn.apply_update(Update::decode_v1(&snapshots[index as usize].data).unwrap());
-        });
-
-        let json = collab.lock().to_json_value();
-        assert_json_diff::assert_json_eq!(json, expected);
-      },
-      Script::AssertDocument { id, expected } => {
-        let collab = Arc::new(
-          CollabBuilder::new(1, &id)
-            .with_device_id("1")
-            .build()
-            .unwrap(),
-        );
-        collab.lock().add_plugin(self.disk_plugin.clone());
-        collab.lock().add_plugin(self.make_snapshot_plugin(
-          self.uid,
-          id,
-          CollabType::Document,
-          collab.clone(),
-        ));
-        collab.lock().initialize();
-
-        let json = collab.to_json_value();
-        assert_json_diff::assert_json_eq!(json, expected);
-      },
-      Script::Wait(secs) => {
-        tokio::time::sleep(Duration::from_secs(secs)).await;
       },
     }
   }
@@ -349,7 +235,6 @@ pub fn disk_plugin(uid: i64) -> (Arc<CollabKVDB>, RocksdbDiskPlugin) {
     uid,
     Arc::downgrade(&db),
     CollabPersistenceConfig::default(),
-    None,
   );
   (db, plugin)
 }

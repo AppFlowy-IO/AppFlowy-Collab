@@ -37,7 +37,7 @@ impl UserAwarenessTest {
 
     let path = tempdir.into_path();
     let db = Arc::new(CollabKVDB::open(path.clone()).unwrap());
-    let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db), None);
+    let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
     let cleaner: Cleaner = Cleaner::new(path);
 
     let collab = CollabBuilder::new(1, uid.to_string())

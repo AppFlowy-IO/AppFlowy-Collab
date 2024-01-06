@@ -52,7 +52,7 @@ pub async fn create_folder_with_data(
 
   let path = tempdir.into_path();
   let db = Arc::new(CollabKVDB::open_opt(path.clone(), false).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(uid.as_i64(), Arc::downgrade(&db), None);
+  let disk_plugin = RocksdbDiskPlugin::new(uid.as_i64(), Arc::downgrade(&db));
   let cleaner: Cleaner = Cleaner::new(path);
 
   let collab = CollabBuilder::new(uid.as_i64(), workspace_id)
@@ -80,7 +80,7 @@ pub async fn create_folder_with_data(
 
 pub async fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf) -> FolderTest {
   let db = Arc::new(CollabKVDB::open_opt(db_path.clone(), false).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(uid.as_i64(), Arc::downgrade(&db), None);
+  let disk_plugin = RocksdbDiskPlugin::new(uid.as_i64(), Arc::downgrade(&db));
   let cleaner: Cleaner = Cleaner::new(db_path);
   let collab = CollabBuilder::new(1, object_id)
     .with_plugin(disk_plugin)

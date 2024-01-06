@@ -76,7 +76,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     _object_type: CollabType,
     collab_db: Weak<CollabKVDB>,
     doc_state: CollabDocState,
-    config: &CollabPersistenceConfig,
+    config: CollabPersistenceConfig,
   ) -> Arc<MutexCollab> {
     let collab = CollabBuilder::new(uid, object_id)
       .with_device_id("1")
@@ -85,7 +85,6 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
         uid,
         collab_db,
         config.clone(),
-        None,
       ))
       .build()
       .unwrap();
@@ -114,7 +113,7 @@ pub async fn workspace_database_test_with_config(
     CollabType::WorkspaceDatabase,
     Arc::downgrade(&collab_db),
     CollabDocState::default(),
-    &config,
+    config.clone(),
   );
   let inner = WorkspaceDatabase::open(uid, collab, Arc::downgrade(&collab_db), config, builder);
   WorkspaceDatabaseTest {
@@ -140,7 +139,7 @@ pub async fn workspace_database_with_db(
     CollabType::WorkspaceDatabase,
     collab_db.clone(),
     CollabDocState::default(),
-    &config,
+    config.clone(),
   );
   WorkspaceDatabase::open(uid, collab, collab_db, config, builder)
 }

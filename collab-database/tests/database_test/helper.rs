@@ -89,7 +89,7 @@ pub async fn create_database_with_db(
     CollabType::Database,
     Arc::downgrade(&collab_db),
     CollabDocState::default(),
-    &CollabPersistenceConfig::default(),
+    CollabPersistenceConfig::default(),
   );
   let context = DatabaseContext {
     uid,
@@ -125,7 +125,7 @@ pub fn restore_database_from_db(
     CollabType::Database,
     Arc::downgrade(&collab_db),
     CollabDocState::default(),
-    &CollabPersistenceConfig::default(),
+    CollabPersistenceConfig::default(),
   );
   let context = DatabaseContext {
     uid,

@@ -30,7 +30,6 @@ pub struct RocksdbDiskPlugin {
   initial_update_count: Arc<AtomicU32>,
   update_count: Arc<AtomicU32>,
   config: CollabPersistenceConfig,
-  backup: Option<Arc<dyn RocksdbBackup>>,
 }
 
 impl Deref for RocksdbDiskPlugin {
@@ -42,12 +41,7 @@ impl Deref for RocksdbDiskPlugin {
 }
 
 impl RocksdbDiskPlugin {
-  pub fn new_with_config(
-    uid: i64,
-    db: Weak<CollabKVDB>,
-    config: CollabPersistenceConfig,
-    backup: Option<Arc<dyn RocksdbBackup>>,
-  ) -> Self {
+  pub fn new_with_config(uid: i64, db: Weak<CollabKVDB>, config: CollabPersistenceConfig) -> Self {
     let initial_update_count = Arc::new(AtomicU32::new(0));
     let update_count = Arc::new(AtomicU32::new(0));
     let did_load = Arc::new(AtomicBool::new(false));
@@ -58,12 +52,11 @@ impl RocksdbDiskPlugin {
       initial_update_count,
       update_count,
       config,
-      backup,
     }
   }
 
-  pub fn new(uid: i64, db: Weak<CollabKVDB>, backup: Option<Arc<dyn RocksdbBackup>>) -> Self {
-    Self::new_with_config(uid, db, CollabPersistenceConfig::default(), backup)
+  pub fn new(uid: i64, db: Weak<CollabKVDB>) -> Self {
+    Self::new_with_config(uid, db, CollabPersistenceConfig::default())
   }
 
   fn increase_count(&self) -> u32 {
@@ -86,10 +79,6 @@ impl RocksdbDiskPlugin {
           encoded.state_vector.to_vec(),
           encoded.doc_state.to_vec(),
         )?;
-
-        if let Some(backup) = &self.backup {
-          backup_doc(self.uid, backup, object_id, encoded);
-        }
       }
 
       Ok(())
@@ -182,22 +171,4 @@ impl CollabPlugin for RocksdbDiskPlugin {
       self.flush_doc(&db, object_id);
     }
   }
-}
-
-fn backup_doc(uid: i64, backup: &Arc<dyn RocksdbBackup>, object_id: &str, encoded: EncodedCollab) {
-  let weak_backup = Arc::downgrade(backup);
-  let object_id = object_id.to_string();
-  tokio::spawn(async move {
-    let _ = tokio::task::spawn_blocking(move || {
-      if let Some(backup) = weak_backup.upgrade() {
-        match backup.save_doc(uid, &object_id, encoded) {
-          Ok(_) => {},
-          Err(err) => {
-            error!("rocksdb backup save doc failed: {}", err);
-          },
-        }
-      }
-    })
-    .await;
-  });
 }
