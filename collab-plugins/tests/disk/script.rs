@@ -75,7 +75,6 @@ impl CollabPersistenceTest {
       uid,
       Arc::downgrade(&db),
       config.clone(),
-      None,
     ));
     let cleaner = Cleaner::new(db_path);
     Self {
@@ -236,7 +235,6 @@ pub fn disk_plugin(uid: i64) -> (Arc<CollabKVDB>, RocksdbDiskPlugin) {
     uid,
     Arc::downgrade(&db),
     CollabPersistenceConfig::default(),
-    None,
   );
   (db, plugin)
 }

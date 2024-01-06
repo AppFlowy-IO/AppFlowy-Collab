@@ -31,7 +31,7 @@ impl DocumentTest {
   }
 
   pub async fn new_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Self {
-    let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db), None);
+    let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
     let collab = CollabBuilder::new(1, doc_id)
       .with_plugin(disk_plugin)
       .with_device_id("1")
@@ -103,7 +103,7 @@ impl Deref for DocumentTest {
 
 pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Document {
   setup_log();
-  let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db), None);
+  let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
   let collab = CollabBuilder::new(uid, doc_id)
     .with_plugin(disk_plugin)
     .with_device_id("1")

@@ -247,7 +247,7 @@ impl Block {
       CollabType::DatabaseRow,
       self.collab_db.clone(),
       doc_state,
-      &config,
+      config,
     )
   }
 }

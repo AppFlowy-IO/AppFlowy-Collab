@@ -1,5 +1,3 @@
-use std::panic;
-use std::panic::AssertUnwindSafe;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
@@ -10,9 +8,8 @@ use crate::CollabKVDB;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabObject;
 use parking_lot::RwLock;
-use similar::{ChangeTag, TextDiff};
-use yrs::updates::decoder::Decode;
-use yrs::{ReadTxn, StateVector, TransactionMut, Update};
+
+use yrs::{ReadTxn, StateVector, TransactionMut};
 
 #[derive(Clone, Debug)]
 enum GenSnapshotState {
@@ -132,61 +129,5 @@ impl CollabPlugin for CollabSnapshotPlugin {
         });
       }
     }
-  }
-}
-
-pub fn calculate_snapshot_diff(
-  uid: i64,
-  object_id: &str,
-  old_snapshot: &[u8],
-  new_snapshot: &[u8],
-) -> Result<String, anyhow::Error> {
-  if old_snapshot.is_empty() {
-    return Ok("".to_string());
-  }
-
-  if new_snapshot.is_empty() {
-    return Err(anyhow::anyhow!(
-      "The new {} snapshot data is empty",
-      object_id
-    ));
-  }
-
-  let old = try_decode_snapshot(uid, object_id, old_snapshot)?;
-  let new = try_decode_snapshot(uid, object_id, new_snapshot)?;
-
-  let mut display_str = String::new();
-  let diff = TextDiff::from_lines(&old, &new);
-  for change in diff.iter_all_changes() {
-    let sign = match change.tag() {
-      ChangeTag::Delete => "-",
-      ChangeTag::Insert => "+",
-      ChangeTag::Equal => " ",
-    };
-    display_str.push_str(&format!("{}{}", sign, change));
-  }
-  Ok(display_str)
-}
-
-pub fn try_decode_snapshot(
-  uid: i64,
-  object_id: &str,
-  data: &[u8],
-) -> Result<String, PersistenceError> {
-  let mut decoded_str = String::new();
-  match {
-    let mut wrapper = AssertUnwindSafe(&mut decoded_str);
-    panic::catch_unwind(move || {
-      let collab = Collab::new(uid, object_id, "1", vec![]);
-      if let Ok(update) = Update::decode_v1(data) {
-        let mut txn = collab.origin_transact_mut();
-        txn.apply_update(update);
-        drop(txn);
-      }
-      **wrapper = collab.to_plain_text();
-    })
-  } {
-    Ok(_) => Ok(decoded_str),
-    Err(e) => Err(PersistenceError::InvalidData(format!("{:?}", e))),
   }
 }

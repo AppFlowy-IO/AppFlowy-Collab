@@ -50,7 +50,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     object_type: CollabType,
     collab_db: Weak<CollabKVDB>,
     collab_doc_state: CollabDocState,
-    config: &CollabPersistenceConfig,
+    config: CollabPersistenceConfig,
   ) -> Arc<MutexCollab>;
 }
 
@@ -345,7 +345,7 @@ impl WorkspaceDatabase {
       CollabType::Database,
       self.collab_db.clone(),
       doc_state,
-      &self.config,
+      self.config.clone(),
     )
   }
 
