@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
 use crate::local_storage::kv::doc::CollabKVAction;
-use crate::local_storage::kv::snapshot::{CollabSnapshot, SnapshotPersistence};
+use crate::local_storage::kv::snapshot::SnapshotPersistence;
 use crate::local_storage::kv::PersistenceError;
 use crate::CollabKVDB;
 use collab::preclude::{Collab, CollabPlugin};
@@ -58,11 +58,6 @@ impl CollabSnapshotPlugin {
       snapshot_per_update,
       state,
     }
-  }
-
-  /// Return the snapshots for the given object id
-  pub fn get_snapshots(&self, object_id: &str) -> Vec<CollabSnapshot> {
-    self.snapshot_persistence.get_snapshots(self.uid, object_id)
   }
 }
 
