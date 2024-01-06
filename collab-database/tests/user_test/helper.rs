@@ -73,7 +73,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     &self,
     uid: i64,
     object_id: &str,
-    _object_type: CollabType,
+    object_type: CollabType,
     collab_db: Weak<CollabKVDB>,
     doc_state: CollabDocState,
     config: CollabPersistenceConfig,
@@ -83,8 +83,11 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
       .with_doc_state(doc_state)
       .with_plugin(RocksdbDiskPlugin::new_with_config(
         uid,
+        object_id.to_string(),
+        object_type,
         collab_db,
         config.clone(),
+        None,
       ))
       .build()
       .unwrap();

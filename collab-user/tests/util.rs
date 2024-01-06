@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use collab::preclude::CollabBuilder;
+use collab_entity::CollabType;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
 use collab_user::core::{
@@ -37,7 +38,14 @@ impl UserAwarenessTest {
 
     let path = tempdir.into_path();
     let db = Arc::new(CollabKVDB::open(path.clone()).unwrap());
-    let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
+    let id = uuid::Uuid::new_v4().to_string();
+    let disk_plugin = RocksdbDiskPlugin::new(
+      uid,
+      id,
+      CollabType::UserAwareness,
+      Arc::downgrade(&db),
+      None,
+    );
     let cleaner: Cleaner = Cleaner::new(path);
 
     let collab = CollabBuilder::new(1, uid.to_string())
