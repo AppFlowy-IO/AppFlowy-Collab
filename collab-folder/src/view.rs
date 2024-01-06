@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use anyhow::bail;
+use collab::core::collab::IndexContentSender;
 use collab::preclude::{
   Any, DeepEventsSubscription, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
@@ -55,6 +56,7 @@ impl ViewsMap {
     change_tx: Option<ViewChangeSender>,
     view_relations: Rc<ViewRelations>,
     section_map: Rc<SectionMap>,
+    index_json_sender: IndexContentSender,
   ) -> ViewsMap {
     let view_cache = Arc::new(RwLock::new(HashMap::new()));
     let subscription = change_tx.as_ref().map(|change_tx| {
@@ -65,6 +67,7 @@ impl ViewsMap {
         change_tx.clone(),
         view_relations.clone(),
         section_map.clone(),
+        index_json_sender.clone(),
       )
     });
     Self {
@@ -648,6 +651,28 @@ pub struct View {
   pub created_by: Option<i64>, // user id
   pub last_edited_time: i64,
   pub last_edited_by: Option<i64>, // user id
+}
+
+/// Represents a the index of a view.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ViewIndexContent {
+  pub id: String,
+  pub parent_view_id: String,
+  pub name: String,
+  pub is_favorite: bool,
+  pub layout: ViewLayout,
+}
+
+impl From<&View> for ViewIndexContent {
+  fn from(value: &View) -> Self {
+    Self {
+      id: value.id.clone(),
+      parent_view_id: value.parent_view_id.clone(),
+      name: value.name.clone(),
+      is_favorite: value.is_favorite,
+      layout: value.layout.clone(),
+    }
+  }
 }
 
 impl Default for View {

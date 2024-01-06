@@ -1,11 +1,13 @@
 use crate::util::{create_folder_with_workspace, make_test_view};
-use collab_folder::{timestamp, IconType, UserId, ViewIcon};
+use collab::core::collab::IndexContent;
+use collab_folder::{timestamp, IconType, UserId, ViewIcon, ViewIndexContent};
 
 #[tokio::test]
 async fn create_view_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
   let o_view = make_test_view("v1", "w1", vec![]);
+  // Insert a new view
   folder_test.insert_view(o_view.clone(), None);
 
   let r_view = folder_test.views.get_view("v1").unwrap();
@@ -339,4 +341,36 @@ async fn check_created_and_edited_time_test() {
   assert_eq!(v1.created_by.unwrap(), uid.as_i64());
   assert_eq!(v1.last_edited_by.unwrap(), uid.as_i64());
   assert_eq!(v1.last_edited_time, v1.created_at);
+}
+#[tokio::test]
+async fn create_view_and_then_sub_index_content_test() {
+  let uid = UserId::from(1);
+  let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
+  let mut index_content_rx = folder_test.subscribe_index_content();
+  let o_view = make_test_view("v1", "w1", vec![]);
+
+  // subscribe the index content
+  let (tx, rx) = tokio::sync::oneshot::channel();
+  tokio::spawn(async move {
+    if let IndexContent::Create(json) = index_content_rx.recv().await.unwrap() {
+      tx.send(serde_json::from_value::<ViewIndexContent>(json).unwrap())
+        .unwrap();
+    } else {
+      panic!("expected IndexContent::Create");
+    }
+  });
+
+  // Insert a new view
+  folder_test.insert_view(o_view.clone(), None);
+
+  let r_view = folder_test.views.get_view("v1").unwrap();
+  assert_eq!(o_view.name, r_view.name);
+  assert_eq!(o_view.parent_view_id, r_view.parent_view_id);
+  assert_eq!(o_view.children, r_view.children);
+
+  // check the index content
+  let index_content = rx.await.unwrap();
+  assert_eq!(index_content.id, o_view.id);
+  assert_eq!(index_content.parent_view_id, o_view.parent_view_id);
+  assert_eq!(index_content.name, o_view.name);
 }
