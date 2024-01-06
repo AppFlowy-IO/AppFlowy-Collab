@@ -8,7 +8,7 @@ use crate::CollabKVDB;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabObject;
 use parking_lot::RwLock;
-use tracing::info;
+use tracing::debug;
 
 use yrs::{ReadTxn, StateVector, TransactionMut};
 
@@ -75,7 +75,10 @@ impl CollabPlugin for CollabSnapshotPlugin {
     let old_value = self.update_count.fetch_add(1, Ordering::SeqCst);
     let should_create_snapshot = self.should_create_snapshot(old_value);
     if should_create_snapshot {
-      info!("{}: create snapshot", self.object.object_id);
+      debug!(
+        "{}: create snapshot, edit count: {}, {}",
+        self.object.object_id, old_value, self.snapshot_per_update
+      );
       let weak_collab_db = self.collab_db.clone();
       let weak_state = Arc::downgrade(&self.state);
       let weak_snapshot_persistence = Arc::downgrade(&self.snapshot_persistence);
