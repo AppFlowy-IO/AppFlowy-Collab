@@ -4,6 +4,7 @@ use std::panic::AssertUnwindSafe;
 
 use crate::local_storage::kv::keys::*;
 use crate::local_storage::kv::*;
+use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
 use yrs::updates::encoder::{Encoder, EncoderV1};
 use yrs::{ReadTxn, Snapshot};
@@ -189,8 +190,8 @@ pub trait SnapshotPersistence: Send + Sync {
     &self,
     uid: i64,
     object_id: &str,
-    title: String,
-    snapshot_data: Vec<u8>,
+    collab_type: &CollabType,
+    encoded_v1: Vec<u8>,
   ) -> Result<(), PersistenceError>;
 }
 

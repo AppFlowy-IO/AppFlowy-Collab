@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
 use crate::local_storage::kv::doc::CollabKVAction;
-use crate::local_storage::kv::snapshot::{CollabSnapshot, SnapshotAction, SnapshotPersistence};
+use crate::local_storage::kv::snapshot::{CollabSnapshot, SnapshotPersistence};
 use crate::local_storage::kv::PersistenceError;
 use crate::CollabKVDB;
 use collab::preclude::{Collab, CollabPlugin};
@@ -112,12 +112,12 @@ impl CollabPlugin for CollabSnapshotPlugin {
 
               // Generate the snapshot
               let txn = snapshot_collab.transact();
-              let snapshot_data = txn.encode_state_as_update_v1(&StateVector::default());
+              let encoded_v1 = txn.encode_state_as_update_v1(&StateVector::default());
               match snapshot_persistence.create_snapshot(
                 uid,
                 &object.object_id,
-                object.collab_type.to_string(),
-                snapshot_data,
+                &object.collab_type,
+                encoded_v1,
               ) {
                 Ok(_) => *state.write() = GenSnapshotState::Idle,
                 Err(e) => {
@@ -132,25 +132,6 @@ impl CollabPlugin for CollabSnapshotPlugin {
         });
       }
     }
-  }
-}
-
-impl SnapshotPersistence for Arc<CollabKVDB> {
-  fn get_snapshots(&self, uid: i64, object_id: &str) -> Vec<CollabSnapshot> {
-    self.read_txn().get_snapshots(uid, object_id)
-  }
-
-  fn create_snapshot(
-    &self,
-    uid: i64,
-    object_id: &str,
-    _title: String,
-    snapshot_data: Vec<u8>,
-  ) -> Result<(), PersistenceError> {
-    self.with_write_txn(|txn| {
-      txn.create_snapshot_with_data(uid, object_id, snapshot_data)?;
-      Ok(())
-    })
   }
 }
 
