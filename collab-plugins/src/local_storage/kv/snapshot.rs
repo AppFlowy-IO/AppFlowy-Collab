@@ -191,10 +191,6 @@ pub trait SnapshotPersistence: Send + Sync {
     collab_type: &CollabType,
     encoded_v1: Vec<u8>,
   ) -> Result<(), PersistenceError>;
-
-  fn set_edit_count(&self, uid: i64, object_id: &str) -> u32;
-
-  fn get_edit_count(&self, uid: i64, object_id: &str, count: u32) -> Result<u32, PersistenceError>;
 }
 
 #[derive(Serialize, Deserialize)]
