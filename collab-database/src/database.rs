@@ -27,10 +27,10 @@ use crate::rows::{
 };
 use crate::user::DatabaseCollabService;
 use crate::views::{
-  CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
-  DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap,
-  GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder, SortMap, ViewChangeReceiver,
-  ViewMap,
+  CalculationMap, CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator,
+  DatabaseLayout, DatabaseView, DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap,
+  FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder,
+  SortMap, ViewChangeReceiver, ViewMap,
 };
 
 pub struct Database {
@@ -794,6 +794,15 @@ impl Database {
         sort_update.clear();
       });
     });
+  }
+
+  pub fn get_all_calculations<T: TryFrom<CalculationMap>>(&self, view_id: &str) -> Vec<T> {
+    self
+      .views
+      .get_view_calculations(view_id)
+      .into_iter()
+      .flat_map(|setting| T::try_from(setting).ok())
+      .collect()
   }
 
   pub fn get_all_filters<T: TryFrom<FilterMap>>(&self, view_id: &str) -> Vec<T> {

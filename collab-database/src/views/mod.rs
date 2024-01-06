@@ -1,3 +1,4 @@
+mod calculation;
 mod field_order;
 mod field_settings;
 mod filter;
@@ -9,6 +10,7 @@ mod view;
 mod view_map;
 mod view_observer;
 
+pub use calculation::*;
 pub use field_order::*;
 pub use field_settings::*;
 pub use filter::*;
