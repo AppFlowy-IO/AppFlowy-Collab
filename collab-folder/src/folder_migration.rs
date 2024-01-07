@@ -27,6 +27,7 @@ impl Folder {
         }
       }
     }
+    drop(txn);
 
     if !favorites.is_empty() {
       self.root.with_transact_mut(|txn| {
