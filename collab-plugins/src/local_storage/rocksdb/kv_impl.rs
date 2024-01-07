@@ -40,9 +40,9 @@ impl RocksStore {
     db_opts.set_wal_bytes_per_sync(1024 * 1024);
 
     db_opts.set_bytes_per_sync(1024 * 1024);
-    db_opts.set_write_buffer_size(10 * 1024 * 1024);
-    db_opts.set_max_write_buffer_number(5);
-    db_opts.set_min_write_buffer_number_to_merge(2);
+    db_opts.set_write_buffer_size(2 * 1024 * 1024);
+    db_opts.set_max_write_buffer_number(2);
+    db_opts.set_min_write_buffer_number_to_merge(1);
 
     // level 0
     db_opts.set_level_zero_file_num_compaction_trigger(2);
