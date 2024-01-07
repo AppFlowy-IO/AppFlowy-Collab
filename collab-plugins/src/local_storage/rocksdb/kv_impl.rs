@@ -30,6 +30,9 @@ impl RocksStore {
     // performance of the system.
     db_opts.set_max_background_jobs(4);
 
+    // sst
+    db_opts.set_max_open_files(50);
+
     // compression
     db_opts.set_compression_type(rocksdb::DBCompressionType::Zstd);
     db_opts.set_blob_compression_type(rocksdb::DBCompressionType::Zstd);
@@ -39,11 +42,11 @@ impl RocksStore {
     db_opts.set_wal_dir(path.as_ref().join("wal"));
     db_opts.set_wal_bytes_per_sync(1024 * 1024);
     db_opts.set_wal_size_limit_mb(2);
-    // db_opts.set_wal_ttl_seconds(60);
     db_opts.set_max_total_wal_size(10 * 1024 * 1024);
 
+    // write buffer
     db_opts.set_bytes_per_sync(1024 * 1024);
-    db_opts.set_write_buffer_size(2 * 1024 * 1024);
+    db_opts.set_write_buffer_size(10 * 1024 * 1024);
     db_opts.set_max_write_buffer_number(2);
     db_opts.set_min_write_buffer_number_to_merge(1);
 
