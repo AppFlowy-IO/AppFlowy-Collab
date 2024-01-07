@@ -7,6 +7,7 @@ use crate::CollabKVDB;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
 use parking_lot::RwLock;
+use tracing::debug;
 
 use yrs::{ReadTxn, StateVector};
 
