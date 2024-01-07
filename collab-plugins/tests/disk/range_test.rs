@@ -194,6 +194,46 @@ async fn range_key_test() {
   assert!(iter.next().is_none());
 }
 
+#[tokio::test]
+async fn delete_range_test() {
+  let db = rocks_db().1;
+  db.with_write_txn(|store| {
+    store.insert([0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 1]).unwrap();
+    store.insert([0, 0, 0, 0, 0, 0, 0, 1], [0, 1, 2]).unwrap();
+    store.insert([0, 0, 0, 0, 0, 0, 0, 2], [0, 1, 3]).unwrap();
+
+    store.insert([0, 0, 1, 0, 0, 0, 0, 0], [0, 2, 1]).unwrap();
+    store.insert([0, 0, 1, 0, 0, 0, 0, 1], [0, 2, 2]).unwrap();
+    store.insert([0, 0, 1, 0, 0, 0, 0, 2], [0, 2, 3]).unwrap();
+
+    Ok(())
+  })
+  .unwrap();
+
+  let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, u8::MAX];
+  let store = db.read_txn();
+  let mut iter = store
+    .range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key)
+    .unwrap();
+  assert_eq!(iter.count(), 3);
+
+  // remove the keys
+  db.with_write_txn(|write_txn| {
+    write_txn
+      .remove_range(&[0, 0, 0, 0, 0, 0, 0, 0], given_key)
+      .unwrap();
+    Ok(())
+  })
+  .unwrap();
+
+  // check that the keys are removed
+  let store = db.read_txn();
+  let mut iter = store
+    .range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key)
+    .unwrap();
+  assert_eq!(iter.count(), 0);
+}
+
 #[repr(transparent)]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Key<const N: usize>(pub SmallVec<[u8; N]>);

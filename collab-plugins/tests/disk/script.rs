@@ -44,7 +44,7 @@ pub enum Script {
     key: String,
     expected: Option<Any>,
   },
-  AssertNumOfUpdates {
+  AssertUpdateLen {
     id: String,
     expected: usize,
   },
@@ -209,7 +209,7 @@ impl CollabPersistenceTest {
           .map(|value| Any::String(Arc::from(value)));
         assert_eq!(text, expected)
       },
-      Script::AssertNumOfUpdates { id, expected } => {
+      Script::AssertUpdateLen { id, expected } => {
         let updates = self
           .db
           .read_txn()

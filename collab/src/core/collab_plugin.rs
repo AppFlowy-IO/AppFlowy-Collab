@@ -80,6 +80,25 @@ where
   fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
     (**self).receive_update(object_id, txn, update)
   }
+
+  fn receive_local_update(&self, origin: &CollabOrigin, object_id: &str, update: &[u8]) {
+    (**self).receive_local_update(origin, object_id, update)
+  }
+
+  fn after_transaction(&self, object_id: &str, txn: &mut TransactionMut) {
+    (**self).after_transaction(object_id, txn)
+  }
+  fn plugin_type(&self) -> CollabPluginType {
+    (**self).plugin_type()
+  }
+
+  fn reset(&self, object_id: &str) {
+    (**self).reset(object_id)
+  }
+
+  fn flush(&self, object_id: &str, doc: &Doc) {
+    (**self).flush(object_id, doc)
+  }
 }
 
 #[async_trait]
@@ -103,6 +122,25 @@ where
 
   fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
     (**self).receive_update(object_id, txn, update)
+  }
+
+  fn receive_local_update(&self, origin: &CollabOrigin, object_id: &str, update: &[u8]) {
+    (**self).receive_local_update(origin, object_id, update)
+  }
+
+  fn after_transaction(&self, object_id: &str, txn: &mut TransactionMut) {
+    (**self).after_transaction(object_id, txn)
+  }
+  fn plugin_type(&self) -> CollabPluginType {
+    (**self).plugin_type()
+  }
+
+  fn reset(&self, object_id: &str) {
+    (**self).reset(object_id)
+  }
+
+  fn flush(&self, object_id: &str, doc: &Doc) {
+    (**self).flush(object_id, doc)
   }
 }
 
