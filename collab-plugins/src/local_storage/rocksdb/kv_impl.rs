@@ -46,7 +46,7 @@ impl RocksStore {
 
     // write buffer
     db_opts.set_bytes_per_sync(1024 * 1024);
-    db_opts.set_write_buffer_size(10 * 1024 * 1024);
+    db_opts.set_write_buffer_size(2 * 1024 * 1024);
     db_opts.set_max_write_buffer_number(2);
     db_opts.set_min_write_buffer_number_to_merge(1);
 
