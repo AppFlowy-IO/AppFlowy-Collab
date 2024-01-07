@@ -11,6 +11,7 @@ use collab::preclude::CollabBuilder;
 use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
 use collab_document::error::DocumentError;
+use collab_entity::CollabType;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
@@ -31,7 +32,13 @@ impl DocumentTest {
   }
 
   pub async fn new_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Self {
-    let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
+    let disk_plugin = RocksdbDiskPlugin::new(
+      uid,
+      doc_id.to_string(),
+      CollabType::Document,
+      Arc::downgrade(&db),
+      None,
+    );
     let collab = CollabBuilder::new(1, doc_id)
       .with_plugin(disk_plugin)
       .with_device_id("1")
@@ -103,7 +110,13 @@ impl Deref for DocumentTest {
 
 pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Document {
   setup_log();
-  let disk_plugin = RocksdbDiskPlugin::new(uid, Arc::downgrade(&db));
+  let disk_plugin = RocksdbDiskPlugin::new(
+    uid,
+    doc_id.to_string(),
+    CollabType::Document,
+    Arc::downgrade(&db),
+    None,
+  );
   let collab = CollabBuilder::new(uid, doc_id)
     .with_plugin(disk_plugin)
     .with_device_id("1")

@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 collab = { workspace = true }
+collab-entity = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 nanoid = "0.4.0"

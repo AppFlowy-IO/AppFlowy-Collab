@@ -8,14 +8,8 @@ pub struct CollabPersistenceConfig {
   /// Enable snapshot. Default is [false].
   pub enable_snapshot: bool,
   /// Generate a snapshot every N updates
-  /// Default is 20. The value must be greater than 0.
+  /// Default is 100. The value must be greater than 0.
   pub snapshot_per_update: u32,
-
-  /// Flush the document. Default is [true].
-  /// After flush the document, all updates will be removed and the document state vector that
-  /// contains all the updates will be reset.
-  #[allow(dead_code)]
-  pub(crate) flush_doc: bool,
 }
 
 impl CollabPersistenceConfig {
@@ -40,7 +34,6 @@ impl Default for CollabPersistenceConfig {
     Self {
       enable_snapshot: true,
       snapshot_per_update: 100,
-      flush_doc: true,
     }
   }
 }

@@ -1,7 +1,6 @@
 use anyhow::bail;
 use collab::preclude::{Any, Array, MapRefExtension, MapRefWrapper, ReadTxn, YrsValue};
 use serde::{Deserialize, Serialize};
-use tracing::error;
 
 use crate::folder::FAVORITES_V1;
 use crate::{Folder, SectionItem, View, ViewRelations, Workspace};
@@ -27,6 +26,13 @@ impl Folder {
         }
       }
     }
+    drop(txn);
+
+    if !favorites.is_empty() {
+      self.root.with_transact_mut(|txn| {
+        self.root.delete_with_txn(txn, FAVORITES_V1);
+      });
+    }
     favorites
   }
 
@@ -40,11 +46,10 @@ impl Folder {
         .flat_map(|map_ref| to_workspace_with_txn(&txn, &map_ref, &self.views.view_relations))
         .collect::<Vec<_>>()
     };
-    if workspace.is_empty() {
-      error!("No workspace found. When migrating from v1 to v2, the workspace must be present.");
-    } else {
+    if !workspace.is_empty() {
       let workspace = workspace.pop().unwrap();
       self.root.with_transact_mut(|txn| {
+        self.root.delete_with_txn(txn, WORKSPACES);
         self
           .views
           .insert_view_with_txn(txn, View::from(workspace), None);

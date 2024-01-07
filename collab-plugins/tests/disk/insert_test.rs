@@ -1,17 +1,17 @@
+use crate::disk::script::CollabPersistenceTest;
 use crate::disk::script::Script::*;
-use crate::disk::script::{disk_plugin, CollabPersistenceTest};
 use collab_plugins::local_storage::CollabPersistenceConfig;
 
 #[tokio::test]
 async fn insert_single_change_and_restore_from_disk() {
   let doc_id = "1".to_string();
   let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
-  let (_db, disk_plugin) = disk_plugin(test.uid);
+  let db = test.db.clone();
   test
     .run_scripts(vec![
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: doc_id.clone(),
-        plugin: disk_plugin,
+        db: db.clone(),
       },
       InsertKeyValue {
         id: doc_id.clone(),
@@ -37,12 +37,12 @@ async fn insert_single_change_and_restore_from_disk() {
 async fn insert_multiple_changes_and_restore_from_disk() {
   let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
   let doc_id = "1".to_string();
-  let (_db, disk_plugin) = disk_plugin(test.uid);
+  let db = test.db.clone();
   test
     .run_scripts(vec![
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: doc_id.clone(),
-        plugin: disk_plugin,
+        db: db.clone(),
       },
       InsertKeyValue {
         id: doc_id.clone(),
@@ -101,32 +101,32 @@ async fn insert_multiple_changes_and_restore_from_disk() {
 #[tokio::test]
 async fn insert_multiple_docs() {
   let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
-  let (_db, disk_plugin) = disk_plugin(test.uid);
+  let db = test.db.clone();
   test
     .run_scripts(vec![
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: "1".to_string(),
-        plugin: disk_plugin.clone(),
+        db: db.clone(),
       },
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: "2".to_string(),
-        plugin: disk_plugin.clone(),
+        db: db.clone(),
       },
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: "3".to_string(),
-        plugin: disk_plugin.clone(),
+        db: db.clone(),
       },
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: "4".to_string(),
-        plugin: disk_plugin.clone(),
+        db: db.clone(),
       },
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: "5".to_string(),
-        plugin: disk_plugin.clone(),
+        db: db.clone(),
       },
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: "6".to_string(),
-        plugin: disk_plugin,
+        db: db.clone(),
       },
       AssertNumOfDocuments { expected: 6 },
     ])
