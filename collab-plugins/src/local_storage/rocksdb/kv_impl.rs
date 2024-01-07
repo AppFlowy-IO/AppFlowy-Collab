@@ -29,6 +29,7 @@ impl RocksStore {
     // On the other hand, setting it too high could lead to excessive CPU and I/O usage, impacting the overall
     // performance of the system.
     db_opts.set_max_background_jobs(4);
+    db_opts.create_if_missing(true);
 
     // sst
     db_opts.set_max_open_files(50);
@@ -62,7 +63,6 @@ impl RocksStore {
     db_opts.set_recycle_log_file_num(5);
     db_opts.set_keep_log_file_num(5);
     db_opts.set_db_log_dir(path.as_ref().join("logs"));
-    db_opts.create_if_missing(true);
 
     let open_result = TransactionDB::<SingleThreaded>::open(&db_opts, &txn_db_opts, &path);
     let db = match open_result {

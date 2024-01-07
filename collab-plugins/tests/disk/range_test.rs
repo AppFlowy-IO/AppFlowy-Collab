@@ -212,7 +212,7 @@ async fn delete_range_test() {
 
   let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, u8::MAX];
   let store = db.read_txn();
-  let mut iter = store
+  let iter = store
     .range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key)
     .unwrap();
   assert_eq!(iter.count(), 3);
@@ -228,7 +228,7 @@ async fn delete_range_test() {
 
   // check that the keys are removed
   let store = db.read_txn();
-  let mut iter = store
+  let iter = store
     .range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key)
     .unwrap();
   assert_eq!(iter.count(), 0);
