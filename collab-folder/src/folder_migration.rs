@@ -1,7 +1,6 @@
 use anyhow::bail;
 use collab::preclude::{Any, Array, MapRefExtension, MapRefWrapper, ReadTxn, YrsValue};
 use serde::{Deserialize, Serialize};
-use tracing::error;
 
 use crate::folder::FAVORITES_V1;
 use crate::{Folder, SectionItem, View, ViewRelations, Workspace};

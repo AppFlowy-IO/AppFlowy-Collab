@@ -362,6 +362,7 @@ dependencies = [
  "collab-entity",
  "collab-plugins",
  "fs_extra",
+ "getrandom 0.2.9",
  "nanoid",
  "parking_lot",
  "serde",

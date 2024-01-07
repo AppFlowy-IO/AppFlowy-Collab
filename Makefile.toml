@@ -68,25 +68,34 @@ script = ["""
   """]
 
 [config]
-on_error_task = "catch"
+default_to_workspace = false
+#on_error_task = "catch"
 
-[tasks.catch]
-run_task = { name = ["clean_profraw_files"] }
+#[tasks.catch]
+#run_task = { name = ["clean_profraw_files"] }
 
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 
-
 [tasks.wasm_build]
 script_runner = "bash"
 script = [
-"""
-crates=("collab" "collab-document" "collab-folder" "collab-user")
-  cd ..
+  """
+  #!/bin/bash
+  BASE_DIR=$(pwd)
+  crates=("collab" "collab-document" "collab-folder" "collab-user")
+
+  # Iterate over each crate and build it
   for crate in "${crates[@]}"; do
     echo "🔥🔥🔥  Building $crate with wasm-pack..."
-    cd ./$crate && wasm-pack build --features="wasm_build" || exit 1
-    cd .. || exit 1
+
+    # Navigate to the crate directory
+    cd "$BASE_DIR/$crate" || { echo "Failed to enter directory $crate"; exit 1; }
+
+    # Build the crate
+    wasm-pack build --features="wasm_build" || { echo "Build failed for $crate"; exit 1; }
+
+    # No need to cd back since we use absolute paths
   done
-"""
+  """
 ]
