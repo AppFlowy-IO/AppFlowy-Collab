@@ -8,6 +8,7 @@ members = [
     "collab-folder",
     "collab-plugins",
 ]
+resolver = "2"
 
 [workspace.dependencies]
 collab = { workspace = true, path = "collab" }

@@ -29,16 +29,47 @@ impl RocksStore {
     // On the other hand, setting it too high could lead to excessive CPU and I/O usage, impacting the overall
     // performance of the system.
     db_opts.set_max_background_jobs(4);
+    db_opts.create_if_missing(true);
+
+    // sst
+    db_opts.set_max_open_files(50);
+
+    // compression
     db_opts.set_compression_type(rocksdb::DBCompressionType::Zstd);
     db_opts.set_blob_compression_type(rocksdb::DBCompressionType::Zstd);
+    db_opts.set_compaction_style(rocksdb::DBCompactionStyle::Level);
+
+    // wal
+    // Can't set the wal because existing rocksdb databases don't have the wal directory
+    // It might cause data lost.
+    // db_opts.set_wal_dir(path.as_ref().join("wal"));
+
+    db_opts.set_wal_bytes_per_sync(1024 * 1024);
+    db_opts.set_wal_size_limit_mb(2);
+    db_opts.set_max_total_wal_size(20 * 1024 * 1024);
+
+    // write buffer
+    db_opts.set_bytes_per_sync(1024 * 1024);
+    db_opts.set_write_buffer_size(2 * 1024 * 1024);
+    db_opts.set_max_write_buffer_number(2);
+    db_opts.set_min_write_buffer_number_to_merge(1);
+
+    // level 0
+    db_opts.set_level_zero_file_num_compaction_trigger(2);
+    db_opts.set_level_zero_slowdown_writes_trigger(5);
+    db_opts.set_level_zero_stop_writes_trigger(10);
+
+    // log
     db_opts.set_recycle_log_file_num(5);
     db_opts.set_keep_log_file_num(5);
     db_opts.set_db_log_dir(path.as_ref().join("logs"));
-    db_opts.create_if_missing(true);
 
     let open_result = TransactionDB::<SingleThreaded>::open(&db_opts, &txn_db_opts, &path);
     let db = match open_result {
-      Ok(db) => Ok(db),
+      Ok(db) => {
+        //
+        Ok(db)
+      },
       Err(e) => {
         tracing::error!("🔴open collab db error: {:?}", e);
         match e.kind() {
@@ -92,6 +123,10 @@ impl RocksStore {
   /// Return a read transaction that accesses the database exclusively.
   pub fn read_txn(&self) -> impl CollabKVAction<'_, Error = PersistenceError> {
     let mut txn_options = TransactionOptions::default();
+    // Use snapshot to provides a consistent view of the data. This snapshot can then be used
+    // to perform read operations, and the returned data will be consistent with the database
+    // state at the time the snapshot was created, regardless of any subsequent modifications
+    // made by other transactions.
     txn_options.set_snapshot(true);
     let txn = self
       .db
@@ -105,12 +140,7 @@ impl RocksStore {
   where
     F: FnOnce(&RocksKVStoreImpl<'_, TransactionDB>) -> Result<O, PersistenceError>,
   {
-    let mut txn_options = TransactionOptions::default();
-    // Use snapshot to provides a consistent view of the data. This snapshot can then be used
-    // to perform read operations, and the returned data will be consistent with the database
-    // state at the time the snapshot was created, regardless of any subsequent modifications
-    // made by other transactions.
-    txn_options.set_snapshot(true);
+    let txn_options = TransactionOptions::default();
     let txn = self
       .db
       .transaction_opt(&WriteOptions::default(), &txn_options);
