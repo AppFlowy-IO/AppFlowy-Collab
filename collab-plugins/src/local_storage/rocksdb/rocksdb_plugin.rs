@@ -9,11 +9,14 @@ use collab::core::collab::make_yrs_doc;
 use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
+use collab_entity::CollabType;
 use tracing::{error, instrument};
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
 
 use crate::local_storage::kv::doc::CollabKVAction;
+use crate::local_storage::kv::snapshot::SnapshotPersistence;
+use crate::local_storage::rocksdb::snapshot_plugin::CollabSnapshot;
 use crate::local_storage::CollabPersistenceConfig;
 
 pub trait RocksdbBackup: Send + Sync {
@@ -24,43 +27,86 @@ pub trait RocksdbBackup: Send + Sync {
 #[derive(Clone)]
 pub struct RocksdbDiskPlugin {
   uid: i64,
-  db: Weak<CollabKVDB>,
+  object_id: String,
+  collab_type: CollabType,
+  collab_db: Weak<CollabKVDB>,
   did_load: Arc<AtomicBool>,
-  /// the number of updates on disk when opening the document
-  initial_update_count: Arc<AtomicU32>,
   update_count: Arc<AtomicU32>,
   config: CollabPersistenceConfig,
+  snapshot: Option<CollabSnapshot>,
 }
 
 impl Deref for RocksdbDiskPlugin {
   type Target = Weak<CollabKVDB>;
 
   fn deref(&self) -> &Self::Target {
-    &self.db
+    &self.collab_db
   }
 }
 
 impl RocksdbDiskPlugin {
-  pub fn new_with_config(uid: i64, db: Weak<CollabKVDB>, config: CollabPersistenceConfig) -> Self {
-    let initial_update_count = Arc::new(AtomicU32::new(0));
+  pub fn new_with_config(
+    uid: i64,
+    object_id: String,
+    collab_type: CollabType,
+    collab_db: Weak<CollabKVDB>,
+    config: CollabPersistenceConfig,
+    snapshot_persistence: Option<Arc<dyn SnapshotPersistence>>,
+  ) -> Self {
     let update_count = Arc::new(AtomicU32::new(0));
     let did_load = Arc::new(AtomicBool::new(false));
+
+    let mut snapshot = None;
+    if config.enable_snapshot {
+      snapshot = snapshot_persistence.map(CollabSnapshot::new);
+    }
+
     Self {
-      db,
+      object_id,
+      collab_type,
+      collab_db,
       uid,
       did_load,
-      initial_update_count,
       update_count,
       config,
+      snapshot,
     }
   }
 
-  pub fn new(uid: i64, db: Weak<CollabKVDB>) -> Self {
-    Self::new_with_config(uid, db, CollabPersistenceConfig::default())
+  pub fn new(
+    uid: i64,
+    object_id: String,
+    collab_type: CollabType,
+    collab_db: Weak<CollabKVDB>,
+    snapshot_persistence: Option<Arc<dyn SnapshotPersistence>>,
+  ) -> Self {
+    Self::new_with_config(
+      uid,
+      object_id,
+      collab_type,
+      collab_db,
+      CollabPersistenceConfig::default(),
+      snapshot_persistence,
+    )
   }
 
-  fn increase_count(&self) -> u32 {
-    self.update_count.fetch_add(1, SeqCst)
+  fn increase_count(&self) {
+    let update_count = self.update_count.fetch_add(1, SeqCst);
+    self.create_snapshot_if_need(update_count);
+  }
+
+  fn create_snapshot_if_need(&self, update_count: u32) {
+    if update_count != 0 && update_count % self.config.snapshot_per_update == 0 {
+      if let Some(snapshot) = &self.snapshot {
+        snapshot.create_snapshot(
+          self.collab_db.clone(),
+          self.uid,
+          &self.object_id,
+          &self.collab_type,
+        );
+      }
+      self.update_count.store(0, SeqCst);
+    }
   }
 
   #[instrument(skip_all)]
@@ -88,7 +134,7 @@ impl RocksdbDiskPlugin {
 
 impl CollabPlugin for RocksdbDiskPlugin {
   fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
-    if let Some(db) = self.db.upgrade() {
+    if let Some(db) = self.collab_db.upgrade() {
       let rocksdb_read = db.read_txn();
       // Check the document is exist or not
       if rocksdb_read.is_exist(self.uid, object_id) {
@@ -96,7 +142,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
         // Safety: The document is exist, so it must be loaded successfully.
         let update_count = match rocksdb_read.load_doc_with_txn(self.uid, object_id, &mut txn) {
           Ok(update_count) => {
-            self.initial_update_count.store(update_count, SeqCst);
+            self.update_count.store(update_count, SeqCst);
             update_count
           },
           Err(e) => {
@@ -108,9 +154,9 @@ impl CollabPlugin for RocksdbDiskPlugin {
         txn.commit();
         drop(txn);
 
-        if self.config.flush_doc && update_count != 0 && update_count % 20 == 0 {
+        if update_count != 0 && update_count % self.config.snapshot_per_update == 0 {
           self.flush_doc(&db, object_id);
-          self.initial_update_count.store(0, SeqCst);
+          self.create_snapshot_if_need(update_count);
         }
       } else {
         let txn = doc.transact();
@@ -137,9 +183,9 @@ impl CollabPlugin for RocksdbDiskPlugin {
     if !self.did_load.load(SeqCst) {
       return;
     }
-    if let Some(db) = self.db.upgrade() {
-      let _ = self.increase_count();
-      // /Acquire a write transaction to ensure consistency
+    if let Some(db) = self.collab_db.upgrade() {
+      self.increase_count();
+      //Acquire a write transaction to ensure consistency
       let result = db.with_write_txn(|w_db_txn| {
         let _ = w_db_txn.push_update(self.uid, object_id, update)?;
         Ok(())
@@ -156,7 +202,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
 
   fn reset(&self, object_id: &str) {
-    if let Some(db) = self.db.upgrade() {
+    if let Some(db) = self.collab_db.upgrade() {
       if let Err(e) = db.with_write_txn(|w_db_txn| {
         w_db_txn.delete_all_updates(self.uid, object_id)?;
         Ok(())
@@ -167,7 +213,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
   }
 
   fn flush(&self, object_id: &str, _doc: &Doc) {
-    if let Some(db) = self.db.upgrade() {
+    if let Some(db) = self.collab_db.upgrade() {
       self.flush_doc(&db, object_id);
     }
   }

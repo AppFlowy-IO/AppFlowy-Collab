@@ -7,6 +7,7 @@ use collab_document::blocks::{
   Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, DocumentData, DocumentMeta,
 };
 use collab_document::document::Document;
+use collab_entity::CollabType;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
@@ -26,7 +27,13 @@ impl BlockTestCore {
   pub async fn new() -> Self {
     let db = document_storage();
     let doc_id = "1";
-    let disk_plugin = RocksdbDiskPlugin::new(1, Arc::downgrade(&db));
+    let disk_plugin = RocksdbDiskPlugin::new(
+      1,
+      doc_id.to_string(),
+      CollabType::Document,
+      Arc::downgrade(&db),
+      None,
+    );
     let collab = CollabBuilder::new(1, doc_id)
       .with_plugin(disk_plugin)
       .with_device_id("1")

@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 anyhow.workspace = true
 chrono.workspace = true
 collab = {path = "../collab" }
+collab-entity.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -19,6 +20,7 @@ thiserror = "1.0.30"
 tokio = {version = "1.26", features = ["rt", "sync"]}
 tokio-stream = {version = "0.1.14", features = ["sync"]}
 tracing.workspace = true
+getrandom = { version = "0.2", optional = true }
 
 [dev-dependencies]
 assert-json-diff = "2.0.2"
@@ -32,5 +34,5 @@ walkdir = "2.3.2"
 zip = "0.6.6"
 
 [features]
-wasm_build = []
+wasm_build = ["getrandom/js"]
 

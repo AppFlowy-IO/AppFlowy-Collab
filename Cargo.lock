@@ -320,6 +320,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "collab",
+ "collab-entity",
  "collab-plugins",
  "futures",
  "getrandom 0.2.9",
@@ -358,8 +359,10 @@ dependencies = [
  "assert-json-diff",
  "chrono",
  "collab",
+ "collab-entity",
  "collab-plugins",
  "fs_extra",
+ "getrandom 0.2.9",
  "nanoid",
  "parking_lot",
  "serde",
@@ -431,6 +434,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -853,6 +857,7 @@ dependencies = [
  "glob",
  "libc",
  "libz-sys",
+ "zstd-sys",
 ]
 
 [[package]]
