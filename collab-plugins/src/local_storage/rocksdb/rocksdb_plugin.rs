@@ -10,7 +10,7 @@ use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_entity::CollabType;
-use tracing::{error, instrument};
+use tracing::{debug, error, instrument};
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
 
@@ -98,12 +98,18 @@ impl RocksdbDiskPlugin {
   fn create_snapshot_if_need(&self, update_count: u32) {
     if update_count != 0 && update_count % self.config.snapshot_per_update == 0 {
       if let Some(snapshot) = &self.snapshot {
-        snapshot.create_snapshot(
-          self.collab_db.clone(),
-          self.uid,
-          &self.object_id,
-          &self.collab_type,
-        );
+        if snapshot.should_create_snapshot() {
+          debug!(
+            "create snapshot for {}, update_count:{}, snapshot_per_update:{}",
+            self.object_id, update_count, self.config.snapshot_per_update
+          );
+          snapshot.create_snapshot(
+            self.collab_db.clone(),
+            self.uid,
+            &self.object_id,
+            &self.collab_type,
+          );
+        }
       }
       self.update_count.store(0, SeqCst);
     }

@@ -239,7 +239,7 @@ impl Block {
   }
 
   fn collab_for_row(&self, row_id: &RowId) -> Arc<MutexCollab> {
-    let config = CollabPersistenceConfig::new().snapshot_per_update(5);
+    let config = CollabPersistenceConfig::new().snapshot_per_update(100);
     let doc_state = CollabDocState::default();
     self.collab_service.build_collab_with_config(
       self.uid,

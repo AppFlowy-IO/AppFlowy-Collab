@@ -8,7 +8,7 @@ pub struct CollabPersistenceConfig {
   /// Enable snapshot. Default is [false].
   pub enable_snapshot: bool,
   /// Generate a snapshot every N updates
-  /// Default is 20. The value must be greater than 0.
+  /// Default is 100. The value must be greater than 0.
   pub snapshot_per_update: u32,
 }
 
