@@ -42,7 +42,7 @@ impl RocksStore {
     db_opts.set_wal_dir(path.as_ref().join("wal"));
     db_opts.set_wal_bytes_per_sync(1024 * 1024);
     db_opts.set_wal_size_limit_mb(2);
-    db_opts.set_max_total_wal_size(10 * 1024 * 1024);
+    db_opts.set_max_total_wal_size(20 * 1024 * 1024);
 
     // write buffer
     db_opts.set_bytes_per_sync(1024 * 1024);
