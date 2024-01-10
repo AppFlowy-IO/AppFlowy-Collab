@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::bail;
 use collab::core::collab::IndexContentSender;
 use collab::preclude::{
-  Any, DeepEventsSubscription, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  Any, DeepEventsSubscription, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -217,6 +217,22 @@ impl ViewsMap {
   pub fn get_view(&self, view_id: &str) -> Option<Arc<View>> {
     let txn = self.container.transact();
     self.get_view_with_txn(&txn, view_id)
+  }
+
+  pub fn get_orphan_views(&self) -> Vec<Arc<View>> {
+    let txn = self.container.transact();
+    self.get_orphan_views_with_txn(&txn)
+  }
+
+  /// Return the orphan views.
+  /// The orphan views are the views that its parent_view_id equal to its view_id.
+  pub fn get_orphan_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Arc<View>> {
+    self
+      .container
+      .keys(txn)
+      .flat_map(|view_id| self.get_view_with_txn(txn, view_id))
+      .filter(|view| view.parent_view_id == view.id)
+      .collect()
   }
 
   /// Return the view with the given view id.

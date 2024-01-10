@@ -216,3 +216,78 @@ async fn delete_child_view_test() {
   let views = folder_test.views.get_views_belong_to("v1");
   assert!(views.is_empty());
 }
+
+#[tokio::test]
+async fn create_orphan_child_views_test() {
+  let uid = UserId::from(1);
+  let folder_test = create_folder_with_workspace(uid.clone(), "fake_w_1").await;
+  let workspace_id = folder_test.get_workspace_id();
+  let view_1 = make_test_view("1", "fake_w_1", vec![]);
+
+  // The orphan view: the parent_view_id equal to the view_id
+  let view_2 = make_test_view("2", "2", vec![]);
+
+  folder_test.insert_view(view_1.clone(), None);
+  folder_test.insert_view(view_2.clone(), None);
+
+  let child_views = folder_test.views.get_views_belong_to(&workspace_id);
+  assert_eq!(child_views.len(), 1);
+
+  let orphan_views = folder_test.views.get_orphan_views();
+  assert_eq!(orphan_views.len(), 1);
+
+  // The folder data should contains the orphan view
+  let folder_data = folder_test.get_folder_data().unwrap();
+  assert_json_include!(
+    actual: json!(folder_data),
+    expected: json!({
+          "current_view": "",
+          "favorites": {},
+          "recent": {},
+          "trash": {},
+          "views": [
+            {
+              "children": {
+                "items": []
+              },
+              "created_by": 1,
+              "desc": "",
+              "icon": null,
+              "id": "1",
+              "is_favorite": false,
+              "last_edited_by": 1,
+              "layout": 0,
+              "name": "",
+              "parent_view_id": "fake_w_1"
+            },
+            {
+              "children": {
+                "items": []
+              },
+              "created_by": 1,
+              "desc": "",
+              "icon": null,
+              "id": "2",
+              "is_favorite": false,
+              "last_edited_by": 1,
+              "layout": 0,
+              "name": "",
+              "parent_view_id": "2"
+            }
+          ],
+          "workspace": {
+            "child_views": {
+              "items": [
+                {
+                  "id": "1"
+                }
+              ]
+            },
+            "created_by": 1,
+            "id": "fake_w_1",
+            "last_edited_by": 1,
+            "name": ""
+          }
+        })
+  );
+}

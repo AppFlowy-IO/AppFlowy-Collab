@@ -182,9 +182,16 @@ impl Folder {
     let current_view = self.get_current_view_with_txn(&txn).unwrap_or_default();
 
     let mut views = vec![];
+    let orphan_views = self
+      .views
+      .get_orphan_views_with_txn(&txn)
+      .iter()
+      .map(|view| view.as_ref().clone())
+      .collect::<Vec<View>>();
     for view in self.get_workspace_views_with_txn(&txn) {
       views.extend(self.get_view_recursively_with_txn(&txn, &view.id));
     }
+    views.extend(orphan_views);
 
     let favorites = self
       .section
