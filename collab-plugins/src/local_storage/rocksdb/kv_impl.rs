@@ -60,9 +60,9 @@ impl RocksStore {
     db_opts.set_level_zero_stop_writes_trigger(10);
 
     // log
+    // don't set the log dir (set_db_log_dir) because it will cause the 'file name too long' error on mobile platform
     db_opts.set_recycle_log_file_num(5);
     db_opts.set_keep_log_file_num(5);
-    db_opts.set_db_log_dir(path.as_ref().join("logs"));
 
     let open_result = TransactionDB::<SingleThreaded>::open(&db_opts, &txn_db_opts, &path);
     let db = match open_result {
