@@ -37,6 +37,10 @@ getrandom = { version = "0.2", optional = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rocksdb = { version = "0.21.0", default-features = false, features = ["zstd"] }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+indexed_db_futures = { version = "0.4.1" }
+wasm-bindgen = "0.2"
+js-sys = "0.3"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }

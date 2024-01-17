@@ -3,7 +3,6 @@ use std::io::Write;
 use std::ops::RangeBounds;
 use std::panic;
 use std::panic::AssertUnwindSafe;
-use std::path::Path;
 use std::sync::Arc;
 
 use crate::local_storage::kv::keys::*;
@@ -15,9 +14,6 @@ use yrs::{TransactionMut, Update};
 
 pub trait KVTransactionDB: Send + Sync + 'static {
   type TransactionAction<'a>;
-  fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError>
-  where
-    Self: Sized;
 
   fn read_txn<'a, 'b>(&'b self) -> Self::TransactionAction<'a>
   where

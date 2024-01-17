@@ -114,13 +114,6 @@ impl KVTransactionDBRocksdbImpl {
 impl KVTransactionDB for KVTransactionDBRocksdbImpl {
   type TransactionAction<'a> = RocksdbKVStoreImpl<'a, TransactionDB>;
 
-  fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError>
-  where
-    Self: Sized,
-  {
-    KVTransactionDBRocksdbImpl::open(path)
-  }
-
   fn read_txn<'a, 'b>(&'b self) -> Self::TransactionAction<'a>
   where
     'b: 'a,
@@ -177,8 +170,8 @@ impl<'a, DB: Send + Sync> RocksdbKVStoreImpl<'a, DB> {
 }
 
 impl<'a, DB: Send + Sync> KVStore<'a> for RocksdbKVStoreImpl<'a, DB> {
-  type Range = RocksDBRange<'a, DB>;
-  type Entry = RocksDBEntry;
+  type Range = RocksdbRange<'a, DB>;
+  type Entry = RocksdbEntry;
   type Value = Vec<u8>;
   type Error = PersistenceError;
 
@@ -243,7 +236,7 @@ impl<'a, DB: Send + Sync> KVStore<'a> for RocksdbKVStoreImpl<'a, DB> {
     };
     let iterator_mode = IteratorMode::From(from, Forward);
     let iter = self.0.iterator_opt(iterator_mode, opt);
-    Ok(RocksDBRange {
+    Ok(RocksdbRange {
       // Safe to transmute because the lifetime of the iterator is the same as the lifetime of the
       // transaction.
       inner: unsafe { std::mem::transmute(iter) },
@@ -256,7 +249,7 @@ impl<'a, DB: Send + Sync> KVStore<'a> for RocksdbKVStoreImpl<'a, DB> {
     let mut raw = self.0.raw_iterator_opt(opt);
     raw.seek_for_prev(key);
     if let Some((key, value)) = raw.item() {
-      Ok(Some(RocksDBEntry::new(key.to_vec(), value.to_vec())))
+      Ok(Some(RocksdbEntry::new(key.to_vec(), value.to_vec())))
     } else {
       Ok(None)
     }
@@ -270,13 +263,13 @@ impl<'a, DB: Send + Sync> From<Transaction<'a, DB>> for RocksdbKVStoreImpl<'a, D
   }
 }
 
-pub struct RocksDBRange<'a, DB> {
+pub struct RocksdbRange<'a, DB> {
   inner: DBIteratorWithThreadMode<'a, Transaction<'a, DB>>,
   to: Vec<u8>,
 }
 
-impl<'a, DB: Send + Sync> Iterator for RocksDBRange<'a, DB> {
-  type Item = RocksDBEntry;
+impl<'a, DB: Send + Sync> Iterator for RocksdbRange<'a, DB> {
+  type Item = RocksdbEntry;
 
   fn next(&mut self) -> Option<Self::Item> {
     let n = self.inner.next()?;
@@ -284,7 +277,7 @@ impl<'a, DB: Send + Sync> Iterator for RocksDBRange<'a, DB> {
       if key.as_ref() >= self.to.as_slice() {
         None
       } else {
-        Some(RocksDBEntry::new(key.to_vec(), value.to_vec()))
+        Some(RocksdbEntry::new(key.to_vec(), value.to_vec()))
       }
     } else {
       None
@@ -292,18 +285,18 @@ impl<'a, DB: Send + Sync> Iterator for RocksDBRange<'a, DB> {
   }
 }
 
-pub struct RocksDBEntry {
+pub struct RocksdbEntry {
   key: Vec<u8>,
   value: Vec<u8>,
 }
 
-impl RocksDBEntry {
+impl RocksdbEntry {
   pub fn new(key: Vec<u8>, value: Vec<u8>) -> Self {
     Self { key, value }
   }
 }
 
-impl KVEntry for RocksDBEntry {
+impl KVEntry for RocksdbEntry {
   fn key(&self) -> &[u8] {
     self.key.as_ref()
   }
