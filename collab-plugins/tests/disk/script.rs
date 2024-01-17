@@ -11,6 +11,7 @@ use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 
 use collab_entity::CollabType;
+use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
 
@@ -70,7 +71,7 @@ impl CollabPersistenceTest {
     let tempdir = TempDir::new().unwrap();
     let db_path = tempdir.into_path();
     let uid = 1;
-    let db = Arc::new(CollabKVDB::open_opt(db_path.clone(), false).unwrap());
+    let db = Arc::new(CollabKVDB::open(db_path.clone()).unwrap());
     let cleaner = Cleaner::new(db_path);
     Self {
       uid,

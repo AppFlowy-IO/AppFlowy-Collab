@@ -3,6 +3,7 @@ use std::io::Write;
 use std::ops::RangeBounds;
 use std::panic;
 use std::panic::AssertUnwindSafe;
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::local_storage::kv::keys::*;
@@ -11,6 +12,26 @@ use crate::local_storage::kv::snapshot::CollabSnapshot;
 use crate::local_storage::kv::PersistenceError;
 use smallvec::SmallVec;
 use yrs::{TransactionMut, Update};
+
+pub trait KVTransactionDB: Send + Sync + 'static {
+  type TransactionAction<'a>;
+  fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError>
+  where
+    Self: Sized;
+
+  fn read_txn<'a, 'b>(&'b self) -> Self::TransactionAction<'a>
+  where
+    'b: 'a;
+
+  fn with_write_txn<'a, 'b, Output>(
+    &'b self,
+    f: impl FnOnce(&Self::TransactionAction<'a>) -> Result<Output, PersistenceError>,
+  ) -> Result<Output, PersistenceError>
+  where
+    'b: 'a;
+
+  fn flush(&self) -> Result<(), PersistenceError>;
+}
 
 pub trait KVStore<'a> {
   type Range: Iterator<Item = Self::Entry>;

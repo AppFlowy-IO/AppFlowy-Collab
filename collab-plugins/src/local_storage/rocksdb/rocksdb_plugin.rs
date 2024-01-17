@@ -16,6 +16,7 @@ use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
 
 use crate::local_storage::kv::doc::CollabKVAction;
 use crate::local_storage::kv::snapshot::SnapshotPersistence;
+use crate::local_storage::kv::KVTransactionDB;
 use crate::local_storage::rocksdb::snapshot_plugin::CollabSnapshot;
 use crate::local_storage::CollabPersistenceConfig;
 

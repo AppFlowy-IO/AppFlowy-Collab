@@ -10,6 +10,7 @@ use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::user::WorkspaceDatabase;
 use collab_database::views::{CreateDatabaseParams, OrderObjectPosition};
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use serde_json::Value;
@@ -72,7 +73,7 @@ impl DatabaseTest {
   pub async fn new(config: CollabPersistenceConfig) -> Self {
     let tempdir = TempDir::new().unwrap();
     let db_path = tempdir.into_path();
-    let collab_db = Arc::new(CollabKVDB::open_opt(db_path.clone(), false).unwrap());
+    let collab_db = Arc::new(CollabKVDB::open(db_path.clone()).unwrap());
     let workspace_database =
       workspace_database_with_db(1, Arc::downgrade(&collab_db), Some(config.clone())).await;
     Self {

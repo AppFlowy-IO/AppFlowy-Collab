@@ -4,6 +4,7 @@ use assert_json_diff::assert_json_eq;
 use collab::preclude::CollabBuilder;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use std::sync::Arc;
 

@@ -2,6 +2,7 @@ use std::thread;
 
 use crate::disk::util::rocks_db;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
 use yrs::{Doc, GetString, Text, Transact};
 
@@ -33,7 +34,7 @@ async fn single_thread_test() {
   }
   drop(db);
 
-  let db = CollabKVDB::open_opt(path, false).unwrap();
+  let db = CollabKVDB::open(path).unwrap();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
     let doc = Doc::new();
@@ -80,7 +81,7 @@ async fn rocks_multiple_thread_test() {
   }
   drop(db);
 
-  let db = CollabKVDB::open_opt(path, false).unwrap();
+  let db = CollabKVDB::open(path).unwrap();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
     let doc = Doc::new();

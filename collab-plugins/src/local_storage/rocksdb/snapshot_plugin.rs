@@ -2,7 +2,7 @@ use std::sync::{Arc, Weak};
 
 use crate::local_storage::kv::doc::CollabKVAction;
 use crate::local_storage::kv::snapshot::SnapshotPersistence;
-use crate::local_storage::kv::PersistenceError;
+use crate::local_storage::kv::{KVTransactionDB, PersistenceError};
 use crate::CollabKVDB;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
