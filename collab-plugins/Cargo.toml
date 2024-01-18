@@ -52,6 +52,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 config = { version = "0.13.3", default-features = false, features = ["yaml"] }
 dotenv = "0.15.0"
 futures = "0.3.17"
+wasm-bindgen-test = "0.3.40"
 
 
 [features]

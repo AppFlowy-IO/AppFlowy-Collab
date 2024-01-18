@@ -1,3 +1,5 @@
+use anyhow::anyhow;
+
 #[derive(Debug, thiserror::Error)]
 pub enum PersistenceError {
   #[cfg(not(target_arch = "wasm32"))]
@@ -21,8 +23,8 @@ pub enum PersistenceError {
   #[error(transparent)]
   Bincode(#[from] bincode::Error),
 
-  #[error("The document is not exist")]
-  DocumentNotExist,
+  #[error("{0}")]
+  RecordNotFound(String),
 
   #[error("The document already exist")]
   DocumentAlreadyExist,
@@ -44,6 +46,13 @@ pub enum PersistenceError {
 
   #[error(transparent)]
   Internal(#[from] anyhow::Error),
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<indexed_db_futures::web_sys::DomException> for PersistenceError {
+  fn from(value: indexed_db_futures::web_sys::DomException) -> Self {
+    PersistenceError::Internal(anyhow!("DOMException: {:?}", value))
+  }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
