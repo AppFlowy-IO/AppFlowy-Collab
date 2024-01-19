@@ -48,6 +48,12 @@ pub enum PersistenceError {
   Internal(#[from] anyhow::Error),
 }
 
+impl PersistenceError {
+  pub fn is_record_not_found(&self) -> bool {
+    matches!(self, PersistenceError::RecordNotFound(_))
+  }
+}
+
 #[cfg(target_arch = "wasm32")]
 impl From<indexed_db_futures::web_sys::DomException> for PersistenceError {
   fn from(value: indexed_db_futures::web_sys::DomException) -> Self {

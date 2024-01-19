@@ -1,12 +1,23 @@
-use crate::local_storage::kv::{KVTransactionDB, PersistenceError};
+use crate::local_storage::kv::{KVStore, PersistenceError};
 use collab::core::collab_plugin::EncodedCollab;
 use indexed_db_futures::js_sys::wasm_bindgen::JsValue;
 use indexed_db_futures::prelude::*;
+
 use js_sys::Uint8Array;
 
+use crate::local_storage::kv::keys::{make_doc_id_key, DocID, DOC_ID_LEN};
+use crate::local_storage::kv::oid::OID;
+use indexed_db_futures::web_sys::IdbKeyRange;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
 pub struct CollabIndexeddb {
-  db: IdbDatabase,
+  db: Arc<RwLock<IdbDatabase>>,
 }
+
+unsafe impl Send for CollabIndexeddb {}
+unsafe impl Sync for CollabIndexeddb {}
+
 const COLLAB_KV_STORE: &str = "collab_kv";
 impl CollabIndexeddb {
   pub async fn new() -> Result<Self, PersistenceError> {
@@ -17,25 +28,18 @@ impl CollabIndexeddb {
       }
       Ok(())
     }));
-    let db = db_req.await?;
+    let db = Arc::new(RwLock::new(db_req.await?));
     Ok(Self { db })
   }
 
-  pub fn read_txn(&self) -> Result<IdbTransactionActionImpl<'_>, PersistenceError> {
-    let tx = self
-      .db
-      .transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readonly)?;
-    Ok(IdbTransactionActionImpl::new(tx)?)
-  }
-
-  pub async fn with_write_txn<Output>(
+  pub async fn with_write_transaction<Output>(
     &self,
     f: impl FnOnce(&IdbTransactionActionImpl<'_>) -> Result<Output, PersistenceError>,
   ) -> Result<Output, PersistenceError> {
-    let tx = self
-      .db
+    let db_write_guard = self.db.write().await;
+    let txn = db_write_guard
       .transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
-    let action_impl = IdbTransactionActionImpl::new(tx)?;
+    let action_impl = IdbTransactionActionImpl::new(txn)?;
     let output = f(&action_impl)?;
     action_impl.tx.await.into_result()?;
     Ok(output)
@@ -45,19 +49,27 @@ impl CollabIndexeddb {
     &self,
     object_id: &str,
   ) -> Result<EncodedCollab, PersistenceError> {
-    let js_object_id = JsValue::from_str(object_id);
-    let read_txn = self.read_txn()?;
-    let store = read_txn.get_store()?;
-    match store.get(&js_object_id)?.await? {
+    let bytes = self.get_data(object_id).await?;
+    let encoded = EncodedCollab::decode_from_bytes(&bytes)?;
+    Ok(encoded)
+  }
+
+  pub async fn get_data<K: AsRef<[u8]>>(&self, key: K) -> Result<Vec<u8>, PersistenceError> {
+    let js_key = JsValue::from(Uint8Array::from(key.as_ref()));
+    match self
+      .db
+      .read()
+      .await
+      .transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readonly)?
+      .object_store(COLLAB_KV_STORE)?
+      .get(&js_key)?
+      .await?
+    {
       None => Err(PersistenceError::RecordNotFound(format!(
-        "object with given id: {} is not found",
-        object_id
+        "object with given key:{:?} is not found",
+        js_key.as_string()
       ))),
-      Some(value) => {
-        let bytes = Uint8Array::new(&value).to_vec();
-        let encoded = EncodedCollab::decode_from_bytes(&bytes)?;
-        Ok(encoded)
-      },
+      Some(value) => Ok(Uint8Array::new(&value).to_vec()),
     }
   }
 
@@ -70,9 +82,9 @@ impl CollabIndexeddb {
     let bytes = encoded_collab.encode_to_bytes()?;
     let buffer = Uint8Array::from(&bytes[..]).buffer();
     self
-      .with_write_txn(|txn| {
+      .with_write_transaction(|txn| {
         let store = txn.get_store()?;
-        store.put_key_val(&object_id, (&buffer).into())?;
+        store.put_key_val(&object_id, &buffer)?;
         Ok(())
       })
       .await
@@ -92,4 +104,20 @@ impl<'a> IdbTransactionActionImpl<'a> {
     let store = self.tx.object_store(COLLAB_KV_STORE)?;
     Ok(store)
   }
+}
+
+async fn get_doc_id<K, S>(
+  uid: i64,
+  object_id: &K,
+  collab_db: &Arc<CollabIndexeddb>,
+) -> Option<DocID>
+where
+  K: AsRef<[u8]> + ?Sized,
+{
+  let uid_id_bytes = &uid.to_be_bytes();
+  let key = make_doc_id_key(uid_id_bytes, object_id.as_ref());
+  let value = collab_db.get_data(key).await.ok()?;
+  let mut bytes = [0; DOC_ID_LEN];
+  bytes[0..DOC_ID_LEN].copy_from_slice(value.as_ref());
+  Some(OID::from_be_bytes(bytes))
 }

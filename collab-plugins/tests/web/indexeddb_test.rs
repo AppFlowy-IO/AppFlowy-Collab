@@ -1,6 +1,6 @@
 use collab::core::collab_plugin::EncodedCollab;
 use collab_plugins::local_storage::indexeddb::kv_impl::CollabIndexeddb;
-use tracing_subscriber::fmt::format;
+
 use uuid::Uuid;
 use wasm_bindgen_test::*;
 
