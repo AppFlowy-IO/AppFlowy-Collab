@@ -1,5 +1,8 @@
+use wasm_bindgen::JsValue;
+
 pub mod local_storage;
 
+#[macro_export]
 macro_rules! if_native {
     ($($item:item)*) => {$(
         #[cfg(not(target_arch = "wasm32"))]
@@ -7,6 +10,7 @@ macro_rules! if_native {
     )*}
 }
 
+#[macro_export]
 macro_rules! if_wasm {
     ($($item:item)*) => {$(
         #[cfg(target_arch = "wasm32")]
@@ -23,5 +27,10 @@ if_native! {
 }
 
 if_wasm! {
+    use wasm_bindgen::prelude::wasm_bindgen;
     pub type CollabKVDB = local_storage::indexeddb::kv_impl::CollabIndexeddb;
+    #[wasm_bindgen]
+    extern "C" {
+        fn get_current_timestamp() ->  wasm_bindgen::JsValue;
+    }
 }

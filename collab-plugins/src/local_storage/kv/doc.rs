@@ -382,7 +382,7 @@ where
     Ok(did)
   } else {
     let key = make_doc_id_key(&uid.to_be_bytes(), object_id.as_ref());
-    let new_did = make_doc_id_for_key(store, key)?;
+    let new_did = insert_doc_id_for_key(store, key)?;
     Ok(new_did)
   }
 }

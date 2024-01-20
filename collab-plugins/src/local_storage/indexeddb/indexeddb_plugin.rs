@@ -1,18 +1,25 @@
 use crate::local_storage::indexeddb::kv_impl::CollabIndexeddb;
-use crate::local_storage::kv::{get_id_for_key, KVStore, PersistenceError};
+use crate::local_storage::kv::keys::{make_doc_id_key, make_doc_state_key, make_state_vector_key};
+use std::future::Future;
+
 use async_stream::stream;
 use async_trait::async_trait;
 use collab::core::awareness::Awareness;
+
 use collab::core::origin::CollabOrigin;
 use collab::preclude::CollabPlugin;
 use collab_entity::CollabType;
 use futures::stream::StreamExt;
+
+use crate::local_storage::kv::PersistenceError;
+use anyhow::anyhow;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Weak};
 use tracing::error;
 use yrs::updates::decoder::Decode;
-use yrs::{Doc, Transact, Update};
+use yrs::updates::encoder::Encode;
+use yrs::{Doc, ReadTxn, StateVector, Transact, Update};
 
 pub struct IndexeddbDiskPlugin {
   uid: i64,
@@ -45,32 +52,46 @@ impl CollabPlugin for IndexeddbDiskPlugin {
   async fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
     if let Some(db) = self.collab_db.upgrade() {
       let object_id = object_id.to_string();
-      let (tx, rx) = tokio::sync::oneshot::channel();
-      tokio::task::spawn_local(async move {
-        let encoded_collab = db.get_encoded_collab(&object_id).await;
-        let _ = tx.send(encoded_collab);
-      });
+      let doc = doc.clone();
+      let origin = origin.clone();
+      let uid = self.uid;
 
-      match rx.await {
-        Ok(Ok(encoded_collab)) => {
-          let mut txn = doc.transact_mut_with(origin.clone());
-          if let Ok(update) = Update::decode_v1(&encoded_collab.doc_state) {
-            txn.apply_update(update);
-            txn.commit();
-            drop(txn);
-          } else {
-            error!("failed to decode update");
-          }
-        },
-        Ok(Err(err)) => {
-          if !err.is_record_not_found() {
-            error!("failed to get encoded collab: {:?}", err);
-          }
-        },
-        Err(err) => {
-          error!("receiver error: {:?}", err);
-        },
-      }
+      tokio::task::spawn_local(async move {
+        match db.get_encoded_collab(&object_id).await {
+          Ok(encoded_collab) => {
+            let mut txn = doc.transact_mut_with(origin);
+            if let Ok(update) = Update::decode_v1(&encoded_collab.doc_state) {
+              txn.apply_update(update);
+              txn.commit();
+              drop(txn);
+            } else {
+              error!("failed to decode update");
+            }
+          },
+          Err(err) => {
+            if err.is_record_not_found() {
+              let mut txn = doc.transact_mut_with(origin);
+              let doc_state = txn.encode_diff_v1(&StateVector::default());
+              let sv = txn.state_vector().encode_v1();
+              drop(txn);
+
+              let f = || async move {
+                let doc_id = db.create_doc_id(uid, object_id).await?;
+                let doc_state_key = make_doc_state_key(doc_id);
+                let sv_key = make_state_vector_key(doc_id);
+                db.set_data(doc_state_key, doc_state).await?;
+                db.set_data(sv_key, sv).await?;
+                Ok::<(), PersistenceError>(())
+              };
+              if let Err(err) = f().await {
+                error!("failed to create doc_id: {:?}", err);
+              }
+            } else {
+              error!("failed to get encoded collab: {:?}", err);
+            }
+          },
+        }
+      });
     } else {
       tracing::warn!("collab_db is dropped");
     }
@@ -109,6 +130,6 @@ impl DocUpdateStream {
             }
         }
     };
-    stream.for_each(|data| async {}).await;
+    stream.for_each(|_data| async {}).await;
   }
 }

@@ -189,7 +189,7 @@ where
   Some(OID::from_be_bytes(bytes))
 }
 
-pub fn make_doc_id_for_key<'a, S>(store: &S, key: Key<20>) -> Result<DocID, PersistenceError>
+pub fn insert_doc_id_for_key<'a, S>(store: &S, key: Key<20>) -> Result<DocID, PersistenceError>
 where
   S: KVStore<'a>,
   PersistenceError: From<<S as KVStore<'a>>::Error>,

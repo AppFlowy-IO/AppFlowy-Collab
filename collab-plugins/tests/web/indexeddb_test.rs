@@ -1,7 +1,8 @@
 use collab::core::collab_plugin::EncodedCollab;
 use collab_plugins::local_storage::indexeddb::kv_impl::CollabIndexeddb;
-
 use uuid::Uuid;
+use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 
 #[wasm_bindgen_test]
@@ -30,8 +31,32 @@ async fn indexeddb_get_non_exist_encoded_collab_test() {
   let db = CollabIndexeddb::new().await.unwrap();
   let object_id = Uuid::new_v4().to_string();
   let error = db.get_encoded_collab(&object_id).await.unwrap_err();
-  assert_eq!(
-    error.to_string(),
-    format!("object with given id: {} is not found", object_id)
-  );
+  assert!(error.is_record_not_found());
+}
+
+#[wasm_bindgen_test]
+async fn indexeddb_push_update_test() {
+  let db = CollabIndexeddb::new().await.unwrap();
+  let object_id = Uuid::new_v4().to_string();
+  let uid: i64 = 1;
+
+  db.create_doc_id(uid, &object_id).await.unwrap();
+  let update_1 = vec![1, 2, 3];
+  db.push_update(uid, &object_id, &update_1).await.unwrap();
+
+  let update_2 = vec![4, 5, 6];
+  db.push_update(uid, &object_id, &update_2).await.unwrap();
+
+  let update_3 = vec![7, 8, 9];
+  db.push_update(uid, &object_id, &update_3).await.unwrap();
+
+  let update_4 = vec![10, 11, 12];
+  db.push_update(uid, &object_id, &update_4).await.unwrap();
+
+  let updates = db.get_all_updates(uid, &object_id).await.unwrap();
+  assert_eq!(updates.len(), 4);
+  assert_eq!(updates[0], update_1);
+  assert_eq!(updates[1], update_2);
+  assert_eq!(updates[2], update_3);
+  assert_eq!(updates[3], update_4);
 }
