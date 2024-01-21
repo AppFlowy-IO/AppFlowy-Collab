@@ -146,11 +146,11 @@ if_wasm! {
 
   impl Timer {
     fn start() -> Self {
-      Self { start: web_sys::js_sys::Date::now() }
+      Self { start: js_sys::Date::now() }
     }
 
     fn elapsed(&self) -> Duration {
-      let now = web_sys::js_sys::Date::now();
+      let now = js_sys::Date::now();
       let elapsed_ms = now - self.start;
       Duration::from_millis(elapsed_ms as u64)
     }
