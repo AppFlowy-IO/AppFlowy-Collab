@@ -3,6 +3,8 @@ use std::ops::RangeBounds;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::local_storage::kv::doc::CollabKVAction;
+use crate::local_storage::kv::keys::DocID;
 use crate::local_storage::kv::{KVEntry, KVStore, KVTransactionDB, PersistenceError};
 use rocksdb::Direction::Forward;
 use rocksdb::{
@@ -108,6 +110,16 @@ impl KVTransactionDBRocksdbImpl {
     }?;
 
     Ok(Self { db: Arc::new(db) })
+  }
+
+  pub fn is_exist(&self, uid: i64, object_id: &str) -> Result<bool, PersistenceError> {
+    let read_txn = self.read_txn();
+    Ok(read_txn.is_exist(uid, object_id))
+  }
+
+  pub async fn delete_doc(&self, uid: i64, doc_id: &str) -> Result<(), PersistenceError> {
+    self.with_write_txn(|txn| txn.delete_doc(uid, doc_id))?;
+    Ok(())
   }
 }
 
