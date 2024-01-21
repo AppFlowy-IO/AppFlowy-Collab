@@ -1,6 +1,5 @@
 use crate::local_storage::kv::PersistenceError;
 use collab::core::collab_plugin::EncodedCollab;
-use indexed_db_futures::js_sys::wasm_bindgen::JsValue;
 use indexed_db_futures::prelude::*;
 use js_sys::{ArrayBuffer, Uint8Array};
 
@@ -15,7 +14,7 @@ use indexed_db_futures::web_sys::IdbKeyRange;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::error;
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{JsCast, JsValue};
 use web_sys::console;
 use yrs::updates::decoder::Decode;
 use yrs::{Doc, Transact, Update};
