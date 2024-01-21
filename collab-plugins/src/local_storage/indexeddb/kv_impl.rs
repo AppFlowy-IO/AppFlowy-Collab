@@ -15,7 +15,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::error;
 use wasm_bindgen::{JsCast, JsValue};
-use web_sys::console;
 use yrs::updates::decoder::Decode;
 use yrs::{Doc, Transact, Update};
 
@@ -219,8 +218,8 @@ impl CollabIndexeddb {
     // delete the doc state and state vector
     let doc_state_key = make_doc_state_key(doc_id);
     let sv_key = make_state_vector_key(doc_id);
-    store.delete(doc_state_key.as_ref())?;
-    store.delete(sv_key.as_ref())?;
+    store.delete(&to_js_key(doc_state_key.as_ref()))?;
+    store.delete(&to_js_key(sv_key.as_ref()))?;
     transaction_result_to_result(transaction.await)?;
     Ok(())
   }
