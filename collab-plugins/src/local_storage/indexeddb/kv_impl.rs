@@ -1,4 +1,4 @@
-use crate::local_storage::kv::{KVStore, PersistenceError};
+use crate::local_storage::kv::PersistenceError;
 use collab::core::collab_plugin::EncodedCollab;
 use indexed_db_futures::js_sys::wasm_bindgen::JsValue;
 use indexed_db_futures::prelude::*;
@@ -6,7 +6,7 @@ use js_sys::{ArrayBuffer, Uint8Array};
 
 use crate::local_storage::kv::keys::{
   clock_from_key, make_doc_end_key, make_doc_id_key, make_doc_start_key, make_doc_state_key,
-  make_doc_update_key, make_state_vector_key, Clock, DocID, Key, DOC_ID_LEN,
+  make_doc_update_key, make_state_vector_key, Clock, DocID, DOC_ID_LEN,
 };
 use crate::local_storage::kv::oid::{LOCAL_DOC_ID_GEN, OID};
 use anyhow::anyhow;
@@ -14,10 +14,11 @@ use collab::core::collab::TransactionMutExt;
 use indexed_db_futures::web_sys::IdbKeyRange;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::error;
 use wasm_bindgen::JsCast;
 use web_sys::console;
 use yrs::updates::decoder::Decode;
-use yrs::{Doc, Transact, TransactionMut, Update};
+use yrs::{Doc, Transact, Update};
 
 pub struct CollabIndexeddb {
   db: Arc<RwLock<IdbDatabase>>,
@@ -31,7 +32,12 @@ impl CollabIndexeddb {
   pub async fn new() -> Result<Self, PersistenceError> {
     let mut db_req = IdbDatabase::open_u32("appflowy_indexeddb", 1)?;
     db_req.set_on_upgrade_needed(Some(|evt: &IdbVersionChangeEvent| -> Result<(), JsValue> {
-      if let None = evt.db().object_store_names().find(|n| n == COLLAB_KV_STORE) {
+      if evt
+        .db()
+        .object_store_names()
+        .find(|n| n == COLLAB_KV_STORE)
+        .is_none()
+      {
         evt.db().create_object_store(COLLAB_KV_STORE)?;
       }
       Ok(())
@@ -223,7 +229,9 @@ impl CollabIndexeddb {
     let _ = cursor_request.delete();
     while cursor_request.continue_cursor()?.await? {
       console::log_1(&JsValue::from_str("delete cursor"));
-      cursor_request.delete();
+      if let Err(err) = cursor_request.delete() {
+        error!("failed to delete cursor: {:?}", err)
+      }
     }
 
     let doc_state_key = make_doc_state_key(doc_id);
@@ -239,7 +247,7 @@ impl CollabIndexeddb {
     Ok(())
   }
 
-  pub async fn push_object(
+  pub async fn push_update(
     &self,
     uid: i64,
     object_id: &str,
@@ -313,7 +321,7 @@ impl CollabIndexeddb {
 
     let next_clock = clock + 1;
     let update_key = make_doc_update_key(id, next_clock);
-    self.set_data_with_store(&store, update_key, update).await?;
+    self.set_data_with_store(store, update_key, update).await?;
     Ok(())
   }
 
@@ -328,7 +336,7 @@ impl CollabIndexeddb {
   {
     let uid_id_bytes = &uid.to_be_bytes();
     let key = make_doc_id_key(uid_id_bytes, object_id.as_ref());
-    let value = self.get_data(&store, key).await.ok()?;
+    let value = self.get_data(store, key).await.ok()?;
     let mut bytes = [0; DOC_ID_LEN];
     bytes[0..DOC_ID_LEN].copy_from_slice(value.as_ref());
     Some(OID::from_be_bytes(bytes))
@@ -354,7 +362,7 @@ fn store_from_transaction<'a>(
 ) -> Result<IdbObjectStore<'a>, PersistenceError> {
   txn
     .object_store(COLLAB_KV_STORE)
-    .map_err(|err| PersistenceError::from(err))
+    .map_err(PersistenceError::from)
 }
 
 pub struct IdbTransactionActionImpl<'a> {

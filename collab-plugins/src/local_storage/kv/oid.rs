@@ -78,8 +78,8 @@ impl DocIDGen {
 
   if_native! {
     fn timestamp(&self) -> u64 {
-      SystemTime::now()
-      .duration_since(SystemTime::UNIX_EPOCH)
+      std::time::SystemTime::now()
+      .duration_since(std::time::SystemTime::UNIX_EPOCH)
       .expect("Clock moved backwards!")
       .as_millis() as u64
     }

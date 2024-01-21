@@ -1,4 +1,4 @@
-use wasm_bindgen::JsValue;
+
 
 pub mod local_storage;
 
@@ -27,10 +27,5 @@ if_native! {
 }
 
 if_wasm! {
-    use wasm_bindgen::prelude::wasm_bindgen;
     pub type CollabKVDB = local_storage::indexeddb::kv_impl::CollabIndexeddb;
-    #[wasm_bindgen]
-    extern "C" {
-        fn get_current_timestamp() ->  wasm_bindgen::JsValue;
-    }
 }

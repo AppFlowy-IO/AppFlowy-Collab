@@ -1,0 +1,38 @@
+name: Wasm Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Run Wasm Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.3.0
+        with:
+          version: latest
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make@${{ env.CARGO_MAKE_VERSION }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+
+      - name: Run Wasm Tests
+        run: cargo make wasm_test

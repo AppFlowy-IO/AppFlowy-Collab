@@ -83,7 +83,7 @@ script = [
   """
   #!/bin/bash
   BASE_DIR=$(pwd)
-  crates=("collab" "collab-document" "collab-folder" "collab-user")
+  crates=("collab" "collab-document" "collab-folder" "collab-user" "collab-plugins")
 
   # Iterate over each crate and build it
   for crate in "${crates[@]}"; do
@@ -94,8 +94,27 @@ script = [
 
     # Build the crate
     wasm-pack build --features="wasm_build" || { echo "Build failed for $crate"; exit 1; }
+  done
+  """
+]
 
-    # No need to cd back since we use absolute paths
+[tasks.wasm_test]
+script_runner = "bash"
+script = [
+  """
+  #!/bin/bash
+  BASE_DIR=$(pwd)
+  crates=("collab-plugins")
+
+  # Iterate over each crate and build it
+  for crate in "${crates[@]}"; do
+    echo "🔥🔥🔥  Running $crate tests with wasm-pack..."
+
+    # Navigate to the crate directory
+    cd "$BASE_DIR/$crate" || { echo "Failed to enter directory $crate"; exit 1; }
+
+    # Build the crate
+    wasm-pack test --headless --firefox --features="wasm_build"
   done
   """
 ]

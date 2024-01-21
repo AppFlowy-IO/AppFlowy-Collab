@@ -45,16 +45,16 @@ async fn indexeddb_push_update_test() {
 
   db.create_doc_id(uid, &object_id).await.unwrap();
   let update_1 = vec![1, 2, 3];
-  db.push_object(uid, &object_id, &update_1).await.unwrap();
+  db.push_update(uid, &object_id, &update_1).await.unwrap();
 
   let update_2 = vec![4, 5, 6];
-  db.push_object(uid, &object_id, &update_2).await.unwrap();
+  db.push_update(uid, &object_id, &update_2).await.unwrap();
 
   let update_3 = vec![7, 8, 9];
-  db.push_object(uid, &object_id, &update_3).await.unwrap();
+  db.push_update(uid, &object_id, &update_3).await.unwrap();
 
   let update_4 = vec![10, 11, 12];
-  db.push_object(uid, &object_id, &update_4).await.unwrap();
+  db.push_update(uid, &object_id, &update_4).await.unwrap();
 
   let updates = db.get_all_updates(uid, &object_id).await.unwrap();
   assert_eq!(updates.len(), 4);
@@ -72,16 +72,16 @@ async fn indexeddb_flush_doc_test() {
 
   db.create_doc_id(uid, &object_id).await.unwrap();
   let update_1 = vec![1, 2, 3];
-  db.push_object(uid, &object_id, &update_1).await.unwrap();
+  db.push_update(uid, &object_id, &update_1).await.unwrap();
 
   let update_2 = vec![4, 5, 6];
-  db.push_object(uid, &object_id, &update_2).await.unwrap();
+  db.push_update(uid, &object_id, &update_2).await.unwrap();
 
   let update_3 = vec![7, 8, 9];
-  db.push_object(uid, &object_id, &update_3).await.unwrap();
+  db.push_update(uid, &object_id, &update_3).await.unwrap();
 
   let update_4 = vec![10, 11, 12];
-  db.push_object(uid, &object_id, &update_4).await.unwrap();
+  db.push_update(uid, &object_id, &update_4).await.unwrap();
 
   let encoded_collab = EncodedCollab {
     state_vector: vec![1, 2, 3].into(),

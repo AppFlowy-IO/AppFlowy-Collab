@@ -1,5 +1,3 @@
-use anyhow::anyhow;
-
 #[derive(Debug, thiserror::Error)]
 pub enum PersistenceError {
   #[cfg(not(target_arch = "wasm32"))]
@@ -60,7 +58,7 @@ impl PersistenceError {
 #[cfg(target_arch = "wasm32")]
 impl From<indexed_db_futures::web_sys::DomException> for PersistenceError {
   fn from(value: indexed_db_futures::web_sys::DomException) -> Self {
-    PersistenceError::Internal(anyhow!("DOMException: {:?}", value))
+    PersistenceError::Internal(anyhow::anyhow!("DOMException: {:?}", value))
   }
 }
 
