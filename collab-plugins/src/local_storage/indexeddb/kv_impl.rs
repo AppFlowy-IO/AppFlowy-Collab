@@ -5,15 +5,19 @@ use indexed_db_futures::prelude::*;
 use js_sys::{ArrayBuffer, Uint8Array};
 
 use crate::local_storage::kv::keys::{
-  clock_from_key, make_doc_id_key, make_doc_state_key, make_doc_update_key, Clock, DocID, Key,
-  DOC_ID_LEN,
+  clock_from_key, make_doc_end_key, make_doc_id_key, make_doc_start_key, make_doc_state_key,
+  make_doc_update_key, make_state_vector_key, Clock, DocID, Key, DOC_ID_LEN,
 };
 use crate::local_storage::kv::oid::{LOCAL_DOC_ID_GEN, OID};
 use anyhow::anyhow;
+use collab::core::collab::TransactionMutExt;
 use indexed_db_futures::web_sys::IdbKeyRange;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use wasm_bindgen::JsCast;
+use web_sys::console;
+use yrs::updates::decoder::Decode;
+use yrs::{Doc, Transact, TransactionMut, Update};
 
 pub struct CollabIndexeddb {
   db: Arc<RwLock<IdbDatabase>>,
@@ -49,20 +53,16 @@ impl CollabIndexeddb {
     Ok(output)
   }
 
-  pub async fn get_data<K>(&self, key: K) -> Result<Vec<u8>, PersistenceError>
+  pub async fn get_data<K>(
+    &self,
+    store: &IdbObjectStore<'_>,
+    key: K,
+  ) -> Result<Vec<u8>, PersistenceError>
   where
     K: AsRef<[u8]>,
   {
-    let js_key = JsValue::from(Uint8Array::from(key.as_ref()));
-    match self
-      .db
-      .read()
-      .await
-      .transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readonly)?
-      .object_store(COLLAB_KV_STORE)?
-      .get(&js_key)?
-      .await?
-    {
+    let js_key = to_js_key(key.as_ref());
+    match store.get(&js_key)?.await? {
       None => Err(PersistenceError::RecordNotFound(format!(
         "object with given key:{:?} is not found",
         js_key
@@ -80,13 +80,14 @@ impl CollabIndexeddb {
     let transaction =
       write_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
     let store = store_from_transaction(&transaction)?;
-    self.set_data_with_store(store, key, value).await?;
+    self.set_data_with_store(&store, key, value).await?;
+    transaction_result_to_result(transaction.await)?;
     Ok(())
   }
 
   pub async fn set_data_with_store<K, V>(
     &self,
-    store: IdbObjectStore<'_>,
+    store: &IdbObjectStore<'_>,
     key: K,
     value: V,
   ) -> Result<(), PersistenceError>
@@ -94,28 +95,168 @@ impl CollabIndexeddb {
     K: AsRef<[u8]>,
     V: AsRef<[u8]>,
   {
-    let js_key = JsValue::from(Uint8Array::from(key.as_ref()));
-    let js_value = JsValue::from(Uint8Array::from(value.as_ref()));
+    let js_key = to_js_key(key.as_ref());
+    let js_value = to_js_key(value.as_ref());
     store.put_key_val(&js_key, &js_value)?.await?;
     Ok(())
   }
 
-  pub async fn flush_doc<K>(&self, uid: i64, object_id: &K)
-  where
-    K: AsRef<[u8]> + ?Sized,
-  {
+  pub async fn create_doc(
+    &self,
+    uid: i64,
+    object_id: &str,
+    encoded_collab: &EncodedCollab,
+  ) -> Result<(), PersistenceError> {
+    let doc_id = self.create_doc_id(uid, object_id).await?;
+    let doc_state_key = make_doc_state_key(doc_id);
+    let sv_key = make_state_vector_key(doc_id);
+
+    let read_guard = self.db.write().await;
+    let transaction =
+      read_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
+    let store = store_from_transaction(&transaction)?;
+    self
+      .set_data_with_store(&store, doc_state_key, &encoded_collab.doc_state)
+      .await?;
+    self
+      .set_data_with_store(&store, sv_key, &encoded_collab.state_vector)
+      .await?;
+
+    transaction_result_to_result(transaction.await)?;
+    Ok(())
   }
 
-  pub async fn push_update(
+  pub async fn load_doc(
+    &self,
+    uid: i64,
+    object_id: &str,
+    doc: Doc,
+  ) -> Result<(), PersistenceError> {
+    let read_guard = self.db.read().await;
+    let transaction =
+      read_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readonly)?;
+    let store = store_from_transaction(&transaction)?;
+    let doc_id = self
+      .get_doc_id(&store, uid, object_id)
+      .await
+      .ok_or_else(|| {
+        PersistenceError::RecordNotFound(format!("doc_id for object_id:{} is not found", object_id))
+      })?;
+
+    let doc_state_key = make_doc_state_key(doc_id);
+    let doc_state = self.get_data(&store, doc_state_key).await?;
+    let updates = fetch_updates(&store, doc_id).await?;
+
+    let mut txn = doc
+      .try_transact_mut()
+      .map_err(|err| PersistenceError::Internal(anyhow!("Transact mut fail. error: {:?}", err)))?;
+    let doc_state_update = Update::decode_v1(doc_state.as_ref()).map_err(PersistenceError::Yrs)?;
+    txn.try_apply_update(doc_state_update)?;
+
+    for update in updates {
+      if let Ok(update) = Update::decode_v1(update.as_ref()) {
+        txn.try_apply_update(update)?;
+      }
+    }
+
+    drop(txn);
+    Ok(())
+  }
+
+  pub async fn get_encoded_collab(
+    &self,
+    uid: i64,
+    object_id: &str,
+  ) -> Result<EncodedCollab, PersistenceError> {
+    let read_guard = self.db.read().await;
+    let transaction =
+      read_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readonly)?;
+    let store = store_from_transaction(&transaction)?;
+
+    let doc_id = self
+      .get_doc_id(&store, uid, object_id)
+      .await
+      .ok_or_else(|| {
+        PersistenceError::RecordNotFound(format!("doc_id for object_id:{} is not found", object_id))
+      })?;
+
+    let doc_state_key = make_doc_state_key(doc_id);
+    let sv_key = make_state_vector_key(doc_id);
+
+    let doc_stata = self.get_data(&store, doc_state_key).await?;
+    let sv = self.get_data(&store, sv_key).await?;
+
+    Ok(EncodedCollab::new_v1(sv, doc_stata))
+  }
+
+  pub async fn flush_doc(
+    &self,
+    uid: i64,
+    object_id: &str,
+    encoded: &EncodedCollab,
+  ) -> Result<(), PersistenceError> {
+    let read_guard = self.db.write().await;
+    let transaction =
+      read_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
+    let store = store_from_transaction(&transaction)?;
+    let doc_id = self
+      .get_doc_id(&store, uid, object_id)
+      .await
+      .ok_or_else(|| {
+        PersistenceError::RecordNotFound(format!("doc_id for object_id:{} is not found", object_id))
+      })?;
+
+    let start = to_js_key(make_doc_start_key(doc_id));
+    let end = to_js_key(make_doc_end_key(doc_id));
+    let key_range = IdbKeyRange::bound(&start, &end).map_err(|err| {
+      PersistenceError::Internal(anyhow!("Get last update key fail. error: {:?}", err))
+    })?;
+
+    let cursor_request = store
+      .open_cursor_with_range(&key_range)?
+      .await?
+      .ok_or_else(|| {
+        PersistenceError::Internal(anyhow!("Open cursor fail. error: {:?}", "cursor is none"))
+      })?;
+
+    // Delete the first key
+    let _ = cursor_request.delete();
+    while cursor_request.continue_cursor()?.await? {
+      console::log_1(&JsValue::from_str("delete cursor"));
+      cursor_request.delete();
+    }
+
+    let doc_state_key = make_doc_state_key(doc_id);
+    let sv_key = make_state_vector_key(doc_id);
+    self
+      .set_data_with_store(&store, doc_state_key, &encoded.doc_state)
+      .await?;
+    self
+      .set_data_with_store(&store, sv_key, &encoded.state_vector)
+      .await?;
+
+    transaction_result_to_result(transaction.await)?;
+    Ok(())
+  }
+
+  pub async fn push_object(
     &self,
     uid: i64,
     object_id: &str,
     update: &[u8],
   ) -> Result<(), PersistenceError> {
-    let doc_id = self.get_doc_id(uid, object_id).await.ok_or_else(|| {
-      PersistenceError::RecordNotFound(format!("doc_id for object_id:{} is not found", object_id))
-    })?;
-    self.put_update(doc_id, update).await?;
+    let write_guard = self.db.write().await;
+    let transaction =
+      write_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
+    let store = store_from_transaction(&transaction)?;
+    let doc_id = self
+      .get_doc_id(&store, uid, object_id)
+      .await
+      .ok_or_else(|| {
+        PersistenceError::RecordNotFound(format!("doc_id for object_id:{} is not found", object_id))
+      })?;
+    self.put_update(&store, doc_id, update).await?;
+    transaction_result_to_result(transaction.await)?;
     Ok(())
   }
 
@@ -124,42 +265,26 @@ impl CollabIndexeddb {
     uid: i64,
     object_id: &str,
   ) -> Result<Vec<Vec<u8>>, PersistenceError> {
-    let doc_id = self.get_doc_id(uid, object_id).await.ok_or_else(|| {
-      PersistenceError::RecordNotFound(format!("doc_id for object_id:{} is not found", object_id))
-    })?;
-    let start = JsValue::from(Uint8Array::from(make_doc_update_key(doc_id, 0).as_ref()));
-    let end = JsValue::from(Uint8Array::from(
-      make_doc_update_key(doc_id, Clock::MAX).as_ref(),
-    ));
-    let key_range = IdbKeyRange::bound(&start, &end).map_err(|err| {
-      PersistenceError::Internal(anyhow!("Get last update key fail. error: {:?}", err))
-    })?;
     let read_guard = self.db.read().await;
     let transaction =
       read_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readonly)?;
     let store = store_from_transaction(&transaction)?;
-    let cursor_request = store
-      .open_cursor_with_range(&key_range)?
-      .await?
+    let doc_id = self
+      .get_doc_id(&store, uid, object_id)
+      .await
       .ok_or_else(|| {
-        PersistenceError::Internal(anyhow!("Open cursor fail. error: {:?}", "cursor is none"))
+        PersistenceError::RecordNotFound(format!("doc_id for object_id:{} is not found", object_id))
       })?;
 
-    let mut js_values = Vec::new();
-    js_values.push(cursor_request.value());
-    while cursor_request.continue_cursor()?.await? {
-      js_values.push(cursor_request.value());
-    }
-
-    Ok(
-      js_values
-        .into_iter()
-        .map(|js_value| js_value.dyn_into::<Uint8Array>().unwrap().to_vec())
-        .collect(),
-    )
+    fetch_updates(&store, doc_id).await
   }
 
-  async fn put_update(&self, id: OID, update: &[u8]) -> Result<(), PersistenceError> {
+  async fn put_update(
+    &self,
+    store: &IdbObjectStore<'_>,
+    id: OID,
+    update: &[u8],
+  ) -> Result<(), PersistenceError> {
     let max_key = JsValue::from(Uint8Array::from(
       make_doc_update_key(id, Clock::MAX).as_ref(),
     ));
@@ -167,10 +292,6 @@ impl CollabIndexeddb {
     let key_range = IdbKeyRange::upper_bound(&max_key).map_err(|err| {
       PersistenceError::Internal(anyhow!("Get last update key fail. error: {:?}", err))
     })?;
-    let write_guard = self.db.write().await;
-    let transaction =
-      write_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
-    let store = store_from_transaction(&transaction)?;
     let cursor = store
       .open_cursor_with_range_and_direction(&key_range, IdbCursorDirection::Prev)?
       .await?
@@ -192,17 +313,22 @@ impl CollabIndexeddb {
 
     let next_clock = clock + 1;
     let update_key = make_doc_update_key(id, next_clock);
-    self.set_data_with_store(store, update_key, update).await?;
+    self.set_data_with_store(&store, update_key, update).await?;
     Ok(())
   }
 
-  pub async fn get_doc_id<K>(&self, uid: i64, object_id: &K) -> Option<DocID>
+  pub async fn get_doc_id<K>(
+    &self,
+    store: &IdbObjectStore<'_>,
+    uid: i64,
+    object_id: &K,
+  ) -> Option<DocID>
   where
     K: AsRef<[u8]> + ?Sized,
   {
     let uid_id_bytes = &uid.to_be_bytes();
     let key = make_doc_id_key(uid_id_bytes, object_id.as_ref());
-    let value = self.get_data(key).await.ok()?;
+    let value = self.get_data(&store, key).await.ok()?;
     let mut bytes = [0; DOC_ID_LEN];
     bytes[0..DOC_ID_LEN].copy_from_slice(value.as_ref());
     Some(OID::from_be_bytes(bytes))
@@ -217,24 +343,10 @@ impl CollabIndexeddb {
     self.set_data(key, new_id.to_be_bytes()).await?;
     Ok(new_id)
   }
+}
 
-  pub async fn get_encoded_collab(
-    &self,
-    object_id: &str,
-  ) -> Result<EncodedCollab, PersistenceError> {
-    let bytes = self.get_data(object_id).await?;
-    let encoded = EncodedCollab::decode_from_bytes(&bytes)?;
-    Ok(encoded)
-  }
-
-  pub async fn save_encoded_collab(
-    &self,
-    object_id: &str,
-    encoded_collab: &EncodedCollab,
-  ) -> Result<(), PersistenceError> {
-    let bytes = encoded_collab.encode_to_bytes()?;
-    self.set_data(object_id, bytes).await
-  }
+fn to_js_key<K: AsRef<[u8]>>(key: K) -> JsValue {
+  JsValue::from(Uint8Array::from(key.as_ref()))
 }
 
 fn store_from_transaction<'a>(
@@ -253,4 +365,41 @@ impl<'a> IdbTransactionActionImpl<'a> {
   fn new(tx: IdbTransaction<'a>) -> Result<Self, PersistenceError> {
     Ok(Self { tx })
   }
+}
+
+fn transaction_result_to_result(result: IdbTransactionResult) -> Result<(), PersistenceError> {
+  match result {
+    IdbTransactionResult::Success => Ok(()),
+    IdbTransactionResult::Error(err) => Err(PersistenceError::from(err)),
+    IdbTransactionResult::Abort => Err(PersistenceError::Internal(anyhow!("Transaction aborted"))),
+  }
+}
+
+async fn fetch_updates(
+  store: &IdbObjectStore<'_>,
+  doc_id: DocID,
+) -> Result<Vec<Vec<u8>>, PersistenceError> {
+  let start = to_js_key(make_doc_update_key(doc_id, 0).as_ref());
+  let end = to_js_key(make_doc_update_key(doc_id, Clock::MAX).as_ref());
+  let key_range = IdbKeyRange::bound(&start, &end).map_err(|err| {
+    PersistenceError::Internal(anyhow!("Get last update key fail. error: {:?}", err))
+  })?;
+  let cursor_request = store.open_cursor_with_range(&key_range)?.await?;
+  if cursor_request.is_none() {
+    return Ok(Vec::new());
+  }
+
+  let cursor_request = cursor_request.unwrap();
+  let mut js_values = Vec::new();
+  js_values.push(cursor_request.value());
+  while cursor_request.continue_cursor()?.await? {
+    js_values.push(cursor_request.value());
+  }
+
+  Ok(
+    js_values
+      .into_iter()
+      .map(|js_value| js_value.dyn_into::<Uint8Array>().unwrap().to_vec())
+      .collect(),
+  )
 }

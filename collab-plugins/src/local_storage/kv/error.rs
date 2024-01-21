@@ -45,6 +45,9 @@ pub enum PersistenceError {
   LatestUpdateKeyNotExist,
 
   #[error(transparent)]
+  Collab(#[from] collab::error::CollabError),
+
+  #[error(transparent)]
   Internal(#[from] anyhow::Error),
 }
 
