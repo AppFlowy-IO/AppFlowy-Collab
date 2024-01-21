@@ -112,7 +112,7 @@ impl KVTransactionDBRocksdbImpl {
     Ok(Self { db: Arc::new(db) })
   }
 
-  pub fn is_exist(&self, uid: i64, object_id: &str) -> Result<bool, PersistenceError> {
+  pub async fn is_exist(&self, uid: i64, object_id: &str) -> Result<bool, PersistenceError> {
     let read_txn = self.read_txn();
     Ok(read_txn.is_exist(uid, object_id))
   }
