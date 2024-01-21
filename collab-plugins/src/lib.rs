@@ -25,5 +25,5 @@ if_native! {
 }
 
 if_wasm! {
-    pub type CollabKVDB = local_storage::indexeddb::kv_impl::CollabIndexeddb;
+    pub type CollabKVDB = local_storage::indexeddb::CollabIndexeddb;
 }
