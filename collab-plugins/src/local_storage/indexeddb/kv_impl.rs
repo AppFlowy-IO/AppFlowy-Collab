@@ -203,18 +203,9 @@ impl CollabIndexeddb {
   }
 
   pub async fn delete_doc(&self, uid: i64, object_id: &str) -> Result<(), PersistenceError> {
-    todo!("delete_doc")
-  }
-
-  pub async fn flush_doc(
-    &self,
-    uid: i64,
-    object_id: &str,
-    encoded: &EncodedCollab,
-  ) -> Result<(), PersistenceError> {
-    let read_guard = self.db.write().await;
+    let write_guard = self.db.write().await;
     let transaction =
-      read_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
+      write_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
     let store = store_from_transaction(&transaction)?;
     let doc_id = self
       .get_doc_id(&store, uid, object_id)
@@ -223,28 +214,36 @@ impl CollabIndexeddb {
         PersistenceError::RecordNotFound(format!("doc_id for object_id:{} is not found", object_id))
       })?;
 
-    let start = to_js_key(make_doc_start_key(doc_id));
-    let end = to_js_key(make_doc_end_key(doc_id));
-    let key_range = IdbKeyRange::bound(&start, &end).map_err(|err| {
-      PersistenceError::Internal(anyhow!("Get last update key fail. error: {:?}", err))
-    })?;
+    self.delete_all_updates(&store, doc_id).await?;
 
-    let cursor_request = store
-      .open_cursor_with_range(&key_range)?
-      .await?
+    // delete the doc state and state vector
+    let doc_state_key = make_doc_state_key(doc_id);
+    let sv_key = make_state_vector_key(doc_id);
+    store.delete(doc_state_key.as_ref())?;
+    store.delete(sv_key.as_ref())?;
+    transaction_result_to_result(transaction.await)?;
+    Ok(())
+  }
+
+  pub async fn flush_doc(
+    &self,
+    uid: i64,
+    object_id: &str,
+    encoded: &EncodedCollab,
+  ) -> Result<(), PersistenceError> {
+    let write_guard = self.db.write().await;
+    let transaction =
+      write_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
+    let store = store_from_transaction(&transaction)?;
+    let doc_id = self
+      .get_doc_id(&store, uid, object_id)
+      .await
       .ok_or_else(|| {
-        PersistenceError::Internal(anyhow!("Open cursor fail. error: {:?}", "cursor is none"))
+        PersistenceError::RecordNotFound(format!("doc_id for object_id:{} is not found", object_id))
       })?;
+    self.delete_all_updates(&store, doc_id).await?;
 
-    // Delete the first key
-    let _ = cursor_request.delete();
-    while cursor_request.continue_cursor()?.await? {
-      console::log_1(&JsValue::from_str("delete cursor"));
-      if let Err(err) = cursor_request.delete() {
-        error!("failed to delete cursor: {:?}", err)
-      }
-    }
-
+    // save the new doc state and state vector
     let doc_state_key = make_doc_state_key(doc_id);
     let sv_key = make_state_vector_key(doc_id);
     self
@@ -253,7 +252,6 @@ impl CollabIndexeddb {
     self
       .set_data_with_store(&store, sv_key, &encoded.state_vector)
       .await?;
-
     transaction_result_to_result(transaction.await)?;
     Ok(())
   }
@@ -276,6 +274,35 @@ impl CollabIndexeddb {
       })?;
     self.put_update(&store, doc_id, update).await?;
     transaction_result_to_result(transaction.await)?;
+    Ok(())
+  }
+
+  async fn delete_all_updates(
+    &self,
+    store: &IdbObjectStore<'_>,
+    doc_id: DocID,
+  ) -> Result<(), PersistenceError> {
+    let start = to_js_key(make_doc_start_key(doc_id));
+    let end = to_js_key(make_doc_end_key(doc_id));
+    let key_range = IdbKeyRange::bound(&start, &end).map_err(|err| {
+      PersistenceError::Internal(anyhow!("Get last update key fail. error: {:?}", err))
+    })?;
+
+    let cursor_request = store
+      .open_cursor_with_range(&key_range)?
+      .await?
+      .ok_or_else(|| {
+        PersistenceError::Internal(anyhow!("Open cursor fail. error: {:?}", "cursor is none"))
+      })?;
+
+    // Delete the first key
+    let _ = cursor_request.delete();
+    while cursor_request.continue_cursor()?.await? {
+      if let Err(err) = cursor_request.delete() {
+        error!("failed to delete cursor: {:?}", err)
+      }
+    }
+
     Ok(())
   }
 
