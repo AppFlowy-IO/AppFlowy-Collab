@@ -194,6 +194,18 @@ impl CollabIndexeddb {
     Ok(EncodedCollab::new_v1(sv, doc_stata))
   }
 
+  pub async fn is_exist(&self, uid: i64, object_id: &str) -> bool {
+    let read_guard = self.db.read().await;
+    let transaction =
+      read_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readonly)?;
+    let store = store_from_transaction(&transaction)?;
+    self.get_doc_id(&store, uid, object_id).await.is_some()
+  }
+
+  pub async fn delete_doc(&self, uid: i64, object_id: &str) -> Result<(), PersistenceError> {
+    todo!("delete_doc")
+  }
+
   pub async fn flush_doc(
     &self,
     uid: i64,
