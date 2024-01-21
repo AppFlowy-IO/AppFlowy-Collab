@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::local_storage::kv::doc::CollabKVAction;
-use crate::local_storage::kv::keys::DocID;
+
 use crate::local_storage::kv::{KVEntry, KVStore, KVTransactionDB, PersistenceError};
 use rocksdb::Direction::Forward;
 use rocksdb::{
