@@ -1,2 +1,5 @@
-pub mod indexeddb_plugin;
-pub mod kv_impl;
+mod indexeddb_plugin;
+mod kv_impl;
+
+pub use indexeddb_plugin::*;
+pub use kv_impl::*;
