@@ -162,7 +162,7 @@ pub async fn user_database_test_with_db(
 pub async fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(CollabKVDB::open_opt(path, false).unwrap());
+  let db = Arc::new(CollabKVDB::open(path).unwrap());
   let w_database = user_database_test_with_db(uid, db).await;
 
   w_database

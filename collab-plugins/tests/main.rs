@@ -1,10 +1,12 @@
-use tracing_subscriber::util::SubscriberInitExt;
-
 #[cfg(not(target_arch = "wasm32"))]
 mod disk;
 
+#[cfg(target_arch = "wasm32")]
+mod web;
+
 #[cfg(not(target_arch = "wasm32"))]
 pub fn setup_log() {
+  use tracing_subscriber::util::SubscriberInitExt;
   static START: std::sync::Once = std::sync::Once::new();
   START.call_once(|| {
     let level = "trace";

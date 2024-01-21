@@ -143,7 +143,7 @@ where
       Ok(snapshot_id)
     } else {
       let key = make_snapshot_id_key(&uid.to_be_bytes(), object_id.as_ref());
-      let new_snapshot_id = make_doc_id_for_key(self, key)?;
+      let new_snapshot_id = insert_doc_id_for_key(self, key)?;
       Ok(new_snapshot_id)
     }
   }

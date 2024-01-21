@@ -130,7 +130,7 @@ pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) 
 pub fn document_storage() -> Arc<CollabKVDB> {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  Arc::new(CollabKVDB::open_opt(path, false).unwrap())
+  Arc::new(CollabKVDB::open(path).unwrap())
 }
 
 fn setup_log() {

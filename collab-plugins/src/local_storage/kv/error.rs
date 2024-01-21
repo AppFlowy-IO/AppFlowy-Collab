@@ -21,8 +21,8 @@ pub enum PersistenceError {
   #[error(transparent)]
   Bincode(#[from] bincode::Error),
 
-  #[error("The document is not exist")]
-  DocumentNotExist,
+  #[error("{0}")]
+  RecordNotFound(String),
 
   #[error("The document already exist")]
   DocumentAlreadyExist,
@@ -43,7 +43,23 @@ pub enum PersistenceError {
   LatestUpdateKeyNotExist,
 
   #[error(transparent)]
+  Collab(#[from] collab::error::CollabError),
+
+  #[error(transparent)]
   Internal(#[from] anyhow::Error),
+}
+
+impl PersistenceError {
+  pub fn is_record_not_found(&self) -> bool {
+    matches!(self, PersistenceError::RecordNotFound(_))
+  }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<indexed_db_futures::web_sys::DomException> for PersistenceError {
+  fn from(value: indexed_db_futures::web_sys::DomException) -> Self {
+    PersistenceError::Internal(anyhow::anyhow!("DOMException: {:?}", value))
+  }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

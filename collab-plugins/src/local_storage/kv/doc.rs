@@ -72,8 +72,8 @@ where
     Ok(())
   }
 
-  fn is_exist<K: AsRef<[u8]> + ?Sized + Debug>(&self, collab_id: i64, object_id: &K) -> bool {
-    get_doc_id(collab_id, self, object_id).is_some()
+  fn is_exist<K: AsRef<[u8]> + ?Sized + Debug>(&self, uid: i64, object_id: &K) -> bool {
+    get_doc_id(uid, self, object_id).is_some()
   }
 
   /// Load the document from the database and apply the updates to the transaction.
@@ -130,7 +130,10 @@ where
       Ok(update_count)
     } else {
       tracing::trace!("[Client] => {:?} not exist", object_id);
-      Err(PersistenceError::DocumentNotExist)
+      Err(PersistenceError::RecordNotFound(format!(
+        "doc with given object id: {:?} is not found",
+        object_id
+      )))
     }
   }
 
@@ -193,7 +196,10 @@ where
           "🔴Insert update failed. Can't find the doc for {:?}",
           object_id
         );
-        Err(PersistenceError::DocumentNotExist)
+        Err(PersistenceError::RecordNotFound(format!(
+          "doc with given object id: {:?} is not found",
+          object_id
+        )))
       },
       Some(doc_id) => insert_doc_update(self, doc_id, object_id, update.to_vec()),
     }
@@ -323,7 +329,10 @@ where
       }
       Ok(updates)
     } else {
-      Err(PersistenceError::DocumentNotExist)
+      Err(PersistenceError::RecordNotFound(format!(
+        "The document with given object id: {:?} is not found",
+        object_id.as_ref(),
+      )))
     }
   }
 
@@ -373,18 +382,18 @@ where
     Ok(did)
   } else {
     let key = make_doc_id_key(&uid.to_be_bytes(), object_id.as_ref());
-    let new_did = make_doc_id_for_key(store, key)?;
+    let new_did = insert_doc_id_for_key(store, key)?;
     Ok(new_did)
   }
 }
 
-fn get_doc_id<'a, K, S>(collab_id: i64, store: &S, object_id: &K) -> Option<DocID>
+fn get_doc_id<'a, K, S>(uid: i64, store: &S, object_id: &K) -> Option<DocID>
 where
   S: KVStore<'a>,
   K: AsRef<[u8]> + ?Sized,
 {
-  let collab_id_bytes = &collab_id.to_be_bytes();
-  let key = make_doc_id_key(collab_id_bytes, object_id.as_ref());
+  let uid_id_bytes = &uid.to_be_bytes();
+  let key = make_doc_id_key(uid_id_bytes, object_id.as_ref());
   get_id_for_key(store, key)
 }
 
