@@ -334,6 +334,23 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     self
   }
 
+  /// Update calculations
+  pub fn update_calculations<F>(mut self, f: F) -> Self
+  where
+    F: FnOnce(ArrayMapUpdate),
+  {
+    let array_ref = self.get_calculations_array();
+    let update = ArrayMapUpdate::new(self.txn, array_ref);
+    f(update);
+    self
+  }
+
+  fn get_calculations_array(&mut self) -> ArrayRef {
+    self
+      .map_ref
+      .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, VIEW_CALCULATIONS)
+  }
+
   /// Set filters of the current view
   pub fn set_filters(mut self, filters: Vec<FilterMap>) -> Self {
     let array_ref = self.get_filter_array();
