@@ -587,7 +587,7 @@ impl From<TestFieldSetting> for AnyMap {
 pub fn make_rocks_db() -> Arc<CollabKVDB> {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  Arc::new(CollabKVDB::open_opt(path, false).unwrap())
+  Arc::new(CollabKVDB::open(path).unwrap())
 }
 
 pub fn setup_log() {

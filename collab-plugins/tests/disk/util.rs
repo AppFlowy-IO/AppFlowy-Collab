@@ -7,5 +7,5 @@ pub fn rocks_db() -> (PathBuf, CollabKVDB) {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let cloned_path = path.clone();
-  (path, CollabKVDB::open_opt(cloned_path, false).unwrap())
+  (path, CollabKVDB::open(cloned_path).unwrap())
 }

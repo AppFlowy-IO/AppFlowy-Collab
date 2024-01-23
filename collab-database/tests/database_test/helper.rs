@@ -189,7 +189,7 @@ impl DatabaseTestBuilder {
   pub async fn build(self) -> DatabaseTest {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
-    let collab_db = Arc::new(CollabKVDB::open_opt(path, false).unwrap());
+    let collab_db = Arc::new(CollabKVDB::open(path).unwrap());
     let collab = CollabBuilder::new(self.uid, &self.database_id)
       .with_device_id("1")
       .build()

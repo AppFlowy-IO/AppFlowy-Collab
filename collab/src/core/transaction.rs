@@ -1,5 +1,5 @@
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::core::collab_plugin::EncodedCollab;
 use yrs::updates::encoder::Encode;
@@ -15,7 +15,7 @@ use crate::error::CollabError;
 pub struct TransactionRetry<'a> {
   timeout: Duration,
   doc: &'a Doc,
-  start: Instant,
+  timer: Timer,
   retry_interval: Duration,
 }
 
@@ -25,12 +25,12 @@ impl<'a> TransactionRetry<'a> {
       timeout: Duration::from_secs(2),
       retry_interval: Duration::from_millis(50),
       doc,
-      start: Instant::now(),
+      timer: Timer::start(),
     }
   }
 
   pub fn get_read_txn(&mut self) -> Transaction<'a> {
-    while self.start.elapsed() < self.timeout {
+    while self.timer.elapsed() < self.timeout {
       match self.doc.try_transact() {
         Ok(txn) => {
           return txn;
@@ -45,7 +45,7 @@ impl<'a> TransactionRetry<'a> {
   }
 
   pub fn try_get_write_txn(&mut self) -> Result<TransactionMut<'a>, CollabError> {
-    while self.start.elapsed() < self.timeout {
+    while self.timer.elapsed() < self.timeout {
       match self.doc.try_transact_mut() {
         Ok(txn) => {
           return Ok(txn);
@@ -60,7 +60,7 @@ impl<'a> TransactionRetry<'a> {
   }
 
   pub fn get_write_txn_with(&mut self, origin: CollabOrigin) -> TransactionMut<'a> {
-    while self.start.elapsed() < self.timeout {
+    while self.timer.elapsed() < self.timeout {
       match self.doc.try_transact_mut_with(origin.clone()) {
         Ok(txn) => {
           return txn;
@@ -78,7 +78,7 @@ impl<'a> TransactionRetry<'a> {
     &mut self,
     origin: CollabOrigin,
   ) -> Result<TransactionMut<'a>, CollabError> {
-    while self.start.elapsed() < self.timeout {
+    while self.timer.elapsed() < self.timeout {
       match self.doc.try_transact_mut_with(origin.clone()) {
         Ok(txn) => {
           return Ok(txn);
@@ -120,5 +120,39 @@ impl DocTransactionExtension for Doc {
   }
   fn doc_transaction_mut(&self) -> TransactionMut {
     self.transact_mut()
+  }
+}
+
+if_native! {
+  struct Timer {
+    start: std::time::Instant,
+  }
+
+  impl Timer {
+    fn start() -> Self {
+      Self { start: std::time::Instant::now() }
+    }
+
+    fn elapsed(&self) -> Duration {
+      self.start.elapsed()
+    }
+  }
+}
+
+if_wasm! {
+  struct Timer {
+    start: f64,
+  }
+
+  impl Timer {
+    fn start() -> Self {
+      Self { start: js_sys::Date::now() }
+    }
+
+    fn elapsed(&self) -> Duration {
+      let now = js_sys::Date::now();
+      let elapsed_ms = now - self.start;
+      Duration::from_millis(elapsed_ms as u64)
+    }
   }
 }

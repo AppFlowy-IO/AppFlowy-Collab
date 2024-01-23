@@ -24,7 +24,7 @@ use crate::cloud_storage::remote_collab::{
 };
 use crate::cloud_storage::sink::{SinkConfig, SinkStrategy};
 use crate::local_storage::kv::doc::CollabKVAction;
-use crate::local_storage::kv::TransactionMutExt;
+use crate::local_storage::kv::{KVTransactionDB, TransactionMutExt};
 use crate::CollabKVDB;
 
 pub struct SupabaseDBPlugin {

@@ -30,6 +30,10 @@ strum = "0.25"
 strum_macros = "0.25"
 getrandom = { version = "0.2", optional = true }
 
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+
 [dev-dependencies]
 collab-plugins = { workspace = true }
 tempfile = "3.8.0"
@@ -38,9 +42,9 @@ assert-json-diff = "2.0.2"
 lazy_static = "1.4.0"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 rand = "0.8.4"
-futures = "0.3.18"
+futures = "0.3.30"
 zip = "0.6.6"
 
 [features]
-wasm_build = ["getrandom/js"]
+wasm_build = ["getrandom/js", "collab-plugins/wasm_build"]
 

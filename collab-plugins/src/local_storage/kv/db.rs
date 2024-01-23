@@ -12,6 +12,23 @@ use crate::local_storage::kv::PersistenceError;
 use smallvec::SmallVec;
 use yrs::{TransactionMut, Update};
 
+pub trait KVTransactionDB: Send + Sync + 'static {
+  type TransactionAction<'a>;
+
+  fn read_txn<'a, 'b>(&'b self) -> Self::TransactionAction<'a>
+  where
+    'b: 'a;
+
+  fn with_write_txn<'a, 'b, Output>(
+    &'b self,
+    f: impl FnOnce(&Self::TransactionAction<'a>) -> Result<Output, PersistenceError>,
+  ) -> Result<Output, PersistenceError>
+  where
+    'b: 'a;
+
+  fn flush(&self) -> Result<(), PersistenceError>;
+}
+
 pub trait KVStore<'a> {
   type Range: Iterator<Item = Self::Entry>;
   type Entry: KVEntry;
@@ -172,7 +189,7 @@ where
   Some(OID::from_be_bytes(bytes))
 }
 
-pub fn make_doc_id_for_key<'a, S>(store: &S, key: Key<20>) -> Result<DocID, PersistenceError>
+pub fn insert_doc_id_for_key<'a, S>(store: &S, key: Key<20>) -> Result<DocID, PersistenceError>
 where
   S: KVStore<'a>,
   PersistenceError: From<<S as KVStore<'a>>::Error>,

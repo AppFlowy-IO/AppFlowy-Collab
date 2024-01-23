@@ -4,7 +4,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::local_storage::kv::doc::CollabKVAction;
-use crate::local_storage::kv::{KVEntry, KVStore, PersistenceError};
+
+use crate::local_storage::kv::{KVEntry, KVStore, KVTransactionDB, PersistenceError};
 use rocksdb::Direction::Forward;
 use rocksdb::{
   DBIteratorWithThreadMode, Direction, ErrorKind, IteratorMode, Options, ReadOptions,
@@ -13,14 +14,15 @@ use rocksdb::{
 };
 
 #[derive(Clone)]
-pub struct RocksStore {
+pub struct KVTransactionDBRocksdbImpl {
   db: Arc<TransactionDB>,
 }
 
-impl RocksStore {
+impl KVTransactionDBRocksdbImpl {
   /// Open a new RocksDB database at the given path.
   /// If the database is corrupted, try to repair it. If it cannot be repaired, return an error.
-  pub fn open_opt(path: impl AsRef<Path>, auto_repair: bool) -> Result<Self, PersistenceError> {
+  pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
+    let auto_repair = false;
     let txn_db_opts = TransactionDBOptions::default();
     let mut db_opts = Options::default();
     // This option sets the upper limit for the total number of background jobs (both flushes and compactions)
@@ -110,18 +112,24 @@ impl RocksStore {
     Ok(Self { db: Arc::new(db) })
   }
 
-  /// Open a new RocksDB database at the given path.
-  /// If the database is corrupted, try to repair it. If it cannot be repaired, return an error.
-  pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
-    Self::open_opt(path, false)
+  pub async fn is_exist(&self, uid: i64, object_id: &str) -> Result<bool, PersistenceError> {
+    let read_txn = self.read_txn();
+    Ok(read_txn.is_exist(uid, object_id))
   }
 
-  pub fn flush(&self) -> Result<(), PersistenceError> {
+  pub async fn delete_doc(&self, uid: i64, doc_id: &str) -> Result<(), PersistenceError> {
+    self.with_write_txn(|txn| txn.delete_doc(uid, doc_id))?;
     Ok(())
   }
+}
 
-  /// Return a read transaction that accesses the database exclusively.
-  pub fn read_txn(&self) -> impl CollabKVAction<'_, Error = PersistenceError> {
+impl KVTransactionDB for KVTransactionDBRocksdbImpl {
+  type TransactionAction<'a> = RocksdbKVStoreImpl<'a, TransactionDB>;
+
+  fn read_txn<'a, 'b>(&'b self) -> Self::TransactionAction<'a>
+  where
+    'b: 'a,
+  {
     let mut txn_options = TransactionOptions::default();
     // Use snapshot to provides a consistent view of the data. This snapshot can then be used
     // to perform read operations, and the returned data will be consistent with the database
@@ -131,33 +139,38 @@ impl RocksStore {
     let txn = self
       .db
       .transaction_opt(&WriteOptions::default(), &txn_options);
-    RocksKVStoreImpl::new(txn)
+    RocksdbKVStoreImpl::new(txn)
   }
 
-  /// Create a write transaction that accesses the database exclusively.
-  /// The transaction will be committed when the closure [F] returns.
-  pub fn with_write_txn<F, O>(&self, f: F) -> Result<O, PersistenceError>
+  fn with_write_txn<'a, 'b, Output>(
+    &'b self,
+    f: impl FnOnce(&Self::TransactionAction<'a>) -> Result<Output, PersistenceError>,
+  ) -> Result<Output, PersistenceError>
   where
-    F: FnOnce(&RocksKVStoreImpl<'_, TransactionDB>) -> Result<O, PersistenceError>,
+    'b: 'a,
   {
     let txn_options = TransactionOptions::default();
     let txn = self
       .db
       .transaction_opt(&WriteOptions::default(), &txn_options);
-    let store = RocksKVStoreImpl::new(txn);
+    let store = RocksdbKVStoreImpl::new(txn);
     let result = f(&store)?;
     store.0.commit()?;
     Ok(result)
   }
+
+  fn flush(&self) -> Result<(), PersistenceError> {
+    Ok(())
+  }
 }
 
-/// Implementation of [KVStore] for [RocksStore]. This is a wrapper around [Transaction].
+/// Implementation of [KVStore] for [KVTransactionDBRocksdbImpl]. This is a wrapper around [Transaction].
 // pub struct RocksKVStoreImpl<'a, DB: Send + Sync>(Transaction<'a, DB>);
-pub struct RocksKVStoreImpl<'a, DB: Send>(Transaction<'a, DB>);
+pub struct RocksdbKVStoreImpl<'a, DB: Send>(Transaction<'a, DB>);
 
-unsafe impl<'a, DB: Send> Send for RocksKVStoreImpl<'a, DB> {}
+unsafe impl<'a, DB: Send> Send for RocksdbKVStoreImpl<'a, DB> {}
 
-impl<'a, DB: Send + Sync> RocksKVStoreImpl<'a, DB> {
+impl<'a, DB: Send + Sync> RocksdbKVStoreImpl<'a, DB> {
   pub fn new(txn: Transaction<'a, DB>) -> Self {
     Self(txn)
   }
@@ -168,10 +181,10 @@ impl<'a, DB: Send + Sync> RocksKVStoreImpl<'a, DB> {
   }
 }
 
-impl<'a, DB: Send + Sync> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
-  type Range = RocksDBRange<'a, DB>;
-  type Entry = RocksDBEntry;
-  type Value = RocksDBVec;
+impl<'a, DB: Send + Sync> KVStore<'a> for RocksdbKVStoreImpl<'a, DB> {
+  type Range = RocksdbRange<'a, DB>;
+  type Entry = RocksdbEntry;
+  type Value = Vec<u8>;
   type Error = PersistenceError;
 
   fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<Self::Value>, Self::Error> {
@@ -235,7 +248,7 @@ impl<'a, DB: Send + Sync> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
     };
     let iterator_mode = IteratorMode::From(from, Forward);
     let iter = self.0.iterator_opt(iterator_mode, opt);
-    Ok(RocksDBRange {
+    Ok(RocksdbRange {
       // Safe to transmute because the lifetime of the iterator is the same as the lifetime of the
       // transaction.
       inner: unsafe { std::mem::transmute(iter) },
@@ -248,29 +261,27 @@ impl<'a, DB: Send + Sync> KVStore<'a> for RocksKVStoreImpl<'a, DB> {
     let mut raw = self.0.raw_iterator_opt(opt);
     raw.seek_for_prev(key);
     if let Some((key, value)) = raw.item() {
-      Ok(Some(RocksDBEntry::new(key.to_vec(), value.to_vec())))
+      Ok(Some(RocksdbEntry::new(key.to_vec(), value.to_vec())))
     } else {
       Ok(None)
     }
   }
 }
 
-impl<'a, DB: Send + Sync> From<Transaction<'a, DB>> for RocksKVStoreImpl<'a, DB> {
+impl<'a, DB: Send + Sync> From<Transaction<'a, DB>> for RocksdbKVStoreImpl<'a, DB> {
   #[inline(always)]
   fn from(txn: Transaction<'a, DB>) -> Self {
-    RocksKVStoreImpl::new(txn)
+    RocksdbKVStoreImpl::new(txn)
   }
 }
 
-pub type RocksDBVec = Vec<u8>;
-
-pub struct RocksDBRange<'a, DB> {
+pub struct RocksdbRange<'a, DB> {
   inner: DBIteratorWithThreadMode<'a, Transaction<'a, DB>>,
   to: Vec<u8>,
 }
 
-impl<'a, DB: Send + Sync> Iterator for RocksDBRange<'a, DB> {
-  type Item = RocksDBEntry;
+impl<'a, DB: Send + Sync> Iterator for RocksdbRange<'a, DB> {
+  type Item = RocksdbEntry;
 
   fn next(&mut self) -> Option<Self::Item> {
     let n = self.inner.next()?;
@@ -278,7 +289,7 @@ impl<'a, DB: Send + Sync> Iterator for RocksDBRange<'a, DB> {
       if key.as_ref() >= self.to.as_slice() {
         None
       } else {
-        Some(RocksDBEntry::new(key.to_vec(), value.to_vec()))
+        Some(RocksdbEntry::new(key.to_vec(), value.to_vec()))
       }
     } else {
       None
@@ -286,18 +297,18 @@ impl<'a, DB: Send + Sync> Iterator for RocksDBRange<'a, DB> {
   }
 }
 
-pub struct RocksDBEntry {
+pub struct RocksdbEntry {
   key: Vec<u8>,
   value: Vec<u8>,
 }
 
-impl RocksDBEntry {
+impl RocksdbEntry {
   pub fn new(key: Vec<u8>, value: Vec<u8>) -> Self {
     Self { key, value }
   }
 }
 
-impl KVEntry for RocksDBEntry {
+impl KVEntry for RocksdbEntry {
   fn key(&self) -> &[u8] {
     self.key.as_ref()
   }

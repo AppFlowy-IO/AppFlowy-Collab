@@ -1,8 +1,8 @@
 #![allow(clippy::upper_case_acronyms)]
 
+use crate::{if_native, if_wasm};
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
-use std::time::SystemTime;
 
 const EPOCH: u64 = 1637806706000;
 const NODE_BITS: u64 = 8;
@@ -23,6 +23,12 @@ pub struct DocIDGen {
   node_id: u64,
   sequence: u64,
   last_timestamp: u64,
+}
+
+impl Default for DocIDGen {
+  fn default() -> Self {
+    Self::new()
+  }
 }
 
 impl DocIDGen {
@@ -64,11 +70,19 @@ impl DocIDGen {
     }
   }
 
-  fn timestamp(&self) -> u64 {
-    SystemTime::now()
-      .duration_since(SystemTime::UNIX_EPOCH)
+  if_wasm! {
+     fn timestamp(&self) -> u64 {
+      js_sys::Date::now() as u64
+     }
+  }
+
+  if_native! {
+    fn timestamp(&self) -> u64 {
+      std::time::SystemTime::now()
+      .duration_since(std::time::SystemTime::UNIX_EPOCH)
       .expect("Clock moved backwards!")
       .as_millis() as u64
+    }
   }
 }
 

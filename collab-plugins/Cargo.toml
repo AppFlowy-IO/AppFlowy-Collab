@@ -47,10 +47,22 @@ assert-json-diff = "2.0.2"
 tokio-util = { version = "0.7", features = ["codec"] }
 config = { version = "0.13.3", default-features = false, features = ["yaml"] }
 dotenv = "0.15.0"
-futures = "0.3.17"
+futures = "0.3"
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+indexed_db_futures = { version = "0.4" }
+js-sys = "0.3"
+async-stream = "0.3"
+futures = "0.3"
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["console", "Window"] }
+wasm-bindgen-futures = "0.4"
+tracing-wasm = "0.2"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3.40"
 
 [features]
 default = []
 postgres_plugin = ["rand"]
-wasm_build = ["getrandom/js"]
+wasm_build = ["getrandom/js", "collab/async-plugin"]
