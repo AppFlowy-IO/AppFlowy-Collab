@@ -805,6 +805,29 @@ impl Database {
       .collect()
   }
 
+  pub fn get_calculation<T: TryFrom<CalculationMap>>(
+    &self,
+    view_id: &str,
+    field_id: &str,
+  ) -> Option<T> {
+    let field_id = field_id.to_string();
+    let mut calculations = self
+      .views
+      .get_view_calculations(view_id)
+      .into_iter()
+      .filter(|calculations_map| {
+        calculations_map.get_str_value("field_id").as_ref() == Some(&field_id)
+      })
+      .flat_map(|value| T::try_from(value).ok())
+      .collect::<Vec<T>>();
+
+    if calculations.is_empty() {
+      None
+    } else {
+      Some(calculations.remove(0))
+    }
+  }
+
   pub fn update_calculation(&self, view_id: &str, calculation: impl Into<CalculationMap>) {
     self.views.update_database_view(view_id, |update| {
       update.update_calculations(|calculation_update| {
