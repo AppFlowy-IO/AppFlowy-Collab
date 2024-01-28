@@ -17,7 +17,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Weak};
 use tracing::{error, instrument};
-use wasm_bindgen_futures::spawn_local;
 use yrs::{Doc, TransactionMut};
 
 pub struct IndexeddbDiskPlugin {
@@ -41,7 +40,7 @@ impl IndexeddbDiskPlugin {
     let did_load = Arc::new(AtomicBool::new(false));
     let (edit_sender, rx) = tokio::sync::mpsc::unbounded_channel();
     let edit_stream = DocEditStream::new(uid, &object_id, collab_db.clone(), rx);
-    spawn_local(edit_stream.run());
+    tokio::task::spawn_local(edit_stream.run());
     Self {
       uid,
       object_id,
@@ -56,7 +55,7 @@ impl IndexeddbDiskPlugin {
   fn flush_doc(&self, db: Arc<CollabIndexeddb>, object_id: &str) {
     let uid = self.uid;
     let object_id = object_id.to_string();
-    spawn_local(async move {
+    tokio::task::spawn_local(async move {
       let doc = make_yrs_doc();
       db.load_doc(uid, &object_id, doc.clone()).await.unwrap();
       let encoded_collab = doc.get_encoded_collab_v1();
@@ -75,7 +74,7 @@ impl CollabPlugin for IndexeddbDiskPlugin {
       let doc = doc.clone();
       let uid = self.uid;
 
-      spawn_local(async move {
+      tokio::task::spawn_local(async move {
         match db.load_doc(uid, &object_id, doc.clone()).await {
           Ok(_) => {},
           Err(err) => {
