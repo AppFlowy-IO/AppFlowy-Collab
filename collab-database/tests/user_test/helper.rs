@@ -15,7 +15,7 @@ use collab_database::user::{
   CollabDocStateByOid, CollabFuture, DatabaseCollabService, RowRelationChange,
   RowRelationUpdateReceiver, WorkspaceDatabase,
 };
-use collab_database::views::{CreateDatabaseParams, CreateViewParams, DatabaseLayout};
+use collab_database::views::{CreateDatabaseParams, CreateDatabaseViewParams, DatabaseLayout};
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use parking_lot::Mutex;
@@ -210,7 +210,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
   CreateDatabaseParams {
     database_id: database_id.to_string(),
     inline_view_id: gen_database_view_id(),
-    views: vec![CreateViewParams {
+    views: vec![CreateDatabaseViewParams {
       database_id: database_id.to_string(),
       view_id: "v1".to_string(),
       name: "my first database".to_string(),
@@ -277,7 +277,7 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
   CreateDatabaseParams {
     database_id: database_id.clone(),
     inline_view_id: gen_database_view_id(),
-    views: vec![CreateViewParams {
+    views: vec![CreateDatabaseViewParams {
       database_id,
       view_id: view_id.to_string(),
       name: name.to_string(),

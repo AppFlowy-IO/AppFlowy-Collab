@@ -1,6 +1,6 @@
 use collab::core::any_map::AnyMapExtension;
 use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
-use collab_database::views::{CreateDatabaseParams, CreateViewParams, OrderObjectPosition};
+use collab_database::views::{CreateDatabaseParams, CreateDatabaseViewParams, OrderObjectPosition};
 
 use crate::database_test::helper::default_field_settings_by_layout;
 use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
@@ -73,7 +73,7 @@ async fn user_database_with_default_field() -> WorkspaceDatabaseTest {
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
       inline_view_id: "inline_view_id".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: "d1".to_string(),
         view_id: "v1".to_string(),
         ..Default::default()

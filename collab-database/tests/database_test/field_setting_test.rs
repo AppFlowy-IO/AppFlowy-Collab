@@ -1,5 +1,5 @@
 use collab_database::fields::Field;
-use collab_database::views::{CreateViewParams, DatabaseLayout, OrderObjectPosition};
+use collab_database::views::{CreateDatabaseViewParams, DatabaseLayout, OrderObjectPosition};
 use std::collections::HashMap;
 
 use crate::database_test::helper::{
@@ -11,7 +11,7 @@ use crate::helper::TestFieldSetting;
 #[tokio::test]
 async fn new_field_new_field_setting_test() {
   let database_test = create_database_with_default_data(1, "1").await;
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
     field_settings: field_settings_for_default_database(),
@@ -39,7 +39,7 @@ async fn new_field_new_field_setting_test() {
 #[tokio::test]
 async fn remove_field_remove_field_setting_test() {
   let database_test = create_database_with_default_data(1, "1").await;
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
     field_settings: field_settings_for_default_database(),
@@ -66,7 +66,7 @@ async fn update_field_setting_for_some_fields_test() {
     width: 100,
     visibility: 1,
   };
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
     field_settings: field_settings_for_default_database(),
@@ -144,7 +144,7 @@ async fn duplicate_view_duplicates_field_settings_test() {
 async fn new_view_requires_deps_field_test() {
   let database_test = create_database_with_default_data(1, "1").await;
   let deps_field = Field::new("f4".to_string(), "date".to_string(), 3, false);
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
     layout: DatabaseLayout::Calendar,

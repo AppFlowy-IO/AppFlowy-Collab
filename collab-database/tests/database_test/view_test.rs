@@ -2,7 +2,7 @@ use collab_database::database::{gen_row_id, DatabaseData};
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
 use collab_database::views::{
-  CreateViewParams, DatabaseLayout, LayoutSettingBuilder, OrderObjectPosition,
+  CreateDatabaseViewParams, DatabaseLayout, LayoutSettingBuilder, OrderObjectPosition,
 };
 use nanoid::nanoid;
 use std::sync::Arc;
@@ -65,7 +65,7 @@ async fn get_database_views_meta_test() {
 #[tokio::test]
 async fn create_same_database_view_twice_test() {
   let database_test = create_database_with_default_data(1, "1").await;
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v1".to_string(),
     name: "my second grid".to_string(),
@@ -133,7 +133,7 @@ async fn create_database_view_with_filter_test() {
     content: "".to_string(),
   };
 
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v1".to_string(),
     name: "my first grid".to_string(),
@@ -162,7 +162,7 @@ async fn create_database_view_with_layout_setting_test() {
     .insert_any("2", "abc")
     .build();
 
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v1".to_string(),
     name: "my first grid".to_string(),
@@ -185,7 +185,7 @@ async fn create_database_view_with_layout_setting_test() {
 async fn delete_database_view_test() {
   let database_test = create_database_with_default_data(1, "1").await;
   for i in 2..5 {
-    let params = CreateViewParams {
+    let params = CreateDatabaseViewParams {
       database_id: "1".to_string(),
       view_id: format!("v{}", i),
       ..Default::default()

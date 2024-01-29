@@ -10,7 +10,7 @@ use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, CreateRowParams};
 use collab_database::user::DatabaseCollabService;
 use collab_database::views::{
-  CreateDatabaseParams, CreateViewParams, DatabaseLayout, FieldSettingsByFieldIdMap,
+  CreateDatabaseParams, CreateDatabaseViewParams, DatabaseLayout, FieldSettingsByFieldIdMap,
   FieldSettingsMap, LayoutSetting, LayoutSettings, OrderObjectPosition,
 };
 use collab_entity::CollabType;
@@ -66,7 +66,7 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
     inline_view_id: "inline_view_id".to_string(),
-    views: vec![CreateViewParams {
+    views: vec![CreateDatabaseViewParams {
       database_id: database_id.to_string(),
       view_id: "v1".to_string(),
       name: "my first database view".to_string(),
@@ -106,7 +106,7 @@ pub async fn create_database_with_db(
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
     inline_view_id: "inline_view_id".to_string(),
-    views: vec![CreateViewParams {
+    views: vec![CreateDatabaseViewParams {
       database_id: database_id.to_string(),
       view_id: "v1".to_string(),
       name: "my first grid".to_string(),
@@ -217,7 +217,7 @@ impl DatabaseTestBuilder {
     let params = CreateDatabaseParams {
       database_id: self.database_id.clone(),
       inline_view_id: "inline_view_id".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: self.database_id,
         view_id: self.view_id,
         name: "my first database view".to_string(),

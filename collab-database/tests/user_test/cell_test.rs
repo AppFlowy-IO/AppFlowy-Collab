@@ -1,7 +1,7 @@
 use collab::core::any_map::AnyMapExtension;
 use collab_database::rows::{new_cell_builder, CREATED_AT};
 use collab_database::rows::{CreateRowParams, LAST_MODIFIED};
-use collab_database::views::{CreateDatabaseParams, CreateViewParams};
+use collab_database::views::{CreateDatabaseParams, CreateDatabaseViewParams};
 
 use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 
@@ -65,7 +65,7 @@ async fn update_not_exist_row_test() {
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
       inline_view_id: "inline_view_id".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: "d1".to_string(),
         view_id: "v1".to_string(),
         ..Default::default()
@@ -86,7 +86,7 @@ async fn user_database_with_default_row() -> WorkspaceDatabaseTest {
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
       inline_view_id: "inline_view_id".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: "d1".to_string(),
         view_id: "v1".to_string(),
         ..Default::default()

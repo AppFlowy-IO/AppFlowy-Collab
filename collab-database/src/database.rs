@@ -27,7 +27,7 @@ use crate::rows::{
 };
 use crate::user::DatabaseCollabService;
 use crate::views::{
-  CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
+  CreateDatabaseParams, CreateDatabaseViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
   DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap,
   GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder, SortMap, ViewChangeReceiver,
   ViewMap,
@@ -83,7 +83,7 @@ impl Database {
       if let Some(index) = views.iter().position(|view| view.view_id == inline_view_id) {
         views.remove(index)
       } else {
-        CreateViewParams::new(
+        CreateDatabaseViewParams::new(
           database_id,
           inline_view_id.clone(),
           "".to_string(),
@@ -1016,7 +1016,7 @@ impl Database {
   }
 
   /// Create a linked view to existing database
-  pub fn create_linked_view(&self, params: CreateViewParams) -> Result<(), DatabaseError> {
+  pub fn create_linked_view(&self, params: CreateDatabaseViewParams) -> Result<(), DatabaseError> {
     self.root.with_transact_mut(|txn| {
       let inline_view_id = self.get_inline_view_id_with_txn(txn);
       let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
@@ -1031,7 +1031,7 @@ impl Database {
   pub fn create_linked_view_with_txn(
     &self,
     txn: &mut TransactionMut,
-    params: CreateViewParams,
+    params: CreateDatabaseViewParams,
     field_orders: Vec<FieldOrder>,
     row_orders: Vec<RowOrder>,
   ) -> Result<(), DatabaseError> {
@@ -1086,7 +1086,7 @@ impl Database {
   pub fn create_view_with_txn(
     &self,
     txn: &mut TransactionMut,
-    params: CreateViewParams,
+    params: CreateDatabaseViewParams,
     field_orders: Vec<FieldOrder>,
     row_orders: Vec<RowOrder>,
   ) -> Result<(), DatabaseError> {
@@ -1374,7 +1374,7 @@ impl DatabaseData {
         } else {
           (view.created_at, view.modified_at)
         };
-        CreateViewParams {
+        CreateDatabaseViewParams {
           database_id: database_id.clone(),
           view_id,
           name: view.name,

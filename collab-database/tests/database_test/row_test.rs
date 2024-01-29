@@ -1,6 +1,6 @@
 use collab_database::database::gen_row_id;
 use collab_database::rows::{meta_id_from_row_id, CreateRowParams, RowId, RowMetaKey};
-use collab_database::views::{CreateViewParams, OrderObjectPosition};
+use collab_database::views::{CreateDatabaseViewParams, OrderObjectPosition};
 use uuid::Uuid;
 
 use crate::database_test::helper::{create_database, create_database_with_default_data};
@@ -8,7 +8,7 @@ use crate::database_test::helper::{create_database, create_database_with_default
 #[tokio::test]
 async fn create_row_shared_by_two_view_test() {
   let database_test = create_database(1, "1").await;
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
     ..Default::default()
@@ -32,7 +32,7 @@ async fn create_row_shared_by_two_view_test() {
 #[tokio::test]
 async fn delete_row_shared_by_two_view_test() {
   let database_test = create_database(1, "1").await;
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
     ..Default::default()
@@ -83,7 +83,7 @@ async fn move_row_in_view_test() {
 #[tokio::test]
 async fn move_row_in_views_test() {
   let database_test = create_database_with_default_data(1, "1").await;
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
     ..Default::default()

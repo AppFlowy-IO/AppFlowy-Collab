@@ -22,7 +22,7 @@ use crate::database_observer::DatabaseNotify;
 use crate::error::DatabaseError;
 
 use crate::user::db_record::{DatabaseViewTracker, DatabaseViewTrackerList};
-use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
+use crate::views::{CreateDatabaseParams, CreateDatabaseViewParams, CreateViewParamsValidator};
 
 pub type CollabDocStateByOid = HashMap<String, CollabDocState>;
 pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
@@ -203,7 +203,7 @@ impl WorkspaceDatabase {
   /// If the inline view is deleted, the reference view will be deleted too.
   pub async fn create_database_linked_view(
     &self,
-    params: CreateViewParams,
+    params: CreateDatabaseViewParams,
   ) -> Result<(), DatabaseError> {
     let params = CreateViewParamsValidator::validate(params)?;
     if let Some(database) = self.get_database(&params.database_id).await {

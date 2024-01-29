@@ -1,6 +1,6 @@
 use collab_database::database::gen_database_view_id;
 use collab_database::rows::CreateRowParams;
-use collab_database::views::{CreateDatabaseParams, CreateViewParams};
+use collab_database::views::{CreateDatabaseParams, CreateDatabaseViewParams};
 
 use crate::user_test::helper::{
   make_default_grid, random_uid, user_database_test_with_db, user_database_test_with_default_data,
@@ -15,7 +15,7 @@ async fn create_database_test() {
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
       inline_view_id: "i1".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: "d1".to_string(),
         view_id: "v1".to_string(),
         ..Default::default()
@@ -36,7 +36,7 @@ async fn create_multiple_database_test() {
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
       inline_view_id: "i1".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: "d1".to_string(),
         view_id: "v1".to_string(),
         ..Default::default()
@@ -48,7 +48,7 @@ async fn create_multiple_database_test() {
     .create_database(CreateDatabaseParams {
       database_id: "d2".to_string(),
       inline_view_id: "i2".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: "d2".to_string(),
         view_id: "v2".to_string(),
         ..Default::default()
@@ -70,7 +70,7 @@ async fn delete_database_test() {
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
       inline_view_id: "i1".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: "d1".to_string(),
         view_id: "v1".to_string(),
         ..Default::default()
@@ -82,7 +82,7 @@ async fn delete_database_test() {
     .create_database(CreateDatabaseParams {
       database_id: "d2".to_string(),
       inline_view_id: "i2".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: "d2".to_string(),
         view_id: "v2".to_string(),
         ..Default::default()
@@ -104,7 +104,7 @@ async fn duplicate_database_inline_view_test() {
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
       inline_view_id: "i1".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: "d1".to_string(),
         view_id: "v1".to_string(),
         ..Default::default()
@@ -142,7 +142,7 @@ async fn duplicate_database_view_test() {
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
       inline_view_id: "i1".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: "d1".to_string(),
         view_id: "v1".to_string(),
         ..Default::default()
@@ -152,7 +152,7 @@ async fn duplicate_database_view_test() {
     .unwrap();
 
   test
-    .create_database_linked_view(CreateViewParams {
+    .create_database_linked_view(CreateDatabaseViewParams {
       database_id: "d1".to_string(),
       view_id: "v2".to_string(),
       ..Default::default()
@@ -185,7 +185,7 @@ async fn delete_database_linked_view_test() {
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
       inline_view_id: "i1".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: "d1".to_string(),
         view_id: "v1".to_string(),
         ..Default::default()
@@ -196,7 +196,7 @@ async fn delete_database_linked_view_test() {
 
   database
     .lock()
-    .create_linked_view(CreateViewParams {
+    .create_linked_view(CreateDatabaseViewParams {
       database_id: "d1".to_string(),
       view_id: "v2".to_string(),
       ..Default::default()
@@ -224,7 +224,7 @@ async fn delete_database_inline_view_test() {
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
       inline_view_id: "i1".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: "d1".to_string(),
         view_id: "v1".to_string(),
         ..Default::default()
@@ -236,7 +236,7 @@ async fn delete_database_inline_view_test() {
   for i in 2..5 {
     database
       .lock()
-      .create_linked_view(CreateViewParams {
+      .create_linked_view(CreateDatabaseViewParams {
         database_id: "d1".to_string(),
         view_id: format!("v{}", i),
         ..Default::default()
@@ -308,7 +308,7 @@ async fn get_database_by_view_id_test() {
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
       inline_view_id: "i1".to_string(),
-      views: vec![CreateViewParams {
+      views: vec![CreateDatabaseViewParams {
         database_id: "d1".to_string(),
         view_id: "v1".to_string(),
         ..Default::default()
@@ -318,7 +318,7 @@ async fn get_database_by_view_id_test() {
     .unwrap();
 
   test
-    .create_database_linked_view(CreateViewParams {
+    .create_database_linked_view(CreateDatabaseViewParams {
       database_id: "d1".to_string(),
       view_id: "v2".to_string(),
       ..Default::default()

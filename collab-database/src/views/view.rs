@@ -45,7 +45,7 @@ pub struct DatabaseViewMeta {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct CreateViewParams {
+pub struct CreateDatabaseViewParams {
   pub database_id: String,
   pub view_id: String,
   pub name: String,
@@ -67,7 +67,7 @@ pub struct CreateViewParams {
   pub deps_field_setting: Vec<HashMap<DatabaseLayout, FieldSettingsMap>>,
 }
 
-impl CreateViewParams {
+impl CreateDatabaseViewParams {
   pub fn take_deps_fields(
     &mut self,
   ) -> (Vec<Field>, Vec<HashMap<DatabaseLayout, FieldSettingsMap>>) {
@@ -78,7 +78,7 @@ impl CreateViewParams {
   }
 }
 
-impl CreateViewParams {
+impl CreateDatabaseViewParams {
   pub fn new(database_id: String, view_id: String, name: String, layout: DatabaseLayout) -> Self {
     Self {
       database_id,
@@ -120,7 +120,7 @@ impl CreateViewParams {
   }
 }
 
-impl From<DatabaseView> for CreateViewParams {
+impl From<DatabaseView> for CreateDatabaseViewParams {
   fn from(view: DatabaseView) -> Self {
     Self {
       database_id: view.database_id,
@@ -140,7 +140,7 @@ impl From<DatabaseView> for CreateViewParams {
 pub(crate) struct CreateViewParamsValidator;
 
 impl CreateViewParamsValidator {
-  pub(crate) fn validate(params: CreateViewParams) -> Result<CreateViewParams, DatabaseError> {
+  pub(crate) fn validate(params: CreateDatabaseViewParams) -> Result<CreateDatabaseViewParams, DatabaseError> {
     if params.database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
@@ -159,7 +159,7 @@ pub struct CreateDatabaseParams {
   pub fields: Vec<Field>,
   pub rows: Vec<CreateRowParams>,
   pub inline_view_id: String,
-  pub views: Vec<CreateViewParams>,
+  pub views: Vec<CreateDatabaseViewParams>,
 }
 
 const VIEW_ID: &str = "id";

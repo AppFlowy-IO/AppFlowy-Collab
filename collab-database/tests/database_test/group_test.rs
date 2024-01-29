@@ -1,5 +1,5 @@
 use collab::core::any_map::AnyMapExtension;
-use collab_database::views::{CreateViewParams, DatabaseLayout};
+use collab_database::views::{CreateDatabaseViewParams, DatabaseLayout};
 
 use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
 use crate::helper::{TestGroup, TestGroupSetting, CONTENT, GROUPS};
@@ -205,7 +205,7 @@ async fn create_database_with_two_groups() -> DatabaseTest {
     content: "".to_string(),
   };
 
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v1".to_string(),
     group_settings: vec![group_1.into(), group_2.into()],

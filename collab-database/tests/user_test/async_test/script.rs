@@ -5,7 +5,7 @@ use collab_database::fields::Field;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
 use collab_database::rows::{CreateRowParams, Row};
 use collab_database::user::WorkspaceDatabase;
-use collab_database::views::{CreateDatabaseParams, CreateViewParams, DatabaseView};
+use collab_database::views::{CreateDatabaseParams, CreateDatabaseViewParams, DatabaseView};
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -266,7 +266,7 @@ pub(crate) fn create_database(database_id: &str) -> CreateDatabaseParams {
   CreateDatabaseParams {
     database_id: database_id.to_string(),
     inline_view_id: "inline_view_id".to_string(),
-    views: vec![CreateViewParams {
+    views: vec![CreateDatabaseViewParams {
       database_id: database_id.to_string(),
       view_id: "v1".to_string(),
       name: "my first database view".to_string(),
