@@ -8,6 +8,7 @@ use std::vec::IntoIter;
 use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+
 use tokio_stream::wrappers::WatchStream;
 use tracing::error;
 use yrs::block::Prelim;
@@ -42,6 +43,14 @@ type AfterTransactionSubscription = Subscription<Arc<dyn Fn(&mut TransactionMut)
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 pub type MapSubscription = Subscription<MapSubscriptionCallback>;
 
+#[derive(Debug, Clone)]
+pub enum IndexContent {
+  Create(serde_json::Value),
+  Update(serde_json::Value),
+  Delete(Vec<String>),
+}
+pub type IndexContentSender = tokio::sync::broadcast::Sender<IndexContent>;
+pub type IndexContentReceiver = tokio::sync::broadcast::Receiver<IndexContent>;
 /// A [Collab] is a wrapper around a [Doc] and [Awareness] that provides a set
 /// of helper methods for interacting with the [Doc] and [Awareness]. The [MutexCollab]
 /// is a thread-safe wrapper around the [Collab].
@@ -74,6 +83,7 @@ pub struct Collab {
   undo_manager: Mutex<Option<UndoManager>>,
   update_subscription: RwLock<Option<UpdateSubscription>>,
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
+  pub index_json_sender: IndexContentSender,
 }
 
 pub fn make_yrs_doc() -> Doc {
@@ -123,7 +133,6 @@ impl Collab {
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
     let awareness = Awareness::new(doc.clone());
-
     Self {
       origin,
       object_id,
@@ -136,6 +145,7 @@ impl Collab {
       state,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
+      index_json_sender: tokio::sync::broadcast::channel(100).0,
     }
   }
 
@@ -154,6 +164,16 @@ impl Collab {
 
   pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
     WatchStream::new(self.state.snapshot_state_notifier.subscribe())
+  }
+
+  /// Subscribes to the `IndexJson` associated with a `Collab` object.
+  ///
+  /// `IndexJson` is a JSON object containing data used for indexing purposes. The structure and
+  /// content of this data may vary between different collaborative objects derived from `Collab`.
+  /// The interpretation of `IndexJson` is specific to the subscriber, as only they know how to
+  /// process and utilize the contained indexing information.
+  pub fn subscribe_index_content(&self) -> IndexContentReceiver {
+    self.index_json_sender.subscribe()
   }
 
   /// Returns the [Doc] associated with the [Collab].
@@ -810,12 +830,14 @@ impl Deref for Plugins {
   }
 }
 
+#[allow(clippy::arc_with_non_send_sync)]
 #[derive(Clone)]
 pub struct MutexCollab(Arc<Mutex<Collab>>);
 
 impl MutexCollab {
   pub fn new(origin: CollabOrigin, object_id: &str, plugins: Vec<Arc<dyn CollabPlugin>>) -> Self {
     let collab = Collab::new_with_origin(origin, object_id, plugins);
+    #[allow(clippy::arc_with_non_send_sync)]
     MutexCollab(Arc::new(Mutex::new(collab)))
   }
 
@@ -826,10 +848,12 @@ impl MutexCollab {
     plugins: Vec<Arc<dyn CollabPlugin>>,
   ) -> Result<Self, CollabError> {
     let collab = Collab::new_with_doc_state(origin, object_id, collab_doc_state, plugins)?;
+    #[allow(clippy::arc_with_non_send_sync)]
     Ok(MutexCollab(Arc::new(Mutex::new(collab))))
   }
 
   pub fn from_collab(collab: Collab) -> Self {
+    #[allow(clippy::arc_with_non_send_sync)]
     MutexCollab(Arc::new(Mutex::new(collab)))
   }
 

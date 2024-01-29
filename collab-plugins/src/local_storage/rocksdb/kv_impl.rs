@@ -3,28 +3,26 @@ use std::ops::RangeBounds;
 use std::path::Path;
 use std::sync::Arc;
 
-use rocksdb::backup::{BackupEngine, BackupEngineOptions};
+use crate::local_storage::kv::doc::CollabKVAction;
+
+use crate::local_storage::kv::{KVEntry, KVStore, KVTransactionDB, PersistenceError};
 use rocksdb::Direction::Forward;
 use rocksdb::{
-  ColumnFamilyDescriptor, DBIteratorWithThreadMode, Direction, Env, ErrorKind, IteratorMode,
-  Options, ReadOptions, SingleThreaded, Transaction, TransactionDB, TransactionDBOptions,
-  TransactionOptions, WriteOptions,
+  DBIteratorWithThreadMode, Direction, ErrorKind, IteratorMode, Options, ReadOptions,
+  SingleThreaded, Transaction, TransactionDB, TransactionDBOptions, TransactionOptions,
+  WriteOptions,
 };
 
-use crate::kv::{KVEntry, KVStore};
-use crate::PersistenceError;
-
-pub type RocksCollabDB = RocksStore;
-
 #[derive(Clone)]
-pub struct RocksStore {
+pub struct KVTransactionDBRocksdbImpl {
   db: Arc<TransactionDB>,
 }
 
-impl RocksStore {
+impl KVTransactionDBRocksdbImpl {
   /// Open a new RocksDB database at the given path.
   /// If the database is corrupted, try to repair it. If it cannot be repaired, return an error.
-  pub fn open_opt(path: impl AsRef<Path>, auto_repair: bool) -> Result<Self, PersistenceError> {
+  pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
+    let auto_repair = false;
     let txn_db_opts = TransactionDBOptions::default();
     let mut db_opts = Options::default();
     // This option sets the upper limit for the total number of background jobs (both flushes and compactions)
@@ -35,9 +33,45 @@ impl RocksStore {
     db_opts.set_max_background_jobs(4);
     db_opts.create_if_missing(true);
 
+    // sst
+    db_opts.set_max_open_files(50);
+
+    // compression
+    db_opts.set_compression_type(rocksdb::DBCompressionType::Zstd);
+    db_opts.set_blob_compression_type(rocksdb::DBCompressionType::Zstd);
+    db_opts.set_compaction_style(rocksdb::DBCompactionStyle::Level);
+
+    // wal
+    // Can't set the wal because existing rocksdb databases don't have the wal directory
+    // It might cause data lost.
+    // db_opts.set_wal_dir(path.as_ref().join("wal"));
+
+    db_opts.set_wal_bytes_per_sync(1024 * 1024);
+    db_opts.set_wal_size_limit_mb(2);
+    db_opts.set_max_total_wal_size(20 * 1024 * 1024);
+
+    // write buffer
+    db_opts.set_bytes_per_sync(1024 * 1024);
+    db_opts.set_write_buffer_size(2 * 1024 * 1024);
+    db_opts.set_max_write_buffer_number(2);
+    db_opts.set_min_write_buffer_number_to_merge(1);
+
+    // level 0
+    db_opts.set_level_zero_file_num_compaction_trigger(2);
+    db_opts.set_level_zero_slowdown_writes_trigger(5);
+    db_opts.set_level_zero_stop_writes_trigger(10);
+
+    // log
+    // don't set the log dir (set_db_log_dir) because it will cause the 'file name too long' error on mobile platform
+    db_opts.set_recycle_log_file_num(5);
+    db_opts.set_keep_log_file_num(5);
+
     let open_result = TransactionDB::<SingleThreaded>::open(&db_opts, &txn_db_opts, &path);
     let db = match open_result {
-      Ok(db) => Ok(db),
+      Ok(db) => {
+        //
+        Ok(db)
+      },
       Err(e) => {
         tracing::error!("🔴open collab db error: {:?}", e);
         match e.kind() {
@@ -78,72 +112,23 @@ impl RocksStore {
     Ok(Self { db: Arc::new(db) })
   }
 
-  /// Open a new RocksDB database at the given path.
-  /// If the database is corrupted, try to repair it. If it cannot be repaired, return an error.
-  pub fn open(path: impl AsRef<Path>) -> Result<Self, PersistenceError> {
-    Self::open_opt(path, false)
+  pub async fn is_exist(&self, uid: i64, object_id: &str) -> Result<bool, PersistenceError> {
+    let read_txn = self.read_txn();
+    Ok(read_txn.is_exist(uid, object_id))
   }
 
-  pub fn flush(&self) -> Result<(), PersistenceError> {
+  pub async fn delete_doc(&self, uid: i64, doc_id: &str) -> Result<(), PersistenceError> {
+    self.with_write_txn(|txn| txn.delete_doc(uid, doc_id))?;
     Ok(())
   }
+}
 
-  #[allow(dead_code)]
-  fn backup_engine(backup_dir: impl AsRef<Path>) -> Result<BackupEngine, PersistenceError> {
-    let backup_opts = BackupEngineOptions::new(backup_dir)?;
-    let env = Env::new()?;
-    let backup_engine = BackupEngine::open(&backup_opts, &env)?;
-    Ok(backup_engine)
-  }
+impl KVTransactionDB for KVTransactionDBRocksdbImpl {
+  type TransactionAction<'a> = RocksdbKVStoreImpl<'a, TransactionDB>;
 
-  pub fn open_with_cfs(
-    names: Vec<String>,
-    path: impl AsRef<Path>,
-  ) -> Result<Self, PersistenceError> {
-    let txn_db_opts = TransactionDBOptions::default();
-    let mut db_opts = Options::default();
-    db_opts.create_if_missing(true);
-    db_opts.create_missing_column_families(true);
-
-    // CFs
-    let cf_opts = Options::default();
-    let cfs = names
-      .into_iter()
-      .map(|name| ColumnFamilyDescriptor::new(name, cf_opts.clone()))
-      .collect::<Vec<_>>();
-    let db = Arc::new(TransactionDB::open_cf_descriptors(
-      &db_opts,
-      &txn_db_opts,
-      path,
-      cfs,
-    )?);
-    Ok(Self { db })
-  }
-
-  /// Return a read transaction that accesses the database exclusively.
-  pub fn read_txn(&self) -> RocksKVStoreImpl<'_, TransactionDB> {
-    let mut txn_options = TransactionOptions::default();
-    txn_options.set_snapshot(true);
-    let txn = self
-      .db
-      .transaction_opt(&WriteOptions::default(), &txn_options);
-    MutexRocksKVStoreImpl::new(txn)
-  }
-
-  pub fn write_txn(&self) -> RocksKVStoreImpl<'_, TransactionDB> {
-    let mut txn_options = TransactionOptions::default();
-    txn_options.set_snapshot(true);
-    let txn = self
-      .db
-      .transaction_opt(&WriteOptions::default(), &txn_options);
-    MutexRocksKVStoreImpl::new(txn)
-  }
-
-  /// Create a write transaction that accesses the database exclusively.
-  /// The transaction will be committed when the closure [F] returns.
-  pub fn with_write_txn<F, O>(&self, f: F) -> Result<O, PersistenceError>
+  fn read_txn<'a, 'b>(&'b self) -> Self::TransactionAction<'a>
   where
-    F: FnOnce(&RocksKVStoreImpl<'_, TransactionDB>) -> Result<O, PersistenceError>,
+    'b: 'a,
   {
     let mut txn_options = TransactionOptions::default();
     // Use snapshot to provides a consistent view of the data. This snapshot can then be used
@@ -154,21 +139,38 @@ impl RocksStore {
     let txn = self
       .db
       .transaction_opt(&WriteOptions::default(), &txn_options);
-    let store = MutexRocksKVStoreImpl::new(txn);
+    RocksdbKVStoreImpl::new(txn)
+  }
+
+  fn with_write_txn<'a, 'b, Output>(
+    &'b self,
+    f: impl FnOnce(&Self::TransactionAction<'a>) -> Result<Output, PersistenceError>,
+  ) -> Result<Output, PersistenceError>
+  where
+    'b: 'a,
+  {
+    let txn_options = TransactionOptions::default();
+    let txn = self
+      .db
+      .transaction_opt(&WriteOptions::default(), &txn_options);
+    let store = RocksdbKVStoreImpl::new(txn);
     let result = f(&store)?;
     store.0.commit()?;
     Ok(result)
   }
+
+  fn flush(&self) -> Result<(), PersistenceError> {
+    Ok(())
+  }
 }
 
-/// Implementation of [KVStore] for [RocksStore]. This is a wrapper around [Transaction].
+/// Implementation of [KVStore] for [KVTransactionDBRocksdbImpl]. This is a wrapper around [Transaction].
 // pub struct RocksKVStoreImpl<'a, DB: Send + Sync>(Transaction<'a, DB>);
-pub type RocksKVStoreImpl<'a, DB> = MutexRocksKVStoreImpl<'a, DB>;
-pub struct MutexRocksKVStoreImpl<'a, DB: Send>(Transaction<'a, DB>);
+pub struct RocksdbKVStoreImpl<'a, DB: Send>(Transaction<'a, DB>);
 
-unsafe impl<'db, DB: Send> Send for MutexRocksKVStoreImpl<'db, DB> {}
+unsafe impl<'a, DB: Send> Send for RocksdbKVStoreImpl<'a, DB> {}
 
-impl<'a, DB: Send + Sync> MutexRocksKVStoreImpl<'a, DB> {
+impl<'a, DB: Send + Sync> RocksdbKVStoreImpl<'a, DB> {
   pub fn new(txn: Transaction<'a, DB>) -> Self {
     Self(txn)
   }
@@ -179,10 +181,10 @@ impl<'a, DB: Send + Sync> MutexRocksKVStoreImpl<'a, DB> {
   }
 }
 
-impl<'a, DB: Send + Sync> KVStore<'a> for MutexRocksKVStoreImpl<'a, DB> {
-  type Range = RocksDBRange<'a, DB>;
-  type Entry = RocksDBEntry;
-  type Value = RocksDBVec;
+impl<'a, DB: Send + Sync> KVStore<'a> for RocksdbKVStoreImpl<'a, DB> {
+  type Range = RocksdbRange<'a, DB>;
+  type Entry = RocksdbEntry;
+  type Value = Vec<u8>;
   type Error = PersistenceError;
 
   fn get<K: AsRef<[u8]>>(&self, key: K) -> Result<Option<Self::Value>, Self::Error> {
@@ -246,7 +248,7 @@ impl<'a, DB: Send + Sync> KVStore<'a> for MutexRocksKVStoreImpl<'a, DB> {
     };
     let iterator_mode = IteratorMode::From(from, Forward);
     let iter = self.0.iterator_opt(iterator_mode, opt);
-    Ok(RocksDBRange {
+    Ok(RocksdbRange {
       // Safe to transmute because the lifetime of the iterator is the same as the lifetime of the
       // transaction.
       inner: unsafe { std::mem::transmute(iter) },
@@ -259,44 +261,27 @@ impl<'a, DB: Send + Sync> KVStore<'a> for MutexRocksKVStoreImpl<'a, DB> {
     let mut raw = self.0.raw_iterator_opt(opt);
     raw.seek_for_prev(key);
     if let Some((key, value)) = raw.item() {
-      Ok(Some(RocksDBEntry::new(key.to_vec(), value.to_vec())))
+      Ok(Some(RocksdbEntry::new(key.to_vec(), value.to_vec())))
     } else {
       Ok(None)
     }
   }
 }
 
-impl<'a, DB: Send + Sync> From<Transaction<'a, DB>> for RocksKVStoreImpl<'a, DB> {
+impl<'a, DB: Send + Sync> From<Transaction<'a, DB>> for RocksdbKVStoreImpl<'a, DB> {
   #[inline(always)]
   fn from(txn: Transaction<'a, DB>) -> Self {
-    MutexRocksKVStoreImpl::new(txn)
+    RocksdbKVStoreImpl::new(txn)
   }
 }
 
-// impl<'a, DB: Send + Sync> From<RocksKVStoreImpl<'a, DB>> for Transaction<'a, DB> {
-//   fn from(store: RocksKVStoreImpl<'a, DB>) -> Self {
-//     store.0.lock()
-//   }
-// }
-
-// impl<'a, DB: Send + Sync> Deref for RocksKVStoreImpl<'a, DB> {
-//   type Target = Transaction<'a, DB>;
-//
-//   #[inline(always)]
-//   fn deref(&self) -> &Self::Target {
-//     &self.0
-//   }
-// }
-
-pub type RocksDBVec = Vec<u8>;
-
-pub struct RocksDBRange<'a, DB> {
+pub struct RocksdbRange<'a, DB> {
   inner: DBIteratorWithThreadMode<'a, Transaction<'a, DB>>,
   to: Vec<u8>,
 }
 
-impl<'a, DB: Send + Sync> Iterator for RocksDBRange<'a, DB> {
-  type Item = RocksDBEntry;
+impl<'a, DB: Send + Sync> Iterator for RocksdbRange<'a, DB> {
+  type Item = RocksdbEntry;
 
   fn next(&mut self) -> Option<Self::Item> {
     let n = self.inner.next()?;
@@ -304,7 +289,7 @@ impl<'a, DB: Send + Sync> Iterator for RocksDBRange<'a, DB> {
       if key.as_ref() >= self.to.as_slice() {
         None
       } else {
-        Some(RocksDBEntry::new(key.to_vec(), value.to_vec()))
+        Some(RocksdbEntry::new(key.to_vec(), value.to_vec()))
       }
     } else {
       None
@@ -312,18 +297,18 @@ impl<'a, DB: Send + Sync> Iterator for RocksDBRange<'a, DB> {
   }
 }
 
-pub struct RocksDBEntry {
+pub struct RocksdbEntry {
   key: Vec<u8>,
   value: Vec<u8>,
 }
 
-impl RocksDBEntry {
+impl RocksdbEntry {
   pub fn new(key: Vec<u8>, value: Vec<u8>) -> Self {
     Self { key, value }
   }
 }
 
-impl KVEntry for RocksDBEntry {
+impl KVEntry for RocksdbEntry {
   fn key(&self) -> &[u8] {
     self.key.as_ref()
   }

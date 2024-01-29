@@ -17,12 +17,12 @@ use collab_database::user::{
 };
 use collab_database::views::{CreateDatabaseParams, CreateViewParams, DatabaseLayout};
 use collab_entity::CollabType;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use parking_lot::Mutex;
 use tokio::sync::mpsc::{channel, Receiver};
 
+use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::CollabKVDB;
 use rand::Rng;
 use tempfile::TempDir;
 
@@ -33,7 +33,7 @@ pub struct WorkspaceDatabaseTest {
   #[allow(dead_code)]
   uid: i64,
   inner: WorkspaceDatabase,
-  pub collab_db: Arc<RocksCollabDB>,
+  pub collab_db: Arc<CollabKVDB>,
 }
 
 impl Deref for WorkspaceDatabaseTest {
@@ -73,16 +73,18 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     &self,
     uid: i64,
     object_id: &str,
-    _object_type: CollabType,
-    collab_db: Weak<RocksCollabDB>,
+    object_type: CollabType,
+    collab_db: Weak<CollabKVDB>,
     doc_state: CollabDocState,
-    config: &CollabPersistenceConfig,
+    config: CollabPersistenceConfig,
   ) -> Arc<MutexCollab> {
     let collab = CollabBuilder::new(uid, object_id)
       .with_device_id("1")
       .with_doc_state(doc_state)
       .with_plugin(RocksdbDiskPlugin::new_with_config(
         uid,
+        object_id.to_string(),
+        object_type,
         collab_db,
         config.clone(),
         None,
@@ -114,7 +116,7 @@ pub async fn workspace_database_test_with_config(
     CollabType::WorkspaceDatabase,
     Arc::downgrade(&collab_db),
     CollabDocState::default(),
-    &config,
+    config.clone(),
   );
   let inner = WorkspaceDatabase::open(uid, collab, Arc::downgrade(&collab_db), config, builder);
   WorkspaceDatabaseTest {
@@ -126,7 +128,7 @@ pub async fn workspace_database_test_with_config(
 
 pub async fn workspace_database_with_db(
   uid: i64,
-  collab_db: Weak<RocksCollabDB>,
+  collab_db: Weak<CollabKVDB>,
   config: Option<CollabPersistenceConfig>,
 ) -> WorkspaceDatabase {
   let config = config.unwrap_or_else(|| CollabPersistenceConfig::new().snapshot_per_update(5));
@@ -140,14 +142,14 @@ pub async fn workspace_database_with_db(
     CollabType::WorkspaceDatabase,
     collab_db.clone(),
     CollabDocState::default(),
-    &config,
+    config.clone(),
   );
   WorkspaceDatabase::open(uid, collab, collab_db, config, builder)
 }
 
 pub async fn user_database_test_with_db(
   uid: i64,
-  collab_db: Arc<RocksCollabDB>,
+  collab_db: Arc<CollabKVDB>,
 ) -> WorkspaceDatabaseTest {
   let inner = workspace_database_with_db(uid, Arc::downgrade(&collab_db), None).await;
   WorkspaceDatabaseTest {
@@ -160,7 +162,7 @@ pub async fn user_database_test_with_db(
 pub async fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
-  let db = Arc::new(RocksCollabDB::open_opt(path, false).unwrap());
+  let db = Arc::new(CollabKVDB::open(path).unwrap());
   let w_database = user_database_test_with_db(uid, db).await;
 
   w_database

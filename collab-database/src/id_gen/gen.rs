@@ -1,4 +1,4 @@
-use std::time::SystemTime;
+use collab_plugins::{if_native, if_wasm};
 
 /// Equivalent to April 9, 2023 4:18:02 AM
 const EPOCH: u64 = 1637806706000;
@@ -57,11 +57,19 @@ impl RowIDGen {
     }
   }
 
-  fn timestamp(&self) -> u64 {
-    SystemTime::now()
-      .duration_since(SystemTime::UNIX_EPOCH)
+  if_native! {
+    fn timestamp(&self) -> u64 {
+      std::time::SystemTime::now()
+      .duration_since(std::time::SystemTime::UNIX_EPOCH)
       .expect("Clock moved backwards!")
       .as_millis() as u64
+    }
+  }
+
+  if_wasm! {
+     fn timestamp(&self) -> u64 {
+      js_sys::Date::now() as u64
+     }
   }
 }
 

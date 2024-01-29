@@ -2,17 +2,12 @@ use std::fmt::Debug;
 use std::panic;
 use std::panic::AssertUnwindSafe;
 
+use crate::local_storage::kv::keys::*;
+use crate::local_storage::kv::*;
+use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
 use yrs::updates::encoder::{Encoder, EncoderV1};
 use yrs::{ReadTxn, Snapshot};
-
-use crate::keys::{make_snapshot_id_key, make_snapshot_update_key, Clock, Key, SnapshotID};
-use crate::kv::KVEntry;
-use crate::kv::KVStore;
-use crate::{
-  get_id_for_key, get_last_update_key, insert_snapshot_update, make_doc_id_for_key,
-  PersistenceError,
-};
 
 impl<'a, T> SnapshotAction<'a> for T
 where
@@ -148,7 +143,7 @@ where
       Ok(snapshot_id)
     } else {
       let key = make_snapshot_id_key(&uid.to_be_bytes(), object_id.as_ref());
-      let new_snapshot_id = make_doc_id_for_key(self, key)?;
+      let new_snapshot_id = insert_doc_id_for_key(self, key)?;
       Ok(new_snapshot_id)
     }
   }
@@ -186,6 +181,16 @@ pub fn try_encode_snapshot<T: ReadTxn>(
     Ok(_) => Ok(encoded_data),
     Err(e) => Err(PersistenceError::InvalidData(format!("{:?}", e))),
   }
+}
+
+pub trait SnapshotPersistence: Send + Sync {
+  fn create_snapshot(
+    &self,
+    uid: i64,
+    object_id: &str,
+    collab_type: &CollabType,
+    encoded_v1: Vec<u8>,
+  ) -> Result<(), PersistenceError>;
 }
 
 #[derive(Serialize, Deserialize)]

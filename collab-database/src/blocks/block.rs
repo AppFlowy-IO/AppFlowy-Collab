@@ -5,9 +5,10 @@ use std::sync::{Arc, Weak};
 use collab::core::collab::{CollabDocState, MutexCollab};
 
 use collab_entity::CollabType;
-use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
+use collab_plugins::CollabKVDB;
 use lru::LruCache;
 use parking_lot::Mutex;
 use tokio::sync::broadcast;
@@ -33,7 +34,7 @@ pub enum BlockEvent {
 #[derive(Clone)]
 pub struct Block {
   uid: i64,
-  collab_db: Weak<RocksCollabDB>,
+  collab_db: Weak<CollabKVDB>,
   collab_service: Arc<dyn DatabaseCollabService>,
   task_controller: Arc<BlockTaskController>,
   sequence: Arc<AtomicU32>,
@@ -45,7 +46,7 @@ pub struct Block {
 impl Block {
   pub fn new(
     uid: i64,
-    collab_db: Weak<RocksCollabDB>,
+    collab_db: Weak<CollabKVDB>,
     collab_service: Arc<dyn DatabaseCollabService>,
     row_change_tx: Option<RowChangeSender>,
   ) -> Block {
@@ -239,7 +240,7 @@ impl Block {
   }
 
   fn collab_for_row(&self, row_id: &RowId) -> Arc<MutexCollab> {
-    let config = CollabPersistenceConfig::new().snapshot_per_update(5);
+    let config = CollabPersistenceConfig::new().snapshot_per_update(100);
     let doc_state = CollabDocState::default();
     self.collab_service.build_collab_with_config(
       self.uid,
@@ -247,7 +248,7 @@ impl Block {
       CollabType::DatabaseRow,
       self.collab_db.clone(),
       doc_state,
-      &config,
+      config,
     )
   }
 }

@@ -175,7 +175,7 @@ impl ViewMap {
       .map(|map_ref| {
         map_ref
           .get_i64_with_txn(&txn, VIEW_LAYOUT)
-          .map(|value| DatabaseLayout::try_from(value).ok())?
+          .map(DatabaseLayout::from)
       });
 
     match layout_type {

@@ -2,14 +2,16 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use collab::core::collab::{IndexContent, IndexContentSender};
 use collab::preclude::{
   DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRefWrapper, ToJson, YrsValue,
 };
 use parking_lot::RwLock;
+use serde_json::json;
 use tokio::sync::broadcast;
 
 use crate::section::SectionMap;
-use crate::{view_from_map_ref, UserId, View, ViewRelations};
+use crate::{view_from_map_ref, UserId, View, ViewIndexContent, ViewRelations};
 
 #[derive(Debug, Clone)]
 pub enum ViewChange {
@@ -58,6 +60,7 @@ pub(crate) fn subscribe_view_change(
   change_tx: ViewChangeSender,
   view_relations: Rc<ViewRelations>,
   section_map: Rc<SectionMap>,
+  index_sender: IndexContentSender,
 ) -> DeepEventsSubscription {
   let uid = uid.clone();
   root.observe_deep(move |txn, events| {
@@ -77,6 +80,11 @@ pub(crate) fn subscribe_view_change(
                     view_cache
                       .write()
                       .insert(view.id.clone(), Arc::new(view.clone()));
+
+                    // Send indexing view
+                    let index_content = ViewIndexContent::from(&view);
+                    let _ = index_sender.send(IndexContent::Create(json!(index_content)));
+
                     let _ = change_tx.send(ViewChange::DidCreateView { view });
                   }
                 }
@@ -88,6 +96,11 @@ pub(crate) fn subscribe_view_change(
                   view_cache
                     .write()
                     .insert(view.id.clone(), Arc::new(view.clone()));
+
+                  // Update indexing view
+                  let index_content = ViewIndexContent::from(&view);
+                  let _ = index_sender.send(IndexContent::Update(json!(index_content)));
+
                   let _ = change_tx.send(ViewChange::DidUpdate { view });
                 }
               },
@@ -99,6 +112,10 @@ pub(crate) fn subscribe_view_change(
                   .collect::<Vec<Arc<View>>>();
 
                 if !views.is_empty() {
+                  // Delete indexing views
+                  let delete_ids: Vec<String> = views.iter().map(|v| v.id.to_owned()).collect();
+                  let _ = index_sender.send(IndexContent::Delete(delete_ids));
+
                   let _ = change_tx.send(ViewChange::DidDeleteView { views });
                 }
               },

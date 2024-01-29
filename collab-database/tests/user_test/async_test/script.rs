@@ -59,7 +59,7 @@ pub enum DatabaseScript {
 
 #[derive(Clone)]
 pub struct DatabaseTest {
-  pub collab_db: Arc<RocksCollabDB>,
+  pub collab_db: Arc<CollabKVDB>,
   pub db_path: PathBuf,
   pub workspace_database: Arc<WorkspaceDatabase>,
   pub config: CollabPersistenceConfig,
@@ -73,7 +73,7 @@ impl DatabaseTest {
   pub async fn new(config: CollabPersistenceConfig) -> Self {
     let tempdir = TempDir::new().unwrap();
     let db_path = tempdir.into_path();
-    let collab_db = Arc::new(RocksCollabDB::open_opt(db_path.clone(), false).unwrap());
+    let collab_db = Arc::new(CollabKVDB::open(db_path.clone()).unwrap());
     let workspace_database =
       workspace_database_with_db(1, Arc::downgrade(&collab_db), Some(config.clone())).await;
     Self {
@@ -103,7 +103,7 @@ impl DatabaseTest {
 
 pub async fn run_script(
   workspace_database: Arc<WorkspaceDatabase>,
-  db: Arc<RocksCollabDB>,
+  db: Arc<CollabKVDB>,
   config: CollabPersistenceConfig,
   script: DatabaseScript,
 ) {

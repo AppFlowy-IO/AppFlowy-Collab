@@ -1,7 +1,6 @@
 use collab_database::fields::Field;
 use collab_database::rows::{CreateRowParams, Row};
 use collab_database::views::{DatabaseLayout, DatabaseView};
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
 use serde_json::json;
 
 use crate::database_test::helper::{
@@ -104,7 +103,7 @@ const HISTORY_DOCUMENT_020: &str = "020_database";
 #[tokio::test]
 async fn open_020_history_database_test() {
   let (_cleaner, db_path) = unzip_history_database_db(HISTORY_DOCUMENT_020).unwrap();
-  let db = std::sync::Arc::new(RocksCollabDB::open_opt(db_path, false).unwrap());
+  let db = std::sync::Arc::new(CollabKVDB::open(db_path).unwrap());
   let database_test = restore_database_from_db(
     221439819971039232,
     "c0e69740-49f0-4790-a488-702e2750ba8d",

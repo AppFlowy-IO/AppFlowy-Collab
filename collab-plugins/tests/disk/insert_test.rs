@@ -1,17 +1,23 @@
 use crate::disk::script::Script::*;
-use crate::disk::script::{disk_plugin, CollabPersistenceTest};
+use crate::disk::script::{disk_plugin_with_db, CollabPersistenceTest};
+use assert_json_diff::assert_json_eq;
+use collab::preclude::CollabBuilder;
+use collab_entity::CollabType;
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn insert_single_change_and_restore_from_disk() {
   let doc_id = "1".to_string();
   let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
-  let (_db, disk_plugin) = disk_plugin(test.uid);
+  let db = test.db.clone();
   test
     .run_scripts(vec![
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: doc_id.clone(),
-        plugin: disk_plugin,
+        db: db.clone(),
       },
       InsertKeyValue {
         id: doc_id.clone(),
@@ -34,15 +40,43 @@ async fn insert_single_change_and_restore_from_disk() {
 }
 
 #[tokio::test]
+async fn flush_test() {
+  let doc_id = "1".to_string();
+  let test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
+  let disk_plugin = disk_plugin_with_db(test.uid, test.db.clone(), &doc_id, CollabType::Document);
+  let collab = Arc::new(
+    CollabBuilder::new(1, &doc_id)
+      .with_device_id("1")
+      .with_plugin(disk_plugin)
+      .build()
+      .unwrap(),
+  );
+  collab.lock().initialize();
+  for i in 0..100 {
+    collab.lock().insert(&i.to_string(), i.to_string());
+  }
+  let before_flush_value = collab.to_json_value();
+
+  let read = test.db.read_txn();
+  let before_flush_updates = read.get_all_updates(test.uid, &doc_id).unwrap();
+  collab.lock().flush();
+  let after_flush_updates = read.get_all_updates(test.uid, &doc_id).unwrap();
+  let after_flush_value = collab.to_json_value();
+  assert_eq!(before_flush_updates.len(), 100);
+  assert_eq!(after_flush_updates.len(), 0);
+  assert_json_eq!(before_flush_value, after_flush_value);
+}
+
+#[tokio::test]
 async fn insert_multiple_changes_and_restore_from_disk() {
   let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
   let doc_id = "1".to_string();
-  let (_db, disk_plugin) = disk_plugin(test.uid);
+  let db = test.db.clone();
   test
     .run_scripts(vec![
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: doc_id.clone(),
-        plugin: disk_plugin,
+        db: db.clone(),
       },
       InsertKeyValue {
         id: doc_id.clone(),
@@ -64,7 +98,7 @@ async fn insert_multiple_changes_and_restore_from_disk() {
         key: "4".to_string(),
         value: "d".into(),
       },
-      AssertNumOfUpdates {
+      AssertUpdateLen {
         id: doc_id.clone(),
         expected: 4,
       },
@@ -101,32 +135,32 @@ async fn insert_multiple_changes_and_restore_from_disk() {
 #[tokio::test]
 async fn insert_multiple_docs() {
   let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
-  let (_db, disk_plugin) = disk_plugin(test.uid);
+  let db = test.db.clone();
   test
     .run_scripts(vec![
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: "1".to_string(),
-        plugin: disk_plugin.clone(),
+        db: db.clone(),
       },
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: "2".to_string(),
-        plugin: disk_plugin.clone(),
+        db: db.clone(),
       },
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: "3".to_string(),
-        plugin: disk_plugin.clone(),
+        db: db.clone(),
       },
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: "4".to_string(),
-        plugin: disk_plugin.clone(),
+        db: db.clone(),
       },
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: "5".to_string(),
-        plugin: disk_plugin.clone(),
+        db: db.clone(),
       },
-      CreateDocumentWithDiskPlugin {
+      CreateDocumentWithCollabDB {
         id: "6".to_string(),
-        plugin: disk_plugin,
+        db: db.clone(),
       },
       AssertNumOfDocuments { expected: 6 },
     ])

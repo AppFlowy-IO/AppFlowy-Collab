@@ -69,4 +69,26 @@ impl TextOperation {
       })
       .collect()
   }
+
+  /// get all text delta and join as string
+  pub fn stringify_all_text_delta(&self) -> HashMap<String, String> {
+    let txn = self.root.transact();
+    self
+      .root
+      .iter(&txn)
+      .filter_map(|(k, _)| {
+        self.get_delta_with_txn(&txn, k).map(|delta| {
+          let text: Vec<String> = delta
+            .iter()
+            .filter_map(|d| match d {
+              TextDelta::Inserted(s, _) => Some(s.clone()),
+              _ => None,
+            })
+            .collect();
+          let text = text.join("");
+          (k.to_string(), text)
+        })
+      })
+      .collect()
+  }
 }

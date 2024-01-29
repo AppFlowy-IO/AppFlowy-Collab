@@ -8,9 +8,9 @@ use async_trait::async_trait;
 use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::core::origin::CollabOrigin;
 use collab_entity::CollabType;
-use collab_persistence::doc::YrsDocAction;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_persistence::PersistenceError;
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use collab_plugins::local_storage::kv::{KVTransactionDB, PersistenceError};
+use collab_plugins::CollabKVDB;
 use tokio::sync::watch;
 
 use crate::blocks::queue::{
@@ -28,10 +28,7 @@ pub struct BlockTaskController {
 }
 
 impl BlockTaskController {
-  pub fn new(
-    collab_db: Weak<RocksCollabDB>,
-    collab_service: Weak<dyn DatabaseCollabService>,
-  ) -> Self {
+  pub fn new(collab_db: Weak<CollabKVDB>, collab_service: Weak<dyn DatabaseCollabService>) -> Self {
     let (runner_notifier_tx, runner_notifier) = watch::channel(false);
     let task_handler = Arc::new(BlockTaskHandler::new(
       collab_service,
@@ -60,7 +57,7 @@ impl BlockTaskController {
 }
 
 pub struct BlockTaskHandler {
-  collab_db: Weak<RocksCollabDB>,
+  collab_db: Weak<CollabKVDB>,
   collab_service: Weak<dyn DatabaseCollabService>,
   queue: parking_lot::Mutex<TaskQueue<BlockTask>>,
   runner_notifier: Arc<watch::Sender<bool>>,
@@ -69,7 +66,7 @@ pub struct BlockTaskHandler {
 impl BlockTaskHandler {
   pub fn new(
     collab_service: Weak<dyn DatabaseCollabService>,
-    collab_db: Weak<RocksCollabDB>,
+    collab_db: Weak<CollabKVDB>,
     runner_notifier: watch::Sender<bool>,
   ) -> Self {
     let queue = parking_lot::Mutex::new(TaskQueue::new());
@@ -159,7 +156,7 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
 }
 
 fn save_row<R: AsRef<str>>(
-  collab_db: &Arc<RocksCollabDB>,
+  collab_db: &Arc<CollabKVDB>,
   collab_doc_state: CollabDocState,
   uid: i64,
   row_id: R,

@@ -1,11 +1,13 @@
 use crate::util::{create_folder_with_workspace, make_test_view};
-use collab_folder::{timestamp, IconType, UserId, ViewIcon};
+use collab::core::collab::IndexContent;
+use collab_folder::{timestamp, IconType, UserId, ViewIcon, ViewIndexContent};
 
 #[tokio::test]
 async fn create_view_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
   let o_view = make_test_view("v1", "w1", vec![]);
+  // Insert a new view
   folder_test.insert_view(o_view.clone(), None);
 
   let r_view = folder_test.views.get_view("v1").unwrap();
@@ -204,7 +206,7 @@ async fn dissociate_and_associate_view_test() {
 
   let r_view = folder_test.views.get_view(view_1_id).unwrap();
   assert_eq!(r_view.children.items.iter().len(), 2);
-  assert_eq!(r_view.children.items.get(0).unwrap().id, view_2_id);
+  assert_eq!(r_view.children.items.first().unwrap().id, view_2_id);
   assert_eq!(r_view.children.items.get(1).unwrap().id, view_1_child_id);
 
   folder_test
@@ -219,7 +221,7 @@ async fn dissociate_and_associate_view_test() {
 
   let r_view = folder_test.views.get_view(view_1_id).unwrap();
   assert_eq!(r_view.children.items.iter().len(), 2);
-  assert_eq!(r_view.children.items.get(0).unwrap().id, view_1_child_id);
+  assert_eq!(r_view.children.items.first().unwrap().id, view_1_child_id);
   assert_eq!(r_view.children.items.get(1).unwrap().id, view_2_id);
 }
 
@@ -261,7 +263,7 @@ async fn move_view_across_parent_test() {
   assert_eq!(view_1_child.parent_view_id, workspace_id);
   assert_eq!(workspace.child_views.items.len(), 3);
   assert_eq!(
-    workspace.child_views.items.get(0).unwrap().id,
+    workspace.child_views.items.first().unwrap().id,
     view_1_child_id
   );
 
@@ -279,7 +281,7 @@ async fn move_view_across_parent_test() {
     workspace.child_views.items.get(1).unwrap().id,
     view_1_child_id
   );
-  assert_eq!(workspace.child_views.items.get(0).unwrap().id, view_1_id);
+  assert_eq!(workspace.child_views.items.first().unwrap().id, view_1_id);
 
   // move view_1_child from current workspace to view_1
   folder_test.move_nested_view(view_1_child_id, view_1_id, None);
@@ -288,7 +290,7 @@ async fn move_view_across_parent_test() {
   let view_1_child = folder_test.views.get_view(view_1_child_id).unwrap();
   let workspace = folder_test.get_current_workspace().unwrap();
   assert_eq!(view_1.children.items.iter().len(), 1);
-  assert_eq!(view_1.children.items.get(0).unwrap().id, view_1_child_id);
+  assert_eq!(view_1.children.items.first().unwrap().id, view_1_child_id);
   assert_eq!(view_1_child.parent_view_id, view_1_id);
   assert_eq!(view_2.children.items.iter().len(), 0);
   assert_eq!(workspace.child_views.items.len(), 2);
@@ -320,7 +322,7 @@ async fn create_view_test_with_index() {
   folder_test.insert_view(view_6.clone(), Some(3));
 
   let views = folder_test.get_current_workspace_views();
-  assert_eq!(views.get(0).unwrap().id, view_2.id);
+  assert_eq!(views.first().unwrap().id, view_2.id);
   assert_eq!(views.get(1).unwrap().id, view_3.id);
   assert_eq!(views.get(2).unwrap().id, view_1.id);
   assert_eq!(views.get(3).unwrap().id, view_6.id);
@@ -335,8 +337,40 @@ async fn check_created_and_edited_time_test() {
   let view = make_test_view("v1", "w1", vec![]);
   folder_test.insert_view(view, Some(0));
   let views = folder_test.get_current_workspace_views();
-  let v1 = views.get(0).unwrap();
+  let v1 = views.first().unwrap();
   assert_eq!(v1.created_by.unwrap(), uid.as_i64());
   assert_eq!(v1.last_edited_by.unwrap(), uid.as_i64());
   assert_eq!(v1.last_edited_time, v1.created_at);
+}
+#[tokio::test]
+async fn create_view_and_then_sub_index_content_test() {
+  let uid = UserId::from(1);
+  let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
+  let mut index_content_rx = folder_test.subscribe_index_content();
+  let o_view = make_test_view("v1", "w1", vec![]);
+
+  // subscribe the index content
+  let (tx, rx) = tokio::sync::oneshot::channel();
+  tokio::spawn(async move {
+    if let IndexContent::Create(json) = index_content_rx.recv().await.unwrap() {
+      tx.send(serde_json::from_value::<ViewIndexContent>(json).unwrap())
+        .unwrap();
+    } else {
+      panic!("expected IndexContent::Create");
+    }
+  });
+
+  // Insert a new view
+  folder_test.insert_view(o_view.clone(), None);
+
+  let r_view = folder_test.views.get_view("v1").unwrap();
+  assert_eq!(o_view.name, r_view.name);
+  assert_eq!(o_view.parent_view_id, r_view.parent_view_id);
+  assert_eq!(o_view.children, r_view.children);
+
+  // check the index content
+  let index_content = rx.await.unwrap();
+  assert_eq!(index_content.id, o_view.id);
+  assert_eq!(index_content.parent_view_id, o_view.parent_view_id);
+  assert_eq!(index_content.name, o_view.name);
 }

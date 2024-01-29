@@ -26,6 +26,7 @@ const APPEARANCE_SETTINGS: &str = "appearance_settings";
 pub struct MutexUserAwareness(Arc<Mutex<UserAwareness>>);
 impl MutexUserAwareness {
   pub fn new(inner: UserAwareness) -> Self {
+    #[allow(clippy::arc_with_non_send_sync)]
     Self(Arc::new(Mutex::new(inner)))
   }
 }

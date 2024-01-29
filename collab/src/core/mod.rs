@@ -4,6 +4,7 @@ pub mod array_wrapper;
 pub mod awareness;
 pub mod collab;
 pub mod collab_plugin;
+mod collab_search;
 mod collab_serde;
 pub mod collab_state;
 pub mod map_wrapper;

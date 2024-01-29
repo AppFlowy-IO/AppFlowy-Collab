@@ -2,11 +2,10 @@ use std::ops::{Deref, Range, RangeTo};
 use std::sync::Arc;
 use std::thread;
 
-use collab_persistence::keys::{clock_from_key, make_doc_update_key, Clock};
-use collab_persistence::kv::{KVEntry, KVStore};
+use crate::disk::util::rocks_db;
+use collab_plugins::local_storage::kv::keys::{clock_from_key, make_doc_update_key, Clock};
+use collab_plugins::local_storage::kv::{KVEntry, KVStore, KVTransactionDB};
 use smallvec::SmallVec;
-
-use crate::util::rocks_db;
 
 #[tokio::test]
 async fn rocks_id_test() {
@@ -60,7 +59,7 @@ async fn rocks_id_test() {
 
   let txn = rocks_db.read_txn();
   let value = txn.get([0, 0, 0, 0, 0, 0, 0, 2]).unwrap().unwrap();
-  assert_eq!(value, &[0, 1, 3]);
+  assert_eq!(&value, &[0, 1, 3]);
 }
 
 #[tokio::test]
@@ -193,6 +192,46 @@ async fn range_key_test() {
   assert_eq!(iter.next().unwrap().value(), &[0, 1, 5]);
   assert_eq!(iter.next().unwrap().value(), &[0, 1, 6]);
   assert!(iter.next().is_none());
+}
+
+#[tokio::test]
+async fn delete_range_test() {
+  let db = rocks_db().1;
+  db.with_write_txn(|store| {
+    store.insert([0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 1]).unwrap();
+    store.insert([0, 0, 0, 0, 0, 0, 0, 1], [0, 1, 2]).unwrap();
+    store.insert([0, 0, 0, 0, 0, 0, 0, 2], [0, 1, 3]).unwrap();
+
+    store.insert([0, 0, 1, 0, 0, 0, 0, 0], [0, 2, 1]).unwrap();
+    store.insert([0, 0, 1, 0, 0, 0, 0, 1], [0, 2, 2]).unwrap();
+    store.insert([0, 0, 1, 0, 0, 0, 0, 2], [0, 2, 3]).unwrap();
+
+    Ok(())
+  })
+  .unwrap();
+
+  let given_key: &[u8; 8] = &[0, 0, 0, 0, 0, 0, 0, u8::MAX];
+  let store = db.read_txn();
+  let iter = store
+    .range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key)
+    .unwrap();
+  assert_eq!(iter.count(), 3);
+
+  // remove the keys
+  db.with_write_txn(|write_txn| {
+    write_txn
+      .remove_range(&[0, 0, 0, 0, 0, 0, 0, 0], given_key)
+      .unwrap();
+    Ok(())
+  })
+  .unwrap();
+
+  // check that the keys are removed
+  let store = db.read_txn();
+  let iter = store
+    .range::<&[u8; 8], RangeTo<&[u8; 8]>>(..given_key)
+    .unwrap();
+  assert_eq!(iter.count(), 0);
 }
 
 #[repr(transparent)]

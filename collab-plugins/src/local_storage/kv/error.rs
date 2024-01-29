@@ -1,32 +1,28 @@
 #[derive(Debug, thiserror::Error)]
 pub enum PersistenceError {
-  #[cfg(feature = "sled_db_persistence")]
-  #[error(transparent)]
-  SledDb(#[from] sled::Error),
-
-  #[cfg(feature = "rocksdb_persistence")]
+  #[cfg(not(target_arch = "wasm32"))]
   #[error("Rocksdb corruption:{0}")]
   RocksdbCorruption(String),
 
-  #[cfg(feature = "rocksdb_persistence")]
+  #[cfg(not(target_arch = "wasm32"))]
   #[error("Rocksdb repair:{0}")]
   RocksdbRepairFail(String),
 
-  #[cfg(feature = "rocksdb_persistence")]
+  #[cfg(not(target_arch = "wasm32"))]
   #[error("{0}")]
   RocksdbBusy(String),
 
   // If the database is already locked by another process, it will return an IO error. It
   // happens when the database is already opened by another process.
-  #[cfg(feature = "rocksdb_persistence")]
+  #[cfg(not(target_arch = "wasm32"))]
   #[error("{0}")]
   RocksdbIOError(String),
 
   #[error(transparent)]
   Bincode(#[from] bincode::Error),
 
-  #[error("The document is not exist")]
-  DocumentNotExist,
+  #[error("{0}")]
+  RecordNotFound(String),
 
   #[error("The document already exist")]
   DocumentAlreadyExist,
@@ -47,10 +43,26 @@ pub enum PersistenceError {
   LatestUpdateKeyNotExist,
 
   #[error(transparent)]
+  Collab(#[from] collab::error::CollabError),
+
+  #[error(transparent)]
   Internal(#[from] anyhow::Error),
 }
 
-#[cfg(feature = "rocksdb_persistence")]
+impl PersistenceError {
+  pub fn is_record_not_found(&self) -> bool {
+    matches!(self, PersistenceError::RecordNotFound(_))
+  }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<indexed_db_futures::web_sys::DomException> for PersistenceError {
+  fn from(value: indexed_db_futures::web_sys::DomException) -> Self {
+    PersistenceError::Internal(anyhow::anyhow!("DOMException: {:?}", value))
+  }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 impl From<rocksdb::Error> for PersistenceError {
   fn from(value: rocksdb::Error) -> Self {
     match value.kind() {

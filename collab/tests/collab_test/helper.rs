@@ -112,6 +112,7 @@ mod tests {
   }
 }
 
+#[allow(clippy::items_after_test_module)]
 pub fn setup_log() {
   static START: Once = Once::new();
   START.call_once(|| {

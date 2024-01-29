@@ -7,8 +7,9 @@ use collab_document::blocks::{
   Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, DocumentData, DocumentMeta,
 };
 use collab_document::document::Document;
-use collab_persistence::kv::rocks_kv::RocksCollabDB;
-use collab_plugins::local_storage::rocksdb::RocksdbDiskPlugin;
+use collab_entity::CollabType;
+use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use serde_json::{json, Value};
 
@@ -17,7 +18,7 @@ use crate::util::document_storage;
 pub const TEXT_BLOCK_TYPE: &str = "paragraph";
 
 pub struct BlockTestCore {
-  pub db: Arc<RocksCollabDB>,
+  pub db: Arc<CollabKVDB>,
   pub document: Document,
   pub collab: Arc<MutexCollab>,
 }
@@ -26,7 +27,13 @@ impl BlockTestCore {
   pub async fn new() -> Self {
     let db = document_storage();
     let doc_id = "1";
-    let disk_plugin = RocksdbDiskPlugin::new(1, Arc::downgrade(&db), None);
+    let disk_plugin = RocksdbDiskPlugin::new(
+      1,
+      doc_id.to_string(),
+      CollabType::Document,
+      Arc::downgrade(&db),
+      None,
+    );
     let collab = CollabBuilder::new(1, doc_id)
       .with_plugin(disk_plugin)
       .with_device_id("1")
@@ -47,7 +54,7 @@ impl BlockTestCore {
     }
   }
 
-  pub fn open(collab: Arc<MutexCollab>, db: Arc<RocksCollabDB>) -> Self {
+  pub fn open(collab: Arc<MutexCollab>, db: Arc<CollabKVDB>) -> Self {
     let open_res = Document::open(collab.clone());
     open_res
       .map(|document| BlockTestCore {

@@ -1,18 +1,17 @@
 [workspace]
 members = [
     "collab",
-    "collab-persistence",
     "collab-database",
-    "collab-plugins",
     "collab-user",
     "collab-entity",
     "collab-document",
     "collab-folder",
+    "collab-plugins",
 ]
+resolver = "2"
 
 [workspace.dependencies]
 collab = { workspace = true, path = "collab" }
-collab-persistence = { workspace = true, path = "collab-persistence" }
 collab-database = { workspace = true, path = "collab-database" }
 collab-plugins = { workspace = true, path = "collab-plugins" }
 collab-user = { workspace = true, path = "collab-user" }

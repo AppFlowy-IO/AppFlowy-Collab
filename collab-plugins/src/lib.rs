@@ -1,10 +1,29 @@
-#[cfg(any(feature = "rocksdb_plugin"))]
-pub use collab_persistence::*;
-
 pub mod local_storage;
 
-#[cfg(feature = "postgres_storage_plugin")]
-pub mod cloud_storage;
+#[macro_export]
+macro_rules! if_native {
+    ($($item:item)*) => {$(
+        #[cfg(not(target_arch = "wasm32"))]
+        $item
+    )*}
+}
 
-#[cfg(feature = "snapshot_plugin")]
-pub mod snapshot;
+#[macro_export]
+macro_rules! if_wasm {
+    ($($item:item)*) => {$(
+        #[cfg(target_arch = "wasm32")]
+        $item
+    )*}
+}
+
+#[cfg(all(feature = "postgres_plugin", not(target_arch = "wasm32")))]
+pub mod cloud_storage;
+pub mod connect_state;
+
+if_native! {
+    pub type CollabKVDB = local_storage::rocksdb::kv_impl::KVTransactionDBRocksdbImpl;
+}
+
+if_wasm! {
+    pub type CollabKVDB = local_storage::indexeddb::CollabIndexeddb;
+}

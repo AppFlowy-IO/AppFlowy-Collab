@@ -498,7 +498,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
     .unwrap_or_default();
   let layout = map_ref
     .get_i64_with_txn(txn, VIEW_LAYOUT)
-    .map(|value| value.try_into().ok())??;
+    .map(DatabaseLayout::from)?;
 
   let layout_settings = map_ref
     .get_map_with_txn(txn, VIEW_LAYOUT_SETTINGS)
