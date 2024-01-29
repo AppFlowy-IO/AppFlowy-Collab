@@ -1,6 +1,7 @@
 use collab_database::fields::Field;
 use collab_database::rows::{CreateRowParams, Row};
 use collab_database::views::{DatabaseLayout, DatabaseView};
+use collab_plugins::CollabKVDB;
 use serde_json::json;
 
 use crate::database_test::helper::{

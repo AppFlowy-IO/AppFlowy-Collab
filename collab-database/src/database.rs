@@ -1045,7 +1045,7 @@ impl Database {
       tracing::trace!("create linked view with deps fields: {:?}", deps_fields);
       deps_fields
         .into_iter()
-        .zip(deps_field_settings.into_iter())
+        .zip(deps_field_settings)
         .for_each(|(field, field_settings)| {
           self.create_field_with_txn(
             txn,
