@@ -27,10 +27,10 @@ use crate::rows::{
 };
 use crate::user::DatabaseCollabService;
 use crate::views::{
-  CreateDatabaseParams, CreateDatabaseViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
-  DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap,
-  GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder, SortMap, ViewChangeReceiver,
-  ViewMap,
+  CreateDatabaseParams, CreateDatabaseViewParams, CreateViewParamsValidator, DatabaseLayout,
+  DatabaseView, DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap,
+  FilterMap, GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder, SortMap,
+  ViewChangeReceiver, ViewMap,
 };
 
 pub struct Database {

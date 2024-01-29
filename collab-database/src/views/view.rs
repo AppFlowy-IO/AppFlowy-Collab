@@ -140,7 +140,9 @@ impl From<DatabaseView> for CreateDatabaseViewParams {
 pub(crate) struct CreateViewParamsValidator;
 
 impl CreateViewParamsValidator {
-  pub(crate) fn validate(params: CreateDatabaseViewParams) -> Result<CreateDatabaseViewParams, DatabaseError> {
+  pub(crate) fn validate(
+    params: CreateDatabaseViewParams,
+  ) -> Result<CreateDatabaseViewParams, DatabaseError> {
     if params.database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }

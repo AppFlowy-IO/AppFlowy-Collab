@@ -26,6 +26,7 @@ use crate::views::{CreateDatabaseParams, CreateDatabaseViewParams, CreateViewPar
 
 pub type CollabDocStateByOid = HashMap<String, CollabDocState>;
 pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
+
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
 /// different [CollabPlugin]s to the [MutexCollab] to support different features.
