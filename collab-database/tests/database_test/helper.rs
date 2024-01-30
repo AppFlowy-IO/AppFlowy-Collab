@@ -65,6 +65,7 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   };
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
+    name: "database_test".to_string(),
     inline_view_id: "inline_view_id".to_string(),
     views: vec![CreateDatabaseViewParams {
       database_id: database_id.to_string(),
@@ -154,6 +155,7 @@ pub fn restore_database_from_db(
 
 pub struct DatabaseTestBuilder {
   uid: i64,
+  name: String,
   database_id: String,
   view_id: String,
   rows: Vec<CreateRowParams>,
@@ -167,6 +169,7 @@ impl DatabaseTestBuilder {
   pub fn new(uid: i64, database_id: &str) -> Self {
     Self {
       uid,
+      name: "".to_string(),
       database_id: database_id.to_string(),
       view_id: "v1".to_string(),
       rows: vec![],
@@ -175,6 +178,11 @@ impl DatabaseTestBuilder {
       layout: DatabaseLayout::Grid,
       field_settings: Default::default(),
     }
+  }
+
+  pub fn with_name(mut self, name: String) -> Self {
+    self.name = name;
+    self
   }
 
   pub fn with_row(mut self, row: CreateRowParams) -> Self {
@@ -216,6 +224,7 @@ impl DatabaseTestBuilder {
     };
     let params = CreateDatabaseParams {
       database_id: self.database_id.clone(),
+      name: self.name,
       inline_view_id: "inline_view_id".to_string(),
       views: vec![CreateDatabaseViewParams {
         database_id: self.database_id,

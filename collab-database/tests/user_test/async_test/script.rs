@@ -265,6 +265,7 @@ pub(crate) fn create_database(database_id: &str) -> CreateDatabaseParams {
 
   CreateDatabaseParams {
     database_id: database_id.to_string(),
+    name: format!("user_async_test {}", database_id),
     inline_view_id: "inline_view_id".to_string(),
     views: vec![CreateDatabaseViewParams {
       database_id: database_id.to_string(),

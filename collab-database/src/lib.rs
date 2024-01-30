@@ -10,5 +10,4 @@ pub mod views;
 mod macros;
 pub mod blocks;
 pub mod database_observer;
-mod database_serde;
 pub mod error;

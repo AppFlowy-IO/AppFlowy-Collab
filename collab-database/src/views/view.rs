@@ -158,9 +158,10 @@ impl CreateViewParamsValidator {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateDatabaseParams {
   pub database_id: String,
+  pub name: String,
+  pub inline_view_id: String,
   pub fields: Vec<Field>,
   pub rows: Vec<CreateRowParams>,
-  pub inline_view_id: String,
   pub views: Vec<CreateDatabaseViewParams>,
 }
 

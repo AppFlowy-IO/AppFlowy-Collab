@@ -17,7 +17,6 @@ pub use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{Block, BlockEvent};
 use crate::database_observer::DatabaseNotify;
-use crate::database_serde::DatabaseSerde;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldChangeReceiver, FieldMap};
 use crate::meta::MetaMap;
@@ -73,6 +72,7 @@ impl Database {
 
     let CreateDatabaseParams {
       database_id,
+      name,
       rows,
       fields,
       inline_view_id,
@@ -96,7 +96,9 @@ impl Database {
     this.root.with_transact_mut(|txn| {
       // Set the inline view id. The inline view id should not be
       // empty if the current database exists.
-      this.set_inline_view_with_txn(txn, &inline_view_id);
+      this.set_inline_view_id_with_txn(txn, &inline_view_id);
+
+      this.metas.set_name_with_txn(txn, &name);
 
       // Insert the given fields into the database
       for field in fields {
@@ -1169,6 +1171,7 @@ impl Database {
     let txn = self.root.transact();
 
     let database_id = self.get_database_id_with_txn(&txn);
+    let name = self.metas.get_name_with_txn(&txn);
     let inline_view_id = self.get_inline_view_id_with_txn(&txn);
     let views = self.views.get_all_views_with_txn(&txn);
     let fields = self.get_fields_in_view_with_txn(&txn, &inline_view_id, None);
@@ -1176,6 +1179,7 @@ impl Database {
 
     DatabaseData {
       database_id,
+      name,
       inline_view_id,
       fields,
       rows,
@@ -1189,8 +1193,8 @@ impl Database {
   }
 
   pub fn to_json_value(&self) -> JsonValue {
-    let database_serde = DatabaseSerde::from_database(self);
-    serde_json::to_value(&database_serde).unwrap()
+    let database_data = self.get_all_database_data();
+    serde_json::to_value(&database_data).unwrap()
   }
 
   pub fn is_inline_view(&self, view_id: &str) -> bool {
@@ -1215,7 +1219,26 @@ impl Database {
     self.views.get_row_orders_with_txn(&txn, &inline_view_id)
   }
 
-  pub fn set_inline_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
+  pub fn get_database_name(&self) -> String {
+    let txn = self.root.transact();
+    self.get_database_name_with_txn(&txn)
+  }
+
+  pub fn get_database_name_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
+    self.metas.get_name_with_txn(txn)
+  }
+
+  pub fn set_database_name(&self, name: &str) {
+    self
+      .root
+      .with_transact_mut(|txn| self.set_database_name_with_txn(txn, name))
+  }
+
+  pub fn set_database_name_with_txn(&self, txn: &mut TransactionMut, name: &str) {
+    self.metas.set_name_with_txn(txn, name)
+  }
+
+  pub fn set_inline_view_id_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
     tracing::trace!("Set inline view id: {}", view_id);
     self.metas.set_inline_view_id_with_txn(txn, view_id);
   }
@@ -1301,6 +1324,7 @@ pub fn timestamp() -> i64 {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DatabaseData {
   pub database_id: String,
+  pub name: String,
   pub inline_view_id: String,
   pub views: Vec<DatabaseView>,
   pub fields: Vec<Field>,
@@ -1308,25 +1332,6 @@ pub struct DatabaseData {
 }
 
 impl DatabaseData {
-  pub fn from_database(database: &Database) -> Self {
-    let txn = database.root.transact();
-    let database_id = database.get_database_id_with_txn(&txn);
-    let inline_view_id = database.metas.get_inline_view_id_with_txn(&txn).unwrap();
-    let views = database.views.get_all_views_with_txn(&txn);
-    let fields = database.get_fields_in_view_with_txn(&txn, &inline_view_id, None);
-    let rows = database.get_rows_for_view(&inline_view_id);
-
-    drop(txn);
-
-    Self {
-      database_id,
-      inline_view_id,
-      views,
-      rows,
-      fields,
-    }
-  }
-
   /// Converts DatabaseData to CreateDatabaseParams. If `regenerate` is true,
   /// the timestamps and view_ids will all be regenerated. This will be used
   /// when duplicating a database. If false, these fields remain the same.
@@ -1339,6 +1344,7 @@ impl DatabaseData {
     };
 
     let timestamp = timestamp();
+
     let create_row_params = self
       .rows
       .into_iter()
@@ -1393,6 +1399,7 @@ impl DatabaseData {
 
     CreateDatabaseParams {
       database_id,
+      name: "".to_string(),
       inline_view_id,
       rows: create_row_params,
       fields: self.fields,

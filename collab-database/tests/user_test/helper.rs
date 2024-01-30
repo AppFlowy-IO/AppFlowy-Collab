@@ -209,6 +209,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
 
   CreateDatabaseParams {
     database_id: database_id.to_string(),
+    name: format!("user_test_{}", database_id),
     inline_view_id: gen_database_view_id(),
     views: vec![CreateDatabaseViewParams {
       database_id: database_id.to_string(),
@@ -276,6 +277,7 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
 
   CreateDatabaseParams {
     database_id: database_id.clone(),
+    name: format!("user_test_grid_{}", database_id),
     inline_view_id: gen_database_view_id(),
     views: vec![CreateDatabaseViewParams {
       database_id,
