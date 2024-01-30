@@ -7,11 +7,11 @@ cargo clippy --target=wasm32-unknown-unknown --fix --allow-dirty --features="was
 
 ## Run tests in Chrome
 ```shell
-wasm-pack test --chrome --features="wasm_build"
+wasm-pack test --chrome 
 ```
 
 ## Build for web
 
 ```shell
-wasm-pack build --features="wasm_build"
+wasm-pack build 
 ```

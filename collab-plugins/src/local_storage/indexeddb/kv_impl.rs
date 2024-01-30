@@ -65,7 +65,7 @@ impl CollabIndexeddb {
   where
     K: AsRef<[u8]>,
   {
-    let js_key = to_js_key(key.as_ref());
+    let js_key = to_js_value(key.as_ref());
     match store.get(&js_key)?.await? {
       None => Err(PersistenceError::RecordNotFound(format!(
         "object with given key:{:?} is not found",
@@ -99,8 +99,8 @@ impl CollabIndexeddb {
     K: AsRef<[u8]>,
     V: AsRef<[u8]>,
   {
-    let js_key = to_js_key(key.as_ref());
-    let js_value = to_js_key(value.as_ref());
+    let js_key = to_js_value(key.as_ref());
+    let js_value = to_js_value(value.as_ref());
     store.put_key_val(&js_key, &js_value)?.await?;
     Ok(())
   }
@@ -218,8 +218,8 @@ impl CollabIndexeddb {
     // delete the doc state and state vector
     let doc_state_key = make_doc_state_key(doc_id);
     let sv_key = make_state_vector_key(doc_id);
-    store.delete(&to_js_key(doc_state_key.as_ref()))?;
-    store.delete(&to_js_key(sv_key.as_ref()))?;
+    store.delete(&to_js_value(doc_state_key.as_ref()))?;
+    store.delete(&to_js_value(sv_key.as_ref()))?;
     transaction_result_to_result(transaction.await)?;
     Ok(())
   }
@@ -281,8 +281,8 @@ impl CollabIndexeddb {
     store: &IdbObjectStore<'_>,
     doc_id: DocID,
   ) -> Result<(), PersistenceError> {
-    let start = to_js_key(make_doc_start_key(doc_id));
-    let end = to_js_key(make_doc_end_key(doc_id));
+    let start = to_js_value(make_doc_start_key(doc_id));
+    let end = to_js_value(make_doc_end_key(doc_id));
     let key_range = IdbKeyRange::bound(&start, &end).map_err(|err| {
       PersistenceError::Internal(anyhow!("Get last update key fail. error: {:?}", err))
     })?;
@@ -390,7 +390,7 @@ impl CollabIndexeddb {
   }
 }
 
-fn to_js_key<K: AsRef<[u8]>>(key: K) -> JsValue {
+fn to_js_value<K: AsRef<[u8]>>(key: K) -> JsValue {
   JsValue::from(Uint8Array::from(key.as_ref()))
 }
 
@@ -424,8 +424,8 @@ async fn fetch_updates(
   store: &IdbObjectStore<'_>,
   doc_id: DocID,
 ) -> Result<Vec<Vec<u8>>, PersistenceError> {
-  let start = to_js_key(make_doc_update_key(doc_id, 0).as_ref());
-  let end = to_js_key(make_doc_update_key(doc_id, Clock::MAX).as_ref());
+  let start = to_js_value(make_doc_update_key(doc_id, 0).as_ref());
+  let end = to_js_value(make_doc_update_key(doc_id, Clock::MAX).as_ref());
   let key_range = IdbKeyRange::bound(&start, &end).map_err(|err| {
     PersistenceError::Internal(anyhow!("Get last update key fail. error: {:?}", err))
   })?;

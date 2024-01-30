@@ -93,7 +93,7 @@ script = [
     cd "$BASE_DIR/$crate" || { echo "Failed to enter directory $crate"; exit 1; }
 
     # Build the crate
-    wasm-pack build --features="wasm_build" || { echo "Build failed for $crate"; exit 1; }
+    wasm-pack build || { echo "Build failed for $crate"; exit 1; }
   done
   """
 ]
@@ -114,7 +114,7 @@ script = [
     cd "$BASE_DIR/$crate" || { echo "Failed to enter directory $crate"; exit 1; }
 
     # Build the crate
-    wasm-pack test --headless --firefox --features="wasm_build"
+    wasm-pack test --headless --firefox
   done
   """
 ]
