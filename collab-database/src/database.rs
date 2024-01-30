@@ -847,8 +847,8 @@ impl Database {
   pub fn remove_calculation(&self, view_id: &str, calculation_id: &str) {
     self.views.update_database_view(view_id, |update| {
       update.update_calculations(|calculation_update| {
-        if calculation_update.contains(&calculation_id) {
-          calculation_update.remove(&calculation_id);
+        if calculation_update.contains(calculation_id) {
+          calculation_update.remove(calculation_id);
         }
       });
     });
