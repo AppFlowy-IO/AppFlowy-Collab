@@ -1,4 +1,4 @@
-use collab_database::views::CreateViewParams;
+use collab_database::views::CreateDatabaseViewParams;
 use collab_database::{fields::Field, views::OrderObjectPosition};
 
 use crate::database_test::helper::{
@@ -73,7 +73,7 @@ async fn create_multiple_field_test() {
 #[tokio::test]
 async fn create_field_in_view_test() {
   let database_test = create_database(1, "1").await;
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
     ..Default::default()
@@ -148,7 +148,7 @@ async fn delete_field_in_views_test() {
     );
   }
 
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v1".to_string(),
     ..Default::default()
@@ -165,7 +165,7 @@ async fn delete_field_in_views_test() {
 #[tokio::test]
 async fn field_order_in_view_test() {
   let database_test = create_database(1, "1").await;
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v1".to_string(),
     ..Default::default()
@@ -217,7 +217,7 @@ async fn get_field_in_order_test() {
 #[tokio::test]
 async fn move_field_test() {
   let database_test = create_database(1, "1").await;
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
     ..Default::default()

@@ -1,6 +1,6 @@
 use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
 use crate::helper::{SortCondition, TestSort};
-use collab_database::views::{CreateViewParams, DatabaseLayout};
+use collab_database::views::{CreateDatabaseViewParams, DatabaseLayout};
 
 #[tokio::test]
 async fn create_database_view_with_sort_test() {
@@ -85,7 +85,7 @@ async fn create_database_with_two_sorts() -> DatabaseTest {
     condition: SortCondition::Descending,
   };
 
-  let params = CreateViewParams {
+  let params = CreateDatabaseViewParams {
     database_id: "1".to_string(),
     view_id: "v1".to_string(),
     sorts: vec![sort_1.into(), sort_2.into()],

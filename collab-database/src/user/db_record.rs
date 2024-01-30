@@ -8,6 +8,7 @@ use collab::preclude::{
 };
 
 use crate::database::timestamp;
+use crate::views::CreateDatabaseParams;
 
 const DATABASES: &str = "databases";
 
@@ -39,11 +40,19 @@ impl DatabaseViewTrackerList {
   /// Create a new [DatabaseViewTracker] for the given database id and view id
   /// use [Self::update_database] to attach more views to the existing database.
   ///
-  pub fn add_database(&self, database_id: &str, view_ids: Vec<String>) {
+  pub fn add_database(&self, params: &CreateDatabaseParams) {
     self.array_ref.with_transact_mut(|txn| {
-      let linked_views: HashSet<String> = view_ids.into_iter().collect();
+      let mut linked_views = HashSet::new();
+      linked_views.insert(params.inline_view_id.to_string());
+      linked_views.extend(
+        params
+          .views
+          .iter()
+          .filter(|view| view.view_id != params.inline_view_id)
+          .map(|view| view.view_id.clone()),
+      );
       let record = DatabaseViewTracker {
-        database_id: database_id.to_string(),
+        database_id: params.database_id.clone(),
         created_at: timestamp(),
         linked_views,
       };

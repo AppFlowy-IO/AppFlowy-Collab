@@ -1,5 +1,3 @@
-#![allow(clippy::all)]
-
 use collab::core::collab::CollabBuilder;
 use collab::preclude::MapRefExtension;
 use std::collections::HashMap;

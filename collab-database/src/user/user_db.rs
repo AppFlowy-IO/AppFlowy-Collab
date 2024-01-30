@@ -22,10 +22,11 @@ use crate::database_observer::DatabaseNotify;
 use crate::error::DatabaseError;
 
 use crate::user::db_record::{DatabaseViewTracker, DatabaseViewTrackerList};
-use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
+use crate::views::{CreateDatabaseParams, CreateDatabaseViewParams, CreateViewParamsValidator};
 
 pub type CollabDocStateByOid = HashMap<String, CollabDocState>;
 pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
+
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
 /// different [CollabPlugin]s to the [MutexCollab] to support different features.
@@ -185,7 +186,6 @@ impl WorkspaceDatabase {
     params: CreateDatabaseParams,
   ) -> Result<Arc<MutexDatabase>, DatabaseError> {
     debug_assert!(!params.database_id.is_empty());
-    debug_assert!(!params.view_id.is_empty());
 
     // Create a [Collab] for the given database id.
     let collab = self.collab_for_database(&params.database_id, CollabDocState::default());
@@ -199,33 +199,11 @@ impl WorkspaceDatabase {
     };
 
     // Add a new database record.
-    self
-      .database_tracker_list()
-      .add_database(&params.database_id, vec![params.view_id.clone()]);
+    self.database_tracker_list().add_database(&params);
     let database_id = params.database_id.clone();
-    // TODO(RS): insert the first view of the database.
     let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);
     let database = Arc::new(mutex_database);
     self.open_handlers.lock().put(database_id, database.clone());
-    Ok(database)
-  }
-
-  pub fn track_database(&self, database_id: &str, database_view_ids: Vec<String>) {
-    self
-      .database_tracker_list()
-      .add_database(database_id, database_view_ids);
-  }
-
-  /// Create database with the data duplicated from the given database.
-  /// The [DatabaseData] contains all the database data. It can be
-  /// used to restore the database from the backup.
-  pub fn create_database_with_data(
-    &self,
-    data: DatabaseData,
-  ) -> Result<Arc<MutexDatabase>, DatabaseError> {
-    let DatabaseData { view, fields, rows } = data;
-    let params = CreateDatabaseParams::from_view(view, fields, rows);
-    let database = self.create_database(params)?;
     Ok(database)
   }
 
@@ -233,7 +211,7 @@ impl WorkspaceDatabase {
   /// If the inline view is deleted, the reference view will be deleted too.
   pub async fn create_database_linked_view(
     &self,
-    params: CreateViewParams,
+    params: CreateDatabaseViewParams,
   ) -> Result<(), DatabaseError> {
     let params = CreateViewParamsValidator::validate(params)?;
     if let Some(database) = self.get_database(&params.database_id).await {
@@ -326,19 +304,18 @@ impl WorkspaceDatabase {
     &self,
     view_id: &str,
   ) -> Result<Arc<MutexDatabase>, DatabaseError> {
-    let DatabaseData { view, fields, rows } = self.get_database_duplicated_data(view_id).await?;
-    let params = CreateDatabaseParams::from_view(view, fields, rows);
-    let database = self.create_database(params)?;
+    let database_data = self.get_all_database_data(view_id).await?;
+
+    let create_database_params = database_data.to_create_database_params(true);
+    let database = self.create_database(create_database_params)?;
+
     Ok(database)
   }
 
-  /// Duplicate the database with the given view id.
-  pub async fn get_database_duplicated_data(
-    &self,
-    view_id: &str,
-  ) -> Result<DatabaseData, DatabaseError> {
+  /// Duplicate the database with the view_id of any linked view in the database
+  pub async fn get_all_database_data(&self, view_id: &str) -> Result<DatabaseData, DatabaseError> {
     if let Some(database) = self.get_database_with_view_id(view_id).await {
-      let data = database.lock().duplicate_database();
+      let data = database.lock().get_all_database_data();
       Ok(data)
     } else {
       Err(DatabaseError::DatabaseNotExist)

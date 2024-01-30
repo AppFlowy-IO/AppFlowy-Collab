@@ -45,16 +45,18 @@ pub struct DatabaseViewMeta {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct CreateViewParams {
+pub struct CreateDatabaseViewParams {
   pub database_id: String,
   pub view_id: String,
   pub name: String,
   pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<FilterMap>,
-  pub groups: Vec<GroupSettingMap>,
+  pub group_settings: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
   pub field_settings: FieldSettingsByFieldIdMap,
+  pub created_at: i64,
+  pub modified_at: i64,
 
   /// When creating a view for a database, it might need to create a new field for the view.
   /// For example, if the view is calendar view, it must have a date field.
@@ -65,7 +67,7 @@ pub struct CreateViewParams {
   pub deps_field_setting: Vec<HashMap<DatabaseLayout, FieldSettingsMap>>,
 }
 
-impl CreateViewParams {
+impl CreateDatabaseViewParams {
   pub fn take_deps_fields(
     &mut self,
   ) -> (Vec<Field>, Vec<HashMap<DatabaseLayout, FieldSettingsMap>>) {
@@ -76,7 +78,7 @@ impl CreateViewParams {
   }
 }
 
-impl CreateViewParams {
+impl CreateDatabaseViewParams {
   pub fn new(database_id: String, view_id: String, name: String, layout: DatabaseLayout) -> Self {
     Self {
       database_id,
@@ -98,7 +100,7 @@ impl CreateViewParams {
   }
 
   pub fn with_groups(mut self, groups: Vec<GroupSettingMap>) -> Self {
-    self.groups = groups;
+    self.group_settings = groups;
     self
   }
 
@@ -118,10 +120,29 @@ impl CreateViewParams {
   }
 }
 
+impl From<DatabaseView> for CreateDatabaseViewParams {
+  fn from(view: DatabaseView) -> Self {
+    Self {
+      database_id: view.database_id,
+      view_id: view.id,
+      name: view.name,
+      layout: view.layout,
+      filters: view.filters,
+      layout_settings: view.layout_settings,
+      group_settings: view.group_settings,
+      sorts: view.sorts,
+      field_settings: view.field_settings,
+      ..Default::default()
+    }
+  }
+}
+
 pub(crate) struct CreateViewParamsValidator;
 
 impl CreateViewParamsValidator {
-  pub(crate) fn validate(params: CreateViewParams) -> Result<CreateViewParams, DatabaseError> {
+  pub(crate) fn validate(
+    params: CreateDatabaseViewParams,
+  ) -> Result<CreateDatabaseViewParams, DatabaseError> {
     if params.database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
@@ -137,63 +158,11 @@ impl CreateViewParamsValidator {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateDatabaseParams {
   pub database_id: String,
-  pub view_id: String,
-  pub view_name: String,
-  pub layout: DatabaseLayout,
-  pub layout_settings: LayoutSettings,
-  pub filters: Vec<FilterMap>,
-  pub groups: Vec<GroupSettingMap>,
-  pub sorts: Vec<SortMap>,
-  pub field_settings: FieldSettingsByFieldIdMap,
-  pub created_rows: Vec<CreateRowParams>,
+  pub name: String,
+  pub inline_view_id: String,
   pub fields: Vec<Field>,
-}
-
-impl CreateDatabaseParams {
-  pub fn from_view(view: DatabaseView, fields: Vec<Field>, rows: Vec<CreateRowParams>) -> Self {
-    let mut params: Self = view.into();
-    params.fields = fields;
-    params.created_rows = rows;
-    params
-  }
-
-  pub fn split(self) -> (Vec<CreateRowParams>, Vec<Field>, CreateViewParams) {
-    (
-      self.created_rows,
-      self.fields,
-      CreateViewParams {
-        database_id: self.database_id,
-        view_id: self.view_id,
-        name: self.view_name,
-        layout: self.layout,
-        layout_settings: self.layout_settings,
-        filters: self.filters,
-        groups: self.groups,
-        sorts: self.sorts,
-        field_settings: self.field_settings,
-        deps_fields: vec![],
-        deps_field_setting: vec![],
-      },
-    )
-  }
-}
-
-impl From<DatabaseView> for CreateDatabaseParams {
-  fn from(view: DatabaseView) -> Self {
-    Self {
-      database_id: view.database_id,
-      view_id: view.id,
-      view_name: view.name,
-      layout: view.layout,
-      layout_settings: view.layout_settings,
-      filters: view.filters,
-      groups: view.group_settings,
-      sorts: view.sorts,
-      field_settings: view.field_settings,
-      created_rows: vec![],
-      fields: vec![],
-    }
-  }
+  pub rows: Vec<CreateRowParams>,
+  pub views: Vec<CreateDatabaseViewParams>,
 }
 
 const VIEW_ID: &str = "id";
