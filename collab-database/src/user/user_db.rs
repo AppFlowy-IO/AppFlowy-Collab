@@ -55,7 +55,14 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
   ) -> Arc<MutexCollab>;
 }
 
-/// A [WorkspaceDatabase] is used to index databases of a workspace.
+/// A [WorkspaceDatabase] indexes the databases within a workspace.
+/// Within a workspace, the view ID is used to identify each database. Therefore, you can use the view_id to retrieve
+/// the actual database ID from [WorkspaceDatabase]. Additionally, [WorkspaceDatabase] allows you to obtain a database
+/// using its database ID.
+///
+/// Relation between database ID and view ID:
+/// One database ID can have multiple view IDs.
+///
 pub struct WorkspaceDatabase {
   uid: i64,
   collab: Arc<MutexCollab>,
