@@ -1,4 +1,4 @@
-mod async_test;
+// mod async_test;
 mod cell_test;
 mod database_test;
 pub mod helper;

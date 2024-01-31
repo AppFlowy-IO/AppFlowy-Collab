@@ -128,16 +128,17 @@ impl Block {
 
   /// If the row with given id exists, return it. Otherwise, return an empty row with given id.
   /// An empty [Row] is a row with no cells.
-  pub fn get_row(&self, row_id: &RowId) -> Row {
-    self
-      .get_or_init_row(row_id)
+  pub async fn get_row(&self, row_id: &RowId) -> Row {
+    let row = self.get_or_init_row(row_id).await;
+    row
       .and_then(|row| row.lock().get_row())
       .unwrap_or_else(|| Row::empty(row_id.clone()))
   }
 
-  pub fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
-    self
-      .get_or_init_row(row_id)
+  pub async fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
+    let row = self.get_or_init_row(row_id).await;
+
+    row
       .and_then(|row| row.lock().get_row_meta())
       .or_else(|| Some(RowMeta::empty()))
   }
@@ -150,11 +151,11 @@ impl Block {
   /// If the row with given id not exist. It will return an empty row with given id.
   /// An empty [Row] is a row with no cells.
   ///
-  pub fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
+  pub async fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
     let mut rows = Vec::new();
     for row_order in row_orders {
-      let row = self
-        .get_or_init_row(&row_order.id)
+      let mutex_row = self.get_or_init_row(&row_order.id).await;
+      let row = mutex_row
         .and_then(|row| row.lock().get_row())
         .unwrap_or_else(|| Row::empty(row_order.id.clone()));
       rows.push(row);
@@ -162,10 +163,9 @@ impl Block {
     rows
   }
 
-  pub fn get_cell(&self, row_id: &RowId, field_id: &str) -> Option<Cell> {
-    self
-      .get_or_init_row(row_id)
-      .and_then(|row| row.lock().get_cell(field_id))
+  pub async fn get_cell(&self, row_id: &RowId, field_id: &str) -> Option<Cell> {
+    let row = self.get_or_init_row(row_id).await;
+    row.and_then(|row| row.lock().get_cell(field_id))
   }
 
   pub fn delete_row(&self, row_id: &RowId) {
@@ -196,7 +196,7 @@ impl Block {
   }
 
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
-  fn get_or_init_row(&self, row_id: &RowId) -> Option<Arc<MutexDatabaseRow>> {
+  async fn get_or_init_row(&self, row_id: &RowId) -> Option<Arc<MutexDatabaseRow>> {
     let collab_db = self.collab_db.upgrade()?;
     let row = self.cache.lock().get(row_id).cloned();
     match row {

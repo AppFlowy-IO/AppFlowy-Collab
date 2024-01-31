@@ -38,7 +38,7 @@ async fn create_initial_database_test() {
         }
       ]
     }),
-    actual: database_test.to_json_value()
+    actual: database_test.to_json_value().await
   );
 }
 
@@ -216,7 +216,7 @@ async fn duplicate_database_view_test() {
 #[tokio::test]
 async fn duplicate_database_data_serde_test() {
   let database_test = create_database_with_default_data(1, "1").await;
-  let duplicated_database = database_test.duplicate_database();
+  let duplicated_database = database_test.duplicate_database().await;
 
   let json = duplicated_database.to_json().unwrap();
   let duplicated_database2 = DatabaseData::from_json(&json).unwrap();

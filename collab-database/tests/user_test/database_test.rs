@@ -73,9 +73,10 @@ async fn duplicate_database_inline_view_test() {
     .unwrap();
 
   let duplicated_database = test.duplicate_database("v1").await.unwrap();
-  let duplicated_view_id = duplicated_database.lock().get_inline_view_id();
+  let duplicated_view_id = duplicated_database.lock().await.get_inline_view_id();
   duplicated_database
     .lock()
+    .await
     .create_row(CreateRowParams {
       id: 1.into(),
       ..Default::default()
@@ -85,11 +86,18 @@ async fn duplicate_database_inline_view_test() {
   assert_eq!(
     duplicated_database
       .lock()
+      .await
       .get_rows_for_view(&duplicated_view_id)
+      .await
       .len(),
     1
   );
-  assert!(database.lock().get_rows_for_view("v1").is_empty());
+  assert!(database
+    .lock()
+    .await
+    .get_rows_for_view("v1")
+    .await
+    .is_empty());
 }
 
 #[tokio::test]
@@ -115,9 +123,10 @@ async fn duplicate_database_view_test() {
     .unwrap();
 
   // Duplicate the linked view.
-  let duplicated_view = database.lock().duplicate_linked_view("v2").unwrap();
+  let duplicated_view = database.lock().await.duplicate_linked_view("v2").unwrap();
   database
     .lock()
+    .await
     .create_row(CreateRowParams {
       id: 1.into(),
       ..Default::default()
@@ -126,10 +135,15 @@ async fn duplicate_database_view_test() {
 
   // Duplicated database should have the same rows as the original database
   assert_eq!(
-    database.lock().get_rows_for_view(&duplicated_view.id).len(),
+    database
+      .lock()
+      .await
+      .get_rows_for_view(&duplicated_view.id)
+      .await
+      .len(),
     1
   );
-  assert_eq!(database.lock().get_rows_for_view("v1").len(), 1);
+  assert_eq!(database.lock().await.get_rows_for_view("v1").await.len(), 1);
 }
 
 #[tokio::test]
@@ -146,6 +160,7 @@ async fn delete_database_inline_view_test() {
   for i in 2..5 {
     database
       .lock()
+      .await
       .create_linked_view(CreateViewParams {
         database_id: "d1".to_string(),
         view_id: format!("v{}", i),
@@ -154,12 +169,12 @@ async fn delete_database_inline_view_test() {
       .unwrap();
   }
 
-  let views = database.lock().views.get_all_views();
+  let views = database.lock().await.views.get_all_views();
   assert_eq!(views.len(), 4);
 
   // After deleting the inline view, all linked views will be removed
   test.delete_view("d1", "v1").await;
-  let views = database.lock().views.get_all_views();
+  let views = database.lock().await.views.get_all_views();
   assert_eq!(views.len(), 0);
 }
 
@@ -170,11 +185,15 @@ async fn duplicate_database_data_test() {
   let duplicated_data = test.get_database_duplicated_data("v1").await.unwrap();
   let duplicate = test.create_database_with_data(duplicated_data).unwrap();
 
-  let duplicated_view_id = &duplicate.lock().get_all_database_views_meta()[0].id;
+  let duplicated_view_id = &duplicate.lock().await.get_all_database_views_meta()[0].id;
 
   // compare rows
-  let original_rows = original.lock().get_rows_for_view("v1");
-  let duplicate_rows = duplicate.lock().get_rows_for_view(duplicated_view_id);
+  let original_rows = original.lock().await.get_rows_for_view("v1").await;
+  let duplicate_rows = duplicate
+    .lock()
+    .await
+    .get_rows_for_view(duplicated_view_id)
+    .await;
   assert_eq!(original_rows.len(), duplicate_rows.len());
   for (index, row) in original_rows.iter().enumerate() {
     assert_eq!(row.visibility, duplicate_rows[index].visibility);
@@ -183,16 +202,21 @@ async fn duplicate_database_data_test() {
   }
 
   // compare views
-  let original_views = original.lock().views.get_all_views();
-  let duplicated_views = duplicate.lock().views.get_all_views();
+  let original_views = original.lock().await.views.get_all_views();
+  let duplicated_views = duplicate.lock().await.views.get_all_views();
   assert_eq!(original_views.len(), duplicated_views.len());
 
   // compare inline view
-  let original_inline_view_id = original.lock().get_inline_view_id();
-  let original_inline_view = original.lock().get_view(&original_inline_view_id).unwrap();
-  let duplicated_inline_view_id = duplicate.lock().get_inline_view_id();
+  let original_inline_view_id = original.lock().await.get_inline_view_id();
+  let original_inline_view = original
+    .lock()
+    .await
+    .get_view(&original_inline_view_id)
+    .unwrap();
+  let duplicated_inline_view_id = duplicate.lock().await.get_inline_view_id();
   let duplicated_inline_view = duplicate
     .lock()
+    .await
     .get_view(&duplicated_inline_view_id)
     .unwrap();
   assert_eq!(
@@ -248,5 +272,5 @@ async fn reopen_database_test() {
 
   let test = user_database_test_with_db(uid, db).await;
   let database = test.get_database_with_view_id(&view_id).await;
-  let _ = database.unwrap().lock().to_json_value();
+  let _ = database.unwrap().lock().await.to_json_value().await;
 }

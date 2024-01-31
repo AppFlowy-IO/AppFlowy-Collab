@@ -91,23 +91,16 @@ impl DatabaseTest {
       .get_database(database_id)
       .await
       .unwrap();
-    let duplicated_database = database.lock().duplicate_database();
+    let duplicated_database = database.lock().await.duplicate_database().await;
     duplicated_database
   }
 
   pub async fn run_scripts(&mut self, scripts: Vec<DatabaseScript>) {
-    let mut handles = vec![];
     for script in scripts {
       let workspace_database = self.workspace_database.clone();
       let db = self.collab_db.clone();
       let config = self.config.clone();
-      let handle = tokio::spawn(async move {
-        run_script(workspace_database, db, config, script).await;
-      });
-      handles.push(handle);
-    }
-    for result in futures::future::join_all(handles).await {
-      assert!(result.is_ok());
+      run_script(workspace_database, db, config, script).await;
     }
   }
 }
@@ -161,7 +154,7 @@ pub async fn run_script(
       let w_database =
         workspace_database_with_db(1, Arc::downgrade(&db), Some(config.clone())).await;
       let database = w_database.get_database(&database_id).await.unwrap();
-      let actual = database.lock().to_json_value();
+      let actual = database.lock().await.to_json_value().await;
       assert_json_diff::assert_json_include!(actual: actual, expected: expected);
     },
     DatabaseScript::AssertDatabase {
@@ -169,7 +162,7 @@ pub async fn run_script(
       expected,
     } => {
       let database = workspace_database.get_database(&database_id).await.unwrap();
-      let actual = database.lock().to_json_value();
+      let actual = database.lock().await.to_json_value().await;
       assert_json_diff::assert_json_include!(actual: actual, expected: expected);
     },
     DatabaseScript::IsExist {

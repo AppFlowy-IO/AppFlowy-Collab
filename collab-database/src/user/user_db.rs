@@ -10,9 +10,8 @@ use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{Collab, Update};
 use collab_entity::CollabType;
-use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::snapshot::{CollabSnapshot, SnapshotAction};
-use collab_plugins::local_storage::kv::KVTransactionDB;
+use collab_plugins::local_storage::kv::snapshot::CollabSnapshot;
+
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use parking_lot::Mutex;
@@ -114,7 +113,7 @@ impl WorkspaceDatabase {
       None => {
         let mut collab_doc_state = CollabDocState::default();
         let is_exist = collab_db
-          .is_exist(self.uid, &database_id)
+          .is_exist(self.uid, database_id)
           .await
           .unwrap_or(false);
         if !is_exist {
@@ -246,7 +245,7 @@ impl WorkspaceDatabase {
         .update_database(&params.database_id, |record| {
           record.linked_views.insert(params.view_id.clone());
         });
-      database.lock().create_linked_view(params)
+      database.lock().await.create_linked_view(params)
     } else {
       Err(DatabaseError::DatabaseNotExist)
     }
@@ -260,15 +259,20 @@ impl WorkspaceDatabase {
         error!("Delete database failed: {}", err);
       }
     }
-    if let Some(database) = self.open_handlers.lock().pop(database_id) {
-      database.lock().close();
+
+    let database = self.open_handlers.lock().pop(database_id);
+    if let Some(database) = database {
+      if let Ok(lock_guard) = database.try_lock() {
+        lock_guard.close();
+      }
     }
   }
 
   /// Close the database with the given database id.
-  pub fn close_database(&self, database_id: &str) {
-    if let Some(database) = self.open_handlers.lock().pop(database_id) {
-      database.lock().close();
+  pub async fn close_database(&self, database_id: &str) {
+    let database = self.open_handlers.lock().pop(database_id);
+    if let Some(database) = database {
+      database.lock().await.close();
     }
   }
 
@@ -303,10 +307,11 @@ impl WorkspaceDatabase {
   /// If the view is the inline view, the database will be deleted too.
   pub async fn delete_view(&self, database_id: &str, view_id: &str) {
     if let Some(database) = self.get_database(database_id).await {
-      database.lock().delete_view(view_id);
-      if database.lock().is_inline_view(view_id) {
+      database.lock().await.delete_view(view_id);
+      let is_inline_view = database.lock().await.is_inline_view(view_id);
+      if is_inline_view {
         // Delete the database if the view is the inline view.
-        self.delete_database(database_id);
+        self.delete_database(database_id).await;
       }
     }
   }
@@ -328,7 +333,7 @@ impl WorkspaceDatabase {
     view_id: &str,
   ) -> Result<DatabaseData, DatabaseError> {
     if let Some(database) = self.get_database_with_view_id(view_id).await {
-      let data = database.lock().duplicate_database();
+      let data = database.lock().await.duplicate_database().await;
       Ok(data)
     } else {
       Err(DatabaseError::DatabaseNotExist)

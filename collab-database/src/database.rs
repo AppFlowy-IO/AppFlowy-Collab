@@ -11,8 +11,8 @@ use collab::preclude::{
 };
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
-use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 pub use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{Block, BlockEvent};
@@ -365,19 +365,19 @@ impl Database {
 
   /// Remove the row
   /// The [RowOrder] of each view representing this row will be removed.
-  pub fn remove_row(&self, row_id: &RowId) -> Option<Row> {
+  pub async fn remove_row(&self, row_id: &RowId) -> Option<Row> {
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |_, update| {
         update.remove_row_order(row_id);
       });
     });
 
-    let row = self.block.get_row(row_id);
+    let row = self.block.get_row(row_id).await;
     self.block.delete_row(row_id);
     Some(row)
   }
 
-  pub fn remove_rows(&self, row_ids: &[RowId]) -> Vec<Row> {
+  pub async fn remove_rows(&self, row_ids: &[RowId]) -> Vec<Row> {
     self.root.with_transact_mut(|txn| {
       self.views.update_all_views_with_txn(txn, |_, mut update| {
         for row_id in row_ids {
@@ -385,15 +385,13 @@ impl Database {
         }
       });
     });
-
-    row_ids
-      .iter()
-      .map(|row_id| {
-        let row = self.block.get_row(row_id);
-        self.block.delete_row(row_id);
-        row
-      })
-      .collect()
+    let mut deleted_rows = vec![];
+    for row_id in row_ids {
+      let row = self.block.get_row(row_id).await;
+      self.block.delete_row(row_id);
+      deleted_rows.push(row);
+    }
+    deleted_rows
   }
 
   /// Update the row
@@ -430,19 +428,19 @@ impl Database {
   }
 
   /// Return the [Row] with the given row id.
-  pub fn get_row(&self, row_id: &RowId) -> Row {
-    self.block.get_row(row_id)
+  pub async fn get_row(&self, row_id: &RowId) -> Row {
+    self.block.get_row(row_id).await
   }
 
   /// Return the [RowMeta] with the given row id.
-  pub fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
-    self.block.get_row_meta(row_id)
+  pub async fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
+    self.block.get_row_meta(row_id).await
   }
 
   /// Return the [RowMeta] with the given row id.
-  pub fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
-    let row = self.block.get_row(row_id);
-    let meta = self.block.get_row_meta(row_id)?;
+  pub async fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
+    let row = self.block.get_row(row_id).await;
+    let meta = self.block.get_row_meta(row_id).await?;
     RowDetail::new(row, meta)
   }
 
@@ -452,9 +450,9 @@ impl Database {
 
   /// Return a list of [Row] for the given view.
   /// The rows here are ordered by [RowOrder]s of the view.
-  pub fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
+  pub async fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
     let row_orders = self.get_row_orders_for_view(view_id);
-    self.get_rows_from_row_orders(&row_orders)
+    self.get_rows_from_row_orders(&row_orders).await
   }
 
   pub fn get_row_orders_for_view(&self, view_id: &str) -> Vec<RowOrder> {
@@ -464,31 +462,34 @@ impl Database {
 
   /// Return a list of [Row] for the given view.
   /// The rows here is ordered by the [RowOrder] of the view.
-  pub fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
-    self.block.get_rows_from_row_orders(row_orders)
+  pub async fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
+    self.block.get_rows_from_row_orders(row_orders).await
   }
 
   /// Return a list of [RowCell] for the given view and field.
-  pub fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<RowCell> {
+  pub async fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<RowCell> {
     let txn = self.root.transact();
-    self.get_cells_for_field_with_txn(&txn, view_id, field_id)
+    self
+      .get_cells_for_field_with_txn(&txn, view_id, field_id)
+      .await
   }
 
   /// Return the [RowCell] with the given row id and field id.
-  pub fn get_cell(&self, field_id: &str, row_id: &RowId) -> RowCell {
-    let cell = self.block.get_cell(row_id, field_id);
+  pub async fn get_cell(&self, field_id: &str, row_id: &RowId) -> RowCell {
+    let cell = self.block.get_cell(row_id, field_id).await;
     RowCell::new(row_id.clone(), cell)
   }
 
   /// Return list of [RowCell] for the given view and field.
-  pub fn get_cells_for_field_with_txn<T: ReadTxn>(
+  pub async fn get_cells_for_field_with_txn<T: ReadTxn>(
     &self,
     txn: &T,
     view_id: &str,
     field_id: &str,
   ) -> Vec<RowCell> {
     let row_orders = self.views.get_row_orders_with_txn(txn, view_id);
-    let rows = self.block.get_rows_from_row_orders(&row_orders);
+    let rows = self.block.get_rows_from_row_orders(&row_orders).await;
+
     rows
       .into_iter()
       .map(|row| RowCell::new(row.id, row.cells.get(field_id).cloned()))
@@ -1110,8 +1111,8 @@ impl Database {
   }
 
   /// Duplicate the row, and insert it after the original row.
-  pub fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
-    let row = self.block.get_row(row_id);
+  pub async fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
+    let row = self.block.get_row(row_id).await;
     Some(CreateRowParams {
       id: gen_row_id(),
       cells: row.cells,
@@ -1143,7 +1144,7 @@ impl Database {
     })
   }
 
-  pub fn duplicate_database(&self) -> DatabaseData {
+  pub async fn duplicate_database(&self) -> DatabaseData {
     let inline_view_id = self.get_inline_view_id();
     let txn = self.root.transact();
     let timestamp = timestamp();
@@ -1153,6 +1154,7 @@ impl Database {
     let rows = self
       .block
       .get_rows_from_row_orders(&row_orders)
+      .await
       .into_iter()
       .map(|row| CreateRowParams {
         id: gen_row_id(),
@@ -1174,8 +1176,8 @@ impl Database {
     self.views.get_view_with_txn(&txn, view_id)
   }
 
-  pub fn to_json_value(&self) -> JsonValue {
-    let database_serde = DatabaseSerde::from_database(self);
+  pub async fn to_json_value(&self) -> JsonValue {
+    let database_serde = DatabaseSerde::from_database(self).await;
     serde_json::to_value(&database_serde).unwrap()
   }
 
@@ -1184,14 +1186,14 @@ impl Database {
     inline_view_id == view_id
   }
 
-  pub fn get_database_rows(&self) -> Vec<Row> {
+  pub async fn get_database_rows(&self) -> Vec<Row> {
     let row_orders = {
       let txn = self.root.transact();
       let inline_view_id = self.get_inline_view_id_with_txn(&txn);
       self.views.get_row_orders_with_txn(&txn, &inline_view_id)
     };
 
-    self.get_rows_from_row_orders(&row_orders)
+    self.get_rows_from_row_orders(&row_orders).await
   }
 
   pub fn get_inline_row_orders(&self) -> Vec<RowOrder> {

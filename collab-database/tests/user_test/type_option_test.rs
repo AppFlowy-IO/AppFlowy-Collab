@@ -9,18 +9,22 @@ use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 async fn update_single_type_option_data_test() {
   let test = user_database_with_default_field().await;
   let database = test.get_database("d1").await.unwrap();
-  database.lock().fields.update_field("f1", |field_update| {
-    field_update.update_type_options(|type_option_update| {
-      type_option_update.insert(
-        "0",
-        TypeOptionDataBuilder::new()
-          .insert_str_value("task", "write code")
-          .build(),
-      );
+  database
+    .lock()
+    .await
+    .fields
+    .update_field("f1", |field_update| {
+      field_update.update_type_options(|type_option_update| {
+        type_option_update.insert(
+          "0",
+          TypeOptionDataBuilder::new()
+            .insert_str_value("task", "write code")
+            .build(),
+        );
+      });
     });
-  });
 
-  let field = database.lock().fields.get_field("f1").unwrap();
+  let field = database.lock().await.fields.get_field("f1").unwrap();
   let type_option = field.type_options.get("0").unwrap();
   assert_eq!(type_option.get("task").unwrap().to_string(), "write code");
 }
@@ -44,7 +48,7 @@ async fn insert_multi_type_options_test() {
       .build(),
   );
 
-  database.lock().create_field(
+  database.lock().await.create_field(
     None,
     Field {
       id: "f2".to_string(),
@@ -57,7 +61,7 @@ async fn insert_multi_type_options_test() {
     default_field_settings_by_layout(),
   );
 
-  let second_field = database.lock().fields.get_field("f2").unwrap();
+  let second_field = database.lock().await.fields.get_field("f2").unwrap();
   assert_eq!(second_field.type_options.len(), 2);
 
   let type_option = second_field.type_options.get("0").unwrap();
@@ -83,6 +87,6 @@ async fn user_database_with_default_field() -> WorkspaceDatabaseTest {
     field_type: 0,
     ..Default::default()
   };
-  database.lock().fields.insert_field(field);
+  database.lock().await.fields.insert_field(field);
   test
 }
