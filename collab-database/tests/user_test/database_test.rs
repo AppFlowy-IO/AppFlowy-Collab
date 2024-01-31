@@ -54,7 +54,7 @@ async fn delete_database_test() {
       ..Default::default()
     })
     .unwrap();
-  test.delete_database("d1");
+  test.delete_database("d1").await;
 
   let all_databases = test.get_all_databases();
   assert_eq!(all_databases[0].database_id, "d2");

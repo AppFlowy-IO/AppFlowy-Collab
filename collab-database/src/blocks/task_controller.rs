@@ -83,19 +83,22 @@ impl BlockTaskHandler {
 #[async_trait]
 impl TaskHandler<BlockTask> for BlockTaskHandler {
   async fn prepare_task(&self) -> Option<PendingTask<BlockTask>> {
-    let mut queue = self.queue.try_lock()?;
-    let task = queue.pop()?;
+    let task = self.queue.try_lock()?.pop()?;
     let collab_db = self.collab_db.upgrade()?;
 
     // The tasks that get the row with given row_id might be duplicated, so we need to check if the
     // task is already done.
     let is_exist = match &task.payload {
-      BlockTask::FetchRow { uid, row_id, .. } => {
-        collab_db.read_txn().is_exist(*uid, row_id.as_ref())
-      },
+      BlockTask::FetchRow { uid, row_id, .. } => collab_db
+        .is_exist(*uid, row_id.as_ref())
+        .await
+        .unwrap_or(false),
       BlockTask::BatchFetchRow { uid, row_ids, .. } => match row_ids.first() {
         None => true,
-        Some(row_id) => collab_db.read_txn().is_exist(*uid, row_id.as_ref()),
+        Some(row_id) => collab_db
+          .is_exist(*uid, row_id.as_ref())
+          .await
+          .unwrap_or(false),
       },
     };
 

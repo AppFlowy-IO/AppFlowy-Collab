@@ -16,6 +16,7 @@ use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use parking_lot::Mutex;
+use tracing::error;
 
 use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
 use crate::database_observer::DatabaseNotify;
@@ -112,7 +113,10 @@ impl WorkspaceDatabase {
     match database {
       None => {
         let mut collab_doc_state = CollabDocState::default();
-        let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
+        let is_exist = collab_db
+          .is_exist(self.uid, &database_id)
+          .await
+          .unwrap_or(false);
         if !is_exist {
           // Try to load the database from the remote. The database doesn't exist in the local only
           // when the user has deleted the database or the database is using a remote storage.
@@ -249,16 +253,12 @@ impl WorkspaceDatabase {
   }
 
   /// Delete the database with the given database id.
-  pub fn delete_database(&self, database_id: &str) {
+  pub async fn delete_database(&self, database_id: &str) {
     self.database_tracker_list().delete_database(database_id);
     if let Some(collab_db) = self.collab_db.upgrade() {
-      let _ = collab_db.with_write_txn(|w_db_txn| {
-        match w_db_txn.delete_doc(self.uid, database_id) {
-          Ok(_) => {},
-          Err(err) => tracing::error!("🔴Delete database failed: {}", err),
-        }
-        Ok(())
-      });
+      if let Err(err) = collab_db.delete_doc(self.uid, database_id).await {
+        error!("Delete database failed: {}", err);
+      }
     }
     if let Some(database) = self.open_handlers.lock().pop(database_id) {
       database.lock().close();
@@ -275,16 +275,6 @@ impl WorkspaceDatabase {
   /// Return all the database records.
   pub fn get_all_databases(&self) -> Vec<DatabaseViewTracker> {
     self.database_tracker_list().get_all_database_tracker()
-  }
-
-  pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
-    match self.collab_db.upgrade() {
-      None => vec![],
-      Some(collab_db) => {
-        let store = collab_db.read_txn();
-        store.get_snapshots(self.uid, database_id)
-      },
-    }
   }
 
   pub fn restore_database_from_snapshot(
