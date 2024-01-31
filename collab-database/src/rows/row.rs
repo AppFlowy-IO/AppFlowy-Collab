@@ -1,18 +1,14 @@
-use std::ops::Deref;
-use std::sync::{Arc, Weak};
-
 use collab::core::collab::MutexCollab;
+use collab::core::value::YrsValueExtension;
 use collab::preclude::{
   Any, ArrayRefWrapper, Collab, DeepEventsSubscription, Map, MapPrelim, MapRef, MapRefExtension,
   MapRefWrapper, ReadTxn, Transaction, TransactionMut, YrsValue,
 };
-use parking_lot::Mutex;
-
-use collab::core::value::YrsValueExtension;
-use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
 use serde::{Deserialize, Serialize};
+use std::ops::Deref;
+use std::sync::{Arc, Weak};
+use tokio::sync::Mutex;
 use tracing::error;
 use uuid::Uuid;
 
@@ -197,19 +193,15 @@ impl DatabaseRow {
       })
   }
 
-  pub fn delete(&self) {
+  pub async fn delete(&self) {
     match self.collab_db.upgrade() {
       None => {
         tracing::warn!("collab db is drop when delete a collab object");
       },
       Some(collab_db) => {
-        let _ = collab_db.with_write_txn(|txn| {
-          let row_id = self.row_id.to_string();
-          if let Err(e) = txn.delete_doc(self.uid, &row_id) {
-            error!("🔴{}", e);
-          }
-          Ok(())
-        });
+        if let Err(err) = collab_db.delete_doc(self.uid, &self.row_id).await {
+          error!("failed to delete row: {}", err);
+        }
       },
     }
   }

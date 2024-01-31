@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use crate::local_storage::kv::keys::*;
 use crate::local_storage::kv::snapshot::SnapshotAction;
 use crate::local_storage::kv::*;
+use collab::core::collab_plugin::EncodedCollab;
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut, Update};
@@ -18,6 +19,19 @@ where
     object_id: &K,
     txn: &T,
   ) -> Result<(), PersistenceError> {
+    let doc_state = txn.encode_diff_v1(&StateVector::default());
+    let sv = txn.state_vector().encode_v1();
+    let encoded_collab = EncodedCollab::new_v1(sv, doc_state);
+    self.create_new_doc_with_encoded_collab(uid, object_id, encoded_collab)?;
+    Ok(())
+  }
+
+  fn create_new_doc_with_encoded_collab<K: AsRef<[u8]> + ?Sized + Debug>(
+    &self,
+    uid: i64,
+    object_id: &K,
+    encoded_collab: EncodedCollab,
+  ) -> Result<(), PersistenceError> {
     if self.is_exist(uid, object_id) {
       tracing::warn!("🟡{:?} already exist", object_id);
       return Err(PersistenceError::DocumentAlreadyExist);
@@ -30,13 +44,11 @@ where
       object_id,
       doc_id
     );
-    let doc_state = txn.encode_diff_v1(&StateVector::default());
-    let sv = txn.state_vector().encode_v1();
     let doc_state_key = make_doc_state_key(doc_id);
     let sv_key = make_state_vector_key(doc_id);
 
-    self.insert(doc_state_key, doc_state)?;
-    self.insert(sv_key, sv)?;
+    self.insert(doc_state_key, encoded_collab.doc_state)?;
+    self.insert(sv_key, encoded_collab.state_vector)?;
 
     Ok(())
   }

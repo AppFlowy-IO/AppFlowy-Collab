@@ -9,14 +9,18 @@ use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 async fn insert_cell_test() {
   let test = user_database_with_default_row().await;
   let database = test.get_database("d1").await.unwrap();
-  database.lock().await.update_row(&1.into(), |row_update| {
-    row_update.update_cells(|cells_update| {
-      cells_update.insert_cell(
-        "f1",
-        new_cell_builder(1).insert_i64_value("level", 1).build(),
-      );
-    });
-  });
+  database
+    .lock()
+    .await
+    .update_row(&1.into(), |row_update| {
+      row_update.update_cells(|cells_update| {
+        cells_update.insert_cell(
+          "f1",
+          new_cell_builder(1).insert_i64_value("level", 1).build(),
+        );
+      });
+    })
+    .await;
 
   let row = database.lock().await.get_row(&1.into()).await;
   let cell = row.cells.get("f1").unwrap();
@@ -27,26 +31,34 @@ async fn insert_cell_test() {
 async fn update_cell_test() {
   let test = user_database_with_default_row().await;
   let database = test.get_database("d1").await.unwrap();
-  database.lock().await.update_row(&1.into(), |row_update| {
-    row_update.update_cells(|cells_update| {
-      cells_update.insert_cell(
-        "f1",
-        new_cell_builder(1).insert_i64_value("level", 1).build(),
-      );
-    });
-  });
+  database
+    .lock()
+    .await
+    .update_row(&1.into(), |row_update| {
+      row_update.update_cells(|cells_update| {
+        cells_update.insert_cell(
+          "f1",
+          new_cell_builder(1).insert_i64_value("level", 1).build(),
+        );
+      });
+    })
+    .await;
 
-  database.lock().await.update_row(&1.into(), |row_update| {
-    row_update.update_cells(|cells_update| {
-      cells_update.insert(
-        "f1",
-        new_cell_builder(1)
-          .insert_i64_value("level", 2)
-          .insert_str_value("name", "appflowy")
-          .build(),
-      );
-    });
-  });
+  database
+    .lock()
+    .await
+    .update_row(&1.into(), |row_update| {
+      row_update.update_cells(|cells_update| {
+        cells_update.insert(
+          "f1",
+          new_cell_builder(1)
+            .insert_i64_value("level", 2)
+            .insert_str_value("name", "appflowy")
+            .build(),
+        );
+      });
+    })
+    .await;
 
   let row = database.lock().await.get_row(&1.into()).await;
   let cell = row.cells.get("f1").unwrap();
@@ -68,11 +80,6 @@ async fn update_not_exist_row_test() {
       ..Default::default()
     })
     .unwrap();
-
-  database
-    .lock()
-    .await
-    .update_row(&1.into(), |_row_update| {});
   let row = database.lock().await.get_row(&1.into()).await;
   // If the row with the given id does not exist, the get_row method will return a empty Row
   assert!(row.is_empty())

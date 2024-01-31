@@ -4,6 +4,7 @@ use anyhow::Result;
 use serde::{de, Deserializer};
 use serde_json::Value as JsonValue;
 use std::fmt;
+use std::future::Future;
 
 use yrs::{Any, Array, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, TransactionMut};
 
@@ -157,3 +158,21 @@ macro_rules! create_deserialize_numeric {
 // Create deserialization functions for i32 and i64
 create_deserialize_numeric!(i32, I32Visitor, deserialize_i32_from_numeric);
 create_deserialize_numeric!(i64, I64Visitor, deserialize_i64_from_numeric);
+
+#[cfg(target_arch = "wasm32")]
+pub fn af_spawn<T>(future: T) -> tokio::task::JoinHandle<T::Output>
+where
+  T: Future + 'static,
+  T::Output: 'static,
+{
+  tokio::task::spawn_local(future)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn af_spawn<T>(future: T) -> tokio::task::JoinHandle<T::Output>
+where
+  T: Future + Send + 'static,
+  T::Output: Send + 'static,
+{
+  tokio::spawn(future)
+}

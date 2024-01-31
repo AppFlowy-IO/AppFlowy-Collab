@@ -3,7 +3,6 @@ use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use async_trait::async_trait;
 use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::preclude::CollabBuilder;
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
@@ -51,7 +50,8 @@ pub fn random_uid() -> i64 {
 
 pub struct TestUserDatabaseCollabBuilderImpl();
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
   fn get_collab_doc_state(
     &self,

@@ -1,16 +1,14 @@
-use std::num::NonZeroUsize;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Weak};
-
 use collab::core::collab::{CollabDocState, MutexCollab};
-
+use collab::util::af_spawn;
 use collab_entity::CollabType;
-use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use lru::LruCache;
 use parking_lot::Mutex;
+
+use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Weak};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
@@ -80,7 +78,7 @@ impl Block {
     });
 
     let weak_notifier = Arc::downgrade(&self.notifier);
-    tokio::spawn(async move {
+    af_spawn(async move {
       while let Some(row_details) = rx.recv().await {
         if let Some(notifier) = weak_notifier.upgrade() {
           let _ = notifier.send(BlockEvent::DidFetchRow(row_details));
@@ -129,18 +127,26 @@ impl Block {
   /// If the row with given id exists, return it. Otherwise, return an empty row with given id.
   /// An empty [Row] is a row with no cells.
   pub async fn get_row(&self, row_id: &RowId) -> Row {
-    let row = self.get_or_init_row(row_id).await;
-    row
-      .and_then(|row| row.lock().get_row())
-      .unwrap_or_else(|| Row::empty(row_id.clone()))
+    if let Some(mutex_row) = self.get_or_init_row(row_id).await {
+      if let Some(row) = mutex_row.lock().await.get_row() {
+        return row;
+      }
+    }
+
+    Row::empty(row_id.clone())
   }
 
   pub async fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
-    let row = self.get_or_init_row(row_id).await;
-
-    row
-      .and_then(|row| row.lock().get_row_meta())
-      .or_else(|| Some(RowMeta::empty()))
+    match self
+      .get_or_init_row(row_id)
+      .await?
+      .lock()
+      .await
+      .get_row_meta()
+    {
+      None => Some(RowMeta::empty()),
+      Some(meta) => Some(meta),
+    }
   }
 
   pub fn get_row_document_id(&self, row_id: &RowId) -> Option<String> {
@@ -154,44 +160,53 @@ impl Block {
   pub async fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
     let mut rows = Vec::new();
     for row_order in row_orders {
-      let mutex_row = self.get_or_init_row(&row_order.id).await;
-      let row = mutex_row
-        .and_then(|row| row.lock().get_row())
-        .unwrap_or_else(|| Row::empty(row_order.id.clone()));
+      let row = if let Some(mutex_row) = self.get_or_init_row(&row_order.id).await {
+        mutex_row
+          .lock()
+          .await
+          .get_row()
+          .unwrap_or_else(|| Row::empty(row_order.id.clone()))
+      } else {
+        Row::empty(row_order.id.clone())
+      };
       rows.push(row);
     }
     rows
   }
 
   pub async fn get_cell(&self, row_id: &RowId, field_id: &str) -> Option<Cell> {
-    let row = self.get_or_init_row(row_id).await;
-    row.and_then(|row| row.lock().get_cell(field_id))
+    self
+      .get_or_init_row(row_id)
+      .await?
+      .lock()
+      .await
+      .get_cell(field_id)
   }
 
-  pub fn delete_row(&self, row_id: &RowId) {
+  pub async fn delete_row(&self, row_id: &RowId) {
     let row = self.cache.lock().pop(row_id);
     if let Some(row) = row {
-      row.lock().delete();
+      row.lock().await.delete().await;
     }
   }
 
-  pub fn update_row<F>(&self, row_id: &RowId, f: F)
+  pub async fn update_row<F>(&self, row_id: &RowId, f: F)
   where
     F: FnOnce(RowUpdate),
   {
     let row = self.cache.lock().get(row_id).cloned();
     if let Some(row) = row {
-      row.lock().update::<F>(f);
+      row.lock().await.update::<F>(f);
     }
   }
 
-  pub fn update_row_meta<F>(&self, row_id: &RowId, f: F)
+  pub async fn update_row_meta<F>(&self, row_id: &RowId, f: F)
   where
     F: FnOnce(RowMetaUpdate),
   {
     let row = self.cache.lock().get(row_id).cloned();
     if let Some(row) = row {
-      row.lock().update_meta::<F>(f);
+      row.lock().await.update_meta::<F>(f);
     }
   }
 
@@ -201,7 +216,10 @@ impl Block {
     let row = self.cache.lock().get(row_id).cloned();
     match row {
       None => {
-        let is_exist = collab_db.read_txn().is_exist(self.uid, row_id.as_ref());
+        let is_exist = collab_db
+          .is_exist(self.uid, row_id.as_ref())
+          .await
+          .unwrap_or(false);
         if !is_exist {
           //
           let (sender, mut rx) = tokio::sync::mpsc::channel(1);
@@ -213,7 +231,7 @@ impl Block {
           });
 
           let weak_notifier = Arc::downgrade(&self.notifier);
-          tokio::spawn(async move {
+          af_spawn(async move {
             while let Some(row_detail) = rx.recv().await {
               if let Some(notifier) = weak_notifier.upgrade() {
                 let _ = notifier.send(BlockEvent::DidFetchRow(vec![row_detail]));

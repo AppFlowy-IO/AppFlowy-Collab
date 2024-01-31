@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::{Arc, Weak};
@@ -373,7 +374,7 @@ impl Database {
     });
 
     let row = self.block.get_row(row_id).await;
-    self.block.delete_row(row_id);
+    self.block.delete_row(row_id).await;
     Some(row)
   }
 
@@ -388,26 +389,26 @@ impl Database {
     let mut deleted_rows = vec![];
     for row_id in row_ids {
       let row = self.block.get_row(row_id).await;
-      self.block.delete_row(row_id);
+      self.block.delete_row(row_id).await;
       deleted_rows.push(row);
     }
     deleted_rows
   }
 
   /// Update the row
-  pub fn update_row<F>(&self, row_id: &RowId, f: F)
+  pub async fn update_row<F>(&self, row_id: &RowId, f: F)
   where
     F: FnOnce(RowUpdate),
   {
-    self.block.update_row(row_id, f);
+    self.block.update_row(row_id, f).await;
   }
 
   /// Update the meta of the row
-  pub fn update_row_meta<F>(&self, row_id: &RowId, f: F)
+  pub async fn update_row_meta<F>(&self, row_id: &RowId, f: F)
   where
     F: FnOnce(RowMetaUpdate),
   {
-    self.block.update_row_meta(row_id, f);
+    self.block.update_row_meta(row_id, f).await;
   }
 
   /// Return the index of the row in the given view.

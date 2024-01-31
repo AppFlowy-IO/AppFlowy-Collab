@@ -4,8 +4,6 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Weak};
-
-use async_trait::async_trait;
 use tokio::sync::watch;
 
 pub trait RequestPayload: Clone + Ord {}
@@ -126,14 +124,16 @@ where
   }
 }
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait TaskHandler<Payload>: Send + Sync + 'static {
   async fn prepare_task(&self) -> Option<PendingTask<Payload>>;
   async fn handle_task(&self, task: PendingTask<Payload>) -> Option<()>;
   fn notify(&self);
 }
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 impl<T, Payload> TaskHandler<Payload> for Arc<T>
 where
   T: TaskHandler<Payload>,

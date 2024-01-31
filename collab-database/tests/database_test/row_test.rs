@@ -252,12 +252,14 @@ async fn update_row_meta_test() {
   let row_meta_before = database_test.get_row_meta(&row_order.id).await.unwrap();
   assert!(row_meta_before.is_document_empty);
 
-  database_test.update_row_meta(&row_order.id, |meta_update| {
-    meta_update
-      .insert_cover("cover 123")
-      .insert_icon("icon 123")
-      .update_is_document_empty(false);
-  });
+  database_test
+    .update_row_meta(&row_order.id, |meta_update| {
+      meta_update
+        .insert_cover("cover 123")
+        .insert_icon("icon 123")
+        .update_is_document_empty(false);
+    })
+    .await;
 
   let row_meta = database_test.get_row_meta(&row_order.id).await.unwrap();
   assert_eq!(row_meta.cover_url, Some("cover 123".to_string()));
