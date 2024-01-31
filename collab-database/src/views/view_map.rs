@@ -11,13 +11,13 @@ use crate::rows::RowId;
 use crate::views::{
   field_settings_from_map_ref, filters_from_map_ref, group_setting_from_map_ref,
   layout_setting_from_map_ref, sorts_from_map_ref, subscribe_view_change, view_from_map_ref,
-  view_from_value, view_meta_from_value, DatabaseLayout, DatabaseView, DatabaseViewMeta,
-  DatabaseViewUpdate, FieldOrder, FieldOrderArray, FieldSettingsByFieldIdMap, FilterMap,
-  GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray, SortMap, ViewBuilder,
-  ViewChangeSender, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
+  view_from_value, view_meta_from_value, CalculationMap, DatabaseLayout, DatabaseView,
+  DatabaseViewMeta, DatabaseViewUpdate, FieldOrder, FieldOrderArray, FieldSettingsByFieldIdMap,
+  FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray, SortMap,
+  ViewBuilder, ViewChangeSender, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
 };
 
-use super::view_id_from_map_ref;
+use super::{calculations_from_map_ref, view_id_from_map_ref};
 
 pub struct ViewMap {
   container: MapRefWrapper,
@@ -94,6 +94,23 @@ impl ViewMap {
   pub fn get_view_sorts_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<SortMap> {
     if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
       sorts_from_map_ref(txn, &map_ref)
+    } else {
+      vec![]
+    }
+  }
+
+  pub fn get_view_calculations(&self, view_id: &str) -> Vec<CalculationMap> {
+    let txn = self.container.transact();
+    self.get_view_calculations_with_txn(&txn, view_id)
+  }
+
+  pub fn get_view_calculations_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+  ) -> Vec<CalculationMap> {
+    if let Some(map_ref) = self.container.get_map_with_txn(txn, view_id) {
+      calculations_from_map_ref(txn, &map_ref)
     } else {
       vec![]
     }

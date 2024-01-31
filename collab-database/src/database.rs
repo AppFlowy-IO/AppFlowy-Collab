@@ -27,10 +27,10 @@ use crate::rows::{
 };
 use crate::user::DatabaseCollabService;
 use crate::views::{
-  CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseLayout, DatabaseView,
-  DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap,
-  GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder, SortMap, ViewChangeReceiver,
-  ViewMap,
+  CalculationMap, CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator,
+  DatabaseLayout, DatabaseView, DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap,
+  FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder,
+  SortMap, ViewChangeReceiver, ViewMap,
 };
 
 pub struct Database {
@@ -796,6 +796,64 @@ impl Database {
     });
   }
 
+  pub fn get_all_calculations<T: TryFrom<CalculationMap>>(&self, view_id: &str) -> Vec<T> {
+    self
+      .views
+      .get_view_calculations(view_id)
+      .into_iter()
+      .flat_map(|calculation| T::try_from(calculation).ok())
+      .collect()
+  }
+
+  pub fn get_calculation<T: TryFrom<CalculationMap>>(
+    &self,
+    view_id: &str,
+    field_id: &str,
+  ) -> Option<T> {
+    let field_id = field_id.to_string();
+    let mut calculations = self
+      .views
+      .get_view_calculations(view_id)
+      .into_iter()
+      .filter(|calculations_map| {
+        calculations_map.get_str_value("field_id").as_ref() == Some(&field_id)
+      })
+      .flat_map(|value| T::try_from(value).ok())
+      .collect::<Vec<T>>();
+
+    if calculations.is_empty() {
+      None
+    } else {
+      Some(calculations.remove(0))
+    }
+  }
+
+  pub fn update_calculation(&self, view_id: &str, calculation: impl Into<CalculationMap>) {
+    self.views.update_database_view(view_id, |update| {
+      update.update_calculations(|calculation_update| {
+        let calculation = calculation.into();
+        if let Some(calculation_id) = calculation.get_str_value("id") {
+          if calculation_update.contains(&calculation_id) {
+            calculation_update.update(&calculation_id, |_| calculation);
+            return;
+          }
+        }
+
+        calculation_update.push(calculation);
+      });
+    });
+  }
+
+  pub fn remove_calculation(&self, view_id: &str, calculation_id: &str) {
+    self.views.update_database_view(view_id, |update| {
+      update.update_calculations(|calculation_update| {
+        if calculation_update.contains(calculation_id) {
+          calculation_update.remove(calculation_id);
+        }
+      });
+    });
+  }
+
   pub fn get_all_filters<T: TryFrom<FilterMap>>(&self, view_id: &str) -> Vec<T> {
     self
       .views
@@ -1202,6 +1260,10 @@ pub fn gen_field_id() -> String {
 
 pub fn gen_row_id() -> RowId {
   RowId::from(uuid::Uuid::new_v4().to_string())
+}
+
+pub fn gen_database_calculation_id() -> String {
+  nanoid!(6)
 }
 
 pub fn gen_database_filter_id() -> String {

@@ -20,6 +20,8 @@ use crate::views::{
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 
+use super::{CalculationArray, CalculationMap};
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct DatabaseView {
   pub id: String,
@@ -209,6 +211,7 @@ pub const ROW_ORDERS: &str = "row_orders";
 pub const FIELD_ORDERS: &str = "field_orders";
 const VIEW_CREATE_AT: &str = "created_at";
 const VIEW_MODIFY_AT: &str = "modified_at";
+const VIEW_CALCULATIONS: &str = "calculations";
 
 pub struct ViewBuilder<'a, 'b> {
   map_ref: MapRefWrapper,
@@ -329,6 +332,23 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
 
     layout_settings.remove(self.txn, layout_ty.as_ref());
     self
+  }
+
+  /// Update calculations
+  pub fn update_calculations<F>(mut self, f: F) -> Self
+  where
+    F: FnOnce(ArrayMapUpdate),
+  {
+    let array_ref = self.get_calculations_array();
+    let update = ArrayMapUpdate::new(self.txn, array_ref);
+    f(update);
+    self
+  }
+
+  fn get_calculations_array(&mut self) -> ArrayRef {
+    self
+      .map_ref
+      .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, VIEW_CALCULATIONS)
   }
 
   /// Set filters of the current view
@@ -493,6 +513,14 @@ pub fn sorts_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<SortMap>
   map_ref
     .get_array_ref_with_txn(txn, VIEW_SORTS)
     .map(|array_ref| SortArray::from_array_ref(txn, &array_ref).0)
+    .unwrap_or_default()
+}
+
+/// Return a new list of [CalculationMap]s from a map ref
+pub fn calculations_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<CalculationMap> {
+  map_ref
+    .get_array_ref_with_txn(txn, VIEW_CALCULATIONS)
+    .map(|array_ref| CalculationArray::from_array_ref(txn, &array_ref).0)
     .unwrap_or_default()
 }
 
