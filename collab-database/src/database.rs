@@ -1139,11 +1139,14 @@ impl Database {
 
   pub async fn duplicate_database(&self) -> DatabaseData {
     let inline_view_id = self.get_inline_view_id();
-    let txn = self.root.transact();
     let timestamp = timestamp();
-    let mut view = self.views.get_view_with_txn(&txn, &inline_view_id).unwrap();
-    let fields = self.get_fields_in_view_with_txn(&txn, &inline_view_id, None);
-    let row_orders = self.views.get_row_orders_with_txn(&txn, &view.id);
+    let (mut view, fields, row_orders) = {
+      let txn = self.root.transact();
+      let view = self.views.get_view_with_txn(&txn, &inline_view_id).unwrap();
+      let fields = self.get_fields_in_view_with_txn(&txn, &inline_view_id, None);
+      let row_orders = self.views.get_row_orders_with_txn(&txn, &view.id);
+      (view, fields, row_orders)
+    };
     let rows = self
       .block
       .get_rows_from_row_orders(&row_orders)
