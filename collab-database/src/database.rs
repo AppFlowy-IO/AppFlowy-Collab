@@ -755,6 +755,14 @@ impl Database {
     });
   }
 
+  pub fn move_sort(&self, view_id: &str, from_sort_id: &str, to_sort_id: &str) {
+    self.views.update_database_view(view_id, |update| {
+      update.update_sorts(|sort_update| {
+        sort_update.move_to(from_sort_id, to_sort_id);
+      });
+    });
+  }
+
   pub fn get_all_sorts<T: TryFrom<SortMap>>(&self, view_id: &str) -> Vec<T> {
     self
       .views
