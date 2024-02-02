@@ -472,32 +472,21 @@ impl Database {
 
   /// Return a list of [RowCell] for the given view and field.
   pub async fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<RowCell> {
-    let txn = self.root.transact();
-    self
-      .get_cells_for_field_with_txn(&txn, view_id, field_id)
-      .await
-  }
-
-  /// Return the [RowCell] with the given row id and field id.
-  pub async fn get_cell(&self, field_id: &str, row_id: &RowId) -> RowCell {
-    let cell = self.block.get_cell(row_id, field_id).await;
-    RowCell::new(row_id.clone(), cell)
-  }
-
-  /// Return list of [RowCell] for the given view and field.
-  pub async fn get_cells_for_field_with_txn<T: ReadTxn>(
-    &self,
-    txn: &T,
-    view_id: &str,
-    field_id: &str,
-  ) -> Vec<RowCell> {
-    let row_orders = self.views.get_row_orders_with_txn(txn, view_id);
+    let row_orders = self
+      .views
+      .get_row_orders_with_txn(&self.root.transact(), view_id);
     let rows = self.block.get_rows_from_row_orders(&row_orders).await;
 
     rows
       .into_iter()
       .map(|row| RowCell::new(row.id, row.cells.get(field_id).cloned()))
       .collect::<Vec<RowCell>>()
+  }
+
+  /// Return the [RowCell] with the given row id and field id.
+  pub async fn get_cell(&self, field_id: &str, row_id: &RowId) -> RowCell {
+    let cell = self.block.get_cell(row_id, field_id).await;
+    RowCell::new(row_id.clone(), cell)
   }
 
   pub fn index_of_field(&self, view_id: &str, field_id: &str) -> Option<usize> {
