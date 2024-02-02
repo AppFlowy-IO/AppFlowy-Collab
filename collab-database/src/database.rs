@@ -475,10 +475,11 @@ impl Database {
     let mut row_details = vec![];
     let rows = self.block.get_rows_from_row_orders(row_orders).await;
     for row in rows {
-      let meta = self.block.get_row_meta(&row.id).await.unwrap_or_default();
-      match RowDetail::new(row, meta) {
-        None => error!("Fail to init row detail"),
-        Some(row_detail) => row_details.push(row_detail),
+      if let Some(meta) = self.block.get_row_meta(&row.id).await {
+        match RowDetail::new(row, meta) {
+          None => error!("Fail to init row detail"),
+          Some(row_detail) => row_details.push(row_detail),
+        }
       }
     }
     row_details
