@@ -42,7 +42,8 @@ pub struct DatabaseRow {
   #[allow(dead_code)]
   subscription: Option<DeepEventsSubscription>,
 }
-
+unsafe impl Send for DatabaseRow {}
+unsafe impl Sync for DatabaseRow {}
 impl DatabaseRow {
   pub fn create<T: Into<Row>>(
     row: T,

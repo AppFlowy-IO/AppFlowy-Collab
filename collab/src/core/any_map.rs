@@ -203,6 +203,8 @@ impl<'a> AnyMapExtension for MutAnyMap<'a> {
 /// A map that can store any type of value.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AnyMap(Arc<HashMap<String, Any>>);
+unsafe impl Send for AnyMap {}
+unsafe impl Sync for AnyMap {}
 
 impl AsRef<AnyMap> for AnyMap {
   fn as_ref(&self) -> &AnyMap {

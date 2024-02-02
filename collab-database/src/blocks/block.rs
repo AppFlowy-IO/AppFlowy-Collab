@@ -40,7 +40,8 @@ pub struct Block {
   pub notifier: Arc<broadcast::Sender<BlockEvent>>,
   row_change_tx: Option<RowChangeSender>,
 }
-
+unsafe impl Send for Block {}
+unsafe impl Sync for Block {}
 impl Block {
   pub fn new(
     uid: i64,

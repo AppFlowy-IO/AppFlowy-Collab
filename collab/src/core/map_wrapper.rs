@@ -31,6 +31,9 @@ pub struct MapRefWrapper {
   pub collab_ctx: CollabContext,
 }
 
+unsafe impl Send for MapRefWrapper {}
+unsafe impl Sync for MapRefWrapper {}
+
 impl MapRefWrapper {
   pub fn new(map_ref: MapRef, collab_ctx: CollabContext) -> Self {
     Self {

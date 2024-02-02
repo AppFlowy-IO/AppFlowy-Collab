@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use std::ops::Deref;
-use std::rc::Rc;
+
 use std::sync::{Arc, Weak};
 
 use collab::core::any_map::AnyMapExtension;
@@ -38,14 +38,17 @@ pub struct Database {
   #[allow(dead_code)]
   inner: Arc<MutexCollab>,
   pub(crate) root: MapRefWrapper,
-  pub views: Rc<ViewMap>,
-  pub fields: Rc<FieldMap>,
-  pub metas: Rc<MetaMap>,
+  pub views: Arc<ViewMap>,
+  pub fields: Arc<FieldMap>,
+  pub metas: Arc<MetaMap>,
   /// It used to keep track of the blocks. Each block contains a list of [Row]s
   /// A database rows will be stored in multiple blocks.
   pub block: Block,
   pub notifier: Option<DatabaseNotify>,
 }
+
+unsafe impl Send for Database {}
+unsafe impl Sync for Database {}
 
 const DATABASE_ID: &str = "id";
 const DATABASE: &str = "database";
@@ -204,9 +207,9 @@ impl Database {
           inner: context.collab,
           root: database,
           block,
-          views: Rc::new(views),
-          fields: Rc::new(fields),
-          metas: Rc::new(metas),
+          views: Arc::new(views),
+          fields: Arc::new(fields),
+          metas: Arc::new(metas),
           notifier: context.notifier,
         })
       },
@@ -275,9 +278,9 @@ impl Database {
       inner: context.collab,
       root: database,
       block,
-      views: Rc::new(views),
-      fields: Rc::new(fields),
-      metas: Rc::new(metas),
+      views: Arc::new(views),
+      fields: Arc::new(fields),
+      metas: Arc::new(metas),
       notifier: context.notifier,
     })
   }
