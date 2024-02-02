@@ -15,6 +15,7 @@ use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 pub use tokio_stream::wrappers::WatchStream;
+use tracing::error;
 
 use crate::blocks::{Block, BlockEvent};
 use crate::database_observer::DatabaseNotify;
@@ -468,6 +469,19 @@ impl Database {
   /// The rows here is ordered by the [RowOrder] of the view.
   pub async fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
     self.block.get_rows_from_row_orders(row_orders).await
+  }
+
+  pub async fn get_row_details_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<RowDetail> {
+    let mut row_details = vec![];
+    let rows = self.block.get_rows_from_row_orders(row_orders).await;
+    for row in rows {
+      let meta = self.block.get_row_meta(&row.id).await.unwrap_or_default();
+      match RowDetail::new(row, meta) {
+        None => error!("Fail to init row detail"),
+        Some(row_detail) => row_details.push(row_detail),
+      }
+    }
+    row_details
   }
 
   /// Return a list of [RowCell] for the given view and field.
