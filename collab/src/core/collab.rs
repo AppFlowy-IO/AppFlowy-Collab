@@ -99,7 +99,7 @@ impl Collab {
     uid: i64,
     object_id: T,
     device_id: impl ToString,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
+    plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Collab {
     let origin = CollabClient::new(uid, device_id);
     Self::new_with_origin(CollabOrigin::Client(origin), object_id, plugins)
@@ -109,7 +109,7 @@ impl Collab {
     origin: CollabOrigin,
     object_id: &str,
     collab_doc_state: CollabDocState,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
+    plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, CollabError> {
     let collab = Self::new_with_origin(origin, object_id, plugins);
     if !collab_doc_state.is_empty() {
@@ -123,7 +123,7 @@ impl Collab {
   pub fn new_with_origin<T: AsRef<str>>(
     origin: CollabOrigin,
     object_id: T,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
+    plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Collab {
     let object_id = object_id.as_ref().to_string();
     let doc = make_yrs_doc();
@@ -191,12 +191,12 @@ impl Collab {
   }
 
   /// Add a plugin to the [Collab]. The plugin's callbacks will be called in the order they are added.
-  pub fn add_plugin(&mut self, plugin: Arc<dyn CollabPlugin>) {
+  pub fn add_plugin(&mut self, plugin: Box<dyn CollabPlugin>) {
     self.add_plugins(vec![plugin]);
   }
 
   /// Add plugins to the [Collab]. The plugin's callbacks will be called in the order they are added.
-  pub fn add_plugins(&mut self, plugins: Vec<Arc<dyn CollabPlugin>>) {
+  pub fn add_plugins(&mut self, plugins: Vec<Box<dyn CollabPlugin>>) {
     let mut write_guard = self.plugins.write();
 
     for plugin in plugins {
@@ -226,8 +226,7 @@ impl Collab {
 
     self.state.set_init_state(InitState::Loading);
     {
-      let plugins = self.plugins.read().clone();
-      for plugin in plugins {
+      for plugin in self.plugins.read().iter() {
         plugin.init(&self.object_id, &self.origin, &self.doc);
       }
     }
@@ -691,7 +690,7 @@ impl Display for Collab {
 pub struct CollabBuilder {
   uid: i64,
   device_id: String,
-  plugins: Vec<Arc<dyn CollabPlugin>>,
+  plugins: Vec<Box<dyn CollabPlugin>>,
   object_id: String,
   doc_state: CollabDocState,
 }
@@ -724,7 +723,7 @@ impl CollabBuilder {
   where
     T: CollabPlugin + 'static,
   {
-    self.plugins.push(Arc::new(plugin));
+    self.plugins.push(Box::new(plugin));
     self
   }
 
@@ -814,16 +813,16 @@ impl DerefMut for Path {
 }
 
 #[derive(Default, Clone)]
-pub struct Plugins(Arc<RwLock<Vec<Arc<dyn CollabPlugin>>>>);
+pub struct Plugins(Arc<RwLock<Vec<Box<dyn CollabPlugin>>>>);
 
 impl Plugins {
-  pub fn new(plugins: Vec<Arc<dyn CollabPlugin>>) -> Plugins {
+  pub fn new(plugins: Vec<Box<dyn CollabPlugin>>) -> Plugins {
     Self(Arc::new(RwLock::new(plugins)))
   }
 }
 
 impl Deref for Plugins {
-  type Target = Arc<RwLock<Vec<Arc<dyn CollabPlugin>>>>;
+  type Target = Arc<RwLock<Vec<Box<dyn CollabPlugin>>>>;
 
   fn deref(&self) -> &Self::Target {
     &self.0
@@ -835,7 +834,7 @@ impl Deref for Plugins {
 pub struct MutexCollab(Arc<Mutex<Collab>>);
 
 impl MutexCollab {
-  pub fn new(origin: CollabOrigin, object_id: &str, plugins: Vec<Arc<dyn CollabPlugin>>) -> Self {
+  pub fn new(origin: CollabOrigin, object_id: &str, plugins: Vec<Box<dyn CollabPlugin>>) -> Self {
     let collab = Collab::new_with_origin(origin, object_id, plugins);
     #[allow(clippy::arc_with_non_send_sync)]
     MutexCollab(Arc::new(Mutex::new(collab)))
@@ -845,7 +844,7 @@ impl MutexCollab {
     origin: CollabOrigin,
     object_id: &str,
     collab_doc_state: CollabDocState,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
+    plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, CollabError> {
     let collab = Collab::new_with_doc_state(origin, object_id, collab_doc_state, plugins)?;
     #[allow(clippy::arc_with_non_send_sync)]

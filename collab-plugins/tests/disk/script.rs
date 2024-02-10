@@ -96,7 +96,7 @@ impl CollabPersistenceTest {
         .unwrap(),
     );
     let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), &doc_id, CollabType::Document)
-      as Arc<dyn CollabPlugin>;
+      as Box<dyn CollabPlugin>;
     collab.lock().add_plugin(disk_plugin);
     collab.lock().initialize();
 
@@ -131,7 +131,7 @@ impl CollabPersistenceTest {
         .unwrap(),
     );
     let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), id, CollabType::Document)
-      as Arc<dyn CollabPlugin>;
+      as Box<dyn CollabPlugin>;
     collab.lock().add_plugin(disk_plugin);
     collab.lock().initialize();
 
@@ -231,10 +231,10 @@ pub fn disk_plugin_with_db(
   db: Arc<CollabKVDB>,
   object_id: &str,
   collab_type: CollabType,
-) -> Arc<RocksdbDiskPlugin> {
+) -> Box<RocksdbDiskPlugin> {
   let object_id = object_id.to_string();
   let collab_type = collab_type.clone();
-  Arc::new(RocksdbDiskPlugin::new_with_config(
+  Box::new(RocksdbDiskPlugin::new_with_config(
     uid,
     object_id,
     collab_type,
