@@ -260,8 +260,7 @@ impl Collab {
 
     self.state.set_init_state(InitState::Loading);
     {
-      let plugins = self.plugins.read().clone();
-      for plugin in plugins {
+      for plugin in self.plugins.read().iter() {
         plugin.init(&self.object_id, &self.origin, &self.doc).await;
       }
     }
