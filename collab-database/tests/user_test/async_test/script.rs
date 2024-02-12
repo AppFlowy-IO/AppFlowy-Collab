@@ -1,19 +1,16 @@
-#![allow(clippy::all)]
-
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use collab_database::database::DatabaseData;
 use collab_database::fields::Field;
-use collab_database::rows::CreateRowParams;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
+use collab_database::rows::{CreateRowParams, Row};
 use collab_database::user::WorkspaceDatabase;
-use collab_database::views::{CreateDatabaseParams, OrderObjectPosition};
+use collab_database::views::{CreateDatabaseParams, CreateViewParams, DatabaseView};
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
-use serde_json::Value;
+use serde_json::{json, Value};
 use tempfile::TempDir;
 
 use crate::database_test::helper::field_settings_for_default_database;
@@ -41,11 +38,15 @@ pub enum DatabaseScript {
   },
   AssertDatabaseInDisk {
     database_id: String,
-    expected: Value,
+    expected_fields: Value,
+    expected_rows: Value,
+    expected_view: Value,
   },
   AssertDatabase {
     database_id: String,
-    expected: Value,
+    expected_fields: Value,
+    expected_rows: Value,
+    expected_view: Value,
   },
   AssertNumOfUpdates {
     oid: String,
@@ -82,17 +83,6 @@ impl DatabaseTest {
       db_path,
       config,
     }
-  }
-
-  #[allow(dead_code)]
-  pub async fn get_database_data(&self, database_id: &str) -> DatabaseData {
-    let database = self
-      .workspace_database
-      .get_database(database_id)
-      .await
-      .unwrap();
-    let duplicated_database = database.lock().duplicate_database();
-    duplicated_database
   }
 
   pub async fn run_scripts(&mut self, scripts: Vec<DatabaseScript>) {
@@ -156,21 +146,62 @@ pub async fn run_script(
     },
     DatabaseScript::AssertDatabaseInDisk {
       database_id,
-      expected,
+      expected_fields,
+      expected_rows,
+      expected_view,
     } => {
       let w_database =
         workspace_database_with_db(1, Arc::downgrade(&db), Some(config.clone())).await;
       let database = w_database.get_database(&database_id).await.unwrap();
-      let actual = database.lock().to_json_value();
-      assert_json_diff::assert_json_include!(actual: actual, expected: expected);
+      let database_data = database.lock().get_all_database_data();
+      let view = database.lock().get_view("v1").unwrap();
+
+      assert_eq!(
+        database_data.rows,
+        serde_json::from_value::<Vec<Row>>(expected_rows).unwrap()
+      );
+      assert_eq!(
+        database_data.fields,
+        serde_json::from_value::<Vec<Field>>(expected_fields).unwrap()
+      );
+      assert_eq!(
+        view,
+        serde_json::from_value::<DatabaseView>(expected_view).unwrap()
+      );
     },
     DatabaseScript::AssertDatabase {
       database_id,
-      expected,
+      expected_fields,
+      expected_rows,
+      expected_view,
     } => {
-      let database = workspace_database.get_database(&database_id).await.unwrap();
-      let actual = database.lock().to_json_value();
-      assert_json_diff::assert_json_include!(actual: actual, expected: expected);
+      let database_data = workspace_database
+        .get_database(&database_id)
+        .await
+        .unwrap()
+        .lock()
+        .get_all_database_data();
+
+      let view = workspace_database
+        .get_database(&database_id)
+        .await
+        .unwrap()
+        .lock()
+        .get_view("v1")
+        .unwrap();
+
+      assert_eq!(
+        database_data.rows,
+        serde_json::from_value::<Vec<Row>>(expected_rows).unwrap()
+      );
+      assert_eq!(
+        database_data.fields,
+        serde_json::from_value::<Vec<Field>>(expected_fields).unwrap()
+      );
+      assert_eq!(
+        view,
+        serde_json::from_value::<DatabaseView>(expected_view).unwrap()
+      );
     },
     DatabaseScript::IsExist {
       oid: database_id,
@@ -191,7 +222,7 @@ pub async fn run_script(
   }
 }
 
-pub fn create_database(database_id: &str) -> CreateDatabaseParams {
+pub(crate) fn create_database(database_id: &str) -> CreateDatabaseParams {
   let row_1 = CreateRowParams {
     id: 1.into(),
     cells: CellsBuilder::new()
@@ -200,9 +231,9 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
       .insert_cell("f3", TestTextCell::from("1f3cell"))
       .build(),
     height: 0,
-    visibility: true,
-    row_position: OrderObjectPosition::default(),
-    timestamp: 0,
+    created_at: 1703772730,
+    modified_at: 1703772762,
+    ..Default::default()
   };
   let row_2 = CreateRowParams {
     id: 2.into(),
@@ -211,9 +242,9 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
       .insert_cell("f2", TestTextCell::from("2f2cell"))
       .build(),
     height: 0,
-    visibility: true,
-    row_position: OrderObjectPosition::default(),
-    timestamp: 0,
+    created_at: 1703772730,
+    modified_at: 1703772762,
+    ..Default::default()
   };
   let row_3 = CreateRowParams {
     id: 3.into(),
@@ -222,9 +253,9 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
       .insert_cell("f3", TestTextCell::from("3f3cell"))
       .build(),
     height: 0,
-    visibility: true,
-    row_position: OrderObjectPosition::default(),
-    timestamp: 0,
+    created_at: 1703772730,
+    modified_at: 1703772762,
+    ..Default::default()
   };
   let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
@@ -234,15 +265,154 @@ pub fn create_database(database_id: &str) -> CreateDatabaseParams {
 
   CreateDatabaseParams {
     database_id: database_id.to_string(),
-    view_id: "v1".to_string(),
-    view_name: "my first database".to_string(),
-    layout: Default::default(),
-    layout_settings: Default::default(),
-    filters: vec![],
-    groups: vec![],
-    sorts: vec![],
-    field_settings: field_settings_map.into(),
-    created_rows: vec![row_1, row_2, row_3],
+    inline_view_id: "v1".to_string(),
+    views: vec![CreateViewParams {
+      database_id: database_id.to_string(),
+      view_id: "v1".to_string(),
+      name: "my first database view".to_string(),
+      field_settings: field_settings_map,
+      ..Default::default()
+    }],
+    rows: vec![row_1, row_2, row_3],
     fields: vec![field_1, field_2, field_3],
   }
+}
+
+pub(crate) fn expected_fields() -> Value {
+  json!([
+    {
+      "field_type": 0,
+      "id": "f1",
+      "is_primary": true,
+      "name": "text field",
+      "type_options": {},
+      "visibility": true,
+      "width": 120
+    },
+    {
+      "field_type": 2,
+      "id": "f2",
+      "is_primary": true,
+      "name": "single select field",
+      "type_options": {},
+      "visibility": true,
+      "width": 120
+    },
+    {
+      "field_type": 1,
+      "id": "f3",
+      "is_primary": true,
+      "name": "checkbox field",
+      "type_options": {},
+      "visibility": true,
+      "width": 120
+    }
+  ])
+}
+
+pub(crate) fn expected_rows() -> Value {
+  json!([
+    {
+      "cells": {
+        "f1": {
+          "data": "1f1cell"
+        },
+        "f2": {
+          "data": "1f2cell"
+        },
+        "f3": {
+          "data": "1f3cell"
+        }
+      },
+      "created_at": 1703772730,
+      "last_modified": 1703772762,
+      "height": 0,
+      "id": "1",
+      "visibility": true
+    },
+    {
+      "cells": {
+        "f1": {
+          "data": "2f1cell"
+        },
+        "f2": {
+          "data": "2f2cell"
+        }
+      },
+      "created_at": 1703772730,
+      "last_modified": 1703772762,
+      "height": 0,
+      "id": "2",
+      "visibility": true
+    },
+    {
+      "cells": {
+        "f1": {
+          "data": "3f1cell"
+        },
+        "f3": {
+          "data": "3f3cell"
+        }
+      },
+      "created_at": 1703772730,
+      "last_modified": 1703772762,
+      "height": 0,
+      "id": "3",
+      "visibility": true
+    }
+  ])
+}
+
+pub(crate) fn expected_view() -> Value {
+  json!({
+    "database_id": "d1",
+    "field_orders": [
+      {
+        "id": "f1"
+      },
+      {
+        "id": "f2"
+      },
+      {
+        "id": "f3"
+      }
+    ],
+    "filters": [],
+    "created_at": 0,
+    "modified_at": 0,
+    "group_settings": [],
+    "id": "v1",
+    "layout": 0,
+    "layout_settings": {},
+    "name": "my first database view",
+    "row_orders": [
+      {
+        "height": 0,
+        "id": "1"
+      },
+      {
+        "height": 0,
+        "id": "2"
+      },
+      {
+        "height": 0,
+        "id": "3"
+      }
+    ],
+    "sorts": [],
+    "field_settings": {
+      "f3": {
+        "width": 0,
+        "visibility": 0
+      },
+      "f1": {
+        "visibility": 0,
+        "width": 0
+      },
+      "f2": {
+        "visibility": 0,
+        "width": 0
+      }
+    }
+  })
 }
