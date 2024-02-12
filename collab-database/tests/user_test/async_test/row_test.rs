@@ -1,6 +1,6 @@
+use collab_database::database::timestamp;
 use collab_database::rows::CreateRowParams;
 use collab_database::rows::{CellsBuilder, RowId};
-use collab_database::views::OrderObjectPosition;
 use serde_json::{json, Value};
 
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -8,7 +8,9 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 
 use crate::helper::TestTextCell;
-use crate::user_test::async_test::script::{create_database, database_test, DatabaseScript};
+use crate::user_test::async_test::script::{
+  create_database, database_test, expected_fields, expected_rows, expected_view, DatabaseScript,
+};
 
 #[tokio::test]
 async fn edit_row_test() {
@@ -53,9 +55,14 @@ async fn edit_row_test() {
     handles.push(handle);
   }
   while handles.next().await.is_some() {}
+  let timestamp = timestamp();
 
-  let mut expected = edit_row_expected();
-  expected["rows"][0]["cells"]["f1"]["data"] = Value::String("hello world".to_string());
+  let mut expected_rows = expected_rows();
+  expected_rows[0]["cells"]["f1"]["data"] = Value::String("hello world".to_string());
+  expected_rows[0]["last_modified"] = Value::Number(timestamp.into());
+  let mut expected_view = expected_view();
+  expected_view["database_id"] = Value::String(database_id.clone());
+
   test
     .run_scripts(vec![
       DatabaseScript::IsExist {
@@ -64,7 +71,9 @@ async fn edit_row_test() {
       },
       DatabaseScript::AssertDatabaseInDisk {
         database_id: database_id.clone(),
-        expected,
+        expected_fields: expected_fields(),
+        expected_rows,
+        expected_view,
       },
       DatabaseScript::AssertNumOfUpdates {
         oid: database_id,
@@ -100,282 +109,43 @@ async fn create_row_test() {
             cells: Default::default(),
             height: 0,
             visibility: false,
-            row_position: OrderObjectPosition::default(),
-            timestamp: 0,
+            ..Default::default()
           },
         });
       }
       cloned_test.run_scripts(scripts).await;
-      let mut expected = create_row_test_expected();
-      expected["views"][0]["database_id"] = Value::String(database_id.clone());
+      let timestamp = timestamp();
+
+      let mut expected_rows = expected_rows();
+      expected_rows.as_array_mut().unwrap().push(json!({
+        "cells": {},
+        "created_at": timestamp,
+        "last_modified": timestamp,
+        "height": 0,
+        "id": "4",
+        "visibility": false
+      }));
+      let mut expected_view = expected_view();
+      expected_view["database_id"] = Value::String(database_id.clone());
+      expected_view["modified_at"] = Value::Number(timestamp.into());
+      expected_view["row_orders"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+          "height": 0,
+          "id": "4"
+        }));
+
       cloned_test
         .run_scripts(vec![DatabaseScript::AssertDatabaseInDisk {
-          database_id,
-          expected,
+          database_id: database_id.clone(),
+          expected_fields: expected_fields(),
+          expected_rows,
+          expected_view,
         }])
         .await;
     });
     handles.push(handle);
   }
   while handles.next().await.is_some() {}
-}
-
-fn edit_row_expected() -> Value {
-  json!({
-    "fields": [
-      {
-        "field_type": 0,
-        "id": "f1",
-        "is_primary": true,
-        "name": "text field",
-        "type_options": {},
-        "visibility": true,
-        "width": 120
-      },
-      {
-        "field_type": 2,
-        "id": "f2",
-        "is_primary": true,
-        "name": "single select field",
-        "type_options": {},
-        "visibility": true,
-        "width": 120
-      },
-      {
-        "field_type": 1,
-        "id": "f3",
-        "is_primary": true,
-        "name": "checkbox field",
-        "type_options": {},
-        "visibility": true,
-        "width": 120
-      }
-    ],
-    "inline_view": "v1",
-    "rows": [
-      {
-        "cells": {
-          "f1": {
-            "data": "1f1cell"
-          },
-          "f2": {
-            "data": "1f2cell"
-          },
-          "f3": {
-            "data": "1f3cell"
-          }
-        },
-        "created_at": 0,
-        "height": 0,
-        "id": "1",
-        "visibility": true
-      },
-      {
-        "cells": {
-          "f1": {
-            "data": "2f1cell"
-          },
-          "f2": {
-            "data": "2f2cell"
-          }
-        },
-        "created_at": 0,
-        "height": 0,
-        "id": "2",
-        "visibility": true
-      },
-      {
-        "cells": {
-          "f1": {
-            "data": "3f1cell"
-          },
-          "f3": {
-            "data": "3f3cell"
-          }
-        },
-        "created_at": 0,
-        "height": 0,
-        "id": "3",
-        "visibility": true
-      }
-    ],
-    "views": [
-      {
-        "database_id": "d2",
-        "field_orders": [
-          {
-            "id": "f1"
-          },
-          {
-            "id": "f2"
-          },
-          {
-            "id": "f3"
-          }
-        ],
-        "filters": [],
-        "group_settings": [],
-        "id": "v1",
-        "layout": 0,
-        "layout_settings": {},
-        "name": "my first database",
-        "row_orders": [
-          {
-            "height": 0,
-            "id": "1"
-          },
-          {
-            "height": 0,
-            "id": "2"
-          },
-          {
-            "height": 0,
-            "id": "3"
-          }
-        ],
-        "sorts": []
-      }
-    ]
-  })
-}
-fn create_row_test_expected() -> Value {
-  json!(
-  {
-    "fields": [
-      {
-        "field_type": 0,
-        "id": "f1",
-        "is_primary": true,
-        "name": "text field",
-        "type_options": {},
-        "visibility": true,
-        "width": 120
-      },
-      {
-        "field_type": 2,
-        "id": "f2",
-        "is_primary": true,
-        "name": "single select field",
-        "type_options": {},
-        "visibility": true,
-        "width": 120
-      },
-      {
-        "field_type": 1,
-        "id": "f3",
-        "is_primary": true,
-        "name": "checkbox field",
-        "type_options": {},
-        "visibility": true,
-        "width": 120
-      }
-    ],
-    "inline_view": "v1",
-    "rows": [
-      {
-        "block_id": 1,
-        "cells": {
-          "f1": {
-            "data": "1f1cell"
-          },
-          "f2": {
-            "data": "1f2cell"
-          },
-          "f3": {
-            "data": "1f3cell"
-          }
-        },
-        "created_at": 0,
-        "height": 60,
-        "id": "1",
-        "visibility": true
-      },
-      {
-        "block_id": 2,
-        "cells": {
-          "f1": {
-            "data": "2f1cell"
-          },
-          "f2": {
-            "data": "2f2cell"
-          }
-        },
-        "created_at": 0,
-        "height": 60,
-        "id": "2",
-        "visibility": true
-      },
-      {
-        "block_id": 3,
-        "cells": {
-          "f1": {
-            "data": "3f1cell"
-          },
-          "f3": {
-            "data": "3f3cell"
-          }
-        },
-        "created_at": 0,
-        "height": 60,
-        "id": "3",
-        "visibility": true
-      },
-      {
-        "block_id": 4,
-        "cells": {},
-        "created_at": 0,
-        "height": 60,
-        "id": "4",
-        "visibility": false
-      }
-    ],
-    "views": [
-      {
-        "created_at": 0,
-        "database_id": "d2",
-        "field_orders": [
-          {
-            "id": "f1"
-          },
-          {
-            "id": "f2"
-          },
-          {
-            "id": "f3"
-          }
-        ],
-        "filters": [],
-        "group_settings": [],
-        "id": "v1",
-        "layout": 0,
-        "layout_settings": {},
-        "modified_at": 0,
-        "name": "my first database",
-        "row_orders": [
-          {
-            "block_id": 1,
-            "height": 0,
-            "id": "1"
-          },
-          {
-            "block_id": 2,
-            "height": 0,
-            "id": "2"
-          },
-          {
-            "block_id": 3,
-            "height": 0,
-            "id": "3"
-          },
-          {
-            "block_id": 4,
-            "height": 0,
-            "id": "4"
-          }
-        ],
-        "sorts": []
-      }
-    ]
-  }
-  )
 }

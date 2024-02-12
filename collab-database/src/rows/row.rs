@@ -72,7 +72,7 @@ impl DatabaseRow {
                 .set_height(row.height)
                 .set_visibility(row.visibility)
                 .set_created_at(row.created_at)
-                .set_last_modified(row.created_at)
+                .set_last_modified(row.modified_at)
                 .set_cells(row.cells);
             })
             .done();
@@ -539,7 +539,8 @@ pub struct CreateRowParams {
   pub visibility: bool,
   #[serde(skip)]
   pub row_position: OrderObjectPosition,
-  pub timestamp: i64,
+  pub created_at: i64,
+  pub modified_at: i64,
 }
 
 pub(crate) struct CreateRowParamsValidator;
@@ -550,8 +551,12 @@ impl CreateRowParamsValidator {
       return Err(DatabaseError::InvalidRowID("row_id is empty"));
     }
 
-    if params.timestamp == 0 {
-      params.timestamp = timestamp();
+    let timestamp = timestamp();
+    if params.created_at == 0 {
+      params.created_at = timestamp;
+    }
+    if params.modified_at == 0 {
+      params.modified_at = timestamp;
     }
 
     Ok(params)
@@ -562,24 +567,24 @@ impl Default for CreateRowParams {
   fn default() -> Self {
     Self {
       id: gen_row_id(),
-      cells: Default::default(),
+      cells: Cells::default(),
       height: 60,
       visibility: true,
       row_position: OrderObjectPosition::default(),
-      timestamp: 0,
+      created_at: 0,
+      modified_at: 0,
     }
   }
 }
 
 impl CreateRowParams {
   pub fn new(id: RowId) -> Self {
+    let timestamp = timestamp();
     Self {
       id,
-      cells: Cells::default(),
-      height: 60,
-      visibility: true,
-      row_position: OrderObjectPosition::default(),
-      timestamp: timestamp(),
+      created_at: timestamp,
+      modified_at: timestamp,
+      ..Default::default()
     }
   }
 }
@@ -591,8 +596,8 @@ impl From<CreateRowParams> for Row {
       cells: params.cells,
       height: params.height,
       visibility: params.visibility,
-      created_at: params.timestamp,
-      modified_at: params.timestamp,
+      created_at: params.created_at,
+      modified_at: params.modified_at,
     }
   }
 }
