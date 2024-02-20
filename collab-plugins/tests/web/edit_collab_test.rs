@@ -95,7 +95,7 @@ pub async fn create_collab(
       .unwrap(),
   );
   let disk_plugin = IndexeddbDiskPlugin::new(uid, doc_id, CollabType::Document, Arc::downgrade(db));
-  collab.lock().add_plugin(Arc::new(disk_plugin));
+  collab.lock().add_plugin(Box::new(disk_plugin));
   collab.lock().initialize().await;
   sleep(1000).await;
   collab

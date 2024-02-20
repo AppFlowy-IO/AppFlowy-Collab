@@ -10,7 +10,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use tokio_stream::wrappers::WatchStream;
-use tracing::error;
+use tracing::{error, trace};
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
@@ -84,6 +84,12 @@ pub struct Collab {
   update_subscription: RwLock<Option<UpdateSubscription>>,
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
   pub index_json_sender: IndexContentSender,
+}
+
+impl Drop for Collab {
+  fn drop(&mut self) {
+    trace!("Collab:{} dropped", self.object_id);
+  }
 }
 
 pub fn make_yrs_doc() -> Doc {
