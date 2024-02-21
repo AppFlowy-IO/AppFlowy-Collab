@@ -72,7 +72,7 @@ impl Document {
     origin: CollabOrigin,
     doc_state: CollabDocState,
     document_id: &str,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
+    plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, DocumentError> {
     let collab = MutexCollab::new_with_doc_state(origin, document_id, doc_state, plugins)?;
     Document::open(Arc::new(collab))

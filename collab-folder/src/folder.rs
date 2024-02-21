@@ -126,7 +126,7 @@ impl Folder {
     origin: CollabOrigin,
     collab_doc_state: CollabDocState,
     workspace_id: &str,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
+    plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, Error> {
     let collab = MutexCollab::new_with_doc_state(origin, workspace_id, collab_doc_state, plugins)?;
     Self::open(uid, Arc::new(collab), None)
