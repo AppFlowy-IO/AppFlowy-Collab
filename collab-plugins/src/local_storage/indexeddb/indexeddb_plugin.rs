@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use collab::core::awareness::Awareness;
 
 use collab::core::origin::CollabOrigin;
-use collab::preclude::CollabPlugin;
+use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
 use futures::stream::StreamExt;
 
@@ -112,7 +112,7 @@ impl CollabPlugin for IndexeddbDiskPlugin {
     }
   }
 
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _last_sync_at: i64) {
+  fn did_init(&self, _collab: &Collab, _object_id: &str, _last_sync_at: i64) {
     self.did_load.store(true, SeqCst);
   }
 

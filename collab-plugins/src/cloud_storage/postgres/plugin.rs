@@ -88,7 +88,7 @@ impl SupabaseDBPlugin {
 }
 
 impl CollabPlugin for SupabaseDBPlugin {
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _last_sync_at: i64) {
+  fn did_init(&self, _collab: &Collab, _object_id: &str, _last_sync_at: i64) {
     // TODO(nathan): retry action might take a long time even if the network is ready or enable of
     // the [RemoteCollabStorage] is true
     let retry_strategy = FibonacciBackoff::from_millis(2000);
