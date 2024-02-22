@@ -287,7 +287,7 @@ impl Collab {
         .plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id, last_sync_at));
+        .for_each(|plugin| plugin.did_init(&self, &self.object_id, last_sync_at));
     }
     self.state.set_init_state(InitState::Initialized);
   }
