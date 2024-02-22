@@ -4,11 +4,11 @@ use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Weak};
 
 use crate::CollabKVDB;
-use collab::core::awareness::Awareness;
+
 use collab::core::collab::make_yrs_doc;
 use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
-use collab::preclude::CollabPlugin;
+use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
 use tracing::{debug, error, instrument};
 use yrs::updates::encoder::Encode;
@@ -181,7 +181,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
     };
   }
 
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _last_sync_at: i64) {
+  fn did_init(&self, _collab: &Collab, _object_id: &str, _last_sync_at: i64) {
     self.did_load.store(true, SeqCst);
   }
 
