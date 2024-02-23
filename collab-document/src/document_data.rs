@@ -87,7 +87,12 @@ pub fn default_document_data() -> DocumentData {
 /// of the document.
 pub fn default_document_collab_data(document_id: &str) -> EncodedCollab {
   let document_data = default_document_data();
-  let collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, document_id, vec![]));
+  let collab = Arc::new(MutexCollab::new(
+    CollabOrigin::Empty,
+    document_id,
+    vec![],
+    false,
+  ));
   let _ = Document::create_with_data(collab.clone(), document_data);
   collab.encode_collab_v1()
 }

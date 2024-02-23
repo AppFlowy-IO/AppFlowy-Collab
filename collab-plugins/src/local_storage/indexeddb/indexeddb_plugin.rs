@@ -56,7 +56,7 @@ impl IndexeddbDiskPlugin {
     let uid = self.uid;
     let object_id = object_id.to_string();
     tokio::task::spawn_local(async move {
-      let doc = make_yrs_doc();
+      let doc = make_yrs_doc(false);
       db.load_doc(uid, &object_id, doc.clone()).await.unwrap();
       let encoded_collab = doc.get_encoded_collab_v1();
       db.flush_doc(uid, &object_id, &encoded_collab)

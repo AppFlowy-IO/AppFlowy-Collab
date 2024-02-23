@@ -171,6 +171,7 @@ fn save_row<R: AsRef<str>>(
       row_id.as_ref(),
       collab_doc_state,
       vec![],
+      false,
     ) {
       Ok(collab) => {
         let collab_guard =

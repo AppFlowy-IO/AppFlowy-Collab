@@ -68,7 +68,7 @@ impl CollabSnapshot {
           weak_collab_db.upgrade(),
           weak_snapshot_persistence.upgrade(),
         ) {
-          let snapshot_collab = Collab::new(uid, object_id.clone(), "1", vec![]);
+          let snapshot_collab = Collab::new(uid, object_id.clone(), "1", vec![], false);
           let mut txn = snapshot_collab.origin_transact_mut();
           if let Err(e) = collab_db
             .read_txn()

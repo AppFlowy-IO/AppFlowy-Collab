@@ -12,7 +12,7 @@ use crate::helper::{setup_log, Person, Position};
 
 #[tokio::test]
 async fn insert_text() {
-  let mut collab = Collab::new(1, "1", "1", vec![]);
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   let _sub = collab.observer_data(|txn, event| {
     event.target().iter(txn).for_each(|(a, b)| {
       println!("{}: {}", a, b);
@@ -27,7 +27,7 @@ async fn insert_text() {
 
 #[tokio::test]
 async fn insert_json_attrs() {
-  let mut collab = Collab::new(1, "1", "1", vec![]);
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   let object = Person {
     name: "nathan".to_string(),
     position: Position {
@@ -48,7 +48,7 @@ async fn insert_json_attrs() {
 
 #[tokio::test]
 async fn observer_attr_mut() {
-  let mut collab = Collab::new(1, "1", "1", vec![]);
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   let object = Person {
     name: "nathan".to_string(),
     position: Position {
@@ -75,7 +75,7 @@ async fn observer_attr_mut() {
 
 #[tokio::test]
 async fn remove_value() {
-  let mut collab = Collab::new(1, "1", "1", vec![]);
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   let object = Person {
     name: "nathan".to_string(),
     position: Position {
@@ -98,7 +98,7 @@ async fn remove_value() {
 #[tokio::test]
 async fn retry_write_txn_success_test() {
   setup_log();
-  let collab = Arc::new(Collab::new(1, "1", "1", vec![]));
+  let collab = Arc::new(Collab::new(1, "1", "1", vec![], false));
   let doc = collab.get_doc().clone();
   let txn = TransactionRetry::new(&doc).get_write_txn_with(CollabOrigin::Empty);
 
@@ -121,7 +121,7 @@ async fn retry_write_txn_success_test() {
 #[should_panic]
 async fn retry_write_txn_fail_test() {
   setup_log();
-  let collab = Arc::new(Collab::new(1, "1", "1", vec![]));
+  let collab = Arc::new(Collab::new(1, "1", "1", vec![], false));
   let doc = collab.get_doc().clone();
   let _txn = TransactionRetry::new(&doc).get_write_txn_with(CollabOrigin::Empty);
 
@@ -140,7 +140,7 @@ async fn retry_write_txn_fail_test() {
 
 #[tokio::test]
 async fn undo_single_insert_text() {
-  let mut collab = Collab::new(1, "1", "1", vec![]);
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   collab.enable_undo_redo();
   collab.insert("text", "hello world");
 
@@ -161,7 +161,7 @@ async fn undo_single_insert_text() {
 
 #[tokio::test]
 async fn redo_single_insert_text() {
-  let mut collab = Collab::new(1, "1", "1", vec![]);
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   collab.enable_undo_redo();
   collab.insert("text", "hello world");
 
@@ -184,14 +184,14 @@ async fn redo_single_insert_text() {
 #[tokio::test]
 #[should_panic]
 async fn undo_manager_not_enable_test() {
-  let mut collab = Collab::new(1, "1", "1", vec![]);
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   collab.insert("text", "hello world");
   collab.undo().unwrap();
 }
 
 #[tokio::test]
 async fn undo_second_insert_text() {
-  let mut collab = Collab::new(1, "1", "1", vec![]);
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   collab.insert("1", "a");
 
   collab.enable_undo_redo();
