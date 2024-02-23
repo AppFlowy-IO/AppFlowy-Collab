@@ -1,11 +1,9 @@
-use std::sync::Arc;
-use std::time::Duration;
-
 use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::core::origin::CollabOrigin;
 use collab::core::transaction::TransactionRetry;
 use collab::error::CollabError;
 use collab::preclude::{Collab, MapRefWrapper};
+use std::time::Duration;
 use yrs::{Map, Observable};
 
 use crate::helper::{setup_log, Person, Position};
@@ -98,7 +96,7 @@ async fn remove_value() {
 #[tokio::test]
 async fn retry_write_txn_success_test() {
   setup_log();
-  let collab = Arc::new(Collab::new(1, "1", "1", vec![], false));
+  let collab = Collab::new(1, "1", "1", vec![], false);
   let doc = collab.get_doc().clone();
   let txn = TransactionRetry::new(&doc).get_write_txn_with(CollabOrigin::Empty);
 
@@ -121,7 +119,7 @@ async fn retry_write_txn_success_test() {
 #[should_panic]
 async fn retry_write_txn_fail_test() {
   setup_log();
-  let collab = Arc::new(Collab::new(1, "1", "1", vec![], false));
+  let collab = Collab::new(1, "1", "1", vec![], false);
   let doc = collab.get_doc().clone();
   let _txn = TransactionRetry::new(&doc).get_write_txn_with(CollabOrigin::Empty);
 
