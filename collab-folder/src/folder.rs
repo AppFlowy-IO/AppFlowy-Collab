@@ -648,6 +648,23 @@ fn create_folder<T: Into<UserId>>(
   }
 }
 
+pub fn check_folder_is_valid(collab: &Collab) -> Result<String, FolderError> {
+  let txn = collab.transact();
+  let meta = collab
+    .get_map_with_txn(&txn, vec![FOLDER, META])
+    .ok_or_else(|| FolderError::NoRequiredData("No meta data".to_string()))?;
+  match meta.get_str_with_txn(&txn, CURRENT_WORKSPACE) {
+    None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
+    Some(workspace_id) => {
+      if workspace_id.is_empty() {
+        Err(FolderError::NoRequiredData("No workspace id".to_string()))
+      } else {
+        Ok(workspace_id)
+      }
+    },
+  }
+}
+
 fn open_folder<T: Into<UserId>>(
   uid: T,
   collab: Arc<MutexCollab>,
