@@ -18,5 +18,6 @@ mod workspace;
 
 #[macro_use]
 mod macros;
+pub mod error;
 mod folder_migration;
 mod folder_observe;
