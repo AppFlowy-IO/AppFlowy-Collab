@@ -1,7 +1,6 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use anyhow::Error;
 use collab::core::collab::{CollabDocState, IndexContentReceiver, MutexCollab};
 use collab::core::collab_plugin::EncodedCollab;
 use collab::core::collab_state::{SnapshotState, SyncState};
@@ -10,6 +9,7 @@ use collab::preclude::*;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
+use crate::error::FolderError;
 use crate::folder_observe::ViewChangeSender;
 use crate::section::{Section, SectionItem, SectionMap, SectionOperation};
 use crate::{
@@ -100,7 +100,7 @@ impl Folder {
     uid: T,
     collab: Arc<MutexCollab>,
     notifier: Option<FolderNotify>,
-  ) -> Result<Self, Error> {
+  ) -> Result<Self, FolderError> {
     let uid = uid.into();
     let folder = open_folder(uid.clone(), collab.clone(), notifier.clone()).unwrap_or_else(|| {
       tracing::info!("Create missing attributes of folder");
@@ -127,7 +127,7 @@ impl Folder {
     collab_doc_state: CollabDocState,
     workspace_id: &str,
     plugins: Vec<Box<dyn CollabPlugin>>,
-  ) -> Result<Self, Error> {
+  ) -> Result<Self, FolderError> {
     let collab = MutexCollab::new_with_doc_state(origin, workspace_id, collab_doc_state, plugins)?;
     Self::open(uid, Arc::new(collab), None)
   }
@@ -240,17 +240,17 @@ impl Folder {
     self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE).unwrap()
   }
 
-  pub fn try_get_workspace_id(&self) -> Result<String, Error> {
+  pub fn try_get_workspace_id(&self) -> Result<String, FolderError> {
     let txn = self.meta.transact();
     match self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE) {
-      None => Err(anyhow::anyhow!("No workspace")),
+      None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
       Some(workspace_id) => Ok(workspace_id),
     }
   }
 
-  pub fn try_get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Result<String, Error> {
+  pub fn try_get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Result<String, FolderError> {
     match self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE) {
-      None => Err(anyhow::anyhow!("No workspace")),
+      None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
       Some(workspace_id) => Ok(workspace_id),
     }
   }
