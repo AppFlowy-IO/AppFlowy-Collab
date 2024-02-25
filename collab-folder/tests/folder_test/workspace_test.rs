@@ -24,7 +24,7 @@ async fn test_workspace_is_ready() {
 
   let workspace = Workspace::new("w1".to_string(), "".to_string(), uid.as_i64());
   let folder_data = FolderData::new(workspace);
-  let collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, &object_id, vec![]));
+  let collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, object_id, vec![]));
   let _ = Folder::create(uid, collab.clone(), None, folder_data);
 
   let workspace_id = check_folder_is_valid(&collab.lock()).unwrap();
