@@ -18,7 +18,7 @@ use tracing_subscriber::EnvFilter;
 use zip::read::ZipArchive;
 
 pub struct FolderTest {
-  folder: Folder,
+  pub folder: Folder,
 
   #[allow(dead_code)]
   db: Arc<CollabKVDB>,
