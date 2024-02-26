@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -62,49 +60,6 @@ pub trait CollabPlugin: 'static {
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
 #[async_trait]
 impl<T> CollabPlugin for Box<T>
-where
-  T: CollabPlugin,
-{
-  #[cfg(not(feature = "async-plugin"))]
-  fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
-    (**self).init(object_id, origin, doc);
-  }
-
-  #[cfg(feature = "async-plugin")]
-  async fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
-    (**self).init(object_id, origin, doc).await;
-  }
-
-  fn did_init(&self, collab: &Collab, _object_id: &str, last_sync_at: i64) {
-    (**self).did_init(collab, _object_id, last_sync_at)
-  }
-
-  fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
-    (**self).receive_update(object_id, txn, update)
-  }
-
-  fn receive_local_update(&self, origin: &CollabOrigin, object_id: &str, update: &[u8]) {
-    (**self).receive_local_update(origin, object_id, update)
-  }
-
-  fn after_transaction(&self, object_id: &str, txn: &mut TransactionMut) {
-    (**self).after_transaction(object_id, txn)
-  }
-  fn plugin_type(&self) -> CollabPluginType {
-    (**self).plugin_type()
-  }
-
-  fn reset(&self, object_id: &str) {
-    (**self).reset(object_id)
-  }
-
-  fn flush(&self, object_id: &str, doc: &Doc) {
-    (**self).flush(object_id, doc)
-  }
-}
-
-#[async_trait]
-impl<T> CollabPlugin for Arc<T>
 where
   T: CollabPlugin,
 {
