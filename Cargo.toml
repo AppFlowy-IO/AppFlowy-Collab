@@ -7,6 +7,7 @@ members = [
     "collab-document",
     "collab-folder",
     "collab-plugins",
+    "collab_bin",
 ]
 resolver = "2"
 
