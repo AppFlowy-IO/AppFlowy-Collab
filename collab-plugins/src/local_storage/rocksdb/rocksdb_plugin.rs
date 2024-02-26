@@ -116,7 +116,6 @@ impl RocksdbDiskPlugin {
     }
   }
 
-  #[instrument(skip_all)]
   fn flush_doc(&self, db: &Arc<CollabKVDB>, object_id: &str) {
     let _ = db.with_write_txn(|w_db_txn| {
       let doc = make_yrs_doc();
