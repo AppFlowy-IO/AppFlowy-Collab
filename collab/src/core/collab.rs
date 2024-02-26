@@ -2,6 +2,7 @@ use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::panic;
 use std::panic::AssertUnwindSafe;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::vec::IntoIter;
 
@@ -818,16 +819,16 @@ impl DerefMut for Path {
 }
 
 #[derive(Default, Clone)]
-pub struct Plugins(Arc<RwLock<Vec<Box<dyn CollabPlugin>>>>);
+pub struct Plugins(Rc<RwLock<Vec<Box<dyn CollabPlugin>>>>);
 
 impl Plugins {
   pub fn new(plugins: Vec<Box<dyn CollabPlugin>>) -> Plugins {
-    Self(Arc::new(RwLock::new(plugins)))
+    Self(Rc::new(RwLock::new(plugins)))
   }
 }
 
 impl Deref for Plugins {
-  type Target = Arc<RwLock<Vec<Box<dyn CollabPlugin>>>>;
+  type Target = Rc<RwLock<Vec<Box<dyn CollabPlugin>>>>;
 
   fn deref(&self) -> &Self::Target {
     &self.0

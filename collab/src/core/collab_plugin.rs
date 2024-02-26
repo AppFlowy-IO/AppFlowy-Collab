@@ -18,8 +18,10 @@ pub enum CollabPluginType {
   Other,
 }
 
-#[async_trait]
-pub trait CollabPlugin: Send + Sync + 'static {
+#[async_trait::async_trait]
+#[cfg_attr(feature = "async-plugin", async_trait(?Send, ?Sync))]
+#[cfg_attr(not(feature = "async-plugin"), async_trait)]
+pub trait CollabPlugin: 'static {
   /// Called when the plugin is initialized.
   /// The will apply the updates to the current [TransactionMut] which will restore the state of
   /// the document.

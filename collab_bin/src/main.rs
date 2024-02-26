@@ -1,11 +1,10 @@
-use collab::core::collab::{make_yrs_doc, MutexCollab, TransactionMutExt};
+use collab::core::collab::{MutexCollab, TransactionMutExt};
 use collab::core::origin::CollabOrigin;
-use collab::core::transaction::DocTransactionExtension;
-use collab::preclude::Collab;
+
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use yrs::updates::decoder::Decode;
-use yrs::{Map, ReadTxn, Transact, Update};
+use yrs::{ReadTxn, Transact, Update};
 
 #[tokio::main]
 async fn main() {
@@ -48,7 +47,7 @@ async fn main() {
     let diff = txn.encode_diff_v1(&doc.lock().transact().state_vector());
     let encoded = Update::decode_v1(&diff).unwrap();
     doc.lock().with_origin_transact_mut(|txn| {
-      txn.try_apply_update(encoded);
+      txn.try_apply_update(encoded).unwrap();
     });
   }
 
