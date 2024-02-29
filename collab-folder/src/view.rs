@@ -677,6 +677,7 @@ pub struct ViewIndexContent {
   pub name: String,
   pub is_favorite: bool,
   pub layout: ViewLayout,
+  pub icon: Option<ViewIcon>,
 }
 
 impl From<&View> for ViewIndexContent {
@@ -687,6 +688,7 @@ impl From<&View> for ViewIndexContent {
       name: value.name.clone(),
       is_favorite: value.is_favorite,
       layout: value.layout.clone(),
+      icon: value.icon.clone(),
     }
   }
 }

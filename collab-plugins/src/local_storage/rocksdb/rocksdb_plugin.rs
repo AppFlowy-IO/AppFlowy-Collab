@@ -10,7 +10,7 @@ use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error};
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
 
