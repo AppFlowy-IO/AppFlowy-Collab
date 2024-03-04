@@ -219,6 +219,16 @@ impl Folder {
     })
   }
 
+  /// Fetches all views associated with the current workspace.
+  ///
+  /// Views are fetched recursively, and thus all nested views are also included.
+  ///
+  pub fn get_all_views_recursively(&self) -> Vec<View> {
+    let workspace_id = self.get_workspace_id();
+    let txn = self.root.transact();
+    self.get_view_recursively_with_txn(&txn, &workspace_id)
+  }
+
   /// Fetches the current workspace.
   ///
   /// This function fetches the ID of the current workspace from the meta object,
