@@ -1,5 +1,5 @@
 use collab::preclude::Collab;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::sync::mpsc;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -19,5 +19,13 @@ async fn awareness_insert_test() {
 
   sleep(Duration::from_secs(1)).await;
   let event = rx.recv().unwrap();
-  assert_eq!(event.added().len(), 1);
+  assert_eq!(event.updated().len(), 1);
+}
+
+#[tokio::test]
+async fn awareness__test() {
+  let mut collab = Collab::new(1, "1", "1", vec![]);
+  let state = collab.get_awareness().get_local_state().unwrap();
+  let state_json = serde_json::from_str::<Value>(state).unwrap();
+  assert_eq!(state_json, json!({"uid": 1}));
 }
