@@ -8,6 +8,7 @@ use std::vec::IntoIter;
 use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde_json::json;
 
 use tokio_stream::wrappers::WatchStream;
 use tracing::{error, trace};
@@ -138,7 +139,10 @@ impl Collab {
     let undo_manager = Mutex::new(None);
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
-    let awareness = Awareness::new(doc.clone());
+    let mut awareness = Awareness::new(doc.clone());
+    if let CollabOrigin::Client(origin) = &origin {
+      awareness.set_local_state(json!({ "uid": origin.uid }).to_string());
+    }
     Self {
       origin,
       object_id,

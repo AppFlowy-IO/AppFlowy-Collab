@@ -82,7 +82,7 @@ impl Awareness {
   /// Returns a state map of all of the clients tracked by current [Awareness] instance. Those
   /// states are identified by their corresponding [ClientID]s. The associated state is
   /// represented and replicated to other clients as a JSON string.
-  pub fn clients(&self) -> &HashMap<ClientID, String> {
+  pub fn get_states(&self) -> &HashMap<ClientID, String> {
     &self.states
   }
 
