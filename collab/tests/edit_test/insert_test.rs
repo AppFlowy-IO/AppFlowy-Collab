@@ -8,7 +8,7 @@ use collab::error::CollabError;
 use collab::preclude::{Collab, MapRefWrapper};
 use yrs::{Map, Observable};
 
-use crate::helper::{setup_log, Person, Position};
+use crate::util::{setup_log, Person, Position};
 
 #[tokio::test]
 async fn insert_text() {

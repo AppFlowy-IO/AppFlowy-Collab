@@ -12,7 +12,11 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 use yrs::updates::decoder::Decode;
 
-use crate::struct_define::TaskInfo;
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct TaskInfo {
+  pub title: String,
+  pub repeated: bool,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Person {
@@ -85,7 +89,7 @@ pub struct Document2 {
 
 #[cfg(test)]
 mod tests {
-  use crate::helper::{Document2, TaskInfo};
+  use crate::util::{Document2, TaskInfo};
 
   #[test]
   fn test() {
