@@ -27,7 +27,7 @@ web-sys = { version = "0.3"}
 js-sys = "0.3"
 
 [dev-dependencies]
-tokio = { version = "1.26", features = ["rt"] }
+tokio = { version = "1.26", features = ["rt", "test-util", "macros"] }
 tempfile = "3.8.0"
 collab = { path = "", features = ["default"] }
 nanoid = "0.4.0"

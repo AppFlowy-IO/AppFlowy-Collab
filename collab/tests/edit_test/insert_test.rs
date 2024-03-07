@@ -13,7 +13,7 @@ use crate::util::{setup_log, Person, Position};
 #[tokio::test]
 async fn insert_text() {
   let mut collab = Collab::new(1, "1", "1", vec![]);
-  let _sub = collab.observer_data(|txn, event| {
+  let _sub = collab.observe_data(|txn, event| {
     event.target().iter(txn).for_each(|(a, b)| {
       println!("{}: {}", a, b);
     });

@@ -22,7 +22,7 @@ use yrs::{
   UpdateSubscription,
 };
 
-use crate::core::awareness::Awareness;
+use crate::core::awareness::{Awareness, AwarenessUpdateSubscription, Event};
 use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedCollab};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
@@ -342,11 +342,18 @@ impl Collab {
       .for_each(|plugin| plugin.flush(&self.object_id, &self.doc));
   }
 
-  pub fn observer_data<F>(&mut self, f: F) -> MapSubscription
+  pub fn observe_data<F>(&mut self, f: F) -> MapSubscription
   where
     F: Fn(&TransactionMut, &MapEvent) + 'static,
   {
     self.data.observe(f)
+  }
+
+  pub fn observe_awareness<F>(&mut self, f: F) -> AwarenessUpdateSubscription
+  where
+    F: Fn(&Awareness, &Event) + 'static,
+  {
+    self.awareness.on_update(f)
   }
 
   pub fn get(&self, key: &str) -> Option<Value> {
