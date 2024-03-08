@@ -23,7 +23,9 @@ use yrs::{
   UpdateSubscription,
 };
 
-use crate::core::awareness::{Awareness, AwarenessUpdateSubscription, Event};
+use crate::core::awareness::{
+  gen_awareness_update_message, Awareness, AwarenessUpdateSubscription, Event,
+};
 use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedCollab};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
@@ -688,7 +690,7 @@ fn observe_awareness(
   origin: CollabOrigin,
 ) -> AwarenessUpdateSubscription {
   awareness.on_update(move |awareness, event| {
-    if let Ok(update) = awareness.update() {
+    if let Ok(update) = gen_awareness_update_message(awareness, event) {
       plugins
         .read()
         .iter()
