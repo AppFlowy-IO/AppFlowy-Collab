@@ -432,7 +432,6 @@ dependencies = [
  "collab",
  "collab-entity",
  "config",
- "dotenv",
  "futures",
  "futures-util",
  "getrandom 0.2.9",
@@ -624,12 +623,6 @@ dependencies = [
  "crypto-common",
  "subtle",
 ]
-
-[[package]]
-name = "dotenv"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
 
 [[package]]
 name = "errno"
