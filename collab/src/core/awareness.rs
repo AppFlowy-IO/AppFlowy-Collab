@@ -1,6 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -323,6 +323,15 @@ impl AwarenessUpdate {
   }
 }
 
+impl Display for AwarenessUpdate {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    for client in self.clients.iter() {
+      write!(f, "{}", client.1)?;
+    }
+    Ok(())
+  }
+}
+
 impl Encode for AwarenessUpdate {
   fn encode<E: Encoder>(&self, encoder: &mut E) {
     encoder.write_var(self.clients.len());
@@ -360,6 +369,16 @@ pub struct AwarenessUpdateEntry {
 impl AwarenessUpdateEntry {
   pub fn json(&self) -> &str {
     &self.json
+  }
+}
+
+impl Display for AwarenessUpdateEntry {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "AwarenessUpdateEntry {{ clock: {}, json: {} }}",
+      self.clock, self.json
+    )
   }
 }
 
