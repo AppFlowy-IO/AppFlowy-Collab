@@ -3,7 +3,7 @@ use crate::local_storage::kv::keys::{make_doc_state_key, make_state_vector_key};
 
 use async_stream::stream;
 use async_trait::async_trait;
-use collab::core::awareness::{Awareness, AwarenessUpdate, Event};
+use collab::core::awareness::{AwarenessUpdate, Event};
 
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};

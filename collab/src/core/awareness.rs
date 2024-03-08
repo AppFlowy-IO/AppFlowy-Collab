@@ -2,7 +2,6 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
-use std::time::Instant;
 
 use crate::error::CollabError;
 use thiserror::Error;
@@ -158,14 +157,15 @@ impl Awareness {
   }
 
   fn update_meta(&mut self, client_id: ClientID) {
+    let now = chrono::Utc::now().timestamp();
     match self.meta.entry(client_id) {
       Entry::Occupied(mut e) => {
         let clock = e.get().clock + 1;
-        let meta = MetaClientState::new(clock, Instant::now());
+        let meta = MetaClientState::new(clock, now);
         e.insert(meta);
       },
       Entry::Vacant(e) => {
-        e.insert(MetaClientState::new(1, Instant::now()));
+        e.insert(MetaClientState::new(1, now));
       },
     }
   }
@@ -218,7 +218,7 @@ impl Awareness {
   /// If current instance has an observer channel (see: [Awareness::with_observer]), applied
   /// changes will also be emitted as events.
   pub fn apply_update(&mut self, update: AwarenessUpdate) -> Result<(), Error> {
-    let now = Instant::now();
+    let now = chrono::Utc::now().timestamp();
 
     let mut added = Vec::new();
     let mut updated = Vec::new();
@@ -393,11 +393,11 @@ pub enum Error {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct MetaClientState {
   clock: u32,
-  last_updated: Instant,
+  last_updated: i64,
 }
 
 impl MetaClientState {
-  fn new(clock: u32, last_updated: Instant) -> Self {
+  fn new(clock: u32, last_updated: i64) -> Self {
     MetaClientState {
       clock,
       last_updated,
