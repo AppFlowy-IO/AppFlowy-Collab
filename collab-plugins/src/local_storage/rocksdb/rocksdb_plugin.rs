@@ -5,6 +5,7 @@ use std::sync::{Arc, Weak};
 
 use crate::CollabKVDB;
 
+use collab::core::awareness::{AwarenessUpdate, Event};
 use collab::core::collab::make_yrs_doc;
 use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
@@ -203,6 +204,15 @@ impl CollabPlugin for RocksdbDiskPlugin {
     } else {
       tracing::warn!("collab_db is dropped");
     };
+  }
+
+  fn receive_local_state(
+    &self,
+    _origin: &CollabOrigin,
+    _object_id: &str,
+    _event: &Event,
+    _update: &AwarenessUpdate,
+  ) {
   }
 
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}

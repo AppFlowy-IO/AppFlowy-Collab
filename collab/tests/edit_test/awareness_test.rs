@@ -23,8 +23,10 @@ async fn awareness_insert_test() {
 }
 
 #[tokio::test]
-async fn awareness__test() {
-  let mut collab = Collab::new(1, "1", "1", vec![]);
+async fn initial_awareness_test() {
+  let collab = Collab::new(1, "1", "1", vec![]);
+
+  // by default, the awareness state contains the uid
   let state = collab.get_awareness().get_local_state().unwrap();
   let state_json = serde_json::from_str::<Value>(state).unwrap();
   assert_eq!(state_json, json!({"uid": 1}));

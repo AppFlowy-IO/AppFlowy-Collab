@@ -83,6 +83,7 @@ pub struct Collab {
   /// is disabled. To enable it, call [Collab::enable_undo_manager].
   undo_manager: Mutex<Option<UndoManager>>,
   update_subscription: RwLock<Option<UpdateSubscription>>,
+  awareness_subscription: RwLock<Option<AwarenessUpdateSubscription>>,
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
   pub index_json_sender: IndexContentSender,
 }
@@ -155,6 +156,7 @@ impl Collab {
       state,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
+      awareness_subscription: Default::default(),
       index_json_sender: tokio::sync::broadcast::channel(100).0,
     }
   }
@@ -229,7 +231,7 @@ impl Collab {
   ///
   /// This method must be called after all plugins have been added.
   #[cfg(not(feature = "async-plugin"))]
-  pub fn initialize(&self) {
+  pub fn initialize(&mut self) {
     if !self.state.is_uninitialized() {
       return;
     }
@@ -248,8 +250,16 @@ impl Collab {
       self.origin.clone(),
     );
 
+    let awareness_subscription = observe_awareness(
+      &mut self.awareness,
+      self.plugins.clone(),
+      self.object_id.clone(),
+      self.origin.clone(),
+    );
+
     *self.update_subscription.write() = Some(update_subscription);
     *self.after_txn_subscription.write() = Some(after_txn_subscription);
+    *self.awareness_subscription.write() = Some(awareness_subscription);
 
     let last_sync_at = self.get_last_sync_at();
     {
@@ -263,7 +273,7 @@ impl Collab {
   }
 
   #[cfg(feature = "async-plugin")]
-  pub async fn initialize(&self) {
+  pub async fn initialize(&mut self) {
     if !self.state.is_uninitialized() {
       return;
     }
@@ -282,8 +292,16 @@ impl Collab {
       self.origin.clone(),
     );
 
+    let awareness_subscription = observe_awareness(
+      &mut self.awareness,
+      self.plugins.clone(),
+      self.object_id.clone(),
+      self.origin.clone(),
+    );
+
     *self.update_subscription.write() = Some(update_subscription);
     *self.after_txn_subscription.write() = Some(after_txn_subscription);
+    *self.awareness_subscription.write() = Some(awareness_subscription);
 
     let last_sync_at = self.get_last_sync_at();
     {
@@ -650,6 +668,22 @@ impl Collab {
       CollabContext::new(self.origin.clone(), self.plugins.clone(), self.doc.clone()),
     )
   }
+}
+
+fn observe_awareness(
+  awareness: &mut Awareness,
+  plugins: Plugins,
+  oid: String,
+  origin: CollabOrigin,
+) -> AwarenessUpdateSubscription {
+  awareness.on_update(move |awareness, event| {
+    if let Ok(update) = awareness.update() {
+      plugins
+        .read()
+        .iter()
+        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
+    }
+  })
 }
 
 /// Observe a document for updates.
