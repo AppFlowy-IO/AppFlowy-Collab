@@ -1,3 +1,4 @@
+use serde_json::Value;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -9,8 +10,6 @@ use yrs::block::ClientID;
 use yrs::updates::decoder::{Decode, Decoder};
 use yrs::updates::encoder::{Encode, Encoder};
 use yrs::{Doc, Observer, Subscription};
-
-const NULL_STR: &str = "null";
 
 /// The Awareness class implements a simple shared state protocol that can be used for non-persistent
 /// data like awareness information (cursor, username, status, ..). Each client can update its own
@@ -26,7 +25,7 @@ const NULL_STR: &str = "null";
 /// Before a client disconnects, it should propagate a `null` state with an updated clock.
 pub struct Awareness {
   doc: Doc,
-  states: HashMap<ClientID, String>,
+  states: HashMap<ClientID, Value>,
   meta: HashMap<ClientID, MetaClientState>,
   #[allow(clippy::type_complexity)]
   on_update: Option<Observer<Arc<dyn Fn(&Awareness, &Event) + 'static>>>,
@@ -82,13 +81,13 @@ impl Awareness {
   /// Returns a state map of all of the clients tracked by current [Awareness] instance. Those
   /// states are identified by their corresponding [ClientID]s. The associated state is
   /// represented and replicated to other clients as a JSON string.
-  pub fn get_states(&self) -> &HashMap<ClientID, String> {
+  pub fn get_states(&self) -> &HashMap<ClientID, Value> {
     &self.states
   }
 
   /// Returns a JSON string state representation of a current [Awareness] instance.
-  pub fn get_local_state(&self) -> Option<&str> {
-    Some(self.states.get(&self.doc.client_id())?.as_str())
+  pub fn get_local_state(&self) -> Option<&Value> {
+    self.states.get(&self.doc.client_id())
   }
 
   /// Sets the local state for the current [Awareness] instance to a specified JSON string.
@@ -105,7 +104,7 @@ impl Awareness {
   /// # Arguments
   /// * `json` - A string or a type that can be converted into a String, representing the new state
   ///   to be set for the current client ID.
-  pub fn set_local_state<S: Into<String>>(&mut self, json: S) {
+  pub fn set_local_state<S: Into<Value>>(&mut self, json: S) {
     let client_id = self.doc.client_id();
     self.update_meta(client_id);
 
@@ -201,11 +200,7 @@ impl Awareness {
         .ok_or(Error::ClientNotFound(client_id))?
         .clock;
 
-      let json = self
-        .states
-        .get(&client_id)
-        .cloned()
-        .unwrap_or_else(|| String::from(NULL_STR));
+      let json = self.states.get(&client_id).cloned().unwrap_or(Value::Null);
 
       res.insert(client_id, AwarenessUpdateEntry { clock, json });
     }
@@ -226,7 +221,7 @@ impl Awareness {
 
     for (client_id, update_entry) in update.clients {
       let mut clock = update_entry.clock;
-      let is_null = update_entry.json.as_str() == NULL_STR;
+      let is_null = update_entry.json == Value::Null;
       match self.meta.entry(client_id) {
         Entry::Occupied(mut entry) => {
           let prev = entry.get();
@@ -338,7 +333,7 @@ impl Encode for AwarenessUpdate {
     for (&client_id, e) in self.clients.iter() {
       encoder.write_var(client_id);
       encoder.write_var(e.clock);
-      encoder.write_string(&e.json);
+      encoder.write_string(&e.json.to_string());
     }
   }
 }
@@ -350,7 +345,7 @@ impl Decode for AwarenessUpdate {
     for _ in 0..len {
       let client_id: ClientID = decoder.read_var()?;
       let clock: u32 = decoder.read_var()?;
-      let json = decoder.read_string()?.to_string();
+      let json = serde_json::from_str(decoder.read_string()?)?;
       clients.insert(client_id, AwarenessUpdateEntry { clock, json });
     }
 
@@ -363,11 +358,11 @@ impl Decode for AwarenessUpdate {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct AwarenessUpdateEntry {
   pub(crate) clock: u32,
-  pub(crate) json: String,
+  pub(crate) json: Value,
 }
 
 impl AwarenessUpdateEntry {
-  pub fn json(&self) -> &str {
+  pub fn json(&self) -> &Value {
     &self.json
   }
 }

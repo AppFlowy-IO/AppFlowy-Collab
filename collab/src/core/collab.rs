@@ -964,6 +964,6 @@ impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
   }
 }
 
-fn initial_awareness_state(uid: i64) -> String {
-  json!({ "uid": uid }).to_string()
+fn initial_awareness_state(uid: i64) -> JsonValue {
+  json!({ "uid": uid })
 }

@@ -1,6 +1,6 @@
 use collab::core::awareness::gen_awareness_update_message;
 use collab::preclude::Collab;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -14,10 +14,10 @@ async fn awareness_insert_test() {
     tx.send(event.clone()).unwrap();
   });
 
-  let s = json!({"name": "nathan"}).to_string();
+  let s = json!({"name": "nathan"});
   collab.get_mut_awareness().set_local_state(s.clone());
   let state = collab.get_awareness().get_local_state().unwrap();
-  assert_eq!(state, s);
+  assert_eq!(state, &s);
 
   sleep(Duration::from_secs(1)).await;
   let event = rx.recv().unwrap();
@@ -30,8 +30,7 @@ async fn initial_awareness_test() {
 
   // by default, the awareness state contains the uid
   let state = collab.get_awareness().get_local_state().unwrap();
-  let state_json = serde_json::from_str::<Value>(state).unwrap();
-  assert_eq!(state_json, json!({"uid": 1}));
+  assert_eq!(state, &json!({"uid": 1}));
 }
 
 #[tokio::test]
@@ -74,8 +73,7 @@ async fn clean_awareness_state_sync_test() {
   assert_eq!(states.len(), 2);
   for (id, json) in states {
     let uid = doc_id_map_uid.get(id).unwrap().parse::<i64>().unwrap();
-    let state_json = serde_json::from_str::<Value>(json).unwrap();
-    assert_eq!(state_json, json!({"uid": uid}));
+    assert_eq!(json, &json!({"uid": uid}));
   }
 
   // collab_a clean the awareness state
