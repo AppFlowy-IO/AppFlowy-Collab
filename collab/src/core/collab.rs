@@ -140,7 +140,7 @@ impl Collab {
     let undo_manager = Mutex::new(None);
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
-    let mut awareness = Awareness::new(doc.clone());
+    let awareness = Awareness::new(doc.clone());
     let mut this = Self {
       origin,
       object_id,
