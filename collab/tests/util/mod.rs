@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Once};
 
 use bytes::Bytes;
+use collab::core::awareness::AwarenessUpdate;
 use collab::core::collab::CollabDocState;
+use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
 use collab::util::deserialize_i32_from_numeric;
 use parking_lot::RwLock;
@@ -12,7 +14,11 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 use yrs::updates::decoder::Decode;
 
-use crate::struct_define::TaskInfo;
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct TaskInfo {
+  pub title: String,
+  pub repeated: bool,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Person {
@@ -74,6 +80,15 @@ impl CollabPlugin for CollabStateCachePlugin {
     }
     write_guard.push(Bytes::from(update.to_vec()));
   }
+
+  fn receive_local_state(
+    &self,
+    _origin: &CollabOrigin,
+    _object_id: &str,
+    _event: &collab::core::awareness::Event,
+    _update: &AwarenessUpdate,
+  ) {
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -85,7 +100,7 @@ pub struct Document2 {
 
 #[cfg(test)]
 mod tests {
-  use crate::helper::{Document2, TaskInfo};
+  use crate::util::{Document2, TaskInfo};
 
   #[test]
   fn test() {
