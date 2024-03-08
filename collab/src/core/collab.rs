@@ -156,7 +156,7 @@ impl Collab {
       awareness_subscription: Default::default(),
       index_json_sender: tokio::sync::broadcast::channel(100).0,
     };
-    this.begin_state_sync();
+    this.emit_awareness_state();
     this
   }
 
@@ -177,11 +177,11 @@ impl Collab {
     WatchStream::new(self.state.snapshot_state_notifier.subscribe())
   }
 
-  pub fn stop_state_sync(&mut self) {
+  pub fn clean_awareness_state(&mut self) {
     self.awareness.clean_local_state();
   }
 
-  pub fn begin_state_sync(&mut self) {
+  pub fn emit_awareness_state(&mut self) {
     if let CollabOrigin::Client(origin) = &self.origin {
       self
         .awareness
