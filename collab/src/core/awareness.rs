@@ -311,7 +311,7 @@ impl std::fmt::Debug for Awareness {
 pub type AwarenessUpdateSubscription = Subscription<Arc<dyn Fn(&Awareness, &Event) + 'static>>;
 
 /// A structure that represents an encodable state of an [Awareness] struct.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct AwarenessUpdate {
   pub(crate) clients: HashMap<ClientID, AwarenessUpdateEntry>,
 }
@@ -344,7 +344,7 @@ impl Decode for AwarenessUpdate {
 
 /// A single client entry of an [AwarenessUpdate]. It consists of logical clock and JSON client
 /// state represented as a string.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct AwarenessUpdateEntry {
   pub(crate) clock: u32,
   pub(crate) json: String,
