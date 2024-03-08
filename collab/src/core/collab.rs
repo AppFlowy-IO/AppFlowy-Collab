@@ -141,10 +141,7 @@ impl Collab {
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
     let mut awareness = Awareness::new(doc.clone());
-    if let CollabOrigin::Client(origin) = &origin {
-      awareness.set_local_state(json!({ "uid": origin.uid }).to_string());
-    }
-    Self {
+    let mut this = Self {
       origin,
       object_id,
       doc,
@@ -158,7 +155,9 @@ impl Collab {
       after_txn_subscription: Default::default(),
       awareness_subscription: Default::default(),
       index_json_sender: tokio::sync::broadcast::channel(100).0,
-    }
+    };
+    this.begin_state_sync();
+    this
   }
 
   /// Returns the doc state and the state vector.
@@ -176,6 +175,18 @@ impl Collab {
 
   pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
     WatchStream::new(self.state.snapshot_state_notifier.subscribe())
+  }
+
+  pub fn stop_state_sync(&mut self) {
+    self.awareness.clean_local_state();
+  }
+
+  pub fn begin_state_sync(&mut self) {
+    if let CollabOrigin::Client(origin) = &self.origin {
+      self
+        .awareness
+        .set_local_state(initial_awareness_state(origin.uid));
+    }
   }
 
   /// Subscribes to the `IndexJson` associated with a `Collab` object.
@@ -949,4 +960,8 @@ impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
       Err(e) => Err(CollabError::YrsTransactionError(format!("{:?}", e))),
     }
   }
+}
+
+fn initial_awareness_state(uid: i64) -> String {
+  json!({ "uid": uid }).to_string()
 }
