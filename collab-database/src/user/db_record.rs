@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::core::value::YrsValueExtension;
 use collab::preclude::{
@@ -41,11 +39,10 @@ impl DatabaseViewTrackerList {
   ///
   pub fn add_database(&self, database_id: &str, view_ids: Vec<String>) {
     self.array_ref.with_transact_mut(|txn| {
-      let linked_views: HashSet<String> = view_ids.into_iter().collect();
       let record = DatabaseViewTracker {
         database_id: database_id.to_string(),
         created_at: timestamp(),
-        linked_views,
+        linked_views: view_ids,
       };
       let map_ref = self.array_ref.insert_map_with_txn(txn, None);
       record.fill_map_ref(txn, &map_ref);
@@ -126,7 +123,7 @@ impl DatabaseViewTrackerList {
     let all = self.get_all_database_view_tracker_with_txn(&txn);
     all
       .into_iter()
-      .find(|record| record.linked_views.contains(view_id))
+      .find(|record| record.linked_views.iter().any(|id| id == view_id))
   }
 
   fn database_index_from_id<T: ReadTxn>(&self, txn: &T, database_id: &str) -> Option<u32> {
@@ -148,7 +145,7 @@ impl DatabaseViewTrackerList {
 pub struct DatabaseViewTracker {
   pub database_id: String,
   pub created_at: i64,
-  pub linked_views: HashSet<String>,
+  pub linked_views: Vec<String>,
 }
 
 const DATABASE_TRACKER_ID: &str = "database_id";
@@ -163,22 +160,21 @@ impl DatabaseViewTracker {
     map_ref.create_array_with_txn(txn, DATABASE_RECORD_VIEWS, views);
   }
 
-  #[allow(clippy::needless_collect)]
   fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<Self> {
-    let id = map_ref.get_str_with_txn(txn, DATABASE_TRACKER_ID)?;
+    let database_id = map_ref.get_str_with_txn(txn, DATABASE_TRACKER_ID)?;
     let created_at = map_ref
       .get_i64_with_txn(txn, DATABASE_RECORD_CREATED_AT)
       .unwrap_or_default();
-    let views = map_ref
+    let linked_views = map_ref
       .get_array_ref_with_txn(txn, DATABASE_RECORD_VIEWS)?
       .iter(txn)
       .map(|value| value.to_string(txn))
-      .collect::<Vec<String>>();
+      .collect();
 
     Some(Self {
-      database_id: id,
+      database_id,
       created_at,
-      linked_views: views.into_iter().collect(),
+      linked_views,
     })
   }
 }

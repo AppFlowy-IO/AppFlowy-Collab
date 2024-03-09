@@ -240,7 +240,7 @@ impl WorkspaceDatabase {
       self
         .database_tracker_list()
         .update_database(&params.database_id, |record| {
-          record.linked_views.insert(params.view_id.clone());
+          record.linked_views.push(params.view_id.clone());
         });
       database.lock().create_linked_view(params)
     } else {
