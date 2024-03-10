@@ -16,12 +16,13 @@ use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use parking_lot::Mutex;
+use tracing::error;
 
 use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
 use crate::database_observer::DatabaseNotify;
 use crate::error::DatabaseError;
 
-use crate::user::db_record::{DatabaseViewTracker, DatabaseViewTrackerList};
+use crate::user::db_record::{DatabaseMeta, DatabaseViewTrackerList};
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 
 pub type CollabDocStateByOid = HashMap<String, CollabDocState>;
@@ -172,7 +173,7 @@ impl WorkspaceDatabase {
   pub fn get_database_id_with_view_id(&self, view_id: &str) -> Option<String> {
     self
       .database_tracker_list()
-      .get_database_view_tracker_with_view_id(view_id)
+      .get_database_meta_with_view_id(view_id)
       .map(|record| record.database_id)
   }
 
@@ -240,7 +241,12 @@ impl WorkspaceDatabase {
       self
         .database_tracker_list()
         .update_database(&params.database_id, |record| {
-          record.linked_views.push(params.view_id.clone());
+          // Check if the view is already linked to the database.
+          if record.linked_views.contains(&params.view_id) {
+            error!("The view is already linked to the database");
+          } else {
+            record.linked_views.push(params.view_id.clone());
+          }
         });
       database.lock().create_linked_view(params)
     } else {
@@ -273,7 +279,7 @@ impl WorkspaceDatabase {
   }
 
   /// Return all the database records.
-  pub fn get_all_databases(&self) -> Vec<DatabaseViewTracker> {
+  pub fn get_all_databases(&self) -> Vec<DatabaseMeta> {
     self.database_tracker_list().get_all_database_tracker()
   }
 
@@ -362,6 +368,6 @@ impl WorkspaceDatabase {
   }
 }
 
-pub fn get_all_database_view_trackers(collab: &Collab) -> Vec<DatabaseViewTracker> {
+pub fn get_all_database_view_trackers(collab: &Collab) -> Vec<DatabaseMeta> {
   DatabaseViewTrackerList::from_collab(collab).get_all_database_tracker()
 }

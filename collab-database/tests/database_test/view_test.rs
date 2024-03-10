@@ -1,4 +1,4 @@
-use collab_database::database::{gen_row_id, DatabaseData};
+use collab_database::database::{gen_row_id, get_inline_view_id, DatabaseData};
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
 use collab_database::views::{
@@ -18,7 +18,7 @@ use crate::helper::TestFilter;
 
 #[tokio::test]
 async fn create_initial_database_test() {
-  let database_test = create_database(1, "1").await;
+  let test = create_database(1, "1").await;
   assert_json_include!(
     expected: json!( {
       "fields": [],
@@ -38,8 +38,12 @@ async fn create_initial_database_test() {
         }
       ]
     }),
-    actual: database_test.to_json_value()
+    actual: test.to_json_value()
   );
+
+  let inline_view_id = get_inline_view_id(&test.database.get_collab().lock()).unwrap();
+  assert_eq!(inline_view_id, test.database.get_inline_view_id());
+  assert_eq!(inline_view_id, "v1");
 }
 
 #[tokio::test]
