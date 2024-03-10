@@ -11,11 +11,11 @@ use crate::database::timestamp;
 const DATABASES: &str = "databases";
 
 /// Used to store list of [DatabaseMeta].
-pub struct DatabaseViewTrackerList {
+pub struct DatabaseMetaList {
   array_ref: ArrayRefWrapper,
 }
 
-impl DatabaseViewTrackerList {
+impl DatabaseMetaList {
   pub fn new(array_ref: ArrayRefWrapper) -> Self {
     Self { array_ref }
   }
@@ -83,8 +83,8 @@ impl DatabaseViewTrackerList {
     });
   }
 
-  /// Return all the database view trackers
-  pub fn get_all_database_tracker(&self) -> Vec<DatabaseMeta> {
+  /// Return all the database meta
+  pub fn get_all_database_meta(&self) -> Vec<DatabaseMeta> {
     self
       .array_ref
       .with_transact_mut(|txn| self.get_all_database_meta_with_txn(txn))

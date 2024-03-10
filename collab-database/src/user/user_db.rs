@@ -22,7 +22,7 @@ use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
 use crate::database_observer::DatabaseNotify;
 use crate::error::DatabaseError;
 
-use crate::user::db_record::{DatabaseMeta, DatabaseViewTrackerList};
+use crate::user::db_meta::{DatabaseMeta, DatabaseMetaList};
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 
 pub type CollabDocStateByOid = HashMap<String, CollabDocState>;
@@ -105,7 +105,7 @@ impl WorkspaceDatabase {
   /// Get the database with the given database id.
   /// Return None if the database does not exist.
   pub async fn get_database(&self, database_id: &str) -> Option<Arc<MutexDatabase>> {
-    if !self.database_tracker_list().contains(database_id) {
+    if !self.database_meta_list().contains(database_id) {
       return None;
     }
     let database = self.open_handlers.lock().get(database_id).cloned();
@@ -172,7 +172,7 @@ impl WorkspaceDatabase {
   /// Return the database id with the given view id.
   pub fn get_database_id_with_view_id(&self, view_id: &str) -> Option<String> {
     self
-      .database_tracker_list()
+      .database_meta_list()
       .get_database_meta_with_view_id(view_id)
       .map(|record| record.database_id)
   }
@@ -201,7 +201,7 @@ impl WorkspaceDatabase {
 
     // Add a new database record.
     self
-      .database_tracker_list()
+      .database_meta_list()
       .add_database(&params.database_id, vec![params.view_id.clone()]);
     let database_id = params.database_id.clone();
     // TODO(RS): insert the first view of the database.
@@ -213,7 +213,7 @@ impl WorkspaceDatabase {
 
   pub fn track_database(&self, database_id: &str, database_view_ids: Vec<String>) {
     self
-      .database_tracker_list()
+      .database_meta_list()
       .add_database(database_id, database_view_ids);
   }
 
@@ -239,7 +239,7 @@ impl WorkspaceDatabase {
     let params = CreateViewParamsValidator::validate(params)?;
     if let Some(database) = self.get_database(&params.database_id).await {
       self
-        .database_tracker_list()
+        .database_meta_list()
         .update_database(&params.database_id, |record| {
           // Check if the view is already linked to the database.
           if record.linked_views.contains(&params.view_id) {
@@ -256,7 +256,7 @@ impl WorkspaceDatabase {
 
   /// Delete the database with the given database id.
   pub fn delete_database(&self, database_id: &str) {
-    self.database_tracker_list().delete_database(database_id);
+    self.database_meta_list().delete_database(database_id);
     if let Some(collab_db) = self.collab_db.upgrade() {
       let _ = collab_db.with_write_txn(|w_db_txn| {
         match w_db_txn.delete_doc(self.uid, database_id) {
@@ -280,7 +280,7 @@ impl WorkspaceDatabase {
 
   /// Return all the database records.
   pub fn get_all_databases(&self) -> Vec<DatabaseMeta> {
-    self.database_tracker_list().get_all_database_tracker()
+    self.database_meta_list().get_all_database_meta()
   }
 
   pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
@@ -363,11 +363,11 @@ impl WorkspaceDatabase {
     )
   }
 
-  fn database_tracker_list(&self) -> DatabaseViewTrackerList {
-    DatabaseViewTrackerList::from_collab(&self.collab.lock())
+  fn database_meta_list(&self) -> DatabaseMetaList {
+    DatabaseMetaList::from_collab(&self.collab.lock())
   }
 }
 
-pub fn get_all_database_view_trackers(collab: &Collab) -> Vec<DatabaseMeta> {
-  DatabaseViewTrackerList::from_collab(collab).get_all_database_tracker()
+pub fn get_all_database_meta(collab: &Collab) -> Vec<DatabaseMeta> {
+  DatabaseMetaList::from_collab(collab).get_all_database_meta()
 }
