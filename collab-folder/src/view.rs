@@ -589,6 +589,22 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     self
   }
 
+  pub fn set_private(self, is_private: bool) -> Self {
+    if let Some(private_section) = self
+      .section_map
+      .section_op_with_txn(self.txn, Section::Private)
+    {
+      if is_private {
+        private_section
+          .add_sections_item_with_txn(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
+      } else {
+        private_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
+      }
+    }
+
+    self
+  }
+
   pub fn set_favorite(self, is_favorite: bool) -> Self {
     if let Some(fav_section) = self
       .section_map

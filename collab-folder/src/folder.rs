@@ -13,8 +13,8 @@ use crate::error::FolderError;
 use crate::folder_observe::ViewChangeSender;
 use crate::section::{Section, SectionItem, SectionMap, SectionOperation};
 use crate::{
-  subscribe_folder_change, FolderData, SectionChangeSender, TrashInfo, View, ViewRelations,
-  ViewsMap, Workspace,
+  subscribe_folder_change, FolderData, SectionChangeSender, SectionsByUid, TrashInfo, View,
+  ViewRelations, ViewsMap, Workspace,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -209,6 +209,13 @@ impl Folder {
       .section_op_with_txn(&txn, Section::Trash)
       .map(|op| op.get_sections_with_txn(&txn))
       .unwrap_or_default();
+
+    let private = self
+      .section
+      .section_op_with_txn(&txn, Section::Private)
+      .map(|op| op.get_sections_with_txn(&txn))
+      .unwrap_or_default();
+
     Some(FolderData {
       workspace,
       current_view,
@@ -216,6 +223,7 @@ impl Folder {
       favorites,
       recent,
       trash,
+      private,
     })
   }
 
@@ -520,6 +528,44 @@ impl Folder {
   pub fn remote_all_trash(&self) {
     if let Some(section) = self.section.section_op(Section::Trash) {
       section.clear()
+    }
+  }
+
+  /// Get the private views for all users
+  pub fn get_all_private_views(&self) -> Vec<SectionItem> {
+    let private_views = self
+      .section
+      .section_op(Section::Private)
+      .map(|op| op.get_sections())
+      .unwrap_or_default()
+      .into_iter()
+      .flat_map(|(_user_id, items)| items.into_iter().map(|item| item))
+      .collect::<Vec<_>>();
+    private_views
+  }
+
+  /// Get the private views for the current user
+  pub fn get_my_private_views(&self) -> Vec<SectionItem> {
+    self
+      .section
+      .section_op(Section::Private)
+      .map(|op| op.get_all_section_item())
+      .unwrap_or_default()
+  }
+
+  pub fn add_private_view_ids(&self, view_ids: Vec<String>) {
+    for id in view_ids {
+      self
+        .views
+        .update_view(&id, |update| update.set_private(true).done());
+    }
+  }
+
+  pub fn delete_private_view_ids(&self, view_ids: Vec<String>) {
+    for id in view_ids {
+      self
+        .views
+        .update_view(&id, |update| update.set_private(false).done());
     }
   }
 

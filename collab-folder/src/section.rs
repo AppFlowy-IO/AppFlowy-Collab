@@ -111,15 +111,22 @@ impl SectionMap {
   }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Section {
   Favorite,
   Recent,
   Trash,
+  Private,
   Custom(String),
 }
 
 pub(crate) fn predefined_sections() -> Vec<Section> {
-  vec![Section::Favorite, Section::Recent, Section::Trash]
+  vec![
+    Section::Favorite,
+    Section::Recent,
+    Section::Trash,
+    Section::Private,
+  ]
 }
 
 impl From<String> for Section {
@@ -135,6 +142,7 @@ impl AsRef<str> for Section {
       Section::Favorite => "favorite",
       Section::Recent => "recent",
       Section::Trash => "trash",
+      Section::Private => "private",
       Section::Custom(s) => s.as_str(),
     }
   }
@@ -170,6 +178,12 @@ impl<'a> SectionOperation<'a> {
 
   fn uid(&self) -> &UserId {
     self.uid
+  }
+
+  #[allow(dead_code)]
+  pub fn get_sections(&self) -> SectionsByUid {
+    let txn = self.container().transact();
+    self.get_sections_with_txn(&txn)
   }
 
   pub fn get_sections_with_txn<T: ReadTxn>(&self, txn: &T) -> SectionsByUid {
@@ -269,6 +283,7 @@ impl<'a> SectionOperation<'a> {
             }));
           },
           Section::Custom(_) => {},
+          Section::Private => {},
         }
       }
     }
@@ -294,6 +309,7 @@ impl<'a> SectionOperation<'a> {
           }));
         },
         Section::Custom(_) => {},
+        Section::Private => {},
       }
     }
   }

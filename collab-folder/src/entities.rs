@@ -13,6 +13,8 @@ pub struct FolderData {
   pub recent: SectionsByUid,
   #[serde(default)]
   pub trash: SectionsByUid,
+  #[serde(default)]
+  pub private: SectionsByUid,
 }
 
 impl FolderData {
@@ -24,6 +26,7 @@ impl FolderData {
       favorites: SectionsByUid::new(),
       recent: SectionsByUid::new(),
       trash: SectionsByUid::new(),
+      private: SectionsByUid::new(),
     }
   }
 }
