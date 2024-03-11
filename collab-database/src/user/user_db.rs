@@ -73,7 +73,8 @@ pub struct WorkspaceDatabase {
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
-  open_handlers: Mutex<LruCache<String, Arc<MutexDatabase>>>,
+  databases: Mutex<LruCache<String, Arc<MutexDatabase>>>,
+  database_collabs: Mutex<LruCache<String, Arc<MutexCollab>>>,
 }
 
 impl WorkspaceDatabase {
@@ -91,26 +92,23 @@ impl WorkspaceDatabase {
     let collab_guard = collab.lock();
     drop(collab_guard);
 
-    let open_handlers = Mutex::new(LruCache::new(NonZeroUsize::new(5).unwrap()));
+    let databases = Mutex::new(LruCache::new(NonZeroUsize::new(5).unwrap()));
+    let database_collabs = Mutex::new(LruCache::new(NonZeroUsize::new(10).unwrap()));
     Self {
       uid,
       collab_db,
       collab,
-      open_handlers,
+      databases,
       config,
       collab_service,
+      database_collabs,
     }
   }
 
-  /// Get the database with the given database id.
-  /// Return None if the database does not exist.
-  pub async fn get_database(&self, database_id: &str) -> Option<Arc<MutexDatabase>> {
-    if !self.database_meta_list().contains(database_id) {
-      return None;
-    }
-    let database = self.open_handlers.lock().get(database_id).cloned();
+  pub async fn get_database_collab(&self, database_id: &str) -> Option<Arc<MutexCollab>> {
+    let database_collab = self.database_collabs.lock().get(database_id).cloned();
     let collab_db = self.collab_db.upgrade()?;
-    match database {
+    match database_collab {
       None => {
         let mut collab_doc_state = CollabDocState::default();
         let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
@@ -124,19 +122,42 @@ impl WorkspaceDatabase {
           {
             Ok(fetched_doc_state) => {
               if fetched_doc_state.is_empty() {
-                tracing::error!("Failed to get updates for database: {}", database_id);
+                error!("Failed to get updates for database: {}", database_id);
                 return None;
               }
               collab_doc_state = fetched_doc_state;
             },
             Err(e) => {
-              tracing::error!("Failed to get collab updates for database: {}", e);
+              error!("Failed to get collab updates for database: {}", e);
               return None;
             },
           }
         }
+        let database_collab = self.collab_for_database(database_id, collab_doc_state);
+        self
+          .database_collabs
+          .lock()
+          .put(database_id.to_string(), database_collab.clone());
+        Some(database_collab)
+      },
+      Some(database_collab) => Some(database_collab),
+    }
+  }
+
+  /// Get the database with the given database id.
+  /// Return None if the database does not exist.
+  pub async fn get_database(&self, database_id: &str) -> Option<Arc<MutexDatabase>> {
+    if !self.database_meta_list().contains(database_id) {
+      return None;
+    }
+    let database = self.databases.lock().get(database_id).cloned();
+    let collab_db = self.collab_db.upgrade()?;
+    match database {
+      None => {
         let notifier = DatabaseNotify::default();
-        let collab = self.collab_for_database(database_id, collab_doc_state);
+        let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
+        let collab = self.get_database_collab(database_id).await?;
+
         let context = DatabaseContext {
           uid: self.uid,
           db: self.collab_db.clone(),
@@ -154,7 +175,7 @@ impl WorkspaceDatabase {
 
         let database = Arc::new(MutexDatabase::new(database));
         self
-          .open_handlers
+          .databases
           .lock()
           .put(database_id.to_string(), database.clone());
         Some(database)
@@ -207,7 +228,7 @@ impl WorkspaceDatabase {
     // TODO(RS): insert the first view of the database.
     let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);
     let database = Arc::new(mutex_database);
-    self.open_handlers.lock().put(database_id, database.clone());
+    self.databases.lock().put(database_id, database.clone());
     Ok(database)
   }
 
@@ -266,20 +287,20 @@ impl WorkspaceDatabase {
         Ok(())
       });
     }
-    if let Some(database) = self.open_handlers.lock().pop(database_id) {
+    if let Some(database) = self.databases.lock().pop(database_id) {
       database.lock().close();
     }
   }
 
   /// Close the database with the given database id.
   pub fn close_database(&self, database_id: &str) {
-    if let Some(database) = self.open_handlers.lock().pop(database_id) {
+    if let Some(database) = self.databases.lock().pop(database_id) {
       database.lock().close();
     }
   }
 
   /// Return all the database records.
-  pub fn get_all_databases(&self) -> Vec<DatabaseMeta> {
+  pub fn get_all_database_meta(&self) -> Vec<DatabaseMeta> {
     self.database_meta_list().get_all_database_meta()
   }
 

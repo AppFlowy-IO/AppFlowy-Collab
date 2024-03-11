@@ -1,4 +1,6 @@
-use collab_database::database::{gen_row_id, get_inline_view_id, DatabaseData};
+use collab_database::database::{
+  gen_row_id, get_database_views_meta, get_inline_view_id, DatabaseData,
+};
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
 use collab_database::views::{
@@ -44,6 +46,13 @@ async fn create_initial_database_test() {
   let inline_view_id = get_inline_view_id(&test.database.get_collab().lock()).unwrap();
   assert_eq!(inline_view_id, test.database.get_inline_view_id());
   assert_eq!(inline_view_id, "v1");
+
+  let view_metas = get_database_views_meta(&test.database.get_collab().lock());
+  let view_meta = view_metas
+    .iter()
+    .find(|view| view.id == inline_view_id)
+    .unwrap();
+  assert_eq!(view_meta.name, "my first database view");
 }
 
 #[tokio::test]
