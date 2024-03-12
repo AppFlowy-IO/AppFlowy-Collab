@@ -70,6 +70,25 @@ async fn remove_database_view_sort_test() {
   assert_eq!(view.sorts.len(), 1);
 }
 
+#[tokio::test]
+async fn reorder_database_view_sort_test() {
+  let database_test = create_database_with_two_sorts().await;
+  database_test.move_sort("v1", "s2", "s1");
+
+  let sorts = database_test
+    .views
+    .get_view("v1")
+    .unwrap()
+    .sorts
+    .into_iter()
+    .map(|value| TestSort::try_from(value).unwrap())
+    .collect::<Vec<TestSort>>();
+
+  assert_eq!(sorts.len(), 2);
+  assert_eq!(sorts[0].id, "s2");
+  assert_eq!(sorts[1].id, "s1");
+}
+
 async fn create_database_with_two_sorts() -> DatabaseTest {
   let database_test = create_database_with_default_data(1, "1").await;
   let sort_1 = TestSort {

@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use collab::core::awareness::Awareness;
+use collab::core::awareness::{Awareness, AwarenessUpdate, Event};
 use collab::core::collab::MutexCollab;
 use collab::core::collab_plugin::CollabPluginType;
 use collab::core::collab_state::SnapshotState;
@@ -88,7 +88,7 @@ impl SupabaseDBPlugin {
 }
 
 impl CollabPlugin for SupabaseDBPlugin {
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _last_sync_at: i64) {
+  fn did_init(&self, _collab: &Collab, _object_id: &str, _last_sync_at: i64) {
     // TODO(nathan): retry action might take a long time even if the network is ready or enable of
     // the [RemoteCollabStorage] is true
     let retry_strategy = FibonacciBackoff::from_millis(2000);
@@ -114,6 +114,15 @@ impl CollabPlugin for SupabaseDBPlugin {
     } else {
       self.pending_updates.write().push(update.to_vec());
     }
+  }
+
+  fn receive_local_state(
+    &self,
+    _origin: &CollabOrigin,
+    _object_id: &str,
+    _event: &Event,
+    _update: &AwarenessUpdate,
+  ) {
   }
 
   fn plugin_type(&self) -> CollabPluginType {

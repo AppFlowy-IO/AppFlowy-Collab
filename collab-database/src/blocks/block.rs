@@ -5,7 +5,7 @@ use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use lru::LruCache;
 use parking_lot::Mutex;
-
+use rayon::prelude::*;
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
@@ -95,13 +95,14 @@ impl Block {
     }
   }
 
-  pub fn create_rows<T: Into<Row>>(&self, rows: Vec<T>) -> Vec<RowOrder> {
-    let mut row_orders: Vec<RowOrder> = vec![];
-    for row in rows.into_iter() {
-      let row_order = self.create_row(row);
-      row_orders.push(row_order);
-    }
-    row_orders
+  pub fn create_rows<T>(&self, rows: Vec<T>) -> Vec<RowOrder>
+  where
+    T: Into<Row> + Send,
+  {
+    rows
+      .into_par_iter()
+      .map(|row| self.create_row(row))
+      .collect::<Vec<RowOrder>>()
   }
 
   pub fn create_row<T: Into<Row>>(&self, row: T) -> RowOrder {

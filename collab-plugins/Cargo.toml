@@ -45,7 +45,6 @@ tempfile = "3.8.0"
 assert-json-diff = "2.0.2"
 tokio-util = { version = "0.7", features = ["codec"] }
 config = { version = "0.13.3", default-features = false, features = ["yaml"] }
-dotenv = "0.15.0"
 futures = "0.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

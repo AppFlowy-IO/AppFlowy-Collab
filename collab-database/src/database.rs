@@ -126,6 +126,11 @@ impl Database {
       .map(|notifier| notifier.view_change_tx.subscribe())
   }
 
+  #[cfg(debug_assertions)]
+  pub fn get_collab(&self) -> &Arc<MutexCollab> {
+    &self.inner
+  }
+
   pub fn load_all_rows(&self) {
     let row_ids = self
       .get_inline_row_orders()
@@ -764,6 +769,14 @@ impl Database {
     });
   }
 
+  pub fn move_sort(&self, view_id: &str, from_sort_id: &str, to_sort_id: &str) {
+    self.views.update_database_view(view_id, |update| {
+      update.update_sorts(|sort_update| {
+        sort_update.move_to(from_sort_id, to_sort_id);
+      });
+    });
+  }
+
   pub fn get_all_sorts<T: TryFrom<SortMap>>(&self, view_id: &str) -> Vec<T> {
     self
       .views
@@ -879,26 +892,6 @@ impl Database {
       .get_view_filters(view_id)
       .into_iter()
       .filter(|filter_map| filter_map.get_str_value("id").as_ref() == Some(&filter_id))
-      .flat_map(|value| T::try_from(value).ok())
-      .collect::<Vec<T>>();
-    if filters.is_empty() {
-      None
-    } else {
-      Some(filters.remove(0))
-    }
-  }
-
-  pub fn get_filter_by_field_id<T: TryFrom<FilterMap>>(
-    &self,
-    view_id: &str,
-    field_id: &str,
-  ) -> Option<T> {
-    let field_id = field_id.to_string();
-    let mut filters = self
-      .views
-      .get_view_filters(view_id)
-      .into_iter()
-      .filter(|filter_map| filter_map.get_str_value("field_id").as_ref() == Some(&field_id))
       .flat_map(|value| T::try_from(value).ok())
       .collect::<Vec<T>>();
     if filters.is_empty() {
@@ -1402,4 +1395,24 @@ where
 pub fn is_database_collab(collab: &Collab) -> bool {
   let txn = collab.transact();
   collab.get_map_with_txn(&txn, vec![DATABASE]).is_some()
+}
+
+/// Quickly retrieve the inline view ID of a database.
+/// Use this function when instantiating a [Database] object is too resource-intensive,
+/// and you need the inline view ID of a specific database.
+pub fn get_inline_view_id(collab: &Collab) -> Option<String> {
+  let txn = collab.transact();
+  let metas = collab.get_map_with_txn(&txn, vec![DATABASE, METAS])?;
+  let meta = MetaMap::new(metas);
+  meta.get_inline_view_with_txn(&txn)
+}
+
+/// Quickly retrieve database views meta.
+/// Use this function when instantiating a [Database] object is too resource-intensive,
+/// and you need the views meta of a specific database.
+pub fn get_database_views_meta(collab: &Collab) -> Vec<DatabaseViewMeta> {
+  let txn = collab.transact();
+  let views = collab.get_map_with_txn(&txn, vec![DATABASE, VIEWS]);
+  let views = ViewMap::new(views.unwrap(), None);
+  views.get_all_views_meta_with_txn(&txn)
 }

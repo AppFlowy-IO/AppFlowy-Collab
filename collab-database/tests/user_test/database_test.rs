@@ -30,7 +30,7 @@ async fn create_multiple_database_test() {
       ..Default::default()
     })
     .unwrap();
-  let all_databases = test.get_all_databases();
+  let all_databases = test.get_all_database_meta();
   assert_eq!(all_databases.len(), 2);
   assert_eq!(all_databases[0].database_id, "d1");
   assert_eq!(all_databases[1].database_id, "d2");
@@ -56,7 +56,7 @@ async fn delete_database_test() {
     .unwrap();
   test.delete_database("d1").await;
 
-  let all_databases = test.get_all_databases();
+  let all_databases = test.get_all_database_meta();
   assert_eq!(all_databases[0].database_id, "d2");
 }
 
