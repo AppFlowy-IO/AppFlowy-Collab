@@ -28,7 +28,7 @@ async fn restore_row_from_disk_test() {
   drop(database_test);
 
   let database_test = restore_database_from_db(1, "1", db);
-  let rows = database_test.get_rows_for_view("v1");
+  let rows = database_test.get_rows_for_view("v1").await;
   assert_eq!(rows.len(), 2);
 
   assert!(rows.iter().any(|row| row.id == row_1.id));
@@ -38,12 +38,12 @@ async fn restore_row_from_disk_test() {
 #[tokio::test]
 async fn restore_from_disk_test() {
   let (db, database_test, expected) = create_database_with_view().await;
-  assert_json_include!(actual:database_test.to_json_value(), expected:expected);
+  assert_json_include!(actual:database_test.to_json_value().await, expected:expected);
   // assert_json_eq!(expected, database_test.to_json_value());
 
   // Restore from disk
   let database_test = restore_database_from_db(1, "1", db);
-  assert_json_include!(actual:database_test.to_json_value(), expected:expected);
+  assert_json_include!(actual:database_test.to_json_value().await, expected:expected);
 }
 
 #[tokio::test]
@@ -69,7 +69,7 @@ async fn restore_from_disk_with_different_database_id_test() {
         }
       ]
     }),
-    actual: database_test.to_json_value()
+    actual: database_test.to_json_value().await
   );
 }
 
@@ -96,7 +96,7 @@ async fn restore_from_disk_with_different_uid_test() {
         }
       ]
     }),
-    actual: database_test.to_json_value()
+    actual: database_test.to_json_value().await
   );
 }
 
@@ -133,7 +133,7 @@ async fn open_020_history_database_test() {
     "c0e69740-49f0-4790-a488-702e2750ba8d",
     db,
   );
-  let data = database_test.duplicate_database();
+  let data = database_test.duplicate_database().await;
 
   let json_value = json!({
     "fields": [

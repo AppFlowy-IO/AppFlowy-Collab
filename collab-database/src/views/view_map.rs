@@ -25,6 +25,9 @@ pub struct ViewMap {
   subscription: Option<DeepEventsSubscription>,
 }
 
+unsafe impl Send for ViewMap {}
+unsafe impl Sync for ViewMap {}
+
 impl Deref for ViewMap {
   type Target = MapRefWrapper;
 

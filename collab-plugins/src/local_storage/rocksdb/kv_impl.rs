@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::local_storage::kv::doc::CollabKVAction;
 
 use crate::local_storage::kv::{KVEntry, KVStore, KVTransactionDB, PersistenceError};
+use collab::core::collab_plugin::EncodedCollab;
 use rocksdb::Direction::Forward;
 use rocksdb::{
   DBIteratorWithThreadMode, Direction, ErrorKind, IteratorMode, Options, ReadOptions,
@@ -115,6 +116,18 @@ impl KVTransactionDBRocksdbImpl {
   pub async fn is_exist(&self, uid: i64, object_id: &str) -> Result<bool, PersistenceError> {
     let read_txn = self.read_txn();
     Ok(read_txn.is_exist(uid, object_id))
+  }
+
+  pub async fn create_doc(
+    &self,
+    uid: i64,
+    object_id: &str,
+    encoded_collab: &EncodedCollab,
+  ) -> Result<(), PersistenceError> {
+    self.with_write_txn(|txn| {
+      txn.create_new_doc_with_encoded_collab(uid, object_id, encoded_collab.clone())
+    })?;
+    Ok(())
   }
 
   pub async fn delete_doc(&self, uid: i64, doc_id: &str) -> Result<(), PersistenceError> {

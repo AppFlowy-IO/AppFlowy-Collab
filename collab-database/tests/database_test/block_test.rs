@@ -14,6 +14,6 @@ async fn create_rows_test() {
       },
     );
   }
-  let rows = database_test.get_rows_for_view("v1");
+  let rows = database_test.get_rows_for_view("v1").await;
   assert_eq!(rows.len(), 100);
 }

@@ -40,7 +40,7 @@ async fn create_initial_database_test() {
         }
       ]
     }),
-    actual: test.to_json_value()
+    actual: test.to_json_value().await
   );
 
   let inline_view_id = get_inline_view_id(&test.database.get_collab().lock()).unwrap();
@@ -229,7 +229,7 @@ async fn duplicate_database_view_test() {
 #[tokio::test]
 async fn duplicate_database_data_serde_test() {
   let database_test = create_database_with_default_data(1, "1").await;
-  let duplicated_database = database_test.duplicate_database();
+  let duplicated_database = database_test.duplicate_database().await;
 
   let json = duplicated_database.to_json().unwrap();
   let duplicated_database2 = DatabaseData::from_json(&json).unwrap();

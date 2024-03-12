@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::task::LocalSet;
 
 use collab::core::any_map::AnyMapExtension;
 use collab_database::database::gen_row_id;
@@ -39,231 +40,262 @@ async fn observer_create_new_row_test() {
 
 #[tokio::test]
 async fn observer_row_cell_test() {
-  let database_test = Arc::new(create_database(1, "1").await);
-  let row_change_rx = database_test.subscribe_row_change().unwrap();
-  let row_id = gen_row_id();
+  let local = LocalSet::new();
+  local
+    .run_until(async move {
+      let database_test = Arc::new(create_database(1, "1").await);
+      let row_change_rx = database_test.subscribe_row_change().unwrap();
+      let row_id = gen_row_id();
 
-  // Insert cell
-  let cloned_row_id = row_id.clone();
-  let cloned_database_test = database_test.clone();
-  tokio::spawn(async move {
-    sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: cloned_row_id.clone(),
-        ..Default::default()
+      // Insert cell
+      let cloned_row_id = row_id.clone();
+      let cloned_database_test = database_test.clone();
+      tokio::task::spawn_local(async move {
+        sleep(Duration::from_millis(300)).await;
+        cloned_database_test
+          .create_row(CreateRowParams {
+            id: cloned_row_id.clone(),
+            ..Default::default()
+          })
+          .unwrap();
+
+        cloned_database_test
+          .update_row(&cloned_row_id, |row| {
+            row.update_cells(|cells| {
+              cells.insert_cell(
+                "f1",
+                new_cell_builder(1).insert_i64_value("level", 1).build(),
+              );
+            });
+          })
+          .await;
+      });
+
+      wait_for_specific_event(row_change_rx, |event| match event {
+        RowChange::DidUpdateCell { key, value } => {
+          key == "f1" && value.get_i64_value("level") == Some(1)
+        },
+        _ => false,
       })
+      .await
       .unwrap();
 
-    cloned_database_test.update_row(&cloned_row_id, |row| {
-      row.update_cells(|cells| {
-        cells.insert_cell(
-          "f1",
-          new_cell_builder(1).insert_i64_value("level", 1).build(),
-        );
+      // Update cell
+      let cloned_database_test = database_test.clone();
+      let row_change_rx = database_test.subscribe_row_change().unwrap();
+      tokio::task::spawn_local(async move {
+        sleep(Duration::from_millis(300)).await;
+
+        cloned_database_test
+          .update_row(&row_id, |row| {
+            row.update_cells(|cells| {
+              cells.insert_cell(
+                "f1",
+                new_cell_builder(1).insert_i64_value("level", 2).build(),
+              );
+            });
+          })
+          .await;
       });
-    });
-  });
 
-  wait_for_specific_event(row_change_rx, |event| match event {
-    RowChange::DidUpdateCell { key, value } => {
-      key == "f1" && value.get_i64_value("level") == Some(1)
-    },
-    _ => false,
-  })
-  .await
-  .unwrap();
-
-  // Update cell
-  let cloned_database_test = database_test.clone();
-  let row_change_rx = database_test.subscribe_row_change().unwrap();
-  tokio::spawn(async move {
-    sleep(Duration::from_millis(300)).await;
-
-    cloned_database_test.update_row(&row_id, |row| {
-      row.update_cells(|cells| {
-        cells.insert_cell(
-          "f1",
-          new_cell_builder(1).insert_i64_value("level", 2).build(),
-        );
-      });
-    });
-  });
-
-  wait_for_specific_event(row_change_rx, |event| match event {
-    RowChange::DidUpdateCell { key, value } => {
-      key == "f1" && value.get_i64_value("level") == Some(2)
-    },
-    _ => false,
-  })
-  .await
-  .unwrap();
+      wait_for_specific_event(row_change_rx, |event| match event {
+        RowChange::DidUpdateCell { key, value } => {
+          key == "f1" && value.get_i64_value("level") == Some(2)
+        },
+        _ => false,
+      })
+      .await
+      .unwrap();
+    })
+    .await;
 }
 
 #[tokio::test]
 async fn observer_update_row_test() {
-  let database_test = Arc::new(create_database(1, "1").await);
-  let row_change_rx = database_test.subscribe_row_change().unwrap();
+  let local = LocalSet::new();
+  local
+    .run_until(async move {
+      let database_test = Arc::new(create_database(1, "1").await);
+      let row_change_rx = database_test.subscribe_row_change().unwrap();
 
-  let row_id = gen_row_id();
-  let cloned_database_test = database_test.clone();
-  tokio::spawn(async move {
-    sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id.clone(),
-        ..Default::default()
+      let row_id = gen_row_id();
+      let cloned_database_test = database_test.clone();
+      tokio::task::spawn_local(async move {
+        sleep(Duration::from_millis(300)).await;
+        cloned_database_test
+          .create_row(CreateRowParams {
+            id: row_id.clone(),
+            ..Default::default()
+          })
+          .unwrap();
+
+        cloned_database_test
+          .update_row(&row_id, |row| {
+            row.set_height(1000);
+          })
+          .await;
+      });
+
+      wait_for_specific_event(row_change_rx, |event| match event {
+        RowChange::DidUpdateHeight { value } => *value == 1000i32,
+        _ => false,
       })
+      .await
       .unwrap();
-
-    cloned_database_test.update_row(&row_id, |row| {
-      row.set_height(1000);
-    });
-  });
-
-  wait_for_specific_event(row_change_rx, |event| match event {
-    RowChange::DidUpdateHeight { value } => *value == 1000i32,
-    _ => false,
-  })
-  .await
-  .unwrap();
+    })
+    .await;
 }
 
 #[tokio::test]
 async fn observer_delete_row_test() {
-  let database_test = Arc::new(create_database(1, "1").await);
-  let view_change_rx = database_test.subscribe_view_change().unwrap();
+  let local = LocalSet::new();
+  local
+    .run_until(async move {
+      let database_test = Arc::new(create_database(1, "1").await);
+      let view_change_rx = database_test.subscribe_view_change().unwrap();
+      let row_id = gen_row_id();
+      let cloned_row_id = row_id.clone();
+      let cloned_database_test = database_test.clone();
+      tokio::task::spawn_local(async move {
+        sleep(Duration::from_millis(300)).await;
+        cloned_database_test
+          .create_row(CreateRowParams {
+            id: gen_row_id(),
+            ..Default::default()
+          })
+          .unwrap();
+        cloned_database_test
+          .create_row(CreateRowParams {
+            id: cloned_row_id.clone(),
+            ..Default::default()
+          })
+          .unwrap();
+        cloned_database_test.remove_row(&cloned_row_id).await;
+      });
 
-  let row_id = gen_row_id();
-  let cloned_row_id = row_id.clone();
-  let cloned_database_test = database_test.clone();
-  tokio::spawn(async move {
-    sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: gen_row_id(),
-        ..Default::default()
+      wait_for_specific_event(view_change_rx, |event| match event {
+        DatabaseViewChange::DidDeleteRowAtIndex { index } => {
+          assert_eq!(index.len(), 1);
+          index[0] == 1u32
+        },
+        _ => false,
       })
+      .await
       .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: cloned_row_id.clone(),
-        ..Default::default()
-      })
-      .unwrap();
-    cloned_database_test.remove_row(&cloned_row_id);
-  });
-
-  wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidDeleteRowAtIndex { index } => {
-      assert_eq!(index.len(), 1);
-      index[0] == 1u32
-    },
-    _ => false,
-  })
-  .await
-  .unwrap();
+    })
+    .await;
 }
 
 #[tokio::test]
 async fn observer_delete_consecutive_rows_test() {
-  let database_test = Arc::new(create_database(1, "1").await);
-  let view_change_rx = database_test.subscribe_view_change().unwrap();
+  let local = LocalSet::new();
+  local
+    .run_until(async move {
+      let database_test = Arc::new(create_database(1, "1").await);
+      let view_change_rx = database_test.subscribe_view_change().unwrap();
 
-  let row_id_1 = gen_row_id();
-  let row_id_2 = gen_row_id();
-  let row_id_3 = gen_row_id();
-  let row_id_4 = gen_row_id();
-  let cloned_database_test = database_test.clone();
-  tokio::spawn(async move {
-    sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_1.clone(),
-        ..Default::default()
-      })
-      .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_2.clone(),
-        ..Default::default()
-      })
-      .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_3.clone(),
-        ..Default::default()
-      })
-      .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_4.clone(),
-        ..Default::default()
-      })
-      .unwrap();
+      let row_id_1 = gen_row_id();
+      let row_id_2 = gen_row_id();
+      let row_id_3 = gen_row_id();
+      let row_id_4 = gen_row_id();
+      let cloned_database_test = database_test.clone();
+      tokio::task::spawn_local(async move {
+        sleep(Duration::from_millis(300)).await;
+        cloned_database_test
+          .create_row(CreateRowParams {
+            id: row_id_1.clone(),
+            ..Default::default()
+          })
+          .unwrap();
+        cloned_database_test
+          .create_row(CreateRowParams {
+            id: row_id_2.clone(),
+            ..Default::default()
+          })
+          .unwrap();
+        cloned_database_test
+          .create_row(CreateRowParams {
+            id: row_id_3.clone(),
+            ..Default::default()
+          })
+          .unwrap();
+        cloned_database_test
+          .create_row(CreateRowParams {
+            id: row_id_4.clone(),
+            ..Default::default()
+          })
+          .unwrap();
 
-    cloned_database_test.remove_rows(&[row_id_2, row_id_3]);
-  });
+        cloned_database_test
+          .remove_rows(&[row_id_2, row_id_3])
+          .await;
+      });
 
-  wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidDeleteRowAtIndex { index } => {
-      assert_eq!(index.len(), 2);
-      index[0] == 1u32 && index[1] == 2u32
-    },
-    _ => false,
-  })
-  .await
-  .unwrap();
+      wait_for_specific_event(view_change_rx, |event| match event {
+        DatabaseViewChange::DidDeleteRowAtIndex { index } => {
+          assert_eq!(index.len(), 2);
+          index[0] == 1u32 && index[1] == 2u32
+        },
+        _ => false,
+      })
+      .await
+      .unwrap();
+    })
+    .await;
 }
 #[tokio::test]
 async fn observer_delete_non_consecutive_rows_test() {
-  let database_test = Arc::new(create_database(1, "1").await);
-  let view_change_rx = database_test.subscribe_view_change().unwrap();
+  let local = LocalSet::new();
+  local
+    .run_until(async move {
+      let database_test = Arc::new(create_database(1, "1").await);
+      let view_change_rx = database_test.subscribe_view_change().unwrap();
+      let row_id_1 = gen_row_id();
+      let row_id_2 = gen_row_id();
+      let row_id_3 = gen_row_id();
+      let row_id_4 = gen_row_id();
+      let cloned_database_test = database_test.clone();
+      sleep(Duration::from_millis(300)).await;
+      cloned_database_test
+        .create_row(CreateRowParams {
+          id: row_id_1.clone(),
+          ..Default::default()
+        })
+        .unwrap();
+      cloned_database_test
+        .create_row(CreateRowParams {
+          id: row_id_2.clone(),
+          ..Default::default()
+        })
+        .unwrap();
+      cloned_database_test
+        .create_row(CreateRowParams {
+          id: row_id_3.clone(),
+          ..Default::default()
+        })
+        .unwrap();
+      cloned_database_test
+        .create_row(CreateRowParams {
+          id: row_id_4.clone(),
+          ..Default::default()
+        })
+        .unwrap();
 
-  let row_id_1 = gen_row_id();
-  let row_id_2 = gen_row_id();
-  let row_id_3 = gen_row_id();
-  let row_id_4 = gen_row_id();
-  let cloned_database_test = database_test.clone();
-  tokio::spawn(async move {
-    sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_1.clone(),
-        ..Default::default()
-      })
-      .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_2.clone(),
-        ..Default::default()
-      })
-      .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_3.clone(),
-        ..Default::default()
-      })
-      .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_4.clone(),
-        ..Default::default()
-      })
-      .unwrap();
+      cloned_database_test
+        .remove_rows(&[row_id_2, row_id_4])
+        .await;
 
-    cloned_database_test.remove_rows(&[row_id_2, row_id_4]);
-  });
-
-  wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidDeleteRowAtIndex { index } => {
-      assert_eq!(index.len(), 2);
-      index[0] == 1u32 && index[1] == 3u32
-    },
-    _ => false,
-  })
-  .await
-  .unwrap();
+      wait_for_specific_event(view_change_rx, |event| match event {
+        DatabaseViewChange::DidDeleteRowAtIndex { index } => {
+          assert_eq!(index.len(), 2);
+          index[0] == 1u32 && index[1] == 3u32
+        },
+        _ => false,
+      })
+      .await
+      .unwrap();
+    })
+    .await;
 }
 
 async fn wait_for_specific_event<F, T>(

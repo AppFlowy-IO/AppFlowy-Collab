@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use lru::LruCache;
 use std::collections::HashMap;
 use std::future::Future;
@@ -10,8 +9,9 @@ use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{Collab, Update};
 use collab_entity::CollabType;
+use collab_plugins::local_storage::kv::snapshot::CollabSnapshot;
+
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::snapshot::{CollabSnapshot, SnapshotAction};
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
@@ -31,7 +31,8 @@ pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'stati
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
 /// different [CollabPlugin]s to the [MutexCollab] to support different features.
 ///
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait DatabaseCollabService: Send + Sync + 'static {
   fn get_collab_doc_state(
     &self,
@@ -111,7 +112,10 @@ impl WorkspaceDatabase {
     match database_collab {
       None => {
         let mut collab_doc_state = CollabDocState::default();
-        let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
+        let is_exist = collab_db
+          .is_exist(self.uid, database_id)
+          .await
+          .unwrap_or(false);
         if !is_exist {
           // Try to load the database from the remote. The database doesn't exist in the local only
           // when the user has deleted the database or the database is using a remote storage.
@@ -269,49 +273,40 @@ impl WorkspaceDatabase {
             record.linked_views.push(params.view_id.clone());
           }
         });
-      database.lock().create_linked_view(params)
+      database.lock().await.create_linked_view(params)
     } else {
       Err(DatabaseError::DatabaseNotExist)
     }
   }
 
   /// Delete the database with the given database id.
-  pub fn delete_database(&self, database_id: &str) {
+  pub async fn delete_database(&self, database_id: &str) {
     self.database_meta_list().delete_database(database_id);
     if let Some(collab_db) = self.collab_db.upgrade() {
-      let _ = collab_db.with_write_txn(|w_db_txn| {
-        match w_db_txn.delete_doc(self.uid, database_id) {
-          Ok(_) => {},
-          Err(err) => tracing::error!("🔴Delete database failed: {}", err),
-        }
-        Ok(())
-      });
+      if let Err(err) = collab_db.delete_doc(self.uid, database_id).await {
+        error!("Delete database failed: {}", err);
+      }
     }
-    if let Some(database) = self.databases.lock().pop(database_id) {
-      database.lock().close();
+
+    let database = self.databases.lock().pop(database_id);
+    if let Some(database) = database {
+      if let Ok(lock_guard) = database.try_lock() {
+        lock_guard.close();
+      }
     }
   }
 
   /// Close the database with the given database id.
-  pub fn close_database(&self, database_id: &str) {
-    if let Some(database) = self.databases.lock().pop(database_id) {
-      database.lock().close();
+  pub async fn close_database(&self, database_id: &str) {
+    let database = self.databases.lock().pop(database_id);
+    if let Some(database) = database {
+      database.lock().await.close();
     }
   }
 
   /// Return all the database records.
   pub fn get_all_database_meta(&self) -> Vec<DatabaseMeta> {
     self.database_meta_list().get_all_database_meta()
-  }
-
-  pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
-    match self.collab_db.upgrade() {
-      None => vec![],
-      Some(collab_db) => {
-        let store = collab_db.read_txn();
-        store.get_snapshots(self.uid, database_id)
-      },
-    }
   }
 
   pub fn restore_database_from_snapshot(
@@ -340,10 +335,11 @@ impl WorkspaceDatabase {
   /// If the view is the inline view, the database will be deleted too.
   pub async fn delete_view(&self, database_id: &str, view_id: &str) {
     if let Some(database) = self.get_database(database_id).await {
-      database.lock().delete_view(view_id);
-      if database.lock().is_inline_view(view_id) {
+      database.lock().await.delete_view(view_id);
+      let is_inline_view = database.lock().await.is_inline_view(view_id);
+      if is_inline_view {
         // Delete the database if the view is the inline view.
-        self.delete_database(database_id);
+        self.delete_database(database_id).await;
       }
     }
   }
@@ -365,7 +361,7 @@ impl WorkspaceDatabase {
     view_id: &str,
   ) -> Result<DatabaseData, DatabaseError> {
     if let Some(database) = self.get_database_with_view_id(view_id).await {
-      let data = database.lock().duplicate_database();
+      let data = database.lock().await.duplicate_database().await;
       Ok(data)
     } else {
       Err(DatabaseError::DatabaseNotExist)
