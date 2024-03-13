@@ -929,6 +929,27 @@ impl Database {
     });
   }
 
+  /// Sets the filters of a database view. Requires two generics to work around the situation where
+  /// `Into<AnyMap>` is only implemented for `&T`, not `T` itself. (alternatively, `From<&T>` is
+  /// implemented for `AnyMap`, but not `From<T>`).
+  ///
+  /// * `T`: needs to be able to do `AnyMap::from(&T)`.
+  /// * `U`: needs to implement `Into<AnyMap>`, could be just an identity conversion.
+  pub fn save_filters<T, U>(&self, view_id: &str, filters: &[T])
+  where
+    U: for<'a> From<&'a T> + Into<FilterMap>,
+  {
+    self.views.update_database_view(view_id, |update| {
+      update.set_filters(
+        filters
+          .iter()
+          .map(|filter| U::from(filter))
+          .map(Into::into)
+          .collect(),
+      );
+    });
+  }
+
   pub fn get_layout_setting<T: From<LayoutSetting>>(
     &self,
     view_id: &str,
