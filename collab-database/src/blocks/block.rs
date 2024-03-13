@@ -119,7 +119,8 @@ impl Block {
           async_create_row(uid, row, cache, collab_db, row_change_tx, collab_service).await;
         });
       } else {
-        self.create_row(row);
+        let row_order = self.create_row(row);
+        row_orders.push(row_order);
       }
     }
 
