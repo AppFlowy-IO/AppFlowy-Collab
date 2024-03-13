@@ -1,22 +1,21 @@
-use std::collections::HashSet;
-
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::core::value::YrsValueExtension;
 use collab::preclude::{
   Any, Array, ArrayRefWrapper, Collab, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut,
   YrsValue,
 };
+use std::collections::HashSet;
 
 use crate::database::timestamp;
 
 const DATABASES: &str = "databases";
 
-/// Used to store list of [DatabaseViewTracker].
-pub struct DatabaseViewTrackerList {
+/// Used to store list of [DatabaseMeta].
+pub struct DatabaseMetaList {
   array_ref: ArrayRefWrapper,
 }
 
-impl DatabaseViewTrackerList {
+impl DatabaseMetaList {
   pub fn new(array_ref: ArrayRefWrapper) -> Self {
     Self { array_ref }
   }
@@ -36,16 +35,17 @@ impl DatabaseViewTrackerList {
     Self::new(databases)
   }
 
-  /// Create a new [DatabaseViewTracker] for the given database id and view id
+  /// Create a new [DatabaseMeta] for the given database id and view id
   /// use [Self::update_database] to attach more views to the existing database.
   ///
   pub fn add_database(&self, database_id: &str, view_ids: Vec<String>) {
     self.array_ref.with_transact_mut(|txn| {
+      // Use HashSet to remove duplicates
       let linked_views: HashSet<String> = view_ids.into_iter().collect();
-      let record = DatabaseViewTracker {
+      let record = DatabaseMeta {
         database_id: database_id.to_string(),
         created_at: timestamp(),
-        linked_views,
+        linked_views: linked_views.into_iter().collect(),
       };
       let map_ref = self.array_ref.insert_map_with_txn(txn, None);
       record.fill_map_ref(txn, &map_ref);
@@ -53,7 +53,7 @@ impl DatabaseViewTrackerList {
   }
 
   /// Update the database by the given id
-  pub fn update_database(&self, database_id: &str, mut f: impl FnMut(&mut DatabaseViewTracker)) {
+  pub fn update_database(&self, database_id: &str, mut f: impl FnMut(&mut DatabaseMeta)) {
     self.array_ref.with_transact_mut(|txn| {
       if let Some(index) = self.database_index_from_id(txn, database_id) {
         if let Some(Some(map_ref)) = self
@@ -61,7 +61,7 @@ impl DatabaseViewTrackerList {
           .get(txn, index)
           .map(|value| value.to_ymap().cloned())
         {
-          if let Some(mut record) = DatabaseViewTracker::from_map_ref(txn, &map_ref) {
+          if let Some(mut record) = DatabaseMeta::from_map_ref(txn, &map_ref) {
             f(&mut record);
             self.array_ref.remove(txn, index);
             let map_ref = self
@@ -83,11 +83,11 @@ impl DatabaseViewTrackerList {
     });
   }
 
-  /// Return all the database view trackers
-  pub fn get_all_database_tracker(&self) -> Vec<DatabaseViewTracker> {
+  /// Return all the database meta
+  pub fn get_all_database_meta(&self) -> Vec<DatabaseMeta> {
     self
       .array_ref
-      .with_transact_mut(|txn| self.get_all_database_view_tracker_with_txn(txn))
+      .with_transact_mut(|txn| self.get_all_database_meta_with_txn(txn))
   }
 
   /// Test if the database with the given id exists
@@ -103,30 +103,24 @@ impl DatabaseViewTrackerList {
   }
 
   /// Return all databases with a Transaction
-  pub fn get_all_database_view_tracker_with_txn<T: ReadTxn>(
-    &self,
-    txn: &T,
-  ) -> Vec<DatabaseViewTracker> {
+  pub fn get_all_database_meta_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseMeta> {
     self
       .array_ref
       .iter(txn)
       .flat_map(|value| {
         let map_ref = value.to_ymap()?;
-        DatabaseViewTracker::from_map_ref(txn, map_ref)
+        DatabaseMeta::from_map_ref(txn, map_ref)
       })
       .collect()
   }
 
-  /// Return the a [DatabaseViewTracker] with the given view id
-  pub fn get_database_view_tracker_with_view_id(
-    &self,
-    view_id: &str,
-  ) -> Option<DatabaseViewTracker> {
+  /// Return the a [DatabaseMeta] with the given view id
+  pub fn get_database_meta_with_view_id(&self, view_id: &str) -> Option<DatabaseMeta> {
     let txn = self.array_ref.transact();
-    let all = self.get_all_database_view_tracker_with_txn(&txn);
+    let all = self.get_all_database_meta_with_txn(&txn);
     all
       .into_iter()
-      .find(|record| record.linked_views.contains(view_id))
+      .find(|record| record.linked_views.iter().any(|id| id == view_id))
   }
 
   fn database_index_from_id<T: ReadTxn>(&self, txn: &T, database_id: &str) -> Option<u32> {
@@ -141,21 +135,21 @@ impl DatabaseViewTrackerList {
   }
 }
 
-/// `DatabaseViewTracker` is a structure used to manage and track the metadata of views associated with a particular database.
+/// [DatabaseMeta] is a structure used to manage and track the metadata of views associated with a particular database.
 /// It's primarily used to maintain a record of all views that are attached to a database, facilitating easier tracking and management.
 ///
 #[derive(Clone, Debug)]
-pub struct DatabaseViewTracker {
+pub struct DatabaseMeta {
   pub database_id: String,
   pub created_at: i64,
-  pub linked_views: HashSet<String>,
+  pub linked_views: Vec<String>,
 }
 
 const DATABASE_TRACKER_ID: &str = "database_id";
 const DATABASE_RECORD_CREATED_AT: &str = "created_at";
 const DATABASE_RECORD_VIEWS: &str = "views";
 
-impl DatabaseViewTracker {
+impl DatabaseMeta {
   fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     map_ref.insert_str_with_txn(txn, DATABASE_TRACKER_ID, self.database_id);
     map_ref.insert_str_with_txn(txn, DATABASE_RECORD_CREATED_AT, self.created_at);
@@ -163,22 +157,21 @@ impl DatabaseViewTracker {
     map_ref.create_array_with_txn(txn, DATABASE_RECORD_VIEWS, views);
   }
 
-  #[allow(clippy::needless_collect)]
   fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<Self> {
-    let id = map_ref.get_str_with_txn(txn, DATABASE_TRACKER_ID)?;
+    let database_id = map_ref.get_str_with_txn(txn, DATABASE_TRACKER_ID)?;
     let created_at = map_ref
       .get_i64_with_txn(txn, DATABASE_RECORD_CREATED_AT)
       .unwrap_or_default();
-    let views = map_ref
+    let linked_views = map_ref
       .get_array_ref_with_txn(txn, DATABASE_RECORD_VIEWS)?
       .iter(txn)
       .map(|value| value.to_string(txn))
-      .collect::<Vec<String>>();
+      .collect();
 
     Some(Self {
-      database_id: id,
+      database_id,
       created_at,
-      linked_views: views.into_iter().collect(),
+      linked_views,
     })
   }
 }
