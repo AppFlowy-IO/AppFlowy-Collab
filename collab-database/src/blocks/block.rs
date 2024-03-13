@@ -100,22 +100,27 @@ impl Block {
   where
     T: Into<Row> + Send,
   {
+    let create_async = rows.len() > 100;
     let mut row_orders = Vec::with_capacity(rows.len());
     for row in rows {
-      let row = row.into();
-      row_orders.push(RowOrder {
-        id: row.id.clone(),
-        height: row.height,
-      });
+      if create_async {
+        let row = row.into();
+        row_orders.push(RowOrder {
+          id: row.id.clone(),
+          height: row.height,
+        });
 
-      let uid = self.uid;
-      let collab_db = self.collab_db.clone();
-      let row_change_tx = self.row_change_tx.clone();
-      let collab_service = self.collab_service.clone();
-      let cache = self.cache.clone();
-      tokio::spawn(async move {
-        async_create_row(uid, row, cache, collab_db, row_change_tx, collab_service).await;
-      });
+        let uid = self.uid;
+        let collab_db = self.collab_db.clone();
+        let row_change_tx = self.row_change_tx.clone();
+        let collab_service = self.collab_service.clone();
+        let cache = self.cache.clone();
+        tokio::spawn(async move {
+          async_create_row(uid, row, cache, collab_db, row_change_tx, collab_service).await;
+        });
+      } else {
+        self.create_row(row);
+      }
     }
 
     row_orders
