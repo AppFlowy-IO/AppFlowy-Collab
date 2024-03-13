@@ -13,8 +13,8 @@ use crate::error::FolderError;
 use crate::folder_observe::ViewChangeSender;
 use crate::section::{Section, SectionItem, SectionMap, SectionOperation};
 use crate::{
-  subscribe_folder_change, FolderData, SectionChangeSender, SectionsByUid, TrashInfo, View,
-  ViewRelations, ViewsMap, Workspace,
+  subscribe_folder_change, FolderData, SectionChangeSender, TrashInfo, View, ViewRelations,
+  ViewsMap, Workspace,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -539,7 +539,7 @@ impl Folder {
       .map(|op| op.get_sections())
       .unwrap_or_default()
       .into_iter()
-      .flat_map(|(_user_id, items)| items.into_iter().map(|item| item))
+      .flat_map(|(_user_id, items)| items)
       .collect::<Vec<_>>();
     private_views
   }
