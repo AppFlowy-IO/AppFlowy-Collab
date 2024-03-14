@@ -121,6 +121,11 @@ impl Folder {
     create_folder(uid, collab, notifier, Some(initial_folder_data))
   }
 
+  #[cfg(feature = "test_utils")]
+  pub fn get_collab(&self) -> &Arc<MutexCollab> {
+    &self.inner
+  }
+
   pub fn from_collab_doc_state<T: Into<UserId>>(
     uid: T,
     origin: CollabOrigin,

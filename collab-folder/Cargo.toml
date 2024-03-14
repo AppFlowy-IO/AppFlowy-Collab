@@ -35,3 +35,5 @@ tracing-subscriber = {version = "0.3.3", features = ["env-filter"]}
 walkdir = "2.3.2"
 zip = "0.6.6"
 
+[features]
+test_utils = []
