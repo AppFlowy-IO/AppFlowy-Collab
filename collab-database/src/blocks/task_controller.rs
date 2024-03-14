@@ -172,9 +172,14 @@ fn save_row(
     ) {
       Ok(collab) => {
         let collab_lock_guard = collab.lock();
-        let txn = collab_lock_guard.transact();
+        let encode_collab = collab_lock_guard.encode_collab_v1();
         let object_id = row_id.as_ref();
-        if let Err(e) = write_txn.create_new_doc(uid, object_id, &txn) {
+        if let Err(e) = write_txn.flush_doc(
+          uid,
+          object_id,
+          encode_collab.state_vector.to_vec(),
+          encode_collab.doc_state.to_vec(),
+        ) {
           tracing::error!(
             "{} failed to save the database row collab: {:?}",
             row_id.as_ref(),
@@ -182,6 +187,7 @@ fn save_row(
           );
         }
 
+        let txn = collab_lock_guard.transact();
         let row_detail = RowDetail::from_collab(&collab_lock_guard, &txn);
         if row_detail.is_none() {
           tracing::error!("{} doesn't have any row information in it", row_id.as_ref());
