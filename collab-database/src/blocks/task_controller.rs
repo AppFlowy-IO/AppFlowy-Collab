@@ -5,7 +5,6 @@ use std::sync::{Arc, Weak};
 use async_trait::async_trait;
 use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::core::origin::CollabOrigin;
-use collab::preclude::Transact;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
@@ -15,7 +14,7 @@ use tokio::sync::watch;
 use crate::blocks::queue::{
   PendingTask, RequestPayload, TaskHandler, TaskQueue, TaskQueueRunner, TaskState,
 };
-use crate::rows::{DatabaseRow, RowDetail, RowId};
+use crate::rows::{RowDetail, RowId};
 use crate::user::DatabaseCollabService;
 
 /// A [BlockTaskController] is used to control how the [BlockTask]s are executed.
@@ -181,7 +180,7 @@ fn save_row(
 
         let row_detail = RowDetail::from_collab(&collab_lock_guard, &txn);
         if row_detail.is_none() {
-          tracing::error!("collab doesn't have any row information in it");
+          tracing::error!("{} doesn't have any row information in it", row_id.as_ref());
         }
         Ok(row_detail)
       },
@@ -194,13 +193,14 @@ fn save_row(
   });
 
   match row {
-    Ok(None) => {
-      tracing::error!("Unexpected empty row. The row should not be empty at this point.");
-      None
-    },
+    Ok(None) => None,
     Ok(row) => row,
     Err(e) => {
-      tracing::error!("Failed to save the database row collab: {:?}", e);
+      tracing::error!(
+        "{} failed to save the database row collab: {:?}",
+        row_id.as_ref(),
+        e
+      );
       None
     },
   }
