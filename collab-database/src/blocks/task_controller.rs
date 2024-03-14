@@ -16,7 +16,7 @@ use tokio::sync::watch;
 use crate::blocks::queue::{
   PendingTask, RequestPayload, TaskHandler, TaskQueue, TaskQueueRunner, TaskState,
 };
-use crate::rows::{RowDetail, RowId};
+use crate::rows::{DatabaseRow, RowDetail, RowId};
 use crate::user::DatabaseCollabService;
 
 /// A [BlockTaskController] is used to control how the [BlockTask]s are executed.
@@ -173,24 +173,21 @@ fn save_row<R: AsRef<str>>(
       vec![],
     ) {
       Ok(collab) => {
-        let collab_guard =
-          collab
-            .try_lock_for(Duration::from_secs(1))
-            .ok_or(PersistenceError::Internal(anyhow!(
-              "Timeout while trying to acquire lock for saving database row"
-            )))?;
-
-        let txn = collab_guard.try_transaction().map_err(|err| {
-          PersistenceError::Internal(anyhow!(
-            "Failed to get transaction for saving database row: {:?}",
-            err
-          ))
-        })?;
+        let collab = Arc::new(collab);
+        let weak_collab_db = Arc::downgrade(collab_db);
+        let row = DatabaseRow::new(
+          uid,
+          RowId::from(row_id.as_ref()),
+          weak_collab_db,
+          collab,
+          None,
+        );
+        let txn = row.transact();
         let object_id = row_id.as_ref();
         if let Err(e) = write_txn.create_new_doc(uid, object_id, &txn) {
           tracing::error!("Failed to save the database row collab: {:?}", e);
         }
-        Ok(RowDetail::from_collab(&collab_guard, &txn))
+        Ok(RowDetail::from_collab(&row, &txn))
       },
 
       Err(e) => {

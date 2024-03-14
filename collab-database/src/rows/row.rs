@@ -138,6 +138,10 @@ impl DatabaseRow {
     }
   }
 
+  pub fn transact(&self) -> Transaction {
+    self.collab.lock().transact()
+  }
+
   pub fn get_row(&self) -> Option<Row> {
     let collab = self.collab.try_lock()?;
     let txn = collab.try_transaction().ok()?;
@@ -232,7 +236,8 @@ impl RowDetail {
       document_id,
     })
   }
-  pub fn from_collab(collab: &Collab, txn: &Transaction) -> Option<Self> {
+  pub fn from_collab(row: &DatabaseRow, txn: &Transaction) -> Option<Self> {
+    let collab = row.collab.lock();
     let data = collab.get_map_with_txn(txn, vec![DATA])?;
     let meta = collab.get_map_with_txn(txn, vec![META])?;
     let row = row_from_map_ref(&data, &meta, txn)?;
