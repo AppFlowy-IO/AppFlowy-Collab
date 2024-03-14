@@ -175,7 +175,11 @@ fn save_row(
         let txn = collab_lock_guard.transact();
         let object_id = row_id.as_ref();
         if let Err(e) = write_txn.create_new_doc(uid, object_id, &txn) {
-          tracing::error!("Failed to save the database row collab: {:?}", e);
+          tracing::error!(
+            "{} failed to save the database row collab: {:?}",
+            row_id.as_ref(),
+            e
+          );
         }
 
         let row_detail = RowDetail::from_collab(&collab_lock_guard, &txn);
