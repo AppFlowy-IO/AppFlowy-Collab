@@ -1,6 +1,7 @@
 use crate::preclude::{CollabContext, YrsDelta};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use unicode_segmentation::UnicodeSegmentation;
 use yrs::types::text::{TextEvent, YChange};
 use yrs::types::{Attrs, Delta};
 use yrs::{Any, ReadTxn, Subscription, Text, TextRef, Transaction, TransactionMut};
@@ -47,7 +48,9 @@ impl TextRefWrapper {
       match d {
         Delta::Inserted(content, attrs) => {
           let value = content.to_string(txn);
-          let len = value.len() as u32;
+          // don't use value.len() because it's not represent the unicode graphemes
+          // for example, "a̐" has 1 grapheme but value.len() is 3, "中文" has 2 graphemes but value.len() is 6
+          let len = value.graphemes(true).count() as u32;
           if let Some(attrs) = attrs {
             self
               .text_ref

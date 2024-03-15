@@ -161,6 +161,34 @@ async fn apply_mark_delta_test() {
 }
 
 #[tokio::test]
+async fn apply_chinese_ime_delta_test() {
+  let test = BlockTestCore::new().await;
+  // convert zhong'wen to 中文
+  let origin_delta = json!([{"insert": "z"}]).to_string();
+  let text_id = test.create_text(origin_delta);
+  let deltas = vec![
+    json!([{"retain": 1}, {"insert": "h"}]).to_string(),
+    json!([{"retain": 2}, {"insert": "o"}]).to_string(),
+    json!([{"retain": 3}, {"insert": "n"}]).to_string(),
+    json!([{"retain": 4}, {"insert": "g"}]).to_string(),
+    json!([{"retain": 5}, {"insert": "'"}]).to_string(),
+    json!([{"retain": 6}, {"insert": "w"}]).to_string(),
+    json!([{"retain": 7}, {"insert": "e"}]).to_string(),
+    json!([{"retain": 8}, {"insert": "n"}]).to_string(),
+    json!([{"insert": "中文"}, {"delete": 9}]).to_string(),
+  ];
+  for delta in deltas {
+    test.apply_text_delta(&text_id, delta);
+  }
+  let delta = test.get_text_delta_with_text_id(&text_id);
+  let expect = json!([{"insert": "中文"}]).to_string();
+  assert_eq!(
+    deserialize_text_delta(&delta).unwrap(),
+    deserialize_text_delta(&expect).unwrap()
+  );
+}
+
+#[tokio::test]
 async fn apply_delete_chinese_delta_test() {
   let test = BlockTestCore::new().await;
   let origin_delta =
