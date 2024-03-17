@@ -13,17 +13,13 @@ use serde_repr::*;
 
 use crate::folder_observe::ViewChangeSender;
 use crate::section::{Section, SectionItem, SectionMap};
-use crate::{
-  impl_any_update, impl_i64_update, impl_option_i64_update, impl_option_str_update,
-  impl_str_update, UserId,
-};
+use crate::{impl_any_update, impl_i64_update, impl_option_i64_update, impl_str_update, UserId};
 use crate::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
 
 const VIEW_ID: &str = "id";
 const VIEW_NAME: &str = "name";
 const VIEW_PARENT_ID: &str = "bid";
 const VIEW_DESC: &str = "desc";
-const VIEW_DATABASE_ID: &str = "database_id";
 const VIEW_LAYOUT: &str = "layout";
 const VIEW_CREATE_AT: &str = "created_at";
 const VIEW_CREATED_BY: &str = "created_by";
@@ -535,11 +531,6 @@ pub struct ViewUpdate<'a, 'b, 'c> {
 impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   impl_str_update!(set_name, set_name_if_not_none, VIEW_NAME);
   impl_str_update!(set_bid, set_bid_if_not_none, VIEW_PARENT_ID);
-  impl_option_str_update!(
-    set_database_id,
-    set_database_id_if_not_none,
-    VIEW_DATABASE_ID
-  );
   impl_str_update!(set_desc, set_desc_if_not_none, VIEW_DESC);
   impl_any_update!(set_layout, set_layout_if_not_none, VIEW_LAYOUT, ViewLayout);
   impl_i64_update!(set_created_at, set_created_at_if_not_none, VIEW_CREATE_AT);
@@ -677,6 +668,7 @@ pub struct ViewIndexContent {
   pub name: String,
   pub is_favorite: bool,
   pub layout: ViewLayout,
+  pub icon: Option<ViewIcon>,
 }
 
 impl From<&View> for ViewIndexContent {
@@ -687,6 +679,7 @@ impl From<&View> for ViewIndexContent {
       name: value.name.clone(),
       is_favorite: value.is_favorite,
       layout: value.layout.clone(),
+      icon: value.icon.clone(),
     }
   }
 }

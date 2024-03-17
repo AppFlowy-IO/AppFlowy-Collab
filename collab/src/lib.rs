@@ -16,7 +16,6 @@ macro_rules! if_wasm {
 
 pub mod core;
 pub mod error;
-pub mod sync_protocol;
 pub mod util;
 
 pub mod preclude {

@@ -121,6 +121,11 @@ impl Database {
       .map(|notifier| notifier.view_change_tx.subscribe())
   }
 
+  #[cfg(debug_assertions)]
+  pub fn get_collab(&self) -> &Arc<MutexCollab> {
+    &self.inner
+  }
+
   pub fn load_all_rows(&self) {
     let row_ids = self
       .get_inline_row_orders()
@@ -924,6 +929,27 @@ impl Database {
     });
   }
 
+  /// Sets the filters of a database view. Requires two generics to work around the situation where
+  /// `Into<AnyMap>` is only implemented for `&T`, not `T` itself. (alternatively, `From<&T>` is
+  /// implemented for `AnyMap`, but not `From<T>`).
+  ///
+  /// * `T`: needs to be able to do `AnyMap::from(&T)`.
+  /// * `U`: needs to implement `Into<AnyMap>`, could be just an identity conversion.
+  pub fn save_filters<T, U>(&self, view_id: &str, filters: &[T])
+  where
+    U: for<'a> From<&'a T> + Into<FilterMap>,
+  {
+    self.views.update_database_view(view_id, |update| {
+      update.set_filters(
+        filters
+          .iter()
+          .map(|filter| U::from(filter))
+          .map(Into::into)
+          .collect(),
+      );
+    });
+  }
+
   pub fn get_layout_setting<T: From<LayoutSetting>>(
     &self,
     view_id: &str,
@@ -1377,4 +1403,24 @@ where
 pub fn is_database_collab(collab: &Collab) -> bool {
   let txn = collab.transact();
   collab.get_map_with_txn(&txn, vec![DATABASE]).is_some()
+}
+
+/// Quickly retrieve the inline view ID of a database.
+/// Use this function when instantiating a [Database] object is too resource-intensive,
+/// and you need the inline view ID of a specific database.
+pub fn get_inline_view_id(collab: &Collab) -> Option<String> {
+  let txn = collab.transact();
+  let metas = collab.get_map_with_txn(&txn, vec![DATABASE, METAS])?;
+  let meta = MetaMap::new(metas);
+  meta.get_inline_view_with_txn(&txn)
+}
+
+/// Quickly retrieve database views meta.
+/// Use this function when instantiating a [Database] object is too resource-intensive,
+/// and you need the views meta of a specific database.
+pub fn get_database_views_meta(collab: &Collab) -> Vec<DatabaseViewMeta> {
+  let txn = collab.transact();
+  let views = collab.get_map_with_txn(&txn, vec![DATABASE, VIEWS]);
+  let views = ViewMap::new(views.unwrap(), None);
+  views.get_all_views_meta_with_txn(&txn)
 }

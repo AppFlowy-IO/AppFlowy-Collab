@@ -694,3 +694,11 @@ impl From<&Document> for DocumentIndexContent {
     Self { page_id, text }
   }
 }
+
+pub fn check_document_is_valid(collab: &Collab) -> Result<(), DocumentError> {
+  let txn = collab.transact();
+  collab
+    .get_map_with_txn(&txn, vec![ROOT])
+    .ok_or_else(|| DocumentError::NoRequiredData)?;
+  Ok(())
+}

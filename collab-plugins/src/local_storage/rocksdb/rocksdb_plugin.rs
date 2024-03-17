@@ -5,12 +5,13 @@ use std::sync::{Arc, Weak};
 
 use crate::CollabKVDB;
 
+use collab::core::awareness::{AwarenessUpdate, Event};
 use collab::core::collab::make_yrs_doc;
 use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error};
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
 
@@ -116,7 +117,6 @@ impl RocksdbDiskPlugin {
     }
   }
 
-  #[instrument(skip_all)]
   fn flush_doc(&self, db: &Arc<CollabKVDB>, object_id: &str) {
     let _ = db.with_write_txn(|w_db_txn| {
       let doc = make_yrs_doc(false);
@@ -204,6 +204,15 @@ impl CollabPlugin for RocksdbDiskPlugin {
     } else {
       tracing::warn!("collab_db is dropped");
     };
+  }
+
+  fn receive_local_state(
+    &self,
+    _origin: &CollabOrigin,
+    _object_id: &str,
+    _event: &Event,
+    _update: &AwarenessUpdate,
+  ) {
   }
 
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}

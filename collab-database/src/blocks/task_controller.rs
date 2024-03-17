@@ -1,15 +1,13 @@
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Weak};
-use std::time::Duration;
 
-use anyhow::anyhow;
 use async_trait::async_trait;
 use collab::core::collab::{CollabDocState, MutexCollab};
 use collab::core::origin::CollabOrigin;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::{KVTransactionDB, PersistenceError};
+use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
 use tokio::sync::watch;
 
@@ -137,7 +135,7 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
         {
           let mut row_details = vec![];
           for (oid, updates) in updates_by_oid {
-            if let Some(row_detail) = save_row(&collab_db, updates, *uid, oid) {
+            if let Some(row_detail) = save_row(&collab_db, updates, *uid, &RowId::from(oid)) {
               row_details.push(row_detail);
             }
           }
@@ -155,11 +153,11 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
   }
 }
 
-fn save_row<R: AsRef<str>>(
+fn save_row(
   collab_db: &Arc<CollabKVDB>,
   collab_doc_state: CollabDocState,
   uid: i64,
-  row_id: R,
+  row_id: &RowId,
 ) -> Option<RowDetail> {
   if collab_doc_state.is_empty() {
     tracing::error!("Unexpected empty row: {} collab update", row_id.as_ref());
@@ -174,41 +172,46 @@ fn save_row<R: AsRef<str>>(
       false,
     ) {
       Ok(collab) => {
-        let collab_guard =
-          collab
-            .try_lock_for(Duration::from_secs(1))
-            .ok_or(PersistenceError::Internal(anyhow!(
-              "Timeout while trying to acquire lock for saving database row"
-            )))?;
-
-        let txn = collab_guard.try_transaction().map_err(|err| {
-          PersistenceError::Internal(anyhow!(
-            "Failed to get transaction for saving database row: {:?}",
-            err
-          ))
-        })?;
+        let collab_lock_guard = collab.lock();
+        let encode_collab = collab_lock_guard.encode_collab_v1();
         let object_id = row_id.as_ref();
-        if let Err(e) = write_txn.create_new_doc(uid, object_id, &txn) {
-          tracing::error!("Failed to save the database row collab: {:?}", e);
+        if let Err(e) = write_txn.flush_doc(
+          uid,
+          object_id,
+          encode_collab.state_vector.to_vec(),
+          encode_collab.doc_state.to_vec(),
+        ) {
+          tracing::error!(
+            "{} failed to save the database row collab: {:?}",
+            row_id.as_ref(),
+            e
+          );
         }
-        Ok(RowDetail::from_collab(&collab_guard, &txn))
+
+        let txn = collab_lock_guard.transact();
+        let row_detail = RowDetail::from_collab(&collab_lock_guard, &txn);
+        if row_detail.is_none() {
+          tracing::error!("{} doesn't have any row information in it", row_id.as_ref());
+        }
+        Ok(row_detail)
       },
 
       Err(e) => {
-        tracing::error!("Failed to create database row collab: {:?}", e);
+        tracing::error!("Failed to deserialize doc state to row: {:?}", e);
         Ok(None)
       },
     }
   });
 
   match row {
-    Ok(None) => {
-      tracing::error!("Unexpected empty row. The row should not be empty at this point.");
-      None
-    },
+    Ok(None) => None,
     Ok(row) => row,
     Err(e) => {
-      tracing::error!("Failed to save the database row collab: {:?}", e);
+      tracing::error!(
+        "{} failed to save the database row collab: {:?}",
+        row_id.as_ref(),
+        e
+      );
       None
     },
   }
