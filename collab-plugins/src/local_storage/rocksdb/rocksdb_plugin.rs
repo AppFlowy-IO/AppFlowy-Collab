@@ -119,7 +119,7 @@ impl RocksdbDiskPlugin {
 
   fn flush_doc(&self, db: &Arc<CollabKVDB>, object_id: &str) {
     let _ = db.with_write_txn(|w_db_txn| {
-      let doc = make_yrs_doc();
+      let doc = make_yrs_doc(false);
       w_db_txn.load_doc_with_txn(self.uid, object_id, &mut doc.transact_mut())?;
       if let Ok(read_txn) = doc.try_transact() {
         let doc_state = read_txn.encode_state_as_update_v1(&StateVector::default());

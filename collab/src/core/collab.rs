@@ -96,10 +96,9 @@ impl Drop for Collab {
   }
 }
 
-pub fn make_yrs_doc() -> Doc {
-  let skip_gc = cfg!(feature = "skip_gc");
+pub fn make_yrs_doc(skp_gc: bool) -> Doc {
   Doc::with_options(Options {
-    skip_gc,
+    skip_gc: skp_gc,
     offset_kind: OffsetKind::Utf16,
     ..Options::default()
   })
@@ -111,9 +110,10 @@ impl Collab {
     object_id: T,
     device_id: impl ToString,
     plugins: Vec<Box<dyn CollabPlugin>>,
+    skip_gc: bool,
   ) -> Collab {
     let origin = CollabClient::new(uid, device_id);
-    Self::new_with_origin(CollabOrigin::Client(origin), object_id, plugins)
+    Self::new_with_origin(CollabOrigin::Client(origin), object_id, plugins, skip_gc)
   }
 
   pub fn new_with_doc_state(
@@ -121,8 +121,9 @@ impl Collab {
     object_id: &str,
     collab_doc_state: CollabDocState,
     plugins: Vec<Box<dyn CollabPlugin>>,
+    skip_gc: bool,
   ) -> Result<Self, CollabError> {
-    let collab = Self::new_with_origin(origin, object_id, plugins);
+    let collab = Self::new_with_origin(origin, object_id, plugins, skip_gc);
     if !collab_doc_state.is_empty() {
       let mut txn = collab.origin_transact_mut();
       let decoded_update = Update::decode_v1(&collab_doc_state)?;
@@ -135,9 +136,10 @@ impl Collab {
     origin: CollabOrigin,
     object_id: T,
     plugins: Vec<Box<dyn CollabPlugin>>,
+    skip_gc: bool,
   ) -> Collab {
     let object_id = object_id.as_ref().to_string();
-    let doc = make_yrs_doc();
+    let doc = make_yrs_doc(skip_gc);
     let data = doc.get_or_insert_map(DATA_SECTION);
     let meta = doc.get_or_insert_map(META_SECTION);
     let undo_manager = Mutex::new(None);
@@ -757,6 +759,7 @@ pub struct CollabBuilder {
   plugins: Vec<Box<dyn CollabPlugin>>,
   object_id: String,
   doc_state: CollabDocState,
+  skip_gc: bool,
 }
 
 /// The raw data of a collab document. It is a list of updates. Each of them can be parsed by
@@ -772,6 +775,7 @@ impl CollabBuilder {
       object_id: object_id.to_string(),
       device_id: "".to_string(),
       doc_state: vec![],
+      skip_gc: true,
     }
   }
 
@@ -796,9 +800,20 @@ impl CollabBuilder {
     self
   }
 
+  pub fn with_skip_gc(mut self, skip_gc: bool) -> Self {
+    self.skip_gc = skip_gc;
+    self
+  }
+
   pub fn build(self) -> Result<MutexCollab, CollabError> {
     let origin = CollabOrigin::Client(CollabClient::new(self.uid, self.device_id));
-    MutexCollab::new_with_doc_state(origin, &self.object_id, self.doc_state, self.plugins)
+    MutexCollab::new_with_doc_state(
+      origin,
+      &self.object_id,
+      self.doc_state,
+      self.plugins,
+      self.skip_gc,
+    )
   }
 }
 
@@ -898,8 +913,13 @@ impl Deref for Plugins {
 pub struct MutexCollab(Arc<Mutex<Collab>>);
 
 impl MutexCollab {
-  pub fn new(origin: CollabOrigin, object_id: &str, plugins: Vec<Box<dyn CollabPlugin>>) -> Self {
-    let collab = Collab::new_with_origin(origin, object_id, plugins);
+  pub fn new(
+    origin: CollabOrigin,
+    object_id: &str,
+    plugins: Vec<Box<dyn CollabPlugin>>,
+    skip_gc: bool,
+  ) -> Self {
+    let collab = Collab::new_with_origin(origin, object_id, plugins, skip_gc);
     #[allow(clippy::arc_with_non_send_sync)]
     MutexCollab(Arc::new(Mutex::new(collab)))
   }
@@ -909,8 +929,9 @@ impl MutexCollab {
     object_id: &str,
     collab_doc_state: CollabDocState,
     plugins: Vec<Box<dyn CollabPlugin>>,
+    skip_gc: bool,
   ) -> Result<Self, CollabError> {
-    let collab = Collab::new_with_doc_state(origin, object_id, collab_doc_state, plugins)?;
+    let collab = Collab::new_with_doc_state(origin, object_id, collab_doc_state, plugins, skip_gc)?;
     #[allow(clippy::arc_with_non_send_sync)]
     Ok(MutexCollab(Arc::new(Mutex::new(collab))))
   }

@@ -169,6 +169,7 @@ fn save_row(
       row_id.as_ref(),
       collab_doc_state,
       vec![],
+      false,
     ) {
       Ok(collab) => {
         let collab_lock_guard = collab.lock();

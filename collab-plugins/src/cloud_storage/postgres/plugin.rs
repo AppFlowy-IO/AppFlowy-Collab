@@ -172,7 +172,13 @@ fn create_snapshot_if_need(
       tracing::trace!("Create remote snapshot for {}", object.object_id);
       let cloned_object = object.clone();
       if let Ok(Ok(doc_state)) = tokio::task::spawn_blocking(move || {
-        let local = Collab::new(uid, object.object_id.clone(), &object.device_id, vec![]);
+        let local = Collab::new(
+          uid,
+          object.object_id.clone(),
+          &object.device_id,
+          vec![],
+          true,
+        );
         let mut txn = local.origin_transact_mut();
         let _ =
           local_collab_storage
@@ -182,7 +188,13 @@ fn create_snapshot_if_need(
 
         // Only sync with the remote if the remote update is not empty
         if !remote_update.is_empty() {
-          let remote = Collab::new(uid, object.object_id.clone(), &object.device_id, vec![]);
+          let remote = Collab::new(
+            uid,
+            object.object_id.clone(),
+            &object.device_id,
+            vec![],
+            true,
+          );
           let mut txn = local.origin_transact_mut();
           txn.try_apply_update(Update::decode_v1(&remote_update)?)?;
           drop(txn);
