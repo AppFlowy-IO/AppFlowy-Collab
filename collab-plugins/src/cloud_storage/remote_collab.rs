@@ -63,6 +63,7 @@ impl RemoteCollab {
       CollabOrigin::Server,
       &object.object_id,
       vec![],
+      true,
     ));
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
