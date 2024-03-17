@@ -97,8 +97,9 @@ impl Drop for Collab {
 }
 
 pub fn make_yrs_doc() -> Doc {
+  let skip_gc = cfg!(feature = "skip_gc");
   Doc::with_options(Options {
-    skip_gc: true,
+    skip_gc,
     offset_kind: OffsetKind::Utf16,
     ..Options::default()
   })

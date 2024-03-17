@@ -37,5 +37,6 @@ assert-json-diff = "2.0.2"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 
 [features]
-default = []
+default = ["skip_gc"]
 async-plugin = []
+skip_gc = []
