@@ -45,8 +45,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
     _object_id: &str,
     _event: &Event,
     _update: &AwarenessUpdate,
-  ) {
-  }
+  );
 
   /// Called after each [TransactionMut]
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
