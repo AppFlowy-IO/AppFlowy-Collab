@@ -41,10 +41,10 @@ pub trait CollabPlugin: Send + Sync + 'static {
 
   fn receive_local_state(
     &self,
-    _origin: &CollabOrigin,
-    _object_id: &str,
-    _event: &Event,
-    _update: &AwarenessUpdate,
+    origin: &CollabOrigin,
+    object_id: &str,
+    event: &Event,
+    update: &AwarenessUpdate,
   );
 
   /// Called after each [TransactionMut]
