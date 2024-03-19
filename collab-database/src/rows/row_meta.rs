@@ -1,4 +1,5 @@
 use collab::preclude::{MapRef, MapRefExtension, ReadTxn, TransactionMut};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::rows::{meta_id_from_row_id, RowMetaKey};
@@ -70,7 +71,7 @@ impl<'a, 'b, 'c> RowMetaUpdate<'a, 'b, 'c> {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RowMeta {
   pub icon_url: Option<String>,
   pub cover_url: Option<String>,

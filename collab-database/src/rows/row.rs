@@ -215,7 +215,7 @@ impl DatabaseRow {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RowDetail {
   pub row: Row,
   pub meta: RowMeta,
