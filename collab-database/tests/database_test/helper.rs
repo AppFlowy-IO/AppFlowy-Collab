@@ -25,7 +25,7 @@ use tempfile::TempDir;
 pub struct DatabaseTest {
   #[allow(dead_code)]
   collab_db: Arc<CollabKVDB>,
-  database: Database,
+  pub database: Database,
 }
 
 unsafe impl Send for DatabaseTest {}

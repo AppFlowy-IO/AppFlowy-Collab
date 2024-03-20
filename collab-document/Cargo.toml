@@ -13,7 +13,6 @@ collab-entity = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 nanoid = "0.4.0"
-getrandom = { version = "0.2", optional = true }
 thiserror = "1.0.30"
 anyhow.workspace = true
 parking_lot.workspace = true
@@ -21,6 +20,8 @@ tracing.workspace = true
 tokio = { version = "1.26", features = ["time", "sync", "rt"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"]}
 
 [dev-dependencies]
 tokio = { version = "1.26", features = ["rt"] }
@@ -29,7 +30,3 @@ tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 collab-plugins = { workspace = true }
 zip = "0.6.6"
 futures = "0.3.30"
-
-
-[features]
-wasm_build = ["getrandom/js"]

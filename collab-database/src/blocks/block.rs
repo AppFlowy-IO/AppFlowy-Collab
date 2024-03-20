@@ -96,12 +96,34 @@ impl Block {
     }
   }
 
-  pub fn create_rows<T: Into<Row>>(&self, rows: Vec<T>) -> Vec<RowOrder> {
-    let mut row_orders: Vec<RowOrder> = vec![];
-    for row in rows.into_iter() {
-      let row_order = self.create_row(row);
-      row_orders.push(row_order);
+  pub fn create_rows<T>(&self, rows: Vec<T>) -> Vec<RowOrder>
+  where
+    T: Into<Row> + Send,
+  {
+    let create_async = rows.len() > 100;
+    let mut row_orders = Vec::with_capacity(rows.len());
+    for row in rows {
+      if create_async {
+        let row = row.into();
+        row_orders.push(RowOrder {
+          id: row.id.clone(),
+          height: row.height,
+        });
+
+        let uid = self.uid;
+        let collab_db = self.collab_db.clone();
+        let row_change_tx = self.row_change_tx.clone();
+        let collab_service = self.collab_service.clone();
+        let cache = self.cache.clone();
+        tokio::spawn(async move {
+          async_create_row(uid, row, cache, collab_db, row_change_tx, collab_service).await;
+        });
+      } else {
+        let row_order = self.create_row(row);
+        row_orders.push(row_order);
+      }
     }
+
     row_orders
   }
 
@@ -250,5 +272,42 @@ impl Block {
       doc_state,
       config,
     )
+  }
+}
+
+async fn async_create_row<T: Into<Row>>(
+  uid: i64,
+  row: T,
+  cache: Arc<Mutex<LruCache<RowId, Arc<MutexDatabaseRow>>>>,
+  collab_db: Weak<CollabKVDB>,
+  row_change_tx: Option<RowChangeSender>,
+  collab_service: Arc<dyn DatabaseCollabService>,
+) {
+  let row = row.into();
+  let row_id = row.id.clone();
+  let cloned_row_id = row_id.clone();
+  let cloned_weak_collab_db = collab_db.clone();
+
+  if let Ok(collab) = tokio::task::spawn_blocking(move || {
+    collab_service.build_collab_with_config(
+      uid,
+      &cloned_row_id,
+      CollabType::DatabaseRow,
+      cloned_weak_collab_db,
+      CollabDocState::default(),
+      CollabPersistenceConfig::new(),
+    )
+  })
+  .await
+  {
+    let database_row = MutexDatabaseRow::new(DatabaseRow::create(
+      row,
+      uid,
+      row_id.clone(),
+      collab_db,
+      collab,
+      row_change_tx,
+    ));
+    cache.lock().put(row_id, Arc::new(database_row));
   }
 }

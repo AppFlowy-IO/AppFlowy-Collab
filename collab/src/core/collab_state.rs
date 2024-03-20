@@ -99,7 +99,7 @@ impl State {
   pub fn set_sync_state(&self, new_state: SyncState) {
     let old_state = self.sync_state.read().clone();
     if old_state != new_state {
-      tracing::trace!(
+      tracing::debug!(
         "{} sync state {:?} => {:?}",
         self.object_id,
         old_state,

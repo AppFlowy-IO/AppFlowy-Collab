@@ -155,6 +155,16 @@ impl<'a, 'b> ArrayMapUpdate<'a, 'b> {
     self.index_of(id).is_some()
   }
 
+  /// Moves an `AnyMap` from one position to another in the array.
+  pub fn move_to(self, from_id: &str, to_id: &str) {
+    let from_pos = self.index_of(from_id);
+    let to_pos = self.index_of(to_id);
+
+    if let (Some(from), Some(to)) = (from_pos, to_pos) {
+      self.array_ref.move_to(self.txn, from, to)
+    }
+  }
+
   /// Returns the index of an `AnyMap` with a specific ID.
   ///
   /// # Arguments

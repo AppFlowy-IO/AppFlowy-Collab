@@ -4,13 +4,14 @@ use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Weak};
 
 use crate::CollabKVDB;
-use collab::core::awareness::Awareness;
+
+use collab::core::awareness::{AwarenessUpdate, Event};
 use collab::core::collab::make_yrs_doc;
 use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
-use collab::preclude::CollabPlugin;
+use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error};
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
 
@@ -116,10 +117,9 @@ impl RocksdbDiskPlugin {
     }
   }
 
-  #[instrument(skip_all)]
   fn flush_doc(&self, db: &Arc<CollabKVDB>, object_id: &str) {
     let _ = db.with_write_txn(|w_db_txn| {
-      let doc = make_yrs_doc();
+      let doc = make_yrs_doc(false);
       w_db_txn.load_doc_with_txn(self.uid, object_id, &mut doc.transact_mut())?;
       if let Ok(read_txn) = doc.try_transact() {
         let doc_state = read_txn.encode_state_as_update_v1(&StateVector::default());
@@ -181,7 +181,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
     };
   }
 
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _last_sync_at: i64) {
+  fn did_init(&self, _collab: &Collab, _object_id: &str, _last_sync_at: i64) {
     self.did_load.store(true, SeqCst);
   }
 
@@ -204,6 +204,15 @@ impl CollabPlugin for RocksdbDiskPlugin {
     } else {
       tracing::warn!("collab_db is dropped");
     };
+  }
+
+  fn receive_local_state(
+    &self,
+    _origin: &CollabOrigin,
+    _object_id: &str,
+    _event: &Event,
+    _update: &AwarenessUpdate,
+  ) {
   }
 
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}

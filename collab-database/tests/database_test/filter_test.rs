@@ -49,20 +49,10 @@ async fn insert_or_update_database_view_filter_test() {
 }
 
 #[tokio::test]
-async fn get_database_view_filter_by_field_id_test() {
-  let database_test = create_database_with_two_filters().await;
-  let filter_1 = database_test
-    .get_filter_by_field_id::<TestFilter>("v1", "f1")
-    .unwrap();
-  assert_eq!(filter_1.content, "hello filter");
-}
-
-#[tokio::test]
-async fn insert_database_view_filter_with_occupied_field_id_test() {
+async fn insert_database_view_filter_to_filtering_field_id_test() {
   let database_test = create_database_with_two_filters().await;
 
-  // The field id "f1" is already occupied by existing filter. So this filter
-  // will be ignored
+  // Filter with id "filter_1" already filters based on "f1"
   database_test.insert_filter(
     "v1",
     TestFilter {
@@ -70,14 +60,14 @@ async fn insert_database_view_filter_with_occupied_field_id_test() {
       field_id: "f1".to_string(),
       field_type: Default::default(),
       condition: 0,
-      content: "Override the existing filter".to_string(),
+      content: "Another filter".to_string(),
     },
   );
 
-  let filter_1 = database_test
-    .get_filter_by_field_id::<TestFilter>("v1", "f1")
+  let filter_3 = database_test
+    .get_filter::<TestFilter>("v1", "filter_3")
     .unwrap();
-  assert_eq!(filter_1.content, "hello filter");
+  assert_eq!(filter_3.content, "Another filter");
 }
 
 #[tokio::test]

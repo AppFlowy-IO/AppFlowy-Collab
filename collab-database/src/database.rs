@@ -27,10 +27,10 @@ use crate::rows::{
 };
 use crate::user::DatabaseCollabService;
 use crate::views::{
-  CreateDatabaseParams, CreateDatabaseViewParams, CreateViewParamsValidator, DatabaseLayout,
-  DatabaseView, DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap,
-  FilterMap, GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder, SortMap,
-  ViewChangeReceiver, ViewMap,
+  CalculationMap, CreateDatabaseParams, CreateDatabaseViewParams, CreateViewParamsValidator,
+  DatabaseLayout, DatabaseView, DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap,
+  FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder,
+  SortMap, ViewChangeReceiver, ViewMap,
 };
 
 pub struct Database {
@@ -146,6 +146,11 @@ impl Database {
       .notifier
       .as_ref()
       .map(|notifier| notifier.view_change_tx.subscribe())
+  }
+
+  #[cfg(debug_assertions)]
+  pub fn get_collab(&self) -> &Arc<MutexCollab> {
+    &self.inner
   }
 
   pub fn load_all_rows(&self) {
@@ -796,6 +801,14 @@ impl Database {
     });
   }
 
+  pub fn move_sort(&self, view_id: &str, from_sort_id: &str, to_sort_id: &str) {
+    self.views.update_database_view(view_id, |update| {
+      update.update_sorts(|sort_update| {
+        sort_update.move_to(from_sort_id, to_sort_id);
+      });
+    });
+  }
+
   pub fn get_all_sorts<T: TryFrom<SortMap>>(&self, view_id: &str) -> Vec<T> {
     self
       .views
@@ -837,6 +850,64 @@ impl Database {
     });
   }
 
+  pub fn get_all_calculations<T: TryFrom<CalculationMap>>(&self, view_id: &str) -> Vec<T> {
+    self
+      .views
+      .get_view_calculations(view_id)
+      .into_iter()
+      .flat_map(|calculation| T::try_from(calculation).ok())
+      .collect()
+  }
+
+  pub fn get_calculation<T: TryFrom<CalculationMap>>(
+    &self,
+    view_id: &str,
+    field_id: &str,
+  ) -> Option<T> {
+    let field_id = field_id.to_string();
+    let mut calculations = self
+      .views
+      .get_view_calculations(view_id)
+      .into_iter()
+      .filter(|calculations_map| {
+        calculations_map.get_str_value("field_id").as_ref() == Some(&field_id)
+      })
+      .flat_map(|value| T::try_from(value).ok())
+      .collect::<Vec<T>>();
+
+    if calculations.is_empty() {
+      None
+    } else {
+      Some(calculations.remove(0))
+    }
+  }
+
+  pub fn update_calculation(&self, view_id: &str, calculation: impl Into<CalculationMap>) {
+    self.views.update_database_view(view_id, |update| {
+      update.update_calculations(|calculation_update| {
+        let calculation = calculation.into();
+        if let Some(calculation_id) = calculation.get_str_value("id") {
+          if calculation_update.contains(&calculation_id) {
+            calculation_update.update(&calculation_id, |_| calculation);
+            return;
+          }
+        }
+
+        calculation_update.push(calculation);
+      });
+    });
+  }
+
+  pub fn remove_calculation(&self, view_id: &str, calculation_id: &str) {
+    self.views.update_database_view(view_id, |update| {
+      update.update_calculations(|calculation_update| {
+        if calculation_update.contains(calculation_id) {
+          calculation_update.remove(calculation_id);
+        }
+      });
+    });
+  }
+
   pub fn get_all_filters<T: TryFrom<FilterMap>>(&self, view_id: &str) -> Vec<T> {
     self
       .views
@@ -853,26 +924,6 @@ impl Database {
       .get_view_filters(view_id)
       .into_iter()
       .filter(|filter_map| filter_map.get_str_value("id").as_ref() == Some(&filter_id))
-      .flat_map(|value| T::try_from(value).ok())
-      .collect::<Vec<T>>();
-    if filters.is_empty() {
-      None
-    } else {
-      Some(filters.remove(0))
-    }
-  }
-
-  pub fn get_filter_by_field_id<T: TryFrom<FilterMap>>(
-    &self,
-    view_id: &str,
-    field_id: &str,
-  ) -> Option<T> {
-    let field_id = field_id.to_string();
-    let mut filters = self
-      .views
-      .get_view_filters(view_id)
-      .into_iter()
-      .filter(|filter_map| filter_map.get_str_value("field_id").as_ref() == Some(&field_id))
       .flat_map(|value| T::try_from(value).ok())
       .collect::<Vec<T>>();
     if filters.is_empty() {
@@ -916,6 +967,27 @@ impl Database {
           filter_update.push(filter);
         }
       });
+    });
+  }
+
+  /// Sets the filters of a database view. Requires two generics to work around the situation where
+  /// `Into<AnyMap>` is only implemented for `&T`, not `T` itself. (alternatively, `From<&T>` is
+  /// implemented for `AnyMap`, but not `From<T>`).
+  ///
+  /// * `T`: needs to be able to do `AnyMap::from(&T)`.
+  /// * `U`: needs to implement `Into<AnyMap>`, could be just an identity conversion.
+  pub fn save_filters<T, U>(&self, view_id: &str, filters: &[T])
+  where
+    U: for<'a> From<&'a T> + Into<FilterMap>,
+  {
+    self.views.update_database_view(view_id, |update| {
+      update.set_filters(
+        filters
+          .iter()
+          .map(|filter| U::from(filter))
+          .map(Into::into)
+          .collect(),
+      );
     });
   }
 
@@ -1276,6 +1348,10 @@ pub fn gen_row_id() -> RowId {
   RowId::from(uuid::Uuid::new_v4().to_string())
 }
 
+pub fn gen_database_calculation_id() -> String {
+  nanoid!(6)
+}
+
 pub fn gen_database_filter_id() -> String {
   nanoid!(6)
 }
@@ -1493,4 +1569,24 @@ where
 pub fn is_database_collab(collab: &Collab) -> bool {
   let txn = collab.transact();
   collab.get_map_with_txn(&txn, vec![DATABASE]).is_some()
+}
+
+/// Quickly retrieve the inline view ID of a database.
+/// Use this function when instantiating a [Database] object is too resource-intensive,
+/// and you need the inline view ID of a specific database.
+pub fn get_inline_view_id(collab: &Collab) -> Option<String> {
+  let txn = collab.transact();
+  let metas = collab.get_map_with_txn(&txn, vec![DATABASE, METAS])?;
+  let meta = MetaMap::new(metas);
+  meta.get_inline_view_id_with_txn(&txn)
+}
+
+/// Quickly retrieve database views meta.
+/// Use this function when instantiating a [Database] object is too resource-intensive,
+/// and you need the views meta of a specific database.
+pub fn get_database_views_meta(collab: &Collab) -> Vec<DatabaseViewMeta> {
+  let txn = collab.transact();
+  let views = collab.get_map_with_txn(&txn, vec![DATABASE, VIEWS]);
+  let views = ViewMap::new(views.unwrap(), None);
+  views.get_all_views_meta_with_txn(&txn)
 }

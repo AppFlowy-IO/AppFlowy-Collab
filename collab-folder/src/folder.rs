@@ -1,7 +1,6 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use anyhow::Error;
 use collab::core::collab::{CollabDocState, IndexContentReceiver, MutexCollab};
 use collab::core::collab_plugin::EncodedCollab;
 use collab::core::collab_state::{SnapshotState, SyncState};
@@ -10,6 +9,7 @@ use collab::preclude::*;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
+use crate::error::FolderError;
 use crate::folder_observe::ViewChangeSender;
 use crate::section::{Section, SectionItem, SectionMap, SectionOperation};
 use crate::{
@@ -100,7 +100,7 @@ impl Folder {
     uid: T,
     collab: Arc<MutexCollab>,
     notifier: Option<FolderNotify>,
-  ) -> Result<Self, Error> {
+  ) -> Result<Self, FolderError> {
     let uid = uid.into();
     let folder = open_folder(uid.clone(), collab.clone(), notifier.clone()).unwrap_or_else(|| {
       tracing::info!("Create missing attributes of folder");
@@ -126,9 +126,10 @@ impl Folder {
     origin: CollabOrigin,
     collab_doc_state: CollabDocState,
     workspace_id: &str,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
-  ) -> Result<Self, Error> {
-    let collab = MutexCollab::new_with_doc_state(origin, workspace_id, collab_doc_state, plugins)?;
+    plugins: Vec<Box<dyn CollabPlugin>>,
+  ) -> Result<Self, FolderError> {
+    let collab =
+      MutexCollab::new_with_doc_state(origin, workspace_id, collab_doc_state, plugins, false)?;
     Self::open(uid, Arc::new(collab), None)
   }
 
@@ -209,6 +210,13 @@ impl Folder {
       .section_op_with_txn(&txn, Section::Trash)
       .map(|op| op.get_sections_with_txn(&txn))
       .unwrap_or_default();
+
+    let private = self
+      .section
+      .section_op_with_txn(&txn, Section::Private)
+      .map(|op| op.get_sections_with_txn(&txn))
+      .unwrap_or_default();
+
     Some(FolderData {
       workspace,
       current_view,
@@ -216,7 +224,18 @@ impl Folder {
       favorites,
       recent,
       trash,
+      private,
     })
+  }
+
+  /// Fetches all views associated with the current workspace.
+  ///
+  /// Views are fetched recursively, and thus all nested views are also included.
+  ///
+  pub fn get_all_views_recursively(&self) -> Vec<View> {
+    let workspace_id = self.get_workspace_id();
+    let txn = self.root.transact();
+    self.get_view_recursively_with_txn(&txn, &workspace_id)
   }
 
   /// Fetches the current workspace.
@@ -240,17 +259,17 @@ impl Folder {
     self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE).unwrap()
   }
 
-  pub fn try_get_workspace_id(&self) -> Result<String, Error> {
+  pub fn try_get_workspace_id(&self) -> Result<String, FolderError> {
     let txn = self.meta.transact();
     match self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE) {
-      None => Err(anyhow::anyhow!("No workspace")),
+      None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
       Some(workspace_id) => Ok(workspace_id),
     }
   }
 
-  pub fn try_get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Result<String, Error> {
+  pub fn try_get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Result<String, FolderError> {
     match self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE) {
-      None => Err(anyhow::anyhow!("No workspace")),
+      None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
       Some(workspace_id) => Ok(workspace_id),
     }
   }
@@ -513,6 +532,44 @@ impl Folder {
     }
   }
 
+  /// Get the private views for all users
+  pub fn get_all_private_views(&self) -> Vec<SectionItem> {
+    let private_views = self
+      .section
+      .section_op(Section::Private)
+      .map(|op| op.get_sections())
+      .unwrap_or_default()
+      .into_iter()
+      .flat_map(|(_user_id, items)| items)
+      .collect::<Vec<_>>();
+    private_views
+  }
+
+  /// Get the private views for the current user
+  pub fn get_my_private_views(&self) -> Vec<SectionItem> {
+    self
+      .section
+      .section_op(Section::Private)
+      .map(|op| op.get_all_section_item())
+      .unwrap_or_default()
+  }
+
+  pub fn add_private_view_ids(&self, view_ids: Vec<String>) {
+    for id in view_ids {
+      self
+        .views
+        .update_view(&id, |update| update.set_private(true).done());
+    }
+  }
+
+  pub fn delete_private_view_ids(&self, view_ids: Vec<String>) {
+    for id in view_ids {
+      self
+        .views
+        .update_view(&id, |update| update.set_private(false).done());
+    }
+  }
+
   pub fn to_json(&self) -> String {
     self.root.to_json_str()
   }
@@ -645,6 +702,23 @@ fn create_folder<T: Into<UserId>>(
     meta,
     subscription,
     notifier,
+  }
+}
+
+pub fn check_folder_is_valid(collab: &Collab) -> Result<String, FolderError> {
+  let txn = collab.transact();
+  let meta = collab
+    .get_map_with_txn(&txn, vec![FOLDER, META])
+    .ok_or_else(|| FolderError::NoRequiredData("No meta data".to_string()))?;
+  match meta.get_str_with_txn(&txn, CURRENT_WORKSPACE) {
+    None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
+    Some(workspace_id) => {
+      if workspace_id.is_empty() {
+        Err(FolderError::NoRequiredData("No workspace id".to_string()))
+      } else {
+        Ok(workspace_id)
+      }
+    },
   }
 }
 

@@ -63,7 +63,7 @@ impl From<&Origin> for CollabOrigin {
 #[derive(Serialize, Deserialize, Eq, PartialEq, Hash, Debug, Clone)]
 pub struct CollabClient {
   pub uid: i64,
-  device_id: String,
+  pub device_id: String,
 }
 
 impl Display for CollabClient {

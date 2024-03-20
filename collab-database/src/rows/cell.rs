@@ -95,6 +95,13 @@ impl<'a, 'b> CellsUpdate<'a, 'b> {
     let cell = value.into();
     self.insert_cell(key, cell)
   }
+
+  pub fn clear(self, key: &str) -> Self {
+    let cell_map_ref = self.map_ref.get_or_create_map_with_txn(self.txn, key);
+    cell_map_ref.clear(self.txn);
+
+    self
+  }
 }
 
 pub type Cell = AnyMap;

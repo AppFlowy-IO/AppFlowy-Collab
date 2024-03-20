@@ -72,9 +72,9 @@ impl Document {
     origin: CollabOrigin,
     doc_state: CollabDocState,
     document_id: &str,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
+    plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, DocumentError> {
-    let collab = MutexCollab::new_with_doc_state(origin, document_id, doc_state, plugins)?;
+    let collab = MutexCollab::new_with_doc_state(origin, document_id, doc_state, plugins, true)?;
     Document::open(Arc::new(collab))
   }
 
@@ -693,4 +693,12 @@ impl From<&Document> for DocumentIndexContent {
 
     Self { page_id, text }
   }
+}
+
+pub fn check_document_is_valid(collab: &Collab) -> Result<(), DocumentError> {
+  let txn = collab.transact();
+  collab
+    .get_map_with_txn(&txn, vec![ROOT])
+    .ok_or_else(|| DocumentError::NoRequiredData)?;
+  Ok(())
 }

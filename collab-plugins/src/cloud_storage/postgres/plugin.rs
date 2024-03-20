@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use collab::core::awareness::Awareness;
+use collab::core::awareness::{Awareness, AwarenessUpdate, Event};
 use collab::core::collab::MutexCollab;
 use collab::core::collab_plugin::CollabPluginType;
 use collab::core::collab_state::SnapshotState;
@@ -88,7 +88,7 @@ impl SupabaseDBPlugin {
 }
 
 impl CollabPlugin for SupabaseDBPlugin {
-  fn did_init(&self, _awareness: &Awareness, _object_id: &str, _last_sync_at: i64) {
+  fn did_init(&self, _collab: &Collab, _object_id: &str, _last_sync_at: i64) {
     // TODO(nathan): retry action might take a long time even if the network is ready or enable of
     // the [RemoteCollabStorage] is true
     let retry_strategy = FibonacciBackoff::from_millis(2000);
@@ -114,6 +114,15 @@ impl CollabPlugin for SupabaseDBPlugin {
     } else {
       self.pending_updates.write().push(update.to_vec());
     }
+  }
+
+  fn receive_local_state(
+    &self,
+    _origin: &CollabOrigin,
+    _object_id: &str,
+    _event: &Event,
+    _update: &AwarenessUpdate,
+  ) {
   }
 
   fn plugin_type(&self) -> CollabPluginType {
@@ -163,7 +172,13 @@ fn create_snapshot_if_need(
       tracing::trace!("Create remote snapshot for {}", object.object_id);
       let cloned_object = object.clone();
       if let Ok(Ok(doc_state)) = tokio::task::spawn_blocking(move || {
-        let local = Collab::new(uid, object.object_id.clone(), &object.device_id, vec![]);
+        let local = Collab::new(
+          uid,
+          object.object_id.clone(),
+          &object.device_id,
+          vec![],
+          true,
+        );
         let mut txn = local.origin_transact_mut();
         let _ =
           local_collab_storage
@@ -173,7 +188,13 @@ fn create_snapshot_if_need(
 
         // Only sync with the remote if the remote update is not empty
         if !remote_update.is_empty() {
-          let remote = Collab::new(uid, object.object_id.clone(), &object.device_id, vec![]);
+          let remote = Collab::new(
+            uid,
+            object.object_id.clone(),
+            &object.device_id,
+            vec![],
+            true,
+          );
           let mut txn = local.origin_transact_mut();
           txn.try_apply_update(Update::decode_v1(&remote_update)?)?;
           drop(txn);

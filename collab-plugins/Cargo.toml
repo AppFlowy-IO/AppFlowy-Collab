@@ -9,7 +9,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 yrs.workspace = true
-collab = { workspace = true }
 collab-entity = { workspace = true }
 
 futures-util = { version = "0.3", features = ["sink"] }
@@ -32,9 +31,9 @@ lazy_static = "1.4.0"
 smallvec = { version = "1.10", features = ["write", "union", "const_generics", "const_new"] }
 chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
 bincode = "1.3.3"
-getrandom = { version = "0.2", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+collab = { workspace = true }
 rocksdb = { version = "0.21.0", default-features = false, features = ["zstd"] }
 
 
@@ -46,10 +45,11 @@ tempfile = "3.8.0"
 assert-json-diff = "2.0.2"
 tokio-util = { version = "0.7", features = ["codec"] }
 config = { version = "0.13.3", default-features = false, features = ["yaml"] }
-dotenv = "0.15.0"
 futures = "0.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"]}
+collab = { workspace = true, features = ["async-plugin"] }
 indexed_db_futures = { version = "0.4" }
 js-sys = "0.3"
 async-stream = "0.3"
@@ -65,4 +65,3 @@ wasm-bindgen-test = "0.3.40"
 [features]
 default = []
 postgres_plugin = ["rand"]
-wasm_build = ["getrandom/js", "collab/async-plugin"]

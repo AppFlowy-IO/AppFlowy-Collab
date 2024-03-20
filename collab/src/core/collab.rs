@@ -8,9 +8,10 @@ use std::vec::IntoIter;
 use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde_json::json;
 
 use tokio_stream::wrappers::WatchStream;
-use tracing::error;
+use tracing::{error, trace};
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
@@ -22,7 +23,9 @@ use yrs::{
   UpdateSubscription,
 };
 
-use crate::core::awareness::Awareness;
+use crate::core::awareness::{
+  gen_awareness_update_message, Awareness, AwarenessUpdateSubscription, Event,
+};
 use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedCollab};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
@@ -82,13 +85,20 @@ pub struct Collab {
   /// is disabled. To enable it, call [Collab::enable_undo_manager].
   undo_manager: Mutex<Option<UndoManager>>,
   update_subscription: RwLock<Option<UpdateSubscription>>,
+  awareness_subscription: RwLock<Option<AwarenessUpdateSubscription>>,
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
   pub index_json_sender: IndexContentSender,
 }
 
-pub fn make_yrs_doc() -> Doc {
+impl Drop for Collab {
+  fn drop(&mut self) {
+    trace!("Collab:{} dropped", self.object_id);
+  }
+}
+
+pub fn make_yrs_doc(skp_gc: bool) -> Doc {
   Doc::with_options(Options {
-    skip_gc: true,
+    skip_gc: skp_gc,
     offset_kind: OffsetKind::Utf16,
     ..Options::default()
   })
@@ -99,19 +109,21 @@ impl Collab {
     uid: i64,
     object_id: T,
     device_id: impl ToString,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
+    plugins: Vec<Box<dyn CollabPlugin>>,
+    skip_gc: bool,
   ) -> Collab {
     let origin = CollabClient::new(uid, device_id);
-    Self::new_with_origin(CollabOrigin::Client(origin), object_id, plugins)
+    Self::new_with_origin(CollabOrigin::Client(origin), object_id, plugins, skip_gc)
   }
 
   pub fn new_with_doc_state(
     origin: CollabOrigin,
     object_id: &str,
     collab_doc_state: CollabDocState,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
+    plugins: Vec<Box<dyn CollabPlugin>>,
+    skip_gc: bool,
   ) -> Result<Self, CollabError> {
-    let collab = Self::new_with_origin(origin, object_id, plugins);
+    let collab = Self::new_with_origin(origin, object_id, plugins, skip_gc);
     if !collab_doc_state.is_empty() {
       let mut txn = collab.origin_transact_mut();
       let decoded_update = Update::decode_v1(&collab_doc_state)?;
@@ -123,17 +135,18 @@ impl Collab {
   pub fn new_with_origin<T: AsRef<str>>(
     origin: CollabOrigin,
     object_id: T,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
+    plugins: Vec<Box<dyn CollabPlugin>>,
+    skip_gc: bool,
   ) -> Collab {
     let object_id = object_id.as_ref().to_string();
-    let doc = make_yrs_doc();
+    let doc = make_yrs_doc(skip_gc);
     let data = doc.get_or_insert_map(DATA_SECTION);
     let meta = doc.get_or_insert_map(META_SECTION);
     let undo_manager = Mutex::new(None);
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
     let awareness = Awareness::new(doc.clone());
-    Self {
+    let mut this = Self {
       origin,
       object_id,
       doc,
@@ -145,8 +158,11 @@ impl Collab {
       state,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
+      awareness_subscription: Default::default(),
       index_json_sender: tokio::sync::broadcast::channel(100).0,
-    }
+    };
+    this.emit_awareness_state();
+    this
   }
 
   /// Returns the doc state and the state vector.
@@ -164,6 +180,18 @@ impl Collab {
 
   pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
     WatchStream::new(self.state.snapshot_state_notifier.subscribe())
+  }
+
+  pub fn clean_awareness_state(&mut self) {
+    self.awareness.clean_local_state();
+  }
+
+  pub fn emit_awareness_state(&mut self) {
+    if let CollabOrigin::Client(origin) = &self.origin {
+      self
+        .awareness
+        .set_local_state(initial_awareness_state(origin.uid));
+    }
   }
 
   /// Subscribes to the `IndexJson` associated with a `Collab` object.
@@ -191,12 +219,12 @@ impl Collab {
   }
 
   /// Add a plugin to the [Collab]. The plugin's callbacks will be called in the order they are added.
-  pub fn add_plugin(&mut self, plugin: Arc<dyn CollabPlugin>) {
+  pub fn add_plugin(&mut self, plugin: Box<dyn CollabPlugin>) {
     self.add_plugins(vec![plugin]);
   }
 
   /// Add plugins to the [Collab]. The plugin's callbacks will be called in the order they are added.
-  pub fn add_plugins(&mut self, plugins: Vec<Arc<dyn CollabPlugin>>) {
+  pub fn add_plugins(&mut self, plugins: Vec<Box<dyn CollabPlugin>>) {
     let mut write_guard = self.plugins.write();
 
     for plugin in plugins {
@@ -219,15 +247,14 @@ impl Collab {
   ///
   /// This method must be called after all plugins have been added.
   #[cfg(not(feature = "async-plugin"))]
-  pub fn initialize(&self) {
+  pub fn initialize(&mut self) {
     if !self.state.is_uninitialized() {
       return;
     }
 
     self.state.set_init_state(InitState::Loading);
     {
-      let plugins = self.plugins.read().clone();
-      for plugin in plugins {
+      for plugin in self.plugins.read().iter() {
         plugin.init(&self.object_id, &self.origin, &self.doc);
       }
     }
@@ -239,8 +266,16 @@ impl Collab {
       self.origin.clone(),
     );
 
+    let awareness_subscription = observe_awareness(
+      &mut self.awareness,
+      self.plugins.clone(),
+      self.object_id.clone(),
+      self.origin.clone(),
+    );
+
     *self.update_subscription.write() = Some(update_subscription);
     *self.after_txn_subscription.write() = Some(after_txn_subscription);
+    *self.awareness_subscription.write() = Some(awareness_subscription);
 
     let last_sync_at = self.get_last_sync_at();
     {
@@ -248,21 +283,20 @@ impl Collab {
         .plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id, last_sync_at));
+        .for_each(|plugin| plugin.did_init(self, &self.object_id, last_sync_at));
     }
     self.state.set_init_state(InitState::Initialized);
   }
 
   #[cfg(feature = "async-plugin")]
-  pub async fn initialize(&self) {
+  pub async fn initialize(&mut self) {
     if !self.state.is_uninitialized() {
       return;
     }
 
     self.state.set_init_state(InitState::Loading);
     {
-      let plugins = self.plugins.read().clone();
-      for plugin in plugins {
+      for plugin in self.plugins.read().iter() {
         plugin.init(&self.object_id, &self.origin, &self.doc).await;
       }
     }
@@ -274,8 +308,16 @@ impl Collab {
       self.origin.clone(),
     );
 
+    let awareness_subscription = observe_awareness(
+      &mut self.awareness,
+      self.plugins.clone(),
+      self.object_id.clone(),
+      self.origin.clone(),
+    );
+
     *self.update_subscription.write() = Some(update_subscription);
     *self.after_txn_subscription.write() = Some(after_txn_subscription);
+    *self.awareness_subscription.write() = Some(awareness_subscription);
 
     let last_sync_at = self.get_last_sync_at();
     {
@@ -283,7 +325,7 @@ impl Collab {
         .plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.did_init(&self.awareness, &self.object_id, last_sync_at));
+        .for_each(|plugin| plugin.did_init(&self, &self.object_id, last_sync_at));
     }
     self.state.set_init_state(InitState::Initialized);
   }
@@ -338,11 +380,18 @@ impl Collab {
       .for_each(|plugin| plugin.flush(&self.object_id, &self.doc));
   }
 
-  pub fn observer_data<F>(&mut self, f: F) -> MapSubscription
+  pub fn observe_data<F>(&mut self, f: F) -> MapSubscription
   where
     F: Fn(&TransactionMut, &MapEvent) + 'static,
   {
     self.data.observe(f)
+  }
+
+  pub fn observe_awareness<F>(&mut self, f: F) -> AwarenessUpdateSubscription
+  where
+    F: Fn(&Awareness, &Event) + 'static,
+  {
+    self.awareness.on_update(f)
   }
 
   pub fn get(&self, key: &str) -> Option<Value> {
@@ -637,6 +686,22 @@ impl Collab {
   }
 }
 
+fn observe_awareness(
+  awareness: &mut Awareness,
+  plugins: Plugins,
+  oid: String,
+  origin: CollabOrigin,
+) -> AwarenessUpdateSubscription {
+  awareness.on_update(move |awareness, event| {
+    if let Ok(update) = gen_awareness_update_message(awareness, event) {
+      plugins
+        .read()
+        .iter()
+        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
+    }
+  })
+}
+
 /// Observe a document for updates.
 /// Use the uid and the device_id to verify that the update is local or remote.
 /// If the update is local, the plugins will be notified.
@@ -691,9 +756,10 @@ impl Display for Collab {
 pub struct CollabBuilder {
   uid: i64,
   device_id: String,
-  plugins: Vec<Arc<dyn CollabPlugin>>,
+  plugins: Vec<Box<dyn CollabPlugin>>,
   object_id: String,
   doc_state: CollabDocState,
+  skip_gc: bool,
 }
 
 /// The raw data of a collab document. It is a list of updates. Each of them can be parsed by
@@ -709,6 +775,7 @@ impl CollabBuilder {
       object_id: object_id.to_string(),
       device_id: "".to_string(),
       doc_state: vec![],
+      skip_gc: true,
     }
   }
 
@@ -724,7 +791,7 @@ impl CollabBuilder {
   where
     T: CollabPlugin + 'static,
   {
-    self.plugins.push(Arc::new(plugin));
+    self.plugins.push(Box::new(plugin));
     self
   }
 
@@ -733,9 +800,20 @@ impl CollabBuilder {
     self
   }
 
+  pub fn with_skip_gc(mut self, skip_gc: bool) -> Self {
+    self.skip_gc = skip_gc;
+    self
+  }
+
   pub fn build(self) -> Result<MutexCollab, CollabError> {
     let origin = CollabOrigin::Client(CollabClient::new(self.uid, self.device_id));
-    MutexCollab::new_with_doc_state(origin, &self.object_id, self.doc_state, self.plugins)
+    MutexCollab::new_with_doc_state(
+      origin,
+      &self.object_id,
+      self.doc_state,
+      self.plugins,
+      self.skip_gc,
+    )
   }
 }
 
@@ -814,16 +892,16 @@ impl DerefMut for Path {
 }
 
 #[derive(Default, Clone)]
-pub struct Plugins(Arc<RwLock<Vec<Arc<dyn CollabPlugin>>>>);
+pub struct Plugins(Arc<RwLock<Vec<Box<dyn CollabPlugin>>>>);
 
 impl Plugins {
-  pub fn new(plugins: Vec<Arc<dyn CollabPlugin>>) -> Plugins {
+  pub fn new(plugins: Vec<Box<dyn CollabPlugin>>) -> Plugins {
     Self(Arc::new(RwLock::new(plugins)))
   }
 }
 
 impl Deref for Plugins {
-  type Target = Arc<RwLock<Vec<Arc<dyn CollabPlugin>>>>;
+  type Target = Arc<RwLock<Vec<Box<dyn CollabPlugin>>>>;
 
   fn deref(&self) -> &Self::Target {
     &self.0
@@ -835,8 +913,13 @@ impl Deref for Plugins {
 pub struct MutexCollab(Arc<Mutex<Collab>>);
 
 impl MutexCollab {
-  pub fn new(origin: CollabOrigin, object_id: &str, plugins: Vec<Arc<dyn CollabPlugin>>) -> Self {
-    let collab = Collab::new_with_origin(origin, object_id, plugins);
+  pub fn new(
+    origin: CollabOrigin,
+    object_id: &str,
+    plugins: Vec<Box<dyn CollabPlugin>>,
+    skip_gc: bool,
+  ) -> Self {
+    let collab = Collab::new_with_origin(origin, object_id, plugins, skip_gc);
     #[allow(clippy::arc_with_non_send_sync)]
     MutexCollab(Arc::new(Mutex::new(collab)))
   }
@@ -845,9 +928,10 @@ impl MutexCollab {
     origin: CollabOrigin,
     object_id: &str,
     collab_doc_state: CollabDocState,
-    plugins: Vec<Arc<dyn CollabPlugin>>,
+    plugins: Vec<Box<dyn CollabPlugin>>,
+    skip_gc: bool,
   ) -> Result<Self, CollabError> {
-    let collab = Collab::new_with_doc_state(origin, object_id, collab_doc_state, plugins)?;
+    let collab = Collab::new_with_doc_state(origin, object_id, collab_doc_state, plugins, skip_gc)?;
     #[allow(clippy::arc_with_non_send_sync)]
     Ok(MutexCollab(Arc::new(Mutex::new(collab))))
   }
@@ -900,4 +984,8 @@ impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
       Err(e) => Err(CollabError::YrsTransactionError(format!("{:?}", e))),
     }
   }
+}
+
+fn initial_awareness_state(uid: i64) -> JsonValue {
+  json!({ "uid": uid })
 }
