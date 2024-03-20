@@ -369,18 +369,18 @@ impl WorkspaceDatabase {
     &self,
     view_id: &str,
   ) -> Result<Arc<MutexDatabase>, DatabaseError> {
-    let database_data = self.get_all_database_data(view_id).await?;
+    let database_data = self.get_database_data(view_id).await?;
 
-    let create_database_params = database_data.to_create_database_params(true);
+    let create_database_params = CreateDatabaseParams::from_database_data(database_data);
     let database = self.create_database(create_database_params)?;
 
     Ok(database)
   }
 
   /// Duplicate the database with the view_id of any view in the database
-  pub async fn get_all_database_data(&self, view_id: &str) -> Result<DatabaseData, DatabaseError> {
+  pub async fn get_database_data(&self, view_id: &str) -> Result<DatabaseData, DatabaseError> {
     if let Some(database) = self.get_database_with_view_id(view_id).await {
-      let data = database.lock().get_all_database_data();
+      let data = database.lock().get_database_data();
       Ok(data)
     } else {
       Err(DatabaseError::DatabaseNotExist)

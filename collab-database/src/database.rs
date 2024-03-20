@@ -1198,7 +1198,7 @@ impl Database {
     })
   }
 
-  pub fn get_all_database_data(&self) -> DatabaseData {
+  pub fn get_database_data(&self) -> DatabaseData {
     let txn = self.root.transact();
 
     let database_id = self.get_database_id_with_txn(&txn);
@@ -1222,7 +1222,7 @@ impl Database {
   }
 
   pub fn to_json_value(&self) -> JsonValue {
-    let database_data = self.get_all_database_data();
+    let database_data = self.get_database_data();
     serde_json::to_value(&database_data).unwrap()
   }
 
@@ -1342,84 +1342,6 @@ pub struct DatabaseData {
 }
 
 impl DatabaseData {
-  /// Converts DatabaseData to CreateDatabaseParams. If `regenerate` is true,
-  /// the timestamps, row_ids and view_ids will all be regenerated. This is used
-  /// when duplicating a database. If false, these fields remain the same.
-  /// This is used in an importing scenario.
-  pub fn to_create_database_params(self, regenerate: bool) -> CreateDatabaseParams {
-    let (database_id, inline_view_id) = if regenerate {
-      (gen_database_id(), gen_database_view_id())
-    } else {
-      (self.database_id, self.inline_view_id.clone())
-    };
-
-    let timestamp = timestamp();
-
-    let create_row_params = self
-      .rows
-      .into_iter()
-      .map(|row| {
-        let (id, created_at, modified_at) = if regenerate {
-          (gen_row_id(), timestamp, timestamp)
-        } else {
-          (row.id, row.created_at, row.modified_at)
-        };
-        CreateRowParams {
-          id,
-          created_at,
-          modified_at,
-          cells: row.cells,
-          height: row.height,
-          visibility: row.visibility,
-          row_position: OrderObjectPosition::End,
-        }
-      })
-      .collect();
-
-    let create_view_params = self
-      .views
-      .into_iter()
-      .map(|view| {
-        let view_id = if regenerate {
-          if view.id == self.inline_view_id {
-            inline_view_id.clone()
-          } else {
-            gen_database_view_id()
-          }
-        } else {
-          view.id
-        };
-        let (created_at, modified_at) = if regenerate {
-          (timestamp, timestamp)
-        } else {
-          (view.created_at, view.modified_at)
-        };
-        CreateViewParams {
-          database_id: database_id.clone(),
-          view_id,
-          name: view.name,
-          layout: view.layout,
-          layout_settings: view.layout_settings,
-          filters: view.filters,
-          group_settings: view.group_settings,
-          sorts: view.sorts,
-          field_settings: view.field_settings,
-          created_at,
-          modified_at,
-          ..Default::default()
-        }
-      })
-      .collect();
-
-    CreateDatabaseParams {
-      database_id,
-      inline_view_id,
-      rows: create_row_params,
-      fields: self.fields,
-      views: create_view_params,
-    }
-  }
-
   pub fn to_json(&self) -> Result<String, DatabaseError> {
     let s = serde_json::to_string(self)?;
     Ok(s)
