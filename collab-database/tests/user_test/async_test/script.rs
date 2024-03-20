@@ -1,16 +1,17 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use assert_json_diff::assert_json_include;
 use collab_database::fields::Field;
+use collab_database::rows::CreateRowParams;
 use collab_database::rows::{Cells, CellsBuilder, RowId};
-use collab_database::rows::{CreateRowParams, Row};
 use collab_database::user::WorkspaceDatabase;
-use collab_database::views::{CreateDatabaseParams, CreateViewParams, DatabaseView};
+use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
-use serde_json::{json, Value};
+use serde_json::Value;
 use tempfile::TempDir;
 
 use crate::database_test::helper::field_settings_for_default_database;
@@ -38,15 +39,11 @@ pub enum DatabaseScript {
   },
   AssertDatabaseInDisk {
     database_id: String,
-    expected_fields: Value,
-    expected_rows: Value,
-    expected_view: Value,
+    expected: Value,
   },
   AssertDatabase {
     database_id: String,
-    expected_fields: Value,
-    expected_rows: Value,
-    expected_view: Value,
+    expected: Value,
   },
   AssertNumOfUpdates {
     oid: String,
@@ -146,62 +143,23 @@ pub async fn run_script(
     },
     DatabaseScript::AssertDatabaseInDisk {
       database_id,
-      expected_fields,
-      expected_rows,
-      expected_view,
+      expected,
     } => {
       let w_database =
         workspace_database_with_db(1, Arc::downgrade(&db), Some(config.clone())).await;
       let database = w_database.get_database(&database_id).await.unwrap();
-      let database_data = database.lock().get_database_data();
-      let view = database.lock().get_view("v1").unwrap();
 
-      assert_eq!(
-        database_data.rows,
-        serde_json::from_value::<Vec<Row>>(expected_rows).unwrap()
-      );
-      assert_eq!(
-        database_data.fields,
-        serde_json::from_value::<Vec<Field>>(expected_fields).unwrap()
-      );
-      assert_eq!(
-        view,
-        serde_json::from_value::<DatabaseView>(expected_view).unwrap()
-      );
+      let actual = database.lock().to_json_value();
+
+      assert_json_include!(actual: actual, expected: expected);
     },
     DatabaseScript::AssertDatabase {
       database_id,
-      expected_fields,
-      expected_rows,
-      expected_view,
+      expected,
     } => {
-      let database_data = workspace_database
-        .get_database(&database_id)
-        .await
-        .unwrap()
-        .lock()
-        .get_database_data();
-
-      let view = workspace_database
-        .get_database(&database_id)
-        .await
-        .unwrap()
-        .lock()
-        .get_view("v1")
-        .unwrap();
-
-      assert_eq!(
-        database_data.rows,
-        serde_json::from_value::<Vec<Row>>(expected_rows).unwrap()
-      );
-      assert_eq!(
-        database_data.fields,
-        serde_json::from_value::<Vec<Field>>(expected_fields).unwrap()
-      );
-      assert_eq!(
-        view,
-        serde_json::from_value::<DatabaseView>(expected_view).unwrap()
-      );
+      let database = workspace_database.get_database(&database_id).await.unwrap();
+      let actual = database.lock().to_json_value();
+      assert_json_diff::assert_json_include!(actual: actual, expected: expected);
     },
     DatabaseScript::IsExist {
       oid: database_id,
@@ -276,143 +234,4 @@ pub(crate) fn create_database(database_id: &str) -> CreateDatabaseParams {
     rows: vec![row_1, row_2, row_3],
     fields: vec![field_1, field_2, field_3],
   }
-}
-
-pub(crate) fn expected_fields() -> Value {
-  json!([
-    {
-      "field_type": 0,
-      "id": "f1",
-      "is_primary": true,
-      "name": "text field",
-      "type_options": {},
-      "visibility": true,
-      "width": 120
-    },
-    {
-      "field_type": 2,
-      "id": "f2",
-      "is_primary": true,
-      "name": "single select field",
-      "type_options": {},
-      "visibility": true,
-      "width": 120
-    },
-    {
-      "field_type": 1,
-      "id": "f3",
-      "is_primary": true,
-      "name": "checkbox field",
-      "type_options": {},
-      "visibility": true,
-      "width": 120
-    }
-  ])
-}
-
-pub(crate) fn expected_rows() -> Value {
-  json!([
-    {
-      "cells": {
-        "f1": {
-          "data": "1f1cell"
-        },
-        "f2": {
-          "data": "1f2cell"
-        },
-        "f3": {
-          "data": "1f3cell"
-        }
-      },
-      "created_at": 1703772730,
-      "last_modified": 1703772762,
-      "height": 0,
-      "id": "1",
-      "visibility": true
-    },
-    {
-      "cells": {
-        "f1": {
-          "data": "2f1cell"
-        },
-        "f2": {
-          "data": "2f2cell"
-        }
-      },
-      "created_at": 1703772730,
-      "last_modified": 1703772762,
-      "height": 0,
-      "id": "2",
-      "visibility": true
-    },
-    {
-      "cells": {
-        "f1": {
-          "data": "3f1cell"
-        },
-        "f3": {
-          "data": "3f3cell"
-        }
-      },
-      "created_at": 1703772730,
-      "last_modified": 1703772762,
-      "height": 0,
-      "id": "3",
-      "visibility": true
-    }
-  ])
-}
-
-pub(crate) fn expected_view() -> Value {
-  json!({
-    "database_id": "d1",
-    "field_orders": [
-      {
-        "id": "f1"
-      },
-      {
-        "id": "f2"
-      },
-      {
-        "id": "f3"
-      }
-    ],
-    "filters": [],
-    "created_at": 0,
-    "modified_at": 0,
-    "group_settings": [],
-    "id": "v1",
-    "layout": 0,
-    "layout_settings": {},
-    "name": "my first database view",
-    "row_orders": [
-      {
-        "height": 0,
-        "id": "1"
-      },
-      {
-        "height": 0,
-        "id": "2"
-      },
-      {
-        "height": 0,
-        "id": "3"
-      }
-    ],
-    "sorts": [],
-    "field_settings": {
-      "f3": {
-        "width": 0,
-        "visibility": 0
-      },
-      "f1": {
-        "visibility": 0,
-        "width": 0
-      },
-      "f2": {
-        "visibility": 0,
-        "width": 0
-      }
-    }
-  })
 }
