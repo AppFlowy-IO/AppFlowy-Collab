@@ -11,9 +11,9 @@ use serde_json::Value;
 use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{
-  deserialize_text_delta, Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent,
-  BlockOperation, ChildrenOperation, DocumentData, DocumentMeta, RootDeepSubscription,
-  TextOperation, EXTERNAL_TYPE_TEXT,
+  deserialize_text_delta, parse_event, Block, BlockAction, BlockActionPayload, BlockActionType,
+  BlockEvent, BlockOperation, ChildrenOperation, DocumentData, DocumentMeta, TextOperation,
+  EXTERNAL_TYPE_TEXT,
 };
 use crate::error::DocumentError;
 
@@ -37,7 +37,7 @@ const TEXT_MAP: &str = "text_map";
 pub struct Document {
   inner: Arc<MutexCollab>,
   root: MapRefWrapper,
-  subscription: RootDeepSubscription,
+  subscription: Option<DeepEventsSubscription>,
   children_operation: ChildrenOperation,
   block_operation: BlockOperation,
   text_operation: TextOperation,
@@ -83,12 +83,16 @@ impl Document {
   where
     F: Fn(&Vec<BlockEvent>, bool) + 'static,
   {
-    self
-      .subscription
-      .subscribe(&mut self.root, move |block_events, origin| {
-        let is_remote = origin.is_some();
-        callback(block_events, is_remote);
-      });
+    let self_origin = CollabOrigin::from(&self.inner.lock().origin_transact_mut());
+    self.subscription = Some(self.root.observe_deep(move |txn, events| {
+      let origin = CollabOrigin::from(txn);
+      let block_events = events
+        .iter()
+        .map(|deep_event| parse_event(txn, deep_event))
+        .collect::<Vec<BlockEvent>>();
+      let is_remote = self_origin != origin;
+      callback(&block_events, is_remote);
+    }));
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
@@ -151,10 +155,9 @@ impl Document {
   /// - @param text_id: The text block's external_id.
   /// - @param delta: The text block's delta. "\[{"insert": "Hello", "attributes": { "bold": true, "italic": true } }, {"insert": " World!"}]".
   pub fn apply_text_delta(&self, text_id: &str, delta: String) {
-    self
-      .inner
-      .lock()
-      .with_origin_transact_mut(|txn| self.apply_text_delta_with_txn(txn, text_id, delta))
+    self.inner.lock().with_origin_transact_mut(|txn| {
+      self.apply_text_delta_with_txn(txn, text_id, delta);
+    })
   }
 
   pub fn apply_text_delta_with_txn(&self, txn: &mut TransactionMut, text_id: &str, delta: String) {
@@ -482,7 +485,6 @@ impl Document {
       })?;
 
     collab_guard.enable_undo_redo();
-    let subscription = RootDeepSubscription::default();
 
     drop(collab_guard);
 
@@ -492,7 +494,7 @@ impl Document {
       block_operation,
       children_operation,
       text_operation,
-      subscription,
+      subscription: None,
     };
     Ok(document)
   }
@@ -545,14 +547,13 @@ impl Document {
       )));
     }
 
-    let subscription = RootDeepSubscription::default();
     Ok(Self {
       inner: collab,
       root: root.unwrap(),
       block_operation: block_operation.unwrap(),
       children_operation: children_operation.unwrap(),
       text_operation: text_operation.unwrap(),
-      subscription,
+      subscription: None,
     })
   }
 
