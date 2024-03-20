@@ -86,7 +86,6 @@ impl Document {
     let self_origin = CollabOrigin::from(&self.inner.lock().origin_transact_mut());
     self.subscription = Some(self.root.observe_deep(move |txn, events| {
       let origin = CollabOrigin::from(txn);
-      tracing::debug!("[Document] received msg from: {:?}", origin);
       let block_events = events
         .iter()
         .map(|deep_event| parse_event(txn, deep_event))
