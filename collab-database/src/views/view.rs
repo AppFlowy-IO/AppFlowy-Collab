@@ -10,6 +10,7 @@ use collab::preclude::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::database::{gen_database_id, gen_database_view_id, gen_row_id, timestamp, DatabaseData};
 use crate::error::DatabaseError;
 use crate::fields::Field;
 use crate::rows::CreateRowParams;
@@ -162,6 +163,62 @@ pub struct CreateDatabaseParams {
   pub fields: Vec<Field>,
   pub rows: Vec<CreateRowParams>,
   pub views: Vec<CreateViewParams>,
+}
+
+impl CreateDatabaseParams {
+  pub fn from_database_data(data: DatabaseData) -> Self {
+    let (database_id, inline_view_id) = (gen_database_id(), gen_database_view_id());
+
+    let timestamp = timestamp();
+
+    let create_row_params = data
+      .rows
+      .into_iter()
+      .map(|row| CreateRowParams {
+        id: gen_row_id(),
+        created_at: timestamp,
+        modified_at: timestamp,
+        cells: row.cells,
+        height: row.height,
+        visibility: row.visibility,
+        row_position: OrderObjectPosition::End,
+      })
+      .collect();
+
+    let create_view_params = data
+      .views
+      .into_iter()
+      .map(|view| {
+        let view_id = if view.id == data.inline_view_id {
+          inline_view_id.clone()
+        } else {
+          gen_database_view_id()
+        };
+        CreateViewParams {
+          database_id: database_id.clone(),
+          view_id,
+          name: view.name,
+          layout: view.layout,
+          layout_settings: view.layout_settings,
+          filters: view.filters,
+          group_settings: view.group_settings,
+          sorts: view.sorts,
+          field_settings: view.field_settings,
+          created_at: timestamp,
+          modified_at: timestamp,
+          ..Default::default()
+        }
+      })
+      .collect();
+
+    Self {
+      database_id,
+      inline_view_id,
+      rows: create_row_params,
+      fields: data.fields,
+      views: create_view_params,
+    }
+  }
 }
 
 const VIEW_ID: &str = "id";

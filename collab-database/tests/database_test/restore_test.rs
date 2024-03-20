@@ -99,7 +99,7 @@ async fn open_020_history_database_test() {
     "c0e69740-49f0-4790-a488-702e2750ba8d",
     db,
   );
-  let mut data = database_test.get_all_database_data();
+  let mut data = database_test.get_database_data();
 
   let expected_database_id = "c0e69740-49f0-4790-a488-702e2750ba8d".to_string();
   let expected_inline_view_id = "b44b2906-4508-4532-ad9e-2cf33ceae304".to_string();

@@ -153,7 +153,7 @@ pub async fn run_script(
       let w_database =
         workspace_database_with_db(1, Arc::downgrade(&db), Some(config.clone())).await;
       let database = w_database.get_database(&database_id).await.unwrap();
-      let database_data = database.lock().get_all_database_data();
+      let database_data = database.lock().get_database_data();
       let view = database.lock().get_view("v1").unwrap();
 
       assert_eq!(
@@ -180,7 +180,7 @@ pub async fn run_script(
         .await
         .unwrap()
         .lock()
-        .get_all_database_data();
+        .get_database_data();
 
       let view = workspace_database
         .get_database(&database_id)
