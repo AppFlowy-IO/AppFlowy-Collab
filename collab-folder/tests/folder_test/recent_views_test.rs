@@ -36,7 +36,7 @@ async fn create_recent_views_test() {
   assert_eq!(views[0].id, id_1);
   assert_eq!(views[1].id, id_2);
 
-  let recent = folder_test.get_all_recent_sections();
+  let recent = folder_test.get_my_recent_sections();
   assert_eq!(recent.len(), 1);
 }
 
@@ -82,7 +82,7 @@ async fn create_multiple_user_recent_test() {
   folder_test_1.insert_view(view_2, None);
 
   folder_test_1.add_recent_view_ids(vec![id_1.to_string(), id_2.to_string()]);
-  let recent = folder_test_1.get_all_recent_sections();
+  let recent = folder_test_1.get_my_recent_sections();
   assert_eq!(recent.len(), 2);
   assert_eq!(recent[0].id, id_1);
   assert_eq!(recent[1].id, id_2);
@@ -90,7 +90,7 @@ async fn create_multiple_user_recent_test() {
 
   let uid_2 = UserId::from(2);
   let folder_test2 = create_folder_with_data(uid_2.clone(), "w1", folder_data).await;
-  let recent = folder_test2.get_all_recent_sections();
+  let recent = folder_test2.get_my_recent_sections();
 
   // User 2 can't see user 1's recent views
   assert!(recent.is_empty());
@@ -164,12 +164,12 @@ async fn delete_recent_test() {
   folder_test.insert_view(view_2, None);
 
   folder_test.add_recent_view_ids(vec![id_1.to_string(), id_2.to_string()]);
-  let recent = folder_test.get_all_recent_sections();
+  let recent = folder_test.get_my_recent_sections();
   assert_eq!(recent.len(), 2);
   assert_eq!(recent[0].id, id_1);
   assert_eq!(recent[1].id, id_2);
 
-  folder_test.remove_all_recent_sections();
-  let recent = folder_test.get_all_recent_sections();
+  folder_test.remove_all_my_recent_sections();
+  let recent = folder_test.get_my_recent_sections();
   assert_eq!(recent.len(), 0);
 }

@@ -13,8 +13,8 @@ use crate::error::FolderError;
 use crate::folder_observe::ViewChangeSender;
 use crate::section::{Section, SectionItem, SectionMap, SectionOperation};
 use crate::{
-  subscribe_folder_change, FolderData, SectionChangeSender, TrashInfo, View, ViewRelations,
-  ViewsMap, Workspace,
+  impl_section_op, subscribe_folder_change, FolderData, SectionChangeSender, TrashInfo, View,
+  ViewRelations, ViewsMap, Workspace,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -412,65 +412,67 @@ impl Folder {
     self.meta.get_str_with_txn(txn, CURRENT_VIEW)
   }
 
-  pub fn add_favorites(&self, favorite_view_ids: Vec<String>) {
-    for fav_id in favorite_view_ids {
-      self
-        .views
-        .update_view(&fav_id, |update| update.set_favorite(true).done());
-    }
-  }
+  // Section operations
+  // Favorites
+  impl_section_op!(
+    Section::Favorite,
+    set_favorite,
+    add_favorite_view_ids,
+    delete_favorite_view_ids,
+    get_my_favorite_sections,
+    get_all_favorites_sections,
+    remove_all_my_favorite_sections
+  );
 
-  pub fn delete_favorites(&self, unfavorite_view_ids: Vec<String>) {
-    for fav_id in unfavorite_view_ids {
-      self
-        .views
-        .update_view(&fav_id, |update| update.set_favorite(false).done());
-    }
-  }
+  // Recent
+  impl_section_op!(
+    Section::Recent,
+    set_recent,
+    add_recent_view_ids,
+    delete_recent_view_ids,
+    get_my_recent_sections,
+    get_all_recent_sections,
+    remove_all_my_recent_sections
+  );
 
-  pub fn get_all_favorites(&self) -> Vec<SectionItem> {
+  // Trash
+  impl_section_op!(
+    Section::Trash,
+    set_trash,
+    add_trash_view_ids,
+    delete_trash_view_ids,
+    get_my_trash_sections,
+    get_all_trash_sections,
+    remove_all_my_trash_sections
+  );
+
+  // Private
+  impl_section_op!(
+    Section::Private,
+    set_private,
+    add_private_view_ids,
+    delete_private_view_ids,
+    get_my_private_sections,
+    get_all_private_sections,
+    remove_all_my_private_sections
+  );
+
+  pub fn get_my_trash_info(&self) -> Vec<TrashInfo> {
+    let txn = self.root.transact();
     self
-      .section
-      .section_op(Section::Favorite)
-      .map(|op| op.get_all_section_item())
-      .unwrap_or_default()
-  }
-
-  pub fn remove_all_favorites(&self) {
-    if let Some(op) = self.section.section_op(Section::Favorite) {
-      op.clear()
-    }
-  }
-
-  // if the view_id has been marked as recent, this function will update it's timestamp
-  pub fn add_recent_view_ids(&self, view_ids: Vec<String>) {
-    for id in view_ids {
-      self
-        .views
-        .update_view(&id, |update| update.set_recent(true).done());
-    }
-  }
-
-  pub fn delete_recent_view_ids(&self, view_ids: Vec<String>) {
-    for id in view_ids {
-      self
-        .views
-        .update_view(&id, |update| update.set_recent(false).done());
-    }
-  }
-
-  pub fn get_all_recent_sections(&self) -> Vec<SectionItem> {
-    self
-      .section
-      .section_op(Section::Recent)
-      .map(|op| op.get_all_section_item())
-      .unwrap_or_default()
-  }
-
-  pub fn remove_all_recent_sections(&self) {
-    if let Some(op) = self.section.section_op(Section::Recent) {
-      op.clear()
-    }
+      .get_my_trash_sections()
+      .into_iter()
+      .flat_map(|section| {
+        self
+          .views
+          .get_view_name_with_txn(&txn, &section.id)
+          .map(|name| TrashInfo {
+            id: section.id,
+            name,
+            created_at: section.timestamp,
+          })
+      })
+      .collect::<Vec<_>>()
   }
 
   pub fn is_view_in_section(&self, section: Section, view_id: &str) -> bool {
@@ -478,95 +480,6 @@ impl Folder {
       op.contains_view_id(view_id)
     } else {
       false
-    }
-  }
-
-  pub fn add_trash(&self, trash_ids: Vec<String>) {
-    let mut txn = self.root.transact_mut();
-    if let Some(section) = self.section.section_op_with_txn(&txn, Section::Trash) {
-      let items = trash_ids
-        .into_iter()
-        .map(|trash_id| SectionItem {
-          id: trash_id,
-          timestamp: chrono::Utc::now().timestamp(),
-        })
-        .collect::<Vec<_>>();
-      section.add_sections_item_with_txn(&mut txn, items);
-    }
-  }
-
-  pub fn delete_trash(&self, trash_ids: Vec<String>) {
-    let mut txn = self.root.transact_mut();
-    if let Some(section) = self.section.section_op_with_txn(&txn, Section::Trash) {
-      section.delete_section_items_with_txn(&mut txn, trash_ids);
-    }
-  }
-
-  pub fn get_all_trash(&self) -> Vec<TrashInfo> {
-    let txn = self.root.transact();
-    match self
-      .section
-      .section_op(Section::Trash)
-      .map(|op| op.get_all_section_item_with_txn(&txn))
-    {
-      None => vec![],
-      Some(items) => items
-        .into_iter()
-        .flat_map(|item| {
-          self
-            .views
-            .get_view_name_with_txn(&txn, &item.id)
-            .map(|name| TrashInfo {
-              id: item.id,
-              name,
-              created_at: item.timestamp,
-            })
-        })
-        .collect::<Vec<_>>(),
-    }
-  }
-
-  pub fn remote_all_trash(&self) {
-    if let Some(section) = self.section.section_op(Section::Trash) {
-      section.clear()
-    }
-  }
-
-  /// Get the private views for all users
-  pub fn get_all_private_views(&self) -> Vec<SectionItem> {
-    let private_views = self
-      .section
-      .section_op(Section::Private)
-      .map(|op| op.get_sections())
-      .unwrap_or_default()
-      .into_iter()
-      .flat_map(|(_user_id, items)| items)
-      .collect::<Vec<_>>();
-    private_views
-  }
-
-  /// Get the private views for the current user
-  pub fn get_my_private_views(&self) -> Vec<SectionItem> {
-    self
-      .section
-      .section_op(Section::Private)
-      .map(|op| op.get_all_section_item())
-      .unwrap_or_default()
-  }
-
-  pub fn add_private_view_ids(&self, view_ids: Vec<String>) {
-    for id in view_ids {
-      self
-        .views
-        .update_view(&id, |update| update.set_private(true).done());
-    }
-  }
-
-  pub fn delete_private_view_ids(&self, view_ids: Vec<String>) {
-    for id in view_ids {
-      self
-        .views
-        .update_view(&id, |update| update.set_private(false).done());
     }
   }
 

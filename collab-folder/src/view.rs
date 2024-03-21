@@ -641,6 +641,22 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     self
   }
 
+  pub fn set_trash(self, is_trash: bool) -> Self {
+    if let Some(trash_section) = self
+      .section_map
+      .section_op_with_txn(self.txn, Section::Trash)
+    {
+      if is_trash {
+        trash_section
+          .add_sections_item_with_txn(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
+      } else {
+        trash_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
+      }
+    }
+
+    self
+  }
+
   pub fn add_children(self, children: Vec<ViewIdentifier>, index: Option<u32>) -> Self {
     self
       .children_map
