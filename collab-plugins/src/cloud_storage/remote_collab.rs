@@ -220,15 +220,20 @@ impl RemoteCollab {
       {
         let remote_collab = self.collab.lock();
         let mut txn = remote_collab.origin_transact_mut();
-        if let Ok(update) = Update::decode_v1(&collab_doc_state) {
-          if let Err(e) = txn.try_apply_update(update) {
-            tracing::error!("apply update failed: {:?}", e);
-          }
-        } else {
-          tracing::error!("🔴decode update failed");
-        }
 
-        remote_update = collab_doc_state;
+        match collab_doc_state {
+          DocStateSource::FromDisk => {},
+          DocStateSource::FromDocState(doc_state) => {
+            if let Ok(update) = Update::decode_v1(&doc_state) {
+              if let Err(e) = txn.try_apply_update(update) {
+                tracing::error!("apply update failed: {:?}", e);
+              }
+            } else {
+              tracing::error!("🔴decode update failed");
+            }
+            remote_update = doc_state;
+          },
+        }
       }
 
       let _ = self.sync_state.send(SyncState::InitSyncBegin);
