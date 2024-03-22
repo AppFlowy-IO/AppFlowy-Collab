@@ -12,7 +12,7 @@ yrs.workspace = true
 collab-entity = { workspace = true }
 
 futures-util = { version = "0.3", features = ["sink"] }
-tokio = { version = "1.26.0", features = ["sync", "rt"] }
+tokio = { version = "1.26.0", features = ["sync", "rt", "macros"] }
 tracing.workspace = true
 parking_lot.workspace = true
 anyhow.workspace = true

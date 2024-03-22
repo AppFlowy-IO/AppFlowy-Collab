@@ -3,7 +3,7 @@ use std::sync::{Arc, Once};
 
 use bytes::Bytes;
 use collab::core::awareness::AwarenessUpdate;
-use collab::core::collab::CollabDocState;
+use collab::core::collab::DocStateSource;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
 use collab::util::deserialize_i32_from_numeric;
@@ -41,7 +41,7 @@ impl CollabStateCachePlugin {
     Self::default()
   }
 
-  pub fn get_doc_state(&self) -> Result<CollabDocState, anyhow::Error> {
+  pub fn get_doc_state(&self) -> Result<DocStateSource, anyhow::Error> {
     let mut updates = vec![];
     for encoded_data in self.0.read().iter() {
       updates.push(encoded_data.to_vec());
@@ -55,7 +55,7 @@ impl CollabStateCachePlugin {
     let doc_state = merge_updates_v1(&updates)
       .map_err(|err| anyhow::anyhow!("merge updates failed: {:?}", err))
       .unwrap();
-    Ok(doc_state)
+    Ok(DocStateSource::FromDocState(doc_state))
   }
 
   #[allow(dead_code)]
