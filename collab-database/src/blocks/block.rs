@@ -13,7 +13,7 @@ use lru::LruCache;
 use parking_lot::Mutex;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
-use tracing::{error, info, trace, warn};
+use tracing::{error, trace, warn};
 use uuid::Uuid;
 
 use crate::blocks::task_controller::{BlockTask, BlockTaskController};
