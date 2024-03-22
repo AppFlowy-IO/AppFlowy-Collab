@@ -149,6 +149,7 @@ impl Block {
       height: row.height,
     };
 
+    trace!("create_row: {}", row_id);
     let collab = self.create_collab_for_row(&row_id);
     let database_row = MutexDatabaseRow::new(DatabaseRow::create(
       row,
@@ -249,15 +250,17 @@ impl Block {
 
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
   fn get_or_init_row(&self, row_id: &RowId) -> Option<Arc<MutexDatabaseRow>> {
-    info!("get_or_init_row: {:?}", row_id);
     let collab_db = self.collab_db.upgrade()?;
     let row = self.cache.lock().get(row_id).cloned();
     match row {
       None => {
-        info!("get_or_init_row: row is not in the cache: {:?}", row_id);
         let is_exist = collab_db.read_txn().is_exist(self.uid, row_id.as_ref());
         // Can't find the row in local disk, fetch it from remote.
         if !is_exist {
+          trace!(
+            "Can't find the row in local disk, fetch it from remote: {:?}",
+            row_id
+          );
           let (sender, mut rx) = tokio::sync::mpsc::channel(1);
           self.task_controller.add_task(BlockTask::FetchRow {
             uid: self.uid,
@@ -299,10 +302,7 @@ impl Block {
           Some(database_row)
         }
       },
-      Some(row) => {
-        info!("get_or_init_row: row is in the cache: {:?}", row_id);
-        Some(row)
-      },
+      Some(row) => Some(row),
     }
   }
 
