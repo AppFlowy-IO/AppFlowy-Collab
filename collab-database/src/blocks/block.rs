@@ -2,7 +2,7 @@ use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
-use collab::core::collab::{CollabDocState, MutexCollab};
+use collab::core::collab::{DocStateSource, MutexCollab};
 
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
@@ -52,7 +52,7 @@ impl Block {
     collab_service: Arc<dyn DatabaseCollabService>,
     row_change_tx: Option<RowChangeSender>,
   ) -> Block {
-    let cache = Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap())));
+    let cache = Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(2000).unwrap())));
     let controller = BlockTaskController::new(collab_db.clone(), Arc::downgrade(&collab_service));
     let task_controller = Arc::new(controller);
     let (notifier, _) = broadcast::channel(1000);
@@ -149,7 +149,7 @@ impl Block {
       height: row.height,
     };
 
-    let collab = self.collab_for_row(&row_id, CollabDocState::default());
+    let collab = self.create_collab_for_row(&row_id);
     let database_row = MutexDatabaseRow::new(DatabaseRow::create(
       row,
       self.uid,
@@ -287,7 +287,7 @@ impl Block {
           });
           None
         } else {
-          let collab = self.collab_for_row(row_id, CollabDocState::default());
+          let collab = self.create_collab_for_row(row_id);
           let database_row = Arc::new(MutexDatabaseRow::new(DatabaseRow::new(
             self.uid,
             row_id.clone(),
@@ -346,14 +346,14 @@ impl Block {
     }
   }
 
-  fn collab_for_row(&self, row_id: &RowId, doc_state: CollabDocState) -> Arc<MutexCollab> {
+  fn create_collab_for_row(&self, row_id: &RowId) -> Arc<MutexCollab> {
     let config = CollabPersistenceConfig::new().snapshot_per_update(100);
     self.collab_service.build_collab_with_config(
       self.uid,
       row_id,
       CollabType::DatabaseRow,
       self.collab_db.clone(),
-      doc_state,
+      DocStateSource::FromDisk,
       config,
     )
   }
@@ -378,12 +378,13 @@ async fn async_create_row<T: Into<Row>>(
       &cloned_row_id,
       CollabType::DatabaseRow,
       cloned_weak_collab_db,
-      CollabDocState::default(),
+      DocStateSource::FromDisk,
       CollabPersistenceConfig::new(),
     )
   })
   .await
   {
+    trace!("async create row:{}", row_id);
     let database_row = MutexDatabaseRow::new(DatabaseRow::create(
       row,
       uid,

@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::{anyhow, Error};
 use async_trait::async_trait;
-use collab::core::collab::{CollabDocState, MutexCollab, TransactionMutExt};
+use collab::core::collab::{DocStateSource, MutexCollab, TransactionMutExt};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab_entity::{CollabObject, CollabType};
@@ -359,7 +359,7 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
   fn is_enable(&self) -> bool;
 
   /// Get all the updates of the remote collab.
-  async fn get_doc_state(&self, object: &CollabObject) -> Result<CollabDocState, anyhow::Error>;
+  async fn get_doc_state(&self, object: &CollabObject) -> Result<DocStateSource, anyhow::Error>;
 
   /// Get the latest snapshot of the remote collab.
   async fn get_snapshots(&self, object_id: &str, limit: usize) -> Vec<RemoteCollabSnapshot>;
@@ -411,7 +411,7 @@ where
     (**self).is_enable()
   }
 
-  async fn get_doc_state(&self, object: &CollabObject) -> Result<CollabDocState, anyhow::Error> {
+  async fn get_doc_state(&self, object: &CollabObject) -> Result<DocStateSource, anyhow::Error> {
     (**self).get_doc_state(object).await
   }
 

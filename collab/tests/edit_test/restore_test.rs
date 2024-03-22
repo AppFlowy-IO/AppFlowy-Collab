@@ -1,6 +1,6 @@
 #![allow(clippy::all)]
 
-use collab::core::collab::CollabBuilder;
+use collab::core::collab::{CollabBuilder, DocStateSource};
 use std::collections::HashMap;
 use yrs::updates::decoder::Decode;
 use yrs::{ReadTxn, Transact, Update};
@@ -74,9 +74,16 @@ async fn apply_same_update_multiple_time() {
 
   // It's ok to apply the updates that were already applied
   let doc_state = update_cache.get_doc_state().unwrap();
-  restored_collab.lock().with_origin_transact_mut(|txn| {
-    txn.apply_update(Update::decode_v1(&doc_state).unwrap());
-  });
+  restored_collab
+    .lock()
+    .with_origin_transact_mut(|txn| match doc_state {
+      DocStateSource::FromDisk => {
+        panic!("doc state should not be empty")
+      },
+      DocStateSource::FromDocState(doc_state) => {
+        txn.apply_update(Update::decode_v1(&doc_state).unwrap());
+      },
+    });
 
   assert_json_diff::assert_json_eq!(collab.lock().to_json(), restored_collab.lock().to_json(),);
 }

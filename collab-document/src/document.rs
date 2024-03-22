@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
-use collab::core::collab::{CollabDocState, MutexCollab};
+use collab::core::collab::{DocStateSource, MutexCollab};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
@@ -70,7 +70,7 @@ impl Document {
 
   pub fn from_doc_state(
     origin: CollabOrigin,
-    doc_state: CollabDocState,
+    doc_state: DocStateSource,
     document_id: &str,
     plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, DocumentError> {

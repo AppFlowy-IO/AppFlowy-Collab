@@ -119,16 +119,22 @@ impl Collab {
   pub fn new_with_doc_state(
     origin: CollabOrigin,
     object_id: &str,
-    collab_doc_state: CollabDocState,
+    collab_doc_state: DocStateSource,
     plugins: Vec<Box<dyn CollabPlugin>>,
     skip_gc: bool,
   ) -> Result<Self, CollabError> {
     let collab = Self::new_with_origin(origin, object_id, plugins, skip_gc);
-    if !collab_doc_state.is_empty() {
-      let mut txn = collab.origin_transact_mut();
-      let decoded_update = Update::decode_v1(&collab_doc_state)?;
-      txn.try_apply_update(decoded_update)?;
+    match collab_doc_state {
+      DocStateSource::FromDisk => {},
+      DocStateSource::FromDocState(doc_state) => {
+        if !doc_state.is_empty() {
+          let mut txn = collab.origin_transact_mut();
+          let decoded_update = Update::decode_v1(&doc_state)?;
+          txn.try_apply_update(decoded_update)?;
+        }
+      },
     }
+
     Ok(collab)
   }
 
@@ -758,14 +764,22 @@ pub struct CollabBuilder {
   device_id: String,
   plugins: Vec<Box<dyn CollabPlugin>>,
   object_id: String,
-  doc_state: CollabDocState,
+  doc_state: DocStateSource,
   skip_gc: bool,
 }
 
 /// The raw data of a collab document. It is a list of updates. Each of them can be parsed by
 /// [Update::decode_v1].
-pub type CollabDocState = Vec<u8>;
+pub enum DocStateSource {
+  FromDisk,
+  FromDocState(Vec<u8>),
+}
 
+impl DocStateSource {
+  pub fn is_empty(&self) -> bool {
+    matches!(self, DocStateSource::FromDisk)
+  }
+}
 impl CollabBuilder {
   pub fn new<T: AsRef<str>>(uid: i64, object_id: T) -> Self {
     let object_id = object_id.as_ref();
@@ -774,7 +788,7 @@ impl CollabBuilder {
       plugins: vec![],
       object_id: object_id.to_string(),
       device_id: "".to_string(),
-      doc_state: vec![],
+      doc_state: DocStateSource::FromDisk,
       skip_gc: true,
     }
   }
@@ -795,7 +809,7 @@ impl CollabBuilder {
     self
   }
 
-  pub fn with_doc_state(mut self, doc_state: CollabDocState) -> Self {
+  pub fn with_doc_state(mut self, doc_state: DocStateSource) -> Self {
     self.doc_state = doc_state;
     self
   }
@@ -927,7 +941,7 @@ impl MutexCollab {
   pub fn new_with_doc_state(
     origin: CollabOrigin,
     object_id: &str,
-    collab_doc_state: CollabDocState,
+    collab_doc_state: DocStateSource,
     plugins: Vec<Box<dyn CollabPlugin>>,
     skip_gc: bool,
   ) -> Result<Self, CollabError> {

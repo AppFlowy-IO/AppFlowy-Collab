@@ -4,7 +4,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use collab::core::collab::{CollabDocState, MutexCollab};
+use collab::core::collab::{DocStateSource, MutexCollab};
 use collab::preclude::CollabBuilder;
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::error::DatabaseError;
@@ -57,8 +57,8 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     &self,
     _object_id: &str,
     _object_ty: CollabType,
-  ) -> CollabFuture<Result<CollabDocState, DatabaseError>> {
-    Box::pin(async move { Ok(vec![]) })
+  ) -> CollabFuture<Result<DocStateSource, DatabaseError>> {
+    Box::pin(async move { Ok(DocStateSource::FromDisk) })
   }
 
   fn batch_get_collab_update(
@@ -75,7 +75,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     object_id: &str,
     object_type: CollabType,
     collab_db: Weak<CollabKVDB>,
-    doc_state: CollabDocState,
+    doc_state: DocStateSource,
     config: CollabPersistenceConfig,
   ) -> Arc<MutexCollab> {
     let collab = CollabBuilder::new(uid, object_id)
@@ -115,7 +115,7 @@ pub async fn workspace_database_test_with_config(
     &database_views_aggregate_id,
     CollabType::WorkspaceDatabase,
     Arc::downgrade(&collab_db),
-    CollabDocState::default(),
+    DocStateSource::FromDisk,
     config.clone(),
   );
   let inner = WorkspaceDatabase::open(uid, collab, Arc::downgrade(&collab_db), config, builder);
@@ -141,7 +141,7 @@ pub async fn workspace_database_with_db(
     database_views_aggregate_id,
     CollabType::WorkspaceDatabase,
     collab_db.clone(),
-    CollabDocState::default(),
+    DocStateSource::FromDisk,
     config.clone(),
   );
   WorkspaceDatabase::open(uid, collab, collab_db, config, builder)

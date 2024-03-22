@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use collab::core::collab::{CollabDocState, IndexContentReceiver, MutexCollab};
+use collab::core::collab::{DocStateSource, IndexContentReceiver, MutexCollab};
 use collab::core::collab_plugin::EncodedCollab;
 use collab::core::collab_state::{SnapshotState, SyncState};
 pub use collab::core::origin::CollabOrigin;
@@ -124,7 +124,7 @@ impl Folder {
   pub fn from_collab_doc_state<T: Into<UserId>>(
     uid: T,
     origin: CollabOrigin,
-    collab_doc_state: CollabDocState,
+    collab_doc_state: DocStateSource,
     workspace_id: &str,
     plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, FolderError> {
