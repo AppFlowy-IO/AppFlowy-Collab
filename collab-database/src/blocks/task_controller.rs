@@ -8,8 +8,11 @@ use collab::core::origin::CollabOrigin;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
+use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use tokio::sync::watch;
+use tokio::task::yield_now;
+use tracing::trace;
 
 use crate::blocks::queue::{
   PendingTask, RequestPayload, TaskHandler, TaskQueue, TaskQueueRunner, TaskState,
@@ -101,9 +104,9 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
   }
 
   async fn handle_task(&self, mut task: PendingTask<BlockTask>) -> Option<()> {
+    trace!("handle task: {:?}", task);
     task.set_state(TaskState::Processing);
-    let collab_service = self.collab_service.upgrade()?;
-    let collab_db = self.collab_db.upgrade()?;
+    let collab_db = self.collab_db.clone();
     match &task.payload {
       BlockTask::FetchRow {
         row_id,
@@ -111,13 +114,22 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
         sender,
         ..
       } => {
-        tracing::trace!("fetching database row: {:?}", row_id);
-        if let Ok(updates) = collab_service
-          .get_collab_doc_state(row_id.as_ref(), CollabType::DatabaseRow)
-          .await
-        {
-          if let Some(row_detail) = save_row(&collab_db, updates, *uid, row_id) {
-            let _ = sender.send(row_detail).await;
+        if let Some(collab_service) = self.collab_service.upgrade() {
+          trace!("fetching database row: {:?}", row_id);
+          if let Ok(doc_state) = collab_service
+            .get_collab_doc_state(row_id.as_ref(), CollabType::DatabaseRow)
+            .await
+          {
+            let collab = collab_service.build_collab_with_config(
+              *uid,
+              row_id,
+              CollabType::DatabaseRow,
+              collab_db,
+              doc_state,
+              CollabPersistenceConfig::default(),
+            );
+
+            let _ = sender.send(collab).await;
           }
         }
       },
@@ -127,20 +139,28 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
         sender,
         ..
       } => {
-        tracing::trace!("batch fetching database row");
-        let object_ids = row_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
-        if let Ok(updates_by_oid) = collab_service
-          .batch_get_collab_update(object_ids, CollabType::DatabaseRow)
-          .await
-        {
-          let mut row_details = vec![];
-          for (oid, updates) in updates_by_oid {
-            if let Some(row_detail) = save_row(&collab_db, updates, *uid, &RowId::from(oid)) {
-              row_details.push(row_detail);
+        if let Some(collab_service) = self.collab_service.upgrade() {
+          trace!("batch fetching database row");
+          let object_ids = row_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
+          if let Ok(updates_by_oid) = collab_service
+            .batch_get_collab_update(object_ids, CollabType::DatabaseRow)
+            .await
+          {
+            let mut collabs = vec![];
+            for (oid, doc_state) in updates_by_oid {
+              let collab = collab_service.build_collab_with_config(
+                *uid,
+                &oid,
+                CollabType::DatabaseRow,
+                collab_db.clone(),
+                doc_state,
+                CollabPersistenceConfig::default(),
+              );
+              collabs.push((oid, collab));
+              yield_now().await;
             }
+            let _ = sender.send(collabs).await;
           }
-
-          let _ = sender.send(row_details).await;
         }
       },
     }
@@ -153,6 +173,7 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
   }
 }
 
+#[allow(dead_code)]
 fn save_row(
   collab_db: &Arc<CollabKVDB>,
   collab_doc_state: CollabDocState,
@@ -217,8 +238,8 @@ fn save_row(
   }
 }
 
-pub type FetchRowSender = tokio::sync::mpsc::Sender<RowDetail>;
-pub type BatchFetchRowSender = tokio::sync::mpsc::Sender<Vec<RowDetail>>;
+pub type FetchRowSender = tokio::sync::mpsc::Sender<Arc<MutexCollab>>;
+pub type BatchFetchRowSender = tokio::sync::mpsc::Sender<Vec<(String, Arc<MutexCollab>)>>;
 
 #[derive(Clone)]
 pub enum BlockTask {

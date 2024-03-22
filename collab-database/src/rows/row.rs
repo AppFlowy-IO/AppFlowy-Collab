@@ -13,7 +13,7 @@ use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
 use serde::{Deserialize, Serialize};
-use tracing::error;
+use tracing::{error, trace};
 use uuid::Uuid;
 
 use crate::database::{gen_row_id, timestamp};
@@ -170,6 +170,7 @@ impl DatabaseRow {
     match self.collab.try_lock() {
       None => error!("failed to acquire lock for updating row"),
       Some(guard) => {
+        trace!("updating row: {}", self.row_id);
         guard.with_origin_transact_mut(|txn| {
           let mut update = RowUpdate::new(txn, &self.data, &self.meta);
 
