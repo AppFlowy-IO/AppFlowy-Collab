@@ -102,3 +102,53 @@ macro_rules! impl_array_update {
     }
   };
 }
+
+#[macro_export]
+macro_rules! impl_section_op {
+  ($section_type:expr, $set_fn:ident, $add_fn:ident, $delete_fn:ident, $get_my_fn:ident, $get_all_fn:ident, $remove_all_fn:ident) => {
+    // Add view IDs as either favorites or recents
+    pub fn $add_fn(&self, ids: Vec<String>) {
+      for id in ids {
+        self
+          .views
+          .update_view(&id, |update| update.$set_fn(true).done());
+      }
+    }
+
+    pub fn $delete_fn(&self, ids: Vec<String>) {
+      for id in ids {
+        self
+          .views
+          .update_view(&id, |update| update.$set_fn(false).done());
+      }
+    }
+
+    // Get all section items for the current user
+    pub fn $get_my_fn(&self) -> Vec<SectionItem> {
+      self
+        .section
+        .section_op($section_type)
+        .map(|op| op.get_all_section_item())
+        .unwrap_or_default()
+    }
+
+    // Get all sections
+    pub fn $get_all_fn(&self) -> Vec<SectionItem> {
+      self
+        .section
+        .section_op($section_type)
+        .map(|op| op.get_sections())
+        .unwrap_or_default()
+        .into_iter()
+        .flat_map(|(_user_id, items)| items)
+        .collect::<Vec<_>>()
+    }
+
+    // Clear all items in a section
+    pub fn $remove_all_fn(&self) {
+      if let Some(op) = self.section.section_op($section_type) {
+        op.clear()
+      }
+    }
+  };
+}

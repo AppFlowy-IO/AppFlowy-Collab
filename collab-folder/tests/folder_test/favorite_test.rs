@@ -20,7 +20,7 @@ async fn create_favorite_test() {
   // Get view_1 from folder
   let view_1 = folder_test.views.get_view("1").unwrap();
   assert!(!view_1.is_favorite);
-  folder_test.add_favorites(vec!["1".to_string()]);
+  folder_test.add_favorite_view_ids(vec!["1".to_string()]);
 
   // Check if view_1 is favorite
   let view_1 = folder_test.views.get_view("1").unwrap();
@@ -38,7 +38,7 @@ async fn create_favorite_test() {
   assert_eq!(views[1].id, "2");
   assert!(!views[1].is_favorite);
 
-  let favorites = folder_test.get_all_favorites();
+  let favorites = folder_test.get_my_favorite_sections();
   assert_eq!(favorites.len(), 1);
 }
 
@@ -51,14 +51,14 @@ async fn add_favorite_view_and_then_remove_test() {
   // Insert view_1
   let view_1 = make_test_view("1", workspace_id.as_str(), vec![]);
   folder_test.insert_view(view_1, None);
-  folder_test.add_favorites(vec!["1".to_string()]);
+  folder_test.add_favorite_view_ids(vec!["1".to_string()]);
 
   let views = folder_test.get_workspace_views();
   assert_eq!(views.len(), 1);
   assert_eq!(views[0].id, "1");
   assert!(views[0].is_favorite);
 
-  folder_test.delete_favorites(vec!["1".to_string()]);
+  folder_test.delete_favorite_view_ids(vec!["1".to_string()]);
   let views = folder_test.get_workspace_views();
   assert!(!views[0].is_favorite);
 }
@@ -76,8 +76,8 @@ async fn create_multiple_user_favorite_test() {
   let view_2 = make_test_view("2", workspace_id.as_str(), vec![]);
   folder_test_1.insert_view(view_2, None);
 
-  folder_test_1.add_favorites(vec!["1".to_string(), "2".to_string()]);
-  let favorites = folder_test_1.get_all_favorites();
+  folder_test_1.add_favorite_view_ids(vec!["1".to_string(), "2".to_string()]);
+  let favorites = folder_test_1.get_my_favorite_sections();
   assert_eq!(favorites.len(), 2);
   assert_eq!(favorites[0].id, "1");
   assert_eq!(favorites[1].id, "2");
@@ -85,7 +85,7 @@ async fn create_multiple_user_favorite_test() {
 
   let uid_2 = UserId::from(2);
   let folder_test2 = create_folder_with_data(uid_2.clone(), "w1", folder_data).await;
-  let favorites = folder_test2.get_all_favorites();
+  let favorites = folder_test2.get_my_favorite_sections();
 
   // User 2 can't see user 1's favorites
   assert!(favorites.is_empty());
@@ -105,7 +105,7 @@ async fn favorite_data_serde_test() {
   let view_2 = make_test_view("2", workspace_id.as_str(), vec![]);
   folder_test.insert_view(view_2, None);
 
-  folder_test.add_favorites(vec!["1".to_string(), "2".to_string()]);
+  folder_test.add_favorite_view_ids(vec!["1".to_string(), "2".to_string()]);
   let folder_data = folder_test.get_folder_data().unwrap();
   let value = serde_json::to_value(&folder_data).unwrap();
   assert_json_include!(
@@ -152,19 +152,19 @@ async fn delete_favorite_test() {
   let view_2 = make_test_view("2", workspace_id.as_str(), vec![]);
   folder_test.insert_view(view_2, None);
 
-  folder_test.add_favorites(vec!["1".to_string(), "2".to_string()]);
-  let favorites = folder_test.get_all_favorites();
+  folder_test.add_favorite_view_ids(vec!["1".to_string(), "2".to_string()]);
+  let favorites = folder_test.get_my_favorite_sections();
   assert_eq!(favorites.len(), 2);
   assert_eq!(favorites[0].id, "1");
   assert_eq!(favorites[1].id, "2");
 
-  folder_test.delete_favorites(vec!["1".to_string()]);
-  let favorites = folder_test.get_all_favorites();
+  folder_test.delete_favorite_view_ids(vec!["1".to_string()]);
+  let favorites = folder_test.get_my_favorite_sections();
   assert_eq!(favorites.len(), 1);
   assert_eq!(favorites[0].id, "2");
 
-  folder_test.remove_all_favorites();
-  let favorites = folder_test.get_all_favorites();
+  folder_test.remove_all_my_favorite_sections();
+  let favorites = folder_test.get_my_favorite_sections();
   assert_eq!(favorites.len(), 0);
 }
 
@@ -249,7 +249,7 @@ async fn migrate_favorite_v1_test() {
   // Migrate the favorites from v1 to v2
   let favorites = folder_test.get_favorite_v1();
   assert_eq!(favorites.len(), 2);
-  folder_test.add_favorites(favorites.into_iter().map(|fav| fav.id).collect::<Vec<_>>());
+  folder_test.add_favorite_view_ids(favorites.into_iter().map(|fav| fav.id).collect::<Vec<_>>());
   folder_test.migrate_workspace_to_view();
 
   let folder_data = folder_test.get_folder_data().unwrap();
