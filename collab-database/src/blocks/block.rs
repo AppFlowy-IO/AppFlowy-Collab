@@ -222,11 +222,11 @@ impl Block {
     let row = self.cache.lock().get(row_id).cloned();
     match row {
       None => {
-        self.get_or_init_row(row_id);
         trace!(
-          "fail to update row. the row is not in the cache: {:?}",
+          "fail to update row. the row is not in the cache: {:?}. init it",
           row_id
         );
+        self.get_or_init_row(row_id);
       },
       Some(row) => {
         row.lock().update::<F>(f);
