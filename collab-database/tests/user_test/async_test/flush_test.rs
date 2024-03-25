@@ -65,7 +65,7 @@ fn expect() -> Value {
         "width": 120
       }
     ],
-    "inline_view": "v1",
+    "inline_view_id": "v1",
     "rows": [
       {
         "cells": {
@@ -79,7 +79,7 @@ fn expect() -> Value {
             "data": "1f3cell"
           }
         },
-        "created_at": 0,
+        "created_at": 1703772730,
         "height": 0,
         "id": "1",
         "visibility": true
@@ -93,7 +93,7 @@ fn expect() -> Value {
             "data": "2f2cell"
           }
         },
-        "created_at": 0,
+        "created_at": 1703772730,
         "height": 0,
         "id": "2",
         "visibility": true
@@ -107,7 +107,7 @@ fn expect() -> Value {
             "data": "3f3cell"
           }
         },
-        "created_at": 0,
+        "created_at": 1703772730,
         "height": 0,
         "id": "3",
         "visibility": true
@@ -132,7 +132,7 @@ fn expect() -> Value {
         "id": "v1",
         "layout": 0,
         "layout_settings": {},
-        "name": "my first database",
+        "name": "my first database view",
         "row_orders": [
           {
             "height": 0,

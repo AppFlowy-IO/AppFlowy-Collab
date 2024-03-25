@@ -1,6 +1,6 @@
+use collab_database::database::timestamp;
 use collab_database::rows::CreateRowParams;
 use collab_database::rows::{CellsBuilder, RowId};
-use collab_database::views::OrderObjectPosition;
 use serde_json::{json, Value};
 
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -55,7 +55,11 @@ async fn edit_row_test() {
   while handles.next().await.is_some() {}
 
   let mut expected = edit_row_expected();
+
+  let timestamp = timestamp();
   expected["rows"][0]["cells"]["f1"]["data"] = Value::String("hello world".to_string());
+  expected["rows"][0]["modified_at"] = Value::Number(timestamp.into());
+
   test
     .run_scripts(vec![
       DatabaseScript::IsExist {
@@ -100,17 +104,18 @@ async fn create_row_test() {
             cells: Default::default(),
             height: 0,
             visibility: false,
-            row_position: OrderObjectPosition::default(),
-            timestamp: 0,
+            ..Default::default()
           },
         });
       }
       cloned_test.run_scripts(scripts).await;
       let mut expected = create_row_test_expected();
       expected["views"][0]["database_id"] = Value::String(database_id.clone());
+      expected["rows"][3]["created_at"] = Value::Number(timestamp().into());
+
       cloned_test
         .run_scripts(vec![DatabaseScript::AssertDatabaseInDisk {
-          database_id,
+          database_id: database_id.clone(),
           expected,
         }])
         .await;
@@ -151,7 +156,7 @@ fn edit_row_expected() -> Value {
         "width": 120
       }
     ],
-    "inline_view": "v1",
+    "inline_view_id": "v1",
     "rows": [
       {
         "cells": {
@@ -165,7 +170,7 @@ fn edit_row_expected() -> Value {
             "data": "1f3cell"
           }
         },
-        "created_at": 0,
+        "created_at": 1703772730,
         "height": 0,
         "id": "1",
         "visibility": true
@@ -179,7 +184,7 @@ fn edit_row_expected() -> Value {
             "data": "2f2cell"
           }
         },
-        "created_at": 0,
+        "created_at": 1703772730,
         "height": 0,
         "id": "2",
         "visibility": true
@@ -193,7 +198,7 @@ fn edit_row_expected() -> Value {
             "data": "3f3cell"
           }
         },
-        "created_at": 0,
+        "created_at": 1703772730,
         "height": 0,
         "id": "3",
         "visibility": true
@@ -218,7 +223,7 @@ fn edit_row_expected() -> Value {
         "id": "v1",
         "layout": 0,
         "layout_settings": {},
-        "name": "my first database",
+        "name": "my first database view",
         "row_orders": [
           {
             "height": 0,
@@ -238,6 +243,7 @@ fn edit_row_expected() -> Value {
     ]
   })
 }
+
 fn create_row_test_expected() -> Value {
   json!(
   {
@@ -270,7 +276,7 @@ fn create_row_test_expected() -> Value {
         "width": 120
       }
     ],
-    "inline_view": "v1",
+    "inline_view_id": "v1",
     "rows": [
       {
         "block_id": 1,
@@ -285,7 +291,7 @@ fn create_row_test_expected() -> Value {
             "data": "1f3cell"
           }
         },
-        "created_at": 0,
+        "created_at": 1703772730,
         "height": 60,
         "id": "1",
         "visibility": true
@@ -300,7 +306,7 @@ fn create_row_test_expected() -> Value {
             "data": "2f2cell"
           }
         },
-        "created_at": 0,
+        "created_at": 1703772730,
         "height": 60,
         "id": "2",
         "visibility": true
@@ -315,7 +321,7 @@ fn create_row_test_expected() -> Value {
             "data": "3f3cell"
           }
         },
-        "created_at": 0,
+        "created_at": 1703772730,
         "height": 60,
         "id": "3",
         "visibility": true
@@ -323,7 +329,7 @@ fn create_row_test_expected() -> Value {
       {
         "block_id": 4,
         "cells": {},
-        "created_at": 0,
+        "created_at": 1703772730,
         "height": 60,
         "id": "4",
         "visibility": false
@@ -350,7 +356,7 @@ fn create_row_test_expected() -> Value {
         "layout": 0,
         "layout_settings": {},
         "modified_at": 0,
-        "name": "my first database",
+        "name": "my first database view",
         "row_orders": [
           {
             "block_id": 1,

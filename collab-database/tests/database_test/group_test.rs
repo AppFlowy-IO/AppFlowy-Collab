@@ -208,7 +208,7 @@ async fn create_database_with_two_groups() -> DatabaseTest {
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v1".to_string(),
-    groups: vec![group_1.into(), group_2.into()],
+    group_settings: vec![group_1.into(), group_2.into()],
     layout: DatabaseLayout::Grid,
     ..Default::default()
   };
