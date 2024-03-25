@@ -983,8 +983,6 @@ unsafe impl Sync for MutexCollab {}
 unsafe impl Send for MutexCollab {}
 
 pub trait TransactionExt<'doc> {
-  /// Applies an update to the document. If the update is invalid, it will return an error.
-  /// It allows to catch panics from `apply_update`.
   fn try_encode_state_as_update_v1(&self, sv: &StateVector) -> Result<Vec<u8>, CollabError>;
 }
 
@@ -1001,6 +999,7 @@ pub trait TransactionMutExt<'doc> {
   /// Applies an update to the document. If the update is invalid, it will return an error.
   /// It allows to catch panics from `apply_update`.
   fn try_apply_update(&mut self, update: Update) -> Result<(), CollabError>;
+  fn try_commit(&mut self) -> Result<(), CollabError>;
 }
 
 impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
@@ -1008,6 +1007,13 @@ impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
     match panic::catch_unwind(AssertUnwindSafe(|| {
       self.apply_update(update);
     })) {
+      Ok(_) => Ok(()),
+      Err(e) => Err(CollabError::YrsTransactionError(format!("{:?}", e))),
+    }
+  }
+
+  fn try_commit(&mut self) -> Result<(), CollabError> {
+    match panic::catch_unwind(AssertUnwindSafe(|| self.commit())) {
       Ok(_) => Ok(()),
       Err(e) => Err(CollabError::YrsTransactionError(format!("{:?}", e))),
     }
