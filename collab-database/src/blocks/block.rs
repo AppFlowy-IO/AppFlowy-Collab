@@ -152,7 +152,7 @@ impl Block {
     trace!("create_row: {}", row_id);
     let collab = self.create_collab_for_row(&row_id);
     let database_row = MutexDatabaseRow::new(DatabaseRow::create(
-      row,
+      Some(row),
       self.uid,
       row_id.clone(),
       self.collab_db.clone(),
@@ -386,7 +386,7 @@ async fn async_create_row<T: Into<Row>>(
   {
     trace!("async create row:{}", row_id);
     let database_row = MutexDatabaseRow::new(DatabaseRow::create(
-      row,
+      Some(row),
       uid,
       row_id.clone(),
       collab_db,

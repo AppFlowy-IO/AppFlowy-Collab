@@ -2273,8 +2273,9 @@ dependencies = [
 
 [[package]]
 name = "yrs"
-version = "0.17.1"
-source = "git+https://github.com/appflowy/y-crdt?rev=c7f1e510a49d12ea738a95806b535b6a557ccf86#c7f1e510a49d12ea738a95806b535b6a557ccf86"
+version = "0.17.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4830316bfee4bec0044fe34a001cda783506d5c4c0852f8433c6041dfbfce51"
 dependencies = [
  "atomic_refcell",
  "rand 0.7.3",
@@ -2354,3 +2355,8 @@ dependencies = [
  "libc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "yrs"
+version = "0.17.2"
+source = "git+https://github.com/appflowy/y-crdt?branch=hot_fix_parent_panic#4866d7a739a941c37658b5f66e8fd0028e645c78"
