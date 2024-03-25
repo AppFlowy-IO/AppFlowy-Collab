@@ -90,7 +90,7 @@ pub struct Folder {
   section: Rc<SectionMap>,
   pub(crate) meta: MapRefWrapper,
   #[allow(dead_code)]
-  subscription: DeepEventsSubscription,
+  subscription: Subscription,
   #[allow(dead_code)]
   notifier: Option<FolderNotify>,
 }

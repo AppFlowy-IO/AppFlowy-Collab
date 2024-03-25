@@ -4,6 +4,7 @@ use std::sync::Arc;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use yrs::block::Prelim;
+use yrs::doc::TransactionAcqError;
 use yrs::types::{ToJson, Value};
 use yrs::{
   ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, ReadTxn, TextPrelim, Transaction, TransactionMut,
@@ -199,6 +200,23 @@ impl MapRefWrapper {
     let txn = self.collab_ctx.transact();
     let value = self.map_ref.to_json(&txn);
     any_to_json_value(value)
+  }
+}
+
+impl Transact for MapRefWrapper {
+  fn try_transact(&self) -> Result<Transaction, TransactionAcqError> {
+    self.collab_ctx.doc.try_transact()
+  }
+
+  fn try_transact_mut(&self) -> Result<TransactionMut, TransactionAcqError> {
+    self.collab_ctx.doc.try_transact_mut()
+  }
+
+  fn try_transact_mut_with<T>(&self, origin: T) -> Result<TransactionMut, TransactionAcqError>
+  where
+    T: Into<Origin>,
+  {
+    self.collab_ctx.doc.try_transact_mut_with(origin)
   }
 }
 

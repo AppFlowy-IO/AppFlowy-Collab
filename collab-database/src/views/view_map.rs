@@ -2,8 +2,7 @@ use collab::core::value::YrsValueExtension;
 use std::ops::Deref;
 
 use collab::preclude::{
-  Array, DeepEventsSubscription, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
-  TransactionMut,
+  Array, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, Subscription, TransactionMut,
 };
 
 use crate::database::timestamp;
@@ -22,7 +21,7 @@ use super::{calculations_from_map_ref, view_id_from_map_ref};
 pub struct ViewMap {
   container: MapRefWrapper,
   #[allow(dead_code)]
-  subscription: Option<DeepEventsSubscription>,
+  subscription: Option<Subscription>,
 }
 
 impl Deref for ViewMap {

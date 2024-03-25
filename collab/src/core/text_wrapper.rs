@@ -6,7 +6,7 @@ use yrs::types::text::{TextEvent, YChange};
 use yrs::types::{Attrs, Delta};
 use yrs::{Any, ReadTxn, Subscription, Text, TextRef, Transaction, TransactionMut};
 pub type TextSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &TextEvent)>;
-pub type TextSubscription = Subscription<TextSubscriptionCallback>;
+pub type TextSubscription = Subscription;
 
 pub struct TextRefWrapper {
   text_ref: TextRef,

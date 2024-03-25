@@ -1,7 +1,6 @@
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::preclude::{
-  Array, ArrayRefWrapper, Change, DeepEventsSubscription, DeepObservable, Event, MapPrelim,
-  YrsValue,
+  Array, ArrayRefWrapper, Change, DeepObservable, Event, MapPrelim, Subscription, YrsValue,
 };
 use collab_entity::reminder::{Reminder, REMINDER_ID};
 use tokio::sync::broadcast;
@@ -18,7 +17,7 @@ pub enum ReminderChange {
 pub struct Reminders {
   pub(crate) container: ArrayRefWrapper,
   #[allow(dead_code)]
-  subscription: Option<DeepEventsSubscription>,
+  subscription: Option<Subscription>,
 }
 
 impl Reminders {
@@ -94,7 +93,7 @@ impl Reminders {
 fn subscribe_reminder_change(
   root: &mut ArrayRefWrapper,
   change_tx: RemindersChangeSender,
-) -> DeepEventsSubscription {
+) -> Subscription {
   root.observe_deep(move |txn, events| {
     for event in events.iter() {
       if let Event::Array(array_event) = event {

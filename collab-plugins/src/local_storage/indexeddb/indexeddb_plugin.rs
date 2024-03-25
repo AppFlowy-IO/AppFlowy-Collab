@@ -3,7 +3,7 @@ use crate::local_storage::kv::keys::{make_doc_state_key, make_state_vector_key};
 
 use async_stream::stream;
 use async_trait::async_trait;
-use collab::core::awareness::{AwarenessUpdate, Event};
+use yrs::sync::awareness::Event;
 
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
@@ -110,15 +110,6 @@ impl CollabPlugin for IndexeddbDiskPlugin {
     if let Err(err) = self.edit_sender.send(DocUpdate::Update(update.to_vec())) {
       error!("failed to send update: {}", err);
     }
-  }
-
-  fn receive_local_state(
-    &self,
-    _origin: &CollabOrigin,
-    _object_id: &str,
-    _event: &Event,
-    _update: &AwarenessUpdate,
-  ) {
   }
 
   fn did_init(&self, _collab: &Collab, _object_id: &str, _last_sync_at: i64) {

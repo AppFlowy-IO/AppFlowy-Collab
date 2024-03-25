@@ -3,8 +3,8 @@ use std::sync::{Arc, Weak};
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::{
-  Any, ArrayRefWrapper, Collab, DeepEventsSubscription, Map, MapPrelim, MapRef, MapRefExtension,
-  MapRefWrapper, ReadTxn, Transaction, TransactionMut, YrsValue,
+  Any, ArrayRefWrapper, Collab, Map, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
+  Subscription, Transaction, TransactionMut, YrsValue,
 };
 use parking_lot::Mutex;
 
@@ -44,7 +44,7 @@ pub struct DatabaseRow {
   comments: ArrayRefWrapper,
   collab_db: Weak<CollabKVDB>,
   #[allow(dead_code)]
-  subscription: Option<DeepEventsSubscription>,
+  subscription: Option<Subscription>,
 }
 
 impl DatabaseRow {

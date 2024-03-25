@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, Once};
 
 use bytes::Bytes;
-use collab::core::awareness::AwarenessUpdate;
 use collab::core::collab::DocStateSource;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
@@ -79,15 +78,6 @@ impl CollabPlugin for CollabStateCachePlugin {
       write_guard.push(Bytes::from(doc_state));
     }
     write_guard.push(Bytes::from(update.to_vec()));
-  }
-
-  fn receive_local_state(
-    &self,
-    _origin: &CollabOrigin,
-    _object_id: &str,
-    _event: &collab::core::awareness::Event,
-    _update: &AwarenessUpdate,
-  ) {
   }
 }
 

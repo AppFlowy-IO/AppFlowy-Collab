@@ -4,8 +4,8 @@ use crate::{timestamp, UserId};
 use anyhow::bail;
 use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::preclude::{
-  Any, Array, DeepEventsSubscription, DeepObservable, Map, MapRefWrapper, ReadTxn, Transact,
-  TransactionMut, Value, YrsValue,
+  Any, Array, DeepObservable, Map, MapRefWrapper, ReadTxn, Subscription, Transact, TransactionMut,
+  Value, YrsValue,
 };
 use collab::util::deserialize_i64_from_numeric;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ pub struct SectionMap {
   #[allow(dead_code)]
   change_tx: Option<SectionChangeSender>,
   #[allow(dead_code)]
-  subscription: DeepEventsSubscription,
+  subscription: Subscription,
 }
 
 impl SectionMap {
@@ -404,6 +404,6 @@ impl TryFrom<&YrsValue> for SectionItem {
   }
 }
 
-fn subscribe_section_change(map: &mut MapRefWrapper) -> DeepEventsSubscription {
+fn subscribe_section_change(map: &mut MapRefWrapper) -> Subscription {
   map.observe_deep(move |_txn, _events| {})
 }

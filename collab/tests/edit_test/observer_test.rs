@@ -19,7 +19,7 @@ async fn array_observer_test() {
   drop(txn);
 
   let doc2 = Doc::with_client_id(2);
-  let mut block_2 = doc2.get_or_insert_array("blocks");
+  let block_2 = doc2.get_or_insert_array("blocks");
   let _subscription = block_2.observe(|txn, event| {
     for event in event.delta(txn) {
       match event {

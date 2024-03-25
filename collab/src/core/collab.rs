@@ -17,15 +17,13 @@ use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
 use yrs::updates::decoder::Decode;
 
+use yrs::sync::awareness::Event;
+use yrs::sync::{Awareness, AwarenessUpdate};
 use yrs::{
   Any, ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options,
   ReadTxn, StateVector, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
-  UpdateSubscription,
 };
 
-use crate::core::awareness::{
-  gen_awareness_update_message, Awareness, AwarenessUpdateSubscription, Event,
-};
 use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedCollab};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
@@ -41,10 +39,10 @@ pub const META_SECTION: &str = "meta";
 
 const LAST_SYNC_AT: &str = "last_sync_at";
 
-type AfterTransactionSubscription = Subscription<Arc<dyn Fn(&mut TransactionMut)>>;
+type AfterTransactionSubscription = Subscription;
 
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
-pub type MapSubscription = Subscription<MapSubscriptionCallback>;
+pub type MapSubscription = Subscription;
 
 #[derive(Debug, Clone)]
 pub enum IndexContent {
@@ -84,8 +82,8 @@ pub struct Collab {
   /// The [UndoManager] is used to undo and redo changes. By default, the [UndoManager]
   /// is disabled. To enable it, call [Collab::enable_undo_manager].
   undo_manager: Mutex<Option<UndoManager>>,
-  update_subscription: RwLock<Option<UpdateSubscription>>,
-  awareness_subscription: RwLock<Option<AwarenessUpdateSubscription>>,
+  update_subscription: RwLock<Option<Subscription>>,
+  awareness_subscription: RwLock<Option<Subscription>>,
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
   pub index_json_sender: IndexContentSender,
 }
@@ -222,6 +220,17 @@ impl Collab {
 
   pub fn get_mut_awareness(&mut self) -> &mut Awareness {
     &mut self.awareness
+  }
+
+  pub fn set_local_state(&mut self, state: serde_json::Value) {
+    self.awareness.set_local_state(state.to_string());
+  }
+
+  pub fn get_local_state(&self) -> Option<serde_json::Value> {
+    self
+      .awareness
+      .local_state()
+      .and_then(|s| serde_json::from_str(s).ok())
   }
 
   /// Add a plugin to the [Collab]. The plugin's callbacks will be called in the order they are added.
@@ -393,9 +402,9 @@ impl Collab {
     self.data.observe(f)
   }
 
-  pub fn observe_awareness<F>(&mut self, f: F) -> AwarenessUpdateSubscription
+  pub fn observe_awareness<F>(&mut self, f: F) -> Subscription
   where
-    F: Fn(&Awareness, &Event) + 'static,
+    F: Fn(&Event) + 'static,
   {
     self.awareness.on_update(f)
   }
@@ -697,14 +706,12 @@ fn observe_awareness(
   plugins: Plugins,
   oid: String,
   origin: CollabOrigin,
-) -> AwarenessUpdateSubscription {
-  awareness.on_update(move |awareness, event| {
-    if let Ok(update) = gen_awareness_update_message(awareness, event) {
-      plugins
-        .read()
-        .iter()
-        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
-    }
+) -> Subscription {
+  awareness.on_update(move |event| {
+    plugins
+      .read()
+      .iter()
+      .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event));
   })
 }
 
@@ -716,7 +723,7 @@ fn observe_doc(
   oid: String,
   plugins: Plugins,
   local_origin: CollabOrigin,
-) -> (UpdateSubscription, AfterTransactionSubscription) {
+) -> (Subscription, AfterTransactionSubscription) {
   let cloned_oid = oid.clone();
   let cloned_plugins = plugins.clone();
   let update_sub = doc
@@ -834,7 +841,7 @@ impl CollabBuilder {
 #[derive(Clone)]
 pub struct CollabContext {
   origin: CollabOrigin,
-  doc: Doc,
+  pub(crate) doc: Doc,
   #[allow(dead_code)]
   plugins: Plugins,
 }
@@ -1020,6 +1027,22 @@ impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
   }
 }
 
-fn initial_awareness_state(uid: i64) -> JsonValue {
-  json!({ "uid": uid })
+fn initial_awareness_state(uid: i64) -> String {
+  json!({ "uid": uid }).to_string()
+}
+
+#[inline]
+pub fn gen_awareness_update_message(
+  awareness: &Awareness,
+  event: &Event,
+) -> Result<AwarenessUpdate, CollabError> {
+  let added = event.added();
+  let updated = event.updated();
+  let removed = event.removed();
+  let mut changed = Vec::with_capacity(added.len() + updated.len() + removed.len());
+  changed.extend_from_slice(added);
+  changed.extend_from_slice(updated);
+  changed.extend_from_slice(removed);
+  let update = awareness.update_with_clients(changed)?;
+  Ok(update)
 }

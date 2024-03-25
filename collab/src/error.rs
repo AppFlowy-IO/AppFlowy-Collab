@@ -22,7 +22,7 @@ pub enum CollabError {
   DecodeUpdate(#[from] yrs::encoding::read::Error),
 
   #[error(transparent)]
-  Awareness(#[from] crate::core::awareness::Error),
+  Awareness(#[from] yrs::sync::awareness::Error),
 
   #[error("Internal failure: {0}")]
   Internal(#[from] Box<dyn std::error::Error + Send + Sync>),

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use collab::core::collab::{IndexContent, IndexContentSender};
 use collab::preclude::{
-  DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRefWrapper, ToJson, YrsValue,
+  DeepObservable, EntryChange, Event, MapRefWrapper, Subscription, ToJson, YrsValue,
 };
 use parking_lot::RwLock;
 use serde_json::json;
@@ -23,7 +23,7 @@ pub enum ViewChange {
 pub type ViewChangeSender = broadcast::Sender<ViewChange>;
 pub type ViewChangeReceiver = broadcast::Receiver<ViewChange>;
 
-pub(crate) fn subscribe_folder_change(root: &mut MapRefWrapper) -> DeepEventsSubscription {
+pub(crate) fn subscribe_folder_change(root: &mut MapRefWrapper) -> Subscription {
   root.observe_deep(move |txn, events| {
     for deep_event in events.iter() {
       match deep_event {
@@ -61,7 +61,7 @@ pub(crate) fn subscribe_view_change(
   view_relations: Rc<ViewRelations>,
   section_map: Rc<SectionMap>,
   index_sender: IndexContentSender,
-) -> DeepEventsSubscription {
+) -> Subscription {
   let uid = uid.clone();
   root.observe_deep(move |txn, events| {
     for deep_event in events.iter() {
