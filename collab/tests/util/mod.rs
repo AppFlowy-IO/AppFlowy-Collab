@@ -79,14 +79,6 @@ impl CollabPlugin for CollabStateCachePlugin {
     }
     write_guard.push(Bytes::from(update.to_vec()));
   }
-
-  fn receive_local_state(
-    &self,
-    _origin: &CollabOrigin,
-    _object_id: &str,
-    _event: &yrs::sync::awareness::Event,
-  ) {
-  }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

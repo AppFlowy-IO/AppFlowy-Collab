@@ -16,6 +16,7 @@ use tokio_retry::strategy::FibonacciBackoff;
 use tokio_retry::{Action, Retry};
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
+use yrs::sync::awareness::Event;
 use yrs::updates::decoder::Decode;
 use yrs::{ReadTxn, StateVector, Update};
 
@@ -114,15 +115,6 @@ impl CollabPlugin for SupabaseDBPlugin {
     } else {
       self.pending_updates.write().push(update.to_vec());
     }
-  }
-
-  fn receive_local_state(
-    &self,
-    _origin: &CollabOrigin,
-    _object_id: &str,
-    _event: &Event,
-    _update: &AwarenessUpdate,
-  ) {
   }
 
   fn plugin_type(&self) -> CollabPluginType {

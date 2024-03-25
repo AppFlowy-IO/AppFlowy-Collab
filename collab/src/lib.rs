@@ -27,6 +27,7 @@ pub mod preclude {
   };
   pub use yrs::*;
 
+  pub type YrsSubscription = yrs::sync::awareness::Subscription;
   pub use crate::core::array_wrapper::ArrayRefWrapper;
   pub use crate::core::collab::{Collab, CollabBuilder, CollabContext};
   pub use crate::core::collab_plugin::CollabPlugin;

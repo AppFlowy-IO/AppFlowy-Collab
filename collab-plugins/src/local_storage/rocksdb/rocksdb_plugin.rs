@@ -206,8 +206,6 @@ impl CollabPlugin for RocksdbDiskPlugin {
     };
   }
 
-  fn receive_local_state(&self, _origin: &CollabOrigin, _object_id: &str, _event: &Event) {}
-
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
 
   fn reset(&self, object_id: &str) {
