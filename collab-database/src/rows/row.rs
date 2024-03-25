@@ -9,6 +9,7 @@ use collab::preclude::{
 use parking_lot::Mutex;
 
 use collab::core::value::YrsValueExtension;
+use collab::error::CollabError;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
@@ -48,84 +49,38 @@ pub struct DatabaseRow {
 }
 
 impl DatabaseRow {
-  pub fn create<T: Into<Row>>(
-    row: T,
+  pub fn create(
+    row: Option<Row>,
     uid: i64,
     row_id: RowId,
     collab_db: Weak<CollabKVDB>,
     collab: Arc<MutexCollab>,
     change_tx: Option<RowChangeSender>,
   ) -> Self {
-    let row = row.into();
-    let mut database_row = Self::inner_new(uid, row_id, collab_db, collab);
-    let data = database_row.data.clone();
-    let meta = database_row.meta.clone();
-    database_row.collab.lock().with_origin_transact_mut(|txn| {
-      RowBuilder::new(txn, data.into_inner(), meta.into_inner())
-        .update(|update| {
-          update
-            .set_row_id(row.id)
-            .set_height(row.height)
-            .set_visibility(row.visibility)
-            .set_created_at(row.created_at)
-            .set_last_modified(row.created_at)
-            .set_cells(row.cells);
-        })
-        .done();
-    });
+    let (mut data, meta, comments) = {
+      let collab_guard = collab.lock();
+      collab_guard.with_origin_transact_mut(|txn| {
+        let data = collab_guard.insert_map_with_txn_if_not_exist(txn, DATA);
+        let meta = collab_guard.insert_map_with_txn_if_not_exist(txn, META);
+        let comments = collab_guard.create_array_with_txn::<MapPrelim<Any>>(txn, COMMENT, vec![]);
+        if let Some(row) = row {
+          RowBuilder::new(txn, data.clone().into_inner(), meta.clone().into_inner())
+            .update(|update| {
+              update
+                .set_row_id(row.id)
+                .set_height(row.height)
+                .set_visibility(row.visibility)
+                .set_created_at(row.created_at)
+                .set_last_modified(row.created_at)
+                .set_cells(row.cells);
+            })
+            .done();
+        }
 
-    database_row.subscription =
-      change_tx.map(|sender| subscribe_row_data_change(&mut database_row.data, sender));
-
-    database_row
-  }
-
-  pub fn new(
-    uid: i64,
-    row_id: RowId,
-    collab_db: Weak<CollabKVDB>,
-    collab: Arc<MutexCollab>,
-    change_tx: Option<RowChangeSender>,
-  ) -> Self {
-    let mut this = Self::inner_new(uid, row_id, collab_db, collab);
-    this.subscription = change_tx.map(|sender| subscribe_row_data_change(&mut this.data, sender));
-    this
-  }
-
-  fn inner_new(
-    uid: i64,
-    row_id: RowId,
-    collab_db: Weak<CollabKVDB>,
-    collab: Arc<MutexCollab>,
-  ) -> Self {
-    let collab_guard = collab.lock();
-    let (data, meta, comments) = {
-      let txn = collab_guard.transact();
-      let data = collab_guard.get_map_with_txn(&txn, vec![DATA]);
-      let meta = collab_guard.get_map_with_txn(&txn, vec![META]);
-      let comments = collab_guard.get_array_with_txn(&txn, vec![COMMENT]);
-      drop(txn);
-      (data, meta, comments)
+        (data, meta, comments)
+      })
     };
-
-    // If any of the data is missing, we need to create it.
-    let mut txn = if data.is_none() || meta.is_none() || comments.is_none() {
-      Some(collab_guard.origin_transact_mut())
-    } else {
-      None
-    };
-
-    let data =
-      data.unwrap_or_else(|| collab_guard.insert_map_with_txn(txn.as_mut().unwrap(), DATA));
-    let meta =
-      meta.unwrap_or_else(|| collab_guard.insert_map_with_txn(txn.as_mut().unwrap(), META));
-    let comments = comments.unwrap_or_else(|| {
-      collab_guard.create_array_with_txn::<MapPrelim<Any>>(txn.as_mut().unwrap(), COMMENT, vec![])
-    });
-
-    drop(txn);
-    drop(collab_guard);
-
+    let subscription = change_tx.map(|sender| subscribe_row_data_change(&mut data, sender));
     Self {
       uid,
       row_id,
@@ -134,7 +89,58 @@ impl DatabaseRow {
       meta,
       comments,
       collab_db,
-      subscription: None,
+      subscription,
+    }
+  }
+
+  pub fn new(
+    uid: i64,
+    row_id: RowId,
+    collab_db: Weak<CollabKVDB>,
+    collab: Arc<MutexCollab>,
+    change_tx: Option<RowChangeSender>,
+  ) -> Result<Self, CollabError> {
+    match Self::create_row_struct(&collab)? {
+      Some((mut data, meta, comments)) => {
+        let subscription = change_tx.map(|sender| subscribe_row_data_change(&mut data, sender));
+        Ok(Self {
+          uid,
+          row_id,
+          collab,
+          data,
+          meta,
+          comments,
+          collab_db,
+          subscription,
+        })
+      },
+      None => Ok(Self::create(
+        None, uid, row_id, collab_db, collab, change_tx,
+      )),
+    }
+  }
+
+  fn create_row_struct(
+    collab: &Arc<MutexCollab>,
+  ) -> Result<Option<(MapRefWrapper, MapRefWrapper, ArrayRefWrapper)>, CollabError> {
+    let collab_guard = collab.lock();
+    let txn = collab_guard.transact();
+    let data = collab_guard.get_map_with_txn(&txn, vec![DATA]);
+
+    match data {
+      None => Err(CollabError::UnexpectedEmpty("missing data map".to_string())),
+      Some(data) => {
+        let f = || {
+          let meta = collab_guard.get_map_with_txn(&txn, vec![META])?;
+          let comments = collab_guard.get_array_with_txn(&txn, vec![COMMENT])?;
+          Some((meta, comments))
+        };
+
+        match f() {
+          None => Ok(None),
+          Some((meta, comments)) => Ok(Some((data, meta, comments))),
+        }
+      },
     }
   }
 

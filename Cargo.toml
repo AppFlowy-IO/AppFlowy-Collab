@@ -18,7 +18,7 @@ collab-user = { workspace = true, path = "collab-user" }
 collab-entity = { workspace = true, path = "collab-entity" }
 collab-document = { workspace = true, path = "collab-document" }
 collab-folder = { workspace = true, path = "collab-folder" }
-yrs = "0.17.1"
+yrs = "0.17.2"
 anyhow = "1.0"
 thiserror = "1.0.39"
 serde = { version = "1.0.157", features = ["derive"] }
@@ -28,6 +28,3 @@ bytes = "1.5.0"
 tracing = "0.1.22"
 chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
 async-trait = "0.1"
-
-[patch.crates-io]
-yrs = { git = "https://github.com/appflowy/y-crdt", rev = "c7f1e510a49d12ea738a95806b535b6a557ccf86" }
