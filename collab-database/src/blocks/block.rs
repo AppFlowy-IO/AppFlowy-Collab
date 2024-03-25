@@ -286,6 +286,8 @@ impl Block {
                 cache,
                 row_collab,
               );
+            } else {
+              error!("Can't fetch the row from remote: {:?}", row_id);
             }
           });
           None
