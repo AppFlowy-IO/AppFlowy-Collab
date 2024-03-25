@@ -468,6 +468,7 @@ impl Document {
       })
     })
   }
+
   // Clean the local state of the awareness.
   // It should be called when the document is closed.
   pub fn clean_awareness_local_state(&self) {
