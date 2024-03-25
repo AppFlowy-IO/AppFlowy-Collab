@@ -222,6 +222,7 @@ impl Block {
     let row = self.cache.lock().get(row_id).cloned();
     match row {
       None => {
+        self.get_or_init_row(row_id);
         trace!(
           "fail to update row. the row is not in the cache: {:?}",
           row_id
@@ -275,7 +276,7 @@ impl Block {
           let weak_notifier = Arc::downgrade(&self.notifier);
           let uid = self.uid;
           let change_tx = self.row_change_tx.clone();
-          let collab_db = self.collab_db.clone();
+          let weak_collab_db = self.collab_db.clone();
           let cache = self.cache.clone();
           let row_id = row_id.clone();
           tokio::spawn(async move {
@@ -285,11 +286,17 @@ impl Block {
                 weak_notifier,
                 uid,
                 change_tx,
-                collab_db,
+                weak_collab_db.clone(),
                 cache,
                 row_collab,
               ) {
                 error!("Can't init collab row: {:?}", err);
+                if let Some(collab_db) = weak_collab_db.upgrade() {
+                  let _ = collab_db.with_write_txn(|txn| {
+                    txn.delete_doc(uid, row_id.as_ref())?;
+                    Ok(())
+                  });
+                }
               }
             } else {
               error!("Can't fetch the row from remote: {:?}", row_id);
@@ -298,20 +305,29 @@ impl Block {
           None
         } else {
           let collab = self.create_collab_for_row(row_id);
-          let database_row = DatabaseRow::new(
+          match DatabaseRow::new(
             self.uid,
             row_id.clone(),
             self.collab_db.clone(),
             collab,
             self.row_change_tx.clone(),
-          )
-          .ok()?;
-          let arc_database_row = Arc::new(MutexDatabaseRow::new(database_row));
-          self
-            .cache
-            .lock()
-            .put(row_id.clone(), arc_database_row.clone());
-          Some(arc_database_row)
+          ) {
+            Ok(database_row) => {
+              let arc_database_row = Arc::new(MutexDatabaseRow::new(database_row));
+              self
+                .cache
+                .lock()
+                .put(row_id.clone(), arc_database_row.clone());
+              Some(arc_database_row)
+            },
+            Err(_) => {
+              let _ = collab_db.with_write_txn(|txn| {
+                txn.delete_doc(self.uid, row_id.as_ref())?;
+                Ok(())
+              });
+              None
+            },
+          }
         }
       },
       Some(row) => Some(row),
