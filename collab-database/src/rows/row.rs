@@ -9,6 +9,7 @@ use collab::preclude::{
 use parking_lot::Mutex;
 
 use collab::core::value::YrsValueExtension;
+use collab::error::CollabError;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
@@ -98,11 +99,11 @@ impl DatabaseRow {
     collab_db: Weak<CollabKVDB>,
     collab: Arc<MutexCollab>,
     change_tx: Option<RowChangeSender>,
-  ) -> Self {
-    match Self::create_row_struct(&collab) {
+  ) -> Result<Self, CollabError> {
+    match Self::create_row_struct(&collab)? {
       Some((mut data, meta, comments)) => {
         let subscription = change_tx.map(|sender| subscribe_row_data_change(&mut data, sender));
-        Self {
+        Ok(Self {
           uid,
           row_id,
           collab,
@@ -111,23 +112,36 @@ impl DatabaseRow {
           comments,
           collab_db,
           subscription,
-        }
+        })
       },
-      None => Self::create(None, uid, row_id, collab_db, collab, change_tx),
+      None => Ok(Self::create(
+        None, uid, row_id, collab_db, collab, change_tx,
+      )),
     }
   }
 
   fn create_row_struct(
     collab: &Arc<MutexCollab>,
-  ) -> Option<(MapRefWrapper, MapRefWrapper, ArrayRefWrapper)> {
+  ) -> Result<Option<(MapRefWrapper, MapRefWrapper, ArrayRefWrapper)>, CollabError> {
     let collab_guard = collab.lock();
     let txn = collab_guard.transact();
-    let data = collab_guard.get_map_with_txn(&txn, vec![DATA])?;
-    let meta = collab_guard.get_map_with_txn(&txn, vec![META])?;
-    let comments = collab_guard.get_array_with_txn(&txn, vec![COMMENT])?;
-    drop(txn);
-    drop(collab_guard);
-    Some((data, meta, comments))
+    let data = collab_guard.get_map_with_txn(&txn, vec![DATA]);
+
+    match data {
+      None => Err(CollabError::UnexpectedEmpty("missing data map".to_string())),
+      Some(data) => {
+        let f = || {
+          let meta = collab_guard.get_map_with_txn(&txn, vec![META])?;
+          let comments = collab_guard.get_array_with_txn(&txn, vec![COMMENT])?;
+          Some((meta, comments))
+        };
+
+        match f() {
+          None => Ok(None),
+          Some((meta, comments)) => Ok(Some((data, meta, comments))),
+        }
+      },
+    }
   }
 
   pub fn get_row(&self) -> Option<Row> {

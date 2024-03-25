@@ -4,6 +4,7 @@ use std::sync::{Arc, Weak};
 
 use collab::core::collab::{DocStateSource, MutexCollab};
 
+use collab::error::CollabError;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
@@ -89,7 +90,7 @@ impl Block {
     tokio::spawn(async move {
       while let Some(row_collabs) = rx.recv().await {
         for (row_id, row_collab) in row_collabs {
-          Self::init_collab_row(
+          if let Err(err) = Self::init_collab_row(
             &RowId::from(row_id),
             weak_notifier.clone(),
             uid,
@@ -97,7 +98,9 @@ impl Block {
             collab_db.clone(),
             cache.clone(),
             row_collab,
-          );
+          ) {
+            error!("Can't init collab row: {:?}", err);
+          }
         }
       }
     });
@@ -277,7 +280,7 @@ impl Block {
           let row_id = row_id.clone();
           tokio::spawn(async move {
             if let Some(row_collab) = rx.recv().await {
-              Self::init_collab_row(
+              if let Err(err) = Self::init_collab_row(
                 &row_id,
                 weak_notifier,
                 uid,
@@ -285,7 +288,9 @@ impl Block {
                 collab_db,
                 cache,
                 row_collab,
-              );
+              ) {
+                error!("Can't init collab row: {:?}", err);
+              }
             } else {
               error!("Can't fetch the row from remote: {:?}", row_id);
             }
@@ -293,15 +298,20 @@ impl Block {
           None
         } else {
           let collab = self.create_collab_for_row(row_id);
-          let database_row = Arc::new(MutexDatabaseRow::new(DatabaseRow::new(
+          let database_row = DatabaseRow::new(
             self.uid,
             row_id.clone(),
             self.collab_db.clone(),
             collab,
             self.row_change_tx.clone(),
-          )));
-          self.cache.lock().put(row_id.clone(), database_row.clone());
-          Some(database_row)
+          )
+          .ok()?;
+          let arc_database_row = Arc::new(MutexDatabaseRow::new(database_row));
+          self
+            .cache
+            .lock()
+            .put(row_id.clone(), arc_database_row.clone());
+          Some(arc_database_row)
         }
       },
       Some(row) => Some(row),
@@ -316,25 +326,19 @@ impl Block {
     collab_db: Weak<CollabKVDB>,
     cache: Arc<Mutex<LruCache<RowId, Arc<MutexDatabaseRow>>>>,
     row_collab: Arc<MutexCollab>,
-  ) {
+  ) -> Result<(), CollabError> {
     if cache.lock().contains(row_id) {
       warn!("The row is already in the cache: {:?}", row_id);
-      return;
+      return Ok(());
     }
 
     trace!("init_collab_row: {:?}", row_id);
     let collab_lock_guard = row_collab.lock();
     let row_detail = RowDetail::from_collab(&collab_lock_guard, &collab_lock_guard.transact());
     drop(collab_lock_guard);
-
-    let row = Arc::new(MutexDatabaseRow::new(DatabaseRow::new(
-      uid,
-      row_id.clone(),
-      collab_db,
-      row_collab,
-      change_tx,
-    )));
-    cache.lock().put(row_id.clone(), row);
+    let row = DatabaseRow::new(uid, row_id.clone(), collab_db, row_collab, change_tx)?;
+    let arc_row = Arc::new(MutexDatabaseRow::new(row));
+    cache.lock().put(row_id.clone(), arc_row);
 
     if let Some(notifier) = weak_notifier.upgrade() {
       match row_detail {
@@ -346,6 +350,7 @@ impl Block {
         },
       }
     }
+    Ok(())
   }
 
   fn create_collab_for_row(&self, row_id: &RowId) -> Arc<MutexCollab> {
