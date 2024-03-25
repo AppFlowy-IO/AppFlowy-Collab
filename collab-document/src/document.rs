@@ -37,7 +37,7 @@ const TEXT_MAP: &str = "text_map";
 pub struct Document {
   inner: Arc<MutexCollab>,
   root: MapRefWrapper,
-  subscription: Option<DeepEventsSubscription>,
+  subscription: Option<Subscription>,
   children_operation: ChildrenOperation,
   block_operation: BlockOperation,
   text_operation: TextOperation,

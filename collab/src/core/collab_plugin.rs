@@ -1,8 +1,8 @@
-use crate::core::awareness::{AwarenessUpdate, Event};
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
+use yrs::sync::awareness::Event;
 use yrs::{Doc, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
@@ -39,13 +39,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
   /// We use the [CollabOrigin] to know if the update comes from the local user or from a remote
   fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, _update: &[u8]) {}
 
-  fn receive_local_state(
-    &self,
-    origin: &CollabOrigin,
-    object_id: &str,
-    event: &Event,
-    update: &AwarenessUpdate,
-  );
+  fn receive_local_state(&self, origin: &CollabOrigin, object_id: &str, event: &Event);
 
   /// Called after each [TransactionMut]
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
@@ -91,14 +85,8 @@ where
   fn receive_local_update(&self, origin: &CollabOrigin, object_id: &str, update: &[u8]) {
     (**self).receive_local_update(origin, object_id, update)
   }
-  fn receive_local_state(
-    &self,
-    origin: &CollabOrigin,
-    object_id: &str,
-    event: &Event,
-    update: &AwarenessUpdate,
-  ) {
-    (**self).receive_local_state(origin, object_id, event, update)
+  fn receive_local_state(&self, origin: &CollabOrigin, object_id: &str, event: &Event) {
+    (**self).receive_local_state(origin, object_id, event)
   }
 
   fn after_transaction(&self, object_id: &str, txn: &mut TransactionMut) {

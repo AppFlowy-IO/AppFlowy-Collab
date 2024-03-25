@@ -5,13 +5,13 @@ use std::sync::{Arc, Weak};
 
 use crate::CollabKVDB;
 
-use collab::core::awareness::{AwarenessUpdate, Event};
 use collab::core::collab::make_yrs_doc;
 use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
 use tracing::{debug, error};
+use yrs::sync::awareness::Event;
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
 
@@ -206,14 +206,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
     };
   }
 
-  fn receive_local_state(
-    &self,
-    _origin: &CollabOrigin,
-    _object_id: &str,
-    _event: &Event,
-    _update: &AwarenessUpdate,
-  ) {
-  }
+  fn receive_local_state(&self, _origin: &CollabOrigin, _object_id: &str, _event: &Event) {}
 
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
 

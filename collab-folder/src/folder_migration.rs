@@ -40,7 +40,7 @@ impl Folder {
     let mut workspace = {
       let txn = self.root.transact();
       let workspace_array = self.root.get_array_ref_with_txn(&txn, WORKSPACES)?;
-      let map_refs = workspace_array.to_map_refs();
+      let map_refs = workspace_array.to_map_refs_with_txn(&txn);
       map_refs
         .into_iter()
         .flat_map(|map_ref| to_workspace_with_txn(&txn, &map_ref, &self.views.view_relations))
