@@ -19,7 +19,7 @@ use yrs::updates::decoder::Decode;
 
 use yrs::{
   Any, ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options,
-  ReadTxn, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
+  ReadTxn, StateVector, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
   UpdateSubscription,
 };
 
@@ -982,6 +982,20 @@ unsafe impl Sync for MutexCollab {}
 
 unsafe impl Send for MutexCollab {}
 
+pub trait TransactionExt<'doc> {
+  /// Applies an update to the document. If the update is invalid, it will return an error.
+  /// It allows to catch panics from `apply_update`.
+  fn try_encode_state_as_update_v1(&self, sv: &StateVector) -> Result<Vec<u8>, CollabError>;
+}
+
+impl<'doc> TransactionExt<'doc> for Transaction<'doc> {
+  fn try_encode_state_as_update_v1(&self, sv: &StateVector) -> Result<Vec<u8>, CollabError> {
+    match panic::catch_unwind(AssertUnwindSafe(|| self.encode_state_as_update_v1(sv))) {
+      Ok(update) => Ok(update),
+      Err(e) => Err(CollabError::YrsEncodeStateError(format!("{:?}", e))),
+    }
+  }
+}
 // Extension trait for `TransactionMut`
 pub trait TransactionMutExt<'doc> {
   /// Applies an update to the document. If the update is invalid, it will return an error.

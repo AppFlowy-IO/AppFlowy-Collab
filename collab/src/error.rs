@@ -12,6 +12,9 @@ pub enum CollabError {
   #[error("Try apply update failed: {0}")]
   YrsTransactionError(String),
 
+  #[error("Try encode update failed: {0}")]
+  YrsEncodeStateError(String),
+
   #[error("UndoManager is not enabled")]
   UndoManagerNotEnabled,
 
