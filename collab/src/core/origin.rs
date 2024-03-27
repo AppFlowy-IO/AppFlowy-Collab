@@ -3,6 +3,11 @@ use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 use yrs::{Origin, TransactionMut};
 
+///  ⚠️ ⚠️ ⚠️Compatibility Warning:
+///
+/// The structure of this struct is integral to maintaining compatibility with existing messages.
+/// Therefore, adding or removing any properties (fields) from this struct could disrupt the
+/// compatibility.
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Serialize, Deserialize)]
 pub enum CollabOrigin {
   Client(CollabClient),
@@ -58,6 +63,12 @@ impl From<&Origin> for CollabOrigin {
   }
 }
 
+///  ⚠️ ⚠️ ⚠️Compatibility Warning:
+///
+/// The structure of this struct is integral to maintaining compatibility with existing messages.
+/// Therefore, adding or removing any properties (fields) from this struct could disrupt the
+/// compatibility.
+///
 /// This [CollabClient] is used to verify the origin of a [Transaction] when
 /// applying a remote update.
 #[derive(Serialize, Deserialize, Eq, PartialEq, Hash, Debug, Clone)]

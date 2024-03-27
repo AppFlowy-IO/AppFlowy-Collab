@@ -3,8 +3,8 @@ pub enum CollabError {
   #[error(transparent)]
   SerdeJson(#[from] serde_json::Error),
 
-  #[error("Unexpected empty value")]
-  UnexpectedEmpty,
+  #[error("Unexpected empty: {0}")]
+  UnexpectedEmpty(String),
 
   #[error("Get write txn failed")]
   AcquiredWriteTxnFail,
