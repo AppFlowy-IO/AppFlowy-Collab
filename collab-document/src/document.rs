@@ -9,6 +9,7 @@ use collab::preclude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio_stream::wrappers::WatchStream;
+use tracing::trace;
 
 use crate::blocks::{
   deserialize_text_delta, parse_event, Block, BlockAction, BlockActionPayload, BlockActionType,
@@ -83,12 +84,14 @@ impl Document {
   where
     F: Fn(&Vec<BlockEvent>, bool) + 'static,
   {
+    let object_id = self.inner.lock().object_id.clone();
     let self_origin = CollabOrigin::from(&self.inner.lock().origin_transact_mut());
     self.subscription = Some(self.root.observe_deep(move |txn, events| {
+      trace!("{} receive events", object_id);
       let origin = CollabOrigin::from(txn);
       let block_events = events
         .iter()
-        .map(|deep_event| parse_event(txn, deep_event))
+        .map(|deep_event| parse_event(&object_id, txn, deep_event))
         .collect::<Vec<BlockEvent>>();
       let is_remote = self_origin != origin;
       callback(&block_events, is_remote);
