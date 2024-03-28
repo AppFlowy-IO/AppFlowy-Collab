@@ -45,7 +45,7 @@ pub struct Document {
   children_operation: ChildrenOperation,
   block_operation: BlockOperation,
   text_operation: TextOperation,
-  awareness: RwLock<Option<AwarenessUpdateSubscription>>,
+  awareness_subscription: RwLock<Option<AwarenessUpdateSubscription>>,
 }
 
 impl Document {
@@ -504,7 +504,7 @@ impl Document {
           .collect();
         f(result);
       });
-    *self.awareness.write() = Some(subscription);
+    *self.awareness_subscription.write() = Some(subscription);
   }
 
   fn create_document(
@@ -565,7 +565,7 @@ impl Document {
       children_operation,
       text_operation,
       subscription: None,
-      awareness: Default::default(),
+      awareness_subscription: Default::default(),
     };
     Ok(document)
   }
@@ -625,7 +625,7 @@ impl Document {
       children_operation: children_operation.unwrap(),
       text_operation: text_operation.unwrap(),
       subscription: None,
-      awareness: Default::default(),
+      awareness_subscription: Default::default(),
     })
   }
 
