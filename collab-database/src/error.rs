@@ -21,6 +21,9 @@ pub enum DatabaseError {
   #[error(transparent)]
   UuidError(#[from] uuid::Error),
 
+  #[error("No required data")]
+  NoRequiredData,
+
   #[error("Internal failure: {0}")]
   Internal(#[from] anyhow::Error),
 }

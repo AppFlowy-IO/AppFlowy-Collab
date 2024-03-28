@@ -16,15 +16,11 @@ use tokio_retry::strategy::FibonacciBackoff;
 use tokio_retry::{Action, Retry};
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
-use yrs::updates::decoder::Decode;
-use yrs::{ReadTxn, StateVector, Update};
+use yrs::ReadTxn;
 
-use crate::cloud_storage::remote_collab::{
-  should_create_snapshot, RemoteCollab, RemoteCollabStorage,
-};
+use crate::cloud_storage::remote_collab::{RemoteCollab, RemoteCollabStorage};
 use crate::cloud_storage::sink::{SinkConfig, SinkStrategy};
 use crate::local_storage::kv::doc::CollabKVAction;
-use crate::local_storage::kv::{KVTransactionDB, TransactionMutExt};
 use crate::CollabKVDB;
 
 pub struct SupabaseDBPlugin {
@@ -135,104 +131,6 @@ impl CollabPlugin for SupabaseDBPlugin {
   }
 }
 
-/// Create a snapshot for the object if need
-/// If the remote_update is empty which means the object is not sync. So crate a snapshot for it.
-/// If the remote_update is not empty, check the [RemoteCollabState] to decide whether create a snapshot.
-fn create_snapshot_if_need(
-  uid: i64,
-  object: CollabObject,
-  remote_update: Vec<u8>,
-  weak_local_collab: Weak<MutexCollab>,
-  weak_local_collab_storage: Weak<CollabKVDB>,
-  weak_remote_collab_storage: Weak<dyn RemoteCollabStorage>,
-) {
-  tokio::spawn(async move {
-    if let (Some(local_collab_storage), Some(remote_collab_storage)) = (
-      weak_local_collab_storage.upgrade(),
-      weak_remote_collab_storage.upgrade(),
-    ) {
-      match remote_collab_storage
-        .get_collab_state(&object.object_id)
-        .await
-      {
-        Ok(Some(collab_state)) => {
-          if !should_create_snapshot(&collab_state, &object) {
-            return;
-          }
-        },
-        Err(e) => {
-          tracing::error!("🔴fetch remote collab state failed: {:?}", e);
-          return;
-        },
-        _ => {
-          return;
-        },
-      }
-
-      tracing::trace!("Create remote snapshot for {}", object.object_id);
-      let cloned_object = object.clone();
-      if let Ok(Ok(doc_state)) = tokio::task::spawn_blocking(move || {
-        let local = Collab::new(
-          uid,
-          object.object_id.clone(),
-          &object.device_id,
-          vec![],
-          true,
-        );
-        let mut txn = local.origin_transact_mut();
-        let _ =
-          local_collab_storage
-            .read_txn()
-            .load_doc_with_txn(uid, &object.object_id, &mut txn)?;
-        drop(txn);
-
-        // Only sync with the remote if the remote update is not empty
-        if !remote_update.is_empty() {
-          let remote = Collab::new(
-            uid,
-            object.object_id.clone(),
-            &object.device_id,
-            vec![],
-            true,
-          );
-          let mut txn = local.origin_transact_mut();
-          txn.try_apply_update(Update::decode_v1(&remote_update)?)?;
-          drop(txn);
-
-          let local_sv = local.transact().state_vector();
-          let encode_update = remote.transact().encode_state_as_update_v1(&local_sv);
-          if let Ok(update) = Update::decode_v1(&encode_update) {
-            let mut txn = local.origin_transact_mut();
-            txn.try_apply_update(update)?;
-            drop(txn);
-          }
-        }
-
-        let txn = local.transact();
-        Ok::<Vec<_>, anyhow::Error>(txn.encode_state_as_update_v1(&StateVector::default()))
-      })
-      .await
-      {
-        // Send the full sync data to remote
-        match remote_collab_storage
-          .create_snapshot(&cloned_object, doc_state)
-          .await
-        {
-          Ok(snapshot_id) => {
-            tracing::debug!("{} remote snapshot created", cloned_object.object_id);
-            if let Some(local_collab) = weak_local_collab.upgrade() {
-              local_collab
-                .lock()
-                .set_snapshot_state(SnapshotState::DidCreateSnapshot { snapshot_id });
-            }
-          },
-          Err(e) => tracing::error!("🔴{}", e),
-        }
-      }
-    }
-  });
-}
-
 struct InitSyncAction {
   uid: i64,
   object: CollabObject,
@@ -250,12 +148,7 @@ impl Action for InitSyncAction {
   type Error = anyhow::Error;
 
   fn run(&mut self) -> Self::Future {
-    let uid = self.uid;
-    let object = self.object.clone();
     let weak_remote_collab = self.remote_collab.clone();
-    let weak_local_collab = self.local_collab.clone();
-    let weak_local_collab_storage = self.local_collab_storage.clone();
-    let weak_remote_collab_storage = self.remote_collab_storage.clone();
     let weak_pending_updates = self.pending_updates.clone();
     let weak_is_first_sync_done = self.is_first_sync_done.clone();
 
@@ -265,17 +158,6 @@ impl Action for InitSyncAction {
         weak_pending_updates.upgrade(),
         weak_is_first_sync_done.upgrade(),
       ) {
-        let remote_update = remote_collab.sync(weak_local_collab.clone()).await?;
-
-        create_snapshot_if_need(
-          uid,
-          object,
-          remote_update,
-          weak_local_collab,
-          weak_local_collab_storage,
-          weak_remote_collab_storage,
-        );
-
         for update in &*pending_updates.read() {
           remote_collab.push_update(update);
         }
