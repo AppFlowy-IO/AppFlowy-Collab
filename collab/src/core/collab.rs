@@ -180,6 +180,10 @@ impl Collab {
     self.doc.get_encoded_collab_v2()
   }
 
+  pub fn get_state(&self) -> &Arc<State> {
+    &self.state
+  }
+
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
     WatchStream::new(self.state.sync_state_notifier.subscribe())
   }
