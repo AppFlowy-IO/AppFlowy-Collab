@@ -250,6 +250,14 @@ impl Folder {
     Some(Workspace::from(view.as_ref()))
   }
 
+  pub fn set_current_workspace(&self, workspace_id: &str) {
+    self.meta.with_transact_mut(|txn| {
+      self
+        .meta
+        .insert_with_txn(txn, CURRENT_WORKSPACE, workspace_id);
+    });
+  }
+
   pub fn get_workspace_id(&self) -> String {
     let txn = self.meta.transact();
     self.get_workspace_id_with_txn(&txn)
