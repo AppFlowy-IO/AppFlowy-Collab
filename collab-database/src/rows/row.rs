@@ -120,6 +120,14 @@ impl DatabaseRow {
     }
   }
 
+  pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
+    let txn = collab.transact();
+    collab
+      .get_map_with_txn(&txn, vec![DATA])
+      .ok_or(DatabaseError::NoRequiredData)?;
+    Ok(())
+  }
+
   fn create_row_struct(
     collab: &Arc<MutexCollab>,
   ) -> Result<Option<(MapRefWrapper, MapRefWrapper, ArrayRefWrapper)>, CollabError> {

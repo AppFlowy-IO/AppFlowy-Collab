@@ -3,11 +3,11 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use collab::core::collab::DocStateSource;
+use collab::core::collab::{DocStateSource, MutexCollab};
 use collab::preclude::CollabBuilder;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
-use collab_database::rows::{CellsBuilder, CreateRowParams};
+use collab_database::rows::{CellsBuilder, CreateRowParams, DatabaseRow, RowId};
 use collab_database::user::DatabaseCollabService;
 use collab_database::views::{
   CreateDatabaseParams, DatabaseLayout, FieldSettingsByFieldIdMap, FieldSettingsMap, LayoutSetting,
@@ -74,6 +74,28 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     database,
     collab_db,
   }
+}
+
+pub fn create_row(uid: i64, row_id: RowId) -> (Arc<MutexCollab>, DatabaseRow) {
+  let collab_db = make_rocks_db();
+  let collab = CollabBuilder::new(uid, row_id.clone())
+    .with_device_id("1")
+    .build()
+    .unwrap();
+  collab.lock().initialize();
+  let arc_collab = Arc::new(collab);
+  let cloned_collab = arc_collab.clone();
+  (
+    arc_collab,
+    DatabaseRow::create(
+      None,
+      uid,
+      row_id,
+      Arc::downgrade(&collab_db),
+      cloned_collab,
+      None,
+    ),
+  )
 }
 
 pub async fn create_database_with_db(
