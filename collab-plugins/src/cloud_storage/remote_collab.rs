@@ -333,18 +333,6 @@ pub struct RemoteCollabState {
   pub snapshot_created_at: i64,
 }
 
-pub fn should_create_snapshot(state: &RemoteCollabState, collab_object: &CollabObject) -> bool {
-  let snapshot_per_edit_count = match collab_object.collab_type {
-    CollabType::Document => 150,
-    CollabType::Database => 50,
-    CollabType::WorkspaceDatabase => 10,
-    CollabType::Folder => 10,
-    CollabType::DatabaseRow => 50,
-    CollabType::UserAwareness => 20,
-  };
-  state.current_edit_count > state.snapshot_edit_count + snapshot_per_edit_count
-}
-
 #[derive(Deserialize)]
 pub struct RemoteCollabSnapshot {
   pub sid: i64,

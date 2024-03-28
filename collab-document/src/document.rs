@@ -55,6 +55,15 @@ impl Document {
     Document::open_document_with_collab(collab)
   }
 
+  pub fn validate(collab: &Collab) -> Result<(), DocumentError> {
+    let txn = collab.transact();
+    let root = collab.get_map_with_txn(&txn, vec![ROOT]);
+    match root {
+      None => Err(DocumentError::NoRequiredData),
+      Some(_) => Ok(()),
+    }
+  }
+
   pub fn get_collab(&self) -> &Arc<MutexCollab> {
     &self.inner
   }

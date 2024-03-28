@@ -93,6 +93,18 @@ impl Database {
     Ok(this)
   }
 
+  pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
+    let txn = collab.transact();
+    let database = collab
+      .get_map_with_txn(&txn, vec![DATABASE])
+      .ok_or_else(|| DatabaseError::DatabaseNotExist)?;
+
+    match database.get_str_with_txn(&txn, DATABASE_ID) {
+      None => Err(DatabaseError::NoRequiredData),
+      Some(_) => Ok(()),
+    }
+  }
+
   pub fn flush(&self) -> Result<(), DatabaseError> {
     if let Some(collab) = self.inner.try_lock() {
       collab.flush();

@@ -112,6 +112,18 @@ impl Folder {
     Ok(folder)
   }
 
+  pub fn validate(collab: &Collab) -> Result<(), FolderError> {
+    let txn = collab.transact();
+    let meta = collab
+      .get_map_with_txn(&txn, vec![FOLDER, META])
+      .ok_or_else(|| FolderError::NoRequiredData("No meta data".to_string()))?;
+
+    match meta.get_str_with_txn(&txn, CURRENT_WORKSPACE) {
+      None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
+      Some(_) => Ok(()),
+    }
+  }
+
   pub fn create<T: Into<UserId>>(
     uid: T,
     collab: Arc<MutexCollab>,

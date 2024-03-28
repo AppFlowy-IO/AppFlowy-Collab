@@ -35,3 +35,14 @@ async fn test_workspace_is_ready() {
   let workspace_id = check_folder_is_valid(&collab.lock()).unwrap();
   assert_eq!(workspace_id, "w1".to_string());
 }
+
+#[tokio::test]
+async fn validate_folder_data() {
+  let collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, "1", vec![], true));
+  assert!(Folder::validate(&collab.lock()).is_err());
+
+  let workspace = Workspace::new("w1".to_string(), "".to_string(), 1);
+  let folder_data = FolderData::new(workspace);
+  let _ = Folder::create(1, collab.clone(), None, folder_data);
+  assert!(Folder::validate(&collab.lock()).is_ok());
+}

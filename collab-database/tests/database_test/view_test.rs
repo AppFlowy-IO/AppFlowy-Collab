@@ -1,5 +1,5 @@
 use collab_database::database::{
-  gen_row_id, get_database_views_meta, get_inline_view_id, DatabaseData,
+  gen_row_id, get_database_views_meta, get_inline_view_id, Database, DatabaseData,
 };
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
@@ -260,4 +260,10 @@ async fn update_database_view_layout_test() {
 
   let layout = database_test.views.get_database_view_layout("v1");
   assert_eq!(layout, DatabaseLayout::Calendar);
+}
+
+#[tokio::test]
+async fn validate_database_test() {
+  let database_test = create_database_with_default_data(1, "1").await;
+  assert!(Database::validate(&database_test.database.get_collab().lock()).is_ok())
 }

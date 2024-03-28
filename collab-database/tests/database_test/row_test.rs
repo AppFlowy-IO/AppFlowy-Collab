@@ -1,9 +1,11 @@
 use collab_database::database::gen_row_id;
-use collab_database::rows::{meta_id_from_row_id, CreateRowParams, RowId, RowMetaKey};
+use collab_database::rows::{meta_id_from_row_id, CreateRowParams, DatabaseRow, RowId, RowMetaKey};
 use collab_database::views::{CreateViewParams, OrderObjectPosition};
 use uuid::Uuid;
 
-use crate::database_test::helper::{create_database, create_database_with_default_data};
+use crate::database_test::helper::{
+  create_database, create_database_with_default_data, create_row,
+};
 
 #[tokio::test]
 async fn create_row_shared_by_two_view_test() {
@@ -275,4 +277,10 @@ async fn row_document_id_test() {
       "0b1903ac-0dc2-5643-b0b5-a3f893cac26b".to_string()
     );
   }
+}
+
+#[tokio::test]
+async fn validate_row_test() {
+  let (collab, _) = create_row(1, RowId::from(1));
+  assert!(DatabaseRow::validate(&collab.lock()).is_ok());
 }
