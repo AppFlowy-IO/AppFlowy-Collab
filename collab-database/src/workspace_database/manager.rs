@@ -54,7 +54,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     collab_db: Weak<CollabKVDB>,
     collab_doc_state: DocStateSource,
     config: CollabPersistenceConfig,
-  ) -> Arc<MutexCollab>;
+  ) -> Result<Arc<MutexCollab>, DatabaseError>;
 }
 
 /// A [WorkspaceDatabase] indexes the databases within a workspace.
@@ -135,11 +135,9 @@ impl WorkspaceDatabase {
         },
       }
     }
-    let database_collab = self.collab_for_database(database_id, collab_doc_state);
-    if Database::validate(&database_collab.lock()).is_ok() {
-      return None;
-    }
-
+    let database_collab = self
+      .collab_for_database(database_id, collab_doc_state)
+      .ok()?;
     Some(database_collab)
   }
 
@@ -209,7 +207,7 @@ impl WorkspaceDatabase {
     debug_assert!(!params.view_id.is_empty());
 
     // Create a [Collab] for the given database id.
-    let collab = self.collab_for_database(&params.database_id, DocStateSource::FromDisk);
+    let collab = self.collab_for_database(&params.database_id, DocStateSource::FromDisk)?;
     let notifier = DatabaseNotify::default();
     let context = DatabaseContext {
       uid: self.uid,
@@ -342,7 +340,11 @@ impl WorkspaceDatabase {
   }
 
   /// Create a new [Collab] instance for given database id.
-  fn collab_for_database(&self, database_id: &str, doc_state: DocStateSource) -> Arc<MutexCollab> {
+  fn collab_for_database(
+    &self,
+    database_id: &str,
+    doc_state: DocStateSource,
+  ) -> Result<Arc<MutexCollab>, DatabaseError> {
     self.collab_service.build_collab_with_config(
       self.uid,
       database_id,

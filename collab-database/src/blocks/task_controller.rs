@@ -17,6 +17,7 @@ use tracing::trace;
 use crate::blocks::queue::{
   PendingTask, RequestPayload, TaskHandler, TaskQueue, TaskQueueRunner, TaskState,
 };
+use crate::error::DatabaseError;
 use crate::rows::{RowDetail, RowId};
 use crate::workspace_database::DatabaseCollabService;
 
@@ -238,8 +239,9 @@ fn save_row(
   }
 }
 
-pub type FetchRowSender = tokio::sync::mpsc::Sender<Arc<MutexCollab>>;
-pub type BatchFetchRowSender = tokio::sync::mpsc::Sender<Vec<(String, Arc<MutexCollab>)>>;
+pub type FetchRowSender = tokio::sync::mpsc::Sender<Result<Arc<MutexCollab>, DatabaseError>>;
+pub type BatchFetchRowSender =
+  tokio::sync::mpsc::Sender<Vec<(String, Result<Arc<MutexCollab>, DatabaseError>)>>;
 
 #[derive(Clone)]
 pub enum BlockTask {

@@ -105,14 +105,16 @@ pub async fn create_database_with_db(
   setup_log();
   let collab_db = make_rocks_db();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
-  let collab = collab_builder.build_collab_with_config(
-    uid,
-    database_id,
-    CollabType::Database,
-    Arc::downgrade(&collab_db),
-    DocStateSource::FromDisk,
-    CollabPersistenceConfig::default(),
-  );
+  let collab = collab_builder
+    .build_collab_with_config(
+      uid,
+      database_id,
+      CollabType::Database,
+      Arc::downgrade(&collab_db),
+      DocStateSource::FromDisk,
+      CollabPersistenceConfig::default(),
+    )
+    .unwrap();
   let context = DatabaseContext {
     uid,
     db: Arc::downgrade(&collab_db),
@@ -141,14 +143,16 @@ pub fn restore_database_from_db(
   collab_db: Arc<CollabKVDB>,
 ) -> DatabaseTest {
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
-  let collab = collab_builder.build_collab_with_config(
-    uid,
-    database_id,
-    CollabType::Database,
-    Arc::downgrade(&collab_db),
-    DocStateSource::FromDisk,
-    CollabPersistenceConfig::default(),
-  );
+  let collab = collab_builder
+    .build_collab_with_config(
+      uid,
+      database_id,
+      CollabType::Database,
+      Arc::downgrade(&collab_db),
+      DocStateSource::FromDisk,
+      CollabPersistenceConfig::default(),
+    )
+    .unwrap();
   let context = DatabaseContext {
     uid,
     db: Arc::downgrade(&collab_db),

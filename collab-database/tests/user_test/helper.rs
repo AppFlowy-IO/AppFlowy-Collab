@@ -77,7 +77,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     collab_db: Weak<CollabKVDB>,
     doc_state: DocStateSource,
     config: CollabPersistenceConfig,
-  ) -> Arc<MutexCollab> {
+  ) -> Result<Arc<MutexCollab>, DatabaseError> {
     let collab = CollabBuilder::new(uid, object_id)
       .with_device_id("1")
       .with_doc_state(doc_state)
@@ -93,7 +93,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
       .unwrap();
 
     collab.lock().initialize();
-    Arc::new(collab)
+    Ok(Arc::new(collab))
   }
 }
 
@@ -111,14 +111,16 @@ pub async fn workspace_database_test_with_config(
   let collab_db = make_rocks_db();
   let builder = TestUserDatabaseCollabBuilderImpl();
   let database_views_aggregate_id = uuid::Uuid::new_v4().to_string();
-  let collab = builder.build_collab_with_config(
-    uid,
-    &database_views_aggregate_id,
-    CollabType::WorkspaceDatabase,
-    Arc::downgrade(&collab_db),
-    DocStateSource::FromDisk,
-    config.clone(),
-  );
+  let collab = builder
+    .build_collab_with_config(
+      uid,
+      &database_views_aggregate_id,
+      CollabType::WorkspaceDatabase,
+      Arc::downgrade(&collab_db),
+      DocStateSource::FromDisk,
+      config.clone(),
+    )
+    .unwrap();
   let inner = WorkspaceDatabase::open(uid, collab, Arc::downgrade(&collab_db), config, builder);
   WorkspaceDatabaseTest {
     uid,
@@ -137,14 +139,16 @@ pub async fn workspace_database_with_db(
 
   // In test, we use a fixed database_storage_id
   let database_views_aggregate_id = "database_views_aggregate_id";
-  let collab = builder.build_collab_with_config(
-    uid,
-    database_views_aggregate_id,
-    CollabType::WorkspaceDatabase,
-    collab_db.clone(),
-    DocStateSource::FromDisk,
-    config.clone(),
-  );
+  let collab = builder
+    .build_collab_with_config(
+      uid,
+      database_views_aggregate_id,
+      CollabType::WorkspaceDatabase,
+      collab_db.clone(),
+      DocStateSource::FromDisk,
+      config.clone(),
+    )
+    .unwrap();
   WorkspaceDatabase::open(uid, collab, collab_db, config, builder)
 }
 

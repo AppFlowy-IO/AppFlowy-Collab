@@ -18,6 +18,7 @@ use tracing::{error, trace, warn};
 use uuid::Uuid;
 
 use crate::blocks::task_controller::{BlockTask, BlockTaskController};
+use crate::error::DatabaseError;
 use crate::rows::{
   meta_id_from_row_id, Cell, DatabaseRow, MutexDatabaseRow, Row, RowChangeSender, RowDetail, RowId,
   RowMeta, RowMetaKey, RowMetaUpdate, RowUpdate,
@@ -90,16 +91,23 @@ impl Block {
     tokio::spawn(async move {
       while let Some(row_collabs) = rx.recv().await {
         for (row_id, row_collab) in row_collabs {
-          if let Err(err) = Self::init_collab_row(
-            &RowId::from(row_id),
-            weak_notifier.clone(),
-            uid,
-            change_tx.clone(),
-            collab_db.clone(),
-            cache.clone(),
-            row_collab,
-          ) {
-            error!("Can't init collab row: {:?}", err);
+          match row_collab {
+            Ok(row_collab) => {
+              if let Err(err) = Self::init_collab_row(
+                &RowId::from(row_id),
+                weak_notifier.clone(),
+                uid,
+                change_tx.clone(),
+                collab_db.clone(),
+                cache.clone(),
+                row_collab,
+              ) {
+                error!("Can't init collab row: {:?}", err);
+              }
+            },
+            Err(err) => {
+              error!("Can't fetch the row from remote: {:?}", err);
+            },
           }
         }
       }
@@ -153,16 +161,17 @@ impl Block {
     };
 
     trace!("create_row: {}", row_id);
-    let collab = self.create_collab_for_row(&row_id);
-    let database_row = MutexDatabaseRow::new(DatabaseRow::create(
-      Some(row),
-      self.uid,
-      row_id.clone(),
-      self.collab_db.clone(),
-      collab,
-      self.row_change_tx.clone(),
-    ));
-    self.cache.lock().put(row_id, Arc::new(database_row));
+    if let Ok(collab) = self.create_collab_for_row(&row_id) {
+      let database_row = MutexDatabaseRow::new(DatabaseRow::create(
+        Some(row),
+        self.uid,
+        row_id.clone(),
+        self.collab_db.clone(),
+        collab,
+        self.row_change_tx.clone(),
+      ));
+      self.cache.lock().put(row_id, Arc::new(database_row));
+    }
     row_order
   }
 
@@ -280,7 +289,7 @@ impl Block {
           let cache = self.cache.clone();
           let row_id = row_id.clone();
           tokio::spawn(async move {
-            if let Some(row_collab) = rx.recv().await {
+            if let Some(Ok(row_collab)) = rx.recv().await {
               if let Err(err) = Self::init_collab_row(
                 &row_id,
                 weak_notifier,
@@ -304,7 +313,7 @@ impl Block {
           });
           None
         } else {
-          let collab = self.create_collab_for_row(row_id);
+          let collab = self.create_collab_for_row(row_id).ok()?;
           match DatabaseRow::new(
             self.uid,
             row_id.clone(),
@@ -370,7 +379,7 @@ impl Block {
     Ok(())
   }
 
-  fn create_collab_for_row(&self, row_id: &RowId) -> Arc<MutexCollab> {
+  fn create_collab_for_row(&self, row_id: &RowId) -> Result<Arc<MutexCollab>, DatabaseError> {
     let config = CollabPersistenceConfig::new().snapshot_per_update(100);
     self.collab_service.build_collab_with_config(
       self.uid,
@@ -396,7 +405,7 @@ async fn async_create_row<T: Into<Row>>(
   let cloned_row_id = row_id.clone();
   let cloned_weak_collab_db = collab_db.clone();
 
-  if let Ok(collab) = tokio::task::spawn_blocking(move || {
+  if let Ok(Ok(collab)) = tokio::task::spawn_blocking(move || {
     collab_service.build_collab_with_config(
       uid,
       &cloned_row_id,
