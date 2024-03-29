@@ -112,15 +112,6 @@ impl CollabPlugin for SupabaseDBPlugin {
     }
   }
 
-  fn receive_local_state(
-    &self,
-    _origin: &CollabOrigin,
-    _object_id: &str,
-    _event: &Event,
-    _update: &AwarenessUpdate,
-  ) {
-  }
-
   fn plugin_type(&self) -> CollabPluginType {
     CollabPluginType::CloudStorage
   }

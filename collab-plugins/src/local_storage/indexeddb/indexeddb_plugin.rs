@@ -112,15 +112,6 @@ impl CollabPlugin for IndexeddbDiskPlugin {
     }
   }
 
-  fn receive_local_state(
-    &self,
-    _origin: &CollabOrigin,
-    _object_id: &str,
-    _event: &Event,
-    _update: &AwarenessUpdate,
-  ) {
-  }
-
   fn did_init(&self, _collab: &Collab, _object_id: &str, _last_sync_at: i64) {
     self.did_load.store(true, SeqCst);
   }

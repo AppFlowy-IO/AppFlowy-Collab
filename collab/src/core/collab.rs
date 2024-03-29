@@ -17,6 +17,7 @@ use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
 use yrs::updates::decoder::Decode;
 
+use yrs::updates::encoder::Encode;
 use yrs::{
   Any, ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options,
   ReadTxn, StateVector, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
@@ -174,6 +175,17 @@ impl Collab {
   /// Returns the doc state and the state vector.
   pub fn encode_collab_v1(&self) -> EncodedCollab {
     self.doc.get_encoded_collab_v1()
+  }
+
+  pub fn try_encode_collab_v1(&self) -> Result<EncodedCollab, CollabError> {
+    let txn = self
+      .doc
+      .try_transact()
+      .map_err(|_err| CollabError::AcquiredReadTxnFail)?;
+    Ok(EncodedCollab::new_v1(
+      txn.state_vector().encode_v1(),
+      txn.encode_state_as_update_v1(&StateVector::default()),
+    ))
   }
 
   pub fn encode_collab_v2(&self) -> EncodedCollab {
