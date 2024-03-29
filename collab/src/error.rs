@@ -9,6 +9,9 @@ pub enum CollabError {
   #[error("Get write txn failed")]
   AcquiredWriteTxnFail,
 
+  #[error("Get read txn failed")]
+  AcquiredReadTxnFail,
+
   #[error("Try apply update failed: {0}")]
   YrsTransactionError(String),
 
