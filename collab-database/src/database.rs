@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+
 use std::sync::{Arc, Weak};
-use std::time::Instant;
 
 use collab::core::any_map::AnyMapExtension;
 use collab::core::collab::MutexCollab;
@@ -46,7 +45,6 @@ pub struct Database {
   /// A database rows will be stored in multiple blocks.
   pub block: Block,
   pub notifier: Option<DatabaseNotify>,
-  pub(crate) edit_at: AtomicI64,
 }
 
 const DATABASE_ID: &str = "id";
@@ -228,7 +226,6 @@ impl Database {
           fields: Rc::new(fields),
           metas: Rc::new(metas),
           notifier: context.notifier,
-          edit_at: Default::default(),
         })
       },
     }
@@ -300,7 +297,6 @@ impl Database {
       fields: Rc::new(fields),
       metas: Rc::new(metas),
       notifier: context.notifier,
-      edit_at: Default::default(),
     })
   }
 
@@ -1257,7 +1253,6 @@ impl Database {
   /// just delete the view with given view id.
   ///
   pub fn delete_view(&self, view_id: &str) -> Vec<String> {
-    self.tick_edit();
     // TODO(nathan): delete the database from workspace database
     if self.is_inline_view(view_id) {
       self.root.with_transact_mut(|txn| {
@@ -1271,10 +1266,6 @@ impl Database {
       });
       vec![view_id.to_string()]
     }
-  }
-
-  fn tick_edit(&self) {
-    self.edit_at.store(timestamp(), Ordering::SeqCst);
   }
 
   /// Only expose this function in test env

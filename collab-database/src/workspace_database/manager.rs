@@ -12,14 +12,16 @@ use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
-use lru::LruCache;
+
 use parking_lot::Mutex;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::future::Future;
-use std::num::NonZeroUsize;
+
+use collab::core::collab_state::SyncState;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
-use tracing::error;
+use tokio_stream::StreamExt;
+use tracing::{error, trace};
 
 pub type CollabDocStateByOid = HashMap<String, DocStateSource>;
 pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
@@ -70,7 +72,7 @@ pub struct WorkspaceDatabase {
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
   databases: Mutex<HashMap<String, Arc<MutexDatabase>>>,
-  closing_database: Mutex<HashSet<String>>,
+  removing_databases: Arc<Mutex<HashMap<String, Arc<MutexDatabase>>>>,
 }
 
 impl WorkspaceDatabase {
@@ -86,6 +88,7 @@ impl WorkspaceDatabase {
   {
     let collab_service = Arc::new(collab_service);
     let databases = Mutex::new(HashMap::new());
+    let removing_databases = Arc::new(Mutex::new(HashMap::new()));
     Self {
       uid,
       collab_db,
@@ -93,7 +96,7 @@ impl WorkspaceDatabase {
       databases,
       config,
       collab_service,
-      closing_database: Default::default(),
+      removing_databases,
     }
   }
 
@@ -144,9 +147,18 @@ impl WorkspaceDatabase {
     }
     let database = self.databases.lock().get(database_id).cloned();
     let collab_db = self.collab_db.upgrade()?;
-    self.closing_database.lock().remove(database_id);
     match database {
       None => {
+        // If the database is being removed, return the database back to the databases.
+        if let Some(database) = self.removing_databases.lock().remove(database_id) {
+          self
+            .databases
+            .lock()
+            .insert(database_id.to_string(), database.clone());
+          return Some(database);
+        }
+
+        // If the database is not exist, create a new one.
         let notifier = DatabaseNotify::default();
         let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
         let collab = self.get_database_collab(database_id).await?;
@@ -165,6 +177,21 @@ impl WorkspaceDatabase {
           database.load_all_rows();
         }
 
+        let mut sub = database.subscribe_sync_state();
+        let cloned_database_id = database_id.to_string();
+        let weak_removing_databases = Arc::downgrade(&self.removing_databases);
+        tokio::task::spawn_local(async move {
+          while let Some(state) = sub.next().await {
+            if matches!(state, SyncState::SyncFinished) {
+              if let Some(removing_databases) = weak_removing_databases.upgrade() {
+                trace!("Sync finish, drop the database:{}", cloned_database_id);
+                removing_databases.lock().remove(&cloned_database_id);
+              }
+            }
+          }
+        });
+
+        // Create a new [MutexDatabase] and add it to the databases.
         let database = Arc::new(MutexDatabase::new(database));
         self
           .databases
@@ -280,6 +307,15 @@ impl WorkspaceDatabase {
     }
     if let Some(database) = self.databases.lock().remove(database_id) {
       database.lock().close();
+    }
+  }
+
+  pub fn close_database(&self, database_id: &str) {
+    if let Some(database) = self.databases.lock().remove(database_id) {
+      self
+        .removing_databases
+        .lock()
+        .insert(database_id.to_string(), database);
     }
   }
 

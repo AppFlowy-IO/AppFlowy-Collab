@@ -1,4 +1,5 @@
-use std::num::NonZeroUsize;
+use dashmap::DashMap;
+
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
@@ -10,8 +11,7 @@ use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
-use lru::LruCache;
-use parking_lot::Mutex;
+
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 use tracing::{error, trace, warn};
@@ -42,7 +42,7 @@ pub struct Block {
   collab_service: Arc<dyn DatabaseCollabService>,
   task_controller: Arc<BlockTaskController>,
   sequence: Arc<AtomicU32>,
-  pub cache: Arc<Mutex<LruCache<RowId, Arc<MutexDatabaseRow>>>>,
+  pub rows: Arc<DashMap<RowId, Arc<MutexDatabaseRow>>>,
   pub notifier: Arc<Sender<BlockEvent>>,
   row_change_tx: Option<RowChangeSender>,
 }
@@ -54,17 +54,16 @@ impl Block {
     collab_service: Arc<dyn DatabaseCollabService>,
     row_change_tx: Option<RowChangeSender>,
   ) -> Block {
-    let cache = Arc::new(Mutex::new(LruCache::new(NonZeroUsize::new(2000).unwrap())));
     let controller = BlockTaskController::new(collab_db.clone(), Arc::downgrade(&collab_service));
     let task_controller = Arc::new(controller);
     let (notifier, _) = broadcast::channel(1000);
     Self {
       uid,
       collab_db,
-      cache,
       task_controller,
       collab_service,
       sequence: Arc::new(Default::default()),
+      rows: Arc::new(Default::default()),
       notifier: Arc::new(notifier),
       row_change_tx,
     }
@@ -86,7 +85,7 @@ impl Block {
     let uid = self.uid;
     let change_tx = self.row_change_tx.clone();
     let collab_db = self.collab_db.clone();
-    let cache = self.cache.clone();
+    let cache = self.rows.clone();
     let weak_notifier = Arc::downgrade(&self.notifier);
     tokio::spawn(async move {
       while let Some(row_collabs) = rx.recv().await {
@@ -115,9 +114,8 @@ impl Block {
   }
 
   pub fn close_rows(&self, row_ids: &[RowId]) {
-    let mut cache_guard = self.cache.lock();
     for row_id in row_ids {
-      cache_guard.pop(row_id);
+      self.rows.remove(row_id);
     }
   }
 
@@ -139,7 +137,7 @@ impl Block {
         let collab_db = self.collab_db.clone();
         let row_change_tx = self.row_change_tx.clone();
         let collab_service = self.collab_service.clone();
-        let cache = self.cache.clone();
+        let cache = self.rows.clone();
         tokio::spawn(async move {
           async_create_row(uid, row, cache, collab_db, row_change_tx, collab_service).await;
         });
@@ -170,7 +168,7 @@ impl Block {
         collab,
         self.row_change_tx.clone(),
       ));
-      self.cache.lock().put(row_id, Arc::new(database_row));
+      self.rows.insert(row_id, Arc::new(database_row));
     }
     row_order
   }
@@ -218,9 +216,9 @@ impl Block {
   }
 
   pub fn delete_row(&self, row_id: &RowId) {
-    let row = self.cache.lock().pop(row_id);
+    let row = self.rows.remove(row_id);
     if let Some(row) = row {
-      row.lock().delete();
+      row.1.lock().delete();
     }
   }
 
@@ -228,7 +226,7 @@ impl Block {
   where
     F: FnOnce(RowUpdate),
   {
-    let row = self.cache.lock().get(row_id).cloned();
+    let row = self.rows.get(row_id).map(|r| r.value().clone());
     match row {
       None => {
         trace!(
@@ -247,7 +245,7 @@ impl Block {
   where
     F: FnOnce(RowMetaUpdate),
   {
-    let row = self.cache.lock().get(row_id).cloned();
+    let row = self.rows.get(row_id).map(|r| r.value().clone());
     match row {
       None => {
         trace!(
@@ -264,7 +262,7 @@ impl Block {
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
   fn get_or_init_row(&self, row_id: &RowId) -> Option<Arc<MutexDatabaseRow>> {
     let collab_db = self.collab_db.upgrade()?;
-    let row = self.cache.lock().get(row_id).cloned();
+    let row = self.rows.get(row_id).map(|r| r.value().clone());
     match row {
       None => {
         let is_exist = collab_db.read_txn().is_exist(self.uid, row_id.as_ref());
@@ -286,7 +284,7 @@ impl Block {
           let uid = self.uid;
           let change_tx = self.row_change_tx.clone();
           let weak_collab_db = self.collab_db.clone();
-          let cache = self.cache.clone();
+          let cache = self.rows.clone();
           let row_id = row_id.clone();
           tokio::spawn(async move {
             if let Some(Ok(row_collab)) = rx.recv().await {
@@ -323,10 +321,7 @@ impl Block {
           ) {
             Ok(database_row) => {
               let arc_database_row = Arc::new(MutexDatabaseRow::new(database_row));
-              self
-                .cache
-                .lock()
-                .put(row_id.clone(), arc_database_row.clone());
+              self.rows.insert(row_id.clone(), arc_database_row.clone());
               Some(arc_database_row)
             },
             Err(_) => {
@@ -349,10 +344,10 @@ impl Block {
     uid: i64,
     change_tx: Option<RowChangeSender>,
     collab_db: Weak<CollabKVDB>,
-    cache: Arc<Mutex<LruCache<RowId, Arc<MutexDatabaseRow>>>>,
+    cache: Arc<DashMap<RowId, Arc<MutexDatabaseRow>>>,
     row_collab: Arc<MutexCollab>,
   ) -> Result<(), CollabError> {
-    if cache.lock().contains(row_id) {
+    if cache.contains_key(row_id) {
       warn!("The row is already in the cache: {:?}", row_id);
       return Ok(());
     }
@@ -364,7 +359,7 @@ impl Block {
 
     let row = DatabaseRow::new(uid, row_id.clone(), collab_db, row_collab, change_tx)?;
     let arc_row = Arc::new(MutexDatabaseRow::new(row));
-    cache.lock().put(row_id.clone(), arc_row);
+    cache.insert(row_id.clone(), arc_row);
 
     if let Some(notifier) = weak_notifier.upgrade() {
       match row_detail {
@@ -395,7 +390,7 @@ impl Block {
 async fn async_create_row<T: Into<Row>>(
   uid: i64,
   row: T,
-  cache: Arc<Mutex<LruCache<RowId, Arc<MutexDatabaseRow>>>>,
+  cache: Arc<DashMap<RowId, Arc<MutexDatabaseRow>>>,
   collab_db: Weak<CollabKVDB>,
   row_change_tx: Option<RowChangeSender>,
   collab_service: Arc<dyn DatabaseCollabService>,
@@ -426,6 +421,6 @@ async fn async_create_row<T: Into<Row>>(
       collab,
       row_change_tx,
     ));
-    cache.lock().put(row_id, Arc::new(database_row));
+    cache.insert(row_id, Arc::new(database_row));
   }
 }
