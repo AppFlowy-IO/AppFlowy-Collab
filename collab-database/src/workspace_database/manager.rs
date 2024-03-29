@@ -1,17 +1,17 @@
 use async_trait::async_trait;
 use lru::LruCache;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
 use collab::core::collab::{DocStateSource, MutexCollab};
-use collab::preclude::updates::decoder::Decode;
-use collab::preclude::{Collab, Update};
+
+use collab::preclude::Collab;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::snapshot::{CollabSnapshot, SnapshotAction};
+
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
@@ -74,7 +74,7 @@ pub struct WorkspaceDatabase {
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
   databases: Mutex<LruCache<String, Arc<MutexDatabase>>>,
-  database_collabs: Mutex<LruCache<String, Arc<MutexCollab>>>,
+  closing_database: Mutex<HashSet<String>>,
 }
 
 impl WorkspaceDatabase {
@@ -89,11 +89,7 @@ impl WorkspaceDatabase {
     T: DatabaseCollabService,
   {
     let collab_service = Arc::new(collab_service);
-    let collab_guard = collab.lock();
-    drop(collab_guard);
-
     let databases = Mutex::new(LruCache::new(NonZeroUsize::new(5).unwrap()));
-    let database_collabs = Mutex::new(LruCache::new(NonZeroUsize::new(10).unwrap()));
     Self {
       uid,
       collab_db,
@@ -101,47 +97,41 @@ impl WorkspaceDatabase {
       databases,
       config,
       collab_service,
-      database_collabs,
+      closing_database: Default::default(),
     }
   }
 
-  pub async fn get_database_collab(&self, database_id: &str) -> Option<Arc<MutexCollab>> {
-    let database_collab = self.database_collabs.lock().get(database_id).cloned();
+  pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Arc<MutexCollab>> {
     let collab_db = self.collab_db.upgrade()?;
-    match database_collab {
-      None => {
-        let mut collab_doc_state = DocStateSource::FromDisk;
-        let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
-        if !is_exist {
-          // Try to load the database from the remote. The database doesn't exist in the local only
-          // when the user has deleted the database or the database is using a remote storage.
-          match self
-            .collab_service
-            .get_collab_doc_state(database_id, CollabType::Database)
-            .await
-          {
-            Ok(fetched_doc_state) => {
-              if fetched_doc_state.is_empty() {
-                error!("Failed to get updates for database: {}", database_id);
-                return None;
-              }
-              collab_doc_state = fetched_doc_state;
-            },
-            Err(e) => {
-              error!("Failed to get collab updates for database: {}", e);
-              return None;
-            },
+    let mut collab_doc_state = DocStateSource::FromDisk;
+    let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
+    if !is_exist {
+      // Try to load the database from the remote. The database doesn't exist in the local only
+      // when the user has deleted the database or the database is using a remote storage.
+      match self
+        .collab_service
+        .get_collab_doc_state(database_id, CollabType::Database)
+        .await
+      {
+        Ok(fetched_doc_state) => {
+          if fetched_doc_state.is_empty() {
+            error!("Failed to get updates for database: {}", database_id);
+            return None;
           }
-        }
-        let database_collab = self.collab_for_database(database_id, collab_doc_state);
-        self
-          .database_collabs
-          .lock()
-          .put(database_id.to_string(), database_collab.clone());
-        Some(database_collab)
-      },
-      Some(database_collab) => Some(database_collab),
+          collab_doc_state = fetched_doc_state;
+        },
+        Err(e) => {
+          error!("Failed to get collab updates for database: {}", e);
+          return None;
+        },
+      }
     }
+    let database_collab = self.collab_for_database(database_id, collab_doc_state);
+    if Database::validate(&database_collab.lock()).is_ok() {
+      return None;
+    }
+
+    Some(database_collab)
   }
 
   /// Get the database with the given database id.
@@ -152,6 +142,7 @@ impl WorkspaceDatabase {
     }
     let database = self.databases.lock().get(database_id).cloned();
     let collab_db = self.collab_db.upgrade()?;
+    self.closing_database.lock().remove(database_id);
     match database {
       None => {
         let notifier = DatabaseNotify::default();
@@ -166,7 +157,6 @@ impl WorkspaceDatabase {
           notifier: Some(notifier),
         };
         let database = Database::get_or_create(database_id, context).ok()?;
-
         // The database is not exist in local disk, which means the rows of the database are not
         // loaded yet. Load the rows from the remote with limit 100.
         if !is_exist {
@@ -282,7 +272,7 @@ impl WorkspaceDatabase {
       let _ = collab_db.with_write_txn(|w_db_txn| {
         match w_db_txn.delete_doc(self.uid, database_id) {
           Ok(_) => {},
-          Err(err) => tracing::error!("🔴Delete database failed: {}", err),
+          Err(err) => error!("🔴Delete database failed: {}", err),
         }
         Ok(())
       });
@@ -294,6 +284,8 @@ impl WorkspaceDatabase {
 
   /// Close the database with the given database id.
   pub fn close_database(&self, database_id: &str) {
+    self.closing_database.lock().insert(database_id.to_string());
+
     if let Some(database) = self.databases.lock().pop(database_id) {
       database.lock().close();
     }
@@ -302,38 +294,6 @@ impl WorkspaceDatabase {
   /// Return all the database records.
   pub fn get_all_database_meta(&self) -> Vec<DatabaseMeta> {
     self.database_meta_list().get_all_database_meta()
-  }
-
-  pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
-    match self.collab_db.upgrade() {
-      None => vec![],
-      Some(collab_db) => {
-        let store = collab_db.read_txn();
-        store.get_snapshots(self.uid, database_id)
-      },
-    }
-  }
-
-  pub fn restore_database_from_snapshot(
-    &self,
-    database_id: &str,
-    snapshot: CollabSnapshot,
-  ) -> Result<Database, DatabaseError> {
-    let collab = self.collab_for_database(database_id, DocStateSource::FromDisk);
-    let update =
-      Update::decode_v1(&snapshot.data).map_err(|err| DatabaseError::Internal(err.into()))?;
-    collab.lock().with_origin_transact_mut(|txn| {
-      txn.apply_update(update);
-    });
-
-    let context = DatabaseContext {
-      uid: self.uid,
-      db: self.collab_db.clone(),
-      collab,
-      collab_service: self.collab_service.clone(),
-      notifier: None,
-    };
-    Database::get_or_create(database_id, context)
   }
 
   /// Delete the view from the database with the given view id.

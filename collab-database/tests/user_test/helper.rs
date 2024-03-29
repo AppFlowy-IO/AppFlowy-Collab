@@ -21,6 +21,8 @@ use collab_plugins::local_storage::CollabPersistenceConfig;
 use parking_lot::Mutex;
 use tokio::sync::mpsc::{channel, Receiver};
 
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
 use rand::Rng;
@@ -91,6 +93,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
       ))
       .build()
       .unwrap();
+
     collab.lock().initialize();
     Arc::new(collab)
   }

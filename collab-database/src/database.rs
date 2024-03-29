@@ -298,7 +298,7 @@ impl Database {
     })
   }
 
-  pub fn close(&self) {
+  pub(crate) fn close(&self) {
     let row_ids = self
       .get_inline_row_orders()
       .into_iter()

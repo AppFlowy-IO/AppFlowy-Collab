@@ -352,6 +352,7 @@ impl Block {
     let collab_lock_guard = row_collab.lock();
     let row_detail = RowDetail::from_collab(&collab_lock_guard, &collab_lock_guard.transact());
     drop(collab_lock_guard);
+
     let row = DatabaseRow::new(uid, row_id.clone(), collab_db, row_collab, change_tx)?;
     let arc_row = Arc::new(MutexDatabaseRow::new(row));
     cache.lock().put(row_id.clone(), arc_row);
