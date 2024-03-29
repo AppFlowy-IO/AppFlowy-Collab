@@ -113,12 +113,6 @@ impl Block {
     });
   }
 
-  pub fn close_rows(&self, row_ids: &[RowId]) {
-    for row_id in row_ids {
-      self.rows.remove(row_id);
-    }
-  }
-
   pub fn create_rows<T>(&self, rows: Vec<T>) -> Vec<RowOrder>
   where
     T: Into<Row> + Send,

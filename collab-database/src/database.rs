@@ -300,15 +300,6 @@ impl Database {
     })
   }
 
-  pub(crate) fn close(&self) {
-    let row_ids = self
-      .get_inline_row_orders()
-      .into_iter()
-      .map(|row_order| row_order.id)
-      .collect::<Vec<_>>();
-    self.block.close_rows(&row_ids);
-  }
-
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
     self.inner.lock().subscribe_sync_state()
   }

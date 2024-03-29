@@ -17,10 +17,8 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::future::Future;
 
-use collab::core::collab_state::SyncState;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
-use tokio_stream::StreamExt;
 use tracing::{error, trace};
 
 pub type CollabDocStateByOid = HashMap<String, DocStateSource>;
@@ -151,6 +149,7 @@ impl WorkspaceDatabase {
       None => {
         // If the database is being removed, return the database back to the databases.
         if let Some(database) = self.removing_databases.lock().remove(database_id) {
+          trace!("Move the database:{} back to databases", database_id);
           self
             .databases
             .lock()
@@ -176,20 +175,6 @@ impl WorkspaceDatabase {
         if !is_exist {
           database.load_all_rows();
         }
-
-        let mut sub = database.subscribe_sync_state();
-        let cloned_database_id = database_id.to_string();
-        let weak_removing_databases = Arc::downgrade(&self.removing_databases);
-        tokio::task::spawn_local(async move {
-          while let Some(state) = sub.next().await {
-            if matches!(state, SyncState::SyncFinished) {
-              if let Some(removing_databases) = weak_removing_databases.upgrade() {
-                trace!("Sync finish, drop the database:{}", cloned_database_id);
-                removing_databases.lock().remove(&cloned_database_id);
-              }
-            }
-          }
-        });
 
         // Create a new [MutexDatabase] and add it to the databases.
         let database = Arc::new(MutexDatabase::new(database));
@@ -305,17 +290,34 @@ impl WorkspaceDatabase {
         Ok(())
       });
     }
-    if let Some(database) = self.databases.lock().remove(database_id) {
-      database.lock().close();
-    }
+    self.databases.lock().remove(database_id);
   }
 
   pub fn close_database(&self, database_id: &str) {
     if let Some(database) = self.databases.lock().remove(database_id) {
+      trace!("Move the database to removing_databases: {}", database_id);
       self
         .removing_databases
         .lock()
         .insert(database_id.to_string(), database);
+
+      let cloned_database_id = database_id.to_string();
+      let weak_removing_databases = Arc::downgrade(&self.removing_databases);
+      tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+        if let Some(removing_databases) = weak_removing_databases.upgrade() {
+          if removing_databases
+            .lock()
+            .remove(&cloned_database_id)
+            .is_some()
+          {
+            trace!(
+              "Remove database {} from removing_databases",
+              cloned_database_id
+            );
+          }
+        }
+      });
     }
   }
 
