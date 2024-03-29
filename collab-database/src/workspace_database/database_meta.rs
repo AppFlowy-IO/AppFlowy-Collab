@@ -8,7 +8,7 @@ use std::collections::HashSet;
 
 use crate::database::timestamp;
 
-const DATABASES: &str = "databases";
+pub(crate) const DATABASES: &str = "databases";
 
 /// Used to store list of [DatabaseMeta].
 pub struct DatabaseMetaList {

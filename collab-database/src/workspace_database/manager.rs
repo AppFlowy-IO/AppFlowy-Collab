@@ -24,6 +24,7 @@ use crate::error::DatabaseError;
 
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
+use crate::workspace_database::DATABASES;
 
 pub type CollabDocStateByOid = HashMap<String, DocStateSource>;
 pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
@@ -99,6 +100,14 @@ impl WorkspaceDatabase {
       collab_service,
       closing_database: Default::default(),
     }
+  }
+
+  pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
+    let txn = collab.transact();
+    let _ = collab
+      .get_array_with_txn(&txn, vec![DATABASES])
+      .ok_or(DatabaseError::NoRequiredData)?;
+    Ok(())
   }
 
   pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Arc<MutexCollab>> {
