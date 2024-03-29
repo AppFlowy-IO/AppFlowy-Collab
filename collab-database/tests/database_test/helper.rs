@@ -8,11 +8,11 @@ use collab::preclude::CollabBuilder;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, CreateRowParams, DatabaseRow, RowId};
-use collab_database::user::DatabaseCollabService;
 use collab_database::views::{
   CreateDatabaseParams, DatabaseLayout, FieldSettingsByFieldIdMap, FieldSettingsMap, LayoutSetting,
   LayoutSettings, OrderObjectPosition,
 };
+use collab_database::workspace_database::DatabaseCollabService;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 

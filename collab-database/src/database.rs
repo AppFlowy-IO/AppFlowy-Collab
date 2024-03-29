@@ -25,13 +25,13 @@ use crate::rows::{
   CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowChangeReceiver, RowDetail, RowId,
   RowMeta, RowMetaUpdate, RowUpdate,
 };
-use crate::user::DatabaseCollabService;
 use crate::views::{
   CalculationMap, CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator,
   DatabaseLayout, DatabaseView, DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap,
   FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder,
   SortMap, ViewChangeReceiver, ViewMap,
 };
+use crate::workspace_database::DatabaseCollabService;
 
 pub struct Database {
   #[allow(dead_code)]

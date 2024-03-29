@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 
-use crate::user::relation::RowRelationMap;
+use crate::workspace_database::relation::RowRelationMap;
 
 pub struct DatabaseRelation {
   #[allow(dead_code)]

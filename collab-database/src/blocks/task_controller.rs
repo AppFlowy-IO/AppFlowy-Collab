@@ -18,7 +18,7 @@ use crate::blocks::queue::{
   PendingTask, RequestPayload, TaskHandler, TaskQueue, TaskQueueRunner, TaskState,
 };
 use crate::rows::{RowDetail, RowId};
-use crate::user::DatabaseCollabService;
+use crate::workspace_database::DatabaseCollabService;
 
 /// A [BlockTaskController] is used to control how the [BlockTask]s are executed.
 /// It contains a [TaskQueue] to queue the [BlockTask]s and a [TaskHandler] to handle the

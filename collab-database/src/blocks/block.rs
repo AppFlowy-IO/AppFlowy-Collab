@@ -22,8 +22,8 @@ use crate::rows::{
   meta_id_from_row_id, Cell, DatabaseRow, MutexDatabaseRow, Row, RowChangeSender, RowDetail, RowId,
   RowMeta, RowMetaKey, RowMetaUpdate, RowUpdate,
 };
-use crate::user::DatabaseCollabService;
 use crate::views::RowOrder;
+use crate::workspace_database::DatabaseCollabService;
 
 #[derive(Clone)]
 pub enum BlockEvent {
@@ -42,7 +42,7 @@ pub struct Block {
   task_controller: Arc<BlockTaskController>,
   sequence: Arc<AtomicU32>,
   pub cache: Arc<Mutex<LruCache<RowId, Arc<MutexDatabaseRow>>>>,
-  pub notifier: Arc<broadcast::Sender<BlockEvent>>,
+  pub notifier: Arc<Sender<BlockEvent>>,
   row_change_tx: Option<RowChangeSender>,
 }
 

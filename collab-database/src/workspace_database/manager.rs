@@ -22,8 +22,8 @@ use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
 use crate::database_observer::DatabaseNotify;
 use crate::error::DatabaseError;
 
-use crate::user::db_meta::{DatabaseMeta, DatabaseMetaList};
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
+use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
 
 pub type CollabDocStateByOid = HashMap<String, DocStateSource>;
 pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;

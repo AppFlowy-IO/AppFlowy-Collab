@@ -6,8 +6,8 @@ use collab::preclude::{
 };
 use tokio::sync::broadcast;
 
-use crate::user::relation::{RowRelation, RowRelationBuilder};
-use crate::user::row_relation_from_map_ref;
+use crate::workspace_database::relation::{RowRelation, RowRelationBuilder};
+use crate::workspace_database::row_relation_from_map_ref;
 
 #[derive(Debug, Clone)]
 pub enum RowRelationChange {

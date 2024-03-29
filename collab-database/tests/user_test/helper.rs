@@ -11,11 +11,11 @@ use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
 use collab_database::rows::CellsBuilder;
 use collab_database::rows::CreateRowParams;
-use collab_database::user::{
+use collab_database::views::{CreateDatabaseParams, DatabaseLayout, OrderObjectPosition};
+use collab_database::workspace_database::{
   CollabDocStateByOid, CollabFuture, DatabaseCollabService, RowRelationChange,
   RowRelationUpdateReceiver, WorkspaceDatabase,
 };
-use collab_database::views::{CreateDatabaseParams, DatabaseLayout, OrderObjectPosition};
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use parking_lot::Mutex;
