@@ -41,11 +41,12 @@ pub trait CollabPlugin: Send + Sync + 'static {
 
   fn receive_local_state(
     &self,
-    origin: &CollabOrigin,
-    object_id: &str,
-    event: &Event,
-    update: &AwarenessUpdate,
-  );
+    _origin: &CollabOrigin,
+    _object_id: &str,
+    _event: &Event,
+    _update: &AwarenessUpdate,
+  ) {
+  }
 
   /// Called after each [TransactionMut]
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
