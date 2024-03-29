@@ -1,30 +1,25 @@
+use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
+use crate::database_state::DatabaseNotify;
+use crate::error::DatabaseError;
+use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
+use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
+use crate::workspace_database::DATABASES;
 use async_trait::async_trait;
+use collab::core::collab::{DocStateSource, MutexCollab};
+use collab::preclude::Collab;
+use collab_entity::CollabType;
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use collab_plugins::local_storage::kv::KVTransactionDB;
+use collab_plugins::local_storage::CollabPersistenceConfig;
+use collab_plugins::CollabKVDB;
 use lru::LruCache;
+use parking_lot::Mutex;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
-
-use collab::core::collab::{DocStateSource, MutexCollab};
-
-use collab::preclude::Collab;
-use collab_entity::CollabType;
-use collab_plugins::local_storage::kv::doc::CollabKVAction;
-
-use collab_plugins::local_storage::kv::KVTransactionDB;
-use collab_plugins::local_storage::CollabPersistenceConfig;
-use collab_plugins::CollabKVDB;
-use parking_lot::Mutex;
 use tracing::error;
-
-use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
-use crate::database_observer::DatabaseNotify;
-use crate::error::DatabaseError;
-
-use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
-use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
-use crate::workspace_database::DATABASES;
 
 pub type CollabDocStateByOid = HashMap<String, DocStateSource>;
 pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
@@ -74,7 +69,7 @@ pub struct WorkspaceDatabase {
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
-  databases: Mutex<LruCache<String, Arc<MutexDatabase>>>,
+  databases: Mutex<HashMap<String, Arc<MutexDatabase>>>,
   closing_database: Mutex<HashSet<String>>,
 }
 
@@ -90,7 +85,7 @@ impl WorkspaceDatabase {
     T: DatabaseCollabService,
   {
     let collab_service = Arc::new(collab_service);
-    let databases = Mutex::new(LruCache::new(NonZeroUsize::new(5).unwrap()));
+    let databases = Mutex::new(HashMap::new());
     Self {
       uid,
       collab_db,
@@ -165,7 +160,7 @@ impl WorkspaceDatabase {
         };
         let database = Database::get_or_create(database_id, context).ok()?;
         // The database is not exist in local disk, which means the rows of the database are not
-        // loaded yet. Load the rows from the remote with limit 100.
+        // loaded yet.
         if !is_exist {
           database.load_all_rows();
         }
@@ -174,7 +169,7 @@ impl WorkspaceDatabase {
         self
           .databases
           .lock()
-          .put(database_id.to_string(), database.clone());
+          .insert(database_id.to_string(), database.clone());
         Some(database)
       },
       Some(database) => Some(database),
@@ -225,7 +220,7 @@ impl WorkspaceDatabase {
     // TODO(RS): insert the first view of the database.
     let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);
     let database = Arc::new(mutex_database);
-    self.databases.lock().put(database_id, database.clone());
+    self.databases.lock().insert(database_id, database.clone());
     Ok(database)
   }
 
@@ -277,23 +272,13 @@ impl WorkspaceDatabase {
     self.database_meta_list().delete_database(database_id);
     if let Some(collab_db) = self.collab_db.upgrade() {
       let _ = collab_db.with_write_txn(|w_db_txn| {
-        match w_db_txn.delete_doc(self.uid, database_id) {
-          Ok(_) => {},
-          Err(err) => error!("🔴Delete database failed: {}", err),
+        if let Err(err) = w_db_txn.delete_doc(self.uid, database_id) {
+          error!("🔴Delete database failed: {}", err);
         }
         Ok(())
       });
     }
-    if let Some(database) = self.databases.lock().pop(database_id) {
-      database.lock().close();
-    }
-  }
-
-  /// Close the database with the given database id.
-  pub fn close_database(&self, database_id: &str) {
-    self.closing_database.lock().insert(database_id.to_string());
-
-    if let Some(database) = self.databases.lock().pop(database_id) {
+    if let Some(database) = self.databases.lock().remove(database_id) {
       database.lock().close();
     }
   }

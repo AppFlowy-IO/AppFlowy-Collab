@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
+use std::time::Instant;
 
 use collab::core::any_map::AnyMapExtension;
 use collab::core::collab::MutexCollab;
@@ -16,8 +18,8 @@ use serde::{Deserialize, Serialize};
 pub use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{Block, BlockEvent};
-use crate::database_observer::DatabaseNotify;
 use crate::database_serde::DatabaseSerde;
+use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldChangeReceiver, FieldMap};
 use crate::meta::MetaMap;
@@ -44,6 +46,7 @@ pub struct Database {
   /// A database rows will be stored in multiple blocks.
   pub block: Block,
   pub notifier: Option<DatabaseNotify>,
+  pub(crate) edit_at: AtomicI64,
 }
 
 const DATABASE_ID: &str = "id";
@@ -214,6 +217,7 @@ impl Database {
             .as_ref()
             .map(|notifier| notifier.row_change_tx.clone()),
         );
+
         drop(collab_guard);
 
         Ok(Self {
@@ -224,6 +228,7 @@ impl Database {
           fields: Rc::new(fields),
           metas: Rc::new(metas),
           notifier: context.notifier,
+          edit_at: Default::default(),
         })
       },
     }
@@ -295,6 +300,7 @@ impl Database {
       fields: Rc::new(fields),
       metas: Rc::new(metas),
       notifier: context.notifier,
+      edit_at: Default::default(),
     })
   }
 
@@ -1251,6 +1257,8 @@ impl Database {
   /// just delete the view with given view id.
   ///
   pub fn delete_view(&self, view_id: &str) -> Vec<String> {
+    self.tick_edit();
+    // TODO(nathan): delete the database from workspace database
     if self.is_inline_view(view_id) {
       self.root.with_transact_mut(|txn| {
         let views = self.views.get_all_views_meta_with_txn(txn);
@@ -1263,6 +1271,10 @@ impl Database {
       });
       vec![view_id.to_string()]
     }
+  }
+
+  fn tick_edit(&self) {
+    self.edit_at.store(timestamp(), Ordering::SeqCst);
   }
 
   /// Only expose this function in test env

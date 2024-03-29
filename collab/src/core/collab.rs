@@ -2,6 +2,7 @@ use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::panic;
 use std::panic::AssertUnwindSafe;
+use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
 use std::vec::IntoIter;
 
@@ -296,7 +297,7 @@ impl Collab {
     );
 
     *self.update_subscription.write() = Some(update_subscription);
-    *self.after_txn_subscription.write() = Some(after_txn_subscription);
+    *self.after_txn_subscription.write() = after_txn_subscription;
     *self.awareness_subscription.write() = Some(awareness_subscription);
 
     let last_sync_at = self.get_last_sync_at();
@@ -338,7 +339,7 @@ impl Collab {
     );
 
     *self.update_subscription.write() = Some(update_subscription);
-    *self.after_txn_subscription.write() = Some(after_txn_subscription);
+    *self.after_txn_subscription.write() = after_txn_subscription;
     *self.awareness_subscription.write() = Some(awareness_subscription);
 
     let last_sync_at = self.get_last_sync_at();
@@ -732,7 +733,7 @@ fn observe_doc(
   oid: String,
   plugins: Plugins,
   local_origin: CollabOrigin,
-) -> (UpdateSubscription, AfterTransactionSubscription) {
+) -> (UpdateSubscription, Option<AfterTransactionSubscription>) {
   let cloned_oid = oid.clone();
   let cloned_plugins = plugins.clone();
   let update_sub = doc
@@ -758,7 +759,7 @@ fn observe_doc(
         .iter()
         .for_each(|plugin| plugin.after_transaction(&oid, txn));
     })
-    .unwrap();
+    .ok();
 
   (update_sub, after_txn_sub)
 }
