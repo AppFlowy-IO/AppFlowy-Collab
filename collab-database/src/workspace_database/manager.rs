@@ -1,29 +1,26 @@
+use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
+use crate::database_state::DatabaseNotify;
+use crate::error::DatabaseError;
+use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
+use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
 use async_trait::async_trait;
-use lru::LruCache;
-use std::collections::HashMap;
-use std::future::Future;
-use std::num::NonZeroUsize;
-use std::pin::Pin;
-use std::sync::{Arc, Weak};
-
 use collab::core::collab::{DocStateSource, MutexCollab};
-use collab::preclude::updates::decoder::Decode;
-use collab::preclude::{Collab, Update};
+use collab::preclude::Collab;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::snapshot::{CollabSnapshot, SnapshotAction};
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
+
 use parking_lot::Mutex;
-use tracing::error;
+use std::collections::HashMap;
+use std::future::Future;
 
-use crate::database::{Database, DatabaseContext, DatabaseData, MutexDatabase};
-use crate::database_observer::DatabaseNotify;
-use crate::error::DatabaseError;
+use std::pin::Pin;
+use std::sync::{Arc, Weak};
+use std::time::Duration;
 
-use crate::user::db_meta::{DatabaseMeta, DatabaseMetaList};
-use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
+use tracing::{error, trace};
 
 pub type CollabDocStateByOid = HashMap<String, DocStateSource>;
 pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
@@ -53,7 +50,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     collab_db: Weak<CollabKVDB>,
     collab_doc_state: DocStateSource,
     config: CollabPersistenceConfig,
-  ) -> Arc<MutexCollab>;
+  ) -> Result<Arc<MutexCollab>, DatabaseError>;
 }
 
 /// A [WorkspaceDatabase] indexes the databases within a workspace.
@@ -73,8 +70,8 @@ pub struct WorkspaceDatabase {
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
-  databases: Mutex<LruCache<String, Arc<MutexDatabase>>>,
-  database_collabs: Mutex<LruCache<String, Arc<MutexCollab>>>,
+  databases: Arc<Mutex<HashMap<String, Arc<MutexDatabase>>>>,
+  removing_databases: Arc<Mutex<HashMap<String, Arc<MutexDatabase>>>>,
 }
 
 impl WorkspaceDatabase {
@@ -89,11 +86,9 @@ impl WorkspaceDatabase {
     T: DatabaseCollabService,
   {
     let collab_service = Arc::new(collab_service);
-    let collab_guard = collab.lock();
-    drop(collab_guard);
+    let databases = Arc::new(Mutex::new(HashMap::new()));
+    let removing_databases = Arc::new(Mutex::new(HashMap::new()));
 
-    let databases = Mutex::new(LruCache::new(NonZeroUsize::new(5).unwrap()));
-    let database_collabs = Mutex::new(LruCache::new(NonZeroUsize::new(10).unwrap()));
     Self {
       uid,
       collab_db,
@@ -101,47 +96,46 @@ impl WorkspaceDatabase {
       databases,
       config,
       collab_service,
-      database_collabs,
+      removing_databases,
     }
   }
 
-  pub async fn get_database_collab(&self, database_id: &str) -> Option<Arc<MutexCollab>> {
-    let database_collab = self.database_collabs.lock().get(database_id).cloned();
+  pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
+    CollabType::WorkspaceDatabase
+      .validate(collab)
+      .map_err(|_| DatabaseError::NoRequiredData)?;
+    Ok(())
+  }
+
+  pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Arc<MutexCollab>> {
     let collab_db = self.collab_db.upgrade()?;
-    match database_collab {
-      None => {
-        let mut collab_doc_state = DocStateSource::FromDisk;
-        let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
-        if !is_exist {
-          // Try to load the database from the remote. The database doesn't exist in the local only
-          // when the user has deleted the database or the database is using a remote storage.
-          match self
-            .collab_service
-            .get_collab_doc_state(database_id, CollabType::Database)
-            .await
-          {
-            Ok(fetched_doc_state) => {
-              if fetched_doc_state.is_empty() {
-                error!("Failed to get updates for database: {}", database_id);
-                return None;
-              }
-              collab_doc_state = fetched_doc_state;
-            },
-            Err(e) => {
-              error!("Failed to get collab updates for database: {}", e);
-              return None;
-            },
+    let mut collab_doc_state = DocStateSource::FromDisk;
+    let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
+    if !is_exist {
+      // Try to load the database from the remote. The database doesn't exist in the local only
+      // when the user has deleted the database or the database is using a remote storage.
+      match self
+        .collab_service
+        .get_collab_doc_state(database_id, CollabType::Database)
+        .await
+      {
+        Ok(fetched_doc_state) => {
+          if fetched_doc_state.is_empty() {
+            error!("Failed to get updates for database: {}", database_id);
+            return None;
           }
-        }
-        let database_collab = self.collab_for_database(database_id, collab_doc_state);
-        self
-          .database_collabs
-          .lock()
-          .put(database_id.to_string(), database_collab.clone());
-        Some(database_collab)
-      },
-      Some(database_collab) => Some(database_collab),
+          collab_doc_state = fetched_doc_state;
+        },
+        Err(e) => {
+          error!("Failed to get collab updates for database: {}", e);
+          return None;
+        },
+      }
     }
+    let database_collab = self
+      .collab_for_database(database_id, collab_doc_state)
+      .ok()?;
+    Some(database_collab)
   }
 
   /// Get the database with the given database id.
@@ -154,6 +148,17 @@ impl WorkspaceDatabase {
     let collab_db = self.collab_db.upgrade()?;
     match database {
       None => {
+        // If the database is being removed, return the database back to the databases.
+        if let Some(database) = self.removing_databases.lock().remove(database_id) {
+          trace!("Move the database:{} back to databases", database_id);
+          self
+            .databases
+            .lock()
+            .insert(database_id.to_string(), database.clone());
+          return Some(database);
+        }
+
+        // If the database is not exist, create a new one.
         let notifier = DatabaseNotify::default();
         let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
         let collab = self.get_database_collab(database_id).await?;
@@ -166,18 +171,18 @@ impl WorkspaceDatabase {
           notifier: Some(notifier),
         };
         let database = Database::get_or_create(database_id, context).ok()?;
-
         // The database is not exist in local disk, which means the rows of the database are not
-        // loaded yet. Load the rows from the remote with limit 100.
+        // loaded yet.
         if !is_exist {
           database.load_all_rows();
         }
 
+        // Create a new [MutexDatabase] and add it to the databases.
         let database = Arc::new(MutexDatabase::new(database));
         self
           .databases
           .lock()
-          .put(database_id.to_string(), database.clone());
+          .insert(database_id.to_string(), database.clone());
         Some(database)
       },
       Some(database) => Some(database),
@@ -210,7 +215,7 @@ impl WorkspaceDatabase {
     debug_assert!(!params.view_id.is_empty());
 
     // Create a [Collab] for the given database id.
-    let collab = self.collab_for_database(&params.database_id, DocStateSource::FromDisk);
+    let collab = self.collab_for_database(&params.database_id, DocStateSource::FromDisk)?;
     let notifier = DatabaseNotify::default();
     let context = DatabaseContext {
       uid: self.uid,
@@ -228,7 +233,7 @@ impl WorkspaceDatabase {
     // TODO(RS): insert the first view of the database.
     let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);
     let database = Arc::new(mutex_database);
-    self.databases.lock().put(database_id, database.clone());
+    self.databases.lock().insert(database_id, database.clone());
     Ok(database)
   }
 
@@ -280,60 +285,57 @@ impl WorkspaceDatabase {
     self.database_meta_list().delete_database(database_id);
     if let Some(collab_db) = self.collab_db.upgrade() {
       let _ = collab_db.with_write_txn(|w_db_txn| {
-        match w_db_txn.delete_doc(self.uid, database_id) {
-          Ok(_) => {},
-          Err(err) => tracing::error!("🔴Delete database failed: {}", err),
+        if let Err(err) = w_db_txn.delete_doc(self.uid, database_id) {
+          error!("🔴Delete database failed: {}", err);
         }
         Ok(())
       });
     }
-    if let Some(database) = self.databases.lock().pop(database_id) {
-      database.lock().close();
+    self.databases.lock().remove(database_id);
+  }
+
+  pub fn open_database(&self, database_id: &str) {
+    // TODO(nathan): refactor the get_database that split the database creation and database opening.
+    if let Some(database) = self.removing_databases.lock().remove(database_id) {
+      trace!("Move the database:{} back to databases", database_id);
+      self
+        .databases
+        .lock()
+        .insert(database_id.to_string(), database);
     }
   }
 
-  /// Close the database with the given database id.
   pub fn close_database(&self, database_id: &str) {
-    if let Some(database) = self.databases.lock().pop(database_id) {
-      database.lock().close();
+    if let Some(database) = self.databases.lock().remove(database_id) {
+      trace!("Move the database to removing_databases: {}", database_id);
+      self
+        .removing_databases
+        .lock()
+        .insert(database_id.to_string(), database);
+
+      let cloned_database_id = database_id.to_string();
+      let weak_removing_databases = Arc::downgrade(&self.removing_databases);
+      tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(120)).await;
+        if let Some(removing_databases) = weak_removing_databases.upgrade() {
+          if removing_databases
+            .lock()
+            .remove(&cloned_database_id)
+            .is_some()
+          {
+            trace!(
+              "drop database {} from removing_databases",
+              cloned_database_id
+            );
+          }
+        }
+      });
     }
   }
 
   /// Return all the database records.
   pub fn get_all_database_meta(&self) -> Vec<DatabaseMeta> {
     self.database_meta_list().get_all_database_meta()
-  }
-
-  pub fn get_database_snapshots(&self, database_id: &str) -> Vec<CollabSnapshot> {
-    match self.collab_db.upgrade() {
-      None => vec![],
-      Some(collab_db) => {
-        let store = collab_db.read_txn();
-        store.get_snapshots(self.uid, database_id)
-      },
-    }
-  }
-
-  pub fn restore_database_from_snapshot(
-    &self,
-    database_id: &str,
-    snapshot: CollabSnapshot,
-  ) -> Result<Database, DatabaseError> {
-    let collab = self.collab_for_database(database_id, DocStateSource::FromDisk);
-    let update =
-      Update::decode_v1(&snapshot.data).map_err(|err| DatabaseError::Internal(err.into()))?;
-    collab.lock().with_origin_transact_mut(|txn| {
-      txn.apply_update(update);
-    });
-
-    let context = DatabaseContext {
-      uid: self.uid,
-      db: self.collab_db.clone(),
-      collab,
-      collab_service: self.collab_service.clone(),
-      notifier: None,
-    };
-    Database::get_or_create(database_id, context)
   }
 
   /// Delete the view from the database with the given view id.
@@ -373,7 +375,11 @@ impl WorkspaceDatabase {
   }
 
   /// Create a new [Collab] instance for given database id.
-  fn collab_for_database(&self, database_id: &str, doc_state: DocStateSource) -> Arc<MutexCollab> {
+  fn collab_for_database(
+    &self,
+    database_id: &str,
+    doc_state: DocStateSource,
+  ) -> Result<Arc<MutexCollab>, DatabaseError> {
     self.collab_service.build_collab_with_config(
       self.uid,
       database_id,

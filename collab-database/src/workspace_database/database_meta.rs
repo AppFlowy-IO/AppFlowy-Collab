@@ -4,11 +4,10 @@ use collab::preclude::{
   Any, Array, ArrayRefWrapper, Collab, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut,
   YrsValue,
 };
+use collab_entity::define::WORKSPACE_DATABASES;
 use std::collections::HashSet;
 
 use crate::database::timestamp;
-
-const DATABASES: &str = "databases";
 
 /// Used to store list of [DatabaseMeta].
 pub struct DatabaseMetaList {
@@ -23,12 +22,12 @@ impl DatabaseMetaList {
   pub fn from_collab(collab: &Collab) -> Self {
     let array = {
       let txn = collab.transact();
-      collab.get_array_with_txn(&txn, vec![DATABASES])
+      collab.get_array_with_txn(&txn, vec![WORKSPACE_DATABASES])
     };
 
     let databases = array.unwrap_or_else(|| {
       collab.with_origin_transact_mut(|txn| {
-        collab.create_array_with_txn::<MapPrelim<Any>>(txn, DATABASES, vec![])
+        collab.create_array_with_txn::<MapPrelim<Any>>(txn, WORKSPACE_DATABASES, vec![])
       })
     });
 

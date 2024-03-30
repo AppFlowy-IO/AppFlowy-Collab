@@ -92,6 +92,10 @@ impl State {
     self.get().is_uninitialized()
   }
 
+  pub fn is_sync_finished(&self) -> bool {
+    self.sync_state.read().is_sync_finished()
+  }
+
   pub fn set_init_state(&self, state: InitState) {
     *self.init_state.write() = state;
   }

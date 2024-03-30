@@ -1,14 +1,19 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
+
 use std::sync::{Arc, Weak};
 
 use collab::core::any_map::AnyMapExtension;
 use collab::core::collab::MutexCollab;
+
 use collab::core::collab_state::{SnapshotState, SyncState};
+
 use collab::preclude::{
   Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
+use collab_entity::define::{DATABASE, DATABASE_ID};
+use collab_entity::CollabType;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use parking_lot::Mutex;
@@ -16,8 +21,8 @@ use serde::{Deserialize, Serialize};
 pub use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{Block, BlockEvent};
-use crate::database_observer::DatabaseNotify;
 use crate::database_serde::DatabaseSerde;
+use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
 use crate::fields::{Field, FieldChangeReceiver, FieldMap};
 use crate::meta::MetaMap;
@@ -25,13 +30,13 @@ use crate::rows::{
   CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowChangeReceiver, RowDetail, RowId,
   RowMeta, RowMetaUpdate, RowUpdate,
 };
-use crate::user::DatabaseCollabService;
 use crate::views::{
   CalculationMap, CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator,
   DatabaseLayout, DatabaseView, DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap,
   FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder,
   SortMap, ViewChangeReceiver, ViewMap,
 };
+use crate::workspace_database::DatabaseCollabService;
 
 pub struct Database {
   #[allow(dead_code)]
@@ -46,8 +51,6 @@ pub struct Database {
   pub notifier: Option<DatabaseNotify>,
 }
 
-const DATABASE_ID: &str = "id";
-const DATABASE: &str = "database";
 const FIELDS: &str = "fields";
 const VIEWS: &str = "views";
 const METAS: &str = "metas";
@@ -94,15 +97,10 @@ impl Database {
   }
 
   pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
-    let txn = collab.transact();
-    let database = collab
-      .get_map_with_txn(&txn, vec![DATABASE])
-      .ok_or_else(|| DatabaseError::DatabaseNotExist)?;
-
-    match database.get_str_with_txn(&txn, DATABASE_ID) {
-      None => Err(DatabaseError::NoRequiredData),
-      Some(_) => Ok(()),
-    }
+    CollabType::Database
+      .validate(collab)
+      .map_err(|_| DatabaseError::NoRequiredData)?;
+    Ok(())
   }
 
   pub fn flush(&self) -> Result<(), DatabaseError> {
@@ -214,6 +212,7 @@ impl Database {
             .as_ref()
             .map(|notifier| notifier.row_change_tx.clone()),
         );
+
         drop(collab_guard);
 
         Ok(Self {
@@ -296,15 +295,6 @@ impl Database {
       metas: Rc::new(metas),
       notifier: context.notifier,
     })
-  }
-
-  pub fn close(&self) {
-    let row_ids = self
-      .get_inline_row_orders()
-      .into_iter()
-      .map(|row_order| row_order.id)
-      .collect::<Vec<_>>();
-    self.block.close_rows(&row_ids);
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
@@ -1251,6 +1241,7 @@ impl Database {
   /// just delete the view with given view id.
   ///
   pub fn delete_view(&self, view_id: &str) -> Vec<String> {
+    // TODO(nathan): delete the database from workspace database
     if self.is_inline_view(view_id) {
       self.root.with_transact_mut(|txn| {
         let views = self.views.get_all_views_meta_with_txn(txn);

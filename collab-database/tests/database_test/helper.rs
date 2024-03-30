@@ -8,17 +8,17 @@ use collab::preclude::CollabBuilder;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, CreateRowParams, DatabaseRow, RowId};
-use collab_database::user::DatabaseCollabService;
 use collab_database::views::{
   CreateDatabaseParams, DatabaseLayout, FieldSettingsByFieldIdMap, FieldSettingsMap, LayoutSetting,
   LayoutSettings, OrderObjectPosition,
 };
+use collab_database::workspace_database::DatabaseCollabService;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 
 use crate::helper::{make_rocks_db, setup_log, TestFieldSetting, TestTextCell};
 use crate::user_test::helper::TestUserDatabaseCollabBuilderImpl;
-use collab_database::database_observer::DatabaseNotify;
+use collab_database::database_state::DatabaseNotify;
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
 
@@ -105,14 +105,16 @@ pub async fn create_database_with_db(
   setup_log();
   let collab_db = make_rocks_db();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
-  let collab = collab_builder.build_collab_with_config(
-    uid,
-    database_id,
-    CollabType::Database,
-    Arc::downgrade(&collab_db),
-    DocStateSource::FromDisk,
-    CollabPersistenceConfig::default(),
-  );
+  let collab = collab_builder
+    .build_collab_with_config(
+      uid,
+      database_id,
+      CollabType::Database,
+      Arc::downgrade(&collab_db),
+      DocStateSource::FromDisk,
+      CollabPersistenceConfig::default(),
+    )
+    .unwrap();
   let context = DatabaseContext {
     uid,
     db: Arc::downgrade(&collab_db),
@@ -141,14 +143,16 @@ pub fn restore_database_from_db(
   collab_db: Arc<CollabKVDB>,
 ) -> DatabaseTest {
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
-  let collab = collab_builder.build_collab_with_config(
-    uid,
-    database_id,
-    CollabType::Database,
-    Arc::downgrade(&collab_db),
-    DocStateSource::FromDisk,
-    CollabPersistenceConfig::default(),
-  );
+  let collab = collab_builder
+    .build_collab_with_config(
+      uid,
+      database_id,
+      CollabType::Database,
+      Arc::downgrade(&collab_db),
+      DocStateSource::FromDisk,
+      CollabPersistenceConfig::default(),
+    )
+    .unwrap();
   let context = DatabaseContext {
     uid,
     db: Arc::downgrade(&collab_db),

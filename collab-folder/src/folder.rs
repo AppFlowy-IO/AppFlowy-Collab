@@ -6,6 +6,8 @@ use collab::core::collab_plugin::EncodedCollab;
 use collab::core::collab_state::{SnapshotState, SyncState};
 pub use collab::core::origin::CollabOrigin;
 use collab::preclude::*;
+use collab_entity::define::{FOLDER, FOLDER_CURRENT_WORKSPACE, FOLDER_META};
+use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 
@@ -45,12 +47,9 @@ impl AsRef<str> for UserId {
   }
 }
 
-const FOLDER: &str = "folder";
 const VIEWS: &str = "views";
-const META: &str = "meta";
 const VIEW_RELATION: &str = "relation";
 const CURRENT_VIEW: &str = "current_view";
-const CURRENT_WORKSPACE: &str = "current_workspace";
 
 pub(crate) const FAVORITES_V1: &str = "favorites";
 const SECTION: &str = "section";
@@ -112,23 +111,11 @@ impl Folder {
     Ok(folder)
   }
 
-  pub fn validate(collab: &Collab) -> Result<String, FolderError> {
-    let txn = collab.transact();
-    let meta = collab
-      .get_map_with_txn(&txn, vec![FOLDER, META])
-      .ok_or_else(|| FolderError::NoRequiredData("No meta data".to_string()))?;
-    match meta.get_str_with_txn(&txn, CURRENT_WORKSPACE) {
-      None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
-      Some(workspace_id) => {
-        if workspace_id.is_empty() {
-          Err(FolderError::NoRequiredData(
-            "workspace id is empty".to_string(),
-          ))
-        } else {
-          Ok(workspace_id)
-        }
-      },
-    }
+  pub fn validate(collab: &Collab) -> Result<(), FolderError> {
+    CollabType::Folder
+      .validate(collab)
+      .map_err(|err| FolderError::NoRequiredData(err.to_string()))?;
+    Ok(())
   }
 
   pub fn create<T: Into<UserId>>(
@@ -264,7 +251,7 @@ impl Folder {
   ///
   pub fn get_current_workspace(&self) -> Option<Workspace> {
     let txn = self.meta.transact();
-    let workspace_id = self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE)?;
+    let workspace_id = self.meta.get_str_with_txn(&txn, FOLDER_CURRENT_WORKSPACE)?;
     let view = self.views.get_view_with_txn(&txn, &workspace_id)?;
     Some(Workspace::from(view.as_ref()))
   }
@@ -275,19 +262,22 @@ impl Folder {
   }
 
   pub fn get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
-    self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE).unwrap()
+    self
+      .meta
+      .get_str_with_txn(txn, FOLDER_CURRENT_WORKSPACE)
+      .unwrap()
   }
 
   pub fn try_get_workspace_id(&self) -> Result<String, FolderError> {
     let txn = self.meta.transact();
-    match self.meta.get_str_with_txn(&txn, CURRENT_WORKSPACE) {
+    match self.meta.get_str_with_txn(&txn, FOLDER_CURRENT_WORKSPACE) {
       None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
       Some(workspace_id) => Ok(workspace_id),
     }
   }
 
   pub fn try_get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Result<String, FolderError> {
-    match self.meta.get_str_with_txn(txn, CURRENT_WORKSPACE) {
+    match self.meta.get_str_with_txn(txn, FOLDER_CURRENT_WORKSPACE) {
       None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
       Some(workspace_id) => Ok(workspace_id),
     }
@@ -405,7 +395,6 @@ impl Folder {
   }
 
   pub fn set_current_view(&self, view_id: &str) {
-    tracing::debug!("Set current view: {}", view_id);
     if view_id.is_empty() {
       tracing::warn!("🟡 Set current view with empty id");
       return;
@@ -573,7 +562,7 @@ fn create_folder<T: Into<UserId>>(
     // create the folder data
     let views = folder.create_map_with_txn_if_not_exist(txn, VIEWS);
     let section = folder.create_map_with_txn_if_not_exist(txn, SECTION);
-    let meta = folder.create_map_with_txn_if_not_exist(txn, META);
+    let meta = folder.create_map_with_txn_if_not_exist(txn, FOLDER_META);
     let view_relations = Rc::new(ViewRelations::new(
       folder.create_map_with_txn_if_not_exist(txn, VIEW_RELATION),
     ));
@@ -605,7 +594,7 @@ fn create_folder<T: Into<UserId>>(
         views.insert_view_with_txn(txn, view, None);
       }
 
-      meta.insert_str_with_txn(txn, CURRENT_WORKSPACE, workspace_id);
+      meta.insert_str_with_txn(txn, FOLDER_CURRENT_WORKSPACE, workspace_id);
       meta.insert_str_with_txn(txn, CURRENT_VIEW, folder_data.current_view);
 
       if let Some(fav_section) = section.section_op_with_txn(txn, Section::Favorite) {
@@ -640,9 +629,9 @@ fn create_folder<T: Into<UserId>>(
 pub fn check_folder_is_valid(collab: &Collab) -> Result<String, FolderError> {
   let txn = collab.transact();
   let meta = collab
-    .get_map_with_txn(&txn, vec![FOLDER, META])
+    .get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])
     .ok_or_else(|| FolderError::NoRequiredData("No meta data".to_string()))?;
-  match meta.get_str_with_txn(&txn, CURRENT_WORKSPACE) {
+  match meta.get_str_with_txn(&txn, FOLDER_CURRENT_WORKSPACE) {
     None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
     Some(workspace_id) => {
       if workspace_id.is_empty() {
@@ -672,7 +661,7 @@ fn open_folder<T: Into<UserId>>(
   let views = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEWS])?;
   // let trash = collab_guard.get_array_with_txn(&txn, vec![FOLDER, TRASH])?;
   let section = collab_guard.get_map_with_txn(&txn, vec![FOLDER, SECTION])?;
-  let meta = collab_guard.get_map_with_txn(&txn, vec![FOLDER, META])?;
+  let meta = collab_guard.get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])?;
   let children_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEW_RELATION])?;
 
   let view_relations = Rc::new(ViewRelations::new(children_map));
