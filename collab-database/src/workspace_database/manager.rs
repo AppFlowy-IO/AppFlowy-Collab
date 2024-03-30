@@ -324,7 +324,7 @@ impl WorkspaceDatabase {
             .is_some()
           {
             trace!(
-              "Remove database {} from removing_databases",
+              "drop database {} from removing_databases",
               cloned_database_id
             );
           }
