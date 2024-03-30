@@ -92,7 +92,7 @@ impl WorkspaceDatabase {
     let removing_databases = Arc::new(Mutex::new(HashMap::new()));
     let databases_access_time = Arc::new(DashMap::new());
 
-    tokio::task::spawn_local(period_check_inactive_database(
+    tokio::spawn(period_check_inactive_database(
       Arc::downgrade(&databases),
       Arc::downgrade(&databases_access_time),
     ));
