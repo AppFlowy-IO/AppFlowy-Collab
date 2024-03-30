@@ -318,7 +318,7 @@ impl WorkspaceDatabase {
       let cloned_database_id = database_id.to_string();
       let weak_removing_databases = Arc::downgrade(&self.removing_databases);
       tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+        tokio::time::sleep(Duration::from_secs(120)).await;
         if let Some(removing_databases) = weak_removing_databases.upgrade() {
           if removing_databases
             .lock()

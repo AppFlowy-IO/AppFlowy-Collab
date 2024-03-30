@@ -746,6 +746,7 @@ fn observe_doc(
         if remote_origin == local_origin {
           plugin.receive_local_update(&local_origin, &cloned_oid, &event.update);
         } else {
+          #[cfg(feature = "verbose_log")]
           trace!("{} did apply remote {} update", local_origin, remote_origin);
         }
       });
