@@ -6,10 +6,14 @@ use std::sync::{Arc, Weak};
 
 use collab::core::any_map::AnyMapExtension;
 use collab::core::collab::MutexCollab;
+
 use collab::core::collab_state::{SnapshotState, SyncState};
+
 use collab::preclude::{
   Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
 };
+use collab_entity::define::{DATABASE, DATABASE_ID};
+use collab_entity::CollabType;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use parking_lot::Mutex;
@@ -47,8 +51,6 @@ pub struct Database {
   pub notifier: Option<DatabaseNotify>,
 }
 
-const DATABASE_ID: &str = "id";
-const DATABASE: &str = "database";
 const FIELDS: &str = "fields";
 const VIEWS: &str = "views";
 const METAS: &str = "metas";
@@ -95,15 +97,10 @@ impl Database {
   }
 
   pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
-    let txn = collab.transact();
-    let database = collab
-      .get_map_with_txn(&txn, vec![DATABASE])
-      .ok_or_else(|| DatabaseError::DatabaseNotExist)?;
-
-    match database.get_str_with_txn(&txn, DATABASE_ID) {
-      None => Err(DatabaseError::NoRequiredData),
-      Some(_) => Ok(()),
-    }
+    CollabType::Database
+      .validate(collab)
+      .map_err(|_| DatabaseError::NoRequiredData)?;
+    Ok(())
   }
 
   pub fn flush(&self) -> Result<(), DatabaseError> {

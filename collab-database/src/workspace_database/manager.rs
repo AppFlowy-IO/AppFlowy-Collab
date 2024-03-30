@@ -3,7 +3,6 @@ use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
-use crate::workspace_database::DATABASES;
 use async_trait::async_trait;
 use collab::core::collab::{DocStateSource, MutexCollab};
 use collab::preclude::Collab;
@@ -99,10 +98,9 @@ impl WorkspaceDatabase {
   }
 
   pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
-    let txn = collab.transact();
-    let _ = collab
-      .get_array_with_txn(&txn, vec![DATABASES])
-      .ok_or(DatabaseError::NoRequiredData)?;
+    CollabType::WorkspaceDatabase
+      .validate(collab)
+      .map_err(|_| DatabaseError::NoRequiredData)?;
     Ok(())
   }
 

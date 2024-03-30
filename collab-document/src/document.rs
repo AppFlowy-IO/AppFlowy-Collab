@@ -8,6 +8,8 @@ use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::block::ClientID;
 use collab::preclude::*;
+use collab_entity::define::DOCUMENT_ROOT;
+use collab_entity::CollabType;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -21,8 +23,6 @@ use crate::blocks::{
 };
 use crate::document_awareness::DocumentAwarenessState;
 use crate::error::DocumentError;
-
-const ROOT: &str = "document";
 
 /// The page_id is a reference that points to the block’s id.
 /// The block that is referenced by this page_id is the first block of the document.
@@ -56,12 +56,10 @@ impl Document {
   }
 
   pub fn validate(collab: &Collab) -> Result<(), DocumentError> {
-    let txn = collab.transact();
-    let root = collab.get_map_with_txn(&txn, vec![ROOT]);
-    match root {
-      None => Err(DocumentError::NoRequiredData),
-      Some(_) => Ok(()),
-    }
+    CollabType::Document
+      .validate(collab)
+      .map_err(|_| DocumentError::NoRequiredData)?;
+    Ok(())
   }
 
   pub fn get_collab(&self) -> &Arc<MutexCollab> {
@@ -527,7 +525,7 @@ impl Document {
     let (root, block_operation, children_operation, text_operation) = collab_guard
       .with_origin_transact_mut(|txn| {
         // { document: {:} }
-        let root = collab_guard.insert_map_with_txn(txn, ROOT);
+        let root = collab_guard.insert_map_with_txn(txn, DOCUMENT_ROOT);
         // { document: { blocks: {:} } }
         let blocks = root.create_map_with_txn(txn, BLOCKS);
         // { document: { blocks: {:}, meta: {:} } }
@@ -586,7 +584,7 @@ impl Document {
     let mut collab_guard = collab.lock();
     let (root, block_operation, children_operation, text_operation) = collab_guard
       .with_origin_transact_mut(|txn| {
-        let root = collab_guard.get_map_with_txn(txn, vec![ROOT]);
+        let root = collab_guard.get_map_with_txn(txn, vec![DOCUMENT_ROOT]);
         if root.is_none() {
           return (None, None, None, None);
         }

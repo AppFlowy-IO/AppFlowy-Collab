@@ -1,6 +1,12 @@
+use anyhow::{anyhow, Error};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
+use crate::define::{
+  DATABASE, DATABASE_ID, DATABASE_ROW_DATA, DOCUMENT_ROOT, FOLDER, FOLDER_CURRENT_WORKSPACE,
+  FOLDER_META, WORKSPACE_DATABASES,
+};
+use collab::preclude::{Collab, MapRefExtension};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 /// The type of the collab object. It will be used to determine what kind of services should be
@@ -22,6 +28,74 @@ impl CollabType {
   pub fn value(&self) -> i32 {
     self.clone() as i32
   }
+
+  /// Validates the provided collaboration object (`collab`) based on its type.
+  ///
+  /// checks for the presence of required data in the collaboration object
+  /// to ensure it adheres to the expected structure for its type. The validation criteria
+  /// vary depending on the `CollabType`.
+  ///
+  /// # Arguments
+  /// - `collab`: A reference to the `Collab` object to validate.
+  ///
+  /// # Returns
+  /// - `Ok(())` if the collab object contains all the required data for its type.
+  /// - `Err(Error)` if the required data is missing or if the collab object does not meet
+  ///   the validation criteria for its type.
+  pub fn validate(&self, collab: &Collab) -> Result<(), Error> {
+    let txn = collab.transact();
+    match self {
+      CollabType::Document => {
+        collab
+          .get_map_with_txn(&txn, vec![DOCUMENT_ROOT])
+          .ok_or_else(no_required_data_error)?;
+        Ok(())
+      },
+      CollabType::Database => {
+        let database = collab
+          .get_map_with_txn(&txn, vec![DATABASE])
+          .ok_or_else(no_required_data_error)?;
+
+        database
+          .get_str_with_txn(&txn, DATABASE_ID)
+          .ok_or_else(no_required_data_error)?;
+        Ok(())
+      },
+      CollabType::WorkspaceDatabase => {
+        let _ = collab
+          .get_array_with_txn(&txn, vec![WORKSPACE_DATABASES])
+          .ok_or_else(no_required_data_error)?;
+        Ok(())
+      },
+      CollabType::Folder => {
+        let meta = collab
+          .get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])
+          .ok_or_else(no_required_data_error)?;
+        let current_workspace = meta
+          .get_str_with_txn(&txn, FOLDER_CURRENT_WORKSPACE)
+          .ok_or_else(no_required_data_error)?;
+
+        if current_workspace.is_empty() {
+          Err(no_required_data_error())
+        } else {
+          Ok(())
+        }
+      },
+      CollabType::DatabaseRow => {
+        collab
+          .get_map_with_txn(&txn, vec![DATABASE_ROW_DATA])
+          .ok_or_else(no_required_data_error)?;
+        Ok(())
+      },
+      CollabType::UserAwareness => Ok(()),
+      CollabType::Empty => Ok(()),
+    }
+  }
+}
+
+#[inline]
+fn no_required_data_error() -> Error {
+  anyhow!("No required data")
 }
 
 impl Display for CollabType {

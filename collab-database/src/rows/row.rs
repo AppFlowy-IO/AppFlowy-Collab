@@ -10,6 +10,8 @@ use parking_lot::Mutex;
 
 use collab::core::value::YrsValueExtension;
 use collab::error::CollabError;
+use collab_entity::define::DATABASE_ROW_DATA;
+use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
@@ -28,7 +30,6 @@ use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 
 pub type BlockId = i64;
 
-const DATA: &str = "data";
 const META: &str = "meta";
 const COMMENT: &str = "comment";
 pub const LAST_MODIFIED: &str = "last_modified";
@@ -60,7 +61,7 @@ impl DatabaseRow {
     let (mut data, meta, comments) = {
       let collab_guard = collab.lock();
       collab_guard.with_origin_transact_mut(|txn| {
-        let data = collab_guard.insert_map_with_txn_if_not_exist(txn, DATA);
+        let data = collab_guard.insert_map_with_txn_if_not_exist(txn, DATABASE_ROW_DATA);
         let meta = collab_guard.insert_map_with_txn_if_not_exist(txn, META);
         let comments = collab_guard.create_array_with_txn::<MapPrelim<Any>>(txn, COMMENT, vec![]);
         if let Some(row) = row {
@@ -121,10 +122,9 @@ impl DatabaseRow {
   }
 
   pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
-    let txn = collab.transact();
-    collab
-      .get_map_with_txn(&txn, vec![DATA])
-      .ok_or(DatabaseError::NoRequiredData)?;
+    CollabType::DatabaseRow
+      .validate(collab)
+      .map_err(|_| DatabaseError::NoRequiredData)?;
     Ok(())
   }
 
@@ -133,7 +133,7 @@ impl DatabaseRow {
   ) -> Result<Option<(MapRefWrapper, MapRefWrapper, ArrayRefWrapper)>, CollabError> {
     let collab_guard = collab.lock();
     let txn = collab_guard.transact();
-    let data = collab_guard.get_map_with_txn(&txn, vec![DATA]);
+    let data = collab_guard.get_map_with_txn(&txn, vec![DATABASE_ROW_DATA]);
 
     match data {
       None => Err(CollabError::UnexpectedEmpty("missing data map".to_string())),
@@ -248,7 +248,7 @@ impl RowDetail {
     })
   }
   pub fn from_collab(collab: &Collab, txn: &Transaction) -> Option<Self> {
-    let data = collab.get_map_with_txn(txn, vec![DATA])?;
+    let data = collab.get_map_with_txn(txn, vec![DATABASE_ROW_DATA])?;
     let meta = collab.get_map_with_txn(txn, vec![META])?;
     let row = row_from_map_ref(&data, &meta, txn)?;
 
@@ -621,7 +621,7 @@ unsafe impl Send for MutexDatabaseRow {}
 pub fn mut_row_with_collab<F1: Fn(RowUpdate)>(collab: &Collab, mut_row: F1) {
   collab.with_origin_transact_mut(|txn| {
     if let (Some(data), Some(meta)) = (
-      collab.get_map_with_txn(txn, vec![DATA]),
+      collab.get_map_with_txn(txn, vec![DATABASE_ROW_DATA]),
       collab.get_map_with_txn(txn, vec![META]),
     ) {
       let update = RowUpdate::new(txn, &data, &meta);
