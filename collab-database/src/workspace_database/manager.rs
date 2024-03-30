@@ -16,8 +16,11 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::future::Future;
 
+use dashmap::DashMap;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
+use std::time::Duration;
+use tokio::time::{interval, Instant};
 use tracing::{error, trace};
 
 pub type CollabDocStateByOid = HashMap<String, DocStateSource>;
@@ -68,8 +71,9 @@ pub struct WorkspaceDatabase {
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
-  databases: Mutex<HashMap<String, Arc<MutexDatabase>>>,
+  databases: Arc<Mutex<HashMap<String, Arc<MutexDatabase>>>>,
   removing_databases: Arc<Mutex<HashMap<String, Arc<MutexDatabase>>>>,
+  databases_access_time: Arc<DashMap<String, Instant>>,
 }
 
 impl WorkspaceDatabase {
@@ -84,8 +88,15 @@ impl WorkspaceDatabase {
     T: DatabaseCollabService,
   {
     let collab_service = Arc::new(collab_service);
-    let databases = Mutex::new(HashMap::new());
+    let databases = Arc::new(Mutex::new(HashMap::new()));
     let removing_databases = Arc::new(Mutex::new(HashMap::new()));
+    let databases_access_time = Arc::new(DashMap::new());
+
+    tokio::task::spawn_local(period_check_inactive_database(
+      Arc::downgrade(&databases),
+      Arc::downgrade(&databases_access_time),
+    ));
+
     Self {
       uid,
       collab_db,
@@ -94,6 +105,7 @@ impl WorkspaceDatabase {
       config,
       collab_service,
       removing_databases,
+      databases_access_time,
     }
   }
 
@@ -138,6 +150,10 @@ impl WorkspaceDatabase {
   /// Get the database with the given database id.
   /// Return None if the database does not exist.
   pub async fn get_database(&self, database_id: &str) -> Option<Arc<MutexDatabase>> {
+    self
+      .databases_access_time
+      .insert(database_id.to_string(), Instant::now());
+
     if !self.database_meta_list().contains(database_id) {
       return None;
     }
@@ -383,4 +399,48 @@ impl WorkspaceDatabase {
 
 pub fn get_all_database_meta(collab: &Collab) -> Vec<DatabaseMeta> {
   DatabaseMetaList::from_collab(collab).get_all_database_meta()
+}
+async fn period_check_inactive_database(
+  databases: Weak<Mutex<HashMap<String, Arc<MutexDatabase>>>>,
+  databases_access_time: Weak<DashMap<String, Instant>>,
+) {
+  let expired_time_in_secs = 10 * 60; // 10 minutes
+  let mut interval = interval(Duration::from_secs(5 * 60)); // Check every 5 minutes
+
+  loop {
+    interval.tick().await;
+    trace!("Check inactive databases");
+
+    let now = Instant::now();
+    // Attempt to upgrade weak pointers at the beginning to avoid multiple upgrades.
+    if let (Some(db_map), Some(access_times)) =
+      (databases.upgrade(), databases_access_time.upgrade())
+    {
+      let db_ids_to_remove: Vec<String> = {
+        let db_map_guard = db_map.lock();
+        access_times
+          .iter()
+          .filter_map(|entry| {
+            let (db_id, last_access_time) = entry.pair();
+            if now.duration_since(*last_access_time).as_secs() > expired_time_in_secs
+              && db_map_guard.contains_key(db_id)
+            {
+              Some(db_id.clone())
+            } else {
+              None
+            }
+          })
+          .collect()
+      };
+
+      let mut db_map_guard = db_map.lock();
+      trace!("Inactive databases: {:?}", db_ids_to_remove);
+      for db_id in db_ids_to_remove {
+        db_map_guard.remove(&db_id);
+        access_times.remove(&db_id);
+      }
+    } else {
+      break;
+    }
+  }
 }
