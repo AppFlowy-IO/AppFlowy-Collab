@@ -395,7 +395,6 @@ impl Folder {
   }
 
   pub fn set_current_view(&self, view_id: &str) {
-    tracing::debug!("Set current view: {}", view_id);
     if view_id.is_empty() {
       tracing::warn!("🟡 Set current view with empty id");
       return;
