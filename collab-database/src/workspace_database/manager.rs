@@ -295,6 +295,7 @@ impl WorkspaceDatabase {
   }
 
   pub fn open_database(&self, database_id: &str) {
+    // TODO(nathan): refactor the get_database that split the database creation and database opening.
     if let Some(database) = self.removing_databases.lock().remove(database_id) {
       trace!("Move the database:{} back to databases", database_id);
       self
