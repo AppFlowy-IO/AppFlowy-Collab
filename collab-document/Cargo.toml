@@ -30,3 +30,6 @@ tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 collab-plugins = { workspace = true }
 zip = "0.6.6"
 futures = "0.3.30"
+
+[features]
+verbose_log = []

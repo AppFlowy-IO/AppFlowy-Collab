@@ -41,6 +41,9 @@ pub fn parse_event(_object_id: &str, txn: &TransactionMut, event: &Event) -> Blo
         .map(|v| TextDelta::from(txn, v.to_owned())) // Map each delta value to a TextDelta
         .collect::<Vec<TextDelta>>(); // Collect the TextDelta values into a vector
 
+      #[cfg(feature = "verbose_log")]
+      tracing::trace!("{}: receive text event: {:?}", _object_id, delta);
+
       // Serialize the delta vector to a JSON string or use an empty string if there's an error
       let value = serde_json::to_string(&delta).unwrap_or_default();
 
@@ -54,41 +57,53 @@ pub fn parse_event(_object_id: &str, txn: &TransactionMut, event: &Event) -> Blo
     },
     Event::Array(_val) => {
       let id = path.last().map(|v| v.to_string()).unwrap_or_default();
-      vec![BlockEventPayload {
+      let value = vec![BlockEventPayload {
         value: parse_yrs_value(txn, &event.target()),
         id,
         path,
         command: DeltaType::Updated,
-      }]
-    },
-    Event::Map(val) => val
-      .keys(txn)
-      .iter()
-      .map(|(key, change)| match change {
-        EntryChange::Inserted(value) => BlockEventPayload {
-          value: parse_yrs_value(txn, value),
-          id: key.to_string(),
-          path: path.clone(),
-          command: DeltaType::Inserted,
-        },
-        EntryChange::Updated(_, _value) => {
-          let id = path.last().map(|v| v.to_string()).unwrap_or_default();
+      }];
 
-          BlockEventPayload {
-            value: parse_yrs_value(txn, &event.target()),
-            id,
+      #[cfg(feature = "verbose_log")]
+      tracing::trace!("{}: receive array event: {:?}", _object_id, value);
+
+      value
+    },
+    Event::Map(val) => {
+      let value = val
+        .keys(txn)
+        .iter()
+        .map(|(key, change)| match change {
+          EntryChange::Inserted(value) => BlockEventPayload {
+            value: parse_yrs_value(txn, value),
+            id: key.to_string(),
             path: path.clone(),
-            command: DeltaType::Updated,
-          }
-        },
-        EntryChange::Removed(value) => BlockEventPayload {
-          value: parse_yrs_value(txn, value),
-          id: key.to_string(),
-          path: path.clone(),
-          command: DeltaType::Removed,
-        },
-      })
-      .collect::<Vec<BlockEventPayload>>(),
+            command: DeltaType::Inserted,
+          },
+          EntryChange::Updated(_, _value) => {
+            let id = path.last().map(|v| v.to_string()).unwrap_or_default();
+
+            BlockEventPayload {
+              value: parse_yrs_value(txn, &event.target()),
+              id,
+              path: path.clone(),
+              command: DeltaType::Updated,
+            }
+          },
+          EntryChange::Removed(value) => BlockEventPayload {
+            value: parse_yrs_value(txn, value),
+            id: key.to_string(),
+            path: path.clone(),
+            command: DeltaType::Removed,
+          },
+        })
+        .collect::<Vec<BlockEventPayload>>();
+
+      #[cfg(feature = "verbose_log")]
+      tracing::trace!("{}: receive map event: {:?}", _object_id, value);
+
+      value
+    },
     _ => vec![],
   };
   BlockEvent::new(delta)
