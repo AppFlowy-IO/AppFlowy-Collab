@@ -98,8 +98,6 @@ impl Document {
     let object_id = self.inner.lock().object_id.clone();
     let self_origin = CollabOrigin::from(&self.inner.lock().origin_transact_mut());
     self.subscription = Some(self.root.observe_deep(move |txn, events| {
-      #[cfg(feature = "verbose_log")]
-      trace!("{} receive events", object_id);
       let origin = CollabOrigin::from(txn);
       let block_events = events
         .iter()
