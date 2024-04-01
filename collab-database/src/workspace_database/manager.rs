@@ -5,7 +5,7 @@ use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValid
 use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
 use async_trait::async_trait;
 use collab::core::collab::{DocStateSource, MutexCollab};
-use collab::preclude::Collab;
+use collab::preclude::{Any, Collab, MapPrelim};
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
@@ -20,6 +20,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use collab_entity::define::WORKSPACE_DATABASES;
 use tracing::{error, trace};
 
 pub type CollabDocStateByOid = HashMap<String, DocStateSource>;
@@ -88,6 +89,22 @@ impl WorkspaceDatabase {
     let collab_service = Arc::new(collab_service);
     let databases = Arc::new(Mutex::new(HashMap::new()));
     let removing_databases = Arc::new(Mutex::new(HashMap::new()));
+    {
+      let lock_guard = collab.lock();
+      let is_exist = {
+        let txn = lock_guard.transact();
+        lock_guard
+          .get_array_with_txn(&txn, vec![WORKSPACE_DATABASES])
+          .is_some()
+      };
+
+      if !is_exist {
+        let _ = lock_guard.with_origin_transact_mut(|txn| {
+          lock_guard.create_array_with_txn::<MapPrelim<Any>>(txn, WORKSPACE_DATABASES, vec![]);
+          Ok::<(), DatabaseError>(())
+        });
+      }
+    }
 
     Self {
       uid,

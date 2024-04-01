@@ -28,3 +28,7 @@ bytes = "1.5.0"
 tracing = "0.1.22"
 chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
 async-trait = "0.1"
+
+[patch.crates-io]
+# will be removed when using yrs 0.18.2 that expose pendings
+yrs = { git = "https://github.com/appflowy/y-crdt", rev = "3f25bb510ca5274e7657d3713fbed41fb46b4487" }
