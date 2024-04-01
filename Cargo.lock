@@ -2256,7 +2256,7 @@ dependencies = [
 [[package]]
 name = "yrs"
 version = "0.17.2"
-source = "git+https://github.com/appflowy/y-crdt?branch=expose_pendings#b622f91d72a8fa6995ab837be8c6a61ede5bdf7b"
+source = "git+https://github.com/appflowy/y-crdt?rev=3f25bb510ca5274e7657d3713fbed41fb46b4487#3f25bb510ca5274e7657d3713fbed41fb46b4487"
 dependencies = [
  "atomic_refcell",
  "rand 0.7.3",

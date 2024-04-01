@@ -48,35 +48,35 @@ impl CollabType {
       CollabType::Document => {
         collab
           .get_map_with_txn(&txn, vec![DOCUMENT_ROOT])
-          .ok_or_else(no_required_data_error)?;
+          .ok_or_else(|| no_required_data_error(self, DOCUMENT_ROOT))?;
         Ok(())
       },
       CollabType::Database => {
         let database = collab
           .get_map_with_txn(&txn, vec![DATABASE])
-          .ok_or_else(no_required_data_error)?;
+          .ok_or_else(|| no_required_data_error(self, DATABASE))?;
 
         database
           .get_str_with_txn(&txn, DATABASE_ID)
-          .ok_or_else(no_required_data_error)?;
+          .ok_or_else(|| no_required_data_error(self, DATABASE_ID))?;
         Ok(())
       },
       CollabType::WorkspaceDatabase => {
         let _ = collab
           .get_array_with_txn(&txn, vec![WORKSPACE_DATABASES])
-          .ok_or_else(no_required_data_error)?;
+          .ok_or_else(|| no_required_data_error(self, WORKSPACE_DATABASES))?;
         Ok(())
       },
       CollabType::Folder => {
         let meta = collab
           .get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])
-          .ok_or_else(no_required_data_error)?;
+          .ok_or_else(|| no_required_data_error(self, FOLDER_META))?;
         let current_workspace = meta
           .get_str_with_txn(&txn, FOLDER_CURRENT_WORKSPACE)
-          .ok_or_else(no_required_data_error)?;
+          .ok_or_else(|| no_required_data_error(self, FOLDER_CURRENT_WORKSPACE))?;
 
         if current_workspace.is_empty() {
-          Err(no_required_data_error())
+          Err(no_required_data_error(self, FOLDER_CURRENT_WORKSPACE))
         } else {
           Ok(())
         }
@@ -84,7 +84,7 @@ impl CollabType {
       CollabType::DatabaseRow => {
         collab
           .get_map_with_txn(&txn, vec![DATABASE_ROW_DATA])
-          .ok_or_else(no_required_data_error)?;
+          .ok_or_else(|| no_required_data_error(self, DATABASE_ROW_DATA))?;
         Ok(())
       },
       CollabType::UserAwareness => Ok(()),
@@ -94,8 +94,8 @@ impl CollabType {
 }
 
 #[inline]
-fn no_required_data_error() -> Error {
-  anyhow!("No required data")
+fn no_required_data_error(collab_type: &CollabType, reason: &str) -> Error {
+  anyhow!("No required data: {}:{}", collab_type, reason)
 }
 
 impl Display for CollabType {
