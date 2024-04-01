@@ -43,7 +43,7 @@ impl CollabType {
   /// - `Err(Error)` if the required data is missing or if the collab object does not meet
   ///   the validation criteria for its type.
   pub fn validate(&self, collab: &Collab) -> Result<(), Error> {
-    let txn = collab.transact();
+    let txn = collab.try_transaction()?;
     match self {
       CollabType::Document => {
         collab
