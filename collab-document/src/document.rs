@@ -4,6 +4,7 @@ use std::vec;
 
 use collab::core::awareness::AwarenessUpdateSubscription;
 use collab::core::collab::{DocStateSource, MutexCollab};
+use collab::core::collab_plugin::EncodedCollab;
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::block::ClientID;
@@ -63,6 +64,14 @@ impl Document {
 
   pub fn get_collab(&self) -> &Arc<MutexCollab> {
     &self.inner
+  }
+
+  pub fn encode_collab(&self) -> Result<EncodedCollab, DocumentError> {
+    self.inner.lock().encode_collab_v1(|collab| {
+      CollabType::Document
+        .validate(collab)
+        .map_err(|_| DocumentError::NoRequiredData)
+    })
   }
 
   pub fn flush(&self) -> Result<(), DocumentError> {
