@@ -311,15 +311,16 @@ impl WorkspaceDatabase {
     self.databases.lock().remove(database_id);
   }
 
-  pub fn open_database(&self, database_id: &str) {
+  pub fn open_database(&self, database_id: &str) -> Option<Arc<MutexDatabase>> {
     // TODO(nathan): refactor the get_database that split the database creation and database opening.
-    if let Some(database) = self.removing_databases.lock().remove(database_id) {
-      trace!("Move the database:{} back to databases", database_id);
-      self
-        .databases
-        .lock()
-        .insert(database_id.to_string(), database);
-    }
+    let database = self.removing_databases.lock().remove(database_id)?;
+    trace!("Move the database:{} back to databases", database_id);
+    self
+      .databases
+      .lock()
+      .insert(database_id.to_string(), database.clone());
+
+    Some(database)
   }
 
   pub fn close_database(&self, database_id: &str) {
