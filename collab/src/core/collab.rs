@@ -385,14 +385,6 @@ impl Collab {
     self.state.set_snapshot_state(snapshot_state);
   }
 
-  pub fn reset(&self) {
-    self
-      .plugins
-      .read()
-      .iter()
-      .for_each(|plugin| plugin.reset(&self.object_id));
-  }
-
   /// Make a full update with the current state of the [Collab].
   /// It invokes the [CollabPlugin::flush] method of each plugin.
   pub fn flush(&self) {
@@ -653,6 +645,12 @@ impl Collab {
       None => Err(CollabError::UndoManagerNotEnabled),
       Some(mgr) => mgr.redo().map_err(|e| CollabError::Internal(Box::new(e))),
     }
+  }
+
+  pub fn start_init_sync(&self) {
+    self.plugins.read().iter().for_each(|plugin| {
+      plugin.start_init_sync();
+    });
   }
 
   pub fn transact(&self) -> Transaction {

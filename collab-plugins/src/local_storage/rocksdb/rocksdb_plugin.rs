@@ -207,17 +207,6 @@ impl CollabPlugin for RocksdbDiskPlugin {
 
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
 
-  fn reset(&self, object_id: &str) {
-    if let Some(db) = self.collab_db.upgrade() {
-      if let Err(e) = db.with_write_txn(|w_db_txn| {
-        w_db_txn.delete_all_updates(self.uid, object_id)?;
-        Ok(())
-      }) {
-        error!("🔴Reset failed: {:?}", e);
-      }
-    }
-  }
-
   fn flush(&self, object_id: &str, _doc: &Doc) {
     if let Some(db) = self.collab_db.upgrade() {
       self.flush_doc(&db, object_id);
