@@ -115,11 +115,6 @@ impl CollabPlugin for SupabaseDBPlugin {
   fn plugin_type(&self) -> CollabPluginType {
     CollabPluginType::CloudStorage
   }
-
-  fn reset(&self, _object_id: &str) {
-    self.pending_updates.write().clear();
-    self.remote_collab.clear();
-  }
 }
 
 struct InitSyncAction {
