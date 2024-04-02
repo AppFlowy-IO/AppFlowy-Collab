@@ -7,7 +7,7 @@ use collab::core::collab::{DocStateSource, MutexCollab};
 use collab::core::origin::CollabOrigin;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::KVTransactionDB;
+use collab_plugins::local_storage::kv::{KVTransactionDB, PersistenceError};
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use tokio::sync::watch;
@@ -195,7 +195,13 @@ fn save_row(
     ) {
       Ok(collab) => {
         let collab_lock_guard = collab.lock();
-        let encode_collab = collab_lock_guard.encode_collab_v1();
+        let encode_collab = collab_lock_guard
+          .encode_collab_v1(|collab| {
+            CollabType::DatabaseRow
+              .validate(collab)
+              .map_err(|_| DatabaseError::NoRequiredData)
+          })
+          .map_err(|err| PersistenceError::Internal(err.into()))?;
         let object_id = row_id.as_ref();
         if let Err(e) = write_txn.flush_doc(
           uid,

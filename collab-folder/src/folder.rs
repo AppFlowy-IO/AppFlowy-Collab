@@ -152,8 +152,12 @@ impl Folder {
   }
 
   /// Returns the doc state and the state vector.
-  pub fn encode_collab_v1(&self) -> EncodedCollab {
-    self.inner.lock().encode_collab_v1()
+  pub fn encode_collab_v1(&self) -> Result<EncodedCollab, FolderError> {
+    self.inner.lock().encode_collab_v1(|collab| {
+      CollabType::Folder
+        .validate(collab)
+        .map_err(|err| FolderError::NoRequiredData(err.to_string()))
+    })
   }
 
   pub fn update_workspace(&self, name: &str) {

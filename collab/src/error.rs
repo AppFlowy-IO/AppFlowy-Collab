@@ -24,6 +24,9 @@ pub enum CollabError {
   #[error(transparent)]
   DecodeUpdate(#[from] yrs::encoding::read::Error),
 
+  #[error("{0}")]
+  NoRequiredData(String),
+
   #[error(transparent)]
   Awareness(#[from] crate::core::awareness::Error),
 

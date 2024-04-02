@@ -4,10 +4,12 @@ use std::sync::Arc;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
+use collab_entity::CollabType;
 use nanoid::nanoid;
 
 use crate::blocks::{Block, DocumentData, DocumentMeta};
 use crate::document::Document;
+use crate::error::DocumentError;
 
 pub const PAGE: &str = "page";
 pub const PARAGRAPH_BLOCK_TYPE: &str = "paragraph";
@@ -85,7 +87,7 @@ pub fn default_document_data() -> DocumentData {
 
 /// Generates default collab data for a document. This document only contains the initial state
 /// of the document.
-pub fn default_document_collab_data(document_id: &str) -> EncodedCollab {
+pub fn default_document_collab_data(document_id: &str) -> Result<EncodedCollab, DocumentError> {
   let document_data = default_document_data();
   let collab = Arc::new(MutexCollab::new(
     CollabOrigin::Empty,
@@ -94,7 +96,11 @@ pub fn default_document_collab_data(document_id: &str) -> EncodedCollab {
     false,
   ));
   let _ = Document::create_with_data(collab.clone(), document_data);
-  collab.encode_collab_v1()
+  collab.encode_collab_v1(|collab| {
+    CollabType::Document
+      .validate(collab)
+      .map_err(|_| DocumentError::NoRequiredData)
+  })
 }
 
 pub fn generate_id() -> String {

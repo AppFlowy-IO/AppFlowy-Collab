@@ -174,11 +174,22 @@ impl Collab {
   }
 
   /// Returns the doc state and the state vector.
-  pub fn encode_collab_v1(&self) -> EncodedCollab {
-    self.doc.get_encoded_collab_v1()
+  pub fn encode_collab_v1<F, E>(&self, validate: F) -> Result<EncodedCollab, E>
+  where
+    F: FnOnce(&Collab) -> Result<(), E>,
+    E: std::fmt::Debug,
+  {
+    validate(self)?;
+    Ok(self.doc.get_encoded_collab_v1())
   }
 
-  pub fn try_encode_collab_v1(&self) -> Result<EncodedCollab, CollabError> {
+  pub fn try_encode_collab_v1<F, E>(&self, validate: F) -> Result<EncodedCollab, CollabError>
+  where
+    F: FnOnce(&Collab) -> Result<(), E>,
+    E: std::fmt::Debug,
+  {
+    validate(self).map_err(|err| CollabError::NoRequiredData(format!("{:?}", err)))?;
+
     let txn = self
       .doc
       .try_transact()
@@ -968,9 +979,13 @@ impl MutexCollab {
   }
 
   /// Returns the doc state and the state vector.
-  pub fn encode_collab_v1(&self) -> EncodedCollab {
+  pub fn encode_collab_v1<F, E>(&self, validate: F) -> Result<EncodedCollab, E>
+  where
+    F: FnOnce(&Collab) -> Result<(), E>,
+    E: std::fmt::Debug,
+  {
     let collab = self.0.lock();
-    collab.encode_collab_v1()
+    collab.encode_collab_v1(validate)
   }
 
   pub fn encode_collab_v2(&self) -> EncodedCollab {
