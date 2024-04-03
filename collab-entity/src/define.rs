@@ -11,3 +11,6 @@ pub const WORKSPACE_DATABASES: &str = "databases";
 pub const DATABASE: &str = "database";
 pub const DATABASE_ID: &str = "id";
 pub const DATABASE_ROW_DATA: &str = "data";
+
+// User Awareness
+pub const USER_AWARENESS: &str = "user_awareness";

@@ -6,6 +6,7 @@ use anyhow::Result;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::SyncState;
 use collab::preclude::{Any, MapPrelim, MapRefWrapper};
+use collab_entity::define::USER_AWARENESS;
 use collab_entity::reminder::Reminder;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -14,7 +15,6 @@ use tokio_stream::wrappers::WatchStream;
 use crate::appearance::AppearanceSettings;
 use crate::reminder::{Reminders, RemindersChangeSender};
 
-const USER: &str = "user_awareness";
 const REMINDERS: &str = "reminders";
 const APPEARANCE_SETTINGS: &str = "appearance_settings";
 
@@ -76,7 +76,7 @@ impl UserAwareness {
     let collab_guard = collab.lock();
     let (container, appearance_settings, reminders) =
       collab_guard.with_origin_transact_mut(|txn| {
-        let awareness = collab_guard.insert_map_with_txn_if_not_exist(txn, USER);
+        let awareness = collab_guard.insert_map_with_txn_if_not_exist(txn, USER_AWARENESS);
 
         let appearance_settings_container =
           awareness.create_map_with_txn_if_not_exist(txn, APPEARANCE_SETTINGS);
@@ -152,7 +152,7 @@ impl UserAwareness {
   fn try_open(collab: Arc<MutexCollab>, notifier: Option<UserAwarenessNotifier>) -> Option<Self> {
     let collab_guard = collab.lock();
     let txn = collab_guard.transact();
-    let awareness = collab_guard.get_map_with_txn(&txn, vec![USER])?;
+    let awareness = collab_guard.get_map_with_txn(&txn, vec![USER_AWARENESS])?;
     let appearance_settings = AppearanceSettings {
       container: awareness.get_map_with_txn(&txn, APPEARANCE_SETTINGS)?,
     };

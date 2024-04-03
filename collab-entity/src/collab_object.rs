@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::define::{
   DATABASE, DATABASE_ID, DATABASE_ROW_DATA, DOCUMENT_ROOT, FOLDER, FOLDER_CURRENT_WORKSPACE,
-  FOLDER_META, WORKSPACE_DATABASES,
+  FOLDER_META, USER_AWARENESS, WORKSPACE_DATABASES,
 };
 use collab::preclude::{Collab, MapRefExtension};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -87,7 +87,12 @@ impl CollabType {
           .ok_or_else(|| no_required_data_error(self, DATABASE_ROW_DATA))?;
         Ok(())
       },
-      CollabType::UserAwareness => Ok(()),
+      CollabType::UserAwareness => {
+        collab
+          .get_map_with_txn(&txn, vec![USER_AWARENESS])
+          .ok_or_else(|| no_required_data_error(self, USER_AWARENESS))?;
+        Ok(())
+      },
       CollabType::Empty => Ok(()),
     }
   }
