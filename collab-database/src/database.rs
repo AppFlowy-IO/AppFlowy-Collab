@@ -131,7 +131,6 @@ impl Database {
       .map(|notifier| notifier.view_change_tx.subscribe())
   }
 
-  #[cfg(debug_assertions)]
   pub fn get_collab(&self) -> &Arc<MutexCollab> {
     &self.inner
   }
