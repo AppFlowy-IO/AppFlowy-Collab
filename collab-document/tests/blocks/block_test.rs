@@ -4,6 +4,7 @@ use collab_document::blocks::{BlockAction, BlockActionPayload, BlockActionType};
 use serde_json::json;
 
 use crate::blocks::block_test_core::{BlockTestCore, TEXT_BLOCK_TYPE};
+use crate::util::try_decode_from_encode_collab;
 
 #[tokio::test]
 async fn create_default_document_test() {
@@ -114,6 +115,7 @@ async fn delete_block_test() {
   test.delete_block(&first_block.id);
   let page_children = test.get_block_children(page_id);
   assert_eq!(page_children.len(), 1);
+  try_decode_from_encode_collab(&test.document);
 }
 
 #[tokio::test]
@@ -156,6 +158,8 @@ async fn move_block_test() {
   let page_children = test.get_block_children(page_id);
   assert_eq!(page_children[0].id, first_block_id);
   assert_eq!(page_children[1].id, second_block_id);
+
+  try_decode_from_encode_collab(&test.document);
 }
 
 #[tokio::test]
@@ -174,6 +178,7 @@ async fn update_block_data_test() {
   expected_data.insert("text".to_string(), json!(update_text));
 
   assert_eq!(block.data, expected_data);
+  try_decode_from_encode_collab(&test.document);
 }
 
 #[tokio::test]
@@ -256,4 +261,5 @@ async fn apply_block_actions_without_block_test() {
   test.apply_action(actions);
   // nothing should happen
   assert_eq!(document_data, test.get_document_data());
+  try_decode_from_encode_collab(&test.document);
 }

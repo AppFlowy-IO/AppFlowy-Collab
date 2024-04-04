@@ -7,7 +7,9 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
-use collab::preclude::CollabBuilder;
+use collab::core::collab::DocStateSource;
+use collab::core::origin::CollabOrigin;
+use collab::preclude::{Collab, CollabBuilder};
 use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
 use collab_document::error::DocumentError;
@@ -254,4 +256,17 @@ pub fn unzip_history_document_db(folder_name: &str) -> std::io::Result<(Cleaner,
     Cleaner::new(PathBuf::from(output_folder_path)),
     PathBuf::from(path),
   ))
+}
+
+/// Can remove in the future. Just want to test the encode_collab and decode_collab
+pub fn try_decode_from_encode_collab(document: &Document) {
+  let data = document.encode_collab().unwrap();
+  let _ = Collab::new_with_doc_state(
+    CollabOrigin::Empty,
+    "1",
+    DocStateSource::FromDocState(data.doc_state.to_vec()),
+    vec![],
+    false,
+  )
+  .unwrap();
 }

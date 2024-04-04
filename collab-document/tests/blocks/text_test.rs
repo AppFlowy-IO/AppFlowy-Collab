@@ -4,6 +4,7 @@ use collab_document::blocks::{
   deserialize_text_delta, BlockAction, BlockActionPayload, BlockActionType, TextDelta,
 };
 
+use crate::util::try_decode_from_encode_collab;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -158,6 +159,7 @@ async fn apply_mark_delta_test() {
     deserialize_text_delta(&delta).unwrap(),
     deserialize_text_delta(&expect).unwrap()
   );
+  try_decode_from_encode_collab(&test.document);
 }
 
 #[tokio::test]
@@ -186,6 +188,7 @@ async fn apply_chinese_ime_delta_test() {
     deserialize_text_delta(&delta).unwrap(),
     deserialize_text_delta(&expect).unwrap()
   );
+  try_decode_from_encode_collab(&test.document);
 }
 
 #[tokio::test]
@@ -206,6 +209,7 @@ async fn apply_delete_chinese_delta_test() {
     deserialize_text_delta(&delta).unwrap(),
     deserialize_text_delta(&expect).unwrap()
   );
+  try_decode_from_encode_collab(&test.document);
 }
 
 #[tokio::test]
@@ -254,6 +258,7 @@ async fn apply_insert_delta_test() {
     deserialize_text_delta(&delta).unwrap(),
     deserialize_text_delta(&expect).unwrap()
   );
+  try_decode_from_encode_collab(&test.document);
 }
 
 #[tokio::test]
@@ -272,6 +277,7 @@ async fn subscribe_apply_delta_test() {
   }])
   .to_string();
   test.apply_text_delta(&text_id, delta);
+  try_decode_from_encode_collab(&test.document);
 }
 
 #[tokio::test]
@@ -403,6 +409,7 @@ async fn apply_text_actions() {
     deserialize_text_delta(&text_delta).unwrap(),
     deserialize_text_delta(&expect).unwrap()
   );
+  try_decode_from_encode_collab(&test.document);
 }
 
 #[tokio::test]
@@ -437,4 +444,5 @@ async fn apply_text_actions_without_params_test() {
 
   // nothing should happen
   assert_eq!(document_data, test.get_document_data());
+  try_decode_from_encode_collab(&test.document);
 }
