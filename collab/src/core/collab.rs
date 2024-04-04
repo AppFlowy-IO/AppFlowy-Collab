@@ -154,7 +154,7 @@ impl Collab {
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
     let awareness = Awareness::new(doc.clone());
-    let mut this = Self {
+    Self {
       origin,
       object_id,
       doc,
@@ -168,9 +168,7 @@ impl Collab {
       after_txn_subscription: Default::default(),
       awareness_subscription: Default::default(),
       index_json_sender: tokio::sync::broadcast::channel(100).0,
-    };
-    this.emit_awareness_state();
-    this
+    }
   }
 
   /// Returns the doc state and the state vector.

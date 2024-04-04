@@ -9,6 +9,7 @@ use tokio::time::sleep;
 #[tokio::test]
 async fn awareness_insert_test() {
   let mut collab = Collab::new(1, "1", "1", vec![], true);
+  collab.emit_awareness_state();
   let (tx, rx) = mpsc::sync_channel(1);
   let _update = collab.observe_awareness(move |_awareness, event| {
     tx.send(event.clone()).unwrap();
@@ -26,8 +27,8 @@ async fn awareness_insert_test() {
 
 #[tokio::test]
 async fn initial_awareness_test() {
-  let collab = Collab::new(1, "1", "1", vec![], true);
-
+  let mut collab = Collab::new(1, "1", "1", vec![], true);
+  collab.emit_awareness_state();
   // by default, the awareness state contains the uid
   let state = collab.get_awareness().get_local_state().unwrap();
   assert_eq!(state, &json!({"uid": 1}));
@@ -36,6 +37,7 @@ async fn initial_awareness_test() {
 #[tokio::test]
 async fn clean_awareness_state_test() {
   let mut collab = Collab::new(1, "1", "1", vec![], true);
+  collab.emit_awareness_state();
   let (tx, rx) = mpsc::sync_channel(1);
   let _update = collab.observe_awareness(move |_awareness, event| {
     tx.send(event.clone()).unwrap();
@@ -51,6 +53,7 @@ async fn clean_awareness_state_test() {
 async fn clean_awareness_state_sync_test() {
   let mut doc_id_map_uid = HashMap::new();
   let mut collab_a = Collab::new(0, "1", "1", vec![], true);
+  collab_a.emit_awareness_state();
   doc_id_map_uid.insert(collab_a.get_doc().client_id(), 0.to_string());
   let (tx, rx) = mpsc::sync_channel(1);
   let _update = collab_a.observe_awareness(move |awareness, event| {
@@ -62,6 +65,7 @@ async fn clean_awareness_state_sync_test() {
   // apply the awareness state from collab_a to collab_b
   let awareness_update = rx.recv().unwrap();
   let mut collab_b = Collab::new(1, "1", "2", vec![], true);
+  collab_b.emit_awareness_state();
   doc_id_map_uid.insert(collab_b.get_doc().client_id(), 1.to_string());
   collab_b
     .get_mut_awareness()
