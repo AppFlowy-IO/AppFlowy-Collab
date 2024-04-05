@@ -278,7 +278,6 @@ impl Collab {
   /// further synchronization with the remote server.
   ///
   /// This method must be called after all plugins have been added.
-  #[cfg(not(feature = "async-plugin"))]
   pub fn initialize(&mut self) {
     if !self.state.is_uninitialized() {
       return;
@@ -316,48 +315,6 @@ impl Collab {
         .read()
         .iter()
         .for_each(|plugin| plugin.did_init(self, &self.object_id, last_sync_at));
-    }
-    self.state.set_init_state(InitState::Initialized);
-  }
-
-  #[cfg(feature = "async-plugin")]
-  pub async fn initialize(&mut self) {
-    if !self.state.is_uninitialized() {
-      return;
-    }
-
-    self.state.set_init_state(InitState::Loading);
-    {
-      for plugin in self.plugins.read().iter() {
-        plugin.init(&self.object_id, &self.origin, &self.doc).await;
-      }
-    }
-
-    let (update_subscription, after_txn_subscription) = observe_doc(
-      &self.doc,
-      self.object_id.clone(),
-      self.plugins.clone(),
-      self.origin.clone(),
-    );
-
-    let awareness_subscription = observe_awareness(
-      &mut self.awareness,
-      self.plugins.clone(),
-      self.object_id.clone(),
-      self.origin.clone(),
-    );
-
-    *self.update_subscription.write() = Some(update_subscription);
-    *self.after_txn_subscription.write() = after_txn_subscription;
-    *self.awareness_subscription.write() = Some(awareness_subscription);
-
-    let last_sync_at = self.get_last_sync_at();
-    {
-      self
-        .plugins
-        .read()
-        .iter()
-        .for_each(|plugin| plugin.did_init(&self, &self.object_id, last_sync_at));
     }
     self.state.set_init_state(InitState::Initialized);
   }
@@ -1000,6 +957,12 @@ impl Deref for MutexCollab {
   type Target = Arc<Mutex<Collab>>;
   fn deref(&self) -> &Self::Target {
     &self.0
+  }
+}
+
+impl DerefMut for MutexCollab {
+  fn deref_mut(&mut self) -> &mut Arc<Mutex<Collab>> {
+    &mut self.0
   }
 }
 
