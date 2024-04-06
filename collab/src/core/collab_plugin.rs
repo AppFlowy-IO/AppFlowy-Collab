@@ -17,16 +17,11 @@ pub enum CollabPluginType {
   Other,
 }
 
-#[async_trait]
 pub trait CollabPlugin: Send + Sync + 'static {
   /// Called when the plugin is initialized.
   /// The will apply the updates to the current [TransactionMut] which will restore the state of
   /// the document.
-  #[cfg(not(feature = "async-plugin"))]
   fn init(&self, _object_id: &str, _origin: &CollabOrigin, _doc: &Doc) {}
-
-  #[cfg(feature = "async-plugin")]
-  async fn init(&self, _object_id: &str, _origin: &CollabOrigin, _doc: &Doc) {}
 
   /// Called when the plugin is initialized.
   fn did_init(&self, _collab: &Collab, _object_id: &str, _last_sync_at: i64) {}
@@ -69,14 +64,8 @@ impl<T> CollabPlugin for Box<T>
 where
   T: CollabPlugin,
 {
-  #[cfg(not(feature = "async-plugin"))]
   fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
     (**self).init(object_id, origin, doc);
-  }
-
-  #[cfg(feature = "async-plugin")]
-  async fn init(&self, object_id: &str, origin: &CollabOrigin, doc: &Doc) {
-    (**self).init(object_id, origin, doc).await;
   }
 
   fn did_init(&self, collab: &Collab, _object_id: &str, last_sync_at: i64) {

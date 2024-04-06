@@ -2,9 +2,6 @@ use crate::local_storage::indexeddb::kv_impl::CollabIndexeddb;
 use crate::local_storage::kv::keys::{make_doc_state_key, make_state_vector_key};
 
 use async_stream::stream;
-use async_trait::async_trait;
-use collab::core::awareness::{AwarenessUpdate, Event};
-
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
@@ -66,9 +63,8 @@ impl IndexeddbDiskPlugin {
   }
 }
 
-#[async_trait]
 impl CollabPlugin for IndexeddbDiskPlugin {
-  async fn init(&self, object_id: &str, _origin: &CollabOrigin, doc: &Doc) {
+  fn init(&self, object_id: &str, _origin: &CollabOrigin, doc: &Doc) {
     if let Some(db) = self.collab_db.upgrade() {
       let object_id = object_id.to_string();
       let doc = doc.clone();
