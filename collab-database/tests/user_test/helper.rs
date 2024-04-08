@@ -255,8 +255,6 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
     id: gen_field_id(),
     name: "Name".to_string(),
     field_type: 0,
-    visibility: false,
-    width: 0,
     type_options: Default::default(),
     is_primary: true,
   };
@@ -265,8 +263,6 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
     id: gen_field_id(),
     name: "Status".to_string(),
     field_type: 3,
-    visibility: false,
-    width: 0,
     type_options: Default::default(),
     is_primary: false,
   };
@@ -275,8 +271,6 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
     id: gen_field_id(),
     name: "Done".to_string(),
     field_type: 4,
-    visibility: false,
-    width: 0,
     type_options: Default::default(),
     is_primary: false,
   };
