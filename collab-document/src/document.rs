@@ -95,8 +95,8 @@ impl Document {
     document_id: &str,
     plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, DocumentError> {
-    let collab = MutexCollab::new_with_doc_state(origin, document_id, doc_state, plugins, true)?;
-    Document::open(Arc::new(collab))
+    let collab = Collab::new_with_doc_state(origin, document_id, doc_state, plugins, true)?;
+    Document::open(Arc::new(MutexCollab::new(collab)))
   }
 
   /// open a document and subscribe to the document changes.

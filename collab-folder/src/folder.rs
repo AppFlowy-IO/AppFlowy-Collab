@@ -135,8 +135,8 @@ impl Folder {
     plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, FolderError> {
     let collab =
-      MutexCollab::new_with_doc_state(origin, workspace_id, collab_doc_state, plugins, false)?;
-    Self::open(uid, Arc::new(collab), None)
+      Collab::new_with_doc_state(origin, workspace_id, collab_doc_state, plugins, false)?;
+    Self::open(uid, Arc::new(MutexCollab::new(collab)), None)
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {

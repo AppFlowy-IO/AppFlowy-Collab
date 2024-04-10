@@ -5,6 +5,7 @@ use std::sync::{Arc, Weak};
 use async_trait::async_trait;
 use collab::core::collab::{DocStateSource, MutexCollab};
 use collab::core::origin::CollabOrigin;
+use collab::preclude::Collab;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::{KVTransactionDB, PersistenceError};
@@ -186,7 +187,7 @@ fn save_row(
     return None;
   }
   let row = collab_db.with_write_txn(|write_txn| {
-    match MutexCollab::new_with_doc_state(
+    match Collab::new_with_doc_state(
       CollabOrigin::Empty,
       row_id.as_ref(),
       collab_doc_state,
@@ -194,8 +195,7 @@ fn save_row(
       false,
     ) {
       Ok(collab) => {
-        let collab_lock_guard = collab.lock();
-        let encode_collab = collab_lock_guard
+        let encode_collab = collab
           .encode_collab_v1(|collab| {
             CollabType::DatabaseRow
               .validate(collab)
@@ -216,8 +216,8 @@ fn save_row(
           );
         }
 
-        let txn = collab_lock_guard.transact();
-        let row_detail = RowDetail::from_collab(&collab_lock_guard, &txn);
+        let txn = collab.transact();
+        let row_detail = RowDetail::from_collab(&collab, &txn);
         if row_detail.is_none() {
           tracing::error!("{} doesn't have any row information in it", row_id.as_ref());
         }
