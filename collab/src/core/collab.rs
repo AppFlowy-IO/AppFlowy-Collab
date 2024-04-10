@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use std::panic;
 use std::panic::AssertUnwindSafe;
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::vec::IntoIter;
 
 use parking_lot::{Mutex, RwLock};
@@ -900,75 +900,47 @@ impl Deref for Plugins {
   }
 }
 
-#[allow(clippy::arc_with_non_send_sync)]
+/// [MutexCollab] is a wrapper around [Rc] and [Mutex] to allow for shared ownership of a [Collab]
+/// It does nothing just impl [Send] and [Sync] for [Collab]
 #[derive(Clone)]
-pub struct MutexCollab(Arc<Mutex<Collab>>);
-
+pub(crate) struct MutexCollab(Arc<Mutex<Collab>>);
 impl MutexCollab {
-  pub fn new(
-    origin: CollabOrigin,
-    object_id: &str,
-    plugins: Vec<Box<dyn CollabPlugin>>,
-    skip_gc: bool,
-  ) -> Self {
-    let collab = Collab::new_with_origin(origin, object_id, plugins, skip_gc);
+  pub(crate) fn new(collab: Collab) -> Self {
     #[allow(clippy::arc_with_non_send_sync)]
-    MutexCollab(Arc::new(Mutex::new(collab)))
+    Self(Arc::new(Mutex::new(collab)))
   }
 
-  pub fn new_with_doc_state(
-    origin: CollabOrigin,
-    object_id: &str,
-    collab_doc_state: DocStateSource,
-    plugins: Vec<Box<dyn CollabPlugin>>,
-    skip_gc: bool,
-  ) -> Result<Self, CollabError> {
-    let collab = Collab::new_with_doc_state(origin, object_id, collab_doc_state, plugins, skip_gc)?;
-    #[allow(clippy::arc_with_non_send_sync)]
-    Ok(MutexCollab(Arc::new(Mutex::new(collab))))
-  }
-
-  pub fn from_collab(collab: Collab) -> Self {
-    #[allow(clippy::arc_with_non_send_sync)]
-    MutexCollab(Arc::new(Mutex::new(collab)))
-  }
-
-  /// Returns the doc state and the state vector.
-  pub fn encode_collab_v1<F, E>(&self, validate: F) -> Result<EncodedCollab, E>
-  where
-    F: FnOnce(&Collab) -> Result<(), E>,
-    E: std::fmt::Debug,
-  {
-    let collab = self.0.lock();
-    collab.encode_collab_v1(validate)
-  }
-
-  pub fn encode_collab_v2(&self) -> EncodedCollab {
-    let collab = self.0.lock();
-    collab.encode_collab_v2()
-  }
-
-  pub fn to_json_value(&self) -> JsonValue {
-    self.0.lock().to_json_value()
+  pub(crate) fn downgrade(&self) -> WeakMutexCollab {
+    WeakMutexCollab(Arc::downgrade(&self.0))
   }
 }
 
 impl Deref for MutexCollab {
   type Target = Arc<Mutex<Collab>>;
+
   fn deref(&self) -> &Self::Target {
     &self.0
   }
 }
 
 impl DerefMut for MutexCollab {
-  fn deref_mut(&mut self) -> &mut Arc<Mutex<Collab>> {
+  fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.0
   }
 }
 
+unsafe impl Send for MutexCollab {}
 unsafe impl Sync for MutexCollab {}
 
-unsafe impl Send for MutexCollab {}
+#[derive(Clone)]
+pub(crate) struct WeakMutexCollab(Weak<Mutex<Collab>>);
+impl WeakMutexCollab {
+  pub(crate) fn upgrade(&self) -> Option<MutexCollab> {
+    self.0.upgrade().map(MutexCollab)
+  }
+}
+unsafe impl Send for WeakMutexCollab {}
+unsafe impl Sync for WeakMutexCollab {}
 
 pub trait TransactionExt<'doc> {
   fn try_encode_state_as_update_v1(&self, sv: &StateVector) -> Result<Vec<u8>, CollabError>;
