@@ -799,13 +799,14 @@ impl CollabBuilder {
 
   pub fn build(self) -> Result<MutexCollab, CollabError> {
     let origin = CollabOrigin::Client(CollabClient::new(self.uid, self.device_id));
-    MutexCollab::new_with_doc_state(
+    let collab = Collab::new_with_doc_state(
       origin,
       &self.object_id,
       self.doc_state,
       self.plugins,
       self.skip_gc,
-    )
+    )?;
+    Ok(MutexCollab::new(collab))
   }
 }
 
@@ -903,14 +904,14 @@ impl Deref for Plugins {
 /// [MutexCollab] is a wrapper around [Rc] and [Mutex] to allow for shared ownership of a [Collab]
 /// It does nothing just impl [Send] and [Sync] for [Collab]
 #[derive(Clone)]
-pub(crate) struct MutexCollab(Arc<Mutex<Collab>>);
+pub struct MutexCollab(Arc<Mutex<Collab>>);
 impl MutexCollab {
-  pub(crate) fn new(collab: Collab) -> Self {
+  pub fn new(collab: Collab) -> Self {
     #[allow(clippy::arc_with_non_send_sync)]
     Self(Arc::new(Mutex::new(collab)))
   }
 
-  pub(crate) fn downgrade(&self) -> WeakMutexCollab {
+  pub fn downgrade(&self) -> WeakMutexCollab {
     WeakMutexCollab(Arc::downgrade(&self.0))
   }
 }
@@ -933,9 +934,9 @@ unsafe impl Send for MutexCollab {}
 unsafe impl Sync for MutexCollab {}
 
 #[derive(Clone)]
-pub(crate) struct WeakMutexCollab(Weak<Mutex<Collab>>);
+pub struct WeakMutexCollab(Weak<Mutex<Collab>>);
 impl WeakMutexCollab {
-  pub(crate) fn upgrade(&self) -> Option<MutexCollab> {
+  pub fn upgrade(&self) -> Option<MutexCollab> {
     self.0.upgrade().map(MutexCollab)
   }
 }
