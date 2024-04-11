@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::{anyhow, Error};
 use async_trait::async_trait;
-use collab::core::collab::{DocStateSource, MutexCollab, TransactionMutExt};
+use collab::core::collab::{DataSource, MutexCollab, TransactionMutExt};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab_entity::{CollabObject, CollabType};
@@ -222,8 +222,8 @@ impl RemoteCollab {
         let mut txn = remote_collab.origin_transact_mut();
 
         match collab_doc_state {
-          DocStateSource::FromDisk => {},
-          DocStateSource::FromDocState(doc_state) => {
+          DataSource::Disk => {},
+          DataSource::DocState(doc_state) => {
             if let Ok(update) = Update::decode_v1(&doc_state) {
               if let Err(e) = txn.try_apply_update(update) {
                 tracing::error!("apply update failed: {:?}", e);
@@ -352,7 +352,7 @@ pub trait RemoteCollabStorage: Send + Sync + 'static {
   fn is_enable(&self) -> bool;
 
   /// Get all the updates of the remote collab.
-  async fn get_doc_state(&self, object: &CollabObject) -> Result<DocStateSource, anyhow::Error>;
+  async fn get_doc_state(&self, object: &CollabObject) -> Result<DataSource, anyhow::Error>;
 
   /// Get the latest snapshot of the remote collab.
   async fn get_snapshots(&self, object_id: &str, limit: usize) -> Vec<RemoteCollabSnapshot>;
@@ -404,7 +404,7 @@ where
     (**self).is_enable()
   }
 
-  async fn get_doc_state(&self, object: &CollabObject) -> Result<DocStateSource, anyhow::Error> {
+  async fn get_doc_state(&self, object: &CollabObject) -> Result<DataSource, anyhow::Error> {
     (**self).get_doc_state(object).await
   }
 

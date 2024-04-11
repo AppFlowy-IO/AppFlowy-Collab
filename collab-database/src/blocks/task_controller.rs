@@ -3,7 +3,7 @@ use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
-use collab::core::collab::{DocStateSource, MutexCollab};
+use collab::core::collab::{DataSource, MutexCollab};
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
@@ -178,7 +178,7 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
 #[allow(dead_code)]
 fn save_row(
   collab_db: &Arc<CollabKVDB>,
-  collab_doc_state: DocStateSource,
+  collab_doc_state: DataSource,
   uid: i64,
   row_id: &RowId,
 ) -> Option<RowDetail> {
@@ -187,7 +187,7 @@ fn save_row(
     return None;
   }
   let row = collab_db.with_write_txn(|write_txn| {
-    match Collab::new_with_doc_state(
+    match Collab::new_with_source(
       CollabOrigin::Empty,
       row_id.as_ref(),
       collab_doc_state,
