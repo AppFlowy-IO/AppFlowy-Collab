@@ -223,7 +223,7 @@ impl RemoteCollab {
 
         match collab_doc_state {
           DataSource::Disk => {},
-          DataSource::DocState(doc_state) => {
+          DataSource::DocStateV1(doc_state) => {
             if let Ok(update) = Update::decode_v1(&doc_state) {
               if let Err(e) = txn.try_apply_update(update) {
                 tracing::error!("apply update failed: {:?}", e);

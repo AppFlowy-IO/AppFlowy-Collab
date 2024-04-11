@@ -128,10 +128,17 @@ impl Collab {
     let collab = Self::new_with_origin(origin, object_id, plugins, skip_gc);
     match collab_doc_state {
       DataSource::Disk => {},
-      DataSource::DocState(doc_state) => {
+      DataSource::DocStateV1(doc_state) => {
         if !doc_state.is_empty() {
           let mut txn = collab.origin_transact_mut();
           let decoded_update = Update::decode_v1(&doc_state)?;
+          txn.try_apply_update(decoded_update)?;
+        }
+      },
+      DataSource::DocStateV2(doc_state) => {
+        if !doc_state.is_empty() {
+          let mut txn = collab.origin_transact_mut();
+          let decoded_update = Update::decode_v2(&doc_state)?;
           txn.try_apply_update(decoded_update)?;
         }
       },
@@ -750,7 +757,8 @@ pub struct CollabBuilder {
 /// [Update::decode_v1].
 pub enum DataSource {
   Disk,
-  DocState(Vec<u8>),
+  DocStateV1(Vec<u8>),
+  DocStateV2(Vec<u8>),
 }
 
 impl DataSource {

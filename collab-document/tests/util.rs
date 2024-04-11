@@ -264,7 +264,7 @@ pub fn try_decode_from_encode_collab(document: &Document) {
   let _ = Collab::new_with_source(
     CollabOrigin::Empty,
     "1",
-    DataSource::DocState(data.doc_state.to_vec()),
+    DataSource::DocStateV1(data.doc_state.to_vec()),
     vec![],
     false,
   )

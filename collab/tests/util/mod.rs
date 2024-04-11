@@ -55,7 +55,7 @@ impl CollabStateCachePlugin {
     let doc_state = merge_updates_v1(&updates)
       .map_err(|err| anyhow::anyhow!("merge updates failed: {:?}", err))
       .unwrap();
-    Ok(DataSource::DocState(doc_state))
+    Ok(DataSource::DocStateV1(doc_state))
   }
 
   #[allow(dead_code)]
