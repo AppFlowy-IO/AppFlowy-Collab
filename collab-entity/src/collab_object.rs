@@ -117,6 +117,20 @@ impl Display for CollabType {
   }
 }
 
+impl From<i32> for CollabType {
+  fn from(n: i32) -> CollabType {
+    match n {
+      0 => CollabType::Document,
+      1 => CollabType::Database,
+      2 => CollabType::WorkspaceDatabase,
+      3 => CollabType::Folder,
+      4 => CollabType::DatabaseRow,
+      5 => CollabType::UserAwareness,
+      _ => CollabType::Empty,
+    }
+  }
+}
+
 #[derive(Clone, Debug)]
 pub struct CollabObject {
   pub object_id: String,
