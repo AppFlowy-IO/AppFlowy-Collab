@@ -26,6 +26,7 @@ const VIEW_CREATED_BY: &str = "created_by";
 const VIEW_ICON: &str = "icon";
 const VIEW_LAST_EDITED_TIME: &str = "last_edited_time";
 const VIEW_LAST_EDITED_BY: &str = "last_edited_by";
+const VIEW_EXTRA: &str = "extra";
 // const VIEW_LAST_VIEWED_TIME: &str = "last_viewed_time";
 
 pub fn timestamp() -> i64 {
@@ -449,6 +450,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     .get_i64_with_txn(txn, VIEW_LAST_EDITED_TIME)
     .unwrap_or(timestamp());
   let last_edited_by = map_ref.get_i64_with_txn(txn, VIEW_LAST_EDITED_BY);
+  let extra = map_ref.get_str_with_txn(txn, VIEW_EXTRA);
 
   Some(View {
     id,
@@ -463,6 +465,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     created_by,
     last_edited_time,
     last_edited_by,
+    extra,
   })
 }
 
@@ -541,6 +544,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     VIEW_LAST_EDITED_TIME
   );
   impl_option_i64_update!(set_last_edited_by, VIEW_LAST_EDITED_BY);
+  impl_str_update!(set_extra, set_extra_if_not_none, VIEW_EXTRA);
 
   pub fn new(
     uid: &'a UserId,
@@ -690,6 +694,18 @@ pub struct View {
   pub created_by: Option<i64>, // user id
   pub last_edited_time: i64,
   pub last_edited_by: Option<i64>, // user id
+  // this value used to store the extra data with JSON format
+  // for document:
+  //  - cover: { type: "", value: "" }
+  //    - type: "0" represents normal color,
+  //            "1" represents gradient color,
+  //            "2" represents built-in image,
+  //            "3" represents custom image,
+  //            "4" represents local image,
+  //            "5" represents unsplash image
+  //  - line_height_layout: "small" or "normal" or "large"
+  //  - font_layout: "small", or "normal", or "large"
+  pub extra: Option<String>,
 }
 
 /// Represents a the index of a view.
@@ -731,6 +747,7 @@ impl Default for View {
       created_by: None,
       last_edited_time: 0,
       last_edited_by: None,
+      extra: None,
     }
   }
 }
