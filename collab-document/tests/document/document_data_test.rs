@@ -1,5 +1,6 @@
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
+use collab::preclude::Collab;
 use collab_document::document::Document;
 use collab_document::document_data::default_document_data;
 use std::sync::Arc;
@@ -26,10 +27,21 @@ async fn get_default_data_test() {
 #[tokio::test]
 async fn validate_document_data() {
   let document_data = default_document_data();
-  let collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, "1", vec![], false));
+  let collab = Arc::new(MutexCollab::new(Collab::new_with_origin(
+    CollabOrigin::Empty,
+    "1",
+    vec![],
+    false,
+  )));
+
   let _ = Document::create_with_data(collab.clone(), document_data).unwrap();
   assert!(Document::validate(&collab.lock()).is_ok());
 
-  let collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, "1", vec![], false));
+  let collab = Arc::new(MutexCollab::new(Collab::new_with_origin(
+    CollabOrigin::Empty,
+    "1",
+    vec![],
+    false,
+  )));
   assert!(Document::validate(&collab.lock()).is_err())
 }

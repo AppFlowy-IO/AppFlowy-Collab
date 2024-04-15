@@ -1,5 +1,6 @@
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
+use collab::preclude::Collab;
 use collab_folder::{check_folder_is_valid, Folder, FolderData, UserId, Workspace};
 use std::sync::Arc;
 
@@ -24,12 +25,12 @@ async fn test_workspace_is_ready() {
 
   let workspace = Workspace::new("w1".to_string(), "".to_string(), uid.as_i64());
   let folder_data = FolderData::new(workspace);
-  let collab = Arc::new(MutexCollab::new(
+  let collab = Arc::new(MutexCollab::new(Collab::new_with_origin(
     CollabOrigin::Empty,
     object_id,
     vec![],
     true,
-  ));
+  )));
   let _ = Folder::create(uid, collab.clone(), None, folder_data);
 
   let workspace_id = check_folder_is_valid(&collab.lock()).unwrap();
@@ -38,7 +39,12 @@ async fn test_workspace_is_ready() {
 
 #[tokio::test]
 async fn validate_folder_data() {
-  let collab = Arc::new(MutexCollab::new(CollabOrigin::Empty, "1", vec![], true));
+  let collab = Arc::new(MutexCollab::new(Collab::new_with_origin(
+    CollabOrigin::Empty,
+    "1",
+    vec![],
+    true,
+  )));
   assert!(Folder::validate(&collab.lock()).is_err());
 
   let workspace = Workspace::new("w1".to_string(), "".to_string(), 1);

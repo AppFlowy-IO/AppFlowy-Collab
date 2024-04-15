@@ -132,10 +132,12 @@ impl CollabPersistenceTest {
     );
     let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), id, CollabType::Document)
       as Box<dyn CollabPlugin>;
-    collab.lock().add_plugin(disk_plugin);
-    collab.lock().initialize();
 
-    let json = collab.to_json_value();
+    let mut lock_guard = collab.lock();
+    lock_guard.add_plugin(disk_plugin);
+    lock_guard.initialize();
+
+    let json = lock_guard.to_json_value();
     assert_json_diff::assert_json_eq!(json, expected);
   }
 

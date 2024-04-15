@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use std::panic;
 use std::panic::AssertUnwindSafe;
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::vec::IntoIter;
 
 use parking_lot::{Mutex, RwLock};
@@ -118,20 +118,27 @@ impl Collab {
     Self::new_with_origin(CollabOrigin::Client(origin), object_id, plugins, skip_gc)
   }
 
-  pub fn new_with_doc_state(
+  pub fn new_with_source(
     origin: CollabOrigin,
     object_id: &str,
-    collab_doc_state: DocStateSource,
+    collab_doc_state: DataSource,
     plugins: Vec<Box<dyn CollabPlugin>>,
     skip_gc: bool,
   ) -> Result<Self, CollabError> {
     let collab = Self::new_with_origin(origin, object_id, plugins, skip_gc);
     match collab_doc_state {
-      DocStateSource::FromDisk => {},
-      DocStateSource::FromDocState(doc_state) => {
+      DataSource::Disk => {},
+      DataSource::DocStateV1(doc_state) => {
         if !doc_state.is_empty() {
           let mut txn = collab.origin_transact_mut();
           let decoded_update = Update::decode_v1(&doc_state)?;
+          txn.try_apply_update(decoded_update)?;
+        }
+      },
+      DataSource::DocStateV2(doc_state) => {
+        if !doc_state.is_empty() {
+          let mut txn = collab.origin_transact_mut();
+          let decoded_update = Update::decode_v2(&doc_state)?;
           txn.try_apply_update(decoded_update)?;
         }
       },
@@ -742,20 +749,21 @@ pub struct CollabBuilder {
   device_id: String,
   plugins: Vec<Box<dyn CollabPlugin>>,
   object_id: String,
-  doc_state: DocStateSource,
+  source: DataSource,
   skip_gc: bool,
 }
 
 /// The raw data of a collab document. It is a list of updates. Each of them can be parsed by
 /// [Update::decode_v1].
-pub enum DocStateSource {
-  FromDisk,
-  FromDocState(Vec<u8>),
+pub enum DataSource {
+  Disk,
+  DocStateV1(Vec<u8>),
+  DocStateV2(Vec<u8>),
 }
 
-impl DocStateSource {
+impl DataSource {
   pub fn is_empty(&self) -> bool {
-    matches!(self, DocStateSource::FromDisk)
+    matches!(self, DataSource::Disk)
   }
 }
 impl CollabBuilder {
@@ -766,7 +774,7 @@ impl CollabBuilder {
       plugins: vec![],
       object_id: object_id.to_string(),
       device_id: "".to_string(),
-      doc_state: DocStateSource::FromDisk,
+      source: DataSource::Disk,
       skip_gc: true,
     }
   }
@@ -787,8 +795,8 @@ impl CollabBuilder {
     self
   }
 
-  pub fn with_doc_state(mut self, doc_state: DocStateSource) -> Self {
-    self.doc_state = doc_state;
+  pub fn with_doc_state(mut self, doc_state: DataSource) -> Self {
+    self.source = doc_state;
     self
   }
 
@@ -799,13 +807,14 @@ impl CollabBuilder {
 
   pub fn build(self) -> Result<MutexCollab, CollabError> {
     let origin = CollabOrigin::Client(CollabClient::new(self.uid, self.device_id));
-    MutexCollab::new_with_doc_state(
+    let collab = Collab::new_with_source(
       origin,
       &self.object_id,
-      self.doc_state,
+      self.source,
       self.plugins,
       self.skip_gc,
-    )
+    )?;
+    Ok(MutexCollab::new(collab))
   }
 }
 
@@ -900,75 +909,47 @@ impl Deref for Plugins {
   }
 }
 
-#[allow(clippy::arc_with_non_send_sync)]
+/// [MutexCollab] is a wrapper around [Rc] and [Mutex] to allow for shared ownership of a [Collab]
+/// It does nothing just impl [Send] and [Sync] for [Collab]
 #[derive(Clone)]
 pub struct MutexCollab(Arc<Mutex<Collab>>);
-
 impl MutexCollab {
-  pub fn new(
-    origin: CollabOrigin,
-    object_id: &str,
-    plugins: Vec<Box<dyn CollabPlugin>>,
-    skip_gc: bool,
-  ) -> Self {
-    let collab = Collab::new_with_origin(origin, object_id, plugins, skip_gc);
+  pub fn new(collab: Collab) -> Self {
     #[allow(clippy::arc_with_non_send_sync)]
-    MutexCollab(Arc::new(Mutex::new(collab)))
+    Self(Arc::new(Mutex::new(collab)))
   }
 
-  pub fn new_with_doc_state(
-    origin: CollabOrigin,
-    object_id: &str,
-    collab_doc_state: DocStateSource,
-    plugins: Vec<Box<dyn CollabPlugin>>,
-    skip_gc: bool,
-  ) -> Result<Self, CollabError> {
-    let collab = Collab::new_with_doc_state(origin, object_id, collab_doc_state, plugins, skip_gc)?;
-    #[allow(clippy::arc_with_non_send_sync)]
-    Ok(MutexCollab(Arc::new(Mutex::new(collab))))
-  }
-
-  pub fn from_collab(collab: Collab) -> Self {
-    #[allow(clippy::arc_with_non_send_sync)]
-    MutexCollab(Arc::new(Mutex::new(collab)))
-  }
-
-  /// Returns the doc state and the state vector.
-  pub fn encode_collab_v1<F, E>(&self, validate: F) -> Result<EncodedCollab, E>
-  where
-    F: FnOnce(&Collab) -> Result<(), E>,
-    E: std::fmt::Debug,
-  {
-    let collab = self.0.lock();
-    collab.encode_collab_v1(validate)
-  }
-
-  pub fn encode_collab_v2(&self) -> EncodedCollab {
-    let collab = self.0.lock();
-    collab.encode_collab_v2()
-  }
-
-  pub fn to_json_value(&self) -> JsonValue {
-    self.0.lock().to_json_value()
+  pub fn downgrade(&self) -> WeakMutexCollab {
+    WeakMutexCollab(Arc::downgrade(&self.0))
   }
 }
 
 impl Deref for MutexCollab {
   type Target = Arc<Mutex<Collab>>;
+
   fn deref(&self) -> &Self::Target {
     &self.0
   }
 }
 
 impl DerefMut for MutexCollab {
-  fn deref_mut(&mut self) -> &mut Arc<Mutex<Collab>> {
+  fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.0
   }
 }
 
+unsafe impl Send for MutexCollab {}
 unsafe impl Sync for MutexCollab {}
 
-unsafe impl Send for MutexCollab {}
+#[derive(Clone)]
+pub struct WeakMutexCollab(Weak<Mutex<Collab>>);
+impl WeakMutexCollab {
+  pub fn upgrade(&self) -> Option<MutexCollab> {
+    self.0.upgrade().map(MutexCollab)
+  }
+}
+unsafe impl Send for WeakMutexCollab {}
+unsafe impl Sync for WeakMutexCollab {}
 
 pub trait TransactionExt<'doc> {
   fn try_encode_state_as_update_v1(&self, sv: &StateVector) -> Result<Vec<u8>, CollabError>;

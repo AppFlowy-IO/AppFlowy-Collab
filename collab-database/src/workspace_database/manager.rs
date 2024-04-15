@@ -4,7 +4,7 @@ use crate::error::DatabaseError;
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
 use async_trait::async_trait;
-use collab::core::collab::{DocStateSource, MutexCollab};
+use collab::core::collab::{DataSource, MutexCollab};
 use collab::preclude::{Any, Collab, MapPrelim};
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
@@ -23,7 +23,7 @@ use std::time::Duration;
 use collab_entity::define::WORKSPACE_DATABASES;
 use tracing::{error, trace};
 
-pub type CollabDocStateByOid = HashMap<String, DocStateSource>;
+pub type CollabDocStateByOid = HashMap<String, DataSource>;
 pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
@@ -35,7 +35,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     &self,
     object_id: &str,
     object_ty: CollabType,
-  ) -> CollabFuture<Result<DocStateSource, DatabaseError>>;
+  ) -> CollabFuture<Result<DataSource, DatabaseError>>;
 
   fn batch_get_collab_update(
     &self,
@@ -49,7 +49,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     object_id: &str,
     object_type: CollabType,
     collab_db: Weak<CollabKVDB>,
-    collab_doc_state: DocStateSource,
+    collab_doc_state: DataSource,
     config: CollabPersistenceConfig,
   ) -> Result<Arc<MutexCollab>, DatabaseError>;
 }
@@ -126,7 +126,7 @@ impl WorkspaceDatabase {
 
   pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Arc<MutexCollab>> {
     let collab_db = self.collab_db.upgrade()?;
-    let mut collab_doc_state = DocStateSource::FromDisk;
+    let mut collab_doc_state = DataSource::Disk;
     let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
     if !is_exist {
       // Try to load the database from the remote. The database doesn't exist in the local only
@@ -232,7 +232,7 @@ impl WorkspaceDatabase {
     debug_assert!(!params.view_id.is_empty());
 
     // Create a [Collab] for the given database id.
-    let collab = self.collab_for_database(&params.database_id, DocStateSource::FromDisk)?;
+    let collab = self.collab_for_database(&params.database_id, DataSource::Disk)?;
     let notifier = DatabaseNotify::default();
     let context = DatabaseContext {
       uid: self.uid,
@@ -396,7 +396,7 @@ impl WorkspaceDatabase {
   fn collab_for_database(
     &self,
     database_id: &str,
-    doc_state: DocStateSource,
+    doc_state: DataSource,
   ) -> Result<Arc<MutexCollab>, DatabaseError> {
     self.collab_service.build_collab_with_config(
       self.uid,

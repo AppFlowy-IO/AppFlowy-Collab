@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::vec;
 
 use collab::core::awareness::AwarenessUpdateSubscription;
-use collab::core::collab::{DocStateSource, MutexCollab};
+use collab::core::collab::{DataSource, MutexCollab};
 use collab::core::collab_plugin::EncodedCollab;
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
@@ -91,12 +91,12 @@ impl Document {
 
   pub fn from_doc_state(
     origin: CollabOrigin,
-    doc_state: DocStateSource,
+    doc_state: DataSource,
     document_id: &str,
     plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, DocumentError> {
-    let collab = MutexCollab::new_with_doc_state(origin, document_id, doc_state, plugins, true)?;
-    Document::open(Arc::new(collab))
+    let collab = Collab::new_with_source(origin, document_id, doc_state, plugins, true)?;
+    Document::open(Arc::new(MutexCollab::new(collab)))
   }
 
   /// open a document and subscribe to the document changes.

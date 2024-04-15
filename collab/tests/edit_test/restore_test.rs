@@ -1,6 +1,6 @@
 #![allow(clippy::all)]
 
-use collab::core::collab::{CollabBuilder, DocStateSource};
+use collab::core::collab::{CollabBuilder, DataSource};
 use std::collections::HashMap;
 use yrs::updates::decoder::Decode;
 use yrs::{ReadTxn, Transact, Update};
@@ -77,11 +77,14 @@ async fn apply_same_update_multiple_time() {
   restored_collab
     .lock()
     .with_origin_transact_mut(|txn| match doc_state {
-      DocStateSource::FromDisk => {
+      DataSource::Disk => {
         panic!("doc state should not be empty")
       },
-      DocStateSource::FromDocState(doc_state) => {
+      DataSource::DocStateV1(doc_state) => {
         txn.apply_update(Update::decode_v1(&doc_state).unwrap());
+      },
+      DataSource::DocStateV2(doc_state) => {
+        txn.apply_update(Update::decode_v2(&doc_state).unwrap());
       },
     });
 

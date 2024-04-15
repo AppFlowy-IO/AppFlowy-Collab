@@ -3,7 +3,7 @@ use dashmap::DashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
-use collab::core::collab::{DocStateSource, MutexCollab};
+use collab::core::collab::{DataSource, MutexCollab};
 
 use collab::error::CollabError;
 use collab_entity::CollabType;
@@ -375,7 +375,7 @@ impl Block {
       row_id,
       CollabType::DatabaseRow,
       self.collab_db.clone(),
-      DocStateSource::FromDisk,
+      DataSource::Disk,
       config,
     )
   }
@@ -400,7 +400,7 @@ async fn async_create_row<T: Into<Row>>(
       &cloned_row_id,
       CollabType::DatabaseRow,
       cloned_weak_collab_db,
-      DocStateSource::FromDisk,
+      DataSource::Disk,
       CollabPersistenceConfig::new(),
     )
   })
