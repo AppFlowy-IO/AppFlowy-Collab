@@ -21,12 +21,21 @@ pub enum CollabType {
   Folder = 3,
   DatabaseRow = 4,
   UserAwareness = 5,
-  Empty = 6,
+  /// This type is used when the specific nature of the collaboration object is not recognized.
+  /// It might represent an uninitialized state or a custom object not covered by existing types.
+  ///
+  /// No strict validation is applied when handling objects of this type(check out the [CollabType::validate]
+  /// for more information), which means errors might not be caught as strictly as with known types.
+  Unknown = 6,
 }
 
 impl CollabType {
   pub fn value(&self) -> i32 {
     self.clone() as i32
+  }
+
+  pub fn is_unknown(&self) -> bool {
+    matches!(self, CollabType::Unknown)
   }
 
   /// Validates the provided collaboration object (`collab`) based on its type.
@@ -93,7 +102,7 @@ impl CollabType {
           .ok_or_else(|| no_required_data_error(self, USER_AWARENESS))?;
         Ok(())
       },
-      CollabType::Empty => Ok(()),
+      CollabType::Unknown => Ok(()),
     }
   }
 }
@@ -112,7 +121,7 @@ impl Display for CollabType {
       Self::DatabaseRow => f.write_str("DatabaseRow"),
       Self::Folder => f.write_str("Folder"),
       Self::UserAwareness => f.write_str("UserAwareness"),
-      Self::Empty => f.write_str("Empty"),
+      Self::Unknown => f.write_str("Unknown"),
     }
   }
 }
@@ -126,7 +135,7 @@ impl From<i32> for CollabType {
       3 => CollabType::Folder,
       4 => CollabType::DatabaseRow,
       5 => CollabType::UserAwareness,
-      _ => CollabType::Empty,
+      _ => CollabType::Unknown,
     }
   }
 }
