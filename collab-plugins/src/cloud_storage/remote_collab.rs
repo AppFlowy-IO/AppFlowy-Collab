@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use collab::core::collab::{DataSource, MutexCollab, TransactionMutExt};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
+use collab::preclude::Collab;
 use collab_entity::{CollabObject, CollabType};
 use parking_lot::Mutex;
 use rand::Rng;
@@ -59,12 +60,12 @@ impl RemoteCollab {
   ) -> Self {
     let is_init_sync_finish = Arc::new(AtomicBool::new(false));
     let sync_state = Arc::new(watch::channel(SyncState::InitSyncBegin).0);
-    let collab = Arc::new(MutexCollab::new(
+    let collab = Arc::new(MutexCollab::new(Collab::new_with_origin(
       CollabOrigin::Server,
       &object.object_id,
       vec![],
       true,
-    ));
+    )));
     let (sink, mut stream) = unbounded_channel::<Message>();
     let weak_storage = Arc::downgrade(&storage);
     let (notifier, notifier_rx) = watch::channel(false);
@@ -225,6 +226,16 @@ impl RemoteCollab {
           DataSource::Disk => {},
           DataSource::DocStateV1(doc_state) => {
             if let Ok(update) = Update::decode_v1(&doc_state) {
+              if let Err(e) = txn.try_apply_update(update) {
+                tracing::error!("apply update failed: {:?}", e);
+              }
+            } else {
+              tracing::error!("🔴decode update failed");
+            }
+            remote_update = doc_state;
+          },
+          DataSource::DocStateV2(doc_state) => {
+            if let Ok(update) = Update::decode_v2(&doc_state) {
               if let Err(e) = txn.try_apply_update(update) {
                 tracing::error!("apply update failed: {:?}", e);
               }
