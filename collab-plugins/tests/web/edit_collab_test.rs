@@ -25,13 +25,13 @@ async fn edit_collab_with_indexeddb_test() {
       let db = Arc::new(CollabIndexeddb::new().await.unwrap());
       let collab = create_collab(uid, object_id.clone(), &db).await;
       collab.lock().insert("message", "hello world");
-      let json_1 = collab.to_json_value();
+      let json_1 = collab.lock().to_json_value();
       drop(collab);
 
       // sleep 2 secs to wait for the disk plugin to flush the data
       sleep(2000).await;
       let collab_from_disk = create_collab(uid, object_id.clone(), &db).await;
-      let json_2 = collab_from_disk.to_json_value();
+      let json_2 = collab_from_disk.lock().to_json_value();
       assert_json_eq!(
         json_2,
         json!({
@@ -59,7 +59,7 @@ async fn flush_collab_with_indexeddb_test() {
       sleep(100).await;
       collab.lock().insert("3", "c");
       sleep(100).await;
-      let json_1 = collab.to_json_value();
+      let json_1 = collab.lock().to_json_value();
       collab.lock().flush();
 
       // sleep 2 secs to wait for the disk plugin to flush the data
@@ -70,7 +70,7 @@ async fn flush_collab_with_indexeddb_test() {
       assert_eq!(updates.len(), 0);
 
       let collab_from_disk = create_collab(uid, object_id.clone(), &db).await;
-      let json_2 = collab_from_disk.to_json_value();
+      let json_2 = collab_from_disk.lock().to_json_value();
       assert_json_eq!(json_1, json_2);
     })
     .await;
