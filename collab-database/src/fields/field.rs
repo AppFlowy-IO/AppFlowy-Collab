@@ -10,8 +10,6 @@ pub struct Field {
   pub id: String,
   pub name: String,
   pub field_type: i64,
-  pub visibility: bool,
-  pub width: i64,
   pub type_options: TypeOptions,
   #[serde(default = "DEFAULT_IS_PRIMARY_VALUE")]
   pub is_primary: bool,
@@ -23,8 +21,6 @@ impl Field {
       id,
       name,
       field_type,
-      visibility: true,
-      width: 120,
       type_options: Default::default(),
       is_primary,
     }
@@ -87,9 +83,7 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
   }
 
   impl_str_update!(set_name, set_name_if_not_none, FIELD_NAME);
-  impl_bool_update!(set_visibility, set_visibility_if_not_none, FIELD_VISIBILITY);
   impl_bool_update!(set_primary, set_primary_if_not_none, FIELD_PRIMARY);
-  impl_i64_update!(set_width, set_width_at_if_not_none, FIELD_WIDTH);
   impl_i64_update!(set_field_type, set_field_type_if_not_none, FIELD_TYPE);
   impl_i64_update!(set_created_at, set_created_at_if_not_none, CREATED_AT);
   impl_i64_update!(
@@ -141,8 +135,6 @@ const FIELD_ID: &str = "id";
 const FIELD_NAME: &str = "name";
 const FIELD_TYPE: &str = "ty";
 const FIELD_TYPE_OPTION: &str = "type_option";
-const FIELD_VISIBILITY: &str = "visibility";
-const FIELD_WIDTH: &str = "width";
 const FIELD_PRIMARY: &str = "is_primary";
 const CREATED_AT: &str = "created_at";
 const LAST_MODIFIED: &str = "last_modified";
@@ -177,12 +169,6 @@ pub fn field_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Field
     .get_str_with_txn(txn, FIELD_NAME)
     .unwrap_or_default();
 
-  let visibility = map_ref
-    .get_bool_with_txn(txn, FIELD_VISIBILITY)
-    .unwrap_or(true);
-
-  let width = map_ref.get_i64_with_txn(txn, FIELD_WIDTH).unwrap_or(120);
-
   let type_options = map_ref
     .get_map_with_txn(txn, FIELD_TYPE_OPTION)
     .map(|map_ref| TypeOptions::from_map_ref(txn, map_ref))
@@ -198,8 +184,6 @@ pub fn field_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Field
     id,
     name,
     field_type,
-    visibility,
-    width,
     type_options,
     is_primary,
   })
