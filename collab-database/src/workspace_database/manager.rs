@@ -377,7 +377,7 @@ impl WorkspaceDatabase {
     Ok(database)
   }
 
-  /// Duplicate the database with the view_id of any view in the database
+  /// Get all of the database data using the id of any view in the database
   pub async fn get_database_data(&self, view_id: &str) -> Result<DatabaseData, DatabaseError> {
     if let Some(database) = self.get_database_with_view_id(view_id).await {
       let data = database.lock().get_database_data();
