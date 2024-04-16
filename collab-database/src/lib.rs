@@ -9,6 +9,5 @@ pub mod workspace_database;
 #[macro_use]
 mod macros;
 pub mod blocks;
-mod database_serde;
 pub mod database_state;
 pub mod error;

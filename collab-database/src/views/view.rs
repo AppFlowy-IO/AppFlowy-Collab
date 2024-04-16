@@ -10,6 +10,7 @@ use collab::preclude::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::database::{gen_database_id, gen_database_view_id, gen_row_id, timestamp, DatabaseData};
 use crate::error::DatabaseError;
 use crate::fields::Field;
 use crate::rows::CreateRowParams;
@@ -54,9 +55,11 @@ pub struct CreateViewParams {
   pub layout: DatabaseLayout,
   pub layout_settings: LayoutSettings,
   pub filters: Vec<FilterMap>,
-  pub groups: Vec<GroupSettingMap>,
+  pub group_settings: Vec<GroupSettingMap>,
   pub sorts: Vec<SortMap>,
   pub field_settings: FieldSettingsByFieldIdMap,
+  pub created_at: i64,
+  pub modified_at: i64,
 
   /// When creating a view for a database, it might need to create a new field for the view.
   /// For example, if the view is calendar view, it must have a date field.
@@ -100,7 +103,7 @@ impl CreateViewParams {
   }
 
   pub fn with_groups(mut self, groups: Vec<GroupSettingMap>) -> Self {
-    self.groups = groups;
+    self.group_settings = groups;
     self
   }
 
@@ -117,6 +120,23 @@ impl CreateViewParams {
   pub fn with_field_settings_map(mut self, field_settings_map: FieldSettingsByFieldIdMap) -> Self {
     self.field_settings = field_settings_map;
     self
+  }
+}
+
+impl From<DatabaseView> for CreateViewParams {
+  fn from(view: DatabaseView) -> Self {
+    Self {
+      database_id: view.database_id,
+      view_id: view.id,
+      name: view.name,
+      layout: view.layout,
+      filters: view.filters,
+      layout_settings: view.layout_settings,
+      group_settings: view.group_settings,
+      sorts: view.sorts,
+      field_settings: view.field_settings,
+      ..Default::default()
+    }
   }
 }
 
@@ -139,61 +159,68 @@ impl CreateViewParamsValidator {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateDatabaseParams {
   pub database_id: String,
-  pub view_id: String,
-  pub view_name: String,
-  pub layout: DatabaseLayout,
-  pub layout_settings: LayoutSettings,
-  pub filters: Vec<FilterMap>,
-  pub groups: Vec<GroupSettingMap>,
-  pub sorts: Vec<SortMap>,
-  pub field_settings: FieldSettingsByFieldIdMap,
-  pub created_rows: Vec<CreateRowParams>,
+  pub inline_view_id: String,
   pub fields: Vec<Field>,
+  pub rows: Vec<CreateRowParams>,
+  pub views: Vec<CreateViewParams>,
 }
 
 impl CreateDatabaseParams {
-  pub fn from_view(view: DatabaseView, fields: Vec<Field>, rows: Vec<CreateRowParams>) -> Self {
-    let mut params: Self = view.into();
-    params.fields = fields;
-    params.created_rows = rows;
-    params
-  }
+  /// This function creates a converts a `CreateDatabaseParams` that can be used to create a new
+  /// database with the same data inside the given `DatabaseData` struct containing all the
+  /// data of a database. The internal `database_id`, the database views' `view_id`s and the rows'
+  /// `row_id`s will all be regenerated.
+  pub fn from_database_data(data: DatabaseData) -> Self {
+    let (database_id, inline_view_id) = (gen_database_id(), gen_database_view_id());
 
-  pub fn split(self) -> (Vec<CreateRowParams>, Vec<Field>, CreateViewParams) {
-    (
-      self.created_rows,
-      self.fields,
-      CreateViewParams {
-        database_id: self.database_id,
-        view_id: self.view_id,
-        name: self.view_name,
-        layout: self.layout,
-        layout_settings: self.layout_settings,
-        filters: self.filters,
-        groups: self.groups,
-        sorts: self.sorts,
-        field_settings: self.field_settings,
-        deps_fields: vec![],
-        deps_field_setting: vec![],
-      },
-    )
-  }
-}
+    let timestamp = timestamp();
 
-impl From<DatabaseView> for CreateDatabaseParams {
-  fn from(view: DatabaseView) -> Self {
+    let create_row_params = data
+      .rows
+      .into_iter()
+      .map(|row| CreateRowParams {
+        id: gen_row_id(),
+        created_at: timestamp,
+        modified_at: timestamp,
+        cells: row.cells,
+        height: row.height,
+        visibility: row.visibility,
+        row_position: OrderObjectPosition::End,
+      })
+      .collect();
+
+    let create_view_params = data
+      .views
+      .into_iter()
+      .map(|view| {
+        let view_id = if view.id == data.inline_view_id {
+          inline_view_id.clone()
+        } else {
+          gen_database_view_id()
+        };
+        CreateViewParams {
+          database_id: database_id.clone(),
+          view_id,
+          name: view.name,
+          layout: view.layout,
+          layout_settings: view.layout_settings,
+          filters: view.filters,
+          group_settings: view.group_settings,
+          sorts: view.sorts,
+          field_settings: view.field_settings,
+          created_at: timestamp,
+          modified_at: timestamp,
+          ..Default::default()
+        }
+      })
+      .collect();
+
     Self {
-      database_id: view.database_id,
-      view_id: view.id,
-      view_name: view.name,
-      layout: view.layout,
-      layout_settings: view.layout_settings,
-      filters: view.filters,
-      groups: view.group_settings,
-      sorts: view.sorts,
-      field_settings: view.field_settings,
-      created_rows: vec![],
-      fields: vec![],
+      database_id,
+      inline_view_id,
+      rows: create_row_params,
+      fields: data.fields,
+      views: create_view_params,
     }
   }
 }
