@@ -222,20 +222,14 @@ async fn duplicate_database_view_test() {
 }
 
 #[tokio::test]
-async fn duplicate_database_data_serde_test() {
+async fn database_data_serde_test() {
   let database_test = create_database_with_default_data(1, "1").await;
-  let duplicated_database = database_test.get_database_data();
+  let database_data = database_test.get_database_data();
 
-  let json = duplicated_database.to_json().unwrap();
-  let duplicated_database2 = DatabaseData::from_json(&json).unwrap();
-  assert_eq!(
-    duplicated_database.fields.len(),
-    duplicated_database2.fields.len()
-  );
-  assert_eq!(
-    duplicated_database.rows.len(),
-    duplicated_database2.rows.len()
-  );
+  let json = database_data.to_json().unwrap();
+  let database_data2 = DatabaseData::from_json(&json).unwrap();
+  assert_eq!(database_data.fields.len(), database_data2.fields.len());
+  assert_eq!(database_data.rows.len(), database_data2.rows.len());
 }
 
 #[tokio::test]
