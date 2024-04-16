@@ -107,9 +107,7 @@ async fn open_020_history_database_test() {
           "0": {
             "data": ""
           }
-        },
-        "visibility": true,
-        "width": 150
+        }
       },
       {
         "field_type": 3,
@@ -120,9 +118,7 @@ async fn open_020_history_database_test() {
           "3": {
             "content": "{\"options\":[{\"id\":\"jydv\",\"name\":\"3\",\"color\":\"LightPink\"},{\"id\":\"F2ew\",\"name\":\"2\",\"color\":\"Pink\"},{\"id\":\"hUJE\",\"name\":\"1\",\"color\":\"Purple\"}],\"disable_color\":false}"
           }
-        },
-        "visibility": true,
-        "width": 150
+        }
       },
       {
         "field_type": 5,
@@ -133,9 +129,7 @@ async fn open_020_history_database_test() {
           "5": {
             "is_selected": false
           }
-        },
-        "visibility": true,
-        "width": 150
+        }
       },
       {
         "field_type": 1,
@@ -156,9 +150,7 @@ async fn open_020_history_database_test() {
             "scale": 0,
             "symbol": "RUB"
           }
-        },
-        "visibility": true,
-        "width": 120
+        }
       },
       {
         "field_type": 6,
@@ -175,9 +167,7 @@ async fn open_020_history_database_test() {
             "content": "",
             "url": ""
           }
-        },
-        "visibility": true,
-        "width": 120
+        }
       },
       {
         "field_type": 8,
@@ -198,9 +188,7 @@ async fn open_020_history_database_test() {
             "time_format": 0,
             "timezone_id": ""
           }
-        },
-        "visibility": true,
-        "width": 120
+        }
       }
     ],
     "inline_view_id": "b44b2906-4508-4532-ad9e-2cf33ceae304",
