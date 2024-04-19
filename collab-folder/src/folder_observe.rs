@@ -82,9 +82,8 @@ pub(crate) fn subscribe_view_change(
                       .insert(view.id.clone(), Arc::new(view.clone()));
 
                     // Send indexing view
-                    let index_content = ViewIndexContent::from(&view);
-                    let _ = index_sender.send(IndexContent::Create(json!(index_content)));
-
+                    // let index_content = ViewIndexContent::from(&view);
+                    // let _ = index_sender.send(IndexContent::Create(json!(index_content)));
                     let _ = change_tx.send(ViewChange::DidCreateView { view });
                   }
                 }
@@ -98,8 +97,8 @@ pub(crate) fn subscribe_view_change(
                     .insert(view.id.clone(), Arc::new(view.clone()));
 
                   // Update indexing view
-                  let index_content = ViewIndexContent::from(&view);
-                  let _ = index_sender.send(IndexContent::Update(json!(index_content)));
+                  // let index_content = ViewIndexContent::from(&view);
+                  // let _ = index_sender.send(IndexContent::Update(json!(index_content)));
 
                   let _ = change_tx.send(ViewChange::DidUpdate { view });
                 }
@@ -113,8 +112,8 @@ pub(crate) fn subscribe_view_change(
 
                 if !views.is_empty() {
                   // Delete indexing views
-                  let delete_ids: Vec<String> = views.iter().map(|v| v.id.to_owned()).collect();
-                  let _ = index_sender.send(IndexContent::Delete(delete_ids));
+                  // let delete_ids: Vec<String> = views.iter().map(|v| v.id.to_owned()).collect();
+                  // let _ = index_sender.send(IndexContent::Delete(delete_ids));
 
                   let _ = change_tx.send(ViewChange::DidDeleteView { views });
                 }
