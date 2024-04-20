@@ -110,6 +110,13 @@ async fn two_way_sync_result_undetermined() {
 
   println!("a: {}", a);
   println!("b: {}", b);
+  // case 1:
+  // a: {map: {}}
+  // b: {map: {}}
+
+  // case 2:
+  // a: {map: {key_2: b, key_1: a}}
+  // b: {map: {key_1: a, key_2: b}}
   assert_eq!(a, b);
 }
 
@@ -159,13 +166,6 @@ async fn two_way_sync_test() {
     let update = Update::decode_v1(&sv_update).unwrap();
     txn.apply_update(update);
   }
-  {
-    let sv_2 = doc_2.transact().state_vector();
-    let sv_update = doc_1.transact().encode_state_as_update_v1(&sv_2);
-    let mut txn = doc_2.transact_mut();
-    let update = Update::decode_v1(&sv_update).unwrap();
-    txn.apply_update(update);
-  }
 
   // The a and b must be the same and not empty
   let a = {
@@ -180,5 +180,8 @@ async fn two_way_sync_test() {
 
   println!("a: {}", a);
   println!("b: {}", b);
+
+  // a: {map: {key_1: a, key_2: b}}
+  // b: {map: {key_2: b, key_1: a}}
   assert_eq!(a, b);
 }
