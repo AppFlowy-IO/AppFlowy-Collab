@@ -1,3 +1,5 @@
+use collab::core::collab::DATA_SECTION;
+use collab::core::value::YrsValueExtension;
 use collab::preclude::MapRefExtension;
 use serde_json::json;
 use yrs::types::ToJson;
@@ -181,4 +183,74 @@ async fn two_way_sync_test() {
   println!("a: {}", a);
   println!("b: {}", b);
   assert_eq!(a, b);
+}
+
+#[tokio::test]
+async fn sync_test_with_error_doc_gc() {
+  let json_str = include_str!("json/error_doc.json");
+
+  // doc1 is empty document and doc2 has a document map
+  let doc1 = Doc::new();
+  let doc2 = Doc::new();
+
+  {
+    let mut txn = doc1.transact_mut();
+    let update = get_update(json_str);
+    txn.apply_update(update);
+  }
+  let data_map = doc1.get_or_insert_map(DATA_SECTION);
+  let document = data_map
+    .get_map_with_txn(&mut doc1.transact_mut(), "document")
+    .expect("document should exist");
+
+  assert!(document.len(&doc1.transact()) > 0);
+
+  {
+    let data_map = doc2.get_or_insert_map(DATA_SECTION);
+    data_map.create_map_with_txn(&mut doc2.transact_mut(), "document");
+    let mut txn = doc2.transact_mut();
+    let update = get_update(json_str);
+    txn.apply_update(update);
+  }
+  let data_map = doc2.get_or_insert_map(DATA_SECTION);
+  let document = data_map
+    .get_map_with_txn(&mut doc2.transact_mut(), "document")
+    .expect("document should exist");
+  assert_eq!(document.len(&doc2.transact()), 0);
+}
+
+#[tokio::test]
+async fn sync_test_with_normal_doc_gc() {
+  let doc = Doc::new();
+  let json_str = include_str!("json/normal_doc.json");
+  {
+    let data_map = doc.get_or_insert_map(DATA_SECTION);
+    data_map.create_map_with_txn(&mut doc.transact_mut(), "document");
+    let mut txn = doc.transact_mut();
+    let update = get_update(json_str);
+    txn.apply_update(update);
+  }
+  let data_map = doc.get_or_insert_map(DATA_SECTION);
+  let document = data_map
+    .get_map_with_txn(&mut doc.transact_mut(), "document")
+    .expect("document should exist");
+  assert!(document.len(&doc.transact()) > 0);
+}
+
+fn get_update(json_str: &str) -> Update {
+  let json: serde_json::Value = serde_json::from_str(json_str).expect("file should be proper JSON");
+  let doc_state = json
+    .get("data")
+    .expect("file should have data key")
+    .get("doc_state")
+    .expect("data should have doc_state key");
+
+  let state = doc_state
+    .as_array()
+    .expect("doc_state should be an array")
+    .iter()
+    .map(|v| v.as_u64().expect("doc_state should be an array of u64") as u8)
+    .collect::<Vec<u8>>();
+
+  Update::decode_v1(&state).expect("doc_state decode v1 failed")
 }
