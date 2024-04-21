@@ -89,6 +89,7 @@ async fn missing_update_test() {
     let update = Update::decode_v1(&missing_update).unwrap();
     txn.apply_update(update);
   });
+  assert!(collab_2.transact().store().pending_update().is_none());
 
   assert_eq!(collab_1.to_json_value(), collab_2.to_json_value());
 }
@@ -196,6 +197,95 @@ async fn simulate_client_missing_server_broadcast_data_test() {
       "4": "d",
       "5": "e"
     })
+  );
+}
+
+#[tokio::test]
+async fn simulate_client_missing_server_broadcast_data_test2() {
+  // Initialize clients and server with the same origin and test conditions.
+  let mut client_1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], true);
+  client_1.initialize();
+  let plugin_1 = ReceiveUpdatesPlugin::default();
+  client_1.add_plugin(Box::new(plugin_1.clone()));
+  client_1.insert("1", "a".to_string());
+  client_1.insert("2", "b".to_string());
+  client_1.insert("3", "c".to_string());
+
+  let mut client_2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], true);
+  client_2.initialize();
+  let plugin_2 = ReceiveUpdatesPlugin::default();
+  client_2.add_plugin(Box::new(plugin_2.clone()));
+  client_2.insert("4", "d".to_string());
+  client_2.insert("5", "e".to_string());
+  client_2.insert("6", "f".to_string());
+
+  let update_1 = std::mem::take(&mut *plugin_1.updates.write());
+  let update_2 = std::mem::take(&mut *plugin_2.updates.write());
+
+  let mut server = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  server.initialize();
+
+  // Split the updates into two parts and simulate partial reception by the server.
+  let (first_1, second_1) = update_1.split_at(2);
+  let (first_2, _second_2) = update_2.split_at(2);
+
+  // the second_1 updates will be deprecated when applying other client's update
+  server.with_origin_transact_mut(|txn| {
+    for update in second_1 {
+      let update = Update::decode_v1(&update).unwrap();
+      txn.apply_update(update);
+    }
+  });
+  // before the first_1 is not applied, so there is a pending update
+  assert!(server.transact().store().pending_update().is_some());
+
+  // apply the first_1 updates. after applying the first_1 updates, the pending update is none
+  server.with_origin_transact_mut(|txn| {
+    for update in first_2 {
+      let update = Update::decode_v1(&update).unwrap();
+      txn.apply_update(update);
+    }
+  });
+  assert_json_eq!(
+    server.to_json_value(),
+    json!({
+      "4": "d",
+      "5": "e"
+    })
+  );
+  assert!(server.transact().store().pending_update().is_none());
+
+  // the second_2 updates was deprecated
+  server.with_origin_transact_mut(|txn| {
+    for update in first_1 {
+      let update = Update::decode_v1(&update).unwrap();
+      txn.apply_update(update);
+    }
+  });
+  assert_json_eq!(
+    server.to_json_value(),
+    json!({
+      "1": "a",
+      "2": "b",
+      "4": "d",
+      "5": "e"
+    })
+  );
+  server.with_origin_transact_mut(|txn| {
+    for update in second_1 {
+      let update = Update::decode_v1(&update).unwrap();
+      txn.apply_update(update);
+    }
+  });
+  assert_json_eq!(
+    server.to_json_value(),
+    json!( {
+      "1": "a",
+      "2": "b",
+      "3": "c",
+      "4": "d",
+      "5": "e"
+    }),
   );
 }
 
