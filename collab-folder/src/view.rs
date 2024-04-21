@@ -53,8 +53,9 @@ impl ViewsMap {
     view_relations: Rc<ViewRelations>,
     section_map: Rc<SectionMap>,
     index_json_sender: IndexContentSender,
+    views: HashMap<String, Arc<View>>,
   ) -> ViewsMap {
-    let view_cache = Arc::new(RwLock::new(HashMap::new()));
+    let view_cache = Arc::new(RwLock::new(views));
     let subscription = change_tx.as_ref().map(|change_tx| {
       subscribe_view_change(
         uid,
