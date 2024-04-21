@@ -34,6 +34,9 @@ async fn create_view_with_sub_view_test() {
   let r_sub_view = folder_test.views.get_view(&r_view.children[0].id).unwrap();
   assert_eq!(child_view.name, r_sub_view.name);
   assert_eq!(child_view.parent_view_id, r_sub_view.parent_view_id);
+
+  let views = folder_test.views.get_all_views();
+  assert_eq!(views.len(), 3);
 }
 
 #[tokio::test]

@@ -711,7 +711,7 @@ fn open_folder<T: Into<UserId>>(
 
 fn get_views_from_root<T: ReadTxn>(
   root: &MapRefWrapper,
-  uid: &UserId,
+  _uid: &UserId,
   view_relations: &Rc<ViewRelations>,
   section_map: &Rc<SectionMap>,
   txn: &T,
@@ -720,7 +720,7 @@ fn get_views_from_root<T: ReadTxn>(
     .iter(txn)
     .flat_map(|(key, value)| {
       if let Value::YMap(map) = value {
-        view_from_map_ref(uid, &map, txn, view_relations, section_map)
+        view_from_map_ref(&map, txn, view_relations, section_map)
           .map(|view| (key.to_string(), Arc::new(view)))
       } else {
         None
