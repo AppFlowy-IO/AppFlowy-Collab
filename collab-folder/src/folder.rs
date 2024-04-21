@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -14,6 +15,7 @@ use tokio_stream::wrappers::WatchStream;
 use crate::error::FolderError;
 use crate::folder_observe::ViewChangeSender;
 use crate::section::{Section, SectionItem, SectionMap, SectionOperation};
+use crate::view::view_from_map_ref;
 use crate::{
   impl_section_op, subscribe_folder_change, FolderData, SectionChangeSender, TrashInfo, View,
   ViewRelations, ViewsMap, Workspace,
@@ -587,6 +589,7 @@ fn create_folder<T: Into<UserId>>(
       view_relations,
       section.clone(),
       index_json_sender,
+      HashMap::new(),
     ));
 
     if let Some(folder_data) = folder_data {
@@ -661,30 +664,33 @@ fn open_folder<T: Into<UserId>>(
   let folder_sub = subscribe_folder_change(&mut folder);
 
   // create the folder collab objects
-  let views = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEWS])?;
+  let view_y_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEWS])?;
   // let trash = collab_guard.get_array_with_txn(&txn, vec![FOLDER, TRASH])?;
-  let section = collab_guard.get_map_with_txn(&txn, vec![FOLDER, SECTION])?;
-  let meta = collab_guard.get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])?;
-  let children_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEW_RELATION])?;
+  let section_y_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, SECTION])?;
+  let meta_y_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])?;
+  let children_map_y_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEW_RELATION])?;
 
-  let view_relations = Rc::new(ViewRelations::new(children_map));
+  let view_relations = Rc::new(ViewRelations::new(children_map_y_map));
   let section_map = Rc::new(SectionMap::new(
     &txn,
     &uid,
-    section,
+    section_y_map,
     notifier
       .as_ref()
       .map(|notifier| notifier.section_change_tx.clone()),
   )?);
-  let views = Rc::new(ViewsMap::new(
+
+  let all_views = get_views_from_root(&folder, &uid, &view_relations, &section_map, &txn);
+  let views_map = Rc::new(ViewsMap::new(
     &uid,
-    views,
+    view_y_map,
     notifier
       .as_ref()
       .map(|notifier| notifier.view_change_tx.clone()),
     view_relations,
     section_map.clone(),
     index_json_sender,
+    all_views,
   ));
   drop(txn);
   drop(collab_guard);
@@ -693,12 +699,32 @@ fn open_folder<T: Into<UserId>>(
     uid,
     inner: collab,
     root: folder,
-    views,
+    views: views_map,
     section: section_map,
-    meta,
+    meta: meta_y_map,
     subscription: folder_sub,
     notifier,
   };
 
   Some(folder)
+}
+
+fn get_views_from_root<T: ReadTxn>(
+  root: &MapRefWrapper,
+  _uid: &UserId,
+  view_relations: &Rc<ViewRelations>,
+  section_map: &Rc<SectionMap>,
+  txn: &T,
+) -> HashMap<String, Arc<View>> {
+  root
+    .iter(txn)
+    .flat_map(|(key, value)| {
+      if let Value::YMap(map) = value {
+        view_from_map_ref(&map, txn, view_relations, section_map)
+          .map(|view| (key.to_string(), Arc::new(view)))
+      } else {
+        None
+      }
+    })
+    .collect()
 }
