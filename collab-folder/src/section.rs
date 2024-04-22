@@ -240,7 +240,10 @@ impl<'a> SectionOperation<'a> {
         let mut sections = vec![];
         for value in array.iter(txn) {
           if let YrsValue::Any(any) = value {
+            // let start = std::time::Instant::now();
+            // trace!("get_all_section_item data: {:?}", any);
             if let Ok(item) = SectionItem::try_from(&any) {
+              // trace!("get_all_section_item: {:?}: {:?}", item, start.elapsed());
               sections.push(item)
             }
           }

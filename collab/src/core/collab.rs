@@ -627,7 +627,7 @@ impl Collab {
   }
 
   pub fn transact(&self) -> Transaction {
-    TransactionRetry::new(&self.doc).get_read_txn()
+    TransactionRetry::new(&self.doc, &self.object_id).get_read_txn()
   }
 
   pub fn try_transaction(&self) -> Result<Transaction, CollabError> {
@@ -638,17 +638,17 @@ impl Collab {
   }
 
   pub fn try_transaction_mut(&self) -> Result<TransactionMut, CollabError> {
-    TransactionRetry::new(&self.doc).try_get_write_txn()
+    TransactionRetry::new(&self.doc, &self.object_id).try_get_write_txn()
   }
 
   pub fn try_origin_transaction_mut(&self) -> Result<TransactionMut, CollabError> {
-    TransactionRetry::new(&self.doc).try_get_write_txn_with(self.origin.clone())
+    TransactionRetry::new(&self.doc, &self.object_id).try_get_write_txn_with(self.origin.clone())
   }
 
   /// Returns a transaction that can mutate the document. This transaction will carry the
   /// origin of the current user.
   pub fn origin_transact_mut(&self) -> TransactionMut {
-    TransactionRetry::new(&self.doc).get_write_txn_with(self.origin.clone())
+    TransactionRetry::new(&self.doc, &self.object_id).get_write_txn_with(self.origin.clone())
   }
 
   /// Returns a transaction that can mutate the document. This transaction will carry the
@@ -660,7 +660,8 @@ impl Collab {
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let mut txn = TransactionRetry::new(&self.doc).get_write_txn_with(self.origin.clone());
+    let mut txn =
+      TransactionRetry::new(&self.doc, &self.object_id).get_write_txn_with(self.origin.clone());
     let ret = f(&mut txn);
     drop(txn);
     ret
@@ -669,13 +670,23 @@ impl Collab {
   fn map_wrapper_with(&self, map_ref: MapRef) -> MapRefWrapper {
     MapRefWrapper::new(
       map_ref,
-      CollabContext::new(self.origin.clone(), self.plugins.clone(), self.doc.clone()),
+      CollabContext::new(
+        self.origin.clone(),
+        self.plugins.clone(),
+        self.doc.clone(),
+        self.object_id.clone(),
+      ),
     )
   }
   fn array_wrapper_with(&self, array_ref: ArrayRef) -> ArrayRefWrapper {
     ArrayRefWrapper::new(
       array_ref,
-      CollabContext::new(self.origin.clone(), self.plugins.clone(), self.doc.clone()),
+      CollabContext::new(
+        self.origin.clone(),
+        self.plugins.clone(),
+        self.doc.clone(),
+        self.object_id.clone(),
+      ),
     )
   }
 }
@@ -824,26 +835,29 @@ pub struct CollabContext {
   doc: Doc,
   #[allow(dead_code)]
   plugins: Plugins,
+  object_id: String,
 }
 
 impl CollabContext {
-  fn new(origin: CollabOrigin, plugins: Plugins, doc: Doc) -> Self {
+  fn new(origin: CollabOrigin, plugins: Plugins, doc: Doc, object_id: String) -> Self {
     Self {
       origin,
       plugins,
       doc,
+      object_id,
     }
   }
 
   pub fn transact(&self) -> Transaction {
-    TransactionRetry::new(&self.doc).get_read_txn()
+    TransactionRetry::new(&self.doc, &self.object_id).get_read_txn()
   }
 
   pub fn with_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let mut txn = TransactionRetry::new(&self.doc).get_write_txn_with(self.origin.clone());
+    let mut txn =
+      TransactionRetry::new(&self.doc, &self.object_id).get_write_txn_with(self.origin.clone());
     let ret = f(&mut txn);
     drop(txn);
     ret

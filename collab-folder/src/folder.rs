@@ -680,7 +680,7 @@ fn open_folder<T: Into<UserId>>(
       .map(|notifier| notifier.section_change_tx.clone()),
   )?);
 
-  let all_views = get_views_from_root(&folder, &uid, &view_relations, &section_map, &txn);
+  let all_views = get_views_from_root(&view_y_map, &uid, &view_relations, &section_map, &txn);
   let views_map = Rc::new(ViewsMap::new(
     &uid,
     view_y_map,

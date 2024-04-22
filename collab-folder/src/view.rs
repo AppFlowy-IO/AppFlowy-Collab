@@ -11,6 +11,7 @@ use collab::preclude::{
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
+use tracing::{instrument, trace};
 
 use crate::folder_observe::ViewChangeSender;
 use crate::section::{Section, SectionItem, SectionMap};
@@ -56,6 +57,7 @@ impl ViewsMap {
     index_json_sender: IndexContentSender,
     views: HashMap<String, Arc<View>>,
   ) -> ViewsMap {
+    trace!("number of views in folder: {}", views.len());
     let view_cache = Arc::new(RwLock::new(views));
     let subscription = change_tx.as_ref().map(|change_tx| {
       subscribe_view_change(
@@ -233,6 +235,7 @@ impl ViewsMap {
       .collect()
   }
 
+  #[instrument(level = "trace", skip_all)]
   pub fn get_view(&self, view_id: &str) -> Option<Arc<View>> {
     match self.get_cache_view(view_id) {
       None => {
@@ -415,6 +418,7 @@ impl ViewsMap {
 
   fn set_cache_view(&self, view: Option<Arc<View>>) {
     if let Some(view) = view {
+      trace!("Update cache view: {}", view.id);
       self.cache.write().insert(view.id.clone(), view);
     }
   }
