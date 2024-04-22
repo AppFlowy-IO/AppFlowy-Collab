@@ -10,7 +10,7 @@ use collab::preclude::{
 use collab::util::deserialize_i64_from_numeric;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
-use tracing::{info, trace};
+use tracing::info;
 
 pub struct SectionMap {
   uid: UserId,
@@ -240,10 +240,10 @@ impl<'a> SectionOperation<'a> {
         let mut sections = vec![];
         for value in array.iter(txn) {
           if let YrsValue::Any(any) = value {
-            let start = std::time::Instant::now();
-            trace!("get_all_section_item data: {:?}", any);
+            // let start = std::time::Instant::now();
+            // trace!("get_all_section_item data: {:?}", any);
             if let Ok(item) = SectionItem::try_from(&any) {
-              trace!("get_all_section_item: {:?}: {:?}", item, start.elapsed());
+              // trace!("get_all_section_item: {:?}: {:?}", item, start.elapsed());
               sections.push(item)
             }
           }
