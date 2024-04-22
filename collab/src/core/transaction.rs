@@ -1,5 +1,6 @@
 use std::thread::sleep;
 use std::time::Duration;
+use tracing::instrument;
 
 use crate::core::collab_plugin::EncodedCollab;
 use yrs::updates::encoder::Encode;
@@ -17,18 +18,21 @@ pub struct TransactionRetry<'a> {
   doc: &'a Doc,
   timer: Timer,
   retry_interval: Duration,
+  object_id: &'a str,
 }
 
 impl<'a> TransactionRetry<'a> {
-  pub fn new(doc: &'a Doc) -> Self {
+  pub fn new(doc: &'a Doc, object_id: &'a str) -> Self {
     Self {
-      timeout: Duration::from_secs(2),
-      retry_interval: Duration::from_millis(50),
+      timeout: Duration::from_secs(1),
+      retry_interval: Duration::from_millis(300),
       doc,
       timer: Timer::start(),
+      object_id,
     }
   }
 
+  #[instrument(level = "trace", skip_all)]
   pub fn get_read_txn(&mut self) -> Transaction<'a> {
     while self.timer.elapsed() < self.timeout {
       match self.doc.try_transact() {
@@ -40,10 +44,11 @@ impl<'a> TransactionRetry<'a> {
         },
       }
     }
-    tracing::warn!("[Txn]: acquire read txn timeout");
+    tracing::warn!("[Txn]: acquire read txn timeout: {}", self.object_id);
     self.doc.transact()
   }
 
+  #[instrument(level = "trace", skip_all)]
   pub fn try_get_write_txn(&mut self) -> Result<TransactionMut<'a>, CollabError> {
     while self.timer.elapsed() < self.timeout {
       match self.doc.try_transact_mut() {
@@ -55,10 +60,11 @@ impl<'a> TransactionRetry<'a> {
         },
       }
     }
-    tracing::warn!("[Txn]: acquire write txn timeout");
+    tracing::warn!("[Txn]: acquire write txn timeout: {}", self.object_id);
     Err(CollabError::AcquiredWriteTxnFail)
   }
 
+  #[instrument(level = "trace", skip_all)]
   pub fn get_write_txn_with(&mut self, origin: CollabOrigin) -> TransactionMut<'a> {
     while self.timer.elapsed() < self.timeout {
       match self.doc.try_transact_mut_with(origin.clone()) {
@@ -70,10 +76,11 @@ impl<'a> TransactionRetry<'a> {
         },
       }
     }
-    tracing::warn!("[Txn]: acquire write txn timeout");
+    tracing::warn!("[Txn]: acquire write txn timeout: {}", self.object_id);
     self.doc.transact_mut_with(origin)
   }
 
+  #[instrument(level = "trace", skip_all)]
   pub fn try_get_write_txn_with(
     &mut self,
     origin: CollabOrigin,
@@ -88,7 +95,7 @@ impl<'a> TransactionRetry<'a> {
         },
       }
     }
-    tracing::warn!("[Txn]: acquire write txn timeout");
+    tracing::warn!("[Txn]: acquire write txn timeout: {}", self.object_id);
     Err(CollabError::AcquiredWriteTxnFail)
   }
 }

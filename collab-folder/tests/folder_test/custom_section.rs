@@ -1,6 +1,10 @@
 use assert_json_diff::assert_json_include;
-use collab_folder::{Section, SectionItem, UserId};
+use collab::preclude::Any;
+use collab_folder::{timestamp, Section, SectionItem, UserId};
 use serde_json::json;
+use std::collections::HashMap;
+use std::sync::Arc;
+
 
 use crate::util::create_folder_with_workspace;
 
@@ -38,5 +42,21 @@ async fn custom_section_test() {
         ]
       }
     }})
+  );
+}
+
+#[tokio::test]
+async fn section_serde_test() {
+  let mut data: HashMap<String, Any> = HashMap::new();
+  data.insert("id".to_string(), uuid::Uuid::new_v4().to_string().into());
+  data.insert("timestamp".to_string(), timestamp().into());
+  let any = Any::Map(Arc::new(data));
+  println!("Any: {:?}", any);
+  let start = std::time::Instant::now();
+  let item = SectionItem::try_from(&any).unwrap();
+  let elapsed = start.elapsed();
+  println!(
+    "Time to convert Any to SectionItem: {:?} {:?}",
+    item, elapsed
   );
 }
