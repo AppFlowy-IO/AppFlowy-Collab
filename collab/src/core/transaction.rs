@@ -24,8 +24,8 @@ pub struct TransactionRetry<'a> {
 impl<'a> TransactionRetry<'a> {
   pub fn new(doc: &'a Doc, object_id: &'a str) -> Self {
     Self {
-      timeout: Duration::from_secs(1),
-      retry_interval: Duration::from_millis(300),
+      timeout: Duration::from_secs(2),
+      retry_interval: Duration::from_millis(500),
       doc,
       timer: Timer::start(),
       object_id,
