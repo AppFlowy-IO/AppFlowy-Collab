@@ -36,7 +36,7 @@ pub trait AnyMapExtension {
       None
     };
 
-    info!("value: {:?}", start.elapsed());
+    info!("get_str_value: {:?}", start.elapsed());
     a
   }
 
