@@ -7,6 +7,7 @@ use std::sync::Arc;
 use serde::de::{MapAccess, Visitor};
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use tracing::info;
 use yrs::types::Value;
 use yrs::{Any, Array, Map, MapRef, ReadTxn, TransactionMut};
 
@@ -27,7 +28,9 @@ pub trait AnyMapExtension {
 
   /// Get the string value with the given key.
   fn get_str_value<K: AsRef<str>>(&self, key: K) -> Option<String> {
+    let start = std::time::Instant::now();
     let value = self.value().get(key.as_ref())?;
+    info!("value: {:?}", start.elapsed());
     if let Any::String(s) = value {
       Some(s.to_string())
     } else {
