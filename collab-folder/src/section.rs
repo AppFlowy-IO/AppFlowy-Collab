@@ -368,7 +368,7 @@ impl TryFrom<AnyMap> for SectionItem {
       None
     }
     .ok_or(anyhow::anyhow!("missing section item id"))?;
-    info!("id: {:?}", start.elapsed());
+    info!("parse id: {:?}", start.elapsed());
 
     let start = std::time::Instant::now();
     let timestamp = value.get_i64_value("timestamp").unwrap_or(timestamp());
