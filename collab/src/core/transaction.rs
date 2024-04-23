@@ -32,7 +32,6 @@ impl<'a> TransactionRetry<'a> {
     }
   }
 
-  #[instrument(level = "trace", skip_all)]
   pub fn get_read_txn(&mut self) -> Transaction<'a> {
     while self.timer.elapsed() < self.timeout {
       match self.doc.try_transact() {
