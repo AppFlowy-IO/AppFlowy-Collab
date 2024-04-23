@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, trace};
 use uuid::Uuid;
 
-use crate::database::{gen_row_id, timestamp};
+use crate::database::timestamp;
 use crate::error::DatabaseError;
 use crate::rows::{
   subscribe_row_data_change, Cell, Cells, CellsUpdate, RowChangeSender, RowId, RowMeta,
@@ -534,6 +534,7 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, _meta_ref: &MapRef, txn: &
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CreateRowParams {
   pub id: RowId,
+  pub database_id: String,
   pub cells: Cells,
   pub height: i32,
   pub visibility: bool,
@@ -563,29 +564,38 @@ impl CreateRowParamsValidator {
   }
 }
 
-impl Default for CreateRowParams {
-  fn default() -> Self {
+impl CreateRowParams {
+  pub fn new<T: Into<RowId>>(id: T, database_id: String) -> Self {
+    let timestamp = timestamp();
     Self {
-      id: gen_row_id(),
-      cells: Cells::default(),
+      id: id.into(),
+      database_id,
+      cells: Default::default(),
       height: 60,
       visibility: true,
       row_position: OrderObjectPosition::default(),
-      created_at: 0,
-      modified_at: 0,
-    }
-  }
-}
-
-impl CreateRowParams {
-  pub fn new(id: RowId) -> Self {
-    let timestamp = timestamp();
-    Self {
-      id,
       created_at: timestamp,
       modified_at: timestamp,
-      ..Default::default()
     }
+  }
+
+  pub fn with_cells(mut self, cells: Cells) -> Self {
+    self.cells = cells;
+    self
+  }
+
+  pub fn with_height(mut self, height: i32) -> Self {
+    self.height = height;
+    self
+  }
+
+  pub fn with_visibility(mut self, visibility: bool) -> Self {
+    self.visibility = visibility;
+    self
+  }
+  pub fn with_row_position(mut self, row_position: OrderObjectPosition) -> Self {
+    self.row_position = row_position;
+    self
   }
 }
 

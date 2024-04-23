@@ -1164,10 +1164,12 @@ impl Database {
 
   /// Duplicate the row, and insert it after the original row.
   pub fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
+    let database_id = self.get_database_id();
     let row = self.block.get_row(row_id);
     let timestamp = timestamp();
     Some(CreateRowParams {
       id: gen_row_id(),
+      database_id,
       cells: row.cells,
       height: row.height,
       visibility: row.visibility,

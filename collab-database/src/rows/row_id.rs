@@ -38,6 +38,12 @@ impl From<RowId> for String {
   }
 }
 
+impl From<uuid::Uuid> for RowId {
+  fn from(data: uuid::Uuid) -> Self {
+    Self(data.to_string())
+  }
+}
+
 impl From<i32> for RowId {
   fn from(data: i32) -> Self {
     Self(data.to_string())

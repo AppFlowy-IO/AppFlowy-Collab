@@ -10,20 +10,15 @@ use crate::helper::unzip_history_database_db;
 
 #[tokio::test]
 async fn restore_row_from_disk_test() {
-  let (db, database_test) = create_database_with_db(1, "1").await;
-  let row_1 = CreateRowParams {
-    id: 1.into(),
-    ..Default::default()
-  };
-  let row_2 = CreateRowParams {
-    id: 2.into(),
-    ..Default::default()
-  };
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let (db, database_test) = create_database_with_db(1, &database_id).await;
+  let row_1 = CreateRowParams::new(1, database_id.clone());
+  let row_2 = CreateRowParams::new(2, database_id.clone());
   database_test.create_row(row_1.clone()).unwrap();
   database_test.create_row(row_2.clone()).unwrap();
   drop(database_test);
 
-  let database_test = restore_database_from_db(1, "1", db);
+  let database_test = restore_database_from_db(1, &database_id, db);
   let rows = database_test.get_rows_for_view("v1");
   assert_eq!(rows.len(), 2);
 

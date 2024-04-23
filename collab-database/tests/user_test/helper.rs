@@ -178,34 +178,25 @@ pub async fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabase
 }
 
 fn create_database_params(database_id: &str) -> CreateDatabaseParams {
-  let row_1 = CreateRowParams {
-    id: 1.into(),
-    cells: CellsBuilder::new()
+  let row_1 = CreateRowParams::new(1, database_id.to_string()).with_cells(
+    CellsBuilder::new()
       .insert_cell("f1", TestTextCell::from("1f1cell"))
       .insert_cell("f2", TestTextCell::from("1f2cell"))
       .insert_cell("f3", TestTextCell::from("1f3cell"))
       .build(),
-    height: 0,
-    ..Default::default()
-  };
-  let row_2 = CreateRowParams {
-    id: 2.into(),
-    cells: CellsBuilder::new()
+  );
+  let row_2 = CreateRowParams::new(2, database_id.to_string()).with_cells(
+    CellsBuilder::new()
       .insert_cell("f1", TestTextCell::from("2f1cell"))
       .insert_cell("f2", TestTextCell::from("2f2cell"))
       .build(),
-    height: 0,
-    ..Default::default()
-  };
-  let row_3 = CreateRowParams {
-    id: 3.into(),
-    cells: CellsBuilder::new()
+  );
+  let row_3 = CreateRowParams::new(3, database_id.to_string()).with_cells(
+    CellsBuilder::new()
       .insert_cell("f1", TestTextCell::from("3f1cell"))
       .insert_cell("f3", TestTextCell::from("3f3cell"))
       .build(),
-    height: 0,
-    ..Default::default()
-  };
+  );
   let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);
@@ -277,7 +268,7 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
     database_id: database_id.clone(),
     inline_view_id: view_id.to_string(),
     views: vec![CreateViewParams {
-      database_id,
+      database_id: database_id.clone(),
       view_id: view_id.to_string(),
       name: name.to_string(),
       layout: DatabaseLayout::Grid,
@@ -285,9 +276,9 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
       ..Default::default()
     }],
     rows: vec![
-      CreateRowParams::new(gen_row_id()),
-      CreateRowParams::new(gen_row_id()),
-      CreateRowParams::new(gen_row_id()),
+      CreateRowParams::new(gen_row_id(), database_id.clone()),
+      CreateRowParams::new(gen_row_id(), database_id.clone()),
+      CreateRowParams::new(gen_row_id(), database_id.clone()),
     ],
     fields: vec![text_field, single_select_field, checkbox_field],
   }

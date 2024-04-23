@@ -81,10 +81,11 @@ async fn update_not_exist_row_test() {
 }
 
 async fn user_database_with_default_row() -> WorkspaceDatabaseTest {
+  let database_id = "d1".to_string();
   let test = workspace_database_test(1).await;
   let database = test
     .create_database(CreateDatabaseParams {
-      database_id: "d1".to_string(),
+      database_id: database_id.clone(),
       inline_view_id: "v1".to_string(),
       views: vec![CreateViewParams {
         database_id: "d1".to_string(),
@@ -95,13 +96,9 @@ async fn user_database_with_default_row() -> WorkspaceDatabaseTest {
     })
     .unwrap();
 
-  database.lock().create_row_in_view(
-    "v1",
-    CreateRowParams {
-      id: 1.into(),
-      ..Default::default()
-    },
-  );
+  database
+    .lock()
+    .create_row_in_view("v1", CreateRowParams::new(1, database_id));
 
   test
 }

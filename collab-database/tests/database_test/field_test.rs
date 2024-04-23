@@ -7,7 +7,8 @@ use crate::database_test::helper::{
 
 #[tokio::test]
 async fn create_single_field_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   database_test.create_field(
     None,
     Field::new("f1".to_string(), "text field".to_string(), 0, true),
@@ -56,7 +57,8 @@ async fn duplicate_field_test2() {
 
 #[tokio::test]
 async fn create_multiple_field_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   for i in 0..10 {
     database_test.create_field(
       None,
@@ -72,7 +74,8 @@ async fn create_multiple_field_test() {
 
 #[tokio::test]
 async fn create_field_in_view_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
@@ -121,7 +124,8 @@ async fn create_field_in_view_test() {
 
 #[tokio::test]
 async fn delete_field_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   for i in 0..3 {
     database_test.create_field(
       None,
@@ -138,7 +142,8 @@ async fn delete_field_test() {
 
 #[tokio::test]
 async fn delete_field_in_views_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   for i in 0..3 {
     database_test.create_field(
       None,
@@ -164,7 +169,8 @@ async fn delete_field_in_views_test() {
 
 #[tokio::test]
 async fn field_order_in_view_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v1".to_string(),
@@ -191,7 +197,8 @@ async fn field_order_in_view_test() {
 
 #[tokio::test]
 async fn get_field_in_order_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   for i in 0..3 {
     database_test.create_field(
       None,
@@ -216,7 +223,8 @@ async fn get_field_in_order_test() {
 
 #[tokio::test]
 async fn move_field_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
@@ -250,7 +258,8 @@ async fn move_field_test() {
 
 #[tokio::test]
 async fn move_field_to_out_of_index_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   for i in 0..3 {
     database_test.create_field(
       None,

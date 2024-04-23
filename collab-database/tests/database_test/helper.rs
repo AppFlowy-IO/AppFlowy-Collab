@@ -266,34 +266,25 @@ impl DatabaseTestBuilder {
 /// Create a database with default data
 /// It will create a default view with id 'v1'
 pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
-  let row_1 = CreateRowParams {
-    id: 1.into(),
-    cells: CellsBuilder::new()
+  let row_1 = CreateRowParams::new(1, database_id.to_string()).with_cells(
+    CellsBuilder::new()
       .insert_cell("f1", TestTextCell::from("1f1cell"))
       .insert_cell("f2", TestTextCell::from("1f2cell"))
       .insert_cell("f3", TestTextCell::from("1f3cell"))
       .build(),
-    height: 0,
-    ..Default::default()
-  };
-  let row_2 = CreateRowParams {
-    id: 2.into(),
-    cells: CellsBuilder::new()
+  );
+  let row_2 = CreateRowParams::new(2, database_id.to_string()).with_cells(
+    CellsBuilder::new()
       .insert_cell("f1", TestTextCell::from("2f1cell"))
       .insert_cell("f2", TestTextCell::from("2f2cell"))
       .build(),
-    height: 0,
-    ..Default::default()
-  };
-  let row_3 = CreateRowParams {
-    id: 3.into(),
-    cells: CellsBuilder::new()
+  );
+  let row_3 = CreateRowParams::new(3, database_id.to_string()).with_cells(
+    CellsBuilder::new()
       .insert_cell("f1", TestTextCell::from("3f1cell"))
       .insert_cell("f3", TestTextCell::from("3f3cell"))
       .build(),
-    height: 0,
-    ..Default::default()
-  };
+  );
 
   let database_test = create_database(uid, database_id).await;
   database_test.create_row(row_1).unwrap();

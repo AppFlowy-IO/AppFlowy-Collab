@@ -172,7 +172,6 @@ impl CreateDatabaseParams {
   /// `row_id`s will all be regenerated.
   pub fn from_database_data(data: DatabaseData) -> Self {
     let (database_id, inline_view_id) = (gen_database_id(), gen_database_view_id());
-
     let timestamp = timestamp();
 
     let create_row_params = data
@@ -180,6 +179,7 @@ impl CreateDatabaseParams {
       .into_iter()
       .map(|row| CreateRowParams {
         id: gen_row_id(),
+        database_id: database_id.clone(),
         created_at: timestamp,
         modified_at: timestamp,
         cells: row.cells,

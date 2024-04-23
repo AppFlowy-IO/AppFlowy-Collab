@@ -31,7 +31,7 @@ rayon = "1.9.0"
 dashmap = "5"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { version = "0.2", features = ["js"]}
+getrandom = { version = "0.2", features = ["js"] }
 js-sys = "0.3"
 
 [dev-dependencies]
@@ -44,5 +44,6 @@ tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 rand = "0.8.4"
 futures = "0.3.30"
 zip = "0.6.6"
+
 
 
