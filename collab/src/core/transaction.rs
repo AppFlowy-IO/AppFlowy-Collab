@@ -170,11 +170,22 @@ impl<'a> DerefMut for TransactionMutWrapper<'a> {
 impl Drop for TransactionMutWrapper<'_> {
   fn drop(&mut self) {
     #[cfg(feature = "trace_transact")]
-    tracing::trace!(
-      "{} drop write transact after {:?}",
-      self.object_id,
-      self.acquire_time.elapsed()
-    );
+    {
+      let elapsed = self.acquire_time.elapsed();
+      let log_level = if elapsed > Duration::from_secs(5) {
+        ("error", "drop write transaction after {:?}")
+      } else if elapsed > Duration::from_secs(3) {
+        ("warn", "drop write transaction after {:?}")
+      } else {
+        ("trace", "drop write transaction after {:?}")
+      };
+
+      match log_level {
+        ("error", msg) => tracing::error!(msg, self.object_id, elapsed),
+        ("warn", msg) => tracing::warn!(msg, self.object_id, elapsed),
+        (_, msg) => tracing::trace!(msg, self.object_id, elapsed),
+      }
+    }
   }
 }
 
