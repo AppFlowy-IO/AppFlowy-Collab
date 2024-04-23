@@ -32,16 +32,13 @@ pub trait AnyMapExtension {
   /// Get the string value with the given key.
   #[inline]
   fn get_str_value<K: AsRef<str>>(&self, key: K) -> Option<String> {
-    let value = self.value().get(key.as_ref())?;
-    let start = std::time::Instant::now();
-    let a = if let Any::String(s) = value {
-      Some(s.to_string())
-    } else {
-      None
-    };
-
-    info!("get_str_value: {:?}", start.elapsed());
-    a
+    self.value().get(key.as_ref()).and_then(|v| {
+      if let Any::String(s) = v {
+        Some(s.to_string())
+      } else {
+        None
+      }
+    })
   }
 
   /// Insert the i64 value with the given key.
