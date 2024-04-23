@@ -172,19 +172,13 @@ impl Drop for TransactionMutWrapper<'_> {
     #[cfg(feature = "trace_transact")]
     {
       let elapsed = self.acquire_time.elapsed();
-      let log_level = if elapsed > Duration::from_secs(5) {
-        ("error", "drop write transaction after {:?}")
+      if elapsed > Duration::from_secs(5) {
+        tracing::error!("drop write transaction after {:?}", self.object_id, elapsed);
       } else if elapsed > Duration::from_secs(3) {
-        ("warn", "drop write transaction after {:?}")
+        tracing::warn!("drop write transaction after {:?}", self.object_id, elapsed);
       } else {
-        ("trace", "drop write transaction after {:?}")
+        tracing::trace!("drop write transaction after {:?}", self.object_id, elapsed);
       };
-
-      match log_level {
-        ("error", msg) => tracing::error!(msg, self.object_id, elapsed),
-        ("warn", msg) => tracing::warn!(msg, self.object_id, elapsed),
-        (_, msg) => tracing::trace!(msg, self.object_id, elapsed),
-      }
     }
   }
 }
