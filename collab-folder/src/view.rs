@@ -73,7 +73,7 @@ impl ViewsMap {
     Self {
       uid: uid.clone(),
       container: root,
-      subscription,
+      subscription: None,
       change_tx,
       view_relations,
       cache: view_cache,
