@@ -40,4 +40,4 @@ tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 [features]
 default = []
 verbose_log = []
-transact_trace = []
+trace_transact = []

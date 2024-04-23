@@ -134,18 +134,18 @@ pub struct TransactionMutWrapper<'a> {
   txn: TransactionMut<'a>,
   #[allow(dead_code)]
   object_id: &'a str,
-  #[cfg(feature = "transact_trace")]
+  #[cfg(feature = "trace_transact")]
   acquire_time: std::time::Instant,
 }
 
 impl<'a> TransactionMutWrapper<'a> {
   pub fn new(txn: TransactionMut<'a>, object_id: &'a str) -> Self {
-    #[cfg(feature = "transact_trace")]
+    #[cfg(feature = "trace_transact")]
     let acquire_time = std::time::Instant::now();
     Self {
       txn,
       object_id,
-      #[cfg(feature = "transact_trace")]
+      #[cfg(feature = "trace_transact")]
       acquire_time,
     }
   }
@@ -169,7 +169,7 @@ impl<'a> DerefMut for TransactionMutWrapper<'a> {
 }
 impl Drop for TransactionMutWrapper<'_> {
   fn drop(&mut self) {
-    #[cfg(feature = "transact_trace")]
+    #[cfg(feature = "trace_transact")]
     tracing::trace!(
       "{} drop write transact after {:?}",
       self.object_id,
