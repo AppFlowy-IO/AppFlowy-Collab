@@ -15,11 +15,14 @@ use crate::preclude::{JsonValue, MapRefExtension, YrsValue};
 
 /// A wrapper around `yrs::Map` that provides a more ergonomic API.
 pub trait AnyMapExtension {
+  #[inline]
   fn value(&self) -> &HashMap<String, Any>;
 
+  #[inline]
   fn mut_value(&mut self) -> &mut HashMap<String, Any>;
 
   /// Insert the string value with the given key.
+  #[inline]
   fn insert_str_value<K: AsRef<str>>(&mut self, key: K, s: String) {
     let _ = self
       .mut_value()
@@ -27,6 +30,7 @@ pub trait AnyMapExtension {
   }
 
   /// Get the string value with the given key.
+  #[inline]
   fn get_str_value<K: AsRef<str>>(&self, key: K) -> Option<String> {
     let value = self.value().get(key.as_ref())?;
     let start = std::time::Instant::now();
@@ -41,6 +45,7 @@ pub trait AnyMapExtension {
   }
 
   /// Insert the i64 value with the given key.
+  #[inline]
   fn insert_i64_value<K: AsRef<str>>(&mut self, key: K, value: i64) {
     let _ = self
       .mut_value()
@@ -48,6 +53,7 @@ pub trait AnyMapExtension {
   }
 
   /// Get the i64 value with the given key.
+  #[inline]
   fn get_i64_value<K: AsRef<str>>(&self, key: K) -> Option<i64> {
     let value = self.value().get(key.as_ref())?;
     if let Any::BigInt(num) = value {
@@ -58,6 +64,7 @@ pub trait AnyMapExtension {
   }
 
   /// Insert the f64 value with the given key.
+  #[inline]
   fn insert_f64_value<K: AsRef<str>>(&mut self, key: K, value: f64) {
     let _ = self
       .mut_value()
@@ -65,6 +72,7 @@ pub trait AnyMapExtension {
   }
 
   /// Get the f64 value with the given key.
+  #[inline]
   fn get_f64_value<K: AsRef<str>>(&self, key: K) -> Option<f64> {
     let value = self.value().get(key.as_ref())?;
     if let Any::Number(num) = value {
@@ -75,6 +83,7 @@ pub trait AnyMapExtension {
   }
 
   /// Insert the bool value with the given key.
+  #[inline]
   fn insert_bool_value<K: AsRef<str>>(&mut self, key: K, value: bool) {
     let _ = self
       .mut_value()
@@ -82,6 +91,7 @@ pub trait AnyMapExtension {
   }
 
   /// Get the bool value with the given key.
+  #[inline]
   fn get_bool_value<K: AsRef<str>>(&self, key: K) -> Option<bool> {
     let value = self.value().get(key.as_ref())?;
     if let Any::Bool(value) = value {
@@ -110,6 +120,7 @@ pub trait AnyMapExtension {
 
   /// Try to get the maps with the given key.
   /// It [T] can't be converted from [AnyMap], it will be ignored.
+  #[inline]
   fn try_get_array<K: AsRef<str>, T: TryFrom<AnyMap>>(&self, key: K) -> Vec<T> {
     if let Some(Any::Array(array)) = self.value().get(key.as_ref()) {
       return array
@@ -128,6 +139,7 @@ pub trait AnyMapExtension {
 
   /// Insert the maps with the given key.
   /// It will override the old maps with the same id.
+  #[inline]
   fn insert_array<K: AsRef<str>, T: Into<AnyMap>>(&mut self, key: K, items: Vec<T>) {
     let key = key.as_ref();
     let array = items_to_lib_0_array(items);
@@ -135,6 +147,7 @@ pub trait AnyMapExtension {
   }
 
   /// Extends the maps with the given key.
+  #[inline]
   fn extend_with_array<K: AsRef<str>, T: Into<AnyMap>>(&mut self, key: K, items: Vec<T>) {
     let key = key.as_ref();
     let items = items_to_anys(items);
@@ -153,6 +166,7 @@ pub trait AnyMapExtension {
 
   /// Remove the maps with the given ids.
   /// It requires the element to have an [id] field. Otherwise, it will be ignored.
+  #[inline]
   fn remove_array_element<K: AsRef<str>>(&mut self, key: K, ids: &[&str]) {
     if let Some(Any::Array(array)) = self.value().get(key.as_ref()) {
       let new_array = array
