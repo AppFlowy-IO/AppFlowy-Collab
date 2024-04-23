@@ -362,12 +362,13 @@ impl TryFrom<AnyMap> for SectionItem {
 
     let value1 = value.get("id").unwrap();
     let start = std::time::Instant::now();
-    let id = if let Any::String(s) = value1 {
-      Some(s.to_string())
-    } else {
-      None
-    }
-    .ok_or(anyhow::anyhow!("missing section item id"))?;
+    let id = "1".to_string();
+    // if let Any::String(s) = value1 {
+    //   Some(s.to_string())
+    // } else {
+    //   None
+    // }
+    // .ok_or(anyhow::anyhow!("missing section item id"))?;
     info!("parse id: {:?}", start.elapsed());
 
     let start = std::time::Instant::now();
