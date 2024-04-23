@@ -228,6 +228,7 @@ impl Database {
 
         let block = Block::new(
           context.uid,
+          database_id.to_string(),
           context.db.clone(),
           context.collab_service.clone(),
           context
@@ -301,6 +302,7 @@ impl Database {
 
     let block = Block::new(
       context.uid,
+      database_id.to_string(),
       context.db.clone(),
       context.collab_service.clone(),
       context

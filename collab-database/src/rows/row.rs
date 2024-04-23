@@ -68,7 +68,7 @@ impl DatabaseRow {
           RowBuilder::new(txn, data.clone().into_inner(), meta.clone().into_inner())
             .update(|update| {
               update
-                .set_row_id(row.id)
+                .set_row_id(row.id, row.database_id)
                 .set_height(row.height)
                 .set_visibility(row.visibility)
                 .set_created_at(row.created_at)
@@ -270,6 +270,7 @@ impl RowDetail {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Row {
   pub id: RowId,
+  pub database_id: String,
   pub cells: Cells,
   pub height: i32,
   pub visibility: bool,
@@ -301,10 +302,11 @@ impl Row {
   /// The default height of a [Row] is 60
   /// The default visibility of a [Row] is true
   /// The default created_at of a [Row] is the current timestamp
-  pub fn new<R: Into<RowId>>(id: R) -> Self {
+  pub fn new<R: Into<RowId>>(id: R, database_id: &str) -> Self {
     let timestamp = timestamp();
     Row {
       id: id.into(),
+      database_id: database_id.to_string(),
       cells: Default::default(),
       height: DEFAULT_ROW_HEIGHT,
       visibility: true,
@@ -313,9 +315,10 @@ impl Row {
     }
   }
 
-  pub fn empty(row_id: RowId) -> Self {
+  pub fn empty(row_id: RowId, database_id: &str) -> Self {
     Self {
       id: row_id,
+      database_id: database_id.to_string(),
       cells: Cells::new(),
       height: DEFAULT_ROW_HEIGHT,
       visibility: true,
@@ -412,7 +415,7 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
     LAST_MODIFIED
   );
 
-  pub fn set_row_id(self, new_row_id: RowId) -> Self {
+  pub fn set_row_id(self, new_row_id: RowId, database_id: String) -> Self {
     let old_row_meta = row_id_from_map_ref(self.txn, self.map_ref)
       .and_then(|row_id| row_id.parse::<Uuid>().ok())
       .map(|row_id| RowMeta::from_map_ref(self.txn, &row_id, self.meta_ref));
@@ -420,6 +423,10 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
     self
       .map_ref
       .insert_str_with_txn(self.txn, ROW_ID, new_row_id.clone());
+
+    self
+      .map_ref
+      .insert_str_with_txn(self.txn, ROW_DATABASE_ID, database_id);
 
     if let Ok(new_row_id) = new_row_id.parse::<Uuid>() {
       self.meta_ref.clear(self.txn);
@@ -456,6 +463,7 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
 }
 
 pub(crate) const ROW_ID: &str = "id";
+pub(crate) const ROW_DATABASE_ID: &str = "database_id";
 pub(crate) const ROW_VISIBILITY: &str = "visibility";
 
 pub const ROW_HEIGHT: &str = "height";
@@ -502,6 +510,10 @@ pub fn row_id_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<RowI
 /// Return a [Row] from a [MapRef]
 pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, _meta_ref: &MapRef, txn: &T) -> Option<Row> {
   let id = RowId::from(map_ref.get_str_with_txn(txn, ROW_ID)?);
+  // for historical data, there is no database_id. we use empty database id instead
+  let database_id = map_ref
+    .get_str_with_txn(txn, ROW_DATABASE_ID)
+    .unwrap_or_default();
   let visibility = map_ref
     .get_bool_with_txn(txn, ROW_VISIBILITY)
     .unwrap_or(true);
@@ -523,6 +535,7 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, _meta_ref: &MapRef, txn: &
 
   Some(Row {
     id,
+    database_id,
     cells,
     height: height as i32,
     visibility,
@@ -603,6 +616,7 @@ impl From<CreateRowParams> for Row {
   fn from(params: CreateRowParams) -> Self {
     Row {
       id: params.id,
+      database_id: params.database_id,
       cells: params.cells,
       height: params.height,
       visibility: params.visibility,

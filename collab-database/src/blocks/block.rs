@@ -38,6 +38,7 @@ pub enum BlockEvent {
 #[derive(Clone)]
 pub struct Block {
   uid: i64,
+  database_id: String,
   collab_db: Weak<CollabKVDB>,
   collab_service: Arc<dyn DatabaseCollabService>,
   task_controller: Arc<BlockTaskController>,
@@ -50,6 +51,7 @@ pub struct Block {
 impl Block {
   pub fn new(
     uid: i64,
+    database_id: String,
     collab_db: Weak<CollabKVDB>,
     collab_service: Arc<dyn DatabaseCollabService>,
     row_change_tx: Option<RowChangeSender>,
@@ -59,6 +61,7 @@ impl Block {
     let (notifier, _) = broadcast::channel(1000);
     Self {
       uid,
+      database_id,
       collab_db,
       task_controller,
       collab_service,
@@ -173,7 +176,7 @@ impl Block {
     self
       .get_or_init_row(row_id)
       .and_then(|row| row.lock().get_row())
-      .unwrap_or_else(|| Row::empty(row_id.clone()))
+      .unwrap_or_else(|| Row::empty(row_id.clone(), &self.database_id))
   }
 
   pub fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
@@ -197,7 +200,7 @@ impl Block {
       let row = self
         .get_or_init_row(&row_order.id)
         .and_then(|row| row.lock().get_row())
-        .unwrap_or_else(|| Row::empty(row_order.id.clone()));
+        .unwrap_or_else(|| Row::empty(row_order.id.clone(), &self.database_id));
       rows.push(row);
     }
     rows
