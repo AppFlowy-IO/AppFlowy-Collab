@@ -17,8 +17,6 @@ pub struct SectionMap {
   container: MapRefWrapper,
   #[allow(dead_code)]
   change_tx: Option<SectionChangeSender>,
-  #[allow(dead_code)]
-  subscription: DeepEventsSubscription,
 }
 
 impl SectionMap {
@@ -36,12 +34,10 @@ impl SectionMap {
       root.create_map_with_txn_if_not_exist(txn, section.as_ref());
     }
 
-    let subscription = subscribe_section_change(&mut root);
     Self {
       uid: uid.clone(),
       container: root,
       change_tx,
-      subscription,
     }
   }
 
@@ -68,12 +64,10 @@ impl SectionMap {
       }
     }
 
-    let subscription = subscribe_section_change(&mut root);
     Some(Self {
       uid: uid.clone(),
       container: root,
       change_tx,
-      subscription,
     })
   }
 
@@ -405,8 +399,4 @@ impl TryFrom<&YrsValue> for SectionItem {
       _ => bail!("Invalid section yrs value"),
     }
   }
-}
-
-fn subscribe_section_change(map: &mut MapRefWrapper) -> DeepEventsSubscription {
-  map.observe_deep(move |_txn, _events| {})
 }

@@ -218,6 +218,7 @@ async fn deserialize_folder_data() {
     vec![],
     true,
   )));
+  collab.lock().initialize();
   let folder = MutexFolder::new(Folder::create(1, collab.clone(), None, folder_data));
 
   let mut handles = vec![];
