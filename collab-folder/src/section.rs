@@ -259,7 +259,9 @@ impl<'a> SectionOperation<'a> {
     txn: &mut TransactionMut,
     ids: Vec<T>,
   ) {
+    let start = std::time::Instant::now();
     if let Some(fav_array) = self.container().get_array_ref_with_txn(txn, self.uid()) {
+      info!("section_op_with_txn takes {:?}", start.elapsed());
       for id in &ids {
         if let Some(pos) = self
           .get_all_section_item_with_txn(txn)
@@ -270,19 +272,20 @@ impl<'a> SectionOperation<'a> {
         }
       }
 
-      if let Some(change_tx) = self.change_tx.as_ref() {
-        match self.section {
-          Section::Favorite => {},
-          Section::Recent => {},
-          Section::Trash => {
-            let _ = change_tx.send(SectionChange::Trash(TrashSectionChange::TrashItemRemoved {
-              ids: ids.into_iter().map(|id| id.as_ref().to_string()).collect(),
-            }));
-          },
-          Section::Custom(_) => {},
-          Section::Private => {},
-        }
-      }
+      info!("delete_section_items_with_txn takes {:?}", start.elapsed());
+      // if let Some(change_tx) = self.change_tx.as_ref() {
+      //   match self.section {
+      //     Section::Favorite => {},
+      //     Section::Recent => {},
+      //     Section::Trash => {
+      //       let _ = change_tx.send(SectionChange::Trash(TrashSectionChange::TrashItemRemoved {
+      //         ids: ids.into_iter().map(|id| id.as_ref().to_string()).collect(),
+      //       }));
+      //     },
+      //     Section::Custom(_) => {},
+      //     Section::Private => {},
+      //   }
+      // }
     }
   }
 
