@@ -234,10 +234,7 @@ impl<'a> SectionOperation<'a> {
         let mut sections = vec![];
         for value in array.iter(txn) {
           if let YrsValue::Any(any) = value {
-            // let start = std::time::Instant::now();
-            // trace!("get_all_section_item data: {:?}", any);
             if let Ok(item) = SectionItem::try_from(&any) {
-              // trace!("get_all_section_item: {:?}: {:?}", item, start.elapsed());
               sections.push(item)
             }
           }
@@ -380,8 +377,12 @@ impl TryFrom<&Any> for SectionItem {
   type Error = anyhow::Error;
 
   fn try_from(any: &Any) -> Result<Self, Self::Error> {
+    let start = std::time::Instant::now();
     let any_map = AnyMap::from(any);
-    Self::try_from(any_map)
+    info!("AnyMap: {:?}", start.elapsed());
+    let a = Self::try_from(any_map);
+    info!("SectionItem: {:?}", start.elapsed());
+    a
   }
 }
 
