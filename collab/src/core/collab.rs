@@ -32,7 +32,7 @@ use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedCollab};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
-use crate::core::transaction::{DocTransactionExtension, TransactionRetry};
+use crate::core::transaction::{DocTransactionExtension, TransactionMutWrapper, TransactionRetry};
 use crate::core::value::YrsValueExtension;
 use crate::error::CollabError;
 use crate::preclude::{ArrayRefWrapper, JsonValue, MapRefExtension};
@@ -637,7 +637,7 @@ impl Collab {
       .map_err(|e| CollabError::Internal(Box::new(e)))
   }
 
-  pub fn try_transaction_mut(&self) -> Result<TransactionMut, CollabError> {
+  pub fn try_transaction_mut(&self) -> Result<TransactionMutWrapper, CollabError> {
     TransactionRetry::new(&self.doc, &self.object_id).try_get_write_txn()
   }
 
@@ -648,7 +648,7 @@ impl Collab {
   /// Returns a transaction that can mutate the document. This transaction will carry the
   /// origin of the current user.
   #[instrument(level = "trace", skip_all)]
-  pub fn origin_transact_mut(&self) -> TransactionMut {
+  pub fn origin_transact_mut(&self) -> TransactionMutWrapper {
     TransactionRetry::new(&self.doc, &self.object_id).get_write_txn_with(self.origin.clone())
   }
 
