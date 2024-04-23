@@ -3,6 +3,7 @@ use std::ops::{Deref, DerefMut};
 use crate::core::value::YrsValueExtension;
 use anyhow::Result;
 use serde::Serialize;
+use tracing::info;
 use yrs::block::Prelim;
 use yrs::{
   Any, Array, ArrayRef, MapPrelim, MapRef, ReadTxn, Transact, Transaction, TransactionMut,
@@ -63,8 +64,14 @@ impl ArrayRefWrapper {
   }
 
   pub fn remove_with_txn(&self, txn: &mut TransactionMut, index: u32) -> Option<YrsValue> {
+    let start = std::time::Instant::now();
     let value = self.array_ref.get(txn, index);
     self.array_ref.remove(txn, index);
+    info!(
+      "remove_with_txn: index={}, elapsed={:?}",
+      index,
+      start.elapsed()
+    );
     value
   }
 

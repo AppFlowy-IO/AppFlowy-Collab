@@ -261,7 +261,6 @@ impl<'a> SectionOperation<'a> {
   ) {
     let start = std::time::Instant::now();
     if let Some(fav_array) = self.container().get_array_ref_with_txn(txn, self.uid()) {
-      info!("section_op_with_txn takes {:?}", start.elapsed());
       for id in &ids {
         if let Some(pos) = self
           .get_all_section_item_with_txn(txn)
@@ -269,10 +268,10 @@ impl<'a> SectionOperation<'a> {
           .position(|item| item.id == id.as_ref())
         {
           fav_array.remove_with_txn(txn, pos as u32);
+          info!("section_op_with_txn takes {:?}", start.elapsed());
         }
       }
 
-      info!("delete_section_items_with_txn takes {:?}", start.elapsed());
       // if let Some(change_tx) = self.change_tx.as_ref() {
       //   match self.section {
       //     Section::Favorite => {},
