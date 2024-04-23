@@ -647,7 +647,6 @@ impl Collab {
 
   /// Returns a transaction that can mutate the document. This transaction will carry the
   /// origin of the current user.
-  #[instrument(level = "trace", skip_all)]
   pub fn origin_transact_mut(&self) -> TransactionMutWrapper {
     TransactionRetry::new(&self.doc, &self.object_id).get_write_txn_with(self.origin.clone())
   }
@@ -657,7 +656,6 @@ impl Collab {
   ///
   /// If applying the remote update, please use the `transact_mut` of `doc`. Ot
   /// update will send to remote that the remote already has.
-  #[instrument(level = "trace", skip_all)]
   pub fn with_origin_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
