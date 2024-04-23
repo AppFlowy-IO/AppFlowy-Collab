@@ -12,7 +12,7 @@ use serde::Serialize;
 use serde_json::json;
 
 use tokio_stream::wrappers::WatchStream;
-use tracing::{error, trace};
+use tracing::{error, instrument, trace};
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
@@ -647,6 +647,7 @@ impl Collab {
 
   /// Returns a transaction that can mutate the document. This transaction will carry the
   /// origin of the current user.
+  #[instrument(level = "trace", skip_all)]
   pub fn origin_transact_mut(&self) -> TransactionMut {
     TransactionRetry::new(&self.doc, &self.object_id).get_write_txn_with(self.origin.clone())
   }
@@ -656,6 +657,7 @@ impl Collab {
   ///
   /// If applying the remote update, please use the `transact_mut` of `doc`. Ot
   /// update will send to remote that the remote already has.
+  #[instrument(level = "trace", skip_all)]
   pub fn with_origin_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
@@ -852,6 +854,7 @@ impl CollabContext {
     TransactionRetry::new(&self.doc, &self.object_id).get_read_txn()
   }
 
+  #[instrument(level = "trace", skip_all)]
   pub fn with_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
