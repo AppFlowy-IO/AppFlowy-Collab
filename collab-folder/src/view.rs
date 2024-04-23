@@ -11,7 +11,7 @@ use collab::preclude::{
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
-use tracing::{instrument, trace};
+use tracing::{info, instrument, trace};
 
 use crate::folder_observe::ViewChangeSender;
 use crate::section::{Section, SectionItem, SectionMap};
@@ -650,12 +650,15 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   ///
   /// If the view is in the recent section, it's timestamp will be updated.
   pub fn set_recent(self, add_in_recent: bool) -> Self {
+    let start = std::time::Instant::now();
     if let Some(recent_section) = self
       .section_map
       .section_op_with_txn(self.txn, Section::Recent)
     {
+      info!("section_op_with_txn takes {:?}", start.elapsed());
       // try to remove the section, if the section is not found, it will be ignored.
       recent_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
+      info!("delete_section_items_with_txn takes {:?}", start.elapsed());
 
       // add the section if add_in_recent is true since we have removed the section before.
       if add_in_recent {
