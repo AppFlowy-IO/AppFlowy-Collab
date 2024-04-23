@@ -59,17 +59,17 @@ impl ViewsMap {
   ) -> ViewsMap {
     trace!("number of views in folder: {}", views.len());
     let view_cache = Arc::new(RwLock::new(views));
-    let subscription = change_tx.as_ref().map(|change_tx| {
-      subscribe_view_change(
-        uid,
-        &mut root,
-        view_cache.clone(),
-        change_tx.clone(),
-        view_relations.clone(),
-        section_map.clone(),
-        index_json_sender.clone(),
-      )
-    });
+    // let subscription = change_tx.as_ref().map(|change_tx| {
+    //   subscribe_view_change(
+    //     uid,
+    //     &mut root,
+    //     view_cache.clone(),
+    //     change_tx.clone(),
+    //     view_relations.clone(),
+    //     section_map.clone(),
+    //     index_json_sender.clone(),
+    //   )
+    // });
     Self {
       uid: uid.clone(),
       container: root,
