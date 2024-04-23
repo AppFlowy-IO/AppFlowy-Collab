@@ -448,6 +448,14 @@ impl Folder {
     remove_all_my_recent_sections
   );
 
+  pub fn add_recent_view_ids2(&self, ids: Vec<String>) {
+    for id in ids {
+      self
+        .views
+        .update_view(&id, |update| update.set_recent(false).done());
+    }
+  }
+
   // Trash
   impl_section_op!(
     Section::Trash,
