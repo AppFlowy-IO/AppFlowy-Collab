@@ -356,10 +356,18 @@ impl TryFrom<AnyMap> for SectionItem {
   type Error = anyhow::Error;
 
   fn try_from(value: AnyMap) -> Result<Self, Self::Error> {
+    // let id = value
+    //   .get_str_value("id")
+    //   .ok_or(anyhow::anyhow!("missing section item id"))?;
+
     let start = std::time::Instant::now();
-    let id = value
-      .get_str_value("id")
-      .ok_or(anyhow::anyhow!("missing section item id"))?;
+    let value = value.get("id")?;
+    let id = if let Any::String(s) = value {
+      Some(s.to_string())
+    } else {
+      None
+    }
+    .ok_or(anyhow::anyhow!("missing section item id"))?;
     info!("id: {:?}", start.elapsed());
 
     let start = std::time::Instant::now();
