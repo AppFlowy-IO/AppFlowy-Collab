@@ -173,11 +173,23 @@ impl Drop for TransactionMutWrapper<'_> {
     {
       let elapsed = self.acquire_time.elapsed();
       if elapsed > Duration::from_secs(5) {
-        tracing::error!("drop write transaction after {:?}", self.object_id, elapsed);
+        tracing::error!(
+          "{} drop write transaction after {:?}",
+          self.object_id,
+          elapsed
+        );
       } else if elapsed > Duration::from_secs(3) {
-        tracing::warn!("drop write transaction after {:?}", self.object_id, elapsed);
+        tracing::warn!(
+          "{} drop write transaction after {:?}",
+          self.object_id,
+          elapsed
+        );
       } else {
-        tracing::trace!("drop write transaction after {:?}", self.object_id, elapsed);
+        tracing::trace!(
+          "{} drop write transaction after {:?}",
+          self.object_id,
+          elapsed
+        );
       };
     }
   }
