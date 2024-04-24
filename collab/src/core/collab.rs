@@ -95,7 +95,9 @@ pub struct Collab {
 
 impl Drop for Collab {
   fn drop(&mut self) {
-    trace!("Collab:{} dropped", self.object_id);
+    if cfg!(feature = "verbose_log") {
+      trace!("Collab:{} dropped", self.object_id);
+    }
   }
 }
 
