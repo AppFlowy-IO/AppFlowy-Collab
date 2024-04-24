@@ -7,8 +7,8 @@ use crate::util::{create_folder_with_workspace, make_test_view};
 #[tokio::test]
 async fn create_child_views_test() {
   let uid = UserId::from(1);
-  let folder_test = create_folder_with_workspace(uid.clone(), "fake_w_1").await;
-  let workspace_id = folder_test.get_workspace_id();
+  let workspace_id = "fake_w_1".to_string();
+  let folder_test = create_folder_with_workspace(uid.clone(), &workspace_id).await;
   let view_1_1 = make_test_view("1_1", "1", vec![]);
   let view_1_2 = make_test_view("1_2", "1", vec![]);
   let view_1_2_1 = make_test_view("1_2_1", "1_2", vec![]);
@@ -30,7 +30,7 @@ async fn create_child_views_test() {
   let v_1_2_child_views = folder_test.views.get_views_belong_to(&view_1_2.id);
   assert_eq!(v_1_2_child_views.len(), 2);
 
-  let folder_data = folder_test.get_folder_data().unwrap();
+  let folder_data = folder_test.get_folder_data(&workspace_id).unwrap();
   let value = serde_json::to_value(folder_data).unwrap();
   assert_json_include!(
     actual: value,
@@ -220,9 +220,9 @@ async fn delete_child_view_test() {
 #[tokio::test]
 async fn create_orphan_child_views_test() {
   let uid = UserId::from(1);
-  let folder_test = create_folder_with_workspace(uid.clone(), "fake_w_1").await;
-  let workspace_id = folder_test.get_workspace_id();
-  let view_1 = make_test_view("1", "fake_w_1", vec![]);
+  let workspace_id = "fake_w_1".to_string();
+  let folder_test = create_folder_with_workspace(uid.clone(), &workspace_id).await;
+  let view_1 = make_test_view("1", &workspace_id, vec![]);
 
   // The orphan view: the parent_view_id equal to the view_id
   let view_2 = make_test_view("2", "2", vec![]);
@@ -237,7 +237,7 @@ async fn create_orphan_child_views_test() {
   assert_eq!(orphan_views.len(), 1);
 
   // The folder data should contains the orphan view
-  let folder_data = folder_test.get_folder_data().unwrap();
+  let folder_data = folder_test.get_folder_data(&workspace_id).unwrap();
   assert_json_include!(
     actual: json!(folder_data),
     expected: json!({

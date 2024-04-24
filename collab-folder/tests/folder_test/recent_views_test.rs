@@ -68,8 +68,8 @@ async fn add_view_into_recent_and_then_remove_it_test() {
 #[tokio::test]
 async fn create_multiple_user_recent_test() {
   let uid_1 = UserId::from(1);
-  let folder_test_1 = create_folder_with_workspace(uid_1.clone(), "w1").await;
-  let workspace_id = folder_test_1.get_workspace_id();
+  let workspace_id = "w1".to_string();
+  let folder_test_1 = create_folder_with_workspace(uid_1.clone(), &workspace_id).await;
 
   // Insert view_1
   let id_1 = "view_1";
@@ -86,7 +86,7 @@ async fn create_multiple_user_recent_test() {
   assert_eq!(recent.len(), 2);
   assert_eq!(recent[0].id, id_1);
   assert_eq!(recent[1].id, id_2);
-  let folder_data = folder_test_1.get_folder_data().unwrap();
+  let folder_data = folder_test_1.get_folder_data(&workspace_id).unwrap();
 
   let uid_2 = UserId::from(2);
   let folder_test2 = create_folder_with_data(uid_2.clone(), "w1", folder_data).await;
@@ -99,8 +99,8 @@ async fn create_multiple_user_recent_test() {
 #[tokio::test]
 async fn recent_data_serde_test() {
   let uid_1 = UserId::from(1);
-  let folder_test = create_folder_with_workspace(uid_1.clone(), "w1").await;
-  let workspace_id = folder_test.get_workspace_id();
+  let workspace_id = "w1".to_string();
+  let folder_test = create_folder_with_workspace(uid_1.clone(), &workspace_id).await;
 
   // Insert view_1
   let view_1 = make_test_view("view_1", workspace_id.as_str(), vec![]);
@@ -112,7 +112,7 @@ async fn recent_data_serde_test() {
 
   let time = timestamp();
   folder_test.add_recent_view_ids(vec!["view_1".to_string(), "view_2".to_string()]);
-  let folder_data = folder_test.get_folder_data().unwrap();
+  let folder_data = folder_test.get_folder_data(&workspace_id).unwrap();
   let value = serde_json::to_value(&folder_data).unwrap();
   assert_json_include!(
     actual: value,
