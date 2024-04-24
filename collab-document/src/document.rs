@@ -6,6 +6,7 @@ use collab::core::awareness::AwarenessUpdateSubscription;
 use collab::core::collab::{DataSource, MutexCollab};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
+use collab::entity::EncodedCollab;
 use collab::preclude::block::ClientID;
 use collab::preclude::*;
 use collab_entity::define::DOCUMENT_ROOT;
@@ -14,7 +15,6 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio_stream::wrappers::WatchStream;
-use collab::entity::EncodedCollab;
 
 use crate::blocks::{
   deserialize_text_delta, parse_event, Block, BlockAction, BlockActionPayload, BlockActionType,

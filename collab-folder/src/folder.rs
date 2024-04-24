@@ -5,12 +5,12 @@ use std::sync::Arc;
 use collab::core::collab::{DataSource, IndexContentReceiver, MutexCollab};
 use collab::core::collab_state::{SnapshotState, SyncState};
 pub use collab::core::origin::CollabOrigin;
+use collab::entity::EncodedCollab;
 use collab::preclude::*;
 use collab_entity::define::{FOLDER, FOLDER_CURRENT_WORKSPACE, FOLDER_META};
 use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
-use collab::entity::EncodedCollab;
 
 use crate::error::FolderError;
 use crate::folder_observe::ViewChangeSender;

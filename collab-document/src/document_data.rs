@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
+use collab::entity::EncodedCollab;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
 use nanoid::nanoid;
-use collab::entity::EncodedCollab;
 
 use crate::blocks::{Block, DocumentData, DocumentMeta};
 use crate::document::Document;

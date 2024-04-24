@@ -7,12 +7,12 @@ use crate::CollabKVDB;
 
 use collab::core::collab::make_yrs_doc;
 use collab::core::origin::CollabOrigin;
+use collab::entity::EncodedCollab;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
 use tracing::{debug, error};
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
-use collab::entity::EncodedCollab;
 
 use crate::local_storage::kv::doc::CollabKVAction;
 use crate::local_storage::kv::snapshot::SnapshotPersistence;
