@@ -6,8 +6,8 @@ use std::sync::{Arc, Weak};
 use crate::CollabKVDB;
 
 use collab::core::collab::make_yrs_doc;
-use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
+use collab::entity::EncodedCollab;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
 use tracing::{debug, error};

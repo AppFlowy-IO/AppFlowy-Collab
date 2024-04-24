@@ -4,9 +4,9 @@ use std::vec;
 
 use collab::core::awareness::AwarenessUpdateSubscription;
 use collab::core::collab::{DataSource, MutexCollab};
-use collab::core::collab_plugin::EncodedCollab;
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
+use collab::entity::EncodedCollab;
 use collab::preclude::block::ClientID;
 use collab::preclude::*;
 use collab_entity::define::DOCUMENT_ROOT;
