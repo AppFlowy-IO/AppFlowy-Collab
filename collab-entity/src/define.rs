@@ -4,7 +4,7 @@ pub const DOCUMENT_ROOT: &str = "document";
 // Folder
 pub const FOLDER: &str = "folder";
 pub const FOLDER_META: &str = "meta";
-pub const FOLDER_CURRENT_WORKSPACE: &str = "current_workspace";
+pub const FOLDER_WORKSPACE_ID: &str = "current_workspace";
 
 // Database
 pub const WORKSPACE_DATABASES: &str = "databases";

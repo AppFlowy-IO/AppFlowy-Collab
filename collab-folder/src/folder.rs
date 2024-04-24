@@ -7,7 +7,7 @@ use collab::core::collab_state::{SnapshotState, SyncState};
 pub use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::*;
-use collab_entity::define::{FOLDER, FOLDER_CURRENT_WORKSPACE, FOLDER_META};
+use collab_entity::define::{FOLDER, FOLDER_META, FOLDER_WORKSPACE_ID};
 use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
@@ -256,7 +256,7 @@ impl Folder {
   ///
   pub fn get_current_workspace(&self) -> Option<Workspace> {
     let txn = self.meta.transact();
-    let workspace_id = self.meta.get_str_with_txn(&txn, FOLDER_CURRENT_WORKSPACE)?;
+    let workspace_id = self.meta.get_str_with_txn(&txn, FOLDER_WORKSPACE_ID)?;
     let view = self.views.get_view_with_txn(&txn, &workspace_id)?;
     Some(Workspace::from(view.as_ref()))
   }
@@ -269,35 +269,19 @@ impl Folder {
   pub fn get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
     self
       .meta
-      .get_str_with_txn(txn, FOLDER_CURRENT_WORKSPACE)
+      .get_str_with_txn(txn, FOLDER_WORKSPACE_ID)
       .unwrap()
   }
 
   pub fn try_get_workspace_id(&self) -> Result<String, FolderError> {
     let txn = self.meta.transact();
-    match self.meta.get_str_with_txn(&txn, FOLDER_CURRENT_WORKSPACE) {
-      None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
-      Some(workspace_id) => Ok(workspace_id),
-    }
-  }
-
-  pub fn try_get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Result<String, FolderError> {
-    match self.meta.get_str_with_txn(txn, FOLDER_CURRENT_WORKSPACE) {
+    match self.meta.get_str_with_txn(&txn, FOLDER_WORKSPACE_ID) {
       None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
       Some(workspace_id) => Ok(workspace_id),
     }
   }
 
   pub fn get_current_workspace_views(&self) -> Vec<Arc<View>> {
-    let txn = self.meta.transact();
-    self.get_current_workspace_views_with_txn(&txn)
-  }
-
-  pub fn get_current_workspace_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Arc<View>> {
-    self.get_workspace_views_with_txn(txn)
-  }
-
-  pub fn get_workspace_views(&self) -> Vec<Arc<View>> {
     let txn = self.meta.transact();
     self.get_workspace_views_with_txn(&txn)
   }
@@ -313,7 +297,7 @@ impl Folder {
   /// * `txn`: A transaction that is used to ensure the consistency of the fetched data.
   /// * `workspace_id`: A string slice that represents the ID of the workspace whose views are to be fetched.
   ///
-  pub fn get_workspace_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Arc<View>> {
+  fn get_workspace_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Arc<View>> {
     match self.try_get_workspace_id() {
       Ok(workspace_id) => self.views.get_views_belong_to_with_txn(txn, &workspace_id),
       Err(_) => vec![],
@@ -600,7 +584,7 @@ fn create_folder<T: Into<UserId>>(
         views.insert_view_with_txn(txn, view, None);
       }
 
-      meta.insert_str_with_txn(txn, FOLDER_CURRENT_WORKSPACE, workspace_id);
+      meta.insert_str_with_txn(txn, FOLDER_WORKSPACE_ID, workspace_id);
       meta.insert_str_with_txn(txn, CURRENT_VIEW, folder_data.current_view);
 
       if let Some(fav_section) = section.section_op_with_txn(txn, Section::Favorite) {
@@ -637,7 +621,7 @@ pub fn check_folder_is_valid(collab: &Collab) -> Result<String, FolderError> {
   let meta = collab
     .get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])
     .ok_or_else(|| FolderError::NoRequiredData("No meta data".to_string()))?;
-  match meta.get_str_with_txn(&txn, FOLDER_CURRENT_WORKSPACE) {
+  match meta.get_str_with_txn(&txn, FOLDER_WORKSPACE_ID) {
     None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
     Some(workspace_id) => {
       if workspace_id.is_empty() {

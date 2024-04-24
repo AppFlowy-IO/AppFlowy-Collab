@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 use crate::define::{
-  DATABASE, DATABASE_ID, DATABASE_ROW_DATA, DOCUMENT_ROOT, FOLDER, FOLDER_CURRENT_WORKSPACE,
-  FOLDER_META, USER_AWARENESS, WORKSPACE_DATABASES,
+  DATABASE, DATABASE_ID, DATABASE_ROW_DATA, DOCUMENT_ROOT, FOLDER, FOLDER_META,
+  FOLDER_WORKSPACE_ID, USER_AWARENESS, WORKSPACE_DATABASES,
 };
 use collab::preclude::{Collab, MapRefExtension};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -81,11 +81,11 @@ impl CollabType {
           .get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])
           .ok_or_else(|| no_required_data_error(self, FOLDER_META))?;
         let current_workspace = meta
-          .get_str_with_txn(&txn, FOLDER_CURRENT_WORKSPACE)
-          .ok_or_else(|| no_required_data_error(self, FOLDER_CURRENT_WORKSPACE))?;
+          .get_str_with_txn(&txn, FOLDER_WORKSPACE_ID)
+          .ok_or_else(|| no_required_data_error(self, FOLDER_WORKSPACE_ID))?;
 
         if current_workspace.is_empty() {
-          Err(no_required_data_error(self, FOLDER_CURRENT_WORKSPACE))
+          Err(no_required_data_error(self, FOLDER_WORKSPACE_ID))
         } else {
           Ok(())
         }
