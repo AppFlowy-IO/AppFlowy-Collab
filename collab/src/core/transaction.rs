@@ -3,11 +3,11 @@ use std::thread::sleep;
 use std::time::Duration;
 use tracing::instrument;
 
-use crate::core::collab_plugin::EncodedCollab;
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, Transaction, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
+use crate::entity::EncodedCollab;
 use crate::error::CollabError;
 
 /// TransactionRetry is a wrapper of Transaction and TransactionMut.

@@ -15,6 +15,7 @@ macro_rules! if_wasm {
 }
 
 pub mod core;
+pub mod entity;
 pub mod error;
 pub mod util;
 

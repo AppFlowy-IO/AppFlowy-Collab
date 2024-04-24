@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
-use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
 use nanoid::nanoid;
+use collab::entity::EncodedCollab;
 
 use crate::blocks::{Block, DocumentData, DocumentMeta};
 use crate::document::Document;

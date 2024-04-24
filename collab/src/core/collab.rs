@@ -28,12 +28,13 @@ use yrs::{
 use crate::core::awareness::{
   gen_awareness_update_message, Awareness, AwarenessUpdateSubscription, Event,
 };
-use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedCollab};
+use crate::core::collab_plugin::{CollabPlugin, CollabPluginType};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
 use crate::core::transaction::{DocTransactionExtension, TransactionMutWrapper, TransactionRetry};
 use crate::core::value::YrsValueExtension;
+use crate::entity::EncodedCollab;
 use crate::error::CollabError;
 use crate::preclude::{ArrayRefWrapper, JsonValue, MapRefExtension};
 use crate::util::insert_json_value_to_map_ref;
