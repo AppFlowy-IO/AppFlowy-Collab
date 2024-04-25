@@ -150,6 +150,13 @@ impl Collab {
     Ok(collab)
   }
 
+  pub fn clear_plugins(&mut self) {
+    let plugins = self.plugins.remove_all();
+    for plugin in plugins {
+      plugin.destroy();
+    }
+  }
+
   pub fn new_with_origin<T: AsRef<str>>(
     origin: CollabOrigin,
     object_id: T,
@@ -918,8 +925,8 @@ impl Plugins {
     Self(Arc::new(RwLock::new(plugins)))
   }
 
-  pub fn clear(&self) {
-    self.0.write().clear();
+  pub fn remove_all(&self) -> Vec<Box<dyn CollabPlugin>> {
+    self.0.write().drain(..).collect()
   }
 }
 

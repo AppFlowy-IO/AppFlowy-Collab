@@ -114,7 +114,9 @@ impl Folder {
     Ok(folder)
   }
 
-  pub fn close(&self) {}
+  pub fn close(&self) {
+    self.inner.lock().clear_plugins();
+  }
 
   pub fn validate(collab: &Collab) -> Result<(), FolderError> {
     CollabType::Folder

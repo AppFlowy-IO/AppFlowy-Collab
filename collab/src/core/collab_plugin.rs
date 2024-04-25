@@ -53,6 +53,9 @@ pub trait CollabPlugin: Send + Sync + 'static {
   fn flush(&self, _object_id: &str, _doc: &Doc) {}
 
   fn start_init_sync(&self) {}
+
+  /// Called when the plugin is removed
+  fn destroy(&self) {}
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
@@ -99,5 +102,9 @@ where
 
   fn start_init_sync(&self) {
     (**self).start_init_sync()
+  }
+
+  fn destroy(&self) {
+    (**self).destroy()
   }
 }
