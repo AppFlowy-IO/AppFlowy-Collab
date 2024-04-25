@@ -198,7 +198,10 @@ impl CollabPlugin for RocksdbDiskPlugin {
       });
 
       if let Err(e) = result {
-        error!("{} save update failed: {:?}", object_id, e);
+        error!(
+          "{}:{} save update failed: {:?}",
+          object_id, self.collab_type, e
+        );
       }
     } else {
       tracing::warn!("collab_db is dropped");
