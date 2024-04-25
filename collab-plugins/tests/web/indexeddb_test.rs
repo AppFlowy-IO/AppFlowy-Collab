@@ -16,7 +16,7 @@ async fn indexeddb_put_and_get_encoded_collab_test() {
       let encoded_collab = EncodedCollab {
         state_vector: vec![1, 2, 3].into(),
         doc_state: vec![4, 5, 6].into(),
-        version: collab::core::collab_plugin::EncoderVersion::V1,
+        version: collab::entity::EncoderVersion::V1,
       };
 
       db.create_doc(uid, &object_id, &encoded_collab)
@@ -105,7 +105,7 @@ async fn indexeddb_flush_doc_test() {
       let encoded_collab = EncodedCollab {
         state_vector: vec![1, 2, 3].into(),
         doc_state: vec![4, 5, 6].into(),
-        version: collab::core::collab_plugin::EncoderVersion::V1,
+        version: collab::entity::EncoderVersion::V1,
       };
       db.flush_doc(uid, &object_id, &encoded_collab)
         .await
