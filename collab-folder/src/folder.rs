@@ -114,6 +114,10 @@ impl Folder {
     Ok(folder)
   }
 
+  pub fn close(&self) {
+    self.inner.lock().clear_plugins();
+  }
+
   pub fn validate(collab: &Collab) -> Result<(), FolderError> {
     CollabType::Folder
       .validate(collab)
@@ -160,17 +164,6 @@ impl Folder {
         .validate(collab)
         .map_err(|err| FolderError::NoRequiredData(err.to_string()))
     })
-  }
-
-  pub fn update_workspace(&self, name: &str) {
-    self.root.with_transact_mut(|txn| {
-      let workspace_id = self.get_workspace_id_with_txn(txn);
-      self
-        .views
-        .update_view_with_txn(&self.uid, txn, &workspace_id, |update| {
-          update.set_name(name).done()
-        });
-    });
   }
 
   /// Fetches the folder data based on the current workspace and view.
@@ -250,7 +243,7 @@ impl Folder {
   /// This function fetches the ID of the current workspace from the meta object,
   /// and uses this ID to fetch the actual workspace object.
   ///
-  pub fn get_current_workspace(&self, workspace_id: &str) -> Option<Workspace> {
+  pub fn get_workspace_info(&self, workspace_id: &str) -> Option<Workspace> {
     let txn = self.meta.transact();
     let folder_workspace_id = self.meta.get_str_with_txn(&txn, FOLDER_WORKSPACE_ID)?;
     if folder_workspace_id != workspace_id {

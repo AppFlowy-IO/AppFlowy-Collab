@@ -4,21 +4,6 @@ use collab::preclude::Collab;
 use collab_folder::{check_folder_is_valid, Folder, FolderData, UserId, Workspace};
 use std::sync::Arc;
 
-use crate::util::create_folder;
-
-#[tokio::test]
-async fn update_workspace_test() {
-  let uid = UserId::from(1);
-  let workspace_id = "1".to_string();
-  let folder_test = create_folder(uid, &workspace_id).await;
-  let workspace = folder_test.get_current_workspace(&workspace_id).unwrap();
-  assert_eq!(workspace.name, "");
-
-  folder_test.update_workspace("My first workspace");
-  let workspace = folder_test.get_current_workspace(&workspace_id).unwrap();
-  assert_eq!(workspace.name, "My first workspace");
-}
-
 #[tokio::test]
 async fn test_workspace_is_ready() {
   let uid = UserId::from(1);
