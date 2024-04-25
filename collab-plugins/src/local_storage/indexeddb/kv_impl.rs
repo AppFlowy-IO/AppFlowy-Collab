@@ -1,5 +1,5 @@
 use crate::local_storage::kv::PersistenceError;
-use collab::core::collab_plugin::EncodedCollab;
+use collab::entity::EncodedCollab;
 use indexed_db_futures::prelude::*;
 use js_sys::{ArrayBuffer, Uint8Array};
 

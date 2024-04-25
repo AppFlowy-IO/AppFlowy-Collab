@@ -7,10 +7,11 @@ use collab::core::collab_state::{SnapshotState, SyncState};
 pub use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::*;
-use collab_entity::define::{FOLDER, FOLDER_CURRENT_WORKSPACE, FOLDER_META};
+use collab_entity::define::{FOLDER, FOLDER_META, FOLDER_WORKSPACE_ID};
 use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
+use tracing::error;
 
 use crate::error::FolderError;
 use crate::folder_observe::ViewChangeSender;
@@ -186,13 +187,18 @@ impl Folder {
   ///
   /// * `None`: If the operation is unsuccessful (though it should typically not be the case as `Some`
   ///   is returned explicitly), it returns `None`.
-  pub fn get_folder_data(&self) -> Option<FolderData> {
+  pub fn get_folder_data(&self, workspace_id: &str) -> Option<FolderData> {
     let txn = self.root.transact();
-    let workspace_id = self.get_workspace_id_with_txn(&txn);
-    let workspace = Workspace::from(self.views.get_view_with_txn(&txn, &workspace_id)?.as_ref());
-
+    let folder_workspace_id = self.get_workspace_id_with_txn(&txn);
+    if folder_workspace_id != workspace_id {
+      error!(
+        "Workspace id not match when get folder data, expected: {}, actual: {}",
+        workspace_id, folder_workspace_id
+      );
+      return None;
+    }
+    let workspace = Workspace::from(self.views.get_view_with_txn(&txn, workspace_id)?.as_ref());
     let current_view = self.get_current_view_with_txn(&txn).unwrap_or_default();
-
     let mut views = vec![];
     let orphan_views = self
       .views
@@ -200,7 +206,7 @@ impl Folder {
       .iter()
       .map(|view| view.as_ref().clone())
       .collect::<Vec<View>>();
-    for view in self.get_workspace_views_with_txn(&txn) {
+    for view in self.views.get_views_belong_to_with_txn(&txn, workspace_id) {
       views.extend(self.get_view_recursively_with_txn(&txn, &view.id));
     }
     views.extend(orphan_views);
@@ -239,25 +245,20 @@ impl Folder {
     })
   }
 
-  /// Fetches all views associated with the current workspace.
-  ///
-  /// Views are fetched recursively, and thus all nested views are also included.
-  ///
-  pub fn get_all_views_recursively(&self) -> Vec<View> {
-    let workspace_id = self.get_workspace_id();
-    let txn = self.root.transact();
-    self.get_view_recursively_with_txn(&txn, &workspace_id)
-  }
-
   /// Fetches the current workspace.
   ///
   /// This function fetches the ID of the current workspace from the meta object,
   /// and uses this ID to fetch the actual workspace object.
   ///
-  pub fn get_current_workspace(&self) -> Option<Workspace> {
+  pub fn get_current_workspace(&self, workspace_id: &str) -> Option<Workspace> {
     let txn = self.meta.transact();
-    let workspace_id = self.meta.get_str_with_txn(&txn, FOLDER_CURRENT_WORKSPACE)?;
-    let view = self.views.get_view_with_txn(&txn, &workspace_id)?;
+    let folder_workspace_id = self.meta.get_str_with_txn(&txn, FOLDER_WORKSPACE_ID)?;
+    if folder_workspace_id != workspace_id {
+      error!("Workspace id not match when get current workspace");
+      return None;
+    }
+
+    let view = self.views.get_view_with_txn(&txn, &folder_workspace_id)?;
     Some(Workspace::from(view.as_ref()))
   }
 
@@ -269,54 +270,15 @@ impl Folder {
   pub fn get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
     self
       .meta
-      .get_str_with_txn(txn, FOLDER_CURRENT_WORKSPACE)
+      .get_str_with_txn(txn, FOLDER_WORKSPACE_ID)
       .unwrap()
   }
 
   pub fn try_get_workspace_id(&self) -> Result<String, FolderError> {
     let txn = self.meta.transact();
-    match self.meta.get_str_with_txn(&txn, FOLDER_CURRENT_WORKSPACE) {
+    match self.meta.get_str_with_txn(&txn, FOLDER_WORKSPACE_ID) {
       None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
       Some(workspace_id) => Ok(workspace_id),
-    }
-  }
-
-  pub fn try_get_workspace_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Result<String, FolderError> {
-    match self.meta.get_str_with_txn(txn, FOLDER_CURRENT_WORKSPACE) {
-      None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
-      Some(workspace_id) => Ok(workspace_id),
-    }
-  }
-
-  pub fn get_current_workspace_views(&self) -> Vec<Arc<View>> {
-    let txn = self.meta.transact();
-    self.get_current_workspace_views_with_txn(&txn)
-  }
-
-  pub fn get_current_workspace_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Arc<View>> {
-    self.get_workspace_views_with_txn(txn)
-  }
-
-  pub fn get_workspace_views(&self) -> Vec<Arc<View>> {
-    let txn = self.meta.transact();
-    self.get_workspace_views_with_txn(&txn)
-  }
-
-  /// Fetches all views associated with a specific workspace, using a provided transaction.
-  ///
-  /// It uses the workspace ID to fetch the relevant workspace. Then, it gets all the child view IDs
-  /// associated with this workspace and uses these IDs
-  /// to fetch the actual view objects.
-  ///
-  /// # Parameters
-  ///
-  /// * `txn`: A transaction that is used to ensure the consistency of the fetched data.
-  /// * `workspace_id`: A string slice that represents the ID of the workspace whose views are to be fetched.
-  ///
-  pub fn get_workspace_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Arc<View>> {
-    match self.try_get_workspace_id() {
-      Ok(workspace_id) => self.views.get_views_belong_to_with_txn(txn, &workspace_id),
-      Err(_) => vec![],
     }
   }
 
@@ -538,6 +500,13 @@ impl Folder {
     }
   }
 
+  pub fn get_views_belong_to(&self, parent_view_id: &str) -> Vec<Arc<View>> {
+    let txn = self.root.transact();
+    self
+      .views
+      .get_views_belong_to_with_txn(&txn, parent_view_id)
+  }
+
   pub fn create_section<S: Into<Section>>(&self, section: S) -> MapRefWrapper {
     self
       .root
@@ -600,7 +569,7 @@ fn create_folder<T: Into<UserId>>(
         views.insert_view_with_txn(txn, view, None);
       }
 
-      meta.insert_str_with_txn(txn, FOLDER_CURRENT_WORKSPACE, workspace_id);
+      meta.insert_str_with_txn(txn, FOLDER_WORKSPACE_ID, workspace_id);
       meta.insert_str_with_txn(txn, CURRENT_VIEW, folder_data.current_view);
 
       if let Some(fav_section) = section.section_op_with_txn(txn, Section::Favorite) {
@@ -637,7 +606,7 @@ pub fn check_folder_is_valid(collab: &Collab) -> Result<String, FolderError> {
   let meta = collab
     .get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])
     .ok_or_else(|| FolderError::NoRequiredData("No meta data".to_string()))?;
-  match meta.get_str_with_txn(&txn, FOLDER_CURRENT_WORKSPACE) {
+  match meta.get_str_with_txn(&txn, FOLDER_WORKSPACE_ID) {
     None => Err(FolderError::NoRequiredData("No workspace id".to_string())),
     Some(workspace_id) => {
       if workspace_id.is_empty() {

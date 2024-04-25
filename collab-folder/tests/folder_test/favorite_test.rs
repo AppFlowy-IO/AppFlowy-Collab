@@ -30,7 +30,7 @@ async fn create_favorite_test() {
   let view_2 = make_test_view("2", workspace_id.as_str(), vec![]);
   folder_test.insert_view(view_2, None);
 
-  let views = folder_test.get_workspace_views();
+  let views = folder_test.views.get_views_belong_to(&workspace_id);
   assert_eq!(views.len(), 2);
   assert_eq!(views[0].id, "1");
   assert!(views[0].is_favorite);
@@ -53,21 +53,21 @@ async fn add_favorite_view_and_then_remove_test() {
   folder_test.insert_view(view_1, None);
   folder_test.add_favorite_view_ids(vec!["1".to_string()]);
 
-  let views = folder_test.get_workspace_views();
+  let views = folder_test.views.get_views_belong_to(&workspace_id);
   assert_eq!(views.len(), 1);
   assert_eq!(views[0].id, "1");
   assert!(views[0].is_favorite);
 
   folder_test.delete_favorite_view_ids(vec!["1".to_string()]);
-  let views = folder_test.get_workspace_views();
+  let views = folder_test.views.get_views_belong_to(&workspace_id);
   assert!(!views[0].is_favorite);
 }
 
 #[tokio::test]
 async fn create_multiple_user_favorite_test() {
   let uid_1 = UserId::from(1);
-  let folder_test_1 = create_folder_with_workspace(uid_1.clone(), "w1").await;
-  let workspace_id = folder_test_1.get_workspace_id();
+  let workspace_id = "w1".to_string();
+  let folder_test_1 = create_folder_with_workspace(uid_1.clone(), &workspace_id).await;
   // Insert view_1
   let view_1 = make_test_view("1", workspace_id.as_str(), vec![]);
   folder_test_1.insert_view(view_1, None);
@@ -81,7 +81,7 @@ async fn create_multiple_user_favorite_test() {
   assert_eq!(favorites.len(), 2);
   assert_eq!(favorites[0].id, "1");
   assert_eq!(favorites[1].id, "2");
-  let folder_data = folder_test_1.get_folder_data().unwrap();
+  let folder_data = folder_test_1.get_folder_data(&workspace_id).unwrap();
 
   let uid_2 = UserId::from(2);
   let folder_test2 = create_folder_with_data(uid_2.clone(), "w1", folder_data).await;
@@ -94,8 +94,8 @@ async fn create_multiple_user_favorite_test() {
 #[tokio::test]
 async fn favorite_data_serde_test() {
   let uid_1 = UserId::from(1);
-  let folder_test = create_folder_with_workspace(uid_1.clone(), "w1").await;
-  let workspace_id = folder_test.get_workspace_id();
+  let workspace_id = "w1".to_string();
+  let folder_test = create_folder_with_workspace(uid_1.clone(), &workspace_id).await;
 
   // Insert view_1
   let view_1 = make_test_view("1", workspace_id.as_str(), vec![]);
@@ -106,7 +106,7 @@ async fn favorite_data_serde_test() {
   folder_test.insert_view(view_2, None);
 
   folder_test.add_favorite_view_ids(vec!["1".to_string(), "2".to_string()]);
-  let folder_data = folder_test.get_folder_data().unwrap();
+  let folder_data = folder_test.get_folder_data(&workspace_id).unwrap();
   let value = serde_json::to_value(&folder_data).unwrap();
   assert_json_include!(
     actual: value,
@@ -181,7 +181,8 @@ async fn migrate_from_old_version_folder_without_fav_test() {
   )
   .await;
   folder_test.migrate_workspace_to_view();
-  let folder_data = folder_test.get_folder_data().unwrap();
+  let workspace_id = folder_test.get_workspace_id();
+  let folder_data = folder_test.get_folder_data(&workspace_id).unwrap();
   let value = serde_json::to_value(folder_data).unwrap();
 
   assert_json_include!(
@@ -245,6 +246,7 @@ async fn migrate_favorite_v1_test() {
     db_path,
   )
   .await;
+  let workspace_id = folder_test.get_workspace_id();
 
   // Migrate the favorites from v1 to v2
   let favorites = folder_test.get_favorite_v1();
@@ -252,7 +254,7 @@ async fn migrate_favorite_v1_test() {
   folder_test.add_favorite_view_ids(favorites.into_iter().map(|fav| fav.id).collect::<Vec<_>>());
   folder_test.migrate_workspace_to_view();
 
-  let folder_data = folder_test.get_folder_data().unwrap();
+  let folder_data = folder_test.get_folder_data(&workspace_id).unwrap();
   let value = serde_json::to_value(folder_data).unwrap();
   assert_json_include!(
     actual: value,
