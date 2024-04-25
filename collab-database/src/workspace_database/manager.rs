@@ -118,6 +118,10 @@ impl WorkspaceDatabase {
     }
   }
 
+  pub fn close(&self) {
+    self.collab.lock().clear_plugins();
+  }
+
   pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
     CollabType::WorkspaceDatabase
       .validate(collab)
