@@ -917,6 +917,10 @@ impl Plugins {
   pub fn new(plugins: Vec<Box<dyn CollabPlugin>>) -> Plugins {
     Self(Arc::new(RwLock::new(plugins)))
   }
+
+  pub fn clear(&self) {
+    self.0.write().clear();
+  }
 }
 
 impl Deref for Plugins {
