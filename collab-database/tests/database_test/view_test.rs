@@ -255,6 +255,6 @@ async fn update_database_view_layout_test() {
 async fn validate_database_test() {
   let database_test = create_database_with_default_data(1, "1").await;
   assert!(CollabType::Database
-    .validate(&database_test.database.get_collab().lock())
+    .validate_require_data(&database_test.database.get_collab().lock())
     .is_ok())
 }

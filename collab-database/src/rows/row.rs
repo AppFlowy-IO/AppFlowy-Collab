@@ -123,7 +123,7 @@ impl DatabaseRow {
 
   pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
     CollabType::DatabaseRow
-      .validate(collab)
+      .validate_require_data(collab)
       .map_err(|_| DatabaseError::NoRequiredData)?;
     Ok(())
   }

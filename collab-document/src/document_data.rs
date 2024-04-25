@@ -100,7 +100,7 @@ pub fn default_document_collab_data(document_id: &str) -> Result<EncodedCollab, 
   let lock_guard = collab.lock();
   lock_guard.encode_collab_v1(|collab| {
     CollabType::Document
-      .validate(collab)
+      .validate_require_data(collab)
       .map_err(|_| DocumentError::NoRequiredData)
   })
 }

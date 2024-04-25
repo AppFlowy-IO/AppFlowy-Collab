@@ -120,7 +120,7 @@ impl Folder {
 
   pub fn validate(collab: &Collab) -> Result<(), FolderError> {
     CollabType::Folder
-      .validate(collab)
+      .validate_require_data(collab)
       .map_err(|err| FolderError::NoRequiredData(err.to_string()))?;
     Ok(())
   }
@@ -161,7 +161,7 @@ impl Folder {
   pub fn encode_collab_v1(&self) -> Result<EncodedCollab, FolderError> {
     self.inner.lock().encode_collab_v1(|collab| {
       CollabType::Folder
-        .validate(collab)
+        .validate_require_data(collab)
         .map_err(|err| FolderError::NoRequiredData(err.to_string()))
     })
   }

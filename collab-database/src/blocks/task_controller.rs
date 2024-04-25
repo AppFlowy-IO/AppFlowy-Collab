@@ -198,7 +198,7 @@ fn save_row(
         let encode_collab = collab
           .encode_collab_v1(|collab| {
             CollabType::DatabaseRow
-              .validate(collab)
+              .validate_require_data(collab)
               .map_err(|_| DatabaseError::NoRequiredData)
           })
           .map_err(|err| PersistenceError::Internal(err.into()))?;

@@ -24,7 +24,7 @@ pub enum CollabType {
   /// This type is used when the specific nature of the collaboration object is not recognized.
   /// It might represent an uninitialized state or a custom object not covered by existing types.
   ///
-  /// No strict validation is applied when handling objects of this type(check out the [CollabType::validate]
+  /// No strict validation is applied when handling objects of this type(check out the [CollabType::validate_require_data]
   /// for more information), which means errors might not be caught as strictly as with known types.
   Unknown = 6,
 }
@@ -51,7 +51,7 @@ impl CollabType {
   /// - `Ok(())` if the collab object contains all the required data for its type.
   /// - `Err(Error)` if the required data is missing or if the collab object does not meet
   ///   the validation criteria for its type.
-  pub fn validate(&self, collab: &Collab) -> Result<(), Error> {
+  pub fn validate_require_data(&self, collab: &Collab) -> Result<(), Error> {
     let txn = collab.try_transaction()?;
     match self {
       CollabType::Document => {

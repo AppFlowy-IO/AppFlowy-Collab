@@ -57,7 +57,7 @@ impl Document {
 
   pub fn validate(collab: &Collab) -> Result<(), DocumentError> {
     CollabType::Document
-      .validate(collab)
+      .validate_require_data(collab)
       .map_err(|_| DocumentError::NoRequiredData)?;
     Ok(())
   }
@@ -69,7 +69,7 @@ impl Document {
   pub fn encode_collab(&self) -> Result<EncodedCollab, DocumentError> {
     self.inner.lock().encode_collab_v1(|collab| {
       CollabType::Document
-        .validate(collab)
+        .validate_require_data(collab)
         .map_err(|_| DocumentError::NoRequiredData)
     })
   }

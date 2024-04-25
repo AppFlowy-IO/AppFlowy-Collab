@@ -124,7 +124,7 @@ impl WorkspaceDatabase {
 
   pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
     CollabType::WorkspaceDatabase
-      .validate(collab)
+      .validate_require_data(collab)
       .map_err(|_| DatabaseError::NoRequiredData)?;
     Ok(())
   }
