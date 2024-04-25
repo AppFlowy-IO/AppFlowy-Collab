@@ -115,6 +115,10 @@ impl UserAwareness {
     })
   }
 
+  pub fn close(&self) {
+    self.inner.lock().clear_plugins();
+  }
+
   /// Constructs a new instance with the provided parameters.
   ///
   /// This private method serves as a constructor for the type, providing a
