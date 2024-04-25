@@ -1,4 +1,4 @@
-use collab::core::collab_plugin::EncodedCollab;
+use collab::entity::EncodedCollab;
 use collab_plugins::local_storage::indexeddb::CollabIndexeddb;
 use tokio::task::LocalSet;
 use uuid::Uuid;
