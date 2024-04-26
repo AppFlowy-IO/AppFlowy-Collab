@@ -107,6 +107,29 @@ impl CollabType {
   }
 }
 
+/// Validates the workspace ID for 'Folder' type collaborations.
+/// Ensures that the workspace ID contained in each Folder matches the expected workspace ID.
+/// A mismatch indicates that the Folder data may be incorrect, potentially due to it being
+/// overridden with data from another Folder.
+#[allow(dead_code)]
+fn validate_data_for_folder(collab: &Collab, workspace_id: &str) -> Result<(), Error> {
+  let txn = collab.transact();
+  let workspace_id_in_collab = collab
+    .get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])
+    .and_then(|map| map.get_str_with_txn(&txn, FOLDER_WORKSPACE_ID))
+    .ok_or_else(|| anyhow!("No required data: FOLDER_WORKSPACE_ID"))?;
+  drop(txn);
+
+  if workspace_id != workspace_id_in_collab {
+    return Err(anyhow!(
+      "Workspace ID mismatch: expected {}, but received {}",
+      workspace_id,
+      workspace_id_in_collab
+    ));
+  }
+  Ok(())
+}
+
 #[inline]
 fn no_required_data_error(collab_type: &CollabType, reason: &str) -> Error {
   anyhow!("No required data: {}:{}", collab_type, reason)

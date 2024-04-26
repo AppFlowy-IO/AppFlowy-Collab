@@ -59,6 +59,10 @@ pub trait CollabPlugin: Send + Sync + 'static {
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
+///
+/// A limitation of manually implementing traits for Arc<T> is that any default methods in the trait
+/// must also be explicitly implemented for Arc<T>. If not, Arc<T> will default to using the trait's
+/// default method implementations, even if the underlying type T has its own specific implementations
 #[async_trait]
 impl<T> CollabPlugin for Box<T>
 where
