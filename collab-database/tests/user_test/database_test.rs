@@ -100,9 +100,10 @@ async fn delete_database_test() {
 async fn duplicate_database_inline_view_test() {
   let uid = random_uid();
   let test = workspace_database_test(uid).await;
+  let database_id = "d1".to_string();
   let database = test
     .create_database(CreateDatabaseParams {
-      database_id: "d1".to_string(),
+      database_id: database_id.clone(),
       inline_view_id: "v1".to_string(),
       views: vec![CreateViewParams {
         database_id: "d1".to_string(),
@@ -117,10 +118,7 @@ async fn duplicate_database_inline_view_test() {
   let duplicated_view_id = duplicated_database.lock().get_inline_view_id();
   duplicated_database
     .lock()
-    .create_row(CreateRowParams {
-      id: 1.into(),
-      ..Default::default()
-    })
+    .create_row(CreateRowParams::new(1, database_id.clone()))
     .unwrap();
 
   assert_eq!(
@@ -138,9 +136,10 @@ async fn duplicate_database_view_test() {
   let test = workspace_database_test(random_uid()).await;
 
   // create the database with inline view
+  let database_id = "d1".to_string();
   let database = test
     .create_database(CreateDatabaseParams {
-      database_id: "d1".to_string(),
+      database_id: database_id.clone(),
       inline_view_id: "v1".to_string(),
       views: vec![CreateViewParams {
         database_id: "d1".to_string(),
@@ -164,10 +163,7 @@ async fn duplicate_database_view_test() {
   let duplicated_view = database.lock().duplicate_linked_view("v2").unwrap();
   database
     .lock()
-    .create_row(CreateRowParams {
-      id: 1.into(),
-      ..Default::default()
-    })
+    .create_row(CreateRowParams::new(1, database_id.clone()))
     .unwrap();
 
   // Duplicated database should have the same rows as the original database

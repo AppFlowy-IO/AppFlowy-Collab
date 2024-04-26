@@ -18,10 +18,11 @@ use crate::helper::TestFilter;
 
 #[tokio::test]
 async fn create_initial_database_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   assert_eq!(database_test.fields.get_all_field_orders().len(), 0);
   assert_eq!(database_test.get_database_rows().len(), 0);
-  assert_eq!(database_test.get_database_id(), "1".to_string());
+  assert_eq!(database_test.get_database_id(), database_id);
 
   let inline_view_id = database_test.get_inline_view_id();
   assert_eq!(inline_view_id, "v1".to_string());
@@ -36,7 +37,7 @@ async fn create_initial_database_test() {
       .unwrap(),
   );
 
-  assert_eq!(inline_view.database_id, "1".to_string(),);
+  assert_eq!(inline_view.database_id, database_id);
   assert_eq!(inline_view.name, "my first database view".to_string());
 }
 
@@ -75,14 +76,11 @@ async fn create_same_database_view_twice_test() {
 
 #[tokio::test]
 async fn create_database_row_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
-
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database_with_default_data(1, &database_id).await;
   let row_id = gen_row_id();
   database_test
-    .create_row(CreateRowParams {
-      id: row_id.clone(),
-      ..Default::default()
-    })
+    .create_row(CreateRowParams::new(row_id.clone(), database_id.clone()))
     .unwrap();
 
   let view = database_test.views.get_view("v1").unwrap();

@@ -11,7 +11,8 @@ use crate::database_test::helper::create_database;
 
 #[tokio::test]
 async fn observer_create_new_row_test() {
-  let database_test = Arc::new(create_database(1, "1").await);
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = Arc::new(create_database(1, &database_id).await);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
 
   let row_id = gen_row_id();
@@ -19,12 +20,8 @@ async fn observer_create_new_row_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .create_row(CreateRowParams {
-        id: cloned_row_id,
-        ..Default::default()
-      })
-      .unwrap();
+    let row = CreateRowParams::new(cloned_row_id, database_id.clone());
+    cloned_database_test.create_row(row).unwrap();
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -39,7 +36,8 @@ async fn observer_create_new_row_test() {
 
 #[tokio::test]
 async fn observer_row_cell_test() {
-  let database_test = Arc::new(create_database(1, "1").await);
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = Arc::new(create_database(1, &database_id).await);
   let row_change_rx = database_test.subscribe_row_change().unwrap();
   let row_id = gen_row_id();
 
@@ -49,10 +47,10 @@ async fn observer_row_cell_test() {
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
     cloned_database_test
-      .create_row(CreateRowParams {
-        id: cloned_row_id.clone(),
-        ..Default::default()
-      })
+      .create_row(CreateRowParams::new(
+        cloned_row_id.clone(),
+        database_id.clone(),
+      ))
       .unwrap();
 
     cloned_database_test.update_row(&cloned_row_id, |row| {
@@ -102,7 +100,8 @@ async fn observer_row_cell_test() {
 
 #[tokio::test]
 async fn observer_update_row_test() {
-  let database_test = Arc::new(create_database(1, "1").await);
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = Arc::new(create_database(1, &database_id).await);
   let row_change_rx = database_test.subscribe_row_change().unwrap();
 
   let row_id = gen_row_id();
@@ -110,10 +109,7 @@ async fn observer_update_row_test() {
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
     cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id.clone(),
-        ..Default::default()
-      })
+      .create_row(CreateRowParams::new(row_id.clone(), database_id.clone()))
       .unwrap();
 
     cloned_database_test.update_row(&row_id, |row| {
@@ -131,7 +127,8 @@ async fn observer_update_row_test() {
 
 #[tokio::test]
 async fn observer_delete_row_test() {
-  let database_test = Arc::new(create_database(1, "1").await);
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = Arc::new(create_database(1, &database_id).await);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
 
   let row_id = gen_row_id();
@@ -140,16 +137,13 @@ async fn observer_delete_row_test() {
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
     cloned_database_test
-      .create_row(CreateRowParams {
-        id: gen_row_id(),
-        ..Default::default()
-      })
+      .create_row(CreateRowParams::new(gen_row_id(), database_id.clone()))
       .unwrap();
     cloned_database_test
-      .create_row(CreateRowParams {
-        id: cloned_row_id.clone(),
-        ..Default::default()
-      })
+      .create_row(CreateRowParams::new(
+        cloned_row_id.clone(),
+        database_id.clone(),
+      ))
       .unwrap();
     cloned_database_test.remove_row(&cloned_row_id);
   });
@@ -167,7 +161,8 @@ async fn observer_delete_row_test() {
 
 #[tokio::test]
 async fn observer_delete_consecutive_rows_test() {
-  let database_test = Arc::new(create_database(1, "1").await);
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = Arc::new(create_database(1, &database_id).await);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
 
   let row_id_1 = gen_row_id();
@@ -177,29 +172,18 @@ async fn observer_delete_consecutive_rows_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
+
     cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_1.clone(),
-        ..Default::default()
-      })
+      .create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
       .unwrap();
     cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_2.clone(),
-        ..Default::default()
-      })
+      .create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
       .unwrap();
     cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_3.clone(),
-        ..Default::default()
-      })
+      .create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
       .unwrap();
     cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_4.clone(),
-        ..Default::default()
-      })
+      .create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
       .unwrap();
 
     cloned_database_test.remove_rows(&[row_id_2, row_id_3]);
@@ -217,7 +201,8 @@ async fn observer_delete_consecutive_rows_test() {
 }
 #[tokio::test]
 async fn observer_delete_non_consecutive_rows_test() {
-  let database_test = Arc::new(create_database(1, "1").await);
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = Arc::new(create_database(1, &database_id).await);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
 
   let row_id_1 = gen_row_id();
@@ -228,28 +213,16 @@ async fn observer_delete_non_consecutive_rows_test() {
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
     cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_1.clone(),
-        ..Default::default()
-      })
+      .create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
       .unwrap();
     cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_2.clone(),
-        ..Default::default()
-      })
+      .create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
       .unwrap();
     cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_3.clone(),
-        ..Default::default()
-      })
+      .create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
       .unwrap();
     cloned_database_test
-      .create_row(CreateRowParams {
-        id: row_id_4.clone(),
-        ..Default::default()
-      })
+      .create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
       .unwrap();
 
     cloned_database_test.remove_rows(&[row_id_2, row_id_4]);
