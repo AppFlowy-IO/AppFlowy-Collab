@@ -18,8 +18,8 @@ use crate::section::{Section, SectionItem, SectionMap};
 use crate::{impl_any_update, impl_i64_update, impl_option_i64_update, impl_str_update, UserId};
 use crate::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
 
-const VIEW_ID: &str = "id";
-const VIEW_NAME: &str = "name";
+pub(crate) const FOLDER_VIEW_ID: &str = "id";
+pub(crate) const FOLDER_VIEW_NAME: &str = "name";
 const VIEW_PARENT_ID: &str = "bid";
 const VIEW_DESC: &str = "desc";
 const VIEW_LAYOUT: &str = "layout";
@@ -36,7 +36,7 @@ pub fn timestamp() -> i64 {
 
 pub struct ViewsMap {
   uid: UserId,
-  container: MapRefWrapper,
+  pub(crate) container: MapRefWrapper,
   pub(crate) view_relations: Rc<ViewRelations>,
   pub(crate) section_map: Rc<SectionMap>,
   cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
@@ -278,7 +278,7 @@ impl ViewsMap {
 
   pub fn get_view_name_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<String> {
     let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-    map_ref.get_str_with_txn(txn, VIEW_NAME)
+    map_ref.get_str_with_txn(txn, FOLDER_VIEW_NAME)
   }
 
   pub(crate) fn insert_view(&self, view: View, index: Option<u32>) {
@@ -448,8 +448,10 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   section_map: &SectionMap,
 ) -> Option<View> {
   let parent_view_id = map_ref.get_str_with_txn(txn, VIEW_PARENT_ID)?;
-  let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
-  let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();
+  let id = map_ref.get_str_with_txn(txn, FOLDER_VIEW_ID)?;
+  let name = map_ref
+    .get_str_with_txn(txn, FOLDER_VIEW_NAME)
+    .unwrap_or_default();
   let desc = map_ref.get_str_with_txn(txn, VIEW_DESC).unwrap_or_default();
   let created_at = map_ref
     .get_i64_with_txn(txn, VIEW_CREATE_AT)
@@ -513,7 +515,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
     belongings: Rc<ViewRelations>,
     section_map: &'a SectionMap,
   ) -> Self {
-    map_ref.insert_str_with_txn(txn, VIEW_ID, view_id);
+    map_ref.insert_str_with_txn(txn, FOLDER_VIEW_ID, view_id);
     Self {
       view_id,
       map_ref,
@@ -555,7 +557,7 @@ pub struct ViewUpdate<'a, 'b, 'c> {
 }
 
 impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
-  impl_str_update!(set_name, set_name_if_not_none, VIEW_NAME);
+  impl_str_update!(set_name, set_name_if_not_none, FOLDER_VIEW_NAME);
   impl_str_update!(set_bid, set_bid_if_not_none, VIEW_PARENT_ID);
   impl_str_update!(set_desc, set_desc_if_not_none, VIEW_DESC);
   impl_any_update!(set_layout, set_layout_if_not_none, VIEW_LAYOUT, ViewLayout);

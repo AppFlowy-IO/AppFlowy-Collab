@@ -85,8 +85,8 @@ pub struct FolderNotify {
 /// * `subscription`: A `DeepEventsSubscription` object, managing the subscription for folder changes, like inserting a new view.
 /// * `notifier`: An optional `FolderNotify` object for notifying about changes in the folder.
 pub struct Folder {
-  uid: UserId,
-  inner: Arc<MutexCollab>,
+  pub(crate) uid: UserId,
+  pub(crate) inner: Arc<MutexCollab>,
   pub(crate) root: MapRefWrapper,
   pub views: Rc<ViewsMap>,
   section: Rc<SectionMap>,
