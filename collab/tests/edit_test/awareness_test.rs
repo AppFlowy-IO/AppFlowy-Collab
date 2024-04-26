@@ -11,7 +11,7 @@ async fn awareness_insert_test() {
   let mut collab = Collab::new(1, "1", "1", vec![], true);
   collab.emit_awareness_state();
   let (tx, rx) = mpsc::sync_channel(1);
-  let _update = collab.observe_awareness(move |_awareness, event| {
+  let _update = collab.observe_awareness(move |_awareness, event, _| {
     tx.send(event.clone()).unwrap();
   });
 
@@ -39,7 +39,7 @@ async fn clean_awareness_state_test() {
   let mut collab = Collab::new(1, "1", "1", vec![], true);
   collab.emit_awareness_state();
   let (tx, rx) = mpsc::sync_channel(1);
-  let _update = collab.observe_awareness(move |_awareness, event| {
+  let _update = collab.observe_awareness(move |_awareness, event, _| {
     tx.send(event.clone()).unwrap();
   });
   collab.clean_awareness_state();
@@ -56,7 +56,7 @@ async fn clean_awareness_state_sync_test() {
   collab_a.emit_awareness_state();
   doc_id_map_uid.insert(collab_a.get_doc().client_id(), 0.to_string());
   let (tx, rx) = mpsc::sync_channel(1);
-  let _update = collab_a.observe_awareness(move |awareness, event| {
+  let _update = collab_a.observe_awareness(move |awareness, event, _| {
     let update = gen_awareness_update_message(awareness, event).unwrap();
     tx.send(update).unwrap();
   });
@@ -69,7 +69,7 @@ async fn clean_awareness_state_sync_test() {
   doc_id_map_uid.insert(collab_b.get_doc().client_id(), 1.to_string());
   collab_b
     .get_mut_awareness()
-    .apply_update(awareness_update)
+    .apply_update(awareness_update, &collab_a.origin)
     .unwrap();
 
   // collab_a's awareness state should be synced to collab_b after applying the update
@@ -86,7 +86,7 @@ async fn clean_awareness_state_sync_test() {
   // apply the awareness state from collab_a to collab_b. collab_b's awareness state should be cleaned
   collab_b
     .get_mut_awareness()
-    .apply_update(awareness_update)
+    .apply_update(awareness_update, &collab_a.origin)
     .unwrap();
 
   let states = collab_b.get_awareness().get_states();
