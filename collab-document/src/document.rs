@@ -501,7 +501,7 @@ impl Document {
     let subscription = self
       .inner
       .lock()
-      .observe_awareness(move |awareness, _event| {
+      .observe_awareness(move |awareness, _event, _| {
         // convert the states to the hashmap and map/filter the invalid states
         let result: HashMap<ClientID, DocumentAwarenessState> = awareness.get_states()
           .iter()

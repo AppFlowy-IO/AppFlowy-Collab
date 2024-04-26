@@ -67,7 +67,7 @@ pub struct Collab {
 
   /// This [CollabClient] is used to verify the origin of a [Transaction] when
   /// applying a remote update.
-  origin: CollabOrigin,
+  pub origin: CollabOrigin,
 
   /// The [Doc] is the main data structure that is used to store the data.
   doc: Doc,
@@ -170,7 +170,7 @@ impl Collab {
     let undo_manager = Mutex::new(None);
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
-    let awareness = Awareness::new(doc.clone());
+    let awareness = Awareness::new(doc.clone(), origin.clone());
     Self {
       origin,
       object_id,
@@ -387,7 +387,7 @@ impl Collab {
 
   pub fn observe_awareness<F>(&mut self, f: F) -> AwarenessUpdateSubscription
   where
-    F: Fn(&Awareness, &Event) + 'static,
+    F: Fn(&Awareness, &Event, &CollabOrigin) + 'static,
   {
     self.awareness.on_update(f)
   }
@@ -707,12 +707,14 @@ fn observe_awareness(
   oid: String,
   origin: CollabOrigin,
 ) -> AwarenessUpdateSubscription {
-  awareness.on_update(move |awareness, event| {
-    if let Ok(update) = gen_awareness_update_message(awareness, event) {
-      plugins
-        .read()
-        .iter()
-        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
+  awareness.on_update(move |awareness, event, update_origin| {
+    if &origin == update_origin {
+      if let Ok(update) = gen_awareness_update_message(awareness, event) {
+        plugins
+          .read()
+          .iter()
+          .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
+      }
     }
   })
 }
