@@ -111,8 +111,7 @@ impl CollabType {
 /// Ensures that the workspace ID contained in each Folder matches the expected workspace ID.
 /// A mismatch indicates that the Folder data may be incorrect, potentially due to it being
 /// overridden with data from another Folder.
-#[allow(dead_code)]
-fn validate_data_for_folder(collab: &Collab, workspace_id: &str) -> Result<(), Error> {
+pub fn validate_data_for_folder(collab: &Collab, workspace_id: &str) -> Result<(), Error> {
   let txn = collab.transact();
   let workspace_id_in_collab = collab
     .get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])
