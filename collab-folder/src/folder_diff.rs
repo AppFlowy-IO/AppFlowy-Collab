@@ -53,7 +53,7 @@ impl Folder {
                   let deleted_view_ids = event
                     .keys(txn)
                     .iter()
-                    .map(|(k, _)| (&**k).to_owned())
+                    .map(|(k, _)| (**k).to_owned())
                     .collect::<Vec<String>>();
                   changes.insert(FolderViewChange::Deleted {
                     view_ids: deleted_view_ids,
