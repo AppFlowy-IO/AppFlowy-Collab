@@ -54,7 +54,7 @@ pub(crate) fn subscribe_folder_change(root: &mut MapRefWrapper) -> DeepEventsSub
 }
 
 pub(crate) fn subscribe_view_change(
-  uid: &UserId,
+  _uid: &UserId,
   root: &mut MapRefWrapper,
   view_cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
   change_tx: ViewChangeSender,
@@ -62,7 +62,6 @@ pub(crate) fn subscribe_view_change(
   section_map: Rc<SectionMap>,
   index_sender: IndexContentSender,
 ) -> DeepEventsSubscription {
-  let uid = uid.clone();
   root.observe_deep(move |txn, events| {
     for deep_event in events.iter() {
       match deep_event {
@@ -74,8 +73,7 @@ pub(crate) fn subscribe_view_change(
             match c {
               EntryChange::Inserted(v) => {
                 if let YrsValue::YMap(map_ref) = v {
-                  if let Some(view) =
-                    view_from_map_ref(&uid, map_ref, txn, &view_relations, &section_map)
+                  if let Some(view) = view_from_map_ref(map_ref, txn, &view_relations, &section_map)
                   {
                     view_cache
                       .write()
@@ -91,7 +89,7 @@ pub(crate) fn subscribe_view_change(
               },
               EntryChange::Updated(_, _) => {
                 if let Some(view) =
-                  view_from_map_ref(&uid, event.target(), txn, &view_relations, &section_map)
+                  view_from_map_ref(event.target(), txn, &view_relations, &section_map)
                 {
                   view_cache
                     .write()

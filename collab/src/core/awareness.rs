@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
+use crate::core::origin::CollabOrigin;
 use crate::error::CollabError;
 use thiserror::Error;
 use yrs::block::ClientID;
@@ -27,8 +28,9 @@ pub struct Awareness {
   doc: Doc,
   states: HashMap<ClientID, Value>,
   meta: HashMap<ClientID, MetaClientState>,
+  origin: CollabOrigin,
   #[allow(clippy::type_complexity)]
-  on_update: Option<Observer<Arc<dyn Fn(&Awareness, &Event) + 'static>>>,
+  on_update: Option<Observer<Arc<dyn Fn(&Awareness, &Event, &CollabOrigin) + 'static>>>,
 }
 
 unsafe impl Send for Awareness {}
@@ -38,20 +40,21 @@ impl Awareness {
   /// Creates a new instance of [Awareness] struct, which operates over a given document.
   /// Awareness instance has full ownership of that document. If necessary it can be accessed
   /// using either [Awareness::doc] or [Awareness::doc_mut] methods.
-  pub fn new(doc: Doc) -> Self {
+  pub fn new(doc: Doc, origin: CollabOrigin) -> Self {
     Awareness {
       doc,
       on_update: None,
       states: HashMap::new(),
       meta: HashMap::new(),
+      origin,
     }
   }
 
-  pub fn with_observer<F>(doc: Doc, f: F) -> Self
+  pub fn with_observer<F>(doc: Doc, origin: CollabOrigin, f: F) -> Self
   where
-    F: Fn(&Awareness, &Event) + 'static,
+    F: Fn(&Awareness, &Event, &CollabOrigin) + 'static,
   {
-    let mut awareness = Awareness::new(doc);
+    let mut awareness = Awareness::new(doc, origin);
     awareness.on_update(f);
     awareness
   }
@@ -59,7 +62,7 @@ impl Awareness {
   /// Returns a channel receiver for an incoming awareness events. This channel can be cloned.
   pub fn on_update<F>(&mut self, f: F) -> AwarenessUpdateSubscription
   where
-    F: Fn(&Awareness, &Event) + 'static,
+    F: Fn(&Awareness, &Event, &CollabOrigin) + 'static,
   {
     let eh = self.on_update.get_or_insert_with(Observer::default);
     eh.subscribe(Arc::new(f))
@@ -122,7 +125,7 @@ impl Awareness {
 
       // Invoke callbacks with the event.
       for cb in eh.callbacks() {
-        cb(self, &e);
+        cb(self, &e, &self.origin);
       }
     }
   }
@@ -142,7 +145,7 @@ impl Awareness {
       if let Some(eh) = self.on_update.as_ref() {
         let e = Event::new(Vec::default(), Vec::default(), vec![client_id]);
         for cb in eh.callbacks() {
-          cb(self, &e);
+          cb(self, &e, &self.origin);
         }
       }
     }
@@ -212,7 +215,11 @@ impl Awareness {
   ///
   /// If current instance has an observer channel (see: [Awareness::with_observer]), applied
   /// changes will also be emitted as events.
-  pub fn apply_update(&mut self, update: AwarenessUpdate) -> Result<(), Error> {
+  pub fn apply_update(
+    &mut self,
+    update: AwarenessUpdate,
+    origin: &CollabOrigin,
+  ) -> Result<(), Error> {
     let now = chrono::Utc::now().timestamp();
 
     let mut added = Vec::new();
@@ -277,18 +284,12 @@ impl Awareness {
       if !added.is_empty() || !updated.is_empty() || !removed.is_empty() {
         let e = Event::new(added, updated, removed);
         for cb in eh.callbacks() {
-          cb(self, &e);
+          cb(self, &e, origin);
         }
       }
     }
 
     Ok(())
-  }
-}
-
-impl Default for Awareness {
-  fn default() -> Self {
-    Awareness::new(Doc::new())
   }
 }
 
@@ -304,7 +305,8 @@ impl std::fmt::Debug for Awareness {
 
 /// Whenever a new callback is being registered, a [Subscription] is made. Whenever this
 /// subscription a registered callback is cancelled and will not be called any more.
-pub type AwarenessUpdateSubscription = Subscription<Arc<dyn Fn(&Awareness, &Event) + 'static>>;
+pub type AwarenessUpdateSubscription =
+  Subscription<Arc<dyn Fn(&Awareness, &Event, &CollabOrigin) + 'static>>;
 
 /// A structure that represents an encodable state of an [Awareness] struct.
 #[derive(Debug, Eq, PartialEq, Clone)]

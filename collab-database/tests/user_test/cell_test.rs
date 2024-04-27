@@ -1,7 +1,7 @@
 use collab::core::any_map::AnyMapExtension;
 use collab_database::rows::{new_cell_builder, CREATED_AT};
 use collab_database::rows::{CreateRowParams, LAST_MODIFIED};
-use collab_database::views::CreateDatabaseParams;
+use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 
 use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 
@@ -64,7 +64,12 @@ async fn update_not_exist_row_test() {
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
-      view_id: "v1".to_string(),
+      inline_view_id: "v1".to_string(),
+      views: vec![CreateViewParams {
+        database_id: "d1".to_string(),
+        view_id: "v1".to_string(),
+        ..Default::default()
+      }],
       ..Default::default()
     })
     .unwrap();
@@ -76,22 +81,24 @@ async fn update_not_exist_row_test() {
 }
 
 async fn user_database_with_default_row() -> WorkspaceDatabaseTest {
+  let database_id = "d1".to_string();
   let test = workspace_database_test(1).await;
   let database = test
     .create_database(CreateDatabaseParams {
-      database_id: "d1".to_string(),
-      view_id: "v1".to_string(),
+      database_id: database_id.clone(),
+      inline_view_id: "v1".to_string(),
+      views: vec![CreateViewParams {
+        database_id: "d1".to_string(),
+        view_id: "v1".to_string(),
+        ..Default::default()
+      }],
       ..Default::default()
     })
     .unwrap();
 
-  database.lock().create_row_in_view(
-    "v1",
-    CreateRowParams {
-      id: 1.into(),
-      ..Default::default()
-    },
-  );
+  database
+    .lock()
+    .create_row_in_view("v1", CreateRowParams::new(1, database_id));
 
   test
 }

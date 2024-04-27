@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, trace};
 use uuid::Uuid;
 
-use crate::database::{gen_row_id, timestamp};
+use crate::database::timestamp;
 use crate::error::DatabaseError;
 use crate::rows::{
   subscribe_row_data_change, Cell, Cells, CellsUpdate, RowChangeSender, RowId, RowMeta,
@@ -68,11 +68,11 @@ impl DatabaseRow {
           RowBuilder::new(txn, data.clone().into_inner(), meta.clone().into_inner())
             .update(|update| {
               update
-                .set_row_id(row.id)
+                .set_row_id(row.id, row.database_id)
                 .set_height(row.height)
                 .set_visibility(row.visibility)
                 .set_created_at(row.created_at)
-                .set_last_modified(row.created_at)
+                .set_last_modified(row.modified_at)
                 .set_cells(row.cells);
             })
             .done();
@@ -123,7 +123,7 @@ impl DatabaseRow {
 
   pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
     CollabType::DatabaseRow
-      .validate(collab)
+      .validate_require_data(collab)
       .map_err(|_| DatabaseError::NoRequiredData)?;
     Ok(())
   }
@@ -270,6 +270,7 @@ impl RowDetail {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Row {
   pub id: RowId,
+  pub database_id: String,
   pub cells: Cells,
   pub height: i32,
   pub visibility: bool,
@@ -301,10 +302,11 @@ impl Row {
   /// The default height of a [Row] is 60
   /// The default visibility of a [Row] is true
   /// The default created_at of a [Row] is the current timestamp
-  pub fn new<R: Into<RowId>>(id: R) -> Self {
+  pub fn new<R: Into<RowId>>(id: R, database_id: &str) -> Self {
     let timestamp = timestamp();
     Row {
       id: id.into(),
+      database_id: database_id.to_string(),
       cells: Default::default(),
       height: DEFAULT_ROW_HEIGHT,
       visibility: true,
@@ -313,9 +315,10 @@ impl Row {
     }
   }
 
-  pub fn empty(row_id: RowId) -> Self {
+  pub fn empty(row_id: RowId, database_id: &str) -> Self {
     Self {
       id: row_id,
+      database_id: database_id.to_string(),
       cells: Cells::new(),
       height: DEFAULT_ROW_HEIGHT,
       visibility: true,
@@ -412,7 +415,7 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
     LAST_MODIFIED
   );
 
-  pub fn set_row_id(self, new_row_id: RowId) -> Self {
+  pub fn set_row_id(self, new_row_id: RowId, database_id: String) -> Self {
     let old_row_meta = row_id_from_map_ref(self.txn, self.map_ref)
       .and_then(|row_id| row_id.parse::<Uuid>().ok())
       .map(|row_id| RowMeta::from_map_ref(self.txn, &row_id, self.meta_ref));
@@ -420,6 +423,10 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
     self
       .map_ref
       .insert_str_with_txn(self.txn, ROW_ID, new_row_id.clone());
+
+    self
+      .map_ref
+      .insert_str_with_txn(self.txn, ROW_DATABASE_ID, database_id);
 
     if let Ok(new_row_id) = new_row_id.parse::<Uuid>() {
       self.meta_ref.clear(self.txn);
@@ -456,6 +463,7 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
 }
 
 pub(crate) const ROW_ID: &str = "id";
+pub(crate) const ROW_DATABASE_ID: &str = "database_id";
 pub(crate) const ROW_VISIBILITY: &str = "visibility";
 
 pub const ROW_HEIGHT: &str = "height";
@@ -502,6 +510,10 @@ pub fn row_id_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<RowI
 /// Return a [Row] from a [MapRef]
 pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, _meta_ref: &MapRef, txn: &T) -> Option<Row> {
   let id = RowId::from(map_ref.get_str_with_txn(txn, ROW_ID)?);
+  // for historical data, there is no database_id. we use empty database id instead
+  let database_id = map_ref
+    .get_str_with_txn(txn, ROW_DATABASE_ID)
+    .unwrap_or_default();
   let visibility = map_ref
     .get_bool_with_txn(txn, ROW_VISIBILITY)
     .unwrap_or(true);
@@ -523,6 +535,7 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, _meta_ref: &MapRef, txn: &
 
   Some(Row {
     id,
+    database_id,
     cells,
     height: height as i32,
     visibility,
@@ -534,12 +547,14 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, _meta_ref: &MapRef, txn: &
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CreateRowParams {
   pub id: RowId,
+  pub database_id: String,
   pub cells: Cells,
   pub height: i32,
   pub visibility: bool,
   #[serde(skip)]
   pub row_position: OrderObjectPosition,
-  pub timestamp: i64,
+  pub created_at: i64,
+  pub modified_at: i64,
 }
 
 pub(crate) struct CreateRowParamsValidator;
@@ -550,37 +565,50 @@ impl CreateRowParamsValidator {
       return Err(DatabaseError::InvalidRowID("row_id is empty"));
     }
 
-    if params.timestamp == 0 {
-      params.timestamp = timestamp();
+    let timestamp = timestamp();
+    if params.created_at == 0 {
+      params.created_at = timestamp;
+    }
+    if params.modified_at == 0 {
+      params.modified_at = timestamp;
     }
 
     Ok(params)
   }
 }
 
-impl Default for CreateRowParams {
-  fn default() -> Self {
+impl CreateRowParams {
+  pub fn new<T: Into<RowId>>(id: T, database_id: String) -> Self {
+    let timestamp = timestamp();
     Self {
-      id: gen_row_id(),
+      id: id.into(),
+      database_id,
       cells: Default::default(),
       height: 60,
       visibility: true,
       row_position: OrderObjectPosition::default(),
-      timestamp: 0,
+      created_at: timestamp,
+      modified_at: timestamp,
     }
   }
-}
 
-impl CreateRowParams {
-  pub fn new(id: RowId) -> Self {
-    Self {
-      id,
-      cells: Cells::default(),
-      height: 60,
-      visibility: true,
-      row_position: OrderObjectPosition::default(),
-      timestamp: timestamp(),
-    }
+  pub fn with_cells(mut self, cells: Cells) -> Self {
+    self.cells = cells;
+    self
+  }
+
+  pub fn with_height(mut self, height: i32) -> Self {
+    self.height = height;
+    self
+  }
+
+  pub fn with_visibility(mut self, visibility: bool) -> Self {
+    self.visibility = visibility;
+    self
+  }
+  pub fn with_row_position(mut self, row_position: OrderObjectPosition) -> Self {
+    self.row_position = row_position;
+    self
   }
 }
 
@@ -588,11 +616,12 @@ impl From<CreateRowParams> for Row {
   fn from(params: CreateRowParams) -> Self {
     Row {
       id: params.id,
+      database_id: params.database_id,
       cells: params.cells,
       height: params.height,
       visibility: params.visibility,
-      created_at: params.timestamp,
-      modified_at: params.timestamp,
+      created_at: params.created_at,
+      modified_at: params.modified_at,
     }
   }
 }

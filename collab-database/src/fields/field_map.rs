@@ -43,8 +43,6 @@ impl FieldMap {
           .set_last_modified(timestamp())
           .set_primary(field.is_primary)
           .set_field_type(field.field_type)
-          .set_width(field.width)
-          .set_visibility(field.visibility)
           .set_type_options(field.type_options);
       })
       .done();

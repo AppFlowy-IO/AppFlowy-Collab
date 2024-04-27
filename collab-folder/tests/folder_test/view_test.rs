@@ -34,6 +34,9 @@ async fn create_view_with_sub_view_test() {
   let r_sub_view = folder_test.views.get_view(&r_view.children[0].id).unwrap();
   assert_eq!(child_view.name, r_sub_view.name);
   assert_eq!(child_view.parent_view_id, r_sub_view.parent_view_id);
+
+  let views = folder_test.views.get_all_views();
+  assert_eq!(views.len(), 3);
 }
 
 #[tokio::test]
@@ -257,7 +260,7 @@ async fn move_view_across_parent_test() {
   let view_1 = folder_test.views.get_view(view_1_id).unwrap();
   let view_2 = folder_test.views.get_view(view_2_id).unwrap();
   let view_1_child = folder_test.views.get_view(view_1_child_id).unwrap();
-  let workspace = folder_test.get_current_workspace().unwrap();
+  let workspace = folder_test.get_workspace_info(workspace_id).unwrap();
   assert_eq!(view_1.children.items.iter().len(), 0);
   assert_eq!(view_2.children.items.iter().len(), 0);
   assert_eq!(view_1_child.parent_view_id, workspace_id);
@@ -272,7 +275,7 @@ async fn move_view_across_parent_test() {
   let view_1 = folder_test.views.get_view(view_1_id).unwrap();
   let view_2 = folder_test.views.get_view(view_2_id).unwrap();
   let view_1_child = folder_test.views.get_view(view_1_child_id).unwrap();
-  let workspace = folder_test.get_current_workspace().unwrap();
+  let workspace = folder_test.get_workspace_info(workspace_id).unwrap();
   assert_eq!(view_1.children.items.iter().len(), 0);
   assert_eq!(view_2.children.items.iter().len(), 0);
   assert_eq!(view_1_child.parent_view_id, workspace_id);
@@ -288,7 +291,7 @@ async fn move_view_across_parent_test() {
   let view_1 = folder_test.views.get_view(view_1_id).unwrap();
   let view_2 = folder_test.views.get_view(view_2_id).unwrap();
   let view_1_child = folder_test.views.get_view(view_1_child_id).unwrap();
-  let workspace = folder_test.get_current_workspace().unwrap();
+  let workspace = folder_test.get_workspace_info(workspace_id).unwrap();
   assert_eq!(view_1.children.items.iter().len(), 1);
   assert_eq!(view_1.children.items.first().unwrap().id, view_1_child_id);
   assert_eq!(view_1_child.parent_view_id, view_1_id);
@@ -306,7 +309,8 @@ async fn create_view_test_with_index() {
   // 5. v2 -> v3 -> v1 -> v4 -> v5
   // 6. v2 -> v3 -> v1 -> v6 -> v4 -> v5
   let uid = UserId::from(1);
-  let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
+  let workspace_id = "w1".to_string();
+  let folder_test = create_folder_with_workspace(uid.clone(), &workspace_id).await;
   let view_1 = make_test_view("v1", "w1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);
   let view_3 = make_test_view("v3", "w1", vec![]);
@@ -321,7 +325,7 @@ async fn create_view_test_with_index() {
   folder_test.insert_view(view_5.clone(), None);
   folder_test.insert_view(view_6.clone(), Some(3));
 
-  let views = folder_test.get_current_workspace_views();
+  let views = folder_test.get_views_belong_to(&workspace_id);
   assert_eq!(views.first().unwrap().id, view_2.id);
   assert_eq!(views.get(1).unwrap().id, view_3.id);
   assert_eq!(views.get(2).unwrap().id, view_1.id);
@@ -333,10 +337,11 @@ async fn create_view_test_with_index() {
 #[tokio::test]
 async fn check_created_and_edited_time_test() {
   let uid = UserId::from(12345);
-  let folder_test = create_folder_with_workspace(uid.clone(), "w1").await;
+  let workspace_id = "w1".to_string();
+  let folder_test = create_folder_with_workspace(uid.clone(), &workspace_id).await;
   let view = make_test_view("v1", "w1", vec![]);
   folder_test.insert_view(view, Some(0));
-  let views = folder_test.get_current_workspace_views();
+  let views = folder_test.get_views_belong_to(&workspace_id);
   let v1 = views.first().unwrap();
   assert_eq!(v1.created_by.unwrap(), uid.as_i64());
   assert_eq!(v1.last_edited_by.unwrap(), uid.as_i64());

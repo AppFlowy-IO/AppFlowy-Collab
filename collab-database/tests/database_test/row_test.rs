@@ -9,7 +9,8 @@ use crate::database_test::helper::{
 
 #[tokio::test]
 async fn create_row_shared_by_two_view_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
@@ -19,10 +20,7 @@ async fn create_row_shared_by_two_view_test() {
 
   let row_id = gen_row_id();
   database_test
-    .create_row(CreateRowParams {
-      id: row_id.clone(),
-      ..Default::default()
-    })
+    .create_row(CreateRowParams::new(row_id.clone(), database_id.clone()))
     .unwrap();
 
   let view_1 = database_test.views.get_view("v1").unwrap();
@@ -33,7 +31,8 @@ async fn create_row_shared_by_two_view_test() {
 
 #[tokio::test]
 async fn delete_row_shared_by_two_view_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
@@ -42,10 +41,7 @@ async fn delete_row_shared_by_two_view_test() {
   database_test.create_linked_view(params).unwrap();
 
   let row_order = database_test
-    .create_row(CreateRowParams {
-      id: gen_row_id(),
-      ..Default::default()
-    })
+    .create_row(CreateRowParams::new(gen_row_id(), database_id.clone()))
     .unwrap();
   database_test.remove_row(&row_order.id);
 
@@ -109,12 +105,10 @@ async fn move_row_in_views_test() {
 
 #[tokio::test]
 async fn insert_row_in_views_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
-  let row = CreateRowParams {
-    id: 4.into(),
-    row_position: OrderObjectPosition::After("2".to_string()),
-    ..Default::default()
-  };
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database_with_default_data(1, &database_id).await;
+  let row = CreateRowParams::new(4, database_id.clone())
+    .with_row_position(OrderObjectPosition::After(2.to_string()));
   database_test.create_row_in_view("v1", row);
 
   let rows = database_test.get_rows_for_view("v1");
@@ -123,11 +117,8 @@ async fn insert_row_in_views_test() {
   assert_eq!(rows[2].id, 4.into());
   assert_eq!(rows[3].id, 3.into());
 
-  let row = CreateRowParams {
-    id: 5.into(),
-    row_position: OrderObjectPosition::Before(2.to_string()),
-    ..Default::default()
-  };
+  let row = CreateRowParams::new(5, database_id.clone())
+    .with_row_position(OrderObjectPosition::Before(2.to_string()));
   database_test.create_row_in_view("v1", row);
 
   let rows = database_test.get_rows_for_view("v1");
@@ -137,11 +128,8 @@ async fn insert_row_in_views_test() {
   assert_eq!(rows[3].id, 4.into());
   assert_eq!(rows[4].id, 3.into());
 
-  let row = CreateRowParams {
-    id: 6.into(),
-    row_position: OrderObjectPosition::After(10.to_string()),
-    ..Default::default()
-  };
+  let row = CreateRowParams::new(6, database_id.clone())
+    .with_row_position(OrderObjectPosition::After(10.to_string()));
   database_test.create_row_in_view("v1", row);
 
   let rows = database_test.get_rows_for_view("v1");
@@ -155,12 +143,10 @@ async fn insert_row_in_views_test() {
 
 #[tokio::test]
 async fn insert_row_at_front_in_views_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
-  let row = CreateRowParams {
-    id: 4.into(),
-    row_position: OrderObjectPosition::Start,
-    ..Default::default()
-  };
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database_with_default_data(1, &database_id).await;
+  let row =
+    CreateRowParams::new(4, database_id.clone()).with_row_position(OrderObjectPosition::Start);
   database_test.create_row_in_view("v1", row);
 
   let rows = database_test.get_rows_for_view("v1");
@@ -172,11 +158,9 @@ async fn insert_row_at_front_in_views_test() {
 
 #[tokio::test]
 async fn insert_row_at_last_in_views_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
-  let row = CreateRowParams {
-    id: 4.into(),
-    ..Default::default()
-  };
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database_with_default_data(1, &database_id).await;
+  let row = CreateRowParams::new(4, database_id.clone());
   database_test.create_row_in_view("v1", row);
 
   let rows = database_test.get_rows_for_view("v1");
@@ -222,13 +206,11 @@ async fn duplicate_last_row_test() {
 
 #[tokio::test]
 async fn document_id_of_row_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   let row_id = Uuid::parse_str("43f6c30f-9d23-470c-a0dd-8819f08dcf2f").unwrap();
   let row_order = database_test
-    .create_row(CreateRowParams {
-      id: RowId::from(row_id.clone().to_string()),
-      ..Default::default()
-    })
+    .create_row(CreateRowParams::new(row_id, database_id.clone()))
     .unwrap();
 
   let row = database_test.get_row(&row_order.id);
@@ -242,13 +224,11 @@ async fn document_id_of_row_test() {
 
 #[tokio::test]
 async fn update_row_meta_test() {
-  let database_test = create_database(1, "1").await;
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id).await;
   let row_id = Uuid::parse_str("43f6c30f-9d23-470c-a0dd-8819f08dcf2f").unwrap();
   let row_order = database_test
-    .create_row(CreateRowParams {
-      id: RowId::from(row_id.clone().to_string()),
-      ..Default::default()
-    })
+    .create_row(CreateRowParams::new(row_id, database_id.clone()))
     .unwrap();
 
   let row_meta_before = database_test.get_row_meta(&row_order.id).unwrap();

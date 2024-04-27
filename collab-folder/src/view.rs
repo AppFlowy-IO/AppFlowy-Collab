@@ -5,11 +5,13 @@ use std::sync::Arc;
 use anyhow::bail;
 use collab::core::collab::IndexContentSender;
 use collab::preclude::{
-  Any, DeepEventsSubscription, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  Any, DeepEventsSubscription, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
+  TransactionMut, Value,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
+use tracing::{instrument, trace};
 
 use crate::folder_observe::ViewChangeSender;
 use crate::section::{Section, SectionItem, SectionMap};
@@ -38,7 +40,7 @@ pub struct ViewsMap {
   container: MapRefWrapper,
   pub(crate) view_relations: Rc<ViewRelations>,
   pub(crate) section_map: Rc<SectionMap>,
-  view_cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
+  cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
 
   #[allow(dead_code)]
   subscription: Option<DeepEventsSubscription>,
@@ -54,8 +56,10 @@ impl ViewsMap {
     view_relations: Rc<ViewRelations>,
     section_map: Rc<SectionMap>,
     index_json_sender: IndexContentSender,
+    views: HashMap<String, Arc<View>>,
   ) -> ViewsMap {
-    let view_cache = Arc::new(RwLock::new(HashMap::new()));
+    trace!("number of views in folder: {}", views.len());
+    let view_cache = Arc::new(RwLock::new(views));
     let subscription = change_tx.as_ref().map(|change_tx| {
       subscribe_view_change(
         uid,
@@ -73,7 +77,7 @@ impl ViewsMap {
       subscription,
       change_tx,
       view_relations,
-      view_cache,
+      cache: view_cache,
       section_map,
     }
   }
@@ -153,20 +157,14 @@ impl ViewsMap {
         .children
         .iter()
         .flat_map(|child| {
-          let cache_view = self.get_cache_view(txn, &child.id);
+          let cache_view = self.get_cache_view(&child.id);
           match cache_view {
             None => {
               let view = self
                 .container
                 .get_map_with_txn(txn, &child.id)
                 .and_then(|map| {
-                  view_from_map_ref(
-                    &self.uid,
-                    &map,
-                    txn,
-                    &self.view_relations,
-                    &self.section_map,
-                  )
+                  view_from_map_ref(&map, txn, &self.view_relations, &self.section_map)
                 })
                 .map(Arc::new);
               self.set_cache_view(view.clone());
@@ -211,9 +209,42 @@ impl ViewsMap {
       .collect::<Vec<_>>()
   }
 
-  pub fn get_view(&self, view_id: &str) -> Option<Arc<View>> {
+  pub fn get_all_views(&self) -> Vec<Arc<View>> {
     let txn = self.container.transact();
-    self.get_view_with_txn(&txn, view_id)
+    let mut write_guard = self.cache.write();
+    self
+      .container
+      .iter(&txn)
+      .flat_map(|(k, v)| {
+        if let Some(view) = write_guard.get(k).cloned() {
+          return Some(view);
+        }
+
+        // Process new view from container if not cached
+        match v {
+          Value::YMap(map) => {
+            let view =
+              view_from_map_ref(&map, &txn, &self.view_relations, &self.section_map).map(Arc::new);
+            if let Some(ref view) = view {
+              write_guard.insert(k.to_string(), view.clone());
+            }
+            view
+          },
+          _ => None,
+        }
+      })
+      .collect()
+  }
+
+  #[instrument(level = "trace", skip_all)]
+  pub fn get_view(&self, view_id: &str) -> Option<Arc<View>> {
+    match self.get_cache_view(view_id) {
+      None => {
+        let txn = self.container.transact();
+        self.get_view_with_txn(&txn, view_id)
+      },
+      Some(view) => Some(view),
+    }
   }
 
   pub fn get_orphan_views(&self) -> Vec<Arc<View>> {
@@ -235,17 +266,11 @@ impl ViewsMap {
   /// Return the view with the given view id.
   /// The view is support nested, by default, we only load the view and its children.
   pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<Arc<View>> {
-    let view = self.get_cache_view(txn, view_id);
+    let view = self.get_cache_view(view_id);
     if view.is_none() {
       let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-      let view = view_from_map_ref(
-        &self.uid,
-        &map_ref,
-        txn,
-        &self.view_relations,
-        &self.section_map,
-      )
-      .map(Arc::new);
+      let view =
+        view_from_map_ref(&map_ref, txn, &self.view_relations, &self.section_map).map(Arc::new);
       self.set_cache_view(view.clone());
       return view;
     }
@@ -394,16 +419,17 @@ impl ViewsMap {
 
   fn set_cache_view(&self, view: Option<Arc<View>>) {
     if let Some(view) = view {
-      self.view_cache.write().insert(view.id.clone(), view);
+      trace!("Update cache view: {}", view.id);
+      self.cache.write().insert(view.id.clone(), view);
     }
   }
 
-  fn get_cache_view<T: ReadTxn>(&self, _txn: &T, view_id: &str) -> Option<Arc<View>> {
-    self.view_cache.read().get(view_id).cloned()
+  fn get_cache_view(&self, view_id: &str) -> Option<Arc<View>> {
+    self.cache.read().get(view_id).cloned()
   }
 
   fn remove_cache_view(&self, view_id: &str) {
-    self.view_cache.write().remove(view_id);
+    self.cache.write().remove(view_id);
   }
 
   // some history data may not have the timestamp and it's value equal to 0, so we should normalize the timestamp.
@@ -417,7 +443,6 @@ impl ViewsMap {
 }
 
 pub(crate) fn view_from_map_ref<T: ReadTxn>(
-  _uid: &UserId,
   map_ref: &MapRef,
   txn: &T,
   view_relations: &Rc<ViewRelations>,
@@ -523,6 +548,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
 }
 
 pub struct ViewUpdate<'a, 'b, 'c> {
+  #[allow(dead_code)]
   uid: &'a UserId,
   view_id: &'a str,
   map_ref: &'c MapRefWrapper,
@@ -669,13 +695,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   }
 
   pub fn done(self) -> Option<View> {
-    view_from_map_ref(
-      self.uid,
-      self.map_ref,
-      self.txn,
-      &self.children_map,
-      self.section_map,
-    )
+    view_from_map_ref(self.map_ref, self.txn, &self.children_map, self.section_map)
   }
 }
 
@@ -776,6 +796,10 @@ pub enum ViewLayout {
 }
 
 impl ViewLayout {
+  pub fn is_document(&self) -> bool {
+    matches!(self, ViewLayout::Document)
+  }
+
   pub fn is_database(&self) -> bool {
     matches!(
       self,

@@ -12,7 +12,7 @@ use serde::Serialize;
 use serde_json::json;
 
 use tokio_stream::wrappers::WatchStream;
-use tracing::{error, trace};
+use tracing::{error, instrument, trace};
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
@@ -28,12 +28,13 @@ use yrs::{
 use crate::core::awareness::{
   gen_awareness_update_message, Awareness, AwarenessUpdateSubscription, Event,
 };
-use crate::core::collab_plugin::{CollabPlugin, CollabPluginType, EncodedCollab};
+use crate::core::collab_plugin::{CollabPlugin, CollabPluginType};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
-use crate::core::transaction::{DocTransactionExtension, TransactionRetry};
+use crate::core::transaction::{DocTransactionExtension, TransactionMutWrapper, TransactionRetry};
 use crate::core::value::YrsValueExtension;
+use crate::entity::EncodedCollab;
 use crate::error::CollabError;
 use crate::preclude::{ArrayRefWrapper, JsonValue, MapRefExtension};
 use crate::util::insert_json_value_to_map_ref;
@@ -66,7 +67,7 @@ pub struct Collab {
 
   /// This [CollabClient] is used to verify the origin of a [Transaction] when
   /// applying a remote update.
-  origin: CollabOrigin,
+  pub origin: CollabOrigin,
 
   /// The [Doc] is the main data structure that is used to store the data.
   doc: Doc,
@@ -94,7 +95,9 @@ pub struct Collab {
 
 impl Drop for Collab {
   fn drop(&mut self) {
-    trace!("Collab:{} dropped", self.object_id);
+    if cfg!(feature = "verbose_log") {
+      trace!("Collab:{} dropped", self.object_id);
+    }
   }
 }
 
@@ -147,6 +150,13 @@ impl Collab {
     Ok(collab)
   }
 
+  pub fn clear_plugins(&mut self) {
+    let plugins = self.plugins.remove_all();
+    for plugin in plugins {
+      plugin.destroy();
+    }
+  }
+
   pub fn new_with_origin<T: AsRef<str>>(
     origin: CollabOrigin,
     object_id: T,
@@ -160,7 +170,7 @@ impl Collab {
     let undo_manager = Mutex::new(None);
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
-    let awareness = Awareness::new(doc.clone());
+    let awareness = Awareness::new(doc.clone(), origin.clone());
     Self {
       origin,
       object_id,
@@ -377,7 +387,7 @@ impl Collab {
 
   pub fn observe_awareness<F>(&mut self, f: F) -> AwarenessUpdateSubscription
   where
-    F: Fn(&Awareness, &Event) + 'static,
+    F: Fn(&Awareness, &Event, &CollabOrigin) + 'static,
   {
     self.awareness.on_update(f)
   }
@@ -627,7 +637,7 @@ impl Collab {
   }
 
   pub fn transact(&self) -> Transaction {
-    TransactionRetry::new(&self.doc).get_read_txn()
+    TransactionRetry::new(&self.doc, &self.object_id).get_read_txn()
   }
 
   pub fn try_transaction(&self) -> Result<Transaction, CollabError> {
@@ -637,18 +647,18 @@ impl Collab {
       .map_err(|e| CollabError::Internal(Box::new(e)))
   }
 
-  pub fn try_transaction_mut(&self) -> Result<TransactionMut, CollabError> {
-    TransactionRetry::new(&self.doc).try_get_write_txn()
+  pub fn try_transaction_mut(&self) -> Result<TransactionMutWrapper, CollabError> {
+    TransactionRetry::new(&self.doc, &self.object_id).try_get_write_txn()
   }
 
   pub fn try_origin_transaction_mut(&self) -> Result<TransactionMut, CollabError> {
-    TransactionRetry::new(&self.doc).try_get_write_txn_with(self.origin.clone())
+    TransactionRetry::new(&self.doc, &self.object_id).try_get_write_txn_with(self.origin.clone())
   }
 
   /// Returns a transaction that can mutate the document. This transaction will carry the
   /// origin of the current user.
-  pub fn origin_transact_mut(&self) -> TransactionMut {
-    TransactionRetry::new(&self.doc).get_write_txn_with(self.origin.clone())
+  pub fn origin_transact_mut(&self) -> TransactionMutWrapper {
+    TransactionRetry::new(&self.doc, &self.object_id).get_write_txn_with(self.origin.clone())
   }
 
   /// Returns a transaction that can mutate the document. This transaction will carry the
@@ -660,7 +670,8 @@ impl Collab {
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let mut txn = TransactionRetry::new(&self.doc).get_write_txn_with(self.origin.clone());
+    let mut txn =
+      TransactionRetry::new(&self.doc, &self.object_id).get_write_txn_with(self.origin.clone());
     let ret = f(&mut txn);
     drop(txn);
     ret
@@ -669,13 +680,23 @@ impl Collab {
   fn map_wrapper_with(&self, map_ref: MapRef) -> MapRefWrapper {
     MapRefWrapper::new(
       map_ref,
-      CollabContext::new(self.origin.clone(), self.plugins.clone(), self.doc.clone()),
+      CollabContext::new(
+        self.origin.clone(),
+        self.plugins.clone(),
+        self.doc.clone(),
+        self.object_id.clone(),
+      ),
     )
   }
   fn array_wrapper_with(&self, array_ref: ArrayRef) -> ArrayRefWrapper {
     ArrayRefWrapper::new(
       array_ref,
-      CollabContext::new(self.origin.clone(), self.plugins.clone(), self.doc.clone()),
+      CollabContext::new(
+        self.origin.clone(),
+        self.plugins.clone(),
+        self.doc.clone(),
+        self.object_id.clone(),
+      ),
     )
   }
 }
@@ -686,12 +707,14 @@ fn observe_awareness(
   oid: String,
   origin: CollabOrigin,
 ) -> AwarenessUpdateSubscription {
-  awareness.on_update(move |awareness, event| {
-    if let Ok(update) = gen_awareness_update_message(awareness, event) {
-      plugins
-        .read()
-        .iter()
-        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
+  awareness.on_update(move |awareness, event, update_origin| {
+    if &origin == update_origin {
+      if let Ok(update) = gen_awareness_update_message(awareness, event) {
+        plugins
+          .read()
+          .iter()
+          .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
+      }
     }
   })
 }
@@ -824,26 +847,30 @@ pub struct CollabContext {
   doc: Doc,
   #[allow(dead_code)]
   plugins: Plugins,
+  object_id: String,
 }
 
 impl CollabContext {
-  fn new(origin: CollabOrigin, plugins: Plugins, doc: Doc) -> Self {
+  fn new(origin: CollabOrigin, plugins: Plugins, doc: Doc, object_id: String) -> Self {
     Self {
       origin,
       plugins,
       doc,
+      object_id,
     }
   }
 
   pub fn transact(&self) -> Transaction {
-    TransactionRetry::new(&self.doc).get_read_txn()
+    TransactionRetry::new(&self.doc, &self.object_id).get_read_txn()
   }
 
+  #[instrument(level = "trace", skip_all)]
   pub fn with_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let mut txn = TransactionRetry::new(&self.doc).get_write_txn_with(self.origin.clone());
+    let mut txn =
+      TransactionRetry::new(&self.doc, &self.object_id).get_write_txn_with(self.origin.clone());
     let ret = f(&mut txn);
     drop(txn);
     ret
@@ -898,6 +925,10 @@ pub struct Plugins(Arc<RwLock<Vec<Box<dyn CollabPlugin>>>>);
 impl Plugins {
   pub fn new(plugins: Vec<Box<dyn CollabPlugin>>) -> Plugins {
     Self(Arc::new(RwLock::new(plugins)))
+  }
+
+  pub fn remove_all(&self) -> Vec<Box<dyn CollabPlugin>> {
+    self.0.write().drain(..).collect()
   }
 }
 

@@ -98,11 +98,11 @@ async fn retry_write_txn_success_test() {
   setup_log();
   let collab = Collab::new(1, "1", "1", vec![], false);
   let doc = collab.get_doc().clone();
-  let txn = TransactionRetry::new(&doc).get_write_txn_with(CollabOrigin::Empty);
+  let txn = TransactionRetry::new(&doc, "1").get_write_txn_with(CollabOrigin::Empty);
 
   let doc = collab.get_doc().clone();
   let result = tokio::task::spawn_blocking(move || {
-    let _txn = TransactionRetry::new(&doc).try_get_write_txn_with(CollabOrigin::Empty)?;
+    let _txn = TransactionRetry::new(&doc, "1").try_get_write_txn_with(CollabOrigin::Empty)?;
     Ok::<(), CollabError>(())
   });
 
@@ -121,11 +121,11 @@ async fn retry_write_txn_fail_test() {
   setup_log();
   let collab = Collab::new(1, "1", "1", vec![], false);
   let doc = collab.get_doc().clone();
-  let _txn = TransactionRetry::new(&doc).get_write_txn_with(CollabOrigin::Empty);
+  let _txn = TransactionRetry::new(&doc, "1").get_write_txn_with(CollabOrigin::Empty);
 
   let doc = collab.get_doc().clone();
   let result = tokio::task::spawn_blocking(move || {
-    let _txn = TransactionRetry::new(&doc).try_get_write_txn_with(CollabOrigin::Empty)?;
+    let _txn = TransactionRetry::new(&doc, "1").try_get_write_txn_with(CollabOrigin::Empty)?;
 
     Ok::<(), CollabError>(())
   });

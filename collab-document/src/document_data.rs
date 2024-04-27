@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use collab::core::collab::MutexCollab;
-use collab::core::collab_plugin::EncodedCollab;
 use collab::core::origin::CollabOrigin;
+use collab::entity::EncodedCollab;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
 use nanoid::nanoid;
@@ -100,7 +100,7 @@ pub fn default_document_collab_data(document_id: &str) -> Result<EncodedCollab, 
   let lock_guard = collab.lock();
   lock_guard.encode_collab_v1(|collab| {
     CollabType::Document
-      .validate(collab)
+      .validate_require_data(collab)
       .map_err(|_| DocumentError::NoRequiredData)
   })
 }

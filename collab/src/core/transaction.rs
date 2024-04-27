@@ -1,11 +1,13 @@
+use std::ops::{Deref, DerefMut};
 use std::thread::sleep;
 use std::time::Duration;
+use tracing::instrument;
 
-use crate::core::collab_plugin::EncodedCollab;
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, Transaction, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
+use crate::entity::EncodedCollab;
 use crate::error::CollabError;
 
 /// TransactionRetry is a wrapper of Transaction and TransactionMut.
@@ -17,15 +19,17 @@ pub struct TransactionRetry<'a> {
   doc: &'a Doc,
   timer: Timer,
   retry_interval: Duration,
+  object_id: &'a str,
 }
 
 impl<'a> TransactionRetry<'a> {
-  pub fn new(doc: &'a Doc) -> Self {
+  pub fn new(doc: &'a Doc, object_id: &'a str) -> Self {
     Self {
       timeout: Duration::from_secs(2),
-      retry_interval: Duration::from_millis(50),
+      retry_interval: Duration::from_millis(500),
       doc,
       timer: Timer::start(),
+      object_id,
     }
   }
 
@@ -40,40 +44,43 @@ impl<'a> TransactionRetry<'a> {
         },
       }
     }
-    tracing::warn!("[Txn]: acquire read txn timeout");
+    tracing::warn!("[Txn]: acquire read txn timeout: {}", self.object_id);
     self.doc.transact()
   }
 
-  pub fn try_get_write_txn(&mut self) -> Result<TransactionMut<'a>, CollabError> {
+  #[instrument(level = "trace", skip_all)]
+  pub fn try_get_write_txn(&mut self) -> Result<TransactionMutWrapper<'a>, CollabError> {
     while self.timer.elapsed() < self.timeout {
       match self.doc.try_transact_mut() {
         Ok(txn) => {
-          return Ok(txn);
+          return Ok(TransactionMutWrapper::new(txn, self.object_id));
         },
         Err(_e) => {
           sleep(self.retry_interval);
         },
       }
     }
-    tracing::warn!("[Txn]: acquire write txn timeout");
+    tracing::warn!("[Txn]: acquire write txn timeout: {}", self.object_id);
     Err(CollabError::AcquiredWriteTxnFail)
   }
 
-  pub fn get_write_txn_with(&mut self, origin: CollabOrigin) -> TransactionMut<'a> {
+  #[instrument(level = "trace", skip_all)]
+  pub fn get_write_txn_with(&mut self, origin: CollabOrigin) -> TransactionMutWrapper<'a> {
     while self.timer.elapsed() < self.timeout {
       match self.doc.try_transact_mut_with(origin.clone()) {
         Ok(txn) => {
-          return txn;
+          return TransactionMutWrapper::new(txn, self.object_id);
         },
         Err(_e) => {
           sleep(self.retry_interval);
         },
       }
     }
-    tracing::warn!("[Txn]: acquire write txn timeout");
-    self.doc.transact_mut_with(origin)
+    tracing::warn!("[Txn]: acquire write txn timeout: {}", self.object_id);
+    TransactionMutWrapper::new(self.doc.transact_mut_with(origin), self.object_id)
   }
 
+  #[instrument(level = "trace", skip_all)]
   pub fn try_get_write_txn_with(
     &mut self,
     origin: CollabOrigin,
@@ -88,14 +95,14 @@ impl<'a> TransactionRetry<'a> {
         },
       }
     }
-    tracing::warn!("[Txn]: acquire write txn timeout");
+    tracing::warn!("[Txn]: acquire write txn timeout: {}", self.object_id);
     Err(CollabError::AcquiredWriteTxnFail)
   }
 }
 
 pub trait DocTransactionExtension: Send + Sync {
   fn doc_transaction(&self) -> Transaction;
-  fn doc_transaction_mut(&self) -> TransactionMut;
+  fn doc_transaction_mut(&self) -> TransactionMutWrapper;
 
   fn get_encoded_collab_v1(&self) -> EncodedCollab {
     let txn = self.doc_transaction();
@@ -118,8 +125,73 @@ impl DocTransactionExtension for Doc {
   fn doc_transaction(&self) -> Transaction {
     self.transact()
   }
-  fn doc_transaction_mut(&self) -> TransactionMut {
-    self.transact_mut()
+  fn doc_transaction_mut(&self) -> TransactionMutWrapper {
+    TransactionMutWrapper::new(self.transact_mut(), "transaction from doc")
+  }
+}
+
+pub struct TransactionMutWrapper<'a> {
+  txn: TransactionMut<'a>,
+  #[allow(dead_code)]
+  object_id: &'a str,
+  #[cfg(feature = "trace_transact")]
+  acquire_time: std::time::Instant,
+}
+
+impl<'a> TransactionMutWrapper<'a> {
+  pub fn new(txn: TransactionMut<'a>, object_id: &'a str) -> Self {
+    #[cfg(feature = "trace_transact")]
+    let acquire_time = std::time::Instant::now();
+    Self {
+      txn,
+      object_id,
+      #[cfg(feature = "trace_transact")]
+      acquire_time,
+    }
+  }
+
+  pub fn txn(&self) -> &TransactionMut {
+    &self.txn
+  }
+}
+
+impl<'a> Deref for TransactionMutWrapper<'a> {
+  type Target = TransactionMut<'a>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.txn
+  }
+}
+impl<'a> DerefMut for TransactionMutWrapper<'a> {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.txn
+  }
+}
+impl Drop for TransactionMutWrapper<'_> {
+  fn drop(&mut self) {
+    #[cfg(feature = "trace_transact")]
+    {
+      let elapsed = self.acquire_time.elapsed();
+      if elapsed > Duration::from_secs(5) {
+        tracing::error!(
+          "{} drop write transaction after {:?}",
+          self.object_id,
+          elapsed
+        );
+      } else if elapsed > Duration::from_secs(3) {
+        tracing::warn!(
+          "{} drop write transaction after {:?}",
+          self.object_id,
+          elapsed
+        );
+      } else {
+        tracing::trace!(
+          "{} drop write transaction after {:?}",
+          self.object_id,
+          elapsed
+        );
+      };
+    }
   }
 }
 

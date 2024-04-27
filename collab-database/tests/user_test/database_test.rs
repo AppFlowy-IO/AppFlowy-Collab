@@ -1,3 +1,4 @@
+use collab_database::database::gen_database_view_id;
 use collab_database::rows::CreateRowParams;
 use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 
@@ -9,7 +10,22 @@ use crate::user_test::helper::{
 #[tokio::test]
 async fn create_database_test() {
   let uid = random_uid();
-  let _ = workspace_database_test(uid).await;
+  let test = workspace_database_test(uid).await;
+  let database = test
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      inline_view_id: "v1".to_string(),
+      views: vec![CreateViewParams {
+        database_id: "d1".to_string(),
+        view_id: "v1".to_string(),
+        ..Default::default()
+      }],
+      ..Default::default()
+    })
+    .unwrap();
+
+  let views = database.lock().views.get_all_views();
+  assert_eq!(views.len(), 1);
 }
 
 #[tokio::test]
@@ -19,14 +35,24 @@ async fn create_multiple_database_test() {
   test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
-      view_id: "v1".to_string(),
+      inline_view_id: "v1".to_string(),
+      views: vec![CreateViewParams {
+        database_id: "d1".to_string(),
+        view_id: "v1".to_string(),
+        ..Default::default()
+      }],
       ..Default::default()
     })
     .unwrap();
   test
     .create_database(CreateDatabaseParams {
       database_id: "d2".to_string(),
-      view_id: "v1".to_string(),
+      inline_view_id: "v2".to_string(),
+      views: vec![CreateViewParams {
+        database_id: "d2".to_string(),
+        view_id: "v2".to_string(),
+        ..Default::default()
+      }],
       ..Default::default()
     })
     .unwrap();
@@ -43,14 +69,24 @@ async fn delete_database_test() {
   test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
-      view_id: "v1".to_string(),
+      inline_view_id: "v1".to_string(),
+      views: vec![CreateViewParams {
+        database_id: "d1".to_string(),
+        view_id: "v1".to_string(),
+        ..Default::default()
+      }],
       ..Default::default()
     })
     .unwrap();
   test
     .create_database(CreateDatabaseParams {
       database_id: "d2".to_string(),
-      view_id: "v1".to_string(),
+      inline_view_id: "v2".to_string(),
+      views: vec![CreateViewParams {
+        database_id: "d2".to_string(),
+        view_id: "v2".to_string(),
+        ..Default::default()
+      }],
       ..Default::default()
     })
     .unwrap();
@@ -64,10 +100,16 @@ async fn delete_database_test() {
 async fn duplicate_database_inline_view_test() {
   let uid = random_uid();
   let test = workspace_database_test(uid).await;
+  let database_id = "d1".to_string();
   let database = test
     .create_database(CreateDatabaseParams {
-      database_id: "d1".to_string(),
-      view_id: "v1".to_string(),
+      database_id: database_id.clone(),
+      inline_view_id: "v1".to_string(),
+      views: vec![CreateViewParams {
+        database_id: "d1".to_string(),
+        view_id: "v1".to_string(),
+        ..Default::default()
+      }],
       ..Default::default()
     })
     .unwrap();
@@ -76,10 +118,7 @@ async fn duplicate_database_inline_view_test() {
   let duplicated_view_id = duplicated_database.lock().get_inline_view_id();
   duplicated_database
     .lock()
-    .create_row(CreateRowParams {
-      id: 1.into(),
-      ..Default::default()
-    })
+    .create_row(CreateRowParams::new(1, database_id.clone()))
     .unwrap();
 
   assert_eq!(
@@ -97,10 +136,16 @@ async fn duplicate_database_view_test() {
   let test = workspace_database_test(random_uid()).await;
 
   // create the database with inline view
+  let database_id = "d1".to_string();
   let database = test
     .create_database(CreateDatabaseParams {
-      database_id: "d1".to_string(),
-      view_id: "v1".to_string(),
+      database_id: database_id.clone(),
+      inline_view_id: "v1".to_string(),
+      views: vec![CreateViewParams {
+        database_id: "d1".to_string(),
+        view_id: "v1".to_string(),
+        ..Default::default()
+      }],
       ..Default::default()
     })
     .unwrap();
@@ -118,10 +163,7 @@ async fn duplicate_database_view_test() {
   let duplicated_view = database.lock().duplicate_linked_view("v2").unwrap();
   database
     .lock()
-    .create_row(CreateRowParams {
-      id: 1.into(),
-      ..Default::default()
-    })
+    .create_row(CreateRowParams::new(1, database_id.clone()))
     .unwrap();
 
   // Duplicated database should have the same rows as the original database
@@ -133,12 +175,56 @@ async fn duplicate_database_view_test() {
 }
 
 #[tokio::test]
+async fn delete_database_linked_view_test() {
+  let test = workspace_database_test(random_uid()).await;
+  let database = test
+    .create_database(CreateDatabaseParams {
+      database_id: "d1".to_string(),
+      inline_view_id: "v1".to_string(),
+      views: vec![CreateViewParams {
+        database_id: "d1".to_string(),
+        view_id: "v1".to_string(),
+        ..Default::default()
+      }],
+      ..Default::default()
+    })
+    .unwrap();
+
+  database
+    .lock()
+    .create_linked_view(CreateViewParams {
+      database_id: "d1".to_string(),
+      view_id: "v2".to_string(),
+      ..Default::default()
+    })
+    .unwrap();
+
+  let views = database.lock().views.get_all_views();
+  assert_eq!(views.len(), 2);
+
+  database.lock().delete_view("v2");
+
+  let views = database.lock().views.get_all_views();
+  assert_eq!(views.len(), 1);
+
+  database.lock().delete_view("v1");
+
+  let views = database.lock().views.get_all_views();
+  assert_eq!(views.len(), 0);
+}
+
+#[tokio::test]
 async fn delete_database_inline_view_test() {
   let test = workspace_database_test(random_uid()).await;
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
-      view_id: "v1".to_string(),
+      inline_view_id: "v1".to_string(),
+      views: vec![CreateViewParams {
+        database_id: "d1".to_string(),
+        view_id: "v1".to_string(),
+        ..Default::default()
+      }],
       ..Default::default()
     })
     .unwrap();
@@ -154,6 +240,7 @@ async fn delete_database_inline_view_test() {
       .unwrap();
   }
 
+  // there should be 4 views: inline-view v1 and created linked-views v2, v3 and v4.
   let views = database.lock().views.get_all_views();
   assert_eq!(views.len(), 4);
 
@@ -167,8 +254,7 @@ async fn delete_database_inline_view_test() {
 async fn duplicate_database_data_test() {
   let test = user_database_test_with_default_data(random_uid()).await;
   let original = test.get_database_with_view_id("v1").await.unwrap();
-  let duplicated_data = test.get_database_duplicated_data("v1").await.unwrap();
-  let duplicate = test.create_database_with_data(duplicated_data).unwrap();
+  let duplicate = test.duplicate_database("v1").await.unwrap();
 
   let duplicated_view_id = &duplicate.lock().get_all_database_views_meta()[0].id;
 
@@ -216,7 +302,12 @@ async fn get_database_by_view_id_test() {
   let _database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
-      view_id: "v1".to_string(),
+      inline_view_id: "v1".to_string(),
+      views: vec![CreateViewParams {
+        database_id: "d1".to_string(),
+        view_id: "v1".to_string(),
+        ..Default::default()
+      }],
       ..Default::default()
     })
     .unwrap();
@@ -238,7 +329,7 @@ async fn get_database_by_view_id_test() {
 async fn reopen_database_test() {
   let uid = random_uid();
   let test = workspace_database_test(uid).await;
-  let view_id = uuid::Uuid::new_v4().to_string();
+  let view_id = gen_database_view_id();
   let params = make_default_grid(&view_id, "first view");
 
   // create the database with inline view

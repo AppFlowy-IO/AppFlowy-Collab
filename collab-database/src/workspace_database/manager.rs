@@ -13,7 +13,7 @@ use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 
 use std::pin::Pin;
@@ -25,6 +25,7 @@ use tracing::{error, trace};
 
 pub type CollabDocStateByOid = HashMap<String, DataSource>;
 pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
+
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
 /// different [CollabPlugin]s to the [MutexCollab] to support different features.
@@ -117,9 +118,13 @@ impl WorkspaceDatabase {
     }
   }
 
+  pub fn close(&self) {
+    self.collab.lock().clear_plugins();
+  }
+
   pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
     CollabType::WorkspaceDatabase
-      .validate(collab)
+      .validate_require_data(collab)
       .map_err(|_| DatabaseError::NoRequiredData)?;
     Ok(())
   }
@@ -205,6 +210,7 @@ impl WorkspaceDatabase {
       Some(database) => Some(database),
     }
   }
+
   /// Return the database id with the given view id.
   /// Multiple views can share the same database.
   pub async fn get_database_with_view_id(&self, view_id: &str) -> Option<Arc<MutexDatabase>> {
@@ -229,7 +235,6 @@ impl WorkspaceDatabase {
     params: CreateDatabaseParams,
   ) -> Result<Arc<MutexDatabase>, DatabaseError> {
     debug_assert!(!params.database_id.is_empty());
-    debug_assert!(!params.view_id.is_empty());
 
     // Create a [Collab] for the given database id.
     let collab = self.collab_for_database(&params.database_id, DataSource::Disk)?;
@@ -243,11 +248,19 @@ impl WorkspaceDatabase {
     };
 
     // Add a new database record.
+    let mut linked_views = HashSet::new();
+    linked_views.insert(params.inline_view_id.to_string());
+    linked_views.extend(
+      params
+        .views
+        .iter()
+        .filter(|view| view.view_id != params.inline_view_id)
+        .map(|view| view.view_id.clone()),
+    );
     self
       .database_meta_list()
-      .add_database(&params.database_id, vec![params.view_id.clone()]);
+      .add_database(&params.database_id, linked_views.into_iter().collect());
     let database_id = params.database_id.clone();
-    // TODO(RS): insert the first view of the database.
     let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);
     let database = Arc::new(mutex_database);
     self.databases.lock().insert(database_id, database.clone());
@@ -258,19 +271,6 @@ impl WorkspaceDatabase {
     self
       .database_meta_list()
       .add_database(database_id, database_view_ids);
-  }
-
-  /// Create database with the data duplicated from the given database.
-  /// The [DatabaseData] contains all the database data. It can be
-  /// used to restore the database from the backup.
-  pub fn create_database_with_data(
-    &self,
-    data: DatabaseData,
-  ) -> Result<Arc<MutexDatabase>, DatabaseError> {
-    let DatabaseData { view, fields, rows } = data;
-    let params = CreateDatabaseParams::from_view(view, fields, rows);
-    let database = self.create_database(params)?;
-    Ok(database)
   }
 
   /// Create linked view that shares the same data with the inline view's database
@@ -373,19 +373,18 @@ impl WorkspaceDatabase {
     &self,
     view_id: &str,
   ) -> Result<Arc<MutexDatabase>, DatabaseError> {
-    let DatabaseData { view, fields, rows } = self.get_database_duplicated_data(view_id).await?;
-    let params = CreateDatabaseParams::from_view(view, fields, rows);
-    let database = self.create_database(params)?;
+    let database_data = self.get_database_data(view_id).await?;
+
+    let create_database_params = CreateDatabaseParams::from_database_data(database_data);
+    let database = self.create_database(create_database_params)?;
+
     Ok(database)
   }
 
-  /// Duplicate the database with the given view id.
-  pub async fn get_database_duplicated_data(
-    &self,
-    view_id: &str,
-  ) -> Result<DatabaseData, DatabaseError> {
+  /// Get all of the database data using the id of any view in the database
+  pub async fn get_database_data(&self, view_id: &str) -> Result<DatabaseData, DatabaseError> {
     if let Some(database) = self.get_database_with_view_id(view_id).await {
-      let data = database.lock().duplicate_database();
+      let data = database.lock().get_database_data();
       Ok(data)
     } else {
       Err(DatabaseError::DatabaseNotExist)

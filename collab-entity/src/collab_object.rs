@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 use crate::define::{
-  DATABASE, DATABASE_ID, DATABASE_ROW_DATA, DOCUMENT_ROOT, FOLDER, FOLDER_CURRENT_WORKSPACE,
-  FOLDER_META, USER_AWARENESS, WORKSPACE_DATABASES,
+  DATABASE, DATABASE_ID, DATABASE_ROW_DATA, DOCUMENT_ROOT, FOLDER, FOLDER_META,
+  FOLDER_WORKSPACE_ID, USER_AWARENESS, WORKSPACE_DATABASES,
 };
 use collab::preclude::{Collab, MapRefExtension};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -24,7 +24,7 @@ pub enum CollabType {
   /// This type is used when the specific nature of the collaboration object is not recognized.
   /// It might represent an uninitialized state or a custom object not covered by existing types.
   ///
-  /// No strict validation is applied when handling objects of this type(check out the [CollabType::validate]
+  /// No strict validation is applied when handling objects of this type(check out the [CollabType::validate_require_data]
   /// for more information), which means errors might not be caught as strictly as with known types.
   Unknown = 6,
 }
@@ -51,7 +51,7 @@ impl CollabType {
   /// - `Ok(())` if the collab object contains all the required data for its type.
   /// - `Err(Error)` if the required data is missing or if the collab object does not meet
   ///   the validation criteria for its type.
-  pub fn validate(&self, collab: &Collab) -> Result<(), Error> {
+  pub fn validate_require_data(&self, collab: &Collab) -> Result<(), Error> {
     let txn = collab.try_transaction()?;
     match self {
       CollabType::Document => {
@@ -81,11 +81,11 @@ impl CollabType {
           .get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])
           .ok_or_else(|| no_required_data_error(self, FOLDER_META))?;
         let current_workspace = meta
-          .get_str_with_txn(&txn, FOLDER_CURRENT_WORKSPACE)
-          .ok_or_else(|| no_required_data_error(self, FOLDER_CURRENT_WORKSPACE))?;
+          .get_str_with_txn(&txn, FOLDER_WORKSPACE_ID)
+          .ok_or_else(|| no_required_data_error(self, FOLDER_WORKSPACE_ID))?;
 
         if current_workspace.is_empty() {
-          Err(no_required_data_error(self, FOLDER_CURRENT_WORKSPACE))
+          Err(no_required_data_error(self, FOLDER_WORKSPACE_ID))
         } else {
           Ok(())
         }
@@ -105,6 +105,28 @@ impl CollabType {
       CollabType::Unknown => Ok(()),
     }
   }
+}
+
+/// Validates the workspace ID for 'Folder' type collaborations.
+/// Ensures that the workspace ID contained in each Folder matches the expected workspace ID.
+/// A mismatch indicates that the Folder data may be incorrect, potentially due to it being
+/// overridden with data from another Folder.
+pub fn validate_data_for_folder(collab: &Collab, workspace_id: &str) -> Result<(), Error> {
+  let txn = collab.transact();
+  let workspace_id_in_collab = collab
+    .get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])
+    .and_then(|map| map.get_str_with_txn(&txn, FOLDER_WORKSPACE_ID))
+    .ok_or_else(|| anyhow!("No required data: FOLDER_WORKSPACE_ID"))?;
+  drop(txn);
+
+  if workspace_id != workspace_id_in_collab {
+    return Err(anyhow!(
+      "Workspace ID mismatch: expected {}, but received {}",
+      workspace_id,
+      workspace_id_in_collab
+    ));
+  }
+  Ok(())
 }
 
 #[inline]

@@ -4,9 +4,9 @@ use std::vec;
 
 use collab::core::awareness::AwarenessUpdateSubscription;
 use collab::core::collab::{DataSource, MutexCollab};
-use collab::core::collab_plugin::EncodedCollab;
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
+use collab::entity::EncodedCollab;
 use collab::preclude::block::ClientID;
 use collab::preclude::*;
 use collab_entity::define::DOCUMENT_ROOT;
@@ -57,7 +57,7 @@ impl Document {
 
   pub fn validate(collab: &Collab) -> Result<(), DocumentError> {
     CollabType::Document
-      .validate(collab)
+      .validate_require_data(collab)
       .map_err(|_| DocumentError::NoRequiredData)?;
     Ok(())
   }
@@ -69,7 +69,7 @@ impl Document {
   pub fn encode_collab(&self) -> Result<EncodedCollab, DocumentError> {
     self.inner.lock().encode_collab_v1(|collab| {
       CollabType::Document
-        .validate(collab)
+        .validate_require_data(collab)
         .map_err(|_| DocumentError::NoRequiredData)
     })
   }
@@ -501,7 +501,7 @@ impl Document {
     let subscription = self
       .inner
       .lock()
-      .observe_awareness(move |awareness, _event| {
+      .observe_awareness(move |awareness, _event, _| {
         // convert the states to the hashmap and map/filter the invalid states
         let result: HashMap<ClientID, DocumentAwarenessState> = awareness.get_states()
           .iter()
