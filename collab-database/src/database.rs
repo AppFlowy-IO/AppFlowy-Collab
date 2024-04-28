@@ -144,6 +144,10 @@ impl Database {
     self.notifier.view_change_tx.subscribe()
   }
 
+  pub fn subscribe_block_event(&self) -> tokio::sync::broadcast::Receiver<BlockEvent> {
+    self.block.subscribe_event()
+  }
+
   pub fn get_collab(&self) -> &Arc<MutexCollab> {
     &self.inner
   }
@@ -156,10 +160,6 @@ impl Database {
       .take(100)
       .collect::<Vec<_>>();
     self.block.batch_load_rows(row_ids);
-  }
-
-  pub fn subscribe_block_event(&self) -> tokio::sync::broadcast::Receiver<BlockEvent> {
-    self.block.subscribe_event()
   }
 
   /// Get or Create a database with the given database_id.

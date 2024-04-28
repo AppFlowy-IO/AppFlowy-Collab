@@ -26,7 +26,7 @@ use crate::rows::{
 use crate::views::RowOrder;
 use crate::workspace_database::DatabaseCollabService;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum BlockEvent {
   /// The Row is fetched from the remote.
   DidFetchRow(Vec<RowDetail>),
