@@ -13,12 +13,12 @@ use crate::views::FieldOrder;
 pub struct FieldMap {
   container: MapRefWrapper,
   #[allow(dead_code)]
-  subscription: Option<DeepEventsSubscription>,
+  subscription: DeepEventsSubscription,
 }
 
 impl FieldMap {
-  pub fn new(mut container: MapRefWrapper, field_change_tx: Option<FieldChangeSender>) -> Self {
-    let subscription = field_change_tx.map(|sender| subscribe_field_change(&mut container, sender));
+  pub fn new(mut container: MapRefWrapper, field_change_tx: FieldChangeSender) -> Self {
+    let subscription = subscribe_field_change(&mut container, field_change_tx);
     Self {
       container,
       subscription,

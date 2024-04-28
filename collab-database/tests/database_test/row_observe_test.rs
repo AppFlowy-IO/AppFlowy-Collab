@@ -13,7 +13,7 @@ use crate::database_test::helper::create_database;
 async fn observer_create_new_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = Arc::new(create_database(1, &database_id).await);
-  let view_change_rx = database_test.subscribe_view_change().unwrap();
+  let view_change_rx = database_test.subscribe_view_change();
 
   let row_id = gen_row_id();
   let cloned_row_id = row_id.clone();
@@ -38,7 +38,7 @@ async fn observer_create_new_row_test() {
 async fn observer_row_cell_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = Arc::new(create_database(1, &database_id).await);
-  let row_change_rx = database_test.subscribe_row_change().unwrap();
+  let row_change_rx = database_test.subscribe_row_change();
   let row_id = gen_row_id();
 
   // Insert cell
@@ -74,7 +74,7 @@ async fn observer_row_cell_test() {
 
   // Update cell
   let cloned_database_test = database_test.clone();
-  let row_change_rx = database_test.subscribe_row_change().unwrap();
+  let row_change_rx = database_test.subscribe_row_change();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
 
@@ -102,7 +102,7 @@ async fn observer_row_cell_test() {
 async fn observer_update_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = Arc::new(create_database(1, &database_id).await);
-  let row_change_rx = database_test.subscribe_row_change().unwrap();
+  let row_change_rx = database_test.subscribe_row_change();
 
   let row_id = gen_row_id();
   let cloned_database_test = database_test.clone();
@@ -129,7 +129,7 @@ async fn observer_update_row_test() {
 async fn observer_delete_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = Arc::new(create_database(1, &database_id).await);
-  let view_change_rx = database_test.subscribe_view_change().unwrap();
+  let view_change_rx = database_test.subscribe_view_change();
 
   let row_id = gen_row_id();
   let cloned_row_id = row_id.clone();
@@ -163,7 +163,7 @@ async fn observer_delete_row_test() {
 async fn observer_delete_consecutive_rows_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = Arc::new(create_database(1, &database_id).await);
-  let view_change_rx = database_test.subscribe_view_change().unwrap();
+  let view_change_rx = database_test.subscribe_view_change();
 
   let row_id_1 = gen_row_id();
   let row_id_2 = gen_row_id();
@@ -203,7 +203,7 @@ async fn observer_delete_consecutive_rows_test() {
 async fn observer_delete_non_consecutive_rows_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = Arc::new(create_database(1, &database_id).await);
-  let view_change_rx = database_test.subscribe_view_change().unwrap();
+  let view_change_rx = database_test.subscribe_view_change();
 
   let row_id_1 = gen_row_id();
   let row_id_2 = gen_row_id();

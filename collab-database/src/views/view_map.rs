@@ -22,7 +22,7 @@ use super::{calculations_from_map_ref, view_id_from_map_ref};
 pub struct ViewMap {
   container: MapRefWrapper,
   #[allow(dead_code)]
-  subscription: Option<DeepEventsSubscription>,
+  subscription: DeepEventsSubscription,
 }
 
 impl Deref for ViewMap {
@@ -34,9 +34,8 @@ impl Deref for ViewMap {
 }
 
 impl ViewMap {
-  pub fn new(mut container: MapRefWrapper, view_change_sender: Option<ViewChangeSender>) -> Self {
-    let subscription =
-      view_change_sender.map(|sender| subscribe_view_change(&mut container, sender));
+  pub fn new(mut container: MapRefWrapper, view_change_sender: ViewChangeSender) -> Self {
+    let subscription = subscribe_view_change(&mut container, view_change_sender);
     Self {
       container,
       subscription,

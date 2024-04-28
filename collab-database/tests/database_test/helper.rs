@@ -61,7 +61,7 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     db: Arc::downgrade(&collab_db),
     collab: Arc::new(collab),
     collab_service: collab_builder,
-    notifier: Some(DatabaseNotify::default()),
+    notifier: DatabaseNotify::default(),
   };
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
@@ -90,6 +90,7 @@ pub fn create_row(uid: i64, row_id: RowId) -> (Arc<MutexCollab>, DatabaseRow) {
   collab.lock().initialize();
   let arc_collab = Arc::new(collab);
   let cloned_collab = arc_collab.clone();
+  let row_change_tx = tokio::sync::broadcast::channel(1).0;
   (
     arc_collab,
     DatabaseRow::create(
@@ -98,7 +99,7 @@ pub fn create_row(uid: i64, row_id: RowId) -> (Arc<MutexCollab>, DatabaseRow) {
       row_id,
       Arc::downgrade(&collab_db),
       cloned_collab,
-      None,
+      row_change_tx,
     ),
   )
 }
@@ -125,7 +126,7 @@ pub async fn create_database_with_db(
     db: Arc::downgrade(&collab_db),
     collab,
     collab_service: collab_builder,
-    notifier: Some(DatabaseNotify::default()),
+    notifier: DatabaseNotify::default(),
   };
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
@@ -169,7 +170,7 @@ pub fn restore_database_from_db(
     db: Arc::downgrade(&collab_db),
     collab,
     collab_service: collab_builder,
-    notifier: Some(DatabaseNotify::default()),
+    notifier: DatabaseNotify::default(),
   };
   let database = Database::get_or_create(database_id, context).unwrap();
   DatabaseTest {
@@ -238,7 +239,7 @@ impl DatabaseTestBuilder {
       db: Arc::downgrade(&collab_db),
       collab: Arc::new(collab),
       collab_service: collab_builder,
-      notifier: Some(DatabaseNotify::default()),
+      notifier: DatabaseNotify::default(),
     };
     let params = CreateDatabaseParams {
       database_id: self.database_id.clone(),
