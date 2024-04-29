@@ -8,13 +8,14 @@ use collab::preclude::{
 
 use crate::database::timestamp;
 use crate::rows::RowId;
+use crate::views::define::*;
 use crate::views::{
   field_settings_from_map_ref, filters_from_map_ref, group_setting_from_map_ref,
   layout_setting_from_map_ref, sorts_from_map_ref, subscribe_view_map_change, view_from_map_ref,
   view_from_value, view_meta_from_value, CalculationMap, DatabaseLayout, DatabaseView,
   DatabaseViewMeta, DatabaseViewUpdate, FieldOrder, FieldOrderArray, FieldSettingsByFieldIdMap,
   FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray, SortMap,
-  ViewBuilder, ViewChangeSender, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
+  ViewBuilder, ViewChangeSender,
 };
 
 use super::{calculations_from_map_ref, view_id_from_map_ref};
@@ -208,7 +209,7 @@ impl ViewMap {
       .get_map_with_txn(&txn, view_id)
       .map(|map_ref| {
         map_ref
-          .get_i64_with_txn(&txn, VIEW_LAYOUT)
+          .get_i64_with_txn(&txn, DATABASE_VIEW_LAYOUT)
           .map(DatabaseLayout::from)
       });
 
@@ -224,7 +225,7 @@ impl ViewMap {
       .get_map_with_txn(txn, view_id)
       .map(|map_ref| {
         map_ref
-          .get_array_ref_with_txn(txn, ROW_ORDERS)
+          .get_array_ref_with_txn(txn, DATABASE_VIEW_ROW_ORDERS)
           .map(|array_ref| RowOrderArray::new(array_ref.into_inner()).get_objects_with_txn(txn))
           .unwrap_or_default()
       })
@@ -238,7 +239,7 @@ impl ViewMap {
     if let Some(row_order_map) = self
       .container
       .get_map_with_txn(txn, view_id)
-      .and_then(|map_ref| map_ref.get_array_ref_with_txn(txn, ROW_ORDERS))
+      .and_then(|map_ref| map_ref.get_array_ref_with_txn(txn, DATABASE_VIEW_ROW_ORDERS))
     {
       let row_order_array = RowOrderArray::new(row_order_map.into_inner());
       for mut row_order in row_order_array.get_objects_with_txn(txn) {
@@ -257,7 +258,7 @@ impl ViewMap {
   pub fn is_row_exist_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str, row_id: &RowId) -> bool {
     let f = || {
       let map = self.container.get_map_with_txn(txn, view_id)?;
-      let row_order_array = map.get_array_ref_with_txn(txn, ROW_ORDERS)?;
+      let row_order_array = map.get_array_ref_with_txn(txn, DATABASE_VIEW_ROW_ORDERS)?;
       RowOrderArray::new(row_order_array.into_inner()).get_position_with_txn(txn, row_id.as_str())
     };
     f().is_some()
@@ -269,7 +270,7 @@ impl ViewMap {
       .get_map_with_txn(txn, view_id)
       .map(|map_ref| {
         map_ref
-          .get_array_ref_with_txn(txn, FIELD_ORDERS)
+          .get_array_ref_with_txn(txn, DATABASE_VIEW_FIELD_ORDERS)
           .map(|array_ref| FieldOrderArray::new(array_ref.into_inner()).get_objects_with_txn(txn))
           .unwrap_or_default()
       })

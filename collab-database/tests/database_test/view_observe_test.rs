@@ -1,9 +1,12 @@
 use crate::database_test::helper::{create_database, wait_for_specific_event};
-use crate::helper::{setup_log, TestFieldSetting};
+use crate::helper::setup_log;
 use collab_database::database::gen_row_id;
 
 use collab_database::rows::CreateRowParams;
-use collab_database::views::{CreateViewParams, DatabaseLayout, DatabaseViewChange};
+use collab_database::views::{
+  CreateViewParams, DatabaseLayout, DatabaseViewChange, FilterMapBuilder, GroupSettingBuilder,
+  GroupSettingMap, SortMapBuilder,
+};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -192,26 +195,194 @@ async fn observe_create_delete_view_test() {
 }
 
 #[tokio::test]
-async fn observe_field_setting_test() {
+async fn observe_database_view_layout_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = Arc::new(create_database(1, &database_id).await);
   let view_change_rx = database_test.subscribe_view_change();
 
   let cloned_database_test = database_test.clone();
-  let view_id = database_test.get_inline_view_id();
+  let update_view_id = database_test.get_inline_view_id();
 
+  let cloned_update_view_id = update_view_id.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let field_settings = TestFieldSetting {
-      width: 10000,
-      visibility: 1,
-    };
-    cloned_database_test.update_field_settings(&view_id, None, field_settings);
+    cloned_database_test
+      .views
+      .update_database_view(&cloned_update_view_id, |update| {
+        update.set_layout_type(DatabaseLayout::Calendar);
+      });
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidUpdateView { view: _ } => true,
+    DatabaseViewChange::LayoutSettingChanged {
+      view_id,
+      layout_type,
+    } => &update_view_id == view_id && layout_type == &DatabaseLayout::Calendar,
+    _ => false,
+  })
+  .await
+  .unwrap();
+}
+
+#[tokio::test]
+async fn observe_database_view_filter_create_delete_test() {
+  setup_log();
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = Arc::new(create_database(1, &database_id).await);
+  let view_change_rx = database_test.subscribe_view_change();
+
+  let cloned_database_test = database_test.clone();
+  let update_view_id = database_test.get_inline_view_id();
+
+  // create filter
+  let cloned_update_view_id = update_view_id.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(300)).await;
+    cloned_database_test
+      .views
+      .update_database_view(&cloned_update_view_id, |update| {
+        let filter = FilterMapBuilder::new()
+          .insert_str_value("filter_id", "123")
+          .build();
+        update.set_filters(vec![filter]);
+      });
+  });
+
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidCreateFilters { view_id, filters } => {
+      filters.len() == 1 && &update_view_id == view_id
+    },
+    _ => false,
+  })
+  .await
+  .unwrap();
+
+  // delete filter
+  let cloned_update_view_id = update_view_id.clone();
+  let cloned_database_test = database_test.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(300)).await;
+    cloned_database_test
+      .views
+      .update_database_view(&cloned_update_view_id, |update| {
+        update.set_filters(vec![]);
+      });
+  });
+
+  let view_change_rx = database_test.subscribe_view_change();
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidUpdateFilter { view_id } => &update_view_id == view_id,
+    _ => false,
+  })
+  .await
+  .unwrap();
+}
+
+#[tokio::test]
+async fn observe_database_view_sort_create_delete_test() {
+  setup_log();
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = Arc::new(create_database(1, &database_id).await);
+  let view_change_rx = database_test.subscribe_view_change();
+
+  let cloned_database_test = database_test.clone();
+  let update_view_id = database_test.get_inline_view_id();
+
+  // create sort
+  let cloned_update_view_id = update_view_id.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(300)).await;
+    cloned_database_test
+      .views
+      .update_database_view(&cloned_update_view_id, |update| {
+        let filter = SortMapBuilder::new()
+          .insert_str_value("sort_id", "123")
+          .insert_str_value("desc", "true")
+          .build();
+        update.set_sorts(vec![filter]);
+      });
+  });
+
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidCreateSorts { view_id, sorts } => {
+      sorts.len() == 1 && &update_view_id == view_id
+    },
+    _ => false,
+  })
+  .await
+  .unwrap();
+
+  // delete sort
+  let cloned_update_view_id = update_view_id.clone();
+  let cloned_database_test = database_test.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(300)).await;
+    cloned_database_test
+      .views
+      .update_database_view(&cloned_update_view_id, |update| {
+        update.set_sorts(vec![]);
+      });
+  });
+
+  let view_change_rx = database_test.subscribe_view_change();
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidUpdateSort { view_id } => &update_view_id == view_id,
+    _ => false,
+  })
+  .await
+  .unwrap();
+}
+
+#[tokio::test]
+async fn observe_database_view_group_create_delete_test() {
+  setup_log();
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = Arc::new(create_database(1, &database_id).await);
+  let view_change_rx = database_test.subscribe_view_change();
+
+  let cloned_database_test = database_test.clone();
+  let update_view_id = database_test.get_inline_view_id();
+
+  // create group setting
+  let cloned_update_view_id = update_view_id.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(300)).await;
+    cloned_database_test
+      .views
+      .update_database_view(&cloned_update_view_id, |update| {
+        let group_setting = GroupSettingBuilder::new()
+          .insert_str_value("group_id", "123")
+          .insert_str_value("desc", "true")
+          .build();
+        update.set_groups(vec![group_setting]);
+      });
+  });
+
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidCreateGroupSettings { view_id, groups } => {
+      groups.len() == 1 && &update_view_id == view_id
+    },
+    _ => false,
+  })
+  .await
+  .unwrap();
+
+  // delete group setting
+  let cloned_update_view_id = update_view_id.clone();
+  let cloned_database_test = database_test.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(300)).await;
+    cloned_database_test
+      .views
+      .update_database_view(&cloned_update_view_id, |update| {
+        update.set_groups(vec![]);
+      });
+  });
+
+  let view_change_rx = database_test.subscribe_view_change();
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidUpdateGroupSetting { view_id } => &update_view_id == view_id,
     _ => false,
   })
   .await
