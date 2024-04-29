@@ -189,7 +189,7 @@ fn handle_map_event(change_tx: &ViewChangeSender, txn: &TransactionMut, event: &
     match value {
       EntryChange::Inserted(value) => {
         let database_view = view_from_value(value, txn);
-        trace!("database view map inserted: {}:{:?}", key, database_view,);
+        // trace!("database view map inserted: {}:{:?}", key, database_view,);
         if let Some(database_view) = database_view {
           let _ = change_tx.send(DatabaseViewChange::DidCreateView {
             view: database_view,
@@ -198,7 +198,7 @@ fn handle_map_event(change_tx: &ViewChangeSender, txn: &TransactionMut, event: &
       },
       EntryChange::Updated(_, _value) => {
         let database_view = view_from_map_ref(event.target(), txn);
-        trace!("database view map update: {}:{:?}", key, database_view);
+        // trace!("database view map update: {}:{:?}", key, database_view);
         if let Some(database_view) = database_view {
           let _ = change_tx.send(DatabaseViewChange::DidUpdateView {
             view: database_view,
