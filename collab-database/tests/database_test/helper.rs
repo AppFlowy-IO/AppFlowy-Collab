@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use collab::core::collab::{DataSource, MutexCollab};
 use collab::preclude::CollabBuilder;
@@ -21,6 +22,7 @@ use crate::user_test::helper::TestUserDatabaseCollabBuilderImpl;
 use collab_database::database_state::DatabaseNotify;
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
+use tokio::time::timeout;
 
 pub struct DatabaseTest {
   #[allow(dead_code)]
@@ -371,5 +373,37 @@ impl Cleaner {
 impl Drop for Cleaner {
   fn drop(&mut self) {
     Self::cleanup(&self.0)
+  }
+}
+
+pub async fn wait_for_specific_event<F, T>(
+  mut change_rx: tokio::sync::broadcast::Receiver<T>,
+  condition: F,
+) -> Result<(), String>
+where
+  F: Fn(&T) -> bool,
+  T: Clone,
+{
+  loop {
+    let result = timeout(Duration::from_secs(5), change_rx.recv()).await;
+
+    match result {
+      Ok(Ok(event)) if condition(&event) => {
+        // If the event matches the condition
+        return Ok(());
+      },
+      Ok(Ok(_)) => {
+        // If it's any other event, continue the loop
+        continue;
+      },
+      Ok(Err(e)) => {
+        // Channel error
+        return Err(format!("Channel error: {}", e));
+      },
+      Err(e) => {
+        // Timeout occurred
+        return Err(format!("Timeout occurred: {}", e));
+      },
+    }
   }
 }

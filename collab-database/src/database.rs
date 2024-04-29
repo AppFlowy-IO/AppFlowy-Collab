@@ -997,6 +997,7 @@ impl Database {
         .map(|field| field.id)
         .collect(),
     );
+
     self.views.update_database_view(view_id, |update| {
       let field_settings = field_settings.into();
       update.update_field_settings_for_fields(

@@ -1,20 +1,29 @@
 use collab::preclude::array::ArrayEvent;
 use collab::preclude::map::MapEvent;
-use collab::preclude::{Change, ToJson, TransactionMut};
+use collab::preclude::{Change, TransactionMut};
 use collab::preclude::{
   DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRefWrapper, PathSegment,
 };
 use std::ops::Deref;
 use tokio::sync::broadcast;
-use tracing::trace;
+use tracing::{trace, warn};
 
 use crate::views::{
-  row_order_from_value, FieldOrder, FilterMap, GroupMap, LayoutSetting, RowOrder, SortMap,
-  ROW_ORDERS,
+  row_order_from_value, view_from_map_ref, view_from_value, DatabaseView, FieldOrder, FilterMap,
+  GroupMap, LayoutSetting, RowOrder, SortMap, ROW_ORDERS,
 };
 
 #[derive(Debug, Clone)]
 pub enum DatabaseViewChange {
+  DidCreateView {
+    view: DatabaseView,
+  },
+  DidUpdateView {
+    view: DatabaseView,
+  },
+  DidDeleteView {
+    view_id: String,
+  },
   LayoutSettingChanged {
     view_id: String,
     setting: LayoutSetting,
@@ -78,7 +87,7 @@ pub enum DatabaseViewChange {
 pub type ViewChangeSender = broadcast::Sender<DatabaseViewChange>;
 pub type ViewChangeReceiver = broadcast::Receiver<DatabaseViewChange>;
 
-pub(crate) fn subscribe_view_change(
+pub(crate) fn subscribe_view_map_change(
   view_map: &mut MapRefWrapper,
   change_tx: ViewChangeSender,
 ) -> DeepEventsSubscription {
@@ -87,7 +96,7 @@ pub(crate) fn subscribe_view_change(
       match event {
         Event::Text(_) => {},
         Event::Array(array_event) => {
-          handle_array_event(&change_tx, txn, event, array_event);
+          handle_array_event(&change_tx, txn, array_event);
         },
         Event::Map(event) => {
           handle_map_event(&change_tx, txn, event);
@@ -124,7 +133,6 @@ pub(crate) fn subscribe_view_change(
 fn handle_array_event(
   change_tx: &ViewChangeSender,
   txn: &TransactionMut,
-  _event: &Event,
   array_event: &ArrayEvent,
 ) {
   let mut offset = 0;
@@ -180,17 +188,31 @@ fn handle_map_event(change_tx: &ViewChangeSender, txn: &TransactionMut, event: &
     let _change_tx = change_tx.clone();
     match value {
       EntryChange::Inserted(value) => {
-        trace!(
-          "database view map inserted: {}:{:?}",
-          key,
-          value.to_json(txn)
-        );
+        let database_view = view_from_value(value, txn);
+        trace!("database view map inserted: {}:{:?}", key, database_view,);
+        if let Some(database_view) = database_view {
+          let _ = change_tx.send(DatabaseViewChange::DidCreateView {
+            view: database_view,
+          });
+        }
       },
-      EntryChange::Updated(_, value) => {
-        trace!("database view map update: {}:{}", key, value);
+      EntryChange::Updated(_, _value) => {
+        let database_view = view_from_map_ref(event.target(), txn);
+        trace!("database view map update: {}:{:?}", key, database_view);
+        if let Some(database_view) = database_view {
+          let _ = change_tx.send(DatabaseViewChange::DidUpdateView {
+            view: database_view,
+          });
+        }
       },
       EntryChange::Removed(_value) => {
-        trace!("database view map delete: {}", key);
+        // trace!("database view map delete: {}:{}", key, value);
+        let view_id = (**key).to_string();
+        if !view_id.is_empty() {
+          let _ = change_tx.send(DatabaseViewChange::DidDeleteView { view_id });
+        } else {
+          warn!("database view map delete: empty key");
+        }
       },
     }
   }

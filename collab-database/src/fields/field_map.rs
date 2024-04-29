@@ -102,12 +102,12 @@ impl FieldMap {
       None => self
         .container
         .iter(txn)
-        .flat_map(|(_k, v)| field_from_value(v, txn))
+        .flat_map(|(_k, v)| field_from_value(&v, txn))
         .collect::<Vec<_>>(),
       Some(field_ids) => self
         .container
         .iter(txn)
-        .flat_map(|(_k, v)| field_from_value(v, txn))
+        .flat_map(|(_k, v)| field_from_value(&v, txn))
         .filter(|field| field_ids.contains(&field.id))
         .collect::<Vec<_>>(),
     }

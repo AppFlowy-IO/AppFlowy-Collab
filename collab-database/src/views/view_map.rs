@@ -10,7 +10,7 @@ use crate::database::timestamp;
 use crate::rows::RowId;
 use crate::views::{
   field_settings_from_map_ref, filters_from_map_ref, group_setting_from_map_ref,
-  layout_setting_from_map_ref, sorts_from_map_ref, subscribe_view_change, view_from_map_ref,
+  layout_setting_from_map_ref, sorts_from_map_ref, subscribe_view_map_change, view_from_map_ref,
   view_from_value, view_meta_from_value, CalculationMap, DatabaseLayout, DatabaseView,
   DatabaseViewMeta, DatabaseViewUpdate, FieldOrder, FieldOrderArray, FieldSettingsByFieldIdMap,
   FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray, SortMap,
@@ -19,10 +19,27 @@ use crate::views::{
 
 use super::{calculations_from_map_ref, view_id_from_map_ref};
 
+/// `ViewMap` manages views within a database.
+///
+/// This class provides methods to insert, update, delete, and retrieve views. Each view is stored
+/// as a key/value pair within the `ViewMap`. The key is the view ID, and the value is the view data.
+///
+/// ## Structure of View Data
+/// The view data is organized in JSON format, where each view is identified by a unique view ID.
+/// Below is an example of how the views are stored:
+///
+/// ```json
+/// {
+///     "view_id_1": "view_data",
+///     "view_id_2": "view_data",
+///     "view_id_3": "view_data"
+/// }
+/// Each view data can be deserialize into a `DatabaseView` struct.
+///
 pub struct ViewMap {
   container: MapRefWrapper,
   #[allow(dead_code)]
-  subscription: DeepEventsSubscription,
+  view_map_subscription: DeepEventsSubscription,
 }
 
 impl Deref for ViewMap {
@@ -35,10 +52,11 @@ impl Deref for ViewMap {
 
 impl ViewMap {
   pub fn new(mut container: MapRefWrapper, view_change_sender: ViewChangeSender) -> Self {
-    let subscription = subscribe_view_change(&mut container, view_change_sender);
+    let view_map_subscription =
+      subscribe_view_map_change(&mut container, view_change_sender.clone());
     Self {
       container,
-      subscription,
+      view_map_subscription,
     }
   }
 
@@ -171,7 +189,7 @@ impl ViewMap {
     self
       .container
       .iter(txn)
-      .flat_map(|(_k, v)| view_from_value(v, txn))
+      .flat_map(|(_k, v)| view_from_value(&v, txn))
       .collect::<Vec<_>>()
   }
 

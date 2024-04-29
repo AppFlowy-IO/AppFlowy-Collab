@@ -81,7 +81,7 @@ impl DatabaseRow {
         (data, meta, comments)
       })
     };
-    let subscription = subscribe_row_data_change(&mut data, change_tx);
+    let subscription = subscribe_row_data_change(row_id.clone(), &mut data, change_tx);
     Self {
       uid,
       row_id,
@@ -103,7 +103,7 @@ impl DatabaseRow {
   ) -> Result<Self, CollabError> {
     match Self::create_row_struct(&collab)? {
       Some((mut data, meta, comments)) => {
-        let subscription = subscribe_row_data_change(&mut data, change_tx);
+        let subscription = subscribe_row_data_change(row_id.clone(), &mut data, change_tx);
         Ok(Self {
           uid,
           row_id,

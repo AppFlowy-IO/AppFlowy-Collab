@@ -1,13 +1,16 @@
-use crate::fields::Field;
+use crate::fields::{field_from_map_ref, field_from_value, Field};
 use collab::preclude::{DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRefWrapper};
 use tokio::sync::broadcast;
+use tracing::warn;
 
 pub type FieldChangeSender = broadcast::Sender<FieldChange>;
 pub type FieldChangeReceiver = broadcast::Receiver<FieldChange>;
 
 #[derive(Clone, Debug)]
 pub enum FieldChange {
-  DidUpdateField(Field),
+  DidCreateField { field: Field },
+  DidUpdateField { field: Field },
+  DidDeleteField { field_id: String },
 }
 
 pub(crate) fn subscribe_field_change(
@@ -25,13 +28,24 @@ pub(crate) fn subscribe_field_change(
             let _change_tx = change_tx.clone();
             match value {
               EntryChange::Inserted(value) => {
-                tracing::trace!("field observer: Inserted: {}:{}", key, value);
+                // tracing::trace!("field observer: Inserted: {}:{}", key, value);
+                if let Some(field) = field_from_value(value, txn) {
+                  let _ = change_tx.send(FieldChange::DidCreateField { field });
+                }
               },
-              EntryChange::Updated(_, value) => {
-                tracing::trace!("field observer: update: {}:{}", key, value);
+              EntryChange::Updated(_, _value) => {
+                // tracing::trace!("field observer: update: {}:{}", key, value);
+                if let Some(field) = field_from_map_ref(event.target(), txn) {
+                  let _ = change_tx.send(FieldChange::DidUpdateField { field });
+                }
               },
               EntryChange::Removed(_value) => {
-                tracing::trace!("field observer: delete: {}", key);
+                let field_id = (**key).to_string();
+                if !field_id.is_empty() {
+                  let _ = change_tx.send(FieldChange::DidDeleteField { field_id });
+                } else {
+                  warn!("field observer: delete: {}", key);
+                }
               },
             }
           }

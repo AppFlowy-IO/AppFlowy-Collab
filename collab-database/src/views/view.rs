@@ -511,6 +511,10 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
 pub fn view_id_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> String {
   map_ref.get_str_with_txn(txn, VIEW_ID).unwrap_or_default()
 }
+pub fn view_id_from_value<T: ReadTxn>(value: &YrsValue, txn: &T) -> Option<String> {
+  let map_ref = value.to_ymap()?;
+  Some(view_id_from_map_ref(map_ref, txn))
+}
 
 /// Return a [DatabaseViewMeta] from a map ref
 /// A [DatabaseViewMeta] is a subset of a [DatabaseView]
@@ -522,7 +526,7 @@ pub fn view_meta_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Data
 }
 
 /// Return a [DatabaseView] from a map ref
-pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<DatabaseView> {
+pub fn view_from_value<T: ReadTxn>(value: &YrsValue, txn: &T) -> Option<DatabaseView> {
   let map_ref = value.to_ymap()?;
   view_from_map_ref(map_ref, txn)
 }
