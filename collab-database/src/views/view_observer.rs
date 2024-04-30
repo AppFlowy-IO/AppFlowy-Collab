@@ -1,23 +1,34 @@
+use collab::core::any_map::AnyMap;
 use collab::preclude::array::ArrayEvent;
 use collab::preclude::map::MapEvent;
-use collab::preclude::{Change, ToJson, TransactionMut};
+use collab::preclude::{Change, TransactionMut};
 use collab::preclude::{
   DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRefWrapper, PathSegment,
 };
 use std::ops::Deref;
+use std::str::FromStr;
 use tokio::sync::broadcast;
-use tracing::trace;
+use tracing::{trace, warn};
 
+use crate::views::define::*;
 use crate::views::{
-  row_order_from_value, FieldOrder, FilterMap, GroupMap, LayoutSetting, RowOrder, SortMap,
-  ROW_ORDERS,
+  row_order_from_value, view_from_map_ref, view_from_value, view_id_from_map_ref, DatabaseLayout,
+  DatabaseView, FieldOrder, FilterMap, GroupMap, RowOrder, SortMap,
 };
-
 #[derive(Debug, Clone)]
 pub enum DatabaseViewChange {
+  DidCreateView {
+    view: DatabaseView,
+  },
+  DidUpdateView {
+    view: DatabaseView,
+  },
+  DidDeleteView {
+    view_id: String,
+  },
   LayoutSettingChanged {
     view_id: String,
-    setting: LayoutSetting,
+    layout_type: DatabaseLayout,
   },
   DidInsertRowOrders {
     row_orders: Vec<RowOrder>,
@@ -26,43 +37,28 @@ pub enum DatabaseViewChange {
     index: Vec<u32>,
   },
   // filter
-  DidCreateFilter {
+  DidCreateFilters {
     view_id: String,
-    filter: FilterMap,
-  },
-  DidDeleteFilter {
-    view_id: String,
-    filter: FilterMap,
+    filters: Vec<FilterMap>,
   },
   DidUpdateFilter {
     view_id: String,
-    filter: FilterMap,
   },
   // group
-  DidCreateGroupSetting {
+  DidCreateGroupSettings {
     view_id: String,
-    group_setting: GroupMap,
-  },
-  DidDeleteGroupSetting {
-    view_id: String,
-    group_setting: GroupMap,
+    groups: Vec<GroupMap>,
   },
   DidUpdateGroupSetting {
     view_id: String,
-    group_setting: GroupMap,
   },
   // Sort
-  DidCreateSort {
+  DidCreateSorts {
     view_id: String,
-    sort: SortMap,
-  },
-  DidDeleteSort {
-    view_id: String,
-    sort: SortMap,
+    sorts: Vec<SortMap>,
   },
   DidUpdateSort {
     view_id: String,
-    sort: SortMap,
   },
   // field order
   DidCreateFieldOrder {
@@ -78,7 +74,7 @@ pub enum DatabaseViewChange {
 pub type ViewChangeSender = broadcast::Sender<DatabaseViewChange>;
 pub type ViewChangeReceiver = broadcast::Receiver<DatabaseViewChange>;
 
-pub(crate) fn subscribe_view_change(
+pub(crate) fn subscribe_view_map_change(
   view_map: &mut MapRefWrapper,
   change_tx: ViewChangeSender,
 ) -> DeepEventsSubscription {
@@ -87,7 +83,7 @@ pub(crate) fn subscribe_view_change(
       match event {
         Event::Text(_) => {},
         Event::Array(array_event) => {
-          handle_array_event(&change_tx, txn, event, array_event);
+          handle_array_event(&change_tx, txn, array_event);
         },
         Event::Map(event) => {
           handle_map_event(&change_tx, txn, event);
@@ -124,16 +120,14 @@ pub(crate) fn subscribe_view_change(
 fn handle_array_event(
   change_tx: &ViewChangeSender,
   txn: &TransactionMut,
-  _event: &Event,
   array_event: &ArrayEvent,
 ) {
   let mut offset = 0;
   let key = ArrayChangeKey::from(array_event);
   let mut deleted_row_index: Vec<u32> = vec![];
-  array_event
-    .delta(txn)
-    .iter()
-    .for_each(|change| match change {
+  array_event.delta(txn).iter().for_each(|change| {
+    trace!("database view observe array event: {:?}:{:?}", key, change);
+    match change {
       Change::Added(values) => match &key {
         ArrayChangeKey::RowOrder => {
           let row_orders = values
@@ -142,7 +136,34 @@ fn handle_array_event(
             .collect::<Vec<_>>();
           let _ = change_tx.send(DatabaseViewChange::DidInsertRowOrders { row_orders });
         },
-        ArrayChangeKey::Unhandle(s) => {
+        ArrayChangeKey::Filter => {
+          if let Some(view_id) = view_id_from_array_event(array_event) {
+            let filters = values
+              .iter()
+              .flat_map(|value| AnyMap::from_value(txn, value))
+              .collect::<Vec<_>>();
+            let _ = change_tx.send(DatabaseViewChange::DidCreateFilters { view_id, filters });
+          }
+        },
+        ArrayChangeKey::Sort => {
+          if let Some(view_id) = view_id_from_array_event(array_event) {
+            let sorts = values
+              .iter()
+              .flat_map(|value| AnyMap::from_value(txn, value))
+              .collect::<Vec<_>>();
+            let _ = change_tx.send(DatabaseViewChange::DidCreateSorts { view_id, sorts });
+          }
+        },
+        ArrayChangeKey::Group => {
+          if let Some(view_id) = view_id_from_array_event(array_event) {
+            let groups = values
+              .iter()
+              .flat_map(|value| AnyMap::from_value(txn, value))
+              .collect::<Vec<_>>();
+            let _ = change_tx.send(DatabaseViewChange::DidCreateGroupSettings { view_id, groups });
+          }
+        },
+        ArrayChangeKey::Unhandled(s) => {
           trace!("database view observe unknown insert: {}", s);
         },
       },
@@ -156,8 +177,23 @@ fn handle_array_event(
             }
             offset += len;
           },
-          ArrayChangeKey::Unhandle(s) => {
-            trace!("database view observe unhandle delete: {}", s);
+          ArrayChangeKey::Filter => {
+            if let Some(view_id) = view_id_from_array_event(array_event) {
+              let _ = change_tx.send(DatabaseViewChange::DidUpdateFilter { view_id });
+            }
+          },
+          ArrayChangeKey::Sort => {
+            if let Some(view_id) = view_id_from_array_event(array_event) {
+              let _ = change_tx.send(DatabaseViewChange::DidUpdateSort { view_id });
+            }
+          },
+          ArrayChangeKey::Group => {
+            if let Some(view_id) = view_id_from_array_event(array_event) {
+              let _ = change_tx.send(DatabaseViewChange::DidUpdateGroupSetting { view_id });
+            }
+          },
+          ArrayChangeKey::Unhandled(s) => {
+            trace!("database view observe unknown remove: {}", s);
           },
         }
       },
@@ -165,7 +201,8 @@ fn handle_array_event(
         offset += value;
         trace!("database view observe array retain: {}", value);
       },
-    });
+    }
+  });
 
   if !deleted_row_index.is_empty() {
     let _ = change_tx.send(DatabaseViewChange::DidDeleteRowAtIndex {
@@ -180,38 +217,86 @@ fn handle_map_event(change_tx: &ViewChangeSender, txn: &TransactionMut, event: &
     let _change_tx = change_tx.clone();
     match value {
       EntryChange::Inserted(value) => {
-        trace!(
-          "database view map inserted: {}:{:?}",
-          key,
-          value.to_json(txn)
-        );
+        let database_view = view_from_value(value, txn);
+        // trace!("database view map inserted: {}:{:?}", key, database_view,);
+        if let Some(database_view) = database_view {
+          let _ = change_tx.send(DatabaseViewChange::DidCreateView {
+            view: database_view,
+          });
+        }
       },
       EntryChange::Updated(_, value) => {
+        let database_view = view_from_map_ref(event.target(), txn);
+        if let Some(database_view) = database_view {
+          let _ = change_tx.send(DatabaseViewChange::DidUpdateView {
+            view: database_view,
+          });
+        }
+
+        let view_id = view_id_from_map_ref(event.target(), txn);
         trace!("database view map update: {}:{}", key, value);
+        match (*key).as_ref() {
+          DATABASE_VIEW_LAYOUT => {
+            if let Ok(layout_type) = DatabaseLayout::from_str(&value.to_string()) {
+              let _ = change_tx.send(DatabaseViewChange::LayoutSettingChanged {
+                view_id,
+                layout_type,
+              });
+            }
+          },
+          _ => {
+            trace!("database view map update: {}:{}", key, value);
+          },
+        }
       },
       EntryChange::Removed(_value) => {
-        trace!("database view map delete: {}", key);
+        // trace!("database view map delete: {}:{}", key, value);
+        let view_id = (**key).to_string();
+        if !view_id.is_empty() {
+          let _ = change_tx.send(DatabaseViewChange::DidDeleteView { view_id });
+        } else {
+          warn!("database view map delete: empty key");
+        }
       },
     }
   }
 }
 
+#[derive(Debug)]
 enum ArrayChangeKey {
-  Unhandle(String),
+  Unhandled(String),
   RowOrder,
+  Filter,
+  Sort,
+  Group,
 }
 
 impl From<&ArrayEvent> for ArrayChangeKey {
   fn from(event: &ArrayEvent) -> Self {
     match event.path().pop_back() {
       Some(segment) => match segment {
-        PathSegment::Key(s) => match s.deref() {
-          ROW_ORDERS => Self::RowOrder,
-          _ => Self::Unhandle(s.deref().to_string()),
+        PathSegment::Key(s) => match s.as_ref() {
+          DATABASE_VIEW_ROW_ORDERS => Self::RowOrder,
+          DATABASE_VIEW_FILTERS => Self::Filter,
+          DATABASE_VIEW_SORTS => Self::Sort,
+          DATABASE_VIEW_GROUPS => Self::Group,
+          _ => Self::Unhandled(s.deref().to_string()),
         },
-        PathSegment::Index(_) => Self::Unhandle("index".to_string()),
+        PathSegment::Index(_) => Self::Unhandled("index".to_string()),
       },
-      None => Self::Unhandle("empty path".to_string()),
+      None => Self::Unhandled("empty path".to_string()),
     }
+  }
+}
+
+fn view_id_from_array_event(event: &ArrayEvent) -> Option<String> {
+  let path = event.path();
+  if path.len() > 1 {
+    match path.front() {
+      Some(PathSegment::Key(key)) => Some(key.to_string()),
+      _ => None,
+    }
+  } else {
+    None
   }
 }

@@ -1,4 +1,5 @@
 mod calculation;
+pub mod define;
 mod field_order;
 mod field_settings;
 mod filter;

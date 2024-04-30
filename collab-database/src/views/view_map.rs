@@ -8,21 +8,39 @@ use collab::preclude::{
 
 use crate::database::timestamp;
 use crate::rows::RowId;
+use crate::views::define::*;
 use crate::views::{
   field_settings_from_map_ref, filters_from_map_ref, group_setting_from_map_ref,
-  layout_setting_from_map_ref, sorts_from_map_ref, subscribe_view_change, view_from_map_ref,
+  layout_setting_from_map_ref, sorts_from_map_ref, subscribe_view_map_change, view_from_map_ref,
   view_from_value, view_meta_from_value, CalculationMap, DatabaseLayout, DatabaseView,
   DatabaseViewMeta, DatabaseViewUpdate, FieldOrder, FieldOrderArray, FieldSettingsByFieldIdMap,
   FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder, RowOrderArray, SortMap,
-  ViewBuilder, ViewChangeSender, FIELD_ORDERS, ROW_ORDERS, VIEW_LAYOUT,
+  ViewBuilder, ViewChangeSender,
 };
 
 use super::{calculations_from_map_ref, view_id_from_map_ref};
 
+/// `ViewMap` manages views within a database.
+///
+/// This class provides methods to insert, update, delete, and retrieve views. Each view is stored
+/// as a key/value pair within the `ViewMap`. The key is the view ID, and the value is the view data.
+///
+/// ## Structure of View Data
+/// The view data is organized in JSON format, where each view is identified by a unique view ID.
+/// Below is an example of how the views are stored:
+///
+/// ```json
+/// {
+///     "view_id_1": "view_data",
+///     "view_id_2": "view_data",
+///     "view_id_3": "view_data"
+/// }
+/// Each view data can be deserialize into a `DatabaseView` struct.
+///
 pub struct ViewMap {
   container: MapRefWrapper,
   #[allow(dead_code)]
-  subscription: Option<DeepEventsSubscription>,
+  view_map_subscription: DeepEventsSubscription,
 }
 
 impl Deref for ViewMap {
@@ -34,12 +52,12 @@ impl Deref for ViewMap {
 }
 
 impl ViewMap {
-  pub fn new(mut container: MapRefWrapper, view_change_sender: Option<ViewChangeSender>) -> Self {
-    let subscription =
-      view_change_sender.map(|sender| subscribe_view_change(&mut container, sender));
+  pub fn new(mut container: MapRefWrapper, view_change_sender: ViewChangeSender) -> Self {
+    let view_map_subscription =
+      subscribe_view_map_change(&mut container, view_change_sender.clone());
     Self {
       container,
-      subscription,
+      view_map_subscription,
     }
   }
 
@@ -172,7 +190,7 @@ impl ViewMap {
     self
       .container
       .iter(txn)
-      .flat_map(|(_k, v)| view_from_value(v, txn))
+      .flat_map(|(_k, v)| view_from_value(&v, txn))
       .collect::<Vec<_>>()
   }
 
@@ -191,7 +209,7 @@ impl ViewMap {
       .get_map_with_txn(&txn, view_id)
       .map(|map_ref| {
         map_ref
-          .get_i64_with_txn(&txn, VIEW_LAYOUT)
+          .get_i64_with_txn(&txn, DATABASE_VIEW_LAYOUT)
           .map(DatabaseLayout::from)
       });
 
@@ -207,7 +225,7 @@ impl ViewMap {
       .get_map_with_txn(txn, view_id)
       .map(|map_ref| {
         map_ref
-          .get_array_ref_with_txn(txn, ROW_ORDERS)
+          .get_array_ref_with_txn(txn, DATABASE_VIEW_ROW_ORDERS)
           .map(|array_ref| RowOrderArray::new(array_ref.into_inner()).get_objects_with_txn(txn))
           .unwrap_or_default()
       })
@@ -221,7 +239,7 @@ impl ViewMap {
     if let Some(row_order_map) = self
       .container
       .get_map_with_txn(txn, view_id)
-      .and_then(|map_ref| map_ref.get_array_ref_with_txn(txn, ROW_ORDERS))
+      .and_then(|map_ref| map_ref.get_array_ref_with_txn(txn, DATABASE_VIEW_ROW_ORDERS))
     {
       let row_order_array = RowOrderArray::new(row_order_map.into_inner());
       for mut row_order in row_order_array.get_objects_with_txn(txn) {
@@ -240,7 +258,7 @@ impl ViewMap {
   pub fn is_row_exist_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str, row_id: &RowId) -> bool {
     let f = || {
       let map = self.container.get_map_with_txn(txn, view_id)?;
-      let row_order_array = map.get_array_ref_with_txn(txn, ROW_ORDERS)?;
+      let row_order_array = map.get_array_ref_with_txn(txn, DATABASE_VIEW_ROW_ORDERS)?;
       RowOrderArray::new(row_order_array.into_inner()).get_position_with_txn(txn, row_id.as_str())
     };
     f().is_some()
@@ -252,7 +270,7 @@ impl ViewMap {
       .get_map_with_txn(txn, view_id)
       .map(|map_ref| {
         map_ref
-          .get_array_ref_with_txn(txn, FIELD_ORDERS)
+          .get_array_ref_with_txn(txn, DATABASE_VIEW_FIELD_ORDERS)
           .map(|array_ref| FieldOrderArray::new(array_ref.into_inner()).get_objects_with_txn(txn))
           .unwrap_or_default()
       })

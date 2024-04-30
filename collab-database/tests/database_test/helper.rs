@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use collab::core::collab::{DataSource, MutexCollab};
 use collab::preclude::CollabBuilder;
@@ -21,6 +22,7 @@ use crate::user_test::helper::TestUserDatabaseCollabBuilderImpl;
 use collab_database::database_state::DatabaseNotify;
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
+use tokio::time::timeout;
 
 pub struct DatabaseTest {
   #[allow(dead_code)]
@@ -61,7 +63,7 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     db: Arc::downgrade(&collab_db),
     collab: Arc::new(collab),
     collab_service: collab_builder,
-    notifier: Some(DatabaseNotify::default()),
+    notifier: DatabaseNotify::default(),
   };
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
@@ -90,6 +92,7 @@ pub fn create_row(uid: i64, row_id: RowId) -> (Arc<MutexCollab>, DatabaseRow) {
   collab.lock().initialize();
   let arc_collab = Arc::new(collab);
   let cloned_collab = arc_collab.clone();
+  let row_change_tx = tokio::sync::broadcast::channel(1).0;
   (
     arc_collab,
     DatabaseRow::create(
@@ -98,7 +101,7 @@ pub fn create_row(uid: i64, row_id: RowId) -> (Arc<MutexCollab>, DatabaseRow) {
       row_id,
       Arc::downgrade(&collab_db),
       cloned_collab,
-      None,
+      row_change_tx,
     ),
   )
 }
@@ -125,7 +128,7 @@ pub async fn create_database_with_db(
     db: Arc::downgrade(&collab_db),
     collab,
     collab_service: collab_builder,
-    notifier: Some(DatabaseNotify::default()),
+    notifier: DatabaseNotify::default(),
   };
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
@@ -169,7 +172,7 @@ pub fn restore_database_from_db(
     db: Arc::downgrade(&collab_db),
     collab,
     collab_service: collab_builder,
-    notifier: Some(DatabaseNotify::default()),
+    notifier: DatabaseNotify::default(),
   };
   let database = Database::get_or_create(database_id, context).unwrap();
   DatabaseTest {
@@ -238,7 +241,7 @@ impl DatabaseTestBuilder {
       db: Arc::downgrade(&collab_db),
       collab: Arc::new(collab),
       collab_service: collab_builder,
-      notifier: Some(DatabaseNotify::default()),
+      notifier: DatabaseNotify::default(),
     };
     let params = CreateDatabaseParams {
       database_id: self.database_id.clone(),
@@ -370,5 +373,37 @@ impl Cleaner {
 impl Drop for Cleaner {
   fn drop(&mut self) {
     Self::cleanup(&self.0)
+  }
+}
+
+pub async fn wait_for_specific_event<F, T>(
+  mut change_rx: tokio::sync::broadcast::Receiver<T>,
+  condition: F,
+) -> Result<(), String>
+where
+  F: Fn(&T) -> bool,
+  T: Clone,
+{
+  loop {
+    let result = timeout(Duration::from_secs(5), change_rx.recv()).await;
+
+    match result {
+      Ok(Ok(event)) if condition(&event) => {
+        // If the event matches the condition
+        return Ok(());
+      },
+      Ok(Ok(_)) => {
+        // If it's any other event, continue the loop
+        continue;
+      },
+      Ok(Err(e)) => {
+        // Channel error
+        return Err(format!("Channel error: {}", e));
+      },
+      Err(e) => {
+        // Timeout occurred
+        return Err(format!("Timeout occurred: {}", e));
+      },
+    }
   }
 }

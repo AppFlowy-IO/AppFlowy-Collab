@@ -190,7 +190,7 @@ impl WorkspaceDatabase {
           db: self.collab_db.clone(),
           collab,
           collab_service: self.collab_service.clone(),
-          notifier: Some(notifier),
+          notifier,
         };
         let database = Database::get_or_create(database_id, context).ok()?;
         // The database is not exist in local disk, which means the rows of the database are not
@@ -244,7 +244,7 @@ impl WorkspaceDatabase {
       db: self.collab_db.clone(),
       collab,
       collab_service: self.collab_service.clone(),
-      notifier: Some(notifier),
+      notifier,
     };
 
     // Add a new database record.

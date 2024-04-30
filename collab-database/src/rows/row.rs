@@ -46,7 +46,7 @@ pub struct DatabaseRow {
   comments: ArrayRefWrapper,
   collab_db: Weak<CollabKVDB>,
   #[allow(dead_code)]
-  subscription: Option<DeepEventsSubscription>,
+  subscription: DeepEventsSubscription,
 }
 
 impl DatabaseRow {
@@ -56,7 +56,7 @@ impl DatabaseRow {
     row_id: RowId,
     collab_db: Weak<CollabKVDB>,
     collab: Arc<MutexCollab>,
-    change_tx: Option<RowChangeSender>,
+    change_tx: RowChangeSender,
   ) -> Self {
     let (mut data, meta, comments) = {
       let collab_guard = collab.lock();
@@ -81,7 +81,7 @@ impl DatabaseRow {
         (data, meta, comments)
       })
     };
-    let subscription = change_tx.map(|sender| subscribe_row_data_change(&mut data, sender));
+    let subscription = subscribe_row_data_change(row_id.clone(), &mut data, change_tx);
     Self {
       uid,
       row_id,
@@ -99,11 +99,11 @@ impl DatabaseRow {
     row_id: RowId,
     collab_db: Weak<CollabKVDB>,
     collab: Arc<MutexCollab>,
-    change_tx: Option<RowChangeSender>,
+    change_tx: RowChangeSender,
   ) -> Result<Self, CollabError> {
     match Self::create_row_struct(&collab)? {
       Some((mut data, meta, comments)) => {
-        let subscription = change_tx.map(|sender| subscribe_row_data_change(&mut data, sender));
+        let subscription = subscribe_row_data_change(row_id.clone(), &mut data, change_tx);
         Ok(Self {
           uid,
           row_id,

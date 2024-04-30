@@ -1,4 +1,4 @@
-use crate::rows::{Cell, Row, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY};
+use crate::rows::{Cell, Row, RowId, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY};
 use collab::core::value::YrsValueExtension;
 
 use collab::preclude::{
@@ -16,13 +16,26 @@ pub type RowChangeReceiver = broadcast::Receiver<RowChange>;
 
 #[derive(Debug, Clone)]
 pub enum RowChange {
-  DidUpdateVisibility { value: bool },
-  DidUpdateHeight { value: i32 },
-  DidUpdateCell { key: String, value: Cell },
-  DidUpdateRowComment { row: Row },
+  DidUpdateVisibility {
+    row_id: RowId,
+    value: bool,
+  },
+  DidUpdateHeight {
+    row_id: RowId,
+    value: i32,
+  },
+  DidUpdateCell {
+    row_id: RowId,
+    key: String,
+    value: Cell,
+  },
+  DidUpdateRowComment {
+    row: Row,
+  },
 }
 
 pub(crate) fn subscribe_row_data_change(
+  row_id: RowId,
   row_data_map: &mut MapRefWrapper,
   change_tx: RowChangeSender,
 ) -> DeepEventsSubscription {
@@ -37,7 +50,7 @@ pub(crate) fn subscribe_row_data_change(
         Event::Text(_) => {},
         Event::Array(_) => {},
         Event::Map(map_event) => {
-          handle_map_event(&change_tx, txn, event, map_event);
+          handle_map_event(&row_id, &change_tx, txn, event, map_event);
         },
         Event::XmlFragment(_) => {},
         Event::XmlText(_) => {},
@@ -47,6 +60,7 @@ pub(crate) fn subscribe_row_data_change(
 }
 
 fn handle_map_event(
+  row_id: &RowId,
   change_tx: &RowChangeSender,
   txn: &TransactionMut,
   event: &Event,
@@ -68,13 +82,17 @@ fn handle_map_event(
             RowChangeValue::Height => {
               if let Some(value) = value.as_i64() {
                 let _ = change_tx.send(RowChange::DidUpdateHeight {
+                  row_id: row_id.clone(),
                   value: value as i32,
                 });
               }
             },
             RowChangeValue::Visibility => {
               if let Some(value) = value.as_bool() {
-                let _ = change_tx.send(RowChange::DidUpdateVisibility { value });
+                let _ = change_tx.send(RowChange::DidUpdateVisibility {
+                  row_id: row_id.clone(),
+                  value,
+                });
               }
             },
           }
@@ -89,6 +107,7 @@ fn handle_map_event(
             // - The 'value' represents the actual content or data inserted into this cell.
             if let Some(cell) = Cell::from_value(txn, value) {
               let _ = change_tx.send(RowChange::DidUpdateCell {
+                row_id: row_id.clone(),
                 key: key.to_string(),
                 value: cell,
               });
@@ -105,6 +124,7 @@ fn handle_map_event(
             if let Some(PathSegment::Key(key)) = event.path().pop_back() {
               if let Some(cell) = Cell::from_value(txn, &event.target()) {
                 let _ = change_tx.send(RowChange::DidUpdateCell {
+                  row_id: row_id.clone(),
                   key: key.deref().to_string(),
                   value: cell,
                 });

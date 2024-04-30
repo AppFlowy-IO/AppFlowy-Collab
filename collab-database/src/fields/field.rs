@@ -157,7 +157,7 @@ pub fn primary_field_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Opti
 }
 
 /// Get field from a [YrsValue]
-pub fn field_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Field> {
+pub fn field_from_value<T: ReadTxn>(value: &YrsValue, txn: &T) -> Option<Field> {
   let map_ref = value.to_ymap()?;
   field_from_map_ref(map_ref, txn)
 }

@@ -26,7 +26,7 @@ use crate::rows::{
 use crate::views::RowOrder;
 use crate::workspace_database::DatabaseCollabService;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum BlockEvent {
   /// The Row is fetched from the remote.
   DidFetchRow(Vec<RowDetail>),
@@ -45,7 +45,7 @@ pub struct Block {
   sequence: Arc<AtomicU32>,
   pub rows: Arc<DashMap<RowId, Arc<MutexDatabaseRow>>>,
   pub notifier: Arc<Sender<BlockEvent>>,
-  row_change_tx: Option<RowChangeSender>,
+  row_change_tx: RowChangeSender,
 }
 
 impl Block {
@@ -54,7 +54,7 @@ impl Block {
     database_id: String,
     collab_db: Weak<CollabKVDB>,
     collab_service: Arc<dyn DatabaseCollabService>,
-    row_change_tx: Option<RowChangeSender>,
+    row_change_tx: RowChangeSender,
   ) -> Block {
     let controller = BlockTaskController::new(collab_db.clone(), Arc::downgrade(&collab_service));
     let task_controller = Arc::new(controller);
@@ -339,7 +339,7 @@ impl Block {
     row_id: &RowId,
     weak_notifier: Weak<Sender<BlockEvent>>,
     uid: i64,
-    change_tx: Option<RowChangeSender>,
+    change_tx: RowChangeSender,
     collab_db: Weak<CollabKVDB>,
     cache: Arc<DashMap<RowId, Arc<MutexDatabaseRow>>>,
     row_collab: Arc<MutexCollab>,
@@ -389,7 +389,7 @@ async fn async_create_row<T: Into<Row>>(
   row: T,
   cache: Arc<DashMap<RowId, Arc<MutexDatabaseRow>>>,
   collab_db: Weak<CollabKVDB>,
-  row_change_tx: Option<RowChangeSender>,
+  row_change_tx: RowChangeSender,
   collab_service: Arc<dyn DatabaseCollabService>,
 ) {
   let row = row.into();
