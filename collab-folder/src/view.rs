@@ -714,17 +714,17 @@ pub struct View {
   pub created_by: Option<i64>, // user id
   pub last_edited_time: i64,
   pub last_edited_by: Option<i64>, // user id
-  // this value used to store the extra data with JSON format
-  // for document:
-  //  - cover: { type: "", value: "" }
-  //    - type: "0" represents normal color,
-  //            "1" represents gradient color,
-  //            "2" represents built-in image,
-  //            "3" represents custom image,
-  //            "4" represents local image,
-  //            "5" represents unsplash image
-  //  - line_height_layout: "small" or "normal" or "large"
-  //  - font_layout: "small", or "normal", or "large"
+  /// this value used to store the extra data with JSON format
+  /// for document:
+  /// - cover: { type: "", value: "" }
+  ///   - type: "0" represents normal color,
+  ///           "1" represents gradient color,
+  ///           "2" represents built-in image,
+  ///           "3" represents custom image,
+  ///           "4" represents local image,
+  ///           "5" represents unsplash image
+  /// - line_height_layout: "small" or "normal" or "large"
+  /// - font_layout: "small", or "normal", or "large"
   pub extra: Option<String>,
 }
 
