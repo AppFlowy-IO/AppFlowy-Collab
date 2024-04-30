@@ -5,7 +5,7 @@ use collab_database::database::gen_row_id;
 use collab_database::rows::CreateRowParams;
 use collab_database::views::{
   CreateViewParams, DatabaseLayout, DatabaseViewChange, FilterMapBuilder, GroupSettingBuilder,
-  GroupSettingMap, SortMapBuilder,
+  SortMapBuilder,
 };
 use std::sync::Arc;
 use std::time::Duration;
