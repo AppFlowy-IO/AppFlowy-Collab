@@ -22,7 +22,6 @@ use yrs::updates::encoder::Encode;
 use yrs::{
   Any, ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options,
   ReadTxn, StateVector, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
-  UpdateSubscription,
 };
 
 use crate::core::awareness::{
@@ -44,10 +43,10 @@ pub const META_SECTION: &str = "meta";
 
 const LAST_SYNC_AT: &str = "last_sync_at";
 
-type AfterTransactionSubscription = Subscription<Arc<dyn Fn(&mut TransactionMut)>>;
+type AfterTransactionSubscription = Subscription;
 
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
-pub type MapSubscription = Subscription<MapSubscriptionCallback>;
+pub type MapSubscription = Subscription;
 
 #[derive(Debug, Clone)]
 pub enum IndexContent {
@@ -87,7 +86,7 @@ pub struct Collab {
   /// The [UndoManager] is used to undo and redo changes. By default, the [UndoManager]
   /// is disabled. To enable it, call [Collab::enable_undo_manager].
   undo_manager: Mutex<Option<UndoManager>>,
-  update_subscription: RwLock<Option<UpdateSubscription>>,
+  update_subscription: RwLock<Option<Subscription>>,
   awareness_subscription: RwLock<Option<AwarenessUpdateSubscription>>,
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
   pub index_json_sender: IndexContentSender,
@@ -727,7 +726,7 @@ fn observe_doc(
   oid: String,
   plugins: Plugins,
   local_origin: CollabOrigin,
-) -> (UpdateSubscription, Option<AfterTransactionSubscription>) {
+) -> (Subscription, Option<AfterTransactionSubscription>) {
   let cloned_oid = oid.clone();
   let cloned_plugins = plugins.clone();
   let update_sub = doc

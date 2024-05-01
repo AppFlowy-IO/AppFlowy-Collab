@@ -65,7 +65,7 @@ impl Awareness {
     F: Fn(&Awareness, &Event, &CollabOrigin) + 'static,
   {
     let eh = self.on_update.get_or_insert_with(Observer::default);
-    eh.subscribe(Arc::new(f))
+    eh.subscribe(f)
   }
 
   pub fn doc(&self) -> &Doc {
@@ -305,8 +305,7 @@ impl std::fmt::Debug for Awareness {
 
 /// Whenever a new callback is being registered, a [Subscription] is made. Whenever this
 /// subscription a registered callback is cancelled and will not be called any more.
-pub type AwarenessUpdateSubscription =
-  Subscription<Arc<dyn Fn(&Awareness, &Event, &CollabOrigin) + 'static>>;
+pub type AwarenessUpdateSubscription = Subscription;
 
 /// A structure that represents an encodable state of an [Awareness] struct.
 #[derive(Debug, Eq, PartialEq, Clone)]
