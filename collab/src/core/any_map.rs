@@ -259,6 +259,7 @@ impl AnyMap {
     }
   }
 
+  /// Insert the content of [AnyMap] into the input map_ref
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.0.iter().for_each(|(k, v)| match v {
       Any::Array(array) => {

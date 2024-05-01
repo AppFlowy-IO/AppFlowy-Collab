@@ -26,7 +26,7 @@ pub enum RowChange {
   },
   DidUpdateCell {
     row_id: RowId,
-    key: String,
+    field_id: String,
     value: Cell,
   },
   DidUpdateRowComment {
@@ -101,14 +101,17 @@ fn handle_map_event(
       RowChangePath::Cells => {
         match enctry_change {
           EntryChange::Inserted(value) => {
+            trace!("row observe insert: {}", key);
             // When a cell's value is newly inserted, the corresponding event exhibits specific characteristics:
             // - The event path is set to "/cells", indicating the operation is within the cells structure.
             // - The 'key' in the event corresponds to the unique identifier of the newly inserted cell.
             // - The 'value' represents the actual content or data inserted into this cell.
             if let Some(cell) = Cell::from_value(txn, value) {
+              // when insert a cell into the row, the key is the field_id
+              let field_id = key.to_string();
               let _ = change_tx.send(RowChange::DidUpdateCell {
                 row_id: row_id.clone(),
-                key: key.to_string(),
+                field_id,
                 value: cell,
               });
             }
@@ -123,9 +126,10 @@ fn handle_map_event(
             // In the current implementation, this key is used as the identifier (ID) of the field within the cells map.
             if let Some(PathSegment::Key(key)) = event.path().pop_back() {
               if let Some(cell) = Cell::from_value(txn, &event.target()) {
+                let field_id = key.deref().to_string();
                 let _ = change_tx.send(RowChange::DidUpdateCell {
                   row_id: row_id.clone(),
-                  key: key.deref().to_string(),
+                  field_id,
                   value: cell,
                 });
               }

@@ -66,9 +66,9 @@ async fn observer_row_cell_test() {
   wait_for_specific_event(row_change_rx, |event| match event {
     RowChange::DidUpdateCell {
       row_id: _,
-      key,
+      field_id,
       value,
-    } => key == "f1" && value.get_i64_value("level") == Some(1),
+    } => field_id == "f1" && value.get_i64_value("level") == Some(1),
     _ => false,
   })
   .await
@@ -93,9 +93,9 @@ async fn observer_row_cell_test() {
   wait_for_specific_event(row_change_rx, |event| match event {
     RowChange::DidUpdateCell {
       row_id: _,
-      key,
+      field_id,
       value,
-    } => key == "f1" && value.get_i64_value("level") == Some(2),
+    } => field_id == "f1" && value.get_i64_value("level") == Some(2),
     _ => false,
   })
   .await
