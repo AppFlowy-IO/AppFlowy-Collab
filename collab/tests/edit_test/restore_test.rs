@@ -467,12 +467,12 @@ async fn root_change_test() {
     .get_doc()
     .transact()
     .encode_state_as_update_v1(&sv_1);
+  let sv_1_update = Update::decode_v1(&sv_1_update).unwrap();
 
   let map_1 = {
     let collab_1_guard = collab_1.lock();
     collab_1_guard.with_origin_transact_mut(|txn| {
-      let update = Update::decode_v1(&sv_1_update).unwrap();
-      txn.apply_update(update);
+      txn.apply_update(sv_1_update);
     });
 
     let txn = collab_1_guard.transact();
