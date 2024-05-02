@@ -9,7 +9,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use yrs::updates::decoder::Decode;
-use yrs::{ReadTxn, Transact, TransactionMut, Update};
+use yrs::{ReadTxn, StateVector, Transact, TransactionMut, Update};
 
 use crate::util::{setup_log, CollabStateCachePlugin};
 
@@ -176,12 +176,10 @@ async fn simulate_client_missing_server_broadcast_data_test() {
   client_2.with_origin_transact_mut(|txn| {
     for update in second_server_updates {
       let update = Update::decode_v1(&update).unwrap();
-      println!("applying {:#?}", update);
       txn.apply_update(update);
     }
     // Verify that client 2 is now out of sync due to missing updates.
     assert!(txn.store().pending_update().is_some());
-    println!("missing: {:#?}", txn.store());
   });
   assert_eq!(
     client_2.to_json_value(),
@@ -190,17 +188,20 @@ async fn simulate_client_missing_server_broadcast_data_test() {
   );
 
   // Encode the missing state as an update and apply it to client 2 to resolve the missing updates.
-  let missing_sv = client_2
+  //FIXME: atm missing state vector is incorrectly computed. See: https://github.com/y-crdt/y-crdt/pull/423
+  let _missing_sv = client_2
     .transact()
     .store()
     .pending_update()
     .unwrap()
     .missing
     .clone();
-  println!("missing_sv: {:?}", missing_sv);
-  let missing_update =
-    Update::decode_v1(&server.transact().encode_state_as_update_v1(&missing_sv)).unwrap();
-  println!("missing_update: {:#?}", missing_update);
+  let missing_update = Update::decode_v1(
+    &server
+      .transact()
+      .encode_state_as_update_v1(&StateVector::default()),
+  )
+  .unwrap();
 
   client_2.with_origin_transact_mut(|txn| txn.apply_update(missing_update));
 
@@ -257,6 +258,8 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
       txn.apply_update(update);
     }
   });
+  // applied: {3:c} (pending), missing: {1:a, 2:b}
+
   // before the first_1 is not applied, so there is a pending update
   assert!(server.transact().store().pending_update().is_some());
 
@@ -267,6 +270,7 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
       txn.apply_update(update);
     }
   });
+  // applied: {4:d,5:e}, pending: {3:c}, missing: {1:a, 2:b}
   assert_json_eq!(
     server.to_json_value(),
     json!({
@@ -274,7 +278,7 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
       "5": "e"
     })
   );
-  assert!(server.transact().store().pending_update().is_none());
+  assert!(server.transact().store().pending_update().is_some());
 
   // the second_2 updates was deprecated
   server.with_origin_transact_mut(|txn| {
@@ -283,11 +287,13 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
       txn.apply_update(update);
     }
   });
+  // applied: {1:a,2:b,4:d,5:e}, re-applied: {3:c}
   assert_json_eq!(
     server.to_json_value(),
     json!({
       "1": "a",
       "2": "b",
+      "3": "c",
       "4": "d",
       "5": "e"
     })
@@ -298,6 +304,7 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
       txn.apply_update(update);
     }
   });
+  // update {6:f} was never applied
   assert_json_eq!(
     server.to_json_value(),
     json!( {
@@ -475,9 +482,7 @@ async fn root_change_test() {
   let a = map_1.to_json_value().unwrap();
   let b = map_2.to_json_value().unwrap();
 
-  println!("a: {}", a);
-  println!("b: {}", b);
-  // assert_eq!(a, b);
+  assert_eq!(a, b);
 }
 
 #[derive(Clone, Default)]
