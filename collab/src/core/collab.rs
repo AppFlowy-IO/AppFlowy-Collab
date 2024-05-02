@@ -24,9 +24,7 @@ use yrs::{
   ReadTxn, StateVector, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
 };
 
-use crate::core::awareness::{
-  gen_awareness_update_message, Awareness, AwarenessUpdateSubscription, Event,
-};
+use crate::core::awareness::{Awareness, Event};
 use crate::core::collab_plugin::{CollabPlugin, CollabPluginType};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
@@ -87,7 +85,7 @@ pub struct Collab {
   /// is disabled. To enable it, call [Collab::enable_undo_manager].
   undo_manager: Mutex<Option<UndoManager>>,
   update_subscription: RwLock<Option<Subscription>>,
-  awareness_subscription: RwLock<Option<AwarenessUpdateSubscription>>,
+  awareness_subscription: RwLock<Option<Subscription>>,
   after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
   pub index_json_sender: IndexContentSender,
 }
@@ -169,7 +167,7 @@ impl Collab {
     let undo_manager = Mutex::new(None);
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
-    let awareness = Awareness::new(doc.clone(), origin.clone());
+    let awareness = Awareness::new(doc.clone());
     Self {
       origin,
       object_id,
@@ -238,7 +236,7 @@ impl Collab {
     if let CollabOrigin::Client(origin) = &self.origin {
       self
         .awareness
-        .set_local_state(initial_awareness_state(origin.uid));
+        .set_local_state(initial_awareness_state(origin.uid).to_string());
     }
   }
 
@@ -384,9 +382,9 @@ impl Collab {
     self.data.observe(f)
   }
 
-  pub fn observe_awareness<F>(&mut self, f: F) -> AwarenessUpdateSubscription
+  pub fn observe_awareness<F>(&mut self, f: F) -> Subscription
   where
-    F: Fn(&Awareness, &Event, &CollabOrigin) + 'static,
+    F: Fn(&Event) + 'static,
   {
     self.awareness.on_update(f)
   }
@@ -705,15 +703,13 @@ fn observe_awareness(
   plugins: Plugins,
   oid: String,
   origin: CollabOrigin,
-) -> AwarenessUpdateSubscription {
-  awareness.on_update(move |awareness, event, update_origin| {
-    if &origin == update_origin {
-      if let Ok(update) = gen_awareness_update_message(awareness, event) {
-        plugins
-          .read()
-          .iter()
-          .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
-      }
+) -> Subscription {
+  awareness.on_update(move |event| {
+    if let Some(update) = event.awareness_update() {
+      plugins
+        .read()
+        .iter()
+        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, update));
     }
   })
 }

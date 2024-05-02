@@ -1,5 +1,5 @@
 use collab::preclude::{
-  DeepEventsSubscription, Map, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  Map, MapRefExtension, MapRefWrapper, ReadTxn, Subscription, TransactionMut,
 };
 
 use crate::database::timestamp;
@@ -13,7 +13,7 @@ use crate::views::FieldOrder;
 pub struct FieldMap {
   container: MapRefWrapper,
   #[allow(dead_code)]
-  subscription: DeepEventsSubscription,
+  subscription: Subscription,
 }
 
 impl FieldMap {

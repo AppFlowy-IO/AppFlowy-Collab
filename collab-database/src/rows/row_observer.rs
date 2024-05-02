@@ -2,7 +2,7 @@ use crate::rows::{Cell, Row, RowId, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY};
 use collab::core::value::YrsValueExtension;
 
 use collab::preclude::{
-  DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRefWrapper, TransactionMut,
+  DeepObservable, EntryChange, Event, MapRefWrapper, Subscription, TransactionMut,
 };
 use collab::preclude::{PathSegment, ToJson};
 use std::ops::Deref;
@@ -38,7 +38,7 @@ pub(crate) fn subscribe_row_data_change(
   row_id: RowId,
   row_data_map: &mut MapRefWrapper,
   change_tx: RowChangeSender,
-) -> DeepEventsSubscription {
+) -> Subscription {
   row_data_map.observe_deep(move |txn, events| {
     for event in events.iter() {
       // trace!(

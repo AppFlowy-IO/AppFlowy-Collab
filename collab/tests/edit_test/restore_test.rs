@@ -128,6 +128,11 @@ async fn simulate_client_missing_server_broadcast_data_test() {
   client_1.insert("3", "c".to_string());
   client_1.insert("4", "d".to_string());
   client_1.insert("5", "e".to_string());
+  assert_eq!(
+    client_1.to_json_value(),
+    json!({"1": "a", "2": "b", "3": "c", "4": "d", "5": "e"}),
+    "client 1 should insert 5 entries"
+  );
 
   // Verify that client_1 has generated five updates.
   let client_1_updates = std::mem::take(&mut *client_1_plugin.updates.write());
@@ -141,6 +146,11 @@ async fn simulate_client_missing_server_broadcast_data_test() {
       txn.apply_update(update);
     }
   });
+  assert_eq!(
+    server.to_json_value(),
+    json!({"1": "a", "2": "b", "3": "c"}),
+    "server applied first 3 updates"
+  );
 
   // Simulate that the first server update is not applied, to mimic a missed broadcast.
   let first_server_updates = std::mem::take(&mut *server_plugin.updates.write());
@@ -153,6 +163,11 @@ async fn simulate_client_missing_server_broadcast_data_test() {
       txn.apply_update(update);
     }
   });
+  assert_eq!(
+    server.to_json_value(),
+    json!( {"1": "a", "2": "b", "3": "c", "4": "d", "5": "e"}),
+    "server applied remaining 2 updates, having a complete state now"
+  );
 
   let second_server_updates = std::mem::take(&mut *server_plugin.updates.write());
   assert_eq!(second_server_updates.len(), 1);
@@ -161,27 +176,33 @@ async fn simulate_client_missing_server_broadcast_data_test() {
   client_2.with_origin_transact_mut(|txn| {
     for update in second_server_updates {
       let update = Update::decode_v1(&update).unwrap();
+      println!("applying {:#?}", update);
       txn.apply_update(update);
     }
-
     // Verify that client 2 is now out of sync due to missing updates.
     assert!(txn.store().pending_update().is_some());
+    println!("missing: {:#?}", txn.store());
   });
-
-  // Encode the missing state as an update and apply it to client 2 to resolve the missing updates.
-  let missing_update = server.transact().encode_state_as_update_v1(
-    &client_2
-      .transact()
-      .store()
-      .pending_update()
-      .unwrap()
-      .missing,
+  assert_eq!(
+    client_2.to_json_value(),
+    json!({}),
+    "client 2 has missing updates"
   );
 
-  client_2.with_origin_transact_mut(|txn| {
-    let update = Update::decode_v1(&missing_update).unwrap();
-    txn.apply_update(update);
-  });
+  // Encode the missing state as an update and apply it to client 2 to resolve the missing updates.
+  let missing_sv = client_2
+    .transact()
+    .store()
+    .pending_update()
+    .unwrap()
+    .missing
+    .clone();
+  println!("missing_sv: {:?}", missing_sv);
+  let missing_update =
+    Update::decode_v1(&server.transact().encode_state_as_update_v1(&missing_sv)).unwrap();
+  println!("missing_update: {:#?}", missing_update);
+
+  client_2.with_origin_transact_mut(|txn| txn.apply_update(missing_update));
 
   // Ensure all clients and the server have synchronized states.
   assert_eq!(client_1.to_json_value(), client_2.to_json_value());

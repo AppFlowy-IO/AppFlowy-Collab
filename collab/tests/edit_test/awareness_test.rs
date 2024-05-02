@@ -1,4 +1,3 @@
-use collab::core::awareness::gen_awareness_update_message;
 use collab::preclude::Collab;
 use serde_json::json;
 use std::collections::HashMap;
@@ -11,14 +10,14 @@ async fn awareness_insert_test() {
   let mut collab = Collab::new(1, "1", "1", vec![], true);
   collab.emit_awareness_state();
   let (tx, rx) = mpsc::sync_channel(1);
-  let _update = collab.observe_awareness(move |_awareness, event, _| {
+  let _update = collab.observe_awareness(move |event| {
     tx.send(event.clone()).unwrap();
   });
 
   let s = json!({"name": "nathan"});
-  collab.get_mut_awareness().set_local_state(s.clone());
-  let state = collab.get_awareness().get_local_state().unwrap();
-  assert_eq!(state, &s);
+  collab.get_mut_awareness().set_local_state(s.to_string());
+  let state = collab.get_awareness().local_state().unwrap();
+  assert_eq!(state, s.to_string());
 
   sleep(Duration::from_secs(1)).await;
   let event = rx.recv().unwrap();
@@ -30,8 +29,8 @@ async fn initial_awareness_test() {
   let mut collab = Collab::new(1, "1", "1", vec![], true);
   collab.emit_awareness_state();
   // by default, the awareness state contains the uid
-  let state = collab.get_awareness().get_local_state().unwrap();
-  assert_eq!(state, &json!({"uid": 1}));
+  let state = collab.get_awareness().local_state().unwrap();
+  assert_eq!(state, json!({"uid": 1}).to_string());
 }
 
 #[tokio::test]
@@ -39,14 +38,14 @@ async fn clean_awareness_state_test() {
   let mut collab = Collab::new(1, "1", "1", vec![], true);
   collab.emit_awareness_state();
   let (tx, rx) = mpsc::sync_channel(1);
-  let _update = collab.observe_awareness(move |_awareness, event, _| {
+  let _update = collab.observe_awareness(move |event| {
     tx.send(event.clone()).unwrap();
   });
   collab.clean_awareness_state();
   let event = rx.recv().unwrap();
   assert_eq!(event.removed().len(), 1);
 
-  assert!(collab.get_awareness().get_local_state().is_none());
+  assert!(collab.get_awareness().local_state().is_none());
 }
 
 #[tokio::test]
@@ -56,9 +55,9 @@ async fn clean_awareness_state_sync_test() {
   collab_a.emit_awareness_state();
   doc_id_map_uid.insert(collab_a.get_doc().client_id(), 0.to_string());
   let (tx, rx) = mpsc::sync_channel(1);
-  let _update = collab_a.observe_awareness(move |awareness, event, _| {
-    let update = gen_awareness_update_message(awareness, event).unwrap();
-    tx.send(update).unwrap();
+  let _update = collab_a.observe_awareness(move |event| {
+    let update = event.awareness_update().unwrap();
+    tx.send(update.clone()).unwrap();
   });
   collab_a.emit_awareness_state();
 
@@ -69,15 +68,15 @@ async fn clean_awareness_state_sync_test() {
   doc_id_map_uid.insert(collab_b.get_doc().client_id(), 1.to_string());
   collab_b
     .get_mut_awareness()
-    .apply_update(awareness_update, &collab_a.origin)
+    .apply_update(awareness_update.clone())
     .unwrap();
 
   // collab_a's awareness state should be synced to collab_b after applying the update
-  let states = collab_b.get_awareness().get_states();
+  let states = collab_b.get_awareness().clients();
   assert_eq!(states.len(), 2);
   for (id, json) in states {
     let uid = doc_id_map_uid.get(id).unwrap().parse::<i64>().unwrap();
-    assert_eq!(json, &json!({"uid": uid}));
+    assert_eq!(json, &json!({"uid": uid}).to_string());
   }
 
   // collab_a clean the awareness state
@@ -86,9 +85,9 @@ async fn clean_awareness_state_sync_test() {
   // apply the awareness state from collab_a to collab_b. collab_b's awareness state should be cleaned
   collab_b
     .get_mut_awareness()
-    .apply_update(awareness_update, &collab_a.origin)
+    .apply_update(awareness_update.clone())
     .unwrap();
 
-  let states = collab_b.get_awareness().get_states();
+  let states = collab_b.get_awareness().clients();
   assert_eq!(states.len(), 1);
 }
