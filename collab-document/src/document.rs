@@ -6,7 +6,6 @@ use collab::core::collab::{DataSource, MutexCollab};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
-use collab::preclude::block::ClientID;
 use collab::preclude::*;
 use collab_entity::define::DOCUMENT_ROOT;
 use collab_entity::CollabType;
@@ -45,6 +44,7 @@ pub struct Document {
   children_operation: ChildrenOperation,
   block_operation: BlockOperation,
   text_operation: TextOperation,
+  #[allow(dead_code)]
   awareness_subscription: RwLock<Option<Subscription>>,
 }
 
