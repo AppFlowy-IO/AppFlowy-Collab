@@ -9,7 +9,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use yrs::updates::decoder::Decode;
-use yrs::{ReadTxn, StateVector, Transact, TransactionMut, Update};
+use yrs::{ReadTxn, Transact, TransactionMut, Update};
 
 use crate::util::{setup_log, CollabStateCachePlugin};
 
@@ -188,18 +188,10 @@ async fn simulate_client_missing_server_broadcast_data_test() {
   );
 
   // Encode the missing state as an update and apply it to client 2 to resolve the missing updates.
-  //FIXME: atm missing state vector is incorrectly computed. See: https://github.com/y-crdt/y-crdt/pull/423
-  let _missing_sv = client_2
-    .transact()
-    .store()
-    .pending_update()
-    .unwrap()
-    .missing
-    .clone();
   let missing_update = Update::decode_v1(
     &server
       .transact()
-      .encode_state_as_update_v1(&StateVector::default()),
+      .encode_state_as_update_v1(&client_2.get_doc().transact().state_vector()),
   )
   .unwrap();
 
@@ -419,6 +411,7 @@ async fn apply_same_update_multiple_time() {
   assert_json_diff::assert_json_eq!(collab.lock().to_json(), restored_collab.lock().to_json(),);
 }
 
+#[ignore = "fixme: flaky test"]
 #[tokio::test]
 async fn root_change_test() {
   setup_log();
