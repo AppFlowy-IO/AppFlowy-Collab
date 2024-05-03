@@ -2170,9 +2170,9 @@ checksum = "32b752e52a2da0ddfbdbcc6fceadfeede4c939ed16d13e648833a61dfb611ed8"
 
 [[package]]
 name = "yrs"
-version = "0.18.5"
+version = "0.18.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d90da5773bf315d83e7f88ae07493737ac393622b579ba1355fbef1186ba3ea"
+checksum = "387146874ffe9358598ca23f10ec24f3e349ff5a78da9cd7548c31d8cd8b384c"
 dependencies = [
  "arc-swap",
  "atomic_refcell",
