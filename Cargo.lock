@@ -283,7 +283,7 @@ dependencies = [
 
 [[package]]
 name = "collab"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -311,7 +311,7 @@ dependencies = [
 
 [[package]]
 name = "collab-database"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -346,7 +346,7 @@ dependencies = [
 
 [[package]]
 name = "collab-document"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "collab",
@@ -369,7 +369,7 @@ dependencies = [
 
 [[package]]
 name = "collab-entity"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "collab-folder"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -412,7 +412,7 @@ dependencies = [
 
 [[package]]
 name = "collab-plugins"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -455,7 +455,7 @@ dependencies = [
 
 [[package]]
 name = "collab-user"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
