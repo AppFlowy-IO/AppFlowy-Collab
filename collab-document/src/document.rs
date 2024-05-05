@@ -6,6 +6,7 @@ use collab::core::collab::{DataSource, MutexCollab};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
+use collab::preclude::block::ClientID;
 use collab::preclude::*;
 use collab_entity::define::DOCUMENT_ROOT;
 use collab_entity::CollabType;
@@ -495,7 +496,7 @@ impl Document {
 
   /// Subscribe to the awareness state change.
   /// This function only allowed to be called once for each document.
-  /*pub fn subscribe_awareness_state<F>(&mut self, f: F)
+  pub fn subscribe_awareness_state<F>(&mut self, f: F)
   where
     F: Fn(HashMap<ClientID, DocumentAwarenessState>) + 'static,
   {
@@ -523,7 +524,7 @@ impl Document {
       }
     });
     *self.awareness_subscription.write() = Some(subscription);
-  }*/
+  }
 
   fn create_document(
     collab: Arc<MutexCollab>,
