@@ -1,10 +1,8 @@
 use collab::core::any_map::AnyMap;
 use collab::preclude::array::ArrayEvent;
 use collab::preclude::map::MapEvent;
-use collab::preclude::{Change, TransactionMut};
-use collab::preclude::{
-  DeepEventsSubscription, DeepObservable, EntryChange, Event, MapRefWrapper, PathSegment,
-};
+use collab::preclude::{Change, Subscription, TransactionMut};
+use collab::preclude::{DeepObservable, EntryChange, Event, MapRefWrapper, PathSegment};
 use std::ops::Deref;
 use std::str::FromStr;
 use tokio::sync::broadcast;
@@ -77,7 +75,7 @@ pub type ViewChangeReceiver = broadcast::Receiver<DatabaseViewChange>;
 pub(crate) fn subscribe_view_map_change(
   view_map: &mut MapRefWrapper,
   change_tx: ViewChangeSender,
-) -> DeepEventsSubscription {
+) -> Subscription {
   view_map.observe_deep(move |txn, events| {
     for event in events.iter() {
       match event {

@@ -4,9 +4,7 @@ use crate::core::value::YrsValueExtension;
 use anyhow::Result;
 use serde::Serialize;
 use yrs::block::Prelim;
-use yrs::{
-  Any, Array, ArrayRef, MapPrelim, MapRef, ReadTxn, Transact, Transaction, TransactionMut,
-};
+use yrs::{Any, Array, ArrayRef, MapPrelim, MapRef, ReadTxn, Transaction, TransactionMut};
 
 use crate::preclude::{CollabContext, MapRefExtension, MapRefWrapper, YrsValue};
 use crate::util::insert_json_value_to_array_ref;
@@ -49,7 +47,7 @@ impl ArrayRefWrapper {
   }
 
   pub fn to_map_refs(&self) -> Vec<MapRefWrapper> {
-    let txn = self.array_ref.transact();
+    let txn = self.collab_ctx.transact();
     self.to_map_refs_with_txn(&txn)
   }
 

@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
-use collab::core::awareness::AwarenessUpdateSubscription;
 use collab::core::collab::{DataSource, MutexCollab};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
@@ -42,11 +41,12 @@ const TEXT_MAP: &str = "text_map";
 pub struct Document {
   inner: Arc<MutexCollab>,
   root: MapRefWrapper,
-  subscription: Option<DeepEventsSubscription>,
+  subscription: Option<Subscription>,
   children_operation: ChildrenOperation,
   block_operation: BlockOperation,
   text_operation: TextOperation,
-  awareness_subscription: RwLock<Option<AwarenessUpdateSubscription>>,
+  #[allow(dead_code)]
+  awareness_subscription: RwLock<Option<Subscription>>,
 }
 
 impl Document {
@@ -459,8 +459,8 @@ impl Document {
     }
   }
 
-  // Set the local state of the awareness.
-  // It will override the previous state.
+  /// Set the local state of the awareness.
+  /// It will override the previous state.
   pub fn set_awareness_local_state(&self, state: DocumentAwarenessState) {
     if let Ok(state) = serde_json::to_string(&state) {
       self.inner.lock().get_mut_awareness().set_local_state(state);
@@ -474,53 +474,55 @@ impl Document {
 
   pub fn get_awareness_local_state(&self) -> Option<DocumentAwarenessState> {
     let mut collab = self.inner.lock();
-    let state = collab.get_mut_awareness().get_local_state();
-    state.and_then(|state| {
-      serde_json::from_value(state.clone()).ok().or_else(|| {
+    let json = collab.get_mut_awareness().local_state()?;
+    match serde_json::from_str(json) {
+      Ok(state) => Some(state),
+      Err(e) => {
         tracing::error!(
-          "Failed to deserialize DocumentAwarenessState, state: {:?}",
-          state
+          "Failed to deserialize DocumentAwarenessState, state: `{}` - {}",
+          json,
+          e
         );
         None
-      })
-    })
+      },
+    }
   }
 
-  // Clean the local state of the awareness.
-  // It should be called when the document is closed.
+  /// Clean the local state of the awareness.
+  /// It should be called when the document is closed.
   pub fn clean_awareness_local_state(&self) {
     self.inner.lock().get_mut_awareness().clean_local_state()
   }
 
-  // Subscribe to the awareness state change.
-  // This function only allowed to be called once for each document.
+  /// Subscribe to the awareness state change.
+  /// This function only allowed to be called once for each document.
   pub fn subscribe_awareness_state<F>(&mut self, f: F)
   where
     F: Fn(HashMap<ClientID, DocumentAwarenessState>) + 'static,
   {
-    let subscription = self
-      .inner
-      .lock()
-      .observe_awareness(move |awareness, _event, _| {
+    let subscription = self.inner.lock().observe_awareness(move |event| {
+      if let Some(update) = event.awareness_update() {
         // convert the states to the hashmap and map/filter the invalid states
-        let result: HashMap<ClientID, DocumentAwarenessState> = awareness.get_states()
-          .iter()
-          .filter_map(|(id, state)| {
-            state
-              .as_str()
-              .and_then(|str| serde_json::from_str(str).ok().map(|state| (*id, state)))
-              .or_else(|| {
-                tracing::error!(
-                  "subscribe_awareness_state error: failed to parse state for id: {:?}, state: {:?}",
-                  id,
-                  state
-                );
-                None
-              })
-          })
-          .collect();
+        let mut result = HashMap::with_capacity(update.clients.len());
+        for (&client_id, entry) in update.clients.iter() {
+          match serde_json::from_str(&entry.json) {
+            Ok(state) => {
+              result.insert(client_id, state);
+            },
+            Err(e) => {
+              tracing::error!(
+                "subscribe_awareness_state error: failed to parse state for id: {:?}, state: {:?} - {}",
+                client_id,
+                entry.json,
+                e
+              );
+            },
+
+          }
+        }
         f(result);
-      });
+      }
+    });
     *self.awareness_subscription.write() = Some(subscription);
   }
 

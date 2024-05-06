@@ -18,7 +18,7 @@ collab-user = { workspace = true, path = "collab-user" }
 collab-entity = { workspace = true, path = "collab-entity" }
 collab-document = { workspace = true, path = "collab-document" }
 collab-folder = { workspace = true, path = "collab-folder" }
-yrs = "0.17.2"
+yrs = "0.18.7"
 anyhow = "1.0"
 thiserror = "1.0.39"
 serde = { version = "1.0.157", features = ["derive"] }
@@ -28,7 +28,3 @@ bytes = "1.5.0"
 tracing = "0.1.22"
 chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
 async-trait = "0.1"
-
-[patch.crates-io]
-# will be removed when using yrs 0.18.2 that expose pendings
-yrs = { git = "https://github.com/appflowy/y-crdt", rev = "3f25bb510ca5274e7657d3713fbed41fb46b4487" }

@@ -5,8 +5,7 @@ use std::sync::Arc;
 use anyhow::bail;
 use collab::core::collab::IndexContentSender;
 use collab::preclude::{
-  Any, DeepEventsSubscription, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
-  TransactionMut, Value,
+  Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, Subscription, TransactionMut, Value,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -43,7 +42,7 @@ pub struct ViewsMap {
   cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
 
   #[allow(dead_code)]
-  subscription: Option<DeepEventsSubscription>,
+  subscription: Option<Subscription>,
   #[allow(dead_code)]
   change_tx: Option<ViewChangeSender>,
 }
