@@ -9,6 +9,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::mpsc;
+use yrs::sync::awareness::AwarenessUpdateEntry;
 use yrs::updates::encoder::{Encode, Encoder};
 
 #[tokio::test]
@@ -51,6 +52,7 @@ async fn document_awareness_test() {
     document_state.timestamp
   );
 }
+
 #[tokio::test]
 async fn document_awareness_serde_test() {
   // This test is to reproduce the serde issue when decoding the [OldAwarenessUpdate] object with the
@@ -92,6 +94,50 @@ async fn document_awareness_serde_test() {
   .unwrap();
   assert_eq!(
     document_state_from_new_version_awareness.version,
+    document_state.version
+  );
+}
+
+#[tokio::test]
+async fn document_awareness_serde_test2() {
+  // This test is to reproduce the serde issue when decoding the [OldAwarenessUpdate] object with the
+  // [AwarenessUpdate].
+  let document_state = DocumentAwarenessState {
+    version: 1,
+    user: DocumentAwarenessUser {
+      uid: 1,
+      device_id: "fake_device".to_string(),
+    },
+    selection: None,
+    metadata: None,
+    timestamp: 123,
+  };
+
+  let mut new_version_awareness_update = AwarenessUpdate {
+    clients: Default::default(),
+  };
+  new_version_awareness_update.clients.insert(
+    1,
+    AwarenessUpdateEntry {
+      clock: 0,
+      json: serde_json::to_string(&document_state).unwrap(),
+    },
+  );
+
+  let old_version_awareness_update =
+    OldAwarenessUpdate::decode_v1(&new_version_awareness_update.encode_v1()).unwrap();
+  let document_state_from_old_version_awareness = serde_json::from_value::<DocumentAwarenessState>(
+    old_version_awareness_update
+      .clients
+      .values()
+      .next()
+      .unwrap()
+      .json
+      .clone(),
+  )
+  .unwrap();
+  assert_eq!(
+    document_state_from_old_version_awareness.version,
     document_state.version
   );
 }
