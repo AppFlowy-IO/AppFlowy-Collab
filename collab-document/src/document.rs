@@ -505,11 +505,18 @@ impl Document {
         // convert the states to the hashmap and map/filter the invalid states
         let mut result = HashMap::with_capacity(update.clients.len());
         for (&client_id, entry) in update.clients.iter() {
+
           match serde_json::from_str(&entry.json) {
             Ok(state) => {
               result.insert(client_id, state);
             },
             Err(e) => {
+              if let Ok(json_str) = serde_json::from_str::<String>(&entry.json) {
+                if let Ok(state) = serde_json::from_str(&json_str) {
+                  result.insert(client_id, state);
+                }
+              }
+
               tracing::error!(
                 "subscribe_awareness_state error: failed to parse state for id: {:?}, state: {:?} - {}",
                 client_id,
