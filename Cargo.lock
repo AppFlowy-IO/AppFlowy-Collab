@@ -349,6 +349,7 @@ name = "collab-document"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "assert-json-diff",
  "collab",
  "collab-entity",
  "collab-plugins",
@@ -364,6 +365,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-subscriber",
+ "yrs",
  "zip",
 ]
 
