@@ -30,6 +30,8 @@ tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 collab-plugins = { workspace = true }
 zip = "0.6.6"
 futures = "0.3.30"
+assert-json-diff = "2.0.2"
+yrs.workspace = true
 
 [features]
 verbose_log = []
