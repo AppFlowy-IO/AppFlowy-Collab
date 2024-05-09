@@ -148,19 +148,26 @@ impl Display for CollabType {
   }
 }
 
-impl From<i32> for CollabType {
-  fn from(n: i32) -> CollabType {
-    match n {
-      0 => CollabType::Document,
-      1 => CollabType::Database,
-      2 => CollabType::WorkspaceDatabase,
-      3 => CollabType::Folder,
-      4 => CollabType::DatabaseRow,
-      5 => CollabType::UserAwareness,
-      _ => CollabType::Unknown,
-    }
-  }
+macro_rules! impl_from_integer_for_collab_type {
+  ($($t:ty),+) => {
+    $(
+      impl From<$t> for CollabType {
+        fn from(n: $t) -> CollabType {
+          match n {
+              0 => CollabType::Document,
+              1 => CollabType::Database,
+              2 => CollabType::WorkspaceDatabase,
+              3 => CollabType::Folder,
+              4 => CollabType::DatabaseRow,
+              5 => CollabType::UserAwareness,
+              _ => CollabType::Unknown,
+          }
+        }
+      }
+    )+
+  };
 }
+impl_from_integer_for_collab_type!(i32, u8);
 
 #[derive(Clone, Debug)]
 pub struct CollabObject {
