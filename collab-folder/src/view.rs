@@ -792,6 +792,7 @@ pub enum ViewLayout {
   Grid = 1,
   Board = 2,
   Calendar = 3,
+  Chat = 4,
 }
 
 impl ViewLayout {
@@ -816,6 +817,7 @@ impl TryFrom<i64> for ViewLayout {
       1 => Ok(ViewLayout::Grid),
       2 => Ok(ViewLayout::Board),
       3 => Ok(ViewLayout::Calendar),
+      4 => Ok(ViewLayout::Chat),
       _ => bail!("Unknown layout {}", value),
     }
   }
