@@ -167,7 +167,29 @@ macro_rules! impl_from_integer_for_collab_type {
     )+
   };
 }
+
+macro_rules! impl_from_collab_type_for_integer {
+    ($($t:ty),+) => {
+      $(
+        impl From<CollabType> for $t {
+          fn from(ct: CollabType) -> $t {
+            match ct {
+                CollabType::Document => 0,
+                CollabType::Database => 1,
+                CollabType::WorkspaceDatabase => 2,
+                CollabType::Folder => 3,
+                CollabType::DatabaseRow => 4,
+                CollabType::UserAwareness => 5,
+                CollabType::Unknown => 255,
+            }
+          }
+        }
+      )+
+    };
+}
+
 impl_from_integer_for_collab_type!(i32, u8);
+impl_from_collab_type_for_integer!(i32, u8);
 
 #[derive(Clone, Debug)]
 pub struct CollabObject {
