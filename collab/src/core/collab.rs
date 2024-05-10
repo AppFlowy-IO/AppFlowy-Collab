@@ -705,11 +705,11 @@ fn observe_awareness(
   origin: CollabOrigin,
 ) -> Subscription {
   awareness.on_update(move |event| {
-    if let Some(update) = event.awareness_update() {
+    if let Ok(update) = event.awareness_state().full_update() {
       plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, update));
+        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
     }
   })
 }
