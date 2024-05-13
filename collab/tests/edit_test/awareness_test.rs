@@ -1,7 +1,7 @@
 use collab::preclude::Collab;
 use serde_json::json;
-use std::collections::HashMap;
-use std::sync::mpsc;
+use std::collections::{HashMap, HashSet};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -22,6 +22,41 @@ async fn awareness_insert_test() {
   sleep(Duration::from_secs(1)).await;
   let event = rx.recv().unwrap();
   assert_eq!(event.updated().len(), 1);
+}
+
+#[tokio::test]
+async fn awareness_updates() {
+  let mut c1 = Collab::new(1, "1", "1", vec![], true);
+  c1.emit_awareness_state();
+  let mut c2 = Collab::new(2, "1", "1", vec![], true);
+  c2.emit_awareness_state();
+
+  let sync = Arc::new(Mutex::new(None));
+  let _u = {
+    let ch = sync.clone();
+    c1.observe_awareness(move |event| {
+      let update = event.awareness_state().full_update().unwrap();
+      let mut lock = ch.lock().unwrap();
+      *lock = Some(update);
+    })
+  };
+
+  let s1 = json!({"name": "nathan"}).to_string();
+  c1.get_mut_awareness().set_local_state(s1.clone());
+  let s2 = json!({"name": "bartosz"}).to_string();
+  c2.get_mut_awareness().set_local_state(s2.clone());
+  let u2 = c2.get_awareness().update().unwrap();
+  c1.get_mut_awareness().apply_update(u2).unwrap();
+
+  let lock = sync.lock().unwrap();
+  let awareness_update = lock.as_ref().unwrap();
+  assert_eq!(awareness_update.clients.len(), 2);
+  let values = awareness_update
+    .clients
+    .values()
+    .map(|e| e.json.clone())
+    .collect::<HashSet<_>>();
+  assert_eq!(values, HashSet::from([s1, s2]));
 }
 
 #[tokio::test]
