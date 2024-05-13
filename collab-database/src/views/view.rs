@@ -450,7 +450,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     self
   }
 
-  /// Get the sort array for the curent view, used when setting or updating
+  /// Get the sort array for the current view, used when setting or updating
   /// sort array
   fn get_sort_array(&mut self) -> ArrayRef {
     self
@@ -458,7 +458,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
       .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, DATABASE_VIEW_SORTS)
   }
 
-  /// Get the group array for the curent view, used when setting or updating
+  /// Get the group array for the current view, used when setting or updating
   /// group array
   fn get_group_array(&mut self) -> ArrayRef {
     self

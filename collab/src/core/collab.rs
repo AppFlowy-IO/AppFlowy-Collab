@@ -661,8 +661,8 @@ impl Collab {
   /// Returns a transaction that can mutate the document. This transaction will carry the
   /// origin of the current user.
   ///
-  /// If applying the remote update, please use the `transact_mut` of `doc`. Ot
-  /// update will send to remote that the remote already has.
+  /// If applying the remote update, please use the `transact_mut` of `doc`.
+  /// The update will send to remote that the remote already has.
   pub fn with_origin_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
