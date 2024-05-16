@@ -661,8 +661,8 @@ impl Collab {
   /// Returns a transaction that can mutate the document. This transaction will carry the
   /// origin of the current user.
   ///
-  /// If applying the remote update, please use the `transact_mut` of `doc`. Ot
-  /// update will send to remote that the remote already has.
+  /// If applying the remote update, please use the `transact_mut` of `doc`.
+  /// The update will send to remote that the remote already has.
   pub fn with_origin_transact_mut<F, T>(&self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
@@ -705,11 +705,11 @@ fn observe_awareness(
   origin: CollabOrigin,
 ) -> Subscription {
   awareness.on_update(move |event| {
-    if let Some(update) = event.awareness_update() {
+    if let Ok(update) = event.awareness_state().full_update() {
       plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, update));
+        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
     }
   })
 }
