@@ -501,14 +501,10 @@ impl Document {
     F: Fn(HashMap<ClientID, DocumentAwarenessState>) + 'static,
   {
     let subscription = self.inner.lock().observe_awareness(move |event| {
-      if let Some(update) = event.awareness_update() {
-        // convert the states to the hashmap and map/filter the invalid states
-        let mut result = HashMap::with_capacity(update.clients.len());
-        for (&client_id, entry) in update.clients.iter() {
+      if let Ok(full_update) = event.awareness_state().full_update() {
+        let result: HashMap<_, _> = full_update.clients.iter().filter_map(|(&client_id, entry)| {
           match serde_json::from_str(&entry.json) {
-            Ok(state) => {
-              result.insert(client_id, state);
-            },
+            Ok(state) => Some((client_id, state)),
             Err(e) => {
               tracing::error!(
                 "subscribe_awareness_state error: failed to parse state for id: {:?}, state: {:?} - {}",
@@ -516,10 +512,10 @@ impl Document {
                 entry.json,
                 e
               );
+              None
             },
-
           }
-        }
+        }).collect();
         f(result);
       }
     });
