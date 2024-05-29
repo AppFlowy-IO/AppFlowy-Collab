@@ -7,7 +7,8 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn get_default_data_test() {
-  let data = default_document_data();
+  let document_id = "1";
+  let data = default_document_data(document_id);
   assert!(!data.page_id.is_empty());
   assert!(!data.blocks.is_empty());
   assert!(!data.meta.children_map.is_empty());
@@ -15,7 +16,8 @@ async fn get_default_data_test() {
   assert!(data.meta.text_map.is_some());
   assert_eq!(data.meta.text_map.unwrap().len(), 1);
 
-  let data = default_document_data();
+  let document_id = "2";
+  let data = default_document_data(document_id);
   println!("{:?}", data);
   assert!(!data.page_id.is_empty());
   assert_eq!(data.blocks.len(), 2);
@@ -26,10 +28,11 @@ async fn get_default_data_test() {
 
 #[tokio::test]
 async fn validate_document_data() {
-  let document_data = default_document_data();
+  let document_id = "1";
+  let document_data = default_document_data(document_id);
   let collab = Arc::new(MutexCollab::new(Collab::new_with_origin(
     CollabOrigin::Empty,
-    "1",
+    document_id,
     vec![],
     false,
   )));
@@ -39,7 +42,7 @@ async fn validate_document_data() {
 
   let collab = Arc::new(MutexCollab::new(Collab::new_with_origin(
     CollabOrigin::Empty,
-    "1",
+    document_id,
     vec![],
     false,
   )));
