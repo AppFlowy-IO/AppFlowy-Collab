@@ -235,6 +235,27 @@ impl ViewsMap {
       .collect()
   }
 
+  // Useful in getting views only related to a certain workspace
+  // It will get all views that is a descendant of parent_id.
+  // Notice that the root itself won't be included
+  pub fn get_all_views_belonging_to(&self, parent_id: &str) -> Vec<Arc<View>> {
+    let mut result: Vec<Arc<View>> = vec![];
+
+    let root_view = self.get_view(parent_id);
+    if let Some(root_view) = root_view {
+      let children = root_view.children.items.clone();
+      for child in children {
+        let child_view = self.get_view(&child.id);
+        if let Some(child_view) = child_view {
+          result.push(child_view);
+          result.append(&mut self.get_all_views_belonging_to(&child.id));
+        }
+      }
+    }
+
+    result
+  }
+
   #[instrument(level = "trace", skip_all)]
   pub fn get_view(&self, view_id: &str) -> Option<Arc<View>> {
     match self.get_cache_view(view_id) {
