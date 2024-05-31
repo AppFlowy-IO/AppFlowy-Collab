@@ -41,10 +41,7 @@ pub fn default_document_data(document_id: &str) -> DocumentData {
   let mut text_map: HashMap<String, String> = HashMap::new();
 
   // page block
-  let page_id = match Uuid::parse_str(document_id) {
-    Ok(uuid) => uuid_id_from_document_uuid(&uuid, PAGE),
-    Err(_) => generate_id(),
-  };
+  let page_id = page_id_from_document_id(document_id).unwrap_or_else(generate_id);
   let children_id = page_id.clone();
   let root = Block {
     id: page_id.clone(),
@@ -112,6 +109,7 @@ pub fn generate_id() -> String {
   nanoid!(10)
 }
 
-pub fn uuid_id_from_document_uuid(document_uuid: &Uuid, key: &str) -> String {
-  Uuid::new_v5(document_uuid, key.as_bytes()).to_string()
+pub fn page_id_from_document_id(document_id: &str) -> Option<String> {
+  let document_uuid = Uuid::parse_str(document_id).ok()?;
+  Some(Uuid::new_v5(&document_uuid, PAGE.as_bytes()).to_string())
 }
