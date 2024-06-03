@@ -1,5 +1,6 @@
-use crate::util::{create_folder_with_workspace, make_test_view};
+use crate::util::{create_folder_with_workspace, make_test_view, setup_log};
 use collab::core::collab::IndexContent;
+use collab_folder::folder_diff::FolderViewChange;
 use collab_folder::{timestamp, IconType, UserId, ViewIcon, ViewIndexContent};
 
 #[tokio::test]
@@ -378,4 +379,47 @@ async fn create_view_and_then_sub_index_content_test() {
   assert_eq!(index_content.id, o_view.id);
   assert_eq!(index_content.parent_view_id, o_view.parent_view_id);
   assert_eq!(index_content.name, o_view.name);
+}
+
+#[tokio::test]
+async fn compare_diff_view_test() {
+  setup_log();
+  let uid = UserId::from(1);
+  let workspace_id = "w1".to_string();
+  let folder_test = create_folder_with_workspace(uid.clone(), &workspace_id).await;
+
+  // Save the full backup of the folder
+  let encode_collab = folder_test.encode_collab_v1().unwrap();
+
+  // insert two views
+  let view_1 = make_test_view("v1", "w1", vec![]);
+  let view_2 = make_test_view("v2", "w1", vec![]);
+  folder_test.insert_view(view_1, None);
+  folder_test.insert_view(view_2, None);
+
+  // Calculate the changes based on the previous backup
+  let changes = folder_test.calculate_view_changes(encode_collab).unwrap();
+  assert!(changes.contains(&FolderViewChange::Inserted {
+    view_id: "v1".to_string(),
+  }));
+  assert!(changes.contains(&FolderViewChange::Inserted {
+    view_id: "v2".to_string(),
+  }));
+
+  // delete v1 and then update v2
+  let encode_collab = folder_test.encode_collab_v1().unwrap();
+  folder_test.views.delete_views(vec!["v1"]);
+  folder_test
+    .views
+    .update_view("v2", |update| update.set_name("v2_updated").done())
+    .unwrap();
+
+  let changes = folder_test.calculate_view_changes(encode_collab).unwrap();
+  assert!(changes.contains(&FolderViewChange::Deleted {
+    view_ids: vec!["v1".to_string()],
+  }));
+
+  assert!(changes.contains(&FolderViewChange::Updated {
+    view_id: "v2".to_string(),
+  }));
 }
