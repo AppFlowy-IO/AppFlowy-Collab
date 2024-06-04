@@ -27,7 +27,7 @@ impl Folder {
       &workspace_id,
       vec![],
     )?;
-    let mut cloned_container = other.views.container.clone();
+    let cloned_container = other.views.container.clone();
     let cloned_changes = changes.clone();
     let sub = cloned_container.observe_deep(move |txn, events| {
       let mut changes = cloned_changes.lock();
