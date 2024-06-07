@@ -1,8 +1,5 @@
 use std::sync::Arc;
 
-use collab::core::array_wrapper::ArrayRefExtension;
-use collab::core::value::YrsValueExtension;
-use collab::preclude::MapRefExtension;
 use yrs::types::{Change, ToJson};
 use yrs::updates::decoder::Decode;
 use yrs::{Array, Doc, Map, Observable, ReadTxn, StateVector, Transact, Update};

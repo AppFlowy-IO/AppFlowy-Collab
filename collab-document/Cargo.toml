@@ -16,14 +16,15 @@ nanoid = "0.4.0"
 thiserror = "1.0.30"
 anyhow.workspace = true
 tracing.workspace = true
-tokio = { workspace = true, features = ["time", "sync", "rt"] }
+arc-swap.workspace = true
+tokio = { workspace = true, features = ["sync", "rt"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
 
 [dev-dependencies]
-tokio = { version = "1.26", features = ["rt"] }
+tokio = { version = "1.26", features = ["macros", "rt"] }
 tempfile = "3.8.0"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 collab-plugins = { workspace = true }

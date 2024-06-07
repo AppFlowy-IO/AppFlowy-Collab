@@ -1,4 +1,5 @@
 use crate::core::awareness::{AwarenessUpdate, Event};
+
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use std::sync::atomic::AtomicBool;
@@ -155,52 +156,52 @@ impl Plugins {
         return false; // skip adding the plugin
       }
     }
-    let mut new = Node {
+    let new = Arc::new(Node {
       next: ArcSwapOption::new(None),
       value: plugin,
-    };
+    });
     inner.head.rcu(|old_head| {
       new.next.store(old_head.clone());
-      Some(Arc::new(new))
+      Some(new.clone())
     });
     true
   }
 
-  pub fn remove_all(&self) -> PluginsIter {
+  pub fn remove_all(&self) -> RemovedPluginsIter {
     let inner = &*self.0;
     let current = inner.head.swap(None);
     inner
       .has_cloud_storage
       .store(false, std::sync::atomic::Ordering::SeqCst);
-    PluginsIter {
-      current,
-      _mask: std::marker::PhantomData,
-    }
+    RemovedPluginsIter { current }
   }
 
-  pub fn iter(&self) -> PluginsIter {
-    PluginsIter {
-      current: self.0.head.load_full(),
-      _mask: std::marker::PhantomData,
+  pub fn each<F>(&self, mut f: F)
+  where
+    F: FnMut(&Box<dyn CollabPlugin>),
+  {
+    let mut curr = self.0.head.load_full();
+    while let Some(node) = curr {
+      f(&node.value);
+      curr = node.next.load_full();
     }
   }
 }
 
-pub struct PluginsIter<'a> {
+pub struct RemovedPluginsIter {
   current: Option<Arc<Node>>,
-  _mask: std::marker::PhantomData<&'a ()>,
 }
 
-impl<'a> Iterator for PluginsIter<'a> {
-  type Item = &'a Box<dyn CollabPlugin>;
+impl Iterator for RemovedPluginsIter {
+  type Item = Box<dyn CollabPlugin>;
 
   fn next(&mut self) -> Option<Self::Item> {
-    match &self.current {
+    match self.current.take() {
       None => None,
       Some(node) => {
-        let value = &node.value;
         self.current = node.next.load_full();
-        Some(value)
+        let node = Arc::into_inner(node)?;
+        Some(node.value)
       },
     }
   }

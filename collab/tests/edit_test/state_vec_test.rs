@@ -1,4 +1,3 @@
-use collab::preclude::MapRefExtension;
 use serde_json::json;
 use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;

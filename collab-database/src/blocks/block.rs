@@ -3,7 +3,7 @@ use dashmap::DashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
-use collab::core::collab::{DataSource, MutexCollab};
+use collab::core::collab::DataSource;
 
 use collab::error::CollabError;
 use collab_entity::CollabType;
@@ -12,6 +12,7 @@ use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 
+use collab::preclude::Collab;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 use tracing::{error, trace, warn};
@@ -342,7 +343,7 @@ impl Block {
     change_tx: RowChangeSender,
     collab_db: Weak<CollabKVDB>,
     cache: Arc<DashMap<RowId, Arc<MutexDatabaseRow>>>,
-    row_collab: Arc<MutexCollab>,
+    row_collab: Arc<Collab>,
   ) -> Result<(), CollabError> {
     if cache.contains_key(row_id) {
       warn!("The row is already in the cache: {:?}", row_id);
@@ -350,9 +351,7 @@ impl Block {
     }
 
     trace!("init_collab_row: {:?}", row_id);
-    let collab_lock_guard = row_collab.lock();
-    let row_detail = RowDetail::from_collab(&collab_lock_guard, &collab_lock_guard.transact());
-    drop(collab_lock_guard);
+    let row_detail = RowDetail::from_collab(&row_collab);
 
     let row = DatabaseRow::new(uid, row_id.clone(), collab_db, row_collab, change_tx)?;
     let arc_row = Arc::new(MutexDatabaseRow::new(row));
@@ -371,7 +370,7 @@ impl Block {
     Ok(())
   }
 
-  fn create_collab_for_row(&self, row_id: &RowId) -> Result<Arc<MutexCollab>, DatabaseError> {
+  fn create_collab_for_row(&self, row_id: &RowId) -> Result<Arc<Collab>, DatabaseError> {
     let config = CollabPersistenceConfig::new().snapshot_per_update(100);
     self.collab_service.build_collab_with_config(
       self.uid,

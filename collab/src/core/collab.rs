@@ -1,19 +1,18 @@
-use std::fmt::{Display, Formatter};
+pub use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::panic;
 use std::panic::AssertUnwindSafe;
 
 use arc_swap::ArcSwapOption;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::sync::Arc;
 use std::vec::IntoIter;
 
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use serde_json::json;
-use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::sync::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use tokio_stream::wrappers::WatchStream;
-use tracing::{error, instrument, trace};
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
@@ -21,22 +20,19 @@ use yrs::updates::decoder::Decode;
 
 use yrs::updates::encoder::Encode;
 use yrs::{
-  Any, ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options,
-  ReadTxn, StateVector, Subscription, Transact, Transaction as Tx, TransactionMut as TxMut,
-  UndoManager, Update,
+  Any, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options, ReadTxn, StateVector,
+  Subscription, Transact, TransactionMut, UndoManager, Update,
 };
 
 use crate::core::awareness::{Awareness, Event};
 use crate::core::collab_plugin::{CollabPlugin, Plugins};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
-use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
-use crate::core::transaction::{DocTransactionExtension, Transaction, TransactionMut};
-use crate::core::value::YrsValueExtension;
+use crate::core::transaction::{DocTransactionExtension, LockedTransaction, LockedTransactionMut};
+use crate::core::value::Entity;
 use crate::entity::EncodedCollab;
 use crate::error::CollabError;
-use crate::preclude::{ArrayRefWrapper, JsonValue, MapRefExtension};
-use crate::util::insert_json_value_to_map_ref;
+use crate::preclude::JsonValue;
 
 pub const DATA_SECTION: &str = "data";
 pub const META_SECTION: &str = "meta";
@@ -45,7 +41,7 @@ const LAST_SYNC_AT: &str = "last_sync_at";
 
 type AfterTransactionSubscription = Subscription;
 
-pub type MapSubscriptionCallback = Arc<dyn Fn(&TxMut, &MapEvent)>;
+pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
 pub type MapSubscription = Subscription;
 
 #[derive(Debug, Clone)]
@@ -63,7 +59,7 @@ pub struct Collab {
   /// The object id can be the document id or the database id. It must be unique for
   /// each [Collab] instance.
   object_id: String,
-  /// This [CollabClient] is used to verify the origin of a [Transaction] when
+  /// This [CollabClient] is used to verify the origin of a [LockedTransaction] when
   /// applying a remote update.
   origin: CollabOrigin,
   /// Every [Collab] instance has a data section that can be used to store
@@ -77,6 +73,7 @@ pub struct Collab {
   /// A list of plugins that are used to extend the functionality of the [Collab].
   plugins: Plugins,
   inner: RwLock<CollabInner>,
+  active_transaction: Mutex<Option<LockedTransactionMut<'static>>>,
 }
 
 unsafe impl Send for Collab {} // TODO: Remove this once MapRefs are Send
@@ -152,24 +149,12 @@ impl Collab {
     skip_gc: bool,
   ) -> Result<Self, CollabError> {
     let collab = Self::new_with_origin(origin, object_id, plugins, skip_gc);
-    match collab_doc_state {
-      DataSource::Disk => {},
-      DataSource::DocStateV1(doc_state) => {
-        if !doc_state.is_empty() {
-          let mut txn = collab.origin_transact_mut();
-          let decoded_update = Update::decode_v1(&doc_state)?;
-          txn.try_apply_update(decoded_update)?;
-        }
-      },
-      DataSource::DocStateV2(doc_state) => {
-        if !doc_state.is_empty() {
-          let mut txn = collab.origin_transact_mut();
-          let decoded_update = Update::decode_v2(&doc_state)?;
-          txn.try_apply_update(decoded_update)?;
-        }
-      },
+    let update = collab_doc_state.as_update()?;
+    if let Some(update) = update {
+      let lock = collab.inner.try_write().unwrap();
+      let mut txn = lock.doc.transact_mut_with(collab.origin.clone());
+      txn.apply_update(update);
     }
-
     Ok(collab)
   }
 
@@ -210,17 +195,39 @@ impl Collab {
       after_txn_subscription: Default::default(),
       awareness_subscription: Default::default(),
       index_json_sender: tokio::sync::broadcast::channel(100).0,
+      active_transaction: Mutex::new(None),
     }
   }
 
-  pub async fn transaction<'a>(&'a self) -> Transaction<'a> {
+  pub async fn transaction<'a>(&'a self) -> LockedTransaction<'a> {
     let lock: RwLockReadGuard<'a, CollabInner> = self.inner.read().await;
-    Transaction::new(lock)
+    LockedTransaction::new(lock)
   }
 
-  pub async fn transaction_mut<'a>(&'a self) -> TransactionMut<'a> {
+  pub async fn transaction_mut<'a>(&'a self) -> LockedTransactionMut<'a> {
     let lock: RwLockWriteGuard<'a, CollabInner> = self.inner.write().await;
-    TransactionMut::new(lock, self.origin.clone())
+    LockedTransactionMut::new(lock, self.origin.clone())
+  }
+
+  /// Wraps given execution function within the transaction scope. That transaction scope
+  /// can be reused as [Collab::with_transaction_mut] is called multiple times inside executed
+  /// nested function, preventing possible deadlock.
+  pub async fn with_transaction_mut<T, F>(&self, f: F) -> T
+  where
+    F: FnOnce(&mut TransactionMut) -> T,
+  {
+    let mut lock = self.active_transaction.lock().await;
+    if lock.is_none() {
+      let tx = self.transaction_mut().await;
+      // this is actually safe since transaction mut won't outlive current collab
+      let tx: LockedTransactionMut<'static> = unsafe { std::mem::transmute(tx) };
+      *lock = Some(tx);
+    }
+    let tx = lock.as_mut().unwrap();
+    let result = f(&mut *tx);
+    drop(lock.take()); // remove and drop active transaction at the end of work
+    drop(lock);
+    result
   }
 
   /// Returns the doc state and the state vector.
@@ -337,9 +344,9 @@ impl Collab {
     let mut lock = self.inner.write().await;
     self.state.set_init_state(InitState::Loading);
     {
-      for plugin in self.plugins.iter() {
-        plugin.init(&self.object_id, &self.origin, &lock.doc);
-      }
+      self
+        .plugins
+        .each(|plugin| plugin.init(&self.object_id, &self.origin, &lock.doc));
     }
 
     let (update_subscription, after_txn_subscription) = observe_doc(
@@ -370,8 +377,7 @@ impl Collab {
     {
       self
         .plugins
-        .iter()
-        .for_each(|plugin| plugin.did_init(self, &self.object_id, last_sync_at));
+        .each(|plugin| plugin.did_init(self, &self.object_id, last_sync_at));
     }
     self.state.set_init_state(InitState::Initialized);
   }
@@ -386,17 +392,22 @@ impl Collab {
     }
   }
 
-  pub fn set_last_sync_at_with_txn(&self, txn: &mut TxMut, last_sync_at: i64) {
+  pub fn set_last_sync_at_with_txn(&self, txn: &mut TransactionMut, last_sync_at: i64) {
     //FIXME: this is very expensive to do on frequent basis. That's one of the reasons we have
     // awareness state separate from document
-    self
-      .meta
-      .insert_i64_with_txn(txn, LAST_SYNC_AT, last_sync_at);
+    self.meta.insert(txn, LAST_SYNC_AT, last_sync_at);
   }
 
   pub fn get_last_sync_at(&self) -> i64 {
-    match self.try_transaction() {
-      Ok(txn) => self.meta.get_i64_with_txn(&txn, LAST_SYNC_AT).unwrap_or(0),
+    match self.inner.try_read() {
+      Ok(inner) => {
+        let txn = inner.doc.transact();
+        self
+          .meta
+          .get(&txn, LAST_SYNC_AT)
+          .and_then(|v| v.cast().ok())
+          .unwrap_or(0)
+      },
       Err(_) => 0,
     }
   }
@@ -413,9 +424,9 @@ impl Collab {
   /// It invokes the [CollabPlugin::flush] method of each plugin.
   pub async fn flush(&self) {
     let lock = self.inner.write().await;
-    for plugin in self.plugins.iter() {
-      plugin.flush(&self.object_id, &lock.doc)
-    }
+    self
+      .plugins
+      .each(|plugin| plugin.flush(&self.object_id, &lock.doc));
   }
 
   pub fn observe_data<F>(&mut self, f: F) -> MapSubscription
@@ -448,121 +459,100 @@ impl Collab {
     self.insert_with_txn(&mut tx, key, value)
   }
 
-  pub fn insert_with_txn<V: Prelim>(&self, txn: &mut TxMut, key: &str, value: V) -> V::Return {
+  pub fn insert_with_txn<V: Prelim>(
+    &self,
+    txn: &mut TransactionMut,
+    key: &str,
+    value: V,
+  ) -> V::Return {
     self.data.insert(txn, key, value)
   }
 
-  pub async fn insert_json_with_path<T: Serialize>(
-    &mut self,
-    path: Vec<String>,
-    key: &str,
-    value: T,
-  ) {
-    let mut txn = self.transaction_mut().await;
-    let mut map = if path.is_empty() {
-      None
-    } else {
-      self
-        .get_map_with_txn(txn.deref(), path)
-        .map(|m| m.into_inner())
+  pub fn get_value_with_path<P, T>(&self, txn: &T, path: P) -> Option<Value>
+  where
+    P: Into<Path>,
+    T: ReadTxn,
+  {
+    let mut current = self.data.clone();
+    let mut path = path.into();
+    let last = path.pop()?;
+    for field in path {
+      current = current.get(txn, &field)?.cast().ok()?;
+    }
+    current.get(txn, &last)
+  }
+
+  pub fn insert_json_with_path<P, V>(
+    &self,
+    txn: &mut TransactionMut,
+    path: P,
+    value: V,
+  ) -> Result<(), CollabError>
+  where
+    P: Into<Path>,
+    V: Serialize,
+  {
+    let value = serde_json::to_value(value)?;
+    self.insert_with_path(txn, path, Entity::from(value))?;
+    Ok(())
+  }
+
+  pub fn get_json_with_path<T, P, V>(&self, txn: &T, path: P) -> Result<V, CollabError>
+  where
+    T: ReadTxn,
+    P: Into<Path>,
+    V: DeserializeOwned,
+  {
+    let value = self
+      .get_value_with_path(txn, path)
+      .ok_or(CollabError::UnexpectedEmpty(
+        "value not found on path".to_string(),
+      ))?;
+    let value = serde_json::to_value(value.to_json(txn))?;
+    Ok(serde_json::from_value(value)?)
+  }
+
+  pub fn insert_with_path<P, V>(
+    &self,
+    txn: &mut TransactionMut,
+    path: P,
+    value: V,
+  ) -> Result<V::Return, CollabError>
+  where
+    P: Into<Path>,
+    V: Prelim,
+  {
+    let mut current = self.data.clone();
+    let mut path = path.into();
+    let last = match path.pop() {
+      Some(field) => field,
+      None => return Err(CollabError::NoRequiredData("empty path".into())),
     };
-
-    if map.is_none() {
-      map = Some(self.data.insert(&mut txn, key, MapPrelim::<Any>::new()));
+    for field in path {
+      current = match current.get(txn, &field) {
+        None => current.insert(txn, field, MapPrelim::<Any>::new()),
+        Some(value) => value
+          .cast()
+          .map_err(|_| CollabError::NoRequiredData(field))?,
+      };
     }
-    let value = serde_json::to_value(&value).unwrap();
-    insert_json_value_to_map_ref(key, &value, map.unwrap(), &mut txn);
+    Ok(current.insert(txn, last, value))
   }
 
-  pub async fn get_json_with_path<T: DeserializeOwned>(&self, path: impl Into<Path>) -> Option<T> {
-    let path = path.into();
+  pub fn remove_with_path<P>(&mut self, txn: &mut TransactionMut<'_>, path: P) -> Option<Value>
+  where
+    P: Into<Path>,
+  {
+    let mut path = path.into();
     if path.is_empty() {
       return None;
     }
-    let map = self.get_map_with_txn(self.transaction().await.deref(), path)?;
-
-    let json_str = map.to_json_str();
-    let object = serde_json::from_str::<T>(&json_str).ok()?;
-    Some(object)
-  }
-
-  pub fn insert_map_with_txn(&self, txn: &mut TxMut, key: &str) -> MapRefWrapper {
-    let map = MapPrelim::<Any>::new();
-    let map_ref = self.data.insert(txn, key, map);
-    self.map_wrapper_with(map_ref)
-  }
-
-  pub fn insert_map_with_txn_if_not_exist(&self, txn: &mut TxMut, key: &str) -> MapRefWrapper {
-    let map_ref = self.data.create_map_if_not_exist_with_txn(txn, key);
-    self.map_wrapper_with(map_ref)
-  }
-
-  pub async fn get_map_with_path<M: CustomMapRef>(&self, path: impl Into<Path>) -> Option<M> {
-    let lock = self.inner.read().await;
-    let txn = lock.doc.transact();
-    let map_ref = self.get_map_with_txn(&txn, path)?;
-    Some(M::from_map_ref(map_ref))
-  }
-
-  pub fn get_map_with_txn<P: Into<Path>, T: ReadTxn>(
-    &self,
-    txn: &T,
-    path: P,
-  ) -> Option<MapRefWrapper> {
-    let path = path.into();
-    if path.is_empty() {
-      return None;
+    let last = path.pop()?;
+    let mut current = self.data.clone();
+    for field in path {
+      current = current.get(txn, &field)?.cast().ok()?;
     }
-    let mut iter = path.into_iter();
-    let value = self.data.get(txn, &iter.next().unwrap())?;
-    let mut map_ref = value.to_ymap().cloned();
-    for path in iter {
-      map_ref = map_ref?.get(txn, &path)?.to_ymap().cloned();
-    }
-    map_ref.map(|map_ref| self.map_wrapper_with(map_ref))
-  }
-
-  pub fn get_array_with_txn<P: Into<Path>, T: ReadTxn>(
-    &self,
-    txn: &T,
-    path: P,
-  ) -> Option<ArrayRefWrapper> {
-    let path = path.into();
-    let value = self.get_ref_from_path_with_txn(txn, path)?;
-    let array_ref = value.to_yarray();
-    array_ref.map(|array_ref| self.array_wrapper_with(array_ref.clone()))
-  }
-
-  pub fn create_array_with_txn<V: Prelim>(
-    &self,
-    txn: &mut TxMut,
-    key: &str,
-    values: Vec<V>,
-  ) -> ArrayRefWrapper {
-    let array_ref = self.data.insert(txn, key, ArrayPrelim::from(values));
-    self.array_wrapper_with(array_ref)
-  }
-
-  fn get_ref_from_path_with_txn<T: ReadTxn>(&self, txn: &T, mut path: Path) -> Option<Value> {
-    if path.is_empty() {
-      return None;
-    }
-
-    if path.len() == 1 {
-      return self.data.get(txn, &path[0]);
-    }
-
-    let last = path.pop().unwrap();
-    let mut iter = path.into_iter();
-    let mut map_ref = self
-      .data
-      .get(txn, &iter.next().unwrap())?
-      .to_ymap()
-      .cloned();
-    for path in iter {
-      map_ref = map_ref?.get(txn, &path)?.to_ymap().cloned();
-    }
-    map_ref?.get(txn, &last)
+    current.remove(txn, &last)
   }
 
   pub async fn remove(&mut self, key: &str) -> Option<Value> {
@@ -570,38 +560,9 @@ impl Collab {
     self.data.remove(&mut txn, key)
   }
 
-  pub async fn remove_with_path<P: Into<Path>>(&mut self, path: P) -> Option<Value> {
-    let path = path.into();
-    if path.is_empty() {
-      return None;
-    }
-    let mut txn = self.transaction_mut().await;
-    let len = path.len();
-    if len == 1 {
-      self.data.remove(&mut txn, &path[0])
-    } else {
-      let mut iter = path.into_iter();
-      let mut remove_path = iter.next().unwrap();
-      let mut map_ref = self.data.get(txn.deref(), &remove_path)?.to_ymap().cloned();
-
-      let remove_index = len - 2;
-      for (index, path) in iter.enumerate() {
-        if index == remove_index {
-          remove_path = path;
-          break;
-        } else {
-          map_ref = map_ref?.get(txn.deref(), &path)?.to_ymap().cloned();
-        }
-      }
-
-      let map_ref = map_ref?;
-      map_ref.remove(&mut txn, &remove_path)
-    }
-  }
-
-  pub fn to_json(&self) -> Any {
-    let txn = self.transact();
-    self.data.to_json(&txn)
+  pub async fn to_json(&self) -> Any {
+    let txn = self.transaction().await;
+    self.data.to_json(txn.deref())
   }
 
   pub fn to_plain_text(&self) -> String {
@@ -629,32 +590,9 @@ impl Collab {
   }
 
   pub fn start_init_sync(&self) {
-    self.plugins.read().iter().for_each(|plugin| {
+    self.plugins.each(|plugin| {
       plugin.start_init_sync();
     });
-  }
-
-  fn map_wrapper_with(&self, map_ref: MapRef) -> MapRefWrapper {
-    MapRefWrapper::new(
-      map_ref,
-      CollabContext::new(
-        self.origin.clone(),
-        self.plugins.clone(),
-        self.doc.clone(),
-        self.object_id.clone(),
-      ),
-    )
-  }
-  fn array_wrapper_with(&self, array_ref: ArrayRef) -> ArrayRefWrapper {
-    ArrayRefWrapper::new(
-      array_ref,
-      CollabContext::new(
-        self.origin.clone(),
-        self.plugins.clone(),
-        self.doc.clone(),
-        self.object_id.clone(),
-      ),
-    )
   }
 }
 
@@ -666,10 +604,7 @@ fn observe_awareness(
 ) -> Subscription {
   awareness.on_update(move |event| {
     if let Ok(update) = event.awareness_state().full_update() {
-      plugins
-        .read()
-        .iter()
-        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
+      plugins.each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
     }
   })
 }
@@ -688,7 +623,7 @@ fn observe_doc(
   let update_sub = doc
     .observe_update_v1(move |txn, event| {
       // If the origin of the txn is none, it means that the update is coming from a remote source.
-      for plugin in cloned_plugins.iter() {
+      cloned_plugins.each(|plugin| {
         plugin.receive_update(&cloned_oid, txn, &event.update);
 
         let remote_origin = CollabOrigin::from(txn);
@@ -696,28 +631,19 @@ fn observe_doc(
           plugin.receive_local_update(&local_origin, &cloned_oid, &event.update);
         } else {
           #[cfg(feature = "verbose_log")]
-          trace!("{} did apply remote {} update", local_origin, remote_origin);
+          tracing::trace!("{} did apply remote {} update", local_origin, remote_origin);
         }
-      }
+      });
     })
     .unwrap();
 
   let after_txn_sub = doc
     .observe_after_transaction(move |txn| {
-      for plugin in plugins.iter() {
-        plugin.after_transaction(&oid, txn)
-      }
+      plugins.each(|plugin| plugin.after_transaction(&oid, txn))
     })
     .ok();
 
   (update_sub, after_txn_sub)
-}
-
-impl Display for Collab {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    f.write_str(&serde_json::to_string(self).unwrap())?;
-    Ok(())
-  }
 }
 
 /// A builder that used to create a new `Collab` instance.
@@ -741,6 +667,18 @@ pub enum DataSource {
 impl DataSource {
   pub fn is_empty(&self) -> bool {
     matches!(self, DataSource::Disk)
+  }
+
+  pub fn as_update(&self) -> Result<Option<Update>, CollabError> {
+    match self {
+      DataSource::DocStateV1(doc_state) if !doc_state.is_empty() => {
+        Ok(Some(Update::decode_v1(&doc_state)?))
+      },
+      DataSource::DocStateV2(doc_state) if !doc_state.is_empty() => {
+        Ok(Some(Update::decode_v2(&doc_state)?))
+      },
+      _ => Ok(None),
+    }
   }
 }
 impl CollabBuilder {
@@ -796,26 +734,6 @@ impl CollabBuilder {
 }
 
 #[derive(Clone)]
-pub struct CollabContext {
-  origin: CollabOrigin,
-  doc: Doc,
-  #[allow(dead_code)]
-  plugins: Plugins,
-  object_id: String,
-}
-
-impl CollabContext {
-  fn new(origin: CollabOrigin, plugins: Plugins, doc: Doc, object_id: String) -> Self {
-    Self {
-      origin,
-      plugins,
-      doc,
-      object_id,
-    }
-  }
-}
-
-#[derive(Clone)]
 pub struct Path(Vec<String>);
 
 impl IntoIterator for Path {
@@ -824,6 +742,12 @@ impl IntoIterator for Path {
 
   fn into_iter(self) -> Self::IntoIter {
     self.0.into_iter()
+  }
+}
+
+impl<const N: usize> From<[&'static str; N]> for Path {
+  fn from(value: [&'static str; N]) -> Self {
+    Path(value.into_iter().map(|value| value.to_string()).collect())
   }
 }
 
@@ -861,7 +785,7 @@ pub trait TransactionExt<'doc> {
   fn try_encode_state_as_update_v1(&self, sv: &StateVector) -> Result<Vec<u8>, CollabError>;
 }
 
-impl<'doc> TransactionExt<'doc> for Transaction<'doc> {
+impl<'doc> TransactionExt<'doc> for LockedTransaction<'doc> {
   fn try_encode_state_as_update_v1(&self, sv: &StateVector) -> Result<Vec<u8>, CollabError> {
     match panic::catch_unwind(AssertUnwindSafe(|| self.encode_state_as_update_v1(sv))) {
       Ok(update) => Ok(update),
@@ -877,7 +801,7 @@ pub trait TransactionMutExt<'doc> {
   fn try_commit(&mut self) -> Result<(), CollabError>;
 }
 
-impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
+impl<'doc> TransactionMutExt<'doc> for LockedTransactionMut<'doc> {
   fn try_apply_update(&mut self, update: Update) -> Result<(), CollabError> {
     match panic::catch_unwind(AssertUnwindSafe(|| {
       self.apply_update(update);

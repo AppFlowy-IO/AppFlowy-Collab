@@ -1,10 +1,8 @@
-use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::core::origin::CollabOrigin;
-use collab::core::transaction::TransactionRetry;
 use collab::error::CollabError;
-use collab::preclude::{Collab, MapRefWrapper};
+use collab::preclude::Collab;
 use std::time::Duration;
-use yrs::{Map, Observable};
+use yrs::{Map, MapRef, Observable};
 
 use crate::util::{setup_log, Person, Position};
 
@@ -33,15 +31,17 @@ async fn insert_json_attrs() {
       level: 3,
     },
   };
-  collab.insert_json_with_path(vec![], "person", object);
-  let _ = collab
-    .get_json_with_path::<Person>(vec!["person".to_string()])
+  let mut tx = collab.transaction_mut().await;
+  collab
+    .insert_json_with_path(&mut tx, ["person"], object.clone())
     .unwrap();
+  let person: Person = collab.get_json_with_path(&*tx, ["person"]).unwrap();
+  assert_eq!(person, object);
 
-  let pos = collab
-    .get_json_with_path::<Position>(vec!["person".to_string(), "position".to_string()])
+  let pos: Position = collab
+    .get_json_with_path(&*tx, ["person", "position"])
     .unwrap();
-  println!("{:?}", pos);
+  assert_eq!(pos, object.position);
 }
 
 #[tokio::test]
@@ -54,21 +54,23 @@ async fn observer_attr_mut() {
       level: 3,
     },
   };
-  collab.insert_json_with_path(vec![], "person", object);
-  let _sub = collab
-    .get_map_with_path::<MapRefWrapper>(vec!["person".to_string(), "position".to_string()])
-    .unwrap()
-    .observe(|txn, event| {
-      event.target().iter(txn).for_each(|(a, b)| {
-        println!("{}: {}", a, b);
-      });
-    });
-
-  let map = collab
-    .get_map_with_path::<MapRefWrapper>(vec!["person".to_string(), "position".to_string()])
+  let mut tx = collab.transaction_mut().await;
+  collab
+    .insert_json_with_path(&mut tx, ["person"], object)
     .unwrap();
 
-  map.insert("title", "manager");
+  let map: MapRef = collab
+    .get_value_with_path(&*tx, ["person", "position"])
+    .unwrap()
+    .cast()
+    .unwrap();
+  let _sub = map.observe(|txn, event| {
+    event.target().iter(txn).for_each(|(a, b)| {
+      println!("{}: {}", a, b);
+    });
+  });
+
+  map.insert(&mut tx, "title", "manager");
 }
 
 #[tokio::test]
@@ -81,66 +83,30 @@ async fn remove_value() {
       level: 3,
     },
   };
-  collab.insert_json_with_path(vec![], "person", object);
-  let map =
-    collab.get_map_with_path::<MapRefWrapper>(vec!["person".to_string(), "position".to_string()]);
+  let mut tx = collab.transaction_mut().await;
+  collab
+    .insert_json_with_path(&mut tx, ["person"], object)
+    .unwrap();
+  let map: Option<MapRef> = collab
+    .get_value_with_path(&*tx, ["person", "position"])
+    .and_then(|v| v.cast().ok());
   assert!(map.is_some());
 
-  collab.remove_with_path(vec!["person".to_string(), "position".to_string()]);
+  collab
+    .remove_with_path(&mut tx, ["person", "position"])
+    .unwrap();
 
-  let map =
-    collab.get_map_with_path::<MapRefWrapper>(vec!["person".to_string(), "position".to_string()]);
+  let map: Option<MapRef> = collab
+    .get_value_with_path(&*tx, ["person", "position"])
+    .and_then(|v| v.cast().ok());
   assert!(map.is_none());
-}
-
-#[tokio::test]
-async fn retry_write_txn_success_test() {
-  setup_log();
-  let collab = Collab::new(1, "1", "1", vec![], false);
-  let doc = collab.get_doc().clone();
-  let txn = TransactionRetry::new(&doc, "1").get_write_txn_with(CollabOrigin::Empty);
-
-  let doc = collab.get_doc().clone();
-  let result = tokio::task::spawn_blocking(move || {
-    let _txn = TransactionRetry::new(&doc, "1").try_get_write_txn_with(CollabOrigin::Empty)?;
-    Ok::<(), CollabError>(())
-  });
-
-  tokio::time::sleep(Duration::from_secs(1)).await;
-  drop(txn);
-
-  let result = result.await.unwrap();
-  assert!(result.is_ok());
-
-  tokio::time::sleep(Duration::from_secs(2)).await;
-}
-
-#[tokio::test]
-#[should_panic]
-async fn retry_write_txn_fail_test() {
-  setup_log();
-  let collab = Collab::new(1, "1", "1", vec![], false);
-  let doc = collab.get_doc().clone();
-  let _txn = TransactionRetry::new(&doc, "1").get_write_txn_with(CollabOrigin::Empty);
-
-  let doc = collab.get_doc().clone();
-  let result = tokio::task::spawn_blocking(move || {
-    let _txn = TransactionRetry::new(&doc, "1").try_get_write_txn_with(CollabOrigin::Empty)?;
-
-    Ok::<(), CollabError>(())
-  });
-
-  tokio::time::sleep(Duration::from_secs(1)).await;
-  let result = result.await.unwrap();
-  assert!(result.is_ok());
-  tokio::time::sleep(Duration::from_secs(2)).await;
 }
 
 #[tokio::test]
 async fn undo_single_insert_text() {
   let mut collab = Collab::new(1, "1", "1", vec![], false);
-  collab.enable_undo_redo();
-  collab.insert("text", "hello world");
+  collab.enable_undo_redo().await;
+  collab.insert("text", "hello world").await;
 
   assert_json_diff::assert_json_eq!(
     collab.to_json(),
@@ -183,17 +149,17 @@ async fn redo_single_insert_text() {
 #[should_panic]
 async fn undo_manager_not_enable_test() {
   let mut collab = Collab::new(1, "1", "1", vec![], false);
-  collab.insert("text", "hello world");
+  collab.insert("text", "hello world").await;
   collab.undo().unwrap();
 }
 
 #[tokio::test]
 async fn undo_second_insert_text() {
   let mut collab = Collab::new(1, "1", "1", vec![], false);
-  collab.insert("1", "a");
+  collab.insert("1", "a").await;
 
-  collab.enable_undo_redo();
-  collab.insert("2", "b");
+  collab.enable_undo_redo().await;
+  collab.insert("2", "b").await;
   collab.undo().unwrap();
 
   assert_json_diff::assert_json_eq!(
@@ -204,21 +170,4 @@ async fn undo_second_insert_text() {
   );
 
   assert!(!collab.can_undo());
-}
-#[tokio::test]
-async fn any_map_extend_test() {
-  let mut map_1 = AnyMap::new();
-  map_1.insert_i64_value("a", 1);
-
-  let map_1_ptr = map_1.clone();
-
-  let mut map_2 = AnyMap::new();
-  map_2.insert_i64_value("b", 2);
-
-  map_1.extend(map_2);
-  assert_eq!(map_1.get_i64_value("a"), Some(1));
-  assert_eq!(map_1.get_i64_value("b"), Some(2));
-
-  assert_eq!(map_1_ptr.get_i64_value("a"), Some(1));
-  assert_eq!(map_1_ptr.get_i64_value("b"), None);
 }
