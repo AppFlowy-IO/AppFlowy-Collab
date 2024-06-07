@@ -15,9 +15,8 @@ serde_json.workspace = true
 nanoid = "0.4.0"
 thiserror = "1.0.30"
 anyhow.workspace = true
-parking_lot.workspace = true
 tracing.workspace = true
-tokio = { version = "1.26", features = ["time", "sync", "rt"] }
+tokio = { workspace = true, features = ["time", "sync", "rt"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 uuid = { version = "1.3.3", features = ["v4", "v5"] }
 

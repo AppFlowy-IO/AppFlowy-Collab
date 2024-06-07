@@ -7,7 +7,6 @@ use collab::core::collab::DataSource;
 
 use collab::preclude::*;
 use collab::util::deserialize_i32_from_numeric;
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;

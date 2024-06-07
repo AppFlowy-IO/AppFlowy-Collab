@@ -5,7 +5,6 @@ use collab::core::collab::{IndexContent, IndexContentSender};
 use collab::preclude::{
   DeepObservable, EntryChange, Event, MapRefWrapper, Subscription, ToJson, YrsValue,
 };
-use parking_lot::RwLock;
 use serde_json::json;
 use tokio::sync::broadcast;
 

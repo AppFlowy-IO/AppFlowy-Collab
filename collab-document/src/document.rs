@@ -10,7 +10,6 @@ use collab::preclude::block::ClientID;
 use collab::preclude::*;
 use collab_entity::define::DOCUMENT_ROOT;
 use collab_entity::CollabType;
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio_stream::wrappers::WatchStream;

@@ -6,7 +6,6 @@ use collab::core::collab::IndexContentSender;
 use collab::preclude::{
   Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, Subscription, TransactionMut, YrsValue,
 };
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 use tracing::{instrument, trace};

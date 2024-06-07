@@ -6,7 +6,6 @@ use crate::local_storage::kv::{KVTransactionDB, PersistenceError};
 use crate::CollabKVDB;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
-use parking_lot::RwLock;
 
 use yrs::{ReadTxn, StateVector};
 

@@ -6,7 +6,6 @@ use collab::preclude::{
   ArrayRefWrapper, Collab, Map, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
   Subscription, Transaction, TransactionMut, YrsValue,
 };
-use parking_lot::Mutex;
 
 use collab::core::value::YrsValueExtension;
 use collab::error::CollabError;
