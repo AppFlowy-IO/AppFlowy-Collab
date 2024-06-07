@@ -4,7 +4,6 @@ use assert_json_diff::assert_json_eq;
 use collab::core::collab::{CollabBuilder, DataSource};
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
-use parking_lot::RwLock;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;

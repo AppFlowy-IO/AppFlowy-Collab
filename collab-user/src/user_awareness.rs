@@ -8,7 +8,6 @@ use collab::core::collab_state::SyncState;
 use collab::preclude::{Any, MapPrelim, MapRefWrapper};
 use collab_entity::define::USER_AWARENESS;
 use collab_entity::reminder::Reminder;
-use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::WatchStream;
 

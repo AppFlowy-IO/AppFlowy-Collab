@@ -11,7 +11,6 @@ use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_entity::{CollabObject, CollabType};
-use parking_lot::Mutex;
 use rand::Rng;
 use serde::Deserialize;
 use tokio::spawn;

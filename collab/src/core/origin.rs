@@ -1,6 +1,5 @@
 use std::fmt::{Display, Formatter};
 
-use crate::core::transaction::TransactionMutWrapper;
 use serde::{Deserialize, Serialize};
 use yrs::{Origin, TransactionMut};
 

@@ -3,13 +3,14 @@ use std::ops::{Deref, DerefMut};
 use std::panic;
 use std::panic::AssertUnwindSafe;
 
-use std::sync::{Arc, Weak};
+use arc_swap::ArcSwapOption;
+use std::sync::Arc;
 use std::vec::IntoIter;
 
-use parking_lot::{Mutex, RwLock};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::json;
+use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use tokio_stream::wrappers::WatchStream;
 use tracing::{error, instrument, trace};
@@ -21,15 +22,16 @@ use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{
   Any, ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options,
-  ReadTxn, StateVector, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
+  ReadTxn, StateVector, Subscription, Transact, Transaction as Tx, TransactionMut as TxMut,
+  UndoManager, Update,
 };
 
 use crate::core::awareness::{Awareness, Event};
-use crate::core::collab_plugin::{CollabPlugin, CollabPluginType};
+use crate::core::collab_plugin::{CollabPlugin, Plugins};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::map_wrapper::{CustomMapRef, MapRefWrapper};
 use crate::core::origin::{CollabClient, CollabOrigin};
-use crate::core::transaction::{DocTransactionExtension, TransactionMutWrapper, TransactionRetry};
+use crate::core::transaction::{DocTransactionExtension, Transaction, TransactionMut};
 use crate::core::value::YrsValueExtension;
 use crate::entity::EncodedCollab;
 use crate::error::CollabError;
@@ -43,7 +45,7 @@ const LAST_SYNC_AT: &str = "last_sync_at";
 
 type AfterTransactionSubscription = Subscription;
 
-pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
+pub type MapSubscriptionCallback = Arc<dyn Fn(&TxMut, &MapEvent)>;
 pub type MapSubscription = Subscription;
 
 #[derive(Debug, Clone)]
@@ -60,40 +62,64 @@ pub type IndexContentReceiver = tokio::sync::broadcast::Receiver<IndexContent>;
 pub struct Collab {
   /// The object id can be the document id or the database id. It must be unique for
   /// each [Collab] instance.
-  pub object_id: String,
-
+  object_id: String,
   /// This [CollabClient] is used to verify the origin of a [Transaction] when
   /// applying a remote update.
-  pub origin: CollabOrigin,
-
-  /// The [Doc] is the main data structure that is used to store the data.
-  doc: Doc,
-  /// The [Awareness] is used to track the awareness of the other peers.
-  awareness: Awareness,
-
+  origin: CollabOrigin,
   /// Every [Collab] instance has a data section that can be used to store
   data: MapRef,
-
   meta: MapRef,
-
+  state: Arc<State>,
+  update_subscription: ArcSwapOption<Subscription>,
+  awareness_subscription: ArcSwapOption<Subscription>,
+  after_txn_subscription: ArcSwapOption<AfterTransactionSubscription>,
+  index_json_sender: IndexContentSender,
   /// A list of plugins that are used to extend the functionality of the [Collab].
   plugins: Plugins,
-
-  state: Arc<State>,
-
-  /// The [UndoManager] is used to undo and redo changes. By default, the [UndoManager]
-  /// is disabled. To enable it, call [Collab::enable_undo_manager].
-  undo_manager: Mutex<Option<UndoManager>>,
-  update_subscription: RwLock<Option<Subscription>>,
-  awareness_subscription: RwLock<Option<Subscription>>,
-  after_txn_subscription: RwLock<Option<AfterTransactionSubscription>>,
-  pub index_json_sender: IndexContentSender,
+  inner: RwLock<CollabInner>,
 }
 
-impl Drop for Collab {
-  fn drop(&mut self) {
-    if cfg!(feature = "verbose_log") {
-      trace!("Collab:{} dropped", self.object_id);
+unsafe impl Send for Collab {} // TODO: Remove this once MapRefs are Send
+unsafe impl Sync for Collab {} // TODO: Remove this once MapRefs are Sync
+
+pub struct CollabInner {
+  /// The [Doc] is the main data structure that is used to store the data.
+  pub doc: Doc,
+  /// The [Awareness] is used to track the awareness of the other peers.
+  pub awareness: Awareness,
+  /// The [UndoManager] is used to undo and redo changes. By default, the [UndoManager]
+  /// is disabled. To enable it, call [Collab::enable_undo_manager].
+  pub undo_manager: Option<UndoManager>,
+}
+
+impl CollabInner {
+  pub fn doc(&self) -> &Doc {
+    &self.doc
+  }
+
+  pub fn doc_mut(&mut self) -> &Doc {
+    &mut self.doc
+  }
+
+  pub fn awareness(&self) -> &Awareness {
+    &self.awareness
+  }
+
+  pub fn awareness_mut(&mut self) -> &mut Awareness {
+    &mut self.awareness
+  }
+
+  pub fn undo_manager(&self) -> Result<&UndoManager, CollabError> {
+    match &self.undo_manager {
+      None => Err(CollabError::UndoManagerNotEnabled),
+      Some(mgr) => Ok(mgr),
+    }
+  }
+
+  pub fn undo_manager_mut(&mut self) -> Result<&mut UndoManager, CollabError> {
+    match &mut self.undo_manager {
+      None => Err(CollabError::UndoManagerNotEnabled),
+      Some(mgr) => Ok(mgr),
     }
   }
 }
@@ -164,20 +190,22 @@ impl Collab {
     let doc = make_yrs_doc(skip_gc);
     let data = doc.get_or_insert_map(DATA_SECTION);
     let meta = doc.get_or_insert_map(META_SECTION);
-    let undo_manager = Mutex::new(None);
+    let undo_manager = None;
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
     let awareness = Awareness::new(doc.clone());
     Self {
       origin,
       object_id,
-      doc,
-      undo_manager,
-      awareness,
+      inner: RwLock::new(CollabInner {
+        doc,
+        awareness,
+        undo_manager,
+      }),
+      state,
       data,
       meta,
       plugins,
-      state,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
       awareness_subscription: Default::default(),
@@ -185,14 +213,26 @@ impl Collab {
     }
   }
 
+  pub async fn transaction<'a>(&'a self) -> Transaction<'a> {
+    let lock: RwLockReadGuard<'a, CollabInner> = self.inner.read().await;
+    Transaction::new(lock)
+  }
+
+  pub async fn transaction_mut<'a>(&'a self) -> TransactionMut<'a> {
+    let lock: RwLockWriteGuard<'a, CollabInner> = self.inner.write().await;
+    TransactionMut::new(lock, self.origin.clone())
+  }
+
   /// Returns the doc state and the state vector.
-  pub fn encode_collab_v1<F, E>(&self, validate: F) -> Result<EncodedCollab, E>
+  pub async fn encode_collab_v1<F, E>(&self, validate: F) -> Result<EncodedCollab, E>
   where
     F: FnOnce(&Collab) -> Result<(), E>,
     E: std::fmt::Debug,
   {
     validate(self)?;
-    Ok(self.doc.get_encoded_collab_v1())
+    let lock = self.inner.read().await;
+    let tx = lock.doc.transact();
+    Ok(tx.get_encoded_collab_v1())
   }
 
   pub fn try_encode_collab_v1<F, E>(&self, validate: F) -> Result<EncodedCollab, CollabError>
@@ -202,18 +242,22 @@ impl Collab {
   {
     validate(self).map_err(|err| CollabError::NoRequiredData(format!("{:?}", err)))?;
 
-    let txn = self
-      .doc
-      .try_transact()
-      .map_err(|_err| CollabError::AcquiredReadTxnFail)?;
+    let lock = self
+      .inner
+      .try_read()
+      .map_err(|_| CollabError::AcquiredReadTxnFail)?;
+
+    let tx = lock.doc.transact();
     Ok(EncodedCollab::new_v1(
-      txn.state_vector().encode_v1(),
-      txn.encode_state_as_update_v1(&StateVector::default()),
+      tx.state_vector().encode_v1(),
+      tx.encode_state_as_update_v1(&StateVector::default()),
     ))
   }
 
-  pub fn encode_collab_v2(&self) -> EncodedCollab {
-    self.doc.get_encoded_collab_v2()
+  pub async fn encode_collab_v2(&self) -> EncodedCollab {
+    let lock = self.inner.read().await;
+    let tx = lock.doc.transact();
+    tx.get_encoded_collab_v2()
   }
 
   pub fn get_state(&self) -> &Arc<State> {
@@ -228,13 +272,15 @@ impl Collab {
     WatchStream::new(self.state.snapshot_state_notifier.subscribe())
   }
 
-  pub fn clean_awareness_state(&mut self) {
-    self.awareness.clean_local_state();
+  pub async fn clean_awareness_state(&mut self) {
+    let mut lock = self.inner.write().await;
+    lock.awareness.clean_local_state();
   }
 
-  pub fn emit_awareness_state(&mut self) {
+  pub async fn emit_awareness_state(&mut self) {
     if let CollabOrigin::Client(origin) = &self.origin {
-      self
+      let mut lock = self.inner.write().await;
+      lock
         .awareness
         .set_local_state(initial_awareness_state(origin.uid).to_string());
     }
@@ -250,39 +296,30 @@ impl Collab {
     self.index_json_sender.subscribe()
   }
 
-  /// Returns the [Doc] associated with the [Collab].
-  pub fn get_doc(&self) -> &Doc {
-    &self.doc
+  #[inline]
+  pub async fn into_inner(&self) -> RwLockReadGuard<CollabInner> {
+    self.inner.read().await
   }
 
-  /// Returns the [Awareness] associated with the [Collab].
-  pub fn get_awareness(&self) -> &Awareness {
-    &self.awareness
-  }
-
-  pub fn get_mut_awareness(&mut self) -> &mut Awareness {
-    &mut self.awareness
+  #[inline]
+  pub async fn into_inner_mut(&self) -> RwLockWriteGuard<CollabInner> {
+    self.inner.write().await
   }
 
   /// Add a plugin to the [Collab]. The plugin's callbacks will be called in the order they are added.
   pub fn add_plugin(&mut self, plugin: Box<dyn CollabPlugin>) {
-    self.add_plugins(vec![plugin]);
+    self.add_plugins([plugin]);
   }
 
   /// Add plugins to the [Collab]. The plugin's callbacks will be called in the order they are added.
-  pub fn add_plugins(&mut self, plugins: Vec<Box<dyn CollabPlugin>>) {
-    let mut write_guard = self.plugins.write();
-
-    for plugin in plugins {
-      if plugin.plugin_type() == CollabPluginType::CloudStorage {
-        let is_exist = write_guard
-          .iter()
-          .find(|plugin| plugin.plugin_type() == CollabPluginType::CloudStorage);
-        if is_exist.is_some() {
-          tracing::error!("Only one cloud storage plugin can be added to a collab instance.");
-        }
+  pub fn add_plugins<I>(&mut self, plugins: I)
+  where
+    I: IntoIterator<Item = Box<dyn CollabPlugin>>,
+  {
+    for plugin in plugins.into_iter() {
+      if !self.plugins.push_front(plugin) {
+        tracing::error!("Only one cloud storage plugin can be added to a collab instance.");
       }
-      write_guard.push(plugin);
     }
   }
 
@@ -292,41 +329,47 @@ impl Collab {
   /// further synchronization with the remote server.
   ///
   /// This method must be called after all plugins have been added.
-  pub fn initialize(&mut self) {
+  pub async fn initialize(&mut self) {
     if !self.state.is_uninitialized() {
       return;
     }
 
+    let mut lock = self.inner.write().await;
     self.state.set_init_state(InitState::Loading);
     {
-      for plugin in self.plugins.read().iter() {
-        plugin.init(&self.object_id, &self.origin, &self.doc);
+      for plugin in self.plugins.iter() {
+        plugin.init(&self.object_id, &self.origin, &lock.doc);
       }
     }
 
     let (update_subscription, after_txn_subscription) = observe_doc(
-      &self.doc,
+      &lock.doc,
       self.object_id.clone(),
       self.plugins.clone(),
       self.origin.clone(),
     );
 
     let awareness_subscription = observe_awareness(
-      &mut self.awareness,
+      &mut lock.awareness,
       self.plugins.clone(),
       self.object_id.clone(),
       self.origin.clone(),
     );
 
-    *self.update_subscription.write() = Some(update_subscription);
-    *self.after_txn_subscription.write() = after_txn_subscription;
-    *self.awareness_subscription.write() = Some(awareness_subscription);
+    self
+      .update_subscription
+      .store(Some(update_subscription.into()));
+    self
+      .after_txn_subscription
+      .store(after_txn_subscription.map(Arc::from));
+    self
+      .awareness_subscription
+      .store(Some(awareness_subscription.into()));
 
     let last_sync_at = self.get_last_sync_at();
     {
       self
         .plugins
-        .read()
         .iter()
         .for_each(|plugin| plugin.did_init(self, &self.object_id, last_sync_at));
     }
@@ -334,17 +377,18 @@ impl Collab {
   }
 
   pub fn set_last_sync_at(&self, last_sync_at: i64) {
-    match self.try_origin_transaction_mut() {
-      Ok(mut txn) => {
-        self.set_last_sync_at_with_txn(&mut txn, last_sync_at);
+    match self.inner.try_read() {
+      Ok(inner) => {
+        let mut txn = inner.doc.transact_mut();
+        self.set_last_sync_at_with_txn(&mut txn, last_sync_at)
       },
-      Err(_) => {
-        error!("Fail to set last sync at");
-      },
+      Err(_) => {},
     }
   }
 
-  pub fn set_last_sync_at_with_txn(&self, txn: &mut TransactionMut, last_sync_at: i64) {
+  pub fn set_last_sync_at_with_txn(&self, txn: &mut TxMut, last_sync_at: i64) {
+    //FIXME: this is very expensive to do on frequent basis. That's one of the reasons we have
+    // awareness state separate from document
     self
       .meta
       .insert_i64_with_txn(txn, LAST_SYNC_AT, last_sync_at);
@@ -367,12 +411,11 @@ impl Collab {
 
   /// Make a full update with the current state of the [Collab].
   /// It invokes the [CollabPlugin::flush] method of each plugin.
-  pub fn flush(&self) {
-    self
-      .plugins
-      .read()
-      .iter()
-      .for_each(|plugin| plugin.flush(&self.object_id, &self.doc));
+  pub async fn flush(&self) {
+    let lock = self.inner.write().await;
+    for plugin in self.plugins.iter() {
+      plugin.flush(&self.object_id, &lock.doc)
+    }
   }
 
   pub fn observe_data<F>(&mut self, f: F) -> MapSubscription
@@ -382,15 +425,17 @@ impl Collab {
     self.data.observe(f)
   }
 
-  pub fn observe_awareness<F>(&mut self, f: F) -> Subscription
+  pub async fn observe_awareness<F>(&mut self, f: F) -> Subscription
   where
     F: Fn(&Event) + 'static,
   {
-    self.awareness.on_update(f)
+    let lock = self.inner.write().await;
+    lock.awareness.on_update(f)
   }
 
-  pub fn get(&self, key: &str) -> Option<Value> {
-    let txn = self.doc.transact();
+  pub async fn get(&self, key: &str) -> Option<Value> {
+    let lock = self.inner.read().await;
+    let txn = lock.doc.transact();
     self.data.get(&txn, key)
   }
 
@@ -398,67 +443,63 @@ impl Collab {
     self.data.get(txn, key)
   }
 
-  pub fn insert<V: Prelim>(&self, key: &str, value: V) -> V::Return {
-    self.with_origin_transact_mut(|txn| self.insert_with_txn(txn, key, value))
+  pub async fn insert<V: Prelim>(&self, key: &str, value: V) -> V::Return {
+    let mut tx = self.transaction_mut().await;
+    self.insert_with_txn(&mut tx, key, value)
   }
 
-  pub fn insert_with_txn<V: Prelim>(
-    &self,
-    txn: &mut TransactionMut,
-    key: &str,
-    value: V,
-  ) -> V::Return {
+  pub fn insert_with_txn<V: Prelim>(&self, txn: &mut TxMut, key: &str, value: V) -> V::Return {
     self.data.insert(txn, key, value)
   }
 
-  pub fn insert_json_with_path<T: Serialize>(&mut self, path: Vec<String>, key: &str, value: T) {
+  pub async fn insert_json_with_path<T: Serialize>(
+    &mut self,
+    path: Vec<String>,
+    key: &str,
+    value: T,
+  ) {
+    let mut txn = self.transaction_mut().await;
     let mut map = if path.is_empty() {
       None
     } else {
-      let txn = self.transact();
-      self.get_map_with_txn(&txn, path).map(|m| m.into_inner())
+      self
+        .get_map_with_txn(txn.deref(), path)
+        .map(|m| m.into_inner())
     };
 
-    self.with_origin_transact_mut(|txn| {
-      if map.is_none() {
-        map = Some(self.data.insert(txn, key, MapPrelim::<Any>::new()));
-      }
-      let value = serde_json::to_value(&value).unwrap();
-      insert_json_value_to_map_ref(key, &value, map.unwrap(), txn);
-    });
+    if map.is_none() {
+      map = Some(self.data.insert(&mut txn, key, MapPrelim::<Any>::new()));
+    }
+    let value = serde_json::to_value(&value).unwrap();
+    insert_json_value_to_map_ref(key, &value, map.unwrap(), &mut txn);
   }
 
-  pub fn get_json_with_path<T: DeserializeOwned>(&self, path: impl Into<Path>) -> Option<T> {
+  pub async fn get_json_with_path<T: DeserializeOwned>(&self, path: impl Into<Path>) -> Option<T> {
     let path = path.into();
     if path.is_empty() {
       return None;
     }
-    let txn = self.transact();
-    let map = self.get_map_with_txn(&txn, path)?;
-    drop(txn);
+    let map = self.get_map_with_txn(self.transaction().await.deref(), path)?;
 
     let json_str = map.to_json_str();
     let object = serde_json::from_str::<T>(&json_str).ok()?;
     Some(object)
   }
 
-  pub fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
+  pub fn insert_map_with_txn(&self, txn: &mut TxMut, key: &str) -> MapRefWrapper {
     let map = MapPrelim::<Any>::new();
     let map_ref = self.data.insert(txn, key, map);
     self.map_wrapper_with(map_ref)
   }
 
-  pub fn insert_map_with_txn_if_not_exist(
-    &self,
-    txn: &mut TransactionMut,
-    key: &str,
-  ) -> MapRefWrapper {
+  pub fn insert_map_with_txn_if_not_exist(&self, txn: &mut TxMut, key: &str) -> MapRefWrapper {
     let map_ref = self.data.create_map_if_not_exist_with_txn(txn, key);
     self.map_wrapper_with(map_ref)
   }
 
-  pub fn get_map_with_path<M: CustomMapRef>(&self, path: impl Into<Path>) -> Option<M> {
-    let txn = self.doc.transact();
+  pub async fn get_map_with_path<M: CustomMapRef>(&self, path: impl Into<Path>) -> Option<M> {
+    let lock = self.inner.read().await;
+    let txn = lock.doc.transact();
     let map_ref = self.get_map_with_txn(&txn, path)?;
     Some(M::from_map_ref(map_ref))
   }
@@ -494,7 +535,7 @@ impl Collab {
 
   pub fn create_array_with_txn<V: Prelim>(
     &self,
-    txn: &mut TransactionMut,
+    txn: &mut TxMut,
     key: &str,
     values: Vec<V>,
   ) -> ArrayRefWrapper {
@@ -524,24 +565,24 @@ impl Collab {
     map_ref?.get(txn, &last)
   }
 
-  pub fn remove(&mut self, key: &str) -> Option<Value> {
-    let mut txn = self.origin_transact_mut();
+  pub async fn remove(&mut self, key: &str) -> Option<Value> {
+    let mut txn = self.transaction_mut().await;
     self.data.remove(&mut txn, key)
   }
 
-  pub fn remove_with_path<P: Into<Path>>(&mut self, path: P) -> Option<Value> {
+  pub async fn remove_with_path<P: Into<Path>>(&mut self, path: P) -> Option<Value> {
     let path = path.into();
     if path.is_empty() {
       return None;
     }
+    let mut txn = self.transaction_mut().await;
     let len = path.len();
     if len == 1 {
-      self.with_origin_transact_mut(|txn| self.data.remove(txn, &path[0]))
+      self.data.remove(&mut txn, &path[0])
     } else {
-      let txn = self.transact();
       let mut iter = path.into_iter();
       let mut remove_path = iter.next().unwrap();
-      let mut map_ref = self.data.get(&txn, &remove_path)?.to_ymap().cloned();
+      let mut map_ref = self.data.get(txn.deref(), &remove_path)?.to_ymap().cloned();
 
       let remove_index = len - 2;
       for (index, path) in iter.enumerate() {
@@ -549,13 +590,12 @@ impl Collab {
           remove_path = path;
           break;
         } else {
-          map_ref = map_ref?.get(&txn, &path)?.to_ymap().cloned();
+          map_ref = map_ref?.get(txn.deref(), &path)?.to_ymap().cloned();
         }
       }
-      drop(txn);
 
       let map_ref = map_ref?;
-      self.with_origin_transact_mut(|txn| map_ref.remove(txn, &remove_path))
+      map_ref.remove(&mut txn, &remove_path)
     }
   }
 
@@ -568,13 +608,14 @@ impl Collab {
     "".to_string()
   }
 
-  pub fn to_json_value(&self) -> JsonValue {
-    let txn = self.transact();
-    serde_json::to_value(&self.data.to_json(&txn)).unwrap()
+  pub async fn to_json_value(&self) -> JsonValue {
+    let txn = self.transaction().await;
+    serde_json::to_value(&self.data.to_json(txn.deref())).unwrap()
   }
 
-  pub fn enable_undo_redo(&mut self) {
-    if self.undo_manager.lock().is_some() {
+  pub async fn enable_undo_redo(&self) {
+    let mut lock = self.inner.write().await;
+    if lock.undo_manager.is_some() {
       tracing::warn!("Undo manager already enabled");
       return;
     }
@@ -582,96 +623,15 @@ impl Collab {
     // we may decide to use different granularity of undo/redo actions. These are grouped together
     // on time-based ranges (configurable in undo::Options, which is 500ms by default).
     let mut undo_manager =
-      UndoManager::with_options(&self.doc, &self.data, yrs::undo::Options::default());
+      UndoManager::with_options(&lock.doc, &self.data, yrs::undo::Options::default());
     undo_manager.include_origin(self.origin.clone());
-    *self.undo_manager.lock() = Some(undo_manager);
-  }
-
-  /// Undo the previous change.
-  /// Returns true if the undo was successful, false if there was nothing to undo. If the
-  /// UndoManager is not enabled, returns false.
-  pub fn can_undo(&self) -> bool {
-    match &*self.undo_manager.lock() {
-      None => {
-        tracing::warn!("Undo manager not enabled, should enable_undo_redo first");
-        false
-      },
-      Some(undo_mgr) => undo_mgr.can_undo(),
-    }
-  }
-
-  /// Redo the previous change.
-  /// Returns true if the redo was successful, false if there was nothing to redo. If the
-  /// UndoManager is not enabled, returns false.
-  pub fn can_redo(&self) -> bool {
-    match &*self.undo_manager.lock() {
-      None => {
-        tracing::warn!("Undo manager not enabled, should enable_undo_redo first");
-        false
-      },
-      Some(undo_mgr) => undo_mgr.can_redo(),
-    }
-  }
-
-  pub fn undo(&mut self) -> Result<bool, CollabError> {
-    match &mut *self.undo_manager.lock() {
-      None => Err(CollabError::UndoManagerNotEnabled),
-      Some(mgr) => mgr.undo().map_err(|e| CollabError::Internal(Box::new(e))),
-    }
-  }
-
-  pub fn redo(&mut self) -> Result<bool, CollabError> {
-    match &mut *self.undo_manager.lock() {
-      None => Err(CollabError::UndoManagerNotEnabled),
-      Some(mgr) => mgr.redo().map_err(|e| CollabError::Internal(Box::new(e))),
-    }
+    lock.undo_manager = Some(undo_manager);
   }
 
   pub fn start_init_sync(&self) {
     self.plugins.read().iter().for_each(|plugin| {
       plugin.start_init_sync();
     });
-  }
-
-  pub fn transact(&self) -> Transaction {
-    TransactionRetry::new(&self.doc, &self.object_id).get_read_txn()
-  }
-
-  pub fn try_transaction(&self) -> Result<Transaction, CollabError> {
-    self
-      .doc
-      .try_transact()
-      .map_err(|e| CollabError::Internal(Box::new(e)))
-  }
-
-  pub fn try_transaction_mut(&self) -> Result<TransactionMutWrapper, CollabError> {
-    TransactionRetry::new(&self.doc, &self.object_id).try_get_write_txn()
-  }
-
-  pub fn try_origin_transaction_mut(&self) -> Result<TransactionMut, CollabError> {
-    TransactionRetry::new(&self.doc, &self.object_id).try_get_write_txn_with(self.origin.clone())
-  }
-
-  /// Returns a transaction that can mutate the document. This transaction will carry the
-  /// origin of the current user.
-  pub fn origin_transact_mut(&self) -> TransactionMutWrapper {
-    TransactionRetry::new(&self.doc, &self.object_id).get_write_txn_with(self.origin.clone())
-  }
-
-  /// Returns a transaction that can mutate the document. This transaction will carry the
-  /// origin of the current user.
-  ///
-  /// If applying the remote update, please use the `transact_mut` of `doc`.
-  /// The update will send to remote that the remote already has.
-  pub fn with_origin_transact_mut<F, T>(&self, f: F) -> T
-  where
-    F: FnOnce(&mut TransactionMut) -> T,
-  {
-    let mut txn =
-      TransactionRetry::new(&self.doc, &self.object_id).get_write_txn_with(self.origin.clone());
-    let ret = f(&mut txn);
-    drop(txn);
-    ret
   }
 
   fn map_wrapper_with(&self, map_ref: MapRef) -> MapRefWrapper {
@@ -728,7 +688,7 @@ fn observe_doc(
   let update_sub = doc
     .observe_update_v1(move |txn, event| {
       // If the origin of the txn is none, it means that the update is coming from a remote source.
-      cloned_plugins.read().iter().for_each(|plugin| {
+      for plugin in cloned_plugins.iter() {
         plugin.receive_update(&cloned_oid, txn, &event.update);
 
         let remote_origin = CollabOrigin::from(txn);
@@ -738,16 +698,15 @@ fn observe_doc(
           #[cfg(feature = "verbose_log")]
           trace!("{} did apply remote {} update", local_origin, remote_origin);
         }
-      });
+      }
     })
     .unwrap();
 
   let after_txn_sub = doc
     .observe_after_transaction(move |txn| {
-      plugins
-        .read()
-        .iter()
-        .for_each(|plugin| plugin.after_transaction(&oid, txn));
+      for plugin in plugins.iter() {
+        plugin.after_transaction(&oid, txn)
+      }
     })
     .ok();
 
@@ -823,7 +782,7 @@ impl CollabBuilder {
     self
   }
 
-  pub fn build(self) -> Result<MutexCollab, CollabError> {
+  pub fn build(self) -> Result<Collab, CollabError> {
     let origin = CollabOrigin::Client(CollabClient::new(self.uid, self.device_id));
     let collab = Collab::new_with_source(
       origin,
@@ -832,7 +791,7 @@ impl CollabBuilder {
       self.plugins,
       self.skip_gc,
     )?;
-    Ok(MutexCollab::new(collab))
+    Ok(collab)
   }
 }
 
@@ -853,22 +812,6 @@ impl CollabContext {
       doc,
       object_id,
     }
-  }
-
-  pub fn transact(&self) -> Transaction {
-    TransactionRetry::new(&self.doc, &self.object_id).get_read_txn()
-  }
-
-  #[instrument(level = "trace", skip_all)]
-  pub fn with_transact_mut<F, T>(&self, f: F) -> T
-  where
-    F: FnOnce(&mut TransactionMut) -> T,
-  {
-    let mut txn =
-      TransactionRetry::new(&self.doc, &self.object_id).get_write_txn_with(self.origin.clone());
-    let ret = f(&mut txn);
-    drop(txn);
-    ret
   }
 }
 
@@ -913,69 +856,6 @@ impl DerefMut for Path {
     &mut self.0
   }
 }
-
-#[derive(Default, Clone)]
-pub struct Plugins(Arc<RwLock<Vec<Box<dyn CollabPlugin>>>>);
-
-impl Plugins {
-  pub fn new(plugins: Vec<Box<dyn CollabPlugin>>) -> Plugins {
-    Self(Arc::new(RwLock::new(plugins)))
-  }
-
-  pub fn remove_all(&self) -> Vec<Box<dyn CollabPlugin>> {
-    self.0.write().drain(..).collect()
-  }
-}
-
-impl Deref for Plugins {
-  type Target = Arc<RwLock<Vec<Box<dyn CollabPlugin>>>>;
-
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-
-/// [MutexCollab] is a wrapper around [Rc] and [Mutex] to allow for shared ownership of a [Collab]
-/// It does nothing just impl [Send] and [Sync] for [Collab]
-#[derive(Clone)]
-pub struct MutexCollab(Arc<Mutex<Collab>>);
-impl MutexCollab {
-  pub fn new(collab: Collab) -> Self {
-    #[allow(clippy::arc_with_non_send_sync)]
-    Self(Arc::new(Mutex::new(collab)))
-  }
-
-  pub fn downgrade(&self) -> WeakMutexCollab {
-    WeakMutexCollab(Arc::downgrade(&self.0))
-  }
-}
-
-impl Deref for MutexCollab {
-  type Target = Arc<Mutex<Collab>>;
-
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-
-impl DerefMut for MutexCollab {
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.0
-  }
-}
-
-unsafe impl Send for MutexCollab {}
-unsafe impl Sync for MutexCollab {}
-
-#[derive(Clone)]
-pub struct WeakMutexCollab(Weak<Mutex<Collab>>);
-impl WeakMutexCollab {
-  pub fn upgrade(&self) -> Option<MutexCollab> {
-    self.0.upgrade().map(MutexCollab)
-  }
-}
-unsafe impl Send for WeakMutexCollab {}
-unsafe impl Sync for WeakMutexCollab {}
 
 pub trait TransactionExt<'doc> {
   fn try_encode_state_as_update_v1(&self, sv: &StateVector) -> Result<Vec<u8>, CollabError>;
