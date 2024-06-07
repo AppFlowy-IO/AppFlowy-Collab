@@ -373,6 +373,7 @@ name = "collab-document"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "assert-json-diff",
  "collab",
  "collab-entity",

@@ -6,7 +6,6 @@ use bytes::Bytes;
 use collab::core::collab::DataSource;
 
 use collab::preclude::*;
-use collab::util::deserialize_i32_from_numeric;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -19,13 +18,13 @@ pub struct TaskInfo {
   pub repeated: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Person {
   pub(crate) name: String,
   pub(crate) position: Position,
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Position {
   pub(crate) title: String,
   #[serde(deserialize_with = "deserialize_i32_from_numeric")]

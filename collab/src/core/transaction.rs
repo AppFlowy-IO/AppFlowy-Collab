@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use tokio::sync::{RwLockReadGuard, RwLockWriteGuard};
 use yrs::updates::encoder::Encode;
-use yrs::{ReadTxn, StateVector, Transact, Transaction as Tx, TransactionMut as TxMut};
+use yrs::{ReadTxn, StateVector, Transact, Transaction, TransactionMut};
 
 use crate::core::collab::CollabInner;
 use crate::core::origin::CollabOrigin;
@@ -10,20 +10,24 @@ use crate::entity::EncodedCollab;
 
 /// A wrapper around the Yrs readonly transaction, which also holds the lock to the collab state.
 /// This way it can be obtained from the collab object using async transaction acquisition.
-pub struct Transaction<'a> {
+pub struct LockedTransaction<'a> {
+  #[allow(dead_code)]
   lock: RwLockReadGuard<'a, CollabInner>,
-  inner: Tx<'a>,
+  inner: Transaction<'a>,
 }
 
-impl<'a> Transaction<'a> {
+impl<'a> LockedTransaction<'a> {
   pub(crate) fn new(lock: RwLockReadGuard<'a, CollabInner>) -> Self {
-    let inner = lock.doc.transact();
+    let txn = lock.doc.transact();
+    // transaction never outlives its document,
+    // while RwLock lifetime is scoped to document container
+    let inner = unsafe { std::mem::transmute(txn) };
     Self { lock, inner }
   }
 }
 
-impl<'a> Deref for Transaction<'a> {
-  type Target = Tx<'a>;
+impl<'a> Deref for LockedTransaction<'a> {
+  type Target = Transaction<'a>;
 
   #[inline]
   fn deref(&self) -> &Self::Target {
@@ -33,20 +37,24 @@ impl<'a> Deref for Transaction<'a> {
 
 /// A wrapper around the Yrs read-write transaction, which also holds the lock to the collab state.
 /// This way it can be obtained from the collab object using async transaction acquisition.
-pub struct TransactionMut<'a> {
+pub struct LockedTransactionMut<'a> {
+  #[allow(dead_code)]
   lock: RwLockWriteGuard<'a, CollabInner>,
-  inner: TxMut<'a>,
+  inner: TransactionMut<'a>,
 }
 
-impl<'a> TransactionMut<'a> {
+impl<'a> LockedTransactionMut<'a> {
   pub(crate) fn new(lock: RwLockWriteGuard<'a, CollabInner>, origin: CollabOrigin) -> Self {
-    let inner = lock.doc.transact_mut_with(origin);
+    let txn = lock.doc.transact_mut_with(origin);
+    // transaction never outlives its document,
+    // while RwLock lifetime is scoped to document container
+    let inner = unsafe { std::mem::transmute(txn) };
     Self { lock, inner }
   }
 }
 
-impl<'a> Deref for TransactionMut<'a> {
-  type Target = TxMut<'a>;
+impl<'a> Deref for LockedTransactionMut<'a> {
+  type Target = TransactionMut<'a>;
 
   #[inline]
   fn deref(&self) -> &Self::Target {
@@ -54,7 +62,7 @@ impl<'a> Deref for TransactionMut<'a> {
   }
 }
 
-impl<'a> DerefMut for TransactionMut<'a> {
+impl<'a> DerefMut for LockedTransactionMut<'a> {
   fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.inner
   }
@@ -76,5 +84,5 @@ pub trait DocTransactionExtension: ReadTxn {
   }
 }
 
-impl<'a> DocTransactionExtension for Tx<'a> {}
-impl<'a> DocTransactionExtension for TxMut<'a> {}
+impl<'a> DocTransactionExtension for Transaction<'a> {}
+impl<'a> DocTransactionExtension for TransactionMut<'a> {}

@@ -15,7 +15,7 @@ serde = { workspace = true, features = ["rc"] }
 serde_json.workspace = true
 bytes = { workspace = true, features = ["serde"] }
 tracing.workspace = true
-tokio = { workspace = true, features = ["time", "sync", "rt"] }
+tokio = { workspace = true, features = ["sync", "rt"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 async-trait.workspace = true
 arc-swap.workspace = true
@@ -29,6 +29,7 @@ web-sys = { version = "0.3" }
 js-sys = "0.3"
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["macros", "sync", "rt"] }
 tempfile = "3.8.0"
 collab = { path = "", features = ["default"] }
 nanoid = "0.4.0"
