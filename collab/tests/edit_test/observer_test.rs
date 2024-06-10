@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use yrs::types::{Change, ToJson};
 use yrs::updates::decoder::Decode;
@@ -54,12 +55,12 @@ async fn array_observer_test() {
 #[tokio::test]
 async fn apply_update_test() {
   let doc1 = Doc::new();
-  let updates = Arc::new(RwLock::new(vec![]));
+  let updates = Rc::new(RefCell::new(vec![]));
 
   let cloned_updates = updates.clone();
   let sub = doc1
     .observe_update_v1(move |_txn, event| {
-      cloned_updates.write().push(event.update.clone());
+      cloned_updates.borrow_mut().push(event.update.clone());
     })
     .unwrap();
 

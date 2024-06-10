@@ -149,10 +149,11 @@ async fn two_way_sync_test() {
   }
 
   // Update the "map" in doc_2 and then sync to doc_1
-  let map_2 = {
-    let txn = doc_2.transact();
-    root_map_2.get_map_with_txn(&txn, "map").unwrap()
-  };
+  let map_2: MapRef = root_map_2
+    .get(&doc_2.transact(), "map")
+    .unwrap()
+    .cast()
+    .unwrap();
   {
     let mut txn = doc_2.transact_mut();
     map_2.insert(&mut txn, "key_1", "a");
