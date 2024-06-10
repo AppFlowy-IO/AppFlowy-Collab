@@ -16,7 +16,6 @@ use collab_entity::define::{DATABASE, DATABASE_ID};
 use collab_entity::CollabType;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
-use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 pub use tokio_stream::wrappers::WatchStream;
 

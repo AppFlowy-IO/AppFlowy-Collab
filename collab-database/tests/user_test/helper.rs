@@ -18,7 +18,6 @@ use collab_database::workspace_database::{
 };
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
-use parking_lot::Mutex;
 use tokio::sync::mpsc::{channel, Receiver};
 
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;

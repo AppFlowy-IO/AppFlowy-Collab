@@ -12,7 +12,6 @@ use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 
-use parking_lot::Mutex;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 

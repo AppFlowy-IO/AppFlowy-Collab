@@ -62,7 +62,7 @@ impl BlockTaskController {
 pub struct BlockTaskHandler {
   collab_db: Weak<CollabKVDB>,
   collab_service: Weak<dyn DatabaseCollabService>,
-  queue: parking_lot::Mutex<TaskQueue<BlockTask>>,
+  queue: Mutex<TaskQueue<BlockTask>>,
   runner_notifier: Arc<watch::Sender<bool>>,
 }
 
@@ -72,7 +72,7 @@ impl BlockTaskHandler {
     collab_db: Weak<CollabKVDB>,
     runner_notifier: watch::Sender<bool>,
   ) -> Self {
-    let queue = parking_lot::Mutex::new(TaskQueue::new());
+    let queue = Mutex::new(TaskQueue::new());
     let runner_notifier = Arc::new(runner_notifier);
     Self {
       collab_service,

@@ -38,7 +38,7 @@ pub struct CollabSink<Sink, Msg> {
 
   /// The [PendingMsgQueue] is used to queue the messages that are waiting to be sent to the
   /// remote. It will merge the messages if possible.
-  pending_msg_queue: Arc<parking_lot::Mutex<PendingMsgQueue<Msg>>>,
+  pending_msg_queue: Arc<Mutex<PendingMsgQueue<Msg>>>,
   msg_id_counter: Arc<dyn MsgIdCounter>,
 
   /// The [watch::Sender] is used to notify the [CollabSinkRunner] to process the pending messages.
@@ -83,7 +83,7 @@ where
     let state_notifier = Arc::new(sync_state_tx);
     let sender = Arc::new(Mutex::new(sink));
     let pending_msg_queue = PendingMsgQueue::new();
-    let pending_msg_queue = Arc::new(parking_lot::Mutex::new(pending_msg_queue));
+    let pending_msg_queue = Arc::new(Mutex::new(pending_msg_queue));
     let msg_id_counter = Arc::new(msg_id_counter);
     //
     let instant = Mutex::new(Instant::now());

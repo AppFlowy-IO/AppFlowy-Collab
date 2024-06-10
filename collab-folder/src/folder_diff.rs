@@ -8,7 +8,6 @@ use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{
   DeepObservable, EntryChange, Event, MapRefExtension, ReadTxn, Update, YrsValue,
 };
-use parking_lot::Mutex;
 use std::collections::HashSet;
 use std::rc::Rc;
 

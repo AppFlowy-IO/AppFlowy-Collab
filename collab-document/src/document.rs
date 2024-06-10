@@ -1,8 +1,9 @@
+use arc_swap::ArcSwapOption;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
-use collab::core::collab::{DataSource, MutexCollab};
+use collab::core::collab::DataSource;
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
@@ -10,7 +11,6 @@ use collab::preclude::block::ClientID;
 use collab::preclude::*;
 use collab_entity::define::DOCUMENT_ROOT;
 use collab_entity::CollabType;
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio_stream::wrappers::WatchStream;
@@ -39,20 +39,20 @@ const CHILDREN_MAP: &str = "children_map";
 const TEXT_MAP: &str = "text_map";
 
 pub struct Document {
-  inner: Arc<MutexCollab>,
+  inner: Arc<Collab>,
   root: MapRefWrapper,
   subscription: Option<Subscription>,
   children_operation: ChildrenOperation,
   block_operation: BlockOperation,
   text_operation: TextOperation,
   #[allow(dead_code)]
-  awareness_subscription: RwLock<Option<Subscription>>,
+  awareness_subscription: ArcSwapOption<Subscription>,
 }
 
 impl Document {
   /// Create or get a document.
-  pub fn open(collab: Arc<MutexCollab>) -> Result<Document, DocumentError> {
-    Document::open_document_with_collab(collab)
+  pub fn open<C: Into<Arc<Collab>>>(collab: C) -> Result<Document, DocumentError> {
+    Document::open_document_with_collab(collab.into())
   }
 
   pub fn validate(collab: &Collab) -> Result<(), DocumentError> {
@@ -62,7 +62,7 @@ impl Document {
     Ok(())
   }
 
-  pub fn get_collab(&self) -> &Arc<MutexCollab> {
+  pub fn get_collab(&self) -> &Arc<Collab> {
     &self.inner
   }
 
@@ -83,7 +83,7 @@ impl Document {
 
   /// Create a new document with the given data.
   pub fn create_with_data(
-    collab: Arc<MutexCollab>,
+    collab: Arc<Collab>,
     data: DocumentData,
   ) -> Result<Document, DocumentError> {
     Document::create_document(collab, Some(data))
@@ -96,7 +96,7 @@ impl Document {
     plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, DocumentError> {
     let collab = Collab::new_with_source(origin, document_id, doc_state, plugins, true)?;
-    Document::open(Arc::new(MutexCollab::new(collab)))
+    Document::open(collab)
   }
 
   /// open a document and subscribe to the document changes.
@@ -523,7 +523,7 @@ impl Document {
   }
 
   fn create_document(
-    collab: Arc<MutexCollab>,
+    collab: Arc<Collab>,
     data: Option<DocumentData>,
   ) -> Result<Self, DocumentError> {
     let mut collab_guard = collab.lock();
@@ -585,8 +585,7 @@ impl Document {
     Ok(document)
   }
 
-  fn open_document_with_collab(collab: Arc<MutexCollab>) -> Result<Self, DocumentError> {
-    let mut collab_guard = collab.lock();
+  async fn open_document_with_collab(collab: Arc<Collab>) -> Result<Self, DocumentError> {
     let (root, block_operation, children_operation, text_operation) = collab_guard
       .with_origin_transact_mut(|txn| {
         let root = collab_guard.get_map_with_txn(txn, vec![DOCUMENT_ROOT]);
@@ -610,8 +609,7 @@ impl Document {
         )
       });
 
-    collab_guard.enable_undo_redo();
-    drop(collab_guard);
+    collab.enable_undo_redo();
 
     if root.is_none() {
       return Err(DocumentError::NoRequiredData);

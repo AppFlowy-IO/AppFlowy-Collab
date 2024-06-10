@@ -2,7 +2,6 @@ use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_folder::{timestamp, Folder, FolderData, UserId};
-use parking_lot::Mutex;
 use serde_json::json;
 use std::ops::Deref;
 use std::sync::Arc;

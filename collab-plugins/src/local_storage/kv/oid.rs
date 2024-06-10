@@ -2,7 +2,6 @@
 
 use crate::{if_native, if_wasm};
 use lazy_static::lazy_static;
-use parking_lot::Mutex;
 
 const EPOCH: u64 = 1637806706000;
 const NODE_BITS: u64 = 8;
@@ -93,7 +92,6 @@ mod tests {
   use std::thread;
 
   use crate::local_storage::kv::oid::LOCAL_DOC_ID_GEN;
-  use parking_lot::RwLock;
 
   #[test]
   fn test_oid_gen() {
