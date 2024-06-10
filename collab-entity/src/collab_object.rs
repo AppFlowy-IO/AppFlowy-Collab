@@ -6,7 +6,7 @@ use crate::define::{
   DATABASE, DATABASE_ID, DATABASE_ROW_DATA, DOCUMENT_ROOT, FOLDER, FOLDER_META,
   FOLDER_WORKSPACE_ID, USER_AWARENESS, WORKSPACE_DATABASES,
 };
-use collab::preclude::{Collab, MapRefExtension};
+use collab::preclude::Collab;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 /// The type of the collab object. It will be used to determine what kind of services should be
