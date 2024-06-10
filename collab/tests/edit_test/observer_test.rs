@@ -3,7 +3,9 @@ use std::rc::Rc;
 
 use yrs::types::{Change, ToJson};
 use yrs::updates::decoder::Decode;
-use yrs::{Array, Doc, Map, Observable, ReadTxn, StateVector, Transact, Update};
+use yrs::{
+  Any, Array, Doc, Map, MapPrelim, MapRef, Observable, ReadTxn, StateVector, Transact, Update,
+};
 
 #[tokio::test]
 async fn array_observer_test() {
@@ -68,9 +70,9 @@ async fn apply_update_test() {
   let doc1_state = doc1.transact().encode_diff_v1(&StateVector::default());
   {
     let mut txn = doc1.transact_mut();
-    let map1 = array.insert_map_with_txn(&mut txn, None);
+    let map1 = array.push_back(&mut txn, MapPrelim::<Any>::new());
     // map1.insert(&mut txn, "m_k", "m_value");
-    map1.create_map_with_txn(&mut txn, "m_k");
+    map1.insert(&mut txn, "m_k", MapPrelim::<Any>::new());
   }
 
   {
@@ -83,7 +85,7 @@ async fn apply_update_test() {
     array.push_back(&mut txn, "b");
   }
 
-  assert_eq!(updates.read().len(), 3);
+  assert_eq!(updates.borrow().len(), 3);
   assert_eq!(
     doc1.to_json(&doc1.transact()).to_string(),
     r#"{array: [{m_k: {}}, a, b]}"#
@@ -97,7 +99,7 @@ async fn apply_update_test() {
     {
       let mut txn = doc2.transact_mut();
       txn.apply_update(Update::decode_v1(doc1_state.as_ref()).unwrap());
-      for update in updates.read().iter() {
+      for update in updates.borrow().iter() {
         txn.apply_update(Update::decode_v1(update).unwrap());
       }
     }
@@ -105,7 +107,7 @@ async fn apply_update_test() {
       let txn = doc2.transact();
       let map = array
         .get(&txn, 0)
-        .map(|value| value.to_ymap().cloned())
+        .map(|value| value.cast::<MapRef>())
         .unwrap()
         .unwrap();
 
@@ -116,14 +118,14 @@ async fn apply_update_test() {
     let cloned_updates = updates.clone();
     let sub = doc2
       .observe_update_v1(move |_txn, event| {
-        cloned_updates.write().push(event.update.clone());
+        cloned_updates.borrow_mut().push(event.update.clone());
       })
       .unwrap();
     let map_2 = {
       // update map
       let doc2 = doc2.clone();
       let mut txn = doc2.transact_mut();
-      map.create_map_with_txn(&mut txn, "m_m_k1")
+      map.insert(&mut txn, "m_m_k1", MapPrelim::<Any>::new())
     };
 
     {
@@ -135,7 +137,7 @@ async fn apply_update_test() {
       map_2.insert(&mut txn, "m_m_k2", "m_m_v2");
     }
 
-    assert_eq!(updates.read().len(), 6);
+    assert_eq!(updates.borrow().len(), 6);
     // assert_eq!(
     //   doc2.to_json(&doc2.transact()).to_string(),
     //   r#"{array: [{m_m_k1: {m_m_k2: m_m_v2}, m_k: {}}, a, b]}"#
@@ -150,7 +152,7 @@ async fn apply_update_test() {
     {
       let mut txn = doc3.transact_mut();
       txn.apply_update(Update::decode_v1(doc1_state.as_ref()).unwrap());
-      for update in updates.read().iter() {
+      for update in updates.borrow().iter() {
         txn.apply_update(Update::decode_v1(update).unwrap());
       }
     }
@@ -159,13 +161,12 @@ async fn apply_update_test() {
       let txn = doc3.transact();
       array
         .get(&txn, 0)
-        .map(|value| value.to_ymap().cloned())
+        .map(|value| value.cast::<MapRef>())
         .unwrap()
         .unwrap()
         .get(&txn, "m_m_k1")
         .unwrap()
-        .to_ymap()
-        .cloned()
+        .cast::<MapRef>()
         .unwrap()
     };
 
