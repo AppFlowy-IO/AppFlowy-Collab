@@ -17,6 +17,7 @@ macro_rules! if_wasm {
 pub mod core;
 pub mod entity;
 pub mod error;
+pub mod util;
 
 pub mod preclude {
   pub use serde_json::value::Value as JsonValue;

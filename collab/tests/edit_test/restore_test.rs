@@ -1,14 +1,23 @@
 #![allow(clippy::all)]
 
 use assert_json_diff::assert_json_eq;
-use collab::core::collab::{CollabBuilder, DataSource};
+use collab::core::collab::CollabBuilder;
 use collab::core::origin::CollabOrigin;
+
 use collab::preclude::{Collab, CollabPlugin};
 use serde_json::json;
-use std::collections::HashMap;
-use std::sync::Arc;
+
+use std::sync::{Arc, RwLock};
 use yrs::updates::decoder::Decode;
-use yrs::{ReadTxn, Transact, TransactionMut, Update};
+
+use yrs::ArrayPrelim;
+use yrs::Map;
+
+use yrs::MapRef;
+use yrs::ReadTxn;
+use yrs::Transact;
+use yrs::TransactionMut;
+use yrs::Update;
 
 use crate::util::{setup_log, CollabStateCachePlugin};
 
@@ -24,12 +33,12 @@ async fn restore_from_update() {
     Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
   collab_2.initialize();
 
-  collab_1.insert("1", "a".to_string());
-  collab_1.insert("2", "b".to_string());
-  collab_1.insert("3", "c".to_string());
+  collab_1.insert("1", "a");
+  collab_1.insert("2", "b");
+  collab_1.insert("3", "c");
 
   let updates = std::mem::take(&mut *plugin.updates.write());
-  collab_2.with_origin_transact_mut(|txn| {
+  collab_2.with_transaction_mut(|txn| {
     for update in updates {
       let update = Update::decode_v1(&update).unwrap();
       txn.apply_update(update);
@@ -312,40 +321,46 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
 async fn init_sync_test() {
   let mut client_1 =
     Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
-  client_1.initialize();
+  client_1.initialize().await;
 
   // client 1 edit
-  client_1.with_origin_transact_mut(|txn| {
-    client_1.insert_map_with_txn(txn, "map");
-  });
-  client_1.with_origin_transact_mut(|txn| {
-    let outer_map = client_1.get_map_with_txn(txn, vec!["map"]).unwrap();
-    outer_map.insert_with_txn(txn, "1", "a");
-    outer_map.insert_array_with_txn(txn, "array", Vec::<String>::new());
-  });
+  {
+    let mut txn = client_1.transaction_mut().await;
+    client_1
+      .insert_json_with_path(&mut txn, ["map"], json!({}))
+      .unwrap();
+    let outer_map: MapRef = client_1
+      .get_with_path(&*txn, ["map"])
+      .unwrap()
+      .cast()
+      .unwrap();
+    outer_map.insert(&mut txn, "1", "a");
+    outer_map.insert(&mut txn, "array", ArrayPrelim::from([]));
+  }
 
   let mut client_2 =
     Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
-  client_2.initialize();
+  client_2.initialize().await;
 
   let mut server_collab =
     Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
-  server_collab.initialize();
+  server_collab.initialize().await;
 
-  init_sync(&server_collab, &client_1);
-  init_sync(&client_2, &server_collab);
+  init_sync(&server_collab, &client_1).await;
+  init_sync(&client_2, &server_collab).await;
 
   assert_eq!(client_1.to_json(), server_collab.to_json());
   assert_eq!(client_2.to_json(), server_collab.to_json());
 }
 
-fn init_sync(old: &Collab, new: &Collab) {
-  let sv = old.transact().state_vector();
-  let update = new.transact().encode_state_as_update_v1(&sv);
-  old.with_origin_transact_mut(|txn| {
-    let update = Update::decode_v1(&update).unwrap();
-    txn.apply_update(update);
-  });
+fn init_sync(destination: &mut Collab, source: &Collab) {
+  let source_tx = source.transaction();
+  let mut dest_tx = destination.transaction_mut();
+
+  let timestamp = dest_tx.state_vector();
+  let update = source_tx.encode_state_as_update_v1(&timestamp);
+  let update = Update::decode_v1(&update).unwrap();
+  dest_tx.apply_update(update);
 }
 
 #[tokio::test]
@@ -356,13 +371,22 @@ async fn restore_from_multiple_update() {
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
-  collab.lock().initialize();
+  collab.initialize().await;
 
   // Insert map
-  let mut map = HashMap::new();
-  map.insert("1".to_string(), "task 1".to_string());
-  map.insert("2".to_string(), "task 2".to_string());
-  collab.lock().insert_json_with_path(vec![], "bullet", map);
+  {
+    let mut tx = collab.transaction_mut().await;
+    collab
+      .insert_json_with_path(
+        &mut tx,
+        ["bullet"],
+        json!({
+          "1": "task 1",
+          "2": "task 2"
+        }),
+      )
+      .unwrap();
+  }
 
   let updates = update_cache.get_doc_state().unwrap();
   let restored_collab = CollabBuilder::new(1, "1")
@@ -370,7 +394,7 @@ async fn restore_from_multiple_update() {
     .with_doc_state(updates)
     .build()
     .unwrap();
-  assert_eq!(collab.lock().to_json(), restored_collab.lock().to_json());
+  assert_eq!(collab.to_json().await, restored_collab.to_json().await);
 }
 
 #[tokio::test]
@@ -381,8 +405,8 @@ async fn apply_same_update_multiple_time() {
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
-  collab.lock().initialize();
-  collab.lock().insert("text", "hello world");
+  collab.initialize().await;
+  collab.insert("text", "hello world").await;
 
   let updates = update_cache.get_doc_state().unwrap();
   let restored_collab = CollabBuilder::new(1, "1")
@@ -394,23 +418,15 @@ async fn apply_same_update_multiple_time() {
   // It's ok to apply the updates that were already applied
   let doc_state = update_cache.get_doc_state().unwrap();
   restored_collab
-    .lock()
-    .with_origin_transact_mut(|txn| match doc_state {
-      DataSource::Disk => {
-        panic!("doc state should not be empty")
-      },
-      DataSource::DocStateV1(doc_state) => {
-        txn.apply_update(Update::decode_v1(&doc_state).unwrap());
-      },
-      DataSource::DocStateV2(doc_state) => {
-        txn.apply_update(Update::decode_v2(&doc_state).unwrap());
-      },
-    });
+    .with_transaction_mut(|txn| {
+      let update = doc_state.as_update().unwrap().unwrap();
+      txn.apply_update(update);
+    })
+    .await;
 
-  assert_json_diff::assert_json_eq!(collab.lock().to_json(), restored_collab.lock().to_json(),);
+  assert_json_eq!(collab.to_json().await, restored_collab.to_json().await);
 }
 
-#[ignore = "fixme: flaky test"]
 #[tokio::test]
 async fn root_change_test() {
   setup_log();
@@ -418,38 +434,29 @@ async fn root_change_test() {
     .with_device_id("1")
     .build()
     .unwrap();
-  collab_1.lock().initialize();
+  collab_1.initialize().await;
   let collab_2 = CollabBuilder::new(1, "1")
     .with_device_id("1")
     .build()
     .unwrap();
-  collab_2.lock().initialize();
+  collab_2.initialize().await;
 
   {
-    let collab_1_guard = collab_1.lock();
-    collab_1_guard.with_origin_transact_mut(|txn| {
-      collab_1_guard.insert_map_with_txn(txn, "map");
-    });
-    drop(collab_1_guard);
+    collab_1
+      .insert_json_with_path(&mut collab_1.transaction_mut().await, ["map"], json!({}))
+      .unwrap();
   }
   {
-    let collab_2_guard = collab_2.lock();
-    collab_2_guard.with_origin_transact_mut(|txn| {
-      collab_2_guard.insert_map_with_txn(txn, "map");
-    });
-    drop(collab_2_guard);
+    collab_2
+      .insert_json_with_path(&mut collab_2.transaction_mut().await, ["map"], json!({}))
+      .unwrap();
   }
 
   let map_2 = {
-    let collab_guard = collab_2.lock();
-    let txn = collab_guard.transact();
-    let map_2 = collab_guard.get_map_with_txn(&txn, vec!["map"]).unwrap();
-    drop(txn);
-
-    collab_guard.with_origin_transact_mut(|txn| {
-      map_2.insert_with_txn(txn, "1", "a");
-      map_2.insert_with_txn(txn, "2", "b");
-    });
+    let txn = collab_2.transact();
+    let map_2: MapRef = collab_2.get_with_path(&txn, ["map"]).unwrap();
+    map_2.insert(txn, "1", "a");
+    map_2.insert(txn, "2", "b");
     map_2
   };
 

@@ -10,25 +10,23 @@ use std::sync::Arc;
 use std::vec::IntoIter;
 
 use serde_json::json;
-use tokio::sync::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use tokio_stream::wrappers::WatchStream;
-use yrs::block::Prelim;
+use yrs::block::{ClientID, Prelim};
 use yrs::types::map::MapEvent;
 use yrs::types::{ToJson, Value};
 use yrs::updates::decoder::Decode;
 
-use yrs::updates::encoder::Encode;
 use yrs::{
   Any, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options, ReadTxn, StateVector,
-  Subscription, Transact, TransactionMut, UndoManager, Update,
+  Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
 };
 
 use crate::core::awareness::{Awareness, Event};
 use crate::core::collab_plugin::{CollabPlugin, Plugins};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::origin::{CollabClient, CollabOrigin};
-use crate::core::transaction::{DocTransactionExtension, LockedTransaction, LockedTransactionMut};
+use crate::core::transaction::DocTransactionExtension;
 use crate::core::value::Entity;
 use crate::entity::EncodedCollab;
 use crate::error::CollabError;
@@ -72,8 +70,8 @@ pub struct Collab {
   index_json_sender: IndexContentSender,
   /// A list of plugins that are used to extend the functionality of the [Collab].
   plugins: Plugins,
-  inner: RwLock<CollabInner>,
-  active_transaction: Mutex<Option<LockedTransactionMut<'static>>>,
+  /// This is an inner collab state that requires mut access in order to modify it.
+  inner: CollabInner,
 }
 
 unsafe impl Send for Collab {} // TODO: Remove this once MapRefs are Send
@@ -151,8 +149,7 @@ impl Collab {
     let collab = Self::new_with_origin(origin, object_id, plugins, skip_gc);
     let update = collab_doc_state.as_update()?;
     if let Some(update) = update {
-      let lock = collab.inner.try_write().unwrap();
-      let mut txn = lock.doc.transact_mut_with(collab.origin.clone());
+      let mut txn = collab.inner.doc.transact_mut_with(collab.origin.clone());
       txn.apply_update(update);
     }
     Ok(collab)
@@ -182,11 +179,11 @@ impl Collab {
     Self {
       origin,
       object_id,
-      inner: RwLock::new(CollabInner {
+      inner: CollabInner {
         doc,
         awareness,
         undo_manager,
-      }),
+      },
       state,
       data,
       meta,
@@ -195,75 +192,102 @@ impl Collab {
       after_txn_subscription: Default::default(),
       awareness_subscription: Default::default(),
       index_json_sender: tokio::sync::broadcast::channel(100).0,
-      active_transaction: Mutex::new(None),
     }
   }
 
-  pub async fn transaction<'a>(&'a self) -> LockedTransaction<'a> {
-    let lock: RwLockReadGuard<'a, CollabInner> = self.inner.read().await;
-    LockedTransaction::new(lock)
+  fn undo_manager(&self) -> Result<&UndoManager, CollabError> {
+    match &self.inner.undo_manager {
+      None => Err(CollabError::UndoManagerNotEnabled),
+      Some(mgr) => Ok(mgr),
+    }
   }
 
-  pub async fn transaction_mut<'a>(&'a self) -> LockedTransactionMut<'a> {
-    let lock: RwLockWriteGuard<'a, CollabInner> = self.inner.write().await;
-    LockedTransactionMut::new(lock, self.origin.clone())
+  fn undo_manager_mut(&mut self) -> Result<&mut UndoManager, CollabError> {
+    match &mut self.inner.undo_manager {
+      None => Err(CollabError::UndoManagerNotEnabled),
+      Some(mgr) => Ok(mgr),
+    }
+  }
+
+  pub fn can_undo(&self) -> bool {
+    match self.undo_manager() {
+      Ok(undo_manager) => undo_manager.can_undo(),
+      Err(_) => false,
+    }
+  }
+
+  pub fn can_redo(&self) -> bool {
+    match self.undo_manager() {
+      Ok(undo_manager) => undo_manager.can_redo(),
+      Err(_) => false,
+    }
+  }
+
+  pub fn undo(&mut self) -> Result<bool, CollabError> {
+    let undo_manager = self.undo_manager_mut()?;
+    undo_manager
+      .undo()
+      .map_err(|_| CollabError::AcquiredWriteTxnFail)
+  }
+
+  pub fn redo(&mut self) -> Result<bool, CollabError> {
+    let undo_manager = self.undo_manager_mut()?;
+    undo_manager
+      .undo()
+      .map_err(|_| CollabError::AcquiredWriteTxnFail)
+  }
+
+  #[inline]
+  pub fn transaction(&self) -> Transaction {
+    self.inner.doc.transact()
+  }
+
+  #[inline]
+  pub fn transaction_mut(&mut self) -> TransactionMut {
+    self.inner.doc.transact_mut_with(self.origin.clone())
+  }
+
+  #[inline]
+  pub fn client_id(&self) -> ClientID {
+    self.inner.doc.client_id()
+  }
+
+  //FIXME: this naming convention is not consistent with Rust: use `awareness` instead
+  #[inline]
+  pub fn get_awareness(&self) -> &Awareness {
+    &self.inner.awareness
+  }
+
+  //FIXME: this naming convention is not consistent with Rust: use `awareness_mut` instead
+  #[inline]
+  pub fn get_mut_awareness(&mut self) -> &mut Awareness {
+    &mut self.inner.awareness
   }
 
   /// Wraps given execution function within the transaction scope. That transaction scope
   /// can be reused as [Collab::with_transaction_mut] is called multiple times inside executed
   /// nested function, preventing possible deadlock.
-  pub async fn with_transaction_mut<T, F>(&self, f: F) -> T
+  pub fn with_transaction_mut<T, F>(&mut self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let mut lock = self.active_transaction.lock().await;
-    if lock.is_none() {
-      let tx = self.transaction_mut().await;
-      // this is actually safe since transaction mut won't outlive current collab
-      let tx: LockedTransactionMut<'static> = unsafe { std::mem::transmute(tx) };
-      *lock = Some(tx);
-    }
-    let tx = lock.as_mut().unwrap();
-    let result = f(&mut *tx);
-    drop(lock.take()); // remove and drop active transaction at the end of work
-    drop(lock);
-    result
+    let mut txn = self.transaction_mut();
+    f(&mut txn)
   }
 
   /// Returns the doc state and the state vector.
-  pub async fn encode_collab_v1<F, E>(&self, validate: F) -> Result<EncodedCollab, E>
+  pub fn encode_collab_v1<F, E>(&self, validate: F) -> Result<EncodedCollab, E>
   where
     F: FnOnce(&Collab) -> Result<(), E>,
     E: std::fmt::Debug,
   {
     validate(self)?;
-    let lock = self.inner.read().await;
-    let tx = lock.doc.transact();
+    let tx = self.transaction();
     Ok(tx.get_encoded_collab_v1())
   }
 
-  pub fn try_encode_collab_v1<F, E>(&self, validate: F) -> Result<EncodedCollab, CollabError>
-  where
-    F: FnOnce(&Collab) -> Result<(), E>,
-    E: std::fmt::Debug,
-  {
-    validate(self).map_err(|err| CollabError::NoRequiredData(format!("{:?}", err)))?;
-
-    let lock = self
-      .inner
-      .try_read()
-      .map_err(|_| CollabError::AcquiredReadTxnFail)?;
-
-    let tx = lock.doc.transact();
-    Ok(EncodedCollab::new_v1(
-      tx.state_vector().encode_v1(),
-      tx.encode_state_as_update_v1(&StateVector::default()),
-    ))
-  }
-
-  pub async fn encode_collab_v2(&self) -> EncodedCollab {
-    let lock = self.inner.read().await;
-    let tx = lock.doc.transact();
+  pub fn encode_collab_v2(&self) -> EncodedCollab {
+    let tx = self.transaction();
     tx.get_encoded_collab_v2()
   }
 
@@ -279,15 +303,14 @@ impl Collab {
     WatchStream::new(self.state.snapshot_state_notifier.subscribe())
   }
 
-  pub async fn clean_awareness_state(&mut self) {
-    let mut lock = self.inner.write().await;
-    lock.awareness.clean_local_state();
+  pub fn clean_awareness_state(&mut self) {
+    self.inner.awareness.clean_local_state();
   }
 
-  pub async fn emit_awareness_state(&mut self) {
+  pub fn emit_awareness_state(&mut self) {
     if let CollabOrigin::Client(origin) = &self.origin {
-      let mut lock = self.inner.write().await;
-      lock
+      self
+        .inner
         .awareness
         .set_local_state(initial_awareness_state(origin.uid).to_string());
     }
@@ -301,16 +324,6 @@ impl Collab {
   /// process and utilize the contained indexing information.
   pub fn subscribe_index_content(&self) -> IndexContentReceiver {
     self.index_json_sender.subscribe()
-  }
-
-  #[inline]
-  pub async fn into_inner(&self) -> RwLockReadGuard<CollabInner> {
-    self.inner.read().await
-  }
-
-  #[inline]
-  pub async fn into_inner_mut(&self) -> RwLockWriteGuard<CollabInner> {
-    self.inner.write().await
   }
 
   /// Add a plugin to the [Collab]. The plugin's callbacks will be called in the order they are added.
@@ -336,28 +349,27 @@ impl Collab {
   /// further synchronization with the remote server.
   ///
   /// This method must be called after all plugins have been added.
-  pub async fn initialize(&mut self) {
+  pub fn initialize(&mut self) {
     if !self.state.is_uninitialized() {
       return;
     }
 
-    let mut lock = self.inner.write().await;
     self.state.set_init_state(InitState::Loading);
     {
       self
         .plugins
-        .each(|plugin| plugin.init(&self.object_id, &self.origin, &lock.doc));
+        .each(|plugin| plugin.init(&self.object_id, &self.origin, &self.inner.doc));
     }
 
     let (update_subscription, after_txn_subscription) = observe_doc(
-      &lock.doc,
+      &self.inner.doc,
       self.object_id.clone(),
       self.plugins.clone(),
       self.origin.clone(),
     );
 
     let awareness_subscription = observe_awareness(
-      &mut lock.awareness,
+      &mut self.inner.awareness,
       self.plugins.clone(),
       self.object_id.clone(),
       self.origin.clone(),
@@ -382,14 +394,9 @@ impl Collab {
     self.state.set_init_state(InitState::Initialized);
   }
 
-  pub fn set_last_sync_at(&self, last_sync_at: i64) {
-    match self.inner.try_read() {
-      Ok(inner) => {
-        let mut txn = inner.doc.transact_mut();
-        self.set_last_sync_at_with_txn(&mut txn, last_sync_at)
-      },
-      Err(_) => {},
-    }
+  pub fn set_last_sync_at(&mut self, last_sync_at: i64) {
+    let mut txn = self.inner.doc.transact_mut();
+    self.set_last_sync_at_with_txn(&mut txn, last_sync_at)
   }
 
   pub fn set_last_sync_at_with_txn(&self, txn: &mut TransactionMut, last_sync_at: i64) {
@@ -399,17 +406,12 @@ impl Collab {
   }
 
   pub fn get_last_sync_at(&self) -> i64 {
-    match self.inner.try_read() {
-      Ok(inner) => {
-        let txn = inner.doc.transact();
-        self
-          .meta
-          .get(&txn, LAST_SYNC_AT)
-          .and_then(|v| v.cast().ok())
-          .unwrap_or(0)
-      },
-      Err(_) => 0,
-    }
+    let txn = self.inner.doc.transact();
+    self
+      .meta
+      .get(&txn, LAST_SYNC_AT)
+      .and_then(|v| v.cast().ok())
+      .unwrap_or(0)
   }
 
   pub fn set_sync_state(&self, sync_state: SyncState) {
@@ -422,11 +424,10 @@ impl Collab {
 
   /// Make a full update with the current state of the [Collab].
   /// It invokes the [CollabPlugin::flush] method of each plugin.
-  pub async fn flush(&self) {
-    let lock = self.inner.write().await;
+  pub fn flush(&self) {
     self
       .plugins
-      .each(|plugin| plugin.flush(&self.object_id, &lock.doc));
+      .each(|plugin| plugin.flush(&self.object_id, &self.inner.doc));
   }
 
   pub fn observe_data<F>(&mut self, f: F) -> MapSubscription
@@ -436,27 +437,28 @@ impl Collab {
     self.data.observe(f)
   }
 
-  pub async fn observe_awareness<F>(&mut self, f: F) -> Subscription
+  pub fn observe_awareness<F>(&mut self, f: F) -> Subscription
   where
     F: Fn(&Event) + 'static,
   {
-    let lock = self.inner.write().await;
-    lock.awareness.on_update(f)
+    self.inner.awareness.on_update(f)
   }
 
-  pub async fn get(&self, key: &str) -> Option<Value> {
-    let lock = self.inner.read().await;
-    let txn = lock.doc.transact();
-    self.data.get(&txn, key)
+  pub fn get<V>(&self, key: &str) -> Option<V>
+  where
+    V: TryFrom<Value, Error = Value>,
+  {
+    let txn = self.inner.doc.transact();
+    self.data.get(&txn, key)?.cast::<V>().ok()
   }
 
   pub fn get_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<Value> {
     self.data.get(txn, key)
   }
 
-  pub async fn insert<V: Prelim>(&self, key: &str, value: V) -> V::Return {
-    let mut tx = self.transaction_mut().await;
-    self.insert_with_txn(&mut tx, key, value)
+  pub fn insert<V: Prelim>(&mut self, key: &str, value: V) -> V::Return {
+    let mut txn = self.inner.doc.transact_mut_with(self.origin.clone());
+    self.data.insert(&mut txn, key, value)
   }
 
   pub fn insert_with_txn<V: Prelim>(
@@ -466,6 +468,17 @@ impl Collab {
     value: V,
   ) -> V::Return {
     self.data.insert(txn, key, value)
+  }
+
+  #[inline]
+  pub fn get_with_path<P, T, V>(&self, txn: &T, path: P) -> Option<V>
+  where
+    P: Into<Path>,
+    T: ReadTxn,
+    V: TryFrom<Value, Error = Value>,
+  {
+    let value = self.get_value_with_path(txn, path)?;
+    value.cast::<V>().ok()
   }
 
   pub fn get_value_with_path<P, T>(&self, txn: &T, path: P) -> Option<Value>
@@ -555,28 +568,25 @@ impl Collab {
     current.remove(txn, &last)
   }
 
-  pub async fn remove(&mut self, key: &str) -> Option<Value> {
-    let mut txn = self.transaction_mut().await;
+  pub fn remove(&mut self, key: &str) -> Option<Value> {
+    let mut txn = self.inner.doc.transact_mut_with(self.origin.clone());
     self.data.remove(&mut txn, key)
   }
 
-  pub async fn to_json(&self) -> Any {
-    let txn = self.transaction().await;
-    self.data.to_json(txn.deref())
+  pub fn to_json(&self) -> Any {
+    self.data.to_json(&self.transaction())
   }
 
   pub fn to_plain_text(&self) -> String {
     "".to_string()
   }
 
-  pub async fn to_json_value(&self) -> JsonValue {
-    let txn = self.transaction().await;
-    serde_json::to_value(&self.data.to_json(txn.deref())).unwrap()
+  pub fn to_json_value(&self) -> JsonValue {
+    serde_json::to_value(&self.data.to_json(&self.transaction())).unwrap()
   }
 
-  pub async fn enable_undo_redo(&self) {
-    let mut lock = self.inner.write().await;
-    if lock.undo_manager.is_some() {
+  pub fn enable_undo_redo(&mut self) {
+    if self.inner.undo_manager.is_some() {
       tracing::warn!("Undo manager already enabled");
       return;
     }
@@ -584,9 +594,9 @@ impl Collab {
     // we may decide to use different granularity of undo/redo actions. These are grouped together
     // on time-based ranges (configurable in undo::Options, which is 500ms by default).
     let mut undo_manager =
-      UndoManager::with_options(&lock.doc, &self.data, yrs::undo::Options::default());
+      UndoManager::with_options(&self.inner.doc, &self.data, yrs::undo::Options::default());
     undo_manager.include_origin(self.origin.clone());
-    lock.undo_manager = Some(undo_manager);
+    self.inner.undo_manager = Some(undo_manager);
   }
 
   pub fn start_init_sync(&self) {
@@ -785,7 +795,7 @@ pub trait TransactionExt<'doc> {
   fn try_encode_state_as_update_v1(&self, sv: &StateVector) -> Result<Vec<u8>, CollabError>;
 }
 
-impl<'doc> TransactionExt<'doc> for LockedTransaction<'doc> {
+impl<'doc> TransactionExt<'doc> for Transaction<'doc> {
   fn try_encode_state_as_update_v1(&self, sv: &StateVector) -> Result<Vec<u8>, CollabError> {
     match panic::catch_unwind(AssertUnwindSafe(|| self.encode_state_as_update_v1(sv))) {
       Ok(update) => Ok(update),
@@ -801,7 +811,7 @@ pub trait TransactionMutExt<'doc> {
   fn try_commit(&mut self) -> Result<(), CollabError>;
 }
 
-impl<'doc> TransactionMutExt<'doc> for LockedTransactionMut<'doc> {
+impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
   fn try_apply_update(&mut self, update: Update) -> Result<(), CollabError> {
     match panic::catch_unwind(AssertUnwindSafe(|| {
       self.apply_update(update);

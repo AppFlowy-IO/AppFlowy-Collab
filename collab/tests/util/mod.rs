@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Once};
+use std::sync::{Arc, Once, RwLock};
 
 use bytes::Bytes;
 
@@ -27,7 +27,7 @@ pub struct Person {
 #[derive(Default, Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Position {
   pub(crate) title: String,
-  #[serde(deserialize_with = "deserialize_i32_from_numeric")]
+  #[serde(deserialize_with = "collab::util::deserialize_i32_from_numeric")]
   pub(crate) level: i32,
 }
 
@@ -71,7 +71,7 @@ impl CollabStateCachePlugin {
 
 impl CollabPlugin for CollabStateCachePlugin {
   fn receive_update(&self, _object_id: &str, txn: &TransactionMut, update: &[u8]) {
-    let mut write_guard = self.0.write();
+    let mut write_guard = self.0.write().unwrap();
     if write_guard.is_empty() {
       let doc_state = txn.encode_state_as_update_v1(&StateVector::default());
       write_guard.push(Bytes::from(doc_state));
