@@ -72,15 +72,13 @@ pub struct Collab {
   /// A list of plugins that are used to extend the functionality of the [Collab].
   plugins: Plugins,
   /// This is an inner collab state that requires mut access in order to modify it.
-  inner: CollabInner,
+  inner: CollabData,
 }
 
 unsafe impl Send for Collab {} // TODO: Remove this once MapRefs are Send
 unsafe impl Sync for Collab {} // TODO: Remove this once MapRefs are Sync
 
-pub struct CollabInner {
-  /// The [Doc] is the main data structure that is used to store the data.
-  pub doc: Doc,
+pub struct CollabData {
   /// The [Awareness] is used to track the awareness of the other peers.
   pub awareness: Awareness,
   /// The [UndoManager] is used to undo and redo changes. By default, the [UndoManager]
@@ -88,13 +86,16 @@ pub struct CollabInner {
   pub undo_manager: Option<UndoManager>,
 }
 
-impl CollabInner {
-  pub fn doc(&self) -> &Doc {
-    &self.doc
+impl CollabData {
+  fn new(awareness: Awareness) -> Self {
+    Self {
+      awareness,
+      undo_manager: None,
+    }
   }
 
-  pub fn doc_mut(&mut self) -> &Doc {
-    &mut self.doc
+  pub(crate) fn doc(&self) -> &Doc {
+    self.awareness.doc()
   }
 
   pub fn awareness(&self) -> &Awareness {
@@ -147,16 +148,16 @@ impl Collab {
     plugins: Vec<Box<dyn CollabPlugin>>,
     skip_gc: bool,
   ) -> Result<Self, CollabError> {
-    let collab = Self::new_with_origin(origin, object_id, plugins, skip_gc);
+    let mut collab = Self::new_with_origin(origin, object_id, plugins, skip_gc);
     let update = collab_doc_state.as_update()?;
     if let Some(update) = update {
-      let mut txn = collab.inner.doc.transact_mut_with(collab.origin.clone());
+      let mut txn = collab.transact_mut();
       txn.apply_update(update);
     }
     Ok(collab)
   }
 
-  pub fn clear_plugins(&mut self) {
+  pub fn clear_plugins(&self) {
     let plugins = self.plugins.remove_all();
     for plugin in plugins {
       plugin.destroy();
@@ -176,12 +177,11 @@ impl Collab {
     let undo_manager = None;
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
-    let awareness = Awareness::new(doc.clone());
+    let awareness = Awareness::new(doc);
     Self {
       origin,
       object_id,
-      inner: CollabInner {
-        doc,
+      inner: CollabData {
         awareness,
         undo_manager,
       },
@@ -239,18 +239,18 @@ impl Collab {
   }
 
   #[inline]
-  pub fn transaction(&self) -> Transaction {
-    self.inner.doc.transact()
+  pub fn transact(&self) -> Transaction {
+    self.inner.doc().transact()
   }
 
   #[inline]
-  pub fn transaction_mut(&mut self) -> TransactionMut {
-    self.inner.doc.transact_mut_with(self.origin.clone())
+  pub fn transact_mut(&mut self) -> TransactionMut {
+    self.inner.doc().transact_mut_with(self.origin.clone())
   }
 
   #[inline]
   pub fn client_id(&self) -> ClientID {
-    self.inner.doc.client_id()
+    self.inner.doc().client_id()
   }
 
   //FIXME: this naming convention is not consistent with Rust: use `awareness` instead
@@ -266,13 +266,13 @@ impl Collab {
   }
 
   /// Wraps given execution function within the transaction scope. That transaction scope
-  /// can be reused as [Collab::with_transaction_mut] is called multiple times inside executed
+  /// can be reused as [Collab::with_origin_transact_mut] is called multiple times inside executed
   /// nested function, preventing possible deadlock.
-  pub fn with_transaction_mut<T, F>(&mut self, f: F) -> T
+  pub fn with_origin_transact_mut<T, F>(&mut self, f: F) -> T
   where
     F: FnOnce(&mut TransactionMut) -> T,
   {
-    let mut txn = self.transaction_mut();
+    let mut txn = self.transact_mut();
     f(&mut txn)
   }
 
@@ -283,12 +283,12 @@ impl Collab {
     E: std::fmt::Debug,
   {
     validate(self)?;
-    let tx = self.transaction();
+    let tx = self.transact();
     Ok(tx.get_encoded_collab_v1())
   }
 
   pub fn encode_collab_v2(&self) -> EncodedCollab {
-    let tx = self.transaction();
+    let tx = self.transact();
     tx.get_encoded_collab_v2()
   }
 
@@ -329,12 +329,12 @@ impl Collab {
   }
 
   /// Add a plugin to the [Collab]. The plugin's callbacks will be called in the order they are added.
-  pub fn add_plugin(&mut self, plugin: Box<dyn CollabPlugin>) {
+  pub fn add_plugin(&self, plugin: Box<dyn CollabPlugin>) {
     self.add_plugins([plugin]);
   }
 
   /// Add plugins to the [Collab]. The plugin's callbacks will be called in the order they are added.
-  pub fn add_plugins<I>(&mut self, plugins: I)
+  pub fn add_plugins<I>(&self, plugins: I)
   where
     I: IntoIterator<Item = Box<dyn CollabPlugin>>,
   {
@@ -360,11 +360,11 @@ impl Collab {
     {
       self
         .plugins
-        .each(|plugin| plugin.init(&self.object_id, &self.origin, &self.inner.doc));
+        .each(|plugin| plugin.init(&self.object_id, &self.origin, self.inner.doc()));
     }
 
     let (update_subscription, after_txn_subscription) = observe_doc(
-      &self.inner.doc,
+      self.inner.doc(),
       self.object_id.clone(),
       self.plugins.clone(),
       self.origin.clone(),
@@ -397,7 +397,7 @@ impl Collab {
   }
 
   pub fn set_last_sync_at(&mut self, last_sync_at: i64) {
-    let mut txn = self.inner.doc.transact_mut();
+    let mut txn = self.transact_mut();
     self.set_last_sync_at_with_txn(&mut txn, last_sync_at)
   }
 
@@ -408,7 +408,7 @@ impl Collab {
   }
 
   pub fn get_last_sync_at(&self) -> i64 {
-    let txn = self.inner.doc.transact();
+    let txn = self.transact();
     self
       .meta
       .get(&txn, LAST_SYNC_AT)
@@ -429,17 +429,17 @@ impl Collab {
   pub fn flush(&self) {
     self
       .plugins
-      .each(|plugin| plugin.flush(&self.object_id, &self.inner.doc));
+      .each(|plugin| plugin.flush(&self.object_id, self.inner.doc()));
   }
 
-  pub fn observe_data<F>(&mut self, f: F) -> MapSubscription
+  pub fn observe_data<F>(&self, f: F) -> MapSubscription
   where
     F: Fn(&TransactionMut, &MapEvent) + Send + Sync + 'static,
   {
     self.data.observe(f)
   }
 
-  pub fn observe_awareness<F>(&mut self, f: F) -> Subscription
+  pub fn observe_awareness<F>(&self, f: F) -> Subscription
   where
     F: Fn(&Awareness, &Event, Option<&Origin>) + Send + Sync + 'static,
   {
@@ -450,7 +450,7 @@ impl Collab {
   where
     V: TryFrom<Out, Error = Out>,
   {
-    let txn = self.inner.doc.transact();
+    let txn = self.transact();
     self.data.get(&txn, key)?.cast::<V>().ok()
   }
 
@@ -459,7 +459,7 @@ impl Collab {
   }
 
   pub fn insert<V: Prelim>(&mut self, key: &str, value: V) -> V::Return {
-    let mut txn = self.inner.doc.transact_mut_with(self.origin.clone());
+    let mut txn = self.transact_mut();
     self.data.insert(&mut txn, key, value)
   }
 
@@ -571,12 +571,12 @@ impl Collab {
   }
 
   pub fn remove(&mut self, key: &str) -> Option<Out> {
-    let mut txn = self.inner.doc.transact_mut_with(self.origin.clone());
+    let mut txn = self.transact_mut();
     self.data.remove(&mut txn, key)
   }
 
   pub fn to_json(&self) -> Any {
-    self.data.to_json(&self.transaction())
+    self.data.to_json(&self.transact())
   }
 
   pub fn to_plain_text(&self) -> String {
@@ -584,7 +584,7 @@ impl Collab {
   }
 
   pub fn to_json_value(&self) -> JsonValue {
-    serde_json::to_value(&self.data.to_json(&self.transaction())).unwrap()
+    serde_json::to_value(&self.data.to_json(&self.transact())).unwrap()
   }
 
   pub fn enable_undo_redo(&mut self) {
@@ -596,7 +596,7 @@ impl Collab {
     // we may decide to use different granularity of undo/redo actions. These are grouped together
     // on time-based ranges (configurable in undo::Options, which is 500ms by default).
     let mut undo_manager =
-      UndoManager::with_scope_and_options(&lock.doc, &self.data, yrs::undo::Options::default());
+      UndoManager::with_scope_and_options(self.inner.doc(), &self.data, yrs::undo::Options::default());
     undo_manager.include_origin(self.origin.clone());
     self.inner.undo_manager = Some(undo_manager);
   }

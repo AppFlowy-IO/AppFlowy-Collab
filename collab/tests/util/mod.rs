@@ -41,16 +41,12 @@ impl CollabStateCachePlugin {
 
   pub fn get_doc_state(&self) -> Result<DataSource, anyhow::Error> {
     let mut updates = vec![];
-    for encoded_data in self.0.read().iter() {
-      updates.push(encoded_data.to_vec());
+    let lock = self.0.read().unwrap();
+    for encoded_data in lock.iter() {
+      updates.push(encoded_data.as_ref());
     }
 
-    let updates = updates
-      .iter()
-      .map(|update| update.as_ref())
-      .collect::<Vec<&[u8]>>();
-
-    let doc_state = merge_updates_v1(updates)
+    let doc_state = merge_updates_v1(&updates)
       .map_err(|err| anyhow::anyhow!("merge updates failed: {:?}", err))
       .unwrap();
     Ok(DataSource::DocStateV1(doc_state))
@@ -58,7 +54,7 @@ impl CollabStateCachePlugin {
 
   #[allow(dead_code)]
   pub fn get_update(&self) -> Result<Update, anyhow::Error> {
-    let read_guard = self.0.read();
+    let read_guard = self.0.read().unwrap();
     let updates = read_guard
       .iter()
       .map(|update| update.as_ref())

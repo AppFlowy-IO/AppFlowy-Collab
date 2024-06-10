@@ -30,15 +30,18 @@ async fn insert_json_attrs() {
       level: 3,
     },
   };
-  let mut tx = collab.transaction_mut();
-  collab
-    .insert_json_with_path(&mut tx, ["person"], object.clone())
-    .unwrap();
-  let person: Person = collab.get_json_with_path(&tx, ["person"]).unwrap();
+  let person = collab.with_origin_transact_mut(|tx| {
+    collab
+      .insert_json_with_path(tx, ["person"], object.clone())
+      .unwrap();
+
+    let person: Person = collab.get_json_with_path(tx, ["person"]).unwrap();
+    person
+  });
   assert_eq!(person, object);
 
   let pos: Position = collab
-    .get_json_with_path(&tx, ["person", "position"])
+    .get_json_with_path(&collab.transact(), ["person", "position"])
     .unwrap();
   assert_eq!(pos, object.position);
 }
@@ -53,7 +56,7 @@ async fn observer_attr_mut() {
       level: 3,
     },
   };
-  let mut tx = collab.transaction_mut();
+  let mut tx = collab.transact_mut();
   collab
     .insert_json_with_path(&mut tx, ["person"], object)
     .unwrap();
@@ -78,7 +81,7 @@ async fn remove_value() {
       level: 3,
     },
   };
-  let mut tx = collab.transaction_mut();
+  let mut tx = collab.transact_mut();
   collab
     .insert_json_with_path(&mut tx, ["person"], object)
     .unwrap();
