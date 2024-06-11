@@ -3,9 +3,9 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::Result;
-use collab::core::collab::MutexCollab;
+use collab::core::collab::CollabReadOps;
 use collab::core::collab_state::SyncState;
-use collab::preclude::{Any, MapPrelim, MapRefWrapper};
+use collab::preclude::{Any, Collab, MapExt, MapPrelim, MapRef};
 use collab_entity::define::USER_AWARENESS;
 use collab_entity::reminder::Reminder;
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,7 @@ use tokio_stream::wrappers::WatchStream;
 
 use crate::appearance::AppearanceSettings;
 use crate::reminder::{Reminders, RemindersChangeSender};
+use crate::user_awareness;
 
 const REMINDERS: &str = "reminders";
 const APPEARANCE_SETTINGS: &str = "appearance_settings";
@@ -22,16 +23,16 @@ const APPEARANCE_SETTINGS: &str = "appearance_settings";
 /// This structure uses an `Arc<Mutex<T>>` pattern to ensure that the underlying `UserAwareness`
 /// can be safely shared and mutated across multiple threads.
 #[derive(Clone)]
-pub struct MutexUserAwareness(Arc<Mutex<UserAwareness>>);
+pub struct MutexUserAwareness(Arc<UserAwareness>);
 impl MutexUserAwareness {
   pub fn new(inner: UserAwareness) -> Self {
     #[allow(clippy::arc_with_non_send_sync)]
-    Self(Arc::new(Mutex::new(inner)))
+    Self(Arc::new(inner))
   }
 }
 
 impl Deref for MutexUserAwareness {
-  type Target = Arc<Mutex<UserAwareness>>;
+  type Target = UserAwareness;
   fn deref(&self) -> &Self::Target {
     &self.0
   }
@@ -41,9 +42,9 @@ unsafe impl Sync for MutexUserAwareness {}
 unsafe impl Send for MutexUserAwareness {}
 
 pub struct UserAwareness {
-  inner: Arc<MutexCollab>,
+  inner: Arc<Collab>,
   #[allow(dead_code)]
-  container: MapRefWrapper,
+  container: MapRef,
   #[allow(dead_code)]
   appearance_settings: AppearanceSettings,
   reminders: Reminders,
@@ -71,29 +72,32 @@ impl UserAwareness {
   /// # Panics
   /// - This function might panic if it fails to lock the `collab` mutex.
   ///
-  pub fn create(collab: Arc<MutexCollab>, notifier: Option<UserAwarenessNotifier>) -> Self {
-    let collab_guard = collab.lock();
-    let (container, appearance_settings, reminders) =
-      collab_guard.with_origin_transact_mut(|txn| {
-        let awareness = collab_guard.insert_map_with_txn_if_not_exist(txn, USER_AWARENESS);
+  pub async fn create(collab: Arc<Collab>, notifier: Option<UserAwarenessNotifier>) -> Self {
+    let collab_guard = collab.write().await;
+    let (container, appearance_settings, reminders) = {
+      let mut txn = collab_guard.transact_mut();
+      let awareness = collab_guard.insert_map_with_txn_if_not_exist(&mut txn, USER_AWARENESS);
 
-        let appearance_settings_container =
-          awareness.create_map_with_txn_if_not_exist(txn, APPEARANCE_SETTINGS);
-        let appearance_settings = AppearanceSettings {
-          container: appearance_settings_container,
-        };
+      let appearance_settings_container =
+        awareness.create_map_with_txn_if_not_exist(&mut txn, APPEARANCE_SETTINGS);
+      let appearance_settings = AppearanceSettings {
+        container: appearance_settings_container,
+      };
 
-        let reminder_container =
-          awareness.create_array_if_not_exist_with_txn::<MapPrelim<Any>, _>(txn, REMINDERS, vec![]);
-        let reminders = Reminders::new(
-          reminder_container,
-          notifier
-            .as_ref()
-            .map(|notifier| notifier.reminder_change_tx.clone()),
-        );
+      let reminder_container = awareness.create_array_if_not_exist_with_txn::<MapPrelim<Any>, _>(
+        &mut txn,
+        REMINDERS,
+        vec![],
+      );
+      let reminders = Reminders::new(
+        reminder_container,
+        notifier
+          .as_ref()
+          .map(|notifier| notifier.reminder_change_tx.clone()),
+      );
 
-        (awareness, appearance_settings, reminders)
-      });
+      (awareness, appearance_settings, reminders)
+    };
     drop(collab_guard);
     Self::new(collab, container, appearance_settings, reminders, notifier)
   }
@@ -107,11 +111,15 @@ impl UserAwareness {
   /// If the user awareness attributes are not present, it logs an informational message and
   /// proceeds to create them. The method encapsulates the logic to seamlessly handle existing
   /// or missing attributes, offering a single point of access.
-  pub fn open(collab: Arc<MutexCollab>, notifier: Option<UserAwarenessNotifier>) -> Self {
-    Self::try_open(collab.clone(), notifier.clone()).unwrap_or_else(|| {
-      tracing::info!("Create missing attributes of user awareness");
-      Self::create(collab, notifier)
-    })
+  pub async fn open(collab: Arc<Collab>, notifier: Option<UserAwarenessNotifier>) -> Self {
+    let user_awareness = Self::try_open(collab.clone(), notifier.clone()).await;
+    match user_awareness {
+      None => {
+        tracing::info!("Create missing attributes of user awareness");
+        Self::create(collab, notifier).await
+      },
+      Some(user_awareness) => user_awareness,
+    }
   }
 
   pub fn close(&self) {
@@ -132,8 +140,8 @@ impl UserAwareness {
   /// - `notifier`: An optional notifier for user awareness changes.
   ///
   fn new(
-    inner: Arc<MutexCollab>,
-    container: MapRefWrapper,
+    inner: Arc<Collab>,
+    container: MapRef,
     appearance_settings: AppearanceSettings,
     reminders: Reminders,
     notifier: Option<UserAwarenessNotifier>,
@@ -152,16 +160,16 @@ impl UserAwareness {
   /// This private method attempts to access existing user awareness attributes, including
   /// appearance settings and reminders. If all attributes are found, an instance is
   /// returned. Otherwise, it returns `None`.
-  fn try_open(collab: Arc<MutexCollab>, notifier: Option<UserAwarenessNotifier>) -> Option<Self> {
-    let collab_guard = collab.lock();
+  async fn try_open(collab: Arc<Collab>, notifier: Option<UserAwarenessNotifier>) -> Option<Self> {
+    let collab_guard = collab.read().await;
     let txn = collab_guard.transact();
-    let awareness = collab_guard.get_map_with_txn(&txn, vec![USER_AWARENESS])?;
+    let awareness: MapRef = collab_guard.get_with_path(&txn, [USER_AWARENESS])?;
     let appearance_settings = AppearanceSettings {
-      container: awareness.get_map_with_txn(&txn, APPEARANCE_SETTINGS)?,
+      container: awareness.get_with_txn(&txn, APPEARANCE_SETTINGS)?,
     };
 
     let reminders = Reminders::new(
-      awareness.get_array_ref_with_txn(&txn, REMINDERS)?,
+      awareness.get_with_txn(&txn, REMINDERS)?,
       notifier
         .as_ref()
         .map(|notifier| notifier.reminder_change_tx.clone()),
@@ -191,7 +199,7 @@ impl UserAwareness {
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
-    self.inner.lock().subscribe_sync_state()
+    self.inner.subscribe_sync_state()
   }
 
   /// Adds a new reminder to the `UserAwareness` object.
