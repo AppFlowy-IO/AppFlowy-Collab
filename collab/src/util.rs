@@ -66,6 +66,21 @@ pub fn any_to_json_value(any: Any) -> Result<Value> {
   Ok(json_value)
 }*/
 
+use yrs::{Map, ReadTxn, Value};
+
+pub trait MapExt: Map {
+  fn get_with_txn<T, V>(&self, txn: &T, key: &str) -> Option<V>
+  where
+    T: ReadTxn,
+    V: TryFrom<Value, Error = Value>,
+  {
+    let value = self.get(txn, key)?;
+    V::try_from(value).ok()
+  }
+}
+
+impl<T: Map> MapExt for T {}
+
 macro_rules! create_deserialize_numeric {
   ($type:ty, $visitor_name:ident, $deserialize_fn_name:ident) => {
     pub fn $deserialize_fn_name<'de, D>(deserializer: D) -> Result<$type, D::Error>

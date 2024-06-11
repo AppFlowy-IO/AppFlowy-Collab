@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::Collab;
@@ -90,12 +89,12 @@ pub fn default_document_data() -> DocumentData {
 /// of the document.
 pub fn default_document_collab_data(document_id: &str) -> Result<EncodedCollab, DocumentError> {
   let document_data = default_document_data();
-  let collab = Arc::new(MutexCollab::new(Collab::new_with_origin(
+  let collab = Arc::new(Collab::new_with_origin(
     CollabOrigin::Empty,
     document_id,
     vec![],
     false,
-  )));
+  ));
   let _ = Document::create_with_data(collab.clone(), document_data);
   let lock_guard = collab.lock();
   lock_guard.encode_collab_v1(|collab| {

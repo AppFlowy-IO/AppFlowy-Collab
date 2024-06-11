@@ -6,7 +6,8 @@ use crate::define::{
   DATABASE, DATABASE_ID, DATABASE_ROW_DATA, DOCUMENT_ROOT, FOLDER, FOLDER_META,
   FOLDER_WORKSPACE_ID, USER_AWARENESS, WORKSPACE_DATABASES,
 };
-use collab::preclude::Collab;
+use collab::core::collab::{CollabRead, CollabReadOps, OwnedCollab};
+use collab::preclude::{ArrayRef, MapExt, MapRef};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 /// The type of the collab object. It will be used to determine what kind of services should be
@@ -51,37 +52,37 @@ impl CollabType {
   /// - `Ok(())` if the collab object contains all the required data for its type.
   /// - `Err(Error)` if the required data is missing or if the collab object does not meet
   ///   the validation criteria for its type.
-  pub fn validate_require_data(&self, collab: &Collab) -> Result<(), Error> {
-    let txn = collab.try_transaction()?;
+  pub fn validate_require_data(&self, collab: &OwnedCollab<CollabRead>) -> Result<(), Error> {
+    let txn = collab.transact();
     match self {
       CollabType::Document => {
-        collab
-          .get_map_with_txn(&txn, vec![DOCUMENT_ROOT])
+        let _: MapRef = collab
+          .get_with_path(&txn, [DOCUMENT_ROOT])
           .ok_or_else(|| no_required_data_error(self, DOCUMENT_ROOT))?;
         Ok(())
       },
       CollabType::Database => {
-        let database = collab
-          .get_map_with_txn(&txn, vec![DATABASE])
+        let database: MapRef = collab
+          .get_with_path(&txn, [DATABASE])
           .ok_or_else(|| no_required_data_error(self, DATABASE))?;
 
-        database
-          .get_str_with_txn(&txn, DATABASE_ID)
+        let _: String = database
+          .get_with_txn(&txn, DATABASE_ID)
           .ok_or_else(|| no_required_data_error(self, DATABASE_ID))?;
         Ok(())
       },
       CollabType::WorkspaceDatabase => {
-        let _ = collab
-          .get_array_with_txn(&txn, vec![WORKSPACE_DATABASES])
+        let _: ArrayRef = collab
+          .get_with_path(&txn, [WORKSPACE_DATABASES])
           .ok_or_else(|| no_required_data_error(self, WORKSPACE_DATABASES))?;
         Ok(())
       },
       CollabType::Folder => {
-        let meta = collab
-          .get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])
+        let meta: MapRef = collab
+          .get_with_path(&txn, [FOLDER, FOLDER_META])
           .ok_or_else(|| no_required_data_error(self, FOLDER_META))?;
-        let current_workspace = meta
-          .get_str_with_txn(&txn, FOLDER_WORKSPACE_ID)
+        let current_workspace: String = meta
+          .get_with_txn(&txn, FOLDER_WORKSPACE_ID)
           .ok_or_else(|| no_required_data_error(self, FOLDER_WORKSPACE_ID))?;
 
         if current_workspace.is_empty() {
@@ -91,14 +92,14 @@ impl CollabType {
         }
       },
       CollabType::DatabaseRow => {
-        collab
-          .get_map_with_txn(&txn, vec![DATABASE_ROW_DATA])
+        let _: MapRef = collab
+          .get_with_path(&txn, [DATABASE_ROW_DATA])
           .ok_or_else(|| no_required_data_error(self, DATABASE_ROW_DATA))?;
         Ok(())
       },
       CollabType::UserAwareness => {
-        collab
-          .get_map_with_txn(&txn, vec![USER_AWARENESS])
+        let _: MapRef = collab
+          .get_with_path(&txn, [USER_AWARENESS])
           .ok_or_else(|| no_required_data_error(self, USER_AWARENESS))?;
         Ok(())
       },
@@ -111,11 +112,13 @@ impl CollabType {
 /// Ensures that the workspace ID contained in each Folder matches the expected workspace ID.
 /// A mismatch indicates that the Folder data may be incorrect, potentially due to it being
 /// overridden with data from another Folder.
-pub fn validate_data_for_folder(collab: &Collab, workspace_id: &str) -> Result<(), Error> {
+pub fn validate_data_for_folder(
+  collab: &OwnedCollab<CollabRead>,
+  workspace_id: &str,
+) -> Result<(), Error> {
   let txn = collab.transact();
-  let workspace_id_in_collab = collab
-    .get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])
-    .and_then(|map| map.get_str_with_txn(&txn, FOLDER_WORKSPACE_ID))
+  let workspace_id_in_collab: String = collab
+    .get_with_path(&txn, [FOLDER, FOLDER_META, FOLDER_WORKSPACE_ID])
     .ok_or_else(|| anyhow!("No required data: FOLDER_WORKSPACE_ID"))?;
   drop(txn);
 

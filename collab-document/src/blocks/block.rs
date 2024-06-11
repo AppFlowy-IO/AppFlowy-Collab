@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{Map, MapRef, ReadTxn, TransactionMut};
 use serde_json::Value;
 
 use crate::blocks::{hashmap_to_json_str, json_str_to_hashmap, Block, ChildrenOperation};

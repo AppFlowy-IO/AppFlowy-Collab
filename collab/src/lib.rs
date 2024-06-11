@@ -30,4 +30,5 @@ pub mod preclude {
 
   pub use crate::core::collab::{Collab, CollabBuilder};
   pub use crate::core::collab_plugin::CollabPlugin;
+  pub use crate::util::MapExt;
 }
