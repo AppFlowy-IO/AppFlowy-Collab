@@ -87,6 +87,9 @@ pub struct CollabData {
   pub undo_manager: Option<UndoManager>,
 }
 
+unsafe impl Send for CollabData {}
+unsafe impl Sync for CollabData {}
+
 impl CollabData {
   pub(crate) fn doc(&self) -> &Doc {
     self.awareness.doc()

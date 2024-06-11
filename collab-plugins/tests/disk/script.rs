@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use collab::core::collab::MutexCollab;
 use collab::preclude::*;
 
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -10,6 +9,7 @@ use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 
+use collab::core::collab::CollabReadOps;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
@@ -56,7 +56,7 @@ pub enum Script {
 
 pub struct CollabPersistenceTest {
   pub uid: i64,
-  collab_by_id: HashMap<String, Arc<MutexCollab>>,
+  collab_by_id: HashMap<String, Arc<Collab>>,
   #[allow(dead_code)]
   cleaner: Cleaner,
   #[allow(dead_code)]
@@ -97,8 +97,8 @@ impl CollabPersistenceTest {
     );
     let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), &doc_id, CollabType::Document)
       as Box<dyn CollabPlugin>;
-    collab.lock().add_plugin(disk_plugin);
-    collab.lock().initialize();
+    collab.add_plugin(disk_plugin);
+    collab.write().await.initialize();
 
     self.collab_by_id.insert(doc_id, collab);
   }
@@ -109,7 +109,8 @@ impl CollabPersistenceTest {
       .get(doc_id)
       .as_ref()
       .unwrap()
-      .lock()
+      .write()
+      .await
       .enable_undo_redo();
   }
 
@@ -119,7 +120,8 @@ impl CollabPersistenceTest {
       .get(id)
       .as_ref()
       .unwrap()
-      .lock()
+      .write()
+      .await
       .insert(&key, value);
   }
 
@@ -133,7 +135,7 @@ impl CollabPersistenceTest {
     let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), id, CollabType::Document)
       as Box<dyn CollabPlugin>;
 
-    let mut lock_guard = collab.lock();
+    let mut lock_guard = collab.write().await;
     lock_guard.add_plugin(disk_plugin);
     lock_guard.initialize();
 
@@ -147,7 +149,8 @@ impl CollabPersistenceTest {
       .get(id)
       .as_ref()
       .unwrap()
-      .lock()
+      .write()
+      .await
       .undo()
       .unwrap();
   }
@@ -158,7 +161,8 @@ impl CollabPersistenceTest {
       .get(id)
       .as_ref()
       .unwrap()
-      .lock()
+      .write()
+      .await
       .redo()
       .unwrap();
   }
@@ -174,7 +178,7 @@ impl CollabPersistenceTest {
             .build()
             .unwrap(),
         );
-        collab.lock().initialize();
+        collab.write().await.initialize();
         self.collab_by_id.insert(id, collab);
       },
       Script::OpenDocument { id } => {
@@ -191,7 +195,7 @@ impl CollabPersistenceTest {
           .with_plugin(disk_plugin)
           .build()
           .unwrap();
-        collab.lock().initialize();
+        collab.write().await.initialize();
         self.collab_by_id.insert(id, Arc::new(collab));
       },
       Script::DeleteDocument { id } => {
@@ -204,10 +208,10 @@ impl CollabPersistenceTest {
         self.insert(&id, key, value).await;
       },
       Script::GetValue { id, key, expected } => {
-        let collab = self.collab_by_id.get(&id).unwrap().lock();
+        let collab = self.collab_by_id.get(&id).unwrap().read().await;
         let txn = collab.transact();
         let text = collab
-          .get(&key)
+          .get_with_txn(&txn, &key)
           .map(|value| value.to_string(&txn))
           .map(|value| Any::String(Arc::from(value)));
         assert_eq!(text, expected)

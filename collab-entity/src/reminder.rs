@@ -166,34 +166,37 @@ pub const REMINDER_MESSAGE: &str = "message";
 pub const REMINDER_META: &str = "meta";
 
 fn reminder_from_map<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Result<Reminder> {
-  let id = map_ref
-    .get_str_with_txn(txn, REMINDER_ID)
+  let id: String = map_ref
+    .get_with_txn(txn, REMINDER_ID)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_ID))?;
-  let object_id = map_ref
-    .get_str_with_txn(txn, REMINDER_OBJECT_ID)
+  let object_id: String = map_ref
+    .get_with_txn(txn, REMINDER_OBJECT_ID)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_OBJECT_ID))?;
-  let scheduled_at = map_ref
-    .get_i64_with_txn(txn, REMINDER_SCHEDULED_AT)
+  let scheduled_at: i64 = map_ref
+    .get_with_txn(txn, REMINDER_SCHEDULED_AT)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_SCHEDULED_AT))?;
-  let is_ack = map_ref
-    .get_bool_with_txn(txn, REMINDER_IS_ACK)
+  let is_ack: bool = map_ref
+    .get_with_txn(txn, REMINDER_IS_ACK)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_IS_ACK))?;
-  let is_read = map_ref
-    .get_bool_with_txn(txn, REMINDER_IS_READ)
+  let is_read: bool = map_ref
+    .get_with_txn(txn, REMINDER_IS_READ)
     .unwrap_or_default();
-  let ty = map_ref
-    .get_i64_with_txn(txn, REMINDER_TY)
+  let ty: i64 = map_ref
+    .get_with_txn(txn, REMINDER_TY)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_TY))?;
-  let title = map_ref
-    .get_str_with_txn(txn, REMINDER_TITLE)
+  let title: String = map_ref
+    .get_with_txn(txn, REMINDER_TITLE)
     .unwrap_or_default();
-  let message = map_ref
-    .get_str_with_txn(txn, REMINDER_MESSAGE)
+  let message: String = map_ref
+    .get_with_txn(txn, REMINDER_MESSAGE)
     .unwrap_or_default();
 
   let meta = map_ref
-    .get_any_with_txn(txn, REMINDER_META)
-    .map(ReminderMeta::from)
+    .get(txn, REMINDER_META)
+    .map(|value| match value {
+      Value::Any(any) => ReminderMeta::from(any),
+      _ => ReminderMeta::default(),
+    })
     .unwrap_or_default();
 
   Ok(Reminder {

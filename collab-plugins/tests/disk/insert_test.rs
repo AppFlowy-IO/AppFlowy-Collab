@@ -1,6 +1,7 @@
 use crate::disk::script::Script::*;
 use crate::disk::script::{disk_plugin_with_db, CollabPersistenceTest};
 use assert_json_diff::assert_json_eq;
+use collab::core::collab::CollabReadOps;
 use collab::preclude::CollabBuilder;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
@@ -51,22 +52,20 @@ async fn flush_test() {
       .build()
       .unwrap(),
   );
-  collab.lock().initialize();
+  let mut lock_guard = collab.write().await;
+  lock_guard.initialize();
   for i in 0..100 {
-    collab.lock().insert(&i.to_string(), i.to_string());
+    lock_guard.insert(&i.to_string(), i.to_string());
   }
-  let lock_guard = collab.lock();
   let before_flush_value = lock_guard.to_json_value();
   drop(lock_guard);
 
   let read = test.db.read_txn();
   let before_flush_updates = read.get_all_updates(test.uid, &doc_id).unwrap();
-  collab.lock().flush();
+  collab.write().await.flush();
   let after_flush_updates = read.get_all_updates(test.uid, &doc_id).unwrap();
 
-  let lock_guard = collab.lock();
-  let after_flush_value = lock_guard.to_json_value();
-  drop(lock_guard);
+  let after_flush_value = collab.read().await.to_json_value();
   assert_eq!(before_flush_updates.len(), 100);
   assert_eq!(after_flush_updates.len(), 0);
   assert_json_eq!(before_flush_value, after_flush_value);
