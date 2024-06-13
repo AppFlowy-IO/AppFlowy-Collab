@@ -66,11 +66,24 @@ pub fn any_to_json_value(any: Any) -> Result<Value> {
   Ok(json_value)
 }*/
 
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::sync::Arc;
 
+use crate::core::collab::Path;
+use crate::core::value::Entity;
+use crate::error::CollabError;
+use yrs::block::Prelim;
+use yrs::branch::BranchPtr;
+use yrs::types::ToJson;
 use yrs::{Any, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, ReadTxn, TransactionMut, Value};
 
 pub trait MapExt: Map {
+  #[inline]
+  fn as_map(&self) -> MapRef {
+    MapRef::from(BranchPtr::from(self.as_ref()))
+  }
+
   fn get_with_txn<T, V>(&self, txn: &T, key: &str) -> Option<V>
   where
     T: ReadTxn,
@@ -95,9 +108,107 @@ pub trait MapExt: Map {
       _ => self.insert(txn, key, ArrayPrelim::default()),
     }
   }
+
+  #[inline]
+  fn get_with_path<P, T, V>(&self, txn: &T, path: P) -> Option<V>
+  where
+    P: Into<Path>,
+    T: ReadTxn,
+    V: TryFrom<Value, Error = Value>,
+  {
+    let value = self.get_value_with_path(txn, path)?;
+    value.cast::<V>().ok()
+  }
+
+  fn get_value_with_path<P, T>(&self, txn: &T, path: P) -> Option<Value>
+  where
+    P: Into<Path>,
+    T: ReadTxn,
+  {
+    let mut current = self.as_map();
+    let mut path = path.into();
+    let last = path.pop()?;
+    for field in path {
+      current = current.get(txn, &field)?.cast().ok()?;
+    }
+    current.get(txn, &last)
+  }
+
+  fn insert_json_with_path<P, V>(
+    &self,
+    txn: &mut TransactionMut,
+    path: P,
+    value: V,
+  ) -> Result<(), CollabError>
+  where
+    P: Into<Path>,
+    V: Serialize,
+  {
+    let value = serde_json::to_value(value)?;
+    self.insert_with_path(txn, path, Entity::from(value))?;
+    Ok(())
+  }
+
+  fn get_json_with_path<T, P, V>(&self, txn: &T, path: P) -> Result<V, CollabError>
+  where
+    T: ReadTxn,
+    P: Into<Path>,
+    V: DeserializeOwned,
+  {
+    let value = self
+      .get_value_with_path(txn, path)
+      .ok_or(CollabError::UnexpectedEmpty(
+        "value not found on path".to_string(),
+      ))?;
+    let value = serde_json::to_value(value.to_json(txn))?;
+    Ok(serde_json::from_value(value)?)
+  }
+
+  fn insert_with_path<P, V>(
+    &self,
+    txn: &mut TransactionMut,
+    path: P,
+    value: V,
+  ) -> Result<V::Return, CollabError>
+  where
+    P: Into<Path>,
+    V: Prelim,
+  {
+    let mut current = self.as_map();
+    let mut path = path.into();
+    let last = match path.pop() {
+      Some(field) => field,
+      None => return Err(CollabError::NoRequiredData("empty path".into())),
+    };
+    for field in path {
+      current = match current.get(txn, &field) {
+        None => current.insert(txn, field, MapPrelim::<Any>::new()),
+        Some(value) => value
+          .cast()
+          .map_err(|_| CollabError::NoRequiredData(field))?,
+      };
+    }
+    Ok(current.insert(txn, last, value))
+  }
+
+  fn remove_with_path<P>(&self, txn: &mut TransactionMut<'_>, path: P) -> Option<Value>
+  where
+    P: Into<Path>,
+  {
+    let mut path = path.into();
+    if path.is_empty() {
+      return None;
+    }
+    let last = path.pop()?;
+    let mut current = self.as_map();
+    for field in path {
+      current = current.get(txn, &field)?.cast().ok()?;
+    }
+    current.remove(txn, &last)
+  }
 }
 
-impl<T: Map> MapExt for T {}
+impl<T: Map + Into<MapRef>> MapExt for T {}
 
 macro_rules! create_deserialize_numeric {
   ($type:ty, $visitor_name:ident, $deserialize_fn_name:ident) => {

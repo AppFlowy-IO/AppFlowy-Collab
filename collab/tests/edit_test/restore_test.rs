@@ -1,10 +1,10 @@
 #![allow(clippy::all)]
 
 use assert_json_diff::assert_json_eq;
-use collab::core::collab::{CollabBuilder, CollabReadOps, CollabWrite, OwnedCollab};
+use collab::core::collab::CollabBuilder;
 use collab::core::origin::CollabOrigin;
 
-use collab::preclude::{Collab, CollabPlugin};
+use collab::preclude::{Collab, CollabPlugin, MapExt};
 use serde_json::json;
 
 use std::sync::{Arc, Mutex};
@@ -22,14 +22,12 @@ use crate::util::{setup_log, CollabStateCachePlugin};
 
 #[tokio::test]
 async fn restore_from_update() {
-  let collab_1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let mut c1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
   let plugin = ReceiveUpdatesPlugin::default();
-  collab_1.add_plugin(Box::new(plugin.clone()));
-  let mut c1 = collab_1.write().await;
+  c1.add_plugin(Box::new(plugin.clone()));
   c1.initialize();
 
-  let collab_2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
-  let mut c2 = collab_2.write().await;
+  let mut c2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
   c2.initialize();
 
   c1.insert("1", "a");
@@ -50,14 +48,12 @@ async fn restore_from_update() {
 
 #[tokio::test]
 async fn missing_update_test() {
-  let collab_1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let mut c1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
   let plugin = ReceiveUpdatesPlugin::default();
-  collab_1.add_plugin(Box::new(plugin.clone()));
-  let mut c1 = collab_1.write().await;
+  c1.add_plugin(Box::new(plugin.clone()));
   c1.initialize();
 
-  let collab_2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
-  let mut c2 = collab_2.write().await;
+  let mut c2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
   c2.initialize();
 
   c1.insert("1", "a".to_string());
@@ -104,23 +100,20 @@ async fn missing_update_test() {
 #[tokio::test]
 async fn simulate_client_missing_server_broadcast_data_test() {
   // Initialize clients and server with the same origin and test conditions.
-  let client_1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
-  let mut c1 = client_1.write().await;
+  let mut c1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
   c1.initialize();
-  let client_2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
-  let mut c2 = client_2.write().await;
+  let mut c2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
   c2.initialize();
-  let server = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
-  let mut s = server.write().await;
-  s.initialize();
+  let mut server = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  server.initialize();
 
   // Perform initial synchronization to simulate starting conditions.
-  init_sync(&mut c1, &s);
-  init_sync(&mut c2, &s);
+  init_sync(&mut c1, &server);
+  init_sync(&mut c2, &server);
 
   // Plugins to capture updates for testing.
   let client_1_plugin = ReceiveUpdatesPlugin::default();
-  client_1.add_plugin(Box::new(client_1_plugin.clone()));
+  c1.add_plugin(Box::new(client_1_plugin.clone()));
 
   let server_plugin = ReceiveUpdatesPlugin::default();
   server.add_plugin(Box::new(server_plugin.clone()));
@@ -144,14 +137,14 @@ async fn simulate_client_missing_server_broadcast_data_test() {
   // Split the updates into two parts and simulate partial reception by the server.
   let (first, second) = client_1_updates.split_at(3);
   {
-    let mut txn = s.transact_mut();
+    let mut txn = server.transact_mut();
     for update in first {
       let update = Update::decode_v1(&update).unwrap();
       txn.apply_update(update);
     }
   }
   assert_eq!(
-    s.to_json_value(),
+    server.to_json_value(),
     json!({"1": "a", "2": "b", "3": "c"}),
     "server applied first 3 updates"
   );
@@ -162,14 +155,14 @@ async fn simulate_client_missing_server_broadcast_data_test() {
 
   // Server applies the second part of updates.
   {
-    let mut txn = s.transact_mut();
+    let mut txn = server.transact_mut();
     for update in second {
       let update = Update::decode_v1(&update).unwrap();
       txn.apply_update(update);
     }
   }
   assert_eq!(
-    s.to_json_value(),
+    server.to_json_value(),
     json!( {"1": "a", "2": "b", "3": "c", "4": "d", "5": "e"}),
     "server applied remaining 2 updates, having a complete state now"
   );
@@ -195,7 +188,8 @@ async fn simulate_client_missing_server_broadcast_data_test() {
 
   // Encode the missing state as an update and apply it to client 2 to resolve the missing updates.
   let missing_update = Update::decode_v1(
-    &s.transact()
+    &server
+      .transact()
       .encode_state_as_update_v1(&c2.transact().state_vector()),
   )
   .unwrap();
@@ -204,7 +198,7 @@ async fn simulate_client_missing_server_broadcast_data_test() {
 
   // Ensure all clients and the server have synchronized states.
   assert_eq!(c1.to_json_value(), c2.to_json_value());
-  assert_eq!(c1.to_json_value(), s.to_json_value());
+  assert_eq!(c1.to_json_value(), server.to_json_value());
 
   // Final verification against a static expected JSON value.
   assert_json_eq!(
@@ -222,8 +216,7 @@ async fn simulate_client_missing_server_broadcast_data_test() {
 #[tokio::test]
 async fn simulate_client_missing_server_broadcast_data_test2() {
   // Initialize clients and server with the same origin and test conditions.
-  let client_1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], true);
-  let mut client_1 = client_1.write().await;
+  let mut client_1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], true);
   client_1.initialize();
   let plugin_1 = ReceiveUpdatesPlugin::default();
   client_1.add_plugin(Box::new(plugin_1.clone()));
@@ -231,8 +224,7 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
   client_1.insert("2", "b".to_string());
   client_1.insert("3", "c".to_string());
 
-  let client_2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], true);
-  let mut client_2 = client_2.write().await;
+  let mut client_2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], true);
   client_2.initialize();
   let plugin_2 = ReceiveUpdatesPlugin::default();
   client_2.add_plugin(Box::new(plugin_2.clone()));
@@ -243,8 +235,7 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
   let update_1 = plugin_1.take_updates();
   let update_2 = plugin_2.take_updates();
 
-  let server = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
-  let mut server = server.write().await;
+  let mut server = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
   server.initialize();
 
   // Split the updates into two parts and simulate partial reception by the server.
@@ -323,28 +314,28 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
 
 #[tokio::test]
 async fn init_sync_test() {
-  let client_1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
-  let mut client_1 = client_1.write().await;
+  let mut client_1 =
+    Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
   client_1.initialize();
 
   // client 1 edit
   {
-    let mut txn = client_1.transact_mut();
+    let mut txn = client_1.context.transact_mut();
     client_1
+      .data
       .insert_json_with_path(&mut txn, ["map"], json!({}))
       .unwrap();
-    let outer_map: MapRef = client_1.get_with_path(&txn, ["map"]).unwrap();
+    let outer_map: MapRef = client_1.data.get_with_path(&txn, ["map"]).unwrap();
     outer_map.insert(&mut txn, "1", "a");
     outer_map.insert(&mut txn, "array", ArrayPrelim::default());
   }
 
-  let client_2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
-  let mut client_2 = client_2.write().await;
+  let mut client_2 =
+    Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
   client_2.initialize();
 
-  let server_collab =
+  let mut server_collab =
     Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
-  let mut server_collab = server_collab.write().await;
   server_collab.initialize();
 
   init_sync(&mut server_collab, &client_1);
@@ -354,9 +345,9 @@ async fn init_sync_test() {
   assert_eq!(client_2.to_json(), server_collab.to_json());
 }
 
-fn init_sync(destination: &mut OwnedCollab<CollabWrite>, source: &OwnedCollab<CollabWrite>) {
+fn init_sync(destination: &mut Collab, source: &Collab) {
   let source_tx = source.transact();
-  let mut dest_tx = destination.transact_mut();
+  let mut dest_tx = destination.context.transact_mut();
 
   let timestamp = dest_tx.state_vector();
   let update = source_tx.encode_state_as_update_v1(&timestamp);
@@ -367,18 +358,18 @@ fn init_sync(destination: &mut OwnedCollab<CollabWrite>, source: &OwnedCollab<Co
 #[tokio::test]
 async fn restore_from_multiple_update() {
   let update_cache = CollabStateCachePlugin::new();
-  let collab = CollabBuilder::new(1, "1")
+  let mut collab = CollabBuilder::new(1, "1")
     .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
-  let mut collab = collab.write().await;
   collab.initialize();
 
   // Insert map
   {
-    let mut tx = collab.transact_mut();
+    let mut tx = collab.context.transact_mut();
     collab
+      .data
       .insert_json_with_path(
         &mut tx,
         ["bullet"],
@@ -396,28 +387,26 @@ async fn restore_from_multiple_update() {
     .with_doc_state(updates)
     .build()
     .unwrap();
-  assert_eq!(collab.to_json(), restored_collab.read().await.to_json());
+  assert_eq!(collab.to_json(), restored_collab.to_json());
 }
 
 #[tokio::test]
 async fn apply_same_update_multiple_time() {
   let update_cache = CollabStateCachePlugin::new();
-  let collab = CollabBuilder::new(1, "1")
+  let mut collab = CollabBuilder::new(1, "1")
     .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
     .unwrap();
-  let mut collab = collab.write().await;
   collab.initialize();
   collab.insert("text", "hello world");
 
   let updates = update_cache.get_doc_state().unwrap();
-  let restored_collab = CollabBuilder::new(1, "1")
+  let mut restored_collab = CollabBuilder::new(1, "1")
     .with_device_id("1")
     .with_doc_state(updates)
     .build()
     .unwrap();
-  let mut restored_collab = restored_collab.write().await;
 
   // It's ok to apply the updates that were already applied
   let doc_state = update_cache.get_doc_state().unwrap();
@@ -430,33 +419,33 @@ async fn apply_same_update_multiple_time() {
 #[tokio::test]
 async fn root_change_test() {
   setup_log();
-  let collab_1 = CollabBuilder::new(1, "1")
+  let mut collab_1 = CollabBuilder::new(1, "1")
     .with_device_id("1")
     .build()
     .unwrap();
-  let mut collab_1 = collab_1.write().await;
   collab_1.initialize();
-  let collab_2 = CollabBuilder::new(1, "1")
+  let mut collab_2 = CollabBuilder::new(1, "1")
     .with_device_id("1")
     .build()
     .unwrap();
-  let mut collab_2 = collab_2.write().await;
   collab_2.initialize();
 
   {
     collab_1
-      .insert_json_with_path(&mut collab_1.transact_mut(), ["map"], json!({}))
+      .data
+      .insert_json_with_path(&mut collab_1.context.transact_mut(), ["map"], json!({}))
       .unwrap();
   }
   {
     collab_2
-      .insert_json_with_path(&mut collab_2.transact_mut(), ["map"], json!({}))
+      .data
+      .insert_json_with_path(&mut collab_2.context.transact_mut(), ["map"], json!({}))
       .unwrap();
   }
 
   let map_2 = {
-    let mut txn = collab_2.transact_mut();
-    let map_2: MapRef = collab_2.get_with_path(&txn, ["map"]).unwrap();
+    let mut txn = collab_2.context.transact_mut();
+    let map_2: MapRef = collab_2.data.get_with_path(&txn, ["map"]).unwrap();
     map_2.insert(&mut txn, "1", "a");
     map_2.insert(&mut txn, "2", "b");
     map_2
@@ -470,6 +459,7 @@ async fn root_change_test() {
     collab_1.apply_update(sv_1_update).unwrap();
 
     collab_1
+      .data
       .get_with_path(&collab_1.transact(), ["map"])
       .unwrap()
   };
