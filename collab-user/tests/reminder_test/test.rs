@@ -10,9 +10,9 @@ async fn add_reminder_test() {
   let reminder = Reminder::new("1".to_string(), "o1".to_string(), 123, ObjectType::Document)
     .with_key_value("block_id", "fake_block_id")
     .with_key_value("id", "fake_id");
-  test.lock().add_reminder(reminder);
+  test.add_reminder(reminder);
 
-  let json = test.lock().to_json().unwrap();
+  let json = test.to_json().unwrap();
   assert_json_eq!(
     json,
     json!({
@@ -43,16 +43,16 @@ async fn update_reminder_test() {
   let reminder = Reminder::new("1".to_string(), "o1".to_string(), 123, ObjectType::Document)
     .with_key_value("block_id", "fake_block_id")
     .with_key_value("id", "fake_id");
-  test.lock().add_reminder(reminder);
+  test.add_reminder(reminder);
 
-  test.lock().update_reminder("1", |reminder| {
+  test.update_reminder("1", |reminder| {
     reminder.title = "new title".to_string();
     reminder.message = "new message".to_string();
     reminder
       .meta
       .insert("block_id".to_string(), "fake_block_id2".to_string());
   });
-  let json = test.lock().to_json().unwrap();
+  let json = test.to_json().unwrap();
   assert_json_eq!(
     json,
     json!({
@@ -81,15 +81,15 @@ async fn update_reminder_test() {
 async fn delete_reminder_test() {
   let test = UserAwarenessTest::new(1).await;
   for i in 0..3 {
-    test.lock().add_reminder(Reminder::new(
+    test.add_reminder(Reminder::new(
       i.to_string(),
       "o1".to_string(),
       123,
       ObjectType::Document,
     ));
   }
-  test.lock().remove_reminder("1");
-  let json = test.lock().to_json().unwrap();
+  test.remove_reminder("1");
+  let json = test.to_json().unwrap();
   assert_json_eq!(
     json,
     json!( {

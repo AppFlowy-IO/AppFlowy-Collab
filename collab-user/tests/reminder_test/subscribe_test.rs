@@ -11,7 +11,7 @@ async fn subscribe_insert_reminder_test() {
   let cloned_test = test.clone();
   let cloned_reminder = reminder.clone();
   tokio::spawn(async move {
-    cloned_test.lock().add_reminder(cloned_reminder);
+    cloned_test.add_reminder(cloned_reminder);
   });
 
   let change = receive_with_timeout(&mut rx, std::time::Duration::from_secs(2))
@@ -37,12 +37,12 @@ async fn subscribe_delete_reminder_test() {
       123,
       ObjectType::Document,
     );
-    test.lock().add_reminder(reminder);
+    test.add_reminder(reminder);
   }
 
   let cloned_test = test.clone();
   tokio::spawn(async move {
-    cloned_test.lock().remove_reminder("1");
+    cloned_test.remove_reminder("1");
   });
 
   // Continuously receive changes until the change we want is received.

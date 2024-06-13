@@ -1,5 +1,7 @@
+use collab::preclude::encoding::serde::{from_any, to_any};
 use collab::preclude::{
-  Array, ArrayRef, Change, DeepObservable, Event, MapPrelim, Subscription, TransactionMut, YrsValue,
+  Any, Array, ArrayRef, Change, DeepObservable, Event, Map, MapPrelim, ReadTxn, Subscription,
+  ToJson, TransactionMut, Value, YrsValue,
 };
 use collab_entity::reminder::{Reminder, REMINDER_ID};
 use tokio::sync::broadcast;
@@ -29,41 +31,57 @@ impl Reminders {
     }
   }
 
-  pub fn remove(&self, id: &str) {
-    self.container.with_transact_mut(|txn| {
-      self.container.remove_with_id(txn, id, REMINDER_ID);
-    });
+  fn find<T: ReadTxn>(&self, txn: &T, reminder_id: &str) -> Option<(u32, Value)> {
+    let mut i = 0;
+    for value in self.container.iter(txn) {
+      if let Value::YMap(map) = &value {
+        if let Some(Value::Any(Any::String(str))) = map.get(txn, REMINDER_ID) {
+          if &*str == reminder_id {
+            return Some((i, value));
+          }
+        }
+      }
+      i += 1;
+    }
+    None
+  }
+
+  pub fn remove(&self, txn: &mut TransactionMut, id: &str) {
+    let (i, _) = self.find(txn, id).unwrap();
+    self.container.remove(txn, i);
   }
 
   pub fn add(&self, txn: &mut TransactionMut, reminder: Reminder) {
-    self
-      .container
-      .insert_map_with_txn(txn, Some(reminder.into()));
+    let map: MapPrelim<_> = reminder.into();
+    self.container.push_back(txn, map);
   }
 
-  pub fn update_reminder<F>(&self, reminder_id: &str, f: F)
+  pub fn update_reminder<F>(&self, txn: &mut TransactionMut, reminder_id: &str, f: F)
   where
     F: FnOnce(&mut Reminder),
   {
-    self.container.with_transact_mut(|txn| {
-      self
-        .container
-        .mut_map_element_with_txn(txn, reminder_id, REMINDER_ID, |txn, map| {
-          let mut reminder = Reminder::try_from((txn, map)).ok()?;
-          f(&mut reminder);
-          Some(MapPrelim::from(reminder))
-        });
-    });
+    if let Some((i, value)) = self.find(txn, reminder_id) {
+      if let Ok(mut reminder) = from_any::<Reminder>(&value.to_json(txn)) {
+        // FIXME: this is wrong. This doesn't "update" the reminder, instead it replaces it,
+        //   with all of the unchanged fields included. That means, that if two people will be
+        //   updating the same reminder at the same time, the last one will overwrite the changes
+        //   of the first one, even if there was no edit collisions.
+        f(&mut reminder);
+        self.container.remove(txn, i);
+        let any = to_any(&reminder).unwrap();
+        self.container.insert(txn, i, any);
+      }
+    }
   }
 
-  pub fn get_all_reminders(&self) -> Vec<Reminder> {
-    let txn = self.container.transact();
+  pub fn get_all_reminders<T: ReadTxn>(&self, txn: &T) -> Vec<Reminder> {
     self
       .container
-      .iter(&txn)
+      .iter(txn)
       .flat_map(|value| {
-        if let YrsValue::YMap(map) = value {
-          Reminder::try_from((&txn, map)).ok()
+        let json = value.to_json(txn);
+        if let Ok(reminder) = from_any::<Reminder>(&json) {
+          Some(reminder)
         } else {
           None
         }

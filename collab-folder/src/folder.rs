@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use collab::core::collab::{DataSource, IndexContentReceiver, MutexCollab};
+use collab::core::collab::{DataSource, IndexContentReceiver};
 use collab::core::collab_state::{SnapshotState, SyncState};
 pub use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
