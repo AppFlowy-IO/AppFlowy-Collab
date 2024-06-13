@@ -1,7 +1,6 @@
 use assert_matches2::assert_matches;
-use collab::preclude::Collab;
+use collab::preclude::{Collab, MapExt};
 
-use collab::core::collab::CollabReadOps;
 use collab::error::CollabError;
 use yrs::{Map, MapRef, Observable};
 
@@ -9,22 +8,21 @@ use crate::util::{Person, Position};
 
 #[tokio::test]
 async fn insert_text() {
-  let collab = Collab::new(1, "1", "1", vec![], false);
-  let _sub = collab.observe_data(|txn, event| {
+  let mut c = Collab::new(1, "1", "1", vec![], false);
+  let _sub = c.observe_data(|txn, event| {
     event.target().iter(txn).for_each(|(a, b)| {
       println!("{}: {}", a, b);
     });
   });
 
-  let c = collab.write().await;
-  c.insert_with_txn(&mut c.transact_mut(), "text", "hello world");
-  let s: String = c.get_with_path(&c.transact(), ["text"]).unwrap();
+  c.insert("text", "hello world");
+  let s: String = c.data.get_with_path(&c.transact(), ["text"]).unwrap();
   assert_eq!(s, "hello world".to_string());
 }
 
 #[tokio::test]
 async fn insert_json_attrs() {
-  let collab = Collab::new(1, "1", "1", vec![], false);
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   let object = Person {
     name: "nathan".to_string(),
     position: Position {
@@ -32,17 +30,23 @@ async fn insert_json_attrs() {
       level: 3,
     },
   };
-  let collab = collab.write().await;
   collab
-    .insert_json_with_path(&mut collab.transact_mut(), ["person"], object.clone())
+    .data
+    .insert_json_with_path(
+      &mut collab.context.transact_mut(),
+      ["person"],
+      object.clone(),
+    )
     .unwrap();
 
   let person: Person = collab
+    .data
     .get_json_with_path(&collab.transact(), ["person"])
     .unwrap();
   assert_eq!(person, object);
 
   let pos: Position = collab
+    .data
     .get_json_with_path(&collab.transact(), ["person", "position"])
     .unwrap();
   assert_eq!(pos, object.position);
@@ -50,7 +54,7 @@ async fn insert_json_attrs() {
 
 #[tokio::test]
 async fn observer_attr_mut() {
-  let collab = Collab::new(1, "1", "1", vec![], false);
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   let object = Person {
     name: "nathan".to_string(),
     position: Position {
@@ -58,12 +62,13 @@ async fn observer_attr_mut() {
       level: 3,
     },
   };
-  let collab = collab.write().await;
   collab
-    .insert_json_with_path(&mut collab.transact_mut(), ["person"], object)
+    .data
+    .insert_json_with_path(&mut collab.context.transact_mut(), ["person"], object)
     .unwrap();
 
   let map: MapRef = collab
+    .data
     .get_with_path(&collab.transact(), ["person", "position"])
     .unwrap();
   let _sub = map.observe(|txn, event| {
@@ -77,7 +82,7 @@ async fn observer_attr_mut() {
 
 #[tokio::test]
 async fn remove_value() {
-  let collab = Collab::new(1, "1", "1", vec![], false);
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   let object = Person {
     name: "nathan".to_string(),
     position: Position {
@@ -85,25 +90,29 @@ async fn remove_value() {
       level: 3,
     },
   };
-  let collab = collab.write().await;
   collab
-    .insert_json_with_path(&mut collab.transact_mut(), ["person"], object)
+    .data
+    .insert_json_with_path(&mut collab.context.transact_mut(), ["person"], object)
     .unwrap();
-  let map: Option<MapRef> = collab.get_with_path(&collab.transact(), ["person", "position"]);
+  let map: Option<MapRef> = collab
+    .data
+    .get_with_path(&collab.transact(), ["person", "position"]);
   assert!(map.is_some());
 
   collab
-    .remove_with_path(&mut collab.transact_mut(), ["person", "position"])
+    .data
+    .remove_with_path(&mut collab.context.transact_mut(), ["person", "position"])
     .unwrap();
 
-  let map: Option<MapRef> = collab.get_with_path(&collab.transact(), ["person", "position"]);
+  let map: Option<MapRef> = collab
+    .data
+    .get_with_path(&collab.transact(), ["person", "position"]);
   assert!(map.is_none());
 }
 
 #[tokio::test]
 async fn undo_single_insert_text() {
-  let collab = Collab::new(1, "1", "1", vec![], false);
-  let mut collab = collab.write().await;
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   collab.enable_undo_redo();
   collab.insert("text", "hello world");
 
@@ -123,8 +132,7 @@ async fn undo_single_insert_text() {
 
 #[tokio::test]
 async fn redo_single_insert_text() {
-  let collab = Collab::new(1, "1", "1", vec![], false);
-  let mut collab = collab.write().await;
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   collab.enable_undo_redo();
   collab.insert("text", "hello world");
 
@@ -146,8 +154,7 @@ async fn redo_single_insert_text() {
 
 #[tokio::test]
 async fn undo_manager_not_enable_test() {
-  let collab = Collab::new(1, "1", "1", vec![], false);
-  let mut collab = collab.write().await;
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   collab.insert("text", "hello world");
   let result = collab.undo();
   assert_matches!(result, Err(CollabError::UndoManagerNotEnabled));
@@ -155,8 +162,7 @@ async fn undo_manager_not_enable_test() {
 
 #[tokio::test]
 async fn undo_second_insert_text() {
-  let collab = Collab::new(1, "1", "1", vec![], false);
-  let mut collab = collab.write().await;
+  let mut collab = Collab::new(1, "1", "1", vec![], false);
   collab.insert("1", "a");
 
   collab.enable_undo_redo();

@@ -12,7 +12,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 use yrs::updates::decoder::Decode;
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct TaskInfo {
   pub title: String,
   pub repeated: bool,
@@ -76,7 +76,7 @@ impl CollabPlugin for CollabStateCachePlugin {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Document2 {
   doc_id: String,
   name: String,
@@ -86,6 +86,8 @@ pub struct Document2 {
 #[cfg(test)]
 mod tests {
   use crate::util::{Document2, TaskInfo};
+  use serde_json::json;
+  use std::collections::HashMap;
 
   #[test]
   fn test() {
@@ -104,11 +106,23 @@ mod tests {
     );
     let json = serde_json::to_value(&doc).unwrap();
     let tasks = &json["tasks"]["1"];
-    println!("{:?}", tasks);
+    assert_eq!(tasks, &json!({"repeated": false, "title": "Task 1"}));
 
     let a = serde_json::from_value::<Document2>(json).unwrap();
-
-    println!("{:?}", a);
+    assert_eq!(
+      a,
+      Document2 {
+        doc_id: "".to_string(),
+        name: "".to_string(),
+        tasks: HashMap::from([(
+          "1".to_string(),
+          TaskInfo {
+            title: "Task 1".to_string(),
+            repeated: false,
+          }
+        )]),
+      }
+    );
   }
 }
 
