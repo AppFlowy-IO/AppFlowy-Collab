@@ -66,7 +66,9 @@ pub fn any_to_json_value(any: Any) -> Result<Value> {
   Ok(json_value)
 }*/
 
-use yrs::{Map, ReadTxn, Value};
+use std::sync::Arc;
+
+use yrs::{Any, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, ReadTxn, TransactionMut, Value};
 
 pub trait MapExt: Map {
   fn get_with_txn<T, V>(&self, txn: &T, key: &str) -> Option<V>
@@ -76,6 +78,22 @@ pub trait MapExt: Map {
   {
     let value = self.get(txn, key)?;
     V::try_from(value).ok()
+  }
+
+  fn get_or_init_map<S: Into<Arc<str>>>(&self, txn: &mut TransactionMut, key: S) -> MapRef {
+    let key = key.into();
+    match self.get(txn, &key) {
+      Some(Value::YMap(map)) => map,
+      _ => self.insert(txn, key, MapPrelim::<Any>::new()),
+    }
+  }
+
+  fn get_or_init_array<S: Into<Arc<str>>>(&self, txn: &mut TransactionMut, key: S) -> ArrayRef {
+    let key = key.into();
+    match self.get(txn, &key) {
+      Some(Value::YArray(array)) => array,
+      _ => self.insert(txn, key, ArrayPrelim::default()),
+    }
   }
 }
 

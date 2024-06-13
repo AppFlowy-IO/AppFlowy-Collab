@@ -1,5 +1,5 @@
 use collab::preclude::{
-  Array, ArrayRef, Change, DeepObservable, Event, MapPrelim, Subscription, YrsValue,
+  Array, ArrayRef, Change, DeepObservable, Event, MapPrelim, Subscription, TransactionMut, YrsValue,
 };
 use collab_entity::reminder::{Reminder, REMINDER_ID};
 use tokio::sync::broadcast;
@@ -35,12 +35,10 @@ impl Reminders {
     });
   }
 
-  pub fn add(&self, reminder: Reminder) {
-    self.container.with_transact_mut(|txn| {
-      let _ = self
-        .container
-        .insert_map_with_txn(txn, Some(reminder.into()));
-    });
+  pub fn add(&self, txn: &mut TransactionMut, reminder: Reminder) {
+    self
+      .container
+      .insert_map_with_txn(txn, Some(reminder.into()));
   }
 
   pub fn update_reminder<F>(&self, reminder_id: &str, f: F)
