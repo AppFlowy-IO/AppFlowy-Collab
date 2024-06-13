@@ -32,7 +32,7 @@ use crate::core::transaction::DocTransactionExtension;
 use crate::core::value::Entity;
 use crate::entity::EncodedCollab;
 use crate::error::CollabError;
-use crate::preclude::JsonValue;
+use crate::preclude::{JsonValue, MapExt};
 
 pub const DATA_SECTION: &str = "data";
 pub const META_SECTION: &str = "meta";
@@ -482,6 +482,10 @@ impl<'a> OwnedCollab<'a, CollabWrite<'a>> {
     if let Some(state) = state {
       self.lock.awareness.set_local_state(state);
     }
+  }
+
+  pub fn insert_map_with_txn_if_not_exist(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
+    self.data.get_or_init_map(txn, key)
   }
 
   /// Upon calling this method, the [Collab]'s document will be initialized with the plugins. The callbacks from the plugins
