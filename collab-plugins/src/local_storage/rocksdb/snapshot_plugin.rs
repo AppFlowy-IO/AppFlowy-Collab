@@ -8,7 +8,6 @@ use crate::CollabKVDB;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
 
-use collab::core::collab::CollabReadOps;
 use yrs::{ReadTxn, StateVector};
 
 #[repr(u8)]
@@ -100,8 +99,7 @@ impl CollabSnapshot {
     state: Arc<AtomicU8>,
   ) -> Result<(), PersistenceError> {
     let result: Result<(), PersistenceError> = tokio::task::spawn_blocking(move || {
-      let collab = Collab::new(uid, object_id.clone(), "1", vec![], false);
-      let collab = collab.blocking_write();
+      let mut collab = Collab::new(uid, object_id.clone(), "1", vec![], false);
       db.read_txn()
         .load_doc_with_txn(uid, &object_id, &mut collab.transact_mut())?;
 

@@ -2,18 +2,16 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use collab::preclude::*;
-
-use collab_plugins::local_storage::CollabPersistenceConfig;
-
-use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
-
-use collab::core::collab::CollabReadOps;
-use collab_entity::CollabType;
-use collab_plugins::local_storage::kv::KVTransactionDB;
-use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
+use tokio::sync::RwLock;
+
+use collab::preclude::*;
+use collab_entity::CollabType;
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use collab_plugins::local_storage::kv::KVTransactionDB;
+use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::local_storage::CollabPersistenceConfig;
+use collab_plugins::CollabKVDB;
 
 use crate::setup_log;
 
@@ -56,7 +54,7 @@ pub enum Script {
 
 pub struct CollabPersistenceTest {
   pub uid: i64,
-  collab_by_id: HashMap<String, Arc<Collab>>,
+  collab_by_id: HashMap<String, Arc<RwLock<Collab>>>,
   #[allow(dead_code)]
   cleaner: Cleaner,
   #[allow(dead_code)]
@@ -89,18 +87,18 @@ impl CollabPersistenceTest {
   }
 
   pub async fn create_collab(&mut self, doc_id: String) {
-    let collab = Arc::new(
-      CollabBuilder::new(1, &doc_id)
-        .with_device_id("1")
-        .build()
-        .unwrap(),
-    );
+    let mut collab = CollabBuilder::new(1, &doc_id)
+      .with_device_id("1")
+      .build()
+      .unwrap();
     let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), &doc_id, CollabType::Document)
       as Box<dyn CollabPlugin>;
     collab.add_plugin(disk_plugin);
-    collab.write().await.initialize();
+    collab.initialize();
 
-    self.collab_by_id.insert(doc_id, collab);
+    self
+      .collab_by_id
+      .insert(doc_id, Arc::new(RwLock::new(collab)));
   }
 
   pub async fn enable_undo_redo(&self, doc_id: &str) {
@@ -126,20 +124,17 @@ impl CollabPersistenceTest {
   }
 
   pub async fn assert_collab(&mut self, id: &str, expected: JsonValue) {
-    let collab = Arc::new(
-      CollabBuilder::new(1, id)
-        .with_device_id("1")
-        .build()
-        .unwrap(),
-    );
+    let mut collab = CollabBuilder::new(1, id)
+      .with_device_id("1")
+      .build()
+      .unwrap();
     let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), id, CollabType::Document)
       as Box<dyn CollabPlugin>;
 
-    let mut lock_guard = collab.write().await;
-    lock_guard.add_plugin(disk_plugin);
-    lock_guard.initialize();
+    collab.add_plugin(disk_plugin);
+    collab.initialize();
 
-    let json = lock_guard.to_json_value();
+    let json = collab.to_json_value();
     assert_json_diff::assert_json_eq!(json, expected);
   }
 
@@ -171,15 +166,13 @@ impl CollabPersistenceTest {
     match script {
       Script::CreateDocumentWithCollabDB { id, db } => {
         let disk_plugin = disk_plugin_with_db(self.uid, db, &id, CollabType::Document);
-        let collab = Arc::new(
-          CollabBuilder::new(1, &id)
-            .with_device_id("1")
-            .with_plugin(disk_plugin)
-            .build()
-            .unwrap(),
-        );
-        collab.write().await.initialize();
-        self.collab_by_id.insert(id, collab);
+        let mut collab = CollabBuilder::new(1, &id)
+          .with_device_id("1")
+          .with_plugin(disk_plugin)
+          .build()
+          .unwrap();
+        collab.initialize();
+        self.collab_by_id.insert(id, Arc::new(RwLock::new(collab)));
       },
       Script::OpenDocument { id } => {
         self.create_collab(id).await;
@@ -190,13 +183,13 @@ impl CollabPersistenceTest {
       Script::OpenDocumentWithDiskPlugin { id } => {
         let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), &id, CollabType::Document);
 
-        let collab = CollabBuilder::new(1, &id)
+        let mut collab = CollabBuilder::new(1, &id)
           .with_device_id("1")
           .with_plugin(disk_plugin)
           .build()
           .unwrap();
-        collab.write().await.initialize();
-        self.collab_by_id.insert(id, Arc::new(collab));
+        collab.initialize();
+        self.collab_by_id.insert(id, Arc::new(RwLock::new(collab)));
       },
       Script::DeleteDocument { id } => {
         self
