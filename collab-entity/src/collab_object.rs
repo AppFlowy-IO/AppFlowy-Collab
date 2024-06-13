@@ -6,8 +6,7 @@ use crate::define::{
   DATABASE, DATABASE_ID, DATABASE_ROW_DATA, DOCUMENT_ROOT, FOLDER, FOLDER_META,
   FOLDER_WORKSPACE_ID, USER_AWARENESS, WORKSPACE_DATABASES,
 };
-use collab::core::collab::{CollabRead, CollabReadOps, OwnedCollab};
-use collab::preclude::{ArrayRef, MapExt, MapRef};
+use collab::preclude::{ArrayRef, Collab, MapExt, MapRef};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 /// The type of the collab object. It will be used to determine what kind of services should be
@@ -52,17 +51,19 @@ impl CollabType {
   /// - `Ok(())` if the collab object contains all the required data for its type.
   /// - `Err(Error)` if the required data is missing or if the collab object does not meet
   ///   the validation criteria for its type.
-  pub fn validate_require_data(&self, collab: &OwnedCollab<CollabRead>) -> Result<(), Error> {
+  pub fn validate_require_data(&self, collab: &Collab) -> Result<(), Error> {
     let txn = collab.transact();
     match self {
       CollabType::Document => {
         let _: MapRef = collab
+          .data
           .get_with_path(&txn, [DOCUMENT_ROOT])
           .ok_or_else(|| no_required_data_error(self, DOCUMENT_ROOT))?;
         Ok(())
       },
       CollabType::Database => {
         let database: MapRef = collab
+          .data
           .get_with_path(&txn, [DATABASE])
           .ok_or_else(|| no_required_data_error(self, DATABASE))?;
 
@@ -73,12 +74,14 @@ impl CollabType {
       },
       CollabType::WorkspaceDatabase => {
         let _: ArrayRef = collab
+          .data
           .get_with_path(&txn, [WORKSPACE_DATABASES])
           .ok_or_else(|| no_required_data_error(self, WORKSPACE_DATABASES))?;
         Ok(())
       },
       CollabType::Folder => {
         let meta: MapRef = collab
+          .data
           .get_with_path(&txn, [FOLDER, FOLDER_META])
           .ok_or_else(|| no_required_data_error(self, FOLDER_META))?;
         let current_workspace: String = meta
@@ -93,12 +96,14 @@ impl CollabType {
       },
       CollabType::DatabaseRow => {
         let _: MapRef = collab
+          .data
           .get_with_path(&txn, [DATABASE_ROW_DATA])
           .ok_or_else(|| no_required_data_error(self, DATABASE_ROW_DATA))?;
         Ok(())
       },
       CollabType::UserAwareness => {
         let _: MapRef = collab
+          .data
           .get_with_path(&txn, [USER_AWARENESS])
           .ok_or_else(|| no_required_data_error(self, USER_AWARENESS))?;
         Ok(())
@@ -112,12 +117,10 @@ impl CollabType {
 /// Ensures that the workspace ID contained in each Folder matches the expected workspace ID.
 /// A mismatch indicates that the Folder data may be incorrect, potentially due to it being
 /// overridden with data from another Folder.
-pub fn validate_data_for_folder(
-  collab: &OwnedCollab<CollabRead>,
-  workspace_id: &str,
-) -> Result<(), Error> {
+pub fn validate_data_for_folder(collab: &Collab, workspace_id: &str) -> Result<(), Error> {
   let txn = collab.transact();
   let workspace_id_in_collab: String = collab
+    .data
     .get_with_path(&txn, [FOLDER, FOLDER_META, FOLDER_WORKSPACE_ID])
     .ok_or_else(|| anyhow!("No required data: FOLDER_WORKSPACE_ID"))?;
   drop(txn);
