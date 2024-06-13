@@ -227,3 +227,39 @@ impl From<Reminder> for MapPrelim {
     ])
   }
 }
+
+#[cfg(test)]
+mod test {
+  use crate::reminder::{ObjectType, Reminder};
+  use collab::preclude::encoding::serde::from_any;
+  use collab::preclude::{Doc, Map, MapPrelim, ToJson, Transact};
+
+  #[test]
+  fn legacy_reminder_conversion() {
+    let doc = Doc::with_client_id(1);
+    let map = doc.get_or_insert_map("reminders");
+    let now = 1718262382723;
+    let reminder = Reminder::new(
+      "test-id".into(),
+      "object-id".into(),
+      now,
+      ObjectType::Document,
+    );
+    let prelim: MapPrelim<_> = reminder.into();
+    let mut tx = doc.transact_mut();
+    map.insert(&mut tx, "reminder", prelim);
+
+    let value = map.get(&tx, "reminder").unwrap();
+    let json = value.to_json(&tx);
+    let reminder: Reminder = from_any(&json).unwrap();
+    assert_eq!(
+      reminder,
+      Reminder::new(
+        "test-id".into(),
+        "object-id".into(),
+        now,
+        ObjectType::Document,
+      )
+    );
+  }
+}

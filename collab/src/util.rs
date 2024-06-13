@@ -76,7 +76,7 @@ use crate::error::CollabError;
 use yrs::block::Prelim;
 use yrs::branch::BranchPtr;
 use yrs::types::ToJson;
-use yrs::{Any, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, ReadTxn, TransactionMut, Value};
+use yrs::{Any, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, ReadTxn, TransactionMut, Out};
 
 pub trait MapExt: Map {
   #[inline]
@@ -87,7 +87,7 @@ pub trait MapExt: Map {
   fn get_with_txn<T, V>(&self, txn: &T, key: &str) -> Option<V>
   where
     T: ReadTxn,
-    V: TryFrom<Value, Error = Value>,
+    V: TryFrom<Out, Error = Out>,
   {
     let value = self.get(txn, key)?;
     V::try_from(value).ok()
@@ -96,15 +96,15 @@ pub trait MapExt: Map {
   fn get_or_init_map<S: Into<Arc<str>>>(&self, txn: &mut TransactionMut, key: S) -> MapRef {
     let key = key.into();
     match self.get(txn, &key) {
-      Some(Value::YMap(map)) => map,
-      _ => self.insert(txn, key, MapPrelim::<Any>::new()),
+      Some(Out::YMap(map)) => map,
+      _ => self.insert(txn, key, MapPrelim::default()),
     }
   }
 
   fn get_or_init_array<S: Into<Arc<str>>>(&self, txn: &mut TransactionMut, key: S) -> ArrayRef {
     let key = key.into();
     match self.get(txn, &key) {
-      Some(Value::YArray(array)) => array,
+      Some(Out::YArray(array)) => array,
       _ => self.insert(txn, key, ArrayPrelim::default()),
     }
   }
@@ -114,13 +114,13 @@ pub trait MapExt: Map {
   where
     P: Into<Path>,
     T: ReadTxn,
-    V: TryFrom<Value, Error = Value>,
+    V: TryFrom<Out, Error = Out>,
   {
     let value = self.get_value_with_path(txn, path)?;
     value.cast::<V>().ok()
   }
 
-  fn get_value_with_path<P, T>(&self, txn: &T, path: P) -> Option<Value>
+  fn get_value_with_path<P, T>(&self, txn: &T, path: P) -> Option<Out>
   where
     P: Into<Path>,
     T: ReadTxn,
@@ -182,7 +182,7 @@ pub trait MapExt: Map {
     };
     for field in path {
       current = match current.get(txn, &field) {
-        None => current.insert(txn, field, MapPrelim::<Any>::new()),
+        None => current.insert(txn, field, MapPrelim::default()),
         Some(value) => value
           .cast()
           .map_err(|_| CollabError::NoRequiredData(field))?,
@@ -191,7 +191,7 @@ pub trait MapExt: Map {
     Ok(current.insert(txn, last, value))
   }
 
-  fn remove_with_path<P>(&self, txn: &mut TransactionMut<'_>, path: P) -> Option<Value>
+  fn remove_with_path<P>(&self, txn: &mut TransactionMut<'_>, path: P) -> Option<Out>
   where
     P: Into<Path>,
   {

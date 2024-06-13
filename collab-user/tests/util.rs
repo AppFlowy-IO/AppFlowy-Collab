@@ -1,6 +1,6 @@
 use std::ops::Deref;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -8,16 +8,14 @@ use collab::preclude::CollabBuilder;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
-use collab_user::core::{
-  MutexUserAwareness, RemindersChangeSender, UserAwareness, UserAwarenessNotifier,
-};
+use collab_user::core::{RemindersChangeSender, UserAwareness, UserAwarenessNotifier};
 use tempfile::TempDir;
 use tokio::sync::broadcast::Receiver;
 use tokio::time::timeout;
 
 #[derive(Clone)]
 pub struct UserAwarenessTest {
-  user_awareness: MutexUserAwareness,
+  user_awareness: Arc<UserAwareness>,
   #[allow(dead_code)]
   cleaner: Arc<Cleaner>,
   #[allow(dead_code)]
@@ -25,7 +23,7 @@ pub struct UserAwarenessTest {
 }
 
 impl Deref for UserAwarenessTest {
-  type Target = MutexUserAwareness;
+  type Target = Arc<UserAwareness>;
 
   fn deref(&self) -> &Self::Target {
     &self.user_awareness
@@ -48,20 +46,21 @@ impl UserAwarenessTest {
     );
     let cleaner: Cleaner = Cleaner::new(path);
 
-    let collab = CollabBuilder::new(1, uid.to_string())
+    let mut collab = CollabBuilder::new(1, uid.to_string())
       .with_plugin(disk_plugin)
       .with_device_id("1")
       .build()
       .unwrap();
-    collab.lock().initialize();
+    collab.initialize();
+    let collab = Arc::new(Mutex::new(collab));
 
     let (reminder_change_tx, _) = tokio::sync::broadcast::channel(100);
     let notifier = UserAwarenessNotifier {
       reminder_change_tx: reminder_change_tx.clone(),
     };
-    let user_awareness = UserAwareness::create(Arc::new(collab), Some(notifier));
+    let user_awareness = UserAwareness::create(collab, Some(notifier));
     Self {
-      user_awareness: MutexUserAwareness::new(user_awareness),
+      user_awareness: Arc::new(user_awareness),
       cleaner: Arc::new(cleaner),
       reminder_change_tx,
     }
