@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use collab::core::collab::{IndexContent, IndexContentSender};
 use collab::preclude::{
-  DeepObservable, EntryChange, Event, MapRefWrapper, Subscription, ToJson, YrsValue,
+  DeepObservable, EntryChange, Event, MapRef, Subscription, ToJson, YrsValue,
 };
 use serde_json::json;
 use tokio::sync::broadcast;
@@ -22,7 +22,7 @@ pub enum ViewChange {
 pub type ViewChangeSender = broadcast::Sender<ViewChange>;
 pub type ViewChangeReceiver = broadcast::Receiver<ViewChange>;
 
-pub(crate) fn subscribe_folder_change(root: &mut MapRefWrapper) -> Subscription {
+pub(crate) fn subscribe_folder_change(root: &mut MapRef) -> Subscription {
   root.observe_deep(move |txn, events| {
     for deep_event in events.iter() {
       match deep_event {
@@ -54,7 +54,7 @@ pub(crate) fn subscribe_folder_change(root: &mut MapRefWrapper) -> Subscription 
 
 pub(crate) fn subscribe_view_change(
   _uid: &UserId,
-  root: &mut MapRefWrapper,
+  root: &mut MapRef,
   view_cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
   change_tx: ViewChangeSender,
   view_relations: Rc<ViewRelations>,

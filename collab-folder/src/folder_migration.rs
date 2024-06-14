@@ -1,5 +1,5 @@
 use anyhow::bail;
-use collab::preclude::{Any, Array, MapRefExtension, MapRefWrapper, ReadTxn, YrsValue};
+use collab::preclude::{Any, Array, MapRef, ReadTxn, YrsValue};
 use serde::{Deserialize, Serialize};
 
 use crate::folder::FAVORITES_V1;
@@ -82,7 +82,7 @@ impl Folder {
 
 pub fn to_workspace_with_txn<T: ReadTxn>(
   txn: &T,
-  map_ref: &MapRefWrapper,
+  map_ref: &MapRef,
   views: &ViewRelations,
 ) -> Option<Workspace> {
   let id = map_ref.get_str_with_txn(txn, WORKSPACE_ID)?;
@@ -144,7 +144,7 @@ impl TryFrom<&YrsValue> for FavoriteId {
 #[derive(Debug, Serialize, Deserialize)]
 struct TrashRecord {
   pub id: String,
-  #[serde(deserialize_with = "collab::util::deserialize_i64_from_numeric")]
+  #[serde(deserialize_with = "collab::preclude::deserialize_i64_from_numeric")]
   pub created_at: i64,
   #[serde(default)]
   pub workspace_id: String,

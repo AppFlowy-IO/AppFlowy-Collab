@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use collab::preclude::{Any, YrsValue};
-use collab::preclude::{Array, ArrayRef, ArrayRefWrapper, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{Any, MapRef, YrsValue};
+use collab::preclude::{Array, ArrayRef, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 
 /// Used to keep track of the view hierarchy.
@@ -14,11 +14,11 @@ use serde::{Deserialize, Serialize};
 /// }
 ///
 pub struct ViewRelations {
-  container: MapRefWrapper,
+  container: MapRef,
 }
 
 impl ViewRelations {
-  pub fn new(container: MapRefWrapper) -> Self {
+  pub fn new(container: MapRef) -> Self {
     Self { container }
   }
 
@@ -175,10 +175,10 @@ impl ViewRelations {
 /// Handy wrapper around an array of children.
 /// It provides methods to manipulate the array.
 #[derive(Clone)]
-pub struct ChildrenArray(ArrayRefWrapper);
+pub struct ChildrenArray(ArrayRef);
 
 impl ChildrenArray {
-  pub fn from_array(array: ArrayRefWrapper) -> Self {
+  pub fn from_array(array: ArrayRef) -> Self {
     Self(array)
   }
 

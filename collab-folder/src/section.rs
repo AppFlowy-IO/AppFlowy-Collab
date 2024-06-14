@@ -2,19 +2,17 @@ use std::collections::HashMap;
 
 use crate::{timestamp, UserId};
 use anyhow::bail;
-use collab::core::any_map::{AnyMap, AnyMapExtension};
+use collab::preclude::deserialize_i64_from_numeric;
 use collab::preclude::{
-  Any, Array, DeepObservable, Map, MapRefWrapper, ReadTxn, Subscription, TransactionMut, Value,
-  YrsValue,
+  Any, AnyMut, Array, Map, MapRef, ReadTxn, Subscription, TransactionMut, Value, YrsValue,
 };
-use collab::util::deserialize_i64_from_numeric;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tracing::info;
 
 pub struct SectionMap {
   uid: UserId,
-  container: MapRefWrapper,
+  container: MapRef,
   #[allow(dead_code)]
   change_tx: Option<SectionChangeSender>,
   #[allow(dead_code)]
@@ -29,7 +27,7 @@ impl SectionMap {
   pub fn create(
     txn: &mut TransactionMut,
     uid: &UserId,
-    mut root: MapRefWrapper,
+    mut root: MapRef,
     change_tx: Option<SectionChangeSender>,
   ) -> Self {
     for section in predefined_sections() {
@@ -54,7 +52,7 @@ impl SectionMap {
   pub fn new<T: ReadTxn>(
     txn: &T,
     uid: &UserId,
-    mut root: MapRefWrapper,
+    mut root: MapRef,
     change_tx: Option<SectionChangeSender>,
   ) -> Option<Self> {
     for section in predefined_sections() {
@@ -96,17 +94,13 @@ impl SectionMap {
     })
   }
 
-  pub fn create_section_with_txn(
-    &self,
-    txn: &mut TransactionMut,
-    section: Section,
-  ) -> MapRefWrapper {
+  pub fn create_section_with_txn(&self, txn: &mut TransactionMut, section: Section) -> MapRef {
     self
       .container
       .create_map_with_txn_if_not_exist(txn, section.as_ref())
   }
 
-  fn get_section<T: ReadTxn>(&self, txn: &T, section_id: &str) -> Option<MapRefWrapper> {
+  fn get_section<T: ReadTxn>(&self, txn: &T, section_id: &str) -> Option<MapRef> {
     self.container.get_map_with_txn(txn, section_id)
   }
 }
@@ -166,13 +160,13 @@ pub type SectionsByUid = HashMap<UserId, Vec<SectionItem>>;
 
 pub struct SectionOperation<'a> {
   uid: &'a UserId,
-  container: MapRefWrapper,
+  container: MapRef,
   section: Section,
   change_tx: Option<SectionChangeSender>,
 }
 
 impl<'a> SectionOperation<'a> {
-  fn container(&self) -> &MapRefWrapper {
+  fn container(&self) -> &MapRef {
     &self.container
   }
 
@@ -359,10 +353,10 @@ impl SectionItem {
 }
 
 /// Uses [AnyMap] to store key-value pairs of section items, making it easy to extend in the future.
-impl TryFrom<AnyMap> for SectionItem {
+impl TryFrom<Any> for SectionItem {
   type Error = anyhow::Error;
 
-  fn try_from(value: AnyMap) -> Result<Self, Self::Error> {
+  fn try_from(value: Any) -> Result<Self, Self::Error> {
     let id = value
       .get_str_value("id")
       .ok_or(anyhow::anyhow!("missing section item id"))?;
@@ -371,12 +365,15 @@ impl TryFrom<AnyMap> for SectionItem {
   }
 }
 
-impl From<SectionItem> for AnyMap {
+impl From<SectionItem> for HashMap<String, AnyMut> {
   fn from(item: SectionItem) -> Self {
-    let mut map = AnyMap::new();
-    map.insert_str_value("id", item.id);
-    map.insert_i64_value("timestamp", item.timestamp);
-    map
+    HashMap::from([
+      ("id".to_string(), AnyMut::String(item.id)),
+      (
+        "timestamp".to_string(),
+        AnyMut::Number(item.timestamp as f64),
+      ),
+    ])
   }
 }
 
@@ -405,8 +402,4 @@ impl TryFrom<&YrsValue> for SectionItem {
       _ => bail!("Invalid section yrs value"),
     }
   }
-}
-
-fn subscribe_section_change(map: &mut MapRefWrapper) -> Subscription {
-  map.observe_deep(move |_txn, _events| {})
 }

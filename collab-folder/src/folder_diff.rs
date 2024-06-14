@@ -5,9 +5,8 @@ use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::updates::decoder::Decode;
-use collab::preclude::{
-  DeepObservable, EntryChange, Event, MapRefExtension, ReadTxn, Update, YrsValue,
-};
+use collab::preclude::{DeepObservable, EntryChange, Event, ReadTxn, Update, YrsValue};
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
@@ -16,7 +15,7 @@ impl Folder {
     &self,
     encoded_collab: EncodedCollab,
   ) -> Result<Vec<FolderViewChange>, FolderError> {
-    let changes = Rc::new(Mutex::new(HashSet::new()));
+    let changes = Rc::new(RefCell::new(HashSet::new()));
     let workspace_id = self.try_get_workspace_id()?;
 
     let other = Folder::from_collab_doc_state(
