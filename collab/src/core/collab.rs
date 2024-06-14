@@ -60,9 +60,9 @@ pub struct Collab {
   update_subscription: ArcSwapOption<Subscription>,
   awareness_subscription: ArcSwapOption<Subscription>,
   after_txn_subscription: ArcSwapOption<AfterTransactionSubscription>,
-  index_json_sender: IndexContentSender,
   /// A list of plugins that are used to extend the functionality of the [Collab].
   plugins: Plugins,
+  pub index_json_sender: IndexContentSender,
 
   // EXPLANATION: context, meta and data are often used within the same context: &mut context
   //  used to obtain TransactionMut, which is then used by &data and &meta. This is why they are

@@ -3,11 +3,10 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use collab::core::collab::IndexContentSender;
-use collab::preclude::{
-  Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, Subscription, TransactionMut, YrsValue,
-};
+use collab::preclude::{Any, Map, MapRef, ReadTxn, Subscription, TransactionMut, Value};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
+use tokio::sync::RwLock;
 use tracing::{instrument, trace};
 
 use crate::folder_observe::ViewChangeSender;
@@ -34,7 +33,7 @@ pub fn timestamp() -> i64 {
 
 pub struct ViewsMap {
   uid: UserId,
-  pub(crate) container: MapRefWrapper,
+  pub(crate) container: MapRef,
   pub(crate) view_relations: Arc<ViewRelations>,
   pub(crate) section_map: Arc<SectionMap>,
   cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
@@ -48,7 +47,7 @@ pub struct ViewsMap {
 impl ViewsMap {
   pub fn new(
     uid: &UserId,
-    mut root: MapRefWrapper,
+    mut root: MapRef,
     change_tx: Option<ViewChangeSender>,
     view_relations: Arc<ViewRelations>,
     section_map: Arc<SectionMap>,
@@ -501,7 +500,7 @@ pub fn get_icon_from_view_map<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<V
 
 pub struct ViewBuilder<'a, 'b> {
   view_id: &'a str,
-  map_ref: MapRefWrapper,
+  map_ref: MapRef,
   txn: &'a mut TransactionMut<'b>,
   belongings: Arc<ViewRelations>,
   view: Option<View>,
@@ -512,7 +511,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
   pub fn new(
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
-    map_ref: MapRefWrapper,
+    map_ref: MapRef,
     belongings: Arc<ViewRelations>,
     section_map: &'a SectionMap,
   ) -> Self {
@@ -551,7 +550,7 @@ pub struct ViewUpdate<'a, 'b, 'c> {
   #[allow(dead_code)]
   uid: &'a UserId,
   view_id: &'a str,
-  map_ref: &'c MapRefWrapper,
+  map_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
   children_map: Arc<ViewRelations>,
   section_map: &'c SectionMap,
@@ -576,7 +575,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     uid: &'a UserId,
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
-    map_ref: &'c MapRefWrapper,
+    map_ref: &'c MapRef,
     children_map: Arc<ViewRelations>,
     section_map: &'c SectionMap,
   ) -> Self {

@@ -85,11 +85,11 @@ pub struct FolderNotify {
 /// * `notifier`: An optional `FolderNotify` object for notifying about changes in the folder.
 pub struct Folder {
   pub(crate) uid: UserId,
-  pub(crate) inner: Arc<MutexCollab>,
-  pub(crate) root: MapRefWrapper,
+  pub(crate) inner: Arc<Mutex<Collab>>,
+  pub(crate) root: MapRef,
   pub views: Arc<ViewsMap>,
   section: Arc<SectionMap>,
-  pub(crate) meta: MapRefWrapper,
+  pub(crate) meta: MapRef,
   #[allow(dead_code)]
   subscription: Subscription,
   #[allow(dead_code)]
@@ -99,7 +99,7 @@ pub struct Folder {
 impl Folder {
   pub fn open<T: Into<UserId>>(
     uid: T,
-    collab: Arc<MutexCollab>,
+    collab: Arc<Mutex<Collab>>,
     notifier: Option<FolderNotify>,
   ) -> Result<Self, FolderError> {
     let uid = uid.into();
@@ -114,7 +114,7 @@ impl Folder {
   }
 
   pub fn close(&self) {
-    self.inner.lock().clear_plugins();
+    self.inner.lock().unwrap().clear_plugins();
   }
 
   pub fn validate(collab: &Collab) -> Result<(), FolderError> {
@@ -126,7 +126,7 @@ impl Folder {
 
   pub fn create<T: Into<UserId>>(
     uid: T,
-    collab: Arc<MutexCollab>,
+    collab: Arc<Mutex<Collab>>,
     notifier: Option<FolderNotify>,
     initial_folder_data: FolderData,
   ) -> Self {
@@ -141,7 +141,7 @@ impl Folder {
     plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, FolderError> {
     let collab = Collab::new_with_source(origin, workspace_id, collab_doc_state, plugins, false)?;
-    Self::open(uid, Arc::new(MutexCollab::new(collab)), None)
+    Self::open(uid, Arc::new(Mutex::new(collab)), None)
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
@@ -499,7 +499,7 @@ impl Folder {
       .get_views_belong_to_with_txn(&txn, parent_view_id)
   }
 
-  pub fn create_section<S: Into<Section>>(&self, section: S) -> MapRefWrapper {
+  pub fn create_section<S: Into<Section>>(&self, section: S) -> MapRef {
     self
       .root
       .with_transact_mut(|txn| self.section.create_section_with_txn(txn, section.into()))
@@ -513,12 +513,12 @@ impl Folder {
 /// Otherwise, create an empty folder.
 fn create_folder<T: Into<UserId>>(
   uid: T,
-  collab: Arc<MutexCollab>,
+  collab: Arc<Mutex<Collab>>,
   notifier: Option<FolderNotify>,
   folder_data: Option<FolderData>,
 ) -> Folder {
   let uid = uid.into();
-  let collab_guard = collab.lock();
+  let collab_guard = collab.lock().unwrap();
   let index_json_sender = collab_guard.index_json_sender.clone();
   let (folder, views, section, meta, subscription) = collab_guard.with_origin_transact_mut(|txn| {
     // create the folder
@@ -612,7 +612,7 @@ pub fn check_folder_is_valid(collab: &Collab) -> Result<String, FolderError> {
 
 fn open_folder<T: Into<UserId>>(
   uid: T,
-  collab: Arc<MutexCollab>,
+  collab: Arc<Mutex<Collab>>,
   notifier: Option<FolderNotify>,
 ) -> Option<Folder> {
   let uid = uid.into();
@@ -671,7 +671,7 @@ fn open_folder<T: Into<UserId>>(
 }
 
 fn get_views_from_root<T: ReadTxn>(
-  root: &MapRefWrapper,
+  root: &MapRef,
   _uid: &UserId,
   view_relations: &Arc<ViewRelations>,
   section_map: &Arc<SectionMap>,
