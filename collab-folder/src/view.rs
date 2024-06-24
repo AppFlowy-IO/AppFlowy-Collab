@@ -339,6 +339,7 @@ impl ViewsMap {
         .set_created_by(Some(create_by))
         .set_last_edited_time(last_edited_time)
         .set_last_edited_by(Some(last_edited_by))
+        .set_extra_if_not_none(view.extra)
         .done()
     })
     .done();
