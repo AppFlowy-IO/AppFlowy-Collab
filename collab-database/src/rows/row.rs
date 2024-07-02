@@ -1,13 +1,11 @@
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
 
-use collab::core::collab::MutexCollab;
 use collab::preclude::{
-  ArrayRefWrapper, Collab, Map, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
-  Subscription, Transaction, TransactionMut, YrsValue,
+  Any, ArrayRef, Collab, Map, MapPrelim, MapRef, ReadTxn, Subscription, Transaction,
+  TransactionMut, YrsValue,
 };
 
-use collab::core::value::YrsValueExtension;
 use collab::error::CollabError;
 use collab_entity::define::DATABASE_ROW_DATA;
 use collab_entity::CollabType;
@@ -15,6 +13,7 @@ use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 use tracing::{error, trace};
 use uuid::Uuid;
 
@@ -38,11 +37,11 @@ pub struct DatabaseRow {
   uid: i64,
   row_id: RowId,
   #[allow(dead_code)]
-  collab: Arc<MutexCollab>,
-  data: MapRefWrapper,
-  meta: MapRefWrapper,
+  collab: Arc<Mutex<Collab>>,
+  data: MapRef,
+  meta: MapRef,
   #[allow(dead_code)]
-  comments: ArrayRefWrapper,
+  comments: ArrayRef,
   collab_db: Weak<CollabKVDB>,
   #[allow(dead_code)]
   subscription: Subscription,
@@ -54,7 +53,7 @@ impl DatabaseRow {
     uid: i64,
     row_id: RowId,
     collab_db: Weak<CollabKVDB>,
-    collab: Arc<MutexCollab>,
+    collab: Arc<Mutex<Collab>>,
     change_tx: RowChangeSender,
   ) -> Self {
     let (mut data, meta, comments) = {
@@ -97,7 +96,7 @@ impl DatabaseRow {
     uid: i64,
     row_id: RowId,
     collab_db: Weak<CollabKVDB>,
-    collab: Arc<MutexCollab>,
+    collab: Arc<Mutex<Collab>>,
     change_tx: RowChangeSender,
   ) -> Result<Self, CollabError> {
     match Self::create_row_struct(&collab)? {
@@ -128,8 +127,8 @@ impl DatabaseRow {
   }
 
   fn create_row_struct(
-    collab: &Arc<MutexCollab>,
-  ) -> Result<Option<(MapRefWrapper, MapRefWrapper, ArrayRefWrapper)>, CollabError> {
+    collab: &Arc<Mutex<Collab>>,
+  ) -> Result<Option<(MapRef, MapRef, ArrayRef)>, CollabError> {
     let collab_guard = collab.lock();
     let txn = collab_guard.transact();
     let data = collab_guard.get_map_with_txn(&txn, vec![DATABASE_ROW_DATA]);

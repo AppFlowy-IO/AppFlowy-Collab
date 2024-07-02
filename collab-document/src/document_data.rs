@@ -6,6 +6,7 @@ use collab::entity::EncodedCollab;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
 use nanoid::nanoid;
+use tokio::sync::RwLock;
 
 use crate::blocks::{Block, DocumentData, DocumentMeta};
 use crate::document::Document;
@@ -89,14 +90,14 @@ pub fn default_document_data(document_id: &str) -> DocumentData {
 /// of the document.
 pub fn default_document_collab_data(document_id: &str) -> Result<EncodedCollab, DocumentError> {
   let document_data = default_document_data(document_id);
-  let collab = Arc::new(Collab::new_with_origin(
+  let collab = Arc::new(RwLock::new(Collab::new_with_origin(
     CollabOrigin::Empty,
     document_id,
     vec![],
     false,
-  ));
+  )));
   let _ = Document::create_with_data(collab.clone(), document_data);
-  let lock_guard = collab.lock();
+  let lock_guard = collab.blocking_read();
   lock_guard.encode_collab_v1(|collab| {
     CollabType::Document
       .validate_require_data(collab)

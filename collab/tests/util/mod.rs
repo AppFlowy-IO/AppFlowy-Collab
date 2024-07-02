@@ -27,7 +27,7 @@ pub struct Person {
 #[derive(Default, Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Position {
   pub(crate) title: String,
-  #[serde(deserialize_with = "collab::util::deserialize_i32_from_numeric")]
+  #[serde(deserialize_with = "collab::preclude::deserialize_i32_from_numeric")]
   pub(crate) level: i32,
 }
 

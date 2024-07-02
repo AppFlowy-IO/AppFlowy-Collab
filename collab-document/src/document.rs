@@ -13,6 +13,7 @@ use collab_entity::define::DOCUMENT_ROOT;
 use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::RwLock;
 use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{
@@ -39,7 +40,7 @@ const CHILDREN_MAP: &str = "children_map";
 const TEXT_MAP: &str = "text_map";
 
 pub struct Document {
-  inner: Arc<Collab>,
+  inner: Arc<RwLock<Collab>>,
   root: MapRef,
   subscription: Option<Subscription>,
   children_operation: ChildrenOperation,
@@ -51,7 +52,7 @@ pub struct Document {
 
 impl Document {
   /// Create or get a document.
-  pub async fn open<C: Into<Arc<Collab>>>(collab: C) -> Result<Document, DocumentError> {
+  pub async fn open<C: Into<Arc<RwLock<Collab>>>>(collab: C) -> Result<Document, DocumentError> {
     Document::open_document_with_collab(collab.into()).await
   }
 
@@ -62,12 +63,22 @@ impl Document {
     Ok(())
   }
 
-  pub fn get_collab(&self) -> &Arc<Collab> {
+  pub fn get_collab(&self) -> &Arc<RwLock<Collab>> {
     &self.inner
   }
 
-  pub fn encode_collab(&self) -> Result<EncodedCollab, DocumentError> {
-    self.inner.lock().encode_collab_v1(|collab| {
+  pub async fn encode_collab(&self) -> Result<EncodedCollab, DocumentError> {
+    let lock = self.inner.read().await;
+    lock.encode_collab_v1(|collab| {
+      CollabType::Document
+        .validate_require_data(collab)
+        .map_err(|_| DocumentError::NoRequiredData)
+    })
+  }
+
+  pub fn encode_collab_blocking(&self) -> Result<EncodedCollab, DocumentError> {
+    let lock = self.inner.blocking_read();
+    lock.encode_collab_v1(|collab| {
       CollabType::Document
         .validate_require_data(collab)
         .map_err(|_| DocumentError::NoRequiredData)
@@ -75,28 +86,27 @@ impl Document {
   }
 
   pub fn flush(&self) -> Result<(), DocumentError> {
-    if let Some(collab_guard) = self.inner.try_lock() {
-      collab_guard.flush();
-    }
+    let collab_guard = self.inner.blocking_write();
+    collab_guard.flush();
     Ok(())
   }
 
   /// Create a new document with the given data.
-  pub fn create_with_data(
-    collab: Arc<Collab>,
+  pub async fn create_with_data(
+    collab: Arc<RwLock<Collab>>,
     data: DocumentData,
   ) -> Result<Document, DocumentError> {
-    Document::create_document(collab, Some(data))
+    Document::create_document(collab, Some(data)).await
   }
 
-  pub fn from_doc_state(
+  pub async fn from_doc_state(
     origin: CollabOrigin,
     doc_state: DataSource,
     document_id: &str,
     plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, DocumentError> {
     let collab = Collab::new_with_source(origin, document_id, doc_state, plugins, true)?;
-    Document::open(collab)
+    Document::open(Arc::new(RwLock::new(collab))).await
   }
 
   /// open a document and subscribe to the document changes.
@@ -104,8 +114,9 @@ impl Document {
   where
     F: Fn(&Vec<BlockEvent>, bool) + Send + Sync + 'static,
   {
-    let object_id = self.inner.lock().object_id.clone();
-    let self_origin = CollabOrigin::from(&self.inner.lock().origin_transact_mut());
+    let lock = self.inner.try_read().unwrap();
+    let object_id = lock.object_id().to_string();
+    let self_origin = lock.origin().clone();
     self.subscription = Some(self.root.observe_deep(move |txn, events| {
       let origin = CollabOrigin::from(txn);
       let block_events = events
@@ -118,14 +129,7 @@ impl Document {
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
-    self.inner.lock().subscribe_sync_state()
-  }
-
-  pub fn with_transact_mut<F, T>(&self, f: F) -> T
-  where
-    F: FnOnce(&mut TransactionMut) -> T,
-  {
-    self.root.with_transact_mut(f)
+    self.inner.blocking_read().subscribe_sync_state()
   }
 
   /// Get document data.
@@ -134,15 +138,13 @@ impl Document {
     let txn = collab_guard.transact();
     let page_id = self
       .root
-      .get_str_with_txn(&txn, PAGE_ID)
+      .get(&txn, PAGE_ID)
+      .and_then(|v| v.cast::<String>().ok())
       .ok_or(DocumentError::PageIdIsEmpty)?;
 
-    drop(txn);
-    drop(collab_guard);
-
-    let blocks = self.block_operation.get_all_blocks();
-    let children_map = self.children_operation.get_all_children();
-    let text_map = self.text_operation.serialize_all_text_delta();
+    let blocks = self.block_operation.get_all_blocks(&txn);
+    let children_map = self.children_operation.get_all_children(&txn);
+    let text_map = self.text_operation.serialize_all_text_delta(&txn);
     let document_data = DocumentData {
       page_id,
       blocks,
@@ -158,14 +160,14 @@ impl Document {
   /// - @param text_id: The text block's external_id.
   /// - @param delta: The text block's delta. "\[{"insert": "Hello", "attributes": { "bold": true, "italic": true } }, {"insert": " World!"}]".
   pub fn create_text(&self, text_id: &str, delta: String) {
-    self.inner.lock().with_origin_transact_mut(|txn| {
-      self.create_text_with_txn(txn, text_id, delta);
-    })
+    let mut lock = self.inner.blocking_write();
+    let mut txn = lock.transact_mut();
+    self.create_text_with_txn(&mut txn, text_id, delta);
   }
 
   pub fn create_text_with_txn(&self, txn: &mut TransactionMut, text_id: &str, delta: String) {
     let delta = deserialize_text_delta(&delta).ok();
-    self.text_operation.create_text_with_txn(txn, text_id);
+    self.text_operation.get_text_with_txn(txn, text_id);
     if let Some(delta) = delta {
       self
         .text_operation
@@ -177,9 +179,9 @@ impl Document {
   /// - @param text_id: The text block's external_id.
   /// - @param delta: The text block's delta. "\[{"insert": "Hello", "attributes": { "bold": true, "italic": true } }, {"insert": " World!"}]".
   pub fn apply_text_delta(&self, text_id: &str, delta: String) {
-    self.inner.lock().with_origin_transact_mut(|txn| {
-      self.apply_text_delta_with_txn(txn, text_id, delta);
-    })
+    let mut lock = self.inner.blocking_write();
+    let mut txn = lock.transact_mut();
+    self.apply_text_delta_with_txn(&mut txn, text_id, delta);
   }
 
   pub fn apply_text_delta_with_txn(&self, txn: &mut TransactionMut, text_id: &str, delta: String) {
@@ -197,31 +199,31 @@ impl Document {
 
   /// Apply actions to the document.
   pub fn apply_action(&self, actions: Vec<BlockAction>) {
-    self.inner.lock().with_origin_transact_mut(|txn| {
-      for action in actions {
-        let result = match action.action {
-          BlockActionType::Insert => self.handle_insert_action(txn, action.payload),
-          BlockActionType::Update => self.handle_update_action(txn, action.payload),
-          BlockActionType::Delete => self.handle_delete_action(txn, action.payload),
-          BlockActionType::Move => self.handle_move_action(txn, action.payload),
-          BlockActionType::InsertText => self.handle_insert_text_action(txn, action.payload),
-          BlockActionType::ApplyTextDelta => {
-            self.handle_apply_text_delta_action(txn, action.payload)
-          },
-        };
+    let mut lock = self.inner.blocking_write();
+    let mut txn = lock.transact_mut();
+    for action in actions {
+      let result = match action.action {
+        BlockActionType::Insert => self.handle_insert_action(&mut txn, action.payload),
+        BlockActionType::Update => self.handle_update_action(&mut txn, action.payload),
+        BlockActionType::Delete => self.handle_delete_action(&mut txn, action.payload),
+        BlockActionType::Move => self.handle_move_action(&mut txn, action.payload),
+        BlockActionType::InsertText => self.handle_insert_text_action(&mut txn, action.payload),
+        BlockActionType::ApplyTextDelta => {
+          self.handle_apply_text_delta_action(&mut txn, action.payload)
+        },
+      };
 
-        if let Err(err) = result {
-          // Handle the error
-          tracing::error!("[Document] apply_action error: {:?}", err);
-          return;
-        }
+      if let Err(err) = result {
+        // Handle the error
+        tracing::error!("[Document] apply_action error: {:?}", err);
+        return;
       }
-    })
+    }
   }
 
   /// Get block with the given id.
   pub fn get_block(&self, block_id: &str) -> Option<Block> {
-    let collab_guard = self.inner.lock();
+    let collab_guard = self.inner.blocking_read();
     let txn = collab_guard.transact();
     self.block_operation.get_block_with_txn(&txn, block_id)
   }
@@ -425,7 +427,7 @@ impl Document {
     if !self.can_redo() {
       return false;
     }
-    if let Some(mut collab_guard) = self.inner.try_lock() {
+    if let Ok(mut collab_guard) = self.inner.try_write() {
       collab_guard.redo().unwrap_or_default()
     } else {
       false
@@ -436,7 +438,7 @@ impl Document {
     if !self.can_undo() {
       return false;
     }
-    if let Some(mut collab_guard) = self.inner.try_lock() {
+    if let Ok(mut collab_guard) = self.inner.try_write() {
       collab_guard.undo().unwrap_or_default()
     } else {
       false
@@ -444,7 +446,7 @@ impl Document {
   }
 
   pub fn can_redo(&self) -> bool {
-    if let Some(collab_guard) = self.inner.try_lock() {
+    if let Ok(collab_guard) = self.inner.try_read() {
       collab_guard.can_redo()
     } else {
       false
@@ -452,7 +454,7 @@ impl Document {
   }
 
   pub fn can_undo(&self) -> bool {
-    if let Some(collab_guard) = self.inner.try_lock() {
+    if let Ok(collab_guard) = self.inner.try_read() {
       collab_guard.can_undo()
     } else {
       false
@@ -462,16 +464,23 @@ impl Document {
   /// Set the local state of the awareness.
   /// It will override the previous state.
   pub fn set_awareness_local_state(&self, state: DocumentAwarenessState) {
-    let mut lock = self.inner.lock();
-    let awareness = lock.get_mut_awareness();
-    if let Err(e) = awareness.set_local_state(state) {
-      tracing::error!("Failed to serialize DocumentAwarenessState: {}", e);
+    if let Ok(state) = serde_json::to_string(&state) {
+      self
+        .inner
+        .blocking_write()
+        .get_mut_awareness()
+        .set_local_state(state);
+    } else {
+      tracing::error!(
+        "Failed to serialize DocumentAwarenessState, state: {:?}",
+        state
+      );
     }
   }
 
   pub fn get_awareness_local_state(&self) -> Option<DocumentAwarenessState> {
-    let mut collab = self.inner.lock();
-    let json = collab.get_mut_awareness().local_state()?;
+    let collab = self.inner.blocking_read();
+    let json = collab.get_awareness().local_state()?;
     match serde_json::from_str(json) {
       Ok(state) => Some(state),
       Err(e) => {
@@ -488,7 +497,11 @@ impl Document {
   /// Clean the local state of the awareness.
   /// It should be called when the document is closed.
   pub fn clean_awareness_local_state(&self) {
-    self.inner.lock().get_mut_awareness().clean_local_state()
+    self
+      .inner
+      .blocking_write()
+      .get_mut_awareness()
+      .clean_local_state()
   }
 
   /// Subscribe to the awareness state change.
@@ -497,7 +510,7 @@ impl Document {
   where
     F: Fn(HashMap<ClientID, DocumentAwarenessState>) + Send + Sync + 'static,
   {
-    let subscription = self.inner.lock().observe_awareness(move |awareness, e, _| {
+    let subscription = self.inner.try_read().unwrap().get_awareness().on_update(move |awareness, e, _| {
       if let Ok(full_update) = awareness.update_with_clients(e.all_changes()) {
         let result: HashMap<_, _> = full_update.clients.iter().filter_map(|(&client_id, entry)| {
           match serde_json::from_str(&entry.json) {
@@ -516,26 +529,29 @@ impl Document {
         f(result);
       }
     });
-    *self.awareness_subscription.write() = Some(subscription);
+    self
+      .awareness_subscription
+      .store(Some(Arc::new(subscription)));
   }
 
   async fn create_document(
-    collab: Arc<Collab>,
+    collab: Arc<RwLock<Collab>>,
     data: Option<DocumentData>,
   ) -> Result<Self, DocumentError> {
     let mut collab_guard = collab.write().await;
     let (root, block_operation, children_operation, text_operation) = {
-      let mut txn = collab_guard.transact_mut();
+      let collab = &mut *collab_guard;
+      let mut txn = collab.context.transact_mut();
       // { document: {:} }
-      let root = collab_guard.insert_map_with_txn(txn, DOCUMENT_ROOT);
+      let root = collab.data.get_or_init_map(&mut txn, DOCUMENT_ROOT);
       // { document: { blocks: {:} } }
-      let blocks = root.create_map_with_txn(txn, BLOCKS);
+      let blocks = root.get_or_init_map(&mut txn, BLOCKS);
       // { document: { blocks: {:}, meta: {:} } }
-      let meta = root.create_map_with_txn(txn, META);
+      let meta = root.get_or_init_map(&mut txn, META);
       // {document: { blocks: {:}, meta: { children_map: {:} } }
-      let children_map = meta.create_map_with_txn(txn, CHILDREN_MAP);
+      let children_map = meta.get_or_init_map(&mut txn, CHILDREN_MAP);
       // { document: { blocks: {:}, meta: { text_map: {:} } }
-      let text_map = meta.create_map_with_txn(txn, TEXT_MAP);
+      let text_map = meta.get_or_init_map(&mut txn, TEXT_MAP);
 
       let children_operation = ChildrenOperation::new(children_map);
       let text_operation = TextOperation::new(text_map);
@@ -543,27 +559,27 @@ impl Document {
 
       // If the data is not None, insert the data to the document.
       if let Some(data) = data {
-        root.insert_with_txn(txn, PAGE_ID, data.page_id);
+        root.insert(&mut txn, PAGE_ID, data.page_id);
 
         for (_, block) in data.blocks {
-          block_operation.create_block_with_txn(txn, block)?;
+          block_operation.create_block_with_txn(&mut txn, block)?;
         }
 
         for (id, child_ids) in data.meta.children_map {
-          let map = children_operation.get_children_with_txn(txn, &id);
+          let map = children_operation.get_children_with_txn(&mut txn, &id);
           child_ids.iter().for_each(|child_id| {
-            map.push_back(txn, child_id.to_string());
+            map.push_back(&mut txn, child_id.to_string());
           });
         }
         if let Some(text_map) = data.meta.text_map {
           for (id, delta) in text_map {
             let delta = serde_json::from_str(&delta).unwrap_or_else(|_| vec![]);
-            text_operation.apply_delta_with_txn(txn, &id, delta)
+            text_operation.apply_delta_with_txn(&mut txn, &id, delta)
           }
         }
       }
 
-      Ok::<_, DocumentError>((root, block_operation, children_operation, text_operation))
+      (root, block_operation, children_operation, text_operation)
     };
 
     collab_guard.enable_undo_redo();
@@ -582,20 +598,21 @@ impl Document {
     Ok(document)
   }
 
-  async fn open_document_with_collab(collab: Arc<Collab>) -> Result<Self, DocumentError> {
+  async fn open_document_with_collab(collab: Arc<RwLock<Collab>>) -> Result<Self, DocumentError> {
     let mut collab_guard = collab.write().await;
     let (root, block_operation, children_operation, text_operation) = {
-      let mut txn = collab_guard.transact_mut();
-      let root = collab_guard.get_with_path(&txn, [DOCUMENT_ROOT]);
+      let collab_ref = &mut *collab_guard;
+      let mut txn = collab_ref.context.transact_mut();
+      let root = collab_ref.data.get_with_path(&txn, [DOCUMENT_ROOT]);
       if root.is_none() {
         return Err(DocumentError::NoRequiredData);
       }
       let root: MapRef = root.unwrap();
-      let blocks = root.create_map_with_txn_if_not_exist(txn, BLOCKS);
-      let meta = root.create_map_with_txn_if_not_exist(txn, META);
+      let blocks = root.get_or_init_map(&mut txn, BLOCKS);
+      let meta = root.get_or_init_map(&mut txn, META);
 
-      let children_map = meta.create_map_with_txn_if_not_exist(txn, CHILDREN_MAP);
-      let text_map = meta.create_map_with_txn_if_not_exist(txn, TEXT_MAP);
+      let children_map = meta.get_or_init_map(&mut txn, CHILDREN_MAP);
+      let text_map = meta.get_or_init_map(&mut txn, TEXT_MAP);
       let children_operation = ChildrenOperation::new(children_map);
       let text_operation = TextOperation::new(text_map);
       let block_operation = BlockOperation::new(blocks, children_operation.clone());
@@ -608,6 +625,7 @@ impl Document {
     };
 
     collab_guard.enable_undo_redo();
+    drop(collab_guard);
 
     if root.is_none() {}
 
@@ -735,19 +753,19 @@ pub struct DocumentIndexContent {
 
 impl From<&Document> for DocumentIndexContent {
   fn from(value: &Document) -> Self {
-    let collab_guard = value.inner.lock();
+    let collab_guard = value.inner.blocking_read();
     let txn = collab_guard.transact();
     let page_id = value
       .root
-      .get_str_with_txn(&txn, PAGE_ID)
+      .get_with_txn(&txn, PAGE_ID)
       .expect("document should have page_id");
+
+    let blocks = value.block_operation.get_all_blocks(&txn);
+    let children_map = value.children_operation.get_all_children(&txn);
+    let text_map = value.text_operation.stringify_all_text_delta(&txn);
 
     drop(txn);
     drop(collab_guard);
-
-    let blocks = value.block_operation.get_all_blocks();
-    let children_map = value.children_operation.get_all_children();
-    let text_map = value.text_operation.stringify_all_text_delta();
 
     let page_block = blocks
       .get(&page_id)
