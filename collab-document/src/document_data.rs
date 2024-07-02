@@ -96,7 +96,7 @@ pub fn default_document_collab_data(document_id: &str) -> Result<EncodedCollab, 
     vec![],
     false,
   )));
-  let _ = Document::create_with_data(collab.clone(), document_data);
+  let _ = Document::create(collab.clone(), Some(document_data));
   let lock_guard = collab.blocking_read();
   lock_guard.encode_collab_v1(|collab| {
     CollabType::Document

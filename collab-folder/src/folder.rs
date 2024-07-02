@@ -145,20 +145,21 @@ impl Folder {
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
-    self.inner.lock().subscribe_sync_state()
+    self.inner.lock().unwrap().subscribe_sync_state()
   }
 
   pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
-    self.inner.lock().subscribe_snapshot_state()
+    self.inner.lock().unwrap().subscribe_snapshot_state()
   }
 
   pub fn subscribe_index_content(&self) -> IndexContentReceiver {
-    self.inner.lock().subscribe_index_content()
+    self.inner.lock().unwrap().subscribe_index_content()
   }
 
   /// Returns the doc state and the state vector.
   pub fn encode_collab_v1(&self) -> Result<EncodedCollab, FolderError> {
-    self.inner.lock().encode_collab_v1(|collab| {
+    let lock = self.inner.lock().unwrap();
+    lock.encode_collab_v1(|collab| {
       CollabType::Folder
         .validate_require_data(collab)
         .map_err(|err| FolderError::NoRequiredData(err.to_string()))
@@ -179,8 +180,7 @@ impl Folder {
   ///
   /// * `None`: If the operation is unsuccessful (though it should typically not be the case as `Some`
   ///   is returned explicitly), it returns `None`.
-  pub fn get_folder_data(&self, workspace_id: &str) -> Option<FolderData> {
-    let txn = self.root.transact();
+  pub fn get_folder_data<T: ReadTxn>(&self, txn: &T, workspace_id: &str) -> Option<FolderData> {
     let folder_workspace_id = self.get_workspace_id_with_txn(&txn);
     if folder_workspace_id != workspace_id {
       error!(
@@ -242,15 +242,14 @@ impl Folder {
   /// This function fetches the ID of the current workspace from the meta object,
   /// and uses this ID to fetch the actual workspace object.
   ///
-  pub fn get_workspace_info(&self, workspace_id: &str) -> Option<Workspace> {
-    let txn = self.meta.transact();
-    let folder_workspace_id = self.meta.get_str_with_txn(&txn, FOLDER_WORKSPACE_ID)?;
+  pub fn get_workspace_info<T: ReadTxn>(&self, txn: &T, workspace_id: &str) -> Option<Workspace> {
+    let folder_workspace_id: String = self.meta.get_with_txn(txn, FOLDER_WORKSPACE_ID)?;
     if folder_workspace_id != workspace_id {
       error!("Workspace id not match when get current workspace");
       return None;
     }
 
-    let view = self.views.get_view_with_txn(&txn, &folder_workspace_id)?;
+    let view = self.views.get_view_with_txn(txn, &folder_workspace_id)?;
     Some(Workspace::from(view.as_ref()))
   }
 

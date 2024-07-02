@@ -6,12 +6,13 @@ use std::sync::{Arc, Weak};
 
 use collab::core::collab_state::{SnapshotState, SyncState};
 
-use collab::preclude::{Collab, JsonValue, ReadTxn, TransactionMut};
+use collab::preclude::{Collab, JsonValue, MapRef, ReadTxn, TransactionMut};
 use collab_entity::define::{DATABASE, DATABASE_ID};
 use collab_entity::CollabType;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 pub use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{Block, BlockEvent};
@@ -33,8 +34,8 @@ use crate::workspace_database::DatabaseCollabService;
 
 pub struct Database {
   #[allow(dead_code)]
-  inner: Arc<MutexCollab>,
-  pub(crate) root: MapRefWrapper,
+  inner: Arc<Mutex<Collab>>,
+  pub(crate) root: MapRef,
   pub views: Rc<ViewMap>,
   pub fields: Rc<FieldMap>,
   pub metas: Rc<MetaMap>,
@@ -51,7 +52,7 @@ const METAS: &str = "metas";
 pub struct DatabaseContext {
   pub uid: i64,
   pub db: Weak<CollabKVDB>,
-  pub collab: Arc<MutexCollab>,
+  pub collab: Arc<Mutex<Collab>>,
   pub collab_service: Arc<dyn DatabaseCollabService>,
   pub notifier: DatabaseNotify,
 }

@@ -91,14 +91,6 @@ impl Document {
     Ok(())
   }
 
-  /// Create a new document with the given data.
-  pub async fn create_with_data(
-    collab: Arc<RwLock<Collab>>,
-    data: DocumentData,
-  ) -> Result<Document, DocumentError> {
-    Document::create_document(collab, Some(data)).await
-  }
-
   pub async fn from_doc_state(
     origin: CollabOrigin,
     doc_state: DataSource,
@@ -133,8 +125,8 @@ impl Document {
   }
 
   /// Get document data.
-  pub async fn get_document_data(&self) -> Result<DocumentData, DocumentError> {
-    let collab_guard = self.inner.read().await;
+  pub fn get_document_data(&self) -> Result<DocumentData, DocumentError> {
+    let collab_guard = self.inner.blocking_read();
     let txn = collab_guard.transact();
     let page_id = self
       .root
@@ -534,56 +526,13 @@ impl Document {
       .store(Some(Arc::new(subscription)));
   }
 
-  async fn create_document(
+  pub async fn create(
     collab: Arc<RwLock<Collab>>,
     data: Option<DocumentData>,
   ) -> Result<Self, DocumentError> {
     let mut collab_guard = collab.write().await;
-    let (root, block_operation, children_operation, text_operation) = {
-      let collab = &mut *collab_guard;
-      let mut txn = collab.context.transact_mut();
-      // { document: {:} }
-      let root = collab.data.get_or_init_map(&mut txn, DOCUMENT_ROOT);
-      // { document: { blocks: {:} } }
-      let blocks = root.get_or_init_map(&mut txn, BLOCKS);
-      // { document: { blocks: {:}, meta: {:} } }
-      let meta = root.get_or_init_map(&mut txn, META);
-      // {document: { blocks: {:}, meta: { children_map: {:} } }
-      let children_map = meta.get_or_init_map(&mut txn, CHILDREN_MAP);
-      // { document: { blocks: {:}, meta: { text_map: {:} } }
-      let text_map = meta.get_or_init_map(&mut txn, TEXT_MAP);
-
-      let children_operation = ChildrenOperation::new(children_map);
-      let text_operation = TextOperation::new(text_map);
-      let block_operation = BlockOperation::new(blocks, children_operation.clone());
-
-      // If the data is not None, insert the data to the document.
-      if let Some(data) = data {
-        root.insert(&mut txn, PAGE_ID, data.page_id);
-
-        for (_, block) in data.blocks {
-          block_operation.create_block_with_txn(&mut txn, block)?;
-        }
-
-        for (id, child_ids) in data.meta.children_map {
-          let map = children_operation.get_children_with_txn(&mut txn, &id);
-          child_ids.iter().for_each(|child_id| {
-            map.push_back(&mut txn, child_id.to_string());
-          });
-        }
-        if let Some(text_map) = data.meta.text_map {
-          for (id, delta) in text_map {
-            let delta = serde_json::from_str(&delta).unwrap_or_else(|_| vec![]);
-            text_operation.apply_delta_with_txn(&mut txn, &id, delta)
-          }
-        }
-      }
-
-      (root, block_operation, children_operation, text_operation)
-    };
-
-    collab_guard.enable_undo_redo();
-
+    let (root, block_operation, children_operation, text_operation) =
+      Self::init_document(&mut collab_guard, data)?;
     drop(collab_guard);
 
     let document = Self {
@@ -596,6 +545,73 @@ impl Document {
       awareness_subscription: Default::default(),
     };
     Ok(document)
+  }
+
+  pub fn create_blocking(
+    collab: Arc<RwLock<Collab>>,
+    data: Option<DocumentData>,
+  ) -> Result<Self, DocumentError> {
+    let mut collab_guard = collab.blocking_write();
+    let (root, block_operation, children_operation, text_operation) =
+      Self::init_document(&mut collab_guard, data)?;
+    drop(collab_guard);
+
+    let document = Self {
+      inner: collab,
+      root,
+      block_operation,
+      children_operation,
+      text_operation,
+      subscription: None,
+      awareness_subscription: Default::default(),
+    };
+    Ok(document)
+  }
+
+  fn init_document(
+    collab: &mut Collab,
+    data: Option<DocumentData>,
+  ) -> Result<(MapRef, BlockOperation, ChildrenOperation, TextOperation), DocumentError> {
+    let mut txn = collab.context.transact_mut();
+    // { document: {:} }
+    let root = collab.data.get_or_init_map(&mut txn, DOCUMENT_ROOT);
+    // { document: { blocks: {:} } }
+    let blocks = root.get_or_init_map(&mut txn, BLOCKS);
+    // { document: { blocks: {:}, meta: {:} } }
+    let meta = root.get_or_init_map(&mut txn, META);
+    // {document: { blocks: {:}, meta: { children_map: {:} } }
+    let children_map = meta.get_or_init_map(&mut txn, CHILDREN_MAP);
+    // { document: { blocks: {:}, meta: { text_map: {:} } }
+    let text_map = meta.get_or_init_map(&mut txn, TEXT_MAP);
+
+    let children_operation = ChildrenOperation::new(children_map);
+    let text_operation = TextOperation::new(text_map);
+    let block_operation = BlockOperation::new(blocks, children_operation.clone());
+
+    // If the data is not None, insert the data to the document.
+    if let Some(data) = data {
+      root.insert(&mut txn, PAGE_ID, data.page_id);
+
+      for (_, block) in data.blocks {
+        block_operation.create_block_with_txn(&mut txn, block)?;
+      }
+
+      for (id, child_ids) in data.meta.children_map {
+        let map = children_operation.get_children_with_txn(&mut txn, &id);
+        child_ids.iter().for_each(|child_id| {
+          map.push_back(&mut txn, child_id.to_string());
+        });
+      }
+      if let Some(text_map) = data.meta.text_map {
+        for (id, delta) in text_map {
+          let delta = serde_json::from_str(&delta).unwrap_or_else(|_| vec![]);
+          text_operation.apply_delta_with_txn(&mut txn, &id, delta)
+        }
+      }
+    }
+    drop(txn);
+    collab.enable_undo_redo();
+    Ok((root, block_operation, children_operation, text_operation))
   }
 
   async fn open_document_with_collab(collab: Arc<RwLock<Collab>>) -> Result<Self, DocumentError> {
