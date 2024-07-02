@@ -12,10 +12,10 @@ use std::sync::mpsc;
 use yrs::sync::awareness::AwarenessUpdateEntry;
 use yrs::updates::encoder::{Encode, Encoder};
 
-#[tokio::test]
-async fn document_awareness_test() {
+#[test]
+fn document_awareness_test() {
   let uid = 1;
-  let mut test = DocumentTest::new(uid, "1").await;
+  let mut test = DocumentTest::new(uid, "1");
   let document_state = DocumentAwarenessState {
     version: 1,
     user: DocumentAwarenessUser {

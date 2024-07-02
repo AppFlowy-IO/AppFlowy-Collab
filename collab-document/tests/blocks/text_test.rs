@@ -8,9 +8,9 @@ use crate::util::try_decode_from_encode_collab;
 use serde_json::json;
 use std::sync::Arc;
 
-#[tokio::test]
-async fn insert_text_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn insert_text_test() {
+  let test = BlockTestCore::new();
   let origin_delta = json!([{"insert": "Hello World"}]).to_string();
   let text_id = test.create_text(origin_delta.clone());
   let delta = test.get_text_delta_with_text_id(&text_id);
@@ -20,9 +20,9 @@ async fn insert_text_test() {
   );
 }
 
-#[tokio::test]
-async fn insert_empty_text_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn insert_empty_text_test() {
+  let test = BlockTestCore::new();
   let origin_delta = "".to_string();
   let text_id = test.create_text(origin_delta);
   let delta = test.get_text_delta_with_text_id(&text_id);
@@ -31,9 +31,9 @@ async fn insert_empty_text_test() {
   assert_eq!(result.unwrap(), vec![]);
 }
 
-#[tokio::test]
-async fn apply_empty_delta_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn apply_empty_delta_test() {
+  let test = BlockTestCore::new();
   let origin_delta = json!([{"insert": "Hello World"}]).to_string();
   let text_id = test.create_text(origin_delta);
   let origin_delta = test.get_text_delta_with_text_id(&text_id);
@@ -45,9 +45,9 @@ async fn apply_empty_delta_test() {
     deserialize_text_delta(&origin_delta).unwrap()
   );
 }
-#[tokio::test]
-async fn format_text_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn format_text_test() {
+  let test = BlockTestCore::new();
   let origin_delta = json!([{"insert": "Hello World", "attributes": { "bold": true }}]).to_string();
   let text_id = test.create_text(origin_delta.clone());
   let delta = test.get_text_delta_with_text_id(&text_id);
@@ -57,9 +57,9 @@ async fn format_text_test() {
   );
 }
 
-#[tokio::test]
-async fn apply_retain_delta_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn apply_retain_delta_test() {
+  let test = BlockTestCore::new();
   let text = "Hello World".to_string();
   let length = text.len() as u32;
   let origin_delta = json!([{"insert": "Hello World"}]).to_string();
@@ -108,9 +108,9 @@ async fn apply_retain_delta_test() {
   );
 }
 
-#[tokio::test]
-async fn apply_delete_delta_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn apply_delete_delta_test() {
+  let test = BlockTestCore::new();
   let origin_delta = json!([{"insert": "Hello World", "attributes": { "bold": true }}]).to_string();
   let text_id = test.create_text(origin_delta);
   let delete_delta = json!([
@@ -128,9 +128,9 @@ async fn apply_delete_delta_test() {
   );
 }
 
-#[tokio::test]
-async fn apply_mark_delta_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn apply_mark_delta_test() {
+  let test = BlockTestCore::new();
   let origin_delta = json!([{"insert": "123456"}]).to_string();
   let text_id = test.create_text(origin_delta);
   let delta = json!([
@@ -162,9 +162,9 @@ async fn apply_mark_delta_test() {
   try_decode_from_encode_collab(&test.document);
 }
 
-#[tokio::test]
-async fn apply_chinese_ime_delta_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn apply_chinese_ime_delta_test() {
+  let test = BlockTestCore::new();
   // convert zhong'wen to 中文
   let origin_delta = json!([{"insert": "z"}]).to_string();
   let text_id = test.create_text(origin_delta);
@@ -191,9 +191,9 @@ async fn apply_chinese_ime_delta_test() {
   try_decode_from_encode_collab(&test.document);
 }
 
-#[tokio::test]
-async fn apply_delete_chinese_delta_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn apply_delete_chinese_delta_test() {
+  let test = BlockTestCore::new();
   let origin_delta =
     json!([{"insert": "Hello World 嗨", "attributes": { "bold": true }}]).to_string();
   let text_id = test.create_text(origin_delta);
@@ -212,9 +212,9 @@ async fn apply_delete_chinese_delta_test() {
   try_decode_from_encode_collab(&test.document);
 }
 
-#[tokio::test]
-async fn apply_insert_delta_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn apply_insert_delta_test() {
+  let test = BlockTestCore::new();
   let _text = "Hello World".to_string();
   let delta = json!([
     { "insert": "As soon as you type " },
@@ -261,9 +261,9 @@ async fn apply_insert_delta_test() {
   try_decode_from_encode_collab(&test.document);
 }
 
-#[tokio::test]
-async fn subscribe_apply_delta_test() {
-  let mut test = BlockTestCore::new().await;
+#[test]
+fn subscribe_apply_delta_test() {
+  let mut test = BlockTestCore::new();
   test.subscribe(|e, _| {
     println!("event: {:?}", e);
   });
@@ -280,8 +280,8 @@ async fn subscribe_apply_delta_test() {
   try_decode_from_encode_collab(&test.document);
 }
 
-#[tokio::test]
-async fn delta_equal_test() {
+#[test]
+fn delta_equal_test() {
   let delta = json!([{"insert": "Hello World"}, { "retain": 6, "attributes": { "bold": true } }, { "delete": 4 } ]).to_string();
   let delta2 = json!([{"insert": "Hello World"}, { "attributes": { "bold": true }, "retain": 6 }, { "delete": 4 } ]).to_string();
 
@@ -291,33 +291,33 @@ async fn delta_equal_test() {
   );
 }
 
-#[tokio::test]
-async fn text_delta_trans_delta_test() {
-  let test = BlockTestCore::new().await;
-  test.document.with_transact_mut(|txn| {
-    let text_delta = TextDelta::Inserted("Hello World".to_string(), None);
-    let delta = Delta::Inserted(YrsValue::from("Hello World"), None);
-    let result = TextDelta::from(txn, delta.clone());
-    assert_eq!(result, text_delta);
-    assert_eq!(result.to_delta(), delta);
+#[test]
+fn text_delta_trans_delta_test() {
+  let test = BlockTestCore::new();
+  let collab = test.document.get_collab().blocking_read();
+  let txn = collab.transact();
+  let text_delta = TextDelta::Inserted("Hello World".to_string(), None);
+  let delta = Delta::Inserted(YrsValue::from("Hello World"), None);
+  let result = TextDelta::from(&txn, delta.clone());
+  assert_eq!(result, text_delta);
+  assert_eq!(result.to_delta(), delta);
 
-    let attrs = Attrs::from([(Arc::from("bold"), true.into())]);
-    let delta = Delta::Retain(6, Some(Box::from(attrs.clone())));
-    let result = TextDelta::from(txn, delta.clone());
-    let text_delta = TextDelta::Retain(6, Some(attrs));
-    assert_eq!(result, text_delta);
-    assert_eq!(result.to_delta(), delta);
+  let attrs = Attrs::from([(Arc::from("bold"), true.into())]);
+  let delta = Delta::Retain(6, Some(Box::from(attrs.clone())));
+  let result = TextDelta::from(&txn, delta.clone());
+  let text_delta = TextDelta::Retain(6, Some(attrs));
+  assert_eq!(result, text_delta);
+  assert_eq!(result.to_delta(), delta);
 
-    let delta = Delta::Deleted(4);
-    let result = TextDelta::from(txn, delta.clone());
-    let text_delta = TextDelta::Deleted(4);
-    assert_eq!(result, text_delta);
-    assert_eq!(result.to_delta(), delta);
-  })
+  let delta = Delta::Deleted(4);
+  let result = TextDelta::from(&txn, delta.clone());
+  let text_delta = TextDelta::Deleted(4);
+  assert_eq!(result, text_delta);
+  assert_eq!(result.to_delta(), delta);
 }
 
-#[tokio::test]
-async fn serialize_delta_test() {
+#[test]
+fn serialize_delta_test() {
   let delta = TextDelta::Inserted("Hello World".to_string(), None);
   let json = serde_json::to_string(&delta).unwrap();
   assert_eq!(json, r#"{"insert":"Hello World"}"#);
@@ -331,8 +331,8 @@ async fn serialize_delta_test() {
   assert_eq!(json, r#"{"delete":4}"#);
 }
 
-#[tokio::test]
-async fn deserialize_delta_test() {
+#[test]
+fn deserialize_delta_test() {
   let json = r#"{"insert":"Hello World"}"#;
   let delta: TextDelta = serde_json::from_str(json).unwrap();
   assert_eq!(delta, TextDelta::Inserted("Hello World".to_string(), None));
@@ -361,9 +361,9 @@ async fn deserialize_delta_test() {
   assert!(result.is_err());
 }
 
-#[tokio::test]
-async fn apply_text_actions() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn apply_text_actions() {
+  let test = BlockTestCore::new();
   let insert_delta = json!([{ "insert": "Hello " }]).to_string();
   let text_id = test.create_text(insert_delta.clone());
   let delta = json!([{
@@ -412,9 +412,9 @@ async fn apply_text_actions() {
   try_decode_from_encode_collab(&test.document);
 }
 
-#[tokio::test]
-async fn apply_text_actions_without_params_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn apply_text_actions_without_params_test() {
+  let test = BlockTestCore::new();
   let insert_delta = json!([{ "insert": "Hello " }]).to_string();
   let text_id = test.create_text(insert_delta.clone());
   let document_data = test.get_document_data();

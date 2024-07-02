@@ -19,6 +19,7 @@ use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use serde_json::{json, Value};
 use tempfile::TempDir;
+use tokio::sync::RwLock;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 use zip::ZipArchive;
 
@@ -28,12 +29,12 @@ pub struct DocumentTest {
 }
 
 impl DocumentTest {
-  pub async fn new(uid: i64, doc_id: &str) -> Self {
+  pub fn new(uid: i64, doc_id: &str) -> Self {
     let db = document_storage();
-    Self::new_with_db(uid, doc_id, db).await
+    Self::new_with_db(uid, doc_id, db)
   }
 
-  pub async fn new_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Self {
+  pub fn new_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Self {
     let disk_plugin = RocksdbDiskPlugin::new(
       uid,
       doc_id.to_string(),
@@ -41,12 +42,12 @@ impl DocumentTest {
       Arc::downgrade(&db),
       None,
     );
-    let collab = CollabBuilder::new(1, doc_id)
+    let mut collab = CollabBuilder::new(1, doc_id)
       .with_plugin(disk_plugin)
       .with_device_id("1")
       .build()
       .unwrap();
-    collab.lock().initialize();
+    collab.initialize();
 
     let mut blocks = HashMap::new();
     let mut children_map = HashMap::new();
@@ -97,7 +98,8 @@ impl DocumentTest {
       blocks,
       meta,
     };
-    let document = Document::create_with_data(Arc::new(collab), document_data).unwrap();
+    let document =
+      Document::create_blocking(Arc::new(RwLock::new(collab)), Some(document_data)).unwrap();
     Self { document, db }
   }
 }
@@ -110,7 +112,7 @@ impl Deref for DocumentTest {
   }
 }
 
-pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Document {
+pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Document {
   setup_log();
   let disk_plugin = RocksdbDiskPlugin::new(
     uid,
@@ -119,14 +121,14 @@ pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) 
     Arc::downgrade(&db),
     None,
   );
-  let collab = CollabBuilder::new(uid, doc_id)
+  let mut collab = CollabBuilder::new(uid, doc_id)
     .with_plugin(disk_plugin)
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.lock().initialize();
+  collab.initialize();
 
-  Document::open(Arc::new(collab)).unwrap()
+  Document::create_blocking(Arc::new(RwLock::new(collab)), None).unwrap()
 }
 
 pub fn document_storage() -> Arc<CollabKVDB> {
@@ -158,7 +160,9 @@ pub fn insert_block(
   block: Block,
   prev_id: String,
 ) -> Result<Block, DocumentError> {
-  document.with_transact_mut(|txn| document.insert_block(txn, block, Some(prev_id)))
+  let mut collab = document.get_collab().blocking_write();
+  let mut txn = collab.transact_mut();
+  document.insert_block(&mut txn, block, Some(prev_id))
 }
 
 pub fn get_document_data(
@@ -175,7 +179,9 @@ pub fn get_document_data(
 }
 
 pub fn delete_block(document: &Document, block_id: &str) -> Result<(), DocumentError> {
-  document.with_transact_mut(|txn| document.delete_block(txn, block_id))
+  let mut collab = document.get_collab().blocking_write();
+  let mut txn = collab.transact_mut();
+  document.delete_block(&mut txn, block_id)
 }
 
 pub fn update_block(
@@ -183,7 +189,9 @@ pub fn update_block(
   block_id: &str,
   data: HashMap<String, Value>,
 ) -> Result<(), DocumentError> {
-  document.with_transact_mut(|txn| document.update_block_data(txn, block_id, data))
+  let mut collab = document.get_collab().blocking_write();
+  let mut txn = collab.transact_mut();
+  document.update_block_data(&mut txn, block_id, data)
 }
 
 pub fn apply_actions(document: &Document, actions: Vec<BlockAction>) {
@@ -260,7 +268,7 @@ pub fn unzip_history_document_db(folder_name: &str) -> std::io::Result<(Cleaner,
 
 /// Can remove in the future. Just want to test the encode_collab and decode_collab
 pub fn try_decode_from_encode_collab(document: &Document) {
-  let data = document.encode_collab().unwrap();
+  let data = document.encode_collab_blocking().unwrap();
   let _ = Collab::new_with_source(
     CollabOrigin::Empty,
     "1",
