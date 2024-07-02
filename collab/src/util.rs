@@ -69,14 +69,19 @@ pub fn any_to_json_value(any: Any) -> Result<Value> {
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::sync::Arc;
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::core::collab::Path;
 use crate::core::value::Entity;
 use crate::error::CollabError;
 use yrs::block::Prelim;
 use yrs::branch::BranchPtr;
-use yrs::types::ToJson;
-use yrs::{Any, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, ReadTxn, TransactionMut, Value};
+use yrs::types::text::YChange;
+use yrs::types::{Attrs, Delta, ToJson};
+use yrs::{
+  Any, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, ReadTxn, Text, TextPrelim, TextRef,
+  TransactionMut, Value,
+};
 
 pub trait MapExt: Map {
   #[inline]
@@ -106,6 +111,14 @@ pub trait MapExt: Map {
     match self.get(txn, &key) {
       Some(Value::YArray(array)) => array,
       _ => self.insert(txn, key, ArrayPrelim::default()),
+    }
+  }
+
+  fn get_or_init_text<S: Into<Arc<str>>>(&self, txn: &mut TransactionMut, key: S) -> TextRef {
+    let key = key.into();
+    match self.get(txn, &key) {
+      Some(Value::YText(text)) => text,
+      _ => self.insert(txn, key, TextPrelim::new("")),
     }
   }
 
@@ -208,7 +221,60 @@ pub trait MapExt: Map {
   }
 }
 
-impl<T: Map + Into<MapRef>> MapExt for T {}
+impl MapExt for MapRef {}
+
+pub trait TextExt: Text {
+  fn delta<T: ReadTxn>(&self, tx: &T) -> Vec<Delta> {
+    let changes = self.diff(tx, YChange::identity);
+    let mut deltas = vec![];
+    for change in changes {
+      let delta = Delta::Inserted(change.insert, change.attributes);
+      deltas.push(delta);
+    }
+    deltas
+  }
+
+  fn apply_delta(&self, txn: &mut TransactionMut, delta: Vec<Delta>) {
+    let mut index = 0;
+    for d in delta {
+      match d {
+        Delta::Inserted(content, attrs) => {
+          let value = content.to_string(txn);
+          // don't use value.len() because it's not represent the unicode graphemes
+          // for example, "a̐" has 1 grapheme but value.len() is 3, "中文" has 2 graphemes but value.len() is 6
+          //
+          // COMMENT (Bartosz): Yrs has two modes of work with string lengths:
+          //  1. (default) offset based on byte-length of the string.
+          //  2. offset based on UTF16 code points: this is also what JavaScript (and Yjs) uses.
+          // Both of these can be set via `Doc::with_options(Options { offset_kind })`
+          let len = value.graphemes(true).count() as u32;
+          if let Some(attrs) = attrs {
+            self.insert_with_attributes(txn, index, &value, *attrs)
+          } else {
+            // TODO: This is a hack to get around the fact that Yrs doesn't
+            // By setting empty attributes, prevent it from encountering a bug where it gets appended to the previous op.
+            let attrs = Attrs::from([(Arc::from(""), Any::Null)]);
+            self.insert_with_attributes(txn, index, &value, attrs);
+          }
+
+          index += len;
+        },
+        Delta::Deleted(len) => {
+          self.remove_range(txn, index, len);
+        },
+        Delta::Retain(len, attrs) => {
+          attrs.map(|attrs| {
+            self.format(txn, index, len, *attrs);
+            Some(())
+          });
+          index += len;
+        },
+      }
+    }
+  }
+}
+
+impl TextExt for TextRef {}
 
 macro_rules! create_deserialize_numeric {
   ($type:ty, $visitor_name:ident, $deserialize_fn_name:ident) => {

@@ -4,14 +4,9 @@ use std::rc::Rc;
 
 use std::sync::{Arc, Weak};
 
-use collab::core::any_map::AnyMapExtension;
-use collab::core::collab::MutexCollab;
-
 use collab::core::collab_state::{SnapshotState, SyncState};
 
-use collab::preclude::{
-  Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
-};
+use collab::preclude::{Collab, JsonValue, ReadTxn, TransactionMut};
 use collab_entity::define::{DATABASE, DATABASE_ID};
 use collab_entity::CollabType;
 use collab_plugins::CollabKVDB;

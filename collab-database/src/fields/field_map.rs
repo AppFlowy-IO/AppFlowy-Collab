@@ -1,6 +1,4 @@
-use collab::preclude::{
-  Map, MapRefExtension, MapRefWrapper, ReadTxn, Subscription, TransactionMut,
-};
+use collab::preclude::{Map, MapRef, ReadTxn, Subscription, TransactionMut};
 
 use crate::database::timestamp;
 use crate::fields::{
@@ -11,13 +9,13 @@ use crate::views::FieldOrder;
 
 /// A map of fields
 pub struct FieldMap {
-  container: MapRefWrapper,
+  container: MapRef,
   #[allow(dead_code)]
   subscription: Subscription,
 }
 
 impl FieldMap {
-  pub fn new(mut container: MapRefWrapper, field_change_tx: FieldChangeSender) -> Self {
+  pub fn new(mut container: MapRef, field_change_tx: FieldChangeSender) -> Self {
     let subscription = subscribe_field_change(&mut container, field_change_tx);
     Self {
       container,

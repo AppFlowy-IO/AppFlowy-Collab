@@ -3,12 +3,8 @@ use std::{
   ops::{Deref, DerefMut},
 };
 
-use collab::core::any_map::{AnyMap, AnyMapBuilder};
-use collab::preclude::{Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
+use collab::preclude::{Map, MapRef, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
-
-pub type FieldSettingsMap = AnyMap;
-pub type FieldSettingsMapBuilder = AnyMapBuilder;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct FieldSettingsByFieldIdMap(HashMap<String, FieldSettingsMap>);

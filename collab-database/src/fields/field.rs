@@ -1,5 +1,4 @@
-use collab::core::value::YrsValueExtension;
-use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue};
+use collab::preclude::{MapRef, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 
 use crate::fields::{TypeOptionData, TypeOptions, TypeOptionsUpdate};

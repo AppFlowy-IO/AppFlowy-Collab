@@ -1,15 +1,15 @@
 use std::ops::Deref;
 
-use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{MapRef, ReadTxn, TransactionMut};
 
 const DATABASE_INLINE_VIEW: &str = "iid";
 
 pub struct MetaMap {
-  container: MapRefWrapper,
+  container: MapRef,
 }
 
 impl MetaMap {
-  pub fn new(container: MapRefWrapper) -> Self {
+  pub fn new(container: MapRef) -> Self {
     Self { container }
   }
 

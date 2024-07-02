@@ -284,6 +284,10 @@ impl Collab {
     }
   }
 
+  pub fn object_id(&self) -> &str {
+    &self.object_id
+  }
+
   pub fn origin(&self) -> &CollabOrigin {
     &self.context.origin
   }

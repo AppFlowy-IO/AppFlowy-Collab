@@ -3,60 +3,49 @@ use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct ChildrenOperation {
-  root: MapRefWrapper,
+  root: MapRef,
 }
 
 impl ChildrenOperation {
-  pub fn new(root: MapRefWrapper) -> Self {
+  pub fn new(root: MapRef) -> Self {
     Self { root }
   }
 
   /// get the children of a block with the given id or create it if it does not exist
-  pub fn get_children_with_txn(
-    &self,
-    txn: &mut TransactionMut,
-    children_id: &str,
-  ) -> ArrayRefWrapper {
-    self
-      .root
-      .get_array_ref_with_txn(txn, children_id)
-      .unwrap_or_else(|| self.create_children_with_txn(txn, children_id))
+  pub fn get_children_with_txn(&self, txn: &mut TransactionMut, children_id: &str) -> ArrayRef {
+    self.root.get_or_init_array(txn, children_id)
   }
 
   /// get children map of current root map
-  pub fn get_all_children(&self) -> HashMap<String, Vec<String>> {
-    let txn = self.root.transact();
+  pub fn get_all_children<T: ReadTxn>(&self, txn: &T) -> HashMap<String, Vec<String>> {
     self
       .root
-      .iter(&txn)
+      .iter(txn)
       .filter_map(|(k, _)| {
-        self.root.get_array_ref_with_txn(&txn, k).map(|children| {
-          (
-            k.to_string(),
-            children
-              .iter(&txn)
-              .map(|child| child.to_string(&txn))
-              .collect(),
-          )
-        })
+        self
+          .root
+          .get_with_txn::<T, ArrayRef>(txn, k)
+          .map(|children| {
+            (
+              k.to_string(),
+              children
+                .iter(txn)
+                .map(|child| child.to_string(txn))
+                .collect(),
+            )
+          })
       })
       .collect()
   }
 
   /// Create children map of each block.
-  pub fn create_children_with_txn(
-    &self,
-    txn: &mut TransactionMut,
-    children_id: &str,
-  ) -> ArrayRefWrapper {
-    self
-      .root
-      .insert_array_with_txn(txn, children_id, Vec::<String>::new())
+  pub fn create_children_with_txn(&self, txn: &mut TransactionMut, children_id: &str) -> ArrayRef {
+    self.root.insert(txn, children_id, ArrayPrelim::default())
   }
 
   /// Delete children map when delete this block.
   pub fn delete_children_with_txn(&self, txn: &mut TransactionMut, children_id: &str) {
-    self.root.delete_with_txn(txn, children_id);
+    self.root.remove(txn, children_id);
   }
 
   /// Get child index of current block's children map with given child id.
@@ -68,8 +57,9 @@ impl ChildrenOperation {
   ) -> Option<u32> {
     self
       .root
-      .get_array_ref_with_txn(txn, children_id)
-      .and_then(|children| {
+      .get(txn, children_id)
+      .and_then(|children| children.cast().ok())
+      .and_then(|children: ArrayRef| {
         children
           .iter(txn)
           .position(|child| child.to_string(txn) == child_id)
@@ -93,7 +83,7 @@ impl ChildrenOperation {
   pub fn delete_child_with_txn(&self, txn: &mut TransactionMut, children_id: &str, child_id: &str) {
     let children_ref = self.get_children_with_txn(txn, children_id);
     if let Some(index) = self.get_child_index_with_txn(txn, children_id, child_id) {
-      children_ref.remove_with_txn(txn, index);
+      children_ref.remove(txn, index);
     }
   }
 }

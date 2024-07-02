@@ -1,4 +1,4 @@
-use collab::preclude::{MapRef, MapRefExtension, ReadTxn, TransactionMut};
+use collab::preclude::{MapRef, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
