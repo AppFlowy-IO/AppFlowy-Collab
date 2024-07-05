@@ -421,11 +421,13 @@ name = "collab-folder"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "assert-json-diff",
  "chrono",
  "collab",
  "collab-entity",
  "collab-plugins",
+ "dashmap",
  "fs_extra",
  "futures",
  "getrandom",

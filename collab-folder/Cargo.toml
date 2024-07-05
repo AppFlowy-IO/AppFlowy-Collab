@@ -19,6 +19,8 @@ thiserror = "1.0.30"
 tokio = { workspace = true, features = ["rt", "sync"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 tracing.workspace = true
+dashmap = "5"
+arc-swap = "1.7"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }

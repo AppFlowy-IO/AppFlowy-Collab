@@ -1,5 +1,7 @@
 use anyhow::bail;
-use collab::preclude::{Any, Array, MapRef, ReadTxn, YrsValue};
+use collab::preclude::{
+  Any, Array, ArrayRef, Map, MapExt, MapRef, ReadTxn, TransactionMut, YrsValue,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::folder::FAVORITES_V1;
@@ -17,54 +19,50 @@ impl Folder {
   /// Returns a `Vec<FavoriteId>` containing the historical favorite data.
   /// The vector will be empty if no historical favorite data exists.
   pub fn get_favorite_v1(&self) -> Vec<FavoriteId> {
-    let txn = self.root.transact();
+    let mut lock = self.inner.lock().unwrap();
+    let mut txn = lock.transact_mut();
     let mut favorites = vec![];
-    if let Some(favorite_array) = self.root.get_array_ref_with_txn(&txn, FAVORITES_V1) {
+    if let Some(favorite_array) = self.root.get_with_txn::<_, ArrayRef>(&txn, FAVORITES_V1) {
       for record in favorite_array.iter(&txn) {
         if let Ok(id) = FavoriteId::try_from(&record) {
           favorites.push(id);
         }
       }
     }
-    drop(txn);
 
     if !favorites.is_empty() {
-      self.root.with_transact_mut(|txn| {
-        self.root.delete_with_txn(txn, FAVORITES_V1);
-      });
+      self.root.remove(&mut txn, FAVORITES_V1);
     }
     favorites
   }
 
-  pub fn migrate_workspace_to_view(&self) -> Option<()> {
+  pub fn migrate_workspace_to_view(&self, txn: &mut TransactionMut) {
     let mut workspace = {
-      let txn = self.root.transact();
-      let workspace_array = self.root.get_array_ref_with_txn(&txn, WORKSPACES)?;
-      let map_refs = workspace_array.to_map_refs();
-      map_refs
-        .into_iter()
-        .flat_map(|map_ref| to_workspace_with_txn(&txn, &map_ref, &self.views.view_relations))
+      let workspace_array: ArrayRef = match self.root.get_with_txn(txn, WORKSPACES) {
+        Some(array) => array,
+        None => return,
+      };
+      workspace_array
+        .iter(txn)
+        .flat_map(|map_ref| {
+          to_workspace_with_txn(txn, &map_ref.cast().unwrap(), &self.views.view_relations)
+        })
         .collect::<Vec<_>>()
     };
     if !workspace.is_empty() {
       let workspace = workspace.pop().unwrap();
-      self.root.with_transact_mut(|txn| {
-        self.root.delete_with_txn(txn, WORKSPACES);
-        self
-          .views
-          .insert_view_with_txn(txn, View::from(workspace), None);
-      })
+      self.root.remove(txn, WORKSPACES);
+      self.views.insert(txn, View::from(workspace), None);
     }
-
-    Some(())
   }
 
   /// Retrieves historical trash data from the key `trash`.
   /// v1 trash data is stored in the key `trash`.
   pub fn get_trash_v1(&self) -> Vec<SectionItem> {
-    let txn = self.root.transact();
+    let lock = self.inner.lock().unwrap();
+    let txn = lock.transact();
     let mut trash = vec![];
-    if let Some(trash_array) = self.root.get_array_ref_with_txn(&txn, "trash") {
+    if let Some(trash_array) = self.root.get_with_txn::<_, ArrayRef>(&txn, "trash") {
       for record in trash_array.iter(&txn) {
         if let YrsValue::Any(any) = record {
           if let Ok(record) = TrashRecord::from_any(any) {
@@ -85,17 +83,17 @@ pub fn to_workspace_with_txn<T: ReadTxn>(
   map_ref: &MapRef,
   views: &ViewRelations,
 ) -> Option<Workspace> {
-  let id = map_ref.get_str_with_txn(txn, WORKSPACE_ID)?;
+  let id: String = map_ref.get_with_txn(txn, WORKSPACE_ID)?;
   let name = map_ref
-    .get_str_with_txn(txn, WORKSPACE_NAME)
+    .get_with_txn(txn, WORKSPACE_NAME)
     .unwrap_or_default();
   let created_at = map_ref
-    .get_i64_with_txn(txn, WORKSPACE_CREATED_AT)
+    .get_with_txn(txn, WORKSPACE_CREATED_AT)
     .unwrap_or_default();
 
   let child_views = views
     .get_children_with_txn(txn, &id)
-    .map(|array| array.get_children())
+    .map(|array| array.get_children_with_txn(txn))
     .unwrap_or_default();
 
   Some(Workspace {
