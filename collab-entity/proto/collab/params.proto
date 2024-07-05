@@ -1,0 +1,16 @@
+syntax = "proto3";
+import "collab/common.proto";
+import "collab/embeddings.proto";
+
+package collab;
+
+// Payload for sending and receive collab over http.
+message CollabParams {
+  string object_id = 1;
+  // Serialized EncodedCollab object, which could either be in bincode or protobuf serialization format.
+  bytes encoded_collab = 2;
+  // Collab type.
+  CollabType collab_type = 3;
+  // Document embeddings.
+  optional CollabEmbeddings embeddings = 4;
+}
