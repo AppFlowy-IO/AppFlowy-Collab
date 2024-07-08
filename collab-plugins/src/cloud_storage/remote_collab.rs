@@ -10,7 +10,7 @@ use collab::core::collab::{DataSource, MutexCollab, TransactionMutExt};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
-use collab_entity::{CollabObject, CollabType};
+use collab_entity::CollabObject;
 use parking_lot::Mutex;
 use rand::Rng;
 use serde::Deserialize;
@@ -209,6 +209,7 @@ impl RemoteCollab {
   /// Return the update of the remote collab.
   /// If the remote collab contains any updates, it will return None.
   /// Otherwise, it will merge the updates into one and return the merged update.
+  #[allow(dead_code)]
   pub async fn sync(&self, local_collab: Weak<MutexCollab>) -> Result<Vec<u8>, Error> {
     let mut remote_update = vec![];
     // It would be better if creating a edge function that calculate the diff between the local and remote.
@@ -329,6 +330,7 @@ impl RemoteCollab {
     }
   }
 
+  #[allow(dead_code)]
   pub fn clear(&self) {
     self.sink.remove_all_pending_msgs();
   }
@@ -495,7 +497,7 @@ impl Message {
         .iter()
         .map(|update| update.as_ref())
         .collect::<Vec<&[u8]>>();
-      merge_updates_v1(&updates)?
+      merge_updates_v1(updates)?
     };
     let msg_id = *self.meta.msg_id();
     Ok((self.object, msg_id, update))

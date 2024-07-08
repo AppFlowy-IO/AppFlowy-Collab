@@ -52,7 +52,7 @@ impl CollabStateCachePlugin {
       .map(|update| update.as_ref())
       .collect::<Vec<&[u8]>>();
 
-    let doc_state = merge_updates_v1(&updates)
+    let doc_state = merge_updates_v1(updates)
       .map_err(|err| anyhow::anyhow!("merge updates failed: {:?}", err))
       .unwrap();
     Ok(DataSource::DocStateV1(doc_state))
@@ -65,7 +65,7 @@ impl CollabStateCachePlugin {
       .iter()
       .map(|update| update.as_ref())
       .collect::<Vec<&[u8]>>();
-    let encoded_data = merge_updates_v1(&updates)?;
+    let encoded_data = merge_updates_v1(updates)?;
     let update = Update::decode_v1(&encoded_data)?;
     Ok(update)
   }

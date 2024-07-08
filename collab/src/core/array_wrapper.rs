@@ -89,7 +89,7 @@ pub trait ArrayRefExtension {
   fn array_ref(&self) -> &ArrayRef;
 
   fn insert_map_with_txn(&self, txn: &mut TransactionMut, value: Option<MapPrelim>) -> MapRef {
-    let value = value.unwrap_or_else(MapPrelim::default);
+    let value = value.unwrap_or_default();
     self.array_ref().push_back(txn, value)
   }
 
@@ -99,7 +99,7 @@ pub trait ArrayRefExtension {
     index: u32,
     value: Option<MapPrelim>,
   ) -> MapRef {
-    let value = value.unwrap_or_else(MapPrelim::default);
+    let value = value.unwrap_or_default();
     self.array_ref().insert(txn, index, value)
   }
 

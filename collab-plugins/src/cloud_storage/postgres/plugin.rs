@@ -4,23 +4,20 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use collab::core::awareness::{AwarenessUpdate, Event};
-use collab::core::collab::MutexCollab;
-use collab::core::collab_plugin::CollabPluginType;
-use collab::core::collab_state::SnapshotState;
-use collab::core::origin::CollabOrigin;
-use collab::preclude::{Collab, CollabPlugin};
-use collab_entity::CollabObject;
 use parking_lot::RwLock;
 use tokio_retry::strategy::FibonacciBackoff;
 use tokio_retry::{Action, Retry};
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
-use yrs::ReadTxn;
+
+use collab::core::collab::MutexCollab;
+use collab::core::collab_plugin::CollabPluginType;
+use collab::core::origin::CollabOrigin;
+use collab::preclude::{Collab, CollabPlugin};
+use collab_entity::CollabObject;
 
 use crate::cloud_storage::remote_collab::{RemoteCollab, RemoteCollabStorage};
 use crate::cloud_storage::sink::{SinkConfig, SinkStrategy};
-use crate::local_storage::kv::doc::CollabKVAction;
 use crate::CollabKVDB;
 
 pub struct SupabaseDBPlugin {
@@ -117,6 +114,7 @@ impl CollabPlugin for SupabaseDBPlugin {
   }
 }
 
+#[allow(dead_code)]
 struct InitSyncAction {
   uid: i64,
   object: CollabObject,
