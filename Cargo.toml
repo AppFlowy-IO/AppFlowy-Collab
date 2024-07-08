@@ -18,7 +18,7 @@ collab-user = { workspace = true, path = "collab-user" }
 collab-entity = { workspace = true, path = "collab-entity" }
 collab-document = { workspace = true, path = "collab-document" }
 collab-folder = { workspace = true, path = "collab-folder" }
-yrs = "0.18.8"
+yrs = { version = "0.19.1", features = ["sync"] }
 anyhow = "1.0"
 thiserror = "1.0.39"
 serde = { version = "1.0.157", features = ["derive"] }

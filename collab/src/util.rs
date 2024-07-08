@@ -20,7 +20,7 @@ pub fn insert_json_value_to_map_ref(
       .into_iter()
       .for_each(|(key, inner_value)| {
         let new_map_ref = if inner_value.is_object() {
-          map_ref.insert(txn, key.as_str(), MapPrelim::<Any>::new());
+          map_ref.insert(txn, key.as_str(), MapPrelim::default());
           map_ref
             .get(txn, key)
             .map(|value| value.to_ymap().cloned().unwrap())
@@ -31,7 +31,7 @@ pub fn insert_json_value_to_map_ref(
         insert_json_value_to_map_ref(key, inner_value, new_map_ref, txn);
       });
   } else if value.is_array() {
-    map_ref.insert(txn, key, ArrayPrelim::<Vec<Any>, Any>::from(vec![]));
+    map_ref.insert(txn, key, ArrayPrelim::default());
     let array_ref = map_ref
       .get(txn, key)
       .map(|value| value.to_yarray().cloned().unwrap())

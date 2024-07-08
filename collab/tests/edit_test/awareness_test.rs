@@ -10,14 +10,14 @@ async fn awareness_insert_test() {
   let mut collab = Collab::new(1, "1", "1", vec![], true);
   collab.emit_awareness_state();
   let (tx, rx) = mpsc::sync_channel(1);
-  let _update = collab.observe_awareness(move |event| {
+  let _update = collab.observe_awareness(move |_, event, _| {
     tx.send(event.clone()).unwrap();
   });
 
   let s = json!({"name": "nathan"});
-  collab.get_mut_awareness().set_local_state(s.to_string());
-  let state = collab.get_awareness().local_state().unwrap();
-  assert_eq!(state, s.to_string());
+  collab.get_mut_awareness().set_local_state(&s).unwrap();
+  let state: serde_json::Value = collab.get_awareness().local_state().unwrap();
+  assert_eq!(state, s);
 
   sleep(Duration::from_secs(1)).await;
   let event = rx.recv().unwrap();
@@ -34,17 +34,17 @@ async fn awareness_updates() {
   let sync = Arc::new(Mutex::new(None));
   let _u = {
     let ch = sync.clone();
-    c1.observe_awareness(move |event| {
-      let update = event.awareness_state().full_update().unwrap();
+    c1.observe_awareness(move |awareness, _, _| {
+      let update = awareness.update().unwrap();
       let mut lock = ch.lock().unwrap();
       *lock = Some(update);
     })
   };
 
-  let s1 = json!({"name": "nathan"}).to_string();
-  c1.get_mut_awareness().set_local_state(s1.clone());
-  let s2 = json!({"name": "bartosz"}).to_string();
-  c2.get_mut_awareness().set_local_state(s2.clone());
+  let s1 = json!({"name": "nathan"});
+  c1.get_mut_awareness().set_local_state(&s1).unwrap();
+  let s2 = json!({"name": "bartosz"});
+  c2.get_mut_awareness().set_local_state(&s2).unwrap();
   let u2 = c2.get_awareness().update().unwrap();
   c1.get_mut_awareness().apply_update(u2).unwrap();
 
@@ -54,7 +54,7 @@ async fn awareness_updates() {
   let values = awareness_update
     .clients
     .values()
-    .map(|e| e.json.clone())
+    .map(|e| serde_json::from_str(&e.json).unwrap())
     .collect::<HashSet<_>>();
   assert_eq!(values, HashSet::from([s1, s2]));
 }
@@ -64,8 +64,8 @@ async fn initial_awareness_test() {
   let mut collab = Collab::new(1, "1", "1", vec![], true);
   collab.emit_awareness_state();
   // by default, the awareness state contains the uid
-  let state = collab.get_awareness().local_state().unwrap();
-  assert_eq!(state, json!({"uid": 1}).to_string());
+  let state: serde_json::Value = collab.get_awareness().local_state().unwrap();
+  assert_eq!(state, json!({"uid": 1}));
 }
 
 #[tokio::test]
@@ -73,14 +73,17 @@ async fn clean_awareness_state_test() {
   let mut collab = Collab::new(1, "1", "1", vec![], true);
   collab.emit_awareness_state();
   let (tx, rx) = mpsc::sync_channel(1);
-  let _update = collab.observe_awareness(move |event| {
+  let _update = collab.observe_awareness(move |_, event, _| {
     tx.send(event.clone()).unwrap();
   });
   collab.clean_awareness_state();
   let event = rx.recv().unwrap();
   assert_eq!(event.removed().len(), 1);
 
-  assert!(collab.get_awareness().local_state().is_none());
+  assert!(collab
+    .get_awareness()
+    .local_state::<serde_json::Value>()
+    .is_none());
 }
 
 #[tokio::test]
@@ -90,8 +93,9 @@ async fn clean_awareness_state_sync_test() {
   collab_a.emit_awareness_state();
   doc_id_map_uid.insert(collab_a.get_doc().client_id(), 0.to_string());
   let (tx, rx) = mpsc::sync_channel(1);
-  let _update = collab_a.observe_awareness(move |event| {
-    let update = event.awareness_update().unwrap();
+  let _update = collab_a.observe_awareness(move |awareness, e, _| {
+    let all_changes = e.all_changes();
+    let update = awareness.update_with_clients(all_changes).unwrap();
     tx.send(update.clone()).unwrap();
   });
   collab_a.emit_awareness_state();
@@ -103,7 +107,7 @@ async fn clean_awareness_state_sync_test() {
   doc_id_map_uid.insert(collab_b.get_doc().client_id(), 1.to_string());
   collab_b
     .get_mut_awareness()
-    .apply_update(awareness_update.clone())
+    .apply_update(awareness_update)
     .unwrap();
 
   // collab_a's awareness state should be synced to collab_b after applying the update
@@ -120,9 +124,10 @@ async fn clean_awareness_state_sync_test() {
   // apply the awareness state from collab_a to collab_b. collab_b's awareness state should be cleaned
   collab_b
     .get_mut_awareness()
-    .apply_update(awareness_update.clone())
+    .apply_update(awareness_update)
     .unwrap();
 
   let states = collab_b.get_awareness().clients();
+  println!("{:#?}", states);
   assert_eq!(states.len(), 1);
 }

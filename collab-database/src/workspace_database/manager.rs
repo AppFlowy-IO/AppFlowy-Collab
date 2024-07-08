@@ -5,7 +5,7 @@ use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValid
 use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
 use async_trait::async_trait;
 use collab::core::collab::{DataSource, MutexCollab};
-use collab::preclude::{Any, Collab, MapPrelim};
+use collab::preclude::{Collab, MapPrelim};
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
@@ -101,7 +101,7 @@ impl WorkspaceDatabase {
 
       if !is_exist {
         let _ = lock_guard.with_origin_transact_mut(|txn| {
-          lock_guard.create_array_with_txn::<MapPrelim<Any>>(txn, WORKSPACE_DATABASES, vec![]);
+          lock_guard.create_array_with_txn::<MapPrelim>(txn, WORKSPACE_DATABASES, vec![]);
           Ok::<(), DatabaseError>(())
         });
       }

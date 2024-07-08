@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use collab::core::collab::{IndexContent, IndexContentSender};
@@ -58,8 +57,8 @@ pub(crate) fn subscribe_view_change(
   root: &mut MapRefWrapper,
   view_cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
   change_tx: ViewChangeSender,
-  view_relations: Rc<ViewRelations>,
-  section_map: Rc<SectionMap>,
+  view_relations: Arc<ViewRelations>,
+  section_map: Arc<SectionMap>,
   index_sender: IndexContentSender,
 ) -> Subscription {
   root.observe_deep(move |txn, events| {

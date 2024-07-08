@@ -4,8 +4,7 @@ use crate::{timestamp, UserId};
 use anyhow::bail;
 use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::preclude::{
-  Any, Array, DeepObservable, Map, MapRefWrapper, ReadTxn, Subscription, TransactionMut, Value,
-  YrsValue,
+  Any, Array, DeepObservable, Map, MapRefWrapper, ReadTxn, Subscription, TransactionMut, YrsValue,
 };
 use collab::util::deserialize_i64_from_numeric;
 use serde::{Deserialize, Serialize};
@@ -189,7 +188,7 @@ impl<'a> SectionOperation<'a> {
   pub fn get_sections_with_txn<T: ReadTxn>(&self, txn: &T) -> SectionsByUid {
     let mut section_id_by_uid = HashMap::new();
     for (uid, value) in self.container().iter(txn) {
-      if let Value::YArray(array) = value {
+      if let YrsValue::YArray(array) = value {
         let mut items = vec![];
         for value in array.iter(txn) {
           if let YrsValue::Any(any) = value {
@@ -399,9 +398,9 @@ impl From<SectionItem> for Any {
 impl TryFrom<&YrsValue> for SectionItem {
   type Error = anyhow::Error;
 
-  fn try_from(value: &Value) -> Result<Self, Self::Error> {
+  fn try_from(value: &YrsValue) -> Result<Self, Self::Error> {
     match value {
-      Value::Any(any) => SectionItem::try_from(any),
+      YrsValue::Any(any) => SectionItem::try_from(any),
       _ => bail!("Invalid section yrs value"),
     }
   }

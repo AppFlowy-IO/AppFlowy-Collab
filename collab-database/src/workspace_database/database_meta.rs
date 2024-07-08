@@ -1,11 +1,12 @@
+use std::collections::HashSet;
+
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::core::value::YrsValueExtension;
 use collab::preclude::{
-  Any, Array, ArrayRefWrapper, Collab, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut,
+  Array, ArrayRefWrapper, Collab, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut,
   YrsValue,
 };
 use collab_entity::define::WORKSPACE_DATABASES;
-use std::collections::HashSet;
 
 use crate::database::timestamp;
 
@@ -27,7 +28,7 @@ impl DatabaseMetaList {
 
     let databases = array.unwrap_or_else(|| {
       collab.with_origin_transact_mut(|txn| {
-        collab.create_array_with_txn::<MapPrelim<Any>>(txn, WORKSPACE_DATABASES, vec![])
+        collab.create_array_with_txn::<MapPrelim>(txn, WORKSPACE_DATABASES, vec![])
       })
     });
 

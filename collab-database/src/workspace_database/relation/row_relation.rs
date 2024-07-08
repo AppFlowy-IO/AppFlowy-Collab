@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use collab::core::array_wrapper::ArrayRefExtension;
 use collab::core::value::YrsValueExtension;
 use collab::preclude::{
-  Any, Array, Map, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
-  YrsValue,
+  Array, ArrayRef, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
 };
 
 #[derive(Debug, Clone)]
@@ -150,9 +149,7 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
   }
 
   pub fn set_linking_rows(self, rows: Vec<LinkingRow>) -> Self {
-    let array_ref = self
-      .map_ref
-      .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, LINKING_ROWS);
+    let array_ref: ArrayRef = self.map_ref.get_or_init(self.txn, LINKING_ROWS);
     for row in rows {
       let map_ref = array_ref.insert_map_with_txn(self.txn, None);
       row.fill_map_with_txn(self.txn, map_ref);
@@ -161,9 +158,7 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
   }
 
   pub fn set_linked_by_rows(self, rows: Vec<LinkedByRow>) -> Self {
-    let array_ref = self
-      .map_ref
-      .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, LINKED_BY_ROWS);
+    let array_ref: ArrayRef = self.map_ref.get_or_init(self.txn, LINKED_BY_ROWS);
 
     for row in rows {
       let map_ref = array_ref.insert_map_with_txn(self.txn, None);

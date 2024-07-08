@@ -4,7 +4,7 @@ use crate::core::value::YrsValueExtension;
 use anyhow::Result;
 use serde::Serialize;
 use yrs::block::Prelim;
-use yrs::{Any, Array, ArrayRef, MapPrelim, MapRef, ReadTxn, Transaction, TransactionMut};
+use yrs::{Array, ArrayRef, MapPrelim, MapRef, ReadTxn, Transaction, TransactionMut};
 
 use crate::preclude::{CollabContext, MapRefExtension, MapRefWrapper, YrsValue};
 use crate::util::insert_json_value_to_array_ref;
@@ -88,8 +88,8 @@ impl DerefMut for ArrayRefWrapper {
 pub trait ArrayRefExtension {
   fn array_ref(&self) -> &ArrayRef;
 
-  fn insert_map_with_txn(&self, txn: &mut TransactionMut, value: Option<MapPrelim<Any>>) -> MapRef {
-    let value = value.unwrap_or_else(MapPrelim::<Any>::new);
+  fn insert_map_with_txn(&self, txn: &mut TransactionMut, value: Option<MapPrelim>) -> MapRef {
+    let value = value.unwrap_or_else(MapPrelim::default);
     self.array_ref().push_back(txn, value)
   }
 
@@ -97,9 +97,9 @@ pub trait ArrayRefExtension {
     &self,
     txn: &mut TransactionMut,
     index: u32,
-    value: Option<MapPrelim<Any>>,
+    value: Option<MapPrelim>,
   ) -> MapRef {
-    let value = value.unwrap_or_else(MapPrelim::<Any>::new);
+    let value = value.unwrap_or_else(MapPrelim::default);
     self.array_ref().insert(txn, index, value)
   }
 

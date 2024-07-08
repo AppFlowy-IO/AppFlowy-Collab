@@ -23,9 +23,9 @@ pub mod preclude {
   pub use serde_json::value::Value as JsonValue;
   pub use yrs::block::Prelim;
   pub use yrs::types::{
-    array::Array, Attrs, Delta as YrsDelta, EntryChange, GetString, Observable, ToJson,
-    Value as YrsValue, *,
+    array::Array, Attrs, Delta as YrsDelta, EntryChange, GetString, Observable, ToJson, *,
   };
+  pub use yrs::Out as YrsValue;
   pub use yrs::*;
 
   pub use crate::core::array_wrapper::ArrayRefWrapper;

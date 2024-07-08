@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 
 use collab::core::collab::MutexCollab;
 use collab::preclude::{
-  Any, ArrayRefWrapper, Collab, Map, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
+  ArrayRefWrapper, Collab, Map, MapPrelim, MapRef, MapRefExtension, MapRefWrapper, ReadTxn,
   Subscription, Transaction, TransactionMut, YrsValue,
 };
 use parking_lot::Mutex;
@@ -63,7 +63,7 @@ impl DatabaseRow {
       collab_guard.with_origin_transact_mut(|txn| {
         let data = collab_guard.insert_map_with_txn_if_not_exist(txn, DATABASE_ROW_DATA);
         let meta = collab_guard.insert_map_with_txn_if_not_exist(txn, META);
-        let comments = collab_guard.create_array_with_txn::<MapPrelim<Any>>(txn, COMMENT, vec![]);
+        let comments = collab_guard.create_array_with_txn::<MapPrelim>(txn, COMMENT, vec![]);
         if let Some(row) = row {
           RowBuilder::new(txn, data.clone().into_inner(), meta.clone().into_inner())
             .update(|update| {
