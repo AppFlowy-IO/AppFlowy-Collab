@@ -174,6 +174,34 @@ pub struct CollabParams {
   #[prost(message, optional, tag = "4")]
   pub embeddings: ::core::option::Option<CollabEmbeddings>,
 }
+/// Payload for creating batch of collab over http.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BatchCreateCollabParams {
+  /// Workspace id.
+  #[prost(string, tag = "1")]
+  pub workspace_id: ::prost::alloc::string::String,
+  /// List of collab params.
+  #[prost(message, repeated, tag = "2")]
+  pub params_list: ::prost::alloc::vec::Vec<CollabParams>,
+}
+/// Payload for creating new collab or update existing collab over http.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CreateCollabParams {
+  /// Workspace id.
+  #[prost(string, tag = "1")]
+  pub workspace_id: ::prost::alloc::string::String,
+  /// Object id.
+  #[prost(string, tag = "2")]
+  pub object_id: ::prost::alloc::string::String,
+  /// Serialized EncodedCollab object, which could either be in bincode or protobuf serialization format.
+  #[prost(bytes = "vec", tag = "3")]
+  pub encoded_collab: ::prost::alloc::vec::Vec<u8>,
+  /// Collab type.
+  #[prost(enumeration = "CollabType", tag = "4")]
+  pub collab_type: i32,
+}
 /// Message sent when the origin attempt to sync the payload with a collab document.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
