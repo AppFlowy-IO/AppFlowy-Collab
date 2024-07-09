@@ -128,6 +128,5 @@ async fn clean_awareness_state_sync_test() {
     .unwrap();
 
   let states = collab_b.get_awareness().clients();
-  println!("{:#?}", states);
   assert_eq!(states.len(), 1);
 }
