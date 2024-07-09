@@ -588,17 +588,6 @@ impl Role {
     }
   }
 }
-/// A snapshot of a collaborative document.
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CollabSnapshot {
-  /// yrs snapshot encoded using EncoderV1.
-  #[prost(bytes = "vec", tag = "1")]
-  pub data: ::prost::alloc::vec::Vec<u8>,
-  /// The creation timestamp of the snapshot.
-  #[prost(int64, tag = "2")]
-  pub created_at: i64,
-}
 /// Encoded collaborative document.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
