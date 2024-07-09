@@ -497,8 +497,8 @@ impl Document {
   where
     F: Fn(HashMap<ClientID, DocumentAwarenessState>) + Send + Sync + 'static,
   {
-    let subscription = self.inner.lock().observe_awareness(move |awareness, _, _| {
-      if let Ok(full_update) = awareness.update() {
+    let subscription = self.inner.lock().observe_awareness(move |awareness, e, _| {
+      if let Ok(full_update) = awareness.update_with_clients(e.all_changes()) {
         let result: HashMap<_, _> = full_update.clients.iter().filter_map(|(&client_id, entry)| {
           match serde_json::from_str(&entry.json) {
             Ok(state) => Some((client_id, state)),

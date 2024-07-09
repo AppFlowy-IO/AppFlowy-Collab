@@ -706,12 +706,12 @@ fn observe_awareness(
   oid: String,
   origin: CollabOrigin,
 ) -> Subscription {
-  awareness.on_update(move |awareness, event, _| {
-    if let Ok(update) = awareness.update() {
+  awareness.on_update(move |awareness, e, _| {
+    if let Ok(update) = awareness.update_with_clients(e.all_changes()) {
       plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
+        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, e, &update));
     }
   })
 }
