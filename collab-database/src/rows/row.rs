@@ -177,6 +177,10 @@ impl DatabaseRow {
     cell_from_map_ref(&self.data, &txn, field_id)
   }
 
+  pub fn get_collab(&self) -> &Arc<MutexCollab> {
+    &self.collab
+  }
+
   pub fn update<F>(&self, f: F)
   where
     F: FnOnce(RowUpdate),
