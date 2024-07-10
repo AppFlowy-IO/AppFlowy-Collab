@@ -14,7 +14,7 @@ pub struct ActiveCollabId {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CollabUpdateEvent {
-  #[prost(oneof = "collab_update_event::Update", tags = "1, 2")]
+  #[prost(oneof = "collab_update_event::Update", tags = "1")]
   pub update: ::core::option::Option<collab_update_event::Update>,
 }
 /// Nested message and enum types in `CollabUpdateEvent`.
@@ -25,9 +25,6 @@ pub mod collab_update_event {
     /// yrs update in encoded form v1
     #[prost(bytes, tag = "1")]
     UpdateV1(::prost::alloc::vec::Vec<u8>),
-    /// yrs update in encoded form v2
-    #[prost(bytes, tag = "2")]
-    UpdateV2(::prost::alloc::vec::Vec<u8>),
   }
 }
 /// Originating from an AppFlowy Client.
