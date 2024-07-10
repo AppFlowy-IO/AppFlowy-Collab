@@ -15,13 +15,14 @@ use tokio_stream::wrappers::WatchStream;
 use tracing::{error, instrument, trace};
 use yrs::block::Prelim;
 use yrs::types::map::MapEvent;
-use yrs::types::{ToJson, Value};
+use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
 
 use yrs::updates::encoder::Encode;
 use yrs::{
-  Any, ArrayPrelim, ArrayRef, Doc, Map, MapPrelim, MapRef, Observable, OffsetKind, Options,
-  ReadTxn, StateVector, Subscription, Transact, Transaction, TransactionMut, UndoManager, Update,
+  Any, ArrayPrelim, ArrayRef, Doc, In, Map, MapPrelim, MapRef, Observable, OffsetKind, Options,
+  Origin, Out, ReadTxn, StateVector, Subscription, Transact, Transaction, TransactionMut,
+  UndoManager, Update,
 };
 
 use crate::core::awareness::{Awareness, Event};
@@ -236,7 +237,8 @@ impl Collab {
     if let CollabOrigin::Client(origin) = &self.origin {
       self
         .awareness
-        .set_local_state(initial_awareness_state(origin.uid).to_string());
+        .set_local_state(initial_awareness_state(origin.uid))
+        .unwrap();
     }
   }
 
@@ -377,24 +379,24 @@ impl Collab {
 
   pub fn observe_data<F>(&mut self, f: F) -> MapSubscription
   where
-    F: Fn(&TransactionMut, &MapEvent) + 'static,
+    F: Fn(&TransactionMut, &MapEvent) + Send + Sync + 'static,
   {
     self.data.observe(f)
   }
 
   pub fn observe_awareness<F>(&mut self, f: F) -> Subscription
   where
-    F: Fn(&Event) + 'static,
+    F: Fn(&Awareness, &Event, Option<&Origin>) + Send + Sync + 'static,
   {
     self.awareness.on_update(f)
   }
 
-  pub fn get(&self, key: &str) -> Option<Value> {
+  pub fn get(&self, key: &str) -> Option<Out> {
     let txn = self.doc.transact();
     self.data.get(&txn, key)
   }
 
-  pub fn get_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<Value> {
+  pub fn get_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<Out> {
     self.data.get(txn, key)
   }
 
@@ -421,7 +423,7 @@ impl Collab {
 
     self.with_origin_transact_mut(|txn| {
       if map.is_none() {
-        map = Some(self.data.insert(txn, key, MapPrelim::<Any>::new()));
+        map = Some(self.data.insert(txn, key, MapPrelim::default()));
       }
       let value = serde_json::to_value(&value).unwrap();
       insert_json_value_to_map_ref(key, &value, map.unwrap(), txn);
@@ -443,7 +445,7 @@ impl Collab {
   }
 
   pub fn insert_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
-    let map = MapPrelim::<Any>::new();
+    let map = MapPrelim::default();
     let map_ref = self.data.insert(txn, key, map);
     self.map_wrapper_with(map_ref)
   }
@@ -492,7 +494,7 @@ impl Collab {
     array_ref.map(|array_ref| self.array_wrapper_with(array_ref.clone()))
   }
 
-  pub fn create_array_with_txn<V: Prelim>(
+  pub fn create_array_with_txn<V: Into<In>>(
     &self,
     txn: &mut TransactionMut,
     key: &str,
@@ -502,7 +504,7 @@ impl Collab {
     self.array_wrapper_with(array_ref)
   }
 
-  fn get_ref_from_path_with_txn<T: ReadTxn>(&self, txn: &T, mut path: Path) -> Option<Value> {
+  fn get_ref_from_path_with_txn<T: ReadTxn>(&self, txn: &T, mut path: Path) -> Option<Out> {
     if path.is_empty() {
       return None;
     }
@@ -524,12 +526,12 @@ impl Collab {
     map_ref?.get(txn, &last)
   }
 
-  pub fn remove(&mut self, key: &str) -> Option<Value> {
+  pub fn remove(&mut self, key: &str) -> Option<Out> {
     let mut txn = self.origin_transact_mut();
     self.data.remove(&mut txn, key)
   }
 
-  pub fn remove_with_path<P: Into<Path>>(&mut self, path: P) -> Option<Value> {
+  pub fn remove_with_path<P: Into<Path>>(&mut self, path: P) -> Option<Out> {
     let path = path.into();
     if path.is_empty() {
       return None;
@@ -582,7 +584,7 @@ impl Collab {
     // we may decide to use different granularity of undo/redo actions. These are grouped together
     // on time-based ranges (configurable in undo::Options, which is 500ms by default).
     let mut undo_manager =
-      UndoManager::with_options(&self.doc, &self.data, yrs::undo::Options::default());
+      UndoManager::with_scope_and_options(&self.doc, &self.data, yrs::undo::Options::default());
     undo_manager.include_origin(self.origin.clone());
     *self.undo_manager.lock() = Some(undo_manager);
   }
@@ -704,12 +706,12 @@ fn observe_awareness(
   oid: String,
   origin: CollabOrigin,
 ) -> Subscription {
-  awareness.on_update(move |event| {
-    if let Ok(update) = event.awareness_state().full_update() {
+  awareness.on_update(move |awareness, e, _| {
+    if let Ok(update) = awareness.update_with_clients(e.all_changes()) {
       plugins
         .read()
         .iter()
-        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, event, &update));
+        .for_each(|plugin| plugin.receive_local_state(&origin, &oid, e, &update));
     }
   })
 }

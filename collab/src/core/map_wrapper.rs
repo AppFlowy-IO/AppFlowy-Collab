@@ -4,7 +4,7 @@ use std::sync::Arc;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use yrs::block::Prelim;
-use yrs::types::{ToJson, Value};
+use yrs::types::ToJson;
 use yrs::{
   ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, ReadTxn, TextPrelim, Transaction, TransactionMut,
 };
@@ -59,15 +59,15 @@ impl MapRefWrapper {
     TextRefWrapper::new(text_ref, self.collab_ctx.clone())
   }
 
-  pub fn insert_array<V: Prelim>(&self, key: &str, values: Vec<V>) -> ArrayRefWrapper {
+  pub fn insert_array<V: Into<Any>>(&self, key: &str, values: Vec<V>) -> ArrayRefWrapper {
     self.with_transact_mut(|txn| self.insert_array_with_txn(txn, key, values))
   }
 
-  pub fn insert_map<T: Into<MapPrelim<Any>>>(&self, key: &str, value: T) {
+  pub fn insert_map<T: Into<MapPrelim>>(&self, key: &str, value: T) {
     self.with_transact_mut(|txn| self.insert_map_with_txn(txn, key, value));
   }
 
-  pub fn insert_map_with_txn<T: Into<MapPrelim<Any>>>(
+  pub fn insert_map_with_txn<T: Into<MapPrelim>>(
     &self,
     txn: &mut TransactionMut,
     key: &str,
@@ -76,25 +76,31 @@ impl MapRefWrapper {
     self.map_ref.insert(txn, key, value.into());
   }
 
-  pub fn insert_array_with_txn<V: Prelim>(
+  pub fn insert_array_with_txn<V: Into<Any>>(
     &self,
     txn: &mut TransactionMut,
     key: &str,
     values: Vec<V>,
   ) -> ArrayRefWrapper {
-    let array = self.map_ref.insert(txn, key, ArrayPrelim::from(values));
+    let array = self.map_ref.insert(
+      txn,
+      key,
+      ArrayPrelim::from_iter(values.into_iter().map(|v| In::Any(v.into()))),
+    );
     ArrayRefWrapper::new(array, self.collab_ctx.clone())
   }
 
-  pub fn create_array_if_not_exist_with_txn<V: Prelim, K: AsRef<str>>(
+  pub fn create_array_if_not_exist_with_txn<V: Into<Any>, K: AsRef<str>>(
     &self,
     txn: &mut TransactionMut,
     key: K,
     values: Vec<V>,
   ) -> ArrayRefWrapper {
-    let array_ref = self
-      .map_ref
-      .create_array_if_not_exist_with_txn(txn, key.as_ref(), values);
+    let array_ref = self.map_ref.create_array_if_not_exist_with_txn(
+      txn,
+      key.as_ref(),
+      values.into_iter().map(|v| In::Any(v.into())).collect(),
+    );
     ArrayRefWrapper::new(array_ref, self.collab_ctx.clone())
   }
 
@@ -107,7 +113,7 @@ impl MapRefWrapper {
     MapRefWrapper::new(map_ref, self.collab_ctx.clone())
   }
 
-  pub fn get_or_insert_array_with_txn<V: Prelim>(
+  pub fn get_or_insert_array_with_txn<V: Into<Any>>(
     &self,
     txn: &mut TransactionMut,
     key: &str,
@@ -118,7 +124,7 @@ impl MapRefWrapper {
   }
 
   pub fn create_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRefWrapper {
-    let map = MapPrelim::<Any>::new();
+    let map = MapPrelim::default();
     let map_ref = self.map_ref.insert(txn, key, map);
     MapRefWrapper::new(map_ref, self.collab_ctx.clone())
   }
@@ -129,7 +135,7 @@ impl MapRefWrapper {
     key: K,
   ) -> Option<MapRefWrapper> {
     let a = self.map_ref.get(txn, key.as_ref());
-    if let Some(Value::YMap(map_ref)) = a {
+    if let Some(YrsValue::YMap(map_ref)) = a {
       return Some(MapRefWrapper::new(map_ref, self.collab_ctx.clone()));
     }
     None
@@ -214,7 +220,7 @@ impl MapRefExtension for MapRefWrapper {
 pub trait MapRefExtension {
   fn map_ref(&self) -> &MapRef;
 
-  fn create_array_with_txn<V: Prelim>(
+  fn create_array_with_txn<V: Into<In>>(
     &self,
     txn: &mut TransactionMut,
     key: &str,
@@ -246,7 +252,7 @@ pub trait MapRefExtension {
   }
 
   fn create_map_with_txn(&self, txn: &mut TransactionMut, key: &str) -> MapRef {
-    let map = MapPrelim::<Any>::new();
+    let map = MapPrelim::default();
     self.map_ref().insert(txn, key, map)
   }
 
@@ -266,7 +272,7 @@ pub trait MapRefExtension {
 
   fn get_any_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<Any> {
     self.map_ref().get(txn, key).and_then(|value| match value {
-      Value::Any(any) => Some(any),
+      YrsValue::Any(any) => Some(any),
       _ => None,
     })
   }
@@ -308,7 +314,7 @@ pub trait MapRefExtension {
       .get(txn, key)
       .and_then(|value| value.to_ymap().cloned())
     {
-      None => self.map_ref().insert(txn, key, MapPrelim::<Any>::new()),
+      None => self.map_ref().insert(txn, key, MapPrelim::default()),
       Some(map_ref) => map_ref,
     }
   }
@@ -324,7 +330,7 @@ pub trait MapRefExtension {
   /// # Arguments
   /// * `txn` - A mutable reference to a transaction that is currently in progress.
   /// * `key` - The key associated with the array in the datastore.
-  fn get_or_create_array_with_txn<V: Prelim>(
+  fn get_or_create_array_with_txn<V: Into<In>>(
     &self,
     txn: &mut TransactionMut,
     key: &str,
@@ -348,7 +354,7 @@ pub trait MapRefExtension {
   /// * `key` - The key to associate with the array in the datastore.
   /// * `values` - The values to be stored in the array if a new array needs to be created.
   ///
-  fn create_array_if_not_exist_with_txn<V: Prelim>(
+  fn create_array_if_not_exist_with_txn<V: Into<In>>(
     &self,
     txn: &mut TransactionMut,
     key: &str,
@@ -365,7 +371,7 @@ pub trait MapRefExtension {
   }
 
   fn get_str_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<String> {
-    if let Some(Value::Any(Any::String(value))) = self.map_ref().get(txn, key) {
+    if let Some(YrsValue::Any(Any::String(value))) = self.map_ref().get(txn, key) {
       return Some(value.to_string());
     }
     None
@@ -379,21 +385,21 @@ pub trait MapRefExtension {
   }
 
   fn get_i64_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<i64> {
-    if let Some(Value::Any(Any::BigInt(value))) = self.map_ref().get(txn, key) {
+    if let Some(YrsValue::Any(Any::BigInt(value))) = self.map_ref().get(txn, key) {
       return Some(value);
     }
     None
   }
 
   fn get_f64_with_txn<T: ReadTxn>(&self, txn: &T, key: &str) -> Option<f64> {
-    if let Some(Value::Any(Any::Number(value))) = self.map_ref().get(txn, key) {
+    if let Some(YrsValue::Any(Any::Number(value))) = self.map_ref().get(txn, key) {
       return Some(value);
     }
     None
   }
 
   fn get_bool_with_txn<T: ReadTxn, K: AsRef<str>>(&self, txn: &T, key: K) -> Option<bool> {
-    if let Some(Value::Any(Any::Bool(value))) = self.map_ref().get(txn, key.as_ref()) {
+    if let Some(YrsValue::Any(Any::Bool(value))) = self.map_ref().get(txn, key.as_ref()) {
       return Some(value);
     }
     None

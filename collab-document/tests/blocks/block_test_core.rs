@@ -67,7 +67,7 @@ impl BlockTestCore {
 
   pub fn subscribe<F>(&mut self, callback: F)
   where
-    F: Fn(&Vec<BlockEvent>, bool) + 'static,
+    F: Fn(&Vec<BlockEvent>, bool) + Send + Sync + 'static,
   {
     self.document.subscribe_block_changed(callback);
   }

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use collab::core::collab::{DataSource, IndexContentReceiver, MutexCollab};
@@ -88,8 +87,8 @@ pub struct Folder {
   pub(crate) uid: UserId,
   pub(crate) inner: Arc<MutexCollab>,
   pub(crate) root: MapRefWrapper,
-  pub views: Rc<ViewsMap>,
-  section: Rc<SectionMap>,
+  pub views: Arc<ViewsMap>,
+  section: Arc<SectionMap>,
   pub(crate) meta: MapRefWrapper,
   #[allow(dead_code)]
   subscription: Subscription,
@@ -530,11 +529,11 @@ fn create_folder<T: Into<UserId>>(
     let views = folder.create_map_with_txn_if_not_exist(txn, VIEWS);
     let section = folder.create_map_with_txn_if_not_exist(txn, SECTION);
     let meta = folder.create_map_with_txn_if_not_exist(txn, FOLDER_META);
-    let view_relations = Rc::new(ViewRelations::new(
+    let view_relations = Arc::new(ViewRelations::new(
       folder.create_map_with_txn_if_not_exist(txn, VIEW_RELATION),
     ));
 
-    let section = Rc::new(SectionMap::create(
+    let section = Arc::new(SectionMap::create(
       txn,
       &uid,
       section,
@@ -542,7 +541,7 @@ fn create_folder<T: Into<UserId>>(
         .as_ref()
         .map(|notifier| notifier.section_change_tx.clone()),
     ));
-    let views = Rc::new(ViewsMap::new(
+    let views = Arc::new(ViewsMap::new(
       &uid,
       views,
       notifier
@@ -632,8 +631,8 @@ fn open_folder<T: Into<UserId>>(
   let meta_y_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, FOLDER_META])?;
   let children_map_y_map = collab_guard.get_map_with_txn(&txn, vec![FOLDER, VIEW_RELATION])?;
 
-  let view_relations = Rc::new(ViewRelations::new(children_map_y_map));
-  let section_map = Rc::new(SectionMap::new(
+  let view_relations = Arc::new(ViewRelations::new(children_map_y_map));
+  let section_map = Arc::new(SectionMap::new(
     &txn,
     &uid,
     section_y_map,
@@ -643,7 +642,7 @@ fn open_folder<T: Into<UserId>>(
   )?);
 
   let all_views = get_views_from_root(&view_y_map, &uid, &view_relations, &section_map, &txn);
-  let views_map = Rc::new(ViewsMap::new(
+  let views_map = Arc::new(ViewsMap::new(
     &uid,
     view_y_map,
     notifier
@@ -674,14 +673,14 @@ fn open_folder<T: Into<UserId>>(
 fn get_views_from_root<T: ReadTxn>(
   root: &MapRefWrapper,
   _uid: &UserId,
-  view_relations: &Rc<ViewRelations>,
-  section_map: &Rc<SectionMap>,
+  view_relations: &Arc<ViewRelations>,
+  section_map: &Arc<SectionMap>,
   txn: &T,
 ) -> HashMap<String, Arc<View>> {
   root
     .iter(txn)
     .flat_map(|(key, value)| {
-      if let Value::YMap(map) = value {
+      if let YrsValue::YMap(map) = value {
         view_from_map_ref(&map, txn, view_relations, section_map)
           .map(|view| (key.to_string(), Arc::new(view)))
       } else {

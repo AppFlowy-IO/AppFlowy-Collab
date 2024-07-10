@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use collab::core::collab::MutexCollab;
 use collab::core::collab_state::SyncState;
-use collab::preclude::{Any, MapPrelim, MapRefWrapper};
+use collab::preclude::{Any, MapRefWrapper};
 use collab_entity::define::USER_AWARENESS;
 use collab_entity::reminder::Reminder;
 use parking_lot::Mutex;
@@ -85,7 +85,7 @@ impl UserAwareness {
         };
 
         let reminder_container =
-          awareness.create_array_if_not_exist_with_txn::<MapPrelim<Any>, _>(txn, REMINDERS, vec![]);
+          awareness.create_array_if_not_exist_with_txn::<Any, _>(txn, REMINDERS, vec![]);
         let reminders = Reminders::new(
           reminder_container,
           notifier

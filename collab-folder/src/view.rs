@@ -1,11 +1,10 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use anyhow::bail;
 use collab::core::collab::IndexContentSender;
 use collab::preclude::{
-  Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, Subscription, TransactionMut, Value,
+  Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, Subscription, TransactionMut, YrsValue,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -37,8 +36,8 @@ pub fn timestamp() -> i64 {
 pub struct ViewsMap {
   uid: UserId,
   pub(crate) container: MapRefWrapper,
-  pub(crate) view_relations: Rc<ViewRelations>,
-  pub(crate) section_map: Rc<SectionMap>,
+  pub(crate) view_relations: Arc<ViewRelations>,
+  pub(crate) section_map: Arc<SectionMap>,
   cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
 
   #[allow(dead_code)]
@@ -52,8 +51,8 @@ impl ViewsMap {
     uid: &UserId,
     mut root: MapRefWrapper,
     change_tx: Option<ViewChangeSender>,
-    view_relations: Rc<ViewRelations>,
-    section_map: Rc<SectionMap>,
+    view_relations: Arc<ViewRelations>,
+    section_map: Arc<SectionMap>,
     index_json_sender: IndexContentSender,
     views: HashMap<String, Arc<View>>,
   ) -> ViewsMap {
@@ -221,7 +220,7 @@ impl ViewsMap {
 
         // Process new view from container if not cached
         match v {
-          Value::YMap(map) => {
+          YrsValue::YMap(map) => {
             let view =
               view_from_map_ref(&map, &txn, &self.view_relations, &self.section_map).map(Arc::new);
             if let Some(ref view) = view {
@@ -445,7 +444,7 @@ impl ViewsMap {
 pub(crate) fn view_from_map_ref<T: ReadTxn>(
   map_ref: &MapRef,
   txn: &T,
-  view_relations: &Rc<ViewRelations>,
+  view_relations: &Arc<ViewRelations>,
   section_map: &SectionMap,
 ) -> Option<View> {
   let parent_view_id = map_ref.get_str_with_txn(txn, VIEW_PARENT_ID)?;
@@ -505,7 +504,7 @@ pub struct ViewBuilder<'a, 'b> {
   view_id: &'a str,
   map_ref: MapRefWrapper,
   txn: &'a mut TransactionMut<'b>,
-  belongings: Rc<ViewRelations>,
+  belongings: Arc<ViewRelations>,
   view: Option<View>,
   section_map: &'a SectionMap,
 }
@@ -515,7 +514,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: MapRefWrapper,
-    belongings: Rc<ViewRelations>,
+    belongings: Arc<ViewRelations>,
     section_map: &'a SectionMap,
   ) -> Self {
     map_ref.insert_str_with_txn(txn, FOLDER_VIEW_ID, view_id);
@@ -555,7 +554,7 @@ pub struct ViewUpdate<'a, 'b, 'c> {
   view_id: &'a str,
   map_ref: &'c MapRefWrapper,
   txn: &'a mut TransactionMut<'b>,
-  children_map: Rc<ViewRelations>,
+  children_map: Arc<ViewRelations>,
   section_map: &'c SectionMap,
 }
 
@@ -579,7 +578,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'c MapRefWrapper,
-    children_map: Rc<ViewRelations>,
+    children_map: Arc<ViewRelations>,
     section_map: &'c SectionMap,
   ) -> Self {
     Self {

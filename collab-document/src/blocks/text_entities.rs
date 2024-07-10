@@ -1,4 +1,4 @@
-use collab::preclude::{Any, Attrs, Delta, ReadTxn, Value as YrsValue};
+use collab::preclude::{Any, Attrs, Delta, ReadTxn, YrsValue};
 use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};

@@ -2,7 +2,7 @@ use collab::preclude::MapRefExtension;
 use serde_json::json;
 use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
-use yrs::{Any, Doc, Map, MapPrelim, ReadTxn, Transact, Update};
+use yrs::{Doc, Map, MapPrelim, ReadTxn, Transact, Update};
 
 #[tokio::test]
 async fn state_vec_apply_test() {
@@ -58,13 +58,13 @@ async fn two_way_sync_result_undetermined() {
   // root: { map:{ } }
   let _map_1 = {
     let mut txn = doc_1.transact_mut();
-    root_map_1.insert(&mut txn, "map", MapPrelim::<Any>::new())
+    root_map_1.insert(&mut txn, "map", MapPrelim::default())
   };
 
   // root: { map:{ } }
   let map_2 = {
     let mut txn = doc_2.transact_mut();
-    root_map_2.insert(&mut txn, "map", MapPrelim::<Any>::new())
+    root_map_2.insert(&mut txn, "map", MapPrelim::default())
   };
 
   {
@@ -130,7 +130,7 @@ async fn two_way_sync_test() {
   // root: { map:{ } }
   let _map_1 = {
     let mut txn = doc_1.transact_mut();
-    root_map_1.insert(&mut txn, "map", MapPrelim::<Any>::new())
+    root_map_1.insert(&mut txn, "map", MapPrelim::default())
   };
 
   // sync the doc_1 local state to doc_2. Then the "map" will be treated as the same object.

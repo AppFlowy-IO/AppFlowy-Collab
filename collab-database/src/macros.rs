@@ -138,9 +138,7 @@ macro_rules! impl_order_update {
     $array_ty: ident
   ) => {
     pub fn $set_orders(self, orders: Vec<$ty>) -> Self {
-      let array_ref = self
-        .map_ref
-        .get_or_create_array_with_txn::<$ty>(self.txn, $key);
+      let array_ref: ArrayRef = self.map_ref.get_or_init(self.txn, $key);
       let array = $array_ty::new(array_ref);
       array.extends_with_txn(self.txn, orders);
       self

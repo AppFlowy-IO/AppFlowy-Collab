@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use anyhow::Result;
-use collab::preclude::{Any, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut};
+use collab::preclude::{Any, In, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
@@ -209,32 +209,18 @@ fn reminder_from_map<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Result<Reminder> 
   })
 }
 
-impl From<Reminder> for MapPrelim<Any> {
+impl From<Reminder> for MapPrelim {
   fn from(item: Reminder) -> Self {
-    let mut map = HashMap::new();
-    map.insert(REMINDER_ID.to_string(), Any::String(Arc::from(item.id)));
-    map.insert(
-      REMINDER_OBJECT_ID.to_string(),
-      Any::String(Arc::from(item.object_id)),
-    );
-    map.insert(
-      REMINDER_SCHEDULED_AT.to_string(),
-      Any::BigInt(item.scheduled_at),
-    );
-    map.insert(REMINDER_IS_ACK.to_string(), Any::Bool(item.is_ack));
-    map.insert(REMINDER_IS_READ.to_string(), Any::Bool(item.is_read));
-    map.insert(REMINDER_TY.to_string(), Any::BigInt(item.ty as i64));
-    map.insert(
-      REMINDER_TITLE.to_string(),
-      Any::String(Arc::from(item.title)),
-    );
-    map.insert(
-      REMINDER_MESSAGE.to_string(),
-      Any::String(Arc::from(item.message)),
-    );
-
-    map.insert(REMINDER_META.to_string(), item.meta.into());
-
-    MapPrelim::from(map)
+    MapPrelim::from([
+      (REMINDER_ID, In::from(item.id)),
+      (REMINDER_OBJECT_ID, item.object_id.into()),
+      (REMINDER_SCHEDULED_AT, Any::BigInt(item.scheduled_at).into()),
+      (REMINDER_IS_ACK, item.is_ack.into()),
+      (REMINDER_IS_READ, item.is_read.into()),
+      (REMINDER_TY, Any::BigInt(item.ty as i64).into()),
+      (REMINDER_TITLE, item.title.into()),
+      (REMINDER_MESSAGE, item.message.into()),
+      (REMINDER_META, Any::from(item.meta).into()),
+    ])
   }
 }

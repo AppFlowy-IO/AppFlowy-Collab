@@ -361,7 +361,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   fn get_calculations_array(&mut self) -> ArrayRef {
     self
       .map_ref
-      .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, VIEW_CALCULATIONS)
+      .get_or_create_array_with_txn::<MapPrelim>(self.txn, VIEW_CALCULATIONS)
   }
 
   /// Set filters of the current view
@@ -453,25 +453,19 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   /// Get the sort array for the current view, used when setting or updating
   /// sort array
   fn get_sort_array(&mut self) -> ArrayRef {
-    self
-      .map_ref
-      .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, DATABASE_VIEW_SORTS)
+    self.map_ref.get_or_init(self.txn, DATABASE_VIEW_SORTS)
   }
 
   /// Get the group array for the current view, used when setting or updating
   /// group array
   fn get_group_array(&mut self) -> ArrayRef {
-    self
-      .map_ref
-      .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, DATABASE_VIEW_GROUPS)
+    self.map_ref.get_or_init(self.txn, DATABASE_VIEW_GROUPS)
   }
 
   /// Get the filter array for the current view, used when setting or updating
   /// filter array
   fn get_filter_array(&mut self) -> ArrayRef {
-    self
-      .map_ref
-      .get_or_create_array_with_txn::<MapPrelim<Any>>(self.txn, DATABASE_VIEW_FILTERS)
+    self.map_ref.get_or_init(self.txn, DATABASE_VIEW_FILTERS)
   }
 
   /// Get the field settings for the current view, used when setting or updating
@@ -479,7 +473,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   fn get_field_settings_map(&mut self) -> MapRef {
     self
       .map_ref
-      .get_or_create_map_with_txn(self.txn, DATABASE_VIEW_FIELD_SETTINGS)
+      .get_or_init(self.txn, DATABASE_VIEW_FIELD_SETTINGS)
   }
 
   fn get_layout_setting(&self) -> Option<DatabaseLayout> {

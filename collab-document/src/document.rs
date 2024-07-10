@@ -102,7 +102,7 @@ impl Document {
   /// open a document and subscribe to the document changes.
   pub fn subscribe_block_changed<F>(&mut self, callback: F)
   where
-    F: Fn(&Vec<BlockEvent>, bool) + 'static,
+    F: Fn(&Vec<BlockEvent>, bool) + Send + Sync + 'static,
   {
     let object_id = self.inner.lock().object_id.clone();
     let self_origin = CollabOrigin::from(&self.inner.lock().origin_transact_mut());
@@ -462,13 +462,10 @@ impl Document {
   /// Set the local state of the awareness.
   /// It will override the previous state.
   pub fn set_awareness_local_state(&self, state: DocumentAwarenessState) {
-    if let Ok(state) = serde_json::to_string(&state) {
-      self.inner.lock().get_mut_awareness().set_local_state(state);
-    } else {
-      tracing::error!(
-        "Failed to serialize DocumentAwarenessState, state: {:?}",
-        state
-      );
+    let mut lock = self.inner.lock();
+    let awareness = lock.get_mut_awareness();
+    if let Err(e) = awareness.set_local_state(state) {
+      tracing::error!("Failed to serialize DocumentAwarenessState: {}", e);
     }
   }
 
@@ -498,10 +495,10 @@ impl Document {
   /// This function only allowed to be called once for each document.
   pub fn subscribe_awareness_state<F>(&mut self, f: F)
   where
-    F: Fn(HashMap<ClientID, DocumentAwarenessState>) + 'static,
+    F: Fn(HashMap<ClientID, DocumentAwarenessState>) + Send + Sync + 'static,
   {
-    let subscription = self.inner.lock().observe_awareness(move |event| {
-      if let Ok(full_update) = event.awareness_state().full_update() {
+    let subscription = self.inner.lock().observe_awareness(move |awareness, e, _| {
+      if let Ok(full_update) = awareness.update_with_clients(e.all_changes()) {
         let result: HashMap<_, _> = full_update.clients.iter().filter_map(|(&client_id, entry)| {
           match serde_json::from_str(&entry.json) {
             Ok(state) => Some((client_id, state)),

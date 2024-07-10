@@ -10,14 +10,14 @@ use collab::preclude::{
 };
 use parking_lot::Mutex;
 use std::collections::HashSet;
-use std::rc::Rc;
+use std::sync::Arc;
 
 impl Folder {
   pub fn calculate_view_changes(
     &self,
     encoded_collab: EncodedCollab,
   ) -> Result<Vec<FolderViewChange>, FolderError> {
-    let changes = Rc::new(Mutex::new(HashSet::new()));
+    let changes = Arc::new(Mutex::new(HashSet::new()));
     let workspace_id = self.try_get_workspace_id()?;
 
     let other = Folder::from_collab_doc_state(

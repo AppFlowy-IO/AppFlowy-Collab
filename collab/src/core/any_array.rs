@@ -1,6 +1,5 @@
 use std::ops::{Deref, DerefMut};
 
-use yrs::types::Value;
 use yrs::{Array, ArrayRef, ReadTxn, TransactionMut};
 
 use crate::core::any_map::AnyMap;
@@ -34,7 +33,7 @@ impl ArrayMap {
     let mut any_array = Self::new();
     for value in array_ref.iter(txn) {
       match value {
-        Value::YMap(map_ref) => {
+        YrsValue::YMap(map_ref) => {
           any_array.push(AnyMap::from((txn, &map_ref)));
         },
         _ => debug_assert!(false, "Unsupported type"),
