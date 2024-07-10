@@ -1,9 +1,10 @@
+use std::sync::Arc;
+
 use collab::core::collab::MutexCollab;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_document::document::Document;
 use collab_document::document_data::default_document_data;
-use std::sync::Arc;
 
 #[tokio::test]
 async fn get_default_data_test() {
