@@ -293,26 +293,27 @@ async fn delta_equal_test() {
 
 #[tokio::test]
 async fn text_delta_trans_delta_test() {
+  use collab::preclude::AsPrelim;
   let test = BlockTestCore::new().await;
   test.document.with_transact_mut(|txn| {
     let text_delta = TextDelta::Inserted("Hello World".to_string(), None);
     let delta = Delta::Inserted(YrsValue::from("Hello World"), None);
     let result = TextDelta::from(txn, delta.clone());
     assert_eq!(result, text_delta);
-    assert_eq!(result.to_delta(), delta);
+    assert_eq!(result.to_delta(), delta.map(|v| v.as_prelim(txn)));
 
     let attrs = Attrs::from([(Arc::from("bold"), true.into())]);
     let delta = Delta::Retain(6, Some(Box::from(attrs.clone())));
     let result = TextDelta::from(txn, delta.clone());
     let text_delta = TextDelta::Retain(6, Some(attrs));
     assert_eq!(result, text_delta);
-    assert_eq!(result.to_delta(), delta);
+    assert_eq!(result.to_delta(), delta.map(|v| v.as_prelim(txn)));
 
     let delta = Delta::Deleted(4);
     let result = TextDelta::from(txn, delta.clone());
     let text_delta = TextDelta::Deleted(4);
     assert_eq!(result, text_delta);
-    assert_eq!(result.to_delta(), delta);
+    assert_eq!(result.to_delta(), delta.map(|v| v.as_prelim(txn)));
   })
 }
 

@@ -23,8 +23,9 @@ pub mod preclude {
   pub use serde_json::value::Value as JsonValue;
   pub use yrs::block::Prelim;
   pub use yrs::types::{
-    array::Array, Attrs, Delta as YrsDelta, EntryChange, GetString, Observable, ToJson, *,
+    array::Array, AsPrelim, Attrs, Delta as YrsDelta, EntryChange, GetString, Observable, ToJson, *,
   };
+  pub use yrs::In as YrsInput;
   pub use yrs::Out as YrsValue;
   pub use yrs::*;
 
