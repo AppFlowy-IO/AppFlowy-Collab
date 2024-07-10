@@ -19,7 +19,7 @@ prost = "0.12"
 
 [build-dependencies]
 prost-build = "0.12"
-walkdir = "2.5.0"
+walkdir = ">=2.0.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
