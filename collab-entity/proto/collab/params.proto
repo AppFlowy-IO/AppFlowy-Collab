@@ -1,8 +1,39 @@
 syntax = "proto3";
 import "collab/common.proto";
-import "collab/embeddings.proto";
 
 package collab;
+
+// Types of embeddings content.
+enum EmbeddingContentType {
+  // Unknown content type.
+  EMBEDDING_CONTENT_TYPE_UNKNOWN = 0;
+  // Plain text
+  EMBEDDING_CONTENT_TYPE_PLAIN_TEXT = 1;
+}
+
+// Embeddings and the associated collab metadata.
+message CollabEmbeddingsParams {
+  // Fragment id.
+  string fragment_id = 1;
+  // Collab object id.
+  string object_id = 2;
+  // Collab type.
+  CollabType collab_type = 3;
+  // Embedding content type.
+  EmbeddingContentType content_type = 4;
+  // Embedding content as string.
+  string content = 5;
+  // Embedding as float array.
+  repeated float embedding = 6;
+}
+
+// Wrapper over a collection of embeddings, together with metadata associated on the collection level.
+message CollabEmbeddings {
+  // OpenAPI tokens consumed.
+  uint32 tokens_consumed = 1;
+  // List of embeddings.
+  repeated CollabEmbeddingsParams embeddings = 2;
+}
 
 // Payload for sending and receive collab over http.
 message CollabParams {
