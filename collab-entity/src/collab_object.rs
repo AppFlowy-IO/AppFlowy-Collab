@@ -107,7 +107,7 @@ impl CollabType {
     }
   }
 
-  pub fn from_proto(proto: proto::collab::CollabType) -> Self {
+  pub fn from_proto(proto: &proto::collab::CollabType) -> Self {
     match proto {
       proto::collab::CollabType::Unknown => CollabType::Unknown,
       proto::collab::CollabType::Document => CollabType::Document,
