@@ -118,6 +118,18 @@ impl CollabType {
       proto::collab::CollabType::UserAwareness => CollabType::UserAwareness,
     }
   }
+
+  pub fn to_proto(&self) -> proto::collab::CollabType {
+    match self {
+      CollabType::Unknown => proto::collab::CollabType::Unknown,
+      CollabType::Document => proto::collab::CollabType::Document,
+      CollabType::Database => proto::collab::CollabType::Database,
+      CollabType::WorkspaceDatabase => proto::collab::CollabType::WorkspaceDatabase,
+      CollabType::Folder => proto::collab::CollabType::Folder,
+      CollabType::DatabaseRow => proto::collab::CollabType::DatabaseRow,
+      CollabType::UserAwareness => proto::collab::CollabType::UserAwareness,
+    }
+  }
 }
 
 /// Validates the workspace ID for 'Folder' type collaborations.
