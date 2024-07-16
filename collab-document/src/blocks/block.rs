@@ -128,20 +128,20 @@ impl BlockOperation {
 
     // Update parent field with the given parent id.
     if let Some(parent_id) = parent_id {
-      map.insert_with_txn(txn, PARENT, parent_id);
+      map.try_update(txn, PARENT, parent_id);
     }
     // Update data field with the given data.
     if let Some(data) = data {
-      map.insert_with_txn(txn, DATA, hashmap_to_json_str(data)?);
+      map.try_update(txn, DATA, hashmap_to_json_str(data)?);
     }
 
     // Update external id and external type.
     if let Some(external_id) = external_id {
-      map.insert_with_txn(txn, EXTERNAL_ID, external_id);
+      map.try_update(txn, EXTERNAL_ID, external_id);
     }
 
     if let Some(external_type) = external_type {
-      map.insert_with_txn(txn, EXTERNAL_TYPE, external_type);
+      map.try_update(txn, EXTERNAL_TYPE, external_type);
     }
     Ok(())
   }

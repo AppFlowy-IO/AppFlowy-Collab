@@ -1,12 +1,13 @@
-use collab::preclude::{Any, Attrs, Delta, ReadTxn, YrsValue};
-use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
-use serde::ser::SerializeMap;
-use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
 use std::ops::Deref;
-
 use std::sync::Arc;
+
+use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
+use serde::ser::SerializeMap;
+use serde::{Serialize, Serializer};
+
+use collab::preclude::{Any, Attrs, Delta, ReadTxn, YrsInput};
 
 const FIELD_INSERT: &str = "insert";
 const FIELD_DELETE: &str = "delete";
@@ -56,10 +57,10 @@ impl TextDelta {
     }
   }
 
-  pub fn to_delta(self) -> Delta {
+  pub fn to_delta(self) -> Delta<YrsInput> {
     match self {
       Self::Inserted(content, attrs) => {
-        let content = YrsValue::from(content);
+        let content = YrsInput::from(content);
         Delta::Inserted(content, attrs.map(Box::new))
       },
       Self::Deleted(len) => Delta::Deleted(len),
