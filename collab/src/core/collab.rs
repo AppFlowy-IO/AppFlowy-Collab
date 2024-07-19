@@ -183,7 +183,7 @@ impl CollabContext {
 
   pub fn emit_awareness_state(&mut self) {
     let state = if let CollabOrigin::Client(origin) = &self.origin {
-      Some(initial_awareness_state(origin.uid).to_string())
+      Some(initial_awareness_state(origin.uid))
     } else {
       None
     };

@@ -17,7 +17,7 @@ async fn awareness_insert_test() {
   let s = json!({"name": "nathan"});
   collab
     .get_mut_awareness()
-    .set_local_state(s.to_string())
+    .set_local_state(s.clone())
     .unwrap();
   let state: serde_json::Value = collab.context.get_awareness().local_state().unwrap();
   assert_eq!(state, s);
