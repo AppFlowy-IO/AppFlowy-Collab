@@ -30,7 +30,7 @@ impl TextOperation {
       text_ref
         .delta(txn)
         .iter()
-        .map(|d| TextDelta::from(txn, d.to_owned()))
+        .map(|d| TextDelta::from(d.clone().map(|s| s.to_string(txn))))
         .collect(),
     )
   }
@@ -43,7 +43,7 @@ impl TextOperation {
     delta: Vec<TextDelta>,
   ) {
     let text_ref = self.get_text_with_txn(txn, text_id);
-    let delta = delta.iter().map(|d| d.to_owned().to_delta()).collect();
+    let delta: Vec<Delta<In>> = delta.iter().map(|d| d.to_owned().to_delta()).collect();
     text_ref.apply_delta(txn, delta);
   }
 

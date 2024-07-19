@@ -16,7 +16,7 @@ fn create_child_views_test() {
   let view_1_3 = make_test_view("1_3", "1", vec![]);
   let view_1 = make_test_view("1", &workspace_id, vec![]);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   let time = timestamp();
@@ -165,7 +165,7 @@ fn move_child_views_test() {
     vec!["1_1".to_string(), "1_2".to_string(), "1_3".to_string()],
   );
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   folder_test.views.insert(&mut txn, view_1.clone(), None);
@@ -195,7 +195,7 @@ fn delete_view_test() {
   let view_2 = make_test_view("1_2", "w1", vec![]);
   let view_3 = make_test_view("1_3", "w1", vec![]);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   folder_test.views.insert(&mut txn, view_1, None);
@@ -216,7 +216,7 @@ fn delete_child_view_test() {
   let view_1_1 = make_test_view("v1_1", "v1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   folder_test.views.insert(&mut txn, view_1, None);
@@ -243,7 +243,7 @@ fn create_orphan_child_views_test() {
   // The orphan view: the parent_view_id equal to the view_id
   let view_2 = make_test_view("2", "2", vec![]);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   folder_test.views.insert(&mut txn, view_1.clone(), None);

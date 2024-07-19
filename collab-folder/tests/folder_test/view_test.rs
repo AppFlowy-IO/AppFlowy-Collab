@@ -9,7 +9,7 @@ fn create_view_test() {
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
   let o_view = make_test_view("v1", "w1", vec![]);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   // Insert a new view
@@ -28,7 +28,7 @@ fn create_view_with_sub_view_test() {
   let child_view = make_test_view("v1_1", "v1", vec![]);
   let view = make_test_view("v1", "w1", vec![child_view.id.clone()]);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   folder_test.views.insert(&mut txn, child_view.clone(), None);
@@ -55,7 +55,7 @@ fn delete_view_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   let view_1 = make_test_view("v1", "w1", vec![]);
@@ -87,7 +87,7 @@ fn update_view_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   let time = timestamp();
@@ -117,7 +117,7 @@ fn update_view_icon_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   let o_view = make_test_view("v1", "w1", vec![]);
@@ -164,7 +164,7 @@ fn different_icon_ty_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   let o_view = make_test_view("v1", "w1", vec![]);
@@ -218,7 +218,7 @@ fn dissociate_and_associate_view_test() {
   let view_2_id = "v2";
   let folder_test = create_folder_with_workspace(uid.clone(), workspace_id);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   let view_1_child = make_test_view(view_1_child_id, view_1_id, vec![]);
@@ -288,7 +288,7 @@ fn move_view_across_parent_test() {
   let view_2_id = "v2";
   let folder_test = create_folder_with_workspace(uid.clone(), workspace_id);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   let view_1_child = make_test_view(view_1_child_id, view_1_id, vec![]);
@@ -378,7 +378,7 @@ fn create_view_test_with_index() {
   let view_5 = make_test_view("v5", "w1", vec![]);
   let view_6 = make_test_view("v6", "w1", vec![]);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   folder_test.views.insert(&mut txn, view_1.clone(), Some(0));
@@ -406,7 +406,7 @@ fn check_created_and_edited_time_test() {
   let folder_test = create_folder_with_workspace(uid.clone(), &workspace_id);
   let view = make_test_view("v1", "w1", vec![]);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   folder_test.views.insert(&mut txn, view, Some(0));
@@ -435,7 +435,7 @@ async fn create_view_and_then_sub_index_content_test() {
   });
 
   {
-    let mut lock = folder_test.inner.lock().unwrap();
+    let mut lock = folder_test.inner.blocking_lock();
     let mut txn = lock.transact_mut();
 
     // Insert a new view
@@ -464,7 +464,7 @@ fn compare_diff_view_test() {
   // Save the full backup of the folder
   let encode_collab = folder_test.encode_collab_v1().unwrap();
   {
-    let mut lock = folder_test.inner.lock().unwrap();
+    let mut lock = folder_test.inner.blocking_lock();
     let mut txn = lock.transact_mut();
 
     // insert two views
@@ -487,7 +487,7 @@ fn compare_diff_view_test() {
   let encode_collab = folder_test.encode_collab_v1().unwrap();
 
   {
-    let mut lock = folder_test.inner.lock().unwrap();
+    let mut lock = folder_test.inner.blocking_lock();
     let mut txn = lock.transact_mut();
     folder_test
       .views

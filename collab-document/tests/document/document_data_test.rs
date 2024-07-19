@@ -28,6 +28,7 @@ async fn get_default_data_test() {
 
 #[tokio::test]
 async fn validate_document_data() {
+  let document_id = "1";
   let document_data = default_document_data(document_id);
   let collab = Arc::new(RwLock::new(Collab::new_with_origin(
     CollabOrigin::Empty,

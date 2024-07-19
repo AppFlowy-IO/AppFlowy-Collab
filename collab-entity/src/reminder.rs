@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use anyhow::Result;
-use collab::preclude::{Any, In, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut};
+use collab::preclude::{Any, In, Map, MapExt, MapPrelim, MapRef, Out, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
@@ -194,7 +194,7 @@ fn reminder_from_map<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Result<Reminder> 
   let meta = map_ref
     .get(txn, REMINDER_META)
     .map(|value| match value {
-      Value::Any(any) => ReminderMeta::from(any),
+      Out::Any(any) => ReminderMeta::from(any),
       _ => ReminderMeta::default(),
     })
     .unwrap_or_default();
@@ -245,7 +245,7 @@ mod test {
       now,
       ObjectType::Document,
     );
-    let prelim: MapPrelim<_> = reminder.into();
+    let prelim: MapPrelim = reminder.into();
     let mut tx = doc.transact_mut();
     map.insert(&mut tx, "reminder", prelim);
 

@@ -15,9 +15,12 @@ async fn awareness_insert_test() {
   });
 
   let s = json!({"name": "nathan"});
-  collab.get_mut_awareness().set_local_state(s.to_string());
-  let state = collab.context.get_awareness().local_state().unwrap();
-  assert_eq!(state, s.to_string());
+  collab
+    .get_mut_awareness()
+    .set_local_state(s.to_string())
+    .unwrap();
+  let state: serde_json::Value = collab.context.get_awareness().local_state().unwrap();
+  assert_eq!(state, s);
 
   sleep(Duration::from_secs(1)).await;
   let event = rx.recv().unwrap();

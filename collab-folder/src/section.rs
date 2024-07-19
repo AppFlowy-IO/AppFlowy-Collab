@@ -5,7 +5,7 @@ use anyhow::bail;
 use collab::preclude::encoding::serde::{from_any, to_any};
 use collab::preclude::{deserialize_i64_from_numeric, ArrayRef, MapExt};
 use collab::preclude::{
-  Any, AnyMut, Array, Map, MapRef, ReadTxn, Subscription, TransactionMut, Value, YrsValue,
+  Any, AnyMut, Array, Map, MapRef, ReadTxn, Subscription, TransactionMut, YrsValue,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;

@@ -3,8 +3,9 @@ use collab::preclude::{Collab, ReadTxn};
 use collab_folder::{timestamp, Folder, FolderData, UserId};
 use serde_json::json;
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 
 use crate::util::{create_folder, make_test_view};
 
@@ -50,7 +51,7 @@ fn view_json_serde() {
   let view_2 = make_test_view("v2", &workspace_id, vec![]);
   let time = timestamp();
   {
-    let mut lock = folder_test.inner.lock().unwrap();
+    let mut lock = folder_test.inner.blocking_lock();
     let mut txn = lock.transact_mut();
 
     folder_test.views.insert(&mut txn, view_1, None);
@@ -128,7 +129,7 @@ fn child_view_json_serde() {
 
   let time = timestamp();
   {
-    let mut lock = folder_test.inner.lock().unwrap();
+    let mut lock = folder_test.inner.blocking_lock();
     let mut txn = lock.transact_mut();
 
     folder_test.views.insert(&mut txn, view_1, None);
@@ -232,7 +233,7 @@ async fn deserialize_folder_data() {
   for _ in 0..40 {
     let folder = folder.clone();
     let handle = tokio::spawn(async move {
-      let inner = folder.inner.lock().unwrap(); //TODO: do I need to say that this need to double lock is bad?
+      let inner = folder.inner.blocking_lock(); //TODO: do I need to say that this need to double lock is bad?
       let txn = inner.transact();
       let start = Instant::now();
       let _trash_ids = folder

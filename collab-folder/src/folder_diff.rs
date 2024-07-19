@@ -20,7 +20,7 @@ impl Folder {
   ) -> Result<Vec<FolderViewChange>, FolderError> {
     //TODO: this entire method should be reimplemented into standard diff comparison
     let changes = Arc::new(ArcSwapOption::default());
-    let this = self.inner.lock().unwrap();
+    let this = self.inner.blocking_lock();
     let this_txn = this.transact();
     let workspace_id = self
       .get_workspace_id_with_txn(&this_txn)
@@ -75,7 +75,7 @@ impl Folder {
       })
     };
     {
-      let mut lock_guard = other.inner.lock().unwrap();
+      let mut lock_guard = other.inner.blocking_lock();
       let mut txn = lock_guard.transact_mut();
       let sv = txn.state_vector();
       let data = this_txn.encode_state_as_update_v1(&sv);

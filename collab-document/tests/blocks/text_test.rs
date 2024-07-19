@@ -298,22 +298,22 @@ fn text_delta_trans_delta_test() {
   let txn = collab.transact();
   let text_delta = TextDelta::Inserted("Hello World".to_string(), None);
   let delta = Delta::Inserted(YrsValue::from("Hello World"), None);
-  let result = TextDelta::from(&txn, delta.clone());
+  let result = TextDelta::from(delta.clone().map(|s| s.to_string(&txn)));
   assert_eq!(result, text_delta);
-  assert_eq!(result.to_delta(), delta);
+  assert_eq!(result.to_delta(), Delta::insert("Hello World"));
 
   let attrs = Attrs::from([(Arc::from("bold"), true.into())]);
   let delta = Delta::Retain(6, Some(Box::from(attrs.clone())));
-  let result = TextDelta::from(&txn, delta.clone());
-  let text_delta = TextDelta::Retain(6, Some(attrs));
+  let result = TextDelta::from(delta.clone());
+  let text_delta = TextDelta::Retain(6, Some(attrs.clone()));
   assert_eq!(result, text_delta);
-  assert_eq!(result.to_delta(), delta);
+  assert_eq!(result.to_delta(), Delta::Retain(6, Some(Box::from(attrs))));
 
   let delta = Delta::Deleted(4);
-  let result = TextDelta::from(&txn, delta.clone());
+  let result = TextDelta::from(delta.clone());
   let text_delta = TextDelta::Deleted(4);
   assert_eq!(result, text_delta);
-  assert_eq!(result.to_delta(), delta);
+  assert_eq!(result.to_delta(), Delta::delete(4));
 }
 
 #[test]

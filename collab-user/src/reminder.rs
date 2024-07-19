@@ -1,7 +1,7 @@
 use collab::preclude::encoding::serde::{from_any, to_any};
 use collab::preclude::{
-  Any, Array, ArrayRef, Change, DeepObservable, Event, Map, MapPrelim, ReadTxn, Subscription,
-  ToJson, TransactionMut, Value, YrsValue,
+  Any, Array, ArrayRef, Change, DeepObservable, Event, Map, MapPrelim, Out, ReadTxn, Subscription,
+  ToJson, TransactionMut, YrsValue,
 };
 use collab_entity::reminder::{Reminder, REMINDER_ID};
 use tokio::sync::broadcast;
@@ -31,11 +31,11 @@ impl Reminders {
     }
   }
 
-  fn find<T: ReadTxn>(&self, txn: &T, reminder_id: &str) -> Option<(u32, Value)> {
+  fn find<T: ReadTxn>(&self, txn: &T, reminder_id: &str) -> Option<(u32, Out)> {
     let mut i = 0;
     for value in self.container.iter(txn) {
-      if let Value::YMap(map) = &value {
-        if let Some(Value::Any(Any::String(str))) = map.get(txn, REMINDER_ID) {
+      if let Out::YMap(map) = &value {
+        if let Some(Out::Any(Any::String(str))) = map.get(txn, REMINDER_ID) {
           if &*str == reminder_id {
             return Some((i, value));
           }
@@ -52,7 +52,7 @@ impl Reminders {
   }
 
   pub fn add(&self, txn: &mut TransactionMut, reminder: Reminder) {
-    let map: MapPrelim<_> = reminder.into();
+    let map: MapPrelim = reminder.into();
     self.container.push_back(txn, map);
   }
 

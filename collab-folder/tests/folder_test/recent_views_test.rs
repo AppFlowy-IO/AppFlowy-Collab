@@ -12,7 +12,7 @@ fn create_recent_views_test() {
 
   let id_1 = "view_1";
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   // Insert view_1
@@ -51,7 +51,7 @@ fn add_view_into_recent_and_then_remove_it_test() {
 
   let id_1 = "view_1";
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   // Insert view_1
@@ -77,7 +77,7 @@ fn create_multiple_user_recent_test() {
   let workspace_id = "w1".to_string();
   let folder_test_1 = create_folder_with_workspace(uid_1.clone(), &workspace_id);
 
-  let mut lock = folder_test_1.inner.lock().unwrap();
+  let mut lock = folder_test_1.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   // Insert view_1
@@ -111,7 +111,7 @@ fn recent_data_serde_test() {
   let workspace_id = "w1".to_string();
   let folder_test = create_folder_with_workspace(uid_1.clone(), &workspace_id);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   // Insert view_1
@@ -166,7 +166,7 @@ fn delete_recent_test() {
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
   let workspace_id = folder_test.get_workspace_id().unwrap();
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   // Insert view_1

@@ -13,7 +13,7 @@ fn create_favorite_test() {
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
   let workspace_id = folder_test.get_workspace_id().unwrap();
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   // Insert view_1
@@ -51,7 +51,7 @@ fn add_favorite_view_and_then_remove_test() {
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
   let workspace_id = folder_test.get_workspace_id().unwrap();
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   // Insert view_1
@@ -75,7 +75,7 @@ fn create_multiple_user_favorite_test() {
   let workspace_id = "w1".to_string();
   let folder_test_1 = create_folder_with_workspace(uid_1.clone(), &workspace_id);
 
-  let mut lock = folder_test_1.inner.lock().unwrap();
+  let mut lock = folder_test_1.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   // Insert view_1
@@ -107,7 +107,7 @@ fn favorite_data_serde_test() {
   let workspace_id = "w1".to_string();
   let folder_test = create_folder_with_workspace(uid_1.clone(), &workspace_id);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   // Insert view_1
@@ -158,7 +158,7 @@ fn delete_favorite_test() {
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
   let workspace_id = folder_test.get_workspace_id().unwrap();
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   // Insert view_1
@@ -197,13 +197,13 @@ fn migrate_from_old_version_folder_without_fav_test() {
     db_path,
   );
   {
-    let mut lock = folder_test.inner.lock().unwrap();
+    let mut lock = folder_test.inner.blocking_lock();
     let mut txn = lock.transact_mut();
     folder_test.migrate_workspace_to_view(&mut txn);
   }
   let workspace_id = folder_test.get_workspace_id().unwrap();
 
-  let lock = folder_test.inner.lock().unwrap();
+  let lock = folder_test.inner.blocking_lock();
   let txn = lock.transact();
 
   let folder_data = folder_test.get_folder_data(&txn, &workspace_id).unwrap();
@@ -275,7 +275,7 @@ fn migrate_favorite_v1_test() {
   let favorites = folder_test.get_favorite_v1();
   assert_eq!(favorites.len(), 2);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   folder_test.add_favorite_view_ids(

@@ -19,7 +19,7 @@ impl Folder {
   /// Returns a `Vec<FavoriteId>` containing the historical favorite data.
   /// The vector will be empty if no historical favorite data exists.
   pub fn get_favorite_v1(&self) -> Vec<FavoriteId> {
-    let mut lock = self.inner.lock().unwrap();
+    let mut lock = self.inner.blocking_lock();
     let mut txn = lock.transact_mut();
     let mut favorites = vec![];
     if let Some(favorite_array) = self.root.get_with_txn::<_, ArrayRef>(&txn, FAVORITES_V1) {
@@ -59,7 +59,7 @@ impl Folder {
   /// Retrieves historical trash data from the key `trash`.
   /// v1 trash data is stored in the key `trash`.
   pub fn get_trash_v1(&self) -> Vec<SectionItem> {
-    let lock = self.inner.lock().unwrap();
+    let lock = self.inner.blocking_lock();
     let txn = lock.transact();
     let mut trash = vec![];
     if let Some(trash_array) = self.root.get_with_txn::<_, ArrayRef>(&txn, "trash") {

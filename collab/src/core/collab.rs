@@ -16,9 +16,8 @@ use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
 
 use yrs::{
-  Any, ArrayPrelim, ArrayRef, Doc, In, Map, MapPrelim, MapRef, Observable, OffsetKind, Options,
-  Origin, Out, ReadTxn, StateVector, Subscription, Transact, Transaction, TransactionMut,
-  UndoManager, Update,
+  Any, Doc, Map, MapRef, Observable, OffsetKind, Options, Out, ReadTxn, StateVector, Subscription,
+  Transact, Transaction, TransactionMut, UndoManager, Update,
 };
 
 use crate::core::awareness::Awareness;
@@ -189,7 +188,9 @@ impl CollabContext {
       None
     };
     if let Some(state) = state {
-      self.awareness.set_local_state(state);
+      if let Err(e) = self.awareness.set_local_state(state) {
+        tracing::warn!("Failed to set awareness state: {}", e);
+      }
     }
   }
 
@@ -526,8 +527,7 @@ fn observe_awareness(
 ) -> Subscription {
   awareness.on_update(move |awareness, e, _| {
     if let Ok(update) = awareness.update_with_clients(e.all_changes()) {
-      plugins
-        .each(|plugin| plugin.receive_local_state(&origin, &oid, e, &update));
+      plugins.each(|plugin| plugin.receive_local_state(&origin, &oid, e, &update));
     }
   })
 }

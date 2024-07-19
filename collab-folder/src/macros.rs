@@ -1,4 +1,3 @@
-use collab::preclude::{ReadTxn, TransactionMut};
 #[macro_export]
 macro_rules! impl_str_update {
   ($setter1: ident, $setter2: ident, $key: expr) => {

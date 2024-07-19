@@ -5,11 +5,7 @@ use std::sync::{Arc, Mutex};
 use crate::reminder::{Reminders, RemindersChangeSender};
 use anyhow::Result;
 use collab::core::collab_state::SyncState;
-<<<<<<< HEAD
-use collab::preclude::{Any, MapRefWrapper};
-=======
 use collab::preclude::{Collab, MapExt, MapRef};
->>>>>>> 8473e96 (draft)
 use collab_entity::define::USER_AWARENESS;
 use collab_entity::reminder::Reminder;
 use serde::{Deserialize, Serialize};

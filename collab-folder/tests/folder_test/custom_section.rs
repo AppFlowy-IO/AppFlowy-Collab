@@ -12,7 +12,7 @@ fn custom_section_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   // By default, the folder has a favorite section

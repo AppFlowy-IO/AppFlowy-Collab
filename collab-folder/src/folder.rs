@@ -10,12 +10,13 @@ use collab::util::any_to_json_value;
 use collab_entity::define::{FOLDER, FOLDER_META, FOLDER_WORKSPACE_ID};
 use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 use tokio_stream::wrappers::WatchStream;
 use tracing::error;
 
 use crate::error::FolderError;
 use crate::folder_observe::ViewChangeSender;
-use crate::section::{Section, SectionItem, SectionMap, SectionOperation};
+use crate::section::{Section, SectionItem, SectionMap};
 use crate::view::view_from_map_ref;
 use crate::{
   impl_section_op, subscribe_folder_change, FolderData, SectionChangeSender, TrashInfo, View,
@@ -89,7 +90,7 @@ pub struct Folder {
   pub inner: Arc<Mutex<Collab>>,
   pub(crate) root: MapRef,
   pub views: Arc<ViewsMap>,
-  section: Arc<SectionMap>,
+  pub section: Arc<SectionMap>,
   pub(crate) meta: MapRef,
   #[allow(dead_code)]
   subscription: Subscription,
@@ -114,7 +115,7 @@ impl Folder {
 
     // When the folder is opened, the workspace id must be present.
     {
-      let lock = folder.inner.lock().unwrap();
+      let lock = folder.inner.blocking_lock();
       folder
         .get_workspace_id_with_txn(&lock.transact())
         .ok_or_else(|| FolderError::NoRequiredData("missing workspace id".into()))?;
@@ -123,7 +124,7 @@ impl Folder {
   }
 
   pub fn close(&self) {
-    self.inner.lock().unwrap().clear_plugins();
+    self.inner.blocking_lock().clear_plugins();
   }
 
   pub fn validate(collab: &Collab) -> Result<(), FolderError> {
@@ -154,20 +155,20 @@ impl Folder {
   }
 
   pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
-    self.inner.lock().unwrap().subscribe_sync_state()
+    self.inner.blocking_lock().subscribe_sync_state()
   }
 
   pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
-    self.inner.lock().unwrap().subscribe_snapshot_state()
+    self.inner.blocking_lock().subscribe_snapshot_state()
   }
 
   pub fn subscribe_index_content(&self) -> IndexContentReceiver {
-    self.inner.lock().unwrap().subscribe_index_content()
+    self.inner.blocking_lock().subscribe_index_content()
   }
 
   /// Returns the doc state and the state vector.
   pub fn encode_collab_v1(&self) -> Result<EncodedCollab, FolderError> {
-    let lock = self.inner.lock().unwrap();
+    let lock = self.inner.blocking_lock();
     lock.encode_collab_v1(|collab| {
       CollabType::Folder
         .validate_require_data(collab)
@@ -263,7 +264,7 @@ impl Folder {
   }
 
   pub fn get_workspace_id(&self) -> Option<String> {
-    let inner = self.inner.lock().unwrap();
+    let inner = self.inner.blocking_lock();
     let txn = inner.transact();
     self.meta.get_with_txn(&txn, FOLDER_WORKSPACE_ID)
   }
@@ -273,7 +274,7 @@ impl Folder {
   }
 
   pub fn move_view(&self, view_id: &str, from: u32, to: u32) -> Option<Arc<View>> {
-    let mut lock = self.inner.lock().unwrap();
+    let mut lock = self.inner.blocking_lock();
     let mut txn = lock.transact_mut();
     let view = self.views.get_view_with_txn(&txn, view_id)?;
     self
@@ -344,7 +345,7 @@ impl Folder {
       return;
     }
 
-    let mut lock = self.inner.lock().unwrap();
+    let mut lock = self.inner.blocking_lock();
     let mut txn = lock.transact_mut();
     if let Some(old_current_view) = self.get_current_view_with_txn(&txn) {
       if old_current_view == view_id {
@@ -356,7 +357,7 @@ impl Folder {
   }
 
   pub fn get_current_view(&self) -> Option<String> {
-    let lock = self.inner.lock().unwrap();
+    let lock = self.inner.blocking_lock();
     let txn = lock.transact();
     self.get_current_view_with_txn(&txn)
   }
@@ -440,7 +441,7 @@ impl Folder {
   }
 
   pub fn to_json_value(&self) -> JsonValue {
-    let lock = self.inner.lock().unwrap();
+    let lock = self.inner.blocking_lock();
     let txn = lock.transact();
     let any = self.root.to_json(&txn);
     println!("{:#?}", any);
@@ -490,7 +491,7 @@ fn create_folder<T: Into<UserId>>(
   folder_data: Option<FolderData>,
 ) -> Folder {
   let uid = uid.into();
-  let mut collab_guard = collab.lock().unwrap();
+  let mut collab_guard = collab.blocking_lock();
   let c = &mut *collab_guard;
   let index_json_sender = c.index_json_sender.clone();
   let mut txn = c.context.transact_mut();
@@ -502,11 +503,11 @@ fn create_folder<T: Into<UserId>>(
   let views = folder.get_or_init_map(&mut txn, VIEWS);
   let section = folder.get_or_init_map(&mut txn, SECTION);
   let meta = folder.get_or_init_map(&mut txn, FOLDER_META);
-  let view_relations = Rc::new(ViewRelations::new(
+  let view_relations = Arc::new(ViewRelations::new(
     folder.get_or_init_map(&mut txn, VIEW_RELATION),
   ));
 
-  let section = Rc::new(SectionMap::create(
+  let section = Arc::new(SectionMap::create(
     &mut txn,
     &uid,
     section,
@@ -514,7 +515,7 @@ fn create_folder<T: Into<UserId>>(
       .as_ref()
       .map(|notifier| notifier.section_change_tx.clone()),
   ));
-  let views = Rc::new(ViewsMap::new(
+  let views = Arc::new(ViewsMap::new(
     &uid,
     views,
     notifier
@@ -588,7 +589,7 @@ fn open_folder<T: Into<UserId>>(
   notifier: Option<FolderNotify>,
 ) -> Option<Folder> {
   let uid = uid.into();
-  let collab_guard = collab.lock().unwrap();
+  let collab_guard = collab.blocking_lock();
   let index_json_sender = collab_guard.index_json_sender.clone();
   let txn = collab_guard.transact();
 

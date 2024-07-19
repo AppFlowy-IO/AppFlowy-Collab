@@ -13,7 +13,7 @@ fn create_trash_test() {
   let view_2 = make_test_view("v2", "w1", vec![]);
   let view_3 = make_test_view("v3", "w1", vec![]);
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   folder_test.views.insert(&mut txn, view_1, Some(0));
@@ -37,7 +37,7 @@ fn delete_trash_view_ids_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
 
-  let mut lock = folder_test.inner.lock().unwrap();
+  let mut lock = folder_test.inner.blocking_lock();
   let mut txn = lock.transact_mut();
 
   let view_1 = make_test_view("v1", "w1", vec![]);
@@ -64,7 +64,7 @@ async fn create_trash_callback_test() {
   let section_rx = folder_test.section_rx.take().unwrap();
 
   tokio::spawn(async move {
-    let mut lock = folder_test.inner.lock().unwrap();
+    let mut lock = folder_test.inner.blocking_lock();
     let mut txn = lock.transact_mut();
     folder_test.add_trash_view_ids(&mut txn, vec!["1".to_string(), "2".to_string()]);
   });
@@ -86,7 +86,7 @@ async fn delete_trash_view_ids_callback_test() {
   let mut folder_test = create_folder_with_workspace(uid.clone(), "w1");
   let trash_rx = folder_test.section_rx.take().unwrap();
   tokio::spawn(async move {
-    let mut lock = folder_test.inner.lock().unwrap();
+    let mut lock = folder_test.inner.blocking_lock();
     let mut txn = lock.transact_mut();
 
     folder_test.add_trash_view_ids(&mut txn, vec!["1".to_string(), "2".to_string()]);

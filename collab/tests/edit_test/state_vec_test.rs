@@ -1,7 +1,7 @@
 use serde_json::json;
 use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
-use yrs::{Doc, Map, MapPrelim, ReadTxn, Transact, Update};
+use yrs::{Doc, Map, MapPrelim, MapRef, ReadTxn, Transact, Update};
 
 #[tokio::test]
 async fn state_vec_apply_test() {

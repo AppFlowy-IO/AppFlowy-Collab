@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::bail;
 use collab::core::collab::IndexContentSender;
 use collab::preclude::{
-  Any, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, ToJson, TransactionMut, Value,
+  Any, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, TransactionMut, YrsValue,
 };
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
@@ -302,9 +302,7 @@ impl ViewsMap {
       self.set_cache_view(view);
     }
 
-    let map_ref = self
-      .container
-      .insert(txn, &*view.id, MapPrelim::<Any>::new());
+    let map_ref = self.container.insert(txn, &*view.id, MapPrelim::default());
     let view_builder = ViewBuilder::new(
       &view.id,
       txn,

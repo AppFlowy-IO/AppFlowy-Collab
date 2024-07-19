@@ -40,8 +40,8 @@ pub enum CollabError {
 impl From<TransactionAcqError> for CollabError {
   fn from(value: TransactionAcqError) -> Self {
     match value {
-      TransactionAcqError::SharedAcqFailed(_) => Self::AcquiredReadTxnFail,
-      TransactionAcqError::ExclusiveAcqFailed(_) => Self::AcquiredWriteTxnFail,
+      TransactionAcqError::SharedAcqFailed => Self::AcquiredReadTxnFail,
+      TransactionAcqError::ExclusiveAcqFailed => Self::AcquiredWriteTxnFail,
       TransactionAcqError::DocumentDropped => Self::Internal(anyhow!("Document dropped").into()),
     }
   }

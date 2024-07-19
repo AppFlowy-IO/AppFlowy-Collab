@@ -456,17 +456,13 @@ impl Document {
   /// Set the local state of the awareness.
   /// It will override the previous state.
   pub fn set_awareness_local_state(&self, state: DocumentAwarenessState) {
-    if let Ok(state) = serde_json::to_string(&state) {
-      self
-        .inner
-        .blocking_write()
-        .get_mut_awareness()
-        .set_local_state(state);
-    } else {
-      tracing::error!(
-        "Failed to serialize DocumentAwarenessState, state: {:?}",
-        state
-      );
+    if let Err(e) = self
+      .inner
+      .blocking_write()
+      .get_mut_awareness()
+      .set_local_state(state)
+    {
+      tracing::error!("Failed to serialize DocumentAwarenessState, state: {}", e);
     }
   }
 
