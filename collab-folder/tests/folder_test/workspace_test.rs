@@ -1,8 +1,6 @@
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_folder::{check_folder_is_valid, Folder, FolderData, UserId, Workspace};
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[test]
 fn test_workspace_is_ready() {
@@ -11,14 +9,14 @@ fn test_workspace_is_ready() {
 
   let workspace = Workspace::new("w1".to_string(), "".to_string(), uid.as_i64());
   let folder_data = FolderData::new(workspace);
-  let collab = Arc::new(Mutex::new(Collab::new_with_origin(
-    CollabOrigin::Empty,
-    object_id,
-    vec![],
-    true,
-  )));
-  let _ = Folder::create(uid, collab.clone(), None, folder_data);
+  let folder = Folder::create(
+    uid,
+    Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], true),
+    None,
+    folder_data,
+  );
 
+  let collab = folder.collab();
   let workspace_id = check_folder_is_valid(&collab.blocking_lock()).unwrap();
   assert_eq!(workspace_id, "w1".to_string());
 }
@@ -30,7 +28,6 @@ fn validate_folder_data() {
 
   let workspace = Workspace::new("w1".to_string(), "".to_string(), 1);
   let folder_data = FolderData::new(workspace);
-  let collab = Arc::new(Mutex::new(collab));
-  let _ = Folder::create(1, collab.clone(), None, folder_data);
-  assert!(Folder::validate(&collab.blocking_lock()).is_ok());
+  let folder = Folder::create(1, collab, None, folder_data);
+  assert!(Folder::validate(&folder.collab().blocking_lock()).is_ok());
 }

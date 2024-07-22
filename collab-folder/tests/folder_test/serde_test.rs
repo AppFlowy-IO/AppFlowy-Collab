@@ -2,10 +2,8 @@ use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, ReadTxn};
 use collab_folder::{timestamp, Folder, FolderData, UserId};
 use serde_json::json;
-use std::ops::Deref;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
 
 use crate::util::{create_folder, make_test_view};
 
@@ -221,19 +219,18 @@ fn child_view_json_serde() {
 async fn deserialize_folder_data() {
   let json = include_str!("../folder_test/history_folder/folder_data.json");
   let folder_data: FolderData = serde_json::from_str(json).unwrap();
-  let collab = Arc::new(Mutex::new(Collab::new_with_origin(
-    CollabOrigin::Empty,
-    "1",
-    vec![],
-    true,
-  )));
-  let folder = Arc::new(Folder::create(1, collab.clone(), None, folder_data));
+  let folder = Arc::new(Folder::create(
+    1,
+    Collab::new_with_origin(CollabOrigin::Empty, "1", vec![], true),
+    None,
+    folder_data,
+  ));
 
   let mut handles = vec![];
   for _ in 0..40 {
     let folder = folder.clone();
     let handle = tokio::spawn(async move {
-      let inner = folder.inner.blocking_lock(); //TODO: do I need to say that this need to double lock is bad?
+      let inner = folder.inner.lock().await; //TODO: do I need to say that this need to double lock is bad?
       let txn = inner.transact();
       let start = Instant::now();
       let _trash_ids = folder
@@ -314,22 +311,3 @@ fn get_all_child_view_ids<T: ReadTxn>(folder: &Folder, txn: &T, view_id: &str) -
   }
   all_child_view_ids
 }
-
-#[derive(Clone)]
-#[allow(clippy::arc_with_non_send_sync)]
-struct MutexFolder(Arc<Mutex<Folder>>);
-
-impl MutexFolder {
-  #[allow(clippy::arc_with_non_send_sync)]
-  fn new(folder: Folder) -> Self {
-    Self(Arc::new(Mutex::new(folder)))
-  }
-}
-impl Deref for MutexFolder {
-  type Target = Arc<Mutex<Folder>>;
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-unsafe impl Sync for MutexFolder {}
-unsafe impl Send for MutexFolder {}

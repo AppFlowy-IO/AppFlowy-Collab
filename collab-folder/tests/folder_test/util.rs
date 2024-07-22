@@ -75,7 +75,7 @@ pub fn create_folder_with_data(
     view_change_tx: view_tx,
     section_change_tx: section_tx,
   };
-  let folder = Folder::create(uid, Arc::new(collab.into()), Some(context), folder_data);
+  let folder = Folder::create(uid, collab, Some(context), folder_data);
   FolderTest {
     db,
     folder,
@@ -108,7 +108,7 @@ pub fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf) -> Fo
     view_change_tx: view_tx,
     section_change_tx: section_tx,
   };
-  let folder = Folder::open(uid, Arc::new(collab.into()), Some(context)).unwrap();
+  let folder = Folder::open(uid, collab, Some(context)).unwrap();
   FolderTest {
     folder,
     db,

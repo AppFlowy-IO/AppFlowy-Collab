@@ -9,7 +9,6 @@ use collab::preclude::{
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
-use tracing::info;
 
 pub struct SectionMap {
   uid: UserId,
@@ -41,40 +40,6 @@ impl SectionMap {
       change_tx,
       subscription: None,
     }
-  }
-
-  /// Attempts to create a new `SectionMap` from the given `MapRefWrapper`.
-  ///
-  /// Iterates over a list of predefined sections. If any section does not exist in the `MapRefWrapper`,
-  /// logs an informational message and returns `None`. Otherwise, returns `Some(SectionMap)`.
-  ///
-  /// When returning None, the caller should call the [Self::create] method to create the section.
-  pub fn new<T: ReadTxn>(
-    txn: &T,
-    uid: &UserId,
-    root: MapRef,
-    change_tx: Option<SectionChangeSender>,
-  ) -> Option<Self> {
-    for section in predefined_sections() {
-      if root
-        .get_with_txn::<_, MapRef>(txn, section.as_ref())
-        .is_none()
-      {
-        info!(
-          "Section {} not exist for user {}",
-          section.as_ref(),
-          uid.as_ref()
-        );
-        return None;
-      }
-    }
-
-    Some(Self {
-      uid: uid.clone(),
-      container: root,
-      change_tx,
-      subscription: None,
-    })
   }
 
   pub fn section_op<T: ReadTxn>(&self, txn: &T, section: Section) -> Option<SectionOperation> {

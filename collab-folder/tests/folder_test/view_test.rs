@@ -420,7 +420,7 @@ fn check_created_and_edited_time_test() {
 async fn create_view_and_then_sub_index_content_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
-  let mut index_content_rx = folder_test.subscribe_index_content();
+  let mut index_content_rx = folder_test.collab().lock().await.subscribe_index_content();
   let o_view = make_test_view("v1", "w1", vec![]);
 
   // subscribe the index content
@@ -435,7 +435,7 @@ async fn create_view_and_then_sub_index_content_test() {
   });
 
   {
-    let mut lock = folder_test.inner.blocking_lock();
+    let mut lock = folder_test.inner.lock().await;
     let mut txn = lock.transact_mut();
 
     // Insert a new view

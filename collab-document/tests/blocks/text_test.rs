@@ -239,7 +239,6 @@ fn apply_insert_delta_test() {
   .to_string();
   test.apply_text_delta(&text_id, insert_delta);
   let delta = test.get_text_delta_with_text_id(&text_id);
-  println!("delta: {}", delta);
   let expect = json!([
     { "insert": "A s soon as you type " },
     {
