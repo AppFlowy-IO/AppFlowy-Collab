@@ -60,7 +60,7 @@ impl ViewMap {
   }
 
   pub fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: DatabaseView) {
-    let map_ref: MapRef = self.container.get_or_init(txn, &view.id);
+    let map_ref: MapRef = self.container.get_or_init(txn, view.id.as_str());
     ViewBuilder::new(txn, map_ref).update(|update| {
       update
         .set_view_id(&view.id)
@@ -77,11 +77,6 @@ impl ViewMap {
         .set_field_orders(view.field_orders)
         .set_row_orders(view.row_orders);
     });
-  }
-
-  pub fn get_view_group_setting(&self, view_id: &str) -> Vec<GroupSettingMap> {
-    let txn = self.container.transact();
-    self.get_view_group_setting_with_txn(&txn, view_id)
   }
 
   pub fn get_view_group_setting_with_txn<T: ReadTxn>(
@@ -269,16 +264,7 @@ impl ViewMap {
       .unwrap_or_default()
   }
 
-  pub fn update_database_view<F>(&self, view_id: &str, f: F)
-  where
-    F: FnOnce(DatabaseViewUpdate),
-  {
-    self
-      .container
-      .with_transact_mut(|txn| self.update_view_with_txn(txn, view_id, f))
-  }
-
-  pub fn update_view_with_txn<F>(&self, txn: &mut TransactionMut, view_id: &str, f: F)
+  pub fn update_database_view<F>(&self, txn: &mut TransactionMut, view_id: &str, f: F)
   where
     F: FnOnce(DatabaseViewUpdate),
   {

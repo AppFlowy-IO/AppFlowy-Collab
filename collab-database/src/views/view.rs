@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use collab::preclude::map::MapPrelim;
 use collab::preclude::{
   Any, Array, ArrayRef, Map, MapExt, MapRef, ReadTxn, TransactionMut, YrsValue,
 };
@@ -459,7 +458,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   fn get_layout_setting(&self) -> Option<DatabaseLayout> {
     self
       .map_ref
-      .get_i64_with_txn(self.txn, DATABASE_VIEW_LAYOUT)
+      .get_with_txn::<_, i64>(self.txn, DATABASE_VIEW_LAYOUT)
       .map(DatabaseLayout::from)
   }
 
@@ -469,32 +468,32 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
 }
 
 pub fn view_id_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> String {
-  map_ref.get_str_with_txn(txn, VIEW_ID).unwrap_or_default()
+  map_ref.get_with_txn(txn, VIEW_ID).unwrap_or_default()
 }
-pub fn view_id_from_value<T: ReadTxn>(value: &YrsValue, txn: &T) -> Option<String> {
-  let map_ref = value.to_ymap()?;
-  Some(view_id_from_map_ref(map_ref, txn))
+pub fn view_id_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<String> {
+  let map_ref: MapRef = value.cast().ok()?;
+  Some(view_id_from_map_ref(&map_ref, txn))
 }
 
 /// Return a [DatabaseViewMeta] from a map ref
 /// A [DatabaseViewMeta] is a subset of a [DatabaseView]
 pub fn view_meta_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<DatabaseViewMeta> {
-  let map_ref = value.to_ymap()?;
-  let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
-  let name = map_ref.get_str_with_txn(txn, VIEW_NAME).unwrap_or_default();
+  let map_ref: MapRef = value.cast().ok()?;
+  let id: String = map_ref.get_with_txn(txn, VIEW_ID)?;
+  let name: String = map_ref.get_with_txn(txn, VIEW_NAME).unwrap_or_default();
   Some(DatabaseViewMeta { id, name })
 }
 
 /// Return a [DatabaseView] from a map ref
-pub fn view_from_value<T: ReadTxn>(value: &YrsValue, txn: &T) -> Option<DatabaseView> {
-  let map_ref = value.to_ymap()?;
-  view_from_map_ref(map_ref, txn)
+pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<DatabaseView> {
+  let map_ref: MapRef = value.cast().ok()?;
+  view_from_map_ref(&map_ref, txn)
 }
 
 /// Return a list of [GroupSettingMap] from a map ref
 pub fn group_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<GroupSettingMap> {
   map_ref
-    .get_array_ref_with_txn(txn, DATABASE_VIEW_GROUPS)
+    .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_GROUPS)
     .map(|array_ref| GroupSettingArray::from_array_ref(txn, &array_ref).0)
     .unwrap_or_default()
 }
@@ -502,7 +501,7 @@ pub fn group_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<
 /// Return a new list of [SortMap]s from a map ref
 pub fn sorts_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<SortMap> {
   map_ref
-    .get_array_ref_with_txn(txn, DATABASE_VIEW_SORTS)
+    .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_SORTS)
     .map(|array_ref| SortArray::from_array_ref(txn, &array_ref).0)
     .unwrap_or_default()
 }
@@ -510,7 +509,7 @@ pub fn sorts_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<SortMap>
 /// Return a new list of [CalculationMap]s from a map ref
 pub fn calculations_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<CalculationMap> {
   map_ref
-    .get_array_ref_with_txn(txn, VIEW_CALCULATIONS)
+    .get_with_txn::<_, ArrayRef>(txn, VIEW_CALCULATIONS)
     .map(|array_ref| CalculationArray::from_array_ref(txn, &array_ref).0)
     .unwrap_or_default()
 }
@@ -518,7 +517,7 @@ pub fn calculations_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<C
 /// Return a new list of [FilterMap]s from a map ref
 pub fn filters_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<FilterMap> {
   map_ref
-    .get_array_ref_with_txn(txn, DATABASE_VIEW_FILTERS)
+    .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_FILTERS)
     .map(|array_ref| FilterArray::from_array_ref(txn, &array_ref).0)
     .unwrap_or_default()
 }
@@ -526,7 +525,7 @@ pub fn filters_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<Filter
 /// Creates a new layout settings from a map ref
 pub fn layout_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> LayoutSettings {
   map_ref
-    .get_map_with_txn(txn, VIEW_LAYOUT_SETTINGS)
+    .get_with_txn::<_, MapRef>(txn, VIEW_LAYOUT_SETTINGS)
     .map(|map_ref| LayoutSettings::from_map_ref(txn, map_ref))
     .unwrap_or_default()
 }
@@ -537,20 +536,20 @@ pub fn field_settings_from_map_ref<T: ReadTxn>(
   map_ref: &MapRef,
 ) -> FieldSettingsByFieldIdMap {
   map_ref
-    .get_map_with_txn(txn, DATABASE_VIEW_FIELD_SETTINGS)
+    .get_with_txn::<_, MapRef>(txn, DATABASE_VIEW_FIELD_SETTINGS)
     .map(|map_ref| FieldSettingsByFieldIdMap::from((txn, &map_ref)))
     .unwrap_or_default()
 }
 
 /// Creates a new view from a map ref
 pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<DatabaseView> {
-  let id = map_ref.get_str_with_txn(txn, VIEW_ID)?;
-  let name = map_ref.get_str_with_txn(txn, VIEW_NAME)?;
-  let database_id = map_ref
-    .get_str_with_txn(txn, VIEW_DATABASE_ID)
+  let id: String = map_ref.get_with_txn(txn, VIEW_ID)?;
+  let name: String = map_ref.get_with_txn(txn, VIEW_NAME)?;
+  let database_id: String = map_ref
+    .get_with_txn(txn, VIEW_DATABASE_ID)
     .unwrap_or_default();
   let layout = map_ref
-    .get_i64_with_txn(txn, DATABASE_VIEW_LAYOUT)
+    .get_with_txn::<_, i64>(txn, DATABASE_VIEW_LAYOUT)
     .map(DatabaseLayout::from)?;
 
   let layout_settings = map_ref
@@ -583,16 +582,16 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
     .map(|array_ref| FieldOrderArray::new(array_ref).get_objects_with_txn(txn))
     .unwrap_or_default();
 
-  let created_at = map_ref
-    .get_i64_with_txn(txn, VIEW_CREATE_AT)
+  let created_at: i64 = map_ref
+    .get_with_txn(txn, VIEW_CREATE_AT)
     .unwrap_or_default();
 
-  let modified_at = map_ref
-    .get_i64_with_txn(txn, VIEW_MODIFY_AT)
+  let modified_at: i64 = map_ref
+    .get_with_txn(txn, VIEW_MODIFY_AT)
     .unwrap_or_default();
 
   let field_settings = map_ref
-    .get_map_with_txn(txn, DATABASE_VIEW_FIELD_SETTINGS)
+    .get_with_txn::<_, MapRef>(txn, DATABASE_VIEW_FIELD_SETTINGS)
     .map(|map_ref| FieldSettingsByFieldIdMap::from((txn, &map_ref)))
     .unwrap_or_default();
 

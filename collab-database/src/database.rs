@@ -661,9 +661,11 @@ impl Database {
   }
 
   pub fn get_all_group_setting<T: TryFrom<GroupSettingMap>>(&self, view_id: &str) -> Vec<T> {
+    let lock = self.inner.blocking_lock();
+    let txn = lock.transact();
     self
       .views
-      .get_view_group_setting(view_id)
+      .get_view_group_setting_with_txn(&txn, view_id)
       .into_iter()
       .flat_map(|setting| T::try_from(setting).ok())
       .collect()
@@ -671,28 +673,36 @@ impl Database {
 
   /// Add a group setting to the view. If the setting already exists, it will be replaced.
   pub fn insert_group_setting(&self, view_id: &str, group_setting: impl Into<GroupSettingMap>) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_groups(|txn, group_update| {
-        let group_setting = group_setting.into();
-        if let Some(YrsValue::Any(Any::String(setting_id))) = group_setting.get("id") {
-          if group_update.contains(&setting_id) {
-            group_update.update(&setting_id, |_| group_setting);
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_groups(|txn, group_update| {
+          let group_setting = group_setting.into();
+          if let Some(YrsValue::Any(Any::String(setting_id))) = group_setting.get("id") {
+            if group_update.contains(&setting_id) {
+              group_update.update(&setting_id, |_| group_setting);
+            } else {
+              group_update.push_back(txn, group_setting);
+            }
           } else {
             group_update.push_back(txn, group_setting);
           }
-        } else {
-          group_update.push_back(txn, group_setting);
-        }
+        });
       });
-    });
   }
 
   pub fn delete_group_setting(&self, view_id: &str, group_setting_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_groups(|txn, group_update| {
-        group_update.remove(txn, group_setting_id);
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_groups(|txn, group_update| {
+          group_update.remove(txn, group_setting_id);
+        });
       });
-    });
   }
 
   pub fn update_group_setting(
@@ -701,47 +711,63 @@ impl Database {
     setting_id: &str,
     f: impl FnOnce(&mut GroupSettingMap),
   ) {
-    self.views.update_database_view(view_id, |view_update| {
-      view_update.update_groups(|txn, group_update| {
-        group_update.update(setting_id, |mut map| {
-          f(&mut map);
-          map
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |view_update| {
+        view_update.update_groups(|txn, group_update| {
+          group_update.update(setting_id, |mut map| {
+            f(&mut map);
+            map
+          });
         });
       });
-    });
   }
 
   pub fn remove_group_setting(&self, view_id: &str, setting_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_groups(|txn, group_update| {
-        group_update.remove(setting_id);
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_groups(|txn, group_update| {
+          group_update.remove(setting_id);
+        });
       });
-    });
   }
 
   pub fn insert_sort(&self, view_id: &str, sort: impl Into<SortMap>) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_sorts(|txn, sort_update| {
-        let sort = sort.into();
-        if let Some(sort_id) = sort.get_str_value("id") {
-          if sort_update.contains(&sort_id) {
-            sort_update.update(&sort_id, |_| sort);
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_sorts(|txn, sort_update| {
+          let sort = sort.into();
+          if let Some(sort_id) = sort.get_str_value("id") {
+            if sort_update.contains(&sort_id) {
+              sort_update.update(&sort_id, |_| sort);
+            } else {
+              sort_update.push(sort);
+            }
           } else {
             sort_update.push(sort);
           }
-        } else {
-          sort_update.push(sort);
-        }
+        });
       });
-    });
   }
 
   pub fn move_sort(&self, view_id: &str, from_sort_id: &str, to_sort_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_sorts(|txn, sort_update| {
-        sort_update.move_to(from_sort_id, to_sort_id);
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_sorts(|txn, sort_update| {
+          sort_update.move_to(from_sort_id, to_sort_id);
+        });
       });
-    });
   }
 
   pub fn get_all_sorts<T: TryFrom<SortMap>>(&self, view_id: &str) -> Vec<T> {
@@ -770,19 +796,27 @@ impl Database {
   }
 
   pub fn remove_sort(&self, view_id: &str, sort_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_sorts(|txn, sort_update| {
-        sort_update.remove(sort_id);
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_sorts(|txn, sort_update| {
+          sort_update.remove(sort_id);
+        });
       });
-    });
   }
 
   pub fn remove_all_sorts(&self, view_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_sorts(|txn, sort_update| {
-        sort_update.clear();
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_sorts(|txn, sort_update| {
+          sort_update.clear();
+        });
       });
-    });
   }
 
   pub fn get_all_calculations<T: TryFrom<CalculationMap>>(&self, view_id: &str) -> Vec<T> {
@@ -818,29 +852,37 @@ impl Database {
   }
 
   pub fn update_calculation(&self, view_id: &str, calculation: impl Into<CalculationMap>) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_calculations(|txn, calculation_update| {
-        let calculation = calculation.into();
-        if let Some(calculation_id) = calculation.get_str_value("id") {
-          if calculation_update.contains(&calculation_id) {
-            calculation_update.update(&calculation_id, |_| calculation);
-            return;
+    self.views.update_database_view(
+      &mut self.inner.blocking_lock().transact_mut(),
+      view_id,
+      |update| {
+        update.update_calculations(|txn, calculation_update| {
+          let calculation = calculation.into();
+          if let Some(calculation_id) = calculation.get_str_value("id") {
+            if calculation_update.contains(&calculation_id) {
+              calculation_update.update(&calculation_id, |_| calculation);
+              return;
+            }
           }
-        }
 
-        calculation_update.push(calculation);
-      });
-    });
+          calculation_update.push(calculation);
+        });
+      },
+    );
   }
 
   pub fn remove_calculation(&self, view_id: &str, calculation_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_calculations(|txn, calculation_update| {
-        if calculation_update.contains(calculation_id) {
-          calculation_update.remove(calculation_id);
-        }
-      });
-    });
+    self.views.update_database_view(
+      &mut self.inner.blocking_lock().transact_mut(),
+      view_id,
+      |update| {
+        update.update_calculations(|txn, calculation_update| {
+          if calculation_update.contains(calculation_id) {
+            calculation_update.remove(calculation_id);
+          }
+        });
+      },
+    );
   }
 
   pub fn get_all_filters<T: TryFrom<FilterMap>>(&self, view_id: &str) -> Vec<T> {
@@ -869,40 +911,52 @@ impl Database {
   }
 
   pub fn update_filter(&self, view_id: &str, filter_id: &str, f: impl FnOnce(&mut FilterMap)) {
-    self.views.update_database_view(view_id, |view_update| {
-      view_update.update_filters(|txn, filter_update| {
-        filter_update.update(filter_id, |mut map| {
-          f(&mut map);
-          map
+    self.views.update_database_view(
+      &mut self.inner.blocking_lock().transact_mut(),
+      view_id,
+      |view_update| {
+        view_update.update_filters(|txn, filter_update| {
+          filter_update.update(filter_id, |mut map| {
+            f(&mut map);
+            map
+          });
         });
-      });
-    });
+      },
+    );
   }
 
   pub fn remove_filter(&self, view_id: &str, filter_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_filters(|txn, filter_update| {
-        filter_update.remove(filter_id);
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_filters(|txn, filter_update| {
+          filter_update.remove(filter_id);
+        });
       });
-    });
   }
 
   /// Add a filter to the view. If the setting already exists, it will be replaced.
   pub fn insert_filter(&self, view_id: &str, filter: impl Into<FilterMap>) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_filters(|txn, filter_update| {
-        let filter = filter.into();
-        if let Some(filter_id) = filter.get_str_value("id") {
-          if filter_update.contains(&filter_id) {
-            filter_update.update(&filter_id, |_| filter);
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_filters(|txn, filter_update| {
+          let filter = filter.into();
+          if let Some(filter_id) = filter.get_str_value("id") {
+            if filter_update.contains(&filter_id) {
+              filter_update.update(&filter_id, |_| filter);
+            } else {
+              filter_update.push_back(txn, filter);
+            }
           } else {
             filter_update.push_back(txn, filter);
           }
-        } else {
-          filter_update.push_back(txn, filter);
-        }
+        });
       });
-    });
   }
 
   /// Sets the filters of a database view. Requires two generics to work around the situation where
@@ -915,15 +969,19 @@ impl Database {
   where
     U: for<'a> From<&'a T> + Into<FilterMap>,
   {
-    self.views.update_database_view(view_id, |update| {
-      update.set_filters(
-        filters
-          .iter()
-          .map(|filter| U::from(filter))
-          .map(Into::into)
-          .collect(),
-      );
-    });
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.set_filters(
+          filters
+            .iter()
+            .map(|filter| U::from(filter))
+            .map(Into::into)
+            .collect(),
+        );
+      });
   }
 
   pub fn get_layout_setting<T: From<LayoutSetting>>(
@@ -940,9 +998,13 @@ impl Database {
     layout_ty: &DatabaseLayout,
     layout_setting: T,
   ) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_layout_settings(layout_ty, layout_setting.into());
-    });
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_layout_settings(layout_ty, layout_setting.into());
+      });
   }
 
   /// Returns the field settings for the given field ids.
@@ -968,9 +1030,13 @@ impl Database {
   }
 
   pub fn set_field_settings(&self, view_id: &str, field_settings_map: FieldSettingsByFieldIdMap) {
-    self.views.update_database_view(view_id, |update| {
-      update.set_field_settings(field_settings_map);
-    })
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.set_field_settings(field_settings_map);
+      })
   }
 
   pub fn update_field_settings(
@@ -987,33 +1053,45 @@ impl Database {
         .collect(),
     );
 
-    self.views.update_database_view(view_id, |update| {
-      let field_settings = field_settings.into();
-      update.update_field_settings_for_fields(
-        field_ids,
-        |txn, field_setting_update, field_id, _layout_ty| {
-          field_setting_update.update(txn, field_id, field_settings.clone());
-        },
-      );
-    })
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        let field_settings = field_settings.into();
+        update.update_field_settings_for_fields(
+          field_ids,
+          |txn, field_setting_update, field_id, _layout_ty| {
+            field_setting_update.update(txn, field_id, field_settings.clone());
+          },
+        );
+      })
   }
 
   pub fn remove_field_settings_for_fields(&self, view_id: &str, field_ids: Vec<String>) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_field_settings_for_fields(
-        field_ids,
-        |txn, field_setting_update, field_id, _layout_ty| {
-          field_setting_update.remove(txn, field_id);
-        },
-      );
-    })
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_field_settings_for_fields(
+          field_ids,
+          |txn, field_setting_update, field_id, _layout_ty| {
+            field_setting_update.remove(txn, field_id);
+          },
+        );
+      })
   }
 
   /// Update the layout type of the view.
   pub fn update_layout_type(&self, view_id: &str, layout_type: &DatabaseLayout) {
-    self.views.update_database_view(view_id, |update| {
-      update.set_layout_type(*layout_type);
-    });
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    self
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.set_layout_type(*layout_type);
+      });
   }
 
   /// Returns all the views that the current database has.

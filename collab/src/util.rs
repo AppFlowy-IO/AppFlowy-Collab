@@ -13,8 +13,8 @@ use yrs::branch::BranchPtr;
 use yrs::types::text::YChange;
 use yrs::types::{Delta, ToJson};
 use yrs::{
-  Any, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, Out, ReadTxn, Text, TextPrelim, TextRef,
-  TransactionMut,
+  Any, Array, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, Out, ReadTxn, Text, TextPrelim,
+  TextRef, TransactionMut,
 };
 
 pub trait MapExt: Map {
@@ -264,3 +264,33 @@ pub fn any_to_json_value(any: Any) -> Result<JsonValue> {
 // Create deserialization functions for i32 and i64
 create_deserialize_numeric!(i32, I32Visitor, deserialize_i32_from_numeric);
 create_deserialize_numeric!(i64, I64Visitor, deserialize_i64_from_numeric);
+
+pub trait ArrayExt: Array {
+  fn clear(&self, txn: &mut TransactionMut) {
+    let len = self.len(txn);
+    self.remove_range(txn, 0, len);
+  }
+
+  fn remove_where<F>(&self, txn: &mut TransactionMut, f: F)
+  where
+    F: Fn(&Out) -> bool,
+  {
+    let mut iter = self.iter(txn);
+    while let Some(n) = iter.next() {
+      if f(n) {
+        iter.remove(txn);
+      }
+    }
+  }
+
+  fn index_of<T: ReadTxn>(&self, txn: &T, value: &str) -> Option<usize> {
+    self.iter(txn).position(|item| {
+      if let Out::YMap(map_ref) = item {
+        if let Some(Out::Any(Any::String(id))) = map_ref.get(txn, "id") {
+          return &*id == value;
+        }
+      }
+      false
+    })
+  }
+}
