@@ -1,6 +1,5 @@
-use collab::core::any_array::ArrayMap;
-use collab::core::any_map::{AnyMap, AnyMapBuilder};
+use serde_json::{Map, Value};
 
-pub type CalculationArray = ArrayMap;
-pub type CalculationMap = AnyMap;
-pub type CalculationMapBuilder = AnyMapBuilder;
+pub type CalculationArray = Vec<Value>;
+pub type CalculationMap = Map<String, Value>;
+pub type CalculationMapBuilder = Map<String, Value>;

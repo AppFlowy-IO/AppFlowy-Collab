@@ -1,16 +1,16 @@
-use collab::core::any_array::{ArrayMap, ArrayMapUpdate};
-use collab::core::any_map::{AnyMap, AnyMapBuilder};
+use collab::preclude::ArrayRef;
+use serde_json::{Map, Value};
 
 /// [GroupSettingArray] contains list of [GroupSettingMap]
-pub type GroupSettingArray = ArrayMap;
-pub type GroupSettingArrayUpdate<'a, 'b> = ArrayMapUpdate<'a, 'b>;
+pub type GroupSettingArray = Vec<Value>;
+pub type GroupSettingArrayUpdate = ArrayRef;
 
 /// [GroupSettingMap] contains list of key/value.
 /// One of the key/value represents as the [GroupMap]
-pub type GroupSettingMap = AnyMap;
-pub type GroupSettingBuilder = AnyMapBuilder;
+pub type GroupSettingMap = Map<String, Value>;
+pub type GroupSettingBuilder = Map<String, Value>;
 
 /// [GroupMap] contains the key/value that represents a group data.
-pub type GroupMap = AnyMap;
+pub type GroupMap = Map<String, Value>;
 /// [GroupMapBuilder] is the builder for [GroupMap]
-pub type GroupMapBuilder = AnyMapBuilder;
+pub type GroupMapBuilder = Map<String, Value>;

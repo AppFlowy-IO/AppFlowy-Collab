@@ -3,7 +3,7 @@ use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
-use collab::core::collab::{DataSource, MutexCollab};
+use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
@@ -11,7 +11,7 @@ use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::{KVTransactionDB, PersistenceError};
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
-use tokio::sync::watch;
+use tokio::sync::{watch, Mutex};
 use tokio::task::yield_now;
 use tracing::trace;
 
@@ -53,7 +53,7 @@ impl BlockTaskController {
     self
       .request_handler
       .queue
-      .lock()
+      .blocking_lock()
       .push(PendingTask::new(task));
     self.request_handler.notify();
   }
@@ -86,7 +86,7 @@ impl BlockTaskHandler {
 #[async_trait]
 impl TaskHandler<BlockTask> for BlockTaskHandler {
   async fn prepare_task(&self) -> Option<PendingTask<BlockTask>> {
-    let mut queue = self.queue.try_lock()?;
+    let mut queue = self.queue.lock().await;
     let task = queue.pop()?;
     let collab_db = self.collab_db.upgrade()?;
 
@@ -245,9 +245,9 @@ fn save_row(
   }
 }
 
-pub type FetchRowSender = tokio::sync::mpsc::Sender<Result<Arc<MutexCollab>, DatabaseError>>;
+pub type FetchRowSender = tokio::sync::mpsc::Sender<Result<Arc<Mutex<Collab>>, DatabaseError>>;
 pub type BatchFetchRowSender =
-  tokio::sync::mpsc::Sender<Vec<(String, Result<Arc<MutexCollab>, DatabaseError>)>>;
+  tokio::sync::mpsc::Sender<Vec<(String, Result<Arc<Mutex<Collab>>, DatabaseError>)>>;
 
 #[derive(Clone)]
 pub enum BlockTask {

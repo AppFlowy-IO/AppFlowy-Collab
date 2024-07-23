@@ -1,10 +1,7 @@
 use std::collections::HashSet;
 
-use collab::core::array_wrapper::ArrayRefExtension;
-use collab::core::value::YrsValueExtension;
 use collab::preclude::{
-  Array, ArrayRefWrapper, Collab, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut,
-  YrsValue,
+  Array, ArrayRef, Collab, Map, MapExt, MapPrelim, MapRef, ReadTxn, TransactionMut, YrsValue,
 };
 use collab_entity::define::WORKSPACE_DATABASES;
 
@@ -12,27 +9,17 @@ use crate::database::timestamp;
 
 /// Used to store list of [DatabaseMeta].
 pub struct DatabaseMetaList {
-  array_ref: ArrayRefWrapper,
+  array_ref: ArrayRef,
 }
 
 impl DatabaseMetaList {
-  pub fn new(array_ref: ArrayRefWrapper) -> Self {
+  pub fn new(array_ref: ArrayRef) -> Self {
     Self { array_ref }
   }
 
-  pub fn from_collab(collab: &Collab) -> Self {
-    let array = {
-      let txn = collab.transact();
-      collab.get_array_with_txn(&txn, vec![WORKSPACE_DATABASES])
-    };
-
-    let databases = array.unwrap_or_else(|| {
-      collab.with_origin_transact_mut(|txn| {
-        collab.create_array_with_txn::<MapPrelim>(txn, WORKSPACE_DATABASES, vec![])
-      })
-    });
-
-    Self::new(databases)
+  pub fn from_collab(collab: &mut Collab) -> Self {
+    let mut txn = collab.context.transact_mut();
+    Self::new(collab.data.get_or_init(&mut txn, WORKSPACE_DATABASES))
   }
 
   /// Create a new [DatabaseMeta] for the given database id and view id
@@ -47,7 +34,7 @@ impl DatabaseMetaList {
         created_at: timestamp(),
         linked_views: linked_views.into_iter().collect(),
       };
-      let map_ref = self.array_ref.insert_map_with_txn(txn, None);
+      let map_ref: MapRef = self.array_ref.insert(txn, MapPrelim::default());
       record.fill_map_ref(txn, &map_ref);
     });
   }
@@ -59,7 +46,7 @@ impl DatabaseMetaList {
         if let Some(Some(map_ref)) = self
           .array_ref
           .get(txn, index)
-          .map(|value| value.to_ymap().cloned())
+          .map(|value| value.cast().ok())
         {
           if let Some(mut record) = DatabaseMeta::from_map_ref(txn, &map_ref) {
             f(&mut record);
@@ -108,8 +95,8 @@ impl DatabaseMetaList {
       .array_ref
       .iter(txn)
       .flat_map(|value| {
-        let map_ref = value.to_ymap()?;
-        DatabaseMeta::from_map_ref(txn, map_ref)
+        let map_ref: MapRef = value.cast().ok()?;
+        DatabaseMeta::from_map_ref(txn, &map_ref)
       })
       .collect()
   }
@@ -151,19 +138,22 @@ const DATABASE_RECORD_VIEWS: &str = "views";
 
 impl DatabaseMeta {
   fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
-    map_ref.insert_str_with_txn(txn, DATABASE_TRACKER_ID, self.database_id);
-    map_ref.insert_str_with_txn(txn, DATABASE_RECORD_CREATED_AT, self.created_at);
-    let views = self.linked_views.into_iter().collect::<Vec<String>>();
-    map_ref.create_array_with_txn(txn, DATABASE_RECORD_VIEWS, views);
+    map_ref.insert(txn, DATABASE_TRACKER_ID, self.database_id);
+    map_ref.insert(txn, DATABASE_RECORD_CREATED_AT, self.created_at);
+    map_ref.insert(
+      txn,
+      DATABASE_RECORD_VIEWS,
+      MapPrelim::from_iter(self.linked_views.into_iter()),
+    );
   }
 
   fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<Self> {
-    let database_id = map_ref.get_str_with_txn(txn, DATABASE_TRACKER_ID)?;
-    let created_at = map_ref
-      .get_i64_with_txn(txn, DATABASE_RECORD_CREATED_AT)
+    let database_id: String = map_ref.get_with_txn(txn, DATABASE_TRACKER_ID)?;
+    let created_at: i64 = map_ref
+      .get_with_txn(txn, DATABASE_RECORD_CREATED_AT)
       .unwrap_or_default();
     let linked_views = map_ref
-      .get_array_ref_with_txn(txn, DATABASE_RECORD_VIEWS)?
+      .get_with_txn::<_, ArrayRef>(txn, DATABASE_RECORD_VIEWS)?
       .iter(txn)
       .map(|value| value.to_string(txn))
       .collect();
@@ -178,7 +168,7 @@ impl DatabaseMeta {
 
 fn database_id_from_value<T: ReadTxn>(txn: &T, value: YrsValue) -> Option<String> {
   if let YrsValue::YMap(map_ref) = value {
-    map_ref.get_str_with_txn(txn, DATABASE_TRACKER_ID)
+    map_ref.get_with_txn(txn, DATABASE_TRACKER_ID)
   } else {
     None
   }

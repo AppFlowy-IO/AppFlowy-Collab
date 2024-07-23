@@ -1,6 +1,5 @@
-use collab::core::any_array::ArrayMap;
-use collab::core::any_map::{AnyMap, AnyMapBuilder};
+use serde_json::{Map, Value};
 
-pub type SortArray = ArrayMap;
-pub type SortMap = AnyMap;
-pub type SortMapBuilder = AnyMapBuilder;
+pub type SortArray = Vec<Value>;
+pub type SortMap = Map<String, Value>;
+pub type SortMapBuilder = Map<String, Value>;

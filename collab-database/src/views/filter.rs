@@ -1,6 +1,5 @@
-use collab::core::any_array::ArrayMap;
-use collab::core::any_map::{AnyMap, AnyMapBuilder};
+use serde_json::{Map, Value};
 
-pub type FilterArray = ArrayMap;
-pub type FilterMap = AnyMap;
-pub type FilterMapBuilder = AnyMapBuilder;
+pub type FilterArray = Vec<Value>;
+pub type FilterMap = Map<String, Value>;
+pub type FilterMapBuilder = Map<String, Value>;

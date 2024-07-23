@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use collab::preclude::{MapRef, ReadTxn, TransactionMut};
+use collab::preclude::{Map, MapRef, ReadTxn, TransactionMut};
 
 const DATABASE_INLINE_VIEW: &str = "iid";
 
@@ -15,14 +15,12 @@ impl MetaMap {
 
   /// Set the inline view id
   pub fn set_inline_view_id_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
-    self
-      .container
-      .insert_str_with_txn(txn, DATABASE_INLINE_VIEW, view_id);
+    self.container.insert(txn, DATABASE_INLINE_VIEW, view_id);
   }
 
   /// Get the inline view id
   pub fn get_inline_view_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
-    self.container.get_str_with_txn(txn, DATABASE_INLINE_VIEW)
+    self.container.get(txn, DATABASE_INLINE_VIEW)?.cast().ok()
   }
 }
 

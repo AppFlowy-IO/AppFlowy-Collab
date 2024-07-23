@@ -1,8 +1,7 @@
 use std::ops::Deref;
 
 use collab::preclude::{
-  DeepObservable, EntryChange, Event, Map, MapRefWrapper, Subscription, ToJson, TransactionMut,
-  YrsValue,
+  DeepObservable, EntryChange, Event, Map, MapRef, Subscription, ToJson, TransactionMut, YrsValue,
 };
 use tokio::sync::broadcast;
 
@@ -19,14 +18,14 @@ pub type RowRelationUpdateSender = broadcast::Sender<RowRelationChange>;
 pub type RowRelationUpdateReceiver = broadcast::Receiver<RowRelationChange>;
 
 pub struct RowRelationMap {
-  container: MapRefWrapper,
+  container: MapRef,
   tx: RowRelationUpdateSender,
   #[allow(dead_code)]
   subscription: Subscription,
 }
 
 impl RowRelationMap {
-  pub fn from_map_ref(mut container: MapRefWrapper) -> Self {
+  pub fn from_map_ref(mut container: MapRef) -> Self {
     let (tx, _) = broadcast::channel(1000);
     let subscription = subscription_changes(tx.clone(), &mut container);
     Self {
@@ -70,10 +69,7 @@ impl RowRelationMap {
   }
 }
 
-fn subscription_changes(
-  tx: RowRelationUpdateSender,
-  container: &mut MapRefWrapper,
-) -> Subscription {
+fn subscription_changes(tx: RowRelationUpdateSender, container: &MapRef) -> Subscription {
   container.observe_deep(move |txn, events| {
     for deep_event in events.iter() {
       match deep_event {
@@ -113,7 +109,7 @@ fn subscription_changes(
 }
 
 impl Deref for RowRelationMap {
-  type Target = MapRefWrapper;
+  type Target = MapRef;
 
   fn deref(&self) -> &Self::Target {
     &self.container

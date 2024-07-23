@@ -1,4 +1,4 @@
-use collab::preclude::{Map, MapRef, ReadTxn, Subscription, TransactionMut};
+use collab::preclude::{Map, MapExt, MapRef, ReadTxn, Subscription, TransactionMut};
 
 use crate::database::timestamp;
 use crate::fields::{
@@ -23,16 +23,9 @@ impl FieldMap {
     }
   }
 
-  /// Get all fields in the map
-  pub fn insert_field(&self, field: Field) {
-    self.container.with_transact_mut(|txn| {
-      self.insert_field_with_txn(txn, field);
-    });
-  }
-
   /// Insert a field into the map with a transaction
   pub fn insert_field_with_txn(&self, txn: &mut TransactionMut, field: Field) {
-    let map_ref = self.container.create_map_with_txn(txn, &field.id);
+    let map_ref: MapRef = self.container.get_or_init(txn, field.id.as_str());
     FieldBuilder::new(&field.id, txn, map_ref)
       .update(|update| {
         update
@@ -77,7 +70,7 @@ impl FieldMap {
 
   /// Return a field by field id with a transaction
   pub fn get_field_with_txn<T: ReadTxn>(&self, txn: &T, field_id: &str) -> Option<Field> {
-    let map_ref = self.container.get_map_with_txn(txn, field_id)?;
+    let map_ref: MapRef = self.container.get_with_txn(txn, field_id)?;
     field_from_map_ref(&map_ref.into_inner(), txn)
   }
 
@@ -147,7 +140,7 @@ impl FieldMap {
     F: FnOnce(FieldUpdate),
   {
     self.container.with_transact_mut(|txn| {
-      let map_ref = self.container.get_or_create_map_with_txn(txn, field_id);
+      let map_ref: MapRef = self.container.get_or_init(txn, field_id);
       let mut update = FieldUpdate::new(field_id, txn, &map_ref);
       update = update.set_last_modified(timestamp());
       f(update);

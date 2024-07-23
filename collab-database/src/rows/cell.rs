@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-use collab::preclude::{Map, MapRef, ReadTxn, TransactionMut, YrsValue};
+use collab::preclude::{Any, Map, MapRef, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 
 use crate::database::timestamp;
@@ -24,7 +24,7 @@ impl Cells {
   /// Returns a new instance of [Cells] from a [MapRef]
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.into_inner().into_iter().for_each(|(k, v)| {
-      let cell_map_ref = map_ref.get_or_create_map_with_txn(txn, &k);
+      let cell_map_ref: MapRef = map_ref.get_or_init(txn, k);
       v.fill_map_ref(txn, &cell_map_ref);
     });
   }
@@ -78,13 +78,13 @@ impl<'a, 'b> CellsUpdate<'a, 'b> {
   }
 
   pub fn insert_cell(self, key: &str, cell: Cell) -> Self {
-    let cell_map_ref = self.map_ref.get_or_create_map_with_txn(self.txn, key);
+    let cell_map_ref: MapRef = self.map_ref.get_or_init(self.txn, key);
     if cell_map_ref.get(self.txn, CREATED_AT).is_none() {
-      cell_map_ref.insert_i64_with_txn(self.txn, CREATED_AT, timestamp());
+      cell_map_ref.insert(self.txn, CREATED_AT, timestamp());
     }
 
     cell.fill_map_ref(self.txn, &cell_map_ref);
-    cell_map_ref.insert_i64_with_txn(self.txn, LAST_MODIFIED, timestamp());
+    cell_map_ref.insert(self.txn, LAST_MODIFIED, timestamp());
     self
   }
 
@@ -96,25 +96,26 @@ impl<'a, 'b> CellsUpdate<'a, 'b> {
   }
 
   pub fn clear(self, key: &str) -> Self {
-    let cell_map_ref = self.map_ref.get_or_create_map_with_txn(self.txn, key);
+    let cell_map_ref: MapRef = self.map_ref.get_or_init(self.txn, key);
     cell_map_ref.clear(self.txn);
 
     self
   }
 }
 
-pub type Cell = AnyMap;
-pub type CellBuilder = AnyMapBuilder;
-pub type CellUpdate<'a, 'b> = AnyMapUpdate<'a, 'b>;
+pub type Cell = HashMap<String, Any>;
+pub type CellBuilder = HashMap<String, Any>;
+pub type CellUpdate = MapRef;
 
 pub fn get_field_type_from_cell<T: From<i64>>(cell: &Cell) -> Option<T> {
-  cell.get_i64_value("field_type").map(|value| T::from(value))
+  let any = cell.get("field_type")?.clone();
+  let field_type: i64 = any.cast().ok()?;
+  Some(T::from(field_type))
 }
 
 /// Create a new [CellBuilder] with the field type.
 pub fn new_cell_builder(field_type: impl Into<i64>) -> CellBuilder {
-  let inner = AnyMapBuilder::new();
-  inner.insert_i64_value("field_type", field_type.into())
+  HashMap::from([("field_type".into(), Any::from(field_type.into()))])
 }
 
 pub struct RowCell {

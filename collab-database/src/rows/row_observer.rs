@@ -77,7 +77,7 @@ fn handle_map_event(
               trace!("row observe value update: {}:{:?}", key, value.to_json(txn))
             },
             RowChangeValue::Height => {
-              if let Some(value) = value.as_i64() {
+              if let Ok(value) = value.clone().cast::<i64>() {
                 let _ = change_tx.send(RowChange::DidUpdateHeight {
                   row_id: row_id.clone(),
                   value: value as i32,
@@ -85,7 +85,7 @@ fn handle_map_event(
               }
             },
             RowChangeValue::Visibility => {
-              if let Some(value) = value.as_bool() {
+              if let Ok(value) = value.clone().cast::<bool>() {
                 let _ = change_tx.send(RowChange::DidUpdateVisibility {
                   row_id: row_id.clone(),
                   value,

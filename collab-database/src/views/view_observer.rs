@@ -1,8 +1,7 @@
-use collab::core::any_map::AnyMap;
 use collab::preclude::array::ArrayEvent;
 use collab::preclude::map::MapEvent;
-use collab::preclude::{Change, Subscription, TransactionMut};
-use collab::preclude::{DeepObservable, EntryChange, Event, MapRefWrapper, PathSegment};
+use collab::preclude::{Change, MapRef, Subscription, ToJson, TransactionMut};
+use collab::preclude::{DeepObservable, EntryChange, Event, PathSegment};
 use std::ops::Deref;
 use std::str::FromStr;
 use tokio::sync::broadcast;
@@ -73,7 +72,7 @@ pub type ViewChangeSender = broadcast::Sender<DatabaseViewChange>;
 pub type ViewChangeReceiver = broadcast::Receiver<DatabaseViewChange>;
 
 pub(crate) fn subscribe_view_map_change(
-  view_map: &mut MapRefWrapper,
+  view_map: &MapRef,
   change_tx: ViewChangeSender,
 ) -> Subscription {
   view_map.observe_deep(move |txn, events| {
@@ -86,8 +85,7 @@ pub(crate) fn subscribe_view_map_change(
         Event::Map(event) => {
           handle_map_event(&change_tx, txn, event);
         },
-        Event::XmlFragment(_) => {},
-        Event::XmlText(_) => {},
+        _ => {},
       }
     }
   })
@@ -138,7 +136,7 @@ fn handle_array_event(
           if let Some(view_id) = view_id_from_array_event(array_event) {
             let filters = values
               .iter()
-              .flat_map(|value| AnyMap::from_value(txn, value))
+              .flat_map(|value| value.to_json(txn))
               .collect::<Vec<_>>();
             let _ = change_tx.send(DatabaseViewChange::DidCreateFilters { view_id, filters });
           }
@@ -147,7 +145,7 @@ fn handle_array_event(
           if let Some(view_id) = view_id_from_array_event(array_event) {
             let sorts = values
               .iter()
-              .flat_map(|value| AnyMap::from_value(txn, value))
+              .flat_map(|value| value.to_json(txn))
               .collect::<Vec<_>>();
             let _ = change_tx.send(DatabaseViewChange::DidCreateSorts { view_id, sorts });
           }

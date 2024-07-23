@@ -176,14 +176,14 @@ impl Block {
   pub fn get_row(&self, row_id: &RowId) -> Row {
     self
       .get_or_init_row(row_id)
-      .and_then(|row| row.lock().get_row())
+      .and_then(|row| row.blocking_lock().get_row())
       .unwrap_or_else(|| Row::empty(row_id.clone(), &self.database_id))
   }
 
   pub fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
     self
       .get_or_init_row(row_id)
-      .and_then(|row| row.lock().get_row_meta())
+      .and_then(|row| row.blocking_lock().get_row_meta())
       .or_else(|| Some(RowMeta::empty()))
   }
 
@@ -200,7 +200,7 @@ impl Block {
     for row_order in row_orders {
       let row = self
         .get_or_init_row(&row_order.id)
-        .and_then(|row| row.lock().get_row())
+        .and_then(|row| row.blocking_lock().get_row())
         .unwrap_or_else(|| Row::empty(row_order.id.clone(), &self.database_id));
       rows.push(row);
     }
@@ -210,13 +210,13 @@ impl Block {
   pub fn get_cell(&self, row_id: &RowId, field_id: &str) -> Option<Cell> {
     self
       .get_or_init_row(row_id)
-      .and_then(|row| row.lock().get_cell(field_id))
+      .and_then(|row| row.blocking_lock().get_cell(field_id))
   }
 
   pub fn delete_row(&self, row_id: &RowId) {
     let row = self.rows.remove(row_id);
-    if let Some(row) = row {
-      row.1.lock().delete();
+    if let Some((_, row)) = row {
+      row.blocking_lock().delete();
     }
   }
 
@@ -234,7 +234,7 @@ impl Block {
         self.get_or_init_row(row_id);
       },
       Some(row) => {
-        row.lock().update::<F>(f);
+        row.blocking_lock().update::<F>(f);
       },
     }
   }
@@ -252,7 +252,7 @@ impl Block {
         )
       },
       Some(row) => {
-        row.lock().update_meta::<F>(f);
+        row.blocking_lock().update_meta::<F>(f);
       },
     }
   }

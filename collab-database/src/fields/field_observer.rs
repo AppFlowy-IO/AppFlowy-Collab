@@ -29,7 +29,7 @@ pub(crate) fn subscribe_field_change(
             match value {
               EntryChange::Inserted(value) => {
                 // tracing::trace!("field observer: Inserted: {}:{}", key, value);
-                if let Some(field) = field_from_value(value, txn) {
+                if let Some(field) = field_from_value(value.clone(), txn) {
                   let _ = change_tx.send(FieldChange::DidCreateField { field });
                 }
               },
@@ -50,8 +50,7 @@ pub(crate) fn subscribe_field_change(
             }
           }
         },
-        Event::XmlFragment(_) => {},
-        Event::XmlText(_) => {},
+        _ => {},
       }
     }
   })

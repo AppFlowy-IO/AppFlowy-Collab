@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
 use anyhow::bail;
-use collab::core::any_map::{AnyMap, AnyMapExtension};
 use collab::preclude::Any;
 use collab_database::fields::{TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::Cell;
@@ -575,7 +574,7 @@ impl From<FieldSettingsMap> for TestFieldSetting {
   }
 }
 
-impl From<TestFieldSetting> for AnyMap {
+impl From<TestFieldSetting> for Any {
   fn from(data: TestFieldSetting) -> Self {
     FieldSettingsMapBuilder::new()
       .insert_i64_value("width", data.width as i64)

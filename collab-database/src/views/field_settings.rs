@@ -3,8 +3,11 @@ use std::{
   ops::{Deref, DerefMut},
 };
 
-use collab::preclude::{Map, MapRef, ReadTxn, TransactionMut, YrsValue};
+use collab::preclude::{Map, MapExt, MapRef, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
+
+pub type FieldSettingsMap = serde_json::Map<String, serde_json::Value>;
+pub type FieldSettingsMapBuilder = serde_json::Map<String, serde_json::Value>;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct FieldSettingsByFieldIdMap(HashMap<String, FieldSettingsMap>);
@@ -23,7 +26,7 @@ impl FieldSettingsByFieldIdMap {
       .into_inner()
       .into_iter()
       .for_each(|(field_id, settings)| {
-        let field_settings_map_ref = map_ref.get_or_create_map_with_txn(txn, &field_id);
+        let field_settings_map_ref: MapRef = map_ref.get_or_init_map(txn, &field_id);
         settings.fill_map_ref(txn, &field_settings_map_ref);
       });
   }

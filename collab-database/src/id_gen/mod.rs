@@ -1,6 +1,7 @@
 mod gen;
 
 use lazy_static::lazy_static;
+use std::sync::Mutex;
 
 use gen::RowIDGen;
 lazy_static! {

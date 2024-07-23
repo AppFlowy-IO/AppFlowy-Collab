@@ -4,8 +4,8 @@ use crate::error::DatabaseError;
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
 use async_trait::async_trait;
-use collab::core::collab::{DataSource, MutexCollab};
-use collab::preclude::{Collab, MapPrelim};
+use collab::core::collab::DataSource;
+use collab::preclude::{ArrayRef, Collab, Map};
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
@@ -18,6 +18,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
+use tokio::sync::Mutex;
 
 use collab_entity::define::WORKSPACE_DATABASES;
 use tracing::{error, trace};
@@ -51,7 +52,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     collab_db: Weak<CollabKVDB>,
     collab_doc_state: DataSource,
     config: CollabPersistenceConfig,
-  ) -> Result<Arc<MutexCollab>, DatabaseError>;
+  ) -> Result<Arc<Mutex<Collab>>, DatabaseError>;
 }
 
 /// A [WorkspaceDatabase] indexes the databases within a workspace.
@@ -64,7 +65,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
 ///
 pub struct WorkspaceDatabase {
   uid: i64,
-  collab: Arc<MutexCollab>,
+  collab: Arc<Mutex<Collab>>,
   collab_db: Weak<CollabKVDB>,
   config: CollabPersistenceConfig,
   collab_service: Arc<dyn DatabaseCollabService>,
@@ -78,7 +79,7 @@ pub struct WorkspaceDatabase {
 impl WorkspaceDatabase {
   pub fn open<T>(
     uid: i64,
-    collab: Arc<MutexCollab>,
+    collab: Arc<Mutex<Collab>>,
     collab_db: Weak<CollabKVDB>,
     config: CollabPersistenceConfig,
     collab_service: T,
@@ -90,20 +91,12 @@ impl WorkspaceDatabase {
     let databases = Arc::new(Mutex::new(HashMap::new()));
     let removing_databases = Arc::new(Mutex::new(HashMap::new()));
     {
-      let lock_guard = collab.lock();
-      let is_exist = {
-        let txn = lock_guard.transact();
-        lock_guard
-          .get_array_with_txn(&txn, vec![WORKSPACE_DATABASES])
-          .is_some()
-      };
-
-      if !is_exist {
-        let _ = lock_guard.with_origin_transact_mut(|txn| {
-          lock_guard.create_array_with_txn::<MapPrelim>(txn, WORKSPACE_DATABASES, vec![]);
-          Ok::<(), DatabaseError>(())
-        });
-      }
+      let mut lock = collab.blocking_lock();
+      let collab = &mut *lock;
+      let mut txn = collab.context.transact_mut();
+      collab
+        .data
+        .get_or_init::<_, ArrayRef>(&mut txn, WORKSPACE_DATABASES);
     }
 
     Self {
@@ -118,7 +111,7 @@ impl WorkspaceDatabase {
   }
 
   pub fn close(&self) {
-    self.collab.lock().clear_plugins();
+    self.collab.blocking_lock().clear_plugins();
   }
 
   pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
@@ -128,7 +121,7 @@ impl WorkspaceDatabase {
     Ok(())
   }
 
-  pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Arc<MutexCollab>> {
+  pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Arc<Mutex<Collab>>> {
     let collab_db = self.collab_db.upgrade()?;
     let mut collab_doc_state = DataSource::Disk;
     let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
@@ -165,16 +158,17 @@ impl WorkspaceDatabase {
     if !self.database_meta_list().contains(database_id) {
       return None;
     }
-    let database = self.databases.lock().get(database_id).cloned();
+    let database = self.databases.lock().await.get(database_id).cloned();
     let collab_db = self.collab_db.upgrade()?;
     match database {
       None => {
         // If the database is being removed, return the database back to the databases.
-        if let Some(database) = self.removing_databases.lock().remove(database_id) {
+        if let Some(database) = self.removing_databases.lock().await.remove(database_id) {
           trace!("Move the database:{} back to databases", database_id);
           self
             .databases
             .lock()
+            .await
             .insert(database_id.to_string(), database.clone());
           return Some(database);
         }
@@ -203,6 +197,7 @@ impl WorkspaceDatabase {
         self
           .databases
           .lock()
+          .await
           .insert(database_id.to_string(), database.clone());
         Some(database)
       },
@@ -262,7 +257,10 @@ impl WorkspaceDatabase {
     let database_id = params.database_id.clone();
     let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);
     let database = Arc::new(mutex_database);
-    self.databases.lock().insert(database_id, database.clone());
+    self
+      .databases
+      .blocking_lock()
+      .insert(database_id, database.clone());
     Ok(database)
   }
 
@@ -290,7 +288,7 @@ impl WorkspaceDatabase {
             record.linked_views.push(params.view_id.clone());
           }
         });
-      database.lock().create_linked_view(params)
+      database.lock().await.create_linked_view(params)
     } else {
       Err(DatabaseError::DatabaseNotExist)
     }
@@ -307,27 +305,30 @@ impl WorkspaceDatabase {
         Ok(())
       });
     }
-    self.databases.lock().remove(database_id);
+    self.databases.blocking_lock().remove(database_id);
   }
 
   pub fn open_database(&self, database_id: &str) -> Option<Arc<MutexDatabase>> {
     // TODO(nathan): refactor the get_database that split the database creation and database opening.
-    let database = self.removing_databases.lock().remove(database_id)?;
+    let database = self
+      .removing_databases
+      .blocking_lock()
+      .remove(database_id)?;
     trace!("Move the database:{} back to databases", database_id);
     self
       .databases
-      .lock()
+      .blocking_lock()
       .insert(database_id.to_string(), database.clone());
 
     Some(database)
   }
 
   pub fn close_database(&self, database_id: &str) {
-    if let Some(database) = self.databases.lock().remove(database_id) {
+    if let Some(database) = self.databases.blocking_lock().remove(database_id) {
       trace!("Move the database to removing_databases: {}", database_id);
       self
         .removing_databases
-        .lock()
+        .blocking_lock()
         .insert(database_id.to_string(), database);
 
       let cloned_database_id = database_id.to_string();
@@ -337,6 +338,7 @@ impl WorkspaceDatabase {
         if let Some(removing_databases) = weak_removing_databases.upgrade() {
           if removing_databases
             .lock()
+            .await
             .remove(&cloned_database_id)
             .is_some()
           {
@@ -359,8 +361,8 @@ impl WorkspaceDatabase {
   /// If the view is the inline view, the database will be deleted too.
   pub async fn delete_view(&self, database_id: &str, view_id: &str) {
     if let Some(database) = self.get_database(database_id).await {
-      database.lock().delete_view(view_id);
-      if database.lock().is_inline_view(view_id) {
+      database.lock().await.delete_view(view_id);
+      if database.lock().await.is_inline_view(view_id) {
         // Delete the database if the view is the inline view.
         self.delete_database(database_id);
       }
@@ -383,7 +385,7 @@ impl WorkspaceDatabase {
   /// Get all of the database data using the id of any view in the database
   pub async fn get_database_data(&self, view_id: &str) -> Result<DatabaseData, DatabaseError> {
     if let Some(database) = self.get_database_with_view_id(view_id).await {
-      let data = database.lock().get_database_data();
+      let data = database.lock().await.get_database_data();
       Ok(data)
     } else {
       Err(DatabaseError::DatabaseNotExist)
@@ -395,7 +397,7 @@ impl WorkspaceDatabase {
     &self,
     database_id: &str,
     doc_state: DataSource,
-  ) -> Result<Arc<MutexCollab>, DatabaseError> {
+  ) -> Result<Arc<Mutex<Collab>>, DatabaseError> {
     self.collab_service.build_collab_with_config(
       self.uid,
       database_id,
@@ -407,10 +409,10 @@ impl WorkspaceDatabase {
   }
 
   fn database_meta_list(&self) -> DatabaseMetaList {
-    DatabaseMetaList::from_collab(&self.collab.lock())
+    DatabaseMetaList::from_collab(&mut self.collab.blocking_lock())
   }
 }
 
-pub fn get_all_database_meta(collab: &Collab) -> Vec<DatabaseMeta> {
+pub fn get_all_database_meta(collab: &mut Collab) -> Vec<DatabaseMeta> {
   DatabaseMetaList::from_collab(collab).get_all_database_meta()
 }

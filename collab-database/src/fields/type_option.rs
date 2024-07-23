@@ -3,6 +3,7 @@ use std::ops::{Deref, DerefMut};
 
 use collab::preclude::{Map, MapRef, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// It's used to store lists of field's type option data
 /// The key is the [FieldType] string representation
@@ -65,7 +66,7 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
   /// Insert a new cell's key/value into the [TypeOptionData]
   pub fn insert<T: Into<TypeOptionData>>(self, key: &str, value: T) -> Self {
     let value = value.into();
-    let type_option_map = self.map_ref.get_or_create_map_with_txn(self.txn, key);
+    let type_option_map: MapRef = self.map_ref.get_or_init(self.txn, key);
     value.fill_map_ref(self.txn, &type_option_map);
     self
   }
@@ -74,7 +75,7 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
   /// It will create the type option if it's not exist
   pub fn update<T: Into<TypeOptionData>>(self, key: &str, value: T) -> Self {
     let value = value.into();
-    let type_option_map = self.map_ref.get_or_create_map_with_txn(self.txn, key);
+    let type_option_map: MapRef = self.map_ref.get_or_init(self.txn, key);
     value.fill_map_ref(self.txn, &type_option_map);
     self
   }
@@ -86,6 +87,6 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
   }
 }
 
-pub type TypeOptionData = AnyMap;
-pub type TypeOptionDataBuilder = AnyMapBuilder;
-pub type TypeOptionUpdate<'a, 'b> = AnyMapUpdate<'a, 'b>;
+pub type TypeOptionData = serde_json::Map<String, Value>;
+pub type TypeOptionDataBuilder = serde_json::Map<String, Value>;
+pub type TypeOptionUpdate = MapRef;

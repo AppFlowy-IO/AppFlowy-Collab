@@ -3,8 +3,7 @@ use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
 use anyhow::bail;
-use collab::core::any_map::{AnyMap, AnyMapBuilder};
-use collab::preclude::{Any, Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
+use collab::preclude::{Any, Map, MapRef, ReadTxn, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
@@ -121,5 +120,5 @@ impl DerefMut for LayoutSettings {
 
 /// Each [LayoutSetting] is a [Map] of [String] to [Any].
 /// This is used to store the settings for each layout.
-pub type LayoutSetting = AnyMap;
-pub type LayoutSettingBuilder = AnyMapBuilder;
+pub type LayoutSetting = serde_json::Map<String, serde_json::Value>;
+pub type LayoutSettingBuilder = serde_json::Map<String, serde_json::Value>;
