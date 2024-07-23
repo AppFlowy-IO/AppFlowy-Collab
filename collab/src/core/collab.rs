@@ -1,3 +1,5 @@
+#[cfg(target_arch = "wasm32")]
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::panic;
@@ -14,6 +16,8 @@ use serde_json::json;
 use tokio_stream::wrappers::WatchStream;
 use tracing::{error, instrument, trace};
 use yrs::block::Prelim;
+#[cfg(target_arch = "wasm32")]
+use yrs::sync::{Clock, Timestamp};
 use yrs::types::map::MapEvent;
 use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
@@ -107,6 +111,45 @@ pub fn make_yrs_doc(skp_gc: bool) -> Doc {
   })
 }
 
+#[cfg(target_arch = "wasm32")]
+pub struct WebClock;
+
+#[cfg(target_arch = "wasm32")]
+impl Clock for WebClock {
+  fn now(&self) -> Timestamp {
+    let window = web_sys::window().expect("should have a window in this context");
+    let performance = window
+      .performance()
+      .expect("performance should be available");
+    performance.now() as u64
+  }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn new_awareness(doc: Doc) -> Awareness {
+  Awareness::with_clock(doc, WebClock)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn new_awareness(doc: Doc) -> Awareness {
+  Awareness::new(doc)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn undo_manager_default_options() -> yrs::undo::Options {
+  yrs::undo::Options {
+    capture_timeout_millis: 500,
+    tracked_origins: HashSet::new(),
+    capture_transaction: None,
+    timestamp: Arc::new(WebClock),
+  }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn undo_manager_default_options() -> yrs::undo::Options {
+  yrs::undo::Options::default()
+}
+
 impl Collab {
   pub fn new<T: AsRef<str>>(
     uid: i64,
@@ -168,7 +211,8 @@ impl Collab {
     let undo_manager = Mutex::new(None);
     let plugins = Plugins::new(plugins);
     let state = Arc::new(State::new(&object_id));
-    let awareness = Awareness::new(doc.clone());
+    let awareness = new_awareness(doc.clone());
+
     Self {
       origin,
       object_id,
@@ -584,7 +628,7 @@ impl Collab {
     // we may decide to use different granularity of undo/redo actions. These are grouped together
     // on time-based ranges (configurable in undo::Options, which is 500ms by default).
     let mut undo_manager =
-      UndoManager::with_scope_and_options(&self.doc, &self.data, yrs::undo::Options::default());
+      UndoManager::with_scope_and_options(&self.doc, &self.data, undo_manager_default_options());
     undo_manager.include_origin(self.origin.clone());
     *self.undo_manager.lock() = Some(undo_manager);
   }
