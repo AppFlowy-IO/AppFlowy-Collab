@@ -117,11 +117,7 @@ pub struct WebClock;
 #[cfg(target_arch = "wasm32")]
 impl Clock for WebClock {
   fn now(&self) -> Timestamp {
-    let window = web_sys::window().expect("should have a window in this context");
-    let performance = window
-      .performance()
-      .expect("performance should be available");
-    performance.now() as u64
+    js_sys::Date::now() as u64
   }
 }
 
