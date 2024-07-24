@@ -35,7 +35,7 @@ collab = { path = "", features = ["default"] }
 nanoid = "0.4.0"
 chrono.workspace = true
 assert-json-diff = "2.0.2"
-tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [features]
 default = []
