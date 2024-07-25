@@ -1,5 +1,6 @@
-use serde_json::{Map, Value};
+use collab::preclude::Any;
+use std::collections::HashMap;
 
-pub type SortArray = Vec<Value>;
-pub type SortMap = Map<String, Value>;
-pub type SortMapBuilder = Map<String, Value>;
+pub type SortArray = Vec<Any>;
+pub type SortMap = HashMap<String, Any>;
+pub type SortMapBuilder = HashMap<String, Any>;

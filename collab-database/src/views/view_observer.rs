@@ -2,6 +2,7 @@ use collab::preclude::array::ArrayEvent;
 use collab::preclude::map::MapEvent;
 use collab::preclude::{Change, MapRef, Subscription, ToJson, TransactionMut};
 use collab::preclude::{DeepObservable, EntryChange, Event, PathSegment};
+use collab::util::AnyExt;
 use std::ops::Deref;
 use std::str::FromStr;
 use tokio::sync::broadcast;
@@ -134,19 +135,19 @@ fn handle_array_event(
         },
         ArrayChangeKey::Filter => {
           if let Some(view_id) = view_id_from_array_event(array_event) {
-            let filters = values
+            let filters: Vec<_> = values
               .iter()
-              .flat_map(|value| value.to_json(txn))
-              .collect::<Vec<_>>();
+              .flat_map(|value| value.to_json(txn).into_map())
+              .collect();
             let _ = change_tx.send(DatabaseViewChange::DidCreateFilters { view_id, filters });
           }
         },
         ArrayChangeKey::Sort => {
           if let Some(view_id) = view_id_from_array_event(array_event) {
-            let sorts = values
+            let sorts: Vec<_> = values
               .iter()
-              .flat_map(|value| value.to_json(txn))
-              .collect::<Vec<_>>();
+              .flat_map(|value| value.to_json(txn).into_map())
+              .collect();
             let _ = change_tx.send(DatabaseViewChange::DidCreateSorts { view_id, sorts });
           }
         },
@@ -154,7 +155,7 @@ fn handle_array_event(
           if let Some(view_id) = view_id_from_array_event(array_event) {
             let groups = values
               .iter()
-              .flat_map(|value| AnyMap::from_value(txn, value))
+              .flat_map(|value| value.to_json(txn).into_map())
               .collect::<Vec<_>>();
             let _ = change_tx.send(DatabaseViewChange::DidCreateGroupSettings { view_id, groups });
           }
@@ -213,7 +214,7 @@ fn handle_map_event(change_tx: &ViewChangeSender, txn: &TransactionMut, event: &
     let _change_tx = change_tx.clone();
     match value {
       EntryChange::Inserted(value) => {
-        let database_view = view_from_value(value, txn);
+        let database_view = view_from_value(value.clone(), txn);
         // trace!("database view map inserted: {}:{:?}", key, database_view,);
         if let Some(database_view) = database_view {
           let _ = change_tx.send(DatabaseViewChange::DidCreateView {

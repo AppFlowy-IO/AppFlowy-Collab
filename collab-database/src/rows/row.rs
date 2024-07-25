@@ -2,11 +2,12 @@ use std::ops::Deref;
 use std::sync::{Arc, Weak};
 
 use collab::preclude::{
-  ArrayRef, Collab, Map, MapExt, MapRef, ReadTxn, Subscription, Transaction, TransactionMut,
-  WriteTxn, YrsValue,
+  ArrayRef, Collab, Map, MapExt, MapRef, ReadTxn, Subscription, ToJson, TransactionMut, WriteTxn,
+  YrsValue,
 };
 
 use collab::error::CollabError;
+use collab::util::AnyExt;
 use collab_entity::define::DATABASE_ROW_DATA;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
@@ -200,7 +201,7 @@ impl DatabaseRow {
   where
     F: FnOnce(RowMetaUpdate),
   {
-    let lock = self.collab.blocking_lock();
+    let mut lock = self.collab.blocking_lock();
     let mut txn = lock.context.transact_mut();
     match Uuid::parse_str(&self.row_id) {
       Ok(row_id) => {
@@ -246,13 +247,14 @@ impl RowDetail {
       document_id,
     })
   }
-  pub fn from_collab(collab: &Collab, txn: &Transaction) -> Option<Self> {
-    let data: MapRef = collab.get_with_txn(txn, DATABASE_ROW_DATA)?.cast().ok()?;
-    let meta: MapRef = collab.get_with_txn(txn, META)?.cast().ok()?;
-    let row = row_from_map_ref(&data, &meta, txn)?;
+  pub fn from_collab(collab: &Collab) -> Option<Self> {
+    let txn = collab.transact();
+    let data: MapRef = collab.get_with_txn(&txn, DATABASE_ROW_DATA)?.cast().ok()?;
+    let meta: MapRef = collab.get_with_txn(&txn, META)?.cast().ok()?;
+    let row = row_from_map_ref(&data, &meta, &txn)?;
 
     let row_id = Uuid::parse_str(&row.id).ok()?;
-    let meta = RowMeta::from_map_ref(txn, &row_id, &meta);
+    let meta = RowMeta::from_map_ref(&txn, &row_id, &meta);
     let row_document_id = meta_id_from_row_id(&row_id, RowMetaKey::DocumentId);
     Some(Self {
       row,
@@ -491,7 +493,7 @@ pub fn row_order_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<(
 pub fn cell_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T, field_id: &str) -> Option<Cell> {
   let cells_map_ref: MapRef = map_ref.get_with_txn(txn, ROW_CELLS)?;
   let cell_map_ref: MapRef = cells_map_ref.get_with_txn(txn, field_id)?;
-  Some(Cell::from_map_ref(txn, &cell_map_ref))
+  cell_map_ref.to_json(txn).into_map()
 }
 
 pub fn row_id_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<RowId> {
@@ -640,8 +642,8 @@ unsafe impl Send for MutexDatabaseRow {}
 pub fn mut_row_with_collab<F1: Fn(RowUpdate)>(collab: &mut Collab, mut_row: F1) {
   let mut txn = collab.context.transact_mut();
   if let (Some(YrsValue::YMap(data)), Some(YrsValue::YMap(meta))) = (
-    collab.get_with_txn(&txn, DATABASE_ROW_DATA),
-    collab.get_with_txn(&txn, META),
+    collab.data.get(&txn, DATABASE_ROW_DATA),
+    collab.data.get(&txn, META),
   ) {
     let update = RowUpdate::new(&mut txn, &data, &meta);
     mut_row(update);

@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use collab::preclude::{
-  Any, Array, ArrayRef, Map, MapExt, MapRef, ReadTxn, TransactionMut, YrsValue,
+  Any, Array, ArrayRef, FillRef, Map, MapExt, MapRef, ReadTxn, ToJson, TransactionMut, YrsValue,
 };
+use collab::util::AnyExt;
 use serde::{Deserialize, Serialize};
 
 use crate::database::{gen_database_id, gen_database_view_id, gen_row_id, timestamp, DatabaseData};
@@ -17,7 +18,7 @@ use crate::views::{
 };
 use crate::{impl_any_update, impl_i64_update, impl_order_update, impl_str_update};
 
-use super::{CalculationArray, CalculationMap};
+use super::CalculationMap;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct DatabaseView {
@@ -321,14 +322,16 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     layout_setting: LayoutSetting,
   ) -> Self {
     let layout_settings: MapRef = self.map_ref.get_or_init(self.txn, VIEW_LAYOUT_SETTINGS);
-    let layout_setting_map: MapRef = layout_settings.get_or_init_map(self.txn, layout_ty.as_ref());
-    layout_setting.fill_map_ref(self.txn, &layout_setting_map);
+    let layout_setting_map: MapRef = layout_settings.get_or_init(self.txn, layout_ty.as_ref());
+    Any::from(layout_setting)
+      .fill(self.txn, &layout_setting_map)
+      .unwrap();
     self
   }
 
   /// Remove layout setting for the given [DatabaseLayout]
   pub fn remove_layout_setting(self, layout_ty: &DatabaseLayout) -> Self {
-    let layout_settings: MapRef = self.map_ref.get_or_init_map(self.txn, VIEW_LAYOUT_SETTINGS);
+    let layout_settings: MapRef = self.map_ref.get_or_init(self.txn, VIEW_LAYOUT_SETTINGS);
     layout_settings.remove(self.txn, layout_ty.as_ref());
     self
   }
@@ -350,8 +353,8 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   /// Set filters of the current view
   pub fn set_filters(mut self, filters: Vec<FilterMap>) -> Self {
     let array_ref = self.get_filter_array();
-    let filter_array = FilterArray::from_any_maps(filters);
-    filter_array.set_array_ref(self.txn, array_ref);
+    let filter_array: FilterArray = filters.into_iter().map(Any::from).collect();
+    Any::from(filter_array).fill(self.txn, &array_ref).unwrap();
     self
   }
 
@@ -369,8 +372,10 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   /// Set groups of the current view
   pub fn set_groups(mut self, group_settings: Vec<GroupSettingMap>) -> Self {
     let array_ref = self.get_group_array();
-    let group_settings = GroupSettingArray::from_any_maps(group_settings);
-    group_settings.set_array_ref(self.txn, array_ref);
+    let group_settings: GroupSettingArray = group_settings.into_iter().map(Any::from).collect();
+    Any::from(group_settings)
+      .fill(self.txn, &array_ref)
+      .unwrap();
     self
   }
 
@@ -388,8 +393,8 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
   /// Set sorts of the current view
   pub fn set_sorts(mut self, sorts: Vec<SortMap>) -> Self {
     let array_ref = self.get_sort_array();
-    let sort_array = SortArray::from_any_maps(sorts);
-    sort_array.set_array_ref(self.txn, array_ref);
+    let sort_array: SortArray = sorts.into_iter().map(Any::from).collect();
+    Any::from(sort_array).fill(self.txn, &array_ref).unwrap();
     self
   }
 
@@ -418,7 +423,7 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     let map_ref = self.get_field_settings_map();
     let layout_ty = self.get_layout_setting().unwrap();
     field_ids.iter().for_each(|field_id| {
-      f(self.txn, map_ref, field_id.as_str(), layout_ty);
+      f(self.txn, map_ref.clone(), field_id.as_str(), layout_ty);
     });
     self
   }
@@ -490,11 +495,21 @@ pub fn view_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<DatabaseV
   view_from_map_ref(&map_ref, txn)
 }
 
+fn array_of_maps(array_ref: ArrayRef, txn: &impl ReadTxn) -> Vec<HashMap<String, Any>> {
+  array_ref
+    .to_json(txn)
+    .into_array()
+    .unwrap()
+    .into_iter()
+    .map(|any| any.into_map().unwrap())
+    .collect()
+}
+
 /// Return a list of [GroupSettingMap] from a map ref
 pub fn group_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<GroupSettingMap> {
   map_ref
     .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_GROUPS)
-    .map(|array_ref| GroupSettingArray::from_array_ref(txn, &array_ref).0)
+    .map(|array_ref| array_of_maps(array_ref, txn))
     .unwrap_or_default()
 }
 
@@ -502,7 +517,7 @@ pub fn group_setting_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<
 pub fn sorts_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<SortMap> {
   map_ref
     .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_SORTS)
-    .map(|array_ref| SortArray::from_array_ref(txn, &array_ref).0)
+    .map(|array_ref| array_of_maps(array_ref, txn))
     .unwrap_or_default()
 }
 
@@ -510,7 +525,7 @@ pub fn sorts_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<SortMap>
 pub fn calculations_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<CalculationMap> {
   map_ref
     .get_with_txn::<_, ArrayRef>(txn, VIEW_CALCULATIONS)
-    .map(|array_ref| CalculationArray::from_array_ref(txn, &array_ref).0)
+    .map(|array_ref| array_of_maps(array_ref, txn))
     .unwrap_or_default()
 }
 
@@ -518,7 +533,7 @@ pub fn calculations_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<C
 pub fn filters_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Vec<FilterMap> {
   map_ref
     .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_FILTERS)
-    .map(|array_ref| FilterArray::from_array_ref(txn, &array_ref).0)
+    .map(|array_ref| array_of_maps(array_ref, txn))
     .unwrap_or_default()
 }
 
@@ -559,17 +574,17 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
 
   let filters = map_ref
     .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_FILTERS)
-    .map(|array_ref| FilterArray::from_array_ref(txn, &array_ref).0)
+    .map(|array_ref| array_of_maps(array_ref, txn))
     .unwrap_or_default();
 
   let group_settings = map_ref
     .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_GROUPS)
-    .map(|array_ref| GroupSettingArray::from_array_ref(txn, &array_ref).0)
+    .map(|array_ref| array_of_maps(array_ref, txn))
     .unwrap_or_default();
 
   let sorts = map_ref
     .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_SORTS)
-    .map(|array_ref| SortArray::from_array_ref(txn, &array_ref).0)
+    .map(|array_ref| array_of_maps(array_ref, txn))
     .unwrap_or_default();
 
   let row_orders = map_ref

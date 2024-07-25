@@ -14,9 +14,10 @@ const ROW_RELATION_MAP: &str = "row_relations";
 impl DatabaseRelation {
   pub fn new(collab: Arc<Mutex<Collab>>) -> DatabaseRelation {
     let relation_map = {
-      let lock = collab.blocking_lock();
-      let mut txn = lock.context.transact_mut();
-      lock.data.get_or_init(&mut txn, ROW_RELATION_MAP)
+      let mut lock = collab.blocking_lock();
+      let collab = &mut *lock;
+      let mut txn = collab.context.transact_mut();
+      collab.data.get_or_init(&mut txn, ROW_RELATION_MAP)
     };
 
     Self {

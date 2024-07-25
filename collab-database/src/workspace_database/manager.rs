@@ -409,10 +409,6 @@ impl WorkspaceDatabase {
   }
 
   fn database_meta_list(&self) -> DatabaseMetaList {
-    DatabaseMetaList::from_collab(&mut self.collab.blocking_lock())
+    DatabaseMetaList::from_collab(self.collab.blocking_lock())
   }
-}
-
-pub fn get_all_database_meta(collab: &mut Collab) -> Vec<DatabaseMeta> {
-  DatabaseMetaList::from_collab(collab).get_all_database_meta()
 }

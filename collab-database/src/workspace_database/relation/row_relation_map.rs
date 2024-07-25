@@ -1,7 +1,8 @@
 use std::ops::Deref;
 
 use collab::preclude::{
-  DeepObservable, EntryChange, Event, Map, MapRef, Subscription, ToJson, TransactionMut, YrsValue,
+  DeepObservable, EntryChange, Event, Map, MapPrelim, MapRef, Subscription, ToJson, TransactionMut,
+  YrsValue,
 };
 use tokio::sync::broadcast;
 
@@ -39,14 +40,10 @@ impl RowRelationMap {
     self.tx.subscribe()
   }
 
-  pub fn insert_relation(&self, relation: RowRelation) {
-    self
-      .container
-      .with_transact_mut(|txn| self.insert_relation_with_txn(txn, relation))
-  }
-
   pub fn insert_relation_with_txn(&self, txn: &mut TransactionMut, relation: RowRelation) {
-    let map_ref = self.container.create_map_with_txn(txn, &relation.id());
+    let map_ref: MapRef = self
+      .container
+      .insert(txn, relation.id(), MapPrelim::default());
     RowRelationBuilder::new(
       &relation.linking_database_id,
       &relation.linked_by_database_id,
@@ -56,12 +53,6 @@ impl RowRelationMap {
     .update(|update| {
       update.set_row_connections(relation.row_connections);
     });
-  }
-
-  pub fn remove_relation(&self, relation_id: &str) {
-    self.container.with_transact_mut(|txn| {
-      self.remove_relation_with_txn(txn, relation_id);
-    })
   }
 
   pub fn remove_relation_with_txn(&self, txn: &mut TransactionMut, relation_id: &str) {

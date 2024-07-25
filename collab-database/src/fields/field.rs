@@ -1,5 +1,6 @@
-use collab::preclude::{Any, Map, MapExt, MapRef, ReadTxn, ToJson, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
+
+use collab::preclude::{Map, MapExt, MapRef, ReadTxn, TransactionMut, YrsValue};
 
 use crate::fields::{TypeOptionData, TypeOptions, TypeOptionsUpdate};
 use crate::{impl_bool_update, impl_i64_update, impl_str_update};
@@ -162,10 +163,10 @@ pub fn field_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Field
   let id: String = map_ref.get_with_txn(txn, FIELD_ID)?;
   let name: String = map_ref.get_with_txn(txn, FIELD_NAME).unwrap_or_default();
 
-  let type_options = map_ref
+  let type_options: TypeOptions = map_ref
     .get_with_txn(txn, FIELD_TYPE_OPTION)
-    .map(|map_ref: MapRef| map_ref.to_json(txn))
-    .unwrap_or(Any::Null);
+    .map(|map_ref: MapRef| TypeOptions::from_map_ref(txn, map_ref))
+    .unwrap_or_default();
 
   let field_type: i64 = map_ref.get_with_txn(txn, FIELD_TYPE)?;
 

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::collections::HashMap;
 
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -7,11 +8,11 @@ use std::sync::Arc;
 use crate::core::collab::Path;
 use crate::core::value::Entity;
 use crate::error::CollabError;
-use crate::preclude::JsonValue;
+use crate::preclude::{FillRef, JsonValue};
 use yrs::block::Prelim;
 use yrs::branch::BranchPtr;
 use yrs::types::text::YChange;
-use yrs::types::{Delta, ToJson};
+use yrs::types::{DefaultPrelim, Delta, ToJson};
 use yrs::{
   Any, Array, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, Out, ReadTxn, Text, TextPrelim,
   TextRef, TransactionMut,
@@ -21,6 +22,15 @@ pub trait MapExt: Map {
   #[inline]
   fn as_map(&self) -> MapRef {
     MapRef::from(BranchPtr::from(self.as_ref()))
+  }
+
+  fn get_id(&self, txn: &impl ReadTxn) -> Option<Arc<str>> {
+    let out = self.get(txn, "id")?;
+    if let Out::Any(Any::String(str)) = out {
+      Some(str)
+    } else {
+      None
+    }
   }
 
   fn get_with_txn<T, V>(&self, txn: &T, key: &str) -> Option<V>
@@ -271,26 +281,85 @@ pub trait ArrayExt: Array {
     self.remove_range(txn, 0, len);
   }
 
-  fn remove_where<F>(&self, txn: &mut TransactionMut, f: F)
+  /// Removes the first element that satisfies the predicate.
+  fn remove_one<F, V>(&self, txn: &mut TransactionMut, predicate: F)
   where
-    F: Fn(&Out) -> bool,
+    F: Fn(V) -> bool,
+    V: TryFrom<Out>,
   {
-    let mut iter = self.iter(txn);
-    while let Some(n) = iter.next() {
-      if f(n) {
-        iter.remove(txn);
+    let mut i = 0;
+    while let Some(out) = self.get(txn, i) {
+      if let Ok(value) = V::try_from(out) {
+        if predicate(value) {
+          self.remove(txn, i);
+          break;
+        }
       }
+      i += 1;
     }
   }
 
-  fn index_of<T: ReadTxn>(&self, txn: &T, value: &str) -> Option<usize> {
-    self.iter(txn).position(|item| {
-      if let Out::YMap(map_ref) = item {
-        if let Some(Out::Any(Any::String(id))) = map_ref.get(txn, "id") {
-          return &*id == value;
+  fn update_map<F>(&self, txn: &mut TransactionMut, id: &str, f: F)
+  where
+    F: FnOnce(&mut HashMap<String, Any>),
+  {
+    let map_ref: MapRef = self.upsert(txn, id);
+    let mut map = map_ref.to_json(txn).into_map().unwrap();
+    f(&mut map);
+    Any::from(map).fill(txn, &map_ref).unwrap();
+  }
+
+  fn index_by_id<T: ReadTxn>(&self, txn: &T, id: &str) -> Option<u32> {
+    let i = self.iter(txn).position(|value| {
+      if let Ok(value) = value.cast::<MapRef>() {
+        if let Some(current_id) = value.get_id(txn) {
+          return &*current_id == id;
         }
       }
       false
-    })
+    })?;
+    Some(i as u32)
+  }
+
+  fn upsert<V>(&self, txn: &mut TransactionMut, id: &str) -> V
+  where
+    V: DefaultPrelim + TryFrom<Out>,
+  {
+    match self.index_by_id(txn, id) {
+      None => self.push_back(txn, V::default_prelim()),
+      Some(i) => {
+        let out = self.get(txn, i).unwrap();
+        match V::try_from(out) {
+          Ok(shared_ref) => shared_ref,
+          Err(_) => {
+            self.remove(txn, i);
+            self.push_back(txn, V::default_prelim())
+          },
+        }
+      },
+    }
+  }
+}
+
+impl<T> ArrayExt for T where T: Array {}
+
+pub trait AnyExt {
+  fn into_map(self) -> Option<HashMap<String, Any>>;
+  fn into_array(self) -> Option<Vec<Any>>;
+}
+
+impl AnyExt for Any {
+  fn into_map(self) -> Option<HashMap<String, Any>> {
+    match self {
+      Any::Map(map) => Arc::into_inner(map),
+      _ => None,
+    }
+  }
+
+  fn into_array(self) -> Option<Vec<Any>> {
+    match self {
+      Any::Array(array) => Some(array.to_vec()),
+      _ => None,
+    }
   }
 }

@@ -491,11 +491,11 @@ fn create_folder<T: Into<UserId>>(
   let subscription = subscribe_folder_change(&mut folder);
 
   // create the folder data
-  let views = folder.get_or_init_map(&mut txn, VIEWS);
-  let section = folder.get_or_init_map(&mut txn, SECTION);
-  let meta = folder.get_or_init_map(&mut txn, FOLDER_META);
+  let views: MapRef = folder.get_or_init(&mut txn, VIEWS);
+  let section: MapRef = folder.get_or_init(&mut txn, SECTION);
+  let meta: MapRef = folder.get_or_init(&mut txn, FOLDER_META);
   let view_relations = Arc::new(ViewRelations::new(
-    folder.get_or_init_map(&mut txn, VIEW_RELATION),
+    folder.get_or_init(&mut txn, VIEW_RELATION),
   ));
 
   let section = Arc::new(SectionMap::create(

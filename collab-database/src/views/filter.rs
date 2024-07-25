@@ -1,5 +1,6 @@
-use serde_json::{Map, Value};
+use collab::preclude::Any;
+use std::collections::HashMap;
 
-pub type FilterArray = Vec<Value>;
-pub type FilterMap = Map<String, Value>;
-pub type FilterMapBuilder = Map<String, Value>;
+pub type FilterArray = Vec<Any>;
+pub type FilterMap = HashMap<String, Any>;
+pub type FilterMapBuilder = HashMap<String, Any>;

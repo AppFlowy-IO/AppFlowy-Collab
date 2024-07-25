@@ -51,8 +51,7 @@ impl Deref for ViewMap {
 
 impl ViewMap {
   pub fn new(container: MapRef, view_change_sender: ViewChangeSender) -> Self {
-    let view_map_subscription =
-      subscribe_view_map_change(&mut container, view_change_sender.clone());
+    let view_map_subscription = subscribe_view_map_change(&container, view_change_sender.clone());
     Self {
       container,
       view_map_subscription,
@@ -91,12 +90,7 @@ impl ViewMap {
     }
   }
 
-  pub fn get_view_sorts(&self, view_id: &str) -> Vec<SortMap> {
-    let txn = self.container.transact();
-    self.get_view_sorts_with_txn(&txn, view_id)
-  }
-
-  pub fn get_view_sorts_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<SortMap> {
+  pub fn get_view_sorts<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<SortMap> {
     if let Some(map_ref) = self.container.get_with_txn(txn, view_id) {
       sorts_from_map_ref(txn, &map_ref)
     } else {
@@ -104,16 +98,7 @@ impl ViewMap {
     }
   }
 
-  pub fn get_view_calculations(&self, view_id: &str) -> Vec<CalculationMap> {
-    let txn = self.container.transact();
-    self.get_view_calculations_with_txn(&txn, view_id)
-  }
-
-  pub fn get_view_calculations_with_txn<T: ReadTxn>(
-    &self,
-    txn: &T,
-    view_id: &str,
-  ) -> Vec<CalculationMap> {
+  pub fn get_view_calculations<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<CalculationMap> {
     if let Some(map_ref) = self.container.get_with_txn(txn, view_id) {
       calculations_from_map_ref(txn, &map_ref)
     } else {
@@ -121,12 +106,7 @@ impl ViewMap {
     }
   }
 
-  pub fn get_view_filters(&self, view_id: &str) -> Vec<FilterMap> {
-    let txn = self.container.transact();
-    self.get_view_filters_with_txn(&txn, view_id)
-  }
-
-  pub fn get_view_filters_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FilterMap> {
+  pub fn get_view_filters<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FilterMap> {
     if let Some(map_ref) = self.container.get_with_txn(txn, view_id) {
       filters_from_map_ref(txn, &map_ref)
     } else {
@@ -134,50 +114,43 @@ impl ViewMap {
     }
   }
 
-  pub fn get_layout_setting<T: From<LayoutSetting>>(
+  pub fn get_layout_setting<T: ReadTxn, V: From<LayoutSetting>>(
     &self,
+    txn: &T,
     view_id: &str,
     layout_ty: &DatabaseLayout,
-  ) -> Option<T> {
-    let txn = self.container.transact();
-    if let Some(map_ref) = self.container.get_with_txn(&txn, view_id) {
-      layout_setting_from_map_ref(&txn, &map_ref)
+  ) -> Option<V> {
+    if let Some(map_ref) = self.container.get_with_txn(txn, view_id) {
+      layout_setting_from_map_ref(txn, &map_ref)
         .get(layout_ty)
-        .map(|value| T::from(value.clone()))
+        .map(|value| V::from(value.clone()))
     } else {
       None
     }
   }
 
-  pub fn get_view_field_settings(&self, view_id: &str) -> FieldSettingsByFieldIdMap {
-    let txn = self.container.transact();
+  pub fn get_view_field_settings<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+  ) -> FieldSettingsByFieldIdMap {
     self
       .container
-      .get_with_txn(&txn, view_id)
-      .map(|map_ref| field_settings_from_map_ref(&txn, &map_ref))
+      .get_with_txn(txn, view_id)
+      .map(|map_ref| field_settings_from_map_ref(txn, &map_ref))
       .unwrap_or_default()
   }
 
-  pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
-    let txn = self.container.transact();
-    self.get_view_with_txn(&txn, view_id)
-  }
-
-  pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<DatabaseView> {
+  pub fn get_view<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<DatabaseView> {
     let map_ref = self.container.get_with_txn(txn, view_id)?;
     view_from_map_ref(&map_ref, txn)
-  }
-
-  pub fn get_all_views(&self) -> Vec<DatabaseView> {
-    let txn = self.container.transact();
-    self.get_all_views_with_txn(&txn)
   }
 
   pub fn get_all_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseView> {
     self
       .container
       .iter(txn)
-      .flat_map(|(_k, v)| view_from_value(&v, txn))
+      .flat_map(|(_k, v)| view_from_value(v, txn))
       .collect::<Vec<_>>()
   }
 
@@ -189,14 +162,13 @@ impl ViewMap {
       .collect::<Vec<_>>()
   }
 
-  pub fn get_database_view_layout(&self, view_id: &str) -> DatabaseLayout {
-    let txn = self.container.transact();
+  pub fn get_database_view_layout<T: ReadTxn>(&self, txn: &T, view_id: &str) -> DatabaseLayout {
     let layout_type = self
       .container
-      .get_with_txn::<_, MapRef>(&txn, view_id)
+      .get_with_txn::<_, MapRef>(txn, view_id)
       .map(|map_ref| {
         map_ref
-          .get_with_txn::<_, i64>(&txn, DATABASE_VIEW_LAYOUT)
+          .get_with_txn::<_, i64>(txn, DATABASE_VIEW_LAYOUT)
           .map(DatabaseLayout::from)
       });
 
@@ -213,7 +185,7 @@ impl ViewMap {
       .map(|map_ref| {
         map_ref
           .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_ROW_ORDERS)
-          .map(|array_ref| RowOrderArray::new(array_ref.into_inner()).get_objects_with_txn(txn))
+          .map(|array_ref| RowOrderArray::new(array_ref).get_objects_with_txn(txn))
           .unwrap_or_default()
       })
       .unwrap_or_default()
@@ -237,18 +209,10 @@ impl ViewMap {
     }
   }
 
-  pub fn is_row_exist(&self, view_id: &str, row_id: &RowId) -> bool {
-    let txn = self.container.transact();
-    self.is_row_exist_with_txn(&txn, view_id, row_id)
-  }
-
-  pub fn is_row_exist_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str, row_id: &RowId) -> bool {
-    let f = || {
-      let map: MapRef = self.container.get_with_txn(txn, view_id)?;
-      let row_order_array: ArrayRef = map.get_with_txn(txn, DATABASE_VIEW_ROW_ORDERS)?;
-      RowOrderArray::new(row_order_array).get_position_with_txn(txn, row_id.as_str())
-    };
-    f().is_some()
+  pub fn get_row_index<T: ReadTxn>(&self, txn: &T, view_id: &str, row_id: &RowId) -> Option<u32> {
+    let map: MapRef = self.container.get_with_txn(txn, view_id)?;
+    let row_order_array: ArrayRef = map.get_with_txn(txn, DATABASE_VIEW_ROW_ORDERS)?;
+    RowOrderArray::new(row_order_array).get_position_with_txn(txn, row_id.as_str())
   }
 
   pub fn get_field_orders_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FieldOrder> {
@@ -280,15 +244,6 @@ impl ViewMap {
     }
   }
 
-  pub fn update_all_views<F>(&self, f: F)
-  where
-    F: Fn(String, DatabaseViewUpdate),
-  {
-    self
-      .container
-      .with_transact_mut(|txn| self.update_all_views_with_txn(txn, f));
-  }
-
   pub fn update_all_views_with_txn<F>(&self, txn: &mut TransactionMut, f: F)
   where
     F: Fn(String, DatabaseViewUpdate),
@@ -305,12 +260,6 @@ impl ViewMap {
       update = update.set_modified_at(timestamp());
       f(view_id, update)
     }
-  }
-
-  pub fn delete_view(&self, view_id: &str) {
-    self.container.with_transact_mut(|txn| {
-      self.container.remove(txn, view_id);
-    })
   }
 
   pub fn clear_with_txn(&self, txn: &mut TransactionMut) {

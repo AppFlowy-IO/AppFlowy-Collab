@@ -216,8 +216,7 @@ fn save_row(
           );
         }
 
-        let txn = collab.transact();
-        let row_detail = RowDetail::from_collab(&collab, &txn);
+        let row_detail = RowDetail::from_collab(&collab);
         if row_detail.is_none() {
           tracing::error!("{} doesn't have any row information in it", row_id.as_ref());
         }

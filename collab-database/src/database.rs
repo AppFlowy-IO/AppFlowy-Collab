@@ -1,14 +1,15 @@
 use std::collections::HashMap;
 use std::ops::Deref;
-use std::rc::Rc;
 
 use std::sync::{Arc, Weak};
 
 use collab::core::collab_state::{SnapshotState, SyncState};
 
 use collab::preclude::{
-  Any, Array, Collab, JsonValue, Map, MapExt, MapRef, ReadTxn, TransactionMut, YrsValue,
+  Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
+  TransactionMut,
 };
+use collab::util::{AnyExt, ArrayExt};
 use collab_entity::define::{DATABASE, DATABASE_ID};
 use collab_entity::CollabType;
 use collab_plugins::CollabKVDB;
@@ -38,9 +39,9 @@ pub struct Database {
   #[allow(dead_code)]
   inner: Arc<Mutex<Collab>>,
   pub(crate) root: MapRef,
-  pub views: Rc<ViewMap>,
-  pub fields: Rc<FieldMap>,
-  pub metas: Rc<MetaMap>,
+  pub views: Arc<ViewMap>,
+  pub fields: Arc<FieldMap>,
+  pub metas: Arc<MetaMap>,
   /// It used to keep track of the blocks. Each block contains a list of [Row]s
   /// A database rows will be stored in multiple blocks.
   pub block: Block,
@@ -67,7 +68,7 @@ impl Database {
     params: CreateDatabaseParams,
     context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
-    // Get or create a empty database with the given database_id
+    // Get or create empty database with the given database_id
     let this = Self::get_or_create(&params.database_id, context)?;
 
     let CreateDatabaseParams {
@@ -115,6 +116,8 @@ impl Database {
       )?;
     }
 
+    drop(txn);
+    drop(lock);
     Ok(this)
   }
 
@@ -176,7 +179,7 @@ impl Database {
     match database {
       None => Self::create(database_id, context),
       Some(database) => {
-        let collab_guard = context.collab.blocking_lock();
+        let mut collab_guard = context.collab.blocking_lock();
         let (fields, views, metas) = {
           let collab = &mut *collab_guard;
           let txn = collab.context.transact();
@@ -210,9 +213,9 @@ impl Database {
           inner: context.collab,
           root: database,
           block,
-          views: Rc::new(views),
-          fields: Rc::new(fields),
-          metas: Rc::new(metas),
+          views: Arc::new(views),
+          fields: Arc::new(fields),
+          metas: Arc::new(metas),
           notifier: context.notifier,
         })
       },
@@ -225,7 +228,7 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
     let (database, fields, views, metas) = {
-      let collab_guard = context.collab.blocking_lock();
+      let mut collab_guard = context.collab.blocking_lock();
       let collab = &mut *collab_guard;
       let mut txn = collab.context.transact_mut();
       // { DATABASE: {:} }
@@ -259,9 +262,9 @@ impl Database {
       inner: context.collab,
       root: database,
       block,
-      views: Rc::new(views),
-      fields: Rc::new(fields),
-      metas: Rc::new(metas),
+      views: Arc::new(views),
+      fields: Arc::new(fields),
+      metas: Arc::new(metas),
       notifier: context.notifier,
     })
   }
@@ -390,7 +393,9 @@ impl Database {
   /// Return the index of the row in the given view.
   /// Return None if the row is not found.
   pub fn index_of_row(&self, view_id: &str, row_id: &RowId) -> Option<usize> {
-    let view = self.views.get_view(view_id)?;
+    let lock = self.inner.blocking_lock();
+    let txn = lock.transact();
+    let view = self.views.get_view(&txn, view_id)?;
     view.row_orders.iter().position(|order| &order.id == row_id)
   }
 
@@ -400,7 +405,7 @@ impl Database {
     view_id: &str,
     row_id: RowId,
   ) -> Option<usize> {
-    let view = self.views.get_view_with_txn(txn, view_id)?;
+    let view = self.views.get_view(txn, view_id)?;
     view.row_orders.iter().position(|order| order.id == row_id)
   }
 
@@ -433,8 +438,9 @@ impl Database {
   }
 
   pub fn get_row_orders_for_view(&self, view_id: &str) -> Vec<RowOrder> {
-    let txn = self.inner.blocking_lock().transact();
-    self.views.get_row_orders_with_txn(&txn, view_id)
+    self
+      .views
+      .get_row_orders_with_txn(&self.inner.blocking_lock().transact(), view_id)
   }
 
   /// Return a list of [Row] for the given view.
@@ -445,8 +451,7 @@ impl Database {
 
   /// Return a list of [RowCell] for the given view and field.
   pub fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<RowCell> {
-    let txn = self.inner.blocking_lock().transact();
-    self.get_cells_for_field_with_txn(&txn, view_id, field_id)
+    self.get_cells_for_field_with_txn(&self.inner.blocking_lock().transact(), view_id, field_id)
   }
 
   /// Return the [RowCell] with the given row id and field id.
@@ -472,7 +477,8 @@ impl Database {
 
   pub fn index_of_field(&self, view_id: &str, field_id: &str) -> Option<usize> {
     let lock = self.inner.blocking_lock();
-    self.index_of_field_with_txn(&lock.transact(), view_id, field_id)
+    let txn = lock.transact();
+    self.index_of_field_with_txn(&txn, view_id, field_id)
   }
 
   /// Return the index of the field in the given view.
@@ -482,7 +488,7 @@ impl Database {
     view_id: &str,
     field_id: &str,
   ) -> Option<usize> {
-    let view = self.views.get_view_with_txn(txn, view_id)?;
+    let view = self.views.get_view(txn, view_id)?;
     view
       .field_orders
       .iter()
@@ -493,7 +499,8 @@ impl Database {
   /// The fields are unordered.
   pub fn get_fields(&self, field_ids: Option<Vec<String>>) -> Vec<Field> {
     let lock = self.inner.blocking_lock();
-    self.get_fields_with_txn(&lock.transact(), field_ids)
+    let txn = lock.transact();
+    self.get_fields_with_txn(&txn, field_ids)
   }
 
   pub fn get_fields_with_txn<T: ReadTxn>(
@@ -510,7 +517,8 @@ impl Database {
   /// If field_ids is Some, return the fields with the given ids
   pub fn get_fields_in_view(&self, view_id: &str, field_ids: Option<Vec<String>>) -> Vec<Field> {
     let lock = self.inner.blocking_lock();
-    self.get_fields_in_view_with_txn(&lock.transact(), view_id, field_ids)
+    let txn = lock.transact();
+    self.get_fields_in_view_with_txn(&txn, view_id, field_ids)
   }
 
   /// Get all fields in the database
@@ -595,11 +603,10 @@ impl Database {
       update.update_field_settings_for_fields(
         vec![field.id.clone()],
         |txn, field_setting_update, field_id, layout_ty| {
-          field_setting_update.try_update(
-            txn,
-            field_id,
-            field_settings_by_layout.get(&layout_ty).unwrap().clone(),
-          );
+          let map_ref: MapRef = field_setting_update.get_or_init_map(txn, field_id);
+          if let Some(settings) = field_settings_by_layout.get(&layout_ty) {
+            Any::from(settings.clone()).fill(txn, &map_ref).unwrap();
+          }
         },
       );
     });
@@ -680,15 +687,12 @@ impl Database {
       .update_database_view(&mut txn, view_id, |update| {
         update.update_groups(|txn, group_update| {
           let group_setting = group_setting.into();
-          if let Some(YrsValue::Any(Any::String(setting_id))) = group_setting.get("id") {
-            if group_update.contains(&setting_id) {
-              group_update.update(&setting_id, |_| group_setting);
-            } else {
-              group_update.push_back(txn, group_setting);
-            }
+          let settings = if let Some(Any::String(setting_id)) = group_setting.get("id") {
+            group_update.upsert(txn, &*setting_id)
           } else {
-            group_update.push_back(txn, group_setting);
-          }
+            group_update.push_back(txn, MapPrelim::default())
+          };
+          Any::from(group_setting).fill(txn, &settings).unwrap();
         });
       });
   }
@@ -700,7 +704,9 @@ impl Database {
       .views
       .update_database_view(&mut txn, view_id, |update| {
         update.update_groups(|txn, group_update| {
-          group_update.remove(txn, group_setting_id);
+          if let Some(i) = group_update.index_by_id(txn, group_setting_id) {
+            group_update.remove(txn, i);
+          }
         });
       });
   }
@@ -717,10 +723,7 @@ impl Database {
       .views
       .update_database_view(&mut txn, view_id, |view_update| {
         view_update.update_groups(|txn, group_update| {
-          group_update.update(setting_id, |mut map| {
-            f(&mut map);
-            map
-          });
+          group_update.update_map(txn, setting_id, f);
         });
       });
   }
@@ -732,7 +735,9 @@ impl Database {
       .views
       .update_database_view(&mut txn, view_id, |update| {
         update.update_groups(|txn, group_update| {
-          group_update.remove(setting_id);
+          if let Some(i) = group_update.index_by_id(txn, setting_id) {
+            group_update.remove(txn, i);
+          }
         });
       });
   }
@@ -745,14 +750,11 @@ impl Database {
       .update_database_view(&mut txn, view_id, |update| {
         update.update_sorts(|txn, sort_update| {
           let sort = sort.into();
-          if let Some(sort_id) = sort.get_str_value("id") {
-            if sort_update.contains(&sort_id) {
-              sort_update.update(&sort_id, |_| sort);
-            } else {
-              sort_update.push(sort);
-            }
+          if let Some(Any::String(sort_id)) = sort.get("id") {
+            let map_ref: MapRef = sort_update.upsert(txn, &sort_id);
+            Any::from(sort).fill(txn, &map_ref).unwrap();
           } else {
-            sort_update.push(sort);
+            sort_update.push_back(txn, sort);
           }
         });
       });
@@ -765,7 +767,11 @@ impl Database {
       .views
       .update_database_view(&mut txn, view_id, |update| {
         update.update_sorts(|txn, sort_update| {
-          sort_update.move_to(from_sort_id, to_sort_id);
+          if let Some(from) = sort_update.index_by_id(txn, from_sort_id) {
+            if let Some(to) = sort_update.index_by_id(txn, to_sort_id) {
+              sort_update.move_to(txn, from, to);
+            }
+          }
         });
       });
   }
@@ -773,19 +779,19 @@ impl Database {
   pub fn get_all_sorts<T: TryFrom<SortMap>>(&self, view_id: &str) -> Vec<T> {
     self
       .views
-      .get_view_sorts(view_id)
+      .get_view_sorts(&self.inner.blocking_lock().transact(), view_id)
       .into_iter()
       .flat_map(|sort| T::try_from(sort).ok())
       .collect()
   }
 
   pub fn get_sort<T: TryFrom<SortMap>>(&self, view_id: &str, sort_id: &str) -> Option<T> {
-    let sort_id = sort_id.to_string();
+    let sort_id: Any = sort_id.into();
     let mut sorts = self
       .views
-      .get_view_sorts(view_id)
+      .get_view_sorts(&self.inner.blocking_lock().transact(), view_id)
       .into_iter()
-      .filter(|filter_map| filter_map.get_str_value("id").as_ref() == Some(&sort_id))
+      .filter(|filter_map| filter_map.get("id") == Some(&sort_id))
       .flat_map(|value| T::try_from(value).ok())
       .collect::<Vec<T>>();
     if sorts.is_empty() {
@@ -802,7 +808,9 @@ impl Database {
       .views
       .update_database_view(&mut txn, view_id, |update| {
         update.update_sorts(|txn, sort_update| {
-          sort_update.remove(sort_id);
+          if let Some(i) = sort_update.index_by_id(txn, sort_id) {
+            sort_update.remove(txn, i);
+          }
         });
       });
   }
@@ -814,15 +822,17 @@ impl Database {
       .views
       .update_database_view(&mut txn, view_id, |update| {
         update.update_sorts(|txn, sort_update| {
-          sort_update.clear();
+          sort_update.clear(txn);
         });
       });
   }
 
   pub fn get_all_calculations<T: TryFrom<CalculationMap>>(&self, view_id: &str) -> Vec<T> {
+    let lock = self.inner.blocking_lock();
+    let txn = lock.transact();
     self
       .views
-      .get_view_calculations(view_id)
+      .get_view_calculations(&txn, view_id)
       .into_iter()
       .flat_map(|calculation| T::try_from(calculation).ok())
       .collect()
@@ -833,14 +843,14 @@ impl Database {
     view_id: &str,
     field_id: &str,
   ) -> Option<T> {
-    let field_id = field_id.to_string();
+    let field_id: Any = field_id.into();
+    let lock = self.inner.blocking_lock();
+    let txn = lock.transact();
     let mut calculations = self
       .views
-      .get_view_calculations(view_id)
+      .get_view_calculations(&txn, view_id)
       .into_iter()
-      .filter(|calculations_map| {
-        calculations_map.get_str_value("field_id").as_ref() == Some(&field_id)
-      })
+      .filter(|calculations_map| calculations_map.get("field_id") == Some(&field_id))
       .flat_map(|value| T::try_from(value).ok())
       .collect::<Vec<T>>();
 
@@ -858,14 +868,10 @@ impl Database {
       |update| {
         update.update_calculations(|txn, calculation_update| {
           let calculation = calculation.into();
-          if let Some(calculation_id) = calculation.get_str_value("id") {
-            if calculation_update.contains(&calculation_id) {
-              calculation_update.update(&calculation_id, |_| calculation);
-              return;
-            }
+          if let Some(Any::String(calculation_id)) = calculation.get("id") {
+            let map_ref: MapRef = calculation_update.upsert(txn, &calculation_id);
+            Any::from(calculation).fill(txn, &map_ref).unwrap();
           }
-
-          calculation_update.push(calculation);
         });
       },
     );
@@ -877,8 +883,8 @@ impl Database {
       view_id,
       |update| {
         update.update_calculations(|txn, calculation_update| {
-          if calculation_update.contains(calculation_id) {
-            calculation_update.remove(calculation_id);
+          if let Some(i) = calculation_update.index_by_id(txn, calculation_id) {
+            calculation_update.remove(txn, i);
           }
         });
       },
@@ -888,19 +894,19 @@ impl Database {
   pub fn get_all_filters<T: TryFrom<FilterMap>>(&self, view_id: &str) -> Vec<T> {
     self
       .views
-      .get_view_filters(view_id)
+      .get_view_filters(&self.inner.blocking_lock().transact(), view_id)
       .into_iter()
       .flat_map(|setting| T::try_from(setting).ok())
       .collect()
   }
 
   pub fn get_filter<T: TryFrom<FilterMap>>(&self, view_id: &str, filter_id: &str) -> Option<T> {
-    let filter_id = filter_id.to_string();
+    let filter_id: Any = filter_id.into();
     let mut filters = self
       .views
-      .get_view_filters(view_id)
+      .get_view_filters(&self.inner.blocking_lock().transact(), view_id)
       .into_iter()
-      .filter(|filter_map| filter_map.get_str_value("id").as_ref() == Some(&filter_id))
+      .filter(|filter_map| filter_map.get("id") == Some(&filter_id))
       .flat_map(|value| T::try_from(value).ok())
       .collect::<Vec<T>>();
     if filters.is_empty() {
@@ -916,10 +922,10 @@ impl Database {
       view_id,
       |view_update| {
         view_update.update_filters(|txn, filter_update| {
-          filter_update.update(filter_id, |mut map| {
-            f(&mut map);
-            map
-          });
+          let map: MapRef = filter_update.upsert(txn, filter_id);
+          let mut filter_map = map.to_json(txn).into_map().unwrap();
+          f(&mut filter_map);
+          Any::from(filter_map).fill(txn, &map).unwrap();
         });
       },
     );
@@ -932,7 +938,9 @@ impl Database {
       .views
       .update_database_view(&mut txn, view_id, |update| {
         update.update_filters(|txn, filter_update| {
-          filter_update.remove(filter_id);
+          if let Some(i) = filter_update.index_by_id(txn, filter_id) {
+            filter_update.remove(txn, i);
+          }
         });
       });
   }
@@ -946,14 +954,12 @@ impl Database {
       .update_database_view(&mut txn, view_id, |update| {
         update.update_filters(|txn, filter_update| {
           let filter = filter.into();
-          if let Some(filter_id) = filter.get_str_value("id") {
-            if filter_update.contains(&filter_id) {
-              filter_update.update(&filter_id, |_| filter);
-            } else {
-              filter_update.push_back(txn, filter);
-            }
+          if let Some(Any::String(filter_id)) = filter.get("id") {
+            let map_ref: MapRef = filter_update.upsert(txn, &filter_id);
+            Any::from(filter).fill(txn, &map_ref).unwrap();
           } else {
-            filter_update.push_back(txn, filter);
+            let map_ref = filter_update.push_back(txn, MapPrelim::default());
+            Any::from(filter).fill(txn, &map_ref).unwrap();
           }
         });
       });
@@ -989,7 +995,9 @@ impl Database {
     view_id: &str,
     layout_ty: &DatabaseLayout,
   ) -> Option<T> {
-    self.views.get_layout_setting(view_id, layout_ty)
+    let lock = self.inner.blocking_lock();
+    let txn = lock.transact();
+    self.views.get_layout_setting(&txn, view_id, layout_ty)
   }
 
   pub fn insert_layout_setting<T: Into<LayoutSetting>>(
@@ -1014,9 +1022,11 @@ impl Database {
     view_id: &str,
     field_ids: Option<&[String]>,
   ) -> HashMap<String, T> {
+    let lock = self.inner.blocking_lock();
+    let txn = lock.transact();
     let mut field_settings_map = self
       .views
-      .get_view_field_settings(view_id)
+      .get_view_field_settings(&txn, view_id)
       .into_inner()
       .into_iter()
       .map(|(field_id, field_setting)| (field_id, T::from(field_setting)))
@@ -1062,7 +1072,10 @@ impl Database {
         update.update_field_settings_for_fields(
           field_ids,
           |txn, field_setting_update, field_id, _layout_ty| {
-            field_setting_update.update(txn, field_id, field_settings.clone());
+            let map_ref: MapRef = field_setting_update.get_or_init(txn, field_id);
+            Any::from(field_settings.clone())
+              .fill(txn, &map_ref)
+              .unwrap();
           },
         );
       })
@@ -1097,20 +1110,20 @@ impl Database {
   /// Returns all the views that the current database has.
   // TODO (RS): Implement the creation of a default view when fetching all database views returns an empty result, with the exception of inline views.
   pub fn get_all_database_views_meta(&self) -> Vec<DatabaseViewMeta> {
-    let txn = self.root.transact();
+    let lock = self.inner.blocking_lock();
+    let txn = lock.transact();
     self.views.get_all_views_meta_with_txn(&txn)
   }
 
   /// Create a linked view to existing database
   pub fn create_linked_view(&self, params: CreateViewParams) -> Result<(), DatabaseError> {
-    self.root.with_transact_mut(|txn| {
-      let inline_view_id = self.get_inline_view_id_with_txn(txn);
-      let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
-      let field_orders = self.views.get_field_orders_with_txn(txn, &inline_view_id);
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    let inline_view_id = self.get_inline_view_id_with_txn(&txn);
+    let row_orders = self.views.get_row_orders_with_txn(&txn, &inline_view_id);
+    let field_orders = self.views.get_field_orders_with_txn(&txn, &inline_view_id);
 
-      self.create_linked_view_with_txn(txn, params, field_orders, row_orders)?;
-      Ok::<(), DatabaseError>(())
-    })?;
+    self.create_linked_view_with_txn(&mut txn, params, field_orders, row_orders)?;
     Ok(())
   }
 
@@ -1178,7 +1191,9 @@ impl Database {
   /// Create a linked view that duplicate the target view's setting including filter, sort,
   /// group, field setting, etc.
   pub fn duplicate_linked_view(&self, view_id: &str) -> Option<DatabaseView> {
-    let view = self.views.get_view(view_id)?;
+    let mut lock = self.inner.blocking_lock();
+    let mut txn = lock.transact_mut();
+    let view = self.views.get_view(&txn, view_id)?;
     let timestamp = timestamp();
     let duplicated_view = DatabaseView {
       id: gen_database_view_id(),
@@ -1187,10 +1202,9 @@ impl Database {
       modified_at: timestamp,
       ..view
     };
-    let mut lock = self.inner.blocking_lock();
     self
       .views
-      .insert_view_with_txn(&mut lock.transact_mut(), duplicated_view.clone());
+      .insert_view_with_txn(&mut txn, duplicated_view.clone());
 
     Some(duplicated_view)
   }
@@ -1254,7 +1268,8 @@ impl Database {
 
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
     let lock = self.inner.blocking_lock();
-    self.views.get_view_with_txn(&lock.transact(), view_id)
+    let txn = lock.transact();
+    self.views.get_view(&txn, view_id)
   }
 
   pub fn to_json_value(&self) -> JsonValue {
@@ -1293,12 +1308,10 @@ impl Database {
   /// The inline view is the view that create with the database when initializing
   pub fn get_inline_view_id(&self) -> String {
     let lock = self.inner.blocking_lock();
+    let txn = lock.transact();
     // It's safe to unwrap because each database inline view id was set
     // when initializing the database
-    self
-      .metas
-      .get_inline_view_id_with_txn(&lock.transact())
-      .unwrap()
+    self.metas.get_inline_view_id_with_txn(&txn).unwrap()
   }
 
   fn get_inline_view_id_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
@@ -1455,22 +1468,25 @@ where
   }
 }
 
-pub fn mut_database_views_with_collab<F>(collab: &Collab, f: F)
+pub fn mut_database_views_with_collab<F>(collab: &mut Collab, f: F)
 where
   F: Fn(&mut DatabaseView),
 {
-  collab.with_origin_transact_mut(|txn| {
-    if let Some(container) = collab.get_map_with_txn(txn, vec![DATABASE, VIEWS]) {
-      let view_change_tx = tokio::sync::broadcast::channel(1).0;
-      let views = ViewMap::new(container, view_change_tx);
-      let mut reset_views = views.get_all_views_with_txn(txn);
+  let mut txn = collab.context.transact_mut();
 
-      reset_views.iter_mut().for_each(f);
-      for view in reset_views {
-        views.insert_view_with_txn(txn, view);
-      }
+  if let Some(container) = collab
+    .data
+    .get_with_path::<_, _, MapRef>(&txn, [DATABASE, VIEWS])
+  {
+    let view_change_tx = tokio::sync::broadcast::channel(1).0;
+    let views = ViewMap::new(container, view_change_tx);
+    let mut reset_views = views.get_all_views_with_txn(&txn);
+
+    reset_views.iter_mut().for_each(f);
+    for view in reset_views {
+      views.insert_view_with_txn(&mut txn, view);
     }
-  });
+  }
 }
 
 pub fn is_database_collab(collab: &Collab) -> bool {

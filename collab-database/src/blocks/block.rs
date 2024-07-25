@@ -13,8 +13,8 @@ use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 
 use collab::preclude::Collab;
-use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
+use tokio::sync::{broadcast, Mutex};
 use tracing::{error, trace, warn};
 use uuid::Uuid;
 
@@ -343,7 +343,7 @@ impl Block {
     change_tx: RowChangeSender,
     collab_db: Weak<CollabKVDB>,
     cache: Arc<DashMap<RowId, Arc<MutexDatabaseRow>>>,
-    row_collab: Arc<Collab>,
+    row_collab: Arc<Mutex<Collab>>,
   ) -> Result<(), CollabError> {
     if cache.contains_key(row_id) {
       warn!("The row is already in the cache: {:?}", row_id);
@@ -351,7 +351,7 @@ impl Block {
     }
 
     trace!("init_collab_row: {:?}", row_id);
-    let row_detail = RowDetail::from_collab(&row_collab);
+    let row_detail = RowDetail::from_collab(&row_collab.blocking_lock());
 
     let row = DatabaseRow::new(uid, row_id.clone(), collab_db, row_collab, change_tx)?;
     let arc_row = Arc::new(MutexDatabaseRow::new(row));
@@ -370,7 +370,7 @@ impl Block {
     Ok(())
   }
 
-  fn create_collab_for_row(&self, row_id: &RowId) -> Result<Arc<Collab>, DatabaseError> {
+  fn create_collab_for_row(&self, row_id: &RowId) -> Result<Arc<Mutex<Collab>>, DatabaseError> {
     let config = CollabPersistenceConfig::new().snapshot_per_update(100);
     self.collab_service.build_collab_with_config(
       self.uid,

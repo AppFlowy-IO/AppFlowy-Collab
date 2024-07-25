@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-use collab::preclude::{Any, Map, MapRef, ReadTxn, TransactionMut, YrsValue};
+use collab::preclude::{Any, FillRef, Map, MapRef, ReadTxn, ToJson, TransactionMut, YrsValue};
+use collab::util::AnyExt;
 use serde::{Deserialize, Serialize};
 
 use crate::database::timestamp;
@@ -23,9 +24,9 @@ impl Cells {
 
   /// Returns a new instance of [Cells] from a [MapRef]
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
-    self.into_inner().into_iter().for_each(|(k, v)| {
+    self.into_inner().into_iter().for_each(|(k, cell)| {
       let cell_map_ref: MapRef = map_ref.get_or_init(txn, k);
-      v.fill_map_ref(txn, &cell_map_ref);
+      Any::from(cell).fill(txn, &cell_map_ref).unwrap()
     });
   }
 
@@ -40,7 +41,7 @@ impl<T: ReadTxn> From<(&'_ T, &MapRef)> for Cells {
     let mut this = Self::new();
     params.1.iter(params.0).for_each(|(k, v)| {
       if let YrsValue::YMap(map_ref) = v {
-        this.insert(k.to_string(), (params.0, &map_ref).into());
+        this.insert(k.to_string(), map_ref.to_json(params.0).into_map().unwrap());
       }
     });
     this
@@ -83,7 +84,7 @@ impl<'a, 'b> CellsUpdate<'a, 'b> {
       cell_map_ref.insert(self.txn, CREATED_AT, timestamp());
     }
 
-    cell.fill_map_ref(self.txn, &cell_map_ref);
+    Any::from(cell).fill(self.txn, &cell_map_ref).unwrap();
     cell_map_ref.insert(self.txn, LAST_MODIFIED, timestamp());
     self
   }

@@ -5,6 +5,7 @@ use collab::preclude::{PathSegment, ToJson};
 use std::ops::Deref;
 
 use collab::preclude::map::MapEvent;
+use collab::util::AnyExt;
 use tokio::sync::broadcast;
 use tracing::trace;
 
@@ -103,7 +104,7 @@ fn handle_map_event(
             // - The event path is set to "/cells", indicating the operation is within the cells structure.
             // - The 'key' in the event corresponds to the unique identifier of the newly inserted cell.
             // - The 'value' represents the actual content or data inserted into this cell.
-            if let Some(cell) = Cell::from_value(txn, value) {
+            if let Some(cell) = value.to_json(txn).into_map() {
               // when insert a cell into the row, the key is the field_id
               let field_id = key.to_string();
               let _ = change_tx.send(RowChange::DidUpdateCell {
@@ -122,7 +123,7 @@ fn handle_map_event(
             // After this removal, the remaining part of the path directly corresponds to the key of the cell.
             // In the current implementation, this key is used as the identifier (ID) of the field within the cells map.
             if let Some(PathSegment::Key(key)) = event.path().pop_back() {
-              if let Some(cell) = Cell::from_value(txn, &event.target()) {
+              if let Some(cell) = event.target().to_json(txn).into_map() {
                 let field_id = key.deref().to_string();
                 let _ = change_tx.send(RowChange::DidUpdateCell {
                   row_id: row_id.clone(),
