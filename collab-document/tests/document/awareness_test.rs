@@ -34,6 +34,10 @@ async fn document_awareness_test() {
   });
 
   test.set_awareness_local_state(document_state.clone());
+  assert_eq!(
+    test.get_awareness_local_state().as_ref(),
+    Some(&document_state)
+  );
   let document_state_from_awareness = rx.recv().unwrap();
   assert_eq!(
     document_state_from_awareness.version,
