@@ -1,4 +1,3 @@
-use collab::core::any_map::AnyMapExtension;
 use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
 use collab_database::views::OrderObjectPosition;
 
@@ -157,6 +156,10 @@ async fn user_database_with_default_field() -> DatabaseTest {
     field_type: 0,
     ..Default::default()
   };
-  test.fields.insert_field(field);
+  {
+    let mut collab = test.database.get_collab().lock().await;
+    let mut txn = collab.transact_mut();
+    test.fields.insert_field(&mut txn, field);
+  }
   test
 }

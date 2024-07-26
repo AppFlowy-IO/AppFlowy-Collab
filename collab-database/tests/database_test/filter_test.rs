@@ -1,5 +1,3 @@
-use collab::core::any_map::AnyMapExtension;
-
 use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
 use crate::helper::{TestFieldType, TestFilter, FILTER_CONTENT};
 
@@ -22,7 +20,7 @@ async fn insert_or_update_database_view_filter_test() {
   let database_test = create_database_with_two_filters().await;
   // Update
   database_test.update_filter("v1", "filter_1", |update| {
-    update.insert_str_value(FILTER_CONTENT, "Text filter".to_string());
+    update.insert(FILTER_CONTENT.into(), "Text filter".into());
   });
 
   let filter_1 = database_test

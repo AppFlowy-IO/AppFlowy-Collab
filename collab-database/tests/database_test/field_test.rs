@@ -16,10 +16,12 @@ async fn create_single_field_test() {
     default_field_settings_by_layout(),
   );
 
-  let fields = database_test.fields.get_all_fields();
+  let mut lock = database_test.get_collab().lock().await;
+  let mut txn = lock.transact();
+  let fields = database_test.fields.get_all_fields(&txn);
   assert_eq!(fields.len(), 1);
 
-  let view = database_test.views.get_view("v1").unwrap();
+  let view = database_test.views.get_view(&txn, "v1").unwrap();
   assert_eq!(view.field_orders[0].id, fields[0].id);
 }
 

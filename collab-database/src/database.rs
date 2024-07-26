@@ -96,7 +96,7 @@ impl Database {
 
     // Insert the given fields into the database
     for field in fields {
-      this.fields.insert_field_with_txn(&mut txn, field);
+      this.fields.insert_field(&mut txn, field);
     }
     // Create the inline view
     this.create_view_with_txn(
@@ -610,7 +610,7 @@ impl Database {
         },
       );
     });
-    self.fields.insert_field_with_txn(txn, field);
+    self.fields.insert_field(txn, field);
   }
 
   pub fn create_field_with_mut(
@@ -651,7 +651,7 @@ impl Database {
           &OrderObjectPosition::After(prev_field_id.to_string()),
         );
       });
-    self.fields.insert_field_with_txn(txn, field);
+    self.fields.insert_field(txn, field);
   }
 
   pub fn delete_field(&self, field_id: &str) {
@@ -1234,7 +1234,7 @@ impl Database {
   ) -> Option<(usize, Field)> {
     let mut lock = self.inner.blocking_lock();
     let mut txn = lock.transact_mut();
-    if let Some(mut field) = self.fields.get_field_with_txn(&txn, field_id) {
+    if let Some(mut field) = self.fields.get_field(&txn, field_id) {
       field.id = gen_field_id();
       field.name = f(&field);
       self.insert_field_with_txn(&mut txn, field.clone(), field_id);

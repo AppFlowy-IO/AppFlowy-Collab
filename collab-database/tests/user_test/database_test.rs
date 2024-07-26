@@ -115,15 +115,17 @@ async fn duplicate_database_inline_view_test() {
     .unwrap();
 
   let duplicated_database = test.duplicate_database("v1").await.unwrap();
-  let duplicated_view_id = duplicated_database.lock().get_inline_view_id();
+  let duplicated_view_id = duplicated_database.lock().await.get_inline_view_id();
   duplicated_database
     .lock()
+    .await
     .create_row(CreateRowParams::new(1, database_id.clone()))
     .unwrap();
 
   assert_eq!(
     duplicated_database
       .lock()
+      .await
       .get_rows_for_view(&duplicated_view_id)
       .len(),
     1

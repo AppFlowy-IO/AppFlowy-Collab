@@ -155,7 +155,8 @@ impl WorkspaceDatabase {
   /// Get the database with the given database id.
   /// Return None if the database does not exist.
   pub async fn get_database(&self, database_id: &str) -> Option<Arc<MutexDatabase>> {
-    if !self.database_meta_list().contains(database_id) {
+    let mut collab = self.collab.lock().await;
+    if !DatabaseMetaList::from_collab(&mut *collab).contains(database_id) {
       return None;
     }
     let database = self.databases.lock().await.get(database_id).cloned();
@@ -214,10 +215,11 @@ impl WorkspaceDatabase {
 
   /// Return the database id with the given view id.
   pub fn get_database_id_with_view_id(&self, view_id: &str) -> Option<String> {
-    self
-      .database_meta_list()
+    let mut lock = self.collab.blocking_lock();
+    let result = DatabaseMetaList::from_collab(&mut *lock)
       .get_database_meta_with_view_id(view_id)
-      .map(|record| record.database_id)
+      .map(|record| record.database_id);
+    result
   }
 
   /// Create database with inline view.
@@ -251,8 +253,8 @@ impl WorkspaceDatabase {
         .filter(|view| view.view_id != params.inline_view_id)
         .map(|view| view.view_id.clone()),
     );
-    self
-      .database_meta_list()
+    let mut lock = self.collab.blocking_lock();
+    DatabaseMetaList::from_collab(&mut *lock)
       .add_database(&params.database_id, linked_views.into_iter().collect());
     let database_id = params.database_id.clone();
     let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);
@@ -265,9 +267,8 @@ impl WorkspaceDatabase {
   }
 
   pub fn track_database(&self, database_id: &str, database_view_ids: Vec<String>) {
-    self
-      .database_meta_list()
-      .add_database(database_id, database_view_ids);
+    let mut lock = self.collab.blocking_lock();
+    DatabaseMetaList::from_collab(&mut *lock).add_database(database_id, database_view_ids);
   }
 
   /// Create linked view that shares the same data with the inline view's database
@@ -278,16 +279,16 @@ impl WorkspaceDatabase {
   ) -> Result<(), DatabaseError> {
     let params = CreateViewParamsValidator::validate(params)?;
     if let Some(database) = self.get_database(&params.database_id).await {
-      self
-        .database_meta_list()
-        .update_database(&params.database_id, |record| {
-          // Check if the view is already linked to the database.
-          if record.linked_views.contains(&params.view_id) {
-            error!("The view is already linked to the database");
-          } else {
-            record.linked_views.push(params.view_id.clone());
-          }
-        });
+      let mut lock = self.collab.lock().await;
+      let mut meta_list = DatabaseMetaList::from_collab(&mut *lock);
+      meta_list.update_database(&params.database_id, |record| {
+        // Check if the view is already linked to the database.
+        if record.linked_views.contains(&params.view_id) {
+          error!("The view is already linked to the database");
+        } else {
+          record.linked_views.push(params.view_id.clone());
+        }
+      });
       database.lock().await.create_linked_view(params)
     } else {
       Err(DatabaseError::DatabaseNotExist)
@@ -296,7 +297,8 @@ impl WorkspaceDatabase {
 
   /// Delete the database with the given database id.
   pub fn delete_database(&self, database_id: &str) {
-    self.database_meta_list().delete_database(database_id);
+    let mut lock = self.collab.blocking_lock();
+    DatabaseMetaList::from_collab(&mut *lock).delete_database(database_id);
     if let Some(collab_db) = self.collab_db.upgrade() {
       let _ = collab_db.with_write_txn(|w_db_txn| {
         if let Err(err) = w_db_txn.delete_doc(self.uid, database_id) {
@@ -354,7 +356,9 @@ impl WorkspaceDatabase {
 
   /// Return all the database records.
   pub fn get_all_database_meta(&self) -> Vec<DatabaseMeta> {
-    self.database_meta_list().get_all_database_meta()
+    let mut lock = self.collab.blocking_lock();
+    let result = DatabaseMetaList::from_collab(&mut *lock).get_all_database_meta();
+    result
   }
 
   /// Delete the view from the database with the given view id.
@@ -406,9 +410,5 @@ impl WorkspaceDatabase {
       doc_state,
       self.config.clone(),
     )
-  }
-
-  fn database_meta_list(&self) -> DatabaseMetaList {
-    DatabaseMetaList::from_collab(self.collab.blocking_lock())
   }
 }

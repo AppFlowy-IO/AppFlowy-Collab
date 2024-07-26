@@ -1,4 +1,3 @@
-use collab::core::any_map::AnyMapExtension;
 use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
 use collab_database::views::{CreateDatabaseParams, CreateViewParams, OrderObjectPosition};
 
@@ -9,7 +8,10 @@ use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 async fn update_single_type_option_data_test() {
   let test = user_database_with_default_field().await;
   let database = test.get_database("d1").await.unwrap();
-  database.lock().fields.update_field("f1", |field_update| {
+  let db = database.lock().await;
+  let mut collab = db.get_collab().lock().await;
+  let mut txn = collab.context.transact_mut();
+  db.fields.update_field(&mut txn, "f1", |field_update| {
     field_update.update_type_options(|type_option_update| {
       type_option_update.insert(
         "0",
@@ -20,7 +22,7 @@ async fn update_single_type_option_data_test() {
     });
   });
 
-  let field = database.lock().fields.get_field("f1").unwrap();
+  let field = db.fields.get_field(&txn, "f1").unwrap();
   let type_option = field.type_options.get("0").unwrap();
   assert_eq!(type_option.get("task").unwrap().to_string(), "write code");
 }
@@ -44,7 +46,8 @@ async fn insert_multi_type_options_test() {
       .build(),
   );
 
-  database.lock().create_field(
+  let db = database.lock().await;
+  db.create_field(
     None,
     Field {
       id: "f2".to_string(),
@@ -57,7 +60,9 @@ async fn insert_multi_type_options_test() {
     default_field_settings_by_layout(),
   );
 
-  let second_field = database.lock().fields.get_field("f2").unwrap();
+  let collab = db.get_collab().lock().await;
+  let txn = collab.context.transact();
+  let second_field = db.fields.get_field(&txn, "f2").unwrap();
   assert_eq!(second_field.type_options.len(), 2);
 
   let type_option = second_field.type_options.get("0").unwrap();
@@ -88,6 +93,9 @@ async fn user_database_with_default_field() -> WorkspaceDatabaseTest {
     field_type: 0,
     ..Default::default()
   };
-  database.lock().fields.insert_field(field);
+  let db = database.lock().await;
+  let mut collab = db.get_collab().lock().await;
+  let mut txn = collab.transact_mut();
+  db.fields.insert_field(&mut txn, field);
   test
 }

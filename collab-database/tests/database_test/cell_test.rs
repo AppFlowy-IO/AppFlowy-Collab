@@ -1,4 +1,3 @@
-use collab::core::any_map::AnyMapExtension;
 use collab_database::rows::Cells;
 
 use crate::database_test::helper::create_database_with_default_data;
@@ -40,13 +39,8 @@ async fn update_cell_for_field_test() {
 
   let cells = database_test.get_cells_for_field("v1", "f1");
   assert_eq!(
-    cells[0]
-      .cell
-      .as_ref()
-      .unwrap()
-      .get_str_value("data")
-      .unwrap(),
-    "hello world"
+    cells[0].cell.as_ref().unwrap().get("data").unwrap(),
+    &"hello world".into()
   );
 }
 
@@ -65,13 +59,8 @@ async fn update_empty_cell_for_field_test() {
   let cells = database_test.get_cells_for_field("v1", "f2");
   assert_eq!(cells.len(), 3);
   assert_eq!(
-    cells[2]
-      .cell
-      .as_ref()
-      .unwrap()
-      .get_str_value("data")
-      .unwrap(),
-    "hello world"
+    cells[2].cell.as_ref().unwrap().get("data").unwrap(),
+    &"hello world".into()
   );
 }
 

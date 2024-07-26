@@ -19,9 +19,11 @@ async fn observe_field_update_and_delete_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
+    let mut lock = cloned_database_test.get_collab().lock().await;
+    let mut txn = lock.transact_mut();
     cloned_database_test
       .fields
-      .update_field(&cloned_field.id, |update| {
+      .update_field(&mut txn, &cloned_field.id, |update| {
         update.set_name("hello world");
       });
   });

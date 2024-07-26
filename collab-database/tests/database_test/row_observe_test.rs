@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use collab::core::any_map::AnyMapExtension;
 use collab_database::database::gen_row_id;
 use collab_database::rows::{new_cell_builder, CreateRowParams, RowChange};
 use collab_database::views::DatabaseViewChange;

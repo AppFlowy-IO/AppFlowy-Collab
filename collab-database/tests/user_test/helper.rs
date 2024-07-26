@@ -4,8 +4,8 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use collab::core::collab::{DataSource, MutexCollab};
-use collab::preclude::CollabBuilder;
+use collab::core::collab::DataSource;
+use collab::preclude::{Collab, CollabBuilder};
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
@@ -24,6 +24,7 @@ use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
 use rand::Rng;
 use tempfile::TempDir;
+use tokio::sync::Mutex;
 
 use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{make_rocks_db, setup_log, TestTextCell};
@@ -76,8 +77,8 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     collab_db: Weak<CollabKVDB>,
     doc_state: DataSource,
     config: CollabPersistenceConfig,
-  ) -> Result<Arc<MutexCollab>, DatabaseError> {
-    let collab = CollabBuilder::new(uid, object_id)
+  ) -> Result<Arc<Mutex<Collab>>, DatabaseError> {
+    let mut collab = CollabBuilder::new(uid, object_id)
       .with_device_id("1")
       .with_doc_state(doc_state)
       .with_plugin(RocksdbDiskPlugin::new_with_config(
@@ -91,8 +92,8 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
       .build()
       .unwrap();
 
-    collab.lock().initialize();
-    Ok(Arc::new(collab))
+    collab.initialize();
+    Ok(Arc::new(collab.into()))
   }
 }
 

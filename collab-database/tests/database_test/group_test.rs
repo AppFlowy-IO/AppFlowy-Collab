@@ -1,4 +1,3 @@
-use collab::core::any_map::AnyMapExtension;
 use collab_database::views::{CreateViewParams, DatabaseLayout};
 
 use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};

@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use tokio::sync::MutexGuard;
 
 use collab::preclude::{
   Array, ArrayPrelim, ArrayRef, Collab, Map, MapExt, MapPrelim, MapRef, ReadTxn, TransactionMut,
@@ -16,7 +15,7 @@ pub struct DatabaseMetaList<'doc> {
 }
 
 impl<'doc> DatabaseMetaList<'doc> {
-  pub fn from_collab(collab: MutexGuard<'doc, Collab>) -> Self {
+  pub fn from_collab(collab: &'doc mut Collab) -> Self {
     let mut txn = collab.context.transact_mut();
     let array_ref = collab.data.get_or_init(&mut txn, WORKSPACE_DATABASES);
     Self { array_ref, txn }

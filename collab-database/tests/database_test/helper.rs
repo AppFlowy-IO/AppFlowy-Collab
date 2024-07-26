@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use collab::core::collab::{DataSource, MutexCollab};
-use collab::preclude::CollabBuilder;
+use collab::core::collab::DataSource;
+use collab::preclude::{Collab, CollabBuilder};
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{CellsBuilder, CreateRowParams, DatabaseRow, RowId};
@@ -22,6 +22,7 @@ use crate::user_test::helper::TestUserDatabaseCollabBuilderImpl;
 use collab_database::database_state::DatabaseNotify;
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
+use tokio::sync::Mutex;
 use tokio::time::timeout;
 
 pub struct DatabaseTest {
@@ -52,16 +53,16 @@ impl DerefMut for DatabaseTest {
 pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   setup_log();
   let collab_db = make_rocks_db();
-  let collab = CollabBuilder::new(uid, database_id)
+  let mut collab = CollabBuilder::new(uid, database_id)
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.lock().initialize();
+  collab.initialize();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let context = DatabaseContext {
     uid,
     db: Arc::downgrade(&collab_db),
-    collab: Arc::new(collab),
+    collab: Arc::new(collab.into()),
     collab_service: collab_builder,
     notifier: DatabaseNotify::default(),
   };
@@ -83,7 +84,7 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   }
 }
 
-pub fn create_row(uid: i64, row_id: RowId) -> (Arc<MutexCollab>, DatabaseRow) {
+pub fn create_row(uid: i64, row_id: RowId) -> (Arc<Mutex<Collab>>, DatabaseRow) {
   let collab_db = make_rocks_db();
   let collab = CollabBuilder::new(uid, row_id.clone())
     .with_device_id("1")
@@ -230,16 +231,16 @@ impl DatabaseTestBuilder {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let collab_db = Arc::new(CollabKVDB::open(path).unwrap());
-    let collab = CollabBuilder::new(self.uid, &self.database_id)
+    let mut collab = CollabBuilder::new(self.uid, &self.database_id)
       .with_device_id("1")
       .build()
       .unwrap();
-    collab.lock().initialize();
+    collab.initialize();
     let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
     let context = DatabaseContext {
       uid: self.uid,
       db: Arc::downgrade(&collab_db),
-      collab: Arc::new(collab),
+      collab: Arc::new(collab.into()),
       collab_service: collab_builder,
       notifier: DatabaseNotify::default(),
     };

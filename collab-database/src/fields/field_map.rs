@@ -24,7 +24,7 @@ impl FieldMap {
   }
 
   /// Insert a field into the map with a transaction
-  pub fn insert_field_with_txn(&self, txn: &mut TransactionMut, field: Field) {
+  pub fn insert_field(&self, txn: &mut TransactionMut, field: Field) {
     let map_ref: MapRef = self.container.get_or_init(txn, field.id.as_str());
     FieldBuilder::new(&field.id, txn, map_ref)
       .update(|update| {
@@ -43,7 +43,7 @@ impl FieldMap {
   pub fn get_primary_field<T: ReadTxn>(&self, txn: &T) -> Option<Field> {
     for (_, v) in self.container.iter(txn) {
       if let Some(field_id) = primary_field_id_from_value(v, txn) {
-        return self.get_field_with_txn(txn, &field_id);
+        return self.get_field(txn, &field_id);
       }
     }
 
@@ -51,12 +51,12 @@ impl FieldMap {
   }
 
   /// Get all fields with a transaction
-  pub fn get_all_fields_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<Field> {
+  pub fn get_all_fields<T: ReadTxn>(&self, txn: &T) -> Vec<Field> {
     self.get_fields_with_txn(txn, None)
   }
 
   /// Return a field by field id with a transaction
-  pub fn get_field_with_txn<T: ReadTxn>(&self, txn: &T, field_id: &str) -> Option<Field> {
+  pub fn get_field<T: ReadTxn>(&self, txn: &T, field_id: &str) -> Option<Field> {
     let map_ref: MapRef = self.container.get_with_txn(txn, field_id)?;
     field_from_map_ref(&map_ref, txn)
   }
@@ -95,7 +95,7 @@ impl FieldMap {
 
   /// Get all field orders with a transaction
   /// This is used to get the order of fields in the view
-  pub fn get_all_field_orders_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<FieldOrder> {
+  pub fn get_all_field_orders<T: ReadTxn>(&self, txn: &T) -> Vec<FieldOrder> {
     self
       .container
       .iter(txn)

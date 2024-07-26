@@ -1,4 +1,3 @@
-use collab::core::any_map::AnyMapExtension;
 use collab_database::rows::{new_cell_builder, CREATED_AT};
 use collab_database::rows::{CreateRowParams, LAST_MODIFIED};
 use collab_database::views::{CreateDatabaseParams, CreateViewParams};
@@ -9,7 +8,7 @@ use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 async fn insert_cell_test() {
   let test = user_database_with_default_row().await;
   let database = test.get_database("d1").await.unwrap();
-  database.lock().update_row(&1.into(), |row_update| {
+  database.lock().await.update_row(&1.into(), |row_update| {
     row_update.update_cells(|cells_update| {
       cells_update.insert_cell(
         "f1",
@@ -98,6 +97,7 @@ async fn user_database_with_default_row() -> WorkspaceDatabaseTest {
 
   database
     .lock()
+    .await
     .create_row_in_view("v1", CreateRowParams::new(1, database_id));
 
   test
