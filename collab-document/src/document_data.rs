@@ -1,17 +1,16 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+
+use nanoid::nanoid;
+use uuid::Uuid;
 
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::Collab;
-use collab_entity::CollabType;
-use nanoid::nanoid;
-use tokio::sync::RwLock;
 
 use crate::blocks::{Block, DocumentData, DocumentMeta};
 use crate::document::Document;
 use crate::error::DocumentError;
-use uuid::Uuid;
+
 pub const PAGE: &str = "page";
 pub const PARAGRAPH_BLOCK_TYPE: &str = "paragraph";
 
@@ -90,19 +89,9 @@ pub fn default_document_data(document_id: &str) -> DocumentData {
 /// of the document.
 pub fn default_document_collab_data(document_id: &str) -> Result<EncodedCollab, DocumentError> {
   let document_data = default_document_data(document_id);
-  let collab = Arc::new(RwLock::new(Collab::new_with_origin(
-    CollabOrigin::Empty,
-    document_id,
-    vec![],
-    false,
-  )));
-  let _ = Document::create(collab.clone(), Some(document_data));
-  let lock_guard = collab.blocking_read();
-  lock_guard.encode_collab_v1(|collab| {
-    CollabType::Document
-      .validate_require_data(collab)
-      .map_err(|_| DocumentError::NoRequiredData)
-  })
+  let collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false);
+  let document = Document::open_with(collab, Some(document_data))?;
+  document.encode_collab()
 }
 
 pub fn generate_id() -> String {

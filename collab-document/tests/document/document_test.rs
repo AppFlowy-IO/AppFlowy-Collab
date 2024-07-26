@@ -4,15 +4,13 @@ use collab_document::{
 };
 use nanoid::nanoid;
 
-use crate::util::{
-  apply_actions, get_document_data, insert_block, open_document_with_db, DocumentTest,
-};
+use crate::util::{apply_actions, get_document_data, open_document_with_db, DocumentTest};
 
 #[test]
 fn insert_block_with_empty_parent_id_and_empty_prev_id() {
   let uid = 1;
   let doc_id = "1";
-  let test = DocumentTest::new(uid, doc_id);
+  let mut test = DocumentTest::new(uid, doc_id);
   let (page_id, _, _) = get_document_data(&test.document);
   let block_id = nanoid!(10);
   let block = Block {
@@ -34,7 +32,7 @@ fn insert_block_with_empty_parent_id_and_empty_prev_id() {
       text_id: None,
     },
   };
-  apply_actions(&test.document, vec![insert_action]);
+  apply_actions(&mut test.document, vec![insert_action]);
   let (page_id, blocks, meta) = get_document_data(&test.document);
 
   // the block's parent_id should be the page_id
@@ -78,7 +76,7 @@ fn reopen_document() {
 fn document_index_data_from_document() {
   let doc_id = "1";
   let test = DocumentTest::new(1, doc_id);
-  let document = test.document;
+  let mut document = test.document;
 
   let (page_id, _blocks, _children_map) = get_document_data(&document);
   let index_content = DocumentIndexContent::from(&document);
@@ -97,8 +95,8 @@ fn document_index_data_from_document() {
     data: Default::default(),
   };
 
-  insert_block(&document, block, "".to_string()).unwrap();
-  document.create_text(
+  document.insert_block(block, None).unwrap();
+  document.apply_text_delta(
     &text_id,
     r#"[{"insert": "Hello "}, {"insert": "world!"}]"#.to_owned(),
   );

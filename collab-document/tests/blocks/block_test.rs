@@ -26,7 +26,7 @@ fn open_document_test() {
   let test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
-  let collab = test.collab;
+  let collab = test.document.split().0;
   let test = BlockTestCore::open(collab, test.db);
   let page = test.get_page();
   let reopened_page_id = page.id.as_str();
@@ -36,7 +36,7 @@ fn open_document_test() {
 #[test]
 fn subscribe_insert_change_test() {
   let mut test = BlockTestCore::new();
-  test.subscribe(|_e, _| {
+  test.subscribe("noop", |_e, _| {
     // do nothing
   });
   let page = test.get_page();
@@ -48,7 +48,7 @@ fn subscribe_insert_change_test() {
 #[test]
 fn subscribe_update_change_test() {
   let mut test = BlockTestCore::new();
-  test.subscribe(|_e, _| {
+  test.subscribe("noop", |_e, _| {
     // do nothing
   });
   let page = test.get_page();
@@ -61,7 +61,7 @@ fn subscribe_update_change_test() {
 #[test]
 fn subscribe_delete_change_test() {
   let mut test = BlockTestCore::new();
-  test.subscribe(|_e, _| {
+  test.subscribe("noop", |_e, _| {
     // do nothing
   });
   let page = test.get_page();
@@ -73,7 +73,7 @@ fn subscribe_delete_change_test() {
 
 #[test]
 fn insert_block_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let page_children = test.get_block_children(page_id);
@@ -100,7 +100,7 @@ fn insert_block_test() {
 
 #[test]
 fn delete_block_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let text = "Hello World".to_string();
@@ -120,7 +120,7 @@ fn delete_block_test() {
 
 #[test]
 fn move_block_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let text = "Hello World".to_string();
@@ -164,7 +164,7 @@ fn move_block_test() {
 
 #[test]
 fn update_block_data_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let page_children = test.get_block_children(page_id);
@@ -183,7 +183,7 @@ fn update_block_data_test() {
 
 #[test]
 fn apply_actions_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let text = "Hello World".to_string();
@@ -215,7 +215,7 @@ fn apply_actions_test() {
 
 #[test]
 fn apply_insert_block_action_without_parent_id_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let text = "Hello World".to_string();
@@ -228,7 +228,7 @@ fn apply_insert_block_action_without_parent_id_test() {
 
 #[test]
 fn apply_block_actions_without_block_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let document_data = test.get_document_data();

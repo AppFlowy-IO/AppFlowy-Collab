@@ -11,7 +11,6 @@ use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use serde_json::{json, Value};
-use tokio::sync::RwLock;
 
 use crate::util::document_storage;
 
@@ -20,7 +19,6 @@ pub const TEXT_BLOCK_TYPE: &str = "paragraph";
 pub struct BlockTestCore {
   pub db: Arc<CollabKVDB>,
   pub document: Document,
-  pub collab: Arc<RwLock<Collab>>,
 }
 
 impl BlockTestCore {
@@ -41,33 +39,24 @@ impl BlockTestCore {
       .unwrap();
     collab.initialize();
 
-    let collab = Arc::new(RwLock::new(collab));
     let document_data = BlockTestCore::get_default_data();
-    let document = match Document::create_blocking(collab.clone(), Some(document_data)) {
+    let document = match Document::open_with(collab, Some(document_data)) {
       Ok(document) => document,
       Err(e) => panic!("create document error: {:?}", e),
     };
-    BlockTestCore {
-      db,
-      document,
-      collab,
-    }
+    BlockTestCore { db, document }
   }
 
-  pub fn open(collab: Arc<RwLock<Collab>>, db: Arc<CollabKVDB>) -> Self {
-    let document = Document::create_blocking(collab.clone(), None).unwrap();
-    BlockTestCore {
-      db,
-      document,
-      collab,
-    }
+  pub fn open(collab: Collab, db: Arc<CollabKVDB>) -> Self {
+    let document = Document::open_with(collab, None).unwrap();
+    BlockTestCore { db, document }
   }
 
-  pub fn subscribe<F>(&mut self, callback: F)
+  pub fn subscribe<F>(&mut self, key: &str, callback: F)
   where
     F: Fn(&Vec<BlockEvent>, bool) + Send + Sync + 'static,
   {
-    self.document.subscribe_block_changed(callback);
+    self.document.subscribe_block_changed(key, callback);
   }
 
   pub fn get_default_data() -> DocumentData {
@@ -165,17 +154,13 @@ impl BlockTestCore {
     children
   }
 
-  pub fn create_text(&self, delta: String) -> String {
+  pub fn create_text(&mut self, delta: String) -> String {
     let external_id = generate_id();
-    self.document.create_text(&external_id, delta);
+    self.document.apply_text_delta(&external_id, delta);
     external_id
   }
 
-  pub fn apply_text_delta(&self, text_id: &str, delta: String) {
-    self.document.apply_text_delta(text_id, delta);
-  }
-
-  pub fn get_text_block(&self, text: String, parent_id: &str) -> Block {
+  pub fn get_text_block(&mut self, text: String, parent_id: &str) -> Block {
     let data = HashMap::new();
     let delta = json!([{ "insert": text }]).to_string();
     let external_id = self.create_text(delta);
@@ -190,53 +175,48 @@ impl BlockTestCore {
     }
   }
 
-  pub fn insert_text_block(&self, text: String, parent_id: &str, prev_id: Option<String>) -> Block {
+  pub fn insert_text_block(
+    &mut self,
+    text: String,
+    parent_id: &str,
+    prev_id: Option<String>,
+  ) -> Block {
     let block = self.get_text_block(text, parent_id);
-    let mut collab = self.document.get_collab().blocking_write();
     let result = self
       .document
-      .insert_block(&mut collab.transact_mut(), block, prev_id)
+      .insert_block(block, prev_id)
       .unwrap_or_else(|e| panic!("insert block error: {:?}", e));
     result
   }
 
-  pub fn update_block_data(&self, block_id: &str, data: HashMap<String, Value>) {
+  pub fn update_block_data(&mut self, block_id: &str, data: HashMap<String, Value>) {
     let block = self.get_block(block_id);
-
-    let mut collab = self.document.get_collab().blocking_write();
     self
       .document
-      .update_block_data(&mut collab.transact_mut(), block.id.as_str(), data)
+      .update_block(block.id.as_str(), data)
       .unwrap_or_else(|e| panic!("update block error: {:?}", e));
   }
 
-  pub fn delete_block(&self, block_id: &str) {
-    let mut collab = self.document.get_collab().blocking_write();
+  pub fn delete_block(&mut self, block_id: &str) {
     self
       .document
-      .delete_block(&mut collab.transact_mut(), block_id)
+      .delete_block(block_id)
       .unwrap_or_else(|e| panic!("delete block error: {:?}", e));
   }
 
-  pub fn move_block(&self, block_id: &str, parent_id: &str, prev_id: Option<String>) {
-    let mut collab = self.document.get_collab().blocking_write();
+  pub fn move_block(&mut self, block_id: &str, parent_id: &str, prev_id: Option<String>) {
     self
       .document
-      .move_block(
-        &mut collab.transact_mut(),
-        block_id,
-        Some(parent_id.to_string()),
-        prev_id,
-      )
+      .move_block(block_id, Some(parent_id.to_string()), prev_id)
       .unwrap_or_else(|e| panic!("move block error: {:?}", e));
   }
 
-  pub fn apply_action(&self, actions: Vec<BlockAction>) {
-    self.document.apply_action(actions)
+  pub fn apply_action(&mut self, actions: Vec<BlockAction>) -> bool {
+    self.document.apply_action(actions).is_ok()
   }
 
   pub fn get_insert_action(
-    &self,
+    &mut self,
     text: String,
     parent_id: &str,
     prev_id: Option<String>,

@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 #[test]
 fn insert_text_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let origin_delta = json!([{"insert": "Hello World"}]).to_string();
   let text_id = test.create_text(origin_delta.clone());
   let delta = test.get_text_delta_with_text_id(&text_id);
@@ -22,7 +22,7 @@ fn insert_text_test() {
 
 #[test]
 fn insert_empty_text_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let origin_delta = "".to_string();
   let text_id = test.create_text(origin_delta);
   let delta = test.get_text_delta_with_text_id(&text_id);
@@ -33,12 +33,12 @@ fn insert_empty_text_test() {
 
 #[test]
 fn apply_empty_delta_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let origin_delta = json!([{"insert": "Hello World"}]).to_string();
   let text_id = test.create_text(origin_delta);
   let origin_delta = test.get_text_delta_with_text_id(&text_id);
   let delta = "".to_string();
-  test.apply_text_delta(&text_id, delta);
+  test.document.apply_text_delta(&text_id, delta);
   let delta = test.get_text_delta_with_text_id(&text_id);
   assert_eq!(
     deserialize_text_delta(&delta).unwrap(),
@@ -47,7 +47,7 @@ fn apply_empty_delta_test() {
 }
 #[test]
 fn format_text_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let origin_delta = json!([{"insert": "Hello World", "attributes": { "bold": true }}]).to_string();
   let text_id = test.create_text(origin_delta.clone());
   let delta = test.get_text_delta_with_text_id(&text_id);
@@ -59,7 +59,7 @@ fn format_text_test() {
 
 #[test]
 fn apply_retain_delta_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let text = "Hello World".to_string();
   let length = text.len() as u32;
   let origin_delta = json!([{"insert": "Hello World"}]).to_string();
@@ -68,7 +68,7 @@ fn apply_retain_delta_test() {
 
   // retain text
   let retain_delta = json!([{ "retain": length }]).to_string();
-  test.apply_text_delta(&text_id, retain_delta);
+  test.document.apply_text_delta(&text_id, retain_delta);
   let delta = test.get_text_delta_with_text_id(&text_id);
   assert_eq!(
     deserialize_text_delta(&delta).unwrap(),
@@ -80,7 +80,7 @@ fn apply_retain_delta_test() {
     {"retain": length, "attributes": { "bold": true, "italic": true }}
   ])
   .to_string();
-  test.apply_text_delta(&text_id, format_delta);
+  test.document.apply_text_delta(&text_id, format_delta);
   let delta = test.get_text_delta_with_text_id(&text_id);
   let expect = json!(
     [{"insert": "Hello World", "attributes": { "bold": true, "italic": true }}]
@@ -96,7 +96,7 @@ fn apply_retain_delta_test() {
     {"retain": length, "attributes": { "bold": null, "italic": null }}
   ])
   .to_string();
-  test.apply_text_delta(&text_id, clear_format_delta);
+  test.document.apply_text_delta(&text_id, clear_format_delta);
   let delta = test.get_text_delta_with_text_id(&text_id);
   let expect = json!(
     [{"insert": "Hello World"}]
@@ -110,7 +110,7 @@ fn apply_retain_delta_test() {
 
 #[test]
 fn apply_delete_delta_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let origin_delta = json!([{"insert": "Hello World", "attributes": { "bold": true }}]).to_string();
   let text_id = test.create_text(origin_delta);
   let delete_delta = json!([
@@ -118,7 +118,7 @@ fn apply_delete_delta_test() {
     {"delete": 5},
   ])
   .to_string();
-  test.apply_text_delta(&text_id, delete_delta);
+  test.document.apply_text_delta(&text_id, delete_delta);
   let delta = test.get_text_delta_with_text_id(&text_id);
   let expect = json!([{"insert": "Hello ", "attributes": { "bold": true }}]).to_string();
 
@@ -130,7 +130,7 @@ fn apply_delete_delta_test() {
 
 #[test]
 fn apply_mark_delta_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let origin_delta = json!([{"insert": "123456"}]).to_string();
   let text_id = test.create_text(origin_delta);
   let delta = json!([
@@ -138,7 +138,7 @@ fn apply_mark_delta_test() {
     {"insert": "*"},
   ])
   .to_string();
-  test.apply_text_delta(&text_id, delta);
+  test.document.apply_text_delta(&text_id, delta);
 
   let delta = json!([
     {"retain": 3},
@@ -146,7 +146,7 @@ fn apply_mark_delta_test() {
     {"insert": "4", "attributes": { "bold": true }},
   ])
   .to_string();
-  test.apply_text_delta(&text_id, delta);
+  test.document.apply_text_delta(&text_id, delta);
 
   let delta = test.get_text_delta_with_text_id(&text_id);
   let expect = json!([{
@@ -164,7 +164,7 @@ fn apply_mark_delta_test() {
 
 #[test]
 fn apply_chinese_ime_delta_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   // convert zhong'wen to 中文
   let origin_delta = json!([{"insert": "z"}]).to_string();
   let text_id = test.create_text(origin_delta);
@@ -180,7 +180,7 @@ fn apply_chinese_ime_delta_test() {
     json!([{"insert": "中文"}, {"delete": 9}]).to_string(),
   ];
   for delta in deltas {
-    test.apply_text_delta(&text_id, delta);
+    test.document.apply_text_delta(&text_id, delta);
   }
   let delta = test.get_text_delta_with_text_id(&text_id);
   let expect = json!([{"insert": "中文"}]).to_string();
@@ -193,7 +193,7 @@ fn apply_chinese_ime_delta_test() {
 
 #[test]
 fn apply_delete_chinese_delta_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let origin_delta =
     json!([{"insert": "Hello World 嗨", "attributes": { "bold": true }}]).to_string();
   let text_id = test.create_text(origin_delta);
@@ -202,7 +202,7 @@ fn apply_delete_chinese_delta_test() {
     {"delete": 1},
   ])
   .to_string();
-  test.apply_text_delta(&text_id, delete_delta);
+  test.document.apply_text_delta(&text_id, delete_delta);
   let delta = test.get_text_delta_with_text_id(&text_id);
   let expect = json!([{"insert": "Hello World ", "attributes": { "bold": true }}]).to_string();
   assert_eq!(
@@ -214,7 +214,7 @@ fn apply_delete_chinese_delta_test() {
 
 #[test]
 fn apply_insert_delta_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let _text = "Hello World".to_string();
   let delta = json!([
     { "insert": "As soon as you type " },
@@ -237,7 +237,7 @@ fn apply_insert_delta_test() {
     "insert": " ",
   }])
   .to_string();
-  test.apply_text_delta(&text_id, insert_delta);
+  test.document.apply_text_delta(&text_id, insert_delta);
   let delta = test.get_text_delta_with_text_id(&text_id);
   let expect = json!([
     { "insert": "A s soon as you type " },
@@ -263,7 +263,7 @@ fn apply_insert_delta_test() {
 #[test]
 fn subscribe_apply_delta_test() {
   let mut test = BlockTestCore::new();
-  test.subscribe(|e, _| {
+  test.subscribe("print", |e, _| {
     println!("event: {:?}", e);
   });
   let text = "Hello World".to_string();
@@ -275,7 +275,7 @@ fn subscribe_apply_delta_test() {
     "insert": "World ",
   }])
   .to_string();
-  test.apply_text_delta(&text_id, delta);
+  test.document.apply_text_delta(&text_id, delta);
   try_decode_from_encode_collab(&test.document);
 }
 
@@ -293,7 +293,7 @@ fn delta_equal_test() {
 #[test]
 fn text_delta_trans_delta_test() {
   let test = BlockTestCore::new();
-  let collab = test.document.get_collab().blocking_read();
+  let collab = &*test.document;
   let txn = collab.transact();
   let text_delta = TextDelta::Inserted("Hello World".to_string(), None);
   let delta = Delta::Inserted(YrsValue::from("Hello World"), None);
@@ -362,7 +362,7 @@ fn deserialize_delta_test() {
 
 #[test]
 fn apply_text_actions() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let insert_delta = json!([{ "insert": "Hello " }]).to_string();
   let text_id = test.create_text(insert_delta.clone());
   let delta = json!([{
@@ -413,7 +413,7 @@ fn apply_text_actions() {
 
 #[test]
 fn apply_text_actions_without_params_test() {
-  let test = BlockTestCore::new();
+  let mut test = BlockTestCore::new();
   let insert_delta = json!([{ "insert": "Hello " }]).to_string();
   let text_id = test.create_text(insert_delta.clone());
   let document_data = test.get_document_data();

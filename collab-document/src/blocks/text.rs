@@ -35,16 +35,14 @@ impl TextOperation {
     )
   }
 
-  /// apply text delta with text_id
-  pub fn apply_delta_with_txn(
-    &self,
-    txn: &mut TransactionMut,
-    text_id: &str,
-    delta: Vec<TextDelta>,
-  ) {
+  /// Applies provided delta to the text with the given `text_id`. If no text with such ID existed,
+  /// it will always be created by the end of this mehtod call.
+  pub fn apply_delta(&self, txn: &mut TransactionMut, text_id: &str, delta: Vec<TextDelta>) {
     let text_ref = self.get_text_with_txn(txn, text_id);
-    let delta: Vec<Delta<In>> = delta.iter().map(|d| d.to_owned().to_delta()).collect();
-    text_ref.apply_delta(txn, delta);
+    if !delta.is_empty() {
+      let delta: Vec<Delta<In>> = delta.iter().map(|d| d.to_owned().to_delta()).collect();
+      text_ref.apply_delta(txn, delta);
+    }
   }
 
   /// get all text delta and serialize to json string

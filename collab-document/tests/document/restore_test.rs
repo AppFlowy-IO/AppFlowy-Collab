@@ -24,7 +24,7 @@ fn restore_default_document_test() {
 fn restore_default_document_test2() {
   let uid = 1;
   let doc_id = "1";
-  let test = DocumentTest::new(uid, doc_id);
+  let mut test = DocumentTest::new(uid, doc_id);
   let (page_id, _, _) = get_document_data(&test.document);
   let block = Block {
     id: "b1".to_string(),
@@ -36,11 +36,7 @@ fn restore_default_document_test2() {
     data: Default::default(),
   };
 
-  let mut collab = test.document.get_collab().blocking_write();
-  test
-    .insert_block(&mut collab.transact_mut(), block.clone(), None)
-    .unwrap();
-  drop(collab);
+  test.document.insert_block(block.clone(), None).unwrap();
 
   let restore_document = open_document_with_db(uid, doc_id, test.db);
   let restore_block = restore_document.get_block("b1").unwrap();
@@ -65,14 +61,10 @@ fn multiple_thread_create_document_test() {
   for i in 0..100 {
     let cloned_db = db.clone();
     let handle = std::thread::spawn(move || {
-      let doc = DocumentTest::new_with_db(i, &format!("doc_id_{}", i), cloned_db);
+      let mut doc = DocumentTest::new_with_db(i, &format!("doc_id_{}", i), cloned_db);
       let (page_id, _, _) = get_document_data(&doc.document);
       let block = create_block(page_id, i);
-      let mut collab = doc.document.get_collab().blocking_write();
-      doc
-        .insert_block(&mut collab.transact_mut(), block, None)
-        .unwrap();
-      drop(collab)
+      doc.document.insert_block(block, None).unwrap();
     });
     handles.push(handle);
   }

@@ -12,14 +12,12 @@ use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabBuilder};
 use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
-use collab_document::error::DocumentError;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
-use serde_json::{json, Value};
+use serde_json::json;
 use tempfile::TempDir;
-use tokio::sync::RwLock;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 use zip::ZipArchive;
 
@@ -98,8 +96,7 @@ impl DocumentTest {
       blocks,
       meta,
     };
-    let document =
-      Document::create_blocking(Arc::new(RwLock::new(collab)), Some(document_data)).unwrap();
+    let document = Document::open_with(collab, Some(document_data)).unwrap();
     Self { document, db }
   }
 }
@@ -128,7 +125,7 @@ pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Doc
     .unwrap();
   collab.initialize();
 
-  Document::create_blocking(Arc::new(RwLock::new(collab)), None).unwrap()
+  Document::open_with(collab, None).unwrap()
 }
 
 pub fn document_storage() -> Arc<CollabKVDB> {
@@ -155,16 +152,6 @@ fn setup_log() {
   });
 }
 
-pub fn insert_block(
-  document: &Document,
-  block: Block,
-  prev_id: String,
-) -> Result<Block, DocumentError> {
-  let mut collab = document.get_collab().blocking_write();
-  let mut txn = collab.transact_mut();
-  document.insert_block(&mut txn, block, Some(prev_id))
-}
-
 pub fn get_document_data(
   document: &Document,
 ) -> (String, HashMap<String, Block>, HashMap<String, Vec<String>>) {
@@ -178,27 +165,15 @@ pub fn get_document_data(
   (page_id, blocks, children_map)
 }
 
-pub fn delete_block(document: &Document, block_id: &str) -> Result<(), DocumentError> {
-  let mut collab = document.get_collab().blocking_write();
-  let mut txn = collab.transact_mut();
-  document.delete_block(&mut txn, block_id)
+pub fn apply_actions(document: &mut Document, actions: Vec<BlockAction>) {
+  if let Err(err) = document.apply_action(actions) {
+    // Handle the error
+    tracing::error!("[Document] apply_action error: {:?}", err);
+    return;
+  }
 }
 
-pub fn update_block(
-  document: &Document,
-  block_id: &str,
-  data: HashMap<String, Value>,
-) -> Result<(), DocumentError> {
-  let mut collab = document.get_collab().blocking_write();
-  let mut txn = collab.transact_mut();
-  document.update_block_data(&mut txn, block_id, data)
-}
-
-pub fn apply_actions(document: &Document, actions: Vec<BlockAction>) {
-  document.apply_action(actions)
-}
-
-pub fn insert_block_for_page(document: &Document, block_id: String) -> Block {
+pub fn insert_block_for_page(document: &mut Document, block_id: String) -> Block {
   let (page_id, _, _) = get_document_data(document);
   let block = Block {
     id: block_id,
@@ -210,7 +185,7 @@ pub fn insert_block_for_page(document: &Document, block_id: String) -> Block {
     data: Default::default(),
   };
 
-  insert_block(document, block, "".to_string()).unwrap()
+  document.insert_block(block, None).unwrap()
 }
 
 pub struct Cleaner(PathBuf);
@@ -268,7 +243,7 @@ pub fn unzip_history_document_db(folder_name: &str) -> std::io::Result<(Cleaner,
 
 /// Can remove in the future. Just want to test the encode_collab and decode_collab
 pub fn try_decode_from_encode_collab(document: &Document) {
-  let data = document.encode_collab_blocking().unwrap();
+  let data = document.encode_collab().unwrap();
   let _ = Collab::new_with_source(
     CollabOrigin::Empty,
     "1",

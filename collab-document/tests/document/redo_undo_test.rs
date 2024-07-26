@@ -4,9 +4,7 @@ use std::time::Duration;
 use nanoid::nanoid;
 use serde_json::to_value;
 
-use crate::util::{
-  delete_block, insert_block_for_page, open_document_with_db, update_block, DocumentTest,
-};
+use crate::util::{insert_block_for_page, open_document_with_db, DocumentTest};
 
 const WAIT_TIME: Duration = Duration::from_secs(1);
 
@@ -14,10 +12,10 @@ const WAIT_TIME: Duration = Duration::from_secs(1);
 fn insert_undo_redo() {
   let doc_id = "1";
   let test = DocumentTest::new(1, doc_id);
-  let document = test.document;
+  let mut document = test.document;
   let block_id = nanoid!(10);
 
-  let block = insert_block_for_page(&document, block_id.clone());
+  let block = insert_block_for_page(&mut document, block_id.clone());
 
   assert!(document.can_undo());
   assert!(document.undo());
@@ -45,15 +43,15 @@ fn insert_undo_redo() {
 fn update_undo_redo() {
   let doc_id = "1";
   let test = DocumentTest::new(1, doc_id);
-  let document = test.document;
+  let mut document = test.document;
   let block_id = nanoid!(10);
-  let insert_block = insert_block_for_page(&document, block_id.clone());
+  let insert_block = insert_block_for_page(&mut document, block_id.clone());
 
   // after insert block 1 second, update the block
   sleep(WAIT_TIME);
   let mut data = std::collections::HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
-  update_block(&document, &block_id, data.clone()).unwrap();
+  document.update_block(&block_id, data.clone()).unwrap();
 
   assert!(document.can_undo());
   assert!(document.undo());
@@ -74,13 +72,13 @@ fn update_undo_redo() {
 fn delete_undo_redo() {
   let doc_id = "1";
   let test = DocumentTest::new(1, doc_id);
-  let document = test.document;
+  let mut document = test.document;
   let block_id = nanoid!(10);
-  let insert_block = insert_block_for_page(&document, block_id.clone());
+  let insert_block = insert_block_for_page(&mut document, block_id.clone());
 
   // after insert block 1 second, delete the block
   sleep(WAIT_TIME);
-  delete_block(&document, &block_id).unwrap();
+  document.delete_block(&block_id).unwrap();
 
   assert!(document.can_undo());
   assert!(document.undo());
@@ -102,20 +100,20 @@ fn delete_undo_redo() {
 fn mutilple_undo_redo_test() {
   let doc_id = "1";
   let test = DocumentTest::new(1, doc_id);
-  let document = test.document;
+  let mut document = test.document;
 
   let block_id = nanoid!(10);
-  insert_block_for_page(&document, block_id.clone());
+  insert_block_for_page(&mut document, block_id.clone());
 
   // after insert block 1 second, update the block
   sleep(WAIT_TIME);
   let mut data = std::collections::HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
-  update_block(&document, &block_id, data.clone()).unwrap();
+  document.update_block(&block_id, data.clone()).unwrap();
 
   // after insert block 1 second, delete the block
   sleep(WAIT_TIME);
-  delete_block(&document, &block_id).unwrap();
+  document.delete_block(&block_id).unwrap();
 
   assert!(document.can_undo());
   assert!(document.undo());
@@ -161,26 +159,26 @@ fn mutilple_undo_redo_test() {
 fn undo_redo_after_reopen_document() {
   let doc_id = "1";
   let test = DocumentTest::new(1, doc_id);
-  let document = test.document;
+  let mut document = test.document;
   // after create document, can't undo
   assert!(!document.can_undo());
 
   // after insert block, can undo
   let block_id = nanoid!(10);
-  insert_block_for_page(&document, block_id.clone());
+  insert_block_for_page(&mut document, block_id.clone());
   assert!(document.can_undo());
 
   // close document
   drop(document);
 
   // reopen document, can't undo
-  let document = open_document_with_db(1, doc_id, test.db);
+  let mut document = open_document_with_db(1, doc_id, test.db);
   assert!(!document.can_undo());
 
   // update block, can undo
   let mut data = std::collections::HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
-  update_block(&document, &block_id, data.clone()).unwrap();
+  document.update_block(&block_id, data.clone()).unwrap();
   assert!(document.can_undo());
 
   // There is no undo action, so can't redo
