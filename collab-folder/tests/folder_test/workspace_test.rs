@@ -9,25 +9,20 @@ fn test_workspace_is_ready() {
 
   let workspace = Workspace::new("w1".to_string(), "".to_string(), uid.as_i64());
   let folder_data = FolderData::new(workspace);
-  let folder = Folder::create(
+  let folder = Folder::open_with(
     uid,
     Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], true),
     None,
-    folder_data,
+    Some(folder_data),
   );
 
-  let collab = folder.collab();
-  let workspace_id = check_folder_is_valid(&collab.blocking_lock()).unwrap();
+  let workspace_id = check_folder_is_valid(&folder.collab).unwrap();
   assert_eq!(workspace_id, "w1".to_string());
 }
 
 #[test]
 fn validate_folder_data() {
   let collab = Collab::new_with_origin(CollabOrigin::Empty, "1", vec![], true);
-  assert!(Folder::validate(&collab).is_err());
-
-  let workspace = Workspace::new("w1".to_string(), "".to_string(), 1);
-  let folder_data = FolderData::new(workspace);
-  let folder = Folder::create(1, collab, None, folder_data);
-  assert!(Folder::validate(&folder.collab().blocking_lock()).is_ok());
+  let result = Folder::open(1, collab, None);
+  assert!(result.is_err());
 }

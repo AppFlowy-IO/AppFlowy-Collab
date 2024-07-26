@@ -142,14 +142,6 @@ impl ViewsMap {
   }
 
   pub fn get_views_belong_to<T: ReadTxn>(&self, txn: &T, parent_view_id: &str) -> Vec<Arc<View>> {
-    self.get_views_belong_to_with_txn(txn, parent_view_id)
-  }
-
-  pub fn get_views_belong_to_with_txn<T: ReadTxn>(
-    &self,
-    txn: &T,
-    parent_view_id: &str,
-  ) -> Vec<Arc<View>> {
     match self.get_view_with_txn(txn, parent_view_id) {
       Some(root_view) => root_view
         .children

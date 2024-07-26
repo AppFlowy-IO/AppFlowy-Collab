@@ -107,47 +107,56 @@ macro_rules! impl_array_update {
 macro_rules! impl_section_op {
   ($section_type:expr, $set_fn:ident, $add_fn:ident, $delete_fn:ident, $get_my_fn:ident, $get_all_fn:ident, $remove_all_fn:ident) => {
     // Add view IDs as either favorites or recents
-    pub fn $add_fn(&self, txn: &mut TransactionMut, ids: Vec<String>) {
+    pub fn $add_fn(&mut self, ids: Vec<String>) {
+      let mut txn = self.collab.transact_mut();
       for id in ids {
         self
+          .body
           .views
-          .update_view(txn, &id, |update| update.$set_fn(true).done());
+          .update_view(&mut txn, &id, |update| update.$set_fn(true).done());
       }
     }
 
-    pub fn $delete_fn(&self, txn: &mut TransactionMut, ids: Vec<String>) {
+    pub fn $delete_fn(&mut self, ids: Vec<String>) {
+      let mut txn = self.collab.transact_mut();
       for id in ids {
         self
+          .body
           .views
-          .update_view(txn, &id, |update| update.$set_fn(false).done());
+          .update_view(&mut txn, &id, |update| update.$set_fn(false).done());
       }
     }
 
     // Get all section items for the current user
-    pub fn $get_my_fn<T: ReadTxn>(&self, txn: &T) -> Vec<SectionItem> {
+    pub fn $get_my_fn(&self) -> Vec<SectionItem> {
+      let txn = self.collab.transact();
       self
+        .body
         .section
-        .section_op(txn, $section_type)
-        .map(|op| op.get_all_section_item(txn))
+        .section_op(&txn, $section_type)
+        .map(|op| op.get_all_section_item(&txn))
         .unwrap_or_default()
     }
 
     // Get all sections
-    pub fn $get_all_fn<T: ReadTxn>(&self, txn: &T) -> Vec<SectionItem> {
+    pub fn $get_all_fn(&self) -> Vec<SectionItem> {
+      let txn = self.collab.transact();
       self
+        .body
         .section
-        .section_op(txn, $section_type)
-        .map(|op| op.get_sections(txn))
+        .section_op(&txn, $section_type)
+        .map(|op| op.get_sections(&txn))
         .unwrap_or_default()
         .into_iter()
         .flat_map(|(_user_id, items)| items)
-        .collect::<Vec<_>>()
+        .collect()
     }
 
     // Clear all items in a section
-    pub fn $remove_all_fn(&self, txn: &mut TransactionMut) {
-      if let Some(op) = self.section.section_op(txn, $section_type) {
-        op.clear(txn)
+    pub fn $remove_all_fn(&mut self) {
+      let mut txn = self.collab.transact_mut();
+      if let Some(op) = self.body.section.section_op(&txn, $section_type) {
+        op.clear(&mut txn)
       }
     }
   };

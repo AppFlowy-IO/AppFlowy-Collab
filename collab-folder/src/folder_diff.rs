@@ -20,20 +20,20 @@ impl Folder {
   ) -> Result<Vec<FolderViewChange>, FolderError> {
     //TODO: this entire method should be reimplemented into standard diff comparison
     let changes = Arc::new(ArcSwapOption::default());
-    let this = self.inner.blocking_lock();
-    let this_txn = this.transact();
+    let this_txn = self.collab.transact();
     let workspace_id = self
-      .get_workspace_id_with_txn(&this_txn)
+      .body
+      .get_workspace_id(&this_txn)
       .ok_or_else(|| FolderError::NoRequiredData("workspace id".to_string()))?;
 
-    let other = Folder::from_collab_doc_state(
-      self.uid.clone(),
+    let mut other = Folder::from_collab_doc_state(
+      self.uid().clone(),
       CollabOrigin::Empty,
       DataSource::DocStateV1(encoded_collab.doc_state.to_vec()),
       &workspace_id,
       vec![],
     )?;
-    let cloned_container = other.views.container.clone();
+    let cloned_container = other.body.views.container.clone();
     let sub = {
       let changes = changes.clone();
       cloned_container.observe_deep(move |txn, events| {
@@ -75,13 +75,12 @@ impl Folder {
       })
     };
     {
-      let mut lock_guard = other.inner.blocking_lock();
-      let mut txn = lock_guard.transact_mut();
-      let sv = txn.state_vector();
+      let mut other_txn = other.collab.transact_mut();
+      let sv = other_txn.state_vector();
       let data = this_txn.encode_state_as_update_v1(&sv);
       let update = Update::decode_v1(&data).map_err(|err| FolderError::Internal(err.into()))?;
 
-      txn.apply_update(update);
+      other_txn.apply_update(update);
     }
     drop(sub);
     drop(other);

@@ -9,31 +9,31 @@ fn create_child_views_test() {
   let uid = UserId::from(1);
   let workspace_id = "fake_w_1".to_string();
   let folder_test = create_folder_with_workspace(uid.clone(), &workspace_id);
-  let view_1_1 = make_test_view("1_1", "1", vec![]);
-  let view_1_2 = make_test_view("1_2", "1", vec![]);
-  let view_1_2_1 = make_test_view("1_2_1", "1_2", vec![]);
-  let view_1_2_2 = make_test_view("1_2_2", "1_2", vec![]);
-  let view_1_3 = make_test_view("1_3", "1", vec![]);
-  let view_1 = make_test_view("1", &workspace_id, vec![]);
+  let v_1_1 = make_test_view("1_1", "1", vec![]);
+  let v_1_2 = make_test_view("1_2", "1", vec![]);
+  let v_1_2_1 = make_test_view("1_2_1", "1_2", vec![]);
+  let v_1_2_2 = make_test_view("1_2_2", "1_2", vec![]);
+  let v_1_3 = make_test_view("1_3", "1", vec![]);
+  let v_1 = make_test_view("1", &workspace_id, vec![]);
 
-  let mut lock = folder_test.inner.blocking_lock();
-  let mut txn = lock.transact_mut();
+  let mut folder = folder_test.folder;
+  let mut txn = folder.collab.transact_mut();
 
   let time = timestamp();
-  folder_test.views.insert(&mut txn, view_1.clone(), None);
-  folder_test.views.insert(&mut txn, view_1_1, None);
-  folder_test.views.insert(&mut txn, view_1_2.clone(), None);
-  folder_test.views.insert(&mut txn, view_1_2_1, None);
-  folder_test.views.insert(&mut txn, view_1_2_2, None);
-  folder_test.views.insert(&mut txn, view_1_3, None);
+  folder.body.views.insert(&mut txn, v_1.clone(), None);
+  folder.body.views.insert(&mut txn, v_1_1, None);
+  folder.body.views.insert(&mut txn, v_1_2.clone(), None);
+  folder.body.views.insert(&mut txn, v_1_2_1, None);
+  folder.body.views.insert(&mut txn, v_1_2_2, None);
+  folder.body.views.insert(&mut txn, v_1_3, None);
 
-  let v_1_child_views = folder_test.views.get_views_belong_to(&txn, &view_1.id);
+  let v_1_child_views = folder.body.views.get_views_belong_to(&txn, &v_1.id);
   assert_eq!(v_1_child_views.len(), 3);
 
-  let v_1_2_child_views = folder_test.views.get_views_belong_to(&txn, &view_1_2.id);
+  let v_1_2_child_views = folder.body.views.get_views_belong_to(&txn, &v_1_2.id);
   assert_eq!(v_1_2_child_views.len(), 2);
 
-  let folder_data = folder_test.get_folder_data(&txn, &workspace_id).unwrap();
+  let folder_data = folder.body.get_folder_data(&txn, &workspace_id).unwrap();
   let value = serde_json::to_value(folder_data).unwrap();
   assert_json_include!(
     actual: value,
@@ -156,32 +156,32 @@ fn create_child_views_test() {
 fn move_child_views_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
-  let view_1_1 = make_test_view("1_1", "1", vec![]);
-  let view_1_2 = make_test_view("1_2", "1", vec![]);
-  let view_1_3 = make_test_view("1_3", "1", vec![]);
-  let view_1 = make_test_view(
+  let v_1_1 = make_test_view("1_1", "1", vec![]);
+  let v_1_2 = make_test_view("1_2", "1", vec![]);
+  let v_1_3 = make_test_view("1_3", "1", vec![]);
+  let v_1 = make_test_view(
     "1",
     "w1",
     vec!["1_1".to_string(), "1_2".to_string(), "1_3".to_string()],
   );
 
-  let mut lock = folder_test.inner.blocking_lock();
-  let mut txn = lock.transact_mut();
+  let mut folder = folder_test.folder;
+  let mut txn = folder.collab.transact_mut();
 
-  folder_test.views.insert(&mut txn, view_1.clone(), None);
-  folder_test.views.insert(&mut txn, view_1_1, None);
-  folder_test.views.insert(&mut txn, view_1_2, None);
-  folder_test.views.insert(&mut txn, view_1_3, None);
+  folder.body.views.insert(&mut txn, v_1.clone(), None);
+  folder.body.views.insert(&mut txn, v_1_1, None);
+  folder.body.views.insert(&mut txn, v_1_2, None);
+  folder.body.views.insert(&mut txn, v_1_3, None);
 
-  let v_1_child_views = folder_test.views.get_views_belong_to(&txn, &view_1.id);
+  let v_1_child_views = folder.body.views.get_views_belong_to(&txn, &v_1.id);
   assert_eq!(v_1_child_views[0].id, "1_1");
   assert_eq!(v_1_child_views[1].id, "1_2");
   assert_eq!(v_1_child_views[2].id, "1_3");
 
-  folder_test.views.move_child(&mut txn, &view_1.id, 2, 0);
-  folder_test.views.move_child(&mut txn, &view_1.id, 0, 1);
+  folder.body.views.move_child(&mut txn, &v_1.id, 2, 0);
+  folder.body.views.move_child(&mut txn, &v_1.id, 0, 1);
 
-  let v_1_child_views = folder_test.views.get_view(&txn, &view_1.id).unwrap();
+  let v_1_child_views = folder.body.views.get_view(&txn, &v_1.id).unwrap();
   assert_eq!(v_1_child_views.children[0].id, "1_1");
   assert_eq!(v_1_child_views.children[1].id, "1_3");
   assert_eq!(v_1_child_views.children[2].id, "1_2");
@@ -195,15 +195,15 @@ fn delete_view_test() {
   let view_2 = make_test_view("1_2", "w1", vec![]);
   let view_3 = make_test_view("1_3", "w1", vec![]);
 
-  let mut lock = folder_test.inner.blocking_lock();
-  let mut txn = lock.transact_mut();
+  let mut folder = folder_test.folder;
+  let mut txn = folder.collab.transact_mut();
 
-  folder_test.views.insert(&mut txn, view_1, None);
-  folder_test.views.insert(&mut txn, view_2, None);
-  folder_test.views.insert(&mut txn, view_3, None);
+  folder.body.views.insert(&mut txn, view_1, None);
+  folder.body.views.insert(&mut txn, view_2, None);
+  folder.body.views.insert(&mut txn, view_3, None);
 
-  folder_test.views.remove_child(&mut txn, "w1", 1);
-  let w_1_child_views = folder_test.views.get_views_belong_to(&txn, "w1");
+  folder.body.views.remove_child(&mut txn, "w1", 1);
+  let w_1_child_views = folder.body.views.get_views_belong_to(&txn, "w1");
   assert_eq!(w_1_child_views[0].id, "1_1");
   assert_eq!(w_1_child_views[1].id, "1_3");
 }
@@ -216,20 +216,21 @@ fn delete_child_view_test() {
   let view_1_1 = make_test_view("v1_1", "v1", vec![]);
   let view_2 = make_test_view("v2", "w1", vec![]);
 
-  let mut lock = folder_test.inner.blocking_lock();
-  let mut txn = lock.transact_mut();
+  let mut folder = folder_test.folder;
+  let mut txn = folder.collab.transact_mut();
 
-  folder_test.views.insert(&mut txn, view_1, None);
-  folder_test.views.insert(&mut txn, view_1_1, None);
-  folder_test.views.insert(&mut txn, view_2, None);
+  folder.body.views.insert(&mut txn, view_1, None);
+  folder.body.views.insert(&mut txn, view_1_1, None);
+  folder.body.views.insert(&mut txn, view_2, None);
 
-  let views = folder_test.views.get_views_belong_to(&txn, "v1");
+  let views = folder.body.views.get_views_belong_to(&txn, "v1");
   assert_eq!(views.len(), 1);
 
-  folder_test
+  folder
+    .body
     .views
     .delete_views_with_txn(&mut txn, vec!["v1_1".to_string()]);
-  let views = folder_test.views.get_views_belong_to(&txn, "v1");
+  let views = folder.body.views.get_views_belong_to(&txn, "v1");
   assert!(views.is_empty());
 }
 
@@ -243,20 +244,20 @@ fn create_orphan_child_views_test() {
   // The orphan view: the parent_view_id equal to the view_id
   let view_2 = make_test_view("2", "2", vec![]);
 
-  let mut lock = folder_test.inner.blocking_lock();
-  let mut txn = lock.transact_mut();
+  let mut folder = folder_test.folder;
+  let mut txn = folder.collab.transact_mut();
 
-  folder_test.views.insert(&mut txn, view_1.clone(), None);
-  folder_test.views.insert(&mut txn, view_2.clone(), None);
+  folder.body.views.insert(&mut txn, view_1.clone(), None);
+  folder.body.views.insert(&mut txn, view_2.clone(), None);
 
-  let child_views = folder_test.views.get_views_belong_to(&txn, &workspace_id);
+  let child_views = folder.body.views.get_views_belong_to(&txn, &workspace_id);
   assert_eq!(child_views.len(), 1);
 
-  let orphan_views = folder_test.views.get_orphan_views_with_txn(&txn);
+  let orphan_views = folder.body.views.get_orphan_views_with_txn(&txn);
   assert_eq!(orphan_views.len(), 1);
 
   // The folder data should contains the orphan view
-  let folder_data = folder_test.get_folder_data(&txn, &workspace_id).unwrap();
+  let folder_data = folder.body.get_folder_data(&txn, &workspace_id).unwrap();
   assert_json_include!(
     actual: json!(folder_data),
     expected: json!({

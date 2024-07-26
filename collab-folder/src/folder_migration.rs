@@ -5,7 +5,7 @@ use collab::preclude::{
 use serde::{Deserialize, Serialize};
 
 use crate::folder::FAVORITES_V1;
-use crate::{Folder, SectionItem, View, ViewRelations, Workspace};
+use crate::{Folder, FolderBody, SectionItem, View, ViewRelations, Workspace};
 
 const WORKSPACES: &str = "workspaces";
 const WORKSPACE_ID: &str = "id";
@@ -18,11 +18,14 @@ impl Folder {
   ///
   /// Returns a `Vec<FavoriteId>` containing the historical favorite data.
   /// The vector will be empty if no historical favorite data exists.
-  pub fn get_favorite_v1(&self) -> Vec<FavoriteId> {
-    let mut lock = self.inner.blocking_lock();
-    let mut txn = lock.transact_mut();
+  pub fn get_favorite_v1(&mut self) -> Vec<FavoriteId> {
+    let mut txn = self.collab.transact_mut();
     let mut favorites = vec![];
-    if let Some(favorite_array) = self.root.get_with_txn::<_, ArrayRef>(&txn, FAVORITES_V1) {
+    if let Some(favorite_array) = self
+      .body
+      .root
+      .get_with_txn::<_, ArrayRef>(&txn, FAVORITES_V1)
+    {
       for record in favorite_array.iter(&txn) {
         if let Ok(id) = FavoriteId::try_from(&record) {
           favorites.push(id);
@@ -31,38 +34,17 @@ impl Folder {
     }
 
     if !favorites.is_empty() {
-      self.root.remove(&mut txn, FAVORITES_V1);
+      self.body.root.remove(&mut txn, FAVORITES_V1);
     }
     favorites
-  }
-
-  pub fn migrate_workspace_to_view(&self, txn: &mut TransactionMut) {
-    let mut workspace = {
-      let workspace_array: ArrayRef = match self.root.get_with_txn(txn, WORKSPACES) {
-        Some(array) => array,
-        None => return,
-      };
-      workspace_array
-        .iter(txn)
-        .flat_map(|map_ref| {
-          to_workspace_with_txn(txn, &map_ref.cast().unwrap(), &self.views.view_relations)
-        })
-        .collect::<Vec<_>>()
-    };
-    if !workspace.is_empty() {
-      let workspace = workspace.pop().unwrap();
-      self.root.remove(txn, WORKSPACES);
-      self.views.insert(txn, View::from(workspace), None);
-    }
   }
 
   /// Retrieves historical trash data from the key `trash`.
   /// v1 trash data is stored in the key `trash`.
   pub fn get_trash_v1(&self) -> Vec<SectionItem> {
-    let lock = self.inner.blocking_lock();
-    let txn = lock.transact();
+    let txn = self.collab.transact();
     let mut trash = vec![];
-    if let Some(trash_array) = self.root.get_with_txn::<_, ArrayRef>(&txn, "trash") {
+    if let Some(trash_array) = self.body.root.get_with_txn::<_, ArrayRef>(&txn, "trash") {
       for record in trash_array.iter(&txn) {
         if let YrsValue::Any(any) = record {
           if let Ok(record) = TrashRecord::from_any(any) {
@@ -106,6 +88,28 @@ pub fn to_workspace_with_txn<T: ReadTxn>(
     last_edited_by: None,
     created_by: None,
   })
+}
+
+impl FolderBody {
+  pub fn migrate_workspace_to_view(&self, txn: &mut TransactionMut) {
+    let mut workspace = {
+      let workspace_array: ArrayRef = match self.root.get_with_txn(txn, WORKSPACES) {
+        Some(array) => array,
+        None => return,
+      };
+      workspace_array
+        .iter(txn)
+        .flat_map(|map_ref| {
+          to_workspace_with_txn(txn, &map_ref.cast().unwrap(), &self.views.view_relations)
+        })
+        .collect::<Vec<_>>()
+    };
+    if !workspace.is_empty() {
+      let workspace = workspace.pop().unwrap();
+      self.root.remove(txn, WORKSPACES);
+      self.views.insert(txn, View::from(workspace), None);
+    }
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

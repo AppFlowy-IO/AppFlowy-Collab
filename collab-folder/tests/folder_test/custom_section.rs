@@ -12,29 +12,31 @@ fn custom_section_test() {
   let uid = UserId::from(1);
   let folder_test = create_folder_with_workspace(uid.clone(), "w1");
 
-  let mut lock = folder_test.inner.blocking_lock();
-  let mut txn = lock.transact_mut();
+  let mut folder = folder_test.folder;
+  let mut txn = folder.collab.transact_mut();
 
   // By default, the folder has a favorite section
-  let op = folder_test
+  let op = folder
+    .body
     .section
     .section_op(&txn, Section::Favorite)
     .unwrap();
   op.add_sections_item(&mut txn, vec![SectionItem::new("1".to_string())]);
 
-  let _ = folder_test
+  let _ = folder
+    .body
     .section
     .create_section(&mut txn, Section::Custom("private".to_string()));
-  let op = folder_test
+  let op = folder
+    .body
     .section
     .section_op(&txn, Section::Custom("private".to_string()))
     .unwrap();
   op.add_sections_item(&mut txn, vec![SectionItem::new("2".to_string())]);
 
   drop(txn);
-  drop(lock);
 
-  let json = folder_test.to_json_value();
+  let json = folder.to_json_value();
   assert_json_include!(
     actual: json,
     expected: json!({"section": {

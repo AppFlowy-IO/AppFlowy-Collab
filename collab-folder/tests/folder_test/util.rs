@@ -1,6 +1,6 @@
 use std::fs::{create_dir_all, File};
 use std::io::copy;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
@@ -32,10 +32,6 @@ pub struct FolderTest {
   #[allow(dead_code)]
   pub(crate) section_rx: Option<SectionChangeReceiver>,
 }
-
-unsafe impl Send for FolderTest {}
-
-unsafe impl Sync for FolderTest {}
 
 pub fn create_folder(uid: UserId, workspace_id: &str) -> FolderTest {
   let mut workspace = Workspace::new(workspace_id.to_string(), "".to_string(), uid.as_i64());
@@ -75,7 +71,7 @@ pub fn create_folder_with_data(
     view_change_tx: view_tx,
     section_change_tx: section_tx,
   };
-  let folder = Folder::create(uid, collab, Some(context), folder_data);
+  let folder = Folder::open_with(uid, collab, Some(context), Some(folder_data));
   FolderTest {
     db,
     folder,
@@ -141,6 +137,12 @@ impl Deref for FolderTest {
 
   fn deref(&self) -> &Self::Target {
     &self.folder
+  }
+}
+
+impl DerefMut for FolderTest {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.folder
   }
 }
 
