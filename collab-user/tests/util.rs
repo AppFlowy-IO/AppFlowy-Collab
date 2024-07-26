@@ -1,37 +1,40 @@
-use std::ops::Deref;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use tempfile::TempDir;
+use tokio::sync::broadcast::Receiver;
+use tokio::time::timeout;
+
 use collab::preclude::CollabBuilder;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
 use collab_user::core::{RemindersChangeSender, UserAwareness, UserAwarenessNotifier};
-use tempfile::TempDir;
-use tokio::sync::broadcast::Receiver;
-use tokio::time::timeout;
 
-#[derive(Clone)]
 pub struct UserAwarenessTest {
-  user_awareness: Arc<UserAwareness>,
-  #[allow(dead_code)]
-  cleaner: Arc<Cleaner>,
+  pub user_awareness: UserAwareness,
   #[allow(dead_code)]
   pub reminder_change_tx: RemindersChangeSender,
 }
 
 impl Deref for UserAwarenessTest {
-  type Target = Arc<UserAwareness>;
+  type Target = UserAwareness;
 
   fn deref(&self) -> &Self::Target {
     &self.user_awareness
   }
 }
 
+impl DerefMut for UserAwarenessTest {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.user_awareness
+  }
+}
+
 impl UserAwarenessTest {
-  pub async fn new(uid: i64) -> Self {
+  pub fn new(uid: i64) -> Self {
     let tempdir = TempDir::new().unwrap();
 
     let path = tempdir.into_path();
@@ -44,7 +47,6 @@ impl UserAwarenessTest {
       Arc::downgrade(&db),
       None,
     );
-    let cleaner: Cleaner = Cleaner::new(path);
 
     let mut collab = CollabBuilder::new(1, uid.to_string())
       .with_plugin(disk_plugin)
@@ -52,36 +54,16 @@ impl UserAwarenessTest {
       .build()
       .unwrap();
     collab.initialize();
-    let collab = Arc::new(Mutex::new(collab));
 
     let (reminder_change_tx, _) = tokio::sync::broadcast::channel(100);
     let notifier = UserAwarenessNotifier {
       reminder_change_tx: reminder_change_tx.clone(),
     };
-    let user_awareness = UserAwareness::create(collab, Some(notifier));
+    let user_awareness = UserAwareness::open(collab, Some(notifier));
     Self {
-      user_awareness: Arc::new(user_awareness),
-      cleaner: Arc::new(cleaner),
+      user_awareness,
       reminder_change_tx,
     }
-  }
-}
-
-struct Cleaner(PathBuf);
-
-impl Cleaner {
-  fn new(dir: PathBuf) -> Self {
-    Cleaner(dir)
-  }
-
-  fn cleanup(dir: &PathBuf) {
-    let _ = std::fs::remove_dir_all(dir);
-  }
-}
-
-impl Drop for Cleaner {
-  fn drop(&mut self) {
-    Self::cleanup(&self.0)
   }
 }
 
