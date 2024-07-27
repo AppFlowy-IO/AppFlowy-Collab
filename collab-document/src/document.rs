@@ -500,6 +500,12 @@ impl Document {
     let subscription = self.inner.lock().observe_awareness(move |awareness, e, _| {
       if let Ok(full_update) = awareness.update_with_clients(e.all_changes()) {
         let result: HashMap<_, _> = full_update.clients.iter().filter_map(|(&client_id, entry)| {
+          // the json field is empty or null when clear the awareness state.
+          // skip the empty or null state.
+          if entry.json.is_empty() || entry.json == "null" {
+            return None;
+          }
+
           match serde_json::from_str(&entry.json) {
             Ok(state) => Some((client_id, state)),
             Err(e) => {
