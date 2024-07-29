@@ -17,8 +17,8 @@ use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{
   deserialize_text_delta, parse_event, Block, BlockAction, BlockActionPayload, BlockActionType,
-  BlockEvent, BlockOperation, ChildrenOperation, DocumentData, DocumentMeta, TextOperation,
-  EXTERNAL_TYPE_TEXT,
+  BlockEvent, BlockOperation, ChildrenOperation, DocumentData, DocumentMeta, TextDelta,
+  TextOperation, EXTERNAL_TYPE_TEXT,
 };
 use crate::document_awareness::DocumentAwarenessState;
 use crate::error::DocumentError;
@@ -154,6 +154,13 @@ impl Document {
     Ok(document_data)
   }
 
+  /// Get page id
+  pub fn get_page_id(&self) -> Option<String> {
+    let collab_guard = self.inner.lock();
+    let txn = collab_guard.transact();
+    self.root.get_str_with_txn(&txn, PAGE_ID)
+  }
+
   /// Create a yText for incremental synchronization.
   /// - @param text_id: The text block's external_id.
   /// - @param delta: The text block's delta. "\[{"insert": "Hello", "attributes": { "bold": true, "italic": true } }, {"insert": " World!"}]".
@@ -224,6 +231,44 @@ impl Document {
     let collab_guard = self.inner.lock();
     let txn = collab_guard.transact();
     self.block_operation.get_block_with_txn(&txn, block_id)
+  }
+
+  /// Get the children of the block with the given id.
+  pub fn get_block_children(&self, block_id: &str) -> Vec<String> {
+    let block = self.get_block(block_id);
+    self.with_transact_mut(|txn| match block {
+      Some(block) => self
+        .children_operation
+        .get_children_with_txn(txn, &block.children)
+        .iter(txn)
+        .map(|child| child.to_string(txn))
+        .collect(),
+      None => vec![],
+    })
+  }
+
+  /// Get the plain text from the text block with the given id.
+  ///
+  /// If the block is not found, return None.
+  /// If the block is found but the external_id is not found, return None.
+  pub fn get_plain_text_from_block(&self, block_id: &str) -> Option<String> {
+    let block = self.get_block(block_id)?;
+    let text_id = block.external_id.as_ref()?;
+    let collab_guard = self.inner.lock();
+    let txn = collab_guard.transact();
+    self
+      .text_operation
+      .get_delta_with_txn(&txn, text_id)
+      .map(|delta| {
+        let text: Vec<String> = delta
+          .iter()
+          .filter_map(|d| match d {
+            TextDelta::Inserted(s, _) => Some(s.clone()),
+            _ => None,
+          })
+          .collect();
+        text.join("")
+      })
   }
 
   /// Insert block to the document.

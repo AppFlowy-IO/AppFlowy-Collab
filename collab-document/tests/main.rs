@@ -4,3 +4,6 @@ mod blocks;
 mod document;
 #[cfg(not(target_arch = "wasm32"))]
 mod util;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod conversions;
