@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct DocumentAwarenessState {
   // the fields supported in version 1 contain the user, selection, metadata, and timestamp fields
   pub version: i64,
@@ -24,19 +24,19 @@ impl DocumentAwarenessState {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct DocumentAwarenessUser {
   pub uid: i64,
   pub device_id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct DocumentAwarenessSelection {
   pub start: DocumentAwarenessPosition,
   pub end: DocumentAwarenessPosition,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct DocumentAwarenessPosition {
   pub path: Vec<u64>,
   pub offset: u64,
