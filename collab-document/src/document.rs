@@ -471,18 +471,7 @@ impl Document {
 
   pub fn get_awareness_local_state(&self) -> Option<DocumentAwarenessState> {
     let mut collab = self.inner.lock();
-    let json = collab.get_mut_awareness().local_state()?;
-    match serde_json::from_str(json) {
-      Ok(state) => Some(state),
-      Err(e) => {
-        tracing::error!(
-          "Failed to deserialize DocumentAwarenessState, state: `{}` - {}",
-          json,
-          e
-        );
-        None
-      },
-    }
+    collab.get_mut_awareness().local_state()
   }
 
   /// Clean the local state of the awareness.
@@ -500,8 +489,8 @@ impl Document {
     let subscription = self.inner.lock().observe_awareness(move |awareness, e, _| {
       if let Ok(full_update) = awareness.update_with_clients(e.all_changes()) {
         let result: HashMap<_, _> = full_update.clients.iter().filter_map(|(&client_id, entry)| {
-          match serde_json::from_str(&entry.json) {
-            Ok(state) => Some((client_id, state)),
+          match serde_json::from_str::<Option<DocumentAwarenessState>>(&entry.json) {
+            Ok(state) => state.map(|state| (client_id, state)),
             Err(e) => {
               tracing::error!(
                 "subscribe_awareness_state error: failed to parse state for id: {:?}, state: {:?} - {}",
