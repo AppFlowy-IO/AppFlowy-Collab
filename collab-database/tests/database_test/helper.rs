@@ -96,7 +96,7 @@ pub fn create_row(uid: i64, row_id: RowId) -> (Arc<Mutex<Collab>>, DatabaseRow) 
   let row_change_tx = tokio::sync::broadcast::channel(1).0;
   (
     arc_collab,
-    DatabaseRow::create(
+    DatabaseRow::new(
       None,
       uid,
       row_id,

@@ -13,8 +13,8 @@ use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 
 use collab::preclude::Collab;
+use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
-use tokio::sync::{broadcast, Mutex};
 use tracing::{error, trace, warn};
 use uuid::Uuid;
 
@@ -158,13 +158,13 @@ impl Block {
 
     trace!("create_row: {}", row_id);
     if let Ok(collab) = self.create_collab_for_row(&row_id) {
-      let database_row = MutexDatabaseRow::new(DatabaseRow::create(
-        Some(row),
+      let database_row = MutexDatabaseRow::new(DatabaseRow::new(
         self.uid,
         row_id.clone(),
         self.collab_db.clone(),
         collab,
         self.row_change_tx.clone(),
+        Some(row),
       ));
       self.rows.insert(row_id, Arc::new(database_row));
     }
@@ -310,26 +310,17 @@ impl Block {
           None
         } else {
           let collab = self.create_collab_for_row(row_id).ok()?;
-          match DatabaseRow::new(
+          let database_row = DatabaseRow::new(
             self.uid,
             row_id.clone(),
             self.collab_db.clone(),
             collab,
             self.row_change_tx.clone(),
-          ) {
-            Ok(database_row) => {
-              let arc_database_row = Arc::new(MutexDatabaseRow::new(database_row));
-              self.rows.insert(row_id.clone(), arc_database_row.clone());
-              Some(arc_database_row)
-            },
-            Err(_) => {
-              let _ = collab_db.with_write_txn(|txn| {
-                txn.delete_doc(self.uid, row_id.as_ref())?;
-                Ok(())
-              });
-              None
-            },
-          }
+            None,
+          );
+          let arc_database_row = Arc::new(MutexDatabaseRow::new(database_row));
+          self.rows.insert(row_id.clone(), arc_database_row.clone());
+          Some(arc_database_row)
         }
       },
       Some(row) => Some(row),
@@ -343,7 +334,7 @@ impl Block {
     change_tx: RowChangeSender,
     collab_db: Weak<CollabKVDB>,
     cache: Arc<DashMap<RowId, Arc<MutexDatabaseRow>>>,
-    row_collab: Arc<Mutex<Collab>>,
+    row_collab: Collab,
   ) -> Result<(), CollabError> {
     if cache.contains_key(row_id) {
       warn!("The row is already in the cache: {:?}", row_id);
@@ -351,9 +342,9 @@ impl Block {
     }
 
     trace!("init_collab_row: {:?}", row_id);
-    let row_detail = RowDetail::from_collab(&row_collab.blocking_lock());
+    let row_detail = RowDetail::from_collab(&row_collab);
 
-    let row = DatabaseRow::new(uid, row_id.clone(), collab_db, row_collab, change_tx)?;
+    let row = DatabaseRow::new(uid, row_id.clone(), collab_db, row_collab, change_tx, None);
     let arc_row = Arc::new(MutexDatabaseRow::new(row));
     cache.insert(row_id.clone(), arc_row);
 
@@ -370,7 +361,7 @@ impl Block {
     Ok(())
   }
 
-  fn create_collab_for_row(&self, row_id: &RowId) -> Result<Arc<Mutex<Collab>>, DatabaseError> {
+  fn create_collab_for_row(&self, row_id: &RowId) -> Result<Collab, DatabaseError> {
     let config = CollabPersistenceConfig::new().snapshot_per_update(100);
     self.collab_service.build_collab_with_config(
       self.uid,
@@ -409,13 +400,13 @@ async fn async_create_row<T: Into<Row>>(
   .await
   {
     trace!("async create row:{}", row_id);
-    let database_row = MutexDatabaseRow::new(DatabaseRow::create(
-      Some(row),
+    let database_row = MutexDatabaseRow::new(DatabaseRow::new(
       uid,
       row_id.clone(),
       collab_db,
       collab,
       row_change_tx,
+      Some(row),
     ));
     cache.insert(row_id, Arc::new(database_row));
   }

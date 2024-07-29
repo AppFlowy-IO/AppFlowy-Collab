@@ -77,7 +77,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     collab_db: Weak<CollabKVDB>,
     doc_state: DataSource,
     config: CollabPersistenceConfig,
-  ) -> Result<Arc<Mutex<Collab>>, DatabaseError> {
+  ) -> Result<Collab, DatabaseError> {
     let mut collab = CollabBuilder::new(uid, object_id)
       .with_device_id("1")
       .with_doc_state(doc_state)
@@ -93,7 +93,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
       .unwrap();
 
     collab.initialize();
-    Ok(Arc::new(collab.into()))
+    Ok(collab)
   }
 }
 

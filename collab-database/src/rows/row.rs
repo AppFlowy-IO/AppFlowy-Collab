@@ -1,12 +1,13 @@
-use std::ops::Deref;
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Weak};
 
 use collab::preclude::{
-  ArrayRef, Collab, Map, MapExt, MapRef, ReadTxn, Subscription, ToJson, TransactionMut, WriteTxn,
+  Any, ArrayRef, Collab, FillRef, Map, MapExt, MapRef, ReadTxn, ToJson, TransactionMut, WriteTxn,
   YrsValue,
 };
 
-use collab::error::CollabError;
+use collab::preclude::encoding::serde::from_any;
 use collab::util::AnyExt;
 use collab_entity::define::DATABASE_ROW_DATA;
 use collab_entity::CollabType;
@@ -15,7 +16,7 @@ use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use tracing::{error, trace};
+use tracing::error;
 use uuid::Uuid;
 
 use crate::database::timestamp;
@@ -35,175 +36,75 @@ pub const LAST_MODIFIED: &str = "last_modified";
 pub const CREATED_AT: &str = "created_at";
 
 pub struct DatabaseRow {
-  uid: i64,
-  row_id: RowId,
-  #[allow(dead_code)]
-  collab: Arc<Mutex<Collab>>,
-  data: MapRef,
-  meta: MapRef,
-  #[allow(dead_code)]
-  comments: ArrayRef,
+  pub collab: Collab,
+  pub body: DatabaseRowBody,
   collab_db: Weak<CollabKVDB>,
-  #[allow(dead_code)]
-  subscription: Subscription,
 }
 
 impl DatabaseRow {
-  pub fn create(
-    row: Option<Row>,
-    uid: i64,
-    row_id: RowId,
-    collab_db: Weak<CollabKVDB>,
-    collab: Arc<Mutex<Collab>>,
-    change_tx: RowChangeSender,
-  ) -> Self {
-    let (mut data, meta, comments) = {
-      let mut collab_guard = collab.blocking_lock();
-      let collab = &mut *collab_guard;
-      let mut txn = collab.context.transact_mut();
-
-      let data: MapRef = txn.get_or_insert_map(DATABASE_ROW_DATA);
-      let meta: MapRef = txn.get_or_insert_map(META);
-      let comments: ArrayRef = data.get_or_init(&mut txn, COMMENT);
-      if let Some(row) = row {
-        RowBuilder::new(&mut txn, data.clone(), meta.clone())
-          .update(|update| {
-            update
-              .set_row_id(row.id, row.database_id)
-              .set_height(row.height)
-              .set_visibility(row.visibility)
-              .set_created_at(row.created_at)
-              .set_last_modified(row.modified_at)
-              .set_cells(row.cells);
-          })
-          .done();
-      }
-
-      (data, meta, comments)
-    };
-    let subscription = subscribe_row_data_change(row_id.clone(), &mut data, change_tx);
-    Self {
-      uid,
-      row_id,
-      collab,
-      data,
-      meta,
-      comments,
-      collab_db,
-      subscription,
-    }
-  }
-
   pub fn new(
     uid: i64,
     row_id: RowId,
     collab_db: Weak<CollabKVDB>,
-    collab: Arc<Mutex<Collab>>,
+    mut collab: Collab,
     change_tx: RowChangeSender,
-  ) -> Result<Self, CollabError> {
-    match Self::create_row_struct(&collab)? {
-      Some((mut data, meta, comments)) => {
-        let subscription = subscribe_row_data_change(row_id.clone(), &mut data, change_tx);
-        Ok(Self {
-          uid,
-          row_id,
-          collab,
-          data,
-          meta,
-          comments,
-          collab_db,
-          subscription,
-        })
-      },
-      None => Ok(Self::create(
-        None, uid, row_id, collab_db, collab, change_tx,
-      )),
+    row: Option<Row>,
+  ) -> Self {
+    let body = DatabaseRowBody::new(uid, row_id.clone(), &mut collab, row);
+    subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
+    Self {
+      collab,
+      body,
+      collab_db,
     }
   }
 
-  pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
+  pub fn validate(&self) -> Result<(), DatabaseError> {
     CollabType::DatabaseRow
-      .validate_require_data(collab)
+      .validate_require_data(&self.collab)
       .map_err(|_| DatabaseError::NoRequiredData)?;
     Ok(())
   }
 
-  fn create_row_struct(
-    collab: &Arc<Mutex<Collab>>,
-  ) -> Result<Option<(MapRef, MapRef, ArrayRef)>, CollabError> {
-    let collab_guard = collab.blocking_lock();
-    let txn = collab_guard.transact();
-    let data: Option<MapRef> = collab_guard
-      .get_with_txn(&txn, DATABASE_ROW_DATA)
-      .and_then(|v| v.cast().ok());
-
-    match data {
-      None => Err(CollabError::UnexpectedEmpty("missing data map".to_string())),
-      Some(data) => {
-        let f = || {
-          let meta: MapRef = collab_guard.get_with_txn(&txn, META)?.cast().ok()?;
-          let comments: ArrayRef = collab_guard.get_with_txn(&txn, COMMENT)?.cast().ok()?;
-          Some((meta, comments))
-        };
-
-        match f() {
-          None => Ok(None),
-          Some((meta, comments)) => Ok(Some((data, meta, comments))),
-        }
-      },
-    }
-  }
-
   pub fn get_row(&self) -> Option<Row> {
-    let collab = self.collab.blocking_lock();
-    let txn = collab.transact();
-    row_from_map_ref(&self.data, &self.meta, &txn)
+    let txn = self.collab.transact();
+    row_from_map_ref(&self.body.data, &txn)
   }
 
   pub fn get_row_meta(&self) -> Option<RowMeta> {
-    let collab = self.collab.blocking_lock();
-    let txn = collab.transact();
-    let row_id = Uuid::parse_str(&self.row_id).ok()?;
+    let txn = self.collab.transact();
+    let row_id = Uuid::parse_str(&self.body.row_id).ok()?;
     Some(RowMeta::from_map_ref(&txn, &row_id, &self.meta))
   }
 
   pub fn get_row_order(&self) -> Option<RowOrder> {
-    let collab = self.collab.blocking_lock();
-    let txn = collab.transact();
+    let txn = self.collab.transact();
     row_order_from_map_ref(&self.data, &txn).map(|value| value.0)
   }
 
   pub fn get_cell(&self, field_id: &str) -> Option<Cell> {
-    let collab = self.collab.blocking_lock();
-    let txn = collab.transact();
+    let txn = self.collab.transact();
     cell_from_map_ref(&self.data, &txn, field_id)
   }
 
-  pub fn update<F>(&self, f: F)
+  pub fn update<F>(&mut self, f: F)
   where
     F: FnOnce(RowUpdate),
   {
-    match self.collab.try_lock() {
-      Err(e) => error!("failed to acquire lock for updating row: {}", e),
-      Ok(mut guard) => {
-        trace!("updating row: {}", self.row_id);
-        let mut txn = guard.context.transact_mut();
-        let mut update = RowUpdate::new(&mut txn, &self.data, &self.meta);
+    let mut txn = self.collab.transact_mut();
+    let mut update = RowUpdate::new(&mut txn, &self.data, &self.meta);
 
-        // Update the last modified timestamp before we call the update function.
-        update = update.set_last_modified(timestamp());
-        f(update)
-      },
-    }
+    // Update the last modified timestamp before we call the update function.
+    update = update.set_last_modified(timestamp());
+    f(update)
   }
 
-  pub fn update_meta<F>(&self, f: F)
+  pub fn update_meta<F>(&mut self, f: F)
   where
     F: FnOnce(RowMetaUpdate),
   {
-    let mut lock = self.collab.blocking_lock();
-    let mut txn = lock.context.transact_mut();
-    match Uuid::parse_str(&self.row_id) {
+    let mut txn = self.collab.transact_mut();
+    match Uuid::parse_str(&self.body.row_id) {
       Ok(row_id) => {
         let update = RowMetaUpdate::new(&mut txn, &self.meta, row_id);
         f(update)
@@ -219,14 +120,82 @@ impl DatabaseRow {
       },
       Some(collab_db) => {
         let _ = collab_db.with_write_txn(|txn| {
-          let row_id = self.row_id.to_string();
-          if let Err(e) = txn.delete_doc(self.uid, &row_id) {
+          let row_id = self.body.row_id.to_string();
+          if let Err(e) = txn.delete_doc(self.body.uid, &row_id) {
             error!("🔴{}", e);
           }
           Ok(())
         });
       },
     }
+  }
+}
+
+impl Deref for DatabaseRow {
+  type Target = Collab;
+
+  fn deref(&self) -> &Self::Target {
+    &self.collab
+  }
+}
+
+impl DerefMut for DatabaseRow {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.collab
+  }
+}
+
+pub struct DatabaseRowBody {
+  uid: i64,
+  row_id: RowId,
+  data: MapRef,
+  meta: MapRef,
+  #[allow(dead_code)]
+  comments: ArrayRef,
+}
+
+impl DatabaseRowBody {
+  pub fn new(uid: i64, row_id: RowId, collab: &mut Collab, init_data: Option<Row>) -> Self {
+    let mut txn = collab.context.transact_mut();
+
+    let data: MapRef = txn.get_or_insert_map(DATABASE_ROW_DATA);
+    let meta: MapRef = txn.get_or_insert_map(META);
+    let comments: ArrayRef = data.get_or_init(&mut txn, COMMENT);
+    if let Some(row) = init_data {
+      RowBuilder::new(&mut txn, data.clone(), meta.clone())
+        .update(|update| {
+          update
+            .set_row_id(row.id, row.database_id)
+            .set_height(row.height)
+            .set_visibility(row.visibility)
+            .set_created_at(row.created_at)
+            .set_last_modified(row.modified_at)
+            .set_cells(row.cells);
+        })
+        .done();
+    }
+
+    DatabaseRowBody {
+      uid,
+      row_id,
+      data,
+      meta,
+      comments,
+    }
+  }
+
+  fn open(uid: i64, row_id: RowId, collab: &Collab) -> Option<Self> {
+    let txn = collab.context.transact();
+    let data: MapRef = collab.data.get_with_txn(&txn, DATABASE_ROW_DATA)?;
+    let meta: MapRef = collab.data.get_with_txn(&txn, META)?;
+    let comments: ArrayRef = collab.data.get_with_txn(&txn, COMMENT)?;
+    Some(DatabaseRowBody {
+      uid,
+      row_id,
+      data,
+      meta,
+      comments,
+    })
   }
 }
 
@@ -251,7 +220,7 @@ impl RowDetail {
     let txn = collab.transact();
     let data: MapRef = collab.get_with_txn(&txn, DATABASE_ROW_DATA)?.cast().ok()?;
     let meta: MapRef = collab.get_with_txn(&txn, META)?.cast().ok()?;
-    let row = row_from_map_ref(&data, &meta, &txn)?;
+    let row = row_from_map_ref(&data, &txn)?;
 
     let row_id = Uuid::parse_str(&row.id).ok()?;
     let meta = RowMeta::from_map_ref(&txn, &row_id, &meta);
@@ -308,7 +277,7 @@ impl Row {
     Row {
       id: id.into(),
       database_id: database_id.to_string(),
-      cells: Default::default(),
+      cells: HashMap::new(),
       height: DEFAULT_ROW_HEIGHT,
       visibility: true,
       created_at: timestamp,
@@ -320,7 +289,7 @@ impl Row {
     Self {
       id: row_id,
       database_id: database_id.to_string(),
-      cells: Cells::new(),
+      cells: HashMap::new(),
       height: DEFAULT_ROW_HEIGHT,
       visibility: true,
       created_at: 0,
@@ -440,7 +409,7 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
 
   pub fn set_cells(self, cells: Cells) -> Self {
     let cell_map: MapRef = self.map_ref.get_or_init(self.txn, ROW_CELLS);
-    cells.fill_map_ref(self.txn, &cell_map);
+    Any::from(cells).fill(self.txn, &cell_map).unwrap();
     self
   }
 
@@ -455,7 +424,7 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
   }
 
   pub fn done(self) -> Option<Row> {
-    row_from_map_ref(self.map_ref, self.meta_ref, self.txn)
+    row_from_map_ref(self.map_ref, self.txn)
   }
 }
 
@@ -502,38 +471,9 @@ pub fn row_id_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<RowI
 }
 
 /// Return a [Row] from a [MapRef]
-pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, _meta_ref: &MapRef, txn: &T) -> Option<Row> {
-  let id = RowId::from(map_ref.get_with_txn::<_, String>(txn, ROW_ID)?);
-  // for historical data, there is no database_id. we use empty database id instead
-  let database_id: String = map_ref
-    .get_with_txn(txn, ROW_DATABASE_ID)
-    .unwrap_or_default();
-  let visibility = map_ref.get_with_txn(txn, ROW_VISIBILITY).unwrap_or(true);
-
-  let height: i64 = map_ref.get_with_txn(txn, ROW_HEIGHT).unwrap_or(60);
-
-  let created_at: i64 = map_ref
-    .get_with_txn(txn, CREATED_AT)
-    .unwrap_or_else(|| chrono::Utc::now().timestamp());
-
-  let modified_at: i64 = map_ref
-    .get_with_txn(txn, LAST_MODIFIED)
-    .unwrap_or_else(|| chrono::Utc::now().timestamp());
-
-  let cells = map_ref
-    .get_with_txn::<_, MapRef>(txn, ROW_CELLS)
-    .map(|map_ref| (txn, &map_ref).into())
-    .unwrap_or_default();
-
-  Some(Row {
-    id,
-    database_id,
-    cells,
-    height: height as i32,
-    visibility,
-    created_at,
-    modified_at,
-  })
+pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
+  let any = map_ref.to_json(txn);
+  from_any(&any).ok()
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

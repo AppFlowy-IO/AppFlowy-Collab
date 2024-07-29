@@ -1,72 +1,12 @@
 use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 
-use collab::preclude::{Any, FillRef, Map, MapRef, ReadTxn, ToJson, TransactionMut, YrsValue};
-use collab::util::AnyExt;
-use serde::{Deserialize, Serialize};
+use collab::preclude::{Any, FillRef, Map, MapRef, TransactionMut};
 
 use crate::database::timestamp;
 use crate::rows::{RowId, CREATED_AT, LAST_MODIFIED};
 
-/// Store lists of cells
-/// The key is the id of the [Field]
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-pub struct Cells(HashMap<String, Cell>);
-
-impl Cells {
-  pub fn new() -> Self {
-    Self::default()
-  }
-
-  pub fn into_inner(self) -> HashMap<String, Cell> {
-    self.0
-  }
-
-  /// Returns a new instance of [Cells] from a [MapRef]
-  pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
-    self.into_inner().into_iter().for_each(|(k, cell)| {
-      let cell_map_ref: MapRef = map_ref.get_or_init(txn, k);
-      Any::from(cell).fill(txn, &cell_map_ref).unwrap()
-    });
-  }
-
-  /// Returns a [Cell] from the [Cells] by the [Field] id
-  pub fn cell_for_field_id(&self, field_id: &str) -> Option<&Cell> {
-    self.get(field_id)
-  }
-}
-
-impl<T: ReadTxn> From<(&'_ T, &MapRef)> for Cells {
-  fn from(params: (&'_ T, &MapRef)) -> Self {
-    let mut this = Self::new();
-    params.1.iter(params.0).for_each(|(k, v)| {
-      if let YrsValue::YMap(map_ref) = v {
-        this.insert(k.to_string(), map_ref.to_json(params.0).into_map().unwrap());
-      }
-    });
-    this
-  }
-}
-
-impl From<HashMap<String, Cell>> for Cells {
-  fn from(data: HashMap<String, Cell>) -> Self {
-    Self(data)
-  }
-}
-
-impl Deref for Cells {
-  type Target = HashMap<String, Cell>;
-
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-
-impl DerefMut for Cells {
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.0
-  }
-}
+pub type Cells = HashMap<String, Cell>;
 
 pub struct CellsUpdate<'a, 'b> {
   map_ref: &'a MapRef,

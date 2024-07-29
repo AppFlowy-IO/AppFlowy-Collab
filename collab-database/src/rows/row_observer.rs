@@ -1,6 +1,6 @@
 use crate::rows::{Cell, Row, RowId, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY};
 
-use collab::preclude::{DeepObservable, EntryChange, Event, MapRef, Subscription, TransactionMut};
+use collab::preclude::{DeepObservable, EntryChange, Event, MapRef, TransactionMut};
 use collab::preclude::{PathSegment, ToJson};
 use std::ops::Deref;
 
@@ -34,16 +34,11 @@ pub enum RowChange {
 
 pub(crate) fn subscribe_row_data_change(
   row_id: RowId,
-  row_data_map: &mut MapRef,
+  row_data_map: &MapRef,
   change_tx: RowChangeSender,
-) -> Subscription {
-  row_data_map.observe_deep(move |txn, events| {
+) {
+  row_data_map.observe_deep_with(row_id.as_str(), move |txn, events| {
     for event in events.iter() {
-      // trace!(
-      //   "row observe event: {:?}, {:?}",
-      //   event.path(),
-      //   event.target().to_json(txn)
-      // );
       match event {
         Event::Text(_) => {},
         Event::Array(_) => {},
@@ -52,9 +47,10 @@ pub(crate) fn subscribe_row_data_change(
         },
         Event::XmlFragment(_) => {},
         Event::XmlText(_) => {},
+        _ => {},
       }
     }
-  })
+  });
 }
 
 fn handle_map_event(

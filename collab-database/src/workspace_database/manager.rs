@@ -52,7 +52,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     collab_db: Weak<CollabKVDB>,
     collab_doc_state: DataSource,
     config: CollabPersistenceConfig,
-  ) -> Result<Arc<Mutex<Collab>>, DatabaseError>;
+  ) -> Result<Collab, DatabaseError>;
 }
 
 /// A [WorkspaceDatabase] indexes the databases within a workspace.
@@ -121,7 +121,7 @@ impl WorkspaceDatabase {
     Ok(())
   }
 
-  pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Arc<Mutex<Collab>>> {
+  pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Collab> {
     let collab_db = self.collab_db.upgrade()?;
     let mut collab_doc_state = DataSource::Disk;
     let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
@@ -401,7 +401,7 @@ impl WorkspaceDatabase {
     &self,
     database_id: &str,
     doc_state: DataSource,
-  ) -> Result<Arc<Mutex<Collab>>, DatabaseError> {
+  ) -> Result<Collab, DatabaseError> {
     self.collab_service.build_collab_with_config(
       self.uid,
       database_id,

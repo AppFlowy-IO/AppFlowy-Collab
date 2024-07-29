@@ -244,9 +244,9 @@ fn save_row(
   }
 }
 
-pub type FetchRowSender = tokio::sync::mpsc::Sender<Result<Arc<Mutex<Collab>>, DatabaseError>>;
+pub type FetchRowSender = tokio::sync::mpsc::Sender<Result<Collab, DatabaseError>>;
 pub type BatchFetchRowSender =
-  tokio::sync::mpsc::Sender<Vec<(String, Result<Arc<Mutex<Collab>>, DatabaseError>)>>;
+  tokio::sync::mpsc::Sender<Vec<(String, Result<Collab, DatabaseError>)>>;
 
 #[derive(Clone)]
 pub enum BlockTask {
