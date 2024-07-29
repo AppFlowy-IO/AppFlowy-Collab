@@ -118,7 +118,7 @@ impl FieldMap {
   }
 
   /// Delete a field with a transaction
-  pub fn delete_field_with_txn(&self, txn: &mut TransactionMut, field_id: &str) {
+  pub fn delete_field(&self, txn: &mut TransactionMut, field_id: &str) {
     self.container.remove(txn, field_id);
   }
 }

@@ -91,8 +91,10 @@ impl DatabaseRow {
   where
     F: FnOnce(RowUpdate),
   {
+    let data = self.data.clone();
+    let meta = self.meta.clone();
     let mut txn = self.collab.transact_mut();
-    let mut update = RowUpdate::new(&mut txn, &self.data, &self.meta);
+    let mut update = RowUpdate::new(&mut txn, data, meta);
 
     // Update the last modified timestamp before we call the update function.
     update = update.set_last_modified(timestamp());
@@ -103,10 +105,11 @@ impl DatabaseRow {
   where
     F: FnOnce(RowMetaUpdate),
   {
+    let meta = self.meta.clone();
     let mut txn = self.collab.transact_mut();
     match Uuid::parse_str(&self.body.row_id) {
       Ok(row_id) => {
-        let update = RowMetaUpdate::new(&mut txn, &self.meta, row_id);
+        let update = RowMetaUpdate::new(&mut txn, meta, row_id);
         f(update)
       },
       Err(e) => error!("🔴 can't update the row meta: {}", e),
@@ -149,6 +152,7 @@ pub struct DatabaseRowBody {
   uid: i64,
   row_id: RowId,
   data: MapRef,
+  #[allow(dead_code)]
   meta: MapRef,
   #[allow(dead_code)]
   comments: ArrayRef,
@@ -182,20 +186,6 @@ impl DatabaseRowBody {
       meta,
       comments,
     }
-  }
-
-  fn open(uid: i64, row_id: RowId, collab: &Collab) -> Option<Self> {
-    let txn = collab.context.transact();
-    let data: MapRef = collab.data.get_with_txn(&txn, DATABASE_ROW_DATA)?;
-    let meta: MapRef = collab.data.get_with_txn(&txn, META)?;
-    let comments: ArrayRef = collab.data.get_with_txn(&txn, COMMENT)?;
-    Some(DatabaseRowBody {
-      uid,
-      row_id,
-      data,
-      meta,
-      comments,
-    })
   }
 }
 
@@ -353,7 +343,7 @@ impl<'a, 'b> RowBuilder<'a, 'b> {
   where
     F: FnOnce(RowUpdate),
   {
-    let update = RowUpdate::new(self.txn, &self.map_ref, &self.meta_ref);
+    let update = RowUpdate::new(self.txn, self.map_ref.clone(), self.meta_ref.clone());
     f(update);
     self
   }
@@ -361,14 +351,14 @@ impl<'a, 'b> RowBuilder<'a, 'b> {
 }
 
 /// It used to update a [Row]
-pub struct RowUpdate<'a, 'b, 'c> {
-  map_ref: &'c MapRef,
-  meta_ref: &'c MapRef,
+pub struct RowUpdate<'a, 'b> {
+  map_ref: MapRef,
+  meta_ref: MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
-impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
-  pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRef, meta_ref: &'c MapRef) -> Self {
+impl<'a, 'b> RowUpdate<'a, 'b> {
+  pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: MapRef, meta_ref: MapRef) -> Self {
     Self {
       map_ref,
       txn,
@@ -386,9 +376,9 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
   );
 
   pub fn set_row_id(self, new_row_id: RowId, database_id: String) -> Self {
-    let old_row_meta = row_id_from_map_ref(self.txn, self.map_ref)
+    let old_row_meta = row_id_from_map_ref(self.txn, &self.map_ref)
       .and_then(|row_id| row_id.parse::<Uuid>().ok())
-      .map(|row_id| RowMeta::from_map_ref(self.txn, &row_id, self.meta_ref));
+      .map(|row_id| RowMeta::from_map_ref(self.txn, &row_id, &self.meta_ref));
 
     self.map_ref.insert(self.txn, ROW_ID, new_row_id.as_str());
 
@@ -401,7 +391,7 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
         new_row_meta.icon_url = old_row_meta.icon_url;
         new_row_meta.cover_url = old_row_meta.cover_url;
       }
-      new_row_meta.fill_map_ref(self.txn, &new_row_id, self.meta_ref);
+      new_row_meta.fill_map_ref(self.txn, &new_row_id, &self.meta_ref);
     }
 
     self
@@ -424,7 +414,7 @@ impl<'a, 'b, 'c> RowUpdate<'a, 'b, 'c> {
   }
 
   pub fn done(self) -> Option<Row> {
-    row_from_map_ref(self.map_ref, self.txn)
+    row_from_map_ref(&self.map_ref, self.txn)
   }
 }
 
@@ -585,7 +575,7 @@ pub fn mut_row_with_collab<F1: Fn(RowUpdate)>(collab: &mut Collab, mut_row: F1) 
     collab.data.get(&txn, DATABASE_ROW_DATA),
     collab.data.get(&txn, META),
   ) {
-    let update = RowUpdate::new(&mut txn, &data, &meta);
+    let update = RowUpdate::new(&mut txn, data, meta);
     mut_row(update);
   }
 }

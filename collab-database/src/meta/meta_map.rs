@@ -14,12 +14,12 @@ impl MetaMap {
   }
 
   /// Set the inline view id
-  pub fn set_inline_view_id_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
+  pub fn set_inline_view_id(&self, txn: &mut TransactionMut, view_id: &str) {
     self.container.insert(txn, DATABASE_INLINE_VIEW, view_id);
   }
 
   /// Get the inline view id
-  pub fn get_inline_view_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+  pub fn get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> Option<String> {
     self.container.get(txn, DATABASE_INLINE_VIEW)?.cast().ok()
   }
 }

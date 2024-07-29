@@ -58,7 +58,7 @@ impl ViewMap {
     }
   }
 
-  pub fn insert_view_with_txn(&self, txn: &mut TransactionMut, view: DatabaseView) {
+  pub fn insert_view(&self, txn: &mut TransactionMut, view: DatabaseView) {
     let map_ref: MapRef = self.container.get_or_init(txn, view.id.as_str());
     ViewBuilder::new(txn, map_ref).update(|update| {
       update
@@ -78,11 +78,7 @@ impl ViewMap {
     });
   }
 
-  pub fn get_view_group_setting_with_txn<T: ReadTxn>(
-    &self,
-    txn: &T,
-    view_id: &str,
-  ) -> Vec<GroupSettingMap> {
+  pub fn get_view_group_setting<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<GroupSettingMap> {
     if let Some(map_ref) = self.container.get_with_txn(txn, view_id) {
       group_setting_from_map_ref(txn, &map_ref)
     } else {
@@ -146,7 +142,7 @@ impl ViewMap {
     view_from_map_ref(&map_ref, txn)
   }
 
-  pub fn get_all_views_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseView> {
+  pub fn get_all_views<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseView> {
     self
       .container
       .iter(txn)
@@ -154,7 +150,7 @@ impl ViewMap {
       .collect::<Vec<_>>()
   }
 
-  pub fn get_all_views_meta_with_txn<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseViewMeta> {
+  pub fn get_all_views_meta<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseViewMeta> {
     self
       .container
       .iter(txn)
@@ -178,7 +174,7 @@ impl ViewMap {
     }
   }
 
-  pub fn get_row_orders_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<RowOrder> {
+  pub fn get_row_orders<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<RowOrder> {
     self
       .container
       .get_with_txn::<_, MapRef>(txn, view_id)
@@ -215,7 +211,7 @@ impl ViewMap {
     RowOrderArray::new(row_order_array).get_position_with_txn(txn, row_id.as_str())
   }
 
-  pub fn get_field_orders_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FieldOrder> {
+  pub fn get_field_orders<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<FieldOrder> {
     self
       .container
       .get_with_txn::<_, MapRef>(txn, view_id)
@@ -244,7 +240,7 @@ impl ViewMap {
     }
   }
 
-  pub fn update_all_views_with_txn<F>(&self, txn: &mut TransactionMut, f: F)
+  pub fn update_all_views<F>(&self, txn: &mut TransactionMut, f: F)
   where
     F: Fn(String, DatabaseViewUpdate),
   {
@@ -262,11 +258,11 @@ impl ViewMap {
     }
   }
 
-  pub fn clear_with_txn(&self, txn: &mut TransactionMut) {
+  pub fn clear(&self, txn: &mut TransactionMut) {
     self.container.clear(txn);
   }
 
-  pub fn delete_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
+  pub fn delete_view(&self, txn: &mut TransactionMut, view_id: &str) {
     self.container.remove(txn, view_id);
   }
 }

@@ -186,7 +186,7 @@ impl WorkspaceDatabase {
           collab_service: self.collab_service.clone(),
           notifier,
         };
-        let database = Database::get_or_create(database_id, context).ok()?;
+        let database = Database::new(database_id, context).ok()?;
         // The database is not exist in local disk, which means the rows of the database are not
         // loaded yet.
         if !is_exist {
@@ -257,7 +257,7 @@ impl WorkspaceDatabase {
     DatabaseMetaList::from_collab(&mut *lock)
       .add_database(&params.database_id, linked_views.into_iter().collect());
     let database_id = params.database_id.clone();
-    let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);
+    let mutex_database = MutexDatabase::new(Database::new_with_view(params, context)?);
     let database = Arc::new(mutex_database);
     self
       .databases

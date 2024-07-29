@@ -37,7 +37,7 @@ pub(crate) fn subscribe_row_data_change(
   row_data_map: &MapRef,
   change_tx: RowChangeSender,
 ) {
-  row_data_map.observe_deep_with(row_id.as_str(), move |txn, events| {
+  row_data_map.observe_deep_with("change", move |txn, events| {
     for event in events.iter() {
       match event {
         Event::Text(_) => {},
@@ -47,6 +47,7 @@ pub(crate) fn subscribe_row_data_change(
         },
         Event::XmlFragment(_) => {},
         Event::XmlText(_) => {},
+        #[allow(unreachable_patterns)]
         _ => {},
       }
     }

@@ -4,9 +4,9 @@ use uuid::Uuid;
 
 use crate::rows::{meta_id_from_row_id, RowMetaKey};
 
-pub struct RowMetaUpdate<'a, 'b, 'c> {
+pub struct RowMetaUpdate<'a, 'b> {
   #[allow(dead_code)]
-  map_ref: &'c MapRef,
+  map_ref: MapRef,
 
   #[allow(dead_code)]
   txn: &'a mut TransactionMut<'b>,
@@ -14,8 +14,8 @@ pub struct RowMetaUpdate<'a, 'b, 'c> {
   row_id: Uuid,
 }
 
-impl<'a, 'b, 'c> RowMetaUpdate<'a, 'b, 'c> {
-  pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: &'c MapRef, row_id: Uuid) -> Self {
+impl<'a, 'b, 'c> RowMetaUpdate<'a, 'b> {
+  pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: MapRef, row_id: Uuid) -> Self {
     Self {
       map_ref,
       txn,

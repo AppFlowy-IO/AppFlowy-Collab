@@ -8,7 +8,7 @@ use collab::core::collab::DataSource;
 use collab::preclude::{Collab, CollabBuilder};
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
-use collab_database::rows::{CellsBuilder, CreateRowParams, DatabaseRow, RowId};
+use collab_database::rows::{CreateRowParams, DatabaseRow, RowId};
 use collab_database::views::{
   CreateDatabaseParams, CreateViewParams, DatabaseLayout, FieldSettingsByFieldIdMap,
   FieldSettingsMap, LayoutSetting, LayoutSettings, OrderObjectPosition,
@@ -77,7 +77,7 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     }],
     ..Default::default()
   };
-  let database = Database::create_with_inline_view(params, context).unwrap();
+  let database = Database::new_with_view(params, context).unwrap();
   DatabaseTest {
     database,
     collab_db,
@@ -142,7 +142,7 @@ pub async fn create_database_with_db(
     }],
     ..Default::default()
   };
-  let database = Database::create_with_inline_view(params, context).unwrap();
+  let database = Database::new_with_view(params, context).unwrap();
   (
     collab_db.clone(),
     DatabaseTest {
@@ -175,7 +175,7 @@ pub fn restore_database_from_db(
     collab_service: collab_builder,
     notifier: DatabaseNotify::default(),
   };
-  let database = Database::get_or_create(database_id, context).unwrap();
+  let database = Database::new(database_id, context).unwrap();
   DatabaseTest {
     database,
     collab_db,
@@ -259,7 +259,7 @@ impl DatabaseTestBuilder {
       rows: self.rows,
       fields: self.fields,
     };
-    let database = Database::create_with_inline_view(params, context).unwrap();
+    let database = Database::new_with_view(params, context).unwrap();
     DatabaseTest {
       database,
       collab_db,

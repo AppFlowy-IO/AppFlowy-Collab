@@ -70,14 +70,14 @@ async fn insert_database_view_filter_to_filtering_field_id_test() {
 
 #[tokio::test]
 async fn remove_database_view_filter_test() {
-  let database_test = create_database_with_two_filters().await;
+  let mut database_test = create_database_with_two_filters().await;
   database_test.remove_filter("v1", "filter_1");
   let filter_1 = database_test.get_filter::<TestFilter>("v1", "filter_1");
   assert!(filter_1.is_none());
 }
 
 async fn create_database_with_two_filters() -> DatabaseTest {
-  let database_test = create_database_with_default_data(1, "1").await;
+  let mut database_test = create_database_with_default_data(1, "1").await;
   let filter_1 = TestFilter {
     id: "filter_1".to_string(),
     field_id: "f1".to_string(),
