@@ -35,20 +35,31 @@ impl DatabaseMetaList {
     Self::new(databases)
   }
 
+  /// Like [Self::add_database] but with a transaction
+  ///
+  pub fn add_database_with_txn(
+    &self,
+    txn: &mut TransactionMut,
+    database_id: &str,
+    view_ids: Vec<String>,
+  ) {
+    // Use HashSet to remove duplicates
+    let linked_views: HashSet<String> = view_ids.into_iter().collect();
+    let record = DatabaseMeta {
+      database_id: database_id.to_string(),
+      created_at: timestamp(),
+      linked_views: linked_views.into_iter().collect(),
+    };
+    let map_ref = self.array_ref.insert_map_with_txn(txn, None);
+    record.fill_map_ref(txn, &map_ref);
+  }
+
   /// Create a new [DatabaseMeta] for the given database id and view id
   /// use [Self::update_database] to attach more views to the existing database.
   ///
   pub fn add_database(&self, database_id: &str, view_ids: Vec<String>) {
     self.array_ref.with_transact_mut(|txn| {
-      // Use HashSet to remove duplicates
-      let linked_views: HashSet<String> = view_ids.into_iter().collect();
-      let record = DatabaseMeta {
-        database_id: database_id.to_string(),
-        created_at: timestamp(),
-        linked_views: linked_views.into_iter().collect(),
-      };
-      let map_ref = self.array_ref.insert_map_with_txn(txn, None);
-      record.fill_map_ref(txn, &map_ref);
+      self.add_database_with_txn(txn, database_id, view_ids);
     });
   }
 
