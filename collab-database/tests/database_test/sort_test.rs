@@ -2,8 +2,8 @@ use crate::database_test::helper::{create_database_with_default_data, DatabaseTe
 use crate::helper::{SortCondition, TestSort};
 use collab_database::views::{CreateViewParams, DatabaseLayout};
 
-#[test]
-fn create_database_view_with_sort_test() {
+#[tokio::test]
+async fn create_database_view_with_sort_test() {
   let database_test = create_database_with_two_sorts();
   let sorts = database_test.get_all_sorts::<TestSort>("v1");
   assert_eq!(sorts.len(), 2);
@@ -11,8 +11,8 @@ fn create_database_view_with_sort_test() {
   assert_eq!(sorts[1].condition, SortCondition::Descending);
 }
 
-#[test]
-fn get_database_view_sort_test() {
+#[tokio::test]
+async fn get_database_view_sort_test() {
   let mut database_test = create_database_with_two_sorts();
 
   database_test.insert_sort(
@@ -29,8 +29,8 @@ fn get_database_view_sort_test() {
   assert!(sort.is_some());
 }
 
-#[test]
-fn update_database_view_sort_test() {
+#[tokio::test]
+async fn update_database_view_sort_test() {
   let mut database_test = create_database_with_two_sorts();
   let sort_1 = TestSort {
     id: "s1".to_string(),
@@ -51,8 +51,8 @@ fn update_database_view_sort_test() {
   assert_eq!(sorts[0].condition, SortCondition::Ascending);
 }
 
-#[test]
-fn remove_all_database_view_sort_test() {
+#[tokio::test]
+async fn remove_all_database_view_sort_test() {
   let mut database_test = create_database_with_two_sorts();
   database_test.remove_all_sorts("v1");
 
@@ -60,8 +60,8 @@ fn remove_all_database_view_sort_test() {
   assert!(view.sorts.is_empty());
 }
 
-#[test]
-fn remove_database_view_sort_test() {
+#[tokio::test]
+async fn remove_database_view_sort_test() {
   let mut database_test = create_database_with_two_sorts();
   database_test.remove_sort("v1", "s1");
 
@@ -69,8 +69,8 @@ fn remove_database_view_sort_test() {
   assert_eq!(view.sorts.len(), 1);
 }
 
-#[test]
-fn reorder_database_view_sort_test() {
+#[tokio::test]
+async fn reorder_database_view_sort_test() {
   let mut database_test = create_database_with_two_sorts();
   database_test.move_sort("v1", "s2", "s1");
 

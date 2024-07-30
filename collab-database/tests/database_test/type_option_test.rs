@@ -8,8 +8,8 @@ use crate::database_test::helper::{
 };
 use crate::helper::{TestCheckboxTypeOption, TestDateFormat, TestDateTypeOption, TestTimeFormat};
 
-#[test]
-fn insert_checkbox_type_option_data_test() {
+#[tokio::test]
+async fn insert_checkbox_type_option_data_test() {
   let mut test = user_database_with_default_field();
   test.update_field("f1", |field_update| {
     field_update.update_type_options(|type_option_update| {
@@ -24,8 +24,8 @@ fn insert_checkbox_type_option_data_test() {
   assert!(type_option.is_selected);
 }
 
-#[test]
-fn insert_date_type_option_data_test() {
+#[tokio::test]
+async fn insert_date_type_option_data_test() {
   let mut test = user_database_with_default_field();
   let type_option = TestDateTypeOption {
     date_format: TestDateFormat::ISO,
@@ -45,8 +45,8 @@ fn insert_date_type_option_data_test() {
   assert_eq!(type_option.time_format, TestTimeFormat::TwelveHour);
 }
 
-#[test]
-fn update_date_type_option_data_test() {
+#[tokio::test]
+async fn update_date_type_option_data_test() {
   let mut test = user_database_with_default_field();
   let type_option = TestDateTypeOption {
     date_format: Default::default(),
@@ -80,8 +80,8 @@ fn update_date_type_option_data_test() {
   assert_eq!(type_option.time_format, TestTimeFormat::TwentyFourHour);
 }
 
-#[test]
-fn single_field_contains_multiple_type_options_test() {
+#[tokio::test]
+async fn single_field_contains_multiple_type_options_test() {
   let mut test = user_database_with_default_field();
   let date_tp = TestDateTypeOption {
     date_format: Default::default(),
@@ -111,8 +111,8 @@ fn single_field_contains_multiple_type_options_test() {
   assert_eq!(date_tp.time_format, TestTimeFormat::TwelveHour);
 }
 
-#[test]
-fn insert_multi_type_options_test() {
+#[tokio::test]
+async fn insert_multi_type_options_test() {
   let mut test = user_database_with_default_field();
 
   let mut type_options = TypeOptions::new();

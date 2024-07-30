@@ -1,3 +1,5 @@
+use crate::rows::RowId;
+
 #[derive(Debug, thiserror::Error)]
 pub enum DatabaseError {
   #[error("The database's id is invalid: {0}")]
@@ -11,6 +13,9 @@ pub enum DatabaseError {
 
   #[error("The database is not existing")]
   DatabaseNotExist,
+
+  #[error("The database row with id {0} doesn't exist")]
+  DatabaseRowNotExist(RowId),
 
   #[error("The database view is not existing")]
   DatabaseViewNotExist,

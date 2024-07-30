@@ -57,7 +57,7 @@ async fn observer_row_cell_test() {
     ))
     .unwrap();
 
-    db.update_row(&cloned_row_id, |row| {
+    db.update_row(cloned_row_id, |row| {
       row.update_cells(|cells| {
         cells.insert_cell(
           "f1",
@@ -84,8 +84,8 @@ async fn observer_row_cell_test() {
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
 
-    let db = cloned_database_test.lock().await;
-    db.update_row(&row_id, |row| {
+    let mut db = cloned_database_test.lock().await;
+    db.update_row(row_id, |row| {
       row.update_cells(|cells| {
         cells.insert_cell("f1", {
           let mut cell = new_cell_builder(1);
@@ -123,7 +123,7 @@ async fn observer_update_row_test() {
     db.create_row(CreateRowParams::new(row_id.clone(), database_id.clone()))
       .unwrap();
 
-    db.update_row(&row_id, |row| {
+    db.update_row(row_id, |row| {
       row.set_height(1000);
     });
   });

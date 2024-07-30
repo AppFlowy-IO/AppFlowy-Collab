@@ -9,22 +9,21 @@ use collab_entity::define::WORKSPACE_DATABASES;
 use crate::database::timestamp;
 
 /// Used to store list of [DatabaseMeta].
-pub struct DatabaseMetaList<'doc> {
+pub struct DatabaseMetaList {
   array_ref: ArrayRef,
-  txn: TransactionMut<'doc>,
 }
 
-impl<'doc> DatabaseMetaList<'doc> {
-  pub fn from_collab(collab: &'doc mut Collab) -> Self {
+impl DatabaseMetaList {
+  pub fn new(collab: &mut Collab) -> Self {
     let mut txn = collab.context.transact_mut();
     let array_ref = collab.data.get_or_init(&mut txn, WORKSPACE_DATABASES);
-    Self { array_ref, txn }
+    Self { array_ref }
   }
 
   /// Create a new [DatabaseMeta] for the given database id and view id
   /// use [Self::update_database] to attach more views to the existing database.
   ///
-  pub fn add_database(&mut self, database_id: &str, view_ids: Vec<String>) {
+  pub fn add_database(&self, txn: &mut TransactionMut, database_id: &str, view_ids: Vec<String>) {
     // Use HashSet to remove duplicates
     let linked_views: HashSet<String> = view_ids.into_iter().collect();
     let record = DatabaseMeta {
@@ -32,75 +31,80 @@ impl<'doc> DatabaseMetaList<'doc> {
       created_at: timestamp(),
       linked_views: linked_views.into_iter().collect(),
     };
-    let map_ref: MapRef = self
-      .array_ref
-      .push_back(&mut self.txn, MapPrelim::default());
-    record.fill_map_ref(&mut self.txn, &map_ref);
+    let map_ref: MapRef = self.array_ref.push_back(txn, MapPrelim::default());
+    record.fill_map_ref(txn, &map_ref);
   }
 
   /// Update the database by the given id
-  pub fn update_database(&mut self, database_id: &str, mut f: impl FnMut(&mut DatabaseMeta)) {
-    if let Some(index) = self.database_index_from_id(database_id) {
+  pub fn update_database(
+    &self,
+    txn: &mut TransactionMut,
+    database_id: &str,
+    mut f: impl FnMut(&mut DatabaseMeta),
+  ) {
+    if let Some(index) = self.database_index_from_id(txn, database_id) {
       if let Some(Some(map_ref)) = self
         .array_ref
-        .get(&self.txn, index)
+        .get(txn, index)
         .map(|value| value.cast().ok())
       {
-        if let Some(mut record) = DatabaseMeta::from_map_ref(&self.txn, &map_ref) {
+        if let Some(mut record) = DatabaseMeta::from_map_ref(txn, &map_ref) {
           f(&mut record);
-          self.array_ref.remove(&mut self.txn, index);
-          let map_ref = self
-            .array_ref
-            .insert(&mut self.txn, index, MapPrelim::default());
-          record.fill_map_ref(&mut self.txn, &map_ref);
+          self.array_ref.remove(txn, index);
+          let map_ref = self.array_ref.insert(txn, index, MapPrelim::default());
+          record.fill_map_ref(txn, &map_ref);
         }
       }
     }
   }
 
   /// Delete the database by the given id
-  pub fn delete_database(&mut self, database_id: &str) {
-    if let Some(index) = self.database_index_from_id(database_id) {
-      self.array_ref.remove(&mut self.txn, index);
+  pub fn delete_database(&self, txn: &mut TransactionMut, database_id: &str) {
+    if let Some(index) = self.database_index_from_id(txn, database_id) {
+      self.array_ref.remove(txn, index);
     }
   }
 
   /// Test if the database with the given id exists
-  pub fn contains(&self, database_id: &str) -> bool {
+  pub fn contains<T: ReadTxn>(&self, txn: &T, database_id: &str) -> bool {
     self
       .array_ref
-      .iter(&self.txn)
-      .any(|value| match database_id_from_value(&self.txn, value) {
+      .iter(txn)
+      .any(|value| match database_id_from_value(txn, value) {
         None => false,
         Some(id) => id == database_id,
       })
   }
 
   /// Return all databases with a Transaction
-  pub fn get_all_database_meta(&self) -> Vec<DatabaseMeta> {
+  pub fn get_all_database_meta<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseMeta> {
     self
       .array_ref
-      .iter(&self.txn)
+      .iter(txn)
       .flat_map(|value| {
         let map_ref: MapRef = value.cast().ok()?;
-        DatabaseMeta::from_map_ref(&self.txn, &map_ref)
+        DatabaseMeta::from_map_ref(txn, &map_ref)
       })
       .collect()
   }
 
   /// Return the a [DatabaseMeta] with the given view id
-  pub fn get_database_meta_with_view_id(&self, view_id: &str) -> Option<DatabaseMeta> {
-    let all = self.get_all_database_meta();
+  pub fn get_database_meta_with_view_id<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+  ) -> Option<DatabaseMeta> {
+    let all = self.get_all_database_meta(txn);
     all
       .into_iter()
       .find(|record| record.linked_views.iter().any(|id| id == view_id))
   }
 
-  fn database_index_from_id(&self, database_id: &str) -> Option<u32> {
+  fn database_index_from_id<T: ReadTxn>(&self, txn: &T, database_id: &str) -> Option<u32> {
     self
       .array_ref
-      .iter(&self.txn)
-      .position(|value| match database_id_from_value(&self.txn, value) {
+      .iter(txn)
+      .position(|value| match database_id_from_value(txn, value) {
         None => false,
         Some(id) => id == database_id,
       })

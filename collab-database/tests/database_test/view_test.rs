@@ -16,8 +16,8 @@ use crate::database_test::helper::{
 };
 use crate::helper::TestFilter;
 
-#[test]
-fn create_initial_database_test() {
+#[tokio::test]
+async fn create_initial_database_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
   assert_eq!(database_test.get_all_field_orders().len(), 0);
@@ -41,16 +41,16 @@ fn create_initial_database_test() {
   assert_eq!(inline_view.name, "my first database view".to_string());
 }
 
-#[test]
-fn create_database_with_single_view_test() {
+#[tokio::test]
+async fn create_database_with_single_view_test() {
   let database_test = create_database_with_default_data(1, "1");
   let view = database_test.get_view("v1").unwrap();
   assert_eq!(view.row_orders.len(), 3);
   assert_eq!(view.field_orders.len(), 3);
 }
 
-#[test]
-fn get_database_views_meta_test() {
+#[tokio::test]
+async fn get_database_views_meta_test() {
   let database_test = create_database_with_default_data(1, "1");
   let views = database_test.get_all_database_views_meta();
   assert_eq!(views.len(), 1);
@@ -58,8 +58,8 @@ fn get_database_views_meta_test() {
   assert_eq!(view.name, "my first database view");
 }
 
-#[test]
-fn create_same_database_view_twice_test() {
+#[tokio::test]
+async fn create_same_database_view_twice_test() {
   let mut database_test = create_database_with_default_data(1, "1");
   let params = CreateViewParams {
     database_id: "1".to_string(),
@@ -74,8 +74,8 @@ fn create_same_database_view_twice_test() {
   assert_eq!(view.name, "my second grid");
 }
 
-#[test]
-fn create_database_row_test() {
+#[tokio::test]
+async fn create_database_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let mut database_test = create_database_with_default_data(1, &database_id);
   let row_id = gen_row_id();
@@ -87,8 +87,8 @@ fn create_database_row_test() {
   assert_json_eq!(view.row_orders.last().unwrap().id, row_id);
 }
 
-#[test]
-fn create_database_field_test() {
+#[tokio::test]
+async fn create_database_field_test() {
   let mut database_test = create_database_with_default_data(1, "1");
 
   let field_id = nanoid!(4);
@@ -107,8 +107,8 @@ fn create_database_field_test() {
   assert_json_eq!(view.field_orders.last().unwrap().id, field_id);
 }
 
-#[test]
-fn create_database_view_with_filter_test() {
+#[tokio::test]
+async fn create_database_view_with_filter_test() {
   let mut database_test = create_database_with_default_data(1, "1");
   let filter_1 = TestFilter {
     id: "filter1".to_string(),
@@ -147,8 +147,8 @@ fn create_database_view_with_filter_test() {
   assert_eq!(filters[1].id, "filter2");
 }
 
-#[test]
-fn create_database_view_with_layout_setting_test() {
+#[tokio::test]
+async fn create_database_view_with_layout_setting_test() {
   let mut database_test = create_database_with_default_data(1, "1");
   let grid_setting =
     LayoutSettingBuilder::from([("1".into(), 123.into()), ("2".into(), "abc".into())]);
@@ -172,8 +172,8 @@ fn create_database_view_with_layout_setting_test() {
   );
 }
 
-#[test]
-fn delete_database_view_test() {
+#[tokio::test]
+async fn delete_database_view_test() {
   let mut database_test = create_database_with_default_data(1, "1");
   for i in 2..5 {
     let params = CreateViewParams {
@@ -198,8 +198,8 @@ fn delete_database_view_test() {
   assert!(!views.contains(&deleted_view_id));
 }
 
-#[test]
-fn duplicate_database_view_test() {
+#[tokio::test]
+async fn duplicate_database_view_test() {
   let mut database_test = create_database_with_default_data(1, "1");
 
   let views = database_test.get_all_views();
@@ -216,8 +216,8 @@ fn duplicate_database_view_test() {
   // modified and created time should also be different but the test completes within one second.
 }
 
-#[test]
-fn database_data_serde_test() {
+#[tokio::test]
+async fn database_data_serde_test() {
   let database_test = create_database_with_default_data(1, "1");
   let database_data = database_test.get_database_data();
 
@@ -227,16 +227,16 @@ fn database_data_serde_test() {
   assert_eq!(database_data.rows.len(), database_data2.rows.len());
 }
 
-#[test]
-fn get_database_view_layout_test() {
+#[tokio::test]
+async fn get_database_view_layout_test() {
   let database_test = create_database_with_default_data(1, "1");
 
   let layout = database_test.get_database_view_layout("v1");
   assert_eq!(layout, DatabaseLayout::Grid);
 }
 
-#[test]
-fn update_database_view_layout_test() {
+#[tokio::test]
+async fn update_database_view_layout_test() {
   let mut database_test = create_database_with_default_data(1, "1");
   database_test.update_database_view("v1", |update| {
     update.set_layout_type(DatabaseLayout::Calendar);
@@ -246,8 +246,8 @@ fn update_database_view_layout_test() {
   assert_eq!(layout, DatabaseLayout::Calendar);
 }
 
-#[test]
-fn validate_database_test() {
+#[tokio::test]
+async fn validate_database_test() {
   let database_test = create_database_with_default_data(1, "1");
   assert!(database_test.database.validate().is_ok())
 }

@@ -1,5 +1,5 @@
 use std::future::Future;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -40,6 +40,12 @@ impl Deref for WorkspaceDatabaseTest {
 
   fn deref(&self) -> &Self::Target {
     &self.inner
+  }
+}
+
+impl DerefMut for WorkspaceDatabaseTest {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.inner
   }
 }
 
@@ -120,7 +126,6 @@ pub async fn workspace_database_test_with_config(
       config.clone(),
     )
     .unwrap();
-  let collab = Arc::new(Mutex::new(collab));
   let inner = WorkspaceDatabase::open(uid, collab, Arc::downgrade(&collab_db), config, builder);
   WorkspaceDatabaseTest {
     uid,
@@ -149,13 +154,7 @@ pub fn workspace_database_with_db(
       config.clone(),
     )
     .unwrap();
-  WorkspaceDatabase::open(
-    uid,
-    Arc::new(Mutex::new(collab)),
-    collab_db,
-    config,
-    builder,
-  )
+  WorkspaceDatabase::open(uid, collab, collab_db, config, builder)
 }
 
 pub fn user_database_test_with_db(uid: i64, collab_db: Arc<CollabKVDB>) -> WorkspaceDatabaseTest {
@@ -171,7 +170,7 @@ pub fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(CollabKVDB::open(path).unwrap());
-  let w_database = user_database_test_with_db(uid, db);
+  let mut w_database = user_database_test_with_db(uid, db);
 
   w_database
     .create_database(create_database_params("d1"))

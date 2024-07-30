@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, Weak};
+use std::sync::Weak;
 
 use collab::preclude::{
   Any, ArrayRef, Collab, FillRef, Map, MapExt, MapRef, ReadTxn, ToJson, TransactionMut, WriteTxn,
@@ -15,7 +15,6 @@ use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 use tracing::error;
 use uuid::Uuid;
 
@@ -547,27 +546,6 @@ impl From<CreateRowParams> for Row {
     }
   }
 }
-
-#[derive(Clone)]
-pub struct MutexDatabaseRow(Arc<Mutex<DatabaseRow>>);
-
-impl MutexDatabaseRow {
-  pub fn new(inner: DatabaseRow) -> Self {
-    #[allow(clippy::arc_with_non_send_sync)]
-    Self(Arc::new(Mutex::new(inner)))
-  }
-}
-
-impl Deref for MutexDatabaseRow {
-  type Target = Arc<Mutex<DatabaseRow>>;
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-
-unsafe impl Sync for MutexDatabaseRow {}
-
-unsafe impl Send for MutexDatabaseRow {}
 
 pub fn mut_row_with_collab<F1: Fn(RowUpdate)>(collab: &mut Collab, mut_row: F1) {
   let mut txn = collab.context.transact_mut();

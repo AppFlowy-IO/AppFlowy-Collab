@@ -64,7 +64,7 @@ async fn insert_multi_type_options_test() {
 }
 
 async fn user_database_with_default_field() -> WorkspaceDatabaseTest {
-  let test = workspace_database_test(1);
+  let mut test = workspace_database_test(1);
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),

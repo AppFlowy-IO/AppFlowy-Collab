@@ -5,8 +5,8 @@ use crate::database_test::helper::{
   create_database, create_database_with_default_data, default_field_settings_by_layout,
 };
 
-#[test]
-fn create_single_field_test() {
+#[tokio::test]
+async fn create_single_field_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let mut database_test = create_database(1, &database_id);
   database_test.create_field(
@@ -23,8 +23,8 @@ fn create_single_field_test() {
   assert_eq!(view.field_orders[0].id, fields[0].id);
 }
 
-#[test]
-fn duplicate_field_test() {
+#[tokio::test]
+async fn duplicate_field_test() {
   let mut database_test = create_database_with_default_data(1, "1");
   let original_field = database_test.get_field("f1").unwrap();
   let (index, duplicated_field) = database_test
@@ -39,8 +39,8 @@ fn duplicate_field_test() {
   );
 }
 
-#[test]
-fn duplicate_field_test2() {
+#[tokio::test]
+async fn duplicate_field_test2() {
   let mut database_test = create_database_with_default_data(1, "1");
   let original_field = database_test.get_field("f3").unwrap();
   let (index, duplicated_field) = database_test
@@ -55,8 +55,8 @@ fn duplicate_field_test2() {
   );
 }
 
-#[test]
-fn create_multiple_field_test() {
+#[tokio::test]
+async fn create_multiple_field_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let mut database_test = create_database(1, &database_id);
   for i in 0..10 {
@@ -72,8 +72,8 @@ fn create_multiple_field_test() {
   assert_eq!(fields.len(), 10);
 }
 
-#[test]
-fn create_field_in_view_test() {
+#[tokio::test]
+async fn create_field_in_view_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let mut database_test = create_database(1, &database_id);
   let params = CreateViewParams {
@@ -122,8 +122,8 @@ fn create_field_in_view_test() {
   assert_eq!(fields[3].id, "f2");
 }
 
-#[test]
-fn delete_field_test() {
+#[tokio::test]
+async fn delete_field_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let mut database_test = create_database(1, &database_id);
   for i in 0..3 {
@@ -140,8 +140,8 @@ fn delete_field_test() {
   assert_eq!(fields.len(), 1);
 }
 
-#[test]
-fn delete_field_in_views_test() {
+#[tokio::test]
+async fn delete_field_in_views_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let mut database_test = create_database(1, &database_id);
   for i in 0..3 {
@@ -167,8 +167,8 @@ fn delete_field_in_views_test() {
   assert_eq!(view.field_orders.len(), 2);
 }
 
-#[test]
-fn field_order_in_view_test() {
+#[tokio::test]
+async fn field_order_in_view_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let mut database_test = create_database(1, &database_id);
   let params = CreateViewParams {
@@ -195,8 +195,8 @@ fn field_order_in_view_test() {
   }
 }
 
-#[test]
-fn get_field_in_order_test() {
+#[tokio::test]
+async fn get_field_in_order_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let mut database_test = create_database(1, &database_id);
   for i in 0..3 {
@@ -221,8 +221,8 @@ fn get_field_in_order_test() {
   assert_eq!(fields[2].id, "f0");
 }
 
-#[test]
-fn move_field_test() {
+#[tokio::test]
+async fn move_field_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let mut database_test = create_database(1, &database_id);
   let params = CreateViewParams {
@@ -256,8 +256,8 @@ fn move_field_test() {
   assert_eq!(view_2.field_orders[2].id, "f2");
 }
 
-#[test]
-fn move_field_to_out_of_index_test() {
+#[tokio::test]
+async fn move_field_to_out_of_index_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let mut database_test = create_database(1, &database_id);
   for i in 0..3 {

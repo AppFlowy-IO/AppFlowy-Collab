@@ -10,7 +10,7 @@ use crate::user_test::helper::{
 #[tokio::test]
 async fn create_database_test() {
   let uid = random_uid();
-  let test = workspace_database_test(uid);
+  let mut test = workspace_database_test(uid);
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -29,10 +29,10 @@ async fn create_database_test() {
   assert_eq!(views.len(), 1);
 }
 
-#[test]
-fn create_multiple_database_test() {
+#[tokio::test]
+async fn create_multiple_database_test() {
   let uid = random_uid();
-  let test = workspace_database_test(uid);
+  let mut test = workspace_database_test(uid);
   test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -63,10 +63,10 @@ fn create_multiple_database_test() {
   assert_eq!(all_databases[1].database_id, "d2");
 }
 
-#[test]
-fn delete_database_test() {
+#[tokio::test]
+async fn delete_database_test() {
   let uid = random_uid();
-  let test = workspace_database_test(uid);
+  let mut test = workspace_database_test(uid);
   test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -100,7 +100,7 @@ fn delete_database_test() {
 #[tokio::test]
 async fn duplicate_database_inline_view_test() {
   let uid = random_uid();
-  let test = workspace_database_test(uid);
+  let mut test = workspace_database_test(uid);
   let database_id = "d1".to_string();
   let database = test
     .create_database(CreateDatabaseParams {
@@ -136,7 +136,7 @@ async fn duplicate_database_inline_view_test() {
 
 #[tokio::test]
 async fn duplicate_database_view_test() {
-  let test = workspace_database_test(random_uid());
+  let mut test = workspace_database_test(random_uid());
 
   // create the database with inline view
   let database_id = "d1".to_string();
@@ -175,7 +175,7 @@ async fn duplicate_database_view_test() {
 
 #[tokio::test]
 async fn delete_database_linked_view_test() {
-  let test = workspace_database_test(random_uid());
+  let mut test = workspace_database_test(random_uid());
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -213,7 +213,7 @@ async fn delete_database_linked_view_test() {
 
 #[tokio::test]
 async fn delete_database_inline_view_test() {
-  let test = workspace_database_test(random_uid());
+  let mut test = workspace_database_test(random_uid());
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -249,7 +249,7 @@ async fn delete_database_inline_view_test() {
 
 #[tokio::test]
 async fn duplicate_database_data_test() {
-  let test = user_database_test_with_default_data(random_uid());
+  let mut test = user_database_test_with_default_data(random_uid());
   let original = test.get_database_with_view_id("v1").await.unwrap();
   let duplicate = test.duplicate_database("v1").await.unwrap();
   let original = original.lock().await;
@@ -294,7 +294,7 @@ async fn duplicate_database_data_test() {
 
 #[tokio::test]
 async fn get_database_by_view_id_test() {
-  let test = workspace_database_test(random_uid());
+  let mut test = workspace_database_test(random_uid());
   let _database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -324,7 +324,7 @@ async fn get_database_by_view_id_test() {
 #[tokio::test]
 async fn reopen_database_test() {
   let uid = random_uid();
-  let test = workspace_database_test(uid);
+  let mut test = workspace_database_test(uid);
   let view_id = gen_database_view_id();
   let params = make_default_grid(&view_id, "first view");
 

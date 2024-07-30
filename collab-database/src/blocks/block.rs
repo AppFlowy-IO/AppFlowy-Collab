@@ -1,5 +1,6 @@
 use dashmap::DashMap;
 
+use dashmap::mapref::one::{Ref, RefMut};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
@@ -21,8 +22,8 @@ use uuid::Uuid;
 use crate::blocks::task_controller::{BlockTask, BlockTaskController};
 use crate::error::DatabaseError;
 use crate::rows::{
-  meta_id_from_row_id, Cell, DatabaseRow, MutexDatabaseRow, Row, RowChangeSender, RowDetail, RowId,
-  RowMeta, RowMetaKey, RowMetaUpdate, RowUpdate,
+  meta_id_from_row_id, Cell, DatabaseRow, Row, RowChangeSender, RowDetail, RowId, RowMeta,
+  RowMetaKey, RowMetaUpdate, RowUpdate,
 };
 use crate::views::RowOrder;
 use crate::workspace_database::DatabaseCollabService;
@@ -44,7 +45,7 @@ pub struct Block {
   collab_service: Arc<dyn DatabaseCollabService>,
   task_controller: Arc<BlockTaskController>,
   sequence: Arc<AtomicU32>,
-  pub rows: Arc<DashMap<RowId, Arc<MutexDatabaseRow>>>,
+  pub rows: Arc<DashMap<RowId, DatabaseRow>>,
   pub notifier: Arc<Sender<BlockEvent>>,
   row_change_tx: RowChangeSender,
 }
@@ -77,7 +78,7 @@ impl Block {
     self.notifier.subscribe()
   }
 
-  pub fn batch_load_rows(&self, row_ids: Vec<RowId>) {
+  pub async fn batch_load_rows(&self, row_ids: Vec<RowId>) {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
     self.task_controller.add_task(BlockTask::BatchFetchRow {
       uid: self.uid,
@@ -91,30 +92,28 @@ impl Block {
     let collab_db = self.collab_db.clone();
     let cache = self.rows.clone();
     let weak_notifier = Arc::downgrade(&self.notifier);
-    tokio::spawn(async move {
-      while let Some(row_collabs) = rx.recv().await {
-        for (row_id, row_collab) in row_collabs {
-          match row_collab {
-            Ok(row_collab) => {
-              if let Err(err) = Self::init_collab_row(
-                &RowId::from(row_id),
-                weak_notifier.clone(),
-                uid,
-                change_tx.clone(),
-                collab_db.clone(),
-                cache.clone(),
-                row_collab,
-              ) {
-                error!("Can't init collab row: {:?}", err);
-              }
-            },
-            Err(err) => {
-              error!("Can't fetch the row from remote: {:?}", err);
-            },
-          }
+    while let Some(row_collabs) = rx.recv().await {
+      for (row_id, row_collab) in row_collabs {
+        match row_collab {
+          Ok(row_collab) => {
+            if let Err(err) = Self::init_collab_row(
+              &RowId::from(row_id),
+              weak_notifier.clone(),
+              uid,
+              change_tx.clone(),
+              collab_db.clone(),
+              cache.clone(),
+              row_collab,
+            ) {
+              error!("Can't init collab row: {:?}", err);
+            }
+          },
+          Err(err) => {
+            error!("Can't fetch the row from remote: {:?}", err);
+          },
         }
       }
-    });
+    }
   }
 
   pub fn create_rows<T>(&self, rows: Vec<T>) -> Vec<RowOrder>
@@ -158,33 +157,34 @@ impl Block {
 
     trace!("create_row: {}", row_id);
     if let Ok(collab) = self.create_collab_for_row(&row_id) {
-      let database_row = MutexDatabaseRow::new(DatabaseRow::new(
+      let database_row = DatabaseRow::new(
         self.uid,
         row_id.clone(),
         self.collab_db.clone(),
         collab,
         self.row_change_tx.clone(),
         Some(row),
-      ));
-      self.rows.insert(row_id, Arc::new(database_row));
+      );
+      self.rows.insert(row_id, database_row);
     }
     row_order
   }
 
   /// If the row with given id exists, return it. Otherwise, return an empty row with given id.
   /// An empty [Row] is a row with no cells.
-  pub fn get_row(&self, row_id: &RowId) -> Row {
-    self
-      .get_or_init_row(row_id)
-      .and_then(|row| row.blocking_lock().get_row())
-      .unwrap_or_else(|| Row::empty(row_id.clone(), &self.database_id))
+  pub fn row(&self, row_id: &RowId) -> Option<Ref<RowId, DatabaseRow>> {
+    self.rows.get(row_id)
+  }
+
+  /// If the row with given id exists, return it. Otherwise, return an empty row with given id.
+  /// An empty [Row] is a row with no cells.
+  pub fn row_mut(&mut self, row_id: &RowId) -> Option<RefMut<RowId, DatabaseRow>> {
+    self.rows.get_mut(row_id)
   }
 
   pub fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
-    self
-      .get_or_init_row(row_id)
-      .and_then(|row| row.blocking_lock().get_row_meta())
-      .or_else(|| Some(RowMeta::empty()))
+    let database_row = self.rows.get(row_id)?;
+    database_row.get_row_meta()
   }
 
   pub fn get_row_document_id(&self, row_id: &RowId) -> Option<String> {
@@ -199,8 +199,8 @@ impl Block {
     let mut rows = Vec::new();
     for row_order in row_orders {
       let row = self
-        .get_or_init_row(&row_order.id)
-        .and_then(|row| row.blocking_lock().get_row())
+        .row(&row_order.id)
+        .and_then(|row| row.get_row())
         .unwrap_or_else(|| Row::empty(row_order.id.clone(), &self.database_id));
       rows.push(row);
     }
@@ -208,42 +208,33 @@ impl Block {
   }
 
   pub fn get_cell(&self, row_id: &RowId, field_id: &str) -> Option<Cell> {
-    self
-      .get_or_init_row(row_id)
-      .and_then(|row| row.blocking_lock().get_cell(field_id))
+    self.row(row_id).and_then(|row| row.get_cell(field_id))
   }
 
-  pub fn delete_row(&self, row_id: &RowId) {
+  pub fn delete_row(&self, row_id: &RowId) -> Option<DatabaseRow> {
     let row = self.rows.remove(row_id);
     if let Some((_, row)) = row {
-      row.blocking_lock().delete();
+      row.delete();
+      Some(row)
+    } else {
+      None
     }
   }
 
-  pub fn update_row<F>(&self, row_id: &RowId, f: F)
+  pub fn update_row<F>(&mut self, row_id: RowId, f: F)
   where
     F: FnOnce(RowUpdate),
   {
-    let row = self.rows.get(row_id).map(|r| r.value().clone());
-    match row {
-      None => {
-        trace!(
-          "fail to update row. the row is not in the cache: {:?}. init it",
-          row_id
-        );
-        self.get_or_init_row(row_id);
-      },
-      Some(row) => {
-        row.blocking_lock().update::<F>(f);
-      },
+    if let Some(mut row) = self.get_or_init_row(row_id) {
+      row.update::<F>(f);
     }
   }
 
-  pub fn update_row_meta<F>(&self, row_id: &RowId, f: F)
+  pub fn update_row_meta<F>(&mut self, row_id: &RowId, f: F)
   where
     F: FnOnce(RowMetaUpdate),
   {
-    let row = self.rows.get(row_id).map(|r| r.value().clone());
+    let row = self.rows.get_mut(row_id);
     match row {
       None => {
         trace!(
@@ -251,79 +242,89 @@ impl Block {
           row_id
         )
       },
-      Some(row) => {
-        row.blocking_lock().update_meta::<F>(f);
+      Some(mut row) => {
+        row.value_mut().update_meta::<F>(f);
       },
     }
   }
 
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
-  fn get_or_init_row(&self, row_id: &RowId) -> Option<Arc<MutexDatabaseRow>> {
-    let collab_db = self.collab_db.upgrade()?;
-    let row = self.rows.get(row_id).map(|r| r.value().clone());
-    match row {
-      None => {
-        let is_exist = collab_db.read_txn().is_exist(self.uid, row_id.as_ref());
-        // Can't find the row in local disk, fetch it from remote.
-        if !is_exist {
-          trace!(
-            "Can't find the row in local disk, fetch it from remote: {:?}",
-            row_id
-          );
-          let (sender, mut rx) = tokio::sync::mpsc::channel(1);
-          self.task_controller.add_task(BlockTask::FetchRow {
-            uid: self.uid,
-            row_id: row_id.clone(),
-            seq: self.sequence.fetch_add(1, Ordering::SeqCst),
-            sender,
-          });
+  pub fn get_or_init_row(&mut self, row_id: RowId) -> Option<RefMut<RowId, DatabaseRow>> {
+    let result = self
+      .rows
+      .entry(row_id.clone())
+      .or_try_insert_with(|| self.init_row(row_id));
 
-          let weak_notifier = Arc::downgrade(&self.notifier);
-          let uid = self.uid;
-          let change_tx = self.row_change_tx.clone();
-          let weak_collab_db = self.collab_db.clone();
-          let cache = self.rows.clone();
-          let row_id = row_id.clone();
-          tokio::spawn(async move {
-            if let Some(Ok(row_collab)) = rx.recv().await {
-              if let Err(err) = Self::init_collab_row(
-                &row_id,
-                weak_notifier,
-                uid,
-                change_tx,
-                weak_collab_db.clone(),
-                cache,
-                row_collab,
-              ) {
-                error!("Can't init collab row: {:?}", err);
-                if let Some(collab_db) = weak_collab_db.upgrade() {
-                  let _ = collab_db.with_write_txn(|txn| {
-                    txn.delete_doc(uid, row_id.as_ref())?;
-                    Ok(())
-                  });
-                }
-              }
-            } else {
-              error!("Can't fetch the row from remote: {:?}", row_id);
-            }
-          });
-          None
-        } else {
-          let collab = self.create_collab_for_row(row_id).ok()?;
-          let database_row = DatabaseRow::new(
-            self.uid,
-            row_id.clone(),
-            self.collab_db.clone(),
-            collab,
-            self.row_change_tx.clone(),
-            None,
-          );
-          let arc_database_row = Arc::new(MutexDatabaseRow::new(database_row));
-          self.rows.insert(row_id.clone(), arc_database_row.clone());
-          Some(arc_database_row)
-        }
+    match result {
+      Ok(row) => Some(row),
+      Err(err) => {
+        warn!("failed to initialize row: {err}");
+        None
       },
-      Some(row) => Some(row),
+    }
+  }
+
+  fn init_row(&self, row_id: RowId) -> Result<DatabaseRow, DatabaseError> {
+    let collab_db = self
+      .collab_db
+      .upgrade()
+      .ok_or(DatabaseError::DatabaseNotExist)?;
+    let exists = collab_db.read_txn().is_exist(self.uid, row_id.as_ref());
+    // Can't find the row in local disk, fetch it from remote.
+    if !exists {
+      trace!(
+        "Can't find the row in local disk, fetch it from remote: {:?}",
+        row_id
+      );
+      let (sender, mut rx) = tokio::sync::mpsc::channel(1);
+      self.task_controller.add_task(BlockTask::FetchRow {
+        uid: self.uid,
+        row_id: row_id.clone(),
+        seq: self.sequence.fetch_add(1, Ordering::SeqCst),
+        sender,
+      });
+
+      let weak_notifier = Arc::downgrade(&self.notifier);
+      let uid = self.uid;
+      let change_tx = self.row_change_tx.clone();
+      let weak_collab_db = self.collab_db.clone();
+      let cache = self.rows.clone();
+      let rid = row_id.clone();
+      tokio::spawn(async move {
+        if let Some(Ok(row_collab)) = rx.recv().await {
+          if let Err(err) = Self::init_collab_row(
+            &rid,
+            weak_notifier,
+            uid,
+            change_tx,
+            weak_collab_db.clone(),
+            cache,
+            row_collab,
+          ) {
+            error!("Can't init collab row: {:?}", err);
+            if let Some(collab_db) = weak_collab_db.upgrade() {
+              let _ = collab_db.with_write_txn(|txn| {
+                txn.delete_doc(uid, rid.as_ref())?;
+                Ok(())
+              });
+            }
+          }
+        } else {
+          error!("Can't fetch the row from remote: {:?}", rid);
+        }
+      });
+      Err(DatabaseError::DatabaseRowNotExist(row_id))
+    } else {
+      let collab = self.create_collab_for_row(&row_id)?;
+      let database_row = DatabaseRow::new(
+        self.uid,
+        row_id.clone(),
+        self.collab_db.clone(),
+        collab,
+        self.row_change_tx.clone(),
+        None,
+      );
+      Ok(database_row)
     }
   }
 
@@ -333,7 +334,7 @@ impl Block {
     uid: i64,
     change_tx: RowChangeSender,
     collab_db: Weak<CollabKVDB>,
-    cache: Arc<DashMap<RowId, Arc<MutexDatabaseRow>>>,
+    cache: Arc<DashMap<RowId, DatabaseRow>>,
     row_collab: Collab,
   ) -> Result<(), CollabError> {
     if cache.contains_key(row_id) {
@@ -345,8 +346,7 @@ impl Block {
     let row_detail = RowDetail::from_collab(&row_collab);
 
     let row = DatabaseRow::new(uid, row_id.clone(), collab_db, row_collab, change_tx, None);
-    let arc_row = Arc::new(MutexDatabaseRow::new(row));
-    cache.insert(row_id.clone(), arc_row);
+    cache.insert(row_id.clone(), row);
 
     if let Some(notifier) = weak_notifier.upgrade() {
       match row_detail {
@@ -377,7 +377,7 @@ impl Block {
 async fn async_create_row<T: Into<Row>>(
   uid: i64,
   row: T,
-  cache: Arc<DashMap<RowId, Arc<MutexDatabaseRow>>>,
+  cache: Arc<DashMap<RowId, DatabaseRow>>,
   collab_db: Weak<CollabKVDB>,
   row_change_tx: RowChangeSender,
   collab_service: Arc<dyn DatabaseCollabService>,
@@ -400,14 +400,14 @@ async fn async_create_row<T: Into<Row>>(
   .await
   {
     trace!("async create row:{}", row_id);
-    let database_row = MutexDatabaseRow::new(DatabaseRow::new(
+    let database_row = DatabaseRow::new(
       uid,
       row_id.clone(),
       collab_db,
       collab,
       row_change_tx,
       Some(row),
-    ));
-    cache.insert(row_id, Arc::new(database_row));
+    );
+    cache.insert(row_id, database_row);
   }
 }

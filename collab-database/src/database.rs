@@ -160,14 +160,14 @@ impl Database {
     self.body.views.get_database_view_layout(&txn, view_id)
   }
 
-  pub fn load_all_rows(&self) {
+  pub async fn load_all_rows(&self) {
     let row_ids = self
       .get_inline_row_orders()
       .into_iter()
       .map(|row_order| row_order.id)
       .take(100)
       .collect::<Vec<_>>();
-    self.body.block.batch_load_rows(row_ids);
+    self.body.block.batch_load_rows(row_ids).await;
   }
 
   /// Return the database id with a transaction
@@ -223,9 +223,8 @@ impl Database {
       });
     };
 
-    let row = self.body.block.get_row(row_id);
-    self.body.block.delete_row(row_id);
-    Some(row)
+    let row = self.body.block.delete_row(row_id)?;
+    row.get_row()
   }
 
   pub fn remove_rows(&mut self, row_ids: &[RowId]) -> Vec<Row> {
@@ -240,16 +239,18 @@ impl Database {
 
     row_ids
       .iter()
-      .map(|row_id| {
-        let row = self.body.block.get_row(row_id);
-        self.body.block.delete_row(row_id);
-        row
+      .flat_map(|row_id| {
+        self
+          .body
+          .block
+          .delete_row(row_id)
+          .and_then(|row| row.get_row())
       })
       .collect()
   }
 
   /// Update the row
-  pub fn update_row<F>(&self, row_id: &RowId, f: F)
+  pub fn update_row<F>(&mut self, row_id: RowId, f: F)
   where
     F: FnOnce(RowUpdate),
   {
@@ -257,7 +258,7 @@ impl Database {
   }
 
   /// Update the meta of the row
-  pub fn update_row_meta<F>(&self, row_id: &RowId, f: F)
+  pub fn update_row_meta<F>(&mut self, row_id: &RowId, f: F)
   where
     F: FnOnce(RowMetaUpdate),
   {
@@ -272,8 +273,18 @@ impl Database {
   }
 
   /// Return the [Row] with the given row id.
-  pub fn get_row(&self, row_id: &RowId) -> Row {
-    self.body.block.get_row(row_id)
+  pub fn get_or_init_row(&mut self, row_id: RowId) -> Row {
+    self
+      .body
+      .block
+      .get_or_init_row(row_id.clone())
+      .and_then(|row| row.get_row())
+      .unwrap_or_else(|| Row::empty(row_id, &*self.get_database_id()))
+  }
+
+  /// Return the [Row] with the given row id.
+  pub fn get_row(&self, row_id: &RowId) -> Option<Row> {
+    self.body.block.row(row_id)?.get_row()
   }
 
   /// Return the [RowMeta] with the given row id.
@@ -283,8 +294,8 @@ impl Database {
 
   /// Return the [RowMeta] with the given row id.
   pub fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
-    let row = self.body.block.get_row(row_id);
     let meta = self.body.block.get_row_meta(row_id)?;
+    let row = self.body.block.row(row_id)?.get_row()?;
     RowDetail::new(row, meta)
   }
 
@@ -897,7 +908,7 @@ impl Database {
   /// Duplicate the row, and insert it after the original row.
   pub fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
     let database_id = self.get_database_id();
-    let row = self.body.block.get_row(row_id);
+    let row = self.body.block.row(row_id)?.get_row()?;
     let timestamp = timestamp();
     Some(CreateRowParams {
       id: gen_row_id(),
