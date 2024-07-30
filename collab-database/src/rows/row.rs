@@ -234,6 +234,7 @@ pub struct Row {
   pub height: i32,
   pub visibility: bool,
   pub created_at: i64,
+  #[serde(alias = "last_modified")]
   pub modified_at: i64,
 }
 
@@ -462,7 +463,13 @@ pub fn row_id_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<RowI
 /// Return a [Row] from a [MapRef]
 pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
   let any = map_ref.to_json(txn);
-  from_any(&any).ok()
+  match from_any(&any) {
+    Ok(row) => Some(row),
+    Err(e) => {
+      error!("Failed to convert to Row: {}", e);
+      None
+    },
+  }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -475,6 +482,7 @@ pub struct CreateRowParams {
   #[serde(skip)]
   pub row_position: OrderObjectPosition,
   pub created_at: i64,
+  #[serde(rename = "last_modified")]
   pub modified_at: i64,
 }
 

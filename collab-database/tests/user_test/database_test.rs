@@ -240,10 +240,11 @@ async fn delete_database_inline_view_test() {
   // there should be 4 views: inline-view v1 and created linked-views v2, v3 and v4.
   let views = db.get_all_views();
   assert_eq!(views.len(), 4);
+  drop(db);
 
   // After deleting the inline view, all linked views will be removed
   test.delete_view("d1", "v1").await;
-  let views = db.get_all_views();
+  let views = database.lock().await.get_all_views();
   assert_eq!(views.len(), 0);
 }
 

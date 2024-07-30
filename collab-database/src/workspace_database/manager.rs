@@ -15,10 +15,10 @@ use collab_plugins::CollabKVDB;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 
+use dashmap::DashMap;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use tokio::sync::Mutex;
 use tracing::{error, trace};
 
 pub type CollabDocStateByOid = HashMap<String, DataSource>;
@@ -71,8 +71,8 @@ pub struct WorkspaceDatabase {
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
-  databases: Arc<Mutex<HashMap<String, Arc<MutexDatabase>>>>,
-  removing_databases: Arc<Mutex<HashMap<String, Arc<MutexDatabase>>>>,
+  databases: DashMap<String, Arc<MutexDatabase>>,
+  removing_databases: Arc<DashMap<String, Arc<MutexDatabase>>>,
 }
 
 impl WorkspaceDatabase {
@@ -87,19 +87,17 @@ impl WorkspaceDatabase {
     T: DatabaseCollabService,
   {
     let collab_service = Arc::new(collab_service);
-    let databases = Arc::new(Mutex::new(HashMap::new()));
-    let removing_databases = Arc::new(Mutex::new(HashMap::new()));
     let meta_list = DatabaseMetaList::new(&mut collab);
 
     Self {
       uid,
       collab_db,
       collab,
-      databases,
       meta_list,
       config,
       collab_service,
-      removing_databases,
+      databases: DashMap::new(),
+      removing_databases: Arc::new(DashMap::new()),
     }
   }
 
@@ -154,17 +152,15 @@ impl WorkspaceDatabase {
     {
       return None;
     }
-    let database = self.databases.lock().await.get(database_id).cloned();
+    let database = self.databases.get(database_id).as_deref().cloned();
     let collab_db = self.collab_db.upgrade()?;
     match database {
       None => {
         // If the database is being removed, return the database back to the databases.
-        if let Some(database) = self.removing_databases.lock().await.remove(database_id) {
+        if let Some((_, database)) = self.removing_databases.remove(database_id) {
           trace!("Move the database:{} back to databases", database_id);
           self
             .databases
-            .lock()
-            .await
             .insert(database_id.to_string(), database.clone());
           return Some(database);
         }
@@ -192,8 +188,6 @@ impl WorkspaceDatabase {
         let database = Arc::new(MutexDatabase::new(database));
         self
           .databases
-          .lock()
-          .await
           .insert(database_id.to_string(), database.clone());
         Some(database)
       },
@@ -258,10 +252,7 @@ impl WorkspaceDatabase {
     let database_id = params.database_id.clone();
     let mutex_database = MutexDatabase::new(Database::new_with_view(params, context)?);
     let database = Arc::new(mutex_database);
-    self
-      .databases
-      .blocking_lock()
-      .insert(database_id, database.clone());
+    self.databases.insert(database_id, database.clone());
     Ok(database)
   }
 
@@ -309,30 +300,25 @@ impl WorkspaceDatabase {
         Ok(())
       });
     }
-    self.databases.blocking_lock().remove(database_id);
+    self.databases.remove(database_id);
   }
 
   pub fn open_database(&self, database_id: &str) -> Option<Arc<MutexDatabase>> {
     // TODO(nathan): refactor the get_database that split the database creation and database opening.
-    let database = self
-      .removing_databases
-      .blocking_lock()
-      .remove(database_id)?;
+    let (_, database) = self.removing_databases.remove(database_id)?;
     trace!("Move the database:{} back to databases", database_id);
     self
       .databases
-      .blocking_lock()
       .insert(database_id.to_string(), database.clone());
 
     Some(database)
   }
 
   pub fn close_database(&self, database_id: &str) {
-    if let Some(database) = self.databases.blocking_lock().remove(database_id) {
+    if let Some((_, database)) = self.databases.remove(database_id) {
       trace!("Move the database to removing_databases: {}", database_id);
       self
         .removing_databases
-        .blocking_lock()
         .insert(database_id.to_string(), database);
 
       let cloned_database_id = database_id.to_string();
@@ -340,12 +326,7 @@ impl WorkspaceDatabase {
       tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(120)).await;
         if let Some(removing_databases) = weak_removing_databases.upgrade() {
-          if removing_databases
-            .lock()
-            .await
-            .remove(&cloned_database_id)
-            .is_some()
-          {
+          if removing_databases.remove(&cloned_database_id).is_some() {
             trace!(
               "drop database {} from removing_databases",
               cloned_database_id

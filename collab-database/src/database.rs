@@ -284,7 +284,8 @@ impl Database {
 
   /// Return the [Row] with the given row id.
   pub fn get_row(&self, row_id: &RowId) -> Option<Row> {
-    self.body.block.row(row_id)?.get_row()
+    let row = self.body.block.row(row_id)?;
+    row.get_row()
   }
 
   /// Return the [RowMeta] with the given row id.
