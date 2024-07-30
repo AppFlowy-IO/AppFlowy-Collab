@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 use std::sync::{Arc, Weak};
 
@@ -19,7 +19,7 @@ pub use tokio_stream::wrappers::WatchStream;
 use crate::blocks::{Block, BlockEvent};
 use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
-use crate::fields::{Field, FieldChangeReceiver, FieldMap};
+use crate::fields::{Field, FieldChangeReceiver, FieldMap, FieldUpdate};
 use crate::meta::MetaMap;
 use crate::rows::{
   CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowChangeReceiver, RowDetail, RowId,
@@ -27,9 +27,9 @@ use crate::rows::{
 };
 use crate::views::{
   CalculationMap, CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator,
-  DatabaseLayout, DatabaseView, DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap,
-  FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder,
-  SortMap, ViewChangeReceiver, ViewMap,
+  DatabaseLayout, DatabaseView, DatabaseViewMeta, DatabaseViewUpdate, FieldOrder,
+  FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
+  OrderObjectPosition, RowOrder, SortMap, ViewChangeReceiver, ViewMap,
 };
 use crate::workspace_database::DatabaseCollabService;
 
@@ -145,6 +145,21 @@ impl Database {
     self.body.block.subscribe_event()
   }
 
+  pub fn get_all_field_orders(&self) -> Vec<FieldOrder> {
+    let txn = self.collab.transact();
+    self.body.fields.get_all_field_orders(&txn)
+  }
+
+  pub fn get_all_views(&self) -> Vec<DatabaseView> {
+    let txn = self.collab.transact();
+    self.body.views.get_all_views(&txn)
+  }
+
+  pub fn get_database_view_layout(&self, view_id: &str) -> DatabaseLayout {
+    let txn = self.collab.transact();
+    self.body.views.get_database_view_layout(&txn, view_id)
+  }
+
   pub fn load_all_rows(&self) {
     let row_ids = self
       .get_inline_row_orders()
@@ -176,6 +191,14 @@ impl Database {
         update.insert_row_order(&row_order, &OrderObjectPosition::default());
       });
     Ok(row_order)
+  }
+
+  pub fn update_database_view<F>(&mut self, view_id: &str, f: F)
+  where
+    F: FnOnce(DatabaseViewUpdate),
+  {
+    let mut txn = self.collab.transact_mut();
+    self.body.views.update_database_view(&mut txn, view_id, f);
   }
 
   /// Create a new row from the given view.
@@ -909,6 +932,11 @@ impl Database {
     }
   }
 
+  pub fn get_all_fields(&self) -> Vec<Field> {
+    let txn = self.collab.transact();
+    self.body.fields.get_all_fields(&txn)
+  }
+
   pub fn get_database_data(&self) -> DatabaseData {
     let txn = self.collab.transact();
 
@@ -985,6 +1013,38 @@ impl Database {
       self.body.views.delete_view(&mut txn, view_id);
       vec![view_id.to_string()]
     }
+  }
+
+  pub fn get_field(&self, field_id: &str) -> Option<Field> {
+    let txn = self.collab.transact();
+    self.body.fields.get_field(&txn, field_id)
+  }
+
+  pub fn insert_field(&mut self, field: Field) {
+    let mut txn = self.collab.transact_mut();
+    self.body.fields.insert_field(&mut txn, field);
+  }
+
+  pub fn update_field<F>(&mut self, field_id: &str, f: F)
+  where
+    F: FnOnce(FieldUpdate),
+  {
+    let mut txn = self.collab.transact_mut();
+    self.body.fields.update_field(&mut txn, field_id, f);
+  }
+}
+
+impl Deref for Database {
+  type Target = Collab;
+
+  fn deref(&self) -> &Self::Target {
+    &self.collab
+  }
+}
+
+impl DerefMut for Database {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.collab
   }
 }
 
@@ -1175,6 +1235,7 @@ impl DatabaseBody {
   fn new(database_id: String, mut context: DatabaseContext) -> (Self, Collab) {
     let mut txn = context.collab.context.transact_mut();
     let root: MapRef = context.collab.data.get_or_init(&mut txn, DATABASE);
+    root.insert(&mut txn, DATABASE_ID, &*database_id);
     let fields: MapRef = root.get_or_init(&mut txn, FIELDS); // { DATABASE: { FIELDS: {:} } }
     let views: MapRef = root.get_or_init(&mut txn, VIEWS); // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
     let metas: MapRef = root.get_or_init(&mut txn, METAS); // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }

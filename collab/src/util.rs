@@ -363,3 +363,31 @@ impl AnyExt for Any {
     }
   }
 }
+
+pub trait AnyMapExt {
+  fn get_as<V>(&self, key: &str) -> Option<V>
+  where
+    V: TryFrom<Any, Error = Any>;
+}
+
+impl AnyMapExt for HashMap<String, Any> {
+  fn get_as<V>(&self, key: &str) -> Option<V>
+  where
+    V: TryFrom<Any, Error = Any>,
+  {
+    let value = self.get(key)?.clone();
+    value.cast().ok()
+  }
+}
+
+impl AnyMapExt for Any {
+  fn get_as<V>(&self, key: &str) -> Option<V>
+  where
+    V: TryFrom<Any, Error = Any>,
+  {
+    match self {
+      Any::Map(map) => map.get_as(key),
+      _ => None,
+    }
+  }
+}

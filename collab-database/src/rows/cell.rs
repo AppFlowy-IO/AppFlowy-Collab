@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 
 use collab::preclude::{Any, FillRef, Map, MapRef, TransactionMut};
+use collab::util::AnyMapExt;
 
 use crate::database::timestamp;
 use crate::rows::{RowId, CREATED_AT, LAST_MODIFIED};
@@ -49,8 +50,7 @@ pub type CellBuilder = HashMap<String, Any>;
 pub type CellUpdate = MapRef;
 
 pub fn get_field_type_from_cell<T: From<i64>>(cell: &Cell) -> Option<T> {
-  let any = cell.get("field_type")?.clone();
-  let field_type: i64 = any.cast().ok()?;
+  let field_type: i64 = cell.get_as("field_type")?;
   Some(T::from(field_type))
 }
 

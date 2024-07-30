@@ -9,7 +9,7 @@ use collab::preclude::{Collab, CollabBuilder};
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
-use collab_database::rows::CreateRowParams;
+use collab_database::rows::{Cells, CreateRowParams};
 use collab_database::views::{CreateDatabaseParams, CreateViewParams, DatabaseLayout};
 use collab_database::workspace_database::{
   CollabDocStateByOid, CollabFuture, DatabaseCollabService, RowRelationChange,
@@ -96,10 +96,10 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
   }
 }
 
-pub async fn workspace_database_test(uid: i64) -> WorkspaceDatabaseTest {
+pub fn workspace_database_test(uid: i64) -> WorkspaceDatabaseTest {
   setup_log();
   let db = make_rocks_db();
-  user_database_test_with_db(uid, db).await
+  user_database_test_with_db(uid, db)
 }
 
 pub async fn workspace_database_test_with_config(
@@ -120,6 +120,7 @@ pub async fn workspace_database_test_with_config(
       config.clone(),
     )
     .unwrap();
+  let collab = Arc::new(Mutex::new(collab));
   let inner = WorkspaceDatabase::open(uid, collab, Arc::downgrade(&collab_db), config, builder);
   WorkspaceDatabaseTest {
     uid,
@@ -128,7 +129,7 @@ pub async fn workspace_database_test_with_config(
   }
 }
 
-pub async fn workspace_database_with_db(
+pub fn workspace_database_with_db(
   uid: i64,
   collab_db: Weak<CollabKVDB>,
   config: Option<CollabPersistenceConfig>,
@@ -148,14 +149,17 @@ pub async fn workspace_database_with_db(
       config.clone(),
     )
     .unwrap();
-  WorkspaceDatabase::open(uid, collab, collab_db, config, builder)
+  WorkspaceDatabase::open(
+    uid,
+    Arc::new(Mutex::new(collab)),
+    collab_db,
+    config,
+    builder,
+  )
 }
 
-pub async fn user_database_test_with_db(
-  uid: i64,
-  collab_db: Arc<CollabKVDB>,
-) -> WorkspaceDatabaseTest {
-  let inner = workspace_database_with_db(uid, Arc::downgrade(&collab_db), None).await;
+pub fn user_database_test_with_db(uid: i64, collab_db: Arc<CollabKVDB>) -> WorkspaceDatabaseTest {
+  let inner = workspace_database_with_db(uid, Arc::downgrade(&collab_db), None);
   WorkspaceDatabaseTest {
     uid,
     inner,
@@ -163,11 +167,11 @@ pub async fn user_database_test_with_db(
   }
 }
 
-pub async fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabaseTest {
+pub fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(CollabKVDB::open(path).unwrap());
-  let w_database = user_database_test_with_db(uid, db).await;
+  let w_database = user_database_test_with_db(uid, db);
 
   w_database
     .create_database(create_database_params("d1"))
@@ -177,25 +181,19 @@ pub async fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabase
 }
 
 fn create_database_params(database_id: &str) -> CreateDatabaseParams {
-  let row_1 = CreateRowParams::new(1, database_id.to_string()).with_cells(
-    CellsBuilder::new()
-      .insert_cell("f1", TestTextCell::from("1f1cell"))
-      .insert_cell("f2", TestTextCell::from("1f2cell"))
-      .insert_cell("f3", TestTextCell::from("1f3cell"))
-      .build(),
-  );
-  let row_2 = CreateRowParams::new(2, database_id.to_string()).with_cells(
-    CellsBuilder::new()
-      .insert_cell("f1", TestTextCell::from("2f1cell"))
-      .insert_cell("f2", TestTextCell::from("2f2cell"))
-      .build(),
-  );
-  let row_3 = CreateRowParams::new(3, database_id.to_string()).with_cells(
-    CellsBuilder::new()
-      .insert_cell("f1", TestTextCell::from("3f1cell"))
-      .insert_cell("f3", TestTextCell::from("3f3cell"))
-      .build(),
-  );
+  let row_1 = CreateRowParams::new(1, database_id.to_string()).with_cells(Cells::from([
+    ("f1".into(), TestTextCell::from("1f1cell").into()),
+    ("f2".into(), TestTextCell::from("1f2cell").into()),
+    ("f3".into(), TestTextCell::from("1f3cell").into()),
+  ]));
+  let row_2 = CreateRowParams::new(2, database_id.to_string()).with_cells(Cells::from([
+    ("f1".into(), TestTextCell::from("2f1cell").into()),
+    ("f2".into(), TestTextCell::from("2f2cell").into()),
+  ]));
+  let row_3 = CreateRowParams::new(3, database_id.to_string()).with_cells(Cells::from([
+    ("f1".into(), TestTextCell::from("3f1cell").into()),
+    ("f3".into(), TestTextCell::from("3f3cell").into()),
+  ]));
   let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);

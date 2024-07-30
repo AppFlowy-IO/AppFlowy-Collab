@@ -1,33 +1,33 @@
+use std::sync::Arc;
+
+use assert_json_diff::assert_json_eq;
+use nanoid::nanoid;
+
+use collab::preclude::Any;
 use collab_database::database::{gen_row_id, DatabaseData};
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
 use collab_database::views::{
   CreateViewParams, DatabaseLayout, LayoutSettingBuilder, OrderObjectPosition,
 };
-use nanoid::nanoid;
-use std::sync::Arc;
-
-use assert_json_diff::assert_json_eq;
-use collab::preclude::Any;
-use collab_entity::CollabType;
 
 use crate::database_test::helper::{
   create_database, create_database_with_default_data, default_field_settings_by_layout,
 };
 use crate::helper::TestFilter;
 
-#[tokio::test]
-async fn create_initial_database_test() {
+#[test]
+fn create_initial_database_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
-  let database_test = create_database(1, &database_id).await;
-  assert_eq!(database_test.fields.get_all_field_orders().len(), 0);
+  let database_test = create_database(1, &database_id);
+  assert_eq!(database_test.get_all_field_orders().len(), 0);
   assert_eq!(database_test.get_database_rows().len(), 0);
   assert_eq!(database_test.get_database_id(), database_id);
 
   let inline_view_id = database_test.get_inline_view_id();
   assert_eq!(inline_view_id, "v1".to_string());
 
-  let mut views = database_test.views.get_all_views();
+  let mut views = database_test.get_all_views();
   assert_eq!(views.len(), 1);
 
   let inline_view = views.remove(
@@ -41,26 +41,26 @@ async fn create_initial_database_test() {
   assert_eq!(inline_view.name, "my first database view".to_string());
 }
 
-#[tokio::test]
-async fn create_database_with_single_view_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
-  let view = database_test.views.get_view("v1").unwrap();
+#[test]
+fn create_database_with_single_view_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  let view = database_test.get_view("v1").unwrap();
   assert_eq!(view.row_orders.len(), 3);
   assert_eq!(view.field_orders.len(), 3);
 }
 
-#[tokio::test]
-async fn get_database_views_meta_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+#[test]
+fn get_database_views_meta_test() {
+  let database_test = create_database_with_default_data(1, "1");
   let views = database_test.get_all_database_views_meta();
   assert_eq!(views.len(), 1);
   let view = database_test.get_view("v1").unwrap();
   assert_eq!(view.name, "my first database view");
 }
 
-#[tokio::test]
-async fn create_same_database_view_twice_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+#[test]
+fn create_same_database_view_twice_test() {
+  let mut database_test = create_database_with_default_data(1, "1");
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v1".to_string(),
@@ -69,27 +69,27 @@ async fn create_same_database_view_twice_test() {
     ..Default::default()
   };
   database_test.create_linked_view(params).unwrap();
-  let view = database_test.views.get_view("v1").unwrap();
+  let view = database_test.get_view("v1").unwrap();
 
   assert_eq!(view.name, "my second grid");
 }
 
-#[tokio::test]
-async fn create_database_row_test() {
+#[test]
+fn create_database_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
-  let database_test = create_database_with_default_data(1, &database_id).await;
+  let mut database_test = create_database_with_default_data(1, &database_id);
   let row_id = gen_row_id();
   database_test
     .create_row(CreateRowParams::new(row_id.clone(), database_id.clone()))
     .unwrap();
 
-  let view = database_test.views.get_view("v1").unwrap();
+  let view = database_test.get_view("v1").unwrap();
   assert_json_eq!(view.row_orders.last().unwrap().id, row_id);
 }
 
-#[tokio::test]
-async fn create_database_field_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+#[test]
+fn create_database_field_test() {
+  let mut database_test = create_database_with_default_data(1, "1");
 
   let field_id = nanoid!(4);
   database_test.create_field(
@@ -103,13 +103,13 @@ async fn create_database_field_test() {
     default_field_settings_by_layout(),
   );
 
-  let view = database_test.views.get_view("v1").unwrap();
+  let view = database_test.get_view("v1").unwrap();
   assert_json_eq!(view.field_orders.last().unwrap().id, field_id);
 }
 
-#[tokio::test]
-async fn create_database_view_with_filter_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+#[test]
+fn create_database_view_with_filter_test() {
+  let mut database_test = create_database_with_default_data(1, "1");
   let filter_1 = TestFilter {
     id: "filter1".to_string(),
     field_id: "".to_string(),
@@ -136,7 +136,7 @@ async fn create_database_view_with_filter_test() {
   };
   database_test.create_linked_view(params).unwrap();
 
-  let view = database_test.views.get_view("v1").unwrap();
+  let view = database_test.get_view("v1").unwrap();
   let filters = view
     .filters
     .into_iter()
@@ -147,13 +147,11 @@ async fn create_database_view_with_filter_test() {
   assert_eq!(filters[1].id, "filter2");
 }
 
-#[tokio::test]
-async fn create_database_view_with_layout_setting_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
-  let grid_setting = LayoutSettingBuilder::new()
-    .insert_i64_value("1", 123)
-    .insert_any("2", "abc")
-    .build();
+#[test]
+fn create_database_view_with_layout_setting_test() {
+  let mut database_test = create_database_with_default_data(1, "1");
+  let grid_setting =
+    LayoutSettingBuilder::from([("1".into(), 123.into()), ("2".into(), "abc".into())]);
 
   let params = CreateViewParams {
     database_id: "1".to_string(),
@@ -165,7 +163,7 @@ async fn create_database_view_with_layout_setting_test() {
   .with_layout_setting(grid_setting);
   database_test.create_linked_view(params).unwrap();
 
-  let view = database_test.views.get_view("v1").unwrap();
+  let view = database_test.get_view("v1").unwrap();
   let grid_layout_setting = view.layout_settings.get(&DatabaseLayout::Grid).unwrap();
   assert_eq!(grid_layout_setting.get("1").unwrap(), &Any::BigInt(123));
   assert_eq!(
@@ -174,9 +172,9 @@ async fn create_database_view_with_layout_setting_test() {
   );
 }
 
-#[tokio::test]
-async fn delete_database_view_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+#[test]
+fn delete_database_view_test() {
+  let mut database_test = create_database_with_default_data(1, "1");
   for i in 2..5 {
     let params = CreateViewParams {
       database_id: "1".to_string(),
@@ -186,13 +184,12 @@ async fn delete_database_view_test() {
     database_test.create_linked_view(params).unwrap();
   }
 
-  let views = database_test.views.get_all_views();
+  let views = database_test.get_all_views();
   assert_eq!(views.len(), 4);
 
   let deleted_view_id = "v3".to_string();
-  database_test.views.delete_view(&deleted_view_id);
+  database_test.delete_view(&deleted_view_id);
   let views = database_test
-    .views
     .get_all_views()
     .iter()
     .map(|view| view.id.clone())
@@ -201,17 +198,17 @@ async fn delete_database_view_test() {
   assert!(!views.contains(&deleted_view_id));
 }
 
-#[tokio::test]
-async fn duplicate_database_view_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+#[test]
+fn duplicate_database_view_test() {
+  let mut database_test = create_database_with_default_data(1, "1");
 
-  let views = database_test.views.get_all_views();
+  let views = database_test.get_all_views();
   assert_eq!(views.len(), 1);
 
   let view = database_test.get_view("v1").unwrap();
   let duplicated_view = database_test.duplicate_linked_view("v1").unwrap();
 
-  let views = database_test.views.get_all_views();
+  let views = database_test.get_all_views();
   assert_eq!(views.len(), 2);
 
   assert_eq!(duplicated_view.name, format!("{}-copy", view.name));
@@ -219,9 +216,9 @@ async fn duplicate_database_view_test() {
   // modified and created time should also be different but the test completes within one second.
 }
 
-#[tokio::test]
-async fn database_data_serde_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+#[test]
+fn database_data_serde_test() {
+  let database_test = create_database_with_default_data(1, "1");
   let database_data = database_test.get_database_data();
 
   let json = database_data.to_json().unwrap();
@@ -230,29 +227,27 @@ async fn database_data_serde_test() {
   assert_eq!(database_data.rows.len(), database_data2.rows.len());
 }
 
-#[tokio::test]
-async fn get_database_view_layout_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+#[test]
+fn get_database_view_layout_test() {
+  let database_test = create_database_with_default_data(1, "1");
 
-  let layout = database_test.views.get_database_view_layout("v1");
+  let layout = database_test.get_database_view_layout("v1");
   assert_eq!(layout, DatabaseLayout::Grid);
 }
 
-#[tokio::test]
-async fn update_database_view_layout_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
-  database_test.views.update_database_view("v1", |update| {
+#[test]
+fn update_database_view_layout_test() {
+  let mut database_test = create_database_with_default_data(1, "1");
+  database_test.update_database_view("v1", |update| {
     update.set_layout_type(DatabaseLayout::Calendar);
   });
 
-  let layout = database_test.views.get_database_view_layout("v1");
+  let layout = database_test.get_database_view_layout("v1");
   assert_eq!(layout, DatabaseLayout::Calendar);
 }
 
-#[tokio::test]
-async fn validate_database_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
-  assert!(CollabType::Database
-    .validate_require_data(&database_test.database.get_collab().lock())
-    .is_ok())
+#[test]
+fn validate_database_test() {
+  let database_test = create_database_with_default_data(1, "1");
+  assert!(database_test.database.validate().is_ok())
 }
