@@ -121,7 +121,11 @@ impl Database {
   pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
     CollabType::Database
       .validate_require_data(collab)
-      .map_err(|_| DatabaseError::NoRequiredData)?;
+      .map_err(|err| {
+        tracing::error!("🔴Database validation error: {:?}", err);
+        println!("🔴Database validation error: {:?}", err);
+        DatabaseError::NoRequiredData
+      })?;
     Ok(())
   }
 
