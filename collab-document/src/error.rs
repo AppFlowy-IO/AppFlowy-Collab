@@ -35,4 +35,7 @@ pub enum DocumentError {
 
   #[error("Lack of document required data")]
   NoRequiredData,
+
+  #[error("Unable to parse document to plain text")]
+  ParseDocumentError,
 }
