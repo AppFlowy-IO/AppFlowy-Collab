@@ -3,8 +3,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Weak;
 
 use collab::preclude::{
-  Any, ArrayRef, Collab, FillRef, Map, MapExt, MapRef, ReadTxn, ToJson, TransactionMut, WriteTxn,
-  YrsValue,
+  Any, ArrayRef, Collab, FillRef, Map, MapExt, MapRef, ReadTxn, ToJson, TransactionMut, YrsValue,
 };
 
 use collab::preclude::encoding::serde::from_any;
@@ -78,19 +77,19 @@ impl DatabaseRow {
 
   pub fn get_row_order(&self) -> Option<RowOrder> {
     let txn = self.collab.transact();
-    row_order_from_map_ref(&self.data, &txn).map(|value| value.0)
+    row_order_from_map_ref(&self.body.data, &txn).map(|value| value.0)
   }
 
   pub fn get_cell(&self, field_id: &str) -> Option<Cell> {
     let txn = self.collab.transact();
-    cell_from_map_ref(&self.data, &txn, field_id)
+    cell_from_map_ref(&self.body.data, &txn, field_id)
   }
 
   pub fn update<F>(&mut self, f: F)
   where
     F: FnOnce(RowUpdate),
   {
-    let data = self.data.clone();
+    let data = self.body.data.clone();
     let meta = self.meta.clone();
     let mut txn = self.collab.transact_mut();
     let mut update = RowUpdate::new(&mut txn, data, meta);
@@ -161,9 +160,9 @@ impl DatabaseRowBody {
   pub fn new(uid: i64, row_id: RowId, collab: &mut Collab, init_data: Option<Row>) -> Self {
     let mut txn = collab.context.transact_mut();
 
-    let data: MapRef = txn.get_or_insert_map(DATABASE_ROW_DATA);
-    let meta: MapRef = txn.get_or_insert_map(META);
-    let comments: ArrayRef = data.get_or_init(&mut txn, COMMENT);
+    let data: MapRef = collab.data.get_or_init(&mut txn, DATABASE_ROW_DATA);
+    let meta: MapRef = collab.data.get_or_init(&mut txn, META);
+    let comments: ArrayRef = collab.data.get_or_init(&mut txn, COMMENT);
     if let Some(row) = init_data {
       RowBuilder::new(&mut txn, data.clone(), meta.clone())
         .update(|update| {

@@ -223,6 +223,7 @@ impl From<TestCheckboxTypeOption> for TypeOptionData {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct TestDateTypeOption {
+  #[serde(alias = "data_format")] // it's probably a typo, but we're in that universe somehow
   pub date_format: TestDateFormat,
   pub time_format: TestTimeFormat,
   #[serde(default)]

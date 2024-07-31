@@ -4,6 +4,7 @@ use assert_json_diff::assert_json_eq;
 use nanoid::nanoid;
 
 use collab::preclude::Any;
+use collab::util::AnyMapExt;
 use collab_database::database::{gen_row_id, DatabaseData};
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
@@ -165,7 +166,7 @@ async fn create_database_view_with_layout_setting_test() {
 
   let view = database_test.get_view("v1").unwrap();
   let grid_layout_setting = view.layout_settings.get(&DatabaseLayout::Grid).unwrap();
-  assert_eq!(grid_layout_setting.get("1").unwrap(), &Any::BigInt(123));
+  assert_eq!(grid_layout_setting.get_as::<i64>("1").unwrap(), 123);
   assert_eq!(
     grid_layout_setting.get("2").unwrap(),
     &Any::String(Arc::from("abc".to_string()))

@@ -213,7 +213,7 @@ async fn document_id_of_row_test() {
     .create_row(CreateRowParams::new(row_id, database_id.clone()))
     .unwrap();
 
-  let row = database_test.get_row(&row_order.id).unwrap();
+  let row = database_test.get_row(&row_order.id);
   let expected_document_id = meta_id_from_row_id(
     &Uuid::parse_str(row.id.as_str()).unwrap(),
     RowMetaKey::DocumentId,
@@ -262,5 +262,5 @@ fn row_document_id_test() {
 #[tokio::test]
 async fn validate_row_test() {
   let row = create_row(1, RowId::from(1));
-  assert!(row.validate().is_ok());
+  row.validate().unwrap();
 }

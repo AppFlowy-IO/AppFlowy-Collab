@@ -283,9 +283,12 @@ impl Database {
   }
 
   /// Return the [Row] with the given row id.
-  pub fn get_row(&self, row_id: &RowId) -> Option<Row> {
-    let row = self.body.block.row(row_id)?;
-    row.get_row()
+  pub fn get_row(&self, row_id: &RowId) -> Row {
+    if let Some(row) = self.body.block.row(row_id).and_then(|row| row.get_row()) {
+      row
+    } else {
+      Row::empty(row_id.clone(), &*self.get_database_id())
+    }
   }
 
   /// Return the [RowMeta] with the given row id.
