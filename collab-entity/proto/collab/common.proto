@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package collab;
+
+// Originating from an AppFlowy Client.
+message ClientOrigin {
+  // User id.
+  int64 uid = 1;
+  // Device id.
+  string device_id = 2;
+}
+
+// Unknown origin.
+message EmptyOrigin {}
+
+// Originating from the AppFlowy Server.
+message ServerOrigin {}
+
+// Origin of a collab message.
+message CollabOrigin {
+  oneof origin {
+    EmptyOrigin empty = 1;
+    ClientOrigin client = 2;
+    ServerOrigin server = 3;
+  }
+}
+
+// Collab Type.
+enum CollabType {
+  COLLAB_TYPE_UNKNOWN = 0;
+  COLLAB_TYPE_DOCUMENT = 1;
+  COLLAB_TYPE_DATABASE = 2;
+  COLLAB_TYPE_WORKSPACE_DATABASE = 3;
+  COLLAB_TYPE_FOLDER = 4;
+  COLLAB_TYPE_DATABASE_ROW = 5;
+  COLLAB_TYPE_USER_AWARENESS = 6;
+}

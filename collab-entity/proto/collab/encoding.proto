@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package collab;
+
+// yrs encoder version.
+enum EncoderVersion {
+  ENCODER_VERSION_UNKNOWN = 0;
+  ENCODER_VERSION_V1 = 1;
+  ENCODER_VERSION_V2 = 2;
+}
+
+// Encoded collaborative document.
+message EncodedCollab {
+  // yrs state vector
+  bytes state_vector = 1;
+  // yrs document state
+  bytes doc_state = 2;
+  // yrs encoder version used for the state vector and doc state
+  EncoderVersion encoder_version = 3;
+}

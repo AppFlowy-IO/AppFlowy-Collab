@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package collab;
+
+// Identifier of an active collab document sent over pubsub
+message ActiveCollabID {
+  // Workspace id the active collab belongs to.
+  string workspace_id = 1;
+  // Object id
+  string oid = 2;
+}
+
+// Update content sent over pubsub
+message CollabUpdateEvent {
+  oneof update {
+    // yrs update in encoded form v1
+    bytes update_v1 = 1;
+  }
+}
