@@ -163,7 +163,7 @@ impl State {
 
   pub fn set_snapshot_state(&self, new_state: SnapshotState) {
     let old_state = self.snapshot_state.swap(new_state.clone().into());
-    if &*old_state != &new_state {
+    if *old_state != new_state {
       let _ = self.snapshot_state_notifier.send(new_state);
     }
   }
