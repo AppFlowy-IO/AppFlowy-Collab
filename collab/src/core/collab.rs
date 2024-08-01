@@ -595,10 +595,10 @@ impl DataSource {
   pub fn as_update(&self) -> Result<Option<Update>, CollabError> {
     match self {
       DataSource::DocStateV1(doc_state) if !doc_state.is_empty() => {
-        Ok(Some(Update::decode_v1(&doc_state)?))
+        Ok(Some(Update::decode_v1(doc_state)?))
       },
       DataSource::DocStateV2(doc_state) if !doc_state.is_empty() => {
-        Ok(Some(Update::decode_v2(&doc_state)?))
+        Ok(Some(Update::decode_v2(doc_state)?))
       },
       _ => Ok(None),
     }

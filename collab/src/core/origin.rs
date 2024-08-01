@@ -56,7 +56,7 @@ impl<'a> From<&TransactionMut<'a>> for CollabOrigin {
 
 impl From<&Origin> for CollabOrigin {
   fn from(value: &Origin) -> Self {
-    serde_json::from_slice::<CollabOrigin>(value.as_ref()).unwrap_or_else(|_| CollabOrigin::Empty)
+    serde_json::from_slice::<CollabOrigin>(value.as_ref()).unwrap_or(CollabOrigin::Empty)
   }
 }
 

@@ -49,7 +49,7 @@ impl FillRef<ArrayRef> for Any {
     match self {
       Any::Array(array) => {
         shared_ref.clear(txn);
-        for value in array.to_vec() {
+        for value in array.iter().cloned() {
           let map_ref = shared_ref.push_back(txn, MapPrelim::default());
           value.fill(txn, &map_ref)?;
         }
