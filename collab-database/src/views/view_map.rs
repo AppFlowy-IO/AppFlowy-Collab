@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use collab::preclude::{
-  Array, ArrayRef, Map, MapExt, MapRef, ReadTxn, Subscription, TransactionMut,
+  Array, ArrayRef, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, TransactionMut,
 };
 
 use crate::database::timestamp;
@@ -59,7 +59,9 @@ impl ViewMap {
   }
 
   pub fn insert_view(&self, txn: &mut TransactionMut, view: DatabaseView) {
-    let map_ref: MapRef = self.container.get_or_init(txn, view.id.as_str());
+    let map_ref = self
+      .container
+      .insert(txn, view.id.as_str(), MapPrelim::default());
     ViewBuilder::new(txn, map_ref).update(|update| {
       update
         .set_view_id(&view.id)

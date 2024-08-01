@@ -29,7 +29,7 @@ use zip::ZipArchive;
 pub struct TestFilter {
   pub id: String,
   pub field_id: String,
-  #[serde(default)]
+  #[serde(default, rename = "ty")]
   pub field_type: TestFieldType,
   #[serde(default)]
   pub condition: i64,
@@ -94,6 +94,7 @@ impl From<TestGroup> for GroupMap {
 pub struct TestGroupSetting {
   pub id: String,
   pub field_id: String,
+  #[serde(rename = "ty")]
   pub field_type: i64,
   #[serde(default)]
   pub groups: Vec<TestGroup>,
@@ -143,6 +144,7 @@ impl From<TestGroupSetting> for GroupSettingMap {
 pub struct TestSort {
   pub id: String,
   pub field_id: String,
+  #[serde(rename = "ty")]
   pub field_type: i64,
   #[serde(default)]
   pub condition: SortCondition,
