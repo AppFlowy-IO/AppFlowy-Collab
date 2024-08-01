@@ -4,7 +4,7 @@ use collab_database::views::{CreateViewParams, DatabaseLayout};
 
 #[tokio::test]
 async fn create_database_view_with_sort_test() {
-  let database_test = create_database_with_two_sorts().await;
+  let database_test = create_database_with_two_sorts();
   let sorts = database_test.get_all_sorts::<TestSort>("v1");
   assert_eq!(sorts.len(), 2);
   assert_eq!(sorts[0].condition, SortCondition::Ascending);
@@ -13,7 +13,7 @@ async fn create_database_view_with_sort_test() {
 
 #[tokio::test]
 async fn get_database_view_sort_test() {
-  let database_test = create_database_with_two_sorts().await;
+  let mut database_test = create_database_with_two_sorts();
 
   database_test.insert_sort(
     "v1",
@@ -31,7 +31,7 @@ async fn get_database_view_sort_test() {
 
 #[tokio::test]
 async fn update_database_view_sort_test() {
-  let database_test = create_database_with_two_sorts().await;
+  let mut database_test = create_database_with_two_sorts();
   let sort_1 = TestSort {
     id: "s1".to_string(),
     field_id: "f1".to_string(),
@@ -41,7 +41,6 @@ async fn update_database_view_sort_test() {
   database_test.insert_sort("v1", sort_1);
 
   let sorts = database_test
-    .views
     .get_view("v1")
     .unwrap()
     .sorts
@@ -54,29 +53,28 @@ async fn update_database_view_sort_test() {
 
 #[tokio::test]
 async fn remove_all_database_view_sort_test() {
-  let database_test = create_database_with_two_sorts().await;
+  let mut database_test = create_database_with_two_sorts();
   database_test.remove_all_sorts("v1");
 
-  let view = database_test.views.get_view("v1").unwrap();
+  let view = database_test.get_view("v1").unwrap();
   assert!(view.sorts.is_empty());
 }
 
 #[tokio::test]
 async fn remove_database_view_sort_test() {
-  let database_test = create_database_with_two_sorts().await;
+  let mut database_test = create_database_with_two_sorts();
   database_test.remove_sort("v1", "s1");
 
-  let view = database_test.views.get_view("v1").unwrap();
+  let view = database_test.get_view("v1").unwrap();
   assert_eq!(view.sorts.len(), 1);
 }
 
 #[tokio::test]
 async fn reorder_database_view_sort_test() {
-  let database_test = create_database_with_two_sorts().await;
+  let mut database_test = create_database_with_two_sorts();
   database_test.move_sort("v1", "s2", "s1");
 
   let sorts = database_test
-    .views
     .get_view("v1")
     .unwrap()
     .sorts
@@ -89,8 +87,8 @@ async fn reorder_database_view_sort_test() {
   assert_eq!(sorts[1].id, "s1");
 }
 
-async fn create_database_with_two_sorts() -> DatabaseTest {
-  let database_test = create_database_with_default_data(1, "1").await;
+fn create_database_with_two_sorts() -> DatabaseTest {
+  let mut database_test = create_database_with_default_data(1, "1");
   let sort_1 = TestSort {
     id: "s1".to_string(),
     field_id: "f1".to_string(),

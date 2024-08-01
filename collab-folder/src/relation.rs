@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use collab::preclude::{Any, YrsValue};
-use collab::preclude::{Array, ArrayRef, ArrayRefWrapper, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{Any, MapExt, MapRef, YrsValue};
+use collab::preclude::{Array, ArrayRef, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 
 /// Used to keep track of the view hierarchy.
@@ -14,19 +14,12 @@ use serde::{Deserialize, Serialize};
 /// }
 ///
 pub struct ViewRelations {
-  container: MapRefWrapper,
+  container: MapRef,
 }
 
 impl ViewRelations {
-  pub fn new(container: MapRefWrapper) -> Self {
+  pub fn new(container: MapRef) -> Self {
     Self { container }
-  }
-
-  /// Move the child at `from` to `to` within the parent with `parent_id`.
-  pub fn move_child(&self, parent_id: &str, from: u32, to: u32) {
-    self.container.with_transact_mut(|txn| {
-      self.move_child_with_txn(txn, parent_id, from, to);
-    })
   }
 
   /// Dissociates a parent-child relationship within a given transaction.
@@ -121,19 +114,12 @@ impl ViewRelations {
     }
   }
 
-  /// Returns the children of the parent with `parent_id`.
-  /// The children are stored in an array.
-  pub fn get_children(&self, parent_id: &str) -> Option<ChildrenArray> {
-    let txn = self.container.transact();
-    self.get_children_with_txn(&txn, parent_id)
-  }
-
   pub fn get_children_with_txn<T: ReadTxn>(
     &self,
     txn: &T,
     parent_id: &str,
   ) -> Option<ChildrenArray> {
-    let array = self.container.get_array_ref_with_txn(txn, parent_id)?;
+    let array = self.container.get_with_txn(txn, parent_id)?;
     Some(ChildrenArray::from_array(array))
   }
 
@@ -142,14 +128,10 @@ impl ViewRelations {
     txn: &mut TransactionMut,
     parent_id: &str,
   ) -> ChildrenArray {
-    let array_ref = self
+    let array_ref: ArrayRef = self
       .container
-      .get_array_ref_with_txn(txn, parent_id)
-      .unwrap_or_else(|| {
-        self
-          .container
-          .insert_array_with_txn::<ViewIdentifier>(txn, parent_id, vec![])
-      });
+      .get_with_txn(txn, parent_id)
+      .unwrap_or_else(|| self.container.get_or_init_array(txn, parent_id));
     ChildrenArray::from_array(array_ref)
   }
 
@@ -175,27 +157,17 @@ impl ViewRelations {
 /// Handy wrapper around an array of children.
 /// It provides methods to manipulate the array.
 #[derive(Clone)]
-pub struct ChildrenArray(ArrayRefWrapper);
+pub struct ChildrenArray(ArrayRef);
 
 impl ChildrenArray {
-  pub fn from_array(array: ArrayRefWrapper) -> Self {
+  pub fn from_array(array: ArrayRef) -> Self {
     Self(array)
-  }
-
-  pub fn get_children(&self) -> RepeatedViewIdentifier {
-    let txn = self.0.transact();
-    self.get_children_with_txn(&txn)
   }
 
   pub fn get_children_with_txn<T: ReadTxn>(&self, txn: &T) -> RepeatedViewIdentifier {
     children_from_array_ref(txn, &self.0)
   }
 
-  pub fn move_child(&self, from: u32, to: u32) {
-    self.0.with_transact_mut(|txn| {
-      self.move_child_with_txn(txn, from, to);
-    });
-  }
   pub fn move_child_with_txn(&self, txn: &mut TransactionMut, from: u32, to: u32) {
     if let Some(YrsValue::Any(value)) = self.0.get(txn, from) {
       self.0.remove(txn, from);
@@ -208,26 +180,13 @@ impl ChildrenArray {
     txn: &mut TransactionMut,
     index: u32,
   ) -> Option<ViewIdentifier> {
-    self
-      .0
-      .remove_with_txn(txn, index)
-      .and_then(view_identifier_from_value)
+    let value = self.0.get(txn, index)?;
+    self.0.remove(txn, index);
+    view_identifier_from_value(value)
   }
 
   pub fn insert_child_with_txn(&self, txn: &mut TransactionMut, index: u32, child: ViewIdentifier) {
     self.0.insert(txn, index, child);
-  }
-
-  pub fn remove_child(&self, index: u32) {
-    self.0.with_transact_mut(|txn| {
-      self.0.remove_with_txn(txn, index);
-    })
-  }
-
-  pub fn add_children(&self, belongings: Vec<ViewIdentifier>) {
-    self
-      .0
-      .with_transact_mut(|txn| self.add_children_with_txn(txn, belongings, None))
   }
 
   /// Add children to the views.

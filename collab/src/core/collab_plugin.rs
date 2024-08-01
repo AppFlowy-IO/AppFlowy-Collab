@@ -1,5 +1,9 @@
 use crate::core::awareness::{AwarenessUpdate, Event};
+
+use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use yrs::{Doc, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
@@ -110,5 +114,95 @@ where
 
   fn destroy(&self) {
     (**self).destroy()
+  }
+}
+
+#[derive(Clone, Default)]
+pub struct Plugins(Arc<PluginsInner>);
+
+#[derive(Default)]
+struct PluginsInner {
+  has_cloud_storage: AtomicBool,
+  head: ArcSwapOption<Node>,
+}
+
+struct Node {
+  next: ArcSwapOption<Node>,
+  value: Box<dyn CollabPlugin>,
+}
+
+impl Plugins {
+  pub fn new<I>(plugins: I) -> Self
+  where
+    I: IntoIterator<Item = Box<dyn CollabPlugin>>,
+  {
+    let list = Plugins(Arc::new(PluginsInner {
+      has_cloud_storage: AtomicBool::new(false),
+      head: ArcSwapOption::new(None),
+    }));
+    for plugin in plugins {
+      list.push_front(plugin);
+    }
+    list
+  }
+
+  pub fn push_front(&self, plugin: Box<dyn CollabPlugin>) -> bool {
+    let inner = &*self.0;
+    if plugin.plugin_type() == CollabPluginType::CloudStorage {
+      let already_existed = inner
+        .has_cloud_storage
+        .swap(true, std::sync::atomic::Ordering::SeqCst);
+      if already_existed {
+        return false; // skip adding the plugin
+      }
+    }
+    let new = Arc::new(Node {
+      next: ArcSwapOption::new(None),
+      value: plugin,
+    });
+    inner.head.rcu(|old_head| {
+      new.next.store(old_head.clone());
+      Some(new.clone())
+    });
+    true
+  }
+
+  pub fn remove_all(&self) -> RemovedPluginsIter {
+    let inner = &*self.0;
+    let current = inner.head.swap(None);
+    inner
+      .has_cloud_storage
+      .store(false, std::sync::atomic::Ordering::SeqCst);
+    RemovedPluginsIter { current }
+  }
+
+  pub fn each<F>(&self, mut f: F)
+  where
+    F: FnMut(&Box<dyn CollabPlugin>),
+  {
+    let mut curr = self.0.head.load_full();
+    while let Some(node) = curr {
+      f(&node.value);
+      curr = node.next.load_full();
+    }
+  }
+}
+
+pub struct RemovedPluginsIter {
+  current: Option<Arc<Node>>,
+}
+
+impl Iterator for RemovedPluginsIter {
+  type Item = Box<dyn CollabPlugin>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    match self.current.take() {
+      None => None,
+      Some(node) => {
+        self.current = node.next.load_full();
+        let node = Arc::into_inner(node)?;
+        Some(node.value)
+      },
+    }
   }
 }

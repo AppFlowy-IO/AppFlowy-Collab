@@ -9,29 +9,30 @@ use collab_database::views::{
 };
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 use tokio::time::sleep;
 
 #[tokio::test]
 async fn observer_delete_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
-  let database_test = Arc::new(create_database(1, &database_id).await);
+  let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change();
 
   let row_id = gen_row_id();
   let cloned_row_id = row_id.clone();
+  let database_test = Arc::new(Mutex::new(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .create_row(CreateRowParams::new(gen_row_id(), database_id.clone()))
+    let mut db = cloned_database_test.lock().await;
+    db.create_row(CreateRowParams::new(gen_row_id(), database_id.clone()))
       .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams::new(
-        cloned_row_id.clone(),
-        database_id.clone(),
-      ))
-      .unwrap();
-    cloned_database_test.remove_row(&cloned_row_id);
+    db.create_row(CreateRowParams::new(
+      cloned_row_id.clone(),
+      database_id.clone(),
+    ))
+    .unwrap();
+    db.remove_row(&cloned_row_id);
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -48,31 +49,29 @@ async fn observer_delete_row_test() {
 #[tokio::test]
 async fn observer_delete_consecutive_rows_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
-  let database_test = Arc::new(create_database(1, &database_id).await);
+  let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change();
 
   let row_id_1 = gen_row_id();
   let row_id_2 = gen_row_id();
   let row_id_3 = gen_row_id();
   let row_id_4 = gen_row_id();
+  let database_test = Arc::new(Mutex::new(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
 
-    cloned_database_test
-      .create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
+    let mut db = cloned_database_test.lock().await;
+    db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
       .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
       .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
       .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
       .unwrap();
 
-    cloned_database_test.remove_rows(&[row_id_2, row_id_3]);
+    db.remove_rows(&[row_id_2, row_id_3]);
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -89,30 +88,28 @@ async fn observer_delete_consecutive_rows_test() {
 #[tokio::test]
 async fn observer_delete_non_consecutive_rows_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
-  let database_test = Arc::new(create_database(1, &database_id).await);
+  let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change();
 
   let row_id_1 = gen_row_id();
   let row_id_2 = gen_row_id();
   let row_id_3 = gen_row_id();
   let row_id_4 = gen_row_id();
+  let database_test = Arc::new(Mutex::new(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
+    let mut db = cloned_database_test.lock().await;
+    db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
       .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
       .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
       .unwrap();
-    cloned_database_test
-      .create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
+    db.create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
       .unwrap();
 
-    cloned_database_test.remove_rows(&[row_id_2, row_id_4]);
+    db.remove_rows(&[row_id_2, row_id_4]);
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -130,18 +127,18 @@ async fn observer_delete_non_consecutive_rows_test() {
 async fn observe_update_view_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
-  let database_test = Arc::new(create_database(1, &database_id).await);
+  let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change();
-  let cloned_database_test = database_test.clone();
   let view_id = database_test.get_inline_view_id();
 
+  let database_test = Arc::new(Mutex::new(database_test));
+  let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .views
-      .update_database_view(&view_id, |update| {
-        update.set_name("hello");
-      });
+    let mut db = cloned_database_test.lock().await;
+    db.update_database_view(&view_id, |update| {
+      update.set_name("hello");
+    });
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -156,7 +153,7 @@ async fn observe_update_view_test() {
 async fn observe_create_delete_view_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
-  let database_test = Arc::new(create_database(1, &database_id).await);
+  let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change();
   let create_view_id = uuid::Uuid::new_v4().to_string();
   let params = CreateViewParams {
@@ -167,10 +164,16 @@ async fn observe_create_delete_view_test() {
     ..Default::default()
   };
 
+  let database_test = Arc::new(Mutex::new(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    cloned_database_test.create_linked_view(params).unwrap();
+    cloned_database_test
+      .lock()
+      .await
+      .database
+      .create_linked_view(params)
+      .unwrap();
   });
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidCreateView { view } => view.name == "my second grid",
@@ -180,11 +183,15 @@ async fn observe_create_delete_view_test() {
   .unwrap();
 
   let cloned_database_test = database_test.clone();
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.lock().await.subscribe_view_change();
   let view_id = create_view_id.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    cloned_database_test.delete_view(&view_id);
+    cloned_database_test
+      .lock()
+      .await
+      .database
+      .delete_view(&view_id);
   });
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidDeleteView { view_id } => view_id == &create_view_id,
@@ -198,20 +205,19 @@ async fn observe_create_delete_view_test() {
 async fn observe_database_view_layout_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
-  let database_test = Arc::new(create_database(1, &database_id).await);
+  let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change();
-
-  let cloned_database_test = database_test.clone();
   let update_view_id = database_test.get_inline_view_id();
-
   let cloned_update_view_id = update_view_id.clone();
+
+  let database_test = Arc::new(Mutex::new(database_test));
+  let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .views
-      .update_database_view(&cloned_update_view_id, |update| {
-        update.set_layout_type(DatabaseLayout::Calendar);
-      });
+    let mut db = cloned_database_test.lock().await;
+    db.update_database_view(&cloned_update_view_id, |update| {
+      update.set_layout_type(DatabaseLayout::Calendar);
+    });
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -229,24 +235,22 @@ async fn observe_database_view_layout_test() {
 async fn observe_database_view_filter_create_delete_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
-  let database_test = Arc::new(create_database(1, &database_id).await);
+  let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change();
-
-  let cloned_database_test = database_test.clone();
   let update_view_id = database_test.get_inline_view_id();
 
+  let database_test = Arc::new(Mutex::new(database_test));
+
   // create filter
+  let cloned_database_test = database_test.clone();
   let cloned_update_view_id = update_view_id.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .views
-      .update_database_view(&cloned_update_view_id, |update| {
-        let filter = FilterMapBuilder::new()
-          .insert_str_value("filter_id", "123")
-          .build();
-        update.set_filters(vec![filter]);
-      });
+    let mut db = cloned_database_test.lock().await;
+    db.update_database_view(&cloned_update_view_id, |update| {
+      let filter = FilterMapBuilder::from([("filter_id".into(), "123".into())]);
+      update.set_filters(vec![filter]);
+    });
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -263,14 +267,13 @@ async fn observe_database_view_filter_create_delete_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .views
-      .update_database_view(&cloned_update_view_id, |update| {
-        update.set_filters(vec![]);
-      });
+    let mut db = cloned_database_test.lock().await;
+    db.update_database_view(&cloned_update_view_id, |update| {
+      update.set_filters(vec![]);
+    });
   });
 
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.lock().await.database.subscribe_view_change();
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateFilter { view_id } => &update_view_id == view_id,
     _ => false,
@@ -283,25 +286,25 @@ async fn observe_database_view_filter_create_delete_test() {
 async fn observe_database_view_sort_create_delete_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
-  let database_test = Arc::new(create_database(1, &database_id).await);
+  let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change();
-
-  let cloned_database_test = database_test.clone();
   let update_view_id = database_test.get_inline_view_id();
+
+  let database_test = Arc::new(Mutex::new(database_test));
+  let cloned_database_test = database_test.clone();
 
   // create sort
   let cloned_update_view_id = update_view_id.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .views
-      .update_database_view(&cloned_update_view_id, |update| {
-        let filter = SortMapBuilder::new()
-          .insert_str_value("sort_id", "123")
-          .insert_str_value("desc", "true")
-          .build();
-        update.set_sorts(vec![filter]);
-      });
+    let mut db = cloned_database_test.lock().await;
+    db.update_database_view(&cloned_update_view_id, |update| {
+      let filter = SortMapBuilder::from([
+        ("sort_id".into(), "123".into()),
+        ("desc".into(), "true".into()),
+      ]);
+      update.set_sorts(vec![filter]);
+    });
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -318,14 +321,13 @@ async fn observe_database_view_sort_create_delete_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .views
-      .update_database_view(&cloned_update_view_id, |update| {
-        update.set_sorts(vec![]);
-      });
+    let mut db = cloned_database_test.lock().await;
+    db.update_database_view(&cloned_update_view_id, |update| {
+      update.set_sorts(vec![]);
+    });
   });
 
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.lock().await.database.subscribe_view_change();
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateSort { view_id } => &update_view_id == view_id,
     _ => false,
@@ -338,25 +340,25 @@ async fn observe_database_view_sort_create_delete_test() {
 async fn observe_database_view_group_create_delete_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
-  let database_test = Arc::new(create_database(1, &database_id).await);
+  let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change();
-
-  let cloned_database_test = database_test.clone();
   let update_view_id = database_test.get_inline_view_id();
+
+  let database_test = Arc::new(Mutex::new(database_test));
+  let cloned_database_test = database_test.clone();
 
   // create group setting
   let cloned_update_view_id = update_view_id.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .views
-      .update_database_view(&cloned_update_view_id, |update| {
-        let group_setting = GroupSettingBuilder::new()
-          .insert_str_value("group_id", "123")
-          .insert_str_value("desc", "true")
-          .build();
-        update.set_groups(vec![group_setting]);
-      });
+    let mut db = cloned_database_test.lock().await;
+    db.update_database_view(&cloned_update_view_id, |update| {
+      let group_setting = GroupSettingBuilder::from([
+        ("group_id".into(), "123".into()),
+        ("desc".into(), "true".into()),
+      ]);
+      update.set_groups(vec![group_setting]);
+    });
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -373,14 +375,13 @@ async fn observe_database_view_group_create_delete_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    cloned_database_test
-      .views
-      .update_database_view(&cloned_update_view_id, |update| {
-        update.set_groups(vec![]);
-      });
+    let mut db = cloned_database_test.lock().await;
+    db.update_database_view(&cloned_update_view_id, |update| {
+      update.set_groups(vec![]);
+    });
   });
 
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.lock().await.database.subscribe_view_change();
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateGroupSetting { view_id } => &update_view_id == view_id,
     _ => false,

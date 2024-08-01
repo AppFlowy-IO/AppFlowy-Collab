@@ -4,9 +4,9 @@ use std::sync::Arc;
 use anyhow::bail;
 use collab::core::collab::IndexContentSender;
 use collab::preclude::{
-  Any, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, Subscription, TransactionMut, YrsValue,
+  Any, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, TransactionMut, YrsValue,
 };
-use parking_lot::RwLock;
+use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 use tracing::{instrument, trace};
@@ -35,11 +35,10 @@ pub fn timestamp() -> i64 {
 
 pub struct ViewsMap {
   uid: UserId,
-  pub(crate) container: MapRefWrapper,
+  pub(crate) container: MapRef,
   pub(crate) view_relations: Arc<ViewRelations>,
   pub(crate) section_map: Arc<SectionMap>,
-  cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
-
+  cache: Arc<DashMap<String, Arc<View>>>,
   #[allow(dead_code)]
   subscription: Option<Subscription>,
   #[allow(dead_code)]
@@ -49,7 +48,7 @@ pub struct ViewsMap {
 impl ViewsMap {
   pub fn new(
     uid: &UserId,
-    mut root: MapRefWrapper,
+    mut root: MapRef,
     change_tx: Option<ViewChangeSender>,
     view_relations: Arc<ViewRelations>,
     section_map: Arc<SectionMap>,
@@ -57,7 +56,7 @@ impl ViewsMap {
     views: HashMap<String, Arc<View>>,
   ) -> ViewsMap {
     trace!("number of views in folder: {}", views.len());
-    let view_cache = Arc::new(RwLock::new(views));
+    let view_cache = Arc::new(DashMap::from_iter(views));
     let subscription = change_tx.as_ref().map(|change_tx| {
       subscribe_view_change(
         uid,
@@ -80,8 +79,10 @@ impl ViewsMap {
     }
   }
 
-  pub fn move_child(&self, parent_id: &str, from: u32, to: u32) {
-    self.view_relations.move_child(parent_id, from, to);
+  pub fn move_child(&self, txn: &mut TransactionMut, parent_id: &str, from: u32, to: u32) {
+    self
+      .view_relations
+      .move_child_with_txn(txn, parent_id, from, to);
     self.remove_cache_view(parent_id);
   }
 
@@ -89,20 +90,22 @@ impl ViewsMap {
   /// Why don't we use the move method to replace dissociate_parent_child and associate_parent_child?
   /// Because the views and workspaces are stored in two separate maps, we can't directly move a view from one map to another.
   /// So, we have to dissociate the relationship between parent_id and view_id, and then associate the relationship between parent_id and view_id.
-  pub fn dissociate_parent_child(&self, parent_id: &str, view_id: &str) {
-    self.container.with_transact_mut(|txn| {
-      self.dissociate_parent_child_with_txn(txn, parent_id, view_id);
-    })
+  pub fn dissociate_parent_child(&self, txn: &mut TransactionMut, parent_id: &str, view_id: &str) {
+    self.dissociate_parent_child_with_txn(txn, parent_id, view_id);
   }
 
   /// Establish a relationship between the parent_id and view_id, and insert the view below the prev_id.
   /// Why don't we use the move method to replace dissociate_parent_child and associate_parent_child?
   /// Because the view and workspace are stored in two separate maps, we can't directly move the view from one map to another.
   /// So we have to dissociate the relationship between parent_id and view_id, and then associate the relationship between parent_id and view_id.
-  pub fn associate_parent_child(&self, parent_id: &str, view_id: &str, prev_id: Option<String>) {
-    self.container.with_transact_mut(|txn| {
-      self.associate_parent_child_with_txn(txn, parent_id, view_id, prev_id);
-    })
+  pub fn associate_parent_child(
+    &self,
+    txn: &mut TransactionMut,
+    parent_id: &str,
+    view_id: &str,
+    prev_id: Option<String>,
+  ) {
+    self.associate_parent_child_with_txn(txn, parent_id, view_id, prev_id);
   }
 
   pub fn dissociate_parent_child_with_txn(
@@ -130,26 +133,15 @@ impl ViewsMap {
     self.remove_cache_view(parent_id);
   }
 
-  pub fn remove_child(&self, parent_id: &str, child_index: u32) {
-    self.container.with_transact_mut(|txn| {
-      if let Some(parent) = self.view_relations.get_children_with_txn(txn, parent_id) {
-        if let Some(identifier) = parent.remove_child_with_txn(txn, child_index) {
-          self.delete_views_with_txn(txn, vec![identifier.id])
-        }
+  pub fn remove_child(&self, txn: &mut TransactionMut, parent_id: &str, child_index: u32) {
+    if let Some(parent) = self.view_relations.get_children_with_txn(txn, parent_id) {
+      if let Some(identifier) = parent.remove_child_with_txn(txn, child_index) {
+        self.delete_views_with_txn(txn, vec![identifier.id]);
       }
-    });
+    }
   }
 
-  pub fn get_views_belong_to(&self, parent_view_id: &str) -> Vec<Arc<View>> {
-    let txn = self.container.transact();
-    self.get_views_belong_to_with_txn(&txn, parent_view_id)
-  }
-
-  pub fn get_views_belong_to_with_txn<T: ReadTxn>(
-    &self,
-    txn: &T,
-    parent_view_id: &str,
-  ) -> Vec<Arc<View>> {
+  pub fn get_views_belong_to<T: ReadTxn>(&self, txn: &T, parent_view_id: &str) -> Vec<Arc<View>> {
     match self.get_view_with_txn(txn, parent_view_id) {
       Some(root_view) => root_view
         .children
@@ -160,7 +152,7 @@ impl ViewsMap {
             None => {
               let view = self
                 .container
-                .get_map_with_txn(txn, &child.id)
+                .get_with_txn(txn, &child.id)
                 .and_then(|map| {
                   view_from_map_ref(&map, txn, &self.view_relations, &self.section_map)
                 })
@@ -175,7 +167,7 @@ impl ViewsMap {
       None => {
         let child_view_ids = self
           .view_relations
-          .get_children(parent_view_id)
+          .get_children_with_txn(txn, parent_view_id)
           .map(|array| {
             array
               .get_children_with_txn(txn)
@@ -186,14 +178,9 @@ impl ViewsMap {
           })
           .unwrap_or_default();
 
-        self.get_views(&child_view_ids)
+        self.get_views_with_txn(txn, &child_view_ids)
       },
     }
-  }
-
-  pub fn get_views<T: AsRef<str>>(&self, view_ids: &[T]) -> Vec<Arc<View>> {
-    let txn = self.container.transact();
-    self.get_views_with_txn(&txn, view_ids)
   }
 
   pub fn get_views_with_txn<T: ReadTxn, V: AsRef<str>>(
@@ -207,24 +194,22 @@ impl ViewsMap {
       .collect::<Vec<_>>()
   }
 
-  pub fn get_all_views(&self) -> Vec<Arc<View>> {
-    let txn = self.container.transact();
-    let mut write_guard = self.cache.write();
+  pub fn get_all_views<T: ReadTxn>(&self, txn: &T) -> Vec<Arc<View>> {
     self
       .container
-      .iter(&txn)
+      .iter(txn)
       .flat_map(|(k, v)| {
-        if let Some(view) = write_guard.get(k).cloned() {
-          return Some(view);
+        if let Some(entry) = self.cache.get(k) {
+          return Some(entry.value().clone());
         }
 
         // Process new view from container if not cached
         match v {
           YrsValue::YMap(map) => {
             let view =
-              view_from_map_ref(&map, &txn, &self.view_relations, &self.section_map).map(Arc::new);
+              view_from_map_ref(&map, txn, &self.view_relations, &self.section_map).map(Arc::new);
             if let Some(ref view) = view {
-              write_guard.insert(k.to_string(), view.clone());
+              self.cache.insert(k.to_string(), view.clone());
             }
             view
           },
@@ -235,19 +220,11 @@ impl ViewsMap {
   }
 
   #[instrument(level = "trace", skip_all)]
-  pub fn get_view(&self, view_id: &str) -> Option<Arc<View>> {
+  pub fn get_view<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<Arc<View>> {
     match self.get_cache_view(view_id) {
-      None => {
-        let txn = self.container.transact();
-        self.get_view_with_txn(&txn, view_id)
-      },
+      None => self.get_view_with_txn(txn, view_id),
       Some(view) => Some(view),
     }
-  }
-
-  pub fn get_orphan_views(&self) -> Vec<Arc<View>> {
-    let txn = self.container.transact();
-    self.get_orphan_views_with_txn(&txn)
   }
 
   /// Return the orphan views.
@@ -266,7 +243,7 @@ impl ViewsMap {
   pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<Arc<View>> {
     let view = self.get_cache_view(view_id);
     if view.is_none() {
-      let map_ref = self.container.get_map_with_txn(txn, view_id)?;
+      let map_ref = self.container.get_with_txn(txn, view_id)?;
       let view =
         view_from_map_ref(&map_ref, txn, &self.view_relations, &self.section_map).map(Arc::new);
       self.set_cache_view(view.clone());
@@ -276,24 +253,28 @@ impl ViewsMap {
   }
 
   pub fn get_view_name_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<String> {
-    let map_ref = self.container.get_map_with_txn(txn, view_id)?;
-    map_ref.get_str_with_txn(txn, FOLDER_VIEW_NAME)
+    let map_ref: MapRef = self.container.get_with_txn(txn, view_id)?;
+    map_ref.get_with_txn(txn, FOLDER_VIEW_NAME)
   }
 
-  pub(crate) fn insert_view(&self, view: View, index: Option<u32>) {
-    self
-      .container
-      .with_transact_mut(|txn| self.insert_view_with_txn(txn, view, index));
-  }
-
-  pub(crate) fn insert_view_with_txn(
-    &self,
-    txn: &mut TransactionMut,
-    view: View,
-    index: Option<u32>,
-  ) {
+  /// Inserts a new view into the workspace.
+  ///
+  /// The function first checks if there is a current workspace ID. If there is, it then checks
+  /// if the `parent_view_id` of the new view matches the workspace ID. If they match,
+  /// the new view is added to the workspace's children.
+  ///
+  /// Finally, the view is inserted into the view storage regardless of its parent view ID
+  /// and workspace ID matching.
+  ///
+  /// # Parameters
+  ///
+  /// * `view`: The `View` object that is to be inserted into the storage.
+  pub fn insert(&self, txn: &mut TransactionMut, view: View, index: Option<u32>) {
     let time = timestamp();
-    if let Some(parent_map_ref) = self.container.get_map_with_txn(txn, &view.parent_view_id) {
+    if let Some(parent_map_ref) = self
+      .container
+      .get_with_txn::<_, MapRef>(txn, &view.parent_view_id)
+    {
       let view_identifier = ViewIdentifier {
         id: view.id.clone(),
       };
@@ -313,7 +294,7 @@ impl ViewsMap {
       self.set_cache_view(view);
     }
 
-    let map_ref = self.container.create_map_with_txn(txn, &view.id);
+    let map_ref = self.container.insert(txn, &*view.id, MapPrelim::default());
     let view_builder = ViewBuilder::new(
       &view.id,
       txn,
@@ -346,26 +327,20 @@ impl ViewsMap {
     self.set_cache_view(view);
   }
 
-  pub fn delete_views<T: AsRef<str>>(&self, view_ids: Vec<T>) {
-    self
-      .container
-      .with_transact_mut(|txn| self.delete_views_with_txn(txn, view_ids));
-  }
-
   pub fn delete_views_with_txn<T: AsRef<str>>(&self, txn: &mut TransactionMut, view_ids: Vec<T>) {
     view_ids.iter().for_each(|view_id| {
-      self.container.delete_with_txn(txn, view_id.as_ref());
+      let view_id = view_id.as_ref();
+      self.container.remove(txn, view_id);
+      self.remove_cache_view(view_id);
     });
   }
 
-  pub fn update_view<F>(&self, view_id: &str, f: F) -> Option<Arc<View>>
+  pub fn update_view<F>(&self, txn: &mut TransactionMut, view_id: &str, f: F) -> Option<Arc<View>>
   where
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
     self.remove_cache_view(view_id);
-    self
-      .container
-      .with_transact_mut(|txn| self.update_view_with_txn(&self.uid, txn, view_id, f))
+    self.update_view_with_txn(&self.uid, txn, view_id, f)
   }
 
   /// Updates a view within a given transaction using a provided function.
@@ -400,7 +375,7 @@ impl ViewsMap {
   where
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
-    let map_ref = self.container.get_map_with_txn(txn, view_id)?;
+    let map_ref = self.container.get_with_txn(txn, view_id)?;
     let update = ViewUpdate::new(
       uid,
       view_id,
@@ -419,16 +394,17 @@ impl ViewsMap {
   fn set_cache_view(&self, view: Option<Arc<View>>) {
     if let Some(view) = view {
       trace!("Update cache view: {}", view.id);
-      self.cache.write().insert(view.id.clone(), view);
+      self.cache.insert(view.id.clone(), view);
     }
   }
 
   fn get_cache_view(&self, view_id: &str) -> Option<Arc<View>> {
-    self.cache.read().get(view_id).cloned()
+    let entry = self.cache.get(view_id)?;
+    Some(entry.value().clone())
   }
 
   fn remove_cache_view(&self, view_id: &str) {
-    self.cache.write().remove(view_id);
+    self.cache.remove(view_id);
   }
 
   // some history data may not have the timestamp and it's value equal to 0, so we should normalize the timestamp.
@@ -447,18 +423,18 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   view_relations: &Arc<ViewRelations>,
   section_map: &SectionMap,
 ) -> Option<View> {
-  let parent_view_id = map_ref.get_str_with_txn(txn, VIEW_PARENT_ID)?;
-  let id = map_ref.get_str_with_txn(txn, FOLDER_VIEW_ID)?;
-  let name = map_ref
-    .get_str_with_txn(txn, FOLDER_VIEW_NAME)
+  let parent_view_id: String = map_ref.get_with_txn(txn, VIEW_PARENT_ID)?;
+  let id: String = map_ref.get_with_txn(txn, FOLDER_VIEW_ID)?;
+  let name: String = map_ref
+    .get_with_txn(txn, FOLDER_VIEW_NAME)
     .unwrap_or_default();
-  let desc = map_ref.get_str_with_txn(txn, VIEW_DESC).unwrap_or_default();
-  let created_at = map_ref
-    .get_i64_with_txn(txn, VIEW_CREATE_AT)
+  let desc: String = map_ref.get_with_txn(txn, VIEW_DESC).unwrap_or_default();
+  let created_at: i64 = map_ref
+    .get_with_txn(txn, VIEW_CREATE_AT)
     .unwrap_or_default();
   let layout = map_ref
-    .get_i64_with_txn(txn, VIEW_LAYOUT)
-    .map(|value| value.try_into().ok())??;
+    .get_with_txn::<_, i64>(txn, VIEW_LAYOUT)
+    .and_then(|v| v.try_into().ok())?;
 
   let children = view_relations
     .get_children_with_txn(txn, &id)
@@ -467,16 +443,16 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
 
   let icon = get_icon_from_view_map(map_ref, txn);
   let is_favorite = section_map
-    .section_op_with_txn(txn, Section::Favorite)
+    .section_op(txn, Section::Favorite)
     .map(|op| op.contains_with_txn(txn, &id))
     .unwrap_or(false);
 
-  let created_by = map_ref.get_i64_with_txn(txn, VIEW_CREATED_BY);
-  let last_edited_time = map_ref
-    .get_i64_with_txn(txn, VIEW_LAST_EDITED_TIME)
+  let created_by = map_ref.get_with_txn(txn, VIEW_CREATED_BY);
+  let last_edited_time: i64 = map_ref
+    .get_with_txn(txn, VIEW_LAST_EDITED_TIME)
     .unwrap_or(timestamp());
-  let last_edited_by = map_ref.get_i64_with_txn(txn, VIEW_LAST_EDITED_BY);
-  let extra = map_ref.get_str_with_txn(txn, VIEW_EXTRA);
+  let last_edited_by = map_ref.get_with_txn(txn, VIEW_LAST_EDITED_BY);
+  let extra = map_ref.get_with_txn(txn, VIEW_EXTRA);
 
   Some(View {
     id,
@@ -496,13 +472,13 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
 }
 
 pub fn get_icon_from_view_map<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<ViewIcon> {
-  let icon_str = map_ref.get_str_with_txn(txn, VIEW_ICON)?;
+  let icon_str: String = map_ref.get_with_txn(txn, VIEW_ICON)?;
   serde_json::from_str::<ViewIcon>(&icon_str).ok()
 }
 
 pub struct ViewBuilder<'a, 'b> {
   view_id: &'a str,
-  map_ref: MapRefWrapper,
+  map_ref: MapRef,
   txn: &'a mut TransactionMut<'b>,
   belongings: Arc<ViewRelations>,
   view: Option<View>,
@@ -513,11 +489,11 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
   pub fn new(
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
-    map_ref: MapRefWrapper,
+    map_ref: MapRef,
     belongings: Arc<ViewRelations>,
     section_map: &'a SectionMap,
   ) -> Self {
-    map_ref.insert_str_with_txn(txn, FOLDER_VIEW_ID, view_id);
+    map_ref.insert(txn, FOLDER_VIEW_ID, view_id);
     Self {
       view_id,
       map_ref,
@@ -552,7 +528,7 @@ pub struct ViewUpdate<'a, 'b, 'c> {
   #[allow(dead_code)]
   uid: &'a UserId,
   view_id: &'a str,
-  map_ref: &'c MapRefWrapper,
+  map_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
   children_map: Arc<ViewRelations>,
   section_map: &'c SectionMap,
@@ -577,7 +553,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     uid: &'a UserId,
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
-    map_ref: &'c MapRefWrapper,
+    map_ref: &'c MapRef,
     children_map: Arc<ViewRelations>,
     section_map: &'c SectionMap,
   ) -> Self {
@@ -604,21 +580,16 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     let icon_str = icon
       .and_then(|icon| serde_json::to_string(&icon).ok())
       .unwrap_or_default();
-    self
-      .map_ref
-      .insert_str_with_txn(self.txn, VIEW_ICON, icon_str);
+    self.map_ref.insert(self.txn, VIEW_ICON, icon_str);
 
     self
   }
 
   pub fn set_private(self, is_private: bool) -> Self {
-    if let Some(private_section) = self
-      .section_map
-      .section_op_with_txn(self.txn, Section::Private)
-    {
+    if let Some(private_section) = self.section_map.section_op(self.txn, Section::Private) {
       if is_private {
         private_section
-          .add_sections_item_with_txn(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
+          .add_sections_item(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
       } else {
         private_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
       }
@@ -628,13 +599,9 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   }
 
   pub fn set_favorite(self, is_favorite: bool) -> Self {
-    if let Some(fav_section) = self
-      .section_map
-      .section_op_with_txn(self.txn, Section::Favorite)
-    {
+    if let Some(fav_section) = self.section_map.section_op(self.txn, Section::Favorite) {
       if is_favorite {
-        fav_section
-          .add_sections_item_with_txn(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
+        fav_section.add_sections_item(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
       } else {
         fav_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
       }
@@ -655,17 +622,14 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   ///
   /// If the view is in the recent section, it's timestamp will be updated.
   pub fn set_recent(self, add_in_recent: bool) -> Self {
-    if let Some(recent_section) = self
-      .section_map
-      .section_op_with_txn(self.txn, Section::Recent)
-    {
+    if let Some(recent_section) = self.section_map.section_op(self.txn, Section::Recent) {
       // try to remove the section, if the section is not found, it will be ignored.
       recent_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
 
       // add the section if add_in_recent is true since we have removed the section before.
       if add_in_recent {
         recent_section
-          .add_sections_item_with_txn(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
+          .add_sections_item(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
       }
     }
 
@@ -673,13 +637,9 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
   }
 
   pub fn set_trash(self, is_trash: bool) -> Self {
-    if let Some(trash_section) = self
-      .section_map
-      .section_op_with_txn(self.txn, Section::Trash)
-    {
+    if let Some(trash_section) = self.section_map.section_op(self.txn, Section::Trash) {
       if is_trash {
-        trash_section
-          .add_sections_item_with_txn(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
+        trash_section.add_sections_item(self.txn, vec![SectionItem::new(self.view_id.to_string())]);
       } else {
         trash_section.delete_section_items_with_txn(self.txn, vec![self.view_id.to_string()]);
       }

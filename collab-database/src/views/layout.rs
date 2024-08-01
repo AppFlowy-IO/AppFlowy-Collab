@@ -3,11 +3,11 @@ use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
 use anyhow::bail;
-use collab::core::any_map::{AnyMap, AnyMapBuilder};
-use collab::preclude::{Any, Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
+use collab::preclude::{Any, FillRef, Map, MapRef, ReadTxn, ToJson, TransactionMut, YrsValue};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
+use collab::util::AnyExt;
 use strum_macros::EnumIter;
 
 /// The [DatabaseLayout] enum is used to represent the layout of the database.
@@ -89,7 +89,7 @@ impl LayoutSettings {
     map_ref.iter(txn).for_each(|(k, v)| {
       if let Ok(layout) = DatabaseLayout::from_str(k) {
         if let YrsValue::YMap(map_ref) = v {
-          this.insert(layout, LayoutSetting::from_map_ref(txn, &map_ref));
+          this.insert(layout, map_ref.to_json(txn).into_map().unwrap());
         }
       }
     });
@@ -99,8 +99,8 @@ impl LayoutSettings {
   /// Fill a [MapRef] with the data from this [LayoutSettings].
   pub fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {
     self.0.into_iter().for_each(|(k, v)| {
-      let inner_map = map_ref.get_or_create_map_with_txn(txn, k.as_ref());
-      v.fill_map_ref(txn, &inner_map);
+      let inner_map: MapRef = map_ref.get_or_init(txn, k.as_ref());
+      Any::from(v).fill(txn, &inner_map).unwrap()
     });
   }
 }
@@ -121,5 +121,5 @@ impl DerefMut for LayoutSettings {
 
 /// Each [LayoutSetting] is a [Map] of [String] to [Any].
 /// This is used to store the settings for each layout.
-pub type LayoutSetting = AnyMap;
-pub type LayoutSettingBuilder = AnyMapBuilder;
+pub type LayoutSetting = HashMap<String, Any>;
+pub type LayoutSettingBuilder = HashMap<String, Any>;

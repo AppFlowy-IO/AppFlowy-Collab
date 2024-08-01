@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use anyhow::Result;
-use collab::preclude::{Any, In, MapPrelim, MapRef, MapRefExtension, ReadTxn, TransactionMut};
+use collab::preclude::{Any, In, Map, MapExt, MapPrelim, MapRef, Out, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use serde_repr::*;
 
@@ -166,34 +166,37 @@ pub const REMINDER_MESSAGE: &str = "message";
 pub const REMINDER_META: &str = "meta";
 
 fn reminder_from_map<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Result<Reminder> {
-  let id = map_ref
-    .get_str_with_txn(txn, REMINDER_ID)
+  let id: String = map_ref
+    .get_with_txn(txn, REMINDER_ID)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_ID))?;
-  let object_id = map_ref
-    .get_str_with_txn(txn, REMINDER_OBJECT_ID)
+  let object_id: String = map_ref
+    .get_with_txn(txn, REMINDER_OBJECT_ID)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_OBJECT_ID))?;
-  let scheduled_at = map_ref
-    .get_i64_with_txn(txn, REMINDER_SCHEDULED_AT)
+  let scheduled_at: i64 = map_ref
+    .get_with_txn(txn, REMINDER_SCHEDULED_AT)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_SCHEDULED_AT))?;
-  let is_ack = map_ref
-    .get_bool_with_txn(txn, REMINDER_IS_ACK)
+  let is_ack: bool = map_ref
+    .get_with_txn(txn, REMINDER_IS_ACK)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_IS_ACK))?;
-  let is_read = map_ref
-    .get_bool_with_txn(txn, REMINDER_IS_READ)
+  let is_read: bool = map_ref
+    .get_with_txn(txn, REMINDER_IS_READ)
     .unwrap_or_default();
-  let ty = map_ref
-    .get_i64_with_txn(txn, REMINDER_TY)
+  let ty: i64 = map_ref
+    .get_with_txn(txn, REMINDER_TY)
     .ok_or(anyhow::anyhow!("{} not found", REMINDER_TY))?;
-  let title = map_ref
-    .get_str_with_txn(txn, REMINDER_TITLE)
+  let title: String = map_ref
+    .get_with_txn(txn, REMINDER_TITLE)
     .unwrap_or_default();
-  let message = map_ref
-    .get_str_with_txn(txn, REMINDER_MESSAGE)
+  let message: String = map_ref
+    .get_with_txn(txn, REMINDER_MESSAGE)
     .unwrap_or_default();
 
   let meta = map_ref
-    .get_any_with_txn(txn, REMINDER_META)
-    .map(ReminderMeta::from)
+    .get(txn, REMINDER_META)
+    .map(|value| match value {
+      Out::Any(any) => ReminderMeta::from(any),
+      _ => ReminderMeta::default(),
+    })
     .unwrap_or_default();
 
   Ok(Reminder {
@@ -222,5 +225,41 @@ impl From<Reminder> for MapPrelim {
       (REMINDER_MESSAGE, item.message.into()),
       (REMINDER_META, Any::from(item.meta).into()),
     ])
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use crate::reminder::{ObjectType, Reminder};
+  use collab::preclude::encoding::serde::from_any;
+  use collab::preclude::{Doc, Map, MapPrelim, ToJson, Transact};
+
+  #[test]
+  fn legacy_reminder_conversion() {
+    let doc = Doc::with_client_id(1);
+    let map = doc.get_or_insert_map("reminders");
+    let now = 1718262382723;
+    let reminder = Reminder::new(
+      "test-id".into(),
+      "object-id".into(),
+      now,
+      ObjectType::Document,
+    );
+    let prelim: MapPrelim = reminder.into();
+    let mut tx = doc.transact_mut();
+    map.insert(&mut tx, "reminder", prelim);
+
+    let value = map.get(&tx, "reminder").unwrap();
+    let json = value.to_json(&tx);
+    let reminder: Reminder = from_any(&json).unwrap();
+    assert_eq!(
+      reminder,
+      Reminder::new(
+        "test-id".into(),
+        "object-id".into(),
+        now,
+        ObjectType::Document,
+      )
+    );
   }
 }

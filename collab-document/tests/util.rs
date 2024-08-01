@@ -12,12 +12,11 @@ use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabBuilder};
 use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
-use collab_document::error::DocumentError;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
-use serde_json::{json, Value};
+use serde_json::json;
 use tempfile::TempDir;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
 use zip::ZipArchive;
@@ -28,12 +27,12 @@ pub struct DocumentTest {
 }
 
 impl DocumentTest {
-  pub async fn new(uid: i64, doc_id: &str) -> Self {
+  pub fn new(uid: i64, doc_id: &str) -> Self {
     let db = document_storage();
-    Self::new_with_db(uid, doc_id, db).await
+    Self::new_with_db(uid, doc_id, db)
   }
 
-  pub async fn new_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Self {
+  pub fn new_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Self {
     let disk_plugin = RocksdbDiskPlugin::new(
       uid,
       doc_id.to_string(),
@@ -41,12 +40,12 @@ impl DocumentTest {
       Arc::downgrade(&db),
       None,
     );
-    let collab = CollabBuilder::new(1, doc_id)
+    let mut collab = CollabBuilder::new(1, doc_id)
       .with_plugin(disk_plugin)
       .with_device_id("1")
       .build()
       .unwrap();
-    collab.lock().initialize();
+    collab.initialize();
 
     let mut blocks = HashMap::new();
     let mut children_map = HashMap::new();
@@ -97,7 +96,7 @@ impl DocumentTest {
       blocks,
       meta,
     };
-    let document = Document::create_with_data(Arc::new(collab), document_data).unwrap();
+    let document = Document::open_with(collab, Some(document_data)).unwrap();
     Self { document, db }
   }
 }
@@ -110,7 +109,7 @@ impl Deref for DocumentTest {
   }
 }
 
-pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Document {
+pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Document {
   setup_log();
   let disk_plugin = RocksdbDiskPlugin::new(
     uid,
@@ -119,14 +118,14 @@ pub async fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) 
     Arc::downgrade(&db),
     None,
   );
-  let collab = CollabBuilder::new(uid, doc_id)
+  let mut collab = CollabBuilder::new(uid, doc_id)
     .with_plugin(disk_plugin)
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.lock().initialize();
+  collab.initialize();
 
-  Document::open(Arc::new(collab)).unwrap()
+  Document::open_with(collab, None).unwrap()
 }
 
 pub fn document_storage() -> Arc<CollabKVDB> {
@@ -153,14 +152,6 @@ fn setup_log() {
   });
 }
 
-pub fn insert_block(
-  document: &Document,
-  block: Block,
-  prev_id: String,
-) -> Result<Block, DocumentError> {
-  document.with_transact_mut(|txn| document.insert_block(txn, block, Some(prev_id)))
-}
-
 pub fn get_document_data(
   document: &Document,
 ) -> (String, HashMap<String, Block>, HashMap<String, Vec<String>>) {
@@ -174,23 +165,15 @@ pub fn get_document_data(
   (page_id, blocks, children_map)
 }
 
-pub fn delete_block(document: &Document, block_id: &str) -> Result<(), DocumentError> {
-  document.with_transact_mut(|txn| document.delete_block(txn, block_id))
+pub fn apply_actions(document: &mut Document, actions: Vec<BlockAction>) {
+  if let Err(err) = document.apply_action(actions) {
+    // Handle the error
+    tracing::error!("[Document] apply_action error: {:?}", err);
+    return;
+  }
 }
 
-pub fn update_block(
-  document: &Document,
-  block_id: &str,
-  data: HashMap<String, Value>,
-) -> Result<(), DocumentError> {
-  document.with_transact_mut(|txn| document.update_block_data(txn, block_id, data))
-}
-
-pub fn apply_actions(document: &Document, actions: Vec<BlockAction>) {
-  document.apply_action(actions)
-}
-
-pub fn insert_block_for_page(document: &Document, block_id: String) -> Block {
+pub fn insert_block_for_page(document: &mut Document, block_id: String) -> Block {
   let (page_id, _, _) = get_document_data(document);
   let block = Block {
     id: block_id,
@@ -202,7 +185,7 @@ pub fn insert_block_for_page(document: &Document, block_id: String) -> Block {
     data: Default::default(),
   };
 
-  insert_block(document, block, "".to_string()).unwrap()
+  document.insert_block(block, None).unwrap()
 }
 
 pub struct Cleaner(PathBuf);

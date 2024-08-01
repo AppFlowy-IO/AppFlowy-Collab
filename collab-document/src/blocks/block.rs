@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use collab::preclude::{Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{Map, MapExt, MapRef, ReadTxn, TransactionMut};
 use serde_json::Value;
 
 use crate::blocks::{hashmap_to_json_str, json_str_to_hashmap, Block, ChildrenOperation};
@@ -20,12 +20,12 @@ const EXTERNAL_TYPE: &str = "external_type";
 
 /// for block operate, there has a root map, and a children map.
 pub struct BlockOperation {
-  root: MapRefWrapper,
+  root: MapRef,
   children_operation: ChildrenOperation,
 }
 
 impl BlockOperation {
-  pub fn new(root: MapRefWrapper, children_operation: ChildrenOperation) -> Self {
+  pub fn new(root: MapRef, children_operation: ChildrenOperation) -> Self {
     Self {
       root,
       children_operation,
@@ -33,14 +33,13 @@ impl BlockOperation {
   }
 
   /// get all blocks
-  pub fn get_all_blocks(&self) -> HashMap<String, Block> {
-    let txn = self.root.transact();
+  pub fn get_all_blocks<T: ReadTxn>(&self, txn: &T) -> HashMap<String, Block> {
     self
       .root
-      .iter(&txn)
+      .iter(txn)
       .filter_map(|(k, _)| {
         self
-          .get_block_with_txn(&txn, k)
+          .get_block_with_txn(txn, k)
           .map(|block| (k.to_string(), block))
       })
       .collect()
@@ -52,25 +51,25 @@ impl BlockOperation {
     txn: &mut TransactionMut,
     block: Block,
   ) -> Result<Block, DocumentError> {
-    if self.root.get_map_with_txn(txn, &block.id).is_some() {
+    if self.root.get(txn, &block.id).is_some() {
       return Err(DocumentError::BlockAlreadyExists);
     }
 
     let block_id = block.id.clone();
     let children_id = block.children.clone();
     // Create block map.
-    let map = self.root.create_map_with_txn(txn, &block.id);
+    let map = self.root.get_or_init_map(txn, &*block.id);
     // Generate data json string.
     let json_str = hashmap_to_json_str(block.data)?;
 
     // Insert block fields.
-    map.insert_with_txn(txn, ID, block.id);
-    map.insert_with_txn(txn, TYPE, block.ty);
-    map.insert_with_txn(txn, PARENT, block.parent);
-    map.insert_with_txn(txn, CHILDREN, block.children);
-    map.insert_with_txn(txn, DATA, json_str);
-    map.insert_with_txn(txn, EXTERNAL_ID, block.external_id);
-    map.insert_with_txn(txn, EXTERNAL_TYPE, block.external_type);
+    map.insert(txn, ID, block.id);
+    map.insert(txn, TYPE, block.ty);
+    map.insert(txn, PARENT, block.parent);
+    map.insert(txn, CHILDREN, block.children);
+    map.insert(txn, DATA, json_str);
+    map.insert(txn, EXTERNAL_ID, block.external_id);
+    map.insert(txn, EXTERNAL_TYPE, block.external_type);
 
     // Create the children for each block.
     self
@@ -105,8 +104,8 @@ impl BlockOperation {
   pub fn get_block_with_txn<T: ReadTxn>(&self, txn: &T, id: &str) -> Option<Block> {
     self
       .root
-      .get_map_with_txn(txn, id)
-      .map(|map| block_from_map(txn, map.into_inner()))
+      .get_with_txn::<T, MapRef>(txn, id)
+      .map(|map| block_from_map(txn, map))
   }
 
   /// Update the block with the given id.
@@ -121,9 +120,9 @@ impl BlockOperation {
     external_id: Option<String>,
     external_type: Option<String>,
   ) -> Result<(), DocumentError> {
-    let map = self
+    let map: MapRef = self
       .root
-      .get_map_with_txn(txn, id)
+      .get_with_txn(txn, id)
       .ok_or(DocumentError::BlockIsNotFound)?;
 
     // Update parent field with the given parent id.
@@ -149,14 +148,14 @@ impl BlockOperation {
 
 /// Build the block from the [MapRef]
 fn block_from_map<T: ReadTxn>(txn: &T, map: MapRef) -> Block {
-  let id = map.get_str_with_txn(txn, ID).unwrap_or_default();
-  let ty = map.get_str_with_txn(txn, TYPE).unwrap_or_default();
-  let parent = map.get_str_with_txn(txn, PARENT).unwrap_or_default();
-  let children = map.get_str_with_txn(txn, CHILDREN).unwrap_or_default();
-  let json_str = map.get_str_with_txn(txn, DATA).unwrap_or_default();
+  let id: String = map.get_with_txn(txn, ID).unwrap_or_default();
+  let ty: String = map.get_with_txn(txn, TYPE).unwrap_or_default();
+  let parent: String = map.get_with_txn(txn, PARENT).unwrap_or_default();
+  let children: String = map.get_with_txn(txn, CHILDREN).unwrap_or_default();
+  let json_str: String = map.get_with_txn(txn, DATA).unwrap_or_default();
   let data = json_str_to_hashmap(&json_str).unwrap_or_default();
-  let external_id = map.get_str_with_txn(txn, EXTERNAL_ID);
-  let external_type = map.get_str_with_txn(txn, EXTERNAL_TYPE);
+  let external_id: Option<String> = map.get_with_txn(txn, EXTERNAL_ID);
+  let external_type: Option<String> = map.get_with_txn(txn, EXTERNAL_TYPE);
   Block {
     id,
     ty,

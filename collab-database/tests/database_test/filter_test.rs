@@ -1,11 +1,9 @@
-use collab::core::any_map::AnyMapExtension;
-
 use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
 use crate::helper::{TestFieldType, TestFilter, FILTER_CONTENT};
 
 #[tokio::test]
 async fn create_database_view_with_filter_test() {
-  let database_test = create_database_with_two_filters().await;
+  let database_test = create_database_with_two_filters();
   let filter_1 = database_test
     .get_filter::<TestFilter>("v1", "filter_1")
     .unwrap();
@@ -19,10 +17,10 @@ async fn create_database_view_with_filter_test() {
 
 #[tokio::test]
 async fn insert_or_update_database_view_filter_test() {
-  let database_test = create_database_with_two_filters().await;
+  let mut database_test = create_database_with_two_filters();
   // Update
   database_test.update_filter("v1", "filter_1", |update| {
-    update.insert_str_value(FILTER_CONTENT, "Text filter".to_string());
+    update.insert(FILTER_CONTENT.into(), "Text filter".into());
   });
 
   let filter_1 = database_test
@@ -50,7 +48,7 @@ async fn insert_or_update_database_view_filter_test() {
 
 #[tokio::test]
 async fn insert_database_view_filter_to_filtering_field_id_test() {
-  let database_test = create_database_with_two_filters().await;
+  let mut database_test = create_database_with_two_filters();
 
   // Filter with id "filter_1" already filters based on "f1"
   database_test.insert_filter(
@@ -72,14 +70,14 @@ async fn insert_database_view_filter_to_filtering_field_id_test() {
 
 #[tokio::test]
 async fn remove_database_view_filter_test() {
-  let database_test = create_database_with_two_filters().await;
+  let mut database_test = create_database_with_two_filters();
   database_test.remove_filter("v1", "filter_1");
   let filter_1 = database_test.get_filter::<TestFilter>("v1", "filter_1");
   assert!(filter_1.is_none());
 }
 
-async fn create_database_with_two_filters() -> DatabaseTest {
-  let database_test = create_database_with_default_data(1, "1").await;
+fn create_database_with_two_filters() -> DatabaseTest {
+  let mut database_test = create_database_with_default_data(1, "1");
   let filter_1 = TestFilter {
     id: "filter_1".to_string(),
     field_id: "f1".to_string(),

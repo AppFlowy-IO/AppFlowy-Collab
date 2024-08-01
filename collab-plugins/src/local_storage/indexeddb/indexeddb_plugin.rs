@@ -150,23 +150,16 @@ impl DocEditStream {
 
   async fn run(mut self) {
     let mut receiver = self.receiver.take().expect("Only take once");
-    let stream = stream! {
-      while let Some(data) = receiver.recv().await {
-        yield data;
-      }
-    };
-    stream
-      .for_each(|data| async {
-        match data {
-          DocUpdate::Update(update) => {
-            if let Some(db) = self.collab_db.upgrade() {
-              if let Err(err) = db.push_update(self.uid, &self.object_id, &update).await {
-                error!("failed to push update: {}", err);
-              }
+    while let Some(data) = receiver.recv().await {
+      match data {
+        DocUpdate::Update(update) => {
+          if let Some(db) = self.collab_db.upgrade() {
+            if let Err(err) = db.push_update(self.uid, &self.object_id, &update).await {
+              error!("failed to push update: {}", err);
             }
-          },
-        }
-      })
-      .await;
+          }
+        },
+      }
+    }
   }
 }

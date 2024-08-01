@@ -1,6 +1,6 @@
-use collab::core::any_array::ArrayMap;
-use collab::core::any_map::{AnyMap, AnyMapBuilder};
+use collab::preclude::Any;
+use std::collections::HashMap;
 
-pub type CalculationArray = ArrayMap;
-pub type CalculationMap = AnyMap;
-pub type CalculationMapBuilder = AnyMapBuilder;
+pub type CalculationArray = Vec<Any>;
+pub type CalculationMap = HashMap<String, Any>;
+pub type CalculationMapBuilder = HashMap<String, Any>;

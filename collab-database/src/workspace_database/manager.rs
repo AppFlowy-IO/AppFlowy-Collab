@@ -4,23 +4,21 @@ use crate::error::DatabaseError;
 use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
 use async_trait::async_trait;
-use collab::core::collab::{DataSource, MutexCollab};
-use collab::preclude::{Collab, MapPrelim};
+use collab::core::collab::DataSource;
+use collab::preclude::Collab;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 
-use parking_lot::Mutex;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 
+use dashmap::DashMap;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-
-use collab_entity::define::WORKSPACE_DATABASES;
 use tracing::{error, trace};
 
 pub type CollabDocStateByOid = HashMap<String, DataSource>;
@@ -52,7 +50,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     collab_db: Weak<CollabKVDB>,
     collab_doc_state: DataSource,
     config: CollabPersistenceConfig,
-  ) -> Result<Arc<MutexCollab>, DatabaseError>;
+  ) -> Result<Collab, DatabaseError>;
 }
 
 /// A [WorkspaceDatabase] indexes the databases within a workspace.
@@ -65,21 +63,22 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
 ///
 pub struct WorkspaceDatabase {
   uid: i64,
-  collab: Arc<MutexCollab>,
+  collab: Collab,
   collab_db: Weak<CollabKVDB>,
+  meta_list: DatabaseMetaList,
   config: CollabPersistenceConfig,
   collab_service: Arc<dyn DatabaseCollabService>,
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
-  databases: Arc<Mutex<HashMap<String, Arc<MutexDatabase>>>>,
-  removing_databases: Arc<Mutex<HashMap<String, Arc<MutexDatabase>>>>,
+  databases: DashMap<String, Arc<MutexDatabase>>,
+  removing_databases: Arc<DashMap<String, Arc<MutexDatabase>>>,
 }
 
 impl WorkspaceDatabase {
   pub fn open<T>(
     uid: i64,
-    collab: Arc<MutexCollab>,
+    mut collab: Collab,
     collab_db: Weak<CollabKVDB>,
     config: CollabPersistenceConfig,
     collab_service: T,
@@ -88,48 +87,32 @@ impl WorkspaceDatabase {
     T: DatabaseCollabService,
   {
     let collab_service = Arc::new(collab_service);
-    let databases = Arc::new(Mutex::new(HashMap::new()));
-    let removing_databases = Arc::new(Mutex::new(HashMap::new()));
-    {
-      let lock_guard = collab.lock();
-      let is_exist = {
-        let txn = lock_guard.transact();
-        lock_guard
-          .get_array_with_txn(&txn, vec![WORKSPACE_DATABASES])
-          .is_some()
-      };
-
-      if !is_exist {
-        let _ = lock_guard.with_origin_transact_mut(|txn| {
-          lock_guard.create_array_with_txn::<MapPrelim>(txn, WORKSPACE_DATABASES, vec![]);
-          Ok::<(), DatabaseError>(())
-        });
-      }
-    }
+    let meta_list = DatabaseMetaList::new(&mut collab);
 
     Self {
       uid,
       collab_db,
       collab,
-      databases,
+      meta_list,
       config,
       collab_service,
-      removing_databases,
+      databases: DashMap::new(),
+      removing_databases: Arc::new(DashMap::new()),
     }
   }
 
   pub fn close(&self) {
-    self.collab.lock().clear_plugins();
+    self.collab.clear_plugins();
   }
 
-  pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
+  pub fn validate(&self) -> Result<(), DatabaseError> {
     CollabType::WorkspaceDatabase
-      .validate_require_data(collab)
+      .validate_require_data(&self.collab)
       .map_err(|_| DatabaseError::NoRequiredData)?;
     Ok(())
   }
 
-  pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Arc<MutexCollab>> {
+  pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Collab> {
     let collab_db = self.collab_db.upgrade()?;
     let mut collab_doc_state = DataSource::Disk;
     let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
@@ -163,19 +146,21 @@ impl WorkspaceDatabase {
   /// Get the database with the given database id.
   /// Return None if the database does not exist.
   pub async fn get_database(&self, database_id: &str) -> Option<Arc<MutexDatabase>> {
-    if !self.database_meta_list().contains(database_id) {
+    if !self
+      .meta_list
+      .contains(&self.collab.transact(), database_id)
+    {
       return None;
     }
-    let database = self.databases.lock().get(database_id).cloned();
+    let database = self.databases.get(database_id).as_deref().cloned();
     let collab_db = self.collab_db.upgrade()?;
     match database {
       None => {
         // If the database is being removed, return the database back to the databases.
-        if let Some(database) = self.removing_databases.lock().remove(database_id) {
+        if let Some((_, database)) = self.removing_databases.remove(database_id) {
           trace!("Move the database:{} back to databases", database_id);
           self
             .databases
-            .lock()
             .insert(database_id.to_string(), database.clone());
           return Some(database);
         }
@@ -192,18 +177,17 @@ impl WorkspaceDatabase {
           collab_service: self.collab_service.clone(),
           notifier,
         };
-        let database = Database::get_or_create(database_id, context).ok()?;
+        let database = Database::new(database_id, context).ok()?;
         // The database is not exist in local disk, which means the rows of the database are not
         // loaded yet.
         if !is_exist {
-          database.load_all_rows();
+          database.load_all_rows().await;
         }
 
         // Create a new [MutexDatabase] and add it to the databases.
         let database = Arc::new(MutexDatabase::new(database));
         self
           .databases
-          .lock()
           .insert(database_id.to_string(), database.clone());
         Some(database)
       },
@@ -220,10 +204,12 @@ impl WorkspaceDatabase {
 
   /// Return the database id with the given view id.
   pub fn get_database_id_with_view_id(&self, view_id: &str) -> Option<String> {
-    self
-      .database_meta_list()
-      .get_database_meta_with_view_id(view_id)
-      .map(|record| record.database_id)
+    let txn = self.collab.transact();
+    let result = self
+      .meta_list
+      .get_database_meta_with_view_id(&txn, view_id)
+      .map(|record| record.database_id);
+    result
   }
 
   /// Create database with inline view.
@@ -231,7 +217,7 @@ impl WorkspaceDatabase {
   /// If the inline view gets deleted, the database will be deleted too.
   /// So the reference views will be deleted too.
   pub fn create_database(
-    &self,
+    &mut self,
     params: CreateDatabaseParams,
   ) -> Result<Arc<MutexDatabase>, DatabaseError> {
     debug_assert!(!params.database_id.is_empty());
@@ -257,33 +243,38 @@ impl WorkspaceDatabase {
         .filter(|view| view.view_id != params.inline_view_id)
         .map(|view| view.view_id.clone()),
     );
-    self
-      .database_meta_list()
-      .add_database(&params.database_id, linked_views.into_iter().collect());
+    let mut txn = self.collab.transact_mut();
+    self.meta_list.add_database(
+      &mut txn,
+      &params.database_id,
+      linked_views.into_iter().collect(),
+    );
     let database_id = params.database_id.clone();
-    let mutex_database = MutexDatabase::new(Database::create_with_inline_view(params, context)?);
+    let mutex_database = MutexDatabase::new(Database::new_with_view(params, context)?);
     let database = Arc::new(mutex_database);
-    self.databases.lock().insert(database_id, database.clone());
+    self.databases.insert(database_id, database.clone());
     Ok(database)
   }
 
-  pub fn track_database(&self, database_id: &str, database_view_ids: Vec<String>) {
+  pub fn track_database(&mut self, database_id: &str, database_view_ids: Vec<String>) {
+    let mut txn = self.collab.transact_mut();
     self
-      .database_meta_list()
-      .add_database(database_id, database_view_ids);
+      .meta_list
+      .add_database(&mut txn, database_id, database_view_ids);
   }
 
   /// Create linked view that shares the same data with the inline view's database
   /// If the inline view is deleted, the reference view will be deleted too.
   pub async fn create_database_linked_view(
-    &self,
+    &mut self,
     params: CreateViewParams,
   ) -> Result<(), DatabaseError> {
     let params = CreateViewParamsValidator::validate(params)?;
     if let Some(database) = self.get_database(&params.database_id).await {
+      let mut txn = self.collab.transact_mut();
       self
-        .database_meta_list()
-        .update_database(&params.database_id, |record| {
+        .meta_list
+        .update_database(&mut txn, &params.database_id, |record| {
           // Check if the view is already linked to the database.
           if record.linked_views.contains(&params.view_id) {
             error!("The view is already linked to the database");
@@ -291,15 +282,16 @@ impl WorkspaceDatabase {
             record.linked_views.push(params.view_id.clone());
           }
         });
-      database.lock().create_linked_view(params)
+      database.lock().await.create_linked_view(params)
     } else {
       Err(DatabaseError::DatabaseNotExist)
     }
   }
 
   /// Delete the database with the given database id.
-  pub fn delete_database(&self, database_id: &str) {
-    self.database_meta_list().delete_database(database_id);
+  pub fn delete_database(&mut self, database_id: &str) {
+    let mut txn = self.collab.transact_mut();
+    self.meta_list.delete_database(&mut txn, database_id);
     if let Some(collab_db) = self.collab_db.upgrade() {
       let _ = collab_db.with_write_txn(|w_db_txn| {
         if let Err(err) = w_db_txn.delete_doc(self.uid, database_id) {
@@ -308,27 +300,25 @@ impl WorkspaceDatabase {
         Ok(())
       });
     }
-    self.databases.lock().remove(database_id);
+    self.databases.remove(database_id);
   }
 
   pub fn open_database(&self, database_id: &str) -> Option<Arc<MutexDatabase>> {
     // TODO(nathan): refactor the get_database that split the database creation and database opening.
-    let database = self.removing_databases.lock().remove(database_id)?;
+    let (_, database) = self.removing_databases.remove(database_id)?;
     trace!("Move the database:{} back to databases", database_id);
     self
       .databases
-      .lock()
       .insert(database_id.to_string(), database.clone());
 
     Some(database)
   }
 
   pub fn close_database(&self, database_id: &str) {
-    if let Some(database) = self.databases.lock().remove(database_id) {
+    if let Some((_, database)) = self.databases.remove(database_id) {
       trace!("Move the database to removing_databases: {}", database_id);
       self
         .removing_databases
-        .lock()
         .insert(database_id.to_string(), database);
 
       let cloned_database_id = database_id.to_string();
@@ -336,11 +326,7 @@ impl WorkspaceDatabase {
       tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(120)).await;
         if let Some(removing_databases) = weak_removing_databases.upgrade() {
-          if removing_databases
-            .lock()
-            .remove(&cloned_database_id)
-            .is_some()
-          {
+          if removing_databases.remove(&cloned_database_id).is_some() {
             trace!(
               "drop database {} from removing_databases",
               cloned_database_id
@@ -353,15 +339,16 @@ impl WorkspaceDatabase {
 
   /// Return all the database records.
   pub fn get_all_database_meta(&self) -> Vec<DatabaseMeta> {
-    self.database_meta_list().get_all_database_meta()
+    let txn = self.collab.transact();
+    self.meta_list.get_all_database_meta(&txn)
   }
 
   /// Delete the view from the database with the given view id.
   /// If the view is the inline view, the database will be deleted too.
-  pub async fn delete_view(&self, database_id: &str, view_id: &str) {
+  pub async fn delete_view(&mut self, database_id: &str, view_id: &str) {
     if let Some(database) = self.get_database(database_id).await {
-      database.lock().delete_view(view_id);
-      if database.lock().is_inline_view(view_id) {
+      database.lock().await.delete_view(view_id);
+      if database.lock().await.is_inline_view(view_id) {
         // Delete the database if the view is the inline view.
         self.delete_database(database_id);
       }
@@ -370,7 +357,7 @@ impl WorkspaceDatabase {
 
   /// Duplicate the database that contains the view.
   pub async fn duplicate_database(
-    &self,
+    &mut self,
     view_id: &str,
   ) -> Result<Arc<MutexDatabase>, DatabaseError> {
     let database_data = self.get_database_data(view_id).await?;
@@ -384,7 +371,7 @@ impl WorkspaceDatabase {
   /// Get all of the database data using the id of any view in the database
   pub async fn get_database_data(&self, view_id: &str) -> Result<DatabaseData, DatabaseError> {
     if let Some(database) = self.get_database_with_view_id(view_id).await {
-      let data = database.lock().get_database_data();
+      let data = database.lock().await.get_database_data();
       Ok(data)
     } else {
       Err(DatabaseError::DatabaseNotExist)
@@ -396,7 +383,7 @@ impl WorkspaceDatabase {
     &self,
     database_id: &str,
     doc_state: DataSource,
-  ) -> Result<Arc<MutexCollab>, DatabaseError> {
+  ) -> Result<Collab, DatabaseError> {
     self.collab_service.build_collab_with_config(
       self.uid,
       database_id,
@@ -406,12 +393,4 @@ impl WorkspaceDatabase {
       self.config.clone(),
     )
   }
-
-  fn database_meta_list(&self) -> DatabaseMetaList {
-    DatabaseMetaList::from_collab(&self.collab.lock())
-  }
-}
-
-pub fn get_all_database_meta(collab: &Collab) -> Vec<DatabaseMeta> {
-  DatabaseMetaList::from_collab(collab).get_all_database_meta()
 }

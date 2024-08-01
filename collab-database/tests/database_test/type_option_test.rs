@@ -1,6 +1,7 @@
-use collab::core::any_map::AnyMapExtension;
+use collab::util::AnyMapExt;
 use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
 use collab_database::views::OrderObjectPosition;
+use std::ops::DerefMut;
 
 use crate::database_test::helper::{
   create_database, default_field_settings_by_layout, DatabaseTest,
@@ -9,14 +10,14 @@ use crate::helper::{TestCheckboxTypeOption, TestDateFormat, TestDateTypeOption, 
 
 #[tokio::test]
 async fn insert_checkbox_type_option_data_test() {
-  let test = user_database_with_default_field().await;
-  test.fields.update_field("f1", |field_update| {
+  let mut test = user_database_with_default_field();
+  test.update_field("f1", |field_update| {
     field_update.update_type_options(|type_option_update| {
       type_option_update.insert("0", TestCheckboxTypeOption { is_selected: true });
     });
   });
 
-  let field = test.fields.get_field("f1").unwrap();
+  let field = test.get_field("f1").unwrap();
   let type_option = field
     .get_type_option::<TestCheckboxTypeOption>("0")
     .unwrap();
@@ -25,19 +26,19 @@ async fn insert_checkbox_type_option_data_test() {
 
 #[tokio::test]
 async fn insert_date_type_option_data_test() {
-  let test = user_database_with_default_field().await;
+  let mut test = user_database_with_default_field();
   let type_option = TestDateTypeOption {
     date_format: TestDateFormat::ISO,
     time_format: TestTimeFormat::TwelveHour,
     include_time: true,
   };
-  test.fields.update_field("f1", |field_update| {
+  test.update_field("f1", |field_update| {
     field_update.update_type_options(|type_option_update| {
       type_option_update.insert("0", type_option);
     });
   });
 
-  let field = test.fields.get_field("f1").unwrap();
+  let field = test.get_field("f1").unwrap();
   let type_option = field.get_type_option::<TestDateTypeOption>("0").unwrap();
   assert!(type_option.include_time);
   assert_eq!(type_option.date_format, TestDateFormat::ISO);
@@ -46,31 +47,34 @@ async fn insert_date_type_option_data_test() {
 
 #[tokio::test]
 async fn update_date_type_option_data_test() {
-  let test = user_database_with_default_field().await;
+  let mut test = user_database_with_default_field();
   let type_option = TestDateTypeOption {
     date_format: Default::default(),
     time_format: TestTimeFormat::TwelveHour,
     include_time: false,
   };
-  test.fields.update_field("f1", |field_update| {
+  test.update_field("f1", |field_update| {
     field_update.update_type_options(|type_option_update| {
       type_option_update.insert("0", type_option);
     });
   });
 
-  test.fields.update_field("f1", |field_update| {
+  test.update_field("f1", |field_update| {
     field_update.update_type_options(|type_option_update| {
       type_option_update.update(
         "0",
-        TypeOptionDataBuilder::new()
-          .insert_bool_value("include_time", true)
-          .insert_i64_value("time_format", TestTimeFormat::TwentyFourHour.value())
-          .build(),
+        TypeOptionDataBuilder::from([
+          ("include_time".into(), true.into()),
+          (
+            "time_format".into(),
+            TestTimeFormat::TwentyFourHour.value().into(),
+          ),
+        ]),
       );
     });
   });
 
-  let field = test.fields.get_field("f1").unwrap();
+  let field = test.get_field("f1").unwrap();
   let type_option = field.get_type_option::<TestDateTypeOption>("0").unwrap();
   assert!(type_option.include_time);
   assert_eq!(type_option.time_format, TestTimeFormat::TwentyFourHour);
@@ -78,7 +82,7 @@ async fn update_date_type_option_data_test() {
 
 #[tokio::test]
 async fn single_field_contains_multiple_type_options_test() {
-  let test = user_database_with_default_field().await;
+  let mut test = user_database_with_default_field();
   let date_tp = TestDateTypeOption {
     date_format: Default::default(),
     time_format: TestTimeFormat::TwelveHour,
@@ -86,19 +90,19 @@ async fn single_field_contains_multiple_type_options_test() {
   };
 
   let checkbox_tp = TestCheckboxTypeOption { is_selected: true };
-  test.fields.update_field("f1", |field_update| {
+  test.update_field("f1", |field_update| {
     field_update
       .set_field_type(0)
       .set_type_option(0, Some(checkbox_tp.into()));
   });
 
-  test.fields.update_field("f1", |field_update| {
+  test.update_field("f1", |field_update| {
     field_update
       .set_field_type(1)
       .set_type_option(1, Some(date_tp.into()));
   });
 
-  let field = test.fields.get_field("f1").unwrap();
+  let field = test.get_field("f1").unwrap();
   let check_tp = field
     .get_type_option::<TestCheckboxTypeOption>("0")
     .unwrap();
@@ -109,20 +113,16 @@ async fn single_field_contains_multiple_type_options_test() {
 
 #[tokio::test]
 async fn insert_multi_type_options_test() {
-  let test = user_database_with_default_field().await;
+  let mut test = user_database_with_default_field();
 
   let mut type_options = TypeOptions::new();
   type_options.insert(
     "0".to_string(),
-    TypeOptionDataBuilder::new()
-      .insert_i64_value("job 1", 123)
-      .build(),
+    TypeOptionDataBuilder::from([("job 1".into(), 123.into())]),
   );
   type_options.insert(
     "1".to_string(),
-    TypeOptionDataBuilder::new()
-      .insert_f64_value("job 2", 456.0)
-      .build(),
+    TypeOptionDataBuilder::from([("job 2".into(), (456.0).into())]),
   );
 
   test.create_field(
@@ -138,18 +138,18 @@ async fn insert_multi_type_options_test() {
     default_field_settings_by_layout(),
   );
 
-  let second_field = test.fields.get_field("f2").unwrap();
+  let second_field = test.get_field("f2").unwrap();
   assert_eq!(second_field.type_options.len(), 2);
 
   let type_option = second_field.type_options.get("0").unwrap();
-  assert_eq!(type_option.get_i64_value("job 1").unwrap(), 123);
+  assert_eq!(type_option.get_as::<i64>("job 1").unwrap(), 123);
 
   let type_option = second_field.type_options.get("1").unwrap();
-  assert_eq!(type_option.get_f64_value("job 2").unwrap(), 456.0);
+  assert_eq!(type_option.get_as::<f64>("job 2").unwrap(), 456.0);
 }
 
-async fn user_database_with_default_field() -> DatabaseTest {
-  let test = create_database(1, "1").await;
+fn user_database_with_default_field() -> DatabaseTest {
+  let mut test = create_database(1, "1");
 
   let field = Field {
     id: "f1".to_string(),
@@ -157,6 +157,10 @@ async fn user_database_with_default_field() -> DatabaseTest {
     field_type: 0,
     ..Default::default()
   };
-  test.fields.insert_field(field);
+  {
+    let db = test.deref_mut();
+    let mut txn = db.collab.transact_mut();
+    db.body.fields.insert_field(&mut txn, field);
+  }
   test
 }
