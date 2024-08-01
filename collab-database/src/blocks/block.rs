@@ -1,6 +1,6 @@
 use dashmap::DashMap;
 
-use dashmap::mapref::one::{Ref, RefMut};
+use dashmap::mapref::one::RefMut;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
@@ -170,18 +170,6 @@ impl Block {
     row_order
   }
 
-  /// If the row with given id exists, return it. Otherwise, return an empty row with given id.
-  /// An empty [Row] is a row with no cells.
-  pub fn row(&self, row_id: &RowId) -> Option<Ref<RowId, DatabaseRow>> {
-    self.rows.get(row_id)
-  }
-
-  /// If the row with given id exists, return it. Otherwise, return an empty row with given id.
-  /// An empty [Row] is a row with no cells.
-  pub fn row_mut(&mut self, row_id: &RowId) -> Option<RefMut<RowId, DatabaseRow>> {
-    self.rows.get_mut(row_id)
-  }
-
   pub fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
     let database_row = self.rows.get(row_id)?;
     database_row.get_row_meta()
@@ -199,7 +187,7 @@ impl Block {
     let mut rows = Vec::new();
     for row_order in row_orders {
       let row = self
-        .row(&row_order.id)
+        .get_or_init_row(row_order.id.clone())
         .and_then(|row| row.get_row())
         .unwrap_or_else(|| Row::empty(row_order.id.clone(), &self.database_id));
       rows.push(row);
@@ -208,7 +196,9 @@ impl Block {
   }
 
   pub fn get_cell(&self, row_id: &RowId, field_id: &str) -> Option<Cell> {
-    self.row(row_id).and_then(|row| row.get_cell(field_id))
+    self
+      .get_or_init_row(row_id.clone())
+      .and_then(|row| row.get_cell(field_id))
   }
 
   pub fn delete_row(&self, row_id: &RowId) -> Option<DatabaseRow> {
@@ -249,7 +239,7 @@ impl Block {
   }
 
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
-  pub fn get_or_init_row(&mut self, row_id: RowId) -> Option<RefMut<RowId, DatabaseRow>> {
+  pub fn get_or_init_row(&self, row_id: RowId) -> Option<RefMut<RowId, DatabaseRow>> {
     let result = self
       .rows
       .entry(row_id.clone())

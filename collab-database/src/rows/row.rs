@@ -228,13 +228,19 @@ impl RowDetail {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Row {
   pub id: RowId,
+  #[serde(default)]
   pub database_id: String,
   pub cells: Cells,
   pub height: i32,
+  #[serde(default = "default_visibility")]
   pub visibility: bool,
   pub created_at: i64,
   #[serde(alias = "last_modified")]
   pub modified_at: i64,
+}
+
+fn default_visibility() -> bool {
+  true
 }
 
 pub enum RowMetaKey {

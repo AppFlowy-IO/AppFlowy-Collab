@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use collab::preclude::{
-  DeepObservable, EntryChange, Event, Map, MapPrelim, MapRef, Subscription, ToJson, TransactionMut,
+  DeepObservable, EntryChange, Event, Map, MapPrelim, MapRef, Subscription, TransactionMut,
   YrsValue,
 };
 use tokio::sync::broadcast;
@@ -78,10 +78,10 @@ fn subscription_changes(tx: RowRelationUpdateSender, container: &MapRef) -> Subs
                 }
               },
               EntryChange::Updated(_k, _v) => {
-                println!("update: {}", event.target().to_json(txn));
+                //println!("update: {}", event.target().to_json(txn));
               },
               EntryChange::Removed(v) => {
-                println!("remove: {}", event.target().to_json(txn));
+                //println!("remove: {}", event.target().to_json(txn));
                 if let YrsValue::YMap(map_ref) = v {
                   if let Some(row_relation) = row_relation_from_map_ref(txn, map_ref) {
                     tracing::trace!("delete: {:?}", row_relation);

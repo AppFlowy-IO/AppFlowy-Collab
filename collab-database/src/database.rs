@@ -284,7 +284,12 @@ impl Database {
 
   /// Return the [Row] with the given row id.
   pub fn get_row(&self, row_id: &RowId) -> Row {
-    if let Some(row) = self.body.block.row(row_id).and_then(|row| row.get_row()) {
+    if let Some(row) = self
+      .body
+      .block
+      .get_or_init_row(row_id.clone())
+      .and_then(|row| row.get_row())
+    {
       row
     } else {
       Row::empty(row_id.clone(), &*self.get_database_id())
@@ -299,7 +304,7 @@ impl Database {
   /// Return the [RowMeta] with the given row id.
   pub fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
     let meta = self.body.block.get_row_meta(row_id)?;
-    let row = self.body.block.row(row_id)?.get_row()?;
+    let row = self.body.block.get_or_init_row(row_id.clone())?.get_row()?;
     RowDetail::new(row, meta)
   }
 
@@ -912,7 +917,7 @@ impl Database {
   /// Duplicate the row, and insert it after the original row.
   pub fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
     let database_id = self.get_database_id();
-    let row = self.body.block.row(row_id)?.get_row()?;
+    let row = self.body.block.get_or_init_row(row_id.clone())?.get_row()?;
     let timestamp = timestamp();
     Some(CreateRowParams {
       id: gen_row_id(),

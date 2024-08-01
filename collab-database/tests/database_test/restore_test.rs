@@ -90,7 +90,6 @@ async fn open_020_history_database_test() {
     db,
   );
   let actual = database_test.to_json_value();
-  println!("{:#?}", actual);
 
   let expected = json!({
     "fields": [
