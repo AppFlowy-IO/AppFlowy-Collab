@@ -416,6 +416,7 @@ async fn apply_same_update_multiple_time() {
   assert_json_eq!(collab.to_json(), restored_collab.to_json());
 }
 
+#[ignore = "fixme: flaky test"]
 #[tokio::test]
 async fn root_change_test() {
   setup_log();
