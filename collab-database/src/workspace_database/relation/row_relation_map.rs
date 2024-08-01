@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use collab::preclude::{
-  DeepObservable, EntryChange, Event, Map, MapRefWrapper, Subscription, ToJson, TransactionMut,
+  DeepObservable, EntryChange, Event, Map, MapPrelim, MapRef, Subscription, TransactionMut,
   YrsValue,
 };
 use tokio::sync::broadcast;
@@ -19,14 +19,14 @@ pub type RowRelationUpdateSender = broadcast::Sender<RowRelationChange>;
 pub type RowRelationUpdateReceiver = broadcast::Receiver<RowRelationChange>;
 
 pub struct RowRelationMap {
-  container: MapRefWrapper,
+  container: MapRef,
   tx: RowRelationUpdateSender,
   #[allow(dead_code)]
   subscription: Subscription,
 }
 
 impl RowRelationMap {
-  pub fn from_map_ref(mut container: MapRefWrapper) -> Self {
+  pub fn from_map_ref(mut container: MapRef) -> Self {
     let (tx, _) = broadcast::channel(1000);
     let subscription = subscription_changes(tx.clone(), &mut container);
     Self {
@@ -40,14 +40,10 @@ impl RowRelationMap {
     self.tx.subscribe()
   }
 
-  pub fn insert_relation(&self, relation: RowRelation) {
-    self
-      .container
-      .with_transact_mut(|txn| self.insert_relation_with_txn(txn, relation))
-  }
-
   pub fn insert_relation_with_txn(&self, txn: &mut TransactionMut, relation: RowRelation) {
-    let map_ref = self.container.create_map_with_txn(txn, &relation.id());
+    let map_ref: MapRef = self
+      .container
+      .insert(txn, relation.id(), MapPrelim::default());
     RowRelationBuilder::new(
       &relation.linking_database_id,
       &relation.linked_by_database_id,
@@ -59,21 +55,12 @@ impl RowRelationMap {
     });
   }
 
-  pub fn remove_relation(&self, relation_id: &str) {
-    self.container.with_transact_mut(|txn| {
-      self.remove_relation_with_txn(txn, relation_id);
-    })
-  }
-
   pub fn remove_relation_with_txn(&self, txn: &mut TransactionMut, relation_id: &str) {
     self.container.remove(txn, relation_id);
   }
 }
 
-fn subscription_changes(
-  tx: RowRelationUpdateSender,
-  container: &mut MapRefWrapper,
-) -> Subscription {
+fn subscription_changes(tx: RowRelationUpdateSender, container: &MapRef) -> Subscription {
   container.observe_deep(move |txn, events| {
     for deep_event in events.iter() {
       match deep_event {
@@ -91,10 +78,10 @@ fn subscription_changes(
                 }
               },
               EntryChange::Updated(_k, _v) => {
-                println!("update: {}", event.target().to_json(txn));
+                //println!("update: {}", event.target().to_json(txn));
               },
               EntryChange::Removed(v) => {
-                println!("remove: {}", event.target().to_json(txn));
+                //println!("remove: {}", event.target().to_json(txn));
                 if let YrsValue::YMap(map_ref) = v {
                   if let Some(row_relation) = row_relation_from_map_ref(txn, map_ref) {
                     tracing::trace!("delete: {:?}", row_relation);
@@ -113,7 +100,7 @@ fn subscription_changes(
 }
 
 impl Deref for RowRelationMap {
-  type Target = MapRefWrapper;
+  type Target = MapRef;
 
   fn deref(&self) -> &Self::Target {
     &self.container

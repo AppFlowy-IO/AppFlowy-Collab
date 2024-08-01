@@ -8,15 +8,13 @@ use crate::helper::TestCalendarLayoutSetting;
 
 #[tokio::test]
 async fn get_layout_setting_test() {
-  let database_test = create_database_with_two_layout_settings().await;
+  let database_test = create_database_with_two_layout_settings();
   let layout_setting = database_test
-    .views
     .get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Board)
     .unwrap();
   assert_eq!(layout_setting.field_id, "f1");
 
   let layout_setting = database_test
-    .views
     .get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Grid)
     .unwrap();
   assert_eq!(layout_setting.field_id, "f2");
@@ -33,11 +31,9 @@ async fn create_database_view_with_layout_setting_test() {
       true,
     ))
     .with_layout_setting(TestCalendarLayoutSetting::new("f1".to_string()).into())
-    .build()
-    .await;
+    .build();
 
   let layout_setting = database_test
-    .views
     .get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Calendar)
     .unwrap();
   assert_eq!(layout_setting.field_id, "f1");
@@ -45,22 +41,20 @@ async fn create_database_view_with_layout_setting_test() {
 
 #[tokio::test]
 async fn remove_layout_setting_test() {
-  let database_test = create_database_with_two_layout_settings().await;
-  database_test.views.update_database_view("v1", |view| {
+  let mut database_test = create_database_with_two_layout_settings();
+  database_test.update_database_view("v1", |view| {
     view.remove_layout_setting(&DatabaseLayout::Board);
   });
 
-  let layout_setting = database_test
-    .views
-    .get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Board);
+  let layout_setting =
+    database_test.get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Board);
   assert!(layout_setting.is_none());
 }
 
 #[tokio::test]
 async fn update_layout_setting_test() {
-  let database_test = create_database_with_two_layout_settings().await;
+  let mut database_test = create_database_with_two_layout_settings();
   let layout_setting = database_test
-    .views
     .get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Board)
     .unwrap();
   assert_eq!(layout_setting.first_day_of_week, 0);
@@ -74,15 +68,14 @@ async fn update_layout_setting_test() {
 
   //
   let layout_setting = database_test
-    .views
     .get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Board)
     .unwrap();
   assert_eq!(layout_setting.first_day_of_week, 2);
   assert!(!layout_setting.show_weekends);
 }
 
-async fn create_database_with_two_layout_settings() -> DatabaseTest {
-  let database_test = create_database_with_default_data(1, "1").await;
+fn create_database_with_two_layout_settings() -> DatabaseTest {
+  let mut database_test = create_database_with_default_data(1, "1");
   let layout_setting_1 = TestCalendarLayoutSetting::new("f1".to_string());
   let layout_setting_2 = TestCalendarLayoutSetting::new("f2".to_string());
 

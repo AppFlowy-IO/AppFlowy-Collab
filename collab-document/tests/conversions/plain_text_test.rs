@@ -3,13 +3,13 @@ use collab_document::{
 };
 use nanoid::nanoid;
 
-use crate::util::{insert_block, DocumentTest};
+use crate::util::DocumentTest;
 
-#[tokio::test]
-async fn plain_text_1_test() {
+#[test]
+fn plain_text_1_test() {
   let doc_id = "1";
-  let test = DocumentTest::new(1, doc_id).await;
-  let document = test.document;
+  let test = DocumentTest::new(1, doc_id);
+  let mut document = test.document;
   let paragraphs = vec![
     "Welcome to AppFlowy!".to_string(),
     "Here are the basics".to_string(),
@@ -20,7 +20,7 @@ async fn plain_text_1_test() {
     "Click `+ New Page `button at the bottom of your sidebar to add a new page.".to_string(),
     "Click `+` next to any page title in the sidebar to quickly add a new subpage, `Document`, `Grid`, or `Kanban Board`.".to_string(),
   ];
-  insert_paragraphs(&document, paragraphs.clone());
+  insert_paragraphs(&mut document, paragraphs.clone());
 
   let plain_text = convert_document_to_plain_text(document).unwrap();
   let mut splitted = plain_text.split('\n').collect::<Vec<&str>>();
@@ -34,7 +34,7 @@ async fn plain_text_1_test() {
   }
 }
 
-fn insert_paragraphs(document: &Document, paragraphs: Vec<String>) {
+fn insert_paragraphs(document: &mut Document, paragraphs: Vec<String>) {
   let page_id = document.get_page_id().unwrap();
   let mut prev_id = "".to_string();
   for paragraph in paragraphs {
@@ -50,10 +50,10 @@ fn insert_paragraphs(document: &Document, paragraphs: Vec<String>) {
       data: Default::default(),
     };
 
-    insert_block(document, block, prev_id).unwrap();
+    document.insert_block(block, Some(prev_id)).unwrap();
 
     prev_id = block_id.clone();
 
-    document.create_text(&text_id, format!(r#"[{{"insert": "{}"}}]"#, paragraph));
+    document.apply_text_delta(&text_id, format!(r#"[{{"insert": "{}"}}]"#, paragraph));
   }
 }

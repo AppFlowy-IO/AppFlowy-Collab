@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
-use collab::core::array_wrapper::ArrayRefExtension;
-use collab::core::value::YrsValueExtension;
 use collab::preclude::{
-  Array, ArrayRef, Map, MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut, YrsValue,
+  Array, ArrayRef, Map, MapExt, MapPrelim, MapRef, ReadTxn, TransactionMut, YrsValue,
 };
 
 #[derive(Debug, Clone)]
@@ -27,7 +25,7 @@ impl RowRelation {
 }
 
 pub struct RowRelationBuilder<'a, 'b> {
-  map_ref: MapRefWrapper,
+  map_ref: MapRef,
   txn: &'a mut TransactionMut<'b>,
 }
 
@@ -36,10 +34,10 @@ impl<'a, 'b> RowRelationBuilder<'a, 'b> {
     linking_database_id: &str,
     linked_by_database_id: &str,
     txn: &'a mut TransactionMut<'b>,
-    map_ref: MapRefWrapper,
+    map_ref: MapRef,
   ) -> Self {
-    map_ref.insert_str_with_txn(txn, LINKING_DB_ID, linking_database_id);
-    map_ref.insert_str_with_txn(txn, LINKED_BY_DB_ID, linked_by_database_id);
+    map_ref.insert(txn, LINKING_DB_ID, linking_database_id);
+    map_ref.insert(txn, LINKED_BY_DB_ID, linked_by_database_id);
     Self { map_ref, txn }
   }
 
@@ -66,7 +64,7 @@ impl<'a, 'b> RowRelationUpdate<'a, 'b> {
 
   pub fn set_row_connections(self, connections: HashMap<String, RowConnection>) -> Self {
     connections.into_iter().for_each(|(k, v)| {
-      let map_ref = self.map_ref.get_or_create_map_with_txn(self.txn, &k);
+      let map_ref: MapRef = self.map_ref.get_or_init(self.txn, k);
       RowConnectionBuilder::new(&v.row_id, self.txn, map_ref).update(|update| {
         update
           .set_linking_rows(v.linking_rows)
@@ -82,16 +80,16 @@ impl<'a, 'b> RowRelationUpdate<'a, 'b> {
 }
 
 pub fn row_relation_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<RowRelation> {
-  let linking_database_id = map_ref.get_str_with_txn(txn, LINKING_DB_ID)?;
-  let linked_by_database_id = map_ref.get_str_with_txn(txn, LINKED_BY_DB_ID)?;
+  let linking_database_id: String = map_ref.get_with_txn(txn, LINKING_DB_ID)?;
+  let linked_by_database_id: String = map_ref.get_with_txn(txn, LINKED_BY_DB_ID)?;
   let row_connections = map_ref
-    .get_map_with_txn(txn, ROW_CONNECTIONS)
+    .get_with_txn::<_, MapRef>(txn, ROW_CONNECTIONS)
     .map(|map_ref| {
       map_ref
         .iter(txn)
         .flat_map(|(k, v)| {
-          let map_ref = v.to_ymap()?;
-          let row_connection = row_connection_from_map_ref(txn, map_ref)?;
+          let map_ref = v.cast().ok()?;
+          let row_connection = row_connection_from_map_ref(txn, &map_ref)?;
           Some((k.to_string(), row_connection))
         })
         .collect::<HashMap<String, RowConnection>>()
@@ -123,7 +121,7 @@ pub struct RowConnectionBuilder<'a, 'b> {
 
 impl<'a, 'b> RowConnectionBuilder<'a, 'b> {
   pub fn new(id: &'a str, txn: &'a mut TransactionMut<'b>, map_ref: MapRef) -> Self {
-    map_ref.insert_str_with_txn(txn, ROW_ID, id);
+    map_ref.insert(txn, ROW_ID, id);
     Self { map_ref, txn }
   }
 
@@ -151,7 +149,7 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
   pub fn set_linking_rows(self, rows: Vec<LinkingRow>) -> Self {
     let array_ref: ArrayRef = self.map_ref.get_or_init(self.txn, LINKING_ROWS);
     for row in rows {
-      let map_ref = array_ref.insert_map_with_txn(self.txn, None);
+      let map_ref = array_ref.push_back(self.txn, MapPrelim::default());
       row.fill_map_with_txn(self.txn, map_ref);
     }
     self
@@ -161,7 +159,7 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
     let array_ref: ArrayRef = self.map_ref.get_or_init(self.txn, LINKED_BY_ROWS);
 
     for row in rows {
-      let map_ref = array_ref.insert_map_with_txn(self.txn, None);
+      let map_ref = array_ref.push_back(self.txn, MapPrelim::default());
       row.fill_map_with_txn(self.txn, map_ref);
     }
     self
@@ -173,14 +171,14 @@ impl<'a, 'b> RowConnectionUpdate<'a, 'b> {
 }
 
 pub fn row_connection_from_map_ref<T: ReadTxn>(txn: &T, map_ref: &MapRef) -> Option<RowConnection> {
-  let row_id = map_ref.get_str_with_txn(txn, ROW_ID)?;
+  let row_id: String = map_ref.get_with_txn(txn, ROW_ID)?;
   let linking_rows = map_ref
-    .get_array_ref_with_txn(txn, LINKING_ROWS)?
+    .get_with_txn::<_, ArrayRef>(txn, LINKING_ROWS)?
     .iter(txn)
     .flat_map(|value| LinkingRow::from_yrs_value(txn, value))
     .collect::<Vec<_>>();
   let linked_by_rows = map_ref
-    .get_array_ref_with_txn(txn, LINKED_BY_ROWS)?
+    .get_with_txn::<_, ArrayRef>(txn, LINKED_BY_ROWS)?
     .iter(txn)
     .flat_map(|value| LinkedByRow::from_yrs_value(txn, value))
     .collect::<Vec<_>>();
@@ -199,15 +197,15 @@ pub struct LinkingRow {
 
 impl LinkingRow {
   pub fn from_yrs_value<T: ReadTxn>(txn: &T, value: YrsValue) -> Option<LinkingRow> {
-    let map_ref = value.to_ymap()?;
-    let row_id = map_ref.get_str_with_txn(txn, "row_id")?;
-    let content = map_ref.get_str_with_txn(txn, "content")?;
+    let map_ref: MapRef = value.cast().ok()?;
+    let row_id: String = map_ref.get_with_txn(txn, "row_id")?;
+    let content: String = map_ref.get_with_txn(txn, "content")?;
     Some(Self { row_id, content })
   }
 
   pub fn fill_map_with_txn(self, txn: &mut TransactionMut, map_ref: MapRef) {
-    map_ref.insert_str_with_txn(txn, "row_id", self.row_id);
-    map_ref.insert_str_with_txn(txn, "content", self.content);
+    map_ref.insert(txn, "row_id", self.row_id);
+    map_ref.insert(txn, "content", self.content);
   }
 }
 
@@ -218,12 +216,13 @@ pub struct LinkedByRow {
 
 impl LinkedByRow {
   pub fn from_yrs_value<T: ReadTxn>(txn: &T, value: YrsValue) -> Option<LinkedByRow> {
-    let map_ref = value.to_ymap()?;
-    let row_id = map_ref.get_str_with_txn(txn, "row_id")?;
-    Some(Self { row_id })
+    let map_ref: MapRef = value.cast().ok()?;
+    Some(Self {
+      row_id: map_ref.get_with_txn(txn, "row_id")?,
+    })
   }
 
   pub fn fill_map_with_txn(self, txn: &mut TransactionMut, map_ref: MapRef) {
-    map_ref.insert_str_with_txn(txn, "row_id", self.row_id);
+    map_ref.insert(txn, "row_id", self.row_id);
   }
 }

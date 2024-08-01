@@ -1,6 +1,6 @@
-use collab::core::any_array::ArrayMap;
-use collab::core::any_map::{AnyMap, AnyMapBuilder};
+use collab::preclude::Any;
+use std::collections::HashMap;
 
-pub type SortArray = ArrayMap;
-pub type SortMap = AnyMap;
-pub type SortMapBuilder = AnyMapBuilder;
+pub type SortArray = Vec<Any>;
+pub type SortMap = HashMap<String, Any>;
+pub type SortMapBuilder = HashMap<String, Any>;

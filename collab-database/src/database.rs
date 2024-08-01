@@ -1,29 +1,25 @@
 use std::collections::HashMap;
-use std::ops::Deref;
-use std::rc::Rc;
+use std::ops::{Deref, DerefMut};
 
 use std::sync::{Arc, Weak};
 
-use collab::core::any_map::AnyMapExtension;
-use collab::core::collab::MutexCollab;
-
-use collab::core::collab_state::{SnapshotState, SyncState};
-
 use collab::preclude::{
-  Collab, JsonValue, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut,
+  Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
+  TransactionMut,
 };
+use collab::util::{AnyExt, ArrayExt};
 use collab_entity::define::{DATABASE, DATABASE_ID};
 use collab_entity::CollabType;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
-use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 pub use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{Block, BlockEvent};
 use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
-use crate::fields::{Field, FieldChangeReceiver, FieldMap};
+use crate::fields::{Field, FieldChangeReceiver, FieldMap, FieldUpdate};
 use crate::meta::MetaMap;
 use crate::rows::{
   CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowChangeReceiver, RowDetail, RowId,
@@ -31,23 +27,15 @@ use crate::rows::{
 };
 use crate::views::{
   CalculationMap, CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator,
-  DatabaseLayout, DatabaseView, DatabaseViewMeta, FieldOrder, FieldSettingsByFieldIdMap,
-  FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderObjectPosition, RowOrder,
-  SortMap, ViewChangeReceiver, ViewMap,
+  DatabaseLayout, DatabaseView, DatabaseViewMeta, DatabaseViewUpdate, FieldOrder,
+  FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
+  OrderObjectPosition, RowOrder, SortMap, ViewChangeReceiver, ViewMap,
 };
 use crate::workspace_database::DatabaseCollabService;
 
 pub struct Database {
-  #[allow(dead_code)]
-  inner: Arc<MutexCollab>,
-  pub(crate) root: MapRefWrapper,
-  pub views: Rc<ViewMap>,
-  pub fields: Rc<FieldMap>,
-  pub metas: Rc<MetaMap>,
-  /// It used to keep track of the blocks. Each block contains a list of [Row]s
-  /// A database rows will be stored in multiple blocks.
-  pub block: Block,
-  pub notifier: DatabaseNotify,
+  pub collab: Collab,
+  pub body: DatabaseBody,
 }
 
 const FIELDS: &str = "fields";
@@ -57,22 +45,34 @@ const METAS: &str = "metas";
 pub struct DatabaseContext {
   pub uid: i64,
   pub db: Weak<CollabKVDB>,
-  pub collab: Arc<MutexCollab>,
+  pub collab: Collab,
   pub collab_service: Arc<dyn DatabaseCollabService>,
   pub notifier: DatabaseNotify,
 }
 
 impl Database {
+  /// Get or Create a database with the given database_id.
+  pub fn new(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
+    if database_id.is_empty() {
+      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
+    }
+    let (body, collab) = DatabaseBody::new(database_id.to_string(), context);
+    Ok(Self { collab, body })
+  }
   /// Create a new database with the given [CreateDatabaseParams]
   /// The method will set the inline view id to the given view_id
   /// from the [CreateDatabaseParams].
-  pub fn create_with_inline_view(
+  pub fn new_with_view(
     params: CreateDatabaseParams,
     context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
-    // Get or create a empty database with the given database_id
-    let this = Self::get_or_create(&params.database_id, context)?;
+    // Get or create empty database with the given database_id
+    let mut this = Self::new(&params.database_id, context)?;
+    this.init(params)?;
+    Ok(this)
+  }
 
+  fn init(&mut self, params: CreateDatabaseParams) -> Result<(), DatabaseError> {
     let CreateDatabaseParams {
       database_id: _,
       rows,
@@ -88,358 +88,228 @@ impl Database {
         return Err(DatabaseError::DatabaseViewNotExist);
       };
 
-    let row_orders = this.block.create_rows(rows);
+    let row_orders = self.body.block.create_rows(rows);
     let field_orders: Vec<FieldOrder> = fields.iter().map(FieldOrder::from).collect();
-    this.root.with_transact_mut(|txn| {
-      // Set the inline view id. The inline view id should not be
-      // empty if the current database exists.
-      this.set_inline_view_with_txn(txn, &inline_view_id);
+    let mut txn = self.collab.context.transact_mut();
+    // Set the inline view id. The inline view id should not be
+    // empty if the current database exists.
+    self
+      .body
+      .metas
+      .set_inline_view_id(&mut txn, &inline_view_id);
 
-      // Insert the given fields into the database
-      for field in fields {
-        this.fields.insert_field_with_txn(txn, field);
-      }
-      // Create the inline view
-      this.create_view_with_txn(txn, inline_view, field_orders.clone(), row_orders.clone())?;
+    // Insert the given fields into the database
+    for field in fields {
+      self.body.fields.insert_field(&mut txn, field);
+    }
+    // Create the inline view
+    self.body.create_view(
+      &mut txn,
+      inline_view,
+      field_orders.clone(),
+      row_orders.clone(),
+    )?;
 
-      // create the linked views
-      for linked_view in views {
-        this.create_linked_view_with_txn(
-          txn,
-          linked_view,
-          field_orders.clone(),
-          row_orders.clone(),
-        )?;
-      }
-
-      Ok::<(), DatabaseError>(())
-    })?;
-
-    Ok(this)
-  }
-
-  pub fn validate(collab: &Collab) -> Result<(), DatabaseError> {
-    CollabType::Database
-      .validate_require_data(collab)
-      .map_err(|_| DatabaseError::NoRequiredData)?;
-    Ok(())
-  }
-
-  pub fn flush(&self) -> Result<(), DatabaseError> {
-    if let Some(collab) = self.inner.try_lock() {
-      collab.flush();
+    // create the linked views
+    for linked_view in views {
+      self.body.create_linked_view(
+        &mut txn,
+        linked_view,
+        field_orders.clone(),
+        row_orders.clone(),
+      )?;
     }
     Ok(())
   }
 
+  pub fn validate(&self) -> Result<(), DatabaseError> {
+    CollabType::Database
+      .validate_require_data(&self.collab)
+      .map_err(|_| DatabaseError::NoRequiredData)?;
+    Ok(())
+  }
+
   pub fn subscribe_row_change(&self) -> RowChangeReceiver {
-    self.notifier.row_change_tx.subscribe()
+    self.body.notifier.row_change_tx.subscribe()
   }
 
   pub fn subscribe_field_change(&self) -> FieldChangeReceiver {
-    self.notifier.field_change_tx.subscribe()
+    self.body.notifier.field_change_tx.subscribe()
   }
 
   pub fn subscribe_view_change(&self) -> ViewChangeReceiver {
-    self.notifier.view_change_tx.subscribe()
+    self.body.notifier.view_change_tx.subscribe()
   }
 
   pub fn subscribe_block_event(&self) -> tokio::sync::broadcast::Receiver<BlockEvent> {
-    self.block.subscribe_event()
+    self.body.block.subscribe_event()
   }
 
-  pub fn get_collab(&self) -> &Arc<MutexCollab> {
-    &self.inner
+  pub fn get_all_field_orders(&self) -> Vec<FieldOrder> {
+    let txn = self.collab.transact();
+    self.body.fields.get_all_field_orders(&txn)
   }
 
-  pub fn load_all_rows(&self) {
+  pub fn get_all_views(&self) -> Vec<DatabaseView> {
+    let txn = self.collab.transact();
+    self.body.views.get_all_views(&txn)
+  }
+
+  pub fn get_database_view_layout(&self, view_id: &str) -> DatabaseLayout {
+    let txn = self.collab.transact();
+    self.body.views.get_database_view_layout(&txn, view_id)
+  }
+
+  pub async fn load_all_rows(&self) {
     let row_ids = self
       .get_inline_row_orders()
       .into_iter()
       .map(|row_order| row_order.id)
       .take(100)
       .collect::<Vec<_>>();
-    self.block.batch_load_rows(row_ids);
-  }
-
-  /// Get or Create a database with the given database_id.
-  pub fn get_or_create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
-    if database_id.is_empty() {
-      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
-    }
-
-    // Get the database from the collab
-    let database = {
-      let collab_guard = context.collab.lock();
-      let txn = collab_guard.transact();
-      collab_guard.get_map_with_txn(&txn, vec![DATABASE])
-    };
-
-    // If the database exists, return the database.
-    // Otherwise, create a new database with the given database_id
-    match database {
-      None => Self::create(database_id, context),
-      Some(database) => {
-        let collab_guard = context.collab.lock();
-        let (fields, views, metas) = collab_guard.with_origin_transact_mut(|txn| {
-          // { DATABASE: { FIELDS: {:} } }
-          let fields = collab_guard
-            .get_map_with_txn(txn, vec![DATABASE, FIELDS])
-            .unwrap();
-
-          // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
-          let views = collab_guard
-            .get_map_with_txn(txn, vec![DATABASE, VIEWS])
-            .unwrap();
-
-          // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
-          let metas = collab_guard
-            .get_map_with_txn(txn, vec![DATABASE, METAS])
-            .unwrap();
-
-          let fields = FieldMap::new(fields, context.notifier.field_change_tx.clone());
-          let views = ViewMap::new(views, context.notifier.view_change_tx.clone());
-          let metas = MetaMap::new(metas);
-
-          (fields, views, metas)
-        });
-
-        let block = Block::new(
-          context.uid,
-          database_id.to_string(),
-          context.db.clone(),
-          context.collab_service.clone(),
-          context.notifier.row_change_tx.clone(),
-        );
-
-        drop(collab_guard);
-
-        Ok(Self {
-          inner: context.collab,
-          root: database,
-          block,
-          views: Rc::new(views),
-          fields: Rc::new(fields),
-          metas: Rc::new(metas),
-          notifier: context.notifier,
-        })
-      },
-    }
-  }
-
-  /// Create a new database with the given database_id and context.
-  fn create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
-    if database_id.is_empty() {
-      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
-    }
-    let collab_guard = context.collab.lock();
-    let (database, fields, views, metas) = collab_guard.with_origin_transact_mut(|txn| {
-      // { DATABASE: {:} }
-      let database = collab_guard
-        .get_map_with_txn(txn, vec![DATABASE])
-        .unwrap_or_else(|| collab_guard.insert_map_with_txn(txn, DATABASE));
-
-      database.insert_str_with_txn(txn, DATABASE_ID, database_id);
-
-      // { DATABASE: { FIELDS: {:} } }
-      let fields = collab_guard
-        .get_map_with_txn(txn, vec![DATABASE, FIELDS])
-        .unwrap_or_else(|| database.create_map_with_txn(txn, FIELDS));
-
-      // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
-      let views = collab_guard
-        .get_map_with_txn(txn, vec![DATABASE, VIEWS])
-        .unwrap_or_else(|| database.create_map_with_txn(txn, VIEWS));
-
-      // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
-      let metas = collab_guard
-        .get_map_with_txn(txn, vec![DATABASE, METAS])
-        .unwrap_or_else(|| database.create_map_with_txn(txn, METAS));
-
-      (database, fields, views, metas)
-    });
-    drop(collab_guard);
-    let views = ViewMap::new(views, context.notifier.view_change_tx.clone());
-    let fields = FieldMap::new(fields, context.notifier.field_change_tx.clone());
-    let metas = MetaMap::new(metas);
-
-    let block = Block::new(
-      context.uid,
-      database_id.to_string(),
-      context.db.clone(),
-      context.collab_service.clone(),
-      context.notifier.row_change_tx.clone(),
-    );
-
-    Ok(Self {
-      inner: context.collab,
-      root: database,
-      block,
-      views: Rc::new(views),
-      fields: Rc::new(fields),
-      metas: Rc::new(metas),
-      notifier: context.notifier,
-    })
-  }
-
-  pub fn subscribe_sync_state(&self) -> WatchStream<SyncState> {
-    self.inner.lock().subscribe_sync_state()
-  }
-
-  pub fn subscribe_snapshot_state(&self) -> WatchStream<SnapshotState> {
-    self.inner.lock().subscribe_snapshot_state()
-  }
-
-  /// Return the database id
-  pub fn get_database_id(&self) -> String {
-    let txn = self.root.transact();
-    // It's safe to unwrap. Because the database_id must exist
-    self.root.get_str_with_txn(&txn, DATABASE_ID).unwrap()
+    self.body.block.batch_load_rows(row_ids).await;
   }
 
   /// Return the database id with a transaction
-  pub fn get_database_id_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
-    self.root.get_str_with_txn(txn, DATABASE_ID).unwrap()
+  pub fn get_database_id(&self) -> String {
+    let txn = self.collab.transact();
+    self.body.get_database_id(&txn)
   }
 
   /// Create a new row from the given params.
   /// This row will be inserted to the end of rows of each view that
   /// reference the given database. Return the row order if the row is
   /// created successfully. Otherwise, return None.
-  pub fn create_row(&self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
+  pub fn create_row(&mut self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
     let params = CreateRowParamsValidator::validate(params)?;
-    let row_order = self.block.create_row(params);
-    self.root.with_transact_mut(|txn| {
-      self
-        .views
-        .update_all_views_with_txn(txn, |_view_id, update| {
-          update.insert_row_order(&row_order, &OrderObjectPosition::default());
-        });
-    });
+    let row_order = self.body.block.create_row(params);
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_all_views(&mut txn, |_view_id, update| {
+        update.insert_row_order(&row_order, &OrderObjectPosition::default());
+      });
     Ok(row_order)
+  }
+
+  pub fn update_database_view<F>(&mut self, view_id: &str, f: F)
+  where
+    F: FnOnce(DatabaseViewUpdate),
+  {
+    let mut txn = self.collab.transact_mut();
+    self.body.views.update_database_view(&mut txn, view_id, f);
   }
 
   /// Create a new row from the given view.
   /// This row will be inserted into corresponding [Block]. The [RowOrder] of this row will
   /// be inserted to each view.
   pub fn create_row_in_view(
-    &self,
+    &mut self,
     view_id: &str,
     params: CreateRowParams,
   ) -> Option<(usize, RowOrder)> {
-    self
-      .root
-      .with_transact_mut(|txn| self.create_row_with_txn(txn, view_id, params))
-  }
-
-  /// Create a new row from the given view.
-  /// This row will be inserted into corresponding [Block]. The [RowOrder] of this row will
-  /// be inserted to each view.
-  pub fn create_row_with_txn(
-    &self,
-    txn: &mut TransactionMut,
-    view_id: &str,
-    params: CreateRowParams,
-  ) -> Option<(usize, RowOrder)> {
-    let row_position = params.row_position.clone();
-    let row_order = self.block.create_row(params);
-
-    self
-      .views
-      .update_all_views_with_txn(txn, |_view_id, update| {
-        update.insert_row_order(&row_order, &row_position);
-      });
-    let index = self
-      .index_of_row_with_txn(txn, view_id, row_order.id.clone())
-      .unwrap_or_default();
-    Some((index, row_order))
+    let mut txn = self.collab.transact_mut();
+    self.body.create_row(&mut txn, view_id, params)
   }
 
   /// Remove the row
   /// The [RowOrder] of each view representing this row will be removed.
-  pub fn remove_row(&self, row_id: &RowId) -> Option<Row> {
-    self.root.with_transact_mut(|txn| {
-      self.views.update_all_views_with_txn(txn, |_, update| {
+  pub fn remove_row(&mut self, row_id: &RowId) -> Option<Row> {
+    {
+      let mut txn = self.collab.transact_mut();
+      self.body.views.update_all_views(&mut txn, |_, update| {
         update.remove_row_order(row_id);
       });
-    });
+    };
 
-    let row = self.block.get_row(row_id);
-    self.block.delete_row(row_id);
-    Some(row)
+    let row = self.body.block.delete_row(row_id)?;
+    row.get_row()
   }
 
-  pub fn remove_rows(&self, row_ids: &[RowId]) -> Vec<Row> {
-    self.root.with_transact_mut(|txn| {
-      self.views.update_all_views_with_txn(txn, |_, mut update| {
+  pub fn remove_rows(&mut self, row_ids: &[RowId]) -> Vec<Row> {
+    {
+      let mut txn = self.collab.transact_mut();
+      self.body.views.update_all_views(&mut txn, |_, mut update| {
         for row_id in row_ids {
           update = update.remove_row_order(row_id);
         }
       });
-    });
+    };
 
     row_ids
       .iter()
-      .map(|row_id| {
-        let row = self.block.get_row(row_id);
-        self.block.delete_row(row_id);
-        row
+      .flat_map(|row_id| {
+        self
+          .body
+          .block
+          .delete_row(row_id)
+          .and_then(|row| row.get_row())
       })
       .collect()
   }
 
   /// Update the row
-  pub fn update_row<F>(&self, row_id: &RowId, f: F)
+  pub fn update_row<F>(&mut self, row_id: RowId, f: F)
   where
     F: FnOnce(RowUpdate),
   {
-    self.block.update_row(row_id, f);
+    self.body.block.update_row(row_id, f);
   }
 
   /// Update the meta of the row
-  pub fn update_row_meta<F>(&self, row_id: &RowId, f: F)
+  pub fn update_row_meta<F>(&mut self, row_id: &RowId, f: F)
   where
     F: FnOnce(RowMetaUpdate),
   {
-    self.block.update_row_meta(row_id, f);
+    self.body.block.update_row_meta(row_id, f);
   }
 
   /// Return the index of the row in the given view.
   /// Return None if the row is not found.
   pub fn index_of_row(&self, view_id: &str, row_id: &RowId) -> Option<usize> {
-    let view = self.views.get_view(view_id)?;
-    view.row_orders.iter().position(|order| &order.id == row_id)
+    let txn = self.collab.transact();
+    self.body.index_of_row(&txn, view_id, row_id)
   }
 
-  pub fn index_of_row_with_txn<T: ReadTxn>(
-    &self,
-    txn: &T,
-    view_id: &str,
-    row_id: RowId,
-  ) -> Option<usize> {
-    let view = self.views.get_view_with_txn(txn, view_id)?;
-    view.row_orders.iter().position(|order| order.id == row_id)
+  /// Return the [Row] with the given row id.
+  pub fn get_or_init_row(&mut self, row_id: RowId) -> Row {
+    self
+      .body
+      .block
+      .get_or_init_row(row_id.clone())
+      .and_then(|row| row.get_row())
+      .unwrap_or_else(|| Row::empty(row_id, &*self.get_database_id()))
   }
 
   /// Return the [Row] with the given row id.
   pub fn get_row(&self, row_id: &RowId) -> Row {
-    self.block.get_row(row_id)
+    if let Some(row) = self
+      .body
+      .block
+      .get_or_init_row(row_id.clone())
+      .and_then(|row| row.get_row())
+    {
+      row
+    } else {
+      Row::empty(row_id.clone(), &*self.get_database_id())
+    }
   }
 
   /// Return the [RowMeta] with the given row id.
   pub fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
-    self.block.get_row_meta(row_id)
+    self.body.block.get_row_meta(row_id)
   }
 
   /// Return the [RowMeta] with the given row id.
   pub fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
-    let row = self.block.get_row(row_id);
-    let meta = self.block.get_row_meta(row_id)?;
+    let meta = self.body.block.get_row_meta(row_id)?;
+    let row = self.body.block.get_or_init_row(row_id.clone())?.get_row()?;
     RowDetail::new(row, meta)
   }
 
   pub fn get_row_document_id(&self, row_id: &RowId) -> Option<String> {
-    self.block.get_row_document_id(row_id)
+    self.body.block.get_row_document_id(row_id)
   }
 
   /// Return a list of [Row] for the given view.
@@ -450,75 +320,38 @@ impl Database {
   }
 
   pub fn get_row_orders_for_view(&self, view_id: &str) -> Vec<RowOrder> {
-    let txn = self.root.transact();
-    self.views.get_row_orders_with_txn(&txn, view_id)
+    let txn = self.collab.transact();
+    self.body.views.get_row_orders(&txn, view_id)
   }
 
   /// Return a list of [Row] for the given view.
   /// The rows here is ordered by the [RowOrder] of the view.
   pub fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
-    self.block.get_rows_from_row_orders(row_orders)
+    self.body.block.get_rows_from_row_orders(row_orders)
   }
 
   /// Return a list of [RowCell] for the given view and field.
   pub fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<RowCell> {
-    let txn = self.root.transact();
-    self.get_cells_for_field_with_txn(&txn, view_id, field_id)
+    let txn = self.collab.transact();
+    self.body.get_cells_for_field(&txn, view_id, field_id)
   }
 
   /// Return the [RowCell] with the given row id and field id.
   pub fn get_cell(&self, field_id: &str, row_id: &RowId) -> RowCell {
-    let cell = self.block.get_cell(row_id, field_id);
+    let cell = self.body.block.get_cell(row_id, field_id);
     RowCell::new(row_id.clone(), cell)
   }
 
-  /// Return list of [RowCell] for the given view and field.
-  pub fn get_cells_for_field_with_txn<T: ReadTxn>(
-    &self,
-    txn: &T,
-    view_id: &str,
-    field_id: &str,
-  ) -> Vec<RowCell> {
-    let row_orders = self.views.get_row_orders_with_txn(txn, view_id);
-    let rows = self.block.get_rows_from_row_orders(&row_orders);
-    rows
-      .into_iter()
-      .map(|row| RowCell::new(row.id, row.cells.get(field_id).cloned()))
-      .collect::<Vec<RowCell>>()
-  }
-
   pub fn index_of_field(&self, view_id: &str, field_id: &str) -> Option<usize> {
-    let txn = self.root.transact();
-    self.index_of_field_with_txn(&txn, view_id, field_id)
-  }
-
-  /// Return the index of the field in the given view.
-  pub fn index_of_field_with_txn<T: ReadTxn>(
-    &self,
-    txn: &T,
-    view_id: &str,
-    field_id: &str,
-  ) -> Option<usize> {
-    let view = self.views.get_view_with_txn(txn, view_id)?;
-    view
-      .field_orders
-      .iter()
-      .position(|order| order.id == field_id)
+    let txn = self.collab.transact();
+    self.body.index_of_field(&txn, view_id, field_id)
   }
 
   /// Returns the [Field] with the given field ids.
   /// The fields are unordered.
   pub fn get_fields(&self, field_ids: Option<Vec<String>>) -> Vec<Field> {
-    let txn = self.root.transact();
-    self.get_fields_with_txn(&txn, field_ids)
-  }
-
-  pub fn get_fields_with_txn<T: ReadTxn>(
-    &self,
-    txn: &T,
-    field_ids: Option<Vec<String>>,
-  ) -> Vec<Field> {
-    self.fields.get_fields_with_txn(txn, field_ids)
+    let txn = self.collab.transact();
+    self.body.fields.get_fields_with_txn(&txn, field_ids)
   }
 
   /// Get all fields in the database
@@ -526,99 +359,31 @@ impl Database {
   /// If field_ids is None, return all fields
   /// If field_ids is Some, return the fields with the given ids
   pub fn get_fields_in_view(&self, view_id: &str, field_ids: Option<Vec<String>>) -> Vec<Field> {
-    let txn = self.root.transact();
-    self.get_fields_in_view_with_txn(&txn, view_id, field_ids)
-  }
-
-  /// Get all fields in the database
-  /// These fields are ordered by the [FieldOrder] of the view
-  /// If field_ids is None, return all fields
-  /// If field_ids is Some, return the fields with the given ids
-  pub fn get_fields_in_view_with_txn<T: ReadTxn>(
-    &self,
-    txn: &T,
-    view_id: &str,
-    field_ids: Option<Vec<String>>,
-  ) -> Vec<Field> {
-    let field_orders = self.views.get_field_orders_with_txn(txn, view_id);
-    let mut all_field_map = self
-      .fields
-      .get_fields_with_txn(txn, field_ids)
-      .into_iter()
-      .map(|field| (field.id.clone(), field))
-      .collect::<HashMap<String, Field>>();
-
-    if field_orders.len() != all_field_map.len() {
-      tracing::warn!(
-        "🟡Field orders: {} and fields: {} are not the same length",
-        field_orders.len(),
-        all_field_map.len()
-      );
-    }
-
-    field_orders
-      .into_iter()
-      .flat_map(|order| all_field_map.remove(&order.id))
-      .collect()
+    let txn = self.collab.transact();
+    self.body.get_fields_in_view(&txn, view_id, field_ids)
   }
 
   /// Creates a new field, inserts field order and adds a field setting. See
   /// `create_field_with_txn` for more information.
   pub fn create_field(
-    &self,
+    &mut self,
     view_id: Option<&str>,
     field: Field,
     position: &OrderObjectPosition,
     field_settings_by_layout: HashMap<DatabaseLayout, FieldSettingsMap>,
   ) {
-    self.root.with_transact_mut(|txn| {
-      self.create_field_with_txn(txn, view_id, field, position, &field_settings_by_layout);
-    })
-  }
-
-  /// Create a new field that is used by `create_field`, `create_field_with_mut`, and
-  /// `create_linked_view`. In all the database views, insert the field order and add a field setting.
-  /// Then, add the field to the field map.
-  ///
-  /// # Arguments
-  ///
-  /// - `txn`: Read-write transaction in which this field creation will be performed.
-  /// - `view_id`: If specified, the field order will only be inserted according to `position` in that
-  /// specific view. For the others, the field order will be pushed back. If `None`, the field order will
-  /// be inserted according to `position` for all the views.
-  /// - `field`: Field to be inserted.
-  /// - `position`: The position of the new field in the field order array.
-  /// - `field_settings_by_layout`: Helps to create the field settings for the field.
-  pub fn create_field_with_txn(
-    &self,
-    txn: &mut TransactionMut,
-    view_id: Option<&str>,
-    field: Field,
-    position: &OrderObjectPosition,
-    field_settings_by_layout: &HashMap<DatabaseLayout, FieldSettingsMap>,
-  ) {
-    self.views.update_all_views_with_txn(txn, |id, update| {
-      let update = match view_id {
-        Some(view_id) if id == view_id => update.insert_field_order(&field, position),
-        Some(_) => update.insert_field_order(&field, &OrderObjectPosition::default()),
-        None => update.insert_field_order(&field, position),
-      };
-
-      update.update_field_settings_for_fields(
-        vec![field.id.clone()],
-        |field_id, field_setting_update, layout_ty| {
-          field_setting_update.update(
-            field_id,
-            field_settings_by_layout.get(&layout_ty).unwrap().clone(),
-          );
-        },
-      );
-    });
-    self.fields.insert_field_with_txn(txn, field);
+    let mut txn = self.collab.transact_mut();
+    self.body.create_field(
+      &mut txn,
+      view_id,
+      field,
+      position,
+      &field_settings_by_layout,
+    );
   }
 
   pub fn create_field_with_mut(
-    &self,
+    &mut self,
     view_id: &str,
     name: String,
     field_type: i64,
@@ -628,149 +393,164 @@ impl Database {
   ) -> (usize, Field) {
     let mut field = Field::new(gen_field_id(), name, field_type, false);
     f(&mut field);
-    let index = self.root.with_transact_mut(|txn| {
-      self.create_field_with_txn(
-        txn,
-        Some(view_id),
-        field.clone(),
-        position,
-        &field_settings_by_layout,
-      );
-      self
-        .index_of_field_with_txn(txn, view_id, &field.id)
-        .unwrap_or_default()
-    });
+    let mut txn = self.collab.transact_mut();
+    self.body.create_field(
+      &mut txn,
+      Some(view_id),
+      field.clone(),
+      position,
+      &field_settings_by_layout,
+    );
+    let index = self
+      .body
+      .index_of_field(&txn, view_id, &field.id)
+      .unwrap_or_default();
 
     (index, field)
   }
 
-  /// Creates a new field, add a field setting, but inserts the field after a
-  /// certain field_id
-  fn insert_field_with_txn(&self, txn: &mut TransactionMut, field: Field, prev_field_id: &str) {
+  pub fn delete_field(&mut self, field_id: &str) {
+    let mut txn = self.collab.transact_mut();
     self
+      .body
       .views
-      .update_all_views_with_txn(txn, |_view_id, update| {
-        update.insert_field_order(
-          &field,
-          &OrderObjectPosition::After(prev_field_id.to_string()),
-        );
+      .update_all_views(&mut txn, |_view_id, update| {
+        update
+          .remove_field_order(field_id)
+          .remove_field_setting(field_id);
       });
-    self.fields.insert_field_with_txn(txn, field);
-  }
-
-  pub fn delete_field(&self, field_id: &str) {
-    self.root.with_transact_mut(|txn| {
-      self
-        .views
-        .update_all_views_with_txn(txn, |_view_id, update| {
-          update
-            .remove_field_order(field_id)
-            .remove_field_setting(field_id);
-        });
-      self.fields.delete_field_with_txn(txn, field_id);
-    })
+    self.body.fields.delete_field(&mut txn, field_id);
   }
 
   pub fn get_all_group_setting<T: TryFrom<GroupSettingMap>>(&self, view_id: &str) -> Vec<T> {
+    let txn = self.collab.transact();
     self
+      .body
       .views
-      .get_view_group_setting(view_id)
+      .get_view_group_setting(&txn, view_id)
       .into_iter()
       .flat_map(|setting| T::try_from(setting).ok())
       .collect()
   }
 
   /// Add a group setting to the view. If the setting already exists, it will be replaced.
-  pub fn insert_group_setting(&self, view_id: &str, group_setting: impl Into<GroupSettingMap>) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_groups(|group_update| {
-        let group_setting = group_setting.into();
-        if let Some(setting_id) = group_setting.get_str_value("id") {
-          if group_update.contains(&setting_id) {
-            group_update.update(&setting_id, |_| group_setting);
+  pub fn insert_group_setting(&mut self, view_id: &str, group_setting: impl Into<GroupSettingMap>) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_groups(|txn, group_update| {
+          let group_setting = group_setting.into();
+          let settings = if let Some(Any::String(setting_id)) = group_setting.get("id") {
+            group_update.upsert(txn, &*setting_id)
           } else {
-            group_update.push(group_setting);
-          }
-        } else {
-          group_update.push(group_setting);
-        }
+            group_update.push_back(txn, MapPrelim::default())
+          };
+          Any::from(group_setting).fill(txn, &settings).unwrap();
+        });
       });
-    });
   }
 
-  pub fn delete_group_setting(&self, view_id: &str, group_setting_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_groups(|group_update| {
-        group_update.remove(group_setting_id);
+  pub fn delete_group_setting(&mut self, view_id: &str, group_setting_id: &str) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_groups(|txn, group_update| {
+          if let Some(i) = group_update.index_by_id(txn, group_setting_id) {
+            group_update.remove(txn, i);
+          }
+        });
       });
-    });
   }
 
   pub fn update_group_setting(
-    &self,
+    &mut self,
     view_id: &str,
     setting_id: &str,
     f: impl FnOnce(&mut GroupSettingMap),
   ) {
-    self.views.update_database_view(view_id, |view_update| {
-      view_update.update_groups(|group_update| {
-        group_update.update(setting_id, |mut map| {
-          f(&mut map);
-          map
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |view_update| {
+        view_update.update_groups(|txn, group_update| {
+          group_update.update_map(txn, setting_id, f);
         });
       });
-    });
   }
 
-  pub fn remove_group_setting(&self, view_id: &str, setting_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_groups(|group_update| {
-        group_update.remove(setting_id);
-      });
-    });
-  }
-
-  pub fn insert_sort(&self, view_id: &str, sort: impl Into<SortMap>) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_sorts(|sort_update| {
-        let sort = sort.into();
-        if let Some(sort_id) = sort.get_str_value("id") {
-          if sort_update.contains(&sort_id) {
-            sort_update.update(&sort_id, |_| sort);
-          } else {
-            sort_update.push(sort);
+  pub fn remove_group_setting(&mut self, view_id: &str, setting_id: &str) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_groups(|txn, group_update| {
+          if let Some(i) = group_update.index_by_id(txn, setting_id) {
+            group_update.remove(txn, i);
           }
-        } else {
-          sort_update.push(sort);
-        }
+        });
       });
-    });
   }
 
-  pub fn move_sort(&self, view_id: &str, from_sort_id: &str, to_sort_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_sorts(|sort_update| {
-        sort_update.move_to(from_sort_id, to_sort_id);
+  pub fn insert_sort(&mut self, view_id: &str, sort: impl Into<SortMap>) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_sorts(|txn, sort_update| {
+          let sort = sort.into();
+          if let Some(Any::String(sort_id)) = sort.get("id") {
+            let map_ref: MapRef = sort_update.upsert(txn, &sort_id);
+            Any::from(sort).fill(txn, &map_ref).unwrap();
+          } else {
+            sort_update.push_back(txn, sort);
+          }
+        });
       });
-    });
+  }
+
+  pub fn move_sort(&mut self, view_id: &str, from_sort_id: &str, to_sort_id: &str) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_sorts(|txn, sort_update| {
+          if let Some(from) = sort_update.index_by_id(txn, from_sort_id) {
+            if let Some(to) = sort_update.index_by_id(txn, to_sort_id) {
+              sort_update.move_to(txn, from, to);
+            }
+          }
+        });
+      });
   }
 
   pub fn get_all_sorts<T: TryFrom<SortMap>>(&self, view_id: &str) -> Vec<T> {
+    let txn = self.collab.transact();
     self
+      .body
       .views
-      .get_view_sorts(view_id)
+      .get_view_sorts(&txn, view_id)
       .into_iter()
       .flat_map(|sort| T::try_from(sort).ok())
       .collect()
   }
 
   pub fn get_sort<T: TryFrom<SortMap>>(&self, view_id: &str, sort_id: &str) -> Option<T> {
-    let sort_id = sort_id.to_string();
+    let sort_id: Any = sort_id.into();
+    let txn = self.collab.transact();
     let mut sorts = self
+      .body
       .views
-      .get_view_sorts(view_id)
+      .get_view_sorts(&txn, view_id)
       .into_iter()
-      .filter(|filter_map| filter_map.get_str_value("id").as_ref() == Some(&sort_id))
+      .filter(|filter_map| filter_map.get("id") == Some(&sort_id))
       .flat_map(|value| T::try_from(value).ok())
       .collect::<Vec<T>>();
     if sorts.is_empty() {
@@ -780,26 +560,38 @@ impl Database {
     }
   }
 
-  pub fn remove_sort(&self, view_id: &str, sort_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_sorts(|sort_update| {
-        sort_update.remove(sort_id);
+  pub fn remove_sort(&mut self, view_id: &str, sort_id: &str) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_sorts(|txn, sort_update| {
+          if let Some(i) = sort_update.index_by_id(txn, sort_id) {
+            sort_update.remove(txn, i);
+          }
+        });
       });
-    });
   }
 
-  pub fn remove_all_sorts(&self, view_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_sorts(|sort_update| {
-        sort_update.clear();
+  pub fn remove_all_sorts(&mut self, view_id: &str) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_sorts(|txn, sort_update| {
+          sort_update.clear(txn);
+        });
       });
-    });
   }
 
   pub fn get_all_calculations<T: TryFrom<CalculationMap>>(&self, view_id: &str) -> Vec<T> {
+    let txn = self.collab.transact();
     self
+      .body
       .views
-      .get_view_calculations(view_id)
+      .get_view_calculations(&txn, view_id)
       .into_iter()
       .flat_map(|calculation| T::try_from(calculation).ok())
       .collect()
@@ -810,14 +602,14 @@ impl Database {
     view_id: &str,
     field_id: &str,
   ) -> Option<T> {
-    let field_id = field_id.to_string();
+    let field_id: Any = field_id.into();
+    let txn = self.collab.transact();
     let mut calculations = self
+      .body
       .views
-      .get_view_calculations(view_id)
+      .get_view_calculations(&txn, view_id)
       .into_iter()
-      .filter(|calculations_map| {
-        calculations_map.get_str_value("field_id").as_ref() == Some(&field_id)
-      })
+      .filter(|calculations_map| calculations_map.get("field_id") == Some(&field_id))
       .flat_map(|value| T::try_from(value).ok())
       .collect::<Vec<T>>();
 
@@ -828,48 +620,56 @@ impl Database {
     }
   }
 
-  pub fn update_calculation(&self, view_id: &str, calculation: impl Into<CalculationMap>) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_calculations(|calculation_update| {
-        let calculation = calculation.into();
-        if let Some(calculation_id) = calculation.get_str_value("id") {
-          if calculation_update.contains(&calculation_id) {
-            calculation_update.update(&calculation_id, |_| calculation);
-            return;
+  pub fn update_calculation(&mut self, view_id: &str, calculation: impl Into<CalculationMap>) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_calculations(|txn, calculation_update| {
+          let calculation = calculation.into();
+          if let Some(Any::String(calculation_id)) = calculation.get("id") {
+            let map_ref: MapRef = calculation_update.upsert(txn, &calculation_id);
+            Any::from(calculation).fill(txn, &map_ref).unwrap();
           }
-        }
-
-        calculation_update.push(calculation);
+        });
       });
-    });
   }
 
-  pub fn remove_calculation(&self, view_id: &str, calculation_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_calculations(|calculation_update| {
-        if calculation_update.contains(calculation_id) {
-          calculation_update.remove(calculation_id);
-        }
+  pub fn remove_calculation(&mut self, view_id: &str, calculation_id: &str) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_calculations(|txn, calculation_update| {
+          if let Some(i) = calculation_update.index_by_id(txn, calculation_id) {
+            calculation_update.remove(txn, i);
+          }
+        });
       });
-    });
   }
 
   pub fn get_all_filters<T: TryFrom<FilterMap>>(&self, view_id: &str) -> Vec<T> {
+    let txn = self.collab.transact();
     self
+      .body
       .views
-      .get_view_filters(view_id)
+      .get_view_filters(&txn, view_id)
       .into_iter()
       .flat_map(|setting| T::try_from(setting).ok())
       .collect()
   }
 
   pub fn get_filter<T: TryFrom<FilterMap>>(&self, view_id: &str, filter_id: &str) -> Option<T> {
-    let filter_id = filter_id.to_string();
+    let filter_id: Any = filter_id.into();
+    let txn = self.collab.transact();
     let mut filters = self
+      .body
       .views
-      .get_view_filters(view_id)
+      .get_view_filters(&txn, view_id)
       .into_iter()
-      .filter(|filter_map| filter_map.get_str_value("id").as_ref() == Some(&filter_id))
+      .filter(|filter_map| filter_map.get("id") == Some(&filter_id))
       .flat_map(|value| T::try_from(value).ok())
       .collect::<Vec<T>>();
     if filters.is_empty() {
@@ -879,41 +679,53 @@ impl Database {
     }
   }
 
-  pub fn update_filter(&self, view_id: &str, filter_id: &str, f: impl FnOnce(&mut FilterMap)) {
-    self.views.update_database_view(view_id, |view_update| {
-      view_update.update_filters(|filter_update| {
-        filter_update.update(filter_id, |mut map| {
-          f(&mut map);
-          map
+  pub fn update_filter(&mut self, view_id: &str, filter_id: &str, f: impl FnOnce(&mut FilterMap)) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |view_update| {
+        view_update.update_filters(|txn, filter_update| {
+          let map: MapRef = filter_update.upsert(txn, filter_id);
+          let mut filter_map = map.to_json(txn).into_map().unwrap();
+          f(&mut filter_map);
+          Any::from(filter_map).fill(txn, &map).unwrap();
         });
       });
-    });
   }
 
-  pub fn remove_filter(&self, view_id: &str, filter_id: &str) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_filters(|filter_update| {
-        filter_update.remove(filter_id);
+  pub fn remove_filter(&mut self, view_id: &str, filter_id: &str) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_filters(|txn, filter_update| {
+          if let Some(i) = filter_update.index_by_id(txn, filter_id) {
+            filter_update.remove(txn, i);
+          }
+        });
       });
-    });
   }
 
   /// Add a filter to the view. If the setting already exists, it will be replaced.
-  pub fn insert_filter(&self, view_id: &str, filter: impl Into<FilterMap>) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_filters(|filter_update| {
-        let filter = filter.into();
-        if let Some(filter_id) = filter.get_str_value("id") {
-          if filter_update.contains(&filter_id) {
-            filter_update.update(&filter_id, |_| filter);
+  pub fn insert_filter(&mut self, view_id: &str, filter: impl Into<FilterMap>) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_filters(|txn, filter_update| {
+          let filter = filter.into();
+          if let Some(Any::String(filter_id)) = filter.get("id") {
+            let map_ref: MapRef = filter_update.upsert(txn, &filter_id);
+            Any::from(filter).fill(txn, &map_ref).unwrap();
           } else {
-            filter_update.push(filter);
+            let map_ref = filter_update.push_back(txn, MapPrelim::default());
+            Any::from(filter).fill(txn, &map_ref).unwrap();
           }
-        } else {
-          filter_update.push(filter);
-        }
+        });
       });
-    });
   }
 
   /// Sets the filters of a database view. Requires two generics to work around the situation where
@@ -922,19 +734,23 @@ impl Database {
   ///
   /// * `T`: needs to be able to do `AnyMap::from(&T)`.
   /// * `U`: needs to implement `Into<AnyMap>`, could be just an identity conversion.
-  pub fn save_filters<T, U>(&self, view_id: &str, filters: &[T])
+  pub fn save_filters<T, U>(&mut self, view_id: &str, filters: &[T])
   where
     U: for<'a> From<&'a T> + Into<FilterMap>,
   {
-    self.views.update_database_view(view_id, |update| {
-      update.set_filters(
-        filters
-          .iter()
-          .map(|filter| U::from(filter))
-          .map(Into::into)
-          .collect(),
-      );
-    });
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.set_filters(
+          filters
+            .iter()
+            .map(|filter| U::from(filter))
+            .map(Into::into)
+            .collect(),
+        );
+      });
   }
 
   pub fn get_layout_setting<T: From<LayoutSetting>>(
@@ -942,18 +758,23 @@ impl Database {
     view_id: &str,
     layout_ty: &DatabaseLayout,
   ) -> Option<T> {
-    self.views.get_layout_setting(view_id, layout_ty)
+    let txn = self.collab.transact();
+    self.body.views.get_layout_setting(&txn, view_id, layout_ty)
   }
 
   pub fn insert_layout_setting<T: Into<LayoutSetting>>(
-    &self,
+    &mut self,
     view_id: &str,
     layout_ty: &DatabaseLayout,
     layout_setting: T,
   ) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_layout_settings(layout_ty, layout_setting.into());
-    });
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_layout_settings(layout_ty, layout_setting.into());
+      });
   }
 
   /// Returns the field settings for the given field ids.
@@ -963,9 +784,11 @@ impl Database {
     view_id: &str,
     field_ids: Option<&[String]>,
   ) -> HashMap<String, T> {
+    let txn = self.collab.transact();
     let mut field_settings_map = self
+      .body
       .views
-      .get_view_field_settings(view_id)
+      .get_view_field_settings(&txn, view_id)
       .into_inner()
       .into_iter()
       .map(|(field_id, field_setting)| (field_id, T::from(field_setting)))
@@ -978,14 +801,22 @@ impl Database {
     field_settings_map
   }
 
-  pub fn set_field_settings(&self, view_id: &str, field_settings_map: FieldSettingsByFieldIdMap) {
-    self.views.update_database_view(view_id, |update| {
-      update.set_field_settings(field_settings_map);
-    })
+  pub fn set_field_settings(
+    &mut self,
+    view_id: &str,
+    field_settings_map: FieldSettingsByFieldIdMap,
+  ) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.set_field_settings(field_settings_map);
+      })
   }
 
   pub fn update_field_settings(
-    &self,
+    &mut self,
     view_id: &str,
     field_ids: Option<Vec<String>>,
     field_settings: impl Into<FieldSettingsMap>,
@@ -998,120 +829,75 @@ impl Database {
         .collect(),
     );
 
-    self.views.update_database_view(view_id, |update| {
-      let field_settings = field_settings.into();
-      update.update_field_settings_for_fields(
-        field_ids,
-        |field_id, field_setting_update, _layout_ty| {
-          field_setting_update.update(field_id, field_settings.clone());
-        },
-      );
-    })
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        let field_settings = field_settings.into();
+        update.update_field_settings_for_fields(
+          field_ids,
+          |txn, field_setting_update, field_id, _layout_ty| {
+            let map_ref: MapRef = field_setting_update.get_or_init(txn, field_id);
+            Any::from(field_settings.clone())
+              .fill(txn, &map_ref)
+              .unwrap();
+          },
+        );
+      })
   }
 
-  pub fn remove_field_settings_for_fields(&self, view_id: &str, field_ids: Vec<String>) {
-    self.views.update_database_view(view_id, |update| {
-      update.update_field_settings_for_fields(
-        field_ids,
-        |field_id, field_setting_update, _layout_ty| {
-          field_setting_update.remove(field_id);
-        },
-      );
-    })
+  pub fn remove_field_settings_for_fields(&mut self, view_id: &str, field_ids: Vec<String>) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.update_field_settings_for_fields(
+          field_ids,
+          |txn, field_setting_update, field_id, _layout_ty| {
+            field_setting_update.remove(txn, field_id);
+          },
+        );
+      })
   }
 
   /// Update the layout type of the view.
-  pub fn update_layout_type(&self, view_id: &str, layout_type: &DatabaseLayout) {
-    self.views.update_database_view(view_id, |update| {
-      update.set_layout_type(*layout_type);
-    });
+  pub fn update_layout_type(&mut self, view_id: &str, layout_type: &DatabaseLayout) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .views
+      .update_database_view(&mut txn, view_id, |update| {
+        update.set_layout_type(*layout_type);
+      });
   }
 
   /// Returns all the views that the current database has.
   // TODO (RS): Implement the creation of a default view when fetching all database views returns an empty result, with the exception of inline views.
   pub fn get_all_database_views_meta(&self) -> Vec<DatabaseViewMeta> {
-    let txn = self.root.transact();
-    self.views.get_all_views_meta_with_txn(&txn)
+    let txn = self.collab.transact();
+    self.body.views.get_all_views_meta(&txn)
   }
 
   /// Create a linked view to existing database
-  pub fn create_linked_view(&self, params: CreateViewParams) -> Result<(), DatabaseError> {
-    self.root.with_transact_mut(|txn| {
-      let inline_view_id = self.get_inline_view_id_with_txn(txn);
-      let row_orders = self.views.get_row_orders_with_txn(txn, &inline_view_id);
-      let field_orders = self.views.get_field_orders_with_txn(txn, &inline_view_id);
+  pub fn create_linked_view(&mut self, params: CreateViewParams) -> Result<(), DatabaseError> {
+    let mut txn = self.collab.transact_mut();
+    let inline_view_id = self.body.get_inline_view_id(&txn);
+    let row_orders = self.body.views.get_row_orders(&txn, &inline_view_id);
+    let field_orders = self.body.views.get_field_orders(&txn, &inline_view_id);
 
-      self.create_linked_view_with_txn(txn, params, field_orders, row_orders)?;
-      Ok::<(), DatabaseError>(())
-    })?;
-    Ok(())
-  }
-
-  pub fn create_linked_view_with_txn(
-    &self,
-    txn: &mut TransactionMut,
-    params: CreateViewParams,
-    field_orders: Vec<FieldOrder>,
-    row_orders: Vec<RowOrder>,
-  ) -> Result<(), DatabaseError> {
-    let mut params = CreateViewParamsValidator::validate(params)?;
-    let (deps_fields, deps_field_settings) = params.take_deps_fields();
-
-    self.create_view_with_txn(txn, params, field_orders, row_orders)?;
-
-    // After creating the view, we need to create the fields that are used in the view.
-    if !deps_fields.is_empty() {
-      tracing::trace!("create linked view with deps fields: {:?}", deps_fields);
-      deps_fields
-        .into_iter()
-        .zip(deps_field_settings)
-        .for_each(|(field, field_settings)| {
-          self.create_field_with_txn(
-            txn,
-            None,
-            field,
-            &OrderObjectPosition::default(),
-            &field_settings,
-          );
-        });
-    }
-    Ok(())
-  }
-
-  /// Create a [DatabaseView] for the current database.
-  pub fn create_view_with_txn(
-    &self,
-    txn: &mut TransactionMut,
-    params: CreateViewParams,
-    field_orders: Vec<FieldOrder>,
-    row_orders: Vec<RowOrder>,
-  ) -> Result<(), DatabaseError> {
-    let params = CreateViewParamsValidator::validate(params)?;
-    let database_id = self.get_database_id_with_txn(txn);
-    let view = DatabaseView {
-      id: params.view_id,
-      database_id,
-      name: params.name,
-      layout: params.layout,
-      layout_settings: params.layout_settings,
-      filters: params.filters,
-      group_settings: params.group_settings,
-      sorts: params.sorts,
-      field_settings: params.field_settings,
-      row_orders,
-      field_orders,
-      created_at: params.created_at,
-      modified_at: params.modified_at,
-    };
-    // tracing::trace!("create linked view with params {:?}", params);
-    self.views.insert_view_with_txn(txn, view);
+    self
+      .body
+      .create_linked_view(&mut txn, params, field_orders, row_orders)?;
     Ok(())
   }
 
   /// Create a linked view that duplicate the target view's setting including filter, sort,
   /// group, field setting, etc.
-  pub fn duplicate_linked_view(&self, view_id: &str) -> Option<DatabaseView> {
-    let view = self.views.get_view(view_id)?;
+  pub fn duplicate_linked_view(&mut self, view_id: &str) -> Option<DatabaseView> {
+    let mut txn = self.collab.transact_mut();
+    let view = self.body.views.get_view(&txn, view_id)?;
     let timestamp = timestamp();
     let duplicated_view = DatabaseView {
       id: gen_database_view_id(),
@@ -1120,7 +906,10 @@ impl Database {
       modified_at: timestamp,
       ..view
     };
-    self.views.insert_view(duplicated_view.clone());
+    self
+      .body
+      .views
+      .insert_view(&mut txn, duplicated_view.clone());
 
     Some(duplicated_view)
   }
@@ -1128,7 +917,7 @@ impl Database {
   /// Duplicate the row, and insert it after the original row.
   pub fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
     let database_id = self.get_database_id();
-    let row = self.block.get_row(row_id);
+    let row = self.body.block.get_or_init_row(row_id.clone())?.get_row()?;
     let timestamp = timestamp();
     Some(CreateRowParams {
       id: gen_row_id(),
@@ -1143,33 +932,38 @@ impl Database {
   }
 
   pub fn duplicate_field(
-    &self,
+    &mut self,
     view_id: &str,
     field_id: &str,
     f: impl FnOnce(&Field) -> String,
   ) -> Option<(usize, Field)> {
-    self.root.with_transact_mut(|txn| {
-      if let Some(mut field) = self.fields.get_field_with_txn(txn, field_id) {
-        field.id = gen_field_id();
-        field.name = f(&field);
-        self.insert_field_with_txn(txn, field.clone(), field_id);
-        let index = self
-          .index_of_field_with_txn(txn, view_id, &field.id)
-          .unwrap_or_default();
-        Some((index, field))
-      } else {
-        None
-      }
-    })
+    let mut txn = self.collab.transact_mut();
+    if let Some(mut field) = self.body.fields.get_field(&txn, field_id) {
+      field.id = gen_field_id();
+      field.name = f(&field);
+      self.body.insert_field(&mut txn, field.clone(), field_id);
+      let index = self
+        .body
+        .index_of_field(&txn, view_id, &field.id)
+        .unwrap_or_default();
+      Some((index, field))
+    } else {
+      None
+    }
+  }
+
+  pub fn get_all_fields(&self) -> Vec<Field> {
+    let txn = self.collab.transact();
+    self.body.fields.get_all_fields(&txn)
   }
 
   pub fn get_database_data(&self) -> DatabaseData {
-    let txn = self.root.transact();
+    let txn = self.collab.transact();
 
-    let database_id = self.get_database_id_with_txn(&txn);
-    let inline_view_id = self.get_inline_view_id_with_txn(&txn);
-    let views = self.views.get_all_views_with_txn(&txn);
-    let fields = self.get_fields_in_view_with_txn(&txn, &inline_view_id, None);
+    let database_id = self.body.get_database_id(&txn);
+    let inline_view_id = self.body.get_inline_view_id(&txn);
+    let views = self.body.views.get_all_views(&txn);
+    let fields = self.body.get_fields_in_view(&txn, &inline_view_id, None);
     let rows = self.get_database_rows();
 
     DatabaseData {
@@ -1182,8 +976,8 @@ impl Database {
   }
 
   pub fn get_view(&self, view_id: &str) -> Option<DatabaseView> {
-    let txn = self.root.transact();
-    self.views.get_view_with_txn(&txn, view_id)
+    let txn = self.collab.transact();
+    self.body.views.get_view(&txn, view_id)
   }
 
   pub fn to_json_value(&self) -> JsonValue {
@@ -1198,60 +992,79 @@ impl Database {
 
   pub fn get_database_rows(&self) -> Vec<Row> {
     let row_orders = {
-      let txn = self.root.transact();
-      let inline_view_id = self.get_inline_view_id_with_txn(&txn);
-      self.views.get_row_orders_with_txn(&txn, &inline_view_id)
+      let txn = self.collab.transact();
+      let inline_view_id = self.body.get_inline_view_id(&txn);
+      self.body.views.get_row_orders(&txn, &inline_view_id)
     };
 
     self.get_rows_from_row_orders(&row_orders)
   }
 
   pub fn get_inline_row_orders(&self) -> Vec<RowOrder> {
-    let collab = self.inner.lock();
-    let txn = collab.transact();
-    let inline_view_id = self.get_inline_view_id_with_txn(&txn);
-    self.views.get_row_orders_with_txn(&txn, &inline_view_id)
+    let txn = self.collab.transact();
+    let inline_view_id = self.body.get_inline_view_id(&txn);
+    self.body.views.get_row_orders(&txn, &inline_view_id)
   }
 
-  pub fn set_inline_view_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
+  pub fn set_inline_view(&mut self, view_id: &str) {
+    let mut txn = self.collab.transact_mut();
     tracing::trace!("Set inline view id: {}", view_id);
-    self.metas.set_inline_view_id_with_txn(txn, view_id);
+    self.body.metas.set_inline_view_id(&mut txn, view_id);
   }
 
   /// The inline view is the view that create with the database when initializing
   pub fn get_inline_view_id(&self) -> String {
-    let txn = self.root.transact();
+    let txn = self.collab.transact();
     // It's safe to unwrap because each database inline view id was set
     // when initializing the database
-    self.metas.get_inline_view_id_with_txn(&txn).unwrap()
-  }
-
-  fn get_inline_view_id_with_txn<T: ReadTxn>(&self, txn: &T) -> String {
-    // It's safe to unwrap because each database inline view id was set
-    // when initializing the database
-    self.metas.get_inline_view_id_with_txn(txn).unwrap()
+    self.body.metas.get_inline_view_id(&txn).unwrap()
   }
 
   /// Delete a view from the database. If the view is the inline view it will clear all
   /// the linked views as well. Otherwise, just delete the view with given view id.
-  pub fn delete_view(&self, view_id: &str) -> Vec<String> {
+  pub fn delete_view(&mut self, view_id: &str) -> Vec<String> {
     // TODO(nathan): delete the database from workspace database
-    self.root.with_transact_mut(|txn| {
-      if self.get_inline_view_id_with_txn(txn) == view_id {
-        let views = self.views.get_all_views_meta_with_txn(txn);
-        self.views.clear_with_txn(txn);
-        views.into_iter().map(|view| view.id).collect()
-      } else {
-        self.views.delete_view_with_txn(txn, view_id);
-        vec![view_id.to_string()]
-      }
-    })
+    let mut txn = self.collab.transact_mut();
+    if self.body.get_inline_view_id(&txn) == view_id {
+      let views = self.body.views.get_all_views_meta(&mut txn);
+      self.body.views.clear(&mut txn);
+      views.into_iter().map(|view| view.id).collect()
+    } else {
+      self.body.views.delete_view(&mut txn, view_id);
+      vec![view_id.to_string()]
+    }
   }
 
-  /// Only expose this function in test env
-  #[cfg(debug_assertions)]
-  pub fn get_mutex_collab(&self) -> &Arc<MutexCollab> {
-    &self.inner
+  pub fn get_field(&self, field_id: &str) -> Option<Field> {
+    let txn = self.collab.transact();
+    self.body.fields.get_field(&txn, field_id)
+  }
+
+  pub fn insert_field(&mut self, field: Field) {
+    let mut txn = self.collab.transact_mut();
+    self.body.fields.insert_field(&mut txn, field);
+  }
+
+  pub fn update_field<F>(&mut self, field_id: &str, f: F)
+  where
+    F: FnOnce(FieldUpdate),
+  {
+    let mut txn = self.collab.transact_mut();
+    self.body.fields.update_field(&mut txn, field_id, f);
+  }
+}
+
+impl Deref for Database {
+  type Target = Collab;
+
+  fn deref(&self) -> &Self::Target {
+    &self.collab
+  }
+}
+
+impl DerefMut for Database {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.collab
   }
 }
 
@@ -1349,78 +1162,333 @@ unsafe impl Sync for MutexDatabase {}
 unsafe impl Send for MutexDatabase {}
 
 pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
-  let txn = collab.transact();
-  let views = collab.get_map_with_txn(&txn, vec![DATABASE, VIEWS])?;
-  let metas = collab.get_map_with_txn(&txn, vec![DATABASE, METAS])?;
+  let txn = collab.context.transact();
+  let views: MapRef = collab.data.get_with_path(&txn, [DATABASE, VIEWS])?;
+  let metas: MapRef = collab.data.get_with_path(&txn, [DATABASE, METAS])?;
 
   let view_change_tx = tokio::sync::broadcast::channel(1).0;
   let views = ViewMap::new(views, view_change_tx);
   let meta = MetaMap::new(metas);
 
-  let inline_view_id = meta.get_inline_view_id_with_txn(&txn)?;
+  let inline_view_id = meta.get_inline_view_id(&txn)?;
   Some(
     views
-      .get_row_orders_with_txn(&txn, &inline_view_id)
+      .get_row_orders(&txn, &inline_view_id)
       .into_iter()
       .map(|order| order.id.to_string())
       .collect(),
   )
 }
 
-pub fn reset_inline_view_id<F>(collab: &Collab, f: F)
+pub fn reset_inline_view_id<F>(collab: &mut Collab, f: F)
 where
   F: Fn(String) -> String,
 {
-  collab.with_origin_transact_mut(|txn| {
-    if let Some(container) = collab.get_map_with_txn(txn, vec![DATABASE, METAS]) {
-      let map = MetaMap::new(container);
-      let inline_view_id = map.get_inline_view_id_with_txn(txn).unwrap();
-      let new_inline_view_id = f(inline_view_id);
-      map.set_inline_view_id_with_txn(txn, &new_inline_view_id);
-    }
-  })
+  let mut txn = collab.context.transact_mut();
+  if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, METAS]) {
+    let map = MetaMap::new(container);
+    let inline_view_id = map.get_inline_view_id(&txn).unwrap();
+    let new_inline_view_id = f(inline_view_id);
+    map.set_inline_view_id(&mut txn, &new_inline_view_id);
+  }
 }
 
-pub fn mut_database_views_with_collab<F>(collab: &Collab, f: F)
+pub fn mut_database_views_with_collab<F>(collab: &mut Collab, f: F)
 where
   F: Fn(&mut DatabaseView),
 {
-  collab.with_origin_transact_mut(|txn| {
-    if let Some(container) = collab.get_map_with_txn(txn, vec![DATABASE, VIEWS]) {
-      let view_change_tx = tokio::sync::broadcast::channel(1).0;
-      let views = ViewMap::new(container, view_change_tx);
-      let mut reset_views = views.get_all_views_with_txn(txn);
+  let mut txn = collab.context.transact_mut();
 
-      reset_views.iter_mut().for_each(f);
-      for view in reset_views {
-        views.insert_view_with_txn(txn, view);
-      }
+  if let Some(container) = collab
+    .data
+    .get_with_path::<_, _, MapRef>(&txn, [DATABASE, VIEWS])
+  {
+    let view_change_tx = tokio::sync::broadcast::channel(1).0;
+    let views = ViewMap::new(container, view_change_tx);
+    let mut reset_views = views.get_all_views(&txn);
+
+    reset_views.iter_mut().for_each(f);
+    for view in reset_views {
+      views.insert_view(&mut txn, view);
     }
-  });
+  }
 }
 
 pub fn is_database_collab(collab: &Collab) -> bool {
   let txn = collab.transact();
-  collab.get_map_with_txn(&txn, vec![DATABASE]).is_some()
+  collab.get_with_txn(&txn, DATABASE).is_some()
 }
 
 /// Quickly retrieve the inline view ID of a database.
 /// Use this function when instantiating a [Database] object is too resource-intensive,
 /// and you need the inline view ID of a specific database.
 pub fn get_inline_view_id(collab: &Collab) -> Option<String> {
-  let txn = collab.transact();
-  let metas = collab.get_map_with_txn(&txn, vec![DATABASE, METAS])?;
+  let txn = collab.context.transact();
+  let metas: MapRef = collab.data.get_with_path(&txn, [DATABASE, METAS])?;
   let meta = MetaMap::new(metas);
-  meta.get_inline_view_id_with_txn(&txn)
+  meta.get_inline_view_id(&txn)
 }
 
 /// Quickly retrieve database views meta.
 /// Use this function when instantiating a [Database] object is too resource-intensive,
 /// and you need the views meta of a specific database.
 pub fn get_database_views_meta(collab: &Collab) -> Vec<DatabaseViewMeta> {
-  let txn = collab.transact();
-  let views = collab.get_map_with_txn(&txn, vec![DATABASE, VIEWS]);
+  let txn = collab.context.transact();
+  let views: Option<MapRef> = collab.data.get_with_path(&txn, [DATABASE, VIEWS]);
   let view_change_tx = tokio::sync::broadcast::channel(1).0;
   let views = ViewMap::new(views.unwrap(), view_change_tx);
-  views.get_all_views_meta_with_txn(&txn)
+  views.get_all_views_meta(&txn)
+}
+
+pub struct DatabaseBody {
+  pub root: MapRef,
+  pub views: Arc<ViewMap>,
+  pub fields: Arc<FieldMap>,
+  pub metas: Arc<MetaMap>,
+  /// It used to keep track of the blocks. Each block contains a list of [Row]s
+  /// A database rows will be stored in multiple blocks.
+  pub block: Block,
+  pub notifier: DatabaseNotify,
+}
+
+impl DatabaseBody {
+  fn new(database_id: String, mut context: DatabaseContext) -> (Self, Collab) {
+    let mut txn = context.collab.context.transact_mut();
+    let root: MapRef = context.collab.data.get_or_init(&mut txn, DATABASE);
+    root.insert(&mut txn, DATABASE_ID, &*database_id);
+    let fields: MapRef = root.get_or_init(&mut txn, FIELDS); // { DATABASE: { FIELDS: {:} } }
+    let views: MapRef = root.get_or_init(&mut txn, VIEWS); // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
+    let metas: MapRef = root.get_or_init(&mut txn, METAS); // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
+    drop(txn);
+
+    let fields = FieldMap::new(fields, context.notifier.field_change_tx.clone());
+    let views = ViewMap::new(views, context.notifier.view_change_tx.clone());
+    let metas = MetaMap::new(metas);
+    let block = Block::new(
+      context.uid,
+      database_id,
+      context.db.clone(),
+      context.collab_service.clone(),
+      context.notifier.row_change_tx.clone(),
+    );
+    let body = DatabaseBody {
+      root,
+      views: views.into(),
+      fields: fields.into(),
+      metas: metas.into(),
+      block,
+      notifier: context.notifier,
+    };
+    (body, context.collab)
+  }
+
+  pub fn get_database_id<T: ReadTxn>(&self, txn: &T) -> String {
+    self.root.get_with_txn(txn, DATABASE_ID).unwrap()
+  }
+
+  /// Create a new row from the given view.
+  /// This row will be inserted into corresponding [Block]. The [RowOrder] of this row will
+  /// be inserted to each view.
+  pub fn create_row(
+    &self,
+    txn: &mut TransactionMut,
+    view_id: &str,
+    params: CreateRowParams,
+  ) -> Option<(usize, RowOrder)> {
+    let row_position = params.row_position.clone();
+    let row_order = self.block.create_row(params);
+
+    self.views.update_all_views(txn, |_view_id, update| {
+      update.insert_row_order(&row_order, &row_position);
+    });
+    let index = self
+      .index_of_row(txn, view_id, &row_order.id)
+      .unwrap_or_default();
+    Some((index, row_order))
+  }
+
+  pub fn index_of_row<T: ReadTxn>(&self, txn: &T, view_id: &str, row_id: &RowId) -> Option<usize> {
+    let view = self.views.get_view(txn, view_id)?;
+    view.row_orders.iter().position(|order| &order.id == row_id)
+  }
+
+  pub fn get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> String {
+    // It's safe to unwrap because each database inline view id was set
+    // when initializing the database
+    self.metas.get_inline_view_id(txn).unwrap()
+  }
+
+  /// Return the index of the field in the given view.
+  pub fn index_of_field<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+    field_id: &str,
+  ) -> Option<usize> {
+    let view = self.views.get_view(txn, view_id)?;
+    view
+      .field_orders
+      .iter()
+      .position(|order| order.id == field_id)
+  }
+
+  /// Return list of [RowCell] for the given view and field.
+  pub fn get_cells_for_field<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+    field_id: &str,
+  ) -> Vec<RowCell> {
+    let row_orders = self.views.get_row_orders(txn, view_id);
+    let rows = self.block.get_rows_from_row_orders(&row_orders);
+    rows
+      .into_iter()
+      .map(|row| RowCell::new(row.id, row.cells.get(field_id).cloned()))
+      .collect()
+  }
+  /// Get all fields in the database
+  /// These fields are ordered by the [FieldOrder] of the view
+  /// If field_ids is None, return all fields
+  /// If field_ids is Some, return the fields with the given ids
+  pub fn get_fields_in_view<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+    field_ids: Option<Vec<String>>,
+  ) -> Vec<Field> {
+    let field_orders = self.views.get_field_orders(txn, view_id);
+    let mut all_field_map = self
+      .fields
+      .get_fields_with_txn(txn, field_ids)
+      .into_iter()
+      .map(|field| (field.id.clone(), field))
+      .collect::<HashMap<String, Field>>();
+
+    if field_orders.len() != all_field_map.len() {
+      tracing::warn!(
+        "🟡Field orders: {} and fields: {} are not the same length",
+        field_orders.len(),
+        all_field_map.len()
+      );
+    }
+
+    field_orders
+      .into_iter()
+      .flat_map(|order| all_field_map.remove(&order.id))
+      .collect()
+  }
+
+  /// Create a new field that is used by `create_field`, `create_field_with_mut`, and
+  /// `create_linked_view`. In all the database views, insert the field order and add a field setting.
+  /// Then, add the field to the field map.
+  ///
+  /// # Arguments
+  ///
+  /// - `txn`: Read-write transaction in which this field creation will be performed.
+  /// - `view_id`: If specified, the field order will only be inserted according to `position` in that
+  /// specific view. For the others, the field order will be pushed back. If `None`, the field order will
+  /// be inserted according to `position` for all the views.
+  /// - `field`: Field to be inserted.
+  /// - `position`: The position of the new field in the field order array.
+  /// - `field_settings_by_layout`: Helps to create the field settings for the field.
+  pub fn create_field(
+    &self,
+    txn: &mut TransactionMut,
+    view_id: Option<&str>,
+    field: Field,
+    position: &OrderObjectPosition,
+    field_settings_by_layout: &HashMap<DatabaseLayout, FieldSettingsMap>,
+  ) {
+    self.views.update_all_views(txn, |id, update| {
+      let update = match view_id {
+        Some(view_id) if id == view_id => update.insert_field_order(&field, position),
+        Some(_) => update.insert_field_order(&field, &OrderObjectPosition::default()),
+        None => update.insert_field_order(&field, position),
+      };
+
+      update.update_field_settings_for_fields(
+        vec![field.id.clone()],
+        |txn, field_setting_update, field_id, layout_ty| {
+          let map_ref: MapRef = field_setting_update.get_or_init_map(txn, field_id);
+          if let Some(settings) = field_settings_by_layout.get(&layout_ty) {
+            Any::from(settings.clone()).fill(txn, &map_ref).unwrap();
+          }
+        },
+      );
+    });
+    self.fields.insert_field(txn, field);
+  }
+
+  /// Creates a new field, add a field setting, but inserts the field after a
+  /// certain field_id
+  fn insert_field(&self, txn: &mut TransactionMut, field: Field, prev_field_id: &str) {
+    self.views.update_all_views(txn, |_view_id, update| {
+      update.insert_field_order(
+        &field,
+        &OrderObjectPosition::After(prev_field_id.to_string()),
+      );
+    });
+    self.fields.insert_field(txn, field);
+  }
+
+  /// Create a [DatabaseView] for the current database.
+  pub fn create_view(
+    &self,
+    txn: &mut TransactionMut,
+    params: CreateViewParams,
+    field_orders: Vec<FieldOrder>,
+    row_orders: Vec<RowOrder>,
+  ) -> Result<(), DatabaseError> {
+    let params = CreateViewParamsValidator::validate(params)?;
+    let database_id = self.get_database_id(txn);
+    let view = DatabaseView {
+      id: params.view_id,
+      database_id,
+      name: params.name,
+      layout: params.layout,
+      layout_settings: params.layout_settings,
+      filters: params.filters,
+      group_settings: params.group_settings,
+      sorts: params.sorts,
+      field_settings: params.field_settings,
+      row_orders,
+      field_orders,
+      created_at: params.created_at,
+      modified_at: params.modified_at,
+    };
+    // tracing::trace!("create linked view with params {:?}", params);
+    self.views.insert_view(txn, view);
+    Ok(())
+  }
+
+  pub fn create_linked_view(
+    &self,
+    txn: &mut TransactionMut,
+    params: CreateViewParams,
+    field_orders: Vec<FieldOrder>,
+    row_orders: Vec<RowOrder>,
+  ) -> Result<(), DatabaseError> {
+    let mut params = CreateViewParamsValidator::validate(params)?;
+    let (deps_fields, deps_field_settings) = params.take_deps_fields();
+
+    self.create_view(txn, params, field_orders, row_orders)?;
+
+    // After creating the view, we need to create the fields that are used in the view.
+    if !deps_fields.is_empty() {
+      tracing::trace!("create linked view with deps fields: {:?}", deps_fields);
+      deps_fields
+        .into_iter()
+        .zip(deps_field_settings)
+        .for_each(|(field, field_settings)| {
+          self.create_field(
+            txn,
+            None,
+            field,
+            &OrderObjectPosition::default(),
+            &field_settings,
+          );
+        });
+    }
+    Ok(())
+  }
 }

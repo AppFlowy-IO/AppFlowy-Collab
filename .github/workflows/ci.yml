@@ -32,10 +32,6 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: clippy
-      - name: Install protobuf
-        run: |
-          sudo apt-get update
-          sudo apt-get install protobuf-compiler
       - name: Linting
         run: cargo clippy --all-targets -- -D warnings
   test:
@@ -54,11 +50,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           prefix-key: ${{ matrix.os }}
-
-      - name: Install protobuf
-        run: |
-          sudo apt-get update
-          sudo apt-get install protobuf-compiler
 
       - name: Run tests
         run: cargo test
