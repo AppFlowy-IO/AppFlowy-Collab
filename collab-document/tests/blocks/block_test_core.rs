@@ -182,11 +182,10 @@ impl BlockTestCore {
     prev_id: Option<String>,
   ) -> Block {
     let block = self.get_text_block(text, parent_id);
-    let result = self
+    self
       .document
       .insert_block(block, prev_id)
-      .unwrap_or_else(|e| panic!("insert block error: {:?}", e));
-    result
+      .unwrap_or_else(|e| panic!("insert block error: {:?}", e))
   }
 
   pub fn update_block_data(&mut self, block_id: &str, data: HashMap<String, Value>) {

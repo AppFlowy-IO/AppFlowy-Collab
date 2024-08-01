@@ -310,15 +310,13 @@ impl TryFrom<&Any> for SectionItem {
   type Error = anyhow::Error;
 
   fn try_from(any: &Any) -> Result<Self, Self::Error> {
-    let value = from_any(&any)?;
-    Ok(value)
+    Ok(from_any(any)?)
   }
 }
 
 impl From<SectionItem> for Any {
   fn from(value: SectionItem) -> Self {
-    let value = to_any(&value).unwrap();
-    value
+    to_any(&value).unwrap()
   }
 }
 

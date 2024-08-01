@@ -99,7 +99,7 @@ impl Folder {
     let folder = Folder { collab, body };
     if folder.get_workspace_id().is_none() {
       // When the folder is opened, the workspace id must be present.
-      return Err(FolderError::NoRequiredData("missing workspace id".into()));
+      Err(FolderError::NoRequiredData("missing workspace id".into()))
     } else {
       Ok(folder)
     }

@@ -32,16 +32,14 @@ impl Reminders {
   }
 
   fn find<T: ReadTxn>(&self, txn: &T, reminder_id: &str) -> Option<(u32, Out)> {
-    let mut i = 0;
-    for value in self.container.iter(txn) {
+    for (i, value) in self.container.iter(txn).enumerate() {
       if let Out::YMap(map) = &value {
         if let Some(Out::Any(Any::String(str))) = map.get(txn, REMINDER_ID) {
           if &*str == reminder_id {
-            return Some((i, value));
+            return Some((i as u32, value));
           }
         }
       }
-      i += 1;
     }
     None
   }
