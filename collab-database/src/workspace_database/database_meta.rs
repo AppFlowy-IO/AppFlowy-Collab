@@ -133,7 +133,7 @@ impl DatabaseMeta {
     map_ref.insert(
       txn,
       DATABASE_RECORD_VIEWS,
-      ArrayPrelim::from_iter(self.linked_views.into_iter()),
+      ArrayPrelim::from_iter(self.linked_views),
     );
   }
 

@@ -205,11 +205,10 @@ impl WorkspaceDatabase {
   /// Return the database id with the given view id.
   pub fn get_database_id_with_view_id(&self, view_id: &str) -> Option<String> {
     let txn = self.collab.transact();
-    let result = self
+    self
       .meta_list
       .get_database_meta_with_view_id(&txn, view_id)
-      .map(|record| record.database_id);
-    result
+      .map(|record| record.database_id)
   }
 
   /// Create database with inline view.

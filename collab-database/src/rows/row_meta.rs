@@ -14,7 +14,7 @@ pub struct RowMetaUpdate<'a, 'b> {
   row_id: Uuid,
 }
 
-impl<'a, 'b, 'c> RowMetaUpdate<'a, 'b> {
+impl<'a, 'b> RowMetaUpdate<'a, 'b> {
   pub fn new(txn: &'a mut TransactionMut<'b>, map_ref: MapRef, row_id: Uuid) -> Self {
     Self {
       map_ref,

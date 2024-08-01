@@ -38,7 +38,7 @@ impl BlockTaskController {
   /// Add a new task to the queue. The task with higher sequence number will be executed first.
   /// Just like Last In First Out (LIFO).
   pub fn add_task(&self, task: BlockTask) {
-    if let Err(_) = self.sender.send(task) {
+    if self.sender.send(task).is_err() {
       tracing::error!("Cannot schedule task - processing loop has been closed");
     }
   }

@@ -26,9 +26,9 @@ pub struct RowRelationMap {
 }
 
 impl RowRelationMap {
-  pub fn from_map_ref(mut container: MapRef) -> Self {
+  pub fn from_map_ref(container: MapRef) -> Self {
     let (tx, _) = broadcast::channel(1000);
-    let subscription = subscription_changes(tx.clone(), &mut container);
+    let subscription = subscription_changes(tx.clone(), &container);
     Self {
       container,
       tx,

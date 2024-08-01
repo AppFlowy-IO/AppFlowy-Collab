@@ -169,7 +169,6 @@ pub fn apply_actions(document: &mut Document, actions: Vec<BlockAction>) {
   if let Err(err) = document.apply_action(actions) {
     // Handle the error
     tracing::error!("[Document] apply_action error: {:?}", err);
-    return;
   }
 }
 

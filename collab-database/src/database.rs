@@ -279,7 +279,7 @@ impl Database {
       .block
       .get_or_init_row(row_id.clone())
       .and_then(|row| row.get_row())
-      .unwrap_or_else(|| Row::empty(row_id, &*self.get_database_id()))
+      .unwrap_or_else(|| Row::empty(row_id, &self.get_database_id()))
   }
 
   /// Return the [Row] with the given row id.
@@ -292,7 +292,7 @@ impl Database {
     {
       row
     } else {
-      Row::empty(row_id.clone(), &*self.get_database_id())
+      Row::empty(row_id.clone(), &self.get_database_id())
     }
   }
 
@@ -443,7 +443,7 @@ impl Database {
         update.update_groups(|txn, group_update| {
           let group_setting = group_setting.into();
           let settings = if let Some(Any::String(setting_id)) = group_setting.get("id") {
-            group_update.upsert(txn, &*setting_id)
+            group_update.upsert(txn, setting_id)
           } else {
             group_update.push_back(txn, MapPrelim::default())
           };
@@ -506,7 +506,7 @@ impl Database {
         update.update_sorts(|txn, sort_update| {
           let sort = sort.into();
           if let Some(Any::String(sort_id)) = sort.get("id") {
-            let map_ref: MapRef = sort_update.upsert(txn, &sort_id);
+            let map_ref: MapRef = sort_update.upsert(txn, sort_id);
             Any::from(sort).fill(txn, &map_ref).unwrap();
           } else {
             sort_update.push_back(txn, sort);
@@ -629,7 +629,7 @@ impl Database {
         update.update_calculations(|txn, calculation_update| {
           let calculation = calculation.into();
           if let Some(Any::String(calculation_id)) = calculation.get("id") {
-            let map_ref: MapRef = calculation_update.upsert(txn, &calculation_id);
+            let map_ref: MapRef = calculation_update.upsert(txn, calculation_id);
             Any::from(calculation).fill(txn, &map_ref).unwrap();
           }
         });
@@ -718,7 +718,7 @@ impl Database {
         update.update_filters(|txn, filter_update| {
           let filter = filter.into();
           if let Some(Any::String(filter_id)) = filter.get("id") {
-            let map_ref: MapRef = filter_update.upsert(txn, &filter_id);
+            let map_ref: MapRef = filter_update.upsert(txn, filter_id);
             Any::from(filter).fill(txn, &map_ref).unwrap();
           } else {
             let map_ref = filter_update.push_back(txn, MapPrelim::default());
@@ -1026,7 +1026,7 @@ impl Database {
     // TODO(nathan): delete the database from workspace database
     let mut txn = self.collab.transact_mut();
     if self.body.get_inline_view_id(&txn) == view_id {
-      let views = self.body.views.get_all_views_meta(&mut txn);
+      let views = self.body.views.get_all_views_meta(&txn);
       self.body.views.clear(&mut txn);
       views.into_iter().map(|view| view.id).collect()
     } else {

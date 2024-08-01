@@ -33,7 +33,9 @@ fn document_awareness_test() {
     tx.send(a.values().next().unwrap().clone()).unwrap();
   });
 
-  test.document.set_awareness_local_state(document_state.clone());
+  test
+    .document
+    .set_awareness_local_state(document_state.clone());
   assert_eq!(
     test.get_awareness_local_state().as_ref(),
     Some(&document_state)
