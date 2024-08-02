@@ -184,6 +184,11 @@ impl Folder {
     self.body.get_workspace_id(&txn)
   }
 
+  pub fn get_views_belong_to(&self, workspace_id: &str) -> Vec<Arc<View>> {
+    let txn = self.collab.transact();
+    self.body.views.get_views_belong_to(&txn, workspace_id)
+  }
+
   pub fn move_view(&mut self, view_id: &str, from: u32, to: u32) -> Option<Arc<View>> {
     let mut txn = self.collab.transact_mut();
     self.body.move_view(&mut txn, view_id, from, to)
