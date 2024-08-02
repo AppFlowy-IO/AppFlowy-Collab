@@ -386,12 +386,6 @@ impl Collab {
     }
   }
 
-  pub fn set_last_sync_at_with_txn(&self, txn: &mut TransactionMut, last_sync_at: i64) {
-    //FIXME: this is very expensive to do on frequent basis. That's one of the reasons we have
-    // awareness state separate from document
-    self.meta.insert(txn, LAST_SYNC_AT, last_sync_at);
-  }
-
   pub fn set_sync_state(&self, sync_state: SyncState) {
     self.state.set_sync_state(sync_state);
   }
@@ -485,13 +479,20 @@ impl Collab {
     tx.get_encoded_collab_v2()
   }
 
-  pub fn get_last_sync_at(&mut self) -> i64 {
+  pub fn get_last_sync_at(&self) -> i64 {
     let txn = self.context.transact();
     self
       .meta
       .get(&txn, LAST_SYNC_AT)
       .and_then(|v| v.cast().ok())
       .unwrap_or(0)
+  }
+
+  pub fn set_last_sync_at(&mut self, last_sync_at: i64) {
+    //FIXME: this is very expensive to do on frequent basis. That's one of the reasons we have
+    // awareness state separate from document
+    let mut txn = self.context.transact_mut();
+    self.meta.insert(&mut txn, LAST_SYNC_AT, last_sync_at);
   }
 
   pub fn to_json(&self) -> Any {
