@@ -9,7 +9,7 @@ use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 async fn update_single_type_option_data_test() {
   let test = user_database_with_default_field().await;
   let database = test.get_database("d1").await.unwrap();
-  let mut db = database.lock().await;
+  let mut db = database.write().await;
   db.update_field("f1", |field_update| {
     field_update.update_type_options(|type_option_update| {
       type_option_update.insert(
@@ -39,7 +39,7 @@ async fn insert_multi_type_options_test() {
     TypeOptionDataBuilder::from([("job 2".into(), (456.0).into())]),
   );
 
-  let mut db = database.lock().await;
+  let mut db = database.write().await;
   db.create_field(
     None,
     Field {
@@ -84,7 +84,7 @@ async fn user_database_with_default_field() -> WorkspaceDatabaseTest {
     field_type: 0,
     ..Default::default()
   };
-  let mut db = database.lock().await;
+  let mut db = database.write().await;
   db.insert_field(field.clone());
   test
 }

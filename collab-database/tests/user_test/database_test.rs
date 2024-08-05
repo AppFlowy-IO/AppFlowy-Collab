@@ -24,7 +24,7 @@ async fn create_database_test() {
     })
     .unwrap();
 
-  let db = database.lock().await;
+  let db = database.read().await;
   let views = db.get_all_views();
   assert_eq!(views.len(), 1);
 }
@@ -116,22 +116,13 @@ async fn duplicate_database_inline_view_test() {
     .unwrap();
 
   let duplicated_database = test.duplicate_database("v1").await.unwrap();
-  let duplicated_view_id = duplicated_database.lock().await.get_inline_view_id();
-  duplicated_database
-    .lock()
-    .await
-    .create_row(CreateRowParams::new(1, database_id.clone()))
+  let mut db = duplicated_database.write().await;
+  let duplicated_view_id = db.get_inline_view_id();
+  db.create_row(CreateRowParams::new(1, database_id.clone()))
     .unwrap();
 
-  assert_eq!(
-    duplicated_database
-      .lock()
-      .await
-      .get_rows_for_view(&duplicated_view_id)
-      .len(),
-    1
-  );
-  assert!(database.lock().await.get_rows_for_view("v1").is_empty());
+  assert_eq!(db.get_rows_for_view(&duplicated_view_id).len(), 1);
+  assert!(database.read().await.get_rows_for_view("v1").is_empty());
 }
 
 #[tokio::test]
@@ -163,7 +154,7 @@ async fn duplicate_database_view_test() {
     .unwrap();
 
   // Duplicate the linked view.
-  let mut db = database.lock().await;
+  let mut db = database.write().await;
   let duplicated_view = db.duplicate_linked_view("v2").unwrap();
   db.create_row(CreateRowParams::new(1, database_id.clone()))
     .unwrap();
@@ -189,7 +180,7 @@ async fn delete_database_linked_view_test() {
     })
     .unwrap();
 
-  let mut db = database.lock().await;
+  let mut db = database.write().await;
   db.create_linked_view(CreateViewParams {
     database_id: "d1".to_string(),
     view_id: "v2".to_string(),
@@ -227,7 +218,7 @@ async fn delete_database_inline_view_test() {
     })
     .unwrap();
 
-  let mut db = database.lock().await;
+  let mut db = database.write().await;
   for i in 2..5 {
     db.create_linked_view(CreateViewParams {
       database_id: "d1".to_string(),
@@ -244,7 +235,7 @@ async fn delete_database_inline_view_test() {
 
   // After deleting the inline view, all linked views will be removed
   test.delete_view("d1", "v1").await;
-  let views = database.lock().await.get_all_views();
+  let views = database.read().await.get_all_views();
   assert_eq!(views.len(), 0);
 }
 
@@ -253,8 +244,8 @@ async fn duplicate_database_data_test() {
   let mut test = user_database_test_with_default_data(random_uid());
   let original = test.get_database_with_view_id("v1").await.unwrap();
   let duplicate = test.duplicate_database("v1").await.unwrap();
-  let original = original.lock().await;
-  let duplicate = duplicate.lock().await;
+  let original = original.read().await;
+  let duplicate = duplicate.read().await;
 
   let duplicated_view_id = &duplicate.get_all_database_views_meta()[0].id;
 
@@ -336,5 +327,5 @@ async fn reopen_database_test() {
 
   let test = user_database_test_with_db(uid, db);
   let database = test.get_database_with_view_id(&view_id).await;
-  let _ = database.unwrap().lock().await.to_json_value();
+  let _ = database.unwrap().read().await.to_json_value();
 }
