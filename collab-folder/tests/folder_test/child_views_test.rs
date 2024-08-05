@@ -229,7 +229,7 @@ fn delete_child_view_test() {
   folder
     .body
     .views
-    .delete_views_with_txn(&mut txn, vec!["v1_1".to_string()]);
+    .delete_views(&mut txn, vec!["v1_1".to_string()]);
   let views = folder.body.views.get_views_belong_to(&txn, "v1");
   assert!(views.is_empty());
 }

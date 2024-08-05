@@ -66,10 +66,7 @@ fn delete_view_test() {
   folder.body.views.insert(&mut txn, view_2, None);
   folder.body.views.insert(&mut txn, view_3, None);
 
-  let views = folder
-    .body
-    .views
-    .get_views_with_txn(&txn, &["v1", "v2", "v3"]);
+  let views = folder.body.views.get_views(&txn, &["v1", "v2", "v3"]);
   assert_eq!(views[0].id, "v1");
   assert_eq!(views[1].id, "v2");
   assert_eq!(views[2].id, "v3");
@@ -77,12 +74,9 @@ fn delete_view_test() {
   folder
     .body
     .views
-    .delete_views_with_txn(&mut txn, vec!["v1", "v2", "v3"]);
+    .delete_views(&mut txn, vec!["v1", "v2", "v3"]);
 
-  let views = folder
-    .body
-    .views
-    .get_views_with_txn(&txn, &["v1", "v2", "v3"]);
+  let views = folder.body.views.get_views(&txn, &["v1", "v2", "v3"]);
   assert_eq!(views.len(), 0);
 }
 
@@ -499,10 +493,7 @@ fn compare_diff_view_test() {
 
   {
     let mut txn = folder.collab.transact_mut();
-    folder
-      .body
-      .views
-      .delete_views_with_txn(&mut txn, vec!["v1"]);
+    folder.body.views.delete_views(&mut txn, vec!["v1"]);
     folder
       .body
       .views
