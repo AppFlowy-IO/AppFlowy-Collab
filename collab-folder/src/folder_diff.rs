@@ -49,8 +49,7 @@ impl Folder {
                     }
                   }
                 },
-                EntryChange::Updated(_k, v) => {
-                  println!("Updated: {}: {:?}", _k, v);
+                EntryChange::Updated(_, _) => {
                   if let Some(view_id) = event.target().get_with_txn(txn, FOLDER_VIEW_ID) {
                     acc.insert(FolderViewChange::Updated { view_id });
                   }
