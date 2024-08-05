@@ -13,7 +13,6 @@ use collab_entity::CollabType;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 pub use tokio_stream::wrappers::WatchStream;
 
 use crate::blocks::{Block, BlockEvent};
@@ -1139,27 +1138,6 @@ impl DatabaseData {
     Ok(database)
   }
 }
-
-#[derive(Clone)]
-pub struct MutexDatabase(Arc<Mutex<Database>>);
-
-impl MutexDatabase {
-  #[allow(clippy::arc_with_non_send_sync)]
-  pub fn new(inner: Database) -> Self {
-    Self(Arc::new(Mutex::new(inner)))
-  }
-}
-
-impl Deref for MutexDatabase {
-  type Target = Arc<Mutex<Database>>;
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-
-unsafe impl Sync for MutexDatabase {}
-
-unsafe impl Send for MutexDatabase {}
 
 pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
   let txn = collab.context.transact();
