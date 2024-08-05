@@ -18,7 +18,7 @@ use crate::section::{Section, SectionItem, SectionMap};
 use crate::view::view_from_map_ref;
 use crate::{
   impl_section_op, subscribe_folder_change, FolderData, SectionChangeSender, TrashInfo, View,
-  ViewRelations, ViewsMap, Workspace,
+  ViewRelations, ViewUpdate, ViewsMap, Workspace,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -184,6 +184,16 @@ impl Folder {
     self.body.get_workspace_id(&txn)
   }
 
+  pub fn get_all_views(&self) -> Vec<Arc<View>> {
+    let txn = self.collab.transact();
+    self.body.views.get_all_views(&txn)
+  }
+
+  pub fn get_views<T: AsRef<str>>(&self, view_ids: &[T]) -> Vec<Arc<View>> {
+    let txn = self.collab.transact();
+    self.body.views.get_views(&txn, view_ids)
+  }
+
   pub fn get_views_belong_to(&self, workspace_id: &str) -> Vec<Arc<View>> {
     let txn = self.collab.transact();
     self.body.views.get_views_belong_to(&txn, workspace_id)
@@ -223,9 +233,27 @@ impl Folder {
       .move_nested_view(&mut txn, view_id, new_parent_id, prev_view_id)
   }
 
+  pub fn set_current_view(&mut self, view_id: String) {
+    let mut txn = self.collab.transact_mut();
+    self.body.set_current_view(&mut txn, view_id);
+  }
+
   pub fn get_current_view(&self) -> Option<String> {
     let txn = self.collab.transact();
     self.body.get_current_view(&txn)
+  }
+
+  pub fn update_view<F>(&mut self, view_id: &str, f: F) -> Option<Arc<View>>
+  where
+    F: FnOnce(ViewUpdate) -> Option<View>,
+  {
+    let mut txn = self.collab.transact_mut();
+    self.body.views.update_view(&mut txn, view_id, f)
+  }
+
+  pub fn delete_views<T: AsRef<str>>(&mut self, views: Vec<T>) {
+    let mut txn = self.collab.transact_mut();
+    self.body.views.delete_views(&mut txn, views);
   }
 
   // Section operations
@@ -699,5 +727,9 @@ impl FolderBody {
 
   pub fn get_current_view<T: ReadTxn>(&self, txn: &T) -> Option<String> {
     self.meta.get_with_txn(txn, CURRENT_VIEW)
+  }
+
+  pub fn set_current_view(&self, txn: &mut TransactionMut, view: String) {
+    self.meta.try_update(txn, CURRENT_VIEW, view);
   }
 }

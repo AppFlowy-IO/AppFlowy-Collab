@@ -136,7 +136,7 @@ impl ViewsMap {
   pub fn remove_child(&self, txn: &mut TransactionMut, parent_id: &str, child_index: u32) {
     if let Some(parent) = self.view_relations.get_children_with_txn(txn, parent_id) {
       if let Some(identifier) = parent.remove_child_with_txn(txn, child_index) {
-        self.delete_views_with_txn(txn, vec![identifier.id]);
+        self.delete_views(txn, vec![identifier.id]);
       }
     }
   }
@@ -178,16 +178,12 @@ impl ViewsMap {
           })
           .unwrap_or_default();
 
-        self.get_views_with_txn(txn, &child_view_ids)
+        self.get_views(txn, &child_view_ids)
       },
     }
   }
 
-  pub fn get_views_with_txn<T: ReadTxn, V: AsRef<str>>(
-    &self,
-    txn: &T,
-    view_ids: &[V],
-  ) -> Vec<Arc<View>> {
+  pub fn get_views<T: ReadTxn, V: AsRef<str>>(&self, txn: &T, view_ids: &[V]) -> Vec<Arc<View>> {
     view_ids
       .iter()
       .flat_map(|view_id| self.get_view_with_txn(txn, view_id.as_ref()))
@@ -327,12 +323,12 @@ impl ViewsMap {
     self.set_cache_view(view);
   }
 
-  pub fn delete_views_with_txn<T: AsRef<str>>(&self, txn: &mut TransactionMut, view_ids: Vec<T>) {
-    view_ids.iter().for_each(|view_id| {
+  pub fn delete_views<T: AsRef<str>>(&self, txn: &mut TransactionMut, view_ids: Vec<T>) {
+    for view_id in view_ids {
       let view_id = view_id.as_ref();
       self.container.remove(txn, view_id);
       self.remove_cache_view(view_id);
-    });
+    }
   }
 
   pub fn update_view<F>(&self, txn: &mut TransactionMut, view_id: &str, f: F) -> Option<Arc<View>>

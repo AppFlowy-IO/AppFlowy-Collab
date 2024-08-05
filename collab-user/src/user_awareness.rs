@@ -89,6 +89,11 @@ impl UserAwareness {
     Ok(value)
   }
 
+  pub fn get_all_reminders(&self) -> Vec<Reminder> {
+    let txn = self.collab.transact();
+    self.body.reminders.get_all_reminders(&txn)
+  }
+
   /// Adds a new reminder to the `UserAwareness` object.
   ///
   /// # Arguments
