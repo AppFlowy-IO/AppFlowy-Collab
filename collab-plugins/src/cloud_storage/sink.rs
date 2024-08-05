@@ -6,7 +6,7 @@ use std::time::Duration;
 use futures_util::SinkExt;
 use tokio::spawn;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
-use tokio::time::{interval, Instant, Interval};
+use tokio::time::{Instant, Interval};
 use tracing::{debug, trace};
 
 use crate::cloud_storage::error::SyncError;
@@ -38,7 +38,7 @@ pub struct CollabSink<Sink, Msg> {
 
   /// The [PendingMsgQueue] is used to queue the messages that are waiting to be sent to the
   /// remote. It will merge the messages if possible.
-  pending_msg_queue: Arc<Mutex<PendingMsgQueue<Msg>>>,
+  pending_msg_queue: Arc<Mutex<PendingMsgQueue<Msg>>>, //FIXME: this should be a channel
   msg_id_counter: Arc<dyn MsgIdCounter>,
 
   /// The [watch::Sender] is used to notify the [CollabSinkRunner] to process the pending messages.
@@ -114,7 +114,7 @@ where
   ///
   pub fn queue_msg(&self, f: impl FnOnce(MsgId) -> Msg) {
     {
-      let mut pending_msgs = self.pending_msg_queue.lock();
+      let mut pending_msgs = self.pending_msg_queue.blocking_lock();
       let msg_id = self.msg_id_counter.next();
       let msg = f(msg_id);
       pending_msgs.push_msg(msg_id, msg);
@@ -125,13 +125,14 @@ where
   }
 
   pub fn remove_all_pending_msgs(&self) {
-    self.pending_msg_queue.lock().clear();
+    self.pending_msg_queue.blocking_lock().clear();
   }
 
   /// Notify the sink to process the next message and mark the current message as done.
   pub async fn ack_msg(&self, object_id: &str, msg_id: MsgId) {
     trace!("receive {} message:{}", object_id, msg_id);
-    if let Some(mut pending_msg) = self.pending_msg_queue.lock().peek_mut() {
+    let mut lock = self.pending_msg_queue.lock().await;
+    if let Some(mut pending_msg) = lock.peek_mut() {
       // In most cases, the msg_id of the pending_msg is the same as the passed-in msg_id. However,
       // due to network issues, the client might send multiple messages with the same msg_id.
       // Therefore, the msg_id might not always match the msg_id of the pending_msg.
@@ -147,7 +148,7 @@ where
         pending_msg.set_state(MessageState::Done);
         self.notify();
       }
-    }
+    };
   }
 
   async fn process_next_msg(&self) -> Result<(), SyncError> {
@@ -195,22 +196,8 @@ where
   async fn try_send_msg_immediately(&self) -> Option<()> {
     let (tx, rx) = oneshot::channel();
     let collab_msg = {
-      let (mut pending_msg_queue, mut sending_msg) = match self.pending_msg_queue.try_lock() {
-        None => {
-          // If acquire the lock failed, try to notify again after 100ms
-          let weak_notifier = Arc::downgrade(&self.notifier);
-          spawn(async move {
-            interval(Duration::from_millis(100)).tick().await;
-            if let Some(notifier) = weak_notifier.upgrade() {
-              let _ = notifier.send(false);
-            }
-          });
-          None
-        },
-        Some(mut pending_msg_queue) => pending_msg_queue
-          .pop()
-          .map(|sending_msg| (pending_msg_queue, sending_msg)),
-      }?;
+      let mut pending_msg_queue = self.pending_msg_queue.lock().await;
+      let mut sending_msg = pending_msg_queue.pop()?;
       if sending_msg.state().is_done() {
         // Notify to process the next pending message
         self.notify();
@@ -252,7 +239,7 @@ where
     // If the message is not acked within the timeout, resend the message.
     match tokio::time::timeout(self.config.timeout, rx).await {
       Ok(_) => {
-        if let Some(mut pending_msgs) = self.pending_msg_queue.try_lock() {
+        if let Ok(mut pending_msgs) = self.pending_msg_queue.try_lock() {
           let pending_msg = pending_msgs.pop();
           trace!(
             "{} was sent, current pending messages: {}",
@@ -270,7 +257,8 @@ where
         self.notify()
       },
       Err(_) => {
-        if let Some(mut pending_msg) = self.pending_msg_queue.lock().peek_mut() {
+        let mut lock = self.pending_msg_queue.lock().await;
+        if let Some(mut pending_msg) = lock.peek_mut() {
           pending_msg.set_state(MessageState::Timeout);
         }
         self.notify();

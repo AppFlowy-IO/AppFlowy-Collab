@@ -3,21 +3,13 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-
-use collab::core::awareness::{AwarenessUpdate, Event};
-use collab::core::collab::MutexCollab;
-use collab::core::collab_plugin::CollabPluginType;
-use collab::core::collab_state::SnapshotState;
-use collab::core::origin::CollabOrigin;
-use collab::preclude::{Collab, CollabPlugin};
-use collab_entity::CollabObject;
+use tokio::sync::RwLock;
 
 use tokio_retry::strategy::FibonacciBackoff;
 use tokio_retry::{Action, Retry};
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 
-use collab::core::collab::MutexCollab;
 use collab::core::collab_plugin::CollabPluginType;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
@@ -30,7 +22,7 @@ use crate::CollabKVDB;
 pub struct SupabaseDBPlugin {
   uid: i64,
   object: CollabObject,
-  local_collab: Weak<MutexCollab>,
+  local_collab: Weak<RwLock<Collab>>,
   local_collab_storage: Weak<CollabKVDB>,
   remote_collab: Arc<RemoteCollab>,
   remote_collab_storage: Arc<dyn RemoteCollabStorage>,
@@ -42,7 +34,7 @@ impl SupabaseDBPlugin {
   pub fn new(
     uid: i64,
     object: CollabObject,
-    local_collab: Weak<MutexCollab>,
+    local_collab: Weak<RwLock<Collab>>,
     sync_per_secs: u64,
     remote_collab_storage: Arc<dyn RemoteCollabStorage>,
     local_collab_storage: Weak<CollabKVDB>,
@@ -69,7 +61,7 @@ impl SupabaseDBPlugin {
     tokio::spawn(async move {
       while let Some(new_state) = remote_sync_state_stream.next().await {
         if let Some(local_collab) = weak_local_collab.upgrade() {
-          local_collab.lock().set_sync_state(new_state);
+          local_collab.read().await.set_sync_state(new_state);
         }
       }
     });
@@ -112,7 +104,7 @@ impl CollabPlugin for SupabaseDBPlugin {
     if self.is_first_sync_done.load(Ordering::SeqCst) {
       self.remote_collab.push_update(update);
     } else {
-      self.pending_updates.write().push(update.to_vec());
+      self.pending_updates.blocking_write().push(update.to_vec());
     }
   }
 
@@ -126,7 +118,7 @@ struct InitSyncAction {
   uid: i64,
   object: CollabObject,
   remote_collab: Weak<RemoteCollab>,
-  local_collab: Weak<MutexCollab>,
+  local_collab: Weak<RwLock<Collab>>,
   local_collab_storage: Weak<CollabKVDB>,
   remote_collab_storage: Weak<dyn RemoteCollabStorage>,
   pending_updates: Weak<RwLock<Vec<Vec<u8>>>>,
@@ -149,7 +141,7 @@ impl Action for InitSyncAction {
         weak_pending_updates.upgrade(),
         weak_is_first_sync_done.upgrade(),
       ) {
-        for update in &*pending_updates.read() {
+        for update in &*pending_updates.read().await {
           remote_collab.push_update(update);
         }
 
