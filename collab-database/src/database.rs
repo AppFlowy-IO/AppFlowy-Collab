@@ -5,7 +5,7 @@ use std::sync::{Arc, Weak};
 
 use collab::preclude::{
   Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
-  TransactionMut,
+  TransactionMut, YrsValue,
 };
 use collab::util::{AnyExt, ArrayExt};
 use collab_entity::define::{DATABASE, DATABASE_ID};
@@ -24,11 +24,12 @@ use crate::rows::{
   CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowChangeReceiver, RowDetail, RowId,
   RowMeta, RowMetaUpdate, RowUpdate,
 };
+use crate::views::define::DATABASE_VIEW_ROW_ORDERS;
 use crate::views::{
   CalculationMap, CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator,
   DatabaseLayout, DatabaseView, DatabaseViewMeta, DatabaseViewUpdate, FieldOrder,
   FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
-  OrderObjectPosition, RowOrder, SortMap, ViewChangeReceiver, ViewMap,
+  OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver, ViewMap,
 };
 use crate::workspace_database::DatabaseCollabService;
 
@@ -198,6 +199,18 @@ impl Database {
   {
     let mut txn = self.collab.transact_mut();
     self.body.views.update_database_view(&mut txn, view_id, f);
+  }
+
+  pub fn contains_row(&self, view_id: &str, row_id: &RowId) -> bool {
+    let txn = self.collab.transact();
+    if let Some(YrsValue::YMap(view)) = self.body.views.get(&txn, view_id) {
+      if let Some(YrsValue::YArray(row_orders)) = view.get(&txn, DATABASE_VIEW_ROW_ORDERS) {
+        return RowOrderArray::new(row_orders)
+          .get_position_with_txn(&txn, row_id)
+          .is_some();
+      }
+    }
+    false
   }
 
   /// Create a new row from the given view.
@@ -949,6 +962,11 @@ impl Database {
     } else {
       None
     }
+  }
+
+  pub fn get_primary_field(&self) -> Option<Field> {
+    let txn = self.collab.transact();
+    self.body.fields.get_primary_field(&txn)
   }
 
   pub fn get_all_fields(&self) -> Vec<Field> {
