@@ -1,3 +1,4 @@
+use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
@@ -1081,6 +1082,19 @@ impl Deref for Database {
 
 impl DerefMut for Database {
   fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.collab
+  }
+}
+
+impl Borrow<Collab> for Database {
+  #[inline]
+  fn borrow(&self) -> &Collab {
+    &self.collab
+  }
+}
+
+impl BorrowMut<Collab> for Database {
+  fn borrow_mut(&mut self) -> &mut Collab {
     &mut self.collab
   }
 }

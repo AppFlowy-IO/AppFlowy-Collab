@@ -1,3 +1,4 @@
+use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
@@ -142,6 +143,19 @@ impl Deref for UserAwareness {
 
 impl DerefMut for UserAwareness {
   fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.collab
+  }
+}
+
+impl Borrow<Collab> for UserAwareness {
+  #[inline]
+  fn borrow(&self) -> &Collab {
+    &self.collab
+  }
+}
+
+impl BorrowMut<Collab> for UserAwareness {
+  fn borrow_mut(&mut self) -> &mut Collab {
     &mut self.collab
   }
 }

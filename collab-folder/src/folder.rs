@@ -1,3 +1,4 @@
+use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -382,6 +383,19 @@ impl Deref for Folder {
 
 impl DerefMut for Folder {
   fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.collab
+  }
+}
+
+impl Borrow<Collab> for Folder {
+  #[inline]
+  fn borrow(&self) -> &Collab {
+    &self.collab
+  }
+}
+
+impl BorrowMut<Collab> for Folder {
+  fn borrow_mut(&mut self) -> &mut Collab {
     &mut self.collab
   }
 }
