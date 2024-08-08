@@ -1,3 +1,4 @@
+use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::vec;
@@ -335,13 +336,28 @@ impl Document {
 impl Deref for Document {
   type Target = Collab;
 
+  #[inline]
   fn deref(&self) -> &Self::Target {
     &self.collab
   }
 }
 
 impl DerefMut for Document {
+  #[inline]
   fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.collab
+  }
+}
+
+impl Borrow<Collab> for Document {
+  #[inline]
+  fn borrow(&self) -> &Collab {
+    &self.collab
+  }
+}
+
+impl BorrowMut<Collab> for Document {
+  fn borrow_mut(&mut self) -> &mut Collab {
     &mut self.collab
   }
 }
