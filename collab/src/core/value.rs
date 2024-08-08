@@ -1,61 +1,60 @@
-use crate::preclude::YrsValue;
-use yrs::{Any, ArrayRef, MapRef, TextRef};
+use serde_json::Value;
+use yrs::block::{ItemContent, Prelim, Unused};
+use yrs::branch::{Branch, BranchPtr};
+use yrs::types::TypeRef;
+use yrs::{Any, Array, ArrayRef, Map, MapRef, TransactionMut};
 
-pub trait YrsValueExtension {
-  fn value(&self) -> &YrsValue;
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Entity(Value);
 
-  fn to_ymap(&self) -> Option<&MapRef> {
-    if let YrsValue::YMap(map) = self.value() {
-      return Some(map);
-    }
-    None
-  }
-
-  fn to_yarray(&self) -> Option<&ArrayRef> {
-    if let YrsValue::YArray(array) = self.value() {
-      return Some(array);
-    }
-    None
-  }
-
-  fn to_ytext(&self) -> Option<&TextRef> {
-    if let YrsValue::YText(text) = self.value() {
-      return Some(text);
-    }
-    None
-  }
-
-  fn as_i64(&self) -> Option<i64> {
-    if let YrsValue::Any(Any::BigInt(value)) = self.value() {
-      return Some(*value);
-    }
-    None
-  }
-
-  fn as_str(&self) -> Option<&str> {
-    if let YrsValue::Any(Any::String(value)) = self.value() {
-      return Some(value);
-    }
-    None
-  }
-
-  fn as_bool(&self) -> Option<bool> {
-    if let YrsValue::Any(Any::Bool(value)) = self.value() {
-      return Some(*value);
-    }
-    None
-  }
-
-  fn as_f64(&self) -> Option<f64> {
-    if let YrsValue::Any(Any::Number(value)) = self.value() {
-      return Some(*value);
-    }
-    None
+impl From<Value> for Entity {
+  fn from(value: Value) -> Self {
+    Entity(value)
   }
 }
 
-impl YrsValueExtension for YrsValue {
-  fn value(&self) -> &YrsValue {
-    self
+impl Prelim for Entity {
+  type Return = Unused;
+
+  fn into_content(self, _txn: &mut TransactionMut) -> (ItemContent, Option<Self>) {
+    match &self.0 {
+      Value::Null => (ItemContent::Any(vec![Any::Null]), None),
+      Value::Bool(value) => (ItemContent::Any(vec![Any::from(*value)]), None),
+      Value::String(value) => (ItemContent::Any(vec![Any::from(value.clone())]), None),
+      Value::Number(value) => {
+        let any = if value.is_f64() {
+          Any::from(value.as_f64().unwrap())
+        } else {
+          Any::from(value.as_i64().unwrap())
+        };
+        (ItemContent::Any(vec![any]), None)
+      },
+      Value::Array(_) => {
+        let yarray = ItemContent::Type(Branch::new(TypeRef::Array));
+        (yarray, Some(self))
+      },
+      Value::Object(_) => {
+        let yarray = ItemContent::Type(Branch::new(TypeRef::Map));
+        (yarray, Some(self))
+      },
+    }
+  }
+
+  fn integrate(self, txn: &mut TransactionMut, inner_ref: BranchPtr) {
+    match self.0 {
+      Value::Array(array) => {
+        let yarray = ArrayRef::from(inner_ref);
+        for value in array {
+          yarray.push_back(txn, Entity::from(value));
+        }
+      },
+      Value::Object(map) => {
+        let ymap = MapRef::from(inner_ref);
+        for (key, value) in map {
+          ymap.insert(txn, key, Entity::from(value));
+        }
+      },
+      _ => { /* not used */ },
+    }
   }
 }

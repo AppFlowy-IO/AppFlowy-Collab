@@ -1,6 +1,5 @@
 use std::fmt::{Display, Formatter};
 
-use crate::core::transaction::TransactionMutWrapper;
 use serde::{Deserialize, Serialize};
 use yrs::{Origin, TransactionMut};
 
@@ -55,21 +54,9 @@ impl<'a> From<&TransactionMut<'a>> for CollabOrigin {
   }
 }
 
-impl<'a> From<&TransactionMutWrapper<'a>> for CollabOrigin {
-  fn from(txn: &TransactionMutWrapper<'a>) -> Self {
-    match txn.origin() {
-      None => CollabOrigin::Empty,
-      Some(origin) => Self::from(origin),
-    }
-  }
-}
-
 impl From<&Origin> for CollabOrigin {
   fn from(value: &Origin) -> Self {
-    match serde_json::from_slice::<CollabOrigin>(value.as_ref()) {
-      Ok(origin) => origin,
-      Err(_) => CollabOrigin::Empty,
-    }
+    serde_json::from_slice::<CollabOrigin>(value.as_ref()).unwrap_or(CollabOrigin::Empty)
   }
 }
 

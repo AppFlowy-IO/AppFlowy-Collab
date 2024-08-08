@@ -6,9 +6,9 @@ use serde_json::json;
 use crate::blocks::block_test_core::{BlockTestCore, TEXT_BLOCK_TYPE};
 use crate::util::try_decode_from_encode_collab;
 
-#[tokio::test]
-async fn create_default_document_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn create_default_document_test() {
+  let test = BlockTestCore::new();
   let document_data = test.get_document_data();
   let page = test.get_page();
   let page_id = page.id.as_str();
@@ -21,22 +21,22 @@ async fn create_default_document_test() {
   assert_eq!(first_block.ty, TEXT_BLOCK_TYPE);
 }
 
-#[tokio::test]
-async fn open_document_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn open_document_test() {
+  let test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
-  let collab = test.collab;
+  let collab = test.document.split().0;
   let test = BlockTestCore::open(collab, test.db);
   let page = test.get_page();
   let reopened_page_id = page.id.as_str();
   assert_eq!(page_id, reopened_page_id);
 }
 
-#[tokio::test]
-async fn subscribe_insert_change_test() {
-  let mut test = BlockTestCore::new().await;
-  test.subscribe(|_e, _| {
+#[test]
+fn subscribe_insert_change_test() {
+  let mut test = BlockTestCore::new();
+  test.subscribe("noop", |_e, _| {
     // do nothing
   });
   let page = test.get_page();
@@ -45,10 +45,10 @@ async fn subscribe_insert_change_test() {
   test.insert_text_block(text, page_id, None);
 }
 
-#[tokio::test]
-async fn subscribe_update_change_test() {
-  let mut test = BlockTestCore::new().await;
-  test.subscribe(|_e, _| {
+#[test]
+fn subscribe_update_change_test() {
+  let mut test = BlockTestCore::new();
+  test.subscribe("noop", |_e, _| {
     // do nothing
   });
   let page = test.get_page();
@@ -58,10 +58,10 @@ async fn subscribe_update_change_test() {
   test.update_block_data(page_id, data);
 }
 
-#[tokio::test]
-async fn subscribe_delete_change_test() {
-  let mut test = BlockTestCore::new().await;
-  test.subscribe(|_e, _| {
+#[test]
+fn subscribe_delete_change_test() {
+  let mut test = BlockTestCore::new();
+  test.subscribe("noop", |_e, _| {
     // do nothing
   });
   let page = test.get_page();
@@ -71,9 +71,9 @@ async fn subscribe_delete_change_test() {
   test.delete_block(first_block_id);
 }
 
-#[tokio::test]
-async fn insert_block_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn insert_block_test() {
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let page_children = test.get_block_children(page_id);
@@ -98,9 +98,9 @@ async fn insert_block_test() {
   assert_eq!(original_first_block_id, page_children[1].id.as_str());
 }
 
-#[tokio::test]
-async fn delete_block_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn delete_block_test() {
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let text = "Hello World".to_string();
@@ -118,9 +118,9 @@ async fn delete_block_test() {
   try_decode_from_encode_collab(&test.document);
 }
 
-#[tokio::test]
-async fn move_block_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn move_block_test() {
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let text = "Hello World".to_string();
@@ -162,9 +162,9 @@ async fn move_block_test() {
   try_decode_from_encode_collab(&test.document);
 }
 
-#[tokio::test]
-async fn update_block_data_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn update_block_data_test() {
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let page_children = test.get_block_children(page_id);
@@ -181,9 +181,9 @@ async fn update_block_data_test() {
   try_decode_from_encode_collab(&test.document);
 }
 
-#[tokio::test]
-async fn apply_actions_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn apply_actions_test() {
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let text = "Hello World".to_string();
@@ -213,9 +213,9 @@ async fn apply_actions_test() {
   assert_eq!(page_children.len(), 1);
 }
 
-#[tokio::test]
-async fn apply_insert_block_action_without_parent_id_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn apply_insert_block_action_without_parent_id_test() {
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let text = "Hello World".to_string();
@@ -226,9 +226,9 @@ async fn apply_insert_block_action_without_parent_id_test() {
   assert_eq!(page_children.len(), 2);
 }
 
-#[tokio::test]
-async fn apply_block_actions_without_block_test() {
-  let test = BlockTestCore::new().await;
+#[test]
+fn apply_block_actions_without_block_test() {
+  let mut test = BlockTestCore::new();
   let page = test.get_page();
   let page_id = page.id.as_str();
   let document_data = test.get_document_data();

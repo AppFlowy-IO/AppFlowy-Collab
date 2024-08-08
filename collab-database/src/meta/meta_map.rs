@@ -1,28 +1,26 @@
 use std::ops::Deref;
 
-use collab::preclude::{MapRef, MapRefExtension, MapRefWrapper, ReadTxn, TransactionMut};
+use collab::preclude::{Map, MapRef, ReadTxn, TransactionMut};
 
 const DATABASE_INLINE_VIEW: &str = "iid";
 
 pub struct MetaMap {
-  container: MapRefWrapper,
+  container: MapRef,
 }
 
 impl MetaMap {
-  pub fn new(container: MapRefWrapper) -> Self {
+  pub fn new(container: MapRef) -> Self {
     Self { container }
   }
 
   /// Set the inline view id
-  pub fn set_inline_view_id_with_txn(&self, txn: &mut TransactionMut, view_id: &str) {
-    self
-      .container
-      .insert_str_with_txn(txn, DATABASE_INLINE_VIEW, view_id);
+  pub fn set_inline_view_id(&self, txn: &mut TransactionMut, view_id: &str) {
+    self.container.insert(txn, DATABASE_INLINE_VIEW, view_id);
   }
 
   /// Get the inline view id
-  pub fn get_inline_view_id_with_txn<T: ReadTxn>(&self, txn: &T) -> Option<String> {
-    self.container.get_str_with_txn(txn, DATABASE_INLINE_VIEW)
+  pub fn get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+    self.container.get(txn, DATABASE_INLINE_VIEW)?.cast().ok()
   }
 }
 

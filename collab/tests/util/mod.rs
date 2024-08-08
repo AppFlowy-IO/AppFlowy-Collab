@@ -1,35 +1,33 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Once};
+use std::sync::{Arc, Once, RwLock};
 
 use bytes::Bytes;
 
 use collab::core::collab::DataSource;
 
 use collab::preclude::*;
-use collab::util::deserialize_i32_from_numeric;
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 use yrs::updates::decoder::Decode;
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct TaskInfo {
   pub title: String,
   pub repeated: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Person {
   pub(crate) name: String,
   pub(crate) position: Position,
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Position {
   pub(crate) title: String,
-  #[serde(deserialize_with = "deserialize_i32_from_numeric")]
+  #[serde(deserialize_with = "collab::preclude::deserialize_i32_from_numeric")]
   pub(crate) level: i32,
 }
 
@@ -43,16 +41,12 @@ impl CollabStateCachePlugin {
 
   pub fn get_doc_state(&self) -> Result<DataSource, anyhow::Error> {
     let mut updates = vec![];
-    for encoded_data in self.0.read().iter() {
-      updates.push(encoded_data.to_vec());
+    let lock = self.0.read().unwrap();
+    for encoded_data in lock.iter() {
+      updates.push(encoded_data.as_ref());
     }
 
-    let updates = updates
-      .iter()
-      .map(|update| update.as_ref())
-      .collect::<Vec<&[u8]>>();
-
-    let doc_state = merge_updates_v1(updates)
+    let doc_state = merge_updates_v1(&updates)
       .map_err(|err| anyhow::anyhow!("merge updates failed: {:?}", err))
       .unwrap();
     Ok(DataSource::DocStateV1(doc_state))
@@ -60,7 +54,7 @@ impl CollabStateCachePlugin {
 
   #[allow(dead_code)]
   pub fn get_update(&self) -> Result<Update, anyhow::Error> {
-    let read_guard = self.0.read();
+    let read_guard = self.0.read().unwrap();
     let updates = read_guard
       .iter()
       .map(|update| update.as_ref())
@@ -73,7 +67,7 @@ impl CollabStateCachePlugin {
 
 impl CollabPlugin for CollabStateCachePlugin {
   fn receive_update(&self, _object_id: &str, txn: &TransactionMut, update: &[u8]) {
-    let mut write_guard = self.0.write();
+    let mut write_guard = self.0.write().unwrap();
     if write_guard.is_empty() {
       let doc_state = txn.encode_state_as_update_v1(&StateVector::default());
       write_guard.push(Bytes::from(doc_state));
@@ -82,7 +76,7 @@ impl CollabPlugin for CollabStateCachePlugin {
   }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Document2 {
   doc_id: String,
   name: String,
@@ -92,6 +86,8 @@ pub struct Document2 {
 #[cfg(test)]
 mod tests {
   use crate::util::{Document2, TaskInfo};
+  use serde_json::json;
+  use std::collections::HashMap;
 
   #[test]
   fn test() {
@@ -110,11 +106,23 @@ mod tests {
     );
     let json = serde_json::to_value(&doc).unwrap();
     let tasks = &json["tasks"]["1"];
-    println!("{:?}", tasks);
+    assert_eq!(tasks, &json!({"repeated": false, "title": "Task 1"}));
 
     let a = serde_json::from_value::<Document2>(json).unwrap();
-
-    println!("{:?}", a);
+    assert_eq!(
+      a,
+      Document2 {
+        doc_id: "".to_string(),
+        name: "".to_string(),
+        tasks: HashMap::from([(
+          "1".to_string(),
+          TaskInfo {
+            title: "Task 1".to_string(),
+            repeated: false,
+          }
+        )]),
+      }
+    );
   }
 }
 

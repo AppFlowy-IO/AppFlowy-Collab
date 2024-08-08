@@ -13,10 +13,9 @@ serde_json.workspace = true
 anyhow.workspace = true
 collab = { workspace = true }
 collab-entity = { workspace = true }
-tokio = { version = "1.26", features = ["rt", "sync"] }
+tokio = { workspace = true, features = ["rt", "sync"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 tracing.workspace = true
-parking_lot.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }

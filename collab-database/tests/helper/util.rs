@@ -6,29 +6,34 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
 use anyhow::bail;
-use collab::core::any_map::{AnyMap, AnyMapExtension};
-use collab::preclude::Any;
+use collab::preclude::encoding::serde::from_any;
+use collab::preclude::{any, Any};
+use collab::util::AnyMapExt;
 use collab_database::fields::{TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::Cell;
 use collab_database::views::{
-  FieldSettingsMap, FieldSettingsMapBuilder, FilterMap, FilterMapBuilder, GroupMap,
-  GroupMapBuilder, GroupSettingBuilder, GroupSettingMap, LayoutSetting, LayoutSettingBuilder,
-  SortMap, SortMapBuilder,
+  FieldSettingsMap, FilterMap, FilterMapBuilder, GroupMap, GroupMapBuilder, GroupSettingBuilder,
+  GroupSettingMap, LayoutSetting, LayoutSettingBuilder, SortMap, SortMapBuilder,
 };
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
+use serde::Deserialize;
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use tempfile::TempDir;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 use zip::ZipArchive;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TestFilter {
   pub id: String,
   pub field_id: String,
+  #[serde(default, rename = "ty")]
   pub field_type: TestFieldType,
+  #[serde(default)]
   pub condition: i64,
+  #[serde(default)]
   pub content: String,
 }
 
@@ -40,13 +45,13 @@ pub const FILTER_CONTENT: &str = "content";
 
 impl From<TestFilter> for FilterMap {
   fn from(data: TestFilter) -> Self {
-    FilterMapBuilder::new()
-      .insert_str_value(FILTER_ID, data.id)
-      .insert_str_value(FIELD_ID, data.field_id)
-      .insert_str_value(FILTER_CONTENT, data.content)
-      .insert_i64_value(FIELD_TYPE, data.field_type.into())
-      .insert_i64_value(FILTER_CONDITION, data.condition)
-      .build()
+    FilterMapBuilder::from([
+      (FILTER_ID.into(), data.id.into()),
+      (FIELD_ID.into(), data.field_id.into()),
+      (FILTER_CONTENT.into(), data.content.into()),
+      (FIELD_TYPE.into(), i64::from(data.field_type).into()),
+      (FILTER_CONDITION.into(), data.condition.into()),
+    ])
   }
 }
 
@@ -54,64 +59,46 @@ impl TryFrom<FilterMap> for TestFilter {
   type Error = anyhow::Error;
 
   fn try_from(filter: FilterMap) -> Result<Self, Self::Error> {
-    match (
-      filter.get_str_value(FILTER_ID),
-      filter.get_str_value(FIELD_ID),
-    ) {
-      (Some(id), Some(field_id)) => {
-        let condition = filter.get_i64_value(FILTER_CONDITION).unwrap_or(0);
-        let content = filter.get_str_value(FILTER_CONTENT).unwrap_or_default();
-        let field_type = filter
-          .get_i64_value(FIELD_TYPE)
-          .map(TestFieldType::from)
-          .unwrap_or_default();
-        Ok(TestFilter {
-          id,
-          field_id,
-          field_type,
-          condition,
-          content,
-        })
-      },
-      _ => {
-        bail!("Invalid filter data")
-      },
-    }
+    let any = Any::from(filter);
+    Ok(from_any(&any)?)
   }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct TestGroup {
   pub id: String,
+  #[serde(default)]
   pub name: String,
+  #[serde(default)]
   pub visible: bool,
 }
 
 impl From<GroupMap> for TestGroup {
   fn from(value: GroupMap) -> Self {
-    let id = value.get_str_value("id").unwrap();
-    let name = value.get_str_value("name").unwrap_or_default();
-    let visible = value.get_bool_value("visible").unwrap_or_default();
-    Self { id, name, visible }
+    let any = Any::from(value);
+    from_any(&any).unwrap()
   }
 }
 
 impl From<TestGroup> for GroupMap {
   fn from(group: TestGroup) -> Self {
-    GroupMapBuilder::new()
-      .insert_str_value("id", group.id)
-      .insert_str_value("name", group.name)
-      .insert_bool_value("visible", group.visible)
-      .build()
+    GroupMapBuilder::from([
+      ("id".into(), group.id.into()),
+      ("name".into(), group.name.into()),
+      ("visible".into(), group.visible.into()),
+    ])
   }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct TestGroupSetting {
   pub id: String,
   pub field_id: String,
+  #[serde(rename = "ty")]
   pub field_type: i64,
+  #[serde(default)]
   pub groups: Vec<TestGroup>,
+  #[serde(default)]
   pub content: String,
 }
 
@@ -131,46 +118,35 @@ impl TryFrom<GroupSettingMap> for TestGroupSetting {
   type Error = anyhow::Error;
 
   fn try_from(value: GroupSettingMap) -> Result<Self, Self::Error> {
-    match (
-      value.get_str_value(GROUP_ID),
-      value.get_str_value(FIELD_ID),
-      value.get_i64_value(FIELD_TYPE),
-    ) {
-      (Some(id), Some(field_id), Some(field_type)) => {
-        let content = value.get_str_value(CONTENT).unwrap_or_default();
-        let groups = value.try_get_array(GROUPS);
-        Ok(Self {
-          id,
-          field_id,
-          field_type,
-          groups,
-          content,
-        })
-      },
-      _ => {
-        bail!("Invalid group setting data")
-      },
-    }
+    let any = Any::from(value);
+    Ok(from_any(&any)?)
   }
 }
 
 impl From<TestGroupSetting> for GroupSettingMap {
   fn from(data: TestGroupSetting) -> Self {
-    GroupSettingBuilder::new()
-      .insert_str_value(GROUP_ID, data.id)
-      .insert_str_value(FIELD_ID, data.field_id)
-      .insert_i64_value(FIELD_TYPE, data.field_type)
-      .insert_str_value(CONTENT, data.content)
-      .insert_maps(GROUPS, data.groups)
-      .build()
+    let groups: Vec<Any> = data
+      .groups
+      .into_iter()
+      .map(|group| GroupMap::from(group).into())
+      .collect();
+    GroupSettingBuilder::from([
+      (GROUP_ID.into(), data.id.into()),
+      (FIELD_ID.into(), data.field_id.into()),
+      (FIELD_TYPE.into(), data.field_type.into()),
+      (CONTENT.into(), data.content.into()),
+      (GROUPS.into(), groups.into()),
+    ])
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TestSort {
   pub id: String,
   pub field_id: String,
+  #[serde(rename = "ty")]
   pub field_type: i64,
+  #[serde(default)]
   pub condition: SortCondition,
 }
 
@@ -181,43 +157,23 @@ impl TryFrom<SortMap> for TestSort {
   type Error = anyhow::Error;
 
   fn try_from(value: SortMap) -> Result<Self, Self::Error> {
-    match (
-      value.get_str_value(SORT_ID),
-      value.get_str_value(FIELD_ID),
-      value.get_i64_value(FIELD_TYPE),
-    ) {
-      (Some(id), Some(field_id), Some(field_type)) => {
-        let condition = value
-          .get_i64_value(SORT_CONDITION)
-          .map(|value| SortCondition::try_from(value).unwrap())
-          .unwrap_or_default();
-
-        Ok(Self {
-          id,
-          field_id,
-          field_type,
-          condition,
-        })
-      },
-      _ => {
-        bail!("Invalid group setting data")
-      },
-    }
+    let any = Any::from(value);
+    Ok(from_any(&any)?)
   }
 }
 
 impl From<TestSort> for SortMap {
   fn from(data: TestSort) -> Self {
-    SortMapBuilder::new()
-      .insert_str_value(SORT_ID, data.id)
-      .insert_str_value(FIELD_ID, data.field_id)
-      .insert_i64_value(FIELD_TYPE, data.field_type)
-      .insert_i64_value(SORT_CONDITION, data.condition.value())
-      .build()
+    SortMapBuilder::from([
+      (SORT_ID.into(), data.id.into()),
+      (FIELD_ID.into(), data.field_id.into()),
+      (FIELD_TYPE.into(), data.field_type.into()),
+      (SORT_CONDITION.into(), data.condition.value().into()),
+    ])
   }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize_repr)]
 #[repr(u8)]
 pub enum SortCondition {
   Ascending = 0,
@@ -248,64 +204,54 @@ impl TryFrom<i64> for SortCondition {
   }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct TestCheckboxTypeOption {
+  #[serde(default)]
   pub is_selected: bool,
 }
 
 impl From<TypeOptionData> for TestCheckboxTypeOption {
   fn from(data: TypeOptionData) -> Self {
-    let is_selected = data.get_bool_value("is_selected").unwrap_or(false);
-    TestCheckboxTypeOption { is_selected }
+    let any = Any::from(data);
+    from_any(&any).unwrap()
   }
 }
 
 impl From<TestCheckboxTypeOption> for TypeOptionData {
   fn from(data: TestCheckboxTypeOption) -> Self {
-    TypeOptionDataBuilder::new()
-      .insert_bool_value("is_selected", data.is_selected)
-      .build()
+    TypeOptionDataBuilder::from([("is_selected".into(), data.is_selected.into())])
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct TestDateTypeOption {
+  #[serde(alias = "data_format")] // it's probably a typo, but we're in that universe somehow
   pub date_format: TestDateFormat,
   pub time_format: TestTimeFormat,
+  #[serde(default)]
   pub include_time: bool,
 }
 
 impl From<TypeOptionData> for TestDateTypeOption {
   fn from(data: TypeOptionData) -> Self {
-    let include_time = data.get_bool_value("include_time").unwrap_or(false);
-    let date_format = data
-      .get_i64_value("data_format")
-      .map(TestDateFormat::from)
-      .unwrap();
-    let time_format = data
-      .get_i64_value("time_format")
-      .map(TestTimeFormat::from)
-      .unwrap();
-    Self {
-      date_format,
-      time_format,
-      include_time,
-    }
+    let any = Any::from(data);
+    from_any(&any).unwrap()
   }
 }
 
 impl From<TestDateTypeOption> for TypeOptionData {
   fn from(data: TestDateTypeOption) -> Self {
-    TypeOptionDataBuilder::new()
-      .insert_i64_value("data_format", data.date_format.value())
-      .insert_i64_value("time_format", data.time_format.value())
-      .insert_bool_value("include_time", data.include_time)
-      .build()
+    TypeOptionDataBuilder::from([
+      ("data_format".into(), data.date_format.value().into()),
+      ("time_format".into(), data.time_format.value().into()),
+      ("include_time".into(), data.include_time.into()),
+    ])
   }
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Clone, Debug, Copy, Eq, PartialEq, Default)]
+#[repr(i64)]
+#[derive(Clone, Debug, Copy, Eq, PartialEq, Default, Deserialize_repr)]
 pub enum TestDateFormat {
   Local = 0,
   US = 1,
@@ -344,7 +290,8 @@ impl TestDateFormat {
   }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[repr(i64)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Deserialize_repr)]
 pub enum TestTimeFormat {
   TwelveHour = 0,
   TwentyFourHour = 1,
@@ -389,8 +336,10 @@ impl From<TestTextCell> for Cell {
 
 impl From<Cell> for TestTextCell {
   fn from(cell: Cell) -> Self {
-    let data = cell.get_str_value("data").unwrap();
-    Self(data)
+    match cell.get("data") {
+      Some(Any::String(data)) => Self(data.to_string()),
+      _ => unreachable!(),
+    }
   }
 }
 
@@ -403,16 +352,13 @@ pub struct TestNumberCell(pub i64);
 
 impl From<TestNumberCell> for Cell {
   fn from(text_cell: TestNumberCell) -> Self {
-    let mut cell = Self::new();
-    cell.insert_i64_value("data", text_cell.0);
-    cell
+    Self::from([("data".into(), text_cell.0.into())])
   }
 }
 
 impl From<&Cell> for TestNumberCell {
   fn from(cell: &Cell) -> Self {
-    let data = cell.get_i64_value("data").unwrap();
-    Self(data)
+    Self(cell.get_as("data").unwrap())
   }
 }
 
@@ -428,17 +374,15 @@ pub struct TestCalendarLayoutSetting {
 impl From<LayoutSetting> for TestCalendarLayoutSetting {
   fn from(setting: LayoutSetting) -> Self {
     let layout_ty = setting
-      .get_i64_value("layout_ty")
+      .get_as::<i64>("layout_ty")
       .map(TestCalendarLayout::from)
       .unwrap_or_default();
     let first_day_of_week = setting
-      .get_i64_value("first_day_of_week")
+      .get_as("first_day_of_week")
       .unwrap_or(DEFAULT_FIRST_DAY_OF_WEEK as i64) as i32;
-    let show_weekends = setting.get_bool_value("show_weekends").unwrap_or_default();
-    let show_week_numbers = setting
-      .get_bool_value("show_week_numbers")
-      .unwrap_or_default();
-    let field_id = setting.get_str_value("field_id").unwrap_or_default();
+    let show_weekends: bool = setting.get_as("show_weekends").unwrap_or_default();
+    let show_week_numbers: bool = setting.get_as("show_week_numbers").unwrap_or_default();
+    let field_id: String = setting.get_as("field_id").unwrap_or_default();
     Self {
       layout_ty,
       first_day_of_week,
@@ -451,13 +395,16 @@ impl From<LayoutSetting> for TestCalendarLayoutSetting {
 
 impl From<TestCalendarLayoutSetting> for LayoutSetting {
   fn from(setting: TestCalendarLayoutSetting) -> Self {
-    LayoutSettingBuilder::new()
-      .insert_i64_value("layout_ty", setting.layout_ty.value())
-      .insert_i64_value("first_day_of_week", setting.first_day_of_week as i64)
-      .insert_bool_value("show_week_numbers", setting.show_week_numbers)
-      .insert_bool_value("show_weekends", setting.show_weekends)
-      .insert_str_value("field_id", setting.field_id)
-      .build()
+    LayoutSettingBuilder::from([
+      ("layout_ty".into(), setting.layout_ty.value().into()),
+      (
+        "first_day_of_week".into(),
+        (setting.first_day_of_week as i64).into(),
+      ),
+      ("show_week_numbers".into(), setting.show_week_numbers.into()),
+      ("show_weekends".into(), setting.show_weekends.into()),
+      ("field_id".into(), setting.field_id.into()),
+    ])
   }
 }
 
@@ -503,7 +450,7 @@ pub const DEFAULT_FIRST_DAY_OF_WEEK: i32 = 0;
 pub const DEFAULT_SHOW_WEEKENDS: bool = true;
 pub const DEFAULT_SHOW_WEEK_NUMBERS: bool = true;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize_repr, Serialize_repr)]
 #[repr(u8)]
 #[derive(Default)]
 pub enum TestFieldType {
@@ -543,9 +490,11 @@ impl std::convert::From<i64> for TestFieldType {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TestFieldSetting {
+  #[serde(default)]
   pub width: i32,
+  #[serde(default)]
   pub visibility: u8,
 }
 
@@ -568,19 +517,25 @@ const VISIBILITY: &str = "visibility";
 
 impl From<FieldSettingsMap> for TestFieldSetting {
   fn from(value: FieldSettingsMap) -> Self {
-    TestFieldSetting {
-      width: value.get_i64_value("width").unwrap_or(0) as i32,
-      visibility: value.get_i64_value(VISIBILITY).unwrap_or(0) as u8,
-    }
+    from_any(&Any::from(value)).unwrap()
   }
 }
 
-impl From<TestFieldSetting> for AnyMap {
+impl From<TestFieldSetting> for FieldSettingsMap {
+  fn from(value: TestFieldSetting) -> Self {
+    FieldSettingsMap::from([
+      ("width".into(), value.width.into()),
+      (VISIBILITY.into(), (value.visibility as i64).into()),
+    ])
+  }
+}
+
+impl From<TestFieldSetting> for Any {
   fn from(data: TestFieldSetting) -> Self {
-    FieldSettingsMapBuilder::new()
-      .insert_i64_value("width", data.width as i64)
-      .insert_i64_value(VISIBILITY, data.visibility as i64)
-      .build()
+    any!({
+      "width": (data.width as i64),
+      "visibility": (data.visibility as i64),
+    })
   }
 }
 

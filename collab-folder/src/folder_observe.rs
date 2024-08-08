@@ -1,11 +1,10 @@
-use std::collections::HashMap;
+use dashmap::DashMap;
 use std::sync::Arc;
 
 use collab::core::collab::{IndexContent, IndexContentSender};
 use collab::preclude::{
-  DeepObservable, EntryChange, Event, MapRefWrapper, Subscription, ToJson, YrsValue,
+  DeepObservable, EntryChange, Event, MapRef, Subscription, ToJson, YrsValue,
 };
-use parking_lot::RwLock;
 use serde_json::json;
 use tokio::sync::broadcast;
 
@@ -22,7 +21,7 @@ pub enum ViewChange {
 pub type ViewChangeSender = broadcast::Sender<ViewChange>;
 pub type ViewChangeReceiver = broadcast::Receiver<ViewChange>;
 
-pub(crate) fn subscribe_folder_change(root: &mut MapRefWrapper) -> Subscription {
+pub(crate) fn subscribe_folder_change(root: &mut MapRef) -> Subscription {
   root.observe_deep(move |txn, events| {
     for deep_event in events.iter() {
       match deep_event {
@@ -47,6 +46,8 @@ pub(crate) fn subscribe_folder_change(root: &mut MapRefWrapper) -> Subscription 
         },
         Event::XmlFragment(_) => {},
         Event::XmlText(_) => {},
+        #[allow(unreachable_patterns)]
+        _ => {},
       }
     }
   })
@@ -54,8 +55,8 @@ pub(crate) fn subscribe_folder_change(root: &mut MapRefWrapper) -> Subscription 
 
 pub(crate) fn subscribe_view_change(
   _uid: &UserId,
-  root: &mut MapRefWrapper,
-  view_cache: Arc<RwLock<HashMap<String, Arc<View>>>>,
+  root: &mut MapRef,
+  view_cache: Arc<DashMap<String, Arc<View>>>,
   change_tx: ViewChangeSender,
   view_relations: Arc<ViewRelations>,
   section_map: Arc<SectionMap>,
@@ -74,9 +75,7 @@ pub(crate) fn subscribe_view_change(
                 if let YrsValue::YMap(map_ref) = v {
                   if let Some(view) = view_from_map_ref(map_ref, txn, &view_relations, &section_map)
                   {
-                    view_cache
-                      .write()
-                      .insert(view.id.clone(), Arc::new(view.clone()));
+                    view_cache.insert(view.id.clone(), Arc::new(view.clone()));
 
                     // Send indexing view
                     let index_content = ViewIndexContent::from(&view);
@@ -90,9 +89,7 @@ pub(crate) fn subscribe_view_change(
                 if let Some(view) =
                   view_from_map_ref(event.target(), txn, &view_relations, &section_map)
                 {
-                  view_cache
-                    .write()
-                    .insert(view.id.clone(), Arc::new(view.clone()));
+                  view_cache.insert(view.id.clone(), Arc::new(view.clone()));
 
                   // Update indexing view
                   let index_content = ViewIndexContent::from(&view);
@@ -102,11 +99,11 @@ pub(crate) fn subscribe_view_change(
                 }
               },
               EntryChange::Removed(_) => {
-                let views = event
+                let views: Vec<_> = event
                   .keys(txn)
                   .iter()
-                  .flat_map(|(k, _)| view_cache.write().remove(&**k))
-                  .collect::<Vec<Arc<View>>>();
+                  .flat_map(|(k, _)| view_cache.remove(&**k).map(|v| v.1))
+                  .collect();
 
                 if !views.is_empty() {
                   // Delete indexing views
@@ -121,6 +118,8 @@ pub(crate) fn subscribe_view_change(
         },
         Event::XmlFragment(_) => {},
         Event::XmlText(_) => {},
+        #[allow(unreachable_patterns)]
+        _ => {},
       }
     }
   })

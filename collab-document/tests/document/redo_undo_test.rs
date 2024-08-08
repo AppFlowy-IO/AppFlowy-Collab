@@ -1,22 +1,21 @@
+use std::thread::sleep;
 use std::time::Duration;
 
 use nanoid::nanoid;
 use serde_json::to_value;
 
-use crate::util::{
-  delete_block, insert_block_for_page, open_document_with_db, update_block, DocumentTest,
-};
+use crate::util::{insert_block_for_page, open_document_with_db, DocumentTest};
 
 const WAIT_TIME: Duration = Duration::from_secs(1);
 
-#[tokio::test]
-async fn insert_undo_redo() {
+#[test]
+fn insert_undo_redo() {
   let doc_id = "1";
-  let test = DocumentTest::new(1, doc_id).await;
-  let document = test.document;
+  let test = DocumentTest::new(1, doc_id);
+  let mut document = test.document;
   let block_id = nanoid!(10);
 
-  let block = insert_block_for_page(&document, block_id.clone());
+  let block = insert_block_for_page(&mut document, block_id.clone());
 
   assert!(document.can_undo());
   assert!(document.undo());
@@ -40,19 +39,19 @@ async fn insert_undo_redo() {
   assert!(!document.redo());
 }
 
-#[tokio::test]
-async fn update_undo_redo() {
+#[test]
+fn update_undo_redo() {
   let doc_id = "1";
-  let test = DocumentTest::new(1, doc_id).await;
-  let document = test.document;
+  let test = DocumentTest::new(1, doc_id);
+  let mut document = test.document;
   let block_id = nanoid!(10);
-  let insert_block = insert_block_for_page(&document, block_id.clone());
+  let insert_block = insert_block_for_page(&mut document, block_id.clone());
 
   // after insert block 1 second, update the block
-  tokio::time::sleep(WAIT_TIME).await;
+  sleep(WAIT_TIME);
   let mut data = std::collections::HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
-  update_block(&document, &block_id, data.clone()).unwrap();
+  document.update_block(&block_id, data.clone()).unwrap();
 
   assert!(document.can_undo());
   assert!(document.undo());
@@ -69,17 +68,17 @@ async fn update_undo_redo() {
   assert_eq!(block.data, data);
 }
 
-#[tokio::test]
-async fn delete_undo_redo() {
+#[test]
+fn delete_undo_redo() {
   let doc_id = "1";
-  let test = DocumentTest::new(1, doc_id).await;
-  let document = test.document;
+  let test = DocumentTest::new(1, doc_id);
+  let mut document = test.document;
   let block_id = nanoid!(10);
-  let insert_block = insert_block_for_page(&document, block_id.clone());
+  let insert_block = insert_block_for_page(&mut document, block_id.clone());
 
   // after insert block 1 second, delete the block
-  tokio::time::sleep(WAIT_TIME).await;
-  delete_block(&document, &block_id).unwrap();
+  sleep(WAIT_TIME);
+  document.delete_block(&block_id).unwrap();
 
   assert!(document.can_undo());
   assert!(document.undo());
@@ -97,24 +96,24 @@ async fn delete_undo_redo() {
   assert!(block.is_none());
 }
 
-#[tokio::test]
-async fn mutilple_undo_redo_test() {
+#[test]
+fn mutilple_undo_redo_test() {
   let doc_id = "1";
-  let test = DocumentTest::new(1, doc_id).await;
-  let document = test.document;
+  let test = DocumentTest::new(1, doc_id);
+  let mut document = test.document;
 
   let block_id = nanoid!(10);
-  insert_block_for_page(&document, block_id.clone());
+  insert_block_for_page(&mut document, block_id.clone());
 
   // after insert block 1 second, update the block
-  tokio::time::sleep(WAIT_TIME).await;
+  sleep(WAIT_TIME);
   let mut data = std::collections::HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
-  update_block(&document, &block_id, data.clone()).unwrap();
+  document.update_block(&block_id, data.clone()).unwrap();
 
   // after insert block 1 second, delete the block
-  tokio::time::sleep(WAIT_TIME).await;
-  delete_block(&document, &block_id).unwrap();
+  sleep(WAIT_TIME);
+  document.delete_block(&block_id).unwrap();
 
   assert!(document.can_undo());
   assert!(document.undo());
@@ -156,30 +155,30 @@ async fn mutilple_undo_redo_test() {
   assert!(!document.can_redo());
 }
 
-#[tokio::test]
-async fn undo_redo_after_reopen_document() {
+#[test]
+fn undo_redo_after_reopen_document() {
   let doc_id = "1";
-  let test = DocumentTest::new(1, doc_id).await;
-  let document = test.document;
+  let test = DocumentTest::new(1, doc_id);
+  let mut document = test.document;
   // after create document, can't undo
   assert!(!document.can_undo());
 
   // after insert block, can undo
   let block_id = nanoid!(10);
-  insert_block_for_page(&document, block_id.clone());
+  insert_block_for_page(&mut document, block_id.clone());
   assert!(document.can_undo());
 
   // close document
   drop(document);
 
   // reopen document, can't undo
-  let document = open_document_with_db(1, doc_id, test.db).await;
+  let mut document = open_document_with_db(1, doc_id, test.db);
   assert!(!document.can_undo());
 
   // update block, can undo
   let mut data = std::collections::HashMap::new();
   data.insert("text".to_string(), to_value("hello").unwrap());
-  update_block(&document, &block_id, data.clone()).unwrap();
+  document.update_block(&block_id, data.clone()).unwrap();
   assert!(document.can_undo());
 
   // There is no undo action, so can't redo

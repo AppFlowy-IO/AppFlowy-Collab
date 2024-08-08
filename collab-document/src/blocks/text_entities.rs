@@ -7,7 +7,7 @@ use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
 
-use collab::preclude::{Any, Attrs, Delta, ReadTxn, YrsInput};
+use collab::preclude::{Any, Attrs, Delta, YrsInput};
 
 const FIELD_INSERT: &str = "insert";
 const FIELD_DELETE: &str = "delete";
@@ -46,12 +46,9 @@ impl PartialEq for TextDelta {
 impl Eq for TextDelta {}
 
 impl TextDelta {
-  pub fn from<T: ReadTxn>(txn: &T, value: Delta) -> Self {
+  pub fn from(value: Delta<String>) -> Self {
     match value {
-      Delta::Inserted(content, attrs) => {
-        let content = content.to_string(txn);
-        Self::Inserted(content, attrs.map(|attrs| *attrs))
-      },
+      Delta::Inserted(content, attrs) => Self::Inserted(content, attrs.map(|attrs| *attrs)),
       Delta::Deleted(len) => Self::Deleted(len),
       Delta::Retain(len, attrs) => Self::Retain(len, attrs.map(|attrs| *attrs)),
     }

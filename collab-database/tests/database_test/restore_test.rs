@@ -11,7 +11,7 @@ use crate::helper::unzip_history_database_db;
 #[tokio::test]
 async fn restore_row_from_disk_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
-  let (db, database_test) = create_database_with_db(1, &database_id).await;
+  let (db, mut database_test) = create_database_with_db(1, &database_id).await;
   let row_1 = CreateRowParams::new(1, database_id.clone());
   let row_2 = CreateRowParams::new(2, database_id.clone());
   database_test.create_row(row_1.clone()).unwrap();

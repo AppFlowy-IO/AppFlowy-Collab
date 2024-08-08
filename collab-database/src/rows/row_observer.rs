@@ -1,13 +1,11 @@
 use crate::rows::{Cell, Row, RowId, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY};
-use collab::core::value::YrsValueExtension;
 
-use collab::preclude::{
-  DeepObservable, EntryChange, Event, MapRefWrapper, Subscription, TransactionMut,
-};
+use collab::preclude::{DeepObservable, EntryChange, Event, MapRef, TransactionMut};
 use collab::preclude::{PathSegment, ToJson};
 use std::ops::Deref;
 
 use collab::preclude::map::MapEvent;
+use collab::util::AnyExt;
 use tokio::sync::broadcast;
 use tracing::trace;
 
@@ -36,16 +34,11 @@ pub enum RowChange {
 
 pub(crate) fn subscribe_row_data_change(
   row_id: RowId,
-  row_data_map: &mut MapRefWrapper,
+  row_data_map: &MapRef,
   change_tx: RowChangeSender,
-) -> Subscription {
-  row_data_map.observe_deep(move |txn, events| {
+) {
+  row_data_map.observe_deep_with("change", move |txn, events| {
     for event in events.iter() {
-      // trace!(
-      //   "row observe event: {:?}, {:?}",
-      //   event.path(),
-      //   event.target().to_json(txn)
-      // );
       match event {
         Event::Text(_) => {},
         Event::Array(_) => {},
@@ -54,9 +47,11 @@ pub(crate) fn subscribe_row_data_change(
         },
         Event::XmlFragment(_) => {},
         Event::XmlText(_) => {},
+        #[allow(unreachable_patterns)]
+        _ => {},
       }
     }
-  })
+  });
 }
 
 fn handle_map_event(
@@ -80,7 +75,7 @@ fn handle_map_event(
               trace!("row observe value update: {}:{:?}", key, value.to_json(txn))
             },
             RowChangeValue::Height => {
-              if let Some(value) = value.as_i64() {
+              if let Ok(value) = value.clone().cast::<i64>() {
                 let _ = change_tx.send(RowChange::DidUpdateHeight {
                   row_id: row_id.clone(),
                   value: value as i32,
@@ -88,7 +83,7 @@ fn handle_map_event(
               }
             },
             RowChangeValue::Visibility => {
-              if let Some(value) = value.as_bool() {
+              if let Ok(value) = value.clone().cast::<bool>() {
                 let _ = change_tx.send(RowChange::DidUpdateVisibility {
                   row_id: row_id.clone(),
                   value,
@@ -106,7 +101,7 @@ fn handle_map_event(
             // - The event path is set to "/cells", indicating the operation is within the cells structure.
             // - The 'key' in the event corresponds to the unique identifier of the newly inserted cell.
             // - The 'value' represents the actual content or data inserted into this cell.
-            if let Some(cell) = Cell::from_value(txn, value) {
+            if let Some(cell) = value.to_json(txn).into_map() {
               // when insert a cell into the row, the key is the field_id
               let field_id = key.to_string();
               let _ = change_tx.send(RowChange::DidUpdateCell {
@@ -125,7 +120,7 @@ fn handle_map_event(
             // After this removal, the remaining part of the path directly corresponds to the key of the cell.
             // In the current implementation, this key is used as the identifier (ID) of the field within the cells map.
             if let Some(PathSegment::Key(key)) = event.path().pop_back() {
-              if let Some(cell) = Cell::from_value(txn, &event.target()) {
+              if let Some(cell) = event.target().to_json(txn).into_map() {
                 let field_id = key.deref().to_string();
                 let _ = change_tx.send(RowChange::DidUpdateCell {
                   row_id: row_id.clone(),

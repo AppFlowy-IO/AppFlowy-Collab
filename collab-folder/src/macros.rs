@@ -2,12 +2,12 @@
 macro_rules! impl_str_update {
   ($setter1: ident, $setter2: ident, $key: expr) => {
     pub fn $setter1<T: AsRef<str>>(self, value: T) -> Self {
-      self.map_ref.insert_with_txn(self.txn, $key, value.as_ref());
+      self.map_ref.insert(self.txn, $key, value.as_ref());
       self
     }
     pub fn $setter2<T: AsRef<str>>(self, value: Option<T>) -> Self {
       if let Some(value) = value {
-        self.map_ref.insert_with_txn(self.txn, $key, value.as_ref());
+        self.map_ref.insert(self.txn, $key, value.as_ref());
       }
       self
     }
@@ -34,13 +34,13 @@ macro_rules! impl_option_str_update {
 macro_rules! impl_i64_update {
   ($setter1: ident, $setter2: ident, $key: expr) => {
     pub fn $setter1(self, value: i64) -> Self {
-      self.map_ref.insert_i64_with_txn(self.txn, $key, value);
+      self.map_ref.insert(self.txn, $key, value);
       self
     }
 
     pub fn $setter2(self, value: Option<i64>) -> Self {
       if let Some(value) = value {
-        self.map_ref.insert_i64_with_txn(self.txn, $key, value);
+        self.map_ref.insert(self.txn, $key, value);
       }
       self
     }
@@ -52,7 +52,7 @@ macro_rules! impl_option_i64_update {
   ($setter1: ident, $key: expr) => {
     pub fn $setter1(self, value: Option<i64>) -> Self {
       if let Some(value) = value {
-        self.map_ref.insert_i64_with_txn(self.txn, $key, value);
+        self.map_ref.insert(self.txn, $key, value);
       }
       self
     }
@@ -63,12 +63,12 @@ macro_rules! impl_option_i64_update {
 macro_rules! impl_bool_update {
   ($setter1: ident, $setter2: ident, $key: expr) => {
     pub fn $setter1(self, value: bool) -> Self {
-      self.map_ref.insert_with_txn(self.txn, $key, value);
+      self.map_ref.insert(self.txn, $key, value);
       self
     }
     pub fn $setter2(self, value: Option<bool>) -> Self {
       if let Some(value) = value {
-        self.map_ref.insert_with_txn(self.txn, $key, value);
+        self.map_ref.insert(self.txn, $key, value);
       }
       self
     }
@@ -79,12 +79,12 @@ macro_rules! impl_bool_update {
 macro_rules! impl_any_update {
   ($setter1: ident,  $setter2: ident,  $key:expr, $value: ident) => {
     pub fn $setter1(self, value: $value) -> Self {
-      self.map_ref.insert_with_txn(self.txn, $key, value);
+      self.map_ref.insert(self.txn, $key, value);
       self
     }
     pub fn $setter2(self, value: Option<$value>) -> Self {
       if let Some(value) = value {
-        self.map_ref.insert_with_txn(self.txn, $key, value);
+        self.map_ref.insert(self.txn, $key, value);
       }
       self
     }
@@ -107,47 +107,56 @@ macro_rules! impl_array_update {
 macro_rules! impl_section_op {
   ($section_type:expr, $set_fn:ident, $add_fn:ident, $delete_fn:ident, $get_my_fn:ident, $get_all_fn:ident, $remove_all_fn:ident) => {
     // Add view IDs as either favorites or recents
-    pub fn $add_fn(&self, ids: Vec<String>) {
+    pub fn $add_fn(&mut self, ids: Vec<String>) {
+      let mut txn = self.collab.transact_mut();
       for id in ids {
         self
+          .body
           .views
-          .update_view(&id, |update| update.$set_fn(true).done());
+          .update_view(&mut txn, &id, |update| update.$set_fn(true).done());
       }
     }
 
-    pub fn $delete_fn(&self, ids: Vec<String>) {
+    pub fn $delete_fn(&mut self, ids: Vec<String>) {
+      let mut txn = self.collab.transact_mut();
       for id in ids {
         self
+          .body
           .views
-          .update_view(&id, |update| update.$set_fn(false).done());
+          .update_view(&mut txn, &id, |update| update.$set_fn(false).done());
       }
     }
 
     // Get all section items for the current user
     pub fn $get_my_fn(&self) -> Vec<SectionItem> {
+      let txn = self.collab.transact();
       self
+        .body
         .section
-        .section_op($section_type)
-        .map(|op| op.get_all_section_item())
+        .section_op(&txn, $section_type)
+        .map(|op| op.get_all_section_item(&txn))
         .unwrap_or_default()
     }
 
     // Get all sections
     pub fn $get_all_fn(&self) -> Vec<SectionItem> {
+      let txn = self.collab.transact();
       self
+        .body
         .section
-        .section_op($section_type)
-        .map(|op| op.get_sections())
+        .section_op(&txn, $section_type)
+        .map(|op| op.get_sections(&txn))
         .unwrap_or_default()
         .into_iter()
         .flat_map(|(_user_id, items)| items)
-        .collect::<Vec<_>>()
+        .collect()
     }
 
     // Clear all items in a section
-    pub fn $remove_all_fn(&self) {
-      if let Some(op) = self.section.section_op($section_type) {
-        op.clear()
+    pub fn $remove_all_fn(&mut self) {
+      let mut txn = self.collab.transact_mut();
+      if let Some(op) = self.body.section.section_op(&txn, $section_type) {
+        op.clear(&mut txn)
       }
     }
   };
