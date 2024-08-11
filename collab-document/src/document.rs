@@ -718,11 +718,10 @@ impl From<&Document> for DocumentIndexContent {
       .iter()
       .filter_map(|id| blocks.get(id)) // get block of child
       .filter_map(|block| { // get external id of blocks with external type text
-        let Some(ty) = block.external_type.as_ref() else { return None;};
-        if ty == EXTERNAL_TYPE_TEXT {
-          return block.external_id.as_ref();
+        match block.external_type.as_ref() {
+          Some(ty) if ty == EXTERNAL_TYPE_TEXT => block.external_id.as_ref(),
+          _ => None,
         }
-        None
       })
       .filter_map(|ext_id| text_map.get(ext_id).filter(|t| !t.is_empty())) // get text of block
       .cloned()

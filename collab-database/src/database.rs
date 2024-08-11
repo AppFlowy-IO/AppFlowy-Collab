@@ -1192,7 +1192,7 @@ pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
 
 pub fn reset_inline_view_id<F>(collab: &mut Collab, f: F)
 where
-  F: Fn(String) -> String,
+  F: FnOnce(String) -> String,
 {
   let mut txn = collab.context.transact_mut();
   if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, METAS]) {
@@ -1205,7 +1205,7 @@ where
 
 pub fn mut_database_views_with_collab<F>(collab: &mut Collab, f: F)
 where
-  F: Fn(&mut DatabaseView),
+  F: FnMut(&mut DatabaseView),
 {
   let mut txn = collab.context.transact_mut();
 
@@ -1396,8 +1396,8 @@ impl DatabaseBody {
   ///
   /// - `txn`: Read-write transaction in which this field creation will be performed.
   /// - `view_id`: If specified, the field order will only be inserted according to `position` in that
-  /// specific view. For the others, the field order will be pushed back. If `None`, the field order will
-  /// be inserted according to `position` for all the views.
+  ///   specific view. For the others, the field order will be pushed back. If `None`, the field order will
+  ///   be inserted according to `position` for all the views.
   /// - `field`: Field to be inserted.
   /// - `position`: The position of the new field in the field order array.
   /// - `field_settings_by_layout`: Helps to create the field settings for the field.

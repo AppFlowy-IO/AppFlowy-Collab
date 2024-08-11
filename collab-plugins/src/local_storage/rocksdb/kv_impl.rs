@@ -251,7 +251,12 @@ impl<'a, DB: Send + Sync> KVStore<'a> for RocksdbKVStoreImpl<'a, DB> {
     Ok(RocksdbRange {
       // Safe to transmute because the lifetime of the iterator is the same as the lifetime of the
       // transaction.
-      inner: unsafe { std::mem::transmute(iter) },
+      inner: unsafe {
+        std::mem::transmute::<
+          rocksdb::DBIteratorWithThreadMode<'_, rocksdb::Transaction<'_, DB>>,
+          rocksdb::DBIteratorWithThreadMode<'_, rocksdb::Transaction<'_, DB>>,
+        >(iter)
+      },
       to: to.to_vec(),
     })
   }

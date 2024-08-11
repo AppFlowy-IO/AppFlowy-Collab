@@ -167,7 +167,7 @@ pub fn try_encode_snapshot<T: ReadTxn>(
   snapshot: Snapshot,
 ) -> Result<Vec<u8>, PersistenceError> {
   let mut encoded_data = vec![];
-  match {
+  let result = {
     let mut wrapper = AssertUnwindSafe(&mut encoded_data);
     let wrapper_txn = AssertUnwindSafe(txn);
     panic::catch_unwind(move || {
@@ -177,7 +177,8 @@ pub fn try_encode_snapshot<T: ReadTxn>(
         .unwrap();
       **wrapper = encoder.to_vec();
     })
-  } {
+  };
+  match result {
     Ok(_) => Ok(encoded_data),
     Err(e) => Err(PersistenceError::InvalidData(format!("{:?}", e))),
   }
@@ -214,7 +215,6 @@ impl TryFrom<&[u8]> for CollabSnapshot {
   type Error = PersistenceError;
 
   fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-    let value = bincode::deserialize(value)?;
-    Ok(value)
+    Ok(bincode::deserialize(value)?)
   }
 }

@@ -214,9 +214,10 @@ pub trait TransactionMutExt<'doc> {
 
 impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
   fn try_apply_update(&mut self, update: Update) -> Result<(), PersistenceError> {
-    match panic::catch_unwind(AssertUnwindSafe(|| {
+    let result = panic::catch_unwind(AssertUnwindSafe(|| {
       self.apply_update(update);
-    })) {
+    }));
+    match result {
       Ok(_) => Ok(()),
       Err(e) => Err(PersistenceError::InvalidData(format!("{:?}", e))),
     }

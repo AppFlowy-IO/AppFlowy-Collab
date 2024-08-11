@@ -77,7 +77,7 @@ pub struct FolderNotify {
 /// * `inner`: A mutex-protected shared pointer for managing access to the folder data.
 /// * `root`: Wrapper around the root map reference.
 /// * `workspaces`: An array of `WorkspaceArray` objects, representing different workspaces in the folder.
-/// Currently, we only use one workspace to manage all the views in the folder.
+///   Currently, we only use one workspace to manage all the views in the folder.
 /// * `views`: A shared pointer to a map (`ViewsMap`) from view id to view data, keeping track of each view's data.
 /// * `trash`: An array of `TrashArray` objects, representing the trash items in the folder.
 /// * `section`: An map of `SectionMap` objects, representing the favorite items in the folder.
