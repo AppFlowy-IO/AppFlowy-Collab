@@ -11,6 +11,7 @@ use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
+use std::borrow::{Borrow, BorrowMut};
 
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
@@ -394,5 +395,19 @@ impl WorkspaceDatabase {
       doc_state,
       self.config.clone(),
     )
+  }
+}
+
+impl Borrow<Collab> for WorkspaceDatabase {
+  #[inline]
+  fn borrow(&self) -> &Collab {
+    &self.collab
+  }
+}
+
+impl BorrowMut<Collab> for WorkspaceDatabase {
+  #[inline]
+  fn borrow_mut(&mut self) -> &mut Collab {
+    &mut self.collab
   }
 }
