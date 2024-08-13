@@ -364,8 +364,8 @@ impl TryFrom<AnyMap> for SectionItem {
   fn try_from(value: AnyMap) -> Result<Self, Self::Error> {
     let id = value
       .get_str_value("id")
-      .ok_or(anyhow::anyhow!("missing section item id"))?;
-    let timestamp = value.get_i64_value("timestamp").unwrap_or(timestamp());
+      .ok_or_else(|| anyhow::anyhow!("missing section item id"))?;
+    let timestamp = value.get_i64_value("timestamp").unwrap_or_else(timestamp);
     Ok(Self { id, timestamp })
   }
 }
