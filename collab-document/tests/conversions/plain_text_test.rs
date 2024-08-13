@@ -22,7 +22,7 @@ fn plain_text_1_test() {
   ];
   insert_paragraphs(&mut document, paragraphs.clone());
 
-  let plain_text = convert_document_to_plain_text(document).unwrap();
+  let plain_text = convert_document_to_plain_text(&document).unwrap();
   let mut splitted = plain_text.split('\n').collect::<Vec<&str>>();
   // the first one and the last one are empty
   assert_eq!(splitted.len(), 10);
