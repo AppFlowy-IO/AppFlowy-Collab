@@ -12,8 +12,8 @@ use collab_database::fields::Field;
 use collab_database::rows::{Cells, CreateRowParams};
 use collab_database::views::{CreateDatabaseParams, CreateViewParams, DatabaseLayout};
 use collab_database::workspace_database::{
-  CollabDocStateByOid, CollabFuture, DatabaseCollabService, RowRelationChange,
-  RowRelationUpdateReceiver, WorkspaceDatabase,
+  CollabDocStateByOid, DatabaseCollabService, RowRelationChange, RowRelationUpdateReceiver,
+  WorkspaceDatabase,
 };
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -58,20 +58,20 @@ pub struct TestUserDatabaseCollabBuilderImpl();
 
 #[async_trait]
 impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
-  fn get_collab_doc_state(
+  async fn get_collab_doc_state(
     &self,
     _object_id: &str,
     _object_ty: CollabType,
-  ) -> CollabFuture<Result<DataSource, DatabaseError>> {
-    Box::pin(async move { Ok(DataSource::Disk) })
+  ) -> Result<DataSource, DatabaseError> {
+    Ok(DataSource::Disk)
   }
 
-  fn batch_get_collab_update(
+  async fn batch_get_collab_update(
     &self,
     _object_ids: Vec<String>,
     _object_ty: CollabType,
-  ) -> CollabFuture<Result<CollabDocStateByOid, DatabaseError>> {
-    Box::pin(async move { Ok(CollabDocStateByOid::default()) })
+  ) -> Result<CollabDocStateByOid, DatabaseError> {
+    Ok(CollabDocStateByOid::default())
   }
 
   fn build_collab_with_config(

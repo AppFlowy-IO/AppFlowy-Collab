@@ -14,17 +14,14 @@ use collab_plugins::CollabKVDB;
 use std::borrow::{Borrow, BorrowMut};
 
 use std::collections::{HashMap, HashSet};
-use std::future::Future;
 
 use dashmap::DashMap;
-use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{error, trace};
 
 pub type CollabDocStateByOid = HashMap<String, DataSource>;
-pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
 
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
@@ -32,17 +29,17 @@ pub type CollabFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'stati
 ///
 #[async_trait]
 pub trait DatabaseCollabService: Send + Sync + 'static {
-  fn get_collab_doc_state(
+  async fn get_collab_doc_state(
     &self,
     object_id: &str,
     object_ty: CollabType,
-  ) -> CollabFuture<Result<DataSource, DatabaseError>>;
+  ) -> Result<DataSource, DatabaseError>;
 
-  fn batch_get_collab_update(
+  async fn batch_get_collab_update(
     &self,
     object_ids: Vec<String>,
     object_ty: CollabType,
-  ) -> CollabFuture<Result<CollabDocStateByOid, DatabaseError>>;
+  ) -> Result<CollabDocStateByOid, DatabaseError>;
 
   fn build_collab_with_config(
     &self,
