@@ -1,7 +1,7 @@
 #![allow(clippy::all)]
 
 use assert_json_diff::assert_json_eq;
-use collab::core::collab::CollabBuilder;
+use collab::core::collab::{CollabBuilder, DataSource};
 use collab::core::origin::CollabOrigin;
 
 use collab::preclude::{Collab, CollabPlugin, MapExt};
@@ -358,7 +358,7 @@ fn init_sync(destination: &mut Collab, source: &Collab) {
 #[tokio::test]
 async fn restore_from_multiple_update() {
   let update_cache = CollabStateCachePlugin::new();
-  let mut collab = CollabBuilder::new(1, "1")
+  let mut collab = CollabBuilder::new(1, "1", DataSource::Disk(None))
     .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
@@ -382,9 +382,8 @@ async fn restore_from_multiple_update() {
   }
 
   let updates = update_cache.get_doc_state().unwrap();
-  let restored_collab = CollabBuilder::new(1, "1")
+  let restored_collab = CollabBuilder::new(1, "1", updates)
     .with_device_id("1")
-    .with_doc_state(updates)
     .build()
     .unwrap();
   assert_eq!(collab.to_json(), restored_collab.to_json());
@@ -393,7 +392,7 @@ async fn restore_from_multiple_update() {
 #[tokio::test]
 async fn apply_same_update_multiple_time() {
   let update_cache = CollabStateCachePlugin::new();
-  let mut collab = CollabBuilder::new(1, "1")
+  let mut collab = CollabBuilder::new(1, "1", DataSource::Disk(None))
     .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
@@ -402,9 +401,8 @@ async fn apply_same_update_multiple_time() {
   collab.insert("text", "hello world");
 
   let updates = update_cache.get_doc_state().unwrap();
-  let mut restored_collab = CollabBuilder::new(1, "1")
+  let mut restored_collab = CollabBuilder::new(1, "1", updates)
     .with_device_id("1")
-    .with_doc_state(updates)
     .build()
     .unwrap();
 
@@ -420,12 +418,12 @@ async fn apply_same_update_multiple_time() {
 #[tokio::test]
 async fn root_change_test() {
   setup_log();
-  let mut collab_1 = CollabBuilder::new(1, "1")
+  let mut collab_1 = CollabBuilder::new(1, "1", DataSource::Disk(None))
     .with_device_id("1")
     .build()
     .unwrap();
   collab_1.initialize();
-  let mut collab_2 = CollabBuilder::new(1, "1")
+  let mut collab_2 = CollabBuilder::new(1, "1", DataSource::Disk(None))
     .with_device_id("1")
     .build()
     .unwrap();

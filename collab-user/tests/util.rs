@@ -3,15 +3,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use tempfile::TempDir;
-use tokio::sync::broadcast::Receiver;
-use tokio::time::timeout;
-
+use collab::core::collab::DataSource;
 use collab::preclude::CollabBuilder;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
 use collab_user::core::{RemindersChangeSender, UserAwareness, UserAwarenessNotifier};
+use tempfile::TempDir;
+use tokio::sync::broadcast::Receiver;
+use tokio::time::timeout;
 
 pub struct UserAwarenessTest {
   pub user_awareness: UserAwareness,
@@ -48,7 +48,7 @@ impl UserAwarenessTest {
       None,
     );
 
-    let mut collab = CollabBuilder::new(1, uid.to_string())
+    let mut collab = CollabBuilder::new(1, uid.to_string(), DataSource::Disk(None))
       .with_plugin(disk_plugin)
       .with_device_id("1")
       .build()

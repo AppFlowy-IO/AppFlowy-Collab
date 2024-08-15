@@ -20,6 +20,7 @@ use collab_plugins::local_storage::CollabPersistenceConfig;
 use crate::helper::{make_rocks_db, setup_log, TestFieldSetting, TestTextCell};
 use crate::user_test::helper::TestUserDatabaseCollabBuilderImpl;
 use collab_database::database_state::DatabaseNotify;
+use collab_database::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
 use tokio::time::timeout;
@@ -48,7 +49,7 @@ impl DerefMut for DatabaseTest {
 pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   setup_log();
   let collab_db = make_rocks_db();
-  let mut collab = CollabBuilder::new(uid, database_id)
+  let mut collab = CollabBuilder::new(uid, database_id, DataSource::Disk(None))
     .with_device_id("1")
     .build()
     .unwrap();
@@ -81,7 +82,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
 
 pub fn create_row(uid: i64, row_id: RowId) -> DatabaseRow {
   let collab_db = make_rocks_db();
-  let mut collab = CollabBuilder::new(uid, row_id.clone())
+  let mut collab = CollabBuilder::new(uid, row_id.clone(), DataSource::Disk(None))
     .with_device_id("1")
     .build()
     .unwrap();
@@ -110,7 +111,7 @@ pub async fn create_database_with_db(
       database_id,
       CollabType::Database,
       Arc::downgrade(&collab_db),
-      DataSource::Disk,
+      DataSource::Disk(None),
       CollabPersistenceConfig::default(),
     )
     .unwrap();
@@ -147,6 +148,10 @@ pub fn restore_database_from_db(
   database_id: &str,
   collab_db: Arc<CollabKVDB>,
 ) -> DatabaseTest {
+  let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+    db: Arc::downgrade(&collab_db),
+    uid,
+  })));
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let collab = collab_builder
     .build_collab_with_config(
@@ -154,7 +159,7 @@ pub fn restore_database_from_db(
       database_id,
       CollabType::Database,
       Arc::downgrade(&collab_db),
-      DataSource::Disk,
+      data_source,
       CollabPersistenceConfig::default(),
     )
     .unwrap();
@@ -221,7 +226,11 @@ impl DatabaseTestBuilder {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let collab_db = Arc::new(CollabKVDB::open(path).unwrap());
-    let mut collab = CollabBuilder::new(self.uid, &self.database_id)
+    let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+      db: Arc::downgrade(&collab_db),
+      uid: self.uid,
+    })));
+    let mut collab = CollabBuilder::new(self.uid, &self.database_id, data_source)
       .with_device_id("1")
       .build()
       .unwrap();

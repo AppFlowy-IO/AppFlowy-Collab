@@ -242,15 +242,31 @@ impl Collab {
   pub fn new_with_source(
     origin: CollabOrigin,
     object_id: &str,
-    collab_doc_state: DataSource,
+    data_source: DataSource,
     plugins: Vec<Box<dyn CollabPlugin>>,
     skip_gc: bool,
   ) -> Result<Self, CollabError> {
     let mut collab = Self::new_with_origin(origin, object_id, plugins, skip_gc);
-    let update = collab_doc_state.as_update()?;
-    if let Some(update) = update {
-      collab.context.apply_update(update)?;
+    match data_source {
+      DataSource::Disk(disk) => {
+        if let Some(disk) = disk {
+          disk.load_collab(&mut collab);
+        }
+      },
+      DataSource::DocStateV1(doc_state) => {
+        if !doc_state.is_empty() {
+          let update = Update::decode_v1(&doc_state)?;
+          collab.context.apply_update(update)?;
+        }
+      },
+      DataSource::DocStateV2(doc_state) => {
+        if !doc_state.is_empty() {
+          let update = Update::decode_v2(&doc_state)?;
+          collab.context.apply_update(update)?;
+        }
+      },
     }
+
     Ok(collab)
   }
 
@@ -286,11 +302,6 @@ impl Collab {
       awareness_subscription: Default::default(),
       index_json_sender: tokio::sync::broadcast::channel(100).0,
     }
-  }
-
-  // Load the Updates from the persistence and apply the them to Collab
-  pub fn load(&mut self, persistence: &impl CollabPersistence) {
-    persistence.load_collab(self);
   }
 
   pub fn object_id(&self) -> &str {
@@ -589,14 +600,14 @@ pub struct CollabBuilder {
 /// The raw data of a collab document. It is a list of updates. Each of them can be parsed by
 /// [Update::decode_v1].
 pub enum DataSource {
-  Disk,
+  Disk(Option<Box<dyn CollabPersistence>>),
   DocStateV1(Vec<u8>),
   DocStateV2(Vec<u8>),
 }
 
 impl DataSource {
   pub fn is_empty(&self) -> bool {
-    matches!(self, DataSource::Disk)
+    matches!(self, DataSource::Disk(_))
   }
 
   pub fn as_update(&self) -> Result<Option<Update>, CollabError> {
@@ -612,14 +623,14 @@ impl DataSource {
   }
 }
 impl CollabBuilder {
-  pub fn new<T: AsRef<str>>(uid: i64, object_id: T) -> Self {
+  pub fn new<T: AsRef<str>>(uid: i64, object_id: T, data_source: DataSource) -> Self {
     let object_id = object_id.as_ref();
     Self {
       uid,
       plugins: vec![],
       object_id: object_id.to_string(),
       device_id: "".to_string(),
-      source: DataSource::Disk,
+      source: data_source,
       skip_gc: true,
     }
   }
@@ -637,11 +648,6 @@ impl CollabBuilder {
     T: CollabPlugin + 'static,
   {
     self.plugins.push(Box::new(plugin));
-    self
-  }
-
-  pub fn with_doc_state(mut self, doc_state: DataSource) -> Self {
-    self.source = doc_state;
     self
   }
 

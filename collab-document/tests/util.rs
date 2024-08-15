@@ -42,13 +42,12 @@ impl DocumentTest {
       None,
     );
     let persistence = disk_plugin.clone();
-    let mut collab = CollabBuilder::new(1, doc_id)
+    let mut collab = CollabBuilder::new(1, doc_id, DataSource::Disk(Some(Box::new(persistence))))
       .with_device_id("1")
       .with_plugin(disk_plugin)
       .build()
       .unwrap();
 
-    collab.load(&persistence);
     collab.initialize();
 
     let mut blocks = HashMap::new();
@@ -123,13 +122,12 @@ pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Doc
     None,
   );
   let persistence = disk_plugin.clone();
-  let mut collab = CollabBuilder::new(uid, doc_id)
+  let mut collab = CollabBuilder::new(uid, doc_id, DataSource::Disk(Some(Box::new(persistence))))
     .with_device_id("1")
     .with_plugin(disk_plugin)
     .build()
     .unwrap();
 
-  collab.load(&persistence);
   collab.initialize();
   Document::open_with(collab, None).unwrap()
 }

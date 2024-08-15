@@ -15,6 +15,7 @@ use std::borrow::{Borrow, BorrowMut};
 
 use std::collections::{HashMap, HashSet};
 
+use crate::util::KVDBCollabPersistenceImpl;
 use dashmap::DashMap;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -113,7 +114,12 @@ impl WorkspaceDatabase {
 
   pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Collab> {
     let collab_db = self.collab_db.upgrade()?;
-    let mut collab_doc_state = DataSource::Disk;
+    let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+      db: self.collab_db.clone(),
+      uid: self.uid,
+    })));
+
+    let mut collab_doc_state = data_source;
     let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
     if !is_exist {
       // Try to load the database from the remote. The database doesn't exist in the local only
@@ -221,7 +227,11 @@ impl WorkspaceDatabase {
     debug_assert!(!params.database_id.is_empty());
 
     // Create a [Collab] for the given database id.
-    let collab = self.collab_for_database(&params.database_id, DataSource::Disk)?;
+    let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+      db: self.collab_db.clone(),
+      uid: self.uid,
+    })));
+    let collab = self.collab_for_database(&params.database_id, data_source)?;
     let notifier = DatabaseNotify::default();
     let context = DatabaseContext {
       uid: self.uid,
@@ -382,14 +392,14 @@ impl WorkspaceDatabase {
   fn collab_for_database(
     &self,
     database_id: &str,
-    doc_state: DataSource,
+    data_source: DataSource,
   ) -> Result<Collab, DatabaseError> {
     self.collab_service.build_collab_with_config(
       self.uid,
       database_id,
       CollabType::Database,
       self.collab_db.clone(),
-      doc_state,
+      data_source,
       self.config.clone(),
     )
   }

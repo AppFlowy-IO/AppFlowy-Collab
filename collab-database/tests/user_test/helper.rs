@@ -22,6 +22,7 @@ use tokio::sync::mpsc::{channel, Receiver};
 use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{make_rocks_db, setup_log, TestTextCell};
 
+use collab_database::util::KVDBCollabPersistenceImpl;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
 use rand::Rng;
@@ -63,7 +64,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     _object_id: &str,
     _object_ty: CollabType,
   ) -> Result<DataSource, DatabaseError> {
-    Ok(DataSource::Disk)
+    Ok(DataSource::Disk(None))
   }
 
   async fn batch_get_collab_update(
@@ -80,7 +81,7 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     object_id: &str,
     object_type: CollabType,
     collab_db: Weak<CollabKVDB>,
-    doc_state: DataSource,
+    data_source: DataSource,
     config: CollabPersistenceConfig,
   ) -> Result<Collab, DatabaseError> {
     let db_plugin = RocksdbDiskPlugin::new_with_config(
@@ -91,15 +92,12 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
       config.clone(),
       None,
     );
-    let persistence = db_plugin.clone();
-    let mut collab = CollabBuilder::new(uid, object_id)
+    let mut collab = CollabBuilder::new(uid, object_id, data_source)
       .with_device_id("1")
       .with_plugin(db_plugin)
-      .with_doc_state(doc_state)
       .build()
       .unwrap();
 
-    collab.load(&persistence);
     collab.initialize();
     Ok(collab)
   }
@@ -117,6 +115,11 @@ pub async fn workspace_database_test_with_config(
 ) -> WorkspaceDatabaseTest {
   setup_log();
   let collab_db = make_rocks_db();
+  let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+    db: Arc::downgrade(&collab_db),
+    uid,
+  })));
+
   let builder = TestUserDatabaseCollabBuilderImpl();
   let database_views_aggregate_id = uuid::Uuid::new_v4().to_string();
   let collab = builder
@@ -125,7 +128,7 @@ pub async fn workspace_database_test_with_config(
       &database_views_aggregate_id,
       CollabType::WorkspaceDatabase,
       Arc::downgrade(&collab_db),
-      DataSource::Disk,
+      data_source,
       config.clone(),
     )
     .unwrap();
@@ -147,13 +150,17 @@ pub fn workspace_database_with_db(
 
   // In test, we use a fixed database_storage_id
   let database_views_aggregate_id = "database_views_aggregate_id";
+  let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+    db: collab_db.clone(),
+    uid,
+  })));
   let collab = builder
     .build_collab_with_config(
       uid,
       database_views_aggregate_id,
       CollabType::WorkspaceDatabase,
       collab_db.clone(),
-      DataSource::Disk,
+      data_source,
       config.clone(),
     )
     .unwrap();

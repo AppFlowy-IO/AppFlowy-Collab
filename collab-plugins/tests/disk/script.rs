@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::setup_log;
+use collab::core::collab::DataSource;
 use collab::preclude::*;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
@@ -11,8 +13,6 @@ use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
 use tokio::sync::RwLock;
-
-use crate::setup_log;
 
 pub enum Script {
   CreateDocumentWithCollabDB {
@@ -88,13 +88,12 @@ impl CollabPersistenceTest {
   pub async fn create_collab(&mut self, doc_id: String) {
     let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), &doc_id, CollabType::Document);
     let persistence = disk_plugin.clone();
-    let mut collab = CollabBuilder::new(1, &doc_id)
+    let mut collab = CollabBuilder::new(1, &doc_id, DataSource::Disk(Some(persistence)))
       .with_device_id("1")
       .with_plugin(disk_plugin)
       .build()
       .unwrap();
 
-    collab.load(&persistence);
     collab.initialize();
 
     self
@@ -127,13 +126,12 @@ impl CollabPersistenceTest {
   pub async fn assert_collab(&mut self, id: &str, expected: JsonValue) {
     let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), id, CollabType::Document);
     let persistence = disk_plugin.clone();
-    let mut collab = CollabBuilder::new(1, id)
+    let mut collab = CollabBuilder::new(1, id, DataSource::Disk(Some(persistence)))
       .with_device_id("1")
       .with_plugin(disk_plugin)
       .build()
       .unwrap();
 
-    collab.load(&persistence);
     collab.initialize();
 
     let json = collab.to_json_value();
@@ -169,12 +167,11 @@ impl CollabPersistenceTest {
       Script::CreateDocumentWithCollabDB { id, db } => {
         let disk_plugin = disk_plugin_with_db(self.uid, db, &id, CollabType::Document);
         let persistence = disk_plugin.clone();
-        let mut collab = CollabBuilder::new(1, &id)
+        let mut collab = CollabBuilder::new(1, &id, DataSource::Disk(Some(persistence)))
           .with_device_id("1")
           .with_plugin(disk_plugin)
           .build()
           .unwrap();
-        collab.load(&persistence);
         collab.initialize();
         self.collab_by_id.insert(id, Arc::new(RwLock::new(collab)));
       },
@@ -188,13 +185,12 @@ impl CollabPersistenceTest {
         let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), &id, CollabType::Document);
         let persistence = disk_plugin.clone();
 
-        let mut collab = CollabBuilder::new(1, &id)
+        let mut collab = CollabBuilder::new(1, &id, DataSource::Disk(Some(persistence)))
           .with_device_id("1")
           .with_plugin(disk_plugin)
           .build()
           .unwrap();
 
-        collab.load(&persistence);
         collab.initialize();
         self.collab_by_id.insert(id, Arc::new(RwLock::new(collab)));
       },

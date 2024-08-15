@@ -5,6 +5,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
 
+use collab::core::collab::DataSource;
 use collab::preclude::CollabBuilder;
 use collab_entity::CollabType;
 use collab_folder::*;
@@ -58,7 +59,7 @@ pub fn create_folder_with_data(
   );
   let cleaner: Cleaner = Cleaner::new(path);
 
-  let mut collab = CollabBuilder::new(uid.as_i64(), workspace_id)
+  let mut collab = CollabBuilder::new(uid.as_i64(), workspace_id, DataSource::Disk(None))
     .with_plugin(disk_plugin)
     .with_device_id("1")
     .build()
@@ -93,13 +94,12 @@ pub fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf) -> Fo
   let persistence = disk_plugin.clone();
   let cleaner: Cleaner = Cleaner::new(db_path);
 
-  let mut collab = CollabBuilder::new(1, object_id)
+  let mut collab = CollabBuilder::new(1, object_id, DataSource::Disk(Some(persistence)))
     .with_device_id("1")
     .with_plugin(disk_plugin)
     .build()
     .unwrap();
 
-  collab.load(&persistence);
   collab.initialize();
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);

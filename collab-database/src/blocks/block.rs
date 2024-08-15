@@ -25,6 +25,7 @@ use crate::rows::{
   meta_id_from_row_id, Cell, DatabaseRow, Row, RowChangeSender, RowDetail, RowId, RowMeta,
   RowMetaKey, RowMetaUpdate, RowUpdate,
 };
+use crate::util::KVDBCollabPersistenceImpl;
 use crate::views::RowOrder;
 use crate::workspace_database::DatabaseCollabService;
 
@@ -353,12 +354,16 @@ impl Block {
 
   fn create_collab_for_row(&self, row_id: &RowId) -> Result<Collab, DatabaseError> {
     let config = CollabPersistenceConfig::new().snapshot_per_update(100);
+    let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+      db: self.collab_db.clone(),
+      uid: self.uid,
+    })));
     self.collab_service.build_collab_with_config(
       self.uid,
       row_id,
       CollabType::DatabaseRow,
       self.collab_db.clone(),
-      DataSource::Disk,
+      data_source,
       config,
     )
   }
@@ -378,12 +383,16 @@ async fn async_create_row<T: Into<Row>>(
   let cloned_weak_collab_db = collab_db.clone();
 
   if let Ok(Ok(collab)) = tokio::task::spawn_blocking(move || {
+    let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+      db: cloned_weak_collab_db.clone(),
+      uid,
+    })));
     collab_service.build_collab_with_config(
       uid,
       &cloned_row_id,
       CollabType::DatabaseRow,
       cloned_weak_collab_db,
-      DataSource::Disk,
+      data_source,
       CollabPersistenceConfig::new(),
     )
   })

@@ -1,6 +1,7 @@
 use crate::disk::script::Script::*;
 use crate::disk::script::{disk_plugin_with_db, CollabPersistenceTest};
 use assert_json_diff::assert_json_eq;
+use collab::core::collab::DataSource;
 use collab::preclude::CollabBuilder;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
@@ -44,12 +45,11 @@ async fn flush_test() {
   let test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
   let disk_plugin = disk_plugin_with_db(test.uid, test.db.clone(), &doc_id, CollabType::Document);
   let persistence = disk_plugin.clone();
-  let mut collab = CollabBuilder::new(1, &doc_id)
+  let mut collab = CollabBuilder::new(1, &doc_id, DataSource::Disk(Some(persistence)))
     .with_device_id("1")
     .with_plugin(disk_plugin)
     .build()
     .unwrap();
-  collab.load(&persistence);
   collab.initialize();
 
   for i in 0..100 {

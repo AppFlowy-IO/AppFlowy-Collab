@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::util::document_storage;
+use collab::core::collab::DataSource;
 use collab::preclude::{Collab, CollabBuilder};
 use collab_document::blocks::{
   Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, DocumentData, DocumentMeta,
@@ -11,8 +13,6 @@ use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use serde_json::{json, Value};
-
-use crate::util::document_storage;
 
 pub const TEXT_BLOCK_TYPE: &str = "paragraph";
 
@@ -32,11 +32,15 @@ impl BlockTestCore {
       Arc::downgrade(&db),
       None,
     );
-    let mut collab = CollabBuilder::new(1, doc_id)
-      .with_plugin(disk_plugin)
-      .with_device_id("1")
-      .build()
-      .unwrap();
+    let mut collab = CollabBuilder::new(
+      1,
+      doc_id,
+      DataSource::Disk(Some(Box::new(disk_plugin.clone()))),
+    )
+    .with_plugin(disk_plugin)
+    .with_device_id("1")
+    .build()
+    .unwrap();
     collab.initialize();
 
     let document_data = BlockTestCore::get_default_data();
