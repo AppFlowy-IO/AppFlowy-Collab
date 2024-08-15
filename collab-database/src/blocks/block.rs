@@ -4,8 +4,6 @@ use dashmap::mapref::one::RefMut;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Weak};
 
-use collab::core::collab::DataSource;
-
 use collab::error::CollabError;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
@@ -354,10 +352,11 @@ impl Block {
 
   fn create_collab_for_row(&self, row_id: &RowId) -> Result<Collab, DatabaseError> {
     let config = CollabPersistenceConfig::new().snapshot_per_update(100);
-    let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+    let data_source = KVDBCollabPersistenceImpl {
       db: self.collab_db.clone(),
       uid: self.uid,
-    })));
+    }
+    .into_data_source();
     self.collab_service.build_collab_with_config(
       self.uid,
       row_id,
@@ -383,10 +382,11 @@ async fn async_create_row<T: Into<Row>>(
   let cloned_weak_collab_db = collab_db.clone();
 
   if let Ok(Ok(collab)) = tokio::task::spawn_blocking(move || {
-    let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+    let data_source = KVDBCollabPersistenceImpl {
       db: cloned_weak_collab_db.clone(),
       uid,
-    })));
+    }
+    .into_data_source();
     collab_service.build_collab_with_config(
       uid,
       &cloned_row_id,

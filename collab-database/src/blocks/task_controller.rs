@@ -16,6 +16,7 @@ use tracing::trace;
 
 use crate::error::DatabaseError;
 use crate::rows::{RowDetail, RowId};
+use crate::util::KVDBCollabPersistenceImpl;
 use crate::workspace_database::DatabaseCollabService;
 
 /// A [BlockTaskController] is used to control how the [BlockTask]s are executed.
@@ -82,12 +83,20 @@ impl BlockTaskController {
           .get_collab_doc_state(row_id.as_ref(), CollabType::DatabaseRow)
           .await
         {
+          let data_source = doc_state.unwrap_or_else(|| {
+            KVDBCollabPersistenceImpl {
+              db: Arc::downgrade(&collab_db),
+              uid: *uid,
+            }
+            .into_data_source()
+          });
+
           let collab = collab_service.build_collab_with_config(
             *uid,
             row_id,
             CollabType::DatabaseRow,
             Arc::downgrade(&collab_db),
-            doc_state,
+            data_source,
             CollabPersistenceConfig::default(),
           );
 

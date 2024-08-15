@@ -34,7 +34,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     &self,
     object_id: &str,
     object_ty: CollabType,
-  ) -> Result<DataSource, DatabaseError>;
+  ) -> Result<Option<DataSource>, DatabaseError>;
 
   async fn batch_get_collab_update(
     &self,
@@ -114,10 +114,11 @@ impl WorkspaceDatabase {
 
   pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Collab> {
     let collab_db = self.collab_db.upgrade()?;
-    let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+    let data_source = KVDBCollabPersistenceImpl {
       db: self.collab_db.clone(),
       uid: self.uid,
-    })));
+    }
+    .into_data_source();
 
     let mut collab_doc_state = data_source;
     let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
@@ -129,12 +130,15 @@ impl WorkspaceDatabase {
         .get_collab_doc_state(database_id, CollabType::Database)
         .await
       {
-        Ok(fetched_doc_state) => {
+        Ok(Some(fetched_doc_state)) => {
           if fetched_doc_state.is_empty() {
             error!("Failed to get updates for database: {}", database_id);
             return None;
           }
           collab_doc_state = fetched_doc_state;
+        },
+        Ok(None) => {
+          // do nothing
         },
         Err(e) => {
           error!("Failed to get collab updates for database: {}", e);
@@ -227,10 +231,11 @@ impl WorkspaceDatabase {
     debug_assert!(!params.database_id.is_empty());
 
     // Create a [Collab] for the given database id.
-    let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+    let data_source = KVDBCollabPersistenceImpl {
       db: self.collab_db.clone(),
       uid: self.uid,
-    })));
+    }
+    .into_data_source();
     let collab = self.collab_for_database(&params.database_id, data_source)?;
     let notifier = DatabaseNotify::default();
     let context = DatabaseContext {

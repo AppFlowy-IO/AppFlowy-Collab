@@ -1,3 +1,4 @@
+use collab::core::collab::DataSource;
 use collab::core::collab_plugin::CollabPersistence;
 use collab::preclude::Collab;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
@@ -10,6 +11,23 @@ pub struct KVDBCollabPersistenceImpl {
   pub db: Weak<CollabKVDB>,
   pub uid: i64,
 }
+
+impl KVDBCollabPersistenceImpl {
+  pub fn new(db: Weak<CollabKVDB>, uid: i64) -> Self {
+    Self { db, uid }
+  }
+
+  pub fn into_data_source(self) -> DataSource {
+    DataSource::Disk(Some(Box::new(self)))
+  }
+}
+
+impl From<KVDBCollabPersistenceImpl> for DataSource {
+  fn from(persistence: KVDBCollabPersistenceImpl) -> Self {
+    persistence.into_data_source()
+  }
+}
+
 impl CollabPersistence for KVDBCollabPersistenceImpl {
   fn load_collab(&self, collab: &mut Collab) {
     if let Some(collab_db) = self.db.upgrade() {

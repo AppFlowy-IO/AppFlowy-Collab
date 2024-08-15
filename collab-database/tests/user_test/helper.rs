@@ -63,8 +63,8 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     &self,
     _object_id: &str,
     _object_ty: CollabType,
-  ) -> Result<DataSource, DatabaseError> {
-    Ok(DataSource::Disk(None))
+  ) -> Result<Option<DataSource>, DatabaseError> {
+    Ok(None)
   }
 
   async fn batch_get_collab_update(
@@ -115,10 +115,11 @@ pub async fn workspace_database_test_with_config(
 ) -> WorkspaceDatabaseTest {
   setup_log();
   let collab_db = make_rocks_db();
-  let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+  let data_source = KVDBCollabPersistenceImpl {
     db: Arc::downgrade(&collab_db),
     uid,
-  })));
+  }
+  .into_data_source();
 
   let builder = TestUserDatabaseCollabBuilderImpl();
   let database_views_aggregate_id = uuid::Uuid::new_v4().to_string();
@@ -150,10 +151,11 @@ pub fn workspace_database_with_db(
 
   // In test, we use a fixed database_storage_id
   let database_views_aggregate_id = "database_views_aggregate_id";
-  let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+  let data_source = KVDBCollabPersistenceImpl {
     db: collab_db.clone(),
     uid,
-  })));
+  }
+  .into_data_source();
   let collab = builder
     .build_collab_with_config(
       uid,

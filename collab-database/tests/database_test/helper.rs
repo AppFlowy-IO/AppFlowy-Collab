@@ -148,10 +148,11 @@ pub fn restore_database_from_db(
   database_id: &str,
   collab_db: Arc<CollabKVDB>,
 ) -> DatabaseTest {
-  let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+  let data_source = KVDBCollabPersistenceImpl {
     db: Arc::downgrade(&collab_db),
     uid,
-  })));
+  }
+  .into_data_source();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let collab = collab_builder
     .build_collab_with_config(
@@ -226,10 +227,11 @@ impl DatabaseTestBuilder {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let collab_db = Arc::new(CollabKVDB::open(path).unwrap());
-    let data_source = DataSource::Disk(Some(Box::new(KVDBCollabPersistenceImpl {
+    let data_source = KVDBCollabPersistenceImpl {
       db: Arc::downgrade(&collab_db),
       uid: self.uid,
-    })));
+    }
+    .into_data_source();
     let mut collab = CollabBuilder::new(self.uid, &self.database_id, data_source)
       .with_device_id("1")
       .build()
