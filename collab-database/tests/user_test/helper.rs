@@ -86,16 +86,20 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     let mut collab = CollabBuilder::new(uid, object_id)
       .with_device_id("1")
       .with_doc_state(doc_state)
-      .with_plugin(RocksdbDiskPlugin::new_with_config(
-        uid,
-        object_id.to_string(),
-        object_type,
-        collab_db,
-        config.clone(),
-        None,
-      ))
       .build()
       .unwrap();
+
+    let db_plugin = RocksdbDiskPlugin::new_with_config(
+      uid,
+      object_id.to_string(),
+      object_type,
+      collab_db,
+      config.clone(),
+      None,
+    );
+
+    db_plugin.load_collab(&mut collab);
+    collab.add_plugin(Box::new(db_plugin));
 
     collab.initialize();
     Ok(collab)

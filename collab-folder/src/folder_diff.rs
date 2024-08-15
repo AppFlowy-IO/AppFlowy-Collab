@@ -84,9 +84,13 @@ impl Folder {
     drop(sub);
     drop(other);
 
-    let changes = changes.swap(None).unwrap();
-    let result = Arc::into_inner(changes).unwrap();
-    Ok(result)
+    match changes.swap(None) {
+      None => Ok(vec![]),
+      Some(changes) => {
+        let result = Arc::into_inner(changes).unwrap();
+        Ok(result)
+      },
+    }
   }
 }
 
