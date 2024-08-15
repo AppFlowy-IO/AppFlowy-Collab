@@ -83,19 +83,23 @@ pub fn create_folder_with_data(
 
 pub fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf) -> FolderTest {
   let db = Arc::new(CollabKVDB::open(db_path.clone()).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(
+  let disk_plugin = Box::new(RocksdbDiskPlugin::new(
     uid.as_i64(),
     object_id.to_string(),
     CollabType::Folder,
     Arc::downgrade(&db),
     None,
-  );
+  ));
+  let persistence = disk_plugin.clone();
   let cleaner: Cleaner = Cleaner::new(db_path);
+
   let mut collab = CollabBuilder::new(1, object_id)
-    .with_plugin(disk_plugin)
     .with_device_id("1")
+    .with_plugin(disk_plugin)
     .build()
     .unwrap();
+
+  collab.load(&persistence);
   collab.initialize();
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);

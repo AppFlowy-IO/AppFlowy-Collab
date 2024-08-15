@@ -21,7 +21,7 @@ use yrs::{
 };
 
 use crate::core::awareness::Awareness;
-use crate::core::collab_plugin::{CollabPlugin, Plugins};
+use crate::core::collab_plugin::{CollabPersistence, CollabPlugin, Plugins};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::origin::{CollabClient, CollabOrigin};
 use crate::core::transaction::DocTransactionExtension;
@@ -288,6 +288,11 @@ impl Collab {
     }
   }
 
+  // Load the Updates from the persistence and apply the them to Collab
+  pub fn load(&mut self, persistence: &impl CollabPersistence) {
+    persistence.load_collab(self);
+  }
+
   pub fn object_id(&self) -> &str {
     &self.object_id
   }
@@ -426,10 +431,9 @@ impl Collab {
   /// Make a full update with the current state of the [Collab].
   /// It invokes the [CollabPlugin::flush] method of each plugin.
   pub fn flush(&self) {
-    let doc = self.context.doc();
     self
       .plugins
-      .each(|plugin| plugin.flush(&self.object_id, doc))
+      .each(|plugin| plugin.write_to_disk(&self.object_id))
   }
 
   pub fn get<V>(&self, key: &str) -> Option<V>

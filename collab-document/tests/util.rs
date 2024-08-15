@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
 use collab::core::collab::DataSource;
+
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabBuilder};
 use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
@@ -40,11 +41,14 @@ impl DocumentTest {
       Arc::downgrade(&db),
       None,
     );
+    let persistence = disk_plugin.clone();
     let mut collab = CollabBuilder::new(1, doc_id)
-      .with_plugin(disk_plugin)
       .with_device_id("1")
+      .with_plugin(disk_plugin)
       .build()
       .unwrap();
+
+    collab.load(&persistence);
     collab.initialize();
 
     let mut blocks = HashMap::new();
@@ -118,13 +122,15 @@ pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Doc
     Arc::downgrade(&db),
     None,
   );
+  let persistence = disk_plugin.clone();
   let mut collab = CollabBuilder::new(uid, doc_id)
-    .with_plugin(disk_plugin)
     .with_device_id("1")
+    .with_plugin(disk_plugin)
     .build()
     .unwrap();
-  collab.initialize();
 
+  collab.load(&persistence);
+  collab.initialize();
   Document::open_with(collab, None).unwrap()
 }
 

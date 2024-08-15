@@ -19,14 +19,14 @@ use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use tokio::sync::mpsc::{channel, Receiver};
 
+use crate::database_test::helper::field_settings_for_default_database;
+use crate::helper::{make_rocks_db, setup_log, TestTextCell};
+
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::CollabKVDB;
 use rand::Rng;
 use tempfile::TempDir;
 use tokio::sync::Mutex;
-
-use crate::database_test::helper::field_settings_for_default_database;
-use crate::helper::{make_rocks_db, setup_log, TestTextCell};
 
 pub struct WorkspaceDatabaseTest {
   #[allow(dead_code)]
@@ -83,12 +83,6 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     doc_state: DataSource,
     config: CollabPersistenceConfig,
   ) -> Result<Collab, DatabaseError> {
-    let mut collab = CollabBuilder::new(uid, object_id)
-      .with_device_id("1")
-      .with_doc_state(doc_state)
-      .build()
-      .unwrap();
-
     let db_plugin = RocksdbDiskPlugin::new_with_config(
       uid,
       object_id.to_string(),
@@ -97,10 +91,15 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
       config.clone(),
       None,
     );
+    let persistence = db_plugin.clone();
+    let mut collab = CollabBuilder::new(uid, object_id)
+      .with_device_id("1")
+      .with_plugin(db_plugin)
+      .with_doc_state(doc_state)
+      .build()
+      .unwrap();
 
-    db_plugin.load_collab(&mut collab);
-    collab.add_plugin(Box::new(db_plugin));
-
+    collab.load(&persistence);
     collab.initialize();
     Ok(collab)
   }

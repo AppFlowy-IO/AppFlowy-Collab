@@ -3,22 +3,20 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Weak};
 
-use crate::CollabKVDB;
-
-use collab::core::collab::make_yrs_doc;
-
-use collab::entity::EncodedCollab;
-use collab::preclude::{Collab, CollabPlugin};
-use collab_entity::CollabType;
-use tracing::{debug, error};
-use yrs::updates::encoder::Encode;
-use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut};
-
 use crate::local_storage::kv::doc::CollabKVAction;
 use crate::local_storage::kv::snapshot::SnapshotPersistence;
 use crate::local_storage::kv::KVTransactionDB;
 use crate::local_storage::rocksdb::snapshot_plugin::CollabSnapshot;
 use crate::local_storage::CollabPersistenceConfig;
+use crate::CollabKVDB;
+use collab::core::collab::make_yrs_doc;
+use collab::core::collab_plugin::CollabPersistence;
+use collab::entity::EncodedCollab;
+use collab::preclude::{Collab, CollabPlugin};
+use collab_entity::CollabType;
+use tracing::{debug, error};
+use yrs::updates::encoder::Encode;
+use yrs::{ReadTxn, StateVector, Transact, TransactionMut};
 
 pub trait RocksdbBackup: Send + Sync {
   fn save_doc(&self, uid: i64, object_id: &str, data: EncodedCollab) -> Result<(), anyhow::Error>;
@@ -136,8 +134,10 @@ impl RocksdbDiskPlugin {
       Ok(())
     });
   }
+}
 
-  pub fn load_collab(&self, collab: &mut Collab) {
+impl CollabPersistence for RocksdbDiskPlugin {
+  fn load_collab(&self, collab: &mut Collab) {
     if let Some(db) = self.collab_db.upgrade() {
       let object_id = collab.object_id().to_string();
       let rocksdb_read = db.read_txn();
@@ -164,16 +164,6 @@ impl RocksdbDiskPlugin {
           self.flush_doc(&db, &object_id);
           self.create_snapshot_if_need(update_count);
         }
-      } else {
-        let txn = collab.transact();
-        let result = db.with_write_txn(|w_db_txn| {
-          w_db_txn.create_new_doc(self.uid, &object_id, &txn)?;
-          Ok(())
-        });
-
-        if let Err(e) = result {
-          error!("🔴 create doc for {:?} failed: {}", object_id, e)
-        }
       }
     } else {
       tracing::warn!("collab_db is dropped");
@@ -182,8 +172,21 @@ impl RocksdbDiskPlugin {
 }
 
 impl CollabPlugin for RocksdbDiskPlugin {
-  fn did_init(&self, _collab: &Collab, _object_id: &str, _last_sync_at: i64) {
+  fn did_init(&self, collab: &Collab, object_id: &str, _last_sync_at: i64) {
     self.did_init.store(true, SeqCst);
+
+    if let Some(collab_db) = self.collab_db.upgrade() {
+      let rocksdb_read = collab_db.read_txn();
+      if !rocksdb_read.is_exist(self.uid, object_id) {
+        let txn = collab.transact();
+        if let Err(err) = collab_db.with_write_txn(|w_db_txn| {
+          w_db_txn.create_new_doc(self.uid, &object_id, &txn)?;
+          Ok(())
+        }) {
+          error!("create doc for {:?} failed: {}", object_id, err);
+        }
+      }
+    }
   }
 
   fn receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
@@ -210,7 +213,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
     };
   }
 
-  fn flush(&self, object_id: &str, _doc: &Doc) {
+  fn write_to_disk(&self, object_id: &str) {
     if let Some(db) = self.collab_db.upgrade() {
       self.flush_doc(&db, object_id);
     }

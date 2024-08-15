@@ -17,6 +17,18 @@ pub enum CollabPluginType {
   /// The default plugin type. It can be used for any other purpose.
   Other,
 }
+pub trait CollabPersistence: Send + Sync + 'static {
+  fn load_collab(&self, collab: &mut Collab);
+}
+
+impl<T> CollabPersistence for Box<T>
+where
+  T: CollabPersistence,
+{
+  fn load_collab(&self, collab: &mut Collab) {
+    (**self).load_collab(collab);
+  }
+}
 
 pub trait CollabPlugin: Send + Sync + 'static {
   /// Called when the plugin is initialized.
@@ -54,12 +66,13 @@ pub trait CollabPlugin: Send + Sync + 'static {
 
   /// Flush the data to the storage. It will remove all existing updates and insert the state vector
   /// and doc_state.
-  fn flush(&self, _object_id: &str, _doc: &Doc) {}
 
   fn start_init_sync(&self) {}
 
   /// Called when the plugin is removed
   fn destroy(&self) {}
+
+  fn write_to_disk(&self, _object_id: &str) {}
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
@@ -104,16 +117,16 @@ where
     (**self).plugin_type()
   }
 
-  fn flush(&self, object_id: &str, doc: &Doc) {
-    (**self).flush(object_id, doc)
-  }
-
   fn start_init_sync(&self) {
     (**self).start_init_sync()
   }
 
   fn destroy(&self) {
     (**self).destroy()
+  }
+
+  fn write_to_disk(&self, _object_id: &str) {
+    (**self).write_to_disk(_object_id)
   }
 }
 
