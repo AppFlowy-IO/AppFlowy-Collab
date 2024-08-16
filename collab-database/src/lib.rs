@@ -11,4 +11,4 @@ mod macros;
 pub mod blocks;
 pub mod database_state;
 pub mod error;
-// pub mod util;
+pub mod util;

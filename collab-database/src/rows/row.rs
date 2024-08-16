@@ -1,11 +1,11 @@
+use anyhow::anyhow;
+use collab::preclude::{
+  Any, ArrayRef, Collab, FillRef, Map, MapExt, MapRef, ReadTxn, ToJson, TransactionMut, YrsValue,
+};
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Weak;
-
-use collab::preclude::{
-  Any, ArrayRef, Collab, FillRef, Map, MapExt, MapRef, ReadTxn, ToJson, TransactionMut, YrsValue,
-};
 
 use collab::preclude::encoding::serde::from_any;
 use collab::util::AnyExt;
@@ -24,6 +24,7 @@ use crate::rows::{
   subscribe_row_data_change, Cell, Cells, CellsUpdate, RowChangeSender, RowId, RowMeta,
   RowMetaUpdate,
 };
+use crate::util::write_collab_to_disk;
 use crate::views::{OrderObjectPosition, RowOrder};
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 
@@ -56,6 +57,20 @@ impl DatabaseRow {
       body,
       collab_db,
     }
+  }
+
+  pub fn write_to_disk(&self) -> Result<(), DatabaseError> {
+    let collab_db = self
+      .collab_db
+      .upgrade()
+      .ok_or(DatabaseError::Internal(anyhow!("collab db is drop")))?;
+    write_collab_to_disk(
+      self.body.uid,
+      &self.collab,
+      &CollabType::DatabaseRow,
+      &collab_db,
+    )?;
+    Ok(())
   }
 
   pub fn validate(&self) -> Result<(), DatabaseError> {

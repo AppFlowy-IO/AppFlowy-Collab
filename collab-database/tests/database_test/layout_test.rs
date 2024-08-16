@@ -31,7 +31,8 @@ async fn create_database_view_with_layout_setting_test() {
       true,
     ))
     .with_layout_setting(TestCalendarLayoutSetting::new("f1".to_string()).into())
-    .build();
+    .build()
+    .await;
 
   let layout_setting = database_test
     .get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Calendar)

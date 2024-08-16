@@ -73,7 +73,11 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     }],
     ..Default::default()
   };
-  let database = Database::new_with_view(params, context).unwrap();
+
+  let database = futures::executor::block_on(async {
+    Database::create_with_view(params, context).await.unwrap()
+  });
+
   DatabaseTest {
     database,
     collab_db,
@@ -133,7 +137,7 @@ pub async fn create_database_with_db(
     }],
     ..Default::default()
   };
-  let database = Database::new_with_view(params, context).unwrap();
+  let database = Database::create_with_view(params, context).await.unwrap();
   (
     collab_db.clone(),
     DatabaseTest {
@@ -170,7 +174,7 @@ pub fn restore_database_from_db(
     collab_service: collab_builder,
     notifier: DatabaseNotify::default(),
   };
-  let database = Database::new(database_id, context).unwrap();
+  let database = Database::open(database_id, context).unwrap();
   DatabaseTest {
     database,
     collab_db,
@@ -222,7 +226,7 @@ impl DatabaseTestBuilder {
     self
   }
 
-  pub fn build(self) -> DatabaseTest {
+  pub async fn build(self) -> DatabaseTest {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let collab_db = Arc::new(CollabKVDB::open(path).unwrap());
@@ -259,7 +263,7 @@ impl DatabaseTestBuilder {
       rows: self.rows,
       fields: self.fields,
     };
-    let database = Database::new_with_view(params, context).unwrap();
+    let database = Database::create_with_view(params, context).await.unwrap();
     DatabaseTest {
       database,
       collab_db,

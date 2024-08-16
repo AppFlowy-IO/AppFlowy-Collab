@@ -94,7 +94,7 @@ impl Block {
       for (row_id, row_collab) in row_collabs {
         match row_collab {
           Ok(row_collab) => {
-            if let Err(err) = Self::init_collab_row(
+            if let Err(err) = Self::create_collab_row_instance(
               &RowId::from(row_id),
               weak_notifier.clone(),
               uid,
@@ -118,30 +118,11 @@ impl Block {
   where
     T: Into<Row> + Send,
   {
-    let create_async = rows.len() > 100;
     let mut row_orders = Vec::with_capacity(rows.len());
     for row in rows {
-      if create_async {
-        let row = row.into();
-        row_orders.push(RowOrder {
-          id: row.id.clone(),
-          height: row.height,
-        });
-
-        let uid = self.uid;
-        let collab_db = self.collab_db.clone();
-        let row_change_tx = self.row_change_tx.clone();
-        let collab_service = self.collab_service.clone();
-        let cache = self.rows.clone();
-        tokio::spawn(async move {
-          async_create_row(uid, row, cache, collab_db, row_change_tx, collab_service).await;
-        });
-      } else {
-        let row_order = self.create_row(row);
-        row_orders.push(row_order);
-      }
+      let row_order = self.create_row(row);
+      row_orders.push(row_order);
     }
-
     row_orders
   }
 
@@ -241,7 +222,7 @@ impl Block {
     let result = self
       .rows
       .entry(row_id.clone())
-      .or_try_insert_with(|| self.init_row(row_id));
+      .or_try_insert_with(|| self.create_row_instance(row_id));
 
     match result {
       Ok(row) => Some(row),
@@ -252,7 +233,7 @@ impl Block {
     }
   }
 
-  fn init_row(&self, row_id: RowId) -> Result<DatabaseRow, DatabaseError> {
+  fn create_row_instance(&self, row_id: RowId) -> Result<DatabaseRow, DatabaseError> {
     let collab_db = self
       .collab_db
       .upgrade()
@@ -280,7 +261,7 @@ impl Block {
       let rid = row_id.clone();
       tokio::spawn(async move {
         if let Some(Ok(row_collab)) = rx.recv().await {
-          if let Err(err) = Self::init_collab_row(
+          if let Err(err) = Self::create_collab_row_instance(
             &rid,
             weak_notifier,
             uid,
@@ -316,7 +297,7 @@ impl Block {
     }
   }
 
-  fn init_collab_row(
+  fn create_collab_row_instance(
     row_id: &RowId,
     weak_notifier: Weak<Sender<BlockEvent>>,
     uid: i64,
@@ -332,7 +313,6 @@ impl Block {
 
     trace!("init_collab_row: {:?}", row_id);
     let row_detail = RowDetail::from_collab(&row_collab);
-
     let row = DatabaseRow::new(uid, row_id.clone(), collab_db, row_collab, change_tx, None);
     cache.insert(row_id.clone(), row);
 
@@ -363,48 +343,5 @@ impl Block {
       data_source.into(),
       config,
     )
-  }
-}
-
-async fn async_create_row<T: Into<Row>>(
-  uid: i64,
-  row: T,
-  cache: Arc<DashMap<RowId, DatabaseRow>>,
-  collab_db: Weak<CollabKVDB>,
-  row_change_tx: RowChangeSender,
-  collab_service: Arc<dyn DatabaseCollabService>,
-) {
-  let row = row.into();
-  let row_id = row.id.clone();
-  let cloned_row_id = row_id.clone();
-  let cloned_weak_collab_db = collab_db.clone();
-
-  if let Ok(Ok(collab)) = tokio::task::spawn_blocking(move || {
-    let data_source = KVDBCollabPersistenceImpl {
-      db: cloned_weak_collab_db.clone(),
-      uid,
-    }
-    .into_data_source();
-    collab_service.build_collab_with_config(
-      uid,
-      &cloned_row_id,
-      CollabType::DatabaseRow,
-      cloned_weak_collab_db,
-      data_source,
-      CollabPersistenceConfig::new(),
-    )
-  })
-  .await
-  {
-    trace!("async create row:{}", row_id);
-    let database_row = DatabaseRow::new(
-      uid,
-      row_id.clone(),
-      collab_db,
-      collab,
-      row_change_tx,
-      Some(row),
-    );
-    cache.insert(row_id, database_row);
   }
 }

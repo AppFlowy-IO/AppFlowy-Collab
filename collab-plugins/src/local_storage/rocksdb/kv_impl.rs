@@ -142,6 +142,17 @@ impl KVTransactionDB for KVTransactionDBRocksdbImpl {
     RocksdbKVStoreImpl::new(txn)
   }
 
+  fn write_txn<'a, 'b>(&'b self) -> Self::TransactionAction<'a>
+  where
+    'b: 'a,
+  {
+    let txn_options = TransactionOptions::default();
+    let txn = self
+      .db
+      .transaction_opt(&WriteOptions::default(), &txn_options);
+    RocksdbKVStoreImpl::new(txn)
+  }
+
   fn with_write_txn<'a, 'b, Output>(
     &'b self,
     f: impl FnOnce(&Self::TransactionAction<'a>) -> Result<Output, PersistenceError>,

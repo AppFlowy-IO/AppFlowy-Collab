@@ -2,20 +2,6 @@ use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-use std::sync::{Arc, Weak};
-
-use collab::preclude::{
-  Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
-  TransactionMut, YrsValue,
-};
-use collab::util::{AnyExt, ArrayExt};
-use collab_entity::define::{DATABASE, DATABASE_ID};
-use collab_entity::CollabType;
-use collab_plugins::CollabKVDB;
-use nanoid::nanoid;
-use serde::{Deserialize, Serialize};
-pub use tokio_stream::wrappers::WatchStream;
-
 use crate::blocks::{Block, BlockEvent};
 use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
@@ -25,6 +11,7 @@ use crate::rows::{
   CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowChangeReceiver, RowDetail, RowId,
   RowMeta, RowMetaUpdate, RowUpdate,
 };
+use crate::util::encoded_collab;
 use crate::views::define::DATABASE_VIEW_ROW_ORDERS;
 use crate::views::{
   CalculationMap, CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator,
@@ -33,10 +20,28 @@ use crate::views::{
   OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver, ViewMap,
 };
 use crate::workspace_database::DatabaseCollabService;
+use anyhow::anyhow;
+use collab::entity::EncodedCollab;
+use collab::preclude::{
+  Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
+  TransactionMut, YrsValue,
+};
+use collab::util::{AnyExt, ArrayExt};
+use collab_entity::define::{DATABASE, DATABASE_ID};
+use collab_entity::CollabType;
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use collab_plugins::local_storage::kv::KVTransactionDB;
+use collab_plugins::CollabKVDB;
+use nanoid::nanoid;
+use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Weak};
+pub use tokio_stream::wrappers::WatchStream;
 
 pub struct Database {
+  uid: i64,
   pub collab: Collab,
   pub body: DatabaseBody,
+  pub collab_db: Weak<CollabKVDB>,
 }
 
 const FIELDS: &str = "fields";
@@ -53,24 +58,74 @@ pub struct DatabaseContext {
 
 impl Database {
   /// Get or Create a database with the given database_id.
-  pub fn new(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
+  pub fn open(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
     if database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
+    let uid = context.uid;
+    let collab_db = context.db.clone();
     let (body, collab) = DatabaseBody::new(database_id.to_string(), context);
-    Ok(Self { collab, body })
+    Ok(Self {
+      uid,
+      collab,
+      body,
+      collab_db,
+    })
   }
   /// Create a new database with the given [CreateDatabaseParams]
   /// The method will set the inline view id to the given view_id
   /// from the [CreateDatabaseParams].
-  pub fn new_with_view(
+  pub async fn create_with_view(
     params: CreateDatabaseParams,
     context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
     // Get or create empty database with the given database_id
-    let mut this = Self::new(&params.database_id, context)?;
-    this.init(params)?;
-    Ok(this)
+    let mut database = Self::open(&params.database_id, context)?;
+    database.init(params)?;
+
+    // write the database to disk
+    tokio::task::spawn_blocking(move || {
+      database.write_to_disk()?;
+      Ok::<_, DatabaseError>(database)
+    })
+    .await
+    .map_err(|e| DatabaseError::Internal(e.into()))?
+  }
+
+  pub fn write_to_disk(&self) -> Result<(), DatabaseError> {
+    if let Some(collab_db) = self.collab_db.upgrade() {
+      let write_txn = collab_db.write_txn();
+      let flush_collab =
+        |uid: i64, object_id: &str, encoded: &EncodedCollab| -> Result<(), DatabaseError> {
+          write_txn
+            .flush_doc(
+              uid,
+              object_id,
+              encoded.state_vector.to_vec(),
+              encoded.doc_state.to_vec(),
+            )
+            .map_err(|err| {
+              DatabaseError::Internal(anyhow!("flush doc:{} failed: {}", object_id, err))
+            })
+        };
+
+      // Write database
+      let database_encoded = encoded_collab(&self.collab, &CollabType::Database)?;
+      flush_collab(self.uid, self.collab.object_id(), &database_encoded)?;
+
+      // Write database rows
+      for row in self.body.block.rows.iter() {
+        let row_encoded = encoded_collab(&row.collab, &CollabType::DatabaseRow)?;
+        flush_collab(self.uid, row.collab.object_id(), &row_encoded)?;
+      }
+
+      // Commit the transaction
+      write_txn
+        .commit_transaction()
+        .map_err(|err| DatabaseError::Internal(anyhow!("commit transaction failed: {}", err)))?;
+    }
+
+    Ok(())
   }
 
   fn init(&mut self, params: CreateDatabaseParams) -> Result<(), DatabaseError> {

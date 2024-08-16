@@ -19,6 +19,10 @@ pub trait KVTransactionDB: Send + Sync + 'static {
   where
     'b: 'a;
 
+  fn write_txn<'a, 'b>(&'b self) -> Self::TransactionAction<'a>
+  where
+    'b: 'a;
+
   fn with_write_txn<'a, 'b, Output>(
     &'b self,
     f: impl FnOnce(&Self::TransactionAction<'a>) -> Result<Output, PersistenceError>,
