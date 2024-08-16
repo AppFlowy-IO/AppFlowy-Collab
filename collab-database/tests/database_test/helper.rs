@@ -20,7 +20,7 @@ use collab_plugins::local_storage::CollabPersistenceConfig;
 use crate::helper::{make_rocks_db, setup_log, TestFieldSetting, TestTextCell};
 use crate::user_test::helper::TestUserDatabaseCollabBuilderImpl;
 use collab_database::database_state::DatabaseNotify;
-use collab_database::util::KVDBCollabPersistenceImpl;
+use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
 use tokio::time::timeout;
@@ -151,8 +151,7 @@ pub fn restore_database_from_db(
   let data_source = KVDBCollabPersistenceImpl {
     db: Arc::downgrade(&collab_db),
     uid,
-  }
-  .into_data_source();
+  };
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let collab = collab_builder
     .build_collab_with_config(
@@ -160,7 +159,7 @@ pub fn restore_database_from_db(
       database_id,
       CollabType::Database,
       Arc::downgrade(&collab_db),
-      data_source,
+      data_source.into(),
       CollabPersistenceConfig::default(),
     )
     .unwrap();

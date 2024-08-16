@@ -2,22 +2,21 @@ use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Weak};
 
+use crate::error::DatabaseError;
+use crate::rows::{RowDetail, RowId};
+use crate::workspace_database::DatabaseCollabService;
 use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::{KVTransactionDB, PersistenceError};
+use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::task::{yield_now, JoinHandle};
 use tracing::trace;
-
-use crate::error::DatabaseError;
-use crate::rows::{RowDetail, RowId};
-use crate::util::KVDBCollabPersistenceImpl;
-use crate::workspace_database::DatabaseCollabService;
 
 /// A [BlockTaskController] is used to control how the [BlockTask]s are executed.
 /// It contains a [TaskQueue] to queue the [BlockTask]s and a [TaskHandler] to handle the
@@ -88,7 +87,7 @@ impl BlockTaskController {
               db: Arc::downgrade(&collab_db),
               uid: *uid,
             }
-            .into_data_source()
+            .into()
           });
 
           let collab = collab_service.build_collab_with_config(

@@ -15,6 +15,7 @@ use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use serde_json::json;
@@ -41,8 +42,11 @@ impl DocumentTest {
       Arc::downgrade(&db),
       None,
     );
-    let persistence = disk_plugin.clone();
-    let mut collab = CollabBuilder::new(1, doc_id, DataSource::Disk(Some(Box::new(persistence))))
+    let data_source = KVDBCollabPersistenceImpl {
+      db: Arc::downgrade(&db),
+      uid,
+    };
+    let mut collab = CollabBuilder::new(uid, doc_id, data_source.into())
       .with_device_id("1")
       .with_plugin(disk_plugin)
       .build()
@@ -121,8 +125,11 @@ pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Doc
     Arc::downgrade(&db),
     None,
   );
-  let persistence = disk_plugin.clone();
-  let mut collab = CollabBuilder::new(uid, doc_id, DataSource::Disk(Some(Box::new(persistence))))
+  let data_source = KVDBCollabPersistenceImpl {
+    db: Arc::downgrade(&db),
+    uid,
+  };
+  let mut collab = CollabBuilder::new(uid, doc_id, data_source.into())
     .with_device_id("1")
     .with_plugin(disk_plugin)
     .build()

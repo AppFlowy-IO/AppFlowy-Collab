@@ -3,12 +3,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::setup_log;
-use collab::core::collab::DataSource;
+
 use collab::preclude::*;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
@@ -87,8 +88,11 @@ impl CollabPersistenceTest {
 
   pub async fn create_collab(&mut self, doc_id: String) {
     let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), &doc_id, CollabType::Document);
-    let persistence = disk_plugin.clone();
-    let mut collab = CollabBuilder::new(1, &doc_id, DataSource::Disk(Some(persistence)))
+    let data_source = KVDBCollabPersistenceImpl {
+      db: Arc::downgrade(&self.db),
+      uid: self.uid,
+    };
+    let mut collab = CollabBuilder::new(1, &doc_id, data_source.into())
       .with_device_id("1")
       .with_plugin(disk_plugin)
       .build()
@@ -125,8 +129,11 @@ impl CollabPersistenceTest {
 
   pub async fn assert_collab(&mut self, id: &str, expected: JsonValue) {
     let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), id, CollabType::Document);
-    let persistence = disk_plugin.clone();
-    let mut collab = CollabBuilder::new(1, id, DataSource::Disk(Some(persistence)))
+    let data_source = KVDBCollabPersistenceImpl {
+      db: Arc::downgrade(&self.db),
+      uid: self.uid,
+    };
+    let mut collab = CollabBuilder::new(1, id, data_source.into())
       .with_device_id("1")
       .with_plugin(disk_plugin)
       .build()
@@ -165,9 +172,13 @@ impl CollabPersistenceTest {
   pub async fn run_script(&mut self, script: Script) {
     match script {
       Script::CreateDocumentWithCollabDB { id, db } => {
+        let uid = 1;
         let disk_plugin = disk_plugin_with_db(self.uid, db, &id, CollabType::Document);
-        let persistence = disk_plugin.clone();
-        let mut collab = CollabBuilder::new(1, &id, DataSource::Disk(Some(persistence)))
+        let data_source = KVDBCollabPersistenceImpl {
+          db: Arc::downgrade(&self.db),
+          uid,
+        };
+        let mut collab = CollabBuilder::new(uid, id.clone(), data_source.into())
           .with_device_id("1")
           .with_plugin(disk_plugin)
           .build()
@@ -183,9 +194,11 @@ impl CollabPersistenceTest {
       },
       Script::OpenDocumentWithDiskPlugin { id } => {
         let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), &id, CollabType::Document);
-        let persistence = disk_plugin.clone();
-
-        let mut collab = CollabBuilder::new(1, &id, DataSource::Disk(Some(persistence)))
+        let data_source = KVDBCollabPersistenceImpl {
+          db: Arc::downgrade(&self.db),
+          uid: self.uid,
+        };
+        let mut collab = CollabBuilder::new(1, id.clone(), data_source.into())
           .with_device_id("1")
           .with_plugin(disk_plugin)
           .build()

@@ -11,21 +11,20 @@ use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 
-use collab::preclude::Collab;
-use tokio::sync::broadcast;
-use tokio::sync::broadcast::Sender;
-use tracing::{error, trace, warn};
-use uuid::Uuid;
-
 use crate::blocks::task_controller::{BlockTask, BlockTaskController};
 use crate::error::DatabaseError;
 use crate::rows::{
   meta_id_from_row_id, Cell, DatabaseRow, Row, RowChangeSender, RowDetail, RowId, RowMeta,
   RowMetaKey, RowMetaUpdate, RowUpdate,
 };
-use crate::util::KVDBCollabPersistenceImpl;
 use crate::views::RowOrder;
 use crate::workspace_database::DatabaseCollabService;
+use collab::preclude::Collab;
+use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
+use tokio::sync::broadcast;
+use tokio::sync::broadcast::Sender;
+use tracing::{error, trace, warn};
+use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub enum BlockEvent {
@@ -355,14 +354,13 @@ impl Block {
     let data_source = KVDBCollabPersistenceImpl {
       db: self.collab_db.clone(),
       uid: self.uid,
-    }
-    .into_data_source();
+    };
     self.collab_service.build_collab_with_config(
       self.uid,
       row_id,
       CollabType::DatabaseRow,
       self.collab_db.clone(),
-      data_source,
+      data_source.into(),
       config,
     )
   }

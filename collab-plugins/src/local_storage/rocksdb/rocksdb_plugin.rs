@@ -10,7 +10,7 @@ use crate::local_storage::rocksdb::snapshot_plugin::CollabSnapshot;
 use crate::local_storage::CollabPersistenceConfig;
 use crate::CollabKVDB;
 use collab::core::collab::make_yrs_doc;
-use collab::core::collab_plugin::CollabPersistence;
+
 use collab::entity::EncodedCollab;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
@@ -133,41 +133,6 @@ impl RocksdbDiskPlugin {
 
       Ok(())
     });
-  }
-}
-
-impl CollabPersistence for RocksdbDiskPlugin {
-  fn load_collab(&self, collab: &mut Collab) {
-    if let Some(db) = self.collab_db.upgrade() {
-      let object_id = collab.object_id().to_string();
-      let rocksdb_read = db.read_txn();
-
-      // Check the document is exist or not
-      if rocksdb_read.is_exist(self.uid, &object_id) {
-        let mut txn = collab.transact_mut();
-        // Safety: The document is exist, so it must be loaded successfully.
-        let update_count = match rocksdb_read.load_doc_with_txn(self.uid, &object_id, &mut txn) {
-          Ok(update_count) => {
-            self.update_count.store(update_count, SeqCst);
-            update_count
-          },
-          Err(e) => {
-            error!("🔴 load doc:{} failed: {}", object_id, e);
-            0
-          },
-        };
-        drop(rocksdb_read);
-        txn.commit();
-        drop(txn);
-
-        if update_count != 0 && update_count % self.config.snapshot_per_update == 0 {
-          self.flush_doc(&db, &object_id);
-          self.create_snapshot_if_need(update_count);
-        }
-      }
-    } else {
-      tracing::warn!("collab_db is dropped");
-    };
   }
 }
 

@@ -22,8 +22,8 @@ use tokio::sync::mpsc::{channel, Receiver};
 use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{make_rocks_db, setup_log, TestTextCell};
 
-use collab_database::util::KVDBCollabPersistenceImpl;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
 use rand::Rng;
 use tempfile::TempDir;
@@ -118,8 +118,7 @@ pub async fn workspace_database_test_with_config(
   let data_source = KVDBCollabPersistenceImpl {
     db: Arc::downgrade(&collab_db),
     uid,
-  }
-  .into_data_source();
+  };
 
   let builder = TestUserDatabaseCollabBuilderImpl();
   let database_views_aggregate_id = uuid::Uuid::new_v4().to_string();
@@ -129,7 +128,7 @@ pub async fn workspace_database_test_with_config(
       &database_views_aggregate_id,
       CollabType::WorkspaceDatabase,
       Arc::downgrade(&collab_db),
-      data_source,
+      data_source.into(),
       config.clone(),
     )
     .unwrap();

@@ -15,7 +15,7 @@ use std::borrow::{Borrow, BorrowMut};
 
 use std::collections::{HashMap, HashSet};
 
-use crate::util::KVDBCollabPersistenceImpl;
+use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use dashmap::DashMap;
 use std::sync::{Arc, Weak};
 use std::time::Duration;

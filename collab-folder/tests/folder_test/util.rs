@@ -10,6 +10,7 @@ use collab::preclude::CollabBuilder;
 use collab_entity::CollabType;
 use collab_folder::*;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use tempfile::TempDir;
@@ -91,10 +92,12 @@ pub fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf) -> Fo
     Arc::downgrade(&db),
     None,
   ));
-  let persistence = disk_plugin.clone();
+  let data_source = KVDBCollabPersistenceImpl {
+    db: Arc::downgrade(&db),
+    uid: uid.as_i64(),
+  };
   let cleaner: Cleaner = Cleaner::new(db_path);
-
-  let mut collab = CollabBuilder::new(1, object_id, DataSource::Disk(Some(persistence)))
+  let mut collab = CollabBuilder::new(1, object_id, data_source.into())
     .with_device_id("1")
     .with_plugin(disk_plugin)
     .build()
