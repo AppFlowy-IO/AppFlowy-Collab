@@ -15,6 +15,7 @@ use std::borrow::{Borrow, BorrowMut};
 
 use std::collections::{HashMap, HashSet};
 
+use collab::entity::EncodedCollab;
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use dashmap::DashMap;
 use std::sync::{Arc, Weak};
@@ -22,7 +23,7 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{error, trace};
 
-pub type CollabDocStateByOid = HashMap<String, DataSource>;
+pub type EncodeCollabByOid = HashMap<String, EncodedCollab>;
 
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
@@ -30,17 +31,17 @@ pub type CollabDocStateByOid = HashMap<String, DataSource>;
 ///
 #[async_trait]
 pub trait DatabaseCollabService: Send + Sync + 'static {
-  async fn get_collab_doc_state(
+  async fn get_encode_collab(
     &self,
     object_id: &str,
     object_ty: CollabType,
-  ) -> Result<Option<DataSource>, DatabaseError>;
+  ) -> Result<Option<EncodedCollab>, DatabaseError>;
 
-  async fn batch_get_collab_update(
+  async fn batch_get_encode_collab(
     &self,
     object_ids: Vec<String>,
     object_ty: CollabType,
-  ) -> Result<CollabDocStateByOid, DatabaseError>;
+  ) -> Result<EncodeCollabByOid, DatabaseError>;
 
   fn build_collab(
     &self,
@@ -110,28 +111,28 @@ impl WorkspaceDatabase {
 
   pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Collab> {
     let collab_db = self.collab_db.upgrade()?;
-    let data_source = KVDBCollabPersistenceImpl {
+    let mut data_source = KVDBCollabPersistenceImpl {
       db: self.collab_db.clone(),
       uid: self.uid,
     }
     .into_data_source();
 
-    let mut collab_doc_state = data_source;
     let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
     if !is_exist {
       // Try to load the database from the remote. The database doesn't exist in the local only
       // when the user has deleted the database or the database is using a remote storage.
       match self
         .collab_service
-        .get_collab_doc_state(database_id, CollabType::Database)
+        .get_encode_collab(database_id, CollabType::Database)
         .await
       {
-        Ok(Some(fetched_doc_state)) => {
-          if fetched_doc_state.is_empty() {
+        Ok(Some(encode_collab)) => {
+          if encode_collab.doc_state.is_empty() {
             error!("Failed to get updates for database: {}", database_id);
             return None;
           }
-          collab_doc_state = fetched_doc_state;
+
+          data_source = DataSource::from(encode_collab);
         },
         Ok(None) => {
           // do nothing
@@ -142,9 +143,7 @@ impl WorkspaceDatabase {
         },
       }
     }
-    let database_collab = self
-      .collab_for_database(database_id, collab_doc_state)
-      .ok()?;
+    let database_collab = self.collab_for_database(database_id, data_source).ok()?;
     Some(database_collab)
   }
 

@@ -12,7 +12,7 @@ use collab_database::fields::Field;
 use collab_database::rows::{Cells, CreateRowParams};
 use collab_database::views::{CreateDatabaseParams, CreateViewParams, DatabaseLayout};
 use collab_database::workspace_database::{
-  CollabDocStateByOid, DatabaseCollabService, RowRelationChange, RowRelationUpdateReceiver,
+  DatabaseCollabService, EncodeCollabByOid, RowRelationChange, RowRelationUpdateReceiver,
   WorkspaceDatabase,
 };
 use collab_entity::CollabType;
@@ -22,6 +22,7 @@ use tokio::sync::mpsc::{channel, Receiver};
 use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{make_rocks_db, setup_log, TestTextCell};
 
+use collab::entity::EncodedCollab;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
@@ -59,20 +60,20 @@ pub struct TestUserDatabaseCollabBuilderImpl();
 
 #[async_trait]
 impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
-  async fn get_collab_doc_state(
+  async fn get_encode_collab(
     &self,
     _object_id: &str,
     _object_ty: CollabType,
-  ) -> Result<Option<DataSource>, DatabaseError> {
+  ) -> Result<Option<EncodedCollab>, DatabaseError> {
     Ok(None)
   }
 
-  async fn batch_get_collab_update(
+  async fn batch_get_encode_collab(
     &self,
     _object_ids: Vec<String>,
     _object_ty: CollabType,
-  ) -> Result<CollabDocStateByOid, DatabaseError> {
-    Ok(CollabDocStateByOid::default())
+  ) -> Result<EncodeCollabByOid, DatabaseError> {
+    Ok(EncodeCollabByOid::default())
   }
 
   fn build_collab(

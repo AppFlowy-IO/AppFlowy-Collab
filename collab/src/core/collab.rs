@@ -26,7 +26,7 @@ use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::origin::{CollabClient, CollabOrigin};
 use crate::core::transaction::DocTransactionExtension;
 
-use crate::entity::EncodedCollab;
+use crate::entity::{EncodedCollab, EncoderVersion};
 use crate::error::CollabError;
 use crate::preclude::JsonValue;
 
@@ -603,6 +603,15 @@ pub enum DataSource {
   Disk(Option<Box<dyn CollabPersistence>>),
   DocStateV1(Vec<u8>),
   DocStateV2(Vec<u8>),
+}
+
+impl From<EncodedCollab> for DataSource {
+  fn from(encoded: EncodedCollab) -> Self {
+    match encoded.version {
+      EncoderVersion::V1 => DataSource::DocStateV1(encoded.doc_state.into()),
+      EncoderVersion::V2 => DataSource::DocStateV2(encoded.doc_state.into()),
+    }
+  }
 }
 
 impl DataSource {

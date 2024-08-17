@@ -78,11 +78,11 @@ impl BlockTaskController {
         ..
       } => {
         trace!("fetching database row: {:?}", row_id);
-        if let Ok(doc_state) = collab_service
-          .get_collab_doc_state(row_id.as_ref(), CollabType::DatabaseRow)
+        if let Ok(encode_collab) = collab_service
+          .get_encode_collab(row_id.as_ref(), CollabType::DatabaseRow)
           .await
         {
-          let data_source = doc_state.unwrap_or_else(|| {
+          let data_source = encode_collab.map(DataSource::from).unwrap_or_else(|| {
             KVDBCollabPersistenceImpl {
               db: Arc::downgrade(&collab_db),
               uid: *uid,
@@ -110,17 +110,17 @@ impl BlockTaskController {
         trace!("batch fetching database row");
         let object_ids = row_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
         if let Ok(updates_by_oid) = collab_service
-          .batch_get_collab_update(object_ids, CollabType::DatabaseRow)
+          .batch_get_encode_collab(object_ids, CollabType::DatabaseRow)
           .await
         {
           let mut collabs = vec![];
-          for (oid, doc_state) in updates_by_oid {
+          for (oid, encode_collab) in updates_by_oid {
             let collab = collab_service.build_collab(
               *uid,
               &oid,
               CollabType::DatabaseRow,
               Arc::downgrade(&collab_db),
-              doc_state,
+              DataSource::from(encode_collab),
             );
             collabs.push((oid, collab));
             yield_now().await;
