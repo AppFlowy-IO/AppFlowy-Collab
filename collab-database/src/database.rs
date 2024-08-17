@@ -36,6 +36,7 @@ use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Weak};
 pub use tokio_stream::wrappers::WatchStream;
+use tracing::error;
 
 pub struct Database {
   uid: i64,
@@ -114,7 +115,7 @@ impl Database {
       flush_collab(self.uid, self.collab.object_id(), &database_encoded)?;
 
       // Write database rows
-      for row in self.body.block.rows.iter() {
+      for row in self.body.block.row_mem_cache.iter() {
         let row_encoded = encoded_collab(&row.collab, &CollabType::DatabaseRow)?;
         flush_collab(self.uid, row.collab.object_id(), &row_encoded)?;
       }
@@ -216,14 +217,18 @@ impl Database {
     self.body.views.get_database_view_layout(&txn, view_id)
   }
 
-  pub async fn load_all_rows(&self) {
+  /// Load the first 100 rows of the database.
+  /// The first 100 rows consider as the first screen rows
+  pub async fn load_first_screen_rows(&self) {
     let row_ids = self
       .get_inline_row_orders()
       .into_iter()
       .map(|row_order| row_order.id)
       .take(100)
       .collect::<Vec<_>>();
-    self.body.block.batch_load_rows(row_ids).await;
+    if let Err(err) = self.body.block.batch_load_rows(row_ids).await {
+      error!("load first screen rows failed: {}", err);
+    }
   }
 
   /// Return the database id with a transaction

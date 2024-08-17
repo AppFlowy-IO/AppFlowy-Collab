@@ -185,7 +185,7 @@ impl WorkspaceDatabase {
         // The database is not exist in local disk, which means the rows of the database are not
         // loaded yet.
         if !is_exist {
-          database.load_all_rows().await;
+          database.load_first_screen_rows().await;
         }
 
         // Create a new [MutexDatabase] and add it to the databases.
