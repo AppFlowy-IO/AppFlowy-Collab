@@ -255,7 +255,6 @@ pub fn disk_plugin_with_db(
     collab_type,
     Arc::downgrade(&db),
     CollabPersistenceConfig::default(),
-    None,
   ))
 }
 

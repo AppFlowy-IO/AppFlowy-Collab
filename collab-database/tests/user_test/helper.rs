@@ -75,22 +75,20 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     Ok(CollabDocStateByOid::default())
   }
 
-  fn build_collab_with_config(
+  fn build_collab(
     &self,
     uid: i64,
     object_id: &str,
     object_type: CollabType,
     collab_db: Weak<CollabKVDB>,
     data_source: DataSource,
-    config: CollabPersistenceConfig,
   ) -> Result<Collab, DatabaseError> {
     let db_plugin = RocksdbDiskPlugin::new_with_config(
       uid,
       object_id.to_string(),
       object_type,
       collab_db,
-      config.clone(),
-      None,
+      CollabPersistenceConfig::default(),
     );
     let mut collab = CollabBuilder::new(uid, object_id, data_source)
       .with_device_id("1")
@@ -111,7 +109,7 @@ pub fn workspace_database_test(uid: i64) -> WorkspaceDatabaseTest {
 
 pub async fn workspace_database_test_with_config(
   uid: i64,
-  config: CollabPersistenceConfig,
+  _config: CollabPersistenceConfig,
 ) -> WorkspaceDatabaseTest {
   setup_log();
   let collab_db = make_rocks_db();
@@ -123,16 +121,15 @@ pub async fn workspace_database_test_with_config(
   let builder = TestUserDatabaseCollabBuilderImpl();
   let database_views_aggregate_id = uuid::Uuid::new_v4().to_string();
   let collab = builder
-    .build_collab_with_config(
+    .build_collab(
       uid,
       &database_views_aggregate_id,
       CollabType::WorkspaceDatabase,
       Arc::downgrade(&collab_db),
       data_source.into(),
-      config.clone(),
     )
     .unwrap();
-  let inner = WorkspaceDatabase::open(uid, collab, Arc::downgrade(&collab_db), config, builder);
+  let inner = WorkspaceDatabase::open(uid, collab, Arc::downgrade(&collab_db), builder);
   WorkspaceDatabaseTest {
     uid,
     inner,
@@ -145,7 +142,7 @@ pub fn workspace_database_with_db(
   collab_db: Weak<CollabKVDB>,
   config: Option<CollabPersistenceConfig>,
 ) -> WorkspaceDatabase {
-  let config = config.unwrap_or_else(|| CollabPersistenceConfig::new().snapshot_per_update(5));
+  let _config = config.unwrap_or_else(|| CollabPersistenceConfig::new().snapshot_per_update(5));
   let builder = TestUserDatabaseCollabBuilderImpl();
 
   // In test, we use a fixed database_storage_id
@@ -156,16 +153,15 @@ pub fn workspace_database_with_db(
   }
   .into_data_source();
   let collab = builder
-    .build_collab_with_config(
+    .build_collab(
       uid,
       database_views_aggregate_id,
       CollabType::WorkspaceDatabase,
       collab_db.clone(),
       data_source,
-      config.clone(),
     )
     .unwrap();
-  WorkspaceDatabase::open(uid, collab, collab_db, config, builder)
+  WorkspaceDatabase::open(uid, collab, collab_db, builder)
 }
 
 pub fn user_database_test_with_db(uid: i64, collab_db: Arc<CollabKVDB>) -> WorkspaceDatabaseTest {

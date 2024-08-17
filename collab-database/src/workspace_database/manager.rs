@@ -9,7 +9,7 @@ use collab::preclude::Collab;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
-use collab_plugins::local_storage::CollabPersistenceConfig;
+
 use collab_plugins::CollabKVDB;
 use std::borrow::{Borrow, BorrowMut};
 
@@ -42,14 +42,13 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     object_ty: CollabType,
   ) -> Result<CollabDocStateByOid, DatabaseError>;
 
-  fn build_collab_with_config(
+  fn build_collab(
     &self,
     uid: i64,
     object_id: &str,
     object_type: CollabType,
     collab_db: Weak<CollabKVDB>,
-    collab_doc_state: DataSource,
-    config: CollabPersistenceConfig,
+    data_source: DataSource,
   ) -> Result<Collab, DatabaseError>;
 }
 
@@ -66,7 +65,6 @@ pub struct WorkspaceDatabase {
   collab: Collab,
   collab_db: Weak<CollabKVDB>,
   meta_list: DatabaseMetaList,
-  config: CollabPersistenceConfig,
   collab_service: Arc<dyn DatabaseCollabService>,
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
@@ -80,7 +78,6 @@ impl WorkspaceDatabase {
     uid: i64,
     mut collab: Collab,
     collab_db: Weak<CollabKVDB>,
-    config: CollabPersistenceConfig,
     collab_service: T,
   ) -> Self
   where
@@ -94,7 +91,6 @@ impl WorkspaceDatabase {
       collab_db,
       collab,
       meta_list,
-      config,
       collab_service,
       databases: DashMap::new(),
       removing_databases: Arc::new(DashMap::new()),
@@ -403,13 +399,12 @@ impl WorkspaceDatabase {
     database_id: &str,
     data_source: DataSource,
   ) -> Result<Collab, DatabaseError> {
-    self.collab_service.build_collab_with_config(
+    self.collab_service.build_collab(
       self.uid,
       database_id,
       CollabType::Database,
       self.collab_db.clone(),
       data_source,
-      self.config.clone(),
     )
   }
 }

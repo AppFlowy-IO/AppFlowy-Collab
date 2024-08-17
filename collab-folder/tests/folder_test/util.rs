@@ -56,7 +56,6 @@ pub fn create_folder_with_data(
     workspace_id.to_string(),
     CollabType::Folder,
     Arc::downgrade(&db),
-    None,
   );
   let cleaner: Cleaner = Cleaner::new(path);
 
@@ -90,7 +89,6 @@ pub fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf) -> Fo
     object_id.to_string(),
     CollabType::Folder,
     Arc::downgrade(&db),
-    None,
   ));
   let data_source = KVDBCollabPersistenceImpl {
     db: Arc::downgrade(&db),

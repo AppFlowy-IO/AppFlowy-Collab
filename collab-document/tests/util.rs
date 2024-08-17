@@ -40,7 +40,6 @@ impl DocumentTest {
       doc_id.to_string(),
       CollabType::Document,
       Arc::downgrade(&db),
-      None,
     );
     let data_source = KVDBCollabPersistenceImpl {
       db: Arc::downgrade(&db),
@@ -123,7 +122,6 @@ pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Doc
     doc_id.to_string(),
     CollabType::Document,
     Arc::downgrade(&db),
-    None,
   );
   let data_source = KVDBCollabPersistenceImpl {
     db: Arc::downgrade(&db),

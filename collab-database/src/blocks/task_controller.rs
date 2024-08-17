@@ -12,7 +12,7 @@ use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::{KVTransactionDB, PersistenceError};
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
-use collab_plugins::local_storage::CollabPersistenceConfig;
+
 use collab_plugins::CollabKVDB;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::task::{yield_now, JoinHandle};
@@ -90,13 +90,12 @@ impl BlockTaskController {
             .into()
           });
 
-          let collab = collab_service.build_collab_with_config(
+          let collab = collab_service.build_collab(
             *uid,
             row_id,
             CollabType::DatabaseRow,
             Arc::downgrade(&collab_db),
             data_source,
-            CollabPersistenceConfig::default(),
           );
 
           let _ = sender.send(collab).await;
@@ -116,13 +115,12 @@ impl BlockTaskController {
         {
           let mut collabs = vec![];
           for (oid, doc_state) in updates_by_oid {
-            let collab = collab_service.build_collab_with_config(
+            let collab = collab_service.build_collab(
               *uid,
               &oid,
               CollabType::DatabaseRow,
               Arc::downgrade(&collab_db),
               doc_state,
-              CollabPersistenceConfig::default(),
             );
             collabs.push((oid, collab));
             yield_now().await;

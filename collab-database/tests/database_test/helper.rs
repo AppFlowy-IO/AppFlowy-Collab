@@ -15,7 +15,6 @@ use collab_database::views::{
 };
 use collab_database::workspace_database::DatabaseCollabService;
 use collab_entity::CollabType;
-use collab_plugins::local_storage::CollabPersistenceConfig;
 
 use crate::helper::{make_rocks_db, setup_log, TestFieldSetting, TestTextCell};
 use crate::user_test::helper::TestUserDatabaseCollabBuilderImpl;
@@ -110,13 +109,12 @@ pub async fn create_database_with_db(
   let collab_db = make_rocks_db();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let collab = collab_builder
-    .build_collab_with_config(
+    .build_collab(
       uid,
       database_id,
       CollabType::Database,
       Arc::downgrade(&collab_db),
       DataSource::Disk(None),
-      CollabPersistenceConfig::default(),
     )
     .unwrap();
   let context = DatabaseContext {
@@ -158,13 +156,12 @@ pub fn restore_database_from_db(
   };
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let collab = collab_builder
-    .build_collab_with_config(
+    .build_collab(
       uid,
       database_id,
       CollabType::Database,
       Arc::downgrade(&collab_db),
       data_source.into(),
-      CollabPersistenceConfig::default(),
     )
     .unwrap();
   let context = DatabaseContext {

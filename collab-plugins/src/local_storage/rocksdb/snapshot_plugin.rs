@@ -38,12 +38,14 @@ impl TryFrom<u8> for SnapshotState {
   }
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct CollabSnapshot {
   state: Arc<AtomicU8>,
   snapshot_persistence: Arc<dyn SnapshotPersistence>,
 }
 
+#[allow(dead_code)]
 impl CollabSnapshot {
   pub fn new(snapshot_persistence: Arc<dyn SnapshotPersistence>) -> Self {
     let state = Arc::new(AtomicU8::new(SnapshotState::IDLE));

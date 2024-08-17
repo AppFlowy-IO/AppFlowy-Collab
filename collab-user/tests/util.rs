@@ -40,13 +40,8 @@ impl UserAwarenessTest {
     let path = tempdir.into_path();
     let db = Arc::new(CollabKVDB::open(path.clone()).unwrap());
     let id = uuid::Uuid::new_v4().to_string();
-    let disk_plugin = RocksdbDiskPlugin::new(
-      uid,
-      id,
-      CollabType::UserAwareness,
-      Arc::downgrade(&db),
-      None,
-    );
+    let disk_plugin =
+      RocksdbDiskPlugin::new(uid, id, CollabType::UserAwareness, Arc::downgrade(&db));
 
     let mut collab = CollabBuilder::new(1, uid.to_string(), DataSource::Disk(None))
       .with_plugin(disk_plugin)

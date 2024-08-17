@@ -31,7 +31,6 @@ impl BlockTestCore {
       doc_id.to_string(),
       CollabType::Document,
       Arc::downgrade(&db),
-      None,
     );
     let data_source = KVDBCollabPersistenceImpl {
       db: Arc::downgrade(&db),

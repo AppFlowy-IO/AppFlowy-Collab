@@ -8,7 +8,7 @@ use collab::error::CollabError;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
-use collab_plugins::local_storage::CollabPersistenceConfig;
+
 use collab_plugins::CollabKVDB;
 
 use crate::blocks::task_controller::{BlockTask, BlockTaskController};
@@ -330,18 +330,16 @@ impl Block {
   }
 
   fn create_collab_for_row(&self, row_id: &RowId) -> Result<Collab, DatabaseError> {
-    let config = CollabPersistenceConfig::new().snapshot_per_update(100);
     let data_source = KVDBCollabPersistenceImpl {
       db: self.collab_db.clone(),
       uid: self.uid,
     };
-    self.collab_service.build_collab_with_config(
+    self.collab_service.build_collab(
       self.uid,
       row_id,
       CollabType::DatabaseRow,
       self.collab_db.clone(),
       data_source.into(),
-      config,
     )
   }
 }
