@@ -8,7 +8,7 @@ use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 #[tokio::test]
 async fn update_single_type_option_data_test() {
   let test = user_database_with_default_field().await;
-  let database = test.get_database("d1").await.unwrap();
+  let database = test.get_or_create_database("d1").await.unwrap();
   let mut db = database.write().await;
   db.update_field("f1", |field_update| {
     field_update.update_type_options(|type_option_update| {
@@ -27,7 +27,7 @@ async fn update_single_type_option_data_test() {
 #[tokio::test]
 async fn insert_multi_type_options_test() {
   let test = user_database_with_default_field().await;
-  let database = test.get_database("d1").await.unwrap();
+  let database = test.get_or_create_database("d1").await.unwrap();
 
   let mut type_options = TypeOptions::new();
   type_options.insert(

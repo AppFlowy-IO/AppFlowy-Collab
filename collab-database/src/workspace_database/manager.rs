@@ -149,26 +149,26 @@ impl WorkspaceDatabase {
 
   /// Get the database with the given database id.
   /// Return None if the database does not exist.
-  pub async fn get_database(&self, database_id: &str) -> Option<Arc<RwLock<Database>>> {
+  pub async fn get_or_create_database(&self, database_id: &str) -> Option<Arc<RwLock<Database>>> {
     if !self
       .meta_list
       .contains(&self.collab.transact(), database_id)
     {
       return None;
     }
+
+    if let Some((_, database)) = self.removing_databases.remove(database_id) {
+      trace!("Move the database:{} back to databases", database_id);
+      self
+        .databases
+        .insert(database_id.to_string(), database.clone());
+      return Some(database);
+    }
+
     let database = self.databases.get(database_id).as_deref().cloned();
     let collab_db = self.collab_db.upgrade()?;
     match database {
       None => {
-        // If the database is being removed, return the database back to the databases.
-        if let Some((_, database)) = self.removing_databases.remove(database_id) {
-          trace!("Move the database:{} back to databases", database_id);
-          self
-            .databases
-            .insert(database_id.to_string(), database.clone());
-          return Some(database);
-        }
-
         // If the database is not exist, create a new one.
         let notifier = DatabaseNotify::default();
         let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
@@ -203,7 +203,7 @@ impl WorkspaceDatabase {
   /// Multiple views can share the same database.
   pub async fn get_database_with_view_id(&self, view_id: &str) -> Option<Arc<RwLock<Database>>> {
     let database_id = self.get_database_id_with_view_id(view_id)?;
-    self.get_database(&database_id).await
+    self.get_or_create_database(&database_id).await
   }
 
   /// Return the database id with the given view id.
@@ -269,13 +269,6 @@ impl WorkspaceDatabase {
     Ok(database)
   }
 
-  pub fn track_database(&mut self, database_id: &str, database_view_ids: Vec<String>) {
-    let mut txn = self.collab.transact_mut();
-    self
-      .meta_list
-      .add_database(&mut txn, database_id, database_view_ids);
-  }
-
   /// Create linked view that shares the same data with the inline view's database
   /// If the inline view is deleted, the reference view will be deleted too.
   pub async fn create_database_linked_view(
@@ -283,7 +276,7 @@ impl WorkspaceDatabase {
     params: CreateViewParams,
   ) -> Result<(), DatabaseError> {
     let params = CreateViewParamsValidator::validate(params)?;
-    if let Some(database) = self.get_database(&params.database_id).await {
+    if let Some(database) = self.get_or_create_database(&params.database_id).await {
       let mut txn = self.collab.transact_mut();
       self
         .meta_list
@@ -316,17 +309,6 @@ impl WorkspaceDatabase {
     self.databases.remove(database_id);
   }
 
-  pub fn open_database(&self, database_id: &str) -> Option<Arc<RwLock<Database>>> {
-    // TODO(nathan): refactor the get_database that split the database creation and database opening.
-    let (_, database) = self.removing_databases.remove(database_id)?;
-    trace!("Move the database:{} back to databases", database_id);
-    self
-      .databases
-      .insert(database_id.to_string(), database.clone());
-
-    Some(database)
-  }
-
   pub fn close_database(&self, database_id: &str) {
     if let Some((_, database)) = self.databases.remove(database_id) {
       trace!("Move the database to removing_databases: {}", database_id);
@@ -350,6 +332,13 @@ impl WorkspaceDatabase {
     }
   }
 
+  pub fn track_database(&mut self, database_id: &str, database_view_ids: Vec<String>) {
+    let mut txn = self.collab.transact_mut();
+    self
+      .meta_list
+      .add_database(&mut txn, database_id, database_view_ids);
+  }
+
   /// Return all the database records.
   pub fn get_all_database_meta(&self) -> Vec<DatabaseMeta> {
     let txn = self.collab.transact();
@@ -359,7 +348,7 @@ impl WorkspaceDatabase {
   /// Delete the view from the database with the given view id.
   /// If the view is the inline view, the database will be deleted too.
   pub async fn delete_view(&mut self, database_id: &str, view_id: &str) {
-    if let Some(database) = self.get_database(database_id).await {
+    if let Some(database) = self.get_or_create_database(database_id).await {
       let mut lock = database.write().await;
       lock.delete_view(view_id);
       if lock.is_inline_view(view_id) {

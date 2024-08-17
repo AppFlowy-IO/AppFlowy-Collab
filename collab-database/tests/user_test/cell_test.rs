@@ -8,7 +8,7 @@ use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 #[tokio::test]
 async fn insert_cell_test() {
   let test = user_database_with_default_row().await;
-  let database = test.get_database("d1").await.unwrap();
+  let database = test.get_or_create_database("d1").await.unwrap();
   database.write().await.update_row(1.into(), |row_update| {
     row_update.update_cells(|cells_update| {
       cells_update.insert_cell("f1", {
@@ -27,7 +27,7 @@ async fn insert_cell_test() {
 #[tokio::test]
 async fn update_cell_test() {
   let test = user_database_with_default_row().await;
-  let database = test.get_database("d1").await.unwrap();
+  let database = test.get_or_create_database("d1").await.unwrap();
   let mut db = database.write().await;
   db.update_row(1.into(), |row_update| {
     row_update.update_cells(|cells_update| {
