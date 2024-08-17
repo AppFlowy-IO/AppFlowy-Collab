@@ -284,7 +284,7 @@ impl Database {
     &mut self,
     view_id: &str,
     params: CreateRowParams,
-  ) -> Option<(usize, RowOrder)> {
+  ) -> (usize, RowOrder) {
     let mut txn = self.collab.transact_mut();
     self.body.create_row(&mut txn, view_id, params)
   }
@@ -1372,7 +1372,7 @@ impl DatabaseBody {
     txn: &mut TransactionMut,
     view_id: &str,
     params: CreateRowParams,
-  ) -> Option<(usize, RowOrder)> {
+  ) -> (usize, RowOrder) {
     let row_position = params.row_position.clone();
     let row_order = self.block.create_row(params);
 
@@ -1382,7 +1382,7 @@ impl DatabaseBody {
     let index = self
       .index_of_row(txn, view_id, &row_order.id)
       .unwrap_or_default();
-    Some((index, row_order))
+    (index, row_order)
   }
 
   pub fn index_of_row<T: ReadTxn>(&self, txn: &T, view_id: &str, row_id: &RowId) -> Option<usize> {

@@ -177,7 +177,7 @@ async fn duplicate_row_test() {
   assert_eq!(rows.len(), 3);
 
   let params = database_test.duplicate_row(&2.into()).await.unwrap();
-  let (index, row_order) = database_test.create_row_in_view("v1", params).unwrap();
+  let (index, row_order) = database_test.create_row_in_view("v1", params);
   assert_eq!(index, 2);
 
   let rows = database_test.get_rows_for_view("v1").await;
@@ -196,7 +196,7 @@ async fn duplicate_last_row_test() {
   assert_eq!(rows.len(), 3);
 
   let params = database_test.duplicate_row(&3.into()).await.unwrap();
-  let (index, row_order) = database_test.create_row_in_view("v1", params).unwrap();
+  let (index, row_order) = database_test.create_row_in_view("v1", params);
   assert_eq!(index, 3);
 
   let rows = database_test.get_rows_for_view("v1").await;
