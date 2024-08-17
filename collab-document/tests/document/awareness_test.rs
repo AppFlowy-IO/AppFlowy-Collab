@@ -12,10 +12,10 @@ use std::sync::mpsc;
 use yrs::sync::awareness::AwarenessUpdateEntry;
 use yrs::updates::encoder::{Encode, Encoder};
 
-#[tokio::test]
-async fn document_awareness_test() {
+#[test]
+fn document_awareness_test() {
   let uid = 1;
-  let mut test = DocumentTest::new(uid, "1").await;
+  let mut test = DocumentTest::new(uid, "1");
   let document_state = DocumentAwarenessState {
     version: 1,
     user: DocumentAwarenessUser {
@@ -28,12 +28,14 @@ async fn document_awareness_test() {
   };
 
   let (tx, rx) = mpsc::channel();
-  test.document.subscribe_awareness_state(move |a| {
+  test.document.subscribe_awareness_state("test", move |a| {
     assert_eq!(a.len(), 1);
     tx.send(a.values().next().unwrap().clone()).unwrap();
   });
 
-  test.set_awareness_local_state(document_state.clone());
+  test
+    .document
+    .set_awareness_local_state(document_state.clone());
   assert_eq!(
     test.get_awareness_local_state().as_ref(),
     Some(&document_state)
@@ -57,8 +59,8 @@ async fn document_awareness_test() {
   );
 }
 
-#[tokio::test]
-async fn document_awareness_serde_test() {
+#[test]
+fn document_awareness_serde_test() {
   // This test is to reproduce the serde issue when decoding the [OldAwarenessUpdate] object with the
   // [AwarenessUpdate].
   let document_state = DocumentAwarenessState {
@@ -102,8 +104,8 @@ async fn document_awareness_serde_test() {
   );
 }
 
-#[tokio::test]
-async fn document_awareness_serde_test2() {
+#[test]
+fn document_awareness_serde_test2() {
   // This test is to reproduce the serde issue when decoding the [OldAwarenessUpdate] object with the
   // [AwarenessUpdate].
   let document_state = DocumentAwarenessState {

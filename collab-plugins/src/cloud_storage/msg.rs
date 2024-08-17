@@ -7,6 +7,7 @@ use tokio::sync::oneshot;
 
 pub type MsgId = u64;
 
+#[allow(dead_code)]
 pub trait CollabSinkMessage: Clone + Send + Sync + 'static + Ord + Display {
   fn object_id(&self) -> &str;
   /// Returns the length of the message in bytes.

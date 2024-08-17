@@ -1,6 +1,6 @@
-use collab::core::any_array::ArrayMap;
-use collab::core::any_map::{AnyMap, AnyMapBuilder};
+use collab::preclude::Any;
+use std::collections::HashMap;
 
-pub type FilterArray = ArrayMap;
-pub type FilterMap = AnyMap;
-pub type FilterMapBuilder = AnyMapBuilder;
+pub type FilterArray = Vec<Any>;
+pub type FilterMap = HashMap<String, Any>;
+pub type FilterMapBuilder = HashMap<String, Any>;

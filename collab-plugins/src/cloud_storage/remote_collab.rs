@@ -1,22 +1,21 @@
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
 use anyhow::{anyhow, Error};
 use async_trait::async_trait;
-use collab::core::collab::{DataSource, MutexCollab, TransactionMutExt};
+use collab::core::collab::{DataSource, TransactionMutExt};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_entity::CollabObject;
-use parking_lot::Mutex;
-use rand::Rng;
+use rand::random;
 use serde::Deserialize;
 use tokio::spawn;
 use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::watch;
+use tokio::sync::{watch, RwLock};
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 use tracing::trace;
@@ -32,7 +31,7 @@ use crate::cloud_storage::sink::{
 /// The [RemoteCollab] is used to sync the local collab to the remote.
 pub struct RemoteCollab {
   object: CollabObject,
-  collab: Arc<MutexCollab>,
+  collab: Arc<RwLock<Collab>>,
   storage: Arc<dyn RemoteCollabStorage>,
   /// The [CollabSink] is used to queue the [Message] and continuously try to send them
   /// to the remote via the [RemoteCollabStorage].
@@ -56,11 +55,11 @@ impl RemoteCollab {
     object: CollabObject,
     storage: Arc<dyn RemoteCollabStorage>,
     config: SinkConfig,
-    local_collab: Weak<MutexCollab>,
+    local_collab: Weak<RwLock<Collab>>,
   ) -> Self {
     let is_init_sync_finish = Arc::new(AtomicBool::new(false));
     let sync_state = Arc::new(watch::channel(SyncState::InitSyncBegin).0);
-    let collab = Arc::new(MutexCollab::new(Collab::new_with_origin(
+    let collab = Arc::new(RwLock::new(Collab::new_with_origin(
       CollabOrigin::Server,
       &object.object_id,
       vec![],
@@ -89,17 +88,15 @@ impl RemoteCollab {
             continue;
           }
           if let Some(local_collab) = local_collab.upgrade() {
-            if let Some(collab) = local_collab.try_lock_for(Duration::from_secs(1)) {
-              if let Ok(mut txn) = collab.try_transaction_mut() {
-                match Update::decode_v1(&update) {
-                  Ok(update) => {
-                    if let Err(e) = txn.try_apply_update(update) {
-                      tracing::error!("apply remote update failed: {:?}", e);
-                    }
-                  },
-                  Err(e) => tracing::error!("🔴Failed to decode remote update: {:?}", e),
+            match Update::decode_v1(&update) {
+              Ok(update) => {
+                let mut collab = local_collab.write().await;
+                let mut txn = collab.transact_mut();
+                if let Err(e) = txn.try_apply_update(update) {
+                  tracing::error!("apply remote update failed: {:?}", e);
                 }
-              }
+              },
+              Err(e) => tracing::error!("🔴Failed to decode remote update: {:?}", e),
             }
           }
         }
@@ -210,7 +207,7 @@ impl RemoteCollab {
   /// If the remote collab contains any updates, it will return None.
   /// Otherwise, it will merge the updates into one and return the merged update.
   #[allow(dead_code)]
-  pub async fn sync(&self, local_collab: Weak<MutexCollab>) -> Result<Vec<u8>, Error> {
+  pub async fn sync(&self, local_collab: Weak<RwLock<Collab>>) -> Result<Vec<u8>, Error> {
     let mut remote_update = vec![];
     // It would be better if creating a edge function that calculate the diff between the local and remote.
     // The local only need to send its state vector to the remote. In this way, the local does not need to
@@ -220,11 +217,11 @@ impl RemoteCollab {
     let collab_doc_state = self.storage.get_doc_state(&self.object).await?;
     if !collab_doc_state.is_empty() {
       {
-        let remote_collab = self.collab.lock();
-        let mut txn = remote_collab.origin_transact_mut();
+        let mut remote_collab = self.collab.write().await;
+        let mut txn = remote_collab.transact_mut();
 
         match collab_doc_state {
-          DataSource::Disk => {},
+          DataSource::Disk(_) => {},
           DataSource::DocStateV1(doc_state) => {
             if let Ok(update) = Update::decode_v1(&doc_state) {
               if let Err(e) = txn.try_apply_update(update) {
@@ -250,17 +247,16 @@ impl RemoteCollab {
 
       let _ = self.sync_state.send(SyncState::InitSyncBegin);
       // Encode the remote collab state as update for local collab.
-      let local_sv = local_collab
+      let local_collab = local_collab
         .upgrade()
-        .ok_or(anyhow!("local collab is drop"))?
-        .lock()
-        .transact()
-        .state_vector();
+        .ok_or(anyhow!("local collab is dropped"))?;
+      let mut local_lock = local_collab.write().await;
       let encode_update = self
         .collab
-        .lock()
+        .read()
+        .await
         .transact()
-        .encode_state_as_update_v1(&local_sv);
+        .encode_state_as_update_v1(&local_lock.transact().state_vector());
       if let Ok(update) = Update::decode_v1(&encode_update) {
         {
           // Don't use the with_transact_mut here, because it carries the origin information. So
@@ -271,13 +267,12 @@ impl RemoteCollab {
             self.object,
             encode_update.len()
           );
-          local_collab
-            .upgrade()
-            .ok_or(anyhow!("local collab is drop"))?
-            .lock()
-            .get_doc()
+          local_lock
+            .get_mut_awareness()
+            .doc_mut()
             .transact_mut()
             .apply_update(update);
+          drop(local_lock);
 
           if let Err(e) = self.sync_state.send(SyncState::InitSyncEnd) {
             tracing::error!("🔴Failed to send sync state: {:?}", e);
@@ -287,11 +282,13 @@ impl RemoteCollab {
     }
 
     // Encode the local collab state as update for remote collab.
-    let remote_state_vector = self.collab.lock().transact().state_vector();
+    let mut remote_lock = self.collab.write().await;
+    let remote_state_vector = remote_lock.transact().state_vector();
     let encode_update = local_collab
       .upgrade()
-      .ok_or(anyhow!("local collab is drop"))?
-      .lock()
+      .ok_or(anyhow!("local collab is dropped"))?
+      .read()
+      .await
       .transact()
       .encode_state_as_update_v1(&remote_state_vector);
 
@@ -303,9 +300,8 @@ impl RemoteCollab {
       );
 
       // Apply the update to the remote collab and send the update to the remote.
-      self.collab.lock().with_origin_transact_mut(|txn| {
-        txn.apply_update(decode_update);
-      });
+      remote_lock.transact_mut().apply_update(decode_update);
+      drop(remote_lock);
 
       self.sink.queue_msg(|msg_id| Message {
         object: self.object.clone(),
@@ -318,9 +314,11 @@ impl RemoteCollab {
 
   pub fn push_update(&self, update: &[u8]) {
     if let Ok(decode_update) = Update::decode_v1(update) {
-      self.collab.lock().with_origin_transact_mut(|txn| {
-        txn.apply_update(decode_update);
-      });
+      self
+        .collab
+        .blocking_write()
+        .transact_mut()
+        .apply_update(decode_update);
 
       self.sink.queue_msg(|msg_id| Message {
         object: self.object.clone(),
@@ -593,7 +591,7 @@ enum CollabError {
 
 const RANDOM_MASK: u64 = (1 << 12) - 1;
 
-struct RngMsgIdCounter(Mutex<MsgId>);
+struct RngMsgIdCounter(AtomicU64);
 
 impl RngMsgIdCounter {
   pub fn new() -> Self {
@@ -602,16 +600,15 @@ impl RngMsgIdCounter {
       .expect("Clock moved backwards!")
       .as_millis() as u64;
 
-    let random: u64 = (rand::thread_rng().gen::<u16>() as u64) & RANDOM_MASK;
+    let random: u64 = (random::<u16>() as u64) & RANDOM_MASK;
     let value = timestamp << 16 | random;
-    Self(Mutex::new(value))
+    Self(AtomicU64::new(value))
   }
 }
 
 impl MsgIdCounter for RngMsgIdCounter {
+  #[inline]
   fn next(&self) -> MsgId {
-    let next = *self.0.lock() + 1;
-    *self.0.lock() = next;
-    next
+    self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
   }
 }

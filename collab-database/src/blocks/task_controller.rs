@@ -2,137 +2,103 @@ use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Weak};
 
-use async_trait::async_trait;
-use collab::core::collab::{DataSource, MutexCollab};
+use crate::error::DatabaseError;
+use crate::rows::{RowDetail, RowId};
+use crate::workspace_database::DatabaseCollabService;
+use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::{KVTransactionDB, PersistenceError};
-use collab_plugins::local_storage::CollabPersistenceConfig;
-use collab_plugins::CollabKVDB;
-use tokio::sync::watch;
-use tokio::task::yield_now;
-use tracing::trace;
+use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 
-use crate::blocks::queue::{
-  PendingTask, RequestPayload, TaskHandler, TaskQueue, TaskQueueRunner, TaskState,
-};
-use crate::error::DatabaseError;
-use crate::rows::{RowDetail, RowId};
-use crate::workspace_database::DatabaseCollabService;
+use collab_plugins::CollabKVDB;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::task::{yield_now, JoinHandle};
+use tracing::trace;
 
 /// A [BlockTaskController] is used to control how the [BlockTask]s are executed.
 /// It contains a [TaskQueue] to queue the [BlockTask]s and a [TaskHandler] to handle the
 /// [BlockTask]s.
 ///
 pub struct BlockTaskController {
-  request_handler: Arc<BlockTaskHandler>,
+  sender: UnboundedSender<BlockTask>,
+  processor: JoinHandle<()>,
 }
 
 impl BlockTaskController {
   pub fn new(collab_db: Weak<CollabKVDB>, collab_service: Weak<dyn DatabaseCollabService>) -> Self {
-    let (runner_notifier_tx, runner_notifier) = watch::channel(false);
-    let task_handler = Arc::new(BlockTaskHandler::new(
-      collab_service,
-      collab_db,
-      runner_notifier_tx,
-    ));
+    let (sender, receiver) = unbounded_channel();
+    let processor = tokio::spawn(Self::run(receiver, collab_db, collab_service));
 
-    let handler = Arc::downgrade(&task_handler) as Weak<dyn TaskHandler<BlockTask>>;
-    tokio::spawn(TaskQueueRunner::run(runner_notifier, handler));
-
-    Self {
-      request_handler: task_handler,
-    }
+    Self { sender, processor }
   }
 
   /// Add a new task to the queue. The task with higher sequence number will be executed first.
   /// Just like Last In First Out (LIFO).
   pub fn add_task(&self, task: BlockTask) {
-    self
-      .request_handler
-      .queue
-      .lock()
-      .push(PendingTask::new(task));
-    self.request_handler.notify();
-  }
-}
-
-pub struct BlockTaskHandler {
-  collab_db: Weak<CollabKVDB>,
-  collab_service: Weak<dyn DatabaseCollabService>,
-  queue: parking_lot::Mutex<TaskQueue<BlockTask>>,
-  runner_notifier: Arc<watch::Sender<bool>>,
-}
-
-impl BlockTaskHandler {
-  pub fn new(
-    collab_service: Weak<dyn DatabaseCollabService>,
-    collab_db: Weak<CollabKVDB>,
-    runner_notifier: watch::Sender<bool>,
-  ) -> Self {
-    let queue = parking_lot::Mutex::new(TaskQueue::new());
-    let runner_notifier = Arc::new(runner_notifier);
-    Self {
-      collab_service,
-      collab_db,
-      queue,
-      runner_notifier,
+    if self.sender.send(task).is_err() {
+      tracing::error!("Cannot schedule task - processing loop has been closed");
     }
   }
-}
-
-#[async_trait]
-impl TaskHandler<BlockTask> for BlockTaskHandler {
-  async fn prepare_task(&self) -> Option<PendingTask<BlockTask>> {
-    let mut queue = self.queue.try_lock()?;
-    let task = queue.pop()?;
-    let collab_db = self.collab_db.upgrade()?;
-
-    // The tasks that get the row with given row_id might be duplicated, so we need to check if the
-    // task is already done.
-    let is_exist = match &task.payload {
-      BlockTask::FetchRow { uid, row_id, .. } => {
-        collab_db.read_txn().is_exist(*uid, row_id.as_ref())
-      },
-      BlockTask::BatchFetchRow { uid, row_ids, .. } => match row_ids.first() {
-        None => true,
-        Some(row_id) => collab_db.read_txn().is_exist(*uid, row_id.as_ref()),
-      },
-    };
-
-    return if is_exist { None } else { Some(task) };
+  async fn run(
+    mut receiver: UnboundedReceiver<BlockTask>,
+    collab_db: Weak<CollabKVDB>,
+    collab_service: Weak<dyn DatabaseCollabService>,
+  ) {
+    while let Some(task) = receiver.recv().await {
+      if let Some(collab_db) = collab_db.upgrade() {
+        if let Some(collab_service) = collab_service.upgrade() {
+          if !Self::redundant(&collab_db, &task) {
+            if let Err(err) = Self::handle_task(task, collab_db, collab_service).await {
+              tracing::error!("Failed to handle task: {}", err);
+            }
+          }
+        } else {
+          break; // collab_service is dropped
+        }
+      } else {
+        break; // collab_db is dropped
+      }
+    }
   }
 
-  async fn handle_task(&self, mut task: PendingTask<BlockTask>) -> Option<()> {
+  async fn handle_task(
+    task: BlockTask,
+    collab_db: Arc<CollabKVDB>,
+    collab_service: Arc<dyn DatabaseCollabService>,
+  ) -> anyhow::Result<()> {
     trace!("handle task: {:?}", task);
-    task.set_state(TaskState::Processing);
-    let collab_db = self.collab_db.clone();
-    match &task.payload {
+    match &task {
       BlockTask::FetchRow {
         row_id,
         uid,
         sender,
         ..
       } => {
-        if let Some(collab_service) = self.collab_service.upgrade() {
-          trace!("fetching database row: {:?}", row_id);
-          if let Ok(doc_state) = collab_service
-            .get_collab_doc_state(row_id.as_ref(), CollabType::DatabaseRow)
-            .await
-          {
-            let collab = collab_service.build_collab_with_config(
-              *uid,
-              row_id,
-              CollabType::DatabaseRow,
-              collab_db,
-              doc_state,
-              CollabPersistenceConfig::default(),
-            );
+        trace!("fetching database row: {:?}", row_id);
+        if let Ok(encode_collab) = collab_service
+          .get_encode_collab(row_id.as_ref(), CollabType::DatabaseRow)
+          .await
+        {
+          let data_source = encode_collab.map(DataSource::from).unwrap_or_else(|| {
+            KVDBCollabPersistenceImpl {
+              db: Arc::downgrade(&collab_db),
+              uid: *uid,
+            }
+            .into()
+          });
 
-            let _ = sender.send(collab).await;
-          }
+          let collab = collab_service.build_collab(
+            *uid,
+            row_id,
+            CollabType::DatabaseRow,
+            Arc::downgrade(&collab_db),
+            data_source,
+          );
+
+          let _ = sender.send(collab).await;
         }
       },
       BlockTask::BatchFetchRow {
@@ -141,37 +107,50 @@ impl TaskHandler<BlockTask> for BlockTaskHandler {
         sender,
         ..
       } => {
-        if let Some(collab_service) = self.collab_service.upgrade() {
-          trace!("batch fetching database row");
-          let object_ids = row_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
-          if let Ok(updates_by_oid) = collab_service
-            .batch_get_collab_update(object_ids, CollabType::DatabaseRow)
-            .await
-          {
-            let mut collabs = vec![];
-            for (oid, doc_state) in updates_by_oid {
-              let collab = collab_service.build_collab_with_config(
-                *uid,
-                &oid,
-                CollabType::DatabaseRow,
-                collab_db.clone(),
-                doc_state,
-                CollabPersistenceConfig::default(),
-              );
-              collabs.push((oid, collab));
-              yield_now().await;
-            }
-            let _ = sender.send(collabs).await;
+        trace!("batch fetching database row");
+        let object_ids = row_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
+        if let Ok(updates_by_oid) = collab_service
+          .batch_get_encode_collab(object_ids, CollabType::DatabaseRow)
+          .await
+        {
+          let mut collabs = vec![];
+          for (oid, encode_collab) in updates_by_oid {
+            let collab = collab_service.build_collab(
+              *uid,
+              &oid,
+              CollabType::DatabaseRow,
+              Arc::downgrade(&collab_db),
+              DataSource::from(encode_collab),
+            );
+            collabs.push((oid, collab));
+            yield_now().await;
           }
+          let _ = sender.send(collabs).await;
         }
       },
     }
-    task.set_state(TaskState::Done);
-    Some(())
+    Ok(())
   }
 
-  fn notify(&self) {
-    let _ = self.runner_notifier.send(false);
+  /// The tasks that get the row with given row_id might be duplicated, so we need to check if the
+  /// task is already done.
+  fn redundant(collab_db: &CollabKVDB, task: &BlockTask) -> bool {
+    let redundant = match &task {
+      BlockTask::FetchRow { uid, row_id, .. } => {
+        collab_db.read_txn().is_exist(*uid, row_id.as_ref())
+      },
+      BlockTask::BatchFetchRow { uid, row_ids, .. } => match row_ids.first() {
+        None => true,
+        Some(row_id) => collab_db.read_txn().is_exist(*uid, row_id.as_ref()),
+      },
+    };
+    redundant
+  }
+}
+
+impl Drop for BlockTaskController {
+  fn drop(&mut self) {
+    self.processor.abort();
   }
 }
 
@@ -216,8 +195,7 @@ fn save_row(
           );
         }
 
-        let txn = collab.transact();
-        let row_detail = RowDetail::from_collab(&collab, &txn);
+        let row_detail = RowDetail::from_collab(&collab);
         if row_detail.is_none() {
           tracing::error!("{} doesn't have any row information in it", row_id.as_ref());
         }
@@ -245,9 +223,9 @@ fn save_row(
   }
 }
 
-pub type FetchRowSender = tokio::sync::mpsc::Sender<Result<Arc<MutexCollab>, DatabaseError>>;
+pub type FetchRowSender = tokio::sync::mpsc::Sender<Result<Collab, DatabaseError>>;
 pub type BatchFetchRowSender =
-  tokio::sync::mpsc::Sender<Vec<(String, Result<Arc<MutexCollab>, DatabaseError>)>>;
+  tokio::sync::mpsc::Sender<Vec<(String, Result<Collab, DatabaseError>)>>;
 
 #[derive(Clone)]
 pub enum BlockTask {
@@ -311,5 +289,3 @@ impl PartialOrd<Self> for BlockTask {
     Some(self.cmp(other))
   }
 }
-
-impl RequestPayload for BlockTask {}

@@ -1,10 +1,10 @@
 use crate::{document::Document, error::DocumentError};
 
-pub fn convert_document_to_plain_text(document: Document) -> Result<String, DocumentError> {
+pub fn convert_document_to_plain_text(document: &Document) -> Result<String, DocumentError> {
   let page_id = document.get_page_id();
   match page_id {
     Some(page_id) => {
-      let plain_text = get_plain_text_from_block(&document, &page_id);
+      let plain_text = get_plain_text_from_block(document, &page_id);
       Ok(plain_text)
     },
     None => Err(DocumentError::ParseDocumentError),

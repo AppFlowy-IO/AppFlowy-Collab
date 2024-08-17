@@ -1,5 +1,5 @@
 use crate::fields::{field_from_map_ref, field_from_value, Field};
-use collab::preclude::{DeepObservable, EntryChange, Event, MapRefWrapper, Subscription};
+use collab::preclude::{DeepObservable, EntryChange, Event, MapRef, Subscription};
 use tokio::sync::broadcast;
 use tracing::warn;
 
@@ -14,7 +14,7 @@ pub enum FieldChange {
 }
 
 pub(crate) fn subscribe_field_change(
-  field_map: &mut MapRefWrapper,
+  field_map: &mut MapRef,
   change_tx: FieldChangeSender,
 ) -> Subscription {
   field_map.observe_deep(move |txn, events| {
@@ -29,7 +29,7 @@ pub(crate) fn subscribe_field_change(
             match value {
               EntryChange::Inserted(value) => {
                 // tracing::trace!("field observer: Inserted: {}:{}", key, value);
-                if let Some(field) = field_from_value(value, txn) {
+                if let Some(field) = field_from_value(value.clone(), txn) {
                   let _ = change_tx.send(FieldChange::DidCreateField { field });
                 }
               },
@@ -50,8 +50,7 @@ pub(crate) fn subscribe_field_change(
             }
           }
         },
-        Event::XmlFragment(_) => {},
-        Event::XmlText(_) => {},
+        _ => {},
       }
     }
   })

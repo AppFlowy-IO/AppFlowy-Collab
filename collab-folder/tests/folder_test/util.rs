@@ -1,14 +1,16 @@
 use std::fs::{create_dir_all, File};
 use std::io::copy;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
 
+use collab::core::collab::DataSource;
 use collab::preclude::CollabBuilder;
 use collab_entity::CollabType;
 use collab_folder::*;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use tempfile::TempDir;
@@ -33,18 +35,14 @@ pub struct FolderTest {
   pub(crate) section_rx: Option<SectionChangeReceiver>,
 }
 
-unsafe impl Send for FolderTest {}
-
-unsafe impl Sync for FolderTest {}
-
-pub async fn create_folder(uid: UserId, workspace_id: &str) -> FolderTest {
+pub fn create_folder(uid: UserId, workspace_id: &str) -> FolderTest {
   let mut workspace = Workspace::new(workspace_id.to_string(), "".to_string(), uid.as_i64());
   workspace.created_at = 0;
   let folder_data = FolderData::new(workspace);
-  create_folder_with_data(uid, workspace_id, folder_data).await
+  create_folder_with_data(uid, workspace_id, folder_data)
 }
 
-pub async fn create_folder_with_data(
+pub fn create_folder_with_data(
   uid: UserId,
   workspace_id: &str,
   folder_data: FolderData,
@@ -58,16 +56,15 @@ pub async fn create_folder_with_data(
     workspace_id.to_string(),
     CollabType::Folder,
     Arc::downgrade(&db),
-    None,
   );
   let cleaner: Cleaner = Cleaner::new(path);
 
-  let collab = CollabBuilder::new(uid.as_i64(), workspace_id)
+  let mut collab = CollabBuilder::new(uid.as_i64(), workspace_id, DataSource::Disk(None))
     .with_plugin(disk_plugin)
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.lock().initialize();
+  collab.initialize();
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
   let (section_tx, section_rx) = tokio::sync::broadcast::channel(100);
@@ -75,7 +72,7 @@ pub async fn create_folder_with_data(
     view_change_tx: view_tx,
     section_change_tx: section_tx,
   };
-  let folder = Folder::create(uid, Arc::new(collab), Some(context), folder_data);
+  let folder = Folder::open_with(uid, collab, Some(context), Some(folder_data));
   FolderTest {
     db,
     folder,
@@ -85,22 +82,26 @@ pub async fn create_folder_with_data(
   }
 }
 
-pub async fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf) -> FolderTest {
+pub fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf) -> FolderTest {
   let db = Arc::new(CollabKVDB::open(db_path.clone()).unwrap());
-  let disk_plugin = RocksdbDiskPlugin::new(
+  let disk_plugin = Box::new(RocksdbDiskPlugin::new(
     uid.as_i64(),
     object_id.to_string(),
     CollabType::Folder,
     Arc::downgrade(&db),
-    None,
-  );
+  ));
+  let data_source = KVDBCollabPersistenceImpl {
+    db: Arc::downgrade(&db),
+    uid: uid.as_i64(),
+  };
   let cleaner: Cleaner = Cleaner::new(db_path);
-  let collab = CollabBuilder::new(1, object_id)
-    .with_plugin(disk_plugin)
+  let mut collab = CollabBuilder::new(1, object_id, data_source.into())
     .with_device_id("1")
+    .with_plugin(disk_plugin)
     .build()
     .unwrap();
-  collab.lock().initialize();
+
+  collab.initialize();
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
   let (section_tx, section_rx) = tokio::sync::broadcast::channel(100);
@@ -108,7 +109,7 @@ pub async fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf)
     view_change_tx: view_tx,
     section_change_tx: section_tx,
   };
-  let folder = Folder::open(uid, Arc::new(collab), Some(context)).unwrap();
+  let folder = Folder::open(uid, collab, Some(context)).unwrap();
   FolderTest {
     folder,
     db,
@@ -118,8 +119,8 @@ pub async fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf)
   }
 }
 
-pub async fn create_folder_with_workspace(uid: UserId, workspace_id: &str) -> FolderTest {
-  create_folder(uid, workspace_id).await
+pub fn create_folder_with_workspace(uid: UserId, workspace_id: &str) -> FolderTest {
+  create_folder(uid, workspace_id)
 }
 
 pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<String>) -> View {
@@ -141,6 +142,12 @@ impl Deref for FolderTest {
 
   fn deref(&self) -> &Self::Target {
     &self.folder
+  }
+}
+
+impl DerefMut for FolderTest {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.folder
   }
 }
 

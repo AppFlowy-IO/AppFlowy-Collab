@@ -11,7 +11,7 @@ use crate::helper::unzip_history_database_db;
 #[tokio::test]
 async fn restore_row_from_disk_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
-  let (db, database_test) = create_database_with_db(1, &database_id).await;
+  let (db, mut database_test) = create_database_with_db(1, &database_id).await;
   let row_1 = CreateRowParams::new(1, database_id.clone());
   let row_2 = CreateRowParams::new(2, database_id.clone());
   database_test.create_row(row_1.clone()).unwrap();
@@ -19,7 +19,7 @@ async fn restore_row_from_disk_test() {
   drop(database_test);
 
   let database_test = restore_database_from_db(1, &database_id, db);
-  let rows = database_test.get_rows_for_view("v1");
+  let rows = database_test.get_rows_for_view("v1").await;
   assert_eq!(rows.len(), 2);
 
   assert!(rows.iter().any(|row| row.id == row_1.id));
@@ -29,11 +29,11 @@ async fn restore_row_from_disk_test() {
 #[tokio::test]
 async fn restore_from_disk_test() {
   let (db, database_test) = create_database_with_db(1, "1").await;
-  assert_database_eq(database_test);
+  assert_database_eq(database_test).await;
 
   // Restore from disk
   let database_test = restore_database_from_db(1, "1", db);
-  assert_database_eq(database_test);
+  assert_database_eq(database_test).await;
 }
 
 #[tokio::test]
@@ -41,7 +41,7 @@ async fn restore_from_disk_with_different_database_id_test() {
   let (db, _) = create_database_with_db(1, "1").await;
   let database_test = restore_database_from_db(1, "1", db);
 
-  assert_database_eq(database_test);
+  assert_database_eq(database_test).await;
 }
 
 #[tokio::test]
@@ -49,10 +49,10 @@ async fn restore_from_disk_with_different_uid_test() {
   let (db, _) = create_database_with_db(1, "1").await;
   let database_test = restore_database_from_db(1, "1", db);
 
-  assert_database_eq(database_test);
+  assert_database_eq(database_test).await;
 }
 
-fn assert_database_eq(database_test: DatabaseTest) {
+async fn assert_database_eq(database_test: DatabaseTest) {
   let expected = json!( {
     "fields": [],
     "inline_view_id": "v1",
@@ -74,7 +74,7 @@ fn assert_database_eq(database_test: DatabaseTest) {
 
   assert_json_include!(
     expected: expected,
-    actual: database_test.to_json_value()
+    actual: database_test.to_json_value().await
   );
 }
 
@@ -89,7 +89,7 @@ async fn open_020_history_database_test() {
     "c0e69740-49f0-4790-a488-702e2750ba8d",
     db,
   );
-  let actual = database_test.to_json_value();
+  let actual = database_test.to_json_value().await;
 
   let expected = json!({
     "fields": [

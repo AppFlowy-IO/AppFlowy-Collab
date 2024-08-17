@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-use collab::core::any_map::{AnyMap, AnyMapBuilder, AnyMapUpdate};
-use collab::preclude::{Map, MapRef, MapRefExtension, ReadTxn, TransactionMut, YrsValue};
+use collab::preclude::{Any, FillRef, Map, MapRef, ReadTxn, ToJson, TransactionMut};
+use collab::util::AnyExt;
 use serde::{Deserialize, Serialize};
 
 /// It's used to store lists of field's type option data
@@ -23,8 +23,8 @@ impl TypeOptions {
   pub fn from_map_ref<T: ReadTxn>(txn: &T, map_ref: MapRef) -> Self {
     let mut this = Self::new();
     map_ref.iter(txn).for_each(|(k, v)| {
-      if let YrsValue::YMap(map_ref) = v {
-        this.insert(k.to_string(), TypeOptionData::from_map_ref(txn, &map_ref));
+      if let Some(type_option_data) = v.to_json(txn).into_map() {
+        this.insert(k.to_string(), type_option_data);
       }
     });
     this
@@ -66,8 +66,8 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
   /// Insert a new cell's key/value into the [TypeOptionData]
   pub fn insert<T: Into<TypeOptionData>>(self, key: &str, value: T) -> Self {
     let value = value.into();
-    let type_option_map = self.map_ref.get_or_create_map_with_txn(self.txn, key);
-    value.fill_map_ref(self.txn, &type_option_map);
+    let type_option_map: MapRef = self.map_ref.get_or_init(self.txn, key);
+    Any::from(value).fill(self.txn, &type_option_map).unwrap();
     self
   }
 
@@ -75,8 +75,8 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
   /// It will create the type option if it's not exist
   pub fn update<T: Into<TypeOptionData>>(self, key: &str, value: T) -> Self {
     let value = value.into();
-    let type_option_map = self.map_ref.get_or_create_map_with_txn(self.txn, key);
-    value.fill_map_ref(self.txn, &type_option_map);
+    let type_option_map: MapRef = self.map_ref.get_or_init(self.txn, key);
+    Any::from(value).fill(self.txn, &type_option_map).unwrap();
     self
   }
 
@@ -87,6 +87,6 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
   }
 }
 
-pub type TypeOptionData = AnyMap;
-pub type TypeOptionDataBuilder = AnyMapBuilder;
-pub type TypeOptionUpdate<'a, 'b> = AnyMapUpdate<'a, 'b>;
+pub type TypeOptionData = HashMap<String, Any>;
+pub type TypeOptionDataBuilder = HashMap<String, Any>;
+pub type TypeOptionUpdate = MapRef;
