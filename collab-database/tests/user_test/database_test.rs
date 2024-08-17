@@ -121,8 +121,13 @@ async fn duplicate_database_inline_view_test() {
   db.create_row(CreateRowParams::new(1, database_id.clone()))
     .unwrap();
 
-  assert_eq!(db.get_rows_for_view(&duplicated_view_id).len(), 1);
-  assert!(database.read().await.get_rows_for_view("v1").is_empty());
+  assert_eq!(db.get_rows_for_view(&duplicated_view_id).await.len(), 1);
+  assert!(database
+    .read()
+    .await
+    .get_rows_for_view("v1")
+    .await
+    .is_empty());
 }
 
 #[tokio::test]
@@ -160,8 +165,8 @@ async fn duplicate_database_view_test() {
     .unwrap();
 
   // Duplicated database should have the same rows as the original database
-  assert_eq!(db.get_rows_for_view(&duplicated_view.id).len(), 1);
-  assert_eq!(db.get_rows_for_view("v1").len(), 1);
+  assert_eq!(db.get_rows_for_view(&duplicated_view.id).await.len(), 1);
+  assert_eq!(db.get_rows_for_view("v1").await.len(), 1);
 }
 
 #[tokio::test]
@@ -250,8 +255,8 @@ async fn duplicate_database_data_test() {
   let duplicated_view_id = &duplicate.get_all_database_views_meta()[0].id;
 
   // compare rows
-  let original_rows = original.get_rows_for_view("v1");
-  let duplicate_rows = duplicate.get_rows_for_view(duplicated_view_id);
+  let original_rows = original.get_rows_for_view("v1").await;
+  let duplicate_rows = duplicate.get_rows_for_view(duplicated_view_id).await;
   assert_eq!(original_rows.len(), duplicate_rows.len());
   for (index, row) in original_rows.iter().enumerate() {
     assert_eq!(row.visibility, duplicate_rows[index].visibility);
@@ -327,5 +332,5 @@ async fn reopen_database_test() {
 
   let test = user_database_test_with_db(uid, db);
   let database = test.get_database_with_view_id(&view_id).await;
-  let _ = database.unwrap().read().await.to_json_value();
+  let _ = database.unwrap().read().await.to_json_value().await;
 }

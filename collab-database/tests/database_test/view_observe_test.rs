@@ -32,7 +32,7 @@ async fn observer_delete_row_test() {
       database_id.clone(),
     ))
     .unwrap();
-    db.remove_row(&cloned_row_id);
+    db.remove_row(&cloned_row_id).await;
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -71,7 +71,7 @@ async fn observer_delete_consecutive_rows_test() {
     db.create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
       .unwrap();
 
-    db.remove_rows(&[row_id_2, row_id_3]);
+    db.remove_rows(&[row_id_2, row_id_3]).await;
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -109,7 +109,7 @@ async fn observer_delete_non_consecutive_rows_test() {
     db.create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
       .unwrap();
 
-    db.remove_rows(&[row_id_2, row_id_4]);
+    db.remove_rows(&[row_id_2, row_id_4]).await;
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {

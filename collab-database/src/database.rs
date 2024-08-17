@@ -8,8 +8,8 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldChangeReceiver, FieldMap, FieldUpdate};
 use crate::meta::MetaMap;
 use crate::rows::{
-  CreateRowParams, CreateRowParamsValidator, Row, RowCell, RowChangeReceiver, RowDetail, RowId,
-  RowMeta, RowMetaUpdate, RowUpdate,
+  CreateRowParams, CreateRowParamsValidator, DatabaseRow, Row, RowCell, RowChangeReceiver,
+  RowDetail, RowId, RowMeta, RowMetaUpdate, RowUpdate,
 };
 use crate::util::encoded_collab;
 use crate::views::define::DATABASE_VIEW_ROW_ORDERS;
@@ -32,9 +32,11 @@ use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
+
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Weak};
+use tokio::sync::RwLock;
 pub use tokio_stream::wrappers::WatchStream;
 use tracing::error;
 
@@ -116,8 +118,9 @@ impl Database {
 
       // Write database rows
       for row in self.body.block.row_mem_cache.iter() {
-        let row_encoded = encoded_collab(&row.collab, &CollabType::DatabaseRow)?;
-        flush_collab(self.uid, row.collab.object_id(), &row_encoded)?;
+        let row_collab = &row.blocking_read().collab;
+        let row_encoded = encoded_collab(row_collab, &CollabType::DatabaseRow)?;
+        flush_collab(self.uid, row_collab.object_id(), &row_encoded)?;
       }
 
       // Commit the transaction
@@ -288,7 +291,7 @@ impl Database {
 
   /// Remove the row
   /// The [RowOrder] of each view representing this row will be removed.
-  pub fn remove_row(&mut self, row_id: &RowId) -> Option<Row> {
+  pub async fn remove_row(&mut self, row_id: &RowId) -> Option<Row> {
     {
       let mut txn = self.collab.transact_mut();
       self.body.views.update_all_views(&mut txn, |_, update| {
@@ -297,10 +300,11 @@ impl Database {
     };
 
     let row = self.body.block.delete_row(row_id)?;
-    row.get_row()
+    let read_guard = row.read().await;
+    read_guard.get_row()
   }
 
-  pub fn remove_rows(&mut self, row_ids: &[RowId]) -> Vec<Row> {
+  pub async fn remove_rows(&mut self, row_ids: &[RowId]) -> Vec<Row> {
     {
       let mut txn = self.collab.transact_mut();
       self.body.views.update_all_views(&mut txn, |_, mut update| {
@@ -310,32 +314,31 @@ impl Database {
       });
     };
 
-    row_ids
-      .iter()
-      .flat_map(|row_id| {
-        self
-          .body
-          .block
-          .delete_row(row_id)
-          .and_then(|row| row.get_row())
-      })
-      .collect()
+    let mut rows = vec![];
+    for row_id in row_ids {
+      if let Some(database_row) = self.body.block.delete_row(row_id) {
+        if let Some(row) = database_row.read().await.get_row() {
+          rows.push(row);
+        }
+      }
+    }
+    rows
   }
 
   /// Update the row
-  pub fn update_row<F>(&mut self, row_id: RowId, f: F)
+  pub async fn update_row<F>(&mut self, row_id: RowId, f: F)
   where
     F: FnOnce(RowUpdate),
   {
-    self.body.block.update_row(row_id, f);
+    self.body.block.update_row(row_id, f).await;
   }
 
   /// Update the meta of the row
-  pub fn update_row_meta<F>(&mut self, row_id: &RowId, f: F)
+  pub async fn update_row_meta<F>(&mut self, row_id: &RowId, f: F)
   where
     F: FnOnce(RowMetaUpdate),
   {
-    self.body.block.update_row_meta(row_id, f);
+    self.body.block.update_row_meta(row_id, f).await;
   }
 
   /// Return the index of the row in the given view.
@@ -346,38 +349,37 @@ impl Database {
   }
 
   /// Return the [Row] with the given row id.
-  pub fn get_or_init_row(&mut self, row_id: RowId) -> Row {
-    self
-      .body
-      .block
-      .get_or_init_row(row_id.clone())
-      .and_then(|row| row.get_row())
-      .unwrap_or_else(|| Row::empty(row_id, &self.get_database_id()))
-  }
-
-  /// Return the [Row] with the given row id.
-  pub fn get_row(&self, row_id: &RowId) -> Row {
-    if let Some(row) = self
-      .body
-      .block
-      .get_or_init_row(row_id.clone())
-      .and_then(|row| row.get_row())
-    {
-      row
-    } else {
-      Row::empty(row_id.clone(), &self.get_database_id())
+  pub async fn get_row(&self, row_id: &RowId) -> Row {
+    let row = self.body.block.get_or_init_row(row_id.clone());
+    match row {
+      None => Row::empty(row_id.clone(), &self.get_database_id()),
+      Some(row) => row
+        .read()
+        .await
+        .get_row()
+        .unwrap_or_else(|| Row::empty(row_id.clone(), &self.get_database_id())),
     }
   }
 
   /// Return the [RowMeta] with the given row id.
-  pub fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
-    self.body.block.get_row_meta(row_id)
+  pub async fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
+    self.body.block.get_row_meta(row_id).await
+  }
+
+  pub fn get_row_collab(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    self.body.block.get_row(row_id)
   }
 
   /// Return the [RowMeta] with the given row id.
-  pub fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
-    let meta = self.body.block.get_row_meta(row_id)?;
-    let row = self.body.block.get_or_init_row(row_id.clone())?.get_row()?;
+  pub async fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
+    let meta = self.body.block.get_row_meta(row_id).await?;
+    let row = self
+      .body
+      .block
+      .get_or_init_row(row_id.clone())?
+      .read()
+      .await
+      .get_row()?;
     RowDetail::new(row, meta)
   }
 
@@ -387,9 +389,9 @@ impl Database {
 
   /// Return a list of [Row] for the given view.
   /// The rows here are ordered by [RowOrder]s of the view.
-  pub fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
+  pub async fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
     let row_orders = self.get_row_orders_for_view(view_id);
-    self.get_rows_from_row_orders(&row_orders)
+    self.get_rows_from_row_orders(&row_orders).await
   }
 
   pub fn get_row_orders_for_view(&self, view_id: &str) -> Vec<RowOrder> {
@@ -399,19 +401,19 @@ impl Database {
 
   /// Return a list of [Row] for the given view.
   /// The rows here is ordered by the [RowOrder] of the view.
-  pub fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
-    self.body.block.get_rows_from_row_orders(row_orders)
+  pub async fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
+    self.body.block.get_rows_from_row_orders(row_orders).await
   }
 
   /// Return a list of [RowCell] for the given view and field.
-  pub fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<RowCell> {
+  pub async fn get_cells_for_field(&self, view_id: &str, field_id: &str) -> Vec<RowCell> {
     let txn = self.collab.transact();
-    self.body.get_cells_for_field(&txn, view_id, field_id)
+    self.body.get_cells_for_field(&txn, view_id, field_id).await
   }
 
   /// Return the [RowCell] with the given row id and field id.
-  pub fn get_cell(&self, field_id: &str, row_id: &RowId) -> RowCell {
-    let cell = self.body.block.get_cell(row_id, field_id);
+  pub async fn get_cell(&self, field_id: &str, row_id: &RowId) -> RowCell {
+    let cell = self.body.block.get_cell(row_id, field_id).await;
     RowCell::new(row_id.clone(), cell)
   }
 
@@ -988,9 +990,15 @@ impl Database {
   }
 
   /// Duplicate the row, and insert it after the original row.
-  pub fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
+  pub async fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
     let database_id = self.get_database_id();
-    let row = self.body.block.get_or_init_row(row_id.clone())?.get_row()?;
+    let row = self
+      .body
+      .block
+      .get_or_init_row(row_id.clone())?
+      .read()
+      .await
+      .get_row()?;
     let timestamp = timestamp();
     Some(CreateRowParams {
       id: gen_row_id(),
@@ -1035,14 +1043,14 @@ impl Database {
     self.body.fields.get_all_fields(&txn)
   }
 
-  pub fn get_database_data(&self) -> DatabaseData {
+  pub async fn get_database_data(&self) -> DatabaseData {
     let txn = self.collab.transact();
 
     let database_id = self.body.get_database_id(&txn);
     let inline_view_id = self.body.get_inline_view_id(&txn);
     let views = self.body.views.get_all_views(&txn);
     let fields = self.body.get_fields_in_view(&txn, &inline_view_id, None);
-    let rows = self.get_database_rows();
+    let rows = self.get_database_rows().await;
 
     DatabaseData {
       database_id,
@@ -1058,8 +1066,8 @@ impl Database {
     self.body.views.get_view(&txn, view_id)
   }
 
-  pub fn to_json_value(&self) -> JsonValue {
-    let database_data = self.get_database_data();
+  pub async fn to_json_value(&self) -> JsonValue {
+    let database_data = self.get_database_data().await;
     serde_json::to_value(&database_data).unwrap()
   }
 
@@ -1068,14 +1076,14 @@ impl Database {
     inline_view_id == view_id
   }
 
-  pub fn get_database_rows(&self) -> Vec<Row> {
+  pub async fn get_database_rows(&self) -> Vec<Row> {
     let row_orders = {
       let txn = self.collab.transact();
       let inline_view_id = self.body.get_inline_view_id(&txn);
       self.body.views.get_row_orders(&txn, &inline_view_id)
     };
 
-    self.get_rows_from_row_orders(&row_orders)
+    self.get_rows_from_row_orders(&row_orders).await
   }
 
   pub fn get_inline_row_orders(&self) -> Vec<RowOrder> {
@@ -1403,14 +1411,14 @@ impl DatabaseBody {
   }
 
   /// Return list of [RowCell] for the given view and field.
-  pub fn get_cells_for_field<T: ReadTxn>(
+  pub async fn get_cells_for_field<T: ReadTxn>(
     &self,
     txn: &T,
     view_id: &str,
     field_id: &str,
   ) -> Vec<RowCell> {
     let row_orders = self.views.get_row_orders(txn, view_id);
-    let rows = self.block.get_rows_from_row_orders(&row_orders);
+    let rows = self.block.get_rows_from_row_orders(&row_orders).await;
     rows
       .into_iter()
       .map(|row| RowCell::new(row.id, row.cells.get(field_id).cloned()))

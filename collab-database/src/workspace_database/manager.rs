@@ -374,7 +374,7 @@ impl WorkspaceDatabase {
   /// Get all of the database data using the id of any view in the database
   pub async fn get_database_data(&self, view_id: &str) -> Result<DatabaseData, DatabaseError> {
     if let Some(database) = self.get_database_with_view_id(view_id).await {
-      let data = database.read().await.get_database_data();
+      let data = database.read().await.get_database_data().await;
       Ok(data)
     } else {
       Err(DatabaseError::DatabaseNotExist)

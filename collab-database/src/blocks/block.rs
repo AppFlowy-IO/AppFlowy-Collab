@@ -20,8 +20,8 @@ use crate::views::RowOrder;
 use crate::workspace_database::DatabaseCollabService;
 use collab::preclude::Collab;
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
-use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
+use tokio::sync::{broadcast, RwLock};
 use tracing::{error, info, trace, warn};
 use uuid::Uuid;
 
@@ -42,7 +42,7 @@ pub struct Block {
   collab_service: Arc<dyn DatabaseCollabService>,
   task_controller: Arc<BlockTaskController>,
   sequence: Arc<AtomicU32>,
-  pub row_mem_cache: Arc<DashMap<RowId, DatabaseRow>>,
+  pub row_mem_cache: Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>,
   pub notifier: Arc<Sender<BlockEvent>>,
   row_change_tx: RowChangeSender,
 }
@@ -106,7 +106,9 @@ impl Block {
           None,
         );
         let row_detail = RowDetail::from_collab(&row_collab)?;
-        self.row_mem_cache.insert(row_id.clone(), row_collab);
+        self
+          .row_mem_cache
+          .insert(row_id.clone(), Arc::new(RwLock::new(row_collab)));
         Some(row_detail)
       })
       .collect::<Vec<RowDetail>>();
@@ -139,14 +141,14 @@ impl Block {
             Ok(row_collab) => {
               let row_id = RowId::from(row_id);
               let row_detail = RowDetail::from_collab(&row_collab);
-              let row = DatabaseRow::new(
+              let row = Arc::new(RwLock::new(DatabaseRow::new(
                 uid,
                 row_id.clone(),
                 collab_db.clone(),
                 row_collab,
                 row_change_tx.clone(),
                 None,
-              );
+              )));
               row_mem_cache.insert(row_id, row);
               if let Some(row_detail) = row_detail {
                 let _ = notifier.send(BlockEvent::DidFetchRow(vec![row_detail]));
@@ -183,22 +185,30 @@ impl Block {
 
     trace!("create_row: {}", row_id);
     if let Ok(collab) = self.create_collab_for_row(&row_id) {
-      let database_row = DatabaseRow::new(
+      let database_row = Arc::new(RwLock::new(DatabaseRow::new(
         self.uid,
         row_id.clone(),
         self.collab_db.clone(),
         collab,
         self.row_change_tx.clone(),
         Some(row),
-      );
+      )));
       self.row_mem_cache.insert(row_id, database_row);
     }
     row_order
   }
 
-  pub fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
+  pub fn get_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    self
+      .row_mem_cache
+      .get(row_id)
+      .map(|row| row.value().clone())
+  }
+
+  pub async fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
     let database_row = self.row_mem_cache.get(row_id)?;
-    database_row.get_row_meta()
+    let read_guard = database_row.read().await;
+    read_guard.get_row_meta()
   }
 
   pub fn get_row_document_id(&self, row_id: &RowId) -> Option<String> {
@@ -209,48 +219,53 @@ impl Block {
   /// If the row with given id not exist. It will return an empty row with given id.
   /// An empty [Row] is a row with no cells.
   ///
-  pub fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
+  pub async fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
     let mut rows = Vec::new();
     for row_order in row_orders {
-      let row = self
-        .get_or_init_row(row_order.id.clone())
-        .and_then(|row| row.get_row())
-        .unwrap_or_else(|| Row::empty(row_order.id.clone(), &self.database_id));
+      let row = match self.get_or_init_row(row_order.id.clone()) {
+        None => Row::empty(row_order.id.clone(), &self.database_id),
+        Some(database_row) => database_row
+          .read()
+          .await
+          .get_row()
+          .unwrap_or_else(|| Row::empty(row_order.id.clone(), &self.database_id)),
+      };
+
       rows.push(row);
     }
     rows
   }
 
-  pub fn get_cell(&self, row_id: &RowId, field_id: &str) -> Option<Cell> {
+  pub async fn get_cell(&self, row_id: &RowId, field_id: &str) -> Option<Cell> {
     self
-      .get_or_init_row(row_id.clone())
-      .and_then(|row| row.get_cell(field_id))
+      .get_or_init_row(row_id.clone())?
+      .read()
+      .await
+      .get_cell(field_id)
   }
 
-  pub fn delete_row(&self, row_id: &RowId) -> Option<DatabaseRow> {
-    let row = self.row_mem_cache.remove(row_id);
-    if let Some((_, row)) = row {
-      row.delete();
-      Some(row)
-    } else {
-      None
+  pub fn delete_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    let row = self.row_mem_cache.remove(row_id).map(|(_, row)| row);
+    if let Some(collab_db) = self.collab_db.upgrade() {
+      let _ = collab_db.write_txn().delete_doc(self.uid, row_id.as_ref());
     }
+    row
   }
 
-  pub fn update_row<F>(&mut self, row_id: RowId, f: F)
+  pub async fn update_row<F>(&mut self, row_id: RowId, f: F)
   where
     F: FnOnce(RowUpdate),
   {
-    if let Some(mut row) = self.get_or_init_row(row_id) {
-      row.update::<F>(f);
+    if let Some(row) = self.get_or_init_row(row_id) {
+      row.write().await.update::<F>(f);
     }
   }
 
-  pub fn update_row_meta<F>(&mut self, row_id: &RowId, f: F)
+  pub async fn update_row_meta<F>(&mut self, row_id: &RowId, f: F)
   where
     F: FnOnce(RowMetaUpdate),
   {
-    let row = self.row_mem_cache.get_mut(row_id);
+    let row = self.row_mem_cache.get(row_id);
     match row {
       None => {
         trace!(
@@ -258,14 +273,14 @@ impl Block {
           row_id
         )
       },
-      Some(mut row) => {
-        row.value_mut().update_meta::<F>(f);
+      Some(row) => {
+        row.write().await.update_meta::<F>(f);
       },
     }
   }
 
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
-  pub fn get_or_init_row(&self, row_id: RowId) -> Option<RefMut<RowId, DatabaseRow>> {
+  pub fn get_or_init_row(&self, row_id: RowId) -> Option<RefMut<RowId, Arc<RwLock<DatabaseRow>>>> {
     let result = self
       .row_mem_cache
       .entry(row_id.clone())
@@ -280,7 +295,7 @@ impl Block {
     }
   }
 
-  fn create_row_instance(&self, row_id: RowId) -> Result<DatabaseRow, DatabaseError> {
+  fn create_row_instance(&self, row_id: RowId) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
     let collab_db = self
       .collab_db
       .upgrade()
@@ -288,14 +303,14 @@ impl Block {
     let exists = collab_db.read_txn().is_exist(self.uid, row_id.as_ref());
     if exists {
       let collab = self.create_collab_for_row(&row_id)?;
-      let database_row = DatabaseRow::new(
+      let database_row = Arc::new(RwLock::new(DatabaseRow::new(
         self.uid,
         row_id.clone(),
         self.collab_db.clone(),
         collab,
         self.row_change_tx.clone(),
         None,
-      );
+      )));
       return Ok(database_row);
     }
 
@@ -321,14 +336,14 @@ impl Block {
     tokio::spawn(async move {
       if let Some(Ok(row_collab)) = rx.recv().await {
         let row_detail = RowDetail::from_collab(&row_collab);
-        let row = DatabaseRow::new(
+        let row = Arc::new(RwLock::new(DatabaseRow::new(
           uid,
           cloned_row_id.clone(),
           weak_collab_db.clone(),
           row_collab,
           change_tx,
           None,
-        );
+        )));
         row_cache.insert(cloned_row_id, row);
         row_detail.map(|row_detail| {
           weak_notifier.upgrade().map(|notifier| {

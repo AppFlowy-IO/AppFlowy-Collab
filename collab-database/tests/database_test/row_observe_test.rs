@@ -64,7 +64,8 @@ async fn observer_row_cell_test() {
           Cell::from([("level".into(), 1.into()), ("field_type".into(), 1.into())]),
         );
       });
-    });
+    })
+    .await;
   });
 
   wait_for_specific_event(row_change_rx, |event| match event {
@@ -93,7 +94,8 @@ async fn observer_row_cell_test() {
           cell
         });
       });
-    });
+    })
+    .await;
   });
 
   wait_for_specific_event(row_change_rx, |event| match event {
@@ -125,7 +127,8 @@ async fn observer_update_row_test() {
 
     db.update_row(row_id, |row| {
       row.set_height(1000);
-    });
+    })
+    .await;
   });
 
   wait_for_specific_event(row_change_rx, |event| match event {
