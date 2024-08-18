@@ -1,6 +1,7 @@
-use collab::core::array_wrapper::ArrayRefExtension;
+use collab::preclude::encoding::serde::{from_any, to_any};
 use collab::preclude::{
-  Array, ArrayRefWrapper, Change, DeepObservable, Event, MapPrelim, Subscription, YrsValue,
+  Any, Array, ArrayRef, Change, DeepObservable, Event, Map, MapPrelim, Out, ReadTxn, Subscription,
+  ToJson, TransactionMut, YrsValue,
 };
 use collab_entity::reminder::{Reminder, REMINDER_ID};
 use tokio::sync::broadcast;
@@ -15,13 +16,13 @@ pub enum ReminderChange {
 }
 
 pub struct Reminders {
-  pub(crate) container: ArrayRefWrapper,
+  pub(crate) container: ArrayRef,
   #[allow(dead_code)]
   subscription: Option<Subscription>,
 }
 
 impl Reminders {
-  pub fn new(mut container: ArrayRefWrapper, change_tx: Option<RemindersChangeSender>) -> Self {
+  pub fn new(mut container: ArrayRef, change_tx: Option<RemindersChangeSender>) -> Self {
     let subscription =
       change_tx.map(|change_tx| subscribe_reminder_change(&mut container, change_tx));
     Self {
@@ -30,43 +31,55 @@ impl Reminders {
     }
   }
 
-  pub fn remove(&self, id: &str) {
-    self.container.with_transact_mut(|txn| {
-      self.container.remove_with_id(txn, id, REMINDER_ID);
-    });
+  fn find<T: ReadTxn>(&self, txn: &T, reminder_id: &str) -> Option<(u32, Out)> {
+    for (i, value) in self.container.iter(txn).enumerate() {
+      if let Out::YMap(map) = &value {
+        if let Some(Out::Any(Any::String(str))) = map.get(txn, REMINDER_ID) {
+          if &*str == reminder_id {
+            return Some((i as u32, value));
+          }
+        }
+      }
+    }
+    None
   }
 
-  pub fn add(&self, reminder: Reminder) {
-    self.container.with_transact_mut(|txn| {
-      let _ = self
-        .container
-        .insert_map_with_txn(txn, Some(reminder.into()));
-    });
+  pub fn remove(&self, txn: &mut TransactionMut, id: &str) {
+    let (i, _) = self.find(txn, id).unwrap();
+    self.container.remove(txn, i);
   }
 
-  pub fn update_reminder<F>(&self, reminder_id: &str, f: F)
+  pub fn add(&self, txn: &mut TransactionMut, reminder: Reminder) {
+    let map: MapPrelim = reminder.into();
+    self.container.push_back(txn, map);
+  }
+
+  pub fn update_reminder<F>(&self, txn: &mut TransactionMut, reminder_id: &str, f: F)
   where
     F: FnOnce(&mut Reminder),
   {
-    self.container.with_transact_mut(|txn| {
-      self
-        .container
-        .mut_map_element_with_txn(txn, reminder_id, REMINDER_ID, |txn, map| {
-          let mut reminder = Reminder::try_from((txn, map)).ok()?;
-          f(&mut reminder);
-          Some(MapPrelim::from(reminder))
-        });
-    });
+    if let Some((i, value)) = self.find(txn, reminder_id) {
+      if let Ok(mut reminder) = from_any::<Reminder>(&value.to_json(txn)) {
+        // FIXME: this is wrong. This doesn't "update" the reminder, instead it replaces it,
+        //   with all of the unchanged fields included. That means, that if two people will be
+        //   updating the same reminder at the same time, the last one will overwrite the changes
+        //   of the first one, even if there was no edit collisions.
+        f(&mut reminder);
+        self.container.remove(txn, i);
+        let any = to_any(&reminder).unwrap();
+        self.container.insert(txn, i, any);
+      }
+    }
   }
 
-  pub fn get_all_reminders(&self) -> Vec<Reminder> {
-    let txn = self.container.transact();
+  pub fn get_all_reminders<T: ReadTxn>(&self, txn: &T) -> Vec<Reminder> {
     self
       .container
-      .iter(&txn)
+      .iter(txn)
       .flat_map(|value| {
-        if let YrsValue::YMap(map) = value {
-          Reminder::try_from((&txn, map)).ok()
+        let json = value.to_json(txn);
+        if let Ok(reminder) = from_any::<Reminder>(&json) {
+          Some(reminder)
         } else {
           None
         }
@@ -91,7 +104,7 @@ impl Reminders {
 /// A `DeepEventsSubscription` that represents the active subscription to the array's changes.
 ///
 fn subscribe_reminder_change(
-  root: &mut ArrayRefWrapper,
+  root: &mut ArrayRef,
   change_tx: RemindersChangeSender,
 ) -> Subscription {
   root.observe_deep(move |txn, events| {

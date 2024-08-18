@@ -7,6 +7,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::cloud_storage::error::SyncError;
 
+#[allow(dead_code)]
 pub trait CollabConnect<Item>: Sink<Item> + Stream {}
 
 pub struct TokioUnboundedSink<T>(pub UnboundedSender<T>);

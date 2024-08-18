@@ -1,13 +1,14 @@
-use collab::core::any_map::AnyMapExtension;
-use collab_database::views::{CreateViewParams, DatabaseLayout};
+use collab::preclude::Any;
+use collab::util::{AnyExt, AnyMapExt};
+use collab_database::views::{CreateViewParams, DatabaseLayout, GroupMap};
 
 use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
 use crate::helper::{TestGroup, TestGroupSetting, CONTENT, GROUPS};
 
 #[tokio::test]
 async fn create_database_view_with_group_test() {
-  let database_test = create_database_with_two_groups().await;
-  let view = database_test.views.get_view("v1").unwrap();
+  let database_test = create_database_with_two_groups();
+  let view = database_test.get_view("v1").unwrap();
   assert_eq!(view.group_settings.len(), 2);
   let group_settings = view
     .group_settings
@@ -24,7 +25,7 @@ async fn create_database_view_with_group_test() {
 
 #[tokio::test]
 async fn create_database_view_with_group_test2() {
-  let database_test = create_database_with_default_data(1, "1").await;
+  let mut database_test = create_database_with_default_data(1, "1");
   let group_setting = TestGroupSetting {
     id: "g1".to_string(),
     field_id: "".to_string(),
@@ -45,7 +46,7 @@ async fn create_database_view_with_group_test2() {
   };
   database_test.insert_group_setting("v1", group_setting);
 
-  let view = database_test.views.get_view("v1").unwrap();
+  let view = database_test.get_view("v1").unwrap();
   assert_eq!(view.group_settings.len(), 1);
   let group_settings = view
     .group_settings
@@ -61,7 +62,7 @@ async fn create_database_view_with_group_test2() {
 
 #[tokio::test]
 async fn get_single_database_group_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+  let mut database_test = create_database_with_default_data(1, "1");
   let group_setting = TestGroupSetting {
     id: "g1".to_string(),
     field_id: "f1".to_string(),
@@ -92,7 +93,7 @@ async fn get_single_database_group_test() {
 
 #[tokio::test]
 async fn get_multiple_database_group_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+  let mut database_test = create_database_with_default_data(1, "1");
   let group_setting_1 = TestGroupSetting {
     id: "g1".to_string(),
     field_id: "f1".to_string(),
@@ -130,20 +131,22 @@ async fn get_multiple_database_group_test() {
 
 #[tokio::test]
 async fn extend_database_view_group_test() {
-  let database_test = create_database_with_two_groups().await;
+  let mut database_test = create_database_with_two_groups();
   database_test.update_group_setting("v1", "g1", |object| {
-    object.insert_str_value(CONTENT, "hello world".to_string());
-    object.extend_with_array(
-      GROUPS,
-      vec![TestGroup {
-        id: "group_item3".to_string(),
-        name: "group item 3".to_string(),
-        visible: false,
-      }],
-    );
+    object.insert(CONTENT.into(), "hello world".into());
+    let mut groups = object
+      .remove(GROUPS)
+      .and_then(|any| any.into_array())
+      .unwrap_or_default();
+    groups.push(Any::from(GroupMap::from(TestGroup {
+      id: "group_item3".to_string(),
+      name: "group item 3".to_string(),
+      visible: false,
+    })));
+    object.insert(GROUPS.into(), Any::from(groups));
   });
 
-  let view = database_test.views.get_view("v1").unwrap();
+  let view = database_test.get_view("v1").unwrap();
   assert_eq!(view.group_settings.len(), 2);
   let group_settings = view
     .group_settings
@@ -160,12 +163,21 @@ async fn extend_database_view_group_test() {
 
 #[tokio::test]
 async fn remove_database_view_group_test() {
-  let database_test = create_database_with_two_groups().await;
+  let mut database_test = create_database_with_two_groups();
   database_test.update_group_setting("v1", "g1", |object| {
-    object.remove_array_element(GROUPS, vec!["group_item1"].as_slice());
+    let mut groups = object
+      .remove(GROUPS)
+      .and_then(|any| any.into_array())
+      .unwrap_or_default();
+    let index = groups
+      .iter()
+      .position(|group| group.get_as::<String>("id").as_deref() == Some("group_item1"))
+      .unwrap();
+    groups.remove(index);
+    object.insert(GROUPS.into(), groups.into());
   });
 
-  let view = database_test.views.get_view("v1").unwrap();
+  let view = database_test.get_view("v1").unwrap();
   let group_settings = view
     .group_settings
     .iter()
@@ -177,8 +189,8 @@ async fn remove_database_view_group_test() {
   assert_eq!(group_settings[0].groups[0].id, "group_item2");
 }
 
-async fn create_database_with_two_groups() -> DatabaseTest {
-  let database_test = create_database_with_default_data(1, "1").await;
+fn create_database_with_two_groups() -> DatabaseTest {
+  let mut database_test = create_database_with_default_data(1, "1");
   let group_1 = TestGroupSetting {
     id: "g1".to_string(),
     field_id: "f1".to_string(),

@@ -10,7 +10,7 @@ use crate::helper::TestFieldSetting;
 
 #[tokio::test]
 async fn new_field_new_field_setting_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+  let mut database_test = create_database_with_default_data(1, "1");
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
@@ -38,7 +38,7 @@ async fn new_field_new_field_setting_test() {
 
 #[tokio::test]
 async fn remove_field_remove_field_setting_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+  let mut database_test = create_database_with_default_data(1, "1");
   let params = CreateViewParams {
     database_id: "1".to_string(),
     view_id: "v2".to_string(),
@@ -61,7 +61,7 @@ async fn remove_field_remove_field_setting_test() {
 
 #[tokio::test]
 async fn update_field_setting_for_some_fields_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+  let mut database_test = create_database_with_default_data(1, "1");
   let field_settings = TestFieldSetting {
     width: 100,
     visibility: 1,
@@ -95,7 +95,7 @@ async fn update_field_setting_for_some_fields_test() {
 
 #[tokio::test]
 async fn update_field_setting_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+  let mut database_test = create_database_with_default_data(1, "1");
   let field_settings = TestFieldSetting {
     width: 100,
     visibility: 1,
@@ -114,7 +114,7 @@ async fn update_field_setting_test() {
 
 #[tokio::test]
 async fn duplicate_view_duplicates_field_settings_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+  let mut database_test = create_database_with_default_data(1, "1");
   let field_settings = TestFieldSetting {
     width: 100,
     visibility: 1,
@@ -142,7 +142,7 @@ async fn duplicate_view_duplicates_field_settings_test() {
 
 #[tokio::test]
 async fn new_view_requires_deps_field_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+  let mut database_test = create_database_with_default_data(1, "1");
   let deps_field = Field::new("f4".to_string(), "date".to_string(), 3, false);
   let params = CreateViewParams {
     database_id: "1".to_string(),

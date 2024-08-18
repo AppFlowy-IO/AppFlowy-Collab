@@ -4,22 +4,22 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use collab::core::collab::{DataSource, MutexCollab};
+use collab::core::collab::DataSource;
 use collab::preclude::CollabBuilder;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
-use collab_database::rows::{CellsBuilder, CreateRowParams, DatabaseRow, RowId};
+use collab_database::rows::{Cells, CreateRowParams, DatabaseRow, RowId};
 use collab_database::views::{
   CreateDatabaseParams, CreateViewParams, DatabaseLayout, FieldSettingsByFieldIdMap,
   FieldSettingsMap, LayoutSetting, LayoutSettings, OrderObjectPosition,
 };
 use collab_database::workspace_database::DatabaseCollabService;
 use collab_entity::CollabType;
-use collab_plugins::local_storage::CollabPersistenceConfig;
 
 use crate::helper::{make_rocks_db, setup_log, TestFieldSetting, TestTextCell};
 use crate::user_test::helper::TestUserDatabaseCollabBuilderImpl;
 use collab_database::database_state::DatabaseNotify;
+use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
 use tokio::time::timeout;
@@ -29,10 +29,6 @@ pub struct DatabaseTest {
   collab_db: Arc<CollabKVDB>,
   pub database: Database,
 }
-
-unsafe impl Send for DatabaseTest {}
-
-unsafe impl Sync for DatabaseTest {}
 
 impl Deref for DatabaseTest {
   type Target = Database;
@@ -49,19 +45,19 @@ impl DerefMut for DatabaseTest {
 }
 
 /// Create a database with a single view.
-pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
+pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   setup_log();
   let collab_db = make_rocks_db();
-  let collab = CollabBuilder::new(uid, database_id)
+  let mut collab = CollabBuilder::new(uid, database_id, DataSource::Disk(None))
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.lock().initialize();
+  collab.initialize();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let context = DatabaseContext {
     uid,
     db: Arc::downgrade(&collab_db),
-    collab: Arc::new(collab),
+    collab,
     collab_service: collab_builder,
     notifier: DatabaseNotify::default(),
   };
@@ -76,33 +72,32 @@ pub async fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     }],
     ..Default::default()
   };
-  let database = Database::create_with_inline_view(params, context).unwrap();
+
+  let database = futures::executor::block_on(async {
+    Database::create_with_view(params, context).await.unwrap()
+  });
+
   DatabaseTest {
     database,
     collab_db,
   }
 }
 
-pub fn create_row(uid: i64, row_id: RowId) -> (Arc<MutexCollab>, DatabaseRow) {
+pub fn create_row(uid: i64, row_id: RowId) -> DatabaseRow {
   let collab_db = make_rocks_db();
-  let collab = CollabBuilder::new(uid, row_id.clone())
+  let mut collab = CollabBuilder::new(uid, row_id.clone(), DataSource::Disk(None))
     .with_device_id("1")
     .build()
     .unwrap();
-  collab.lock().initialize();
-  let arc_collab = Arc::new(collab);
-  let cloned_collab = arc_collab.clone();
+  collab.initialize();
   let row_change_tx = tokio::sync::broadcast::channel(1).0;
-  (
-    arc_collab,
-    DatabaseRow::create(
-      None,
-      uid,
-      row_id,
-      Arc::downgrade(&collab_db),
-      cloned_collab,
-      row_change_tx,
-    ),
+  DatabaseRow::new(
+    uid,
+    row_id,
+    Arc::downgrade(&collab_db),
+    collab,
+    row_change_tx,
+    None,
   )
 }
 
@@ -114,13 +109,12 @@ pub async fn create_database_with_db(
   let collab_db = make_rocks_db();
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let collab = collab_builder
-    .build_collab_with_config(
+    .build_collab(
       uid,
       database_id,
       CollabType::Database,
       Arc::downgrade(&collab_db),
-      DataSource::Disk,
-      CollabPersistenceConfig::default(),
+      DataSource::Disk(None),
     )
     .unwrap();
   let context = DatabaseContext {
@@ -141,7 +135,7 @@ pub async fn create_database_with_db(
     }],
     ..Default::default()
   };
-  let database = Database::create_with_inline_view(params, context).unwrap();
+  let database = Database::create_with_view(params, context).await.unwrap();
   (
     collab_db.clone(),
     DatabaseTest {
@@ -156,15 +150,18 @@ pub fn restore_database_from_db(
   database_id: &str,
   collab_db: Arc<CollabKVDB>,
 ) -> DatabaseTest {
+  let data_source = KVDBCollabPersistenceImpl {
+    db: Arc::downgrade(&collab_db),
+    uid,
+  };
   let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
   let collab = collab_builder
-    .build_collab_with_config(
+    .build_collab(
       uid,
       database_id,
       CollabType::Database,
       Arc::downgrade(&collab_db),
-      DataSource::Disk,
-      CollabPersistenceConfig::default(),
+      data_source.into(),
     )
     .unwrap();
   let context = DatabaseContext {
@@ -174,7 +171,7 @@ pub fn restore_database_from_db(
     collab_service: collab_builder,
     notifier: DatabaseNotify::default(),
   };
-  let database = Database::get_or_create(database_id, context).unwrap();
+  let database = Database::open(database_id, context).unwrap();
   DatabaseTest {
     database,
     collab_db,
@@ -230,16 +227,21 @@ impl DatabaseTestBuilder {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let collab_db = Arc::new(CollabKVDB::open(path).unwrap());
-    let collab = CollabBuilder::new(self.uid, &self.database_id)
+    let data_source = KVDBCollabPersistenceImpl {
+      db: Arc::downgrade(&collab_db),
+      uid: self.uid,
+    }
+    .into_data_source();
+    let mut collab = CollabBuilder::new(self.uid, &self.database_id, data_source)
       .with_device_id("1")
       .build()
       .unwrap();
-    collab.lock().initialize();
+    collab.initialize();
     let collab_builder = Arc::new(TestUserDatabaseCollabBuilderImpl());
     let context = DatabaseContext {
       uid: self.uid,
       db: Arc::downgrade(&collab_db),
-      collab: Arc::new(collab),
+      collab,
       collab_service: collab_builder,
       notifier: DatabaseNotify::default(),
     };
@@ -258,7 +260,7 @@ impl DatabaseTestBuilder {
       rows: self.rows,
       fields: self.fields,
     };
-    let database = Database::create_with_inline_view(params, context).unwrap();
+    let database = Database::create_with_view(params, context).await.unwrap();
     DatabaseTest {
       database,
       collab_db,
@@ -268,28 +270,22 @@ impl DatabaseTestBuilder {
 
 /// Create a database with default data
 /// It will create a default view with id 'v1'
-pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
-  let row_1 = CreateRowParams::new(1, database_id.to_string()).with_cells(
-    CellsBuilder::new()
-      .insert_cell("f1", TestTextCell::from("1f1cell"))
-      .insert_cell("f2", TestTextCell::from("1f2cell"))
-      .insert_cell("f3", TestTextCell::from("1f3cell"))
-      .build(),
-  );
-  let row_2 = CreateRowParams::new(2, database_id.to_string()).with_cells(
-    CellsBuilder::new()
-      .insert_cell("f1", TestTextCell::from("2f1cell"))
-      .insert_cell("f2", TestTextCell::from("2f2cell"))
-      .build(),
-  );
-  let row_3 = CreateRowParams::new(3, database_id.to_string()).with_cells(
-    CellsBuilder::new()
-      .insert_cell("f1", TestTextCell::from("3f1cell"))
-      .insert_cell("f3", TestTextCell::from("3f3cell"))
-      .build(),
-  );
+pub fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
+  let row_1 = CreateRowParams::new(1, database_id.to_string()).with_cells(Cells::from([
+    ("f1".into(), TestTextCell::from("1f1cell").into()),
+    ("f2".into(), TestTextCell::from("1f2cell").into()),
+    ("f3".into(), TestTextCell::from("1f3cell").into()),
+  ]));
+  let row_2 = CreateRowParams::new(2, database_id.to_string()).with_cells(Cells::from([
+    ("f1".into(), TestTextCell::from("2f1cell").into()),
+    ("f2".into(), TestTextCell::from("2f2cell").into()),
+  ]));
+  let row_3 = CreateRowParams::new(3, database_id.to_string()).with_cells(Cells::from([
+    ("f1".into(), TestTextCell::from("3f1cell").into()),
+    ("f3".into(), TestTextCell::from("3f3cell").into()),
+  ]));
 
-  let database_test = create_database(uid, database_id).await;
+  let mut database_test = create_database(uid, database_id);
   database_test.create_row(row_1).unwrap();
   database_test.create_row(row_2).unwrap();
   database_test.create_row(row_3).unwrap();
@@ -327,10 +323,8 @@ pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> D
 /// Creates the default field settings for the database created by
 /// create_database_with_default_data
 pub fn field_settings_for_default_database() -> FieldSettingsByFieldIdMap {
-  let field_settings = FieldSettingsMap::from(TestFieldSetting {
-    width: 0,
-    visibility: 0,
-  });
+  let field_settings =
+    FieldSettingsMap::from([("width".into(), 0.into()), ("visibility".into(), 0.into())]);
   let mut field_settings_map = HashMap::new();
   field_settings_map.insert("f1".to_string(), field_settings.clone());
   field_settings_map.insert("f2".to_string(), field_settings.clone());

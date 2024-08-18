@@ -54,7 +54,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           prefix-key: ${{ matrix.os }}
-
       - name: Install protobuf
         run: |
           sudo apt-get update

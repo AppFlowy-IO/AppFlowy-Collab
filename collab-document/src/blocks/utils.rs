@@ -38,7 +38,7 @@ pub fn parse_event(_object_id: &str, txn: &TransactionMut, event: &Event) -> Blo
       let delta = val
         .delta(txn)
         .iter()
-        .map(|v| TextDelta::from(txn, v.to_owned())) // Map each delta value to a TextDelta
+        .map(|v| TextDelta::from(v.clone().map(|d|d.to_string(txn)))) // Map each delta value to a TextDelta
         .collect::<Vec<TextDelta>>(); // Collect the TextDelta values into a vector
 
       #[cfg(feature = "verbose_log")]
@@ -129,7 +129,7 @@ fn parse_yrs_value(txn: &TransactionMut, value: &YrsValue) -> String {
     YrsValue::YText(val) => {
       let delta: Vec<TextDelta> = get_delta_with_text_ref(val, txn)
         .iter()
-        .map(|v| TextDelta::from(txn, v.to_owned()))
+        .map(|v| TextDelta::from(v.clone().map(|d| d.to_string(txn))))
         .collect();
       serde_json::to_string(&delta).unwrap_or_default()
     },

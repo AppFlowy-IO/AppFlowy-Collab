@@ -1,9 +1,11 @@
 use anyhow::bail;
-use collab::preclude::{Any, Array, MapRefExtension, MapRefWrapper, ReadTxn, YrsValue};
+use collab::preclude::{
+  Any, Array, ArrayRef, Map, MapExt, MapRef, ReadTxn, TransactionMut, YrsValue,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::folder::FAVORITES_V1;
-use crate::{Folder, SectionItem, View, ViewRelations, Workspace};
+use crate::{Folder, FolderBody, SectionItem, View, ViewRelations, Workspace};
 
 const WORKSPACES: &str = "workspaces";
 const WORKSPACE_ID: &str = "id";
@@ -16,55 +18,33 @@ impl Folder {
   ///
   /// Returns a `Vec<FavoriteId>` containing the historical favorite data.
   /// The vector will be empty if no historical favorite data exists.
-  pub fn get_favorite_v1(&self) -> Vec<FavoriteId> {
-    let txn = self.root.transact();
+  pub fn get_favorite_v1(&mut self) -> Vec<FavoriteId> {
+    let mut txn = self.collab.transact_mut();
     let mut favorites = vec![];
-    if let Some(favorite_array) = self.root.get_array_ref_with_txn(&txn, FAVORITES_V1) {
+    if let Some(favorite_array) = self
+      .body
+      .root
+      .get_with_txn::<_, ArrayRef>(&txn, FAVORITES_V1)
+    {
       for record in favorite_array.iter(&txn) {
         if let Ok(id) = FavoriteId::try_from(&record) {
           favorites.push(id);
         }
       }
     }
-    drop(txn);
 
     if !favorites.is_empty() {
-      self.root.with_transact_mut(|txn| {
-        self.root.delete_with_txn(txn, FAVORITES_V1);
-      });
+      self.body.root.remove(&mut txn, FAVORITES_V1);
     }
     favorites
-  }
-
-  pub fn migrate_workspace_to_view(&self) -> Option<()> {
-    let mut workspace = {
-      let txn = self.root.transact();
-      let workspace_array = self.root.get_array_ref_with_txn(&txn, WORKSPACES)?;
-      let map_refs = workspace_array.to_map_refs();
-      map_refs
-        .into_iter()
-        .flat_map(|map_ref| to_workspace_with_txn(&txn, &map_ref, &self.views.view_relations))
-        .collect::<Vec<_>>()
-    };
-    if !workspace.is_empty() {
-      let workspace = workspace.pop().unwrap();
-      self.root.with_transact_mut(|txn| {
-        self.root.delete_with_txn(txn, WORKSPACES);
-        self
-          .views
-          .insert_view_with_txn(txn, View::from(workspace), None);
-      })
-    }
-
-    Some(())
   }
 
   /// Retrieves historical trash data from the key `trash`.
   /// v1 trash data is stored in the key `trash`.
   pub fn get_trash_v1(&self) -> Vec<SectionItem> {
-    let txn = self.root.transact();
+    let txn = self.collab.transact();
     let mut trash = vec![];
-    if let Some(trash_array) = self.root.get_array_ref_with_txn(&txn, "trash") {
+    if let Some(trash_array) = self.body.root.get_with_txn::<_, ArrayRef>(&txn, "trash") {
       for record in trash_array.iter(&txn) {
         if let YrsValue::Any(any) = record {
           if let Ok(record) = TrashRecord::from_any(any) {
@@ -82,20 +62,20 @@ impl Folder {
 
 pub fn to_workspace_with_txn<T: ReadTxn>(
   txn: &T,
-  map_ref: &MapRefWrapper,
+  map_ref: &MapRef,
   views: &ViewRelations,
 ) -> Option<Workspace> {
-  let id = map_ref.get_str_with_txn(txn, WORKSPACE_ID)?;
+  let id: String = map_ref.get_with_txn(txn, WORKSPACE_ID)?;
   let name = map_ref
-    .get_str_with_txn(txn, WORKSPACE_NAME)
+    .get_with_txn(txn, WORKSPACE_NAME)
     .unwrap_or_default();
   let created_at = map_ref
-    .get_i64_with_txn(txn, WORKSPACE_CREATED_AT)
+    .get_with_txn(txn, WORKSPACE_CREATED_AT)
     .unwrap_or_default();
 
   let child_views = views
     .get_children_with_txn(txn, &id)
-    .map(|array| array.get_children())
+    .map(|array| array.get_children_with_txn(txn))
     .unwrap_or_default();
 
   Some(Workspace {
@@ -108,6 +88,28 @@ pub fn to_workspace_with_txn<T: ReadTxn>(
     last_edited_by: None,
     created_by: None,
   })
+}
+
+impl FolderBody {
+  pub fn migrate_workspace_to_view(&self, txn: &mut TransactionMut) {
+    let mut workspace = {
+      let workspace_array: ArrayRef = match self.root.get_with_txn(txn, WORKSPACES) {
+        Some(array) => array,
+        None => return,
+      };
+      workspace_array
+        .iter(txn)
+        .flat_map(|map_ref| {
+          to_workspace_with_txn(txn, &map_ref.cast().unwrap(), &self.views.view_relations)
+        })
+        .collect::<Vec<_>>()
+    };
+    if !workspace.is_empty() {
+      let workspace = workspace.pop().unwrap();
+      self.root.remove(txn, WORKSPACES);
+      self.views.insert(txn, View::from(workspace), None);
+    }
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -144,7 +146,7 @@ impl TryFrom<&YrsValue> for FavoriteId {
 #[derive(Debug, Serialize, Deserialize)]
 struct TrashRecord {
   pub id: String,
-  #[serde(deserialize_with = "collab::util::deserialize_i64_from_numeric")]
+  #[serde(deserialize_with = "collab::preclude::deserialize_i64_from_numeric")]
   pub created_at: i64,
   #[serde(default)]
   pub workspace_id: String,

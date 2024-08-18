@@ -1,33 +1,34 @@
 use std::future::Future;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use collab::core::collab::{DataSource, MutexCollab};
-use collab::preclude::CollabBuilder;
+use collab::core::collab::DataSource;
+use collab::preclude::{Collab, CollabBuilder};
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
-use collab_database::rows::CellsBuilder;
-use collab_database::rows::CreateRowParams;
+use collab_database::rows::{Cells, CreateRowParams};
 use collab_database::views::{CreateDatabaseParams, CreateViewParams, DatabaseLayout};
 use collab_database::workspace_database::{
-  CollabDocStateByOid, CollabFuture, DatabaseCollabService, RowRelationChange,
-  RowRelationUpdateReceiver, WorkspaceDatabase,
+  DatabaseCollabService, EncodeCollabByOid, RowRelationChange, RowRelationUpdateReceiver,
+  WorkspaceDatabase,
 };
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
-use parking_lot::Mutex;
 use tokio::sync::mpsc::{channel, Receiver};
-
-use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
-use collab_plugins::CollabKVDB;
-use rand::Rng;
-use tempfile::TempDir;
 
 use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{make_rocks_db, setup_log, TestTextCell};
+
+use collab::entity::EncodedCollab;
+use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
+use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
+use collab_plugins::CollabKVDB;
+use rand::Rng;
+use tempfile::TempDir;
+use tokio::sync::Mutex;
 
 pub struct WorkspaceDatabaseTest {
   #[allow(dead_code)]
@@ -44,6 +45,12 @@ impl Deref for WorkspaceDatabaseTest {
   }
 }
 
+impl DerefMut for WorkspaceDatabaseTest {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.inner
+  }
+}
+
 pub fn random_uid() -> i64 {
   let mut rng = rand::thread_rng();
   rng.gen::<i64>()
@@ -53,75 +60,77 @@ pub struct TestUserDatabaseCollabBuilderImpl();
 
 #[async_trait]
 impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
-  fn get_collab_doc_state(
+  async fn get_encode_collab(
     &self,
     _object_id: &str,
     _object_ty: CollabType,
-  ) -> CollabFuture<Result<DataSource, DatabaseError>> {
-    Box::pin(async move { Ok(DataSource::Disk) })
+  ) -> Result<Option<EncodedCollab>, DatabaseError> {
+    Ok(None)
   }
 
-  fn batch_get_collab_update(
+  async fn batch_get_encode_collab(
     &self,
     _object_ids: Vec<String>,
     _object_ty: CollabType,
-  ) -> CollabFuture<Result<CollabDocStateByOid, DatabaseError>> {
-    Box::pin(async move { Ok(CollabDocStateByOid::default()) })
+  ) -> Result<EncodeCollabByOid, DatabaseError> {
+    Ok(EncodeCollabByOid::default())
   }
 
-  fn build_collab_with_config(
+  fn build_collab(
     &self,
     uid: i64,
     object_id: &str,
     object_type: CollabType,
     collab_db: Weak<CollabKVDB>,
-    doc_state: DataSource,
-    config: CollabPersistenceConfig,
-  ) -> Result<Arc<MutexCollab>, DatabaseError> {
-    let collab = CollabBuilder::new(uid, object_id)
+    data_source: DataSource,
+  ) -> Result<Collab, DatabaseError> {
+    let db_plugin = RocksdbDiskPlugin::new_with_config(
+      uid,
+      object_id.to_string(),
+      object_type,
+      collab_db,
+      CollabPersistenceConfig::default(),
+    );
+    let mut collab = CollabBuilder::new(uid, object_id, data_source)
       .with_device_id("1")
-      .with_doc_state(doc_state)
-      .with_plugin(RocksdbDiskPlugin::new_with_config(
-        uid,
-        object_id.to_string(),
-        object_type,
-        collab_db,
-        config.clone(),
-        None,
-      ))
+      .with_plugin(db_plugin)
       .build()
       .unwrap();
 
-    collab.lock().initialize();
-    Ok(Arc::new(collab))
+    collab.initialize();
+    Ok(collab)
   }
 }
 
-pub async fn workspace_database_test(uid: i64) -> WorkspaceDatabaseTest {
+pub fn workspace_database_test(uid: i64) -> WorkspaceDatabaseTest {
   setup_log();
   let db = make_rocks_db();
-  user_database_test_with_db(uid, db).await
+  user_database_test_with_db(uid, db)
 }
 
 pub async fn workspace_database_test_with_config(
   uid: i64,
-  config: CollabPersistenceConfig,
+  _config: CollabPersistenceConfig,
 ) -> WorkspaceDatabaseTest {
   setup_log();
   let collab_db = make_rocks_db();
+  let data_source = KVDBCollabPersistenceImpl {
+    db: Arc::downgrade(&collab_db),
+    uid,
+  };
+
   let builder = TestUserDatabaseCollabBuilderImpl();
   let database_views_aggregate_id = uuid::Uuid::new_v4().to_string();
   let collab = builder
-    .build_collab_with_config(
+    .build_collab(
       uid,
       &database_views_aggregate_id,
       CollabType::WorkspaceDatabase,
       Arc::downgrade(&collab_db),
-      DataSource::Disk,
-      config.clone(),
+      data_source.into(),
     )
     .unwrap();
-  let inner = WorkspaceDatabase::open(uid, collab, Arc::downgrade(&collab_db), config, builder);
+  let inner = WorkspaceDatabase::open(uid, collab, Arc::downgrade(&collab_db), builder);
   WorkspaceDatabaseTest {
     uid,
     inner,
@@ -129,34 +138,35 @@ pub async fn workspace_database_test_with_config(
   }
 }
 
-pub async fn workspace_database_with_db(
+pub fn workspace_database_with_db(
   uid: i64,
   collab_db: Weak<CollabKVDB>,
   config: Option<CollabPersistenceConfig>,
 ) -> WorkspaceDatabase {
-  let config = config.unwrap_or_else(|| CollabPersistenceConfig::new().snapshot_per_update(5));
+  let _config = config.unwrap_or_else(|| CollabPersistenceConfig::new().snapshot_per_update(5));
   let builder = TestUserDatabaseCollabBuilderImpl();
 
   // In test, we use a fixed database_storage_id
   let database_views_aggregate_id = "database_views_aggregate_id";
+  let data_source = KVDBCollabPersistenceImpl {
+    db: collab_db.clone(),
+    uid,
+  }
+  .into_data_source();
   let collab = builder
-    .build_collab_with_config(
+    .build_collab(
       uid,
       database_views_aggregate_id,
       CollabType::WorkspaceDatabase,
       collab_db.clone(),
-      DataSource::Disk,
-      config.clone(),
+      data_source,
     )
     .unwrap();
-  WorkspaceDatabase::open(uid, collab, collab_db, config, builder)
+  WorkspaceDatabase::open(uid, collab, collab_db, builder)
 }
 
-pub async fn user_database_test_with_db(
-  uid: i64,
-  collab_db: Arc<CollabKVDB>,
-) -> WorkspaceDatabaseTest {
-  let inner = workspace_database_with_db(uid, Arc::downgrade(&collab_db), None).await;
+pub fn user_database_test_with_db(uid: i64, collab_db: Arc<CollabKVDB>) -> WorkspaceDatabaseTest {
+  let inner = workspace_database_with_db(uid, Arc::downgrade(&collab_db), None);
   WorkspaceDatabaseTest {
     uid,
     inner,
@@ -164,11 +174,11 @@ pub async fn user_database_test_with_db(
   }
 }
 
-pub async fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabaseTest {
+pub fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabaseTest {
   let tempdir = TempDir::new().unwrap();
   let path = tempdir.into_path();
   let db = Arc::new(CollabKVDB::open(path).unwrap());
-  let w_database = user_database_test_with_db(uid, db).await;
+  let mut w_database = user_database_test_with_db(uid, db);
 
   w_database
     .create_database(create_database_params("d1"))
@@ -178,25 +188,19 @@ pub async fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabase
 }
 
 fn create_database_params(database_id: &str) -> CreateDatabaseParams {
-  let row_1 = CreateRowParams::new(1, database_id.to_string()).with_cells(
-    CellsBuilder::new()
-      .insert_cell("f1", TestTextCell::from("1f1cell"))
-      .insert_cell("f2", TestTextCell::from("1f2cell"))
-      .insert_cell("f3", TestTextCell::from("1f3cell"))
-      .build(),
-  );
-  let row_2 = CreateRowParams::new(2, database_id.to_string()).with_cells(
-    CellsBuilder::new()
-      .insert_cell("f1", TestTextCell::from("2f1cell"))
-      .insert_cell("f2", TestTextCell::from("2f2cell"))
-      .build(),
-  );
-  let row_3 = CreateRowParams::new(3, database_id.to_string()).with_cells(
-    CellsBuilder::new()
-      .insert_cell("f1", TestTextCell::from("3f1cell"))
-      .insert_cell("f3", TestTextCell::from("3f3cell"))
-      .build(),
-  );
+  let row_1 = CreateRowParams::new(1, database_id.to_string()).with_cells(Cells::from([
+    ("f1".into(), TestTextCell::from("1f1cell").into()),
+    ("f2".into(), TestTextCell::from("1f2cell").into()),
+    ("f3".into(), TestTextCell::from("1f3cell").into()),
+  ]));
+  let row_2 = CreateRowParams::new(2, database_id.to_string()).with_cells(Cells::from([
+    ("f1".into(), TestTextCell::from("2f1cell").into()),
+    ("f2".into(), TestTextCell::from("2f2cell").into()),
+  ]));
+  let row_3 = CreateRowParams::new(3, database_id.to_string()).with_cells(Cells::from([
+    ("f1".into(), TestTextCell::from("3f1cell").into()),
+    ("f3".into(), TestTextCell::from("3f3cell").into()),
+  ]));
   let field_1 = Field::new("f1".to_string(), "text field".to_string(), 0, true);
   let field_2 = Field::new("f2".to_string(), "single select field".to_string(), 2, true);
   let field_3 = Field::new("f3".to_string(), "checkbox field".to_string(), 1, true);

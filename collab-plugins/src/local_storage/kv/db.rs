@@ -6,7 +6,7 @@ use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 use crate::local_storage::kv::keys::*;
-use crate::local_storage::kv::oid::{LOCAL_DOC_ID_GEN, OID};
+use crate::local_storage::kv::oid::{DocIDGen, OID};
 use crate::local_storage::kv::snapshot::CollabSnapshot;
 use crate::local_storage::kv::PersistenceError;
 use smallvec::SmallVec;
@@ -16,6 +16,10 @@ pub trait KVTransactionDB: Send + Sync + 'static {
   type TransactionAction<'a>;
 
   fn read_txn<'a, 'b>(&'b self) -> Self::TransactionAction<'a>
+  where
+    'b: 'a;
+
+  fn write_txn<'a, 'b>(&'b self) -> Self::TransactionAction<'a>
   where
     'b: 'a;
 
@@ -194,7 +198,7 @@ where
   S: KVStore<'a>,
   PersistenceError: From<<S as KVStore<'a>>::Error>,
 {
-  let new_id = LOCAL_DOC_ID_GEN.lock().next_id();
+  let new_id = DocIDGen::next_id();
   store.insert(key.as_ref(), new_id.to_be_bytes())?;
   Ok(new_id)
 }
@@ -214,9 +218,10 @@ pub trait TransactionMutExt<'doc> {
 
 impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
   fn try_apply_update(&mut self, update: Update) -> Result<(), PersistenceError> {
-    match panic::catch_unwind(AssertUnwindSafe(|| {
+    let result = panic::catch_unwind(AssertUnwindSafe(|| {
       self.apply_update(update);
-    })) {
+    }));
+    match result {
       Ok(_) => Ok(()),
       Err(e) => Err(PersistenceError::InvalidData(format!("{:?}", e))),
     }

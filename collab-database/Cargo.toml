@@ -16,8 +16,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 serde_repr = "0.1"
-parking_lot.workspace = true
-tokio = { version = "1.26", features = ["rt", "sync"] }
+tokio = { workspace = true, features = ["time", "sync", "rt"] }
 tracing.workspace = true
 nanoid = "0.4.0"
 chrono.workspace = true
@@ -29,6 +28,7 @@ strum = "0.25"
 strum_macros = "0.25"
 rayon = "1.9.0"
 dashmap = "5"
+futures = "0.3.30"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
@@ -37,7 +37,6 @@ js-sys = "0.3"
 [dev-dependencies]
 collab-plugins = { workspace = true }
 tempfile = "3.8.0"
-tokio = { version = "1.26", features = ["macros"] }
 assert-json-diff = "2.0.2"
 lazy_static = "1.4.0"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }

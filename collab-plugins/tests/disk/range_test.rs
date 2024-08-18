@@ -108,7 +108,7 @@ async fn scan_prefix_multi_thread() {
     let handle = thread::spawn(move || {
       let cloned_db = cloned_db.read_txn();
       {
-        println!("start: {}", step);
+        //println!("start: {}", step);
         let max_key = make_doc_update_key(doc_id, Clock::MAX);
         let last_clock = if let Ok(Some(entry)) = cloned_db.next_back_entry(max_key.as_ref()) {
           let clock_byte = clock_from_key(entry.key());
