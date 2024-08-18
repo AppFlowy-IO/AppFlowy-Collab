@@ -309,6 +309,36 @@ impl Block {
       .clone()
   }
 
+  #[instrument(level = "debug", skip_all)]
+  pub fn create_new_database_row(&self, row_id: RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    let collab_db = self.collab_db.upgrade()?;
+    if collab_db.read_txn().is_exist(self.uid, row_id.as_ref()) {
+      warn!("The row already exists: {:?}", row_id);
+      return None;
+    }
+
+    let collab = self.create_collab_for_row(&row_id).ok()?;
+    let database_row = DatabaseRow::new(
+      self.uid,
+      row_id.clone(),
+      self.collab_db.clone(),
+      collab,
+      self.row_change_tx.clone(),
+      None,
+    );
+
+    if let Err(err) = database_row.write_to_disk() {
+      error!("Fail to write the row to disk: {:?}", err);
+      return None;
+    }
+
+    let database_row = Arc::new(RwLock::new(database_row));
+    self
+      .row_mem_cache
+      .insert(row_id, Some(database_row.clone()));
+    Some(database_row)
+  }
+
   pub fn create_row_instance(&self, row_id: RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
     let collab_db = self.collab_db.upgrade()?;
     let exists = collab_db.read_txn().is_exist(self.uid, row_id.as_ref());
