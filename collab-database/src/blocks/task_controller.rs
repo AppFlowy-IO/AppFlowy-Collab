@@ -3,20 +3,21 @@ use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, Weak};
 
 use crate::error::DatabaseError;
-use crate::rows::{RowDetail, RowId};
+use crate::rows::RowId;
 use crate::workspace_database::DatabaseCollabService;
 use collab::core::collab::DataSource;
-use collab::core::origin::CollabOrigin;
+
 use collab::preclude::Collab;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::{KVTransactionDB, PersistenceError};
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 
+use collab::entity::EncodedCollab;
 use collab_plugins::CollabKVDB;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::task::{yield_now, JoinHandle};
-use tracing::trace;
+use tracing::{error, trace};
 
 /// A [BlockTaskController] is used to control how the [BlockTask]s are executed.
 /// It contains a [TaskQueue] to queue the [BlockTask]s and a [TaskHandler] to handle the
@@ -82,6 +83,10 @@ impl BlockTaskController {
           .get_encode_collab(row_id.as_ref(), CollabType::DatabaseRow)
           .await
         {
+          if let Some(encode_collab) = encode_collab.clone() {
+            save_row(&collab_db, encode_collab, *uid, row_id)?;
+          }
+
           let data_source = encode_collab.map(DataSource::from).unwrap_or_else(|| {
             KVDBCollabPersistenceImpl {
               db: Arc::downgrade(&collab_db),
@@ -114,9 +119,30 @@ impl BlockTaskController {
           .await
         {
           let mut collabs = vec![];
+
+          let uid = *uid;
+          let cloned_collab_db = collab_db.clone();
+          let cloned_updates_by_oid = updates_by_oid.clone();
+          let _ = tokio::task::spawn_blocking(move || {
+            for (oid, encode_collab) in cloned_updates_by_oid {
+              let _ = cloned_collab_db.with_write_txn(|write_txn| {
+                if let Err(e) = write_txn.flush_doc(
+                  uid,
+                  &oid,
+                  encode_collab.state_vector.to_vec(),
+                  encode_collab.doc_state.to_vec(),
+                ) {
+                  error!("{} failed to save the database row collab: {:?}", oid, e);
+                }
+                Ok(())
+              });
+            }
+          })
+          .await;
+
           for (oid, encode_collab) in updates_by_oid {
             let collab = collab_service.build_collab(
-              *uid,
+              uid,
               &oid,
               CollabType::DatabaseRow,
               Arc::downgrade(&collab_db),
@@ -154,73 +180,27 @@ impl Drop for BlockTaskController {
   }
 }
 
-#[allow(dead_code)]
 fn save_row(
   collab_db: &Arc<CollabKVDB>,
-  collab_doc_state: DataSource,
+  encode_collab: EncodedCollab,
   uid: i64,
   row_id: &RowId,
-) -> Option<RowDetail> {
-  if collab_doc_state.is_empty() {
-    tracing::error!("Unexpected empty row: {} collab update", row_id.as_ref());
-    return None;
-  }
-  let row = collab_db.with_write_txn(|write_txn| {
-    match Collab::new_with_source(
-      CollabOrigin::Empty,
-      row_id.as_ref(),
-      collab_doc_state,
-      vec![],
-      false,
+) -> Result<(), PersistenceError> {
+  collab_db.with_write_txn(|write_txn| {
+    if let Err(e) = write_txn.flush_doc(
+      uid,
+      row_id.as_str(),
+      encode_collab.state_vector.to_vec(),
+      encode_collab.doc_state.to_vec(),
     ) {
-      Ok(collab) => {
-        let encode_collab = collab
-          .encode_collab_v1(|collab| {
-            CollabType::DatabaseRow
-              .validate_require_data(collab)
-              .map_err(|_| DatabaseError::NoRequiredData)
-          })
-          .map_err(|err| PersistenceError::Internal(err.into()))?;
-        let object_id = row_id.as_ref();
-        if let Err(e) = write_txn.flush_doc(
-          uid,
-          object_id,
-          encode_collab.state_vector.to_vec(),
-          encode_collab.doc_state.to_vec(),
-        ) {
-          tracing::error!(
-            "{} failed to save the database row collab: {:?}",
-            row_id.as_ref(),
-            e
-          );
-        }
-
-        let row_detail = RowDetail::from_collab(&collab);
-        if row_detail.is_none() {
-          tracing::error!("{} doesn't have any row information in it", row_id.as_ref());
-        }
-        Ok(row_detail)
-      },
-
-      Err(e) => {
-        tracing::error!("Failed to deserialize doc state to row: {:?}", e);
-        Ok(None)
-      },
-    }
-  });
-
-  match row {
-    Ok(None) => None,
-    Ok(row) => row,
-    Err(e) => {
-      tracing::error!(
+      error!(
         "{} failed to save the database row collab: {:?}",
         row_id.as_ref(),
         e
       );
-      None
-    },
-  }
+    }
+    Ok(())
+  })
 }
 
 pub type FetchRowSender = tokio::sync::mpsc::Sender<Result<Collab, DatabaseError>>;

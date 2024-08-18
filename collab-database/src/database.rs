@@ -1,5 +1,6 @@
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
 use crate::blocks::{Block, BlockEvent};
@@ -381,8 +382,11 @@ impl Database {
 
   /// Return the [RowMeta] with the given row id.
   pub async fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
-    let meta = self.body.block.get_row_meta(row_id).await?;
-    let row = self.body.block.get_row(row_id)?.read().await.get_row()?;
+    let database_row = self.body.block.get_or_init_row(row_id.clone())?;
+
+    let read_guard = database_row.read().await;
+    let row = read_guard.get_row()?;
+    let meta = read_guard.get_row_meta()?;
     RowDetail::new(row, meta)
   }
 
@@ -609,18 +613,32 @@ impl Database {
       });
   }
 
-  pub fn get_all_sorts<T: TryFrom<SortMap>>(&self, view_id: &str) -> Vec<T> {
+  pub fn get_all_sorts<T>(&self, view_id: &str) -> Vec<T>
+  where
+    T: TryFrom<SortMap>,
+    <T as TryFrom<SortMap>>::Error: Debug,
+  {
     let txn = self.collab.transact();
     self
       .body
       .views
       .get_view_sorts(&txn, view_id)
       .into_iter()
-      .flat_map(|sort| T::try_from(sort).ok())
+      .flat_map(|sort| match T::try_from(sort) {
+        Ok(sort) => Some(sort),
+        Err(err) => {
+          error!("Failed to convert sort, error: {:?}", err);
+          None
+        },
+      })
       .collect()
   }
 
-  pub fn get_sort<T: TryFrom<SortMap>>(&self, view_id: &str, sort_id: &str) -> Option<T> {
+  pub fn get_sort<T>(&self, view_id: &str, sort_id: &str) -> Option<T>
+  where
+    T: TryFrom<SortMap>,
+    <T as TryFrom<SortMap>>::Error: Debug,
+  {
     let sort_id: Any = sort_id.into();
     let txn = self.collab.transact();
     let mut sorts = self
@@ -628,8 +646,14 @@ impl Database {
       .views
       .get_view_sorts(&txn, view_id)
       .into_iter()
-      .filter(|filter_map| filter_map.get("id") == Some(&sort_id))
-      .flat_map(|value| T::try_from(value).ok())
+      .filter(|sort_map| sort_map.get("id") == Some(&sort_id))
+      .flat_map(|value| match T::try_from(value) {
+        Ok(sort) => Some(sort),
+        Err(err) => {
+          error!("Failed to convert sort, error: {:?}", err);
+          None
+        },
+      })
       .collect::<Vec<T>>();
     if sorts.is_empty() {
       None
@@ -728,18 +752,32 @@ impl Database {
       });
   }
 
-  pub fn get_all_filters<T: TryFrom<FilterMap>>(&self, view_id: &str) -> Vec<T> {
+  pub fn get_all_filters<T>(&self, view_id: &str) -> Vec<T>
+  where
+    T: TryFrom<FilterMap>,
+    <T as TryFrom<FilterMap>>::Error: Debug,
+  {
     let txn = self.collab.transact();
     self
       .body
       .views
       .get_view_filters(&txn, view_id)
       .into_iter()
-      .flat_map(|setting| T::try_from(setting).ok())
+      .flat_map(|setting| match T::try_from(setting) {
+        Ok(filter) => Some(filter),
+        Err(err) => {
+          error!("Failed to convert filter: {:?}", err);
+          None
+        },
+      })
       .collect()
   }
 
-  pub fn get_filter<T: TryFrom<FilterMap>>(&self, view_id: &str, filter_id: &str) -> Option<T> {
+  pub fn get_filter<T>(&self, view_id: &str, filter_id: &str) -> Option<T>
+  where
+    T: TryFrom<FilterMap>,
+    <T as TryFrom<FilterMap>>::Error: Debug,
+  {
     let filter_id: Any = filter_id.into();
     let txn = self.collab.transact();
     let mut filters = self
@@ -748,7 +786,13 @@ impl Database {
       .get_view_filters(&txn, view_id)
       .into_iter()
       .filter(|filter_map| filter_map.get("id") == Some(&filter_id))
-      .flat_map(|value| T::try_from(value).ok())
+      .flat_map(|value| match T::try_from(value) {
+        Ok(filter) => Some(filter),
+        Err(err) => {
+          error!("Failed to convert filter, error: {:?}", err);
+          None
+        },
+      })
       .collect::<Vec<T>>();
     if filters.is_empty() {
       None
