@@ -373,7 +373,7 @@ impl Database {
 
   #[instrument(level = "debug", skip_all)]
   pub fn create_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self.body.block.get_or_init_row(row_id.clone())
+    self.body.block.create_new_database_row(row_id.clone())
   }
 
   pub fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
