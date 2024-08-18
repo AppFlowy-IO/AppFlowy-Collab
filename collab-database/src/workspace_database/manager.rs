@@ -19,9 +19,9 @@ use collab::entity::EncodedCollab;
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use dashmap::DashMap;
 use std::sync::{Arc, Weak};
-use std::time::Duration;
+
 use tokio::sync::RwLock;
-use tracing::{error, trace};
+use tracing::error;
 
 pub type EncodeCollabByOid = HashMap<String, EncodedCollab>;
 
@@ -71,7 +71,6 @@ pub struct WorkspaceDatabase {
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
   databases: DashMap<String, Arc<RwLock<Database>>>,
-  removing_databases: Arc<DashMap<String, Arc<RwLock<Database>>>>,
 }
 
 impl WorkspaceDatabase {
@@ -94,7 +93,6 @@ impl WorkspaceDatabase {
       meta_list,
       collab_service,
       databases: DashMap::new(),
-      removing_databases: Arc::new(DashMap::new()),
     }
   }
 
@@ -155,14 +153,6 @@ impl WorkspaceDatabase {
       .contains(&self.collab.transact(), database_id)
     {
       return None;
-    }
-
-    if let Some((_, database)) = self.removing_databases.remove(database_id) {
-      trace!("Move the database:{} back to databases", database_id);
-      self
-        .databases
-        .insert(database_id.to_string(), database.clone());
-      return Some(database);
     }
 
     let database = self.databases.get(database_id).as_deref().cloned();
@@ -310,26 +300,7 @@ impl WorkspaceDatabase {
   }
 
   pub fn close_database(&self, database_id: &str) {
-    if let Some((_, database)) = self.databases.remove(database_id) {
-      trace!("Move the database to removing_databases: {}", database_id);
-      self
-        .removing_databases
-        .insert(database_id.to_string(), database);
-
-      let cloned_database_id = database_id.to_string();
-      let weak_removing_databases = Arc::downgrade(&self.removing_databases);
-      tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(120)).await;
-        if let Some(removing_databases) = weak_removing_databases.upgrade() {
-          if removing_databases.remove(&cloned_database_id).is_some() {
-            trace!(
-              "drop database {} from removing_databases",
-              cloned_database_id
-            );
-          }
-        }
-      });
-    }
+    let _ = self.databases.remove(database_id);
   }
 
   pub fn track_database(&mut self, database_id: &str, database_view_ids: Vec<String>) {

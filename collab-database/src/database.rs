@@ -38,7 +38,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Weak};
 use tokio::sync::RwLock;
 pub use tokio_stream::wrappers::WatchStream;
-use tracing::error;
+use tracing::{error, instrument};
 
 pub struct Database {
   uid: i64,
@@ -118,9 +118,11 @@ impl Database {
 
       // Write database rows
       for row in self.body.block.row_mem_cache.iter() {
-        let row_collab = &row.blocking_read().collab;
-        let row_encoded = encoded_collab(row_collab, &CollabType::DatabaseRow)?;
-        flush_collab(self.uid, row_collab.object_id(), &row_encoded)?;
+        if let Some(row) = row.value() {
+          let row_collab = &row.blocking_read().collab;
+          let row_encoded = encoded_collab(row_collab, &CollabType::DatabaseRow)?;
+          flush_collab(self.uid, row_collab.object_id(), &row_encoded)?;
+        }
       }
 
       // Commit the transaction
@@ -285,6 +287,8 @@ impl Database {
     view_id: &str,
     params: CreateRowParams,
   ) -> (usize, RowOrder) {
+    self.get_or_init_database_row(&params.id);
+
     let mut txn = self.collab.transact_mut();
     self.body.create_row(&mut txn, view_id, params)
   }
@@ -350,7 +354,7 @@ impl Database {
 
   /// Return the [Row] with the given row id.
   pub async fn get_row(&self, row_id: &RowId) -> Row {
-    let row = self.body.block.get_or_init_row(row_id.clone());
+    let row = self.body.block.get_row(row_id);
     match row {
       None => Row::empty(row_id.clone(), &self.get_database_id()),
       Some(row) => row
@@ -366,20 +370,15 @@ impl Database {
     self.body.block.get_row_meta(row_id).await
   }
 
-  pub fn get_row_collab(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self.body.block.get_row(row_id)
+  #[instrument(level = "debug", skip_all)]
+  pub fn get_or_init_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    self.body.block.get_or_init_row(row_id.clone())
   }
 
   /// Return the [RowMeta] with the given row id.
   pub async fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
     let meta = self.body.block.get_row_meta(row_id).await?;
-    let row = self
-      .body
-      .block
-      .get_or_init_row(row_id.clone())?
-      .read()
-      .await
-      .get_row()?;
+    let row = self.body.block.get_row(row_id)?.read().await.get_row()?;
     RowDetail::new(row, meta)
   }
 
@@ -992,13 +991,7 @@ impl Database {
   /// Duplicate the row, and insert it after the original row.
   pub async fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
     let database_id = self.get_database_id();
-    let row = self
-      .body
-      .block
-      .get_or_init_row(row_id.clone())?
-      .read()
-      .await
-      .get_row()?;
+    let row = self.body.block.get_row(row_id)?.read().await.get_row()?;
     let timestamp = timestamp();
     Some(CreateRowParams {
       id: gen_row_id(),

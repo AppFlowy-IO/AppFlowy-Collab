@@ -14,8 +14,8 @@ pub enum DatabaseError {
   #[error("The database is not existing")]
   DatabaseNotExist,
 
-  #[error("The database row with id {0} doesn't exist")]
-  DatabaseRowNotExist(RowId),
+  #[error("row: {row_id} not found, reason: {reason}")]
+  DatabaseRowNotFound { row_id: RowId, reason: String },
 
   #[error("The database view is not existing")]
   DatabaseViewNotExist,
