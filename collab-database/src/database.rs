@@ -287,7 +287,7 @@ impl Database {
     view_id: &str,
     params: CreateRowParams,
   ) -> (usize, RowOrder) {
-    self.get_or_init_database_row(&params.id);
+    self.create_database_row(&params.id);
 
     let mut txn = self.collab.transact_mut();
     self.body.create_row(&mut txn, view_id, params)
@@ -371,8 +371,13 @@ impl Database {
   }
 
   #[instrument(level = "debug", skip_all)]
-  pub fn get_or_init_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self.body.block.get_or_init_row(row_id.clone())
+  pub fn create_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    self.body.block.create_row_instance(row_id.clone())
+  }
+
+  #[instrument(level = "debug", skip_all)]
+  pub fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    self.body.block.get_row(row_id)
   }
 
   /// Return the [RowMeta] with the given row id.
@@ -1048,7 +1053,7 @@ impl Database {
     let inline_view_id = self.body.get_inline_view_id(&txn);
     let views = self.body.views.get_all_views(&txn);
     let fields = self.body.get_fields_in_view(&txn, &inline_view_id, None);
-    let rows = self.get_database_rows().await;
+    let rows = self.get_all_rows().await;
 
     DatabaseData {
       database_id,
@@ -1074,7 +1079,7 @@ impl Database {
     inline_view_id == view_id
   }
 
-  pub async fn get_database_rows(&self) -> Vec<Row> {
+  pub async fn get_all_rows(&self) -> Vec<Row> {
     let row_orders = {
       let txn = self.collab.transact();
       let inline_view_id = self.body.get_inline_view_id(&txn);

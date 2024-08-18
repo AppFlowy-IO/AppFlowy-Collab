@@ -309,7 +309,7 @@ impl Block {
       .clone()
   }
 
-  fn create_row_instance(&self, row_id: RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+  pub fn create_row_instance(&self, row_id: RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
     let collab_db = self.collab_db.upgrade()?;
     let exists = collab_db.read_txn().is_exist(self.uid, row_id.as_ref());
     if exists {
