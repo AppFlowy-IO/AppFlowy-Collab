@@ -1089,6 +1089,12 @@ impl Database {
     self.get_rows_from_row_orders(&row_orders).await
   }
 
+  pub async fn get_all_row_orders(&self) -> Vec<RowOrder> {
+    let txn = self.collab.transact();
+    let inline_view_id = self.body.get_inline_view_id(&txn);
+    self.body.views.get_row_orders(&txn, &inline_view_id)
+  }
+
   pub fn get_inline_row_orders(&self) -> Vec<RowOrder> {
     let txn = self.collab.transact();
     let inline_view_id = self.body.get_inline_view_id(&txn);
