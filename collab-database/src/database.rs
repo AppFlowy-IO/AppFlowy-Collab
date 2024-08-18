@@ -38,7 +38,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Weak};
 use tokio::sync::RwLock;
 pub use tokio_stream::wrappers::WatchStream;
-use tracing::{error, instrument};
+use tracing::{error, instrument, trace};
 
 pub struct Database {
   uid: i64,
@@ -960,6 +960,11 @@ impl Database {
     let inline_view_id = self.body.get_inline_view_id(&txn);
     let row_orders = self.body.views.get_row_orders(&txn, &inline_view_id);
     let field_orders = self.body.views.get_field_orders(&txn, &inline_view_id);
+    trace!(
+      "Create linked view: {} rows, {} fields",
+      row_orders.len(),
+      field_orders.len()
+    );
 
     self
       .body
