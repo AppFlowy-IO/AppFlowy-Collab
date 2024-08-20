@@ -56,7 +56,7 @@ pub fn get_field_type_from_cell<T: From<i64>>(cell: &Cell) -> Option<T> {
 
 /// Create a new [CellBuilder] with the field type.
 pub fn new_cell_builder(field_type: impl Into<i64>) -> CellBuilder {
-  HashMap::from([("field_type".into(), Any::from(field_type.into()))])
+  HashMap::from([("field_type".into(), Any::BigInt(field_type.into()))])
 }
 
 pub struct RowCell {

@@ -1,6 +1,6 @@
 use collab_database::rows::Cells;
 
-use crate::database_test::helper::create_database_with_default_data;
+use crate::database_test::helper::{create_database_with_default_data, ReceiveUpdatesPlugin};
 use crate::helper::{TestNumberCell, TestTextCell};
 
 #[tokio::test]

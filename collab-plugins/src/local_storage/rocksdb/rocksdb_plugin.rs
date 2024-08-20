@@ -84,26 +84,6 @@ impl RocksdbDiskPlugin {
     let _update_count = self.update_count.fetch_add(1, SeqCst);
   }
 
-  // fn create_snapshot_if_need(&self, update_count: u32) {
-  //   if update_count != 0 && update_count % self.config.snapshot_per_update == 0 {
-  //     if let Some(snapshot) = &self.snapshot {
-  //       if snapshot.should_create_snapshot() {
-  //         debug!(
-  //           "create snapshot for {}, update_count:{}, snapshot_per_update:{}",
-  //           self.object_id, update_count, self.config.snapshot_per_update
-  //         );
-  //         snapshot.create_snapshot(
-  //           self.collab_db.clone(),
-  //           self.uid,
-  //           &self.object_id,
-  //           &self.collab_type,
-  //         );
-  //       }
-  //     }
-  //     self.update_count.store(0, SeqCst);
-  //   }
-  // }
-
   fn flush_doc(&self, db: &Arc<CollabKVDB>, object_id: &str) {
     let _ = db.with_write_txn(|w_db_txn| {
       let doc = make_yrs_doc(false);

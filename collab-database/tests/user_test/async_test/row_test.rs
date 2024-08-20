@@ -1,6 +1,6 @@
 use collab_database::database::timestamp;
 use collab_database::rows::CreateRowParams;
-use collab_database::rows::{CellsBuilder, RowId};
+use collab_database::rows::RowId;
 use serde_json::{json, Value};
 
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -43,7 +43,7 @@ async fn edit_row_test() {
         scripts.push(DatabaseScript::EditRow {
           database_id: cloned_database_id.clone(),
           row_id: cloned_row_id.clone(),
-          cells: CellsBuilder::new()
+          cells: Cell::new()
             .insert_cell("f1", TestTextCell::from("hello world"))
             .build(),
         })
