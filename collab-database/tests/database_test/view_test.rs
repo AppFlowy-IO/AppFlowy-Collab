@@ -22,7 +22,7 @@ async fn create_initial_database_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
   assert_eq!(database_test.get_all_field_orders().len(), 0);
-  assert_eq!(database_test.get_database_rows().await.len(), 0);
+  assert_eq!(database_test.get_all_rows().await.len(), 0);
   assert_eq!(database_test.get_database_id(), database_id);
 
   let inline_view_id = database_test.get_inline_view_id();

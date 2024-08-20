@@ -32,6 +32,7 @@ pub enum DatabaseViewChange {
     row_orders: Vec<RowOrder>,
   },
   DidDeleteRowAtIndex {
+    // FIXME(nathan): it should be list of row ids
     index: Vec<u32>,
   },
   // filter

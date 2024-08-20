@@ -1,5 +1,6 @@
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
 use crate::blocks::{Block, BlockEvent};
@@ -38,7 +39,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Weak};
 use tokio::sync::RwLock;
 pub use tokio_stream::wrappers::WatchStream;
-use tracing::error;
+use tracing::{error, instrument, trace};
 
 pub struct Database {
   uid: i64,
@@ -118,9 +119,11 @@ impl Database {
 
       // Write database rows
       for row in self.body.block.row_mem_cache.iter() {
-        let row_collab = &row.blocking_read().collab;
-        let row_encoded = encoded_collab(row_collab, &CollabType::DatabaseRow)?;
-        flush_collab(self.uid, row_collab.object_id(), &row_encoded)?;
+        if let Some(row) = row.value() {
+          let row_collab = &row.blocking_read().collab;
+          let row_encoded = encoded_collab(row_collab, &CollabType::DatabaseRow)?;
+          flush_collab(self.uid, row_collab.object_id(), &row_encoded)?;
+        }
       }
 
       // Commit the transaction
@@ -285,6 +288,8 @@ impl Database {
     view_id: &str,
     params: CreateRowParams,
   ) -> (usize, RowOrder) {
+    self.create_database_row(&params.id);
+
     let mut txn = self.collab.transact_mut();
     self.body.create_row(&mut txn, view_id, params)
   }
@@ -350,7 +355,7 @@ impl Database {
 
   /// Return the [Row] with the given row id.
   pub async fn get_row(&self, row_id: &RowId) -> Row {
-    let row = self.body.block.get_or_init_row(row_id.clone());
+    let row = self.body.block.get_row(row_id);
     match row {
       None => Row::empty(row_id.clone(), &self.get_database_id()),
       Some(row) => row
@@ -366,20 +371,27 @@ impl Database {
     self.body.block.get_row_meta(row_id).await
   }
 
-  pub fn get_row_collab(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+  #[instrument(level = "debug", skip_all)]
+  pub fn create_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    self.body.block.create_new_database_row(row_id.clone())
+  }
+
+  #[instrument(level = "debug", skip_all)]
+  pub fn init_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    self.body.block.get_or_init_row(row_id.clone())
+  }
+
+  pub fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
     self.body.block.get_row(row_id)
   }
 
   /// Return the [RowMeta] with the given row id.
   pub async fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
-    let meta = self.body.block.get_row_meta(row_id).await?;
-    let row = self
-      .body
-      .block
-      .get_or_init_row(row_id.clone())?
-      .read()
-      .await
-      .get_row()?;
+    let database_row = self.body.block.get_or_init_row(row_id.clone())?;
+
+    let read_guard = database_row.read().await;
+    let row = read_guard.get_row()?;
+    let meta = read_guard.get_row_meta()?;
     RowDetail::new(row, meta)
   }
 
@@ -606,18 +618,32 @@ impl Database {
       });
   }
 
-  pub fn get_all_sorts<T: TryFrom<SortMap>>(&self, view_id: &str) -> Vec<T> {
+  pub fn get_all_sorts<T>(&self, view_id: &str) -> Vec<T>
+  where
+    T: TryFrom<SortMap>,
+    <T as TryFrom<SortMap>>::Error: Debug,
+  {
     let txn = self.collab.transact();
     self
       .body
       .views
       .get_view_sorts(&txn, view_id)
       .into_iter()
-      .flat_map(|sort| T::try_from(sort).ok())
+      .flat_map(|sort| match T::try_from(sort) {
+        Ok(sort) => Some(sort),
+        Err(err) => {
+          error!("Failed to convert sort, error: {:?}", err);
+          None
+        },
+      })
       .collect()
   }
 
-  pub fn get_sort<T: TryFrom<SortMap>>(&self, view_id: &str, sort_id: &str) -> Option<T> {
+  pub fn get_sort<T>(&self, view_id: &str, sort_id: &str) -> Option<T>
+  where
+    T: TryFrom<SortMap>,
+    <T as TryFrom<SortMap>>::Error: Debug,
+  {
     let sort_id: Any = sort_id.into();
     let txn = self.collab.transact();
     let mut sorts = self
@@ -625,8 +651,14 @@ impl Database {
       .views
       .get_view_sorts(&txn, view_id)
       .into_iter()
-      .filter(|filter_map| filter_map.get("id") == Some(&sort_id))
-      .flat_map(|value| T::try_from(value).ok())
+      .filter(|sort_map| sort_map.get("id") == Some(&sort_id))
+      .flat_map(|value| match T::try_from(value) {
+        Ok(sort) => Some(sort),
+        Err(err) => {
+          error!("Failed to convert sort, error: {:?}", err);
+          None
+        },
+      })
       .collect::<Vec<T>>();
     if sorts.is_empty() {
       None
@@ -725,18 +757,32 @@ impl Database {
       });
   }
 
-  pub fn get_all_filters<T: TryFrom<FilterMap>>(&self, view_id: &str) -> Vec<T> {
+  pub fn get_all_filters<T>(&self, view_id: &str) -> Vec<T>
+  where
+    T: TryFrom<FilterMap>,
+    <T as TryFrom<FilterMap>>::Error: Debug,
+  {
     let txn = self.collab.transact();
     self
       .body
       .views
       .get_view_filters(&txn, view_id)
       .into_iter()
-      .flat_map(|setting| T::try_from(setting).ok())
+      .flat_map(|setting| match T::try_from(setting) {
+        Ok(filter) => Some(filter),
+        Err(err) => {
+          error!("Failed to convert filter: {:?}", err);
+          None
+        },
+      })
       .collect()
   }
 
-  pub fn get_filter<T: TryFrom<FilterMap>>(&self, view_id: &str, filter_id: &str) -> Option<T> {
+  pub fn get_filter<T>(&self, view_id: &str, filter_id: &str) -> Option<T>
+  where
+    T: TryFrom<FilterMap>,
+    <T as TryFrom<FilterMap>>::Error: Debug,
+  {
     let filter_id: Any = filter_id.into();
     let txn = self.collab.transact();
     let mut filters = self
@@ -745,7 +791,13 @@ impl Database {
       .get_view_filters(&txn, view_id)
       .into_iter()
       .filter(|filter_map| filter_map.get("id") == Some(&filter_id))
-      .flat_map(|value| T::try_from(value).ok())
+      .flat_map(|value| match T::try_from(value) {
+        Ok(filter) => Some(filter),
+        Err(err) => {
+          error!("Failed to convert filter, error: {:?}", err);
+          None
+        },
+      })
       .collect::<Vec<T>>();
     if filters.is_empty() {
       None
@@ -961,6 +1013,11 @@ impl Database {
     let inline_view_id = self.body.get_inline_view_id(&txn);
     let row_orders = self.body.views.get_row_orders(&txn, &inline_view_id);
     let field_orders = self.body.views.get_field_orders(&txn, &inline_view_id);
+    trace!(
+      "Create linked view: {} rows, {} fields",
+      row_orders.len(),
+      field_orders.len()
+    );
 
     self
       .body
@@ -992,13 +1049,7 @@ impl Database {
   /// Duplicate the row, and insert it after the original row.
   pub async fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
     let database_id = self.get_database_id();
-    let row = self
-      .body
-      .block
-      .get_or_init_row(row_id.clone())?
-      .read()
-      .await
-      .get_row()?;
+    let row = self.body.block.get_row(row_id)?.read().await.get_row()?;
     let timestamp = timestamp();
     Some(CreateRowParams {
       id: gen_row_id(),
@@ -1050,7 +1101,7 @@ impl Database {
     let inline_view_id = self.body.get_inline_view_id(&txn);
     let views = self.body.views.get_all_views(&txn);
     let fields = self.body.get_fields_in_view(&txn, &inline_view_id, None);
-    let rows = self.get_database_rows().await;
+    let rows = self.get_all_rows().await;
 
     DatabaseData {
       database_id,
@@ -1076,7 +1127,7 @@ impl Database {
     inline_view_id == view_id
   }
 
-  pub async fn get_database_rows(&self) -> Vec<Row> {
+  pub async fn get_all_rows(&self) -> Vec<Row> {
     let row_orders = {
       let txn = self.collab.transact();
       let inline_view_id = self.body.get_inline_view_id(&txn);
@@ -1084,6 +1135,12 @@ impl Database {
     };
 
     self.get_rows_from_row_orders(&row_orders).await
+  }
+
+  pub async fn get_all_row_orders(&self) -> Vec<RowOrder> {
+    let txn = self.collab.transact();
+    let inline_view_id = self.body.get_inline_view_id(&txn);
+    self.body.views.get_row_orders(&txn, &inline_view_id)
   }
 
   pub fn get_inline_row_orders(&self) -> Vec<RowOrder> {
