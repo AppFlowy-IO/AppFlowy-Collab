@@ -509,7 +509,9 @@ impl Collab {
     //FIXME: this is very expensive to do on frequent basis. That's one of the reasons we have
     // awareness state separate from document
     let mut txn = self.context.transact_mut();
-    self.meta.insert(&mut txn, LAST_SYNC_AT, Any::BigInt(last_sync_at));
+    self
+      .meta
+      .insert(&mut txn, LAST_SYNC_AT, Any::BigInt(last_sync_at));
   }
 
   pub fn to_json(&self) -> Any {
