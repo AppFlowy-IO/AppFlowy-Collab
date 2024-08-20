@@ -14,7 +14,7 @@ use collab::core::collab::make_yrs_doc;
 use collab::entity::EncodedCollab;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
-use tracing::{error, info};
+use tracing::error;
 use yrs::updates::encoder::Encode;
 use yrs::{ReadTxn, StateVector, Transact, TransactionMut};
 
