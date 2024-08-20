@@ -22,11 +22,11 @@ impl<'a, 'b> CellsUpdate<'a, 'b> {
   pub fn insert_cell(self, key: &str, cell: Cell) -> Self {
     let cell_map_ref: MapRef = self.map_ref.get_or_init(self.txn, key);
     if cell_map_ref.get(self.txn, CREATED_AT).is_none() {
-      cell_map_ref.insert(self.txn, CREATED_AT, timestamp());
+      cell_map_ref.insert(self.txn, CREATED_AT, Any::BigInt(timestamp()));
     }
 
     Any::from(cell).fill(self.txn, &cell_map_ref).unwrap();
-    cell_map_ref.insert(self.txn, LAST_MODIFIED, timestamp());
+    cell_map_ref.insert(self.txn, LAST_MODIFIED, Any::BigInt(timestamp()));
     self
   }
 
@@ -56,7 +56,7 @@ pub fn get_field_type_from_cell<T: From<i64>>(cell: &Cell) -> Option<T> {
 
 /// Create a new [CellBuilder] with the field type.
 pub fn new_cell_builder(field_type: impl Into<i64>) -> CellBuilder {
-  HashMap::from([("field_type".into(), Any::from(field_type.into()))])
+  HashMap::from([("field_type".into(), Any::BigInt(field_type.into()))])
 }
 
 pub struct RowCell {
