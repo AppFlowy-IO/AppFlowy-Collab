@@ -17,7 +17,7 @@ impl Folder {
   /// Apply the `op` to a [Folder]
   /// and returning the encoded update that were made.
   /// Caller must not attempt to acquire a lock on the [Folder] while in `op`
-  pub fn get_updates_for_op(&self, op: impl FnOnce(&Folder)) -> Vec<u8> {
+  pub fn get_updates_for_op(&self, op: impl FnOnce(&mut Folder)) -> Vec<u8> {
     let txn = self.transact();
     let state_vector = txn.state_vector();
     op(self);
