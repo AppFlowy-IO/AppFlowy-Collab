@@ -119,6 +119,12 @@ impl RocksdbDiskPlugin {
           encoded.state_vector.to_vec(),
           encoded.doc_state.to_vec(),
         )?;
+
+        tracing::trace!(
+          "Collab state {} {} flushed to disk",
+          object_id,
+          self.collab_type
+        );
       }
 
       Ok(())
@@ -136,6 +142,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
         let txn = collab.transact();
         if let Err(err) = collab_db.with_write_txn(|w_db_txn| {
           w_db_txn.create_new_doc(self.uid, &object_id, &txn)?;
+          tracing::trace!("Created new doc {}", object_id);
           Ok(())
         }) {
           error!("create doc for {:?} failed: {}", object_id, err);
@@ -154,6 +161,23 @@ impl CollabPlugin for RocksdbDiskPlugin {
       //Acquire a write transaction to ensure consistency
       let result = db.with_write_txn(|w_db_txn| {
         let _ = w_db_txn.push_update(self.uid, object_id, update)?;
+        #[cfg(not(feature = "verbose_log"))]
+        tracing::trace!(
+          "Collab {} {} persisting update",
+          object_id,
+          self.collab_type
+        );
+        #[cfg(feature = "verbose_log")]
+        {
+          use yrs::updates::decoder::Decode;
+          let update = yrs::Update::decode_v1(update).unwrap();
+          tracing::trace!(
+            "Collab {} {} persisting update: {:#?}",
+            object_id,
+            self.collab_type,
+            update
+          );
+        }
         Ok(())
       });
 
@@ -170,6 +194,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
 
   fn write_to_disk(&self, object_id: &str) {
     if let Some(db) = self.collab_db.upgrade() {
+      tracing::trace!("Flushed data to disk");
       self.flush_doc(&db, object_id);
     }
   }
