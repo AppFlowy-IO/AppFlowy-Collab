@@ -252,12 +252,5 @@ pub fn unzip_history_document_db(folder_name: &str) -> std::io::Result<(Cleaner,
 /// Can remove in the future. Just want to test the encode_collab and decode_collab
 pub fn try_decode_from_encode_collab(document: &Document) {
   let data = document.encode_collab().unwrap();
-  let _ = Collab::new_with_source(
-    CollabOrigin::Empty,
-    "1",
-    DataSource::DocStateV1(data.doc_state.to_vec()),
-    vec![],
-    false,
-  )
-  .unwrap();
+  let _ = Collab::new_with_source(CollabOrigin::Empty, "1", data.into(), vec![], false).unwrap();
 }

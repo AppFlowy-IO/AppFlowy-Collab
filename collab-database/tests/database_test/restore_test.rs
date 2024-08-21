@@ -100,7 +100,7 @@ async fn open_020_history_database_test() {
   let restored_database_collab = Collab::new_with_source(
     CollabOrigin::Empty,
     "c0e69740-49f0-4790-a488-702e2750ba8d",
-    DataSource::DocStateV1(encode_collab.doc_state.to_vec()),
+    encode_collab.into(),
     vec![],
     false,
   )

@@ -156,6 +156,7 @@ impl Database {
     let mut txn = self.collab.context.transact_mut();
     // Set the inline view id. The inline view id should not be
     // empty if the current database exists.
+    tracing::trace!("Set inline view id: {}", inline_view_id);
     self
       .body
       .metas
@@ -1151,7 +1152,6 @@ impl Database {
 
   pub fn set_inline_view(&mut self, view_id: &str) {
     let mut txn = self.collab.transact_mut();
-    tracing::trace!("Set inline view id: {}", view_id);
     self.body.metas.set_inline_view_id(&mut txn, view_id);
   }
 

@@ -29,7 +29,7 @@ impl Folder {
     let mut other = Folder::from_collab_doc_state(
       self.uid().clone(),
       CollabOrigin::Empty,
-      DataSource::DocStateV1(encoded_collab.doc_state.to_vec()),
+      encoded_collab.into(),
       &workspace_id,
       vec![],
     )?;
