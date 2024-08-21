@@ -83,7 +83,7 @@ impl RocksdbDiskPlugin {
 }
 
 impl CollabPlugin for RocksdbDiskPlugin {
-  fn did_init(&self, collab: &Collab, object_id: &str, _last_sync_at: i64) {
+  fn did_init(&self, collab: &Collab, object_id: &str) {
     self.did_init.store(true, SeqCst);
 
     if let Some(collab_db) = self.collab_db.upgrade() {

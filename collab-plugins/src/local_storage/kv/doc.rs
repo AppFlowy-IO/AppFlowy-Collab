@@ -127,6 +127,13 @@ where
           object_id
         );
       }
+
+      tracing::trace!(
+        "Collab {:?} loaded from snapshot and {} updates",
+        object_id,
+        update_count
+      );
+
       Ok(update_count)
     } else {
       tracing::trace!("[Client] => {:?} not exist", object_id);
