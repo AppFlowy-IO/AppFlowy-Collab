@@ -256,7 +256,9 @@ impl Block {
   pub fn delete_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
     let row = self.row_mem_cache.remove(row_id).map(|(_, row)| row);
     if let Some(collab_db) = self.collab_db.upgrade() {
-      let _ = collab_db.write_txn().delete_doc(self.uid, row_id.as_ref());
+      let write_txn = collab_db.write_txn();
+      let _ = write_txn.delete_doc(self.uid, row_id.as_ref());
+      let _ = write_txn.commit_transaction();
     }
     row?
   }

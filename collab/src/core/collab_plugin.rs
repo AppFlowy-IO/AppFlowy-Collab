@@ -71,8 +71,6 @@ pub trait CollabPlugin: Send + Sync + 'static {
 
   /// Called when the plugin is removed
   fn destroy(&self) {}
-
-  fn write_to_disk(&self, _object_id: &str) {}
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
@@ -123,10 +121,6 @@ where
 
   fn destroy(&self) {
     (**self).destroy()
-  }
-
-  fn write_to_disk(&self, _object_id: &str) {
-    (**self).write_to_disk(_object_id)
   }
 }
 

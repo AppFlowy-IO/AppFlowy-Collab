@@ -2,6 +2,7 @@ use crate::disk::script::Script::*;
 use crate::disk::script::{disk_plugin_with_db, CollabPersistenceTest};
 use assert_json_diff::assert_json_eq;
 
+use anyhow::Error;
 use collab::preclude::CollabBuilder;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
@@ -51,7 +52,6 @@ async fn flush_test() {
     uid: 1,
   };
 
-  let _persistence = disk_plugin.clone();
   let mut collab = CollabBuilder::new(1, &doc_id, data_source.into())
     .with_device_id("1")
     .with_plugin(disk_plugin)
@@ -66,7 +66,18 @@ async fn flush_test() {
 
   let read = test.db.read_txn();
   let before_flush_updates = read.get_all_updates(test.uid, &doc_id).unwrap();
-  collab.flush();
+  let write_txn = test.db.write_txn();
+  let encode_collab = collab.encode_collab_v1(|_| Ok::<(), Error>(())).unwrap();
+  write_txn
+    .flush_doc(
+      test.uid,
+      &doc_id,
+      encode_collab.state_vector.to_vec(),
+      encode_collab.doc_state.to_vec(),
+    )
+    .unwrap();
+  write_txn.commit_transaction().unwrap();
+
   let after_flush_updates = read.get_all_updates(test.uid, &doc_id).unwrap();
 
   let after_flush_value = collab.to_json_value();
