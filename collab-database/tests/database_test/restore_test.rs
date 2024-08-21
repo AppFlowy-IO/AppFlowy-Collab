@@ -3,7 +3,7 @@ use crate::database_test::helper::{
 };
 use crate::helper::unzip_history_database_db;
 use assert_json_diff::{assert_json_eq, assert_json_include};
-use collab::core::collab::DataSource;
+
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::Collab;
@@ -100,7 +100,7 @@ async fn open_020_history_database_test() {
   let restored_database_collab = Collab::new_with_source(
     CollabOrigin::Empty,
     "c0e69740-49f0-4790-a488-702e2750ba8d",
-    DataSource::DocStateV1(encode_collab.doc_state.to_vec()),
+    encode_collab.into(),
     vec![],
     false,
   )
