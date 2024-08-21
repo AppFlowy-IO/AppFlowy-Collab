@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwapOption;
 
-use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::updates::decoder::Decode;
@@ -29,7 +28,7 @@ impl Folder {
     let mut other = Folder::from_collab_doc_state(
       self.uid().clone(),
       CollabOrigin::Empty,
-      DataSource::DocStateV1(encoded_collab.doc_state.to_vec()),
+      encoded_collab.into(),
       &workspace_id,
       vec![],
     )?;
