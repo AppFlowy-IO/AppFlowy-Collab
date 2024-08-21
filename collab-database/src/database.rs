@@ -15,10 +15,9 @@ use crate::rows::{
 use crate::util::encoded_collab;
 use crate::views::define::DATABASE_VIEW_ROW_ORDERS;
 use crate::views::{
-  CalculationMap, CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator,
-  DatabaseLayout, DatabaseView, DatabaseViewMeta, DatabaseViewUpdate, FieldOrder,
-  FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
-  OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver, ViewMap,
+  CalculationMap, DatabaseLayout, DatabaseViewUpdate, FieldOrder, FieldSettingsByFieldIdMap,
+  FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, OrderObjectPosition,
+  RowOrder, RowOrderArray, SortMap, ViewChangeReceiver, ViewMap,
 };
 use crate::workspace_database::DatabaseCollabService;
 use anyhow::anyhow;
@@ -34,6 +33,9 @@ use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
 
+use crate::entity::{
+  CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView, DatabaseViewMeta,
+};
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Weak};

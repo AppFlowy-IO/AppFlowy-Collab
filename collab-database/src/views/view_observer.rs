@@ -1,3 +1,9 @@
+use crate::entity::DatabaseView;
+use crate::views::define::*;
+use crate::views::{
+  row_order_from_value, view_from_map_ref, view_from_value, view_id_from_map_ref, DatabaseLayout,
+  FieldOrder, FilterMap, GroupMap, RowOrder, SortMap,
+};
 use collab::preclude::array::ArrayEvent;
 use collab::preclude::map::MapEvent;
 use collab::preclude::{Change, MapRef, Subscription, ToJson, TransactionMut};
@@ -7,12 +13,6 @@ use std::ops::Deref;
 use std::str::FromStr;
 use tokio::sync::broadcast;
 use tracing::{trace, warn};
-
-use crate::views::define::*;
-use crate::views::{
-  row_order_from_value, view_from_map_ref, view_from_value, view_id_from_map_ref, DatabaseLayout,
-  DatabaseView, FieldOrder, FilterMap, GroupMap, RowOrder, SortMap,
-};
 #[derive(Debug, Clone)]
 pub enum DatabaseViewChange {
   DidCreateView {

@@ -1,11 +1,11 @@
-use collab_database::database::gen_row_id;
-use collab_database::rows::{meta_id_from_row_id, CreateRowParams, RowId, RowMetaKey};
-use collab_database::views::{CreateViewParams, OrderObjectPosition};
-use uuid::Uuid;
-
 use crate::database_test::helper::{
   create_database, create_database_with_default_data, create_row,
 };
+use collab_database::database::gen_row_id;
+use collab_database::entity::CreateViewParams;
+use collab_database::rows::{meta_id_from_row_id, CreateRowParams, RowId, RowMetaKey};
+use collab_database::views::OrderObjectPosition;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn create_row_shared_by_two_view_test() {
