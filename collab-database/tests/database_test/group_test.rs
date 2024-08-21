@@ -1,6 +1,7 @@
 use collab::preclude::Any;
 use collab::util::{AnyExt, AnyMapExt};
-use collab_database::views::{CreateViewParams, DatabaseLayout, GroupMap};
+use collab_database::entity::CreateViewParams;
+use collab_database::views::{DatabaseLayout, GroupMap};
 
 use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
 use crate::helper::{TestGroup, TestGroupSetting, CONTENT, GROUPS};

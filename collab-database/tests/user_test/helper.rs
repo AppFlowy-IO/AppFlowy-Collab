@@ -10,7 +10,7 @@ use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
 use collab_database::rows::{Cells, CreateRowParams};
-use collab_database::views::{CreateDatabaseParams, CreateViewParams, DatabaseLayout};
+use collab_database::views::DatabaseLayout;
 use collab_database::workspace_database::{
   DatabaseCollabService, EncodeCollabByOid, RowRelationChange, RowRelationUpdateReceiver,
   WorkspaceDatabase,
@@ -23,6 +23,7 @@ use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{make_rocks_db, setup_log, TestTextCell};
 
 use collab::entity::EncodedCollab;
+use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
