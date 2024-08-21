@@ -29,6 +29,9 @@ pub enum DatabaseError {
   #[error("No required data")]
   NoRequiredData,
 
+  #[error("Record already exist")]
+  RecordAlreadyExist,
+
   #[error("Internal failure: {0}")]
   Internal(#[from] anyhow::Error),
 }

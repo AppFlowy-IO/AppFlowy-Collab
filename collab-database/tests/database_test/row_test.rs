@@ -25,6 +25,15 @@ async fn create_row_shared_by_two_view_test() {
 
   let view_1 = database_test.get_view("v1").unwrap();
   let view_2 = database_test.get_view("v2").unwrap();
+
+  for row_order in view_1.row_orders.iter() {
+    let _ = database_test.get_row_detail(&row_order.id).await.unwrap();
+  }
+
+  for row_order in view_2.row_orders.iter() {
+    let _ = database_test.get_row_detail(&row_order.id).await.unwrap();
+  }
+
   assert_eq!(view_1.row_orders[0].id, row_id);
   assert_eq!(view_2.row_orders[0].id, row_id);
 }
@@ -109,7 +118,7 @@ async fn insert_row_in_views_test() {
   let mut database_test = create_database_with_default_data(1, &database_id);
   let row = CreateRowParams::new(4, database_id.clone())
     .with_row_position(OrderObjectPosition::After(2.to_string()));
-  database_test.create_row_in_view("v1", row);
+  database_test.create_row_in_view("v1", row).unwrap();
 
   let rows = database_test.get_rows_for_view("v1").await;
   assert_eq!(rows[0].id, 1.into());
@@ -119,7 +128,7 @@ async fn insert_row_in_views_test() {
 
   let row = CreateRowParams::new(5, database_id.clone())
     .with_row_position(OrderObjectPosition::Before(2.to_string()));
-  database_test.create_row_in_view("v1", row);
+  database_test.create_row_in_view("v1", row).unwrap();
 
   let rows = database_test.get_rows_for_view("v1").await;
   assert_eq!(rows[0].id, 1.into());
@@ -130,7 +139,7 @@ async fn insert_row_in_views_test() {
 
   let row = CreateRowParams::new(6, database_id.clone())
     .with_row_position(OrderObjectPosition::After(10.to_string()));
-  database_test.create_row_in_view("v1", row);
+  database_test.create_row_in_view("v1", row).unwrap();
 
   let rows = database_test.get_rows_for_view("v1").await;
   assert_eq!(rows[0].id, 1.into());
@@ -147,7 +156,7 @@ async fn insert_row_at_front_in_views_test() {
   let mut database_test = create_database_with_default_data(1, &database_id);
   let row =
     CreateRowParams::new(4, database_id.clone()).with_row_position(OrderObjectPosition::Start);
-  database_test.create_row_in_view("v1", row);
+  database_test.create_row_in_view("v1", row).unwrap();
 
   let rows = database_test.get_rows_for_view("v1").await;
   assert_eq!(rows[0].id, 4.into());
@@ -161,7 +170,7 @@ async fn insert_row_at_last_in_views_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let mut database_test = create_database_with_default_data(1, &database_id);
   let row = CreateRowParams::new(4, database_id.clone());
-  database_test.create_row_in_view("v1", row);
+  database_test.create_row_in_view("v1", row).unwrap();
 
   let rows = database_test.get_rows_for_view("v1").await;
   assert_eq!(rows[0].id, 1.into());
@@ -177,7 +186,7 @@ async fn duplicate_row_test() {
   assert_eq!(rows.len(), 3);
 
   let params = database_test.duplicate_row(&2.into()).await.unwrap();
-  let (index, row_order) = database_test.create_row_in_view("v1", params);
+  let (index, row_order) = database_test.create_row_in_view("v1", params).unwrap();
   assert_eq!(index, 2);
 
   let rows = database_test.get_rows_for_view("v1").await;
@@ -196,7 +205,7 @@ async fn duplicate_last_row_test() {
   assert_eq!(rows.len(), 3);
 
   let params = database_test.duplicate_row(&3.into()).await.unwrap();
-  let (index, row_order) = database_test.create_row_in_view("v1", params);
+  let (index, row_order) = database_test.create_row_in_view("v1", params).unwrap();
   assert_eq!(index, 3);
 
   let rows = database_test.get_rows_for_view("v1").await;

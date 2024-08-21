@@ -121,11 +121,9 @@ impl Database {
 
       // Write database rows
       for row in self.body.block.row_mem_cache.iter() {
-        if let Some(row) = row.value() {
-          let row_collab = &row.blocking_read().collab;
-          let row_encoded = encoded_collab(row_collab, &CollabType::DatabaseRow)?;
-          flush_collab(self.uid, row_collab.object_id(), &row_encoded)?;
-        }
+        let row_collab = &row.blocking_read().collab;
+        let row_encoded = encoded_collab(row_collab, &CollabType::DatabaseRow)?;
+        flush_collab(self.uid, row_collab.object_id(), &row_encoded)?;
       }
 
       // Commit the transaction
@@ -290,11 +288,11 @@ impl Database {
     &mut self,
     view_id: &str,
     params: CreateRowParams,
-  ) -> (usize, RowOrder) {
-    self.create_database_row(&params.id);
+  ) -> Result<(usize, RowOrder), DatabaseError> {
+    let _ = self.create_database_row(&params.id)?;
 
     let mut txn = self.collab.transact_mut();
-    self.body.create_row(&mut txn, view_id, params)
+    Ok(self.body.create_row(&mut txn, view_id, params))
   }
 
   /// Remove the row
@@ -375,13 +373,16 @@ impl Database {
   }
 
   #[instrument(level = "debug", skip_all)]
-  pub fn create_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+  pub fn create_database_row(
+    &self,
+    row_id: &RowId,
+  ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
     self.body.block.create_new_database_row(row_id.clone())
   }
 
   #[instrument(level = "debug", skip_all)]
   pub fn init_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self.body.block.get_or_init_row(row_id.clone())
+    self.body.block.get_or_init_row(row_id.clone()).ok()
   }
 
   pub fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
@@ -390,7 +391,7 @@ impl Database {
 
   /// Return the [RowMeta] with the given row id.
   pub async fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
-    let database_row = self.body.block.get_or_init_row(row_id.clone())?;
+    let database_row = self.body.block.get_or_init_row(row_id.clone()).ok()?;
 
     let read_guard = database_row.read().await;
     let row = read_guard.get_row()?;
