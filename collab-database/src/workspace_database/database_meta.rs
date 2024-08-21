@@ -122,9 +122,9 @@ pub struct DatabaseMeta {
   pub linked_views: Vec<String>,
 }
 
-const DATABASE_TRACKER_ID: &str = "database_id";
-const DATABASE_RECORD_CREATED_AT: &str = "created_at";
-const DATABASE_RECORD_VIEWS: &str = "views";
+pub const DATABASE_TRACKER_ID: &str = "database_id";
+pub const DATABASE_RECORD_CREATED_AT: &str = "created_at";
+pub const DATABASE_RECORD_VIEWS: &str = "views";
 
 impl DatabaseMeta {
   fn fill_map_ref(self, txn: &mut TransactionMut, map_ref: &MapRef) {

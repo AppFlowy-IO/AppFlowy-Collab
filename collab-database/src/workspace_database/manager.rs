@@ -5,7 +5,7 @@ use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValid
 use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
 use async_trait::async_trait;
 use collab::core::collab::DataSource;
-use collab::preclude::Collab;
+use collab::preclude::{Collab, ToJson};
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
@@ -339,6 +339,7 @@ impl WorkspaceDatabase {
 
     let create_database_params = CreateDatabaseParams::from_database_data(database_data);
     let database = self.create_database(create_database_params)?;
+
     Ok(database)
   }
 

@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use collab::preclude::{Map, MapRef, ReadTxn, TransactionMut};
 
-const DATABASE_INLINE_VIEW: &str = "iid";
+pub const DATABASE_INLINE_VIEW: &str = "iid";
 
 pub struct MetaMap {
   container: MapRef,

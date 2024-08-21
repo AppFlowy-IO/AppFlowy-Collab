@@ -30,7 +30,7 @@ use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 
 pub type BlockId = i64;
 
-const META: &str = "meta";
+pub const META: &str = "meta";
 const COMMENT: &str = "comment";
 pub const LAST_MODIFIED: &str = "last_modified";
 pub const CREATED_AT: &str = "created_at";

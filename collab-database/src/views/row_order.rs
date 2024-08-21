@@ -4,7 +4,7 @@ use collab::preclude::{Any, ArrayRef, ReadTxn, YrsValue};
 use collab::util::deserialize_i32_from_numeric;
 use serde::{Deserialize, Serialize};
 
-use crate::rows::{Row, RowId};
+use crate::rows::{CreateRowParams, Row, RowId};
 use crate::views::{OrderArray, OrderIdentifiable};
 
 pub struct RowOrderArray {
@@ -49,6 +49,15 @@ pub struct RowOrder {
 
   #[serde(deserialize_with = "deserialize_i32_from_numeric")]
   pub height: i32,
+}
+
+impl From<&CreateRowParams> for RowOrder {
+  fn from(field: &CreateRowParams) -> Self {
+    Self {
+      id: field.id.clone(),
+      height: field.height,
+    }
+  }
 }
 
 impl OrderIdentifiable for RowOrder {

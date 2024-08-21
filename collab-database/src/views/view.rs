@@ -6,7 +6,7 @@ use collab::preclude::{
 use collab::util::AnyExt;
 use serde::{Deserialize, Serialize};
 
-use crate::database::{gen_database_id, gen_database_view_id, gen_row_id, timestamp, DatabaseData};
+use crate::database::{gen_database_id, gen_row_id, timestamp, DatabaseData};
 use crate::error::DatabaseError;
 use crate::fields::Field;
 use crate::rows::CreateRowParams;
@@ -168,7 +168,7 @@ impl CreateDatabaseParams {
   /// data of a database. The internal `database_id`, the database views' `view_id`s and the rows'
   /// `row_id`s will all be regenerated.
   pub fn from_database_data(data: DatabaseData) -> Self {
-    let (database_id, inline_view_id) = (gen_database_id(), gen_database_view_id());
+    let (database_id, inline_view_id) = (gen_database_id(), gen_database_id());
     let timestamp = timestamp();
 
     let create_row_params = data
@@ -193,7 +193,7 @@ impl CreateDatabaseParams {
         let view_id = if view.id == data.inline_view_id {
           inline_view_id.clone()
         } else {
-          gen_database_view_id()
+          gen_database_id()
         };
         CreateViewParams {
           database_id: database_id.clone(),

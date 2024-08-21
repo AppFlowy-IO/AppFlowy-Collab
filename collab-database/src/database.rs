@@ -48,9 +48,9 @@ pub struct Database {
   pub collab_db: Weak<CollabKVDB>,
 }
 
-const FIELDS: &str = "fields";
-const VIEWS: &str = "views";
-const METAS: &str = "metas";
+pub const FIELDS: &str = "fields";
+pub const VIEWS: &str = "views";
+pub const METAS: &str = "metas";
 
 pub struct DatabaseContext {
   pub uid: i64,
@@ -135,7 +135,7 @@ impl Database {
     Ok(())
   }
 
-  fn init(&mut self, params: CreateDatabaseParams) -> Result<(), DatabaseError> {
+  pub fn init(&mut self, params: CreateDatabaseParams) -> Result<(), DatabaseError> {
     let CreateDatabaseParams {
       database_id: _,
       rows,
