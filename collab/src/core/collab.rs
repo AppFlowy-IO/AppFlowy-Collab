@@ -33,8 +33,6 @@ use crate::preclude::JsonValue;
 pub const DATA_SECTION: &str = "data";
 pub const META_SECTION: &str = "meta";
 
-const LAST_SYNC_AT: &str = "last_sync_at";
-
 type AfterTransactionSubscription = Subscription;
 
 pub type MapSubscriptionCallback = Arc<dyn Fn(&TransactionMut, &MapEvent)>;
@@ -356,11 +354,10 @@ impl Collab {
       .awareness_subscription
       .store(Some(awareness_subscription.into()));
 
-    let last_sync_at = self.get_last_sync_at();
     {
       self
         .plugins
-        .each(|plugin| plugin.did_init(self, &self.object_id, last_sync_at));
+        .each(|plugin| plugin.did_init(self, &self.object_id));
     }
     self.state.set_init_state(InitState::Initialized);
   }
@@ -439,14 +436,6 @@ impl Collab {
       .unwrap()
   }
 
-  /// Make a full update with the current state of the [Collab].
-  /// It invokes the [CollabPlugin::flush] method of each plugin.
-  pub fn flush(&self) {
-    self
-      .plugins
-      .each(|plugin| plugin.write_to_disk(&self.object_id))
-  }
-
   pub fn get<V>(&self, key: &str) -> Option<V>
   where
     V: TryFrom<Out, Error = Out>,
@@ -494,24 +483,6 @@ impl Collab {
   pub fn encode_collab_v2(&self) -> EncodedCollab {
     let tx = self.context.transact();
     tx.get_encoded_collab_v2()
-  }
-
-  pub fn get_last_sync_at(&self) -> i64 {
-    let txn = self.context.transact();
-    self
-      .meta
-      .get(&txn, LAST_SYNC_AT)
-      .and_then(|v| v.cast().ok())
-      .unwrap_or(0)
-  }
-
-  pub fn set_last_sync_at(&mut self, last_sync_at: i64) {
-    //FIXME: this is very expensive to do on frequent basis. That's one of the reasons we have
-    // awareness state separate from document
-    let mut txn = self.context.transact_mut();
-    self
-      .meta
-      .insert(&mut txn, LAST_SYNC_AT, Any::BigInt(last_sync_at));
   }
 
   pub fn to_json(&self) -> Any {

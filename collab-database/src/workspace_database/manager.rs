@@ -1,11 +1,10 @@
 use crate::database::{Database, DatabaseContext, DatabaseData};
 use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
-use crate::views::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
 use async_trait::async_trait;
 use collab::core::collab::DataSource;
-use collab::preclude::{Collab, ToJson};
+use collab::preclude::Collab;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
@@ -20,6 +19,7 @@ use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use dashmap::DashMap;
 use std::sync::{Arc, Weak};
 
+use crate::entity::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 use tokio::sync::RwLock;
 use tracing::error;
 

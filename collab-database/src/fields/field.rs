@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use collab::preclude::{Map, MapExt, MapRef, ReadTxn, TransactionMut, YrsValue};
+use collab::preclude::{Any, Map, MapExt, MapRef, ReadTxn, TransactionMut, YrsValue};
 
 use crate::fields::{TypeOptionData, TypeOptions, TypeOptionsUpdate};
 use crate::{impl_bool_update, impl_i64_update, impl_str_update};

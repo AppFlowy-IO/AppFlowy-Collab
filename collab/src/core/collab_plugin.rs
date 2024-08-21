@@ -37,7 +37,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
   fn init(&self, _object_id: &str, _origin: &CollabOrigin, _doc: &Doc) {}
 
   /// Called when the plugin is initialized.
-  fn did_init(&self, _collab: &Collab, _object_id: &str, _last_sync_at: i64) {}
+  fn did_init(&self, _collab: &Collab, _object_id: &str) {}
 
   /// Called when the plugin receives an update. It happens after the [TransactionMut] commit to
   /// the Yrs document.
@@ -71,8 +71,6 @@ pub trait CollabPlugin: Send + Sync + 'static {
 
   /// Called when the plugin is removed
   fn destroy(&self) {}
-
-  fn write_to_disk(&self, _object_id: &str) {}
 }
 
 /// Implement the [CollabPlugin] trait for Box<T> and Arc<T> where T implements CollabPlugin.
@@ -89,8 +87,8 @@ where
     (**self).init(object_id, origin, doc);
   }
 
-  fn did_init(&self, collab: &Collab, _object_id: &str, last_sync_at: i64) {
-    (**self).did_init(collab, _object_id, last_sync_at)
+  fn did_init(&self, collab: &Collab, _object_id: &str) {
+    (**self).did_init(collab, _object_id)
   }
 
   fn receive_update(&self, object_id: &str, txn: &TransactionMut, update: &[u8]) {
@@ -123,10 +121,6 @@ where
 
   fn destroy(&self) {
     (**self).destroy()
-  }
-
-  fn write_to_disk(&self, _object_id: &str) {
-    (**self).write_to_disk(_object_id)
   }
 }
 

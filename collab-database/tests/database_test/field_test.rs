@@ -1,9 +1,8 @@
-use collab_database::views::CreateViewParams;
-use collab_database::{fields::Field, views::OrderObjectPosition};
-
 use crate::database_test::helper::{
   create_database, create_database_with_default_data, default_field_settings_by_layout,
 };
+use collab_database::entity::CreateViewParams;
+use collab_database::{fields::Field, views::OrderObjectPosition};
 
 #[tokio::test]
 async fn create_single_field_test() {

@@ -1,7 +1,7 @@
 use collab::util::AnyMapExt;
+use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab_database::rows::{new_cell_builder, CREATED_AT};
 use collab_database::rows::{CreateRowParams, LAST_MODIFIED};
-use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 
 use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 

@@ -1,6 +1,7 @@
 use collab::util::AnyMapExt;
+use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
-use collab_database::views::{CreateDatabaseParams, CreateViewParams, OrderObjectPosition};
+use collab_database::views::OrderObjectPosition;
 
 use crate::database_test::helper::default_field_settings_by_layout;
 use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};

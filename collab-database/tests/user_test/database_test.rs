@@ -1,6 +1,6 @@
 use collab_database::database::gen_database_view_id;
+use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab_database::rows::CreateRowParams;
-use collab_database::views::{CreateDatabaseParams, CreateViewParams};
 
 use crate::user_test::helper::{
   make_default_grid, random_uid, user_database_test_with_db, user_database_test_with_default_data,

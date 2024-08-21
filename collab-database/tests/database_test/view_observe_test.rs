@@ -2,10 +2,10 @@ use crate::database_test::helper::{create_database, wait_for_specific_event};
 use crate::helper::setup_log;
 use collab_database::database::gen_row_id;
 
+use collab_database::entity::CreateViewParams;
 use collab_database::rows::CreateRowParams;
 use collab_database::views::{
-  CreateViewParams, DatabaseLayout, DatabaseViewChange, FilterMapBuilder, GroupSettingBuilder,
-  SortMapBuilder,
+  DatabaseLayout, DatabaseViewChange, FilterMapBuilder, GroupSettingBuilder, SortMapBuilder,
 };
 use std::sync::Arc;
 use std::time::Duration;

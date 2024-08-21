@@ -6,11 +6,10 @@ use nanoid::nanoid;
 use collab::preclude::Any;
 use collab::util::AnyMapExt;
 use collab_database::database::{gen_row_id, DatabaseData};
+use collab_database::entity::CreateViewParams;
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
-use collab_database::views::{
-  CreateViewParams, DatabaseLayout, LayoutSettingBuilder, OrderObjectPosition,
-};
+use collab_database::views::{DatabaseLayout, LayoutSettingBuilder, OrderObjectPosition};
 
 use crate::database_test::helper::{
   create_database, create_database_with_default_data, default_field_settings_by_layout,

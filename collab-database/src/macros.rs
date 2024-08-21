@@ -47,13 +47,13 @@ macro_rules! impl_option_str_update {
 macro_rules! impl_i64_update {
   ($setter1: ident, $setter2: ident, $key: expr) => {
     pub fn $setter1(self, value: i64) -> Self {
-      self.map_ref.insert(self.txn, $key, value);
+      self.map_ref.insert(self.txn, $key, Any::BigInt(value));
       self
     }
 
     pub fn $setter2(self, value: Option<i64>) -> Self {
       if let Some(value) = value {
-        self.map_ref.insert(self.txn, $key, value);
+        self.map_ref.insert(self.txn, $key, Any::BigInt(value));
       }
       self
     }
@@ -64,13 +64,17 @@ macro_rules! impl_i64_update {
 macro_rules! impl_i32_update {
   ($setter1: ident, $setter2: ident, $key: expr) => {
     pub fn $setter1(self, value: i32) -> Self {
-      self.map_ref.insert(self.txn, $key, value);
+      self
+        .map_ref
+        .insert(self.txn, $key, Any::BigInt(value as i64));
       self
     }
 
     pub fn $setter2(self, value: Option<i32>) -> Self {
       if let Some(value) = value {
-        self.map_ref.insert(self.txn, $key, value);
+        self
+          .map_ref
+          .insert(self.txn, $key, Any::BigInt(value as i64));
       }
       self
     }
@@ -81,13 +85,17 @@ macro_rules! impl_i32_update {
 macro_rules! impl_u8_update {
   ($setter1: ident, $setter2: ident, $key: expr) => {
     pub fn $setter1(self, value: u8) -> Self {
-      self.map_ref.insert(self.txn, $key, value);
+      self
+        .map_ref
+        .insert(self.txn, $key, Any::BigInt(value as i64));
       self
     }
 
     pub fn $setter2(self, value: Option<u8>) -> Self {
       if let Some(value) = value {
-        self.map_ref.insert(self.txn, $key, value);
+        self
+          .map_ref
+          .insert(self.txn, $key, Any::BigInt(value as i64));
       }
       self
     }

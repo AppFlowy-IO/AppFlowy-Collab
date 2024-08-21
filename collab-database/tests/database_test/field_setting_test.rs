@@ -1,12 +1,12 @@
-use collab_database::fields::Field;
-use collab_database::views::{CreateViewParams, DatabaseLayout, OrderObjectPosition};
-use std::collections::HashMap;
-
 use crate::database_test::helper::{
   create_database_with_default_data, default_field_settings_by_layout,
   field_settings_for_default_database,
 };
 use crate::helper::TestFieldSetting;
+use collab_database::entity::CreateViewParams;
+use collab_database::fields::Field;
+use collab_database::views::{DatabaseLayout, OrderObjectPosition};
+use std::collections::HashMap;
 
 #[tokio::test]
 async fn new_field_new_field_setting_test() {
