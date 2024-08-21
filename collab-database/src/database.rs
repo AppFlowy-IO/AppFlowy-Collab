@@ -250,7 +250,7 @@ impl Database {
   /// created successfully. Otherwise, return None.
   pub fn create_row(&mut self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
     let params = CreateRowParamsValidator::validate(params)?;
-    let row_order = self.body.block.create_row(params);
+    let row_order = self.body.block.create_row(params)?;
     let mut txn = self.collab.transact_mut();
     self
       .body
@@ -289,10 +289,8 @@ impl Database {
     view_id: &str,
     params: CreateRowParams,
   ) -> Result<(usize, RowOrder), DatabaseError> {
-    let _ = self.create_database_row(&params.id)?;
-
     let mut txn = self.collab.transact_mut();
-    Ok(self.body.create_row(&mut txn, view_id, params))
+    self.body.create_row(&mut txn, view_id, params)
   }
 
   /// Remove the row
@@ -370,14 +368,6 @@ impl Database {
   /// Return the [RowMeta] with the given row id.
   pub async fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
     self.body.block.get_row_meta(row_id).await
-  }
-
-  #[instrument(level = "debug", skip_all)]
-  pub fn create_database_row(
-    &self,
-    row_id: &RowId,
-  ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
-    self.body.block.create_new_database_row(row_id.clone())
   }
 
   #[instrument(level = "debug", skip_all)]
@@ -1427,9 +1417,9 @@ impl DatabaseBody {
     txn: &mut TransactionMut,
     view_id: &str,
     params: CreateRowParams,
-  ) -> (usize, RowOrder) {
+  ) -> Result<(usize, RowOrder), DatabaseError> {
     let row_position = params.row_position.clone();
-    let row_order = self.block.create_row(params);
+    let row_order = self.block.create_row(params)?;
 
     self.views.update_all_views(txn, |_view_id, update| {
       update.insert_row_order(&row_order, &row_position);
@@ -1437,7 +1427,7 @@ impl DatabaseBody {
     let index = self
       .index_of_row(txn, view_id, &row_order.id)
       .unwrap_or_default();
-    (index, row_order)
+    Ok((index, row_order))
   }
 
   pub fn index_of_row<T: ReadTxn>(&self, txn: &T, view_id: &str, row_id: &RowId) -> Option<usize> {

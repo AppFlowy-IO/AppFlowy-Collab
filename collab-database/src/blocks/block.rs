@@ -179,13 +179,14 @@ impl Block {
   {
     let mut row_orders = Vec::with_capacity(rows.len());
     for row in rows {
-      let row_order = self.create_row(row);
-      row_orders.push(row_order);
+      if let Ok(row_order) = self.create_row(row) {
+        row_orders.push(row_order);
+      }
     }
     row_orders
   }
 
-  pub fn create_row<T: Into<Row>>(&self, row: T) -> RowOrder {
+  pub fn create_row<T: Into<Row>>(&self, row: T) -> Result<RowOrder, DatabaseError> {
     let row = row.into();
     let row_id = row.id.clone();
     let row_order = RowOrder {
@@ -194,18 +195,31 @@ impl Block {
     };
 
     trace!("create_row: {}", row_id);
-    if let Ok(collab) = self.create_collab_for_row(&row_id) {
-      let database_row = Arc::new(RwLock::new(DatabaseRow::new(
-        self.uid,
-        row_id.clone(),
-        self.collab_db.clone(),
-        collab,
-        self.row_change_tx.clone(),
-        Some(row),
-      )));
-      self.row_mem_cache.insert(row_id, database_row);
+    let collab_db = self
+      .collab_db
+      .upgrade()
+      .ok_or_else(|| DatabaseError::Internal(anyhow!("Collab db is not available")))?;
+
+    if collab_db.read_txn().is_exist(self.uid, row_id.as_ref()) {
+      warn!("The row already exists: {:?}", row_id);
+      return Err(DatabaseError::RecordAlreadyExist);
     }
-    row_order
+
+    let collab = self.create_collab_for_row(&row_id)?;
+    let database_row = DatabaseRow::new(
+      self.uid,
+      row_id.clone(),
+      self.collab_db.clone(),
+      collab,
+      self.row_change_tx.clone(),
+      Some(row),
+    );
+
+    database_row.write_to_disk()?;
+    let database_row = Arc::new(RwLock::new(database_row));
+    self.row_mem_cache.insert(row_id, database_row);
+
+    Ok(row_order)
   }
 
   pub fn get_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
@@ -306,37 +320,6 @@ impl Block {
       .entry(row_id.clone())
       .or_try_insert_with(|| self.create_row_instance(row_id))
       .map(|r| r.value().clone())
-  }
-
-  #[instrument(level = "debug", skip_all)]
-  pub fn create_new_database_row(
-    &self,
-    row_id: RowId,
-  ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
-    let collab_db = self
-      .collab_db
-      .upgrade()
-      .ok_or_else(|| DatabaseError::Internal(anyhow!("Collab db is not available")))?;
-
-    if collab_db.read_txn().is_exist(self.uid, row_id.as_ref()) {
-      warn!("The row already exists: {:?}", row_id);
-      return Err(DatabaseError::RecordAlreadyExist);
-    }
-
-    let collab = self.create_collab_for_row(&row_id)?;
-    let database_row = DatabaseRow::new(
-      self.uid,
-      row_id.clone(),
-      self.collab_db.clone(),
-      collab,
-      self.row_change_tx.clone(),
-      None,
-    );
-
-    database_row.write_to_disk()?;
-    let database_row = Arc::new(RwLock::new(database_row));
-    self.row_mem_cache.insert(row_id, database_row.clone());
-    Ok(database_row)
   }
 
   pub fn create_row_instance(
