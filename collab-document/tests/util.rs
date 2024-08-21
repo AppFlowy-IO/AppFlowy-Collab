@@ -7,8 +7,6 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
-use collab::core::collab::DataSource;
-
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabBuilder};
 use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};

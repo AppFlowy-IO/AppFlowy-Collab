@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwapOption;
 
-use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::updates::decoder::Decode;
