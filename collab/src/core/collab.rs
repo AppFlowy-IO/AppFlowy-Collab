@@ -439,14 +439,6 @@ impl Collab {
       .unwrap()
   }
 
-  /// Make a full update with the current state of the [Collab].
-  /// It invokes the [CollabPlugin::flush] method of each plugin.
-  pub fn flush(&self) {
-    self
-      .plugins
-      .each(|plugin| plugin.write_to_disk(&self.object_id))
-  }
-
   pub fn get<V>(&self, key: &str) -> Option<V>
   where
     V: TryFrom<Out, Error = Out>,

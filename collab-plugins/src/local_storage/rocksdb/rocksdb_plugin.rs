@@ -4,19 +4,16 @@ use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Weak};
 
 use crate::local_storage::kv::doc::CollabKVAction;
-
 use crate::local_storage::kv::KVTransactionDB;
-
 use crate::local_storage::CollabPersistenceConfig;
 use crate::CollabKVDB;
-use collab::core::collab::make_yrs_doc;
 
 use collab::entity::EncodedCollab;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
 use tracing::error;
-use yrs::updates::encoder::Encode;
-use yrs::{ReadTxn, StateVector, Transact, TransactionMut};
+
+use yrs::TransactionMut;
 
 pub trait RocksdbBackup: Send + Sync {
   fn save_doc(&self, uid: i64, object_id: &str, data: EncodedCollab) -> Result<(), anyhow::Error>;
@@ -83,33 +80,6 @@ impl RocksdbDiskPlugin {
   fn increase_count(&self) {
     let _update_count = self.update_count.fetch_add(1, SeqCst);
   }
-
-  fn flush_doc(&self, db: &Arc<CollabKVDB>, object_id: &str) {
-    let _ = db.with_write_txn(|w_db_txn| {
-      let doc = make_yrs_doc(false);
-      w_db_txn.load_doc_with_txn(self.uid, object_id, &mut doc.transact_mut())?;
-      if let Ok(read_txn) = doc.try_transact() {
-        let doc_state = read_txn.encode_state_as_update_v1(&StateVector::default());
-        let state_vector = read_txn.state_vector().encode_v1();
-        let encoded = EncodedCollab::new_v1(state_vector, doc_state);
-
-        w_db_txn.flush_doc(
-          self.uid,
-          object_id,
-          encoded.state_vector.to_vec(),
-          encoded.doc_state.to_vec(),
-        )?;
-
-        tracing::trace!(
-          "Collab state {} {} flushed to disk",
-          object_id,
-          self.collab_type
-        );
-      }
-
-      Ok(())
-    });
-  }
 }
 
 impl CollabPlugin for RocksdbDiskPlugin {
@@ -170,12 +140,5 @@ impl CollabPlugin for RocksdbDiskPlugin {
     } else {
       tracing::warn!("collab_db is dropped");
     };
-  }
-
-  fn write_to_disk(&self, object_id: &str) {
-    if let Some(db) = self.collab_db.upgrade() {
-      tracing::trace!("Flushed data to disk");
-      self.flush_doc(&db, object_id);
-    }
   }
 }
