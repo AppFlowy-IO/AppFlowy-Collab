@@ -20,7 +20,11 @@ async fn get_cells_for_field_test() {
 #[tokio::test]
 async fn get_cell_for_field_test() {
   let database_test = create_database_with_default_data(1, "1");
-  let cell = database_test.get_cell("f1", &1.into()).await.cell.unwrap();
+  let cell = database_test
+    .get_cell("f1", &database_test.pre_define_row_ids[0])
+    .await
+    .cell
+    .unwrap();
   let text_cell = TestTextCell::from(cell);
   assert_eq!(text_cell.0, "1f1cell");
 }
@@ -31,8 +35,9 @@ async fn update_cell_for_field_test() {
   let cells = database_test.get_cells_for_field("v1", "f1").await;
   assert_eq!(cells.len(), 3);
 
+  let first_row_id = database_test.pre_define_row_ids[0].clone();
   database_test
-    .update_row(1.into(), |row_update| {
+    .update_row(first_row_id, |row_update| {
       row_update.update_cells(|cells_update| {
         cells_update.insert("f1", TestTextCell("hello world".to_string()));
       });
@@ -52,8 +57,9 @@ async fn update_empty_cell_for_field_test() {
   let cells = database_test.get_cells_for_field("v1", "f2").await;
   assert_eq!(cells.len(), 3);
 
+  let third_row_id = database_test.pre_define_row_ids[2].clone();
   database_test
-    .update_row(3.into(), |row_update| {
+    .update_row(third_row_id, |row_update| {
       row_update.update_cells(|cells_update| {
         cells_update.insert("f2", TestTextCell("hello world".to_string()));
       });
