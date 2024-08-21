@@ -111,7 +111,8 @@ async fn user_database_with_default_row() -> WorkspaceDatabaseTest {
   database
     .write()
     .await
-    .create_row_in_view("v1", CreateRowParams::new(1, database_id));
+    .create_row_in_view("v1", CreateRowParams::new(1, database_id))
+    .unwrap();
 
   test
 }

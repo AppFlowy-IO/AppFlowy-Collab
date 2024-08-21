@@ -500,7 +500,7 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
   match from_any(&any) {
     Ok(row) => Some(row),
     Err(e) => {
-      error!("Failed to convert to Row: {}", e);
+      error!("Failed to convert to Row: {}, value:{:#?}", e, any);
       None
     },
   }
