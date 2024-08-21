@@ -415,7 +415,6 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
       .map(|row_id| RowMeta::from_map_ref(self.txn, &row_id, &self.meta_ref));
 
     self.map_ref.insert(self.txn, ROW_ID, new_row_id.as_str());
-
     self.map_ref.insert(self.txn, ROW_DATABASE_ID, database_id);
 
     if let Ok(new_row_id) = new_row_id.parse::<Uuid>() {
@@ -500,7 +499,7 @@ pub fn row_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Row> {
   match from_any(&any) {
     Ok(row) => Some(row),
     Err(e) => {
-      error!("Failed to convert to Row: {}", e);
+      error!("Failed to convert to Row: {}, value: {:?}", e, any);
       None
     },
   }
