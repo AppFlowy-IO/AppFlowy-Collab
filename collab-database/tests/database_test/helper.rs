@@ -18,7 +18,6 @@ use collab_entity::CollabType;
 
 use crate::helper::{make_rocks_db, setup_log, TestFieldSetting, TestTextCell};
 use crate::user_test::helper::TestUserDatabaseServiceImpl;
-use collab_database::database_state::DatabaseNotify;
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
