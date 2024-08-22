@@ -9,11 +9,11 @@ use collab::preclude::{Collab, CollabBuilder};
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
-use collab_database::rows::{Cells, CreateRowParams};
+use collab_database::rows::{Cells, CreateRowParams, RowId};
 use collab_database::views::DatabaseLayout;
 use collab_database::workspace_database::{
-  DatabaseCollabService, EncodeCollabByOid, RowRelationChange, RowRelationUpdateReceiver,
-  WorkspaceDatabase,
+  DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid, RowRelationChange,
+  RowRelationUpdateReceiver, WorkspaceDatabase,
 };
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -24,6 +24,8 @@ use crate::helper::{make_rocks_db, setup_log, TestTextCell};
 
 use collab::entity::EncodedCollab;
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
@@ -57,10 +59,61 @@ pub fn random_uid() -> i64 {
   rng.gen::<i64>()
 }
 
-pub struct TestUserDatabaseCollabBuilderImpl();
+pub struct TestUserDatabaseServiceImpl {
+  pub db: Arc<CollabKVDB>,
+}
+
+pub struct TestUserDatabasePersistenceImpl {
+  pub db: Arc<CollabKVDB>,
+}
+impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
+  fn load_collab(&self, uid: i64, collab: &mut Collab) {
+    let object_id = collab.object_id().to_string();
+    let mut txn = collab.transact_mut();
+    let db_read = self.db.read_txn();
+    let _ = db_read.load_doc_with_txn(uid, &object_id, &mut txn);
+  }
+
+  fn delete_collab(&self, uid: i64, object_id: &str) -> Result<(), DatabaseError> {
+    let write_txn = self.db.write_txn();
+    write_txn.delete_doc(uid, object_id).unwrap();
+    Ok(())
+  }
+
+  fn is_collab_exist(&self, uid: i64, object_id: &str) -> bool {
+    let read_txn = self.db.read_txn();
+    read_txn.is_exist(uid, object_id)
+  }
+
+  fn flush_collab(
+    &self,
+    uid: i64,
+    object_id: &str,
+    encode_collab: EncodedCollab,
+  ) -> Result<(), DatabaseError> {
+    let write_txn = self.db.write_txn();
+    write_txn
+      .flush_doc(
+        uid,
+        object_id,
+        encode_collab.state_vector.to_vec(),
+        encode_collab.doc_state.to_vec(),
+      )
+      .unwrap();
+    write_txn.commit_transaction().unwrap();
+    Ok(())
+  }
+
+  fn is_row_exist_partition(&self, uid: i64, row_ids: Vec<RowId>) -> (Vec<RowId>, Vec<RowId>) {
+    let read_txn = self.db.read_txn();
+    row_ids
+      .into_iter()
+      .partition(|row_id| read_txn.is_exist(uid, row_id.as_ref()))
+  }
+}
 
 #[async_trait]
-impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
+impl DatabaseCollabService for TestUserDatabaseServiceImpl {
   async fn get_encode_collab(
     &self,
     _object_id: &str,
@@ -82,14 +135,13 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
     uid: i64,
     object_id: &str,
     object_type: CollabType,
-    collab_db: Weak<CollabKVDB>,
     data_source: DataSource,
   ) -> Result<Collab, DatabaseError> {
     let db_plugin = RocksdbDiskPlugin::new_with_config(
       uid,
       object_id.to_string(),
       object_type,
-      collab_db,
+      Arc::downgrade(&self.db),
       CollabPersistenceConfig::default(),
     );
     let mut collab = CollabBuilder::new(uid, object_id, data_source)
@@ -100,6 +152,12 @@ impl DatabaseCollabService for TestUserDatabaseCollabBuilderImpl {
 
     collab.initialize();
     Ok(collab)
+  }
+
+  fn persistence(&self) -> Option<Box<dyn DatabaseCollabPersistenceService>> {
+    Some(Box::new(TestUserDatabasePersistenceImpl {
+      db: self.db.clone(),
+    }))
   }
 }
 
@@ -120,18 +178,19 @@ pub async fn workspace_database_test_with_config(
     uid,
   };
 
-  let builder = TestUserDatabaseCollabBuilderImpl();
+  let collab_service = TestUserDatabaseServiceImpl {
+    db: collab_db.clone(),
+  };
   let database_views_aggregate_id = uuid::Uuid::new_v4().to_string();
-  let collab = builder
+  let collab = collab_service
     .build_collab(
       uid,
       &database_views_aggregate_id,
       CollabType::WorkspaceDatabase,
-      Arc::downgrade(&collab_db),
       data_source.into(),
     )
     .unwrap();
-  let inner = WorkspaceDatabase::open(uid, collab, Arc::downgrade(&collab_db), builder);
+  let inner = WorkspaceDatabase::open(uid, collab, collab_service);
   WorkspaceDatabaseTest {
     uid,
     inner,
@@ -145,7 +204,9 @@ pub fn workspace_database_with_db(
   config: Option<CollabPersistenceConfig>,
 ) -> WorkspaceDatabase {
   let _config = config.unwrap_or_else(|| CollabPersistenceConfig::new().snapshot_per_update(5));
-  let builder = TestUserDatabaseCollabBuilderImpl();
+  let builder = TestUserDatabaseServiceImpl {
+    db: collab_db.clone().upgrade().unwrap(),
+  };
 
   // In test, we use a fixed database_storage_id
   let database_views_aggregate_id = "database_views_aggregate_id";
@@ -159,11 +220,10 @@ pub fn workspace_database_with_db(
       uid,
       database_views_aggregate_id,
       CollabType::WorkspaceDatabase,
-      collab_db.clone(),
       data_source,
     )
     .unwrap();
-  WorkspaceDatabase::open(uid, collab, collab_db, builder)
+  WorkspaceDatabase::open(uid, collab, builder)
 }
 
 pub fn user_database_test_with_db(uid: i64, collab_db: Arc<CollabKVDB>) -> WorkspaceDatabaseTest {

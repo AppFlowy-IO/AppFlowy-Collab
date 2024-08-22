@@ -6,20 +6,17 @@ use async_trait::async_trait;
 use collab::core::collab::DataSource;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
-use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::KVTransactionDB;
-
-use collab_plugins::CollabKVDB;
-use std::borrow::{Borrow, BorrowMut};
-
-use std::collections::{HashMap, HashSet};
 
 use collab::entity::EncodedCollab;
-use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
+
 use dashmap::DashMap;
-use std::sync::{Arc, Weak};
+use std::borrow::{Borrow, BorrowMut};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use crate::entity::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
+use crate::rows::RowId;
+use collab::core::collab_plugin::CollabPersistence;
 use tokio::sync::RwLock;
 use tracing::error;
 
@@ -48,9 +45,45 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     uid: i64,
     object_id: &str,
     object_type: CollabType,
-    collab_db: Weak<CollabKVDB>,
     data_source: DataSource,
   ) -> Result<Collab, DatabaseError>;
+
+  fn persistence(&self) -> Option<Box<dyn DatabaseCollabPersistenceService>>;
+}
+
+pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
+  fn load_collab(&self, uid: i64, collab: &mut Collab);
+
+  fn delete_collab(&self, uid: i64, object_id: &str) -> Result<(), DatabaseError>;
+
+  fn is_collab_exist(&self, uid: i64, object_id: &str) -> bool;
+
+  fn flush_collab(
+    &self,
+    uid: i64,
+    object_id: &str,
+    encode_collab: EncodedCollab,
+  ) -> Result<(), DatabaseError>;
+
+  fn is_row_exist_partition(&self, uid: i64, row_ids: Vec<RowId>) -> (Vec<RowId>, Vec<RowId>);
+}
+
+pub struct CollabPersistenceImpl {
+  pub uid: i64,
+  pub persistence: Option<Box<dyn DatabaseCollabPersistenceService>>,
+}
+impl CollabPersistence for CollabPersistenceImpl {
+  fn load_collab_from_disk(&self, collab: &mut Collab) {
+    if let Some(persistence) = &self.persistence {
+      persistence.load_collab(self.uid, collab);
+    }
+  }
+}
+
+impl From<CollabPersistenceImpl> for DataSource {
+  fn from(persistence: CollabPersistenceImpl) -> Self {
+    DataSource::Disk(Some(Box::new(persistence)))
+  }
 }
 
 /// A [WorkspaceDatabase] indexes the databases within a workspace.
@@ -64,7 +97,6 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
 pub struct WorkspaceDatabase {
   uid: i64,
   collab: Collab,
-  collab_db: Weak<CollabKVDB>,
   meta_list: DatabaseMetaList,
   collab_service: Arc<dyn DatabaseCollabService>,
   /// In memory database handlers.
@@ -74,12 +106,7 @@ pub struct WorkspaceDatabase {
 }
 
 impl WorkspaceDatabase {
-  pub fn open<T>(
-    uid: i64,
-    mut collab: Collab,
-    collab_db: Weak<CollabKVDB>,
-    collab_service: T,
-  ) -> Self
+  pub fn open<T>(uid: i64, mut collab: Collab, collab_service: T) -> Self
   where
     T: DatabaseCollabService,
   {
@@ -88,7 +115,6 @@ impl WorkspaceDatabase {
 
     Self {
       uid,
-      collab_db,
       collab,
       meta_list,
       collab_service,
@@ -108,14 +134,18 @@ impl WorkspaceDatabase {
   }
 
   pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Collab> {
-    let collab_db = self.collab_db.upgrade()?;
-    let mut data_source = KVDBCollabPersistenceImpl {
-      db: self.collab_db.clone(),
+    let mut data_source: DataSource = CollabPersistenceImpl {
       uid: self.uid,
+      persistence: self.collab_service.persistence(),
     }
-    .into_data_source();
+    .into();
 
-    let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
+    let is_exist = self
+      .collab_service
+      .persistence()
+      .map(|persistence| persistence.is_collab_exist(self.uid, database_id))
+      .unwrap_or(false);
+
     if !is_exist {
       // Try to load the database from the remote. The database doesn't exist in the local only
       // when the user has deleted the database or the database is using a remote storage.
@@ -156,21 +186,17 @@ impl WorkspaceDatabase {
     }
 
     let database = self.databases.get(database_id).as_deref().cloned();
-    let collab_db = self.collab_db.upgrade()?;
     match database {
       None => {
         // If the database is not exist, create a new one.
-        let notifier = DatabaseNotify::default();
-        let is_exist = collab_db.read_txn().is_exist(self.uid, &database_id);
+        let _notifier = DatabaseNotify::default();
+        let is_exist = self
+          .collab_service
+          .persistence()?
+          .is_collab_exist(self.uid, database_id);
         let collab = self.get_database_collab(database_id).await?;
 
-        let context = DatabaseContext {
-          uid: self.uid,
-          db: self.collab_db.clone(),
-          collab,
-          collab_service: self.collab_service.clone(),
-          notifier,
-        };
+        let context = DatabaseContext::new(self.uid, collab, self.collab_service.clone());
         let database = Database::open(database_id, context).ok()?;
         // The database is not exist in local disk, which means the rows of the database are not
         // loaded yet.
@@ -216,20 +242,13 @@ impl WorkspaceDatabase {
     debug_assert!(!params.database_id.is_empty());
 
     // Create a [Collab] for the given database id.
-    let data_source = KVDBCollabPersistenceImpl {
-      db: self.collab_db.clone(),
+    let data_source: DataSource = CollabPersistenceImpl {
       uid: self.uid,
+      persistence: self.collab_service.persistence(),
     }
-    .into_data_source();
+    .into();
     let collab = self.collab_for_database(&params.database_id, data_source)?;
-    let notifier = DatabaseNotify::default();
-    let context = DatabaseContext {
-      uid: self.uid,
-      db: self.collab_db.clone(),
-      collab,
-      collab_service: self.collab_service.clone(),
-      notifier,
-    };
+    let context = DatabaseContext::new(self.uid, collab, self.collab_service.clone());
 
     // Add a new database record.
     let mut linked_views = HashSet::new();
@@ -288,13 +307,12 @@ impl WorkspaceDatabase {
   pub fn delete_database(&mut self, database_id: &str) {
     let mut txn = self.collab.transact_mut();
     self.meta_list.delete_database(&mut txn, database_id);
-    if let Some(collab_db) = self.collab_db.upgrade() {
-      let _ = collab_db.with_write_txn(|w_db_txn| {
-        if let Err(err) = w_db_txn.delete_doc(self.uid, database_id) {
-          error!("🔴Delete database failed: {}", err);
-        }
-        Ok(())
-      });
+    drop(txn);
+
+    if let Some(persistence) = self.collab_service.persistence() {
+      if let Err(err) = persistence.delete_collab(self.uid, database_id) {
+        error!("🔴Delete database failed: {}", err);
+      }
     }
     self.databases.remove(database_id);
   }
@@ -358,13 +376,9 @@ impl WorkspaceDatabase {
     database_id: &str,
     data_source: DataSource,
   ) -> Result<Collab, DatabaseError> {
-    self.collab_service.build_collab(
-      self.uid,
-      database_id,
-      CollabType::Database,
-      self.collab_db.clone(),
-      data_source,
-    )
+    self
+      .collab_service
+      .build_collab(self.uid, database_id, CollabType::Database, data_source)
   }
 }
 

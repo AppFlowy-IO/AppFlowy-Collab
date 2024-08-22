@@ -248,7 +248,7 @@ impl Collab {
     match data_source {
       DataSource::Disk(disk) => {
         if let Some(disk) = disk {
-          disk.load_collab(&mut collab);
+          disk.load_collab_from_disk(&mut collab);
         }
       },
       DataSource::DocStateV1(doc_state) => {
