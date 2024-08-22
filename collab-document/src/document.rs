@@ -73,7 +73,7 @@ impl Document {
   }
 
   pub fn open_with(mut collab: Collab, data: Option<DocumentData>) -> Result<Self, DocumentError> {
-    let body = DocumentBody::open(&mut collab, data)?;
+    let body = DocumentBody::new(&mut collab, data)?;
     Ok(Self { collab, body })
   }
 
@@ -129,25 +129,7 @@ impl Document {
   /// Get document data.
   pub fn get_document_data(&self) -> Result<DocumentData, DocumentError> {
     let txn = self.collab.transact();
-    let page_id = self
-      .body
-      .root
-      .get(&txn, PAGE_ID)
-      .and_then(|v| v.cast::<String>().ok())
-      .ok_or(DocumentError::PageIdIsEmpty)?;
-
-    let blocks = self.body.block_operation.get_all_blocks(&txn);
-    let children_map = self.body.children_operation.get_all_children(&txn);
-    let text_map = self.body.text_operation.serialize_all_text_delta(&txn);
-    let document_data = DocumentData {
-      page_id,
-      blocks,
-      meta: DocumentMeta {
-        children_map,
-        text_map: Some(text_map),
-      },
-    };
-    Ok(document_data)
+    self.body.get_document_data(&txn)
   }
 
   /// Get page id
@@ -379,7 +361,11 @@ pub struct DocumentBody {
 }
 
 impl DocumentBody {
-  pub fn open(collab: &mut Collab, data: Option<DocumentData>) -> Result<Self, DocumentError> {
+  /// Create new [Document] body based on the given [Collab] instance. If the required fields are
+  /// not present in the current [Collab] instance, they will be initialized.
+  ///
+  /// If [DocumentData] was provided it will be applied on the document.
+  pub fn new(collab: &mut Collab, data: Option<DocumentData>) -> Result<Self, DocumentError> {
     let mut txn = collab.context.transact_mut();
     // { document: {:} }
     let root = collab.data.get_or_init_map(&mut txn, DOCUMENT_ROOT);
@@ -420,6 +406,33 @@ impl DocumentBody {
     drop(txn);
     collab.enable_undo_redo();
     Ok(Self {
+      root,
+      block_operation,
+      children_operation,
+      text_operation,
+    })
+  }
+
+  /// Creates a [Document] body from the given [Collab] instance. If the required fields are not
+  /// present, it will return `None`.
+  pub fn from_collab(collab: &Collab) -> Option<Self> {
+    let txn = collab.context.transact();
+    // { document: {:} }
+    let root: MapRef = collab.data.get_with_txn(&txn, DOCUMENT_ROOT)?;
+    // { document: { blocks: {:} } }
+    let blocks: MapRef = root.get_with_txn(&txn, BLOCKS)?;
+    // { document: { blocks: {:}, meta: {:} } }
+    let meta: MapRef = root.get_with_txn(&txn, META)?;
+    // {document: { blocks: {:}, meta: { children_map: {:} } }
+    let children_map: MapRef = meta.get_with_txn(&txn, CHILDREN_MAP)?;
+    // { document: { blocks: {:}, meta: { text_map: {:} } }
+    let text_map: MapRef = meta.get_with_txn(&txn, TEXT_MAP)?;
+
+    let children_operation = ChildrenOperation::new(children_map);
+    let text_operation = TextOperation::new(text_map);
+    let block_operation = BlockOperation::new(blocks, children_operation.clone());
+
+    Some(Self {
       root,
       block_operation,
       children_operation,
@@ -544,6 +557,27 @@ impl DocumentBody {
       block.external_id,
       block.external_type,
     )
+  }
+
+  pub fn get_document_data<T: ReadTxn>(&self, txn: &T) -> Result<DocumentData, DocumentError> {
+    let page_id = self
+      .root
+      .get(txn, PAGE_ID)
+      .and_then(|v| v.cast::<String>().ok())
+      .ok_or(DocumentError::PageIdIsEmpty)?;
+
+    let blocks = self.block_operation.get_all_blocks(txn);
+    let children_map = self.children_operation.get_all_children(txn);
+    let text_map = self.text_operation.serialize_all_text_delta(txn);
+    let document_data = DocumentData {
+      page_id,
+      blocks,
+      meta: DocumentMeta {
+        children_map,
+        text_map: Some(text_map),
+      },
+    };
+    Ok(document_data)
   }
 
   /// move the block to the new parent.
