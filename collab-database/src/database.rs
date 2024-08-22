@@ -20,8 +20,7 @@ use crate::views::{
   RowOrder, RowOrderArray, SortMap, ViewChangeReceiver, ViewMap,
 };
 use crate::workspace_database::DatabaseCollabService;
-use anyhow::anyhow;
-use collab::entity::EncodedCollab;
+
 use collab::preclude::{
   Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
   TransactionMut, YrsValue,
@@ -29,16 +28,13 @@ use collab::preclude::{
 use collab::util::{AnyExt, ArrayExt};
 use collab_entity::define::{DATABASE, DATABASE_ID};
 use collab_entity::CollabType;
-use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::KVTransactionDB;
-use collab_plugins::CollabKVDB;
 
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView, DatabaseViewMeta,
 };
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 pub use tokio_stream::wrappers::WatchStream;
 use tracing::{error, instrument, trace};
@@ -47,7 +43,7 @@ pub struct Database {
   uid: i64,
   pub collab: Collab,
   pub body: DatabaseBody,
-  pub collab_db: Weak<CollabKVDB>,
+  pub collab_service: Arc<dyn DatabaseCollabService>,
 }
 
 const FIELDS: &str = "fields";
@@ -56,10 +52,24 @@ const METAS: &str = "metas";
 
 pub struct DatabaseContext {
   pub uid: i64,
-  pub db: Weak<CollabKVDB>,
   pub collab: Collab,
   pub collab_service: Arc<dyn DatabaseCollabService>,
   pub notifier: DatabaseNotify,
+}
+
+impl DatabaseContext {
+  pub fn new(
+    uid: i64,
+    collab: Collab,
+    collab_service: Arc<dyn DatabaseCollabService>,
+  ) -> Self {
+    Self {
+      uid,
+      collab,
+      collab_service,
+      notifier: DatabaseNotify::default(),
+    }
+
 }
 
 impl Database {
@@ -69,13 +79,13 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
     let uid = context.uid;
-    let collab_db = context.db.clone();
+    let collab_service = context.collab_service.clone();
     let (body, collab) = DatabaseBody::new(database_id.to_string(), context);
     Ok(Self {
       uid,
       collab,
       body,
-      collab_db,
+      collab_service,
     })
   }
   /// Create a new database with the given [CreateDatabaseParams]
@@ -99,37 +109,17 @@ impl Database {
   }
 
   pub fn write_to_disk(&self) -> Result<(), DatabaseError> {
-    if let Some(collab_db) = self.collab_db.upgrade() {
-      let write_txn = collab_db.write_txn();
-      let flush_collab =
-        |uid: i64, object_id: &str, encoded: &EncodedCollab| -> Result<(), DatabaseError> {
-          write_txn
-            .flush_doc(
-              uid,
-              object_id,
-              encoded.state_vector.to_vec(),
-              encoded.doc_state.to_vec(),
-            )
-            .map_err(|err| {
-              DatabaseError::Internal(anyhow!("flush doc:{} failed: {}", object_id, err))
-            })
-        };
-
+    if let Some(persistence) = self.collab_service.persistence() {
       // Write database
       let database_encoded = encoded_collab(&self.collab, &CollabType::Database)?;
-      flush_collab(self.uid, self.collab.object_id(), &database_encoded)?;
+      persistence.flush_collab(self.uid, self.collab.object_id(), database_encoded)?;
 
       // Write database rows
       for row in self.body.block.row_mem_cache.iter() {
         let row_collab = &row.blocking_read().collab;
         let row_encoded = encoded_collab(row_collab, &CollabType::DatabaseRow)?;
-        flush_collab(self.uid, row_collab.object_id(), &row_encoded)?;
+        persistence.flush_collab(self.uid, row_collab.object_id(), row_encoded)?;
       }
-
-      // Commit the transaction
-      write_txn
-        .commit_transaction()
-        .map_err(|err| DatabaseError::Internal(anyhow!("commit transaction failed: {}", err)))?;
     }
 
     Ok(())
@@ -1390,7 +1380,6 @@ impl DatabaseBody {
     let block = Block::new(
       context.uid,
       database_id,
-      context.db.clone(),
       context.collab_service.clone(),
       context.notifier.row_change_tx.clone(),
     );

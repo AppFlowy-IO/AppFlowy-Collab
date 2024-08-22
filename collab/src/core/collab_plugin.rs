@@ -18,15 +18,15 @@ pub enum CollabPluginType {
   Other,
 }
 pub trait CollabPersistence: Send + Sync + 'static {
-  fn load_collab(&self, collab: &mut Collab);
+  fn load_collab_from_disk(&self, collab: &mut Collab);
 }
 
 impl<T> CollabPersistence for Box<T>
 where
   T: CollabPersistence,
 {
-  fn load_collab(&self, collab: &mut Collab) {
-    (**self).load_collab(collab);
+  fn load_collab_from_disk(&self, collab: &mut Collab) {
+    (**self).load_collab_from_disk(collab);
   }
 }
 

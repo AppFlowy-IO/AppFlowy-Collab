@@ -29,7 +29,7 @@ impl From<KVDBCollabPersistenceImpl> for DataSource {
 }
 
 impl CollabPersistence for KVDBCollabPersistenceImpl {
-  fn load_collab(&self, collab: &mut Collab) {
+  fn load_collab_from_disk(&self, collab: &mut Collab) {
     if let Some(collab_db) = self.db.upgrade() {
       let object_id = collab.object_id().to_string();
       let rocksdb_read = collab_db.read_txn();

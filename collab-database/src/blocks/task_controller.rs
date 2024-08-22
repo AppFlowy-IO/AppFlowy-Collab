@@ -4,17 +4,16 @@ use std::sync::{Arc, Weak};
 
 use crate::error::DatabaseError;
 use crate::rows::RowId;
-use crate::workspace_database::DatabaseCollabService;
+use crate::workspace_database::{
+  CollabPersistenceImpl, DatabaseCollabPersistenceService, DatabaseCollabService,
+};
 use collab::core::collab::DataSource;
 
 use collab::preclude::Collab;
 use collab_entity::CollabType;
-use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::{KVTransactionDB, PersistenceError};
-use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 
 use collab::entity::EncodedCollab;
-use collab_plugins::CollabKVDB;
+
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::task::{yield_now, JoinHandle};
 use tracing::{error, trace};
@@ -29,9 +28,9 @@ pub struct BlockTaskController {
 }
 
 impl BlockTaskController {
-  pub fn new(collab_db: Weak<CollabKVDB>, collab_service: Weak<dyn DatabaseCollabService>) -> Self {
+  pub fn new(collab_service: Weak<dyn DatabaseCollabService>) -> Self {
     let (sender, receiver) = unbounded_channel();
-    let processor = tokio::spawn(Self::run(receiver, collab_db, collab_service));
+    let processor = tokio::spawn(Self::run(receiver, collab_service));
 
     Self { sender, processor }
   }
@@ -45,29 +44,23 @@ impl BlockTaskController {
   }
   async fn run(
     mut receiver: UnboundedReceiver<BlockTask>,
-    collab_db: Weak<CollabKVDB>,
     collab_service: Weak<dyn DatabaseCollabService>,
   ) {
     while let Some(task) = receiver.recv().await {
-      if let Some(collab_db) = collab_db.upgrade() {
-        if let Some(collab_service) = collab_service.upgrade() {
-          if !Self::redundant(&collab_db, &task) {
-            if let Err(err) = Self::handle_task(task, collab_db, collab_service).await {
-              tracing::error!("Failed to handle task: {}", err);
-            }
+      if let Some(collab_service) = collab_service.upgrade() {
+        if !Self::redundant(collab_service.persistence(), &task) {
+          if let Err(err) = Self::handle_task(task, collab_service).await {
+            tracing::error!("Failed to handle task: {}", err);
           }
-        } else {
-          break; // collab_service is dropped
         }
       } else {
-        break; // collab_db is dropped
+        break; // collab_service is dropped
       }
     }
   }
 
   async fn handle_task(
     task: BlockTask,
-    collab_db: Arc<CollabKVDB>,
     collab_service: Arc<dyn DatabaseCollabService>,
   ) -> anyhow::Result<()> {
     trace!("handle task: {:?}", task);
@@ -84,24 +77,19 @@ impl BlockTaskController {
           .await
         {
           if let Some(encode_collab) = encode_collab.clone() {
-            save_row(&collab_db, encode_collab, *uid, row_id)?;
+            write_encode_collab_to_disk(&collab_service, encode_collab, *uid, row_id.as_str());
           }
 
           let data_source = encode_collab.map(DataSource::from).unwrap_or_else(|| {
-            KVDBCollabPersistenceImpl {
-              db: Arc::downgrade(&collab_db),
+            CollabPersistenceImpl {
+              persistence: collab_service.persistence(),
               uid: *uid,
             }
             .into()
           });
 
-          let collab = collab_service.build_collab(
-            *uid,
-            row_id,
-            CollabType::DatabaseRow,
-            Arc::downgrade(&collab_db),
-            data_source,
-          );
+          let collab =
+            collab_service.build_collab(*uid, row_id, CollabType::DatabaseRow, data_source);
 
           let _ = sender.send(collab).await;
         }
@@ -118,24 +106,13 @@ impl BlockTaskController {
           .batch_get_encode_collab(object_ids, CollabType::DatabaseRow)
           .await
         {
-          let mut collabs = vec![];
-
           let uid = *uid;
-          let cloned_collab_db = collab_db.clone();
+          let mut collabs = vec![];
           let cloned_updates_by_oid = updates_by_oid.clone();
+          let cloned_collab_service = collab_service.clone();
           let _ = tokio::task::spawn_blocking(move || {
             for (oid, encode_collab) in cloned_updates_by_oid {
-              let _ = cloned_collab_db.with_write_txn(|write_txn| {
-                if let Err(e) = write_txn.flush_doc(
-                  uid,
-                  &oid,
-                  encode_collab.state_vector.to_vec(),
-                  encode_collab.doc_state.to_vec(),
-                ) {
-                  error!("{} failed to save the database row collab: {:?}", oid, e);
-                }
-                Ok(())
-              });
+              write_encode_collab_to_disk(&cloned_collab_service, encode_collab, uid, &oid);
             }
           })
           .await;
@@ -145,7 +122,6 @@ impl BlockTaskController {
               uid,
               &oid,
               CollabType::DatabaseRow,
-              Arc::downgrade(&collab_db),
               DataSource::from(encode_collab),
             );
             collabs.push((oid, collab));
@@ -160,17 +136,25 @@ impl BlockTaskController {
 
   /// The tasks that get the row with given row_id might be duplicated, so we need to check if the
   /// task is already done.
-  fn redundant(collab_db: &CollabKVDB, task: &BlockTask) -> bool {
-    let redundant = match &task {
-      BlockTask::FetchRow { uid, row_id, .. } => {
-        collab_db.read_txn().is_exist(*uid, row_id.as_ref())
+  fn redundant(
+    collab_persistence: Option<Box<dyn DatabaseCollabPersistenceService>>,
+    task: &BlockTask,
+  ) -> bool {
+    match collab_persistence {
+      None => false,
+      Some(collab_persistence) => {
+        let redundant = match &task {
+          BlockTask::FetchRow { uid, row_id, .. } => {
+            collab_persistence.is_collab_exist(*uid, row_id.as_ref())
+          },
+          BlockTask::BatchFetchRow { uid, row_ids, .. } => match row_ids.first() {
+            None => true,
+            Some(row_id) => collab_persistence.is_collab_exist(*uid, row_id.as_ref()),
+          },
+        };
+        redundant
       },
-      BlockTask::BatchFetchRow { uid, row_ids, .. } => match row_ids.first() {
-        None => true,
-        Some(row_id) => collab_db.read_txn().is_exist(*uid, row_id.as_ref()),
-      },
-    };
-    redundant
+    }
   }
 }
 
@@ -180,27 +164,25 @@ impl Drop for BlockTaskController {
   }
 }
 
-fn save_row(
-  collab_db: &Arc<CollabKVDB>,
+fn write_encode_collab_to_disk(
+  collab_service: &Arc<dyn DatabaseCollabService>,
   encode_collab: EncodedCollab,
   uid: i64,
-  row_id: &RowId,
-) -> Result<(), PersistenceError> {
-  collab_db.with_write_txn(|write_txn| {
-    if let Err(e) = write_txn.flush_doc(
-      uid,
-      row_id.as_str(),
-      encode_collab.state_vector.to_vec(),
-      encode_collab.doc_state.to_vec(),
-    ) {
-      error!(
-        "{} failed to save the database row collab: {:?}",
-        row_id.as_ref(),
-        e
-      );
-    }
-    Ok(())
-  })
+  object_id: &str,
+) {
+  match collab_service.persistence() {
+    None => {
+      trace!("No persistence service found, skip writing collab to disk");
+    },
+    Some(persistence) => {
+      if let Err(err) = persistence.flush_collab(uid, object_id, encode_collab) {
+        error!(
+          "{} failed to save the database row collab: {:?}",
+          object_id, err
+        );
+      }
+    },
+  }
 }
 
 pub type FetchRowSender = tokio::sync::mpsc::Sender<Result<Collab, DatabaseError>>;
