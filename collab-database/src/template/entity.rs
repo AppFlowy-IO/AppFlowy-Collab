@@ -1,12 +1,13 @@
 use crate::database::{gen_database_id, gen_database_view_id, gen_field_id, gen_row_id, timestamp};
 use crate::entity::{CreateDatabaseParams, CreateViewParams};
 use crate::fields::Field;
-use crate::rows::CreateRowParams;
+use crate::rows::{CreateRowParams, RowId};
 use crate::views::{DatabaseLayout, LayoutSettings};
 use collab::preclude::Any;
 use std::collections::HashMap;
 
 pub struct DatabaseTemplate {
+  pub database_id: String,
   pub fields: Vec<FieldTemplate>,
   pub rows: Vec<RowTemplate>,
   pub views: Vec<DatabaseViewTemplate>,
@@ -31,14 +32,27 @@ const DEFAULT_IS_PRIMARY_VALUE: fn() -> bool = || false;
 pub type CellTemplate = HashMap<String, CellTemplateData>;
 pub type CellTemplateData = HashMap<String, Any>;
 
+#[derive(Debug, Clone)]
 pub struct RowTemplate {
+  pub row_id: String,
   pub height: i32,
   pub visibility: bool,
   pub cells: CellTemplate,
 }
 
+impl Default for RowTemplate {
+  fn default() -> Self {
+    Self {
+      row_id: Default::default(),
+      height: 60,
+      visibility: true,
+      cells: Default::default(),
+    }
+  }
+}
+
 pub fn create_database_from_template(template: DatabaseTemplate) -> CreateDatabaseParams {
-  let database_id = gen_database_id();
+  let database_id = template.database_id.clone();
   let inline_view_id = gen_database_view_id();
   let timestamp = timestamp();
 
@@ -59,7 +73,7 @@ pub fn create_database_from_template(template: DatabaseTemplate) -> CreateDataba
   let mut rows = vec![];
   for row_template in template.rows {
     rows.push(CreateRowParams {
-      id: gen_row_id(),
+      id: RowId::from(row_template.row_id),
       database_id: database_id.clone(),
       cells: row_template.cells,
       height: row_template.height,

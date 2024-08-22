@@ -32,6 +32,8 @@ use collab_entity::CollabType;
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView, DatabaseViewMeta,
 };
+use crate::template::entity::{create_database_from_template, DatabaseTemplate};
+use collab::entity::EncodedCollab;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -84,6 +86,12 @@ impl Database {
       collab_service,
     })
   }
+
+  pub fn collab_from_template(template: DatabaseTemplate) -> Vec<EncodedCollab> {
+    let data = create_database_from_template(template);
+    vec![]
+  }
+
   /// Create a new database with the given [CreateDatabaseParams]
   /// The method will set the inline view id to the given view_id
   /// from the [CreateDatabaseParams].

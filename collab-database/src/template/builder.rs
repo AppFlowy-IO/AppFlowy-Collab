@@ -1,4 +1,4 @@
-use crate::database::gen_option_id;
+use crate::database::{gen_database_id, gen_option_id};
 use crate::template::entity::{
   CellTemplate, CellTemplateData, DatabaseTemplate, DatabaseViewTemplate, FieldTemplate, FieldType,
   RowTemplate,
@@ -11,14 +11,14 @@ use collab::preclude::Any;
 use std::collections::{HashMap, HashSet};
 
 pub struct DatabaseTemplateBuilder {
-  cells: Vec<Vec<CellTemplateData>>,
+  columns: Vec<Vec<CellTemplateData>>,
   fields: Vec<FieldTemplate>,
 }
 
 impl DatabaseTemplateBuilder {
   pub fn new() -> Self {
     Self {
-      cells: vec![],
+      columns: vec![],
       fields: vec![],
     }
   }
@@ -34,27 +34,30 @@ impl DatabaseTemplateBuilder {
     F: FnOnce(FieldTemplateBuilder) -> FieldTemplateBuilder,
   {
     let builder = FieldTemplateBuilder::new(name.to_string(), field_type, is_primary);
-    let (field, cells) = f(builder).build();
+    let (field, rows) = f(builder).build();
     self.fields.push(field);
-    self.cells.push(cells);
+    self.columns.push(rows);
     self
   }
 
   pub fn build(self) -> DatabaseTemplate {
+    let database_id = gen_database_id();
     let fields = self.fields;
 
-    let mut rows = vec![];
-    for h_cell in self.cells {
-      let mut cell_template = CellTemplate::new();
-      for (index, v_cell) in h_cell.into_iter().enumerate() {
-        cell_template.insert(fields[index].field_type.type_id(), v_cell);
-      }
+    let num_rows = self
+      .columns
+      .iter()
+      .map(|column| column.len())
+      .max()
+      .unwrap_or(0);
 
-      rows.push(RowTemplate {
-        height: 60,
-        visibility: true,
-        cells: cell_template,
-      });
+    let mut rows = vec![RowTemplate::default(); num_rows];
+    for (field_index, row) in self.columns.into_iter().enumerate() {
+      for (row_index, cell) in row.into_iter().enumerate() {
+        rows[row_index]
+          .cells
+          .insert(fields[field_index].field_type.type_id(), cell);
+      }
     }
 
     let mut views = vec![];
@@ -69,6 +72,7 @@ impl DatabaseTemplateBuilder {
     });
 
     DatabaseTemplate {
+      database_id,
       fields,
       rows,
       views,
@@ -120,7 +124,7 @@ impl FieldTemplateBuilder {
           .into_iter()
           .map(|id| {
             let mut map: HashMap<String, Any> = HashMap::new();
-            map.insert("CELL_DATA".to_string(), Any::from(id));
+            map.insert(CELL_DATA.to_string(), Any::from(id));
             map
           })
           .collect::<Vec<CellTemplateData>>();
