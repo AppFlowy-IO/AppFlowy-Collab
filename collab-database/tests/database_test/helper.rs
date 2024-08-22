@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use collab::core::collab::DataSource;
-use collab::preclude::CollabBuilder;
+use collab::preclude::{uuid_v4, CollabBuilder};
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{Cells, CreateRowParams, DatabaseRow, RowId};
@@ -29,6 +29,7 @@ pub struct DatabaseTest {
   #[allow(dead_code)]
   collab_db: Arc<CollabKVDB>,
   pub database: Database,
+  pub pre_define_row_ids: Vec<RowId>,
 }
 
 impl Deref for DatabaseTest {
@@ -81,6 +82,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   DatabaseTest {
     database,
     collab_db,
+    pre_define_row_ids: vec![],
   }
 }
 
@@ -142,6 +144,7 @@ pub async fn create_database_with_db(
     DatabaseTest {
       database,
       collab_db,
+      pre_define_row_ids: vec![],
     },
   )
 }
@@ -176,6 +179,7 @@ pub fn restore_database_from_db(
   DatabaseTest {
     database,
     collab_db,
+    pre_define_row_ids: vec![],
   }
 }
 
@@ -265,6 +269,7 @@ impl DatabaseTestBuilder {
     DatabaseTest {
       database,
       collab_db,
+      pre_define_row_ids: vec![],
     }
   }
 }
@@ -272,21 +277,25 @@ impl DatabaseTestBuilder {
 /// Create a database with default data
 /// It will create a default view with id 'v1'
 pub fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
-  let row_1 = CreateRowParams::new(1, database_id.to_string()).with_cells(Cells::from([
-    ("f1".into(), TestTextCell::from("1f1cell").into()),
-    ("f2".into(), TestTextCell::from("1f2cell").into()),
-    ("f3".into(), TestTextCell::from("1f3cell").into()),
-  ]));
-  let row_2 = CreateRowParams::new(2, database_id.to_string()).with_cells(Cells::from([
-    ("f1".into(), TestTextCell::from("2f1cell").into()),
-    ("f2".into(), TestTextCell::from("2f2cell").into()),
-  ]));
-  let row_3 = CreateRowParams::new(3, database_id.to_string()).with_cells(Cells::from([
-    ("f1".into(), TestTextCell::from("3f1cell").into()),
-    ("f3".into(), TestTextCell::from("3f3cell").into()),
-  ]));
+  let row_1 =
+    CreateRowParams::new(uuid_v4().to_string(), database_id.to_string()).with_cells(Cells::from([
+      ("f1".into(), TestTextCell::from("1f1cell").into()),
+      ("f2".into(), TestTextCell::from("1f2cell").into()),
+      ("f3".into(), TestTextCell::from("1f3cell").into()),
+    ]));
+  let row_2 =
+    CreateRowParams::new(uuid_v4().to_string(), database_id.to_string()).with_cells(Cells::from([
+      ("f1".into(), TestTextCell::from("2f1cell").into()),
+      ("f2".into(), TestTextCell::from("2f2cell").into()),
+    ]));
+  let row_3 =
+    CreateRowParams::new(uuid_v4().to_string(), database_id.to_string()).with_cells(Cells::from([
+      ("f1".into(), TestTextCell::from("3f1cell").into()),
+      ("f3".into(), TestTextCell::from("3f3cell").into()),
+    ]));
 
   let mut database_test = create_database(uid, database_id);
+  database_test.pre_define_row_ids = vec![row_1.id.clone(), row_2.id.clone(), row_3.id.clone()];
   database_test.create_row(row_1).unwrap();
   database_test.create_row(row_2).unwrap();
   database_test.create_row(row_3).unwrap();
