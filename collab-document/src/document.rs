@@ -59,8 +59,6 @@ impl Document {
     let block_operation = BlockOperation::new(blocks, children_operation.clone());
     drop(txn);
 
-    collab.enable_undo_redo();
-
     Ok(Self {
       collab,
       body: DocumentBody {
