@@ -12,4 +12,5 @@ pub mod blocks;
 pub mod database_state;
 pub mod entity;
 pub mod error;
+pub mod template;
 pub mod util;

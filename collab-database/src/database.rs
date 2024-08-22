@@ -1203,7 +1203,7 @@ pub fn gen_database_id() -> String {
 }
 
 pub fn gen_database_view_id() -> String {
-  format!("v:{}", nanoid!(6))
+  uuid::Uuid::new_v4().to_string()
 }
 
 pub fn gen_field_id() -> String {
