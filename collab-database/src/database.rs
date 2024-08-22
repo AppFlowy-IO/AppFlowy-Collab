@@ -58,18 +58,14 @@ pub struct DatabaseContext {
 }
 
 impl DatabaseContext {
-  pub fn new(
-    uid: i64,
-    collab: Collab,
-    collab_service: Arc<dyn DatabaseCollabService>,
-  ) -> Self {
+  pub fn new(uid: i64, collab: Collab, collab_service: Arc<dyn DatabaseCollabService>) -> Self {
     Self {
       uid,
       collab,
       collab_service,
       notifier: DatabaseNotify::default(),
     }
-
+  }
 }
 
 impl Database {
