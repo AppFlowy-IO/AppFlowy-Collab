@@ -9,7 +9,9 @@ use crate::rows::{
   RowMetaKey, RowMetaUpdate, RowUpdate,
 };
 use crate::views::RowOrder;
-use crate::workspace_database::{CollabPersistenceImpl, DatabaseCollabService};
+use crate::workspace_database::{
+  CollabPersistenceImpl, DatabaseCollabCloudService, DatabaseCollabService,
+};
 
 use collab::preclude::Collab;
 
@@ -31,7 +33,6 @@ pub enum BlockEvent {
 /// might want to split the rows into multiple [Block]s to improve performance.
 #[derive(Clone)]
 pub struct Block {
-  uid: i64,
   database_id: String,
   collab_service: Arc<dyn DatabaseCollabService>,
   task_controller: Arc<BlockTaskController>,
@@ -43,16 +44,18 @@ pub struct Block {
 
 impl Block {
   pub fn new(
-    uid: i64,
     database_id: String,
     collab_service: Arc<dyn DatabaseCollabService>,
+    cloud_service: Option<Arc<dyn DatabaseCollabCloudService>>,
     row_change_tx: RowChangeSender,
   ) -> Block {
-    let controller = BlockTaskController::new(Arc::downgrade(&collab_service));
+    let controller = BlockTaskController::new(
+      Arc::downgrade(&collab_service),
+      cloud_service.map(|s| Arc::downgrade(&s)),
+    );
     let task_controller = Arc::new(controller);
     let (notifier, _) = broadcast::channel(1000);
     Self {
-      uid,
       database_id,
       task_controller,
       collab_service,
@@ -70,7 +73,7 @@ impl Block {
   pub async fn batch_load_rows(&self, row_ids: Vec<RowId>) -> Result<(), DatabaseError> {
     let (rows_on_disk, rows_not_on_disk) = match self.collab_service.persistence() {
       None => (vec![], row_ids),
-      Some(persistence) => persistence.is_row_exist_partition(self.uid, row_ids),
+      Some(persistence) => persistence.is_row_exist_partition(row_ids),
     };
 
     info!(
@@ -85,7 +88,6 @@ impl Block {
       .filter_map(|row_id| {
         let collab = self.create_collab_for_row(&row_id).ok()?;
         let row_collab = DatabaseRow::new(
-          self.uid,
           row_id.clone(),
           collab,
           self.row_change_tx.clone(),
@@ -112,13 +114,11 @@ impl Block {
     info!("batch load {} rows from remote", row_ids.len());
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     self.task_controller.add_task(BlockTask::BatchFetchRow {
-      uid: self.uid,
       row_ids,
       seq: self.sequence.fetch_add(1, Ordering::SeqCst),
       sender: tx,
     });
 
-    let uid = self.uid;
     let row_change_tx = self.row_change_tx.clone();
     let row_mem_cache = self.row_mem_cache.clone();
     let notifier = self.notifier.clone();
@@ -133,7 +133,6 @@ impl Block {
               let row_id = RowId::from(row_id);
               let row_detail = RowDetail::from_collab(&row_collab);
               let row = Arc::new(RwLock::new(DatabaseRow::new(
-                uid,
                 row_id.clone(),
                 row_collab,
                 row_change_tx.clone(),
@@ -184,7 +183,7 @@ impl Block {
 
     trace!("create_row: {}", row_id);
     if let Some(persistence) = self.collab_service.persistence() {
-      if persistence.is_collab_exist(self.uid, &row_id) {
+      if persistence.is_collab_exist(&row_id) {
         warn!("The row already exists: {:?}", row_id);
         return Err(DatabaseError::RecordAlreadyExist);
       }
@@ -192,7 +191,6 @@ impl Block {
 
     let collab = self.create_collab_for_row(&row_id)?;
     let database_row = DatabaseRow::new(
-      self.uid,
       row_id.clone(),
       collab,
       self.row_change_tx.clone(),
@@ -254,7 +252,7 @@ impl Block {
   pub fn delete_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
     let row = self.row_mem_cache.remove(row_id).map(|(_, row)| row);
     if let Some(persistence) = self.collab_service.persistence() {
-      if let Err(err) = persistence.delete_collab(self.uid, row_id) {
+      if let Err(err) = persistence.delete_collab(row_id) {
         error!("Can't delete the row from disk: {:?}", err);
       }
     }
@@ -312,14 +310,13 @@ impl Block {
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
     let exists = match self.collab_service.persistence() {
       None => false,
-      Some(persistence) => persistence.is_collab_exist(self.uid, &row_id),
+      Some(persistence) => persistence.is_collab_exist(&row_id),
     };
 
     if exists {
       trace!("create row instance from disk: {:?}", row_id);
       let collab = self.create_collab_for_row(&row_id)?;
       let database_row = Arc::new(RwLock::new(DatabaseRow::new(
-        self.uid,
         row_id.clone(),
         collab,
         self.row_change_tx.clone(),
@@ -336,14 +333,12 @@ impl Block {
     );
     let (sender, mut rx) = tokio::sync::mpsc::channel(1);
     self.task_controller.add_task(BlockTask::FetchRow {
-      uid: self.uid,
       row_id: row_id.clone(),
       seq: self.sequence.fetch_add(1, Ordering::SeqCst),
       sender,
     });
 
     let weak_notifier = Arc::downgrade(&self.notifier);
-    let uid = self.uid;
     let change_tx = self.row_change_tx.clone();
     let row_cache = self.row_mem_cache.clone();
     let cloned_row_id = row_id.clone();
@@ -353,7 +348,6 @@ impl Block {
         let row_detail = RowDetail::from_collab(&row_collab);
         trace!("create row instance from remote: {:?}", cloned_row_id);
         let row = Arc::new(RwLock::new(DatabaseRow::new(
-          uid,
           cloned_row_id.clone(),
           row_collab,
           change_tx,
@@ -378,14 +372,10 @@ impl Block {
 
   fn create_collab_for_row(&self, row_id: &RowId) -> Result<Collab, DatabaseError> {
     let data_source = CollabPersistenceImpl {
-      uid: self.uid,
       persistence: self.collab_service.persistence(),
     };
-    self.collab_service.build_collab(
-      self.uid,
-      row_id,
-      CollabType::DatabaseRow,
-      data_source.into(),
-    )
+    self
+      .collab_service
+      .build_collab(row_id, CollabType::DatabaseRow, data_source.into())
   }
 }

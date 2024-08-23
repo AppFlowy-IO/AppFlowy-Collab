@@ -41,14 +41,13 @@ pub struct DatabaseRow {
 
 impl DatabaseRow {
   pub fn new(
-    uid: i64,
     row_id: RowId,
     mut collab: Collab,
     change_tx: RowChangeSender,
     row: Option<Row>,
     collab_service: Arc<dyn DatabaseCollabService>,
   ) -> Self {
-    let body = DatabaseRowBody::new(uid, row_id.clone(), &mut collab, row);
+    let body = DatabaseRowBody::new(row_id.clone(), &mut collab, row);
     subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
     Self {
       collab,
@@ -63,7 +62,7 @@ impl DatabaseRow {
         .collab
         .encode_collab_v1(|collab| CollabType::DatabaseRow.validate_require_data(collab))
         .map_err(DatabaseError::Internal)?;
-      persistence.flush_collab(self.body.uid, self.collab.object_id(), encoded_collab)?;
+      persistence.flush_collab(self.collab.object_id(), encoded_collab)?;
     }
 
     Ok(())
@@ -132,7 +131,7 @@ impl DatabaseRow {
         trace!("skip delete database row because persistence is not available");
       },
       Some(persistence) => {
-        if let Err(err) = persistence.delete_collab(self.body.uid, self.collab.object_id()) {
+        if let Err(err) = persistence.delete_collab(self.collab.object_id()) {
           error!("🔴 delete database row failed: {}", err);
         }
       },
@@ -168,7 +167,6 @@ impl BorrowMut<Collab> for DatabaseRow {
 }
 
 pub struct DatabaseRowBody {
-  uid: i64,
   row_id: RowId,
   data: MapRef,
   #[allow(dead_code)]
@@ -178,7 +176,7 @@ pub struct DatabaseRowBody {
 }
 
 impl DatabaseRowBody {
-  pub fn new(uid: i64, row_id: RowId, collab: &mut Collab, init_data: Option<Row>) -> Self {
+  pub fn new(row_id: RowId, collab: &mut Collab, init_data: Option<Row>) -> Self {
     let mut txn = collab.context.transact_mut();
 
     let data: MapRef = collab.data.get_or_init(&mut txn, DATABASE_ROW_DATA);
@@ -199,7 +197,6 @@ impl DatabaseRowBody {
     }
 
     DatabaseRowBody {
-      uid,
       row_id,
       data,
       meta,
