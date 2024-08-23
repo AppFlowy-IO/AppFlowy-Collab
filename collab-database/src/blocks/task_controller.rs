@@ -65,40 +65,30 @@ impl BlockTaskController {
   ) -> anyhow::Result<()> {
     trace!("handle task: {:?}", task);
     match &task {
-      BlockTask::FetchRow {
-        row_id,
-        uid,
-        sender,
-        ..
-      } => {
+      BlockTask::FetchRow { row_id, sender, .. } => {
         trace!("fetching database row: {:?}", row_id);
         if let Ok(encode_collab) = collab_service
           .get_encode_collab(row_id.as_ref(), CollabType::DatabaseRow)
           .await
         {
           if let Some(encode_collab) = encode_collab.clone() {
-            write_encode_collab_to_disk(&collab_service, encode_collab, *uid, row_id.as_str());
+            write_encode_collab_to_disk(&collab_service, encode_collab, row_id.as_str());
           }
 
           let data_source = encode_collab.map(DataSource::from).unwrap_or_else(|| {
             CollabPersistenceImpl {
               persistence: collab_service.persistence(),
-              uid: *uid,
             }
             .into()
           });
 
-          let collab =
-            collab_service.build_collab(*uid, row_id, CollabType::DatabaseRow, data_source);
+          let collab = collab_service.build_collab(row_id, CollabType::DatabaseRow, data_source);
 
           let _ = sender.send(collab).await;
         }
       },
       BlockTask::BatchFetchRow {
-        row_ids,
-        uid,
-        sender,
-        ..
+        row_ids, sender, ..
       } => {
         trace!("batch fetching database row");
         let object_ids = row_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
@@ -106,20 +96,18 @@ impl BlockTaskController {
           .batch_get_encode_collab(object_ids, CollabType::DatabaseRow)
           .await
         {
-          let uid = *uid;
           let mut collabs = vec![];
           let cloned_updates_by_oid = updates_by_oid.clone();
           let cloned_collab_service = collab_service.clone();
           let _ = tokio::task::spawn_blocking(move || {
             for (oid, encode_collab) in cloned_updates_by_oid {
-              write_encode_collab_to_disk(&cloned_collab_service, encode_collab, uid, &oid);
+              write_encode_collab_to_disk(&cloned_collab_service, encode_collab, &oid);
             }
           })
           .await;
 
           for (oid, encode_collab) in updates_by_oid {
             let collab = collab_service.build_collab(
-              uid,
               &oid,
               CollabType::DatabaseRow,
               DataSource::from(encode_collab),
@@ -144,12 +132,10 @@ impl BlockTaskController {
       None => false,
       Some(collab_persistence) => {
         let redundant = match &task {
-          BlockTask::FetchRow { uid, row_id, .. } => {
-            collab_persistence.is_collab_exist(*uid, row_id.as_ref())
-          },
-          BlockTask::BatchFetchRow { uid, row_ids, .. } => match row_ids.first() {
+          BlockTask::FetchRow { row_id, .. } => collab_persistence.is_collab_exist(row_id.as_ref()),
+          BlockTask::BatchFetchRow { row_ids, .. } => match row_ids.first() {
             None => true,
-            Some(row_id) => collab_persistence.is_collab_exist(*uid, row_id.as_ref()),
+            Some(row_id) => collab_persistence.is_collab_exist(row_id.as_ref()),
           },
         };
         redundant
@@ -167,7 +153,6 @@ impl Drop for BlockTaskController {
 fn write_encode_collab_to_disk(
   collab_service: &Arc<dyn DatabaseCollabService>,
   encode_collab: EncodedCollab,
-  uid: i64,
   object_id: &str,
 ) {
   match collab_service.persistence() {
@@ -175,7 +160,7 @@ fn write_encode_collab_to_disk(
       trace!("No persistence service found, skip writing collab to disk");
     },
     Some(persistence) => {
-      if let Err(err) = persistence.flush_collab(uid, object_id, encode_collab) {
+      if let Err(err) = persistence.flush_collab(object_id, encode_collab) {
         error!(
           "{} failed to save the database row collab: {:?}",
           object_id, err
@@ -192,13 +177,11 @@ pub type BatchFetchRowSender =
 #[derive(Clone)]
 pub enum BlockTask {
   FetchRow {
-    uid: i64,
     row_id: RowId,
     seq: u32,
     sender: FetchRowSender,
   },
   BatchFetchRow {
-    uid: i64,
     row_ids: Vec<RowId>,
     seq: u32,
     sender: BatchFetchRowSender,
