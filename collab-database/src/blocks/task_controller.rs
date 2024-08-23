@@ -73,34 +73,29 @@ impl BlockTaskController {
     collab_service: Arc<dyn DatabaseCollabService>,
     cloud_service: Option<Weak<dyn DatabaseCollabCloudService>>,
   ) -> anyhow::Result<()> {
-    let cloud_service = cloud_service.and_then(|cloud_service| cloud_service.upgrade());
-    if cloud_service.is_none() {
-      return Ok(());
-    }
-
     trace!("handle task: {:?}", task);
-    let cloud_service = cloud_service.unwrap();
     match &task {
       BlockTask::FetchRow { row_id, sender, .. } => {
         trace!("fetching database row from remote: {:?}", row_id);
-        if let Ok(encode_collab) = cloud_service
-          .get_encode_collab(row_id.as_ref(), CollabType::DatabaseRow)
-          .await
-        {
-          if let Some(encode_collab) = encode_collab.clone() {
-            write_encode_collab_to_disk(&collab_service, encode_collab, row_id.as_str());
-          }
+        let result = collab_service
+          .build_collab(
+            row_id.as_ref(),
+            CollabType::DatabaseRow,
+            cloud_service.clone(),
+          )
+          .await;
+        // if let Some(encode_collab) = encode_collab.clone() {
+        //   write_encode_collab_to_disk(&collab_service, encode_collab, row_id.as_str());
+        // }
+        //
+        // let data_source = encode_collab.map(DataSource::from).unwrap_or_else(|| {
+        //   CollabPersistenceImpl {
+        //     persistence: collab_service.persistence(),
+        //   }
+        //   .into()
+        // });
 
-          let data_source = encode_collab.map(DataSource::from).unwrap_or_else(|| {
-            CollabPersistenceImpl {
-              persistence: collab_service.persistence(),
-            }
-            .into()
-          });
-
-          let collab = collab_service.build_collab(row_id, CollabType::DatabaseRow, data_source);
-          let _ = sender.send(collab).await;
-        }
+        let _ = sender.send(result).await;
       },
       BlockTask::BatchFetchRow {
         row_ids, sender, ..
@@ -112,20 +107,20 @@ impl BlockTaskController {
           .await
         {
           let mut collabs = vec![];
-          let cloned_updates_by_oid = updates_by_oid.clone();
-          let cloned_collab_service = collab_service.clone();
-          let _ = tokio::task::spawn_blocking(move || {
-            for (oid, encode_collab) in cloned_updates_by_oid {
-              write_encode_collab_to_disk(&cloned_collab_service, encode_collab, &oid);
-            }
-          })
-          .await;
+          // let cloned_updates_by_oid = updates_by_oid.clone();
+          // let cloned_collab_service = collab_service.clone();
+          // let _ = tokio::task::spawn_blocking(move || {
+          //   for (oid, encode_collab) in cloned_updates_by_oid {
+          //     write_encode_collab_to_disk(&cloned_collab_service, encode_collab, &oid);
+          //   }
+          // })
+          // .await;
 
           for (oid, encode_collab) in updates_by_oid {
             let collab = collab_service.build_collab(
               &oid,
               CollabType::DatabaseRow,
-              DataSource::from(encode_collab),
+              Some(Arc::downgrade(&cloud_service)),
             );
             collabs.push((oid, collab));
             yield_now().await;

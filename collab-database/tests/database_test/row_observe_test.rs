@@ -24,7 +24,12 @@ async fn observer_create_new_row_test() {
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
     let row = CreateRowParams::new(cloned_row_id, database_id.clone());
-    cloned_database_test.lock().await.create_row(row).unwrap();
+    cloned_database_test
+      .lock()
+      .await
+      .create_row(row)
+      .await
+      .unwrap();
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -55,6 +60,7 @@ async fn observer_row_cell_test() {
       cloned_row_id.clone(),
       database_id.clone(),
     ))
+    .await
     .unwrap();
 
     db.update_row(cloned_row_id, |row| {
@@ -123,6 +129,7 @@ async fn observer_update_row_test() {
     sleep(Duration::from_millis(300)).await;
     let mut db = cloned_database_test.lock().await;
     db.create_row(CreateRowParams::new(row_id.clone(), database_id.clone()))
+      .await
       .unwrap();
 
     db.update_row(row_id, |row| {

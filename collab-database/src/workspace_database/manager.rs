@@ -28,29 +28,14 @@ pub type EncodeCollabByOid = HashMap<String, EncodedCollab>;
 ///
 #[async_trait]
 pub trait DatabaseCollabService: Send + Sync + 'static {
-  fn build_collab(
+  async fn build_collab(
     &self,
     object_id: &str,
     object_type: CollabType,
-    data_source: DataSource,
+    is_new: bool,
   ) -> Result<Collab, DatabaseError>;
 
   fn persistence(&self) -> Option<Box<dyn DatabaseCollabPersistenceService>>;
-}
-
-#[async_trait]
-pub trait DatabaseCollabCloudService: Send + Sync + 'static {
-  async fn get_encode_collab(
-    &self,
-    object_id: &str,
-    object_ty: CollabType,
-  ) -> Result<Option<EncodedCollab>, DatabaseError>;
-
-  async fn batch_get_encode_collab(
-    &self,
-    object_ids: Vec<String>,
-    object_ty: CollabType,
-  ) -> Result<EncodeCollabByOid, DatabaseError>;
 }
 
 pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
@@ -70,7 +55,7 @@ pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
 }
 
 pub struct CollabPersistenceImpl {
-  pub persistence: Option<Box<dyn DatabaseCollabPersistenceService>>,
+  pub persistence: Option<Arc<dyn DatabaseCollabPersistenceService>>,
 }
 impl CollabPersistence for CollabPersistenceImpl {
   fn load_collab_from_disk(&self, collab: &mut Collab) {
@@ -98,7 +83,6 @@ pub struct WorkspaceDatabase {
   collab: Collab,
   meta_list: DatabaseMetaList,
   collab_service: Arc<dyn DatabaseCollabService>,
-  cloud_service: Arc<dyn DatabaseCollabCloudService>,
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
@@ -106,20 +90,14 @@ pub struct WorkspaceDatabase {
 }
 
 impl WorkspaceDatabase {
-  pub fn open(
-    mut collab: Collab,
-    collab_service: impl DatabaseCollabService,
-    cloud_service: impl DatabaseCollabCloudService,
-  ) -> Self {
+  pub fn open(mut collab: Collab, collab_service: impl DatabaseCollabService) -> Self {
     let collab_service = Arc::new(collab_service);
-    let cloud_service = Arc::new(cloud_service);
     let meta_list = DatabaseMetaList::new(&mut collab);
 
     Self {
       collab,
       meta_list,
       collab_service,
-      cloud_service,
       databases: DashMap::new(),
     }
   }
@@ -135,46 +113,46 @@ impl WorkspaceDatabase {
     Ok(())
   }
 
-  pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Collab> {
-    let mut data_source: DataSource = CollabPersistenceImpl {
-      persistence: self.collab_service.persistence(),
-    }
-    .into();
-
-    let is_exist = self
-      .collab_service
-      .persistence()
-      .map(|persistence| persistence.is_collab_exist(database_id))
-      .unwrap_or(false);
-
-    if !is_exist {
-      // Try to load the database from the remote. The database doesn't exist in the local only
-      // when the user has deleted the database or the database is using a remote storage.
-      match self
-        .cloud_service
-        .get_encode_collab(database_id, CollabType::Database)
-        .await
-      {
-        Ok(Some(encode_collab)) => {
-          if encode_collab.doc_state.is_empty() {
-            error!("Failed to get updates for database: {}", database_id);
-            return None;
-          }
-
-          data_source = DataSource::from(encode_collab);
-        },
-        Ok(None) => {
-          // do nothing
-        },
-        Err(e) => {
-          error!("Failed to get collab updates for database: {}", e);
-          return None;
-        },
-      }
-    }
-    let database_collab = self.collab_for_database(database_id, data_source).ok()?;
-    Some(database_collab)
-  }
+  // pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Collab> {
+  //   // let mut data_source: DataSource = CollabPersistenceImpl {
+  //   //   persistence: self.collab_service.persistence(),
+  //   // }
+  //   // .into();
+  //
+  //   // let is_exist = self
+  //   //   .collab_service
+  //   //   .persistence()
+  //   //   .map(|persistence| persistence.is_collab_exist(database_id))
+  //   //   .unwrap_or(false);
+  //   //
+  //   // if !is_exist {
+  //   // Try to load the database from the remote. The database doesn't exist in the local only
+  //   // when the user has deleted the database or the database is using a remote storage.
+  //   //   match self
+  //   //     .cloud_service
+  //   //     .get_encode_collab(database_id, CollabType::Database)
+  //   //     .await
+  //   //   {
+  //   //     Ok(Some(encode_collab)) => {
+  //   //       if encode_collab.doc_state.is_empty() {
+  //   //         error!("Failed to get updates for database: {}", database_id);
+  //   //         return None;
+  //   //       }
+  //   //
+  //   //       data_source = DataSource::from(encode_collab);
+  //   //     },
+  //   //     Ok(None) => {
+  //   //       // do nothing
+  //   //     },
+  //   //     Err(e) => {
+  //   //       error!("Failed to get collab updates for database: {}", e);
+  //   //       return None;
+  //   //     },
+  //   //   }
+  //   // }
+  //   let database_collab = self.collab_for_database(database_id).ok()?;
+  //   Some(database_collab)
+  // }
 
   /// Get the database with the given database id.
   /// Return None if the database does not exist.
@@ -195,14 +173,9 @@ impl WorkspaceDatabase {
           .collab_service
           .persistence()?
           .is_collab_exist(database_id);
-        let collab = self.get_database_collab(database_id).await?;
 
-        let context = DatabaseContext::new(
-          collab,
-          self.collab_service.clone(),
-          Some(self.cloud_service.clone()),
-        );
-        let database = Database::open(database_id, context).ok()?;
+        let context = DatabaseContext::new(self.collab_service.clone(), false);
+        let database = Database::open(database_id, context).await.ok()?;
         // The database is not exist in local disk, which means the rows of the database are not
         // loaded yet.
         if !is_exist {
@@ -246,17 +219,7 @@ impl WorkspaceDatabase {
   ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
     debug_assert!(!params.database_id.is_empty());
 
-    // Create a [Collab] for the given database id.
-    let data_source: DataSource = CollabPersistenceImpl {
-      persistence: self.collab_service.persistence(),
-    }
-    .into();
-    let collab = self.collab_for_database(&params.database_id, data_source)?;
-    let context = DatabaseContext::new(
-      collab,
-      self.collab_service.clone(),
-      Some(self.cloud_service.clone()),
-    );
+    let context = DatabaseContext::new(self.collab_service.clone(), true);
 
     // Add a new database record.
     let mut linked_views = HashSet::new();
@@ -376,17 +339,6 @@ impl WorkspaceDatabase {
     } else {
       Err(DatabaseError::DatabaseNotExist)
     }
-  }
-
-  /// Create a new [Collab] instance for given database id.
-  fn collab_for_database(
-    &self,
-    database_id: &str,
-    data_source: DataSource,
-  ) -> Result<Collab, DatabaseError> {
-    self
-      .collab_service
-      .build_collab(database_id, CollabType::Database, data_source)
   }
 }
 
