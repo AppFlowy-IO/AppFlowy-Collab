@@ -1,9 +1,10 @@
-use crate::database::{gen_database_id, gen_database_view_id, gen_field_id, gen_row_id, timestamp};
+use crate::database::{gen_database_view_id, gen_field_id, gen_row_id, timestamp};
 use crate::entity::{CreateDatabaseParams, CreateViewParams};
 use crate::fields::Field;
 use crate::rows::{CreateRowParams, RowId};
 use crate::views::{DatabaseLayout, LayoutSettings};
 use collab::preclude::Any;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub struct DatabaseTemplate {
@@ -27,7 +28,6 @@ pub struct FieldTemplate {
   pub is_primary: bool,
   pub type_options: HashMap<FieldType, HashMap<String, Any>>,
 }
-const DEFAULT_IS_PRIMARY_VALUE: fn() -> bool = || false;
 
 pub type CellTemplate = HashMap<String, CellTemplateData>;
 pub type CellTemplateData = HashMap<String, Any>;
@@ -112,7 +112,7 @@ pub fn create_database_from_template(template: DatabaseTemplate) -> CreateDataba
   }
 }
 
-#[derive(Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum FieldType {
   RichText = 0,
   Number = 1,

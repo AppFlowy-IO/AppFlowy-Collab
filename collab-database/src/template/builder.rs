@@ -1,18 +1,28 @@
-use crate::database::{gen_database_id, gen_option_id};
+use crate::database::gen_database_id;
 use crate::template::entity::{
-  CellTemplate, CellTemplateData, DatabaseTemplate, DatabaseViewTemplate, FieldTemplate, FieldType,
-  RowTemplate,
+  CellTemplateData, DatabaseTemplate, DatabaseViewTemplate, FieldTemplate, FieldType, RowTemplate,
 };
 
-use serde::{Deserialize, Serialize};
-
+use crate::template::chect_list_parse::ChecklistCellData;
+use crate::template::date_parse::{replace_cells_with_timestamp, DateTypeOption};
+use crate::template::option_parse::{
+  build_options_from_cells, replace_cells_with_options_id, SelectTypeOption,
+  SELECT_OPTION_SEPARATOR,
+};
+use crate::template::time_parse::TimestampTypeOption;
 use crate::views::DatabaseLayout;
 use collab::preclude::Any;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 pub struct DatabaseTemplateBuilder {
   columns: Vec<Vec<CellTemplateData>>,
   fields: Vec<FieldTemplate>,
+}
+
+impl Default for DatabaseTemplateBuilder {
+  fn default() -> Self {
+    Self::new()
+  }
 }
 
 impl DatabaseTemplateBuilder {
@@ -60,16 +70,14 @@ impl DatabaseTemplateBuilder {
       }
     }
 
-    let mut views = vec![];
-    // create inline view
-    views.push(DatabaseViewTemplate {
+    let views = vec![DatabaseViewTemplate {
       name: "".to_string(),
       layout: DatabaseLayout::Grid,
       layout_settings: Default::default(),
       filters: vec![],
       group_settings: vec![],
       sorts: vec![],
-    });
+    }];
 
     DatabaseTemplate {
       database_id,
@@ -86,7 +94,6 @@ pub struct FieldTemplateBuilder {
   pub is_primary: bool,
   cells: Vec<String>,
 }
-
 const CELL_DATA: &str = "data";
 const TYPE_OPTION_CONTENT: &str = "content";
 impl FieldTemplateBuilder {
@@ -104,6 +111,26 @@ impl FieldTemplateBuilder {
     self
   }
 
+  pub fn create_checklist_cell<T1: ToString, T2: ToString>(
+    mut self,
+    options: Vec<T1>,
+    selected_options: Vec<T2>,
+  ) -> Self {
+    let options = options
+      .into_iter()
+      .map(|option| option.to_string())
+      .collect();
+    let selected_options = selected_options
+      .into_iter()
+      .map(|option| option.to_string())
+      .collect();
+    let cell = ChecklistCellData::from((options, selected_options));
+    self
+      .cells
+      .push(serde_json::to_string(&cell).unwrap_or_default());
+    self
+  }
+
   pub fn build(self) -> (FieldTemplate, Vec<CellTemplateData>) {
     let field_type = self.field_type.clone();
     let mut field_template = FieldTemplate {
@@ -114,13 +141,33 @@ impl FieldTemplateBuilder {
     };
 
     let cell_template = match field_type {
-      FieldType::SingleSelect => {
+      FieldType::SingleSelect | FieldType::MultiSelect => {
         let options = build_options_from_cells(&self.cells);
         let type_option = SelectTypeOption {
           options,
           disable_color: false,
         };
-        let cell_template = replace_cells_with_options_id(self.cells, &type_option.options)
+        let cell_template =
+          replace_cells_with_options_id(self.cells, &type_option.options, SELECT_OPTION_SEPARATOR)
+            .into_iter()
+            .map(|id| {
+              let mut map: HashMap<String, Any> = HashMap::new();
+              map.insert(CELL_DATA.to_string(), Any::from(id));
+              map
+            })
+            .collect::<Vec<CellTemplateData>>();
+
+        field_template.type_options.insert(
+          field_type,
+          HashMap::from([(
+            TYPE_OPTION_CONTENT.to_string(),
+            Any::from(type_option.to_json_string()),
+          )]),
+        );
+        cell_template
+      },
+      FieldType::DateTime => {
+        let cell_template = replace_cells_with_timestamp(self.cells)
           .into_iter()
           .map(|id| {
             let mut map: HashMap<String, Any> = HashMap::new();
@@ -133,19 +180,28 @@ impl FieldTemplateBuilder {
           field_type,
           HashMap::from([(
             TYPE_OPTION_CONTENT.to_string(),
-            Any::from(type_option.to_json_string()),
+            Any::from(DateTypeOption::default().to_json_string()),
           )]),
         );
         cell_template
       },
-      FieldType::MultiSelect => {
-        todo!()
-      },
-      FieldType::Checklist => {
-        todo!()
-      },
-      FieldType::Relation => {
-        vec![]
+      FieldType::LastEditedTime | FieldType::CreatedTime => {
+        let cell_template = replace_cells_with_timestamp(self.cells)
+          .into_iter()
+          .map(|id| {
+            let mut map: HashMap<String, Any> = HashMap::new();
+            map.insert(CELL_DATA.to_string(), Any::from(id));
+            map
+          })
+          .collect::<Vec<CellTemplateData>>();
+
+        let type_option =
+          serde_json::to_string(&TimestampTypeOption::new(field_type.clone(), false)).unwrap();
+        field_template.type_options.insert(
+          field_type,
+          HashMap::from([(TYPE_OPTION_CONTENT.to_string(), Any::from(type_option))]),
+        );
+        cell_template
       },
       _ => string_cell_template(self.cells),
     };
@@ -159,98 +215,4 @@ fn string_cell_template(cell: Vec<String>) -> Vec<CellTemplateData> {
     .into_iter()
     .map(|data| HashMap::from([(CELL_DATA.to_string(), Any::from(data))]))
     .collect()
-}
-
-fn replace_cells_with_options_id(cells: Vec<String>, options: &[SelectOption]) -> Vec<String> {
-  cells
-    .into_iter()
-    .map(|cell| {
-      let option = options.iter().find(|option| option.name == cell).unwrap();
-      option.id.clone()
-    })
-    .collect()
-}
-
-fn build_options_from_cells(cells: &[String]) -> Vec<SelectOption> {
-  let mut option_names = HashSet::new();
-  for cell in cells {
-    option_names.insert(cell.clone());
-  }
-
-  let mut options = vec![];
-  for (index, name) in option_names.into_iter().enumerate() {
-    // pick a color by mod 8
-    let color = SelectOptionColor::from(index % 8);
-    let option = SelectOption {
-      id: gen_option_id(),
-      name,
-      color,
-    };
-    options.push(option);
-  }
-
-  options
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct SelectTypeOption {
-  pub options: Vec<SelectOption>,
-  pub disable_color: bool,
-}
-impl SelectTypeOption {
-  pub fn to_json_string(&self) -> String {
-    serde_json::to_string(self).unwrap()
-  }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct SelectOption {
-  pub id: String,
-  pub name: String,
-  pub color: SelectOptionColor,
-}
-
-#[derive(PartialEq, Eq, Serialize, Deserialize, Debug, Clone)]
-#[repr(u8)]
-#[derive(Default)]
-pub enum SelectOptionColor {
-  #[default]
-  Purple = 0,
-  Pink = 1,
-  LightPink = 2,
-  Orange = 3,
-  Yellow = 4,
-  Lime = 5,
-  Green = 6,
-  Aqua = 7,
-  Blue = 8,
-}
-
-impl From<usize> for SelectOptionColor {
-  fn from(index: usize) -> Self {
-    match index {
-      0 => SelectOptionColor::Purple,
-      1 => SelectOptionColor::Pink,
-      2 => SelectOptionColor::LightPink,
-      3 => SelectOptionColor::Orange,
-      4 => SelectOptionColor::Yellow,
-      5 => SelectOptionColor::Lime,
-      6 => SelectOptionColor::Green,
-      7 => SelectOptionColor::Aqua,
-      8 => SelectOptionColor::Blue,
-      _ => SelectOptionColor::Purple,
-    }
-  }
-}
-
-#[derive(Debug)]
-pub struct SelectOptionIds(Vec<String>);
-impl SelectOptionIds {
-  pub fn from_cell(cell: String) -> Self {
-    let ids = cell
-      .split(",")
-      .map(|id| id.to_string())
-      .collect::<Vec<String>>();
-    Self(ids)
-  }
 }
