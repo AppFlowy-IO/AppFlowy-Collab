@@ -32,6 +32,9 @@ pub enum DatabaseError {
   #[error("Record already exist")]
   RecordAlreadyExist,
 
+  #[error("Record not found")]
+  RecordNotFound,
+
   #[error("Internal failure: {0}")]
   Internal(#[from] anyhow::Error),
 }
