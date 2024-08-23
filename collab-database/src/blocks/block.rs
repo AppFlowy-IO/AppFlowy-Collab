@@ -62,17 +62,6 @@ impl Block {
   }
 
   pub async fn batch_load_rows(&self, row_ids: Vec<RowId>) -> Result<(), DatabaseError> {
-    // let (rows_on_disk, rows_not_on_disk) = match self.collab_service.persistence() {
-    //   None => (vec![], row_ids),
-    //   Some(persistence) => persistence.is_row_exist_partition(row_ids),
-    // };
-    //
-    // info!(
-    //   "batch_load_rows: rows_on_disk: {}, rows_not_on_disk: {}",
-    //   rows_on_disk.len(),
-    //   rows_not_on_disk.len()
-    // );
-
     let cloned_notifier = self.notifier.clone();
     let mut row_on_disk_details = vec![];
     for row_id in &row_ids {
@@ -95,60 +84,8 @@ impl Block {
     if !row_on_disk_details.is_empty() {
       let _ = cloned_notifier.send(BlockEvent::DidFetchRow(row_on_disk_details));
     }
-    // self.batch_load_rows_from_remote(rows_not_on_disk);
     Ok(())
   }
-
-  // fn batch_load_rows_from_remote(&self, row_ids: Vec<RowId>) {
-  //   // start loading rows that not on disk
-  //   info!("batch load {} rows from remote", row_ids.len());
-  //   let (tx, mut rx) = tokio::sync::mpsc::channel(100);
-  //   self.task_controller.add_task(BlockTask::BatchFetchRow {
-  //     row_ids,
-  //     seq: self.sequence.fetch_add(1, Ordering::SeqCst),
-  //     sender: tx,
-  //   });
-  //
-  //   let row_change_tx = self.row_change_tx.clone();
-  //   let row_mem_cache = self.row_mem_cache.clone();
-  //   let notifier = self.notifier.clone();
-  //   let collab_service = self.collab_service.clone();
-  //   tokio::spawn(async move {
-  //     let mut success_row_count = 0;
-  //     let mut fail_row_count = 0;
-  //     while let Some(row_collabs) = rx.recv().await {
-  //       for (row_id, row_collab) in row_collabs {
-  //         match row_collab {
-  //           Ok(row_collab) => {
-  //             let row_id = RowId::from(row_id);
-  //             let row_detail = RowDetail::from_collab(&row_collab);
-  //             let row = Arc::new(RwLock::new(DatabaseRow::new(
-  //               row_id.clone(),
-  //               row_collab,
-  //               row_change_tx.clone(),
-  //               None,
-  //               collab_service.clone(),
-  //             )));
-  //             row_mem_cache.insert(row_id, row);
-  //             success_row_count += 1;
-  //             if let Some(row_detail) = row_detail {
-  //               let _ = notifier.send(BlockEvent::DidFetchRow(vec![row_detail]));
-  //             }
-  //           },
-  //           Err(err) => {
-  //             fail_row_count += 1;
-  //             error!("Can't fetch the row from remote: {:?}", err);
-  //           },
-  //         }
-  //       }
-  //     }
-  //
-  //     info!(
-  //       "did load rows from remote: success_row_count: {}, fail_row_count: {}",
-  //       success_row_count, fail_row_count
-  //     );
-  //   });
-  // }
 
   pub async fn create_rows<T>(&self, rows: Vec<T>) -> Vec<RowOrder>
   where
@@ -314,12 +251,6 @@ impl Block {
     &self,
     row_id: RowId,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
-    // let exists = match self.collab_service.persistence() {
-    //   None => false,
-    //   Some(persistence) => persistence.is_collab_exist(&row_id),
-    // };
-
-    // if exists {
     trace!("create row instance from disk: {:?}", row_id);
     let collab = self.create_collab_for_row(&row_id, false).await?;
     let database_row = DatabaseRow::new(
@@ -339,46 +270,6 @@ impl Block {
         .send(BlockEvent::DidFetchRow(vec![row_detail]));
     }
     Ok(database_row)
-    // }
-
-    // // Can't find the row in local disk, fetch it from remote.
-    // trace!(
-    //   "Row:{:?} not found in local disk, fetch it from remote",
-    //   row_id
-    // );
-    // let (sender, mut rx) = tokio::sync::mpsc::channel(1);
-    // self.task_controller.add_task(BlockTask::FetchRow {
-    //   row_id: row_id.clone(),
-    //   seq: self.sequence.fetch_add(1, Ordering::SeqCst),
-    //   sender,
-    // });
-    //
-    // let weak_notifier = Arc::downgrade(&self.notifier);
-    // let change_tx = self.row_change_tx.clone();
-    // let row_cache = self.row_mem_cache.clone();
-    // let cloned_row_id = row_id.clone();
-    // let cloned_collab_service = self.collab_service.clone();
-    // tokio::spawn(async move {
-    //   if let Some(Ok(row_collab)) = rx.recv().await {
-    //     let row_detail = RowDetail::from_collab(&row_collab);
-    //     trace!("create row instance from remote: {:?}", cloned_row_id);
-    //     let row = Arc::new(RwLock::new(DatabaseRow::new(
-    //       cloned_row_id.clone(),
-    //       row_collab,
-    //       change_tx,
-    //       None,
-    //       cloned_collab_service,
-    //     )));
-    //     row_cache.insert(cloned_row_id, row);
-    //     row_detail.map(|row_detail| {
-    //       weak_notifier.upgrade().map(|notifier| {
-    //         let _ = notifier.send(BlockEvent::DidFetchRow(vec![row_detail]));
-    //       })
-    //     });
-    //   } else {
-    //     error!("Can't fetch the row from remote: {:?}", cloned_row_id);
-    //   }
-    // });
   }
 
   async fn create_collab_for_row(
