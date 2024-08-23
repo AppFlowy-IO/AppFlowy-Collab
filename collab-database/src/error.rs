@@ -35,6 +35,9 @@ pub enum DatabaseError {
   #[error("Record not found")]
   RecordNotFound,
 
+  #[error("Action cancelled")]
+  ActionCancelled,
+
   #[error("Internal failure: {0}")]
   Internal(#[from] anyhow::Error),
 }
