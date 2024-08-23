@@ -12,7 +12,7 @@ use collab_database::fields::Field;
 use collab_database::rows::{Cells, CreateRowParams, RowId};
 use collab_database::views::DatabaseLayout;
 use collab_database::workspace_database::{
-  DatabaseCloudService, DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid,
+  DatabaseCollabCloudService, DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid,
   RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
 };
 use collab_entity::CollabType;
@@ -116,7 +116,7 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
 pub struct TestCloudServiceImpl;
 
 #[async_trait]
-impl DatabaseCloudService for TestCloudServiceImpl {
+impl DatabaseCollabCloudService for TestCloudServiceImpl {
   async fn get_encode_collab(
     &self,
     _object_id: &str,

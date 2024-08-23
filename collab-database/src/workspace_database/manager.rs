@@ -39,7 +39,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
 }
 
 #[async_trait]
-pub trait DatabaseCloudService: Send + Sync + 'static {
+pub trait DatabaseCollabCloudService: Send + Sync + 'static {
   async fn get_encode_collab(
     &self,
     object_id: &str,
@@ -98,7 +98,7 @@ pub struct WorkspaceDatabase {
   collab: Collab,
   meta_list: DatabaseMetaList,
   collab_service: Arc<dyn DatabaseCollabService>,
-  cloud_service: Arc<dyn DatabaseCloudService>,
+  cloud_service: Arc<dyn DatabaseCollabCloudService>,
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
@@ -109,7 +109,7 @@ impl WorkspaceDatabase {
   pub fn open(
     mut collab: Collab,
     collab_service: impl DatabaseCollabService,
-    cloud_service: impl DatabaseCloudService,
+    cloud_service: impl DatabaseCollabCloudService,
   ) -> Self {
     let collab_service = Arc::new(collab_service);
     let cloud_service = Arc::new(cloud_service);

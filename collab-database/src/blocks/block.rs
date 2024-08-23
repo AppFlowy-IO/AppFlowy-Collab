@@ -10,7 +10,7 @@ use crate::rows::{
 };
 use crate::views::RowOrder;
 use crate::workspace_database::{
-  CollabPersistenceImpl, DatabaseCloudService, DatabaseCollabService,
+  CollabPersistenceImpl, DatabaseCollabCloudService, DatabaseCollabService,
 };
 
 use collab::preclude::Collab;
@@ -46,7 +46,7 @@ impl Block {
   pub fn new(
     database_id: String,
     collab_service: Arc<dyn DatabaseCollabService>,
-    cloud_service: Option<Arc<dyn DatabaseCloudService>>,
+    cloud_service: Option<Arc<dyn DatabaseCollabCloudService>>,
     row_change_tx: RowChangeSender,
   ) -> Block {
     let controller = BlockTaskController::new(

@@ -5,7 +5,7 @@ use std::sync::{Arc, Weak};
 use crate::error::DatabaseError;
 use crate::rows::RowId;
 use crate::workspace_database::{
-  CollabPersistenceImpl, DatabaseCloudService, DatabaseCollabPersistenceService,
+  CollabPersistenceImpl, DatabaseCollabCloudService, DatabaseCollabPersistenceService,
   DatabaseCollabService,
 };
 use collab::core::collab::DataSource;
@@ -31,7 +31,7 @@ pub struct BlockTaskController {
 impl BlockTaskController {
   pub fn new(
     collab_service: Weak<dyn DatabaseCollabService>,
-    cloud_service: Option<Weak<dyn DatabaseCloudService>>,
+    cloud_service: Option<Weak<dyn DatabaseCollabCloudService>>,
   ) -> Self {
     let (sender, receiver) = unbounded_channel();
     let processor = tokio::spawn(Self::run(receiver, collab_service, cloud_service));
@@ -49,7 +49,7 @@ impl BlockTaskController {
   async fn run(
     mut receiver: UnboundedReceiver<BlockTask>,
     collab_service: Weak<dyn DatabaseCollabService>,
-    cloud_service: Option<Weak<dyn DatabaseCloudService>>,
+    cloud_service: Option<Weak<dyn DatabaseCollabCloudService>>,
   ) {
     if cloud_service.is_none() {
       return;
@@ -71,7 +71,7 @@ impl BlockTaskController {
   async fn handle_task(
     task: BlockTask,
     collab_service: Arc<dyn DatabaseCollabService>,
-    cloud_service: Option<Weak<dyn DatabaseCloudService>>,
+    cloud_service: Option<Weak<dyn DatabaseCollabCloudService>>,
   ) -> anyhow::Result<()> {
     if let Some(cloud_service) = cloud_service.and_then(|cloud_service| cloud_service.upgrade()) {
       trace!("handle task: {:?}", task);
