@@ -71,7 +71,7 @@ async fn update_cell_test() {
 
 #[tokio::test]
 async fn update_not_exist_row_test() {
-  let mut test = workspace_database_test(1);
+  let mut test = workspace_database_test(1).await;
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: "d1".to_string(),
@@ -94,7 +94,7 @@ async fn update_not_exist_row_test() {
 
 async fn user_database_with_default_row() -> WorkspaceDatabaseTest {
   let database_id = "d1".to_string();
-  let mut test = workspace_database_test(1);
+  let mut test = workspace_database_test(1).await;
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: database_id.clone(),
@@ -112,6 +112,7 @@ async fn user_database_with_default_row() -> WorkspaceDatabaseTest {
     .write()
     .await
     .create_row_in_view("v1", CreateRowParams::new(1, database_id))
+    .await
     .unwrap();
 
   test

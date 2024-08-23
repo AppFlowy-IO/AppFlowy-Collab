@@ -19,7 +19,7 @@ use crate::views::{
   FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, OrderObjectPosition,
   RowOrder, RowOrderArray, SortMap, ViewChangeReceiver, ViewMap,
 };
-use crate::workspace_database::{DatabaseCollabCloudService, DatabaseCollabService};
+use crate::workspace_database::DatabaseCollabService;
 
 use collab::preclude::{
   Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
@@ -50,35 +50,35 @@ const VIEWS: &str = "views";
 const METAS: &str = "metas";
 
 pub struct DatabaseContext {
-  pub collab: Collab,
   pub collab_service: Arc<dyn DatabaseCollabService>,
-  pub cloud_service: Option<Arc<dyn DatabaseCollabCloudService>>,
   pub notifier: DatabaseNotify,
+  pub is_new: bool,
 }
 
 impl DatabaseContext {
-  pub fn new(
-    collab: Collab,
-    collab_service: Arc<dyn DatabaseCollabService>,
-    cloud_service: Option<Arc<dyn DatabaseCollabCloudService>>,
-  ) -> Self {
+  pub fn new(collab_service: Arc<dyn DatabaseCollabService>, is_new: bool) -> Self {
     Self {
-      collab,
       collab_service,
-      cloud_service,
       notifier: DatabaseNotify::default(),
+      is_new,
     }
   }
 }
 
 impl Database {
   /// Get or Create a database with the given database_id.
-  pub fn open(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
+  pub async fn open(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
     if database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
+
+    let collab = context
+      .collab_service
+      .build_collab(database_id, CollabType::Database, context.is_new)
+      .await?;
+
     let collab_service = context.collab_service.clone();
-    let (body, collab) = DatabaseBody::new(database_id.to_string(), context);
+    let (body, collab) = DatabaseBody::new(collab, database_id.to_string(), context);
     Ok(Self {
       collab,
       body,
@@ -93,8 +93,8 @@ impl Database {
     context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
     // Get or create empty database with the given database_id
-    let mut database = Self::open(&params.database_id, context)?;
-    database.init(params)?;
+    let mut database = Self::open(&params.database_id, context).await?;
+    database.init(params).await?;
 
     // write the database to disk
     tokio::task::spawn_blocking(move || {
@@ -122,7 +122,7 @@ impl Database {
     Ok(())
   }
 
-  fn init(&mut self, params: CreateDatabaseParams) -> Result<(), DatabaseError> {
+  async fn init(&mut self, params: CreateDatabaseParams) -> Result<(), DatabaseError> {
     let CreateDatabaseParams {
       database_id: _,
       rows,
@@ -138,7 +138,7 @@ impl Database {
         return Err(DatabaseError::DatabaseViewNotExist);
       };
 
-    let row_orders = self.body.block.create_rows(rows);
+    let row_orders = self.body.block.create_rows(rows).await;
     let field_orders: Vec<FieldOrder> = fields.iter().map(FieldOrder::from).collect();
     let mut txn = self.collab.context.transact_mut();
     // Set the inline view id. The inline view id should not be
@@ -235,9 +235,9 @@ impl Database {
   /// This row will be inserted to the end of rows of each view that
   /// reference the given database. Return the row order if the row is
   /// created successfully. Otherwise, return None.
-  pub fn create_row(&mut self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
+  pub async fn create_row(&mut self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
     let params = CreateRowParamsValidator::validate(params)?;
-    let row_order = self.body.block.create_row(params)?;
+    let row_order = self.body.block.create_row(params).await?;
     let mut txn = self.collab.transact_mut();
     self
       .body
@@ -271,13 +271,26 @@ impl Database {
   /// Create a new row from the given view.
   /// This row will be inserted into corresponding [Block]. The [RowOrder] of this row will
   /// be inserted to each view.
-  pub fn create_row_in_view(
+  pub async fn create_row_in_view(
     &mut self,
     view_id: &str,
     params: CreateRowParams,
   ) -> Result<(usize, RowOrder), DatabaseError> {
+    let row_position = params.row_position.clone();
+    let row_order = self.body.create_row(params).await?;
+
     let mut txn = self.collab.transact_mut();
-    self.body.create_row(&mut txn, view_id, params)
+    self
+      .body
+      .views
+      .update_all_views(&mut txn, |_view_id, update| {
+        update.insert_row_order(&row_order, &row_position);
+      });
+    let index = self
+      .body
+      .index_of_row(&txn, view_id, &row_order.id)
+      .unwrap_or_default();
+    Ok((index, row_order))
   }
 
   /// Remove the row
@@ -358,8 +371,8 @@ impl Database {
   }
 
   #[instrument(level = "debug", skip_all)]
-  pub fn init_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self.body.block.get_or_init_row(row_id.clone()).ok()
+  pub async fn init_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    self.body.block.get_or_init_row(row_id.clone()).await.ok()
   }
 
   pub fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
@@ -368,7 +381,7 @@ impl Database {
 
   /// Return the [RowMeta] with the given row id.
   pub async fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
-    let database_row = self.body.block.get_or_init_row(row_id.clone()).ok()?;
+    let database_row = self.body.block.get_or_init_row(row_id.clone()).await.ok()?;
 
     let read_guard = database_row.read().await;
     let row = read_guard.get_row()?;
@@ -1362,9 +1375,9 @@ pub struct DatabaseBody {
 }
 
 impl DatabaseBody {
-  fn new(database_id: String, mut context: DatabaseContext) -> (Self, Collab) {
-    let mut txn = context.collab.context.transact_mut();
-    let root: MapRef = context.collab.data.get_or_init(&mut txn, DATABASE);
+  fn new(mut collab: Collab, database_id: String, context: DatabaseContext) -> (Self, Collab) {
+    let mut txn = collab.context.transact_mut();
+    let root: MapRef = collab.data.get_or_init(&mut txn, DATABASE);
     root.insert(&mut txn, DATABASE_ID, &*database_id);
     let fields: MapRef = root.get_or_init(&mut txn, FIELDS); // { DATABASE: { FIELDS: {:} } }
     let views: MapRef = root.get_or_init(&mut txn, VIEWS); // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
@@ -1377,7 +1390,6 @@ impl DatabaseBody {
     let block = Block::new(
       database_id,
       context.collab_service.clone(),
-      context.cloud_service.clone(),
       context.notifier.row_change_tx.clone(),
     );
     let body = DatabaseBody {
@@ -1388,7 +1400,7 @@ impl DatabaseBody {
       block,
       notifier: context.notifier,
     };
-    (body, context.collab)
+    (body, collab)
   }
 
   pub fn get_database_id<T: ReadTxn>(&self, txn: &T) -> String {
@@ -1398,22 +1410,9 @@ impl DatabaseBody {
   /// Create a new row from the given view.
   /// This row will be inserted into corresponding [Block]. The [RowOrder] of this row will
   /// be inserted to each view.
-  pub fn create_row(
-    &self,
-    txn: &mut TransactionMut,
-    view_id: &str,
-    params: CreateRowParams,
-  ) -> Result<(usize, RowOrder), DatabaseError> {
-    let row_position = params.row_position.clone();
-    let row_order = self.block.create_row(params)?;
-
-    self.views.update_all_views(txn, |_view_id, update| {
-      update.insert_row_order(&row_order, &row_position);
-    });
-    let index = self
-      .index_of_row(txn, view_id, &row_order.id)
-      .unwrap_or_default();
-    Ok((index, row_order))
+  pub async fn create_row(&self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
+    let row_order = self.block.create_row(params).await?;
+    Ok(row_order)
   }
 
   pub fn index_of_row<T: ReadTxn>(&self, txn: &T, view_id: &str, row_id: &RowId) -> Option<usize> {
