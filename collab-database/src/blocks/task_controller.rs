@@ -5,7 +5,8 @@ use std::sync::{Arc, Weak};
 use crate::error::DatabaseError;
 use crate::rows::RowId;
 use crate::workspace_database::{
-  CollabPersistenceImpl, DatabaseCollabPersistenceService, DatabaseCollabService,
+  CollabPersistenceImpl, DatabaseCloudService, DatabaseCollabPersistenceService,
+  DatabaseCollabService,
 };
 use collab::core::collab::DataSource;
 
@@ -28,9 +29,12 @@ pub struct BlockTaskController {
 }
 
 impl BlockTaskController {
-  pub fn new(collab_service: Weak<dyn DatabaseCollabService>) -> Self {
+  pub fn new(
+    collab_service: Weak<dyn DatabaseCollabService>,
+    cloud_service: Option<Weak<dyn DatabaseCloudService>>,
+  ) -> Self {
     let (sender, receiver) = unbounded_channel();
-    let processor = tokio::spawn(Self::run(receiver, collab_service));
+    let processor = tokio::spawn(Self::run(receiver, collab_service, cloud_service));
 
     Self { sender, processor }
   }
@@ -45,11 +49,16 @@ impl BlockTaskController {
   async fn run(
     mut receiver: UnboundedReceiver<BlockTask>,
     collab_service: Weak<dyn DatabaseCollabService>,
+    cloud_service: Option<Weak<dyn DatabaseCloudService>>,
   ) {
+    if cloud_service.is_none() {
+      return;
+    }
+
     while let Some(task) = receiver.recv().await {
       if let Some(collab_service) = collab_service.upgrade() {
         if !Self::redundant(collab_service.persistence(), &task) {
-          if let Err(err) = Self::handle_task(task, collab_service).await {
+          if let Err(err) = Self::handle_task(task, collab_service, cloud_service.clone()).await {
             tracing::error!("Failed to handle task: {}", err);
           }
         }
@@ -62,63 +71,66 @@ impl BlockTaskController {
   async fn handle_task(
     task: BlockTask,
     collab_service: Arc<dyn DatabaseCollabService>,
+    cloud_service: Option<Weak<dyn DatabaseCloudService>>,
   ) -> anyhow::Result<()> {
-    trace!("handle task: {:?}", task);
-    match &task {
-      BlockTask::FetchRow { row_id, sender, .. } => {
-        trace!("fetching database row: {:?}", row_id);
-        if let Ok(encode_collab) = collab_service
-          .get_encode_collab(row_id.as_ref(), CollabType::DatabaseRow)
-          .await
-        {
-          if let Some(encode_collab) = encode_collab.clone() {
-            write_encode_collab_to_disk(&collab_service, encode_collab, row_id.as_str());
-          }
-
-          let data_source = encode_collab.map(DataSource::from).unwrap_or_else(|| {
-            CollabPersistenceImpl {
-              persistence: collab_service.persistence(),
+    if let Some(cloud_service) = cloud_service.and_then(|cloud_service| cloud_service.upgrade()) {
+      trace!("handle task: {:?}", task);
+      match &task {
+        BlockTask::FetchRow { row_id, sender, .. } => {
+          trace!("fetching database row from remote: {:?}", row_id);
+          if let Ok(encode_collab) = cloud_service
+            .get_encode_collab(row_id.as_ref(), CollabType::DatabaseRow)
+            .await
+          {
+            if let Some(encode_collab) = encode_collab.clone() {
+              write_encode_collab_to_disk(&collab_service, encode_collab, row_id.as_str());
             }
-            .into()
-          });
 
-          let collab = collab_service.build_collab(row_id, CollabType::DatabaseRow, data_source);
+            let data_source = encode_collab.map(DataSource::from).unwrap_or_else(|| {
+              CollabPersistenceImpl {
+                persistence: collab_service.persistence(),
+              }
+              .into()
+            });
 
-          let _ = sender.send(collab).await;
-        }
-      },
-      BlockTask::BatchFetchRow {
-        row_ids, sender, ..
-      } => {
-        trace!("batch fetching database row");
-        let object_ids = row_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
-        if let Ok(updates_by_oid) = collab_service
-          .batch_get_encode_collab(object_ids, CollabType::DatabaseRow)
-          .await
-        {
-          let mut collabs = vec![];
-          let cloned_updates_by_oid = updates_by_oid.clone();
-          let cloned_collab_service = collab_service.clone();
-          let _ = tokio::task::spawn_blocking(move || {
-            for (oid, encode_collab) in cloned_updates_by_oid {
-              write_encode_collab_to_disk(&cloned_collab_service, encode_collab, &oid);
-            }
-          })
-          .await;
-
-          for (oid, encode_collab) in updates_by_oid {
-            let collab = collab_service.build_collab(
-              &oid,
-              CollabType::DatabaseRow,
-              DataSource::from(encode_collab),
-            );
-            collabs.push((oid, collab));
-            yield_now().await;
+            let collab = collab_service.build_collab(row_id, CollabType::DatabaseRow, data_source);
+            let _ = sender.send(collab).await;
           }
-          let _ = sender.send(collabs).await;
-        }
-      },
+        },
+        BlockTask::BatchFetchRow {
+          row_ids, sender, ..
+        } => {
+          trace!("batch fetching database row");
+          let object_ids = row_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
+          if let Ok(updates_by_oid) = cloud_service
+            .batch_get_encode_collab(object_ids, CollabType::DatabaseRow)
+            .await
+          {
+            let mut collabs = vec![];
+            let cloned_updates_by_oid = updates_by_oid.clone();
+            let cloned_collab_service = collab_service.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+              for (oid, encode_collab) in cloned_updates_by_oid {
+                write_encode_collab_to_disk(&cloned_collab_service, encode_collab, &oid);
+              }
+            })
+            .await;
+
+            for (oid, encode_collab) in updates_by_oid {
+              let collab = collab_service.build_collab(
+                &oid,
+                CollabType::DatabaseRow,
+                DataSource::from(encode_collab),
+              );
+              collabs.push((oid, collab));
+              yield_now().await;
+            }
+            let _ = sender.send(collabs).await;
+          }
+        },
+      }
     }
+
     Ok(())
   }
 

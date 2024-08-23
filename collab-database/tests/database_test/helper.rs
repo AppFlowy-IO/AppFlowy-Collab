@@ -59,7 +59,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     .unwrap();
   collab.initialize();
 
-  let context = DatabaseContext::new(collab, collab_service);
+  let context = DatabaseContext::new(collab, collab_service, None);
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
     inline_view_id: "v1".to_string(),
@@ -111,7 +111,7 @@ pub async fn create_database_with_db(
   let collab = collab_service
     .build_collab(database_id, CollabType::Database, DataSource::Disk(None))
     .unwrap();
-  let context = DatabaseContext::new(collab, collab_service);
+  let context = DatabaseContext::new(collab, collab_service, None);
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
     inline_view_id: "v1".to_string(),
@@ -150,7 +150,7 @@ pub fn restore_database_from_db(
   let collab = collab_service
     .build_collab(database_id, CollabType::Database, data_source.into())
     .unwrap();
-  let context = DatabaseContext::new(collab, collab_service);
+  let context = DatabaseContext::new(collab, collab_service, None);
   let database = Database::open(database_id, context).unwrap();
   DatabaseTest {
     database,
@@ -222,7 +222,7 @@ impl DatabaseTestBuilder {
       uid: self.uid,
       db: collab_db.clone(),
     });
-    let context = DatabaseContext::new(collab, collab_service);
+    let context = DatabaseContext::new(collab, collab_service, None);
     let params = CreateDatabaseParams {
       database_id: self.database_id.clone(),
       inline_view_id: self.view_id.clone(),

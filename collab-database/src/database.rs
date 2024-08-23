@@ -19,7 +19,7 @@ use crate::views::{
   FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, OrderObjectPosition,
   RowOrder, RowOrderArray, SortMap, ViewChangeReceiver, ViewMap,
 };
-use crate::workspace_database::DatabaseCollabService;
+use crate::workspace_database::{DatabaseCloudService, DatabaseCollabService};
 
 use collab::preclude::{
   Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
@@ -52,14 +52,20 @@ const METAS: &str = "metas";
 pub struct DatabaseContext {
   pub collab: Collab,
   pub collab_service: Arc<dyn DatabaseCollabService>,
+  pub cloud_service: Option<Arc<dyn DatabaseCloudService>>,
   pub notifier: DatabaseNotify,
 }
 
 impl DatabaseContext {
-  pub fn new(collab: Collab, collab_service: Arc<dyn DatabaseCollabService>) -> Self {
+  pub fn new(
+    collab: Collab,
+    collab_service: Arc<dyn DatabaseCollabService>,
+    cloud_service: Option<Arc<dyn DatabaseCloudService>>,
+  ) -> Self {
     Self {
       collab,
       collab_service,
+      cloud_service,
       notifier: DatabaseNotify::default(),
     }
   }
@@ -1371,6 +1377,7 @@ impl DatabaseBody {
     let block = Block::new(
       database_id,
       context.collab_service.clone(),
+      context.cloud_service.clone(),
       context.notifier.row_change_tx.clone(),
     );
     let body = DatabaseBody {

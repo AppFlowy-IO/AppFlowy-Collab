@@ -28,6 +28,18 @@ pub type EncodeCollabByOid = HashMap<String, EncodedCollab>;
 ///
 #[async_trait]
 pub trait DatabaseCollabService: Send + Sync + 'static {
+  fn build_collab(
+    &self,
+    object_id: &str,
+    object_type: CollabType,
+    data_source: DataSource,
+  ) -> Result<Collab, DatabaseError>;
+
+  fn persistence(&self) -> Option<Box<dyn DatabaseCollabPersistenceService>>;
+}
+
+#[async_trait]
+pub trait DatabaseCloudService: Send + Sync + 'static {
   async fn get_encode_collab(
     &self,
     object_id: &str,
@@ -39,15 +51,6 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     object_ids: Vec<String>,
     object_ty: CollabType,
   ) -> Result<EncodeCollabByOid, DatabaseError>;
-
-  fn build_collab(
-    &self,
-    object_id: &str,
-    object_type: CollabType,
-    data_source: DataSource,
-  ) -> Result<Collab, DatabaseError>;
-
-  fn persistence(&self) -> Option<Box<dyn DatabaseCollabPersistenceService>>;
 }
 
 pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
@@ -95,6 +98,7 @@ pub struct WorkspaceDatabase {
   collab: Collab,
   meta_list: DatabaseMetaList,
   collab_service: Arc<dyn DatabaseCollabService>,
+  cloud_service: Arc<dyn DatabaseCloudService>,
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
@@ -102,17 +106,20 @@ pub struct WorkspaceDatabase {
 }
 
 impl WorkspaceDatabase {
-  pub fn open<T>(mut collab: Collab, collab_service: T) -> Self
-  where
-    T: DatabaseCollabService,
-  {
+  pub fn open(
+    mut collab: Collab,
+    collab_service: impl DatabaseCollabService,
+    cloud_service: impl DatabaseCloudService,
+  ) -> Self {
     let collab_service = Arc::new(collab_service);
+    let cloud_service = Arc::new(cloud_service);
     let meta_list = DatabaseMetaList::new(&mut collab);
 
     Self {
       collab,
       meta_list,
       collab_service,
+      cloud_service,
       databases: DashMap::new(),
     }
   }
@@ -144,7 +151,7 @@ impl WorkspaceDatabase {
       // Try to load the database from the remote. The database doesn't exist in the local only
       // when the user has deleted the database or the database is using a remote storage.
       match self
-        .collab_service
+        .cloud_service
         .get_encode_collab(database_id, CollabType::Database)
         .await
       {
@@ -190,7 +197,11 @@ impl WorkspaceDatabase {
           .is_collab_exist(database_id);
         let collab = self.get_database_collab(database_id).await?;
 
-        let context = DatabaseContext::new(collab, self.collab_service.clone());
+        let context = DatabaseContext::new(
+          collab,
+          self.collab_service.clone(),
+          Some(self.cloud_service.clone()),
+        );
         let database = Database::open(database_id, context).ok()?;
         // The database is not exist in local disk, which means the rows of the database are not
         // loaded yet.
@@ -241,7 +252,11 @@ impl WorkspaceDatabase {
     }
     .into();
     let collab = self.collab_for_database(&params.database_id, data_source)?;
-    let context = DatabaseContext::new(collab, self.collab_service.clone());
+    let context = DatabaseContext::new(
+      collab,
+      self.collab_service.clone(),
+      Some(self.cloud_service.clone()),
+    );
 
     // Add a new database record.
     let mut linked_views = HashSet::new();

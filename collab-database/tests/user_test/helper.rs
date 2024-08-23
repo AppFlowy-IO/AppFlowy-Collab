@@ -12,8 +12,8 @@ use collab_database::fields::Field;
 use collab_database::rows::{Cells, CreateRowParams, RowId};
 use collab_database::views::DatabaseLayout;
 use collab_database::workspace_database::{
-  DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid, RowRelationChange,
-  RowRelationUpdateReceiver, WorkspaceDatabase,
+  DatabaseCloudService, DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid,
+  RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabase,
 };
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -113,8 +113,10 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
   }
 }
 
+pub struct TestCloudServiceImpl;
+
 #[async_trait]
-impl DatabaseCollabService for TestUserDatabaseServiceImpl {
+impl DatabaseCloudService for TestCloudServiceImpl {
   async fn get_encode_collab(
     &self,
     _object_id: &str,
@@ -130,7 +132,10 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
   ) -> Result<EncodeCollabByOid, DatabaseError> {
     Ok(EncodeCollabByOid::default())
   }
+}
 
+#[async_trait]
+impl DatabaseCollabService for TestUserDatabaseServiceImpl {
   fn build_collab(
     &self,
     object_id: &str,
@@ -191,7 +196,7 @@ pub async fn workspace_database_test_with_config(
       data_source.into(),
     )
     .unwrap();
-  let inner = WorkspaceDatabase::open(collab, collab_service);
+  let inner = WorkspaceDatabase::open(collab, collab_service, TestCloudServiceImpl);
   WorkspaceDatabaseTest {
     uid,
     inner,
@@ -224,7 +229,7 @@ pub fn workspace_database_with_db(
       data_source,
     )
     .unwrap();
-  WorkspaceDatabase::open(collab, builder)
+  WorkspaceDatabase::open(collab, builder, TestCloudServiceImpl)
 }
 
 pub fn user_database_test_with_db(uid: i64, collab_db: Arc<CollabKVDB>) -> WorkspaceDatabaseTest {

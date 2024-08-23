@@ -9,7 +9,9 @@ use crate::rows::{
   RowMetaKey, RowMetaUpdate, RowUpdate,
 };
 use crate::views::RowOrder;
-use crate::workspace_database::{CollabPersistenceImpl, DatabaseCollabService};
+use crate::workspace_database::{
+  CollabPersistenceImpl, DatabaseCloudService, DatabaseCollabService,
+};
 
 use collab::preclude::Collab;
 
@@ -44,9 +46,13 @@ impl Block {
   pub fn new(
     database_id: String,
     collab_service: Arc<dyn DatabaseCollabService>,
+    cloud_service: Option<Arc<dyn DatabaseCloudService>>,
     row_change_tx: RowChangeSender,
   ) -> Block {
-    let controller = BlockTaskController::new(Arc::downgrade(&collab_service));
+    let controller = BlockTaskController::new(
+      Arc::downgrade(&collab_service),
+      cloud_service.map(|s| Arc::downgrade(&s)),
+    );
     let task_controller = Arc::new(controller);
     let (notifier, _) = broadcast::channel(1000);
     Self {
