@@ -1,6 +1,7 @@
-use crate::database::gen_database_id;
+use crate::database::{gen_database_id, gen_field_id, gen_row_id};
 use crate::template::entity::{
   CellTemplateData, DatabaseTemplate, DatabaseViewTemplate, FieldTemplate, FieldType, RowTemplate,
+  CELL_DATA, TYPE_OPTION_CONTENT,
 };
 
 use crate::template::chect_list_parse::ChecklistCellData;
@@ -61,12 +62,21 @@ impl DatabaseTemplateBuilder {
       .max()
       .unwrap_or(0);
 
-    let mut rows = vec![RowTemplate::default(); num_rows];
+    let mut rows = Vec::with_capacity(num_rows);
+    for _ in 0..num_rows {
+      rows.push(RowTemplate {
+        row_id: gen_row_id().to_string(),
+        height: 60,
+        visibility: true,
+        cells: Default::default(),
+      });
+    }
+
     for (field_index, row) in self.columns.into_iter().enumerate() {
       for (row_index, cell) in row.into_iter().enumerate() {
         rows[row_index]
           .cells
-          .insert(fields[field_index].field_type.type_id(), cell);
+          .insert(fields[field_index].field_id.clone(), cell);
       }
     }
 
@@ -94,8 +104,7 @@ pub struct FieldTemplateBuilder {
   pub is_primary: bool,
   cells: Vec<String>,
 }
-const CELL_DATA: &str = "data";
-const TYPE_OPTION_CONTENT: &str = "content";
+
 impl FieldTemplateBuilder {
   pub fn new(name: String, field_type: FieldType, is_primary: bool) -> Self {
     Self {
@@ -134,6 +143,7 @@ impl FieldTemplateBuilder {
   pub fn build(self) -> (FieldTemplate, Vec<CellTemplateData>) {
     let field_type = self.field_type.clone();
     let mut field_template = FieldTemplate {
+      field_id: gen_field_id(),
       name: self.name,
       field_type: self.field_type,
       is_primary: self.is_primary,

@@ -142,8 +142,8 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
     Ok(collab)
   }
 
-  fn persistence(&self) -> Option<Box<dyn DatabaseCollabPersistenceService>> {
-    Some(Box::new(TestUserDatabasePersistenceImpl {
+  fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
+    Some(Arc::new(TestUserDatabasePersistenceImpl {
       uid: self.uid,
       db: self.db.clone(),
     }))
