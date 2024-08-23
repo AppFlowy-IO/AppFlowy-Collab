@@ -24,7 +24,7 @@ async fn create_single_field_test() {
 
 #[tokio::test]
 async fn duplicate_field_test() {
-  let mut database_test = create_database_with_default_data(1, "1");
+  let mut database_test = create_database_with_default_data(1, "1").await;
   let original_field = database_test.get_field("f1").unwrap();
   let (index, duplicated_field) = database_test
     .duplicate_field("v1", "f1", |field| format!("{} (copy)", field.name))
@@ -40,7 +40,7 @@ async fn duplicate_field_test() {
 
 #[tokio::test]
 async fn duplicate_field_test2() {
-  let mut database_test = create_database_with_default_data(1, "1");
+  let mut database_test = create_database_with_default_data(1, "1").await;
   let original_field = database_test.get_field("f3").unwrap();
   let (index, duplicated_field) = database_test
     .duplicate_field("v1", "f3", |field| format!("{} (copy)", field.name))

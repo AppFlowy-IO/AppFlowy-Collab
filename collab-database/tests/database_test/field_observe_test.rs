@@ -11,7 +11,7 @@ use tokio::time::sleep;
 async fn observe_field_update_and_delete_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
-  let database_test = create_database_with_default_data(1, &database_id);
+  let database_test = create_database_with_default_data(1, &database_id).await;
 
   let field = database_test.get_fields(None).pop().unwrap();
 
