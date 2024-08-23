@@ -19,7 +19,7 @@ use crate::views::{
   FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, OrderObjectPosition,
   RowOrder, RowOrderArray, SortMap, ViewChangeReceiver, ViewMap,
 };
-use crate::workspace_database::DatabaseCollabService;
+use crate::workspace_database::{DatabaseCollabCloudService, DatabaseCollabService};
 
 use collab::preclude::{
   Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
@@ -40,7 +40,6 @@ pub use tokio_stream::wrappers::WatchStream;
 use tracing::{error, instrument, trace};
 
 pub struct Database {
-  uid: i64,
   pub collab: Collab,
   pub body: DatabaseBody,
   pub collab_service: Arc<dyn DatabaseCollabService>,
@@ -51,18 +50,22 @@ const VIEWS: &str = "views";
 const METAS: &str = "metas";
 
 pub struct DatabaseContext {
-  pub uid: i64,
   pub collab: Collab,
   pub collab_service: Arc<dyn DatabaseCollabService>,
+  pub cloud_service: Option<Arc<dyn DatabaseCollabCloudService>>,
   pub notifier: DatabaseNotify,
 }
 
 impl DatabaseContext {
-  pub fn new(uid: i64, collab: Collab, collab_service: Arc<dyn DatabaseCollabService>) -> Self {
+  pub fn new(
+    collab: Collab,
+    collab_service: Arc<dyn DatabaseCollabService>,
+    cloud_service: Option<Arc<dyn DatabaseCollabCloudService>>,
+  ) -> Self {
     Self {
-      uid,
       collab,
       collab_service,
+      cloud_service,
       notifier: DatabaseNotify::default(),
     }
   }
@@ -74,11 +77,9 @@ impl Database {
     if database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
-    let uid = context.uid;
     let collab_service = context.collab_service.clone();
     let (body, collab) = DatabaseBody::new(database_id.to_string(), context);
     Ok(Self {
-      uid,
       collab,
       body,
       collab_service,
@@ -108,13 +109,13 @@ impl Database {
     if let Some(persistence) = self.collab_service.persistence() {
       // Write database
       let database_encoded = encoded_collab(&self.collab, &CollabType::Database)?;
-      persistence.flush_collab(self.uid, self.collab.object_id(), database_encoded)?;
+      persistence.flush_collab(self.collab.object_id(), database_encoded)?;
 
       // Write database rows
       for row in self.body.block.row_mem_cache.iter() {
         let row_collab = &row.blocking_read().collab;
         let row_encoded = encoded_collab(row_collab, &CollabType::DatabaseRow)?;
-        persistence.flush_collab(self.uid, row_collab.object_id(), row_encoded)?;
+        persistence.flush_collab(row_collab.object_id(), row_encoded)?;
       }
     }
 
@@ -1374,9 +1375,9 @@ impl DatabaseBody {
     let views = ViewMap::new(views, context.notifier.view_change_tx.clone());
     let metas = MetaMap::new(metas);
     let block = Block::new(
-      context.uid,
       database_id,
       context.collab_service.clone(),
+      context.cloud_service.clone(),
       context.notifier.row_change_tx.clone(),
     );
     let body = DatabaseBody {
