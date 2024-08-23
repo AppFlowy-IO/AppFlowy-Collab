@@ -113,47 +113,6 @@ impl WorkspaceDatabase {
     Ok(())
   }
 
-  // pub(crate) async fn get_database_collab(&self, database_id: &str) -> Option<Collab> {
-  //   // let mut data_source: DataSource = CollabPersistenceImpl {
-  //   //   persistence: self.collab_service.persistence(),
-  //   // }
-  //   // .into();
-  //
-  //   // let is_exist = self
-  //   //   .collab_service
-  //   //   .persistence()
-  //   //   .map(|persistence| persistence.is_collab_exist(database_id))
-  //   //   .unwrap_or(false);
-  //   //
-  //   // if !is_exist {
-  //   // Try to load the database from the remote. The database doesn't exist in the local only
-  //   // when the user has deleted the database or the database is using a remote storage.
-  //   //   match self
-  //   //     .cloud_service
-  //   //     .get_encode_collab(database_id, CollabType::Database)
-  //   //     .await
-  //   //   {
-  //   //     Ok(Some(encode_collab)) => {
-  //   //       if encode_collab.doc_state.is_empty() {
-  //   //         error!("Failed to get updates for database: {}", database_id);
-  //   //         return None;
-  //   //       }
-  //   //
-  //   //       data_source = DataSource::from(encode_collab);
-  //   //     },
-  //   //     Ok(None) => {
-  //   //       // do nothing
-  //   //     },
-  //   //     Err(e) => {
-  //   //       error!("Failed to get collab updates for database: {}", e);
-  //   //       return None;
-  //   //     },
-  //   //   }
-  //   // }
-  //   let database_collab = self.collab_for_database(database_id).ok()?;
-  //   Some(database_collab)
-  // }
-
   /// Get the database with the given database id.
   /// Return None if the database does not exist.
   pub async fn get_or_create_database(&self, database_id: &str) -> Option<Arc<RwLock<Database>>> {
