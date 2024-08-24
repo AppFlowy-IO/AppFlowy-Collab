@@ -110,10 +110,7 @@ impl DatabaseRow {
     let data = self.body.data.clone();
     let meta = self.meta.clone();
     let mut txn = self.collab.transact_mut();
-    let mut update = RowUpdate::new(&mut txn, data, meta);
-
-    // Update the last modified timestamp before we call the update function.
-    update = update.set_last_modified(timestamp());
+    let update = RowUpdate::new(&mut txn, data, meta);
     f(update)
   }
 
