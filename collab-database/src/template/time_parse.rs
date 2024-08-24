@@ -1,5 +1,4 @@
-use crate::template::date_parse::{DateFormat, TimeFormat};
-use crate::template::entity::FieldType;
+use crate::entity::{DateFormat, FieldType, TimeFormat};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]

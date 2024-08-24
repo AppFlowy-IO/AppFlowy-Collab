@@ -1,14 +1,15 @@
-use crate::database::{gen_database_id, gen_field_id, gen_row_id};
+use crate::database::{gen_field_id, gen_row_id};
 use crate::template::entity::{
-  CellTemplateData, DatabaseTemplate, DatabaseViewTemplate, FieldTemplate, FieldType, RowTemplate,
-  CELL_DATA, TYPE_OPTION_CONTENT,
+  CellTemplateData, DatabaseTemplate, DatabaseViewTemplate, FieldTemplate, RowTemplate, CELL_DATA,
+  TYPE_OPTION_CONTENT,
 };
 
+use crate::entity::{DateTypeOption, FieldType, SelectTypeOption};
+use crate::rows::new_cell_builder;
 use crate::template::chect_list_parse::ChecklistCellData;
-use crate::template::date_parse::{replace_cells_with_timestamp, DateTypeOption};
+use crate::template::date_parse::replace_cells_with_timestamp;
 use crate::template::option_parse::{
-  build_options_from_cells, replace_cells_with_options_id, SelectTypeOption,
-  SELECT_OPTION_SEPARATOR,
+  build_options_from_cells, replace_cells_with_options_id, SELECT_OPTION_SEPARATOR,
 };
 use crate::template::time_parse::TimestampTypeOption;
 use crate::views::DatabaseLayout;
@@ -52,7 +53,6 @@ impl DatabaseTemplateBuilder {
   }
 
   pub fn build(self) -> DatabaseTemplate {
-    let database_id = gen_database_id();
     let fields = self.fields;
 
     let num_rows = self
@@ -90,7 +90,6 @@ impl DatabaseTemplateBuilder {
     }];
 
     DatabaseTemplate {
-      database_id,
       fields,
       rows,
       views,
@@ -161,7 +160,7 @@ impl FieldTemplateBuilder {
           replace_cells_with_options_id(self.cells, &type_option.options, SELECT_OPTION_SEPARATOR)
             .into_iter()
             .map(|id| {
-              let mut map: HashMap<String, Any> = HashMap::new();
+              let mut map = new_cell_builder(field_type.clone());
               map.insert(CELL_DATA.to_string(), Any::from(id));
               map
             })
@@ -180,7 +179,7 @@ impl FieldTemplateBuilder {
         let cell_template = replace_cells_with_timestamp(self.cells)
           .into_iter()
           .map(|id| {
-            let mut map: HashMap<String, Any> = HashMap::new();
+            let mut map = new_cell_builder(field_type.clone());
             map.insert(CELL_DATA.to_string(), Any::from(id));
             map
           })
@@ -199,7 +198,7 @@ impl FieldTemplateBuilder {
         let cell_template = replace_cells_with_timestamp(self.cells)
           .into_iter()
           .map(|id| {
-            let mut map: HashMap<String, Any> = HashMap::new();
+            let mut map = new_cell_builder(field_type.clone());
             map.insert(CELL_DATA.to_string(), Any::from(id));
             map
           })
@@ -213,16 +212,20 @@ impl FieldTemplateBuilder {
         );
         cell_template
       },
-      _ => string_cell_template(self.cells),
+      _ => string_cell_template(&field_type, self.cells),
     };
 
     (field_template, cell_template)
   }
 }
 
-fn string_cell_template(cell: Vec<String>) -> Vec<CellTemplateData> {
+fn string_cell_template(field_type: &FieldType, cell: Vec<String>) -> Vec<CellTemplateData> {
   cell
     .into_iter()
-    .map(|data| HashMap::from([(CELL_DATA.to_string(), Any::from(data))]))
+    .map(|data| {
+      let mut cells = new_cell_builder(field_type.clone());
+      cells.insert(CELL_DATA.to_string(), Any::from(data));
+      cells
+    })
     .collect()
 }

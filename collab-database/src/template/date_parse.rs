@@ -1,34 +1,5 @@
+#![allow(deprecated)]
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
-use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct DateTypeOption {
-  pub date_format: DateFormat,
-  pub time_format: TimeFormat,
-  pub timezone_id: String,
-}
-
-impl DateTypeOption {
-  pub fn to_json_string(&self) -> String {
-    serde_json::to_string(self).unwrap()
-  }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Serialize, Deserialize, Default)]
-pub enum TimeFormat {
-  TwelveHour = 0,
-  #[default]
-  TwentyFourHour = 1,
-}
-#[derive(Clone, Debug, Copy, Serialize, Deserialize, Default)]
-pub enum DateFormat {
-  Local = 0,
-  US = 1,
-  ISO = 2,
-  #[default]
-  Friendly = 3,
-  DayMonthYear = 4,
-}
 
 pub(crate) fn replace_cells_with_timestamp(cells: Vec<String>) -> Vec<String> {
   cells

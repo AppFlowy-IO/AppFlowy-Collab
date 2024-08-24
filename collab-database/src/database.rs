@@ -32,8 +32,11 @@ use collab_entity::CollabType;
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView, DatabaseViewMeta,
 };
+
 use crate::template::entity::DatabaseTemplate;
-use collab::entity::EncodedCollab;
+use crate::template::util::{
+  create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
+};
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -86,6 +89,19 @@ impl Database {
       body,
       collab_service,
     })
+  }
+
+  pub async fn create_with_template(
+    database_id: &str,
+    template: DatabaseTemplate,
+  ) -> Result<Self, DatabaseError> {
+    let params = create_database_params_from_template(database_id, template);
+    let context = DatabaseContext {
+      collab_service: Arc::new(TemplateDatabaseCollabServiceImpl),
+      notifier: Default::default(),
+      is_new: true,
+    };
+    Self::create_with_view(params, context).await
   }
 
   /// Create a new database with the given [CreateDatabaseParams]
@@ -181,6 +197,10 @@ impl Database {
       .validate_require_data(&self.collab)
       .map_err(|_| DatabaseError::NoRequiredData)?;
     Ok(())
+  }
+
+  pub async fn export_template(&self) -> Result<DatabaseTemplate, DatabaseError> {
+    todo!()
   }
 
   pub fn subscribe_row_change(&self) -> RowChangeReceiver {

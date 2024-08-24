@@ -1,5 +1,5 @@
 use crate::database::gen_option_id;
-use crate::template::option_parse::{SelectOption, SelectOptionColor};
+use crate::entity::{SelectOption, SelectOptionColor};
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Clone, Serialize, Deserialize)]

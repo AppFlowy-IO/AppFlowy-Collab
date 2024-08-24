@@ -1,4 +1,7 @@
-use crate::database::{gen_database_id, gen_database_view_id, gen_row_id, timestamp, DatabaseData};
+#![allow(clippy::upper_case_acronyms)]
+use crate::database::{
+  gen_database_id, gen_database_view_id, gen_option_id, gen_row_id, timestamp, DatabaseData,
+};
 use crate::error::DatabaseError;
 use crate::fields::Field;
 use crate::rows::CreateRowParams;
@@ -6,6 +9,7 @@ use crate::views::{
   DatabaseLayout, FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap,
   GroupSettingMap, LayoutSetting, LayoutSettings, OrderObjectPosition, RowOrder, SortMap,
 };
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -207,6 +211,151 @@ impl CreateDatabaseParams {
       rows: create_row_params,
       fields: data.fields,
       views: create_view_params,
+    }
+  }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct DateTypeOption {
+  pub date_format: DateFormat,
+  pub time_format: TimeFormat,
+  pub timezone_id: String,
+}
+
+impl DateTypeOption {
+  pub fn to_json_string(&self) -> String {
+    serde_json::to_string(self).unwrap()
+  }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Serialize, Deserialize, Default)]
+pub enum TimeFormat {
+  TwelveHour = 0,
+  #[default]
+  TwentyFourHour = 1,
+}
+#[derive(Clone, Debug, Copy, Serialize, Deserialize, Default)]
+pub enum DateFormat {
+  Local = 0,
+  US = 1,
+  ISO = 2,
+  #[default]
+  Friendly = 3,
+  DayMonthYear = 4,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TimestampTypeOption {
+  pub date_format: DateFormat,
+  pub time_format: TimeFormat,
+  pub include_time: bool,
+  pub field_type: FieldType,
+}
+
+impl TimestampTypeOption {
+  pub fn new(field_type: FieldType, include_time: bool) -> Self {
+    Self {
+      date_format: DateFormat::default(),
+      time_format: TimeFormat::default(),
+      include_time,
+      field_type,
+    }
+  }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub enum FieldType {
+  RichText = 0,
+  Number = 1,
+  DateTime = 2,
+  SingleSelect = 3,
+  MultiSelect = 4,
+  Checkbox = 5,
+  URL = 6,
+  Checklist = 7,
+  LastEditedTime = 8,
+  CreatedTime = 9,
+  Relation = 10,
+  Summary = 11,
+  Translate = 12,
+  Time = 13,
+}
+
+impl FieldType {
+  pub fn type_id(&self) -> String {
+    (self.clone() as i64).to_string()
+  }
+}
+
+impl From<FieldType> for i64 {
+  fn from(field_type: FieldType) -> Self {
+    field_type as i64
+  }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SelectTypeOption {
+  pub options: Vec<SelectOption>,
+  pub disable_color: bool,
+}
+impl SelectTypeOption {
+  pub fn to_json_string(&self) -> String {
+    serde_json::to_string(self).unwrap()
+  }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SelectOption {
+  pub id: String,
+  pub name: String,
+  pub color: SelectOptionColor,
+}
+impl SelectOption {
+  pub fn new(name: &str) -> Self {
+    SelectOption {
+      id: gen_option_id(),
+      name: name.to_owned(),
+      color: SelectOptionColor::default(),
+    }
+  }
+
+  pub fn with_color(name: &str, color: SelectOptionColor) -> Self {
+    SelectOption {
+      id: gen_option_id(),
+      name: name.to_owned(),
+      color,
+    }
+  }
+}
+#[derive(PartialEq, Eq, Serialize, Deserialize, Debug, Clone)]
+#[repr(u8)]
+#[derive(Default)]
+pub enum SelectOptionColor {
+  #[default]
+  Purple = 0,
+  Pink = 1,
+  LightPink = 2,
+  Orange = 3,
+  Yellow = 4,
+  Lime = 5,
+  Green = 6,
+  Aqua = 7,
+  Blue = 8,
+}
+
+impl From<usize> for SelectOptionColor {
+  fn from(index: usize) -> Self {
+    match index {
+      0 => SelectOptionColor::Purple,
+      1 => SelectOptionColor::Pink,
+      2 => SelectOptionColor::LightPink,
+      3 => SelectOptionColor::Orange,
+      4 => SelectOptionColor::Yellow,
+      5 => SelectOptionColor::Lime,
+      6 => SelectOptionColor::Green,
+      7 => SelectOptionColor::Aqua,
+      8 => SelectOptionColor::Blue,
+      _ => SelectOptionColor::Purple,
     }
   }
 }

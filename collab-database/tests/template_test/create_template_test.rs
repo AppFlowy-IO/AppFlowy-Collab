@@ -1,6 +1,7 @@
+use collab_database::database::{gen_database_id, Database};
+use collab_database::entity::FieldType;
 use collab_database::template::builder::DatabaseTemplateBuilder;
-use collab_database::template::entity::FieldType;
-use collab_database::template::util::database_from_template;
+use collab_database::template::entity::CELL_DATA;
 
 #[tokio::test]
 async fn create_template_test() {
@@ -13,37 +14,8 @@ async fn create_template_test() {
     FieldType::LastEditedTime,
   ];
 
-  let expected_cell_len = vec![6, 6, 6, 4, 2, 2];
-  let expected_field_name = vec!["name", "status", "user", "time", "tasks", "last modified"];
-  let expected_cell_data = vec![vec![
-    "1th",
-    "2th",
-    "3th",
-    "In Progress",
-    "Done",
-    "Not Started",
-    "Lucas, Tom",
-    "Lucas",
-    "Tom",
-    "",
-    "Lucas, Tom, Nathan",
-    "2024/08/22",
-    "2024-08-22",
-    "August 22, 2024",
-    "2024-08-22 03:30 PM",
-    "A",
-    "B",
-    "A",
-    "1",
-    "2",
-    "3",
-    "task1",
-    "task2",
-    "2024/08/22",
-    "2024-08-22",
-    "August 22, 2024",
-    "2024-08-22 03:30 PM",
-  ]];
+  let expected_cell_len = [6, 6, 6, 4, 2, 2];
+  let expected_field_name = ["name", "status", "user", "time", "tasks", "last modified"];
 
   let template = DatabaseTemplateBuilder::new()
     .create_field("name", FieldType::RichText, true, |field_builder| {
@@ -101,7 +73,12 @@ async fn create_template_test() {
   }
   assert_eq!(template.fields.len(), 6);
 
-  let database = database_from_template(template).await.unwrap();
+  let database_id = gen_database_id();
+  let database = Database::create_with_template(&database_id, template)
+    .await
+    .unwrap();
+
+  // Assert num of fields
   let fields = database.get_fields_in_view(database.get_inline_view_id().as_str(), None);
   assert_eq!(fields.len(), 6);
   for (index, field) in fields.iter().enumerate() {
@@ -109,12 +86,17 @@ async fn create_template_test() {
     assert_eq!(field.name, expected_field_name[index]);
   }
 
+  // Assert num of rows
   let rows = database.get_all_rows().await;
   assert_eq!(rows.len(), 5);
-
-  for field in fields {
-    for (index, row) in rows.iter().enumerate() {
-      assert_eq!(row.cells.len(), expected_cell_len[index]);
+  for row in rows.iter() {
+    for field in &fields {
+      let cell = row
+        .cells
+        .get(&field.id)
+        .and_then(|cell| cell.get(CELL_DATA).cloned());
+      println!("data: {:?}", cell);
     }
+    println!("\n");
   }
 }

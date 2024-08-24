@@ -1,4 +1,4 @@
-use crate::database::{gen_database_view_id, gen_field_id, timestamp, Database, DatabaseContext};
+use crate::database::{gen_database_view_id, timestamp, Database, DatabaseContext};
 use crate::entity::{CreateDatabaseParams, CreateViewParams};
 use crate::error::DatabaseError;
 use crate::fields::Field;
@@ -11,8 +11,11 @@ use collab::preclude::Collab;
 use collab_entity::CollabType;
 use std::sync::Arc;
 
-pub async fn database_from_template(template: DatabaseTemplate) -> Result<Database, DatabaseError> {
-  let params = create_database_params_from_template(template);
+pub async fn database_from_template(
+  database_id: &str,
+  template: DatabaseTemplate,
+) -> Result<Database, DatabaseError> {
+  let params = create_database_params_from_template(database_id, template);
   let context = DatabaseContext {
     collab_service: Arc::new(TemplateDatabaseCollabServiceImpl),
     notifier: Default::default(),
@@ -22,8 +25,11 @@ pub async fn database_from_template(template: DatabaseTemplate) -> Result<Databa
   Ok(database)
 }
 
-fn create_database_params_from_template(template: DatabaseTemplate) -> CreateDatabaseParams {
-  let database_id = template.database_id.clone();
+pub(crate) fn create_database_params_from_template(
+  database_id: &str,
+  template: DatabaseTemplate,
+) -> CreateDatabaseParams {
+  let database_id = database_id.to_string();
   let inline_view_id = gen_database_view_id();
   let timestamp = timestamp();
 
@@ -83,7 +89,7 @@ fn create_database_params_from_template(template: DatabaseTemplate) -> CreateDat
   }
 }
 
-struct TemplateDatabaseCollabServiceImpl;
+pub(crate) struct TemplateDatabaseCollabServiceImpl;
 
 #[async_trait]
 impl DatabaseCollabService for TemplateDatabaseCollabServiceImpl {
