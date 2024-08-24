@@ -454,7 +454,6 @@ impl Collab {
 
   pub fn enable_undo_redo(&mut self) {
     if self.context.undo_manager.is_some() {
-      tracing::warn!("Undo manager already enabled");
       return;
     }
     // a frequent case includes establishing a new transaction for every user key stroke. Meanwhile
