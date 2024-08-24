@@ -30,8 +30,10 @@ use collab_entity::define::{DATABASE, DATABASE_ID};
 use collab_entity::CollabType;
 
 use crate::entity::{
-  CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView, DatabaseViewMeta,
+  CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
+  DatabaseViewMeta,
 };
+
 
 use crate::template::entity::DatabaseTemplate;
 use crate::template::util::{
@@ -197,10 +199,6 @@ impl Database {
       .validate_require_data(&self.collab)
       .map_err(|_| DatabaseError::NoRequiredData)?;
     Ok(())
-  }
-
-  pub async fn export_template(&self) -> Result<DatabaseTemplate, DatabaseError> {
-    todo!()
   }
 
   pub fn subscribe_row_change(&self) -> RowChangeReceiver {
@@ -402,7 +400,7 @@ impl Database {
     self.body.block.get_row(row_id)
   }
 
-  /// Return the [RowMeta] with the given row id.
+  #[instrument(level = "debug", skip_all)]
   pub async fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
     let database_row = self.body.block.get_or_init_row(row_id.clone()).await.ok()?;
 

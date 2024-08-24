@@ -293,6 +293,28 @@ impl From<FieldType> for i64 {
   }
 }
 
+impl From<i64> for FieldType {
+  fn from(index: i64) -> Self {
+    match index {
+      0 => FieldType::RichText,
+      1 => FieldType::Number,
+      2 => FieldType::DateTime,
+      3 => FieldType::SingleSelect,
+      4 => FieldType::MultiSelect,
+      5 => FieldType::Checkbox,
+      6 => FieldType::URL,
+      7 => FieldType::Checklist,
+      8 => FieldType::LastEditedTime,
+      9 => FieldType::CreatedTime,
+      10 => FieldType::Relation,
+      11 => FieldType::Summary,
+      12 => FieldType::Translate,
+      13 => FieldType::Time,
+      _ => FieldType::RichText,
+    }
+  }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SelectTypeOption {
   pub options: Vec<SelectOption>,
