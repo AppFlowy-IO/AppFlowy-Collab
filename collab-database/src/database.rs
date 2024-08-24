@@ -32,6 +32,11 @@ use collab_entity::CollabType;
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView, DatabaseViewMeta,
 };
+
+use crate::template::entity::DatabaseTemplate;
+use crate::template::util::{
+  create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
+};
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -43,6 +48,12 @@ pub struct Database {
   pub collab: Collab,
   pub body: DatabaseBody,
   pub collab_service: Arc<dyn DatabaseCollabService>,
+}
+impl Drop for Database {
+  fn drop(&mut self) {
+    #[cfg(feature = "verbose_log")]
+    trace!("Database dropped: {}", self.collab.object_id());
+  }
 }
 
 const FIELDS: &str = "fields";
@@ -85,6 +96,20 @@ impl Database {
       collab_service,
     })
   }
+
+  pub async fn create_with_template(
+    database_id: &str,
+    template: DatabaseTemplate,
+  ) -> Result<Self, DatabaseError> {
+    let params = create_database_params_from_template(database_id, template);
+    let context = DatabaseContext {
+      collab_service: Arc::new(TemplateDatabaseCollabServiceImpl),
+      notifier: Default::default(),
+      is_new: true,
+    };
+    Self::create_with_view(params, context).await
+  }
+
   /// Create a new database with the given [CreateDatabaseParams]
   /// The method will set the inline view id to the given view_id
   /// from the [CreateDatabaseParams].
@@ -379,7 +404,7 @@ impl Database {
     self.body.block.get_row(row_id)
   }
 
-  /// Return the [RowMeta] with the given row id.
+  #[instrument(level = "debug", skip_all)]
   pub async fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
     let database_row = self.body.block.get_or_init_row(row_id.clone()).await.ok()?;
 
@@ -1217,7 +1242,7 @@ pub fn gen_database_id() -> String {
 }
 
 pub fn gen_database_view_id() -> String {
-  format!("v:{}", nanoid!(6))
+  uuid::Uuid::new_v4().to_string()
 }
 
 pub fn gen_field_id() -> String {

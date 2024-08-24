@@ -39,6 +39,13 @@ pub struct DatabaseRow {
   collab_service: Arc<dyn DatabaseCollabService>,
 }
 
+impl Drop for DatabaseRow {
+  fn drop(&mut self) {
+    #[cfg(feature = "verbose_log")]
+    trace!("DatabaseRow dropped: {}", self.body.row_id);
+  }
+}
+
 impl DatabaseRow {
   pub fn new(
     row_id: RowId,
@@ -103,10 +110,7 @@ impl DatabaseRow {
     let data = self.body.data.clone();
     let meta = self.meta.clone();
     let mut txn = self.collab.transact_mut();
-    let mut update = RowUpdate::new(&mut txn, data, meta);
-
-    // Update the last modified timestamp before we call the update function.
-    update = update.set_last_modified(timestamp());
+    let update = RowUpdate::new(&mut txn, data, meta);
     f(update)
   }
 

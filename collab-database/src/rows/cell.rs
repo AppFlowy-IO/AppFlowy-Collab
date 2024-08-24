@@ -49,6 +49,7 @@ pub type Cell = HashMap<String, Any>;
 pub type CellBuilder = HashMap<String, Any>;
 pub type CellUpdate = MapRef;
 
+pub const CELL_FIELD_TYPE: &str = "field_type";
 pub fn get_field_type_from_cell<T: From<i64>>(cell: &Cell) -> Option<T> {
   let field_type: i64 = cell.get_as("field_type")?;
   Some(T::from(field_type))
@@ -56,7 +57,7 @@ pub fn get_field_type_from_cell<T: From<i64>>(cell: &Cell) -> Option<T> {
 
 /// Create a new [CellBuilder] with the field type.
 pub fn new_cell_builder(field_type: impl Into<i64>) -> CellBuilder {
-  HashMap::from([("field_type".into(), Any::BigInt(field_type.into()))])
+  HashMap::from([(CELL_FIELD_TYPE.into(), Any::BigInt(field_type.into()))])
 }
 
 pub struct RowCell {

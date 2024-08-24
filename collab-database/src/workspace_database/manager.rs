@@ -35,7 +35,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     is_new: bool,
   ) -> Result<Collab, DatabaseError>;
 
-  fn persistence(&self) -> Option<Box<dyn DatabaseCollabPersistenceService>>;
+  fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>>;
 }
 
 pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {

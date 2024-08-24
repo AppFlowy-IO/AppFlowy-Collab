@@ -128,7 +128,6 @@ impl Block {
     database_row.write_to_disk()?;
     let database_row = Arc::new(RwLock::new(database_row));
     self.row_mem_cache.insert(row_id, database_row);
-
     Ok(row_order)
   }
 
