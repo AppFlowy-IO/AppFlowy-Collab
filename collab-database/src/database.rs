@@ -30,10 +30,8 @@ use collab_entity::define::{DATABASE, DATABASE_ID};
 use collab_entity::CollabType;
 
 use crate::entity::{
-  CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
-  DatabaseViewMeta,
+  CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView, DatabaseViewMeta,
 };
-
 
 use crate::template::entity::DatabaseTemplate;
 use crate::template::util::{
@@ -50,6 +48,12 @@ pub struct Database {
   pub collab: Collab,
   pub body: DatabaseBody,
   pub collab_service: Arc<dyn DatabaseCollabService>,
+}
+impl Drop for DatabaseRow {
+  fn drop(&mut self) {
+    #[cfg(feature = "verbose_log")]
+    trace!("Database dropped: {}", self.collab.object_id());
+  }
 }
 
 const FIELDS: &str = "fields";

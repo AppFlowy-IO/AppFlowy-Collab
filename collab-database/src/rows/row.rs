@@ -39,6 +39,13 @@ pub struct DatabaseRow {
   collab_service: Arc<dyn DatabaseCollabService>,
 }
 
+impl Drop for DatabaseRow {
+  fn drop(&mut self) {
+    #[cfg(feature = "verbose_log")]
+    trace!("DatabaseRow dropped: {}", self.body.row_id);
+  }
+}
+
 impl DatabaseRow {
   pub fn new(
     row_id: RowId,
