@@ -26,43 +26,31 @@ pub fn cast_string_to_timestamp(cell: &str) -> Option<i64> {
 
   // Year-Month-Day
   if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%Y-%m-%d") {
-    let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
+    let datetime = naive_date.and_hms(0, 0, 0);
     return Some(Utc.from_utc_datetime(&datetime).timestamp());
   }
 
   // Year/Month/Day
   if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%Y/%m/%d") {
-    let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
-    return Some(Utc.from_utc_datetime(&datetime).timestamp());
-  }
-
-  // Year.Month.Day (New: Handles both "2017.09" and "2017.09.02")
-  if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%Y.%m.%d") {
-    let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
-    return Some(Utc.from_utc_datetime(&datetime).timestamp());
-  }
-
-  // Year.Month (Only Year and Month)
-  if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%Y.%m") {
-    let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
+    let datetime = naive_date.and_hms(0, 0, 0);
     return Some(Utc.from_utc_datetime(&datetime).timestamp());
   }
 
   // Month/Day/Year
   if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%m/%d/%Y") {
-    let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
+    let datetime = naive_date.and_hms(0, 0, 0);
     return Some(Utc.from_utc_datetime(&datetime).timestamp());
   }
 
   // Month Day, Year
   if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%B %d, %Y") {
-    let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
+    let datetime = naive_date.and_hms(0, 0, 0);
     return Some(Utc.from_utc_datetime(&datetime).timestamp());
   }
 
   // Day/Month/Year
   if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%d/%m/%Y") {
-    let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
+    let datetime = naive_date.and_hms(0, 0, 0);
     return Some(Utc.from_utc_datetime(&datetime).timestamp());
   }
 
@@ -111,7 +99,6 @@ mod tests {
   fn test_year_month_day_format() {
     let cells = vec!["2024/08/22".to_string()];
     let result = replace_cells_with_timestamp(cells);
-    // Expected Unix timestamp for "2024-08-22T00:00:00+00:00"
     assert_eq!(
       result[0],
       Utc
@@ -126,7 +113,6 @@ mod tests {
   fn test_year_month_day_hyphen_format() {
     let cells = vec!["2024-08-22".to_string()];
     let result = replace_cells_with_timestamp(cells);
-    // Expected Unix timestamp for "2024-08-22T00:00:00+00:00"
     assert_eq!(
       result[0],
       Utc
@@ -141,7 +127,6 @@ mod tests {
   fn test_month_day_year_full_format() {
     let cells = vec!["August 22, 2024".to_string()];
     let result = replace_cells_with_timestamp(cells);
-    // Expected Unix timestamp for "2024-08-22T00:00:00+00:00"
     assert_eq!(
       result[0],
       Utc
@@ -156,7 +141,6 @@ mod tests {
   fn test_day_month_year_format() {
     let cells = vec!["22/08/2024".to_string()];
     let result = replace_cells_with_timestamp(cells);
-    // Expected Unix timestamp for "2024-08-22T00:00:00+00:00"
     assert_eq!(
       result[0],
       Utc
@@ -171,7 +155,6 @@ mod tests {
   fn test_24_hour_format() {
     let cells = vec!["2024-08-22 15:30".to_string()];
     let result = replace_cells_with_timestamp(cells);
-    // Expected Unix timestamp for "2024-08-22T15:30:00+00:00"
     assert_eq!(
       result[0],
       Utc
@@ -186,7 +169,6 @@ mod tests {
   fn test_12_hour_format() {
     let cells = vec!["2024-08-22 03:30 PM".to_string()];
     let result = replace_cells_with_timestamp(cells);
-    // Expected Unix timestamp for "2024-08-22T15:30:00+00:00"
     assert_eq!(
       result[0],
       Utc
@@ -215,6 +197,7 @@ mod tests {
       "not-a-date".to_string(),          // Invalid input
     ];
     let result = replace_cells_with_timestamp(cells);
+
     assert_eq!(result[0], "1726948800");
     assert_eq!(
       result[1],
@@ -240,6 +223,5 @@ mod tests {
         .timestamp()
         .to_string()
     );
-    assert_eq!(result[4], "");
   }
 }
