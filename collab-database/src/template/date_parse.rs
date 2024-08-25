@@ -2,6 +2,7 @@
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
 
 pub fn cast_string_to_timestamp(cell: &str) -> Option<i64> {
+  // Try to parse as a UNIX timestamp directly
   if let Ok(unix_timestamp) = cell.parse::<i64>() {
     return Utc
       .timestamp_opt(unix_timestamp, 0)
@@ -21,10 +22,10 @@ pub fn cast_string_to_timestamp(cell: &str) -> Option<i64> {
     return Some(Utc.from_utc_datetime(&naive_datetime).timestamp());
   }
 
-  // Try different date formats
+  // Try different date formats without time
 
-  // Month/Day/Year
-  if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%m/%d/%Y") {
+  // Year-Month-Day
+  if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%Y-%m-%d") {
     let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
     return Some(Utc.from_utc_datetime(&datetime).timestamp());
   }
@@ -35,8 +36,20 @@ pub fn cast_string_to_timestamp(cell: &str) -> Option<i64> {
     return Some(Utc.from_utc_datetime(&datetime).timestamp());
   }
 
-  // Year-Month-Day
-  if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%Y-%m-%d") {
+  // Year.Month.Day (New: Handles both "2017.09" and "2017.09.02")
+  if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%Y.%m.%d") {
+    let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
+    return Some(Utc.from_utc_datetime(&datetime).timestamp());
+  }
+
+  // Year.Month (Only Year and Month)
+  if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%Y.%m") {
+    let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
+    return Some(Utc.from_utc_datetime(&datetime).timestamp());
+  }
+
+  // Month/Day/Year
+  if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%m/%d/%Y") {
     let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
     return Some(Utc.from_utc_datetime(&datetime).timestamp());
   }
@@ -52,6 +65,7 @@ pub fn cast_string_to_timestamp(cell: &str) -> Option<i64> {
     let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
     return Some(Utc.from_utc_datetime(&datetime).timestamp());
   }
+
   None
 }
 
