@@ -11,12 +11,19 @@ use crate::views::{
 };
 
 use collab::entity::EncodedCollab;
+use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub struct EncodedDatabase {
-  pub encoded_database_collab: EncodedCollab,
-  pub encoded_row_collabs: Vec<EncodedCollab>,
+  pub encoded_database_collab: EncodedCollabInfo,
+  pub encoded_row_collabs: Vec<EncodedCollabInfo>,
+}
+
+pub struct EncodedCollabInfo {
+  pub object_id: String,
+  pub collab_type: CollabType,
+  pub encoded_collab: EncodedCollab,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]

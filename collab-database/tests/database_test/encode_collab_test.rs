@@ -11,12 +11,12 @@ async fn encode_database_collab_test() {
   let database_collab = database_test.encode_database_collabs().await.unwrap();
   assert_eq!(database_collab.encoded_row_collabs.len(), 3);
 
-  for (index, encoded_row_collab) in database_collab.encoded_row_collabs.into_iter().enumerate() {
+  for (index, encoded_info) in database_collab.encoded_row_collabs.into_iter().enumerate() {
     let object_id = database_test.pre_define_row_ids[index].clone();
     let collab = Collab::new_with_source(
       CollabOrigin::Empty,
       &object_id,
-      encoded_row_collab.into(),
+      encoded_info.encoded_collab.into(),
       vec![],
       false,
     )
