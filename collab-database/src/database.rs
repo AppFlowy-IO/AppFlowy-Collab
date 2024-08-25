@@ -30,7 +30,8 @@ use collab_entity::define::{DATABASE, DATABASE_ID};
 use collab_entity::CollabType;
 
 use crate::entity::{
-  CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView, DatabaseViewMeta,
+  CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
+  DatabaseViewMeta, EncodedDatabase,
 };
 
 use crate::template::entity::DatabaseTemplate;
@@ -128,6 +129,28 @@ impl Database {
     })
     .await
     .map_err(|e| DatabaseError::Internal(e.into()))?
+  }
+
+  /// Return encoded collab for the database
+  /// EncodedDatabase includes the encoded collab of the database and all row collabs
+  pub async fn encode_database_collabs(&self) -> Result<EncodedDatabase, DatabaseError> {
+    let encoded_database_collab = encoded_collab(&self.collab, &CollabType::Database)?;
+    let mut encoded_row_collabs = vec![];
+    let row_orders = self.get_all_row_orders().await;
+    const CHUNK_SIZE: usize = 30;
+    for chunk in row_orders.chunks(CHUNK_SIZE) {
+      for chunk_row in chunk {
+        if let Some(database_row) = self.init_database_row(&chunk_row.id).await {
+          encoded_row_collabs.push(database_row.read().await.encoded_collab()?);
+        }
+      }
+      tokio::task::yield_now().await;
+    }
+
+    Ok(EncodedDatabase {
+      encoded_database_collab,
+      encoded_row_collabs,
+    })
   }
 
   pub fn write_to_disk(&self) -> Result<(), DatabaseError> {

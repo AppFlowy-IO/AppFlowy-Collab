@@ -10,8 +10,14 @@ use crate::views::{
   GroupSettingMap, LayoutSetting, LayoutSettings, OrderObjectPosition, RowOrder, SortMap,
 };
 
+use collab::entity::EncodedCollab;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+pub struct EncodedDatabase {
+  pub encoded_database_collab: EncodedCollab,
+  pub encoded_row_collabs: Vec<EncodedCollab>,
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct DatabaseView {

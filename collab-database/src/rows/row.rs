@@ -11,17 +11,18 @@ use collab::util::AnyExt;
 use collab_entity::define::DATABASE_ROW_DATA;
 use collab_entity::CollabType;
 
-use serde::{Deserialize, Serialize};
-use tracing::{error, trace};
-use uuid::Uuid;
-
 use crate::database::timestamp;
 use crate::error::DatabaseError;
 use crate::rows::{
   subscribe_row_data_change, Cell, Cells, CellsUpdate, RowChangeSender, RowId, RowMeta,
   RowMetaUpdate,
 };
+use collab::entity::EncodedCollab;
+use serde::{Deserialize, Serialize};
+use tracing::{error, trace};
+use uuid::Uuid;
 
+use crate::util::encoded_collab;
 use crate::views::{OrderObjectPosition, RowOrder};
 use crate::workspace_database::DatabaseCollabService;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
@@ -61,6 +62,11 @@ impl DatabaseRow {
       body,
       collab_service,
     }
+  }
+
+  pub fn encoded_collab(&self) -> Result<EncodedCollab, DatabaseError> {
+    let row_encoded = encoded_collab(&self.collab, &CollabType::DatabaseRow)?;
+    Ok(row_encoded)
   }
 
   pub fn write_to_disk(&self) -> Result<(), DatabaseError> {
