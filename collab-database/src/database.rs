@@ -21,6 +21,14 @@ use crate::views::{
 };
 use crate::workspace_database::DatabaseCollabService;
 
+use crate::entity::{
+  CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
+  DatabaseViewMeta, EncodedCollabInfo, EncodedDatabase,
+};
+use crate::template::entity::DatabaseTemplate;
+use crate::template::util::{
+  create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
+};
 use collab::preclude::{
   Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
   TransactionMut, YrsValue,
@@ -28,16 +36,6 @@ use collab::preclude::{
 use collab::util::{AnyExt, ArrayExt};
 use collab_entity::define::{DATABASE, DATABASE_ID};
 use collab_entity::CollabType;
-
-use crate::entity::{
-  CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
-  DatabaseViewMeta, EncodedDatabase,
-};
-
-use crate::template::entity::DatabaseTemplate;
-use crate::template::util::{
-  create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
-};
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -134,14 +132,23 @@ impl Database {
   /// Return encoded collab for the database
   /// EncodedDatabase includes the encoded collab of the database and all row collabs
   pub async fn encode_database_collabs(&self) -> Result<EncodedDatabase, DatabaseError> {
-    let encoded_database_collab = encoded_collab(&self.collab, &CollabType::Database)?;
+    let database_id = self.collab.object_id().to_string();
+    let encoded_database_collab = EncodedCollabInfo {
+      object_id: database_id,
+      collab_type: CollabType::Database,
+      encoded_collab: encoded_collab(&self.collab, &CollabType::Database)?,
+    };
     let mut encoded_row_collabs = vec![];
     let row_orders = self.get_all_row_orders().await;
     const CHUNK_SIZE: usize = 30;
     for chunk in row_orders.chunks(CHUNK_SIZE) {
       for chunk_row in chunk {
         if let Some(database_row) = self.init_database_row(&chunk_row.id).await {
-          encoded_row_collabs.push(database_row.read().await.encoded_collab()?);
+          encoded_row_collabs.push(EncodedCollabInfo {
+            object_id: chunk_row.id.to_string(),
+            collab_type: CollabType::DatabaseRow,
+            encoded_collab: database_row.read().await.encoded_collab()?,
+          });
         }
       }
       tokio::task::yield_now().await;
