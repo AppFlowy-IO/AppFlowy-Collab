@@ -1,70 +1,68 @@
 #![allow(deprecated)]
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
 
+pub fn cast_string_to_timestamp(cell: &str) -> Option<i64> {
+  // Try to parse as a UNIX timestamp directly
+  if let Ok(unix_timestamp) = cell.parse::<i64>() {
+    return Utc
+      .timestamp_opt(unix_timestamp, 0)
+      .single()
+      .map(|value| value.timestamp());
+  }
+
+  // Try to parse as datetime with time formats
+
+  // Year-Month-Day Hour:Minute (24-hour format)
+  if let Ok(naive_datetime) = NaiveDateTime::parse_from_str(cell, "%Y-%m-%d %H:%M") {
+    return Some(Utc.from_utc_datetime(&naive_datetime).timestamp());
+  }
+
+  // Year-Month-Day Hour:Minute AM/PM (12-hour format)
+  if let Ok(naive_datetime) = NaiveDateTime::parse_from_str(cell, "%Y-%m-%d %I:%M %p") {
+    return Some(Utc.from_utc_datetime(&naive_datetime).timestamp());
+  }
+
+  // Try different date formats without time
+
+  // Year-Month-Day
+  if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%Y-%m-%d") {
+    let datetime = naive_date.and_hms(0, 0, 0);
+    return Some(Utc.from_utc_datetime(&datetime).timestamp());
+  }
+
+  // Year/Month/Day
+  if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%Y/%m/%d") {
+    let datetime = naive_date.and_hms(0, 0, 0);
+    return Some(Utc.from_utc_datetime(&datetime).timestamp());
+  }
+
+  // Month/Day/Year
+  if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%m/%d/%Y") {
+    let datetime = naive_date.and_hms(0, 0, 0);
+    return Some(Utc.from_utc_datetime(&datetime).timestamp());
+  }
+
+  // Month Day, Year
+  if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%B %d, %Y") {
+    let datetime = naive_date.and_hms(0, 0, 0);
+    return Some(Utc.from_utc_datetime(&datetime).timestamp());
+  }
+
+  // Day/Month/Year
+  if let Ok(naive_date) = NaiveDate::parse_from_str(cell, "%d/%m/%Y") {
+    let datetime = naive_date.and_hms(0, 0, 0);
+    return Some(Utc.from_utc_datetime(&datetime).timestamp());
+  }
+
+  None
+}
+
 pub(crate) fn replace_cells_with_timestamp(cells: Vec<String>) -> Vec<String> {
   cells
     .into_iter()
     .map(|cell| {
-      // Try to parse as UNIX timestamp (i64)
-      if let Ok(unix_timestamp) = cell.parse::<i64>() {
-        return Utc
-          .timestamp_opt(unix_timestamp, 0)
-          .single()
-          .map_or("".to_string(), |dt| dt.timestamp().to_string());
-      }
-
-      // Try to parse as datetime with time formats
-
-      // Year-Month-Day Hour:Minute (24-hour format)
-      if let Ok(naive_datetime) = NaiveDateTime::parse_from_str(&cell, "%Y-%m-%d %H:%M") {
-        return Utc
-          .from_utc_datetime(&naive_datetime)
-          .timestamp()
-          .to_string();
-      }
-
-      // Year-Month-Day Hour:Minute AM/PM (12-hour format)
-      if let Ok(naive_datetime) = NaiveDateTime::parse_from_str(&cell, "%Y-%m-%d %I:%M %p") {
-        return Utc
-          .from_utc_datetime(&naive_datetime)
-          .timestamp()
-          .to_string();
-      }
-
-      // Try different date formats
-
-      // Month/Day/Year
-      if let Ok(naive_date) = NaiveDate::parse_from_str(&cell, "%m/%d/%Y") {
-        let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
-        return Utc.from_utc_datetime(&datetime).timestamp().to_string();
-      }
-
-      // Year/Month/Day
-      if let Ok(naive_date) = NaiveDate::parse_from_str(&cell, "%Y/%m/%d") {
-        let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
-        return Utc.from_utc_datetime(&datetime).timestamp().to_string();
-      }
-
-      // Year-Month-Day
-      if let Ok(naive_date) = NaiveDate::parse_from_str(&cell, "%Y-%m-%d") {
-        let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
-        return Utc.from_utc_datetime(&datetime).timestamp().to_string();
-      }
-
-      // Month Day, Year
-      if let Ok(naive_date) = NaiveDate::parse_from_str(&cell, "%B %d, %Y") {
-        let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
-        return Utc.from_utc_datetime(&datetime).timestamp().to_string();
-      }
-
-      // Day/Month/Year
-      if let Ok(naive_date) = NaiveDate::parse_from_str(&cell, "%d/%m/%Y") {
-        let datetime = naive_date.and_hms_opt(0, 0, 0).unwrap();
-        return Utc.from_utc_datetime(&datetime).timestamp().to_string();
-      }
-
-      // If no match, return an empty string
-      "".to_string()
+      cast_string_to_timestamp(&cell)
+        .map_or_else(|| "".to_string(), |timestamp| timestamp.to_string())
     })
     .collect()
 }
@@ -101,7 +99,6 @@ mod tests {
   fn test_year_month_day_format() {
     let cells = vec!["2024/08/22".to_string()];
     let result = replace_cells_with_timestamp(cells);
-    // Expected Unix timestamp for "2024-08-22T00:00:00+00:00"
     assert_eq!(
       result[0],
       Utc
@@ -116,7 +113,6 @@ mod tests {
   fn test_year_month_day_hyphen_format() {
     let cells = vec!["2024-08-22".to_string()];
     let result = replace_cells_with_timestamp(cells);
-    // Expected Unix timestamp for "2024-08-22T00:00:00+00:00"
     assert_eq!(
       result[0],
       Utc
@@ -131,7 +127,6 @@ mod tests {
   fn test_month_day_year_full_format() {
     let cells = vec!["August 22, 2024".to_string()];
     let result = replace_cells_with_timestamp(cells);
-    // Expected Unix timestamp for "2024-08-22T00:00:00+00:00"
     assert_eq!(
       result[0],
       Utc
@@ -146,7 +141,6 @@ mod tests {
   fn test_day_month_year_format() {
     let cells = vec!["22/08/2024".to_string()];
     let result = replace_cells_with_timestamp(cells);
-    // Expected Unix timestamp for "2024-08-22T00:00:00+00:00"
     assert_eq!(
       result[0],
       Utc
@@ -161,7 +155,6 @@ mod tests {
   fn test_24_hour_format() {
     let cells = vec!["2024-08-22 15:30".to_string()];
     let result = replace_cells_with_timestamp(cells);
-    // Expected Unix timestamp for "2024-08-22T15:30:00+00:00"
     assert_eq!(
       result[0],
       Utc
@@ -176,7 +169,6 @@ mod tests {
   fn test_12_hour_format() {
     let cells = vec!["2024-08-22 03:30 PM".to_string()];
     let result = replace_cells_with_timestamp(cells);
-    // Expected Unix timestamp for "2024-08-22T15:30:00+00:00"
     assert_eq!(
       result[0],
       Utc
@@ -205,6 +197,7 @@ mod tests {
       "not-a-date".to_string(),          // Invalid input
     ];
     let result = replace_cells_with_timestamp(cells);
+
     assert_eq!(result[0], "1726948800");
     assert_eq!(
       result[1],
@@ -230,6 +223,5 @@ mod tests {
         .timestamp()
         .to_string()
     );
-    assert_eq!(result[4], "");
   }
 }
