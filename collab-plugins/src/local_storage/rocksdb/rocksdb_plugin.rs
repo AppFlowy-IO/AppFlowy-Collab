@@ -83,22 +83,8 @@ impl RocksdbDiskPlugin {
 }
 
 impl CollabPlugin for RocksdbDiskPlugin {
-  fn did_init(&self, collab: &Collab, object_id: &str) {
+  fn did_init(&self, _collab: &Collab, _object_id: &str) {
     self.did_init.store(true, SeqCst);
-
-    if let Some(collab_db) = self.collab_db.upgrade() {
-      let rocksdb_read = collab_db.read_txn();
-      if !rocksdb_read.is_exist(self.uid, object_id) {
-        let txn = collab.transact();
-        if let Err(err) = collab_db.with_write_txn(|w_db_txn| {
-          w_db_txn.create_new_doc(self.uid, &object_id, &txn)?;
-          tracing::trace!("Created new doc {}", object_id);
-          Ok(())
-        }) {
-          error!("create doc for {:?} failed: {}", object_id, err);
-        }
-      }
-    }
   }
 
   fn receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {

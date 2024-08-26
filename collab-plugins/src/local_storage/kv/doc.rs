@@ -129,7 +129,7 @@ where
       }
 
       tracing::trace!(
-        "Collab {:?} loaded from snapshot and {} updates",
+        "Collab {:?} loaded from and {} updates",
         object_id,
         update_count
       );

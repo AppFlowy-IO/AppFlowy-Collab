@@ -17,11 +17,11 @@ async fn restore_row_from_disk_test() {
   let (db, mut database_test) = create_database_with_db(1, &database_id).await;
   let row_1 = CreateRowParams::new(1, database_id.clone());
   let row_2 = CreateRowParams::new(2, database_id.clone());
-  database_test.create_row(row_1.clone()).unwrap();
-  database_test.create_row(row_2.clone()).unwrap();
+  database_test.create_row(row_1.clone()).await.unwrap();
+  database_test.create_row(row_2.clone()).await.unwrap();
   drop(database_test);
 
-  let database_test = restore_database_from_db(1, &database_id, db);
+  let database_test = restore_database_from_db(1, &database_id, db).await;
   let rows = database_test.get_rows_for_view("v1").await;
   assert_eq!(rows.len(), 2);
 
@@ -35,14 +35,14 @@ async fn restore_from_disk_test() {
   assert_database_eq(database_test).await;
 
   // Restore from disk
-  let database_test = restore_database_from_db(1, "1", db);
+  let database_test = restore_database_from_db(1, "1", db).await;
   assert_database_eq(database_test).await;
 }
 
 #[tokio::test]
 async fn restore_from_disk_with_different_database_id_test() {
   let (db, _) = create_database_with_db(1, "1").await;
-  let database_test = restore_database_from_db(1, "1", db);
+  let database_test = restore_database_from_db(1, "1", db).await;
 
   assert_database_eq(database_test).await;
 }
@@ -50,7 +50,7 @@ async fn restore_from_disk_with_different_database_id_test() {
 #[tokio::test]
 async fn restore_from_disk_with_different_uid_test() {
   let (db, _) = create_database_with_db(1, "1").await;
-  let database_test = restore_database_from_db(1, "1", db);
+  let database_test = restore_database_from_db(1, "1", db).await;
 
   assert_database_eq(database_test).await;
 }
@@ -91,7 +91,8 @@ async fn open_020_history_database_test() {
     221439819971039232,
     "c0e69740-49f0-4790-a488-702e2750ba8d",
     db,
-  );
+  )
+  .await;
   let actual_1 = database_test.to_json_value().await;
   assert_json_include!(expected: expected_json(), actual: actual_1);
 

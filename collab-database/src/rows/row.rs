@@ -1,22 +1,15 @@
-use anyhow::anyhow;
 use collab::preclude::{
   Any, ArrayRef, Collab, FillRef, Map, MapExt, MapRef, ReadTxn, ToJson, TransactionMut, YrsValue,
 };
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
-use std::sync::Weak;
+use std::sync::Arc;
 
 use collab::preclude::encoding::serde::from_any;
 use collab::util::AnyExt;
 use collab_entity::define::DATABASE_ROW_DATA;
 use collab_entity::CollabType;
-use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::KVTransactionDB;
-use collab_plugins::CollabKVDB;
-use serde::{Deserialize, Serialize};
-use tracing::error;
-use uuid::Uuid;
 
 use crate::database::timestamp;
 use crate::error::DatabaseError;
@@ -24,8 +17,14 @@ use crate::rows::{
   subscribe_row_data_change, Cell, Cells, CellsUpdate, RowChangeSender, RowId, RowMeta,
   RowMetaUpdate,
 };
-use crate::util::write_collab_to_disk;
+use collab::entity::EncodedCollab;
+use serde::{Deserialize, Serialize};
+use tracing::{error, trace};
+use uuid::Uuid;
+
+use crate::util::encoded_collab;
 use crate::views::{OrderObjectPosition, RowOrder};
+use crate::workspace_database::DatabaseCollabService;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 
 pub type BlockId = i64;
@@ -38,38 +37,47 @@ pub const CREATED_AT: &str = "created_at";
 pub struct DatabaseRow {
   pub collab: Collab,
   pub body: DatabaseRowBody,
-  collab_db: Weak<CollabKVDB>,
+  collab_service: Arc<dyn DatabaseCollabService>,
+}
+
+impl Drop for DatabaseRow {
+  fn drop(&mut self) {
+    #[cfg(feature = "verbose_log")]
+    trace!("DatabaseRow dropped: {}", self.body.row_id);
+  }
 }
 
 impl DatabaseRow {
   pub fn new(
-    uid: i64,
     row_id: RowId,
-    collab_db: Weak<CollabKVDB>,
     mut collab: Collab,
     change_tx: RowChangeSender,
     row: Option<Row>,
+    collab_service: Arc<dyn DatabaseCollabService>,
   ) -> Self {
-    let body = DatabaseRowBody::new(uid, row_id.clone(), &mut collab, row);
+    let body = DatabaseRowBody::new(row_id.clone(), &mut collab, row);
     subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
     Self {
       collab,
       body,
-      collab_db,
+      collab_service,
     }
   }
 
+  pub fn encoded_collab(&self) -> Result<EncodedCollab, DatabaseError> {
+    let row_encoded = encoded_collab(&self.collab, &CollabType::DatabaseRow)?;
+    Ok(row_encoded)
+  }
+
   pub fn write_to_disk(&self) -> Result<(), DatabaseError> {
-    let collab_db = self
-      .collab_db
-      .upgrade()
-      .ok_or(DatabaseError::Internal(anyhow!("collab db is drop")))?;
-    write_collab_to_disk(
-      self.body.uid,
-      &self.collab,
-      &CollabType::DatabaseRow,
-      &collab_db,
-    )?;
+    if let Some(persistence) = self.collab_service.persistence() {
+      let encoded_collab = self
+        .collab
+        .encode_collab_v1(|collab| CollabType::DatabaseRow.validate_require_data(collab))
+        .map_err(DatabaseError::Internal)?;
+      persistence.flush_collab(self.collab.object_id(), encoded_collab)?;
+    }
+
     Ok(())
   }
 
@@ -108,10 +116,7 @@ impl DatabaseRow {
     let data = self.body.data.clone();
     let meta = self.meta.clone();
     let mut txn = self.collab.transact_mut();
-    let mut update = RowUpdate::new(&mut txn, data, meta);
-
-    // Update the last modified timestamp before we call the update function.
-    update = update.set_last_modified(timestamp());
+    let update = RowUpdate::new(&mut txn, data, meta);
     f(update)
   }
 
@@ -131,18 +136,14 @@ impl DatabaseRow {
   }
 
   pub fn delete(&self) {
-    match self.collab_db.upgrade() {
+    match self.collab_service.persistence() {
       None => {
-        tracing::warn!("collab db is drop when delete a collab object");
+        trace!("skip delete database row because persistence is not available");
       },
-      Some(collab_db) => {
-        let _ = collab_db.with_write_txn(|txn| {
-          let row_id = self.body.row_id.to_string();
-          if let Err(e) = txn.delete_doc(self.body.uid, &row_id) {
-            error!("🔴{}", e);
-          }
-          Ok(())
-        });
+      Some(persistence) => {
+        if let Err(err) = persistence.delete_collab(self.collab.object_id()) {
+          error!("🔴 delete database row failed: {}", err);
+        }
       },
     }
   }
@@ -176,7 +177,6 @@ impl BorrowMut<Collab> for DatabaseRow {
 }
 
 pub struct DatabaseRowBody {
-  uid: i64,
   row_id: RowId,
   data: MapRef,
   #[allow(dead_code)]
@@ -186,7 +186,7 @@ pub struct DatabaseRowBody {
 }
 
 impl DatabaseRowBody {
-  pub fn new(uid: i64, row_id: RowId, collab: &mut Collab, init_data: Option<Row>) -> Self {
+  pub fn new(row_id: RowId, collab: &mut Collab, init_data: Option<Row>) -> Self {
     let mut txn = collab.context.transact_mut();
 
     let data: MapRef = collab.data.get_or_init(&mut txn, DATABASE_ROW_DATA);
@@ -207,7 +207,6 @@ impl DatabaseRowBody {
     }
 
     DatabaseRowBody {
-      uid,
       row_id,
       data,
       meta,

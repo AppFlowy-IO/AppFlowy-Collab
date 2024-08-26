@@ -248,7 +248,7 @@ impl Collab {
     match data_source {
       DataSource::Disk(disk) => {
         if let Some(disk) = disk {
-          disk.load_collab(&mut collab);
+          disk.load_collab_from_disk(&mut collab);
         }
       },
       DataSource::DocStateV1(doc_state) => {
@@ -454,7 +454,6 @@ impl Collab {
 
   pub fn enable_undo_redo(&mut self) {
     if self.context.undo_manager.is_some() {
-      tracing::warn!("Undo manager already enabled");
       return;
     }
     // a frequent case includes establishing a new transaction for every user key stroke. Meanwhile

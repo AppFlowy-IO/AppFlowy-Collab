@@ -1,5 +1,3 @@
-use collab_plugins::{if_native, if_wasm};
-
 /// Equivalent to April 9, 2023 4:18:02 AM
 const EPOCH: u64 = 1637806706000;
 /// 12 bits. For every ID generated on that machine/process, the sequence number is incremented by 1.
@@ -57,19 +55,11 @@ impl RowIDGen {
     }
   }
 
-  if_native! {
-    fn timestamp(&self) -> u64 {
-      std::time::SystemTime::now()
+  fn timestamp(&self) -> u64 {
+    std::time::SystemTime::now()
       .duration_since(std::time::SystemTime::UNIX_EPOCH)
       .expect("Clock moved backwards!")
       .as_millis() as u64
-    }
-  }
-
-  if_wasm! {
-     fn timestamp(&self) -> u64 {
-      js_sys::Date::now() as u64
-     }
   }
 }
 

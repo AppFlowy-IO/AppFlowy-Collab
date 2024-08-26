@@ -8,7 +8,7 @@ use crate::helper::TestCalendarLayoutSetting;
 
 #[tokio::test]
 async fn get_layout_setting_test() {
-  let database_test = create_database_with_two_layout_settings();
+  let database_test = create_database_with_two_layout_settings().await;
   let layout_setting = database_test
     .get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Board)
     .unwrap();
@@ -42,7 +42,7 @@ async fn create_database_view_with_layout_setting_test() {
 
 #[tokio::test]
 async fn remove_layout_setting_test() {
-  let mut database_test = create_database_with_two_layout_settings();
+  let mut database_test = create_database_with_two_layout_settings().await;
   database_test.update_database_view("v1", |view| {
     view.remove_layout_setting(&DatabaseLayout::Board);
   });
@@ -54,7 +54,7 @@ async fn remove_layout_setting_test() {
 
 #[tokio::test]
 async fn update_layout_setting_test() {
-  let mut database_test = create_database_with_two_layout_settings();
+  let mut database_test = create_database_with_two_layout_settings().await;
   let layout_setting = database_test
     .get_layout_setting::<TestCalendarLayoutSetting>("v1", &DatabaseLayout::Board)
     .unwrap();
@@ -75,8 +75,8 @@ async fn update_layout_setting_test() {
   assert!(!layout_setting.show_weekends);
 }
 
-fn create_database_with_two_layout_settings() -> DatabaseTest {
-  let mut database_test = create_database_with_default_data(1, "1");
+async fn create_database_with_two_layout_settings() -> DatabaseTest {
+  let mut database_test = create_database_with_default_data(1, "1").await;
   let layout_setting_1 = TestCalendarLayoutSetting::new("f1".to_string());
   let layout_setting_2 = TestCalendarLayoutSetting::new("f2".to_string());
 

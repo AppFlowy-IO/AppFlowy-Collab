@@ -8,7 +8,7 @@ use crate::helper::{TestGroup, TestGroupSetting, CONTENT, GROUPS};
 
 #[tokio::test]
 async fn create_database_view_with_group_test() {
-  let database_test = create_database_with_two_groups();
+  let database_test = create_database_with_two_groups().await;
   let view = database_test.get_view("v1").unwrap();
   assert_eq!(view.group_settings.len(), 2);
   let group_settings = view
@@ -26,7 +26,7 @@ async fn create_database_view_with_group_test() {
 
 #[tokio::test]
 async fn create_database_view_with_group_test2() {
-  let mut database_test = create_database_with_default_data(1, "1");
+  let mut database_test = create_database_with_default_data(1, "1").await;
   let group_setting = TestGroupSetting {
     id: "g1".to_string(),
     field_id: "".to_string(),
@@ -63,7 +63,7 @@ async fn create_database_view_with_group_test2() {
 
 #[tokio::test]
 async fn get_single_database_group_test() {
-  let mut database_test = create_database_with_default_data(1, "1");
+  let mut database_test = create_database_with_default_data(1, "1").await;
   let group_setting = TestGroupSetting {
     id: "g1".to_string(),
     field_id: "f1".to_string(),
@@ -94,7 +94,7 @@ async fn get_single_database_group_test() {
 
 #[tokio::test]
 async fn get_multiple_database_group_test() {
-  let mut database_test = create_database_with_default_data(1, "1");
+  let mut database_test = create_database_with_default_data(1, "1").await;
   let group_setting_1 = TestGroupSetting {
     id: "g1".to_string(),
     field_id: "f1".to_string(),
@@ -132,7 +132,7 @@ async fn get_multiple_database_group_test() {
 
 #[tokio::test]
 async fn extend_database_view_group_test() {
-  let mut database_test = create_database_with_two_groups();
+  let mut database_test = create_database_with_two_groups().await;
   database_test.update_group_setting("v1", "g1", |object| {
     object.insert(CONTENT.into(), "hello world".into());
     let mut groups = object
@@ -164,7 +164,7 @@ async fn extend_database_view_group_test() {
 
 #[tokio::test]
 async fn remove_database_view_group_test() {
-  let mut database_test = create_database_with_two_groups();
+  let mut database_test = create_database_with_two_groups().await;
   database_test.update_group_setting("v1", "g1", |object| {
     let mut groups = object
       .remove(GROUPS)
@@ -190,8 +190,8 @@ async fn remove_database_view_group_test() {
   assert_eq!(group_settings[0].groups[0].id, "group_item2");
 }
 
-fn create_database_with_two_groups() -> DatabaseTest {
-  let mut database_test = create_database_with_default_data(1, "1");
+async fn create_database_with_two_groups() -> DatabaseTest {
+  let mut database_test = create_database_with_default_data(1, "1").await;
   let group_1 = TestGroupSetting {
     id: "g1".to_string(),
     field_id: "f1".to_string(),

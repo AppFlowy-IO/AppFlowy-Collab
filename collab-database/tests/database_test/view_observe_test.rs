@@ -26,11 +26,13 @@ async fn observer_delete_row_test() {
     sleep(Duration::from_millis(300)).await;
     let mut db = cloned_database_test.lock().await;
     db.create_row(CreateRowParams::new(gen_row_id(), database_id.clone()))
+      .await
       .unwrap();
     db.create_row(CreateRowParams::new(
       cloned_row_id.clone(),
       database_id.clone(),
     ))
+    .await
     .unwrap();
     db.remove_row(&cloned_row_id).await;
   });
@@ -63,12 +65,16 @@ async fn observer_delete_consecutive_rows_test() {
 
     let mut db = cloned_database_test.lock().await;
     db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
+      .await
       .unwrap();
     db.create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
+      .await
       .unwrap();
     db.create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
+      .await
       .unwrap();
     db.create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
+      .await
       .unwrap();
 
     db.remove_rows(&[row_id_2, row_id_3]).await;
@@ -101,12 +107,16 @@ async fn observer_delete_non_consecutive_rows_test() {
     sleep(Duration::from_millis(300)).await;
     let mut db = cloned_database_test.lock().await;
     db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
+      .await
       .unwrap();
     db.create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
+      .await
       .unwrap();
     db.create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
+      .await
       .unwrap();
     db.create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
+      .await
       .unwrap();
 
     db.remove_rows(&[row_id_2, row_id_4]).await;

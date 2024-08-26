@@ -10,7 +10,6 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 collab = { workspace = true }
 collab-entity = { workspace = true }
-collab-plugins = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json.workspace = true
 thiserror.workspace = true
@@ -45,4 +44,5 @@ futures = "0.3.30"
 zip = "0.6.6"
 
 
-
+[features]
+verbose_log = []
