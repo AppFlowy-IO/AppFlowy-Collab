@@ -1,6 +1,6 @@
 use std::ops::Deref;
+use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering::SeqCst;
-use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Weak};
 
 use crate::local_storage::kv::doc::CollabKVAction;
