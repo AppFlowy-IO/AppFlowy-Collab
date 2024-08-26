@@ -317,19 +317,27 @@ impl Collab {
   ///
   /// This method must be called after all plugins have been added.
   pub fn initialize(&mut self) {
-    if !self.state.is_uninitialized() {
-      return;
-    }
-
     let doc = self.context.doc();
-    self.state.set_init_state(InitState::Loading);
     {
       let origin = self.origin();
       self
         .plugins
         .each(|plugin| plugin.init(&self.object_id, origin, doc));
     }
+    self.observe_update();
+    {
+      self
+        .plugins
+        .each(|plugin| plugin.did_init(self, &self.object_id));
+    }
+  }
 
+  pub fn observe_update(&mut self) {
+    if !self.state.is_uninitialized() {
+      return;
+    }
+    self.state.set_init_state(InitState::Loading);
+    let doc = self.context.doc();
     let (update_subscription, after_txn_subscription) = observe_doc(
       doc,
       self.object_id.clone(),
@@ -353,12 +361,6 @@ impl Collab {
     self
       .awareness_subscription
       .store(Some(awareness_subscription.into()));
-
-    {
-      self
-        .plugins
-        .each(|plugin| plugin.did_init(self, &self.object_id));
-    }
     self.state.set_init_state(InitState::Initialized);
   }
 
