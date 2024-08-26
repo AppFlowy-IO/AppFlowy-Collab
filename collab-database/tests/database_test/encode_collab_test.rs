@@ -24,6 +24,7 @@ async fn encode_database_collab_test() {
     let json = collab.to_json_value();
     let expected_json = database_test
       .get_database_row(&object_id)
+      .await
       .unwrap()
       .read()
       .await

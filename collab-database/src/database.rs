@@ -412,7 +412,7 @@ impl Database {
 
   /// Return the [Row] with the given row id.
   pub async fn get_row(&self, row_id: &RowId) -> Row {
-    let row = self.body.block.get_row(row_id);
+    let row = self.body.block.get_row(row_id).await;
     match row {
       None => Row::empty(row_id.clone(), &self.get_database_id()),
       Some(row) => row
@@ -430,16 +430,16 @@ impl Database {
 
   #[instrument(level = "debug", skip_all)]
   pub async fn init_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self.body.block.get_or_init_row(row_id.clone()).await.ok()
+    self.body.block.get_or_init_row(row_id).await.ok()
   }
 
-  pub fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self.body.block.get_row(row_id)
+  pub async fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    self.body.block.get_row(row_id).await
   }
 
   #[instrument(level = "debug", skip_all)]
   pub async fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
-    let database_row = self.body.block.get_or_init_row(row_id.clone()).await.ok()?;
+    let database_row = self.body.block.get_or_init_row(row_id).await.ok()?;
 
     let read_guard = database_row.read().await;
     let row = read_guard.get_row()?;
@@ -1101,7 +1101,14 @@ impl Database {
   /// Duplicate the row, and insert it after the original row.
   pub async fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
     let database_id = self.get_database_id();
-    let row = self.body.block.get_row(row_id)?.read().await.get_row()?;
+    let row = self
+      .body
+      .block
+      .get_row(row_id)
+      .await?
+      .read()
+      .await
+      .get_row()?;
     let timestamp = timestamp();
     Some(CreateRowParams {
       id: gen_row_id(),

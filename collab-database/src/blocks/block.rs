@@ -131,21 +131,18 @@ impl Block {
     Ok(row_order)
   }
 
-  pub fn get_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self
-      .row_mem_cache
-      .get(row_id)
-      .map(|row| Some(row.value().clone()))?
+  pub async fn get_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    self.get_or_init_row(row_id).await.ok()
   }
 
   pub async fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
-    let database_row = self.get_or_init_row(row_id.clone()).await.ok()?;
+    let database_row = self.get_row(row_id).await?;
     let read_guard = database_row.read().await;
     read_guard.get_row_meta()
   }
 
   pub async fn get_cell(&self, row_id: &RowId, field_id: &str) -> Option<Cell> {
-    let database_row = self.get_row(row_id)?;
+    let database_row = self.get_row(row_id).await?;
     let read_guard = database_row.read().await;
     read_guard.get_cell(field_id)
   }
@@ -162,7 +159,7 @@ impl Block {
   pub async fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
     let mut rows = Vec::new();
     for row_order in row_orders {
-      let row = match self.get_or_init_row(row_order.id.clone()).await {
+      let row = match self.get_or_init_row(&row_order.id).await {
         Err(_) => Row::empty(row_order.id.clone(), &self.database_id),
         Ok(database_row) => database_row
           .read()
@@ -190,7 +187,7 @@ impl Block {
   where
     F: FnOnce(RowUpdate),
   {
-    match self.get_row(&row_id) {
+    match self.get_row(&row_id).await {
       None => {
         error!(
           "fail to update row. the database row is not created: {:?}",
@@ -225,11 +222,11 @@ impl Block {
   #[instrument(level = "debug", skip_all)]
   pub async fn get_or_init_row(
     &self,
-    row_id: RowId,
+    row_id: &RowId,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
     let value = self
       .row_mem_cache
-      .get(&row_id)
+      .get(row_id)
       .map(|entry| entry.value().clone());
 
     match value {
@@ -239,7 +236,7 @@ impl Block {
       )
       .await
       .map_err(|_| DatabaseError::DatabaseRowNotFound {
-        row_id,
+        row_id: row_id.clone(),
         reason: "the row is not exist in local disk".to_string(),
       })?,
       Some(row) => Ok(row),
