@@ -79,6 +79,7 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
   fn delete_collab(&self, object_id: &str) -> Result<(), DatabaseError> {
     let write_txn = self.db.write_txn();
     write_txn.delete_doc(self.uid, object_id).unwrap();
+    write_txn.commit_transaction().unwrap();
     Ok(())
   }
 
@@ -132,6 +133,7 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
       db: Arc::downgrade(&self.db),
       uid: self.uid,
     };
+
     let mut collab = CollabBuilder::new(self.uid, object_id, data_source.into())
       .with_device_id("1")
       .with_plugin(db_plugin)
@@ -153,7 +155,9 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
 pub async fn workspace_database_test(uid: i64) -> WorkspaceDatabaseTest {
   setup_log();
   let db = make_rocks_db();
-  user_database_test_with_db(uid, db).await
+  let workspace_database = user_database_test_with_db(uid, db).await;
+  workspace_database.flush_workspace_database().unwrap();
+  workspace_database
 }
 
 pub async fn workspace_database_test_with_config(
@@ -166,16 +170,12 @@ pub async fn workspace_database_test_with_config(
     uid,
     db: collab_db.clone(),
   };
-  let database_views_aggregate_id = uuid::Uuid::new_v4().to_string();
+  let workspace_database_id = uuid::Uuid::new_v4().to_string();
   let collab = collab_service
-    .build_collab(
-      &database_views_aggregate_id,
-      CollabType::WorkspaceDatabase,
-      true,
-    )
+    .build_collab(&workspace_database_id, CollabType::WorkspaceDatabase, true)
     .await
     .unwrap();
-  let inner = WorkspaceDatabase::open(collab, collab_service);
+  let inner = WorkspaceDatabase::open(&workspace_database_id, collab, collab_service);
   WorkspaceDatabaseTest {
     uid,
     inner,
@@ -195,16 +195,12 @@ pub async fn workspace_database_with_db(
   };
 
   // In test, we use a fixed database_storage_id
-  let database_views_aggregate_id = "database_views_aggregate_id";
+  let workspace_database_id = "database_views_aggregate_id";
   let collab = builder
-    .build_collab(
-      database_views_aggregate_id,
-      CollabType::WorkspaceDatabase,
-      true,
-    )
+    .build_collab(workspace_database_id, CollabType::WorkspaceDatabase, true)
     .await
     .unwrap();
-  WorkspaceDatabase::open(collab, builder)
+  WorkspaceDatabase::open(workspace_database_id, collab, builder)
 }
 
 pub async fn user_database_test_with_db(

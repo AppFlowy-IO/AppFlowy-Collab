@@ -139,7 +139,7 @@ impl Block {
   }
 
   pub async fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
-    let database_row = self.get_row(row_id)?;
+    let database_row = self.get_or_init_row(row_id.clone()).await.ok()?;
     let read_guard = database_row.read().await;
     read_guard.get_row_meta()
   }
@@ -207,8 +207,8 @@ impl Block {
   where
     F: FnOnce(RowMetaUpdate),
   {
-    let row = self.row_mem_cache.get(row_id);
-    match row {
+    let database_row = self.row_mem_cache.get(row_id);
+    match database_row {
       None => {
         trace!(
           "fail to update row meta. the row is not in the cache: {:?}",
@@ -250,7 +250,6 @@ impl Block {
     &self,
     row_id: RowId,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
-    trace!("create row instance from disk: {:?}", row_id);
     let collab = self.create_collab_for_row(&row_id, false).await?;
     let database_row = DatabaseRow::new(
       row_id.clone(),
@@ -262,7 +261,6 @@ impl Block {
     let row_details = RowDetail::from_collab(&database_row);
     let database_row = Arc::new(RwLock::new(database_row));
     self.row_mem_cache.insert(row_id, database_row.clone());
-
     if let Some(row_detail) = row_details {
       let _ = self
         .notifier

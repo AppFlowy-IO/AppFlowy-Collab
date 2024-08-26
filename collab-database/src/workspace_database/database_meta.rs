@@ -42,7 +42,7 @@ impl DatabaseMetaList {
     database_id: &str,
     mut f: impl FnMut(&mut DatabaseMeta),
   ) {
-    if let Some(index) = self.database_index_from_id(txn, database_id) {
+    if let Some(index) = self.database_index_from_database_id(txn, database_id) {
       if let Some(Some(map_ref)) = self
         .array_ref
         .get(txn, index)
@@ -60,7 +60,7 @@ impl DatabaseMetaList {
 
   /// Delete the database by the given id
   pub fn delete_database(&self, txn: &mut TransactionMut, database_id: &str) {
-    if let Some(index) = self.database_index_from_id(txn, database_id) {
+    if let Some(index) = self.database_index_from_database_id(txn, database_id) {
       self.array_ref.remove(txn, index);
     }
   }
@@ -100,7 +100,7 @@ impl DatabaseMetaList {
       .find(|record| record.linked_views.iter().any(|id| id == view_id))
   }
 
-  fn database_index_from_id<T: ReadTxn>(&self, txn: &T, database_id: &str) -> Option<u32> {
+  fn database_index_from_database_id<T: ReadTxn>(&self, txn: &T, database_id: &str) -> Option<u32> {
     self
       .array_ref
       .iter(txn)

@@ -170,6 +170,9 @@ impl Database {
       for row in self.body.block.row_mem_cache.iter() {
         let row_collab = &row.blocking_read().collab;
         let row_encoded = encoded_collab(row_collab, &CollabType::DatabaseRow)?;
+        #[cfg(feature = "verbose_log")]
+        trace!("Write row to disk: {}", row_collab.object_id());
+
         persistence.flush_collab(row_collab.object_id(), row_encoded)?;
       }
     }
