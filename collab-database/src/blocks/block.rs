@@ -139,7 +139,7 @@ impl Block {
   }
 
   pub async fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
-    let database_row = self.get_row(row_id)?;
+    let database_row = self.get_or_init_row(row_id.clone()).await.ok()?;
     let read_guard = database_row.read().await;
     read_guard.get_row_meta()
   }

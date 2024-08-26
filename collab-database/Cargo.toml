@@ -34,7 +34,7 @@ getrandom = { version = "0.2", features = ["js"] }
 js-sys = "0.3"
 
 [dev-dependencies]
-collab-plugins = { workspace = true }
+collab-plugins = { workspace = true, features = ["verbose_log"] }
 collab-database = { path = "../collab-database", features = ["verbose_log"] }
 tempfile = "3.8.0"
 assert-json-diff = "2.0.2"
