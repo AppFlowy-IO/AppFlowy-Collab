@@ -164,7 +164,8 @@ where
     match get_doc_id(uid, self, object_id.as_ref()) {
       None => {
         tracing::error!(
-          "🔴Insert update failed. Can't find the doc for {:?}",
+          "🔴Insert update failed. Can't find the doc for {}-{:?}",
+          uid,
           object_id
         );
         Err(PersistenceError::RecordNotFound(format!(
