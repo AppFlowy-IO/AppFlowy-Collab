@@ -1,6 +1,6 @@
 use std::ops::Deref;
+use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering::SeqCst;
-use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::{Arc, Weak};
 
 use crate::local_storage::kv::doc::CollabKVAction;
@@ -27,7 +27,6 @@ pub struct RocksdbDiskPlugin {
   object_id: String,
   collab_type: CollabType,
   collab_db: Weak<CollabKVDB>,
-  did_init: Arc<AtomicBool>,
   update_count: Arc<AtomicU32>,
   #[allow(dead_code)]
   config: CollabPersistenceConfig,
@@ -50,13 +49,11 @@ impl RocksdbDiskPlugin {
     config: CollabPersistenceConfig,
   ) -> Self {
     let update_count = Arc::new(AtomicU32::new(0));
-    let did_init = Arc::new(AtomicBool::new(false));
     Self {
       object_id,
       collab_type,
       collab_db,
       uid,
-      did_init,
       update_count,
       config,
     }
@@ -84,8 +81,6 @@ impl RocksdbDiskPlugin {
 
 impl CollabPlugin for RocksdbDiskPlugin {
   fn did_init(&self, collab: &Collab, object_id: &str) {
-    self.did_init.store(true, SeqCst);
-
     if let Some(collab_db) = self.collab_db.upgrade() {
       let rocksdb_read = collab_db.read_txn();
       if !rocksdb_read.is_exist(self.uid, object_id) {
@@ -103,9 +98,6 @@ impl CollabPlugin for RocksdbDiskPlugin {
 
   fn receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
     // Only push update if the doc is loaded
-    if !self.did_init.load(SeqCst) {
-      return;
-    }
     if let Some(db) = self.collab_db.upgrade() {
       self.increase_count();
       //Acquire a write transaction to ensure consistency
