@@ -99,6 +99,14 @@ impl DatabaseRow {
     Some(RowMeta::from_map_ref(&txn, &row_id, &self.meta))
   }
 
+  pub fn get_row_detail(&self) -> Option<RowDetail> {
+    let txn = self.collab.transact();
+    let row = row_from_map_ref(&self.body.data, &txn)?;
+    let row_id = Uuid::parse_str(&self.body.row_id).ok()?;
+    let meta = RowMeta::from_map_ref(&txn, &row_id, &self.meta);
+    RowDetail::new(row, meta)
+  }
+
   pub fn get_row_order(&self) -> Option<RowOrder> {
     let txn = self.collab.transact();
     row_order_from_map_ref(&self.body.data, &txn).map(|value| value.0)

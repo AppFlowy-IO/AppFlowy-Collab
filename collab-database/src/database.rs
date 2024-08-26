@@ -442,9 +442,7 @@ impl Database {
     let database_row = self.body.block.get_or_init_row(row_id).await.ok()?;
 
     let read_guard = database_row.read().await;
-    let row = read_guard.get_row()?;
-    let meta = read_guard.get_row_meta()?;
-    RowDetail::new(row, meta)
+    read_guard.get_row_detail()
   }
 
   pub fn get_row_document_id(&self, row_id: &RowId) -> Option<String> {
