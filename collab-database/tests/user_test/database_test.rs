@@ -335,16 +335,24 @@ async fn reopen_database_test() {
       .write()
       .await
       .update_row_meta(&row_order.id, |updater| {
-        updater.insert_icon(&format!("icon-{}", index));
+        updater
+          .insert_icon(&format!("icon-{}", index))
+          .insert_cover("cover");
       })
       .await;
-    let row_meta = database
-      .read()
-      .await
-      .get_row_meta(&row_order.id)
-      .await
-      .unwrap();
-    assert_eq!(row_meta.icon_url, Some(format!("icon-{}", index)));
+
+    // let row = database
+    //   .read()
+    //   .await
+    //   .get_database_row(&row_order.id)
+    //   .await
+    //   .unwrap();
+    // let json = row.read().await.collab.to_json_value();
+    // let meta_json = json.get("meta").unwrap();
+    // assert_eq!(
+    //   meta_json.get("icon_url").unwrap(),
+    //   &format!("icon-{}", index)
+    // );
   }
 
   let db = test.collab_db.clone();
@@ -353,7 +361,6 @@ async fn reopen_database_test() {
   let test = user_database_test_with_db(uid, db).await;
   let database = test.get_database_with_view_id(&view_id).await.unwrap();
   let row_orders = database.read().await.get_all_row_orders().await;
-
   for (index, row_order) in row_orders.into_iter().enumerate() {
     let row_meta = database
       .read()

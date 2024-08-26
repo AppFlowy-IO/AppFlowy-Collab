@@ -93,14 +93,14 @@ impl Block {
   {
     let mut row_orders = Vec::with_capacity(rows.len());
     for row in rows {
-      if let Ok(row_order) = self.create_row(row).await {
+      if let Ok(row_order) = self.create_new_row(row).await {
         row_orders.push(row_order);
       }
     }
     row_orders
   }
 
-  pub async fn create_row<T: Into<Row>>(&self, row: T) -> Result<RowOrder, DatabaseError> {
+  pub async fn create_new_row<T: Into<Row>>(&self, row: T) -> Result<RowOrder, DatabaseError> {
     let row = row.into();
     let row_id = row.id.clone();
     let row_order = RowOrder {
@@ -108,7 +108,7 @@ impl Block {
       height: row.height,
     };
 
-    trace!("create_row: {}", row_id);
+    trace!("create new row: {}", row_id);
     if let Some(persistence) = self.collab_service.persistence() {
       if persistence.is_collab_exist(&row_id) {
         warn!("The row already exists: {:?}", row_id);
@@ -125,7 +125,6 @@ impl Block {
       self.collab_service.clone(),
     );
 
-    database_row.write_to_disk()?;
     let database_row = Arc::new(RwLock::new(database_row));
     self.row_mem_cache.insert(row_id, database_row);
     Ok(row_order)
@@ -232,7 +231,7 @@ impl Block {
     match value {
       None => tokio::time::timeout(
         Duration::from_secs(3),
-        self.create_row_instance(row_id.clone()),
+        self.init_row_instance(row_id.clone()),
       )
       .await
       .map_err(|_| DatabaseError::DatabaseRowNotFound {
@@ -243,10 +242,11 @@ impl Block {
     }
   }
 
-  pub async fn create_row_instance(
+  pub async fn init_row_instance(
     &self,
     row_id: RowId,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
+    trace!("init row instance: {}", row_id);
     let collab = self.create_collab_for_row(&row_id, false).await?;
     let database_row = DatabaseRow::new(
       row_id.clone(),

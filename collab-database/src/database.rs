@@ -295,7 +295,7 @@ impl Database {
   /// created successfully. Otherwise, return None.
   pub async fn create_row(&mut self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
     let params = CreateRowParamsValidator::validate(params)?;
-    let row_order = self.body.block.create_row(params).await?;
+    let row_order = self.body.block.create_new_row(params).await?;
     let mut txn = self.collab.transact_mut();
     self
       .body
@@ -1474,7 +1474,7 @@ impl DatabaseBody {
   /// This row will be inserted into corresponding [Block]. The [RowOrder] of this row will
   /// be inserted to each view.
   pub async fn create_row(&self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
-    let row_order = self.block.create_row(params).await?;
+    let row_order = self.block.create_new_row(params).await?;
     Ok(row_order)
   }
 
