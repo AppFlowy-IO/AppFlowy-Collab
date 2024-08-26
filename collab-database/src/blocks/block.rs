@@ -131,7 +131,10 @@ impl Block {
   }
 
   pub async fn get_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self.get_or_init_row(row_id).await.ok()
+    self
+      .row_mem_cache
+      .get(row_id)
+      .map(|row| Some(row.value().clone()))?
   }
 
   pub async fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
