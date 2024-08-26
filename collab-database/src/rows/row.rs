@@ -96,14 +96,14 @@ impl DatabaseRow {
   pub fn get_row_meta(&self) -> Option<RowMeta> {
     let txn = self.collab.transact();
     let row_id = Uuid::parse_str(&self.body.row_id).ok()?;
-    Some(RowMeta::from_map_ref(&txn, &row_id, &self.meta))
+    Some(RowMeta::from_map_ref(&txn, &row_id, &self.body.meta))
   }
 
   pub fn get_row_detail(&self) -> Option<RowDetail> {
     let txn = self.collab.transact();
     let row = row_from_map_ref(&self.body.data, &txn)?;
     let row_id = Uuid::parse_str(&self.body.row_id).ok()?;
-    let meta = RowMeta::from_map_ref(&txn, &row_id, &self.meta);
+    let meta = RowMeta::from_map_ref(&txn, &row_id, &self.body.meta);
     RowDetail::new(row, meta)
   }
 
@@ -122,7 +122,7 @@ impl DatabaseRow {
     F: FnOnce(RowUpdate),
   {
     let data = self.body.data.clone();
-    let meta = self.meta.clone();
+    let meta = self.body.meta.clone();
     let mut txn = self.collab.transact_mut();
     let update = RowUpdate::new(&mut txn, data, meta);
     f(update)
@@ -132,7 +132,7 @@ impl DatabaseRow {
   where
     F: FnOnce(RowMetaUpdate),
   {
-    let meta = self.meta.clone();
+    let meta = self.body.meta.clone();
     let mut txn = self.collab.transact_mut();
     match Uuid::parse_str(&self.body.row_id) {
       Ok(row_id) => {

@@ -341,18 +341,14 @@ async fn reopen_database_test() {
       })
       .await;
 
-    // let row = database
-    //   .read()
-    //   .await
-    //   .get_database_row(&row_order.id)
-    //   .await
-    //   .unwrap();
-    // let json = row.read().await.collab.to_json_value();
-    // let meta_json = json.get("meta").unwrap();
-    // assert_eq!(
-    //   meta_json.get("icon_url").unwrap(),
-    //   &format!("icon-{}", index)
-    // );
+    let row = database
+      .read()
+      .await
+      .get_database_row(&row_order.id)
+      .await
+      .unwrap();
+    let json = row.read().await.collab.to_json_value();
+    assert!(json.get("meta").is_some());
   }
 
   let db = test.collab_db.clone();
