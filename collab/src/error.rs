@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use yrs::doc::TransactionAcqError;
+use yrs::TransactionAcqError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CollabError {
