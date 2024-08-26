@@ -344,6 +344,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "collab",
+ "collab-database",
  "collab-entity",
  "collab-plugins",
  "dashmap",

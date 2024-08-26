@@ -9,14 +9,14 @@ use collab_entity::CollabType;
 
 use collab::entity::EncodedCollab;
 
+use crate::entity::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
+use crate::rows::RowId;
+use anyhow::anyhow;
+use collab::core::collab_plugin::CollabPersistence;
 use dashmap::DashMap;
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-
-use crate::entity::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
-use crate::rows::RowId;
-use collab::core::collab_plugin::CollabPersistence;
 use tokio::sync::RwLock;
 use tracing::error;
 
@@ -80,6 +80,7 @@ impl From<CollabPersistenceImpl> for DataSource {
 /// One database ID can have multiple view IDs.
 ///
 pub struct WorkspaceDatabase {
+  object_id: String,
   collab: Collab,
   meta_list: DatabaseMetaList,
   collab_service: Arc<dyn DatabaseCollabService>,
@@ -90,11 +91,16 @@ pub struct WorkspaceDatabase {
 }
 
 impl WorkspaceDatabase {
-  pub fn open(mut collab: Collab, collab_service: impl DatabaseCollabService) -> Self {
+  pub fn open(
+    object_id: &str,
+    mut collab: Collab,
+    collab_service: impl DatabaseCollabService,
+  ) -> Self {
     let collab_service = Arc::new(collab_service);
     let meta_list = DatabaseMetaList::new(&mut collab);
 
     Self {
+      object_id: object_id.to_string(),
       collab,
       meta_list,
       collab_service,
@@ -298,6 +304,18 @@ impl WorkspaceDatabase {
     } else {
       Err(DatabaseError::DatabaseNotExist)
     }
+  }
+
+  pub fn flush_workspace_database(&self) -> Result<(), DatabaseError> {
+    let encode_collab = self
+      .collab
+      .encode_collab_v1(|collab| CollabType::WorkspaceDatabase.validate_require_data(collab))?;
+    self
+      .collab_service
+      .persistence()
+      .ok_or_else(|| DatabaseError::Internal(anyhow!("collab persistence is not found")))?
+      .flush_collab(&self.object_id, encode_collab)?;
+    Ok(())
   }
 }
 

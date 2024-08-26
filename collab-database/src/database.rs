@@ -170,6 +170,9 @@ impl Database {
       for row in self.body.block.row_mem_cache.iter() {
         let row_collab = &row.blocking_read().collab;
         let row_encoded = encoded_collab(row_collab, &CollabType::DatabaseRow)?;
+        #[cfg(feature = "verbose_log")]
+        trace!("Write row to disk: {}", row_collab.object_id());
+
         persistence.flush_collab(row_collab.object_id(), row_encoded)?;
       }
     }
@@ -292,7 +295,7 @@ impl Database {
   /// created successfully. Otherwise, return None.
   pub async fn create_row(&mut self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
     let params = CreateRowParamsValidator::validate(params)?;
-    let row_order = self.body.block.create_row(params).await?;
+    let row_order = self.body.block.create_new_row(params).await?;
     let mut txn = self.collab.transact_mut();
     self
       .body
@@ -409,7 +412,7 @@ impl Database {
 
   /// Return the [Row] with the given row id.
   pub async fn get_row(&self, row_id: &RowId) -> Row {
-    let row = self.body.block.get_row(row_id);
+    let row = self.body.block.get_row(row_id).await;
     match row {
       None => Row::empty(row_id.clone(), &self.get_database_id()),
       Some(row) => row
@@ -427,21 +430,19 @@ impl Database {
 
   #[instrument(level = "debug", skip_all)]
   pub async fn init_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self.body.block.get_or_init_row(row_id.clone()).await.ok()
+    self.body.block.get_or_init_row(row_id).await.ok()
   }
 
-  pub fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self.body.block.get_row(row_id)
+  pub async fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    self.body.block.get_row(row_id).await
   }
 
   #[instrument(level = "debug", skip_all)]
   pub async fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
-    let database_row = self.body.block.get_or_init_row(row_id.clone()).await.ok()?;
+    let database_row = self.body.block.get_or_init_row(row_id).await.ok()?;
 
     let read_guard = database_row.read().await;
-    let row = read_guard.get_row()?;
-    let meta = read_guard.get_row_meta()?;
-    RowDetail::new(row, meta)
+    read_guard.get_row_detail()
   }
 
   pub fn get_row_document_id(&self, row_id: &RowId) -> Option<String> {
@@ -1098,7 +1099,14 @@ impl Database {
   /// Duplicate the row, and insert it after the original row.
   pub async fn duplicate_row(&self, row_id: &RowId) -> Option<CreateRowParams> {
     let database_id = self.get_database_id();
-    let row = self.body.block.get_row(row_id)?.read().await.get_row()?;
+    let row = self
+      .body
+      .block
+      .get_row(row_id)
+      .await?
+      .read()
+      .await
+      .get_row()?;
     let timestamp = timestamp();
     Some(CreateRowParams {
       id: gen_row_id(),
@@ -1466,7 +1474,7 @@ impl DatabaseBody {
   /// This row will be inserted into corresponding [Block]. The [RowOrder] of this row will
   /// be inserted to each view.
   pub async fn create_row(&self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
-    let row_order = self.block.create_row(params).await?;
+    let row_order = self.block.create_new_row(params).await?;
     Ok(row_order)
   }
 

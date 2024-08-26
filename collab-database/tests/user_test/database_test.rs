@@ -328,11 +328,43 @@ async fn reopen_database_test() {
   let params = make_default_grid(&view_id, "first view");
 
   // create the database with inline view
-  let _database = test.create_database(params).unwrap();
+  let database = test.create_database(params).unwrap();
+  let row_orders = database.read().await.get_all_row_orders().await;
+  for (index, row_order) in row_orders.into_iter().enumerate() {
+    database
+      .write()
+      .await
+      .update_row_meta(&row_order.id, |updater| {
+        updater
+          .insert_icon(&format!("icon-{}", index))
+          .insert_cover("cover");
+      })
+      .await;
+
+    let row = database
+      .read()
+      .await
+      .get_database_row(&row_order.id)
+      .await
+      .unwrap();
+    let json = row.read().await.collab.to_json_value();
+    assert!(json.get("meta").is_some());
+  }
+
   let db = test.collab_db.clone();
   drop(test);
 
   let test = user_database_test_with_db(uid, db).await;
-  let database = test.get_database_with_view_id(&view_id).await;
-  let _ = database.unwrap().read().await.to_json_value().await;
+  let database = test.get_database_with_view_id(&view_id).await.unwrap();
+  let row_orders = database.read().await.get_all_row_orders().await;
+  for (index, row_order) in row_orders.into_iter().enumerate() {
+    let row_meta = database
+      .read()
+      .await
+      .get_row_meta(&row_order.id)
+      .await
+      .unwrap();
+    assert_eq!(row_meta.icon_url, Some(format!("icon-{}", index)));
+  }
+  let _ = database.read().await.to_json_value().await;
 }
