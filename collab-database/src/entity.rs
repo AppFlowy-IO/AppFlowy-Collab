@@ -173,8 +173,11 @@ impl CreateDatabaseParams {
   /// database with the same data inside the given `DatabaseData` struct containing all the
   /// data of a database. The internal `database_id`, the database views' `view_id`s and the rows'
   /// `row_id`s will all be regenerated.
-  pub fn from_database_data(data: DatabaseData) -> Self {
-    let (database_id, inline_view_id) = (gen_database_id(), gen_database_view_id());
+  pub fn from_database_data(data: DatabaseData, default_inline_view_id: Option<String>) -> Self {
+    let (database_id, inline_view_id) = (
+      gen_database_id(),
+      default_inline_view_id.unwrap_or_else(gen_database_view_id),
+    );
     let timestamp = timestamp();
 
     let create_row_params = data
