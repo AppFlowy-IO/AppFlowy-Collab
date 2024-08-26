@@ -35,6 +35,7 @@ js-sys = "0.3"
 
 [dev-dependencies]
 collab-plugins = { workspace = true }
+collab-database = { path = "../collab-database", features = ["verbose_log"] }
 tempfile = "3.8.0"
 assert-json-diff = "2.0.2"
 lazy_static = "1.4.0"

@@ -128,11 +128,7 @@ where
         );
       }
 
-      tracing::trace!(
-        "Collab {:?} loaded from and {} updates",
-        object_id,
-        update_count
-      );
+      tracing::trace!("Collab {:?} loaded and {} updates", object_id, update_count);
 
       Ok(update_count)
     } else {
