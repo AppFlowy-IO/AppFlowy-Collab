@@ -33,6 +33,9 @@ pub enum PersistenceError {
   #[error(transparent)]
   Yrs(#[from] yrs::encoding::read::Error),
 
+  #[error("Failed to apply update from persistent store: {0}")]
+  Update(#[from] yrs::error::UpdateError),
+
   #[error("invalid data: {0}")]
   InvalidData(String),
 

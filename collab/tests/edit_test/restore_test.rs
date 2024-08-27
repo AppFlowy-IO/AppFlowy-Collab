@@ -39,7 +39,7 @@ async fn restore_from_update() {
     let mut txn = c2.transact_mut();
     for update in updates {
       let update = Update::decode_v1(&update).unwrap();
-      txn.apply_update(update);
+      txn.apply_update(update).unwrap();
     }
   }
 
@@ -72,7 +72,7 @@ async fn missing_update_test() {
     let mut txn = c2.transact_mut();
     for update in updates {
       let update = Update::decode_v1(&update).unwrap();
-      txn.apply_update(update);
+      txn.apply_update(update).unwrap();
     }
     assert!(txn.store().pending_update().is_some())
   }
@@ -140,7 +140,7 @@ async fn simulate_client_missing_server_broadcast_data_test() {
     let mut txn = server.transact_mut();
     for update in first {
       let update = Update::decode_v1(&update).unwrap();
-      txn.apply_update(update);
+      txn.apply_update(update).unwrap();
     }
   }
   assert_eq!(
@@ -158,7 +158,7 @@ async fn simulate_client_missing_server_broadcast_data_test() {
     let mut txn = server.transact_mut();
     for update in second {
       let update = Update::decode_v1(&update).unwrap();
-      txn.apply_update(update);
+      txn.apply_update(update).unwrap();
     }
   }
   assert_eq!(
@@ -175,7 +175,7 @@ async fn simulate_client_missing_server_broadcast_data_test() {
     let mut txn = c2.transact_mut();
     for update in second_server_updates {
       let update = Update::decode_v1(&update).unwrap();
-      txn.apply_update(update);
+      txn.apply_update(update).unwrap();
     }
     // Verify that client 2 is now out of sync due to missing updates.
     assert!(txn.store().pending_update().is_some());
@@ -247,7 +247,7 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
     let mut txn = server.transact_mut();
     for update in second_1 {
       let update = Update::decode_v1(&update).unwrap();
-      txn.apply_update(update);
+      txn.apply_update(update).unwrap();
     }
   }
   // applied: {3:c} (pending), missing: {1:a, 2:b}
@@ -260,7 +260,7 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
     let mut txn = server.transact_mut();
     for update in first_2 {
       let update = Update::decode_v1(&update).unwrap();
-      txn.apply_update(update);
+      txn.apply_update(update).unwrap();
     }
   }
   // applied: {4:d,5:e}, pending: {3:c}, missing: {1:a, 2:b}
@@ -278,7 +278,7 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
     let mut txn = server.transact_mut();
     for update in first_1 {
       let update = Update::decode_v1(&update).unwrap();
-      txn.apply_update(update);
+      txn.apply_update(update).unwrap();
     }
   }
   // applied: {1:a,2:b,4:d,5:e}, re-applied: {3:c}
@@ -296,7 +296,7 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
     let mut txn = server.transact_mut();
     for update in second_1 {
       let update = Update::decode_v1(&update).unwrap();
-      txn.apply_update(update);
+      txn.apply_update(update).unwrap();
     }
   }
   // update {6:f} was never applied
@@ -352,7 +352,7 @@ fn init_sync(destination: &mut Collab, source: &Collab) {
   let timestamp = dest_tx.state_vector();
   let update = source_tx.encode_state_as_update_v1(&timestamp);
   let update = Update::decode_v1(&update).unwrap();
-  dest_tx.apply_update(update);
+  dest_tx.apply_update(update).unwrap();
 }
 
 #[tokio::test]

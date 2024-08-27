@@ -165,16 +165,17 @@ impl CollabContext {
 
   pub fn undo(&mut self) -> Result<bool, CollabError> {
     let undo_manager = self.undo_manager_mut()?;
-    Ok(undo_manager.undo()?)
+    Ok(undo_manager.undo_blocking())
   }
 
   pub fn redo(&mut self) -> Result<bool, CollabError> {
     let undo_manager = self.undo_manager_mut()?;
-    Ok(undo_manager.redo()?)
+    Ok(undo_manager.redo_blocking())
   }
 
   pub fn apply_update(&mut self, update: Update) -> Result<(), CollabError> {
-    self.with_txn(|tx| tx.apply_update(update))
+    self.with_txn(|tx| tx.apply_update(update))??;
+    Ok(())
   }
 
   pub fn clean_awareness_state(&mut self) {
@@ -722,13 +723,8 @@ pub trait TransactionMutExt<'doc> {
 
 impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
   fn try_apply_update(&mut self, update: Update) -> Result<(), CollabError> {
-    let result = panic::catch_unwind(AssertUnwindSafe(|| {
-      self.apply_update(update);
-    }));
-    match result {
-      Ok(_) => Ok(()),
-      Err(e) => Err(CollabError::YrsTransactionError(format!("{:?}", e))),
-    }
+    self.apply_update(update)?;
+    Ok(())
   }
 
   fn try_commit(&mut self) -> Result<(), CollabError> {
