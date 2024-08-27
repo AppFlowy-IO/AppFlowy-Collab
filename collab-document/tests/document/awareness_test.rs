@@ -126,7 +126,7 @@ fn document_awareness_serde_test2() {
     1,
     AwarenessUpdateEntry {
       clock: 0,
-      json: serde_json::to_string(&document_state).unwrap(),
+      json: serde_json::to_string(&document_state).unwrap().into(),
     },
   );
 

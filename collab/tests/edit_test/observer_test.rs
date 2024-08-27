@@ -33,7 +33,8 @@ async fn array_observer_test() {
   });
 
   let mut txn = doc2.transact_mut();
-  txn.apply_update(Update::decode_v1(&update_1).unwrap());
+  let update = Update::decode_v1(&update_1).unwrap();
+  txn.apply_update(update).unwrap();
   drop(txn);
 
   let mut txn = doc1.transact_mut();
@@ -41,8 +42,9 @@ async fn array_observer_test() {
   let update_2 = txn.encode_update_v1();
   drop(txn);
 
+  let update = Update::decode_v1(&update_2).unwrap();
   let mut txn = doc2.transact_mut();
-  txn.apply_update(Update::decode_v1(&update_2).unwrap());
+  txn.apply_update(update).unwrap();
   drop(txn);
 
   //Output:
@@ -94,11 +96,13 @@ async fn apply_update_test() {
     let doc2 = Doc::new();
     let array = doc2.get_or_insert_array("array");
     {
+      let update = Update::decode_v1(doc1_state.as_ref()).unwrap();
       let mut txn = doc2.transact_mut();
-      txn.apply_update(Update::decode_v1(doc1_state.as_ref()).unwrap());
+      txn.apply_update(update).unwrap();
       let lock = updates.lock().unwrap();
       for update in lock.iter() {
-        txn.apply_update(Update::decode_v1(update).unwrap());
+        let update = Update::decode_v1(update).unwrap();
+        txn.apply_update(update).unwrap();
       }
     }
     let map = {
@@ -148,11 +152,13 @@ async fn apply_update_test() {
     let doc3 = Doc::new();
     let array = doc3.get_or_insert_array("array");
     {
+      let update = Update::decode_v1(doc1_state.as_ref()).unwrap();
       let mut txn = doc3.transact_mut();
-      txn.apply_update(Update::decode_v1(doc1_state.as_ref()).unwrap());
+      txn.apply_update(update).unwrap();
       let lock = updates.lock().unwrap();
       for update in lock.iter() {
-        txn.apply_update(Update::decode_v1(update).unwrap());
+        let update = Update::decode_v1(update).unwrap();
+        txn.apply_update(update).unwrap();
       }
     }
 

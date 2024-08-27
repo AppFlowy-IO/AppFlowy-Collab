@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use yrs::doc::TransactionAcqError;
+use yrs::TransactionAcqError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CollabError {
@@ -32,6 +32,9 @@ pub enum CollabError {
 
   #[error(transparent)]
   Awareness(#[from] crate::core::awareness::Error),
+
+  #[error("Failed to apply update: {0}")]
+  UpdateFailed(#[from] yrs::error::UpdateError),
 
   #[error("Internal failure: {0}")]
   Internal(#[from] Box<dyn std::error::Error + Send + Sync>),

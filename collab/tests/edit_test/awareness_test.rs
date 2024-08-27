@@ -114,11 +114,13 @@ async fn clean_awareness_state_sync_test() {
     .unwrap();
 
   // collab_a's awareness state should be synced to collab_b after applying the update
-  let states = collab_2.get_awareness().clients();
+  let states = collab_2.get_awareness().iter().collect::<Vec<_>>();
   assert_eq!(states.len(), 2);
-  for (id, json) in states {
-    let uid = doc_id_map_uid.get(id).unwrap().parse::<i64>().unwrap();
-    assert_eq!(json, &json!({"uid": uid}).to_string());
+  for (id, state) in states {
+    if let Some(json) = state.data {
+      let uid = doc_id_map_uid.get(&id).unwrap().parse::<i64>().unwrap();
+      assert_eq!(json, json!({"uid": uid}).to_string().into());
+    }
   }
 
   // collab_a clean the awareness state
@@ -130,6 +132,10 @@ async fn clean_awareness_state_sync_test() {
     .apply_update(awareness_update)
     .unwrap();
 
-  let states = collab_2.get_awareness().clients();
-  assert_eq!(states.len(), 1);
+  let states = collab_2
+    .get_awareness()
+    .iter()
+    .filter(|(_, s)| s.data.is_some())
+    .count();
+  assert_eq!(states, 1);
 }

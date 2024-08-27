@@ -5,6 +5,7 @@ use arc_swap::ArcSwapOption;
 
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
+use collab::error::CollabError;
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{DeepObservable, EntryChange, Event, MapExt, ReadTxn, Update, YrsValue};
 
@@ -78,7 +79,9 @@ impl Folder {
       let data = this_txn.encode_state_as_update_v1(&sv);
       let update = Update::decode_v1(&data).map_err(|err| FolderError::Internal(err.into()))?;
 
-      other_txn.apply_update(update);
+      other_txn
+        .apply_update(update)
+        .map_err(|e| CollabError::UpdateFailed(e))?;
     }
     drop(sub);
     drop(other);

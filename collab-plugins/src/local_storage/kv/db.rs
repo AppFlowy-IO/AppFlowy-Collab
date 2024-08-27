@@ -1,8 +1,6 @@
 use std::fmt::Debug;
 use std::io::Write;
 use std::ops::RangeBounds;
-use std::panic;
-use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 use crate::local_storage::kv::keys::*;
@@ -218,13 +216,8 @@ pub trait TransactionMutExt<'doc> {
 
 impl<'doc> TransactionMutExt<'doc> for TransactionMut<'doc> {
   fn try_apply_update(&mut self, update: Update) -> Result<(), PersistenceError> {
-    let result = panic::catch_unwind(AssertUnwindSafe(|| {
-      self.apply_update(update);
-    }));
-    match result {
-      Ok(_) => Ok(()),
-      Err(e) => Err(PersistenceError::InvalidData(format!("{:?}", e))),
-    }
+    self.apply_update(update)?;
+    Ok(())
   }
 }
 

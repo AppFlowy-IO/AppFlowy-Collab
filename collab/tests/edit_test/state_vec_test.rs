@@ -30,8 +30,9 @@ async fn state_vec_apply_test() {
     .transact()
     .encode_state_as_update_v1(&doc2.transact().state_vector());
   {
+    let update = Update::decode_v1(&update).unwrap();
     let mut txn = doc2.transact_mut();
-    txn.apply_update(Update::decode_v1(&update).unwrap());
+    txn.apply_update(update).unwrap();
   }
 
   assert_json_diff::assert_json_eq!(
@@ -77,7 +78,7 @@ async fn two_way_sync_result_undetermined() {
     let sv_update = doc_2.transact().encode_state_as_update_v1(&sv_1);
     let mut txn = doc_1.transact_mut();
     let update = Update::decode_v1(&sv_update).unwrap();
-    txn.apply_update(update);
+    txn.apply_update(update).unwrap();
   }
 
   // When synchronizing updates, what happens is that a conflict has occurred - under the same key
@@ -93,7 +94,7 @@ async fn two_way_sync_result_undetermined() {
     let sv_update = doc_1.transact().encode_state_as_update_v1(&sv_2);
     let mut txn = doc_2.transact_mut();
     let update = Update::decode_v1(&sv_update).unwrap();
-    txn.apply_update(update);
+    txn.apply_update(update).unwrap();
   }
 
   // The a and b must be the same and might be empty. This is the result of the two way sync.
@@ -138,14 +139,14 @@ async fn two_way_sync_test() {
     let sv_update = doc_2.transact().encode_state_as_update_v1(&sv_1);
     let mut txn = doc_1.transact_mut();
     let update = Update::decode_v1(&sv_update).unwrap();
-    txn.apply_update(update);
+    txn.apply_update(update).unwrap();
   }
   {
     let sv_2 = doc_2.transact().state_vector();
     let sv_update = doc_1.transact().encode_state_as_update_v1(&sv_2);
     let mut txn = doc_2.transact_mut();
     let update = Update::decode_v1(&sv_update).unwrap();
-    txn.apply_update(update);
+    txn.apply_update(update).unwrap();
   }
 
   // Update the "map" in doc_2 and then sync to doc_1
@@ -164,7 +165,7 @@ async fn two_way_sync_test() {
     let sv_update = doc_2.transact().encode_state_as_update_v1(&sv_1);
     let mut txn = doc_1.transact_mut();
     let update = Update::decode_v1(&sv_update).unwrap();
-    txn.apply_update(update);
+    txn.apply_update(update).unwrap();
   }
 
   // The a and b must be the same and not empty
