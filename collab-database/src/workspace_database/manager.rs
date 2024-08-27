@@ -288,7 +288,7 @@ impl WorkspaceDatabase {
   ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
     let database_data = self.get_database_data(view_id).await?;
 
-    let create_database_params = CreateDatabaseParams::from_database_data(database_data);
+    let create_database_params = CreateDatabaseParams::from_database_data(database_data, None);
     let database = self.create_database(create_database_params)?;
     Ok(database)
   }
