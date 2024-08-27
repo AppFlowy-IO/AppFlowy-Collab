@@ -1,7 +1,7 @@
 use crate::database::{Database, DatabaseContext, DatabaseData};
 use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
-use crate::workspace_database::database_meta::{DatabaseMeta, WorkspaceDatabaseBody};
+use crate::workspace_database::body::{DatabaseMeta, WorkspaceDatabaseBody};
 use async_trait::async_trait;
 use collab::core::collab::DataSource;
 use collab::preclude::Collab;
