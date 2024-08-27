@@ -271,7 +271,7 @@ impl RemoteCollab {
             .get_mut_awareness()
             .doc_mut()
             .transact_mut()
-            .apply_update(update);
+            .apply_update(update)?;
           drop(local_lock);
 
           if let Err(e) = self.sync_state.send(SyncState::InitSyncEnd) {
@@ -300,7 +300,7 @@ impl RemoteCollab {
       );
 
       // Apply the update to the remote collab and send the update to the remote.
-      remote_lock.transact_mut().apply_update(decode_update);
+      remote_lock.transact_mut().apply_update(decode_update)?;
       drop(remote_lock);
 
       self.sink.queue_msg(|msg_id| Message {
@@ -312,13 +312,13 @@ impl RemoteCollab {
     Ok(remote_update)
   }
 
-  pub fn push_update(&self, update: &[u8]) {
+  pub fn push_update(&self, update: &[u8]) -> Result<(), Error> {
     if let Ok(decode_update) = Update::decode_v1(update) {
       self
         .collab
         .blocking_write()
         .transact_mut()
-        .apply_update(decode_update);
+        .apply_update(decode_update)?;
 
       self.sink.queue_msg(|msg_id| Message {
         object: self.object.clone(),
@@ -326,6 +326,8 @@ impl RemoteCollab {
         meta: MessageMeta::Update { msg_id },
       });
     }
+
+    Ok(())
   }
 
   #[allow(dead_code)]

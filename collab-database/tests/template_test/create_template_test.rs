@@ -5,7 +5,7 @@ use collab_database::template::entity::CELL_DATA;
 
 #[tokio::test]
 async fn create_template_test() {
-  let expected_field_type = vec![
+  let expected_field_type = [
     FieldType::RichText,
     FieldType::SingleSelect,
     FieldType::MultiSelect,

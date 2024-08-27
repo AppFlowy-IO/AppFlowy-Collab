@@ -81,7 +81,7 @@ impl Folder {
 
       other_txn
         .apply_update(update)
-        .map_err(|e| CollabError::UpdateFailed(e))?;
+        .map_err(CollabError::UpdateFailed)?;
     }
     drop(sub);
     drop(other);
