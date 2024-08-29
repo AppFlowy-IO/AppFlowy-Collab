@@ -1465,6 +1465,14 @@ impl DatabaseBody {
     (body, collab)
   }
 
+  /// Return database id from the given [Collab] instance. If the required fields are not found,
+  /// it will return None.
+  pub fn database_id_from_collab(collab: &Collab) -> Option<String> {
+    let txn = collab.context.transact();
+    let root = collab.data.get(&txn, DATABASE)?.cast::<MapRef>().ok()?;
+    root.get(&txn, DATABASE_ID)?.cast::<String>().ok()
+  }
+
   pub fn get_database_id<T: ReadTxn>(&self, txn: &T) -> String {
     self.root.get_with_txn(txn, DATABASE_ID).unwrap()
   }
