@@ -45,10 +45,9 @@ pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
 
   fn is_collab_exist(&self, object_id: &str) -> bool;
 
-  fn flush_collab(
+  fn flush_collabs(
     &self,
-    object_id: &str,
-    encode_collab: EncodedCollab,
+    encoded_collabs: Vec<(String, EncodedCollab)>,
   ) -> Result<(), DatabaseError>;
 
   fn is_row_exist_partition(&self, row_ids: Vec<RowId>) -> (Vec<RowId>, Vec<RowId>);
@@ -311,7 +310,7 @@ impl WorkspaceDatabase {
       .collab_service
       .persistence()
       .ok_or_else(|| DatabaseError::Internal(anyhow!("collab persistence is not found")))?
-      .flush_collab(&self.object_id, encode_collab)?;
+      .flush_collabs(vec![(self.object_id.clone(), encode_collab)])?;
     Ok(())
   }
 }
