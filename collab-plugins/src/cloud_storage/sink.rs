@@ -3,9 +3,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use collab::lock::Mutex;
 use futures_util::SinkExt;
 use tokio::spawn;
-use tokio::sync::{mpsc, oneshot, watch, Mutex};
+use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::{Instant, Interval};
 use tracing::{debug, trace};
 
@@ -81,12 +82,12 @@ where
   {
     let notifier = Arc::new(notifier);
     let state_notifier = Arc::new(sync_state_tx);
-    let sender = Arc::new(Mutex::new(sink));
+    let sender = Arc::new(Mutex::from(sink));
     let pending_msg_queue = PendingMsgQueue::new();
-    let pending_msg_queue = Arc::new(Mutex::new(pending_msg_queue));
+    let pending_msg_queue = Arc::new(Mutex::from(pending_msg_queue));
     let msg_id_counter = Arc::new(msg_id_counter);
     //
-    let instant = Mutex::new(Instant::now());
+    let instant = Mutex::from(Instant::now());
     let mut interval_runner_stop_tx = None;
     if let SinkStrategy::FixInterval(duration) = &config.strategy {
       let weak_notifier = Arc::downgrade(&notifier);

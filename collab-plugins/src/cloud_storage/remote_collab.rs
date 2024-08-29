@@ -9,13 +9,14 @@ use async_trait::async_trait;
 use collab::core::collab::{DataSource, TransactionMutExt};
 use collab::core::collab_state::SyncState;
 use collab::core::origin::CollabOrigin;
+use collab::lock::RwLock;
 use collab::preclude::Collab;
 use collab_entity::CollabObject;
 use rand::random;
 use serde::Deserialize;
 use tokio::spawn;
 use tokio::sync::mpsc::unbounded_channel;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
 use tracing::trace;
@@ -59,7 +60,7 @@ impl RemoteCollab {
   ) -> Self {
     let is_init_sync_finish = Arc::new(AtomicBool::new(false));
     let sync_state = Arc::new(watch::channel(SyncState::InitSyncBegin).0);
-    let collab = Arc::new(RwLock::new(Collab::new_with_origin(
+    let collab = Arc::new(RwLock::from(Collab::new_with_origin(
       CollabOrigin::Server,
       &object.object_id,
       vec![],

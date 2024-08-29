@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::setup_log;
 
+use collab::lock::RwLock;
 use collab::preclude::*;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
@@ -13,7 +14,6 @@ use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
-use tokio::sync::RwLock;
 
 pub enum Script {
   CreateDocumentWithCollabDB {
@@ -102,7 +102,7 @@ impl CollabPersistenceTest {
 
     self
       .collab_by_id
-      .insert(doc_id, Arc::new(RwLock::new(collab)));
+      .insert(doc_id, Arc::new(RwLock::from(collab)));
   }
 
   pub async fn enable_undo_redo(&self, doc_id: &str) {
@@ -184,7 +184,7 @@ impl CollabPersistenceTest {
           .build()
           .unwrap();
         collab.initialize();
-        self.collab_by_id.insert(id, Arc::new(RwLock::new(collab)));
+        self.collab_by_id.insert(id, Arc::new(RwLock::from(collab)));
       },
       Script::OpenDocument { id } => {
         self.create_collab(id).await;
@@ -205,7 +205,7 @@ impl CollabPersistenceTest {
           .unwrap();
 
         collab.initialize();
-        self.collab_by_id.insert(id, Arc::new(RwLock::new(collab)));
+        self.collab_by_id.insert(id, Arc::new(RwLock::from(collab)));
       },
       Script::DeleteDocument { id } => {
         self

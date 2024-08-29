@@ -1,9 +1,9 @@
+use collab::lock::RwLock;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use tokio::sync::RwLock;
 
 use tokio_retry::strategy::FibonacciBackoff;
 use tokio_retry::{Action, Retry};
@@ -39,7 +39,7 @@ impl SupabaseDBPlugin {
     remote_collab_storage: Arc<dyn RemoteCollabStorage>,
     local_collab_storage: Weak<CollabKVDB>,
   ) -> Self {
-    let pending_updates = Arc::new(RwLock::new(Vec::new()));
+    let pending_updates = Arc::new(RwLock::from(Vec::new()));
     let is_first_sync_done = Arc::new(AtomicBool::new(false));
 
     let config = SinkConfig::new()

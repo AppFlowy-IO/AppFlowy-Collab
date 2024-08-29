@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::Mutex;
+use collab::lock::Mutex;
 use tokio::time::sleep;
 
 use collab::util::AnyMapExt;
@@ -19,13 +19,13 @@ async fn observer_create_new_row_test() {
 
   let row_id = gen_row_id();
   let cloned_row_id = row_id.clone();
-  let database_test = Arc::new(Mutex::new(database_test));
+  let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
     let row = CreateRowParams::new(cloned_row_id, database_id.clone());
     cloned_database_test
-      .lock()
+      .lock_unsafe()
       .await
       .create_row(row)
       .await
@@ -51,11 +51,11 @@ async fn observer_row_cell_test() {
 
   // Insert cell
   let cloned_row_id = row_id.clone();
-  let database_test = Arc::new(Mutex::new(database_test));
+  let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let mut db = cloned_database_test.lock().await;
+    let mut db = cloned_database_test.lock_unsafe().await;
     db.create_row(CreateRowParams::new(
       cloned_row_id.clone(),
       database_id.clone(),
@@ -87,11 +87,15 @@ async fn observer_row_cell_test() {
 
   // Update cell
   let cloned_database_test = database_test.clone();
-  let row_change_rx = database_test.lock().await.database.subscribe_row_change();
+  let row_change_rx = database_test
+    .lock_unsafe()
+    .await
+    .database
+    .subscribe_row_change();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
 
-    let mut db = cloned_database_test.lock().await;
+    let mut db = cloned_database_test.lock_unsafe().await;
     db.update_row(row_id, |row| {
       row.update_cells(|cells| {
         cells.insert_cell("f1", {
@@ -123,11 +127,11 @@ async fn observer_update_row_test() {
   let row_change_rx = database_test.subscribe_row_change();
 
   let row_id = gen_row_id();
-  let database_test = Arc::new(Mutex::new(database_test));
+  let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let mut db = cloned_database_test.lock().await;
+    let mut db = cloned_database_test.lock_unsafe().await;
     db.create_row(CreateRowParams::new(row_id.clone(), database_id.clone()))
       .await
       .unwrap();

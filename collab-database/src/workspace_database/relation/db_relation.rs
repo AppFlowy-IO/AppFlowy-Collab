@@ -1,6 +1,6 @@
+use collab::lock::Mutex;
 use collab::preclude::{Collab, Map};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::workspace_database::relation::RowRelationMap;
 
@@ -14,7 +14,7 @@ const ROW_RELATION_MAP: &str = "row_relations";
 impl DatabaseRelation {
   pub fn new(collab: Arc<Mutex<Collab>>) -> DatabaseRelation {
     let relation_map = {
-      let mut lock = collab.blocking_lock();
+      let mut lock = collab.blocking_lock(); //FIXME: was that safe before?
       let collab = &mut *lock;
       let mut txn = collab.context.transact_mut();
       collab.data.get_or_init(&mut txn, ROW_RELATION_MAP)

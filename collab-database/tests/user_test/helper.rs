@@ -23,6 +23,7 @@ use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{make_rocks_db, setup_log, TestTextCell};
 
 use collab::entity::EncodedCollab;
+use collab::lock::Mutex;
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
@@ -31,7 +32,6 @@ use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
 use rand::Rng;
 use tempfile::TempDir;
-use tokio::sync::Mutex;
 
 pub struct WorkspaceDatabaseTest {
   #[allow(dead_code)]
@@ -336,7 +336,7 @@ pub struct MutexUserDatabase(Arc<Mutex<WorkspaceDatabase>>);
 
 impl MutexUserDatabase {
   pub fn new(inner: WorkspaceDatabase) -> Self {
-    Self(Arc::new(Mutex::new(inner)))
+    Self(Arc::new(Mutex::from(inner)))
   }
 }
 
