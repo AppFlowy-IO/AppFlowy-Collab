@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
 use assert_json_diff::assert_json_eq;
-use nanoid::nanoid;
-
-use collab::preclude::Any;
+use collab::core::origin::CollabOrigin;
+use collab::preclude::{Any, Collab};
 use collab::util::AnyMapExt;
-use collab_database::database::{gen_row_id, DatabaseData};
+use collab_database::database::{gen_row_id, DatabaseBody, DatabaseData};
 use collab_database::entity::CreateViewParams;
 use collab_database::fields::Field;
 use collab_database::rows::CreateRowParams;
 use collab_database::views::{DatabaseLayout, LayoutSettingBuilder, OrderObjectPosition};
+use nanoid::nanoid;
 
 use crate::database_test::helper::{
   create_database, create_database_with_default_data, default_field_settings_by_layout,
@@ -39,6 +39,20 @@ async fn create_initial_database_test() {
 
   assert_eq!(inline_view.database_id, database_id);
   assert_eq!(inline_view.name, "my first database view".to_string());
+
+  let encoded_collab = database_test
+    .encode_collab_v1(|_| Ok::<_, anyhow::Error>(()))
+    .unwrap();
+  let collab = Collab::new_with_source(
+    CollabOrigin::Empty,
+    "",
+    encoded_collab.into(),
+    vec![],
+    false,
+  )
+  .unwrap();
+  let database_id_from_collab = DatabaseBody::database_id_from_collab(collab).unwrap();
+  assert_eq!(database_id_from_collab, database_id);
 }
 
 #[tokio::test]
