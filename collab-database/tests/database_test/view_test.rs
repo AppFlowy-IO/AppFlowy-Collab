@@ -51,7 +51,7 @@ async fn create_initial_database_test() {
     false,
   )
   .unwrap();
-  let database_id_from_collab = DatabaseBody::database_id_from_collab(collab).unwrap();
+  let database_id_from_collab = DatabaseBody::database_id_from_collab(&collab).unwrap();
   assert_eq!(database_id_from_collab, database_id);
 }
 
