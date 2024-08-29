@@ -2,9 +2,9 @@ use crate::database_test::helper::{create_database_with_default_data, wait_for_s
 use crate::helper::setup_log;
 use collab_database::fields::FieldChange;
 
+use collab::lock::Mutex;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use tokio::time::sleep;
 
 #[tokio::test]
@@ -17,7 +17,7 @@ async fn observe_field_update_and_delete_test() {
 
   // Update
   let cloned_field = field.clone();
-  let database_test = Arc::new(Mutex::new(database_test));
+  let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;

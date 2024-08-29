@@ -1,7 +1,7 @@
+use collab::lock::Mutex;
 use collab_entity::reminder::{ObjectType, Reminder};
 use collab_user::core::ReminderChange;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::util::{receive_with_timeout, UserAwarenessTest};
 
@@ -10,7 +10,7 @@ async fn subscribe_insert_reminder_test() {
   let test = UserAwarenessTest::new(1);
   let mut rx = test.reminder_change_tx.subscribe();
   let reminder = Reminder::new("1".to_string(), "o1".to_string(), 123, ObjectType::Document);
-  let test = Arc::new(Mutex::new(test));
+  let test = Arc::new(Mutex::from(test));
   let cloned_test = test.clone();
   let cloned_reminder = reminder.clone();
   tokio::spawn(async move {
@@ -44,7 +44,7 @@ async fn subscribe_delete_reminder_test() {
     test.add_reminder(reminder);
   }
 
-  let test = Arc::new(Mutex::new(test));
+  let test = Arc::new(Mutex::from(test));
   let cloned_test = test.clone();
   tokio::spawn(async move {
     let mut lock = cloned_test.lock().await;

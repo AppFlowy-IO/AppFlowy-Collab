@@ -29,6 +29,7 @@ use crate::template::entity::DatabaseTemplate;
 use crate::template::util::{
   create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
 };
+use collab::lock::RwLock;
 use collab::preclude::{
   Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
   TransactionMut, YrsValue,
@@ -39,7 +40,6 @@ use collab_entity::CollabType;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 pub use tokio_stream::wrappers::WatchStream;
 use tracing::{error, info, instrument, trace};
 

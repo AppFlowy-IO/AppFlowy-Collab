@@ -13,11 +13,11 @@ use crate::entity::{CreateDatabaseParams, CreateViewParams, CreateViewParamsVali
 use crate::rows::RowId;
 use anyhow::anyhow;
 use collab::core::collab_plugin::CollabPersistence;
+use collab::lock::RwLock;
 use dashmap::DashMap;
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing::error;
 
 pub type EncodeCollabByOid = HashMap<String, EncodedCollab>;
@@ -144,7 +144,7 @@ impl WorkspaceDatabase {
         }
 
         // Create a new [MutexDatabase] and add it to the databases.
-        let database = Arc::new(RwLock::new(database));
+        let database = Arc::new(RwLock::from(database));
         self
           .databases
           .insert(database_id.to_string(), database.clone());
@@ -204,7 +204,7 @@ impl WorkspaceDatabase {
       Database::create_with_view(params, context).await.unwrap()
     });
 
-    let mutex_database = RwLock::new(database);
+    let mutex_database = RwLock::from(database);
     let database = Arc::new(mutex_database);
     self.databases.insert(database_id, database.clone());
     Ok(database)

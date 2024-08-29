@@ -12,10 +12,11 @@ use crate::workspace_database::DatabaseCollabService;
 
 use collab::preclude::Collab;
 
+use collab::lock::RwLock;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
-use tokio::sync::{broadcast, RwLock};
 use tracing::{error, instrument, trace, warn};
 use uuid::Uuid;
 
@@ -76,7 +77,7 @@ impl Block {
       if let Some(row_detail) = RowDetail::from_collab(&row_collab) {
         self
           .row_mem_cache
-          .insert(row_id.clone(), Arc::new(RwLock::new(row_collab)));
+          .insert(row_id.clone(), Arc::new(RwLock::from(row_collab)));
         row_on_disk_details.push(row_detail);
       }
     }
@@ -125,7 +126,7 @@ impl Block {
       self.collab_service.clone(),
     );
 
-    let database_row = Arc::new(RwLock::new(database_row));
+    let database_row = Arc::new(RwLock::from(database_row));
     self.row_mem_cache.insert(row_id, database_row);
     Ok(row_order)
   }
@@ -256,7 +257,7 @@ impl Block {
       self.collab_service.clone(),
     );
     let row_details = RowDetail::from_collab(&database_row);
-    let database_row = Arc::new(RwLock::new(database_row));
+    let database_row = Arc::new(RwLock::from(database_row));
     self.row_mem_cache.insert(row_id, database_row.clone());
     if let Some(row_detail) = row_details {
       let _ = self

@@ -10,9 +10,9 @@ use crate::local_storage::kv::keys::{
 use crate::local_storage::kv::oid::{LOCAL_DOC_ID_GEN, OID};
 use anyhow::anyhow;
 use collab::core::collab::TransactionMutExt;
+use collab::lock::RwLock;
 use indexed_db_futures::web_sys::IdbKeyRange;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing::error;
 use wasm_bindgen::{JsCast, JsValue};
 use yrs::updates::decoder::Decode;
@@ -48,7 +48,7 @@ impl CollabIndexeddb {
     &self,
     f: impl FnOnce(&IdbTransactionActionImpl<'_>) -> Result<Output, PersistenceError>,
   ) -> Result<Output, PersistenceError> {
-    let db_write_guard = self.db.write().await;
+    let db_write_guard = self.db.write_err().await;
     let txn = db_write_guard
       .transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
     let action_impl = IdbTransactionActionImpl::new(txn)?;
@@ -80,7 +80,7 @@ impl CollabIndexeddb {
     K: AsRef<[u8]>,
     V: AsRef<[u8]>,
   {
-    let write_guard = self.db.write().await;
+    let write_guard = self.db.write_err().await;
     let transaction =
       write_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
     let store = store_from_transaction(&transaction)?;
@@ -115,7 +115,7 @@ impl CollabIndexeddb {
     let doc_state_key = make_doc_state_key(doc_id);
     let sv_key = make_state_vector_key(doc_id);
 
-    let read_guard = self.db.write().await;
+    let read_guard = self.db.write_err().await;
     let transaction =
       read_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
     let store = store_from_transaction(&transaction)?;
@@ -136,7 +136,7 @@ impl CollabIndexeddb {
     object_id: &str,
     doc: Doc,
   ) -> Result<(), PersistenceError> {
-    let read_guard = self.db.read().await;
+    let read_guard = self.db.read_err().await;
     let transaction =
       read_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readonly)?;
     let store = store_from_transaction(&transaction)?;
@@ -172,7 +172,7 @@ impl CollabIndexeddb {
     uid: i64,
     object_id: &str,
   ) -> Result<EncodedCollab, PersistenceError> {
-    let read_guard = self.db.read().await;
+    let read_guard = self.db.read_err().await;
     let transaction =
       read_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readonly)?;
     let store = store_from_transaction(&transaction)?;
@@ -194,7 +194,7 @@ impl CollabIndexeddb {
   }
 
   pub async fn is_exist(&self, uid: i64, object_id: &str) -> Result<bool, PersistenceError> {
-    let read_guard = self.db.read().await;
+    let read_guard = self.db.read_err().await;
     let transaction =
       read_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readonly)?;
     let store = store_from_transaction(&transaction)?;
@@ -202,7 +202,7 @@ impl CollabIndexeddb {
   }
 
   pub async fn delete_doc(&self, uid: i64, object_id: &str) -> Result<(), PersistenceError> {
-    let write_guard = self.db.write().await;
+    let write_guard = self.db.write_err().await;
     let transaction =
       write_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
     let store = store_from_transaction(&transaction)?;
@@ -230,7 +230,7 @@ impl CollabIndexeddb {
     object_id: &str,
     encoded: &EncodedCollab,
   ) -> Result<(), PersistenceError> {
-    let write_guard = self.db.write().await;
+    let write_guard = self.db.write_err().await;
     let transaction =
       write_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
     let store = store_from_transaction(&transaction)?;
@@ -261,7 +261,7 @@ impl CollabIndexeddb {
     object_id: &str,
     update: &[u8],
   ) -> Result<(), PersistenceError> {
-    let write_guard = self.db.write().await;
+    let write_guard = self.db.write_err().await;
     let transaction =
       write_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readwrite)?;
     let store = store_from_transaction(&transaction)?;
@@ -310,7 +310,7 @@ impl CollabIndexeddb {
     uid: i64,
     object_id: &str,
   ) -> Result<Vec<Vec<u8>>, PersistenceError> {
-    let read_guard = self.db.read().await;
+    let read_guard = self.db.read_err().await;
     let transaction =
       read_guard.transaction_on_one_with_mode(COLLAB_KV_STORE, IdbTransactionMode::Readonly)?;
     let store = store_from_transaction(&transaction)?;

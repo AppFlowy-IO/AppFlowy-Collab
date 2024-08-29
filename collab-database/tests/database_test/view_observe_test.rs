@@ -2,6 +2,7 @@ use crate::database_test::helper::{create_database, wait_for_specific_event};
 use crate::helper::setup_log;
 use collab_database::database::gen_row_id;
 
+use collab::lock::Mutex;
 use collab_database::entity::CreateViewParams;
 use collab_database::rows::CreateRowParams;
 use collab_database::views::{
@@ -9,7 +10,6 @@ use collab_database::views::{
 };
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use tokio::time::sleep;
 
 #[tokio::test]
@@ -20,7 +20,7 @@ async fn observer_delete_row_test() {
 
   let row_id = gen_row_id();
   let cloned_row_id = row_id.clone();
-  let database_test = Arc::new(Mutex::new(database_test));
+  let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
@@ -58,7 +58,7 @@ async fn observer_delete_consecutive_rows_test() {
   let row_id_2 = gen_row_id();
   let row_id_3 = gen_row_id();
   let row_id_4 = gen_row_id();
-  let database_test = Arc::new(Mutex::new(database_test));
+  let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
@@ -101,7 +101,7 @@ async fn observer_delete_non_consecutive_rows_test() {
   let row_id_2 = gen_row_id();
   let row_id_3 = gen_row_id();
   let row_id_4 = gen_row_id();
-  let database_test = Arc::new(Mutex::new(database_test));
+  let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
@@ -141,7 +141,7 @@ async fn observe_update_view_test() {
   let view_change_rx = database_test.subscribe_view_change();
   let view_id = database_test.get_inline_view_id();
 
-  let database_test = Arc::new(Mutex::new(database_test));
+  let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
@@ -174,7 +174,7 @@ async fn observe_create_delete_view_test() {
     ..Default::default()
   };
 
-  let database_test = Arc::new(Mutex::new(database_test));
+  let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
@@ -220,7 +220,7 @@ async fn observe_database_view_layout_test() {
   let update_view_id = database_test.get_inline_view_id();
   let cloned_update_view_id = update_view_id.clone();
 
-  let database_test = Arc::new(Mutex::new(database_test));
+  let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
@@ -249,7 +249,7 @@ async fn observe_database_view_filter_create_delete_test() {
   let view_change_rx = database_test.subscribe_view_change();
   let update_view_id = database_test.get_inline_view_id();
 
-  let database_test = Arc::new(Mutex::new(database_test));
+  let database_test = Arc::new(Mutex::from(database_test));
 
   // create filter
   let cloned_database_test = database_test.clone();
@@ -300,7 +300,7 @@ async fn observe_database_view_sort_create_delete_test() {
   let view_change_rx = database_test.subscribe_view_change();
   let update_view_id = database_test.get_inline_view_id();
 
-  let database_test = Arc::new(Mutex::new(database_test));
+  let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
 
   // create sort
@@ -354,7 +354,7 @@ async fn observe_database_view_group_create_delete_test() {
   let view_change_rx = database_test.subscribe_view_change();
   let update_view_id = database_test.get_inline_view_id();
 
-  let database_test = Arc::new(Mutex::new(database_test));
+  let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
 
   // create group setting
