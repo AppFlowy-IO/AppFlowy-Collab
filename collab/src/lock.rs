@@ -4,15 +4,18 @@ use std::time::Duration;
 pub const DEFAULT_RWLOCK_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug)]
-pub struct RwLock<T> {
-  inner: tokio::sync::RwLock<T>,
+pub struct RwLock<T: ?Sized> {
+  inner: Box<tokio::sync::RwLock<T>>,
   timeout: Duration,
 }
 
-impl<T> RwLock<T> {
-  pub fn new(inner: T, timeout: Duration) -> Self {
+impl<T: ?Sized> RwLock<T> {
+  pub fn new(inner: T, timeout: Duration) -> Self
+  where
+    T: Sized,
+  {
     Self {
-      inner: tokio::sync::RwLock::new(inner),
+      inner: tokio::sync::RwLock::new(inner).into(),
       timeout,
     }
   }
@@ -52,7 +55,7 @@ impl<T> RwLock<T> {
   }
 }
 
-impl<T> Deref for RwLock<T> {
+impl<T: ?Sized> Deref for RwLock<T> {
   type Target = tokio::sync::RwLock<T>;
 
   #[inline]
@@ -82,15 +85,18 @@ pub enum RwLockError {
 }
 
 #[derive(Debug)]
-pub struct Mutex<T> {
-  inner: tokio::sync::Mutex<T>,
+pub struct Mutex<T: ?Sized> {
+  inner: Box<tokio::sync::Mutex<T>>,
   timeout: Duration,
 }
 
-impl<T> Mutex<T> {
-  pub fn new(inner: T, timeout: Duration) -> Self {
+impl<T: ?Sized> Mutex<T> {
+  pub fn new(inner: T, timeout: Duration) -> Self
+  where
+    T: Sized,
+  {
     Self {
-      inner: tokio::sync::Mutex::new(inner),
+      inner: tokio::sync::Mutex::new(inner).into(),
       timeout,
     }
   }
@@ -110,7 +116,7 @@ impl<T> Mutex<T> {
   }
 }
 
-impl<T> Deref for Mutex<T> {
+impl<T: ?Sized> Deref for Mutex<T> {
   type Target = tokio::sync::Mutex<T>;
 
   #[inline]
