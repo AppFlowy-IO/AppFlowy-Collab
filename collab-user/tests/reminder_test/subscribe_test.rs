@@ -14,7 +14,7 @@ async fn subscribe_insert_reminder_test() {
   let cloned_test = test.clone();
   let cloned_reminder = reminder.clone();
   tokio::spawn(async move {
-    let mut lock = cloned_test.lock_unsafe().await;
+    let mut lock = cloned_test.lock().await;
     lock.user_awareness.add_reminder(cloned_reminder);
   });
 
@@ -47,7 +47,7 @@ async fn subscribe_delete_reminder_test() {
   let test = Arc::new(Mutex::from(test));
   let cloned_test = test.clone();
   tokio::spawn(async move {
-    let mut lock = cloned_test.lock_unsafe().await;
+    let mut lock = cloned_test.lock().await;
     lock.remove_reminder("1");
   });
 

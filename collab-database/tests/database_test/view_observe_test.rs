@@ -24,7 +24,7 @@ async fn observer_delete_row_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let mut db = cloned_database_test.lock_unsafe().await;
+    let mut db = cloned_database_test.lock().await;
     db.create_row(CreateRowParams::new(gen_row_id(), database_id.clone()))
       .await
       .unwrap();
@@ -63,7 +63,7 @@ async fn observer_delete_consecutive_rows_test() {
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
 
-    let mut db = cloned_database_test.lock_unsafe().await;
+    let mut db = cloned_database_test.lock().await;
     db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
       .await
       .unwrap();
@@ -105,7 +105,7 @@ async fn observer_delete_non_consecutive_rows_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let mut db = cloned_database_test.lock_unsafe().await;
+    let mut db = cloned_database_test.lock().await;
     db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
       .await
       .unwrap();
@@ -145,7 +145,7 @@ async fn observe_update_view_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let mut db = cloned_database_test.lock_unsafe().await;
+    let mut db = cloned_database_test.lock().await;
     db.update_database_view(&view_id, |update| {
       update.set_name("hello");
     });
@@ -179,7 +179,7 @@ async fn observe_create_delete_view_test() {
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
     cloned_database_test
-      .lock_unsafe()
+      .lock()
       .await
       .database
       .create_linked_view(params)
@@ -193,12 +193,12 @@ async fn observe_create_delete_view_test() {
   .unwrap();
 
   let cloned_database_test = database_test.clone();
-  let view_change_rx = database_test.lock_unsafe().await.subscribe_view_change();
+  let view_change_rx = database_test.lock().await.subscribe_view_change();
   let view_id = create_view_id.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
     cloned_database_test
-      .lock_unsafe()
+      .lock()
       .await
       .database
       .delete_view(&view_id);
@@ -224,7 +224,7 @@ async fn observe_database_view_layout_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let mut db = cloned_database_test.lock_unsafe().await;
+    let mut db = cloned_database_test.lock().await;
     db.update_database_view(&cloned_update_view_id, |update| {
       update.set_layout_type(DatabaseLayout::Calendar);
     });
@@ -256,7 +256,7 @@ async fn observe_database_view_filter_create_delete_test() {
   let cloned_update_view_id = update_view_id.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let mut db = cloned_database_test.lock_unsafe().await;
+    let mut db = cloned_database_test.lock().await;
     db.update_database_view(&cloned_update_view_id, |update| {
       let filter = FilterMapBuilder::from([("filter_id".into(), "123".into())]);
       update.set_filters(vec![filter]);
@@ -277,17 +277,13 @@ async fn observe_database_view_filter_create_delete_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let mut db = cloned_database_test.lock_unsafe().await;
+    let mut db = cloned_database_test.lock().await;
     db.update_database_view(&cloned_update_view_id, |update| {
       update.set_filters(vec![]);
     });
   });
 
-  let view_change_rx = database_test
-    .lock_unsafe()
-    .await
-    .database
-    .subscribe_view_change();
+  let view_change_rx = database_test.lock().await.database.subscribe_view_change();
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateFilter { view_id } => &update_view_id == view_id,
     _ => false,
@@ -311,7 +307,7 @@ async fn observe_database_view_sort_create_delete_test() {
   let cloned_update_view_id = update_view_id.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let mut db = cloned_database_test.lock_unsafe().await;
+    let mut db = cloned_database_test.lock().await;
     db.update_database_view(&cloned_update_view_id, |update| {
       let filter = SortMapBuilder::from([
         ("sort_id".into(), "123".into()),
@@ -335,17 +331,13 @@ async fn observe_database_view_sort_create_delete_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let mut db = cloned_database_test.lock_unsafe().await;
+    let mut db = cloned_database_test.lock().await;
     db.update_database_view(&cloned_update_view_id, |update| {
       update.set_sorts(vec![]);
     });
   });
 
-  let view_change_rx = database_test
-    .lock_unsafe()
-    .await
-    .database
-    .subscribe_view_change();
+  let view_change_rx = database_test.lock().await.database.subscribe_view_change();
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateSort { view_id } => &update_view_id == view_id,
     _ => false,
@@ -369,7 +361,7 @@ async fn observe_database_view_group_create_delete_test() {
   let cloned_update_view_id = update_view_id.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let mut db = cloned_database_test.lock_unsafe().await;
+    let mut db = cloned_database_test.lock().await;
     db.update_database_view(&cloned_update_view_id, |update| {
       let group_setting = GroupSettingBuilder::from([
         ("group_id".into(), "123".into()),
@@ -393,17 +385,13 @@ async fn observe_database_view_group_create_delete_test() {
   let cloned_database_test = database_test.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
-    let mut db = cloned_database_test.lock_unsafe().await;
+    let mut db = cloned_database_test.lock().await;
     db.update_database_view(&cloned_update_view_id, |update| {
       update.set_groups(vec![]);
     });
   });
 
-  let view_change_rx = database_test
-    .lock_unsafe()
-    .await
-    .database
-    .subscribe_view_change();
+  let view_change_rx = database_test.lock().await.database.subscribe_view_change();
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateGroupSetting { view_id } => &update_view_id == view_id,
     _ => false,

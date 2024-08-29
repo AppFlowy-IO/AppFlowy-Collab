@@ -95,7 +95,7 @@ impl<T> Mutex<T> {
     }
   }
 
-  pub async fn lock_unsafe(&self) -> tokio::sync::MutexGuard<'_, T> {
+  pub async fn lock(&self) -> tokio::sync::MutexGuard<'_, T> {
     match tokio::time::timeout(self.timeout, self.inner.lock()).await {
       Ok(guard) => guard,
       Err(_) => panic!("Trying to obtain lock timed out after {:?}", self.timeout),
