@@ -100,9 +100,16 @@ impl CollabPlugin for SupabaseDBPlugin {
     });
   }
 
-  fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, update: &[u8]) {
+  fn receive_local_update(&self, origin: &CollabOrigin, object_id: &str, update: &[u8]) {
     if self.is_first_sync_done.load(Ordering::SeqCst) {
-      self.remote_collab.push_update(update);
+      if let Err(e) = self.remote_collab.push_update(update) {
+        tracing::error!(
+          "Collab {} failed to apply update from {}: {}",
+          object_id,
+          origin,
+          e
+        );
+      };
     } else {
       self.pending_updates.blocking_write().push(update.to_vec());
     }
@@ -142,7 +149,7 @@ impl Action for InitSyncAction {
         weak_is_first_sync_done.upgrade(),
       ) {
         for update in &*pending_updates.read().await {
-          remote_collab.push_update(update);
+          remote_collab.push_update(update)?;
         }
 
         is_first_sync_done.store(true, Ordering::SeqCst);

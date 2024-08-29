@@ -1,7 +1,7 @@
 use crate::database::{Database, DatabaseContext, DatabaseData};
 use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
-use crate::workspace_database::database_meta::{DatabaseMeta, DatabaseMetaList};
+use crate::workspace_database::body::{DatabaseMeta, WorkspaceDatabaseBody};
 use async_trait::async_trait;
 use collab::core::collab::DataSource;
 use collab::preclude::Collab;
@@ -45,10 +45,9 @@ pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
 
   fn is_collab_exist(&self, object_id: &str) -> bool;
 
-  fn flush_collab(
+  fn flush_collabs(
     &self,
-    object_id: &str,
-    encode_collab: EncodedCollab,
+    encoded_collabs: Vec<(String, EncodedCollab)>,
   ) -> Result<(), DatabaseError>;
 
   fn is_row_exist_partition(&self, row_ids: Vec<RowId>) -> (Vec<RowId>, Vec<RowId>);
@@ -82,7 +81,7 @@ impl From<CollabPersistenceImpl> for DataSource {
 pub struct WorkspaceDatabase {
   object_id: String,
   collab: Collab,
-  meta_list: DatabaseMetaList,
+  body: WorkspaceDatabaseBody,
   collab_service: Arc<dyn DatabaseCollabService>,
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
@@ -97,12 +96,12 @@ impl WorkspaceDatabase {
     collab_service: impl DatabaseCollabService,
   ) -> Self {
     let collab_service = Arc::new(collab_service);
-    let meta_list = DatabaseMetaList::new(&mut collab);
+    let body = WorkspaceDatabaseBody::new(&mut collab);
 
     Self {
       object_id: object_id.to_string(),
       collab,
-      meta_list,
+      body,
       collab_service,
       databases: DashMap::new(),
     }
@@ -122,10 +121,7 @@ impl WorkspaceDatabase {
   /// Get the database with the given database id.
   /// Return None if the database does not exist.
   pub async fn get_or_create_database(&self, database_id: &str) -> Option<Arc<RwLock<Database>>> {
-    if !self
-      .meta_list
-      .contains(&self.collab.transact(), database_id)
-    {
+    if !self.body.contains(&self.collab.transact(), database_id) {
       return None;
     }
 
@@ -169,7 +165,7 @@ impl WorkspaceDatabase {
   pub fn get_database_id_with_view_id(&self, view_id: &str) -> Option<String> {
     let txn = self.collab.transact();
     self
-      .meta_list
+      .body
       .get_database_meta_with_view_id(&txn, view_id)
       .map(|record| record.database_id)
   }
@@ -197,7 +193,7 @@ impl WorkspaceDatabase {
         .map(|view| view.view_id.clone()),
     );
     let mut txn = self.collab.transact_mut();
-    self.meta_list.add_database(
+    self.body.add_database(
       &mut txn,
       &params.database_id,
       linked_views.into_iter().collect(),
@@ -224,7 +220,7 @@ impl WorkspaceDatabase {
     if let Some(database) = self.get_or_create_database(&params.database_id).await {
       let mut txn = self.collab.transact_mut();
       self
-        .meta_list
+        .body
         .update_database(&mut txn, &params.database_id, |record| {
           // Check if the view is already linked to the database.
           if record.linked_views.contains(&params.view_id) {
@@ -242,7 +238,7 @@ impl WorkspaceDatabase {
   /// Delete the database with the given database id.
   pub fn delete_database(&mut self, database_id: &str) {
     let mut txn = self.collab.transact_mut();
-    self.meta_list.delete_database(&mut txn, database_id);
+    self.body.delete_database(&mut txn, database_id);
     drop(txn);
 
     if let Some(persistence) = self.collab_service.persistence() {
@@ -260,14 +256,14 @@ impl WorkspaceDatabase {
   pub fn track_database(&mut self, database_id: &str, database_view_ids: Vec<String>) {
     let mut txn = self.collab.transact_mut();
     self
-      .meta_list
+      .body
       .add_database(&mut txn, database_id, database_view_ids);
   }
 
   /// Return all the database records.
   pub fn get_all_database_meta(&self) -> Vec<DatabaseMeta> {
     let txn = self.collab.transact();
-    self.meta_list.get_all_database_meta(&txn)
+    self.body.get_all_database_meta(&txn)
   }
 
   /// Delete the view from the database with the given view id.
@@ -291,7 +287,7 @@ impl WorkspaceDatabase {
   ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
     let database_data = self.get_database_data(view_id).await?;
 
-    let create_database_params = CreateDatabaseParams::from_database_data(database_data);
+    let create_database_params = CreateDatabaseParams::from_database_data(database_data, None);
     let database = self.create_database(create_database_params)?;
     Ok(database)
   }
@@ -314,7 +310,7 @@ impl WorkspaceDatabase {
       .collab_service
       .persistence()
       .ok_or_else(|| DatabaseError::Internal(anyhow!("collab persistence is not found")))?
-      .flush_collab(&self.object_id, encode_collab)?;
+      .flush_collabs(vec![(self.object_id.clone(), encode_collab)])?;
     Ok(())
   }
 }

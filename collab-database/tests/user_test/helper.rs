@@ -88,20 +88,22 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
     read_txn.is_exist(self.uid, object_id)
   }
 
-  fn flush_collab(
+  fn flush_collabs(
     &self,
-    object_id: &str,
-    encode_collab: EncodedCollab,
+    encoded_collabs: Vec<(String, EncodedCollab)>,
   ) -> Result<(), DatabaseError> {
     let write_txn = self.db.write_txn();
-    write_txn
-      .flush_doc(
-        self.uid,
-        object_id,
-        encode_collab.state_vector.to_vec(),
-        encode_collab.doc_state.to_vec(),
-      )
-      .unwrap();
+    for (object_id, encode_collab) in encoded_collabs {
+      write_txn
+        .flush_doc(
+          self.uid,
+          &object_id,
+          encode_collab.state_vector.to_vec(),
+          encode_collab.doc_state.to_vec(),
+        )
+        .map_err(|e| DatabaseError::Internal(e.into()))?;
+    }
+
     write_txn.commit_transaction().unwrap();
     Ok(())
   }

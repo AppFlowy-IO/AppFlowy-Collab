@@ -75,7 +75,7 @@ impl DatabaseRow {
         .collab
         .encode_collab_v1(|collab| CollabType::DatabaseRow.validate_require_data(collab))
         .map_err(DatabaseError::Internal)?;
-      persistence.flush_collab(self.collab.object_id(), encoded_collab)?;
+      persistence.flush_collabs(vec![(self.collab.object_id().to_string(), encoded_collab)])?;
     }
 
     Ok(())

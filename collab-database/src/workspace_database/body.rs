@@ -9,11 +9,11 @@ use collab_entity::define::WORKSPACE_DATABASES;
 use crate::database::timestamp;
 
 /// Used to store list of [DatabaseMeta].
-pub struct DatabaseMetaList {
+pub struct WorkspaceDatabaseBody {
   array_ref: ArrayRef,
 }
 
-impl DatabaseMetaList {
+impl WorkspaceDatabaseBody {
   pub fn new(collab: &mut Collab) -> Self {
     let mut txn = collab.context.transact_mut();
     let array_ref = collab.data.get_or_init(&mut txn, WORKSPACE_DATABASES);
