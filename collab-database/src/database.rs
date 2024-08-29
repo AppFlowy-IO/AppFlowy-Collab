@@ -119,8 +119,12 @@ impl Database {
     // Get or create empty database with the given database_id
     let mut database = Self::open(&params.database_id, context).await?;
     database.init(params).await?;
-    database.write_to_disk().await?;
-    Ok(database)
+    tokio::task::spawn_blocking(move || {
+      database.write_to_disk()?;
+      Ok::<_, DatabaseError>(database)
+    })
+    .await
+    .map_err(|e| DatabaseError::Internal(e.into()))?
   }
 
   /// Return encoded collab for the database
@@ -154,7 +158,7 @@ impl Database {
     })
   }
 
-  pub async fn write_to_disk(&self) -> Result<(), DatabaseError> {
+  pub fn write_to_disk(&self) -> Result<(), DatabaseError> {
     if let Some(persistence) = self.collab_service.persistence() {
       let database_encoded = encoded_collab(&self.collab, &CollabType::Database)?;
       let mut encode_collabs = vec![];
@@ -162,18 +166,13 @@ impl Database {
 
       // Write database rows
       for row in self.body.block.row_mem_cache.iter() {
-        let row_collab = &row.read().await.collab;
+        let row_collab = &row.blocking_read().collab;
         let encoded_collab = encoded_collab(row_collab, &CollabType::DatabaseRow)?;
         encode_collabs.push((row_collab.object_id().to_string(), encoded_collab));
       }
 
-      tokio::task::spawn_blocking(move || {
-        info!("Write {} database collab", encode_collabs.len());
-        persistence.flush_collabs(encode_collabs)?;
-        Ok::<_, DatabaseError>(())
-      })
-      .await
-      .map_err(|e| DatabaseError::Internal(e.into()))??;
+      info!("Write {} database collab", encode_collabs.len());
+      persistence.flush_collabs(encode_collabs)?;
     }
 
     Ok(())
