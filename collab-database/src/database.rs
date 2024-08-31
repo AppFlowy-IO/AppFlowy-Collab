@@ -1291,8 +1291,8 @@ pub fn gen_row_id() -> RowId {
 }
 
 pub fn get_row_document_id(row_id: &RowId) -> Result<String, DatabaseError> {
-  let row_id = Uuid::parse_str(row_id)
-    .map_err(|err| DatabaseError::InvalidRowID(&format!("Failed to parse row id: {}", err)))?;
+  let row_id =
+    Uuid::parse_str(row_id).map_err(|_err| DatabaseError::InvalidRowID("Failed to parse row id"))?;
   Ok(meta_id_from_row_id(&row_id, RowMetaKey::DocumentId))
 }
 
