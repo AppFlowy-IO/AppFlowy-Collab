@@ -9,8 +9,8 @@ use crate::error::DatabaseError;
 use crate::fields::{Field, FieldChangeReceiver, FieldMap, FieldUpdate};
 use crate::meta::MetaMap;
 use crate::rows::{
-  CreateRowParams, CreateRowParamsValidator, DatabaseRow, Row, RowCell, RowChangeReceiver,
-  RowDetail, RowId, RowMeta, RowMetaUpdate, RowUpdate,
+  meta_id_from_row_id, CreateRowParams, CreateRowParamsValidator, DatabaseRow, Row, RowCell,
+  RowChangeReceiver, RowDetail, RowId, RowMeta, RowMetaKey, RowMetaUpdate, RowUpdate,
 };
 use crate::util::encoded_collab;
 use crate::views::define::DATABASE_VIEW_ROW_ORDERS;
@@ -42,6 +42,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 pub use tokio_stream::wrappers::WatchStream;
 use tracing::{error, info, instrument, trace};
+use uuid::Uuid;
 
 pub struct Database {
   pub collab: Collab,
@@ -1287,6 +1288,12 @@ pub fn gen_field_id() -> String {
 
 pub fn gen_row_id() -> RowId {
   RowId::from(uuid::Uuid::new_v4().to_string())
+}
+
+pub fn get_row_document_id(row_id: &RowId) -> Result<String, DatabaseError> {
+  let row_id = Uuid::parse_str(row_id)
+    .map_err(|err| DatabaseError::InvalidRowID(&format!("Failed to parse row id: {}", err)))?;
+  Ok(meta_id_from_row_id(&row_id, RowMetaKey::DocumentId))
 }
 
 pub fn gen_database_calculation_id() -> String {
