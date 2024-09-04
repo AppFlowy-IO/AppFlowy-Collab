@@ -15,9 +15,9 @@ use crate::rows::{
 use crate::util::encoded_collab;
 use crate::views::define::DATABASE_VIEW_ROW_ORDERS;
 use crate::views::{
-  CalculationMap, DatabaseLayout, DatabaseViewUpdate, FieldOrder, FieldSettingsByFieldIdMap,
-  FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, OrderObjectPosition,
-  RowOrder, RowOrderArray, SortMap, ViewChangeReceiver, ViewMap,
+  CalculationMap, DatabaseLayout, DatabaseViewUpdate, DatabaseViews, FieldOrder,
+  FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
+  OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver,
 };
 use crate::workspace_database::DatabaseCollabService;
 
@@ -1368,7 +1368,7 @@ pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
   let metas: MapRef = collab.data.get_with_path(&txn, [DATABASE, METAS])?;
 
   let view_change_tx = tokio::sync::broadcast::channel(1).0;
-  let views = ViewMap::new(views, view_change_tx);
+  let views = DatabaseViews::new(views, view_change_tx);
   let meta = MetaMap::new(metas);
 
   let inline_view_id = meta.get_inline_view_id(&txn)?;
@@ -1405,7 +1405,7 @@ where
     .get_with_path::<_, _, MapRef>(&txn, [DATABASE, VIEWS])
   {
     let view_change_tx = tokio::sync::broadcast::channel(1).0;
-    let views = ViewMap::new(container, view_change_tx);
+    let views = DatabaseViews::new(container, view_change_tx);
     let mut reset_views = views.get_all_views(&txn);
 
     reset_views.iter_mut().for_each(f);
@@ -1437,13 +1437,13 @@ pub fn get_database_views_meta(collab: &Collab) -> Vec<DatabaseViewMeta> {
   let txn = collab.context.transact();
   let views: Option<MapRef> = collab.data.get_with_path(&txn, [DATABASE, VIEWS]);
   let view_change_tx = tokio::sync::broadcast::channel(1).0;
-  let views = ViewMap::new(views.unwrap(), view_change_tx);
+  let views = DatabaseViews::new(views.unwrap(), view_change_tx);
   views.get_all_views_meta(&txn)
 }
 
 pub struct DatabaseBody {
   pub root: MapRef,
-  pub views: Arc<ViewMap>,
+  pub views: Arc<DatabaseViews>,
   pub fields: Arc<FieldMap>,
   pub metas: Arc<MetaMap>,
   /// It used to keep track of the blocks. Each block contains a list of [Row]s
@@ -1463,7 +1463,7 @@ impl DatabaseBody {
     drop(txn);
 
     let fields = FieldMap::new(fields, context.notifier.field_change_tx.clone());
-    let views = ViewMap::new(views, context.notifier.view_change_tx.clone());
+    let views = DatabaseViews::new(views, context.notifier.view_change_tx.clone());
     let metas = MetaMap::new(metas);
     let block = Block::new(
       database_id,

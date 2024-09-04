@@ -1,8 +1,8 @@
-use std::ops::Deref;
-
 use collab::preclude::{
   Array, ArrayRef, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, TransactionMut,
 };
+
+use std::ops::Deref;
 
 use crate::database::timestamp;
 use crate::entity::{DatabaseView, DatabaseViewMeta};
@@ -35,13 +35,13 @@ use super::{calculations_from_map_ref, view_id_from_map_ref};
 /// }
 /// Each view data can be deserialize into a `DatabaseView` struct.
 ///
-pub struct ViewMap {
+pub struct DatabaseViews {
   container: MapRef,
   #[allow(dead_code)]
   view_map_subscription: Subscription,
 }
 
-impl Deref for ViewMap {
+impl Deref for DatabaseViews {
   type Target = MapRef;
 
   fn deref(&self) -> &Self::Target {
@@ -49,7 +49,7 @@ impl Deref for ViewMap {
   }
 }
 
-impl ViewMap {
+impl DatabaseViews {
   pub fn new(container: MapRef, view_change_sender: ViewChangeSender) -> Self {
     let view_map_subscription = subscribe_view_map_change(&container, view_change_sender.clone());
     Self {

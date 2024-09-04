@@ -38,9 +38,9 @@ async fn observer_delete_row_test() {
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidDeleteRowAtIndex { index } => {
-      assert_eq!(index.len(), 1);
-      index[0] == 1u32
+    DatabaseViewChange::DidDeleteRowAtIndex { indexs } => {
+      assert_eq!(indexs.len(), 1);
+      indexs[0] == 1u32
     },
     _ => false,
   })
@@ -81,9 +81,9 @@ async fn observer_delete_consecutive_rows_test() {
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidDeleteRowAtIndex { index } => {
-      assert_eq!(index.len(), 2);
-      index[0] == 1u32 && index[1] == 2u32
+    DatabaseViewChange::DidDeleteRowAtIndex { indexs } => {
+      assert_eq!(indexs.len(), 2);
+      indexs[0] == 1u32 && indexs[1] == 2u32
     },
     _ => false,
   })
@@ -123,9 +123,9 @@ async fn observer_delete_non_consecutive_rows_test() {
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidDeleteRowAtIndex { index } => {
-      assert_eq!(index.len(), 2);
-      index[0] == 1u32 && index[1] == 3u32
+    DatabaseViewChange::DidDeleteRowAtIndex { indexs } => {
+      assert_eq!(indexs.len(), 2);
+      indexs[0] == 1u32 && indexs[1] == 3u32
     },
     _ => false,
   })

@@ -32,8 +32,7 @@ pub enum DatabaseViewChange {
     row_orders: Vec<RowOrder>,
   },
   DidDeleteRowAtIndex {
-    // FIXME(nathan): it should be list of row ids
-    index: Vec<u32>,
+    indexs: Vec<u32>,
   },
   // filter
   DidCreateFilters {
@@ -204,7 +203,7 @@ fn handle_array_event(
 
   if !deleted_row_index.is_empty() {
     let _ = change_tx.send(DatabaseViewChange::DidDeleteRowAtIndex {
-      index: deleted_row_index,
+      indexs: deleted_row_index,
     });
   }
 }
