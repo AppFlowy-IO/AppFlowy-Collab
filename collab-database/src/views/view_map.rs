@@ -176,6 +176,22 @@ impl ViewMap {
     }
   }
 
+  pub fn get_row_order_at_index<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+    index: u32,
+  ) -> Option<RowOrder> {
+    self
+      .container
+      .get_with_txn::<_, MapRef>(txn, view_id)
+      .and_then(|map_ref| {
+        map_ref
+          .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_ROW_ORDERS)
+          .map(|array_ref| RowOrderArray::new(array_ref).get_object_at_index(txn, index))
+      })?
+  }
+
   pub fn get_row_orders<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<RowOrder> {
     self
       .container

@@ -455,6 +455,11 @@ impl Database {
     self.get_rows_from_row_orders(&row_orders).await
   }
 
+  pub async fn get_row_order_at_index(&self, view_id: &str, index: u32) -> Option<RowOrder> {
+    let txn = self.collab.transact();
+    self.body.views.get_row_order_at_index(&txn, view_id, index)
+  }
+
   pub fn get_row_orders_for_view(&self, view_id: &str) -> Vec<RowOrder> {
     let txn = self.collab.transact();
     self.body.views.get_row_orders(&txn, view_id)
