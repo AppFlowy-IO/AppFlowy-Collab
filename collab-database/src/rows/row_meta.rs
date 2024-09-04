@@ -46,6 +46,14 @@ impl<'a, 'b> RowMetaUpdate<'a, 'b> {
     }
   }
 
+  pub fn update_attachment_count_if_not_none(self, attachment_count: Option<i64>) -> Self {
+    if let Some(attachment_count) = attachment_count {
+      self.update_attachment_count(attachment_count)
+    } else {
+      self
+    }
+  }
+
   pub fn insert_icon(self, icon_url: &str) -> Self {
     let icon_id = meta_id_from_row_id(&self.row_id, RowMetaKey::IconId);
     self.map_ref.insert(self.txn, icon_id, icon_url);
@@ -65,6 +73,14 @@ impl<'a, 'b> RowMetaUpdate<'a, 'b> {
       .insert(self.txn, is_document_empty_id, is_document_empty);
     self
   }
+
+  pub fn update_attachment_count(self, attachment_count: i64) -> Self {
+    let attachment_count_id = meta_id_from_row_id(&self.row_id, RowMetaKey::AttachmentCount);
+    self
+      .map_ref
+      .insert(self.txn, attachment_count_id, attachment_count);
+    self
+  }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,6 +88,7 @@ pub struct RowMeta {
   pub icon_url: Option<String>,
   pub cover_url: Option<String>,
   pub is_document_empty: bool,
+  pub attachment_count: i64,
 }
 
 impl RowMeta {
@@ -80,6 +97,7 @@ impl RowMeta {
       icon_url: None,
       cover_url: None,
       is_document_empty: true,
+      attachment_count: 0,
     }
   }
 
@@ -93,6 +111,12 @@ impl RowMeta {
           &meta_id_from_row_id(row_id, RowMetaKey::IsDocumentEmpty),
         )
         .unwrap_or(true),
+      attachment_count: map_ref
+        .get_with_txn(
+          txn,
+          &meta_id_from_row_id(row_id, RowMetaKey::AttachmentCount),
+        )
+        .unwrap_or(0),
     }
   }
 
