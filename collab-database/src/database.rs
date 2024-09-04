@@ -460,6 +460,11 @@ impl Database {
     self.body.views.get_row_orders(&txn, view_id)
   }
 
+  pub fn get_row_index(&self, view_id: &str, row_id: &RowId) -> Option<usize> {
+    let txn = self.collab.transact();
+    self.body.index_of_row(&txn, view_id, row_id)
+  }
+
   /// Return a list of [Row] for the given view.
   /// The rows here is ordered by the [RowOrder] of the view.
   pub async fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
@@ -1291,8 +1296,8 @@ pub fn gen_row_id() -> RowId {
 }
 
 pub fn get_row_document_id(row_id: &RowId) -> Result<String, DatabaseError> {
-  let row_id =
-    Uuid::parse_str(row_id).map_err(|_err| DatabaseError::InvalidRowID("Failed to parse row id"))?;
+  let row_id = Uuid::parse_str(row_id)
+    .map_err(|_err| DatabaseError::InvalidRowID("Failed to parse row id"))?;
   Ok(meta_id_from_row_id(&row_id, RowMetaKey::DocumentId))
 }
 
