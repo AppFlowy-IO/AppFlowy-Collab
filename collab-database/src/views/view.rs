@@ -504,6 +504,13 @@ pub trait OrderArray {
       .collect::<Vec<Self::Object>>()
   }
 
+  fn get_object_at_index<T: ReadTxn>(&self, txn: &T, index: u32) -> Option<Self::Object> {
+    self
+      .array_ref()
+      .get(txn, index)
+      .and_then(|value| self.object_from_value(value, txn))
+  }
+
   fn replace_with_txn(&self, txn: &mut TransactionMut, object: Self::Object) {
     if let Some(pos) =
       self

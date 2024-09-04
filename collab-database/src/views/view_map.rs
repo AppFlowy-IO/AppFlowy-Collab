@@ -1,8 +1,8 @@
-use std::ops::Deref;
-
 use collab::preclude::{
   Array, ArrayRef, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, TransactionMut,
 };
+
+use std::ops::Deref;
 
 use crate::database::timestamp;
 use crate::entity::{DatabaseView, DatabaseViewMeta};
@@ -35,13 +35,13 @@ use super::{calculations_from_map_ref, view_id_from_map_ref};
 /// }
 /// Each view data can be deserialize into a `DatabaseView` struct.
 ///
-pub struct ViewMap {
+pub struct DatabaseViews {
   container: MapRef,
   #[allow(dead_code)]
   view_map_subscription: Subscription,
 }
 
-impl Deref for ViewMap {
+impl Deref for DatabaseViews {
   type Target = MapRef;
 
   fn deref(&self) -> &Self::Target {
@@ -49,7 +49,7 @@ impl Deref for ViewMap {
   }
 }
 
-impl ViewMap {
+impl DatabaseViews {
   pub fn new(container: MapRef, view_change_sender: ViewChangeSender) -> Self {
     let view_map_subscription = subscribe_view_map_change(&container, view_change_sender.clone());
     Self {
@@ -174,6 +174,22 @@ impl ViewMap {
       Some(Some(layout_type)) => layout_type,
       _ => DatabaseLayout::Grid,
     }
+  }
+
+  pub fn get_row_order_at_index<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+    index: u32,
+  ) -> Option<RowOrder> {
+    self
+      .container
+      .get_with_txn::<_, MapRef>(txn, view_id)
+      .and_then(|map_ref| {
+        map_ref
+          .get_with_txn::<_, ArrayRef>(txn, DATABASE_VIEW_ROW_ORDERS)
+          .map(|array_ref| RowOrderArray::new(array_ref).get_object_at_index(txn, index))
+      })?
   }
 
   pub fn get_row_orders<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<RowOrder> {
