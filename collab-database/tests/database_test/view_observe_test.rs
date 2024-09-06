@@ -134,6 +134,58 @@ async fn observer_delete_non_consecutive_rows_test() {
 }
 
 #[tokio::test]
+async fn observer_create_delete_row_test() {
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id);
+  let view_change_rx = database_test.subscribe_view_change();
+
+  let row_id_1 = gen_row_id();
+  let row_id_2 = gen_row_id();
+  let row_id_3 = gen_row_id();
+  let row_id_4 = gen_row_id();
+  let created_row = vec![
+    row_id_1.clone(),
+    row_id_2.clone(),
+    row_id_3.clone(),
+    row_id_4.clone(),
+  ];
+  let database_test = Arc::new(Mutex::from(database_test));
+  let cloned_database_test = database_test.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(300)).await;
+    let mut db = cloned_database_test.lock().await;
+    db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
+      .await
+      .unwrap();
+
+    db.create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
+      .await
+      .unwrap();
+    db.create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
+      .await
+      .unwrap();
+    db.create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
+      .await
+      .unwrap();
+  });
+
+  let mut received_rows = vec![];
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidInsertRowOrders { row_orders } => {
+      for (row_order, index) in row_orders {
+        let pos = created_row.iter().position(|x| x == &row_order.id).unwrap() as u32;
+        assert_eq!(&pos, index);
+        received_rows.push(row_order.id.clone());
+      }
+      created_row == received_rows
+    },
+    _ => false,
+  })
+  .await
+  .unwrap();
+}
+
+#[tokio::test]
 async fn observe_update_view_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();

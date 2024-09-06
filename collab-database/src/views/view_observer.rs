@@ -29,7 +29,7 @@ pub enum DatabaseViewChange {
     layout_type: DatabaseLayout,
   },
   DidInsertRowOrders {
-    row_orders: Vec<RowOrder>,
+    row_orders: Vec<(RowOrder, u32)>,
   },
   DidDeleteRowAtIndex {
     indexs: Vec<u32>,
@@ -129,7 +129,7 @@ fn handle_array_event(
         ArrayChangeKey::RowOrder => {
           let row_orders = values
             .iter()
-            .flat_map(|value| row_order_from_value(value, txn))
+            .flat_map(|value| row_order_from_value(value, txn).map(|row_order| (row_order, offset)))
             .collect::<Vec<_>>();
           let _ = change_tx.send(DatabaseViewChange::DidInsertRowOrders { row_orders });
         },

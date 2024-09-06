@@ -375,6 +375,13 @@ impl Database {
     read_guard.get_row()
   }
 
+  pub async fn move_row(&mut self, from_row_id: &str, to_row_id: &str) {
+    let mut txn = self.collab.transact_mut();
+    self.body.views.update_all_views(&mut txn, |_, update| {
+      update.move_row_order(from_row_id, to_row_id);
+    });
+  }
+
   pub async fn remove_rows(&mut self, row_ids: &[RowId]) -> Vec<Row> {
     {
       let mut txn = self.collab.transact_mut();

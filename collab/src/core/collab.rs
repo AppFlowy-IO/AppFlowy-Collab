@@ -555,6 +555,8 @@ fn observe_doc(
 
   let after_txn_sub = doc
     .observe_after_transaction(move |txn| {
+      txn.before_state();
+
       plugins.each(|plugin| plugin.after_transaction(&oid, txn))
     })
     .ok();

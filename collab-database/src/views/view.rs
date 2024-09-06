@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-
 use collab::preclude::{
   Any, Array, ArrayRef, FillRef, Map, MapExt, MapRef, ReadTxn, ToJson, TransactionMut, YrsValue,
 };
 use collab::util::AnyExt;
+use std::collections::HashMap;
+use tracing::trace;
 
 use super::CalculationMap;
 
@@ -542,6 +542,7 @@ pub trait OrderArray {
     let from = self.get_position_with_txn(txn, from_id)?;
     let to = self.get_position_with_txn(txn, to_id)?;
     let to = if from < to { to + 1 } else { to };
+    trace!("Move object from {} to {}", from, to);
     self.array_ref().move_to(txn, from, to);
     None
   }

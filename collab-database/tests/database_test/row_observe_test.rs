@@ -34,7 +34,7 @@ async fn observer_create_new_row_test() {
 
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidInsertRowOrders { row_orders } => {
-      row_orders.len() == 1 && row_orders[0].id == row_id
+      row_orders.len() == 1 && row_orders[0].0.id == row_id
     },
     _ => false,
   })
