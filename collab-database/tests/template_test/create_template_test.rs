@@ -1,4 +1,4 @@
-use collab_database::database::{gen_database_id, Database};
+use collab_database::database::{gen_database_id, gen_database_view_id, Database};
 use collab_database::entity::FieldType;
 use collab_database::template::builder::DatabaseTemplateBuilder;
 use collab_database::template::entity::CELL_DATA;
@@ -74,7 +74,8 @@ async fn create_template_test() {
   assert_eq!(template.fields.len(), 6);
 
   let database_id = gen_database_id();
-  let database = Database::create_with_template(&database_id, template)
+  let view_id = gen_database_view_id();
+  let database = Database::create_with_template(&database_id, &view_id, template)
     .await
     .unwrap();
 

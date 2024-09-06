@@ -11,6 +11,7 @@ pub struct DatabaseTemplate {
   pub rows: Vec<RowTemplate>,
   pub views: Vec<DatabaseViewTemplate>,
 }
+
 pub struct DatabaseViewTemplate {
   pub name: String,
   pub layout: DatabaseLayout,

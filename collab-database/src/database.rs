@@ -97,11 +97,20 @@ impl Database {
     })
   }
 
-  pub async fn create_with_template(
+  pub async fn create_with_template<T>(
     database_id: &str,
-    template: DatabaseTemplate,
-  ) -> Result<Self, DatabaseError> {
-    let params = create_database_params_from_template(database_id, template);
+    view_id: &str,
+    template: T,
+  ) -> Result<Self, DatabaseError>
+  where
+    T: TryInto<DatabaseTemplate>,
+    <T as TryInto<DatabaseTemplate>>::Error: ToString,
+  {
+    let template = template
+      .try_into()
+      .map_err(|err| DatabaseError::ImportData(err.to_string()))?;
+    let params =
+      create_database_params_from_template(database_id.to_string(), view_id.to_string(), template);
     let context = DatabaseContext {
       collab_service: Arc::new(TemplateDatabaseCollabServiceImpl),
       notifier: Default::default(),
@@ -253,6 +262,7 @@ impl Database {
     self.body.block.subscribe_event()
   }
 
+  /// Return all field orders without order
   pub fn get_all_field_orders(&self) -> Vec<FieldOrder> {
     let txn = self.collab.transact();
     self.body.fields.get_all_field_orders(&txn)
@@ -1155,6 +1165,8 @@ impl Database {
     self.body.fields.get_primary_field(&txn)
   }
 
+  /// Return all fields
+  /// Use [Database::get_fields_in_view] If you want to ordered fields for specific view
   pub fn get_all_fields(&self) -> Vec<Field> {
     let txn = self.collab.transact();
     self.body.fields.get_all_fields(&txn)

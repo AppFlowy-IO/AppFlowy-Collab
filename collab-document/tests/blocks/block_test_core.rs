@@ -44,7 +44,7 @@ impl BlockTestCore {
     collab.initialize();
 
     let document_data = BlockTestCore::get_default_data();
-    let document = match Document::open_with(collab, Some(document_data)) {
+    let document = match Document::create_with_data(collab, document_data) {
       Ok(document) => document,
       Err(e) => panic!("create document error: {:?}", e),
     };
@@ -52,7 +52,7 @@ impl BlockTestCore {
   }
 
   pub fn open(collab: Collab, db: Arc<CollabKVDB>) -> Self {
-    let document = Document::open_with(collab, None).unwrap();
+    let document = Document::open(collab).unwrap();
     BlockTestCore { db, document }
   }
 
