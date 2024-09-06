@@ -30,14 +30,10 @@ fn validate_document_data() {
   let document_data = default_document_data(document_id);
   let collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false);
 
-  let document = Document::open_with(collab, Some(document_data)).unwrap();
+  let document = Document::create_with_data(collab, document_data).unwrap();
   assert!(document.validate().is_ok());
 
-  let result = Document::open(Collab::new_with_origin(
-    CollabOrigin::Empty,
-    document_id,
-    vec![],
-    false,
-  ));
+  let new_collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false);
+  let result = Document::open(new_collab);
   assert!(result.is_err())
 }

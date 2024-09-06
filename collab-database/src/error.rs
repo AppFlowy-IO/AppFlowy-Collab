@@ -38,6 +38,12 @@ pub enum DatabaseError {
   #[error("Action cancelled")]
   ActionCancelled,
 
+  #[error("Invalid CSV:{0}")]
+  InvalidCSV(String),
+
+  #[error("Import data failed: {0}")]
+  ImportData(String),
+
   #[error("Internal failure: {0}")]
   Internal(#[from] anyhow::Error),
 }

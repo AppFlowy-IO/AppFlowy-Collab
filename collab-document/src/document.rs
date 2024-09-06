@@ -42,39 +42,16 @@ pub struct Document {
 }
 
 impl Document {
+  /// Opening a document with given [Collab]
+  /// If the required fields are not present in the current [Collab] instance, it will return an error.
   pub fn open(mut collab: Collab) -> Result<Self, DocumentError> {
-    let mut txn = collab.context.transact_mut();
-    let root = collab.data.get_with_path(&txn, [DOCUMENT_ROOT]);
-    if root.is_none() {
-      return Err(DocumentError::NoRequiredData);
-    }
-    let root: MapRef = root.unwrap();
-    let blocks = root.get_or_init_map(&mut txn, BLOCKS);
-    let meta = root.get_or_init_map(&mut txn, META);
-
-    let children_map = meta.get_or_init_map(&mut txn, CHILDREN_MAP);
-    let text_map = meta.get_or_init_map(&mut txn, TEXT_MAP);
-    let children_operation = ChildrenOperation::new(children_map);
-    let text_operation = TextOperation::new(text_map);
-    let block_operation = BlockOperation::new(blocks, children_operation.clone());
-    drop(txn);
-
-    Ok(Self {
-      collab,
-      body: DocumentBody {
-        root,
-        block_operation,
-        children_operation,
-        text_operation,
-      },
-    })
-  }
-
-  pub fn open_with(mut collab: Collab, data: Option<DocumentData>) -> Result<Self, DocumentError> {
-    let body = DocumentBody::new(&mut collab, data)?;
+    CollabType::Document.validate_require_data(&collab)?;
+    let body = DocumentBody::new(&mut collab, None)?;
     Ok(Self { collab, body })
   }
 
+  /// Opening a document with given [DataSource]
+  /// If the required fields are not present in the current [Collab] instance, it will return an error.
   pub fn open_with_options(
     origin: CollabOrigin,
     doc_state: DataSource,
@@ -83,6 +60,11 @@ impl Document {
   ) -> Result<Self, DocumentError> {
     let collab = Collab::new_with_source(origin, document_id, doc_state, plugins, true)?;
     Document::open(collab)
+  }
+
+  pub fn create_with_data(mut collab: Collab, data: DocumentData) -> Result<Self, DocumentError> {
+    let body = DocumentBody::new(&mut collab, Some(data))?;
+    Ok(Self { collab, body })
   }
 
   #[inline]

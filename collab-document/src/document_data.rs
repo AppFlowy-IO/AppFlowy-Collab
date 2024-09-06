@@ -90,7 +90,7 @@ pub fn default_document_data(document_id: &str) -> DocumentData {
 pub fn default_document_collab_data(document_id: &str) -> Result<EncodedCollab, DocumentError> {
   let document_data = default_document_data(document_id);
   let collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false);
-  let document = Document::open_with(collab, Some(document_data))?;
+  let document = Document::create_with_data(collab, document_data)?;
   document.encode_collab()
 }
 

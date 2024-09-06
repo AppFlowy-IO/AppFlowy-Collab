@@ -100,7 +100,7 @@ impl DocumentTest {
       blocks,
       meta,
     };
-    let document = Document::open_with(collab, Some(document_data)).unwrap();
+    let document = Document::create_with_data(collab, document_data).unwrap();
     Self { document, db }
   }
 }
@@ -132,7 +132,7 @@ pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Doc
     .unwrap();
 
   collab.initialize();
-  Document::open_with(collab, None).unwrap()
+  Document::open(collab).unwrap()
 }
 
 pub fn document_storage() -> Arc<CollabKVDB> {
