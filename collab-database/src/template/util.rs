@@ -12,8 +12,8 @@ use collab_entity::CollabType;
 use std::sync::Arc;
 
 pub async fn database_from_template(
-  database_id: &str,
-  view_id: &str,
+  database_id: String,
+  view_id: String,
   template: DatabaseTemplate,
 ) -> Result<Database, DatabaseError> {
   let params = create_database_params_from_template(database_id, view_id, template);
@@ -26,13 +26,28 @@ pub async fn database_from_template(
   Ok(database)
 }
 
+pub fn construct_create_database_params<T>(
+  database_id: String,
+  view_id: String,
+  template: T,
+) -> Result<CreateDatabaseParams, DatabaseError>
+where
+  T: TryInto<DatabaseTemplate>,
+  <T as TryInto<DatabaseTemplate>>::Error: ToString,
+{
+  let template = template
+    .try_into()
+    .map_err(|err| DatabaseError::ImportData(err.to_string()))?;
+  let params = create_database_params_from_template(database_id, view_id, template);
+  Ok(params)
+}
+
 pub(crate) fn create_database_params_from_template(
-  database_id: &str,
-  view_id: &str,
+  database_id: String,
+  view_id: String,
   template: DatabaseTemplate,
 ) -> CreateDatabaseParams {
-  let database_id = database_id.to_string();
-  let inline_view_id = view_id.to_string();
+  let inline_view_id = view_id;
   let timestamp = timestamp();
 
   let mut fields = vec![];
