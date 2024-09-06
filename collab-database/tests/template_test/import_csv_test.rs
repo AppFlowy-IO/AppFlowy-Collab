@@ -1,4 +1,4 @@
-use collab_database::database::{gen_database_id, Database};
+use collab_database::database::{gen_database_id, gen_database_view_id, Database};
 use collab_database::template::csv::CSVTemplate;
 use collab_database::template::entity::CELL_DATA;
 
@@ -8,7 +8,8 @@ async fn import_csv_test() {
   let csv_template = CSVTemplate::try_from(csv_data).unwrap();
 
   let database_id = gen_database_id();
-  let database = Database::create_with_template(&database_id, csv_template)
+  let view_id = gen_database_view_id();
+  let database = Database::create_with_template(&database_id, &view_id, csv_template)
     .await
     .unwrap();
 

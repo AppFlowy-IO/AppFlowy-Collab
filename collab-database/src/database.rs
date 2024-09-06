@@ -99,6 +99,7 @@ impl Database {
 
   pub async fn create_with_template<T>(
     database_id: &str,
+    view_id: &str,
     template: T,
   ) -> Result<Self, DatabaseError>
   where
@@ -108,7 +109,7 @@ impl Database {
     let template = template
       .try_into()
       .map_err(|err| DatabaseError::ImportData(err.to_string()))?;
-    let params = create_database_params_from_template(database_id, template);
+    let params = create_database_params_from_template(database_id, view_id, template);
     let context = DatabaseContext {
       collab_service: Arc::new(TemplateDatabaseCollabServiceImpl),
       notifier: Default::default(),
