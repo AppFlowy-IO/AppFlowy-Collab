@@ -177,12 +177,14 @@ async fn observer_create_delete_row_test() {
   let mut received_rows = vec![];
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateRowOrders {
+      database_view_id,
       is_local_change,
       insert_row_orders,
       delete_row_indexes,
     } => {
       assert!(is_local_change);
       assert_eq!(delete_row_indexes.len(), 0);
+      assert_eq!(database_view_id, &"v1".to_string());
       for (row_order, index) in insert_row_orders {
         let pos = created_row.iter().position(|x| x == &row_order.id).unwrap() as u32;
         assert_eq!(&pos, index);
@@ -206,11 +208,13 @@ async fn observer_create_delete_row_test() {
   let view_change_rx = database_test.lock().await.subscribe_view_change();
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateRowOrders {
+      database_view_id,
       is_local_change,
       insert_row_orders,
       delete_row_indexes,
     } => {
       assert!(is_local_change);
+      assert_eq!(database_view_id, &"v1".to_string());
 
       assert_eq!(delete_row_indexes.len(), 1);
       assert_eq!(delete_row_indexes[0], 0);

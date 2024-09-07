@@ -31,6 +31,7 @@ pub enum DatabaseViewChange {
     layout_type: DatabaseLayout,
   },
   DidUpdateRowOrders {
+    database_view_id: String,
     is_local_change: bool,
     insert_row_orders: Vec<(RowOrder, u32)>,
     delete_row_indexes: Vec<u32>,
@@ -128,94 +129,101 @@ fn handle_array_event(
   let key = ArrayChangeKey::from(array_event);
   let mut delete_row_indexes: Vec<u32> = vec![];
   let mut insert_row_orders: Vec<(RowOrder, u32)> = vec![];
-  array_event.delta(txn).iter().for_each(|change| {
-    #[cfg(feature = "verbose_log")]
-    trace!("database view observe array event: {:?}:{:?}", key, change);
-    match change {
-      Change::Added(values) => match &key {
-        ArrayChangeKey::RowOrder => {
-          let row_orders = values
-            .iter()
-            .flat_map(|value| row_order_from_value(value, txn).map(|row_order| (row_order, offset)))
-            .collect::<Vec<_>>();
-          insert_row_orders.extend(row_orders.clone());
-        },
-        ArrayChangeKey::Filter => {
-          if let Some(view_id) = view_id_from_array_event(array_event) {
-            let filters: Vec<_> = values
-              .iter()
-              .flat_map(|value| value.to_json(txn).into_map())
-              .collect();
-            let _ = change_tx.send(DatabaseViewChange::DidCreateFilters { view_id, filters });
-          }
-        },
-        ArrayChangeKey::Sort => {
-          if let Some(view_id) = view_id_from_array_event(array_event) {
-            let sorts: Vec<_> = values
-              .iter()
-              .flat_map(|value| value.to_json(txn).into_map())
-              .collect();
-            let _ = change_tx.send(DatabaseViewChange::DidCreateSorts { view_id, sorts });
-          }
-        },
-        ArrayChangeKey::Group => {
-          if let Some(view_id) = view_id_from_array_event(array_event) {
-            let groups = values
-              .iter()
-              .flat_map(|value| value.to_json(txn).into_map())
-              .collect::<Vec<_>>();
-            let _ = change_tx.send(DatabaseViewChange::DidCreateGroupSettings { view_id, groups });
-          }
-        },
-        ArrayChangeKey::Unhandled(s) => {
-          trace!("database view observe unknown insert: {}", s);
-        },
-      },
-      Change::Removed(len) => {
-        // https://github.com/y-crdt/y-crdt/issues/341
-        #[cfg(feature = "verbose_log")]
-        trace!("database view observe array remove: {}", len);
-        match &key {
+  if let Some(PathSegment::Key(view_id)) = array_event.path().front() {
+    let database_view_id = view_id.to_string();
+    array_event.delta(txn).iter().for_each(|change| {
+      #[cfg(feature = "verbose_log")]
+      trace!("database view observe array event: {:?}:{:?}", key, change);
+
+      match change {
+        Change::Added(values) => match &key {
           ArrayChangeKey::RowOrder => {
-            if *len > 0 {
-              delete_row_indexes.extend((offset..=(offset + len - 1)).collect::<Vec<_>>());
-            }
-            offset += len;
+            let row_orders = values
+              .iter()
+              .flat_map(|value| {
+                row_order_from_value(value, txn).map(|row_order| (row_order, offset))
+              })
+              .collect::<Vec<_>>();
+            insert_row_orders.extend(row_orders.clone());
           },
           ArrayChangeKey::Filter => {
             if let Some(view_id) = view_id_from_array_event(array_event) {
-              let _ = change_tx.send(DatabaseViewChange::DidUpdateFilter { view_id });
+              let filters: Vec<_> = values
+                .iter()
+                .flat_map(|value| value.to_json(txn).into_map())
+                .collect();
+              let _ = change_tx.send(DatabaseViewChange::DidCreateFilters { view_id, filters });
             }
           },
           ArrayChangeKey::Sort => {
             if let Some(view_id) = view_id_from_array_event(array_event) {
-              let _ = change_tx.send(DatabaseViewChange::DidUpdateSort { view_id });
+              let sorts: Vec<_> = values
+                .iter()
+                .flat_map(|value| value.to_json(txn).into_map())
+                .collect();
+              let _ = change_tx.send(DatabaseViewChange::DidCreateSorts { view_id, sorts });
             }
           },
           ArrayChangeKey::Group => {
             if let Some(view_id) = view_id_from_array_event(array_event) {
-              let _ = change_tx.send(DatabaseViewChange::DidUpdateGroupSetting { view_id });
+              let groups = values
+                .iter()
+                .flat_map(|value| value.to_json(txn).into_map())
+                .collect::<Vec<_>>();
+              let _ =
+                change_tx.send(DatabaseViewChange::DidCreateGroupSettings { view_id, groups });
             }
           },
           ArrayChangeKey::Unhandled(s) => {
-            #[cfg(feature = "verbose_log")]
-            trace!("database view observe unknown remove: {}", s);
+            trace!("database view observe unknown insert: {}", s);
           },
-        }
-      },
-      Change::Retain(value) => {
-        offset += value;
-        #[cfg(feature = "verbose_log")]
-        trace!("database view observe array retain: {}", value);
-      },
-    }
-  });
-
-  let _ = change_tx.send(DatabaseViewChange::DidUpdateRowOrders {
-    is_local_change,
-    insert_row_orders,
-    delete_row_indexes,
-  });
+        },
+        Change::Removed(len) => {
+          // https://github.com/y-crdt/y-crdt/issues/341
+          #[cfg(feature = "verbose_log")]
+          trace!("database view observe array remove: {}", len);
+          match &key {
+            ArrayChangeKey::RowOrder => {
+              if *len > 0 {
+                delete_row_indexes.extend((offset..=(offset + len - 1)).collect::<Vec<_>>());
+              }
+              offset += len;
+            },
+            ArrayChangeKey::Filter => {
+              if let Some(view_id) = view_id_from_array_event(array_event) {
+                let _ = change_tx.send(DatabaseViewChange::DidUpdateFilter { view_id });
+              }
+            },
+            ArrayChangeKey::Sort => {
+              if let Some(view_id) = view_id_from_array_event(array_event) {
+                let _ = change_tx.send(DatabaseViewChange::DidUpdateSort { view_id });
+              }
+            },
+            ArrayChangeKey::Group => {
+              if let Some(view_id) = view_id_from_array_event(array_event) {
+                let _ = change_tx.send(DatabaseViewChange::DidUpdateGroupSetting { view_id });
+              }
+            },
+            ArrayChangeKey::Unhandled(s) => {
+              #[cfg(feature = "verbose_log")]
+              trace!("database view observe unknown remove: {}", s);
+            },
+          }
+        },
+        Change::Retain(value) => {
+          offset += value;
+          #[cfg(feature = "verbose_log")]
+          trace!("database view observe array retain: {}", value);
+        },
+      }
+    });
+    let _ = change_tx.send(DatabaseViewChange::DidUpdateRowOrders {
+      database_view_id,
+      is_local_change,
+      insert_row_orders,
+      delete_row_indexes,
+    });
+  }
 }
 
 fn handle_map_event(
