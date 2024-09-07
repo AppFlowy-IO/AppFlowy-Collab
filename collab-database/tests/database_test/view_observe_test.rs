@@ -38,9 +38,11 @@ async fn observer_delete_row_test() {
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidDeleteRowAtIndex { indexs } => {
-      assert_eq!(indexs.len(), 1);
-      indexs[0] == 1u32
+    DatabaseViewChange::DidUpdateRowOrders {
+      delete_row_indexes, ..
+    } => {
+      assert_eq!(delete_row_indexes.len(), 1);
+      delete_row_indexes[0] == 1u32
     },
     _ => false,
   })
@@ -81,9 +83,11 @@ async fn observer_delete_consecutive_rows_test() {
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidDeleteRowAtIndex { indexs } => {
-      assert_eq!(indexs.len(), 2);
-      indexs[0] == 1u32 && indexs[1] == 2u32
+    DatabaseViewChange::DidUpdateRowOrders {
+      delete_row_indexes, ..
+    } => {
+      assert_eq!(delete_row_indexes.len(), 2);
+      delete_row_indexes[0] == 1u32 && delete_row_indexes[1] == 2u32
     },
     _ => false,
   })
@@ -123,9 +127,11 @@ async fn observer_delete_non_consecutive_rows_test() {
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidDeleteRowAtIndex { indexs } => {
-      assert_eq!(indexs.len(), 2);
-      indexs[0] == 1u32 && indexs[1] == 3u32
+    DatabaseViewChange::DidUpdateRowOrders {
+      delete_row_indexes, ..
+    } => {
+      assert_eq!(delete_row_indexes.len(), 2);
+      delete_row_indexes[0] == 1u32 && delete_row_indexes[1] == 3u32
     },
     _ => false,
   })
@@ -137,7 +143,6 @@ async fn observer_delete_non_consecutive_rows_test() {
 async fn observer_create_delete_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
-  let view_change_rx = database_test.subscribe_view_change();
 
   let row_id_1 = gen_row_id();
   let row_id_2 = gen_row_id();
@@ -157,7 +162,6 @@ async fn observer_create_delete_row_test() {
     db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
       .await
       .unwrap();
-
     db.create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
       .await
       .unwrap();
@@ -169,15 +173,51 @@ async fn observer_create_delete_row_test() {
       .unwrap();
   });
 
+  let view_change_rx = database_test.lock().await.subscribe_view_change();
   let mut received_rows = vec![];
   wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidInsertRowOrders { row_orders } => {
-      for (row_order, index) in row_orders {
+    DatabaseViewChange::DidUpdateRowOrders {
+      is_local_change,
+      insert_row_orders,
+      delete_row_indexes,
+    } => {
+      assert!(is_local_change);
+      assert_eq!(delete_row_indexes.len(), 0);
+      for (row_order, index) in insert_row_orders {
         let pos = created_row.iter().position(|x| x == &row_order.id).unwrap() as u32;
         assert_eq!(&pos, index);
         received_rows.push(row_order.id.clone());
       }
       created_row == received_rows
+    },
+    _ => false,
+  })
+  .await
+  .unwrap();
+
+  let cloned_database_test = database_test.clone();
+  let cloned_created_row = created_row.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(300)).await;
+    let mut db = cloned_database_test.lock().await;
+    db.move_row(&created_row[0], &created_row[2]).await;
+  });
+
+  let view_change_rx = database_test.lock().await.subscribe_view_change();
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidUpdateRowOrders {
+      is_local_change,
+      insert_row_orders,
+      delete_row_indexes,
+    } => {
+      assert!(is_local_change);
+
+      assert_eq!(delete_row_indexes.len(), 1);
+      assert_eq!(delete_row_indexes[0], 0);
+
+      assert_eq!(insert_row_orders.len(), 1);
+      assert_eq!(insert_row_orders[0].0.id, cloned_created_row[0]);
+      true
     },
     _ => false,
   })

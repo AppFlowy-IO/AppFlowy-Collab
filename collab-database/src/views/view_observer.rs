@@ -4,6 +4,7 @@ use crate::views::{
   row_order_from_value, view_from_map_ref, view_from_value, view_id_from_map_ref, DatabaseLayout,
   FieldOrder, FilterMap, GroupMap, RowOrder, SortMap,
 };
+use collab::core::origin::CollabOrigin;
 use collab::preclude::array::ArrayEvent;
 use collab::preclude::map::MapEvent;
 use collab::preclude::{Change, MapRef, Subscription, ToJson, TransactionMut};
@@ -13,6 +14,7 @@ use std::ops::Deref;
 use std::str::FromStr;
 use tokio::sync::broadcast;
 use tracing::{trace, warn};
+
 #[derive(Debug, Clone)]
 pub enum DatabaseViewChange {
   DidCreateView {
@@ -28,11 +30,10 @@ pub enum DatabaseViewChange {
     view_id: String,
     layout_type: DatabaseLayout,
   },
-  DidInsertRowOrders {
-    row_orders: Vec<(RowOrder, u32)>,
-  },
-  DidDeleteRowAtIndex {
-    indexs: Vec<u32>,
+  DidUpdateRowOrders {
+    is_local_change: bool,
+    insert_row_orders: Vec<(RowOrder, u32)>,
+    delete_row_indexes: Vec<u32>,
   },
   // filter
   DidCreateFilters {
@@ -73,18 +74,21 @@ pub type ViewChangeSender = broadcast::Sender<DatabaseViewChange>;
 pub type ViewChangeReceiver = broadcast::Receiver<DatabaseViewChange>;
 
 pub(crate) fn subscribe_view_map_change(
+  origin: CollabOrigin,
   view_map: &MapRef,
   change_tx: ViewChangeSender,
 ) -> Subscription {
   view_map.observe_deep(move |txn, events| {
+    let txn_origin = CollabOrigin::from(txn);
+    let is_local = txn_origin == origin;
     for event in events.iter() {
       match event {
         Event::Text(_) => {},
         Event::Array(array_event) => {
-          handle_array_event(&change_tx, txn, array_event);
+          handle_array_event(&change_tx, txn, array_event, is_local);
         },
         Event::Map(event) => {
-          handle_map_event(&change_tx, txn, event);
+          handle_map_event(&change_tx, txn, event, is_local);
         },
         _ => {},
       }
@@ -118,11 +122,14 @@ fn handle_array_event(
   change_tx: &ViewChangeSender,
   txn: &TransactionMut,
   array_event: &ArrayEvent,
+  is_local_change: bool,
 ) {
   let mut offset = 0;
   let key = ArrayChangeKey::from(array_event);
-  let mut deleted_row_index: Vec<u32> = vec![];
+  let mut delete_row_indexes: Vec<u32> = vec![];
+  let mut insert_row_orders: Vec<(RowOrder, u32)> = vec![];
   array_event.delta(txn).iter().for_each(|change| {
+    #[cfg(feature = "verbose_log")]
     trace!("database view observe array event: {:?}:{:?}", key, change);
     match change {
       Change::Added(values) => match &key {
@@ -131,7 +138,7 @@ fn handle_array_event(
             .iter()
             .flat_map(|value| row_order_from_value(value, txn).map(|row_order| (row_order, offset)))
             .collect::<Vec<_>>();
-          let _ = change_tx.send(DatabaseViewChange::DidInsertRowOrders { row_orders });
+          insert_row_orders.extend(row_orders.clone());
         },
         ArrayChangeKey::Filter => {
           if let Some(view_id) = view_id_from_array_event(array_event) {
@@ -166,11 +173,12 @@ fn handle_array_event(
       },
       Change::Removed(len) => {
         // https://github.com/y-crdt/y-crdt/issues/341
+        #[cfg(feature = "verbose_log")]
         trace!("database view observe array remove: {}", len);
         match &key {
           ArrayChangeKey::RowOrder => {
             if *len > 0 {
-              deleted_row_index.extend((offset..=(offset + len - 1)).collect::<Vec<_>>());
+              delete_row_indexes.extend((offset..=(offset + len - 1)).collect::<Vec<_>>());
             }
             offset += len;
           },
@@ -190,25 +198,32 @@ fn handle_array_event(
             }
           },
           ArrayChangeKey::Unhandled(s) => {
+            #[cfg(feature = "verbose_log")]
             trace!("database view observe unknown remove: {}", s);
           },
         }
       },
       Change::Retain(value) => {
         offset += value;
+        #[cfg(feature = "verbose_log")]
         trace!("database view observe array retain: {}", value);
       },
     }
   });
 
-  if !deleted_row_index.is_empty() {
-    let _ = change_tx.send(DatabaseViewChange::DidDeleteRowAtIndex {
-      indexs: deleted_row_index,
-    });
-  }
+  let _ = change_tx.send(DatabaseViewChange::DidUpdateRowOrders {
+    is_local_change,
+    insert_row_orders,
+    delete_row_indexes,
+  });
 }
 
-fn handle_map_event(change_tx: &ViewChangeSender, txn: &TransactionMut, event: &MapEvent) {
+fn handle_map_event(
+  change_tx: &ViewChangeSender,
+  txn: &TransactionMut,
+  event: &MapEvent,
+  _is_local_change: bool,
+) {
   let keys = event.keys(txn);
   for (key, value) in keys.iter() {
     let _change_tx = change_tx.clone();

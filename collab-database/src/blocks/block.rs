@@ -65,8 +65,8 @@ impl Block {
   pub async fn batch_load_rows(&self, row_ids: Vec<RowId>) -> Result<(), DatabaseError> {
     let cloned_notifier = self.notifier.clone();
     let mut row_on_disk_details = vec![];
-    for row_id in &row_ids {
-      let collab = self.create_collab_for_row(row_id, false).await?;
+    for row_id in row_ids.into_iter() {
+      let collab = self.create_collab_for_row(&row_id, false).await?;
       let row_collab = DatabaseRow::new(
         row_id.clone(),
         collab,
