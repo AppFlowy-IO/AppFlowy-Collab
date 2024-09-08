@@ -221,6 +221,7 @@ async fn observer_create_delete_row_test() {
 
       assert_eq!(insert_row_orders.len(), 1);
       assert_eq!(insert_row_orders[0].0.id, cloned_created_row[0]);
+      assert_eq!(insert_row_orders[0].1, 3);
       true
     },
     _ => false,

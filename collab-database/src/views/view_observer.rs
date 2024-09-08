@@ -141,7 +141,9 @@ fn handle_array_event(
             let row_orders = values
               .iter()
               .flat_map(|value| {
-                row_order_from_value(value, txn).map(|row_order| (row_order, offset))
+                let value = row_order_from_value(value, txn).map(|row_order| (row_order, offset));
+                offset += 1;
+                value
               })
               .collect::<Vec<_>>();
             insert_row_orders.extend(row_orders.clone());
@@ -217,12 +219,15 @@ fn handle_array_event(
         },
       }
     });
-    let _ = change_tx.send(DatabaseViewChange::DidUpdateRowOrders {
-      database_view_id,
-      is_local_change,
-      insert_row_orders,
-      delete_row_indexes,
-    });
+
+    if insert_row_orders.len() > 0 || delete_row_indexes.len() > 0 {
+      let _ = change_tx.send(DatabaseViewChange::DidUpdateRowOrders {
+        database_view_id,
+        is_local_change,
+        insert_row_orders,
+        delete_row_indexes,
+      });
+    }
   }
 }
 
