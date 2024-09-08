@@ -29,6 +29,7 @@ use crate::template::entity::DatabaseTemplate;
 use crate::template::util::{
   create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
 };
+use collab::core::origin::CollabOrigin;
 use collab::lock::RwLock;
 use collab::preclude::{
   Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
@@ -373,6 +374,13 @@ impl Database {
     let row = self.body.block.delete_row(row_id)?;
     let read_guard = row.read().await;
     read_guard.get_row()
+  }
+
+  pub async fn move_row(&mut self, from_row_id: &str, to_row_id: &str) {
+    let mut txn = self.collab.transact_mut();
+    self.body.views.update_all_views(&mut txn, |_, update| {
+      update.move_row_order(from_row_id, to_row_id);
+    });
   }
 
   pub async fn remove_rows(&mut self, row_ids: &[RowId]) -> Vec<Row> {
@@ -1380,7 +1388,7 @@ pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
   let metas: MapRef = collab.data.get_with_path(&txn, [DATABASE, METAS])?;
 
   let view_change_tx = tokio::sync::broadcast::channel(1).0;
-  let views = DatabaseViews::new(views, view_change_tx);
+  let views = DatabaseViews::new(CollabOrigin::Empty, views, view_change_tx);
   let meta = MetaMap::new(metas);
 
   let inline_view_id = meta.get_inline_view_id(&txn)?;
@@ -1410,6 +1418,7 @@ pub fn mut_database_views_with_collab<F>(collab: &mut Collab, f: F)
 where
   F: FnMut(&mut DatabaseView),
 {
+  let origin = collab.origin().clone();
   let mut txn = collab.context.transact_mut();
 
   if let Some(container) = collab
@@ -1417,7 +1426,7 @@ where
     .get_with_path::<_, _, MapRef>(&txn, [DATABASE, VIEWS])
   {
     let view_change_tx = tokio::sync::broadcast::channel(1).0;
-    let views = DatabaseViews::new(container, view_change_tx);
+    let views = DatabaseViews::new(origin, container, view_change_tx);
     let mut reset_views = views.get_all_views(&txn);
 
     reset_views.iter_mut().for_each(f);
@@ -1449,7 +1458,7 @@ pub fn get_database_views_meta(collab: &Collab) -> Vec<DatabaseViewMeta> {
   let txn = collab.context.transact();
   let views: Option<MapRef> = collab.data.get_with_path(&txn, [DATABASE, VIEWS]);
   let view_change_tx = tokio::sync::broadcast::channel(1).0;
-  let views = DatabaseViews::new(views.unwrap(), view_change_tx);
+  let views = DatabaseViews::new(CollabOrigin::Empty, views.unwrap(), view_change_tx);
   views.get_all_views_meta(&txn)
 }
 
@@ -1466,6 +1475,7 @@ pub struct DatabaseBody {
 
 impl DatabaseBody {
   fn new(mut collab: Collab, database_id: String, context: DatabaseContext) -> (Self, Collab) {
+    let origin = collab.origin().clone();
     let mut txn = collab.context.transact_mut();
     let root: MapRef = collab.data.get_or_init(&mut txn, DATABASE);
     root.insert(&mut txn, DATABASE_ID, &*database_id);
@@ -1475,7 +1485,7 @@ impl DatabaseBody {
     drop(txn);
 
     let fields = FieldMap::new(fields, context.notifier.field_change_tx.clone());
-    let views = DatabaseViews::new(views, context.notifier.view_change_tx.clone());
+    let views = DatabaseViews::new(origin, views, context.notifier.view_change_tx.clone());
     let metas = MetaMap::new(metas);
     let block = Block::new(
       database_id,

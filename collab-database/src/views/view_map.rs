@@ -2,8 +2,6 @@ use collab::preclude::{
   Array, ArrayRef, Map, MapExt, MapPrelim, MapRef, ReadTxn, Subscription, TransactionMut,
 };
 
-use std::ops::Deref;
-
 use crate::database::timestamp;
 use crate::entity::{DatabaseView, DatabaseViewMeta};
 use crate::rows::RowId;
@@ -15,6 +13,8 @@ use crate::views::{
   FieldOrder, FieldOrderArray, FieldSettingsByFieldIdMap, FilterMap, GroupSettingMap,
   LayoutSetting, OrderArray, RowOrder, RowOrderArray, SortMap, ViewBuilder, ViewChangeSender,
 };
+use collab::core::origin::CollabOrigin;
+use std::ops::Deref;
 
 use super::{calculations_from_map_ref, view_id_from_map_ref};
 
@@ -50,8 +50,13 @@ impl Deref for DatabaseViews {
 }
 
 impl DatabaseViews {
-  pub fn new(container: MapRef, view_change_sender: ViewChangeSender) -> Self {
-    let view_map_subscription = subscribe_view_map_change(&container, view_change_sender.clone());
+  pub fn new(
+    origin: CollabOrigin,
+    container: MapRef,
+    view_change_sender: ViewChangeSender,
+  ) -> Self {
+    let view_map_subscription =
+      subscribe_view_map_change(origin, &container, view_change_sender.clone());
     Self {
       container,
       view_map_subscription,

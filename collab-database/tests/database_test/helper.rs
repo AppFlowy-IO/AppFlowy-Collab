@@ -329,10 +329,10 @@ impl Drop for Cleaner {
 
 pub async fn wait_for_specific_event<F, T>(
   mut change_rx: tokio::sync::broadcast::Receiver<T>,
-  condition: F,
+  mut condition: F,
 ) -> Result<(), String>
 where
-  F: Fn(&T) -> bool,
+  F: FnMut(&T) -> bool,
   T: Clone,
 {
   loop {
