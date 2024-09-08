@@ -13,44 +13,6 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 #[tokio::test]
-async fn observer_delete_row_test() {
-  let database_id = uuid::Uuid::new_v4().to_string();
-  let database_test = create_database(1, &database_id);
-  let view_change_rx = database_test.subscribe_view_change();
-
-  let row_id = gen_row_id();
-  let cloned_row_id = row_id.clone();
-  let database_test = Arc::new(Mutex::from(database_test));
-  let cloned_database_test = database_test.clone();
-  tokio::spawn(async move {
-    sleep(Duration::from_millis(300)).await;
-    let mut db = cloned_database_test.lock().await;
-    db.create_row(CreateRowParams::new(gen_row_id(), database_id.clone()))
-      .await
-      .unwrap();
-    db.create_row(CreateRowParams::new(
-      cloned_row_id.clone(),
-      database_id.clone(),
-    ))
-    .await
-    .unwrap();
-    db.remove_row(&cloned_row_id).await;
-  });
-
-  wait_for_specific_event(view_change_rx, |event| match event {
-    DatabaseViewChange::DidUpdateRowOrders {
-      delete_row_indexes, ..
-    } => {
-      assert_eq!(delete_row_indexes.len(), 1);
-      delete_row_indexes[0] == 1u32
-    },
-    _ => false,
-  })
-  .await
-  .unwrap();
-}
-
-#[tokio::test]
 async fn observer_delete_consecutive_rows_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
@@ -60,11 +22,11 @@ async fn observer_delete_consecutive_rows_test() {
   let row_id_2 = gen_row_id();
   let row_id_3 = gen_row_id();
   let row_id_4 = gen_row_id();
+  let cloned_row_id_2 = row_id_2.clone();
+  let cloned_row_id_3 = row_id_3.clone();
   let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
-  tokio::spawn(async move {
-    sleep(Duration::from_millis(300)).await;
-
+  {
     let mut db = cloned_database_test.lock().await;
     db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
       .await
@@ -78,16 +40,25 @@ async fn observer_delete_consecutive_rows_test() {
     db.create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
       .await
       .unwrap();
+  }
 
-    db.remove_rows(&[row_id_2, row_id_3]).await;
+  let cloned_database_test = database_test.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(500)).await;
+    let mut db = cloned_database_test.lock().await;
+    db.remove_rows(&[cloned_row_id_2, cloned_row_id_3]).await;
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateRowOrders {
       delete_row_indexes, ..
     } => {
-      assert_eq!(delete_row_indexes.len(), 2);
-      delete_row_indexes[0] == 1u32 && delete_row_indexes[1] == 2u32
+      if delete_row_indexes.len() != 2 {
+        return false;
+      } else {
+        assert_eq!(delete_row_indexes.len(), 2);
+        delete_row_indexes[0] == 1u32 && delete_row_indexes[1] == 2u32
+      }
     },
     _ => false,
   })
@@ -105,10 +76,11 @@ async fn observer_delete_non_consecutive_rows_test() {
   let row_id_2 = gen_row_id();
   let row_id_3 = gen_row_id();
   let row_id_4 = gen_row_id();
+  let cloned_row_id_2 = row_id_2.clone();
+  let cloned_row_id_4 = row_id_4.clone();
   let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
-  tokio::spawn(async move {
-    sleep(Duration::from_millis(300)).await;
+  {
     let mut db = cloned_database_test.lock().await;
     db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
       .await
@@ -122,16 +94,116 @@ async fn observer_delete_non_consecutive_rows_test() {
     db.create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
       .await
       .unwrap();
+  }
 
-    db.remove_rows(&[row_id_2, row_id_4]).await;
+  let cloned_database_test = database_test.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(500)).await;
+    let mut db = cloned_database_test.lock().await;
+    db.remove_rows(&[cloned_row_id_2, cloned_row_id_4]).await;
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateRowOrders {
       delete_row_indexes, ..
     } => {
-      assert_eq!(delete_row_indexes.len(), 2);
-      delete_row_indexes[0] == 1u32 && delete_row_indexes[1] == 3u32
+      if delete_row_indexes.len() != 2 {
+        return false;
+      } else {
+        assert_eq!(delete_row_indexes.len(), 2);
+        delete_row_indexes[0] == 1u32 && delete_row_indexes[1] == 3u32
+      }
+    },
+    _ => false,
+  })
+  .await
+  .unwrap();
+}
+
+#[tokio::test]
+async fn observe_move_row_test() {
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let mut database_test = create_database(1, &database_id);
+  let view_change_rx = database_test.subscribe_view_change();
+
+  let row_id_1 = gen_row_id();
+  let row_id_2 = gen_row_id();
+  let row_id_3 = gen_row_id();
+  let row_id_4 = gen_row_id();
+  database_test
+    .create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
+    .await
+    .unwrap();
+  database_test
+    .create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
+    .await
+    .unwrap();
+  database_test
+    .create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
+    .await
+    .unwrap();
+  database_test
+    .create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
+    .await
+    .unwrap();
+
+  let database_test = Arc::new(Mutex::from(database_test));
+  let cloned_database_test = database_test.clone();
+  let cloned_row_id_1 = row_id_1.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(500)).await;
+    let mut db = cloned_database_test.lock().await;
+    // [row_id_1, row_id_2, row_id_3, row_id_4]
+    db.move_row(&cloned_row_id_1, &row_id_3).await;
+  });
+
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidUpdateRowOrders {
+      insert_row_orders,
+      delete_row_indexes,
+      ..
+    } => {
+      if delete_row_indexes.len() == 1 {
+        // [row_id_1, row_id_2, row_id_3, row_id_1, row_id_4]
+        assert_eq!(delete_row_indexes[0], 0);
+        assert_eq!(insert_row_orders[0].0.id, row_id_1);
+        assert_eq!(insert_row_orders[0].1, 3);
+        true
+      } else {
+        return false;
+      }
+    },
+    _ => false,
+  })
+  .await
+  .unwrap();
+
+  let cloned_row_id_1 = row_id_1.clone();
+  let cloned_row_id_2 = row_id_2.clone();
+  let cloned_database_test = database_test.clone();
+  let view_change_rx = database_test.lock().await.subscribe_view_change();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(500)).await;
+    let mut db = cloned_database_test.lock().await;
+    // [row_id_2, row_id_3, row_id_1, row_id_4]
+    db.move_row(&cloned_row_id_1, &cloned_row_id_2).await;
+  });
+
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidUpdateRowOrders {
+      insert_row_orders,
+      delete_row_indexes,
+      ..
+    } => {
+      if delete_row_indexes.len() == 1 {
+        // [row_id_1, row_id_2, row_id_3, row_id_1, row_id_4]
+        assert_eq!(delete_row_indexes[0], 3);
+        assert_eq!(insert_row_orders[0].0.id, row_id_1);
+        assert_eq!(insert_row_orders[0].1, 0);
+        true
+      } else {
+        return false;
+      }
     },
     _ => false,
   })

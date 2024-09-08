@@ -220,7 +220,7 @@ fn handle_array_event(
       }
     });
 
-    if insert_row_orders.len() > 0 || delete_row_indexes.len() > 0 {
+    if !insert_row_orders.is_empty() || !delete_row_indexes.is_empty() {
       let _ = change_tx.send(DatabaseViewChange::DidUpdateRowOrders {
         database_view_id,
         is_local_change,
