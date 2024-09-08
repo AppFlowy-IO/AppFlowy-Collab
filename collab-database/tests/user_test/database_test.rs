@@ -333,7 +333,7 @@ async fn reopen_database_test() {
   for (index, row_order) in row_orders.into_iter().enumerate() {
     let cover = RowCover {
       url: format!("cover-{}", index),
-      upload_type: FileUploadType::Local,
+      upload_type: FileUploadType::LocalFile,
     };
 
     database
