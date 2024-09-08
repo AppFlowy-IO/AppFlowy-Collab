@@ -54,7 +54,7 @@ async fn observer_delete_consecutive_rows_test() {
       delete_row_indexes, ..
     } => {
       if delete_row_indexes.len() != 2 {
-        return false;
+        false
       } else {
         assert_eq!(delete_row_indexes.len(), 2);
         delete_row_indexes[0] == 1u32 && delete_row_indexes[1] == 2u32
@@ -108,7 +108,7 @@ async fn observer_delete_non_consecutive_rows_test() {
       delete_row_indexes, ..
     } => {
       if delete_row_indexes.len() != 2 {
-        return false;
+        false
       } else {
         assert_eq!(delete_row_indexes.len(), 2);
         delete_row_indexes[0] == 1u32 && delete_row_indexes[1] == 3u32
@@ -165,12 +165,14 @@ async fn observe_move_row_test() {
     } => {
       if delete_row_indexes.len() == 1 {
         // [row_id_1, row_id_2, row_id_3, row_id_1, row_id_4]
+        // after apply delete_row_indexs and insert_row_orders, then the array will be
+        // [row_id_2, row_id_2, row_id_1, row_id_4]
         assert_eq!(delete_row_indexes[0], 0);
         assert_eq!(insert_row_orders[0].0.id, row_id_1);
         assert_eq!(insert_row_orders[0].1, 3);
         true
       } else {
-        return false;
+        false
       }
     },
     _ => false,
@@ -197,12 +199,14 @@ async fn observe_move_row_test() {
     } => {
       if delete_row_indexes.len() == 1 {
         // [row_id_1, row_id_2, row_id_3, row_id_1, row_id_4]
+        // after apply delete_row_indexs and insert_row_orders, then the array will be
+        // [row_id_1, row_id_2, row_id_3, row_id_4]
         assert_eq!(delete_row_indexes[0], 3);
         assert_eq!(insert_row_orders[0].0.id, row_id_1);
         assert_eq!(insert_row_orders[0].1, 0);
         true
       } else {
-        return false;
+        false
       }
     },
     _ => false,
