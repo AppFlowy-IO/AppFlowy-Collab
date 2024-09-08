@@ -432,7 +432,7 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
       let mut new_row_meta = RowMeta::empty();
       if let Some(old_row_meta) = old_row_meta {
         new_row_meta.icon_url = old_row_meta.icon_url;
-        new_row_meta.cover_url = old_row_meta.cover_url;
+        new_row_meta.cover = old_row_meta.cover;
       }
       new_row_meta.fill_map_ref(self.txn, &new_row_id, &self.meta_ref);
     }
