@@ -32,6 +32,7 @@ use crate::template::util::{
 
 use async_trait::async_trait;
 use collab::core::origin::CollabOrigin;
+use collab::entity::EncodedCollab;
 use collab::lock::RwLock;
 use collab::preclude::{
   Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
@@ -65,17 +66,29 @@ const VIEWS: &str = "views";
 pub struct DatabaseContext {
   pub collab_service: Arc<dyn DatabaseCollabService>,
   pub notifier: DatabaseNotify,
-  pub is_new: bool,
 }
 
 impl DatabaseContext {
-  pub fn new(collab_service: Arc<dyn DatabaseCollabService>, is_new: bool) -> Self {
+  pub fn new(collab_service: Arc<dyn DatabaseCollabService>) -> Self {
     Self {
       collab_service,
       notifier: DatabaseNotify::default(),
-      is_new,
     }
   }
+}
+
+pub fn default_database_data(
+  database_id: &str,
+  collab_service: Arc<dyn DatabaseCollabService>,
+) -> Result<EncodedCollab, DatabaseError> {
+  let context = DatabaseContext::new(collab_service);
+  let collab = Collab::new_with_origin(CollabOrigin::Empty, database_id, vec![], false);
+  let (_, collab) = DatabaseBody::create(collab, database_id.to_string(), context)?;
+  Ok(
+    collab
+      .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
+      .unwrap(),
+  )
 }
 
 impl Database {
@@ -87,7 +100,7 @@ impl Database {
 
     let collab = context
       .collab_service
-      .build_collab(database_id, CollabType::Database, context.is_new)
+      .build_collab(database_id, CollabType::Database, None)
       .await?;
     let collab_service = context.collab_service.clone();
     let (body, collab) = DatabaseBody::open(collab, database_id.to_string(), context)?;
@@ -103,9 +116,10 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
+    let encoded_collab = default_database_data(database_id, context.collab_service.clone())?;
     let collab = context
       .collab_service
-      .build_collab(database_id, CollabType::Database, context.is_new)
+      .build_collab(database_id, CollabType::Database, Some(encoded_collab))
       .await?;
 
     let collab_service = context.collab_service.clone();
@@ -134,7 +148,6 @@ impl Database {
     let context = DatabaseContext {
       collab_service: Arc::new(TemplateDatabaseCollabServiceImpl),
       notifier: Default::default(),
-      is_new: true,
     };
     Self::create_with_view(params, context).await
   }
@@ -1562,7 +1575,7 @@ impl DatabaseBody {
         &self,
         object_id: &str,
         _object_type: CollabType,
-        _is_new: bool,
+        _encoded_collab: Option<EncodedCollab>,
       ) -> Result<Collab, DatabaseError> {
         Ok(Collab::new_with_origin(
           CollabOrigin::Empty,

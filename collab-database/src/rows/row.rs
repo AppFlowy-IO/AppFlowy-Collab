@@ -17,15 +17,15 @@ use crate::rows::{
   subscribe_row_data_change, Cell, Cells, CellsUpdate, RowChangeSender, RowId, RowMeta,
   RowMetaUpdate,
 };
-use collab::entity::EncodedCollab;
-use serde::{Deserialize, Serialize};
-use tracing::{error, trace};
-use uuid::Uuid;
-
 use crate::util::encoded_collab;
 use crate::views::{OrderObjectPosition, RowOrder};
 use crate::workspace_database::DatabaseCollabService;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
+use collab::core::origin::CollabOrigin;
+use collab::entity::EncodedCollab;
+use serde::{Deserialize, Serialize};
+use tracing::{error, trace};
+use uuid::Uuid;
 
 pub type BlockId = i64;
 
@@ -38,6 +38,14 @@ pub struct DatabaseRow {
   pub collab: Collab,
   pub body: DatabaseRowBody,
   collab_service: Arc<dyn DatabaseCollabService>,
+}
+
+pub fn default_database_row_data(row_id: &RowId, row: Row) -> EncodedCollab {
+  let mut collab = Collab::new_with_origin(CollabOrigin::Empty, row_id, vec![], false);
+  let _ = DatabaseRowBody::create(row_id.clone(), &mut collab, row);
+  collab
+    .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
+    .unwrap()
 }
 
 impl Drop for DatabaseRow {

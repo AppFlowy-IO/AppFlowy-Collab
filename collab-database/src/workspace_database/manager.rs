@@ -33,7 +33,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     &self,
     object_id: &str,
     object_type: CollabType,
-    is_new: bool,
+    encoded_collab: Option<EncodedCollab>,
   ) -> Result<Collab, DatabaseError>;
 
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>>;
@@ -158,7 +158,7 @@ impl WorkspaceDatabase {
           .persistence()?
           .is_collab_exist(database_id);
 
-        let context = DatabaseContext::new(self.collab_service.clone(), false);
+        let context = DatabaseContext::new(self.collab_service.clone());
         let database = Database::open(database_id, context).await.ok()?;
         // The database is not exist in local disk, which means the rows of the database are not
         // loaded yet.
@@ -203,7 +203,7 @@ impl WorkspaceDatabase {
   ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
     debug_assert!(!params.database_id.is_empty());
 
-    let context = DatabaseContext::new(self.collab_service.clone(), true);
+    let context = DatabaseContext::new(self.collab_service.clone());
 
     // Add a new database record.
     let mut linked_views = HashSet::new();
