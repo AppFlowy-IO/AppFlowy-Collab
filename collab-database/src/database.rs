@@ -1534,7 +1534,22 @@ impl DatabaseBody {
   pub fn get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> String {
     // It's safe to unwrap because each database inline view id was set
     // when initializing the database
-    self.metas.get_inline_view_id(txn).unwrap()
+    let mut inline_view_id = self.metas.get_inline_view_id(txn);
+    if inline_view_id.is_none() {
+      error!("Inline view id is not found in the database");
+      let view_metas = self.views.get_all_views_meta(txn);
+      inline_view_id = view_metas.first().map(|view| view.id.clone());
+      if view_metas.is_empty() {
+        error!("Can't find any database views when inline view id is empty");
+      } else {
+        info!(
+          "Can't find default inline view id, using {} as inline view id",
+          inline_view_id.as_ref().unwrap()
+        );
+      }
+    }
+
+    inline_view_id.unwrap()
   }
 
   /// Return the index of the field in the given view.
