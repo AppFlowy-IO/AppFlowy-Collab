@@ -13,6 +13,7 @@ use crate::entity::{CreateDatabaseParams, CreateViewParams, CreateViewParamsVali
 use crate::rows::RowId;
 use anyhow::anyhow;
 use collab::core::collab_plugin::CollabPersistence;
+use collab::core::origin::CollabOrigin;
 use collab::error::CollabError;
 use collab::lock::RwLock;
 use dashmap::DashMap;
@@ -37,6 +38,38 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
   ) -> Result<Collab, DatabaseError>;
 
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>>;
+}
+
+pub struct NoPersistenceDatabaseCollabService;
+#[async_trait]
+impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
+  async fn build_collab(
+    &self,
+    object_id: &str,
+    _object_type: CollabType,
+    encoded_collab: Option<EncodedCollab>,
+  ) -> Result<Collab, DatabaseError> {
+    match encoded_collab {
+      None => Ok(Collab::new_with_origin(
+        CollabOrigin::Empty,
+        object_id,
+        vec![],
+        false,
+      )),
+      Some(encode_collab) => Collab::new_with_source(
+        CollabOrigin::Empty,
+        object_id,
+        encode_collab.into(),
+        vec![],
+        false,
+      )
+      .map_err(|err| DatabaseError::Internal(err.into())),
+    }
+  }
+
+  fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
+    None
+  }
 }
 
 pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {

@@ -19,7 +19,7 @@ use crate::views::{
   FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
   OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver,
 };
-use crate::workspace_database::{DatabaseCollabPersistenceService, DatabaseCollabService};
+use crate::workspace_database::{DatabaseCollabService, NoPersistenceDatabaseCollabService};
 
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
@@ -30,7 +30,6 @@ use crate::template::util::{
   create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
 };
 
-use async_trait::async_trait;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::lock::RwLock;
@@ -77,11 +76,8 @@ impl DatabaseContext {
   }
 }
 
-pub fn default_database_data(
-  database_id: &str,
-  collab_service: Arc<dyn DatabaseCollabService>,
-) -> Result<EncodedCollab, DatabaseError> {
-  let context = DatabaseContext::new(collab_service);
+pub fn default_database_data(database_id: &str) -> Result<EncodedCollab, DatabaseError> {
+  let context = DatabaseContext::new(Arc::new(NoPersistenceDatabaseCollabService));
   let collab = Collab::new_with_origin(CollabOrigin::Empty, database_id, vec![], false);
   let (_, collab) = DatabaseBody::create(collab, database_id.to_string(), context)?;
   Ok(
@@ -116,7 +112,7 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
-    let encoded_collab = default_database_data(database_id, context.collab_service.clone())?;
+    let encoded_collab = default_database_data(database_id)?;
     let collab = context
       .collab_service
       .build_collab(database_id, CollabType::Database, Some(encoded_collab))
@@ -1567,29 +1563,6 @@ impl DatabaseBody {
   ///
   /// There is no [DatabaseNotify] or persistence layer in [DatabaseBody] created by this method.
   pub fn from_collab(collab: &Collab) -> Option<Self> {
-    /// DatabaseCollabServiceImpl will be removed
-    struct DatabaseCollabServiceImpl;
-    #[async_trait]
-    impl DatabaseCollabService for DatabaseCollabServiceImpl {
-      async fn build_collab(
-        &self,
-        object_id: &str,
-        _object_type: CollabType,
-        _encoded_collab: Option<EncodedCollab>,
-      ) -> Result<Collab, DatabaseError> {
-        Ok(Collab::new_with_origin(
-          CollabOrigin::Empty,
-          object_id,
-          vec![],
-          false,
-        ))
-      }
-
-      fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
-        None
-      }
-    }
-
     let txn = collab.context.transact();
     let root: MapRef = collab.data.get_with_txn(&txn, DATABASE)?;
     let database_id = root.get_with_txn(&txn, DATABASE_ID)?;
@@ -1600,7 +1573,11 @@ impl DatabaseBody {
     let fields = FieldMap::new(fields, None);
     let views = DatabaseViews::new(CollabOrigin::Empty, views, None);
     let metas = MetaMap::new(metas);
-    let block = Block::new(database_id, Arc::new(DatabaseCollabServiceImpl), None);
+    let block = Block::new(
+      database_id,
+      Arc::new(NoPersistenceDatabaseCollabService),
+      None,
+    );
     Some(Self {
       root,
       views: views.into(),
