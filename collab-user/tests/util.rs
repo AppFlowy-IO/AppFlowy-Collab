@@ -54,7 +54,7 @@ impl UserAwarenessTest {
     let notifier = UserAwarenessNotifier {
       reminder_change_tx: reminder_change_tx.clone(),
     };
-    let user_awareness = UserAwareness::open(collab, Some(notifier));
+    let user_awareness = UserAwareness::create(collab, Some(notifier)).unwrap();
     Self {
       user_awareness,
       reminder_change_tx,

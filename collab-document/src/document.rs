@@ -345,7 +345,10 @@ impl DocumentBody {
   /// not present in the current [Collab] instance, they will be initialized.
   ///
   /// If [DocumentData] was provided it will be applied on the document.
-  pub fn new(collab: &mut Collab, data: Option<DocumentData>) -> Result<Self, DocumentError> {
+  pub(crate) fn new(
+    collab: &mut Collab,
+    data: Option<DocumentData>,
+  ) -> Result<Self, DocumentError> {
     let mut txn = collab.context.transact_mut();
     // { document: {:} }
     let root = collab.data.get_or_init_map(&mut txn, DOCUMENT_ROOT);

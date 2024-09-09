@@ -65,18 +65,23 @@ impl Block {
     let mut row_on_disk_details = vec![];
     for row_id in row_ids.into_iter() {
       let collab = self.create_collab_for_row(&row_id, false).await?;
-      let row_collab = DatabaseRow::new(
+      match DatabaseRow::open(
         row_id.clone(),
         collab,
         self.row_change_tx.clone(),
-        None,
         self.collab_service.clone(),
-      );
-      if let Some(row_detail) = RowDetail::from_collab(&row_collab) {
-        self
-          .row_mem_cache
-          .insert(row_id.clone(), Arc::new(RwLock::from(row_collab)));
-        row_on_disk_details.push(row_detail);
+      ) {
+        Ok(row_collab) => {
+          if let Some(row_detail) = RowDetail::from_collab(&row_collab) {
+            self
+              .row_mem_cache
+              .insert(row_id.clone(), Arc::new(RwLock::from(row_collab)));
+            row_on_disk_details.push(row_detail);
+          }
+        },
+        Err(err) => {
+          error!("fail to load row: {:?}", err);
+        },
       }
     }
 
@@ -116,11 +121,11 @@ impl Block {
     }
 
     let collab = self.create_collab_for_row(&row_id, true).await?;
-    let database_row = DatabaseRow::new(
+    let database_row = DatabaseRow::create(
       row_id.clone(),
       collab,
       self.row_change_tx.clone(),
-      Some(row),
+      row,
       self.collab_service.clone(),
     );
 
@@ -247,13 +252,12 @@ impl Block {
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
     trace!("init row instance: {}", row_id);
     let collab = self.create_collab_for_row(&row_id, false).await?;
-    let database_row = DatabaseRow::new(
+    let database_row = DatabaseRow::open(
       row_id.clone(),
       collab,
       self.row_change_tx.clone(),
-      None,
       self.collab_service.clone(),
-    );
+    )?;
     let row_details = RowDetail::from_collab(&database_row);
     let database_row = Arc::new(RwLock::from(database_row));
     self.row_mem_cache.insert(row_id, database_row.clone());

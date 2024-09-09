@@ -88,9 +88,27 @@ impl Database {
       .collab_service
       .build_collab(database_id, CollabType::Database, context.is_new)
       .await?;
+    let collab_service = context.collab_service.clone();
+    let (body, collab) = DatabaseBody::open(collab, database_id.to_string(), context)?;
+    Ok(Self {
+      collab,
+      body,
+      collab_service,
+    })
+  }
+
+  pub async fn create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
+    if database_id.is_empty() {
+      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
+    }
+
+    let collab = context
+      .collab_service
+      .build_collab(database_id, CollabType::Database, context.is_new)
+      .await?;
 
     let collab_service = context.collab_service.clone();
-    let (body, collab) = DatabaseBody::new(collab, database_id.to_string(), context);
+    let (body, collab) = DatabaseBody::create(collab, database_id.to_string(), context)?;
     Ok(Self {
       collab,
       body,
@@ -128,7 +146,7 @@ impl Database {
     context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
     // Get or create empty database with the given database_id
-    let mut database = Self::open(&params.database_id, context).await?;
+    let mut database = Self::create(&params.database_id, context).await?;
     database.create_view(params).await?;
     tokio::task::spawn_blocking(move || {
       database.write_to_disk()?;
@@ -1485,7 +1503,20 @@ pub struct DatabaseBody {
 }
 
 impl DatabaseBody {
-  fn new(mut collab: Collab, database_id: String, context: DatabaseContext) -> (Self, Collab) {
+  fn open(
+    collab: Collab,
+    database_id: String,
+    context: DatabaseContext,
+  ) -> Result<(Self, Collab), DatabaseError> {
+    CollabType::Database.validate_require_data(&collab)?;
+    Self::create(collab, database_id, context)
+  }
+
+  fn create(
+    mut collab: Collab,
+    database_id: String,
+    context: DatabaseContext,
+  ) -> Result<(Self, Collab), DatabaseError> {
     let origin = collab.origin().clone();
     let mut txn = collab.context.transact_mut();
     let root: MapRef = collab.data.get_or_init(&mut txn, DATABASE);
@@ -1511,7 +1542,7 @@ impl DatabaseBody {
       block,
       notifier: Some(context.notifier),
     };
-    (body, collab)
+    Ok((body, collab))
   }
 
   /// Creates a [DatabaseBody] body from the given [Collab] instance. If the required fields are not
