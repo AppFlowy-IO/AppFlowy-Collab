@@ -152,7 +152,7 @@ impl WorkspaceDatabase {
     collab_service: impl DatabaseCollabService,
   ) -> Self {
     let collab_service = Arc::new(collab_service);
-    let body = WorkspaceDatabaseBody::new(&mut collab);
+    let body = WorkspaceDatabaseBody::open(&mut collab);
 
     Self {
       object_id: object_id.to_string(),

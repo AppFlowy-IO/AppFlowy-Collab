@@ -1,20 +1,36 @@
-use std::collections::HashSet;
-
+use collab::core::origin::CollabOrigin;
+use collab::entity::EncodedCollab;
 use collab::preclude::{
   Array, ArrayPrelim, ArrayRef, Collab, Map, MapExt, MapPrelim, MapRef, ReadTxn, TransactionMut,
   YrsValue,
 };
 use collab_entity::define::WORKSPACE_DATABASES;
+use std::collections::HashSet;
 
 use crate::database::timestamp;
+use crate::error::DatabaseError;
 
 /// Used to store list of [DatabaseMeta].
 pub struct WorkspaceDatabaseBody {
   array_ref: ArrayRef,
 }
 
+pub fn default_workspace_database_data(object_id: &str) -> EncodedCollab {
+  let mut collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false);
+  let _ = WorkspaceDatabaseBody::create(&mut collab);
+  collab
+    .encode_collab_v1(|collab| Ok::<_, DatabaseError>(()))
+    .unwrap()
+}
+
 impl WorkspaceDatabaseBody {
-  pub fn new(collab: &mut Collab) -> Self {
+  pub fn open(collab: &mut Collab) -> Self {
+    let mut txn = collab.context.transact_mut();
+    let array_ref = collab.data.get_or_init(&mut txn, WORKSPACE_DATABASES);
+    Self { array_ref }
+  }
+
+  pub fn create(collab: &mut Collab) -> Self {
     let mut txn = collab.context.transact_mut();
     let array_ref = collab.data.get_or_init(&mut txn, WORKSPACE_DATABASES);
     Self { array_ref }
