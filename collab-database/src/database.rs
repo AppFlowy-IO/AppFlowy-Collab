@@ -1237,9 +1237,7 @@ impl Database {
   /// The inline view is the view that create with the database when initializing
   pub fn get_inline_view_id(&self) -> String {
     let txn = self.collab.transact();
-    // It's safe to unwrap because each database inline view id was set
-    // when initializing the database
-    self.body.metas.get_inline_view_id(&txn).unwrap()
+    self.body.get_inline_view_id(&txn)
   }
 
   /// Delete a view from the database. If the view is the inline view it will clear all
