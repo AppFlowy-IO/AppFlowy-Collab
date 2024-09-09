@@ -91,7 +91,7 @@ pub fn create_row(uid: i64, row_id: RowId) -> DatabaseRow {
   DatabaseRow::new(
     row_id.clone(),
     collab,
-    row_change_tx,
+    Some(row_change_tx),
     Some(Row::new(row_id, "1")),
     collab_builder,
   )

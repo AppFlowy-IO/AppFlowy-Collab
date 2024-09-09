@@ -37,14 +37,14 @@ pub struct Block {
   // sequence: Arc<AtomicU32>,
   pub row_mem_cache: Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>,
   pub notifier: Arc<Sender<BlockEvent>>,
-  row_change_tx: RowChangeSender,
+  row_change_tx: Option<RowChangeSender>,
 }
 
 impl Block {
   pub fn new(
     database_id: String,
     collab_service: Arc<dyn DatabaseCollabService>,
-    row_change_tx: RowChangeSender,
+    row_change_tx: Option<RowChangeSender>,
   ) -> Block {
     let (notifier, _) = broadcast::channel(1000);
     Self {

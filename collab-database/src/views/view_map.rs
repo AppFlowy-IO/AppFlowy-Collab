@@ -38,7 +38,7 @@ use super::{calculations_from_map_ref, view_id_from_map_ref};
 pub struct DatabaseViews {
   container: MapRef,
   #[allow(dead_code)]
-  view_map_subscription: Subscription,
+  view_map_subscription: Option<Subscription>,
 }
 
 impl Deref for DatabaseViews {
@@ -53,10 +53,10 @@ impl DatabaseViews {
   pub fn new(
     origin: CollabOrigin,
     container: MapRef,
-    view_change_sender: ViewChangeSender,
+    view_change_sender: Option<ViewChangeSender>,
   ) -> Self {
-    let view_map_subscription =
-      subscribe_view_map_change(origin, &container, view_change_sender.clone());
+    let view_map_subscription = view_change_sender
+      .map(|sender| subscribe_view_map_change(origin, &container, sender.clone()));
     Self {
       container,
       view_map_subscription,

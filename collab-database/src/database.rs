@@ -247,16 +247,28 @@ impl Database {
     Ok(())
   }
 
-  pub fn subscribe_row_change(&self) -> RowChangeReceiver {
-    self.body.notifier.row_change_tx.subscribe()
+  pub fn subscribe_row_change(&self) -> Option<RowChangeReceiver> {
+    self
+      .body
+      .notifier
+      .as_ref()
+      .map(|notifier| notifier.row_change_tx.subscribe())
   }
 
-  pub fn subscribe_field_change(&self) -> FieldChangeReceiver {
-    self.body.notifier.field_change_tx.subscribe()
+  pub fn subscribe_field_change(&self) -> Option<FieldChangeReceiver> {
+    self
+      .body
+      .notifier
+      .as_ref()
+      .map(|notifier| notifier.field_change_tx.subscribe())
   }
 
-  pub fn subscribe_view_change(&self) -> ViewChangeReceiver {
-    self.body.notifier.view_change_tx.subscribe()
+  pub fn subscribe_view_change(&self) -> Option<ViewChangeReceiver> {
+    self
+      .body
+      .notifier
+      .as_ref()
+      .map(|notifier| notifier.view_change_tx.subscribe())
   }
 
   pub fn subscribe_block_event(&self) -> tokio::sync::broadcast::Receiver<BlockEvent> {
@@ -1387,8 +1399,7 @@ pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
     .data
     .get_with_path(&txn, [DATABASE, DATABASE_METAS])?;
 
-  let view_change_tx = tokio::sync::broadcast::channel(1).0;
-  let views = DatabaseViews::new(CollabOrigin::Empty, views, view_change_tx);
+  let views = DatabaseViews::new(CollabOrigin::Empty, views, None);
   let meta = MetaMap::new(metas);
 
   let inline_view_id = meta.get_inline_view_id(&txn)?;
@@ -1425,8 +1436,7 @@ where
     .data
     .get_with_path::<_, _, MapRef>(&txn, [DATABASE, VIEWS])
   {
-    let view_change_tx = tokio::sync::broadcast::channel(1).0;
-    let views = DatabaseViews::new(origin, container, view_change_tx);
+    let views = DatabaseViews::new(origin, container, None);
     let mut reset_views = views.get_all_views(&txn);
 
     reset_views.iter_mut().for_each(f);
@@ -1459,8 +1469,7 @@ pub fn get_inline_view_id(collab: &Collab) -> Option<String> {
 pub fn get_database_views_meta(collab: &Collab) -> Vec<DatabaseViewMeta> {
   let txn = collab.context.transact();
   let views: Option<MapRef> = collab.data.get_with_path(&txn, [DATABASE, VIEWS]);
-  let view_change_tx = tokio::sync::broadcast::channel(1).0;
-  let views = DatabaseViews::new(CollabOrigin::Empty, views.unwrap(), view_change_tx);
+  let views = DatabaseViews::new(CollabOrigin::Empty, views.unwrap(), None);
   views.get_all_views_meta(&txn)
 }
 
@@ -1472,7 +1481,7 @@ pub struct DatabaseBody {
   /// It used to keep track of the blocks. Each block contains a list of [Row]s
   /// A database rows will be stored in multiple blocks.
   pub block: Block,
-  pub notifier: DatabaseNotify,
+  pub notifier: Option<DatabaseNotify>,
 }
 
 impl DatabaseBody {
@@ -1486,13 +1495,13 @@ impl DatabaseBody {
     let metas: MapRef = root.get_or_init(&mut txn, DATABASE_METAS); // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
     drop(txn);
 
-    let fields = FieldMap::new(fields, context.notifier.field_change_tx.clone());
-    let views = DatabaseViews::new(origin, views, context.notifier.view_change_tx.clone());
+    let fields = FieldMap::new(fields, Some(context.notifier.field_change_tx.clone()));
+    let views = DatabaseViews::new(origin, views, Some(context.notifier.view_change_tx.clone()));
     let metas = MetaMap::new(metas);
     let block = Block::new(
       database_id,
       context.collab_service.clone(),
-      context.notifier.row_change_tx.clone(),
+      Some(context.notifier.row_change_tx.clone()),
     );
     let body = DatabaseBody {
       root,
@@ -1500,7 +1509,7 @@ impl DatabaseBody {
       fields: fields.into(),
       metas: metas.into(),
       block,
-      notifier: context.notifier,
+      notifier: Some(context.notifier),
     };
     (body, collab)
   }
@@ -1538,22 +1547,17 @@ impl DatabaseBody {
     let views: MapRef = root.get_with_txn(&txn, VIEWS)?; // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
     let metas: MapRef = root.get_with_txn(&txn, DATABASE_METAS)?; // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
 
-    let notifier = DatabaseNotify::default();
-    let fields = FieldMap::new(fields, notifier.field_change_tx.clone());
-    let views = DatabaseViews::new(CollabOrigin::Empty, views, notifier.view_change_tx.clone());
+    let fields = FieldMap::new(fields, None);
+    let views = DatabaseViews::new(CollabOrigin::Empty, views, None);
     let metas = MetaMap::new(metas);
-    let block = Block::new(
-      database_id,
-      Arc::new(DatabaseCollabServiceImpl),
-      notifier.row_change_tx.clone(),
-    );
+    let block = Block::new(database_id, Arc::new(DatabaseCollabServiceImpl), None);
     Some(Self {
       root,
       views: views.into(),
       fields: fields.into(),
       metas: metas.into(),
       block,
-      notifier,
+      notifier: None,
     })
   }
 

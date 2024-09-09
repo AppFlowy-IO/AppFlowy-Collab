@@ -51,12 +51,14 @@ impl DatabaseRow {
   pub fn new(
     row_id: RowId,
     mut collab: Collab,
-    change_tx: RowChangeSender,
+    change_tx: Option<RowChangeSender>,
     row: Option<Row>,
     collab_service: Arc<dyn DatabaseCollabService>,
   ) -> Self {
     let body = DatabaseRowBody::new(row_id.clone(), &mut collab, row);
-    subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
+    if let Some(change_tx) = change_tx {
+      subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
+    }
     Self {
       collab,
       body,
