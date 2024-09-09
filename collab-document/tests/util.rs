@@ -43,13 +43,11 @@ impl DocumentTest {
       db: Arc::downgrade(&db),
       uid,
     };
-    let mut collab = CollabBuilder::new(uid, doc_id, data_source.into())
+    let collab = CollabBuilder::new(uid, doc_id, data_source.into())
       .with_device_id("1")
       .with_plugin(disk_plugin)
       .build()
       .unwrap();
-
-    collab.initialize();
 
     let mut blocks = HashMap::new();
     let mut children_map = HashMap::new();
@@ -100,7 +98,8 @@ impl DocumentTest {
       blocks,
       meta,
     };
-    let document = Document::create_with_data(collab, document_data).unwrap();
+    let mut document = Document::create_with_data(collab, document_data).unwrap();
+    document.initialize();
     Self { document, db }
   }
 }

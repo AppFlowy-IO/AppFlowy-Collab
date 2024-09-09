@@ -19,7 +19,7 @@ use crate::views::{
   FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
   OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver,
 };
-use crate::workspace_database::DatabaseCollabService;
+use crate::workspace_database::{DatabaseCollabPersistenceService, DatabaseCollabService};
 
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
@@ -29,6 +29,7 @@ use crate::template::entity::DatabaseTemplate;
 use crate::template::util::{
   create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
 };
+use async_trait::async_trait;
 use collab::core::origin::CollabOrigin;
 use collab::lock::RwLock;
 use collab::preclude::{
@@ -36,7 +37,7 @@ use collab::preclude::{
   TransactionMut, YrsValue,
 };
 use collab::util::{AnyExt, ArrayExt};
-use collab_entity::define::{DATABASE, DATABASE_ID};
+use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
 use collab_entity::CollabType;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
@@ -59,7 +60,6 @@ impl Drop for Database {
 
 const FIELDS: &str = "fields";
 const VIEWS: &str = "views";
-const METAS: &str = "metas";
 
 pub struct DatabaseContext {
   pub collab_service: Arc<dyn DatabaseCollabService>,
@@ -129,7 +129,7 @@ impl Database {
   ) -> Result<Self, DatabaseError> {
     // Get or create empty database with the given database_id
     let mut database = Self::open(&params.database_id, context).await?;
-    database.init(params).await?;
+    database.create_view(params).await?;
     tokio::task::spawn_blocking(move || {
       database.write_to_disk()?;
       Ok::<_, DatabaseError>(database)
@@ -189,7 +189,7 @@ impl Database {
     Ok(())
   }
 
-  async fn init(&mut self, params: CreateDatabaseParams) -> Result<(), DatabaseError> {
+  async fn create_view(&mut self, params: CreateDatabaseParams) -> Result<(), DatabaseError> {
     let CreateDatabaseParams {
       database_id: _,
       rows,
@@ -210,7 +210,7 @@ impl Database {
     let mut txn = self.collab.context.transact_mut();
     // Set the inline view id. The inline view id should not be
     // empty if the current database exists.
-    tracing::trace!("Set inline view id: {}", inline_view_id);
+    info!("Set inline view id: {}", inline_view_id);
     self
       .body
       .metas
@@ -1238,9 +1238,7 @@ impl Database {
   /// The inline view is the view that create with the database when initializing
   pub fn get_inline_view_id(&self) -> String {
     let txn = self.collab.transact();
-    // It's safe to unwrap because each database inline view id was set
-    // when initializing the database
-    self.body.metas.get_inline_view_id(&txn).unwrap()
+    self.body.get_inline_view_id(&txn)
   }
 
   /// Delete a view from the database. If the view is the inline view it will clear all
@@ -1385,7 +1383,9 @@ impl DatabaseData {
 pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
   let txn = collab.context.transact();
   let views: MapRef = collab.data.get_with_path(&txn, [DATABASE, VIEWS])?;
-  let metas: MapRef = collab.data.get_with_path(&txn, [DATABASE, METAS])?;
+  let metas: MapRef = collab
+    .data
+    .get_with_path(&txn, [DATABASE, DATABASE_METAS])?;
 
   let view_change_tx = tokio::sync::broadcast::channel(1).0;
   let views = DatabaseViews::new(CollabOrigin::Empty, views, view_change_tx);
@@ -1406,7 +1406,7 @@ where
   F: FnOnce(String) -> String,
 {
   let mut txn = collab.context.transact_mut();
-  if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, METAS]) {
+  if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
     let map = MetaMap::new(container);
     let inline_view_id = map.get_inline_view_id(&txn).unwrap();
     let new_inline_view_id = f(inline_view_id);
@@ -1446,7 +1446,9 @@ pub fn is_database_collab(collab: &Collab) -> bool {
 /// and you need the inline view ID of a specific database.
 pub fn get_inline_view_id(collab: &Collab) -> Option<String> {
   let txn = collab.context.transact();
-  let metas: MapRef = collab.data.get_with_path(&txn, [DATABASE, METAS])?;
+  let metas: MapRef = collab
+    .data
+    .get_with_path(&txn, [DATABASE, DATABASE_METAS])?;
   let meta = MetaMap::new(metas);
   meta.get_inline_view_id(&txn)
 }
@@ -1481,7 +1483,7 @@ impl DatabaseBody {
     root.insert(&mut txn, DATABASE_ID, &*database_id);
     let fields: MapRef = root.get_or_init(&mut txn, FIELDS); // { DATABASE: { FIELDS: {:} } }
     let views: MapRef = root.get_or_init(&mut txn, VIEWS); // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
-    let metas: MapRef = root.get_or_init(&mut txn, METAS); // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
+    let metas: MapRef = root.get_or_init(&mut txn, DATABASE_METAS); // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
     drop(txn);
 
     let fields = FieldMap::new(fields, context.notifier.field_change_tx.clone());
@@ -1501,6 +1503,58 @@ impl DatabaseBody {
       notifier: context.notifier,
     };
     (body, collab)
+  }
+
+  /// Creates a [DatabaseBody] body from the given [Collab] instance. If the required fields are not
+  /// present, it will return `None`.
+  pub fn from_collab(collab: &Collab) -> Option<Self> {
+    /// DatabaseCollabServiceImpl will be removed
+    struct DatabaseCollabServiceImpl;
+    #[async_trait]
+    impl DatabaseCollabService for DatabaseCollabServiceImpl {
+      async fn build_collab(
+        &self,
+        object_id: &str,
+        _object_type: CollabType,
+        _is_new: bool,
+      ) -> Result<Collab, DatabaseError> {
+        Ok(Collab::new_with_origin(
+          CollabOrigin::Empty,
+          object_id,
+          vec![],
+          false,
+        ))
+      }
+
+      fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
+        None
+      }
+    }
+
+    let txn = collab.context.transact();
+    let root: MapRef = collab.data.get_with_txn(&txn, DATABASE)?;
+    let database_id = root.get_with_txn(&txn, DATABASE_ID)?;
+    let fields: MapRef = root.get_with_txn(&txn, FIELDS)?; // { DATABASE: { FIELDS: {:} } }
+    let views: MapRef = root.get_with_txn(&txn, VIEWS)?; // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
+    let metas: MapRef = root.get_with_txn(&txn, DATABASE_METAS)?; // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
+
+    let notifier = DatabaseNotify::default();
+    let fields = FieldMap::new(fields, notifier.field_change_tx.clone());
+    let views = DatabaseViews::new(CollabOrigin::Empty, views, notifier.view_change_tx.clone());
+    let metas = MetaMap::new(metas);
+    let block = Block::new(
+      database_id,
+      Arc::new(DatabaseCollabServiceImpl),
+      notifier.row_change_tx.clone(),
+    );
+    Some(Self {
+      root,
+      views: views.into(),
+      fields: fields.into(),
+      metas: metas.into(),
+      block,
+      notifier,
+    })
   }
 
   /// Return database id from the given [Collab] instance. If the required fields are not found,
@@ -1531,7 +1585,29 @@ impl DatabaseBody {
   pub fn get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> String {
     // It's safe to unwrap because each database inline view id was set
     // when initializing the database
-    self.metas.get_inline_view_id(txn).unwrap()
+    let mut inline_view_id = self.metas.get_inline_view_id(txn);
+    if inline_view_id.is_none() {
+      error!(
+        "Inline view id is not found in the database:{}",
+        self.get_database_id(txn)
+      );
+      let view_metas = self.views.get_all_views_meta(txn);
+      inline_view_id = view_metas.first().map(|view| view.id.clone());
+      if view_metas.is_empty() {
+        let root = self.root.to_json(txn);
+        error!(
+          "Can't find any database views when inline view id is empty. current root map:{}",
+          root
+        );
+      } else {
+        info!(
+          "Can't find default inline view id, using {} as inline view id",
+          inline_view_id.as_ref().unwrap()
+        );
+      }
+    }
+
+    inline_view_id.unwrap()
   }
 
   /// Return the index of the field in the given view.

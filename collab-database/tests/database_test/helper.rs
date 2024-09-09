@@ -8,7 +8,7 @@ use collab::core::collab::DataSource;
 use collab::preclude::{uuid_v4, CollabBuilder};
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
-use collab_database::rows::{Cells, CreateRowParams, DatabaseRow, RowId};
+use collab_database::rows::{Cells, CreateRowParams, DatabaseRow, Row, RowId};
 use collab_database::views::{
   DatabaseLayout, FieldSettingsByFieldIdMap, FieldSettingsMap, LayoutSetting, LayoutSettings,
   OrderObjectPosition,
@@ -88,7 +88,13 @@ pub fn create_row(uid: i64, row_id: RowId) -> DatabaseRow {
     uid,
     db: collab_db.clone(),
   });
-  DatabaseRow::new(row_id, collab, row_change_tx, None, collab_builder)
+  DatabaseRow::new(
+    row_id.clone(),
+    collab,
+    row_change_tx,
+    Some(Row::new(row_id, "1")),
+    collab_builder,
+  )
 }
 
 pub async fn create_database_with_db(

@@ -1,12 +1,12 @@
-use std::ops::Deref;
-use std::sync::atomic::Ordering::SeqCst;
-use std::sync::atomic::{AtomicBool, AtomicU32};
-use std::sync::{Arc, Weak};
-
 use crate::local_storage::kv::doc::CollabKVAction;
 use crate::local_storage::kv::KVTransactionDB;
 use crate::local_storage::CollabPersistenceConfig;
 use crate::CollabKVDB;
+
+use std::ops::Deref;
+use std::sync::atomic::Ordering::SeqCst;
+use std::sync::atomic::{AtomicBool, AtomicU32};
+use std::sync::{Arc, Weak};
 
 use collab::entity::EncodedCollab;
 use collab::preclude::{Collab, CollabPlugin};
@@ -88,13 +88,23 @@ impl CollabPlugin for RocksdbDiskPlugin {
     if let Some(collab_db) = self.collab_db.upgrade() {
       let rocksdb_read = collab_db.read_txn();
       if !rocksdb_read.is_exist(self.uid, object_id) {
-        let txn = collab.transact();
-        if let Err(err) = collab_db.with_write_txn(|w_db_txn| {
-          w_db_txn.create_new_doc(self.uid, &object_id, &txn)?;
-          tracing::trace!("Created new doc {}", object_id);
-          Ok(())
-        }) {
-          error!("create doc for {:?} failed: {}", object_id, err);
+        match self.collab_type.validate_require_data(collab) {
+          Ok(_) => {
+            let txn = collab.transact();
+            if let Err(err) = collab_db.with_write_txn(|w_db_txn| {
+              w_db_txn.create_new_doc(self.uid, &object_id, &txn)?;
+              tracing::trace!("[Rocksdb Plugin]: created new doc {}", object_id);
+              Ok(())
+            }) {
+              error!("[Rocksdb Plugin]: create doc:{} failed: {}", object_id, err);
+            }
+          },
+          Err(err) => {
+            error!(
+              "[Rocksdb Plugin]: validate collab:{}, collab_type:{}, failed: {}",
+              object_id, self.collab_type, err
+            );
+          },
         }
       }
     }
@@ -112,7 +122,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
         let _ = w_db_txn.push_update(self.uid, object_id, update)?;
         #[cfg(not(feature = "verbose_log"))]
         tracing::trace!(
-          "Collab {} {} persisting update",
+          "[Rocksdb Plugin]: Collab {} {} persisting update",
           object_id,
           self.collab_type
         );
@@ -121,7 +131,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
           use yrs::updates::decoder::Decode;
           let update = yrs::Update::decode_v1(update).unwrap();
           tracing::trace!(
-            "Collab {} {} persisting update: {:#?}",
+            "[Rocksdb Plugin]: Collab {} {} persisting update: {:#?}",
             object_id,
             self.collab_type,
             update
@@ -132,12 +142,12 @@ impl CollabPlugin for RocksdbDiskPlugin {
 
       if let Err(e) = result {
         error!(
-          "{}:{} save update failed: {:?}",
+          "[Rocksdb Plugin]: {}:{} save update failed: {:?}",
           object_id, self.collab_type, e
         );
       }
     } else {
-      tracing::warn!("collab_db is dropped");
+      tracing::warn!("[Rocksdb Plugin]: collab_db is dropped");
     };
   }
 }

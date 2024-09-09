@@ -46,7 +46,7 @@ async fn insert_single_change_and_restore_from_disk() {
 async fn flush_test() {
   let doc_id = "1".to_string();
   let test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
-  let disk_plugin = disk_plugin_with_db(test.uid, test.db.clone(), &doc_id, CollabType::Document);
+  let disk_plugin = disk_plugin_with_db(test.uid, test.db.clone(), &doc_id, CollabType::Unknown);
   let data_source = KVDBCollabPersistenceImpl {
     db: Arc::downgrade(&test.db),
     uid: 1,

@@ -51,7 +51,7 @@ pub type CellUpdate = MapRef;
 
 pub const CELL_FIELD_TYPE: &str = "field_type";
 pub fn get_field_type_from_cell<T: From<i64>>(cell: &Cell) -> Option<T> {
-  let field_type: i64 = cell.get_as("field_type")?;
+  let field_type: i64 = cell.get_as(CELL_FIELD_TYPE)?;
   Some(T::from(field_type))
 }
 
