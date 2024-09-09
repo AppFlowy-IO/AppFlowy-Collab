@@ -221,11 +221,11 @@ fn child_view_json_serde() {
 async fn deserialize_folder_data() {
   let json = include_str!("../folder_test/history_folder/folder_data.json");
   let folder_data: FolderData = serde_json::from_str(json).unwrap();
-  let folder = Arc::new(Folder::open_with(
+  let folder = Arc::new(Folder::create(
     1,
     Collab::new_with_origin(CollabOrigin::Empty, "1", vec![], true),
     None,
-    Some(folder_data),
+    folder_data,
   ));
 
   let mut handles = vec![];

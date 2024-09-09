@@ -72,7 +72,7 @@ pub fn create_folder_with_data(
     view_change_tx: view_tx,
     section_change_tx: section_tx,
   };
-  let folder = Folder::open_with(uid, collab, Some(context), Some(folder_data));
+  let folder = Folder::create(uid, collab, Some(context), folder_data);
   FolderTest {
     db,
     folder,

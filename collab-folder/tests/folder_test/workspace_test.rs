@@ -9,11 +9,11 @@ fn test_workspace_is_ready() {
 
   let workspace = Workspace::new("w1".to_string(), "".to_string(), uid.as_i64());
   let folder_data = FolderData::new(workspace);
-  let folder = Folder::open_with(
+  let folder = Folder::create(
     uid,
     Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], true),
     None,
-    Some(folder_data),
+    folder_data,
   );
 
   let workspace_id = check_folder_is_valid(&folder.collab).unwrap();

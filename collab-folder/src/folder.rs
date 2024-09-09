@@ -106,24 +106,13 @@ impl Folder {
     }
   }
 
-  pub fn close(&self) {
-    self.collab.clear_plugins();
-  }
-
-  pub fn validate(&self) -> Result<(), FolderError> {
-    CollabType::Folder
-      .validate_require_data(&self.collab)
-      .map_err(|err| FolderError::NoRequiredData(err.to_string()))?;
-    Ok(())
-  }
-
-  pub fn open_with<T: Into<UserId>>(
+  pub fn create<T: Into<UserId>>(
     uid: T,
     mut collab: Collab,
     notifier: Option<FolderNotify>,
-    initial_folder_data: Option<FolderData>,
+    data: FolderData,
   ) -> Self {
-    let body = FolderBody::open_with(uid.into(), &mut collab, notifier, initial_folder_data);
+    let body = FolderBody::open_with(uid.into(), &mut collab, notifier, Some(data));
     Folder { collab, body }
   }
 
@@ -136,6 +125,17 @@ impl Folder {
   ) -> Result<Self, FolderError> {
     let collab = Collab::new_with_source(origin, workspace_id, collab_doc_state, plugins, false)?;
     Self::open(uid, collab, None)
+  }
+
+  pub fn close(&self) {
+    self.collab.clear_plugins();
+  }
+
+  pub fn validate(&self) -> Result<(), FolderError> {
+    CollabType::Folder
+      .validate_require_data(&self.collab)
+      .map_err(|err| FolderError::NoRequiredData(err.to_string()))?;
+    Ok(())
   }
 
   pub fn uid(&self) -> &UserId {
@@ -456,52 +456,8 @@ impl FolderBody {
     uid: UserId,
     notifier: Option<FolderNotify>,
   ) -> Result<Self, FolderError> {
-    let index_json_sender = collab.index_json_sender.clone();
-    let mut txn = collab.context.transact_mut();
-
-    // create the folder
-    let mut folder: MapRef = collab.data.get_or_init_map(&mut txn, FOLDER);
-    let subscription = subscribe_folder_change(&mut folder);
-
-    // create the folder collab objects
-    let view_y_map: MapRef = folder.get_or_init_map(&mut txn, VIEWS);
-    // let trash = collab_guard.get_array_with_txn(&txn, vec![FOLDER, TRASH])?;
-    let section_y_map: MapRef = folder.get_or_init_map(&mut txn, SECTION);
-    let meta: MapRef = folder.get_or_init_map(&mut txn, FOLDER_META);
-    let children_map_y_map: MapRef = folder.get_or_init_map(&mut txn, VIEW_RELATION);
-
-    let view_relations = Arc::new(ViewRelations::new(children_map_y_map));
-    let section = Arc::new(SectionMap::create(
-      &mut txn,
-      &uid,
-      section_y_map,
-      notifier
-        .as_ref()
-        .map(|notifier| notifier.section_change_tx.clone()),
-    ));
-
-    let all_views = get_views_from_root(&view_y_map, &uid, &view_relations, &section, &txn);
-    let views = Arc::new(ViewsMap::new(
-      &uid,
-      view_y_map,
-      notifier
-        .as_ref()
-        .map(|notifier| notifier.view_change_tx.clone()),
-      view_relations,
-      section.clone(),
-      index_json_sender,
-      all_views,
-    ));
-
-    Ok(Self {
-      uid,
-      root: folder,
-      views,
-      section,
-      meta,
-      subscription,
-      notifier,
-    })
+    CollabType::Folder.validate_require_data(collab)?;
+    Ok(Self::open_with(uid, collab, notifier, None))
   }
 
   pub fn open_with(
@@ -532,6 +488,7 @@ impl FolderBody {
         .as_ref()
         .map(|notifier| notifier.section_change_tx.clone()),
     ));
+    let all_views = get_views_from_root(&views, &uid, &view_relations, &section, &txn);
     let views = Arc::new(ViewsMap::new(
       &uid,
       views,
@@ -541,7 +498,7 @@ impl FolderBody {
       view_relations,
       section.clone(),
       index_json_sender,
-      HashMap::new(),
+      all_views,
     ));
 
     if let Some(folder_data) = folder_data {
