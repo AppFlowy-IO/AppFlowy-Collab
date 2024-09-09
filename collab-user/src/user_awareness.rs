@@ -63,6 +63,14 @@ impl UserAwareness {
     Ok(Self::new(collab, body))
   }
 
+  pub fn create(
+    mut collab: Collab,
+    notifier: Option<UserAwarenessNotifier>,
+  ) -> Result<Self, Error> {
+    let body = UserAwarenessBody::new(&mut collab, notifier);
+    Ok(Self::new(collab, body))
+  }
+
   /// Tries to retrieve user awareness attributes from the given collaboration object.
   ///
   /// This private method attempts to access existing user awareness attributes, including
