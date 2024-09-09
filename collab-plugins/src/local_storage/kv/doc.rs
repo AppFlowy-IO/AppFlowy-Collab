@@ -1,8 +1,9 @@
-use std::fmt::Debug;
-
 use crate::local_storage::kv::keys::*;
 use crate::local_storage::kv::snapshot::SnapshotAction;
 use crate::local_storage::kv::*;
+use std::fmt::Debug;
+use tracing::{error, info, trace};
+
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut, Update};
@@ -23,18 +24,12 @@ where
       return Err(PersistenceError::DocumentAlreadyExist);
     }
     let doc_id = get_or_create_did(uid, self, object_id.as_ref())?;
-    tracing::trace!(
-      "[Client {}] => [{}:{:?}]: new doc:{}",
-      uid,
-      doc_id,
-      object_id,
-      doc_id
-    );
     let doc_state = txn.encode_diff_v1(&StateVector::default());
     let sv = txn.state_vector().encode_v1();
     let doc_state_key = make_doc_state_key(doc_id);
     let sv_key = make_state_vector_key(doc_id);
 
+    info!("new doc:{:?}, doc state len:{}", object_id, doc_state.len());
     self.insert(doc_state_key, doc_state)?;
     self.insert(sv_key, sv)?;
 
@@ -94,11 +89,15 @@ where
       let doc_state_key = make_doc_state_key(doc_id);
       if let Some(doc_state) = self.get(doc_state_key.as_ref())? {
         // Load the doc state
-        if let Err(e) = Update::decode_v1(doc_state.as_ref())
-          .map_err(PersistenceError::Yrs)
-          .and_then(|update| txn.try_apply_update(update))
-        {
-          tracing::error!("🔴{:?} apply doc state error: {}", object_id, e)
+
+        match Update::decode_v1(doc_state.as_ref()) {
+          Ok(update) => {
+            txn.try_apply_update(update)?;
+          },
+          Err(err) => {
+            error!("🔴{:?} decode doc state error: {}", object_id, err);
+            return Err(PersistenceError::Yrs(err));
+          },
         }
 
         // If the enable_snapshot is true, we will try to load the snapshot.
@@ -120,6 +119,12 @@ where
           }
           update_count += 1;
         }
+        trace!(
+          "Collab {:?} loaded. doc state len:{}, update count:{}",
+          object_id,
+          doc_state.as_ref().len(),
+          update_count
+        );
       } else {
         tracing::error!(
           "🔴collab => [{}-{:?}]: the doc state should not be empty",
@@ -127,8 +132,6 @@ where
           object_id
         );
       }
-
-      tracing::trace!("Collab {:?} loaded and {} updates", object_id, update_count);
 
       Ok(update_count)
     } else {
