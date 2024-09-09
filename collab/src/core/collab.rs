@@ -366,6 +366,14 @@ impl Collab {
     self.state.set_init_state(InitState::Initialized);
   }
 
+  pub fn save_to_disk(
+    &self,
+    persistence: &dyn CollabPersistence,
+    encoded_collab: EncodedCollab,
+  ) -> Result<(), CollabError> {
+    persistence.save_collab_to_disk(&self.object_id, encoded_collab)
+  }
+
   pub fn get_state(&self) -> &Arc<State> {
     &self.state
   }
@@ -576,6 +584,8 @@ pub struct CollabBuilder {
 /// The raw data of a collab document. It is a list of updates. Each of them can be parsed by
 /// [Update::decode_v1].
 pub enum DataSource {
+  /// when CollabPersistence is not provided, which means the data is not persisted to disk yet
+  /// otherwise, it is already persisted to disk.
   Disk(Option<Box<dyn CollabPersistence>>),
   DocStateV1(Vec<u8>),
   DocStateV2(Vec<u8>),

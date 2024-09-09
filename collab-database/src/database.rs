@@ -19,7 +19,7 @@ use crate::views::{
   FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
   OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver,
 };
-use crate::workspace_database::{DatabaseCollabPersistenceService, DatabaseCollabService};
+use crate::workspace_database::{DatabaseCollabService, NoPersistenceDatabaseCollabService};
 
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
@@ -29,8 +29,9 @@ use crate::template::entity::DatabaseTemplate;
 use crate::template::util::{
   create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
 };
-use async_trait::async_trait;
+
 use collab::core::origin::CollabOrigin;
+use collab::entity::EncodedCollab;
 use collab::lock::RwLock;
 use collab::preclude::{
   Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
@@ -64,17 +65,26 @@ const VIEWS: &str = "views";
 pub struct DatabaseContext {
   pub collab_service: Arc<dyn DatabaseCollabService>,
   pub notifier: DatabaseNotify,
-  pub is_new: bool,
 }
 
 impl DatabaseContext {
-  pub fn new(collab_service: Arc<dyn DatabaseCollabService>, is_new: bool) -> Self {
+  pub fn new(collab_service: Arc<dyn DatabaseCollabService>) -> Self {
     Self {
       collab_service,
       notifier: DatabaseNotify::default(),
-      is_new,
     }
   }
+}
+
+pub fn default_database_data(database_id: &str) -> Result<EncodedCollab, DatabaseError> {
+  let context = DatabaseContext::new(Arc::new(NoPersistenceDatabaseCollabService));
+  let collab = Collab::new_with_origin(CollabOrigin::Empty, database_id, vec![], false);
+  let (_, collab) = DatabaseBody::create(collab, database_id.to_string(), context)?;
+  Ok(
+    collab
+      .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
+      .unwrap(),
+  )
 }
 
 impl Database {
@@ -86,7 +96,7 @@ impl Database {
 
     let collab = context
       .collab_service
-      .build_collab(database_id, CollabType::Database, context.is_new)
+      .build_collab(database_id, CollabType::Database, None)
       .await?;
     let collab_service = context.collab_service.clone();
     let (body, collab) = DatabaseBody::open(collab, database_id.to_string(), context)?;
@@ -102,9 +112,10 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
+    let encoded_collab = default_database_data(database_id)?;
     let collab = context
       .collab_service
-      .build_collab(database_id, CollabType::Database, context.is_new)
+      .build_collab(database_id, CollabType::Database, Some(encoded_collab))
       .await?;
 
     let collab_service = context.collab_service.clone();
@@ -133,7 +144,6 @@ impl Database {
     let context = DatabaseContext {
       collab_service: Arc::new(TemplateDatabaseCollabServiceImpl),
       notifier: Default::default(),
-      is_new: true,
     };
     Self::create_with_view(params, context).await
   }
@@ -187,6 +197,7 @@ impl Database {
     })
   }
 
+  #[instrument(level = "info", skip_all, err)]
   pub fn write_to_disk(&self) -> Result<(), DatabaseError> {
     if let Some(persistence) = self.collab_service.persistence() {
       let database_encoded = encoded_collab(&self.collab, &CollabType::Database)?;
@@ -1504,11 +1515,13 @@ pub struct DatabaseBody {
 
 impl DatabaseBody {
   fn open(
-    collab: Collab,
+    mut collab: Collab,
     database_id: String,
     context: DatabaseContext,
   ) -> Result<(Self, Collab), DatabaseError> {
-    CollabType::Database.validate_require_data(&collab)?;
+    if let Err(_err) = CollabType::Database.validate_require_data(&collab) {
+      try_fixing_database_inline_view_id(&mut collab)?;
+    }
     Self::create(collab, database_id, context)
   }
 
@@ -1550,29 +1563,6 @@ impl DatabaseBody {
   ///
   /// There is no [DatabaseNotify] or persistence layer in [DatabaseBody] created by this method.
   pub fn from_collab(collab: &Collab) -> Option<Self> {
-    /// DatabaseCollabServiceImpl will be removed
-    struct DatabaseCollabServiceImpl;
-    #[async_trait]
-    impl DatabaseCollabService for DatabaseCollabServiceImpl {
-      async fn build_collab(
-        &self,
-        object_id: &str,
-        _object_type: CollabType,
-        _is_new: bool,
-      ) -> Result<Collab, DatabaseError> {
-        Ok(Collab::new_with_origin(
-          CollabOrigin::Empty,
-          object_id,
-          vec![],
-          false,
-        ))
-      }
-
-      fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
-        None
-      }
-    }
-
     let txn = collab.context.transact();
     let root: MapRef = collab.data.get_with_txn(&txn, DATABASE)?;
     let database_id = root.get_with_txn(&txn, DATABASE_ID)?;
@@ -1583,7 +1573,11 @@ impl DatabaseBody {
     let fields = FieldMap::new(fields, None);
     let views = DatabaseViews::new(CollabOrigin::Empty, views, None);
     let metas = MetaMap::new(metas);
-    let block = Block::new(database_id, Arc::new(DatabaseCollabServiceImpl), None);
+    let block = Block::new(
+      database_id,
+      Arc::new(NoPersistenceDatabaseCollabService),
+      None,
+    );
     Some(Self {
       root,
       views: views.into(),
@@ -1600,6 +1594,39 @@ impl DatabaseBody {
     let txn = collab.context.transact();
     let root = collab.data.get(&txn, DATABASE)?.cast::<MapRef>().ok()?;
     root.get(&txn, DATABASE_ID)?.cast::<String>().ok()
+  }
+
+  pub fn inline_view_id_from_collab(collab: &Collab) -> Option<String> {
+    let txn = collab.context.transact();
+    let root = collab.data.get(&txn, DATABASE)?.cast::<MapRef>().ok()?;
+    let database_id = root.get(&txn, DATABASE_ID)?.cast::<String>().ok()?;
+    let views_map: MapRef = root.get_with_txn(&txn, VIEWS)?;
+    let metas_map: MapRef = root.get_with_txn(&txn, DATABASE_METAS)?;
+    let metas = MetaMap::new(metas_map);
+    let views = DatabaseViews::new(CollabOrigin::Empty, views_map, None);
+
+    let mut inline_view_id = metas.get_inline_view_id(&txn);
+    if inline_view_id.is_none() {
+      error!(
+        "Inline view id is not found in the database:{}",
+        database_id,
+      );
+      let view_metas = views.get_all_views_meta(&txn);
+      inline_view_id = view_metas.first().map(|view| view.id.clone());
+      if view_metas.is_empty() {
+        error!(
+          "Can't find any database views when inline view id is empty. current root map:{}",
+          root.to_json(&txn)
+        );
+      } else {
+        info!(
+          "Can't find default inline view id, using {} as inline view id",
+          inline_view_id.as_ref().unwrap()
+        );
+      }
+    }
+
+    inline_view_id
   }
 
   pub fn get_database_id<T: ReadTxn>(&self, txn: &T) -> String {
@@ -1620,6 +1647,10 @@ impl DatabaseBody {
   }
 
   pub fn get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> String {
+    self.try_get_inline_view_id(txn).unwrap()
+  }
+
+  pub fn try_get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> Option<String> {
     // It's safe to unwrap because each database inline view id was set
     // when initializing the database
     let mut inline_view_id = self.metas.get_inline_view_id(txn);
@@ -1644,7 +1675,7 @@ impl DatabaseBody {
       }
     }
 
-    inline_view_id.unwrap()
+    inline_view_id
   }
 
   /// Return the index of the field in the given view.
@@ -1820,4 +1851,25 @@ impl DatabaseBody {
     }
     Ok(())
   }
+}
+
+pub fn try_fixing_database_inline_view_id(collab: &mut Collab) -> Result<(), DatabaseError> {
+  let inline_view_id = {
+    let body = DatabaseBody::from_collab(collab).ok_or_else(|| DatabaseError::NoRequiredData)?;
+    let txn = collab.context.transact();
+    body.try_get_inline_view_id(&txn)
+  };
+
+  if let Some(inline_view_id) = inline_view_id {
+    let mut txn = collab.context.transact_mut();
+    if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
+      let map = MetaMap::new(container);
+
+      info!("Fixing inline view id to {}", inline_view_id);
+      map.set_inline_view_id(&mut txn, &inline_view_id);
+      return Ok(());
+    }
+  }
+
+  Err(DatabaseError::NoRequiredData)
 }

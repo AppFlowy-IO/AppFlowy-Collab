@@ -11,7 +11,7 @@ use std::sync::{Arc, Weak};
 use collab::entity::EncodedCollab;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use yrs::TransactionMut;
 
@@ -80,37 +80,44 @@ impl RocksdbDiskPlugin {
   fn increase_count(&self) {
     let _update_count = self.update_count.fetch_add(1, SeqCst);
   }
-}
 
-impl CollabPlugin for RocksdbDiskPlugin {
-  fn did_init(&self, collab: &Collab, object_id: &str) {
-    self.did_init.store(true, SeqCst);
+  fn write_to_disk(&self, collab: &Collab) {
     if let Some(collab_db) = self.collab_db.upgrade() {
       let rocksdb_read = collab_db.read_txn();
-      if !rocksdb_read.is_exist(self.uid, object_id) {
+      if !rocksdb_read.is_exist(self.uid, &self.object_id) {
         match self.collab_type.validate_require_data(collab) {
           Ok(_) => {
             let txn = collab.transact();
             if let Err(err) = collab_db.with_write_txn(|w_db_txn| {
-              w_db_txn.create_new_doc(self.uid, &object_id, &txn)?;
+              w_db_txn.create_new_doc(self.uid, &self.object_id, &txn)?;
               info!(
                 "[Rocksdb Plugin]: created new doc {}, collab_type:{}",
-                object_id, self.collab_type
+                self.object_id, self.collab_type
               );
               Ok(())
             }) {
-              error!("[Rocksdb Plugin]: create doc:{} failed: {}", object_id, err);
+              error!(
+                "[Rocksdb Plugin]: create doc:{} failed: {}",
+                self.object_id, err
+              );
             }
           },
           Err(err) => {
-            error!(
+            warn!(
               "[Rocksdb Plugin]: validate collab:{}, collab_type:{}, failed: {}",
-              object_id, self.collab_type, err
+              self.object_id, self.collab_type, err
             );
           },
         }
       }
     }
+  }
+}
+
+impl CollabPlugin for RocksdbDiskPlugin {
+  fn did_init(&self, collab: &Collab, _object_id: &str) {
+    self.did_init.store(true, SeqCst);
+    self.write_to_disk(collab);
   }
 
   fn receive_update(&self, object_id: &str, _txn: &TransactionMut, update: &[u8]) {
@@ -143,10 +150,10 @@ impl CollabPlugin for RocksdbDiskPlugin {
         Ok(())
       });
 
-      if let Err(e) = result {
+      if let Err(err) = result {
         error!(
           "[Rocksdb Plugin]: {}:{} save update failed: {:?}",
-          object_id, self.collab_type, e
+          object_id, self.collab_type, err
         );
       }
     } else {

@@ -13,6 +13,8 @@ use crate::entity::{CreateDatabaseParams, CreateViewParams, CreateViewParamsVali
 use crate::rows::RowId;
 use anyhow::anyhow;
 use collab::core::collab_plugin::CollabPersistence;
+use collab::core::origin::CollabOrigin;
+use collab::error::CollabError;
 use collab::lock::RwLock;
 use dashmap::DashMap;
 use std::borrow::{Borrow, BorrowMut};
@@ -32,16 +34,54 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     &self,
     object_id: &str,
     object_type: CollabType,
-    is_new: bool,
+    encoded_collab: Option<EncodedCollab>,
   ) -> Result<Collab, DatabaseError>;
 
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>>;
+}
+
+pub struct NoPersistenceDatabaseCollabService;
+#[async_trait]
+impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
+  async fn build_collab(
+    &self,
+    object_id: &str,
+    _object_type: CollabType,
+    encoded_collab: Option<EncodedCollab>,
+  ) -> Result<Collab, DatabaseError> {
+    match encoded_collab {
+      None => Ok(Collab::new_with_origin(
+        CollabOrigin::Empty,
+        object_id,
+        vec![],
+        false,
+      )),
+      Some(encode_collab) => Collab::new_with_source(
+        CollabOrigin::Empty,
+        object_id,
+        encode_collab.into(),
+        vec![],
+        false,
+      )
+      .map_err(|err| DatabaseError::Internal(err.into())),
+    }
+  }
+
+  fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
+    None
+  }
 }
 
 pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
   fn load_collab(&self, collab: &mut Collab);
 
   fn delete_collab(&self, object_id: &str) -> Result<(), DatabaseError>;
+
+  fn save_collab(
+    &self,
+    object_id: &str,
+    encoded_collab: EncodedCollab,
+  ) -> Result<(), DatabaseError>;
 
   fn is_collab_exist(&self, object_id: &str) -> bool;
 
@@ -60,6 +100,22 @@ impl CollabPersistence for CollabPersistenceImpl {
   fn load_collab_from_disk(&self, collab: &mut Collab) {
     if let Some(persistence) = &self.persistence {
       persistence.load_collab(collab);
+    }
+  }
+
+  fn save_collab_to_disk(
+    &self,
+    object_id: &str,
+    encoded_collab: EncodedCollab,
+  ) -> Result<(), CollabError> {
+    if let Some(persistence) = &self.persistence {
+      persistence
+        .save_collab(object_id, encoded_collab)
+        .map_err(|err| CollabError::Internal(anyhow!(err)))
+    } else {
+      Err(CollabError::Internal(anyhow!(
+        "collab persistence is not found"
+      )))
     }
   }
 }
@@ -96,7 +152,7 @@ impl WorkspaceDatabase {
     collab_service: impl DatabaseCollabService,
   ) -> Self {
     let collab_service = Arc::new(collab_service);
-    let body = WorkspaceDatabaseBody::new(&mut collab);
+    let body = WorkspaceDatabaseBody::open(&mut collab);
 
     Self {
       object_id: object_id.to_string(),
@@ -135,7 +191,7 @@ impl WorkspaceDatabase {
           .persistence()?
           .is_collab_exist(database_id);
 
-        let context = DatabaseContext::new(self.collab_service.clone(), false);
+        let context = DatabaseContext::new(self.collab_service.clone());
         let database = Database::open(database_id, context).await.ok()?;
         // The database is not exist in local disk, which means the rows of the database are not
         // loaded yet.
@@ -180,7 +236,7 @@ impl WorkspaceDatabase {
   ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
     debug_assert!(!params.database_id.is_empty());
 
-    let context = DatabaseContext::new(self.collab_service.clone(), true);
+    let context = DatabaseContext::new(self.collab_service.clone());
 
     // Add a new database record.
     let mut linked_views = HashSet::new();

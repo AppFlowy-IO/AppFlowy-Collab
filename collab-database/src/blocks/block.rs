@@ -4,14 +4,15 @@ use collab_entity::CollabType;
 
 use crate::error::DatabaseError;
 use crate::rows::{
-  meta_id_from_row_id, Cell, DatabaseRow, Row, RowChangeSender, RowDetail, RowId, RowMeta,
-  RowMetaKey, RowMetaUpdate, RowUpdate,
+  default_database_row_data, meta_id_from_row_id, Cell, DatabaseRow, Row, RowChangeSender,
+  RowDetail, RowId, RowMeta, RowMetaKey, RowMetaUpdate, RowUpdate,
 };
 use crate::views::RowOrder;
 use crate::workspace_database::DatabaseCollabService;
 
 use collab::preclude::Collab;
 
+use collab::entity::EncodedCollab;
 use collab::lock::RwLock;
 use std::sync::Arc;
 use std::time::Duration;
@@ -64,7 +65,7 @@ impl Block {
     let cloned_notifier = self.notifier.clone();
     let mut row_on_disk_details = vec![];
     for row_id in row_ids.into_iter() {
-      let collab = self.create_collab_for_row(&row_id, false).await?;
+      let collab = self.create_collab_for_row(&row_id, None).await?;
       match DatabaseRow::open(
         row_id.clone(),
         collab,
@@ -120,14 +121,16 @@ impl Block {
       }
     }
 
-    let collab = self.create_collab_for_row(&row_id, true).await?;
-    let database_row = DatabaseRow::create(
+    let encoded_collab = default_database_row_data(&row_id, row);
+    let collab = self
+      .create_collab_for_row(&row_id, Some(encoded_collab))
+      .await?;
+    let database_row = DatabaseRow::open(
       row_id.clone(),
       collab,
       self.row_change_tx.clone(),
-      row,
       self.collab_service.clone(),
-    );
+    )?;
 
     let database_row = Arc::new(RwLock::from(database_row));
     self.row_mem_cache.insert(row_id, database_row);
@@ -251,7 +254,7 @@ impl Block {
     row_id: RowId,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
     trace!("init row instance: {}", row_id);
-    let collab = self.create_collab_for_row(&row_id, false).await?;
+    let collab = self.create_collab_for_row(&row_id, None).await?;
     let database_row = DatabaseRow::open(
       row_id.clone(),
       collab,
@@ -272,11 +275,11 @@ impl Block {
   async fn create_collab_for_row(
     &self,
     row_id: &RowId,
-    is_new: bool,
+    encoded_collab: Option<EncodedCollab>,
   ) -> Result<Collab, DatabaseError> {
     self
       .collab_service
-      .build_collab(row_id, CollabType::DatabaseRow, is_new)
+      .build_collab(row_id, CollabType::DatabaseRow, encoded_collab)
       .await
   }
 }

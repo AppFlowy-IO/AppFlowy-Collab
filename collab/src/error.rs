@@ -37,7 +37,7 @@ pub enum CollabError {
   UpdateFailed(#[from] yrs::error::UpdateError),
 
   #[error("Internal failure: {0}")]
-  Internal(#[from] Box<dyn std::error::Error + Send + Sync>),
+  Internal(#[from] anyhow::Error),
 }
 
 impl From<TransactionAcqError> for CollabError {
@@ -45,7 +45,7 @@ impl From<TransactionAcqError> for CollabError {
     match value {
       TransactionAcqError::SharedAcqFailed => Self::AcquiredReadTxnFail,
       TransactionAcqError::ExclusiveAcqFailed => Self::AcquiredWriteTxnFail,
-      TransactionAcqError::DocumentDropped => Self::Internal(anyhow!("Document dropped").into()),
+      TransactionAcqError::DocumentDropped => Self::Internal(anyhow!("Document dropped")),
     }
   }
 }
