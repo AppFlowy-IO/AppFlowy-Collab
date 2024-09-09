@@ -67,7 +67,8 @@ pub struct Collab {
   //  will be able to infere that &mut context and &data/&meta don't overlap.
   /// Every [Collab] instance has a data section that can be used to store
   pub data: MapRef,
-  pub meta: MapRef,
+  #[allow(dead_code)]
+  meta: MapRef,
   /// This is an inner collab state that requires mut access in order to modify it.
   pub context: CollabContext,
 }

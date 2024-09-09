@@ -10,6 +10,8 @@ pub const FOLDER_WORKSPACE_ID: &str = "current_workspace";
 pub const WORKSPACE_DATABASES: &str = "databases";
 pub const DATABASE: &str = "database";
 pub const DATABASE_ID: &str = "id";
+pub const DATABASE_METAS: &str = "metas";
+pub const DATABASE_INLINE_VIEW: &str = "iid";
 pub const DATABASE_ROW_DATA: &str = "data";
 
 // User Awareness

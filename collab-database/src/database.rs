@@ -36,7 +36,7 @@ use collab::preclude::{
   TransactionMut, YrsValue,
 };
 use collab::util::{AnyExt, ArrayExt};
-use collab_entity::define::{DATABASE, DATABASE_ID};
+use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
 use collab_entity::CollabType;
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
@@ -59,7 +59,6 @@ impl Drop for Database {
 
 const FIELDS: &str = "fields";
 const VIEWS: &str = "views";
-const METAS: &str = "metas";
 
 pub struct DatabaseContext {
   pub collab_service: Arc<dyn DatabaseCollabService>,
@@ -129,7 +128,7 @@ impl Database {
   ) -> Result<Self, DatabaseError> {
     // Get or create empty database with the given database_id
     let mut database = Self::open(&params.database_id, context).await?;
-    database.init(params).await?;
+    database.create_view(params).await?;
     tokio::task::spawn_blocking(move || {
       database.write_to_disk()?;
       Ok::<_, DatabaseError>(database)
@@ -189,7 +188,7 @@ impl Database {
     Ok(())
   }
 
-  async fn init(&mut self, params: CreateDatabaseParams) -> Result<(), DatabaseError> {
+  async fn create_view(&mut self, params: CreateDatabaseParams) -> Result<(), DatabaseError> {
     let CreateDatabaseParams {
       database_id: _,
       rows,
@@ -210,7 +209,7 @@ impl Database {
     let mut txn = self.collab.context.transact_mut();
     // Set the inline view id. The inline view id should not be
     // empty if the current database exists.
-    tracing::trace!("Set inline view id: {}", inline_view_id);
+    info!("Set inline view id: {}", inline_view_id);
     self
       .body
       .metas
@@ -1385,7 +1384,9 @@ impl DatabaseData {
 pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
   let txn = collab.context.transact();
   let views: MapRef = collab.data.get_with_path(&txn, [DATABASE, VIEWS])?;
-  let metas: MapRef = collab.data.get_with_path(&txn, [DATABASE, METAS])?;
+  let metas: MapRef = collab
+    .data
+    .get_with_path(&txn, [DATABASE, DATABASE_METAS])?;
 
   let view_change_tx = tokio::sync::broadcast::channel(1).0;
   let views = DatabaseViews::new(CollabOrigin::Empty, views, view_change_tx);
@@ -1406,7 +1407,7 @@ where
   F: FnOnce(String) -> String,
 {
   let mut txn = collab.context.transact_mut();
-  if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, METAS]) {
+  if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
     let map = MetaMap::new(container);
     let inline_view_id = map.get_inline_view_id(&txn).unwrap();
     let new_inline_view_id = f(inline_view_id);
@@ -1446,7 +1447,9 @@ pub fn is_database_collab(collab: &Collab) -> bool {
 /// and you need the inline view ID of a specific database.
 pub fn get_inline_view_id(collab: &Collab) -> Option<String> {
   let txn = collab.context.transact();
-  let metas: MapRef = collab.data.get_with_path(&txn, [DATABASE, METAS])?;
+  let metas: MapRef = collab
+    .data
+    .get_with_path(&txn, [DATABASE, DATABASE_METAS])?;
   let meta = MetaMap::new(metas);
   meta.get_inline_view_id(&txn)
 }
@@ -1481,7 +1484,7 @@ impl DatabaseBody {
     root.insert(&mut txn, DATABASE_ID, &*database_id);
     let fields: MapRef = root.get_or_init(&mut txn, FIELDS); // { DATABASE: { FIELDS: {:} } }
     let views: MapRef = root.get_or_init(&mut txn, VIEWS); // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
-    let metas: MapRef = root.get_or_init(&mut txn, METAS); // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
+    let metas: MapRef = root.get_or_init(&mut txn, DATABASE_METAS); // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
     drop(txn);
 
     let fields = FieldMap::new(fields, context.notifier.field_change_tx.clone());

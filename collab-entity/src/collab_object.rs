@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 use crate::define::{
-  DATABASE, DATABASE_ID, DATABASE_ROW_DATA, DOCUMENT_ROOT, FOLDER, FOLDER_META,
-  FOLDER_WORKSPACE_ID, USER_AWARENESS, WORKSPACE_DATABASES,
+  DATABASE, DATABASE_ID, DATABASE_INLINE_VIEW, DATABASE_METAS, DATABASE_ROW_DATA, DOCUMENT_ROOT,
+  FOLDER, FOLDER_META, FOLDER_WORKSPACE_ID, USER_AWARENESS, WORKSPACE_DATABASES,
 };
 use crate::proto;
 use collab::preclude::{ArrayRef, Collab, MapExt, MapRef};
@@ -71,6 +71,15 @@ impl CollabType {
         let _: String = database
           .get_with_txn(&txn, DATABASE_ID)
           .ok_or_else(|| no_required_data_error(self, DATABASE_ID))?;
+
+        let database_meta: MapRef = database
+          .get_with_txn(&txn, DATABASE_METAS)
+          .ok_or_else(|| no_required_data_error(self, DATABASE_METAS))?;
+
+        let _: String = database_meta
+          .get_with_txn(&txn, DATABASE_INLINE_VIEW)
+          .ok_or_else(|| no_required_data_error(self, DATABASE_INLINE_VIEW))?;
+
         Ok(())
       },
       CollabType::WorkspaceDatabase => {
