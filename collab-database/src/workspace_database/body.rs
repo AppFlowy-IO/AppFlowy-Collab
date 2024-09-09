@@ -19,7 +19,7 @@ pub fn default_workspace_database_data(object_id: &str) -> EncodedCollab {
   let mut collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false);
   let _ = WorkspaceDatabaseBody::create(&mut collab);
   collab
-    .encode_collab_v1(|collab| Ok::<_, DatabaseError>(()))
+    .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
     .unwrap()
 }
 
