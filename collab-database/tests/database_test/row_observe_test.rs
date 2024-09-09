@@ -15,7 +15,7 @@ use crate::database_test::helper::{create_database, wait_for_specific_event};
 async fn observer_create_new_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.subscribe_view_change().unwrap();
 
   let row_id = gen_row_id();
   let cloned_row_id = row_id.clone();
@@ -46,7 +46,7 @@ async fn observer_create_new_row_test() {
 async fn observer_row_cell_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
-  let row_change_rx = database_test.subscribe_row_change();
+  let row_change_rx = database_test.subscribe_row_change().unwrap();
   let row_id = gen_row_id();
 
   // Insert cell
@@ -87,7 +87,12 @@ async fn observer_row_cell_test() {
 
   // Update cell
   let cloned_database_test = database_test.clone();
-  let row_change_rx = database_test.lock().await.database.subscribe_row_change();
+  let row_change_rx = database_test
+    .lock()
+    .await
+    .database
+    .subscribe_row_change()
+    .unwrap();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
 
@@ -120,7 +125,7 @@ async fn observer_row_cell_test() {
 async fn observer_update_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
-  let row_change_rx = database_test.subscribe_row_change();
+  let row_change_rx = database_test.subscribe_row_change().unwrap();
 
   let row_id = gen_row_id();
   let database_test = Arc::new(Mutex::from(database_test));

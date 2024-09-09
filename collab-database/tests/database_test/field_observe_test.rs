@@ -27,7 +27,7 @@ async fn observe_field_update_and_delete_test() {
     });
   });
 
-  let field_change_rx = database_test.lock().await.subscribe_field_change();
+  let field_change_rx = database_test.lock().await.subscribe_field_change().unwrap();
   wait_for_specific_event(field_change_rx, |event| match event {
     FieldChange::DidUpdateField { field } => field.name == "hello world",
     _ => false,
@@ -45,7 +45,7 @@ async fn observe_field_update_and_delete_test() {
   });
 
   let cloned_field = field.clone();
-  let field_change_rx = database_test.lock().await.subscribe_field_change();
+  let field_change_rx = database_test.lock().await.subscribe_field_change().unwrap();
   wait_for_specific_event(field_change_rx, |event| match event {
     FieldChange::DidDeleteField { field_id } => field_id == &cloned_field.id,
     _ => false,

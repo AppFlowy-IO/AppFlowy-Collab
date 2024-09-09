@@ -16,7 +16,7 @@ use tokio::time::sleep;
 async fn observer_delete_consecutive_rows_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.subscribe_view_change().unwrap();
 
   let row_id_1 = gen_row_id();
   let row_id_2 = gen_row_id();
@@ -70,7 +70,7 @@ async fn observer_delete_consecutive_rows_test() {
 async fn observer_delete_non_consecutive_rows_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.subscribe_view_change().unwrap();
 
   let row_id_1 = gen_row_id();
   let row_id_2 = gen_row_id();
@@ -124,7 +124,7 @@ async fn observer_delete_non_consecutive_rows_test() {
 async fn observe_move_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let mut database_test = create_database(1, &database_id);
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.subscribe_view_change().unwrap();
 
   let row_id_1 = gen_row_id();
   let row_id_2 = gen_row_id();
@@ -183,7 +183,7 @@ async fn observe_move_row_test() {
   let cloned_row_id_1 = row_id_1.clone();
   let cloned_row_id_2 = row_id_2.clone();
   let cloned_database_test = database_test.clone();
-  let view_change_rx = database_test.lock().await.subscribe_view_change();
+  let view_change_rx = database_test.lock().await.subscribe_view_change().unwrap();
   tokio::spawn(async move {
     sleep(Duration::from_millis(500)).await;
     let mut db = cloned_database_test.lock().await;
@@ -249,7 +249,7 @@ async fn observer_create_delete_row_test() {
       .unwrap();
   });
 
-  let view_change_rx = database_test.lock().await.subscribe_view_change();
+  let view_change_rx = database_test.lock().await.subscribe_view_change().unwrap();
   let mut received_rows = vec![];
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateRowOrders {
@@ -281,7 +281,7 @@ async fn observer_create_delete_row_test() {
     db.move_row(&created_row[0], &created_row[2]).await;
   });
 
-  let view_change_rx = database_test.lock().await.subscribe_view_change();
+  let view_change_rx = database_test.lock().await.subscribe_view_change().unwrap();
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateRowOrders {
       database_view_id,
@@ -311,7 +311,7 @@ async fn observe_update_view_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.subscribe_view_change().unwrap();
   let view_id = database_test.get_inline_view_id();
 
   let database_test = Arc::new(Mutex::from(database_test));
@@ -337,7 +337,7 @@ async fn observe_create_delete_view_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.subscribe_view_change().unwrap();
   let create_view_id = uuid::Uuid::new_v4().to_string();
   let params = CreateViewParams {
     database_id: database_id.clone(),
@@ -366,7 +366,7 @@ async fn observe_create_delete_view_test() {
   .unwrap();
 
   let cloned_database_test = database_test.clone();
-  let view_change_rx = database_test.lock().await.subscribe_view_change();
+  let view_change_rx = database_test.lock().await.subscribe_view_change().unwrap();
   let view_id = create_view_id.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(300)).await;
@@ -389,7 +389,7 @@ async fn observe_database_view_layout_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.subscribe_view_change().unwrap();
   let update_view_id = database_test.get_inline_view_id();
   let cloned_update_view_id = update_view_id.clone();
 
@@ -419,7 +419,7 @@ async fn observe_database_view_filter_create_delete_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.subscribe_view_change().unwrap();
   let update_view_id = database_test.get_inline_view_id();
 
   let database_test = Arc::new(Mutex::from(database_test));
@@ -456,7 +456,12 @@ async fn observe_database_view_filter_create_delete_test() {
     });
   });
 
-  let view_change_rx = database_test.lock().await.database.subscribe_view_change();
+  let view_change_rx = database_test
+    .lock()
+    .await
+    .database
+    .subscribe_view_change()
+    .unwrap();
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateFilter { view_id } => &update_view_id == view_id,
     _ => false,
@@ -470,7 +475,7 @@ async fn observe_database_view_sort_create_delete_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.subscribe_view_change().unwrap();
   let update_view_id = database_test.get_inline_view_id();
 
   let database_test = Arc::new(Mutex::from(database_test));
@@ -510,7 +515,12 @@ async fn observe_database_view_sort_create_delete_test() {
     });
   });
 
-  let view_change_rx = database_test.lock().await.database.subscribe_view_change();
+  let view_change_rx = database_test
+    .lock()
+    .await
+    .database
+    .subscribe_view_change()
+    .unwrap();
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateSort { view_id } => &update_view_id == view_id,
     _ => false,
@@ -524,7 +534,7 @@ async fn observe_database_view_group_create_delete_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
-  let view_change_rx = database_test.subscribe_view_change();
+  let view_change_rx = database_test.subscribe_view_change().unwrap();
   let update_view_id = database_test.get_inline_view_id();
 
   let database_test = Arc::new(Mutex::from(database_test));
@@ -564,7 +574,12 @@ async fn observe_database_view_group_create_delete_test() {
     });
   });
 
-  let view_change_rx = database_test.lock().await.database.subscribe_view_change();
+  let view_change_rx = database_test
+    .lock()
+    .await
+    .database
+    .subscribe_view_change()
+    .unwrap();
   wait_for_specific_event(view_change_rx, |event| match event {
     DatabaseViewChange::DidUpdateGroupSetting { view_id } => &update_view_id == view_id,
     _ => false,
