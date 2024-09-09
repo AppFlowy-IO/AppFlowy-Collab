@@ -188,6 +188,7 @@ impl Database {
     })
   }
 
+  #[instrument(level = "info", skip_all, err)]
   pub fn write_to_disk(&self) -> Result<(), DatabaseError> {
     if let Some(persistence) = self.collab_service.persistence() {
       let database_encoded = encoded_collab(&self.collab, &CollabType::Database)?;
@@ -1509,8 +1510,7 @@ impl DatabaseBody {
     database_id: String,
     context: DatabaseContext,
   ) -> Result<(Self, Collab), DatabaseError> {
-    if let Err(err) = CollabType::Database.validate_require_data(&collab) {
-      error!("Failed to open database: {}, try to fix", err);
+    if let Err(_err) = CollabType::Database.validate_require_data(&collab) {
       try_fixing_database_inline_view_id(&mut collab)?;
     }
     Self::create(collab, database_id, context)
@@ -1874,6 +1874,8 @@ pub fn try_fixing_database_inline_view_id(collab: &mut Collab) -> Result<(), Dat
     let mut txn = collab.context.transact_mut();
     if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
       let map = MetaMap::new(container);
+
+      info!("Fixing inline view id to {}", inline_view_id);
       map.set_inline_view_id(&mut txn, &inline_view_id);
       return Ok(());
     }
