@@ -1,8 +1,11 @@
 use crate::local_storage::kv::doc::CollabKVAction;
 use crate::local_storage::kv::KVTransactionDB;
 use crate::CollabKVDB;
+use anyhow::anyhow;
 use collab::core::collab::DataSource;
 use collab::core::collab_plugin::CollabPersistence;
+use collab::entity::EncodedCollab;
+use collab::error::CollabError;
 use collab::preclude::Collab;
 use std::sync::Weak;
 use tracing::{error, warn};
@@ -45,6 +48,31 @@ impl CollabPersistence for KVDBCollabPersistenceImpl {
       }
     } else {
       warn!("collab_db is dropped");
+    }
+  }
+
+  fn save_collab_to_disk(
+    &self,
+    object_id: &str,
+    encoded_collab: EncodedCollab,
+  ) -> Result<(), CollabError> {
+    if let Some(collab_db) = self.db.upgrade() {
+      let write_txn = collab_db.write_txn();
+      write_txn
+        .flush_doc(
+          self.uid,
+          &object_id,
+          encoded_collab.state_vector.to_vec(),
+          encoded_collab.doc_state.to_vec(),
+        )
+        .map_err(|err| CollabError::Internal(err.into()))?;
+
+      write_txn
+        .commit_transaction()
+        .map_err(|err| CollabError::Internal(err.into()))?;
+      Ok(())
+    } else {
+      Err(CollabError::Internal(anyhow!("collab_db is dropped")))
     }
   }
 }

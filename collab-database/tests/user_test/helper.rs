@@ -83,6 +83,26 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
     Ok(())
   }
 
+  fn save_collab(
+    &self,
+    object_id: &str,
+    encoded_collab: EncodedCollab,
+  ) -> Result<(), DatabaseError> {
+    let write_txn = self.db.write_txn();
+    write_txn
+      .flush_doc(
+        self.uid,
+        &object_id,
+        encoded_collab.state_vector.to_vec(),
+        encoded_collab.doc_state.to_vec(),
+      )
+      .map_err(|err| DatabaseError::Internal(err.into()))?;
+    write_txn
+      .commit_transaction()
+      .map_err(|err| DatabaseError::Internal(err.into()))?;
+    Ok(())
+  }
+
   fn is_collab_exist(&self, object_id: &str) -> bool {
     let read_txn = self.db.read_txn();
     read_txn.is_exist(self.uid, object_id)

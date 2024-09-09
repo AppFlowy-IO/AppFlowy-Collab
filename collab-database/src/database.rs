@@ -29,6 +29,7 @@ use crate::template::entity::DatabaseTemplate;
 use crate::template::util::{
   create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
 };
+
 use async_trait::async_trait;
 use collab::core::origin::CollabOrigin;
 use collab::lock::RwLock;
@@ -1504,11 +1505,14 @@ pub struct DatabaseBody {
 
 impl DatabaseBody {
   fn open(
-    collab: Collab,
+    mut collab: Collab,
     database_id: String,
     context: DatabaseContext,
   ) -> Result<(Self, Collab), DatabaseError> {
-    CollabType::Database.validate_require_data(&collab)?;
+    if let Err(err) = CollabType::Database.validate_require_data(&collab) {
+      error!("Failed to open database: {}, try to fix", err);
+      try_fixing_database_inline_view_id(&mut collab)?;
+    }
     Self::create(collab, database_id, context)
   }
 
@@ -1602,6 +1606,39 @@ impl DatabaseBody {
     root.get(&txn, DATABASE_ID)?.cast::<String>().ok()
   }
 
+  pub fn inline_view_id_from_collab(collab: &Collab) -> Option<String> {
+    let txn = collab.context.transact();
+    let root = collab.data.get(&txn, DATABASE)?.cast::<MapRef>().ok()?;
+    let database_id = root.get(&txn, DATABASE_ID)?.cast::<String>().ok()?;
+    let views_map: MapRef = root.get_with_txn(&txn, VIEWS)?;
+    let metas_map: MapRef = root.get_with_txn(&txn, DATABASE_METAS)?;
+    let metas = MetaMap::new(metas_map);
+    let views = DatabaseViews::new(CollabOrigin::Empty, views_map, None);
+
+    let mut inline_view_id = metas.get_inline_view_id(&txn);
+    if inline_view_id.is_none() {
+      error!(
+        "Inline view id is not found in the database:{}",
+        database_id,
+      );
+      let view_metas = views.get_all_views_meta(&txn);
+      inline_view_id = view_metas.first().map(|view| view.id.clone());
+      if view_metas.is_empty() {
+        error!(
+          "Can't find any database views when inline view id is empty. current root map:{}",
+          root.to_json(&txn)
+        );
+      } else {
+        info!(
+          "Can't find default inline view id, using {} as inline view id",
+          inline_view_id.as_ref().unwrap()
+        );
+      }
+    }
+
+    inline_view_id
+  }
+
   pub fn get_database_id<T: ReadTxn>(&self, txn: &T) -> String {
     self.root.get_with_txn(txn, DATABASE_ID).unwrap()
   }
@@ -1620,6 +1657,10 @@ impl DatabaseBody {
   }
 
   pub fn get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> String {
+    self.try_get_inline_view_id(txn).unwrap()
+  }
+
+  pub fn try_get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> Option<String> {
     // It's safe to unwrap because each database inline view id was set
     // when initializing the database
     let mut inline_view_id = self.metas.get_inline_view_id(txn);
@@ -1644,7 +1685,7 @@ impl DatabaseBody {
       }
     }
 
-    inline_view_id.unwrap()
+    inline_view_id
   }
 
   /// Return the index of the field in the given view.
@@ -1820,4 +1861,23 @@ impl DatabaseBody {
     }
     Ok(())
   }
+}
+
+pub fn try_fixing_database_inline_view_id(collab: &mut Collab) -> Result<(), DatabaseError> {
+  let inline_view_id = {
+    let body = DatabaseBody::from_collab(collab).ok_or_else(|| DatabaseError::NoRequiredData)?;
+    let txn = collab.context.transact();
+    body.try_get_inline_view_id(&txn)
+  };
+
+  if let Some(inline_view_id) = inline_view_id {
+    let mut txn = collab.context.transact_mut();
+    if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
+      let map = MetaMap::new(container);
+      map.set_inline_view_id(&mut txn, &inline_view_id);
+      return Ok(());
+    }
+  }
+
+  Err(DatabaseError::NoRequiredData)
 }

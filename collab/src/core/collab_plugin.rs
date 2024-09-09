@@ -7,6 +7,8 @@ use std::sync::Arc;
 use yrs::{Doc, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
+use crate::entity::EncodedCollab;
+use crate::error::CollabError;
 use crate::preclude::Collab;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -19,6 +21,11 @@ pub enum CollabPluginType {
 }
 pub trait CollabPersistence: Send + Sync + 'static {
   fn load_collab_from_disk(&self, collab: &mut Collab);
+  fn save_collab_to_disk(
+    &self,
+    object_id: &str,
+    encoded_collab: EncodedCollab,
+  ) -> Result<(), CollabError>;
 }
 
 impl<T> CollabPersistence for Box<T>
@@ -27,6 +34,14 @@ where
 {
   fn load_collab_from_disk(&self, collab: &mut Collab) {
     (**self).load_collab_from_disk(collab);
+  }
+
+  fn save_collab_to_disk(
+    &self,
+    object_id: &str,
+    encoded_collab: EncodedCollab,
+  ) -> Result<(), CollabError> {
+    (**self).save_collab_to_disk(object_id, encoded_collab)
   }
 }
 

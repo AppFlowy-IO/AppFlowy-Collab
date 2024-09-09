@@ -366,6 +366,14 @@ impl Collab {
     self.state.set_init_state(InitState::Initialized);
   }
 
+  pub fn save_to_disk(
+    &self,
+    persistence: &dyn CollabPersistence,
+    encoded_collab: EncodedCollab,
+  ) -> Result<(), CollabError> {
+    persistence.save_collab_to_disk(&self.object_id, encoded_collab)
+  }
+
   pub fn get_state(&self) -> &Arc<State> {
     &self.state
   }

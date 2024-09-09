@@ -13,6 +13,7 @@ use crate::entity::{CreateDatabaseParams, CreateViewParams, CreateViewParamsVali
 use crate::rows::RowId;
 use anyhow::anyhow;
 use collab::core::collab_plugin::CollabPersistence;
+use collab::error::CollabError;
 use collab::lock::RwLock;
 use dashmap::DashMap;
 use std::borrow::{Borrow, BorrowMut};
@@ -43,6 +44,12 @@ pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
 
   fn delete_collab(&self, object_id: &str) -> Result<(), DatabaseError>;
 
+  fn save_collab(
+    &self,
+    object_id: &str,
+    encoded_collab: EncodedCollab,
+  ) -> Result<(), DatabaseError>;
+
   fn is_collab_exist(&self, object_id: &str) -> bool;
 
   fn flush_collabs(
@@ -60,6 +67,22 @@ impl CollabPersistence for CollabPersistenceImpl {
   fn load_collab_from_disk(&self, collab: &mut Collab) {
     if let Some(persistence) = &self.persistence {
       persistence.load_collab(collab);
+    }
+  }
+
+  fn save_collab_to_disk(
+    &self,
+    object_id: &str,
+    encoded_collab: EncodedCollab,
+  ) -> Result<(), CollabError> {
+    if let Some(persistence) = &self.persistence {
+      persistence
+        .save_collab(object_id, encoded_collab)
+        .map_err(|err| CollabError::Internal(anyhow!(err)))
+    } else {
+      Err(CollabError::Internal(anyhow!(
+        "collab persistence is not found"
+      )))
     }
   }
 }
