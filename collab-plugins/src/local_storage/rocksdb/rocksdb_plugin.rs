@@ -11,7 +11,7 @@ use std::sync::{Arc, Weak};
 use collab::entity::EncodedCollab;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
-use tracing::error;
+use tracing::{error, info};
 
 use yrs::TransactionMut;
 
@@ -93,7 +93,10 @@ impl CollabPlugin for RocksdbDiskPlugin {
             let txn = collab.transact();
             if let Err(err) = collab_db.with_write_txn(|w_db_txn| {
               w_db_txn.create_new_doc(self.uid, &object_id, &txn)?;
-              tracing::trace!("[Rocksdb Plugin]: created new doc {}", object_id);
+              info!(
+                "[Rocksdb Plugin]: created new doc {}, collab_type:{}",
+                object_id, self.collab_type
+              );
               Ok(())
             }) {
               error!("[Rocksdb Plugin]: create doc:{} failed: {}", object_id, err);

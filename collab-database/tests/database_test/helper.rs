@@ -88,11 +88,11 @@ pub fn create_row(uid: i64, row_id: RowId) -> DatabaseRow {
     uid,
     db: collab_db.clone(),
   });
-  DatabaseRow::new(
+  DatabaseRow::create(
     row_id.clone(),
     collab,
     Some(row_change_tx),
-    Some(Row::new(row_id, "1")),
+    Row::new(row_id, "1"),
     collab_builder,
   )
 }

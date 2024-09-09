@@ -2,12 +2,13 @@ use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-use anyhow::Result;
+use anyhow::{Error, Result};
 use serde::{Deserialize, Serialize};
 
 use collab::preclude::{ArrayRef, Collab, Map, MapExt, MapRef};
 use collab_entity::define::USER_AWARENESS;
 use collab_entity::reminder::Reminder;
+use collab_entity::CollabType;
 
 use crate::reminder::{Reminders, RemindersChangeSender};
 
@@ -56,9 +57,10 @@ impl UserAwareness {
   /// # Panics
   /// - This function might panic if it fails to lock the `collab` mutex.
   ///
-  pub fn open(mut collab: Collab, notifier: Option<UserAwarenessNotifier>) -> Self {
+  pub fn open(mut collab: Collab, notifier: Option<UserAwarenessNotifier>) -> Result<Self, Error> {
+    CollabType::UserAwareness.validate_require_data(&collab)?;
     let body = UserAwarenessBody::new(&mut collab, notifier);
-    Self::new(collab, body)
+    Ok(Self::new(collab, body))
   }
 
   /// Tries to retrieve user awareness attributes from the given collaboration object.

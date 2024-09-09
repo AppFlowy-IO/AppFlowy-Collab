@@ -48,14 +48,31 @@ impl Drop for DatabaseRow {
 }
 
 impl DatabaseRow {
-  pub fn new(
+  pub fn open(
     row_id: RowId,
     mut collab: Collab,
     change_tx: Option<RowChangeSender>,
-    row: Option<Row>,
+    collab_service: Arc<dyn DatabaseCollabService>,
+  ) -> Result<Self, DatabaseError> {
+    let body = DatabaseRowBody::open(row_id.clone(), &mut collab)?;
+    if let Some(change_tx) = change_tx {
+      subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
+    }
+    Ok(Self {
+      collab,
+      body,
+      collab_service,
+    })
+  }
+
+  pub fn create(
+    row_id: RowId,
+    mut collab: Collab,
+    change_tx: Option<RowChangeSender>,
+    row: Row,
     collab_service: Arc<dyn DatabaseCollabService>,
   ) -> Self {
-    let body = DatabaseRowBody::new(row_id.clone(), &mut collab, row);
+    let body = DatabaseRowBody::create(row_id.clone(), &mut collab, row);
     if let Some(change_tx) = change_tx {
       subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
     }
@@ -196,13 +213,21 @@ pub struct DatabaseRowBody {
 }
 
 impl DatabaseRowBody {
-  pub fn new(row_id: RowId, collab: &mut Collab, init_data: Option<Row>) -> Self {
-    let mut txn = collab.context.transact_mut();
+  pub fn open(row_id: RowId, collab: &mut Collab) -> Result<Self, DatabaseError> {
+    CollabType::DatabaseRow.validate_require_data(collab)?;
+    Ok(Self::create_with_data(row_id, collab, None))
+  }
 
+  pub fn create(row_id: RowId, collab: &mut Collab, row: Row) -> Self {
+    Self::create_with_data(row_id, collab, Some(row))
+  }
+
+  fn create_with_data(row_id: RowId, collab: &mut Collab, row: Option<Row>) -> Self {
+    let mut txn = collab.context.transact_mut();
     let data: MapRef = collab.data.get_or_init(&mut txn, DATABASE_ROW_DATA);
     let meta: MapRef = collab.data.get_or_init(&mut txn, META);
     let comments: ArrayRef = collab.data.get_or_init(&mut txn, COMMENT);
-    if let Some(row) = init_data {
+    if let Some(row) = row {
       RowBuilder::new(&mut txn, data.clone(), meta.clone())
         .update(|update| {
           update
