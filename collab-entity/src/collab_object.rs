@@ -78,7 +78,7 @@ impl CollabType {
 
         let _: String = database_meta
           .get_with_txn(&txn, DATABASE_INLINE_VIEW)
-          .ok_or_else(|| no_required_data_error(self, DATABASE_INLINE_VIEW))?;
+          .ok_or_else(|| no_required_data_error(self, "database inline view id"))?;
 
         Ok(())
       },

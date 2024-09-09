@@ -1534,11 +1534,18 @@ impl DatabaseBody {
     // when initializing the database
     let mut inline_view_id = self.metas.get_inline_view_id(txn);
     if inline_view_id.is_none() {
-      error!("Inline view id is not found in the database");
+      error!(
+        "Inline view id is not found in the database:{}",
+        self.get_database_id(txn)
+      );
       let view_metas = self.views.get_all_views_meta(txn);
       inline_view_id = view_metas.first().map(|view| view.id.clone());
       if view_metas.is_empty() {
-        error!("Can't find any database views when inline view id is empty");
+        let root = self.root.to_json(txn);
+        error!(
+          "Can't find any database views when inline view id is empty. current root map:{}",
+          root
+        );
       } else {
         info!(
           "Can't find default inline view id, using {} as inline view id",
