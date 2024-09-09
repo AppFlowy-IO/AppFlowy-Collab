@@ -87,7 +87,7 @@ impl CollabPersistenceTest {
   }
 
   pub async fn create_collab(&mut self, doc_id: String) {
-    let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), &doc_id, CollabType::Document);
+    let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), &doc_id, CollabType::Unknown);
     let data_source = KVDBCollabPersistenceImpl {
       db: Arc::downgrade(&self.db),
       uid: self.uid,
@@ -173,7 +173,7 @@ impl CollabPersistenceTest {
     match script {
       Script::CreateDocumentWithCollabDB { id, db } => {
         let uid = 1;
-        let disk_plugin = disk_plugin_with_db(self.uid, db, &id, CollabType::Document);
+        let disk_plugin = disk_plugin_with_db(self.uid, db, &id, CollabType::Unknown);
         let data_source = KVDBCollabPersistenceImpl {
           db: Arc::downgrade(&self.db),
           uid,
@@ -193,7 +193,7 @@ impl CollabPersistenceTest {
         self.collab_by_id.remove(&id);
       },
       Script::OpenDocumentWithDiskPlugin { id } => {
-        let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), &id, CollabType::Document);
+        let disk_plugin = disk_plugin_with_db(self.uid, self.db.clone(), &id, CollabType::Unknown);
         let data_source = KVDBCollabPersistenceImpl {
           db: Arc::downgrade(&self.db),
           uid: self.uid,

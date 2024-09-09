@@ -19,7 +19,7 @@ use crate::views::{
   FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
   OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver,
 };
-use crate::workspace_database::DatabaseCollabService;
+use crate::workspace_database::{DatabaseCollabPersistenceService, DatabaseCollabService};
 
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
@@ -29,6 +29,7 @@ use crate::template::entity::DatabaseTemplate;
 use crate::template::util::{
   create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
 };
+use async_trait::async_trait;
 use collab::core::origin::CollabOrigin;
 use collab::lock::RwLock;
 use collab::preclude::{
@@ -1502,6 +1503,58 @@ impl DatabaseBody {
       notifier: context.notifier,
     };
     (body, collab)
+  }
+
+  /// Creates a [DatabaseBody] body from the given [Collab] instance. If the required fields are not
+  /// present, it will return `None`.
+  pub fn from_collab(collab: &Collab) -> Option<Self> {
+    /// DatabaseCollabServiceImpl will be removed
+    struct DatabaseCollabServiceImpl;
+    #[async_trait]
+    impl DatabaseCollabService for DatabaseCollabServiceImpl {
+      async fn build_collab(
+        &self,
+        object_id: &str,
+        _object_type: CollabType,
+        _is_new: bool,
+      ) -> Result<Collab, DatabaseError> {
+        Ok(Collab::new_with_origin(
+          CollabOrigin::Empty,
+          object_id,
+          vec![],
+          false,
+        ))
+      }
+
+      fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
+        None
+      }
+    }
+
+    let txn = collab.context.transact();
+    let root: MapRef = collab.data.get_with_txn(&txn, DATABASE)?;
+    let database_id = root.get_with_txn(&txn, DATABASE_ID)?;
+    let fields: MapRef = root.get_with_txn(&txn, FIELDS)?; // { DATABASE: { FIELDS: {:} } }
+    let views: MapRef = root.get_with_txn(&txn, VIEWS)?; // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
+    let metas: MapRef = root.get_with_txn(&txn, DATABASE_METAS)?; // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
+
+    let notifier = DatabaseNotify::default();
+    let fields = FieldMap::new(fields, notifier.field_change_tx.clone());
+    let views = DatabaseViews::new(CollabOrigin::Empty, views, notifier.view_change_tx.clone());
+    let metas = MetaMap::new(metas);
+    let block = Block::new(
+      database_id,
+      Arc::new(DatabaseCollabServiceImpl),
+      notifier.row_change_tx.clone(),
+    );
+    Some(Self {
+      root,
+      views: views.into(),
+      fields: fields.into(),
+      metas: metas.into(),
+      block,
+      notifier,
+    })
   }
 
   /// Return database id from the given [Collab] instance. If the required fields are not found,

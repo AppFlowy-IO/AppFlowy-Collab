@@ -49,9 +49,7 @@ impl Block {
     let (notifier, _) = broadcast::channel(1000);
     Self {
       database_id,
-      // task_controller,
       collab_service,
-      // sequence: Arc::new(Default::default()),
       row_mem_cache: Arc::new(Default::default()),
       notifier: Arc::new(notifier),
       row_change_tx,
