@@ -1516,6 +1516,8 @@ impl DatabaseBody {
 
   /// Creates a [DatabaseBody] body from the given [Collab] instance. If the required fields are not
   /// present, it will return `None`.
+  ///
+  /// There is no [DatabaseNotify] or persistence layer in [DatabaseBody] created by this method.
   pub fn from_collab(collab: &Collab) -> Option<Self> {
     /// DatabaseCollabServiceImpl will be removed
     struct DatabaseCollabServiceImpl;
