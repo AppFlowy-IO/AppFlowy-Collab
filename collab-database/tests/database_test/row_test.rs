@@ -2,8 +2,8 @@ use crate::database_test::helper::{
   create_database, create_database_with_default_data, create_row,
 };
 use collab_database::database::gen_row_id;
-use collab_database::entity::CreateViewParams;
-use collab_database::rows::{meta_id_from_row_id, CreateRowParams, RowId, RowMetaKey};
+use collab_database::entity::{CreateViewParams, FileUploadType};
+use collab_database::rows::{meta_id_from_row_id, CreateRowParams, RowCover, RowId, RowMetaKey};
 use collab_database::views::OrderObjectPosition;
 use uuid::Uuid;
 
@@ -281,17 +281,23 @@ async fn update_row_meta_test() {
   let row_meta_before = database_test.get_row_meta(&row_order.id).await.unwrap();
   assert!(row_meta_before.is_document_empty);
 
+  let cover = RowCover {
+    url: "cover 123".to_string(),
+    upload_type: FileUploadType::LocalFile,
+  };
+
   database_test
     .update_row_meta(&row_order.id, |meta_update| {
       meta_update
-        .insert_cover("cover 123")
+        .insert_cover(&cover)
         .insert_icon("icon 123")
         .update_is_document_empty(false);
     })
     .await;
 
   let row_meta = database_test.get_row_meta(&row_order.id).await.unwrap();
-  assert_eq!(row_meta.cover_url, Some("cover 123".to_string()));
+  let cover = row_meta.cover.unwrap();
+  assert_eq!(cover.url, "cover 123".to_string());
   assert_eq!(row_meta.icon_url, Some("icon 123".to_string()));
   assert!(!row_meta.is_document_empty);
 }

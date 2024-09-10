@@ -2,7 +2,10 @@ use collab::preclude::{Map, MapExt, MapRef, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::rows::{meta_id_from_row_id, RowMetaKey};
+use crate::{
+  entity::FileUploadType,
+  rows::{meta_id_from_row_id, RowMetaKey},
+};
 
 pub struct RowMetaUpdate<'a, 'b> {
   #[allow(dead_code)]
@@ -30,8 +33,8 @@ impl<'a, 'b> RowMetaUpdate<'a, 'b> {
     }
   }
 
-  pub fn insert_cover_if_not_none(self, cover_url: Option<String>) -> Self {
-    if let Some(cover) = cover_url {
+  pub fn insert_cover_if_not_none(self, cover: Option<RowCover>) -> Self {
+    if let Some(cover) = cover {
       self.insert_cover(&cover)
     } else {
       self
@@ -60,9 +63,13 @@ impl<'a, 'b> RowMetaUpdate<'a, 'b> {
     self
   }
 
-  pub fn insert_cover(self, cover_url: &str) -> Self {
+  pub fn insert_cover(self, cover: &RowCover) -> Self {
     let cover_id = meta_id_from_row_id(&self.row_id, RowMetaKey::CoverId);
-    self.map_ref.insert(self.txn, cover_id, cover_url);
+    self.map_ref.insert(
+      self.txn,
+      cover_id,
+      serde_json::to_string(cover).unwrap_or_default(),
+    );
     self
   }
 
@@ -83,10 +90,16 @@ impl<'a, 'b> RowMetaUpdate<'a, 'b> {
   }
 }
 
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct RowCover {
+  pub url: String,
+  pub upload_type: FileUploadType,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RowMeta {
   pub icon_url: Option<String>,
-  pub cover_url: Option<String>,
+  pub cover: Option<RowCover>,
   pub is_document_empty: bool,
   pub attachment_count: i64,
 }
@@ -95,16 +108,20 @@ impl RowMeta {
   pub(crate) fn empty() -> Self {
     Self {
       icon_url: None,
-      cover_url: None,
+      cover: None,
       is_document_empty: true,
       attachment_count: 0,
     }
   }
 
   pub(crate) fn from_map_ref<T: ReadTxn>(txn: &T, row_id: &Uuid, map_ref: &MapRef) -> Self {
+    let cover_data: String = map_ref
+      .get_with_txn(txn, &meta_id_from_row_id(row_id, RowMetaKey::CoverId))
+      .unwrap_or_default();
+
     Self {
       icon_url: map_ref.get_with_txn(txn, &meta_id_from_row_id(row_id, RowMetaKey::IconId)),
-      cover_url: map_ref.get_with_txn(txn, &meta_id_from_row_id(row_id, RowMetaKey::CoverId)),
+      cover: serde_json::from_str(&cover_data).unwrap_or(None),
       is_document_empty: map_ref
         .get_with_txn(
           txn,
@@ -125,8 +142,12 @@ impl RowMeta {
       map_ref.try_update(txn, meta_id_from_row_id(row_id, RowMetaKey::IconId), icon);
     }
 
-    if let Some(cover) = self.cover_url {
-      map_ref.try_update(txn, meta_id_from_row_id(row_id, RowMetaKey::CoverId), cover);
+    if let Some(cover) = self.cover {
+      map_ref.try_update(
+        txn,
+        meta_id_from_row_id(row_id, RowMetaKey::CoverId),
+        serde_json::to_string(&cover).unwrap_or_default(),
+      );
     }
   }
 }

@@ -1,6 +1,6 @@
 use collab_database::database::gen_database_view_id;
-use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
-use collab_database::rows::CreateRowParams;
+use collab_database::entity::{CreateDatabaseParams, CreateViewParams, FileUploadType};
+use collab_database::rows::{CreateRowParams, RowCover};
 
 use crate::user_test::helper::{
   make_default_grid, random_uid, user_database_test_with_db, user_database_test_with_default_data,
@@ -331,13 +331,18 @@ async fn reopen_database_test() {
   let database = test.create_database(params).unwrap();
   let row_orders = database.read().await.get_all_row_orders().await;
   for (index, row_order) in row_orders.into_iter().enumerate() {
+    let cover = RowCover {
+      url: format!("cover-{}", index),
+      upload_type: FileUploadType::LocalFile,
+    };
+
     database
       .write()
       .await
       .update_row_meta(&row_order.id, |updater| {
         updater
           .insert_icon(&format!("icon-{}", index))
-          .insert_cover("cover");
+          .insert_cover(&cover);
       })
       .await;
 
@@ -364,7 +369,11 @@ async fn reopen_database_test() {
       .get_row_meta(&row_order.id)
       .await
       .unwrap();
+
     assert_eq!(row_meta.icon_url, Some(format!("icon-{}", index)));
+
+    let cover = row_meta.cover.unwrap();
+    assert_eq!(cover.url, format!("cover-{}", index));
   }
   let _ = database.read().await.to_json_value().await;
 }

@@ -397,3 +397,12 @@ impl From<usize> for SelectOptionColor {
     }
   }
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum FileUploadType {
+  #[default]
+  LocalFile = 0,
+  NetworkFile = 1,
+  CloudFile = 2,
+}
