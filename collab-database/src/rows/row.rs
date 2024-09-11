@@ -278,6 +278,8 @@ impl DatabaseRowBody {
         self.meta.insert(txn, new_meta_key, doc_id);
       }
     }
+
+    self.data.insert(txn, DATABASE_ROW_ID, new_row_id.as_str());
     self.row_id = new_row_id;
     Ok(())
   }
