@@ -349,7 +349,7 @@ async fn reopen_database_test() {
     let row = database
       .read()
       .await
-      .get_database_row(&row_order.id)
+      .get_or_init_database_row(&row_order.id)
       .await
       .unwrap();
     let json = row.read().await.collab.to_json_value();
@@ -366,8 +366,12 @@ async fn reopen_database_test() {
     let row_meta = database
       .read()
       .await
-      .get_row_meta(&row_order.id)
+      .get_or_init_database_row(&row_order.id)
       .await
+      .unwrap()
+      .read()
+      .await
+      .get_row_meta()
       .unwrap();
 
     assert_eq!(row_meta.icon_url, Some(format!("icon-{}", index)));

@@ -17,7 +17,7 @@ pub enum CollabPluginType {
   /// used per document.
   CloudStorage,
   /// The default plugin type. It can be used for any other purpose.
-  Other,
+  Other(String),
 }
 pub trait CollabPersistence: Send + Sync + 'static {
   fn load_collab_from_disk(&self, collab: &mut Collab);
@@ -75,9 +75,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
 
   /// Returns the type of the plugin.
-  fn plugin_type(&self) -> CollabPluginType {
-    CollabPluginType::Other
-  }
+  fn plugin_type(&self) -> CollabPluginType;
 
   /// Flush the data to the storage. It will remove all existing updates and insert the state vector
   /// and doc_state.
@@ -140,11 +138,11 @@ where
 }
 
 #[derive(Clone, Default)]
-pub struct Plugins(Arc<PluginsInner>);
+pub struct Plugins(pub(crate) Arc<PluginsInner>);
 
 #[derive(Default)]
-struct PluginsInner {
-  has_cloud_storage: AtomicBool,
+pub(crate) struct PluginsInner {
+  pub(crate) has_cloud_plugin: AtomicBool,
   head: ArcSwapOption<Node>,
 }
 
@@ -159,7 +157,7 @@ impl Plugins {
     I: IntoIterator<Item = Box<dyn CollabPlugin>>,
   {
     let list = Plugins(Arc::new(PluginsInner {
-      has_cloud_storage: AtomicBool::new(false),
+      has_cloud_plugin: AtomicBool::new(false),
       head: ArcSwapOption::new(None),
     }));
     for plugin in plugins {
@@ -172,7 +170,7 @@ impl Plugins {
     let inner = &*self.0;
     if plugin.plugin_type() == CollabPluginType::CloudStorage {
       let already_existed = inner
-        .has_cloud_storage
+        .has_cloud_plugin
         .swap(true, std::sync::atomic::Ordering::SeqCst);
       if already_existed {
         return false; // skip adding the plugin
@@ -193,7 +191,7 @@ impl Plugins {
     let inner = &*self.0;
     let current = inner.head.swap(None);
     inner
-      .has_cloud_storage
+      .has_cloud_plugin
       .store(false, std::sync::atomic::Ordering::SeqCst);
     RemovedPluginsIter { current }
   }
