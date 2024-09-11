@@ -7,3 +7,6 @@ mod util;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod conversions;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod importer;
