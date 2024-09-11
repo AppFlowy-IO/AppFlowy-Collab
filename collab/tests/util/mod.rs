@@ -5,6 +5,7 @@ use bytes::Bytes;
 
 use collab::core::collab::DataSource;
 
+use collab::core::collab_plugin::CollabPluginType;
 use collab::preclude::*;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::fmt::Subscriber;
@@ -73,6 +74,10 @@ impl CollabPlugin for CollabStateCachePlugin {
       write_guard.push(Bytes::from(doc_state));
     }
     write_guard.push(Bytes::from(update.to_vec()));
+  }
+
+  fn plugin_type(&self) -> CollabPluginType {
+    CollabPluginType::Other
   }
 }
 

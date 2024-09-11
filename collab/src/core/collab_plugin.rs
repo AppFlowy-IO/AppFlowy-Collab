@@ -75,9 +75,7 @@ pub trait CollabPlugin: Send + Sync + 'static {
   fn after_transaction(&self, _object_id: &str, _txn: &mut TransactionMut) {}
 
   /// Returns the type of the plugin.
-  fn plugin_type(&self) -> CollabPluginType {
-    CollabPluginType::Other
-  }
+  fn plugin_type(&self) -> CollabPluginType;
 
   /// Flush the data to the storage. It will remove all existing updates and insert the state vector
   /// and doc_state.

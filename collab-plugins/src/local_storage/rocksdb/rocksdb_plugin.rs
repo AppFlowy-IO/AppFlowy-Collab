@@ -13,6 +13,7 @@ use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabType;
 use tracing::{error, info, warn};
 
+use collab::core::collab_plugin::CollabPluginType;
 use yrs::TransactionMut;
 
 pub trait RocksdbBackup: Send + Sync {
@@ -159,5 +160,9 @@ impl CollabPlugin for RocksdbDiskPlugin {
     } else {
       tracing::warn!("[Rocksdb Plugin]: collab_db is dropped");
     };
+  }
+
+  fn plugin_type(&self) -> CollabPluginType {
+    CollabPluginType::Other
   }
 }
