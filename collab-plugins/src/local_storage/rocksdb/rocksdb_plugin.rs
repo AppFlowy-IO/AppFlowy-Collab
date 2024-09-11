@@ -163,6 +163,6 @@ impl CollabPlugin for RocksdbDiskPlugin {
   }
 
   fn plugin_type(&self) -> CollabPluginType {
-    CollabPluginType::Other
+    CollabPluginType::Other("RocksdbDiskPlugin".to_string())
   }
 }

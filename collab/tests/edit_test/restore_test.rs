@@ -486,6 +486,6 @@ impl CollabPlugin for ReceiveUpdatesPlugin {
   }
 
   fn plugin_type(&self) -> CollabPluginType {
-    CollabPluginType::Other
+    CollabPluginType::Other("ReceiveUpdatesPlugin".to_string())
   }
 }

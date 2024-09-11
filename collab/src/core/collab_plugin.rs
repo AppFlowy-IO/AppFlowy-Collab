@@ -17,7 +17,7 @@ pub enum CollabPluginType {
   /// used per document.
   CloudStorage,
   /// The default plugin type. It can be used for any other purpose.
-  Other,
+  Other(String),
 }
 pub trait CollabPersistence: Send + Sync + 'static {
   fn load_collab_from_disk(&self, collab: &mut Collab);

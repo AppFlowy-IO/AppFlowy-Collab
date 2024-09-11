@@ -77,7 +77,7 @@ impl CollabPlugin for CollabStateCachePlugin {
   }
 
   fn plugin_type(&self) -> CollabPluginType {
-    CollabPluginType::Other
+    CollabPluginType::Other("CollabStateCachePlugin".to_string())
   }
 }
 
