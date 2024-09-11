@@ -41,6 +41,9 @@ use collab::util::{AnyExt, ArrayExt};
 use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
 use collab_entity::CollabType;
 use nanoid::nanoid;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
+use rayon::prelude::IntoParallelIterator;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 pub use tokio_stream::wrappers::WatchStream;
@@ -166,8 +169,6 @@ impl Database {
     .map_err(|e| DatabaseError::Internal(e.into()))?
   }
 
-  /// Return encoded collab for the database
-  /// EncodedDatabase includes the encoded collab of the database and all row collabs
   pub async fn encode_database_collabs(&self) -> Result<EncodedDatabase, DatabaseError> {
     let database_id = self.collab.object_id().to_string();
     let encoded_database_collab = EncodedCollabInfo {
@@ -175,21 +176,30 @@ impl Database {
       collab_type: CollabType::Database,
       encoded_collab: encoded_collab(&self.collab, &CollabType::Database)?,
     };
-    let mut encoded_row_collabs = vec![];
+
+    // Get all row orders
     let row_orders = self.get_all_row_orders().await;
-    const CHUNK_SIZE: usize = 30;
-    for chunk in row_orders.chunks(CHUNK_SIZE) {
-      for chunk_row in chunk {
-        if let Some(database_row) = self.init_database_row(&chunk_row.id).await {
-          encoded_row_collabs.push(EncodedCollabInfo {
-            object_id: chunk_row.id.to_string(),
+    let database_rows: Vec<Option<Arc<RwLock<DatabaseRow>>>> = futures::future::join_all(
+      row_orders
+        .iter()
+        .map(|chunk_row| self.get_or_init_database_row(&chunk_row.id)),
+    )
+    .await;
+
+    info!("[Database]: encode {} database rows", database_rows.len());
+    let encoded_row_collabs = database_rows
+        .into_par_iter() // Parallel iterator over the cloned rows
+        .filter_map(|database_row| {
+         let database_row = database_row?;
+          let row_collab = &database_row.blocking_read().collab;
+          let encoded_collab = encoded_collab(row_collab, &CollabType::DatabaseRow).ok()?;
+          Some(EncodedCollabInfo {
+            object_id: row_collab.object_id().to_string(),
             collab_type: CollabType::DatabaseRow,
-            encoded_collab: database_row.read().await.encoded_collab()?,
-          });
-        }
-      }
-      tokio::task::yield_now().await;
-    }
+            encoded_collab,
+          })
+        })
+        .collect::<Vec<_>>();
 
     Ok(EncodedDatabase {
       encoded_database_collab,
@@ -204,12 +214,25 @@ impl Database {
       let mut encode_collabs = vec![];
       encode_collabs.push((self.collab.object_id().to_string(), database_encoded));
 
-      // Write database rows
-      for row in self.body.block.row_mem_cache.iter() {
-        let row_collab = &row.blocking_read().collab;
-        let encoded_collab = encoded_collab(row_collab, &CollabType::DatabaseRow)?;
-        encode_collabs.push((row_collab.object_id().to_string(), encoded_collab));
-      }
+      let rows = self
+        .body
+        .block
+        .row_mem_cache
+        .iter()
+        .map(|entry| entry.value().clone())
+        .collect::<Vec<_>>();
+
+      info!("[Database]: encode {} database rows", rows.len());
+      let row_encodings = rows
+        .par_iter()
+        .flat_map(|row| {
+          let row_collab = &row.blocking_read().collab;
+          let encoded_collab = encoded_collab(row_collab, &CollabType::DatabaseRow).ok()?;
+          Some((row_collab.object_id().to_string(), encoded_collab))
+        })
+        .collect::<Vec<_>>();
+
+      encode_collabs.extend(row_encodings);
 
       info!("Write {} database collab", encode_collabs.len());
       persistence.flush_collabs(encode_collabs)?;
@@ -470,7 +493,7 @@ impl Database {
 
   /// Return the [Row] with the given row id.
   pub async fn get_row(&self, row_id: &RowId) -> Row {
-    let row = self.body.block.get_row(row_id).await;
+    let row = self.body.block.get_database_row(row_id).await;
     match row {
       None => Row::empty(row_id.clone(), &self.get_database_id()),
       Some(row) => row
@@ -487,17 +510,24 @@ impl Database {
   }
 
   #[instrument(level = "debug", skip_all)]
-  pub async fn init_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self.body.block.get_or_init_row(row_id).await.ok()
+  pub async fn get_or_init_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
+    self.body.block.get_or_init_database_row(row_id).await.ok()
   }
 
+  /// Return None if the row is not initialized.
+  /// Use [Self::get_or_init_database_row] to initialize the row.
   pub async fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
-    self.body.block.get_row(row_id).await
+    self.body.block.get_database_row(row_id).await
   }
 
   #[instrument(level = "debug", skip_all)]
   pub async fn get_row_detail(&self, row_id: &RowId) -> Option<RowDetail> {
-    let database_row = self.body.block.get_or_init_row(row_id).await.ok()?;
+    let database_row = self
+      .body
+      .block
+      .get_or_init_database_row(row_id)
+      .await
+      .ok()?;
 
     let read_guard = database_row.read().await;
     read_guard.get_row_detail()
@@ -1170,7 +1200,7 @@ impl Database {
     let row = self
       .body
       .block
-      .get_row(row_id)
+      .get_database_row(row_id)
       .await?
       .read()
       .await

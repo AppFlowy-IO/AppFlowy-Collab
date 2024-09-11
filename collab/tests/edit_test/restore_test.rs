@@ -13,12 +13,12 @@ use yrs::updates::decoder::Decode;
 use yrs::Map;
 use yrs::{ArrayPrelim, ReadTxn};
 
+use crate::util::{setup_log, CollabStateCachePlugin};
+use collab::core::collab_plugin::CollabPluginType;
 use yrs::types::ToJson;
 use yrs::MapRef;
 use yrs::TransactionMut;
 use yrs::Update;
-
-use crate::util::{setup_log, CollabStateCachePlugin};
 
 #[tokio::test]
 async fn restore_from_update() {
@@ -483,5 +483,9 @@ impl ReceiveUpdatesPlugin {
 impl CollabPlugin for ReceiveUpdatesPlugin {
   fn receive_update(&self, _object_id: &str, _txn: &TransactionMut, update: &[u8]) {
     self.updates.lock().unwrap().push(update.to_vec());
+  }
+
+  fn plugin_type(&self) -> CollabPluginType {
+    CollabPluginType::Other("ReceiveUpdatesPlugin".to_string())
   }
 }
