@@ -215,7 +215,7 @@ pub struct DatabaseRowBody {
   row_id: RowId,
   pub data: MapRef,
   #[allow(dead_code)]
-  meta: MapRef,
+  pub meta: MapRef,
   #[allow(dead_code)]
   comments: ArrayRef,
 }
@@ -523,7 +523,7 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
 }
 
 pub(crate) const ROW_ID: &str = "id";
-pub(crate) const ROW_DATABASE_ID: &str = "database_id";
+pub const ROW_DATABASE_ID: &str = "database_id";
 pub(crate) const ROW_VISIBILITY: &str = "visibility";
 
 pub const ROW_HEIGHT: &str = "height";
