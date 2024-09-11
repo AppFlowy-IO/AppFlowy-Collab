@@ -73,9 +73,6 @@ pub struct Collab {
   pub context: CollabContext,
 }
 
-unsafe impl Send for Collab {} // TODO: Remove this once MapRefs are Send
-unsafe impl Sync for Collab {} // TODO: Remove this once MapRefs are Sync
-
 pub struct CollabContext {
   /// This [CollabClient] is used to verify the origin of a [LockedTransaction] when
   /// applying a remote update.
@@ -268,6 +265,15 @@ impl Collab {
     }
 
     Ok(collab)
+  }
+
+  /// Each collab can have only one cloud plugin
+  pub fn has_cloud_plugin(&self) -> bool {
+    self
+      .plugins
+      .0
+      .has_cloud_plugin
+      .load(std::sync::atomic::Ordering::SeqCst)
   }
 
   pub fn clear_plugins(&self) {

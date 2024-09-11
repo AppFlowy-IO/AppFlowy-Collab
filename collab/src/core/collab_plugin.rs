@@ -140,11 +140,11 @@ where
 }
 
 #[derive(Clone, Default)]
-pub struct Plugins(Arc<PluginsInner>);
+pub struct Plugins(pub(crate) Arc<PluginsInner>);
 
 #[derive(Default)]
-struct PluginsInner {
-  has_cloud_storage: AtomicBool,
+pub(crate) struct PluginsInner {
+  pub(crate) has_cloud_plugin: AtomicBool,
   head: ArcSwapOption<Node>,
 }
 
@@ -159,7 +159,7 @@ impl Plugins {
     I: IntoIterator<Item = Box<dyn CollabPlugin>>,
   {
     let list = Plugins(Arc::new(PluginsInner {
-      has_cloud_storage: AtomicBool::new(false),
+      has_cloud_plugin: AtomicBool::new(false),
       head: ArcSwapOption::new(None),
     }));
     for plugin in plugins {
@@ -172,7 +172,7 @@ impl Plugins {
     let inner = &*self.0;
     if plugin.plugin_type() == CollabPluginType::CloudStorage {
       let already_existed = inner
-        .has_cloud_storage
+        .has_cloud_plugin
         .swap(true, std::sync::atomic::Ordering::SeqCst);
       if already_existed {
         return false; // skip adding the plugin
@@ -193,7 +193,7 @@ impl Plugins {
     let inner = &*self.0;
     let current = inner.head.swap(None);
     inner
-      .has_cloud_storage
+      .has_cloud_plugin
       .store(false, std::sync::atomic::Ordering::SeqCst);
     RemovedPluginsIter { current }
   }
