@@ -7,6 +7,7 @@ use std::time::Duration;
 use collab::core::collab::DataSource;
 use collab::preclude::{uuid_v4, CollabBuilder};
 use collab_database::database::{Database, DatabaseContext};
+use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
 use collab_database::rows::{Cells, CreateRowParams, DatabaseRow, Row, RowId};
 use collab_database::views::{
@@ -76,7 +77,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   }
 }
 
-pub fn create_row(uid: i64, row_id: RowId) -> DatabaseRow {
+pub fn create_row(uid: i64, row_id: RowId) -> Result<DatabaseRow, DatabaseError> {
   let collab_db = make_rocks_db();
   let mut collab = CollabBuilder::new(uid, row_id.clone(), DataSource::Disk(None))
     .with_device_id("1")
@@ -89,7 +90,6 @@ pub fn create_row(uid: i64, row_id: RowId) -> DatabaseRow {
     db: collab_db.clone(),
   });
   DatabaseRow::create(
-    row_id.clone(),
     collab,
     Some(row_change_tx),
     Row::new(row_id, "1"),

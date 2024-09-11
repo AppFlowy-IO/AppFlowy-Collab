@@ -5,10 +5,12 @@ use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 use collab::preclude::encoding::serde::from_any;
 use collab::util::AnyExt;
-use collab_entity::define::DATABASE_ROW_DATA;
+use collab_entity::define::{DATABASE_ROW_DATA, DATABASE_ROW_ID};
 use collab_entity::CollabType;
 
 use crate::database::timestamp;
@@ -42,7 +44,7 @@ pub struct DatabaseRow {
 
 pub fn default_database_row_data(row_id: &RowId, row: Row) -> EncodedCollab {
   let mut collab = Collab::new_with_origin(CollabOrigin::Empty, row_id, vec![], false);
-  let _ = DatabaseRowBody::create(row_id.clone(), &mut collab, row);
+  let _ = DatabaseRowBody::create(&mut collab, row);
   collab
     .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
     .unwrap()
@@ -57,14 +59,13 @@ impl Drop for DatabaseRow {
 
 impl DatabaseRow {
   pub fn open(
-    row_id: RowId,
     mut collab: Collab,
     change_tx: Option<RowChangeSender>,
     collab_service: Arc<dyn DatabaseCollabService>,
   ) -> Result<Self, DatabaseError> {
-    let body = DatabaseRowBody::open(row_id.clone(), &mut collab)?;
+    let body = DatabaseRowBody::open(&mut collab)?;
     if let Some(change_tx) = change_tx {
-      subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
+      subscribe_row_data_change(body.row_id.clone(), &body.data, change_tx);
     }
     Ok(Self {
       collab,
@@ -74,21 +75,20 @@ impl DatabaseRow {
   }
 
   pub fn create(
-    row_id: RowId,
     mut collab: Collab,
     change_tx: Option<RowChangeSender>,
     row: Row,
     collab_service: Arc<dyn DatabaseCollabService>,
-  ) -> Self {
-    let body = DatabaseRowBody::create(row_id.clone(), &mut collab, row);
+  ) -> Result<Self, DatabaseError> {
+    let body = DatabaseRowBody::create(&mut collab, row)?;
     if let Some(change_tx) = change_tx {
-      subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
+      subscribe_row_data_change(body.row_id.clone(), &body.data, change_tx);
     }
-    Self {
+    Ok(Self {
       collab,
       body,
       collab_service,
-    }
+    })
   }
 
   pub fn encoded_collab(&self) -> Result<EncodedCollab, DatabaseError> {
@@ -221,16 +221,22 @@ pub struct DatabaseRowBody {
 }
 
 impl DatabaseRowBody {
-  pub fn open(row_id: RowId, collab: &mut Collab) -> Result<Self, DatabaseError> {
+  pub fn open(collab: &mut Collab) -> Result<Self, DatabaseError> {
     CollabType::DatabaseRow.validate_require_data(collab)?;
-    Ok(Self::create_with_data(row_id, collab, None))
+    Self::create_with_data(collab, None)
   }
 
-  pub fn create(row_id: RowId, collab: &mut Collab, row: Row) -> Self {
-    Self::create_with_data(row_id, collab, Some(row))
+  pub fn create(collab: &mut Collab, row: Row) -> Result<Self, DatabaseError> {
+    Self::create_with_data(collab, Some(row))
   }
 
-  fn create_with_data(row_id: RowId, collab: &mut Collab, row: Option<Row>) -> Self {
+  fn create_with_data(collab: &mut Collab, row: Option<Row>) -> Result<Self, DatabaseError> {
+    let row_id: String = collab
+      .data
+      .get_with_path(&collab.transact(), [DATABASE_ROW_DATA, DATABASE_ROW_ID])
+      .ok_or_else(|| DatabaseError::NoRequiredData)?;
+    let row_id = RowId::from(row_id);
+
     let mut txn = collab.context.transact_mut();
     let data: MapRef = collab.data.get_or_init(&mut txn, DATABASE_ROW_DATA);
     let meta: MapRef = collab.data.get_or_init(&mut txn, META);
@@ -249,12 +255,31 @@ impl DatabaseRowBody {
         .done();
     }
 
-    DatabaseRowBody {
+    Ok(DatabaseRowBody {
       row_id,
       data,
       meta,
       comments,
+    })
+  }
+
+  /// Update row id together with the meta data
+  /// This ensure that future addition to RowMetaKey will be handled
+  pub fn update_id(
+    &mut self,
+    txn: &mut TransactionMut,
+    new_row_id: RowId,
+  ) -> Result<(), DatabaseError> {
+    for key in RowMetaKey::iter() {
+      let old_meta_key = meta_id_from_row_id(&self.row_id.as_str().parse()?, key.clone());
+      let old_meta_value = self.meta.remove(txn, &old_meta_key);
+      let new_meta_key = meta_id_from_row_id(&new_row_id.as_str().parse()?, key);
+      if let Some(yrs::Out::Any(doc_id)) = old_meta_value {
+        self.meta.insert(txn, new_meta_key, doc_id);
+      }
     }
+    self.row_id = new_row_id;
+    Ok(())
   }
 }
 
@@ -314,6 +339,7 @@ fn default_visibility() -> bool {
   true
 }
 
+#[derive(Clone, Debug, EnumIter)]
 pub enum RowMetaKey {
   DocumentId,
   IconId,

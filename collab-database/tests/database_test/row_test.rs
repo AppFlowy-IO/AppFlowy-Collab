@@ -316,6 +316,6 @@ fn row_document_id_test() {
 
 #[tokio::test]
 async fn validate_row_test() {
-  let row = create_row(1, RowId::from(1));
+  let row = create_row(1, RowId::from(1)).unwrap();
   row.validate().unwrap();
 }
