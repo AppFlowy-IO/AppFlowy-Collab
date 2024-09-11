@@ -349,7 +349,7 @@ async fn reopen_database_test() {
     let row = database
       .read()
       .await
-      .get_database_row(&row_order.id)
+      .get_or_init_database_row(&row_order.id)
       .await
       .unwrap();
     let json = row.read().await.collab.to_json_value();
