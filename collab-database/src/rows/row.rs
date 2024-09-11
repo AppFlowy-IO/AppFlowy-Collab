@@ -213,7 +213,7 @@ impl BorrowMut<Collab> for DatabaseRow {
 
 pub struct DatabaseRowBody {
   row_id: RowId,
-  data: MapRef,
+  pub data: MapRef,
   #[allow(dead_code)]
   meta: MapRef,
   #[allow(dead_code)]
