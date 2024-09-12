@@ -129,7 +129,7 @@ fn node_type_to_string(node: &mdast::Node, list_type: Option<&str>) -> String {
       }
     },
     mdast::Node::Code(_) => "code",
-    mdast::Node::Image(_) | mdast::Node::ImageReference(_) => "image",
+    mdast::Node::Image(_) => "image",
     mdast::Node::Math(_) => "math_equation",
     mdast::Node::ThematicBreak(_) => "divider",
     mdast::Node::Table(_) => "table",
@@ -273,10 +273,36 @@ fn process_table(document_data: &mut DocumentData, table: &mdast::Table, parent_
           let cell_block =
             create_table_cell_block(&cell_id, parent_id, row_index, col_index, &table.align);
 
+          let paragraph_node = mdast::Node::Paragraph(mdast::Paragraph {
+            children: cell_node.children.clone(),
+            position: None,
+          });
+
+          let paragraph_block_id = generate_id();
+          let paragraph_block = create_block(
+            &paragraph_block_id,
+            &paragraph_node,
+            Some(cell_id.clone()),
+            None,
+          );
+
+          document_data
+            .blocks
+            .insert(paragraph_block.id.clone(), paragraph_block);
           document_data.blocks.insert(cell_id.clone(), cell_block);
           update_children_map(document_data, Some(parent_id.to_string()), &cell_id);
+          update_children_map(
+            document_data,
+            Some(cell_id.to_string()),
+            &paragraph_block_id,
+          );
 
-          process_children(document_data, &cell_node.children, Some(cell_id), None);
+          process_children(
+            document_data,
+            &cell_node.children,
+            Some(paragraph_block_id.clone()),
+            None,
+          );
         }
       }
     }

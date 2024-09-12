@@ -552,7 +552,16 @@ fn test_table() {
 
   for cell in table_cells.iter() {
     let text_map = result.meta.text_map.as_ref().unwrap();
-    let delta_json = parse_json(text_map.get(&cell.id).unwrap());
+    let paragraph_block = result
+      .meta
+      .children_map
+      .get(&cell.id)
+      .unwrap()
+      .iter()
+      .map(|id| result.blocks.get(id).unwrap())
+      .next()
+      .unwrap();
+    let delta_json = parse_json(text_map.get(&paragraph_block.id).unwrap());
     let data = cell.data.clone();
     let row_position = data.get("rowPosition").unwrap().as_u64().unwrap();
     let col_position = data.get("colPosition").unwrap().as_u64().unwrap();
