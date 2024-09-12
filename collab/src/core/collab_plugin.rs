@@ -2,7 +2,7 @@ use crate::core::awareness::{AwarenessUpdate, Event};
 
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
-use std::sync::atomic::AtomicBool;
+
 use std::sync::Arc;
 use yrs::{Doc, TransactionMut};
 
@@ -11,7 +11,7 @@ use crate::entity::EncodedCollab;
 use crate::error::CollabError;
 use crate::preclude::Collab;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum CollabPluginType {
   /// The plugin is used for sync data with a remote storage. Only one plugin of this type can be
   /// used per document.
@@ -139,10 +139,8 @@ where
 
 #[derive(Clone, Default)]
 pub struct Plugins(pub(crate) Arc<PluginsInner>);
-
 #[derive(Default)]
 pub(crate) struct PluginsInner {
-  pub(crate) has_cloud_plugin: AtomicBool,
   head: ArcSwapOption<Node>,
 }
 
@@ -157,7 +155,6 @@ impl Plugins {
     I: IntoIterator<Item = Box<dyn CollabPlugin>>,
   {
     let list = Plugins(Arc::new(PluginsInner {
-      has_cloud_plugin: AtomicBool::new(false),
       head: ArcSwapOption::new(None),
     }));
     for plugin in plugins {
@@ -166,36 +163,83 @@ impl Plugins {
     list
   }
 
+  // Check if a CloudStorage plugin exists in the list
+  pub fn has_cloud_plugin(&self) -> bool {
+    let mut current = self.0.head.load_full();
+    while let Some(node) = current {
+      if node.value.plugin_type() == CollabPluginType::CloudStorage {
+        return true; // CloudStorage plugin found
+      }
+      current = node.next.load_full();
+    }
+    false
+  }
+
+  // Remove a plugin based on its type
+  pub fn remove_plugin(&self, plugin_type: CollabPluginType) {
+    let inner = &*self.0;
+    let mut current = inner.head.load_full();
+    let mut prev: Option<Arc<Node>> = None;
+
+    while let Some(curr_node) = current {
+      if curr_node.value.plugin_type() == plugin_type {
+        let next = curr_node.next.load_full();
+        match prev {
+          Some(prev_node) => {
+            prev_node.next.store(next); // Bypass the current node
+          },
+          None => {
+            inner.head.swap(next); // Removing the head node
+          },
+        }
+        curr_node.value.destroy();
+        return;
+      }
+
+      prev = Some(curr_node.clone());
+      current = curr_node.next.load_full();
+    }
+  }
+
+  // Push a plugin to the front of the list
   pub fn push_front(&self, plugin: Box<dyn CollabPlugin>) -> bool {
     let inner = &*self.0;
-    if plugin.plugin_type() == CollabPluginType::CloudStorage {
-      let already_existed = inner
-        .has_cloud_plugin
-        .swap(true, std::sync::atomic::Ordering::SeqCst);
-      if already_existed {
-        return false; // skip adding the plugin
-      }
+    if self.contains_plugin(plugin.plugin_type()) {
+      return false;
     }
-    let new = Arc::new(Node {
+
+    let new_node = Arc::new(Node {
       next: ArcSwapOption::new(None),
       value: plugin,
     });
+
     inner.head.rcu(|old_head| {
-      new.next.store(old_head.clone());
-      Some(new.clone())
+      new_node.next.store(old_head.clone());
+      Some(new_node.clone())
     });
+
     true
   }
 
+  pub fn contains_plugin(&self, plugin_type: CollabPluginType) -> bool {
+    let mut current = self.0.head.load_full();
+    while let Some(node) = current {
+      if node.value.plugin_type() == plugin_type {
+        return true;
+      }
+      current = node.next.load_full();
+    }
+    false
+  }
+
+  // Remove all plugins from the list
   pub fn remove_all(&self) -> RemovedPluginsIter {
     let inner = &*self.0;
     let current = inner.head.swap(None);
-    inner
-      .has_cloud_plugin
-      .store(false, std::sync::atomic::Ordering::SeqCst);
     RemovedPluginsIter { current }
   }
 
+  // Iterate over each plugin in the list and apply a function to it
   pub fn each<F>(&self, mut f: F)
   where
     F: FnMut(&Box<dyn CollabPlugin>),
@@ -224,5 +268,139 @@ impl Iterator for RemovedPluginsIter {
         Some(node.value)
       },
     }
+  }
+}
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  struct MyPlugin {
+    pub plugin_type: CollabPluginType,
+  }
+
+  impl CollabPlugin for MyPlugin {
+    fn plugin_type(&self) -> CollabPluginType {
+      self.plugin_type.clone()
+    }
+
+    fn destroy(&self) {
+      // In a real implementation, you might want to clean up resources here.
+    }
+  }
+
+  #[test]
+  fn test_push_front_and_contains_plugin() {
+    let plugins = Plugins::new(vec![]);
+
+    // Initially, the list should not contain any plugins
+    assert!(!plugins.contains_plugin(CollabPluginType::Other("PluginA".to_string())));
+    assert!(!plugins.contains_plugin(CollabPluginType::CloudStorage));
+
+    // Add an Other plugin
+    let other_plugin = Box::new(MyPlugin {
+      plugin_type: CollabPluginType::Other("PluginA".to_string()),
+    });
+    assert!(plugins.push_front(other_plugin));
+
+    // The list should now contain the Other plugin
+    assert!(plugins.contains_plugin(CollabPluginType::Other("PluginA".to_string())));
+    assert!(!plugins.contains_plugin(CollabPluginType::CloudStorage));
+
+    // Add a CloudStorage plugin
+    let cloud_plugin = Box::new(MyPlugin {
+      plugin_type: CollabPluginType::CloudStorage,
+    });
+    assert!(plugins.push_front(cloud_plugin));
+
+    // The list should contain both Other and CloudStorage plugins
+    assert!(plugins.contains_plugin(CollabPluginType::Other("PluginA".to_string())));
+    assert!(plugins.contains_plugin(CollabPluginType::CloudStorage));
+
+    // Try to add another CloudStorage plugin (should be rejected)
+    let another_cloud_plugin = Box::new(MyPlugin {
+      plugin_type: CollabPluginType::CloudStorage,
+    });
+    assert!(!plugins.push_front(another_cloud_plugin)); // Should return false
+  }
+
+  #[test]
+  fn test_remove_plugin() {
+    let plugins = Plugins::new(vec![
+      Box::new(MyPlugin {
+        plugin_type: CollabPluginType::Other("PluginA".to_string()),
+      }) as Box<dyn CollabPlugin>,
+      Box::new(MyPlugin {
+        plugin_type: CollabPluginType::CloudStorage,
+      }) as Box<dyn CollabPlugin>,
+    ]);
+
+    // The list should contain both Other and CloudStorage plugins
+    assert!(plugins.contains_plugin(CollabPluginType::Other("PluginA".to_string())));
+    assert!(plugins.contains_plugin(CollabPluginType::CloudStorage));
+
+    // Remove the Other plugin
+    plugins.remove_plugin(CollabPluginType::Other("PluginA".to_string()));
+    assert!(!plugins.contains_plugin(CollabPluginType::Other("PluginA".to_string())));
+    assert!(plugins.contains_plugin(CollabPluginType::CloudStorage));
+
+    // Remove the CloudStorage plugin
+    plugins.remove_plugin(CollabPluginType::CloudStorage);
+    assert!(!plugins.contains_plugin(CollabPluginType::Other("PluginA".to_string())));
+    assert!(!plugins.contains_plugin(CollabPluginType::CloudStorage));
+  }
+
+  #[test]
+  fn test_remove_all() {
+    let plugins = Plugins::new(vec![
+      Box::new(MyPlugin {
+        plugin_type: CollabPluginType::Other("PluginA".to_string()),
+      }) as Box<dyn CollabPlugin>,
+      Box::new(MyPlugin {
+        plugin_type: CollabPluginType::CloudStorage,
+      }) as Box<dyn CollabPlugin>,
+    ]);
+
+    // The list should contain both Other and CloudStorage plugins
+    assert!(plugins.contains_plugin(CollabPluginType::Other("PluginA".to_string())));
+    assert!(plugins.contains_plugin(CollabPluginType::CloudStorage));
+
+    // Remove all plugins
+    let mut removed_plugins = plugins.remove_all();
+
+    // Check that the removed plugins iterator contains both plugins
+    let removed_plugin_1 = removed_plugins.next().unwrap();
+    let removed_plugin_2 = removed_plugins.next().unwrap();
+    let types: Vec<_> = vec![
+      removed_plugin_1.plugin_type(),
+      removed_plugin_2.plugin_type(),
+    ];
+    assert!(types.contains(&CollabPluginType::Other("PluginA".to_string())));
+    assert!(types.contains(&CollabPluginType::CloudStorage));
+
+    // After removing all, the list should be empty
+    assert!(!plugins.contains_plugin(CollabPluginType::Other("PluginA".to_string())));
+    assert!(!plugins.contains_plugin(CollabPluginType::CloudStorage));
+  }
+
+  #[test]
+  fn test_each() {
+    let plugins = Plugins::new(vec![
+      Box::new(MyPlugin {
+        plugin_type: CollabPluginType::Other("PluginA".to_string()),
+      }) as Box<dyn CollabPlugin>,
+      Box::new(MyPlugin {
+        plugin_type: CollabPluginType::CloudStorage,
+      }) as Box<dyn CollabPlugin>,
+    ]);
+
+    // Collect all plugin types using the `each` method
+    let mut plugin_types = vec![];
+    plugins.each(|plugin| {
+      plugin_types.push(plugin.plugin_type());
+    });
+
+    // Ensure both Other and CloudStorage plugins were iterated
+    assert!(plugin_types.contains(&CollabPluginType::Other("PluginA".to_string())));
+    assert!(plugin_types.contains(&CollabPluginType::CloudStorage));
   }
 }

@@ -82,7 +82,7 @@ impl UserAwareness {
   }
 
   pub fn close(&self) {
-    self.collab.clear_plugins();
+    self.collab.remove_all_plugins();
   }
 
   /// Converts the internal state of the `UserAwareness` into a JSON representation.
