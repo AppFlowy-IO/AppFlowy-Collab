@@ -21,7 +21,7 @@ use yrs::{
 };
 
 use crate::core::awareness::Awareness;
-use crate::core::collab_plugin::{CollabPersistence, CollabPlugin, Plugins};
+use crate::core::collab_plugin::{CollabPersistence, CollabPlugin, CollabPluginType, Plugins};
 use crate::core::collab_state::{InitState, SnapshotState, State, SyncState};
 use crate::core::origin::{CollabClient, CollabOrigin};
 use crate::core::transaction::DocTransactionExtension;
@@ -269,14 +269,16 @@ impl Collab {
 
   /// Each collab can have only one cloud plugin
   pub fn has_cloud_plugin(&self) -> bool {
-    self
-      .plugins
-      .0
-      .has_cloud_plugin
-      .load(std::sync::atomic::Ordering::SeqCst)
+    self.plugins.has_cloud_plugin()
   }
 
-  pub fn clear_plugins(&self) {
+  pub fn remove_plugins_for_types(&self, plugin_types: Vec<CollabPluginType>) {
+    for plugin_type in plugin_types {
+      self.plugins.remove_plugin(plugin_type);
+    }
+  }
+
+  pub fn remove_all_plugins(&self) {
     let plugins = self.plugins.remove_all();
     for plugin in plugins {
       plugin.destroy();
