@@ -5,10 +5,12 @@ use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 use collab::preclude::encoding::serde::from_any;
 use collab::util::AnyExt;
-use collab_entity::define::DATABASE_ROW_DATA;
+use collab_entity::define::{DATABASE_ROW_DATA, DATABASE_ROW_ID};
 use collab_entity::CollabType;
 
 use crate::database::timestamp;
@@ -213,9 +215,9 @@ impl BorrowMut<Collab> for DatabaseRow {
 
 pub struct DatabaseRowBody {
   row_id: RowId,
-  data: MapRef,
+  pub data: MapRef,
   #[allow(dead_code)]
-  meta: MapRef,
+  pub meta: MapRef,
   #[allow(dead_code)]
   comments: ArrayRef,
 }
@@ -255,6 +257,25 @@ impl DatabaseRowBody {
       meta,
       comments,
     }
+  }
+
+  pub fn update_id(
+    &mut self,
+    txn: &mut TransactionMut,
+    new_row_id: RowId,
+  ) -> Result<(), DatabaseError> {
+    for key in RowMetaKey::iter() {
+      let old_meta_key = meta_id_from_row_id(&self.row_id.as_str().parse()?, key.clone());
+      let old_meta_value = self.meta.remove(txn, &old_meta_key);
+      let new_meta_key = meta_id_from_row_id(&new_row_id.as_str().parse()?, key);
+      if let Some(yrs::Out::Any(doc_id)) = old_meta_value {
+        self.meta.insert(txn, new_meta_key, doc_id);
+      }
+    }
+
+    self.data.insert(txn, DATABASE_ROW_ID, new_row_id.as_str());
+    self.row_id = new_row_id;
+    Ok(())
   }
 }
 
@@ -314,6 +335,7 @@ fn default_visibility() -> bool {
   true
 }
 
+#[derive(Clone, Debug, EnumIter)]
 pub enum RowMetaKey {
   DocumentId,
   IconId,
@@ -497,7 +519,7 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
 }
 
 pub(crate) const ROW_ID: &str = "id";
-pub(crate) const ROW_DATABASE_ID: &str = "database_id";
+pub const ROW_DATABASE_ID: &str = "database_id";
 pub(crate) const ROW_VISIBILITY: &str = "visibility";
 
 pub const ROW_HEIGHT: &str = "height";
