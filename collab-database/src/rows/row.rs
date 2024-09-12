@@ -278,6 +278,20 @@ impl DatabaseRowBody {
     Ok(())
   }
 
+  pub fn has_document<T: ReadTxn>(&self, txn: &T) -> Result<bool, DatabaseError> {
+    let row_uuid = Uuid::parse_str(&self.row_id)?;
+    let is_doc_empty_key = meta_id_from_row_id(&row_uuid, RowMetaKey::IsDocumentEmpty);
+    let is_doc_empty = self.meta.get(txn, &is_doc_empty_key);
+    if let Some(yrs::Out::Any(Any::Bool(is_doc_empty))) = is_doc_empty {
+      Ok(!is_doc_empty)
+    } else {
+      Err(DatabaseError::Internal(anyhow::anyhow!(
+        "🔴 Invalid is_doc_empty value: {:?}",
+        is_doc_empty
+      )))
+    }
+  }
+
   pub fn get_data(&self) -> &MapRef {
     &self.data
   }
