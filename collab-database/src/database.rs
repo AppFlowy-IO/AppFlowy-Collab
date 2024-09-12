@@ -26,9 +26,7 @@ use crate::entity::{
   DatabaseViewMeta, EncodedCollabInfo, EncodedDatabase,
 };
 use crate::template::entity::DatabaseTemplate;
-use crate::template::util::{
-  create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
-};
+use crate::template::util::create_database_params_from_template;
 
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
@@ -145,7 +143,7 @@ impl Database {
     let params =
       create_database_params_from_template(database_id.to_string(), view_id.to_string(), template);
     let context = DatabaseContext {
-      collab_service: Arc::new(TemplateDatabaseCollabServiceImpl),
+      collab_service: Arc::new(NoPersistenceDatabaseCollabService),
       notifier: Default::default(),
     };
     Self::create_with_view(params, context).await

@@ -17,6 +17,7 @@ use collab::core::origin::CollabOrigin;
 use collab::error::CollabError;
 use collab::lock::RwLock;
 use dashmap::DashMap;
+use rayon::prelude::*;
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -37,6 +38,12 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     encoded_collab: Option<EncodedCollab>,
   ) -> Result<Collab, DatabaseError>;
 
+  async fn get_collabs(
+    &self,
+    object_ids: Vec<String>,
+    collab_type: CollabType,
+  ) -> Result<EncodeCollabByOid, DatabaseError>;
+
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>>;
 }
 
@@ -50,12 +57,17 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
     encoded_collab: Option<EncodedCollab>,
   ) -> Result<Collab, DatabaseError> {
     match encoded_collab {
-      None => Ok(Collab::new_with_origin(
+      None => Collab::new_with_source(
         CollabOrigin::Empty,
         object_id,
+        CollabPersistenceImpl {
+          persistence: self.persistence(),
+        }
+        .into(),
         vec![],
         false,
-      )),
+      )
+      .map_err(|err| DatabaseError::Internal(err.into())),
       Some(encode_collab) => Collab::new_with_source(
         CollabOrigin::Empty,
         object_id,
@@ -65,6 +77,41 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
       )
       .map_err(|err| DatabaseError::Internal(err.into())),
     }
+  }
+
+  async fn get_collabs(
+    &self,
+    object_ids: Vec<String>,
+    collab_type: CollabType,
+  ) -> Result<EncodeCollabByOid, DatabaseError> {
+    let map: HashMap<String, _> = object_ids
+      .into_par_iter()
+      .filter_map(|object_id| {
+        let persistence = self.persistence();
+
+        let result = Collab::new_with_source(
+          CollabOrigin::Empty,
+          &object_id,
+          CollabPersistenceImpl { persistence }.into(),
+          vec![],
+          false,
+        )
+        .map_err(|err| DatabaseError::Internal(err.into()))
+        .and_then(|collab| {
+          collab
+            .encode_collab_v1(|collab| collab_type.validate_require_data(collab))
+            .map_err(DatabaseError::Internal)
+        });
+
+        // If successful, return the object ID and the encoded collab
+        match result {
+          Ok(encoded_collab) => Some((object_id, encoded_collab)),
+          Err(_) => None, // Ignore errors, but you can log them if necessary
+        }
+      })
+      .collect();
+
+    Ok(map)
   }
 
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {

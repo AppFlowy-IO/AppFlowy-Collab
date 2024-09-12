@@ -227,6 +227,10 @@ impl Block {
     }
   }
 
+  pub async fn get_or_init_database_rows(&self, row_ids: Vec<RowId>) {
+    //
+  }
+
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
   #[instrument(level = "debug", skip_all)]
   pub async fn get_or_init_database_row(
@@ -241,7 +245,7 @@ impl Block {
     match value {
       None => tokio::time::timeout(
         Duration::from_secs(3),
-        self.init_row_instance(row_id.clone()),
+        self.init_database_row(row_id.clone()),
       )
       .await
       .map_err(|_| DatabaseError::DatabaseRowNotFound {
@@ -252,12 +256,20 @@ impl Block {
     }
   }
 
-  pub async fn init_row_instance(
+  pub async fn init_database_row(
     &self,
     row_id: RowId,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
     trace!("init row instance: {}", row_id);
     let collab = self.create_collab_for_row(&row_id, None).await?;
+    self.init_database_row_from_collab(row_id, collab).await
+  }
+
+  pub async fn init_database_row_from_collab(
+    &self,
+    row_id: RowId,
+    collab: Collab,
+  ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
     let database_row = DatabaseRow::open(
       row_id.clone(),
       collab,

@@ -12,7 +12,7 @@ use collab_database::fields::Field;
 use collab_database::rows::{Cells, CreateRowParams, RowId};
 use collab_database::views::DatabaseLayout;
 use collab_database::workspace_database::{
-  DatabaseCollabPersistenceService, DatabaseCollabService, RowRelationChange,
+  DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid, RowRelationChange,
   RowRelationUpdateReceiver, WorkspaceDatabase,
 };
 use collab_entity::CollabType;
@@ -169,6 +169,43 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
 
     collab.initialize();
     Ok(collab)
+  }
+
+  async fn get_collabs(
+    &self,
+    object_ids: Vec<String>,
+    collab_type: CollabType,
+  ) -> Result<EncodeCollabByOid, DatabaseError> {
+    let mut map = EncodeCollabByOid::new();
+    for object_id in object_ids {
+      let db_plugin = RocksdbDiskPlugin::new_with_config(
+        1,
+        object_id.to_string(),
+        collab_type.clone(),
+        Arc::downgrade(&self.db),
+        CollabPersistenceConfig::default(),
+      );
+
+      let collab = CollabBuilder::new(
+        1,
+        &object_id,
+        KVDBCollabPersistenceImpl {
+          db: Arc::downgrade(&self.db),
+          uid: self.uid,
+        }
+        .into_data_source(),
+      )
+      .with_device_id("1")
+      .with_plugin(db_plugin)
+      .build()
+      .unwrap();
+
+      let encoded_collab = collab
+        .encode_collab_v1(|_| Ok::<_, DatabaseError>(()))
+        .unwrap();
+      map.insert(object_id, encoded_collab);
+    }
+    Ok(map)
   }
 
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
