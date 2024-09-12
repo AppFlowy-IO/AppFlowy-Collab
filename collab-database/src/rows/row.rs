@@ -297,7 +297,7 @@ impl DatabaseRowBody {
   }
 
   pub fn get_meta(&self) -> &MapRef {
-    &self.data
+    &self.meta
   }
 }
 
