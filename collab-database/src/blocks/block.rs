@@ -1,5 +1,3 @@
-use collab::util::MapExt;
-use collab_entity::define::{DATABASE_ROW_DATA, DATABASE_ROW_ID};
 use dashmap::DashMap;
 
 use collab_entity::CollabType;
@@ -69,6 +67,7 @@ impl Block {
     for row_id in row_ids.into_iter() {
       let collab = self.create_collab_for_row(&row_id, None).await?;
       match DatabaseRow::open(
+        row_id.clone(),
         collab,
         self.row_change_tx.clone(),
         self.collab_service.clone(),
@@ -123,15 +122,11 @@ impl Block {
     }
 
     let encoded_collab = default_database_row_data(&row_id, row);
-    let mut collab = self
+    let collab = self
       .create_collab_for_row(&row_id, Some(encoded_collab))
       .await?;
-    let _ = collab.data.insert_with_path(
-      &mut collab.context.transact_mut(),
-      vec![DATABASE_ROW_DATA, DATABASE_ROW_ID],
-      row_id.to_string(),
-    );
     let database_row = DatabaseRow::open(
+      row_id.clone(),
       collab,
       self.row_change_tx.clone(),
       self.collab_service.clone(),
@@ -264,6 +259,7 @@ impl Block {
     trace!("init row instance: {}", row_id);
     let collab = self.create_collab_for_row(&row_id, None).await?;
     let database_row = DatabaseRow::open(
+      row_id.clone(),
       collab,
       self.row_change_tx.clone(),
       self.collab_service.clone(),
