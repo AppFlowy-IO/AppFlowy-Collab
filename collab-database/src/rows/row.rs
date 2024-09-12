@@ -285,10 +285,7 @@ impl DatabaseRowBody {
     if let Some(yrs::Out::Any(Any::Bool(is_doc_empty))) = is_doc_empty {
       Ok(!is_doc_empty)
     } else {
-      Err(DatabaseError::Internal(anyhow::anyhow!(
-        "🔴 Invalid is_doc_empty value: {:?}",
-        is_doc_empty
-      )))
+      Ok(false)
     }
   }
 
