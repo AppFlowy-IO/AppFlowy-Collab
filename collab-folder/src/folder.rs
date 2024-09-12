@@ -128,7 +128,7 @@ impl Folder {
   }
 
   pub fn close(&self) {
-    self.collab.clear_plugins();
+    self.collab.remove_all_plugins();
   }
 
   pub fn validate(&self) -> Result<(), FolderError> {
