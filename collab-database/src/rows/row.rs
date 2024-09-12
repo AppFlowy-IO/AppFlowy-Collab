@@ -241,7 +241,8 @@ impl DatabaseRowBody {
       RowBuilder::new(&mut txn, data.clone(), meta.clone())
         .update(|update| {
           update
-            .set_row_id(row.id, row.database_id)
+            .set_row_id(row.id)
+            .set_database_id(row.database_id)
             .set_height(row.height)
             .set_visibility(row.visibility)
             .set_created_at(row.created_at)
@@ -257,6 +258,14 @@ impl DatabaseRowBody {
       meta,
       comments,
     }
+  }
+
+  pub fn update<F>(&self, txn: &mut TransactionMut, modify: F)
+  where
+    F: FnOnce(RowUpdate),
+  {
+    let update = RowUpdate::new(txn, self.data.clone(), self.meta.clone());
+    modify(update);
   }
 
   pub fn update_id(
@@ -494,15 +503,17 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
     LAST_MODIFIED
   );
 
-  pub fn set_row_id(self, new_row_id: RowId, database_id: String) -> Self {
+  pub fn set_database_id(self, database_id: String) -> Self {
+    self.map_ref.insert(self.txn, ROW_DATABASE_ID, database_id);
+    self
+  }
+
+  pub fn set_row_id(self, new_row_id: RowId) -> Self {
     let old_row_meta = row_id_from_map_ref(self.txn, &self.map_ref)
       .and_then(|row_id| row_id.parse::<Uuid>().ok())
       .map(|row_id| RowMeta::from_map_ref(self.txn, &row_id, &self.meta_ref));
 
     self.map_ref.insert(self.txn, ROW_ID, new_row_id.as_str());
-
-    self.map_ref.insert(self.txn, ROW_DATABASE_ID, database_id);
-
     if let Ok(new_row_id) = new_row_id.parse::<Uuid>() {
       self.meta_ref.clear(self.txn);
       let mut new_row_meta = RowMeta::empty();
@@ -532,7 +543,7 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
     self
   }
 
-  pub fn done(self) -> Option<Row> {
+  pub fn get_updated_row(self) -> Option<Row> {
     row_from_map_ref(&self.map_ref, self.txn)
   }
 }
