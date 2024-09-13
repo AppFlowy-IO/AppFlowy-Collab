@@ -512,6 +512,11 @@ impl Database {
     self.body.block.get_or_init_database_row(row_id).await.ok()
   }
 
+  #[instrument(level = "debug", skip_all)]
+  pub async fn init_database_rows(&self, row_id: Vec<RowId>) -> Result<(), DatabaseError> {
+    self.body.block.init_database_rows(row_id).await
+  }
+
   /// Return None if the row is not initialized.
   /// Use [Self::get_or_init_database_row] to initialize the row.
   pub async fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
