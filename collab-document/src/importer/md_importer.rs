@@ -2,16 +2,12 @@ use crate::blocks::{Block, DocumentData, DocumentMeta};
 use crate::document_data::generate_id;
 use markdown::mdast::AlignKind;
 use markdown::{mdast, message, to_mdast, Constructs, ParseOptions};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
+#[derive(Default)]
 pub struct MDImporter {}
-
-impl Default for MDImporter {
-  fn default() -> Self {
-    Self::new()
-  }
-}
 
 impl MDImporter {
   pub fn new() -> Self {
@@ -29,6 +25,7 @@ impl MDImporter {
           autolink: true,
           ..Constructs::gfm()
         },
+
         ..ParseOptions::gfm()
       },
     )?;
@@ -130,6 +127,8 @@ fn node_type_to_string(node: &mdast::Node, list_type: Option<&str>) -> String {
     },
     mdast::Node::Code(_) => "code",
     mdast::Node::Image(_) => "image",
+    mdast::Node::ImageReference(_) => "image",
+    mdast::Node::LinkReference(_) => "link_preview",
     mdast::Node::Math(_) => "math_equation",
     mdast::Node::ThematicBreak(_) => "divider",
     mdast::Node::Table(_) => "table",
@@ -149,7 +148,8 @@ fn node_to_data(node: &mdast::Node) -> HashMap<String, Value> {
   let mut data = HashMap::new();
   match node {
     mdast::Node::Heading(heading) => {
-      data.insert("level".to_string(), Value::Number(heading.depth.into()));
+      let level = heading.depth.clamp(1, 6);
+      data.insert("level".to_string(), level.into());
     },
     mdast::Node::Code(code) => {
       let language = code.lang.as_ref().cloned().unwrap_or_default();
@@ -157,7 +157,14 @@ fn node_to_data(node: &mdast::Node) -> HashMap<String, Value> {
     },
     mdast::Node::Image(image) => {
       data.insert("url".to_string(), Value::String(image.url.clone()));
-      data.insert("image_type".to_string(), 2.into());
+      data.insert("image_type".to_string(), 2.into()); // 1 => internal, 2 => external
+    },
+    mdast::Node::ImageReference(image) => {
+      data.insert("url".to_string(), Value::String(image.identifier.clone()));
+      data.insert("image_type".to_string(), 2.into()); // 1 => internal, 2 => external
+    },
+    mdast::Node::LinkReference(link) => {
+      data.insert("url".to_string(), Value::String(link.identifier.clone()));
     },
     mdast::Node::Math(math) => {
       data.insert("formula".to_string(), Value::String(math.value.clone()));
@@ -267,46 +274,60 @@ fn node_children(node: &mdast::Node) -> Option<&Vec<mdast::Node>> {
 fn process_table(document_data: &mut DocumentData, table: &mdast::Table, parent_id: &str) {
   for (row_index, row) in table.children.iter().enumerate() {
     if let mdast::Node::TableRow(row_node) = row {
-      for (col_index, cell) in row_node.children.iter().enumerate() {
-        if let mdast::Node::TableCell(cell_node) = cell {
-          let cell_id = generate_id();
-          let cell_block =
-            create_table_cell_block(&cell_id, parent_id, row_index, col_index, &table.align);
-
-          let paragraph_node = mdast::Node::Paragraph(mdast::Paragraph {
-            children: cell_node.children.clone(),
-            position: None,
-          });
-
-          let paragraph_block_id = generate_id();
-          let paragraph_block = create_block(
-            &paragraph_block_id,
-            &paragraph_node,
-            Some(cell_id.clone()),
-            None,
-          );
-
-          document_data
-            .blocks
-            .insert(paragraph_block.id.clone(), paragraph_block);
-          document_data.blocks.insert(cell_id.clone(), cell_block);
-          update_children_map(document_data, Some(parent_id.to_string()), &cell_id);
-          update_children_map(
-            document_data,
-            Some(cell_id.to_string()),
-            &paragraph_block_id,
-          );
-
-          process_children(
-            document_data,
-            &cell_node.children,
-            Some(paragraph_block_id.clone()),
-            None,
-          );
-        }
-      }
+      process_table_row(document_data, row_node, row_index, parent_id, &table.align);
     }
   }
+}
+
+fn process_table_row(
+  document_data: &mut DocumentData,
+  row_node: &mdast::TableRow,
+  row_index: usize,
+  parent_id: &str,
+  align: &[AlignKind],
+) {
+  for (col_index, cell) in row_node.children.iter().enumerate() {
+    if let mdast::Node::TableCell(cell_node) = cell {
+      let cell_id = generate_id();
+      let cell_block = create_table_cell_block(&cell_id, parent_id, row_index, col_index, align);
+      document_data.blocks.insert(cell_id.clone(), cell_block);
+      update_children_map(document_data, Some(parent_id.to_string()), &cell_id);
+
+      let paragraph_block_id = create_paragraph_block(document_data, &cell_id);
+
+      process_children(
+        document_data,
+        &cell_node.children,
+        Some(paragraph_block_id.clone()),
+        None,
+      );
+    }
+  }
+}
+fn create_paragraph_block(document_data: &mut DocumentData, parent_id: &str) -> String {
+  let paragraph_node = mdast::Node::Paragraph(mdast::Paragraph {
+    children: Vec::new(),
+    position: None,
+  });
+
+  let paragraph_block_id = generate_id();
+  let paragraph_block = create_block(
+    &paragraph_block_id,
+    &paragraph_node,
+    Some(parent_id.to_string()),
+    None,
+  );
+
+  document_data
+    .blocks
+    .insert(paragraph_block_id.clone(), paragraph_block);
+  update_children_map(
+    document_data,
+    Some(parent_id.to_string()),
+    &paragraph_block_id,
+  );
+
+  paragraph_block_id
 }
 
 fn create_table_cell_block(
@@ -340,12 +361,12 @@ fn create_table_cell_block(
     external_type: Some("text".to_string()),
   }
 }
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct Delta {
   ops: Vec<Operation>,
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Operation {
   insert: String,
   #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -381,12 +402,6 @@ impl From<Operation> for Value {
       true => json!({ "insert": op.insert }),
       false => json!({ "insert": op.insert, "attributes": attributes }),
     }
-  }
-}
-
-impl Default for Delta {
-  fn default() -> Self {
-    Self::new()
   }
 }
 
@@ -491,8 +506,10 @@ pub fn insert_text_to_delta(
   text: String,
   attributes: HashMap<String, Value>,
 ) -> String {
-  let mut delta: Delta = serde_json::from_str::<Delta>(delta_str.as_deref().unwrap_or("[]"))
-    .unwrap_or_else(|_| Delta::new());
+  let mut delta = delta_str
+    .and_then(|s| serde_json::from_str::<Delta>(&s).ok())
+    .unwrap_or_default();
+
   delta.insert(text, attributes.into_iter().collect());
   delta.to_json()
 }
