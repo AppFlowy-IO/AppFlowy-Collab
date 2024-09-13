@@ -251,7 +251,10 @@ impl Block {
     }
   }
 
-  pub async fn init_database_rows(&self, row_ids: Vec<RowId>) -> Result<(), DatabaseError> {
+  pub async fn init_database_rows(
+    &self,
+    row_ids: Vec<RowId>,
+  ) -> Result<Vec<Arc<RwLock<DatabaseRow>>>, DatabaseError> {
     let row_ids = row_ids.into_iter().map(|id| id.to_string()).collect();
     let data_source_by_id = self
       .collab_service
@@ -266,15 +269,15 @@ impl Block {
           .collab_service
           .build_collab(&row_id, CollabType::DatabaseRow, Some(data_source))
           .await?;
-        self.init_database_row_from_collab(row_id, collab).await?;
-        Ok::<(), DatabaseError>(())
+        let database_row = self.init_database_row_from_collab(row_id, collab).await?;
+        Ok::<_, DatabaseError>(database_row)
       });
 
-    join_all(futures)
+    let rows = join_all(futures)
       .await
       .into_iter()
-      .collect::<Result<(), _>>()?;
-    Ok(())
+      .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
   }
 
   pub async fn init_database_row(

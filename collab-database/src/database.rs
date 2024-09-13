@@ -513,7 +513,10 @@ impl Database {
   }
 
   #[instrument(level = "debug", skip_all)]
-  pub async fn init_database_rows(&self, row_id: Vec<RowId>) -> Result<(), DatabaseError> {
+  pub async fn init_database_rows(
+    &self,
+    row_id: Vec<RowId>,
+  ) -> Result<Vec<Arc<RwLock<DatabaseRow>>>, DatabaseError> {
     self.body.block.init_database_rows(row_id).await
   }
 
