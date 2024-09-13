@@ -277,8 +277,8 @@ impl DatabaseRowBody {
       let old_meta_key = meta_id_from_row_id(&self.row_id.as_str().parse()?, key.clone());
       let old_meta_value = self.meta.remove(txn, &old_meta_key);
       let new_meta_key = meta_id_from_row_id(&new_row_id.as_str().parse()?, key);
-      if let Some(yrs::Out::Any(doc_id)) = old_meta_value {
-        self.meta.insert(txn, new_meta_key, doc_id);
+      if let Some(yrs::Out::Any(old_meta_value)) = old_meta_value {
+        self.meta.insert(txn, new_meta_key, old_meta_value);
       }
     }
 
