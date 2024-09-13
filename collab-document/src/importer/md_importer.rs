@@ -5,9 +5,10 @@ use markdown::{mdast, message, to_mdast, Constructs, ParseOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use thiserror::Error;
 
 #[derive(Default)]
-pub struct MDImporter {}
+pub struct MDImporter;
 
 impl MDImporter {
   pub fn new() -> Self {
@@ -180,7 +181,6 @@ fn node_to_data(node: &mdast::Node) -> HashMap<String, Value> {
         .map_or(0, |row| row.children().map(|c| c.len()).unwrap_or(0));
       data.insert("colsLen".to_string(), cols_len.into());
     },
-
     mdast::Node::ListItem(list) => {
       if let Some(checked) = list.checked {
         data.insert("checked".to_string(), Value::Bool(checked));
@@ -366,42 +366,69 @@ pub struct Delta {
   ops: Vec<Operation>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Operation {
   insert: String,
   #[serde(skip_serializing_if = "Vec::is_empty")]
   attributes: Vec<(String, Value)>,
 }
 
-impl From<Value> for Operation {
-  fn from(s: Value) -> Self {
-    let s = s.as_object().unwrap();
-    let insert = s.get("insert").unwrap().as_str().unwrap().to_string();
-    let attributes = s
+#[derive(Error, Debug)]
+pub enum ConversionError {
+  #[error("Invalid structure: expected an object")]
+  NotAnObject,
+  #[error("Missing 'insert' field")]
+  MissingInsert,
+  #[error("'insert' field is not a string")]
+  InsertNotString,
+  #[error("'attributes' field is not an object")]
+  AttributesNotObject,
+  #[error("Invalid attribute")]
+  InvalidAttribute,
+  #[error("Invalid insert")]
+  InvalidInsert,
+}
+impl TryFrom<Value> for Operation {
+  type Error = ConversionError;
+
+  fn try_from(value: Value) -> Result<Self, Self::Error> {
+    let obj = value.as_object().ok_or(ConversionError::NotAnObject)?;
+
+    let insert = obj
+      .get("insert")
+      .ok_or(ConversionError::MissingInsert)?
+      .as_str()
+      .ok_or(ConversionError::InsertNotString)?
+      .to_string();
+
+    let attributes = obj
       .get("attributes")
-      .map(|v| {
+      .map(|v| -> Result<HashMap<String, Value>, ConversionError> {
         v.as_object()
-          .unwrap()
+          .ok_or(ConversionError::AttributesNotObject)?
           .iter()
-          .map(|(k, v)| (k.clone(), v.clone()))
+          .map(|(k, v)| Ok((k.clone(), v.clone())))
           .collect()
       })
+      .transpose()?
       .unwrap_or_default();
-    Self { insert, attributes }
+
+    let attributes = attributes.into_iter().collect();
+    Ok(Self { insert, attributes })
   }
 }
-impl From<Operation> for Value {
-  fn from(op: Operation) -> Self {
-    let attributes = op
-      .attributes
-      .iter()
-      .map(|(k, v)| (k.clone(), v.clone()))
-      .collect::<HashMap<String, Value>>();
 
-    match attributes.is_empty() {
-      true => json!({ "insert": op.insert }),
-      false => json!({ "insert": op.insert, "attributes": attributes }),
-    }
+impl TryFrom<Operation> for Value {
+  type Error = ConversionError;
+
+  fn try_from(op: Operation) -> Result<Self, Self::Error> {
+    let attributes: HashMap<String, Value> = op.attributes.into_iter().collect();
+
+    Ok(if attributes.is_empty() {
+      json!({ "insert": op.insert })
+    } else {
+      json!({ "insert": op.insert, "attributes": attributes })
+    })
   }
 }
 
@@ -425,10 +452,10 @@ impl Delta {
     let ops: Vec<Value> = self
       .ops
       .iter()
-      .map(|op| Value::from(op.to_owned()))
+      .filter_map(|op| Value::try_from(op.clone()).ok())
       .collect();
 
-    serde_json::to_string(&ops).unwrap()
+    serde_json::to_string(&ops).unwrap_or_else(|_| "[]".to_string())
   }
 }
 
@@ -482,23 +509,42 @@ fn process_children_inline(children: &[mdast::Node], attributes: Vec<(String, Va
 }
 
 fn insert_delta_to_text_map(document_data: &mut DocumentData, parent_id: &str, new_delta: Delta) {
-  let text_map = document_data.meta.text_map.as_mut().unwrap();
+  let text_map = match document_data.meta.text_map.as_mut() {
+    Some(map) => map,
+    None => {
+      eprintln!("Text map not found");
+      return;
+    },
+  };
 
-  let mut existing_delta = text_map
-    .get(parent_id)
-    .map(|s| {
-      let ops = serde_json::from_str::<Value>(s)
-        .unwrap()
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| Operation::from(v.clone()))
-        .collect();
-      Delta { ops }
-    })
-    .unwrap_or_default();
-  existing_delta.extend(new_delta);
-  text_map.insert(parent_id.to_string(), existing_delta.to_json());
+  let existing_delta = if let Some(s) = text_map.get(parent_id) {
+    match serde_json::from_str::<Value>(s) {
+      Ok(value) => {
+        let ops = value
+          .as_array()
+          .map(|arr| {
+            arr
+              .iter()
+              .filter_map(|v| Operation::try_from(v.clone()).ok())
+              .collect()
+          })
+          .unwrap_or_default();
+        Delta { ops }
+      },
+      Err(e) => {
+        eprintln!("Failed to parse JSON: {}", e);
+        Delta::default()
+      },
+    }
+  } else {
+    Delta::default()
+  };
+
+  let mut combined_delta = existing_delta;
+  combined_delta.extend(new_delta);
+
+  let json_string = combined_delta.to_json();
+  text_map.insert(parent_id.to_string(), json_string);
 }
 
 pub fn insert_text_to_delta(
