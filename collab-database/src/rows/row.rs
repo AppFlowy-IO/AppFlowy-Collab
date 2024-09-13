@@ -309,6 +309,19 @@ impl DatabaseRowBody {
     }
   }
 
+  pub fn cells<T: ReadTxn>(&self, txn: &T) -> Option<Cells> {
+    let map = self
+      .data
+      .get(txn, ROW_CELLS)
+      .and_then(|cell| cell.cast::<MapRef>().ok())?;
+    let mut cells = Cells::new();
+    for (field_id, out) in map.iter(txn) {
+      let cell = out.to_json(txn).into_map()?;
+      cells.insert(field_id.to_string(), cell);
+    }
+    Some(cells)
+  }
+
   pub fn get_data(&self) -> &MapRef {
     &self.data
   }
