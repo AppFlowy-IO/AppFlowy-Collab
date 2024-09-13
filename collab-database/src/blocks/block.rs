@@ -15,7 +15,7 @@ use collab::preclude::Collab;
 use collab::entity::EncodedCollab;
 use collab::lock::RwLock;
 use std::sync::Arc;
-use std::time::Duration;
+
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 use tracing::{error, instrument, trace, warn};
@@ -227,10 +227,6 @@ impl Block {
     }
   }
 
-  pub async fn get_or_init_database_rows(&self, row_ids: Vec<RowId>) {
-    //
-  }
-
   /// Get the [DatabaseRow] from the cache. If the row is not in the cache, initialize it.
   #[instrument(level = "debug", skip_all)]
   pub async fn get_or_init_database_row(
@@ -243,15 +239,12 @@ impl Block {
       .map(|entry| entry.value().clone());
 
     match value {
-      None => tokio::time::timeout(
-        Duration::from_secs(3),
-        self.init_database_row(row_id.clone()),
-      )
-      .await
-      .map_err(|_| DatabaseError::DatabaseRowNotFound {
-        row_id: row_id.clone(),
-        reason: "the row is not exist in local disk".to_string(),
-      })?,
+      None => self.init_database_row(row_id.clone()).await.map_err(|_| {
+        DatabaseError::DatabaseRowNotFound {
+          row_id: row_id.clone(),
+          reason: "the row is not exist in local disk".to_string(),
+        }
+      }),
       Some(row) => Ok(row),
     }
   }
