@@ -296,6 +296,7 @@ pub async fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabase
 
   w_database
     .create_database(create_database_params("d1"))
+    .await
     .unwrap();
 
   w_database

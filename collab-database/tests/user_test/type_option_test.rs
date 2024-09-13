@@ -77,6 +77,7 @@ async fn user_database_with_default_field() -> WorkspaceDatabaseTest {
       }],
       ..Default::default()
     })
+    .await
     .unwrap();
 
   let field = Field {

@@ -231,7 +231,6 @@ impl Database {
         .collect::<Vec<_>>();
 
       encode_collabs.extend(row_encodings);
-
       info!("Write {} database collab", encode_collabs.len());
       persistence.flush_collabs(encode_collabs)?;
     }

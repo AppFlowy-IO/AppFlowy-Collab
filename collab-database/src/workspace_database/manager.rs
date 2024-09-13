@@ -279,14 +279,13 @@ impl WorkspaceDatabase {
   /// The inline view is the default view of the database.
   /// If the inline view gets deleted, the database will be deleted too.
   /// So the reference views will be deleted too.
-  pub fn create_database(
+  pub async fn create_database(
     &mut self,
     params: CreateDatabaseParams,
   ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
     debug_assert!(!params.database_id.is_empty());
 
     let context = DatabaseContext::new(self.collab_service.clone());
-
     // Add a new database record.
     let mut linked_views = HashSet::new();
     linked_views.insert(params.inline_view_id.to_string());
@@ -304,11 +303,7 @@ impl WorkspaceDatabase {
       linked_views.into_iter().collect(),
     );
     let database_id = params.database_id.clone();
-
-    let database = futures::executor::block_on(async {
-      Database::create_with_view(params, context).await.unwrap()
-    });
-
+    let database = Database::create_with_view(params, context).await.unwrap();
     let mutex_database = RwLock::from(database);
     let database = Arc::new(mutex_database);
     self.databases.insert(database_id, database.clone());
@@ -393,7 +388,7 @@ impl WorkspaceDatabase {
     let database_data = self.get_database_data(view_id).await?;
 
     let create_database_params = CreateDatabaseParams::from_database_data(database_data, None);
-    let database = self.create_database(create_database_params)?;
+    let database = self.create_database(create_database_params).await?;
     Ok(database)
   }
 
