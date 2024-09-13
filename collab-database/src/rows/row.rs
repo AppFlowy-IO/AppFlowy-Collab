@@ -284,16 +284,9 @@ impl DatabaseRowBody {
     txn: &mut TransactionMut,
     new_row_id: RowId,
   ) -> Result<(), DatabaseError> {
-    for key in RowMetaKey::iter() {
-      let old_meta_key = meta_id_from_row_id(&self.row_id.as_str().parse()?, key.clone());
-      let old_meta_value = self.meta.remove(txn, &old_meta_key);
-      let new_meta_key = meta_id_from_row_id(&new_row_id.as_str().parse()?, key);
-      if let Some(yrs::Out::Any(old_meta_value)) = old_meta_value {
-        self.meta.insert(txn, new_meta_key, old_meta_value);
-      }
-    }
-
-    self.data.insert(txn, DATABASE_ROW_ID, new_row_id.as_str());
+    self.update(txn, |update| {
+      update.set_row_id(new_row_id.clone());
+    });
     self.row_id = new_row_id;
     Ok(())
   }
@@ -537,19 +530,34 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
   }
 
   pub fn set_row_id(self, new_row_id: RowId) -> Self {
-    let old_row_meta = row_id_from_map_ref(self.txn, &self.map_ref)
-      .and_then(|row_id| row_id.parse::<Uuid>().ok())
-      .map(|row_id| RowMeta::from_map_ref(self.txn, &row_id, &self.meta_ref));
-
     self.map_ref.insert(self.txn, ROW_ID, new_row_id.as_str());
-    if let Ok(new_row_id) = new_row_id.parse::<Uuid>() {
-      self.meta_ref.clear(self.txn);
-      let mut new_row_meta = RowMeta::empty();
-      if let Some(old_row_meta) = old_row_meta {
-        new_row_meta.icon_url = old_row_meta.icon_url;
-        new_row_meta.cover = old_row_meta.cover;
+
+    let old_row_id = match row_id_from_map_ref(self.txn, &self.map_ref) {
+      Some(row_id) => row_id,
+      None => return self,
+    };
+    let old_row_uuid = match old_row_id.parse::<Uuid>() {
+      Ok(uuid) => uuid,
+      Err(err) => {
+        error!("uuid parse error: {}, old_row_id: {}", err, old_row_id);
+        return self;
+      },
+    };
+    let new_row_uuid = match new_row_id.parse::<Uuid>() {
+      Ok(uuid) => uuid,
+      Err(err) => {
+        error!("uuid parse error: {}, new_row_id: {}", err, new_row_id);
+        return self;
+      },
+    };
+
+    for key in RowMetaKey::iter() {
+      let old_meta_key = meta_id_from_row_id(&old_row_uuid, key.clone());
+      let old_meta_value = self.meta_ref.remove(self.txn, &old_meta_key);
+      let new_meta_key = meta_id_from_row_id(&new_row_uuid, key);
+      if let Some(yrs::Out::Any(old_meta_value)) = old_meta_value {
+        self.meta_ref.insert(self.txn, new_meta_key, old_meta_value);
       }
-      new_row_meta.fill_map_ref(self.txn, &new_row_id, &self.meta_ref);
     }
 
     self
