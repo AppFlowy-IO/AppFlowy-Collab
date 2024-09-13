@@ -298,15 +298,19 @@ impl DatabaseRowBody {
     Ok(())
   }
 
-  pub fn has_document<T: ReadTxn>(&self, txn: &T) -> Result<bool, DatabaseError> {
+  /// Attempts to get the document id for the row.
+  /// Returns None if there is no document.
+  pub fn document_id<T: ReadTxn>(&self, txn: &T) -> Result<Option<String>, DatabaseError> {
     let row_uuid = Uuid::parse_str(&self.row_id)?;
     let is_doc_empty_key = meta_id_from_row_id(&row_uuid, RowMetaKey::IsDocumentEmpty);
     let is_doc_empty = self.meta.get(txn, &is_doc_empty_key);
     if let Some(yrs::Out::Any(Any::Bool(is_doc_empty))) = is_doc_empty {
-      Ok(!is_doc_empty)
-    } else {
-      Ok(false)
+      if !is_doc_empty {
+        let doc_id = meta_id_from_row_id(&row_uuid, RowMetaKey::DocumentId);
+        return Ok(Some(doc_id));
+      }
     }
+    Ok(None)
   }
 
   pub fn cells<T: ReadTxn>(&self, txn: &T) -> Option<Cells> {
