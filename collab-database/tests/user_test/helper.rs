@@ -23,6 +23,7 @@ use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{make_rocks_db, setup_log, TestTextCell};
 
 use collab::core::collab::DataSource;
+use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::lock::Mutex;
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
@@ -75,6 +76,14 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
     let mut txn = collab.transact_mut();
     let db_read = self.db.read_txn();
     let _ = db_read.load_doc_with_txn(self.uid, &object_id, &mut txn);
+  }
+
+  fn get_encoded_collab(&self, object_id: &str, collab_type: CollabType) -> Option<EncodedCollab> {
+    let mut collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false);
+    self.load_collab(&mut collab);
+    collab
+      .encode_collab_v1(|collab| collab_type.validate_require_data(collab))
+      .ok()
   }
 
   fn delete_collab(&self, object_id: &str) -> Result<(), DatabaseError> {

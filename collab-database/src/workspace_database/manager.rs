@@ -24,6 +24,7 @@ use std::sync::Arc;
 use tracing::error;
 
 pub type EncodeCollabByOid = HashMap<String, EncodedCollab>;
+pub type DataSourceByOid = HashMap<String, DataSource>;
 
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
@@ -68,10 +69,10 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
         false,
       )
       .map_err(|err| DatabaseError::Internal(err.into())),
-      Some(encode_collab) => Collab::new_with_source(
+      Some(encoded_collab) => Collab::new_with_source(
         CollabOrigin::Empty,
         object_id,
-        encode_collab.into(),
+        encoded_collab.into(),
         vec![],
         false,
       )
@@ -121,6 +122,8 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
 
 pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
   fn load_collab(&self, collab: &mut Collab);
+
+  fn get_encoded_collab(&self, object_id: &str, collab_type: CollabType) -> Option<EncodedCollab>;
 
   fn delete_collab(&self, object_id: &str) -> Result<(), DatabaseError>;
 

@@ -12,10 +12,9 @@ use crate::workspace_database::DatabaseCollabService;
 
 use collab::preclude::Collab;
 
-use collab::entity::EncodedCollab;
 use collab::lock::RwLock;
+use futures::future::join_all;
 use std::sync::Arc;
-
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 use tracing::{error, instrument, trace, warn};
@@ -34,8 +33,6 @@ pub enum BlockEvent {
 pub struct Block {
   database_id: String,
   collab_service: Arc<dyn DatabaseCollabService>,
-  // task_controller: Arc<BlockTaskController>,
-  // sequence: Arc<AtomicU32>,
   pub row_mem_cache: Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>,
   pub notifier: Arc<Sender<BlockEvent>>,
   row_change_tx: Option<RowChangeSender>,
@@ -65,7 +62,10 @@ impl Block {
     let cloned_notifier = self.notifier.clone();
     let mut row_on_disk_details = vec![];
     for row_id in row_ids.into_iter() {
-      let collab = self.create_collab_for_row(&row_id, None).await?;
+      let collab = self
+        .collab_service
+        .build_collab(&row_id, CollabType::DatabaseRow, None)
+        .await?;
       match DatabaseRow::open(
         row_id.clone(),
         collab,
@@ -123,8 +123,10 @@ impl Block {
 
     let encoded_collab = default_database_row_data(&row_id, row);
     let collab = self
-      .create_collab_for_row(&row_id, Some(encoded_collab))
+      .collab_service
+      .build_collab(&row_id, CollabType::DatabaseRow, Some(encoded_collab))
       .await?;
+
     let database_row = DatabaseRow::open(
       row_id.clone(),
       collab,
@@ -249,12 +251,41 @@ impl Block {
     }
   }
 
+  pub async fn init_database_rows(&self, row_ids: Vec<RowId>) -> Result<(), DatabaseError> {
+    let row_ids = row_ids.into_iter().map(|id| id.to_string()).collect();
+    let data_source_by_id = self
+      .collab_service
+      .get_collabs(row_ids, CollabType::DatabaseRow)
+      .await?;
+
+    let futures = data_source_by_id
+      .into_iter()
+      .map(|(row_id, data_source)| async {
+        let row_id = RowId::from(row_id);
+        let collab = self
+          .collab_service
+          .build_collab(&row_id, CollabType::DatabaseRow, Some(data_source))
+          .await?;
+        self.init_database_row_from_collab(row_id, collab).await?;
+        Ok::<(), DatabaseError>(())
+      });
+
+    join_all(futures)
+      .await
+      .into_iter()
+      .collect::<Result<(), _>>()?;
+    Ok(())
+  }
+
   pub async fn init_database_row(
     &self,
     row_id: RowId,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
     trace!("init row instance: {}", row_id);
-    let collab = self.create_collab_for_row(&row_id, None).await?;
+    let collab = self
+      .collab_service
+      .build_collab(&row_id, CollabType::DatabaseRow, None)
+      .await?;
     self.init_database_row_from_collab(row_id, collab).await
   }
 
@@ -278,16 +309,5 @@ impl Block {
         .send(BlockEvent::DidFetchRow(vec![row_detail]));
     }
     Ok(database_row)
-  }
-
-  async fn create_collab_for_row(
-    &self,
-    row_id: &RowId,
-    encoded_collab: Option<EncodedCollab>,
-  ) -> Result<Collab, DatabaseError> {
-    self
-      .collab_service
-      .build_collab(row_id, CollabType::DatabaseRow, encoded_collab)
-      .await
   }
 }
