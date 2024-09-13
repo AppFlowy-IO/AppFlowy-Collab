@@ -185,7 +185,6 @@ impl WorkspaceDatabase {
     match database {
       None => {
         // If the database is not exist, create a new one.
-        let _notifier = DatabaseNotify::default();
         let is_exist = self
           .collab_service
           .persistence()?
