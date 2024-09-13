@@ -14,11 +14,13 @@ use collab_entity::define::{DATABASE_ROW_DATA, DATABASE_ROW_ID};
 use collab_entity::CollabType;
 
 use crate::database::timestamp;
+
 use crate::error::DatabaseError;
 use crate::rows::{
   subscribe_row_data_change, Cell, Cells, CellsUpdate, RowChangeSender, RowId, RowMeta,
   RowMetaUpdate,
 };
+
 use crate::util::encoded_collab;
 use crate::views::{OrderObjectPosition, RowOrder};
 use crate::workspace_database::DatabaseCollabService;
@@ -265,6 +267,15 @@ impl DatabaseRowBody {
     F: FnOnce(RowUpdate),
   {
     let update = RowUpdate::new(txn, self.data.clone(), self.meta.clone());
+    modify(update);
+  }
+
+  pub fn update_cells<F>(&self, txn: &mut TransactionMut, modify: F)
+  where
+    F: FnOnce(CellsUpdate),
+  {
+    let cell_map: MapRef = self.data.get_or_init(txn, ROW_CELLS);
+    let update = CellsUpdate::new(txn, &cell_map);
     modify(update);
   }
 
