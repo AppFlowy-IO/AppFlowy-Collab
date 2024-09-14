@@ -1,6 +1,4 @@
-use crate::database::{
-  try_fixing_database_inline_view_id, Database, DatabaseContext, DatabaseData,
-};
+use crate::database::{try_fixing_database, Database, DatabaseContext, DatabaseData};
 
 use crate::error::DatabaseError;
 use crate::workspace_database::body::{DatabaseMeta, WorkspaceDatabaseBody};
@@ -255,15 +253,28 @@ impl WorkspaceDatabase {
     match Database::open(database_id, context).await {
       Ok(database) => Some(insert_database(database)),
       // If the database is missing required data, try to fix it and open it again
-      Err(err) if err.is_no_required_data() => self
-        .fix_and_open_database(
-          database_id,
-          DatabaseContext::new(self.collab_service.clone()),
-        )
-        .await
-        .map(insert_database),
       Err(err) => {
-        error!("open database failed: {}", err);
+        if err.is_no_required_data() {
+          if self
+            .fix_and_open_database(
+              database_id,
+              DatabaseContext::new(self.collab_service.clone()),
+            )
+            .await
+            .is_ok()
+          {
+            if let Ok(database) = Database::open(
+              database_id,
+              DatabaseContext::new(self.collab_service.clone()),
+            )
+            .await
+            {
+              return Some(insert_database(database));
+            }
+          }
+        } else {
+          error!("Open database failed: {}", err);
+        }
         None
       },
     }
@@ -433,9 +444,9 @@ impl WorkspaceDatabase {
     &self,
     database_id: &str,
     context: DatabaseContext,
-  ) -> Option<Database> {
+  ) -> Result<(), DatabaseError> {
     // Try to get the database metadata
-    info!("Attempting to fix database: {}", database_id);
+    info!("[Fix]: Attempting to fix database: {}", database_id);
     if let Some(database_meta) = self.get_database_meta(database_id) {
       // Try to build the collab
       if let Ok(mut collab) = context
@@ -444,18 +455,28 @@ impl WorkspaceDatabase {
         .await
       {
         // Attempt to fix the database inline view ID
-        if try_fixing_database_inline_view_id(&mut collab, database_meta).is_ok() {
-          info!("Fix database:{} by adding inline view", database_id);
+        if try_fixing_database(&mut collab, database_meta).is_ok() {
+          info!("[Fix]: database:{} by adding inline view", database_id);
           // Retry opening the database after attempting to fix it
           if let Ok(database) = Database::open(database_id, context).await {
-            return Some(database);
+            if let Some(persistence) = self.collab_service.persistence() {
+              if let Ok(encoded_collab) = database.encode_collab_v1(|collab| {
+                CollabType::Database.validate_require_data(collab)?;
+                Ok::<_, DatabaseError>(())
+              }) {
+                info!("[Fix]: save database:{} to disk", database_id);
+                persistence.save_collab(database_id, encoded_collab).ok();
+              }
+            }
+            return Ok(());
           }
         }
       }
     } else {
       info!("Can't find any database meta for database: {}", database_id);
     }
-    None
+
+    Err(DatabaseError::Internal(anyhow!("Can't fix the database")))
   }
 }
 

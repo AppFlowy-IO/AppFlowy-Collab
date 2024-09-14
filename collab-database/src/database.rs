@@ -1881,13 +1881,14 @@ impl DatabaseBody {
   }
 }
 
-pub fn try_fixing_database_inline_view_id(
+pub fn try_fixing_database(
   collab: &mut Collab,
   database_meta: DatabaseMeta,
 ) -> Result<(), DatabaseError> {
   // check if inline view id
   let inline_view_id = {
     let txn = collab.context.transact();
+
     if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
       let map = MetaMap::new(container);
       map.get_inline_view_id(&txn)
@@ -1901,7 +1902,7 @@ pub fn try_fixing_database_inline_view_id(
       let mut txn = collab.context.transact_mut();
       if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
         let map = MetaMap::new(container);
-        info!("Fixing inline view id to {}", default_inline_view);
+        info!("[Fix]: set inline view id to {}", default_inline_view);
         map.set_inline_view_id(&mut txn, default_inline_view);
       }
     }
