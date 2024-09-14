@@ -12,7 +12,7 @@ use collab_database::fields::Field;
 use collab_database::rows::{Cells, CreateRowParams, RowId};
 use collab_database::views::DatabaseLayout;
 use collab_database::workspace_database::{
-  DatabaseCollabPersistenceService, DatabaseCollabService, RowRelationChange,
+  DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid, RowRelationChange,
   RowRelationUpdateReceiver, WorkspaceDatabase,
 };
 use collab_entity::CollabType;
@@ -23,6 +23,7 @@ use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{make_rocks_db, setup_log, TestTextCell};
 
 use collab::core::collab::DataSource;
+use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::lock::Mutex;
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
@@ -75,6 +76,14 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
     let mut txn = collab.transact_mut();
     let db_read = self.db.read_txn();
     let _ = db_read.load_doc_with_txn(self.uid, &object_id, &mut txn);
+  }
+
+  fn get_encoded_collab(&self, object_id: &str, collab_type: CollabType) -> Option<EncodedCollab> {
+    let mut collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false);
+    self.load_collab(&mut collab);
+    collab
+      .encode_collab_v1(|collab| collab_type.validate_require_data(collab))
+      .ok()
   }
 
   fn delete_collab(&self, object_id: &str) -> Result<(), DatabaseError> {
@@ -171,6 +180,43 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
     Ok(collab)
   }
 
+  async fn get_collabs(
+    &self,
+    object_ids: Vec<String>,
+    collab_type: CollabType,
+  ) -> Result<EncodeCollabByOid, DatabaseError> {
+    let mut map = EncodeCollabByOid::new();
+    for object_id in object_ids {
+      let db_plugin = RocksdbDiskPlugin::new_with_config(
+        1,
+        object_id.to_string(),
+        collab_type.clone(),
+        Arc::downgrade(&self.db),
+        CollabPersistenceConfig::default(),
+      );
+
+      let collab = CollabBuilder::new(
+        1,
+        &object_id,
+        KVDBCollabPersistenceImpl {
+          db: Arc::downgrade(&self.db),
+          uid: self.uid,
+        }
+        .into_data_source(),
+      )
+      .with_device_id("1")
+      .with_plugin(db_plugin)
+      .build()
+      .unwrap();
+
+      let encoded_collab = collab
+        .encode_collab_v1(|_| Ok::<_, DatabaseError>(()))
+        .unwrap();
+      map.insert(object_id, encoded_collab);
+    }
+    Ok(map)
+  }
+
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
     Some(Arc::new(TestUserDatabasePersistenceImpl {
       uid: self.uid,
@@ -250,6 +296,7 @@ pub async fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabase
 
   w_database
     .create_database(create_database_params("d1"))
+    .await
     .unwrap();
 
   w_database

@@ -17,12 +17,14 @@ use collab::core::origin::CollabOrigin;
 use collab::error::CollabError;
 use collab::lock::RwLock;
 use dashmap::DashMap;
+use rayon::prelude::*;
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::error;
 
 pub type EncodeCollabByOid = HashMap<String, EncodedCollab>;
+pub type DataSourceByOid = HashMap<String, DataSource>;
 
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
@@ -37,6 +39,12 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     encoded_collab: Option<EncodedCollab>,
   ) -> Result<Collab, DatabaseError>;
 
+  async fn get_collabs(
+    &self,
+    object_ids: Vec<String>,
+    collab_type: CollabType,
+  ) -> Result<EncodeCollabByOid, DatabaseError>;
+
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>>;
 }
 
@@ -50,21 +58,61 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
     encoded_collab: Option<EncodedCollab>,
   ) -> Result<Collab, DatabaseError> {
     match encoded_collab {
-      None => Ok(Collab::new_with_origin(
+      None => Collab::new_with_source(
         CollabOrigin::Empty,
         object_id,
+        CollabPersistenceImpl {
+          persistence: self.persistence(),
+        }
+        .into(),
         vec![],
         false,
-      )),
-      Some(encode_collab) => Collab::new_with_source(
+      )
+      .map_err(|err| DatabaseError::Internal(err.into())),
+      Some(encoded_collab) => Collab::new_with_source(
         CollabOrigin::Empty,
         object_id,
-        encode_collab.into(),
+        encoded_collab.into(),
         vec![],
         false,
       )
       .map_err(|err| DatabaseError::Internal(err.into())),
     }
+  }
+
+  async fn get_collabs(
+    &self,
+    object_ids: Vec<String>,
+    collab_type: CollabType,
+  ) -> Result<EncodeCollabByOid, DatabaseError> {
+    let map: HashMap<String, _> = object_ids
+      .into_par_iter()
+      .filter_map(|object_id| {
+        let persistence = self.persistence();
+
+        let result = Collab::new_with_source(
+          CollabOrigin::Empty,
+          &object_id,
+          CollabPersistenceImpl { persistence }.into(),
+          vec![],
+          false,
+        )
+        .map_err(|err| DatabaseError::Internal(err.into()))
+        .and_then(|collab| {
+          collab
+            .encode_collab_v1(|collab| collab_type.validate_require_data(collab))
+            .map_err(DatabaseError::Internal)
+        });
+
+        // If successful, return the object ID and the encoded collab
+        match result {
+          Ok(encoded_collab) => Some((object_id, encoded_collab)),
+          Err(_) => None, // Ignore errors, but you can log them if necessary
+        }
+      })
+      .collect();
+
+    Ok(map)
   }
 
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
@@ -74,6 +122,8 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
 
 pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
   fn load_collab(&self, collab: &mut Collab);
+
+  fn get_encoded_collab(&self, object_id: &str, collab_type: CollabType) -> Option<EncodedCollab>;
 
   fn delete_collab(&self, object_id: &str) -> Result<(), DatabaseError>;
 
@@ -229,14 +279,13 @@ impl WorkspaceDatabase {
   /// The inline view is the default view of the database.
   /// If the inline view gets deleted, the database will be deleted too.
   /// So the reference views will be deleted too.
-  pub fn create_database(
+  pub async fn create_database(
     &mut self,
     params: CreateDatabaseParams,
   ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
     debug_assert!(!params.database_id.is_empty());
 
     let context = DatabaseContext::new(self.collab_service.clone());
-
     // Add a new database record.
     let mut linked_views = HashSet::new();
     linked_views.insert(params.inline_view_id.to_string());
@@ -254,11 +303,7 @@ impl WorkspaceDatabase {
       linked_views.into_iter().collect(),
     );
     let database_id = params.database_id.clone();
-
-    let database = futures::executor::block_on(async {
-      Database::create_with_view(params, context).await.unwrap()
-    });
-
+    let database = Database::create_with_view(params, context).await.unwrap();
     let mutex_database = RwLock::from(database);
     let database = Arc::new(mutex_database);
     self.databases.insert(database_id, database.clone());
@@ -343,7 +388,7 @@ impl WorkspaceDatabase {
     let database_data = self.get_database_data(view_id).await?;
 
     let create_database_params = CreateDatabaseParams::from_database_data(database_data, None);
-    let database = self.create_database(create_database_params)?;
+    let database = self.create_database(create_database_params).await?;
     Ok(database)
   }
 

@@ -206,9 +206,9 @@ fn handle_array_event(
                 let _ = change_tx.send(DatabaseViewChange::DidUpdateGroupSetting { view_id });
               }
             },
-            ArrayChangeKey::Unhandled(s) => {
+            ArrayChangeKey::Unhandled(_s) => {
               #[cfg(feature = "verbose_log")]
-              trace!("database view observe unknown remove: {}", s);
+              trace!("database view observe unknown remove: {}", _s);
             },
           }
         },

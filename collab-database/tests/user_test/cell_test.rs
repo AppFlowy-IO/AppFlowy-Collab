@@ -83,6 +83,7 @@ async fn update_not_exist_row_test() {
       }],
       ..Default::default()
     })
+    .await
     .unwrap();
 
   let mut db = database.write().await;
@@ -106,6 +107,7 @@ async fn user_database_with_default_row() -> WorkspaceDatabaseTest {
       }],
       ..Default::default()
     })
+    .await
     .unwrap();
 
   database

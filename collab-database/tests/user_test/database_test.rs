@@ -22,6 +22,7 @@ async fn create_database_test() {
       }],
       ..Default::default()
     })
+    .await
     .unwrap();
 
   let db = database.read().await;
@@ -44,6 +45,7 @@ async fn create_multiple_database_test() {
       }],
       ..Default::default()
     })
+    .await
     .unwrap();
   test
     .create_database(CreateDatabaseParams {
@@ -56,6 +58,7 @@ async fn create_multiple_database_test() {
       }],
       ..Default::default()
     })
+    .await
     .unwrap();
   let all_databases = test.get_all_database_meta();
   assert_eq!(all_databases.len(), 2);
@@ -78,6 +81,7 @@ async fn delete_database_test() {
       }],
       ..Default::default()
     })
+    .await
     .unwrap();
   test
     .create_database(CreateDatabaseParams {
@@ -90,6 +94,7 @@ async fn delete_database_test() {
       }],
       ..Default::default()
     })
+    .await
     .unwrap();
   test.delete_database("d1");
 
@@ -113,6 +118,7 @@ async fn duplicate_database_inline_view_test() {
       }],
       ..Default::default()
     })
+    .await
     .unwrap();
 
   let duplicated_database = test.duplicate_database("v1").await.unwrap();
@@ -148,6 +154,7 @@ async fn duplicate_database_view_test() {
       }],
       ..Default::default()
     })
+    .await
     .unwrap();
 
   test
@@ -185,6 +192,7 @@ async fn delete_database_linked_view_test() {
       }],
       ..Default::default()
     })
+    .await
     .unwrap();
 
   let mut db = database.write().await;
@@ -223,6 +231,7 @@ async fn delete_database_inline_view_test() {
       }],
       ..Default::default()
     })
+    .await
     .unwrap();
 
   let mut db = database.write().await;
@@ -305,6 +314,7 @@ async fn get_database_by_view_id_test() {
       }],
       ..Default::default()
     })
+    .await
     .unwrap();
 
   test
@@ -328,7 +338,7 @@ async fn reopen_database_test() {
   let params = make_default_grid(&view_id, "first view");
 
   // create the database with inline view
-  let database = test.create_database(params).unwrap();
+  let database = test.create_database(params).await.unwrap();
   let row_orders = database.read().await.get_all_row_orders().await;
   for (index, row_order) in row_orders.into_iter().enumerate() {
     let cover = RowCover {

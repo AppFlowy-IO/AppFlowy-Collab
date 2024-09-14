@@ -26,9 +26,7 @@ use crate::entity::{
   DatabaseViewMeta, EncodedCollabInfo, EncodedDatabase,
 };
 use crate::template::entity::DatabaseTemplate;
-use crate::template::util::{
-  create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
-};
+use crate::template::util::create_database_params_from_template;
 
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
@@ -145,7 +143,7 @@ impl Database {
     let params =
       create_database_params_from_template(database_id.to_string(), view_id.to_string(), template);
     let context = DatabaseContext {
-      collab_service: Arc::new(TemplateDatabaseCollabServiceImpl),
+      collab_service: Arc::new(NoPersistenceDatabaseCollabService),
       notifier: Default::default(),
     };
     Self::create_with_view(params, context).await
@@ -233,7 +231,6 @@ impl Database {
         .collect::<Vec<_>>();
 
       encode_collabs.extend(row_encodings);
-
       info!("Write {} database collab", encode_collabs.len());
       persistence.flush_collabs(encode_collabs)?;
     }
@@ -512,6 +509,14 @@ impl Database {
   #[instrument(level = "debug", skip_all)]
   pub async fn get_or_init_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
     self.body.block.get_or_init_database_row(row_id).await.ok()
+  }
+
+  #[instrument(level = "debug", skip_all)]
+  pub async fn init_database_rows(
+    &self,
+    row_id: Vec<RowId>,
+  ) -> Result<Vec<Arc<RwLock<DatabaseRow>>>, DatabaseError> {
+    self.body.block.init_database_rows(row_id).await
   }
 
   /// Return None if the row is not initialized.
