@@ -35,6 +35,7 @@ pub const LAST_MODIFIED: &str = "last_modified";
 pub const CREATED_AT: &str = "created_at";
 
 pub struct DatabaseRow {
+  pub row_id: RowId,
   pub collab: Collab,
   pub body: DatabaseRowBody,
   collab_service: Arc<dyn DatabaseCollabService>,
@@ -67,6 +68,7 @@ impl DatabaseRow {
       subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
     }
     Ok(Self {
+      row_id,
       collab,
       body,
       collab_service,
@@ -85,6 +87,7 @@ impl DatabaseRow {
       subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
     }
     Self {
+      row_id,
       collab,
       body,
       collab_service,
