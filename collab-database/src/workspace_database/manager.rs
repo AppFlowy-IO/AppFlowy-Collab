@@ -448,7 +448,6 @@ impl WorkspaceDatabase {
     // Try to get the database metadata
     info!("[Fix]: Attempting to fix database: {}", database_id);
     if let Some(database_meta) = self.get_database_meta(database_id) {
-      // Try to build the collab
       if let Ok(mut collab) = context
         .collab_service
         .build_collab(database_id, CollabType::Database, None)
@@ -460,12 +459,17 @@ impl WorkspaceDatabase {
           // Retry opening the database after attempting to fix it
           if let Ok(database) = Database::open(database_id, context).await {
             if let Some(persistence) = self.collab_service.persistence() {
-              if let Ok(encoded_collab) = database.encode_collab_v1(|collab| {
+              match database.encode_collab_v1(|collab| {
                 CollabType::Database.validate_require_data(collab)?;
                 Ok::<_, DatabaseError>(())
               }) {
-                info!("[Fix]: save database:{} to disk", database_id);
-                persistence.save_collab(database_id, encoded_collab).ok();
+                Ok(encoded_collab) => {
+                  info!("[Fix]: save database:{} to disk", database_id);
+                  persistence.save_collab(database_id, encoded_collab).ok();
+                },
+                Err(err) => {
+                  error!("[Fix]: fix database:{} failed: {}", database_id, err);
+                },
               }
             }
             return Ok(());
