@@ -116,7 +116,11 @@ impl Database {
     let encoded_collab = default_database_data(database_id)?;
     let collab = context
       .collab_service
-      .build_collab(database_id, CollabType::Database, Some(encoded_collab))
+      .build_collab(
+        database_id,
+        CollabType::Database,
+        Some((encoded_collab, true)),
+      )
       .await?;
 
     let collab_service = context.collab_service.clone();
@@ -254,8 +258,12 @@ impl Database {
         return Err(DatabaseError::DatabaseViewNotExist);
       };
 
+    // create rows
     let row_orders = self.body.block.create_rows(rows).await;
+
+    // create fields
     let field_orders: Vec<FieldOrder> = fields.iter().map(FieldOrder::from).collect();
+
     let mut txn = self.collab.context.transact_mut();
     // Set the inline view id. The inline view id should not be
     // empty if the current database exists.

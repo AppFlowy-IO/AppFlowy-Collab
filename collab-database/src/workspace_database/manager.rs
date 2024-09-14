@@ -36,7 +36,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     &self,
     object_id: &str,
     object_type: CollabType,
-    encoded_collab: Option<EncodedCollab>,
+    encoded_collab: Option<(EncodedCollab, bool)>,
   ) -> Result<Collab, DatabaseError>;
 
   async fn get_collabs(
@@ -55,7 +55,7 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
     &self,
     object_id: &str,
     _object_type: CollabType,
-    encoded_collab: Option<EncodedCollab>,
+    encoded_collab: Option<(EncodedCollab, bool)>,
   ) -> Result<Collab, DatabaseError> {
     match encoded_collab {
       None => Collab::new_with_source(
@@ -69,7 +69,7 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
         false,
       )
       .map_err(|err| DatabaseError::Internal(err.into())),
-      Some(encoded_collab) => Collab::new_with_source(
+      Some((encoded_collab, _)) => Collab::new_with_source(
         CollabOrigin::Empty,
         object_id,
         encoded_collab.into(),

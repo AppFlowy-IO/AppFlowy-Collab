@@ -10,9 +10,8 @@ use crate::rows::{
 use crate::views::RowOrder;
 use crate::workspace_database::DatabaseCollabService;
 
-use collab::preclude::Collab;
-
 use collab::lock::RwLock;
+use collab::preclude::Collab;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -124,7 +123,11 @@ impl Block {
     let encoded_collab = default_database_row_data(&row_id, row);
     let collab = self
       .collab_service
-      .build_collab(&row_id, CollabType::DatabaseRow, Some(encoded_collab))
+      .build_collab(
+        &row_id,
+        CollabType::DatabaseRow,
+        Some((encoded_collab, true)),
+      )
       .await?;
 
     let database_row = DatabaseRow::open(
@@ -169,18 +172,18 @@ impl Block {
   #[instrument(level = "debug", skip_all)]
   pub async fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
     let mut rows = Vec::new();
-    for row_order in row_orders {
-      let row = match self.get_or_init_database_row(&row_order.id).await {
-        Err(_) => Row::empty(row_order.id.clone(), &self.database_id),
-        Ok(database_row) => database_row
-          .read()
-          .await
+    let row_ids: Vec<RowId> = row_orders.iter().map(|order| order.id.clone()).collect();
+    if let Ok(database_rows) = self.init_database_rows(row_ids).await {
+      for database_row in database_rows {
+        let read_guard = database_row.read().await;
+        let row_id = read_guard.row_id.clone();
+        let row = read_guard
           .get_row()
-          .unwrap_or_else(|| Row::empty(row_order.id.clone(), &self.database_id)),
-      };
-
-      rows.push(row);
+          .unwrap_or_else(|| Row::empty(row_id, &self.database_id));
+        rows.push(row);
+      }
     }
+
     rows
   }
 
@@ -253,21 +256,28 @@ impl Block {
 
   pub async fn init_database_rows(
     &self,
-    row_ids: Vec<RowId>,
+    mut row_ids: Vec<RowId>,
   ) -> Result<Vec<Arc<RwLock<DatabaseRow>>>, DatabaseError> {
-    let row_ids = row_ids.into_iter().map(|id| id.to_string()).collect();
-    let data_source_by_id = self
+    // filter out the row that already in the cache.
+    row_ids.retain(|id| !self.row_mem_cache.contains_key(id));
+
+    let row_ids: Vec<String> = row_ids.into_iter().map(|id| id.into_inner()).collect();
+    let encoded_collab_by_id = self
       .collab_service
       .get_collabs(row_ids, CollabType::DatabaseRow)
       .await?;
 
-    let futures = data_source_by_id
+    let futures = encoded_collab_by_id
       .into_iter()
-      .map(|(row_id, data_source)| async {
+      .map(|(row_id, encoded_collab)| async {
         let row_id = RowId::from(row_id);
         let collab = self
           .collab_service
-          .build_collab(&row_id, CollabType::DatabaseRow, Some(data_source))
+          .build_collab(
+            &row_id,
+            CollabType::DatabaseRow,
+            Some((encoded_collab, false)),
+          )
           .await?;
         let database_row = self.init_database_row_from_collab(row_id, collab).await?;
         Ok::<_, DatabaseError>(database_row)

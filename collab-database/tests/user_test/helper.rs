@@ -152,7 +152,7 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
     &self,
     object_id: &str,
     object_type: CollabType,
-    encoded_collab: Option<EncodedCollab>,
+    encoded_collab: Option<(EncodedCollab, bool)>,
   ) -> Result<Collab, DatabaseError> {
     let db_plugin = RocksdbDiskPlugin::new_with_config(
       self.uid,
@@ -162,13 +162,15 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
       CollabPersistenceConfig::default(),
     );
 
-    let data_source = encoded_collab.map(DataSource::from).unwrap_or_else(|| {
-      KVDBCollabPersistenceImpl {
-        db: Arc::downgrade(&self.db),
-        uid: self.uid,
-      }
-      .into_data_source()
-    });
+    let data_source = encoded_collab
+      .map(|(encoded_collab, _)| DataSource::from(encoded_collab))
+      .unwrap_or_else(|| {
+        KVDBCollabPersistenceImpl {
+          db: Arc::downgrade(&self.db),
+          uid: self.uid,
+        }
+        .into_data_source()
+      });
 
     let mut collab = CollabBuilder::new(self.uid, object_id, data_source)
       .with_device_id("1")
