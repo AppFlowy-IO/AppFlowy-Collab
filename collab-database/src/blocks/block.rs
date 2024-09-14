@@ -1,4 +1,5 @@
 use dashmap::DashMap;
+use std::collections::HashMap;
 
 use collab_entity::CollabType;
 
@@ -253,20 +254,24 @@ impl Block {
       Some(row) => Ok(row),
     }
   }
-
   pub async fn init_database_rows(
     &self,
-    mut row_ids: Vec<RowId>,
+    row_ids: Vec<RowId>,
   ) -> Result<Vec<Arc<RwLock<DatabaseRow>>>, DatabaseError> {
-    // filter out the row that already in the cache.
-    row_ids.retain(|id| !self.row_mem_cache.contains_key(id));
+    // Retain only rows that are not in the cache
+    let uncached_row_ids: Vec<String> = row_ids
+      .iter()
+      .filter(|id| !self.row_mem_cache.contains_key(id))
+      .map(|id| id.to_string())
+      .collect();
 
-    let row_ids: Vec<String> = row_ids.into_iter().map(|id| id.into_inner()).collect();
+    // Fetch collabs for the uncached row IDs
     let encoded_collab_by_id = self
       .collab_service
-      .get_collabs(row_ids, CollabType::DatabaseRow)
+      .get_collabs(uncached_row_ids, CollabType::DatabaseRow)
       .await?;
 
+    // Prepare concurrent tasks to initialize database rows
     let futures = encoded_collab_by_id
       .into_iter()
       .map(|(row_id, encoded_collab)| async {
@@ -279,17 +284,30 @@ impl Block {
             Some((encoded_collab, false)),
           )
           .await?;
-        let database_row = self.init_database_row_from_collab(row_id, collab).await?;
-        Ok::<_, DatabaseError>(database_row)
+        let database_row = self
+          .init_database_row_from_collab(row_id.clone(), collab)
+          .await?;
+        Ok::<_, DatabaseError>((row_id, database_row))
       });
 
-    let rows = join_all(futures)
+    // Execute the tasks concurrently and collect them into a HashMap
+    let uncached_rows: HashMap<RowId, Arc<RwLock<DatabaseRow>>> = join_all(futures)
       .await
       .into_iter()
-      .collect::<Result<Vec<_>, _>>()?;
-    Ok(rows)
-  }
+      .collect::<Result<HashMap<_, _>, _>>()?;
 
+    // Initialize final database rows by combining cached and newly fetched rows
+    let mut database_rows = Vec::with_capacity(row_ids.len());
+    for row_id in row_ids {
+      if let Some(cached_row) = self.row_mem_cache.get(&row_id) {
+        database_rows.push(cached_row.value().clone());
+      } else if let Some(new_row) = uncached_rows.get(&row_id) {
+        database_rows.push(new_row.clone());
+      }
+    }
+
+    Ok(database_rows)
+  }
   pub async fn init_database_row(
     &self,
     row_id: RowId,
