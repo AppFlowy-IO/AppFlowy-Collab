@@ -1,4 +1,5 @@
 use crate::rows::RowId;
+use collab_entity::CollabValidateError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DatabaseError {
@@ -26,8 +27,8 @@ pub enum DatabaseError {
   #[error(transparent)]
   UuidError(#[from] uuid::Error),
 
-  #[error("No required data")]
-  NoRequiredData,
+  #[error("No required data:{0}")]
+  NoRequiredData(String),
 
   #[error("Record already exist")]
   RecordAlreadyExist,
@@ -46,4 +47,18 @@ pub enum DatabaseError {
 
   #[error("Internal failure: {0}")]
   Internal(#[from] anyhow::Error),
+}
+
+impl DatabaseError {
+  pub fn is_no_required_data(&self) -> bool {
+    matches!(self, DatabaseError::NoRequiredData(_))
+  }
+}
+
+impl From<CollabValidateError> for DatabaseError {
+  fn from(error: CollabValidateError) -> Self {
+    match error {
+      CollabValidateError::NoRequiredData(data) => DatabaseError::NoRequiredData(data),
+    }
+  }
 }

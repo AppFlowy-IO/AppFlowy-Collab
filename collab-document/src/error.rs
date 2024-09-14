@@ -1,3 +1,5 @@
+use collab_entity::CollabValidateError;
+
 #[derive(Debug, thiserror::Error)]
 pub enum DocumentError {
   #[error(transparent)]
@@ -38,4 +40,12 @@ pub enum DocumentError {
 
   #[error("Unable to parse document to plain text")]
   ParseDocumentError,
+}
+
+impl From<CollabValidateError> for DocumentError {
+  fn from(error: CollabValidateError) -> Self {
+    match error {
+      CollabValidateError::NoRequiredData(_) => DocumentError::NoRequiredData,
+    }
+  }
 }

@@ -103,7 +103,10 @@ impl DatabaseRow {
     if let Some(persistence) = self.collab_service.persistence() {
       let encoded_collab = self
         .collab
-        .encode_collab_v1(|collab| CollabType::DatabaseRow.validate_require_data(collab))
+        .encode_collab_v1(|collab| {
+          CollabType::DatabaseRow.validate_require_data(collab)?;
+          Ok(())
+        })
         .map_err(DatabaseError::Internal)?;
       persistence.flush_collabs(vec![(self.collab.object_id().to_string(), encoded_collab)])?;
     }
@@ -112,9 +115,7 @@ impl DatabaseRow {
   }
 
   pub fn validate(&self) -> Result<(), DatabaseError> {
-    CollabType::DatabaseRow
-      .validate_require_data(&self.collab)
-      .map_err(|_| DatabaseError::NoRequiredData)?;
+    CollabType::DatabaseRow.validate_require_data(&self.collab)?;
     Ok(())
   }
 

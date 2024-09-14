@@ -116,6 +116,14 @@ impl WorkspaceDatabaseBody {
       .find(|record| record.linked_views.iter().any(|id| id == view_id))
   }
 
+  pub fn get_database_meta<T: ReadTxn>(&self, txn: &T, database_id: &str) -> Option<DatabaseMeta> {
+    // TODO(nathan): No need to get all database meta
+    let all = self.get_all_database_meta(txn);
+    all
+      .into_iter()
+      .find(|record| record.database_id == database_id)
+  }
+
   fn database_index_from_database_id<T: ReadTxn>(&self, txn: &T, database_id: &str) -> Option<u32> {
     self
       .array_ref
@@ -135,6 +143,7 @@ impl WorkspaceDatabaseBody {
 pub struct DatabaseMeta {
   pub database_id: String,
   pub created_at: i64,
+  /// The first view should be the inline view
   pub linked_views: Vec<String>,
 }
 
