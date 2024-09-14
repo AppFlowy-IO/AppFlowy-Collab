@@ -16,6 +16,7 @@ collab = { workspace = true }
 anyhow.workspace = true
 bytes = { workspace = true, features = ["serde"] }
 prost = "0.12"
+thiserror = "1.0.61"
 
 [build-dependencies]
 prost-build = "0.12"

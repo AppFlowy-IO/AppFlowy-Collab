@@ -19,7 +19,9 @@ use crate::views::{
   FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
   OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver,
 };
-use crate::workspace_database::{DatabaseCollabService, NoPersistenceDatabaseCollabService};
+use crate::workspace_database::{
+  DatabaseCollabService, DatabaseMeta, NoPersistenceDatabaseCollabService,
+};
 
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
@@ -116,7 +118,11 @@ impl Database {
     let encoded_collab = default_database_data(database_id)?;
     let collab = context
       .collab_service
-      .build_collab(database_id, CollabType::Database, Some(encoded_collab))
+      .build_collab(
+        database_id,
+        CollabType::Database,
+        Some((encoded_collab, true)),
+      )
       .await?;
 
     let collab_service = context.collab_service.clone();
@@ -254,8 +260,12 @@ impl Database {
         return Err(DatabaseError::DatabaseViewNotExist);
       };
 
+    // create rows
     let row_orders = self.body.block.create_rows(rows).await;
+
+    // create fields
     let field_orders: Vec<FieldOrder> = fields.iter().map(FieldOrder::from).collect();
+
     let mut txn = self.collab.context.transact_mut();
     // Set the inline view id. The inline view id should not be
     // empty if the current database exists.
@@ -290,9 +300,7 @@ impl Database {
   }
 
   pub fn validate(&self) -> Result<(), DatabaseError> {
-    CollabType::Database
-      .validate_require_data(&self.collab)
-      .map_err(|_| DatabaseError::NoRequiredData)?;
+    CollabType::Database.validate_require_data(&self.collab)?;
     Ok(())
   }
 
@@ -1537,13 +1545,11 @@ pub struct DatabaseBody {
 
 impl DatabaseBody {
   fn open(
-    mut collab: Collab,
+    collab: Collab,
     database_id: String,
     context: DatabaseContext,
   ) -> Result<(Self, Collab), DatabaseError> {
-    if let Err(_err) = CollabType::Database.validate_require_data(&collab) {
-      try_fixing_database_inline_view_id(&mut collab)?;
-    }
+    CollabType::Database.validate_require_data(&collab)?;
     Self::create(collab, database_id, context)
   }
 
@@ -1875,23 +1881,31 @@ impl DatabaseBody {
   }
 }
 
-pub fn try_fixing_database_inline_view_id(collab: &mut Collab) -> Result<(), DatabaseError> {
+pub fn try_fixing_database_inline_view_id(
+  collab: &mut Collab,
+  database_meta: DatabaseMeta,
+) -> Result<(), DatabaseError> {
+  // check if inline view id
   let inline_view_id = {
-    let body = DatabaseBody::from_collab(collab).ok_or_else(|| DatabaseError::NoRequiredData)?;
     let txn = collab.context.transact();
-    body.try_get_inline_view_id(&txn)
-  };
-
-  if let Some(inline_view_id) = inline_view_id {
-    let mut txn = collab.context.transact_mut();
     if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
       let map = MetaMap::new(container);
+      map.get_inline_view_id(&txn)
+    } else {
+      None
+    }
+  };
 
-      info!("Fixing inline view id to {}", inline_view_id);
-      map.set_inline_view_id(&mut txn, &inline_view_id);
-      return Ok(());
+  if inline_view_id.is_none() {
+    if let Some(default_inline_view) = database_meta.linked_views.first() {
+      let mut txn = collab.context.transact_mut();
+      if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
+        let map = MetaMap::new(container);
+        info!("Fixing inline view id to {}", default_inline_view);
+        map.set_inline_view_id(&mut txn, default_inline_view);
+      }
     }
   }
 
-  Err(DatabaseError::NoRequiredData)
+  Ok(())
 }

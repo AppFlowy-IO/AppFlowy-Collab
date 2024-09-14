@@ -30,6 +30,12 @@ pub enum CollabType {
   Unknown = 6,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum CollabValidateError {
+  #[error("No required data: {0}")]
+  NoRequiredData(String),
+}
+
 impl CollabType {
   pub fn value(&self) -> i32 {
     self.clone() as i32
@@ -52,7 +58,7 @@ impl CollabType {
   /// - `Ok(())` if the collab object contains all the required data for its type.
   /// - `Err(Error)` if the required data is missing or if the collab object does not meet
   ///   the validation criteria for its type.
-  pub fn validate_require_data(&self, collab: &Collab) -> Result<(), Error> {
+  pub fn validate_require_data(&self, collab: &Collab) -> Result<(), CollabValidateError> {
     let txn = collab.transact();
     match self {
       CollabType::Document => {
@@ -173,8 +179,8 @@ pub fn validate_data_for_folder(collab: &Collab, workspace_id: &str) -> Result<(
 }
 
 #[inline]
-fn no_required_data_error(collab_type: &CollabType, reason: &str) -> Error {
-  anyhow!("No required data: {}:{}", collab_type, reason)
+fn no_required_data_error(collab_type: &CollabType, reason: &str) -> CollabValidateError {
+  CollabValidateError::NoRequiredData(format!("{}:{}", collab_type, reason))
 }
 
 impl Display for CollabType {
