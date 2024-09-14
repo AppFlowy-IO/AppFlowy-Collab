@@ -458,30 +458,22 @@ impl WorkspaceDatabase {
       {
         // Attempt to fix the database inline view ID
         if try_fixing_database(&mut collab, database_meta).is_ok() {
-          info!("[Fix]: database:{} by adding inline view", database_id);
-          // Retry opening the database after attempting to fix it
-          match Database::open(database_id, context).await {
-            Ok(database) => {
-              if let Some(persistence) = self.collab_service.persistence() {
-                match database.encode_collab_v1(|collab| {
-                  CollabType::Database.validate_require_data(collab)?;
-                  Ok::<_, DatabaseError>(())
-                }) {
-                  Ok(encoded_collab) => {
-                    info!("[Fix]: save database:{} to disk", database_id);
-                    persistence.save_collab(database_id, encoded_collab).ok();
-                  },
-                  Err(err) => {
-                    error!("[Fix]: fix database:{} failed: {}", database_id, err);
-                  },
-                }
-              }
-              return Ok(());
-            },
-            Err(err) => {
-              info!("[Fix]: fix database:{} failed: {}", database_id, err);
-            },
+          if let Some(persistence) = self.collab_service.persistence() {
+            match collab.encode_collab_v1(|collab| {
+              CollabType::Database.validate_require_data(collab)?;
+              Ok::<_, DatabaseError>(())
+            }) {
+              Ok(encoded_collab) => {
+                info!("[Fix]: save database:{} to disk", database_id);
+                persistence.save_collab(database_id, encoded_collab).ok();
+              },
+              Err(err) => {
+                error!("[Fix]: fix database:{} failed: {}", database_id, err);
+              },
+            }
           }
+        } else {
+          info!("[Fix]: Can't fix the database: {}", database_id);
         }
       }
     } else {
