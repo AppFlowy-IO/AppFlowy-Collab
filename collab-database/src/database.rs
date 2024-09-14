@@ -159,7 +159,12 @@ impl Database {
     // Get or create empty database with the given database_id
     let mut database = Self::create(&params.database_id, context).await?;
     database.create_view(params).await?;
-    Ok(database)
+    tokio::task::spawn_blocking(move || {
+      database.write_to_disk()?;
+      Ok::<_, DatabaseError>(database)
+    })
+    .await
+    .map_err(|e| DatabaseError::Internal(e.into()))?
   }
 
   pub async fn encode_database_collabs(&self) -> Result<EncodedDatabase, DatabaseError> {
