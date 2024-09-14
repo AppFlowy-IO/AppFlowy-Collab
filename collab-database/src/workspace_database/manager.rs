@@ -435,6 +435,7 @@ impl WorkspaceDatabase {
     context: DatabaseContext,
   ) -> Option<Database> {
     // Try to get the database metadata
+    info!("Attempting to fix database: {}", database_id);
     if let Some(database_meta) = self.get_database_meta(database_id) {
       // Try to build the collab
       if let Ok(mut collab) = context
@@ -444,13 +445,15 @@ impl WorkspaceDatabase {
       {
         // Attempt to fix the database inline view ID
         if try_fixing_database_inline_view_id(&mut collab, database_meta).is_ok() {
-          info!("Database inline view ID fixed: {}", database_id);
+          info!("Fix database:{} by adding inline view", database_id);
           // Retry opening the database after attempting to fix it
           if let Ok(database) = Database::open(database_id, context).await {
             return Some(database);
           }
         }
       }
+    } else {
+      info!("Can't find any database meta for database: {}", database_id);
     }
     None
   }
