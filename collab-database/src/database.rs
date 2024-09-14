@@ -498,11 +498,12 @@ impl Database {
   }
 
   #[instrument(level = "debug", skip_all)]
-  pub async fn init_database_rows(
+  pub async fn init_database_rows<T: Into<RowId>>(
     &self,
-    row_id: Vec<RowId>,
+    row_ids: Vec<T>,
   ) -> Result<Vec<Arc<RwLock<DatabaseRow>>>, DatabaseError> {
-    self.body.block.init_database_rows(row_id).await
+    let row_ids = row_ids.into_iter().map(Into::into).collect();
+    self.body.block.init_database_rows(row_ids).await
   }
 
   /// Return None if the row is not initialized.
