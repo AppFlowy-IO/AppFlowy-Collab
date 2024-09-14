@@ -1888,7 +1888,6 @@ pub fn try_fixing_database(
   // check if inline view id
   let inline_view_id = {
     let txn = collab.context.transact();
-
     if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
       let map = MetaMap::new(container);
       map.get_inline_view_id(&txn)
@@ -1897,6 +1896,7 @@ pub fn try_fixing_database(
     }
   };
 
+  info!("[Fix]: inline view id: {:?}", inline_view_id);
   if inline_view_id.is_none() {
     if let Some(default_inline_view) = database_meta.linked_views.first() {
       let mut txn = collab.context.transact_mut();
@@ -1905,6 +1905,8 @@ pub fn try_fixing_database(
         info!("[Fix]: set inline view id to {}", default_inline_view);
         map.set_inline_view_id(&mut txn, default_inline_view);
       }
+    } else {
+      info!("[Fix]: no default inline view id found");
     }
   }
 
