@@ -244,9 +244,9 @@ impl WorkspaceDatabase {
         let database = Database::open(database_id, context).await.ok()?;
         // The database is not exist in local disk, which means the rows of the database are not
         // loaded yet.
-        if !is_exist {
-          database.load_first_screen_rows().await;
-        }
+        // if !is_exist {
+        //   database.load_first_screen_rows().await;
+        // }
 
         // Create a new [MutexDatabase] and add it to the databases.
         let database = Arc::new(RwLock::from(database));
