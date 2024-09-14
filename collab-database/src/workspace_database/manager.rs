@@ -234,21 +234,8 @@ impl WorkspaceDatabase {
     let database = self.databases.get(database_id).as_deref().cloned();
     match database {
       None => {
-        // If the database is not exist, create a new one.
-        let is_exist = self
-          .collab_service
-          .persistence()?
-          .is_collab_exist(database_id);
-
         let context = DatabaseContext::new(self.collab_service.clone());
         let database = Database::open(database_id, context).await.ok()?;
-        // The database is not exist in local disk, which means the rows of the database are not
-        // loaded yet.
-        if !is_exist {
-          database.load_first_screen_rows().await;
-        }
-
-        // Create a new [MutexDatabase] and add it to the databases.
         let database = Arc::new(RwLock::from(database));
         self
           .databases

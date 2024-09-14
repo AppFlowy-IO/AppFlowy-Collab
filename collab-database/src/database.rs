@@ -340,20 +340,6 @@ impl Database {
     self.body.views.get_database_view_layout(&txn, view_id)
   }
 
-  /// Load the first 100 rows of the database.
-  /// The first 100 rows consider as the first screen rows
-  pub async fn load_first_screen_rows(&self) {
-    let row_ids = self
-      .get_inline_row_orders()
-      .into_iter()
-      .map(|row_order| row_order.id)
-      .take(100)
-      .collect::<Vec<_>>();
-    if let Err(err) = self.body.block.batch_load_rows(row_ids).await {
-      error!("load first screen rows failed: {}", err);
-    }
-  }
-
   /// Return the database id with a transaction
   pub fn get_database_id(&self) -> String {
     let txn = self.collab.transact();
