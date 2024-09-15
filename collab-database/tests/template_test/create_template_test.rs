@@ -1,7 +1,9 @@
 use collab_database::database::{gen_database_id, gen_database_view_id, Database};
 use collab_database::entity::FieldType;
+use collab_database::rows::Row;
 use collab_database::template::builder::DatabaseTemplateBuilder;
 use collab_database::template::entity::CELL_DATA;
+use futures::StreamExt;
 
 #[tokio::test]
 async fn create_template_test() {
@@ -88,7 +90,12 @@ async fn create_template_test() {
   }
 
   // Assert num of rows
-  let rows = database.get_all_rows().await;
+  let rows: Vec<Row> = database
+    .get_all_rows(None)
+    .await
+    .filter_map(|result| async move { result.ok() })
+    .collect()
+    .await;
   assert_eq!(rows.len(), 5);
   for row in rows.iter() {
     for field in &fields {
