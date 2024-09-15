@@ -557,8 +557,17 @@ fn observe_doc(
     .observe_update_v1(move |txn, event| {
       // If the origin of the txn is none, it means that the update is coming from a remote source.
       cloned_plugins.each(|plugin| {
-        plugin.receive_update(&cloned_oid, txn, &event.update);
+        #[cfg(all(debug_assertions, feature = "verbose_log"))]
+        {
+          use yrs::updates::decoder::Decode;
+          if let Ok(update) = Update::decode_v1(&event.update) {
+            tracing::trace!("Collab {} apply update: {:#?}", cloned_oid, update);
+          } else {
+            tracing::warn!("Failed to decode update for Collab {}", cloned_oid);
+          }
+        }
 
+        plugin.receive_update(&cloned_oid, txn, &event.update);
         let remote_origin = CollabOrigin::from(txn);
         if remote_origin == local_origin {
           plugin.receive_local_update(&local_origin, &cloned_oid, &event.update);
