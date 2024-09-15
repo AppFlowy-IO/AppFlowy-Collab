@@ -561,7 +561,7 @@ fn observe_doc(
         {
           use yrs::updates::decoder::Decode;
           if let Ok(update) = Update::decode_v1(&event.update) {
-            tracing::trace!("Collab {} apply update: {:#?}", oid, update);
+            tracing::trace!("Collab {} apply update: {:#?}", cloned_oid, update);
           } else {
             tracing::warn!("Failed to decode update for Collab {}", oid);
           }
