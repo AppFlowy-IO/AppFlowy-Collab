@@ -1,6 +1,8 @@
 use collab_database::database::{gen_database_id, gen_database_view_id, Database};
+use collab_database::rows::Row;
 use collab_database::template::csv::CSVTemplate;
 use collab_database::template::entity::CELL_DATA;
+use futures::StreamExt;
 
 #[tokio::test]
 async fn import_csv_test() {
@@ -14,7 +16,13 @@ async fn import_csv_test() {
     .unwrap();
 
   let fields = database.get_fields_in_view(&database.get_inline_view_id(), None);
-  let rows = database.get_all_rows().await;
+  let rows: Vec<Row> = database
+    .get_all_rows(None)
+    .await
+    .filter_map(|result| async move { result.ok() })
+    .collect()
+    .await;
+
   let mut reader = csv::Reader::from_reader(csv_data.as_bytes());
   let csv_rows = reader
     .records()

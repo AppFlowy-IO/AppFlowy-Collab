@@ -1,6 +1,7 @@
 use collab_database::database::gen_database_view_id;
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams, FileUploadType};
-use collab_database::rows::{CreateRowParams, RowCover};
+use collab_database::rows::{CreateRowParams, Row, RowCover};
+use futures::StreamExt;
 
 use crate::user_test::helper::{
   make_default_grid, random_uid, user_database_test_with_db, user_database_test_with_default_data,
@@ -128,13 +129,23 @@ async fn duplicate_database_inline_view_test() {
     .await
     .unwrap();
 
-  assert_eq!(db.get_rows_for_view(&duplicated_view_id).await.len(), 1);
-  assert!(database
-    .read()
-    .await
-    .get_rows_for_view("v1")
-    .await
-    .is_empty());
+  assert_eq!(
+    db.get_rows_for_view(&duplicated_view_id, None)
+      .await
+      .count()
+      .await,
+    1
+  );
+  assert_eq!(
+    database
+      .read()
+      .await
+      .get_rows_for_view("v1", None)
+      .await
+      .count()
+      .await,
+    0
+  );
 }
 
 #[tokio::test]
@@ -174,8 +185,14 @@ async fn duplicate_database_view_test() {
     .unwrap();
 
   // Duplicated database should have the same rows as the original database
-  assert_eq!(db.get_rows_for_view(&duplicated_view.id).await.len(), 1);
-  assert_eq!(db.get_rows_for_view("v1").await.len(), 1);
+  assert_eq!(
+    db.get_rows_for_view(&duplicated_view.id, None)
+      .await
+      .count()
+      .await,
+    1
+  );
+  assert_eq!(db.get_rows_for_view("v1", None).await.count().await, 1);
 }
 
 #[tokio::test]
@@ -266,8 +283,19 @@ async fn duplicate_database_data_test() {
   let duplicated_view_id = &duplicate.get_all_database_views_meta()[0].id;
 
   // compare rows
-  let original_rows = original.get_rows_for_view("v1").await;
-  let duplicate_rows = duplicate.get_rows_for_view(duplicated_view_id).await;
+  let original_rows: Vec<Row> = original
+    .get_rows_for_view("v1", None)
+    .await
+    .filter_map(|result| async { result.ok() })
+    .collect()
+    .await;
+
+  let duplicate_rows: Vec<Row> = duplicate
+    .get_rows_for_view(duplicated_view_id, None)
+    .await
+    .filter_map(|result| async { result.ok() })
+    .collect()
+    .await;
   assert_eq!(original_rows.len(), duplicate_rows.len());
   for (index, row) in original_rows.iter().enumerate() {
     assert_eq!(row.visibility, duplicate_rows[index].visibility);

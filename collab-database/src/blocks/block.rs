@@ -17,6 +17,7 @@ use futures::future::join_all;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
+
 use tracing::{error, instrument, trace, warn};
 use uuid::Uuid;
 
@@ -173,6 +174,7 @@ impl Block {
   #[instrument(level = "debug", skip_all)]
   pub async fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
     let mut rows = Vec::new();
+
     let row_ids: Vec<RowId> = row_orders.iter().map(|order| order.id.clone()).collect();
     if let Ok(database_rows) = self.init_database_rows(row_ids).await {
       for database_row in database_rows {
@@ -254,6 +256,7 @@ impl Block {
       Some(row) => Ok(row),
     }
   }
+
   pub async fn init_database_rows(
     &self,
     row_ids: Vec<RowId>,
@@ -308,6 +311,7 @@ impl Block {
 
     Ok(database_rows)
   }
+
   pub async fn init_database_row(
     &self,
     row_id: RowId,

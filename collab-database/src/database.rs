@@ -40,6 +40,8 @@ use collab::preclude::{
 use collab::util::{AnyExt, ArrayExt};
 use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
 use collab_entity::CollabType;
+use futures::StreamExt;
+use futures::{stream, Stream};
 use nanoid::nanoid;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
@@ -47,6 +49,7 @@ use rayon::prelude::IntoParallelIterator;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 pub use tokio_stream::wrappers::WatchStream;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, trace};
 use uuid::Uuid;
 
@@ -505,13 +508,45 @@ impl Database {
     self.body.block.get_or_init_database_row(row_id).await.ok()
   }
 
-  #[instrument(level = "debug", skip_all)]
-  pub async fn init_database_rows<T: Into<RowId>>(
-    &self,
+  pub fn init_database_rows<'a, T: Into<RowId> + Send + 'a>(
+    &'a self,
     row_ids: Vec<T>,
-  ) -> Result<Vec<Arc<RwLock<DatabaseRow>>>, DatabaseError> {
-    let row_ids = row_ids.into_iter().map(Into::into).collect();
-    self.body.block.init_database_rows(row_ids).await
+    cancel_token: Option<CancellationToken>,
+  ) -> impl Stream<Item = Result<Arc<RwLock<DatabaseRow>>, DatabaseError>> + 'a {
+    let row_ids_chunk_stream = stream::iter(
+      row_ids
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<RowId>>()
+        .chunks(50)
+        .map(|chunk| chunk.to_vec())
+        .collect::<Vec<Vec<RowId>>>(),
+    );
+
+    // Stream that processes each chunk and yields rows, checking for cancellation if the token is provided
+    row_ids_chunk_stream
+      .then(move |chunk| {
+        let cancel_token = cancel_token.clone();
+        async move {
+          if let Some(ref token) = cancel_token {
+            if token.is_cancelled() {
+              return Err(DatabaseError::ActionCancelled);
+            }
+          }
+
+          self.body.block.init_database_rows(chunk).await
+        }
+      })
+      .filter_map(|result| async {
+        match result {
+          Ok(rows) => Some(stream::iter(rows.into_iter().map(Ok))),
+          Err(err) => {
+            error!("Error initializing database rows: {:?}", err);
+            None
+          },
+        }
+      })
+      .flatten()
   }
 
   /// Return None if the row is not initialized.
@@ -539,9 +574,15 @@ impl Database {
 
   /// Return a list of [Row] for the given view.
   /// The rows here are ordered by [RowOrder]s of the view.
-  pub async fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
+  pub async fn get_rows_for_view(
+    &self,
+    view_id: &str,
+    cancel_token: Option<CancellationToken>,
+  ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
     let row_orders = self.get_row_orders_for_view(view_id);
-    self.get_rows_from_row_orders(&row_orders).await
+    self
+      .get_rows_from_row_orders(&row_orders, cancel_token)
+      .await
   }
 
   pub async fn get_row_order_at_index(&self, view_id: &str, index: u32) -> Option<RowOrder> {
@@ -561,8 +602,26 @@ impl Database {
 
   /// Return a list of [Row] for the given view.
   /// The rows here is ordered by the [RowOrder] of the view.
-  pub async fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
-    self.body.block.get_rows_from_row_orders(row_orders).await
+  pub async fn get_rows_from_row_orders<'a>(
+    &'a self,
+    row_orders: &[RowOrder],
+    cancel_token: Option<CancellationToken>,
+  ) -> impl Stream<Item = Result<Row, DatabaseError>> + 'a {
+    let row_ids = row_orders.iter().map(|order| order.id.clone()).collect();
+    let rows_stream = self.init_database_rows(row_ids, cancel_token);
+    let database_id = self.get_database_id();
+    rows_stream.then(move |result| {
+      let database_id = database_id.clone();
+      async move {
+        let row = result?;
+        let read_guard = row.read().await;
+        let row_id = read_guard.row_id.clone();
+        let row = read_guard
+          .get_row()
+          .unwrap_or_else(|| Row::empty(row_id, &database_id));
+        Ok(row)
+      }
+    })
   }
 
   /// Return a list of [RowCell] for the given view and field.
@@ -1258,7 +1317,11 @@ impl Database {
     let inline_view_id = self.body.get_inline_view_id(&txn);
     let views = self.body.views.get_all_views(&txn);
     let fields = self.body.get_fields_in_view(&txn, &inline_view_id, None);
-    let rows = self.get_all_rows().await;
+    let rows_stream = self.get_all_rows(None).await;
+    let rows: Vec<Row> = rows_stream
+      .filter_map(|result| async move { result.ok() })
+      .collect()
+      .await;
 
     DatabaseData {
       database_id,
@@ -1284,14 +1347,19 @@ impl Database {
     inline_view_id == view_id
   }
 
-  pub async fn get_all_rows(&self) -> Vec<Row> {
+  pub async fn get_all_rows(
+    &self,
+    cancel_token: Option<CancellationToken>,
+  ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
     let row_orders = {
       let txn = self.collab.transact();
       let inline_view_id = self.body.get_inline_view_id(&txn);
       self.body.views.get_row_orders(&txn, &inline_view_id)
     };
 
-    self.get_rows_from_row_orders(&row_orders).await
+    self
+      .get_rows_from_row_orders(&row_orders, cancel_token)
+      .await
   }
 
   pub async fn get_all_row_orders(&self) -> Vec<RowOrder> {
