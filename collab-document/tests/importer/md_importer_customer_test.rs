@@ -4,7 +4,6 @@ use crate::importer::util::{
   dump_page_blocks, get_children_blocks, get_delta, get_delta_json, get_page_block,
   markdown_to_document_data,
 };
-use serde_json::json;
 
 #[test]
 fn test_customer_unordered_list_with_link() {
