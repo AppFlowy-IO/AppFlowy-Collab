@@ -2,11 +2,12 @@ use collab_document::blocks::DocumentData;
 use collab_document::importer::md_importer::MDImporter;
 use serde_json::{json, Value};
 
-fn markdown_to_document_data(md: &str) -> DocumentData {
+pub(crate) fn markdown_to_document_data(md: &str) -> DocumentData {
   let importer = MDImporter::new(None);
   let result = importer.import("test_document", md);
   result.unwrap()
 }
+
 fn parse_json(s: &str) -> Value {
   serde_json::from_str(s).unwrap()
 }
