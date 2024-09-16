@@ -534,11 +534,13 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
   }
 
   pub fn set_row_id(self, new_row_id: RowId) -> Self {
-    self.map_ref.insert(self.txn, ROW_ID, new_row_id.as_str());
-
     let old_row_id = match row_id_from_map_ref(self.txn, &self.map_ref) {
       Some(row_id) => row_id,
-      None => return self,
+      None => {
+        // no row id found, so we just insert the new id
+        self.map_ref.insert(self.txn, ROW_ID, new_row_id.as_str());
+        return self;
+      },
     };
     let old_row_uuid = match old_row_id.parse::<Uuid>() {
       Ok(uuid) => uuid,
@@ -555,6 +557,10 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
       },
     };
 
+    // update to new row id
+    self.map_ref.insert(self.txn, ROW_ID, new_row_id.as_str());
+
+    // update meta key derived from new row id
     for key in RowMetaKey::iter() {
       let old_meta_key = meta_id_from_row_id(&old_row_uuid, key.clone());
       let old_meta_value = self.meta_ref.remove(self.txn, &old_meta_key);
