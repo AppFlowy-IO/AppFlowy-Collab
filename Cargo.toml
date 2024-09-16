@@ -7,6 +7,7 @@ members = [
     "collab-document",
     "collab-folder",
     "collab-plugins",
+    "importer",
 ]
 resolver = "2"
 
@@ -18,6 +19,7 @@ collab-user = { workspace = true, path = "collab-user" }
 collab-entity = { workspace = true, path = "collab-entity" }
 collab-document = { workspace = true, path = "collab-document" }
 collab-folder = { workspace = true, path = "collab-folder" }
+collab-importer = { workspace = true, path = "importer" }
 yrs = { version = "0.21.0", features = ["sync"] }
 anyhow = "1.0"
 thiserror = "1.0.39"

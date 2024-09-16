@@ -1,0 +1,26 @@
+[package]
+name = "importer"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+collab-folder = { workspace = true }
+collab-database = { workspace = true }
+collab-document = { workspace = true }
+collab = { workspace = true }
+thiserror.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+walkdir = "2.5.0"
+uuid = "1.6.1"
+serde = { version = "1.0.204", features = ["derive"] }
+serde_json = "1.0.120"
+markdown = "1.0.0-alpha.20"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+nanoid = "0.4.0"
+zip = "2.2.0"
+assert-json-diff = "2.0.2"
