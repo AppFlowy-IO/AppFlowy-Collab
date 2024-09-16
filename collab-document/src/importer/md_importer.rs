@@ -131,16 +131,32 @@ fn process_mdast_node(
     },
     // handle the blockquote and list item node
     mdast::Node::BlockQuote(_) | mdast::Node::ListItem(_) => {
-      if let Some(mdast::Node::Paragraph(para)) =
-        get_mdast_node_children(node).and_then(|c| c.first())
-      {
-        process_mdast_node_children(
-          document_data,
-          Some(id.clone()),
-          &para.children,
-          None,
-          start_number,
-        );
+      if let Some(children) = get_mdast_node_children(node) {
+        if children.is_empty() {
+          return;
+        }
+
+        if let Some((first, rest)) = children.split_first() {
+          // use the first node as the content of the block
+          if let mdast::Node::Paragraph(para) = first {
+            process_mdast_node_children(
+              document_data,
+              Some(id.clone()),
+              &para.children,
+              None,
+              start_number,
+            );
+          }
+
+          // continue to process the rest of the nodes
+          process_mdast_node_children(
+            document_data,
+            Some(id.clone()),
+            rest,
+            list_type,
+            start_number,
+          );
+        }
       }
     },
     mdast::Node::Code(code) => {

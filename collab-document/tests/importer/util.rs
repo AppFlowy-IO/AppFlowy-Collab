@@ -35,13 +35,12 @@ pub(crate) fn get_children_blocks(document_data: &DocumentData, block_id: &str) 
 }
 
 pub(crate) fn get_delta(document_data: &DocumentData, block_id: &str) -> String {
-  let block = get_block(document_data, block_id);
   let delta = document_data
     .meta
     .text_map
     .as_ref()
     .unwrap()
-    .get(&block.id)
+    .get(block_id)
     .unwrap();
   delta.clone()
 }

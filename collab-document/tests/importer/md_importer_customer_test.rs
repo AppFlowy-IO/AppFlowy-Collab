@@ -1,8 +1,7 @@
 use serde_json::json;
 
 use crate::importer::util::{
-  dump_page_blocks, get_children_blocks, get_delta, get_delta_json, get_page_block,
-  markdown_to_document_data,
+  get_children_blocks, get_delta, get_delta_json, get_page_block, markdown_to_document_data,
 };
 
 #[test]
@@ -91,18 +90,19 @@ Here is the complete Dart file with the above steps:
 #[test]
 fn test_customer_nested_list() {
   let markdown = r#"
-- Task Parent One
-    - Task One + Parent
-        - Task Two
-    - Task Three
-- Task Four
-- Task Five
+- Task 1
+    - Task 1 - 1
+        - Task 1 - 1 - 1
+    - Task 1 - 2
+- Task 2
+- Task 3
 
-1. Numbered List
-    1. Which
-    2. Is
-    3. Nested
-2. Back to top level
+1. Number 1
+    1. Number 1 - 1
+    2. Number 1 - 2
+    3. Number 1 - 3
+2. Number 2
+3. Number 3
 "#;
 
   let result = markdown_to_document_data(markdown);
@@ -110,43 +110,104 @@ fn test_customer_nested_list() {
   let page_block = get_page_block(&result);
   let children_blocks = get_children_blocks(&result, &page_block.id);
 
-  // TODO: This test failed.
-  for (idx, block) in children_blocks.iter().enumerate() {
-    println!("block: {:?}", block);
-  }
-
-  for text in result.meta.text_map.iter() {
-    println!("text: {:?}", text);
-  }
-
-  // - Task Parent One
+  // - Task 1
   {
     assert_eq!(children_blocks[0].ty, "bulleted_list");
+    assert_eq!(
+      get_delta_json(&result, &children_blocks[0].id),
+      json!([{"insert":"Task 1"}])
+    );
 
+    // - Task 1 - 1
+    //     - Task 1 - 1 - 1
+    // - Task 1 - 2
     let children_blocks_1 = get_children_blocks(&result, &children_blocks[0].id);
     assert_eq!(children_blocks_1.len(), 2);
 
-    // - Task One + Parent
     assert_eq!(children_blocks_1[0].ty, "bulleted_list");
+    assert_eq!(
+      get_delta_json(&result, &children_blocks_1[0].id),
+      json!([{"insert":"Task 1 - 1"}])
+    );
+
+    // - Task 1 - 1 - 1
     let children_blocks_2 = get_children_blocks(&result, &children_blocks_1[0].id);
     assert_eq!(children_blocks_2.len(), 1);
-    assert_eq!(
-      get_delta(&result, &children_blocks_2[0].id),
-      r#"[{"insert":"Task One + Parent"}]"#
-    );
 
-    // - Task Two
     assert_eq!(children_blocks_2[0].ty, "bulleted_list");
     assert_eq!(
-      get_delta(&result, &children_blocks_2[0].id),
-      r#"[{"insert":"Task Two"}]"#
+      get_delta_json(&result, &children_blocks_2[0].id),
+      json!([{"insert":"Task 1 - 1 - 1"}])
     );
 
-    // - Task Three
-    assert_eq!(children_blocks_2[0].ty, "bulleted_list");
+    assert_eq!(children_blocks_1[1].ty, "bulleted_list");
     assert_eq!(
-      get_delta(&result, &children_blocks_2[0].id),
-      r#"[{"insert":"Task Three"}]"#
+      get_delta_json(&result, &children_blocks_1[1].id),
+      json!([{"insert":"Task 1 - 2"}])
+    );
+  }
+
+  // Task 2 and Task 3
+  {
+    assert_eq!(children_blocks[1].ty, "bulleted_list");
+    assert_eq!(
+      get_delta_json(&result, &children_blocks[1].id),
+      json!([{"insert":"Task 2"}])
+    );
+
+    assert_eq!(children_blocks[2].ty, "bulleted_list");
+    assert_eq!(
+      get_delta_json(&result, &children_blocks[2].id),
+      json!([{"insert":"Task 3"}])
+    );
+  }
+
+  // 1. Number 1
+  {
+    assert_eq!(children_blocks[3].ty, "numbered_list");
+    assert_eq!(
+      get_delta_json(&result, &children_blocks[3].id),
+      json!([{"insert":"Number 1"}])
+    );
+
+    // 1. Number 1 - 1
+    let children_blocks_1 = get_children_blocks(&result, &children_blocks[3].id);
+    assert_eq!(children_blocks_1.len(), 3);
+
+    assert_eq!(children_blocks_1[0].ty, "numbered_list");
+    assert_eq!(
+      get_delta_json(&result, &children_blocks_1[0].id),
+      json!([{"insert":"Number 1 - 1"}])
+    );
+
+    // 1. Number 1 - 2
+    assert_eq!(children_blocks_1[1].ty, "numbered_list");
+    assert_eq!(
+      get_delta_json(&result, &children_blocks_1[1].id),
+      json!([{"insert":"Number 1 - 2"}])
+    );
+
+    // 1. Number 1 - 3
+    assert_eq!(children_blocks_1[2].ty, "numbered_list");
+    assert_eq!(
+      get_delta_json(&result, &children_blocks_1[2].id),
+      json!([{"insert":"Number 1 - 3"}])
+    );
+  }
+
+  // 2. Number 2
+  // 3. Number 3
+  {
+    assert_eq!(children_blocks[4].ty, "numbered_list");
+    assert_eq!(
+      get_delta_json(&result, &children_blocks[4].id),
+      json!([{"insert":"Number 2"}])
+    );
+
+    assert_eq!(children_blocks[5].ty, "numbered_list");
+    assert_eq!(
+      get_delta_json(&result, &children_blocks[5].id),
+      json!([{"insert":"Number 3"}])
     );
   }
 }
