@@ -1,4 +1,4 @@
-use crate::database::{Database, DatabaseContext, DatabaseData};
+use crate::database::{try_fixing_database, Database, DatabaseContext, DatabaseData};
 
 use crate::error::DatabaseError;
 use crate::workspace_database::body::{DatabaseMeta, WorkspaceDatabaseBody};
@@ -17,12 +17,14 @@ use collab::core::origin::CollabOrigin;
 use collab::error::CollabError;
 use collab::lock::RwLock;
 use dashmap::DashMap;
+use rayon::prelude::*;
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tracing::error;
+use tracing::{error, info};
 
 pub type EncodeCollabByOid = HashMap<String, EncodedCollab>;
+pub type DataSourceByOid = HashMap<String, DataSource>;
 
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
@@ -34,8 +36,14 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     &self,
     object_id: &str,
     object_type: CollabType,
-    encoded_collab: Option<EncodedCollab>,
+    encoded_collab: Option<(EncodedCollab, bool)>,
   ) -> Result<Collab, DatabaseError>;
+
+  async fn get_collabs(
+    &self,
+    object_ids: Vec<String>,
+    collab_type: CollabType,
+  ) -> Result<EncodeCollabByOid, DatabaseError>;
 
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>>;
 }
@@ -47,24 +55,67 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
     &self,
     object_id: &str,
     _object_type: CollabType,
-    encoded_collab: Option<EncodedCollab>,
+    encoded_collab: Option<(EncodedCollab, bool)>,
   ) -> Result<Collab, DatabaseError> {
     match encoded_collab {
-      None => Ok(Collab::new_with_origin(
+      None => Collab::new_with_source(
         CollabOrigin::Empty,
         object_id,
+        CollabPersistenceImpl {
+          persistence: self.persistence(),
+        }
+        .into(),
         vec![],
         false,
-      )),
-      Some(encode_collab) => Collab::new_with_source(
+      )
+      .map_err(|err| DatabaseError::Internal(err.into())),
+      Some((encoded_collab, _)) => Collab::new_with_source(
         CollabOrigin::Empty,
         object_id,
-        encode_collab.into(),
+        encoded_collab.into(),
         vec![],
         false,
       )
       .map_err(|err| DatabaseError::Internal(err.into())),
     }
+  }
+
+  async fn get_collabs(
+    &self,
+    object_ids: Vec<String>,
+    collab_type: CollabType,
+  ) -> Result<EncodeCollabByOid, DatabaseError> {
+    let map: HashMap<String, _> = object_ids
+      .into_par_iter()
+      .filter_map(|object_id| {
+        let persistence = self.persistence();
+
+        let result = Collab::new_with_source(
+          CollabOrigin::Empty,
+          &object_id,
+          CollabPersistenceImpl { persistence }.into(),
+          vec![],
+          false,
+        )
+        .map_err(|err| DatabaseError::Internal(err.into()))
+        .and_then(|collab| {
+          collab
+            .encode_collab_v1(|collab| {
+              collab_type.validate_require_data(collab)?;
+              Ok(())
+            })
+            .map_err(DatabaseError::Internal)
+        });
+
+        // If successful, return the object ID and the encoded collab
+        match result {
+          Ok(encoded_collab) => Some((object_id, encoded_collab)),
+          Err(_) => None, // Ignore errors, but you can log them if necessary
+        }
+      })
+      .collect();
+
+    Ok(map)
   }
 
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
@@ -74,6 +125,8 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
 
 pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
   fn load_collab(&self, collab: &mut Collab);
+
+  fn get_encoded_collab(&self, object_id: &str, collab_type: CollabType) -> Option<EncodedCollab>;
 
   fn delete_collab(&self, object_id: &str) -> Result<(), DatabaseError>;
 
@@ -168,44 +221,66 @@ impl WorkspaceDatabase {
   }
 
   pub fn validate(&self) -> Result<(), DatabaseError> {
-    CollabType::WorkspaceDatabase
-      .validate_require_data(&self.collab)
-      .map_err(|_| DatabaseError::NoRequiredData)?;
+    CollabType::WorkspaceDatabase.validate_require_data(&self.collab)?;
     Ok(())
   }
 
   /// Get the database with the given database id.
   /// Return None if the database does not exist.
-  pub async fn get_or_create_database(&self, database_id: &str) -> Option<Arc<RwLock<Database>>> {
+  // The original function, now using the extracted fix_and_open_database function
+  pub async fn get_or_init_database(
+    &self,
+    database_id: &str,
+  ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
+    // Check if the database exists in the body
     if !self.body.contains(&self.collab.transact(), database_id) {
-      return None;
+      return Err(DatabaseError::DatabaseNotExist);
     }
 
-    let database = self.databases.get(database_id).as_deref().cloned();
-    match database {
-      None => {
-        // If the database is not exist, create a new one.
-        let is_exist = self
-          .collab_service
-          .persistence()?
-          .is_collab_exist(database_id);
+    // Check if the database is already initialized and cached
+    if let Some(database) = self.databases.get(database_id).as_deref().cloned() {
+      return Ok(database);
+    }
 
-        let context = DatabaseContext::new(self.collab_service.clone());
-        let database = Database::open(database_id, context).await.ok()?;
-        // The database is not exist in local disk, which means the rows of the database are not
-        // loaded yet.
-        if !is_exist {
-          database.load_first_screen_rows().await;
+    // Helper function to insert the database into the cache
+    let insert_database = |db: Database| -> Arc<RwLock<Database>> {
+      let database = Arc::new(RwLock::new(db));
+      self
+        .databases
+        .insert(database_id.to_string(), database.clone());
+      database
+    };
+
+    // Try to open the database
+    let context = DatabaseContext::new(self.collab_service.clone());
+    match Database::open(database_id, context).await {
+      Ok(database) => Ok(insert_database(database)),
+      // If the database is missing required data, try to fix it and open it again
+      Err(err) => {
+        if err.is_no_required_data() {
+          if self
+            .fix_and_open_database(
+              database_id,
+              DatabaseContext::new(self.collab_service.clone()),
+            )
+            .await
+            .is_ok()
+          {
+            if let Ok(database) = Database::open(
+              database_id,
+              DatabaseContext::new(self.collab_service.clone()),
+            )
+            .await
+            {
+              return Ok(insert_database(database));
+            }
+          }
+          Err(err)
+        } else {
+          error!("Open database failed: {}", err);
+          Err(err)
         }
-
-        // Create a new [MutexDatabase] and add it to the databases.
-        let database = Arc::new(RwLock::from(database));
-        self
-          .databases
-          .insert(database_id.to_string(), database.clone());
-        Some(database)
       },
-      Some(database) => Some(database),
     }
   }
 
@@ -213,7 +288,7 @@ impl WorkspaceDatabase {
   /// Multiple views can share the same database.
   pub async fn get_database_with_view_id(&self, view_id: &str) -> Option<Arc<RwLock<Database>>> {
     let database_id = self.get_database_id_with_view_id(view_id)?;
-    self.get_or_create_database(&database_id).await
+    self.get_or_init_database(&database_id).await.ok()
   }
 
   /// Return the database id with the given view id.
@@ -229,14 +304,13 @@ impl WorkspaceDatabase {
   /// The inline view is the default view of the database.
   /// If the inline view gets deleted, the database will be deleted too.
   /// So the reference views will be deleted too.
-  pub fn create_database(
+  pub async fn create_database(
     &mut self,
     params: CreateDatabaseParams,
   ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
     debug_assert!(!params.database_id.is_empty());
 
     let context = DatabaseContext::new(self.collab_service.clone());
-
     // Add a new database record.
     let mut linked_views = HashSet::new();
     linked_views.insert(params.inline_view_id.to_string());
@@ -254,11 +328,7 @@ impl WorkspaceDatabase {
       linked_views.into_iter().collect(),
     );
     let database_id = params.database_id.clone();
-
-    let database = futures::executor::block_on(async {
-      Database::create_with_view(params, context).await.unwrap()
-    });
-
+    let database = Database::create_with_view(params, context).await.unwrap();
     let mutex_database = RwLock::from(database);
     let database = Arc::new(mutex_database);
     self.databases.insert(database_id, database.clone());
@@ -272,22 +342,21 @@ impl WorkspaceDatabase {
     params: CreateViewParams,
   ) -> Result<(), DatabaseError> {
     let params = CreateViewParamsValidator::validate(params)?;
-    if let Some(database) = self.get_or_create_database(&params.database_id).await {
-      let mut txn = self.collab.transact_mut();
-      self
-        .body
-        .update_database(&mut txn, &params.database_id, |record| {
-          // Check if the view is already linked to the database.
-          if record.linked_views.contains(&params.view_id) {
-            error!("The view is already linked to the database");
-          } else {
-            record.linked_views.push(params.view_id.clone());
-          }
-        });
-      database.write().await.create_linked_view(params)
-    } else {
-      Err(DatabaseError::DatabaseNotExist)
-    }
+    let database = self.get_or_init_database(&params.database_id).await?;
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .update_database(&mut txn, &params.database_id, |record| {
+        // Check if the view is already linked to the database.
+        if record.linked_views.contains(&params.view_id) {
+          error!("The view is already linked to the database");
+        } else {
+          record.linked_views.push(params.view_id.clone());
+        }
+      });
+
+    let mut write_guard = database.write().await;
+    write_guard.create_linked_view(params)
   }
 
   /// Delete the database with the given database id.
@@ -321,10 +390,15 @@ impl WorkspaceDatabase {
     self.body.get_all_database_meta(&txn)
   }
 
+  pub fn get_database_meta(&self, database_id: &str) -> Option<DatabaseMeta> {
+    let txn = self.collab.transact();
+    self.body.get_database_meta(&txn, database_id)
+  }
+
   /// Delete the view from the database with the given view id.
   /// If the view is the inline view, the database will be deleted too.
   pub async fn delete_view(&mut self, database_id: &str, view_id: &str) {
-    if let Some(database) = self.get_or_create_database(database_id).await {
+    if let Ok(database) = self.get_or_init_database(database_id).await {
       let mut lock = database.write().await;
       lock.delete_view(view_id);
       if lock.is_inline_view(view_id) {
@@ -343,7 +417,7 @@ impl WorkspaceDatabase {
     let database_data = self.get_database_data(view_id).await?;
 
     let create_database_params = CreateDatabaseParams::from_database_data(database_data, None);
-    let database = self.create_database(create_database_params)?;
+    let database = self.create_database(create_database_params).await?;
     Ok(database)
   }
 
@@ -367,6 +441,46 @@ impl WorkspaceDatabase {
       .ok_or_else(|| DatabaseError::Internal(anyhow!("collab persistence is not found")))?
       .flush_collabs(vec![(self.object_id.clone(), encode_collab)])?;
     Ok(())
+  }
+
+  async fn fix_and_open_database(
+    &self,
+    database_id: &str,
+    context: DatabaseContext,
+  ) -> Result<(), DatabaseError> {
+    // Try to get the database metadata
+    info!("[Fix]: Attempting to fix database: {}", database_id);
+    if let Some(database_meta) = self.get_database_meta(database_id) {
+      if let Ok(mut collab) = context
+        .collab_service
+        .build_collab(database_id, CollabType::Database, None)
+        .await
+      {
+        // Attempt to fix the database inline view ID
+        if try_fixing_database(&mut collab, database_meta).is_ok() {
+          if let Some(persistence) = self.collab_service.persistence() {
+            match collab.encode_collab_v1(|collab| {
+              CollabType::Database.validate_require_data(collab)?;
+              Ok::<_, DatabaseError>(())
+            }) {
+              Ok(encoded_collab) => {
+                info!("[Fix]: save database:{} to disk", database_id);
+                persistence.save_collab(database_id, encoded_collab).ok();
+              },
+              Err(err) => {
+                error!("[Fix]: fix database:{} failed: {}", database_id, err);
+              },
+            }
+          }
+        } else {
+          info!("[Fix]: Can't fix the database: {}", database_id);
+        }
+      }
+    } else {
+      info!("Can't find any database meta for database: {}", database_id);
+    }
+
+    Err(DatabaseError::Internal(anyhow!("Can't fix the database")))
   }
 }
 

@@ -1,5 +1,5 @@
 use crate::util::ArrayExt;
-use tracing::warn;
+
 use yrs::types::TypeRef;
 use yrs::{Any, Array, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, SharedRef, TransactionMut};
 
@@ -34,10 +34,7 @@ impl FillRef<MapRef> for Any {
               value.fill(txn, &nested_ref)?;
             },
             other => {
-              let is_success = shared_ref.try_update(txn, key.as_str(), other);
-              if !is_success {
-                warn!("Failed to update key:{}", key);
-              }
+              shared_ref.try_update(txn, key.as_str(), other);
             },
           }
         }

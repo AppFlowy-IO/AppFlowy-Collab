@@ -10,7 +10,7 @@ use strum_macros::EnumIter;
 
 use collab::preclude::encoding::serde::from_any;
 use collab::util::AnyExt;
-use collab_entity::define::{DATABASE_ROW_DATA, DATABASE_ROW_ID};
+use collab_entity::define::DATABASE_ROW_DATA;
 use collab_entity::CollabType;
 
 use crate::database::timestamp;
@@ -39,6 +39,7 @@ pub const LAST_MODIFIED: &str = "last_modified";
 pub const CREATED_AT: &str = "created_at";
 
 pub struct DatabaseRow {
+  pub row_id: RowId,
   pub collab: Collab,
   pub body: DatabaseRowBody,
   collab_service: Arc<dyn DatabaseCollabService>,
@@ -71,6 +72,7 @@ impl DatabaseRow {
       subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
     }
     Ok(Self {
+      row_id,
       collab,
       body,
       collab_service,
@@ -89,6 +91,7 @@ impl DatabaseRow {
       subscribe_row_data_change(row_id.clone(), &body.data, change_tx);
     }
     Self {
+      row_id,
       collab,
       body,
       collab_service,
@@ -104,7 +107,10 @@ impl DatabaseRow {
     if let Some(persistence) = self.collab_service.persistence() {
       let encoded_collab = self
         .collab
-        .encode_collab_v1(|collab| CollabType::DatabaseRow.validate_require_data(collab))
+        .encode_collab_v1(|collab| {
+          CollabType::DatabaseRow.validate_require_data(collab)?;
+          Ok(())
+        })
         .map_err(DatabaseError::Internal)?;
       persistence.flush_collabs(vec![(self.collab.object_id().to_string(), encoded_collab)])?;
     }
@@ -113,9 +119,7 @@ impl DatabaseRow {
   }
 
   pub fn validate(&self) -> Result<(), DatabaseError> {
-    CollabType::DatabaseRow
-      .validate_require_data(&self.collab)
-      .map_err(|_| DatabaseError::NoRequiredData)?;
+    CollabType::DatabaseRow.validate_require_data(&self.collab)?;
     Ok(())
   }
 

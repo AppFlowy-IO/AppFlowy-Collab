@@ -4,12 +4,7 @@ use crate::error::DatabaseError;
 use crate::fields::Field;
 use crate::rows::{CreateRowParams, RowId};
 use crate::template::entity::DatabaseTemplate;
-use crate::workspace_database::{DatabaseCollabPersistenceService, DatabaseCollabService};
-use async_trait::async_trait;
-use collab::core::origin::CollabOrigin;
-use collab::entity::EncodedCollab;
-use collab::preclude::Collab;
-use collab_entity::CollabType;
+use crate::workspace_database::NoPersistenceDatabaseCollabService;
 use std::sync::Arc;
 
 pub async fn database_from_template(
@@ -19,7 +14,7 @@ pub async fn database_from_template(
 ) -> Result<Database, DatabaseError> {
   let params = create_database_params_from_template(database_id, view_id, template);
   let context = DatabaseContext {
-    collab_service: Arc::new(TemplateDatabaseCollabServiceImpl),
+    collab_service: Arc::new(NoPersistenceDatabaseCollabService),
     notifier: Default::default(),
   };
   let database = Database::create_with_view(params, context).await?;
@@ -103,40 +98,5 @@ pub(crate) fn create_database_params_from_template(
     fields,
     rows,
     views,
-  }
-}
-
-pub(crate) struct TemplateDatabaseCollabServiceImpl;
-
-#[async_trait]
-impl DatabaseCollabService for TemplateDatabaseCollabServiceImpl {
-  async fn build_collab(
-    &self,
-    object_id: &str,
-    _object_type: CollabType,
-    encoded_collab: Option<EncodedCollab>,
-  ) -> Result<Collab, DatabaseError> {
-    match encoded_collab {
-      None => Ok(Collab::new_with_origin(
-        CollabOrigin::Empty,
-        object_id,
-        vec![],
-        false,
-      )),
-      Some(encode_collab) => Ok(
-        Collab::new_with_source(
-          CollabOrigin::Empty,
-          object_id,
-          encode_collab.into(),
-          vec![],
-          false,
-        )
-        .map_err(|err| DatabaseError::Internal(err.into()))?,
-      ),
-    }
-  }
-
-  fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>> {
-    None
   }
 }

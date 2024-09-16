@@ -94,6 +94,28 @@ async fn move_row_in_view_test() {
 }
 
 #[tokio::test]
+async fn move_row_in_view_test2() {
+  let mut database_test = create_database_with_default_data(1, "1").await;
+  let rows = database_test.get_rows_for_view("v1").await;
+  let first_row_id = database_test.pre_define_row_ids[0].clone();
+  let second_row_id = database_test.pre_define_row_ids[1].clone();
+  let third_row_id = database_test.pre_define_row_ids[2].clone();
+
+  assert_eq!(rows[0].id, first_row_id);
+  assert_eq!(rows[1].id, second_row_id);
+  assert_eq!(rows[2].id, third_row_id);
+
+  database_test.update_database_view("v1", |update| {
+    update.move_row_order(first_row_id.as_str(), third_row_id.as_str());
+  });
+
+  let rows2 = database_test.get_rows_for_view("v1").await;
+  assert_eq!(rows2[0].id, second_row_id);
+  assert_eq!(rows2[1].id, third_row_id);
+  assert_eq!(rows2[2].id, first_row_id);
+}
+
+#[tokio::test]
 async fn move_row_in_views_test() {
   let mut database_test = create_database_with_default_data(1, "1").await;
   let params = CreateViewParams {

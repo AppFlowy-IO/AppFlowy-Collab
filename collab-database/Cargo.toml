@@ -30,6 +30,7 @@ dashmap = "5"
 futures = "0.3.30"
 csv = { version = "1.3.0" }
 yrs.workspace = true
+tokio-util = "0.7"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }

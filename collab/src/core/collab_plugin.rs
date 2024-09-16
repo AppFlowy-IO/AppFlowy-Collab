@@ -4,6 +4,7 @@ use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 
 use std::sync::Arc;
+use tracing::trace;
 use yrs::{Doc, TransactionMut};
 
 use crate::core::origin::CollabOrigin;
@@ -192,6 +193,8 @@ impl Plugins {
             inner.head.swap(next); // Removing the head node
           },
         }
+
+        trace!("Removed plugin: {:?}", plugin_type);
         curr_node.value.destroy();
         return;
       }

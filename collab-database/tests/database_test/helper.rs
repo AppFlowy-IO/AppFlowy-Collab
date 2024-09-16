@@ -1,9 +1,3 @@
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
-
 use collab::core::collab::DataSource;
 use collab::preclude::{uuid_v4, CollabBuilder};
 use collab_database::database::{Database, DatabaseContext};
@@ -13,6 +7,12 @@ use collab_database::views::{
   DatabaseLayout, FieldSettingsByFieldIdMap, FieldSettingsMap, LayoutSetting, LayoutSettings,
   OrderObjectPosition,
 };
+use futures::StreamExt;
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 
 use crate::helper::{make_rocks_db, setup_log, TestFieldSetting, TestTextCell};
 use crate::user_test::helper::TestUserDatabaseServiceImpl;
@@ -27,6 +27,17 @@ pub struct DatabaseTest {
   collab_db: Arc<CollabKVDB>,
   pub database: Database,
   pub pre_define_row_ids: Vec<RowId>,
+}
+
+impl DatabaseTest {
+  pub async fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
+    let rows_stream = self.database.get_rows_for_view(view_id, None).await;
+    let rows: Vec<Row> = rows_stream
+      .filter_map(|result| async move { result.ok() })
+      .collect()
+      .await;
+    rows
+  }
 }
 
 impl Deref for DatabaseTest {

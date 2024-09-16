@@ -19,16 +19,16 @@ use crate::views::{
   FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
   OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver,
 };
-use crate::workspace_database::{DatabaseCollabService, NoPersistenceDatabaseCollabService};
+use crate::workspace_database::{
+  DatabaseCollabService, DatabaseMeta, NoPersistenceDatabaseCollabService,
+};
 
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
   DatabaseViewMeta, EncodedCollabInfo, EncodedDatabase,
 };
 use crate::template::entity::DatabaseTemplate;
-use crate::template::util::{
-  create_database_params_from_template, TemplateDatabaseCollabServiceImpl,
-};
+use crate::template::util::create_database_params_from_template;
 
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
@@ -40,6 +40,8 @@ use collab::preclude::{
 use collab::util::{AnyExt, ArrayExt};
 use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
 use collab_entity::CollabType;
+use futures::StreamExt;
+use futures::{stream, Stream};
 use nanoid::nanoid;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
@@ -47,6 +49,7 @@ use rayon::prelude::IntoParallelIterator;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 pub use tokio_stream::wrappers::WatchStream;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, trace};
 use uuid::Uuid;
 
@@ -118,7 +121,11 @@ impl Database {
     let encoded_collab = default_database_data(database_id)?;
     let collab = context
       .collab_service
-      .build_collab(database_id, CollabType::Database, Some(encoded_collab))
+      .build_collab(
+        database_id,
+        CollabType::Database,
+        Some((encoded_collab, true)),
+      )
       .await?;
 
     let collab_service = context.collab_service.clone();
@@ -145,7 +152,7 @@ impl Database {
     let params =
       create_database_params_from_template(database_id.to_string(), view_id.to_string(), template);
     let context = DatabaseContext {
-      collab_service: Arc::new(TemplateDatabaseCollabServiceImpl),
+      collab_service: Arc::new(NoPersistenceDatabaseCollabService),
       notifier: Default::default(),
     };
     Self::create_with_view(params, context).await
@@ -233,7 +240,6 @@ impl Database {
         .collect::<Vec<_>>();
 
       encode_collabs.extend(row_encodings);
-
       info!("Write {} database collab", encode_collabs.len());
       persistence.flush_collabs(encode_collabs)?;
     }
@@ -257,8 +263,12 @@ impl Database {
         return Err(DatabaseError::DatabaseViewNotExist);
       };
 
+    // create rows
     let row_orders = self.body.block.create_rows(rows).await;
+
+    // create fields
     let field_orders: Vec<FieldOrder> = fields.iter().map(FieldOrder::from).collect();
+
     let mut txn = self.collab.context.transact_mut();
     // Set the inline view id. The inline view id should not be
     // empty if the current database exists.
@@ -293,9 +303,7 @@ impl Database {
   }
 
   pub fn validate(&self) -> Result<(), DatabaseError> {
-    CollabType::Database
-      .validate_require_data(&self.collab)
-      .map_err(|_| DatabaseError::NoRequiredData)?;
+    CollabType::Database.validate_require_data(&self.collab)?;
     Ok(())
   }
 
@@ -341,20 +349,6 @@ impl Database {
   pub fn get_database_view_layout(&self, view_id: &str) -> DatabaseLayout {
     let txn = self.collab.transact();
     self.body.views.get_database_view_layout(&txn, view_id)
-  }
-
-  /// Load the first 100 rows of the database.
-  /// The first 100 rows consider as the first screen rows
-  pub async fn load_first_screen_rows(&self) {
-    let row_ids = self
-      .get_inline_row_orders()
-      .into_iter()
-      .map(|row_order| row_order.id)
-      .take(100)
-      .collect::<Vec<_>>();
-    if let Err(err) = self.body.block.batch_load_rows(row_ids).await {
-      error!("load first screen rows failed: {}", err);
-    }
   }
 
   /// Return the database id with a transaction
@@ -514,6 +508,47 @@ impl Database {
     self.body.block.get_or_init_database_row(row_id).await.ok()
   }
 
+  pub fn init_database_rows<'a, T: Into<RowId> + Send + 'a>(
+    &'a self,
+    row_ids: Vec<T>,
+    cancel_token: Option<CancellationToken>,
+  ) -> impl Stream<Item = Result<Arc<RwLock<DatabaseRow>>, DatabaseError>> + 'a {
+    let row_ids_chunk_stream = stream::iter(
+      row_ids
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<RowId>>()
+        .chunks(50)
+        .map(|chunk| chunk.to_vec())
+        .collect::<Vec<Vec<RowId>>>(),
+    );
+
+    // Stream that processes each chunk and yields rows, checking for cancellation if the token is provided
+    row_ids_chunk_stream
+      .then(move |chunk| {
+        let cancel_token = cancel_token.clone();
+        async move {
+          if let Some(ref token) = cancel_token {
+            if token.is_cancelled() {
+              return Err(DatabaseError::ActionCancelled);
+            }
+          }
+
+          self.body.block.init_database_rows(chunk).await
+        }
+      })
+      .filter_map(|result| async {
+        match result {
+          Ok(rows) => Some(stream::iter(rows.into_iter().map(Ok))),
+          Err(err) => {
+            error!("Error initializing database rows: {:?}", err);
+            None
+          },
+        }
+      })
+      .flatten()
+  }
+
   /// Return None if the row is not initialized.
   /// Use [Self::get_or_init_database_row] to initialize the row.
   pub async fn get_database_row(&self, row_id: &RowId) -> Option<Arc<RwLock<DatabaseRow>>> {
@@ -539,9 +574,15 @@ impl Database {
 
   /// Return a list of [Row] for the given view.
   /// The rows here are ordered by [RowOrder]s of the view.
-  pub async fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
+  pub async fn get_rows_for_view(
+    &self,
+    view_id: &str,
+    cancel_token: Option<CancellationToken>,
+  ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
     let row_orders = self.get_row_orders_for_view(view_id);
-    self.get_rows_from_row_orders(&row_orders).await
+    self
+      .get_rows_from_row_orders(&row_orders, cancel_token)
+      .await
   }
 
   pub async fn get_row_order_at_index(&self, view_id: &str, index: u32) -> Option<RowOrder> {
@@ -561,8 +602,26 @@ impl Database {
 
   /// Return a list of [Row] for the given view.
   /// The rows here is ordered by the [RowOrder] of the view.
-  pub async fn get_rows_from_row_orders(&self, row_orders: &[RowOrder]) -> Vec<Row> {
-    self.body.block.get_rows_from_row_orders(row_orders).await
+  pub async fn get_rows_from_row_orders<'a>(
+    &'a self,
+    row_orders: &[RowOrder],
+    cancel_token: Option<CancellationToken>,
+  ) -> impl Stream<Item = Result<Row, DatabaseError>> + 'a {
+    let row_ids = row_orders.iter().map(|order| order.id.clone()).collect();
+    let rows_stream = self.init_database_rows(row_ids, cancel_token);
+    let database_id = self.get_database_id();
+    rows_stream.then(move |result| {
+      let database_id = database_id.clone();
+      async move {
+        let row = result?;
+        let read_guard = row.read().await;
+        let row_id = read_guard.row_id.clone();
+        let row = read_guard
+          .get_row()
+          .unwrap_or_else(|| Row::empty(row_id, &database_id));
+        Ok(row)
+      }
+    })
   }
 
   /// Return a list of [RowCell] for the given view and field.
@@ -1258,7 +1317,11 @@ impl Database {
     let inline_view_id = self.body.get_inline_view_id(&txn);
     let views = self.body.views.get_all_views(&txn);
     let fields = self.body.get_fields_in_view(&txn, &inline_view_id, None);
-    let rows = self.get_all_rows().await;
+    let rows_stream = self.get_all_rows(None).await;
+    let rows: Vec<Row> = rows_stream
+      .filter_map(|result| async move { result.ok() })
+      .collect()
+      .await;
 
     DatabaseData {
       database_id,
@@ -1284,14 +1347,19 @@ impl Database {
     inline_view_id == view_id
   }
 
-  pub async fn get_all_rows(&self) -> Vec<Row> {
+  pub async fn get_all_rows(
+    &self,
+    cancel_token: Option<CancellationToken>,
+  ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
     let row_orders = {
       let txn = self.collab.transact();
       let inline_view_id = self.body.get_inline_view_id(&txn);
       self.body.views.get_row_orders(&txn, &inline_view_id)
     };
 
-    self.get_rows_from_row_orders(&row_orders).await
+    self
+      .get_rows_from_row_orders(&row_orders, cancel_token)
+      .await
   }
 
   pub async fn get_all_row_orders(&self) -> Vec<RowOrder> {
@@ -1545,13 +1613,11 @@ pub struct DatabaseBody {
 
 impl DatabaseBody {
   fn open(
-    mut collab: Collab,
+    collab: Collab,
     database_id: String,
     context: DatabaseContext,
   ) -> Result<(Self, Collab), DatabaseError> {
-    if let Err(_err) = CollabType::Database.validate_require_data(&collab) {
-      try_fixing_database_inline_view_id(&mut collab)?;
-    }
+    CollabType::Database.validate_require_data(&collab)?;
     Self::create(collab, database_id, context)
   }
 
@@ -1883,23 +1949,34 @@ impl DatabaseBody {
   }
 }
 
-pub fn try_fixing_database_inline_view_id(collab: &mut Collab) -> Result<(), DatabaseError> {
+pub fn try_fixing_database(
+  collab: &mut Collab,
+  database_meta: DatabaseMeta,
+) -> Result<(), DatabaseError> {
+  // check if inline view id
   let inline_view_id = {
-    let body = DatabaseBody::from_collab(collab).ok_or_else(|| DatabaseError::NoRequiredData)?;
     let txn = collab.context.transact();
-    body.try_get_inline_view_id(&txn)
-  };
-
-  if let Some(inline_view_id) = inline_view_id {
-    let mut txn = collab.context.transact_mut();
     if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
       let map = MetaMap::new(container);
+      map.get_inline_view_id(&txn)
+    } else {
+      None
+    }
+  };
 
-      info!("Fixing inline view id to {}", inline_view_id);
-      map.set_inline_view_id(&mut txn, &inline_view_id);
-      return Ok(());
+  info!("[Fix]: inline view id: {:?}", inline_view_id);
+  if inline_view_id.is_none() {
+    if let Some(default_inline_view) = database_meta.linked_views.first() {
+      let mut txn = collab.context.transact_mut();
+      if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
+        let map = MetaMap::new(container);
+        info!("[Fix]: set inline view id to {}", default_inline_view);
+        map.set_inline_view_id(&mut txn, default_inline_view);
+      }
+    } else {
+      info!("[Fix]: no default inline view id found");
     }
   }
 
-  Err(DatabaseError::NoRequiredData)
+  Ok(())
 }
