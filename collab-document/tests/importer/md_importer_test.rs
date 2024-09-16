@@ -1,7 +1,8 @@
 use serde_json::json;
 
 use crate::importer::util::{
-  get_block_by_type, get_children_blocks, get_delta_json, markdown_to_document_data, parse_json,
+  get_block_by_type, get_children_blocks, get_delta_json, get_page_block,
+  markdown_to_document_data, parse_json,
 };
 
 #[test]
@@ -10,16 +11,10 @@ fn test_inline_elements() {
 
   let result = markdown_to_document_data(markdown);
 
-  assert_eq!(result.blocks.len(), 2); // root 和 paragraph
+  assert_eq!(result.blocks.len(), 2); // 1 page + 1 paragraph
 
-  let paragraph = result
-    .blocks
-    .values()
-    .find(|b| b.ty == "paragraph")
-    .unwrap();
-
-  let text_map = result.meta.text_map.as_ref().unwrap();
-  let delta_json = parse_json(text_map.get(&paragraph.id).unwrap());
+  let paragraph = get_block_by_type(&result, "paragraph");
+  let delta_json = get_delta_json(&result, &paragraph.id);
 
   let expected_delta = json!([
       {"insert": "This is "},
@@ -41,15 +36,8 @@ fn test_inline_math() {
   let markdown = "This is an inline math formula: $E=mc^2$.";
 
   let result = markdown_to_document_data(markdown);
-
-  let paragraph = result
-    .blocks
-    .values()
-    .find(|b| b.ty == "paragraph")
-    .unwrap();
-
-  let text_map = result.meta.text_map.as_ref().unwrap();
-  let delta_json = parse_json(text_map.get(&paragraph.id).unwrap());
+  let paragraph = get_block_by_type(&result, "paragraph");
+  let delta_json = get_delta_json(&result, &paragraph.id);
 
   let expected_delta = json!([
       {"insert": "This is an inline math formula: "},
@@ -64,15 +52,8 @@ fn test_mixed_inline_elements() {
   let markdown = "This is ***bold and italic*** and `code`.";
 
   let result = markdown_to_document_data(markdown);
-
-  let paragraph = result
-    .blocks
-    .values()
-    .find(|b| b.ty == "paragraph")
-    .unwrap();
-
-  let text_map = result.meta.text_map.as_ref().unwrap();
-  let delta_json = parse_json(text_map.get(&paragraph.id).unwrap());
+  let paragraph = get_block_by_type(&result, "paragraph");
+  let delta_json = get_delta_json(&result, &paragraph.id);
 
   let expected_delta = json!([
       {"insert": "This is "},
@@ -91,14 +72,8 @@ fn test_nested_inline_elements() {
 
   let result = markdown_to_document_data(markdown);
 
-  let paragraph = result
-    .blocks
-    .values()
-    .find(|b| b.ty == "paragraph")
-    .unwrap();
-
-  let text_map = result.meta.text_map.as_ref().unwrap();
-  let delta_json = parse_json(text_map.get(&paragraph.id).unwrap());
+  let paragraph = get_block_by_type(&result, "paragraph");
+  let delta_json = get_delta_json(&result, &paragraph.id);
 
   let expected_delta = json!([
       {"insert": "This is "},
@@ -113,20 +88,19 @@ fn test_nested_inline_elements() {
 
 #[test]
 fn test_headings() {
-  let markdown =
-    "# Heading 1\n## Heading 2\n### Heading 3\n#### Heading 4\n##### Heading 5\n###### Heading 6";
+  let markdown = r"
+# Heading 1
+## Heading 2
+### Heading 3
+#### Heading 4
+##### Heading 5
+###### Heading 6
+";
 
   let result = markdown_to_document_data(markdown);
 
-  let page = result.blocks.get("test_document").unwrap();
-  let headings: Vec<_> = result
-    .meta
-    .children_map
-    .get(&page.id)
-    .unwrap()
-    .iter()
-    .map(|id| result.blocks.get(id).unwrap())
-    .collect();
+  let page = get_page_block(&result);
+  let headings: Vec<_> = get_children_blocks(&result, &page.id);
 
   assert_eq!(headings.len(), 6);
   assert_eq!(headings[0].data["level"], 1);
@@ -137,16 +111,14 @@ fn test_headings() {
   assert_eq!(headings[5].data["level"], 6);
 
   for (i, heading) in headings.iter().enumerate() {
-    let text_map = result.meta.text_map.as_ref().unwrap();
-    let delta_json = parse_json(text_map.get(&heading.id).unwrap());
+    assert_eq!(heading.data["level"], i + 1);
+    assert_eq!(heading.ty, "heading");
+
+    let delta_json = get_delta_json(&result, &heading.id);
     let expected_delta = json!([
         {"insert": format!("Heading {}", i + 1)}
     ]);
     assert_eq!(delta_json, expected_delta);
-
-    let ty = heading.ty.clone();
-
-    assert_eq!(ty, "heading");
   }
 }
 
@@ -155,131 +127,88 @@ fn test_numbered_list() {
   let markdown = "1. First item\n2. Second item\n3. Third item";
 
   let result = markdown_to_document_data(markdown);
-
-  let page = result.blocks.get("test_document").unwrap();
-
-  let list = result
-    .meta
-    .children_map
-    .get(&page.id)
-    .unwrap()
-    .iter()
-    .map(|id| result.blocks.get(id).unwrap())
-    .collect::<Vec<_>>();
+  let page = get_page_block(&result);
+  let list = get_children_blocks(&result, &page.id);
 
   assert_eq!(list.len(), 3);
 
   for (i, item) in list.iter().enumerate() {
-    let text_map = result.meta.text_map.as_ref().unwrap();
-    let delta_json = parse_json(text_map.get(&item.id).unwrap());
+    assert_eq!(item.ty, "numbered_list");
+
+    let delta_json = get_delta_json(&result, &item.id);
     let expected_delta = json!([
         {"insert": format!("{} item", ["First", "Second", "Third"][i])}
     ]);
     assert_eq!(delta_json, expected_delta);
-
-    let ty = item.ty.clone();
-
-    assert_eq!(ty, "numbered_list");
   }
 }
 
 #[test]
 fn test_bulleted_list() {
-  let markdown = "* First item\n- Second item\n* Third item";
+  let markdown = r#"* First item
+- Second item
+* Third item"#;
 
   let result = markdown_to_document_data(markdown);
 
-  let page = result.blocks.get("test_document").unwrap();
-
-  let list = result
-    .meta
-    .children_map
-    .get(&page.id)
-    .unwrap()
-    .iter()
-    .map(|id| result.blocks.get(id).unwrap())
-    .collect::<Vec<_>>();
+  let page = get_page_block(&result);
+  let list = get_children_blocks(&result, &page.id);
 
   assert_eq!(list.len(), 3);
 
   for (i, item) in list.iter().enumerate() {
-    let text_map = result.meta.text_map.as_ref().unwrap();
-    let delta_json = parse_json(text_map.get(&item.id).unwrap());
+    assert_eq!(item.ty, "bulleted_list");
+    let delta_json = get_delta_json(&result, &item.id);
     let expected_delta = json!([
         {"insert": format!("{} item", ["First", "Second", "Third"][i])}
     ]);
     assert_eq!(delta_json, expected_delta);
-
-    let ty = item.ty.clone();
-
-    assert_eq!(ty, "bulleted_list");
   }
 }
 
 #[test]
 fn test_checkbox() {
-  let markdown = "- [ ] Unchecked\n- [x] Checked";
+  let markdown = r#"
+- [ ] Unchecked
+- [x] Checked"#;
 
   let result = markdown_to_document_data(markdown);
 
-  let page = result.blocks.get("test_document").unwrap();
-
-  let list = result
-    .meta
-    .children_map
-    .get(&page.id)
-    .unwrap()
-    .iter()
-    .map(|id| result.blocks.get(id).unwrap())
-    .collect::<Vec<_>>();
+  let page = get_page_block(&result);
+  let list = get_children_blocks(&result, &page.id);
 
   assert_eq!(list.len(), 2);
 
   for (i, item) in list.iter().enumerate() {
-    let text_map = result.meta.text_map.as_ref().unwrap();
-    let delta_json = parse_json(text_map.get(&item.id).unwrap());
+    assert_eq!(item.ty, "todo_list");
+
+    let delta_json = get_delta_json(&result, &item.id);
     let expected_delta = json!([
         {"insert": format!("{}", ["Unchecked", "Checked"][i])}
     ]);
     assert_eq!(delta_json, expected_delta);
 
-    let data = item.data.clone();
-
-    let is_checked = data
-      .get("checked")
-      .and_then(|v| v.as_bool())
-      .unwrap_or(false);
-
-    assert_eq!(is_checked, i != 0);
-
-    let ty = item.ty.clone();
-
-    assert_eq!(ty, "todo_list");
+    let checked = item.data.get("checked").unwrap();
+    assert_eq!(checked, i != 0);
   }
 }
 
 #[test]
 fn test_mix_list() {
-  let markdown = "1. First item\n- Second item\n3. Third item\n- [ ] Fourth item";
+  let markdown = r#"1. First item
+- Second item
+3. Third item
+- [ ] Fourth item"#;
 
   let result = markdown_to_document_data(markdown);
 
-  let page = result.blocks.get("test_document").unwrap();
-
-  let list = result
-    .meta
-    .children_map
-    .get(&page.id)
-    .unwrap()
-    .iter()
-    .map(|id| result.blocks.get(id).unwrap())
-    .collect::<Vec<_>>();
+  let page = get_page_block(&result);
+  let list = get_children_blocks(&result, &page.id);
 
   assert_eq!(list.len(), 4);
 
   for (i, item) in list.iter().enumerate() {
-    let text_map = result.meta.text_map.as_ref().unwrap();
-    let delta_json = parse_json(text_map.get(&item.id).unwrap());
+    let delta_json = get_delta_json(&result, &item.id);
     let expected_delta = json!([
         {"insert": format!("{} item", ["First", "Second", "Third", "Fourth"][i])}
     ]);
@@ -308,28 +237,25 @@ fn test_mix_list() {
 
 #[test]
 fn test_quote_list() {
-  let markdown = "> First item\nThis is a paragraph\n\n> Second item\n\n> Third item";
+  let markdown = r#"> First item
+This is a paragraph
+
+> Second item
+
+> Third item"#;
 
   let result = markdown_to_document_data(markdown);
-  let page = result.blocks.get("test_document").unwrap();
+  let page = get_page_block(&result);
 
-  let list = result
-    .meta
-    .children_map
-    .get(&page.id)
-    .unwrap()
-    .iter()
-    .map(|id| result.blocks.get(id).unwrap())
-    .collect::<Vec<_>>();
+  let list = get_children_blocks(&result, &page.id);
 
   assert_eq!(list.len(), 3);
 
   for (i, item) in list.iter().enumerate() {
+    assert_eq!(item.ty, "quote");
+
     let text_map = result.meta.text_map.as_ref().unwrap();
     let delta_json = parse_json(text_map.get(&item.id).unwrap());
-
-    let ty = item.ty.clone();
-    assert_eq!(ty, "quote");
 
     if i == 0 {
       let expected_delta = json!([
