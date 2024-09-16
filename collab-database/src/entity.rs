@@ -14,6 +14,7 @@ use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use yrs::{Any, Out};
 
 pub struct EncodedDatabase {
   pub encoded_database_collab: EncodedCollabInfo,
@@ -306,6 +307,17 @@ impl FieldType {
 impl From<FieldType> for i64 {
   fn from(field_type: FieldType) -> Self {
     field_type as i64
+  }
+}
+
+impl TryFrom<yrs::Out> for FieldType {
+  type Error = yrs::Out;
+
+  fn try_from(value: yrs::Out) -> Result<Self, Self::Error> {
+    match value {
+      Out::Any(Any::BigInt(field_type)) => Ok(FieldType::from(field_type)),
+      _ => Err(value),
+    }
   }
 }
 
