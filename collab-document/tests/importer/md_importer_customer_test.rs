@@ -242,11 +242,6 @@ If you have questions or feedback, please submit an issue on Github or join the 
   let page_block = get_page_block(&result);
   let children_blocks = get_children_blocks(&result, &page_block.id);
 
-  for block in &children_blocks {
-    println!("{:?}", block);
-    // println!("{:?}", get_delta(&result, &block.id));
-  }
-
   // ## 👋 **Welcome to** ***[AppFlowy Editor](appflowy.io)***
   assert_eq!(children_blocks[0].ty, "heading");
   assert_eq!(children_blocks[0].data.get("level").unwrap(), 2);
