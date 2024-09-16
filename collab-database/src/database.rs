@@ -143,12 +143,17 @@ impl Database {
     template: T,
   ) -> Result<Self, DatabaseError>
   where
-    T: TryInto<DatabaseTemplate>,
+    T: TryInto<DatabaseTemplate> + Send + Sync + 'static,
     <T as TryInto<DatabaseTemplate>>::Error: ToString,
   {
-    let template = template
-      .try_into()
-      .map_err(|err| DatabaseError::ImportData(err.to_string()))?;
+    let template = tokio::task::spawn_blocking(move || {
+      template
+        .try_into()
+        .map_err(|err| DatabaseError::ImportData(err.to_string()))
+    })
+    .await
+    .map_err(|e| DatabaseError::Internal(e.into()))??;
+
     let params =
       create_database_params_from_template(database_id.to_string(), view_id.to_string(), template);
     let context = DatabaseContext {

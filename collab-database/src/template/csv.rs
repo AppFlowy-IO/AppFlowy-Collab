@@ -30,7 +30,7 @@ impl CSVTemplate {
       return Err(DatabaseError::InvalidCSV("No header".to_string()));
     }
 
-    let rows = reader
+    let rows: Vec<Vec<String>> = reader
       .records()
       .flat_map(|r| r.ok())
       .map(|record| {
