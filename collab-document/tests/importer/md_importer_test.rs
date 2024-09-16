@@ -1,6 +1,8 @@
 use serde_json::json;
 
-use crate::importer::util::{markdown_to_document_data, parse_json};
+use crate::importer::util::{
+  get_block_by_type, get_children_blocks, get_delta_json, markdown_to_document_data, parse_json,
+};
 
 #[test]
 fn test_inline_elements() {
@@ -345,37 +347,31 @@ fn test_quote_list() {
 
 #[test]
 fn test_code_block() {
-  let markdown = "```\nfn main() {\n    println!(\"Hello, world!\");\n}\n```";
+  let markdown = r#"
+```rust
+fn main() {
+    println!("Hello, world!");
+}
+```
+"#;
 
   let result = markdown_to_document_data(markdown);
+  let code_block = get_block_by_type(&result, "code");
+  let delta_json = get_delta_json(&result, &code_block.id);
 
-  let page = result.blocks.get("test_document").unwrap();
-  let code_block = result
-    .meta
-    .children_map
-    .get(&page.id)
-    .unwrap()
-    .iter()
-    .map(|id| result.blocks.get(id).unwrap())
-    .next()
-    .unwrap();
-
-  let text_map = result.meta.text_map.as_ref().unwrap();
-  let delta_json = parse_json(text_map.get(&code_block.id).unwrap());
-
-  let expected_delta = json!([
+  assert_eq!(
+    delta_json,
+    json!([
       {"insert": "fn main() {\n    println!(\"Hello, world!\");\n}"}
-  ]);
+    ])
+  );
 
-  assert_eq!(delta_json, expected_delta);
-
-  let ty = code_block.ty.clone();
-
-  assert_eq!(ty, "code");
-
-  let language = code_block.data.get("language").unwrap().as_str().unwrap();
-
-  assert_eq!(language, "");
+  assert_eq!(
+    json!(code_block.data),
+    json!({
+      "language": "rust"
+    })
+  );
 }
 
 #[test]
@@ -383,65 +379,49 @@ fn test_divider() {
   let markdown = "---";
 
   let result = markdown_to_document_data(markdown);
-
-  let page = result.blocks.get("test_document").unwrap();
-  let divider = result
-    .meta
-    .children_map
-    .get(&page.id)
-    .unwrap()
-    .iter()
-    .map(|id| result.blocks.get(id).unwrap())
-    .next()
-    .unwrap();
-
-  let ty = divider.ty.clone();
-
-  assert_eq!(ty, "divider");
+  let divider = get_block_by_type(&result, "divider");
+  assert_eq!(divider.ty, "divider");
 }
 
 #[test]
 fn test_image() {
-  let markdown = "![Alt text](https://example.com/image.png \"Image title\")";
+  let image_with_title = "![Alt text](https://example.com/image.png \"Image title\")";
+  let image_without_title = "![Alt text](https://example.com/image.png)";
 
-  let result = markdown_to_document_data(markdown);
+  let result = markdown_to_document_data(image_with_title);
+  let image = get_block_by_type(&result, "image");
+  assert_eq!(
+    json!(image.data),
+    json!({
+      "url": "https://example.com/image.png",
+      "image_type": 2
+    })
+  );
 
-  let image = result.blocks.values().find(|b| b.ty == "image").unwrap();
-
-  let data = image.data.clone();
-
-  let ty = image.ty.clone();
-
-  assert_eq!(ty, "image");
-
-  let src = data.get("url").unwrap().as_str().unwrap();
-
-  assert_eq!(src, "https://example.com/image.png");
-
-  let image_type = data.get("image_type").unwrap().to_string();
-
-  assert_eq!(image_type, "2".to_string());
+  let result = markdown_to_document_data(image_without_title);
+  let image = get_block_by_type(&result, "image");
+  assert_eq!(
+    json!(image.data),
+    json!({
+      "url": "https://example.com/image.png",
+      "image_type": 2
+    })
+  );
 }
 
 #[test]
-fn test_math() {
+fn test_math_equation() {
   let markdown = "$$\nE=mc^2\n$$";
+
   let result = markdown_to_document_data(markdown);
+  let math = get_block_by_type(&result, "math_equation");
 
-  let math = result
-    .blocks
-    .values()
-    .find(|b| b.ty == "math_equation")
-    .unwrap();
-
-  let data = math.data.clone();
-
-  let ty = math.ty.clone();
-  assert_eq!(ty, "math_equation");
-
-  let formula = data.get("formula").unwrap().as_str().unwrap();
-
-  assert_eq!(formula, "E=mc^2");
+  assert_eq!(
+    json!(math.data),
+    json!({
+      "formula": "E=mc^2"
+    })
+  );
 }
 
 #[test]
@@ -449,22 +429,13 @@ fn test_link_reference() {
   let markdown = "[link]: https://example.com";
 
   let result = markdown_to_document_data(markdown);
-
-  let link_preview = result
-    .blocks
-    .values()
-    .find(|b| b.ty == "link_preview")
-    .unwrap();
-
-  let data = link_preview.data.clone();
-
-  let ty = link_preview.ty.clone();
-
-  assert_eq!(ty, "link_preview");
-
-  let url = data.get("url").unwrap().as_str().unwrap();
-
-  assert_eq!(url, "https://example.com");
+  let link_preview = get_block_by_type(&result, "link_preview");
+  assert_eq!(
+    json!(link_preview.data),
+    json!({
+      "url": "https://example.com"
+    })
+  );
 }
 
 #[test]
@@ -472,39 +443,31 @@ fn test_image_reference() {
   let markdown = "[image]: https://example.com/image.png";
 
   let result = markdown_to_document_data(markdown);
+  let image = get_block_by_type(&result, "image");
 
-  let image = result.blocks.values().find(|b| b.ty == "image").unwrap();
-
-  let data = image.data.clone();
-
-  let ty = image.ty.clone();
-
-  assert_eq!(ty, "image");
-
-  let src = data.get("url").unwrap().as_str().unwrap();
-
-  assert_eq!(src, "https://example.com/image.png");
-
-  let image_type = data.get("image_type").unwrap().to_string();
-
-  assert_eq!(image_type, "2".to_string());
+  assert_eq!(
+    json!(image.data),
+    json!({
+      "url": "https://example.com/image.png",
+      "image_type": 2
+    })
+  );
 }
+
 #[test]
 fn test_table() {
-  let markdown = "| Header 1 | Header 2 | Header 3 |\n| --- | --- | --- |\n| Row 1, Col 0 | Row 1, Col 1 | Row 1, Col 2 |\n| Row 2, Col 0 | Row 2, Col 1 | Row 2, Col 2 |";
+  let markdown = r#"| Header 1 | Header 2 | Header 3 |
+| --- | --- | --- |
+| Row 1, Col 0 | Row 1, Col 1 | Row 1, Col 2 |
+| Row 2, Col 0 | Row 2, Col 1 | Row 2, Col 2 |
+"#;
 
   let result = markdown_to_document_data(markdown);
+  let table = get_block_by_type(&result, "table");
 
-  let table = result.blocks.values().find(|b| b.ty == "table").unwrap();
-
-  let data = table.data.clone();
-
-  let ty = table.ty.clone();
-
-  assert_eq!(ty, "table");
-
-  assert_eq!(data.get("rowsLen").unwrap().as_u64().unwrap(), 3);
-  assert_eq!(data.get("colsLen").unwrap().as_u64().unwrap(), 3);
+  assert_eq!(table.ty, "table");
+  assert_eq!(table.data["rowsLen"], 3);
+  assert_eq!(table.data["colsLen"], 3);
 
   let table_cells = result
     .blocks
@@ -515,20 +478,15 @@ fn test_table() {
   assert_eq!(table_cells.len(), 9);
 
   for cell in table_cells.iter() {
-    let text_map = result.meta.text_map.as_ref().unwrap();
-    let paragraph_block = result
-      .meta
-      .children_map
-      .get(&cell.id)
+    let paragraph_block_id = get_children_blocks(&result, &cell.id)
+      .first()
       .unwrap()
-      .iter()
-      .map(|id| result.blocks.get(id).unwrap())
-      .next()
-      .unwrap();
-    let delta_json = parse_json(text_map.get(&paragraph_block.id).unwrap());
-    let data = cell.data.clone();
-    let row_position = data.get("rowPosition").unwrap().as_u64().unwrap();
-    let col_position = data.get("colPosition").unwrap().as_u64().unwrap();
+      .id
+      .clone();
+    let delta_json = get_delta_json(&result, &paragraph_block_id);
+
+    let row_position = cell.data["rowPosition"].as_u64().unwrap();
+    let col_position = cell.data["colPosition"].as_u64().unwrap();
 
     if row_position == 0 {
       let expected_delta = json!([

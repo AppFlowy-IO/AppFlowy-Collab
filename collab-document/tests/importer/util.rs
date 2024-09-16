@@ -25,6 +25,15 @@ pub(crate) fn get_block(document_data: &DocumentData, block_id: &str) -> Block {
   document_data.blocks.get(block_id).unwrap().clone()
 }
 
+pub(crate) fn get_block_by_type(document_data: &DocumentData, block_type: &str) -> Block {
+  document_data
+    .blocks
+    .values()
+    .find(|b| b.ty == block_type)
+    .unwrap()
+    .clone()
+}
+
 pub(crate) fn get_children_blocks(document_data: &DocumentData, block_id: &str) -> Vec<Block> {
   let block = get_block(document_data, block_id);
   let children_ids = document_data.meta.children_map.get(&block.id).unwrap();
