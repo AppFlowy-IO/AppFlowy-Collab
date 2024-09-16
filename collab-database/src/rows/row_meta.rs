@@ -105,6 +105,7 @@ pub struct RowMeta {
 }
 
 impl RowMeta {
+  #[allow(dead_code)]
   pub(crate) fn empty() -> Self {
     Self {
       icon_url: None,
@@ -137,6 +138,7 @@ impl RowMeta {
     }
   }
 
+  #[allow(dead_code)]
   pub(crate) fn fill_map_ref(self, txn: &mut TransactionMut, row_id: &Uuid, map_ref: &MapRef) {
     if let Some(icon) = self.icon_url {
       map_ref.try_update(txn, meta_id_from_row_id(row_id, RowMetaKey::IconId), icon);

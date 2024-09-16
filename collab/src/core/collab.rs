@@ -559,7 +559,6 @@ fn observe_doc(
       cloned_plugins.each(|plugin| {
         #[cfg(all(debug_assertions, feature = "verbose_log"))]
         {
-          use yrs::updates::decoder::Decode;
           if let Ok(update) = Update::decode_v1(&event.update) {
             tracing::trace!("Collab {} apply update: {:#?}", cloned_oid, update);
           } else {

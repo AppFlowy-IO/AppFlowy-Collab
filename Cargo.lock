@@ -383,6 +383,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "yrs",
  "zip 0.6.6",
 ]
 
@@ -398,6 +399,7 @@ dependencies = [
  "collab-plugins",
  "futures",
  "getrandom",
+ "markdown",
  "nanoid",
  "serde",
  "serde_json",

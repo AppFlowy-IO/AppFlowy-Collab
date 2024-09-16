@@ -213,6 +213,14 @@ impl Block {
       },
       Some(database_row) => {
         database_row.write().await.update::<F>(f);
+
+        // if row_id is updated, we need to update the the database key value store
+        let new_row_id = &database_row.read().await.row_id;
+        if *new_row_id != row_id {
+          if let Some((_, row_data)) = self.row_mem_cache.remove(&row_id) {
+            self.row_mem_cache.insert(new_row_id.clone(), row_data);
+          };
+        }
       },
     }
   }

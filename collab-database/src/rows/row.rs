@@ -5,6 +5,8 @@ use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 use collab::preclude::encoding::serde::from_any;
 use collab::util::AnyExt;
@@ -12,11 +14,13 @@ use collab_entity::define::DATABASE_ROW_DATA;
 use collab_entity::CollabType;
 
 use crate::database::timestamp;
+
 use crate::error::DatabaseError;
 use crate::rows::{
   subscribe_row_data_change, Cell, Cells, CellsUpdate, RowChangeSender, RowId, RowMeta,
   RowMetaUpdate,
 };
+
 use crate::util::encoded_collab;
 use crate::views::{OrderObjectPosition, RowOrder};
 use crate::workspace_database::DatabaseCollabService;
@@ -155,8 +159,14 @@ impl DatabaseRow {
     let data = self.body.data.clone();
     let meta = self.body.meta.clone();
     let mut txn = self.collab.transact_mut();
-    let update = RowUpdate::new(&mut txn, data, meta);
-    f(update)
+    let update = RowUpdate::new(&mut txn, data.clone(), meta);
+    f(update);
+
+    // updates the row_id in case it has changed
+    if let Some(row_id) = row_id_from_map_ref(&txn, &data) {
+      self.body.row_id = row_id.clone();
+      self.row_id = row_id;
+    };
   }
 
   pub fn update_meta<F>(&mut self, f: F)
@@ -243,7 +253,8 @@ impl DatabaseRowBody {
       RowBuilder::new(&mut txn, data.clone(), meta.clone())
         .update(|update| {
           update
-            .set_row_id(row.id, row.database_id)
+            .set_row_id(row.id)
+            .set_database_id(row.database_id)
             .set_height(row.height)
             .set_visibility(row.visibility)
             .set_created_at(row.created_at)
@@ -259,6 +270,71 @@ impl DatabaseRowBody {
       meta,
       comments,
     }
+  }
+
+  pub fn update<F>(&self, txn: &mut TransactionMut, modify: F)
+  where
+    F: FnOnce(RowUpdate),
+  {
+    let update = RowUpdate::new(txn, self.data.clone(), self.meta.clone());
+    modify(update);
+  }
+
+  pub fn update_cells<F>(&self, txn: &mut TransactionMut, modify: F)
+  where
+    F: FnOnce(CellsUpdate),
+  {
+    let cell_map: MapRef = self.data.get_or_init(txn, ROW_CELLS);
+    let update = CellsUpdate::new(txn, &cell_map);
+    modify(update);
+  }
+
+  pub fn update_id(
+    &mut self,
+    txn: &mut TransactionMut,
+    new_row_id: RowId,
+  ) -> Result<(), DatabaseError> {
+    self.update(txn, |update| {
+      update.set_row_id(new_row_id.clone());
+    });
+    self.row_id = new_row_id;
+    Ok(())
+  }
+
+  /// Attempts to get the document id for the row.
+  /// Returns None if there is no document.
+  pub fn document_id<T: ReadTxn>(&self, txn: &T) -> Result<Option<String>, DatabaseError> {
+    let row_uuid = Uuid::parse_str(&self.row_id)?;
+    let is_doc_empty_key = meta_id_from_row_id(&row_uuid, RowMetaKey::IsDocumentEmpty);
+    let is_doc_empty = self.meta.get(txn, &is_doc_empty_key);
+    if let Some(yrs::Out::Any(Any::Bool(is_doc_empty))) = is_doc_empty {
+      if !is_doc_empty {
+        let doc_id = meta_id_from_row_id(&row_uuid, RowMetaKey::DocumentId);
+        return Ok(Some(doc_id));
+      }
+    }
+    Ok(None)
+  }
+
+  pub fn cells<T: ReadTxn>(&self, txn: &T) -> Option<Cells> {
+    let map = self
+      .data
+      .get(txn, ROW_CELLS)
+      .and_then(|cell| cell.cast::<MapRef>().ok())?;
+    let mut cells = Cells::new();
+    for (field_id, out) in map.iter(txn) {
+      let cell = out.to_json(txn).into_map()?;
+      cells.insert(field_id.to_string(), cell);
+    }
+    Some(cells)
+  }
+
+  pub fn get_data(&self) -> &MapRef {
+    &self.data
+  }
+
+  pub fn get_meta(&self) -> &MapRef {
+    &self.meta
   }
 }
 
@@ -318,6 +394,7 @@ fn default_visibility() -> bool {
   true
 }
 
+#[derive(Clone, Debug, EnumIter)]
 pub enum RowMetaKey {
   DocumentId,
   IconId,
@@ -457,23 +534,48 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
     LAST_MODIFIED
   );
 
-  pub fn set_row_id(self, new_row_id: RowId, database_id: String) -> Self {
-    let old_row_meta = row_id_from_map_ref(self.txn, &self.map_ref)
-      .and_then(|row_id| row_id.parse::<Uuid>().ok())
-      .map(|row_id| RowMeta::from_map_ref(self.txn, &row_id, &self.meta_ref));
+  pub fn set_database_id(self, database_id: String) -> Self {
+    self.map_ref.insert(self.txn, ROW_DATABASE_ID, database_id);
+    self
+  }
 
+  pub fn set_row_id(self, new_row_id: RowId) -> Self {
+    let old_row_id = match row_id_from_map_ref(self.txn, &self.map_ref) {
+      Some(row_id) => row_id,
+      None => {
+        // no row id found, so we just insert the new id
+        self.map_ref.insert(self.txn, ROW_ID, new_row_id.as_str());
+        return self;
+      },
+    };
+    let old_row_uuid = match old_row_id.parse::<Uuid>() {
+      Ok(uuid) => uuid,
+      Err(err) => {
+        error!("uuid parse error: {}, old_row_id: {}", err, old_row_id);
+        return self;
+      },
+    };
+    let new_row_uuid = match new_row_id.parse::<Uuid>() {
+      Ok(uuid) => uuid,
+      Err(err) => {
+        error!("uuid parse error: {}, new_row_id: {}", err, new_row_id);
+        return self;
+      },
+    };
+
+    // update to new row id
     self.map_ref.insert(self.txn, ROW_ID, new_row_id.as_str());
 
-    self.map_ref.insert(self.txn, ROW_DATABASE_ID, database_id);
-
-    if let Ok(new_row_id) = new_row_id.parse::<Uuid>() {
-      self.meta_ref.clear(self.txn);
-      let mut new_row_meta = RowMeta::empty();
-      if let Some(old_row_meta) = old_row_meta {
-        new_row_meta.icon_url = old_row_meta.icon_url;
-        new_row_meta.cover = old_row_meta.cover;
+    // update meta key derived from new row id
+    // this exhaustively iterates over all meta keys
+    // so that we can update all meta keys derived from the row id.
+    for key in RowMetaKey::iter() {
+      let old_meta_key = meta_id_from_row_id(&old_row_uuid, key.clone());
+      let old_meta_value = self.meta_ref.remove(self.txn, &old_meta_key);
+      let new_meta_key = meta_id_from_row_id(&new_row_uuid, key);
+      if let Some(yrs::Out::Any(old_meta_value)) = old_meta_value {
+        self.meta_ref.insert(self.txn, new_meta_key, old_meta_value);
       }
-      new_row_meta.fill_map_ref(self.txn, &new_row_id, &self.meta_ref);
     }
 
     self
@@ -495,13 +597,13 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
     self
   }
 
-  pub fn done(self) -> Option<Row> {
+  pub fn get_updated_row(self) -> Option<Row> {
     row_from_map_ref(&self.map_ref, self.txn)
   }
 }
 
 pub(crate) const ROW_ID: &str = "id";
-pub(crate) const ROW_DATABASE_ID: &str = "database_id";
+pub const ROW_DATABASE_ID: &str = "database_id";
 pub(crate) const ROW_VISIBILITY: &str = "visibility";
 
 pub const ROW_HEIGHT: &str = "height";

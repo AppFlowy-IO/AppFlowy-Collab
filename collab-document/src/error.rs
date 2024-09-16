@@ -40,6 +40,9 @@ pub enum DocumentError {
 
   #[error("Unable to parse document to plain text")]
   ParseDocumentError,
+
+  #[error("Unable to parse markdown to document data")]
+  ParseMarkdownError,
 }
 
 impl From<CollabValidateError> for DocumentError {
