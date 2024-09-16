@@ -39,24 +39,21 @@ impl TryFrom<Value> for Operation {
 
     let insert = obj
       .get("insert")
+      .and_then(Value::as_str)
       .ok_or(ConversionError::MissingInsert)?
-      .as_str()
-      .ok_or(ConversionError::InsertNotString)?
-      .to_string();
+      .to_owned();
 
     let attributes = obj
       .get("attributes")
-      .map(|v| -> Result<HashMap<String, Value>, ConversionError> {
-        v.as_object()
-          .ok_or(ConversionError::AttributesNotObject)?
+      .and_then(Value::as_object)
+      .map(|attrs| {
+        attrs
           .iter()
-          .map(|(k, v)| Ok((k.clone(), v.clone())))
+          .map(|(k, v)| (k.to_owned(), v.clone()))
           .collect()
       })
-      .transpose()?
       .unwrap_or_default();
 
-    let attributes = attributes.into_iter().collect();
     Ok(Self { insert, attributes })
   }
 }

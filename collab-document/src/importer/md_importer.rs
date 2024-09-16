@@ -78,7 +78,7 @@ fn process_mdast_node(
   }
 
   if let Some((children, list_type)) = get_list_info(node) {
-    process_children(document_data, children, parent_id, Some(list_type));
+    process_mdast_node_children(document_data, children, parent_id, Some(list_type));
     return;
   }
 
@@ -92,19 +92,19 @@ fn process_mdast_node(
 
   match node {
     mdast::Node::Root(root) => {
-      process_children(document_data, &root.children, Some(id.clone()), None)
+      process_mdast_node_children(document_data, &root.children, Some(id.clone()), None)
     },
     mdast::Node::Paragraph(para) => {
-      process_children(document_data, &para.children, Some(id.clone()), None)
+      process_mdast_node_children(document_data, &para.children, Some(id.clone()), None)
     },
     mdast::Node::Heading(heading) => {
-      process_children(document_data, &heading.children, Some(id.clone()), None)
+      process_mdast_node_children(document_data, &heading.children, Some(id.clone()), None)
     },
     mdast::Node::BlockQuote(_) | mdast::Node::ListItem(_) => {
       if let Some(mdast::Node::Paragraph(para)) =
         get_mdast_node_children(node).and_then(|c| c.first())
       {
-        process_children(document_data, &para.children, Some(id.clone()), None);
+        process_mdast_node_children(document_data, &para.children, Some(id.clone()), None);
       }
     },
     mdast::Node::Code(code) => {
@@ -173,7 +173,7 @@ fn process_table_row(
 
       let paragraph_block_id = create_paragraph_block(document_data, &cell_id);
 
-      process_children(
+      process_mdast_node_children(
         document_data,
         &cell_node.children,
         Some(paragraph_block_id.clone()),
@@ -244,7 +244,7 @@ fn create_table_cell_block(
   }
 }
 
-fn process_children(
+fn process_mdast_node_children(
   document_data: &mut DocumentData,
   children: &[mdast::Node],
   parent_id: Option<String>,
