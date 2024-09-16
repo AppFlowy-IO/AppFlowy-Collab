@@ -48,7 +48,7 @@ pub(crate) fn mdast_node_type_to_block_type(
 }
 
 /// Convert the mdast node to block data
-pub(crate) fn mdast_node_to_block_data(node: &mdast::Node) -> BlockData {
+pub(crate) fn mdast_node_to_block_data(node: &mdast::Node, start_number: Option<u32>) -> BlockData {
   let mut data = BlockData::new();
 
   match node {
@@ -95,6 +95,10 @@ pub(crate) fn mdast_node_to_block_data(node: &mdast::Node) -> BlockData {
       if let Some(checked) = list.checked {
         data.insert(CHECKED_FIELD.to_string(), checked.into());
       }
+
+      if let Some(start_number) = start_number {
+        data.insert(START_NUMBER_FIELD.to_string(), start_number.into());
+      }
     },
     mdast::Node::Definition(defi) => {
       let url = defi.url.to_string();
@@ -133,14 +137,16 @@ pub(crate) fn is_inline_node(node: &mdast::Node) -> bool {
 }
 
 /// Get the list type and children of the md ast node
-pub(crate) fn get_list_info(node: &mdast::Node) -> Option<(&Vec<mdast::Node>, &'static str)> {
+pub(crate) fn get_mdast_node_info(
+  node: &mdast::Node,
+) -> Option<(&Vec<mdast::Node>, &'static str, Option<u32>)> {
   if let mdast::Node::List(list) = node {
     let list_type = if list.ordered {
       NUMBERED_LIST_TYPE
     } else {
       BULLETED_LIST_TYPE
     };
-    Some((&list.children, list_type))
+    Some((&list.children, list_type, list.start))
   } else {
     None
   }
@@ -155,18 +161,18 @@ pub(crate) fn get_mdast_node_children(node: &mdast::Node) -> Option<&Vec<mdast::
 }
 
 /// Process the inline node
-pub(crate) fn process_inline(
+pub(crate) fn process_inline_mdast_node(
   document_data: &mut DocumentData,
   node: &mdast::Node,
   parent_id: Option<String>,
 ) {
   if let Some(parent_id) = parent_id {
-    let delta = process_inline_node(node, Vec::new());
+    let delta = inline_mdast_node_to_delta(node, Vec::new());
     insert_delta_to_text_map(document_data, &parent_id, delta);
   }
 }
 
-pub(crate) fn process_inline_node(
+pub(crate) fn inline_mdast_node_to_delta(
   node: &mdast::Node,
   mut attributes: Vec<(String, Value)>,
 ) -> Delta {
@@ -177,33 +183,31 @@ pub(crate) fn process_inline_node(
       delta
     },
     mdast::Node::Strong(strong) => {
-      attributes.push(("bold".to_string(), Value::Bool(true)));
+      attributes.push((BOLD_ATTR.to_owned(), Value::Bool(true)));
       process_children_inline(&strong.children, attributes)
     },
     mdast::Node::Emphasis(emph) => {
-      attributes.push(("italic".to_string(), Value::Bool(true)));
+      attributes.push((ITALIC_ATTR.to_owned(), Value::Bool(true)));
       process_children_inline(&emph.children, attributes)
     },
     mdast::Node::Link(link) => {
-      attributes.push(("href".to_string(), Value::String(link.url.clone())));
+      attributes.push((HREF_ATTR.to_owned(), Value::String(link.url.clone())));
       process_children_inline(&link.children, attributes)
     },
     mdast::Node::InlineCode(code) => {
-      attributes.push(("code".to_string(), Value::Bool(true)));
-
+      attributes.push((CODE_ATTR.to_owned(), Value::Bool(true)));
       let mut delta = Delta::new();
       delta.insert(code.value.clone(), attributes);
       delta
     },
     mdast::Node::InlineMath(math) => {
-      attributes.push(("formula".to_string(), Value::String(math.value.clone())));
-
+      attributes.push((FORMULA_ATTR.to_owned(), Value::String(math.value.clone())));
       let mut delta = Delta::new();
-      delta.insert("$".to_string(), attributes);
+      delta.insert(INLINE_MATH_SYMBOL.to_owned(), attributes);
       delta
     },
     mdast::Node::Delete(del) => {
-      attributes.push(("strikethrough".to_string(), Value::Bool(true)));
+      attributes.push((STRIKETHROUGH_ATTR.to_owned(), Value::Bool(true)));
       process_children_inline(&del.children, attributes)
     },
     _ => Delta::new(),
@@ -216,7 +220,7 @@ pub(crate) fn process_children_inline(
 ) -> Delta {
   let mut delta = Delta::new();
   for child in children {
-    delta.extend(process_inline_node(child, attributes.clone()));
+    delta.extend(inline_mdast_node_to_delta(child, attributes.clone()));
   }
   delta
 }

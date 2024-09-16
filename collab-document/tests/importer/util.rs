@@ -45,3 +45,18 @@ pub(crate) fn get_delta(document_data: &DocumentData, block_id: &str) -> String 
     .unwrap();
   delta.clone()
 }
+
+pub(crate) fn get_delta_json(document_data: &DocumentData, block_id: &str) -> Value {
+  let delta = get_delta(document_data, block_id);
+  parse_json(&delta)
+}
+
+// Prints all child blocks of the page block for debugging purposes.
+#[allow(dead_code)]
+pub(crate) fn dump_page_blocks(document_data: &DocumentData) {
+  let page_block = get_page_block(document_data);
+  let children_blocks = get_children_blocks(document_data, &page_block.id);
+  for block in children_blocks {
+    println!("{:?}", block);
+  }
+}

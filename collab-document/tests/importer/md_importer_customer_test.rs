@@ -1,10 +1,9 @@
-// These tests are for the customer's markdown
+use serde_json::json;
 
 use crate::importer::util::{
-  get_children_blocks, get_delta, get_page_block, markdown_to_document_data,
+  dump_page_blocks, get_children_blocks, get_delta, get_delta_json, get_page_block,
+  markdown_to_document_data,
 };
-
-use super::util::get_block;
 
 #[test]
 fn test_customer_unordered_list_with_link() {
@@ -25,27 +24,27 @@ fn test_customer_unordered_list_with_link() {
   // - [The Straits Times](https://www.straitstimes.com/)
   assert_eq!(children_blocks[0].parent, page_block.id);
   assert_eq!(children_blocks[0].ty, "bulleted_list");
-  let delta_1 = get_delta(&result, &children_blocks[0].id);
+  let delta_1 = get_delta_json(&result, &children_blocks[0].id);
   assert_eq!(
     delta_1,
-    r#"[{"attributes":{"href":"https://www.straitstimes.com/"},"insert":"The Straits Times"}]"#
+    json!([{"attributes":{"href":"https://www.straitstimes.com/"},"insert":"The Straits Times"}])
   );
 
   // - [Channel News Asia](https://www.channelnewsasia.com/)
   assert_eq!(children_blocks[1].parent, page_block.id);
   assert_eq!(children_blocks[1].ty, "bulleted_list");
-  let delta_2 = get_delta(&result, &children_blocks[1].id);
+  let delta_2 = get_delta_json(&result, &children_blocks[1].id);
   assert_eq!(
     delta_2,
-    r#"[{"attributes":{"href":"https://www.channelnewsasia.com/"},"insert":"Channel News Asia"}]"#
+    json!([{"attributes":{"href":"https://www.channelnewsasia.com/"},"insert":"Channel News Asia"}])
   );
 
   assert_eq!(children_blocks[2].parent, page_block.id);
   assert_eq!(children_blocks[2].ty, "bulleted_list");
-  let delta_3 = get_delta(&result, &children_blocks[2].id);
+  let delta_3 = get_delta_json(&result, &children_blocks[2].id);
   assert_eq!(
     delta_3,
-    r#"[{"attributes":{"href":"https://www.todayonline.com/"},"insert":"Today Online"}]"#
+    json!([{"attributes":{"href":"https://www.todayonline.com/"},"insert":"Today Online"}])
   );
 }
 
@@ -73,23 +72,20 @@ Here is the complete Dart file with the above steps:
   let children_blocks = get_children_blocks(&result, &page_block.id);
   assert_eq!(children_blocks.len(), 6);
 
-  // TODO: this test failed.
-  // the number in the data is empty.
-
   // 1. **Ensure Dependencies**
   assert_eq!(children_blocks[0].parent, page_block.id);
   assert_eq!(children_blocks[0].ty, "numbered_list");
-  assert_eq!(children_blocks[0].data.get("number").unwrap(), "1");
+  assert_eq!(children_blocks[0].data.get("number").unwrap(), 1);
 
   // 2. **Import Statements**
   assert_eq!(children_blocks[2].parent, page_block.id);
   assert_eq!(children_blocks[2].ty, "numbered_list");
-  assert_eq!(children_blocks[2].data.get("number").unwrap(), "2");
+  assert_eq!(children_blocks[2].data.get("number").unwrap(), 2);
 
   // 3. **Class Definition**
   assert_eq!(children_blocks[4].parent, page_block.id);
   assert_eq!(children_blocks[4].ty, "numbered_list");
-  assert_eq!(children_blocks[4].data.get("number").unwrap(), "3");
+  assert_eq!(children_blocks[4].data.get("number").unwrap(), 3);
 }
 
 #[test]
@@ -97,7 +93,7 @@ fn test_customer_nested_list() {
   let markdown = r#"
 - Task Parent One
     - Task One + Parent
-      - Task Two
+        - Task Two
     - Task Three
 - Task Four
 - Task Five
@@ -115,6 +111,13 @@ fn test_customer_nested_list() {
   let children_blocks = get_children_blocks(&result, &page_block.id);
 
   // TODO: This test failed.
+  for (idx, block) in children_blocks.iter().enumerate() {
+    println!("block: {:?}", block);
+  }
+
+  for text in result.meta.text_map.iter() {
+    println!("text: {:?}", text);
+  }
 
   // - Task Parent One
   {

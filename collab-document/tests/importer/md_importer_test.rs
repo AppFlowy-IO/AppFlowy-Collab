@@ -1,40 +1,6 @@
-use collab_document::blocks::DocumentData;
-use collab_document::importer::md_importer::MDImporter;
-use serde_json::{json, Value};
+use serde_json::json;
 
-pub(crate) fn markdown_to_document_data(md: &str) -> DocumentData {
-  let importer = MDImporter::new(None);
-  let result = importer.import("test_document", md);
-  result.unwrap()
-}
-
-fn parse_json(s: &str) -> Value {
-  serde_json::from_str(s).unwrap()
-}
-
-#[test]
-fn test_simple_paragraph() {
-  let markdown = "Hello, world!";
-  let result = markdown_to_document_data(markdown);
-
-  assert_eq!(result.blocks.len(), 2); // root and paragraph
-  assert!(result.blocks.values().any(|b| b.ty == "page"));
-  assert!(result.blocks.values().any(|b| b.ty == "paragraph"));
-
-  let paragraph = result
-    .blocks
-    .values()
-    .find(|b| b.ty == "paragraph")
-    .unwrap();
-  let _delta = result
-    .meta
-    .text_map
-    .as_ref()
-    .unwrap()
-    .get(&paragraph.id)
-    .unwrap();
-  // FIXME: check the result
-}
+use crate::importer::util::{markdown_to_document_data, parse_json};
 
 #[test]
 fn test_inline_elements() {

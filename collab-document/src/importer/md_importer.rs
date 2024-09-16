@@ -7,8 +7,8 @@ use markdown::{mdast, to_mdast, Constructs, ParseOptions};
 use serde_json::Value;
 use std::collections::HashMap;
 
-use super::delta::Delta;
-use super::util::*;
+use crate::importer::delta::Delta;
+use crate::importer::util::*;
 
 #[derive(Default)]
 pub struct MDImporter {
@@ -57,6 +57,7 @@ impl MDImporter {
       None,
       Some(document_id.to_string()),
       None,
+      None,
     );
 
     Ok(document_data)
@@ -71,20 +72,30 @@ fn process_mdast_node(
   parent_id: Option<String>,
   block_id: Option<String>,
   list_type: Option<&str>,
+  start_number: Option<u32>,
 ) {
+  // If the node is an inline node, process it as an inline node
   if is_inline_node(node) {
-    process_inline(document_data, node, parent_id);
+    process_inline_mdast_node(document_data, node, parent_id);
     return;
   }
 
-  if let Some((children, list_type)) = get_list_info(node) {
-    process_mdast_node_children(document_data, children, parent_id, Some(list_type));
+  // If the node is a list node, process it as a list node
+  if let Some((children, list_type, start_number)) = get_mdast_node_info(node) {
+    process_mdast_node_children(
+      document_data,
+      parent_id,
+      children,
+      Some(list_type),
+      start_number,
+    );
     return;
   }
 
+  // Process other nodes as normal nodes
   let id = block_id.unwrap_or_else(generate_id);
 
-  let block = create_block(&id, node, parent_id.clone(), list_type);
+  let block = create_block(&id, node, parent_id.clone(), list_type, start_number);
 
   document_data.blocks.insert(id.clone(), block);
 
@@ -92,19 +103,44 @@ fn process_mdast_node(
 
   match node {
     mdast::Node::Root(root) => {
-      process_mdast_node_children(document_data, &root.children, Some(id.clone()), None)
+      process_mdast_node_children(
+        document_data,
+        Some(id.clone()),
+        &root.children,
+        None,
+        start_number,
+      );
     },
     mdast::Node::Paragraph(para) => {
-      process_mdast_node_children(document_data, &para.children, Some(id.clone()), None)
+      process_mdast_node_children(
+        document_data,
+        Some(id.clone()),
+        &para.children,
+        None,
+        start_number,
+      );
     },
     mdast::Node::Heading(heading) => {
-      process_mdast_node_children(document_data, &heading.children, Some(id.clone()), None)
+      process_mdast_node_children(
+        document_data,
+        Some(id.clone()),
+        &heading.children,
+        None,
+        start_number,
+      );
     },
+    // handle the blockquote and list item node
     mdast::Node::BlockQuote(_) | mdast::Node::ListItem(_) => {
       if let Some(mdast::Node::Paragraph(para)) =
         get_mdast_node_children(node).and_then(|c| c.first())
       {
-        process_mdast_node_children(document_data, &para.children, Some(id.clone()), None);
+        process_mdast_node_children(
+          document_data,
+          Some(id.clone()),
+          &para.children,
+          None,
+          start_number,
+        );
       }
     },
     mdast::Node::Code(code) => {
@@ -122,11 +158,12 @@ fn create_block(
   node: &mdast::Node,
   parent_id: Option<String>,
   list_type: Option<&str>,
+  start_number: Option<u32>,
 ) -> Block {
   Block {
     id: id.to_string(),
     ty: mdast_node_type_to_block_type(node, list_type),
-    data: mdast_node_to_block_data(node),
+    data: mdast_node_to_block_data(node, start_number),
     parent: parent_id.unwrap_or_default(),
     children: id.to_string(),
     external_id: Some(id.to_string()),
@@ -175,8 +212,9 @@ fn process_table_row(
 
       process_mdast_node_children(
         document_data,
-        &cell_node.children,
         Some(paragraph_block_id.clone()),
+        &cell_node.children,
+        None,
         None,
       );
     }
@@ -194,6 +232,7 @@ fn create_paragraph_block(document_data: &mut DocumentData, parent_id: &str) -> 
     &paragraph_block_id,
     &paragraph_node,
     Some(parent_id.to_string()),
+    None,
     None,
   );
 
@@ -246,11 +285,19 @@ fn create_table_cell_block(
 
 fn process_mdast_node_children(
   document_data: &mut DocumentData,
-  children: &[mdast::Node],
   parent_id: Option<String>,
+  children: &[mdast::Node],
   list_type: Option<&str>,
+  start_number: Option<u32>,
 ) {
   for child in children {
-    process_mdast_node(document_data, child, parent_id.clone(), None, list_type);
+    process_mdast_node(
+      document_data,
+      child,
+      parent_id.clone(),
+      None,
+      list_type,
+      start_number,
+    );
   }
 }
