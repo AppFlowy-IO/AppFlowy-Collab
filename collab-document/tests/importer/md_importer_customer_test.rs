@@ -93,6 +93,62 @@ Here is the complete Dart file with the above steps:
 }
 
 #[test]
+fn test_customer_nested_list() {
+  let markdown = r#"
+- Task Parent One
+    - Task One + Parent
+      - Task Two
+    - Task Three
+- Task Four
+- Task Five
+
+1. Numbered List
+    1. Which
+    2. Is
+    3. Nested
+2. Back to top level
+"#;
+
+  let result = markdown_to_document_data(markdown);
+
+  let page_block = get_page_block(&result);
+  let children_blocks = get_children_blocks(&result, &page_block.id);
+
+  // TODO: This test failed.
+
+  // - Task Parent One
+  {
+    assert_eq!(children_blocks[0].ty, "bulleted_list");
+
+    let children_blocks_1 = get_children_blocks(&result, &children_blocks[0].id);
+    assert_eq!(children_blocks_1.len(), 2);
+
+    // - Task One + Parent
+    assert_eq!(children_blocks_1[0].ty, "bulleted_list");
+    let children_blocks_2 = get_children_blocks(&result, &children_blocks_1[0].id);
+    assert_eq!(children_blocks_2.len(), 1);
+    assert_eq!(
+      get_delta(&result, &children_blocks_2[0].id),
+      r#"[{"insert":"Task One + Parent"}]"#
+    );
+
+    // - Task Two
+    assert_eq!(children_blocks_2[0].ty, "bulleted_list");
+    assert_eq!(
+      get_delta(&result, &children_blocks_2[0].id),
+      r#"[{"insert":"Task Two"}]"#
+    );
+
+    // - Task Three
+    assert_eq!(children_blocks_2[0].ty, "bulleted_list");
+    assert_eq!(
+      get_delta(&result, &children_blocks_2[0].id),
+      r#"[{"insert":"Task Three"}]"#
+    );
+  }
+}
+
+#[test]
 fn test_customer_appflowy_editor_built_in_readme() {
   let markdown = r#"
 ## 👋 **Welcome to** ***[AppFlowy Editor](appflowy.io)***
