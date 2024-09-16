@@ -1,0 +1,278 @@
+use std::collections::HashMap;
+
+use markdown::mdast;
+use serde_json::Value;
+
+use crate::{blocks::DocumentData, importer::define::*};
+
+use super::delta::{Delta, Operation};
+
+type BlockType = String;
+type BlockData = HashMap<String, Value>;
+
+/// Convert the node type to string
+pub(crate) fn mdast_node_type_to_block_type(
+  node: &mdast::Node,
+  list_type: Option<&str>,
+) -> BlockType {
+  match node {
+    mdast::Node::Root(_) => PAGE_TYPE,
+    mdast::Node::Paragraph(_) => PARAGRAPH_TYPE,
+    mdast::Node::Heading(_) => HEADING_TYPE,
+    mdast::Node::BlockQuote(_) => QUOTE_TYPE,
+    mdast::Node::Code(_) => CODE_TYPE,
+    mdast::Node::Image(_) => IMAGE_TYPE,
+    mdast::Node::ImageReference(_) => IMAGE_TYPE,
+    mdast::Node::LinkReference(_) => LINK_PREVIEW_TYPE,
+    mdast::Node::Math(_) => MATH_EQUATION_TYPE,
+    mdast::Node::ThematicBreak(_) => DIVIDER_TYPE,
+    mdast::Node::Table(_) => TABLE_TYPE,
+    mdast::Node::TableCell(_) => TABLE_CELL_TYPE,
+    mdast::Node::ListItem(list) => {
+      if list.checked.is_some() {
+        TODO_LIST_TYPE
+      } else {
+        list_type.unwrap_or(BULLETED_LIST_TYPE)
+      }
+    },
+    mdast::Node::Definition(defi) => {
+      if is_image_url(&defi.url) {
+        IMAGE_TYPE
+      } else {
+        LINK_PREVIEW_TYPE
+      }
+    },
+    _ => PARAGRAPH_TYPE,
+  }
+  .to_string()
+}
+
+/// Convert the mdast node to block data
+pub(crate) fn mdast_node_to_block_data(node: &mdast::Node) -> BlockData {
+  let mut data = BlockData::new();
+
+  match node {
+    mdast::Node::Heading(heading) => {
+      let level = heading.depth.clamp(1, 6);
+      data.insert(LEVEL_FIELD.to_string(), level.into());
+    },
+    mdast::Node::Code(code) => {
+      let language = code.lang.as_ref().cloned().unwrap_or_default();
+      data.insert(LANGUAGE_FIELD.to_string(), language.into());
+    },
+    mdast::Node::Image(image) => {
+      data.insert(URL_FIELD.to_string(), image.url.clone().into());
+      data.insert(IMAGE_TYPE_FIELD.to_string(), EXTERNAL_IMAGE_TYPE.into());
+    },
+    mdast::Node::ImageReference(image) => {
+      data.insert(URL_FIELD.to_string(), image.identifier.clone().into());
+      data.insert(IMAGE_TYPE_FIELD.to_string(), EXTERNAL_IMAGE_TYPE.into());
+    },
+    mdast::Node::LinkReference(link) => {
+      data.insert(URL_FIELD.to_string(), link.identifier.clone().into());
+    },
+    mdast::Node::Math(math) => {
+      data.insert(FORMULA_FIELD.to_string(), math.value.clone().into());
+    },
+    mdast::Node::Table(table) => {
+      let rows_len = table.children.len();
+      data.insert(ROWS_LEN_FIELD.to_string(), rows_len.into());
+      data.insert(
+        COL_DEFAULT_WIDTH_FIELD.to_string(),
+        DEFAULT_COL_WIDTH.into(),
+      );
+      data.insert(
+        ROW_DEFAULT_HEIGHT_FIELD.to_string(),
+        DEFAULT_ROW_HEIGHT.into(),
+      );
+      let cols_len = table
+        .children
+        .first()
+        .map_or(0, |row| row.children().map(|c| c.len()).unwrap_or(0));
+      data.insert(COLS_LEN_FIELD.to_string(), cols_len.into());
+    },
+    mdast::Node::ListItem(list) => {
+      if let Some(checked) = list.checked {
+        data.insert(CHECKED_FIELD.to_string(), checked.into());
+      }
+    },
+    mdast::Node::Definition(defi) => {
+      let url = defi.url.to_string();
+      if is_image_url(&url) {
+        data.insert(IMAGE_TYPE_FIELD.to_string(), EXTERNAL_IMAGE_TYPE.into());
+      }
+      data.insert(URL_FIELD.to_string(), url.into());
+    },
+    _ => {},
+  }
+  data
+}
+
+/// Check if the url is an image url
+///
+/// NOTES: This function can't handle the case if the url points to an image but not
+/// ends with the image extensions.
+pub(crate) fn is_image_url(url: &str) -> bool {
+  IMAGE_EXTENSIONS
+    .iter()
+    .any(|ext| url.to_lowercase().ends_with(ext))
+}
+
+/// Check if the node is an inline node
+pub(crate) fn is_inline_node(node: &mdast::Node) -> bool {
+  matches!(
+    node,
+    mdast::Node::Text(_)
+      | mdast::Node::Strong(_)
+      | mdast::Node::Emphasis(_)
+      | mdast::Node::Link(_)
+      | mdast::Node::InlineCode(_)
+      | mdast::Node::InlineMath(_)
+      | mdast::Node::Delete(_)
+  )
+}
+
+/// Get the list type and children of the md ast node
+pub(crate) fn get_list_info(node: &mdast::Node) -> Option<(&Vec<mdast::Node>, &'static str)> {
+  if let mdast::Node::List(list) = node {
+    let list_type = if list.ordered {
+      NUMBERED_LIST_TYPE
+    } else {
+      BULLETED_LIST_TYPE
+    };
+    Some((&list.children, list_type))
+  } else {
+    None
+  }
+}
+
+pub(crate) fn get_mdast_node_children(node: &mdast::Node) -> Option<&Vec<mdast::Node>> {
+  match node {
+    mdast::Node::BlockQuote(quote) => Some(&quote.children),
+    mdast::Node::ListItem(list) => Some(&list.children),
+    _ => None,
+  }
+}
+
+/// Process the inline node
+pub(crate) fn process_inline(
+  document_data: &mut DocumentData,
+  node: &mdast::Node,
+  parent_id: Option<String>,
+) {
+  if let Some(parent_id) = parent_id {
+    let delta = process_inline_node(node, Vec::new());
+    insert_delta_to_text_map(document_data, &parent_id, delta);
+  }
+}
+
+pub(crate) fn process_inline_node(
+  node: &mdast::Node,
+  mut attributes: Vec<(String, Value)>,
+) -> Delta {
+  match node {
+    mdast::Node::Text(text) => {
+      let mut delta = Delta::new();
+      delta.insert(text.value.clone(), attributes);
+      delta
+    },
+    mdast::Node::Strong(strong) => {
+      attributes.push(("bold".to_string(), Value::Bool(true)));
+      process_children_inline(&strong.children, attributes)
+    },
+    mdast::Node::Emphasis(emph) => {
+      attributes.push(("italic".to_string(), Value::Bool(true)));
+      process_children_inline(&emph.children, attributes)
+    },
+    mdast::Node::Link(link) => {
+      attributes.push(("href".to_string(), Value::String(link.url.clone())));
+      process_children_inline(&link.children, attributes)
+    },
+    mdast::Node::InlineCode(code) => {
+      attributes.push(("code".to_string(), Value::Bool(true)));
+
+      let mut delta = Delta::new();
+      delta.insert(code.value.clone(), attributes);
+      delta
+    },
+    mdast::Node::InlineMath(math) => {
+      attributes.push(("formula".to_string(), Value::String(math.value.clone())));
+
+      let mut delta = Delta::new();
+      delta.insert("$".to_string(), attributes);
+      delta
+    },
+    mdast::Node::Delete(del) => {
+      attributes.push(("strikethrough".to_string(), Value::Bool(true)));
+      process_children_inline(&del.children, attributes)
+    },
+    _ => Delta::new(),
+  }
+}
+
+pub(crate) fn process_children_inline(
+  children: &[mdast::Node],
+  attributes: Vec<(String, Value)>,
+) -> Delta {
+  let mut delta = Delta::new();
+  for child in children {
+    delta.extend(process_inline_node(child, attributes.clone()));
+  }
+  delta
+}
+
+pub(crate) fn insert_delta_to_text_map(
+  document_data: &mut DocumentData,
+  parent_id: &str,
+  new_delta: Delta,
+) {
+  let text_map = match document_data.meta.text_map.as_mut() {
+    Some(map) => map,
+    None => {
+      eprintln!("Text map not found");
+      return;
+    },
+  };
+
+  let existing_delta = if let Some(s) = text_map.get(parent_id) {
+    match serde_json::from_str::<Value>(s) {
+      Ok(value) => {
+        let ops = value
+          .as_array()
+          .map(|arr| {
+            arr
+              .iter()
+              .filter_map(|v| Operation::try_from(v.clone()).ok())
+              .collect()
+          })
+          .unwrap_or_default();
+        Delta { ops }
+      },
+      Err(e) => {
+        eprintln!("Failed to parse JSON: {}", e);
+        Delta::default()
+      },
+    }
+  } else {
+    Delta::default()
+  };
+
+  let mut combined_delta = existing_delta;
+  combined_delta.extend(new_delta);
+
+  let json_string = combined_delta.to_json();
+  text_map.insert(parent_id.to_string(), json_string);
+}
+
+// pub(crate) fn insert_text_to_delta(
+//   delta_str: Option<String>,
+//   text: String,
+//   attributes: HashMap<String, Value>,
+// ) -> String {
+//   let mut delta = delta_str
+//     .and_then(|s| serde_json::from_str::<Delta>(&s).ok())
+//     .unwrap_or_default();
+
+//   delta.insert(text, attributes.into_iter().collect());
+//   delta.to_json()
+// }
