@@ -159,8 +159,14 @@ impl DatabaseRow {
     let data = self.body.data.clone();
     let meta = self.body.meta.clone();
     let mut txn = self.collab.transact_mut();
-    let update = RowUpdate::new(&mut txn, data, meta);
-    f(update)
+    let update = RowUpdate::new(&mut txn, data.clone(), meta);
+    f(update);
+
+    // updates the row_id in case it has changed
+    if let Some(row_id) = row_id_from_map_ref(&txn, &data) {
+      self.body.row_id = row_id.clone();
+      self.row_id = row_id;
+    };
   }
 
   pub fn update_meta<F>(&mut self, f: F)
@@ -561,6 +567,8 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
     self.map_ref.insert(self.txn, ROW_ID, new_row_id.as_str());
 
     // update meta key derived from new row id
+    // this exhaustively iterates over all meta keys
+    // so that we can update all meta keys derived from the row id.
     for key in RowMetaKey::iter() {
       let old_meta_key = meta_id_from_row_id(&old_row_uuid, key.clone());
       let old_meta_value = self.meta_ref.remove(self.txn, &old_meta_key);
