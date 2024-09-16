@@ -4,6 +4,7 @@ use crate::importer::util::{
   dump_page_blocks, get_children_blocks, get_delta, get_delta_json, get_page_block,
   markdown_to_document_data,
 };
+use serde_json::json;
 
 #[test]
 fn test_customer_unordered_list_with_link() {
@@ -251,9 +252,26 @@ If you have questions or feedback, please submit an issue on Github or join the 
         assert_eq!(cell.data.get("colPosition").unwrap(), j);
         assert_eq!(cell.data.get("rowPosition").unwrap(), i);
 
-        // Unable to get cell delta here?
-        let delta = get_delta(&result, &cell.id);
-        println!("{:?}", delta);
+        let paragraph_blocks = get_children_blocks(&result, &cell.id);
+        let paragraph_block_id = paragraph_blocks[0].id.clone();
+        let delta = get_delta(&result, &paragraph_block_id);
+        if i == 0 && j == 0 {
+          let expected_json = json!([{"insert":"## a"}]);
+
+          assert_eq!(delta, expected_json.to_string());
+        } else if i == 0 && j == 1 {
+          let expected_json = json!([{"attributes":{"italic":true},"insert":"c"}]);
+
+          assert_eq!(delta, expected_json.to_string());
+        } else if i == 1 && j == 0 {
+          let expected_json = json!([{"attributes":{"bold":true},"insert":"b"}]);
+
+          assert_eq!(delta, expected_json.to_string());
+        } else if i == 1 && j == 1 {
+          let expected_json = json!([{"insert":"d"}]);
+
+          assert_eq!(delta, expected_json.to_string());
+        }
       }
     }
   }
