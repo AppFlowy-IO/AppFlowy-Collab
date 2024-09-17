@@ -1367,6 +1367,11 @@ impl Database {
       .await
   }
 
+  pub async fn collect_all_rows(&self) -> Vec<Result<Row, DatabaseError>> {
+    let rows_stream = self.get_all_rows(None).await;
+    rows_stream.collect::<Vec<_>>().await
+  }
+
   pub async fn get_all_row_orders(&self) -> Vec<RowOrder> {
     let txn = self.collab.transact();
     let inline_view_id = self.body.get_inline_view_id(&txn);

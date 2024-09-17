@@ -290,6 +290,22 @@ impl Document {
     Ok(text)
   }
 
+  // pub fn to_delta(&self) -> Result<Vec<String>, DocumentError> {
+  //   let txn = self.collab.transact();
+  //   let blocks = self.body.block_operation.get_all_blocks(&txn);
+  //   let children_map = self.body.children_operation.get_all_children(&txn);
+  //   let text_map = self.body.text_operation.serialize_all_text_delta(txn);
+  //   let document_data = DocumentData {
+  //     page_id,
+  //     blocks,
+  //     meta: DocumentMeta {
+  //       children_map,
+  //       text_map: Some(text_map),
+  //     },
+  //   };
+  //   Ok(document_data)
+  // }
+
   /// Get the plain text from the text block with the given id.
   ///
   /// If the block is not found, return None.

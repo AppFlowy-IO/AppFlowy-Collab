@@ -1,12 +1,17 @@
 use crate::error::ImporterError;
 use crate::imported_collab::{ImportedCollab, ImportedCollabView, ImportedType};
+use anyhow::anyhow;
 use collab_database::database::{gen_database_id, gen_database_view_id, Database};
 use collab_database::template::csv::CSVTemplate;
-use collab_document::blocks::DocumentData;
 use collab_document::document::{gen_document_id, Document};
 use collab_document::importer::md_importer::MDImporter;
 use collab_entity::CollabType;
+use fancy_regex::Regex;
+use markdown::mdast::Node;
+use markdown::{to_mdast, ParseOptions};
+use percent_encoding::percent_decode_str;
 use serde::Serialize;
+
 use std::path::{Path, PathBuf};
 use tracing::warn;
 use walkdir::{DirEntry, WalkDir};
@@ -16,31 +21,70 @@ pub struct NotionView {
   pub notion_name: String,
   pub notion_id: String,
   pub children: Vec<NotionView>,
-  pub file_type: FileType,
-  pub file_path: PathBuf,
+  pub notion_file: NotionFile,
+  pub external_links: Vec<Vec<ExternalLink>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExternalLink {
+  pub id: String,
+  pub name: String,
+  pub link_type: LinkType,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub enum LinkType {
+  Unknown,
+  CSV,
+  Markdown,
 }
 
 impl NotionView {
+  pub fn num_of_csv(&self) -> usize {
+    self
+      .children
+      .iter()
+      .map(|view| view.num_of_csv())
+      .sum::<usize>()
+      + if matches!(self.notion_file, NotionFile::CSV { .. }) {
+        1
+      } else {
+        0
+      }
+  }
+
+  pub fn num_of_markdown(&self) -> usize {
+    self
+      .children
+      .iter()
+      .map(|view| view.num_of_markdown())
+      .sum::<usize>()
+      + if matches!(self.notion_file, NotionFile::Markdown { .. }) {
+        1
+      } else {
+        0
+      }
+  }
   pub async fn as_document(&self, document_id: &str) -> Result<Document, ImporterError> {
-    match self.file_type {
-      FileType::Markdown => {
+    match &self.notion_file {
+      NotionFile::Markdown { file_path } => {
         let md_importer = MDImporter::new(None);
-        let content = std::fs::read_to_string(&self.file_path)?;
+        let content = std::fs::read_to_string(file_path)?;
         let document_data = md_importer.import(document_id, content)?;
         let document = Document::create(document_id, document_data)?;
         Ok(document)
       },
-      FileType::CSV => Err(ImporterError::InvalidFileType(format!(
+      _ => Err(ImporterError::InvalidFileType(format!(
         "File type is not supported for document: {:?}",
-        self.file_type
+        self.notion_file
       ))),
     }
   }
 
   pub async fn as_database(&self) -> Result<Database, ImporterError> {
-    match self.file_type {
-      FileType::CSV => {
-        let content = std::fs::read_to_string(&self.file_path)?;
+    match &self.notion_file {
+      NotionFile::CSV { file_path } => {
+        let content = std::fs::read_to_string(file_path)?;
         let csv_template = CSVTemplate::try_from(content)?;
         let database_id = gen_database_id();
         let database_view_id = gen_database_view_id();
@@ -48,16 +92,16 @@ impl NotionView {
           Database::create_with_template(&database_id, &database_view_id, csv_template).await?;
         Ok(database)
       },
-      FileType::Markdown => Err(ImporterError::InvalidFileType(format!(
+      _ => Err(ImporterError::InvalidFileType(format!(
         "File type is not supported for database: {:?}",
-        self.file_type
+        self.notion_file
       ))),
     }
   }
 
   pub async fn try_into_collab(self) -> Result<ImportedCollabView, ImporterError> {
-    match self.file_type {
-      FileType::CSV => {
+    match self.notion_file {
+      NotionFile::CSV { .. } => {
         let database = self.as_database().await?;
         let imported_collabs = database
           .encode_database_collabs()
@@ -77,7 +121,7 @@ impl NotionView {
           collabs: imported_collabs,
         })
       },
-      FileType::Markdown => {
+      NotionFile::Markdown { .. } => {
         let document_id = gen_document_id();
         let document = self.as_document(&document_id).await?;
         let encoded_collab = document.encode_collab()?;
@@ -92,20 +136,71 @@ impl NotionView {
           collabs: vec![imported_collab],
         })
       },
+      _ => Err(ImporterError::InvalidFileType(format!(
+        "File type is not supported for collab: {:?}",
+        self.notion_file
+      ))),
     }
   }
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub enum FileType {
-  CSV,
-  Markdown,
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]
+pub enum NotionFile {
+  #[default]
+  Unknown,
+  CSV {
+    file_path: PathBuf,
+  },
+  CSVPart {
+    file_path: PathBuf,
+  },
+  Markdown {
+    file_path: PathBuf,
+  },
+}
+impl NotionFile {
+  pub fn is_markdown(&self) -> bool {
+    matches!(self, NotionFile::Markdown { .. })
+  }
+
+  pub fn is_csv_all(&self) -> bool {
+    matches!(self, NotionFile::CSV { .. })
+  }
+  pub fn file_path(&self) -> Option<&PathBuf> {
+    match self {
+      NotionFile::CSV { file_path } => Some(file_path),
+      NotionFile::Markdown { file_path } => Some(file_path),
+      _ => None,
+    }
+  }
 }
 
 #[derive(Debug, Serialize)]
 pub struct ImportedView {
   pub name: String,
   pub views: Vec<NotionView>,
+}
+
+impl ImportedView {
+  pub fn num_of_csv(&self) -> usize {
+    for view in self.views.iter() {
+      let a = view.num_of_csv();
+      println!("aaaaa: {}", a);
+    }
+    self
+      .views
+      .iter()
+      .map(|view| view.num_of_csv())
+      .sum::<usize>()
+  }
+
+  pub fn num_of_markdown(&self) -> usize {
+    self
+      .views
+      .iter()
+      .map(|view| view.num_of_markdown())
+      .sum::<usize>()
+  }
 }
 
 #[derive(Debug)]
@@ -164,21 +259,33 @@ fn process_entry(entry: DirEntry) -> Option<NotionView> {
       let file_stem = path.file_stem()?.to_str()?;
       let corresponding_dir = parent.join(file_stem);
       if corresponding_dir.is_dir() {
-        return None; // Skip .md file if there's a corresponding directory
+        return None; // Skip .md or .csv file if there's a corresponding directory
       }
     }
 
     // Process the file normally if it doesn't correspond to a directory
     let (name, id) = name_and_id_from_path(path).ok()?;
-    let file_type = get_file_type(path)?;
+    let notion_file = file_type_from_path(path)?;
+    let mut external_links = vec![];
+    if notion_file.is_markdown() {
+      external_links = get_md_links(path).unwrap_or_default();
+    }
+
+    // If the file is CSV, then it should be handled later.
+    if notion_file.is_csv_all() {
+      return None;
+    }
     return Some(NotionView {
       notion_name: name,
       notion_id: id,
       children: vec![],
-      file_type,
-      file_path: path.to_path_buf(),
+      notion_file,
+      external_links,
     });
   } else if path.is_dir() {
+    // When the path is directory, which means it should has a file with the same name but with .md
+    // or .csv extension.
+
     // Extract name and ID for the directory
     let (name, id) = name_and_id_from_path(path).ok()?;
     let mut children = vec![];
@@ -186,35 +293,125 @@ fn process_entry(entry: DirEntry) -> Option<NotionView> {
     // Look for the corresponding .md file for this directory in the parent directory
     let dir_name = path.file_name()?.to_str()?;
     let parent_path = path.parent()?;
-    let md_file_path = parent_path.join(format!("{}.md", dir_name));
-    if !md_file_path.exists() {
-      warn!("No corresponding .md file found for directory: {:?}", path);
-      return None;
-    }
 
-    // Walk through sub-entries of the directory
-    for sub_entry in WalkDir::new(path)
-      .max_depth(1)
-      .into_iter()
-      .filter_map(|e| e.ok())
-    {
-      // Skip the directory itself and its corresponding .md file
-      if sub_entry.path() != path && sub_entry.path() != md_file_path {
-        if let Some(child_view) = process_entry(sub_entry) {
-          children.push(child_view);
+    let mut notion_file: NotionFile;
+    let mut external_links = vec![];
+    let md_file_path = parent_path.join(format!("{}.md", dir_name));
+    let csv_file_path = parent_path.join(format!("{}_all.csv", dir_name));
+
+    if md_file_path.exists() {
+      external_links = get_md_links(&md_file_path).unwrap_or_default();
+      // Walk through sub-entries of the directory
+      for sub_entry in WalkDir::new(path)
+        .max_depth(1)
+        .into_iter()
+        .filter_map(|e| e.ok())
+      {
+        // Skip the directory itself and its corresponding .md file
+        if sub_entry.path() != path && sub_entry.path() != md_file_path {
+          if let Some(child_view) = process_entry(sub_entry) {
+            children.push(child_view);
+          }
         }
       }
+      notion_file = NotionFile::Markdown {
+        file_path: md_file_path,
+      }
+    } else if csv_file_path.exists() {
+      // when current file is csv, which means its children are rows
+      notion_file = NotionFile::CSV {
+        file_path: csv_file_path,
+      }
+    } else {
+      warn!("No corresponding .md file found for directory: {:?}", path);
+      return None;
     }
 
     return Some(NotionView {
       notion_name: name,
       notion_id: id,
       children,
-      file_type: FileType::Markdown,
-      file_path: md_file_path,
+      notion_file,
+      external_links,
     });
   }
   None
+}
+
+// Main function to get all links from a markdown file
+fn get_md_links(md_file_path: &Path) -> Result<Vec<Vec<ExternalLink>>, ImporterError> {
+  let content = std::fs::read_to_string(md_file_path)?;
+  let ast = to_mdast(&content, &ParseOptions::default())
+    .map_err(|err| ImporterError::ParseMarkdownError(err))?;
+  let mut links = Vec::new();
+  collect_links_from_node(&ast, &mut links);
+  Ok(
+    links
+      .into_iter()
+      .flat_map(|link| {
+        let str = percent_decode_str(&link).decode_utf8().ok()?.to_string();
+        let links = extract_name_id(&str).ok()?;
+        Some(links)
+      })
+      .collect(),
+  )
+}
+
+fn collect_links_from_node(node: &Node, links: &mut Vec<String>) {
+  match node {
+    // For standard links, push the URL
+    Node::Link(link) => {
+      links.push(link.url.clone());
+    },
+    // For link references, push the identifier
+    Node::LinkReference(link_ref) => {
+      links.push(link_ref.identifier.clone());
+    },
+    // If the node is a container, recurse into its children
+    Node::Root(root) => {
+      for child in &root.children {
+        collect_links_from_node(child, links);
+      }
+    },
+    Node::Paragraph(paragraph) => {
+      for child in &paragraph.children {
+        collect_links_from_node(child, links);
+      }
+    },
+    _ => {},
+  }
+}
+
+fn extract_name_id(path_str: &str) -> Result<Vec<ExternalLink>, ImporterError> {
+  let mut result = Vec::new();
+  let re = Regex::new(r"^(.*?)\s([0-9a-fA-F]{32})(?:_all)?(?:\.(\w+))?$").unwrap();
+  let path = Path::new(path_str);
+  for component in path.components() {
+    if let Some(component_str) = component.as_os_str().to_str() {
+      if let Ok(Some(captures)) = re.captures(component_str) {
+        let link = || {
+          let name = captures.get(1)?.as_str().to_string();
+          let id = captures.get(2)?.as_str().to_string();
+          let link_type = match captures.get(3) {
+            None => LinkType::Unknown,
+            Some(s) => link_type_from_str(s.as_str()),
+          };
+          Some(ExternalLink {
+            id,
+            name,
+            link_type,
+          })
+        };
+        if let Some(link) = link() {
+          result.push(link);
+        }
+      }
+    } else {
+      return Err(ImporterError::Internal(anyhow!("Non-UTF8 path component")));
+    }
+  }
+
+  Ok(result)
 }
 
 fn is_valid_file(path: &Path) -> bool {
@@ -255,12 +452,37 @@ fn name_and_id_from_path(path: &Path) -> Result<(String, String), ImporterError>
 
   Ok((name, id))
 }
+/// - If the file is a `.csv` and contains `_all`, it's considered a `CSV`.
+/// - Otherwise, if it's a `.csv`, it's considered a `CSVPart`.
+/// - `.md` files are classified as `Markdown`.
+fn file_type_from_path(path: &Path) -> Option<NotionFile> {
+  let extension = path.extension()?.to_str()?;
 
-fn get_file_type(path: &Path) -> Option<FileType> {
-  match path.extension()?.to_str()? {
-    "md" => Some(FileType::Markdown),
-    "csv" => Some(FileType::CSV),
+  match extension {
+    "md" => Some(NotionFile::Markdown {
+      file_path: path.to_path_buf(),
+    }),
+    "csv" => {
+      let file_name = path.file_name()?.to_str()?;
+      if file_name.contains("_all") {
+        Some(NotionFile::CSV {
+          file_path: path.to_path_buf(),
+        })
+      } else {
+        Some(NotionFile::CSVPart {
+          file_path: path.to_path_buf(),
+        })
+      }
+    },
     _ => None,
+  }
+}
+
+fn link_type_from_str(file_type: &str) -> LinkType {
+  match file_type {
+    "md" => LinkType::Markdown,
+    "csv" => LinkType::CSV,
+    _ => LinkType::Unknown,
   }
 }
 

@@ -1,4 +1,6 @@
 use crate::util::{print_view, unzip};
+use assert_json_diff::assert_json_eq;
+use collab_database::rows::Row;
 use collab_document::document::gen_document_id;
 use importer::notion::NotionImporter;
 use nanoid::nanoid;
@@ -11,17 +13,21 @@ async fn import_project_and_task_test() {
   let imported_view = importer.import().await.unwrap();
   assert!(!imported_view.views.is_empty());
   assert_eq!(imported_view.name, "project&task");
+  assert_eq!(imported_view.num_of_csv(), 2);
+  assert_eq!(imported_view.num_of_markdown(), 1);
 
   /*
   - Projects & Tasks:Markdown
   - Tasks:CSV
   - Projects:CSV
   */
+  let root_view = &imported_view.views[0].clone();
   assert_eq!(imported_view.views.len(), 1);
-  assert_eq!(imported_view.views[0].notion_name, "Projects & Tasks");
-  assert_eq!(imported_view.views[0].children.len(), 2);
-  assert_eq!(imported_view.views[0].children[0].notion_name, "Tasks");
-  assert_eq!(imported_view.views[0].children[1].notion_name, "Projects");
+  assert_eq!(root_view.notion_name, "Projects & Tasks");
+
+  assert_eq!(root_view.children.len(), 2);
+  assert_eq!(root_view.children[0].notion_name, "Tasks");
+  assert_eq!(root_view.children[1].notion_name, "Projects");
 
   let document_id = gen_document_id();
   let document = imported_view.views[0]
@@ -30,23 +36,24 @@ async fn import_project_and_task_test() {
     .await
     .unwrap();
 
-  // Projects & Task.md
-  /*
-    # Projects & Tasks
-  - [Projects](Projects%20&%20Tasks%20104d4deadd2c805fb3abcaab6d3727e7/Projects%2058b8977d6e4444a98ec4d64176a071e5.md): This is your overview of all the projects in the pipeline
-  - [Tasks](Projects%20&%20Tasks%20104d4deadd2c805fb3abcaab6d3727e7/Tasks%2076aaf8a4637542ed8175259692ca08bb.md)**:** This is your detailed breakdown of every task under your projects
-
-  [Tasks](Projects%20&%20Tasks%20104d4deadd2c805fb3abcaab6d3727e7/Tasks%2076aaf8a4637542ed8175259692ca08bb.csv)
-
-  ↓ Click through the different database tabs to see the same data in different ways
-
-  Hover over any project name and click `◨ OPEN` to view more info and its associated tasks
-
-  [Projects](Projects%20&%20Tasks%20104d4deadd2c805fb3abcaab6d3727e7/Projects%2058b8977d6e4444a98ec4d64176a071e5.csv)
-    */
-
   // let json = document.to_json_value();
   // assert_json_eq!(json, json!(""));
+
+  let project_database = imported_view.views[0].children[0]
+    .clone()
+    .as_database()
+    .await
+    .unwrap();
+  let project_rows = project_database.collect_all_rows().await;
+  assert_eq!(project_rows.len(), 17);
+
+  let task_database = imported_view.views[0].children[1]
+    .clone()
+    .as_database()
+    .await
+    .unwrap();
+  let task_rows = task_database.collect_all_rows().await;
+  assert_eq!(task_rows.len(), 4);
 }
 
 #[tokio::test]

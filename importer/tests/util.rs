@@ -6,7 +6,7 @@ use zip::ZipArchive;
 
 pub fn print_view(view: &NotionView, depth: usize) {
   let indent = "  ".repeat(depth);
-  println!("{}- {}:{:?}", indent, view.notion_name, view.file_type);
+  println!("{}- {}:{:?}", indent, view.notion_name, view.notion_file);
 
   for child in &view.children {
     print_view(child, depth + 1);

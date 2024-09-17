@@ -15,6 +15,9 @@ pub enum ImporterError {
   #[error(transparent)]
   ImportCsvError(#[from] collab_database::error::DatabaseError),
 
+  #[error("Parse markdown error: {0}")]
+  ParseMarkdownError(markdown::message::Message),
+
   #[error(transparent)]
   Internal(#[from] anyhow::Error),
 }
