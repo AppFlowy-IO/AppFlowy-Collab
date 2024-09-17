@@ -40,7 +40,7 @@ async fn test_importer() {
 
 fn print_view(view: &NotionView, depth: usize) {
   let indent = "  ".repeat(depth);
-  println!("{}- {}:{:?}", indent, view.name, view.file_type);
+  println!("{}- {}:{:?}", indent, view.notion_name, view.file_type);
 
   for child in &view.children {
     print_view(child, depth + 1);

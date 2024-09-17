@@ -38,9 +38,9 @@ impl MDImporter {
     Self { parse_options }
   }
 
-  pub fn import(&self, document_id: &str, md: &str) -> Result<DocumentData, DocumentError> {
+  pub fn import(&self, document_id: &str, md: String) -> Result<DocumentData, DocumentError> {
     let md_node =
-      to_mdast(md, &self.parse_options).map_err(|_| DocumentError::ParseMarkdownError)?;
+      to_mdast(&md, &self.parse_options).map_err(|_| DocumentError::ParseMarkdownError)?;
 
     let mut document_data = DocumentData {
       page_id: document_id.to_string(),

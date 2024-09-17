@@ -67,6 +67,11 @@ impl Document {
     Ok(Self { collab, body })
   }
 
+  pub fn create(document_id: &str, data: DocumentData) -> Result<Self, DocumentError> {
+    let collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false);
+    Self::create_with_data(collab, data)
+  }
+
   #[inline]
   pub fn split(self) -> (Collab, DocumentBody) {
     (self.collab, self.body)
@@ -748,4 +753,8 @@ impl From<&Document> for DocumentIndexContent {
 
     Self { page_id, text }
   }
+}
+
+pub fn gen_document_id() -> String {
+  uuid::Uuid::new_v4().to_string()
 }

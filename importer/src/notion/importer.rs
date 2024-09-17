@@ -1,21 +1,78 @@
 use crate::error::ImporterError;
+use crate::imported_collab::{ImportedCollab, ImportedCollabView, ImportedType};
+use collab_database::database::{gen_database_id, gen_database_view_id, Database};
+use collab_database::template::csv::CSVTemplate;
+use collab_document::document::{gen_document_id, Document};
+use collab_document::importer::md_importer::MDImporter;
+use collab_entity::CollabType;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use tracing::warn;
 use walkdir::{DirEntry, WalkDir};
 
 #[derive(Debug, Serialize)]
 pub struct NotionView {
-  pub name: String,
-  pub id: String,
+  pub notion_name: String,
+  pub notion_id: String,
   pub children: Vec<NotionView>,
   pub file_type: FileType,
-  pub file_path: Option<PathBuf>,
+  pub file_path: PathBuf,
+}
+
+impl NotionView {
+  pub async fn try_into_collab(self) -> Result<ImportedCollabView, ImporterError> {
+    match self.file_type {
+      FileType::CSV => {
+        let content = std::fs::read_to_string(&self.file_path)?;
+        let csv_template = CSVTemplate::try_from(content)?;
+        let database_id = gen_database_id();
+        let database_view_id = gen_database_view_id();
+        let database =
+          Database::create_with_template(&database_id, &database_view_id, csv_template).await?;
+        let imported_collabs = database
+          .encode_database_collabs()
+          .await?
+          .into_collabs()
+          .into_iter()
+          .map(|collab_info| ImportedCollab {
+            object_id: collab_info.object_id,
+            collab_type: collab_info.collab_type,
+            encoded_collab: collab_info.encoded_collab,
+          })
+          .collect::<Vec<_>>();
+
+        Ok(ImportedCollabView {
+          name: self.notion_name,
+          imported_type: ImportedType::Database,
+          collabs: imported_collabs,
+        })
+      },
+      FileType::Markdown => {
+        let document_id = gen_document_id();
+        let md_importer = MDImporter::new(None);
+        let content = std::fs::read_to_string(&self.file_path)?;
+        let document_data = md_importer.import(&document_id, content)?;
+        let document = Document::create(&document_id, document_data)?;
+        let encoded_collab = document.encode_collab()?;
+        let imported_collab = ImportedCollab {
+          object_id: document_id,
+          collab_type: CollabType::Document,
+          encoded_collab,
+        };
+        Ok(ImportedCollabView {
+          name: self.notion_name,
+          imported_type: ImportedType::Document,
+          collabs: vec![imported_collab],
+        })
+      },
+    }
+  }
 }
 
 #[derive(Debug, Serialize)]
 pub enum FileType {
   CSV,
-  MD,
+  Markdown,
 }
 
 #[derive(Debug, Serialize)]
@@ -88,11 +145,11 @@ fn process_entry(entry: DirEntry) -> Option<NotionView> {
     let (name, id) = name_and_id_from_path(path).ok()?;
     let file_type = get_file_type(path)?;
     return Some(NotionView {
-      name,
-      id,
+      notion_name: name,
+      notion_id: id,
       children: vec![],
       file_type,
-      file_path: Some(path.to_path_buf()),
+      file_path: path.to_path_buf(),
     });
   } else if path.is_dir() {
     // Extract name and ID for the directory
@@ -103,11 +160,10 @@ fn process_entry(entry: DirEntry) -> Option<NotionView> {
     let dir_name = path.file_name()?.to_str()?;
     let parent_path = path.parent()?;
     let md_file_path = parent_path.join(format!("{}.md", dir_name));
-    let file_path = if md_file_path.exists() {
-      Some(md_file_path.clone()) // Use .md file as the directory's file_path
-    } else {
-      None // No corresponding .md file, so no special file_path
-    };
+    if !md_file_path.exists() {
+      warn!("No corresponding .md file found for directory: {:?}", path);
+      return None;
+    }
 
     // Walk through sub-entries of the directory
     for sub_entry in WalkDir::new(path)
@@ -124,11 +180,11 @@ fn process_entry(entry: DirEntry) -> Option<NotionView> {
     }
 
     return Some(NotionView {
-      name,
-      id,
+      notion_name: name,
+      notion_id: id,
       children,
-      file_type: FileType::MD,
-      file_path,
+      file_type: FileType::Markdown,
+      file_path: md_file_path,
     });
   }
   None
@@ -175,7 +231,7 @@ fn name_and_id_from_path(path: &Path) -> Result<(String, String), ImporterError>
 
 fn get_file_type(path: &Path) -> Option<FileType> {
   match path.extension()?.to_str()? {
-    "md" => Some(FileType::MD),
+    "md" => Some(FileType::Markdown),
     "csv" => Some(FileType::CSV),
     _ => None,
   }

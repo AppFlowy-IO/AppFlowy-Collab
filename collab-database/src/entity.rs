@@ -21,6 +21,14 @@ pub struct EncodedDatabase {
   pub encoded_row_collabs: Vec<EncodedCollabInfo>,
 }
 
+impl EncodedDatabase {
+  pub fn into_collabs(self) -> Vec<EncodedCollabInfo> {
+    let mut collabs = vec![self.encoded_database_collab];
+    collabs.extend(self.encoded_row_collabs);
+    collabs
+  }
+}
+
 pub struct EncodedCollabInfo {
   pub object_id: String,
   pub collab_type: CollabType,

@@ -7,6 +7,12 @@ pub enum ImporterError {
   InvalidPathFormat,
 
   #[error(transparent)]
+  ImportMarkdownError(#[from] collab_document::error::DocumentError),
+
+  #[error(transparent)]
+  ImportCsvError(#[from] collab_database::error::DatabaseError),
+
+  #[error(transparent)]
   Internal(#[from] anyhow::Error),
 }
 
