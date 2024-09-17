@@ -2,6 +2,7 @@ use crate::error::ImporterError;
 use crate::imported_collab::{ImportedCollab, ImportedCollabView, ImportedType};
 use collab_database::database::{gen_database_id, gen_database_view_id, Database};
 use collab_database::template::csv::CSVTemplate;
+use collab_document::blocks::DocumentData;
 use collab_document::document::{gen_document_id, Document};
 use collab_document::importer::md_importer::MDImporter;
 use collab_entity::CollabType;
@@ -10,7 +11,7 @@ use std::path::{Path, PathBuf};
 use tracing::warn;
 use walkdir::{DirEntry, WalkDir};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NotionView {
   pub notion_name: String,
   pub notion_id: String,
@@ -20,7 +21,23 @@ pub struct NotionView {
 }
 
 impl NotionView {
-  pub async fn try_into_collab(self) -> Result<ImportedCollabView, ImporterError> {
+  pub async fn as_document(&self, document_id: &str) -> Result<Document, ImporterError> {
+    match self.file_type {
+      FileType::Markdown => {
+        let md_importer = MDImporter::new(None);
+        let content = std::fs::read_to_string(&self.file_path)?;
+        let document_data = md_importer.import(document_id, content)?;
+        let document = Document::create(document_id, document_data)?;
+        Ok(document)
+      },
+      FileType::CSV => Err(ImporterError::InvalidFileType(format!(
+        "File type is not supported for document: {:?}",
+        self.file_type
+      ))),
+    }
+  }
+
+  pub async fn as_database(&self) -> Result<Database, ImporterError> {
     match self.file_type {
       FileType::CSV => {
         let content = std::fs::read_to_string(&self.file_path)?;
@@ -29,6 +46,19 @@ impl NotionView {
         let database_view_id = gen_database_view_id();
         let database =
           Database::create_with_template(&database_id, &database_view_id, csv_template).await?;
+        Ok(database)
+      },
+      FileType::Markdown => Err(ImporterError::InvalidFileType(format!(
+        "File type is not supported for database: {:?}",
+        self.file_type
+      ))),
+    }
+  }
+
+  pub async fn try_into_collab(self) -> Result<ImportedCollabView, ImporterError> {
+    match self.file_type {
+      FileType::CSV => {
+        let database = self.as_database().await?;
         let imported_collabs = database
           .encode_database_collabs()
           .await?
@@ -49,10 +79,7 @@ impl NotionView {
       },
       FileType::Markdown => {
         let document_id = gen_document_id();
-        let md_importer = MDImporter::new(None);
-        let content = std::fs::read_to_string(&self.file_path)?;
-        let document_data = md_importer.import(&document_id, content)?;
-        let document = Document::create(&document_id, document_data)?;
+        let document = self.as_document(&document_id).await?;
         let encoded_collab = document.encode_collab()?;
         let imported_collab = ImportedCollab {
           object_id: document_id,
@@ -69,7 +96,7 @@ impl NotionView {
   }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub enum FileType {
   CSV,
   Markdown,

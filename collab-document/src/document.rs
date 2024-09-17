@@ -1,8 +1,4 @@
-use std::borrow::{Borrow, BorrowMut};
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
-use std::vec;
-
+use anyhow::anyhow;
 use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
@@ -12,6 +8,10 @@ use collab_entity::define::DOCUMENT_ROOT;
 use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::borrow::{Borrow, BorrowMut};
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
+use std::vec;
 
 use crate::blocks::{
   deserialize_text_delta, parse_event, Block, BlockAction, BlockActionPayload, BlockActionType,
@@ -273,6 +273,21 @@ impl Document {
         .collect(),
       None => vec![],
     }
+  }
+
+  pub fn to_plain_text(&self) -> Result<String, DocumentError> {
+    let page_id = self
+      .get_page_id()
+      .ok_or_else(|| DocumentError::Internal(anyhow!("Page id is not found")))?;
+    let mut text = self.get_plain_text_from_block(&page_id).unwrap_or_default();
+    let children = self.get_block_children(&page_id);
+    for child_id in children {
+      text.push('\n');
+      if let Some(child_text) = self.get_plain_text_from_block(&child_id) {
+        text.push_str(&child_text);
+      }
+    }
+    Ok(text)
   }
 
   /// Get the plain text from the text block with the given id.

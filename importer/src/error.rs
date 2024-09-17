@@ -6,6 +6,9 @@ pub enum ImporterError {
   #[error("Invalid path format")]
   InvalidPathFormat,
 
+  #[error("{0}")]
+  InvalidFileType(String),
+
   #[error(transparent)]
   ImportMarkdownError(#[from] collab_document::error::DocumentError),
 
