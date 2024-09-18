@@ -1,9 +1,11 @@
 use crate::util::{parse_csv, print_view, unzip};
+use assert_json_diff::assert_json_eq;
 
 use collab_database::template::entity::CELL_DATA;
 use collab_document::document::gen_document_id;
 use importer::notion::{NotionImporter, NotionView};
 use nanoid::nanoid;
+use serde_json::{json, Value};
 
 #[tokio::test]
 async fn import_project_and_task_test2() {
@@ -24,21 +26,35 @@ async fn import_project_and_task_test2() {
   let root_view = &imported_view.views[0];
   assert_eq!(root_view.notion_name, "Projects & Tasks");
   assert_eq!(imported_view.views.len(), 1);
-  check_document(&root_view, "Projects & Tasks".to_string()).await;
+  let expected = vec![
+    json!([{"insert":"Projects & Tasks"}]),
+    json!([{"attributes":{"href":"Projects%20&%20Tasks%20104d4deadd2c805fb3abcaab6d3727e7/Projects%2058b8977d6e4444a98ec4d64176a071e5.md"},"insert":"Projects"},{"insert":": This is your overview of all the projects in the pipeline"}]),
+    json!([{"attributes":{"href":"Projects%20&%20Tasks%20104d4deadd2c805fb3abcaab6d3727e7/Tasks%2076aaf8a4637542ed8175259692ca08bb.md"},"insert":"Tasks"},{"attributes":{"bold":true},"insert":":"},{"insert":" This is your detailed breakdown of every task under your projects"}]),
+    json!([{"attributes":{"href":"Projects%20&%20Tasks%20104d4deadd2c805fb3abcaab6d3727e7/Tasks%2076aaf8a4637542ed8175259692ca08bb.csv"},"insert":"Tasks"}]),
+    json!([{"insert":"↓ Click through the different database tabs to see the same data in different ways"}]),
+    json!([{"insert":"Hover over any project name and click "},{"attributes":{"code":true},"insert":"◨ OPEN"},{"insert":" to view more info and its associated tasks"}]),
+    json!([{"attributes":{"href":"Projects%20&%20Tasks%20104d4deadd2c805fb3abcaab6d3727e7/Projects%2058b8977d6e4444a98ec4d64176a071e5.csv"},"insert":"Projects"}]),
+  ];
+  check_document(root_view, expected).await;
 
   let linked_views = root_view.get_linked_views();
   assert_eq!(linked_views.len(), 2);
   assert_eq!(linked_views[0].notion_name, "Tasks");
   assert_eq!(linked_views[1].notion_name, "Projects");
-  println!("linked_views: {:?}", linked_views);
 
   check_database_view(&linked_views[0], "Tasks", 17, 13).await;
   check_database_view(&linked_views[1], "Projects", 4, 11).await;
 }
 
-async fn check_document(document_view: &NotionView, expected: String) {
+async fn check_document(document_view: &NotionView, expected: Vec<Value>) {
   let document_id = gen_document_id();
   let document = document_view.as_document(&document_id).await.unwrap();
+  let first_block_id = document.get_page_id().unwrap();
+  let block_ids = document.get_block_children_ids(&first_block_id);
+  for (index, block_id) in block_ids.iter().enumerate() {
+    let delta = document.get_delta_json(&block_id).unwrap();
+    assert_json_eq!(delta, expected[index]);
+  }
 }
 
 async fn check_database_view(

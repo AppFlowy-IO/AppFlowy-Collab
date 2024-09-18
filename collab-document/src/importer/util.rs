@@ -7,42 +7,41 @@ use crate::{blocks::DocumentData, importer::define::*};
 
 use super::delta::{Delta, Operation};
 
-type BlockType = String;
 type BlockData = HashMap<String, Value>;
 
 /// Convert the node type to string
-pub(crate) fn mdast_node_type_to_block_type(
-  node: &mdast::Node,
-  list_type: Option<&str>,
-) -> BlockType {
+pub(crate) fn mdast_node_type_to_block_type(node: &mdast::Node, list_type: Option<&str>) -> String {
   match node {
-    mdast::Node::Root(_) => PAGE_TYPE,
-    mdast::Node::Paragraph(_) => PARAGRAPH_TYPE,
-    mdast::Node::Heading(_) => HEADING_TYPE,
-    mdast::Node::BlockQuote(_) => QUOTE_TYPE,
-    mdast::Node::Code(_) => CODE_TYPE,
-    mdast::Node::Image(_) => IMAGE_TYPE,
-    mdast::Node::ImageReference(_) => IMAGE_TYPE,
-    mdast::Node::LinkReference(_) => LINK_PREVIEW_TYPE,
-    mdast::Node::Math(_) => MATH_EQUATION_TYPE,
-    mdast::Node::ThematicBreak(_) => DIVIDER_TYPE,
-    mdast::Node::Table(_) => TABLE_TYPE,
-    mdast::Node::TableCell(_) => TABLE_CELL_TYPE,
+    mdast::Node::Root(_) => BlockType::Page,
+    mdast::Node::Paragraph(_) => BlockType::Paragraph,
+    mdast::Node::Heading(_) => BlockType::Heading,
+    mdast::Node::BlockQuote(_) => BlockType::Quote,
+    mdast::Node::Code(_) => BlockType::Code,
+    mdast::Node::Image(_) => BlockType::Image,
+    mdast::Node::ImageReference(_) => BlockType::Image,
+    mdast::Node::LinkReference(_) => BlockType::LinkPreview,
+    mdast::Node::Math(_) => BlockType::MathEquation,
+    mdast::Node::ThematicBreak(_) => BlockType::Divider,
+    mdast::Node::Table(_) => BlockType::Table,
+    mdast::Node::TableCell(_) => BlockType::TableCell,
     mdast::Node::ListItem(list) => {
       if list.checked.is_some() {
-        TODO_LIST_TYPE
+        BlockType::TodoList
       } else {
-        list_type.unwrap_or(BULLETED_LIST_TYPE)
+        match list_type {
+          None => BlockType::BulletedList,
+          Some(s) => BlockType::from_str(s).unwrap_or(BlockType::BulletedList),
+        }
       }
     },
     mdast::Node::Definition(defi) => {
       if is_image_url(&defi.url) {
-        IMAGE_TYPE
+        BlockType::Image
       } else {
-        LINK_PREVIEW_TYPE
+        BlockType::LinkPreview
       }
     },
-    _ => PARAGRAPH_TYPE,
+    _ => BlockType::Paragraph,
   }
   .to_string()
 }
@@ -142,11 +141,11 @@ pub(crate) fn get_mdast_node_info(
 ) -> Option<(&Vec<mdast::Node>, &'static str, Option<u32>)> {
   if let mdast::Node::List(list) = node {
     let list_type = if list.ordered {
-      NUMBERED_LIST_TYPE
+      BlockType::NumberedList
     } else {
-      BULLETED_LIST_TYPE
+      BlockType::BulletedList
     };
-    Some((&list.children, list_type, list.start))
+    Some((&list.children, list_type.as_str(), list.start))
   } else {
     None
   }

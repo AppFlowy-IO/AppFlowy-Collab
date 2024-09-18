@@ -196,23 +196,26 @@ impl Document {
     self.body.delete_block(&mut txn, block_id)
   }
 
-  pub fn get_block_ids<T: AsRef<str>>(
-    &self,
-    block_type: Option<T>,
-  ) -> Result<Vec<String>, DocumentError> {
+  pub fn get_all_block_ids(&self) -> Vec<String> {
+    let txn = self.collab.transact();
+    let blocks = self.body.block_operation.get_all_blocks(&txn);
+    let block_ids = blocks
+      .values()
+      .map(|block| block.id.clone())
+      .collect::<Vec<_>>();
+    block_ids
+  }
+
+  pub fn get_block_ids<T: AsRef<str>>(&self, block_type: T) -> Result<Vec<String>, DocumentError> {
     let txn = self.collab.transact();
     let blocks = self.body.block_operation.get_all_blocks(&txn);
     let block_ids = blocks
       .values()
       .filter_map(|block| {
-        if let Some(block_type) = block_type.as_ref() {
-          if block.ty == block_type.as_ref() {
-            Some(block.id.clone())
-          } else {
-            None
-          }
-        } else {
+        if block.ty == block_type.as_ref() {
           Some(block.id.clone())
+        } else {
+          None
         }
       })
       .collect::<Vec<_>>();

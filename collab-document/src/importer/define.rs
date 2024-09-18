@@ -1,20 +1,77 @@
-// Block Type Keys
-pub const PAGE_TYPE: &str = "page";
-pub const PARAGRAPH_TYPE: &str = "paragraph";
-pub const HEADING_TYPE: &str = "heading";
-pub const QUOTE_TYPE: &str = "quote";
-pub const TODO_LIST_TYPE: &str = "todo_list";
-pub const NUMBERED_LIST_TYPE: &str = "numbered_list";
-pub const BULLETED_LIST_TYPE: &str = "bulleted_list";
-pub const IMAGE_TYPE: &str = "image";
-pub const LINK_PREVIEW_TYPE: &str = "link_preview";
-pub const CODE_TYPE: &str = "code";
-pub const MATH_EQUATION_TYPE: &str = "math_equation";
-pub const DIVIDER_TYPE: &str = "divider";
-pub const TABLE_TYPE: &str = "table";
-pub const TABLE_CELL_TYPE: &str = "table/cell";
+#[derive(Debug, PartialEq, Eq)]
+pub enum BlockType {
+  Page,
+  Paragraph,
+  Heading,
+  Quote,
+  TodoList,
+  NumberedList,
+  BulletedList,
+  Image,
+  LinkPreview,
+  Code,
+  MathEquation,
+  Divider,
+  Table,
+  TableCell,
+  Text,
+}
 
-pub const TEXT_TYPE: &str = "text";
+impl BlockType {
+  pub fn as_str(&self) -> &'static str {
+    match self {
+      BlockType::Page => "page",
+      BlockType::Paragraph => "paragraph",
+      BlockType::Heading => "heading",
+      BlockType::Quote => "quote",
+      BlockType::TodoList => "todo_list",
+      BlockType::NumberedList => "numbered_list",
+      BlockType::BulletedList => "bulleted_list",
+      BlockType::Image => "image",
+      BlockType::LinkPreview => "link_preview",
+      BlockType::Code => "code",
+      BlockType::MathEquation => "math_equation",
+      BlockType::Divider => "divider",
+      BlockType::Table => "table",
+      BlockType::TableCell => "table/cell",
+      BlockType::Text => "text",
+    }
+  }
+
+  pub fn from_str(s: &str) -> Option<Self> {
+    match s {
+      "page" => Some(BlockType::Page),
+      "paragraph" => Some(BlockType::Paragraph),
+      "heading" => Some(BlockType::Heading),
+      "quote" => Some(BlockType::Quote),
+      "todo_list" => Some(BlockType::TodoList),
+      "numbered_list" => Some(BlockType::NumberedList),
+      "bulleted_list" => Some(BlockType::BulletedList),
+      "image" => Some(BlockType::Image),
+      "link_preview" => Some(BlockType::LinkPreview),
+      "code" => Some(BlockType::Code),
+      "math_equation" => Some(BlockType::MathEquation),
+      "divider" => Some(BlockType::Divider),
+      "table" => Some(BlockType::Table),
+      "table/cell" => Some(BlockType::TableCell),
+      "text" => Some(BlockType::Text),
+      _ => None,
+    }
+  }
+}
+
+// Implement AsRef<str> for ContentType
+impl AsRef<str> for BlockType {
+  fn as_ref(&self) -> &str {
+    self.as_str()
+  }
+}
+
+impl ToString for BlockType {
+  fn to_string(&self) -> String {
+    self.as_str().to_string()
+  }
+}
 
 pub const IMAGE_EXTENSIONS: [&str; 6] = ["png", "jpg", "jpeg", "gif", "svg", "webp"];
 

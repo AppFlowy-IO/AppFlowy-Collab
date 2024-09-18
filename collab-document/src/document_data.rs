@@ -3,9 +3,7 @@ use std::collections::HashMap;
 use nanoid::nanoid;
 use uuid::Uuid;
 
-use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
-use collab::preclude::Collab;
 
 use crate::blocks::{Block, DocumentData, DocumentMeta};
 use crate::document::Document;
