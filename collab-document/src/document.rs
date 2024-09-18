@@ -135,6 +135,9 @@ impl Document {
   pub fn apply_text_delta(&mut self, text_id: &str, delta: String) {
     let mut txn = self.collab.transact_mut();
     let delta = deserialize_text_delta(&delta).ok().unwrap_or_default();
+    #[cfg(feature = "verbose_log")]
+    tracing::trace!("apply_text_delta: text_id: {}, delta: {:?}", text_id, delta);
+
     self
       .body
       .text_operation
@@ -145,6 +148,9 @@ impl Document {
   pub fn apply_action(&mut self, actions: Vec<BlockAction>) -> Result<(), DocumentError> {
     let mut txn = self.collab.transact_mut();
     for action in actions {
+      #[cfg(feature = "verbose_log")]
+      tracing::trace!("apply_action: {:?}", action);
+
       let result = match action.action {
         BlockActionType::Insert => self.body.handle_insert_action(&mut txn, action.payload),
         BlockActionType::Update => self.body.handle_update_action(&mut txn, action.payload),

@@ -44,6 +44,16 @@ async fn import_project_and_task_test2() {
 
   check_database_view(&linked_views[0], "Tasks", 17, 13).await;
   check_database_view(&linked_views[1], "Projects", 4, 11).await;
+
+  let views = root_view.get_external_link_notion_view();
+  assert_eq!(views.len(), 2);
+  assert_eq!(views[0].notion_id, linked_views[0].notion_id);
+  assert_eq!(views[1].notion_id, linked_views[1].notion_id);
+}
+
+async fn replace_links(document_view: &NotionView, linked_views: Vec<NotionView>) {
+  let document_id = gen_document_id();
+  let document = document_view.as_document(&document_id).await.unwrap();
 }
 
 async fn check_document(document_view: &NotionView, expected: Vec<Value>) {
@@ -52,7 +62,7 @@ async fn check_document(document_view: &NotionView, expected: Vec<Value>) {
   let first_block_id = document.get_page_id().unwrap();
   let block_ids = document.get_block_children_ids(&first_block_id);
   for (index, block_id) in block_ids.iter().enumerate() {
-    let delta = document.get_delta_json(&block_id).unwrap();
+    let delta = document.get_delta_json(block_id).unwrap();
     assert_json_eq!(delta, expected[index]);
   }
 }

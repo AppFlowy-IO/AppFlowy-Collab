@@ -66,6 +66,18 @@ impl NotionView {
       }
   }
 
+  pub fn get_external_link_notion_view(&self) -> Vec<NotionView> {
+    let mut linked_views = vec![];
+    for links in self.external_links.iter() {
+      if let Some(link) = links.last() {
+        if let Some(view) = self.get_view(&link.id) {
+          linked_views.push(view);
+        }
+      }
+    }
+    linked_views
+  }
+
   pub fn get_view(&self, id: &str) -> Option<NotionView> {
     fn search_view(views: &[NotionView], id: &str) -> Option<NotionView> {
       for view in views {
