@@ -1037,6 +1037,7 @@ dependencies = [
  "collab-document",
  "collab-entity",
  "collab-folder",
+ "csv",
  "fancy-regex",
  "markdown",
  "nanoid",

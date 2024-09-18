@@ -65,6 +65,35 @@ impl NotionView {
         0
       }
   }
+
+  pub fn get_view(&self, id: &str) -> Option<NotionView> {
+    fn search_view(views: &[NotionView], id: &str) -> Option<NotionView> {
+      for view in views {
+        if view.notion_id == id {
+          return Some(view.clone());
+        }
+        if let Some(child_view) = search_view(&view.children, id) {
+          return Some(child_view);
+        }
+      }
+      None
+    }
+
+    search_view(&self.children, id)
+  }
+
+  pub fn get_linked_views(&self) -> Vec<NotionView> {
+    let mut linked_views = vec![];
+    for link in &self.external_links {
+      for external_link in link {
+        if let Some(view) = self.get_view(&external_link.id) {
+          linked_views.push(view);
+        }
+      }
+    }
+    linked_views
+  }
+
   pub async fn as_document(&self, document_id: &str) -> Result<Document, ImporterError> {
     match &self.notion_file {
       NotionFile::Markdown { file_path } => {
@@ -294,7 +323,7 @@ fn process_entry(entry: DirEntry) -> Option<NotionView> {
     let dir_name = path.file_name()?.to_str()?;
     let parent_path = path.parent()?;
 
-    let mut notion_file: NotionFile;
+    let notion_file: NotionFile;
     let mut external_links = vec![];
     let md_file_path = parent_path.join(format!("{}.md", dir_name));
     let csv_file_path = parent_path.join(format!("{}_all.csv", dir_name));
@@ -341,8 +370,8 @@ fn process_entry(entry: DirEntry) -> Option<NotionView> {
 // Main function to get all links from a markdown file
 fn get_md_links(md_file_path: &Path) -> Result<Vec<Vec<ExternalLink>>, ImporterError> {
   let content = std::fs::read_to_string(md_file_path)?;
-  let ast = to_mdast(&content, &ParseOptions::default())
-    .map_err(|err| ImporterError::ParseMarkdownError(err))?;
+  let ast =
+    to_mdast(&content, &ParseOptions::default()).map_err(ImporterError::ParseMarkdownError)?;
   let mut links = Vec::new();
   collect_links_from_node(&ast, &mut links);
   Ok(

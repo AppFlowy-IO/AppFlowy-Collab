@@ -165,6 +165,22 @@ impl Document {
     self.body.block_operation.get_block_with_txn(&txn, block_id)
   }
 
+  /// Get the children of the block with the given id.
+  pub fn get_block_children_ids(&self, block_id: &str) -> Vec<String> {
+    let block = self.get_block(block_id);
+    let txn = self.collab.transact();
+    match block {
+      Some(block) => self
+        .body
+        .children_operation
+        .get_children(&txn, &block.children)
+        .into_iter()
+        .map(|child| child.to_string(&txn))
+        .collect(),
+      None => vec![],
+    }
+  }
+
   /// Insert block to the document.
   pub fn insert_block(
     &mut self,
@@ -178,6 +194,73 @@ impl Document {
   pub fn delete_block(&mut self, block_id: &str) -> Result<(), DocumentError> {
     let mut txn = self.collab.transact_mut();
     self.body.delete_block(&mut txn, block_id)
+  }
+
+  pub fn get_block_ids<T: AsRef<str>>(
+    &self,
+    block_type: Option<T>,
+  ) -> Result<Vec<String>, DocumentError> {
+    let txn = self.collab.transact();
+    let blocks = self.body.block_operation.get_all_blocks(&txn);
+    let block_ids = blocks
+      .values()
+      .filter_map(|block| {
+        if let Some(block_type) = block_type.as_ref() {
+          if block.ty == block_type.as_ref() {
+            Some(block.id.clone())
+          } else {
+            None
+          }
+        } else {
+          Some(block.id.clone())
+        }
+      })
+      .collect::<Vec<_>>();
+    Ok(block_ids)
+  }
+
+  /// Get the plain text from the text block with the given id.
+  ///
+  /// If the block is not found, return None.
+  /// If the block is found but the external_id is not found, return None.
+  pub fn get_plain_text_from_block(&self, block_id: &str) -> Option<String> {
+    let block = self.get_block(block_id)?;
+    let text_id = block.external_id.as_ref()?;
+    let txn = self.collab.transact();
+    self
+      .body
+      .text_operation
+      .get_delta_with_txn(&txn, text_id)
+      .map(|delta| {
+        let text: Vec<String> = delta
+          .iter()
+          .filter_map(|d| match d {
+            TextDelta::Inserted(s, _) => Some(s.clone()),
+            _ => None,
+          })
+          .collect();
+        text.join("")
+      })
+  }
+
+  pub fn get_delta_from_block<T: AsRef<str>>(&self, block_id: T) -> Option<Vec<TextDelta>> {
+    let block_id = block_id.as_ref();
+    let txn = self.collab.transact();
+    let block = self
+      .body
+      .block_operation
+      .get_block_with_txn(&txn, block_id)?;
+    let external_id = block.external_id?;
+    let delta = self
+      .body
+      .text_operation
+      .get_delta_with_txn(&txn, &external_id)?;
+    Some(delta)
+  }
+
+  pub fn get_delta_json<T: AsRef<str>>(&self, block_id: T) -> Option<Value> {
+    let delta = self.get_delta_from_block(block_id)?;
+    serde_json::to_value(delta).ok()
   }
 
   pub fn delete_block_from_parent(&mut self, block_id: &str, parent_id: &str) {
@@ -259,28 +342,13 @@ impl Document {
       }
     });
   }
-  /// Get the children of the block with the given id.
-  pub fn get_block_children(&self, block_id: &str) -> Vec<String> {
-    let block = self.get_block(block_id);
-    let txn = self.collab.transact();
-    match block {
-      Some(block) => self
-        .body
-        .children_operation
-        .get_children(&txn, &block.children)
-        .into_iter()
-        .map(|child| child.to_string(&txn))
-        .collect(),
-      None => vec![],
-    }
-  }
 
   pub fn to_plain_text(&self) -> Result<String, DocumentError> {
     let page_id = self
       .get_page_id()
       .ok_or_else(|| DocumentError::Internal(anyhow!("Page id is not found")))?;
     let mut text = self.get_plain_text_from_block(&page_id).unwrap_or_default();
-    let children = self.get_block_children(&page_id);
+    let children = self.get_block_children_ids(&page_id);
     for child_id in children {
       text.push('\n');
       if let Some(child_text) = self.get_plain_text_from_block(&child_id) {
@@ -305,30 +373,6 @@ impl Document {
   //   };
   //   Ok(document_data)
   // }
-
-  /// Get the plain text from the text block with the given id.
-  ///
-  /// If the block is not found, return None.
-  /// If the block is found but the external_id is not found, return None.
-  pub fn get_plain_text_from_block(&self, block_id: &str) -> Option<String> {
-    let block = self.get_block(block_id)?;
-    let text_id = block.external_id.as_ref()?;
-    let txn = self.collab.transact();
-    self
-      .body
-      .text_operation
-      .get_delta_with_txn(&txn, text_id)
-      .map(|delta| {
-        let text: Vec<String> = delta
-          .iter()
-          .filter_map(|d| match d {
-            TextDelta::Inserted(s, _) => Some(s.clone()),
-            _ => None,
-          })
-          .collect();
-        text.join("")
-      })
-  }
 }
 
 impl Deref for Document {

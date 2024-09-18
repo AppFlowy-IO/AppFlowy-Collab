@@ -13,6 +13,29 @@ pub fn print_view(view: &NotionView, depth: usize) {
   }
 }
 
+pub fn parse_csv(file_path: &PathBuf) -> (Vec<String>, Vec<Vec<String>>) {
+  let content = std::fs::read_to_string(file_path).unwrap();
+  let mut reader = csv::Reader::from_reader(content.as_bytes());
+  let csv_fields = reader
+    .headers()
+    .unwrap()
+    .iter()
+    .map(|s| s.to_string())
+    .collect::<Vec<String>>();
+  let csv_rows = reader
+    .records()
+    .flat_map(|r| r.ok())
+    .map(|record| {
+      record
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>()
+    })
+    .collect::<Vec<Vec<String>>>();
+
+  (csv_fields, csv_rows)
+}
+
 pub struct Cleaner(PathBuf);
 
 impl Cleaner {

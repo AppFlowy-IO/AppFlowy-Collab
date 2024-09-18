@@ -28,3 +28,4 @@ tokio = { workspace = true, features = ["full"] }
 nanoid = "0.4.0"
 zip = "2.2.0"
 assert-json-diff = "2.0.2"
+csv = { version = "1.3.0" }
