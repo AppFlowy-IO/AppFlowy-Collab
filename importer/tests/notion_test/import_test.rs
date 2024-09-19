@@ -8,6 +8,31 @@ use importer::notion::{NotionImporter, NotionView};
 use nanoid::nanoid;
 
 #[tokio::test]
+async fn import_blog_post_document_test() {
+  let parent_dir = nanoid!(6);
+  let (_cleaner, file_path) = unzip("blog_post", &parent_dir).unwrap();
+  let importer = NotionImporter::new(&file_path).unwrap();
+  let imported_view = importer.import().await.unwrap();
+  assert_eq!(imported_view.name, "blog_post");
+  assert_eq!(imported_view.num_of_csv(), 0);
+  assert_eq!(imported_view.num_of_markdown(), 1);
+
+  let root_view = &imported_view.views[0];
+  let external_link_views = root_view.get_external_link_notion_view();
+  let document = root_view.as_document(external_link_views).await.unwrap();
+  let first_block_id = document.get_page_id().unwrap();
+  let block_ids = document.get_block_children_ids(&first_block_id);
+
+  for block_id in block_ids.iter() {
+    if let Some((block_type, block_delta)) = document.get_block_delta(block_id) {
+      // if matches!(block_type, BlockType::Image) {
+      println!("{:?} {:?}", block_type, block_delta);
+      // }
+    }
+  }
+}
+
+#[tokio::test]
 async fn import_project_and_task_test() {
   let parent_dir = nanoid!(6);
   let (_cleaner, file_path) = unzip("project&task", &parent_dir).unwrap();
