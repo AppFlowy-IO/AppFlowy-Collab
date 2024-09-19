@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
+use crate::{blocks::DocumentData, importer::define::*};
 use markdown::mdast;
 use serde_json::Value;
-
-use crate::{blocks::DocumentData, importer::define::*};
+use std::collections::HashMap;
 
 use super::delta::{Delta, Operation};
 
@@ -30,7 +28,14 @@ pub(crate) fn mdast_node_type_to_block_type(node: &mdast::Node, list_type: Optio
       } else {
         match list_type {
           None => BlockType::BulletedList,
-          Some(s) => BlockType::from_str(s).unwrap_or(BlockType::BulletedList),
+          Some(s) => {
+            let ty = BlockType::from_block_ty(s);
+            if matches!(ty, BlockType::Custom(_)) {
+              BlockType::BulletedList
+            } else {
+              ty
+            }
+          },
         }
       }
     },
@@ -138,14 +143,14 @@ pub(crate) fn is_inline_node(node: &mdast::Node) -> bool {
 /// Get the list type and children of the md ast node
 pub(crate) fn get_mdast_node_info(
   node: &mdast::Node,
-) -> Option<(&Vec<mdast::Node>, &'static str, Option<u32>)> {
+) -> Option<(&Vec<mdast::Node>, String, Option<u32>)> {
   if let mdast::Node::List(list) = node {
     let list_type = if list.ordered {
       BlockType::NumberedList
     } else {
       BlockType::BulletedList
     };
-    Some((&list.children, list_type.as_str(), list.start))
+    Some((&list.children, list_type.as_str().to_string(), list.start))
   } else {
     None
   }

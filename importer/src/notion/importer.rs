@@ -1,9 +1,9 @@
 use crate::error::ImporterError;
 use crate::imported_collab::{ImportedCollab, ImportedCollabView, ImportedType};
 use anyhow::anyhow;
-use collab_database::database::{gen_database_id, gen_database_view_id, Database};
+use collab_database::database::{gen_database_view_id, Database};
 use collab_database::template::csv::CSVTemplate;
-use collab_document::document::{gen_document_id, Document};
+use collab_document::document::Document;
 use collab_document::importer::md_importer::MDImporter;
 use collab_entity::CollabType;
 use fancy_regex::Regex;
@@ -11,17 +11,23 @@ use markdown::mdast::Node;
 use markdown::{to_mdast, ParseOptions};
 use percent_encoding::percent_decode_str;
 use serde::Serialize;
+use std::collections::HashMap;
+
+use collab_document::blocks::{mention_block_data, mention_block_delta, TextDelta};
+use collab_document::importer::define::BlockType;
 
 use std::path::{Path, PathBuf};
-use tracing::warn;
+
+use tracing::{error, warn};
 use walkdir::{DirEntry, WalkDir};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct NotionView {
   pub notion_name: String,
   pub notion_id: String,
-  pub children: Vec<NotionView>,
   pub notion_file: NotionFile,
+  pub object_id: String,
+  pub children: Vec<NotionView>,
   pub external_links: Vec<Vec<ExternalLink>>,
 }
 
@@ -66,12 +72,12 @@ impl NotionView {
       }
   }
 
-  pub fn get_external_link_notion_view(&self) -> Vec<NotionView> {
-    let mut linked_views = vec![];
+  pub fn get_external_link_notion_view(&self) -> HashMap<String, NotionView> {
+    let mut linked_views = HashMap::new();
     for links in self.external_links.iter() {
       if let Some(link) = links.last() {
         if let Some(view) = self.get_view(&link.id) {
-          linked_views.push(view);
+          linked_views.insert(link.id.clone(), view);
         }
       }
     }
@@ -106,13 +112,57 @@ impl NotionView {
     linked_views
   }
 
-  pub async fn as_document(&self, document_id: &str) -> Result<Document, ImporterError> {
+  pub async fn as_document(
+    &self,
+    external_link_views: HashMap<String, NotionView>,
+  ) -> Result<Document, ImporterError> {
     match &self.notion_file {
       NotionFile::Markdown { file_path } => {
         let md_importer = MDImporter::new(None);
         let content = std::fs::read_to_string(file_path)?;
-        let document_data = md_importer.import(document_id, content)?;
-        let document = Document::create(document_id, document_data)?;
+        let document_data = md_importer.import(&self.object_id, content)?;
+        let mut document = Document::create(&self.object_id, document_data)?;
+
+        // 1. Get the page ID from the document
+        if let Some(first_block_id) = document.get_page_id() {
+          // 2 Get all the block children of the page
+          let block_ids = document.get_block_children_ids(&first_block_id);
+          // 3. Get all the deltas of the block children
+          for block_id in block_ids.iter() {
+            // 4. Get the block type and deltas of the block
+            if let Some((block_type, deltas)) = document.get_block_delta(block_id) {
+              for delta in deltas {
+                // 5. If the block type is Text, get the inserted text and attributes
+                if let TextDelta::Inserted(_, Some(attrs)) = delta {
+                  // 6. If the block type is External, get the external ID and type
+                  if let Some(any) = attrs.get("href") {
+                    let delta_str = any.to_string();
+                    // 7. Extract the name and ID from the delta string
+                    if let Ok(links) = extract_name_id(&delta_str) {
+                      if let Some(link) = links.last() {
+                        if let Some(view) = external_link_views.get(&link.id) {
+                          document.remove_block_delta(block_id);
+                          if matches!(block_type, BlockType::Paragraph) {
+                            let data = mention_block_data(&view.object_id, &self.object_id);
+                            if let Err(err) = document.update_block(block_id, data) {
+                              error!("Failed to update block when trying to replace ref link. error:{:?}", err);
+                            }
+                          } else {
+                            let delta = mention_block_delta(&view.object_id);
+                            if let Err(err) = document.set_block_delta(block_id, vec![delta]) {
+                              error!("Failed to set block delta when trying to replace ref link. error:{:?}", err);
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
         Ok(document)
       },
       _ => Err(ImporterError::InvalidFileType(format!(
@@ -127,10 +177,9 @@ impl NotionView {
       NotionFile::CSV { file_path } => {
         let content = std::fs::read_to_string(file_path)?;
         let csv_template = CSVTemplate::try_from(content)?;
-        let database_id = gen_database_id();
         let database_view_id = gen_database_view_id();
         let database =
-          Database::create_with_template(&database_id, &database_view_id, csv_template).await?;
+          Database::create_with_template(&self.object_id, &database_view_id, csv_template).await?;
         Ok(database)
       },
       _ => Err(ImporterError::InvalidFileType(format!(
@@ -163,11 +212,10 @@ impl NotionView {
         })
       },
       NotionFile::Markdown { .. } => {
-        let document_id = gen_document_id();
-        let document = self.as_document(&document_id).await?;
+        let document = self.as_document(HashMap::new()).await?;
         let encoded_collab = document.encode_collab()?;
         let imported_collab = ImportedCollab {
-          object_id: document_id,
+          object_id: self.object_id,
           collab_type: CollabType::Document,
           encoded_collab,
         };
@@ -224,10 +272,6 @@ pub struct ImportedView {
 
 impl ImportedView {
   pub fn num_of_csv(&self) -> usize {
-    for view in self.views.iter() {
-      let a = view.num_of_csv();
-      println!("aaaaa: {}", a);
-    }
     self
       .views
       .iter()
@@ -322,6 +366,7 @@ fn process_entry(entry: DirEntry) -> Option<NotionView> {
       children: vec![],
       notion_file,
       external_links,
+      object_id: uuid::Uuid::new_v4().to_string(),
     });
   } else if path.is_dir() {
     // When the path is directory, which means it should has a file with the same name but with .md
@@ -374,6 +419,7 @@ fn process_entry(entry: DirEntry) -> Option<NotionView> {
       children,
       notion_file,
       external_links,
+      object_id: uuid::Uuid::new_v4().to_string(),
     });
   }
   None
@@ -390,8 +436,7 @@ fn get_md_links(md_file_path: &Path) -> Result<Vec<Vec<ExternalLink>>, ImporterE
     links
       .into_iter()
       .flat_map(|link| {
-        let str = percent_decode_str(&link).decode_utf8().ok()?.to_string();
-        let links = extract_name_id(&str).ok()?;
+        let links = extract_name_id(&link).ok()?;
         Some(links)
       })
       .collect(),
@@ -424,9 +469,10 @@ fn collect_links_from_node(node: &Node, links: &mut Vec<String>) {
 }
 
 fn extract_name_id(path_str: &str) -> Result<Vec<ExternalLink>, ImporterError> {
+  let path_str = percent_decode_str(path_str).decode_utf8()?.to_string();
   let mut result = Vec::new();
   let re = Regex::new(r"^(.*?)\s([0-9a-fA-F]{32})(?:_all)?(?:\.(\w+))?$").unwrap();
-  let path = Path::new(path_str);
+  let path = Path::new(&path_str);
   for component in path.components() {
     if let Some(component_str) = component.as_os_str().to_str() {
       if let Ok(Some(captures)) = re.captures(component_str) {

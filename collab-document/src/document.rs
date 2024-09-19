@@ -20,6 +20,7 @@ use crate::blocks::{
 };
 use crate::document_awareness::DocumentAwarenessState;
 use crate::error::DocumentError;
+use crate::importer::define::BlockType;
 
 /// The page_id is a reference that points to the block’s id.
 /// The block that is referenced by this page_id is the first block of the document.
@@ -171,6 +172,12 @@ impl Document {
     self.body.block_operation.get_block_with_txn(&txn, block_id)
   }
 
+  pub fn get_block_data(&self, block_id: &str) -> Option<(BlockType, HashMap<String, Value>)> {
+    let block = self.get_block(block_id)?;
+    let block_type = BlockType::from_block_ty(&block.ty);
+    Some((block_type, block.data))
+  }
+
   /// Get the children of the block with the given id.
   pub fn get_block_children_ids(&self, block_id: &str) -> Vec<String> {
     let block = self.get_block(block_id);
@@ -212,17 +219,19 @@ impl Document {
     block_ids
   }
 
-  pub fn get_block_ids<T: AsRef<str>>(&self, block_type: T) -> Result<Vec<String>, DocumentError> {
+  pub fn get_block_ids<T: AsRef<str>>(
+    &self,
+    block_types: Vec<T>,
+  ) -> Result<Vec<String>, DocumentError> {
     let txn = self.collab.transact();
     let blocks = self.body.block_operation.get_all_blocks(&txn);
     let block_ids = blocks
       .values()
       .filter_map(|block| {
-        if block.ty == block_type.as_ref() {
-          Some(block.id.clone())
-        } else {
-          None
-        }
+        block_types
+          .iter()
+          .find(|&t| block.ty == t.as_ref())
+          .map(|_| block.id.clone())
       })
       .collect::<Vec<_>>();
     Ok(block_ids)
@@ -251,8 +260,12 @@ impl Document {
         text.join("")
       })
   }
+  pub fn get_block_delta_json<T: AsRef<str>>(&self, block_id: T) -> Option<Value> {
+    let delta = self.get_block_delta(block_id)?.1;
+    serde_json::to_value(delta).ok()
+  }
 
-  pub fn get_delta_from_block<T: AsRef<str>>(&self, block_id: T) -> Option<Vec<TextDelta>> {
+  pub fn get_block_delta<T: AsRef<str>>(&self, block_id: T) -> Option<(BlockType, Vec<TextDelta>)> {
     let block_id = block_id.as_ref();
     let txn = self.collab.transact();
     let block = self
@@ -264,12 +277,50 @@ impl Document {
       .body
       .text_operation
       .get_delta_with_txn(&txn, &external_id)?;
-    Some(delta)
+
+    let block_type = BlockType::from_block_ty(&block.ty);
+    Some((block_type, delta))
   }
 
-  pub fn get_delta_json<T: AsRef<str>>(&self, block_id: T) -> Option<Value> {
-    let delta = self.get_delta_from_block(block_id)?;
-    serde_json::to_value(delta).ok()
+  pub fn remove_block_delta<T: AsRef<str>>(&mut self, block_id: T) {
+    let block_id = block_id.as_ref();
+    let mut txn = self.collab.transact_mut();
+    let block = self.body.block_operation.get_block_with_txn(&txn, block_id);
+    if let Some(block) = block {
+      if let Some(external_id) = &block.external_id {
+        self
+          .body
+          .text_operation
+          .delete_text_with_txn(&mut txn, external_id);
+      }
+    }
+  }
+
+  pub fn set_block_delta<T: AsRef<str>>(
+    &mut self,
+    block_id: T,
+    delta: Vec<TextDelta>,
+  ) -> Result<(), DocumentError> {
+    if delta.is_empty() {
+      return Ok(());
+    }
+
+    let block_id = block_id.as_ref();
+    let mut txn = self.collab.transact_mut();
+    let block = self.body.block_operation.get_block_with_txn(&txn, block_id);
+    if let Some(block) = block {
+      let external_id = block
+        .external_id
+        .as_ref()
+        .ok_or(DocumentError::ExternalIdIsNotFound)?;
+      self
+        .body
+        .text_operation
+        .set_delta(&mut txn, external_id, delta);
+      Ok(())
+    } else {
+      Err(DocumentError::BlockIsNotFound)
+    }
   }
 
   pub fn delete_block_from_parent(&mut self, block_id: &str, parent_id: &str) {

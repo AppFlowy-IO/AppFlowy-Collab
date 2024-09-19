@@ -1,3 +1,6 @@
+use crate::error::DocumentError;
+use std::str::FromStr;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum BlockType {
   Page,
@@ -15,10 +18,11 @@ pub enum BlockType {
   Table,
   TableCell,
   Text,
+  Custom(String),
 }
 
 impl BlockType {
-  pub fn as_str(&self) -> &'static str {
+  pub fn as_str(&self) -> &str {
     match self {
       BlockType::Page => "page",
       BlockType::Paragraph => "paragraph",
@@ -35,28 +39,36 @@ impl BlockType {
       BlockType::Table => "table",
       BlockType::TableCell => "table/cell",
       BlockType::Text => "text",
+      BlockType::Custom(s) => s,
     }
   }
 
-  pub fn from_str(s: &str) -> Option<Self> {
+  pub fn from_block_ty(s: &str) -> Self {
     match s {
-      "page" => Some(BlockType::Page),
-      "paragraph" => Some(BlockType::Paragraph),
-      "heading" => Some(BlockType::Heading),
-      "quote" => Some(BlockType::Quote),
-      "todo_list" => Some(BlockType::TodoList),
-      "numbered_list" => Some(BlockType::NumberedList),
-      "bulleted_list" => Some(BlockType::BulletedList),
-      "image" => Some(BlockType::Image),
-      "link_preview" => Some(BlockType::LinkPreview),
-      "code" => Some(BlockType::Code),
-      "math_equation" => Some(BlockType::MathEquation),
-      "divider" => Some(BlockType::Divider),
-      "table" => Some(BlockType::Table),
-      "table/cell" => Some(BlockType::TableCell),
-      "text" => Some(BlockType::Text),
-      _ => None,
+      "page" => BlockType::Page,
+      "paragraph" => BlockType::Paragraph,
+      "heading" => BlockType::Heading,
+      "quote" => BlockType::Quote,
+      "todo_list" => BlockType::TodoList,
+      "numbered_list" => BlockType::NumberedList,
+      "bulleted_list" => BlockType::BulletedList,
+      "image" => BlockType::Image,
+      "link_preview" => BlockType::LinkPreview,
+      "code" => BlockType::Code,
+      "math_equation" => BlockType::MathEquation,
+      "divider" => BlockType::Divider,
+      "table" => BlockType::Table,
+      "table/cell" => BlockType::TableCell,
+      "text" => BlockType::Text,
+      _ => BlockType::Custom(s.to_string()),
     }
+  }
+}
+impl FromStr for BlockType {
+  type Err = DocumentError;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    Ok(Self::from_block_ty(s))
   }
 }
 

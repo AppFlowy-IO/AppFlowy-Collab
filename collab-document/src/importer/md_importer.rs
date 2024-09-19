@@ -86,7 +86,7 @@ fn process_mdast_node(
       document_data,
       parent_id,
       children,
-      Some(list_type),
+      Some(&list_type),
       start_number,
     );
     return;

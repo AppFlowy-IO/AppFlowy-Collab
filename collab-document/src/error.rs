@@ -38,6 +38,9 @@ pub enum DocumentError {
   #[error("Lack of document required data")]
   NoRequiredData,
 
+  #[error("The external id is not found")]
+  ExternalIdIsNotFound,
+
   #[error("Unable to parse document to plain text")]
   ParseDocumentError,
 

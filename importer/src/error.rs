@@ -1,3 +1,5 @@
+use std::str::Utf8Error;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ImporterError {
   #[error("Invalid path: {0}")]
@@ -17,6 +19,9 @@ pub enum ImporterError {
 
   #[error("Parse markdown error: {0}")]
   ParseMarkdownError(markdown::message::Message),
+
+  #[error(transparent)]
+  Utf8Error(#[from] Utf8Error),
 
   #[error(transparent)]
   Internal(#[from] anyhow::Error),

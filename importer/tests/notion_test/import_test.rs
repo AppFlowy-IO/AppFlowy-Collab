@@ -1,14 +1,14 @@
 use crate::util::{parse_csv, print_view, unzip};
-use assert_json_diff::assert_json_eq;
 
 use collab_database::template::entity::CELL_DATA;
-use collab_document::document::gen_document_id;
+use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_from_block_data};
+
+use collab_document::importer::define::BlockType;
 use importer::notion::{NotionImporter, NotionView};
 use nanoid::nanoid;
-use serde_json::{json, Value};
 
 #[tokio::test]
-async fn import_project_and_task_test2() {
+async fn import_project_and_task_test() {
   let parent_dir = nanoid!(6);
   let (_cleaner, file_path) = unzip("project&task", &parent_dir).unwrap();
   let importer = NotionImporter::new(&file_path).unwrap();
@@ -26,45 +26,52 @@ async fn import_project_and_task_test2() {
   let root_view = &imported_view.views[0];
   assert_eq!(root_view.notion_name, "Projects & Tasks");
   assert_eq!(imported_view.views.len(), 1);
-  let expected = vec![
-    json!([{"insert":"Projects & Tasks"}]),
-    json!([{"attributes":{"href":"Projects%20&%20Tasks%20104d4deadd2c805fb3abcaab6d3727e7/Projects%2058b8977d6e4444a98ec4d64176a071e5.md"},"insert":"Projects"},{"insert":": This is your overview of all the projects in the pipeline"}]),
-    json!([{"attributes":{"href":"Projects%20&%20Tasks%20104d4deadd2c805fb3abcaab6d3727e7/Tasks%2076aaf8a4637542ed8175259692ca08bb.md"},"insert":"Tasks"},{"attributes":{"bold":true},"insert":":"},{"insert":" This is your detailed breakdown of every task under your projects"}]),
-    json!([{"attributes":{"href":"Projects%20&%20Tasks%20104d4deadd2c805fb3abcaab6d3727e7/Tasks%2076aaf8a4637542ed8175259692ca08bb.csv"},"insert":"Tasks"}]),
-    json!([{"insert":"↓ Click through the different database tabs to see the same data in different ways"}]),
-    json!([{"insert":"Hover over any project name and click "},{"attributes":{"code":true},"insert":"◨ OPEN"},{"insert":" to view more info and its associated tasks"}]),
-    json!([{"attributes":{"href":"Projects%20&%20Tasks%20104d4deadd2c805fb3abcaab6d3727e7/Projects%2058b8977d6e4444a98ec4d64176a071e5.csv"},"insert":"Projects"}]),
-  ];
-  check_document(root_view, expected).await;
-
   let linked_views = root_view.get_linked_views();
+  check_project_and_task_document(root_view, linked_views.clone()).await;
+
   assert_eq!(linked_views.len(), 2);
   assert_eq!(linked_views[0].notion_name, "Tasks");
   assert_eq!(linked_views[1].notion_name, "Projects");
 
   check_database_view(&linked_views[0], "Tasks", 17, 13).await;
   check_database_view(&linked_views[1], "Projects", 4, 11).await;
-
-  let views = root_view.get_external_link_notion_view();
-  assert_eq!(views.len(), 2);
-  assert_eq!(views[0].notion_id, linked_views[0].notion_id);
-  assert_eq!(views[1].notion_id, linked_views[1].notion_id);
 }
 
-async fn replace_links(document_view: &NotionView, linked_views: Vec<NotionView>) {
-  let document_id = gen_document_id();
-  let document = document_view.as_document(&document_id).await.unwrap();
-}
-
-async fn check_document(document_view: &NotionView, expected: Vec<Value>) {
-  let document_id = gen_document_id();
-  let document = document_view.as_document(&document_id).await.unwrap();
+async fn check_project_and_task_document(
+  document_view: &NotionView,
+  notion_views: Vec<NotionView>,
+) {
+  let external_link_views = document_view.get_external_link_notion_view();
+  let document = document_view
+    .as_document(external_link_views)
+    .await
+    .unwrap();
   let first_block_id = document.get_page_id().unwrap();
   let block_ids = document.get_block_children_ids(&first_block_id);
-  for (index, block_id) in block_ids.iter().enumerate() {
-    let delta = document.get_delta_json(block_id).unwrap();
-    assert_json_eq!(delta, expected[index]);
+
+  let mut cloned_notion_views = notion_views.clone();
+  for block_id in block_ids.iter() {
+    if let Some((block_type, block_delta)) = document.get_block_delta(block_id) {
+      if matches!(block_type, BlockType::BulletedList) {
+        let page_id = extract_page_id_from_block_delta(&block_delta).unwrap();
+        cloned_notion_views.retain(|view| view.object_id != page_id);
+      }
+    }
   }
+
+  let mut cloned_notion_views2 = notion_views.clone();
+  for block_id in block_ids.iter() {
+    if let Some((block_type, data)) = document.get_block_data(block_id) {
+      if matches!(block_type, BlockType::Paragraph) {
+        if let Some(view_id) = extract_view_id_from_block_data(&data) {
+          cloned_notion_views2.retain(|view| view.object_id != view_id);
+        }
+      }
+    }
+  }
+
+  assert!(cloned_notion_views.is_empty());
+  assert!(cloned_notion_views2.is_empty());
 }
 
 async fn check_database_view(
