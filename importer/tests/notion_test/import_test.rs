@@ -21,14 +21,14 @@ async fn import_blog_post_document_test() {
   let root_view = &imported_view.views[0];
   let external_link_views = root_view.get_external_link_notion_view();
   let document = root_view.as_document(external_link_views).await.unwrap();
-  let first_block_id = document.get_page_id().unwrap();
-  let block_ids = document.get_block_children_ids(&first_block_id);
-
+  // let first_block_id = document.get_page_id().unwrap();
+  // let block_ids = document.get_block_children_ids(&first_block_id);
+  let block_ids = document.get_all_block_ids();
   for block_id in block_ids.iter() {
     if let Some((block_type, block_data)) = document.get_block_data(block_id) {
-      // if matches!(block_type, BlockType::Image) {
-      println!("{:?} {:?}", block_type, block_data);
-      // }
+      if matches!(block_type, BlockType::Image) {
+        println!("{:?} {:?}", block_type, block_data);
+      }
     }
   }
 }

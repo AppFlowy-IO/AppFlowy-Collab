@@ -400,6 +400,8 @@ fn process_entry(entry: DirEntry) -> Option<NotionView> {
           }
         }
       }
+
+      // try to collect all files include jpg,png
       notion_file = NotionFile::Markdown {
         file_path: md_file_path,
       }
