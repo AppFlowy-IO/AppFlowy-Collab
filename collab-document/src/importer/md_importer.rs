@@ -94,6 +94,17 @@ fn process_mdast_node(
     return;
   }
 
+  // flatten the image node, by default, the image is wrapped in a paragraph
+  if let mdast::Node::Paragraph(para) = node {
+    if para.children.len() == 1 && matches!(para.children[0], mdast::Node::Image(_)) {
+      if let mdast::Node::Image(image) = &para.children[0] {
+        if let Some(parent_id) = parent_id {
+          return process_image(document_data, image, &parent_id);
+        }
+      }
+    }
+  }
+
   // Process other nodes as normal nodes
   let id = block_id.unwrap_or_else(generate_id);
 
@@ -114,6 +125,7 @@ fn process_mdast_node(
       );
     },
     mdast::Node::Paragraph(para) => {
+      // Process paragraph as before
       process_mdast_node_children(
         document_data,
         Some(id.clone()),
