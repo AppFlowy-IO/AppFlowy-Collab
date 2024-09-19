@@ -2,13 +2,13 @@ use crate::blocks::{Block, DocumentData, DocumentMeta};
 use crate::document_data::generate_id;
 use crate::error::DocumentError;
 use crate::importer::define::*;
+use crate::importer::delta::Delta;
+use crate::importer::util::*;
 use markdown::mdast::AlignKind;
 use markdown::{mdast, to_mdast, Constructs, ParseOptions};
 use serde_json::Value;
 use std::collections::HashMap;
-
-use crate::importer::delta::Delta;
-use crate::importer::util::*;
+use tracing::trace;
 
 #[derive(Default)]
 pub struct MDImporter {
@@ -76,10 +76,12 @@ fn process_mdast_node(
 ) {
   // If the node is an inline node, process it as an inline node
   if is_inline_node(node) {
+    trace!("Processing inline node: {:?}", node);
     process_inline_mdast_node(document_data, node, parent_id);
     return;
   }
 
+  trace!("Processing node: {:?}", node);
   // If the node is a list node, process it as a list node
   if let Some((children, list_type, start_number)) = get_mdast_node_info(node) {
     process_mdast_node_children(
@@ -165,7 +167,10 @@ fn process_mdast_node(
       insert_delta_to_text_map(document_data, &id, delta);
     },
     mdast::Node::Table(table) => process_table(document_data, table, &id),
-    _ => {},
+    mdast::Node::Image(image) => process_image(document_data, image, &id),
+    _ => {
+      trace!("Unhandled node: {:?}", node);
+    },
   }
 }
 
@@ -200,6 +205,15 @@ fn update_children_map(
       .or_default()
       .push(child_id.to_string());
   }
+}
+
+fn process_image(document_data: &mut DocumentData, image: &mdast::Image, parent_id: &str) {
+  let new_block_id = generate_id();
+  let image_block = create_image_block(&new_block_id, image.url.clone(), parent_id);
+  document_data
+    .blocks
+    .insert(new_block_id.clone(), image_block);
+  update_children_map(document_data, Some(parent_id.to_string()), &new_block_id);
 }
 
 fn process_table(document_data: &mut DocumentData, table: &mdast::Table, parent_id: &str) {
@@ -262,6 +276,21 @@ fn create_paragraph_block(document_data: &mut DocumentData, parent_id: &str) -> 
   );
 
   paragraph_block_id
+}
+
+fn create_image_block(block_id: &str, url: String, parent_id: &str) -> Block {
+  let mut data = BlockData::new();
+  data.insert(URL_FIELD.to_string(), url.into());
+  data.insert(IMAGE_TYPE_FIELD.to_string(), EXTERNAL_IMAGE_TYPE.into());
+  Block {
+    id: block_id.to_string(),
+    ty: BlockType::Image.to_string(),
+    data,
+    parent: parent_id.to_string(),
+    children: "".to_string(),
+    external_id: None,
+    external_type: None,
+  }
 }
 
 fn create_table_cell_block(

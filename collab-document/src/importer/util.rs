@@ -1,11 +1,11 @@
+use super::delta::{Delta, Operation};
 use crate::{blocks::DocumentData, importer::define::*};
 use markdown::mdast;
 use serde_json::Value;
 use std::collections::HashMap;
+use tracing::trace;
 
-use super::delta::{Delta, Operation};
-
-type BlockData = HashMap<String, Value>;
+pub type BlockData = HashMap<String, Value>;
 
 /// Convert the node type to string
 pub(crate) fn mdast_node_type_to_block_type(node: &mdast::Node, list_type: Option<&str>) -> String {
@@ -46,7 +46,13 @@ pub(crate) fn mdast_node_type_to_block_type(node: &mdast::Node, list_type: Optio
         BlockType::LinkPreview
       }
     },
-    _ => BlockType::Paragraph,
+    _ => {
+      trace!(
+        "Unknown node type: {:?}, fallback to BlockType::Paragraph",
+        node
+      );
+      BlockType::Paragraph
+    },
   }
   .to_string()
 }

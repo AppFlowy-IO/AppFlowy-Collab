@@ -1,4 +1,4 @@
-use crate::util::{parse_csv, print_view, unzip};
+use crate::util::{parse_csv, print_view, setup_log, unzip};
 
 use collab_database::template::entity::CELL_DATA;
 use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_from_block_data};
@@ -9,6 +9,7 @@ use nanoid::nanoid;
 
 #[tokio::test]
 async fn import_blog_post_document_test() {
+  setup_log();
   let parent_dir = nanoid!(6);
   let (_cleaner, file_path) = unzip("blog_post", &parent_dir).unwrap();
   let importer = NotionImporter::new(&file_path).unwrap();
@@ -24,9 +25,9 @@ async fn import_blog_post_document_test() {
   let block_ids = document.get_block_children_ids(&first_block_id);
 
   for block_id in block_ids.iter() {
-    if let Some((block_type, block_delta)) = document.get_block_delta(block_id) {
+    if let Some((block_type, block_data)) = document.get_block_data(block_id) {
       // if matches!(block_type, BlockType::Image) {
-      println!("{:?} {:?}", block_type, block_delta);
+      println!("{:?} {:?}", block_type, block_data);
       // }
     }
   }

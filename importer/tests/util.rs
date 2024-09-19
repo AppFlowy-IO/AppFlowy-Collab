@@ -2,6 +2,10 @@ use importer::notion::NotionView;
 use std::fs::{create_dir_all, File};
 use std::io::copy;
 use std::path::{Path, PathBuf};
+use std::sync::Once;
+use tracing_subscriber::fmt::Subscriber;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 use zip::ZipArchive;
 
 pub fn print_view(view: &NotionView, depth: usize) {
@@ -81,4 +85,16 @@ pub fn unzip(file_name: &str, parent_dir: &str) -> std::io::Result<(Cleaner, Pat
     Cleaner::new(PathBuf::from(output_folder_path)),
     PathBuf::from(path),
   ))
+}
+
+pub fn setup_log() {
+  static START: Once = Once::new();
+  START.call_once(|| {
+    std::env::set_var("RUST_LOG", "info");
+    let subscriber = Subscriber::builder()
+      .with_env_filter(EnvFilter::from_default_env())
+      .with_ansi(true)
+      .finish();
+    subscriber.try_init().unwrap();
+  });
 }

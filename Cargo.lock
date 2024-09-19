@@ -1047,6 +1047,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "walkdir",
  "zip 2.2.0",

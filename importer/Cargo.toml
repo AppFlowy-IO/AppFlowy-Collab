@@ -24,6 +24,7 @@ percent-encoding = "2.3.1"
 fancy-regex = "0.13.0"
 
 [dev-dependencies]
+tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 tokio = { workspace = true, features = ["full"] }
 nanoid = "0.4.0"
 zip = "2.2.0"
