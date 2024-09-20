@@ -24,6 +24,12 @@ async fn import_csv_test() {
     .await;
 
   let mut reader = csv::Reader::from_reader(csv_data.as_bytes());
+  let csv_fields = reader
+    .headers()
+    .unwrap()
+    .iter()
+    .map(|s| s.to_string())
+    .collect::<Vec<String>>();
   let csv_rows = reader
     .records()
     .flat_map(|r| r.ok())
@@ -35,8 +41,15 @@ async fn import_csv_test() {
     })
     .collect::<Vec<Vec<String>>>();
 
+  assert_eq!(rows.len(), csv_rows.len());
   assert_eq!(rows.len(), 1200);
+
+  assert_eq!(fields.len(), csv_fields.len());
   assert_eq!(fields.len(), 14);
+
+  for (index, field) in fields.iter().enumerate() {
+    assert_eq!(field.name, csv_fields[index]);
+  }
 
   for (row_index, row) in rows.iter().enumerate() {
     assert_eq!(row.cells.len(), fields.len());

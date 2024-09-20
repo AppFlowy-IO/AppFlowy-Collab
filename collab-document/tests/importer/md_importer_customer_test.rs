@@ -353,3 +353,23 @@ If you have questions or feedback, please submit an issue on Github or join the 
     assert_eq!(children_blocks[9].ty, "bulleted_list");
   }
 }
+
+#[test]
+fn test_customer_image_in_first_level() {
+  let markdown = r#"![Image](https://example.com/image.png)"#;
+
+  let result = markdown_to_document_data(markdown);
+
+  let page_block = get_page_block(&result);
+  let children_blocks = get_children_blocks(&result, &page_block.id);
+
+  for block in children_blocks.iter() {
+    println!("{:?}", block);
+  }
+
+  assert_eq!(children_blocks[0].ty, "image");
+  assert_eq!(
+    children_blocks[0].data.get("url").unwrap(),
+    "https://example.com/image.png"
+  );
+}

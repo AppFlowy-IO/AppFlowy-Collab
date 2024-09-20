@@ -1,6 +1,7 @@
 use crate::blocks::text_entities::TextDelta;
 use collab::preclude::*;
 use collab::util::TextExt;
+use serde_json::json;
 use std::collections::HashMap;
 
 pub struct TextOperation {
@@ -40,9 +41,21 @@ impl TextOperation {
   pub fn apply_delta(&self, txn: &mut TransactionMut, text_id: &str, delta: Vec<TextDelta>) {
     let text_ref = self.get_text_with_txn(txn, text_id);
     if !delta.is_empty() {
-      let delta: Vec<Delta<In>> = delta.iter().map(|d| d.to_owned().to_delta()).collect();
+      let delta: Vec<Delta<In>> = delta.into_iter().map(|d| d.to_delta()).collect();
       text_ref.apply_delta(txn, delta);
     }
+  }
+
+  pub fn set_delta(&self, txn: &mut TransactionMut, text_id: &str, delta: Vec<TextDelta>) {
+    let text_ref = self.get_text_with_txn(txn, text_id);
+
+    // remove all deltas
+    let len = text_ref.len(txn);
+    text_ref.remove_range(txn, 0, len);
+
+    // apply new deltas
+    let delta: Vec<Delta<In>> = delta.into_iter().map(|d| d.to_delta()).collect();
+    text_ref.apply_delta(txn, delta);
   }
 
   /// get all text delta and serialize to json string
@@ -81,4 +94,43 @@ impl TextOperation {
       })
       .collect()
   }
+}
+
+pub fn mention_block_data(view_id: &str, parent_view_id: &str) -> HashMap<String, JsonValue> {
+  let mut data = HashMap::with_capacity(2);
+  data.insert("view_id".to_string(), json!(view_id));
+  data.insert("parent_id".to_string(), json!(parent_view_id));
+  data
+}
+
+pub fn extract_view_id_from_block_data(data: &HashMap<String, JsonValue>) -> Option<String> {
+  data
+    .get("view_id")
+    .and_then(|v| v.as_str().map(|s| s.to_string()))
+}
+
+pub fn mention_block_delta(view_id: &str) -> TextDelta {
+  let mut mention_content = HashMap::with_capacity(2);
+  mention_content.insert("type".to_string(), "page".to_string());
+  mention_content.insert("page_id".to_string(), view_id.to_string());
+
+  let mut mention = Attrs::with_capacity(1);
+  mention.insert("mention".into(), Any::from(mention_content));
+  TextDelta::Inserted("$".to_string(), Some(mention))
+}
+
+pub fn extract_page_id_from_block_delta(deltas: &[TextDelta]) -> Option<String> {
+  deltas
+    .iter()
+    .filter_map(|d| match d {
+      TextDelta::Inserted(_, Some(attrs)) => {
+        if let Some(Any::Map(attrs)) = attrs.get("mention") {
+          attrs.get("page_id").map(|v| v.to_string())
+        } else {
+          None
+        }
+      },
+      _ => None,
+    })
+    .next()
 }

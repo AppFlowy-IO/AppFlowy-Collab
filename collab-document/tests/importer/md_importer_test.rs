@@ -313,6 +313,12 @@ fn test_divider() {
 fn test_image() {
   let image_with_title = "![Alt text](https://example.com/image.png \"Image title\")";
   let image_without_title = "![Alt text](https://example.com/image.png)";
+  let local_image = "![In the Getty Center auditorium for the recent “There Will Be Food“ panel.](Blog%20Post%20104d4deadd2c808aa7dbd79eadeff0eb/maarten-van-den-heuvel-400626-unsplash.jpg)";
+  let local_image_with_desc = r#"
+![Dishes at Broken Spanish, in Downtown LA.](Blog%20Post%20104d4deadd2c808aa7dbd79eadeff0eb/christine-siracusa-363257-unsplash.jpg)
+
+Dishes at Broken Spanish, in Downtown LA.
+"#;
 
   let result = markdown_to_document_data(image_with_title);
   let image = get_block_by_type(&result, "image");
@@ -330,6 +336,26 @@ fn test_image() {
     json!(image.data),
     json!({
       "url": "https://example.com/image.png",
+      "image_type": 2
+    })
+  );
+
+  let result = markdown_to_document_data(local_image);
+  let image = get_block_by_type(&result, "image");
+  assert_eq!(
+    json!(image.data),
+    json!({
+      "url": "Blog%20Post%20104d4deadd2c808aa7dbd79eadeff0eb/maarten-van-den-heuvel-400626-unsplash.jpg",
+      "image_type": 2
+    })
+  );
+
+  let result = markdown_to_document_data(local_image_with_desc);
+  let image = get_block_by_type(&result, "image");
+  assert_eq!(
+    json!(image.data),
+    json!({
+      "url": "Blog%20Post%20104d4deadd2c808aa7dbd79eadeff0eb/christine-siracusa-363257-unsplash.jpg",
       "image_type": 2
     })
   );

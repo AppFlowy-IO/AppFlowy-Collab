@@ -28,9 +28,7 @@ fn get_default_data_test() {
 fn validate_document_data() {
   let document_id = "1";
   let document_data = default_document_data(document_id);
-  let collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false);
-
-  let document = Document::create_with_data(collab, document_data).unwrap();
+  let document = Document::create(document_id, document_data).unwrap();
   assert!(document.validate().is_ok());
 
   let new_collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false);

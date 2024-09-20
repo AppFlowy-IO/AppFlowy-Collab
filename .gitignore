@@ -18,3 +18,4 @@ collab-plugins/.env.test
 # Protobuf generated code
 collab-entity/src/proto/*.rs
 !collab-entity/src/proto/mod.rs
+**/temp/**

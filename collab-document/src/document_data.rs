@@ -3,9 +3,7 @@ use std::collections::HashMap;
 use nanoid::nanoid;
 use uuid::Uuid;
 
-use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
-use collab::preclude::Collab;
 
 use crate::blocks::{Block, DocumentData, DocumentMeta};
 use crate::document::Document;
@@ -89,8 +87,7 @@ pub fn default_document_data(document_id: &str) -> DocumentData {
 /// of the document.
 pub fn default_document_collab_data(document_id: &str) -> Result<EncodedCollab, DocumentError> {
   let document_data = default_document_data(document_id);
-  let collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false);
-  let document = Document::create_with_data(collab, document_data)?;
+  let document = Document::create(document_id, document_data)?;
   document.encode_collab()
 }
 

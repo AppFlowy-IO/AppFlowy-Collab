@@ -1,20 +1,89 @@
-// Block Type Keys
-pub const PAGE_TYPE: &str = "page";
-pub const PARAGRAPH_TYPE: &str = "paragraph";
-pub const HEADING_TYPE: &str = "heading";
-pub const QUOTE_TYPE: &str = "quote";
-pub const TODO_LIST_TYPE: &str = "todo_list";
-pub const NUMBERED_LIST_TYPE: &str = "numbered_list";
-pub const BULLETED_LIST_TYPE: &str = "bulleted_list";
-pub const IMAGE_TYPE: &str = "image";
-pub const LINK_PREVIEW_TYPE: &str = "link_preview";
-pub const CODE_TYPE: &str = "code";
-pub const MATH_EQUATION_TYPE: &str = "math_equation";
-pub const DIVIDER_TYPE: &str = "divider";
-pub const TABLE_TYPE: &str = "table";
-pub const TABLE_CELL_TYPE: &str = "table/cell";
+use crate::error::DocumentError;
+use std::str::FromStr;
 
-pub const TEXT_TYPE: &str = "text";
+#[derive(Debug, PartialEq, Eq)]
+pub enum BlockType {
+  Page,
+  Paragraph,
+  Heading,
+  Quote,
+  TodoList,
+  NumberedList,
+  BulletedList,
+  Image,
+  LinkPreview,
+  Code,
+  MathEquation,
+  Divider,
+  Table,
+  TableCell,
+  Text,
+  Custom(String),
+}
+
+impl BlockType {
+  pub fn as_str(&self) -> &str {
+    match self {
+      BlockType::Page => "page",
+      BlockType::Paragraph => "paragraph",
+      BlockType::Heading => "heading",
+      BlockType::Quote => "quote",
+      BlockType::TodoList => "todo_list",
+      BlockType::NumberedList => "numbered_list",
+      BlockType::BulletedList => "bulleted_list",
+      BlockType::Image => "image",
+      BlockType::LinkPreview => "link_preview",
+      BlockType::Code => "code",
+      BlockType::MathEquation => "math_equation",
+      BlockType::Divider => "divider",
+      BlockType::Table => "table",
+      BlockType::TableCell => "table/cell",
+      BlockType::Text => "text",
+      BlockType::Custom(s) => s,
+    }
+  }
+
+  pub fn from_block_ty(s: &str) -> Self {
+    match s {
+      "page" => BlockType::Page,
+      "paragraph" => BlockType::Paragraph,
+      "heading" => BlockType::Heading,
+      "quote" => BlockType::Quote,
+      "todo_list" => BlockType::TodoList,
+      "numbered_list" => BlockType::NumberedList,
+      "bulleted_list" => BlockType::BulletedList,
+      "image" => BlockType::Image,
+      "link_preview" => BlockType::LinkPreview,
+      "code" => BlockType::Code,
+      "math_equation" => BlockType::MathEquation,
+      "divider" => BlockType::Divider,
+      "table" => BlockType::Table,
+      "table/cell" => BlockType::TableCell,
+      "text" => BlockType::Text,
+      _ => BlockType::Custom(s.to_string()),
+    }
+  }
+}
+impl FromStr for BlockType {
+  type Err = DocumentError;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    Ok(Self::from_block_ty(s))
+  }
+}
+
+// Implement AsRef<str> for ContentType
+impl AsRef<str> for BlockType {
+  fn as_ref(&self) -> &str {
+    self.as_str()
+  }
+}
+
+impl ToString for BlockType {
+  fn to_string(&self) -> String {
+    self.as_str().to_string()
+  }
+}
 
 pub const IMAGE_EXTENSIONS: [&str; 6] = ["png", "jpg", "jpeg", "gif", "svg", "webp"];
 

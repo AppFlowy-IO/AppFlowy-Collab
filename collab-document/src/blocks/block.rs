@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
-use collab::preclude::{Map, MapExt, MapRef, ReadTxn, TransactionMut};
-use serde_json::Value;
-
 use crate::blocks::{hashmap_to_json_str, json_str_to_hashmap, Block, ChildrenOperation};
 use crate::error::DocumentError;
+use collab::preclude::{Map, MapExt, MapRef, ReadTxn, TransactionMut};
+use serde_json::Value;
 
 pub const EXTERNAL_TYPE_TEXT: &str = "text";
 pub const EXTERNAL_TYPE_ARRAY: &str = "array";
