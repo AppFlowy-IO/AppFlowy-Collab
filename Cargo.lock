@@ -485,6 +485,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "collab-importer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert-json-diff",
+ "base64",
+ "chrono",
+ "collab",
+ "collab-database",
+ "collab-document",
+ "collab-entity",
+ "collab-folder",
+ "csv",
+ "fancy-regex",
+ "fxhash",
+ "hex",
+ "markdown",
+ "nanoid",
+ "percent-encoding",
+ "rayon",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "walkdir",
+ "zip 2.2.0",
+]
+
+[[package]]
 name = "collab-plugins"
 version = "0.2.0"
 dependencies = [
@@ -1044,39 +1077,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f"
 dependencies = [
  "cc",
-]
-
-[[package]]
-name = "importer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "assert-json-diff",
- "base64",
- "chrono",
- "collab",
- "collab-database",
- "collab-document",
- "collab-entity",
- "collab-folder",
- "csv",
- "fancy-regex",
- "fxhash",
- "hex",
- "markdown",
- "nanoid",
- "percent-encoding",
- "rayon",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "walkdir",
- "zip 2.2.0",
 ]
 
 [[package]]

@@ -2,9 +2,8 @@ use crate::util::{parse_csv, print_view, setup_log, unzip};
 
 use collab_database::template::entity::CELL_DATA;
 use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_from_block_data};
-
 use collab_document::importer::define::{BlockType, URL_FIELD};
-use importer::notion::{NotionImporter, NotionView};
+use collab_importer::notion::{NotionImporter, NotionView};
 use nanoid::nanoid;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 

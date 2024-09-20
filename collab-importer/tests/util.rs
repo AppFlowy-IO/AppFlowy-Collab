@@ -1,4 +1,4 @@
-use importer::notion::NotionView;
+use collab_importer::notion::NotionView;
 use std::fs::{create_dir_all, File};
 use std::io::copy;
 use std::path::{Path, PathBuf};
