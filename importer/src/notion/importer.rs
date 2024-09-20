@@ -1,8 +1,7 @@
 use crate::error::ImporterError;
 use crate::imported_collab::{ImportedCollab, ImportedCollabView, ImportedType};
 use anyhow::anyhow;
-use base64::engine::general_purpose::URL_SAFE;
-use base64::Engine;
+
 use collab_database::database::{gen_database_view_id, Database};
 use collab_database::template::csv::CSVTemplate;
 use collab_document::blocks::{mention_block_data, mention_block_delta, TextDelta};
@@ -13,15 +12,15 @@ use collab_entity::CollabType;
 use fancy_regex::Regex;
 use markdown::mdast::Node;
 use markdown::{to_mdast, ParseOptions};
-use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
+use percent_encoding::percent_decode_str;
 use serde::Serialize;
 use serde_json::json;
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 
 use std::path::{Path, PathBuf};
-use tokio::io::{AsyncReadExt, BufReader};
+
+use crate::util::{upload_file_url, FileId};
 use tracing::{error, warn};
 use walkdir::{DirEntry, WalkDir};
 
@@ -194,31 +193,11 @@ impl NotionView {
             {
               let full_image_url = parent_path.join(image_url.to_string());
               if resources.iter().any(|r| r.contains(&full_image_url)) {
-                if let Ok(file) = tokio::fs::File::open(&full_image_url).await {
-                  let ext = Path::new(&full_image_url)
-                    .extension()
-                    .and_then(std::ffi::OsStr::to_str)
-                    .unwrap_or("")
-                    .to_owned();
-
-                  let mut reader = BufReader::new(file);
-                  let mut buffer = vec![0u8; 1024 * 1024];
-                  let mut hasher = Sha256::new();
-                  while let Ok(bytes_read) = reader.read(&mut buffer).await {
-                    if bytes_read == 0 {
-                      break;
-                    }
-                    hasher.update(&buffer[..bytes_read]);
-                  }
-                  let hash_result = hasher.finalize();
-                  let file_id = format!("{}.{}", URL_SAFE.encode(hash_result), ext);
-                  let parent_dir =
-                    utf8_percent_encode(&self.object_id, NON_ALPHANUMERIC).to_string();
-                  let url = format!(
-                    "{}/{workspace_id}/v1/blob/{parent_dir}/{file_id}",
-                    self.host
-                  );
+                if let Ok(file_id) = FileId::from_path(&full_image_url).await {
+                  let url = upload_file_url(&self.host, workspace_id, &self.object_id, &file_id);
                   block_data.insert(URL_FIELD.to_string(), json!(url));
+
+                  // Update the block with the new URL
                   if let Err(err) = document.update_block(block_id, block_data) {
                     error!(
                       "Failed to update block when trying to replace image. error:{:?}",
