@@ -22,6 +22,12 @@ markdown = "1.0.0-alpha.20"
 tracing.workspace = true
 percent-encoding = "2.3.1"
 fancy-regex = "0.13.0"
+fxhash = "0.2.1"
+tokio = { workspace = true, features = ["io-util"] }
+rayon = "1.10.0"
+sha2 = "0.10.8"
+hex = "0.4.3"
+base64 = "0.22.1"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }

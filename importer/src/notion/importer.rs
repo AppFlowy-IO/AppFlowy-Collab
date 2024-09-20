@@ -1,22 +1,27 @@
 use crate::error::ImporterError;
 use crate::imported_collab::{ImportedCollab, ImportedCollabView, ImportedType};
 use anyhow::anyhow;
+use base64::engine::general_purpose::URL_SAFE;
+use base64::Engine;
 use collab_database::database::{gen_database_view_id, Database};
 use collab_database::template::csv::CSVTemplate;
 use collab_document::blocks::{mention_block_data, mention_block_delta, TextDelta};
 use collab_document::document::Document;
-use collab_document::importer::define::BlockType;
+use collab_document::importer::define::{BlockType, URL_FIELD};
 use collab_document::importer::md_importer::MDImporter;
 use collab_entity::CollabType;
 use fancy_regex::Regex;
 use markdown::mdast::Node;
 use markdown::{to_mdast, ParseOptions};
-use percent_encoding::percent_decode_str;
+use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use serde::Serialize;
+use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::fs;
 
 use std::path::{Path, PathBuf};
-
+use tokio::io::{AsyncReadExt, BufReader};
 use tracing::{error, warn};
 use walkdir::{DirEntry, WalkDir};
 
@@ -26,8 +31,10 @@ pub struct NotionView {
   pub notion_id: String,
   pub notion_file: NotionFile,
   pub object_id: String,
+  pub workspace_id: String,
   pub children: Vec<NotionView>,
   pub external_links: Vec<Vec<ExternalLink>>,
+  pub host: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -45,6 +52,30 @@ pub enum LinkType {
 }
 
 impl NotionView {
+  /// Recursively collect all the files that need to be uploaded.
+  /// It will include the current view's file and all its children's files.
+  pub fn get_upload_files_recursively(&self) -> Vec<(String, Vec<PathBuf>)> {
+    let mut files = vec![];
+    files.push((self.object_id.clone(), self.notion_file.upload_resources()));
+
+    for child in &self.children {
+      files.extend(child.get_upload_files_recursively());
+    }
+    files
+  }
+
+  /// Recursively collect all the files that need to be uploaded.
+  pub fn get_payload_size_recursively(&self) -> u64 {
+    let size = self.notion_file.file_size();
+    self
+      .children
+      .iter()
+      .map(|view| view.get_payload_size_recursively())
+      .sum::<u64>()
+      + size
+  }
+
+  /// Returns the number of CSV files in the view and its children.
   pub fn num_of_csv(&self) -> usize {
     self
       .children
@@ -58,6 +89,7 @@ impl NotionView {
       }
   }
 
+  /// Returns the number of markdown files in the view and its children.
   pub fn num_of_markdown(&self) -> usize {
     self
       .children
@@ -83,6 +115,8 @@ impl NotionView {
     linked_views
   }
 
+  /// Get the view with the given ID.
+  /// It will search the view recursively.
   pub fn get_view(&self, id: &str) -> Option<NotionView> {
     fn search_view(views: &[NotionView], id: &str) -> Option<NotionView> {
       for view in views {
@@ -119,13 +153,18 @@ impl NotionView {
       NotionFile::Markdown {
         file_path,
         resources,
+        ..
       } => {
         let md_importer = MDImporter::new(None);
         let content = std::fs::read_to_string(file_path)?;
         let document_data = md_importer.import(&self.object_id, content)?;
         let mut document = Document::create(&self.object_id, document_data)?;
+
+        let parent_path = file_path.parent().unwrap();
         self.replace_link_views(&mut document, external_link_views);
-        self.replace_resource(&mut document, resources);
+        self
+          .replace_resources(&self.workspace_id, &mut document, resources, parent_path)
+          .await;
 
         Ok(document)
       },
@@ -136,8 +175,63 @@ impl NotionView {
     }
   }
 
-  fn replace_resource(&self, document: &mut Document, resources: &[Resource]) {
-    println!("resources: {:?}", resources);
+  async fn replace_resources(
+    &self,
+    workspace_id: &str,
+    document: &mut Document,
+    resources: &[Resource],
+    parent_path: &Path,
+  ) {
+    if let Some(page_id) = document.get_page_id() {
+      let block_ids = document.get_block_children_ids(&page_id);
+      for block_id in block_ids.iter() {
+        if let Some((block_type, mut block_data)) = document.get_block_data(block_id) {
+          if matches!(block_type, BlockType::Image) {
+            if let Some(image_url) = block_data
+              .get(URL_FIELD)
+              .and_then(|v| v.as_str())
+              .and_then(|s| percent_decode_str(s).decode_utf8().ok())
+            {
+              let full_image_url = parent_path.join(image_url.to_string());
+              if resources.iter().any(|r| r.contains(&full_image_url)) {
+                if let Ok(file) = tokio::fs::File::open(&full_image_url).await {
+                  let ext = Path::new(&full_image_url)
+                    .extension()
+                    .and_then(std::ffi::OsStr::to_str)
+                    .unwrap_or("")
+                    .to_owned();
+
+                  let mut reader = BufReader::new(file);
+                  let mut buffer = vec![0u8; 1024 * 1024];
+                  let mut hasher = Sha256::new();
+                  while let Ok(bytes_read) = reader.read(&mut buffer).await {
+                    if bytes_read == 0 {
+                      break;
+                    }
+                    hasher.update(&buffer[..bytes_read]);
+                  }
+                  let hash_result = hasher.finalize();
+                  let file_id = format!("{}.{}", URL_SAFE.encode(hash_result), ext);
+                  let parent_dir =
+                    utf8_percent_encode(&self.object_id, NON_ALPHANUMERIC).to_string();
+                  let url = format!(
+                    "{}/{workspace_id}/v1/blob/{parent_dir}/{file_id}",
+                    self.host
+                  );
+                  block_data.insert(URL_FIELD.to_string(), json!(url));
+                  if let Err(err) = document.update_block(block_id, block_data) {
+                    error!(
+                      "Failed to update block when trying to replace image. error:{:?}",
+                      err
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   fn replace_link_views(
@@ -145,9 +239,9 @@ impl NotionView {
     document: &mut Document,
     external_link_views: HashMap<String, NotionView>,
   ) {
-    if let Some(first_block_id) = document.get_page_id() {
+    if let Some(page_id) = document.get_page_id() {
       // 2 Get all the block children of the page
-      let block_ids = document.get_block_children_ids(&first_block_id);
+      let block_ids = document.get_block_children_ids(&page_id);
       // 3. Get all the deltas of the block children
       for block_id in block_ids.iter() {
         // 4. Get the block type and deltas of the block
@@ -193,7 +287,7 @@ impl NotionView {
 
   pub async fn as_database(&self) -> Result<Database, ImporterError> {
     match &self.notion_file {
-      NotionFile::CSV { file_path } => {
+      NotionFile::CSV { file_path, .. } => {
         let content = std::fs::read_to_string(file_path)?;
         let csv_template = CSVTemplate::try_from(content)?;
         let database_view_id = gen_database_view_id();
@@ -258,20 +352,73 @@ pub enum NotionFile {
   Unknown,
   CSV {
     file_path: PathBuf,
+    size: u64,
   },
   CSVPart {
     file_path: PathBuf,
+    size: u64,
   },
   Markdown {
     file_path: PathBuf,
+    size: u64,
     resources: Vec<Resource>,
   },
 }
 
+impl NotionFile {
+  pub fn upload_resources(&self) -> Vec<PathBuf> {
+    match self {
+      NotionFile::Markdown { resources, .. } => resources
+        .iter()
+        .flat_map(|r| r.file_paths())
+        .cloned()
+        .collect(),
+      _ => vec![],
+    }
+  }
+  pub fn file_size(&self) -> u64 {
+    match self {
+      NotionFile::CSV { size, .. } => *size,
+      NotionFile::CSVPart { size, .. } => *size,
+      NotionFile::Markdown {
+        size, resources, ..
+      } => resources.iter().map(|r| r.size()).sum::<u64>() + *size,
+      _ => 0,
+    }
+  }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub enum Resource {
-  Images { paths: Vec<PathBuf> },
-  Files { paths: Vec<PathBuf> },
+  Images { files: Vec<(PathBuf, u64)> },
+  Files { files: Vec<(PathBuf, u64)> },
+}
+
+impl Resource {
+  pub fn file_paths(&self) -> Vec<&PathBuf> {
+    match self {
+      Resource::Images { files } => files.iter().map(|(path, _)| path).collect(),
+      Resource::Files { files } => files.iter().map(|(path, _)| path).collect(),
+    }
+  }
+  pub fn size(&self) -> u64 {
+    match self {
+      Resource::Images { files } => files.iter().map(|(_, size)| *size).sum(),
+      Resource::Files { files } => files.iter().map(|(_, size)| *size).sum(),
+    }
+  }
+  pub fn contains(&self, path: &PathBuf) -> bool {
+    match self {
+      Resource::Images { files } => files.iter().any(|(file_path, _)| file_path == path),
+      Resource::Files { files } => files.iter().any(|(file_path, _)| file_path == path),
+    }
+  }
+}
+
+fn get_file_size(path: &PathBuf) -> std::io::Result<u64> {
+  let metadata = fs::metadata(path)?;
+  let file_size = metadata.len();
+  Ok(file_size)
 }
 
 impl NotionFile {
@@ -282,9 +429,9 @@ impl NotionFile {
   pub fn is_csv_all(&self) -> bool {
     matches!(self, NotionFile::CSV { .. })
   }
-  pub fn file_path(&self) -> Option<&PathBuf> {
+  pub fn imported_file_path(&self) -> Option<&PathBuf> {
     match self {
-      NotionFile::CSV { file_path } => Some(file_path),
+      NotionFile::CSV { file_path, .. } => Some(file_path),
       NotionFile::Markdown { file_path, .. } => Some(file_path),
       _ => None,
     }
@@ -293,11 +440,30 @@ impl NotionFile {
 
 #[derive(Debug, Serialize)]
 pub struct ImportedView {
+  pub workspace_id: String,
+  pub host: String,
   pub name: String,
   pub views: Vec<NotionView>,
 }
 
 impl ImportedView {
+  pub fn upload_files(&self) -> Vec<(String, Vec<PathBuf>)> {
+    self
+      .views
+      .iter()
+      .flat_map(|view| view.get_upload_files_recursively())
+      .collect()
+  }
+
+  pub fn size(&self) -> usize {
+    self.views.len()
+      + self
+        .views
+        .iter()
+        .map(|view| view.children.len())
+        .sum::<usize>()
+  }
+
   pub fn num_of_csv(&self) -> usize {
     self
       .views
@@ -317,13 +483,19 @@ impl ImportedView {
 
 #[derive(Debug)]
 pub struct NotionImporter {
+  host: String,
+  workspace_id: String,
   path: PathBuf,
   name: String,
   pub views: Option<NotionView>,
 }
 
 impl NotionImporter {
-  pub fn new<P: Into<PathBuf>>(file_path: P) -> Result<Self, ImporterError> {
+  pub fn new<P: Into<PathBuf>, S: ToString>(
+    file_path: P,
+    workspace_id: S,
+    host: String,
+  ) -> Result<Self, ImporterError> {
     let path = file_path.into();
     if !path.exists() {
       return Err(ImporterError::InvalidPath(
@@ -337,6 +509,8 @@ impl NotionImporter {
     });
 
     Ok(Self {
+      host,
+      workspace_id: workspace_id.to_string(),
       path,
       name,
       views: None,
@@ -346,6 +520,8 @@ impl NotionImporter {
   pub async fn import(mut self) -> Result<ImportedView, ImporterError> {
     let views = self.collect_views().await?;
     Ok(ImportedView {
+      workspace_id: self.workspace_id,
+      host: self.host,
       name: self.name,
       views,
     })
@@ -356,20 +532,19 @@ impl NotionImporter {
       .max_depth(1)
       .into_iter()
       .filter_map(|e| e.ok())
-      .filter_map(|entry| process_entry(&entry))
+      .filter_map(|entry| process_entry(&self.host, &self.workspace_id, &entry))
       .collect::<Vec<NotionView>>();
 
     Ok(views)
   }
 }
 
-fn collect_entry_resources(entry: &DirEntry) -> Vec<Resource> {
+fn collect_entry_resources(_workspace_id: &str, entry: &DirEntry) -> Vec<Resource> {
   let image_extensions = ["jpg", "jpeg", "png"];
   let file_extensions = ["zip"];
 
-  // Separate collections for images and files
-  let mut image_paths: Vec<PathBuf> = Vec::new();
-  let mut file_paths: Vec<PathBuf> = Vec::new();
+  let mut image_paths = Vec::new();
+  let mut file_paths = Vec::new();
 
   // Walk through the directory
   WalkDir::new(entry.path())
@@ -380,27 +555,35 @@ fn collect_entry_resources(entry: &DirEntry) -> Vec<Resource> {
         let path = entry.path();
         if path.is_file() {
           if let Some(ext) = path.extension().and_then(|ext| ext.to_str()) {
-            let ext_lower = ext.to_lowercase();
-            if image_extensions.contains(&ext_lower.as_str()) {
-              image_paths.push(path.to_path_buf());
-            } else if file_extensions.contains(&ext_lower.as_str()) {
-              file_paths.push(path.to_path_buf());
-          }
+            match fs::metadata(path).map(|file| file.len()) {
+              Ok(len) => {
+                let ext_lower = ext.to_lowercase();
+                if image_extensions.contains(&ext_lower.as_str()) {
+                  image_paths.push((path.to_path_buf(), len));
+                } else if file_extensions.contains(&ext_lower.as_str()) {
+                  file_paths.push((path.to_path_buf(), len));
+                }
+              }
+              Err(err) => {
+                error!("Failed to get file size: {:?}", err);
+              }
+            }
+
         }
       }});
 
   // Prepare the result
   let mut resources = Vec::new();
   if !image_paths.is_empty() {
-    resources.push(Resource::Images { paths: image_paths });
+    resources.push(Resource::Images { files: image_paths });
   }
   if !file_paths.is_empty() {
-    resources.push(Resource::Files { paths: file_paths });
+    resources.push(Resource::Files { files: file_paths });
   }
   resources
 }
 
-fn process_entry(entry: &DirEntry) -> Option<NotionView> {
+fn process_entry(host: &str, workspace_id: &str, entry: &DirEntry) -> Option<NotionView> {
   let path = entry.path();
 
   if path.is_file() && is_valid_file(path) {
@@ -432,6 +615,8 @@ fn process_entry(entry: &DirEntry) -> Option<NotionView> {
       notion_file,
       external_links,
       object_id: uuid::Uuid::new_v4().to_string(),
+      host: host.to_string(),
+      workspace_id: workspace_id.to_string(),
     });
   } else if path.is_dir() {
     // When the path is directory, which means it should has a file with the same name but with .md
@@ -461,22 +646,25 @@ fn process_entry(entry: &DirEntry) -> Option<NotionView> {
       {
         // Skip the directory itself and its corresponding .md file
         if sub_entry.path() != path && sub_entry.path() != md_file_path {
-          if let Some(child_view) = process_entry(&sub_entry) {
+          if let Some(child_view) = process_entry(host, workspace_id, &sub_entry) {
             children.push(child_view);
           }
-          resources.extend(collect_entry_resources(&sub_entry));
+          resources.extend(collect_entry_resources(workspace_id, &sub_entry));
         }
       }
 
-      // try to collect all files include jpg,png
+      let file_size = get_file_size(&md_file_path).ok()?;
       notion_file = NotionFile::Markdown {
         file_path: md_file_path,
+        size: file_size,
         resources,
       }
     } else if csv_file_path.exists() {
+      let file_size = get_file_size(&csv_file_path).ok()?;
       // when current file is csv, which means its children are rows
       notion_file = NotionFile::CSV {
         file_path: csv_file_path,
+        size: file_size,
       }
     } else {
       warn!("No corresponding .md file found for directory: {:?}", path);
@@ -490,6 +678,8 @@ fn process_entry(entry: &DirEntry) -> Option<NotionView> {
       notion_file,
       external_links,
       object_id: uuid::Uuid::new_v4().to_string(),
+      host: host.to_string(),
+      workspace_id: workspace_id.to_string(),
     });
   }
   None
@@ -618,10 +808,12 @@ fn name_and_id_from_path(path: &Path) -> Result<(String, String), ImporterError>
 /// - `.md` files are classified as `Markdown`.
 fn file_type_from_path(path: &Path) -> Option<NotionFile> {
   let extension = path.extension()?.to_str()?;
+  let file_size = get_file_size(&path.to_path_buf()).ok()?;
 
   match extension {
     "md" => Some(NotionFile::Markdown {
       file_path: path.to_path_buf(),
+      size: file_size,
       resources: vec![],
     }),
     "csv" => {
@@ -629,10 +821,12 @@ fn file_type_from_path(path: &Path) -> Option<NotionFile> {
       if file_name.contains("_all") {
         Some(NotionFile::CSV {
           file_path: path.to_path_buf(),
+          size: file_size,
         })
       } else {
         Some(NotionFile::CSVPart {
           file_path: path.to_path_buf(),
+          size: file_size,
         })
       }
     },
