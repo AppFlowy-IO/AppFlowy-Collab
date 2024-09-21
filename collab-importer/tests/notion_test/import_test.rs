@@ -3,7 +3,8 @@ use crate::util::{parse_csv, print_view, setup_log, unzip};
 use collab_database::template::entity::CELL_DATA;
 use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_from_block_data};
 use collab_document::importer::define::{BlockType, URL_FIELD};
-use collab_importer::notion::{NotionImporter, NotionView};
+use collab_importer::notion::page::NotionView;
+use collab_importer::notion::NotionImporter;
 use nanoid::nanoid;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 
@@ -77,7 +78,7 @@ async fn import_project_and_task_test() {
   let root_view = &imported_view.views[0];
   assert_eq!(root_view.notion_name, "Projects & Tasks");
   assert_eq!(imported_view.views.len(), 1);
-  assert_eq!(root_view.get_payload_size_recursively(), 12852);
+  assert_eq!(root_view.get_payload_size_recursively(), 1156965);
   let linked_views = root_view.get_linked_views();
   check_project_and_task_document(root_view, linked_views.clone()).await;
 
@@ -86,7 +87,7 @@ async fn import_project_and_task_test() {
   assert_eq!(linked_views[1].notion_name, "Projects");
 
   check_database_view(&linked_views[0], "Tasks", 17, 13).await;
-  check_database_view(&linked_views[1], "Projects", 4, 11).await;
+  check_database_view(&linked_views[1], "Projects", 4, 12).await;
 }
 
 async fn check_project_and_task_document(
