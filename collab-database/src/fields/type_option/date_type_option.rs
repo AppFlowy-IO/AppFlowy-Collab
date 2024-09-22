@@ -13,7 +13,7 @@ use std::fmt;
 
 use std::str::FromStr;
 pub use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
+pub use strum_macros::EnumIter;
 use tracing::error;
 use yrs::Any;
 
