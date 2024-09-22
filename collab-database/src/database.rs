@@ -1367,6 +1367,10 @@ impl Database {
       .await
   }
 
+  pub async fn stringify_cell(&self, _field_id: &str, _row_id: &RowId) -> String {
+    todo!()
+  }
+
   pub async fn collect_all_rows(&self) -> Vec<Result<Row, DatabaseError>> {
     let rows_stream = self.get_all_rows(None).await;
     rows_stream.collect::<Vec<_>>().await

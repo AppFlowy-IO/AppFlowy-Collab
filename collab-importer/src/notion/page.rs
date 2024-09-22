@@ -251,7 +251,7 @@ impl NotionView {
     match &self.notion_file {
       NotionFile::CSV { file_path, .. } => {
         let content = std::fs::read_to_string(file_path)?;
-        let csv_template = CSVTemplate::try_from(content)?;
+        let csv_template = CSVTemplate::try_from_reader(content.as_bytes(), false)?;
         let database_view_id = gen_database_view_id();
         let database =
           Database::create_with_template(&self.object_id, &database_view_id, csv_template).await?;

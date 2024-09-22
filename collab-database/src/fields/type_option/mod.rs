@@ -1,3 +1,7 @@
+pub mod number_type_option;
+pub mod select_type_option;
+pub mod time_type_option;
+
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
