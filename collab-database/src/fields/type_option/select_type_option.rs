@@ -24,7 +24,11 @@ impl StringifyTypeOption for SelectTypeOption {
   }
 
   fn stringify_text(&self, text: &str) -> String {
-    let ids = SelectOptionIds::from(text).0;
+    let ids = SelectOptionIds::from_str(text).unwrap_or_default().0;
+    if ids.is_empty() {
+      return "".to_string();
+    }
+
     let options = ids
       .iter()
       .flat_map(|option_id| {
@@ -32,10 +36,10 @@ impl StringifyTypeOption for SelectTypeOption {
           .options
           .iter()
           .find(|option| &option.id == option_id)
-          .map(|option| option.name)
+          .map(|option| option.name.clone())
       })
       .collect::<Vec<_>>();
-    options.into_iter().join(", ")
+    options.join(", ")
   }
 }
 
@@ -194,6 +198,24 @@ impl SelectOptionIds {
 
 pub const SELECTION_IDS_SEPARATOR: &str = ",";
 
+impl std::convert::From<Vec<String>> for SelectOptionIds {
+  fn from(ids: Vec<String>) -> Self {
+    let ids = ids
+      .into_iter()
+      .filter(|id| !id.is_empty())
+      .collect::<Vec<String>>();
+    Self(ids)
+  }
+}
+
+impl ToString for SelectOptionIds {
+  /// Returns a string that consists list of ids, placing a commas
+  /// separator between each
+  fn to_string(&self) -> String {
+    self.0.join(SELECTION_IDS_SEPARATOR)
+  }
+}
+
 impl From<&Cell> for SelectOptionIds {
   fn from(cell: &Cell) -> Self {
     let value: String = cell.get_as(CELL_DATA).unwrap_or_default();
@@ -213,5 +235,19 @@ impl FromStr for SelectOptionIds {
       .map(|id| id.to_string())
       .collect::<Vec<String>>();
     Ok(Self(ids))
+  }
+}
+
+impl std::ops::Deref for SelectOptionIds {
+  type Target = Vec<String>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl std::ops::DerefMut for SelectOptionIds {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.0
   }
 }
