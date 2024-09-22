@@ -84,6 +84,22 @@ impl StringifyTypeOption for DateTypeOption {
 }
 
 impl DateTypeOption {
+  pub fn new() -> Self {
+    Self {
+      date_format: DateFormat::default(),
+      time_format: TimeFormat::default(),
+      timezone_id: String::new(),
+    }
+  }
+
+  pub fn default_utc() -> Self {
+    Self {
+      date_format: DateFormat::default(),
+      time_format: TimeFormat::default(),
+      timezone_id: "Etc/UTC".to_owned(),
+    }
+  }
+
   pub fn to_json_string(&self) -> String {
     serde_json::to_string(self).unwrap()
   }
