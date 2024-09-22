@@ -2,8 +2,11 @@
 
 use crate::error::DatabaseError;
 use crate::fields::number_type_option::number_currency::Currency;
-use crate::fields::{TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
+use crate::rows::Cell;
+use crate::template::entity::CELL_DATA;
 use collab::preclude::Any;
+use collab::util::AnyMapExt;
 use fancy_regex::Regex;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
@@ -53,6 +56,22 @@ impl From<NumberTypeOption> for TypeOptionData {
       ("name".into(), data.name.into()),
       ("symbol".into(), data.symbol.into()),
     ])
+  }
+}
+
+impl StringifyTypeOption for NumberTypeOption {
+  fn stringify_cell(&self, cell: &Cell) -> String {
+    match cell.get_as::<String>(CELL_DATA) {
+      None => "".to_string(),
+      Some(s) => Self::stringify_text(self, &s),
+    }
+  }
+
+  fn stringify_text(&self, text: &str) -> String {
+    match self.format_cell_data(text) {
+      Ok(cell_data) => cell_data.to_string(),
+      Err(_) => "".to_string(),
+    }
   }
 }
 
@@ -716,5 +735,77 @@ impl NumberFormat {
 
   pub fn symbol(&self) -> String {
     self.currency().symbol.to_string()
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  /// Testing when the input is not a number.
+  #[test]
+  fn number_type_option_input_test() {
+    let type_option = NumberTypeOption::default();
+
+    // Input is empty String
+    assert_number(&type_option, "", "");
+    assert_number(&type_option, "abc", "");
+    assert_number(&type_option, "-123", "-123");
+    assert_number(&type_option, "abc-123", "-123");
+    assert_number(&type_option, "+123", "123");
+    assert_number(&type_option, "0.2", "0.2");
+    assert_number(&type_option, "-0.2", "-0.2");
+    assert_number(&type_option, "-$0.2", "0.2");
+    assert_number(&type_option, ".2", "0.2");
+  }
+
+  #[test]
+  fn dollar_type_option_test() {
+    let mut type_option = NumberTypeOption::new();
+    type_option.format = NumberFormat::USD;
+
+    assert_number(&type_option, "", "");
+    assert_number(&type_option, "abc", "");
+    assert_number(&type_option, "-123", "-$123");
+    assert_number(&type_option, "+123", "$123");
+    assert_number(&type_option, "0.2", "$0.2");
+    assert_number(&type_option, "-0.2", "-$0.2");
+    assert_number(&type_option, "-$0.2", "-$0.2");
+    assert_number(&type_option, "-€0.2", "-$0.2");
+    assert_number(&type_option, ".2", "$0.2");
+  }
+
+  #[test]
+  fn dollar_type_option_test2() {
+    let mut type_option = NumberTypeOption::new();
+    type_option.format = NumberFormat::USD;
+
+    assert_number(&type_option, "99999999999", "$99,999,999,999");
+    assert_number(&type_option, "$99,999,999,999", "$99,999,999,999");
+  }
+  #[test]
+  fn other_symbol_to_dollar_type_option_test() {
+    let mut type_option = NumberTypeOption::new();
+    type_option.format = NumberFormat::USD;
+
+    assert_number(&type_option, "€0.2", "$0.2");
+    assert_number(&type_option, "-€0.2", "-$0.2");
+    assert_number(&type_option, "-CN¥0.2", "-$0.2");
+    assert_number(&type_option, "CN¥0.2", "$0.2");
+    assert_number(&type_option, "0.2", "$0.2");
+  }
+
+  #[test]
+  fn euro_type_option_test() {
+    let mut type_option = NumberTypeOption::new();
+    type_option.format = NumberFormat::EUR;
+
+    assert_number(&type_option, "0.2", "€0,2");
+    assert_number(&type_option, "1000", "€1.000");
+    assert_number(&type_option, "1234.56", "€1.234,56");
+  }
+
+  fn assert_number(type_option: &NumberTypeOption, input_str: &str, expected_str: &str) {
+    let output = type_option.stringify_text(input_str);
+    assert_eq!(output, expected_str.to_owned());
   }
 }

@@ -5,6 +5,7 @@ pub mod time_type_option;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
+use crate::rows::Cell;
 use collab::preclude::{Any, FillRef, Map, MapRef, ReadTxn, ToJson, TransactionMut};
 use collab::util::AnyExt;
 use serde::{Deserialize, Serialize};
@@ -94,3 +95,8 @@ impl<'a, 'b> TypeOptionsUpdate<'a, 'b> {
 pub type TypeOptionData = HashMap<String, Any>;
 pub type TypeOptionDataBuilder = HashMap<String, Any>;
 pub type TypeOptionUpdate = MapRef;
+
+pub trait StringifyTypeOption {
+  fn stringify_cell(&self, cell: &Cell) -> String;
+  fn stringify_text(&self, text: &str) -> String;
+}
