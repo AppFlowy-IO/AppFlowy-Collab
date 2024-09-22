@@ -1,13 +1,16 @@
 use crate::database::gen_option_id;
-use crate::fields::{TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
+use crate::rows::Cell;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
+use std::ops::{Deref, DerefMut};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SelectTypeOption {
   pub options: Vec<SelectOption>,
   pub disable_color: bool,
 }
+
 impl SelectTypeOption {
   pub fn to_json_string(&self) -> String {
     serde_json::to_string(self).unwrap()
@@ -83,5 +86,84 @@ impl From<usize> for SelectOptionColor {
       8 => SelectOptionColor::Blue,
       _ => SelectOptionColor::Purple,
     }
+  }
+}
+
+#[derive(Clone, Default, Debug)]
+pub struct SingleSelectTypeOption(pub SelectTypeOption);
+
+impl Deref for SingleSelectTypeOption {
+  type Target = SelectTypeOption;
+
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl DerefMut for SingleSelectTypeOption {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.0
+  }
+}
+
+impl From<TypeOptionData> for SingleSelectTypeOption {
+  fn from(data: TypeOptionData) -> Self {
+    SingleSelectTypeOption(SelectTypeOption::from(data))
+  }
+}
+
+impl From<SingleSelectTypeOption> for TypeOptionData {
+  fn from(data: SingleSelectTypeOption) -> Self {
+    data.0.into()
+  }
+}
+
+impl StringifyTypeOption for SingleSelectTypeOption {
+  fn stringify_cell(&self, cell: &Cell) -> String {
+    todo!()
+  }
+
+  fn stringify_text(&self, text: &str) -> String {
+    todo!()
+  }
+}
+
+// Multiple select
+#[derive(Clone, Default, Debug)]
+pub struct MultiSelectTypeOption(pub SelectTypeOption);
+
+impl Deref for MultiSelectTypeOption {
+  type Target = SelectTypeOption;
+
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl DerefMut for MultiSelectTypeOption {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.0
+  }
+}
+
+impl From<TypeOptionData> for MultiSelectTypeOption {
+  fn from(data: TypeOptionData) -> Self {
+    MultiSelectTypeOption(SelectTypeOption::from(data))
+  }
+}
+
+impl From<MultiSelectTypeOption> for TypeOptionData {
+  fn from(data: MultiSelectTypeOption) -> Self {
+    data.0.into()
+  }
+}
+
+impl StringifyTypeOption for MultiSelectTypeOption {
+  fn stringify_cell(&self, cell: &Cell) -> String {
+    todo!()
+  }
+
+  fn stringify_text(&self, text: &str) -> String {
+    todo!()
   }
 }
