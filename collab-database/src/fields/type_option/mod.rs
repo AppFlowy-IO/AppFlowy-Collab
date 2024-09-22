@@ -1,6 +1,7 @@
 pub mod date_type_option;
 pub mod number_type_option;
 pub mod select_type_option;
+mod timestamp_type_option;
 pub mod url_type_option;
 
 use std::collections::HashMap;
