@@ -60,13 +60,6 @@ impl From<NumberTypeOption> for TypeOptionData {
 }
 
 impl StringifyTypeOption for NumberTypeOption {
-  fn stringify_cell(&self, cell: &Cell) -> String {
-    match cell.get_as::<String>(CELL_DATA) {
-      None => "".to_string(),
-      Some(s) => Self::stringify_text(self, &s),
-    }
-  }
-
   fn stringify_text(&self, text: &str) -> String {
     match self.format_cell_data(text) {
       Ok(cell_data) => cell_data.to_string(),

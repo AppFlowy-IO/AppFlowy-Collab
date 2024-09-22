@@ -1,13 +1,15 @@
 pub mod number_type_option;
 pub mod select_type_option;
 pub mod time_type_option;
+mod url_type_option;
 
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
 use crate::rows::Cell;
+use crate::template::entity::CELL_DATA;
 use collab::preclude::{Any, FillRef, Map, MapRef, ReadTxn, ToJson, TransactionMut};
-use collab::util::AnyExt;
+use collab::util::{AnyExt, AnyMapExt};
 use serde::{Deserialize, Serialize};
 
 /// It's used to store lists of field's type option data
@@ -97,6 +99,11 @@ pub type TypeOptionDataBuilder = HashMap<String, Any>;
 pub type TypeOptionUpdate = MapRef;
 
 pub trait StringifyTypeOption {
-  fn stringify_cell(&self, cell: &Cell) -> String;
+  fn stringify_cell(&self, cell: &Cell) -> String {
+    match cell.get_as::<String>(CELL_DATA) {
+      None => "".to_string(),
+      Some(s) => Self::stringify_text(self, &s),
+    }
+  }
   fn stringify_text(&self, text: &str) -> String;
 }

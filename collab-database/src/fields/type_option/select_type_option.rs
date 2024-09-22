@@ -16,13 +16,6 @@ pub struct SelectTypeOption {
 }
 
 impl StringifyTypeOption for SelectTypeOption {
-  fn stringify_cell(&self, cell: &Cell) -> String {
-    match cell.get_as::<String>(CELL_DATA) {
-      None => "".to_string(),
-      Some(s) => Self::stringify_text(self, &s),
-    }
-  }
-
   fn stringify_text(&self, text: &str) -> String {
     let ids = SelectOptionIds::from_str(text).unwrap_or_default().0;
     if ids.is_empty() {
