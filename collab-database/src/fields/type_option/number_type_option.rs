@@ -2,6 +2,8 @@
 
 use crate::error::DatabaseError;
 use crate::fields::number_type_option::number_currency::Currency;
+use crate::fields::{TypeOptionData, TypeOptionDataBuilder};
+use collab::preclude::Any;
 use fancy_regex::Regex;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
@@ -10,8 +12,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+use yrs::encoding::serde::from_any;
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NumberTypeOption {
   #[serde(default, deserialize_with = "number_format_from_i64")]
   pub format: NumberFormat,
@@ -21,6 +24,36 @@ pub struct NumberTypeOption {
   pub symbol: String,
   #[serde(default)]
   pub name: String,
+}
+
+impl Default for NumberTypeOption {
+  fn default() -> Self {
+    let format = NumberFormat::default();
+    let symbol = format.symbol();
+    NumberTypeOption {
+      format,
+      scale: 0,
+      symbol,
+      name: "Number".to_string(),
+    }
+  }
+}
+
+impl From<TypeOptionData> for NumberTypeOption {
+  fn from(data: TypeOptionData) -> Self {
+    from_any(&Any::from(data)).unwrap()
+  }
+}
+
+impl From<NumberTypeOption> for TypeOptionData {
+  fn from(data: NumberTypeOption) -> Self {
+    TypeOptionDataBuilder::from([
+      ("format".into(), Any::BigInt(data.format.value())),
+      ("scale".into(), Any::BigInt(data.scale as i64)),
+      ("name".into(), data.name.into()),
+      ("symbol".into(), data.symbol.into()),
+    ])
+  }
 }
 
 impl NumberTypeOption {
