@@ -1,7 +1,9 @@
 use crate::database::gen_option_id;
+use crate::fields::{TypeOptionData, TypeOptionDataBuilder};
+use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SelectTypeOption {
   pub options: Vec<SelectOption>,
   pub disable_color: bool,
@@ -9,6 +11,22 @@ pub struct SelectTypeOption {
 impl SelectTypeOption {
   pub fn to_json_string(&self) -> String {
     serde_json::to_string(self).unwrap()
+  }
+}
+
+impl From<TypeOptionData> for SelectTypeOption {
+  fn from(data: TypeOptionData) -> Self {
+    data
+      .get_as::<String>("content")
+      .map(|s| serde_json::from_str::<SelectTypeOption>(&s).unwrap_or_default())
+      .unwrap_or_default()
+  }
+}
+
+impl From<SelectTypeOption> for TypeOptionData {
+  fn from(data: SelectTypeOption) -> Self {
+    let content = serde_json::to_string(&data).unwrap_or_default();
+    TypeOptionDataBuilder::from([("content".into(), content.into())])
   }
 }
 
