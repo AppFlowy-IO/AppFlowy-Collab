@@ -1,14 +1,42 @@
 use crate::database::gen_option_id;
+use crate::entity::FieldType;
+use crate::error::DatabaseError;
 use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
-use crate::rows::Cell;
+use crate::rows::{new_cell_builder, Cell};
+use crate::template::entity::CELL_DATA;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
+use std::str::FromStr;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SelectTypeOption {
   pub options: Vec<SelectOption>,
   pub disable_color: bool,
+}
+
+impl StringifyTypeOption for SelectTypeOption {
+  fn stringify_cell(&self, cell: &Cell) -> String {
+    match cell.get_as::<String>(CELL_DATA) {
+      None => "".to_string(),
+      Some(s) => Self::stringify_text(self, &s),
+    }
+  }
+
+  fn stringify_text(&self, text: &str) -> String {
+    let ids = SelectOptionIds::from(text).0;
+    let options = ids
+      .iter()
+      .flat_map(|option_id| {
+        self
+          .options
+          .iter()
+          .find(|option| &option.id == option_id)
+          .map(|option| option.name)
+      })
+      .collect::<Vec<_>>();
+    options.into_iter().join(", ")
+  }
 }
 
 impl SelectTypeOption {
@@ -118,16 +146,6 @@ impl From<SingleSelectTypeOption> for TypeOptionData {
   }
 }
 
-impl StringifyTypeOption for SingleSelectTypeOption {
-  fn stringify_cell(&self, cell: &Cell) -> String {
-    todo!()
-  }
-
-  fn stringify_text(&self, text: &str) -> String {
-    todo!()
-  }
-}
-
 // Multiple select
 #[derive(Clone, Default, Debug)]
 pub struct MultiSelectTypeOption(pub SelectTypeOption);
@@ -158,12 +176,42 @@ impl From<MultiSelectTypeOption> for TypeOptionData {
   }
 }
 
-impl StringifyTypeOption for MultiSelectTypeOption {
-  fn stringify_cell(&self, cell: &Cell) -> String {
-    todo!()
+#[derive(Default, Clone, Debug)]
+pub struct SelectOptionIds(Vec<String>);
+impl SelectOptionIds {
+  pub fn new() -> Self {
+    Self::default()
   }
+  pub fn into_inner(self) -> Vec<String> {
+    self.0
+  }
+  pub fn to_cell_data(&self, field_type: FieldType) -> Cell {
+    let mut cell = new_cell_builder(field_type);
+    cell.insert(CELL_DATA.into(), self.to_string().into());
+    cell
+  }
+}
 
-  fn stringify_text(&self, text: &str) -> String {
-    todo!()
+pub const SELECTION_IDS_SEPARATOR: &str = ",";
+
+impl From<&Cell> for SelectOptionIds {
+  fn from(cell: &Cell) -> Self {
+    let value: String = cell.get_as(CELL_DATA).unwrap_or_default();
+    Self::from_str(&value).unwrap_or_default()
+  }
+}
+
+impl FromStr for SelectOptionIds {
+  type Err = DatabaseError;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    if s.is_empty() {
+      return Ok(Self(vec![]));
+    }
+    let ids = s
+      .split(SELECTION_IDS_SEPARATOR)
+      .map(|id| id.to_string())
+      .collect::<Vec<String>>();
+    Ok(Self(ids))
   }
 }
