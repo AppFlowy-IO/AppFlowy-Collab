@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use std::str::FromStr;
-use strum::IntoEnumIterator;
+pub use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use tracing::error;
 use yrs::Any;
