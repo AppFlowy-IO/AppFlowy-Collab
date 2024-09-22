@@ -1,10 +1,17 @@
 #![allow(clippy::upper_case_acronyms)]
+
+use crate::error::DatabaseError;
+use crate::fields::number_type_option::number_currency::Currency;
+use fancy_regex::Regex;
 use lazy_static::lazy_static;
-use rusty_money::define_currency_set;
+use rust_decimal::Decimal;
+use rusty_money::{define_currency_set, Money};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::str::FromStr;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
-#[derive(Clone, Debug, Serialize, Deserialize)]
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct NumberTypeOption {
   #[serde(default, deserialize_with = "number_format_from_i64")]
   pub format: NumberFormat,
@@ -16,6 +23,66 @@ pub struct NumberTypeOption {
   pub name: String,
 }
 
+impl NumberTypeOption {
+  pub fn new() -> Self {
+    Self::default()
+  }
+
+  pub fn format_cell_data<T: AsRef<str>>(
+    &self,
+    num_cell_data: T,
+  ) -> Result<NumberCellFormat, DatabaseError> {
+    match self.format {
+      NumberFormat::Num => {
+        if SCIENTIFIC_NOTATION_REGEX
+          .is_match(num_cell_data.as_ref())
+          .unwrap()
+        {
+          match Decimal::from_scientific(&num_cell_data.as_ref().to_lowercase()) {
+            Ok(value, ..) => Ok(NumberCellFormat::from_decimal(value)),
+            Err(_) => Ok(NumberCellFormat::new()),
+          }
+        } else {
+          // Test the input string is start with dot and only contains number.
+          // If it is, add a 0 before the dot. For example, ".123" -> "0.123"
+          let num_str = match START_WITH_DOT_NUM_REGEX.captures(num_cell_data.as_ref()) {
+            Ok(Some(captures)) => match captures.get(0).map(|m| m.as_str().to_string()) {
+              Some(s) => {
+                format!("0{}", s)
+              },
+              None => "".to_string(),
+            },
+            // Extract the number from the string.
+            // For example, "123abc" -> "123". check out the number_type_option_input_test test for
+            // more examples.
+            _ => match EXTRACT_NUM_REGEX.captures(num_cell_data.as_ref()) {
+              Ok(Some(captures)) => captures
+                .get(0)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default(),
+              _ => "".to_string(),
+            },
+          };
+
+          match Decimal::from_str(&num_str) {
+            Ok(decimal, ..) => Ok(NumberCellFormat::from_decimal(decimal)),
+            Err(_) => Ok(NumberCellFormat::new()),
+          }
+        }
+      },
+      _ => {
+        // If the format is not number, use the format string to format the number.
+        NumberCellFormat::from_format_str(num_cell_data.as_ref(), &self.format)
+      },
+    }
+  }
+
+  pub fn set_format(&mut self, format: NumberFormat) {
+    self.format = format;
+    self.symbol = format.symbol();
+  }
+}
+
 fn number_format_from_i64<'de, D>(deserializer: D) -> Result<NumberFormat, D::Error>
 where
   D: Deserializer<'de>,
@@ -24,7 +91,111 @@ where
   Ok(NumberFormat::from(value))
 }
 
+#[derive(Debug, Default)]
+pub struct NumberCellFormat {
+  decimal: Option<Decimal>,
+  money: Option<String>,
+}
+
+impl NumberCellFormat {
+  pub fn new() -> Self {
+    Self {
+      decimal: Default::default(),
+      money: None,
+    }
+  }
+
+  /// The num_str might contain currency symbol, e.g. $1,000.00
+  pub fn from_format_str(num_str: &str, format: &NumberFormat) -> Result<Self, DatabaseError> {
+    if num_str.is_empty() {
+      return Ok(Self::default());
+    }
+    // If the first char is not '-', then it is a sign.
+    let sign_positive = match num_str.find('-') {
+      None => true,
+      Some(offset) => offset != 0,
+    };
+
+    let num_str = auto_fill_zero_at_start_if_need(num_str);
+    let num_str = extract_number(&num_str);
+    match Decimal::from_str(&num_str) {
+      Ok(mut decimal) => {
+        decimal.set_sign_positive(sign_positive);
+        let money = Money::from_decimal(decimal, format.currency());
+        Ok(Self::from_money(money))
+      },
+      Err(_) => match Money::from_str(&num_str, format.currency()) {
+        Ok(money) => Ok(Self::from_money(money)),
+        Err(_) => Ok(Self::default()),
+      },
+    }
+  }
+
+  pub fn from_decimal(decimal: Decimal) -> Self {
+    Self {
+      decimal: Some(decimal),
+      money: None,
+    }
+  }
+
+  pub fn from_money(money: Money<Currency>) -> Self {
+    Self {
+      decimal: Some(*money.amount()),
+      money: Some(money.to_string()),
+    }
+  }
+
+  pub fn decimal(&self) -> &Option<Decimal> {
+    &self.decimal
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.decimal.is_none()
+  }
+
+  pub fn to_unformatted_string(&self) -> String {
+    match self.decimal {
+      None => String::default(),
+      Some(decimal) => decimal.to_string(),
+    }
+  }
+}
+
+fn auto_fill_zero_at_start_if_need(num_str: &str) -> String {
+  match START_WITH_DOT_NUM_REGEX.captures(num_str) {
+    Ok(Some(captures)) => match captures.get(0).map(|m| m.as_str().to_string()) {
+      Some(s) => format!("0{}", s),
+      None => num_str.to_string(),
+    },
+    _ => num_str.to_string(),
+  }
+}
+
+fn extract_number(num_str: &str) -> String {
+  let mut matches = EXTRACT_NUM_REGEX.find_iter(num_str);
+  let mut values = vec![];
+  while let Some(Ok(m)) = matches.next() {
+    values.push(m.as_str().to_string());
+  }
+  values.join("")
+}
+
+impl ToString for NumberCellFormat {
+  fn to_string(&self) -> String {
+    match &self.money {
+      None => match self.decimal {
+        None => String::default(),
+        Some(decimal) => decimal.to_string(),
+      },
+      Some(money) => money.to_string(),
+    }
+  }
+}
+
 lazy_static! {
+  static ref SCIENTIFIC_NOTATION_REGEX: Regex = Regex::new(r"([+-]?\d*\.?\d+)e([+-]?\d+)").unwrap();
+  pub(crate) static ref EXTRACT_NUM_REGEX: Regex = Regex::new(r"-?\d+(\.\d+)?").unwrap();
+  pub(crate) static ref START_WITH_DOT_NUM_REGEX: Regex = Regex::new(r"^\.\d+").unwrap();
   pub static ref CURRENCY_SYMBOL: Vec<String> = NumberFormat::iter()
     .map(|format| format.symbol())
     .collect::<Vec<String>>();
