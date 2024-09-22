@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use std::str::FromStr;
+use strum_macros::EnumIter;
 use tracing::error;
 use yrs::Any;
 
@@ -223,7 +224,7 @@ impl From<DateTypeOption> for TypeOptionData {
   }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Serialize, Deserialize, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Serialize, Deserialize, Default, EnumIter)]
 pub enum TimeFormat {
   TwelveHour = 0,
   #[default]
@@ -256,7 +257,7 @@ impl TimeFormat {
   }
 }
 
-#[derive(Clone, Debug, Copy, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Copy, EnumIter, Serialize, Deserialize, Default)]
 pub enum DateFormat {
   Local = 0,
   US = 1,
