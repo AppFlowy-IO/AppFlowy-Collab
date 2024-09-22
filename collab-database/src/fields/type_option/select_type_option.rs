@@ -1,5 +1,5 @@
 use crate::database::gen_option_id;
-use crate::entity::FieldType;
+
 use crate::error::DatabaseError;
 use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
 use crate::rows::{new_cell_builder, Cell};
@@ -189,7 +189,7 @@ impl SelectOptionIds {
   pub fn into_inner(self) -> Vec<String> {
     self.0
   }
-  pub fn to_cell_data(&self, field_type: FieldType) -> Cell {
+  pub fn to_cell_data(&self, field_type: impl Into<i64>) -> Cell {
     let mut cell = new_cell_builder(field_type);
     cell.insert(CELL_DATA.into(), self.to_string().into());
     cell
