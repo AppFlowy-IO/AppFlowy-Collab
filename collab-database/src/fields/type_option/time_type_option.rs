@@ -88,7 +88,7 @@ impl DateTypeOption {
     serde_json::to_string(self).unwrap()
   }
 
-  fn formatted_date_time_from_timestamp(&self, timestamp: &Option<i64>) -> (String, String) {
+  pub fn formatted_date_time_from_timestamp(&self, timestamp: &Option<i64>) -> (String, String) {
     if let Some(timestamp) = timestamp {
       match chrono::DateTime::from_timestamp(*timestamp, 0) {
         None => ("".to_owned(), "".to_owned()),
