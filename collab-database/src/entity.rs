@@ -13,6 +13,7 @@ use crate::views::{
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
 use yrs::{Any, Out};
 
@@ -418,7 +419,7 @@ impl From<usize> for SelectOptionColor {
   }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum FileUploadType {
   #[default]

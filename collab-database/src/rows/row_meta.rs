@@ -1,5 +1,6 @@
 use collab::preclude::{Map, MapExt, MapRef, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
 
 use crate::{
@@ -97,7 +98,7 @@ pub struct RowCover {
   pub cover_type: CoverType,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum CoverType {
   #[default]
