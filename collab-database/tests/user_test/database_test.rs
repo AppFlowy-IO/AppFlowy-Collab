@@ -1,6 +1,6 @@
 use collab_database::database::gen_database_view_id;
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams, FileUploadType};
-use collab_database::rows::{CreateRowParams, Row, RowCover};
+use collab_database::rows::{CoverType, CreateRowParams, Row, RowCover};
 use futures::StreamExt;
 
 use crate::user_test::helper::{
@@ -370,8 +370,9 @@ async fn reopen_database_test() {
   let row_orders = database.read().await.get_all_row_orders().await;
   for (index, row_order) in row_orders.into_iter().enumerate() {
     let cover = RowCover {
-      url: format!("cover-{}", index),
+      data: format!("cover-{}", index),
       upload_type: FileUploadType::LocalFile,
+      cover_type: CoverType::FileCover,
     };
 
     database
@@ -415,7 +416,7 @@ async fn reopen_database_test() {
     assert_eq!(row_meta.icon_url, Some(format!("icon-{}", index)));
 
     let cover = row_meta.cover.unwrap();
-    assert_eq!(cover.url, format!("cover-{}", index));
+    assert_eq!(cover.data, format!("cover-{}", index));
   }
   let _ = database.read().await.to_json_value().await;
 }

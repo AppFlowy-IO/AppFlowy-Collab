@@ -1,5 +1,6 @@
 use collab::preclude::{Map, MapExt, MapRef, ReadTxn, TransactionMut};
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
 
 use crate::{
@@ -92,8 +93,19 @@ impl<'a, 'b> RowMetaUpdate<'a, 'b> {
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct RowCover {
-  pub url: String,
+  pub data: String,
   pub upload_type: FileUploadType,
+  pub cover_type: CoverType,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum CoverType {
+  #[default]
+  ColorCover = 0,
+  FileCover = 1,
+  AssetCover = 2,
+  GradientCover = 3,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
