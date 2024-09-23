@@ -6,6 +6,8 @@ use collab_importer::notion::page::NotionView;
 use collab_importer::notion::NotionImporter;
 use nanoid::nanoid;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use collab_database::entity::FieldType;
+use collab_database::entity::FieldType::*;
 
 #[tokio::test]
 async fn import_blog_post_document_test() {
@@ -177,28 +179,35 @@ async fn check_project_database(linked_view: &NotionView) {
   assert_eq!(fields.len(), csv_fields.len());
   assert_eq!(fields.len(), 13);
 
-  // let expected_file_type = vec![
-  //   RichText,
-  //   SingleSelect,
-  //   SingleSelect,
-  //   MultiSelect,
-  //   SingleSelect,
-  //   RichText,
-  //   RichText,
-  //   RichText,
-  //   RichText,
-  //   MultiSelect,
-  //   DateTime,
-  //   Checkbox,
-  //   RichText,
-  // ];
-  // for (index, field) in fields.iter().enumerate() {
-  //   assert_eq!(FieldType::from(field.field_type), expected_file_type[index]);
-  // }
+  let expected_file_type = vec![
+    RichText,
+    SingleSelect,
+    SingleSelect,
+    MultiSelect,
+    SingleSelect,
+    RichText,
+    RichText,
+    RichText,
+    RichText,
+    MultiSelect,
+    DateTime,
+    Checkbox,
+    RichText,
+  ];
+
+  fields.iter().map(|field| {
+    let field_type = FieldType::from(field.field_type);
+    field.get_type_option(field_type.type_id()).unwrap()
+  })
+
+  for (index, field) in fields.iter().enumerate() {
+    assert_eq!(FieldType::from(field.field_type), expected_file_type[index]);
+  }
 
   for (index, field) in csv_fields.iter().enumerate() {
     assert_eq!(&fields[index].name, field);
   }
+
   for (row_index, row) in rows.into_iter().enumerate() {
     let row = row.unwrap();
     assert_eq!(row.cells.len(), fields.len());

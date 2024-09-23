@@ -1,6 +1,6 @@
 use crate::entity::FieldType;
 use crate::fields::date_type_option::{DateFormat, TimeFormat};
-use crate::fields::{TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
 use chrono::{DateTime, Local, Offset};
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
@@ -14,6 +14,17 @@ pub struct TimestampTypeOption {
   pub field_type: i64,
 }
 
+impl StringifyTypeOption for TimestampTypeOption {
+  fn stringify_text(&self, text: &str) -> String {
+    let (date_string, time_string) =
+      self.formatted_date_time_from_timestamp(&text.parse::<i64>().ok());
+    if self.include_time {
+      format!("{} {}", date_string, time_string)
+    } else {
+      date_string
+    }
+  }
+}
 impl TimestampTypeOption {
   pub fn new<T: Into<i64>>(field_type: T) -> Self {
     Self {

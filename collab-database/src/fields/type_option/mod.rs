@@ -1,12 +1,21 @@
+mod checkbox_type_option;
 pub mod date_type_option;
 pub mod number_type_option;
 pub mod select_type_option;
+mod text_type_option;
 pub mod timestamp_type_option;
 pub mod url_type_option;
 
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
+use crate::entity::FieldType;
+use crate::fields::date_type_option::{DateTypeOption, TimeTypeOption};
+use crate::fields::number_type_option::NumberTypeOption;
+use crate::fields::select_type_option::{MultiSelectTypeOption, SingleSelectTypeOption};
+use crate::fields::type_option::checkbox_type_option::CheckboxTypeOption;
+use crate::fields::type_option::text_type_option::RichTextTypeOption;
+use crate::fields::url_type_option::URLTypeOption;
 use crate::rows::Cell;
 use crate::template::entity::CELL_DATA;
 use collab::preclude::{Any, FillRef, Map, MapRef, ReadTxn, ToJson, TransactionMut};
@@ -99,6 +108,7 @@ pub type TypeOptionData = HashMap<String, Any>;
 pub type TypeOptionDataBuilder = HashMap<String, Any>;
 pub type TypeOptionUpdate = MapRef;
 
+/// It's used to parse each cell into readable text
 pub trait StringifyTypeOption {
   fn stringify_cell(&self, cell: &Cell) -> String {
     match cell.get_as::<String>(CELL_DATA) {
@@ -107,4 +117,26 @@ pub trait StringifyTypeOption {
     }
   }
   fn stringify_text(&self, text: &str) -> String;
+}
+pub fn stringify_type_option(
+  type_option_data: TypeOptionData,
+  field_type: &FieldType,
+) -> Option<Box<dyn StringifyTypeOption>> {
+  match field_type {
+    FieldType::RichText => Some(Box::new(RichTextTypeOption::from(type_option_data))),
+    FieldType::Number => Some(Box::new(NumberTypeOption::from(type_option_data))),
+    FieldType::DateTime => Some(Box::new(DateTypeOption::from(type_option_data))),
+    FieldType::SingleSelect => Some(Box::new(SingleSelectTypeOption::from(type_option_data))),
+    FieldType::MultiSelect => Some(Box::new(MultiSelectTypeOption::from(type_option_data))),
+    FieldType::Checkbox => Some(Box::new(CheckboxTypeOption::from(type_option_data))),
+    FieldType::URL => Some(Box::new(URLTypeOption::from(type_option_data))),
+    FieldType::Time => Some(Box::new(TimeTypeOption::from(type_option_data))),
+
+    FieldType::Checklist
+    | FieldType::LastEditedTime
+    | FieldType::CreatedTime
+    | FieldType::Relation
+    | FieldType::Summary
+    | FieldType::Translate => None,
+  }
 }

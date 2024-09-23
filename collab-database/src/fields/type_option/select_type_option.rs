@@ -117,6 +117,12 @@ impl From<usize> for SelectOptionColor {
 #[derive(Clone, Default, Debug)]
 pub struct SingleSelectTypeOption(pub SelectTypeOption);
 
+impl StringifyTypeOption for SingleSelectTypeOption {
+  fn stringify_text(&self, text: &str) -> String {
+    self.0.stringify_text(text)
+  }
+}
+
 impl Deref for SingleSelectTypeOption {
   type Target = SelectTypeOption;
 
@@ -146,6 +152,11 @@ impl From<SingleSelectTypeOption> for TypeOptionData {
 // Multiple select
 #[derive(Clone, Default, Debug)]
 pub struct MultiSelectTypeOption(pub SelectTypeOption);
+impl StringifyTypeOption for MultiSelectTypeOption {
+  fn stringify_text(&self, text: &str) -> String {
+    self.0.stringify_text(text)
+  }
+}
 
 impl Deref for MultiSelectTypeOption {
   type Target = SelectTypeOption;
