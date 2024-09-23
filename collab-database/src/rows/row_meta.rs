@@ -92,8 +92,19 @@ impl<'a, 'b> RowMetaUpdate<'a, 'b> {
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct RowCover {
-  pub url: String,
+  pub data: String,
   pub upload_type: FileUploadType,
+  pub cover_type: CoverType,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum CoverType {
+  #[default]
+  ColorCover = 0,
+  FileCover = 1,
+  AssetCover = 2,
+  GradientCover = 3,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
