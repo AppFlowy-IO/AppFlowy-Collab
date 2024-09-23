@@ -2,14 +2,6 @@
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
 
 pub fn cast_string_to_timestamp(cell: &str) -> Option<i64> {
-  // Try to parse as a UNIX timestamp directly
-  if let Ok(unix_timestamp) = cell.parse::<i64>() {
-    return Utc
-      .timestamp_opt(unix_timestamp, 0)
-      .single()
-      .map(|value| value.timestamp());
-  }
-
   // Try to parse as datetime with time formats
 
   // Year-Month-Day Hour:Minute (24-hour format)

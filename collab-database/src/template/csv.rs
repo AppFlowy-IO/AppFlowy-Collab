@@ -84,12 +84,19 @@ fn detect_field_type_from_cells(cells: &[&str]) -> FieldType {
     .cloned()
     .collect::<Vec<&str>>();
 
+  // Do not chang the order of the following checks
+
   if is_link_field(&cells) {
     return FieldType::URL;
   }
 
   if is_checkbox_cell(&cells) {
     return FieldType::Checkbox;
+  }
+
+  if is_date_cell(&cells) {
+    // TODO(nathan): handle this case: April 23, 2024 → May 22, 2024
+    return FieldType::DateTime;
   }
 
   if is_single_select_field(&cells) {
@@ -100,24 +107,17 @@ fn detect_field_type_from_cells(cells: &[&str]) -> FieldType {
     return FieldType::MultiSelect;
   }
 
-  if is_date_cell(&cells) {
-    return FieldType::DateTime;
-  }
-
   FieldType::RichText
 }
 
 fn is_date_cell(cells: &[&str]) -> bool {
-  // Iterate through each cell
   for &cell in cells {
     // If `cast_string_to_timestamp` returns `None`, this is not a date cell
-    if cast_string_to_timestamp(cell).is_none() {
-      return false;
+    if cast_string_to_timestamp(cell).is_some() {
+      return true;
     }
   }
-
-  // If all cells return `Some` from `cast_string_to_timestamp`, return true
-  true
+  false
 }
 
 /// Detect if a column is a checkbox field.

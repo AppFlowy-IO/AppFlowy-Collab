@@ -294,7 +294,7 @@ impl DateFormat {
       DateFormat::Local => "%m/%d/%Y",
       DateFormat::US => "%Y/%m/%d",
       DateFormat::ISO => "%Y-%m-%d",
-      DateFormat::Friendly => "%b %d, %Y",
+      DateFormat::Friendly => "%B %-d, %Y",
       DateFormat::DayMonthYear => "%d/%m/%Y",
     }
   }

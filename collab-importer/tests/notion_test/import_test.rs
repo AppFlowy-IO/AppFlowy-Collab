@@ -1,13 +1,17 @@
 use crate::util::{parse_csv, print_view, setup_log, unzip};
-use collab_database::template::entity::CELL_DATA;
+use collab_database::database::Database;
+use collab_database::entity::FieldType;
+use collab_database::entity::FieldType::*;
+use collab_database::error::DatabaseError;
+use collab_database::fields::{Field, StringifyTypeOption};
+use collab_database::rows::Row;
 use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_from_block_data};
 use collab_document::importer::define::{BlockType, URL_FIELD};
 use collab_importer::notion::page::NotionView;
 use collab_importer::notion::NotionImporter;
 use nanoid::nanoid;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
-use collab_database::entity::FieldType;
-use collab_database::entity::FieldType::*;
+use std::collections::HashMap;
 
 #[tokio::test]
 async fn import_blog_post_document_test() {
@@ -87,7 +91,7 @@ async fn import_project_and_task_test() {
   assert_eq!(linked_views[0].notion_name, "Tasks");
   assert_eq!(linked_views[1].notion_name, "Projects");
 
-  // check_database_view(&linked_views[0], "Tasks", 17, 13).await;
+  check_task_database(&linked_views[0]).await;
   check_project_database(&linked_views[1]).await;
 }
 
@@ -128,44 +132,40 @@ async fn check_project_and_task_document(
   assert!(cloned_notion_views2.is_empty());
 }
 
-async fn check_database_view(
-  linked_view: &NotionView,
-  expected_name: &str,
-  expected_rows_count: usize,
-  expected_fields_count: usize,
-) {
-  assert_eq!(linked_view.notion_name, expected_name);
+async fn check_task_database(linked_view: &NotionView) {
+  assert_eq!(linked_view.notion_name, "Tasks");
 
   let (csv_fields, csv_rows) = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
   let database = linked_view.as_database().await.unwrap();
   let fields = database.get_fields_in_view(&database.get_inline_view_id(), None);
   let rows = database.collect_all_rows().await;
-  assert_eq!(rows.len(), expected_rows_count);
+  assert_eq!(rows.len(), 17);
   assert_eq!(fields.len(), csv_fields.len());
-  assert_eq!(fields.len(), expected_fields_count);
+  assert_eq!(fields.len(), 13);
 
+  let expected_file_type = vec![
+    RichText,
+    SingleSelect,
+    SingleSelect,
+    DateTime,
+    SingleSelect,
+    MultiSelect,
+    SingleSelect,
+    SingleSelect,
+    RichText,
+    RichText,
+    RichText,
+    DateTime,
+    SingleSelect,
+  ];
+  for (index, field) in fields.iter().enumerate() {
+    assert_eq!(FieldType::from(field.field_type), expected_file_type[index]);
+  }
   for (index, field) in csv_fields.iter().enumerate() {
     assert_eq!(&fields[index].name, field);
   }
-  for (row_index, row) in rows.into_iter().enumerate() {
-    let row = row.unwrap();
-    assert_eq!(row.cells.len(), fields.len());
-    for (field_index, field) in fields.iter().enumerate() {
-      let cell = row
-        .cells
-        .get(&field.id)
-        .unwrap()
-        .get(CELL_DATA)
-        .cloned()
-        .unwrap();
-      let cell_data = cell.cast::<String>().unwrap();
-      assert_eq!(
-        cell_data, csv_rows[row_index][field_index],
-        "Row: {}, Field: {}:{}",
-        row_index, field.name, field_index
-      );
-    }
-  }
+
+  assert_database_rows_with_csv_rows(csv_rows, database, fields, rows);
 }
 
 async fn check_project_database(linked_view: &NotionView) {
@@ -190,40 +190,56 @@ async fn check_project_database(linked_view: &NotionView) {
     RichText,
     RichText,
     MultiSelect,
-    DateTime,
+    RichText,
     Checkbox,
     RichText,
   ];
-
-  fields.iter().map(|field| {
-    let field_type = FieldType::from(field.field_type);
-    field.get_type_option(field_type.type_id()).unwrap()
-  })
-
   for (index, field) in fields.iter().enumerate() {
     assert_eq!(FieldType::from(field.field_type), expected_file_type[index]);
   }
-
   for (index, field) in csv_fields.iter().enumerate() {
     assert_eq!(&fields[index].name, field);
   }
+  assert_database_rows_with_csv_rows(csv_rows, database, fields, rows);
+}
+
+fn assert_database_rows_with_csv_rows(
+  csv_rows: Vec<Vec<String>>,
+  database: Database,
+  fields: Vec<Field>,
+  rows: Vec<Result<Row, DatabaseError>>,
+) {
+  let type_option_by_field_id = fields
+    .iter()
+    .map(|field| {
+      (
+        field.id.clone(),
+        match database.get_stringify_type_option(&field.id) {
+          None => {
+            panic!("Field {:?} doesn't have type option", field)
+          },
+          Some(ty) => ty,
+        },
+      )
+    })
+    .collect::<HashMap<String, Box<dyn StringifyTypeOption>>>();
 
   for (row_index, row) in rows.into_iter().enumerate() {
     let row = row.unwrap();
     assert_eq!(row.cells.len(), fields.len());
     for (field_index, field) in fields.iter().enumerate() {
-      let cell = row
-        .cells
-        .get(&field.id)
-        .unwrap()
-        .get(CELL_DATA)
-        .cloned()
-        .unwrap();
-      let cell_data = cell.cast::<String>().unwrap();
+      let cell = row.cells.get(&field.id).unwrap();
+      let type_option = type_option_by_field_id[&field.id].as_ref();
+      let cell_data = type_option.stringify_cell(cell);
       assert_eq!(
-        cell_data, csv_rows[row_index][field_index],
-        "Row: {}, Field: {}:{}",
-        row_index, field.name, field_index
+        cell_data,
+        csv_rows[row_index][field_index],
+        "current:{}, expected:{}\nRow: {}, Field: {}, type: {:?}",
+        cell_data,
+        csv_rows[row_index][field_index],
+        row_index,
+        field.name,
+        FieldType::from(field.field_type)
       );
     }
   }

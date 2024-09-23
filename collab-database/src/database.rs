@@ -510,14 +510,13 @@ impl Database {
     self.body.block.get_row_meta(row_id).await
   }
 
-  pub async fn get_stringify_type_option(
-    &self,
-    field_id: &str,
-  ) -> Option<Box<dyn StringifyTypeOption>> {
+  pub fn get_stringify_type_option(&self, field_id: &str) -> Option<Box<dyn StringifyTypeOption>> {
     let txn = self.collab.transact();
     let field = self.body.fields.get_field(&txn, field_id)?;
     let field_type = FieldType::from(field.field_type);
-    let type_option = field.get_any_type_option(field_type.type_id())?;
+    let type_option = field
+      .get_any_type_option(field_type.type_id())
+      .unwrap_or_default();
     stringify_type_option(type_option, &field_type)
   }
 
