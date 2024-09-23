@@ -2,8 +2,10 @@ use crate::database_test::helper::{
   create_database, create_database_with_default_data, create_row,
 };
 use collab_database::database::gen_row_id;
-use collab_database::entity::{CoverType, CreateViewParams, FileUploadType};
-use collab_database::rows::{meta_id_from_row_id, CreateRowParams, RowCover, RowId, RowMetaKey};
+use collab_database::entity::{CreateViewParams, FileUploadType};
+use collab_database::rows::{
+  meta_id_from_row_id, CoverType, CreateRowParams, RowCover, RowId, RowMetaKey,
+};
 use collab_database::views::OrderObjectPosition;
 use uuid::Uuid;
 
