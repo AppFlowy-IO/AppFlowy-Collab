@@ -12,6 +12,7 @@ use std::ops::{Deref, DerefMut};
 
 use crate::entity::FieldType;
 use crate::fields::date_type_option::{DateTypeOption, TimeTypeOption};
+use crate::fields::media_type_option::MediaTypeOption;
 use crate::fields::number_type_option::NumberTypeOption;
 use crate::fields::select_type_option::{MultiSelectTypeOption, SingleSelectTypeOption};
 use crate::fields::type_option::checkbox_type_option::CheckboxTypeOption;
@@ -132,13 +133,13 @@ pub fn stringify_type_option(
     FieldType::Checkbox => Some(Box::new(CheckboxTypeOption::from(type_option_data))),
     FieldType::URL => Some(Box::new(URLTypeOption::from(type_option_data))),
     FieldType::Time => Some(Box::new(TimeTypeOption::from(type_option_data))),
+    FieldType::Media => Some(Box::new(MediaTypeOption::from(type_option_data))),
 
     FieldType::Checklist
     | FieldType::LastEditedTime
     | FieldType::CreatedTime
     | FieldType::Relation
     | FieldType::Summary
-    | FieldType::Translate
-    | FieldType::Media => None,
+    | FieldType::Translate => None,
   }
 }

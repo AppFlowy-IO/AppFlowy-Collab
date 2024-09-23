@@ -3,6 +3,7 @@ use collab_database::database::Database;
 use collab_database::entity::FieldType;
 use collab_database::entity::FieldType::*;
 use collab_database::error::DatabaseError;
+use collab_database::fields::media_type_option::MediaCellData;
 use collab_database::fields::{Field, StringifyTypeOption};
 use collab_database::rows::Row;
 use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_from_block_data};
@@ -10,7 +11,7 @@ use collab_document::importer::define::{BlockType, URL_FIELD};
 use collab_importer::notion::page::NotionView;
 use collab_importer::notion::NotionImporter;
 use nanoid::nanoid;
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use std::collections::HashMap;
 
 #[tokio::test]
@@ -54,7 +55,6 @@ async fn import_blog_post_document_test() {
     }
   }
 
-  println!("Allowed URLs: {:?}", expected_urls);
   assert!(expected_urls.is_empty());
 }
 
@@ -91,7 +91,7 @@ async fn import_project_and_task_test() {
   assert_eq!(linked_views[0].notion_name, "Tasks");
   assert_eq!(linked_views[1].notion_name, "Projects");
 
-  // check_task_database(&linked_views[0]).await;
+  check_task_database(&linked_views[0]).await;
   check_project_database(&linked_views[1]).await;
 }
 
@@ -196,10 +196,11 @@ async fn check_project_database(linked_view: &NotionView) {
     MultiSelect,
     RichText,
     Checkbox,
-    RichText,
+    Media,
   ];
   for (index, field) in fields.iter().enumerate() {
     assert_eq!(FieldType::from(field.field_type), expected_file_type[index]);
+    // println!("{:?}", FieldType::from(field.field_type));
   }
   for (index, field) in csv_fields.iter().enumerate() {
     assert_eq!(&fields[index].name, field);
@@ -228,25 +229,41 @@ fn assert_database_rows_with_csv_rows(
     })
     .collect::<HashMap<String, Box<dyn StringifyTypeOption>>>();
 
+  let mut expected_files = HashMap::from([("DO010003572.jpeg", "http://test.appflowy.cloud/ef151418-41b1-4ca2-b190-3ed59a3bea76/v1/blob/ysINEn/TZQyERYXrrBq25cKsZVAvRqe9ZPTYNlG8EJfUioKruI=.jpeg"), ("appflowy_2x.png", "http://test.appflowy.cloud/ef151418-41b1-4ca2-b190-3ed59a3bea76/v1/blob/ysINEn/c9Ju1jv95fPw6irxJACDKPDox_-hfd-3_blIEapMaZc=.png"),]);
+
   for (row_index, row) in rows.into_iter().enumerate() {
     let row = row.unwrap();
     assert_eq!(row.cells.len(), fields.len());
     for (field_index, field) in fields.iter().enumerate() {
       let cell = row.cells.get(&field.id).unwrap();
+      let field_type = FieldType::from(field.field_type);
       let type_option = type_option_by_field_id[&field.id].as_ref();
       let cell_data = type_option.stringify_cell(cell);
-      assert_eq!(
-        cell_data,
-        csv_rows[row_index][field_index],
-        "current:{}, expected:{}\nRow: {}, Field: {}, type: {:?}",
-        cell_data,
-        csv_rows[row_index][field_index],
-        row_index,
-        field.name,
-        FieldType::from(field.field_type)
-      );
+
+      if matches!(field_type, FieldType::Media) {
+        let mut data = MediaCellData::from(cell);
+        if let Some(file) = data.files.pop() {
+          expected_files.remove(file.name.as_str()).unwrap();
+        }
+      } else {
+        assert_eq!(
+          cell_data,
+          percent_decode_str(&csv_rows[row_index][field_index])
+            .decode_utf8()
+            .unwrap()
+            .to_string(),
+          "current:{}, expected:{}\nRow: {}, Field: {}, type: {:?}",
+          cell_data,
+          csv_rows[row_index][field_index],
+          row_index,
+          field.name,
+          FieldType::from(field.field_type)
+        );
+      }
     }
   }
+
+  assert!(expected_files.is_empty());
 }
 
 #[tokio::test]

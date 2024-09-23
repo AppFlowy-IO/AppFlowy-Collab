@@ -168,7 +168,8 @@ pub(crate) fn process_entry(
       resources.extend(collect_entry_resources(
         workspace_id,
         parent_path,
-        parent_path.parent(),
+        None,
+        // parent_path.parent(),
       ));
 
       // when current file is csv, which means its children are rows

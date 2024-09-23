@@ -1,4 +1,5 @@
 use collab_importer::notion::page::NotionView;
+use percent_encoding::percent_decode_str;
 use std::fs::{create_dir_all, File};
 use std::io::copy;
 use std::path::{Path, PathBuf};
@@ -32,7 +33,7 @@ pub fn parse_csv(file_path: &PathBuf) -> (Vec<String>, Vec<Vec<String>>) {
     .map(|record| {
       record
         .into_iter()
-        .map(|s| s.to_string())
+        .filter_map(|s| Some(percent_decode_str(s).decode_utf8().ok()?.to_string()))
         .collect::<Vec<String>>()
     })
     .collect::<Vec<Vec<String>>>();

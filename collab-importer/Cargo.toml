@@ -26,8 +26,8 @@ fxhash = "0.2.1"
 tokio = { workspace = true, features = ["io-util", "fs"] }
 rayon = "1.10.0"
 sha2 = "0.10.8"
-hex = "0.4.3"
 base64 = "0.22.1"
+hex = "0.4.3"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }

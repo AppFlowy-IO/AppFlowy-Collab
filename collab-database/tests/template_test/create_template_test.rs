@@ -7,6 +7,7 @@ use futures::StreamExt;
 
 #[tokio::test]
 async fn create_template_test() {
+  let workspace_id = uuid::Uuid::new_v4().to_string();
   let expected_field_type = [
     FieldType::RichText,
     FieldType::SingleSelect,
@@ -20,42 +21,85 @@ async fn create_template_test() {
   let expected_field_name = ["name", "status", "user", "time", "tasks", "last modified"];
 
   let template = DatabaseTemplateBuilder::new()
-    .create_field("name", FieldType::RichText, true, |field_builder| {
-      field_builder
-        .create_cell("1th")
-        .create_cell("2th")
-        .create_cell("3th")
-    })
-    .create_field("status", FieldType::SingleSelect, false, |field_builder| {
-      field_builder
-        .create_cell("In Progress")
-        .create_cell("Done")
-        .create_cell("Not Started")
-        .create_cell("In Progress")
-        .create_cell("In Progress")
-    })
-    .create_field("user", FieldType::MultiSelect, false, |field_builder| {
-      field_builder
-        .create_cell("Lucas, Tom")
-        .create_cell("Lucas")
-        .create_cell("Tom")
-        .create_cell("")
-        .create_cell("Lucas, Tom, Nathan")
-    })
-    .create_field("time", FieldType::DateTime, false, |field_builder| {
-      field_builder
-        .create_cell("2024/08/22")
-        .create_cell("2024-08-22")
-        .create_cell("August 22, 2024")
-        .create_cell("2024-08-22 03:30 PM")
-    })
-    .create_field("tasks", FieldType::Checklist, false, |field_builder| {
-      field_builder
-        .create_checklist_cell(vec!["A", "B"], vec!["A"])
-        .create_checklist_cell(vec!["1", "2", "3"], Vec::<String>::new())
-        .create_checklist_cell(vec!["task1", "task2"], vec!["task1", "task2"])
-    })
     .create_field(
+      &None,
+      &workspace_id,
+      &[],
+      "name",
+      FieldType::RichText,
+      true,
+      |field_builder| {
+        field_builder
+          .create_cell("1th")
+          .create_cell("2th")
+          .create_cell("3th")
+      },
+    )
+    .create_field(
+      &None,
+      &workspace_id,
+      &[],
+      "status",
+      FieldType::SingleSelect,
+      false,
+      |field_builder| {
+        field_builder
+          .create_cell("In Progress")
+          .create_cell("Done")
+          .create_cell("Not Started")
+          .create_cell("In Progress")
+          .create_cell("In Progress")
+      },
+    )
+    .create_field(
+      &None,
+      &workspace_id,
+      &[],
+      "user",
+      FieldType::MultiSelect,
+      false,
+      |field_builder| {
+        field_builder
+          .create_cell("Lucas, Tom")
+          .create_cell("Lucas")
+          .create_cell("Tom")
+          .create_cell("")
+          .create_cell("Lucas, Tom, Nathan")
+      },
+    )
+    .create_field(
+      &None,
+      &workspace_id,
+      &[],
+      "time",
+      FieldType::DateTime,
+      false,
+      |field_builder| {
+        field_builder
+          .create_cell("2024/08/22")
+          .create_cell("2024-08-22")
+          .create_cell("August 22, 2024")
+          .create_cell("2024-08-22 03:30 PM")
+      },
+    )
+    .create_field(
+      &None,
+      &workspace_id,
+      &[],
+      "tasks",
+      FieldType::Checklist,
+      false,
+      |field_builder| {
+        field_builder
+          .create_checklist_cell(vec!["A", "B"], vec!["A"])
+          .create_checklist_cell(vec!["1", "2", "3"], Vec::<String>::new())
+          .create_checklist_cell(vec!["task1", "task2"], vec!["task1", "task2"])
+      },
+    )
+    .create_field(
+      &None,
+      &workspace_id,
+      &[],
       "last modified",
       FieldType::LastEditedTime,
       false,

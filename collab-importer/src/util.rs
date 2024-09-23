@@ -14,7 +14,7 @@ pub struct FileId;
 
 impl FileId {
   pub async fn from_path(file_path: &PathBuf) -> Result<String, Error> {
-    calculate_file_id(file_path).await
+    async_calculate_file_id(file_path).await
   }
 
   pub fn from_bytes(bytes: &[u8], ext: String) -> String {
@@ -25,7 +25,7 @@ impl FileId {
   }
 }
 
-async fn calculate_file_id(file_path: &PathBuf) -> Result<String, Error> {
+async fn async_calculate_file_id(file_path: &PathBuf) -> Result<String, Error> {
   let file = tokio::fs::File::open(file_path).await?;
   let ext = file_path
     .extension()

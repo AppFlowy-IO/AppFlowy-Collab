@@ -14,6 +14,7 @@ use crate::fields::timestamp_type_option::TimestampTypeOption;
 use crate::rows::new_cell_builder;
 use crate::template::chect_list_parse::ChecklistCellData;
 use crate::template::date_parse::replace_cells_with_timestamp;
+use crate::template::media_parse::replace_cells_with_files;
 use crate::template::option_parse::{
   build_options_from_cells, replace_cells_with_options_id, SELECT_OPTION_SEPARATOR,
 };
@@ -40,8 +41,12 @@ impl DatabaseTemplateBuilder {
     }
   }
 
+  #[allow(clippy::too_many_arguments)]
   pub fn create_field<F>(
     mut self,
+    server_url: &Option<String>,
+    workspace_id: &str,
+    resources: &[String],
     name: &str,
     field_type: FieldType,
     is_primary: bool,
@@ -51,7 +56,7 @@ impl DatabaseTemplateBuilder {
     F: FnOnce(FieldTemplateBuilder) -> FieldTemplateBuilder,
   {
     let builder = FieldTemplateBuilder::new(name.to_string(), field_type, is_primary);
-    let (field, rows) = f(builder).build();
+    let (field, rows) = f(builder).build(server_url, resources, workspace_id);
     self.fields.push(field);
     self.columns.push(rows);
     self
@@ -103,6 +108,7 @@ impl DatabaseTemplateBuilder {
 }
 
 pub struct FieldTemplateBuilder {
+  pub field_id: String,
   pub name: String,
   pub field_type: FieldType,
   pub is_primary: bool,
@@ -111,7 +117,9 @@ pub struct FieldTemplateBuilder {
 
 impl FieldTemplateBuilder {
   pub fn new(name: String, field_type: FieldType, is_primary: bool) -> Self {
+    let field_id = gen_field_id();
     Self {
+      field_id,
       name,
       field_type,
       is_primary,
@@ -144,10 +152,15 @@ impl FieldTemplateBuilder {
     self
   }
 
-  pub fn build(self) -> (FieldTemplate, Vec<CellTemplateData>) {
+  pub fn build(
+    self,
+    server_url: &Option<String>,
+    resources: &[String],
+    workspace_id: &str,
+  ) -> (FieldTemplate, Vec<CellTemplateData>) {
     let field_type = self.field_type.clone();
     let mut field_template = FieldTemplate {
-      field_id: gen_field_id(),
+      field_id: self.field_id,
       name: self.name,
       field_type: self.field_type,
       is_primary: self.is_primary,
@@ -232,7 +245,23 @@ impl FieldTemplateBuilder {
         cell_template
       },
       FieldType::Media => {
-        let cell_template = string_cell_template(&field_type, self.cells);
+        let cell_template = replace_cells_with_files(
+          server_url,
+          workspace_id,
+          self.cells,
+          &field_template.field_id,
+          resources,
+        )
+        .into_iter()
+        .map(|file| {
+          let mut cells = new_cell_builder(field_type.clone());
+          if let Some(file) = file {
+            cells.insert(CELL_DATA.to_string(), Any::from(file));
+          }
+          cells
+        })
+        .collect();
+
         field_template
           .type_options
           .insert(field_type, MediaTypeOption::default().into());

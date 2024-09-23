@@ -9,8 +9,11 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 
 pub struct CSVTemplate {
+  pub server_url: Option<String>,
+  pub workspace_id: String,
   pub fields: Vec<CSVField>,
   pub rows: Vec<Vec<String>>,
+  pub resources: Vec<String>,
 }
 
 pub struct CSVField {
@@ -20,13 +23,23 @@ pub struct CSVField {
 
 impl CSVTemplate {
   pub fn try_from_reader(
+    server_url: Option<String>,
+    workspace_id: String,
     reader: impl io::Read,
     auto_field_type: bool,
   ) -> Result<Self, DatabaseError> {
-    Self::try_from_reader_with_resources(reader, auto_field_type, Vec::<String>::new())
+    Self::try_from_reader_with_resources(
+      server_url,
+      workspace_id,
+      reader,
+      auto_field_type,
+      Vec::<String>::new(),
+    )
   }
 
   pub fn try_from_reader_with_resources(
+    server_url: Option<String>,
+    workspace_id: String,
     reader: impl io::Read,
     auto_field_type: bool,
     resources: Vec<String>,
@@ -51,16 +64,22 @@ impl CSVTemplate {
       .map(|record| {
         record
           .into_iter()
-          .map(|s| s.to_string())
+          .filter_map(|s| Some(percent_decode_str(s).decode_utf8().ok()?.to_string()))
           .collect::<Vec<String>>()
       })
       .collect();
 
     if auto_field_type {
-      auto_detect_field_type(&mut fields, &rows, resources);
+      auto_detect_field_type(&mut fields, &rows, resources.clone());
     }
 
-    Ok(CSVTemplate { fields, rows })
+    Ok(CSVTemplate {
+      server_url,
+      workspace_id,
+      fields,
+      rows,
+      resources,
+    })
   }
 }
 
@@ -89,6 +108,7 @@ fn auto_detect_field_type(
     });
 }
 
+#[allow(dead_code)]
 fn detect_field_type_from_cells(cells: &[&str]) -> FieldType {
   let resources = Vec::<String>::new();
   detect_field_type_from_cells_with_resource(cells, &resources)
@@ -103,7 +123,7 @@ fn detect_field_type_from_cells_with_resource(cells: &[&str], resources: &[Strin
     .collect::<Vec<&str>>();
 
   // Do not chang the order of the following checks
-  if is_media_cell(&cells, &resources) {
+  if is_media_cell(&cells, resources) {
     return FieldType::Media;
   }
 
@@ -140,7 +160,11 @@ fn is_media_cell<E: AsRef<str>>(cells: &[&str], resources: &[E]) -> bool {
 
   let valid_count = decode_cells
     .into_iter()
-    .filter(|cell| resources.iter().any(|resource| resource.as_ref() == cell))
+    .filter(|cell| {
+      resources
+        .iter()
+        .any(|resource| resource.as_ref().ends_with(cell.as_ref()))
+    })
     .count();
 
   if valid_count == 0 {
@@ -249,9 +273,18 @@ impl TryFrom<CSVTemplate> for DatabaseTemplate {
 
   fn try_from(value: CSVTemplate) -> Result<Self, Self::Error> {
     let mut builder = DatabaseTemplateBuilder::new();
-    let CSVTemplate { fields, rows } = value;
+    let CSVTemplate {
+      server_url,
+      workspace_id,
+      fields,
+      rows,
+      resources,
+    } = value;
     for (field_index, field) in fields.into_iter().enumerate() {
       builder = builder.create_field(
+        &server_url,
+        &workspace_id,
+        &resources,
         &field.name,
         field.field_type,
         field_index == 0,
@@ -267,30 +300,6 @@ impl TryFrom<CSVTemplate> for DatabaseTemplate {
     }
 
     Ok(builder.build())
-  }
-}
-
-impl TryFrom<&[u8]> for CSVTemplate {
-  type Error = DatabaseError;
-
-  fn try_from(content: &[u8]) -> Result<Self, Self::Error> {
-    Self::try_from_reader(content, false)
-  }
-}
-
-impl TryFrom<String> for CSVTemplate {
-  type Error = DatabaseError;
-
-  fn try_from(content: String) -> Result<Self, Self::Error> {
-    Self::try_from_reader(content.as_bytes(), false)
-  }
-}
-
-impl TryFrom<&str> for CSVTemplate {
-  type Error = DatabaseError;
-
-  fn try_from(content: &str) -> Result<Self, Self::Error> {
-    Self::try_from_reader(content.as_bytes(), false)
   }
 }
 

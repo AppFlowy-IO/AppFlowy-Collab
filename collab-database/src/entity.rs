@@ -13,6 +13,7 @@ use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
+use tracing::error;
 use yrs::{Any, Out};
 
 pub struct EncodedDatabase {
@@ -299,7 +300,11 @@ impl From<i64> for FieldType {
       11 => FieldType::Summary,
       12 => FieldType::Translate,
       13 => FieldType::Time,
-      _ => FieldType::RichText,
+      14 => FieldType::Media,
+      _ => {
+        error!("Unknown field type: {}, fallback to text", index);
+        FieldType::RichText
+      },
     }
   }
 }

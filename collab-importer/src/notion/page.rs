@@ -262,8 +262,13 @@ impl NotionView {
           .iter()
           .filter_map(|p| p.to_str().map(|s| s.to_string()))
           .collect();
-        let csv_template =
-          CSVTemplate::try_from_reader_with_resources(content.as_bytes(), true, resources)?;
+        let csv_template = CSVTemplate::try_from_reader_with_resources(
+          Some(self.host.clone()),
+          self.workspace_id.clone(),
+          content.as_bytes(),
+          true,
+          resources,
+        )?;
         let database_view_id = gen_database_view_id();
         let database =
           Database::create_with_template(&self.object_id, &database_view_id, csv_template).await?;

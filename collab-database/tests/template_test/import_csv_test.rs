@@ -6,8 +6,10 @@ use futures::StreamExt;
 
 #[tokio::test]
 async fn import_csv_test() {
+  let workspace_id = uuid::Uuid::new_v4().to_string();
   let csv_data = include_str!("../asset/selected-services-march-2024-quarter-csv.csv");
-  let csv_template = CSVTemplate::try_from(csv_data).unwrap();
+  let csv_template =
+    CSVTemplate::try_from_reader(None, workspace_id, csv_data.as_bytes(), false).unwrap();
 
   let database_id = gen_database_id();
   let view_id = gen_database_view_id();

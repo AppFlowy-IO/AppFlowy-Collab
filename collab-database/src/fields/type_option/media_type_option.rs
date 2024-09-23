@@ -1,5 +1,5 @@
 use crate::entity::FieldType;
-use crate::fields::{TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
 use collab::util::AnyMapExt;
@@ -13,6 +13,25 @@ use yrs::Any;
 pub struct MediaTypeOption {
   #[serde(default)]
   pub hide_file_names: bool,
+}
+
+impl StringifyTypeOption for MediaTypeOption {
+  fn stringify_cell(&self, cell: &Cell) -> String {
+    match cell.get_as::<MediaCellData>(CELL_DATA) {
+      None => "".to_string(),
+      Some(s) => s.to_string(),
+    }
+  }
+
+  fn stringify_text(&self, text: &str) -> String {
+    let data = MediaCellData::from(text.to_string());
+    data
+      .files
+      .into_iter()
+      .map(|file| file.name)
+      .collect::<Vec<_>>()
+      .join(", ")
+  }
 }
 
 impl From<TypeOptionData> for MediaTypeOption {
@@ -36,39 +55,51 @@ pub struct MediaCellData {
   pub files: Vec<MediaFile>,
 }
 
-impl From<&Cell> for MediaCellData {
-  fn from(cell: &Cell) -> Self {
-    let files = match cell.get(CELL_DATA) {
-      Some(Any::Array(array)) => array
-        .iter()
-        .flat_map(|item| {
-          if let Any::String(string) = item {
-            Some(serde_json::from_str::<MediaFile>(string).unwrap_or_default())
-          } else {
-            None
-          }
-        })
-        .collect(),
-      _ => vec![],
-    };
-
-    Self { files }
-  }
-}
-
-impl From<&MediaCellData> for Cell {
-  fn from(value: &MediaCellData) -> Self {
-    let data = Any::Array(Arc::from(
-      value
+impl From<MediaCellData> for Any {
+  fn from(data: MediaCellData) -> Self {
+    Any::Array(Arc::from(
+      data
         .files
         .clone()
         .into_iter()
         .map(|file| Any::String(Arc::from(serde_json::to_string(&file).unwrap_or_default())))
         .collect::<Vec<_>>(),
-    ));
+    ))
+  }
+}
 
+impl TryFrom<Any> for MediaCellData {
+  type Error = Any;
+
+  fn try_from(value: Any) -> Result<Self, Self::Error> {
+    match value {
+      Any::Array(array) => {
+        let files = array
+          .iter()
+          .flat_map(|item| {
+            if let Any::String(string) = item {
+              Some(serde_json::from_str::<MediaFile>(string).unwrap_or_default())
+            } else {
+              None
+            }
+          })
+          .collect();
+        Ok(Self { files })
+      },
+      _ => Ok(Self::default()),
+    }
+  }
+}
+impl From<&Cell> for MediaCellData {
+  fn from(cell: &Cell) -> Self {
+    cell.get_as::<MediaCellData>(CELL_DATA).unwrap_or_default()
+  }
+}
+
+impl From<MediaCellData> for Cell {
+  fn from(value: MediaCellData) -> Self {
     let mut cell = new_cell_builder(FieldType::Media);
-    cell.insert(CELL_DATA.into(), data);
+    cell.insert(CELL_DATA.into(), value.into());
     cell
   }
 }
@@ -93,7 +124,7 @@ impl ToString for MediaCellData {
     self
       .files
       .iter()
-      .map(|file| file.to_string())
+      .map(|file| file.name.clone())
       .collect::<Vec<_>>()
       .join(", ")
   }
@@ -101,7 +132,8 @@ impl ToString for MediaCellData {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaFile {
-  pub id: String,
+  #[serde(rename = "id")]
+  pub field_id: String,
   pub name: String,
   pub url: String,
   pub upload_type: MediaUploadType,
@@ -111,7 +143,7 @@ pub struct MediaFile {
 impl MediaFile {
   pub fn rename(&self, new_name: String) -> Self {
     Self {
-      id: self.id.clone(),
+      field_id: self.field_id.clone(),
       name: new_name,
       url: self.url.clone(),
       upload_type: self.upload_type.clone(),
@@ -125,7 +157,7 @@ impl Display for MediaFile {
     write!(
       f,
       "MediaFile(id: {}, name: {}, url: {}, upload_type: {:?}, file_type: {:?})",
-      self.id, self.name, self.url, self.upload_type, self.file_type
+      self.field_id, self.name, self.url, self.upload_type, self.file_type
     )
   }
 }
@@ -269,7 +301,7 @@ mod tests {
   #[test]
   fn test_serialize_deserialize_media_file() {
     let media_file = MediaFile {
-      id: "123".to_string(),
+      field_id: "123".to_string(),
       name: "test_file".to_string(),
       url: "http://example.com/file".to_string(),
       upload_type: MediaUploadType::Cloud,
