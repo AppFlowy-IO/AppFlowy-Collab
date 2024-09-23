@@ -266,6 +266,7 @@ pub enum DateFormat {
   #[default]
   Friendly = 3,
   DayMonthYear = 4,
+  FriendlyFull = 5,
 }
 
 impl std::convert::From<i64> for DateFormat {
@@ -276,6 +277,7 @@ impl std::convert::From<i64> for DateFormat {
       2 => DateFormat::ISO,
       3 => DateFormat::Friendly,
       4 => DateFormat::DayMonthYear,
+      5 => DateFormat::FriendlyFull,
       _ => {
         tracing::error!("Unsupported date format, fallback to friendly");
         DateFormat::Friendly
@@ -294,8 +296,9 @@ impl DateFormat {
       DateFormat::Local => "%m/%d/%Y",
       DateFormat::US => "%Y/%m/%d",
       DateFormat::ISO => "%Y-%m-%d",
-      DateFormat::Friendly => "%B %-d, %Y",
+      DateFormat::Friendly => "%b %d, %Y",
       DateFormat::DayMonthYear => "%d/%m/%Y",
+      DateFormat::FriendlyFull => "%B %-d, %Y",
     }
   }
 }

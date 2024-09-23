@@ -111,13 +111,17 @@ fn detect_field_type_from_cells(cells: &[&str]) -> FieldType {
 }
 
 fn is_date_cell(cells: &[&str]) -> bool {
-  for &cell in cells {
-    // If `cast_string_to_timestamp` returns `None`, this is not a date cell
-    if cast_string_to_timestamp(cell).is_some() {
-      return true;
-    }
+  let half_count = cells.len() / 2;
+  let valid_count = cells
+    .iter()
+    .filter(|&&cell| cast_string_to_timestamp(cell).is_some())
+    .count();
+
+  if valid_count == 0 {
+    return false;
   }
-  false
+
+  valid_count >= half_count
 }
 
 /// Detect if a column is a checkbox field.
@@ -361,6 +365,6 @@ mod tests {
     assert!(is_date_cell(&cells));
 
     let cells = vec!["2023-05-21", "Invalid Date", "12/09/2023"];
-    assert!(!is_date_cell(&cells));
+    assert!(is_date_cell(&cells));
   }
 }

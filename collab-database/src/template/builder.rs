@@ -1,19 +1,21 @@
 use crate::database::{gen_field_id, gen_row_id};
 use crate::template::entity::{
   CellTemplateData, DatabaseTemplate, DatabaseViewTemplate, FieldTemplate, RowTemplate, CELL_DATA,
-  TYPE_OPTION_CONTENT,
 };
 
 use crate::entity::FieldType;
-use crate::fields::date_type_option::DateTypeOption;
+use crate::fields::checkbox_type_option::CheckboxTypeOption;
+use crate::fields::date_type_option::{DateFormat, DateTypeOption};
+use crate::fields::number_type_option::NumberTypeOption;
 use crate::fields::select_type_option::SelectTypeOption;
+use crate::fields::text_type_option::RichTextTypeOption;
+use crate::fields::timestamp_type_option::TimestampTypeOption;
 use crate::rows::new_cell_builder;
 use crate::template::chect_list_parse::ChecklistCellData;
 use crate::template::date_parse::replace_cells_with_timestamp;
 use crate::template::option_parse::{
   build_options_from_cells, replace_cells_with_options_id, SELECT_OPTION_SEPARATOR,
 };
-use crate::template::time_parse::TimestampTypeOption;
 use crate::views::DatabaseLayout;
 use collab::preclude::Any;
 use std::collections::HashMap;
@@ -168,13 +170,9 @@ impl FieldTemplateBuilder {
             })
             .collect::<Vec<CellTemplateData>>();
 
-        field_template.type_options.insert(
-          field_type,
-          HashMap::from([(
-            TYPE_OPTION_CONTENT.to_string(),
-            Any::from(type_option.to_json_string()),
-          )]),
-        );
+        field_template
+          .type_options
+          .insert(field_type, type_option.into());
         cell_template
       },
       FieldType::DateTime => {
@@ -187,13 +185,12 @@ impl FieldTemplateBuilder {
           })
           .collect::<Vec<CellTemplateData>>();
 
-        field_template.type_options.insert(
-          field_type,
-          HashMap::from([(
-            TYPE_OPTION_CONTENT.to_string(),
-            Any::from(DateTypeOption::default().to_json_string()),
-          )]),
-        );
+        let mut type_option = DateTypeOption::new();
+        type_option.date_format = DateFormat::FriendlyFull;
+
+        field_template
+          .type_options
+          .insert(field_type, type_option.into());
         cell_template
       },
       FieldType::LastEditedTime | FieldType::CreatedTime => {
@@ -205,13 +202,32 @@ impl FieldTemplateBuilder {
             map
           })
           .collect::<Vec<CellTemplateData>>();
+        let type_option = TimestampTypeOption::new(field_type.clone());
+        field_template
+          .type_options
+          .insert(field_type, type_option.into());
+        cell_template
+      },
+      FieldType::RichText => {
+        let cell_template = string_cell_template(&field_type, self.cells);
+        field_template
+          .type_options
+          .insert(field_type, RichTextTypeOption.into());
+        cell_template
+      },
+      FieldType::Checkbox => {
+        let cell_template = string_cell_template(&field_type, self.cells);
+        field_template
+          .type_options
+          .insert(field_type, CheckboxTypeOption.into());
+        cell_template
+      },
+      FieldType::Number => {
+        let cell_template = string_cell_template(&field_type, self.cells);
+        field_template
+          .type_options
+          .insert(field_type, NumberTypeOption::default().into());
 
-        let type_option =
-          serde_json::to_string(&TimestampTypeOption::new(field_type.clone(), false)).unwrap();
-        field_template.type_options.insert(
-          field_type,
-          HashMap::from([(TYPE_OPTION_CONTENT.to_string(), Any::from(type_option))]),
-        );
         cell_template
       },
       _ => string_cell_template(&field_type, self.cells),

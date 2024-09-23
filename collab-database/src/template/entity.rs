@@ -5,7 +5,6 @@ use collab::preclude::Any;
 use std::collections::HashMap;
 
 pub const CELL_DATA: &str = "data";
-pub const TYPE_OPTION_CONTENT: &str = "content";
 pub struct DatabaseTemplate {
   pub fields: Vec<FieldTemplate>,
   pub rows: Vec<RowTemplate>,

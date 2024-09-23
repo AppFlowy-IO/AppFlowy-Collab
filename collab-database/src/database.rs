@@ -514,9 +514,7 @@ impl Database {
     let txn = self.collab.transact();
     let field = self.body.fields.get_field(&txn, field_id)?;
     let field_type = FieldType::from(field.field_type);
-    let type_option = field
-      .get_any_type_option(field_type.type_id())
-      .unwrap_or_default();
+    let type_option = field.get_any_type_option(field_type.type_id())?;
     stringify_type_option(type_option, &field_type)
   }
 

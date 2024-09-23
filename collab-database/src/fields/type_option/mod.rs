@@ -138,6 +138,7 @@ pub fn stringify_type_option(
     | FieldType::CreatedTime
     | FieldType::Relation
     | FieldType::Summary
-    | FieldType::Translate => None,
+    | FieldType::Translate
+    | FieldType::Media => None,
   }
 }

@@ -139,7 +139,7 @@ pub enum MediaFileType {
 #[repr(u8)]
 pub enum MediaUploadType {
   #[default]
-  LocalMedia = 0,
-  NetworkMedia = 1,
-  CloudMedia = 2,
+  Local = 0,
+  Network = 1,
+  Cloud = 2,
 }

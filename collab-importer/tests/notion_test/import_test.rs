@@ -160,6 +160,7 @@ async fn check_task_database(linked_view: &NotionView) {
   ];
   for (index, field) in fields.iter().enumerate() {
     assert_eq!(FieldType::from(field.field_type), expected_file_type[index]);
+    // println!("{:?}", FieldType::from(field.field_type));
   }
   for (index, field) in csv_fields.iter().enumerate() {
     assert_eq!(&fields[index].name, field);
