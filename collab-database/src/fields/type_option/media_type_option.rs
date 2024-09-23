@@ -4,7 +4,7 @@ use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_repr::{Serialize_repr};
+use serde_repr::Serialize_repr;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use yrs::Any;
