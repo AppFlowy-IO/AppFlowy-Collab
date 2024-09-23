@@ -3,7 +3,8 @@ use crate::fields::{TypeOptionData, TypeOptionDataBuilder};
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
 use collab::util::AnyMapExt;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_repr::{Serialize_repr};
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use yrs::Any;
@@ -132,7 +133,7 @@ impl Display for MediaFile {
   }
 }
 
-#[derive(PartialEq, Eq, Serialize, Deserialize, Debug, Default, Clone)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize_repr)]
 #[repr(u8)]
 pub enum MediaFileType {
   #[default]
@@ -146,11 +147,142 @@ pub enum MediaFileType {
   Text = 7,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+impl<'de> Deserialize<'de> for MediaFileType {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    struct MediaFileTypeVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for MediaFileTypeVisitor {
+      type Value = MediaFileType;
+
+      fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a string or a u8 representing MediaFileType")
+      }
+
+      fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+      where
+        E: serde::de::Error,
+      {
+        match value {
+          0 => Ok(MediaFileType::Other),
+          1 => Ok(MediaFileType::Image),
+          2 => Ok(MediaFileType::Link),
+          3 => Ok(MediaFileType::Document),
+          4 => Ok(MediaFileType::Archive),
+          5 => Ok(MediaFileType::Video),
+          6 => Ok(MediaFileType::Audio),
+          7 => Ok(MediaFileType::Text),
+          _ => Err(E::custom(format!(
+            "Unknown numeric value for MediaFileType: {}",
+            value
+          ))),
+        }
+      }
+
+      fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+      where
+        E: serde::de::Error,
+      {
+        match value {
+          "Other" => Ok(MediaFileType::Other),
+          "Image" => Ok(MediaFileType::Image),
+          "Link" => Ok(MediaFileType::Link),
+          "Document" => Ok(MediaFileType::Document),
+          "Archive" => Ok(MediaFileType::Archive),
+          "Video" => Ok(MediaFileType::Video),
+          "Audio" => Ok(MediaFileType::Audio),
+          "Text" => Ok(MediaFileType::Text),
+          _ => Err(E::custom(format!(
+            "Unknown string variant for MediaFileType: {}",
+            value
+          ))),
+        }
+      }
+    }
+
+    deserializer.deserialize_any(MediaFileTypeVisitor)
+  }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize_repr)]
 #[repr(u8)]
 pub enum MediaUploadType {
   #[default]
   Local = 0,
   Network = 1,
   Cloud = 2,
+}
+
+impl<'de> Deserialize<'de> for MediaUploadType {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    struct MediaUploadTypeVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for MediaUploadTypeVisitor {
+      type Value = MediaUploadType;
+
+      fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a string or a u8 representing MediaUploadType")
+      }
+
+      fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+      where
+        E: serde::de::Error,
+      {
+        match value {
+          0 => Ok(MediaUploadType::Local),
+          1 => Ok(MediaUploadType::Network),
+          2 => Ok(MediaUploadType::Cloud),
+          _ => Err(E::custom(format!(
+            "Unknown numeric value for MediaUploadType: {}",
+            value
+          ))),
+        }
+      }
+
+      fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+      where
+        E: serde::de::Error,
+      {
+        match value {
+          "Local" | "LocalMedia" => Ok(MediaUploadType::Local),
+          "Network" | "NetworkMedia" => Ok(MediaUploadType::Network),
+          "Cloud" | "CloudMedia" => Ok(MediaUploadType::Cloud),
+          _ => Err(E::custom(format!(
+            "Unknown string variant for MediaUploadType: {}",
+            value
+          ))),
+        }
+      }
+    }
+
+    deserializer.deserialize_any(MediaUploadTypeVisitor)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use serde_json;
+
+  #[test]
+  fn test_serialize_deserialize_media_file() {
+    let media_file = MediaFile {
+      id: "123".to_string(),
+      name: "test_file".to_string(),
+      url: "http://example.com/file".to_string(),
+      upload_type: MediaUploadType::Cloud,
+      file_type: MediaFileType::Image,
+    };
+
+    // Serialize the MediaFile to a JSON string
+    let serialized = serde_json::to_string(&media_file).unwrap();
+    println!("Serialized MediaFile: {}", serialized);
+    let deserialized: MediaFile = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(media_file, deserialized);
+  }
 }

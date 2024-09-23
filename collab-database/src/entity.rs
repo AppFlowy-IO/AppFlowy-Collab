@@ -11,6 +11,7 @@ use crate::views::{
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
 use yrs::{Any, Out};
 
@@ -238,7 +239,8 @@ impl CreateDatabaseParams {
   }
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
 pub enum FieldType {
   RichText = 0,
   Number = 1,
