@@ -42,6 +42,12 @@ pub struct URLCellData {
   pub data: String,
 }
 
+impl AsRef<str> for URLCellData {
+  fn as_ref(&self) -> &str {
+    &self.data
+  }
+}
+
 impl URLCellData {
   pub fn new(s: &str) -> Self {
     Self {
