@@ -3,6 +3,7 @@ use crate::error::DatabaseError;
 use crate::template::builder::DatabaseTemplateBuilder;
 use crate::template::date_parse::cast_string_to_timestamp;
 use crate::template::entity::DatabaseTemplate;
+use percent_encoding::percent_decode_str;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::io;
@@ -21,6 +22,14 @@ impl CSVTemplate {
   pub fn try_from_reader(
     reader: impl io::Read,
     auto_field_type: bool,
+  ) -> Result<Self, DatabaseError> {
+    Self::try_from_reader_with_resources(reader, auto_field_type, Vec::<String>::new())
+  }
+
+  pub fn try_from_reader_with_resources(
+    reader: impl io::Read,
+    auto_field_type: bool,
+    resources: Vec<String>,
   ) -> Result<Self, DatabaseError> {
     let mut fields: Vec<CSVField> = vec![];
 
@@ -48,14 +57,18 @@ impl CSVTemplate {
       .collect();
 
     if auto_field_type {
-      auto_detect_field_type(&mut fields, &rows);
+      auto_detect_field_type(&mut fields, &rows, resources);
     }
 
     Ok(CSVTemplate { fields, rows })
   }
 }
 
-fn auto_detect_field_type(fields: &mut Vec<CSVField>, rows: &[Vec<String>]) {
+fn auto_detect_field_type(
+  fields: &mut Vec<CSVField>,
+  rows: &[Vec<String>],
+  resources: Vec<String>,
+) {
   let num_fields = fields.len();
   fields
     .par_iter_mut()
@@ -72,11 +85,16 @@ fn auto_detect_field_type(fields: &mut Vec<CSVField>, rows: &[Vec<String>]) {
         })
         .collect();
 
-      field.field_type = detect_field_type_from_cells(&cells);
+      field.field_type = detect_field_type_from_cells_with_resource(&cells, &resources);
     });
 }
 
 fn detect_field_type_from_cells(cells: &[&str]) -> FieldType {
+  let resources = Vec::<String>::new();
+  detect_field_type_from_cells_with_resource(cells, &resources)
+}
+
+fn detect_field_type_from_cells_with_resource(cells: &[&str], resources: &[String]) -> FieldType {
   let cells = cells
     .iter()
     .filter(|cell| !cell.is_empty())
@@ -85,6 +103,9 @@ fn detect_field_type_from_cells(cells: &[&str]) -> FieldType {
     .collect::<Vec<&str>>();
 
   // Do not chang the order of the following checks
+  if is_media_cell(&cells, &resources) {
+    return FieldType::Media;
+  }
 
   if is_link_field(&cells) {
     return FieldType::URL;
@@ -108,6 +129,25 @@ fn detect_field_type_from_cells(cells: &[&str]) -> FieldType {
   }
 
   FieldType::RichText
+}
+
+fn is_media_cell<E: AsRef<str>>(cells: &[&str], resources: &[E]) -> bool {
+  let half_count = cells.len() / 2;
+  let decode_cells = cells
+    .iter()
+    .filter_map(|cell| percent_decode_str(cell).decode_utf8().ok())
+    .collect::<Vec<_>>();
+
+  let valid_count = decode_cells
+    .into_iter()
+    .filter(|cell| resources.iter().any(|resource| resource.as_ref() == cell))
+    .count();
+
+  if valid_count == 0 {
+    return false;
+  }
+
+  valid_count >= half_count
 }
 
 fn is_date_cell(cells: &[&str]) -> bool {

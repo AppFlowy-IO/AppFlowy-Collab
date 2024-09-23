@@ -20,7 +20,11 @@ pub(crate) fn get_file_size(path: &PathBuf) -> std::io::Result<u64> {
   Ok(file_size)
 }
 
-pub(crate) fn collect_entry_resources(_workspace_id: &str, entry: &DirEntry) -> Vec<Resource> {
+pub(crate) fn collect_entry_resources(
+  _workspace_id: &str,
+  walk_path: &Path,
+  relative_path: Option<&Path>,
+) -> Vec<Resource> {
   let image_extensions = ["jpg", "jpeg", "png"];
   let file_extensions = ["zip"];
 
@@ -28,7 +32,7 @@ pub(crate) fn collect_entry_resources(_workspace_id: &str, entry: &DirEntry) -> 
   let mut file_paths = Vec::new();
 
   // Walk through the directory
-  WalkDir::new(entry.path())
+  WalkDir::new(walk_path)
         .max_depth(1)
         .into_iter()
         .filter_map(|e| e.ok()) // Ignore invalid entries
@@ -38,11 +42,17 @@ pub(crate) fn collect_entry_resources(_workspace_id: &str, entry: &DirEntry) -> 
                 if let Some(ext) = path.extension().and_then(|ext| ext.to_str()) {
                     match fs::metadata(path).map(|file| file.len()) {
                         Ok(len) => {
+                            let mut path_buf = path.to_path_buf();
+                            if let Some(rel_path) = relative_path {
+                              if let Ok(stripped) = path.strip_prefix(rel_path) {
+                                path_buf = stripped.to_path_buf();
+                              }
+                            }
                             let ext_lower = ext.to_lowercase();
                             if image_extensions.contains(&ext_lower.as_str()) {
-                                image_paths.push((path.to_path_buf(), len));
+                                image_paths.push((path_buf, len));
                             } else if file_extensions.contains(&ext_lower.as_str()) {
-                                file_paths.push((path.to_path_buf(), len));
+                                file_paths.push((path_buf, len));
                             }
                         }
                         Err(err) => {
@@ -67,9 +77,9 @@ pub(crate) fn collect_entry_resources(_workspace_id: &str, entry: &DirEntry) -> 
 pub(crate) fn process_entry(
   host: &str,
   workspace_id: &str,
-  entry: &DirEntry,
+  current_entry: &DirEntry,
 ) -> Option<NotionView> {
-  let path = entry.path();
+  let path = current_entry.path();
 
   if path.is_file() && is_valid_file(path) {
     // Check if there's a corresponding directory for this .md file and skip it if so
@@ -134,7 +144,14 @@ pub(crate) fn process_entry(
           if let Some(child_view) = process_entry(host, workspace_id, &sub_entry) {
             children.push(child_view);
           }
-          resources.extend(collect_entry_resources(workspace_id, &sub_entry));
+
+          // When traversing the directory, resources like images and files
+          // can be found within subdirectories of the current directory.
+          resources.extend(collect_entry_resources(
+            workspace_id,
+            sub_entry.path(),
+            None,
+          ));
         }
       }
 
@@ -146,10 +163,19 @@ pub(crate) fn process_entry(
       }
     } else if csv_file_path.exists() {
       let file_size = get_file_size(&csv_file_path).ok()?;
+      // If the current file is a CSV, its related resources are located in the same directory.
+      // Therefore, we need to collect resources from the directory where the CSV file is located.
+      resources.extend(collect_entry_resources(
+        workspace_id,
+        parent_path,
+        parent_path.parent(),
+      ));
+
       // when current file is csv, which means its children are rows
       notion_file = NotionFile::CSV {
         file_path: csv_file_path,
         size: file_size,
+        resources,
       }
     } else {
       warn!("No corresponding .md file found for directory: {:?}", path);
@@ -303,6 +329,7 @@ fn file_type_from_path(path: &Path) -> Option<NotionFile> {
         Some(NotionFile::CSV {
           file_path: path.to_path_buf(),
           size: file_size,
+          resources: vec![],
         })
       } else {
         Some(NotionFile::CSVPart {

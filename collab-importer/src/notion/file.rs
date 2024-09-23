@@ -15,6 +15,7 @@ pub enum NotionFile {
   CSV {
     file_path: PathBuf,
     size: u64,
+    resources: Vec<Resource>,
   },
   CSVPart {
     file_path: PathBuf,
@@ -45,6 +46,11 @@ impl NotionFile {
   pub fn upload_resources(&self) -> Vec<PathBuf> {
     match self {
       NotionFile::Markdown { resources, .. } => resources
+        .iter()
+        .flat_map(|r| r.file_paths())
+        .cloned()
+        .collect(),
+      NotionFile::CSV { resources, .. } => resources
         .iter()
         .flat_map(|r| r.file_paths())
         .cloned()

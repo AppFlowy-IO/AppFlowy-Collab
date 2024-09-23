@@ -6,6 +6,7 @@ use crate::template::entity::{
 use crate::entity::FieldType;
 use crate::fields::checkbox_type_option::CheckboxTypeOption;
 use crate::fields::date_type_option::{DateFormat, DateTypeOption};
+use crate::fields::media_type_option::MediaTypeOption;
 use crate::fields::number_type_option::NumberTypeOption;
 use crate::fields::select_type_option::SelectTypeOption;
 use crate::fields::text_type_option::RichTextTypeOption;
@@ -227,6 +228,14 @@ impl FieldTemplateBuilder {
         field_template
           .type_options
           .insert(field_type, NumberTypeOption::default().into());
+
+        cell_template
+      },
+      FieldType::Media => {
+        let cell_template = string_cell_template(&field_type, self.cells);
+        field_template
+          .type_options
+          .insert(field_type, MediaTypeOption::default().into());
 
         cell_template
       },

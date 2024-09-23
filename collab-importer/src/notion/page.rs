@@ -34,6 +34,11 @@ pub struct NotionView {
 }
 
 impl NotionView {
+  /// Returns the files that need to be uploaded for current view.
+  pub fn get_upload_files(&self) -> Vec<PathBuf> {
+    self.notion_file.upload_resources()
+  }
+
   /// Recursively collect all the files that need to be uploaded.
   /// It will include the current view's file and all its children's files.
   pub fn get_upload_files_recursively(&self) -> Vec<(String, Vec<PathBuf>)> {
@@ -251,7 +256,14 @@ impl NotionView {
     match &self.notion_file {
       NotionFile::CSV { file_path, .. } => {
         let content = std::fs::read_to_string(file_path)?;
-        let csv_template = CSVTemplate::try_from_reader(content.as_bytes(), true)?;
+        let resources = self
+          .notion_file
+          .upload_resources()
+          .iter()
+          .filter_map(|p| p.to_str().map(|s| s.to_string()))
+          .collect();
+        let csv_template =
+          CSVTemplate::try_from_reader_with_resources(content.as_bytes(), true, resources)?;
         let database_view_id = gen_database_view_id();
         let database =
           Database::create_with_template(&self.object_id, &database_view_id, csv_template).await?;

@@ -12,9 +12,6 @@ use yrs::Any;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MediaTypeOption {
   #[serde(default)]
-  pub files: Vec<MediaFile>,
-
-  #[serde(default)]
   pub hide_file_names: bool,
 }
 

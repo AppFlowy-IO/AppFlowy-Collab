@@ -72,7 +72,7 @@ pub struct ImportedView {
 }
 
 impl ImportedView {
-  pub fn upload_files(&self) -> Vec<(String, Vec<PathBuf>)> {
+  pub fn all_upload_files(&self) -> Vec<(String, Vec<PathBuf>)> {
     self
       .views
       .iter()

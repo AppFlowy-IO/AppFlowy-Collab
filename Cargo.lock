@@ -493,6 +493,7 @@ dependencies = [
  "js-sys",
  "lazy_static",
  "nanoid",
+ "percent-encoding",
  "rand",
  "rayon",
  "rust_decimal",

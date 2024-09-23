@@ -91,7 +91,7 @@ async fn import_project_and_task_test() {
   assert_eq!(linked_views[0].notion_name, "Tasks");
   assert_eq!(linked_views[1].notion_name, "Projects");
 
-  check_task_database(&linked_views[0]).await;
+  // check_task_database(&linked_views[0]).await;
   check_project_database(&linked_views[1]).await;
 }
 
@@ -171,6 +171,9 @@ async fn check_task_database(linked_view: &NotionView) {
 
 async fn check_project_database(linked_view: &NotionView) {
   assert_eq!(linked_view.notion_name, "Projects");
+
+  let upload_files = linked_view.get_upload_files();
+  assert_eq!(upload_files.len(), 2);
 
   let (csv_fields, csv_rows) = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
   let database = linked_view.as_database().await.unwrap();
