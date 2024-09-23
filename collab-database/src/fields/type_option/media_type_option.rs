@@ -90,6 +90,17 @@ impl From<String> for MediaCellData {
   }
 }
 
+impl ToString for MediaCellData {
+  fn to_string(&self) -> String {
+    self
+      .files
+      .iter()
+      .map(|file| file.to_string())
+      .collect::<Vec<_>>()
+      .join(", ")
+  }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaFile {
   pub id: String,
