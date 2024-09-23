@@ -1,8 +1,8 @@
-mod checkbox_type_option;
+pub mod checkbox_type_option;
 pub mod date_type_option;
 pub mod number_type_option;
 pub mod select_type_option;
-mod text_type_option;
+pub mod text_type_option;
 pub mod timestamp_type_option;
 pub mod url_type_option;
 
