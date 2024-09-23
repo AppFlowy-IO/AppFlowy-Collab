@@ -166,7 +166,7 @@ async fn check_task_database(linked_view: &NotionView) {
     assert_eq!(&fields[index].name, field);
   }
 
-  assert_database_rows_with_csv_rows(csv_rows, database, fields, rows);
+  assert_database_rows_with_csv_rows(csv_rows, database, fields, rows, HashMap::new());
 }
 
 async fn check_project_database(linked_view: &NotionView) {
@@ -205,7 +205,8 @@ async fn check_project_database(linked_view: &NotionView) {
   for (index, field) in csv_fields.iter().enumerate() {
     assert_eq!(&fields[index].name, field);
   }
-  assert_database_rows_with_csv_rows(csv_rows, database, fields, rows);
+  let  expected_files = HashMap::from([("DO010003572.jpeg", "http://test.appflowy.cloud/ef151418-41b1-4ca2-b190-3ed59a3bea76/v1/blob/ysINEn/TZQyERYXrrBq25cKsZVAvRqe9ZPTYNlG8EJfUioKruI=.jpeg"), ("appflowy_2x.png", "http://test.appflowy.cloud/ef151418-41b1-4ca2-b190-3ed59a3bea76/v1/blob/ysINEn/c9Ju1jv95fPw6irxJACDKPDox_-hfd-3_blIEapMaZc=.png"),]);
+  assert_database_rows_with_csv_rows(csv_rows, database, fields, rows, expected_files);
 }
 
 fn assert_database_rows_with_csv_rows(
@@ -213,6 +214,7 @@ fn assert_database_rows_with_csv_rows(
   database: Database,
   fields: Vec<Field>,
   rows: Vec<Result<Row, DatabaseError>>,
+  mut expected_files: HashMap<&str, &str>,
 ) {
   let type_option_by_field_id = fields
     .iter()
@@ -228,8 +230,6 @@ fn assert_database_rows_with_csv_rows(
       )
     })
     .collect::<HashMap<String, Box<dyn StringifyTypeOption>>>();
-
-  let mut expected_files = HashMap::from([("DO010003572.jpeg", "http://test.appflowy.cloud/ef151418-41b1-4ca2-b190-3ed59a3bea76/v1/blob/ysINEn/TZQyERYXrrBq25cKsZVAvRqe9ZPTYNlG8EJfUioKruI=.jpeg"), ("appflowy_2x.png", "http://test.appflowy.cloud/ef151418-41b1-4ca2-b190-3ed59a3bea76/v1/blob/ysINEn/c9Ju1jv95fPw6irxJACDKPDox_-hfd-3_blIEapMaZc=.png"),]);
 
   for (row_index, row) in rows.into_iter().enumerate() {
     let row = row.unwrap();
