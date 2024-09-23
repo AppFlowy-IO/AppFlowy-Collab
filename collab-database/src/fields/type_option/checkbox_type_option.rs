@@ -4,6 +4,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CheckboxTypeOption;
 
+impl CheckboxTypeOption {
+  pub fn new() -> Self {
+    Self
+  }
+}
+
 impl StringifyTypeOption for CheckboxTypeOption {
   fn stringify_text(&self, text: &str) -> String {
     text.to_string()

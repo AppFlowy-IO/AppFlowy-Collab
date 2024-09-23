@@ -254,6 +254,7 @@ pub enum FieldType {
   Summary = 11,
   Translate = 12,
   Time = 13,
+  Media = 14,
 }
 
 impl FieldType {
