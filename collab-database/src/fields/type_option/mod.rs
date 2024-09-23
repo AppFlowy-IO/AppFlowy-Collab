@@ -1,6 +1,6 @@
 pub mod checkbox_type_option;
 pub mod date_type_option;
-mod media_type_option;
+pub mod media_type_option;
 pub mod number_type_option;
 pub mod select_type_option;
 pub mod text_type_option;
