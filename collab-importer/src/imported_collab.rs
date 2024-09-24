@@ -5,12 +5,32 @@ use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
 use std::env::temp_dir;
 use std::fmt::Display;
+use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct RepeatedImportedCollabInfo {
   pub infos: Vec<ImportedCollabInfo>,
-  pub total_size: u64,
+}
+
+impl Deref for RepeatedImportedCollabInfo {
+  type Target = Vec<ImportedCollabInfo>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.infos
+  }
+}
+
+impl DerefMut for RepeatedImportedCollabInfo {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.infos
+  }
+}
+
+impl RepeatedImportedCollabInfo {
+  pub fn size(&self) -> u64 {
+    self.infos.iter().map(|i| i.total_size()).sum()
+  }
 }
 
 impl Display for RepeatedImportedCollabInfo {
@@ -18,7 +38,7 @@ impl Display for RepeatedImportedCollabInfo {
     for info in &self.infos {
       write!(f, "{}\n\n", info)?;
     }
-    write!(f, "Total size: {}", self.total_size)
+    write!(f, "Total size: {}", self.size())
   }
 }
 
@@ -28,9 +48,27 @@ pub struct ImportedCollabInfo {
   pub collabs: Vec<ImportedCollab>,
   /// All files that related to current collab
   pub files: Vec<String>,
-  /// The total payload size for current collab and its files
-  pub file_size: u64,
   pub import_type: ImportType,
+}
+
+impl ImportedCollabInfo {
+  pub fn total_size(&self) -> u64 {
+    let collab_size: u64 = self
+      .collabs
+      .iter()
+      .map(|c| c.encoded_collab.doc_state.len() as u64)
+      .sum();
+
+    self.file_size() + collab_size
+  }
+
+  pub fn file_size(&self) -> u64 {
+    self
+      .files
+      .iter()
+      .map(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0))
+      .sum()
+  }
 }
 
 #[derive(Debug, Clone)]
@@ -59,7 +97,7 @@ impl Display for ImportedCollabInfo {
       self.import_type,
       self.collabs.len(),
       self.files.len(),
-      self.file_size,
+      self.total_size(),
       file_paths
     )
   }
@@ -88,7 +126,6 @@ pub async fn import_notion_zip_file(
     .import()
     .await?;
 
-  let total_size = imported.all_file_size() as u64;
   let infos = imported.all_imported_collabs().await;
-  Ok(RepeatedImportedCollabInfo { infos, total_size })
+  Ok(RepeatedImportedCollabInfo { infos })
 }

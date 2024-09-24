@@ -81,22 +81,6 @@ impl ImportedInfo {
     imported_collabs
   }
 
-  pub fn all_upload_files(&self) -> Vec<(String, Vec<PathBuf>)> {
-    self
-      .views
-      .iter()
-      .flat_map(|view| view.get_upload_files_recursively())
-      .collect()
-  }
-
-  pub fn all_file_size(&self) -> usize {
-    self
-      .views
-      .iter()
-      .map(|view| view.get_file_size_recursively() as usize)
-      .sum::<usize>()
-  }
-
   pub fn num_of_csv(&self) -> usize {
     self
       .views

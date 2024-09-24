@@ -40,9 +40,6 @@ async fn import_blog_post_document_test() {
   .map(|s| format!("{host}/{workspace_id}/v1/blob/{object_id}/{s}"))
   .collect::<Vec<String>>();
 
-  let size = root_view.get_file_size_recursively();
-  assert_eq!(size, 5333956);
-
   let (document, _) = root_view.as_document(external_link_views).await.unwrap();
   let page_block_id = document.get_page_id().unwrap();
   let block_ids = document.get_block_children_ids(&page_block_id);
@@ -66,9 +63,21 @@ async fn import_project_and_task_collab_test() {
     .await
     .unwrap();
 
-  println!("{info}");
+  assert_eq!(info.len(), 3);
+  assert_eq!(info[0].name, "Projects & Tasks");
+  assert_eq!(info[0].collabs.len(), 1);
+  assert_eq!(info[0].files.len(), 0);
 
-  assert_eq!(info.total_size, 1156988);
+  assert_eq!(info[1].name, "Projects");
+  assert_eq!(info[1].collabs.len(), 5);
+  assert_eq!(info[1].files.len(), 2);
+  assert_eq!(info[1].file_size(), 1143952);
+
+  assert_eq!(info[2].name, "Tasks");
+  assert_eq!(info[2].collabs.len(), 18);
+  assert_eq!(info[2].files.len(), 0);
+
+  println!("{info}");
 }
 
 #[tokio::test]
@@ -95,7 +104,6 @@ async fn import_project_and_task_test() {
   let root_view = &imported_view.views[0];
   assert_eq!(root_view.notion_name, "Projects & Tasks");
   assert_eq!(imported_view.views.len(), 1);
-  assert_eq!(root_view.get_file_size_recursively(), 1156988);
   let linked_views = root_view.get_linked_views();
   check_project_and_task_document(root_view, linked_views.clone()).await;
 
@@ -184,7 +192,7 @@ async fn check_task_database(linked_view: &NotionView) {
 async fn check_project_database(linked_view: &NotionView) {
   assert_eq!(linked_view.notion_name, "Projects");
 
-  let upload_files = linked_view.get_upload_files();
+  let upload_files = linked_view.notion_file.upload_resources();
   assert_eq!(upload_files.len(), 2);
 
   let (csv_fields, csv_rows) = parse_csv(linked_view.notion_file.imported_file_path().unwrap());

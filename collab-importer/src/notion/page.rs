@@ -14,7 +14,7 @@ use serde::Serialize;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 
-use crate::notion::file::{NotionFile, Resource};
+use crate::notion::file::NotionFile;
 use crate::notion::walk_dir::extract_external_links;
 use crate::util::{upload_file_url, FileId};
 use async_recursion::async_recursion;
@@ -34,34 +34,6 @@ pub struct NotionView {
 }
 
 impl NotionView {
-  /// Returns the files that need to be uploaded for current view.
-  pub fn get_upload_files(&self) -> Vec<PathBuf> {
-    self.notion_file.upload_resources()
-  }
-
-  /// Recursively collect all the files that need to be uploaded.
-  /// It will include the current view's file and all its children's files.
-  pub fn get_upload_files_recursively(&self) -> Vec<(String, Vec<PathBuf>)> {
-    let mut files = vec![];
-    files.push((self.object_id.clone(), self.notion_file.upload_resources()));
-
-    for child in &self.children {
-      files.extend(child.get_upload_files_recursively());
-    }
-    files
-  }
-
-  /// Recursively collect all the files that need to be uploaded.
-  pub fn get_file_size_recursively(&self) -> u64 {
-    let size = self.notion_file.file_size();
-    self
-      .children
-      .iter()
-      .map(|view| view.get_file_size_recursively())
-      .sum::<u64>()
-      + size
-  }
-
   /// Returns the number of CSV files in the view and its children.
   pub fn num_of_csv(&self) -> usize {
     self
@@ -326,13 +298,10 @@ impl NotionView {
           })
           .collect::<Vec<_>>();
 
-        let file_size = calculate_files_size(&files);
-
         Ok(ImportedCollabInfo {
           name,
           collabs: imported_collabs,
           files,
-          file_size,
           import_type: ImportType::Database,
         })
       },
@@ -344,12 +313,10 @@ impl NotionView {
           collab_type: CollabType::Document,
           encoded_collab,
         };
-        let file_size = calculate_files_size(&files);
         Ok(ImportedCollabInfo {
           name,
           collabs: vec![imported_collab],
           files,
-          file_size,
           import_type: ImportType::Document,
         })
       },
@@ -359,13 +326,6 @@ impl NotionView {
       ))),
     }
   }
-}
-
-fn calculate_files_size(paths: &[String]) -> u64 {
-  paths
-    .iter()
-    .map(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0))
-    .sum()
 }
 
 #[derive(Debug, Clone, Serialize)]

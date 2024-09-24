@@ -58,16 +58,6 @@ impl NotionFile {
       _ => vec![],
     }
   }
-  pub fn file_size(&self) -> u64 {
-    match self {
-      NotionFile::CSV { size, .. } => *size,
-      NotionFile::CSVPart { size, .. } => *size,
-      NotionFile::Markdown {
-        size, resources, ..
-      } => resources.iter().map(|r| r.size()).sum::<u64>() + *size,
-      _ => 0,
-    }
-  }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
