@@ -1473,7 +1473,7 @@ pub fn gen_field_id() -> String {
   nanoid!(6)
 }
 pub fn gen_database_file_id() -> String {
-  nanoid!(6)
+  uuid::Uuid::new_v4().to_string()
 }
 
 pub fn gen_row_id() -> RowId {
