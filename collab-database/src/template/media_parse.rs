@@ -32,13 +32,13 @@ pub(crate) fn replace_cells_with_files(
                 .to_string();
               let file_id = DatabaseFileId::from_path(&path).ok()?;
               let url = upload_file_url(host, workspace_id, field_id, &file_id);
-              Some(MediaFile {
-                field_id: field_id.to_string(),
-                name: file_name,
+              let media_type = MediaFileType::from_file(path);
+              Some(MediaFile::new(
+                file_name,
                 url,
-                upload_type: MediaUploadType::Cloud,
-                file_type: MediaFileType::Image,
-              })
+                MediaUploadType::Cloud,
+                media_type,
+              ))
             } else {
               None
             }

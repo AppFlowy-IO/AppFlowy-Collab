@@ -1,3 +1,4 @@
+use crate::database::gen_database_file_id;
 use crate::entity::FieldType;
 use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
 use crate::rows::{new_cell_builder, Cell};
@@ -6,6 +7,7 @@ use collab::util::AnyMapExt;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_repr::Serialize_repr;
 use std::fmt::{Display, Formatter};
+use std::path::Path;
 use std::sync::Arc;
 use yrs::Any;
 
@@ -132,8 +134,7 @@ impl ToString for MediaCellData {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaFile {
-  #[serde(rename = "id")]
-  pub field_id: String,
+  pub id: String,
   pub name: String,
   pub url: String,
   pub upload_type: MediaUploadType,
@@ -141,9 +142,24 @@ pub struct MediaFile {
 }
 
 impl MediaFile {
+  pub fn new(
+    name: String,
+    url: String,
+    upload_type: MediaUploadType,
+    file_type: MediaFileType,
+  ) -> Self {
+    Self {
+      id: gen_database_file_id(),
+      name,
+      url,
+      upload_type,
+      file_type,
+    }
+  }
+
   pub fn rename(&self, new_name: String) -> Self {
     Self {
-      field_id: self.field_id.clone(),
+      id: self.id.clone(),
       name: new_name,
       url: self.url.clone(),
       upload_type: self.upload_type.clone(),
@@ -157,7 +173,7 @@ impl Display for MediaFile {
     write!(
       f,
       "MediaFile(id: {}, name: {}, url: {}, upload_type: {:?}, file_type: {:?})",
-      self.field_id, self.name, self.url, self.upload_type, self.file_type
+      self.id, self.name, self.url, self.upload_type, self.file_type
     )
   }
 }
@@ -176,6 +192,27 @@ pub enum MediaFileType {
   Text = 7,
 }
 
+impl MediaFileType {
+  pub fn from_file<T: AsRef<Path>>(path: T) -> MediaFileType {
+    match path
+      .as_ref()
+      .extension()
+      .and_then(std::ffi::OsStr::to_str)
+      .unwrap_or("")
+      .to_lowercase()
+      .as_str()
+    {
+      "jpg" | "jpeg" | "png" | "gif" => MediaFileType::Image,
+      "zip" | "rar" | "tar" => MediaFileType::Archive,
+      "mp4" | "mov" | "avi" => MediaFileType::Video,
+      "mp3" | "wav" => MediaFileType::Audio,
+      "txt" => MediaFileType::Text,
+      "doc" | "docx" => MediaFileType::Document,
+      "html" | "htm" => MediaFileType::Link,
+      _ => MediaFileType::Other,
+    }
+  }
+}
 impl<'de> Deserialize<'de> for MediaFileType {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
@@ -240,7 +277,9 @@ impl<'de> Deserialize<'de> for MediaFileType {
 pub enum MediaUploadType {
   #[default]
   Local = 0,
+  /// Network means file is external http URL
   Network = 1,
+  /// Cloud means file stored in appflowy cloud
   Cloud = 2,
 }
 
@@ -301,7 +340,7 @@ mod tests {
   #[test]
   fn test_serialize_deserialize_media_file() {
     let media_file = MediaFile {
-      field_id: "123".to_string(),
+      id: "123".to_string(),
       name: "test_file".to_string(),
       url: "http://example.com/file".to_string(),
       upload_type: MediaUploadType::Cloud,
