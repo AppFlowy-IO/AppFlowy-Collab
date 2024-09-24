@@ -1,4 +1,5 @@
 use crate::error::ImporterError;
+use crate::imported_collab::ImportedCollabInfo;
 use crate::notion::page::NotionView;
 use crate::notion::walk_dir::{file_name_from_path, process_entry};
 use serde::Serialize;
@@ -41,9 +42,9 @@ impl NotionImporter {
     })
   }
 
-  pub async fn import(mut self) -> Result<ImportedView, ImporterError> {
+  pub async fn import(mut self) -> Result<ImportedInfo, ImporterError> {
     let views = self.collect_views().await?;
-    Ok(ImportedView {
+    Ok(ImportedInfo {
       workspace_id: self.workspace_id,
       host: self.host,
       name: self.name,
@@ -64,14 +65,22 @@ impl NotionImporter {
 }
 
 #[derive(Debug, Serialize)]
-pub struct ImportedView {
+pub struct ImportedInfo {
   pub workspace_id: String,
   pub host: String,
   pub name: String,
   pub views: Vec<NotionView>,
 }
 
-impl ImportedView {
+impl ImportedInfo {
+  pub async fn all_imported_collabs(&self) -> Vec<ImportedCollabInfo> {
+    let mut imported_collabs = vec![];
+    for view in self.views.iter() {
+      imported_collabs.extend(view.build_imported_collab_recursively().await);
+    }
+    imported_collabs
+  }
+
   pub fn all_upload_files(&self) -> Vec<(String, Vec<PathBuf>)> {
     self
       .views
@@ -80,13 +89,12 @@ impl ImportedView {
       .collect()
   }
 
-  pub fn size(&self) -> usize {
-    self.views.len()
-      + self
-        .views
-        .iter()
-        .map(|view| view.children.len())
-        .sum::<usize>()
+  pub fn all_file_size(&self) -> usize {
+    self
+      .views
+      .iter()
+      .map(|view| view.get_file_size_recursively() as usize)
+      .sum::<usize>()
   }
 
   pub fn num_of_csv(&self) -> usize {

@@ -1,4 +1,4 @@
-use crate::util::{parse_csv, print_view, setup_log, unzip};
+use crate::util::{parse_csv, print_view, setup_log, unzip_test_asset};
 use collab_database::database::Database;
 use collab_database::entity::FieldType;
 use collab_database::entity::FieldType::*;
@@ -10,16 +10,14 @@ use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_
 use collab_document::importer::define::{BlockType, URL_FIELD};
 use collab_importer::notion::page::NotionView;
 use collab_importer::notion::NotionImporter;
-use nanoid::nanoid;
 use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use std::collections::HashMap;
 
 #[tokio::test]
 async fn import_blog_post_document_test() {
   setup_log();
-  let parent_dir = nanoid!(6);
   let workspace_id = uuid::Uuid::new_v4();
-  let (_cleaner, file_path) = unzip("blog_post", &parent_dir).unwrap();
+  let (_cleaner, file_path) = unzip_test_asset("blog_post").unwrap();
   let host = "http://test.appflowy.cloud";
   let importer = NotionImporter::new(&file_path, workspace_id, host.to_string()).unwrap();
   let imported_view = importer.import().await.unwrap();
@@ -40,7 +38,7 @@ async fn import_blog_post_document_test() {
   .map(|s| format!("{host}/{workspace_id}/v1/blob/{object_id}/{s}"))
   .collect::<Vec<String>>();
 
-  let size = root_view.get_payload_size_recursively();
+  let size = root_view.get_file_size_recursively();
   assert_eq!(size, 5333956);
 
   let document = root_view.as_document(external_link_views).await.unwrap();
@@ -60,9 +58,8 @@ async fn import_blog_post_document_test() {
 
 #[tokio::test]
 async fn import_project_and_task_test() {
-  let parent_dir = nanoid!(6);
   let workspace_id = uuid::Uuid::new_v4();
-  let (_cleaner, file_path) = unzip("project&task", &parent_dir).unwrap();
+  let (_cleaner, file_path) = unzip_test_asset("project&task").unwrap();
   let importer = NotionImporter::new(
     &file_path,
     workspace_id,
@@ -83,7 +80,7 @@ async fn import_project_and_task_test() {
   let root_view = &imported_view.views[0];
   assert_eq!(root_view.notion_name, "Projects & Tasks");
   assert_eq!(imported_view.views.len(), 1);
-  assert_eq!(root_view.get_payload_size_recursively(), 1156988);
+  assert_eq!(root_view.get_file_size_recursively(), 1156988);
   let linked_views = root_view.get_linked_views();
   check_project_and_task_document(root_view, linked_views.clone()).await;
 
@@ -268,8 +265,7 @@ fn assert_database_rows_with_csv_rows(
 
 #[tokio::test]
 async fn test_importer() {
-  let parent_dir = nanoid!(6);
-  let (_cleaner, file_path) = unzip("import_test", &parent_dir).unwrap();
+  let (_cleaner, file_path) = unzip_test_asset("import_test").unwrap();
   let importer = NotionImporter::new(
     &file_path,
     uuid::Uuid::new_v4(),

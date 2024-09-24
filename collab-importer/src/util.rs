@@ -3,8 +3,12 @@ use base64::engine::general_purpose::URL_SAFE;
 use base64::Engine;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use sha2::{Digest, Sha256};
+use std::fs::{create_dir_all, File};
+use std::io::copy;
 use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, BufReader};
+use zip::ZipArchive;
+
 pub fn upload_file_url(host: &str, workspace_id: &str, object_id: &str, file_id: &str) -> String {
   let parent_dir = utf8_percent_encode(object_id, NON_ALPHANUMERIC).to_string();
   format!("{host}/{workspace_id}/v1/blob/{parent_dir}/{file_id}",)
@@ -45,4 +49,31 @@ async fn async_calculate_file_id(file_path: &PathBuf) -> Result<String, Error> {
   let hash_result = hasher.finalize();
   let file_id = format!("{}.{}", URL_SAFE.encode(hash_result), ext);
   Ok(file_id)
+}
+
+pub fn unzip(input: PathBuf, out: PathBuf) -> std::io::Result<PathBuf> {
+  let file_name = input
+    .file_stem()
+    .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid file stem"))?
+    .to_str()
+    .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid file name"))?;
+
+  let reader = File::open(&input)?;
+  let mut archive = ZipArchive::new(reader)?;
+  for i in 0..archive.len() {
+    let mut file = archive.by_index(i)?;
+    let outpath = out.join(file.mangled_name());
+    if file.name().ends_with('/') {
+      create_dir_all(&outpath)?;
+    } else {
+      if let Some(p) = outpath.parent() {
+        if !p.exists() {
+          create_dir_all(p)?;
+        }
+      }
+      let mut outfile = File::create(&outpath)?;
+      copy(&mut file, &mut outfile)?;
+    }
+  }
+  Ok(out.join(file_name))
 }

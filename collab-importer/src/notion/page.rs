@@ -1,5 +1,5 @@
 use crate::error::ImporterError;
-use crate::imported_collab::{ImportedCollab, ImportedCollabView, ImportedType};
+use crate::imported_collab::{ImportedCollab, ImportedCollabInfo};
 
 use collab_database::database::{gen_database_view_id, Database};
 use collab_database::template::csv::CSVTemplate;
@@ -14,11 +14,11 @@ use serde::Serialize;
 use serde_json::json;
 use std::collections::HashMap;
 
-use std::path::{Path, PathBuf};
-
 use crate::notion::file::{NotionFile, Resource};
 use crate::notion::walk_dir::extract_external_links;
 use crate::util::{upload_file_url, FileId};
+use async_recursion::async_recursion;
+use std::path::{Path, PathBuf};
 use tracing::error;
 
 #[derive(Debug, Clone, Serialize)]
@@ -39,6 +39,10 @@ impl NotionView {
     self.notion_file.upload_resources()
   }
 
+  pub fn get_file_size(&self) -> u64 {
+    self.notion_file.file_size()
+  }
+
   /// Recursively collect all the files that need to be uploaded.
   /// It will include the current view's file and all its children's files.
   pub fn get_upload_files_recursively(&self) -> Vec<(String, Vec<PathBuf>)> {
@@ -52,12 +56,12 @@ impl NotionView {
   }
 
   /// Recursively collect all the files that need to be uploaded.
-  pub fn get_payload_size_recursively(&self) -> u64 {
+  pub fn get_file_size_recursively(&self) -> u64 {
     let size = self.notion_file.file_size();
     self
       .children
       .iter()
-      .map(|view| view.get_payload_size_recursively())
+      .map(|view| view.get_file_size_recursively())
       .sum::<u64>()
       + size
   }
@@ -281,7 +285,23 @@ impl NotionView {
     }
   }
 
-  pub async fn try_into_collab(self) -> Result<ImportedCollabView, ImporterError> {
+  #[async_recursion(?Send)]
+  pub async fn build_imported_collab_recursively(&self) -> Vec<ImportedCollabInfo> {
+    let mut imported_collab_info_list = vec![];
+    let imported_collab_info = self.build_imported_collab().await;
+    if let Ok(info) = imported_collab_info {
+      imported_collab_info_list.push(info);
+    }
+    for child in self.children.iter() {
+      imported_collab_info_list.extend(child.build_imported_collab_recursively().await);
+    }
+    imported_collab_info_list
+  }
+
+  pub async fn build_imported_collab(&self) -> Result<ImportedCollabInfo, ImporterError> {
+    let files = self.get_upload_files();
+    let file_size = self.get_file_size();
+    let name = self.notion_name.clone();
     match self.notion_file {
       NotionFile::CSV { .. } => {
         let database = self.as_database().await?;
@@ -297,24 +317,26 @@ impl NotionView {
           })
           .collect::<Vec<_>>();
 
-        Ok(ImportedCollabView {
-          name: self.notion_name,
-          imported_type: ImportedType::Database,
+        Ok(ImportedCollabInfo {
+          name,
           collabs: imported_collabs,
+          files,
+          file_size,
         })
       },
       NotionFile::Markdown { .. } => {
         let document = self.as_document(HashMap::new()).await?;
         let encoded_collab = document.encode_collab()?;
         let imported_collab = ImportedCollab {
-          object_id: self.object_id,
+          object_id: self.object_id.clone(),
           collab_type: CollabType::Document,
           encoded_collab,
         };
-        Ok(ImportedCollabView {
-          name: self.notion_name,
-          imported_type: ImportedType::Document,
+        Ok(ImportedCollabInfo {
+          name,
           collabs: vec![imported_collab],
+          files,
+          file_size,
         })
       },
       _ => Err(ImporterError::InvalidFileType(format!(
