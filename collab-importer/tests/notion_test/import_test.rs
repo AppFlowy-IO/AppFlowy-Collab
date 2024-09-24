@@ -1,18 +1,25 @@
-use crate::util::{parse_csv, print_view, setup_log, unzip};
-
-use collab_database::template::entity::CELL_DATA;
+use crate::util::{parse_csv, print_view, setup_log, unzip_test_asset};
+use collab_database::database::Database;
+use collab_database::entity::FieldType;
+use collab_database::entity::FieldType::*;
+use collab_database::error::DatabaseError;
+use collab_database::fields::media_type_option::MediaCellData;
+use collab_database::fields::{Field, StringifyTypeOption};
+use collab_database::rows::Row;
 use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_from_block_data};
 use collab_document::importer::define::{BlockType, URL_FIELD};
-use collab_importer::notion::{NotionImporter, NotionView};
-use nanoid::nanoid;
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use collab_importer::imported_collab::import_notion_zip_file;
+use collab_importer::notion::page::NotionView;
+use collab_importer::notion::NotionImporter;
+use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[tokio::test]
 async fn import_blog_post_document_test() {
   setup_log();
-  let parent_dir = nanoid!(6);
   let workspace_id = uuid::Uuid::new_v4();
-  let (_cleaner, file_path) = unzip("blog_post", &parent_dir).unwrap();
+  let (_cleaner, file_path) = unzip_test_asset("blog_post").unwrap();
   let host = "http://test.appflowy.cloud";
   let importer = NotionImporter::new(&file_path, workspace_id, host.to_string()).unwrap();
   let imported_view = importer.import().await.unwrap();
@@ -33,10 +40,7 @@ async fn import_blog_post_document_test() {
   .map(|s| format!("{host}/{workspace_id}/v1/blob/{object_id}/{s}"))
   .collect::<Vec<String>>();
 
-  let size = root_view.get_payload_size_recursively();
-  assert_eq!(size, 5333956);
-
-  let document = root_view.as_document(external_link_views).await.unwrap();
+  let (document, _) = root_view.as_document(external_link_views).await.unwrap();
   let page_block_id = document.get_page_id().unwrap();
   let block_ids = document.get_block_children_ids(&page_block_id);
   for block_id in block_ids.iter() {
@@ -47,16 +51,39 @@ async fn import_blog_post_document_test() {
       }
     }
   }
-
-  println!("Allowed URLs: {:?}", expected_urls);
   assert!(expected_urls.is_empty());
 }
 
 #[tokio::test]
+async fn import_project_and_task_collab_test() {
+  let workspace_id = uuid::Uuid::new_v4().to_string();
+  let host = "http://test.appflowy.cloud";
+  let zip_file_path = PathBuf::from("./tests/asset/project&task.zip");
+  let info = import_notion_zip_file(host, &workspace_id, zip_file_path)
+    .await
+    .unwrap();
+
+  assert_eq!(info.len(), 3);
+  assert_eq!(info[0].name, "Projects & Tasks");
+  assert_eq!(info[0].collabs.len(), 1);
+  assert_eq!(info[0].files.len(), 0);
+
+  assert_eq!(info[1].name, "Projects");
+  assert_eq!(info[1].collabs.len(), 5);
+  assert_eq!(info[1].files.len(), 2);
+  assert_eq!(info[1].file_size(), 1143952);
+
+  assert_eq!(info[2].name, "Tasks");
+  assert_eq!(info[2].collabs.len(), 18);
+  assert_eq!(info[2].files.len(), 0);
+
+  println!("{info}");
+}
+
+#[tokio::test]
 async fn import_project_and_task_test() {
-  let parent_dir = nanoid!(6);
   let workspace_id = uuid::Uuid::new_v4();
-  let (_cleaner, file_path) = unzip("project&task", &parent_dir).unwrap();
+  let (_cleaner, file_path) = unzip_test_asset("project&task").unwrap();
   let importer = NotionImporter::new(
     &file_path,
     workspace_id,
@@ -77,7 +104,6 @@ async fn import_project_and_task_test() {
   let root_view = &imported_view.views[0];
   assert_eq!(root_view.notion_name, "Projects & Tasks");
   assert_eq!(imported_view.views.len(), 1);
-  assert_eq!(root_view.get_payload_size_recursively(), 12852);
   let linked_views = root_view.get_linked_views();
   check_project_and_task_document(root_view, linked_views.clone()).await;
 
@@ -85,8 +111,8 @@ async fn import_project_and_task_test() {
   assert_eq!(linked_views[0].notion_name, "Tasks");
   assert_eq!(linked_views[1].notion_name, "Projects");
 
-  check_database_view(&linked_views[0], "Tasks", 17, 13).await;
-  check_database_view(&linked_views[1], "Projects", 4, 11).await;
+  check_task_database(&linked_views[0]).await;
+  check_project_database(&linked_views[1]).await;
 }
 
 async fn check_project_and_task_document(
@@ -94,7 +120,7 @@ async fn check_project_and_task_document(
   notion_views: Vec<NotionView>,
 ) {
   let external_link_views = document_view.get_external_link_notion_view();
-  let document = document_view
+  let (document, _) = document_view
     .as_document(external_link_views)
     .await
     .unwrap();
@@ -126,50 +152,143 @@ async fn check_project_and_task_document(
   assert!(cloned_notion_views2.is_empty());
 }
 
-async fn check_database_view(
-  linked_view: &NotionView,
-  expected_name: &str,
-  expected_rows_count: usize,
-  expected_fields_count: usize,
-) {
-  assert_eq!(linked_view.notion_name, expected_name);
+async fn check_task_database(linked_view: &NotionView) {
+  assert_eq!(linked_view.notion_name, "Tasks");
 
   let (csv_fields, csv_rows) = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
-  let database = linked_view.as_database().await.unwrap();
+  let (database, _) = linked_view.as_database().await.unwrap();
   let fields = database.get_fields_in_view(&database.get_inline_view_id(), None);
   let rows = database.collect_all_rows().await;
-  assert_eq!(rows.len(), expected_rows_count);
+  assert_eq!(rows.len(), 17);
   assert_eq!(fields.len(), csv_fields.len());
-  assert_eq!(fields.len(), expected_fields_count);
+  assert_eq!(fields.len(), 13);
 
+  let expected_file_type = vec![
+    RichText,
+    SingleSelect,
+    SingleSelect,
+    DateTime,
+    SingleSelect,
+    MultiSelect,
+    SingleSelect,
+    SingleSelect,
+    RichText,
+    RichText,
+    RichText,
+    DateTime,
+    SingleSelect,
+  ];
+  for (index, field) in fields.iter().enumerate() {
+    assert_eq!(FieldType::from(field.field_type), expected_file_type[index]);
+    // println!("{:?}", FieldType::from(field.field_type));
+  }
   for (index, field) in csv_fields.iter().enumerate() {
     assert_eq!(&fields[index].name, field);
   }
+
+  assert_database_rows_with_csv_rows(csv_rows, database, fields, rows, HashMap::new());
+}
+
+async fn check_project_database(linked_view: &NotionView) {
+  assert_eq!(linked_view.notion_name, "Projects");
+
+  let upload_files = linked_view.notion_file.upload_resources();
+  assert_eq!(upload_files.len(), 2);
+
+  let (csv_fields, csv_rows) = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
+  let (database, _) = linked_view.as_database().await.unwrap();
+  let fields = database.get_fields_in_view(&database.get_inline_view_id(), None);
+  let rows = database.collect_all_rows().await;
+  assert_eq!(rows.len(), 4);
+  assert_eq!(fields.len(), csv_fields.len());
+  assert_eq!(fields.len(), 13);
+
+  let expected_file_type = vec![
+    RichText,
+    SingleSelect,
+    SingleSelect,
+    MultiSelect,
+    SingleSelect,
+    RichText,
+    RichText,
+    RichText,
+    RichText,
+    MultiSelect,
+    RichText,
+    Checkbox,
+    Media,
+  ];
+  for (index, field) in fields.iter().enumerate() {
+    assert_eq!(FieldType::from(field.field_type), expected_file_type[index]);
+    // println!("{:?}", FieldType::from(field.field_type));
+  }
+  for (index, field) in csv_fields.iter().enumerate() {
+    assert_eq!(&fields[index].name, field);
+  }
+  let  expected_files = HashMap::from([("DO010003572.jpeg", "http://test.appflowy.cloud/ef151418-41b1-4ca2-b190-3ed59a3bea76/v1/blob/ysINEn/TZQyERYXrrBq25cKsZVAvRqe9ZPTYNlG8EJfUioKruI=.jpeg"), ("appflowy_2x.png", "http://test.appflowy.cloud/ef151418-41b1-4ca2-b190-3ed59a3bea76/v1/blob/ysINEn/c9Ju1jv95fPw6irxJACDKPDox_-hfd-3_blIEapMaZc=.png"),]);
+  assert_database_rows_with_csv_rows(csv_rows, database, fields, rows, expected_files);
+}
+
+fn assert_database_rows_with_csv_rows(
+  csv_rows: Vec<Vec<String>>,
+  database: Database,
+  fields: Vec<Field>,
+  rows: Vec<Result<Row, DatabaseError>>,
+  mut expected_files: HashMap<&str, &str>,
+) {
+  let type_option_by_field_id = fields
+    .iter()
+    .map(|field| {
+      (
+        field.id.clone(),
+        match database.get_stringify_type_option(&field.id) {
+          None => {
+            panic!("Field {:?} doesn't have type option", field)
+          },
+          Some(ty) => ty,
+        },
+      )
+    })
+    .collect::<HashMap<String, Box<dyn StringifyTypeOption>>>();
+
   for (row_index, row) in rows.into_iter().enumerate() {
     let row = row.unwrap();
     assert_eq!(row.cells.len(), fields.len());
     for (field_index, field) in fields.iter().enumerate() {
-      let cell = row
-        .cells
-        .get(&field.id)
-        .unwrap()
-        .get(CELL_DATA)
-        .cloned()
-        .unwrap();
-      let cell_data = cell.cast::<String>().unwrap();
-      assert_eq!(
-        cell_data, csv_rows[row_index][field_index],
-        "Row: {}, Field: {}:{}",
-        row_index, field.name, field_index
-      );
+      let cell = row.cells.get(&field.id).unwrap();
+      let field_type = FieldType::from(field.field_type);
+      let type_option = type_option_by_field_id[&field.id].as_ref();
+      let cell_data = type_option.stringify_cell(cell);
+
+      if matches!(field_type, FieldType::Media) {
+        let mut data = MediaCellData::from(cell);
+        if let Some(file) = data.files.pop() {
+          expected_files.remove(file.name.as_str()).unwrap();
+        }
+      } else {
+        assert_eq!(
+          cell_data,
+          percent_decode_str(&csv_rows[row_index][field_index])
+            .decode_utf8()
+            .unwrap()
+            .to_string(),
+          "current:{}, expected:{}\nRow: {}, Field: {}, type: {:?}",
+          cell_data,
+          csv_rows[row_index][field_index],
+          row_index,
+          field.name,
+          FieldType::from(field.field_type)
+        );
+      }
     }
   }
+
+  assert!(expected_files.is_empty());
 }
 
 #[tokio::test]
-async fn test_importer() {
-  let parent_dir = nanoid!(6);
-  let (_cleaner, file_path) = unzip("import_test", &parent_dir).unwrap();
+async fn import_level_test() {
+  let (_cleaner, file_path) = unzip_test_asset("import_test").unwrap();
   let importer = NotionImporter::new(
     &file_path,
     uuid::Uuid::new_v4(),

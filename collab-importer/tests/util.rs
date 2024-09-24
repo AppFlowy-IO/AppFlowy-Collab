@@ -1,12 +1,13 @@
-use collab_importer::notion::NotionView;
-use std::fs::{create_dir_all, File};
-use std::io::copy;
-use std::path::{Path, PathBuf};
+use collab_importer::notion::page::NotionView;
+use collab_importer::util::unzip;
+use percent_encoding::percent_decode_str;
+use std::env::temp_dir;
+
+use std::path::PathBuf;
 use std::sync::Once;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
-use zip::ZipArchive;
 
 pub fn print_view(view: &NotionView, depth: usize) {
   let indent = "  ".repeat(depth);
@@ -32,7 +33,7 @@ pub fn parse_csv(file_path: &PathBuf) -> (Vec<String>, Vec<Vec<String>>) {
     .map(|record| {
       record
         .into_iter()
-        .map(|s| s.to_string())
+        .filter_map(|s| Some(percent_decode_str(s).decode_utf8().ok()?.to_string()))
         .collect::<Vec<String>>()
     })
     .collect::<Vec<Vec<String>>>();
@@ -58,33 +59,12 @@ impl Drop for Cleaner {
   }
 }
 
-pub fn unzip(file_name: &str, parent_dir: &str) -> std::io::Result<(Cleaner, PathBuf)> {
+pub fn unzip_test_asset(file_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
   // Open the zip file
-  let zip_file_path = format!("./tests/asset/{}.zip", file_name);
-  let reader = File::open(zip_file_path)?;
-  let output_folder_path = format!("./tests/temp/{}", parent_dir);
-  let mut archive = ZipArchive::new(reader)?;
-  for i in 0..archive.len() {
-    let mut file = archive.by_index(i)?;
-    let outpath = Path::new(&output_folder_path).join(file.mangled_name());
-
-    if file.name().ends_with('/') {
-      create_dir_all(&outpath)?;
-    } else {
-      if let Some(p) = outpath.parent() {
-        if !p.exists() {
-          create_dir_all(p)?;
-        }
-      }
-      let mut outfile = File::create(&outpath)?;
-      copy(&mut file, &mut outfile)?;
-    }
-  }
-  let path = format!("{}/{}", output_folder_path, file_name);
-  Ok((
-    Cleaner::new(PathBuf::from(output_folder_path)),
-    PathBuf::from(path),
-  ))
+  let zip_file_path = PathBuf::from(format!("./tests/asset/{}.zip", file_name));
+  let output_folder_path = temp_dir();
+  let out_path = unzip(zip_file_path, output_folder_path.clone())?;
+  Ok((Cleaner::new(out_path.clone()), out_path))
 }
 
 pub fn setup_log() {

@@ -1,5 +1,5 @@
 use crate::database::gen_option_id;
-use crate::entity::{SelectOption, SelectOptionColor};
+use crate::fields::select_type_option::{SelectOption, SelectOptionColor};
 use std::collections::HashSet;
 
 pub(crate) const SELECT_OPTION_SEPARATOR: &str = ",";

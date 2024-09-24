@@ -6,7 +6,9 @@ use std::ops::{Deref, DerefMut};
 use crate::blocks::{Block, BlockEvent};
 use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
-use crate::fields::{Field, FieldChangeReceiver, FieldMap, FieldUpdate};
+use crate::fields::{
+  stringify_type_option, Field, FieldChangeReceiver, FieldMap, FieldUpdate, StringifyTypeOption,
+};
 use crate::meta::MetaMap;
 use crate::rows::{
   meta_id_from_row_id, CreateRowParams, CreateRowParamsValidator, DatabaseRow, Row, RowCell,
@@ -25,7 +27,7 @@ use crate::workspace_database::{
 
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
-  DatabaseViewMeta, EncodedCollabInfo, EncodedDatabase,
+  DatabaseViewMeta, EncodedCollabInfo, EncodedDatabase, FieldType,
 };
 use crate::template::entity::DatabaseTemplate;
 use crate::template::util::create_database_params_from_template;
@@ -506,6 +508,14 @@ impl Database {
   /// Return the [RowMeta] with the given row id.
   pub async fn get_row_meta(&self, row_id: &RowId) -> Option<RowMeta> {
     self.body.block.get_row_meta(row_id).await
+  }
+
+  pub fn get_stringify_type_option(&self, field_id: &str) -> Option<Box<dyn StringifyTypeOption>> {
+    let txn = self.collab.transact();
+    let field = self.body.fields.get_field(&txn, field_id)?;
+    let field_type = FieldType::from(field.field_type);
+    let type_option = field.get_any_type_option(field_type.type_id())?;
+    stringify_type_option(type_option, &field_type)
   }
 
   #[instrument(level = "debug", skip_all)]
@@ -1461,6 +1471,9 @@ pub fn gen_database_view_id() -> String {
 
 pub fn gen_field_id() -> String {
   nanoid!(6)
+}
+pub fn gen_database_file_id() -> String {
+  uuid::Uuid::new_v4().to_string()
 }
 
 pub fn gen_row_id() -> RowId {

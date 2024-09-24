@@ -1,42 +1,50 @@
 use crate::database::{gen_field_id, gen_row_id};
 use crate::template::entity::{
   CellTemplateData, DatabaseTemplate, DatabaseViewTemplate, FieldTemplate, RowTemplate, CELL_DATA,
-  TYPE_OPTION_CONTENT,
 };
 
-use crate::entity::{DateTypeOption, FieldType, SelectTypeOption};
+use crate::entity::FieldType;
+use crate::fields::checkbox_type_option::CheckboxTypeOption;
+use crate::fields::date_type_option::{DateFormat, DateTypeOption};
+use crate::fields::media_type_option::MediaTypeOption;
+use crate::fields::number_type_option::NumberTypeOption;
+use crate::fields::select_type_option::SelectTypeOption;
+use crate::fields::text_type_option::RichTextTypeOption;
+use crate::fields::timestamp_type_option::TimestampTypeOption;
 use crate::rows::new_cell_builder;
 use crate::template::chect_list_parse::ChecklistCellData;
 use crate::template::date_parse::replace_cells_with_timestamp;
+use crate::template::media_parse::replace_cells_with_files;
 use crate::template::option_parse::{
   build_options_from_cells, replace_cells_with_options_id, SELECT_OPTION_SEPARATOR,
 };
-use crate::template::time_parse::TimestampTypeOption;
 use crate::views::DatabaseLayout;
 use collab::preclude::Any;
 use std::collections::HashMap;
 
 pub struct DatabaseTemplateBuilder {
+  #[allow(dead_code)]
+  database_id: String,
   columns: Vec<Vec<CellTemplateData>>,
   fields: Vec<FieldTemplate>,
 }
 
-impl Default for DatabaseTemplateBuilder {
-  fn default() -> Self {
-    Self::new()
-  }
-}
-
 impl DatabaseTemplateBuilder {
-  pub fn new() -> Self {
+  pub fn new(database_id: String) -> Self {
     Self {
+      database_id,
       columns: vec![],
       fields: vec![],
     }
   }
 
-  pub fn create_field<F>(
+  #[allow(clippy::too_many_arguments)]
+  pub async fn create_field<F>(
     mut self,
+    server_url: &Option<String>,
+    workspace_id: &str,
+    database_id: &str,
+    resources: &[String],
     name: &str,
     field_type: FieldType,
     is_primary: bool,
@@ -46,7 +54,9 @@ impl DatabaseTemplateBuilder {
     F: FnOnce(FieldTemplateBuilder) -> FieldTemplateBuilder,
   {
     let builder = FieldTemplateBuilder::new(name.to_string(), field_type, is_primary);
-    let (field, rows) = f(builder).build();
+    let (field, rows) = f(builder)
+      .build(server_url, resources, workspace_id, database_id)
+      .await;
     self.fields.push(field);
     self.columns.push(rows);
     self
@@ -98,6 +108,7 @@ impl DatabaseTemplateBuilder {
 }
 
 pub struct FieldTemplateBuilder {
+  pub field_id: String,
   pub name: String,
   pub field_type: FieldType,
   pub is_primary: bool,
@@ -106,7 +117,9 @@ pub struct FieldTemplateBuilder {
 
 impl FieldTemplateBuilder {
   pub fn new(name: String, field_type: FieldType, is_primary: bool) -> Self {
+    let field_id = gen_field_id();
     Self {
+      field_id,
       name,
       field_type,
       is_primary,
@@ -139,10 +152,16 @@ impl FieldTemplateBuilder {
     self
   }
 
-  pub fn build(self) -> (FieldTemplate, Vec<CellTemplateData>) {
+  pub async fn build(
+    self,
+    server_url: &Option<String>,
+    resources: &[String],
+    workspace_id: &str,
+    database_id: &str,
+  ) -> (FieldTemplate, Vec<CellTemplateData>) {
     let field_type = self.field_type.clone();
     let mut field_template = FieldTemplate {
-      field_id: gen_field_id(),
+      field_id: self.field_id,
       name: self.name,
       field_type: self.field_type,
       is_primary: self.is_primary,
@@ -166,13 +185,9 @@ impl FieldTemplateBuilder {
             })
             .collect::<Vec<CellTemplateData>>();
 
-        field_template.type_options.insert(
-          field_type,
-          HashMap::from([(
-            TYPE_OPTION_CONTENT.to_string(),
-            Any::from(type_option.to_json_string()),
-          )]),
-        );
+        field_template
+          .type_options
+          .insert(field_type, type_option.into());
         cell_template
       },
       FieldType::DateTime => {
@@ -185,13 +200,12 @@ impl FieldTemplateBuilder {
           })
           .collect::<Vec<CellTemplateData>>();
 
-        field_template.type_options.insert(
-          field_type,
-          HashMap::from([(
-            TYPE_OPTION_CONTENT.to_string(),
-            Any::from(DateTypeOption::default().to_json_string()),
-          )]),
-        );
+        let mut type_option = DateTypeOption::new();
+        type_option.date_format = DateFormat::FriendlyFull;
+
+        field_template
+          .type_options
+          .insert(field_type, type_option.into());
         cell_template
       },
       FieldType::LastEditedTime | FieldType::CreatedTime => {
@@ -203,13 +217,52 @@ impl FieldTemplateBuilder {
             map
           })
           .collect::<Vec<CellTemplateData>>();
+        let type_option = TimestampTypeOption::new(field_type.clone());
+        field_template
+          .type_options
+          .insert(field_type, type_option.into());
+        cell_template
+      },
+      FieldType::RichText => {
+        let cell_template = string_cell_template(&field_type, self.cells);
+        field_template
+          .type_options
+          .insert(field_type, RichTextTypeOption.into());
+        cell_template
+      },
+      FieldType::Checkbox => {
+        let cell_template = string_cell_template(&field_type, self.cells);
+        field_template
+          .type_options
+          .insert(field_type, CheckboxTypeOption.into());
+        cell_template
+      },
+      FieldType::Number => {
+        let cell_template = string_cell_template(&field_type, self.cells);
+        field_template
+          .type_options
+          .insert(field_type, NumberTypeOption::default().into());
 
-        let type_option =
-          serde_json::to_string(&TimestampTypeOption::new(field_type.clone(), false)).unwrap();
-        field_template.type_options.insert(
-          field_type,
-          HashMap::from([(TYPE_OPTION_CONTENT.to_string(), Any::from(type_option))]),
-        );
+        cell_template
+      },
+      FieldType::Media => {
+        let cell_template =
+          replace_cells_with_files(server_url, workspace_id, self.cells, database_id, resources)
+            .await
+            .into_iter()
+            .map(|file| {
+              let mut cells = new_cell_builder(field_type.clone());
+              if let Some(file) = file {
+                cells.insert(CELL_DATA.to_string(), Any::from(file));
+              }
+              cells
+            })
+            .collect();
+
+        field_template
+          .type_options
+          .insert(field_type, MediaTypeOption::default().into());
+
         cell_template
       },
       _ => string_cell_template(&field_type, self.cells),

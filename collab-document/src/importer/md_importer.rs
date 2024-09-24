@@ -144,7 +144,7 @@ fn process_mdast_node(
       );
     },
     // handle the blockquote and list item node
-    mdast::Node::BlockQuote(_) | mdast::Node::ListItem(_) => {
+    mdast::Node::Blockquote(_) | mdast::Node::ListItem(_) => {
       if let Some(children) = get_mdast_node_children(node) {
         if children.is_empty() {
           return;

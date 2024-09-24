@@ -4,10 +4,14 @@ use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
 pub fn cast_string_to_timestamp(cell: &str) -> Option<i64> {
   // Try to parse as a UNIX timestamp directly
   if let Ok(unix_timestamp) = cell.parse::<i64>() {
-    return Utc
-      .timestamp_opt(unix_timestamp, 0)
-      .single()
-      .map(|value| value.timestamp());
+    // Only consider timestamps larger than a reasonable threshold (e.g., 1000000000 for the year 2001)
+    if unix_timestamp > 1000000000 {
+      return Utc
+        .timestamp_opt(unix_timestamp, 0)
+        .single()
+        .filter(|&value| value.timestamp() > 0)
+        .map(|value| value.timestamp());
+    }
   }
 
   // Try to parse as datetime with time formats

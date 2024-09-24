@@ -20,7 +20,7 @@ arc-swap.workspace = true
 tokio = { workspace = true, features = ["sync", "rt"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 uuid = { version = "1.3.3", features = ["v4", "v5"] }
-markdown = "1.0.0-alpha.20"
+markdown = "1.0.0-alpha.21"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }

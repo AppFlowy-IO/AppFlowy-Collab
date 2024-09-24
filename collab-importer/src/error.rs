@@ -24,11 +24,8 @@ pub enum ImporterError {
   Utf8Error(#[from] Utf8Error),
 
   #[error(transparent)]
-  Internal(#[from] anyhow::Error),
-}
+  IOError(#[from] std::io::Error),
 
-impl From<std::io::Error> for ImporterError {
-  fn from(error: std::io::Error) -> Self {
-    Self::Internal(error.into())
-  }
+  #[error(transparent)]
+  Internal(#[from] anyhow::Error),
 }

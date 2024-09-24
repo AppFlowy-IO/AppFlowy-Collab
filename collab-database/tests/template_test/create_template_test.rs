@@ -7,6 +7,8 @@ use futures::StreamExt;
 
 #[tokio::test]
 async fn create_template_test() {
+  let workspace_id = uuid::Uuid::new_v4().to_string();
+  let database_id = gen_database_id();
   let expected_field_type = [
     FieldType::RichText,
     FieldType::SingleSelect,
@@ -19,43 +21,97 @@ async fn create_template_test() {
   let expected_cell_len = [6, 6, 6, 4, 2, 2];
   let expected_field_name = ["name", "status", "user", "time", "tasks", "last modified"];
 
-  let template = DatabaseTemplateBuilder::new()
-    .create_field("name", FieldType::RichText, true, |field_builder| {
-      field_builder
-        .create_cell("1th")
-        .create_cell("2th")
-        .create_cell("3th")
-    })
-    .create_field("status", FieldType::SingleSelect, false, |field_builder| {
-      field_builder
-        .create_cell("In Progress")
-        .create_cell("Done")
-        .create_cell("Not Started")
-        .create_cell("In Progress")
-        .create_cell("In Progress")
-    })
-    .create_field("user", FieldType::MultiSelect, false, |field_builder| {
-      field_builder
-        .create_cell("Lucas, Tom")
-        .create_cell("Lucas")
-        .create_cell("Tom")
-        .create_cell("")
-        .create_cell("Lucas, Tom, Nathan")
-    })
-    .create_field("time", FieldType::DateTime, false, |field_builder| {
-      field_builder
-        .create_cell("2024/08/22")
-        .create_cell("2024-08-22")
-        .create_cell("August 22, 2024")
-        .create_cell("2024-08-22 03:30 PM")
-    })
-    .create_field("tasks", FieldType::Checklist, false, |field_builder| {
-      field_builder
-        .create_checklist_cell(vec!["A", "B"], vec!["A"])
-        .create_checklist_cell(vec!["1", "2", "3"], Vec::<String>::new())
-        .create_checklist_cell(vec!["task1", "task2"], vec!["task1", "task2"])
-    })
+  let template = DatabaseTemplateBuilder::new(database_id.clone())
     .create_field(
+      &None,
+      &workspace_id,
+      &database_id,
+      &[],
+      "name",
+      FieldType::RichText,
+      true,
+      |field_builder| {
+        field_builder
+          .create_cell("1th")
+          .create_cell("2th")
+          .create_cell("3th")
+      },
+    )
+    .await
+    .create_field(
+      &None,
+      &workspace_id,
+      &database_id,
+      &[],
+      "status",
+      FieldType::SingleSelect,
+      false,
+      |field_builder| {
+        field_builder
+          .create_cell("In Progress")
+          .create_cell("Done")
+          .create_cell("Not Started")
+          .create_cell("In Progress")
+          .create_cell("In Progress")
+      },
+    )
+    .await
+    .create_field(
+      &None,
+      &workspace_id,
+      &database_id,
+      &[],
+      "user",
+      FieldType::MultiSelect,
+      false,
+      |field_builder| {
+        field_builder
+          .create_cell("Lucas, Tom")
+          .create_cell("Lucas")
+          .create_cell("Tom")
+          .create_cell("")
+          .create_cell("Lucas, Tom, Nathan")
+      },
+    )
+    .await
+    .create_field(
+      &None,
+      &workspace_id,
+      &database_id,
+      &[],
+      "time",
+      FieldType::DateTime,
+      false,
+      |field_builder| {
+        field_builder
+          .create_cell("2024/08/22")
+          .create_cell("2024-08-22")
+          .create_cell("August 22, 2024")
+          .create_cell("2024-08-22 03:30 PM")
+      },
+    )
+    .await
+    .create_field(
+      &None,
+      &workspace_id,
+      &database_id,
+      &[],
+      "tasks",
+      FieldType::Checklist,
+      false,
+      |field_builder| {
+        field_builder
+          .create_checklist_cell(vec!["A", "B"], vec!["A"])
+          .create_checklist_cell(vec!["1", "2", "3"], Vec::<String>::new())
+          .create_checklist_cell(vec!["task1", "task2"], vec!["task1", "task2"])
+      },
+    )
+    .await
+    .create_field(
+      &None,
+      &workspace_id,
+      &database_id,
+      &[],
       "last modified",
       FieldType::LastEditedTime,
       false,
@@ -67,6 +123,7 @@ async fn create_template_test() {
           .create_cell("2024-08-22 03:30 PM")
       },
     )
+    .await
     .build();
 
   assert_eq!(template.rows.len(), 5);
@@ -75,7 +132,6 @@ async fn create_template_test() {
   }
   assert_eq!(template.fields.len(), 6);
 
-  let database_id = gen_database_id();
   let view_id = gen_database_view_id();
   let database = Database::create_with_template(&database_id, &view_id, template)
     .await

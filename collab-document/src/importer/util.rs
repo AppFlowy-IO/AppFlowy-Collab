@@ -13,7 +13,7 @@ pub(crate) fn mdast_node_type_to_block_type(node: &mdast::Node, list_type: Optio
     mdast::Node::Root(_) => BlockType::Page,
     mdast::Node::Paragraph(_) => BlockType::Paragraph,
     mdast::Node::Heading(_) => BlockType::Heading,
-    mdast::Node::BlockQuote(_) => BlockType::Quote,
+    mdast::Node::Blockquote(_) => BlockType::Quote,
     mdast::Node::Code(_) => BlockType::Code,
     mdast::Node::Image(_) => BlockType::Image,
     mdast::Node::ImageReference(_) => BlockType::Image,
@@ -164,7 +164,7 @@ pub(crate) fn get_mdast_node_info(
 
 pub(crate) fn get_mdast_node_children(node: &mdast::Node) -> Option<&Vec<mdast::Node>> {
   match node {
-    mdast::Node::BlockQuote(quote) => Some(&quote.children),
+    mdast::Node::Blockquote(quote) => Some(&quote.children),
     mdast::Node::ListItem(list) => Some(&list.children),
     _ => None,
   }
