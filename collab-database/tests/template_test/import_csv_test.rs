@@ -13,7 +13,8 @@ async fn import_csv_test() {
 
   let database_id = gen_database_id();
   let view_id = gen_database_view_id();
-  let database = Database::create_with_template(&database_id, &view_id, csv_template)
+  let database_template = csv_template.try_into_database_template().await.unwrap();
+  let database = Database::create_with_template(&database_id, &view_id, database_template)
     .await
     .unwrap();
 

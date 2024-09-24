@@ -1,3 +1,4 @@
+use crate::database::gen_database_id;
 use crate::entity::FieldType;
 use crate::error::DatabaseError;
 use crate::template::builder::DatabaseTemplateBuilder;
@@ -42,7 +43,7 @@ impl CSVTemplate {
     workspace_id: String,
     reader: impl io::Read,
     auto_field_type: bool,
-    resources: Vec<String>,
+    mut resources: Vec<String>,
   ) -> Result<Self, DatabaseError> {
     let mut fields: Vec<CSVField> = vec![];
 
@@ -70,8 +71,11 @@ impl CSVTemplate {
       .collect();
 
     if auto_field_type {
-      auto_detect_field_type(&mut fields, &rows, resources.clone());
+      auto_detect_field_type(&mut fields, &rows, &resources);
     }
+
+    // filter out resources that are not used
+    filter_out_resources(&fields, &rows, &mut resources);
 
     Ok(CSVTemplate {
       server_url,
@@ -81,13 +85,66 @@ impl CSVTemplate {
       resources,
     })
   }
+
+  pub async fn try_into_database_template(self) -> Result<DatabaseTemplate, DatabaseError> {
+    let database_id = gen_database_id();
+    let mut builder = DatabaseTemplateBuilder::new(database_id.clone());
+    let CSVTemplate {
+      server_url,
+      workspace_id,
+      fields,
+      rows,
+      resources,
+    } = self;
+    for (field_index, field) in fields.into_iter().enumerate() {
+      builder = builder
+        .create_field(
+          &server_url,
+          &workspace_id,
+          &database_id,
+          &resources,
+          &field.name,
+          field.field_type,
+          field_index == 0,
+          |mut field_builder| {
+            for row in rows.iter() {
+              if let Some(cell) = row.get(field_index) {
+                field_builder = field_builder.create_cell(cell)
+              }
+            }
+            field_builder
+          },
+        )
+        .await;
+    }
+
+    Ok(builder.build())
+  }
 }
 
-fn auto_detect_field_type(
-  fields: &mut Vec<CSVField>,
-  rows: &[Vec<String>],
-  resources: Vec<String>,
-) {
+fn filter_out_resources(fields: &[CSVField], rows: &[Vec<String>], resources: &mut Vec<String>) {
+  let mut cell_resources = HashSet::new();
+  for (index, field) in fields.iter().enumerate() {
+    if matches!(field.field_type, FieldType::Media) {
+      for row in rows.iter() {
+        if let Some(cell) = row.get(index) {
+          for res in cell.split(',') {
+            cell_resources.insert(res.to_string());
+          }
+        }
+      }
+    }
+  }
+
+  resources.retain(|resource| {
+    // retain if resource end with one of the cell resources
+    cell_resources
+      .iter()
+      .any(|cell_res| resource.ends_with(cell_res))
+  });
+}
+
+fn auto_detect_field_type(fields: &mut Vec<CSVField>, rows: &[Vec<String>], resources: &[String]) {
   let num_fields = fields.len();
   fields
     .par_iter_mut()
@@ -104,7 +161,7 @@ fn auto_detect_field_type(
         })
         .collect();
 
-      field.field_type = detect_field_type_from_cells_with_resource(&cells, &resources);
+      field.field_type = detect_field_type_from_cells_with_resource(&cells, resources);
     });
 }
 
@@ -153,17 +210,12 @@ fn detect_field_type_from_cells_with_resource(cells: &[&str], resources: &[Strin
 
 fn is_media_cell<E: AsRef<str>>(cells: &[&str], resources: &[E]) -> bool {
   let half_count = cells.len() / 2;
-  let decode_cells = cells
+  let valid_count = cells
     .iter()
-    .filter_map(|cell| percent_decode_str(cell).decode_utf8().ok())
-    .collect::<Vec<_>>();
-
-  let valid_count = decode_cells
-    .into_iter()
     .filter(|cell| {
       resources
         .iter()
-        .any(|resource| resource.as_ref().ends_with(cell.as_ref()))
+        .any(|resource| resource.as_ref().ends_with(*cell))
     })
     .count();
 
@@ -266,41 +318,6 @@ fn is_link_field(cells: &[&str]) -> bool {
   cells
     .iter()
     .all(|cell| cell.starts_with("http://") || cell.starts_with("https://"))
-}
-
-impl TryFrom<CSVTemplate> for DatabaseTemplate {
-  type Error = DatabaseError;
-
-  fn try_from(value: CSVTemplate) -> Result<Self, Self::Error> {
-    let mut builder = DatabaseTemplateBuilder::new();
-    let CSVTemplate {
-      server_url,
-      workspace_id,
-      fields,
-      rows,
-      resources,
-    } = value;
-    for (field_index, field) in fields.into_iter().enumerate() {
-      builder = builder.create_field(
-        &server_url,
-        &workspace_id,
-        &resources,
-        &field.name,
-        field.field_type,
-        field_index == 0,
-        |mut field_builder| {
-          for row in rows.iter() {
-            if let Some(cell) = row.get(field_index) {
-              field_builder = field_builder.create_cell(cell)
-            }
-          }
-          field_builder
-        },
-      );
-    }
-
-    Ok(builder.build())
-  }
 }
 
 #[cfg(test)]

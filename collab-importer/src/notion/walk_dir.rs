@@ -163,8 +163,11 @@ pub(crate) fn process_entry(
       }
     } else if csv_file_path.exists() {
       let file_size = get_file_size(&csv_file_path).ok()?;
-      // If the current file is a CSV, its related resources are located in the same directory.
-      // Therefore, we need to collect resources from the directory where the CSV file is located.
+      // When the current file is a CSV, its related resources are found in the same directory.
+      // We need to gather resources from this directory by iterating over the CSV file.
+      // To identify which CSV file contains these resources, we must check each row
+      // to see if any paths match the resource path.
+      // Currently, we do this in [filter_out_resources].
       resources.extend(collect_entry_resources(
         workspace_id,
         parent_path,

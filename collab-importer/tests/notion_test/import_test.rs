@@ -8,10 +8,12 @@ use collab_database::fields::{Field, StringifyTypeOption};
 use collab_database::rows::Row;
 use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_from_block_data};
 use collab_document::importer::define::{BlockType, URL_FIELD};
+use collab_importer::imported_collab::import_notion_zip_file;
 use collab_importer::notion::page::NotionView;
 use collab_importer::notion::NotionImporter;
 use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[tokio::test]
 async fn import_blog_post_document_test() {
@@ -41,7 +43,7 @@ async fn import_blog_post_document_test() {
   let size = root_view.get_file_size_recursively();
   assert_eq!(size, 5333956);
 
-  let document = root_view.as_document(external_link_views).await.unwrap();
+  let (document, _) = root_view.as_document(external_link_views).await.unwrap();
   let page_block_id = document.get_page_id().unwrap();
   let block_ids = document.get_block_children_ids(&page_block_id);
   for block_id in block_ids.iter() {
@@ -52,8 +54,21 @@ async fn import_blog_post_document_test() {
       }
     }
   }
-
   assert!(expected_urls.is_empty());
+}
+
+#[tokio::test]
+async fn import_project_and_task_collab_test() {
+  let workspace_id = uuid::Uuid::new_v4().to_string();
+  let host = "http://test.appflowy.cloud";
+  let zip_file_path = PathBuf::from("./tests/asset/project&task.zip");
+  let info = import_notion_zip_file(host, &workspace_id, zip_file_path)
+    .await
+    .unwrap();
+
+  println!("{info}");
+
+  assert_eq!(info.total_size, 1156988);
 }
 
 #[tokio::test]
@@ -97,7 +112,7 @@ async fn check_project_and_task_document(
   notion_views: Vec<NotionView>,
 ) {
   let external_link_views = document_view.get_external_link_notion_view();
-  let document = document_view
+  let (document, _) = document_view
     .as_document(external_link_views)
     .await
     .unwrap();
@@ -133,7 +148,7 @@ async fn check_task_database(linked_view: &NotionView) {
   assert_eq!(linked_view.notion_name, "Tasks");
 
   let (csv_fields, csv_rows) = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
-  let database = linked_view.as_database().await.unwrap();
+  let (database, _) = linked_view.as_database().await.unwrap();
   let fields = database.get_fields_in_view(&database.get_inline_view_id(), None);
   let rows = database.collect_all_rows().await;
   assert_eq!(rows.len(), 17);
@@ -173,7 +188,7 @@ async fn check_project_database(linked_view: &NotionView) {
   assert_eq!(upload_files.len(), 2);
 
   let (csv_fields, csv_rows) = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
-  let database = linked_view.as_database().await.unwrap();
+  let (database, _) = linked_view.as_database().await.unwrap();
   let fields = database.get_fields_in_view(&database.get_inline_view_id(), None);
   let rows = database.collect_all_rows().await;
   assert_eq!(rows.len(), 4);
@@ -264,7 +279,7 @@ fn assert_database_rows_with_csv_rows(
 }
 
 #[tokio::test]
-async fn test_importer() {
+async fn import_level_test() {
   let (_cleaner, file_path) = unzip_test_asset("import_test").unwrap();
   let importer = NotionImporter::new(
     &file_path,

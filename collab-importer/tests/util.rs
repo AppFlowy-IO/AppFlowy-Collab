@@ -2,14 +2,12 @@ use collab_importer::notion::page::NotionView;
 use collab_importer::util::unzip;
 use percent_encoding::percent_decode_str;
 use std::env::temp_dir;
-use std::fs::{create_dir_all, File};
-use std::io::copy;
-use std::path::{Path, PathBuf};
+
+use std::path::PathBuf;
 use std::sync::Once;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
-use zip::ZipArchive;
 
 pub fn print_view(view: &NotionView, depth: usize) {
   let indent = "  ".repeat(depth);

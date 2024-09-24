@@ -23,29 +23,27 @@ use collab::preclude::Any;
 use std::collections::HashMap;
 
 pub struct DatabaseTemplateBuilder {
+  #[allow(dead_code)]
+  database_id: String,
   columns: Vec<Vec<CellTemplateData>>,
   fields: Vec<FieldTemplate>,
 }
 
-impl Default for DatabaseTemplateBuilder {
-  fn default() -> Self {
-    Self::new()
-  }
-}
-
 impl DatabaseTemplateBuilder {
-  pub fn new() -> Self {
+  pub fn new(database_id: String) -> Self {
     Self {
+      database_id,
       columns: vec![],
       fields: vec![],
     }
   }
 
   #[allow(clippy::too_many_arguments)]
-  pub fn create_field<F>(
+  pub async fn create_field<F>(
     mut self,
     server_url: &Option<String>,
     workspace_id: &str,
+    database_id: &str,
     resources: &[String],
     name: &str,
     field_type: FieldType,
@@ -56,7 +54,9 @@ impl DatabaseTemplateBuilder {
     F: FnOnce(FieldTemplateBuilder) -> FieldTemplateBuilder,
   {
     let builder = FieldTemplateBuilder::new(name.to_string(), field_type, is_primary);
-    let (field, rows) = f(builder).build(server_url, resources, workspace_id);
+    let (field, rows) = f(builder)
+      .build(server_url, resources, workspace_id, database_id)
+      .await;
     self.fields.push(field);
     self.columns.push(rows);
     self
@@ -152,11 +152,12 @@ impl FieldTemplateBuilder {
     self
   }
 
-  pub fn build(
+  pub async fn build(
     self,
     server_url: &Option<String>,
     resources: &[String],
     workspace_id: &str,
+    database_id: &str,
   ) -> (FieldTemplate, Vec<CellTemplateData>) {
     let field_type = self.field_type.clone();
     let mut field_template = FieldTemplate {
@@ -245,22 +246,18 @@ impl FieldTemplateBuilder {
         cell_template
       },
       FieldType::Media => {
-        let cell_template = replace_cells_with_files(
-          server_url,
-          workspace_id,
-          self.cells,
-          &field_template.field_id,
-          resources,
-        )
-        .into_iter()
-        .map(|file| {
-          let mut cells = new_cell_builder(field_type.clone());
-          if let Some(file) = file {
-            cells.insert(CELL_DATA.to_string(), Any::from(file));
-          }
-          cells
-        })
-        .collect();
+        let cell_template =
+          replace_cells_with_files(server_url, workspace_id, self.cells, database_id, resources)
+            .await
+            .into_iter()
+            .map(|file| {
+              let mut cells = new_cell_builder(field_type.clone());
+              if let Some(file) = file {
+                cells.insert(CELL_DATA.to_string(), Any::from(file));
+              }
+              cells
+            })
+            .collect();
 
         field_template
           .type_options

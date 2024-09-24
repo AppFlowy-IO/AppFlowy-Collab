@@ -1,5 +1,5 @@
 use crate::error::ImporterError;
-use crate::imported_collab::{ImportedCollab, ImportedCollabInfo};
+use crate::imported_collab::{ImportType, ImportedCollab, ImportedCollabInfo};
 
 use collab_database::database::{gen_database_view_id, Database};
 use collab_database::template::csv::CSVTemplate;
@@ -12,7 +12,7 @@ use collab_entity::CollabType;
 use percent_encoding::percent_decode_str;
 use serde::Serialize;
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::notion::file::{NotionFile, Resource};
 use crate::notion::walk_dir::extract_external_links;
@@ -37,10 +37,6 @@ impl NotionView {
   /// Returns the files that need to be uploaded for current view.
   pub fn get_upload_files(&self) -> Vec<PathBuf> {
     self.notion_file.upload_resources()
-  }
-
-  pub fn get_file_size(&self) -> u64 {
-    self.notion_file.file_size()
   }
 
   /// Recursively collect all the files that need to be uploaded.
@@ -139,13 +135,10 @@ impl NotionView {
   pub async fn as_document(
     &self,
     external_link_views: HashMap<String, NotionView>,
-  ) -> Result<Document, ImporterError> {
+  ) -> Result<(Document, Vec<String>), ImporterError> {
     match &self.notion_file {
-      NotionFile::Markdown {
-        file_path,
-        resources,
-        ..
-      } => {
+      NotionFile::Markdown { file_path, .. } => {
+        let mut resource_paths = self.notion_file.upload_resources();
         let md_importer = MDImporter::new(None);
         let content = std::fs::read_to_string(file_path)?;
         let document_data = md_importer.import(&self.object_id, content)?;
@@ -154,10 +147,20 @@ impl NotionView {
         let parent_path = file_path.parent().unwrap();
         self.replace_link_views(&mut document, external_link_views);
         self
-          .replace_resources(&self.workspace_id, &mut document, resources, parent_path)
+          .replace_resources(
+            &self.workspace_id,
+            &mut document,
+            &mut resource_paths,
+            parent_path,
+          )
           .await;
 
-        Ok(document)
+        let resources = resource_paths
+          .iter()
+          .filter_map(|p| p.to_str().map(|s| s.to_string()))
+          .collect();
+
+        Ok((document, resources))
       },
       _ => Err(ImporterError::InvalidFileType(format!(
         "File type is not supported for document: {:?}",
@@ -170,9 +173,10 @@ impl NotionView {
     &self,
     workspace_id: &str,
     document: &mut Document,
-    resources: &[Resource],
+    resources: &mut Vec<PathBuf>,
     parent_path: &Path,
   ) {
+    let mut document_resources = HashSet::new();
     if let Some(page_id) = document.get_page_id() {
       let block_ids = document.get_block_children_ids(&page_id);
       for block_id in block_ids.iter() {
@@ -184,11 +188,13 @@ impl NotionView {
               .and_then(|s| percent_decode_str(s).decode_utf8().ok())
             {
               let full_image_url = parent_path.join(image_url.to_string());
-              if resources.iter().any(|r| r.contains(&full_image_url)) {
+              let pos = resources.iter().position(|r| r == &full_image_url);
+              if let Some(pos) = pos {
                 if let Ok(file_id) = FileId::from_path(&full_image_url).await {
+                  document_resources.insert(resources.remove(pos));
+
                   let url = upload_file_url(&self.host, workspace_id, &self.object_id, &file_id);
                   block_data.insert(URL_FIELD.to_string(), json!(url));
-
                   // Update the block with the new URL
                   if let Err(err) = document.update_block(block_id, block_data) {
                     error!(
@@ -203,6 +209,8 @@ impl NotionView {
         }
       }
     }
+
+    *resources = document_resources.into_iter().collect();
   }
 
   fn replace_link_views(
@@ -256,7 +264,7 @@ impl NotionView {
     }
   }
 
-  pub async fn as_database(&self) -> Result<Database, ImporterError> {
+  pub async fn as_database(&self) -> Result<(Database, Vec<String>), ImporterError> {
     match &self.notion_file {
       NotionFile::CSV { file_path, .. } => {
         let content = std::fs::read_to_string(file_path)?;
@@ -273,10 +281,13 @@ impl NotionView {
           true,
           resources,
         )?;
+        let resources = csv_template.resources.clone();
         let database_view_id = gen_database_view_id();
+        let database_template = csv_template.try_into_database_template().await.unwrap();
         let database =
-          Database::create_with_template(&self.object_id, &database_view_id, csv_template).await?;
-        Ok(database)
+          Database::create_with_template(&self.object_id, &database_view_id, database_template)
+            .await?;
+        Ok((database, resources))
       },
       _ => Err(ImporterError::InvalidFileType(format!(
         "File type is not supported for database: {:?}",
@@ -299,12 +310,10 @@ impl NotionView {
   }
 
   pub async fn build_imported_collab(&self) -> Result<ImportedCollabInfo, ImporterError> {
-    let files = self.get_upload_files();
-    let file_size = self.get_file_size();
     let name = self.notion_name.clone();
-    match self.notion_file {
+    match &self.notion_file {
       NotionFile::CSV { .. } => {
-        let database = self.as_database().await?;
+        let (database, files) = self.as_database().await?;
         let imported_collabs = database
           .encode_database_collabs()
           .await?
@@ -317,26 +326,31 @@ impl NotionView {
           })
           .collect::<Vec<_>>();
 
+        let file_size = calculate_files_size(&files);
+
         Ok(ImportedCollabInfo {
           name,
           collabs: imported_collabs,
           files,
           file_size,
+          import_type: ImportType::Database,
         })
       },
       NotionFile::Markdown { .. } => {
-        let document = self.as_document(HashMap::new()).await?;
+        let (document, files) = self.as_document(HashMap::new()).await?;
         let encoded_collab = document.encode_collab()?;
         let imported_collab = ImportedCollab {
           object_id: self.object_id.clone(),
           collab_type: CollabType::Document,
           encoded_collab,
         };
+        let file_size = calculate_files_size(&files);
         Ok(ImportedCollabInfo {
           name,
           collabs: vec![imported_collab],
           files,
           file_size,
+          import_type: ImportType::Document,
         })
       },
       _ => Err(ImporterError::InvalidFileType(format!(
@@ -345,6 +359,13 @@ impl NotionView {
       ))),
     }
   }
+}
+
+fn calculate_files_size(paths: &[String]) -> u64 {
+  paths
+    .iter()
+    .map(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0))
+    .sum()
 }
 
 #[derive(Debug, Clone, Serialize)]

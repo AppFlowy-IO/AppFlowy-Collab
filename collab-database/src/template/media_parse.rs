@@ -3,11 +3,11 @@ use crate::util::{upload_file_url, DatabaseFileId};
 use rayon::prelude::*;
 use std::path::PathBuf;
 
-pub(crate) fn replace_cells_with_files(
+pub(crate) async fn replace_cells_with_files(
   server_url: &Option<String>,
   workspace_id: &str,
   cells: Vec<String>,
-  field_id: &str,
+  database_id: &str,
   resources: &[String],
 ) -> Vec<Option<MediaCellData>> {
   match server_url {
@@ -31,7 +31,7 @@ pub(crate) fn replace_cells_with_files(
                 .to_string_lossy()
                 .to_string();
               let file_id = DatabaseFileId::from_path(&path).ok()?;
-              let url = upload_file_url(host, workspace_id, field_id, &file_id);
+              let url = upload_file_url(host, workspace_id, database_id, &file_id);
               let media_type = MediaFileType::from_file(path);
               Some(MediaFile::new(
                 file_name,
