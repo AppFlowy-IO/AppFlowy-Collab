@@ -1,6 +1,6 @@
 use crate::error::ImporterError;
 use crate::imported_collab::ImportedCollabInfo;
-use crate::notion::page::NotionView;
+use crate::notion::page::NotionPage;
 use crate::notion::walk_dir::{file_name_from_path, process_entry};
 use serde::Serialize;
 use std::path::PathBuf;
@@ -12,7 +12,7 @@ pub struct NotionImporter {
   workspace_id: String,
   path: PathBuf,
   name: String,
-  pub views: Option<NotionView>,
+  pub views: Option<NotionPage>,
 }
 
 impl NotionImporter {
@@ -52,13 +52,13 @@ impl NotionImporter {
     })
   }
 
-  async fn collect_views(&mut self) -> Result<Vec<NotionView>, ImporterError> {
+  async fn collect_views(&mut self) -> Result<Vec<NotionPage>, ImporterError> {
     let views = WalkDir::new(&self.path)
       .max_depth(1)
       .into_iter()
       .filter_map(|e| e.ok())
       .filter_map(|entry| process_entry(&self.host, &self.workspace_id, &entry))
-      .collect::<Vec<NotionView>>();
+      .collect::<Vec<NotionPage>>();
 
     Ok(views)
   }
@@ -69,7 +69,7 @@ pub struct ImportedInfo {
   pub workspace_id: String,
   pub host: String,
   pub name: String,
-  pub views: Vec<NotionView>,
+  pub views: Vec<NotionPage>,
 }
 
 impl ImportedInfo {

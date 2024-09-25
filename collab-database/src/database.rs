@@ -139,11 +139,7 @@ impl Database {
     })
   }
 
-  pub async fn create_with_template<T>(
-    database_id: &str,
-    view_id: &str,
-    template: T,
-  ) -> Result<Self, DatabaseError>
+  pub async fn create_with_template<T>(template: T) -> Result<Self, DatabaseError>
   where
     T: TryInto<DatabaseTemplate> + Send + Sync + 'static,
     <T as TryInto<DatabaseTemplate>>::Error: ToString,
@@ -156,8 +152,7 @@ impl Database {
     .await
     .map_err(|e| DatabaseError::Internal(e.into()))??;
 
-    let params =
-      create_database_params_from_template(database_id.to_string(), view_id.to_string(), template);
+    let params = create_database_params_from_template(template);
     let context = DatabaseContext {
       collab_service: Arc::new(NoPersistenceDatabaseCollabService),
       notifier: Default::default(),

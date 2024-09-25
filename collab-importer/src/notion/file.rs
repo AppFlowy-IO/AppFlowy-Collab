@@ -43,7 +43,7 @@ impl NotionFile {
       _ => None,
     }
   }
-  pub fn upload_resources(&self) -> Vec<PathBuf> {
+  pub fn upload_files(&self) -> Vec<PathBuf> {
     match self {
       NotionFile::Markdown { resources, .. } => resources
         .iter()

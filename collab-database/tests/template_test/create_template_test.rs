@@ -7,7 +7,6 @@ use futures::StreamExt;
 
 #[tokio::test]
 async fn create_template_test() {
-  let workspace_id = uuid::Uuid::new_v4().to_string();
   let database_id = gen_database_id();
   let expected_field_type = [
     FieldType::RichText,
@@ -21,12 +20,10 @@ async fn create_template_test() {
   let expected_cell_len = [6, 6, 6, 4, 2, 2];
   let expected_field_name = ["name", "status", "user", "time", "tasks", "last modified"];
 
-  let template = DatabaseTemplateBuilder::new(database_id.clone())
+  let template = DatabaseTemplateBuilder::new(database_id.clone(), gen_database_view_id())
     .create_field(
       &None,
-      &workspace_id,
       &database_id,
-      &[],
       "name",
       FieldType::RichText,
       true,
@@ -40,9 +37,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &workspace_id,
       &database_id,
-      &[],
       "status",
       FieldType::SingleSelect,
       false,
@@ -58,9 +53,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &workspace_id,
       &database_id,
-      &[],
       "user",
       FieldType::MultiSelect,
       false,
@@ -76,9 +69,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &workspace_id,
       &database_id,
-      &[],
       "time",
       FieldType::DateTime,
       false,
@@ -93,9 +84,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &workspace_id,
       &database_id,
-      &[],
       "tasks",
       FieldType::Checklist,
       false,
@@ -109,9 +98,7 @@ async fn create_template_test() {
     .await
     .create_field(
       &None,
-      &workspace_id,
       &database_id,
-      &[],
       "last modified",
       FieldType::LastEditedTime,
       false,
@@ -131,11 +118,7 @@ async fn create_template_test() {
     assert_eq!(row.cells.len(), expected_cell_len[index]);
   }
   assert_eq!(template.fields.len(), 6);
-
-  let view_id = gen_database_view_id();
-  let database = Database::create_with_template(&database_id, &view_id, template)
-    .await
-    .unwrap();
+  let database = Database::create_with_template(template).await.unwrap();
 
   // Assert num of fields
   let fields = database.get_fields_in_view(database.get_inline_view_id().as_str(), None);

@@ -1,4 +1,4 @@
-use collab_importer::notion::page::NotionView;
+use collab_importer::notion::page::NotionPage;
 use collab_importer::util::unzip;
 use percent_encoding::percent_decode_str;
 use std::env::temp_dir;
@@ -9,7 +9,7 @@ use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
-pub fn print_view(view: &NotionView, depth: usize) {
+pub fn print_view(view: &NotionPage, depth: usize) {
   let indent = "  ".repeat(depth);
   println!("{}- {}:{:?}", indent, view.notion_name, view.notion_file);
 

@@ -6,7 +6,7 @@ use markdown::mdast::Node;
 use markdown::{to_mdast, ParseOptions};
 use percent_encoding::percent_decode_str;
 
-use crate::notion::page::{ExternalLink, ExternalLinkType, NotionView};
+use crate::notion::page::{ExternalLink, ExternalLinkType, NotionPage};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -78,7 +78,7 @@ pub(crate) fn process_entry(
   host: &str,
   workspace_id: &str,
   current_entry: &DirEntry,
-) -> Option<NotionView> {
+) -> Option<NotionPage> {
   let path = current_entry.path();
 
   if path.is_file() && is_valid_file(path) {
@@ -103,13 +103,13 @@ pub(crate) fn process_entry(
     if notion_file.is_csv_all() {
       return None;
     }
-    return Some(NotionView {
+    return Some(NotionPage {
       notion_name: name,
       notion_id: id,
       children: vec![],
       notion_file,
       external_links,
-      object_id: uuid::Uuid::new_v4().to_string(),
+      view_id: uuid::Uuid::new_v4().to_string(),
       host: host.to_string(),
       workspace_id: workspace_id.to_string(),
     });
@@ -186,13 +186,13 @@ pub(crate) fn process_entry(
       return None;
     }
 
-    return Some(NotionView {
+    return Some(NotionPage {
       notion_name: name,
       notion_id: id,
       children,
       notion_file,
       external_links,
-      object_id: uuid::Uuid::new_v4().to_string(),
+      view_id: uuid::Uuid::new_v4().to_string(),
       host: host.to_string(),
       workspace_id: workspace_id.to_string(),
     });

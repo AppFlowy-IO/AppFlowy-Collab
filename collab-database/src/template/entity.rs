@@ -6,6 +6,8 @@ use std::collections::HashMap;
 
 pub const CELL_DATA: &str = "data";
 pub struct DatabaseTemplate {
+  pub database_id: String,
+  pub view_id: String,
   pub fields: Vec<FieldTemplate>,
   pub rows: Vec<RowTemplate>,
   pub views: Vec<DatabaseViewTemplate>,
