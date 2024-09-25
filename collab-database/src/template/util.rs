@@ -7,12 +7,8 @@ use crate::template::entity::DatabaseTemplate;
 use crate::workspace_database::NoPersistenceDatabaseCollabService;
 use std::sync::Arc;
 
-pub async fn database_from_template(
-  database_id: String,
-  view_id: String,
-  template: DatabaseTemplate,
-) -> Result<Database, DatabaseError> {
-  let params = create_database_params_from_template(database_id, view_id, template);
+pub async fn database_from_template(template: DatabaseTemplate) -> Result<Database, DatabaseError> {
+  let params = create_database_params_from_template(template);
   let context = DatabaseContext {
     collab_service: Arc::new(NoPersistenceDatabaseCollabService),
     notifier: Default::default(),
@@ -22,8 +18,6 @@ pub async fn database_from_template(
 }
 
 pub fn construct_create_database_params<T>(
-  database_id: String,
-  view_id: String,
   template: T,
 ) -> Result<CreateDatabaseParams, DatabaseError>
 where
@@ -33,16 +27,15 @@ where
   let template = template
     .try_into()
     .map_err(|err| DatabaseError::ImportData(err.to_string()))?;
-  let params = create_database_params_from_template(database_id, view_id, template);
+  let params = create_database_params_from_template(template);
   Ok(params)
 }
 
 pub(crate) fn create_database_params_from_template(
-  database_id: String,
-  view_id: String,
   template: DatabaseTemplate,
 ) -> CreateDatabaseParams {
-  let inline_view_id = view_id;
+  let inline_view_id = template.view_id;
+  let database_id = template.database_id;
   let timestamp = timestamp();
 
   let mut fields = vec![];

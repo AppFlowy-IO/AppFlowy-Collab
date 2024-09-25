@@ -9,7 +9,7 @@ use collab_database::rows::Row;
 use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_from_block_data};
 use collab_document::importer::define::{BlockType, URL_FIELD};
 use collab_importer::imported_collab::import_notion_zip_file;
-use collab_importer::notion::page::NotionView;
+use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::NotionImporter;
 use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use std::collections::HashMap;
@@ -29,7 +29,7 @@ async fn import_blog_post_document_test() {
 
   let root_view = &imported_view.views[0];
   let external_link_views = root_view.get_external_link_notion_view();
-  let object_id = utf8_percent_encode(&root_view.object_id, NON_ALPHANUMERIC).to_string();
+  let object_id = utf8_percent_encode(&root_view.view_id, NON_ALPHANUMERIC).to_string();
 
   let mut expected_urls = vec![
     "PGTRCFsf2duc7iP3KjE62Xs8LE7B96a0aQtLtGtfIcw=.jpg",
@@ -116,8 +116,8 @@ async fn import_project_and_task_test() {
 }
 
 async fn check_project_and_task_document(
-  document_view: &NotionView,
-  notion_views: Vec<NotionView>,
+  document_view: &NotionPage,
+  notion_views: Vec<NotionPage>,
 ) {
   let external_link_views = document_view.get_external_link_notion_view();
   let (document, _) = document_view
@@ -132,7 +132,7 @@ async fn check_project_and_task_document(
     if let Some((block_type, block_delta)) = document.get_block_delta(block_id) {
       if matches!(block_type, BlockType::BulletedList) {
         let page_id = extract_page_id_from_block_delta(&block_delta).unwrap();
-        cloned_notion_views.retain(|view| view.object_id != page_id);
+        cloned_notion_views.retain(|view| view.view_id != page_id);
       }
     }
   }
@@ -142,7 +142,7 @@ async fn check_project_and_task_document(
     if let Some((block_type, data)) = document.get_block_data(block_id) {
       if matches!(block_type, BlockType::Paragraph) {
         if let Some(view_id) = extract_view_id_from_block_data(&data) {
-          cloned_notion_views2.retain(|view| view.object_id != view_id);
+          cloned_notion_views2.retain(|view| view.view_id != view_id);
         }
       }
     }
@@ -152,7 +152,7 @@ async fn check_project_and_task_document(
   assert!(cloned_notion_views2.is_empty());
 }
 
-async fn check_task_database(linked_view: &NotionView) {
+async fn check_task_database(linked_view: &NotionPage) {
   assert_eq!(linked_view.notion_name, "Tasks");
 
   let (csv_fields, csv_rows) = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
@@ -176,7 +176,7 @@ async fn check_task_database(linked_view: &NotionView) {
     RichText,
     RichText,
     DateTime,
-    SingleSelect,
+    Number,
   ];
   for (index, field) in fields.iter().enumerate() {
     assert_eq!(FieldType::from(field.field_type), expected_file_type[index]);
@@ -189,10 +189,10 @@ async fn check_task_database(linked_view: &NotionView) {
   assert_database_rows_with_csv_rows(csv_rows, database, fields, rows, HashMap::new());
 }
 
-async fn check_project_database(linked_view: &NotionView) {
+async fn check_project_database(linked_view: &NotionPage) {
   assert_eq!(linked_view.notion_name, "Projects");
 
-  let upload_files = linked_view.notion_file.upload_resources();
+  let upload_files = linked_view.notion_file.upload_files();
   assert_eq!(upload_files.len(), 2);
 
   let (csv_fields, csv_rows) = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
@@ -209,12 +209,12 @@ async fn check_project_database(linked_view: &NotionView) {
     SingleSelect,
     MultiSelect,
     SingleSelect,
-    RichText,
+    Number,
     RichText,
     RichText,
     RichText,
     MultiSelect,
-    RichText,
+    Number,
     Checkbox,
     Media,
   ];

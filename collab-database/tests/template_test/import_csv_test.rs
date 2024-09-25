@@ -1,4 +1,4 @@
-use collab_database::database::{gen_database_id, gen_database_view_id, Database};
+use collab_database::database::Database;
 use collab_database::rows::Row;
 use collab_database::template::csv::CSVTemplate;
 use collab_database::template::entity::CELL_DATA;
@@ -6,15 +6,11 @@ use futures::StreamExt;
 
 #[tokio::test]
 async fn import_csv_test() {
-  let workspace_id = uuid::Uuid::new_v4().to_string();
   let csv_data = include_str!("../asset/selected-services-march-2024-quarter-csv.csv");
-  let csv_template =
-    CSVTemplate::try_from_reader(None, workspace_id, csv_data.as_bytes(), false).unwrap();
+  let csv_template = CSVTemplate::try_from_reader(csv_data.as_bytes(), false, None).unwrap();
 
-  let database_id = gen_database_id();
-  let view_id = gen_database_view_id();
   let database_template = csv_template.try_into_database_template().await.unwrap();
-  let database = Database::create_with_template(&database_id, &view_id, database_template)
+  let database = Database::create_with_template(database_template)
     .await
     .unwrap();
 

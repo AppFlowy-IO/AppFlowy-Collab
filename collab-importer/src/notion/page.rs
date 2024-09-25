@@ -1,8 +1,8 @@
 use crate::error::ImporterError;
 use crate::imported_collab::{ImportType, ImportedCollab, ImportedCollabInfo};
 
-use collab_database::database::{gen_database_view_id, Database};
-use collab_database::template::csv::CSVTemplate;
+use collab_database::database::Database;
+use collab_database::template::csv::{CSVResource, CSVTemplate};
 use collab_document::blocks::{mention_block_data, mention_block_delta, TextDelta};
 use collab_document::document::Document;
 use collab_document::importer::define::{BlockType, URL_FIELD};
@@ -22,18 +22,20 @@ use std::path::{Path, PathBuf};
 use tracing::error;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct NotionView {
+pub struct NotionPage {
   pub notion_name: String,
   pub notion_id: String,
   pub notion_file: NotionFile,
-  pub object_id: String,
+  /// If current notion view is database, then view_id is the inline view id of the database.
+  /// If current notion view is document, then view_id is the document id of the document.
+  pub view_id: String,
   pub workspace_id: String,
-  pub children: Vec<NotionView>,
+  pub children: Vec<NotionPage>,
   pub external_links: Vec<Vec<ExternalLink>>,
   pub host: String,
 }
 
-impl NotionView {
+impl NotionPage {
   /// Returns the number of CSV files in the view and its children.
   pub fn num_of_csv(&self) -> usize {
     self
@@ -62,7 +64,7 @@ impl NotionView {
       }
   }
 
-  pub fn get_external_link_notion_view(&self) -> HashMap<String, NotionView> {
+  pub fn get_external_link_notion_view(&self) -> HashMap<String, NotionPage> {
     let mut linked_views = HashMap::new();
     for links in self.external_links.iter() {
       if let Some(link) = links.last() {
@@ -76,8 +78,8 @@ impl NotionView {
 
   /// Get the view with the given ID.
   /// It will search the view recursively.
-  pub fn get_view(&self, id: &str) -> Option<NotionView> {
-    fn search_view(views: &[NotionView], id: &str) -> Option<NotionView> {
+  pub fn get_view(&self, id: &str) -> Option<NotionPage> {
+    fn search_view(views: &[NotionPage], id: &str) -> Option<NotionPage> {
       for view in views {
         if view.notion_id == id {
           return Some(view.clone());
@@ -92,7 +94,7 @@ impl NotionView {
     search_view(&self.children, id)
   }
 
-  pub fn get_linked_views(&self) -> Vec<NotionView> {
+  pub fn get_linked_views(&self) -> Vec<NotionPage> {
     let mut linked_views = vec![];
     for link in &self.external_links {
       for external_link in link {
@@ -106,15 +108,15 @@ impl NotionView {
 
   pub async fn as_document(
     &self,
-    external_link_views: HashMap<String, NotionView>,
+    external_link_views: HashMap<String, NotionPage>,
   ) -> Result<(Document, Vec<String>), ImporterError> {
     match &self.notion_file {
       NotionFile::Markdown { file_path, .. } => {
-        let mut resource_paths = self.notion_file.upload_resources();
+        let mut resource_paths = self.notion_file.upload_files();
         let md_importer = MDImporter::new(None);
         let content = std::fs::read_to_string(file_path)?;
-        let document_data = md_importer.import(&self.object_id, content)?;
-        let mut document = Document::create(&self.object_id, document_data)?;
+        let document_data = md_importer.import(&self.view_id, content)?;
+        let mut document = Document::create(&self.view_id, document_data)?;
 
         let parent_path = file_path.parent().unwrap();
         self.replace_link_views(&mut document, external_link_views);
@@ -165,7 +167,7 @@ impl NotionView {
                 if let Ok(file_id) = FileId::from_path(&full_image_url).await {
                   document_resources.insert(resources.remove(pos));
 
-                  let url = upload_file_url(&self.host, workspace_id, &self.object_id, &file_id);
+                  let url = upload_file_url(&self.host, workspace_id, &self.view_id, &file_id);
                   block_data.insert(URL_FIELD.to_string(), json!(url));
                   // Update the block with the new URL
                   if let Err(err) = document.update_block(block_id, block_data) {
@@ -188,7 +190,7 @@ impl NotionView {
   fn replace_link_views(
     &self,
     document: &mut Document,
-    external_link_views: HashMap<String, NotionView>,
+    external_link_views: HashMap<String, NotionPage>,
   ) {
     if let Some(page_id) = document.get_page_id() {
       // 2 Get all the block children of the page
@@ -209,7 +211,7 @@ impl NotionView {
                     if let Some(view) = external_link_views.get(&link.id) {
                       document.remove_block_delta(block_id);
                       if matches!(block_type, BlockType::Paragraph) {
-                        let data = mention_block_data(&view.object_id, &self.object_id);
+                        let data = mention_block_data(&view.view_id, &self.view_id);
                         if let Err(err) = document.update_block(block_id, data) {
                           error!(
                             "Failed to update block when trying to replace ref link. error:{:?}",
@@ -217,7 +219,7 @@ impl NotionView {
                           );
                         }
                       } else {
-                        let delta = mention_block_delta(&view.object_id);
+                        let delta = mention_block_delta(&view.view_id);
                         if let Err(err) = document.set_block_delta(block_id, vec![delta]) {
                           error!(
                             "Failed to set block delta when trying to replace ref link. error:{:?}",
@@ -240,25 +242,27 @@ impl NotionView {
     match &self.notion_file {
       NotionFile::CSV { file_path, .. } => {
         let content = std::fs::read_to_string(file_path)?;
-        let resources = self
+        let files = self
           .notion_file
-          .upload_resources()
+          .upload_files()
           .iter()
           .filter_map(|p| p.to_str().map(|s| s.to_string()))
           .collect();
-        let csv_template = CSVTemplate::try_from_reader_with_resources(
-          Some(self.host.clone()),
-          self.workspace_id.clone(),
-          content.as_bytes(),
-          true,
-          resources,
-        )?;
-        let resources = csv_template.resources.clone();
-        let database_view_id = gen_database_view_id();
+
+        let csv_resource = CSVResource {
+          server_url: self.host.clone(),
+          workspace_id: self.workspace_id.clone(),
+          files,
+        };
+
+        // create csv template, we need to set the current object id as csv template database id
+        let mut csv_template =
+          CSVTemplate::try_from_reader(content.as_bytes(), true, Some(csv_resource))?;
+        csv_template.reset_view_id(self.view_id.clone());
+
+        let resources = csv_template.resource.as_ref().unwrap().files.clone();
         let database_template = csv_template.try_into_database_template().await.unwrap();
-        let database =
-          Database::create_with_template(&self.object_id, &database_view_id, database_template)
-            .await?;
+        let database = Database::create_with_template(database_template).await?;
         Ok((database, resources))
       },
       _ => Err(ImporterError::InvalidFileType(format!(
@@ -309,7 +313,7 @@ impl NotionView {
         let (document, files) = self.as_document(HashMap::new()).await?;
         let encoded_collab = document.encode_collab()?;
         let imported_collab = ImportedCollab {
-          object_id: self.object_id.clone(),
+          object_id: self.view_id.clone(),
           collab_type: CollabType::Document,
           encoded_collab,
         };

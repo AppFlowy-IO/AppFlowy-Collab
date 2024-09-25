@@ -1,4 +1,4 @@
-use crate::database::gen_database_id;
+use crate::database::{gen_database_id, gen_database_view_id};
 use crate::entity::FieldType;
 use crate::error::DatabaseError;
 use crate::template::builder::DatabaseTemplateBuilder;
@@ -10,11 +10,11 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 
 pub struct CSVTemplate {
-  pub server_url: Option<String>,
-  pub workspace_id: String,
   pub fields: Vec<CSVField>,
   pub rows: Vec<Vec<String>>,
-  pub resources: Vec<String>,
+  pub resource: Option<CSVResource>,
+  pub database_id: String,
+  pub view_id: String,
 }
 
 pub struct CSVField {
@@ -22,28 +22,17 @@ pub struct CSVField {
   field_type: FieldType,
 }
 
+pub struct CSVResource {
+  pub server_url: String,
+  pub workspace_id: String,
+  pub files: Vec<String>,
+}
+
 impl CSVTemplate {
   pub fn try_from_reader(
-    server_url: Option<String>,
-    workspace_id: String,
     reader: impl io::Read,
     auto_field_type: bool,
-  ) -> Result<Self, DatabaseError> {
-    Self::try_from_reader_with_resources(
-      server_url,
-      workspace_id,
-      reader,
-      auto_field_type,
-      Vec::<String>::new(),
-    )
-  }
-
-  pub fn try_from_reader_with_resources(
-    server_url: Option<String>,
-    workspace_id: String,
-    reader: impl io::Read,
-    auto_field_type: bool,
-    mut resources: Vec<String>,
+    mut csv_resource: Option<CSVResource>,
   ) -> Result<Self, DatabaseError> {
     let mut fields: Vec<CSVField> = vec![];
 
@@ -71,38 +60,41 @@ impl CSVTemplate {
       .collect();
 
     if auto_field_type {
-      auto_detect_field_type(&mut fields, &rows, &resources);
+      auto_detect_field_type(&mut fields, &rows, &csv_resource);
     }
 
     // filter out resources that are not used
-    filter_out_resources(&fields, &rows, &mut resources);
+    filter_out_resources(&fields, &rows, &mut csv_resource);
 
     Ok(CSVTemplate {
-      server_url,
-      workspace_id,
       fields,
       rows,
-      resources,
+      resource: csv_resource,
+      database_id: gen_database_id(),
+      view_id: gen_database_view_id(),
     })
   }
 
+  pub fn reset_view_id(&mut self, view_id: String) {
+    self.view_id = view_id;
+  }
+
   pub async fn try_into_database_template(self) -> Result<DatabaseTemplate, DatabaseError> {
-    let database_id = gen_database_id();
-    let mut builder = DatabaseTemplateBuilder::new(database_id.clone());
     let CSVTemplate {
-      server_url,
-      workspace_id,
       fields,
       rows,
-      resources,
+      resource,
+      database_id,
+      view_id,
     } = self;
+
+    let mut builder = DatabaseTemplateBuilder::new(database_id.clone(), view_id.clone());
+
     for (field_index, field) in fields.into_iter().enumerate() {
       builder = builder
         .create_field(
-          &server_url,
-          &workspace_id,
+          &resource,
           &database_id,
-          &resources,
           &field.name,
           field.field_type,
           field_index == 0,
@@ -122,7 +114,11 @@ impl CSVTemplate {
   }
 }
 
-fn filter_out_resources(fields: &[CSVField], rows: &[Vec<String>], resources: &mut Vec<String>) {
+fn filter_out_resources(
+  fields: &[CSVField],
+  rows: &[Vec<String>],
+  resource: &mut Option<CSVResource>,
+) {
   let mut cell_resources = HashSet::new();
   for (index, field) in fields.iter().enumerate() {
     if matches!(field.field_type, FieldType::Media) {
@@ -136,15 +132,21 @@ fn filter_out_resources(fields: &[CSVField], rows: &[Vec<String>], resources: &m
     }
   }
 
-  resources.retain(|resource| {
-    // retain if resource end with one of the cell resources
-    cell_resources
-      .iter()
-      .any(|cell_res| resource.ends_with(cell_res))
-  });
+  if let Some(resource) = resource {
+    resource.files.retain(|file| {
+      // retain if resource end with one of the cell resources
+      cell_resources
+        .iter()
+        .any(|cell_res| file.ends_with(cell_res))
+    });
+  }
 }
 
-fn auto_detect_field_type(fields: &mut Vec<CSVField>, rows: &[Vec<String>], resources: &[String]) {
+fn auto_detect_field_type(
+  fields: &mut Vec<CSVField>,
+  rows: &[Vec<String>],
+  resources: &Option<CSVResource>,
+) {
   let num_fields = fields.len();
   fields
     .par_iter_mut()
@@ -167,17 +169,23 @@ fn auto_detect_field_type(fields: &mut Vec<CSVField>, rows: &[Vec<String>], reso
 
 #[allow(dead_code)]
 fn detect_field_type_from_cells(cells: &[&str]) -> FieldType {
-  let resources = Vec::<String>::new();
-  detect_field_type_from_cells_with_resource(cells, &resources)
+  detect_field_type_from_cells_with_resource(cells, &None)
 }
 
-fn detect_field_type_from_cells_with_resource(cells: &[&str], resources: &[String]) -> FieldType {
+fn detect_field_type_from_cells_with_resource(
+  cells: &[&str],
+  resources: &Option<CSVResource>,
+) -> FieldType {
   let cells = cells
     .iter()
     .filter(|cell| !cell.is_empty())
     .take(10)
     .cloned()
     .collect::<Vec<&str>>();
+
+  if is_number_cell(&cells) {
+    return FieldType::Number;
+  }
 
   // Do not chang the order of the following checks
   if is_media_cell(&cells, resources) {
@@ -208,14 +216,13 @@ fn detect_field_type_from_cells_with_resource(cells: &[&str], resources: &[Strin
   FieldType::RichText
 }
 
-fn is_media_cell<E: AsRef<str>>(cells: &[&str], resources: &[E]) -> bool {
+fn is_media_cell(cells: &[&str], resource: &Option<CSVResource>) -> bool {
   let half_count = cells.len() / 2;
   let valid_count = cells
     .iter()
-    .filter(|cell| {
-      resources
-        .iter()
-        .any(|resource| resource.as_ref().ends_with(*cell))
+    .filter(|cell| match resource {
+      Some(resource) => resource.files.iter().any(|file| file.ends_with(*cell)),
+      None => false,
     })
     .count();
 
@@ -318,6 +325,20 @@ fn is_link_field(cells: &[&str]) -> bool {
   cells
     .iter()
     .all(|cell| cell.starts_with("http://") || cell.starts_with("https://"))
+}
+
+fn is_number_cell(cells: &[&str]) -> bool {
+  let all_count = cells.len();
+  let valid_count = cells
+    .iter()
+    .filter(|&&cell| cell.parse::<f64>().is_ok())
+    .count();
+
+  if valid_count == 0 {
+    return false;
+  }
+
+  valid_count >= all_count
 }
 
 #[cfg(test)]
