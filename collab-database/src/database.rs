@@ -30,7 +30,6 @@ use crate::entity::{
   DatabaseViewMeta, EncodedCollabInfo, EncodedDatabase, FieldType,
 };
 use crate::template::entity::DatabaseTemplate;
-use crate::template::util::create_database_params_from_template;
 
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
@@ -144,15 +143,15 @@ impl Database {
     T: TryInto<DatabaseTemplate> + Send + Sync + 'static,
     <T as TryInto<DatabaseTemplate>>::Error: ToString,
   {
-    let template = tokio::task::spawn_blocking(move || {
+    let params = tokio::task::spawn_blocking(move || {
       template
         .try_into()
         .map_err(|err| DatabaseError::ImportData(err.to_string()))
     })
     .await
-    .map_err(|e| DatabaseError::Internal(e.into()))??;
+    .map_err(|e| DatabaseError::Internal(e.into()))??
+    .into_params();
 
-    let params = create_database_params_from_template(template);
     let context = DatabaseContext {
       collab_service: Arc::new(NoPersistenceDatabaseCollabService),
       notifier: Default::default(),
