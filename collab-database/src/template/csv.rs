@@ -183,6 +183,10 @@ fn detect_field_type_from_cells_with_resource(
     .cloned()
     .collect::<Vec<&str>>();
 
+  if is_number_cell(&cells) {
+    return FieldType::Number;
+  }
+
   // Do not chang the order of the following checks
   if is_media_cell(&cells, resources) {
     return FieldType::Media;
@@ -321,6 +325,20 @@ fn is_link_field(cells: &[&str]) -> bool {
   cells
     .iter()
     .all(|cell| cell.starts_with("http://") || cell.starts_with("https://"))
+}
+
+fn is_number_cell(cells: &[&str]) -> bool {
+  let all_count = cells.len();
+  let valid_count = cells
+    .iter()
+    .filter(|&&cell| cell.parse::<f64>().is_ok())
+    .count();
+
+  if valid_count == 0 {
+    return false;
+  }
+
+  valid_count >= all_count
 }
 
 #[cfg(test)]

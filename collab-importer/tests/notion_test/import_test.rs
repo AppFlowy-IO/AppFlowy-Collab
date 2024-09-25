@@ -176,7 +176,7 @@ async fn check_task_database(linked_view: &NotionPage) {
     RichText,
     RichText,
     DateTime,
-    SingleSelect,
+    Number,
   ];
   for (index, field) in fields.iter().enumerate() {
     assert_eq!(FieldType::from(field.field_type), expected_file_type[index]);
@@ -209,12 +209,12 @@ async fn check_project_database(linked_view: &NotionPage) {
     SingleSelect,
     MultiSelect,
     SingleSelect,
-    RichText,
+    Number,
     RichText,
     RichText,
     RichText,
     MultiSelect,
-    RichText,
+    Number,
     Checkbox,
     Media,
   ];
