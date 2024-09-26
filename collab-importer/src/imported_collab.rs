@@ -4,7 +4,7 @@ use crate::notion::NotionImporter;
 use crate::util::unzip;
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
-use std::env::temp_dir;
+
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
