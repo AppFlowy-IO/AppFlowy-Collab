@@ -5,6 +5,7 @@ use crate::util::{unzip_from_path_or_memory, Either};
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
 
+use futures::StreamExt;
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -24,7 +25,11 @@ pub async fn import_notion_zip_file(
     .import()
     .await?;
 
-  let infos = imported.all_imported_collabs().await;
+  let infos = imported
+    .all_imported_collabs()
+    .await
+    .collect::<Vec<ImportedCollabInfo>>()
+    .await;
   Ok(RepeatedImportedCollabInfo { infos })
 }
 
