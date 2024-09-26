@@ -13,6 +13,7 @@ use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::NotionImporter;
 use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use std::collections::HashMap;
+use std::env::temp_dir;
 use std::path::PathBuf;
 
 #[tokio::test]
@@ -59,7 +60,7 @@ async fn import_project_and_task_collab_test() {
   let workspace_id = uuid::Uuid::new_v4().to_string();
   let host = "http://test.appflowy.cloud";
   let zip_file_path = PathBuf::from("./tests/asset/project&task.zip");
-  let info = import_notion_zip_file(host, &workspace_id, zip_file_path)
+  let info = import_notion_zip_file(host, &workspace_id, zip_file_path, temp_dir())
     .await
     .unwrap();
 

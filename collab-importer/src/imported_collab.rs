@@ -121,8 +121,13 @@ pub async fn import_notion_zip_file(
   host: &str,
   workspace_id: &str,
   zip_file: PathBuf,
+  output_dir: PathBuf,
 ) -> Result<RepeatedImportedCollabInfo, ImporterError> {
-  let unzip_file = unzip(zip_file, temp_dir())?;
+  if !zip_file.exists() {
+    return Err(ImporterError::FileNotFound);
+  }
+
+  let unzip_file = unzip(zip_file, output_dir)?;
   let imported = NotionImporter::new(&unzip_file, workspace_id, host.to_string())?
     .import()
     .await?;
