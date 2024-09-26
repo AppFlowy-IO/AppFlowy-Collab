@@ -58,7 +58,7 @@ async fn async_calculate_file_id(file_path: &PathBuf) -> Result<String, Error> {
 pub async fn unzip<R: Read + Seek>(
   mut archive: ZipArchive<R>,
   file_name: &str,
-  out: PathBuf,
+  out: &PathBuf,
 ) -> Result<PathBuf> {
   for i in 0..archive.len() {
     let mut file = archive.by_index(i)?;
@@ -95,7 +95,7 @@ pub async fn unzip<R: Read + Seek>(
 
 pub async fn unzip_from_path_or_memory(
   input: Either<PathBuf, (Vec<u8>, String)>,
-  out: PathBuf,
+  out: &PathBuf,
 ) -> Result<PathBuf> {
   match input {
     Either::Left(path) => {
