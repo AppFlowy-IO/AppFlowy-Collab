@@ -26,6 +26,9 @@ pub enum ImporterError {
   #[error(transparent)]
   IOError(#[from] std::io::Error),
 
+  #[error("File not found")]
+  FileNotFound,
+
   #[error(transparent)]
   Internal(#[from] anyhow::Error),
 }

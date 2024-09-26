@@ -1,12 +1,32 @@
 use crate::error::ImporterError;
+use crate::notion::page::CollabResource;
 use crate::notion::NotionImporter;
-use crate::util::unzip;
+use crate::util::{unzip_from_path_or_memory, Either};
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
-use std::env::temp_dir;
+
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
+
+pub async fn import_notion_zip_file(
+  host: &str,
+  workspace_id: &str,
+  zip_file: PathBuf,
+  output_dir: PathBuf,
+) -> Result<RepeatedImportedCollabInfo, ImporterError> {
+  if !zip_file.exists() {
+    return Err(ImporterError::FileNotFound);
+  }
+
+  let unzip_file = unzip_from_path_or_memory(Either::Left(zip_file), output_dir).await?;
+  let imported = NotionImporter::new(&unzip_file, workspace_id, host.to_string())?
+    .import()
+    .await?;
+
+  let infos = imported.all_imported_collabs().await;
+  Ok(RepeatedImportedCollabInfo { infos })
+}
 
 #[derive(Debug, Clone)]
 pub struct RepeatedImportedCollabInfo {
@@ -46,8 +66,7 @@ impl Display for RepeatedImportedCollabInfo {
 pub struct ImportedCollabInfo {
   pub name: String,
   pub collabs: Vec<ImportedCollab>,
-  /// All files that related to current collab
-  pub files: Vec<String>,
+  pub resource: CollabResource,
   pub import_type: ImportType,
 }
 
@@ -64,6 +83,7 @@ impl ImportedCollabInfo {
 
   pub fn file_size(&self) -> u64 {
     self
+      .resource
       .files
       .iter()
       .map(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0))
@@ -88,7 +108,7 @@ impl Display for ImportType {
 
 impl Display for ImportedCollabInfo {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let file_paths: String = self.files.join(", ");
+    let file_paths: String = self.resource.files.join(", ");
 
     write!(
       f,
@@ -96,7 +116,7 @@ impl Display for ImportedCollabInfo {
       self.name,
       self.import_type,
       self.collabs.len(),
-      self.files.len(),
+      self.resource.files.len(),
       self.total_size(),
       file_paths
     )
@@ -114,18 +134,4 @@ impl Display for ImportedCollab {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "Collab: {} - {}", self.object_id, self.collab_type)
   }
-}
-
-pub async fn import_notion_zip_file(
-  host: &str,
-  workspace_id: &str,
-  zip_file: PathBuf,
-) -> Result<RepeatedImportedCollabInfo, ImporterError> {
-  let unzip_file = unzip(zip_file, temp_dir())?;
-  let imported = NotionImporter::new(&unzip_file, workspace_id, host.to_string())?
-    .import()
-    .await?;
-
-  let infos = imported.all_imported_collabs().await;
-  Ok(RepeatedImportedCollabInfo { infos })
 }

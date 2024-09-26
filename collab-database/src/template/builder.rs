@@ -20,8 +20,17 @@ use crate::template::option_parse::{
   build_options_from_cells, replace_cells_with_options_id, SELECT_OPTION_SEPARATOR,
 };
 use crate::views::DatabaseLayout;
+
 use collab::preclude::Any;
+
 use std::collections::HashMap;
+
+use std::path::Path;
+
+#[async_trait::async_trait]
+pub trait FileUrlBuilder: Send + Sync + 'static {
+  async fn build(&self, database_id: &str, path: &Path) -> Option<String>;
+}
 
 pub struct DatabaseTemplateBuilder {
   #[allow(dead_code)]
@@ -29,15 +38,21 @@ pub struct DatabaseTemplateBuilder {
   view_id: String,
   columns: Vec<Vec<CellTemplateData>>,
   fields: Vec<FieldTemplate>,
+  file_url_builder: Option<Box<dyn FileUrlBuilder>>,
 }
 
 impl DatabaseTemplateBuilder {
-  pub fn new(database_id: String, view_id: String) -> Self {
+  pub fn new(
+    database_id: String,
+    view_id: String,
+    file_url_builder: Option<Box<dyn FileUrlBuilder>>,
+  ) -> Self {
     Self {
       database_id,
       view_id,
       columns: vec![],
       fields: vec![],
+      file_url_builder,
     }
   }
 
@@ -49,13 +64,15 @@ impl DatabaseTemplateBuilder {
     name: &str,
     field_type: FieldType,
     is_primary: bool,
-    f: F,
+    field_builder: F,
   ) -> Self
   where
     F: FnOnce(FieldTemplateBuilder) -> FieldTemplateBuilder,
   {
     let builder = FieldTemplateBuilder::new(name.to_string(), field_type, is_primary);
-    let (field, rows) = f(builder).build(csv_resource, database_id).await;
+    let (field, rows) = field_builder(builder)
+      .build(csv_resource, database_id, &self.file_url_builder)
+      .await;
     self.fields.push(field);
     self.columns.push(rows);
     self
@@ -157,6 +174,7 @@ impl FieldTemplateBuilder {
     self,
     csv_resource: &Option<CSVResource>,
     database_id: &str,
+    file_url_builder: &Option<Box<dyn FileUrlBuilder>>,
   ) -> (FieldTemplate, Vec<CellTemplateData>) {
     let field_type = self.field_type.clone();
     let mut field_template = FieldTemplate {
@@ -245,17 +263,18 @@ impl FieldTemplateBuilder {
         cell_template
       },
       FieldType::Media => {
-        let cell_template = replace_cells_with_files(self.cells, database_id, csv_resource)
-          .await
-          .into_iter()
-          .map(|file| {
-            let mut cells = new_cell_builder(field_type.clone());
-            if let Some(file) = file {
-              cells.insert(CELL_DATA.to_string(), Any::from(file));
-            }
-            cells
-          })
-          .collect();
+        let cell_template =
+          replace_cells_with_files(self.cells, database_id, csv_resource, file_url_builder)
+            .await
+            .into_iter()
+            .map(|file| {
+              let mut cells = new_cell_builder(field_type.clone());
+              if let Some(file) = file {
+                cells.insert(CELL_DATA.to_string(), Any::from(file));
+              }
+              cells
+            })
+            .collect();
 
         field_template
           .type_options

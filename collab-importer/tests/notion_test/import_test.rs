@@ -13,13 +13,14 @@ use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::NotionImporter;
 use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use std::collections::HashMap;
+use std::env::temp_dir;
 use std::path::PathBuf;
 
 #[tokio::test]
 async fn import_blog_post_document_test() {
   setup_log();
   let workspace_id = uuid::Uuid::new_v4();
-  let (_cleaner, file_path) = unzip_test_asset("blog_post").unwrap();
+  let (_cleaner, file_path) = unzip_test_asset("blog_post").await.unwrap();
   let host = "http://test.appflowy.cloud";
   let importer = NotionImporter::new(&file_path, workspace_id, host.to_string()).unwrap();
   let imported_view = importer.import().await.unwrap();
@@ -59,23 +60,24 @@ async fn import_project_and_task_collab_test() {
   let workspace_id = uuid::Uuid::new_v4().to_string();
   let host = "http://test.appflowy.cloud";
   let zip_file_path = PathBuf::from("./tests/asset/project&task.zip");
-  let info = import_notion_zip_file(host, &workspace_id, zip_file_path)
+  let temp_dir = temp_dir();
+  let info = import_notion_zip_file(host, &workspace_id, zip_file_path, temp_dir.clone())
     .await
     .unwrap();
 
   assert_eq!(info.len(), 3);
   assert_eq!(info[0].name, "Projects & Tasks");
   assert_eq!(info[0].collabs.len(), 1);
-  assert_eq!(info[0].files.len(), 0);
+  assert_eq!(info[0].resource.files.len(), 0);
 
   assert_eq!(info[1].name, "Projects");
   assert_eq!(info[1].collabs.len(), 5);
-  assert_eq!(info[1].files.len(), 2);
+  assert_eq!(info[1].resource.files.len(), 2);
   assert_eq!(info[1].file_size(), 1143952);
 
   assert_eq!(info[2].name, "Tasks");
   assert_eq!(info[2].collabs.len(), 18);
-  assert_eq!(info[2].files.len(), 0);
+  assert_eq!(info[2].resource.files.len(), 0);
 
   println!("{info}");
 }
@@ -83,7 +85,7 @@ async fn import_project_and_task_collab_test() {
 #[tokio::test]
 async fn import_project_and_task_test() {
   let workspace_id = uuid::Uuid::new_v4();
-  let (_cleaner, file_path) = unzip_test_asset("project&task").unwrap();
+  let (_cleaner, file_path) = unzip_test_asset("project&task").await.unwrap();
   let importer = NotionImporter::new(
     &file_path,
     workspace_id,
@@ -288,7 +290,7 @@ fn assert_database_rows_with_csv_rows(
 
 #[tokio::test]
 async fn import_level_test() {
-  let (_cleaner, file_path) = unzip_test_asset("import_test").unwrap();
+  let (_cleaner, file_path) = unzip_test_asset("import_test").await.unwrap();
   let importer = NotionImporter::new(
     &file_path,
     uuid::Uuid::new_v4(),

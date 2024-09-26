@@ -9,7 +9,7 @@ async fn import_csv_test() {
   let csv_data = include_str!("../asset/selected-services-march-2024-quarter-csv.csv");
   let csv_template = CSVTemplate::try_from_reader(csv_data.as_bytes(), false, None).unwrap();
 
-  let database_template = csv_template.try_into_database_template().await.unwrap();
+  let database_template = csv_template.try_into_database_template(None).await.unwrap();
   let database = Database::create_with_template(database_template)
     .await
     .unwrap();

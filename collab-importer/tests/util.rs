@@ -1,5 +1,5 @@
 use collab_importer::notion::page::NotionPage;
-use collab_importer::util::unzip;
+use collab_importer::util::{unzip_from_path_or_memory, Either};
 use percent_encoding::percent_decode_str;
 use std::env::temp_dir;
 
@@ -59,11 +59,13 @@ impl Drop for Cleaner {
   }
 }
 
-pub fn unzip_test_asset(file_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
+pub async fn unzip_test_asset(file_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
   // Open the zip file
   let zip_file_path = PathBuf::from(format!("./tests/asset/{}.zip", file_name));
   let output_folder_path = temp_dir();
-  let out_path = unzip(zip_file_path, output_folder_path.clone())?;
+  let out_path = unzip_from_path_or_memory(Either::Left(zip_file_path), output_folder_path.clone())
+    .await
+    .unwrap();
   Ok((Cleaner::new(out_path.clone()), out_path))
 }
 
