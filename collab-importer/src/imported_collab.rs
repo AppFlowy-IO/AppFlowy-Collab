@@ -13,7 +13,7 @@ pub async fn import_notion_zip_file(
   host: &str,
   workspace_id: &str,
   zip_file: PathBuf,
-  output_dir: &PathBuf,
+  output_dir: PathBuf,
 ) -> Result<RepeatedImportedCollabInfo, ImporterError> {
   if !zip_file.exists() {
     return Err(ImporterError::FileNotFound);
