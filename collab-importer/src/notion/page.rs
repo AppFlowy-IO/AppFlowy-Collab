@@ -8,11 +8,11 @@ use collab_document::document::Document;
 use collab_document::importer::define::{BlockType, URL_FIELD};
 use collab_document::importer::md_importer::MDImporter;
 use collab_entity::CollabType;
+use futures::stream::{self, Stream, StreamExt};
 
 use crate::notion::file::NotionFile;
 use crate::notion::walk_dir::extract_external_links;
 use crate::util::{upload_file_url, FileId};
-use async_recursion::async_recursion;
 use collab_database::template::builder::FileUrlBuilder;
 use percent_encoding::percent_decode_str;
 use serde::Serialize;
@@ -20,7 +20,7 @@ use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::path::{Path, PathBuf};
-
+use std::pin::Pin;
 use tracing::error;
 
 #[derive(Debug, Clone, Serialize)]
@@ -300,19 +300,30 @@ impl NotionPage {
     }
   }
 
-  #[async_recursion(?Send)]
-  pub async fn build_imported_collab_recursively(&self) -> Vec<ImportedCollabInfo> {
-    let mut imported_collab_info_list = vec![];
+  pub async fn build_imported_collab_recursively(
+    &self,
+  ) -> Pin<Box<dyn Stream<Item = ImportedCollabInfo> + '_>> {
     let imported_collab_info = self.build_imported_collab().await;
-    if let Ok(info) = imported_collab_info {
-      imported_collab_info_list.push(info);
-    }
-    for child in self.children.iter() {
-      imported_collab_info_list.extend(child.build_imported_collab_recursively().await);
-    }
-    imported_collab_info_list
-  }
+    let initial_stream: Pin<Box<dyn Stream<Item = ImportedCollabInfo>>> = match imported_collab_info
+    {
+      Ok(info) => Box::pin(stream::once(async { info })),
+      Err(_) => Box::pin(stream::empty()),
+    };
 
+    // Create a stream of child collabs recursively
+    let child_streams = self
+      .children
+      .iter()
+      .map(|child| async move { child.build_imported_collab_recursively().await });
+
+    // Use `stream::iter` to iterate over child streams, resolve the futures, and flatten the results
+    let child_stream = stream::iter(child_streams)
+        .then(|stream_future| stream_future) // Resolve the future to get the stream
+        .flatten(); // Flatten the stream of streams
+
+    // Chain the current node's stream with the child streams and return as a boxed stream
+    Box::pin(initial_stream.chain(child_stream))
+  }
   pub async fn build_imported_collab(&self) -> Result<ImportedCollabInfo, ImporterError> {
     let name = self.notion_name.clone();
     match &self.notion_file {
