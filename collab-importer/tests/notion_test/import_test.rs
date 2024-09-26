@@ -66,16 +66,16 @@ async fn import_project_and_task_collab_test() {
   assert_eq!(info.len(), 3);
   assert_eq!(info[0].name, "Projects & Tasks");
   assert_eq!(info[0].collabs.len(), 1);
-  assert_eq!(info[0].files.len(), 0);
+  assert_eq!(info[0].resource.files.len(), 0);
 
   assert_eq!(info[1].name, "Projects");
   assert_eq!(info[1].collabs.len(), 5);
-  assert_eq!(info[1].files.len(), 2);
+  assert_eq!(info[1].resource.files.len(), 2);
   assert_eq!(info[1].file_size(), 1143952);
 
   assert_eq!(info[2].name, "Tasks");
   assert_eq!(info[2].collabs.len(), 18);
-  assert_eq!(info[2].files.len(), 0);
+  assert_eq!(info[2].resource.files.len(), 0);
 
   println!("{info}");
 }

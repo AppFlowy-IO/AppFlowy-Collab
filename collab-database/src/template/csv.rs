@@ -1,12 +1,13 @@
 use crate::database::{gen_database_id, gen_database_view_id};
 use crate::entity::FieldType;
 use crate::error::DatabaseError;
-use crate::template::builder::DatabaseTemplateBuilder;
+use crate::template::builder::{DatabaseTemplateBuilder, FileUrlBuilder};
 use crate::template::date_parse::cast_string_to_timestamp;
 use crate::template::entity::DatabaseTemplate;
 use percent_encoding::percent_decode_str;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
+
 use std::io;
 
 pub struct CSVTemplate {
@@ -79,7 +80,10 @@ impl CSVTemplate {
     self.view_id = view_id;
   }
 
-  pub async fn try_into_database_template(self) -> Result<DatabaseTemplate, DatabaseError> {
+  pub async fn try_into_database_template(
+    self,
+    file_url_builder: Option<Box<dyn FileUrlBuilder>>,
+  ) -> Result<DatabaseTemplate, DatabaseError> {
     let CSVTemplate {
       fields,
       rows,
@@ -88,8 +92,8 @@ impl CSVTemplate {
       view_id,
     } = self;
 
-    let mut builder = DatabaseTemplateBuilder::new(database_id.clone(), view_id.clone());
-
+    let mut builder =
+      DatabaseTemplateBuilder::new(database_id.clone(), view_id.clone(), file_url_builder);
     for (field_index, field) in fields.into_iter().enumerate() {
       builder = builder
         .create_field(

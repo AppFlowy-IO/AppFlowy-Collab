@@ -1,4 +1,5 @@
 use crate::error::ImporterError;
+use crate::notion::page::CollabResource;
 use crate::notion::NotionImporter;
 use crate::util::unzip;
 use collab::entity::EncodedCollab;
@@ -46,8 +47,7 @@ impl Display for RepeatedImportedCollabInfo {
 pub struct ImportedCollabInfo {
   pub name: String,
   pub collabs: Vec<ImportedCollab>,
-  /// All files that related to current collab
-  pub files: Vec<String>,
+  pub resource: CollabResource,
   pub import_type: ImportType,
 }
 
@@ -64,6 +64,7 @@ impl ImportedCollabInfo {
 
   pub fn file_size(&self) -> u64 {
     self
+      .resource
       .files
       .iter()
       .map(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0))
@@ -88,7 +89,7 @@ impl Display for ImportType {
 
 impl Display for ImportedCollabInfo {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let file_paths: String = self.files.join(", ");
+    let file_paths: String = self.resource.files.join(", ");
 
     write!(
       f,
@@ -96,7 +97,7 @@ impl Display for ImportedCollabInfo {
       self.name,
       self.import_type,
       self.collabs.len(),
-      self.files.len(),
+      self.resource.files.len(),
       self.total_size(),
       file_paths
     )

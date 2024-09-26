@@ -9,16 +9,18 @@ use collab_document::importer::define::{BlockType, URL_FIELD};
 use collab_document::importer::md_importer::MDImporter;
 use collab_entity::CollabType;
 
-use percent_encoding::percent_decode_str;
-use serde::Serialize;
-use serde_json::json;
-use std::collections::{HashMap, HashSet};
-
 use crate::notion::file::NotionFile;
 use crate::notion::walk_dir::extract_external_links;
 use crate::util::{upload_file_url, FileId};
 use async_recursion::async_recursion;
+use collab_database::template::builder::FileUrlBuilder;
+use percent_encoding::percent_decode_str;
+use serde::Serialize;
+use serde_json::json;
+use std::collections::{HashMap, HashSet};
+use std::future::Future;
 use std::path::{Path, PathBuf};
+
 use tracing::error;
 
 #[derive(Debug, Clone, Serialize)]
@@ -109,10 +111,10 @@ impl NotionPage {
   pub async fn as_document(
     &self,
     external_link_views: HashMap<String, NotionPage>,
-  ) -> Result<(Document, Vec<String>), ImporterError> {
+  ) -> Result<(Document, CollabResource), ImporterError> {
     match &self.notion_file {
       NotionFile::Markdown { file_path, .. } => {
-        let mut resource_paths = self.notion_file.upload_files();
+        let mut file_paths = self.notion_file.upload_files();
         let md_importer = MDImporter::new(None);
         let content = std::fs::read_to_string(file_path)?;
         let document_data = md_importer.import(&self.view_id, content)?;
@@ -122,19 +124,32 @@ impl NotionPage {
         self.replace_link_views(&mut document, external_link_views);
         self
           .replace_resources(
-            &self.workspace_id,
             &mut document,
-            &mut resource_paths,
+            &mut file_paths,
             parent_path,
+            |view_id, path| async move {
+              let file_id = FileId::from_path(&path).await.ok()?;
+              Some(upload_file_url(
+                &self.host,
+                &self.workspace_id,
+                view_id,
+                &file_id,
+              ))
+            },
           )
           .await;
 
-        let resources = resource_paths
+        let files = file_paths
           .iter()
           .filter_map(|p| p.to_str().map(|s| s.to_string()))
           .collect();
 
-        Ok((document, resources))
+        let resource = CollabResource {
+          object_id: self.view_id.clone(),
+          files,
+        };
+
+        Ok((document, resource))
       },
       _ => Err(ImporterError::InvalidFileType(format!(
         "File type is not supported for document: {:?}",
@@ -143,13 +158,16 @@ impl NotionPage {
     }
   }
 
-  async fn replace_resources(
-    &self,
-    workspace_id: &str,
+  async fn replace_resources<'a, B, O>(
+    &'a self,
     document: &mut Document,
     resources: &mut Vec<PathBuf>,
     parent_path: &Path,
-  ) {
+    file_url_builder: B,
+  ) where
+    B: Fn(&'a str, PathBuf) -> O + Send + Sync + 'a,
+    O: Future<Output = Option<String>> + Send + 'a,
+  {
     let mut document_resources = HashSet::new();
     if let Some(page_id) = document.get_page_id() {
       let block_ids = document.get_block_children_ids(&page_id);
@@ -164,12 +182,9 @@ impl NotionPage {
               let full_image_url = parent_path.join(image_url.to_string());
               let pos = resources.iter().position(|r| r == &full_image_url);
               if let Some(pos) = pos {
-                if let Ok(file_id) = FileId::from_path(&full_image_url).await {
+                if let Some(url) = file_url_builder(&self.view_id, full_image_url).await {
                   document_resources.insert(resources.remove(pos));
-
-                  let url = upload_file_url(&self.host, workspace_id, &self.view_id, &file_id);
                   block_data.insert(URL_FIELD.to_string(), json!(url));
-                  // Update the block with the new URL
                   if let Err(err) = document.update_block(block_id, block_data) {
                     error!(
                       "Failed to update block when trying to replace image. error:{:?}",
@@ -238,7 +253,7 @@ impl NotionPage {
     }
   }
 
-  pub async fn as_database(&self) -> Result<(Database, Vec<String>), ImporterError> {
+  pub async fn as_database(&self) -> Result<(Database, CollabResource), ImporterError> {
     match &self.notion_file {
       NotionFile::CSV { file_path, .. } => {
         let content = std::fs::read_to_string(file_path)?;
@@ -259,11 +274,24 @@ impl NotionPage {
         let mut csv_template =
           CSVTemplate::try_from_reader(content.as_bytes(), true, Some(csv_resource))?;
         csv_template.reset_view_id(self.view_id.clone());
+        let database_id = csv_template.database_id.clone();
+
+        let file_url_builder = FileUrlBuilderImpl {
+          host: self.host.clone(),
+          workspace_id: self.workspace_id.clone(),
+        };
 
         let resources = csv_template.resource.as_ref().unwrap().files.clone();
-        let database_template = csv_template.try_into_database_template().await.unwrap();
+        let database_template = csv_template
+          .try_into_database_template(Some(Box::new(file_url_builder)))
+          .await
+          .unwrap();
         let database = Database::create_with_template(database_template).await?;
-        Ok((database, resources))
+        let resource = CollabResource {
+          object_id: database_id,
+          files: resources,
+        };
+        Ok((database, resource))
       },
       _ => Err(ImporterError::InvalidFileType(format!(
         "File type is not supported for database: {:?}",
@@ -289,7 +317,7 @@ impl NotionPage {
     let name = self.notion_name.clone();
     match &self.notion_file {
       NotionFile::CSV { .. } => {
-        let (database, files) = self.as_database().await?;
+        let (database, collab_resource) = self.as_database().await?;
         let imported_collabs = database
           .encode_database_collabs()
           .await?
@@ -305,12 +333,12 @@ impl NotionPage {
         Ok(ImportedCollabInfo {
           name,
           collabs: imported_collabs,
-          files,
+          resource: collab_resource,
           import_type: ImportType::Database,
         })
       },
       NotionFile::Markdown { .. } => {
-        let (document, files) = self.as_document(HashMap::new()).await?;
+        let (document, collab_resource) = self.as_document(HashMap::new()).await?;
         let encoded_collab = document.encode_collab()?;
         let imported_collab = ImportedCollab {
           object_id: self.view_id.clone(),
@@ -320,7 +348,7 @@ impl NotionPage {
         Ok(ImportedCollabInfo {
           name,
           collabs: vec![imported_collab],
-          files,
+          resource: collab_resource,
           import_type: ImportType::Document,
         })
       },
@@ -344,4 +372,28 @@ pub enum ExternalLinkType {
   Unknown,
   CSV,
   Markdown,
+}
+
+#[derive(Debug, Clone)]
+pub struct CollabResource {
+  pub object_id: String,
+  pub files: Vec<String>,
+}
+
+struct FileUrlBuilderImpl {
+  host: String,
+  workspace_id: String,
+}
+
+#[async_trait::async_trait]
+impl FileUrlBuilder for FileUrlBuilderImpl {
+  async fn build(&self, database_id: &str, path: &Path) -> Option<String> {
+    let file_id = FileId::from_path(&path.to_path_buf()).await.ok()?;
+    Some(upload_file_url(
+      &self.host,
+      &self.workspace_id,
+      database_id,
+      &file_id,
+    ))
+  }
 }
