@@ -20,7 +20,7 @@ use std::path::PathBuf;
 async fn import_blog_post_document_test() {
   setup_log();
   let workspace_id = uuid::Uuid::new_v4();
-  let (_cleaner, file_path) = unzip_test_asset("blog_post").unwrap();
+  let (_cleaner, file_path) = unzip_test_asset("blog_post").await.unwrap();
   let host = "http://test.appflowy.cloud";
   let importer = NotionImporter::new(&file_path, workspace_id, host.to_string()).unwrap();
   let imported_view = importer.import().await.unwrap();
@@ -84,7 +84,7 @@ async fn import_project_and_task_collab_test() {
 #[tokio::test]
 async fn import_project_and_task_test() {
   let workspace_id = uuid::Uuid::new_v4();
-  let (_cleaner, file_path) = unzip_test_asset("project&task").unwrap();
+  let (_cleaner, file_path) = unzip_test_asset("project&task").await.unwrap();
   let importer = NotionImporter::new(
     &file_path,
     workspace_id,
@@ -289,7 +289,7 @@ fn assert_database_rows_with_csv_rows(
 
 #[tokio::test]
 async fn import_level_test() {
-  let (_cleaner, file_path) = unzip_test_asset("import_test").unwrap();
+  let (_cleaner, file_path) = unzip_test_asset("import_test").await.unwrap();
   let importer = NotionImporter::new(
     &file_path,
     uuid::Uuid::new_v4(),

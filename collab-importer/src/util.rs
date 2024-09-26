@@ -1,11 +1,15 @@
 use anyhow::Error;
+use anyhow::{Context, Result};
 use base64::engine::general_purpose::URL_SAFE;
 use base64::Engine;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use sha2::{Digest, Sha256};
-use std::fs::{create_dir_all, File};
-use std::io::copy;
+use std::io::Read;
+use std::io::{Cursor, Seek};
 use std::path::PathBuf;
+use tokio::fs;
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 use tokio::io::{AsyncReadExt, BufReader};
 use zip::ZipArchive;
 
@@ -51,29 +55,71 @@ async fn async_calculate_file_id(file_path: &PathBuf) -> Result<String, Error> {
   Ok(file_id)
 }
 
-pub fn unzip(input: PathBuf, out: PathBuf) -> std::io::Result<PathBuf> {
-  let file_name = input
-    .file_stem()
-    .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid file stem"))?
-    .to_str()
-    .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid file name"))?;
-
-  let reader = File::open(&input)?;
-  let mut archive = ZipArchive::new(reader)?;
+pub async fn unzip<R: Read + Seek>(
+  mut archive: ZipArchive<R>,
+  file_name: &str,
+  out: PathBuf,
+) -> Result<PathBuf> {
   for i in 0..archive.len() {
     let mut file = archive.by_index(i)?;
     let outpath = out.join(file.mangled_name());
     if file.name().ends_with('/') {
-      create_dir_all(&outpath)?;
+      fs::create_dir_all(&outpath).await?;
     } else {
-      if let Some(p) = outpath.parent() {
-        if !p.exists() {
-          create_dir_all(p)?;
+      if let Some(parent) = outpath.parent() {
+        if !parent.exists() {
+          fs::create_dir_all(parent).await?;
         }
       }
-      let mut outfile = File::create(&outpath)?;
-      copy(&mut file, &mut outfile)?;
+
+      let mut outfile = File::create(&outpath)
+        .await
+        .with_context(|| format!("Failed to create file: {:?}", outpath))?;
+
+      let mut buffer = Vec::new();
+      file.read_to_end(&mut buffer).with_context(|| {
+        format!(
+          "Failed to read contents of file in archive: {}",
+          file.name()
+        )
+      })?;
+
+      outfile
+        .write_all(&buffer)
+        .await
+        .with_context(|| format!("Failed to write file contents to: {:?}", outpath))?;
     }
   }
   Ok(out.join(file_name))
+}
+
+pub async fn unzip_from_path_or_memory(
+  input: Either<PathBuf, (Vec<u8>, String)>,
+  out: PathBuf,
+) -> Result<PathBuf> {
+  match input {
+    Either::Left(path) => {
+      let file_name = path
+        .file_stem()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid file stem"))?
+        .to_str()
+        .ok_or_else(|| {
+          std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid file name")
+        })?;
+
+      let reader = std::fs::File::open(&path)
+        .with_context(|| format!("Failed to open file at path: {:?}", path))?;
+      let archive = ZipArchive::new(reader)?;
+      unzip(archive, file_name, out).await
+    },
+    Either::Right((data, file_name)) => {
+      let archive = ZipArchive::new(Cursor::new(data))?;
+      unzip(archive, &file_name, out).await
+    },
+  }
+}
+
+pub enum Either<L, R> {
+  Left(L),
+  Right(R),
 }
