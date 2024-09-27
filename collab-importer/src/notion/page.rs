@@ -304,6 +304,7 @@ impl NotionPage {
   pub async fn build_imported_collab_recursively(&self) -> Vec<ImportedCollabInfo> {
     let mut imported_collab_info_list = vec![];
     let imported_collab_info = self.build_imported_collab().await;
+<<<<<<< Updated upstream
     if let Ok(info) = imported_collab_info {
       imported_collab_info_list.push(info);
     }
@@ -311,6 +312,27 @@ impl NotionPage {
       imported_collab_info_list.extend(child.build_imported_collab_recursively().await);
     }
     imported_collab_info_list
+=======
+    let initial_stream: Pin<Box<dyn Stream<Item = ImportedCollabInfo>>> = match imported_collab_info
+    {
+      Ok(info) => Box::pin(stream::once(async { info })),
+      Err(_) => Box::pin(stream::empty()),
+    };
+
+    // Create a stream of child collabs recursively
+    let child_streams = self
+      .children
+      .iter()
+      .map(|child| async move { child.build_imported_collab_recursively().await });
+
+    // Use `stream::iter` to iterate over child streams, resolve the futures, and flatten the results
+    let child_stream = stream::iter(child_streams)
+      .then(|stream_future| stream_future)
+      .flatten(); // Flatten the stream of streams
+
+    // Chain the current node's stream with the child streams and return as a boxed stream
+    Box::pin(initial_stream.chain(child_stream))
+>>>>>>> Stashed changes
   }
 
   pub async fn build_imported_collab(&self) -> Result<ImportedCollabInfo, ImporterError> {

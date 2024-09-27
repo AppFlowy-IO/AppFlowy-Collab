@@ -15,6 +15,7 @@ use tracing::error;
 
 use crate::error::FolderError;
 use crate::folder_observe::ViewChangeSender;
+use crate::hierarchy_builder::{FlattedViews, ParentChildViews};
 use crate::section::{Section, SectionItem, SectionMap};
 use crate::view::view_from_map_ref;
 use crate::{
@@ -324,6 +325,14 @@ impl Folder {
   pub fn insert_view(&mut self, view: View, index: Option<u32>) {
     let mut txn = self.collab.transact_mut();
     self.body.views.insert(&mut txn, view, index);
+  }
+
+  pub fn insert_nested_views(&mut self, views: Vec<ParentChildViews>) {
+    let views = FlattedViews::flatten_views(views);
+    let mut txn = self.collab.transact_mut();
+    for view in views {
+      self.body.views.insert(&mut txn, view, None);
+    }
   }
 
   pub fn get_view(&self, view_id: &str) -> Option<Arc<View>> {
@@ -702,5 +711,26 @@ impl FolderBody {
 
   pub fn set_current_view(&self, txn: &mut TransactionMut, view: String) {
     self.meta.try_update(txn, CURRENT_VIEW, view);
+  }
+}
+
+pub fn default_folder_data(workspace_id: &str) -> FolderData {
+  let workspace = Workspace {
+    id: workspace_id.to_string(),
+    name: "".to_string(),
+    child_views: Default::default(),
+    created_at: 0,
+    created_by: None,
+    last_edited_time: 0,
+    last_edited_by: None,
+  };
+  FolderData {
+    workspace,
+    current_view: "".to_string(),
+    views: vec![],
+    favorites: HashMap::new(),
+    recent: HashMap::new(),
+    trash: HashMap::new(),
+    private: HashMap::new(),
   }
 }

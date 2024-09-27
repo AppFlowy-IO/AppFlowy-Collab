@@ -1,10 +1,15 @@
 use crate::error::ImporterError;
 use crate::notion::page::CollabResource;
-use crate::notion::NotionImporter;
+use crate::notion::{ImportedInfo, NotionImporter};
 use crate::util::{unzip_from_path_or_memory, Either};
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
 
+<<<<<<< Updated upstream
+=======
+use collab_folder::Folder;
+use futures::StreamExt;
+>>>>>>> Stashed changes
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -21,11 +26,21 @@ pub async fn import_notion_zip_file(
 
   let unzip_file = unzip_from_path_or_memory(Either::Left(zip_file), output_dir).await?;
   let imported = NotionImporter::new(&unzip_file, workspace_id, host.to_string())?
-    .import()
+    .import(true)
     .await?;
 
   let infos = imported.all_imported_collabs().await;
   Ok(RepeatedImportedCollabInfo { infos })
+}
+
+pub async fn import_into_workspace(
+  uid: i64,
+  folder: &mut Folder,
+  imported_info: &ImportedInfo,
+) -> Result<(), ImporterError> {
+  let view_hierarchy = imported_info.build_nested_views(uid).await;
+  folder.insert_nested_views(view_hierarchy.into_inner());
+  Ok(())
 }
 
 #[derive(Debug, Clone)]

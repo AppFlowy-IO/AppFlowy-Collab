@@ -1,7 +1,14 @@
 use crate::error::ImporterError;
 use crate::imported_collab::ImportedCollabInfo;
+use crate::notion::file::NotionFile;
 use crate::notion::page::NotionPage;
 use crate::notion::walk_dir::{file_name_from_path, process_entry};
+<<<<<<< Updated upstream
+=======
+use collab_folder::hierarchy_builder::{ParentChildViews, ViewBuilder};
+use collab_folder::ViewLayout;
+use futures::stream::{self, Stream, StreamExt};
+>>>>>>> Stashed changes
 use serde::Serialize;
 use std::path::PathBuf;
 use walkdir::WalkDir;
@@ -42,8 +49,10 @@ impl NotionImporter {
     })
   }
 
-  pub async fn import(mut self) -> Result<ImportedInfo, ImporterError> {
-    let views = self.collect_views().await?;
+  /// Return a ImportedInfo struct that contains all the views and their children
+  /// recursively. If include_root is true, the root folder will be included in the views.
+  pub async fn import(mut self, include_root: bool) -> Result<ImportedInfo, ImporterError> {
+    let views = self.collect_views(include_root).await?;
     Ok(ImportedInfo {
       workspace_id: self.workspace_id,
       host: self.host,
@@ -52,15 +61,20 @@ impl NotionImporter {
     })
   }
 
-  async fn collect_views(&mut self) -> Result<Vec<NotionPage>, ImporterError> {
-    let views = WalkDir::new(&self.path)
+  async fn collect_views(&mut self, include_root: bool) -> Result<Vec<NotionPage>, ImporterError> {
+    let mut views = WalkDir::new(&self.path)
       .max_depth(1)
       .into_iter()
       .filter_map(|e| e.ok())
       .filter_map(|entry| process_entry(&self.host, &self.workspace_id, &entry))
       .collect::<Vec<NotionPage>>();
 
-    Ok(views)
+    // check the number of first level views is one. If yes then exclude this view when include_root is false
+    if views.len() == 1 && !include_root {
+      Ok(views.pop().unwrap().children)
+    } else {
+      Ok(views)
+    }
   }
 }
 
@@ -81,6 +95,14 @@ impl ImportedInfo {
     imported_collabs
   }
 
+  pub async fn build_nested_views(&self, uid: i64) -> NestedViews {
+    let views = stream::iter(&self.views)
+      .then(|notion_page| convert_notion_page_to_parent_child(&self.workspace_id, notion_page, uid))
+      .collect()
+      .await;
+    NestedViews { views }
+  }
+
   pub fn num_of_csv(&self) -> usize {
     self
       .views
@@ -95,5 +117,47 @@ impl ImportedInfo {
       .iter()
       .map(|view| view.num_of_markdown())
       .sum::<usize>()
+  }
+}
+
+#[async_recursion::async_recursion]
+async fn convert_notion_page_to_parent_child(
+  parent_id: &str,
+  notion_page: &NotionPage,
+  uid: i64,
+) -> ParentChildViews {
+  let view_layout = match notion_page.notion_file {
+    NotionFile::Unknown => ViewLayout::Document,
+    NotionFile::CSV { .. } => ViewLayout::Grid,
+    NotionFile::CSVPart { .. } => ViewLayout::Grid,
+    NotionFile::Markdown { .. } => ViewLayout::Document,
+  };
+  let mut view_builder = ViewBuilder::new(uid, parent_id.to_string())
+    .with_name(&notion_page.notion_name)
+    .with_layout(view_layout)
+    .with_view_id(&notion_page.view_id);
+
+  for child_notion_page in &notion_page.children {
+    view_builder = view_builder
+      .with_child_view_builder(|_| async {
+        convert_notion_page_to_parent_child(&notion_page.view_id, child_notion_page, uid).await
+      })
+      .await;
+  }
+
+  view_builder.build()
+}
+
+pub struct NestedViews {
+  views: Vec<ParentChildViews>,
+}
+
+impl NestedViews {
+  pub fn into_inner(self) -> Vec<ParentChildViews> {
+    self.views
+  }
+
+  pub fn remove_view(&mut self, view_id: &str) {
+    self.views.retain(|view| view.parent_view.id != view_id);
   }
 }
