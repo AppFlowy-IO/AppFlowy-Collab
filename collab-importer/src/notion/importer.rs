@@ -147,17 +147,3 @@ async fn convert_notion_page_to_parent_child(
 
   view_builder.build()
 }
-
-pub struct NestedViews {
-  views: Vec<ParentChildViews>,
-}
-
-impl NestedViews {
-  pub fn into_inner(self) -> Vec<ParentChildViews> {
-    self.views
-  }
-
-  pub fn remove_view(&mut self, view_id: &str) {
-    self.views.retain(|view| view.parent_view.id != view_id);
-  }
-}

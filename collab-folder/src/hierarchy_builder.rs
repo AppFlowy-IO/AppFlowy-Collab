@@ -2,6 +2,7 @@ use crate::{
   timestamp, IconType, RepeatedViewIdentifier, View, ViewIcon, ViewIdentifier, ViewLayout,
 };
 use std::future::Future;
+use std::ops::{Deref, DerefMut};
 
 /// A builder for creating a view for a workspace.
 /// The views created by this builder will be the first level views of the workspace.
@@ -31,8 +32,38 @@ impl NestedViewBuilder {
     self
   }
 
-  pub fn build(&mut self) -> Vec<ParentChildViews> {
-    std::mem::take(&mut self.views)
+  pub fn build(&mut self) -> NestedViews {
+    NestedViews {
+      views: std::mem::take(&mut self.views),
+    }
+  }
+}
+
+pub struct NestedViews {
+  views: Vec<ParentChildViews>,
+}
+
+impl NestedViews {
+  pub fn into_inner(self) -> Vec<ParentChildViews> {
+    self.views
+  }
+
+  pub fn remove_view(&mut self, view_id: &str) {
+    self.views.retain(|view| view.parent_view.id != view_id);
+  }
+}
+
+impl Deref for NestedViews {
+  type Target = Vec<ParentChildViews>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.views
+  }
+}
+
+impl DerefMut for NestedViews {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    &mut self.views
   }
 }
 
@@ -187,7 +218,7 @@ mod tests {
     let workspace_views = builder.build();
     assert_eq!(workspace_views.len(), 3);
 
-    let views = FlattedViews::flatten_views(workspace_views);
+    let views = FlattedViews::flatten_views(workspace_views.into_inner());
     assert_eq!(views.len(), 3);
   }
 
@@ -231,7 +262,7 @@ mod tests {
     assert_eq!(workspace_views[1].child_views.len(), 1);
     assert_eq!(workspace_views[1].child_views[0].parent_view.name, "2_1");
 
-    let views = FlattedViews::flatten_views(workspace_views);
+    let views = FlattedViews::flatten_views(workspace_views.into_inner());
     assert_eq!(views.len(), 5);
   }
 
@@ -300,7 +331,7 @@ mod tests {
       "1_2_2"
     );
 
-    let views = FlattedViews::flatten_views(workspace_views);
+    let views = FlattedViews::flatten_views(workspace_views.into_inner());
     assert_eq!(views.len(), 7);
   }
 }
