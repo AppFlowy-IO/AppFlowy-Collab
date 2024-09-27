@@ -39,6 +39,7 @@ impl NestedViewBuilder {
   }
 }
 
+#[derive(Debug, Clone)]
 pub struct NestedViews {
   views: Vec<ParentChildViews>,
 }
@@ -180,6 +181,7 @@ impl ViewBuilder {
   }
 }
 
+#[derive(Debug, Clone)]
 pub struct ParentChildViews {
   pub parent_view: View,
   pub child_views: Vec<ParentChildViews>,
@@ -252,7 +254,7 @@ mod tests {
           .build()
       })
       .await;
-    let workspace_views = builder.build();
+    let mut workspace_views = builder.build();
     assert_eq!(workspace_views.len(), 2);
 
     assert_eq!(workspace_views[0].parent_view.name, "1");
@@ -261,9 +263,24 @@ mod tests {
     assert_eq!(workspace_views[0].child_views[1].parent_view.name, "1_2");
     assert_eq!(workspace_views[1].child_views.len(), 1);
     assert_eq!(workspace_views[1].child_views[0].parent_view.name, "2_1");
-
-    let views = FlattedViews::flatten_views(workspace_views.into_inner());
+    let views = FlattedViews::flatten_views(workspace_views.clone().into_inner());
     assert_eq!(views.len(), 5);
+
+    {
+      let mut cloned_workspace_views = workspace_views.clone();
+      let view_id_1_2 = workspace_views[0].child_views[1].parent_view.id.clone();
+      cloned_workspace_views.remove_view(&view_id_1_2);
+      let views = FlattedViews::flatten_views(cloned_workspace_views.into_inner());
+      assert_eq!(views.len(), 4);
+    }
+
+    {
+      let mut cloned_workspace_views = workspace_views.clone();
+      let view_id_1 = workspace_views[0].parent_view.id.clone();
+      cloned_workspace_views.remove_view(&view_id_1);
+      let views = FlattedViews::flatten_views(cloned_workspace_views.into_inner());
+      assert_eq!(views.len(), 2);
+    }
   }
 
   #[tokio::test]

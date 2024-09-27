@@ -29,13 +29,9 @@ sha2 = "0.10.8"
 base64 = "0.22.1"
 hex = "0.4.3"
 zip = "2.2.0"
-async-recursion = "1.1.1"
 async-trait.workspace = true
-<<<<<<< Updated upstream
-=======
 futures = "0.3.30"
 async-recursion = "1.1"
->>>>>>> Stashed changes
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }

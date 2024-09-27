@@ -621,6 +621,7 @@ dependencies = [
  "collab-folder",
  "csv",
  "fancy-regex",
+ "futures",
  "fxhash",
  "hex",
  "markdown",

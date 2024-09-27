@@ -3,14 +3,16 @@ use crate::imported_collab::ImportedCollabInfo;
 use crate::notion::file::NotionFile;
 use crate::notion::page::NotionPage;
 use crate::notion::walk_dir::{file_name_from_path, process_entry};
-<<<<<<< Updated upstream
-=======
 use collab_folder::hierarchy_builder::{ParentChildViews, ViewBuilder};
 use collab_folder::ViewLayout;
+<<<<<<< Updated upstream
+use futures::stream::{Stream, StreamExt};
+=======
 use futures::stream::{self, Stream, StreamExt};
 >>>>>>> Stashed changes
 use serde::Serialize;
 use std::path::PathBuf;
+use std::pin::Pin;
 use walkdir::WalkDir;
 
 #[derive(Debug)]
@@ -87,12 +89,18 @@ pub struct ImportedInfo {
 }
 
 impl ImportedInfo {
-  pub async fn all_imported_collabs(&self) -> Vec<ImportedCollabInfo> {
-    let mut imported_collabs = vec![];
-    for view in self.views.iter() {
-      imported_collabs.extend(view.build_imported_collab_recursively().await);
-    }
-    imported_collabs
+  pub async fn all_imported_collabs(&self) -> Pin<Box<dyn Stream<Item = ImportedCollabInfo> + '_>> {
+    // Create a stream for each view by resolving the futures into streams
+    let view_streams = self
+      .views
+      .iter()
+      .map(|view| async { view.build_imported_collab_recursively().await });
+
+    let combined_stream = stream::iter(view_streams)
+      .then(|stream_future| stream_future)
+      .flatten();
+
+    Box::pin(combined_stream)
   }
 
   pub async fn build_nested_views(&self, uid: i64) -> NestedViews {
