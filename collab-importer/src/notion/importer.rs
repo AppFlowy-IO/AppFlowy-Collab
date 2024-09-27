@@ -3,13 +3,10 @@ use crate::imported_collab::ImportedCollabInfo;
 use crate::notion::file::NotionFile;
 use crate::notion::page::NotionPage;
 use crate::notion::walk_dir::{file_name_from_path, process_entry};
-use collab_folder::hierarchy_builder::{ParentChildViews, ViewBuilder};
+use collab_folder::hierarchy_builder::{NestedViews, ParentChildViews, ViewBuilder};
 use collab_folder::ViewLayout;
-<<<<<<< Updated upstream
+use futures::stream;
 use futures::stream::{Stream, StreamExt};
-=======
-use futures::stream::{self, Stream, StreamExt};
->>>>>>> Stashed changes
 use serde::Serialize;
 use std::path::PathBuf;
 use std::pin::Pin;
