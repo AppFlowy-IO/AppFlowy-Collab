@@ -30,6 +30,7 @@ impl FieldMap {
       .update(|update| {
         update
           .set_name(field.name)
+          .set_icon(field.icon)
           .set_created_at(timestamp())
           .set_last_modified(timestamp())
           .set_primary(field.is_primary)
