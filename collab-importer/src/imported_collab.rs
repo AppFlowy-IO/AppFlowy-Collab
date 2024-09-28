@@ -23,11 +23,11 @@ pub async fn import_notion_zip_file(
 
   let unzip_file = unzip_from_path_or_memory(Either::Left(zip_file), output_dir).await?;
   let imported = NotionImporter::new(&unzip_file, workspace_id, host.to_string())?
-    .import(true)
+    .import()
     .await?;
 
   let infos = imported
-    .all_imported_collabs()
+    .into_collab_stream()
     .await
     .collect::<Vec<ImportedCollabInfo>>()
     .await;

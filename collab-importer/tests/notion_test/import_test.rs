@@ -27,7 +27,7 @@ async fn import_blog_post_document_test() {
   let (_cleaner, file_path) = unzip_test_asset("blog_post").await.unwrap();
   let host = "http://test.appflowy.cloud";
   let importer = NotionImporter::new(&file_path, workspace_id, host.to_string()).unwrap();
-  let imported_view = importer.import(true).await.unwrap();
+  let imported_view = importer.import().await.unwrap();
   assert_eq!(imported_view.name, "blog_post");
   assert_eq!(imported_view.num_of_csv(), 0);
   assert_eq!(imported_view.num_of_markdown(), 1);
@@ -96,7 +96,7 @@ async fn import_project_and_task_test() {
     "http://test.appflowy.cloud".to_string(),
   )
   .unwrap();
-  let imported_view = importer.import(true).await.unwrap();
+  let imported_view = importer.import().await.unwrap();
   assert!(!imported_view.views.is_empty());
   assert_eq!(imported_view.name, "project&task");
   assert_eq!(imported_view.num_of_csv(), 2);
@@ -301,7 +301,7 @@ async fn import_level_test() {
     "http://test.appflowy.cloud".to_string(),
   )
   .unwrap();
-  let info = importer.import(true).await.unwrap();
+  let info = importer.import().await.unwrap();
   assert!(!info.views.is_empty());
   assert_eq!(info.name, "import_test");
 

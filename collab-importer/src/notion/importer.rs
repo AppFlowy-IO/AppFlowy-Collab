@@ -1,7 +1,7 @@
 use crate::error::ImporterError;
 use crate::imported_collab::ImportedCollabInfo;
 use crate::notion::file::NotionFile;
-use crate::notion::page::NotionPage;
+use crate::notion::page::{build_imported_collab_recursively, NotionPage};
 use crate::notion::walk_dir::{file_name_from_path, process_entry};
 use collab_folder::hierarchy_builder::{NestedViews, ParentChildViews, ViewBuilder};
 use collab_folder::ViewLayout;
@@ -48,10 +48,9 @@ impl NotionImporter {
     })
   }
 
-  /// Return a ImportedInfo struct that contains all the views and their children
-  /// recursively. If include_root is true, the root folder will be included in the views.
-  pub async fn import(mut self, include_root: bool) -> Result<ImportedInfo, ImporterError> {
-    let views = self.collect_views(include_root).await?;
+  /// Return a ImportedInfo struct that contains all the views and their children recursively.
+  pub async fn import(mut self) -> Result<ImportedInfo, ImporterError> {
+    let views = self.collect_views().await?;
     Ok(ImportedInfo {
       workspace_id: self.workspace_id,
       host: self.host,
@@ -60,20 +59,14 @@ impl NotionImporter {
     })
   }
 
-  async fn collect_views(&mut self, include_root: bool) -> Result<Vec<NotionPage>, ImporterError> {
-    let mut views = WalkDir::new(&self.path)
+  async fn collect_views(&mut self) -> Result<Vec<NotionPage>, ImporterError> {
+    let views = WalkDir::new(&self.path)
       .max_depth(1)
       .into_iter()
       .filter_map(|e| e.ok())
       .filter_map(|entry| process_entry(&self.host, &self.workspace_id, &entry))
       .collect::<Vec<NotionPage>>();
-
-    // check the number of first level views is one. If yes then exclude this view when include_root is false
-    if views.len() == 1 && !include_root {
-      Ok(views.pop().unwrap().children)
-    } else {
-      Ok(views)
-    }
+    Ok(views)
   }
 }
 
@@ -85,13 +78,14 @@ pub struct ImportedInfo {
   pub views: Vec<NotionPage>,
 }
 
+pub type ImportedCollabInfoStream<'a> = Pin<Box<dyn Stream<Item = ImportedCollabInfo> + 'a>>;
 impl ImportedInfo {
-  pub async fn all_imported_collabs(&self) -> Pin<Box<dyn Stream<Item = ImportedCollabInfo> + '_>> {
+  pub async fn into_collab_stream(self) -> ImportedCollabInfoStream<'static> {
     // Create a stream for each view by resolving the futures into streams
     let view_streams = self
       .views
-      .iter()
-      .map(|view| async { view.build_imported_collab_recursively().await });
+      .into_iter()
+      .map(|view| async { build_imported_collab_recursively(view).await });
 
     let combined_stream = stream::iter(view_streams)
       .then(|stream_future| stream_future)
