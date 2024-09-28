@@ -91,7 +91,7 @@ impl ImportedInfo {
       .then(|stream_future| stream_future)
       .flatten();
 
-    Box::pin(combined_stream)
+    Box::pin(combined_stream) as ImportedCollabInfoStream
   }
 
   pub async fn build_nested_views(&self, uid: i64) -> NestedViews {

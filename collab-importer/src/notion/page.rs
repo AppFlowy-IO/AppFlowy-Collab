@@ -21,6 +21,7 @@ use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::path::{Path, PathBuf};
+use tokio::fs;
 use tracing::error;
 
 #[derive(Debug, Clone, Serialize)]
@@ -116,7 +117,7 @@ impl NotionPage {
       NotionFile::Markdown { file_path, .. } => {
         let mut file_paths = self.notion_file.upload_files();
         let md_importer = MDImporter::new(None);
-        let content = std::fs::read_to_string(file_path)?;
+        let content = fs::read_to_string(file_path).await?;
         let document_data = md_importer.import(&self.view_id, content)?;
         let mut document = Document::create(&self.view_id, document_data)?;
 
@@ -256,7 +257,7 @@ impl NotionPage {
   pub async fn as_database(&self) -> Result<(Database, CollabResource), ImporterError> {
     match &self.notion_file {
       NotionFile::CSV { file_path, .. } => {
-        let content = std::fs::read_to_string(file_path)?;
+        let content = fs::read_to_string(file_path).await?;
         let files = self
           .notion_file
           .upload_files()
