@@ -109,7 +109,10 @@ impl ImportedCollabInfo {
 
 #[derive(Debug, Clone)]
 pub enum ImportType {
-  Database { view_ids: Vec<String> },
+  Database {
+    database_id: String,
+    view_ids: Vec<String>,
+  },
   Document,
 }
 

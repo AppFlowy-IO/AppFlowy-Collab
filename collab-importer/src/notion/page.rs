@@ -306,6 +306,7 @@ impl NotionPage {
     match &self.notion_file {
       NotionFile::CSV { .. } => {
         let (database, collab_resource) = self.as_database().await?;
+        let database_id = database.get_database_id();
         let view_ids = database
           .get_all_views()
           .into_iter()
@@ -327,7 +328,10 @@ impl NotionPage {
           name,
           collabs: imported_collabs,
           resource: collab_resource,
-          import_type: ImportType::Database { view_ids },
+          import_type: ImportType::Database {
+            database_id,
+            view_ids,
+          },
         })
       },
       NotionFile::Markdown { .. } => {
