@@ -275,7 +275,7 @@ pub async fn workspace_database_with_db(
     .build_collab(workspace_database_id, CollabType::WorkspaceDatabase, None)
     .await
     .unwrap();
-  WorkspaceDatabase::open(workspace_database_id, collab, builder).unwrap()
+  WorkspaceDatabase::create(workspace_database_id, collab, builder).unwrap()
 }
 
 pub async fn user_database_test_with_db(
