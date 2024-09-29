@@ -271,7 +271,7 @@ impl NotionPage {
           files,
         };
 
-        // create csv template, we need to set the current object id as csv template database id
+        // create csv template, we need to set the view id as csv template view id
         let mut csv_template =
           CSVTemplate::try_from_reader(content.as_bytes(), true, Some(csv_resource))?;
         csv_template.reset_view_id(self.view_id.clone());
@@ -306,6 +306,11 @@ impl NotionPage {
     match &self.notion_file {
       NotionFile::CSV { .. } => {
         let (database, collab_resource) = self.as_database().await?;
+        let view_ids = database
+          .get_all_views()
+          .into_iter()
+          .map(|view| view.id)
+          .collect::<Vec<_>>();
         let imported_collabs = database
           .encode_database_collabs()
           .await?
@@ -322,7 +327,7 @@ impl NotionPage {
           name,
           collabs: imported_collabs,
           resource: collab_resource,
-          import_type: ImportType::Database,
+          import_type: ImportType::Database { view_ids },
         })
       },
       NotionFile::Markdown { .. } => {

@@ -163,6 +163,10 @@ async fn check_task_database(linked_view: &NotionPage) {
 
   let (csv_fields, csv_rows) = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
   let (database, _) = linked_view.as_database().await.unwrap();
+  let views = database.get_all_views();
+  assert_eq!(views.len(), 1);
+  assert_eq!(linked_view.view_id, views[0].id);
+
   let fields = database.get_fields_in_view(&database.get_inline_view_id(), None);
   let rows = database.collect_all_rows().await;
   assert_eq!(rows.len(), 17);

@@ -109,14 +109,14 @@ impl ImportedCollabInfo {
 
 #[derive(Debug, Clone)]
 pub enum ImportType {
-  Database,
+  Database { view_ids: Vec<String> },
   Document,
 }
 
 impl Display for ImportType {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      ImportType::Database => write!(f, "Database"),
+      ImportType::Database { .. } => write!(f, "Database"),
       ImportType::Document => write!(f, "Document"),
     }
   }
