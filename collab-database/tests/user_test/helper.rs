@@ -250,7 +250,7 @@ pub async fn workspace_database_test_with_config(
     .build_collab(&workspace_database_id, CollabType::WorkspaceDatabase, None)
     .await
     .unwrap();
-  let inner = WorkspaceDatabase::open(&workspace_database_id, collab, collab_service);
+  let inner = WorkspaceDatabase::open(&workspace_database_id, collab, collab_service).unwrap();
   WorkspaceDatabaseTest {
     uid,
     inner,
@@ -275,7 +275,7 @@ pub async fn workspace_database_with_db(
     .build_collab(workspace_database_id, CollabType::WorkspaceDatabase, None)
     .await
     .unwrap();
-  WorkspaceDatabase::open(workspace_database_id, collab, builder)
+  WorkspaceDatabase::open(workspace_database_id, collab, builder).unwrap()
 }
 
 pub async fn user_database_test_with_db(

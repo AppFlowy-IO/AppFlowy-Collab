@@ -203,17 +203,17 @@ impl WorkspaceDatabase {
     object_id: &str,
     mut collab: Collab,
     collab_service: impl DatabaseCollabService,
-  ) -> Self {
+  ) -> Result<Self, DatabaseError> {
     let collab_service = Arc::new(collab_service);
-    let body = WorkspaceDatabaseBody::open(&mut collab);
+    let body = WorkspaceDatabaseBody::open(&mut collab)?;
 
-    Self {
+    Ok(Self {
       object_id: object_id.to_string(),
       collab,
       body,
       collab_service,
       databases: DashMap::new(),
-    }
+    })
   }
 
   pub fn close(&self) {

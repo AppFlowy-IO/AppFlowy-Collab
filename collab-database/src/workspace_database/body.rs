@@ -1,3 +1,5 @@
+use crate::database::timestamp;
+use crate::error::DatabaseError;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::{
@@ -5,10 +7,8 @@ use collab::preclude::{
   YrsValue,
 };
 use collab_entity::define::WORKSPACE_DATABASES;
+use collab_entity::CollabType;
 use std::collections::HashSet;
-
-use crate::database::timestamp;
-use crate::error::DatabaseError;
 
 /// Used to store list of [DatabaseMeta].
 pub struct WorkspaceDatabaseBody {
@@ -24,10 +24,12 @@ pub fn default_workspace_database_data(object_id: &str) -> EncodedCollab {
 }
 
 impl WorkspaceDatabaseBody {
-  pub fn open(collab: &mut Collab) -> Self {
+  pub fn open(collab: &mut Collab) -> Result<Self, DatabaseError> {
+    CollabType::WorkspaceDatabase.validate_require_data(collab)?;
+
     let mut txn = collab.context.transact_mut();
     let array_ref = collab.data.get_or_init(&mut txn, WORKSPACE_DATABASES);
-    Self { array_ref }
+    Ok(Self { array_ref })
   }
 
   pub fn create(collab: &mut Collab) -> Self {
