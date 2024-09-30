@@ -74,11 +74,11 @@ impl WorkspaceDatabaseBody {
     record.fill_map_ref(&mut txn, &map_ref);
   }
 
-  pub fn batch_add_database_with_txn(
+  pub fn batch_add_database(
     &mut self,
-    txn: &mut TransactionMut,
     view_ids_by_database_id: HashMap<String, Vec<String>>,
-  ) {
+  ) -> TransactionMut {
+    let mut txn = self.collab.transact_mut();
     for (database_id, view_ids) in view_ids_by_database_id {
       let linked_views: HashSet<String> = view_ids.into_iter().collect();
       let record = DatabaseMeta {
@@ -86,9 +86,10 @@ impl WorkspaceDatabaseBody {
         created_at: timestamp(),
         linked_views: linked_views.into_iter().collect(),
       };
-      let map_ref: MapRef = self.array_ref.push_back(txn, MapPrelim::default());
-      record.fill_map_ref(txn, &map_ref);
+      let map_ref: MapRef = self.array_ref.push_back(&mut txn, MapPrelim::default());
+      record.fill_map_ref(&mut txn, &map_ref);
     }
+    txn
   }
 
   /// Update the database by the given id
