@@ -10,6 +10,8 @@ pub struct Field {
   pub id: String,
   pub name: String,
   pub field_type: i64,
+  #[serde(default = "DEFAULT_ICON_VALUE")]
+  pub icon: String,
   pub type_options: TypeOptions,
   #[serde(default = "DEFAULT_IS_PRIMARY_VALUE")]
   pub is_primary: bool,
@@ -21,8 +23,8 @@ impl Field {
       id,
       name,
       field_type,
-      type_options: Default::default(),
       is_primary,
+      ..Default::default()
     }
   }
 
@@ -45,6 +47,7 @@ impl Field {
   }
 }
 
+const DEFAULT_ICON_VALUE: fn() -> String = || "".to_string();
 const DEFAULT_IS_PRIMARY_VALUE: fn() -> bool = || false;
 
 pub struct FieldBuilder<'a, 'b> {
@@ -83,6 +86,7 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
   }
 
   impl_str_update!(set_name, set_name_if_not_none, FIELD_NAME);
+  impl_str_update!(set_icon, set_icon_if_not_none, FIELD_ICON);
   impl_bool_update!(set_primary, set_primary_if_not_none, FIELD_PRIMARY);
   impl_i64_update!(set_field_type, set_field_type_if_not_none, FIELD_TYPE);
   impl_i64_update!(set_created_at, set_created_at_if_not_none, CREATED_AT);
@@ -129,6 +133,7 @@ impl<'a, 'b, 'c> FieldUpdate<'a, 'b, 'c> {
 
 const FIELD_ID: &str = "id";
 const FIELD_NAME: &str = "name";
+const FIELD_ICON: &str = "icon";
 const FIELD_TYPE: &str = "ty";
 const FIELD_TYPE_OPTION: &str = "type_option";
 const FIELD_PRIMARY: &str = "is_primary";
@@ -162,6 +167,7 @@ pub fn field_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Field> {
 pub fn field_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Field> {
   let id: String = map_ref.get_with_txn(txn, FIELD_ID)?;
   let name: String = map_ref.get_with_txn(txn, FIELD_NAME).unwrap_or_default();
+  let icon: String = map_ref.get_with_txn(txn, FIELD_ICON).unwrap_or_default();
 
   let type_options: TypeOptions = map_ref
     .get_with_txn(txn, FIELD_TYPE_OPTION)
@@ -175,6 +181,7 @@ pub fn field_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Field
   Some(Field {
     id,
     name,
+    icon,
     field_type,
     type_options,
     is_primary,

@@ -359,29 +359,9 @@ pub async fn test_timeout<F: Future>(f: F) -> F::Output {
 pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
   let database_id = gen_database_id();
 
-  let text_field = Field {
-    id: gen_field_id(),
-    name: "Name".to_string(),
-    field_type: 0,
-    type_options: Default::default(),
-    is_primary: true,
-  };
-
-  let single_select_field = Field {
-    id: gen_field_id(),
-    name: "Status".to_string(),
-    field_type: 3,
-    type_options: Default::default(),
-    is_primary: false,
-  };
-
-  let checkbox_field = Field {
-    id: gen_field_id(),
-    name: "Done".to_string(),
-    field_type: 4,
-    type_options: Default::default(),
-    is_primary: false,
-  };
+  let text_field = Field::new(gen_field_id(), "Name".to_string(), 0, true);
+  let single_select_field = Field::new(gen_field_id(), "Status".to_string(), 3, false);
+  let checkbox_field = Field::new(gen_field_id(), "Done".to_string(), 4, false);
 
   let field_settings_map = field_settings_for_default_database();
 
