@@ -11,8 +11,7 @@ use collab::preclude::{
 use collab_entity::define::WORKSPACE_DATABASES;
 use collab_entity::CollabType;
 use std::borrow::{Borrow, BorrowMut};
-use std::collections::HashSet;
-use yrs::WriteTxn;
+use std::collections::{HashMap, HashSet};
 
 /// Used to store list of [DatabaseMeta].
 pub struct WorkspaceDatabaseBody {
@@ -65,24 +64,28 @@ impl WorkspaceDatabaseBody {
   ///
   pub fn add_database(&mut self, database_id: &str, view_ids: Vec<String>) {
     let mut txn = self.collab.transact_mut();
-    self.add_database_with_txn(&mut txn, database_id, view_ids);
-  }
-
-  pub fn add_database_with_txn<T: WriteTxn>(
-    &mut self,
-    txn: &mut T,
-    database_id: &str,
-    view_ids: Vec<String>,
-  ) {
-    // Use HashSet to remove duplicates
     let linked_views: HashSet<String> = view_ids.into_iter().collect();
     let record = DatabaseMeta {
       database_id: database_id.to_string(),
       created_at: timestamp(),
       linked_views: linked_views.into_iter().collect(),
     };
-    let map_ref: MapRef = self.array_ref.push_back(txn, MapPrelim::default());
-    record.fill_map_ref(txn, &map_ref);
+    let map_ref: MapRef = self.array_ref.push_back(&mut txn, MapPrelim::default());
+    record.fill_map_ref(&mut txn, &map_ref);
+  }
+
+  pub fn add_database_with_txn(&mut self, view_ids_by_database_id: HashMap<String, Vec<String>>) {
+    let mut txn = self.collab.transact_mut();
+    for (database_id, view_ids) in view_ids_by_database_id {
+      let linked_views: HashSet<String> = view_ids.into_iter().collect();
+      let record = DatabaseMeta {
+        database_id,
+        created_at: timestamp(),
+        linked_views: linked_views.into_iter().collect(),
+      };
+      let map_ref: MapRef = self.array_ref.push_back(&mut txn, MapPrelim::default());
+      record.fill_map_ref(&mut txn, &map_ref);
+    }
   }
 
   /// Update the database by the given id
