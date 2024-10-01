@@ -1,10 +1,11 @@
 use crate::error::ImporterError;
 use crate::notion::page::CollabResource;
-use crate::notion::NotionImporter;
+use crate::notion::{ImportedInfo, NotionImporter};
 use crate::util::{unzip_from_path_or_memory, Either};
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
 
+use collab_folder::Folder;
 use futures::StreamExt;
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
@@ -26,11 +27,21 @@ pub async fn import_notion_zip_file(
     .await?;
 
   let infos = imported
-    .all_imported_collabs()
+    .into_collab_stream()
     .await
     .collect::<Vec<ImportedCollabInfo>>()
     .await;
   Ok(RepeatedImportedCollabInfo { infos })
+}
+
+pub async fn import_into_workspace(
+  uid: i64,
+  folder: &mut Folder,
+  imported_info: &ImportedInfo,
+) -> Result<(), ImporterError> {
+  let view_hierarchy = imported_info.build_nested_views(uid).await;
+  folder.insert_nested_views(view_hierarchy.into_inner());
+  Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -98,14 +109,17 @@ impl ImportedCollabInfo {
 
 #[derive(Debug, Clone)]
 pub enum ImportType {
-  Database,
+  Database {
+    database_id: String,
+    view_ids: Vec<String>,
+  },
   Document,
 }
 
 impl Display for ImportType {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      ImportType::Database => write!(f, "Database"),
+      ImportType::Database { .. } => write!(f, "Database"),
       ImportType::Document => write!(f, "Document"),
     }
   }

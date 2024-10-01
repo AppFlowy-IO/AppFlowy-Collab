@@ -22,3 +22,4 @@ pub mod error;
 pub mod folder_diff;
 mod folder_migration;
 mod folder_observe;
+pub mod hierarchy_builder;

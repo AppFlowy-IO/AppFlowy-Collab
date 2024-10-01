@@ -1,4 +1,5 @@
 use crate::util::{parse_csv, print_view, setup_log, unzip_test_asset};
+use collab::preclude::Collab;
 use collab_database::database::Database;
 use collab_database::entity::FieldType;
 use collab_database::entity::FieldType::*;
@@ -7,14 +8,17 @@ use collab_database::fields::media_type_option::MediaCellData;
 use collab_database::fields::{Field, StringifyTypeOption};
 use collab_database::rows::Row;
 use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_from_block_data};
+
 use collab_document::importer::define::{BlockType, URL_FIELD};
-use collab_importer::imported_collab::import_notion_zip_file;
+use collab_folder::{default_folder_data, Folder, View};
+use collab_importer::imported_collab::{import_into_workspace, import_notion_zip_file};
 use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::NotionImporter;
 use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use std::collections::HashMap;
 use std::env::temp_dir;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn import_blog_post_document_test() {
@@ -159,6 +163,10 @@ async fn check_task_database(linked_view: &NotionPage) {
 
   let (csv_fields, csv_rows) = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
   let (database, _) = linked_view.as_database().await.unwrap();
+  let views = database.get_all_views();
+  assert_eq!(views.len(), 1);
+  assert_eq!(linked_view.view_id, views[0].id);
+
   let fields = database.get_fields_in_view(&database.get_inline_view_id(), None);
   let rows = database.collect_all_rows().await;
   assert_eq!(rows.len(), 17);
@@ -297,10 +305,22 @@ async fn import_level_test() {
     "http://test.appflowy.cloud".to_string(),
   )
   .unwrap();
-  let imported_view = importer.import().await.unwrap();
-  assert!(!imported_view.views.is_empty());
-  assert_eq!(imported_view.name, "import_test");
+  let info = importer.import().await.unwrap();
+  assert!(!info.views.is_empty());
+  assert_eq!(info.name, "import_test");
 
+  let uid = 1;
+  let collab = Collab::new(uid, &info.workspace_id, "1", vec![], false);
+  let mut folder = Folder::create(1, collab, None, default_folder_data(&info.workspace_id));
+  import_into_workspace(uid, &mut folder, &info)
+    .await
+    .unwrap();
+
+  let first_level_views = folder.get_views_belong_to(&info.workspace_id);
+  assert_eq!(first_level_views.len(), 3);
+  verify_first_level_views(&first_level_views, &mut folder);
+
+  // Print out the views for debugging or manual inspection
   /*
   - Root2:Markdown
     - root2-link:Markdown
@@ -316,7 +336,52 @@ async fn import_level_test() {
     - root 3:Markdown
       - root 3 1:Markdown
       */
-  for view in imported_view.views {
+  for view in info.views {
     print_view(&view, 0);
+  }
+}
+
+// Helper function to verify second and third level views based on the first level view name
+fn verify_first_level_views(first_level_views: &[Arc<View>], folder: &mut Folder) {
+  for view in first_level_views {
+    let second_level_views = folder.get_views_belong_to(&view.id);
+    match view.name.as_str() {
+      "Root2" => {
+        assert_eq!(second_level_views.len(), 1);
+        assert_eq!(second_level_views[0].name, "root2-link");
+      },
+      "Home" => {
+        assert_eq!(second_level_views.len(), 2);
+        assert_eq!(second_level_views[0].name, "Home views");
+        assert_eq!(second_level_views[1].name, "My tasks");
+      },
+      "Root" => {
+        assert_eq!(second_level_views.len(), 3);
+        verify_root_second_level_views(&second_level_views, folder);
+      },
+      _ => panic!("Unexpected view name: {}", view.name),
+    }
+  }
+}
+
+// Helper function to verify third level views based on the second level view name under "Root"
+fn verify_root_second_level_views(second_level_views: &[Arc<View>], folder: &mut Folder) {
+  for view in second_level_views {
+    let third_level_views = folder.get_views_belong_to(&view.id);
+    match view.name.as_str() {
+      "root-2" => {
+        assert_eq!(third_level_views.len(), 1);
+        assert_eq!(third_level_views[0].name, "root-2-1");
+      },
+      "root-1" => {
+        assert_eq!(third_level_views.len(), 1);
+        assert_eq!(third_level_views[0].name, "root-1-1");
+      },
+      "root 3" => {
+        assert_eq!(third_level_views.len(), 1);
+        assert_eq!(third_level_views[0].name, "root 3 1");
+      },
+      _ => panic!("Unexpected second level view name: {}", view.name),
+    }
   }
 }
