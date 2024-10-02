@@ -64,7 +64,8 @@ async fn import_project_and_task_collab_test() {
   let workspace_id = uuid::Uuid::new_v4().to_string();
   let host = "http://test.appflowy.cloud";
   let zip_file_path = PathBuf::from("./tests/asset/project&task.zip");
-  let temp_dir = temp_dir();
+  let temp_dir = temp_dir().join(uuid::Uuid::new_v4().to_string());
+  std::fs::create_dir_all(&temp_dir).unwrap();
   let info = import_notion_zip_file(host, &workspace_id, zip_file_path, temp_dir.clone())
     .await
     .unwrap();
