@@ -196,9 +196,9 @@ impl Folder {
     self.body.views.get_views(&txn, view_ids)
   }
 
-  pub fn get_views_belong_to(&self, workspace_id: &str) -> Vec<Arc<View>> {
+  pub fn get_views_belong_to(&self, parent_id: &str) -> Vec<Arc<View>> {
     let txn = self.collab.transact();
-    self.body.views.get_views_belong_to(&txn, workspace_id)
+    self.body.views.get_views_belong_to(&txn, parent_id)
   }
 
   pub fn move_view(&mut self, view_id: &str, from: u32, to: u32) -> Option<Arc<View>> {

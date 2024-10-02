@@ -1,6 +1,7 @@
 use crate::{
   timestamp, IconType, RepeatedViewIdentifier, View, ViewIcon, ViewIdentifier, ViewLayout,
 };
+use std::fmt::{Display, Formatter};
 use std::future::Future;
 use std::ops::{Deref, DerefMut};
 
@@ -44,6 +45,15 @@ pub struct NestedViews {
   pub views: Vec<ParentChildViews>,
 }
 
+impl Display for NestedViews {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    for view in &self.views {
+      write!(f, "{}", view)?;
+    }
+    Ok(())
+  }
+}
+
 impl NestedViews {
   pub fn into_inner(self) -> Vec<ParentChildViews> {
     self.views
@@ -58,6 +68,10 @@ impl NestedViews {
       view.remove_view(view_id);
       true
     });
+  }
+
+  pub fn all_views(&self) -> Vec<View> {
+    FlattedViews::flatten_views(self.views.clone())
   }
 }
 
@@ -110,6 +124,16 @@ impl ViewBuilder {
 
   pub fn view_id(&self) -> &str {
     &self.view_id
+  }
+
+  pub fn with_view(mut self, view: ParentChildViews) -> Self {
+    self.child_views.push(view);
+    self
+  }
+
+  pub fn with_child_views(mut self, mut views: Vec<ParentChildViews>) -> Self {
+    self.child_views.append(&mut views);
+    self
   }
 
   pub fn with_view_id<T: ToString>(mut self, view_id: T) -> Self {
@@ -192,6 +216,30 @@ impl ViewBuilder {
 pub struct ParentChildViews {
   pub parent_view: View,
   pub child_views: Vec<ParentChildViews>,
+}
+
+impl ParentChildViews {
+  fn fmt_with_indent(&self, f: &mut Formatter<'_>, indent_level: usize) -> std::fmt::Result {
+    let indent = "  ".repeat(indent_level);
+    writeln!(
+      f,
+      "{}: {}, parent id: {}",
+      indent, self.parent_view.id, self.parent_view.parent_view_id
+    )?;
+
+    // Recursively print child views
+    for child in &self.child_views {
+      child.fmt_with_indent(f, indent_level + 1)?;
+    }
+
+    Ok(())
+  }
+}
+
+impl Display for ParentChildViews {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    self.fmt_with_indent(f, 0)
+  }
 }
 
 impl ParentChildViews {

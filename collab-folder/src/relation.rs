@@ -293,6 +293,14 @@ pub struct ViewIdentifier {
   pub id: String,
 }
 
+impl Deref for ViewIdentifier {
+  type Target = String;
+
+  fn deref(&self) -> &Self::Target {
+    &self.id
+  }
+}
+
 impl ViewIdentifier {
   pub fn new(id: String) -> Self {
     Self { id }
