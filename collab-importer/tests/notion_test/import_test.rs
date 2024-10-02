@@ -97,6 +97,11 @@ async fn import_project_and_task_test() {
   )
   .unwrap();
   let imported_view = importer.import().await.unwrap();
+  println!(
+    "workspace_id:{}, views:\n{}",
+    workspace_id,
+    imported_view.build_nested_views(1).await
+  );
   assert!(!imported_view.views.is_empty());
   assert_eq!(imported_view.name, "project&task");
   assert_eq!(imported_view.num_of_csv(), 2);
