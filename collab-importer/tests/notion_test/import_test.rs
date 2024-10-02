@@ -11,7 +11,7 @@ use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_
 
 use collab_document::importer::define::{BlockType, URL_FIELD};
 use collab_folder::{default_folder_data, Folder, View};
-use collab_importer::imported_collab::{import_into_workspace, import_notion_zip_file};
+use collab_importer::imported_collab::import_notion_zip_file;
 use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::NotionImporter;
 use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
@@ -312,12 +312,19 @@ async fn import_level_test() {
   let uid = 1;
   let collab = Collab::new(uid, &info.workspace_id, "1", vec![], false);
   let mut folder = Folder::create(1, collab, None, default_folder_data(&info.workspace_id));
-  import_into_workspace(uid, &mut folder, &info)
-    .await
-    .unwrap();
+
+  let view_hierarchy = info.build_nested_views(uid).await;
+  println!(
+    "workspace_id:{}, views: \n{}",
+    &info.workspace_id, view_hierarchy
+  );
+  assert_eq!(view_hierarchy.all_views().len(), 13);
+  folder.insert_nested_views(view_hierarchy.into_inner());
 
   let first_level_views = folder.get_views_belong_to(&info.workspace_id);
   assert_eq!(first_level_views.len(), 3);
+  println!("first_level_views: {:?}", first_level_views);
+
   verify_first_level_views(&first_level_views, &mut folder);
 
   // Print out the views for debugging or manual inspection
