@@ -2,7 +2,6 @@ use anyhow::Error;
 use anyhow::{Context, Result};
 use base64::engine::general_purpose::URL_SAFE;
 use base64::Engine;
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use sha2::{Digest, Sha256};
 use std::io::Read;
 use std::io::{Cursor, Seek};
@@ -14,8 +13,7 @@ use tokio::io::{AsyncReadExt, BufReader};
 use zip::ZipArchive;
 
 pub fn upload_file_url(host: &str, workspace_id: &str, object_id: &str, file_id: &str) -> String {
-  let parent_dir = utf8_percent_encode(object_id, NON_ALPHANUMERIC).to_string();
-  format!("{host}/{workspace_id}/v1/blob/{parent_dir}/{file_id}",)
+  format!("{host}/{workspace_id}/v1/blob/{object_id}/{file_id}",)
 }
 
 pub struct FileId;
