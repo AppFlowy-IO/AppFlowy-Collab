@@ -14,7 +14,7 @@ use collab_folder::{default_folder_data, Folder, View};
 use collab_importer::imported_collab::import_notion_zip_file;
 use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::NotionImporter;
-use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
+use percent_encoding::percent_decode_str;
 use std::collections::HashMap;
 use std::env::temp_dir;
 use std::path::PathBuf;
@@ -34,7 +34,7 @@ async fn import_blog_post_document_test() {
 
   let root_view = &imported_view.views[0];
   let external_link_views = root_view.get_external_link_notion_view();
-  let object_id = utf8_percent_encode(&root_view.view_id, NON_ALPHANUMERIC).to_string();
+  let object_id = root_view.view_id.clone();
 
   let mut expected_urls = vec![
     "PGTRCFsf2duc7iP3KjE62Xs8LE7B96a0aQtLtGtfIcw=.jpg",
