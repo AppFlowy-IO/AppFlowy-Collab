@@ -112,6 +112,16 @@ impl ViewBuilder {
     &self.view_id
   }
 
+  pub fn with_view(mut self, view: ParentChildViews) -> Self {
+    self.child_views.push(view);
+    self
+  }
+
+  pub fn with_child_views(mut self, mut views: Vec<ParentChildViews>) -> Self {
+    self.child_views.append(&mut views);
+    self
+  }
+
   pub fn with_view_id<T: ToString>(mut self, view_id: T) -> Self {
     self.view_id = view_id.to_string();
     self
