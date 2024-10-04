@@ -55,8 +55,6 @@ where
     // Remove the updates
     let start = make_doc_start_key(doc_id);
     let end = make_doc_end_key(doc_id);
-
-    tracing::debug!("[{}:{:?}]: flush doc", doc_id, object_id,);
     self.remove_range(start.as_ref(), end.as_ref())?;
 
     let doc_state_key = make_doc_state_key(doc_id);
