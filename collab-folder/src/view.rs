@@ -389,7 +389,6 @@ impl ViewsMap {
 
   fn set_cache_view(&self, view: Option<Arc<View>>) {
     if let Some(view) = view {
-      trace!("Update cache view: {}", view.id);
       self.cache.insert(view.id.clone(), view);
     }
   }

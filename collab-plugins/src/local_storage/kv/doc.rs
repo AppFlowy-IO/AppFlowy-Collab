@@ -119,12 +119,6 @@ where
           }
           update_count += 1;
         }
-        trace!(
-          "Collab {:?} loaded. doc state len:{}, update count:{}",
-          object_id,
-          doc_state.as_ref().len(),
-          update_count
-        );
       } else {
         tracing::error!(
           "🔴collab => [{}-{:?}]: the doc state should not be empty",
