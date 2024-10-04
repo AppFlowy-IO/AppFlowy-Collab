@@ -1,6 +1,8 @@
 use crate::{
   timestamp, IconType, RepeatedViewIdentifier, View, ViewIcon, ViewIdentifier, ViewLayout,
 };
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::fmt::{Display, Formatter};
 use std::future::Future;
 use std::ops::{Deref, DerefMut};
@@ -164,8 +166,10 @@ impl ViewBuilder {
     self
   }
 
-  pub fn with_extra(mut self, extra: &str) -> Self {
-    self.extra = Some(extra.to_string());
+  pub fn with_extra<F: Fn(ViewExtraBuilder) -> serde_json::Value>(mut self, extra: F) -> Self {
+    let builder = ViewExtraBuilder::new();
+    let extra_json = extra(builder);
+    self.extra = Some(serde_json::to_string(&extra_json).unwrap());
     self
   }
 
@@ -210,6 +214,30 @@ impl ViewBuilder {
       child_views: self.child_views,
     }
   }
+}
+
+pub struct ViewExtraBuilder(serde_json::Value);
+impl ViewExtraBuilder {
+  pub fn new() -> Self {
+    Self(json!({}))
+  }
+  pub fn is_space(mut self, is_space: bool, permission: SpacePermission) -> Self {
+    self.0["is_space"] = json!(is_space);
+    self.0["space_permission"] = json!(permission as u8);
+    self.0["space_created_at"] = json!(timestamp());
+    self
+  }
+
+  pub fn build(self) -> serde_json::Value {
+    self.0
+  }
+}
+
+#[derive(Debug, Clone, serde_repr::Serialize_repr, serde_repr::Deserialize_repr)]
+#[repr(u8)]
+pub enum SpacePermission {
+  PublicToAll = 0,
+  Private = 1,
 }
 
 #[derive(Debug, Clone)]
