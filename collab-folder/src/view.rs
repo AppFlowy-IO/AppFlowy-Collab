@@ -15,7 +15,7 @@ use crate::folder_observe::ViewChangeSender;
 use crate::hierarchy_builder::SpacePermission;
 use crate::section::{Section, SectionItem, SectionMap};
 use crate::{impl_any_update, impl_i64_update, impl_option_i64_update, impl_str_update, UserId};
-use crate::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
+use crate::{subscribe_view_change, ParentChildRelations, RepeatedViewIdentifier, ViewIdentifier};
 
 pub(crate) const FOLDER_VIEW_ID: &str = "id";
 pub(crate) const FOLDER_VIEW_NAME: &str = "name";
@@ -37,7 +37,7 @@ pub fn timestamp() -> i64 {
 pub struct ViewsMap {
   uid: UserId,
   pub(crate) container: MapRef,
-  pub(crate) view_relations: Arc<ViewRelations>,
+  pub(crate) parent_children_relation: Arc<ParentChildRelations>,
   pub(crate) section_map: Arc<SectionMap>,
   cache: Arc<DashMap<String, Arc<View>>>,
   #[allow(dead_code)]
@@ -51,7 +51,7 @@ impl ViewsMap {
     uid: &UserId,
     mut root: MapRef,
     change_tx: Option<ViewChangeSender>,
-    view_relations: Arc<ViewRelations>,
+    view_relations: Arc<ParentChildRelations>,
     section_map: Arc<SectionMap>,
     index_json_sender: IndexContentSender,
     views: HashMap<String, Arc<View>>,
@@ -74,7 +74,7 @@ impl ViewsMap {
       container: root,
       subscription,
       change_tx,
-      view_relations,
+      parent_children_relation: view_relations,
       cache: view_cache,
       section_map,
     }
@@ -82,7 +82,7 @@ impl ViewsMap {
 
   pub fn move_child(&self, txn: &mut TransactionMut, parent_id: &str, from: u32, to: u32) {
     self
-      .view_relations
+      .parent_children_relation
       .move_child_with_txn(txn, parent_id, from, to);
     self.remove_cache_view(parent_id);
   }
@@ -116,7 +116,7 @@ impl ViewsMap {
     view_id: &str,
   ) {
     self
-      .view_relations
+      .parent_children_relation
       .dissociate_parent_child_with_txn(txn, parent_id, view_id);
     self.remove_cache_view(parent_id);
   }
@@ -129,13 +129,16 @@ impl ViewsMap {
     prev_view_id: Option<String>,
   ) {
     self
-      .view_relations
+      .parent_children_relation
       .associate_parent_child_with_txn(txn, parent_id, view_id, prev_view_id);
     self.remove_cache_view(parent_id);
   }
 
   pub fn remove_child(&self, txn: &mut TransactionMut, parent_id: &str, child_index: u32) {
-    if let Some(parent) = self.view_relations.get_children_with_txn(txn, parent_id) {
+    if let Some(parent) = self
+      .parent_children_relation
+      .get_children_with_txn(txn, parent_id)
+    {
       if let Some(identifier) = parent.remove_child_with_txn(txn, child_index) {
         self.delete_views(txn, vec![identifier.id]);
       }
@@ -155,7 +158,7 @@ impl ViewsMap {
                 .container
                 .get_with_txn(txn, &child.id)
                 .and_then(|map| {
-                  view_from_map_ref(&map, txn, &self.view_relations, &self.section_map)
+                  view_from_map_ref(&map, txn, &self.parent_children_relation, &self.section_map)
                 })
                 .map(Arc::new);
               self.set_cache_view(view.clone());
@@ -167,7 +170,7 @@ impl ViewsMap {
         .collect::<Vec<Arc<View>>>(),
       None => {
         let child_view_ids = self
-          .view_relations
+          .parent_children_relation
           .get_children_with_txn(txn, parent_view_id)
           .map(|array| {
             array
@@ -204,7 +207,8 @@ impl ViewsMap {
         match v {
           YrsValue::YMap(map) => {
             let view =
-              view_from_map_ref(&map, txn, &self.view_relations, &self.section_map).map(Arc::new);
+              view_from_map_ref(&map, txn, &self.parent_children_relation, &self.section_map)
+                .map(Arc::new);
             if let Some(ref view) = view {
               self.cache.insert(k.to_string(), view.clone());
             }
@@ -218,10 +222,7 @@ impl ViewsMap {
 
   #[instrument(level = "trace", skip_all)]
   pub fn get_view<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<Arc<View>> {
-    match self.get_cache_view(view_id) {
-      None => self.get_view_with_txn(txn, view_id),
-      Some(view) => Some(view),
-    }
+    self.get_view_with_txn(txn, view_id)
   }
 
   /// Return the orphan views.
@@ -241,8 +242,13 @@ impl ViewsMap {
     let view = self.get_cache_view(view_id);
     if view.is_none() {
       let map_ref = self.container.get_with_txn(txn, view_id)?;
-      let view =
-        view_from_map_ref(&map_ref, txn, &self.view_relations, &self.section_map).map(Arc::new);
+      let view = view_from_map_ref(
+        &map_ref,
+        txn,
+        &self.parent_children_relation,
+        &self.section_map,
+      )
+      .map(Arc::new);
       self.set_cache_view(view.clone());
       return view;
     }
@@ -280,7 +286,7 @@ impl ViewsMap {
         &view.parent_view_id,
         txn,
         &parent_map_ref,
-        self.view_relations.clone(),
+        self.parent_children_relation.clone(),
         &self.section_map,
       )
       .add_children(vec![view_identifier], index)
@@ -296,7 +302,7 @@ impl ViewsMap {
       &view.id,
       txn,
       map_ref,
-      self.view_relations.clone(),
+      self.parent_children_relation.clone(),
       &self.section_map,
     )
     .update(&self.uid, |update| {
@@ -378,7 +384,7 @@ impl ViewsMap {
       view_id,
       txn,
       &map_ref,
-      self.view_relations.clone(),
+      self.parent_children_relation.clone(),
       &self.section_map,
     )
     .set_last_edited_by(Some(uid.as_i64()))
@@ -416,7 +422,7 @@ impl ViewsMap {
 pub(crate) fn view_from_map_ref<T: ReadTxn>(
   map_ref: &MapRef,
   txn: &T,
-  view_relations: &Arc<ViewRelations>,
+  view_relations: &Arc<ParentChildRelations>,
   section_map: &SectionMap,
 ) -> Option<View> {
   let parent_view_id: String = map_ref.get_with_txn(txn, VIEW_PARENT_ID)?;
@@ -476,7 +482,7 @@ pub struct ViewBuilder<'a, 'b> {
   view_id: &'a str,
   map_ref: MapRef,
   txn: &'a mut TransactionMut<'b>,
-  belongings: Arc<ViewRelations>,
+  belongings: Arc<ParentChildRelations>,
   view: Option<View>,
   section_map: &'a SectionMap,
 }
@@ -486,7 +492,7 @@ impl<'a, 'b> ViewBuilder<'a, 'b> {
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: MapRef,
-    belongings: Arc<ViewRelations>,
+    belongings: Arc<ParentChildRelations>,
     section_map: &'a SectionMap,
   ) -> Self {
     map_ref.insert(txn, FOLDER_VIEW_ID, view_id);
@@ -526,7 +532,7 @@ pub struct ViewUpdate<'a, 'b, 'c> {
   view_id: &'a str,
   map_ref: &'c MapRef,
   txn: &'a mut TransactionMut<'b>,
-  children_map: Arc<ViewRelations>,
+  children_map: Arc<ParentChildRelations>,
   section_map: &'c SectionMap,
 }
 
@@ -550,7 +556,7 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     view_id: &'a str,
     txn: &'a mut TransactionMut<'b>,
     map_ref: &'c MapRef,
-    children_map: Arc<ViewRelations>,
+    children_map: Arc<ParentChildRelations>,
     section_map: &'c SectionMap,
   ) -> Self {
     Self {

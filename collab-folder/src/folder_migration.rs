@@ -5,7 +5,7 @@ use collab::preclude::{
 use serde::{Deserialize, Serialize};
 
 use crate::folder::FAVORITES_V1;
-use crate::{Folder, FolderBody, SectionItem, View, ViewRelations, Workspace};
+use crate::{Folder, FolderBody, ParentChildRelations, SectionItem, View, Workspace};
 
 const WORKSPACES: &str = "workspaces";
 const WORKSPACE_ID: &str = "id";
@@ -63,7 +63,7 @@ impl Folder {
 pub fn to_workspace_with_txn<T: ReadTxn>(
   txn: &T,
   map_ref: &MapRef,
-  views: &ViewRelations,
+  views: &ParentChildRelations,
 ) -> Option<Workspace> {
   let id: String = map_ref.get_with_txn(txn, WORKSPACE_ID)?;
   let name = map_ref
@@ -100,7 +100,11 @@ impl FolderBody {
       workspace_array
         .iter(txn)
         .flat_map(|map_ref| {
-          to_workspace_with_txn(txn, &map_ref.cast().unwrap(), &self.views.view_relations)
+          to_workspace_with_txn(
+            txn,
+            &map_ref.cast().unwrap(),
+            &self.views.parent_children_relation,
+          )
         })
         .collect::<Vec<_>>()
     };

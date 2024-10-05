@@ -72,6 +72,16 @@ impl NestedViews {
     });
   }
 
+  pub fn find_view(&self, view_id: &str) -> Option<&View> {
+    for view in &self.views {
+      let view = view.find_view(view_id);
+      if view.is_some() {
+        return view;
+      }
+    }
+    None
+  }
+
   pub fn all_views(&self) -> Vec<View> {
     FlattedViews::flatten_views(self.views.clone())
   }
@@ -218,9 +228,9 @@ impl ViewBuilder {
 
 pub struct ViewExtraBuilder(serde_json::Value);
 impl Default for ViewExtraBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
+  fn default() -> Self {
+    Self::new()
+  }
 }
 
 impl ViewExtraBuilder {
@@ -285,6 +295,19 @@ impl ParentChildViews {
       child_view.remove_view(view_id);
       true
     });
+  }
+
+  pub fn find_view(&self, view_id: &str) -> Option<&View> {
+    if self.parent_view.id == view_id {
+      return Some(&self.parent_view);
+    }
+    for child_view in &self.child_views {
+      let view = child_view.find_view(view_id);
+      if view.is_some() {
+        return view;
+      }
+    }
+    None
   }
 }
 
