@@ -1,7 +1,7 @@
 use crate::{
   timestamp, IconType, RepeatedViewIdentifier, View, ViewIcon, ViewIdentifier, ViewLayout,
 };
-use serde::{Deserialize, Serialize};
+
 use serde_json::json;
 use std::fmt::{Display, Formatter};
 use std::future::Future;
@@ -217,6 +217,12 @@ impl ViewBuilder {
 }
 
 pub struct ViewExtraBuilder(serde_json::Value);
+impl Default for ViewExtraBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ViewExtraBuilder {
   pub fn new() -> Self {
     Self(json!({}))

@@ -2,7 +2,7 @@ use crate::local_storage::kv::keys::*;
 use crate::local_storage::kv::snapshot::SnapshotAction;
 use crate::local_storage::kv::*;
 use std::fmt::Debug;
-use tracing::{error, info, trace};
+use tracing::{error, info};
 
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;

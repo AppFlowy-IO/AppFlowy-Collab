@@ -12,6 +12,7 @@ use serde_repr::*;
 use tracing::{instrument, trace};
 
 use crate::folder_observe::ViewChangeSender;
+use crate::hierarchy_builder::SpacePermission;
 use crate::section::{Section, SectionItem, SectionMap};
 use crate::{impl_any_update, impl_i64_update, impl_option_i64_update, impl_str_update, UserId};
 use crate::{subscribe_view_change, RepeatedViewIdentifier, ViewIdentifier, ViewRelations};
@@ -682,6 +683,19 @@ pub struct View {
   /// - line_height_layout: "small" or "normal" or "large"
   /// - font_layout: "small", or "normal", or "large"
   pub extra: Option<String>,
+}
+
+impl View {
+  pub fn space_info(&self) -> Option<SpaceInfo> {
+    let extra = self.extra.as_ref()?;
+    serde_json::from_str::<SpaceInfo>(extra).ok()
+  }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SpaceInfo {
+  pub is_space: bool,
+  pub space_permission: SpacePermission,
 }
 
 /// Represents a the index of a view.
