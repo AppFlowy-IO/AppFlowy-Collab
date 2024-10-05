@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 pub trait Schema {
   fn schema() -> Value;
 
-  fn init(tx: &mut TransactionMut) {
+  fn init_schema(tx: &mut TransactionMut) {
     let schema = Self::schema();
     match schema {
       Value::Object(map) => {
@@ -29,7 +29,7 @@ pub trait Schema {
     }
   }
 
-  fn validate<T: ReadTxn>(tx: &T) -> Result<(), CollabValidateError> {
+  fn validate_schema<T: ReadTxn>(tx: &T) -> Result<(), CollabValidateError> {
     let schema = Self::schema();
     match &schema {
       Value::Object(map) => {
@@ -172,8 +172,13 @@ mod test {
   fn test_schema() {
     let mut collab = Collab::new(0, "oid-1", "device-1", vec![], false);
     let mut tx = collab.transact_mut();
-    TestSchema::init(&mut tx);
-    assert_matches!(TestSchema::validate(&tx), Ok(_));
-    assert_matches!(TestSchema2::validate(&tx), Err(_));
+    // initialize collab state with schema
+    TestSchema::init_schema(&mut tx);
+
+    // test collab state against a valid schema
+    assert_matches!(TestSchema::validate_schema(&tx), Ok(_));
+
+    // test collab state against another (invalid) schema
+    assert_matches!(TestSchema2::validate_schema(&tx), Err(_));
   }
 }
