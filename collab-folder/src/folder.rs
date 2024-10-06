@@ -19,8 +19,8 @@ use crate::hierarchy_builder::{FlattedViews, ParentChildViews};
 use crate::section::{Section, SectionItem, SectionMap};
 use crate::view::view_from_map_ref;
 use crate::{
-  impl_section_op, subscribe_folder_change, FolderData, SectionChangeSender, TrashInfo, View,
-  ViewRelations, ViewUpdate, ViewsMap, Workspace,
+  impl_section_op, subscribe_folder_change, FolderData, ParentChildRelations, SectionChangeSender,
+  TrashInfo, View, ViewUpdate, ViewsMap, Workspace,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -52,7 +52,7 @@ impl AsRef<str> for UserId {
 }
 
 const VIEWS: &str = "views";
-const VIEW_RELATION: &str = "relation";
+const PARENT_CHILD_VIEW_RELATION: &str = "relation";
 const CURRENT_VIEW: &str = "current_view";
 
 pub(crate) const FAVORITES_V1: &str = "favorites";
@@ -430,7 +430,7 @@ pub fn check_folder_is_valid(collab: &Collab) -> Result<String, FolderError> {
 fn get_views_from_root<T: ReadTxn>(
   root: &MapRef,
   _uid: &UserId,
-  view_relations: &Arc<ViewRelations>,
+  view_relations: &Arc<ParentChildRelations>,
   section_map: &Arc<SectionMap>,
   txn: &T,
 ) -> HashMap<String, Arc<View>> {
@@ -485,8 +485,8 @@ impl FolderBody {
     let views: MapRef = folder.get_or_init(&mut txn, VIEWS);
     let section: MapRef = folder.get_or_init(&mut txn, SECTION);
     let meta: MapRef = folder.get_or_init(&mut txn, FOLDER_META);
-    let view_relations = Arc::new(ViewRelations::new(
-      folder.get_or_init(&mut txn, VIEW_RELATION),
+    let parent_child_relations = Arc::new(ParentChildRelations::new(
+      folder.get_or_init(&mut txn, PARENT_CHILD_VIEW_RELATION),
     ));
 
     let section = Arc::new(SectionMap::create(
@@ -497,14 +497,14 @@ impl FolderBody {
         .as_ref()
         .map(|notifier| notifier.section_change_tx.clone()),
     ));
-    let all_views = get_views_from_root(&views, &uid, &view_relations, &section, &txn);
+    let all_views = get_views_from_root(&views, &uid, &parent_child_relations, &section, &txn);
     let views = Arc::new(ViewsMap::new(
       &uid,
       views,
       notifier
         .as_ref()
         .map(|notifier| notifier.view_change_tx.clone()),
-      view_relations,
+      parent_child_relations,
       section.clone(),
       index_json_sender,
       all_views,

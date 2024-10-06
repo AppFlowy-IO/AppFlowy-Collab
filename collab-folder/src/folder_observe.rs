@@ -9,7 +9,7 @@ use serde_json::json;
 use tokio::sync::broadcast;
 
 use crate::section::SectionMap;
-use crate::{view_from_map_ref, UserId, View, ViewIndexContent, ViewRelations};
+use crate::{view_from_map_ref, ParentChildRelations, UserId, View, ViewIndexContent};
 
 #[derive(Debug, Clone)]
 pub enum ViewChange {
@@ -58,7 +58,7 @@ pub(crate) fn subscribe_view_change(
   root: &mut MapRef,
   view_cache: Arc<DashMap<String, Arc<View>>>,
   change_tx: ViewChangeSender,
-  view_relations: Arc<ViewRelations>,
+  view_relations: Arc<ParentChildRelations>,
   section_map: Arc<SectionMap>,
   index_sender: IndexContentSender,
 ) -> Subscription {

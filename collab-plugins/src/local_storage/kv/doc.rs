@@ -2,7 +2,7 @@ use crate::local_storage::kv::keys::*;
 use crate::local_storage::kv::snapshot::SnapshotAction;
 use crate::local_storage::kv::*;
 use std::fmt::Debug;
-use tracing::{error, info, trace};
+use tracing::{error, info};
 
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
@@ -55,8 +55,6 @@ where
     // Remove the updates
     let start = make_doc_start_key(doc_id);
     let end = make_doc_end_key(doc_id);
-
-    tracing::debug!("[{}:{:?}]: flush doc", doc_id, object_id,);
     self.remove_range(start.as_ref(), end.as_ref())?;
 
     let doc_state_key = make_doc_state_key(doc_id);
@@ -119,12 +117,6 @@ where
           }
           update_count += 1;
         }
-        trace!(
-          "Collab {:?} loaded. doc state len:{}, update count:{}",
-          object_id,
-          doc_state.as_ref().len(),
-          update_count
-        );
       } else {
         tracing::error!(
           "🔴collab => [{}-{:?}]: the doc state should not be empty",

@@ -13,11 +13,11 @@ use serde::{Deserialize, Serialize};
 ///   parent_id: [child_id1, child_id2, ...]
 /// }
 ///
-pub struct ViewRelations {
+pub struct ParentChildRelations {
   container: MapRef,
 }
 
-impl ViewRelations {
+impl ParentChildRelations {
   pub fn new(container: MapRef) -> Self {
     Self { container }
   }
