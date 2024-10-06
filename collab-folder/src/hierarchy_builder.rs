@@ -64,7 +64,7 @@ impl NestedViews {
   pub fn remove_view(&mut self, view_id: &str) {
     // recursively remove the view and its children views.
     self.views.retain_mut(|view| {
-      if view.parent_view.id == view_id {
+      if view.view.id == view_id {
         return false;
       }
       view.remove_view(view_id);
@@ -212,7 +212,7 @@ impl ViewBuilder {
           .child_views
           .iter()
           .map(|v| ViewIdentifier {
-            id: v.parent_view.id.clone(),
+            id: v.view.id.clone(),
           })
           .collect(),
       ),
@@ -220,8 +220,8 @@ impl ViewBuilder {
       extra: self.extra,
     };
     ParentChildViews {
-      parent_view: view,
-      child_views: self.child_views,
+      view,
+      children: self.child_views,
     }
   }
 }
@@ -258,8 +258,8 @@ pub enum SpacePermission {
 
 #[derive(Debug, Clone)]
 pub struct ParentChildViews {
-  pub parent_view: View,
-  pub child_views: Vec<ParentChildViews>,
+  pub view: View,
+  pub children: Vec<ParentChildViews>,
 }
 
 impl ParentChildViews {
@@ -268,11 +268,11 @@ impl ParentChildViews {
     writeln!(
       f,
       "{}: {}, parent id: {}",
-      indent, self.parent_view.id, self.parent_view.parent_view_id
+      indent, self.view.id, self.view.parent_view_id
     )?;
 
     // Recursively print child views
-    for child in &self.child_views {
+    for child in &self.children {
       child.fmt_with_indent(f, indent_level + 1)?;
     }
 
@@ -288,8 +288,8 @@ impl Display for ParentChildViews {
 
 impl ParentChildViews {
   pub fn remove_view(&mut self, view_id: &str) {
-    self.child_views.retain_mut(|child_view| {
-      if child_view.parent_view.id == view_id {
+    self.children.retain_mut(|child_view| {
+      if child_view.view.id == view_id {
         return false;
       }
       child_view.remove_view(view_id);
@@ -298,10 +298,10 @@ impl ParentChildViews {
   }
 
   pub fn find_view(&self, view_id: &str) -> Option<&View> {
-    if self.parent_view.id == view_id {
-      return Some(&self.parent_view);
+    if self.view.id == view_id {
+      return Some(&self.view);
     }
-    for child_view in &self.child_views {
+    for child_view in &self.children {
       let view = child_view.find_view(view_id);
       if view.is_some() {
         return view;
@@ -317,8 +317,8 @@ impl FlattedViews {
   pub fn flatten_views(views: Vec<ParentChildViews>) -> Vec<View> {
     let mut result = vec![];
     for view in views {
-      result.push(view.parent_view);
-      result.append(&mut Self::flatten_views(view.child_views));
+      result.push(view.view);
+      result.append(&mut Self::flatten_views(view.children));
     }
     result
   }
