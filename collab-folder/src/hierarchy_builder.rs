@@ -26,10 +26,10 @@ impl NestedViewBuilder {
 
   pub async fn with_view_builder<F, O>(&mut self, view_builder: F) -> &mut Self
   where
-    F: Fn(ViewBuilder) -> O,
+    F: Fn(NestedChildViewBuilder) -> O,
     O: Future<Output = ParentChildViews>,
   {
-    let builder = ViewBuilder::new(self.uid, self.workspace_id.clone());
+    let builder = NestedChildViewBuilder::new(self.uid, self.workspace_id.clone());
     let view = view_builder(builder).await;
     self.views.push(view);
     self
@@ -103,7 +103,7 @@ impl DerefMut for NestedViews {
 
 /// A builder for creating a view.
 /// The default layout of the view is [ViewLayout::Document]
-pub struct ViewBuilder {
+pub struct NestedChildViewBuilder {
   uid: i64,
   parent_view_id: String,
   view_id: String,
@@ -116,7 +116,7 @@ pub struct ViewBuilder {
   extra: Option<String>,
 }
 
-impl ViewBuilder {
+impl NestedChildViewBuilder {
   /// Create a new view builder.
   /// It generates a new view id for the view. If you want to specify the view id, you can use [with_view_id] method.
   pub fn new(uid: i64, parent_view_id: String) -> Self {
@@ -176,7 +176,7 @@ impl ViewBuilder {
     self
   }
 
-  pub fn with_extra<F: Fn(ViewExtraBuilder) -> serde_json::Value>(mut self, extra: F) -> Self {
+  pub fn with_extra<F: FnOnce(ViewExtraBuilder) -> serde_json::Value>(mut self, extra: F) -> Self {
     let builder = ViewExtraBuilder::new();
     let extra_json = extra(builder);
     self.extra = Some(serde_json::to_string(&extra_json).unwrap());
@@ -187,10 +187,10 @@ impl ViewBuilder {
   /// The view created by this builder will be the next level view of the current view.
   pub async fn with_child_view_builder<F, O>(mut self, child_view_builder: F) -> Self
   where
-    F: Fn(ViewBuilder) -> O,
+    F: Fn(NestedChildViewBuilder) -> O,
     O: Future<Output = ParentChildViews>,
   {
-    let builder = ViewBuilder::new(self.uid, self.view_id.clone());
+    let builder = NestedChildViewBuilder::new(self.uid, self.view_id.clone());
     self.children.push(child_view_builder(builder).await);
     self
   }
@@ -267,8 +267,8 @@ impl ParentChildViews {
     let indent = "  ".repeat(indent_level);
     writeln!(
       f,
-      "{}: {}, parent id: {}",
-      indent, self.view.id, self.view.parent_view_id
+      "{}: {}:{}, parent id: {}",
+      indent, self.view.name, self.view.id, self.view.parent_view_id
     )?;
 
     // Recursively print child views

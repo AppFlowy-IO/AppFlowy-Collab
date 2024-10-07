@@ -1,4 +1,4 @@
-use crate::util::{parse_csv, print_view, setup_log, unzip_test_asset};
+use crate::util::{parse_csv, setup_log, unzip_test_asset};
 use collab::preclude::Collab;
 use collab_database::database::Database;
 use collab_database::entity::FieldType;
@@ -26,13 +26,13 @@ async fn import_blog_post_document_test() {
   let workspace_id = uuid::Uuid::new_v4();
   let (_cleaner, file_path) = unzip_test_asset("blog_post").await.unwrap();
   let host = "http://test.appflowy.cloud";
-  let importer = NotionImporter::new(&file_path, workspace_id, host.to_string()).unwrap();
+  let importer = NotionImporter::new(1, &file_path, workspace_id, host.to_string()).unwrap();
   let imported_view = importer.import().await.unwrap();
   assert_eq!(imported_view.name, "blog_post");
   assert_eq!(imported_view.num_of_csv(), 0);
   assert_eq!(imported_view.num_of_markdown(), 1);
 
-  let root_view = &imported_view.views[0];
+  let root_view = &imported_view.views()[0];
   let external_link_views = root_view.get_external_link_notion_view();
   let object_id = root_view.view_id.clone();
 
@@ -66,23 +66,27 @@ async fn import_project_and_task_collab_test() {
   let zip_file_path = PathBuf::from("./tests/asset/project&task.zip");
   let temp_dir = temp_dir().join(uuid::Uuid::new_v4().to_string());
   std::fs::create_dir_all(&temp_dir).unwrap();
-  let info = import_notion_zip_file(host, &workspace_id, zip_file_path, temp_dir.clone())
+  let info = import_notion_zip_file(1, host, &workspace_id, zip_file_path, temp_dir.clone())
     .await
     .unwrap();
 
-  assert_eq!(info.len(), 3);
-  assert_eq!(info[0].name, "Projects & Tasks");
+  assert_eq!(info.len(), 4);
+  assert_eq!(info[0].name, "project&task");
   assert_eq!(info[0].collabs.len(), 1);
   assert_eq!(info[0].resource.files.len(), 0);
 
-  assert_eq!(info[1].name, "Projects");
-  assert_eq!(info[1].collabs.len(), 5);
-  assert_eq!(info[1].resource.files.len(), 2);
-  assert_eq!(info[1].file_size(), 1143952);
+  assert_eq!(info[1].name, "Projects & Tasks");
+  assert_eq!(info[1].collabs.len(), 1);
+  assert_eq!(info[1].resource.files.len(), 0);
 
-  assert_eq!(info[2].name, "Tasks");
-  assert_eq!(info[2].collabs.len(), 18);
-  assert_eq!(info[2].resource.files.len(), 0);
+  assert_eq!(info[2].name, "Projects");
+  assert_eq!(info[2].collabs.len(), 5);
+  assert_eq!(info[2].resource.files.len(), 2);
+  assert_eq!(info[2].file_size(), 1143952);
+
+  assert_eq!(info[3].name, "Tasks");
+  assert_eq!(info[3].collabs.len(), 18);
+  assert_eq!(info[3].resource.files.len(), 0);
 
   println!("{info}");
 }
@@ -92,6 +96,7 @@ async fn import_project_and_task_test() {
   let workspace_id = uuid::Uuid::new_v4();
   let (_cleaner, file_path) = unzip_test_asset("project&task").await.unwrap();
   let importer = NotionImporter::new(
+    1,
     &file_path,
     workspace_id,
     "http://test.appflowy.cloud".to_string(),
@@ -101,9 +106,9 @@ async fn import_project_and_task_test() {
   println!(
     "workspace_id:{}, views:\n{}",
     workspace_id,
-    imported_view.build_nested_views(1).await
+    imported_view.build_nested_views().await
   );
-  assert!(!imported_view.views.is_empty());
+  assert!(!imported_view.views().is_empty());
   assert_eq!(imported_view.name, "project&task");
   assert_eq!(imported_view.num_of_csv(), 2);
   assert_eq!(imported_view.num_of_markdown(), 1);
@@ -113,9 +118,9 @@ async fn import_project_and_task_test() {
   - Tasks: CSV
   - Projects: CSV
   */
-  let root_view = &imported_view.views[0];
+  let root_view = &imported_view.views()[0];
   assert_eq!(root_view.notion_name, "Projects & Tasks");
-  assert_eq!(imported_view.views.len(), 1);
+  assert_eq!(imported_view.views().len(), 1);
   let linked_views = root_view.get_linked_views();
   check_project_and_task_document(root_view, linked_views.clone()).await;
 
@@ -306,52 +311,51 @@ fn assert_database_rows_with_csv_rows(
 async fn import_level_test() {
   let (_cleaner, file_path) = unzip_test_asset("import_test").await.unwrap();
   let importer = NotionImporter::new(
+    1,
     &file_path,
     uuid::Uuid::new_v4(),
     "http://test.appflowy.cloud".to_string(),
   )
   .unwrap();
   let info = importer.import().await.unwrap();
-  assert!(!info.views.is_empty());
+  assert!(!info.views().is_empty());
   assert_eq!(info.name, "import_test");
 
   let uid = 1;
   let collab = Collab::new(uid, &info.workspace_id, "1", vec![], false);
   let mut folder = Folder::create(1, collab, None, default_folder_data(&info.workspace_id));
 
-  let view_hierarchy = info.build_nested_views(uid).await;
-  println!(
-    "workspace_id:{}, views: \n{}",
-    &info.workspace_id, view_hierarchy
-  );
-  assert_eq!(view_hierarchy.all_views().len(), 13);
+  let view_hierarchy = info.build_nested_views().await;
+  assert_eq!(view_hierarchy.all_views().len(), 14);
   folder.insert_nested_views(view_hierarchy.into_inner());
 
   let first_level_views = folder.get_views_belong_to(&info.workspace_id);
-  assert_eq!(first_level_views.len(), 3);
+  assert_eq!(first_level_views.len(), 1);
+  assert_eq!(first_level_views[0].children.len(), 3);
   println!("first_level_views: {:?}", first_level_views);
 
-  verify_first_level_views(&first_level_views, &mut folder);
+  let second_level_views = folder.get_views_belong_to(&first_level_views[0].id);
+  verify_first_level_views(&second_level_views, &mut folder);
 
   // Print out the views for debugging or manual inspection
   /*
-  - Root2:Markdown
-    - root2-link:Markdown
-  - Home:Markdown
-    - Home views:Markdown
-    - My tasks:Markdown
-  - Root:Markdown
-    - root-2:Markdown
-      - root-2-1:Markdown
-        - root-2-database:CSV
-    - root-1:Markdown
-      - root-1-1:Markdown
-    - root 3:Markdown
-      - root 3 1:Markdown
-      */
-  for view in info.views {
-    print_view(&view, 0);
-  }
+  - import_test
+    - Root2:Markdown
+      - root2-link:Markdown
+    - Home:Markdown
+      - Home views:Markdown
+      - My tasks:Markdown
+    - Root:Markdown
+      - root-2:Markdown
+        - root-2-1:Markdown
+          - root-2-database:CSV
+      - root-1:Markdown
+        - root-1-1:Markdown
+      - root 3:Markdown
+        - root 3 1:Markdown
+  */
+  let nested_view = info.build_nested_views().await;
+  println!("{}", nested_view);
 }
 
 // Helper function to verify second and third level views based on the first level view name

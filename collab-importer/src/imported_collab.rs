@@ -11,6 +11,7 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 
 pub async fn import_notion_zip_file(
+  uid: i64,
   host: &str,
   workspace_id: &str,
   zip_file: PathBuf,
@@ -21,7 +22,7 @@ pub async fn import_notion_zip_file(
   }
 
   let unzip_file = unzip_from_path_or_memory(Either::Left(zip_file), output_dir).await?;
-  let imported = NotionImporter::new(&unzip_file, workspace_id, host.to_string())?
+  let imported = NotionImporter::new(uid, &unzip_file, workspace_id, host.to_string())?
     .import()
     .await?;
 
