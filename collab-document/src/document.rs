@@ -336,7 +336,9 @@ impl Document {
     data: HashMap<String, Value>,
   ) -> Result<(), DocumentError> {
     let mut txn = self.collab.transact_mut();
-    self.body.update_block_data(&mut txn, block_id, data)
+    self
+      .body
+      .update_block_data(&mut txn, block_id, data, None, None)
   }
 
   pub fn move_block(
@@ -661,12 +663,17 @@ impl DocumentBody {
       .map(|_| ())
   }
 
-  /// update the block data.
+  /// update the block data or external_id or external_type
+  ///
+  /// If the external_id and external_type are not provided, use the block's external_id and
+  /// external_type.
   pub fn update_block_data(
     &self,
     txn: &mut TransactionMut,
     block_id: &str,
     data: HashMap<String, Value>,
+    external_id: Option<String>,
+    external_type: Option<String>,
   ) -> Result<(), DocumentError> {
     let block = match self.block_operation.get_block_with_txn(txn, block_id) {
       Some(block) => block,
@@ -677,8 +684,8 @@ impl DocumentBody {
       &block.id,
       Some(data),
       None,
-      block.external_id,
-      block.external_type,
+      external_id.or(block.external_id),
+      external_type.or(block.external_type),
     )
   }
 
@@ -791,7 +798,9 @@ impl DocumentBody {
   ) -> Result<(), DocumentError> {
     if let Some(block) = payload.block {
       let data = &block.data;
-      self.update_block_data(txn, &block.id, data.to_owned())
+      let external_id = block.external_id;
+      let external_type = block.external_type;
+      self.update_block_data(txn, &block.id, data.to_owned(), external_id, external_type)
     } else {
       Err(DocumentError::BlockIsNotFound)
     }
