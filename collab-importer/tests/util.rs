@@ -1,4 +1,3 @@
-use collab_importer::notion::page::NotionPage;
 use collab_importer::util::{unzip_from_path_or_memory, Either};
 use percent_encoding::percent_decode_str;
 use std::env::temp_dir;
@@ -8,15 +7,6 @@ use std::sync::Once;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
-
-pub fn print_view(view: &NotionPage, depth: usize) {
-  let indent = "  ".repeat(depth);
-  println!("{}- {}:{:?}", indent, view.notion_name, view.notion_file);
-
-  for child in &view.children {
-    print_view(child, depth + 1);
-  }
-}
 
 pub fn parse_csv(file_path: &PathBuf) -> (Vec<String>, Vec<Vec<String>>) {
   let content = std::fs::read_to_string(file_path).unwrap();

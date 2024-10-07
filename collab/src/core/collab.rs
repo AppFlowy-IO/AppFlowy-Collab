@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 pub use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::panic;
@@ -71,6 +72,14 @@ pub struct Collab {
   meta: MapRef,
   /// This is an inner collab state that requires mut access in order to modify it.
   pub context: CollabContext,
+}
+
+impl Debug for Collab {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("Collab")
+      .field("object_id", &self.object_id)
+      .finish()
+  }
 }
 
 pub struct CollabContext {
