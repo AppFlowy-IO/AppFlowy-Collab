@@ -22,6 +22,22 @@ use std::env::temp_dir;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+// #[tokio::test]
+// async fn import_two_spaces_test2() {
+//   let (_cleaner, file_path) = unzip_test_asset("appflowy_io").await.unwrap();
+//   let importer = NotionImporter::new(
+//     1,
+//     &file_path,
+//     uuid::Uuid::new_v4(),
+//     "http://test.appflowy.cloud".to_string(),
+//   )
+//   .unwrap();
+//   let info = importer.import().await.unwrap();
+//
+//   let views = info.build_nested_views().await.flatten_views();
+//   assert!(!views.is_empty())
+// }
+
 #[tokio::test]
 async fn import_two_spaces_test() {
   let (_cleaner, file_path) = unzip_test_asset("two_spaces").await.unwrap();
