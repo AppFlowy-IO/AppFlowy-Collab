@@ -309,7 +309,7 @@ pub(crate) fn collect_links_from_node(node: &Node, links: &mut Vec<String>) {
 pub(crate) fn extract_external_links(path_str: &str) -> Result<Vec<ExternalLink>, ImporterError> {
   let path_str = percent_decode_str(path_str).decode_utf8()?.to_string();
   let mut result = Vec::new();
-  let re = Regex::new(r"^(.*?)\s([0-9a-fA-F]{32})(?:_all)?(?:\.(\w+))?$").unwrap();
+  let re = Regex::new(r"^(.*?)\s*([a-f0-9]{32})\s*(?:\.[a-z]+)?$").unwrap();
   let path = Path::new(&path_str);
   for component in path.components() {
     if let Some(component_str) = component.as_os_str().to_str() {
@@ -344,8 +344,9 @@ pub(crate) fn is_valid_file(path: &Path) -> bool {
     .extension()
     .map_or(false, |ext| ext == "md" || ext == "csv")
 }
+
 fn name_and_id_from_path(path: &Path) -> Result<(String, Option<String>), ImporterError> {
-  let re = Regex::new(r"^(.*?)\s*([a-f0-9]{32})?(?:\.[a-z]+)?$").unwrap();
+  let re = Regex::new(r"^(.*?)\s*([a-f0-9]{32})?\s*(?:\.[a-zA-Z0-9]+)?\s*$").unwrap();
 
   let input = path
     .file_name()
@@ -496,5 +497,13 @@ mod tests {
     let (name, id) = name_and_id_from_path(path).unwrap();
     assert_eq!(name, "My tasks");
     assert_eq!(id.unwrap(), "6db51a77742b4b11bedb1f0e02e27af8");
+  }
+
+  #[test]
+  fn test_file_name_with_id() {
+    let path = Path::new("space two 4331f936c1de4ec2bed58d49d9826c76  ");
+    let (name, id) = name_and_id_from_path(path).unwrap();
+    assert_eq!(name, "space two");
+    assert_eq!(id.unwrap(), "4331f936c1de4ec2bed58d49d9826c76");
   }
 }
