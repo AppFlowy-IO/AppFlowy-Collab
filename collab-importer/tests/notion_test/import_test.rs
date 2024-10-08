@@ -10,7 +10,9 @@ use collab_database::rows::Row;
 use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_from_block_data};
 
 use collab_document::importer::define::{BlockType, URL_FIELD};
+use collab_folder::hierarchy_builder::ParentChildViews;
 use collab_folder::{default_folder_data, Folder, View};
+use collab_importer::error::ImporterError;
 use collab_importer::imported_collab::import_notion_zip_file;
 use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::NotionImporter;
@@ -21,42 +23,100 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 #[tokio::test]
+async fn import_two_spaces_test() {
+  let (_cleaner, file_path) = unzip_test_asset("two_spaces").await.unwrap();
+  let importer = NotionImporter::new(
+    1,
+    &file_path,
+    uuid::Uuid::new_v4(),
+    "http://test.appflowy.cloud".to_string(),
+  )
+  .unwrap();
+  let info = importer.import().await.unwrap();
+  assert!(!info.views().is_empty());
+  assert_eq!(info.name, "two_spaces");
+
+  let first_space = &info.views()[0];
+  assert_eq!(first_space.notion_name, "space one");
+  assert!(first_space.is_dir);
+  assert_eq!(first_space.children.len(), 1);
+  let blog_post_page = &first_space.children[0];
+  assert_blog_post(&info.host, &info.workspace_id, blog_post_page).await;
+
+  let second_space = info.views()[1].clone();
+  assert_eq!(second_space.notion_name, "space two");
+  assert!(second_space.is_dir);
+  assert_eq!(second_space.children.len(), 1);
+  let project_and_task = &second_space.children[0];
+  assert_project_and_task(project_and_task).await;
+
+  let views: Vec<ParentChildViews> = info.build_nested_views().await.into_inner();
+  for view in views {
+    assert!(view.view.space_info().is_some());
+  }
+}
+
+#[tokio::test]
 async fn import_blog_post_document_test() {
   setup_log();
   let workspace_id = uuid::Uuid::new_v4();
   let (_cleaner, file_path) = unzip_test_asset("blog_post").await.unwrap();
   let host = "http://test.appflowy.cloud";
   let importer = NotionImporter::new(1, &file_path, workspace_id, host.to_string()).unwrap();
-  let imported_view = importer.import().await.unwrap();
-  assert_eq!(imported_view.name, "blog_post");
-  assert_eq!(imported_view.num_of_csv(), 0);
-  assert_eq!(imported_view.num_of_markdown(), 1);
+  let info = importer.import().await.unwrap();
+  assert_eq!(info.name, "blog_post");
+  assert_eq!(info.num_of_csv(), 0);
+  assert_eq!(info.num_of_markdown(), 1);
 
-  let root_view = &imported_view.views()[0];
-  let external_link_views = root_view.get_external_link_notion_view();
-  let object_id = root_view.view_id.clone();
+  let root_view = &info.views()[0];
+  assert_blog_post(host, &info.workspace_id, root_view).await;
+}
 
-  let mut expected_urls = vec![
-    "PGTRCFsf2duc7iP3KjE62Xs8LE7B96a0aQtLtGtfIcw=.jpg",
-    "fFWPgqwdqbaxPe7Q_vUO143Sa2FypnRcWVibuZYdkRI=.jpg",
-    "EIj9Z3yj8Gw8UW60U8CLXx7ulckEs5Eu84LCFddCXII=.jpg",
-  ]
-  .into_iter()
-  .map(|s| format!("{host}/{workspace_id}/v1/blob/{object_id}/{s}"))
-  .collect::<Vec<String>>();
+#[tokio::test]
+async fn import_project_and_task_test() {
+  let workspace_id = uuid::Uuid::new_v4();
+  let (_cleaner, file_path) = unzip_test_asset("project&task").await.unwrap();
+  let importer = NotionImporter::new(
+    1,
+    &file_path,
+    workspace_id,
+    "http://test.appflowy.cloud".to_string(),
+  )
+  .unwrap();
+  let import = importer.import().await.unwrap();
+  println!(
+    "workspace_id:{}, views:\n{}",
+    workspace_id,
+    import.build_nested_views().await
+  );
+  assert!(!import.views().is_empty());
+  assert_eq!(import.name, "project&task");
+  assert_eq!(import.num_of_csv(), 2);
+  assert_eq!(import.num_of_markdown(), 1);
+  assert_eq!(import.views().len(), 1);
 
-  let (document, _) = root_view.as_document(external_link_views).await.unwrap();
-  let page_block_id = document.get_page_id().unwrap();
-  let block_ids = document.get_block_children_ids(&page_block_id);
-  for block_id in block_ids.iter() {
-    if let Some((block_type, block_data)) = document.get_block_data(block_id) {
-      if matches!(block_type, BlockType::Image) {
-        let url = block_data.get(URL_FIELD).unwrap().as_str().unwrap();
-        expected_urls.retain(|allowed_url| !url.contains(allowed_url));
-      }
-    }
-  }
-  assert!(expected_urls.is_empty());
+  /*
+  - Projects & Tasks: Markdown
+  - Tasks: CSV
+  - Projects: CSV
+  */
+  let root_view = &import.views()[0];
+  assert_project_and_task(root_view).await;
+}
+
+#[tokio::test]
+async fn import_empty_zip_test() {
+  let workspace_id = uuid::Uuid::new_v4();
+  let (_cleaner, file_path) = unzip_test_asset("empty_zip").await.unwrap();
+  let importer = NotionImporter::new(
+    1,
+    &file_path,
+    workspace_id,
+    "http://test.appflowy.cloud".to_string(),
+  )
+  .unwrap();
+  let err = importer.import().await.unwrap_err();
+  assert!(matches!(err, ImporterError::CannotImport));
 }
 
 #[tokio::test]
@@ -91,36 +151,8 @@ async fn import_project_and_task_collab_test() {
   println!("{info}");
 }
 
-#[tokio::test]
-async fn import_project_and_task_test() {
-  let workspace_id = uuid::Uuid::new_v4();
-  let (_cleaner, file_path) = unzip_test_asset("project&task").await.unwrap();
-  let importer = NotionImporter::new(
-    1,
-    &file_path,
-    workspace_id,
-    "http://test.appflowy.cloud".to_string(),
-  )
-  .unwrap();
-  let imported_view = importer.import().await.unwrap();
-  println!(
-    "workspace_id:{}, views:\n{}",
-    workspace_id,
-    imported_view.build_nested_views().await
-  );
-  assert!(!imported_view.views().is_empty());
-  assert_eq!(imported_view.name, "project&task");
-  assert_eq!(imported_view.num_of_csv(), 2);
-  assert_eq!(imported_view.num_of_markdown(), 1);
-
-  /*
-  - Projects & Tasks: Markdown
-  - Tasks: CSV
-  - Projects: CSV
-  */
-  let root_view = &imported_view.views()[0];
+async fn assert_project_and_task(root_view: &NotionPage) {
   assert_eq!(root_view.notion_name, "Projects & Tasks");
-  assert_eq!(imported_view.views().len(), 1);
   let linked_views = root_view.get_linked_views();
   check_project_and_task_document(root_view, linked_views.clone()).await;
 
@@ -130,6 +162,33 @@ async fn import_project_and_task_test() {
 
   check_task_database(&linked_views[0]).await;
   check_project_database(&linked_views[1]).await;
+}
+
+async fn assert_blog_post(host: &str, workspace_id: &str, root_view: &NotionPage) {
+  let external_link_views = root_view.get_external_link_notion_view();
+  let object_id = root_view.view_id.clone();
+
+  let mut expected_urls = vec![
+    "PGTRCFsf2duc7iP3KjE62Xs8LE7B96a0aQtLtGtfIcw=.jpg",
+    "fFWPgqwdqbaxPe7Q_vUO143Sa2FypnRcWVibuZYdkRI=.jpg",
+    "EIj9Z3yj8Gw8UW60U8CLXx7ulckEs5Eu84LCFddCXII=.jpg",
+  ]
+  .into_iter()
+  .map(|s| format!("{host}/{workspace_id}/v1/blob/{object_id}/{s}"))
+  .collect::<Vec<String>>();
+
+  let (document, _) = root_view.as_document(external_link_views).await.unwrap();
+  let page_block_id = document.get_page_id().unwrap();
+  let block_ids = document.get_block_children_ids(&page_block_id);
+  for block_id in block_ids.iter() {
+    if let Some((block_type, block_data)) = document.get_block_data(block_id) {
+      if matches!(block_type, BlockType::Image) {
+        let url = block_data.get(URL_FIELD).unwrap().as_str().unwrap();
+        expected_urls.retain(|allowed_url| !url.contains(allowed_url));
+      }
+    }
+  }
+  assert!(expected_urls.is_empty());
 }
 
 async fn check_project_and_task_document(
@@ -326,7 +385,7 @@ async fn import_level_test() {
   let mut folder = Folder::create(1, collab, None, default_folder_data(&info.workspace_id));
 
   let view_hierarchy = info.build_nested_views().await;
-  assert_eq!(view_hierarchy.all_views().len(), 14);
+  assert_eq!(view_hierarchy.flatten_views().len(), 14);
   folder.insert_nested_views(view_hierarchy.into_inner());
 
   let first_level_views = folder.get_views_belong_to(&info.workspace_id);
@@ -356,6 +415,40 @@ async fn import_level_test() {
   */
   let nested_view = info.build_nested_views().await;
   println!("{}", nested_view);
+}
+
+#[tokio::test]
+async fn import_empty_space() {
+  let (_cleaner, file_path) = unzip_test_asset("empty_spaces").await.unwrap();
+  let importer = NotionImporter::new(
+    1,
+    &file_path,
+    uuid::Uuid::new_v4(),
+    "http://test.appflowy.cloud".to_string(),
+  )
+  .unwrap();
+  let info = importer.import().await.unwrap();
+  assert!(!info.views().is_empty());
+  assert_eq!(info.name, "empty_spaces");
+
+  let view_hierarchy = info.build_nested_views().await;
+  println!("{}", view_hierarchy);
+  let views: Vec<ParentChildViews> = view_hierarchy.into_inner();
+  assert_eq!(views.len(), 2);
+
+  // only the first level views will be the space view
+  assert!(views[0].view.space_info().is_some());
+  let second_space = views[0].clone();
+  assert_eq!(second_space.view.name, "second space");
+  assert_eq!(second_space.children.len(), 2);
+  assert!(second_space.children[0].view.space_info().is_none());
+  assert_eq!(second_space.children[0].view.name, "1");
+  assert!(second_space.children[1].view.space_info().is_none());
+  assert_eq!(second_space.children[1].view.name, "2");
+
+  let first_space = views[1].clone();
+  assert!(first_space.view.space_info().is_some());
+  assert_eq!(first_space.view.name, "first space");
 }
 
 // Helper function to verify second and third level views based on the first level view name

@@ -27,7 +27,7 @@ use tracing::error;
 #[derive(Debug, Clone, Serialize)]
 pub struct NotionPage {
   pub notion_name: String,
-  pub notion_id: String,
+  pub notion_id: Option<String>,
   pub notion_file: NotionFile,
   /// If current notion view is database, then view_id is the inline view id of the database.
   /// If current notion view is document, then view_id is the document id of the document.
@@ -36,6 +36,7 @@ pub struct NotionPage {
   pub children: Vec<NotionPage>,
   pub external_links: Vec<Vec<ExternalLink>>,
   pub host: String,
+  pub is_dir: bool,
 }
 
 impl NotionPage {
@@ -84,8 +85,10 @@ impl NotionPage {
   pub fn get_view(&self, id: &str) -> Option<NotionPage> {
     fn search_view(views: &[NotionPage], id: &str) -> Option<NotionPage> {
       for view in views {
-        if view.notion_id == id {
-          return Some(view.clone());
+        if let Some(notion_id) = &view.notion_id {
+          if notion_id == id {
+            return Some(view.clone());
+          }
         }
         if let Some(child_view) = search_view(&view.children, id) {
           return Some(child_view);
