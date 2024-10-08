@@ -31,7 +31,7 @@ async fn import_two_spaces_test() {
     uuid::Uuid::new_v4(),
     "http://test.appflowy.cloud".to_string(),
   )
-  .unwrap();
+      .unwrap();
   let info = importer.import().await.unwrap();
   assert!(!info.views().is_empty());
   assert_eq!(info.name, "two_spaces");
@@ -82,7 +82,7 @@ async fn import_project_and_task_test() {
     workspace_id,
     "http://test.appflowy.cloud".to_string(),
   )
-  .unwrap();
+      .unwrap();
   let import = importer.import().await.unwrap();
   println!(
     "workspace_id:{}, views:\n{}",
@@ -114,7 +114,7 @@ async fn import_empty_zip_test() {
     workspace_id,
     "http://test.appflowy.cloud".to_string(),
   )
-  .unwrap();
+      .unwrap();
   let err = importer.import().await.unwrap_err();
   assert!(matches!(err, ImporterError::CannotImport));
 }
@@ -127,8 +127,8 @@ async fn import_project_and_task_collab_test() {
   let temp_dir = temp_dir().join(uuid::Uuid::new_v4().to_string());
   std::fs::create_dir_all(&temp_dir).unwrap();
   let info = import_notion_zip_file(1, host, &workspace_id, zip_file_path, temp_dir.clone())
-    .await
-    .unwrap();
+      .await
+      .unwrap();
 
   assert_eq!(info.len(), 4);
   assert_eq!(info[0].name, "project&task");
@@ -173,9 +173,9 @@ async fn assert_blog_post(host: &str, workspace_id: &str, root_view: &NotionPage
     "fFWPgqwdqbaxPe7Q_vUO143Sa2FypnRcWVibuZYdkRI=.jpg",
     "EIj9Z3yj8Gw8UW60U8CLXx7ulckEs5Eu84LCFddCXII=.jpg",
   ]
-  .into_iter()
-  .map(|s| format!("{host}/{workspace_id}/v1/blob/{object_id}/{s}"))
-  .collect::<Vec<String>>();
+      .into_iter()
+      .map(|s| format!("{host}/{workspace_id}/v1/blob/{object_id}/{s}"))
+      .collect::<Vec<String>>();
 
   let (document, _) = root_view.as_document(external_link_views).await.unwrap();
   let page_block_id = document.get_page_id().unwrap();
@@ -197,9 +197,9 @@ async fn check_project_and_task_document(
 ) {
   let external_link_views = document_view.get_external_link_notion_view();
   let (document, _) = document_view
-    .as_document(external_link_views)
-    .await
-    .unwrap();
+      .as_document(external_link_views)
+      .await
+      .unwrap();
   let first_block_id = document.get_page_id().unwrap();
   let block_ids = document.get_block_children_ids(&first_block_id);
 
@@ -317,19 +317,19 @@ fn assert_database_rows_with_csv_rows(
   mut expected_files: HashMap<&str, &str>,
 ) {
   let type_option_by_field_id = fields
-    .iter()
-    .map(|field| {
-      (
-        field.id.clone(),
-        match database.get_stringify_type_option(&field.id) {
-          None => {
-            panic!("Field {:?} doesn't have type option", field)
+      .iter()
+      .map(|field| {
+        (
+          field.id.clone(),
+          match database.get_stringify_type_option(&field.id) {
+            None => {
+              panic!("Field {:?} doesn't have type option", field)
+            },
+            Some(ty) => ty,
           },
-          Some(ty) => ty,
-        },
-      )
-    })
-    .collect::<HashMap<String, Box<dyn StringifyTypeOption>>>();
+        )
+      })
+      .collect::<HashMap<String, Box<dyn StringifyTypeOption>>>();
 
   for (row_index, row) in rows.into_iter().enumerate() {
     let row = row.unwrap();
@@ -349,9 +349,9 @@ fn assert_database_rows_with_csv_rows(
         assert_eq!(
           cell_data,
           percent_decode_str(&csv_rows[row_index][field_index])
-            .decode_utf8()
-            .unwrap()
-            .to_string(),
+              .decode_utf8()
+              .unwrap()
+              .to_string(),
           "current:{}, expected:{}\nRow: {}, Field: {}, type: {:?}",
           cell_data,
           csv_rows[row_index][field_index],
@@ -375,7 +375,7 @@ async fn import_level_test() {
     uuid::Uuid::new_v4(),
     "http://test.appflowy.cloud".to_string(),
   )
-  .unwrap();
+      .unwrap();
   let info = importer.import().await.unwrap();
   assert!(!info.views().is_empty());
   assert_eq!(info.name, "import_test");
@@ -426,7 +426,7 @@ async fn import_empty_space() {
     uuid::Uuid::new_v4(),
     "http://test.appflowy.cloud".to_string(),
   )
-  .unwrap();
+      .unwrap();
   let info = importer.import().await.unwrap();
   assert!(!info.views().is_empty());
   assert_eq!(info.name, "empty_spaces");

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use collab_document::blocks::{BlockAction, BlockActionPayload, BlockActionType};
+use collab_document::blocks::{Block, BlockAction, BlockActionPayload, BlockActionType};
 use serde_json::json;
 
-use crate::blocks::block_test_core::{BlockTestCore, TEXT_BLOCK_TYPE};
+use crate::blocks::block_test_core::{generate_id, BlockTestCore, TEXT_BLOCK_TYPE};
 use crate::util::try_decode_from_encode_collab;
 
 #[test]
@@ -262,4 +262,64 @@ fn apply_block_actions_without_block_test() {
   // nothing should happen
   assert_eq!(document_data, test.get_document_data());
   try_decode_from_encode_collab(&test.document);
+}
+
+#[test]
+fn update_external_id_and_external_type_test() {
+  let mut test = BlockTestCore::new();
+  let page = test.get_page();
+  let page_id = page.id.as_str();
+
+  // 1. create a block without external_id and external_type
+  // 2. insert it into the document
+  // 3. update the block's external_id and external_type
+  let block_id = generate_id();
+  let block_without_external_id_and_external_type = Block {
+    id: block_id.clone(),
+    ty: TEXT_BLOCK_TYPE.to_string(),
+    parent: page_id.to_string(),
+    children: generate_id(),
+    external_id: None,
+    external_type: None,
+    data: HashMap::new(),
+  };
+  let insert_payload = BlockActionPayload {
+    block: Some(block_without_external_id_and_external_type.clone()),
+    prev_id: None,
+    parent_id: Some(page_id.to_string()),
+    delta: None,
+    text_id: None,
+  };
+
+  test.apply_action(vec![BlockAction {
+    action: BlockActionType::Insert,
+    payload: insert_payload,
+  }]);
+
+  let block = test.get_block(&block_id);
+  assert_eq!(block.external_id, None);
+  assert_eq!(block.external_type, None);
+
+  let external_id = generate_id();
+  let external_type = "text".to_string();
+  let mut block_with_external_id_and_external_type =
+    block_without_external_id_and_external_type.clone();
+  block_with_external_id_and_external_type.external_id = Some(external_id.clone());
+  block_with_external_id_and_external_type.external_type = Some(external_type.clone());
+  let update_payload = BlockActionPayload {
+    block: Some(block_with_external_id_and_external_type),
+    prev_id: None,
+    parent_id: Some(page_id.to_string()),
+    delta: None,
+    text_id: None,
+  };
+
+  test.apply_action(vec![BlockAction {
+    action: BlockActionType::Update,
+    payload: update_payload,
+  }]);
+
+  let block = test.get_block(&block_id);
+  assert_eq!(block.external_id, Some(external_id));
+  assert_eq!(block.external_type, Some(external_type));
 }
