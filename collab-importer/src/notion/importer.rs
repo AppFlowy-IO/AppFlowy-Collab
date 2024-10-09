@@ -63,6 +63,7 @@ impl NotionImporter {
     if views.is_empty() {
       return Err(ImporterError::CannotImport);
     }
+
     ImportedInfo::new(
       self.uid,
       self.workspace_id.clone(),
@@ -73,13 +74,19 @@ impl NotionImporter {
   }
 
   async fn collect_views(&mut self) -> Result<Vec<NotionPage>, ImporterError> {
-    let views = WalkDir::new(&self.path)
+    let mut views = WalkDir::new(&self.path)
       .max_depth(1)
       .into_iter()
       .filter_map(|e| e.ok())
       .filter(|e| e.path() != self.path)
       .filter_map(|entry| process_entry(&self.host, &self.workspace_id, &entry))
       .collect::<Vec<NotionPage>>();
+
+    // if there are spaces in the views, we only keep the views that are in the spaces
+    let contains_spaces = views.iter().any(|view| view.is_dir);
+    if contains_spaces {
+      views.retain(|view| view.is_dir);
+    }
     Ok(views)
   }
 }
@@ -135,10 +142,9 @@ impl ImportedInfo {
   fn space_ids(&self) -> Vec<String> {
     let mut space_ids = Vec::new();
     for view in &self.views {
-      if !view.is_dir {
-        return vec![];
+      if view.is_dir {
+        space_ids.push(view.view_id.clone());
       }
-      space_ids.push(view.view_id.clone());
     }
     space_ids
   }

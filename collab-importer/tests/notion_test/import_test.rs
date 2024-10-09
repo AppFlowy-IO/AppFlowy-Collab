@@ -106,6 +106,32 @@ async fn import_two_spaces_test() {
 }
 
 #[tokio::test]
+async fn import_two_spaces_with_other_files_test() {
+  let (_cleaner, file_path) = unzip_test_asset("two_spaces_with_other_files")
+    .await
+    .unwrap();
+  let importer = NotionImporter::new(
+    1,
+    &file_path,
+    uuid::Uuid::new_v4(),
+    "http://test.appflowy.cloud".to_string(),
+  )
+  .unwrap();
+  let info = importer.import().await.unwrap();
+  let views: Vec<ParentChildViews> = info.build_nested_views().await.into_inner();
+  assert_eq!(views.len(), 2);
+  for (index, view) in views.iter().enumerate() {
+    if index == 0 {
+      assert_eq!(view.view.name, "space one");
+    }
+    if index == 1 {
+      assert_eq!(view.view.name, "space two");
+    }
+    assert!(view.view.space_info().is_some());
+  }
+}
+
+#[tokio::test]
 async fn import_blog_post_document_test() {
   setup_log();
   let workspace_id = uuid::Uuid::new_v4();
