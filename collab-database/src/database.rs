@@ -41,16 +41,16 @@ use collab::preclude::{
 use collab::util::{AnyExt, ArrayExt};
 use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
 use collab_entity::CollabType;
-use futures::stream::iter;
+
 use futures::stream::StreamExt;
 use futures::{stream, Stream};
 use nanoid::nanoid;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-
 pub use tokio_stream::wrappers::WatchStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, trace};
@@ -187,27 +187,34 @@ impl Database {
       encoded_collab: encoded_collab(&self.collab, &CollabType::Database)?,
     };
 
+    // Fetch row orders
     let row_orders = self.get_all_row_orders().await;
-    let row_stream = iter(row_orders)
-      .then(|chunk_row| async move { self.get_or_init_database_row(&chunk_row.id).await });
-
-    let mut encoded_row_collabs_stream =
-      Box::pin(row_stream.filter_map(|database_row| async move {
-        let database_row = database_row?;
-        let read_guard = database_row.read().await;
-        let row_collab = &read_guard.collab;
-        let encoded_collab = encoded_collab(row_collab, &CollabType::DatabaseRow).ok()?;
-        Some(EncodedCollabInfo {
-          object_id: row_collab.object_id().to_string(),
-          collab_type: CollabType::DatabaseRow,
-          encoded_collab,
-        })
-      }));
-
-    // Collect the results from the stream
     let mut encoded_row_collabs = Vec::new();
-    while let Some(encoded_row_collab) = encoded_row_collabs_stream.next().await {
-      encoded_row_collabs.push(encoded_row_collab);
+    // Process row orders in chunks
+    for chunk in row_orders.chunks(20) {
+      // Create async tasks for each row in the chunk
+      let tasks: Vec<_> = chunk
+        .iter()
+        .map(|chunk_row| async move {
+          let database_row = self.get_or_init_database_row(&chunk_row.id).await?;
+          let read_guard = database_row.read().await;
+          let row_collab = &read_guard.collab;
+          let encoded_collab = encoded_collab(row_collab, &CollabType::DatabaseRow).ok()?;
+          Some(EncodedCollabInfo {
+            object_id: row_collab.object_id().to_string(),
+            collab_type: CollabType::DatabaseRow,
+            encoded_collab,
+          })
+        })
+        .collect();
+
+      let chunk_results = join_all(tasks).await;
+      for collab_info in chunk_results.into_iter().flatten() {
+        encoded_row_collabs.push(collab_info);
+      }
+
+      // Yield to the runtime after processing each chunk
+      tokio::task::yield_now().await;
     }
 
     Ok(EncodedDatabase {

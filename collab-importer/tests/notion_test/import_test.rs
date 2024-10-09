@@ -7,7 +7,10 @@ use collab_database::error::DatabaseError;
 use collab_database::fields::media_type_option::MediaCellData;
 use collab_database::fields::{Field, StringifyTypeOption};
 use collab_database::rows::Row;
-use collab_document::blocks::{extract_page_id_from_block_delta, extract_view_id_from_block_data};
+use collab_document::blocks::{
+  extract_page_id_from_block_delta, extract_view_id_from_block_data,
+  mention_block_content_from_delta,
+};
 
 use collab_document::importer::define::{BlockType, URL_FIELD};
 use collab_folder::hierarchy_builder::ParentChildViews;
@@ -16,27 +19,57 @@ use collab_importer::error::ImporterError;
 use collab_importer::imported_collab::import_notion_zip_file;
 use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::NotionImporter;
+use futures::stream::StreamExt;
 use percent_encoding::percent_decode_str;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env::temp_dir;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-// #[tokio::test]
-// async fn import_two_spaces_test2() {
-//   let (_cleaner, file_path) = unzip_test_asset("appflowy_io").await.unwrap();
-//   let importer = NotionImporter::new(
-//     1,
-//     &file_path,
-//     uuid::Uuid::new_v4(),
-//     "http://test.appflowy.cloud".to_string(),
-//   )
-//   .unwrap();
-//   let info = importer.import().await.unwrap();
-//
-//   let views = info.build_nested_views().await.flatten_views();
-//   assert!(!views.is_empty())
-// }
+#[tokio::test]
+async fn import_two_spaces_test2() {
+  let (_cleaner, file_path) = unzip_test_asset("design").await.unwrap();
+  let importer = NotionImporter::new(
+    1,
+    &file_path,
+    uuid::Uuid::new_v4(),
+    "http://test.appflowy.cloud".to_string(),
+  )
+  .unwrap();
+  let info = importer.import().await.unwrap();
+  let design_view = &info.views()[0];
+  assert_eq!(design_view.notion_name, "Design");
+
+  let all_views = design_view
+    .get_linked_views()
+    .into_iter()
+    .map(|v| v.view_id)
+    .collect::<Vec<_>>();
+
+  let (document, _) = design_view.as_document().await.unwrap();
+  let page_block_id = document.get_page_id().unwrap();
+  let block_ids = document.get_block_children_ids(&page_block_id);
+  let mut mention_blocks = HashSet::new();
+  for block_id in block_ids.iter() {
+    if let Some((_, deltas)) = document.get_block_delta(block_id) {
+      println!("{:?}", deltas);
+      mention_blocks.extend(
+        deltas
+          .into_iter()
+          .filter_map(|delta| mention_block_content_from_delta(&delta))
+          .collect::<Vec<_>>(),
+      )
+    }
+  }
+
+  assert_eq!(mention_blocks.len(), 3);
+  // the mention pages should be included in the all_views
+  mention_blocks.retain(|block| !all_views.contains(&block.page_id));
+  assert!(mention_blocks.is_empty());
+
+  let collabs = info.into_collab_stream().await.collect::<Vec<_>>().await;
+  assert!(!collabs.is_empty())
+}
 
 #[tokio::test]
 async fn import_two_spaces_test() {
@@ -181,7 +214,6 @@ async fn assert_project_and_task(root_view: &NotionPage) {
 }
 
 async fn assert_blog_post(host: &str, workspace_id: &str, root_view: &NotionPage) {
-  let external_link_views = root_view.get_external_link_notion_view();
   let object_id = root_view.view_id.clone();
 
   let mut expected_urls = vec![
@@ -193,7 +225,7 @@ async fn assert_blog_post(host: &str, workspace_id: &str, root_view: &NotionPage
   .map(|s| format!("{host}/{workspace_id}/v1/blob/{object_id}/{s}"))
   .collect::<Vec<String>>();
 
-  let (document, _) = root_view.as_document(external_link_views).await.unwrap();
+  let (document, _) = root_view.as_document().await.unwrap();
   let page_block_id = document.get_page_id().unwrap();
   let block_ids = document.get_block_children_ids(&page_block_id);
   for block_id in block_ids.iter() {
@@ -211,11 +243,7 @@ async fn check_project_and_task_document(
   document_view: &NotionPage,
   notion_views: Vec<NotionPage>,
 ) {
-  let external_link_views = document_view.get_external_link_notion_view();
-  let (document, _) = document_view
-    .as_document(external_link_views)
-    .await
-    .unwrap();
+  let (document, _) = document_view.as_document().await.unwrap();
   let first_block_id = document.get_page_id().unwrap();
   let block_ids = document.get_block_children_ids(&first_block_id);
 
