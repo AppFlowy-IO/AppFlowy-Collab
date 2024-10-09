@@ -1,6 +1,7 @@
 use crate::blocks::text_entities::TextDelta;
 use collab::preclude::*;
 use collab::util::TextExt;
+use serde::Deserialize;
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -117,6 +118,27 @@ pub fn mention_block_delta(view_id: &str) -> TextDelta {
   let mut mention = Attrs::with_capacity(1);
   mention.insert("mention".into(), Any::from(mention_content));
   TextDelta::Inserted("$".to_string(), Some(mention))
+}
+
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Hash)]
+pub struct MentionBlockContent {
+  pub ty: String,
+  pub page_id: String,
+}
+
+pub fn mention_block_content_from_delta(delta: &TextDelta) -> Option<MentionBlockContent> {
+  match delta {
+    TextDelta::Inserted(_, Some(attrs)) => {
+      if let Some(Any::Map(attrs)) = attrs.get("mention") {
+        let ty = attrs.get("type")?.to_string();
+        let page_id = attrs.get("page_id")?.to_string();
+        Some(MentionBlockContent { ty, page_id })
+      } else {
+        None
+      }
+    },
+    _ => None,
+  }
 }
 
 pub fn extract_page_id_from_block_delta(deltas: &[TextDelta]) -> Option<String> {

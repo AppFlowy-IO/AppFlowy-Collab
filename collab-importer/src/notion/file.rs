@@ -11,7 +11,7 @@ pub enum LinkType {
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]
 pub enum NotionFile {
   #[default]
-  Unknown,
+  Empty,
   CSV {
     file_path: PathBuf,
     size: u64,

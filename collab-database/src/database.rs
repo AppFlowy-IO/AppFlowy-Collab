@@ -41,12 +41,14 @@ use collab::preclude::{
 use collab::util::{AnyExt, ArrayExt};
 use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
 use collab_entity::CollabType;
-use futures::StreamExt;
+
+use futures::stream::StreamExt;
 use futures::{stream, Stream};
 use nanoid::nanoid;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
-use rayon::prelude::IntoParallelIterator;
+
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 pub use tokio_stream::wrappers::WatchStream;
@@ -185,21 +187,18 @@ impl Database {
       encoded_collab: encoded_collab(&self.collab, &CollabType::Database)?,
     };
 
-    // Get all row orders
+    // Fetch row orders
     let row_orders = self.get_all_row_orders().await;
-    let database_rows: Vec<Option<Arc<RwLock<DatabaseRow>>>> = futures::future::join_all(
-      row_orders
+    let mut encoded_row_collabs = Vec::new();
+    // Process row orders in chunks
+    for chunk in row_orders.chunks(20) {
+      // Create async tasks for each row in the chunk
+      let tasks: Vec<_> = chunk
         .iter()
-        .map(|chunk_row| self.get_or_init_database_row(&chunk_row.id)),
-    )
-    .await;
-
-    info!("[Database]: encode {} database rows", database_rows.len());
-    let encoded_row_collabs = database_rows
-        .into_par_iter() // Parallel iterator over the cloned rows
-        .filter_map(|database_row| {
-         let database_row = database_row?;
-          let row_collab = &database_row.blocking_read().collab;
+        .map(|chunk_row| async move {
+          let database_row = self.get_or_init_database_row(&chunk_row.id).await?;
+          let read_guard = database_row.read().await;
+          let row_collab = &read_guard.collab;
           let encoded_collab = encoded_collab(row_collab, &CollabType::DatabaseRow).ok()?;
           Some(EncodedCollabInfo {
             object_id: row_collab.object_id().to_string(),
@@ -207,7 +206,16 @@ impl Database {
             encoded_collab,
           })
         })
-        .collect::<Vec<_>>();
+        .collect();
+
+      let chunk_results = join_all(tasks).await;
+      for collab_info in chunk_results.into_iter().flatten() {
+        encoded_row_collabs.push(collab_info);
+      }
+
+      // Yield to the runtime after processing each chunk
+      tokio::task::yield_now().await;
+    }
 
     Ok(EncodedDatabase {
       encoded_database_collab,

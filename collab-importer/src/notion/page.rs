@@ -27,7 +27,7 @@ use tracing::error;
 #[derive(Debug, Clone, Serialize)]
 pub struct NotionPage {
   pub notion_name: String,
-  pub notion_id: String,
+  pub notion_id: Option<String>,
   pub notion_file: NotionFile,
   /// If current notion view is database, then view_id is the inline view id of the database.
   /// If current notion view is document, then view_id is the document id of the document.
@@ -36,6 +36,7 @@ pub struct NotionPage {
   pub children: Vec<NotionPage>,
   pub external_links: Vec<Vec<ExternalLink>>,
   pub host: String,
+  pub is_dir: bool,
 }
 
 impl NotionPage {
@@ -84,8 +85,10 @@ impl NotionPage {
   pub fn get_view(&self, id: &str) -> Option<NotionPage> {
     fn search_view(views: &[NotionPage], id: &str) -> Option<NotionPage> {
       for view in views {
-        if view.notion_id == id {
-          return Some(view.clone());
+        if let Some(notion_id) = &view.notion_id {
+          if notion_id == id {
+            return Some(view.clone());
+          }
         }
         if let Some(child_view) = search_view(&view.children, id) {
           return Some(child_view);
@@ -109,10 +112,8 @@ impl NotionPage {
     linked_views
   }
 
-  pub async fn as_document(
-    &self,
-    external_link_views: HashMap<String, NotionPage>,
-  ) -> Result<(Document, CollabResource), ImporterError> {
+  pub async fn as_document(&self) -> Result<(Document, CollabResource), ImporterError> {
+    let external_link_views = self.get_external_link_notion_view();
     match &self.notion_file {
       NotionFile::Markdown { file_path, .. } => {
         let mut file_paths = self.notion_file.upload_files();
@@ -121,23 +122,19 @@ impl NotionPage {
         let document_data = md_importer.import(&self.view_id, content)?;
         let mut document = Document::create(&self.view_id, document_data)?;
 
+        let url_builder = |view_id, path| async move {
+          let file_id = FileId::from_path(&path).await.ok()?;
+          Some(upload_file_url(
+            &self.host,
+            &self.workspace_id,
+            view_id,
+            &file_id,
+          ))
+        };
         let parent_path = file_path.parent().unwrap();
         self.replace_link_views(&mut document, external_link_views);
         self
-          .replace_resources(
-            &mut document,
-            &mut file_paths,
-            parent_path,
-            |view_id, path| async move {
-              let file_id = FileId::from_path(&path).await.ok()?;
-              Some(upload_file_url(
-                &self.host,
-                &self.workspace_id,
-                view_id,
-                &file_id,
-              ))
-            },
-          )
+          .replace_resources(&mut document, &mut file_paths, parent_path, url_builder)
           .await;
 
         let files = file_paths
@@ -209,45 +206,95 @@ impl NotionPage {
     external_link_views: HashMap<String, NotionPage>,
   ) {
     if let Some(page_id) = document.get_page_id() {
-      // 2 Get all the block children of the page
+      // Get all block children and process them
       let block_ids = document.get_block_children_ids(&page_id);
-      // 3. Get all the deltas of the block children
       for block_id in block_ids.iter() {
-        // 4. Get the block type and deltas of the block
         if let Some((block_type, deltas)) = document.get_block_delta(block_id) {
-          for delta in deltas {
-            // 5. If the block type is Text, get the inserted text and attributes
-            if let TextDelta::Inserted(_, Some(attrs)) = delta {
-              // 6. If the block type is External, get the external ID and type
-              if let Some(any) = attrs.get("href") {
-                let delta_str = any.to_string();
-                // 7. Extract the name and ID from the delta string
-                if let Ok(links) = extract_external_links(&delta_str) {
-                  if let Some(link) = links.last() {
-                    if let Some(view) = external_link_views.get(&link.id) {
-                      document.remove_block_delta(block_id);
-                      if matches!(block_type, BlockType::Paragraph) {
-                        let data = mention_block_data(&view.view_id, &self.view_id);
-                        if let Err(err) = document.update_block(block_id, data) {
-                          error!(
-                            "Failed to update block when trying to replace ref link. error:{:?}",
-                            err
-                          );
-                        }
-                      } else {
-                        let delta = mention_block_delta(&view.view_id);
-                        if let Err(err) = document.set_block_delta(block_id, vec![delta]) {
-                          error!(
-                            "Failed to set block delta when trying to replace ref link. error:{:?}",
-                            err
-                          );
-                        }
-                      }
-                    }
-                  }
-                }
-              }
+          self.process_block_deltas(document, block_id, block_type, deltas, &external_link_views);
+        }
+      }
+    }
+  }
+
+  /// Process the deltas for a block, looking for links to replace
+  fn process_block_deltas(
+    &self,
+    document: &mut Document,
+    block_id: &str,
+    block_type: BlockType,
+    deltas: Vec<TextDelta>,
+    external_link_views: &HashMap<String, NotionPage>,
+  ) {
+    for delta in deltas {
+      if let TextDelta::Inserted(_, Some(attrs)) = delta {
+        if let Some(href_value) = attrs.get("href") {
+          let delta_str = href_value.to_string();
+          if let Ok(links) = extract_external_links(&delta_str) {
+            self.replace_links_in_deltas(document, block_id, &links, external_link_views);
+            self.update_paragraph_block(
+              document,
+              block_id,
+              &block_type,
+              &links,
+              external_link_views,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  /// Replace links in the deltas with the corresponding view IDs
+  fn replace_links_in_deltas(
+    &self,
+    document: &mut Document,
+    block_id: &str,
+    links: &[ExternalLink],
+    external_link_views: &HashMap<String, NotionPage>,
+  ) {
+    let mut block_deltas = document
+      .get_block_delta(block_id)
+      .map(|t| t.1)
+      .unwrap_or_default();
+
+    for link in links {
+      if let Some(view) = external_link_views.get(&link.id) {
+        block_deltas.iter_mut().for_each(|d| {
+          if let TextDelta::Inserted(content, _) = d {
+            if content == &link.name {
+              *d = mention_block_delta(&view.view_id);
             }
+          }
+        });
+      }
+    }
+
+    if let Err(err) = document.set_block_delta(block_id, block_deltas) {
+      error!(
+        "Failed to set block delta when trying to replace ref link. error: {:?}",
+        err
+      );
+    }
+  }
+
+  /// Update the paragraph block if the last link points to an external view
+  fn update_paragraph_block(
+    &self,
+    document: &mut Document,
+    block_id: &str,
+    block_type: &BlockType,
+    links: &[ExternalLink],
+    external_link_views: &HashMap<String, NotionPage>,
+  ) {
+    if let Some(last_link) = links.last() {
+      if let Some(view) = external_link_views.get(&last_link.id) {
+        if matches!(block_type, BlockType::Paragraph) {
+          let data = mention_block_data(&view.view_id, &self.view_id);
+          if let Err(err) = document.update_block(block_id, data) {
+            error!(
+              "Failed to update block when trying to replace ref link. error: {:?}",
+              err
+            );
           }
         }
       }
@@ -335,7 +382,7 @@ impl NotionPage {
         })
       },
       NotionFile::Markdown { .. } => {
-        let (document, collab_resource) = self.as_document(HashMap::new()).await?;
+        let (document, collab_resource) = self.as_document().await?;
         let encoded_collab = document.encode_collab()?;
         let imported_collab = ImportedCollab {
           object_id: self.view_id.clone(),

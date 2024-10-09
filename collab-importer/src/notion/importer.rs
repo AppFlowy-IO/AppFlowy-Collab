@@ -3,16 +3,16 @@ use crate::imported_collab::{ImportType, ImportedCollab, ImportedCollabInfo};
 use crate::notion::file::NotionFile;
 use crate::notion::page::{build_imported_collab_recursively, CollabResource, NotionPage};
 use crate::notion::walk_dir::{file_name_from_path, process_entry};
-use crate::space_view::create_space_view;
-use collab::preclude::Collab;
 
 use collab_folder::hierarchy_builder::{
-  NestedChildViewBuilder, NestedViews, ParentChildViews, SpacePermission,
+  NestedChildViewBuilder, NestedViews, ParentChildViews, SpacePermission, ViewExtraBuilder,
 };
 use collab_folder::ViewLayout;
 use futures::stream;
 use futures::stream::{Stream, StreamExt};
 
+use crate::space_view::create_space_view;
+use collab::preclude::Collab;
 use collab_entity::CollabType;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -24,7 +24,7 @@ pub struct NotionImporter {
   host: String,
   workspace_id: String,
   path: PathBuf,
-  name: String,
+  workspace_name: String,
   pub views: Option<NotionPage>,
 }
 
@@ -42,7 +42,7 @@ impl NotionImporter {
       ));
     }
 
-    let name = file_name_from_path(&path).unwrap_or_else(|_| {
+    let workspace_name = file_name_from_path(&path).unwrap_or_else(|_| {
       let now = chrono::Utc::now();
       format!("import-{}", now.format("%Y-%m-%d %H:%M"))
     });
@@ -52,7 +52,7 @@ impl NotionImporter {
       host,
       workspace_id: workspace_id.to_string(),
       path,
-      name,
+      workspace_name,
       views: None,
     })
   }
@@ -60,11 +60,14 @@ impl NotionImporter {
   /// Return a ImportedInfo struct that contains all the views and their children recursively.
   pub async fn import(mut self) -> Result<ImportedInfo, ImporterError> {
     let views = self.collect_views().await?;
+    if views.is_empty() {
+      return Err(ImporterError::CannotImport);
+    }
     ImportedInfo::new(
       self.uid,
       self.workspace_id.clone(),
       self.host.clone(),
-      self.name.clone(),
+      self.workspace_name.clone(),
       views,
     )
   }
@@ -74,6 +77,7 @@ impl NotionImporter {
       .max_depth(1)
       .into_iter()
       .filter_map(|e| e.ok())
+      .filter(|e| e.path() != self.path)
       .filter_map(|entry| process_entry(&self.host, &self.workspace_id, &entry))
       .collect::<Vec<NotionPage>>();
     Ok(views)
@@ -104,7 +108,7 @@ impl ImportedInfo {
     let (space_view, space_collab) = create_space_view(
       uid,
       &workspace_id,
-      &name,
+      "Imported Space",
       &view_id,
       vec![],
       SpacePermission::PublicToAll,
@@ -124,51 +128,95 @@ impl ImportedInfo {
     &self.views
   }
 
+  fn has_space_view(&self) -> bool {
+    !self.views.iter().any(|view| !view.is_dir)
+  }
+
+  fn space_ids(&self) -> Vec<String> {
+    let mut space_ids = Vec::new();
+    for view in &self.views {
+      if !view.is_dir {
+        return vec![];
+      }
+      space_ids.push(view.view_id.clone());
+    }
+    space_ids
+  }
+
   pub async fn into_collab_stream(self) -> ImportedCollabInfoStream<'static> {
     // Create a stream for each view by resolving the futures into streams
+    let has_space = self.has_space_view();
     let view_streams = self
       .views
       .into_iter()
       .map(|view| async { build_imported_collab_recursively(view).await });
 
-    let imported_space_collab = ImportedCollab {
-      object_id: self.space_view.view.id.clone(),
-      collab_type: CollabType::Document,
-      encoded_collab: self
-        .space_collab
-        .encode_collab_v1(|_collab| Ok::<_, ImporterError>(()))
-        .unwrap(),
-    };
+    if has_space {
+      let combined_stream = stream::iter(view_streams)
+        .then(|stream_future| stream_future)
+        .flatten();
+      Box::pin(combined_stream) as ImportedCollabInfoStream
+    } else {
+      let imported_space_collab = ImportedCollab {
+        object_id: self.space_view.view.id.clone(),
+        collab_type: CollabType::Document,
+        encoded_collab: self
+          .space_collab
+          .encode_collab_v1(|_collab| Ok::<_, ImporterError>(()))
+          .unwrap(),
+      };
 
-    let space_view_collab = ImportedCollabInfo {
-      name: self.name.clone(),
-      collabs: vec![imported_space_collab],
-      resource: CollabResource {
-        object_id: self.space_view.view.id,
-        files: vec![],
-      },
-      import_type: ImportType::Document,
-    };
-    let space_view_collab_stream = stream::once(async { space_view_collab });
-    let combined_view_stream = stream::iter(view_streams)
-      .then(|stream_future| stream_future)
-      .flatten();
-    let combined_stream = space_view_collab_stream.chain(combined_view_stream);
-    Box::pin(combined_stream) as ImportedCollabInfoStream
+      let space_view_collab = ImportedCollabInfo {
+        name: self.name.clone(),
+        collabs: vec![imported_space_collab],
+        resource: CollabResource {
+          object_id: self.space_view.view.id,
+          files: vec![],
+        },
+        import_type: ImportType::Document,
+      };
+
+      let space_view_collab_stream = stream::once(async { space_view_collab });
+      let combined_view_stream = stream::iter(view_streams)
+        .then(|stream_future| stream_future)
+        .flatten();
+      let combined_stream = space_view_collab_stream.chain(combined_view_stream);
+      Box::pin(combined_stream) as ImportedCollabInfoStream
+    }
   }
 
   pub async fn build_nested_views(&self) -> NestedViews {
-    let mut space_view = self.space_view.clone();
-    let parent_id = space_view.view.id.clone();
-    let views: Vec<ParentChildViews> = stream::iter(&self.views)
+    let space_ids = self.space_ids();
+    let parent_id = if space_ids.is_empty() {
+      self.space_view.view.id.clone()
+    } else {
+      self.workspace_id.clone()
+    };
+
+    let mut views: Vec<ParentChildViews> = stream::iter(&self.views)
       .then(|notion_page| convert_notion_page_to_parent_child(&parent_id, notion_page, self.uid))
       .collect()
       .await;
 
-    space_view.children = views;
-    NestedViews {
-      views: vec![space_view],
-    }
+    let views = if space_ids.is_empty() {
+      let mut space_view = self.space_view.clone();
+      space_view.children = views;
+      vec![space_view]
+    } else {
+      views.iter_mut().for_each(|view| {
+        if space_ids.contains(&view.view.id) {
+          view.view.extra = serde_json::to_string(
+            &ViewExtraBuilder::new()
+              .is_space(true, SpacePermission::PublicToAll)
+              .build(),
+          )
+          .ok();
+        }
+      });
+      views
+    };
+
+    NestedViews { views }
   }
 
   pub fn num_of_csv(&self) -> usize {
@@ -195,7 +243,7 @@ async fn convert_notion_page_to_parent_child(
   uid: i64,
 ) -> ParentChildViews {
   let view_layout = match notion_page.notion_file {
-    NotionFile::Unknown => ViewLayout::Document,
+    NotionFile::Empty => ViewLayout::Document,
     NotionFile::CSV { .. } => ViewLayout::Grid,
     NotionFile::CSVPart { .. } => ViewLayout::Grid,
     NotionFile::Markdown { .. } => ViewLayout::Document,

@@ -29,6 +29,9 @@ pub enum ImporterError {
   #[error("File not found")]
   FileNotFound,
 
+  #[error("Can not import file")]
+  CannotImport,
+
   #[error(transparent)]
   Internal(#[from] anyhow::Error),
 }

@@ -82,7 +82,7 @@ impl NestedViews {
     None
   }
 
-  pub fn all_views(&self) -> Vec<View> {
+  pub fn flatten_views(&self) -> Vec<View> {
     FlattedViews::flatten_views(self.views.clone())
   }
 }
@@ -267,8 +267,8 @@ impl ParentChildViews {
     let indent = "  ".repeat(indent_level);
     writeln!(
       f,
-      "{}: {}:{}, parent id: {}",
-      indent, self.view.name, self.view.id, self.view.parent_view_id
+      "{}: {}, parent id: {}",
+      indent, self.view.name, self.view.parent_view_id
     )?;
 
     // Recursively print child views

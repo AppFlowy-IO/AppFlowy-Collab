@@ -622,6 +622,7 @@ dependencies = [
  "csv",
  "fancy-regex",
  "futures",
+ "futures-util",
  "fxhash",
  "hex",
  "markdown",
