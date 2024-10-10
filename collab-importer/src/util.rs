@@ -13,7 +13,7 @@ use tokio::io::{AsyncReadExt, BufReader};
 use zip::ZipArchive;
 
 pub fn upload_file_url(host: &str, workspace_id: &str, object_id: &str, file_id: &str) -> String {
-  format!("{host}/{workspace_id}/v1/blob/{object_id}/{file_id}",)
+  format!("{host}/api/file_storage/{workspace_id}/v1/blob/{object_id}/{file_id}",)
 }
 
 pub struct FileId;

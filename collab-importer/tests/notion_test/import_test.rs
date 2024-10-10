@@ -248,7 +248,7 @@ async fn assert_blog_post(host: &str, workspace_id: &str, root_view: &NotionPage
     "EIj9Z3yj8Gw8UW60U8CLXx7ulckEs5Eu84LCFddCXII=.jpg",
   ]
   .into_iter()
-  .map(|s| format!("{host}/{workspace_id}/v1/blob/{object_id}/{s}"))
+  .map(|s| format!("{host}/api/file_storage/{workspace_id}/v1/blob/{object_id}/{s}"))
   .collect::<Vec<String>>();
 
   let (document, _) = root_view.as_document().await.unwrap();
