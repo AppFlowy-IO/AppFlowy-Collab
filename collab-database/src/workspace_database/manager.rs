@@ -189,6 +189,7 @@ impl From<CollabPersistenceImpl> for DataSource {
 ///
 pub struct WorkspaceDatabase {
   object_id: String,
+  collab: Collab,
   body: WorkspaceDatabaseBody,
   collab_service: Arc<dyn DatabaseCollabService>,
   /// In memory database handlers.
@@ -200,13 +201,14 @@ pub struct WorkspaceDatabase {
 impl WorkspaceDatabase {
   pub fn open(
     object_id: &str,
-    collab: Collab,
+    mut collab: Collab,
     collab_service: impl DatabaseCollabService,
   ) -> Result<Self, DatabaseError> {
     let collab_service = Arc::new(collab_service);
-    let body = WorkspaceDatabaseBody::open(collab)?;
+    let body = WorkspaceDatabaseBody::open(&mut collab)?;
     Ok(Self {
       object_id: object_id.to_string(),
+      collab,
       body,
       collab_service,
       databases: DashMap::new(),
@@ -215,13 +217,14 @@ impl WorkspaceDatabase {
 
   pub fn create(
     object_id: &str,
-    collab: Collab,
+    mut collab: Collab,
     collab_service: impl DatabaseCollabService,
   ) -> Result<Self, DatabaseError> {
     let collab_service = Arc::new(collab_service);
-    let body = WorkspaceDatabaseBody::create(collab);
+    let body = WorkspaceDatabaseBody::create(&mut collab);
     Ok(Self {
       object_id: object_id.to_string(),
+      collab,
       body,
       collab_service,
       databases: DashMap::new(),
@@ -229,11 +232,11 @@ impl WorkspaceDatabase {
   }
 
   pub fn close(&self) {
-    self.body.close();
+    self.collab.remove_all_plugins();
   }
 
   pub fn validate(&self) -> Result<(), DatabaseError> {
-    self.body.validate()?;
+    CollabType::WorkspaceDatabase.validate_require_data(&self.collab)?;
     Ok(())
   }
 
@@ -245,7 +248,7 @@ impl WorkspaceDatabase {
     database_id: &str,
   ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
     // Check if the database exists in the body
-    if !self.body.contains(database_id) {
+    if !self.body.contains(&self.collab.transact(), database_id) {
       return Err(DatabaseError::DatabaseNotExist);
     }
 
@@ -305,9 +308,10 @@ impl WorkspaceDatabase {
 
   /// Return the database id with the given view id.
   pub fn get_database_id_with_view_id(&self, view_id: &str) -> Option<String> {
+    let txn = self.collab.transact();
     self
       .body
-      .get_database_meta_with_view_id(view_id)
+      .get_database_meta_with_view_id(&txn, view_id)
       .map(|record| record.database_id)
   }
 
@@ -332,9 +336,12 @@ impl WorkspaceDatabase {
         .filter(|view| view.view_id != params.inline_view_id)
         .map(|view| view.view_id.clone()),
     );
-    self
-      .body
-      .add_database(&params.database_id, linked_views.into_iter().collect());
+    let mut txn = self.collab.transact_mut();
+    self.body.add_database(
+      &mut txn,
+      &params.database_id,
+      linked_views.into_iter().collect(),
+    );
     let database_id = params.database_id.clone();
     let database = Database::create_with_view(params, context).await.unwrap();
     let mutex_database = RwLock::from(database);
@@ -351,14 +358,17 @@ impl WorkspaceDatabase {
   ) -> Result<(), DatabaseError> {
     let params = CreateViewParamsValidator::validate(params)?;
     let database = self.get_or_init_database(&params.database_id).await?;
-    self.body.update_database(&params.database_id, |record| {
-      // Check if the view is already linked to the database.
-      if record.linked_views.contains(&params.view_id) {
-        error!("The view is already linked to the database");
-      } else {
-        record.linked_views.push(params.view_id.clone());
-      }
-    });
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .update_database(&mut txn, &params.database_id, |record| {
+        // Check if the view is already linked to the database.
+        if record.linked_views.contains(&params.view_id) {
+          error!("The view is already linked to the database");
+        } else {
+          record.linked_views.push(params.view_id.clone());
+        }
+      });
 
     let mut write_guard = database.write().await;
     write_guard.create_linked_view(params)
@@ -366,7 +376,8 @@ impl WorkspaceDatabase {
 
   /// Delete the database with the given database id.
   pub fn delete_database(&mut self, database_id: &str) {
-    self.body.delete_database(database_id);
+    let mut txn = self.collab.transact_mut();
+    self.body.delete_database(&mut txn, database_id);
 
     if let Some(persistence) = self.collab_service.persistence() {
       if let Err(err) = persistence.delete_collab(database_id) {
@@ -381,16 +392,21 @@ impl WorkspaceDatabase {
   }
 
   pub fn track_database(&mut self, database_id: &str, database_view_ids: Vec<String>) {
-    self.body.add_database(database_id, database_view_ids);
+    let mut txn = self.collab.transact_mut();
+    self
+      .body
+      .add_database(&mut txn, database_id, database_view_ids);
   }
 
   /// Return all the database records.
   pub fn get_all_database_meta(&self) -> Vec<DatabaseMeta> {
-    self.body.get_all_database_meta()
+    let txn = self.collab.transact();
+    self.body.get_all_database_meta(&txn)
   }
 
   pub fn get_database_meta(&self, database_id: &str) -> Option<DatabaseMeta> {
-    self.body.get_database_meta(database_id)
+    let txn = self.collab.transact();
+    self.body.get_database_meta(&txn, database_id)
   }
 
   /// Delete the view from the database with the given view id.
@@ -430,7 +446,9 @@ impl WorkspaceDatabase {
   }
 
   pub fn flush_workspace_database(&self) -> Result<(), DatabaseError> {
-    let encoded_collab = self.body.encode_collab_v1()?;
+    let encoded_collab = self.collab.encode_collab_v1(|_collab| {
+      CollabType::WorkspaceDatabase.validate_require_data(&self.collab)
+    })?;
     self
       .collab_service
       .persistence()
@@ -483,13 +501,13 @@ impl WorkspaceDatabase {
 impl Borrow<Collab> for WorkspaceDatabase {
   #[inline]
   fn borrow(&self) -> &Collab {
-    self.body.borrow()
+    self.collab.borrow()
   }
 }
 
 impl BorrowMut<Collab> for WorkspaceDatabase {
   #[inline]
   fn borrow_mut(&mut self) -> &mut Collab {
-    self.body.borrow_mut()
+    self.collab.borrow_mut()
   }
 }
