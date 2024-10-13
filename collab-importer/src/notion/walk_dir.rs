@@ -6,11 +6,10 @@ use markdown::mdast::Node;
 use markdown::{to_mdast, ParseOptions};
 use percent_encoding::percent_decode_str;
 
+use crate::notion::file::{NotionFile, Resource};
 use crate::notion::page::{ExternalLink, ExternalLinkType, NotionPage};
 use std::fs;
 use std::path::{Path, PathBuf};
-
-use crate::notion::file::{NotionFile, Resource};
 use tracing::error;
 use walkdir::{DirEntry, WalkDir};
 
@@ -115,13 +114,7 @@ fn process_space_dir(
 ) -> Option<NotionPage> {
   let mut children = vec![];
   // Collect all child entries first, to sort by created time
-  let entries: Vec<_> = WalkDir::new(path)
-    .max_depth(1)
-    .into_iter()
-    .filter_map(|e| e.ok())
-    .filter(|e| e.path() != path)
-    .collect();
-
+  let entries: Vec<_> = walk_sub_dir(path);
   for sub_entry in entries {
     if let Some(child_view) = process_entry(host, workspace_id, &sub_entry) {
       children.push(child_view);
@@ -177,6 +170,16 @@ fn process_csv_dir(
   })
 }
 
+pub fn walk_sub_dir(path: &Path) -> Vec<DirEntry> {
+  WalkDir::new(path)
+    .sort_by_file_name()
+    .max_depth(1)
+    .into_iter()
+    .filter_map(|e| e.ok())
+    .filter(|e| e.path() != path)
+    .collect()
+}
+
 fn process_md_dir(
   host: &str,
   workspace_id: &str,
@@ -189,13 +192,9 @@ fn process_md_dir(
   let external_links = get_md_links(md_file_path).unwrap_or_default();
   let mut resources = vec![];
   // Walk through sub-entries of the directory
-  for sub_entry in WalkDir::new(path)
-    .max_depth(1)
-    .into_iter()
-    .filter_map(|e| e.ok())
-  {
+  for sub_entry in walk_sub_dir(path) {
     // Skip the directory itself and its corresponding .md file
-    if sub_entry.path() != path && sub_entry.path() != md_file_path {
+    if sub_entry.path() != md_file_path {
       if let Some(child_view) = process_entry(host, workspace_id, &sub_entry) {
         children.push(child_view);
       }

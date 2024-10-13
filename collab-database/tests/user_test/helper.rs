@@ -13,7 +13,7 @@ use collab_database::rows::{Cells, CreateRowParams, RowId};
 use collab_database::views::DatabaseLayout;
 use collab_database::workspace_database::{
   DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid, RowRelationChange,
-  RowRelationUpdateReceiver, WorkspaceDatabase,
+  RowRelationUpdateReceiver, WorkspaceDatabaseManager,
 };
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -38,12 +38,12 @@ use tempfile::TempDir;
 pub struct WorkspaceDatabaseTest {
   #[allow(dead_code)]
   uid: i64,
-  inner: WorkspaceDatabase,
+  inner: WorkspaceDatabaseManager,
   pub collab_db: Arc<CollabKVDB>,
 }
 
 impl Deref for WorkspaceDatabaseTest {
-  type Target = WorkspaceDatabase;
+  type Target = WorkspaceDatabaseManager;
 
   fn deref(&self) -> &Self::Target {
     &self.inner
@@ -250,7 +250,8 @@ pub async fn workspace_database_test_with_config(
     .build_collab(&workspace_database_id, CollabType::WorkspaceDatabase, None)
     .await
     .unwrap();
-  let inner = WorkspaceDatabase::open(&workspace_database_id, collab, collab_service).unwrap();
+  let inner =
+    WorkspaceDatabaseManager::open(&workspace_database_id, collab, collab_service).unwrap();
   WorkspaceDatabaseTest {
     uid,
     inner,
@@ -262,7 +263,7 @@ pub async fn workspace_database_with_db(
   uid: i64,
   collab_db: Weak<CollabKVDB>,
   config: Option<CollabPersistenceConfig>,
-) -> WorkspaceDatabase {
+) -> WorkspaceDatabaseManager {
   let _config = config.unwrap_or_else(|| CollabPersistenceConfig::new().snapshot_per_update(5));
   let builder = TestUserDatabaseServiceImpl {
     uid,
@@ -275,7 +276,7 @@ pub async fn workspace_database_with_db(
     .build_collab(workspace_database_id, CollabType::WorkspaceDatabase, None)
     .await
     .unwrap();
-  WorkspaceDatabase::create(workspace_database_id, collab, builder).unwrap()
+  WorkspaceDatabaseManager::create(workspace_database_id, collab, builder).unwrap()
 }
 
 pub async fn user_database_test_with_db(
@@ -386,16 +387,16 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
 }
 
 #[derive(Clone)]
-pub struct MutexUserDatabase(Arc<Mutex<WorkspaceDatabase>>);
+pub struct MutexUserDatabase(Arc<Mutex<WorkspaceDatabaseManager>>);
 
 impl MutexUserDatabase {
-  pub fn new(inner: WorkspaceDatabase) -> Self {
+  pub fn new(inner: WorkspaceDatabaseManager) -> Self {
     Self(Arc::new(Mutex::from(inner)))
   }
 }
 
 impl Deref for MutexUserDatabase {
-  type Target = Arc<Mutex<WorkspaceDatabase>>;
+  type Target = Arc<Mutex<WorkspaceDatabaseManager>>;
   fn deref(&self) -> &Self::Target {
     &self.0
   }

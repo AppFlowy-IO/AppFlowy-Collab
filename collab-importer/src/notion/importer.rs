@@ -2,7 +2,7 @@ use crate::error::ImporterError;
 use crate::imported_collab::{ImportType, ImportedCollab, ImportedCollabInfo};
 use crate::notion::file::NotionFile;
 use crate::notion::page::{build_imported_collab_recursively, CollabResource, NotionPage};
-use crate::notion::walk_dir::{file_name_from_path, process_entry};
+use crate::notion::walk_dir::{file_name_from_path, process_entry, walk_sub_dir};
 
 use collab_folder::hierarchy_builder::{
   NestedChildViewBuilder, NestedViews, ParentChildViews, SpacePermission, ViewExtraBuilder,
@@ -16,7 +16,6 @@ use collab::preclude::Collab;
 use collab_entity::CollabType;
 use std::path::PathBuf;
 use std::pin::Pin;
-use walkdir::WalkDir;
 
 #[derive(Debug)]
 pub struct NotionImporter {
@@ -74,14 +73,10 @@ impl NotionImporter {
   }
 
   async fn collect_views(&mut self) -> Result<Vec<NotionPage>, ImporterError> {
-    let mut views = WalkDir::new(&self.path)
-      .max_depth(1)
+    let mut views = walk_sub_dir(&self.path)
       .into_iter()
-      .filter_map(|e| e.ok())
-      .filter(|e| e.path() != self.path)
       .filter_map(|entry| process_entry(&self.host, &self.workspace_id, &entry))
       .collect::<Vec<NotionPage>>();
-
     // if there are spaces in the views, we only keep the views that are in the spaces
     let contains_spaces = views.iter().any(|view| view.is_dir);
     if contains_spaces {

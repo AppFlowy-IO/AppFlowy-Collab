@@ -14,35 +14,29 @@ use std::borrow::{Borrow, BorrowMut};
 use std::collections::{HashMap, HashSet};
 
 /// Used to store list of [DatabaseMeta].
-pub struct WorkspaceDatabaseBody {
+pub struct WorkspaceDatabase {
   collab: Collab,
-  array_ref: ArrayRef,
+  body: WorkspaceDatabaseBody,
 }
 
 pub fn default_workspace_database_data(object_id: &str) -> EncodedCollab {
-  let collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false);
-  let body = WorkspaceDatabaseBody::create(collab);
-  body
-    .collab
+  let mut collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false);
+  let _ = WorkspaceDatabaseBody::create(&mut collab);
+  collab
     .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
     .unwrap()
 }
 
-impl WorkspaceDatabaseBody {
+impl WorkspaceDatabase {
   pub fn open(mut collab: Collab) -> Result<Self, DatabaseError> {
     CollabType::WorkspaceDatabase.validate_require_data(&collab)?;
-
-    let mut txn = collab.context.transact_mut();
-    let array_ref = collab.data.get_or_init(&mut txn, WORKSPACE_DATABASES);
-    drop(txn);
-    Ok(Self { array_ref, collab })
+    let body = WorkspaceDatabaseBody::open(&mut collab)?;
+    Ok(Self { body, collab })
   }
 
   pub fn create(mut collab: Collab) -> Self {
-    let mut txn = collab.context.transact_mut();
-    let array_ref = collab.data.get_or_init(&mut txn, WORKSPACE_DATABASES);
-    drop(txn);
-    Self { array_ref, collab }
+    let body = WorkspaceDatabaseBody::create(&mut collab);
+    Self { body, collab }
   }
 
   pub fn from_collab_doc_state(
@@ -70,8 +64,7 @@ impl WorkspaceDatabaseBody {
       created_at: timestamp(),
       linked_views: linked_views.into_iter().collect(),
     };
-    let map_ref: MapRef = self.array_ref.push_back(&mut txn, MapPrelim::default());
-    record.fill_map_ref(&mut txn, &map_ref);
+    self.body.push_back(&mut txn, record);
   }
 
   pub fn batch_add_database(
@@ -86,65 +79,35 @@ impl WorkspaceDatabaseBody {
         created_at: timestamp(),
         linked_views: linked_views.into_iter().collect(),
       };
-      let map_ref: MapRef = self.array_ref.push_back(&mut txn, MapPrelim::default());
-      record.fill_map_ref(&mut txn, &map_ref);
+      self.body.push_back(&mut txn, record);
     }
     txn
   }
 
   /// Update the database by the given id
-  pub fn update_database(&mut self, database_id: &str, mut f: impl FnMut(&mut DatabaseMeta)) {
-    let index = self.database_index_from_database_id(&self.collab.transact(), database_id);
-
-    if let Some(index) = index {
-      let mut txn = self.collab.transact_mut();
-      if let Some(Some(map_ref)) = self
-        .array_ref
-        .get(&txn, index)
-        .map(|value| value.cast().ok())
-      {
-        if let Some(mut record) = DatabaseMeta::from_map_ref(&txn, &map_ref) {
-          f(&mut record);
-          self.array_ref.remove(&mut txn, index);
-          let map_ref = self.array_ref.insert(&mut txn, index, MapPrelim::default());
-          record.fill_map_ref(&mut txn, &map_ref);
-        }
-      }
-    }
+  pub fn update_database(&mut self, database_id: &str, f: impl FnMut(&mut DatabaseMeta)) {
+    self
+      .body
+      .update_database(&mut self.collab.transact_mut(), database_id, f);
   }
 
   /// Delete the database by the given id
   pub fn delete_database(&mut self, database_id: &str) {
-    let index = self.database_index_from_database_id(&self.collab.transact(), database_id);
-    if let Some(index) = index {
-      let mut txn = self.collab.transact_mut();
-      self.array_ref.remove(&mut txn, index);
-    }
+    self
+      .body
+      .delete_database(&mut self.collab.transact_mut(), database_id);
   }
 
   /// Test if the database with the given id exists
   pub fn contains(&self, database_id: &str) -> bool {
     let txn = self.collab.transact();
-    self
-      .array_ref
-      .iter(&txn)
-      .any(|value| match database_id_from_value(&txn, value) {
-        None => false,
-        Some(id) => id == database_id,
-      })
+    self.body.contains_database(&txn, database_id)
   }
 
   /// Return all databases with a Transaction
   pub fn get_all_database_meta(&self) -> Vec<DatabaseMeta> {
     let txn = self.collab.transact();
-    self
-      .array_ref
-      .iter(&txn)
-      .flat_map(|value| {
-        let map_ref: MapRef = value.cast().ok()?;
-        DatabaseMeta::from_map_ref(&txn, &map_ref)
-      })
-      .collect()
+    self.body.get_all_meta(&txn)
   }
 
   /// Return the a [DatabaseMeta] with the given view id
@@ -156,7 +119,6 @@ impl WorkspaceDatabaseBody {
   }
 
   pub fn get_database_meta(&self, database_id: &str) -> Option<DatabaseMeta> {
-    // TODO(nathan): No need to get all database meta
     let all = self.get_all_database_meta();
     all
       .into_iter()
@@ -173,17 +135,6 @@ impl WorkspaceDatabaseBody {
     self
       .collab
       .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
-  }
-
-  fn database_index_from_database_id<T: ReadTxn>(&self, txn: &T, database_id: &str) -> Option<u32> {
-    self
-      .array_ref
-      .iter(txn)
-      .position(|value| match database_id_from_value(txn, value) {
-        None => false,
-        Some(id) => id == database_id,
-      })
-      .map(|index| index as u32)
   }
 }
 
@@ -240,16 +191,105 @@ fn database_id_from_value<T: ReadTxn>(txn: &T, value: YrsValue) -> Option<String
   }
 }
 
-impl Borrow<Collab> for WorkspaceDatabaseBody {
+impl Borrow<Collab> for WorkspaceDatabase {
   #[inline]
   fn borrow(&self) -> &Collab {
     &self.collab
   }
 }
 
-impl BorrowMut<Collab> for WorkspaceDatabaseBody {
+impl BorrowMut<Collab> for WorkspaceDatabase {
   #[inline]
   fn borrow_mut(&mut self) -> &mut Collab {
     &mut self.collab
+  }
+}
+
+pub struct WorkspaceDatabaseBody {
+  array_ref: ArrayRef,
+}
+
+impl WorkspaceDatabaseBody {
+  pub fn open(collab: &mut Collab) -> Result<Self, DatabaseError> {
+    let txn = collab.context.transact();
+    let array_ref = collab
+      .data
+      .get_with_txn(&txn, WORKSPACE_DATABASES)
+      .ok_or_else(|| DatabaseError::NoRequiredData(WORKSPACE_DATABASES.to_string()))?;
+    Ok(Self { array_ref })
+  }
+
+  pub fn create(collab: &mut Collab) -> Self {
+    let mut txn = collab.context.transact_mut();
+    let array_ref = collab.data.get_or_init(&mut txn, WORKSPACE_DATABASES);
+    drop(txn);
+    Self { array_ref }
+  }
+
+  pub fn push_back(&self, txn: &mut TransactionMut, value: DatabaseMeta) -> MapRef {
+    let map_ref: MapRef = self.array_ref.push_back(txn, MapPrelim::default());
+    value.fill_map_ref(txn, &map_ref);
+    map_ref
+  }
+
+  pub fn index_of_database<T: ReadTxn>(&self, txn: &T, database_id: &str) -> Option<u32> {
+    self
+      .array_ref
+      .iter(txn)
+      .position(|value| {
+        database_id_from_value(txn, value)
+          .map(|id| id == database_id)
+          .unwrap_or(false)
+      })
+      .map(|index| index as u32)
+  }
+
+  pub fn get_all_meta<T: ReadTxn>(&self, txn: &T) -> Vec<DatabaseMeta> {
+    self
+      .array_ref
+      .iter(txn)
+      .flat_map(|value| {
+        let map_ref: MapRef = value.cast().ok()?;
+        DatabaseMeta::from_map_ref(txn, &map_ref)
+      })
+      .collect()
+  }
+
+  pub fn contains_database<T: ReadTxn>(&self, txn: &T, database_id: &str) -> bool {
+    self.array_ref.iter(txn).any(|value| {
+      database_id_from_value(txn, value)
+        .map(|id| id == database_id)
+        .unwrap_or(false)
+    })
+  }
+
+  pub fn delete_database(&self, txn: &mut TransactionMut, database_id: &str) {
+    if let Some(index) = self.index_of_database(txn, database_id) {
+      self.array_ref.remove(txn, index);
+    }
+  }
+
+  pub fn update_database(
+    &mut self,
+    txn: &mut TransactionMut,
+    database_id: &str,
+    mut f: impl FnMut(&mut DatabaseMeta),
+  ) {
+    let index = self.index_of_database(txn, database_id);
+
+    if let Some(index) = index {
+      if let Some(Some(map_ref)) = self
+        .array_ref
+        .get(txn, index)
+        .map(|value| value.cast().ok())
+      {
+        if let Some(mut record) = DatabaseMeta::from_map_ref(txn, &map_ref) {
+          f(&mut record);
+          self.array_ref.remove(txn, index);
+          let map_ref = self.array_ref.insert(txn, index, MapPrelim::default());
+          record.fill_map_ref(txn, &map_ref);
+        }
+      }
+    }
   }
 }

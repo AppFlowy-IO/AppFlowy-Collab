@@ -1,7 +1,7 @@
 use crate::database::{try_fixing_database, Database, DatabaseContext, DatabaseData};
 
 use crate::error::DatabaseError;
-use crate::workspace_database::body::{DatabaseMeta, WorkspaceDatabaseBody};
+use crate::workspace_database::body::{DatabaseMeta, WorkspaceDatabase};
 use async_trait::async_trait;
 use collab::core::collab::DataSource;
 use collab::preclude::Collab;
@@ -179,17 +179,17 @@ impl From<CollabPersistenceImpl> for DataSource {
   }
 }
 
-/// A [WorkspaceDatabase] indexes the databases within a workspace.
+/// A [WorkspaceDatabaseManager] indexes the databases within a workspace.
 /// Within a workspace, the view ID is used to identify each database. Therefore, you can use the view_id to retrieve
-/// the actual database ID from [WorkspaceDatabase]. Additionally, [WorkspaceDatabase] allows you to obtain a database
+/// the actual database ID from [WorkspaceDatabaseManager]. Additionally, [WorkspaceDatabaseManager] allows you to obtain a database
 /// using its database ID.
 ///
 /// Relation between database ID and view ID:
 /// One database ID can have multiple view IDs.
 ///
-pub struct WorkspaceDatabase {
+pub struct WorkspaceDatabaseManager {
   object_id: String,
-  body: WorkspaceDatabaseBody,
+  body: WorkspaceDatabase,
   collab_service: Arc<dyn DatabaseCollabService>,
   /// In memory database handlers.
   /// The key is the database id. The handler will be added when the database is opened or created.
@@ -197,14 +197,14 @@ pub struct WorkspaceDatabase {
   databases: DashMap<String, Arc<RwLock<Database>>>,
 }
 
-impl WorkspaceDatabase {
+impl WorkspaceDatabaseManager {
   pub fn open(
     object_id: &str,
     collab: Collab,
     collab_service: impl DatabaseCollabService,
   ) -> Result<Self, DatabaseError> {
     let collab_service = Arc::new(collab_service);
-    let body = WorkspaceDatabaseBody::open(collab)?;
+    let body = WorkspaceDatabase::open(collab)?;
     Ok(Self {
       object_id: object_id.to_string(),
       body,
@@ -219,7 +219,7 @@ impl WorkspaceDatabase {
     collab_service: impl DatabaseCollabService,
   ) -> Result<Self, DatabaseError> {
     let collab_service = Arc::new(collab_service);
-    let body = WorkspaceDatabaseBody::create(collab);
+    let body = WorkspaceDatabase::create(collab);
     Ok(Self {
       object_id: object_id.to_string(),
       body,
@@ -480,14 +480,14 @@ impl WorkspaceDatabase {
   }
 }
 
-impl Borrow<Collab> for WorkspaceDatabase {
+impl Borrow<Collab> for WorkspaceDatabaseManager {
   #[inline]
   fn borrow(&self) -> &Collab {
     self.body.borrow()
   }
 }
 
-impl BorrowMut<Collab> for WorkspaceDatabase {
+impl BorrowMut<Collab> for WorkspaceDatabaseManager {
   #[inline]
   fn borrow_mut(&mut self) -> &mut Collab {
     self.body.borrow_mut()
