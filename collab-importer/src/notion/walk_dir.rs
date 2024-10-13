@@ -10,7 +10,6 @@ use crate::notion::file::{NotionFile, Resource};
 use crate::notion::page::{ExternalLink, ExternalLinkType, NotionPage};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 use tracing::error;
 use walkdir::{DirEntry, WalkDir};
 
@@ -172,19 +171,13 @@ fn process_csv_dir(
 }
 
 pub fn walk_sub_dir(path: &Path) -> Vec<DirEntry> {
-  let mut entries: Vec<_> = WalkDir::new(path)
+  WalkDir::new(path)
+    .sort_by_file_name()
     .max_depth(1)
     .into_iter()
     .filter_map(|e| e.ok())
     .filter(|e| e.path() != path)
-    .collect();
-
-  entries.sort_by_key(|entry| {
-    fs::metadata(entry.path())
-      .and_then(|metadata| metadata.created())
-      .unwrap_or(SystemTime::UNIX_EPOCH)
-  });
-  entries
+    .collect()
 }
 
 fn process_md_dir(

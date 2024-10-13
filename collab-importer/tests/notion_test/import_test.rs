@@ -507,8 +507,8 @@ async fn import_empty_space() {
   assert_eq!(views.len(), 2);
 
   // only the first level views will be the space view
-  assert!(views[0].view.space_info().is_some());
-  let second_space = views[0].clone();
+  assert!(views[1].view.space_info().is_some());
+  let second_space = views[1].clone();
   assert_eq!(second_space.view.name, "second space");
   assert_eq!(second_space.children.len(), 2);
   assert!(second_space.children[0].view.space_info().is_none());
@@ -516,7 +516,7 @@ async fn import_empty_space() {
   assert!(second_space.children[1].view.space_info().is_none());
   assert_eq!(second_space.children[1].view.name, "2");
 
-  let first_space = views[1].clone();
+  let first_space = views[0].clone();
   assert!(first_space.view.space_info().is_some());
   assert_eq!(first_space.view.name, "first space");
 }
