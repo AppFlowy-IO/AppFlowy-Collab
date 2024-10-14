@@ -107,6 +107,7 @@ async fn import_two_spaces_test() {
 
 #[tokio::test]
 async fn import_two_spaces_with_other_files_test() {
+  setup_log();
   let (_cleaner, file_path) = unzip_test_asset("two_spaces_with_other_files")
     .await
     .unwrap();
@@ -119,6 +120,7 @@ async fn import_two_spaces_with_other_files_test() {
   .unwrap();
   let info = importer.import().await.unwrap();
   let views: Vec<ParentChildViews> = info.build_nested_views().await.into_inner();
+  println!("{:?}", views);
   assert_eq!(views.len(), 2);
   for (index, view) in views.iter().enumerate() {
     if index == 0 {
