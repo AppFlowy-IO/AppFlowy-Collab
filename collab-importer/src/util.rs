@@ -1,4 +1,4 @@
-use crate::zip_tool::{unzip_async, unzip_file};
+use crate::zip_tool::{is_multi_part_zip, is_multi_part_zip_file, unzip_async, unzip_file};
 use anyhow::Error;
 use anyhow::Result;
 use async_zip::base::read::stream::ZipFileReader;
@@ -7,7 +7,8 @@ use base64::Engine;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, BufReader};
-use tokio_util::compat::TokioAsyncReadCompatExt;
+
+use tracing::warn;
 
 pub fn upload_file_url(host: &str, workspace_id: &str, object_id: &str, file_id: &str) -> String {
   format!("{host}/api/file_storage/{workspace_id}/v1/blob/{object_id}/{file_id}",)
@@ -53,6 +54,12 @@ async fn async_calculate_file_id(file_path: &PathBuf) -> Result<String, Error> {
 pub async fn unzip_from_path_or_memory(input: Either<PathBuf, Vec<u8>>, out: PathBuf) -> PathBuf {
   match input {
     Either::Left(path) => {
+      if is_multi_part_zip(&path).await.unwrap_or(false) {
+        warn!(
+          "This test does not support multi-part zip files: {}",
+          path.display()
+        );
+      }
       // let file = tokio::fs::File::open(&path).await.unwrap();
       // let reader = BufReader::new(file).compat();
       // let zip_reader = ZipFileReader::new(reader);
@@ -67,6 +74,14 @@ pub async fn unzip_from_path_or_memory(input: Either<PathBuf, Vec<u8>>, out: Pat
       unzip_file(file, &out).await.unwrap().unzip_dir_path
     },
     Either::Right(data) => {
+      if data.len() >= 4 {
+        if let Ok(first_4_bytes) = data[..4].try_into() {
+          if is_multi_part_zip_file(first_4_bytes) {
+            warn!("This test does not support multi-part zip files");
+          }
+        }
+      }
+
       let zip_reader = ZipFileReader::new(data.as_slice());
       unzip_async(zip_reader, out).await.unwrap().unzip_dir_path
     },

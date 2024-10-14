@@ -1,27 +1,21 @@
 use anyhow::{Context, Result};
 use async_zip::base::read::stream::{Ready, ZipFileReader};
 use async_zip::{StringEncoding, ZipString};
-use futures::io::{AsyncBufRead, AsyncReadExt};
+use futures::io::AsyncBufRead;
+use futures::AsyncReadExt as FuturesAsyncReadExt;
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::fs::File;
+use tokio::io::AsyncReadExt;
 use tokio::io::{AsyncWriteExt, BufReader};
-
-use anyhow::Error;
-
-use base64::engine::general_purpose::URL_SAFE;
-use base64::Engine;
-use sha2::{Digest, Sha256};
 
 use async_zip::base::read::seek::ZipFileReader as SeekZipFileReader;
 use tokio::fs::{create_dir_all, OpenOptions};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 
-use async_zip::error::ZipError;
-use std::io::{Read, Seek, SeekFrom};
 use tracing::error;
 
 pub struct UnzipFile {
@@ -34,6 +28,8 @@ pub async fn unzip_async<R: AsyncBufRead + Unpin>(
   out_dir: PathBuf,
 ) -> Result<UnzipFile, anyhow::Error> {
   let mut unzip_root_folder_name = None;
+
+  #[allow(irrefutable_let_patterns)]
   while let result = zip_reader.next_with_entry().await {
     match result {
       Ok(Some(mut next_reader)) => {
@@ -123,23 +119,27 @@ pub fn get_filename(zip_string: &ZipString) -> Result<String, anyhow::Error> {
   }
 }
 
-pub async fn is_multi_part_zip(file_path: &str) -> Result<bool> {
-  let mut file = std::fs::File::open(file_path)?;
-  // Seek to the end of the file minus the size of the EOCD (22 bytes)
-  file.seek(SeekFrom::End(-22))?;
-  let mut eocd_buffer = [0u8; 22];
-  file.read_exact(&mut eocd_buffer)?;
+/// Check if the first 4 bytes of the buffer match known multi-part zip signatures.
+fn is_multi_part_zip_signature(buffer: &[u8; 4]) -> bool {
+  const MULTI_PART_SIGNATURES: [[u8; 4]; 2] = [
+    [0x50, 0x4b, 0x07, 0x08], // Spanned zip signature
+    [0x50, 0x4b, 0x03, 0x04], // Regular zip signature
+  ];
 
-  // Check the number of disks in the EOCD (bytes 4 and 5)
-  let number_of_this_disk = u16::from_le_bytes([eocd_buffer[4], eocd_buffer[5]]);
-  let total_disks = u16::from_le_bytes([eocd_buffer[6], eocd_buffer[7]]);
+  MULTI_PART_SIGNATURES.contains(buffer)
+}
 
-  // If there is more than one disk, it's a multi-part archive
-  if number_of_this_disk > 0 || total_disks > 1 {
-    return Ok(true);
-  }
+/// Async function to check if a file is a multi-part zip by reading the first 4 bytes.
+pub async fn is_multi_part_zip(file_path: &Path) -> Result<bool> {
+  let mut file = File::open(file_path).await?;
+  let mut buffer = [0; 4]; // Read only the first 4 bytes
+  file.read_exact(&mut buffer).await?;
+  Ok(is_multi_part_zip_signature(&buffer))
+}
 
-  Ok(false)
+/// Check if a buffer contains the multi-part zip signature.
+pub fn is_multi_part_zip_file(buffer: &[u8; 4]) -> bool {
+  is_multi_part_zip_signature(buffer)
 }
 
 fn sanitize_file_path(path: &str) -> PathBuf {
@@ -163,13 +163,7 @@ pub async fn unzip_file(archive: File, out_dir: &Path) -> Result<UnzipFile, anyh
     let entry = reader.file().entries().get(index).unwrap();
     let file_name = entry.filename().as_str().unwrap();
     if unzip_root_folder_name.is_none() && file_name.ends_with('/') {
-      unzip_root_folder_name = Some(
-        file_name
-          .split('/')
-          .next()
-          .unwrap_or(&file_name)
-          .to_string(),
-      );
+      unzip_root_folder_name = Some(file_name.split('/').next().unwrap_or(file_name).to_string());
     }
 
     let path = out_dir.join(sanitize_file_path(entry.filename().as_str().unwrap()));
