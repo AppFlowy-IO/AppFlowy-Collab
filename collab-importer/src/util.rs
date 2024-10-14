@@ -1,16 +1,14 @@
+use crate::zip_tool::{is_multi_part_zip, is_multi_part_zip_file, unzip_async, unzip_file};
 use anyhow::Error;
-use anyhow::{Context, Result};
+use anyhow::Result;
+use async_zip::base::read::stream::ZipFileReader;
 use base64::engine::general_purpose::URL_SAFE;
 use base64::Engine;
 use sha2::{Digest, Sha256};
-use std::io::Read;
-use std::io::{Cursor, Seek};
 use std::path::PathBuf;
-use tokio::fs;
-use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
 use tokio::io::{AsyncReadExt, BufReader};
-use zip::ZipArchive;
+
+use tracing::warn;
 
 pub fn upload_file_url(host: &str, workspace_id: &str, object_id: &str, file_id: &str) -> String {
   format!("{host}/api/file_storage/{workspace_id}/v1/blob/{object_id}/{file_id}",)
@@ -53,65 +51,39 @@ async fn async_calculate_file_id(file_path: &PathBuf) -> Result<String, Error> {
   Ok(file_id)
 }
 
-pub async fn unzip<R: Read + Seek>(
-  mut archive: ZipArchive<R>,
-  file_name: &str,
-  out: PathBuf,
-) -> Result<PathBuf> {
-  for i in 0..archive.len() {
-    let mut file = archive.by_index(i)?;
-    let outpath = out.join(file.mangled_name());
-    if file.name().ends_with('/') {
-      fs::create_dir_all(&outpath).await?;
-    } else {
-      if let Some(parent) = outpath.parent() {
-        if !parent.exists() {
-          fs::create_dir_all(parent).await?;
+pub async fn unzip_from_path_or_memory(input: Either<PathBuf, Vec<u8>>, out: PathBuf) -> PathBuf {
+  match input {
+    Either::Left(path) => {
+      if is_multi_part_zip(&path).await.unwrap_or(false) {
+        warn!(
+          "This test does not support multi-part zip files: {}",
+          path.display()
+        );
+      }
+      // let file = tokio::fs::File::open(&path).await.unwrap();
+      // let reader = BufReader::new(file).compat();
+      // let zip_reader = ZipFileReader::new(reader);
+
+      // let mut buffer = Vec::new();
+      // file.read_to_end(&mut buffer).await.unwrap();
+      // let reader = BufReader::new(&buffer[..]).compat();
+      // let zip_reader = ZipFileReader::new(reader);
+      // unzip_async(zip_reader, out).await.unwrap()
+
+      let file = tokio::fs::File::open(&path).await.unwrap();
+      unzip_file(file, &out).await.unwrap().unzip_dir_path
+    },
+    Either::Right(data) => {
+      if data.len() >= 4 {
+        if let Ok(first_4_bytes) = data[..4].try_into() {
+          if is_multi_part_zip_file(first_4_bytes) {
+            warn!("This test does not support multi-part zip files");
+          }
         }
       }
 
-      let mut outfile = File::create(&outpath)
-        .await
-        .with_context(|| format!("Failed to create file: {:?}", outpath))?;
-
-      let mut buffer = Vec::new();
-      file.read_to_end(&mut buffer).with_context(|| {
-        format!(
-          "Failed to read contents of file in archive: {}",
-          file.name()
-        )
-      })?;
-
-      outfile
-        .write_all(&buffer)
-        .await
-        .with_context(|| format!("Failed to write file contents to: {:?}", outpath))?;
-    }
-  }
-  Ok(out.join(file_name))
-}
-pub async fn unzip_from_path_or_memory(
-  input: Either<PathBuf, (Vec<u8>, String)>,
-  out: PathBuf,
-) -> Result<PathBuf> {
-  match input {
-    Either::Left(path) => {
-      let file_name = path
-        .file_stem()
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid file stem"))?
-        .to_str()
-        .ok_or_else(|| {
-          std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid file name")
-        })?;
-
-      let reader = std::fs::File::open(&path)
-        .with_context(|| format!("Failed to open file at path: {:?}", path))?;
-      let archive = ZipArchive::new(reader)?;
-      unzip(archive, file_name, out).await
-    },
-    Either::Right((data, file_name)) => {
-      let archive = ZipArchive::new(Cursor::new(data))?;
-      unzip(archive, &file_name, out).await
+      let zip_reader = ZipFileReader::new(data.as_slice());
+      unzip_async(zip_reader, out).await.unwrap().unzip_dir_path
     },
   }
 }

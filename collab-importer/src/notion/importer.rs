@@ -36,9 +36,10 @@ impl NotionImporter {
   ) -> Result<Self, ImporterError> {
     let path = file_path.into();
     if !path.exists() {
-      return Err(ImporterError::InvalidPath(
-        "Path: does not exist".to_string(),
-      ));
+      return Err(ImporterError::InvalidPath(format!(
+        "Path: does not exist: {:?}",
+        path
+      )));
     }
 
     let workspace_name = file_name_from_path(&path).unwrap_or_else(|_| {

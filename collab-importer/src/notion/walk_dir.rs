@@ -78,6 +78,12 @@ pub(crate) fn process_entry(
   workspace_id: &str,
   current_entry: &DirEntry,
 ) -> Option<NotionPage> {
+  // Skip macOS-specific files
+  let entry_name = current_entry.file_name().to_str()?;
+  if entry_name == ".DS_Store" || entry_name.starts_with("__MACOSX") {
+    return None;
+  }
+
   let path = current_entry.path();
   if path.is_file() && is_valid_file(path) {
     // Check if there's a corresponding directory for this .md file and skip it if so
@@ -89,10 +95,9 @@ pub(crate) fn process_entry(
     let (name, id) = name_and_id_from_path(path).ok()?;
 
     // Look for the corresponding .md file for this directory in the parent directory
-    let dir_name = path.file_name()?.to_str()?;
     let parent_path = path.parent()?;
-    let md_file_path = parent_path.join(format!("{}.md", dir_name));
-    let csv_file_path = parent_path.join(format!("{}_all.csv", dir_name));
+    let md_file_path = parent_path.join(format!("{}.md", entry_name));
+    let csv_file_path = parent_path.join(format!("{}_all.csv", entry_name));
     if md_file_path.exists() {
       process_md_dir(host, workspace_id, path, name, id, &md_file_path)
     } else if csv_file_path.exists() {

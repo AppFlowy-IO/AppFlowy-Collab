@@ -52,17 +52,21 @@ impl Drop for Cleaner {
 pub async fn unzip_test_asset(file_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
   // Open the zip file
   let zip_file_path = PathBuf::from(format!("./tests/asset/{}.zip", file_name));
-  let output_folder_path = temp_dir();
-  let out_path = unzip_from_path_or_memory(Either::Left(zip_file_path), output_folder_path.clone())
-    .await
-    .unwrap();
-  Ok((Cleaner::new(out_path.clone()), out_path))
+  let output_folder_path = temp_dir().join(uuid::Uuid::new_v4().to_string());
+  tokio::fs::create_dir_all(&output_folder_path).await?;
+
+  let unzip_file =
+    unzip_from_path_or_memory(Either::Left(zip_file_path), output_folder_path.clone()).await;
+  Ok((Cleaner::new(unzip_file.clone()), unzip_file))
 }
 
 pub fn setup_log() {
   static START: Once = Once::new();
   START.call_once(|| {
-    std::env::set_var("RUST_LOG", "info");
+    let level = "trace";
+    let mut filters = vec![];
+    filters.push(format!("collab_importer={}", level));
+    std::env::set_var("RUST_LOG", filters.join(","));
     let subscriber = Subscriber::builder()
       .with_env_filter(EnvFilter::from_default_env())
       .with_ansi(true)
