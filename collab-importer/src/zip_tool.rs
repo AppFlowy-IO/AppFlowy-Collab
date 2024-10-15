@@ -13,6 +13,7 @@ use tokio::io::AsyncReadExt;
 use tokio::io::{AsyncWriteExt, BufReader};
 
 use async_zip::base::read::seek::ZipFileReader as SeekZipFileReader;
+use fancy_regex::Regex;
 use tokio::fs::{create_dir_all, OpenOptions};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
@@ -68,12 +69,11 @@ pub async fn unzip_stream<R: AsyncBufRead + Unpin>(
                 if buffer.len() >= 4 {
                   if let Ok(four_bytes) = buffer[..4].try_into() {
                     if is_multi_part_zip_signature(four_bytes) {
-                      if let (Some(file_name)) =
+                      if let Some(file_name) =
                         Path::new(&filename).file_stem().and_then(|s| s.to_str())
                       {
-                        unzip_root_folder_name = Some(file_name.to_string());
+                        unzip_root_folder_name = Some(remove_part_suffix(file_name));
                       }
-
                       parts.push(output_path.clone());
                     }
                   }
@@ -112,12 +112,12 @@ pub async fn unzip_stream<R: AsyncBufRead + Unpin>(
     }
   }
 
-  let mut unzip_files = vec![];
   if !parts.is_empty() {
     for part in &parts {
       let part_file = File::open(part).await?;
-      let part_unzip_file = unzip_file(part_file, &out_dir, unzip_root_folder_name.clone()).await?;
-      unzip_files.push(part_unzip_file);
+      let _ = unzip_file(part_file, &out_dir, unzip_root_folder_name.clone()).await?;
+      // remove part file
+      let _ = fs::remove_file(part).await;
     }
   }
 
@@ -244,5 +244,69 @@ pub async fn unzip_file(
       unzip_dir_path: out_dir.join(file_name),
       parts: vec![],
     }),
+  }
+}
+
+fn remove_part_suffix(file_name: &str) -> String {
+  let path = Path::new(file_name);
+  if let Some(stem) = path.file_stem() {
+    let mut stem_str = stem.to_string_lossy().to_string();
+    // Common patterns for multi-part files
+    // Common patterns for multi-part files
+    let patterns = [
+      r"(?i)-part-\d+", // -Part-1, -Part-2, etc., case-insensitive
+      r"(?i)\.z\d{2}",  // .z01, .z02, etc., case-insensitive
+      r"(?i)\.part\d+", // .part1, .part2, etc., case-insensitive
+      r"\(\d+\)",       // (1), (2), etc.
+      r"_\d+",          // _1, _2, etc.
+    ];
+
+    for pattern in &patterns {
+      let re = Regex::new(pattern).unwrap();
+      stem_str = re.replace(&stem_str, "").to_string();
+    }
+    return stem_str;
+  }
+
+  file_name.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_remove_part_suffix() {
+    let cases = vec![
+      // Test cases with expected outputs
+      (
+        "Export-99d4faad-5bc1-4fef-82ac-5f6c7a957b12-Part-1.zip",
+        "Export-99d4faad-5bc1-4fef-82ac-5f6c7a957b12",
+      ),
+      (
+        "Export-99d4faad-5bc1-4fef-82ac-5f6c7a957b12-part-1.zip",
+        "Export-99d4faad-5bc1-4fef-82ac-5f6c7a957b12",
+      ),
+      ("file.z01", "file"),
+      ("file.part2.zip", "file"),
+      ("file(1).zip", "file"),
+      ("file_3.zip", "file"),
+      ("document-Part-10.zip", "document"),
+      ("project.part1.zip", "project"),
+      ("archive.z99.zip", "archive"),
+      // Test case with no suffix
+      ("normalfile.zip", "normalfile"),
+      // Test case with no extension
+      ("file-no-ext", "file-no-ext"),
+    ];
+
+    for (input, expected) in cases {
+      assert_eq!(
+        remove_part_suffix(input),
+        expected,
+        "Failed for input: {}",
+        input
+      );
+    }
   }
 }

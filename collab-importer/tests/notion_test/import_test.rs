@@ -37,8 +37,9 @@ async fn import_part_zip_test() {
   )
   .unwrap();
   let info = importer.import().await.unwrap();
-  let design_view = &info.views()[0];
-  assert_eq!(design_view.notion_name, "Design");
+  let nested_view = info.build_nested_views().await;
+  assert_eq!(nested_view.flatten_views().len(), 31);
+  println!("{}", nested_view);
 }
 
 #[tokio::test]

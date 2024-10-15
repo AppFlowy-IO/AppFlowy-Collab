@@ -1,4 +1,3 @@
-use collab_importer::util::{unzip_from_path_or_memory, Either};
 use percent_encoding::percent_decode_str;
 use std::env::temp_dir;
 
@@ -70,6 +69,9 @@ pub async fn unzip_stream_asset(file_name: &str) -> std::io::Result<(Cleaner, Pa
   setup_log();
   let zip_file_path = PathBuf::from(format!("./tests/asset/{}.zip", file_name));
   let output_folder_path = temp_dir().join(uuid::Uuid::new_v4().to_string());
+  // let output_folder_path = std::env::current_dir()
+  //   .unwrap()
+  //   .join(uuid::Uuid::new_v4().to_string());
   tokio::fs::create_dir_all(&output_folder_path).await?;
 
   let file = tokio::fs::File::open(&zip_file_path).await.unwrap();
