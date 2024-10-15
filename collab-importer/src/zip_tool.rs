@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use async_recursion::async_recursion;
 use async_zip::base::read::stream::{Ready, ZipFileReader};
 use async_zip::{StringEncoding, ZipString};
 use futures::io::AsyncBufRead;
@@ -21,20 +22,22 @@ use tracing::error;
 pub struct UnzipFile {
   pub file_name: String,
   pub unzip_dir_path: PathBuf,
+  pub parts: Vec<PathBuf>,
 }
 
-pub async fn unzip_async<R: AsyncBufRead + Unpin>(
+#[async_recursion(?Send)]
+pub async fn unzip_stream<R: AsyncBufRead + Unpin>(
   mut zip_reader: ZipFileReader<Ready<R>>,
   out_dir: PathBuf,
 ) -> Result<UnzipFile, anyhow::Error> {
   let mut unzip_root_folder_name = None;
-
+  let mut parts = vec![];
   #[allow(irrefutable_let_patterns)]
   while let result = zip_reader.next_with_entry().await {
     match result {
       Ok(Some(mut next_reader)) => {
         let entry_reader = next_reader.reader_mut();
-        let filename = get_filename(entry_reader.entry().filename())
+        let filename = get_filename_from_zip_string(entry_reader.entry().filename())
           .with_context(|| "Failed to extract filename from entry".to_string())?;
 
         if unzip_root_folder_name.is_none() && filename.ends_with('/') {
@@ -62,6 +65,20 @@ pub async fn unzip_async<R: AsyncBufRead + Unpin>(
             let mut buffer = vec![];
             match entry_reader.read_to_end(&mut buffer).await {
               Ok(_) => {
+                if buffer.len() >= 4 {
+                  if let Ok(four_bytes) = buffer[..4].try_into() {
+                    if is_multi_part_zip_signature(four_bytes) {
+                      if let (Some(file_name)) =
+                        Path::new(&filename).file_stem().and_then(|s| s.to_str())
+                      {
+                        unzip_root_folder_name = Some(file_name.to_string());
+                      }
+
+                      parts.push(output_path.clone());
+                    }
+                  }
+                }
+
                 outfile.write_all(&buffer).await.with_context(|| {
                   format!("Failed to write data to file: {}", output_path.display())
                 })?;
@@ -89,22 +106,33 @@ pub async fn unzip_async<R: AsyncBufRead + Unpin>(
       },
       Ok(None) => break,
       Err(zip_error) => {
-        error!("Error reading zip file: {:?}", zip_error);
+        println!("Error reading zip file: {:?}", zip_error);
         break;
       },
     }
   }
 
+  let mut unzip_files = vec![];
+  if !parts.is_empty() {
+    for part in &parts {
+      let part_file = File::open(part).await?;
+      let part_unzip_file = unzip_file(part_file, &out_dir, unzip_root_folder_name.clone()).await?;
+      unzip_files.push(part_unzip_file);
+    }
+  }
+
+  // move all unzip file content into parent
   match unzip_root_folder_name {
     None => Err(anyhow::anyhow!("No files found in the zip archive")),
     Some(file_name) => Ok(UnzipFile {
       file_name: file_name.clone(),
       unzip_dir_path: out_dir.join(file_name),
+      parts,
     }),
   }
 }
 
-pub fn get_filename(zip_string: &ZipString) -> Result<String, anyhow::Error> {
+pub fn get_filename_from_zip_string(zip_string: &ZipString) -> Result<String, anyhow::Error> {
   match zip_string.encoding() {
     StringEncoding::Utf8 => match zip_string.as_str() {
       Ok(valid_str) => Ok(valid_str.to_string()),
@@ -152,8 +180,11 @@ fn sanitize_file_path(path: &str) -> PathBuf {
 }
 
 /// Extracts everything from the ZIP archive to the output directory
-pub async fn unzip_file(archive: File, out_dir: &Path) -> Result<UnzipFile, anyhow::Error> {
-  let mut unzip_root_folder_name = None;
+pub async fn unzip_file(
+  archive: File,
+  out_dir: &Path,
+  mut unzip_root_folder_name: Option<String>,
+) -> Result<UnzipFile, anyhow::Error> {
   let archive = BufReader::new(archive).compat();
   let mut reader = SeekZipFileReader::new(archive)
     .await
@@ -211,6 +242,7 @@ pub async fn unzip_file(archive: File, out_dir: &Path) -> Result<UnzipFile, anyh
     Some(file_name) => Ok(UnzipFile {
       file_name: file_name.clone(),
       unzip_dir_path: out_dir.join(file_name),
+      parts: vec![],
     }),
   }
 }

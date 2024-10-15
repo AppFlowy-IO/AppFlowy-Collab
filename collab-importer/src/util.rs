@@ -1,4 +1,4 @@
-use crate::zip_tool::{is_multi_part_zip, is_multi_part_zip_file, unzip_async, unzip_file};
+use crate::zip_tool::{is_multi_part_zip, is_multi_part_zip_file, unzip_file, unzip_stream};
 use anyhow::Error;
 use anyhow::Result;
 use async_zip::base::read::stream::ZipFileReader;
@@ -71,7 +71,7 @@ pub async fn unzip_from_path_or_memory(input: Either<PathBuf, Vec<u8>>, out: Pat
       // unzip_async(zip_reader, out).await.unwrap()
 
       let file = tokio::fs::File::open(&path).await.unwrap();
-      unzip_file(file, &out).await.unwrap().unzip_dir_path
+      unzip_file(file, &out, None).await.unwrap().unzip_dir_path
     },
     Either::Right(data) => {
       if data.len() >= 4 {
@@ -83,7 +83,7 @@ pub async fn unzip_from_path_or_memory(input: Either<PathBuf, Vec<u8>>, out: Pat
       }
 
       let zip_reader = ZipFileReader::new(data.as_slice());
-      unzip_async(zip_reader, out).await.unwrap().unzip_dir_path
+      unzip_stream(zip_reader, out).await.unwrap().unzip_dir_path
     },
   }
 }
