@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use async_recursion::async_recursion;
 use async_zip::base::read::stream::{Ready, ZipFileReader};
 use async_zip::{StringEncoding, ZipString};
 use futures::io::AsyncBufRead;
@@ -12,6 +13,7 @@ use tokio::io::AsyncReadExt;
 use tokio::io::{AsyncWriteExt, BufReader};
 
 use async_zip::base::read::seek::ZipFileReader as SeekZipFileReader;
+use fancy_regex::Regex;
 use tokio::fs::{create_dir_all, OpenOptions};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
@@ -21,20 +23,22 @@ use tracing::error;
 pub struct UnzipFile {
   pub file_name: String,
   pub unzip_dir_path: PathBuf,
+  pub parts: Vec<PathBuf>,
 }
 
-pub async fn unzip_async<R: AsyncBufRead + Unpin>(
+#[async_recursion(?Send)]
+pub async fn unzip_stream<R: AsyncBufRead + Unpin>(
   mut zip_reader: ZipFileReader<Ready<R>>,
   out_dir: PathBuf,
 ) -> Result<UnzipFile, anyhow::Error> {
   let mut unzip_root_folder_name = None;
-
+  let mut parts = vec![];
   #[allow(irrefutable_let_patterns)]
   while let result = zip_reader.next_with_entry().await {
     match result {
       Ok(Some(mut next_reader)) => {
         let entry_reader = next_reader.reader_mut();
-        let filename = get_filename(entry_reader.entry().filename())
+        let filename = get_filename_from_zip_string(entry_reader.entry().filename())
           .with_context(|| "Failed to extract filename from entry".to_string())?;
 
         if unzip_root_folder_name.is_none() && filename.ends_with('/') {
@@ -62,6 +66,19 @@ pub async fn unzip_async<R: AsyncBufRead + Unpin>(
             let mut buffer = vec![];
             match entry_reader.read_to_end(&mut buffer).await {
               Ok(_) => {
+                if buffer.len() >= 4 {
+                  if let Ok(four_bytes) = buffer[..4].try_into() {
+                    if is_multi_part_zip_signature(four_bytes) {
+                      if let Some(file_name) =
+                        Path::new(&filename).file_stem().and_then(|s| s.to_str())
+                      {
+                        unzip_root_folder_name = Some(remove_part_suffix(file_name));
+                      }
+                      parts.push(output_path.clone());
+                    }
+                  }
+                }
+
                 outfile.write_all(&buffer).await.with_context(|| {
                   format!("Failed to write data to file: {}", output_path.display())
                 })?;
@@ -89,22 +106,33 @@ pub async fn unzip_async<R: AsyncBufRead + Unpin>(
       },
       Ok(None) => break,
       Err(zip_error) => {
-        error!("Error reading zip file: {:?}", zip_error);
+        println!("Error reading zip file: {:?}", zip_error);
         break;
       },
     }
   }
 
+  if !parts.is_empty() {
+    for part in &parts {
+      let part_file = File::open(part).await?;
+      let _ = unzip_file(part_file, &out_dir, unzip_root_folder_name.clone()).await?;
+      // remove part file
+      let _ = fs::remove_file(part).await;
+    }
+  }
+
+  // move all unzip file content into parent
   match unzip_root_folder_name {
     None => Err(anyhow::anyhow!("No files found in the zip archive")),
     Some(file_name) => Ok(UnzipFile {
       file_name: file_name.clone(),
       unzip_dir_path: out_dir.join(file_name),
+      parts,
     }),
   }
 }
 
-pub fn get_filename(zip_string: &ZipString) -> Result<String, anyhow::Error> {
+pub fn get_filename_from_zip_string(zip_string: &ZipString) -> Result<String, anyhow::Error> {
   match zip_string.encoding() {
     StringEncoding::Utf8 => match zip_string.as_str() {
       Ok(valid_str) => Ok(valid_str.to_string()),
@@ -152,8 +180,11 @@ fn sanitize_file_path(path: &str) -> PathBuf {
 }
 
 /// Extracts everything from the ZIP archive to the output directory
-pub async fn unzip_file(archive: File, out_dir: &Path) -> Result<UnzipFile, anyhow::Error> {
-  let mut unzip_root_folder_name = None;
+pub async fn unzip_file(
+  archive: File,
+  out_dir: &Path,
+  mut unzip_root_folder_name: Option<String>,
+) -> Result<UnzipFile, anyhow::Error> {
   let archive = BufReader::new(archive).compat();
   let mut reader = SeekZipFileReader::new(archive)
     .await
@@ -211,6 +242,71 @@ pub async fn unzip_file(archive: File, out_dir: &Path) -> Result<UnzipFile, anyh
     Some(file_name) => Ok(UnzipFile {
       file_name: file_name.clone(),
       unzip_dir_path: out_dir.join(file_name),
+      parts: vec![],
     }),
+  }
+}
+
+fn remove_part_suffix(file_name: &str) -> String {
+  let path = Path::new(file_name);
+  if let Some(stem) = path.file_stem() {
+    let mut stem_str = stem.to_string_lossy().to_string();
+    // Common patterns for multi-part files
+    // Common patterns for multi-part files
+    let patterns = [
+      r"(?i)-part-\d+", // -Part-1, -Part-2, etc., case-insensitive
+      r"(?i)\.z\d{2}",  // .z01, .z02, etc., case-insensitive
+      r"(?i)\.part\d+", // .part1, .part2, etc., case-insensitive
+      r"\(\d+\)",       // (1), (2), etc.
+      r"_\d+",          // _1, _2, etc.
+    ];
+
+    for pattern in &patterns {
+      let re = Regex::new(pattern).unwrap();
+      stem_str = re.replace(&stem_str, "").to_string();
+    }
+    return stem_str;
+  }
+
+  file_name.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_remove_part_suffix() {
+    let cases = vec![
+      // Test cases with expected outputs
+      (
+        "Export-99d4faad-5bc1-4fef-82ac-5f6c7a957b12-Part-1.zip",
+        "Export-99d4faad-5bc1-4fef-82ac-5f6c7a957b12",
+      ),
+      (
+        "Export-99d4faad-5bc1-4fef-82ac-5f6c7a957b12-part-1.zip",
+        "Export-99d4faad-5bc1-4fef-82ac-5f6c7a957b12",
+      ),
+      ("file.z01", "file"),
+      ("file.part2.zip", "file"),
+      ("file(1).zip", "file"),
+      ("file_3.zip", "file"),
+      ("document-Part-10.zip", "document"),
+      ("project.part1.zip", "project"),
+      ("archive.z99.zip", "archive"),
+      // Test case with no suffix
+      ("normalfile.zip", "normalfile"),
+      // Test case with no extension
+      ("file-no-ext", "file-no-ext"),
+    ];
+
+    for (input, expected) in cases {
+      assert_eq!(
+        remove_part_suffix(input),
+        expected,
+        "Failed for input: {}",
+        input
+      );
+    }
   }
 }

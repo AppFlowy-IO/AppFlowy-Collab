@@ -1,9 +1,12 @@
-use collab_importer::util::{unzip_from_path_or_memory, Either};
 use percent_encoding::percent_decode_str;
 use std::env::temp_dir;
 
+use async_zip::base::read::stream::ZipFileReader;
+use collab_importer::zip_tool::{unzip_file, unzip_stream};
 use std::path::PathBuf;
 use std::sync::Once;
+use tokio::io::BufReader;
+use tokio_util::compat::TokioAsyncReadCompatExt;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
@@ -49,15 +52,36 @@ impl Drop for Cleaner {
   }
 }
 
-pub async fn unzip_test_asset(file_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
-  // Open the zip file
+pub async fn unzip_file_asset(file_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
   let zip_file_path = PathBuf::from(format!("./tests/asset/{}.zip", file_name));
   let output_folder_path = temp_dir().join(uuid::Uuid::new_v4().to_string());
   tokio::fs::create_dir_all(&output_folder_path).await?;
 
-  let unzip_file =
-    unzip_from_path_or_memory(Either::Left(zip_file_path), output_folder_path.clone()).await;
-  Ok((Cleaner::new(unzip_file.clone()), unzip_file))
+  let file = tokio::fs::File::open(&zip_file_path).await.unwrap();
+  let unzip_file_path = unzip_file(file, &output_folder_path, None)
+    .await
+    .unwrap()
+    .unzip_dir_path;
+  Ok((Cleaner::new(unzip_file_path.clone()), unzip_file_path))
+}
+
+pub async fn unzip_stream_asset(file_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
+  setup_log();
+  let zip_file_path = PathBuf::from(format!("./tests/asset/{}.zip", file_name));
+  let output_folder_path = temp_dir().join(uuid::Uuid::new_v4().to_string());
+  // let output_folder_path = std::env::current_dir()
+  //   .unwrap()
+  //   .join(uuid::Uuid::new_v4().to_string());
+  tokio::fs::create_dir_all(&output_folder_path).await?;
+
+  let file = tokio::fs::File::open(&zip_file_path).await.unwrap();
+  let reader = BufReader::new(file).compat();
+  let zip_reader = ZipFileReader::new(reader);
+  let unzip_file_path = unzip_stream(zip_reader, output_folder_path)
+    .await
+    .unwrap()
+    .unzip_dir_path;
+  Ok((Cleaner::new(unzip_file_path.clone()), unzip_file_path))
 }
 
 pub fn setup_log() {
