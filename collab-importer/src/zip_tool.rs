@@ -190,17 +190,17 @@ pub async fn unzip_file(
 
   for index in 0..reader.file().entries().len() {
     let entry = reader.file().entries().get(index).unwrap();
-    let file_name = entry.filename().as_str().unwrap();
+    let file_name = entry.filename().as_str()?;
     if unzip_root_folder_name.is_none() && file_name.ends_with('/') {
       unzip_root_folder_name = Some(file_name.split('/').next().unwrap_or(file_name).to_string());
     }
 
-    let path = out_dir.join(sanitize_file_path(entry.filename().as_str().unwrap()));
+    let path = out_dir.join(sanitize_file_path(entry.filename().as_str()?));
     // If the filename of the entry ends with '/', it is treated as a directory.
     // This is implemented by previous versions of this crate and the Python Standard Library.
     // https://docs.rs/async_zip/0.0.8/src/async_zip/read/mod.rs.html#63-65
     // https://github.com/python/cpython/blob/820ef62833bd2d84a141adedd9a05998595d6b6d/Lib/zipfile.py#L528
-    let entry_is_dir = entry.dir().unwrap();
+    let entry_is_dir = entry.dir()?;
     let mut entry_reader = reader.reader_without_entry(index).await?;
 
     if entry_is_dir {
