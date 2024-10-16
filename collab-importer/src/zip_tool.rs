@@ -5,7 +5,8 @@ use async_zip::{StringEncoding, ZipString};
 use futures::io::AsyncBufRead;
 use futures::AsyncReadExt as FuturesAsyncReadExt;
 use std::ffi::OsString;
-use std::os::unix::ffi::OsStringExt;
+use std::str;
+
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::fs::File;
@@ -142,7 +143,8 @@ pub fn get_filename_from_zip_string(zip_string: &ZipString) -> Result<String, an
 
     StringEncoding::Raw => {
       let raw_bytes = zip_string.as_bytes();
-      let os_string = OsString::from_vec(raw_bytes.to_vec());
+      let utf8_str = str::from_utf8(raw_bytes)?;
+      let os_string = OsString::from(utf8_str);
       Ok(os_string.to_string_lossy().into_owned())
     },
   }
