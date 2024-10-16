@@ -453,3 +453,33 @@ fn test_table() {
     }
   }
 }
+
+#[test]
+fn test_aside() {
+  let markdown = r#"<aside>
+💡 **Notion Tip:** Create a new page and select `Daily entry` ****from the list of template options to automatically generate the format below every day.
+
+</aside>"#;
+
+  let result = markdown_to_document_data(markdown);
+
+  let page = get_page_block(&result);
+  let paragraphs = get_children_blocks(&result, &page.id);
+
+  assert_eq!(paragraphs.len(), 2);
+
+  let first_paragraph = paragraphs.first().unwrap();
+  let delta_json = get_delta_json(&result, &first_paragraph.id);
+  let expected_delta = json!([
+      {"insert": "<aside>\n💡 **Notion Tip:** Create a new page and select `Daily entry` ****from the list of template options to automatically generate the format below every day."},
+  ]);
+
+  assert_eq!(delta_json, expected_delta);
+
+  let second_paragraph = paragraphs.last().unwrap();
+  let delta_json = get_delta_json(&result, &second_paragraph.id);
+  let expected_delta = json!([
+      {"insert": "</aside>"}
+  ]);
+  assert_eq!(delta_json, expected_delta);
+}

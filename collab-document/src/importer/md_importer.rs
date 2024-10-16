@@ -182,6 +182,11 @@ fn process_mdast_node(
     mdast::Node::Image(image) => process_image(document_data, image, &id),
     _ => {
       trace!("Unhandled node: {:?}", node);
+      // Default to processing as paragraph
+      let children = node.to_string();
+      let mut delta = Delta::new();
+      delta.insert(children, Vec::new());
+      insert_delta_to_text_map(document_data, &id, delta);
     },
   }
 }
