@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use async_recursion::async_recursion;
 use async_zip::base::read::stream::{Ready, ZipFileReader};
 use async_zip::{StringEncoding, ZipString};
@@ -18,6 +18,7 @@ use tokio::fs::{create_dir_all, OpenOptions};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 
+use crate::error::ImporterError;
 use tracing::error;
 
 pub struct UnzipFile {
@@ -30,7 +31,7 @@ pub struct UnzipFile {
 pub async fn unzip_stream<R: AsyncBufRead + Unpin>(
   mut zip_reader: ZipFileReader<Ready<R>>,
   out_dir: PathBuf,
-) -> Result<UnzipFile, anyhow::Error> {
+) -> Result<UnzipFile, ImporterError> {
   let mut unzip_root_folder_name = None;
   let mut parts = vec![];
   #[allow(irrefutable_let_patterns)]
@@ -89,10 +90,10 @@ pub async fn unzip_stream<R: AsyncBufRead + Unpin>(
                   entry_reader.entry(),
                   err,
                 );
-                return Err(anyhow::anyhow!(
+                return Err(ImporterError::Internal(anyhow!(
                   "Unexpected EOF while reading: {}",
                   filename
-                ));
+                )));
               },
             }
           }
@@ -106,7 +107,7 @@ pub async fn unzip_stream<R: AsyncBufRead + Unpin>(
       },
       Ok(None) => break,
       Err(zip_error) => {
-        println!("Error reading zip file: {:?}", zip_error);
+        error!("Error reading zip file: {:?}", zip_error);
         break;
       },
     }
@@ -123,7 +124,7 @@ pub async fn unzip_stream<R: AsyncBufRead + Unpin>(
 
   // move all unzip file content into parent
   match unzip_root_folder_name {
-    None => Err(anyhow::anyhow!("No files found in the zip archive")),
+    None => Err(ImporterError::FileNotFound),
     Some(file_name) => Ok(UnzipFile {
       file_name: file_name.clone(),
       unzip_dir_path: out_dir.join(file_name),
@@ -184,24 +185,34 @@ pub async fn unzip_file(
   archive: File,
   out_dir: &Path,
   mut unzip_root_folder_name: Option<String>,
-) -> Result<UnzipFile, anyhow::Error> {
+) -> Result<UnzipFile, ImporterError> {
   let archive = BufReader::new(archive).compat();
-  let mut reader = SeekZipFileReader::new(archive).await?;
+  let mut reader = SeekZipFileReader::new(archive)
+    .await
+    .map_err(|err| ImporterError::Internal(err.into()))?;
 
   for index in 0..reader.file().entries().len() {
     let entry = reader.file().entries().get(index).unwrap();
-    let file_name = entry.filename().as_str()?;
+    let file_name = entry
+      .filename()
+      .as_str()
+      .map_err(|err| ImporterError::Internal(err.into()))?;
     if unzip_root_folder_name.is_none() && file_name.ends_with('/') {
       unzip_root_folder_name = Some(file_name.split('/').next().unwrap_or(file_name).to_string());
     }
 
-    let path = out_dir.join(sanitize_file_path(entry.filename().as_str()?));
+    let path = out_dir.join(sanitize_file_path(file_name));
     // If the filename of the entry ends with '/', it is treated as a directory.
     // This is implemented by previous versions of this crate and the Python Standard Library.
     // https://docs.rs/async_zip/0.0.8/src/async_zip/read/mod.rs.html#63-65
     // https://github.com/python/cpython/blob/820ef62833bd2d84a141adedd9a05998595d6b6d/Lib/zipfile.py#L528
-    let entry_is_dir = entry.dir()?;
-    let mut entry_reader = reader.reader_without_entry(index).await?;
+    let entry_is_dir = entry
+      .dir()
+      .map_err(|err| ImporterError::Internal(err.into()))?;
+    let mut entry_reader = reader
+      .reader_without_entry(index)
+      .await
+      .map_err(|err| ImporterError::Internal(err.into()))?;
 
     if entry_is_dir {
       if !path.exists() {
@@ -224,7 +235,7 @@ pub async fn unzip_file(
     }
   }
   match unzip_root_folder_name {
-    None => Err(anyhow::anyhow!("No files found in the zip archive")),
+    None => Err(ImporterError::FileNotFound),
     Some(file_name) => Ok(UnzipFile {
       file_name: file_name.clone(),
       unzip_dir_path: out_dir.join(file_name),
