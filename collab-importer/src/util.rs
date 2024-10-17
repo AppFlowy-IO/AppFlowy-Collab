@@ -83,7 +83,10 @@ pub async fn unzip_from_path_or_memory(input: Either<PathBuf, Vec<u8>>, out: Pat
       }
 
       let zip_reader = ZipFileReader::new(data.as_slice());
-      unzip_stream(zip_reader, out).await.unwrap().unzip_dir_path
+      unzip_stream(zip_reader, out, None)
+        .await
+        .unwrap()
+        .unzip_dir_path
     },
   }
 }

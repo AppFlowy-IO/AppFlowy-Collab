@@ -26,6 +26,21 @@ use std::env::temp_dir;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+// #[tokio::test]
+// async fn import_part_zip_test2() {
+//   let (_cleaner, file_path) = unzip_stream_asset("abc").await.unwrap();
+//   let importer = NotionImporter::new(
+//     1,
+//     &file_path,
+//     uuid::Uuid::new_v4(),
+//     "http://test.appflowy.cloud".to_string(),
+//   )
+//   .unwrap();
+//   let info = importer.import().await.unwrap();
+//   let nested_view = info.build_nested_views().await;
+//   println!("{}", nested_view);
+// }
+
 #[tokio::test]
 async fn import_csv_without_subpage_folder_test() {
   let (_cleaner, file_path) = unzip_stream_asset("project&task_no_subpages")

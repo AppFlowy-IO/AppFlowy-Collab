@@ -593,4 +593,11 @@ mod tests {
     assert_eq!(name, "Projects");
     assert_eq!(id.unwrap(), "58b8977d6e4444a98ec4d64176a071e5");
   }
+  #[test]
+  fn version_number_name_test() {
+    let path = Path::new("v0 7 2 11f96b61692380489555ecb38b723e46");
+    let (name, id) = name_and_id_from_path(path).unwrap();
+    assert_eq!(name, "v0 7 2");
+    assert_eq!(id.unwrap(), "11f96b61692380489555ecb38b723e46");
+  }
 }

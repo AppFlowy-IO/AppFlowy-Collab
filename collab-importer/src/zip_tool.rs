@@ -5,7 +5,7 @@ use async_zip::{StringEncoding, ZipString};
 use futures::io::AsyncBufRead;
 use futures::AsyncReadExt as FuturesAsyncReadExt;
 use std::ffi::OsString;
-use std::str;
+use std::{io, str};
 
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -20,6 +20,7 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 
 use crate::error::ImporterError;
+
 use tracing::error;
 
 pub struct UnzipFile {
@@ -32,8 +33,9 @@ pub struct UnzipFile {
 pub async fn unzip_stream<R: AsyncBufRead + Unpin>(
   mut zip_reader: ZipFileReader<Ready<R>>,
   out_dir: PathBuf,
+  default_file_name: Option<String>,
 ) -> Result<UnzipFile, ImporterError> {
-  let mut unzip_root_folder_name = None;
+  let mut root_dir = None;
   let mut parts = vec![];
   #[allow(irrefutable_let_patterns)]
   while let result = zip_reader.next_with_entry().await {
@@ -43,9 +45,8 @@ pub async fn unzip_stream<R: AsyncBufRead + Unpin>(
         let filename = get_filename_from_zip_string(entry_reader.entry().filename())
           .with_context(|| "Failed to extract filename from entry".to_string())?;
 
-        if unzip_root_folder_name.is_none() && filename.ends_with('/') {
-          unzip_root_folder_name =
-            Some(filename.split('/').next().unwrap_or(&filename).to_string());
+        if root_dir.is_none() && entry_reader.entry().dir().unwrap_or(false) {
+          root_dir = Some(filename.split('/').next().unwrap_or(&filename).to_string());
         }
 
         let output_path = out_dir.join(&filename);
@@ -74,7 +75,7 @@ pub async fn unzip_stream<R: AsyncBufRead + Unpin>(
                       if let Some(file_name) =
                         Path::new(&filename).file_stem().and_then(|s| s.to_str())
                       {
-                        unzip_root_folder_name = Some(remove_part_suffix(file_name));
+                        root_dir = Some(remove_part_suffix(file_name));
                       }
                       parts.push(output_path.clone());
                     }
@@ -117,21 +118,64 @@ pub async fn unzip_stream<R: AsyncBufRead + Unpin>(
   if !parts.is_empty() {
     for part in &parts {
       let part_file = File::open(part).await?;
-      let _ = unzip_file(part_file, &out_dir, unzip_root_folder_name.clone()).await?;
-      // remove part file
+      let _ = unzip_file(part_file, &out_dir, root_dir.clone()).await?;
       let _ = fs::remove_file(part).await;
     }
   }
 
   // move all unzip file content into parent
-  match unzip_root_folder_name {
-    None => Err(ImporterError::FileNotFound),
+  match root_dir {
+    None => match default_file_name {
+      None => Err(ImporterError::FileNotFound),
+      Some(default_file_name) => {
+        let new_out_dir = out_dir
+          .parent()
+          .ok_or_else(|| ImporterError::FileNotFound)?
+          .join(uuid::Uuid::new_v4().to_string())
+          .join(&default_file_name);
+        move_all(&out_dir, &new_out_dir).await?;
+        let _ = fs::remove_dir_all(&out_dir).await;
+        Ok(UnzipFile {
+          file_name: default_file_name.clone(),
+          unzip_dir_path: new_out_dir,
+          parts,
+        })
+      },
+    },
     Some(file_name) => Ok(UnzipFile {
       file_name: file_name.clone(),
       unzip_dir_path: out_dir.join(file_name),
       parts,
     }),
   }
+}
+
+#[async_recursion]
+async fn move_all(old_path: &Path, new_path: &Path) -> io::Result<()> {
+  if !new_path.exists() {
+    fs::create_dir_all(new_path).await?;
+  }
+
+  let mut read_dir = fs::read_dir(old_path).await?;
+  while let Some(entry) = read_dir.next_entry().await? {
+    let path = entry.path();
+    let file_name = match path.file_name() {
+      Some(name) => name,
+      None => continue,
+    };
+
+    let new_file_path = new_path.join(file_name);
+    if path.is_dir() {
+      if !new_file_path.exists() {
+        fs::create_dir_all(&new_file_path).await?;
+      }
+      move_all(&path, &new_file_path).await?;
+      fs::remove_dir_all(&path).await?;
+    } else if path.is_file() {
+      fs::rename(&path, &new_file_path).await?;
+    }
+  }
+  Ok(())
 }
 
 pub fn get_filename_from_zip_string(zip_string: &ZipString) -> Result<String, anyhow::Error> {
@@ -186,7 +230,7 @@ fn sanitize_file_path(path: &str) -> PathBuf {
 pub async fn unzip_file(
   archive: File,
   out_dir: &Path,
-  mut unzip_root_folder_name: Option<String>,
+  mut root_dir: Option<String>,
 ) -> Result<UnzipFile, ImporterError> {
   let archive = BufReader::new(archive).compat();
   let mut reader = SeekZipFileReader::new(archive)
@@ -199,8 +243,8 @@ pub async fn unzip_file(
       .filename()
       .as_str()
       .map_err(|err| ImporterError::Internal(err.into()))?;
-    if unzip_root_folder_name.is_none() && file_name.ends_with('/') {
-      unzip_root_folder_name = Some(file_name.split('/').next().unwrap_or(file_name).to_string());
+    if root_dir.is_none() && file_name.ends_with('/') {
+      root_dir = Some(file_name.split('/').next().unwrap_or(file_name).to_string());
     }
 
     let path = out_dir.join(sanitize_file_path(file_name));
@@ -236,11 +280,11 @@ pub async fn unzip_file(
       futures_lite::io::copy(&mut entry_reader, &mut writer.compat_write()).await?;
     }
   }
-  match unzip_root_folder_name {
+  match root_dir {
     None => Err(ImporterError::FileNotFound),
-    Some(file_name) => Ok(UnzipFile {
-      file_name: file_name.clone(),
-      unzip_dir_path: out_dir.join(file_name),
+    Some(root_dir) => Ok(UnzipFile {
+      file_name: root_dir.clone(),
+      unzip_dir_path: out_dir.join(root_dir),
       parts: vec![],
     }),
   }
