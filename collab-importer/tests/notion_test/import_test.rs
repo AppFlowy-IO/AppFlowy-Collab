@@ -46,7 +46,7 @@ async fn import_csv_without_subpage_folder_test() {
   assert_eq!(views[1].notion_name, "Tasks");
 
   check_project_database(&views[0]).await;
-  // check_task_database(&views[1]).await;
+  check_task_database(&views[1]).await;
 }
 
 #[tokio::test]
