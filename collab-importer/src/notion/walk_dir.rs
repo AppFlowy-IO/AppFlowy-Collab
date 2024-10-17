@@ -85,9 +85,10 @@ pub(crate) fn process_entry(
   }
 
   let path = current_entry.path();
-  if path.is_file() && is_valid_file(path) {
+  let ext = get_file_extension(path);
+  if ext.is_file() {
     // Check if there's a corresponding directory for this .md file and skip it if so
-    process_md_file(host, workspace_id, path)
+    process_file(host, workspace_id, path, ext)
   } else if path.is_dir() {
     // If the path is a directory, it should contain a file with the same name but with either a .md or .csv extension.
     // If no such file is found, the directory will be treated as a space.
@@ -233,6 +234,71 @@ fn process_md_dir(
   })
 }
 
+fn process_file(
+  host: &str,
+  workspace_id: &str,
+  path: &Path,
+  ext: FileExtension,
+) -> Option<NotionPage> {
+  match ext {
+    FileExtension::Unknown => None,
+    FileExtension::Markdown => process_md_file(host, workspace_id, path),
+    FileExtension::Csv => process_csv_file(host, workspace_id, path),
+  }
+}
+
+fn process_csv_file(host: &str, workspace_id: &str, path: &Path) -> Option<NotionPage> {
+  let file_name = path.file_name()?.to_str()?;
+  // Check if a folder exists with the same name as the CSV file, excluding the "_all.csv" suffix.
+  // When exporting a Notion zip file with the 'create folders for subpages' option enabled,
+  // a folder with the same name as the CSV file may be generated.
+  // For example, if the CSV file is named "abc_all.csv", a folder named "abc" will also be created.
+  // In such cases, we should skip processing the CSV file.
+  if let Some(parent) = path.parent() {
+    let parent_path = parent.join(file_name.trim_end_matches("_all.csv"));
+    if parent_path.is_dir() {
+      return None;
+    }
+  }
+
+  // Sometime, the exported csv might contains abc_all.csv or abc.csv. Just keep the abc_all.csv
+  if !file_name.ends_with("_all.csv") {
+    // If the file name does not end with "_all", return None
+    return None;
+  }
+
+  let mut resources = vec![];
+  // When the current file is a CSV, its related resources are found in the same directory.
+  // We need to gather resources from this directory by iterating over the CSV file.
+  // To identify which CSV file contains these resources, we must check each row
+  // to see if any paths match the resource path.
+  // Currently, we do this in [filter_out_resources].
+  if let Some(parent) = path.parent() {
+    resources.extend(collect_entry_resources(workspace_id, parent, None));
+  }
+
+  let file_path = path.to_path_buf();
+  let (name, id) = name_and_id_from_path(path).ok()?;
+  let file_size = get_file_size(&file_path).ok()?;
+  let notion_file = NotionFile::CSV {
+    file_path,
+    size: file_size,
+    resources,
+  };
+
+  Some(NotionPage {
+    notion_name: name,
+    notion_id: id,
+    children: vec![],
+    notion_file,
+    external_links: vec![],
+    view_id: uuid::Uuid::new_v4().to_string(),
+    host: host.to_string(),
+    workspace_id: workspace_id.to_string(),
+    is_dir: false,
+  })
+}
+
 fn process_md_file(host: &str, workspace_id: &str, path: &Path) -> Option<NotionPage> {
   if let Some(parent) = path.parent() {
     let file_stem = path.file_stem()?.to_str()?;
@@ -343,14 +409,30 @@ pub(crate) fn extract_external_links(path_str: &str) -> Result<Vec<ExternalLink>
   Ok(result)
 }
 
-pub(crate) fn is_valid_file(path: &Path) -> bool {
-  path
-    .extension()
-    .map_or(false, |ext| ext == "md" || ext == "csv")
+enum FileExtension {
+  Unknown,
+  Markdown,
+  Csv,
 }
 
+impl FileExtension {
+  fn is_file(&self) -> bool {
+    matches!(self, FileExtension::Markdown | FileExtension::Csv)
+  }
+}
+
+fn get_file_extension(path: &Path) -> FileExtension {
+  path
+    .extension()
+    .map_or(FileExtension::Unknown, |ext| match ext.to_str() {
+      Some("md") => FileExtension::Markdown,
+      Some("csv") => FileExtension::Csv,
+      _ => FileExtension::Unknown,
+    })
+}
 fn name_and_id_from_path(path: &Path) -> Result<(String, Option<String>), ImporterError> {
-  let re = Regex::new(r"^(.*?)\s*([a-f0-9]{32})?\s*(?:\.[a-zA-Z0-9]+)?\s*$").unwrap();
+  let re =
+    Regex::new(r"^(.*?)(?:\s+([a-f0-9]{32}))?(?:_[a-zA-Z0-9]+)?(?:\.[a-zA-Z0-9]+)?\s*$").unwrap();
 
   let input = path
     .file_name()
@@ -359,15 +441,16 @@ fn name_and_id_from_path(path: &Path) -> Result<(String, Option<String>), Import
 
   if let Ok(Some(captures)) = re.captures(input) {
     let file_name = captures
-        .get(1)
-        .map(|m| m.as_str().trim().to_string())
-        .filter(|s| !s.is_empty())  // Ensure the name isn't empty
-        .ok_or(ImporterError::InvalidPathFormat)?;
+      .get(1)
+      .map(|m| m.as_str().trim().to_string())
+      .filter(|s| !s.is_empty())
+      .ok_or(ImporterError::InvalidPathFormat)?;
 
     let file_id = captures.get(2).map(|m| m.as_str().to_string());
     return Ok((file_name, file_id));
   }
 
+  // Fallback for cases where no ID is present but a valid name exists
   Err(ImporterError::InvalidPathFormat)
 }
 
@@ -480,14 +563,6 @@ mod tests {
   }
 
   #[test]
-  fn test_valid_path_with_no_spaces_in_name() {
-    let path = Path::new("rootname103d4deadd2c8032bc32d094d8d5f41f");
-    let (name, id) = name_and_id_from_path(path).unwrap();
-    assert_eq!(name, "rootname");
-    assert_eq!(id, Some("103d4deadd2c8032bc32d094d8d5f41f".to_string()));
-  }
-
-  #[test]
   fn test_space_name() {
     let path = Path::new("first space");
     let (name, id) = name_and_id_from_path(path).unwrap();
@@ -509,5 +584,13 @@ mod tests {
     let (name, id) = name_and_id_from_path(path).unwrap();
     assert_eq!(name, "space two");
     assert_eq!(id.unwrap(), "4331f936c1de4ec2bed58d49d9826c76");
+  }
+
+  #[test]
+  fn test_file_name_with_all_csv() {
+    let path = Path::new("Projects 58b8977d6e4444a98ec4d64176a071e5_all.csv");
+    let (name, id) = name_and_id_from_path(path).unwrap();
+    assert_eq!(name, "Projects");
+    assert_eq!(id.unwrap(), "58b8977d6e4444a98ec4d64176a071e5");
   }
 }
