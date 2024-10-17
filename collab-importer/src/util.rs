@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, BufReader};
 
+use crate::error::ImporterError;
 use tracing::warn;
 
 pub fn upload_file_url(host: &str, workspace_id: &str, object_id: &str, file_id: &str) -> String {
@@ -51,7 +52,10 @@ async fn async_calculate_file_id(file_path: &PathBuf) -> Result<String, Error> {
   Ok(file_id)
 }
 
-pub async fn unzip_from_path_or_memory(input: Either<PathBuf, Vec<u8>>, out: PathBuf) -> PathBuf {
+pub async fn unzip_from_path_or_memory(
+  input: Either<PathBuf, Vec<u8>>,
+  out: PathBuf,
+) -> Result<PathBuf, ImporterError> {
   match input {
     Either::Left(path) => {
       if is_multi_part_zip(&path).await.unwrap_or(false) {
@@ -71,7 +75,7 @@ pub async fn unzip_from_path_or_memory(input: Either<PathBuf, Vec<u8>>, out: Pat
       // unzip_async(zip_reader, out).await.unwrap()
 
       let file = tokio::fs::File::open(&path).await.unwrap();
-      unzip_file(file, &out, None).await.unwrap().unzip_dir_path
+      Ok(unzip_file(file, &out, None).await?.unzip_dir_path)
     },
     Either::Right(data) => {
       if data.len() >= 4 {
@@ -83,7 +87,7 @@ pub async fn unzip_from_path_or_memory(input: Either<PathBuf, Vec<u8>>, out: Pat
       }
 
       let zip_reader = ZipFileReader::new(data.as_slice());
-      unzip_stream(zip_reader, out).await.unwrap().unzip_dir_path
+      Ok(unzip_stream(zip_reader, out, None).await?.unzip_dir_path)
     },
   }
 }

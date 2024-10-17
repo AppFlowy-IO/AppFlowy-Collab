@@ -21,7 +21,7 @@ pub async fn import_notion_zip_file(
     return Err(ImporterError::FileNotFound);
   }
 
-  let unzip_file = unzip_from_path_or_memory(Either::Left(zip_file), output_dir).await;
+  let unzip_file = unzip_from_path_or_memory(Either::Left(zip_file), output_dir).await?;
   let imported = NotionImporter::new(uid, &unzip_file, workspace_id, host.to_string())?
     .import()
     .await?;

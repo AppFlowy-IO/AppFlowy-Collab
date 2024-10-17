@@ -74,10 +74,16 @@ pub async fn unzip_stream_asset(file_name: &str) -> std::io::Result<(Cleaner, Pa
   //   .join(uuid::Uuid::new_v4().to_string());
   tokio::fs::create_dir_all(&output_folder_path).await?;
 
+  let file_name = zip_file_path
+    .file_stem()
+    .unwrap()
+    .to_str()
+    .unwrap()
+    .to_string();
   let file = tokio::fs::File::open(&zip_file_path).await.unwrap();
   let reader = BufReader::new(file).compat();
   let zip_reader = ZipFileReader::new(reader);
-  let unzip_file_path = unzip_stream(zip_reader, output_folder_path)
+  let unzip_file_path = unzip_stream(zip_reader, output_folder_path, Some(file_name))
     .await
     .unwrap()
     .unzip_dir_path;
