@@ -27,6 +27,29 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 #[tokio::test]
+async fn import_csv_without_subpage_folder_test() {
+  let (_cleaner, file_path) = unzip_stream_asset("project&task_no_subpages")
+    .await
+    .unwrap();
+  let importer = NotionImporter::new(
+    1,
+    &file_path,
+    uuid::Uuid::new_v4(),
+    "http://test.appflowy.cloud".to_string(),
+  )
+  .unwrap();
+  let info = importer.import().await.unwrap();
+  let views = info.views();
+
+  assert_eq!(views.len(), 2);
+  assert_eq!(views[0].notion_name, "Projects");
+  assert_eq!(views[1].notion_name, "Tasks");
+
+  check_project_database(&views[0]).await;
+  // check_task_database(&views[1]).await;
+}
+
+#[tokio::test]
 async fn import_part_zip_test() {
   let (_cleaner, file_path) = unzip_stream_asset("multi_part_zip").await.unwrap();
   let importer = NotionImporter::new(
