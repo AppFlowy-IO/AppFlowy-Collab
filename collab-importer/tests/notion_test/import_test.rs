@@ -37,10 +37,10 @@ use std::sync::Arc;
 //   )
 //   .unwrap();
 //   let info = importer.import().await.unwrap();
-//   let collabs = info.into_collab_stream().await.collect::<Vec<_>>().await;
-//   for collab in collabs {
-//
-//   }
+//   let nested_view = info.build_nested_views().await;
+//   println!("{}", nested_view);
+//   // let collabs = info.into_collab_stream().await.collect::<Vec<_>>().await;
+//   // for collab in collabs {}
 // }
 
 #[tokio::test]
@@ -175,14 +175,16 @@ async fn import_two_spaces_with_other_files_test() {
   )
   .unwrap();
   let info = importer.import().await.unwrap();
-  let views: Vec<ParentChildViews> = info.build_nested_views().await.into_inner();
-  println!("{:?}", views);
-  assert_eq!(views.len(), 2);
+  let views = info.build_nested_views().await;
+  println!("{}", views);
+
+  let views: Vec<ParentChildViews> = views.into_inner();
+  assert_eq!(views.len(), 3);
   for (index, view) in views.iter().enumerate() {
-    if index == 0 {
+    if index == 1 {
       assert_eq!(view.view.name, "space one");
     }
-    if index == 1 {
+    if index == 2 {
       assert_eq!(view.view.name, "space two");
     }
     assert!(view.view.space_info().is_some());
