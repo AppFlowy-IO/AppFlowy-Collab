@@ -37,8 +37,10 @@ use std::sync::Arc;
 //   )
 //   .unwrap();
 //   let info = importer.import().await.unwrap();
-//   let nested_view = info.build_nested_views().await;
-//   println!("{}", nested_view);
+//   let collabs = info.into_collab_stream().await.collect::<Vec<_>>().await;
+//   for collab in collabs {
+//
+//   }
 // }
 
 #[tokio::test]

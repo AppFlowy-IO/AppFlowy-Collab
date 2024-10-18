@@ -15,6 +15,7 @@ use crate::notion::walk_dir::extract_external_links;
 use crate::notion::ImportedCollabInfoStream;
 use crate::util::{upload_file_url, FileId};
 use collab_database::template::builder::FileUrlBuilder;
+use collab_document::document_data::default_document_data;
 use percent_encoding::percent_decode_str;
 use serde::Serialize;
 use serde_json::json;
@@ -396,10 +397,25 @@ impl NotionPage {
           import_type: ImportType::Document,
         })
       },
-      _ => Err(ImporterError::InvalidFileType(format!(
-        "File type is not supported for collab: {:?}",
-        self.notion_file
-      ))),
+      _ => {
+        let data = default_document_data(&self.view_id);
+        let document = Document::create(&self.view_id, data)?;
+        let encoded_collab = document.encode_collab()?;
+        let imported_collab = ImportedCollab {
+          object_id: self.view_id.clone(),
+          collab_type: CollabType::Document,
+          encoded_collab,
+        };
+        Ok(ImportedCollabInfo {
+          name,
+          collabs: vec![imported_collab],
+          resource: CollabResource {
+            object_id: self.view_id.clone(),
+            files: vec![],
+          },
+          import_type: ImportType::Document,
+        })
+      },
     }
   }
 }

@@ -267,8 +267,8 @@ impl ParentChildViews {
     let indent = "  ".repeat(indent_level);
     writeln!(
       f,
-      "{}: {}, parent id: {}",
-      indent, self.view.name, self.view.parent_view_id
+      "{}: {}, parent id: {}, layout: {:?}",
+      indent, self.view.name, self.view.parent_view_id, self.view.layout,
     )?;
 
     // Recursively print child views
