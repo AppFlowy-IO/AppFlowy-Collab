@@ -74,16 +74,37 @@ impl NotionImporter {
   }
 
   async fn collect_views(&mut self) -> Result<Vec<NotionPage>, ImporterError> {
-    let mut views = walk_sub_dir(&self.path)
-      .into_iter()
-      .filter_map(|entry| process_entry(&self.host, &self.workspace_id, &entry))
-      .collect::<Vec<NotionPage>>();
-    // if there are spaces in the views, we only keep the views that are in the spaces
-    let contains_spaces = views.iter().any(|view| view.is_dir);
-    if contains_spaces {
-      views.retain(|view| view.is_dir);
+    let mut notion_pages = vec![];
+    let mut has_spaces = false;
+    let mut has_pages = false;
+
+    // Process entries and track whether we have spaces (directories) and pages (non-directories)
+    for entry in walk_sub_dir(&self.path) {
+      if let Some(view) = process_entry(&self.host, &self.workspace_id, &entry) {
+        has_spaces |= view.is_dir;
+        has_pages |= !view.is_dir;
+        notion_pages.push(view);
+      }
     }
-    Ok(views)
+
+    // If there are only spaces (directories) and no pages, return the pages
+    if !has_pages && has_spaces {
+      return Ok(notion_pages);
+    }
+
+    if has_pages && has_spaces {
+      notion_pages.iter_mut().for_each(|page| {
+        if !page.is_dir {
+          let mut cloned_page = page.clone();
+          cloned_page.is_dir = false;
+
+          page.turn_into_space();
+          page.children.push(cloned_page);
+        }
+      });
+    }
+
+    Ok(notion_pages)
   }
 }
 

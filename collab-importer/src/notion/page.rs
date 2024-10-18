@@ -41,6 +41,12 @@ pub struct NotionPage {
 }
 
 impl NotionPage {
+  pub fn turn_into_space(&mut self) {
+    self.is_dir = true;
+    self.children.clear();
+    self.notion_file = NotionFile::Empty;
+    self.external_links.clear();
+  }
   /// Returns the number of CSV files in the view and its children.
   pub fn num_of_csv(&self) -> usize {
     self
@@ -349,7 +355,7 @@ impl NotionPage {
     }
   }
 
-  pub async fn build_imported_collab(&self) -> Result<ImportedCollabInfo, ImporterError> {
+  pub async fn build_imported_collab(&self) -> Result<Option<ImportedCollabInfo>, ImporterError> {
     let name = self.notion_name.clone();
     match &self.notion_file {
       NotionFile::CSV { .. } => {
@@ -372,7 +378,7 @@ impl NotionPage {
           })
           .collect::<Vec<_>>();
 
-        Ok(ImportedCollabInfo {
+        Ok(Some(ImportedCollabInfo {
           name,
           collabs: imported_collabs,
           resource: collab_resource,
@@ -380,7 +386,7 @@ impl NotionPage {
             database_id,
             view_ids,
           },
-        })
+        }))
       },
       NotionFile::Markdown { .. } => {
         let (document, collab_resource) = self.as_document().await?;
@@ -390,14 +396,14 @@ impl NotionPage {
           collab_type: CollabType::Document,
           encoded_collab,
         };
-        Ok(ImportedCollabInfo {
+        Ok(Some(ImportedCollabInfo {
           name,
           collabs: vec![imported_collab],
           resource: collab_resource,
           import_type: ImportType::Document,
-        })
+        }))
       },
-      _ => {
+      NotionFile::Empty => {
         let data = default_document_data(&self.view_id);
         let document = Document::create(&self.view_id, data)?;
         let encoded_collab = document.encode_collab()?;
@@ -406,7 +412,7 @@ impl NotionPage {
           collab_type: CollabType::Document,
           encoded_collab,
         };
-        Ok(ImportedCollabInfo {
+        Ok(Some(ImportedCollabInfo {
           name,
           collabs: vec![imported_collab],
           resource: CollabResource {
@@ -414,8 +420,9 @@ impl NotionPage {
             files: vec![],
           },
           import_type: ImportType::Document,
-        })
+        }))
       },
+      _ => Ok(None),
     }
   }
 }
@@ -425,7 +432,8 @@ pub async fn build_imported_collab_recursively<'a>(
 ) -> ImportedCollabInfoStream<'a> {
   let imported_collab_info = notion_page.build_imported_collab().await;
   let initial_stream: ImportedCollabInfoStream = match imported_collab_info {
-    Ok(info) => Box::pin(stream::once(async { info })),
+    Ok(Some(info)) => Box::pin(stream::once(async { info })),
+    Ok(None) => Box::pin(stream::empty()),
     Err(_) => Box::pin(stream::empty()),
   };
 
