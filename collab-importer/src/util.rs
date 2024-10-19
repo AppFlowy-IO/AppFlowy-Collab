@@ -1,4 +1,4 @@
-use crate::zip_tool::{is_multi_part_zip, is_multi_part_zip_file, unzip_file, unzip_stream};
+use crate::zip_tool::async_zip::{async_unzip, unzip_single_file};
 use anyhow::Error;
 use anyhow::Result;
 use async_zip::base::read::stream::ZipFileReader;
@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, BufReader};
 
 use crate::error::ImporterError;
+use crate::zip_tool::util::{is_multi_part_zip, is_multi_part_zip_file};
 use tracing::warn;
 
 pub fn upload_file_url(host: &str, workspace_id: &str, object_id: &str, file_id: &str) -> String {
@@ -75,7 +76,7 @@ pub async fn unzip_from_path_or_memory(
       // unzip_async(zip_reader, out).await.unwrap()
 
       let file = tokio::fs::File::open(&path).await.unwrap();
-      Ok(unzip_file(file, &out, None).await?.unzip_dir_path)
+      Ok(unzip_single_file(file, &out, None).await?.unzip_dir_path)
     },
     Either::Right(data) => {
       if data.len() >= 4 {
@@ -87,7 +88,7 @@ pub async fn unzip_from_path_or_memory(
       }
 
       let zip_reader = ZipFileReader::new(data.as_slice());
-      Ok(unzip_stream(zip_reader, out, None).await?.unzip_dir_path)
+      Ok(async_unzip(zip_reader, out, None).await?.unzip_dir_path)
     },
   }
 }

@@ -1,4 +1,4 @@
-use crate::util::{parse_csv, setup_log, unzip_file_asset, unzip_stream_asset};
+use crate::util::{async_unzip_asset, parse_csv, setup_log, sync_unzip_asset};
 use collab::preclude::Collab;
 use collab_database::database::Database;
 use collab_database::entity::FieldType;
@@ -45,46 +45,51 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn import_csv_without_subpage_folder_test() {
-  let (_cleaner, file_path) = unzip_stream_asset("project&task_no_subpages")
-    .await
+  let (_cleaner, file_path_1) = async_unzip_asset("project&task_no_subpages").await.unwrap();
+  let (_cleaner, file_path_2) = sync_unzip_asset("project&task_no_subpages").await.unwrap();
+
+  for file_path in [file_path_1, file_path_2] {
+    let importer = NotionImporter::new(
+      1,
+      &file_path,
+      uuid::Uuid::new_v4(),
+      "http://test.appflowy.cloud".to_string(),
+    )
     .unwrap();
-  let importer = NotionImporter::new(
-    1,
-    &file_path,
-    uuid::Uuid::new_v4(),
-    "http://test.appflowy.cloud".to_string(),
-  )
-  .unwrap();
-  let info = importer.import().await.unwrap();
-  let views = info.views();
+    let info = importer.import().await.unwrap();
+    let views = info.views();
 
-  assert_eq!(views.len(), 2);
-  assert_eq!(views[0].notion_name, "Projects");
-  assert_eq!(views[1].notion_name, "Tasks");
+    assert_eq!(views.len(), 2);
+    assert_eq!(views[0].notion_name, "Projects");
+    assert_eq!(views[1].notion_name, "Tasks");
 
-  check_project_database(&views[0]).await;
-  check_task_database(&views[1]).await;
+    check_project_database(&views[0]).await;
+    check_task_database(&views[1]).await;
+  }
 }
 
 #[tokio::test]
 async fn import_part_zip_test() {
-  let (_cleaner, file_path) = unzip_stream_asset("multi_part_zip").await.unwrap();
-  let importer = NotionImporter::new(
-    1,
-    &file_path,
-    uuid::Uuid::new_v4(),
-    "http://test.appflowy.cloud".to_string(),
-  )
-  .unwrap();
-  let info = importer.import().await.unwrap();
-  let nested_view = info.build_nested_views().await;
-  assert_eq!(nested_view.flatten_views().len(), 31);
-  println!("{}", nested_view);
+  let (_cleaner, file_path_1) = async_unzip_asset("multi_part_zip").await.unwrap();
+  let (_cleaner, file_path_2) = sync_unzip_asset("multi_part_zip").await.unwrap();
+  for file_path in [file_path_1, file_path_2] {
+    let importer = NotionImporter::new(
+      1,
+      &file_path,
+      uuid::Uuid::new_v4(),
+      "http://test.appflowy.cloud".to_string(),
+    )
+    .unwrap();
+    let info = importer.import().await.unwrap();
+    let nested_view = info.build_nested_views().await;
+    assert_eq!(nested_view.flatten_views().len(), 31);
+    println!("{}", nested_view);
+  }
 }
 
 #[tokio::test]
 async fn import_two_spaces_test2() {
-  let (_cleaner, file_path) = unzip_file_asset("design").await.unwrap();
+  let (_cleaner, file_path) = sync_unzip_asset("design").await.unwrap();
   let importer = NotionImporter::new(
     1,
     &file_path,
@@ -129,7 +134,7 @@ async fn import_two_spaces_test2() {
 
 #[tokio::test]
 async fn import_two_spaces_test() {
-  let (_cleaner, file_path) = unzip_file_asset("two_spaces").await.unwrap();
+  let (_cleaner, file_path) = sync_unzip_asset("two_spaces").await.unwrap();
   let importer = NotionImporter::new(
     1,
     &file_path,
@@ -164,7 +169,7 @@ async fn import_two_spaces_test() {
 #[tokio::test]
 async fn import_two_spaces_with_other_files_test() {
   setup_log();
-  let (_cleaner, file_path) = unzip_file_asset("two_spaces_with_other_files")
+  let (_cleaner, file_path) = sync_unzip_asset("two_spaces_with_other_files")
     .await
     .unwrap();
   let importer = NotionImporter::new(
@@ -195,7 +200,7 @@ async fn import_two_spaces_with_other_files_test() {
 async fn import_blog_post_document_test() {
   setup_log();
   let workspace_id = uuid::Uuid::new_v4();
-  let (_cleaner, file_path) = unzip_file_asset("blog_post").await.unwrap();
+  let (_cleaner, file_path) = sync_unzip_asset("blog_post").await.unwrap();
   let host = "http://test.appflowy.cloud";
   let importer = NotionImporter::new(1, &file_path, workspace_id, host.to_string()).unwrap();
   let info = importer.import().await.unwrap();
@@ -210,7 +215,7 @@ async fn import_blog_post_document_test() {
 #[tokio::test]
 async fn import_project_and_task_test() {
   let workspace_id = uuid::Uuid::new_v4();
-  let (_cleaner, file_path) = unzip_file_asset("project&task").await.unwrap();
+  let (_cleaner, file_path) = sync_unzip_asset("project&task").await.unwrap();
   let importer = NotionImporter::new(
     1,
     &file_path,
@@ -242,7 +247,7 @@ async fn import_project_and_task_test() {
 #[tokio::test]
 async fn import_empty_zip_test() {
   let workspace_id = uuid::Uuid::new_v4();
-  let (_cleaner, file_path) = unzip_file_asset("empty_zip").await.unwrap();
+  let (_cleaner, file_path) = sync_unzip_asset("empty_zip").await.unwrap();
   let importer = NotionImporter::new(
     1,
     &file_path,
@@ -498,7 +503,7 @@ fn assert_database_rows_with_csv_rows(
 
 #[tokio::test]
 async fn import_level_test() {
-  let (_cleaner, file_path) = unzip_file_asset("import_test").await.unwrap();
+  let (_cleaner, file_path) = sync_unzip_asset("import_test").await.unwrap();
   let importer = NotionImporter::new(
     1,
     &file_path,
@@ -549,7 +554,7 @@ async fn import_level_test() {
 
 #[tokio::test]
 async fn import_empty_space() {
-  let (_cleaner, file_path) = unzip_file_asset("empty_spaces").await.unwrap();
+  let (_cleaner, file_path) = sync_unzip_asset("empty_spaces").await.unwrap();
   let importer = NotionImporter::new(
     1,
     &file_path,
