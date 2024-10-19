@@ -28,7 +28,7 @@ use std::sync::Arc;
 
 // #[tokio::test]
 // async fn import_part_zip_test2() {
-//   let (_cleaner, file_path) = unzip_stream_asset("abc").await.unwrap();
+//   let (_cleaner, file_path) = sync_unzip_asset("abc").await.unwrap();
 //   let importer = NotionImporter::new(
 //     1,
 //     &file_path,

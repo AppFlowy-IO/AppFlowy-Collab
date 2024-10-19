@@ -19,7 +19,6 @@ pub fn sync_unzip(
   out_dir: PathBuf,
   default_file_name: Option<String>,
 ) -> Result<UnzipFile, ImporterError> {
-  // Open the zip file and read it synchronously in a blocking task
   let file = File::open(file_path)
     .map_err(|e| ImporterError::Internal(anyhow!("Failed to open zip file: {:?}", e)))?;
 
@@ -51,7 +50,7 @@ pub fn sync_unzip(
       }
 
       // Create and write the file
-      let mut outfile = std::fs::File::create(&output_path)
+      let mut outfile = File::create(&output_path)
         .map_err(|e| ImporterError::Internal(anyhow!("Failed to create file: {:?}", e)))?;
 
       let mut buffer = vec![];
