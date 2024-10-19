@@ -10,11 +10,10 @@ use std::{io, str};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::fs::File;
-use tokio::io::AsyncReadExt;
 use tokio::io::{AsyncWriteExt, BufReader};
 
 use async_zip::base::read::seek::ZipFileReader as SeekZipFileReader;
-use fancy_regex::Regex;
+
 use tokio::fs::{create_dir_all, OpenOptions};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;

@@ -2,7 +2,7 @@ use percent_encoding::percent_decode_str;
 use std::env::temp_dir;
 
 use async_zip::base::read::stream::ZipFileReader;
-use collab_importer::zip_tool::async_zip::{async_unzip, unzip_single_file};
+use collab_importer::zip_tool::async_zip::async_unzip;
 use collab_importer::zip_tool::sync_zip::sync_unzip;
 use std::path::PathBuf;
 use std::sync::Once;

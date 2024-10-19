@@ -2,7 +2,6 @@ use fancy_regex::Regex;
 use std::path::{Path, PathBuf};
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use tokio::join;
 
 /// Check if the first 4 bytes of the buffer match known multi-part zip signatures.
 pub fn is_multi_part_zip_signature(buffer: &[u8; 4]) -> bool {

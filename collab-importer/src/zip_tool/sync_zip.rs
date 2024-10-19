@@ -8,10 +8,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::fs::File;
-use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
-use tokio_util::compat::TokioAsyncReadCompatExt;
 use zip::read::ZipArchive;
 
 pub struct UnzipFile {
