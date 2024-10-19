@@ -2,7 +2,8 @@ use percent_encoding::percent_decode_str;
 use std::env::temp_dir;
 
 use async_zip::base::read::stream::ZipFileReader;
-use collab_importer::zip_tool::{unzip_file, unzip_stream};
+use collab_importer::zip_tool::async_zip::async_unzip;
+use collab_importer::zip_tool::sync_zip::sync_unzip;
 use std::path::PathBuf;
 use std::sync::Once;
 use tokio::io::BufReader;
@@ -52,20 +53,25 @@ impl Drop for Cleaner {
   }
 }
 
-pub async fn unzip_file_asset(file_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
+pub async fn sync_unzip_asset(file_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
   let zip_file_path = PathBuf::from(format!("./tests/asset/{}.zip", file_name));
+  let file_name = zip_file_path
+    .file_stem()
+    .unwrap()
+    .to_str()
+    .unwrap()
+    .to_string();
+
   let output_folder_path = temp_dir().join(uuid::Uuid::new_v4().to_string());
   tokio::fs::create_dir_all(&output_folder_path).await?;
 
-  let file = tokio::fs::File::open(&zip_file_path).await.unwrap();
-  let unzip_file_path = unzip_file(file, &output_folder_path, None)
-    .await
+  let unzip_file_path = sync_unzip(zip_file_path, output_folder_path, Some(file_name))
     .unwrap()
     .unzip_dir_path;
   Ok((Cleaner::new(unzip_file_path.clone()), unzip_file_path))
 }
 
-pub async fn unzip_stream_asset(file_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
+pub async fn async_unzip_asset(file_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
   setup_log();
   let zip_file_path = PathBuf::from(format!("./tests/asset/{}.zip", file_name));
   let output_folder_path = temp_dir().join(uuid::Uuid::new_v4().to_string());
@@ -83,7 +89,7 @@ pub async fn unzip_stream_asset(file_name: &str) -> std::io::Result<(Cleaner, Pa
   let file = tokio::fs::File::open(&zip_file_path).await.unwrap();
   let reader = BufReader::new(file).compat();
   let zip_reader = ZipFileReader::new(reader);
-  let unzip_file_path = unzip_stream(zip_reader, output_folder_path, Some(file_name))
+  let unzip_file_path = async_unzip(zip_reader, output_folder_path, Some(file_name))
     .await
     .unwrap()
     .unzip_dir_path;
