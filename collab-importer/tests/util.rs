@@ -55,12 +55,19 @@ impl Drop for Cleaner {
 
 pub async fn sync_unzip_asset(file_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
   let zip_file_path = PathBuf::from(format!("./tests/asset/{}.zip", file_name));
+  let file_name = zip_file_path
+    .file_stem()
+    .unwrap()
+    .to_str()
+    .unwrap()
+    .to_string();
+
   let output_folder_path = temp_dir().join(uuid::Uuid::new_v4().to_string());
   tokio::fs::create_dir_all(&output_folder_path).await?;
 
-  let unzip_file_path = sync_unzip(zip_file_path, output_folder_path, None)
+  let unzip_file_path = sync_unzip(zip_file_path, output_folder_path, Some(file_name))
     .unwrap()
-    .unzip_dir_path;
+    .unzip_dir;
   Ok((Cleaner::new(unzip_file_path.clone()), unzip_file_path))
 }
 
