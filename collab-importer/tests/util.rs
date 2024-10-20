@@ -67,7 +67,7 @@ pub async fn sync_unzip_asset(file_name: &str) -> std::io::Result<(Cleaner, Path
 
   let unzip_file_path = sync_unzip(zip_file_path, output_folder_path, Some(file_name))
     .unwrap()
-    .unzip_dir_path;
+    .unzip_dir;
   Ok((Cleaner::new(unzip_file_path.clone()), unzip_file_path))
 }
 

@@ -2,21 +2,23 @@ use crate::error::ImporterError;
 use crate::zip_tool::util::{is_multi_part_zip_signature, remove_part_suffix, sanitize_file_path};
 use anyhow::{anyhow, Result};
 
-use std::fs::{File, OpenOptions};
+use std::fs::{File, OpenOptions, Permissions};
 use std::io::{Read, Write};
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+
 use zip::read::ZipArchive;
 
 pub struct UnzipFile {
-  pub file_name: String,
-  pub unzip_dir_path: PathBuf,
+  pub dir_name: String,
+  pub unzip_dir: PathBuf,
   pub parts: Vec<PathBuf>,
 }
 
 pub fn sync_unzip(
   file_path: PathBuf,
-  out_dir: PathBuf,
+  mut out_dir: PathBuf,
   default_file_name: Option<String>,
 ) -> Result<UnzipFile, ImporterError> {
   let file = File::open(file_path)
@@ -28,6 +30,23 @@ pub fn sync_unzip(
   let mut root_dir = None;
   let mut parts = vec![];
 
+  if let Ok(entry) = archive.by_index(0) {
+    let filename = entry.name().to_string();
+    if root_dir.is_none() && entry.is_dir() {
+      root_dir = Some(filename.split('/').next().unwrap_or(&filename).to_string());
+    }
+  }
+
+  if root_dir.is_none() {
+    if let Some(default_name) = &default_file_name {
+      out_dir = out_dir.join(default_name);
+      if !out_dir.exists() {
+        fs::create_dir_all(&out_dir)
+          .map_err(|e| ImporterError::Internal(anyhow!("Failed to create dir: {:?}", e)))?;
+      }
+    }
+  }
+
   // Iterate through each file in the archive
   for i in 0..archive.len() {
     let mut entry = archive
@@ -35,10 +54,6 @@ pub fn sync_unzip(
       .map_err(|e| ImporterError::Internal(anyhow!("Failed to read entry: {:?}", e)))?;
 
     let filename = entry.name().to_string();
-    if root_dir.is_none() && entry.is_dir() {
-      root_dir = Some(filename.split('/').next().unwrap_or(&filename).to_string());
-    }
-
     let output_path = out_dir.join(&filename);
     if entry.is_dir() {
       fs::create_dir_all(&output_path)
@@ -87,36 +102,32 @@ pub fn sync_unzip(
   match root_dir {
     None => match default_file_name {
       None => Err(ImporterError::FileNotFound),
-      Some(default_file_name) => {
-        let new_out_dir = out_dir
-          .parent()
-          .ok_or_else(|| ImporterError::FileNotFound)?
-          .join(uuid::Uuid::new_v4().to_string())
-          .join(&default_file_name);
-        move_all(&out_dir, &new_out_dir)?;
-        fs::remove_dir_all(&out_dir)?;
-        Ok(UnzipFile {
-          file_name: default_file_name,
-          unzip_dir_path: new_out_dir,
-          parts,
-        })
-      },
+      Some(root_dir) => Ok(UnzipFile {
+        dir_name: root_dir,
+        unzip_dir: out_dir,
+        parts,
+      }),
     },
-    Some(file_name) => Ok(UnzipFile {
-      file_name: file_name.clone(),
-      unzip_dir_path: out_dir.join(file_name),
+    Some(root_dir) => Ok(UnzipFile {
+      dir_name: root_dir.clone(),
+      unzip_dir: out_dir.join(root_dir),
       parts,
     }),
   }
 }
 
 /// Helper function to move all files and directories from one path to another
-fn move_all(old_path: &Path, new_path: &Path) -> io::Result<()> {
+#[allow(dead_code)]
+fn move_all(old_path: &Path, new_path: &Path) -> Result<(), ImporterError> {
   if !new_path.exists() {
     fs::create_dir_all(new_path)?;
+    let dir_permissions = Permissions::from_mode(0o755);
+    fs::set_permissions(new_path, dir_permissions)?;
   }
 
-  for entry in fs::read_dir(old_path)? {
+  for entry in fs::read_dir(old_path).map_err(|err| {
+    ImporterError::Internal(anyhow!("Can not read {:?}, error: {:?}", old_path, err))
+  })? {
     let entry = entry?;
     let path = entry.path();
     let file_name = match path.file_name() {
@@ -125,16 +136,29 @@ fn move_all(old_path: &Path, new_path: &Path) -> io::Result<()> {
     };
 
     let new_file_path = new_path.join(file_name);
+
     if path.is_dir() {
       move_all(&path, &new_file_path)?;
-      fs::remove_dir_all(&path)?;
+      fs::remove_dir_all(&path).map_err(|err| {
+        ImporterError::Internal(anyhow!(
+          "Can not remove directory {:?}, error: {:?}",
+          path,
+          err
+        ))
+      })?;
     } else {
-      fs::rename(&path, &new_file_path)?;
+      fs::rename(&path, &new_file_path).map_err(|err| {
+        ImporterError::Internal(anyhow!(
+          "Can not move file {:?} to {:?}, error: {:?}",
+          path,
+          new_file_path,
+          err
+        ))
+      })?;
     }
   }
   Ok(())
 }
-
 fn unzip_single_file(
   archive_file: File,
   out_dir: &Path,
@@ -193,8 +217,8 @@ fn unzip_single_file(
   match root_dir {
     None => Err(ImporterError::FileNotFound),
     Some(root_dir) => Ok(UnzipFile {
-      file_name: root_dir.clone(),
-      unzip_dir_path: out_dir.join(root_dir),
+      dir_name: root_dir.clone(),
+      unzip_dir: out_dir.join(root_dir),
       parts: vec![],
     }),
   }
