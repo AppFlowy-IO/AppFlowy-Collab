@@ -16,17 +16,16 @@ fn main() -> Result<()> {
       proto_files.push(e.path().display().to_string());
     }
   }
+  // If the `PROTOC` environment variable is set, don't use vendored `protoc`
+  std::env::var("PROTOC").map(|_| ()).unwrap_or_else(|_| {
+    let protoc_path = protoc_bin_vendored::protoc_bin_path().expect("protoc bin path");
+    let protoc_path_str = protoc_path.to_str().expect("protoc path to str");
 
-  if std::panic::catch_unwind(|| compile_proto_files(&proto_files)).is_err() {
-    std::env::set_var(
-      "PROTOC",
-      protoc_bin_vendored::protoc_bin_path()
-        .expect("vendored protoc binary not found")
-        .to_str()
-        .expect("vendored protoc binary path is not valid string"),
-    );
-    compile_proto_files(&proto_files)?
-  }
+    // Set the `PROTOC` environment variable to the path of the `protoc` binary.
+    std::env::set_var("PROTOC", protoc_path_str);
+  });
+
+  compile_proto_files(&proto_files).expect("unable to compile proto files");
 
   let generated_files = std::fs::read_dir("src/proto")?
     .filter_map(Result::ok)
