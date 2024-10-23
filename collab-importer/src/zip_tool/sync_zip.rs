@@ -65,8 +65,17 @@ pub fn sync_unzip(
       }
 
       // Create and write the file
-      let mut outfile = File::create(&output_path)
-        .map_err(|e| ImporterError::Internal(anyhow!("Failed to create file: {:?}", e)))?;
+      let mut outfile = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&output_path)
+        .map_err(|e| {
+          ImporterError::Internal(anyhow!(
+            "Failed to create or open file with path: {:?}, error:{:?}",
+            output_path,
+            e
+          ))
+        })?;
 
       let mut buffer = vec![];
       entry
@@ -206,7 +215,7 @@ fn unzip_single_file(
         .write(true)
         .create_new(true)
         .open(&path)
-        .map_err(|e| ImporterError::Internal(anyhow!("Failed to create file: {:?}", e)))?;
+        .map_err(|e| ImporterError::Internal(anyhow!("Failed to create part file: {:?}", e)))?;
 
       io::copy(&mut entry, &mut outfile)
         .map_err(|e| ImporterError::Internal(anyhow!("Failed to write file: {:?}", e)))?;

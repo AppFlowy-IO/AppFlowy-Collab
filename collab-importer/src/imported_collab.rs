@@ -4,6 +4,7 @@ use crate::notion::NotionImporter;
 use crate::util::{unzip_from_path_or_memory, Either};
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
+use std::fmt;
 
 use futures::StreamExt;
 use std::fmt::Display;
@@ -72,7 +73,7 @@ impl Display for RepeatedImportedCollabInfo {
 pub struct ImportedCollabInfo {
   pub name: String,
   pub collabs: Vec<ImportedCollab>,
-  pub resource: CollabResource,
+  pub resources: Vec<CollabResource>,
   pub import_type: ImportType,
 }
 
@@ -89,9 +90,9 @@ impl ImportedCollabInfo {
 
   pub fn file_size(&self) -> u64 {
     self
-      .resource
-      .files
+      .resources
       .iter()
+      .flat_map(|r| r.files.iter())
       .map(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0))
       .sum()
   }
@@ -116,16 +117,24 @@ impl Display for ImportType {
 }
 
 impl Display for ImportedCollabInfo {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let file_paths: String = self.resource.files.join(", ");
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    // Collect all file paths into a single string, separated by commas
+    let file_paths: String = self
+      .resources
+      .iter()
+      .flat_map(|r| r.files.iter())
+      .cloned()
+      .collect::<Vec<_>>()
+      .join(", ");
 
+    // Write the formatted string to the formatter
     write!(
       f,
       "{}:{} - {} collabs, {} files, {} bytes\nFiles: [{}]",
       self.name,
       self.import_type,
       self.collabs.len(),
-      self.resource.files.len(),
+      self.resources.iter().map(|r| r.files.len()).sum::<usize>(),
       self.total_size(),
       file_paths
     )

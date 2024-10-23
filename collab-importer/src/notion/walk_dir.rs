@@ -1,15 +1,15 @@
 use crate::error::ImporterError;
 
-use anyhow::anyhow;
 use fancy_regex::Regex;
 use markdown::mdast::Node;
 use markdown::{to_mdast, ParseOptions};
 use percent_encoding::percent_decode_str;
 
-use crate::notion::file::{NotionFile, Resource};
-use crate::notion::page::{ExternalLink, ExternalLinkType, NotionPage};
+use crate::notion::file::{process_row_md_file, NotionFile, Resource};
+use crate::notion::page::{ExternalLink, ExternalLinkType, ImportedRowDocument, NotionPage};
+use crate::util::parse_csv;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use tracing::error;
 use walkdir::{DirEntry, WalkDir};
 
@@ -98,11 +98,21 @@ pub(crate) fn process_entry(
     // Look for the corresponding .md file for this directory in the parent directory
     let parent_path = path.parent()?;
     let md_file_path = parent_path.join(format!("{}.md", entry_name));
-    let csv_file_path = parent_path.join(format!("{}_all.csv", entry_name));
+    let all_csv_file_path = parent_path.join(format!("{}_all.csv", entry_name));
+    let csv_file_path = parent_path.join(format!("{}.csv", entry_name));
     if md_file_path.exists() {
       process_md_dir(host, workspace_id, path, name, id, &md_file_path)
-    } else if csv_file_path.exists() {
-      process_csv_dir(host, workspace_id, name, id, parent_path, &csv_file_path)
+    } else if all_csv_file_path.exists() {
+      process_csv_dir(
+        entry_name,
+        host,
+        workspace_id,
+        name,
+        id,
+        parent_path,
+        &all_csv_file_path,
+        &csv_file_path,
+      )
     } else {
       process_space_dir(host, workspace_id, name, id, path)
     }
@@ -140,26 +150,54 @@ fn process_space_dir(
   })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_csv_dir(
+  file_name: &str,
   host: &str,
   workspace_id: &str,
   name: String,
   id: Option<String>,
   parent_path: &Path,
+  all_csv_file_path: &PathBuf,
   csv_file_path: &PathBuf,
 ) -> Option<NotionPage> {
   let mut resources = vec![];
-  let file_size = get_file_size(csv_file_path).ok()?;
+  let file_size = get_file_size(all_csv_file_path).ok()?;
   // When the current file is a CSV, its related resources are found in the same directory.
   // We need to gather resources from this directory by iterating over the CSV file.
   // To identify which CSV file contains these resources, we must check each row
   // to see if any paths match the resource path.
   // Currently, we do this in [filter_out_resources].
   resources.extend(collect_entry_resources(workspace_id, parent_path, None));
+  let mut row_documents = vec![];
+
+  // collect all sub entries whose entries are directory
+  if csv_file_path.exists() {
+    let csv_file = parse_csv(csv_file_path);
+    let csv_dir = parent_path.join(file_name);
+    if csv_dir.exists() {
+      for sub_entry in walk_sub_dir(&csv_dir) {
+        if let Some(page) = process_entry(host, workspace_id, &sub_entry) {
+          for row in csv_file.rows.iter() {
+            if page.notion_name.starts_with(&row[0]) {
+              if let Some(file_path) = page.notion_file.imported_file_path() {
+                let _ = process_row_md_file(file_path);
+              }
+
+              row_documents.push(ImportedRowDocument { page });
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
   let notion_file = NotionFile::CSV {
-    file_path: csv_file_path.clone(),
+    file_path: all_csv_file_path.clone(),
     size: file_size,
     resources,
+    row_documents,
   };
 
   Some(NotionPage {
@@ -284,6 +322,7 @@ fn process_csv_file(host: &str, workspace_id: &str, path: &Path) -> Option<Notio
     file_path,
     size: file_size,
     resources,
+    row_documents: vec![],
   };
 
   Some(NotionPage {
@@ -375,34 +414,42 @@ pub(crate) fn collect_links_from_node(node: &Node, links: &mut Vec<String>) {
     _ => {},
   }
 }
+fn link_type_from_extension(extension: Option<&str>) -> ExternalLinkType {
+  match extension {
+    Some("md") => ExternalLinkType::Markdown,
+    Some("csv") => ExternalLinkType::CSV,
+    _ => ExternalLinkType::Unknown,
+  }
+}
 
 pub(crate) fn extract_external_links(path_str: &str) -> Result<Vec<ExternalLink>, ImporterError> {
   let path_str = percent_decode_str(path_str).decode_utf8()?.to_string();
   let mut result = Vec::new();
-  let re = Regex::new(r"^(.*?)\s*([a-f0-9]{32})\s*(?:\.[a-z]+)?$").unwrap();
+  let re = Regex::new(r"^(.*?)\s*([a-f0-9]{32})(?:\.(\w+))?$").unwrap();
   let path = Path::new(&path_str);
+
   for component in path.components() {
-    if let Some(component_str) = component.as_os_str().to_str() {
-      if let Ok(Some(captures)) = re.captures(component_str) {
-        let link = || {
-          let name = captures.get(1)?.as_str().to_string();
-          let id = captures.get(2)?.as_str().to_string();
-          let link_type = match captures.get(3) {
-            None => ExternalLinkType::Unknown,
-            Some(s) => link_type_from_str(s.as_str()),
-          };
-          Some(ExternalLink {
-            id,
+    if let Component::Normal(component_str) = component {
+      if let Some(component_str) = component_str.to_str() {
+        if let Ok(Some(captures)) = re.captures(component_str) {
+          let name = captures.get(1).map_or("", |m| m.as_str()).to_string();
+          let id = captures.get(2).map_or("", |m| m.as_str()).to_string();
+          let link_type = captures
+            .get(3)
+            .map(|m| link_type_from_extension(Some(m.as_str())))
+            .unwrap_or(ExternalLinkType::Unknown);
+
+          result.push(ExternalLink {
             name,
+            id,
             link_type,
-          })
-        };
-        if let Some(link) = link() {
-          result.push(link);
+          });
         }
+      } else {
+        return Err(ImporterError::Internal(anyhow::anyhow!(
+          "Non-UTF8 path component"
+        )));
       }
-    } else {
-      return Err(ImporterError::Internal(anyhow!("Non-UTF8 path component")));
     }
   }
 
@@ -474,6 +521,7 @@ fn file_type_from_path(path: &Path) -> Option<NotionFile> {
           file_path: path.to_path_buf(),
           size: file_size,
           resources: vec![],
+          row_documents: vec![],
         })
       } else {
         Some(NotionFile::CSVPart {
@@ -483,14 +531,6 @@ fn file_type_from_path(path: &Path) -> Option<NotionFile> {
       }
     },
     _ => None,
-  }
-}
-
-fn link_type_from_str(file_type: &str) -> ExternalLinkType {
-  match file_type {
-    "md" => ExternalLinkType::Markdown,
-    "csv" => ExternalLinkType::CSV,
-    _ => ExternalLinkType::Unknown,
   }
 }
 
@@ -504,7 +544,7 @@ pub(crate) fn file_name_from_path(path: &Path) -> Result<String, ImporterError> 
 }
 
 #[cfg(test)]
-mod tests {
+mod name_and_id_from_path_tests {
   use super::*;
 
   #[test]
@@ -599,5 +639,61 @@ mod tests {
     let (name, id) = name_and_id_from_path(path).unwrap();
     assert_eq!(name, "v0 7 2");
     assert_eq!(id.unwrap(), "11f96b61692380489555ecb38b723e46");
+  }
+}
+
+#[cfg(test)]
+mod extract_external_links_tests {
+  use super::*;
+
+  #[test]
+  fn test_extract_external_links_valid_md_path() {
+    // Test with a valid path containing an external link
+    let path_str = "folder/Marketing_campaign e445ee1fb7ff4591be2de17d906df97e.md";
+    let result = extract_external_links(path_str);
+
+    assert!(result.is_ok());
+    let links = result.unwrap();
+    assert_eq!(links.len(), 1);
+
+    let link = &links[0];
+    assert_eq!(link.name, "Marketing_campaign");
+    assert_eq!(link.id, "e445ee1fb7ff4591be2de17d906df97e");
+    assert_eq!(link.link_type, ExternalLinkType::Markdown);
+  }
+
+  #[test]
+  fn test_extract_external_links_valid_csv_path() {
+    // Test with a valid path containing an external link
+    let path_str = "folder/Marketing_campaign e445ee1fb7ff4591be2de17d906df97e.csv";
+    let result = extract_external_links(path_str);
+
+    assert!(result.is_ok());
+    let links = result.unwrap();
+    assert_eq!(links.len(), 1);
+
+    let link = &links[0];
+    assert_eq!(link.name, "Marketing_campaign");
+    assert_eq!(link.id, "e445ee1fb7ff4591be2de17d906df97e");
+    assert_eq!(link.link_type, ExternalLinkType::CSV);
+  }
+
+  #[test]
+  fn test_extract_external_links_multiple_components() {
+    // Test with a path containing multiple components
+    let path_str = "folder/Research_study e445ee1fb7ff4591be2de17d906df97e/file_2 a8e534ad763040029d0feb27fdb1820d.md";
+    let result = extract_external_links(path_str);
+
+    assert!(result.is_ok());
+    let links = result.unwrap();
+    assert_eq!(links.len(), 2);
+
+    assert_eq!(links[0].name, "Research_study");
+    assert_eq!(links[0].id, "e445ee1fb7ff4591be2de17d906df97e");
+    assert_eq!(links[0].link_type, ExternalLinkType::Unknown);
+
+    assert_eq!(links[1].name, "file_2");
+    assert_eq!(links[1].id, "a8e534ad763040029d0feb27fdb1820d");
+    assert_eq!(links[1].link_type, ExternalLinkType::Markdown);
   }
 }
