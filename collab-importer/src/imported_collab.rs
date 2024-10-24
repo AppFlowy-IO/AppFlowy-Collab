@@ -72,7 +72,7 @@ impl Display for RepeatedImportedCollabInfo {
 #[derive(Debug, Clone)]
 pub struct ImportedCollabInfo {
   pub name: String,
-  pub collabs: Vec<ImportedCollab>,
+  pub imported_collabs: Vec<ImportedCollab>,
   pub resources: Vec<CollabResource>,
   pub import_type: ImportType,
 }
@@ -80,7 +80,7 @@ pub struct ImportedCollabInfo {
 impl ImportedCollabInfo {
   pub fn total_size(&self) -> u64 {
     let collab_size: u64 = self
-      .collabs
+      .imported_collabs
       .iter()
       .map(|c| c.encoded_collab.doc_state.len() as u64)
       .sum();
@@ -103,6 +103,7 @@ pub enum ImportType {
   Database {
     database_id: String,
     view_ids: Vec<String>,
+    row_document_ids: Vec<String>,
   },
   Document,
 }
@@ -133,7 +134,7 @@ impl Display for ImportedCollabInfo {
       "{}:{} - {} collabs, {} files, {} bytes\nFiles: [{}]",
       self.name,
       self.import_type,
-      self.collabs.len(),
+      self.imported_collabs.len(),
       self.resources.iter().map(|r| r.files.len()).sum::<usize>(),
       self.total_size(),
       file_paths

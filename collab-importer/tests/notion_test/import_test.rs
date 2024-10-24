@@ -13,10 +13,11 @@ use collab_document::blocks::{
 };
 
 use collab_document::importer::define::{BlockType, URL_FIELD};
+use collab_entity::CollabType;
 use collab_folder::hierarchy_builder::ParentChildViews;
 use collab_folder::{default_folder_data, Folder, View};
 use collab_importer::error::ImporterError;
-use collab_importer::imported_collab::import_notion_zip_file;
+use collab_importer::imported_collab::{import_notion_zip_file, ImportType};
 use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::NotionImporter;
 use collab_importer::util::{parse_csv, CSVRow};
@@ -82,7 +83,7 @@ async fn import_part_zip_test() {
     .unwrap();
     let info = importer.import().await.unwrap();
     let nested_view = info.build_nested_views().await;
-    assert_eq!(nested_view.flatten_views().len(), 31);
+    assert_eq!(nested_view.flatten_views().len(), 35);
     println!("{}", nested_view);
   }
 }
@@ -225,18 +226,14 @@ async fn import_project_test() {
   let import = importer.import().await.unwrap();
   check_project_database(&import.views()[0], true).await;
 
-  let database = import.views()[0].as_database().await.unwrap();
-  for row_document in database.row_documents {
-    assert_eq!(row_document.page.children.len(), 1);
-    let _ref_database = row_document.page.children[0]
-      .as_database()
-      .await
-      .unwrap()
-      .database;
+  let nested_view = import.build_nested_views().await;
+  println!("{}", nested_view);
 
-    let document = row_document.page.as_document().await.unwrap().0;
-    println!("{}", document.to_plain_text().unwrap().trim());
-  }
+  assert_eq!(nested_view.views.len(), 1);
+  assert_eq!(nested_view.views[0].children.len(), 1);
+  let project_view = &nested_view.views[0].children[0];
+  let project_row_databases = &project_view.children;
+  assert_eq!(project_row_databases.len(), 4);
 }
 
 #[tokio::test]
@@ -276,7 +273,7 @@ async fn import_project_and_task_test() {
   );
   assert!(!import.views().is_empty());
   assert_eq!(import.name, "project&task");
-  assert_eq!(import.num_of_csv(), 2);
+  assert_eq!(import.num_of_csv(), 6);
   assert_eq!(import.num_of_markdown(), 1);
   assert_eq!(import.views().len(), 1);
 
@@ -287,6 +284,38 @@ async fn import_project_and_task_test() {
   */
   let root_view = &import.views()[0];
   assert_project_and_task(root_view).await;
+}
+
+#[tokio::test]
+async fn import_project_and_task_collab_test() {
+  let workspace_id = uuid::Uuid::new_v4().to_string();
+  let host = "http://test.appflowy.cloud";
+  let zip_file_path = PathBuf::from("./tests/asset/project&task.zip");
+  let temp_dir = temp_dir().join(uuid::Uuid::new_v4().to_string());
+  std::fs::create_dir_all(&temp_dir).unwrap();
+  let info = import_notion_zip_file(1, host, &workspace_id, zip_file_path, temp_dir.clone())
+    .await
+    .unwrap();
+
+  assert_eq!(info.len(), 8);
+  assert_eq!(info[0].name, "project&task");
+  assert_eq!(info[0].imported_collabs.len(), 1);
+  assert_eq!(info[0].resources[0].files.len(), 0);
+
+  assert_eq!(info[1].name, "Projects & Tasks");
+  assert_eq!(info[1].imported_collabs.len(), 1);
+  assert_eq!(info[1].resources[0].files.len(), 0);
+
+  assert_eq!(info[2].name, "Projects");
+  assert_eq!(info[2].imported_collabs.len(), 30);
+  assert_eq!(info[2].resources[0].files.len(), 2);
+  assert_eq!(info[2].file_size(), 1143952);
+
+  assert_eq!(info[3].name, "Tasks");
+  assert_eq!(info[3].imported_collabs.len(), 7);
+  assert_eq!(info[3].resources[0].files.len(), 0);
+
+  println!("{info}");
 }
 
 #[tokio::test]
@@ -302,38 +331,6 @@ async fn import_empty_zip_test() {
   .unwrap();
   let err = importer.import().await.unwrap_err();
   assert!(matches!(err, ImporterError::CannotImport));
-}
-
-#[tokio::test]
-async fn import_project_and_task_collab_test() {
-  let workspace_id = uuid::Uuid::new_v4().to_string();
-  let host = "http://test.appflowy.cloud";
-  let zip_file_path = PathBuf::from("./tests/asset/project&task.zip");
-  let temp_dir = temp_dir().join(uuid::Uuid::new_v4().to_string());
-  std::fs::create_dir_all(&temp_dir).unwrap();
-  let info = import_notion_zip_file(1, host, &workspace_id, zip_file_path, temp_dir.clone())
-    .await
-    .unwrap();
-
-  assert_eq!(info.len(), 4);
-  assert_eq!(info[0].name, "project&task");
-  assert_eq!(info[0].collabs.len(), 1);
-  assert_eq!(info[0].resources[0].files.len(), 0);
-
-  assert_eq!(info[1].name, "Projects & Tasks");
-  assert_eq!(info[1].collabs.len(), 1);
-  assert_eq!(info[1].resources[0].files.len(), 0);
-
-  assert_eq!(info[2].name, "Projects");
-  assert_eq!(info[2].collabs.len(), 30);
-  assert_eq!(info[2].resources[0].files.len(), 2);
-  assert_eq!(info[2].file_size(), 1143952);
-
-  assert_eq!(info[3].name, "Tasks");
-  assert_eq!(info[3].collabs.len(), 18);
-  assert_eq!(info[3].resources[0].files.len(), 0);
-
-  println!("{info}");
 }
 
 async fn assert_project_and_task(root_view: &NotionPage) {
@@ -496,10 +493,10 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
   );
 
   if include_sub_dir {
-    let expected_documents = project_expected_row_documents();
+    let expected_row_document_contents = project_expected_row_documents();
     let expected_rows_count = project_expected_row_counts();
     let mut linked_views = vec![];
-    let mut documents = vec![];
+    let mut row_document_contents = vec![];
     let mut rows_count = vec![];
     assert_eq!(content.row_documents.len(), 4);
     let mut mention_blocks = HashSet::new();
@@ -536,16 +533,36 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
         }
       }
 
-      documents.push(document.to_plain_text().unwrap().trim().to_string());
+      row_document_contents.push(document.to_plain_text().unwrap().trim().to_string());
     }
     assert_eq!(mention_blocks.len(), 4);
     mention_blocks.retain(|block| !linked_views.contains(&block.page_id));
     assert!(mention_blocks.is_empty());
-    assert_eq!(documents, expected_documents);
+    assert_eq!(row_document_contents, expected_row_document_contents);
     assert_eq!(rows_count, expected_rows_count);
 
-    let imported_collab = linked_view.build_imported_collab().await.unwrap().unwrap();
-    assert_eq!(imported_collab.collabs.len(), 30);
+    let imported_collab_info = linked_view.build_imported_collab().await.unwrap().unwrap();
+    assert_eq!(imported_collab_info.imported_collabs.len(), 30);
+    assert!(matches!(
+      imported_collab_info.import_type,
+      ImportType::Database { .. }
+    ));
+    match imported_collab_info.import_type {
+      ImportType::Database {
+        row_document_ids, ..
+      } => {
+        // each row document should have its own collab
+        for row_document_id in row_document_ids {
+          let imported_collab = imported_collab_info
+            .imported_collabs
+            .iter()
+            .find(|v| v.object_id == row_document_id)
+            .unwrap();
+          assert_eq!(imported_collab.collab_type, CollabType::Document);
+        }
+      },
+      ImportType::Document => {},
+    }
   }
 }
 

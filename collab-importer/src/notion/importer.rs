@@ -191,7 +191,7 @@ impl ImportedInfo {
 
       let space_view_collab = ImportedCollabInfo {
         name: self.name.clone(),
-        collabs: vec![imported_space_collab],
+        imported_collabs: vec![imported_space_collab],
         resources: vec![CollabResource {
           object_id: self.space_view.view.id,
           files: vec![],
