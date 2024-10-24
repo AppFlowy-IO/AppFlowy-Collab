@@ -217,6 +217,14 @@ fn process_csv_dir(
     }
   }
 
+  // When importing a Notion database, there is no direct relationship between the database and its views.
+  // If a document in a database row references a database view, a new database will be created instead of
+  // creating a view for the existing database.
+  let children = row_documents
+    .iter()
+    .flat_map(|row_document| row_document.page.children.clone())
+    .collect::<Vec<_>>();
+
   let notion_file = NotionFile::CSV {
     file_path: all_csv_file_path.clone(),
     size: file_size,
@@ -227,8 +235,7 @@ fn process_csv_dir(
   Some(NotionPage {
     notion_name: name,
     notion_id: id,
-    children: vec![],
-    // when current file is csv, which means its children are rows
+    children,
     notion_file,
     external_links: vec![],
     view_id: uuid::Uuid::new_v4().to_string(),

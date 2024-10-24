@@ -432,7 +432,7 @@ impl NotionPage {
 
           for child in row_document.page.children {
             if let Ok(Some(value)) = child.build_imported_collab().await {
-              imported_collabs.extend(value.collabs);
+              imported_collabs.extend(value.imported_collabs);
               resources.extend(value.resources);
             }
           }
@@ -440,7 +440,7 @@ impl NotionPage {
 
         Ok(Some(ImportedCollabInfo {
           name,
-          collabs: imported_collabs,
+          imported_collabs,
           resources,
           import_type: ImportType::Database {
             database_id,
@@ -459,7 +459,7 @@ impl NotionPage {
         };
         Ok(Some(ImportedCollabInfo {
           name,
-          collabs: vec![imported_collab],
+          imported_collabs: vec![imported_collab],
           resources: vec![collab_resource],
           import_type: ImportType::Document,
         }))
@@ -475,7 +475,7 @@ impl NotionPage {
         };
         Ok(Some(ImportedCollabInfo {
           name,
-          collabs: vec![imported_collab],
+          imported_collabs: vec![imported_collab],
           resources: vec![CollabResource {
             object_id: self.view_id.clone(),
             files: vec![],
