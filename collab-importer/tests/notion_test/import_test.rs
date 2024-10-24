@@ -13,10 +13,11 @@ use collab_document::blocks::{
 };
 
 use collab_document::importer::define::{BlockType, URL_FIELD};
+use collab_entity::CollabType;
 use collab_folder::hierarchy_builder::ParentChildViews;
 use collab_folder::{default_folder_data, Folder, View};
 use collab_importer::error::ImporterError;
-use collab_importer::imported_collab::import_notion_zip_file;
+use collab_importer::imported_collab::{import_notion_zip_file, ImportType};
 use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::NotionImporter;
 use collab_importer::util::{parse_csv, CSVRow};
@@ -496,10 +497,10 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
   );
 
   if include_sub_dir {
-    let expected_documents = project_expected_row_documents();
+    let expected_row_document_contents = project_expected_row_documents();
     let expected_rows_count = project_expected_row_counts();
     let mut linked_views = vec![];
-    let mut documents = vec![];
+    let mut row_document_contents = vec![];
     let mut rows_count = vec![];
     assert_eq!(content.row_documents.len(), 4);
     let mut mention_blocks = HashSet::new();
@@ -536,16 +537,36 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
         }
       }
 
-      documents.push(document.to_plain_text().unwrap().trim().to_string());
+      row_document_contents.push(document.to_plain_text().unwrap().trim().to_string());
     }
     assert_eq!(mention_blocks.len(), 4);
     mention_blocks.retain(|block| !linked_views.contains(&block.page_id));
     assert!(mention_blocks.is_empty());
-    assert_eq!(documents, expected_documents);
+    assert_eq!(row_document_contents, expected_row_document_contents);
     assert_eq!(rows_count, expected_rows_count);
 
-    let imported_collab = linked_view.build_imported_collab().await.unwrap().unwrap();
-    assert_eq!(imported_collab.collabs.len(), 30);
+    let imported_collab_info = linked_view.build_imported_collab().await.unwrap().unwrap();
+    assert_eq!(imported_collab_info.collabs.len(), 30);
+    assert!(matches!(
+      imported_collab_info.import_type,
+      ImportType::Database { .. }
+    ));
+    match imported_collab_info.import_type {
+      ImportType::Database {
+        row_document_ids, ..
+      } => {
+        // each row document should have its own collab
+        for row_document_id in row_document_ids {
+          let imported_collab = imported_collab_info
+            .collabs
+            .iter()
+            .find(|v| v.object_id == row_document_id)
+            .unwrap();
+          assert_eq!(imported_collab.collab_type, CollabType::Document);
+        }
+      },
+      ImportType::Document => {},
+    }
   }
 }
 

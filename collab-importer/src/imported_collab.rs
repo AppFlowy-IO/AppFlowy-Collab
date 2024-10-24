@@ -103,6 +103,7 @@ pub enum ImportType {
   Database {
     database_id: String,
     view_ids: Vec<String>,
+    row_document_ids: Vec<String>,
   },
   Document,
 }

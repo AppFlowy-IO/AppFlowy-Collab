@@ -347,20 +347,25 @@ impl NotionPage {
           .try_into_database_template(Some(Box::new(file_url_builder)))
           .await
           .unwrap();
-        let database = Database::create_with_template(database_template).await?;
+        let mut database = Database::create_with_template(database_template).await?;
         let mut row_documents = row_documents.clone();
 
         if let Some(field) = database.get_primary_field() {
           let view_id = database.get_inline_view_id();
           let row_cells = database.get_cells_for_field(&view_id, &field.id).await;
           for row_cell in row_cells {
-            row_documents.iter_mut().for_each(|row_document| {
+            for row_document in row_documents.iter_mut() {
               if let Some(text) = row_cell.text() {
                 if row_document.page.notion_name == text {
-                  row_document.set_row_id(&row_cell.row_id);
+                  row_document.set_row_document_id(&row_cell.row_id);
+                  database
+                    .update_row_meta(&row_cell.row_id, |meta| {
+                      meta.update_is_document_empty(false);
+                    })
+                    .await;
                 }
               }
-            });
+            }
           }
         }
 
@@ -410,16 +415,18 @@ impl NotionPage {
           })
           .collect::<Vec<_>>();
 
+        let mut row_document_ids = vec![];
         for row_document in content.row_documents {
           if let Ok((document, resource)) = row_document.page.as_document().await {
             if let Ok(encoded_collab) = document.encode_collab() {
               resources.push(resource);
               let imported_collab = ImportedCollab {
-                object_id: self.view_id.clone(),
+                object_id: row_document.page.view_id.clone(),
                 collab_type: CollabType::Document,
                 encoded_collab,
               };
               imported_collabs.push(imported_collab);
+              row_document_ids.push(row_document.page.view_id.clone())
             }
           }
 
@@ -438,6 +445,7 @@ impl NotionPage {
           import_type: ImportType::Database {
             database_id,
             view_ids,
+            row_document_ids,
           },
         }))
       },
@@ -547,7 +555,7 @@ pub struct ImportedRowDocument {
 }
 
 impl ImportedRowDocument {
-  fn set_row_id(&mut self, row_id: &RowId) {
+  fn set_row_document_id(&mut self, row_id: &RowId) {
     let document_id = get_row_document_id(row_id).unwrap();
     self.page.view_id = document_id;
   }
