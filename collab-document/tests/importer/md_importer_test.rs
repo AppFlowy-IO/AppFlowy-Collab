@@ -1,3 +1,4 @@
+use assert_json_diff::assert_json_eq;
 use serde_json::json;
 
 use crate::importer::util::{
@@ -29,6 +30,26 @@ fn test_inline_elements() {
   ]);
 
   assert_eq!(delta_json, expected_delta);
+}
+
+#[test]
+fn test_href_link() {
+  let markdown = r#"
+  ## Project tasks
+  [Tasks](Marketing%20campaign%2088ac0cea4cb245efb44d63ace0a37d1e/Tasks%2042a63a9fe6df4a39a8d5b4804e0eae9f.csv)
+  "#;
+  let result = markdown_to_document_data(markdown);
+  let paragraph = get_block_by_type(&result, "paragraph");
+  let delta_json = get_delta_json(&result, &paragraph.id);
+  let expected_delta = json!( [
+    {
+      "attributes": {
+        "href": "Marketing%20campaign%2088ac0cea4cb245efb44d63ace0a37d1e/Tasks%2042a63a9fe6df4a39a8d5b4804e0eae9f.csv"
+      },
+      "insert": "Tasks"
+    }
+  ]);
+  assert_json_eq!(delta_json, expected_delta);
 }
 
 #[test]

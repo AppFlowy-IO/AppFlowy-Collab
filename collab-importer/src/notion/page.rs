@@ -235,7 +235,7 @@ impl NotionPage {
     external_link_views: &HashMap<String, NotionPage>,
   ) {
     for delta in deltas {
-      if let TextDelta::Inserted(_, Some(attrs)) = delta {
+      if let TextDelta::Inserted(_v, Some(attrs)) = delta {
         if let Some(href_value) = attrs.get("href") {
           let delta_str = href_value.to_string();
           if let Ok(links) = extract_external_links(&delta_str) {
@@ -382,6 +382,7 @@ impl NotionPage {
     }
   }
 
+  #[async_recursion::async_recursion(?Send)]
   pub async fn build_imported_collab(&self) -> Result<Option<ImportedCollabInfo>, ImporterError> {
     let name = self.notion_name.clone();
     match &self.notion_file {
@@ -419,6 +420,13 @@ impl NotionPage {
                 encoded_collab,
               };
               imported_collabs.push(imported_collab);
+            }
+          }
+
+          for child in row_document.page.children {
+            if let Ok(Some(value)) = child.build_imported_collab().await {
+              imported_collabs.extend(value.collabs);
+              resources.extend(value.resources);
             }
           }
         }

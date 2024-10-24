@@ -5,12 +5,12 @@ use markdown::mdast::Node;
 use markdown::{to_mdast, ParseOptions};
 use percent_encoding::percent_decode_str;
 
-use crate::notion::file::{process_row_md_file, NotionFile, Resource};
+use crate::notion::file::{process_row_md_content, NotionFile, Resource};
 use crate::notion::page::{ExternalLink, ExternalLinkType, ImportedRowDocument, NotionPage};
 use crate::util::parse_csv;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use tracing::error;
+use tracing::{error, warn};
 use walkdir::{DirEntry, WalkDir};
 
 pub(crate) fn get_file_size(path: &PathBuf) -> std::io::Result<u64> {
@@ -77,6 +77,7 @@ pub(crate) fn process_entry(
   host: &str,
   workspace_id: &str,
   current_entry: &DirEntry,
+  include_partial_csv: bool,
 ) -> Option<NotionPage> {
   // Skip macOS-specific files
   let entry_name = current_entry.file_name().to_str()?;
@@ -85,7 +86,7 @@ pub(crate) fn process_entry(
   }
 
   let path = current_entry.path();
-  let ext = get_file_extension(path);
+  let ext = get_file_extension(path, include_partial_csv);
   if ext.is_file() {
     // Check if there's a corresponding directory for this .md file and skip it if so
     process_file(host, workspace_id, path, ext)
@@ -101,7 +102,15 @@ pub(crate) fn process_entry(
     let all_csv_file_path = parent_path.join(format!("{}_all.csv", entry_name));
     let csv_file_path = parent_path.join(format!("{}.csv", entry_name));
     if md_file_path.exists() {
-      process_md_dir(host, workspace_id, path, name, id, &md_file_path)
+      process_md_dir(
+        host,
+        workspace_id,
+        path,
+        name,
+        id,
+        &md_file_path,
+        include_partial_csv,
+      )
     } else if all_csv_file_path.exists() {
       process_csv_dir(
         entry_name,
@@ -132,7 +141,7 @@ fn process_space_dir(
   // Collect all child entries first, to sort by created time
   let entries: Vec<_> = walk_sub_dir(path);
   for sub_entry in entries {
-    if let Some(child_view) = process_entry(host, workspace_id, &sub_entry) {
+    if let Some(child_view) = process_entry(host, workspace_id, &sub_entry, false) {
       children.push(child_view);
     }
   }
@@ -177,14 +186,29 @@ fn process_csv_dir(
     let csv_dir = parent_path.join(file_name);
     if csv_dir.exists() {
       for sub_entry in walk_sub_dir(&csv_dir) {
-        if let Some(page) = process_entry(host, workspace_id, &sub_entry) {
+        if let Some(page) = process_entry(host, workspace_id, &sub_entry, true) {
+          if page.children.iter().any(|c| c.notion_file.is_markdown()) {
+            warn!("Only CSV file exist in the database row directory");
+          }
+
           for row in csv_file.rows.iter() {
+            // when page name equal to the first cell of the row. It means it's a database row document
             if page.notion_name.starts_with(&row[0]) {
               if let Some(file_path) = page.notion_file.imported_file_path() {
-                let _ = process_row_md_file(file_path);
+                if let Ok(md_content) = fs::read_to_string(file_path) {
+                  if md_content.is_empty() {
+                    continue;
+                  }
+
+                  // In Notion, each database row is represented as a markdown file.
+                  // The content between the first-level heading (H1) and the second-level heading (H2)
+                  // contains key-value pairs corresponding to the columns/cells of that row.
+                  if process_row_md_content(md_content, file_path).is_ok() {
+                    row_documents.push(ImportedRowDocument { page });
+                  }
+                }
               }
 
-              row_documents.push(ImportedRowDocument { page });
               break;
             }
           }
@@ -227,19 +251,20 @@ pub fn walk_sub_dir(path: &Path) -> Vec<DirEntry> {
 fn process_md_dir(
   host: &str,
   workspace_id: &str,
-  path: &Path,
+  dir_path: &Path,
   name: String,
   id: Option<String>,
   md_file_path: &PathBuf,
+  include_partial_csv: bool,
 ) -> Option<NotionPage> {
   let mut children = vec![];
   let external_links = get_md_links(md_file_path).unwrap_or_default();
   let mut resources = vec![];
   // Walk through sub-entries of the directory
-  for sub_entry in walk_sub_dir(path) {
+  for sub_entry in walk_sub_dir(dir_path) {
     // Skip the directory itself and its corresponding .md file
     if sub_entry.path() != md_file_path {
-      if let Some(child_view) = process_entry(host, workspace_id, &sub_entry) {
+      if let Some(child_view) = process_entry(host, workspace_id, &sub_entry, include_partial_csv) {
         children.push(child_view);
       }
 
@@ -281,11 +306,18 @@ fn process_file(
   match ext {
     FileExtension::Unknown => None,
     FileExtension::Markdown => process_md_file(host, workspace_id, path),
-    FileExtension::Csv => process_csv_file(host, workspace_id, path),
+    FileExtension::Csv {
+      include_partial_csv,
+    } => process_csv_file(host, workspace_id, path, include_partial_csv),
   }
 }
 
-fn process_csv_file(host: &str, workspace_id: &str, path: &Path) -> Option<NotionPage> {
+fn process_csv_file(
+  host: &str,
+  workspace_id: &str,
+  path: &Path,
+  include_partial_csv: bool,
+) -> Option<NotionPage> {
   let file_name = path.file_name()?.to_str()?;
   // Check if a folder exists with the same name as the CSV file, excluding the "_all.csv" suffix.
   // When exporting a Notion zip file with the 'create folders for subpages' option enabled,
@@ -300,7 +332,7 @@ fn process_csv_file(host: &str, workspace_id: &str, path: &Path) -> Option<Notio
   }
 
   // Sometime, the exported csv might contains abc_all.csv or abc.csv. Just keep the abc_all.csv
-  if !file_name.ends_with("_all.csv") {
+  if !include_partial_csv && !file_name.ends_with("_all.csv") {
     // If the file name does not end with "_all", return None
     return None;
   }
@@ -356,7 +388,7 @@ fn process_md_file(host: &str, workspace_id: &str, path: &Path) -> Option<Notion
   }
 
   // If the file is CSV, then it should be handled later.
-  if notion_file.is_csv_all() {
+  if notion_file.is_csv() {
     return None;
   }
   Some(NotionPage {
@@ -459,21 +491,23 @@ pub(crate) fn extract_external_links(path_str: &str) -> Result<Vec<ExternalLink>
 enum FileExtension {
   Unknown,
   Markdown,
-  Csv,
+  Csv { include_partial_csv: bool },
 }
 
 impl FileExtension {
   fn is_file(&self) -> bool {
-    matches!(self, FileExtension::Markdown | FileExtension::Csv)
+    matches!(self, FileExtension::Markdown | FileExtension::Csv { .. })
   }
 }
 
-fn get_file_extension(path: &Path) -> FileExtension {
+fn get_file_extension(path: &Path, include_partial_csv: bool) -> FileExtension {
   path
     .extension()
     .map_or(FileExtension::Unknown, |ext| match ext.to_str() {
       Some("md") => FileExtension::Markdown,
-      Some("csv") => FileExtension::Csv,
+      Some("csv") => FileExtension::Csv {
+        include_partial_csv,
+      },
       _ => FileExtension::Unknown,
     })
 }

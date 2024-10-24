@@ -113,7 +113,6 @@ async fn import_two_spaces_test2() {
   let mut mention_blocks = HashSet::new();
   for block_id in block_ids.iter() {
     if let Some((_, deltas)) = document.get_block_delta(block_id) {
-      println!("{:?}", deltas);
       mention_blocks.extend(
         deltas
           .into_iter()
@@ -224,16 +223,20 @@ async fn import_project_test() {
   )
   .unwrap();
   let import = importer.import().await.unwrap();
-  // check_project_database(&import.views()[0]).await;
+  check_project_database(&import.views()[0], true).await;
 
-  let expected_documents = project_task_expected_row_documents();
-  let mut documents = vec![];
   let database = import.views()[0].as_database().await.unwrap();
   for row_document in database.row_documents {
+    assert_eq!(row_document.page.children.len(), 1);
+    let _ref_database = row_document.page.children[0]
+      .as_database()
+      .await
+      .unwrap()
+      .database;
+
     let document = row_document.page.as_document().await.unwrap().0;
-    documents.push(document.to_plain_text().unwrap().trim().to_string());
+    println!("{}", document.to_plain_text().unwrap().trim());
   }
-  assert_eq!(documents, expected_documents);
 }
 
 #[tokio::test]
@@ -322,12 +325,12 @@ async fn import_project_and_task_collab_test() {
   assert_eq!(info[1].resources[0].files.len(), 0);
 
   assert_eq!(info[2].name, "Projects");
-  assert_eq!(info[2].collabs.len(), 9);
+  assert_eq!(info[2].collabs.len(), 30);
   assert_eq!(info[2].resources[0].files.len(), 2);
   assert_eq!(info[2].file_size(), 1143952);
 
   assert_eq!(info[3].name, "Tasks");
-  assert_eq!(info[3].collabs.len(), 35);
+  assert_eq!(info[3].collabs.len(), 18);
   assert_eq!(info[3].resources[0].files.len(), 0);
 
   println!("{info}");
@@ -479,7 +482,6 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
   ];
   for (index, field) in fields.iter().enumerate() {
     assert_eq!(FieldType::from(field.field_type), expected_file_type[index]);
-    // println!("{:?}", FieldType::from(field.field_type));
   }
   for (index, field) in csv_file.columns.iter().enumerate() {
     assert_eq!(&fields[index].name, field);
@@ -494,34 +496,56 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
   );
 
   if include_sub_dir {
-    let expected_documents = project_task_expected_row_documents();
+    let expected_documents = project_expected_row_documents();
+    let expected_rows_count = project_expected_row_counts();
+    let mut linked_views = vec![];
     let mut documents = vec![];
+    let mut rows_count = vec![];
     assert_eq!(content.row_documents.len(), 4);
+    let mut mention_blocks = HashSet::new();
     for row_document in content.row_documents {
       let document = row_document.page.as_document().await.unwrap().0;
+      let document_ref_database = row_document.page.children[0]
+        .as_database()
+        .await
+        .unwrap()
+        .database;
+
+      let rows = document_ref_database.collect_all_rows().await;
+      rows_count.push(rows.len());
+
+      linked_views.extend(
+        row_document
+          .page
+          .get_linked_views()
+          .into_iter()
+          .map(|v| v.view_id)
+          .collect::<Vec<_>>(),
+      );
+
       let first_block_id = document.get_page_id().unwrap();
       let block_ids = document.get_block_children_ids(&first_block_id);
-
       for block_id in block_ids.iter() {
         if let Some((_block_type, block_delta)) = document.get_block_delta(block_id) {
-          println!("{:?}", block_delta);
-        }
-      }
-
-      for block_id in block_ids.iter() {
-        if let Some((block_type, data)) = document.get_block_data(block_id) {
-          println!("{:?}", data);
-          if matches!(block_type, BlockType::Paragraph) {
-            if let Some(view_id) = extract_view_id_from_block_data(&data) {
-              println!("{:?}", view_id);
-            }
-          }
+          mention_blocks.extend(
+            block_delta
+              .into_iter()
+              .filter_map(|delta| mention_block_content_from_delta(&delta))
+              .collect::<Vec<_>>(),
+          )
         }
       }
 
       documents.push(document.to_plain_text().unwrap().trim().to_string());
     }
+    assert_eq!(mention_blocks.len(), 4);
+    mention_blocks.retain(|block| !linked_views.contains(&block.page_id));
+    assert!(mention_blocks.is_empty());
     assert_eq!(documents, expected_documents);
+    assert_eq!(rows_count, expected_rows_count);
+
+    let imported_collab = linked_view.build_imported_collab().await.unwrap().unwrap();
+    assert_eq!(imported_collab.collabs.len(), 30);
   }
 }
 
@@ -712,14 +736,41 @@ fn verify_root_second_level_views(second_level_views: &[Arc<View>], folder: &mut
   }
 }
 
-fn project_task_expected_row_documents() -> Vec<&'static str> {
-  let a = r#"About this projectLast year, the team prioritized mobile performance, and successfully reduced page load times by 50%. This directly correlated with increased mobile usage, and more positive app store reviews.This quarter, the mobile team is doubling down on performance, and investing in more native components across iOS and Android.Performance dashboardsProject tasksTasks"#;
+fn project_expected_row_counts() -> Vec<usize> {
+  vec![6, 3, 4, 4]
+}
 
-  let b = r#"About this projectThe decision to launch a new product was made in response to a gap in the market and a desire to expand our product line. The product development team has been working on designing and developing a high-quality product that meets the needs of our target audience.The marketing team is developing a comprehensive marketing strategy to promote the product and capture a significant share of the market. The goal of the project is to successfully launch the product and capture 10% market share within the first 6 months.Email campaign templatehttps://www.notion.soProject tasksTasks"#;
+fn project_expected_row_documents() -> Vec<&'static str> {
+  let a = r#"About this project
+Last year, the team prioritized mobile performance, and successfully reduced page load times by 50%. This directly correlated with increased mobile usage, and more positive app store reviews.
+This quarter, the mobile team is doubling down on performance, and investing in more native components across iOS and Android.
+Performance dashboards
+Project tasks
+$"#;
 
-  let c = r#"About this projectThe research study was initiated to gain a deeper understanding of customer satisfaction and identify areas for improvement. Feedback from customers indicated that there were some areas of our product and service that could be improved to better meet their needs.The research team is developing a survey to collect data from a representative sample of customers, which will be analyzed to identify patterns and insights. The goal of the project is to use the findings to inform strategic decision-making and improve customer satisfaction.User interviewshttps://www.notion.sohttps://www.notion.soProject tasksTasks"#;
+  let b = r#"About this project
+The decision to launch a new product was made in response to a gap in the market and a desire to expand our product line. The product development team has been working on designing and developing a high-quality product that meets the needs of our target audience.
+The marketing team is developing a comprehensive marketing strategy to promote the product and capture a significant share of the market. The goal of the project is to successfully launch the product and capture 10% market share within the first 6 months.
+Email campaign template
+https://www.notion.so
+Project tasks
+$"#;
 
-  let d = r#"About this projectBecause our app has so many features, and serves so many personas and use cases, many users find the current onboarding process overwhelming, and don’t experience their “a ha” moment quickly enough.This quarter, the user education team is investing in a holistically redesigned onboarding flow, with a goal of increasing 7 day retention by 25%.Proposed user journeyProject tasksTasks"#;
+  let c = r#"About this project
+The research study was initiated to gain a deeper understanding of customer satisfaction and identify areas for improvement. Feedback from customers indicated that there were some areas of our product and service that could be improved to better meet their needs.
+The research team is developing a survey to collect data from a representative sample of customers, which will be analyzed to identify patterns and insights. The goal of the project is to use the findings to inform strategic decision-making and improve customer satisfaction.
+User interviews
+https://www.notion.so
+https://www.notion.so
+Project tasks
+$"#;
+
+  let d = r#"About this project
+Because our app has so many features, and serves so many personas and use cases, many users find the current onboarding process overwhelming, and don’t experience their “a ha” moment quickly enough.
+This quarter, the user education team is investing in a holistically redesigned onboarding flow, with a goal of increasing 7 day retention by 25%.
+Proposed user journey
+Project tasks
+$"#;
 
   vec![a, b, c, d]
 }

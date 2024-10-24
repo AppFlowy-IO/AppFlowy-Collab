@@ -2,7 +2,7 @@ use crate::notion::page::ImportedRowDocument;
 use markdown::mdast::Node;
 use markdown::{to_mdast, ParseOptions};
 use serde::Serialize;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
@@ -39,7 +39,7 @@ impl NotionFile {
     matches!(self, NotionFile::Markdown { .. })
   }
 
-  pub fn is_csv_all(&self) -> bool {
+  pub fn is_csv(&self) -> bool {
     matches!(self, NotionFile::CSV { .. })
   }
   pub fn imported_file_path(&self) -> Option<&PathBuf> {
@@ -92,51 +92,65 @@ impl Resource {
     }
   }
 }
-
-fn remove_first_h1_until_next_h2(md_content: &str) -> String {
+pub fn remove_first_h1_until_next_h2(md_content: &str) -> String {
   // Parse the Markdown content into an AST
   let parse_options = ParseOptions::default();
-  let mut ast = to_mdast(md_content, &parse_options).unwrap();
+  let ast = to_mdast(md_content, &parse_options).unwrap();
 
-  if let Node::Root(root) = &mut ast {
-    let mut inside_h1_block = false;
+  // Variables to track the line range to remove
+  let mut start_line = None;
+  let mut end_line = None;
 
-    // Filter the root’s children to remove the first H1 and content until the next H2
-    root.children.retain(|node| {
-      if inside_h1_block {
-        // If we're inside the H1 block, check if this node is an H2 heading
-        if let Node::Heading(heading) = node {
-          if heading.depth == 2 {
-            inside_h1_block = false; // Stop removing content
-            return true; // Keep the H2 heading
-          }
-        }
-        // Skip the current node as it's part of the H1 block
-        return false;
-      }
-
-      // Check if the current node is the first H1 heading
+  // Traverse the AST to find the first H1 and next H2 headings
+  if let Node::Root(root) = &ast {
+    for node in &root.children {
       if let Node::Heading(heading) = node {
-        if heading.depth == 1 {
-          inside_h1_block = true; // Start removing content
-          return false; // Remove the H1 heading
+        if heading.depth == 1 && start_line.is_none() {
+          // Mark the start line of the H1 block
+          start_line = heading.position.as_ref().map(|pos| pos.start.line);
+        } else if heading.depth == 2 && start_line.is_some() {
+          // Mark the end line of the H1 block when the first H2 is found
+          end_line = heading.position.as_ref().map(|pos| pos.start.line);
+          break;
         }
       }
-
-      // Keep the node if it's not part of the H1 block
-      true
-    });
+    }
   }
 
-  // Convert the modified AST back to Markdown
-  ast.to_string()
+  // If no H1 or H2 was found, return the original content
+  if start_line.is_none() {
+    return md_content.to_string();
+  }
+
+  let start_line = start_line.unwrap();
+  let end_line = end_line.unwrap_or_else(|| md_content.lines().count() + 1);
+  // Filter the lines and remove the lines between start_line and end_line
+  let result: String = md_content
+    .lines()
+    .enumerate()
+    .filter_map(|(index, line)| {
+      let line_num = index + 1;
+      if line_num < start_line || line_num >= end_line {
+        Some(line)
+      } else {
+        None
+      }
+    })
+    .collect::<Vec<_>>()
+    .join("\n");
+
+  result
 }
 
-pub fn process_row_md_file(file_path: &PathBuf) -> io::Result<()> {
-  let md_content = fs::read_to_string(file_path)?;
+pub fn process_row_md_content(md_content: String, file_path: &PathBuf) -> io::Result<()> {
   let updated_md = remove_first_h1_until_next_h2(&md_content);
+  if updated_md.is_empty() {
+    return Err(io::Error::new(
+      io::ErrorKind::InvalidData,
+      "The Markdown content is empty after processing",
+    ));
+  }
   let mut file = File::create(file_path)?;
   file.write_all(updated_md.as_bytes())?;
-
   Ok(())
 }
