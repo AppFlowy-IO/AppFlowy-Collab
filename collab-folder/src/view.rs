@@ -692,6 +692,23 @@ pub struct View {
 }
 
 impl View {
+  pub fn orphan_view(view_id: &str, layout: ViewLayout, uid: Option<i64>) -> Self {
+    View {
+      id: view_id.to_string(),
+      parent_view_id: view_id.to_string(),
+      name: "".to_string(),
+      desc: "".to_string(),
+      children: Default::default(),
+      created_at: timestamp(),
+      is_favorite: false,
+      layout,
+      icon: None,
+      created_by: uid,
+      last_edited_time: 0,
+      last_edited_by: None,
+      extra: None,
+    }
+  }
   pub fn space_info(&self) -> Option<SpaceInfo> {
     let extra = self.extra.as_ref()?;
     serde_json::from_str::<SpaceInfo>(extra).ok()
