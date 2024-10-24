@@ -59,7 +59,7 @@ impl NotionImporter {
 
   /// Return a ImportedInfo struct that contains all the views and their children recursively.
   pub async fn import(mut self) -> Result<ImportedInfo, ImporterError> {
-    let views = self.collect_views().await?;
+    let views = self.collect_pages().await?;
     if views.is_empty() {
       return Err(ImporterError::CannotImport);
     }
@@ -73,14 +73,14 @@ impl NotionImporter {
     )
   }
 
-  async fn collect_views(&mut self) -> Result<Vec<NotionPage>, ImporterError> {
+  async fn collect_pages(&mut self) -> Result<Vec<NotionPage>, ImporterError> {
     let mut notion_pages = vec![];
     let mut has_spaces = false;
     let mut has_pages = false;
 
     // Process entries and track whether we have spaces (directories) and pages (non-directories)
     for entry in walk_sub_dir(&self.path) {
-      if let Some(view) = process_entry(&self.host, &self.workspace_id, &entry) {
+      if let Some(view) = process_entry(&self.host, &self.workspace_id, &entry, false) {
         has_spaces |= view.is_dir;
         has_pages |= !view.is_dir;
         notion_pages.push(view);
@@ -192,10 +192,10 @@ impl ImportedInfo {
       let space_view_collab = ImportedCollabInfo {
         name: self.name.clone(),
         collabs: vec![imported_space_collab],
-        resource: CollabResource {
+        resources: vec![CollabResource {
           object_id: self.space_view.view.id,
           files: vec![],
-        },
+        }],
         import_type: ImportType::Document,
       };
 

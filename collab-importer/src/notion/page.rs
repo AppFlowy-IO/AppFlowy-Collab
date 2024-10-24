@@ -1,7 +1,7 @@
 use crate::error::ImporterError;
 use crate::imported_collab::{ImportType, ImportedCollab, ImportedCollabInfo};
 
-use collab_database::database::Database;
+use collab_database::database::{get_row_document_id, Database};
 use collab_database::template::csv::{CSVResource, CSVTemplate};
 use collab_document::blocks::{mention_block_data, mention_block_delta, TextDelta};
 use collab_document::document::Document;
@@ -14,18 +14,20 @@ use crate::notion::file::NotionFile;
 use crate::notion::walk_dir::extract_external_links;
 use crate::notion::ImportedCollabInfoStream;
 use crate::util::{upload_file_url, FileId};
+use collab_database::rows::RowId;
 use collab_database::template::builder::FileUrlBuilder;
 use collab_document::document_data::default_document_data;
 use percent_encoding::percent_decode_str;
 use serde::Serialize;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Display;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tracing::error;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]
 pub struct NotionPage {
   pub notion_name: String,
   pub notion_id: Option<String>,
@@ -233,7 +235,7 @@ impl NotionPage {
     external_link_views: &HashMap<String, NotionPage>,
   ) {
     for delta in deltas {
-      if let TextDelta::Inserted(_, Some(attrs)) = delta {
+      if let TextDelta::Inserted(_v, Some(attrs)) = delta {
         if let Some(href_value) = attrs.get("href") {
           let delta_str = href_value.to_string();
           if let Ok(links) = extract_external_links(&delta_str) {
@@ -308,9 +310,13 @@ impl NotionPage {
     }
   }
 
-  pub async fn as_database(&self) -> Result<(Database, CollabResource), ImporterError> {
+  pub async fn as_database(&self) -> Result<DatabaseImportContent, ImporterError> {
     match &self.notion_file {
-      NotionFile::CSV { file_path, .. } => {
+      NotionFile::CSV {
+        file_path,
+        row_documents,
+        ..
+      } => {
         let content = fs::read_to_string(file_path).await?;
         let files = self
           .notion_file
@@ -342,11 +348,32 @@ impl NotionPage {
           .await
           .unwrap();
         let database = Database::create_with_template(database_template).await?;
+        let mut row_documents = row_documents.clone();
+
+        if let Some(field) = database.get_primary_field() {
+          let view_id = database.get_inline_view_id();
+          let row_cells = database.get_cells_for_field(&view_id, &field.id).await;
+          for row_cell in row_cells {
+            row_documents.iter_mut().for_each(|row_document| {
+              if let Some(text) = row_cell.text() {
+                if row_document.page.notion_name == text {
+                  row_document.set_row_id(&row_cell.row_id);
+                }
+              }
+            });
+          }
+        }
+
         let resource = CollabResource {
           object_id: database_id,
           files,
         };
-        Ok((database, resource))
+
+        Ok(DatabaseImportContent {
+          database,
+          row_documents,
+          resource,
+        })
       },
       _ => Err(ImporterError::InvalidFileType(format!(
         "File type is not supported for database: {:?}",
@@ -355,18 +382,23 @@ impl NotionPage {
     }
   }
 
+  #[async_recursion::async_recursion(?Send)]
   pub async fn build_imported_collab(&self) -> Result<Option<ImportedCollabInfo>, ImporterError> {
     let name = self.notion_name.clone();
     match &self.notion_file {
       NotionFile::CSV { .. } => {
-        let (database, collab_resource) = self.as_database().await?;
-        let database_id = database.get_database_id();
-        let view_ids = database
+        let content = self.as_database().await?;
+        let database_id = content.database.get_database_id();
+        let mut resources = vec![content.resource];
+        let view_ids = content
+          .database
           .get_all_views()
           .into_iter()
           .map(|view| view.id)
           .collect::<Vec<_>>();
-        let imported_collabs = database
+
+        let mut imported_collabs = content
+          .database
           .encode_database_collabs()
           .await?
           .into_collabs()
@@ -378,10 +410,31 @@ impl NotionPage {
           })
           .collect::<Vec<_>>();
 
+        for row_document in content.row_documents {
+          if let Ok((document, resource)) = row_document.page.as_document().await {
+            if let Ok(encoded_collab) = document.encode_collab() {
+              resources.push(resource);
+              let imported_collab = ImportedCollab {
+                object_id: self.view_id.clone(),
+                collab_type: CollabType::Document,
+                encoded_collab,
+              };
+              imported_collabs.push(imported_collab);
+            }
+          }
+
+          for child in row_document.page.children {
+            if let Ok(Some(value)) = child.build_imported_collab().await {
+              imported_collabs.extend(value.collabs);
+              resources.extend(value.resources);
+            }
+          }
+        }
+
         Ok(Some(ImportedCollabInfo {
           name,
           collabs: imported_collabs,
-          resource: collab_resource,
+          resources,
           import_type: ImportType::Database {
             database_id,
             view_ids,
@@ -399,7 +452,7 @@ impl NotionPage {
         Ok(Some(ImportedCollabInfo {
           name,
           collabs: vec![imported_collab],
-          resource: collab_resource,
+          resources: vec![collab_resource],
           import_type: ImportType::Document,
         }))
       },
@@ -415,10 +468,10 @@ impl NotionPage {
         Ok(Some(ImportedCollabInfo {
           name,
           collabs: vec![imported_collab],
-          resource: CollabResource {
+          resources: vec![CollabResource {
             object_id: self.view_id.clone(),
             files: vec![],
-          },
+          }],
           import_type: ImportType::Document,
         }))
       },
@@ -449,15 +502,16 @@ pub async fn build_imported_collab_recursively<'a>(
   Box::pin(initial_stream.chain(child_stream))
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]
 pub struct ExternalLink {
   pub id: String,
   pub name: String,
   pub link_type: ExternalLinkType,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]
 pub enum ExternalLinkType {
+  #[default]
   Unknown,
   CSV,
   Markdown,
@@ -485,4 +539,28 @@ impl FileUrlBuilder for FileUrlBuilderImpl {
       &file_id,
     ))
   }
+}
+
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]
+pub struct ImportedRowDocument {
+  pub page: NotionPage,
+}
+
+impl ImportedRowDocument {
+  fn set_row_id(&mut self, row_id: &RowId) {
+    let document_id = get_row_document_id(row_id).unwrap();
+    self.page.view_id = document_id;
+  }
+}
+
+impl Display for ImportedRowDocument {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.page.notion_name)
+  }
+}
+
+pub struct DatabaseImportContent {
+  pub database: Database,
+  pub row_documents: Vec<ImportedRowDocument>,
+  pub resource: CollabResource,
 }

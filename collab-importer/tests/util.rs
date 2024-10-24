@@ -1,4 +1,3 @@
-use percent_encoding::percent_decode_str;
 use std::env::temp_dir;
 
 use async_zip::base::read::stream::ZipFileReader;
@@ -11,29 +10,6 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
-
-pub fn parse_csv(file_path: &PathBuf) -> (Vec<String>, Vec<Vec<String>>) {
-  let content = std::fs::read_to_string(file_path).unwrap();
-  let mut reader = csv::Reader::from_reader(content.as_bytes());
-  let csv_fields = reader
-    .headers()
-    .unwrap()
-    .iter()
-    .map(|s| s.to_string())
-    .collect::<Vec<String>>();
-  let csv_rows = reader
-    .records()
-    .flat_map(|r| r.ok())
-    .map(|record| {
-      record
-        .into_iter()
-        .filter_map(|s| Some(percent_decode_str(s).decode_utf8().ok()?.to_string()))
-        .collect::<Vec<String>>()
-    })
-    .collect::<Vec<Vec<String>>>();
-
-  (csv_fields, csv_rows)
-}
 
 pub struct Cleaner(PathBuf);
 
