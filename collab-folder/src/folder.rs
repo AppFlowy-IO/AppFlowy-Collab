@@ -327,6 +327,13 @@ impl Folder {
     self.body.views.insert(&mut txn, view, index);
   }
 
+  pub fn insert_views(&mut self, views: Vec<View>) {
+    let mut txn = self.collab.transact_mut();
+    for view in views {
+      self.body.views.insert(&mut txn, view, None);
+    }
+  }
+
   pub fn insert_nested_views(&mut self, views: Vec<ParentChildViews>) {
     let views = FlattedViews::flatten_views(views);
     let mut txn = self.collab.transact_mut();
