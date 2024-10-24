@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-
+use tracing::warn;
 use zip::read::ZipArchive;
 
 pub struct UnzipFile {
@@ -65,7 +65,7 @@ pub fn sync_unzip(
       }
 
       // Create and write the file
-      let mut outfile = OpenOptions::new()
+      match OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&output_path)
@@ -75,26 +75,31 @@ pub fn sync_unzip(
             output_path,
             e
           ))
-        })?;
+        }) {
+        Ok(mut outfile) => {
+          let mut buffer = vec![];
+          entry.read_to_end(&mut buffer).map_err(|e| {
+            ImporterError::Internal(anyhow!("Failed to read entry content: {:?}", e))
+          })?;
 
-      let mut buffer = vec![];
-      entry
-        .read_to_end(&mut buffer)
-        .map_err(|e| ImporterError::Internal(anyhow!("Failed to read entry content: {:?}", e)))?;
-
-      if buffer.len() >= 4 {
-        let four_bytes: [u8; 4] = buffer[..4].try_into().unwrap();
-        if is_multi_part_zip_signature(&four_bytes) {
-          if let Some(file_name) = Path::new(&filename).file_stem().and_then(|s| s.to_str()) {
-            root_dir = Some(remove_part_suffix(file_name));
+          if buffer.len() >= 4 {
+            let four_bytes: [u8; 4] = buffer[..4].try_into().unwrap();
+            if is_multi_part_zip_signature(&four_bytes) {
+              if let Some(file_name) = Path::new(&filename).file_stem().and_then(|s| s.to_str()) {
+                root_dir = Some(remove_part_suffix(file_name));
+              }
+              parts.push(output_path.clone());
+            }
           }
-          parts.push(output_path.clone());
-        }
-      }
 
-      outfile
-        .write_all(&buffer)
-        .map_err(|e| ImporterError::Internal(anyhow!("Failed to write file: {:?}", e)))?;
+          outfile
+            .write_all(&buffer)
+            .map_err(|e| ImporterError::Internal(anyhow!("Failed to write file: {:?}", e)))?;
+        },
+        Err(err) => {
+          warn!("{}", err);
+        },
+      }
     }
   }
 
