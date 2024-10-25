@@ -80,41 +80,53 @@ impl NotionImporter {
   }
 
   async fn collect_pages(&mut self) -> Result<Vec<NotionPage>, ImporterError> {
-    let mut notion_pages = vec![];
     let mut has_spaces = false;
     let mut has_pages = false;
 
-    let csv_relation = find_parent_child_csv_relationships(&self.path).unwrap_or_default();
+    let path = self.path.clone();
+    let csv_relation = tokio::task::spawn_blocking(move || {
+      find_parent_child_csv_relationships(&path).unwrap_or_default()
+    })
+    .await
+    .unwrap_or_default();
 
-    // Process entries and track whether we have spaces (directories) and pages (non-directories)
-    for entry in walk_sub_dir(&self.path) {
-      if let Some(view) =
-        process_entry(&self.host, &self.workspace_id, &entry, false, &csv_relation)
-      {
-        has_spaces |= view.is_dir;
-        has_pages |= !view.is_dir;
-        notion_pages.push(view);
-      }
-    }
-
-    // If there are only spaces (directories) and no pages, return the pages
-    if !has_pages && has_spaces {
-      return Ok(notion_pages);
-    }
-
-    if has_pages && has_spaces {
-      notion_pages.iter_mut().for_each(|page| {
-        if !page.is_dir {
-          let mut cloned_page = page.clone();
-          cloned_page.is_dir = false;
-
-          page.turn_into_space();
-          page.children.push(cloned_page);
+    let path = self.path.clone();
+    let host = self.host.clone();
+    let workspace_id = self.workspace_id.clone();
+    let pages = tokio::task::spawn_blocking(move || {
+      // Process entries and track whether we have spaces (directories) and pages (non-directories)
+      let mut notion_pages: Vec<NotionPage> = vec![];
+      for entry in walk_sub_dir(&path) {
+        if let Some(view) = process_entry(&host, &workspace_id, &entry, false, &csv_relation) {
+          has_spaces |= view.is_dir;
+          has_pages |= !view.is_dir;
+          notion_pages.push(view);
         }
-      });
-    }
+      }
 
-    Ok(notion_pages)
+      // If there are only spaces (directories) and no pages, return the pages
+      if !has_pages && has_spaces {
+        return Ok(notion_pages);
+      }
+
+      if has_pages && has_spaces {
+        notion_pages.iter_mut().for_each(|page| {
+          if !page.is_dir {
+            let mut cloned_page = page.clone();
+            cloned_page.is_dir = false;
+
+            page.turn_into_space();
+            page.children.push(cloned_page);
+          }
+        });
+      }
+
+      Ok::<_, ImporterError>(notion_pages)
+    })
+    .await
+    .map_err(|err| ImporterError::Internal(err.into()))??;
+
+    Ok(pages)
   }
 }
 
