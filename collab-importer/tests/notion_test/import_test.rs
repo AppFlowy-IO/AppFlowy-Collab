@@ -84,7 +84,7 @@ async fn import_part_zip_test() {
     .unwrap();
     let info = importer.import().await.unwrap();
     let nested_view = info.build_nested_views().await;
-    assert_eq!(nested_view.flatten_views().len(), 31);
+    assert_eq!(nested_view.flatten_views().len(), 35);
     println!("{}", nested_view);
   }
 }
@@ -274,7 +274,7 @@ async fn import_project_and_task_test() {
   );
   assert!(!import.views().is_empty());
   assert_eq!(import.name, "project&task");
-  assert_eq!(import.num_of_csv(), 2);
+  assert_eq!(import.num_of_csv(), 6);
   assert_eq!(import.num_of_markdown(), 1);
   assert_eq!(import.views().len(), 1);
 
@@ -314,6 +314,38 @@ async fn import_project_and_task_collab_test() {
 
   assert_eq!(info[3].name, "Tasks");
   assert_eq!(info[3].imported_collabs.len(), 18);
+  assert_eq!(info[3].resources[0].files.len(), 0);
+
+  println!("{info}");
+}
+
+#[tokio::test]
+async fn import_project_and_task_collab_test() {
+  let workspace_id = uuid::Uuid::new_v4().to_string();
+  let host = "http://test.appflowy.cloud";
+  let zip_file_path = PathBuf::from("./tests/asset/project&task.zip");
+  let temp_dir = temp_dir().join(uuid::Uuid::new_v4().to_string());
+  std::fs::create_dir_all(&temp_dir).unwrap();
+  let info = import_notion_zip_file(1, host, &workspace_id, zip_file_path, temp_dir.clone())
+    .await
+    .unwrap();
+
+  assert_eq!(info.len(), 8);
+  assert_eq!(info[0].name, "project&task");
+  assert_eq!(info[0].imported_collabs.len(), 1);
+  assert_eq!(info[0].resources[0].files.len(), 0);
+
+  assert_eq!(info[1].name, "Projects & Tasks");
+  assert_eq!(info[1].imported_collabs.len(), 1);
+  assert_eq!(info[1].resources[0].files.len(), 0);
+
+  assert_eq!(info[2].name, "Projects");
+  assert_eq!(info[2].imported_collabs.len(), 30);
+  assert_eq!(info[2].resources[0].files.len(), 2);
+  assert_eq!(info[2].file_size(), 1143952);
+
+  assert_eq!(info[3].name, "Tasks");
+  assert_eq!(info[3].imported_collabs.len(), 7);
   assert_eq!(info[3].resources[0].files.len(), 0);
 
   println!("{info}");
@@ -560,7 +592,6 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
     mention_blocks.retain(|block| !linked_views.contains(&block.page_id));
     assert!(mention_blocks.is_empty());
     assert_eq!(row_document_contents, expected_row_document_contents);
-
     let imported_collab_info = linked_view.build_imported_collab().await.unwrap().unwrap();
     assert_eq!(imported_collab_info.imported_collabs.len(), 9);
     assert!(matches!(
