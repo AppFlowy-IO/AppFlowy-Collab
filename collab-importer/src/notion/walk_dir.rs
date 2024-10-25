@@ -92,7 +92,7 @@ pub(crate) fn process_entry(
   let ext = get_file_extension(path, include_partial_csv);
   if ext.is_file() {
     // Check if there's a corresponding directory for this .md file and skip it if so
-    process_file(host, workspace_id, path, ext)
+    process_file(host, workspace_id, path, ext, csv_relation)
   } else if path.is_dir() {
     // If the path is a directory, it should contain a file with the same name but with either a .md or .csv extension.
     // If no such file is found, the directory will be treated as a space.
@@ -162,6 +162,7 @@ fn process_space_dir(
     host: host.to_string(),
     workspace_id: workspace_id.to_string(),
     is_dir: true,
+    csv_relation: csv_relation.clone(),
   })
 }
 
@@ -193,7 +194,7 @@ fn process_csv_dir(
     let csv_dir = parent_path.join(file_name);
     if csv_dir.exists() {
       for sub_entry in walk_sub_dir(&csv_dir) {
-        if let Some(page) = process_entry(host, workspace_id, &sub_entry, true, csv_relation) {
+        if let Some(mut page) = process_entry(host, workspace_id, &sub_entry, true, csv_relation) {
           if page.children.iter().any(|c| c.notion_file.is_markdown()) {
             warn!("Only CSV file exist in the database row directory");
           }
@@ -211,15 +212,15 @@ fn process_csv_dir(
                   // The content between the first-level heading (H1) and the second-level heading (H2)
                   // contains key-value pairs corresponding to the columns/cells of that row.
                   if process_row_md_content(md_content, file_path).is_ok() {
-                    for child in page.children.iter() {
+                    // remove page's children that can be found in the csv_relation
+                    page.children.retain(|child| {
                       if let Some(file_path) = child.notion_file.file_path() {
                         if let Ok(file_name) = file_name_from_path(file_path) {
-                          let key = csv_relation.get(&file_name.to_lowercase());
-                          println!("key: {:?}, value:{:?}", key, csv_relation.keys());
+                          return csv_relation.get(&file_name.to_lowercase()).is_none();
                         }
-                        // get the key whose values contains file_path
                       }
-                    }
+                      true
+                    });
 
                     // When importing a Notion database, there is no direct link between the database and its views.
                     // If a document in a database row references a database view, we cannot determine which database it belongs to.
@@ -249,7 +250,7 @@ fn process_csv_dir(
     row_documents,
   };
 
-  Some(NotionPage {
+  let page = NotionPage {
     notion_name: name,
     notion_id: id,
     children,
@@ -259,7 +260,11 @@ fn process_csv_dir(
     host: host.to_string(),
     workspace_id: workspace_id.to_string(),
     is_dir: false,
-  })
+    csv_relation: csv_relation.clone(),
+  };
+
+  csv_relation.set_page_by_path_buf(all_csv_file_path.clone(), page.clone());
+  Some(page)
 }
 
 pub fn walk_sub_dir(path: &Path) -> Vec<DirEntry> {
@@ -326,6 +331,7 @@ fn process_md_dir(
     host: host.to_string(),
     workspace_id: workspace_id.to_string(),
     is_dir: false,
+    csv_relation: csv_relation.clone(),
   })
 }
 
@@ -334,13 +340,14 @@ fn process_file(
   workspace_id: &str,
   path: &Path,
   ext: FileExtension,
+  csv_relation: &CSVRelation,
 ) -> Option<NotionPage> {
   match ext {
     FileExtension::Unknown => None,
-    FileExtension::Markdown => process_md_file(host, workspace_id, path),
+    FileExtension::Markdown => process_md_file(host, workspace_id, path, csv_relation),
     FileExtension::Csv {
       include_partial_csv,
-    } => process_csv_file(host, workspace_id, path, include_partial_csv),
+    } => process_csv_file(host, workspace_id, path, include_partial_csv, csv_relation),
   }
 }
 
@@ -349,6 +356,7 @@ fn process_csv_file(
   workspace_id: &str,
   path: &Path,
   include_partial_csv: bool,
+  csv_relation: &CSVRelation,
 ) -> Option<NotionPage> {
   let file_name = path.file_name()?.to_str()?;
   // Check if a folder exists with the same name as the CSV file, excluding the "_all.csv" suffix.
@@ -399,10 +407,16 @@ fn process_csv_file(
     host: host.to_string(),
     workspace_id: workspace_id.to_string(),
     is_dir: false,
+    csv_relation: csv_relation.clone(),
   })
 }
 
-fn process_md_file(host: &str, workspace_id: &str, path: &Path) -> Option<NotionPage> {
+fn process_md_file(
+  host: &str,
+  workspace_id: &str,
+  path: &Path,
+  csv_relation: &CSVRelation,
+) -> Option<NotionPage> {
   if let Some(parent) = path.parent() {
     let file_stem = path.file_stem()?.to_str()?;
     let corresponding_dir = parent.join(file_stem);
@@ -433,6 +447,7 @@ fn process_md_file(host: &str, workspace_id: &str, path: &Path) -> Option<Notion
     host: host.to_string(),
     workspace_id: workspace_id.to_string(),
     is_dir: false,
+    csv_relation: csv_relation.clone(),
   })
 }
 
@@ -507,6 +522,11 @@ pub(crate) fn extract_external_links(path_str: &str) -> Result<Vec<ExternalLink>
             name,
             id,
             link_type,
+            file_name: path
+              .file_name()
+              .and_then(|name| name.to_str())
+              .map(|s| s.to_string())
+              .unwrap_or_default(),
           });
         }
       } else {

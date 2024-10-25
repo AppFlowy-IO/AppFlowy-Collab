@@ -13,7 +13,7 @@ pub enum LinkType {
   Markdown,
 }
 
-#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Default, Clone)]
 pub enum NotionFile {
   #[default]
   Empty,

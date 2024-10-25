@@ -20,7 +20,7 @@ use csv::Reader;
 use fancy_regex::Regex;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use walkdir::WalkDir;
 
 #[derive(Debug)]
@@ -297,13 +297,36 @@ async fn convert_notion_page_to_parent_child(
   view_builder.build()
 }
 
-#[derive(Default, Debug)]
-pub struct CSVRelation(HashMap<String, PathBuf>);
+#[derive(Default, Debug, Clone)]
+pub struct CSVRelation {
+  inner: Arc<HashMap<String, PathBuf>>,
+  page_by_path_buf: Arc<Mutex<HashMap<PathBuf, NotionPage>>>,
+}
 impl Deref for CSVRelation {
   type Target = HashMap<String, PathBuf>;
 
   fn deref(&self) -> &Self::Target {
-    &self.0
+    &self.inner
+  }
+}
+
+impl CSVRelation {
+  pub fn new(inner: Arc<HashMap<String, PathBuf>>) -> Self {
+    Self {
+      inner,
+      page_by_path_buf: Default::default(),
+    }
+  }
+
+  pub fn get_page(&self, file_name: &str) -> Option<NotionPage> {
+    let path = self.inner.get(&file_name.to_lowercase())?;
+    self.page_by_path_buf.lock().ok()?.get(path).cloned()
+  }
+
+  pub fn set_page_by_path_buf(&self, path_buf: PathBuf, page: NotionPage) {
+    if let Ok(mut lock_guard) = self.page_by_path_buf.lock() {
+      lock_guard.insert(path_buf, page);
+    }
   }
 }
 
@@ -385,16 +408,16 @@ fn find_parent_child_csv_relationships(dir: &PathBuf) -> Result<CSVRelation, any
           csv_map.insert(normalized_child_name, parent_csv.clone());
         }
       } else {
-        println!(
-          "{:?} is not contained in {:?}",
-          child_csv.file_name(),
-          parent_csv.file_name()
-        );
+        // println!(
+        //   "{:?} is not contained in {:?}",
+        //   child_csv.file_name(),
+        //   parent_csv.file_name()
+        // );
       }
     }
   }
 
-  Ok(CSVRelation(csv_map))
+  Ok(CSVRelation::new(Arc::new(csv_map)))
 }
 
 pub fn is_csv_contained_cached(
