@@ -20,6 +20,7 @@ use csv::Reader;
 use fancy_regex::Regex;
 use std::path::PathBuf;
 use std::pin::Pin;
+use std::sync::Arc;
 use walkdir::WalkDir;
 
 #[derive(Debug)]
@@ -306,9 +307,50 @@ impl Deref for CSVRelation {
   }
 }
 
+/// In-memory cache for CSV file content
+#[derive(Default)]
+pub struct CSVContentCache {
+  cache: HashMap<PathBuf, Arc<Vec<HashSet<String>>>>,
+}
+
+impl CSVContentCache {
+  pub fn new() -> Self {
+    Self::default()
+  }
+
+  /// Load and cache the content of the given CSV file
+  fn get_or_load(&mut self, file: &PathBuf) -> Result<Arc<Vec<HashSet<String>>>, Error> {
+    if !self.cache.contains_key(file) {
+      let content = self.load_csv(file)?;
+      self.cache.insert(file.clone(), Arc::new(content));
+    }
+    Ok(self.cache.get(file).unwrap().clone())
+  }
+
+  /// Load CSV content and return it as a vector of hash sets
+  fn load_csv(&self, file: &PathBuf) -> Result<Vec<HashSet<String>>, Error> {
+    let mut reader = Reader::from_path(file)?;
+    let rows: Vec<HashSet<String>> = reader
+      .records()
+      .filter_map(|row| {
+        row.ok().map(|r| {
+          r.iter()
+            .filter(|cell| !cell.is_empty())
+            .map(extract_file_name_from_view_ref)
+            .collect::<HashSet<String>>()
+        })
+      })
+      .collect();
+    Ok(rows)
+  }
+}
+
+/// Main function to find parent-child CSV relationships with content caching
 fn find_parent_child_csv_relationships(dir: &PathBuf) -> Result<CSVRelation, anyhow::Error> {
   let mut parent_csvs = Vec::new();
   let mut child_csvs = Vec::new();
+
+  // Scan for parent and child CSVs in the directory
   for entry in WalkDir::new(dir).into_iter().filter_map(Result::ok) {
     let path = entry.path();
     if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("csv") {
@@ -324,10 +366,20 @@ fn find_parent_child_csv_relationships(dir: &PathBuf) -> Result<CSVRelation, any
   }
 
   let mut csv_map: HashMap<String, PathBuf> = HashMap::new();
+  let mut csv_cache = CSVContentCache::new();
+
+  // Iterate over parent-child combinations
   for parent_csv in &parent_csvs {
+    // Load parent CSV content into cache
+    let parent_rows = csv_cache.get_or_load(parent_csv)?;
+
     for child_csv in &child_csvs {
-      // Check if the parent CSV contains all rows of the child CSV
-      if is_csv_contained(parent_csv, child_csv).unwrap_or(false) {
+      // Load child CSV content into cache
+      let child_rows = csv_cache.get_or_load(child_csv)?;
+
+      // Check if child rows are contained in parent rows
+      let is_contained = are_rows_contained(parent_rows.as_ref(), child_rows.as_ref());
+      if is_contained {
         if let Some(child_csv_str) = child_csv.to_str() {
           let normalized_child_name = extract_file_name(child_csv_str);
           csv_map.insert(normalized_child_name, parent_csv.clone());
@@ -344,62 +396,28 @@ fn find_parent_child_csv_relationships(dir: &PathBuf) -> Result<CSVRelation, any
 
   Ok(CSVRelation(csv_map))
 }
-/// Checks if all rows of file_b are contained in file_a, ignoring paths, case, and whitespace.
-/// If a row from file_b is not contained in file_a, prints both row_a and row_b.
-pub fn is_csv_contained(file_a: &PathBuf, file_b: &PathBuf) -> Result<bool, Error> {
-  // Read and collect rows from file_a into a Vec of HashSets for cell-level comparison
-  let mut reader_a = Reader::from_path(file_a)?;
-  let rows_a: Vec<HashSet<String>> = reader_a
-    .records()
-    .filter_map(|row| {
-      row.ok().map(|r| {
-        r.iter()
-          .map(extract_file_name_from_view_ref)
-          .collect::<HashSet<String>>()
-      })
-    })
-    .collect();
 
-  // Read and check each row of file_b
-  let mut reader_b = Reader::from_path(file_b)?;
-  let mut not_contained_rows = Vec::new();
+pub fn is_csv_contained_cached(
+  file_a: &PathBuf,
+  file_b: &PathBuf,
+  csv_cache: &mut CSVContentCache,
+) -> Result<bool, anyhow::Error> {
+  let parent_rows = csv_cache.get_or_load(file_a)?;
+  let child_rows = csv_cache.get_or_load(file_b)?;
+  Ok(are_rows_contained(
+    parent_rows.as_ref(),
+    child_rows.as_ref(),
+  ))
+}
 
-  for row in reader_b.records() {
-    let row_b: HashSet<String> = row?
-      .iter()
-      .filter(|cell| !cell.is_empty())
-      .map(extract_file_name_from_view_ref)
-      .collect();
-
-    if row_b.is_empty() {
-      continue;
-    }
-
-    let mut is_contained = false;
-    for row_a in &rows_a {
-      if row_b.is_subset(row_a) {
-        is_contained = true;
-        not_contained_rows.clear();
-        break;
-      }
-    }
-
-    if !is_contained {
-      not_contained_rows.push(row_b);
-      break;
+/// Check if all rows of child_rows are contained in parent_rows
+fn are_rows_contained(parent_rows: &[HashSet<String>], child_rows: &[HashSet<String>]) -> bool {
+  for row_b in child_rows {
+    if !parent_rows.iter().any(|row_a| row_b.is_subset(row_a)) {
+      return false;
     }
   }
-
-  // If there are missing rows, print them and return false
-  if !not_contained_rows.is_empty() {
-    // for row in not_contained_rows {
-    //   println!("{:?}", row);
-    // }
-    return Ok(false);
-  }
-
-  // All rows of file_b are contained in file_a
-  Ok(true)
+  true
 }
 
 /// Helper function to normalize strings and extract the file name from a path.
@@ -428,7 +446,6 @@ fn extract_file_name(input: &str) -> String {
 
   normalized
 }
-
 #[cfg(test)]
 mod test_csv_relation {
   use super::*;
@@ -452,9 +469,11 @@ mod test_csv_relation {
       vec!["dog", "frog", ""],
     ]);
 
-    assert!(is_csv_contained(
+    let mut csv_cache = CSVContentCache::new();
+    assert!(is_csv_contained_cached(
       &file_a.to_path_buf(),
-      &file_b.to_path_buf()
+      &file_b.to_path_buf(),
+      &mut csv_cache
     )?);
     Ok(())
   }
@@ -474,9 +493,11 @@ mod test_csv_relation {
       vec!["cat", "dog", "elephant"],
     ]);
 
-    assert!(!is_csv_contained(
+    let mut csv_cache = CSVContentCache::new();
+    assert!(!is_csv_contained_cached(
       &file_a.to_path_buf(),
-      &file_b.to_path_buf()
+      &file_b.to_path_buf(),
+      &mut csv_cache
     )?);
     Ok(())
   }
@@ -492,9 +513,11 @@ mod test_csv_relation {
 
     let file_b = create_temp_csv(vec![]);
 
-    assert!(is_csv_contained(
+    let mut csv_cache = CSVContentCache::new();
+    assert!(is_csv_contained_cached(
       &file_a.to_path_buf(),
-      &file_b.to_path_buf()
+      &file_b.to_path_buf(),
+      &mut csv_cache
     )?);
     Ok(())
   }
@@ -513,15 +536,18 @@ mod test_csv_relation {
       vec!["elephant", ""],
       vec!["banana", ""],
     ]);
-    assert!(!is_csv_contained(
+
+    let mut csv_cache = CSVContentCache::new();
+    assert!(!is_csv_contained_cached(
       &file_a.to_path_buf(),
-      &file_b.to_path_buf()
+      &file_b.to_path_buf(),
+      &mut csv_cache
     )?);
     Ok(())
   }
 
   #[test]
-  fn test_complex_csv_containment() {
+  fn test_complex_csv_containment() -> Result<(), Box<dyn Error>> {
     let header = vec!["Task", "Category", "Related Project", "Related Tasks"];
     let file_a = create_temp_csv(vec![
       header.clone(),
@@ -533,7 +559,6 @@ mod test_csv_relation {
       ],
     ]);
 
-    // Create file_b with the provided content
     let file_b = create_temp_csv(vec![
       header.clone(),
       vec![
@@ -544,15 +569,12 @@ mod test_csv_relation {
       ],
     ]);
 
-    // Check if file_b is contained within file_a
-    match is_csv_contained(&file_a.to_path_buf(), &file_b.to_path_buf()) {
-      Ok(result) => {
-        assert!(result, "File B should be contained in File A");
-      },
-      Err(e) => {
-        panic!("Error occurred while checking CSV containment: {:?}", e);
-      },
-    }
+    let mut csv_cache = CSVContentCache::new();
+    assert!(
+      is_csv_contained_cached(&file_a.to_path_buf(), &file_b.to_path_buf(), &mut csv_cache)?,
+      "File B should be contained in File A"
+    );
+    Ok(())
   }
 
   /// Helper function to create a temporary CSV file with the given rows

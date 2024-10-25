@@ -19,7 +19,7 @@ use collab_folder::{default_folder_data, Folder, View};
 use collab_importer::error::ImporterError;
 use collab_importer::imported_collab::{import_notion_zip_file, ImportType};
 use collab_importer::notion::page::NotionPage;
-use collab_importer::notion::{is_csv_contained, NotionImporter};
+use collab_importer::notion::{is_csv_contained_cached, CSVContentCache, NotionImporter};
 use collab_importer::util::{parse_csv, CSVRow};
 
 use futures::stream::StreamExt;
@@ -342,6 +342,7 @@ async fn test_csv_file_comparison() {
   // Define the path to `all.csv` in the directory
   let all_csv_path = dir_path.join("Tasks 76aaf8a4637542ed8175259692ca08bb_all.csv");
 
+  let mut csv_cache = CSVContentCache::new();
   // Iterate through each CSV file in the directory
   for entry in std::fs::read_dir(&dir_path).unwrap() {
     let entry = entry.unwrap();
@@ -354,7 +355,7 @@ async fn test_csv_file_comparison() {
 
     // Only process CSV files
     if path.extension().and_then(|ext| ext.to_str()) == Some("csv") {
-      let is_contains = is_csv_contained(&all_csv_path, &path).unwrap();
+      let is_contains = is_csv_contained_cached(&all_csv_path, &path, &mut csv_cache).unwrap();
       if !is_contains {
         println!("{} is not contained in all.csv", path.display());
       }
