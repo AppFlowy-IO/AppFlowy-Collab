@@ -12,7 +12,7 @@ use futures::stream::{self, StreamExt};
 
 use crate::notion::file::NotionFile;
 use crate::notion::walk_dir::extract_external_links;
-use crate::notion::ImportedCollabInfoStream;
+use crate::notion::{CSVRelation, ImportedCollabInfoStream};
 use crate::util::{upload_file_url, FileId};
 use collab_database::rows::RowId;
 use collab_database::template::builder::FileUrlBuilder;
@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use tokio::fs;
 use tracing::error;
 
-#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone)]
 pub struct NotionPage {
   pub notion_name: String,
   pub notion_id: Option<String>,
@@ -40,6 +40,7 @@ pub struct NotionPage {
   pub external_links: Vec<Vec<ExternalLink>>,
   pub host: String,
   pub is_dir: bool,
+  pub csv_relation: CSVRelation,
 }
 
 impl NotionPage {
@@ -81,8 +82,27 @@ impl NotionPage {
     let mut linked_views = HashMap::new();
     for links in self.external_links.iter() {
       if let Some(link) = links.last() {
-        if let Some(view) = self.get_view(&link.id) {
+        let page = self.csv_relation.get_page(&link.file_name);
+        if let Some(page) = page {
+          linked_views.insert(link.id.clone(), page);
+        } else if let Some(view) = self.get_view(&link.id) {
           linked_views.insert(link.id.clone(), view);
+        }
+      }
+    }
+    linked_views
+  }
+
+  pub fn get_external_linked_views(&self) -> Vec<NotionPage> {
+    self.get_external_link_notion_view().into_values().collect()
+  }
+
+  pub fn get_linked_views(&self) -> Vec<NotionPage> {
+    let mut linked_views = vec![];
+    for link in &self.external_links {
+      for external_link in link {
+        if let Some(view) = self.get_view(&external_link.id) {
+          linked_views.push(view);
         }
       }
     }
@@ -107,18 +127,6 @@ impl NotionPage {
     }
 
     search_view(&self.children, id)
-  }
-
-  pub fn get_linked_views(&self) -> Vec<NotionPage> {
-    let mut linked_views = vec![];
-    for link in &self.external_links {
-      for external_link in link {
-        if let Some(view) = self.get_view(&external_link.id) {
-          linked_views.push(view);
-        }
-      }
-    }
-    linked_views
   }
 
   pub async fn as_document(&self) -> Result<(Document, CollabResource), ImporterError> {
@@ -515,6 +523,7 @@ pub struct ExternalLink {
   pub id: String,
   pub name: String,
   pub link_type: ExternalLinkType,
+  pub file_name: String,
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]
@@ -549,7 +558,7 @@ impl FileUrlBuilder for FileUrlBuilderImpl {
   }
 }
 
-#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone)]
 pub struct ImportedRowDocument {
   pub page: NotionPage,
 }

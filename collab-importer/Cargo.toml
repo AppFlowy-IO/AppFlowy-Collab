@@ -44,3 +44,4 @@ tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 tokio = { workspace = true, features = ["full"] }
 nanoid = "0.4.0"
 assert-json-diff = "2.0.2"
+tempfile = "3.10.1"

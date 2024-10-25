@@ -19,8 +19,9 @@ use collab_folder::{default_folder_data, Folder, View};
 use collab_importer::error::ImporterError;
 use collab_importer::imported_collab::{import_notion_zip_file, ImportType};
 use collab_importer::notion::page::NotionPage;
-use collab_importer::notion::NotionImporter;
+use collab_importer::notion::{is_csv_contained_cached, CSVContentCache, NotionImporter};
 use collab_importer::util::{parse_csv, CSVRow};
+
 use futures::stream::StreamExt;
 use percent_encoding::percent_decode_str;
 use std::collections::{HashMap, HashSet};
@@ -83,7 +84,7 @@ async fn import_part_zip_test() {
     .unwrap();
     let info = importer.import().await.unwrap();
     let nested_view = info.build_nested_views().await;
-    assert_eq!(nested_view.flatten_views().len(), 35);
+    assert_eq!(nested_view.flatten_views().len(), 31);
     println!("{}", nested_view);
   }
 }
@@ -158,7 +159,7 @@ async fn import_two_spaces_test() {
   assert!(second_space.is_dir);
   assert_eq!(second_space.children.len(), 1);
   let project_and_task = &second_space.children[0];
-  assert_project_and_task(project_and_task).await;
+  assert_project_and_task(project_and_task, false).await;
 
   let views: Vec<ParentChildViews> = info.build_nested_views().await.into_inner();
   for view in views {
@@ -224,7 +225,7 @@ async fn import_project_test() {
   )
   .unwrap();
   let import = importer.import().await.unwrap();
-  check_project_database(&import.views()[0], true).await;
+  check_project_database(&import.views()[0], false).await;
 
   let nested_view = import.build_nested_views().await;
   println!("{}", nested_view);
@@ -273,7 +274,7 @@ async fn import_project_and_task_test() {
   );
   assert!(!import.views().is_empty());
   assert_eq!(import.name, "project&task");
-  assert_eq!(import.num_of_csv(), 6);
+  assert_eq!(import.num_of_csv(), 2);
   assert_eq!(import.num_of_markdown(), 1);
   assert_eq!(import.views().len(), 1);
 
@@ -283,7 +284,7 @@ async fn import_project_and_task_test() {
   - Projects: CSV
   */
   let root_view = &import.views()[0];
-  assert_project_and_task(root_view).await;
+  assert_project_and_task(root_view, true).await;
 }
 
 #[tokio::test]
@@ -297,7 +298,7 @@ async fn import_project_and_task_collab_test() {
     .await
     .unwrap();
 
-  assert_eq!(info.len(), 8);
+  assert_eq!(info.len(), 4);
   assert_eq!(info[0].name, "project&task");
   assert_eq!(info[0].imported_collabs.len(), 1);
   assert_eq!(info[0].resources[0].files.len(), 0);
@@ -307,12 +308,12 @@ async fn import_project_and_task_collab_test() {
   assert_eq!(info[1].resources[0].files.len(), 0);
 
   assert_eq!(info[2].name, "Projects");
-  assert_eq!(info[2].imported_collabs.len(), 30);
+  assert_eq!(info[2].imported_collabs.len(), 9);
   assert_eq!(info[2].resources[0].files.len(), 2);
   assert_eq!(info[2].file_size(), 1143952);
 
   assert_eq!(info[3].name, "Tasks");
-  assert_eq!(info[3].imported_collabs.len(), 7);
+  assert_eq!(info[3].imported_collabs.len(), 18);
   assert_eq!(info[3].resources[0].files.len(), 0);
 
   println!("{info}");
@@ -333,7 +334,37 @@ async fn import_empty_zip_test() {
   assert!(matches!(err, ImporterError::CannotImport));
 }
 
-async fn assert_project_and_task(root_view: &NotionPage) {
+#[tokio::test]
+async fn test_csv_file_comparison() {
+  // Unzip and get the directory path
+  let (_cleaner, dir_path) = sync_unzip_asset("csv_relation").await.unwrap();
+
+  // Define the path to `all.csv` in the directory
+  let all_csv_path = dir_path.join("Tasks 76aaf8a4637542ed8175259692ca08bb_all.csv");
+
+  let mut csv_cache = CSVContentCache::new();
+  // Iterate through each CSV file in the directory
+  for entry in std::fs::read_dir(&dir_path).unwrap() {
+    let entry = entry.unwrap();
+    let path = entry.path();
+
+    // Skip if it's `all.csv` itself
+    if path.file_name().unwrap() == "Tasks 76aaf8a4637542ed8175259692ca08bb_all.csv" {
+      continue;
+    }
+
+    // Only process CSV files
+    if path.extension().and_then(|ext| ext.to_str()) == Some("csv") {
+      let is_contains = is_csv_contained_cached(&all_csv_path, &path, &mut csv_cache).unwrap();
+      if !is_contains {
+        println!("{} is not contained in all.csv", path.display());
+      }
+      assert!(is_contains);
+    }
+  }
+}
+
+async fn assert_project_and_task(root_view: &NotionPage, include_sub_dir: bool) {
   assert_eq!(root_view.notion_name, "Projects & Tasks");
   let linked_views = root_view.get_linked_views();
   check_project_and_task_document(root_view, linked_views.clone()).await;
@@ -343,7 +374,7 @@ async fn assert_project_and_task(root_view: &NotionPage) {
   assert_eq!(linked_views[1].notion_name, "Projects");
 
   check_task_database(&linked_views[0]).await;
-  check_project_database(&linked_views[1], true).await;
+  check_project_database(&linked_views[1], include_sub_dir).await;
 }
 
 async fn assert_blog_post(host: &str, workspace_id: &str, root_view: &NotionPage) {
@@ -408,7 +439,7 @@ async fn check_project_and_task_document(
 async fn check_task_database(linked_view: &NotionPage) {
   assert_eq!(linked_view.notion_name, "Tasks");
 
-  let csv_file = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
+  let csv_file = parse_csv(linked_view.notion_file.file_path().unwrap());
   let database = linked_view.as_database().await.unwrap().database;
   let views = database.get_all_views();
   assert_eq!(views.len(), 1);
@@ -452,7 +483,7 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
   let upload_files = linked_view.notion_file.upload_files();
   assert_eq!(upload_files.len(), 2);
 
-  let csv_file = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
+  let csv_file = parse_csv(linked_view.notion_file.file_path().unwrap());
   let content = linked_view.as_database().await.unwrap();
   let fields = content
     .database
@@ -494,27 +525,17 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
 
   if include_sub_dir {
     let expected_row_document_contents = project_expected_row_documents();
-    let expected_rows_count = project_expected_row_counts();
     let mut linked_views = vec![];
     let mut row_document_contents = vec![];
-    let mut rows_count = vec![];
     assert_eq!(content.row_documents.len(), 4);
-    let mut mention_blocks = HashSet::new();
+    let mut mention_blocks = vec![];
     for row_document in content.row_documents {
       let document = row_document.page.as_document().await.unwrap().0;
-      let document_ref_database = row_document.page.children[0]
-        .as_database()
-        .await
-        .unwrap()
-        .database;
-
-      let rows = document_ref_database.collect_all_rows().await;
-      rows_count.push(rows.len());
 
       linked_views.extend(
         row_document
           .page
-          .get_linked_views()
+          .get_external_linked_views()
           .into_iter()
           .map(|v| v.view_id)
           .collect::<Vec<_>>(),
@@ -539,10 +560,8 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
     mention_blocks.retain(|block| !linked_views.contains(&block.page_id));
     assert!(mention_blocks.is_empty());
     assert_eq!(row_document_contents, expected_row_document_contents);
-    assert_eq!(rows_count, expected_rows_count);
-
     let imported_collab_info = linked_view.build_imported_collab().await.unwrap().unwrap();
-    assert_eq!(imported_collab_info.imported_collabs.len(), 30);
+    assert_eq!(imported_collab_info.imported_collabs.len(), 9);
     assert!(matches!(
       imported_collab_info.import_type,
       ImportType::Database { .. }
@@ -751,10 +770,6 @@ fn verify_root_second_level_views(second_level_views: &[Arc<View>], folder: &mut
       _ => panic!("Unexpected second level view name: {}", view.name),
     }
   }
-}
-
-fn project_expected_row_counts() -> Vec<usize> {
-  vec![6, 3, 4, 4]
 }
 
 fn project_expected_row_documents() -> Vec<&'static str> {
