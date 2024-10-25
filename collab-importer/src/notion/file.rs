@@ -42,7 +42,7 @@ impl NotionFile {
   pub fn is_csv(&self) -> bool {
     matches!(self, NotionFile::CSV { .. })
   }
-  pub fn imported_file_path(&self) -> Option<&PathBuf> {
+  pub fn file_path(&self) -> Option<&PathBuf> {
     match self {
       NotionFile::CSV { file_path, .. } => Some(file_path),
       NotionFile::Markdown { file_path, .. } => Some(file_path),

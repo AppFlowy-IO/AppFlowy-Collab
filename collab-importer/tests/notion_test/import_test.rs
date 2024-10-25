@@ -19,8 +19,9 @@ use collab_folder::{default_folder_data, Folder, View};
 use collab_importer::error::ImporterError;
 use collab_importer::imported_collab::{import_notion_zip_file, ImportType};
 use collab_importer::notion::page::NotionPage;
-use collab_importer::notion::NotionImporter;
+use collab_importer::notion::{is_csv_contained, NotionImporter};
 use collab_importer::util::{parse_csv, CSVRow};
+
 use futures::stream::StreamExt;
 use percent_encoding::percent_decode_str;
 use std::collections::{HashMap, HashSet};
@@ -333,6 +334,35 @@ async fn import_empty_zip_test() {
   assert!(matches!(err, ImporterError::CannotImport));
 }
 
+#[tokio::test]
+async fn test_csv_file_comparison() {
+  // Unzip and get the directory path
+  let (_cleaner, dir_path) = sync_unzip_asset("csv_relation").await.unwrap();
+
+  // Define the path to `all.csv` in the directory
+  let all_csv_path = dir_path.join("Tasks 76aaf8a4637542ed8175259692ca08bb_all.csv");
+
+  // Iterate through each CSV file in the directory
+  for entry in std::fs::read_dir(&dir_path).unwrap() {
+    let entry = entry.unwrap();
+    let path = entry.path();
+
+    // Skip if it's `all.csv` itself
+    if path.file_name().unwrap() == "Tasks 76aaf8a4637542ed8175259692ca08bb_all.csv" {
+      continue;
+    }
+
+    // Only process CSV files
+    if path.extension().and_then(|ext| ext.to_str()) == Some("csv") {
+      let is_contains = is_csv_contained(&all_csv_path, &path).unwrap();
+      if !is_contains {
+        println!("{} is not contained in all.csv", path.display());
+      }
+      assert!(is_contains);
+    }
+  }
+}
+
 async fn assert_project_and_task(root_view: &NotionPage) {
   assert_eq!(root_view.notion_name, "Projects & Tasks");
   let linked_views = root_view.get_linked_views();
@@ -408,7 +438,7 @@ async fn check_project_and_task_document(
 async fn check_task_database(linked_view: &NotionPage) {
   assert_eq!(linked_view.notion_name, "Tasks");
 
-  let csv_file = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
+  let csv_file = parse_csv(linked_view.notion_file.file_path().unwrap());
   let database = linked_view.as_database().await.unwrap().database;
   let views = database.get_all_views();
   assert_eq!(views.len(), 1);
@@ -452,7 +482,7 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
   let upload_files = linked_view.notion_file.upload_files();
   assert_eq!(upload_files.len(), 2);
 
-  let csv_file = parse_csv(linked_view.notion_file.imported_file_path().unwrap());
+  let csv_file = parse_csv(linked_view.notion_file.file_path().unwrap());
   let content = linked_view.as_database().await.unwrap();
   let fields = content
     .database

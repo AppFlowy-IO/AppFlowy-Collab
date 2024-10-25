@@ -7,7 +7,9 @@ use percent_encoding::percent_decode_str;
 
 use crate::notion::file::{process_row_md_content, NotionFile, Resource};
 use crate::notion::page::{ExternalLink, ExternalLinkType, ImportedRowDocument, NotionPage};
+use crate::notion::CSVRelation;
 use crate::util::parse_csv;
+
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use tracing::{error, warn};
@@ -78,6 +80,7 @@ pub(crate) fn process_entry(
   workspace_id: &str,
   current_entry: &DirEntry,
   include_partial_csv: bool,
+  csv_relation: &CSVRelation,
 ) -> Option<NotionPage> {
   // Skip macOS-specific files
   let entry_name = current_entry.file_name().to_str()?;
@@ -110,6 +113,7 @@ pub(crate) fn process_entry(
         id,
         &md_file_path,
         include_partial_csv,
+        csv_relation,
       )
     } else if all_csv_file_path.exists() {
       process_csv_dir(
@@ -121,9 +125,10 @@ pub(crate) fn process_entry(
         parent_path,
         &all_csv_file_path,
         &csv_file_path,
+        csv_relation,
       )
     } else {
-      process_space_dir(host, workspace_id, name, id, path)
+      process_space_dir(host, workspace_id, name, id, path, csv_relation)
     }
   } else {
     None
@@ -136,12 +141,13 @@ fn process_space_dir(
   name: String,
   id: Option<String>,
   path: &Path,
+  csv_relation: &CSVRelation,
 ) -> Option<NotionPage> {
   let mut children = vec![];
   // Collect all child entries first, to sort by created time
   let entries: Vec<_> = walk_sub_dir(path);
   for sub_entry in entries {
-    if let Some(child_view) = process_entry(host, workspace_id, &sub_entry, false) {
+    if let Some(child_view) = process_entry(host, workspace_id, &sub_entry, false, csv_relation) {
       children.push(child_view);
     }
   }
@@ -169,6 +175,7 @@ fn process_csv_dir(
   parent_path: &Path,
   all_csv_file_path: &PathBuf,
   csv_file_path: &PathBuf,
+  csv_relation: &CSVRelation,
 ) -> Option<NotionPage> {
   let mut resources = vec![];
   let file_size = get_file_size(all_csv_file_path).ok()?;
@@ -186,7 +193,7 @@ fn process_csv_dir(
     let csv_dir = parent_path.join(file_name);
     if csv_dir.exists() {
       for sub_entry in walk_sub_dir(&csv_dir) {
-        if let Some(page) = process_entry(host, workspace_id, &sub_entry, true) {
+        if let Some(page) = process_entry(host, workspace_id, &sub_entry, true, csv_relation) {
           if page.children.iter().any(|c| c.notion_file.is_markdown()) {
             warn!("Only CSV file exist in the database row directory");
           }
@@ -194,7 +201,7 @@ fn process_csv_dir(
           for row in csv_file.rows.iter() {
             // when page name equal to the first cell of the row. It means it's a database row document
             if page.notion_name.starts_with(&row[0]) {
-              if let Some(file_path) = page.notion_file.imported_file_path() {
+              if let Some(file_path) = page.notion_file.file_path() {
                 if let Ok(md_content) = fs::read_to_string(file_path) {
                   if md_content.is_empty() {
                     continue;
@@ -204,6 +211,19 @@ fn process_csv_dir(
                   // The content between the first-level heading (H1) and the second-level heading (H2)
                   // contains key-value pairs corresponding to the columns/cells of that row.
                   if process_row_md_content(md_content, file_path).is_ok() {
+                    for child in page.children.iter() {
+                      if let Some(file_path) = child.notion_file.file_path() {
+                        if let Ok(file_name) = file_name_from_path(file_path) {
+                          let key = csv_relation.get(&file_name.to_lowercase());
+                          println!("key: {:?}, value:{:?}", key, csv_relation.keys());
+                        }
+                        // get the key whose values contains file_path
+                      }
+                    }
+
+                    // When importing a Notion database, there is no direct link between the database and its views.
+                    // If a document in a database row references a database view, we cannot determine which database it belongs to.
+                    // We use file csv relation to determine the relation between the database and its views.
                     row_documents.push(ImportedRowDocument { page });
                   }
                 }
@@ -217,9 +237,6 @@ fn process_csv_dir(
     }
   }
 
-  // When importing a Notion database, there is no direct relationship between the database and its views.
-  // If a document in a database row references a database view, a new database will be created instead of
-  // creating a view for the existing database.
   let children = row_documents
     .iter()
     .flat_map(|row_document| row_document.page.children.clone())
@@ -255,6 +272,7 @@ pub fn walk_sub_dir(path: &Path) -> Vec<DirEntry> {
     .collect()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_md_dir(
   host: &str,
   workspace_id: &str,
@@ -263,6 +281,7 @@ fn process_md_dir(
   id: Option<String>,
   md_file_path: &PathBuf,
   include_partial_csv: bool,
+  csv_relation: &CSVRelation,
 ) -> Option<NotionPage> {
   let mut children = vec![];
   let external_links = get_md_links(md_file_path).unwrap_or_default();
@@ -271,7 +290,13 @@ fn process_md_dir(
   for sub_entry in walk_sub_dir(dir_path) {
     // Skip the directory itself and its corresponding .md file
     if sub_entry.path() != md_file_path {
-      if let Some(child_view) = process_entry(host, workspace_id, &sub_entry, include_partial_csv) {
+      if let Some(child_view) = process_entry(
+        host,
+        workspace_id,
+        &sub_entry,
+        include_partial_csv,
+        csv_relation,
+      ) {
         children.push(child_view);
       }
 
