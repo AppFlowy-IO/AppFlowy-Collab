@@ -321,7 +321,13 @@ impl Database {
   /// Return all field orders without order
   pub fn get_all_field_orders(&self) -> Vec<FieldOrder> {
     let txn = self.collab.transact();
-    self.body.fields.get_all_field_orders(&txn)
+    match self.body.try_get_inline_view_id(&txn) {
+      None => {
+        error!("Cannot find inline view id");
+        self.body.fields.get_all_field_orders(&txn)
+      },
+      Some(inline_view_id) => self.body.views.get_field_orders(&txn, &inline_view_id),
+    }
   }
 
   pub fn get_all_views(&self) -> Vec<DatabaseView> {
