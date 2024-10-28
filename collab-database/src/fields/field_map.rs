@@ -95,7 +95,6 @@ impl FieldMap {
   }
 
   /// Get all field orders with a transaction
-  /// This is used to get the order of fields in the view
   pub fn get_all_field_orders<T: ReadTxn>(&self, txn: &T) -> Vec<FieldOrder> {
     self
       .container

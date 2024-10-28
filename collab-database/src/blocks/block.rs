@@ -140,6 +140,11 @@ impl Block {
     )?;
 
     let database_row = Arc::new(RwLock::from(database_row));
+    if let Some(persistence) = self.collab_service.persistence() {
+      if let Ok(encoded_collab) = database_row.write().await.encoded_collab() {
+        persistence.save_collab(&row_id, encoded_collab)?;
+      }
+    }
     self.row_mem_cache.insert(row_id, database_row);
     Ok(row_order)
   }

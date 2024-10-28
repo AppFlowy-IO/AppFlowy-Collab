@@ -324,14 +324,7 @@ impl WorkspaceDatabaseManager {
     let context = DatabaseContext::new(self.collab_service.clone());
     // Add a new database record.
     let mut linked_views = HashSet::new();
-    linked_views.insert(params.inline_view_id.to_string());
-    linked_views.extend(
-      params
-        .views
-        .iter()
-        .filter(|view| view.view_id != params.inline_view_id)
-        .map(|view| view.view_id.clone()),
-    );
+    linked_views.extend(params.views.iter().map(|view| view.view_id.clone()));
     self
       .body
       .add_database(&params.database_id, linked_views.into_iter().collect());
@@ -414,7 +407,7 @@ impl WorkspaceDatabaseManager {
   ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
     let database_data = self.get_database_data(view_id).await?;
 
-    let create_database_params = CreateDatabaseParams::from_database_data(database_data, None);
+    let create_database_params = CreateDatabaseParams::from_database_data(database_data);
     let database = self.create_database(create_database_params).await?;
     Ok(database)
   }

@@ -66,7 +66,6 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   let context = DatabaseContext::new(collab_service);
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
-    inline_view_id: "v1".to_string(),
     views: vec![CreateViewParams {
       database_id: database_id.to_string(),
       view_id: "v1".to_string(),
@@ -121,7 +120,6 @@ pub async fn create_database_with_db(
   let context = DatabaseContext::new(collab_service);
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
-    inline_view_id: "v1".to_string(),
     views: vec![CreateViewParams {
       database_id: database_id.to_string(),
       view_id: "v1".to_string(),
@@ -216,7 +214,6 @@ impl DatabaseTestBuilder {
     let context = DatabaseContext::new(collab_service);
     let params = CreateDatabaseParams {
       database_id: self.database_id.clone(),
-      inline_view_id: self.view_id.clone(),
       views: vec![CreateViewParams {
         database_id: self.database_id,
         view_id: self.view_id,

@@ -10,6 +10,7 @@ use collab::preclude::Collab;
 use collab_database::rows::CreateRowParams;
 use collab_plugins::CollabKVDB;
 use serde_json::{json, Value};
+use uuid::Uuid;
 
 #[tokio::test]
 async fn restore_row_from_disk_test() {
@@ -31,42 +32,43 @@ async fn restore_row_from_disk_test() {
 
 #[tokio::test]
 async fn restore_from_disk_test() {
-  let (db, database_test) = create_database_with_db(1, "1").await;
-  assert_database_eq(database_test).await;
+  let database_id = Uuid::new_v4().to_string();
+  let (db, database_test) = create_database_with_db(1, &database_id).await;
+  assert_database_eq(&database_id, database_test).await;
 
   // Restore from disk
-  let database_test = restore_database_from_db(1, "1", db).await;
-  assert_database_eq(database_test).await;
+  let database_test = restore_database_from_db(1, &database_id, db).await;
+  assert_database_eq(&database_id, database_test).await;
 }
 
 #[tokio::test]
 async fn restore_from_disk_with_different_database_id_test() {
-  let (db, _) = create_database_with_db(1, "1").await;
-  let database_test = restore_database_from_db(1, "1", db).await;
+  let database_id = Uuid::new_v4().to_string();
+  let (db, _) = create_database_with_db(1, &database_id).await;
+  let database_test = restore_database_from_db(1, &database_id, db).await;
 
-  assert_database_eq(database_test).await;
+  assert_database_eq(&database_id, database_test).await;
 }
 
 #[tokio::test]
 async fn restore_from_disk_with_different_uid_test() {
-  let (db, _) = create_database_with_db(1, "1").await;
-  let database_test = restore_database_from_db(1, "1", db).await;
+  let database_id = Uuid::new_v4().to_string();
+  let (db, _) = create_database_with_db(1, &database_id).await;
+  let database_test = restore_database_from_db(1, &database_id, db).await;
 
-  assert_database_eq(database_test).await;
+  assert_database_eq(&database_id, database_test).await;
 }
 
-async fn assert_database_eq(database_test: DatabaseTest) {
+async fn assert_database_eq(database_id: &str, database_test: DatabaseTest) {
   let expected = json!( {
     "fields": [],
-    "inline_view_id": "v1",
     "rows": [],
     "views": [
       {
-        "database_id": "1",
+        "database_id": database_id,
         "field_orders": [],
         "filters": [],
         "group_settings": [],
-        "id": "v1",
         "layout": 0,
         "layout_settings": {},
         "row_orders": [],
@@ -206,7 +208,6 @@ fn expected_json() -> Value {
         }
       }
     ],
-    "inline_view_id": "b44b2906-4508-4532-ad9e-2cf33ceae304",
     "rows": [
       {
         "cells": {
