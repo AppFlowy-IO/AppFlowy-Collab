@@ -208,7 +208,6 @@ fn expected_json() -> Value {
         }
       }
     ],
-    "inline_view_id": "b44b2906-4508-4532-ad9e-2cf33ceae304",
     "rows": [
       {
         "cells": {

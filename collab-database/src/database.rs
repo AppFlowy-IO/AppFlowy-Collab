@@ -1328,7 +1328,6 @@ impl Database {
 
     DatabaseData {
       database_id,
-      inline_view_id,
       fields,
       rows,
       views,
@@ -1503,7 +1502,6 @@ pub fn timestamp() -> i64 {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DatabaseData {
   pub database_id: String,
-  pub inline_view_id: String,
   pub views: Vec<DatabaseView>,
   pub fields: Vec<Field>,
   pub rows: Vec<Row>,
