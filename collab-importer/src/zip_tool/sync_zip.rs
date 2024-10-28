@@ -15,7 +15,6 @@ pub struct UnzipFile {
   pub unzip_dir: PathBuf,
   pub parts: Vec<PathBuf>,
 }
-
 pub fn sync_unzip(
   file_path: PathBuf,
   mut out_dir: PathBuf,
@@ -30,6 +29,7 @@ pub fn sync_unzip(
   let mut root_dir = None;
   let mut parts = vec![];
 
+  // Determine the root directory if the first entry is a directory
   if let Ok(entry) = archive.by_index(0) {
     let filename = entry.name().to_string();
     if root_dir.is_none() && entry.is_dir() {
@@ -54,6 +54,12 @@ pub fn sync_unzip(
       .map_err(|e| ImporterError::Internal(anyhow!("Failed to read entry: {:?}", e)))?;
 
     let filename = entry.name().to_string();
+    // Skip zip files within subdirectories
+    if entry.is_file() && filename.ends_with(".zip") {
+      println!("Skipping zip file: {:?}", filename);
+      continue;
+    }
+
     let output_path = out_dir.join(&filename);
     if entry.is_dir() {
       fs::create_dir_all(&output_path)
@@ -71,7 +77,7 @@ pub fn sync_unzip(
         .open(&output_path)
         .map_err(|e| {
           ImporterError::Internal(anyhow!(
-            "Failed to create or open file with path: {:?}, error:{:?}",
+            "Failed to create or open file with path: {:?}, error: {:?}",
             output_path,
             e
           ))
@@ -82,6 +88,7 @@ pub fn sync_unzip(
             ImporterError::Internal(anyhow!("Failed to read entry content: {:?}", e))
           })?;
 
+          // Check if it's a multipart zip file
           if buffer.len() >= 4 {
             let four_bytes: [u8; 4] = buffer[..4].try_into().unwrap();
             if is_multi_part_zip_signature(&four_bytes) {
