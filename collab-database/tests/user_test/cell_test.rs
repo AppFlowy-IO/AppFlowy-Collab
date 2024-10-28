@@ -2,13 +2,18 @@ use collab::util::AnyMapExt;
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab_database::rows::{new_cell_builder, CREATED_AT};
 use collab_database::rows::{CreateRowParams, LAST_MODIFIED};
+use uuid::Uuid;
 
 use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
 
 #[tokio::test]
 async fn insert_cell_test() {
-  let test = user_database_with_default_row().await;
-  let database = test.get_or_init_database("d1").await.unwrap();
+  let database_id = Uuid::new_v4();
+  let test = user_database_with_default_row(&database_id).await;
+  let database = test
+    .get_or_init_database(&database_id.to_string())
+    .await
+    .unwrap();
   database
     .write()
     .await
@@ -30,8 +35,12 @@ async fn insert_cell_test() {
 
 #[tokio::test]
 async fn update_cell_test() {
-  let test = user_database_with_default_row().await;
-  let database = test.get_or_init_database("d1").await.unwrap();
+  let database_id = Uuid::new_v4();
+  let test = user_database_with_default_row(&database_id).await;
+  let database = test
+    .get_or_init_database(&database_id.to_string())
+    .await
+    .unwrap();
   let mut db = database.write().await;
   db.update_row(1.into(), |row_update| {
     row_update.update_cells(|cells_update| {
@@ -72,12 +81,12 @@ async fn update_cell_test() {
 #[tokio::test]
 async fn update_not_exist_row_test() {
   let mut test = workspace_database_test(1).await;
+  let database_id = Uuid::new_v4();
   let database = test
     .create_database(CreateDatabaseParams {
-      database_id: "d1".to_string(),
-      inline_view_id: "v1".to_string(),
+      database_id: database_id.to_string(),
       views: vec![CreateViewParams {
-        database_id: "d1".to_string(),
+        database_id: database_id.to_string(),
         view_id: "v1".to_string(),
         ..Default::default()
       }],
@@ -93,15 +102,13 @@ async fn update_not_exist_row_test() {
   assert!(row.is_empty())
 }
 
-async fn user_database_with_default_row() -> WorkspaceDatabaseTest {
-  let database_id = "d1".to_string();
+async fn user_database_with_default_row(database_id: &Uuid) -> WorkspaceDatabaseTest {
   let mut test = workspace_database_test(1).await;
   let database = test
     .create_database(CreateDatabaseParams {
-      database_id: database_id.clone(),
-      inline_view_id: "v1".to_string(),
+      database_id: database_id.to_string(),
       views: vec![CreateViewParams {
-        database_id: "d1".to_string(),
+        database_id: database_id.to_string(),
         view_id: "v1".to_string(),
         ..Default::default()
       }],
@@ -113,7 +120,7 @@ async fn user_database_with_default_row() -> WorkspaceDatabaseTest {
   database
     .write()
     .await
-    .create_row_in_view("v1", CreateRowParams::new(1, database_id))
+    .create_row_in_view("v1", CreateRowParams::new(1, database_id.to_string()))
     .await
     .unwrap();
 

@@ -34,6 +34,7 @@ use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
 use rand::Rng;
 use tempfile::TempDir;
+use uuid::Uuid;
 
 pub struct WorkspaceDatabaseTest {
   #[allow(dead_code)]
@@ -297,8 +298,9 @@ pub async fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabase
   let db = Arc::new(CollabKVDB::open(path).unwrap());
   let mut w_database = user_database_test_with_db(uid, db).await;
 
+  let database_id = Uuid::new_v4().to_string();
   w_database
-    .create_database(create_database_params("d1"))
+    .create_database(create_database_params(database_id.as_str()))
     .await
     .unwrap();
 
@@ -327,7 +329,6 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
 
   CreateDatabaseParams {
     database_id: database_id.to_string(),
-    inline_view_id: "v1".to_string(),
     views: vec![CreateViewParams {
       database_id: database_id.to_string(),
       view_id: "v1".to_string(),
@@ -368,7 +369,6 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
 
   CreateDatabaseParams {
     database_id: database_id.clone(),
-    inline_view_id: view_id.to_string(),
     views: vec![CreateViewParams {
       database_id: database_id.clone(),
       view_id: view_id.to_string(),

@@ -62,6 +62,11 @@ impl<'a, 'b> DatabaseViewUpdate<'a, 'b> {
     self
   }
 
+  pub fn set_is_inline(self, is_inline: bool) -> Self {
+    self.map_ref.insert(self.txn, IS_INLINE, is_inline);
+    self
+  }
+
   impl_str_update!(
     set_database_id,
     set_database_id_if_not_none,
@@ -281,7 +286,12 @@ pub fn view_meta_from_value<T: ReadTxn>(value: YrsValue, txn: &T) -> Option<Data
   let map_ref: MapRef = value.cast().ok()?;
   let id: String = map_ref.get_with_txn(txn, VIEW_ID)?;
   let name: String = map_ref.get_with_txn(txn, VIEW_NAME).unwrap_or_default();
-  Some(DatabaseViewMeta { id, name })
+  let is_inline = map_ref.get_with_txn(txn, IS_INLINE).unwrap_or_default();
+  Some(DatabaseViewMeta {
+    id,
+    name,
+    is_inline,
+  })
 }
 
 /// Return a [DatabaseView] from a map ref
@@ -405,6 +415,8 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
     .map(|map_ref| FieldSettingsByFieldIdMap::from((txn, &map_ref)))
     .unwrap_or_default();
 
+  let is_inline: bool = map_ref.get_with_txn(txn, IS_INLINE).unwrap_or_default();
+
   Some(DatabaseView {
     id,
     database_id,
@@ -419,6 +431,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
     field_settings,
     created_at,
     modified_at,
+    is_inline,
   })
 }
 

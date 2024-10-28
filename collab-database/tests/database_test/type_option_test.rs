@@ -1,12 +1,12 @@
-use collab::util::AnyMapExt;
-use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
-use collab_database::views::OrderObjectPosition;
-use std::ops::DerefMut;
-
 use crate::database_test::helper::{
   create_database, default_field_settings_by_layout, DatabaseTest,
 };
 use crate::helper::{TestCheckboxTypeOption, TestDateFormat, TestDateTypeOption, TestTimeFormat};
+use collab::util::AnyMapExt;
+use collab_database::fields::{Field, TypeOptionDataBuilder, TypeOptions};
+use collab_database::views::OrderObjectPosition;
+use std::ops::DerefMut;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn insert_checkbox_type_option_data_test() {
@@ -149,7 +149,8 @@ async fn insert_multi_type_options_test() {
 }
 
 fn user_database_with_default_field() -> DatabaseTest {
-  let mut test = create_database(1, "1");
+  let database_id = Uuid::new_v4().to_string();
+  let mut test = create_database(1, &database_id);
 
   let field = Field {
     id: "f1".to_string(),

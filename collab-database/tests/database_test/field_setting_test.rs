@@ -10,9 +10,10 @@ use std::collections::HashMap;
 
 #[tokio::test]
 async fn new_field_new_field_setting_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let params = CreateViewParams {
-    database_id: "1".to_string(),
+    database_id: database_id.to_string(),
     view_id: "v2".to_string(),
     field_settings: field_settings_for_default_database(),
     ..Default::default()
@@ -38,9 +39,10 @@ async fn new_field_new_field_setting_test() {
 
 #[tokio::test]
 async fn remove_field_remove_field_setting_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let params = CreateViewParams {
-    database_id: "1".to_string(),
+    database_id: database_id.to_string(),
     view_id: "v2".to_string(),
     field_settings: field_settings_for_default_database(),
     ..Default::default()
@@ -61,7 +63,8 @@ async fn remove_field_remove_field_setting_test() {
 
 #[tokio::test]
 async fn update_field_setting_for_some_fields_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let field_settings = TestFieldSetting {
     width: 100,
     visibility: 1,
@@ -95,7 +98,8 @@ async fn update_field_setting_for_some_fields_test() {
 
 #[tokio::test]
 async fn update_field_setting_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let field_settings = TestFieldSetting {
     width: 100,
     visibility: 1,
@@ -114,7 +118,8 @@ async fn update_field_setting_test() {
 
 #[tokio::test]
 async fn duplicate_view_duplicates_field_settings_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let field_settings = TestFieldSetting {
     width: 100,
     visibility: 1,
@@ -142,10 +147,11 @@ async fn duplicate_view_duplicates_field_settings_test() {
 
 #[tokio::test]
 async fn new_view_requires_deps_field_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let deps_field = Field::new("f4".to_string(), "date".to_string(), 3, false);
   let params = CreateViewParams {
-    database_id: "1".to_string(),
+    database_id: database_id.to_string(),
     view_id: "v2".to_string(),
     layout: DatabaseLayout::Calendar,
     field_settings: field_settings_for_default_database(),

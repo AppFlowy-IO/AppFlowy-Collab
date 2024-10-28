@@ -50,6 +50,23 @@ pub struct DatabaseView {
   pub field_settings: FieldSettingsByFieldIdMap,
   pub created_at: i64,
   pub modified_at: i64,
+  #[serde(default)]
+  pub is_inline: bool,
+}
+
+impl DatabaseView {
+  pub fn new(database_id: String, view_id: String, name: String, layout: DatabaseLayout) -> Self {
+    let timestamp = timestamp();
+    Self {
+      id: view_id,
+      database_id,
+      name,
+      layout,
+      created_at: timestamp,
+      modified_at: timestamp,
+      ..Default::default()
+    }
+  }
 }
 
 /// A meta of [DatabaseView]
@@ -57,6 +74,7 @@ pub struct DatabaseView {
 pub struct DatabaseViewMeta {
   pub id: String,
   pub name: String,
+  pub is_inline: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -171,7 +189,6 @@ impl CreateViewParamsValidator {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateDatabaseParams {
   pub database_id: String,
-  pub inline_view_id: String,
   pub fields: Vec<Field>,
   pub rows: Vec<CreateRowParams>,
   pub views: Vec<CreateViewParams>,
@@ -182,11 +199,8 @@ impl CreateDatabaseParams {
   /// database with the same data inside the given `DatabaseData` struct containing all the
   /// data of a database. The internal `database_id`, the database views' `view_id`s and the rows'
   /// `row_id`s will all be regenerated.
-  pub fn from_database_data(data: DatabaseData, default_inline_view_id: Option<String>) -> Self {
-    let (database_id, inline_view_id) = (
-      gen_database_id(),
-      default_inline_view_id.unwrap_or_else(gen_database_view_id),
-    );
+  pub fn from_database_data(data: DatabaseData) -> Self {
+    let database_id = gen_database_id();
     let timestamp = timestamp();
 
     let create_row_params = data
@@ -207,32 +221,24 @@ impl CreateDatabaseParams {
     let create_view_params = data
       .views
       .into_iter()
-      .map(|view| {
-        let view_id = if view.id == data.inline_view_id {
-          inline_view_id.clone()
-        } else {
-          gen_database_view_id()
-        };
-        CreateViewParams {
-          database_id: database_id.clone(),
-          view_id,
-          name: view.name,
-          layout: view.layout,
-          layout_settings: view.layout_settings,
-          filters: view.filters,
-          group_settings: view.group_settings,
-          sorts: view.sorts,
-          field_settings: view.field_settings,
-          created_at: timestamp,
-          modified_at: timestamp,
-          ..Default::default()
-        }
+      .map(|view| CreateViewParams {
+        database_id: database_id.clone(),
+        view_id: gen_database_view_id(),
+        name: view.name,
+        layout: view.layout,
+        layout_settings: view.layout_settings,
+        filters: view.filters,
+        group_settings: view.group_settings,
+        sorts: view.sorts,
+        field_settings: view.field_settings,
+        created_at: timestamp,
+        modified_at: timestamp,
+        ..Default::default()
       })
       .collect();
 
     Self {
       database_id,
-      inline_view_id,
       rows: create_row_params,
       fields: data.fields,
       views: create_view_params,

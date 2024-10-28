@@ -89,7 +89,8 @@ async fn reorder_database_view_sort_test() {
 }
 
 async fn create_database_with_two_sorts() -> DatabaseTest {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let sort_1 = TestSort {
     id: "s1".to_string(),
     field_id: "f1".to_string(),
@@ -104,7 +105,7 @@ async fn create_database_with_two_sorts() -> DatabaseTest {
   };
 
   let params = CreateViewParams {
-    database_id: "1".to_string(),
+    database_id: database_id.to_string(),
     view_id: "v1".to_string(),
     sorts: vec![sort_1.into(), sort_2.into()],
     layout: DatabaseLayout::Grid,
