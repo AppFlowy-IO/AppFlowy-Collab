@@ -400,6 +400,7 @@ fn row_document_id_test() {
 
 #[tokio::test]
 async fn validate_row_test() {
-  let row = create_row(1, RowId::from(1));
+  let workspace_id = Uuid::new_v4().to_string();
+  let row = create_row(1, &workspace_id, RowId::from(1));
   row.validate().unwrap();
 }

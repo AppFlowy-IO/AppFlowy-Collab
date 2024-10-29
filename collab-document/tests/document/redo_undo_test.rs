@@ -1,10 +1,9 @@
 use std::thread::sleep;
 use std::time::Duration;
 
+use crate::util::{insert_block_for_page, open_document_with_db, DocumentTest};
 use nanoid::nanoid;
 use serde_json::to_value;
-
-use crate::util::{insert_block_for_page, open_document_with_db, DocumentTest};
 
 const WAIT_TIME: Duration = Duration::from_secs(1);
 
@@ -172,7 +171,7 @@ fn undo_redo_after_reopen_document() {
   drop(document);
 
   // reopen document, can't undo
-  let mut document = open_document_with_db(1, doc_id, test.db);
+  let mut document = open_document_with_db(1, &test.workspace_id, doc_id, test.db);
   assert!(!document.can_undo());
 
   // update block, can undo

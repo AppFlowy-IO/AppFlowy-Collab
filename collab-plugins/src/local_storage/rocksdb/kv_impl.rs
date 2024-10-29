@@ -112,13 +112,23 @@ impl KVTransactionDBRocksdbImpl {
     Ok(Self { db: Arc::new(db) })
   }
 
-  pub async fn is_exist(&self, uid: i64, object_id: &str) -> Result<bool, PersistenceError> {
+  pub async fn is_exist(
+    &self,
+    uid: i64,
+    workspace_id: &str,
+    object_id: &str,
+  ) -> Result<bool, PersistenceError> {
     let read_txn = self.read_txn();
-    Ok(read_txn.is_exist(uid, object_id))
+    Ok(read_txn.is_exist(uid, workspace_id, object_id))
   }
 
-  pub async fn delete_doc(&self, uid: i64, doc_id: &str) -> Result<(), PersistenceError> {
-    self.with_write_txn(|txn| txn.delete_doc(uid, doc_id))?;
+  pub async fn delete_doc(
+    &self,
+    uid: i64,
+    workspace_id: &str,
+    doc_id: &str,
+  ) -> Result<(), PersistenceError> {
+    self.with_write_txn(|txn| txn.delete_doc(uid, workspace_id, doc_id))?;
     Ok(())
   }
 }

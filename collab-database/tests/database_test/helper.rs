@@ -21,6 +21,7 @@ use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
 use tokio::time::timeout;
+use uuid::Uuid;
 
 pub struct DatabaseTest {
   #[allow(dead_code)]
@@ -56,10 +57,12 @@ impl DerefMut for DatabaseTest {
 
 /// Create a database with a single view.
 pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
+  let workspace_id = Uuid::new_v4().to_string();
   setup_log();
   let collab_db = make_rocks_db();
   let collab_service = Arc::new(TestUserDatabaseServiceImpl {
     uid,
+    workspace_id,
     db: collab_db.clone(),
   });
 
@@ -86,7 +89,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   }
 }
 
-pub fn create_row(uid: i64, row_id: RowId) -> DatabaseRow {
+pub fn create_row(uid: i64, workspace_id: &str, row_id: RowId) -> DatabaseRow {
   let collab_db = make_rocks_db();
   let mut collab = CollabBuilder::new(uid, row_id.clone(), DataSource::Disk(None))
     .with_device_id("1")
@@ -96,6 +99,7 @@ pub fn create_row(uid: i64, row_id: RowId) -> DatabaseRow {
   let row_change_tx = tokio::sync::broadcast::channel(1).0;
   let collab_builder = Arc::new(TestUserDatabaseServiceImpl {
     uid,
+    workspace_id: workspace_id.to_string(),
     db: collab_db.clone(),
   });
   DatabaseRow::create(
@@ -109,12 +113,14 @@ pub fn create_row(uid: i64, row_id: RowId) -> DatabaseRow {
 
 pub async fn create_database_with_db(
   uid: i64,
+  workspace_id: &str,
   database_id: &str,
 ) -> (Arc<CollabKVDB>, DatabaseTest) {
   setup_log();
   let collab_db = make_rocks_db();
   let collab_service = Arc::new(TestUserDatabaseServiceImpl {
     uid,
+    workspace_id: workspace_id.to_string(),
     db: collab_db.clone(),
   });
   let context = DatabaseContext::new(collab_service);
@@ -141,11 +147,13 @@ pub async fn create_database_with_db(
 
 pub async fn restore_database_from_db(
   uid: i64,
+  workspace_id: &str,
   database_id: &str,
   collab_db: Arc<CollabKVDB>,
 ) -> DatabaseTest {
   let collab_service = Arc::new(TestUserDatabaseServiceImpl {
     uid,
+    workspace_id: workspace_id.to_string(),
     db: collab_db.clone(),
   });
 
@@ -204,11 +212,13 @@ impl DatabaseTestBuilder {
   }
 
   pub async fn build(self) -> DatabaseTest {
+    let workspace_id = Uuid::new_v4().to_string();
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let collab_db = Arc::new(CollabKVDB::open(path).unwrap());
     let collab_service = Arc::new(TestUserDatabaseServiceImpl {
       uid: self.uid,
+      workspace_id,
       db: collab_db.clone(),
     });
     let context = DatabaseContext::new(collab_service);

@@ -1,11 +1,11 @@
-use assert_json_diff::assert_json_include;
-use collab_folder::{FolderData, UserId};
-use serde_json::json;
-
 use crate::util::{
   create_folder_with_data, create_folder_with_workspace, make_test_view, open_folder_with_db,
   unzip_history_folder_db,
 };
+use assert_json_diff::assert_json_include;
+use collab_folder::{FolderData, UserId};
+use serde_json::json;
+use uuid::Uuid;
 
 #[test]
 fn create_favorite_test() {
@@ -194,9 +194,11 @@ const FOLDER_WITH_FAV_V1: &str = "folder_with_fav_v1";
 
 #[test]
 fn migrate_from_old_version_folder_without_fav_test() {
+  let workspace_id = Uuid::new_v4().to_string();
   let (_cleaner, db_path) = unzip_history_folder_db(FOLDER_WITHOUT_FAV).unwrap();
   let folder_test = open_folder_with_db(
     221439819971039232.into(),
+    &workspace_id,
     "49af3b85-9343-447a-946d-038f63883399",
     db_path,
   );
@@ -264,9 +266,11 @@ fn migrate_from_old_version_folder_without_fav_test() {
 
 #[test]
 fn migrate_favorite_v1_test() {
+  let workspace_id = Uuid::new_v4().to_string();
   let (_cleaner, db_path) = unzip_history_folder_db(FOLDER_WITH_FAV_V1).unwrap();
   let folder_test = open_folder_with_db(
     254954554859196416.into(),
+    &workspace_id,
     "835f64ab-9efc-4365-8055-1e66ee03c555",
     db_path,
   );

@@ -13,11 +13,16 @@ use tracing::{error, warn};
 pub struct KVDBCollabPersistenceImpl {
   pub db: Weak<CollabKVDB>,
   pub uid: i64,
+  pub workspace_id: String,
 }
 
 impl KVDBCollabPersistenceImpl {
-  pub fn new(db: Weak<CollabKVDB>, uid: i64) -> Self {
-    Self { db, uid }
+  pub fn new(db: Weak<CollabKVDB>, uid: i64, workspace_id: String) -> Self {
+    Self {
+      db,
+      uid,
+      workspace_id,
+    }
   }
 
   pub fn into_data_source(self) -> DataSource {
@@ -37,9 +42,11 @@ impl CollabPersistence for KVDBCollabPersistenceImpl {
       let object_id = collab.object_id().to_string();
       let rocksdb_read = collab_db.read_txn();
 
-      if rocksdb_read.is_exist(self.uid, &object_id) {
+      if rocksdb_read.is_exist(self.uid, &self.workspace_id, &object_id) {
         let mut txn = collab.transact_mut();
-        if let Err(err) = rocksdb_read.load_doc_with_txn(self.uid, &object_id, &mut txn) {
+        if let Err(err) =
+          rocksdb_read.load_doc_with_txn(self.uid, self.workspace_id.as_str(), &object_id, &mut txn)
+        {
           error!("🔴 load doc:{} failed: {}", object_id, err);
         }
         drop(rocksdb_read);
@@ -61,7 +68,8 @@ impl CollabPersistence for KVDBCollabPersistenceImpl {
       write_txn
         .flush_doc(
           self.uid,
-          &object_id,
+          self.workspace_id.as_str(),
+          object_id,
           encoded_collab.state_vector.to_vec(),
           encoded_collab.doc_state.to_vec(),
         )

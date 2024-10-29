@@ -14,6 +14,7 @@ use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use serde_json::{json, Value};
+use uuid::Uuid;
 
 pub const TEXT_BLOCK_TYPE: &str = "paragraph";
 
@@ -24,10 +25,12 @@ pub struct BlockTestCore {
 
 impl BlockTestCore {
   pub fn new() -> Self {
+    let workspace_id = Uuid::new_v4().to_string();
     let db = document_storage();
     let doc_id = "1";
     let disk_plugin = RocksdbDiskPlugin::new(
       1,
+      workspace_id.clone(),
       doc_id.to_string(),
       CollabType::Document,
       Arc::downgrade(&db),
@@ -35,6 +38,7 @@ impl BlockTestCore {
     let data_source = KVDBCollabPersistenceImpl {
       db: Arc::downgrade(&db),
       uid: 1,
+      workspace_id,
     };
     let mut collab = CollabBuilder::new(1, doc_id, data_source.into())
       .with_plugin(disk_plugin)

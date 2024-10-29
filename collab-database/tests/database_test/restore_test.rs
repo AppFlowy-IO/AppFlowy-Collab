@@ -14,15 +14,16 @@ use uuid::Uuid;
 
 #[tokio::test]
 async fn restore_row_from_disk_test() {
+  let workspace_id = Uuid::new_v4().to_string();
   let database_id = uuid::Uuid::new_v4().to_string();
-  let (db, mut database_test) = create_database_with_db(1, &database_id).await;
+  let (db, mut database_test) = create_database_with_db(1, &workspace_id, &database_id).await;
   let row_1 = CreateRowParams::new(1, database_id.clone());
   let row_2 = CreateRowParams::new(2, database_id.clone());
   database_test.create_row(row_1.clone()).await.unwrap();
   database_test.create_row(row_2.clone()).await.unwrap();
   drop(database_test);
 
-  let database_test = restore_database_from_db(1, &database_id, db).await;
+  let database_test = restore_database_from_db(1, &workspace_id, &database_id, db).await;
   let rows = database_test.get_rows_for_view("v1").await;
   assert_eq!(rows.len(), 2);
 
@@ -32,29 +33,32 @@ async fn restore_row_from_disk_test() {
 
 #[tokio::test]
 async fn restore_from_disk_test() {
+  let workspace_id = Uuid::new_v4().to_string();
   let database_id = Uuid::new_v4().to_string();
-  let (db, database_test) = create_database_with_db(1, &database_id).await;
+  let (db, database_test) = create_database_with_db(1, &workspace_id, &database_id).await;
   assert_database_eq(&database_id, database_test).await;
 
   // Restore from disk
-  let database_test = restore_database_from_db(1, &database_id, db).await;
+  let database_test = restore_database_from_db(1, &workspace_id, &database_id, db).await;
   assert_database_eq(&database_id, database_test).await;
 }
 
 #[tokio::test]
 async fn restore_from_disk_with_different_database_id_test() {
+  let workspace_id = Uuid::new_v4().to_string();
   let database_id = Uuid::new_v4().to_string();
-  let (db, _) = create_database_with_db(1, &database_id).await;
-  let database_test = restore_database_from_db(1, &database_id, db).await;
+  let (db, _) = create_database_with_db(1, &workspace_id, &database_id).await;
+  let database_test = restore_database_from_db(1, &workspace_id, &database_id, db).await;
 
   assert_database_eq(&database_id, database_test).await;
 }
 
 #[tokio::test]
 async fn restore_from_disk_with_different_uid_test() {
+  let workspace_id = Uuid::new_v4().to_string();
   let database_id = Uuid::new_v4().to_string();
-  let (db, _) = create_database_with_db(1, &database_id).await;
-  let database_test = restore_database_from_db(1, &database_id, db).await;
+  let (db, _) = create_database_with_db(1, &workspace_id, &database_id).await;
+  let database_test = restore_database_from_db(1, &workspace_id, &database_id, db).await;
 
   assert_database_eq(&database_id, database_test).await;
 }
@@ -87,10 +91,12 @@ const HISTORY_DATABASE_020: &str = "020_database";
 
 #[tokio::test]
 async fn open_020_history_database_test() {
+  let workspace_id = Uuid::new_v4().to_string();
   let (_cleaner, db_path) = unzip_history_database_db(HISTORY_DATABASE_020).unwrap();
   let db = std::sync::Arc::new(CollabKVDB::open(db_path).unwrap());
   let database_test = restore_database_from_db(
     221439819971039232,
+    &workspace_id,
     "c0e69740-49f0-4790-a488-702e2750ba8d",
     db,
   )

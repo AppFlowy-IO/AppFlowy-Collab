@@ -10,6 +10,7 @@ use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use std::sync::Arc;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn insert_single_change_and_restore_from_disk() {
@@ -46,10 +47,17 @@ async fn insert_single_change_and_restore_from_disk() {
 async fn flush_test() {
   let doc_id = "1".to_string();
   let test = CollabPersistenceTest::new(CollabPersistenceConfig::new());
-  let disk_plugin = disk_plugin_with_db(test.uid, test.db.clone(), &doc_id, CollabType::Unknown);
+  let disk_plugin = disk_plugin_with_db(
+    test.uid,
+    test.workspace_id.clone(),
+    test.db.clone(),
+    &doc_id,
+    CollabType::Unknown,
+  );
   let data_source = KVDBCollabPersistenceImpl {
     db: Arc::downgrade(&test.db),
     uid: 1,
+    workspace_id: test.workspace_id.clone(),
   };
 
   let mut collab = CollabBuilder::new(1, &doc_id, data_source.into())
@@ -65,12 +73,15 @@ async fn flush_test() {
   let before_flush_value = collab.to_json_value();
 
   let read = test.db.read_txn();
-  let before_flush_updates = read.get_all_updates(test.uid, &doc_id).unwrap();
+  let before_flush_updates = read
+    .get_all_updates(test.uid, &test.workspace_id, &doc_id)
+    .unwrap();
   let write_txn = test.db.write_txn();
   let encode_collab = collab.encode_collab_v1(|_| Ok::<(), Error>(())).unwrap();
   write_txn
     .flush_doc(
       test.uid,
+      &test.workspace_id,
       &doc_id,
       encode_collab.state_vector.to_vec(),
       encode_collab.doc_state.to_vec(),
@@ -78,7 +89,9 @@ async fn flush_test() {
     .unwrap();
   write_txn.commit_transaction().unwrap();
 
-  let after_flush_updates = read.get_all_updates(test.uid, &doc_id).unwrap();
+  let after_flush_updates = read
+    .get_all_updates(test.uid, &test.workspace_id, &doc_id)
+    .unwrap();
 
   let after_flush_value = collab.to_json_value();
   assert_eq!(before_flush_updates.len(), 100);

@@ -1,13 +1,14 @@
-use std::thread;
-
 use crate::disk::util::rocks_db;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::CollabKVDB;
+use std::thread;
+use uuid::Uuid;
 use yrs::{Doc, GetString, Text, Transact};
 
 #[tokio::test]
 async fn single_thread_test() {
+  let workspace_id = Uuid::new_v4().to_string();
   let (path, db) = rocks_db();
   for i in 0..100 {
     let oid = format!("doc_{}", i);
@@ -15,7 +16,9 @@ async fn single_thread_test() {
     {
       let txn = doc.transact();
       db.with_write_txn(|db_w_txn| {
-        db_w_txn.create_new_doc(1, &oid, &txn).unwrap();
+        db_w_txn
+          .create_new_doc(1, &workspace_id, &oid, &txn)
+          .unwrap();
         Ok(())
       })
       .unwrap();
@@ -26,7 +29,7 @@ async fn single_thread_test() {
       text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
       let update = txn.encode_update_v1();
       db.with_write_txn(|w| {
-        w.push_update(1, &oid, &update).unwrap();
+        w.push_update(1, &workspace_id, &oid, &update).unwrap();
         Ok(())
       })
       .unwrap();
@@ -40,7 +43,9 @@ async fn single_thread_test() {
     let doc = Doc::new();
     {
       let mut txn = doc.transact_mut();
-      db.read_txn().load_doc_with_txn(1, &oid, &mut txn).unwrap();
+      db.read_txn()
+        .load_doc_with_txn(1, &workspace_id, &oid, &mut txn)
+        .unwrap();
     }
     let text = doc.get_or_insert_text("text");
     let txn = doc.transact();
@@ -52,7 +57,9 @@ async fn single_thread_test() {
 async fn rocks_multiple_thread_test() {
   let (path, db) = rocks_db();
   let mut handles = vec![];
+  let workspace_id = Uuid::new_v4().to_string();
   for i in 0..100 {
+    let cloned_workspace_id = workspace_id.clone();
     let cloned_db = db.clone();
     let handle = thread::spawn(move || {
       let oid = format!("doc_{}", i);
@@ -60,7 +67,7 @@ async fn rocks_multiple_thread_test() {
       {
         let txn = doc.transact();
         cloned_db
-          .with_write_txn(|store| store.create_new_doc(1, &oid, &txn))
+          .with_write_txn(|store| store.create_new_doc(1, &cloned_workspace_id, &oid, &txn))
           .unwrap();
       }
       {
@@ -69,7 +76,7 @@ async fn rocks_multiple_thread_test() {
         text.insert(&mut txn, 0, &format!("Hello, world! {}", i));
         let update = txn.encode_update_v1();
         cloned_db
-          .with_write_txn(|store| store.push_update(1, &oid, &update))
+          .with_write_txn(|store| store.push_update(1, &cloned_workspace_id, &oid, &update))
           .unwrap();
       }
     });
@@ -87,7 +94,9 @@ async fn rocks_multiple_thread_test() {
     let doc = Doc::new();
     {
       let mut txn = doc.transact_mut();
-      db.read_txn().load_doc_with_txn(1, &oid, &mut txn).unwrap();
+      db.read_txn()
+        .load_doc_with_txn(1, &workspace_id, &oid, &mut txn)
+        .unwrap();
     }
     let text = doc.get_or_insert_text("text");
     let txn = doc.transact();
