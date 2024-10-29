@@ -1,6 +1,7 @@
 use crate::local_storage::kv::keys::*;
 use crate::local_storage::kv::snapshot::SnapshotAction;
 use crate::local_storage::kv::*;
+use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 use tracing::{error, info};
 
@@ -270,6 +271,24 @@ where
   {
     let from = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT]);
     let to = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT_KEY]);
+    let iter = self.range(from.as_ref()..to.as_ref())?;
+    Ok(OIDIter { iter })
+  }
+
+  fn get_all_docs_for_user(
+    &self,
+    uid: i64,
+  ) -> Result<OIDIter<<Self as KVStore<'a>>::Range, <Self as KVStore<'a>>::Entry>, PersistenceError>
+  {
+    let uid_bytes = uid.to_be_bytes();
+    let mut from_vec: SmallVec<[u8; 20]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT];
+    from_vec.extend_from_slice(&uid_bytes);
+    let from = Key(from_vec);
+
+    let mut to_vec: SmallVec<[u8; 20]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT];
+    to_vec.extend_from_slice(&uid_bytes);
+    let to = Key(to_vec);
+
     let iter = self.range(from.as_ref()..to.as_ref())?;
     Ok(OIDIter { iter })
   }
