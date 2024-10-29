@@ -1,48 +1,36 @@
 use crate::disk::script::CollabPersistenceTest;
-use crate::disk::script::Script::*;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 
 #[tokio::test]
 async fn delete_single_doc_test() {
   let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::default());
   let doc_id = "1".to_string();
+
+  // Replacing Script variants with function calls
   test
-    .run_scripts(vec![
-      CreateDocumentWithCollabDB {
-        id: doc_id.clone(),
-        db: test.db.clone(),
-      },
-      AssertNumOfDocuments { expected: 1 },
-      DeleteDocument { id: doc_id },
-      AssertNumOfDocuments { expected: 0 },
-    ])
+    .create_document_with_collab_db(doc_id.clone(), test.db.clone())
     .await;
+  test.assert_num_of_documents(1).await;
+  test.delete_document(doc_id).await;
+  test.assert_num_of_documents(0).await;
 }
+
 #[tokio::test]
 async fn delete_multiple_docs_test() {
   let mut test = CollabPersistenceTest::new(CollabPersistenceConfig::default());
   let db = test.db.clone();
+
+  // Replacing Script variants with function calls
   test
-    .run_scripts(vec![
-      CreateDocumentWithCollabDB {
-        id: "1".to_string(),
-        db: db.clone(),
-      },
-      CreateDocumentWithCollabDB {
-        id: "2".to_string(),
-        db: db.clone(),
-      },
-      CreateDocumentWithCollabDB {
-        id: "3".to_string(),
-        db: db.clone(),
-      },
-      DeleteDocument {
-        id: "1".to_string(),
-      },
-      DeleteDocument {
-        id: "2".to_string(),
-      },
-      AssertNumOfDocuments { expected: 1 },
-    ])
+    .create_document_with_collab_db("1".to_string(), db.clone())
     .await;
+  test
+    .create_document_with_collab_db("2".to_string(), db.clone())
+    .await;
+  test
+    .create_document_with_collab_db("3".to_string(), db.clone())
+    .await;
+  test.delete_document("1".to_string()).await;
+  test.delete_document("2".to_string()).await;
+  test.assert_num_of_documents(1).await;
 }

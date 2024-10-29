@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::setup_log;
-
 use collab::lock::RwLock;
 use collab::preclude::*;
 use collab_entity::CollabType;
@@ -15,43 +14,6 @@ use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
 use uuid::Uuid;
-
-pub enum Script {
-  CreateDocumentWithCollabDB {
-    id: String,
-    db: Arc<CollabKVDB>,
-  },
-  OpenDocumentWithDiskPlugin {
-    id: String,
-  },
-  #[allow(dead_code)]
-  OpenDocument {
-    id: String,
-  },
-  CloseDocument {
-    id: String,
-  },
-  DeleteDocument {
-    id: String,
-  },
-  InsertKeyValue {
-    id: String,
-    key: String,
-    value: Any,
-  },
-  GetValue {
-    id: String,
-    key: String,
-    expected: Option<Any>,
-  },
-  AssertUpdateLen {
-    id: String,
-    expected: usize,
-  },
-  AssertNumOfDocuments {
-    expected: usize,
-  },
-}
 
 pub struct CollabPersistenceTest {
   pub uid: i64,
@@ -84,10 +46,93 @@ impl CollabPersistenceTest {
     }
   }
 
-  pub async fn run_scripts(&mut self, scripts: Vec<Script>) {
-    for script in scripts {
-      self.run_script(script).await;
-    }
+  pub async fn create_document_with_collab_db(&mut self, id: String, db: Arc<CollabKVDB>) {
+    let disk_plugin = disk_plugin_with_db(
+      self.uid,
+      self.workspace_id.clone(),
+      db,
+      &id,
+      CollabType::Unknown,
+    );
+    let data_source = KVDBCollabPersistenceImpl {
+      db: Arc::downgrade(&self.db),
+      uid: self.uid,
+      workspace_id: self.workspace_id.clone(),
+    };
+    let mut collab = CollabBuilder::new(1, id.clone(), data_source.into())
+      .with_device_id("1")
+      .with_plugin(disk_plugin)
+      .build()
+      .unwrap();
+    collab.initialize();
+    self.collab_by_id.insert(id, Arc::new(RwLock::from(collab)));
+  }
+
+  pub async fn open_document_with_disk_plugin(&mut self, id: String) {
+    let disk_plugin = disk_plugin_with_db(
+      self.uid,
+      self.workspace_id.clone(),
+      self.db.clone(),
+      &id,
+      CollabType::Unknown,
+    );
+    let data_source = KVDBCollabPersistenceImpl {
+      db: Arc::downgrade(&self.db),
+      uid: self.uid,
+      workspace_id: self.workspace_id.clone(),
+    };
+    let mut collab = CollabBuilder::new(1, id.clone(), data_source.into())
+      .with_device_id("1")
+      .with_plugin(disk_plugin)
+      .build()
+      .unwrap();
+    collab.initialize();
+    self.collab_by_id.insert(id, Arc::new(RwLock::from(collab)));
+  }
+
+  pub async fn close_document(&mut self, id: String) {
+    self.collab_by_id.remove(&id);
+  }
+
+  pub async fn delete_document(&mut self, id: String) {
+    self
+      .db
+      .with_write_txn(|store| store.delete_doc(self.uid, &self.workspace_id, &id))
+      .unwrap();
+  }
+
+  pub async fn insert_key_value(&mut self, id: String, key: String, value: Any) {
+    self.insert(&id, key, value).await;
+  }
+
+  pub async fn get_value(&mut self, id: String, key: String, expected: Option<Any>) {
+    let collab = self.collab_by_id.get(&id).unwrap().read().await;
+    let txn = collab.transact();
+    let text = collab
+      .get_with_txn(&txn, &key)
+      .map(|value| value.to_string(&txn))
+      .map(|value| Any::String(Arc::from(value)));
+    assert_eq!(text, expected);
+  }
+
+  pub async fn assert_update_len(&mut self, id: String, expected: usize) {
+    let updates = self
+      .db
+      .read_txn()
+      .get_decoded_v1_updates(self.uid, &self.workspace_id, &id)
+      .unwrap();
+    assert_eq!(updates.len(), expected);
+  }
+
+  pub async fn assert_num_of_documents(&mut self, expected: usize) {
+    let docs = self.db.read_txn().get_all_docs().unwrap();
+    let docs_2 = self
+      .db
+      .read_txn()
+      .get_all_docs_for_user(self.uid, &self.workspace_id)
+      .unwrap();
+    assert_eq!(docs.count(), expected);
+    assert_eq!(docs_2.count(), expected);
   }
 
   pub async fn create_collab(&mut self, doc_id: String) {
@@ -108,9 +153,7 @@ impl CollabPersistenceTest {
       .with_plugin(disk_plugin)
       .build()
       .unwrap();
-
     collab.initialize();
-
     self
       .collab_by_id
       .insert(doc_id, Arc::new(RwLock::from(collab)));
@@ -156,9 +199,7 @@ impl CollabPersistenceTest {
       .with_plugin(disk_plugin)
       .build()
       .unwrap();
-
     collab.initialize();
-
     let json = collab.to_json_value();
     assert_json_diff::assert_json_eq!(json, expected);
   }
@@ -185,97 +226,6 @@ impl CollabPersistenceTest {
       .await
       .redo()
       .unwrap();
-  }
-
-  pub async fn run_script(&mut self, script: Script) {
-    match script {
-      Script::CreateDocumentWithCollabDB { id, db } => {
-        let uid = 1;
-        let disk_plugin = disk_plugin_with_db(
-          self.uid,
-          self.workspace_id.clone(),
-          db,
-          &id,
-          CollabType::Unknown,
-        );
-        let data_source = KVDBCollabPersistenceImpl {
-          db: Arc::downgrade(&self.db),
-          uid,
-          workspace_id: self.workspace_id.clone(),
-        };
-        let mut collab = CollabBuilder::new(uid, id.clone(), data_source.into())
-          .with_device_id("1")
-          .with_plugin(disk_plugin)
-          .build()
-          .unwrap();
-        collab.initialize();
-        self.collab_by_id.insert(id, Arc::new(RwLock::from(collab)));
-      },
-      Script::OpenDocument { id } => {
-        self.create_collab(id).await;
-      },
-      Script::CloseDocument { id } => {
-        self.collab_by_id.remove(&id);
-      },
-      Script::OpenDocumentWithDiskPlugin { id } => {
-        let disk_plugin = disk_plugin_with_db(
-          self.uid,
-          self.workspace_id.clone(),
-          self.db.clone(),
-          &id,
-          CollabType::Unknown,
-        );
-        let data_source = KVDBCollabPersistenceImpl {
-          db: Arc::downgrade(&self.db),
-          uid: self.uid,
-          workspace_id: self.workspace_id.clone(),
-        };
-        let mut collab = CollabBuilder::new(1, id.clone(), data_source.into())
-          .with_device_id("1")
-          .with_plugin(disk_plugin)
-          .build()
-          .unwrap();
-
-        collab.initialize();
-        self.collab_by_id.insert(id, Arc::new(RwLock::from(collab)));
-      },
-      Script::DeleteDocument { id } => {
-        self
-          .db
-          .with_write_txn(|store| store.delete_doc(self.uid, &self.workspace_id, &id))
-          .unwrap();
-      },
-      Script::InsertKeyValue { id, key, value } => {
-        self.insert(&id, key, value).await;
-      },
-      Script::GetValue { id, key, expected } => {
-        let collab = self.collab_by_id.get(&id).unwrap().read().await;
-        let txn = collab.transact();
-        let text = collab
-          .get_with_txn(&txn, &key)
-          .map(|value| value.to_string(&txn))
-          .map(|value| Any::String(Arc::from(value)));
-        assert_eq!(text, expected)
-      },
-      Script::AssertUpdateLen { id, expected } => {
-        let updates = self
-          .db
-          .read_txn()
-          .get_decoded_v1_updates(self.uid, &self.workspace_id, &id)
-          .unwrap();
-        assert_eq!(updates.len(), expected)
-      },
-      Script::AssertNumOfDocuments { expected } => {
-        let docs = self.db.read_txn().get_all_docs().unwrap();
-        let docs_2 = self
-          .db
-          .read_txn()
-          .get_all_docs_for_user(self.uid, &self.workspace_id)
-          .unwrap();
-        assert_eq!(docs.count(), expected);
-        assert_eq!(docs_2.count(), expected);
-      },
-    }
   }
 }
 
