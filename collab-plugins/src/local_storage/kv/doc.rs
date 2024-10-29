@@ -287,6 +287,7 @@ where
 
     let mut to_vec: SmallVec<[u8; 20]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT];
     to_vec.extend_from_slice(&uid_bytes);
+    to_vec.push(0xFF);
     let to = Key(to_vec);
 
     let iter = self.range(from.as_ref()..to.as_ref())?;

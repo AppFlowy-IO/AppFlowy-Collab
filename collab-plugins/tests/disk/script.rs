@@ -235,7 +235,9 @@ impl CollabPersistenceTest {
       },
       Script::AssertNumOfDocuments { expected } => {
         let docs = self.db.read_txn().get_all_docs().unwrap();
+        let docs_2 = self.db.read_txn().get_all_docs_for_user(self.uid).unwrap();
         assert_eq!(docs.count(), expected);
+        assert_eq!(docs_2.count(), expected);
       },
     }
   }
