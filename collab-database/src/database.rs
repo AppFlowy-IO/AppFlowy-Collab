@@ -1554,16 +1554,23 @@ pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
   )
 }
 
-pub fn reset_inline_view_id<F>(collab: &mut Collab, f: F)
+pub fn reset_inline_view_id<F>(collab: &mut Collab, f: F) -> Result<(), DatabaseError>
 where
   F: FnOnce(String) -> String,
 {
   let mut txn = collab.context.transact_mut();
   if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
     let map = MetaMap::new(container);
-    let inline_view_id = map.get_inline_view_id(&txn).unwrap();
+    let inline_view_id = map.get_inline_view_id(&txn).ok_or_else(|| {
+      DatabaseError::NoRequiredData("Can not find the inline view id".to_string())
+    })?;
     let new_inline_view_id = f(inline_view_id);
     map.set_inline_view_id(&mut txn, &new_inline_view_id);
+    Ok(())
+  } else {
+    Err(DatabaseError::NoRequiredData(
+      "Can not find the database metas".to_string(),
+    ))
   }
 }
 
