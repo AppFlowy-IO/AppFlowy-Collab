@@ -468,13 +468,11 @@ where
     Some(String::from_utf8_lossy(content).to_string())
   }
 }
-
-// Helper function to extract 16-byte UUID from key bytes
 fn extract_uuid_from_key(key: &[u8]) -> Option<[u8; 16]> {
-  // it starts right after DOC_SPACE and DOC_SPACE_OBJECT
-  // start index + workspace_id + object_id + TERMINATOR
+  // Start index is set to skip DOC_SPACE and DOC_SPACE_OBJECT (2 bytes)
   let start_index = 2;
-  let end_index = start_index + 16 + 16 + 1;
+  let end_index = start_index + 16;
+  // Ensure the key has enough length for extracting a 16-byte UUID
   if key.len() >= end_index {
     let mut uuid_bytes = [0u8; 16];
     uuid_bytes.copy_from_slice(&key[start_index..end_index]);

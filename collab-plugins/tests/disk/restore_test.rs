@@ -103,3 +103,57 @@ async fn rocks_multiple_thread_test() {
     assert_eq!(text.get_string(&txn), format!("Hello, world! {}", i));
   }
 }
+#[tokio::test]
+async fn multiple_workspace_test() {
+  let (_, db) = rocks_db();
+
+  // Define multiple workspaces with different numbers of objects and user IDs
+  let workspaces = [
+    ("Workspace 1", 2), // Workspace 1 with 2 objects
+    ("Workspace 2", 3), // Workspace 2 with 3 objects
+    ("Workspace 3", 1),
+  ];
+
+  for (index, (workspace_name, num_objects)) in workspaces.iter().enumerate() {
+    let workspace_id = Uuid::new_v4().to_string();
+    let user_id = index as i64 + 1; // Assign a unique user ID (1, 2, 3, ...)
+
+    for _ in 0..*num_objects {
+      let object_id = Uuid::new_v4().to_string();
+      let doc = Doc::new();
+      // Create a new document in the workspace with the current user ID
+      {
+        let txn = doc.transact();
+        db.with_write_txn(|store| store.create_new_doc(user_id, &workspace_id, &object_id, &txn))
+          .unwrap();
+      }
+
+      // Insert content into the document
+      {
+        let text = doc.get_or_insert_text("text");
+        let mut txn = doc.transact_mut();
+        let content = format!("Content for {} in {}", object_id, workspace_name);
+        text.insert(&mut txn, 0, &content);
+        let update = txn.encode_update_v1();
+        db.with_write_txn(|store| store.push_update(user_id, &workspace_id, &object_id, &update))
+          .unwrap();
+      }
+    }
+
+    // Test get_all_docs_for_user for the current user and workspace
+    let docs_iter = db
+      .read_txn()
+      .get_all_docs_for_user(user_id, &workspace_id)
+      .unwrap();
+    let doc_count: usize = docs_iter.count();
+    assert_eq!(
+      doc_count, *num_objects,
+      "Unexpected document count for user {} in {}",
+      user_id, workspace_name
+    );
+  }
+
+  // Count the total number of workspaces
+  let workspace_count = db.read_txn().get_all_workspace_ids().unwrap().len();
+  assert_eq!(workspace_count, workspaces.len());
+}
