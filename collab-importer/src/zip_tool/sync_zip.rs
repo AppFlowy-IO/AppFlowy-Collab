@@ -2,9 +2,8 @@ use crate::error::ImporterError;
 use crate::zip_tool::util::{is_multi_part_zip_signature, remove_part_suffix, sanitize_file_path};
 use anyhow::{anyhow, Result};
 
-use std::fs::{File, OpenOptions, Permissions};
+use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 use tracing::warn;
@@ -130,49 +129,6 @@ pub fn sync_unzip(
   }
 }
 
-/// Helper function to move all files and directories from one path to another
-#[allow(dead_code)]
-fn move_all(old_path: &Path, new_path: &Path) -> Result<(), ImporterError> {
-  if !new_path.exists() {
-    fs::create_dir_all(new_path)?;
-    let dir_permissions = Permissions::from_mode(0o755);
-    fs::set_permissions(new_path, dir_permissions)?;
-  }
-
-  for entry in fs::read_dir(old_path).map_err(|err| {
-    ImporterError::Internal(anyhow!("Can not read {:?}, error: {:?}", old_path, err))
-  })? {
-    let entry = entry?;
-    let path = entry.path();
-    let file_name = match path.file_name() {
-      Some(name) => name,
-      None => continue,
-    };
-
-    let new_file_path = new_path.join(file_name);
-
-    if path.is_dir() {
-      move_all(&path, &new_file_path)?;
-      fs::remove_dir_all(&path).map_err(|err| {
-        ImporterError::Internal(anyhow!(
-          "Can not remove directory {:?}, error: {:?}",
-          path,
-          err
-        ))
-      })?;
-    } else {
-      fs::rename(&path, &new_file_path).map_err(|err| {
-        ImporterError::Internal(anyhow!(
-          "Can not move file {:?} to {:?}, error: {:?}",
-          path,
-          new_file_path,
-          err
-        ))
-      })?;
-    }
-  }
-  Ok(())
-}
 fn unzip_single_file(
   archive_file: File,
   out_dir: &Path,
