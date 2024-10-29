@@ -403,11 +403,16 @@ impl WorkspaceDatabaseManager {
   /// Duplicate the database that contains the view.
   pub async fn duplicate_database(
     &mut self,
-    view_id: &str,
+    database_view_id: &str,
+    new_database_view_id: &str,
   ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
-    let database_data = self.get_database_data(view_id).await?;
+    let database_data = self.get_database_data(database_view_id).await?;
 
-    let create_database_params = CreateDatabaseParams::from_database_data(database_data);
+    let create_database_params = CreateDatabaseParams::from_database_data(
+      database_data,
+      database_view_id,
+      new_database_view_id,
+    );
     let database = self.create_database(create_database_params).await?;
     Ok(database)
   }

@@ -122,7 +122,7 @@ async fn duplicate_database_inline_view_test() {
     .await
     .unwrap();
 
-  let duplicated_database = test.duplicate_database("v1").await.unwrap();
+  let duplicated_database = test.duplicate_database("v1", "v1_1").await.unwrap();
   let mut db = duplicated_database.write().await;
   let duplicated_view_id = db.get_inline_view_id();
   db.create_row(CreateRowParams::new(1, database_id.to_string()))
@@ -274,11 +274,12 @@ async fn delete_database_inline_view_test() {
 async fn duplicate_database_data_test() {
   let mut test = user_database_test_with_default_data(random_uid()).await;
   let original = test.get_database_with_view_id("v1").await.unwrap();
-  let duplicate = test.duplicate_database("v1").await.unwrap();
+  let duplicate = test.duplicate_database("v1", "v1_1").await.unwrap();
   let original = original.read().await;
   let duplicate = duplicate.read().await;
 
   let duplicated_view_id = &duplicate.get_all_database_views_meta()[0].id;
+  assert_eq!(duplicated_view_id, "v1_1");
 
   // compare rows
   let original_rows: Vec<Row> = original

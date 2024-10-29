@@ -199,7 +199,11 @@ impl CreateDatabaseParams {
   /// database with the same data inside the given `DatabaseData` struct containing all the
   /// data of a database. The internal `database_id`, the database views' `view_id`s and the rows'
   /// `row_id`s will all be regenerated.
-  pub fn from_database_data(data: DatabaseData) -> Self {
+  pub fn from_database_data(
+    data: DatabaseData,
+    database_view_id: &str,
+    new_database_view_id: &str,
+  ) -> Self {
     let database_id = gen_database_id();
     let timestamp = timestamp();
 
@@ -223,7 +227,11 @@ impl CreateDatabaseParams {
       .into_iter()
       .map(|view| CreateViewParams {
         database_id: database_id.clone(),
-        view_id: gen_database_view_id(),
+        view_id: if view.id == database_view_id {
+          new_database_view_id.to_string()
+        } else {
+          gen_database_view_id()
+        },
         name: view.name,
         layout: view.layout,
         layout_settings: view.layout_settings,
