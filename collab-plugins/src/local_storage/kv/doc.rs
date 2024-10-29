@@ -2,9 +2,10 @@ use crate::local_storage::kv::keys::*;
 use crate::local_storage::kv::snapshot::SnapshotAction;
 use crate::local_storage::kv::*;
 use smallvec::{smallvec, SmallVec};
+use std::collections::HashSet;
 use std::fmt::Debug;
 use tracing::{error, info};
-
+use uuid::Uuid;
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{Doc, ReadTxn, StateVector, Transact, TransactionMut, Update};
@@ -293,6 +294,7 @@ where
     let iter = self.range(from.as_ref()..to.as_ref())?;
     Ok(OIDIter { iter })
   }
+
   fn get_all_docs_for_user(
     &self,
     uid: i64,
@@ -320,6 +322,23 @@ where
 
     // Return the iterator in OIDIter
     Ok(OIDIter { iter })
+  }
+
+  fn get_all_workspace_ids(&self) -> Result<Vec<String>, PersistenceError> {
+    let from = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT]);
+    let to = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT_KEY]);
+    let iter = self.range(from.as_ref()..to.as_ref())?;
+
+    let mut workspace_ids = HashSet::new();
+    // Iterate over the keys and extract workspace IDs
+    for entry in iter {
+      let key_bytes = entry.key();
+      if let Some(workspace_id) = extract_uuid_from_key(key_bytes) {
+        workspace_ids.insert(Uuid::from_bytes(workspace_id).to_string());
+      }
+    }
+
+    Ok(workspace_ids.into_iter().collect())
   }
 
   /// Return all the updates for the given document
@@ -447,5 +466,20 @@ where
     let entry = self.iter.next()?;
     let content = oid_from_key(entry.key());
     Some(String::from_utf8_lossy(content).to_string())
+  }
+}
+
+// Helper function to extract 16-byte UUID from key bytes
+fn extract_uuid_from_key(key: &[u8]) -> Option<[u8; 16]> {
+  // it starts right after DOC_SPACE and DOC_SPACE_OBJECT
+  // start index + workspace_id + object_id + TERMINATOR
+  let start_index = 2;
+  let end_index = start_index + 16 + 16 + 1;
+  if key.len() >= end_index {
+    let mut uuid_bytes = [0u8; 16];
+    uuid_bytes.copy_from_slice(&key[start_index..end_index]);
+    Some(uuid_bytes)
+  } else {
+    None
   }
 }

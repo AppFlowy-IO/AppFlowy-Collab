@@ -10,7 +10,6 @@ use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use std::sync::Arc;
-use uuid::Uuid;
 
 #[tokio::test]
 async fn insert_single_change_and_restore_from_disk() {
