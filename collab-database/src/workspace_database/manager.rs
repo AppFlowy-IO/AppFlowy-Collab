@@ -147,10 +147,11 @@ pub struct CollabPersistenceImpl {
   pub persistence: Option<Arc<dyn DatabaseCollabPersistenceService>>,
 }
 impl CollabPersistence for CollabPersistenceImpl {
-  fn load_collab_from_disk(&self, collab: &mut Collab) {
+  fn load_collab_from_disk(&self, collab: &mut Collab) -> Result<(), CollabError> {
     if let Some(persistence) = &self.persistence {
       persistence.load_collab(collab);
     }
+    Ok(())
   }
 
   fn save_collab_to_disk(
