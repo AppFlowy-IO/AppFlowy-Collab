@@ -1,7 +1,7 @@
 use crate::disk::util::rocks_db;
 use collab_plugins::local_storage::kv::doc::{migrate_old_keys, CollabKVAction};
 use collab_plugins::local_storage::kv::keys::{
-  make_doc_id_key_v0, make_doc_id_key_v1, Key, DOC_SPACE, DOC_SPACE_OBJECT, DOC_SPACE_OBJECT_KEY,
+  make_doc_id_key_v0, make_doc_id_key_v1,
 };
 use collab_plugins::local_storage::kv::{KVStore, KVTransactionDB};
 use collab_plugins::CollabKVDB;
@@ -165,7 +165,7 @@ async fn multiple_workspace_test() {
 #[tokio::test]
 async fn test_migrate_old_keys() {
   let workspace_id = Uuid::new_v4().to_string();
-  let (_, mut db) = rocks_db();
+  let (_, db) = rocks_db();
 
   // Insert old keys into the database
   let num_docs = 5;
@@ -196,7 +196,7 @@ async fn test_migrate_old_keys() {
     let new_key = make_doc_id_key_v1(uid_id_bytes, workspace_id.as_bytes(), object_id.as_bytes());
 
     // Check if the new key exists in the store
-    let mut txn = db.read_txn();
+    let txn = db.read_txn();
     let value = txn.get(&new_key).unwrap();
     assert_eq!(value, Some(format!("value_{}", i).into_bytes()));
   }
