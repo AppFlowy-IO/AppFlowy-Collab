@@ -71,7 +71,19 @@ pub const SNAPSHOT_UPDATE_KEY_PREFIX_LEN: usize = SNAPSHOT_ID_LEN + 4;
 pub type Clock = u32;
 pub const CLOCK_LEN: usize = 4;
 
-pub fn make_doc_id_key(uid: &[u8], object_id: &[u8]) -> Key<20> {
+pub fn make_doc_id_key_v1(uid: &[u8], workspace_id: &[u8], object_id: &[u8]) -> Key<20> {
+  // uuid: 16 bytes
+  // uid: 8 bytes
+  // 16 * 2 + 8 + 2+ 1 = 43
+  let mut v: SmallVec<[u8; 20]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT];
+  v.write_all(uid).unwrap();
+  v.write_all(workspace_id).unwrap();
+  v.write_all(object_id).unwrap();
+  v.push(TERMINATOR);
+  Key(v)
+}
+
+pub fn make_doc_id_key_v0(uid: &[u8], object_id: &[u8]) -> Key<20> {
   let mut v: SmallVec<[u8; 20]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT];
   v.write_all(uid).unwrap();
   v.write_all(object_id).unwrap();

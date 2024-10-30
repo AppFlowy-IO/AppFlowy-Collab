@@ -395,9 +395,10 @@ async fn reopen_database_test() {
   }
 
   let db = test.collab_db.clone();
+  let workspace_id = test.workspace_id.clone();
   drop(test);
 
-  let test = user_database_test_with_db(uid, db).await;
+  let test = user_database_test_with_db(uid, &workspace_id, db).await;
   let database = test.get_database_with_view_id(&view_id).await.unwrap();
   let row_orders = database.read().await.get_all_row_orders().await;
   for (index, row_order) in row_orders.into_iter().enumerate() {

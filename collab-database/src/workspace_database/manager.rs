@@ -10,7 +10,7 @@ use collab_entity::CollabType;
 use collab::entity::EncodedCollab;
 
 use crate::entity::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
-use crate::rows::RowId;
+
 use anyhow::anyhow;
 use collab::core::collab_plugin::CollabPersistence;
 use collab::core::origin::CollabOrigin;
@@ -89,7 +89,6 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
       .into_par_iter()
       .filter_map(|object_id| {
         let persistence = self.persistence();
-
         let result = Collab::new_with_source(
           CollabOrigin::Empty,
           &object_id,
@@ -142,18 +141,17 @@ pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
     &self,
     encoded_collabs: Vec<(String, EncodedCollab)>,
   ) -> Result<(), DatabaseError>;
-
-  fn is_row_exist_partition(&self, row_ids: Vec<RowId>) -> (Vec<RowId>, Vec<RowId>);
 }
 
 pub struct CollabPersistenceImpl {
   pub persistence: Option<Arc<dyn DatabaseCollabPersistenceService>>,
 }
 impl CollabPersistence for CollabPersistenceImpl {
-  fn load_collab_from_disk(&self, collab: &mut Collab) {
+  fn load_collab_from_disk(&self, collab: &mut Collab) -> Result<(), CollabError> {
     if let Some(persistence) = &self.persistence {
       persistence.load_collab(collab);
     }
+    Ok(())
   }
 
   fn save_collab_to_disk(

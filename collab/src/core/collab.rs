@@ -256,7 +256,7 @@ impl Collab {
     match data_source {
       DataSource::Disk(disk) => {
         if let Some(disk) = disk {
-          disk.load_collab_from_disk(&mut collab);
+          disk.load_collab_from_disk(&mut collab)?;
         }
       },
       DataSource::DocStateV1(doc_state) => {
@@ -381,14 +381,6 @@ impl Collab {
       .awareness_subscription
       .store(Some(awareness_subscription.into()));
     self.state.set_init_state(InitState::Initialized);
-  }
-
-  pub fn save_to_disk(
-    &self,
-    persistence: &dyn CollabPersistence,
-    encoded_collab: EncodedCollab,
-  ) -> Result<(), CollabError> {
-    persistence.save_collab_to_disk(&self.object_id, encoded_collab)
   }
 
   pub fn get_state(&self) -> &Arc<State> {
@@ -627,9 +619,12 @@ impl From<EncodedCollab> for DataSource {
 
 impl DataSource {
   pub fn is_empty(&self) -> bool {
-    matches!(self, DataSource::Disk(_))
+    match self {
+      DataSource::Disk(d) => d.is_none(),
+      DataSource::DocStateV1(d) => d.is_empty(),
+      DataSource::DocStateV2(d) => d.is_empty(),
+    }
   }
-
   pub fn as_update(&self) -> Result<Option<Update>, CollabError> {
     match self {
       DataSource::DocStateV1(doc_state) if !doc_state.is_empty() => {
