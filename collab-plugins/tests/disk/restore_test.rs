@@ -1,8 +1,8 @@
 use crate::disk::util::rocks_db;
-use collab_plugins::local_storage::kv::doc::{migrate_old_keys, CollabKVAction};
-use collab_plugins::local_storage::kv::keys::{
-  make_doc_id_key_v0, make_doc_id_key_v1,
+use collab_plugins::local_storage::kv::doc::{
+  extract_object_id_from_key_v1, migrate_old_keys, CollabKVAction,
 };
+use collab_plugins::local_storage::kv::keys::{make_doc_id_key_v0, make_doc_id_key_v1};
 use collab_plugins::local_storage::kv::{KVStore, KVTransactionDB};
 use collab_plugins::CollabKVDB;
 use std::thread;
@@ -146,9 +146,10 @@ async fn multiple_workspace_test() {
     // Test get_all_docs_for_user for the current user and workspace
     let docs_iter = db
       .read_txn()
-      .get_all_docs_for_user(user_id, &workspace_id)
-      .unwrap();
-    let doc_count: usize = docs_iter.count();
+      .get_all_object_ids(user_id, &workspace_id)
+      .unwrap()
+      .collect::<Vec<String>>();
+    let doc_count: usize = docs_iter.len();
     assert_eq!(
       doc_count, *num_objects,
       "Unexpected document count for user {} in {}",
@@ -161,20 +162,24 @@ async fn multiple_workspace_test() {
   assert_eq!(workspace_count, workspaces.len());
 }
 
-// Test function for `migrate_old_keys`
 #[tokio::test]
 async fn test_migrate_old_keys() {
   let workspace_id = Uuid::new_v4().to_string();
+  let workspace_id_bytes = workspace_id.as_bytes();
   let (_, db) = rocks_db();
 
   // Insert old keys into the database
   let num_docs = 5;
   let uid: i64 = 123;
   let uid_id_bytes = &uid.to_be_bytes();
-  for i in 0..num_docs {
-    let object_id = format!("object_{}", i);
+  let mut object_ids = Vec::new();
+
+  for _ in 0..num_docs {
+    let object_id = Uuid::new_v4().to_string();
+    object_ids.push(object_id.clone());
+
     let old_key = make_doc_id_key_v0(uid_id_bytes, object_id.as_ref());
-    let value = format!("value_{}", i).into_bytes();
+    let value = object_id.clone().into_bytes(); // Use object_id as value
 
     db.with_write_txn(|db_w_txn| {
       db_w_txn.insert(old_key.clone(), value.clone())?;
@@ -191,13 +196,12 @@ async fn test_migrate_old_keys() {
   }
 
   // Verify that old keys were migrated to new keys
-  for i in 0..num_docs {
-    let object_id = format!("object_{}", i);
+  for object_id in object_ids {
     let new_key = make_doc_id_key_v1(uid_id_bytes, workspace_id.as_bytes(), object_id.as_bytes());
 
-    // Check if the new key exists in the store
-    let txn = db.read_txn();
-    let value = txn.get(&new_key).unwrap();
-    assert_eq!(value, Some(format!("value_{}", i).into_bytes()));
+    let oid = extract_object_id_from_key_v1(&new_key, uid_id_bytes.len(), workspace_id_bytes.len())
+      .map(|v| String::from_utf8(v.to_vec()).unwrap())
+      .unwrap();
+    assert_eq!(oid, object_id);
   }
 }

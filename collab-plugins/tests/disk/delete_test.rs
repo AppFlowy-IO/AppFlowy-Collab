@@ -10,9 +10,9 @@ async fn delete_single_doc_test() {
   test
     .create_document_with_collab_db(doc_id.clone(), test.db.clone())
     .await;
-  test.assert_num_of_documents(1).await;
+  test.assert_ids(vec![1.to_string()]).await;
   test.delete_document(doc_id).await;
-  test.assert_num_of_documents(0).await;
+  test.assert_ids(vec![]).await;
 }
 
 #[tokio::test]
@@ -32,5 +32,5 @@ async fn delete_multiple_docs_test() {
     .await;
   test.delete_document("1".to_string()).await;
   test.delete_document("2".to_string()).await;
-  test.assert_num_of_documents(1).await;
+  test.assert_ids(vec![1.to_string()]).await;
 }

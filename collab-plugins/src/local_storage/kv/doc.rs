@@ -295,12 +295,11 @@ where
     Ok(OIDIter { iter })
   }
 
-  fn get_all_docs_for_user(
+  fn get_all_object_ids(
     &self,
     uid: i64,
     workspace_id: &str,
-  ) -> Result<OIDIter<<Self as KVStore<'a>>::Range, <Self as KVStore<'a>>::Entry>, PersistenceError>
-  {
+  ) -> Result<impl Iterator<Item = String>, PersistenceError> {
     let uid_bytes = uid.to_be_bytes();
     let workspace_bytes = workspace_id.as_bytes();
 
@@ -311,17 +310,15 @@ where
     let from = Key(from_vec);
 
     // Construct the `to` key by appending 0xFF to cover the full range of keys with the same prefix
-    let mut to_vec: SmallVec<[u8; 24]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT];
-    to_vec.extend_from_slice(&uid_bytes);
-    to_vec.extend_from_slice(workspace_bytes);
-    to_vec.push(0xFF);
+    let to_vec: SmallVec<[u8; 24]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT_KEY];
     let to = Key(to_vec);
 
-    // Get the range iterator from the store
     let iter = self.range(from.as_ref()..to.as_ref())?;
 
-    // Return the iterator in OIDIter
-    Ok(OIDIter { iter })
+    Ok(iter.filter_map(move |entry| {
+      extract_object_id_from_key_v1(entry.key(), uid_bytes.len(), workspace_bytes.len())
+        .and_then(|object_id_bytes| String::from_utf8(object_id_bytes.to_vec()).ok())
+    }))
   }
 
   fn get_all_workspace_ids(&self) -> Result<Vec<String>, PersistenceError> {
@@ -502,4 +499,19 @@ where
   }
 
   Ok(())
+}
+
+pub fn extract_object_id_from_key_v1(
+  key: &[u8],
+  uid_len: usize,
+  workspace_id_len: usize,
+) -> Option<&[u8]> {
+  let prefix_len = 2; // DOC_SPACE + DOC_SPACE_OBJECT
+  let start_index = prefix_len + uid_len + workspace_id_len;
+  // Check if the key is long enough to contain an object_id and a terminator
+  if key.len() > start_index && key[key.len() - 1] == TERMINATOR {
+    Some(&key[start_index..key.len() - 1])
+  } else {
+    None
+  }
 }

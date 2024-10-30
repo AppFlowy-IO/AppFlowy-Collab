@@ -131,23 +131,15 @@ async fn insert_multiple_docs() {
   let db = test.db.clone();
 
   // Replacing Script variants with function calls
-  test
-    .create_document_with_collab_db("1".to_string(), db.clone())
-    .await;
-  test
-    .create_document_with_collab_db("2".to_string(), db.clone())
-    .await;
-  test
-    .create_document_with_collab_db("3".to_string(), db.clone())
-    .await;
-  test
-    .create_document_with_collab_db("4".to_string(), db.clone())
-    .await;
-  test
-    .create_document_with_collab_db("5".to_string(), db.clone())
-    .await;
-  test
-    .create_document_with_collab_db("6".to_string(), db.clone())
-    .await;
-  test.assert_num_of_documents(6).await;
+  let id_1 = uuid::Uuid::new_v4().to_string();
+  let id_2 = uuid::Uuid::new_v4().to_string();
+  let id_3 = uuid::Uuid::new_v4().to_string();
+  let id_4 = uuid::Uuid::new_v4().to_string();
+
+  let expected = vec![id_1.clone(), id_2.clone(), id_3.clone(), id_4.clone()];
+  test.create_document_with_collab_db(id_1, db.clone()).await;
+  test.create_document_with_collab_db(id_2, db.clone()).await;
+  test.create_document_with_collab_db(id_3, db.clone()).await;
+  test.create_document_with_collab_db(id_4, db.clone()).await;
+  test.assert_ids(expected).await;
 }

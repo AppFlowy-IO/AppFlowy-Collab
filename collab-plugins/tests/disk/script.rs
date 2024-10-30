@@ -124,15 +124,16 @@ impl CollabPersistenceTest {
     assert_eq!(updates.len(), expected);
   }
 
-  pub async fn assert_num_of_documents(&mut self, expected: usize) {
-    let docs = self.db.read_txn().get_all_docs().unwrap();
-    let docs_2 = self
+  pub async fn assert_ids(&mut self, mut expected: Vec<String>) {
+    let mut docs = self
       .db
       .read_txn()
-      .get_all_docs_for_user(self.uid, &self.workspace_id)
-      .unwrap();
-    assert_eq!(docs.count(), expected);
-    assert_eq!(docs_2.count(), expected);
+      .get_all_object_ids(self.uid, &self.workspace_id)
+      .map(|iter| iter.collect::<Vec<String>>())
+      .unwrap_or_default();
+    docs.sort();
+    expected.sort();
+    assert_eq!(docs, expected);
   }
 
   pub async fn create_collab(&mut self, doc_id: String) {
