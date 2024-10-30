@@ -443,7 +443,7 @@ where
   }
 
   // Fallback to the old key format if not found
-  let old_key = make_doc_id_key(&uid_bytes, object_id.as_ref());
+  let old_key = make_doc_id_key_v0(&uid_bytes, object_id.as_ref());
   get_id_for_key(store, old_key)
 }
 
@@ -480,4 +480,26 @@ fn extract_uuid_from_key(key: &[u8]) -> Option<[u8; 16]> {
   } else {
     None
   }
+}
+
+pub fn migrate_old_keys<'a, S>(store: &'a S, workspace_id: &str) -> Result<(), PersistenceError>
+where
+  S: KVStore<'a>,
+  PersistenceError: From<<S as KVStore<'a>>::Error>,
+{
+  let from = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT]);
+  let to = Key::from_const([DOC_SPACE, DOC_SPACE_OBJECT_KEY]);
+
+  let iter = store.range(from.as_ref()..to.as_ref())?;
+  for entry in iter {
+    let old_key = entry.key();
+    let value = entry.value();
+    let uid = &old_key[2..10];
+    let object_id = &old_key[10..old_key.len() - 1];
+
+    let new_key = make_doc_id_key_v1(uid, workspace_id.as_ref(), object_id);
+    store.insert(new_key, value)?;
+  }
+
+  Ok(())
 }

@@ -83,7 +83,7 @@ pub fn make_doc_id_key_v1(uid: &[u8], workspace_id: &[u8], object_id: &[u8]) -> 
   Key(v)
 }
 
-pub fn make_doc_id_key(uid: &[u8], object_id: &[u8]) -> Key<20> {
+pub fn make_doc_id_key_v0(uid: &[u8], object_id: &[u8]) -> Key<20> {
   let mut v: SmallVec<[u8; 20]> = smallvec![DOC_SPACE, DOC_SPACE_OBJECT];
   v.write_all(uid).unwrap();
   v.write_all(object_id).unwrap();

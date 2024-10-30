@@ -1,6 +1,9 @@
 use crate::disk::util::rocks_db;
-use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::KVTransactionDB;
+use collab_plugins::local_storage::kv::doc::{migrate_old_keys, CollabKVAction};
+use collab_plugins::local_storage::kv::keys::{
+  make_doc_id_key_v0, make_doc_id_key_v1, Key, DOC_SPACE, DOC_SPACE_OBJECT, DOC_SPACE_OBJECT_KEY,
+};
+use collab_plugins::local_storage::kv::{KVStore, KVTransactionDB};
 use collab_plugins::CollabKVDB;
 use std::thread;
 use uuid::Uuid;
@@ -156,4 +159,45 @@ async fn multiple_workspace_test() {
   // Count the total number of workspaces
   let workspace_count = db.read_txn().get_all_workspace_ids().unwrap().len();
   assert_eq!(workspace_count, workspaces.len());
+}
+
+// Test function for `migrate_old_keys`
+#[tokio::test]
+async fn test_migrate_old_keys() {
+  let workspace_id = Uuid::new_v4().to_string();
+  let (_, mut db) = rocks_db();
+
+  // Insert old keys into the database
+  let num_docs = 5;
+  let uid: i64 = 123;
+  let uid_id_bytes = &uid.to_be_bytes();
+  for i in 0..num_docs {
+    let object_id = format!("object_{}", i);
+    let old_key = make_doc_id_key_v0(uid_id_bytes, object_id.as_ref());
+    let value = format!("value_{}", i).into_bytes();
+
+    db.with_write_txn(|db_w_txn| {
+      db_w_txn.insert(old_key.clone(), value.clone())?;
+      Ok(())
+    })
+    .unwrap();
+  }
+
+  // Perform migration of old keys
+  {
+    let w = db.write_txn();
+    migrate_old_keys(&w, &workspace_id).unwrap();
+    w.commit_transaction().unwrap();
+  }
+
+  // Verify that old keys were migrated to new keys
+  for i in 0..num_docs {
+    let object_id = format!("object_{}", i);
+    let new_key = make_doc_id_key_v1(uid_id_bytes, workspace_id.as_bytes(), object_id.as_bytes());
+
+    // Check if the new key exists in the store
+    let mut txn = db.read_txn();
+    let value = txn.get(&new_key).unwrap();
+    assert_eq!(value, Some(format!("value_{}", i).into_bytes()));
+  }
 }
