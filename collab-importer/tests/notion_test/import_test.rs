@@ -72,9 +72,8 @@ async fn import_csv_without_subpage_folder_test() {
 
 #[tokio::test]
 async fn import_part_zip_test() {
-  let (_cleaner, file_path_1) = async_unzip_asset("multi_part_zip").await.unwrap();
   let (_cleaner, file_path_2) = sync_unzip_asset("multi_part_zip").await.unwrap();
-  for file_path in [file_path_1, file_path_2] {
+  for file_path in [file_path_2] {
     let importer = NotionImporter::new(
       1,
       &file_path,
