@@ -618,6 +618,13 @@ impl From<EncodedCollab> for DataSource {
 }
 
 impl DataSource {
+  pub fn is_empty(&self) -> bool {
+    match self {
+      DataSource::Disk(d) => d.is_none(),
+      DataSource::DocStateV1(d) => d.is_empty(),
+      DataSource::DocStateV2(d) => d.is_empty(),
+    }
+  }
   pub fn as_update(&self) -> Result<Option<Update>, CollabError> {
     match self {
       DataSource::DocStateV1(doc_state) if !doc_state.is_empty() => {
