@@ -32,5 +32,5 @@ async fn delete_multiple_docs_test() {
     .await;
   test.delete_document("1".to_string()).await;
   test.delete_document("2".to_string()).await;
-  test.assert_ids(vec![1.to_string()]).await;
+  test.assert_ids(vec![3.to_string()]).await;
 }
