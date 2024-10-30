@@ -383,14 +383,6 @@ impl Collab {
     self.state.set_init_state(InitState::Initialized);
   }
 
-  pub fn save_to_disk(
-    &self,
-    persistence: &dyn CollabPersistence,
-    encoded_collab: EncodedCollab,
-  ) -> Result<(), CollabError> {
-    persistence.save_collab_to_disk(&self.object_id, encoded_collab)
-  }
-
   pub fn get_state(&self) -> &Arc<State> {
     &self.state
   }
@@ -626,10 +618,6 @@ impl From<EncodedCollab> for DataSource {
 }
 
 impl DataSource {
-  pub fn is_empty(&self) -> bool {
-    matches!(self, DataSource::Disk(_))
-  }
-
   pub fn as_update(&self) -> Result<Option<Update>, CollabError> {
     match self {
       DataSource::DocStateV1(doc_state) if !doc_state.is_empty() => {

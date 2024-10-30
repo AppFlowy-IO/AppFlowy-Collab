@@ -9,7 +9,7 @@ use collab::preclude::{Collab, CollabBuilder};
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
-use collab_database::rows::{Cells, CreateRowParams, RowId};
+use collab_database::rows::{Cells, CreateRowParams};
 use collab_database::views::DatabaseLayout;
 use collab_database::workspace_database::{
   DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid, RowRelationChange,
@@ -144,13 +144,6 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
 
     write_txn.commit_transaction().unwrap();
     Ok(())
-  }
-
-  fn is_row_exist_partition(&self, row_ids: Vec<RowId>) -> (Vec<RowId>, Vec<RowId>) {
-    let read_txn = self.db.read_txn();
-    row_ids
-      .into_iter()
-      .partition(|row_id| read_txn.is_exist(self.uid, self.workspace_id.as_str(), row_id.as_ref()))
   }
 }
 
