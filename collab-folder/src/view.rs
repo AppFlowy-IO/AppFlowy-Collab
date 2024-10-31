@@ -260,18 +260,19 @@ impl ViewsMap {
     map_ref.get_with_txn(txn, FOLDER_VIEW_NAME)
   }
 
-  /// Inserts a new view into the workspace.
+  /// Inserts a new view into the specified workspace under a given parent view.
   ///
-  /// The function first checks if there is a current workspace ID. If there is, it then checks
-  /// if the `parent_view_id` of the new view matches the workspace ID. If they match,
-  /// the new view is added to the workspace's children.
+  /// # Parameters:
+  /// - `parent_view_id`: The ID of the parent view under which the new view will be added.
+  /// - `index`: Optional. If provided, the new view will be inserted at the specified position
+  ///    among the parent view's children. If `None`, the new view will be added at the end of
+  ///    the children list.
   ///
-  /// Finally, the view is inserted into the view storage regardless of its parent view ID
-  /// and workspace ID matching.
+  /// # Behavior:
+  /// - When `index` is `Some`, the new view is inserted at that position in the list of the
+  ///   parent view’s children.
+  /// - When `index` is `None`, the new view is appended to the end of the parent view’s children.
   ///
-  /// # Parameters
-  ///
-  /// * `view`: The `View` object that is to be inserted into the storage.
   pub fn insert(&self, txn: &mut TransactionMut, view: View, index: Option<u32>) {
     let time = timestamp();
     if let Some(parent_map_ref) = self
@@ -314,7 +315,6 @@ impl ViewsMap {
       update
         .set_name(view.name)
         .set_bid(view.parent_view_id)
-        .set_desc(view.desc)
         .set_layout(view.layout)
         .set_created_at(created_at)
         .set_children(view.children)
@@ -430,7 +430,6 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
   let name: String = map_ref
     .get_with_txn(txn, FOLDER_VIEW_NAME)
     .unwrap_or_default();
-  let desc: String = map_ref.get_with_txn(txn, VIEW_DESC).unwrap_or_default();
   let created_at: i64 = map_ref
     .get_with_txn(txn, VIEW_CREATE_AT)
     .unwrap_or_default();
@@ -460,7 +459,6 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     id,
     parent_view_id,
     name,
-    desc,
     children,
     created_at,
     layout,
@@ -664,10 +662,13 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct View {
+  /// The id of the view
   pub id: String,
+  /// The id for given parent view
   pub parent_view_id: String,
+  /// The name that display on the left sidebar
   pub name: String,
-  pub desc: String,
+  /// A list of ids, each of them is the id of other view
   pub children: RepeatedViewIdentifier,
   pub created_at: i64,
   #[serde(default)]
@@ -692,12 +693,34 @@ pub struct View {
 }
 
 impl View {
+  pub fn new(
+    view_id: String,
+    parent_view_id: String,
+    name: String,
+    layout: ViewLayout,
+    created_by: Option<i64>,
+  ) -> Self {
+    Self {
+      id: view_id,
+      parent_view_id,
+      name,
+      children: Default::default(),
+      created_at: timestamp(),
+      is_favorite: false,
+      layout,
+      icon: None,
+      created_by,
+      last_edited_time: 0,
+      last_edited_by: None,
+      extra: None,
+    }
+  }
+
   pub fn orphan_view(view_id: &str, layout: ViewLayout, uid: Option<i64>) -> Self {
     View {
       id: view_id.to_string(),
       parent_view_id: view_id.to_string(),
       name: "".to_string(),
-      desc: "".to_string(),
       children: Default::default(),
       created_at: timestamp(),
       is_favorite: false,
@@ -745,26 +768,6 @@ impl From<&View> for ViewIndexContent {
   }
 }
 
-impl Default for View {
-  fn default() -> Self {
-    Self {
-      id: "".to_string(),
-      parent_view_id: "".to_string(),
-      name: "".to_string(),
-      desc: "".to_string(),
-      children: Default::default(),
-      created_at: 0,
-      is_favorite: false,
-      layout: ViewLayout::Document,
-      icon: None,
-      created_by: None,
-      last_edited_time: 0,
-      last_edited_by: None,
-      extra: None,
-    }
-  }
-}
-
 #[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum IconType {
@@ -773,6 +776,30 @@ pub enum IconType {
   Icon = 2,
 }
 
+/// Represents an icon associated with a view, including its type and value.
+///
+/// # Fields
+/// - `ty`: The type of the icon, as specified by the `IconType` enum.
+/// - `value`: The string value representing the icon; for example, it could be an emoji character,
+///    a URL, or an icon name.
+///
+/// # Example
+/// ```no_run
+/// use collab_folder::{IconType, ViewIcon};
+/// let view_icon = ViewIcon {
+///     ty: IconType::Url,
+///     value: String::from("https://example.com/icon.png"),
+/// };
+/// assert_eq!(view_icon.ty, IconType::Url);
+/// assert_eq!(view_icon.value, "https://example.com/icon.png");
+///
+/// let emoji_icon = ViewIcon {
+///     ty: IconType::Emoji,
+///     value: String::from("🙂"),
+/// };
+/// assert_eq!(emoji_icon.ty, IconType::Emoji);
+/// assert_eq!(emoji_icon.value, "🙂");
+/// ```
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct ViewIcon {
   pub ty: IconType,

@@ -139,9 +139,16 @@ pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<Strin
   View {
     id: view_id.to_string(),
     parent_view_id: parent_view_id.to_string(),
+    name: "".to_string(),
     children: RepeatedViewIdentifier::new(belongings),
+    created_at: 0,
+    is_favorite: false,
     layout: ViewLayout::Document,
-    ..Default::default()
+    icon: None,
+    created_by: None,
+    last_edited_time: 0,
+    last_edited_by: None,
+    extra: None,
   }
 }
 

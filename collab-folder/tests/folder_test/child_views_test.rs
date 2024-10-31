@@ -56,7 +56,6 @@ fn create_child_views_test() {
             ]
           },
           "created_at": time,
-          "desc": "",
           "icon": null,
           "id": "1",
           "is_favorite": false,
@@ -69,7 +68,6 @@ fn create_child_views_test() {
             "items": []
           },
           "created_at": time,
-          "desc": "",
           "icon": null,
           "id": "1_1",
           "is_favorite": false,
@@ -89,7 +87,6 @@ fn create_child_views_test() {
             ]
           },
           "created_at": time,
-          "desc": "",
           "icon": null,
           "id": "1_2",
           "is_favorite": false,
@@ -102,7 +99,6 @@ fn create_child_views_test() {
             "items": []
           },
           "created_at": time,
-          "desc": "",
           "icon": null,
           "id": "1_2_1",
           "is_favorite": false,
@@ -115,7 +111,6 @@ fn create_child_views_test() {
             "items": []
           },
           "created_at": time,
-          "desc": "",
           "icon": null,
           "id": "1_2_2",
           "is_favorite": false,
@@ -128,7 +123,6 @@ fn create_child_views_test() {
             "items": []
           },
           "created_at": time,
-          "desc": "",
           "icon": null,
           "id": "1_3",
           "is_favorite": false,
@@ -271,7 +265,6 @@ fn create_orphan_child_views_test() {
                 "items": []
               },
               "created_by": 1,
-              "desc": "",
               "icon": null,
               "id": "1",
               "is_favorite": false,
@@ -285,7 +278,6 @@ fn create_orphan_child_views_test() {
                 "items": []
               },
               "created_by": 1,
-              "desc": "",
               "icon": null,
               "id": "2",
               "is_favorite": false,

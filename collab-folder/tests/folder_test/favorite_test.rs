@@ -227,7 +227,6 @@ fn migrate_from_old_version_folder_without_fav_test() {
             ]
           },
           "created_at": 1690602073,
-          "desc": "",
           "icon": null,
           "id": "5cf7eff5-954d-424d-a5e7-032527929019",
           "is_favorite": false,
@@ -240,7 +239,6 @@ fn migrate_from_old_version_folder_without_fav_test() {
             "items": []
           },
           "created_at": 1690602073,
-          "desc": "",
           "icon": null,
           "id": "631584ec-af71-42c3-94f4-89dcfdafb988",
           "is_favorite": false,
@@ -318,7 +316,6 @@ fn migrate_favorite_v1_test() {
             ]
           },
           "created_at": 1698592608,
-          "desc": "",
           "icon": null,
           "id": "ddf06dcf-1a01-4d0d-b973-9d6a892f68b5",
           "is_favorite": false,
@@ -331,7 +328,6 @@ fn migrate_favorite_v1_test() {
             "items": []
           },
           "created_at": 1698661285,
-          "desc": "",
           "icon": null,
           "id": "36e0a35e-c636-48d6-9e50-e2e2ee8a1d9f",
           "is_favorite": true,
@@ -344,7 +340,6 @@ fn migrate_favorite_v1_test() {
             "items": []
           },
           "created_at": 1698661296,
-          "desc": "",
           "icon": null,
           "id": "9330d783-d10d-4a15-84d3-1fa4fa2e8cc4",
           "is_favorite": true,
@@ -357,7 +352,6 @@ fn migrate_favorite_v1_test() {
             "items": []
           },
           "created_at": 1698661316,
-          "desc": "",
           "icon": null,
           "id": "c96d9587-0f6a-4d6b-8d59-6d72f5dcaa4e",
           "is_favorite": false,

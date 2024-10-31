@@ -46,15 +46,17 @@ impl From<Workspace> for View {
   fn from(value: Workspace) -> Self {
     Self {
       id: value.id,
+      parent_view_id: "".to_string(),
       name: value.name,
       children: value.child_views,
       created_at: value.created_at,
+      is_favorite: false,
       layout: ViewLayout::Document,
       icon: None,
       created_by: value.created_by,
       last_edited_time: value.last_edited_time,
       last_edited_by: value.last_edited_by,
-      ..Default::default()
+      extra: None,
     }
   }
 }
