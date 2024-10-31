@@ -28,7 +28,6 @@ fn folder_json_serde() {
             "fake_w_1": {
               "bid": "",
               "created_at": time,
-              "desc": "",
               "icon": "",
               "id": "fake_w_1",
               "layout": 0,
@@ -86,7 +85,6 @@ fn view_json_serde() {
             "fake_workspace_id": {
               "bid": "",
               "created_at": time,
-              "desc": "",
               "icon": "",
               "id": "fake_workspace_id",
               "layout": 0,
@@ -95,7 +93,6 @@ fn view_json_serde() {
             "v1": {
               "bid": "fake_workspace_id",
               "created_at": time,
-              "desc": "",
               "icon": "",
               "id": "v1",
               "layout": 0,
@@ -104,7 +101,6 @@ fn view_json_serde() {
             "v2": {
               "bid": "fake_workspace_id",
               "created_at": time,
-              "desc": "",
               "icon": "",
               "id": "v2",
               "layout": 0,
@@ -171,7 +167,6 @@ fn child_view_json_serde() {
       "fake_workspace_id": {
         "bid": "",
         "created_at": time,
-        "desc": "",
         "icon": "",
         "id": "fake_workspace_id",
         "layout": 0,
@@ -180,7 +175,6 @@ fn child_view_json_serde() {
       "v1": {
         "bid": "fake_workspace_id",
         "created_at": time,
-        "desc": "",
         "icon": "",
         "id": "v1",
         "layout": 0,
@@ -189,7 +183,6 @@ fn child_view_json_serde() {
       "v2": {
         "bid": "fake_workspace_id",
         "created_at": time,
-        "desc": "",
         "icon": "",
         "id": "v2",
         "layout": 0,
@@ -198,7 +191,6 @@ fn child_view_json_serde() {
       "v2.1": {
         "bid": "v2",
         "created_at": time,
-        "desc": "",
         "icon": "",
         "id": "v2.1",
         "layout": 0,
@@ -207,7 +199,6 @@ fn child_view_json_serde() {
       "v2.2": {
         "bid": "v2",
         "created_at": time,
-        "desc": "",
         "icon": "",
         "id": "v2.2",
         "layout": 0,
