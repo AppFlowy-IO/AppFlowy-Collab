@@ -312,6 +312,102 @@ async fn observer_create_delete_row_test() {
 }
 
 #[tokio::test]
+async fn observer_create_row_test() {
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id);
+
+  let row_id_1 = gen_row_id();
+  let row_id_2 = gen_row_id();
+  let row_id_3 = gen_row_id();
+  let row_id_4 = gen_row_id();
+  let created_row = vec![
+    row_id_1.clone(),
+    row_id_2.clone(),
+    row_id_3.clone(),
+    row_id_4.clone(),
+  ];
+  let database_test = Arc::new(Mutex::from(database_test));
+  let cloned_database_test = database_test.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(300)).await;
+    let mut db = cloned_database_test.lock().await;
+    db.create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
+      .await
+      .unwrap();
+    db.create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
+      .await
+      .unwrap();
+    db.create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
+      .await
+      .unwrap();
+    db.create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
+      .await
+      .unwrap();
+  });
+
+  let view_change_rx = database_test.lock().await.subscribe_view_change().unwrap();
+  let mut received_rows = vec![];
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidUpdateRowOrders {
+      database_view_id,
+      is_local_change,
+      insert_row_orders,
+      delete_row_indexes,
+    } => {
+      if database_view_id == "v1" {
+        assert!(is_local_change);
+        assert_eq!(delete_row_indexes.len(), 0);
+        for (row_order, index) in insert_row_orders {
+          let pos = created_row.iter().position(|x| x == &row_order.id).unwrap() as u32;
+          assert_eq!(&pos, index);
+          received_rows.push(row_order.id.clone());
+        }
+        created_row == received_rows
+      } else {
+        false
+      }
+    },
+    _ => false,
+  })
+  .await
+  .unwrap();
+
+  let cloned_database_test = database_test.clone();
+  let cloned_created_row = created_row.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(300)).await;
+    let mut db = cloned_database_test.lock().await;
+    db.move_row(&created_row[0], &created_row[2]).await;
+  });
+
+  let view_change_rx = database_test.lock().await.subscribe_view_change().unwrap();
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidUpdateRowOrders {
+      database_view_id,
+      is_local_change,
+      insert_row_orders,
+      delete_row_indexes,
+    } => {
+      if database_view_id == "v1" {
+        assert!(is_local_change);
+        assert_eq!(delete_row_indexes.len(), 1);
+        assert_eq!(delete_row_indexes[0], 0);
+
+        assert_eq!(insert_row_orders.len(), 1);
+        assert_eq!(insert_row_orders[0].0.id, cloned_created_row[0]);
+        assert_eq!(insert_row_orders[0].1, 3);
+        true
+      } else {
+        false
+      }
+    },
+    _ => false,
+  })
+  .await
+  .unwrap();
+}
+
+#[tokio::test]
 async fn observe_update_view_test() {
   setup_log();
   let database_id = uuid::Uuid::new_v4().to_string();

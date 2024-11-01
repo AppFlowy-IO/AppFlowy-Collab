@@ -415,7 +415,7 @@ pub fn view_from_map_ref<T: ReadTxn>(map_ref: &MapRef, txn: &T) -> Option<Databa
     .map(|map_ref| FieldSettingsByFieldIdMap::from((txn, &map_ref)))
     .unwrap_or_default();
 
-  let is_inline: bool = map_ref.get_with_txn(txn, IS_INLINE).unwrap_or_default();
+  let is_inline: bool = map_ref.get_with_txn(txn, IS_INLINE).unwrap_or(false);
 
   Some(DatabaseView {
     id,

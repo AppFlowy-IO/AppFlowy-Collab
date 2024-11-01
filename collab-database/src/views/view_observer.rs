@@ -227,7 +227,17 @@ fn handle_array_event(
         insert_row_orders,
         delete_row_indexes,
       });
+    } else {
+      #[cfg(feature = "verbose_log")]
+      trace!("database view observe array event: no row order change");
     }
+  } else {
+    #[cfg(feature = "verbose_log")]
+    trace!(
+      "Can not find database view id when receive key:{:?} event:{:?}",
+      key,
+      array_event.path()
+    );
   }
 }
 
