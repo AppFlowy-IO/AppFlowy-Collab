@@ -55,7 +55,7 @@ pub fn sync_unzip(
 
     let filename = entry.name().to_string();
     // Skip zip files within subdirectories
-    if entry.is_file() && filename.ends_with(".zip") {
+    if entry.is_file() && filename.ends_with(".zip") && i != 0 {
       trace!("Skipping zip file: {:?}", filename);
       continue;
     }
