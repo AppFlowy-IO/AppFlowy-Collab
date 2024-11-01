@@ -1636,7 +1636,7 @@ pub struct DatabaseBody {
 impl DatabaseBody {
   fn open(collab: Collab, context: DatabaseContext) -> Result<(Self, Collab), DatabaseError> {
     CollabType::Database.validate_require_data(&collab)?;
-    let body = Self::from_collab(&collab, context.collab_service)
+    let body = Self::from_collab(&collab, context.collab_service, Some(context.notifier))
       .ok_or_else(|| DatabaseError::NoRequiredData("Can not open database".to_string()))?;
     Ok((body, collab))
   }
@@ -1712,6 +1712,7 @@ impl DatabaseBody {
   pub fn from_collab(
     collab: &Collab,
     collab_service: Arc<dyn DatabaseCollabService>,
+    notifier: Option<DatabaseNotify>,
   ) -> Option<Self> {
     let txn = collab.context.transact();
     let root: MapRef = collab.data.get_with_txn(&txn, DATABASE)?;
@@ -1720,17 +1721,25 @@ impl DatabaseBody {
     let views: MapRef = root.get_with_txn(&txn, VIEWS)?; // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
     let metas: MapRef = root.get_with_txn(&txn, DATABASE_METAS)?; // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
 
-    let fields = FieldMap::new(fields, None);
-    let views = DatabaseViews::new(CollabOrigin::Empty, views, None);
+    let fields = FieldMap::new(fields, notifier.as_ref().map(|n| n.field_change_tx.clone()));
+    let views = DatabaseViews::new(
+      CollabOrigin::Empty,
+      views,
+      notifier.as_ref().map(|n| n.view_change_tx.clone()),
+    );
     let metas = MetaMap::new(metas);
-    let block = Block::new(database_id, collab_service, None);
+    let block = Block::new(
+      database_id,
+      collab_service,
+      notifier.as_ref().map(|n| n.row_change_tx.clone()),
+    );
     Some(Self {
       root,
       views: views.into(),
       fields: fields.into(),
       metas: metas.into(),
       block,
-      notifier: None,
+      notifier,
     })
   }
 
