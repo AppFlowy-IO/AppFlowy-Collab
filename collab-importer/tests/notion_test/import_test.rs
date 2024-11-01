@@ -17,7 +17,7 @@ use collab_entity::CollabType;
 use collab_folder::hierarchy_builder::ParentChildViews;
 use collab_folder::{default_folder_data, Folder, View};
 use collab_importer::error::ImporterError;
-use collab_importer::imported_collab::{import_notion_zip_file, ImportType};
+use collab_importer::imported_collab::{import_notion_zip_file, ImportType, ImportedCollabInfo};
 use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::{is_csv_contained_cached, CSVContentCache, NotionImporter};
 use collab_importer::util::{parse_csv, CSVRow};
@@ -29,9 +29,26 @@ use std::env::temp_dir;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+// #[tokio::test]
+// async fn import_test() {
+//   let (_cleaner, file_path) = sync_unzip_asset("appflowy_io_full").await.unwrap();
+//   let importer = NotionImporter::new(
+//     1,
+//     &file_path,
+//     uuid::Uuid::new_v4(),
+//     "http://test.appflowy.cloud".to_string(),
+//   )
+//   .unwrap();
+//   let info = importer.import().await.unwrap();
+//   let nested_view = info.build_nested_views().await;
+//   println!("{}", nested_view);
+// }
+
 #[tokio::test]
-async fn import_part_zip_test2() {
-  let (_cleaner, file_path) = sync_unzip_asset("general_300mb").await.unwrap();
+async fn import_zip_file_contains_zip_as_attachments() {
+  let (_cleaner, file_path) = sync_unzip_asset("project&task_contain_zip_attachment")
+    .await
+    .unwrap();
   let importer = NotionImporter::new(
     1,
     &file_path,
@@ -42,8 +59,33 @@ async fn import_part_zip_test2() {
   let info = importer.import().await.unwrap();
   let nested_view = info.build_nested_views().await;
   println!("{}", nested_view);
-  // let collabs = info.into_collab_stream().await.collect::<Vec<_>>().await;
-  // for collab in collabs {}
+
+  let imported_collabs = info
+    .into_collab_stream()
+    .await
+    .collect::<Vec<ImportedCollabInfo>>()
+    .await;
+
+  assert_eq!(imported_collabs.len(), 4);
+  assert_eq!(
+    imported_collabs[0].name,
+    "project&task_contain_zip_attachment"
+  );
+  assert_eq!(imported_collabs[0].imported_collabs.len(), 1);
+  assert_eq!(imported_collabs[0].resources[0].files.len(), 0);
+
+  assert_eq!(imported_collabs[1].name, "Projects & Tasks");
+  assert_eq!(imported_collabs[1].imported_collabs.len(), 1);
+  assert_eq!(imported_collabs[1].resources[0].files.len(), 0);
+
+  assert_eq!(imported_collabs[2].name, "Projects");
+  assert_eq!(imported_collabs[2].imported_collabs.len(), 9);
+  assert_eq!(imported_collabs[2].resources[0].files.len(), 2);
+  assert_eq!(imported_collabs[2].file_size(), 1143952);
+
+  assert_eq!(imported_collabs[3].name, "Tasks");
+  assert_eq!(imported_collabs[3].imported_collabs.len(), 18);
+  assert_eq!(imported_collabs[3].resources[0].files.len(), 0);
 }
 
 #[tokio::test]

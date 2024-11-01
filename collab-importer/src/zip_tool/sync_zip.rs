@@ -6,7 +6,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use tracing::warn;
+use tracing::{trace, warn};
 use zip::read::ZipArchive;
 
 pub struct UnzipFile {
@@ -14,6 +14,7 @@ pub struct UnzipFile {
   pub unzip_dir: PathBuf,
   pub parts: Vec<PathBuf>,
 }
+
 pub fn sync_unzip(
   file_path: PathBuf,
   mut out_dir: PathBuf,
@@ -55,7 +56,7 @@ pub fn sync_unzip(
     let filename = entry.name().to_string();
     // Skip zip files within subdirectories
     if entry.is_file() && filename.ends_with(".zip") {
-      println!("Skipping zip file: {:?}", filename);
+      trace!("Skipping zip file: {:?}", filename);
       continue;
     }
 
@@ -108,6 +109,7 @@ pub fn sync_unzip(
       }
     }
   }
+  drop(archive);
 
   // Process multipart zip files
   if !parts.is_empty() {
@@ -150,6 +152,11 @@ fn unzip_single_file(
       .by_index(i)
       .map_err(|e| ImporterError::Internal(anyhow!("Failed to read entry: {:?}", e)))?;
 
+    let entry_name = entry.name();
+    if entry_name == ".DS_Store" || entry_name.starts_with("__MACOSX") {
+      continue;
+    }
+
     let file_name = entry.name().to_string();
     if root_dir.is_none() && entry.is_dir() {
       root_dir = Some(
@@ -183,7 +190,13 @@ fn unzip_single_file(
         .write(true)
         .create_new(true)
         .open(&path)
-        .map_err(|e| ImporterError::Internal(anyhow!("Failed to create part file: {:?}", e)))?;
+        .map_err(|e| {
+          ImporterError::Internal(anyhow!(
+            "Failed to create part file: {:?}, path:{:?}",
+            e,
+            path
+          ))
+        })?;
 
       io::copy(&mut entry, &mut outfile)
         .map_err(|e| ImporterError::Internal(anyhow!("Failed to write file: {:?}", e)))?;
