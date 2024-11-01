@@ -85,10 +85,11 @@ impl DatabaseContext {
   }
 }
 
-pub fn default_database_data(database_id: &str) -> Result<EncodedCollab, DatabaseError> {
+pub async fn default_database_data(database_id: &str) -> Result<EncodedCollab, DatabaseError> {
   let context = DatabaseContext::new(Arc::new(NoPersistenceDatabaseCollabService));
   let collab = Collab::new_with_origin(CollabOrigin::Empty, database_id, vec![], false);
-  let (_, collab) = DatabaseBody::create(collab, database_id.to_string(), context)?;
+  let (_, collab) =
+    DatabaseBody::create(collab, database_id.to_string(), context, vec![], vec![]).await?;
   Ok(
     collab
       .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
@@ -108,7 +109,7 @@ impl Database {
       .build_collab(database_id, CollabType::Database, None)
       .await?;
     let collab_service = context.collab_service.clone();
-    let (body, collab) = DatabaseBody::open(collab, database_id.to_string(), context)?;
+    let (body, collab) = DatabaseBody::open(collab, context)?;
     Ok(Self {
       collab,
       body,
@@ -116,12 +117,17 @@ impl Database {
     })
   }
 
-  pub async fn create(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
+  pub async fn create(
+    database_id: &str,
+    context: DatabaseContext,
+    rows: Vec<CreateRowParams>,
+    fields: Vec<Field>,
+  ) -> Result<Self, DatabaseError> {
     if database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
-    let encoded_collab = default_database_data(database_id)?;
+    let encoded_collab = default_database_data(database_id).await?;
     let collab = context
       .collab_service
       .build_collab(
@@ -132,7 +138,8 @@ impl Database {
       .await?;
 
     let collab_service = context.collab_service.clone();
-    let (body, collab) = DatabaseBody::create(collab, database_id.to_string(), context)?;
+    let (body, collab) =
+      DatabaseBody::create(collab, database_id.to_string(), context, rows, fields).await?;
     Ok(Self {
       collab,
       body,
@@ -169,8 +176,30 @@ impl Database {
     context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
     // Get or create empty database with the given database_id
-    let mut database = Self::create(&params.database_id, context).await?;
-    database.create_view(params).await?;
+    let CreateDatabaseParams {
+      database_id,
+      rows,
+      fields,
+      views,
+    } = params;
+
+    let mut database = Self::create(&database_id, context, rows, fields).await?;
+    let row_orders = database.get_all_row_orders().await;
+    let field_orders = database.get_all_field_orders();
+    {
+      let mut txn = database.collab.context.transact_mut();
+
+      // create the linked views
+      for linked_view in views {
+        database.body.create_linked_view(
+          &mut txn,
+          linked_view,
+          field_orders.clone(),
+          row_orders.clone(),
+        )?;
+      }
+    }
+
     tokio::task::spawn_blocking(move || {
       database.write_to_disk()?;
       Ok::<_, DatabaseError>(database)
@@ -256,61 +285,6 @@ impl Database {
     Ok(())
   }
 
-  async fn create_view(&mut self, params: CreateDatabaseParams) -> Result<(), DatabaseError> {
-    let CreateDatabaseParams {
-      database_id: _,
-      rows,
-      fields,
-      inline_view_id,
-      mut views,
-    } = params;
-
-    let inline_view =
-      if let Some(index) = views.iter().position(|view| view.view_id == inline_view_id) {
-        views.remove(index)
-      } else {
-        return Err(DatabaseError::DatabaseViewNotExist);
-      };
-
-    // create rows
-    let row_orders = self.body.block.create_rows(rows).await;
-
-    // create fields
-    let field_orders: Vec<FieldOrder> = fields.iter().map(FieldOrder::from).collect();
-
-    let mut txn = self.collab.context.transact_mut();
-    // Set the inline view id. The inline view id should not be
-    // empty if the current database exists.
-    info!("Set inline view id: {}", inline_view_id);
-    self
-      .body
-      .metas
-      .set_inline_view_id(&mut txn, &inline_view_id);
-
-    // Insert the given fields into the database
-    for field in fields {
-      self.body.fields.insert_field(&mut txn, field);
-    }
-    // Create the inline view
-    self.body.create_view(
-      &mut txn,
-      inline_view,
-      field_orders.clone(),
-      row_orders.clone(),
-    )?;
-
-    // create the linked views
-    for linked_view in views {
-      self.body.create_linked_view(
-        &mut txn,
-        linked_view,
-        field_orders.clone(),
-        row_orders.clone(),
-      )?;
-    }
-    Ok(())
-  }
-
   pub fn validate(&self) -> Result<(), DatabaseError> {
     CollabType::Database.validate_require_data(&self.collab)?;
     Ok(())
@@ -347,12 +321,24 @@ impl Database {
   /// Return all field orders without order
   pub fn get_all_field_orders(&self) -> Vec<FieldOrder> {
     let txn = self.collab.transact();
-    self.body.fields.get_all_field_orders(&txn)
+    match self.body.try_get_inline_view_id(&txn) {
+      None => {
+        error!("Cannot find inline view id");
+        self.body.fields.get_all_field_orders(&txn)
+      },
+      Some(inline_view_id) => self.body.views.get_field_orders(&txn, &inline_view_id),
+    }
   }
 
   pub fn get_all_views(&self) -> Vec<DatabaseView> {
     let txn = self.collab.transact();
-    self.body.views.get_all_views(&txn)
+    self
+      .body
+      .views
+      .get_all_views(&txn)
+      .into_iter()
+      .filter(|view| !view.is_inline)
+      .collect()
   }
 
   pub fn get_database_view_layout(&self, view_id: &str) -> DatabaseLayout {
@@ -1228,7 +1214,13 @@ impl Database {
   // TODO (RS): Implement the creation of a default view when fetching all database views returns an empty result, with the exception of inline views.
   pub fn get_all_database_views_meta(&self) -> Vec<DatabaseViewMeta> {
     let txn = self.collab.transact();
-    self.body.views.get_all_views_meta(&txn)
+    self
+      .body
+      .views
+      .get_all_views_meta(&txn)
+      .into_iter()
+      .filter(|view| !view.is_inline)
+      .collect()
   }
 
   /// Create a linked view to existing database
@@ -1332,7 +1324,7 @@ impl Database {
 
     let database_id = self.body.get_database_id(&txn);
     let inline_view_id = self.body.get_inline_view_id(&txn);
-    let views = self.body.views.get_all_views(&txn);
+    let views = self.get_all_views();
     let fields = self.body.get_fields_in_view(&txn, &inline_view_id, None);
     let rows_stream = self.get_all_rows(None).await;
     let rows: Vec<Row> = rows_stream
@@ -1342,7 +1334,6 @@ impl Database {
 
     DatabaseData {
       database_id,
-      inline_view_id,
       fields,
       rows,
       views,
@@ -1517,7 +1508,6 @@ pub fn timestamp() -> i64 {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DatabaseData {
   pub database_id: String,
-  pub inline_view_id: String,
   pub views: Vec<DatabaseView>,
   pub fields: Vec<Field>,
   pub rows: Vec<Row>,
@@ -1564,16 +1554,23 @@ pub fn get_database_row_ids(collab: &Collab) -> Option<Vec<String>> {
   )
 }
 
-pub fn reset_inline_view_id<F>(collab: &mut Collab, f: F)
+pub fn reset_inline_view_id<F>(collab: &mut Collab, f: F) -> Result<(), DatabaseError>
 where
   F: FnOnce(String) -> String,
 {
   let mut txn = collab.context.transact_mut();
   if let Some(container) = collab.data.get_with_path(&txn, [DATABASE, DATABASE_METAS]) {
     let map = MetaMap::new(container);
-    let inline_view_id = map.get_inline_view_id(&txn).unwrap();
+    let inline_view_id = map.get_inline_view_id(&txn).ok_or_else(|| {
+      DatabaseError::NoRequiredData("Can not find the inline view id".to_string())
+    })?;
     let new_inline_view_id = f(inline_view_id);
     map.set_inline_view_id(&mut txn, &new_inline_view_id);
+    Ok(())
+  } else {
+    Err(DatabaseError::NoRequiredData(
+      "Can not find the database metas".to_string(),
+    ))
   }
 }
 
@@ -1637,19 +1634,19 @@ pub struct DatabaseBody {
 }
 
 impl DatabaseBody {
-  fn open(
-    collab: Collab,
-    database_id: String,
-    context: DatabaseContext,
-  ) -> Result<(Self, Collab), DatabaseError> {
+  fn open(collab: Collab, context: DatabaseContext) -> Result<(Self, Collab), DatabaseError> {
     CollabType::Database.validate_require_data(&collab)?;
-    Self::create(collab, database_id, context)
+    let body = Self::from_collab(&collab, context.collab_service)
+      .ok_or_else(|| DatabaseError::NoRequiredData("Can not open database".to_string()))?;
+    Ok((body, collab))
   }
 
-  fn create(
+  async fn create(
     mut collab: Collab,
     database_id: String,
     context: DatabaseContext,
+    new_rows: Vec<CreateRowParams>,
+    new_fields: Vec<Field>,
   ) -> Result<(Self, Collab), DatabaseError> {
     let origin = collab.origin().clone();
     let mut txn = collab.context.transact_mut();
@@ -1658,16 +1655,45 @@ impl DatabaseBody {
     let fields: MapRef = root.get_or_init(&mut txn, FIELDS); // { DATABASE: { FIELDS: {:} } }
     let views: MapRef = root.get_or_init(&mut txn, VIEWS); // { DATABASE: { FIELDS: {:}, VIEWS: {:} } }
     let metas: MapRef = root.get_or_init(&mut txn, DATABASE_METAS); // { DATABASE: { FIELDS: {:},  VIEWS: {:}, METAS: {:} } }
-    drop(txn);
 
     let fields = FieldMap::new(fields, Some(context.notifier.field_change_tx.clone()));
     let views = DatabaseViews::new(origin, views, Some(context.notifier.view_change_tx.clone()));
-    let metas = MetaMap::new(metas);
     let block = Block::new(
-      database_id,
+      database_id.clone(),
       context.collab_service.clone(),
       Some(context.notifier.row_change_tx.clone()),
     );
+
+    let database_id_uuid = Uuid::parse_str(&database_id)
+      .map_err(|_| DatabaseError::InvalidDatabaseID("database_id is not a valid UUID"))?;
+    let inline_view_id = database_inline_view_id(&database_id_uuid);
+
+    // create rows
+    let row_orders = block.create_rows(new_rows).await;
+
+    // create field orders
+    let field_orders: Vec<FieldOrder> = new_fields.iter().map(FieldOrder::from).collect();
+
+    // Insert the given fields into the database
+    for field in new_fields {
+      fields.insert_field(&mut txn, field);
+    }
+
+    let mut inline_view = DatabaseView::new(
+      database_id,
+      inline_view_id.to_string(),
+      "".to_string(),
+      DatabaseLayout::Grid,
+    );
+    inline_view.is_inline = true;
+    inline_view.row_orders = row_orders.clone();
+    inline_view.field_orders = field_orders.clone();
+    views.insert_view(&mut txn, inline_view);
+
+    let metas = MetaMap::new(metas);
+    metas.set_inline_view_id(&mut txn, &inline_view_id.to_string());
+    drop(txn);
+
     let body = DatabaseBody {
       root,
       views: views.into(),
@@ -1683,7 +1709,10 @@ impl DatabaseBody {
   /// present, it will return `None`.
   ///
   /// There is no [DatabaseNotify] or persistence layer in [DatabaseBody] created by this method.
-  pub fn from_collab(collab: &Collab) -> Option<Self> {
+  pub fn from_collab(
+    collab: &Collab,
+    collab_service: Arc<dyn DatabaseCollabService>,
+  ) -> Option<Self> {
     let txn = collab.context.transact();
     let root: MapRef = collab.data.get_with_txn(&txn, DATABASE)?;
     let database_id = root.get_with_txn(&txn, DATABASE_ID)?;
@@ -1694,11 +1723,7 @@ impl DatabaseBody {
     let fields = FieldMap::new(fields, None);
     let views = DatabaseViews::new(CollabOrigin::Empty, views, None);
     let metas = MetaMap::new(metas);
-    let block = Block::new(
-      database_id,
-      Arc::new(NoPersistenceDatabaseCollabService),
-      None,
-    );
+    let block = Block::new(database_id, collab_service, None);
     Some(Self {
       root,
       views: views.into(),
@@ -1936,6 +1961,7 @@ impl DatabaseBody {
       field_orders,
       created_at: params.created_at,
       modified_at: params.modified_at,
+      is_inline: false,
     };
     // tracing::trace!("create linked view with params {:?}", params);
     self.views.insert_view(txn, view);
@@ -2004,4 +2030,9 @@ pub fn try_fixing_database(
   }
 
   Ok(())
+}
+
+fn database_inline_view_id(database_id: &Uuid) -> Uuid {
+  let key = "inline_view_id";
+  Uuid::new_v5(database_id, key.as_bytes())
 }

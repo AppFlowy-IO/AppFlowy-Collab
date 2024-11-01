@@ -22,7 +22,8 @@ async fn get_layout_setting_test() {
 
 #[tokio::test]
 async fn create_database_view_with_layout_setting_test() {
-  let database_test = DatabaseTestBuilder::new(1, "1")
+  let database_id = uuid::Uuid::new_v4();
+  let database_test = DatabaseTestBuilder::new(1, &database_id.to_string())
     .with_layout(DatabaseLayout::Calendar)
     .with_field(Field::new(
       "f1".to_string(),
@@ -76,7 +77,8 @@ async fn update_layout_setting_test() {
 }
 
 async fn create_database_with_two_layout_settings() -> DatabaseTest {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let layout_setting_1 = TestCalendarLayoutSetting::new("f1".to_string());
   let layout_setting_2 = TestCalendarLayoutSetting::new("f2".to_string());
 

@@ -12,6 +12,7 @@ use collab_user::core::{RemindersChangeSender, UserAwareness, UserAwarenessNotif
 use tempfile::TempDir;
 use tokio::sync::broadcast::Receiver;
 use tokio::time::timeout;
+use uuid::Uuid;
 
 pub struct UserAwarenessTest {
   pub user_awareness: UserAwareness,
@@ -35,13 +36,19 @@ impl DerefMut for UserAwarenessTest {
 
 impl UserAwarenessTest {
   pub fn new(uid: i64) -> Self {
+    let workspace_id = Uuid::new_v4().to_string();
     let tempdir = TempDir::new().unwrap();
 
     let path = tempdir.into_path();
     let db = Arc::new(CollabKVDB::open(path.clone()).unwrap());
     let id = uuid::Uuid::new_v4().to_string();
-    let disk_plugin =
-      RocksdbDiskPlugin::new(uid, id, CollabType::UserAwareness, Arc::downgrade(&db));
+    let disk_plugin = RocksdbDiskPlugin::new(
+      uid,
+      workspace_id,
+      id,
+      CollabType::UserAwareness,
+      Arc::downgrade(&db),
+    );
 
     let mut collab = CollabBuilder::new(1, uid.to_string(), DataSource::Disk(None))
       .with_plugin(disk_plugin)

@@ -200,7 +200,6 @@ impl NestedChildViewBuilder {
       id: self.view_id,
       parent_view_id: self.parent_view_id,
       name: self.name,
-      desc: self.desc,
       created_at: timestamp(),
       is_favorite: self.is_favorite,
       layout: self.layout,

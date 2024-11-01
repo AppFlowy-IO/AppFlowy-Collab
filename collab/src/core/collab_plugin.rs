@@ -21,7 +21,7 @@ pub enum CollabPluginType {
   Other(String),
 }
 pub trait CollabPersistence: Send + Sync + 'static {
-  fn load_collab_from_disk(&self, collab: &mut Collab);
+  fn load_collab_from_disk(&self, collab: &mut Collab) -> Result<(), CollabError>;
   fn save_collab_to_disk(
     &self,
     object_id: &str,
@@ -33,8 +33,8 @@ impl<T> CollabPersistence for Box<T>
 where
   T: CollabPersistence,
 {
-  fn load_collab_from_disk(&self, collab: &mut Collab) {
-    (**self).load_collab_from_disk(collab);
+  fn load_collab_from_disk(&self, collab: &mut Collab) -> Result<(), CollabError> {
+    (**self).load_collab_from_disk(collab)
   }
 
   fn save_collab_to_disk(

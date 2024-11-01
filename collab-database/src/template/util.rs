@@ -34,7 +34,6 @@ where
 pub(crate) fn create_database_params_from_template(
   template: DatabaseTemplate,
 ) -> CreateDatabaseParams {
-  let inline_view_id = template.view_id;
   let database_id = template.database_id;
   let timestamp = timestamp();
 
@@ -70,7 +69,7 @@ pub(crate) fn create_database_params_from_template(
   for view_template in template.views {
     views.push(CreateViewParams {
       database_id: database_id.clone(),
-      view_id: inline_view_id.clone(),
+      view_id: template.view_id.clone(),
       name: view_template.name,
       layout: view_template.layout,
       layout_settings: view_template.layout_settings,
@@ -87,7 +86,6 @@ pub(crate) fn create_database_params_from_template(
 
   CreateDatabaseParams {
     database_id,
-    inline_view_id,
     fields,
     rows,
     views,

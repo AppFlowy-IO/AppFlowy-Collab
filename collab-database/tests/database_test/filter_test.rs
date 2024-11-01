@@ -77,7 +77,8 @@ async fn remove_database_view_filter_test() {
 }
 
 async fn create_database_with_two_filters() -> DatabaseTest {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let filter_1 = TestFilter {
     id: "filter_1".to_string(),
     field_id: "f1".to_string(),

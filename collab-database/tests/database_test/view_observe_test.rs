@@ -258,15 +258,18 @@ async fn observer_create_delete_row_test() {
       insert_row_orders,
       delete_row_indexes,
     } => {
-      assert!(is_local_change);
-      assert_eq!(delete_row_indexes.len(), 0);
-      assert_eq!(database_view_id, &"v1".to_string());
-      for (row_order, index) in insert_row_orders {
-        let pos = created_row.iter().position(|x| x == &row_order.id).unwrap() as u32;
-        assert_eq!(&pos, index);
-        received_rows.push(row_order.id.clone());
+      if database_view_id == "v1" {
+        assert!(is_local_change);
+        assert_eq!(delete_row_indexes.len(), 0);
+        for (row_order, index) in insert_row_orders {
+          let pos = created_row.iter().position(|x| x == &row_order.id).unwrap() as u32;
+          assert_eq!(&pos, index);
+          received_rows.push(row_order.id.clone());
+        }
+        created_row == received_rows
+      } else {
+        false
       }
-      created_row == received_rows
     },
     _ => false,
   })
@@ -289,16 +292,18 @@ async fn observer_create_delete_row_test() {
       insert_row_orders,
       delete_row_indexes,
     } => {
-      assert!(is_local_change);
-      assert_eq!(database_view_id, &"v1".to_string());
+      if database_view_id == "v1" {
+        assert!(is_local_change);
+        assert_eq!(delete_row_indexes.len(), 1);
+        assert_eq!(delete_row_indexes[0], 0);
 
-      assert_eq!(delete_row_indexes.len(), 1);
-      assert_eq!(delete_row_indexes[0], 0);
-
-      assert_eq!(insert_row_orders.len(), 1);
-      assert_eq!(insert_row_orders[0].0.id, cloned_created_row[0]);
-      assert_eq!(insert_row_orders[0].1, 3);
-      true
+        assert_eq!(insert_row_orders.len(), 1);
+        assert_eq!(insert_row_orders[0].0.id, cloned_created_row[0]);
+        assert_eq!(insert_row_orders[0].1, 3);
+        true
+      } else {
+        false
+      }
     },
     _ => false,
   })

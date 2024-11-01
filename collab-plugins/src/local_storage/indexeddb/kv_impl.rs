@@ -4,7 +4,7 @@ use indexed_db_futures::prelude::*;
 use js_sys::{ArrayBuffer, Uint8Array};
 
 use crate::local_storage::kv::keys::{
-  clock_from_key, make_doc_end_key, make_doc_id_key, make_doc_start_key, make_doc_state_key,
+  clock_from_key, make_doc_end_key, make_doc_id_key_v1, make_doc_start_key, make_doc_state_key,
   make_doc_update_key, make_state_vector_key, Clock, DocID, DOC_ID_LEN,
 };
 use crate::local_storage::kv::oid::{LOCAL_DOC_ID_GEN, OID};
@@ -366,27 +366,18 @@ impl CollabIndexeddb {
     &self,
     store: &IdbObjectStore<'_>,
     uid: i64,
+    workspace_id: &K,
     object_id: &K,
   ) -> Option<DocID>
   where
     K: AsRef<[u8]> + ?Sized,
   {
     let uid_id_bytes = &uid.to_be_bytes();
-    let key = make_doc_id_key(uid_id_bytes, object_id.as_ref());
+    let key = make_doc_id_key_v1(uid_id_bytes, workspace_id.as_ref(), object_id.as_ref());
     let value = self.get_data(store, key).await.ok()?;
     let mut bytes = [0; DOC_ID_LEN];
     bytes[0..DOC_ID_LEN].copy_from_slice(value.as_ref());
     Some(OID::from_be_bytes(bytes))
-  }
-
-  pub async fn create_doc_id<I>(&self, uid: i64, object_id: I) -> Result<DocID, PersistenceError>
-  where
-    I: AsRef<[u8]>,
-  {
-    let new_id = LOCAL_DOC_ID_GEN.lock().next_id();
-    let key = make_doc_id_key(&uid.to_be_bytes(), object_id.as_ref());
-    self.set_data(key, new_id.to_be_bytes()).await?;
-    Ok(new_id)
   }
 }
 

@@ -26,7 +26,8 @@ async fn create_database_view_with_group_test() {
 
 #[tokio::test]
 async fn create_database_view_with_group_test2() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let group_setting = TestGroupSetting {
     id: "g1".to_string(),
     field_id: "".to_string(),
@@ -63,7 +64,8 @@ async fn create_database_view_with_group_test2() {
 
 #[tokio::test]
 async fn get_single_database_group_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let group_setting = TestGroupSetting {
     id: "g1".to_string(),
     field_id: "f1".to_string(),
@@ -94,7 +96,8 @@ async fn get_single_database_group_test() {
 
 #[tokio::test]
 async fn get_multiple_database_group_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let group_setting_1 = TestGroupSetting {
     id: "g1".to_string(),
     field_id: "f1".to_string(),
@@ -191,7 +194,8 @@ async fn remove_database_view_group_test() {
 }
 
 async fn create_database_with_two_groups() -> DatabaseTest {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let group_1 = TestGroupSetting {
     id: "g1".to_string(),
     field_id: "f1".to_string(),

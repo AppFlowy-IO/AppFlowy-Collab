@@ -19,22 +19,26 @@ use nanoid::nanoid;
 use serde_json::json;
 use tempfile::TempDir;
 use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
+use uuid::Uuid;
 use zip::ZipArchive;
 
 pub struct DocumentTest {
+  pub workspace_id: String,
   pub document: Document,
   pub db: Arc<CollabKVDB>,
 }
 
 impl DocumentTest {
   pub fn new(uid: i64, doc_id: &str) -> Self {
+    let workspace_id = Uuid::new_v4().to_string();
     let db = document_storage();
-    Self::new_with_db(uid, doc_id, db)
+    Self::new_with_db(uid, workspace_id, doc_id, db)
   }
 
-  pub fn new_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Self {
+  pub fn new_with_db(uid: i64, workspace_id: String, doc_id: &str, db: Arc<CollabKVDB>) -> Self {
     let disk_plugin = RocksdbDiskPlugin::new(
       uid,
+      workspace_id.clone(),
       doc_id.to_string(),
       CollabType::Document,
       Arc::downgrade(&db),
@@ -42,6 +46,7 @@ impl DocumentTest {
     let data_source = KVDBCollabPersistenceImpl {
       db: Arc::downgrade(&db),
       uid,
+      workspace_id: workspace_id.clone(),
     };
     let collab = CollabBuilder::new(uid, doc_id, data_source.into())
       .with_device_id("1")
@@ -100,7 +105,11 @@ impl DocumentTest {
     };
     let mut document = Document::create_with_data(collab, document_data).unwrap();
     document.initialize();
-    Self { document, db }
+    Self {
+      workspace_id,
+      document,
+      db,
+    }
   }
 }
 
@@ -112,10 +121,16 @@ impl Deref for DocumentTest {
   }
 }
 
-pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Document {
+pub fn open_document_with_db(
+  uid: i64,
+  workspace_id: &str,
+  doc_id: &str,
+  db: Arc<CollabKVDB>,
+) -> Document {
   setup_log();
   let disk_plugin = RocksdbDiskPlugin::new(
     uid,
+    workspace_id.to_string(),
     doc_id.to_string(),
     CollabType::Document,
     Arc::downgrade(&db),
@@ -123,6 +138,7 @@ pub fn open_document_with_db(uid: i64, doc_id: &str, db: Arc<CollabKVDB>) -> Doc
   let data_source = KVDBCollabPersistenceImpl {
     db: Arc::downgrade(&db),
     uid,
+    workspace_id: workspace_id.to_string(),
   };
   let mut collab = CollabBuilder::new(uid, doc_id, data_source.into())
     .with_device_id("1")
