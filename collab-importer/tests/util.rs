@@ -31,6 +31,9 @@ impl Drop for Cleaner {
 
 pub async fn sync_unzip_asset(file_name: &str) -> std::io::Result<(Cleaner, PathBuf)> {
   let zip_file_path = PathBuf::from(format!("./tests/asset/{}.zip", file_name));
+  if !zip_file_path.exists() {
+    panic!("File not found: {:?}", zip_file_path);
+  }
   let file_name = zip_file_path
     .file_stem()
     .unwrap()
@@ -39,11 +42,22 @@ pub async fn sync_unzip_asset(file_name: &str) -> std::io::Result<(Cleaner, Path
     .to_string();
 
   let output_folder_path = temp_dir().join(uuid::Uuid::new_v4().to_string());
+  // let output_folder_path = std::env::current_dir()
+  //   .unwrap()
+  //   .join(uuid::Uuid::new_v4().to_string());
   tokio::fs::create_dir_all(&output_folder_path).await?;
 
-  let unzip_file_path = sync_unzip(zip_file_path, output_folder_path, Some(file_name))
-    .unwrap()
-    .unzip_dir;
+  let start = std::time::Instant::now();
+  let unzip_file_path = tokio::task::spawn_blocking(move || {
+    sync_unzip(zip_file_path, output_folder_path.clone(), Some(file_name))
+      .unwrap()
+      .unzip_dir
+  })
+  .await
+  .unwrap();
+
+  println!("sync_unzip_asset took: {:?}", start.elapsed());
+
   Ok((Cleaner::new(unzip_file_path.clone()), unzip_file_path))
 }
 
@@ -51,9 +65,6 @@ pub async fn async_unzip_asset(file_name: &str) -> std::io::Result<(Cleaner, Pat
   setup_log();
   let zip_file_path = PathBuf::from(format!("./tests/asset/{}.zip", file_name));
   let output_folder_path = temp_dir().join(uuid::Uuid::new_v4().to_string());
-  // let output_folder_path = std::env::current_dir()
-  //   .unwrap()
-  //   .join(uuid::Uuid::new_v4().to_string());
   tokio::fs::create_dir_all(&output_folder_path).await?;
 
   let file_name = zip_file_path
