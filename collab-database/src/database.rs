@@ -20,7 +20,6 @@ use crate::views::{
   CalculationMap, DatabaseLayout, DatabaseViewUpdate, DatabaseViews, FieldOrder,
   FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
   OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver,
-  ViewChangeSender,
 };
 use crate::workspace_database::{
   DatabaseCollabService, DatabaseMeta, NoPersistenceDatabaseCollabService,
@@ -1637,7 +1636,7 @@ pub struct DatabaseBody {
 impl DatabaseBody {
   fn open(collab: Collab, context: DatabaseContext) -> Result<(Self, Collab), DatabaseError> {
     CollabType::Database.validate_require_data(&collab)?;
-    let body = Self::from_collab(&collab, context.collab_service, context.notifier)
+    let body = Self::from_collab(&collab, context.collab_service, Some(context.notifier))
       .ok_or_else(|| DatabaseError::NoRequiredData("Can not open database".to_string()))?;
     Ok((body, collab))
   }
