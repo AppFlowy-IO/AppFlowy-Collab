@@ -6,12 +6,12 @@ use collab_database::template::csv::{CSVResource, CSVTemplate};
 use collab_document::blocks::{mention_block_data, mention_block_delta, TextDelta};
 use collab_document::document::Document;
 use collab_document::importer::define::{BlockType, URL_FIELD};
-use collab_document::importer::md_importer::MDImporter;
+use collab_document::importer::md_importer::{create_image_block, MDImporter};
 use collab_entity::CollabType;
 use futures::stream::{self, StreamExt};
 
 use crate::notion::file::NotionFile;
-use crate::notion::walk_dir::extract_external_links;
+use crate::notion::walk_dir::{extract_delta_link, extract_external_links};
 use crate::notion::{CSVRelation, ImportedCollabInfoStream};
 use crate::util::{upload_file_url, FileId};
 use collab_database::rows::RowId;
@@ -133,7 +133,7 @@ impl NotionPage {
     let external_link_views = self.get_external_link_notion_view();
     match &self.notion_file {
       NotionFile::Markdown { file_path, .. } => {
-        let mut file_paths = self.notion_file.upload_files();
+        let resource_paths = self.notion_file.upload_files();
         let md_importer = MDImporter::new(None);
         let content = fs::read_to_string(file_path).await?;
         let document_data = md_importer.import(&self.view_id, content)?;
@@ -149,12 +149,25 @@ impl NotionPage {
           ))
         };
         let parent_path = file_path.parent().unwrap();
-        self.replace_link_views(&mut document, external_link_views);
-        self
-          .replace_resources(&mut document, &mut file_paths, parent_path, url_builder)
+        let valid_delta_resources = self
+          .replace_link_views(
+            parent_path,
+            &mut document,
+            &resource_paths,
+            external_link_views,
+            &url_builder,
+          )
+          .await;
+        let valid_block_resources = self
+          .replace_block_resources(parent_path, &mut document, &resource_paths, url_builder)
           .await;
 
-        let files = file_paths
+        let all_resources = valid_block_resources
+          .into_iter()
+          .chain(valid_delta_resources.into_iter())
+          .collect::<Vec<_>>();
+
+        let files = all_resources
           .iter()
           .filter_map(|p| p.to_str().map(|s| s.to_string()))
           .collect();
@@ -173,13 +186,14 @@ impl NotionPage {
     }
   }
 
-  async fn replace_resources<'a, B, O>(
+  async fn replace_block_resources<'a, B, O>(
     &'a self,
-    document: &mut Document,
-    resources: &mut Vec<PathBuf>,
     parent_path: &Path,
+    document: &mut Document,
+    resources: &[PathBuf],
     file_url_builder: B,
-  ) where
+  ) -> Vec<PathBuf>
+  where
     B: Fn(&'a str, PathBuf) -> O + Send + Sync + 'a,
     O: Future<Output = Option<String>> + Send + 'a,
   {
@@ -198,7 +212,7 @@ impl NotionPage {
               let pos = resources.iter().position(|r| r == &full_image_url);
               if let Some(pos) = pos {
                 if let Some(url) = file_url_builder(&self.view_id, full_image_url).await {
-                  document_resources.insert(resources.remove(pos));
+                  document_resources.insert(resources[pos].clone());
                   block_data.insert(URL_FIELD.to_string(), json!(url));
                   if let Err(err) = document.update_block(block_id, block_data) {
                     error!(
@@ -214,84 +228,147 @@ impl NotionPage {
       }
     }
 
-    *resources = document_resources.into_iter().collect();
+    document_resources.into_iter().collect()
   }
 
-  fn replace_link_views(
-    &self,
+  async fn replace_link_views<'a, 'b, B, O>(
+    &'b self,
+    parent_path: &Path,
     document: &mut Document,
+    resources: &[PathBuf],
     external_link_views: HashMap<String, NotionPage>,
-  ) {
-    if let Some(page_id) = document.get_page_id() {
+    file_url_builder: &'a B,
+  ) -> Vec<PathBuf>
+  where
+    B: Fn(&'a str, PathBuf) -> O + Send + Sync + 'a,
+    O: Future<Output = Option<String>> + Send + 'a,
+    'b: 'a,
+  {
+    let mut delta_resources = HashSet::new();
+    if let Some(first_page_id) = document.get_page_id() {
       // Get all block children and process them
-      let block_ids = document.get_block_children_ids(&page_id);
+      let block_ids = document.get_block_children_ids(&first_page_id);
       for block_id in block_ids.iter() {
-        if let Some((block_type, deltas)) = document.get_block_delta(block_id) {
-          self.process_block_deltas(document, block_id, block_type, deltas, &external_link_views);
+        if let Some((block_type, mut deltas)) = document.get_block_delta(block_id) {
+          let block_deltas_result = self
+            .process_block_deltas(
+              parent_path,
+              document,
+              block_id,
+              block_type,
+              deltas,
+              &external_link_views,
+              resources,
+              file_url_builder,
+            )
+            .await;
+          delta_resources.extend(block_deltas_result.delta_resources);
+
+          if let Some(new_deltas) = block_deltas_result.new_deltas {
+            if let Err(err) = document.set_block_delta(block_id, new_deltas) {
+              error!(
+                "Failed to set block delta when trying to replace ref link. error: {:?}",
+                err
+              );
+            }
+          }
+
+          for image_url in block_deltas_result.new_delta_image_blocks {
+            let new_block_id = collab_document::document_data::generate_id();
+            let image_block = create_image_block(&new_block_id, image_url, &block_id);
+            if let Err(err) = document.insert_block(image_block, Some(block_id.clone())) {
+              error!(
+                "Failed to insert image block when trying to replace delta link. error: {:?}",
+                err
+              );
+            }
+          }
         }
       }
     }
+
+    delta_resources.into_iter().collect()
   }
 
   /// Process the deltas for a block, looking for links to replace
-  fn process_block_deltas(
-    &self,
+  async fn process_block_deltas<'a, 'b, B, O>(
+    &'b self,
+    parent_path: &Path,
     document: &mut Document,
     block_id: &str,
     block_type: BlockType,
-    deltas: Vec<TextDelta>,
+    mut deltas: Vec<TextDelta>,
     external_link_views: &HashMap<String, NotionPage>,
-  ) {
-    for delta in deltas {
-      if let TextDelta::Inserted(_v, Some(attrs)) = delta {
-        if let Some(href_value) = attrs.get("href") {
-          let delta_str = href_value.to_string();
-          if let Ok(links) = extract_external_links(&delta_str) {
-            self.replace_links_in_deltas(document, block_id, &links, external_link_views);
-            self.update_paragraph_block(
-              document,
-              block_id,
-              &block_type,
-              &links,
-              external_link_views,
-            );
+    resources: &[PathBuf],
+    file_url_builder: &'a B,
+  ) -> ProcessBlockDeltaResult
+  where
+    B: Fn(&'a str, PathBuf) -> O + Send + Sync + 'a,
+    O: Future<Output = Option<String>> + Send + 'a,
+    'b: 'a,
+  {
+    let mut is_changed = false;
+    let mut new_delta_image_blocks = vec![];
+    let mut delta_resources = HashSet::new();
+    for delta in deltas.iter_mut() {
+      if let TextDelta::Inserted(v, attrs) = delta.clone() {
+        // If there are any href in the attrs, we will try to replace with the corresponding view id
+        if let Some(attrs) = &attrs {
+          if let Some(href_value) = attrs.get("href") {
+            let delta_str = href_value.to_string();
+
+            // Replace links in the deltas with the corresponding view IDs
+            if let Ok(links) = extract_external_links(&delta_str) {
+              for link in &links {
+                if let Some(view) = external_link_views.get(&link.id) {
+                  if &v == &link.name {
+                    is_changed = true;
+                    *delta = mention_block_delta(&view.view_id);
+                  }
+                }
+              }
+
+              self.update_paragraph_block(
+                document,
+                block_id,
+                &block_type,
+                &links,
+                external_link_views,
+              );
+            }
+          }
+        }
+
+        // extract link from insert delta and replace with real image link
+        if let Some(delta_link) = extract_delta_link(&v) {
+          debug_assert!(attrs.is_none(), "attrs should be None for image link");
+          let full_image_url = parent_path.join(delta_link.link);
+          let pos = resources.iter().position(|r| r == &full_image_url);
+          if let Some(pos) = pos {
+            if let Some(url) = file_url_builder(&self.view_id, full_image_url).await {
+              delta_resources.insert(resources[pos].clone());
+
+              // replace the inserted image link with empty string
+              *delta = TextDelta::Inserted("".to_string(), None);
+              // generate a block for given image
+              new_delta_image_blocks.push(url);
+            }
           }
         }
       }
     }
-  }
 
-  /// Replace links in the deltas with the corresponding view IDs
-  fn replace_links_in_deltas(
-    &self,
-    document: &mut Document,
-    block_id: &str,
-    links: &[ExternalLink],
-    external_link_views: &HashMap<String, NotionPage>,
-  ) {
-    let mut block_deltas = document
-      .get_block_delta(block_id)
-      .map(|t| t.1)
-      .unwrap_or_default();
+    let mut result = ProcessBlockDeltaResult {
+      delta_resources: delta_resources.into_iter().collect(),
+      new_deltas: None,
+      new_delta_image_blocks,
+    };
 
-    for link in links {
-      if let Some(view) = external_link_views.get(&link.id) {
-        block_deltas.iter_mut().for_each(|d| {
-          if let TextDelta::Inserted(content, _) = d {
-            if content == &link.name {
-              *d = mention_block_delta(&view.view_id);
-            }
-          }
-        });
-      }
+    if is_changed {
+      result.new_deltas = Some(deltas);
     }
 
-    if let Err(err) = document.set_block_delta(block_id, block_deltas) {
-      error!(
-        "Failed to set block delta when trying to replace ref link. error: {:?}",
-        err
-      );
-    }
+    result
   }
 
   /// Update the paragraph block if the last link points to an external view
@@ -516,6 +593,12 @@ pub async fn build_imported_collab_recursively<'a>(
     .flatten();
 
   Box::pin(initial_stream.chain(child_stream))
+}
+
+pub struct ProcessBlockDeltaResult {
+  pub delta_resources: Vec<PathBuf>,
+  pub new_deltas: Option<Vec<TextDelta>>,
+  pub new_delta_image_blocks: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]

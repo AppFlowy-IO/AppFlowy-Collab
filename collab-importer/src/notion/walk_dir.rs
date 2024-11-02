@@ -1,4 +1,5 @@
 use crate::error::ImporterError;
+use std::fmt::Display;
 
 use fancy_regex::Regex;
 use markdown::mdast::Node;
@@ -427,7 +428,7 @@ fn process_md_file(
 
   // Process the file normally if it doesn't correspond to a directory
   let (name, id) = name_and_id_from_path(path).ok()?;
-  let notion_file = notino_file_from_path(path, notion_export.no_subpages)?;
+  let notion_file = notion_file_from_path(path, notion_export.no_subpages)?;
   let mut external_links = vec![];
   if notion_file.is_markdown() {
     external_links = get_md_links(path).unwrap_or_default();
@@ -540,6 +541,43 @@ pub(crate) fn extract_external_links(path_str: &str) -> Result<Vec<ExternalLink>
   Ok(result)
 }
 
+pub struct DeltaLink {
+  pub file_name: String,
+  pub link: String,
+  pub start: usize,
+  pub end: usize,
+}
+
+impl Display for DeltaLink {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "DeltaLink {{ file_name: {}, link: {} }}",
+      self.file_name, self.link
+    )
+  }
+}
+
+pub fn extract_delta_link(input: &str) -> Option<DeltaLink> {
+  let re = Regex::new(r"!\[(.*?)\]\((.*?)\)").unwrap();
+
+  if let Some(captures) = re.captures(input).ok().flatten() {
+    let file_name = captures.get(1)?.as_str().to_string();
+    let link = captures.get(2)?.as_str().to_string();
+    let start = captures.get(0)?.start();
+    let end = captures.get(0)?.end();
+
+    return Some(DeltaLink {
+      file_name,
+      link,
+      start,
+      end,
+    });
+  }
+
+  None
+}
+
 enum FileExtension {
   Unknown,
   Markdown,
@@ -590,7 +628,7 @@ fn name_and_id_from_path(path: &Path) -> Result<(String, Option<String>), Import
 /// - If the file is a `.csv` and contains `_all`, it's considered a `CSV`.
 /// - Otherwise, if it's a `.csv`, it's considered a `CSVPart`.
 /// - `.md` files are classified as `Markdown`.
-fn notino_file_from_path(path: &Path, no_subpages: bool) -> Option<NotionFile> {
+fn notion_file_from_path(path: &Path, no_subpages: bool) -> Option<NotionFile> {
   let extension = path.extension()?.to_str()?;
   let file_size = get_file_size(&path.to_path_buf()).ok()?;
 
@@ -636,6 +674,80 @@ pub(crate) fn file_name_from_path(path: &Path) -> Result<String, ImporterError> 
     .to_str()
     .ok_or_else(|| ImporterError::InvalidPath("file name is not a valid string".to_string()))
     .map(|s| s.to_string())
+}
+
+#[cfg(test)]
+mod extract_delta_link_tests {
+  use super::*;
+
+  #[test]
+  fn test_extract_info_valid_input() {
+    let input =
+      "![Dishes at Broken Spanish, in Downtown LA.](christine-siracusa-363257-unsplash.jpg)";
+    let result = extract_delta_link(input);
+    assert!(result.is_some());
+    let delta_link = result.unwrap();
+    assert_eq!(
+      delta_link.file_name,
+      "Dishes at Broken Spanish, in Downtown LA."
+    );
+    assert_eq!(delta_link.link, "christine-siracusa-363257-unsplash.jpg");
+    assert_eq!(delta_link.start, 0);
+    assert_eq!(delta_link.end, input.len());
+  }
+
+  #[test]
+  fn test_extract_info_no_alt_text() {
+    let input = "![](christine-siracusa-363257-unsplash.jpg)";
+    let result = extract_delta_link(input);
+    assert!(result.is_some());
+    let delta_link = result.unwrap();
+    assert_eq!(delta_link.file_name, "");
+    assert_eq!(delta_link.link, "christine-siracusa-363257-unsplash.jpg");
+    assert_eq!(delta_link.start, 0);
+    assert_eq!(delta_link.end, input.len());
+  }
+
+  #[test]
+  fn test_extract_info_no_link() {
+    let input = "![Dishes at Broken Spanish, in Downtown LA.]()";
+    let result = extract_delta_link(input);
+    assert!(result.is_some());
+    let delta_link = result.unwrap();
+    assert_eq!(
+      delta_link.file_name,
+      "Dishes at Broken Spanish, in Downtown LA."
+    );
+    assert_eq!(delta_link.link, "");
+    assert_eq!(delta_link.start, 0);
+    assert_eq!(delta_link.end, input.len());
+  }
+
+  #[test]
+  fn test_extract_info_invalid_format() {
+    let input = "This is not an image markdown";
+    let result = extract_delta_link(input);
+    assert!(result.is_none());
+  }
+
+  #[test]
+  fn test_extract_info_partial_markdown() {
+    let input = "![Only alt text]";
+    let result = extract_delta_link(input);
+    assert!(result.is_none());
+  }
+
+  #[test]
+  fn test_extract_info_special_characters() {
+    let input = "![Special chars & symbols: @#$%^&*()!](file-with-special-chars-@#$%.jpg)";
+    let result = extract_delta_link(input);
+    assert!(result.is_some());
+    let delta_link = result.unwrap();
+    assert_eq!(delta_link.file_name, "Special chars & symbols: @#$%^&*()!");
+    assert_eq!(delta_link.link, "file-with-special-chars-@#$%.jpg");
+    assert_eq!(delta_link.start, 0);
+    assert_eq!(delta_link.end, input.len());
+  }
 }
 
 #[cfg(test)]
