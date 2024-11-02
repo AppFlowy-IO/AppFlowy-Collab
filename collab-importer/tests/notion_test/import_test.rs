@@ -22,16 +22,16 @@ use collab_importer::notion::page::NotionPage;
 use collab_importer::notion::{is_csv_contained_cached, CSVContentCache, NotionImporter};
 use collab_importer::util::{parse_csv, CSVRow};
 
+use collab_document::document::Document;
 use futures::stream::StreamExt;
 use percent_encoding::percent_decode_str;
 use std::collections::{HashMap, HashSet};
 use std::env::temp_dir;
 use std::path::PathBuf;
 use std::sync::Arc;
-
 // #[tokio::test]
 // async fn import_test() {
-//   let (_cleaner, file_path) = sync_unzip_asset("appflowy_io_full").await.unwrap();
+//   let (_cleaner, file_path) = sync_unzip_asset("d-1").await.unwrap();
 //   let importer = NotionImporter::new(
 //     1,
 //     &file_path,
@@ -40,6 +40,15 @@ use std::sync::Arc;
 //   )
 //   .unwrap();
 //   let info = importer.import().await.unwrap();
+//   let view = info.views()[0].as_document().await.unwrap();
+//   let document = view.0;
+//   let block_ids = document.get_all_block_ids();
+//   for block_id in block_ids {
+//     if let Some((block_type, block_data)) = document.get_block_data(&block_id) {
+//       println!("{:?} {:?}", block_type, block_data);
+//     }
+//   }
+//
 //   let nested_view = info.build_nested_views().await;
 //   println!("{}", nested_view);
 // }
@@ -256,6 +265,20 @@ async fn import_blog_post_document_test() {
 }
 
 #[tokio::test]
+async fn import_blog_post_no_subpages_test() {
+  setup_log();
+  let workspace_id = uuid::Uuid::new_v4();
+  let (_cleaner, file_path) = sync_unzip_asset("blog_post_no_subpages").await.unwrap();
+  let host = "http://test.appflowy.cloud";
+  let importer = NotionImporter::new(1, &file_path, workspace_id, host.to_string()).unwrap();
+  let info = importer.import().await.unwrap();
+  assert_eq!(info.name, "blog_post_no_subpages");
+
+  let root_view = &info.views()[0];
+  assert_blog_post(host, &info.workspace_id, root_view).await;
+}
+
+#[tokio::test]
 async fn import_project_test() {
   let workspace_id = uuid::Uuid::new_v4();
   let (_cleaner, file_path) = sync_unzip_asset("project").await.unwrap();
@@ -433,16 +456,29 @@ async fn assert_blog_post(host: &str, workspace_id: &str, root_view: &NotionPage
 
   let (document, _) = root_view.as_document().await.unwrap();
   let page_block_id = document.get_page_id().unwrap();
-  let block_ids = document.get_block_children_ids(&page_block_id);
-  for block_id in block_ids.iter() {
-    if let Some((block_type, block_data)) = document.get_block_data(block_id) {
-      if matches!(block_type, BlockType::Image) {
-        let url = block_data.get(URL_FIELD).unwrap().as_str().unwrap();
+  process_all_blocks_to_find_expected_urls(&document, &page_block_id, &mut expected_urls);
+  assert!(expected_urls.is_empty());
+}
+
+fn process_all_blocks_to_find_expected_urls(
+  document: &Document,
+  block_id: &str,
+  expected_urls: &mut Vec<String>,
+) {
+  // Process the current block
+  if let Some((block_type, block_data)) = document.get_block_data(block_id) {
+    if matches!(block_type, BlockType::Image) {
+      if let Some(url) = block_data.get(URL_FIELD).and_then(|value| value.as_str()) {
         expected_urls.retain(|allowed_url| !url.contains(allowed_url));
       }
     }
   }
-  assert!(expected_urls.is_empty());
+
+  // Recursively process each child block
+  let block_children_ids = document.get_block_children_ids(block_id);
+  for child_id in block_children_ids.iter() {
+    process_all_blocks_to_find_expected_urls(document, child_id, expected_urls);
+  }
 }
 
 async fn check_project_and_task_document(

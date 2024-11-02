@@ -90,6 +90,12 @@ impl NotionImporter {
     .await
     .unwrap_or_default();
 
+    let no_subpages = !has_subdirectories(&self.path, 1);
+    let notion_export = NotionExportContext {
+      csv_relation,
+      no_subpages,
+    };
+
     let path = self.path.clone();
     let host = self.host.clone();
     let workspace_id = self.workspace_id.clone();
@@ -97,7 +103,7 @@ impl NotionImporter {
       // Process entries and track whether we have spaces (directories) and pages (non-directories)
       let mut notion_pages: Vec<NotionPage> = vec![];
       for entry in walk_sub_dir(&path) {
-        if let Some(view) = process_entry(&host, &workspace_id, &entry, false, &csv_relation) {
+        if let Some(view) = process_entry(&host, &workspace_id, &entry, false, &notion_export) {
           has_spaces |= view.is_dir;
           has_pages |= !view.is_dir;
           notion_pages.push(view);
@@ -309,6 +315,15 @@ async fn convert_notion_page_to_parent_child(
   view_builder.build()
 }
 
+pub struct NotionExportContext {
+  pub csv_relation: CSVRelation,
+  pub no_subpages: bool,
+}
+
+/// [CSVRelation] manages parent-child relationships between CSV files exported in zip format from Notion.
+/// The zip export may contain multiple CSV files that represent views of the main *_all.csv file.
+/// When a partial CSV file is encountered, it is replaced with the main *_all.csv file and directed to
+/// reference the *_all.csv file using the specified ID.
 #[derive(Default, Debug, Clone)]
 pub struct CSVRelation {
   inner: Arc<HashMap<String, PathBuf>>,
@@ -481,6 +496,15 @@ fn extract_file_name(input: &str) -> String {
 
   normalized
 }
+
+fn has_subdirectories(path: &PathBuf, max_depth: usize) -> bool {
+  WalkDir::new(path)
+    .max_depth(max_depth)
+    .into_iter()
+    .filter_map(Result::ok)
+    .any(|entry| entry.file_type().is_dir() && entry.path() != path)
+}
+
 #[cfg(test)]
 mod test_csv_relation {
   use super::*;

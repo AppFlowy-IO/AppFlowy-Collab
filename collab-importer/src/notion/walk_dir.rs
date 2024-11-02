@@ -1,4 +1,5 @@
 use crate::error::ImporterError;
+use std::fmt::Display;
 
 use fancy_regex::Regex;
 use markdown::mdast::Node;
@@ -7,7 +8,7 @@ use percent_encoding::percent_decode_str;
 
 use crate::notion::file::{process_row_md_content, NotionFile, Resource};
 use crate::notion::page::{ExternalLink, ExternalLinkType, ImportedRowDocument, NotionPage};
-use crate::notion::CSVRelation;
+use crate::notion::NotionExportContext;
 use crate::util::parse_csv;
 
 use std::fs;
@@ -22,7 +23,6 @@ pub(crate) fn get_file_size(path: &PathBuf) -> std::io::Result<u64> {
 }
 
 pub(crate) fn collect_entry_resources(
-  _workspace_id: &str,
   walk_path: &Path,
   relative_path: Option<&Path>,
 ) -> Vec<Resource> {
@@ -80,7 +80,7 @@ pub(crate) fn process_entry(
   workspace_id: &str,
   current_entry: &DirEntry,
   include_partial_csv: bool,
-  csv_relation: &CSVRelation,
+  notion_export: &NotionExportContext,
 ) -> Option<NotionPage> {
   // Skip macOS-specific files
   let entry_name = current_entry.file_name().to_str()?;
@@ -92,7 +92,7 @@ pub(crate) fn process_entry(
   let ext = get_file_extension(path, include_partial_csv);
   if ext.is_file() {
     // Check if there's a corresponding directory for this .md file and skip it if so
-    process_file(host, workspace_id, path, ext, csv_relation)
+    process_file(host, workspace_id, path, ext, notion_export)
   } else if path.is_dir() {
     // If the path is a directory, it should contain a file with the same name but with either a .md or .csv extension.
     // If no such file is found, the directory will be treated as a space.
@@ -113,7 +113,7 @@ pub(crate) fn process_entry(
         id,
         &md_file_path,
         include_partial_csv,
-        csv_relation,
+        notion_export,
       )
     } else if all_csv_file_path.exists() {
       process_csv_dir(
@@ -125,10 +125,10 @@ pub(crate) fn process_entry(
         parent_path,
         &all_csv_file_path,
         &csv_file_path,
-        csv_relation,
+        notion_export,
       )
     } else {
-      process_space_dir(host, workspace_id, name, id, path, csv_relation)
+      process_space_dir(host, workspace_id, name, id, path, notion_export)
     }
   } else {
     None
@@ -141,13 +141,13 @@ fn process_space_dir(
   name: String,
   id: Option<String>,
   path: &Path,
-  csv_relation: &CSVRelation,
+  notion_export: &NotionExportContext,
 ) -> Option<NotionPage> {
   let mut children = vec![];
   // Collect all child entries first, to sort by created time
   let entries: Vec<_> = walk_sub_dir(path);
   for sub_entry in entries {
-    if let Some(child_view) = process_entry(host, workspace_id, &sub_entry, false, csv_relation) {
+    if let Some(child_view) = process_entry(host, workspace_id, &sub_entry, false, notion_export) {
       children.push(child_view);
     }
   }
@@ -162,7 +162,7 @@ fn process_space_dir(
     host: host.to_string(),
     workspace_id: workspace_id.to_string(),
     is_dir: true,
-    csv_relation: csv_relation.clone(),
+    csv_relation: notion_export.csv_relation.clone(),
   })
 }
 
@@ -176,7 +176,7 @@ fn process_csv_dir(
   parent_path: &Path,
   all_csv_file_path: &PathBuf,
   csv_file_path: &PathBuf,
-  csv_relation: &CSVRelation,
+  notion_export: &NotionExportContext,
 ) -> Option<NotionPage> {
   let mut resources = vec![];
   let file_size = get_file_size(all_csv_file_path).ok()?;
@@ -185,7 +185,7 @@ fn process_csv_dir(
   // To identify which CSV file contains these resources, we must check each row
   // to see if any paths match the resource path.
   // Currently, we do this in [filter_out_resources].
-  resources.extend(collect_entry_resources(workspace_id, parent_path, None));
+  resources.extend(collect_entry_resources(parent_path, None));
   let mut row_documents = vec![];
 
   // collect all sub entries whose entries are directory
@@ -194,7 +194,7 @@ fn process_csv_dir(
     let csv_dir = parent_path.join(file_name);
     if csv_dir.exists() {
       for sub_entry in walk_sub_dir(&csv_dir) {
-        if let Some(mut page) = process_entry(host, workspace_id, &sub_entry, true, csv_relation) {
+        if let Some(mut page) = process_entry(host, workspace_id, &sub_entry, true, notion_export) {
           if page.children.iter().any(|c| c.notion_file.is_markdown()) {
             warn!("Only CSV file exist in the database row directory");
           }
@@ -216,7 +216,10 @@ fn process_csv_dir(
                     page.children.retain(|child| {
                       if let Some(file_path) = child.notion_file.file_path() {
                         if let Ok(file_name) = file_name_from_path(file_path) {
-                          return csv_relation.get(&file_name.to_lowercase()).is_none();
+                          return notion_export
+                            .csv_relation
+                            .get(&file_name.to_lowercase())
+                            .is_none();
                         }
                       }
                       true
@@ -260,10 +263,12 @@ fn process_csv_dir(
     host: host.to_string(),
     workspace_id: workspace_id.to_string(),
     is_dir: false,
-    csv_relation: csv_relation.clone(),
+    csv_relation: notion_export.csv_relation.clone(),
   };
 
-  csv_relation.set_page_by_path_buf(all_csv_file_path.clone(), page.clone());
+  notion_export
+    .csv_relation
+    .set_page_by_path_buf(all_csv_file_path.clone(), page.clone());
   Some(page)
 }
 
@@ -286,7 +291,7 @@ fn process_md_dir(
   id: Option<String>,
   md_file_path: &PathBuf,
   include_partial_csv: bool,
-  csv_relation: &CSVRelation,
+  notion_export: &NotionExportContext,
 ) -> Option<NotionPage> {
   let mut children = vec![];
   let external_links = get_md_links(md_file_path).unwrap_or_default();
@@ -300,18 +305,14 @@ fn process_md_dir(
         workspace_id,
         &sub_entry,
         include_partial_csv,
-        csv_relation,
+        notion_export,
       ) {
         children.push(child_view);
       }
 
       // When traversing the directory, resources like images and files
       // can be found within subdirectories of the current directory.
-      resources.extend(collect_entry_resources(
-        workspace_id,
-        sub_entry.path(),
-        None,
-      ));
+      resources.extend(collect_entry_resources(sub_entry.path(), None));
     }
   }
 
@@ -331,7 +332,7 @@ fn process_md_dir(
     host: host.to_string(),
     workspace_id: workspace_id.to_string(),
     is_dir: false,
-    csv_relation: csv_relation.clone(),
+    csv_relation: notion_export.csv_relation.clone(),
   })
 }
 
@@ -340,14 +341,14 @@ fn process_file(
   workspace_id: &str,
   path: &Path,
   ext: FileExtension,
-  csv_relation: &CSVRelation,
+  notion_export: &NotionExportContext,
 ) -> Option<NotionPage> {
   match ext {
     FileExtension::Unknown => None,
-    FileExtension::Markdown => process_md_file(host, workspace_id, path, csv_relation),
+    FileExtension::Markdown => process_md_file(host, workspace_id, path, notion_export),
     FileExtension::Csv {
       include_partial_csv,
-    } => process_csv_file(host, workspace_id, path, include_partial_csv, csv_relation),
+    } => process_csv_file(host, workspace_id, path, include_partial_csv, notion_export),
   }
 }
 
@@ -356,7 +357,7 @@ fn process_csv_file(
   workspace_id: &str,
   path: &Path,
   include_partial_csv: bool,
-  csv_relation: &CSVRelation,
+  notion_export: &NotionExportContext,
 ) -> Option<NotionPage> {
   let file_name = path.file_name()?.to_str()?;
   // Check if a folder exists with the same name as the CSV file, excluding the "_all.csv" suffix.
@@ -384,7 +385,7 @@ fn process_csv_file(
   // to see if any paths match the resource path.
   // Currently, we do this in [filter_out_resources].
   if let Some(parent) = path.parent() {
-    resources.extend(collect_entry_resources(workspace_id, parent, None));
+    resources.extend(collect_entry_resources(parent, None));
   }
 
   let file_path = path.to_path_buf();
@@ -407,7 +408,7 @@ fn process_csv_file(
     host: host.to_string(),
     workspace_id: workspace_id.to_string(),
     is_dir: false,
-    csv_relation: csv_relation.clone(),
+    csv_relation: notion_export.csv_relation.clone(),
   })
 }
 
@@ -415,7 +416,7 @@ fn process_md_file(
   host: &str,
   workspace_id: &str,
   path: &Path,
-  csv_relation: &CSVRelation,
+  notion_export: &NotionExportContext,
 ) -> Option<NotionPage> {
   if let Some(parent) = path.parent() {
     let file_stem = path.file_stem()?.to_str()?;
@@ -427,7 +428,7 @@ fn process_md_file(
 
   // Process the file normally if it doesn't correspond to a directory
   let (name, id) = name_and_id_from_path(path).ok()?;
-  let notion_file = file_type_from_path(path)?;
+  let notion_file = notion_file_from_path(path, notion_export.no_subpages)?;
   let mut external_links = vec![];
   if notion_file.is_markdown() {
     external_links = get_md_links(path).unwrap_or_default();
@@ -447,7 +448,7 @@ fn process_md_file(
     host: host.to_string(),
     workspace_id: workspace_id.to_string(),
     is_dir: false,
-    csv_relation: csv_relation.clone(),
+    csv_relation: notion_export.csv_relation.clone(),
   })
 }
 
@@ -540,6 +541,43 @@ pub(crate) fn extract_external_links(path_str: &str) -> Result<Vec<ExternalLink>
   Ok(result)
 }
 
+pub struct DeltaLink {
+  pub file_name: String,
+  pub link: String,
+  pub start: usize,
+  pub end: usize,
+}
+
+impl Display for DeltaLink {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "DeltaLink {{ file_name: {}, link: {} }}",
+      self.file_name, self.link
+    )
+  }
+}
+
+pub fn extract_delta_link(input: &str) -> Option<DeltaLink> {
+  let re = Regex::new(r"!\[(.*?)\]\((.*?)\)").unwrap();
+
+  if let Some(captures) = re.captures(input).ok().flatten() {
+    let file_name = captures.get(1)?.as_str().to_string();
+    let link = captures.get(2)?.as_str().to_string();
+    let start = captures.get(0)?.start();
+    let end = captures.get(0)?.end();
+
+    return Some(DeltaLink {
+      file_name,
+      link,
+      start,
+      end,
+    });
+  }
+
+  None
+}
+
 enum FileExtension {
   Unknown,
   Markdown,
@@ -590,16 +628,25 @@ fn name_and_id_from_path(path: &Path) -> Result<(String, Option<String>), Import
 /// - If the file is a `.csv` and contains `_all`, it's considered a `CSV`.
 /// - Otherwise, if it's a `.csv`, it's considered a `CSVPart`.
 /// - `.md` files are classified as `Markdown`.
-fn file_type_from_path(path: &Path) -> Option<NotionFile> {
+fn notion_file_from_path(path: &Path, no_subpages: bool) -> Option<NotionFile> {
   let extension = path.extension()?.to_str()?;
   let file_size = get_file_size(&path.to_path_buf()).ok()?;
 
   match extension {
-    "md" => Some(NotionFile::Markdown {
-      file_path: path.to_path_buf(),
-      size: file_size,
-      resources: vec![],
-    }),
+    "md" => {
+      let mut resources = vec![];
+      if no_subpages {
+        if let Some(parent_path) = path.parent() {
+          resources = collect_entry_resources(parent_path, None);
+        }
+      }
+
+      Some(NotionFile::Markdown {
+        file_path: path.to_path_buf(),
+        size: file_size,
+        resources,
+      })
+    },
     "csv" => {
       let file_name = path.file_name()?.to_str()?;
       if file_name.contains("_all") {
@@ -627,6 +674,80 @@ pub(crate) fn file_name_from_path(path: &Path) -> Result<String, ImporterError> 
     .to_str()
     .ok_or_else(|| ImporterError::InvalidPath("file name is not a valid string".to_string()))
     .map(|s| s.to_string())
+}
+
+#[cfg(test)]
+mod extract_delta_link_tests {
+  use super::*;
+
+  #[test]
+  fn test_extract_info_valid_input() {
+    let input =
+      "![Dishes at Broken Spanish, in Downtown LA.](christine-siracusa-363257-unsplash.jpg)";
+    let result = extract_delta_link(input);
+    assert!(result.is_some());
+    let delta_link = result.unwrap();
+    assert_eq!(
+      delta_link.file_name,
+      "Dishes at Broken Spanish, in Downtown LA."
+    );
+    assert_eq!(delta_link.link, "christine-siracusa-363257-unsplash.jpg");
+    assert_eq!(delta_link.start, 0);
+    assert_eq!(delta_link.end, input.len());
+  }
+
+  #[test]
+  fn test_extract_info_no_alt_text() {
+    let input = "![](christine-siracusa-363257-unsplash.jpg)";
+    let result = extract_delta_link(input);
+    assert!(result.is_some());
+    let delta_link = result.unwrap();
+    assert_eq!(delta_link.file_name, "");
+    assert_eq!(delta_link.link, "christine-siracusa-363257-unsplash.jpg");
+    assert_eq!(delta_link.start, 0);
+    assert_eq!(delta_link.end, input.len());
+  }
+
+  #[test]
+  fn test_extract_info_no_link() {
+    let input = "![Dishes at Broken Spanish, in Downtown LA.]()";
+    let result = extract_delta_link(input);
+    assert!(result.is_some());
+    let delta_link = result.unwrap();
+    assert_eq!(
+      delta_link.file_name,
+      "Dishes at Broken Spanish, in Downtown LA."
+    );
+    assert_eq!(delta_link.link, "");
+    assert_eq!(delta_link.start, 0);
+    assert_eq!(delta_link.end, input.len());
+  }
+
+  #[test]
+  fn test_extract_info_invalid_format() {
+    let input = "This is not an image markdown";
+    let result = extract_delta_link(input);
+    assert!(result.is_none());
+  }
+
+  #[test]
+  fn test_extract_info_partial_markdown() {
+    let input = "![Only alt text]";
+    let result = extract_delta_link(input);
+    assert!(result.is_none());
+  }
+
+  #[test]
+  fn test_extract_info_special_characters() {
+    let input = "![Special chars & symbols: @#$%^&*()!](file-with-special-chars-@#$%.jpg)";
+    let result = extract_delta_link(input);
+    assert!(result.is_some());
+    let delta_link = result.unwrap();
+    assert_eq!(delta_link.file_name, "Special chars & symbols: @#$%^&*()!");
+    assert_eq!(delta_link.link, "file-with-special-chars-@#$%.jpg");
+    assert_eq!(delta_link.start, 0);
+    assert_eq!(delta_link.end, input.len());
+  }
 }
 
 #[cfg(test)]
