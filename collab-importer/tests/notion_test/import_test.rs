@@ -29,20 +29,29 @@ use std::collections::{HashMap, HashSet};
 use std::env::temp_dir;
 use std::path::PathBuf;
 use std::sync::Arc;
-// #[tokio::test]
-// async fn import_test() {
-//   let (_cleaner, file_path) = sync_unzip_asset("appflowy_io_full").await.unwrap();
-//   let importer = NotionImporter::new(
-//     1,
-//     &file_path,
-//     uuid::Uuid::new_v4(),
-//     "http://test.appflowy.cloud".to_string(),
-//   )
-//   .unwrap();
-//   let info = importer.import().await.unwrap();
-//   let nested_view = info.build_nested_views().await;
-//   println!("{}", nested_view);
-// }
+#[tokio::test]
+async fn import_test() {
+  let (_cleaner, file_path) = sync_unzip_asset("testnotion-1").await.unwrap();
+  let importer = NotionImporter::new(
+    1,
+    &file_path,
+    uuid::Uuid::new_v4(),
+    "http://test.appflowy.cloud".to_string(),
+  )
+  .unwrap();
+  let info = importer.import().await.unwrap();
+  let view = info.views()[0].as_document().await.unwrap();
+  let document = view.0;
+  let block_ids = document.get_all_block_ids();
+  for block_id in block_ids {
+    if let Some((block_type, block_data)) = document.get_block_data(&block_id) {
+      println!("{:?} {:?}", block_type, block_data);
+    }
+  }
+
+  let nested_view = info.build_nested_views().await;
+  println!("{}", nested_view);
+}
 
 #[tokio::test]
 async fn import_zip_file_contains_zip_as_attachments() {

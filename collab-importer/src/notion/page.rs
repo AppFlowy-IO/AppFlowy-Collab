@@ -199,28 +199,54 @@ impl NotionPage {
   {
     let mut document_resources = HashSet::new();
     if let Some(page_id) = document.get_page_id() {
-      let block_ids = document.get_block_children_ids(&page_id);
-      for block_id in block_ids.iter() {
-        if let Some((block_type, mut block_data)) = document.get_block_data(block_id) {
-          if matches!(block_type, BlockType::Image) {
-            if let Some(image_url) = block_data
-              .get(URL_FIELD)
-              .and_then(|v| v.as_str())
-              .and_then(|s| percent_decode_str(s).decode_utf8().ok())
-            {
-              let full_image_url = parent_path.join(image_url.to_string());
-              let pos = resources.iter().position(|r| r == &full_image_url);
-              if let Some(pos) = pos {
-                if let Some(url) = file_url_builder(&self.view_id, full_image_url).await {
-                  document_resources.insert(resources[pos].clone());
-                  block_data.insert(URL_FIELD.to_string(), json!(url));
-                  if let Err(err) = document.update_block(block_id, block_data) {
-                    error!(
-                      "Failed to update block when trying to replace image. error:{:?}",
-                      err
-                    );
-                  }
-                }
+      // Start the recursive processing with the root block (page_id)
+      self
+        .process_block_and_children(
+          parent_path,
+          document,
+          &page_id,
+          resources,
+          &file_url_builder,
+          &mut document_resources,
+        )
+        .await;
+    }
+
+    document_resources.into_iter().collect()
+  }
+
+  #[async_recursion::async_recursion(?Send)]
+  async fn process_block_and_children<'a, B, O>(
+    &'a self,
+    parent_path: &Path,
+    document: &mut Document,
+    block_id: &str,
+    resources: &[PathBuf],
+    file_url_builder: &B,
+    document_resources: &mut HashSet<PathBuf>,
+  ) where
+    B: Fn(&'a str, PathBuf) -> O + Send + Sync + 'a,
+    O: Future<Output = Option<String>> + Send + 'a,
+  {
+    // Process the current block
+    if let Some((block_type, mut block_data)) = document.get_block_data(block_id) {
+      if matches!(block_type, BlockType::Image) {
+        if let Some(image_url) = block_data
+          .get(URL_FIELD)
+          .and_then(|v| v.as_str())
+          .and_then(|s| percent_decode_str(s).decode_utf8().ok())
+        {
+          let full_image_url = parent_path.join(image_url.to_string());
+          let pos = resources.iter().position(|r| r == &full_image_url);
+          if let Some(pos) = pos {
+            if let Some(url) = file_url_builder(&self.view_id, full_image_url).await {
+              document_resources.insert(resources[pos].clone());
+              block_data.insert(URL_FIELD.to_string(), json!(url));
+              if let Err(err) = document.update_block(block_id, block_data) {
+                error!(
+                  "Failed to update block when trying to replace image. error:{:?}",
+                  err
+                );
               }
             }
           }
@@ -228,7 +254,20 @@ impl NotionPage {
       }
     }
 
-    document_resources.into_iter().collect()
+    // Recursively process each child block
+    let block_children_ids = document.get_block_children_ids(block_id);
+    for child_id in block_children_ids.iter() {
+      self
+        .process_block_and_children(
+          parent_path,
+          document,
+          child_id,
+          resources,
+          file_url_builder,
+          document_resources,
+        )
+        .await;
+    }
   }
 
   async fn replace_link_views<'a, 'b, B, O>(
