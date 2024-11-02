@@ -256,6 +256,20 @@ async fn import_blog_post_document_test() {
 }
 
 #[tokio::test]
+async fn import_blog_post_no_subpages_test() {
+  setup_log();
+  let workspace_id = uuid::Uuid::new_v4();
+  let (_cleaner, file_path) = sync_unzip_asset("blog_post_no_subpages").await.unwrap();
+  let host = "http://test.appflowy.cloud";
+  let importer = NotionImporter::new(1, &file_path, workspace_id, host.to_string()).unwrap();
+  let info = importer.import().await.unwrap();
+  assert_eq!(info.name, "blog_post_no_subpages");
+
+  let root_view = &info.views()[0];
+  assert_blog_post(host, &info.workspace_id, root_view).await;
+}
+
+#[tokio::test]
 async fn import_project_test() {
   let workspace_id = uuid::Uuid::new_v4();
   let (_cleaner, file_path) = sync_unzip_asset("project").await.unwrap();
