@@ -423,3 +423,39 @@ fn test_customer_image_in_nested_level_1() {
     }
   }
 }
+
+#[test]
+fn test_indented_image_under_paragraph() {
+  let markdown = r#"
+This is a paragraph 1
+
+  ![Untitled](Untitled.png)
+
+This is a paragraph 2
+"#;
+
+  let result = markdown_to_document_data(markdown);
+  let page_block = get_page_block(&result);
+  let children_blocks = get_children_blocks(&result, &page_block.id);
+
+  // First paragraph
+  assert_eq!(children_blocks[0].ty, BlockType::Paragraph.to_string());
+  assert_eq!(
+    get_delta(&result, &children_blocks[0].id),
+    r#"[{"insert":"This is a paragraph 1"}]"#
+  );
+
+  // Image
+  assert_eq!(children_blocks[1].ty, BlockType::Image.to_string());
+  assert_eq!(
+    children_blocks[1].data.get(URL_FIELD).unwrap(),
+    "Untitled.png"
+  );
+
+  // Second paragraph
+  assert_eq!(children_blocks[2].ty, BlockType::Paragraph.to_string());
+  assert_eq!(
+    get_delta(&result, &children_blocks[2].id),
+    r#"[{"insert":"This is a paragraph 2"}]"#
+  );
+}
