@@ -1,3 +1,4 @@
+use collab_document::importer::define::{BlockType, URL_FIELD};
 use serde_json::json;
 
 use crate::importer::util::{
@@ -371,5 +372,90 @@ fn test_customer_image_in_first_level() {
   assert_eq!(
     children_blocks[0].data.get("url").unwrap(),
     "https://example.com/image.png"
+  );
+}
+
+#[test]
+fn test_customer_image_in_nested_level_1() {
+  // notes: there's a empty line between the first nested bulleted item and the image
+  let markdown = r#"
+- 7/18 Consumption Spike issue
+  - 7/19 Contacted Enphase and they are going to clear spike with case #16518709 - they said the update on the 18th caused the snike
+
+    ![Untitled](Untitled.png)
+  "#;
+
+  let result = markdown_to_document_data(markdown);
+
+  let page_block = get_page_block(&result);
+  let children_blocks = get_children_blocks(&result, &page_block.id);
+
+  // - First bulleted item
+  let delta = get_delta(&result, &children_blocks[0].id);
+  assert_eq!(children_blocks.len(), 1);
+  assert_eq!(children_blocks[0].ty, BlockType::BulletedList.to_string());
+  assert_eq!(delta, r#"[{"insert":"7/18 Consumption Spike issue"}]"#);
+
+  // - First nested bulleted item
+  let children_blocks_1 = get_children_blocks(&result, &children_blocks[0].id);
+  let delta = get_delta(&result, &children_blocks_1[0].id);
+  assert_eq!(children_blocks_1.len(), 1);
+  assert_eq!(children_blocks_1[0].ty, BlockType::BulletedList.to_string());
+  assert_eq!(
+    delta,
+    r#"[{"insert":"7/19 Contacted Enphase and they are going to clear spike with case #16518709 - they said the update on the 18th caused the snike"}]"#
+  );
+
+  // Image under the first nested bulleted item
+  let children_blocks_1_1 = get_children_blocks(&result, &children_blocks_1[0].id);
+  assert_eq!(children_blocks_1_1.len(), 1);
+  assert_eq!(children_blocks_1_1[0].ty, BlockType::Image.to_string());
+  assert_eq!(
+    children_blocks_1_1[0].data.get(URL_FIELD).unwrap(),
+    "Untitled.png"
+  );
+
+  let blocks = result.blocks;
+  for value in blocks.iter() {
+    let block = value.1;
+    if block.ty == BlockType::Image.to_string() {
+      assert_eq!(block.data.get(URL_FIELD).unwrap(), "Untitled.png");
+    }
+  }
+}
+
+#[test]
+fn test_indented_image_under_paragraph() {
+  let markdown = r#"
+This is a paragraph 1
+
+  ![Untitled](Untitled.png)
+
+This is a paragraph 2
+"#;
+
+  let result = markdown_to_document_data(markdown);
+  let page_block = get_page_block(&result);
+  let children_blocks = get_children_blocks(&result, &page_block.id);
+
+  // First paragraph
+  assert_eq!(children_blocks[0].ty, BlockType::Paragraph.to_string());
+  assert_eq!(
+    get_delta(&result, &children_blocks[0].id),
+    r#"[{"insert":"This is a paragraph 1"}]"#
+  );
+
+  // Image
+  assert_eq!(children_blocks[1].ty, BlockType::Image.to_string());
+  assert_eq!(
+    children_blocks[1].data.get(URL_FIELD).unwrap(),
+    "Untitled.png"
+  );
+
+  // Second paragraph
+  assert_eq!(children_blocks[2].ty, BlockType::Paragraph.to_string());
+  assert_eq!(
+    get_delta(&result, &children_blocks[2].id),
+    r#"[{"insert":"This is a paragraph 2"}]"#
   );
 }
