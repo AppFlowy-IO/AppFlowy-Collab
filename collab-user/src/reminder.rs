@@ -64,11 +64,12 @@ impl Reminders {
   where
     F: FnOnce(ReminderUpdate),
   {
-    if let Some((_, mut value)) = self.find(txn, reminder_id) {
-      if let Out::YMap(map) = &mut value {
-        let update = ReminderUpdate { map_ref: map, txn };
-        f(update)
-      }
+    if let Some((_, Out::YMap(mut map))) = self.find(txn, reminder_id) {
+      let update = ReminderUpdate {
+        map_ref: &mut map,
+        txn,
+      };
+      f(update)
     }
   }
 
