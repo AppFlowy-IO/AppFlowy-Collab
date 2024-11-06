@@ -2,6 +2,7 @@ use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
+use crate::core::ReminderUpdate;
 use crate::reminder::{Reminders, RemindersChangeSender};
 use anyhow::{Error, Result};
 use collab::core::origin::CollabOrigin;
@@ -133,7 +134,7 @@ impl UserAwareness {
   /// * `f` - A function or closure that takes `ReminderUpdate` as its argument and implements the changes to the reminder.
   pub fn update_reminder<F>(&mut self, reminder_id: &str, f: F)
   where
-    F: FnOnce(&mut Reminder),
+    F: FnOnce(ReminderUpdate),
   {
     let mut txn = self.collab.transact_mut();
     self

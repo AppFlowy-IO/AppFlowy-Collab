@@ -1,9 +1,14 @@
-use collab::preclude::encoding::serde::{from_any, to_any};
+use std::collections::HashMap;
+
+use collab::preclude::encoding::serde::from_any;
 use collab::preclude::{
-  Any, Array, ArrayRef, Change, DeepObservable, Event, Map, MapPrelim, Out, ReadTxn, Subscription,
-  ToJson, TransactionMut, YrsValue,
+  Any, Array, ArrayRef, Change, DeepObservable, Event, Map, MapPrelim, MapRef, Out, ReadTxn,
+  Subscription, ToJson, TransactionMut, YrsValue,
 };
-use collab_entity::reminder::{Reminder, REMINDER_ID};
+use collab_entity::reminder::{
+  Reminder, REMINDER_ID, REMINDER_IS_ACK, REMINDER_MESSAGE, REMINDER_META, REMINDER_OBJECT_ID,
+  REMINDER_SCHEDULED_AT, REMINDER_TITLE, REMINDER_TY,
+};
 use tokio::sync::broadcast;
 
 pub type RemindersChangeSender = broadcast::Sender<ReminderChange>;
@@ -45,8 +50,9 @@ impl Reminders {
   }
 
   pub fn remove(&self, txn: &mut TransactionMut, id: &str) {
-    let (i, _) = self.find(txn, id).unwrap();
-    self.container.remove(txn, i);
+    if let Some((i, _value)) = self.find(txn, id) {
+      self.container.remove(txn, i);
+    }
   }
 
   pub fn add(&self, txn: &mut TransactionMut, reminder: Reminder) {
@@ -56,19 +62,14 @@ impl Reminders {
 
   pub fn update_reminder<F>(&self, txn: &mut TransactionMut, reminder_id: &str, f: F)
   where
-    F: FnOnce(&mut Reminder),
+    F: FnOnce(ReminderUpdate),
   {
-    if let Some((i, value)) = self.find(txn, reminder_id) {
-      if let Ok(mut reminder) = from_any::<Reminder>(&value.to_json(txn)) {
-        // FIXME: this is wrong. This doesn't "update" the reminder, instead it replaces it,
-        //   with all of the unchanged fields included. That means, that if two people will be
-        //   updating the same reminder at the same time, the last one will overwrite the changes
-        //   of the first one, even if there was no edit collisions.
-        f(&mut reminder);
-        self.container.remove(txn, i);
-        let any = to_any(&reminder).unwrap();
-        self.container.insert(txn, i, any);
-      }
+    if let Some((_, Out::YMap(mut map))) = self.find(txn, reminder_id) {
+      let update = ReminderUpdate {
+        map_ref: &mut map,
+        txn,
+      };
+      f(update)
     }
   }
 
@@ -135,4 +136,59 @@ fn subscribe_reminder_change(
       }
     }
   })
+}
+
+pub struct ReminderUpdate<'a, 'b> {
+  map_ref: &'a mut MapRef,
+  txn: &'a mut TransactionMut<'b>,
+}
+
+impl<'a, 'b> ReminderUpdate<'a, 'b> {
+  pub fn set_object_id<T: AsRef<str>>(self, value: T) -> Self {
+    self
+      .map_ref
+      .try_update(self.txn, REMINDER_OBJECT_ID, value.as_ref());
+    self
+  }
+
+  pub fn set_title<T: AsRef<str>>(self, value: T) -> Self {
+    self
+      .map_ref
+      .try_update(self.txn, REMINDER_TITLE, value.as_ref());
+    self
+  }
+
+  pub fn set_message<T: AsRef<str>>(self, value: T) -> Self {
+    self
+      .map_ref
+      .try_update(self.txn, REMINDER_MESSAGE, value.as_ref());
+    self
+  }
+
+  pub fn set_is_ack(self, value: bool) -> Self {
+    self.map_ref.try_update(self.txn, REMINDER_IS_ACK, value);
+    self
+  }
+
+  pub fn set_is_read(self, value: bool) -> Self {
+    self.map_ref.try_update(self.txn, REMINDER_IS_ACK, value);
+    self
+  }
+
+  pub fn set_type<T: Into<i64>>(self, value: T) -> Self {
+    self.map_ref.try_update(self.txn, REMINDER_TY, value.into());
+    self
+  }
+
+  pub fn set_scheduled_at<T: Into<i64>>(self, value: T) -> Self {
+    self
+      .map_ref
+      .try_update(self.txn, REMINDER_SCHEDULED_AT, value.into());
+    self
+  }
+
+  pub fn set_meta(self, value: HashMap<String, String>) -> Self {
+    self.map_ref.try_update(self.txn, REMINDER_META, value);
+    self
+  }
 }
