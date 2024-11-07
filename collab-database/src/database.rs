@@ -1715,6 +1715,11 @@ impl DatabaseBody {
     notifier: Option<DatabaseNotify>,
   ) -> Option<Self> {
     let txn = collab.context.transact();
+    let origin = if notifier.is_some() {
+      collab.origin().clone()
+    } else {
+      CollabOrigin::Empty
+    };
     let root: MapRef = collab.data.get_with_txn(&txn, DATABASE)?;
     let database_id = root.get_with_txn(&txn, DATABASE_ID)?;
     let fields: MapRef = root.get_with_txn(&txn, FIELDS)?; // { DATABASE: { FIELDS: {:} } }
@@ -1723,7 +1728,7 @@ impl DatabaseBody {
 
     let fields = FieldMap::new(fields, notifier.as_ref().map(|n| n.field_change_tx.clone()));
     let views = DatabaseViews::new(
-      CollabOrigin::Empty,
+      origin,
       views,
       notifier.as_ref().map(|n| n.view_change_tx.clone()),
     );
