@@ -1,10 +1,14 @@
 pub mod checkbox_type_option;
+pub mod checklist_type_option;
 pub mod date_type_option;
 pub mod media_type_option;
 pub mod number_type_option;
+pub mod relation_type_option;
 pub mod select_type_option;
+pub mod summary_type_option;
 pub mod text_type_option;
 pub mod timestamp_type_option;
+pub mod translate_type_option;
 pub mod url_type_option;
 
 use std::collections::HashMap;

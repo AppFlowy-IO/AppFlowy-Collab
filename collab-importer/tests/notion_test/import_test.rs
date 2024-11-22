@@ -529,7 +529,7 @@ async fn check_task_database(linked_view: &NotionPage) {
   assert_eq!(fields.len(), csv_file.columns.len());
   assert_eq!(fields.len(), 13);
 
-  let expected_file_type = vec![
+  let expected_file_type = [
     RichText,
     SingleSelect,
     SingleSelect,
@@ -571,7 +571,7 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
   assert_eq!(fields.len(), csv_file.columns.len());
   assert_eq!(fields.len(), 13);
 
-  let expected_file_type = vec![
+  let expected_file_type = [
     RichText,
     SingleSelect,
     SingleSelect,

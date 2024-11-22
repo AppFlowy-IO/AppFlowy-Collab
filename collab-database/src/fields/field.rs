@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use collab::preclude::{Any, Map, MapExt, MapRef, ReadTxn, TransactionMut, YrsValue};
 
+use crate::database::gen_field_id;
+use crate::entity::{default_type_option_data_from_type, FieldType};
 use crate::fields::{TypeOptionData, TypeOptions, TypeOptionsUpdate};
 use crate::{impl_bool_update, impl_i64_update, impl_str_update};
 
@@ -35,6 +37,17 @@ impl Field {
   ) -> Self {
     self.type_options.insert(type_id.to_string(), type_options);
     self
+  }
+
+  pub fn from_field_type(name: &str, field_type: FieldType, is_primary: bool) -> Self {
+    let new_field = Self {
+      id: gen_field_id(),
+      name: name.to_string(),
+      field_type: field_type.into(),
+      is_primary,
+      ..Default::default()
+    };
+    new_field.with_type_option_data(field_type, default_type_option_data_from_type(field_type))
   }
 
   pub fn get_type_option<T: From<TypeOptionData>>(&self, type_id: impl ToString) -> Option<T> {
