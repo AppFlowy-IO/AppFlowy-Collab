@@ -1,31 +1,33 @@
 use crate::error::ImporterError;
 use crate::imported_collab::{ImportType, ImportedCollab, ImportedCollabInfo};
 
-use collab_database::database::Database;
+use collab_database::database::{get_row_document_id, Database};
 use collab_database::template::csv::{CSVResource, CSVTemplate};
 use collab_document::blocks::{mention_block_data, mention_block_delta, TextDelta};
 use collab_document::document::Document;
 use collab_document::importer::define::{BlockType, URL_FIELD};
-use collab_document::importer::md_importer::MDImporter;
+use collab_document::importer::md_importer::{create_image_block, MDImporter};
 use collab_entity::CollabType;
 use futures::stream::{self, StreamExt};
 
 use crate::notion::file::NotionFile;
-use crate::notion::walk_dir::extract_external_links;
-use crate::notion::ImportedCollabInfoStream;
+use crate::notion::walk_dir::{extract_delta_link, extract_external_links};
+use crate::notion::{CSVRelation, ImportedCollabInfoStream};
 use crate::util::{upload_file_url, FileId};
+use collab_database::rows::RowId;
 use collab_database::template::builder::FileUrlBuilder;
 use collab_document::document_data::default_document_data;
 use percent_encoding::percent_decode_str;
 use serde::Serialize;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Display;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tracing::error;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct NotionPage {
   pub notion_name: String,
   pub notion_id: Option<String>,
@@ -38,6 +40,7 @@ pub struct NotionPage {
   pub external_links: Vec<Vec<ExternalLink>>,
   pub host: String,
   pub is_dir: bool,
+  pub csv_relation: CSVRelation,
 }
 
 impl NotionPage {
@@ -79,8 +82,27 @@ impl NotionPage {
     let mut linked_views = HashMap::new();
     for links in self.external_links.iter() {
       if let Some(link) = links.last() {
-        if let Some(view) = self.get_view(&link.id) {
+        let page = self.csv_relation.get_page(&link.file_name);
+        if let Some(page) = page {
+          linked_views.insert(link.id.clone(), page);
+        } else if let Some(view) = self.get_view(&link.id) {
           linked_views.insert(link.id.clone(), view);
+        }
+      }
+    }
+    linked_views
+  }
+
+  pub fn get_external_linked_views(&self) -> Vec<NotionPage> {
+    self.get_external_link_notion_view().into_values().collect()
+  }
+
+  pub fn get_linked_views(&self) -> Vec<NotionPage> {
+    let mut linked_views = vec![];
+    for link in &self.external_links {
+      for external_link in link {
+        if let Some(view) = self.get_view(&external_link.id) {
+          linked_views.push(view);
         }
       }
     }
@@ -107,23 +129,11 @@ impl NotionPage {
     search_view(&self.children, id)
   }
 
-  pub fn get_linked_views(&self) -> Vec<NotionPage> {
-    let mut linked_views = vec![];
-    for link in &self.external_links {
-      for external_link in link {
-        if let Some(view) = self.get_view(&external_link.id) {
-          linked_views.push(view);
-        }
-      }
-    }
-    linked_views
-  }
-
   pub async fn as_document(&self) -> Result<(Document, CollabResource), ImporterError> {
     let external_link_views = self.get_external_link_notion_view();
     match &self.notion_file {
       NotionFile::Markdown { file_path, .. } => {
-        let mut file_paths = self.notion_file.upload_files();
+        let resource_paths = self.notion_file.upload_files();
         let md_importer = MDImporter::new(None);
         let content = fs::read_to_string(file_path).await?;
         let document_data = md_importer.import(&self.view_id, content)?;
@@ -139,12 +149,30 @@ impl NotionPage {
           ))
         };
         let parent_path = file_path.parent().unwrap();
-        self.replace_link_views(&mut document, external_link_views);
-        self
-          .replace_resources(&mut document, &mut file_paths, parent_path, url_builder)
+        let valid_delta_resources = self
+          .replace_link_views(
+            parent_path,
+            &mut document,
+            &resource_paths,
+            external_link_views,
+            &url_builder,
+          )
+          .await;
+        let valid_block_resources = self
+          .replace_block_resources_recursively(
+            parent_path,
+            &mut document,
+            &resource_paths,
+            url_builder,
+          )
           .await;
 
-        let files = file_paths
+        let all_resources = valid_block_resources
+          .into_iter()
+          .chain(valid_delta_resources.into_iter())
+          .collect::<Vec<_>>();
+
+        let files = all_resources
           .iter()
           .filter_map(|p| p.to_str().map(|s| s.to_string()))
           .collect();
@@ -163,40 +191,67 @@ impl NotionPage {
     }
   }
 
-  async fn replace_resources<'a, B, O>(
+  async fn replace_block_resources_recursively<'a, B, O>(
     &'a self,
-    document: &mut Document,
-    resources: &mut Vec<PathBuf>,
     parent_path: &Path,
+    document: &mut Document,
+    resources: &[PathBuf],
     file_url_builder: B,
-  ) where
+  ) -> Vec<PathBuf>
+  where
     B: Fn(&'a str, PathBuf) -> O + Send + Sync + 'a,
     O: Future<Output = Option<String>> + Send + 'a,
   {
     let mut document_resources = HashSet::new();
     if let Some(page_id) = document.get_page_id() {
-      let block_ids = document.get_block_children_ids(&page_id);
-      for block_id in block_ids.iter() {
-        if let Some((block_type, mut block_data)) = document.get_block_data(block_id) {
-          if matches!(block_type, BlockType::Image) {
-            if let Some(image_url) = block_data
-              .get(URL_FIELD)
-              .and_then(|v| v.as_str())
-              .and_then(|s| percent_decode_str(s).decode_utf8().ok())
-            {
-              let full_image_url = parent_path.join(image_url.to_string());
-              let pos = resources.iter().position(|r| r == &full_image_url);
-              if let Some(pos) = pos {
-                if let Some(url) = file_url_builder(&self.view_id, full_image_url).await {
-                  document_resources.insert(resources.remove(pos));
-                  block_data.insert(URL_FIELD.to_string(), json!(url));
-                  if let Err(err) = document.update_block(block_id, block_data) {
-                    error!(
-                      "Failed to update block when trying to replace image. error:{:?}",
-                      err
-                    );
-                  }
-                }
+      // Start the recursive processing with the root block (page_id)
+      self
+        .process_block_and_children(
+          parent_path,
+          document,
+          &page_id,
+          resources,
+          &file_url_builder,
+          &mut document_resources,
+        )
+        .await;
+    }
+
+    document_resources.into_iter().collect()
+  }
+
+  #[async_recursion::async_recursion(?Send)]
+  async fn process_block_and_children<'a, B, O>(
+    &'a self,
+    parent_path: &Path,
+    document: &mut Document,
+    block_id: &str,
+    resources: &[PathBuf],
+    file_url_builder: &B,
+    document_resources: &mut HashSet<PathBuf>,
+  ) where
+    B: Fn(&'a str, PathBuf) -> O + Send + Sync + 'a,
+    O: Future<Output = Option<String>> + Send + 'a,
+  {
+    // Process the current block
+    if let Some((block_type, mut block_data)) = document.get_block_data(block_id) {
+      if matches!(block_type, BlockType::Image) {
+        if let Some(image_url) = block_data
+          .get(URL_FIELD)
+          .and_then(|v| v.as_str())
+          .and_then(|s| percent_decode_str(s).decode_utf8().ok())
+        {
+          let full_image_url = parent_path.join(image_url.to_string());
+          let pos = resources.iter().position(|r| r == &full_image_url);
+          if let Some(pos) = pos {
+            if let Some(url) = file_url_builder(&self.view_id, full_image_url).await {
+              document_resources.insert(resources[pos].clone());
+              block_data.insert(URL_FIELD.to_string(), json!(url));
+              if let Err(err) = document.update_block(block_id, block_data) {
+                error!(
+                  "Failed to update block when trying to replace image. error:{:?}",
+                  err
+                );
               }
             }
           }
@@ -204,84 +259,207 @@ impl NotionPage {
       }
     }
 
-    *resources = document_resources.into_iter().collect();
+    // Recursively process each child block
+    let block_children_ids = document.get_block_children_ids(block_id);
+    for child_id in block_children_ids.iter() {
+      self
+        .process_block_and_children(
+          parent_path,
+          document,
+          child_id,
+          resources,
+          file_url_builder,
+          document_resources,
+        )
+        .await;
+    }
   }
 
-  fn replace_link_views(
-    &self,
+  async fn replace_link_views<'a, 'b, B, O>(
+    &'b self,
+    parent_path: &Path,
     document: &mut Document,
+    resources: &[PathBuf],
     external_link_views: HashMap<String, NotionPage>,
-  ) {
-    if let Some(page_id) = document.get_page_id() {
-      // Get all block children and process them
-      let block_ids = document.get_block_children_ids(&page_id);
-      for block_id in block_ids.iter() {
-        if let Some((block_type, deltas)) = document.get_block_delta(block_id) {
-          self.process_block_deltas(document, block_id, block_type, deltas, &external_link_views);
+    file_url_builder: &'a B,
+  ) -> Vec<PathBuf>
+  where
+    B: Fn(&'a str, PathBuf) -> O + Send + Sync + 'a,
+    O: Future<Output = Option<String>> + Send + 'a,
+    'b: 'a,
+  {
+    let mut delta_resources = HashSet::new();
+    if let Some(first_page_id) = document.get_page_id() {
+      // Start the recursive processing with the first page's root block
+      self
+        .process_link_views_recursive(
+          parent_path,
+          document,
+          &first_page_id,
+          resources,
+          &external_link_views,
+          file_url_builder,
+          &mut delta_resources,
+        )
+        .await;
+    }
+
+    delta_resources.into_iter().collect()
+  }
+
+  #[async_recursion::async_recursion]
+  #[allow(clippy::too_many_arguments)]
+  async fn process_link_views_recursive<'a, 'b, B, O>(
+    &'b self,
+    parent_path: &Path,
+    document: &mut Document,
+    block_id: &str,
+    resources: &[PathBuf],
+    external_link_views: &HashMap<String, NotionPage>,
+    file_url_builder: &'a B,
+    delta_resources: &mut HashSet<PathBuf>,
+  ) where
+    B: Fn(&'a str, PathBuf) -> O + Send + Sync + 'a,
+    O: Future<Output = Option<String>> + Send + 'a,
+    'b: 'a,
+  {
+    if let Some((block_type, deltas)) = document.get_block_delta(block_id) {
+      let block_deltas_result = self
+        .process_block_deltas(
+          parent_path,
+          document,
+          block_id,
+          block_type,
+          deltas,
+          external_link_views,
+          resources,
+          file_url_builder,
+        )
+        .await;
+
+      // Collect resources from this block
+      delta_resources.extend(block_deltas_result.delta_resources);
+
+      // Update document deltas if new ones are created
+      if let Some(new_deltas) = block_deltas_result.new_deltas {
+        if let Err(err) = document.set_block_delta(block_id, new_deltas) {
+          error!(
+            "Failed to set block delta when trying to replace ref link. error: {:?}",
+            err
+          );
         }
       }
+
+      // Insert new image blocks if any are created
+      for image_url in block_deltas_result.new_delta_image_blocks {
+        let new_block_id = collab_document::document_data::generate_id();
+        let image_block = create_image_block(&new_block_id, image_url, block_id);
+        if let Err(err) = document.insert_block(image_block, Some(block_id.to_string())) {
+          error!(
+            "Failed to insert image block when trying to replace delta link. error: {:?}",
+            err
+          );
+        }
+      }
+    }
+
+    // Recursively process each child block
+    let block_children_ids = document.get_block_children_ids(block_id);
+    for child_id in block_children_ids.iter() {
+      self
+        .process_link_views_recursive(
+          parent_path,
+          document,
+          child_id,
+          resources,
+          external_link_views,
+          file_url_builder,
+          delta_resources,
+        )
+        .await;
     }
   }
 
   /// Process the deltas for a block, looking for links to replace
-  fn process_block_deltas(
-    &self,
+  #[allow(clippy::too_many_arguments)]
+  async fn process_block_deltas<'a, 'b, B, O>(
+    &'b self,
+    parent_path: &Path,
     document: &mut Document,
     block_id: &str,
     block_type: BlockType,
-    deltas: Vec<TextDelta>,
+    mut deltas: Vec<TextDelta>,
     external_link_views: &HashMap<String, NotionPage>,
-  ) {
-    for delta in deltas {
-      if let TextDelta::Inserted(_, Some(attrs)) = delta {
-        if let Some(href_value) = attrs.get("href") {
-          let delta_str = href_value.to_string();
-          if let Ok(links) = extract_external_links(&delta_str) {
-            self.replace_links_in_deltas(document, block_id, &links, external_link_views);
-            self.update_paragraph_block(
-              document,
-              block_id,
-              &block_type,
-              &links,
-              external_link_views,
-            );
+    resources: &[PathBuf],
+    file_url_builder: &'a B,
+  ) -> ProcessBlockDeltaResult
+  where
+    B: Fn(&'a str, PathBuf) -> O + Send + Sync + 'a,
+    O: Future<Output = Option<String>> + Send + 'a,
+    'b: 'a,
+  {
+    let mut is_changed = false;
+    let mut new_delta_image_blocks = vec![];
+    let mut delta_resources = HashSet::new();
+    for delta in deltas.iter_mut() {
+      if let TextDelta::Inserted(v, attrs) = delta.clone() {
+        // If there are any href in the attrs, we will try to replace with the corresponding view id
+        if let Some(attrs) = &attrs {
+          if let Some(href_value) = attrs.get("href") {
+            let delta_str = href_value.to_string();
+
+            // Replace links in the deltas with the corresponding view IDs
+            if let Ok(links) = extract_external_links(&delta_str) {
+              for link in &links {
+                if let Some(view) = external_link_views.get(&link.id) {
+                  if v == link.name {
+                    is_changed = true;
+                    *delta = mention_block_delta(&view.view_id);
+                  }
+                }
+              }
+
+              self.update_paragraph_block(
+                document,
+                block_id,
+                &block_type,
+                &links,
+                external_link_views,
+              );
+            }
+          }
+        }
+
+        // extract link from insert delta and replace with real image link
+        if let Some(delta_link) = extract_delta_link(&v) {
+          debug_assert!(attrs.is_none(), "attrs should be None for image link");
+          let full_image_url = parent_path.join(delta_link.link);
+          let pos = resources.iter().position(|r| r == &full_image_url);
+          if let Some(pos) = pos {
+            if let Some(url) = file_url_builder(&self.view_id, full_image_url).await {
+              delta_resources.insert(resources[pos].clone());
+
+              // replace the inserted image link with empty string
+              *delta = TextDelta::Inserted("".to_string(), None);
+              // generate a block for given image
+              new_delta_image_blocks.push(url);
+            }
           }
         }
       }
     }
-  }
 
-  /// Replace links in the deltas with the corresponding view IDs
-  fn replace_links_in_deltas(
-    &self,
-    document: &mut Document,
-    block_id: &str,
-    links: &[ExternalLink],
-    external_link_views: &HashMap<String, NotionPage>,
-  ) {
-    let mut block_deltas = document
-      .get_block_delta(block_id)
-      .map(|t| t.1)
-      .unwrap_or_default();
+    let mut result = ProcessBlockDeltaResult {
+      delta_resources: delta_resources.into_iter().collect(),
+      new_deltas: None,
+      new_delta_image_blocks,
+    };
 
-    for link in links {
-      if let Some(view) = external_link_views.get(&link.id) {
-        block_deltas.iter_mut().for_each(|d| {
-          if let TextDelta::Inserted(content, _) = d {
-            if content == &link.name {
-              *d = mention_block_delta(&view.view_id);
-            }
-          }
-        });
-      }
+    if is_changed {
+      result.new_deltas = Some(deltas);
     }
 
-    if let Err(err) = document.set_block_delta(block_id, block_deltas) {
-      error!(
-        "Failed to set block delta when trying to replace ref link. error: {:?}",
-        err
-      );
-    }
+    result
   }
 
   /// Update the paragraph block if the last link points to an external view
@@ -308,9 +486,13 @@ impl NotionPage {
     }
   }
 
-  pub async fn as_database(&self) -> Result<(Database, CollabResource), ImporterError> {
+  pub async fn as_database(&self) -> Result<DatabaseImportContent, ImporterError> {
     match &self.notion_file {
-      NotionFile::CSV { file_path, .. } => {
+      NotionFile::CSV {
+        file_path,
+        row_documents,
+        ..
+      } => {
         let content = fs::read_to_string(file_path).await?;
         let files = self
           .notion_file
@@ -341,12 +523,38 @@ impl NotionPage {
           .try_into_database_template(Some(Box::new(file_url_builder)))
           .await
           .unwrap();
-        let database = Database::create_with_template(database_template).await?;
+        let mut database = Database::create_with_template(database_template).await?;
+        let mut row_documents = row_documents.clone();
+
+        if let Some(field) = database.get_primary_field() {
+          let view_id = database.get_inline_view_id();
+          let row_cells = database.get_cells_for_field(&view_id, &field.id).await;
+          for row_cell in row_cells {
+            for row_document in row_documents.iter_mut() {
+              if let Some(text) = row_cell.text() {
+                if row_document.page.notion_name == text {
+                  row_document.set_row_document_id(&row_cell.row_id);
+                  database
+                    .update_row_meta(&row_cell.row_id, |meta| {
+                      meta.update_is_document_empty(false);
+                    })
+                    .await;
+                }
+              }
+            }
+          }
+        }
+
         let resource = CollabResource {
           object_id: database_id,
           files,
         };
-        Ok((database, resource))
+
+        Ok(DatabaseImportContent {
+          database,
+          row_documents,
+          resource,
+        })
       },
       _ => Err(ImporterError::InvalidFileType(format!(
         "File type is not supported for database: {:?}",
@@ -355,18 +563,23 @@ impl NotionPage {
     }
   }
 
+  #[async_recursion::async_recursion(?Send)]
   pub async fn build_imported_collab(&self) -> Result<Option<ImportedCollabInfo>, ImporterError> {
     let name = self.notion_name.clone();
     match &self.notion_file {
       NotionFile::CSV { .. } => {
-        let (database, collab_resource) = self.as_database().await?;
-        let database_id = database.get_database_id();
-        let view_ids = database
+        let content = self.as_database().await?;
+        let database_id = content.database.get_database_id();
+        let mut resources = vec![content.resource];
+        let view_ids = content
+          .database
           .get_all_views()
           .into_iter()
           .map(|view| view.id)
           .collect::<Vec<_>>();
-        let imported_collabs = database
+
+        let mut imported_collabs = content
+          .database
           .encode_database_collabs()
           .await?
           .into_collabs()
@@ -378,13 +591,37 @@ impl NotionPage {
           })
           .collect::<Vec<_>>();
 
+        let mut row_document_ids = vec![];
+        for row_document in content.row_documents {
+          if let Ok((document, resource)) = row_document.page.as_document().await {
+            if let Ok(encoded_collab) = document.encode_collab() {
+              resources.push(resource);
+              let imported_collab = ImportedCollab {
+                object_id: row_document.page.view_id.clone(),
+                collab_type: CollabType::Document,
+                encoded_collab,
+              };
+              imported_collabs.push(imported_collab);
+              row_document_ids.push(row_document.page.view_id.clone())
+            }
+          }
+
+          for child in row_document.page.children {
+            if let Ok(Some(value)) = child.build_imported_collab().await {
+              imported_collabs.extend(value.imported_collabs);
+              resources.extend(value.resources);
+            }
+          }
+        }
+
         Ok(Some(ImportedCollabInfo {
           name,
-          collabs: imported_collabs,
-          resource: collab_resource,
+          imported_collabs,
+          resources,
           import_type: ImportType::Database {
             database_id,
             view_ids,
+            row_document_ids,
           },
         }))
       },
@@ -398,8 +635,8 @@ impl NotionPage {
         };
         Ok(Some(ImportedCollabInfo {
           name,
-          collabs: vec![imported_collab],
-          resource: collab_resource,
+          imported_collabs: vec![imported_collab],
+          resources: vec![collab_resource],
           import_type: ImportType::Document,
         }))
       },
@@ -414,11 +651,11 @@ impl NotionPage {
         };
         Ok(Some(ImportedCollabInfo {
           name,
-          collabs: vec![imported_collab],
-          resource: CollabResource {
+          imported_collabs: vec![imported_collab],
+          resources: vec![CollabResource {
             object_id: self.view_id.clone(),
             files: vec![],
-          },
+          }],
           import_type: ImportType::Document,
         }))
       },
@@ -449,15 +686,23 @@ pub async fn build_imported_collab_recursively<'a>(
   Box::pin(initial_stream.chain(child_stream))
 }
 
-#[derive(Debug, Clone, Serialize)]
+pub struct ProcessBlockDeltaResult {
+  pub delta_resources: Vec<PathBuf>,
+  pub new_deltas: Option<Vec<TextDelta>>,
+  pub new_delta_image_blocks: Vec<String>,
+}
+
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]
 pub struct ExternalLink {
   pub id: String,
   pub name: String,
   pub link_type: ExternalLinkType,
+  pub file_name: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize)]
 pub enum ExternalLinkType {
+  #[default]
   Unknown,
   CSV,
   Markdown,
@@ -485,4 +730,28 @@ impl FileUrlBuilder for FileUrlBuilderImpl {
       &file_id,
     ))
   }
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportedRowDocument {
+  pub page: NotionPage,
+}
+
+impl ImportedRowDocument {
+  fn set_row_document_id(&mut self, row_id: &RowId) {
+    let document_id = get_row_document_id(row_id).unwrap();
+    self.page.view_id = document_id;
+  }
+}
+
+impl Display for ImportedRowDocument {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.page.notion_name)
+  }
+}
+
+pub struct DatabaseImportContent {
+  pub database: Database,
+  pub row_documents: Vec<ImportedRowDocument>,
+  pub resource: CollabResource,
 }

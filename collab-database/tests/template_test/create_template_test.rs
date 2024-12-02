@@ -124,7 +124,7 @@ async fn create_template_test() {
   let fields = database.get_fields_in_view(database.get_inline_view_id().as_str(), None);
   assert_eq!(fields.len(), 6);
   for (index, field) in fields.iter().enumerate() {
-    assert_eq!(field.field_type, expected_field_type[index].clone() as i64);
+    assert_eq!(field.field_type, expected_field_type[index] as i64);
     assert_eq!(field.name, expected_field_name[index]);
   }
 

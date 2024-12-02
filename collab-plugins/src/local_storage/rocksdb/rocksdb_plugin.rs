@@ -25,6 +25,7 @@ pub trait RocksdbBackup: Send + Sync {
 pub struct RocksdbDiskPlugin {
   uid: i64,
   #[allow(dead_code)]
+  workspace_id: String,
   object_id: String,
   collab_type: CollabType,
   collab_db: Weak<CollabKVDB>,
@@ -45,6 +46,7 @@ impl Deref for RocksdbDiskPlugin {
 impl RocksdbDiskPlugin {
   pub fn new_with_config(
     uid: i64,
+    workspace_id: String,
     object_id: String,
     collab_type: CollabType,
     collab_db: Weak<CollabKVDB>,
@@ -53,6 +55,7 @@ impl RocksdbDiskPlugin {
     let update_count = Arc::new(AtomicU32::new(0));
     let did_init = Arc::new(AtomicBool::new(false));
     Self {
+      workspace_id,
       object_id,
       collab_type,
       collab_db,
@@ -65,12 +68,14 @@ impl RocksdbDiskPlugin {
 
   pub fn new(
     uid: i64,
+    workspace_id: String,
     object_id: String,
     collab_type: CollabType,
     collab_db: Weak<CollabKVDB>,
   ) -> Self {
     Self::new_with_config(
       uid,
+      workspace_id,
       object_id,
       collab_type,
       collab_db,
@@ -85,12 +90,12 @@ impl RocksdbDiskPlugin {
   fn write_to_disk(&self, collab: &Collab) {
     if let Some(collab_db) = self.collab_db.upgrade() {
       let rocksdb_read = collab_db.read_txn();
-      if !rocksdb_read.is_exist(self.uid, &self.object_id) {
+      if !rocksdb_read.is_exist(self.uid, &self.workspace_id, &self.object_id) {
         match self.collab_type.validate_require_data(collab) {
           Ok(_) => {
             let txn = collab.transact();
             if let Err(err) = collab_db.with_write_txn(|w_db_txn| {
-              w_db_txn.create_new_doc(self.uid, &self.object_id, &txn)?;
+              w_db_txn.create_new_doc(self.uid, &self.workspace_id, &self.object_id, &txn)?;
               info!(
                 "[Rocksdb Plugin]: created new doc {}, collab_type:{}",
                 self.object_id, self.collab_type
@@ -130,7 +135,7 @@ impl CollabPlugin for RocksdbDiskPlugin {
       self.increase_count();
       //Acquire a write transaction to ensure consistency
       let result = db.with_write_txn(|w_db_txn| {
-        let _ = w_db_txn.push_update(self.uid, object_id, update)?;
+        let _ = w_db_txn.push_update(self.uid, self.workspace_id.as_str(), object_id, update)?;
         #[cfg(not(feature = "verbose_log"))]
         tracing::trace!(
           "[Rocksdb Plugin]: Collab {} {} persisting update",

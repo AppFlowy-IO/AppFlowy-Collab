@@ -81,7 +81,8 @@ impl DatabaseViews {
         .set_groups(view.group_settings)
         .set_sorts(view.sorts)
         .set_field_orders(view.field_orders)
-        .set_row_orders(view.row_orders);
+        .set_row_orders(view.row_orders)
+        .set_is_inline(view.is_inline);
     });
   }
 

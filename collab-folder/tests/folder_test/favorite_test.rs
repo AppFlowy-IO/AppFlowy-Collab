@@ -1,11 +1,11 @@
-use assert_json_diff::assert_json_include;
-use collab_folder::{FolderData, UserId};
-use serde_json::json;
-
 use crate::util::{
   create_folder_with_data, create_folder_with_workspace, make_test_view, open_folder_with_db,
   unzip_history_folder_db,
 };
+use assert_json_diff::assert_json_include;
+use collab_folder::{FolderData, UserId};
+use serde_json::json;
+use uuid::Uuid;
 
 #[test]
 fn create_favorite_test() {
@@ -194,9 +194,11 @@ const FOLDER_WITH_FAV_V1: &str = "folder_with_fav_v1";
 
 #[test]
 fn migrate_from_old_version_folder_without_fav_test() {
+  let workspace_id = Uuid::new_v4().to_string();
   let (_cleaner, db_path) = unzip_history_folder_db(FOLDER_WITHOUT_FAV).unwrap();
   let folder_test = open_folder_with_db(
     221439819971039232.into(),
+    &workspace_id,
     "49af3b85-9343-447a-946d-038f63883399",
     db_path,
   );
@@ -225,7 +227,6 @@ fn migrate_from_old_version_folder_without_fav_test() {
             ]
           },
           "created_at": 1690602073,
-          "desc": "",
           "icon": null,
           "id": "5cf7eff5-954d-424d-a5e7-032527929019",
           "is_favorite": false,
@@ -238,7 +239,6 @@ fn migrate_from_old_version_folder_without_fav_test() {
             "items": []
           },
           "created_at": 1690602073,
-          "desc": "",
           "icon": null,
           "id": "631584ec-af71-42c3-94f4-89dcfdafb988",
           "is_favorite": false,
@@ -264,9 +264,11 @@ fn migrate_from_old_version_folder_without_fav_test() {
 
 #[test]
 fn migrate_favorite_v1_test() {
+  let workspace_id = Uuid::new_v4().to_string();
   let (_cleaner, db_path) = unzip_history_folder_db(FOLDER_WITH_FAV_V1).unwrap();
   let folder_test = open_folder_with_db(
     254954554859196416.into(),
+    &workspace_id,
     "835f64ab-9efc-4365-8055-1e66ee03c555",
     db_path,
   );
@@ -314,7 +316,6 @@ fn migrate_favorite_v1_test() {
             ]
           },
           "created_at": 1698592608,
-          "desc": "",
           "icon": null,
           "id": "ddf06dcf-1a01-4d0d-b973-9d6a892f68b5",
           "is_favorite": false,
@@ -327,7 +328,6 @@ fn migrate_favorite_v1_test() {
             "items": []
           },
           "created_at": 1698661285,
-          "desc": "",
           "icon": null,
           "id": "36e0a35e-c636-48d6-9e50-e2e2ee8a1d9f",
           "is_favorite": true,
@@ -340,7 +340,6 @@ fn migrate_favorite_v1_test() {
             "items": []
           },
           "created_at": 1698661296,
-          "desc": "",
           "icon": null,
           "id": "9330d783-d10d-4a15-84d3-1fa4fa2e8cc4",
           "is_favorite": true,
@@ -353,7 +352,6 @@ fn migrate_favorite_v1_test() {
             "items": []
           },
           "created_at": 1698661316,
-          "desc": "",
           "icon": null,
           "id": "c96d9587-0f6a-4d6b-8d59-6d72f5dcaa4e",
           "is_favorite": false,

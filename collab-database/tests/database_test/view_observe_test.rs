@@ -1,4 +1,6 @@
-use crate::database_test::helper::{create_database, wait_for_specific_event};
+use crate::database_test::helper::{
+  create_database, restore_database_from_db, wait_for_specific_event,
+};
 use crate::helper::setup_log;
 use collab_database::database::gen_row_id;
 
@@ -258,15 +260,18 @@ async fn observer_create_delete_row_test() {
       insert_row_orders,
       delete_row_indexes,
     } => {
-      assert!(is_local_change);
-      assert_eq!(delete_row_indexes.len(), 0);
-      assert_eq!(database_view_id, &"v1".to_string());
-      for (row_order, index) in insert_row_orders {
-        let pos = created_row.iter().position(|x| x == &row_order.id).unwrap() as u32;
-        assert_eq!(&pos, index);
-        received_rows.push(row_order.id.clone());
+      if database_view_id == "v1" {
+        assert!(is_local_change);
+        assert_eq!(delete_row_indexes.len(), 0);
+        for (row_order, index) in insert_row_orders {
+          let pos = created_row.iter().position(|x| x == &row_order.id).unwrap() as u32;
+          assert_eq!(&pos, index);
+          received_rows.push(row_order.id.clone());
+        }
+        created_row == received_rows
+      } else {
+        false
       }
-      created_row == received_rows
     },
     _ => false,
   })
@@ -289,16 +294,62 @@ async fn observer_create_delete_row_test() {
       insert_row_orders,
       delete_row_indexes,
     } => {
-      assert!(is_local_change);
-      assert_eq!(database_view_id, &"v1".to_string());
+      if database_view_id == "v1" {
+        assert!(is_local_change);
+        assert_eq!(delete_row_indexes.len(), 1);
+        assert_eq!(delete_row_indexes[0], 0);
 
-      assert_eq!(delete_row_indexes.len(), 1);
-      assert_eq!(delete_row_indexes[0], 0);
+        assert_eq!(insert_row_orders.len(), 1);
+        assert_eq!(insert_row_orders[0].0.id, cloned_created_row[0]);
+        assert_eq!(insert_row_orders[0].1, 3);
+        true
+      } else {
+        false
+      }
+    },
+    _ => false,
+  })
+  .await
+  .unwrap();
+}
 
-      assert_eq!(insert_row_orders.len(), 1);
-      assert_eq!(insert_row_orders[0].0.id, cloned_created_row[0]);
-      assert_eq!(insert_row_orders[0].1, 3);
-      true
+#[tokio::test]
+async fn observer_create_row_when_reopen_a_database_test() {
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_test = create_database(1, &database_id);
+  let object_id = database_test.database.object_id().to_string();
+  let db = database_test.collab_db.clone();
+  let workspace_id = database_test.workspace_id.clone();
+
+  let database_test = restore_database_from_db(1, &workspace_id, &object_id, db).await;
+  let database_test = Arc::new(Mutex::from(database_test));
+  let row_id = gen_row_id();
+  let cloned_database_test = database_test.clone();
+  let cloned_row_id = row_id.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(300)).await;
+    let mut db = cloned_database_test.lock().await;
+    db.create_row(CreateRowParams::new(cloned_row_id, database_id.clone()))
+      .await
+      .unwrap();
+  });
+
+  let view_change_rx = database_test.lock().await.subscribe_view_change().unwrap();
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidUpdateRowOrders {
+      database_view_id,
+      is_local_change: _,
+      insert_row_orders,
+      delete_row_indexes,
+    } => {
+      if database_view_id == "v1" {
+        assert_eq!(insert_row_orders.len(), 1);
+        assert_eq!(insert_row_orders[0].0.id, row_id);
+        assert!(delete_row_indexes.is_empty());
+        true
+      } else {
+        false
+      }
     },
     _ => false,
   })

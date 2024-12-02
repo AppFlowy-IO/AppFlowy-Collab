@@ -105,7 +105,6 @@ fn update_view_test() {
 
   let r_view = folder.body.views.get_view(&txn, "v1").unwrap();
   assert_eq!(r_view.name, "Untitled");
-  assert_eq!(r_view.desc, "My first view");
   assert!(r_view.is_favorite);
   assert_eq!(r_view.created_at, time);
   assert_eq!(r_view.last_edited_time, time);

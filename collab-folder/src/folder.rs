@@ -322,11 +322,38 @@ impl Folder {
       .collect()
   }
 
+  /// Inserts a new view into the specified workspace under a given parent view.
+  ///
+  /// # Parameters:
+  /// - `parent_view_id`: The ID of the parent view under which the new view will be added.
+  /// - `index`: Optional. If provided, the new view will be inserted at the specified position
+  ///    among the parent view's children. If `None`, the new view will be added at the end of
+  ///    the children list.
+  ///
+  /// # Behavior:
+  /// - When `index` is `Some`, the new view is inserted at that position in the list of the
+  ///   parent view’s children.
+  /// - When `index` is `None`, the new view is appended to the end of the parent view’s children.
+  ///
+  /// Represents a view that serves as an identifier for a specific [`Collab`] object.
+  /// A view can represent different types of [`Collab`] objects, such as a document or a database.
+  /// When a view is inserted, its id is the[`Collab`] object id.
+  ///
   pub fn insert_view(&mut self, view: View, index: Option<u32>) {
     let mut txn = self.collab.transact_mut();
     self.body.views.insert(&mut txn, view, index);
   }
 
+  /// Insert a list of views at the end of its parent view
+  pub fn insert_views(&mut self, views: Vec<View>) {
+    let mut txn = self.collab.transact_mut();
+    for view in views {
+      self.body.views.insert(&mut txn, view, None);
+    }
+  }
+
+  /// Insert parent-children views into the folder.
+  /// when only insert one view, user [Self::insert_view] instead.
   pub fn insert_nested_views(&mut self, views: Vec<ParentChildViews>) {
     let views = FlattedViews::flatten_views(views);
     let mut txn = self.collab.transact_mut();

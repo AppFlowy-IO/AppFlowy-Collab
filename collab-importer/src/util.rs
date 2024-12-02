@@ -1,14 +1,17 @@
-use crate::zip_tool::{is_multi_part_zip, is_multi_part_zip_file, unzip_file, unzip_stream};
+use crate::zip_tool::async_zip::{async_unzip, unzip_single_file};
 use anyhow::Error;
 use anyhow::Result;
 use async_zip::base::read::stream::ZipFileReader;
 use base64::engine::general_purpose::URL_SAFE;
 use base64::Engine;
+use percent_encoding::percent_decode_str;
 use sha2::{Digest, Sha256};
+use std::ops::Deref;
 use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, BufReader};
 
 use crate::error::ImporterError;
+use crate::zip_tool::util::{is_multi_part_zip, is_multi_part_zip_file};
 use tracing::warn;
 
 pub fn upload_file_url(host: &str, workspace_id: &str, object_id: &str, file_id: &str) -> String {
@@ -75,7 +78,7 @@ pub async fn unzip_from_path_or_memory(
       // unzip_async(zip_reader, out).await.unwrap()
 
       let file = tokio::fs::File::open(&path).await.unwrap();
-      Ok(unzip_file(file, &out, None).await?.unzip_dir_path)
+      Ok(unzip_single_file(file, &out, None).await?.unzip_dir_path)
     },
     Either::Right(data) => {
       if data.len() >= 4 {
@@ -87,7 +90,7 @@ pub async fn unzip_from_path_or_memory(
       }
 
       let zip_reader = ZipFileReader::new(data.as_slice());
-      Ok(unzip_stream(zip_reader, out, None).await?.unzip_dir_path)
+      Ok(async_unzip(zip_reader, out, None).await?.unzip_dir_path)
     },
   }
 }
@@ -95,4 +98,48 @@ pub async fn unzip_from_path_or_memory(
 pub enum Either<L, R> {
   Left(L),
   Right(R),
+}
+
+pub fn parse_csv(file_path: &PathBuf) -> CSVFile {
+  let content = std::fs::read_to_string(file_path).unwrap();
+  let mut reader = csv::Reader::from_reader(content.as_bytes());
+  let csv_fields = reader
+    .headers()
+    .unwrap()
+    .iter()
+    .map(|s| s.to_string())
+    .collect::<Vec<String>>();
+  let csv_rows = reader
+    .records()
+    .flat_map(|r| r.ok())
+    .map(|record| {
+      record
+        .into_iter()
+        .filter_map(|s| Some(percent_decode_str(s).decode_utf8().ok()?.to_string()))
+        .collect::<Vec<String>>()
+    })
+    .collect::<Vec<Vec<String>>>();
+
+  CSVFile {
+    columns: csv_fields,
+    rows: csv_rows.into_iter().map(|cells| CSVRow { cells }).collect(),
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct CSVFile {
+  pub columns: Vec<String>,
+  pub rows: Vec<CSVRow>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CSVRow {
+  cells: Vec<String>,
+}
+impl Deref for CSVRow {
+  type Target = Vec<String>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.cells
+  }
 }

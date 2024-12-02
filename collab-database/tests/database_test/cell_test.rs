@@ -5,7 +5,8 @@ use crate::helper::{TestNumberCell, TestTextCell};
 
 #[tokio::test]
 async fn get_cells_for_field_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let database_test = create_database_with_default_data(1, &database_id.to_string()).await;
 
   let cells = database_test.get_cells_for_field("v1", "f1").await;
   assert_eq!(cells.len(), 3);
@@ -19,7 +20,8 @@ async fn get_cells_for_field_test() {
 
 #[tokio::test]
 async fn get_cell_for_field_test() {
-  let database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let cell = database_test
     .get_cell("f1", &database_test.pre_define_row_ids[0])
     .await
@@ -31,7 +33,8 @@ async fn get_cell_for_field_test() {
 
 #[tokio::test]
 async fn update_cell_for_field_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let cells = database_test.get_cells_for_field("v1", "f1").await;
   assert_eq!(cells.len(), 3);
 
@@ -53,7 +56,8 @@ async fn update_cell_for_field_test() {
 
 #[tokio::test]
 async fn update_empty_cell_for_field_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let cells = database_test.get_cells_for_field("v1", "f2").await;
   assert_eq!(cells.len(), 3);
 

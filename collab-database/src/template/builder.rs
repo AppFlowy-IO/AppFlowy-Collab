@@ -176,7 +176,7 @@ impl FieldTemplateBuilder {
     database_id: &str,
     file_url_builder: &Option<Box<dyn FileUrlBuilder>>,
   ) -> (FieldTemplate, Vec<CellTemplateData>) {
-    let field_type = self.field_type.clone();
+    let field_type = self.field_type;
     let mut field_template = FieldTemplate {
       field_id: self.field_id,
       name: self.name,
@@ -196,7 +196,7 @@ impl FieldTemplateBuilder {
           replace_cells_with_options_id(self.cells, &type_option.options, SELECT_OPTION_SEPARATOR)
             .into_iter()
             .map(|id| {
-              let mut map = new_cell_builder(field_type.clone());
+              let mut map = new_cell_builder(field_type);
               map.insert(CELL_DATA.to_string(), Any::from(id));
               map
             })
@@ -211,7 +211,7 @@ impl FieldTemplateBuilder {
         let cell_template = replace_cells_with_timestamp(self.cells)
           .into_iter()
           .map(|id| {
-            let mut map = new_cell_builder(field_type.clone());
+            let mut map = new_cell_builder(field_type);
             map.insert(CELL_DATA.to_string(), Any::from(id));
             map
           })
@@ -229,12 +229,12 @@ impl FieldTemplateBuilder {
         let cell_template = replace_cells_with_timestamp(self.cells)
           .into_iter()
           .map(|id| {
-            let mut map = new_cell_builder(field_type.clone());
+            let mut map = new_cell_builder(field_type);
             map.insert(CELL_DATA.to_string(), Any::from(id));
             map
           })
           .collect::<Vec<CellTemplateData>>();
-        let type_option = TimestampTypeOption::new(field_type.clone());
+        let type_option = TimestampTypeOption::new(field_type);
         field_template
           .type_options
           .insert(field_type, type_option.into());
@@ -268,7 +268,7 @@ impl FieldTemplateBuilder {
             .await
             .into_iter()
             .map(|file| {
-              let mut cells = new_cell_builder(field_type.clone());
+              let mut cells = new_cell_builder(field_type);
               if let Some(file) = file {
                 cells.insert(CELL_DATA.to_string(), Any::from(file));
               }
@@ -293,7 +293,7 @@ fn string_cell_template(field_type: &FieldType, cell: Vec<String>) -> Vec<CellTe
   cell
     .into_iter()
     .map(|data| {
-      let mut cells = new_cell_builder(field_type.clone());
+      let mut cells = new_cell_builder(field_type);
       cells.insert(CELL_DATA.to_string(), Any::from(data));
       cells
     })

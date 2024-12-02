@@ -216,34 +216,32 @@ impl RemoteCollab {
     // TODO(nathan): create a edge function to calculate the diff between the local and remote.
     tracing::trace!("Try init sync:{}", self.object);
     let collab_doc_state = self.storage.get_doc_state(&self.object).await?;
-    if !collab_doc_state.is_empty() {
-      {
-        let mut remote_collab = self.collab.write().await;
-        let mut txn = remote_collab.transact_mut();
+    {
+      let mut remote_collab = self.collab.write().await;
+      let mut txn = remote_collab.transact_mut();
 
-        match collab_doc_state {
-          DataSource::Disk(_) => {},
-          DataSource::DocStateV1(doc_state) => {
-            if let Ok(update) = Update::decode_v1(&doc_state) {
-              if let Err(e) = txn.try_apply_update(update) {
-                tracing::error!("apply update failed: {:?}", e);
-              }
-            } else {
-              tracing::error!("🔴decode update failed");
+      match collab_doc_state {
+        DataSource::Disk { .. } => {},
+        DataSource::DocStateV1(doc_state) => {
+          if let Ok(update) = Update::decode_v1(&doc_state) {
+            if let Err(e) = txn.try_apply_update(update) {
+              tracing::error!("apply update failed: {:?}", e);
             }
-            remote_update = doc_state;
-          },
-          DataSource::DocStateV2(doc_state) => {
-            if let Ok(update) = Update::decode_v2(&doc_state) {
-              if let Err(e) = txn.try_apply_update(update) {
-                tracing::error!("apply update failed: {:?}", e);
-              }
-            } else {
-              tracing::error!("🔴decode update failed");
+          } else {
+            tracing::error!("🔴decode update failed");
+          }
+          remote_update = doc_state;
+        },
+        DataSource::DocStateV2(doc_state) => {
+          if let Ok(update) = Update::decode_v2(&doc_state) {
+            if let Err(e) = txn.try_apply_update(update) {
+              tracing::error!("apply update failed: {:?}", e);
             }
-            remote_update = doc_state;
-          },
-        }
+          } else {
+            tracing::error!("🔴decode update failed");
+          }
+          remote_update = doc_state;
+        },
       }
 
       let _ = self.sync_state.send(SyncState::InitSyncBegin);

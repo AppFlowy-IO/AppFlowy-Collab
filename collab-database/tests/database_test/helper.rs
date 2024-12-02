@@ -21,10 +21,11 @@ use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
 use tokio::time::timeout;
+use uuid::Uuid;
 
 pub struct DatabaseTest {
-  #[allow(dead_code)]
-  collab_db: Arc<CollabKVDB>,
+  pub workspace_id: String,
+  pub collab_db: Arc<CollabKVDB>,
   pub database: Database,
   pub pre_define_row_ids: Vec<RowId>,
 }
@@ -56,17 +57,18 @@ impl DerefMut for DatabaseTest {
 
 /// Create a database with a single view.
 pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
+  let workspace_id = Uuid::new_v4().to_string();
   setup_log();
   let collab_db = make_rocks_db();
   let collab_service = Arc::new(TestUserDatabaseServiceImpl {
     uid,
+    workspace_id: workspace_id.clone(),
     db: collab_db.clone(),
   });
 
   let context = DatabaseContext::new(collab_service);
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
-    inline_view_id: "v1".to_string(),
     views: vec![CreateViewParams {
       database_id: database_id.to_string(),
       view_id: "v1".to_string(),
@@ -81,13 +83,14 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   });
 
   DatabaseTest {
+    workspace_id,
     database,
     collab_db,
     pre_define_row_ids: vec![],
   }
 }
 
-pub fn create_row(uid: i64, row_id: RowId) -> DatabaseRow {
+pub fn create_row(uid: i64, workspace_id: &str, row_id: RowId) -> DatabaseRow {
   let collab_db = make_rocks_db();
   let mut collab = CollabBuilder::new(uid, row_id.clone(), DataSource::Disk(None))
     .with_device_id("1")
@@ -97,6 +100,7 @@ pub fn create_row(uid: i64, row_id: RowId) -> DatabaseRow {
   let row_change_tx = tokio::sync::broadcast::channel(1).0;
   let collab_builder = Arc::new(TestUserDatabaseServiceImpl {
     uid,
+    workspace_id: workspace_id.to_string(),
     db: collab_db.clone(),
   });
   DatabaseRow::create(
@@ -110,18 +114,19 @@ pub fn create_row(uid: i64, row_id: RowId) -> DatabaseRow {
 
 pub async fn create_database_with_db(
   uid: i64,
+  workspace_id: &str,
   database_id: &str,
 ) -> (Arc<CollabKVDB>, DatabaseTest) {
   setup_log();
   let collab_db = make_rocks_db();
   let collab_service = Arc::new(TestUserDatabaseServiceImpl {
     uid,
+    workspace_id: workspace_id.to_string(),
     db: collab_db.clone(),
   });
   let context = DatabaseContext::new(collab_service);
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
-    inline_view_id: "v1".to_string(),
     views: vec![CreateViewParams {
       database_id: database_id.to_string(),
       view_id: "v1".to_string(),
@@ -134,6 +139,7 @@ pub async fn create_database_with_db(
   (
     collab_db.clone(),
     DatabaseTest {
+      workspace_id: workspace_id.to_string(),
       database,
       collab_db,
       pre_define_row_ids: vec![],
@@ -143,17 +149,20 @@ pub async fn create_database_with_db(
 
 pub async fn restore_database_from_db(
   uid: i64,
+  workspace_id: &str,
   database_id: &str,
   collab_db: Arc<CollabKVDB>,
 ) -> DatabaseTest {
   let collab_service = Arc::new(TestUserDatabaseServiceImpl {
     uid,
+    workspace_id: workspace_id.to_string(),
     db: collab_db.clone(),
   });
 
   let context = DatabaseContext::new(collab_service);
   let database = Database::open(database_id, context).await.unwrap();
   DatabaseTest {
+    workspace_id: workspace_id.to_string(),
     database,
     collab_db,
     pre_define_row_ids: vec![],
@@ -206,17 +215,18 @@ impl DatabaseTestBuilder {
   }
 
   pub async fn build(self) -> DatabaseTest {
+    let workspace_id = Uuid::new_v4().to_string();
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let collab_db = Arc::new(CollabKVDB::open(path).unwrap());
     let collab_service = Arc::new(TestUserDatabaseServiceImpl {
       uid: self.uid,
+      workspace_id: workspace_id.clone(),
       db: collab_db.clone(),
     });
     let context = DatabaseContext::new(collab_service);
     let params = CreateDatabaseParams {
       database_id: self.database_id.clone(),
-      inline_view_id: self.view_id.clone(),
       views: vec![CreateViewParams {
         database_id: self.database_id,
         view_id: self.view_id,
@@ -231,6 +241,7 @@ impl DatabaseTestBuilder {
     };
     let database = Database::create_with_view(params, context).await.unwrap();
     DatabaseTest {
+      workspace_id,
       database,
       collab_db,
       pre_define_row_ids: vec![],

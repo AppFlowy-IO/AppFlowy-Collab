@@ -11,10 +11,17 @@ use std::path::Path;
 use std::sync::Arc;
 use yrs::Any;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MediaTypeOption {
-  #[serde(default)]
   pub hide_file_names: bool,
+}
+
+impl Default for MediaTypeOption {
+  fn default() -> Self {
+    Self {
+      hide_file_names: true,
+    }
+  }
 }
 
 impl StringifyTypeOption for MediaTypeOption {

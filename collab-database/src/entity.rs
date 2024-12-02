@@ -1,7 +1,19 @@
 #![allow(clippy::upper_case_acronyms)]
 use crate::database::{gen_database_id, gen_database_view_id, gen_row_id, timestamp, DatabaseData};
 use crate::error::DatabaseError;
-use crate::fields::Field;
+use crate::fields::checkbox_type_option::CheckboxTypeOption;
+use crate::fields::checklist_type_option::ChecklistTypeOption;
+use crate::fields::date_type_option::{DateTypeOption, TimeTypeOption};
+use crate::fields::media_type_option::MediaTypeOption;
+use crate::fields::number_type_option::NumberTypeOption;
+use crate::fields::relation_type_option::RelationTypeOption;
+use crate::fields::select_type_option::{MultiSelectTypeOption, SingleSelectTypeOption};
+use crate::fields::summary_type_option::SummarizationTypeOption;
+use crate::fields::text_type_option::RichTextTypeOption;
+use crate::fields::timestamp_type_option::TimestampTypeOption;
+use crate::fields::translate_type_option::TranslateTypeOption;
+use crate::fields::url_type_option::URLTypeOption;
+use crate::fields::{Field, TypeOptionData};
 use crate::rows::CreateRowParams;
 use crate::views::{
   DatabaseLayout, FieldOrder, FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap,
@@ -13,6 +25,7 @@ use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use tracing::error;
 use yrs::{Any, Out};
 
@@ -50,6 +63,23 @@ pub struct DatabaseView {
   pub field_settings: FieldSettingsByFieldIdMap,
   pub created_at: i64,
   pub modified_at: i64,
+  #[serde(default)]
+  pub is_inline: bool,
+}
+
+impl DatabaseView {
+  pub fn new(database_id: String, view_id: String, name: String, layout: DatabaseLayout) -> Self {
+    let timestamp = timestamp();
+    Self {
+      id: view_id,
+      database_id,
+      name,
+      layout,
+      created_at: timestamp,
+      modified_at: timestamp,
+      ..Default::default()
+    }
+  }
 }
 
 /// A meta of [DatabaseView]
@@ -57,6 +87,7 @@ pub struct DatabaseView {
 pub struct DatabaseViewMeta {
   pub id: String,
   pub name: String,
+  pub is_inline: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -171,7 +202,6 @@ impl CreateViewParamsValidator {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateDatabaseParams {
   pub database_id: String,
-  pub inline_view_id: String,
   pub fields: Vec<Field>,
   pub rows: Vec<CreateRowParams>,
   pub views: Vec<CreateViewParams>,
@@ -182,11 +212,12 @@ impl CreateDatabaseParams {
   /// database with the same data inside the given `DatabaseData` struct containing all the
   /// data of a database. The internal `database_id`, the database views' `view_id`s and the rows'
   /// `row_id`s will all be regenerated.
-  pub fn from_database_data(data: DatabaseData, default_inline_view_id: Option<String>) -> Self {
-    let (database_id, inline_view_id) = (
-      gen_database_id(),
-      default_inline_view_id.unwrap_or_else(gen_database_view_id),
-    );
+  pub fn from_database_data(
+    data: DatabaseData,
+    database_view_id: &str,
+    new_database_view_id: &str,
+  ) -> Self {
+    let database_id = gen_database_id();
     let timestamp = timestamp();
 
     let create_row_params = data
@@ -207,32 +238,28 @@ impl CreateDatabaseParams {
     let create_view_params = data
       .views
       .into_iter()
-      .map(|view| {
-        let view_id = if view.id == data.inline_view_id {
-          inline_view_id.clone()
+      .map(|view| CreateViewParams {
+        database_id: database_id.clone(),
+        view_id: if view.id == database_view_id {
+          new_database_view_id.to_string()
         } else {
           gen_database_view_id()
-        };
-        CreateViewParams {
-          database_id: database_id.clone(),
-          view_id,
-          name: view.name,
-          layout: view.layout,
-          layout_settings: view.layout_settings,
-          filters: view.filters,
-          group_settings: view.group_settings,
-          sorts: view.sorts,
-          field_settings: view.field_settings,
-          created_at: timestamp,
-          modified_at: timestamp,
-          ..Default::default()
-        }
+        },
+        name: view.name,
+        layout: view.layout,
+        layout_settings: view.layout_settings,
+        filters: view.filters,
+        group_settings: view.group_settings,
+        sorts: view.sorts,
+        field_settings: view.field_settings,
+        created_at: timestamp,
+        modified_at: timestamp,
+        ..Default::default()
       })
       .collect();
 
     Self {
       database_id,
-      inline_view_id,
       rows: create_row_params,
       fields: data.fields,
       views: create_view_params,
@@ -240,7 +267,7 @@ impl CreateDatabaseParams {
   }
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
 pub enum FieldType {
   RichText = 0,
@@ -262,13 +289,19 @@ pub enum FieldType {
 
 impl FieldType {
   pub fn type_id(&self) -> String {
-    (self.clone() as i64).to_string()
+    (*self as i64).to_string()
   }
 }
 
 impl From<FieldType> for i64 {
   fn from(field_type: FieldType) -> Self {
     field_type as i64
+  }
+}
+
+impl From<&FieldType> for i64 {
+  fn from(field_type: &FieldType) -> Self {
+    *field_type as i64
   }
 }
 
@@ -280,6 +313,120 @@ impl TryFrom<yrs::Out> for FieldType {
       Out::Any(Any::BigInt(field_type)) => Ok(FieldType::from(field_type)),
       _ => Err(value),
     }
+  }
+}
+
+impl Display for FieldType {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    let value: i64 = (*self).into();
+    f.write_fmt(format_args!("{}", value))
+  }
+}
+
+impl AsRef<FieldType> for FieldType {
+  fn as_ref(&self) -> &FieldType {
+    self
+  }
+}
+
+impl From<&FieldType> for FieldType {
+  fn from(field_type: &FieldType) -> Self {
+    *field_type
+  }
+}
+
+impl FieldType {
+  pub fn value(&self) -> i64 {
+    (*self).into()
+  }
+
+  pub fn default_name(&self) -> String {
+    let s = match self {
+      FieldType::RichText => "Text",
+      FieldType::Number => "Number",
+      FieldType::DateTime => "Date",
+      FieldType::SingleSelect => "Single Select",
+      FieldType::MultiSelect => "Multi Select",
+      FieldType::Checkbox => "Checkbox",
+      FieldType::URL => "URL",
+      FieldType::Checklist => "Checklist",
+      FieldType::LastEditedTime => "Last modified",
+      FieldType::CreatedTime => "Created time",
+      FieldType::Relation => "Relation",
+      FieldType::Summary => "Summarize",
+      FieldType::Translate => "Translate",
+      FieldType::Time => "Time",
+      FieldType::Media => "Media",
+    };
+    s.to_string()
+  }
+
+  pub fn is_ai_field(&self) -> bool {
+    matches!(self, FieldType::Summary | FieldType::Translate)
+  }
+
+  pub fn is_number(&self) -> bool {
+    matches!(self, FieldType::Number)
+  }
+
+  pub fn is_text(&self) -> bool {
+    matches!(self, FieldType::RichText)
+  }
+
+  pub fn is_checkbox(&self) -> bool {
+    matches!(self, FieldType::Checkbox)
+  }
+
+  pub fn is_date(&self) -> bool {
+    matches!(self, FieldType::DateTime)
+  }
+
+  pub fn is_single_select(&self) -> bool {
+    matches!(self, FieldType::SingleSelect)
+  }
+
+  pub fn is_multi_select(&self) -> bool {
+    matches!(self, FieldType::MultiSelect)
+  }
+
+  pub fn is_last_edited_time(&self) -> bool {
+    matches!(self, FieldType::LastEditedTime)
+  }
+
+  pub fn is_created_time(&self) -> bool {
+    matches!(self, FieldType::CreatedTime)
+  }
+
+  pub fn is_url(&self) -> bool {
+    matches!(self, FieldType::URL)
+  }
+
+  pub fn is_select_option(&self) -> bool {
+    self.is_single_select() || self.is_multi_select()
+  }
+
+  pub fn is_checklist(&self) -> bool {
+    matches!(self, FieldType::Checklist)
+  }
+
+  pub fn is_relation(&self) -> bool {
+    matches!(self, FieldType::Relation)
+  }
+
+  pub fn is_time(&self) -> bool {
+    matches!(self, FieldType::Time)
+  }
+
+  pub fn is_media(&self) -> bool {
+    matches!(self, FieldType::Media)
+  }
+
+  pub fn can_be_group(&self) -> bool {
+    self.is_select_option() || self.is_checkbox() || self.is_url()
+  }
+
+  pub fn is_auto_update(&self) -> bool {
+    self.is_last_edited_time()
   }
 }
 
@@ -306,6 +453,29 @@ impl From<i64> for FieldType {
         FieldType::RichText
       },
     }
+  }
+}
+
+pub fn default_type_option_data_from_type(field_type: FieldType) -> TypeOptionData {
+  match field_type {
+    FieldType::RichText => RichTextTypeOption.into(),
+    FieldType::Number => NumberTypeOption::default().into(),
+    FieldType::DateTime => DateTypeOption::default().into(),
+    FieldType::LastEditedTime | FieldType::CreatedTime => TimestampTypeOption {
+      field_type: field_type.into(),
+      ..Default::default()
+    }
+    .into(),
+    FieldType::SingleSelect => SingleSelectTypeOption::default().into(),
+    FieldType::MultiSelect => MultiSelectTypeOption::default().into(),
+    FieldType::Checkbox => CheckboxTypeOption.into(),
+    FieldType::URL => URLTypeOption::default().into(),
+    FieldType::Time => TimeTypeOption.into(),
+    FieldType::Media => MediaTypeOption::default().into(),
+    FieldType::Checklist => ChecklistTypeOption.into(),
+    FieldType::Relation => RelationTypeOption::default().into(),
+    FieldType::Summary => SummarizationTypeOption::default().into(),
+    FieldType::Translate => TranslateTypeOption::default().into(),
   }
 }
 

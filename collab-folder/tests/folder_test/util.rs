@@ -54,6 +54,7 @@ pub fn create_folder_with_data(
   let disk_plugin = RocksdbDiskPlugin::new(
     uid.as_i64(),
     workspace_id.to_string(),
+    workspace_id.to_string(),
     CollabType::Folder,
     Arc::downgrade(&db),
   );
@@ -82,10 +83,16 @@ pub fn create_folder_with_data(
   }
 }
 
-pub fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf) -> FolderTest {
+pub fn open_folder_with_db(
+  uid: UserId,
+  workspace_id: &str,
+  object_id: &str,
+  db_path: PathBuf,
+) -> FolderTest {
   let db = Arc::new(CollabKVDB::open(db_path.clone()).unwrap());
   let disk_plugin = Box::new(RocksdbDiskPlugin::new(
     uid.as_i64(),
+    workspace_id.to_string(),
     object_id.to_string(),
     CollabType::Folder,
     Arc::downgrade(&db),
@@ -93,6 +100,7 @@ pub fn open_folder_with_db(uid: UserId, object_id: &str, db_path: PathBuf) -> Fo
   let data_source = KVDBCollabPersistenceImpl {
     db: Arc::downgrade(&db),
     uid: uid.as_i64(),
+    workspace_id: workspace_id.to_string(),
   };
   let cleaner: Cleaner = Cleaner::new(db_path);
   let mut collab = CollabBuilder::new(1, object_id, data_source.into())
@@ -131,9 +139,16 @@ pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<Strin
   View {
     id: view_id.to_string(),
     parent_view_id: parent_view_id.to_string(),
+    name: "".to_string(),
     children: RepeatedViewIdentifier::new(belongings),
+    created_at: 0,
+    is_favorite: false,
     layout: ViewLayout::Document,
-    ..Default::default()
+    icon: None,
+    created_by: None,
+    last_edited_time: 0,
+    last_edited_by: None,
+    extra: None,
   }
 }
 

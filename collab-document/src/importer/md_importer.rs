@@ -295,7 +295,7 @@ fn create_paragraph_block(document_data: &mut DocumentData, parent_id: &str) -> 
   paragraph_block_id
 }
 
-fn create_image_block(block_id: &str, url: String, parent_id: &str) -> Block {
+pub fn create_image_block(block_id: &str, url: String, parent_id: &str) -> Block {
   let mut data = BlockData::new();
   data.insert(URL_FIELD.to_string(), url.into());
   data.insert(IMAGE_TYPE_FIELD.to_string(), EXTERNAL_IMAGE_TYPE.into());

@@ -66,7 +66,8 @@ async fn delete_row_shared_by_two_view_test() {
 
 #[tokio::test]
 async fn move_row_in_view_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let rows = database_test.get_rows_for_view("v1").await;
   let first_row_id = database_test.pre_define_row_ids[0].clone();
   let second_row_id = database_test.pre_define_row_ids[1].clone();
@@ -97,7 +98,8 @@ async fn move_row_in_view_test() {
 
 #[tokio::test]
 async fn move_row_in_view_test2() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let rows = database_test.get_rows_for_view("v1").await;
   let first_row_id = database_test.pre_define_row_ids[0].clone();
   let second_row_id = database_test.pre_define_row_ids[1].clone();
@@ -119,9 +121,10 @@ async fn move_row_in_view_test2() {
 
 #[tokio::test]
 async fn move_row_in_views_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let params = CreateViewParams {
-    database_id: "1".to_string(),
+    database_id: database_id.to_string(),
     view_id: "v2".to_string(),
     ..Default::default()
   };
@@ -229,7 +232,8 @@ async fn insert_row_at_last_in_views_test() {
 
 #[tokio::test]
 async fn duplicate_row_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let rows = database_test.get_rows_for_view("v1").await;
   assert_eq!(rows.len(), 3);
   let first_row_id = database_test.pre_define_row_ids[0].clone();
@@ -254,7 +258,8 @@ async fn duplicate_row_test() {
 
 #[tokio::test]
 async fn duplicate_last_row_test() {
-  let mut database_test = create_database_with_default_data(1, "1").await;
+  let database_id = uuid::Uuid::new_v4();
+  let mut database_test = create_database_with_default_data(1, &database_id.to_string()).await;
   let rows = database_test.get_rows_for_view("v1").await;
   assert_eq!(rows.len(), 3);
 
@@ -395,6 +400,7 @@ fn row_document_id_test() {
 
 #[tokio::test]
 async fn validate_row_test() {
-  let row = create_row(1, RowId::from(1));
+  let workspace_id = Uuid::new_v4().to_string();
+  let row = create_row(1, &workspace_id, RowId::from(1));
   row.validate().unwrap();
 }

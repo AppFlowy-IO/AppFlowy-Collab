@@ -10,18 +10,20 @@ use collab::preclude::Collab;
 use collab_database::rows::CreateRowParams;
 use collab_plugins::CollabKVDB;
 use serde_json::{json, Value};
+use uuid::Uuid;
 
 #[tokio::test]
 async fn restore_row_from_disk_test() {
+  let workspace_id = Uuid::new_v4().to_string();
   let database_id = uuid::Uuid::new_v4().to_string();
-  let (db, mut database_test) = create_database_with_db(1, &database_id).await;
+  let (db, mut database_test) = create_database_with_db(1, &workspace_id, &database_id).await;
   let row_1 = CreateRowParams::new(1, database_id.clone());
   let row_2 = CreateRowParams::new(2, database_id.clone());
   database_test.create_row(row_1.clone()).await.unwrap();
   database_test.create_row(row_2.clone()).await.unwrap();
   drop(database_test);
 
-  let database_test = restore_database_from_db(1, &database_id, db).await;
+  let database_test = restore_database_from_db(1, &workspace_id, &database_id, db).await;
   let rows = database_test.get_rows_for_view("v1").await;
   assert_eq!(rows.len(), 2);
 
@@ -31,42 +33,46 @@ async fn restore_row_from_disk_test() {
 
 #[tokio::test]
 async fn restore_from_disk_test() {
-  let (db, database_test) = create_database_with_db(1, "1").await;
-  assert_database_eq(database_test).await;
+  let workspace_id = Uuid::new_v4().to_string();
+  let database_id = Uuid::new_v4().to_string();
+  let (db, database_test) = create_database_with_db(1, &workspace_id, &database_id).await;
+  assert_database_eq(&database_id, database_test).await;
 
   // Restore from disk
-  let database_test = restore_database_from_db(1, "1", db).await;
-  assert_database_eq(database_test).await;
+  let database_test = restore_database_from_db(1, &workspace_id, &database_id, db).await;
+  assert_database_eq(&database_id, database_test).await;
 }
 
 #[tokio::test]
 async fn restore_from_disk_with_different_database_id_test() {
-  let (db, _) = create_database_with_db(1, "1").await;
-  let database_test = restore_database_from_db(1, "1", db).await;
+  let workspace_id = Uuid::new_v4().to_string();
+  let database_id = Uuid::new_v4().to_string();
+  let (db, _) = create_database_with_db(1, &workspace_id, &database_id).await;
+  let database_test = restore_database_from_db(1, &workspace_id, &database_id, db).await;
 
-  assert_database_eq(database_test).await;
+  assert_database_eq(&database_id, database_test).await;
 }
 
 #[tokio::test]
 async fn restore_from_disk_with_different_uid_test() {
-  let (db, _) = create_database_with_db(1, "1").await;
-  let database_test = restore_database_from_db(1, "1", db).await;
+  let workspace_id = Uuid::new_v4().to_string();
+  let database_id = Uuid::new_v4().to_string();
+  let (db, _) = create_database_with_db(1, &workspace_id, &database_id).await;
+  let database_test = restore_database_from_db(1, &workspace_id, &database_id, db).await;
 
-  assert_database_eq(database_test).await;
+  assert_database_eq(&database_id, database_test).await;
 }
 
-async fn assert_database_eq(database_test: DatabaseTest) {
+async fn assert_database_eq(database_id: &str, database_test: DatabaseTest) {
   let expected = json!( {
     "fields": [],
-    "inline_view_id": "v1",
     "rows": [],
     "views": [
       {
-        "database_id": "1",
+        "database_id": database_id,
         "field_orders": [],
         "filters": [],
         "group_settings": [],
-        "id": "v1",
         "layout": 0,
         "layout_settings": {},
         "row_orders": [],
@@ -85,10 +91,12 @@ const HISTORY_DATABASE_020: &str = "020_database";
 
 #[tokio::test]
 async fn open_020_history_database_test() {
+  let workspace_id = Uuid::new_v4().to_string();
   let (_cleaner, db_path) = unzip_history_database_db(HISTORY_DATABASE_020).unwrap();
   let db = std::sync::Arc::new(CollabKVDB::open(db_path).unwrap());
   let database_test = restore_database_from_db(
     221439819971039232,
+    &workspace_id,
     "c0e69740-49f0-4790-a488-702e2750ba8d",
     db,
   )
@@ -206,7 +214,6 @@ fn expected_json() -> Value {
         }
       }
     ],
-    "inline_view_id": "b44b2906-4508-4532-ad9e-2cf33ceae304",
     "rows": [
       {
         "cells": {

@@ -23,7 +23,7 @@ pub struct Reminder {
   pub object_id: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize_repr, Deserialize_repr, Copy)]
 #[repr(i64)]
 pub enum ObjectType {
   Unknown = 0,
@@ -37,6 +37,16 @@ impl From<i64> for ObjectType {
       1 => ObjectType::Document,
       2 => ObjectType::Database,
       _ => ObjectType::Unknown,
+    }
+  }
+}
+
+impl From<ObjectType> for i64 {
+  fn from(value: ObjectType) -> Self {
+    match value {
+      ObjectType::Unknown => 0,
+      ObjectType::Document => 1,
+      ObjectType::Database => 2,
     }
   }
 }
