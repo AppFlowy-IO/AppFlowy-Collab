@@ -507,7 +507,7 @@ impl Database {
 
     let field_type = FieldType::from(field.field_type);
     let type_option = field.get_any_type_option(field_type.type_id())?;
-    type_option_cell_reader(type_option, &field_type)
+    Some(type_option_cell_reader(type_option, &field_type))
   }
 
   /// Return [TypeOptionCellWriter] for the given field id.
@@ -518,7 +518,7 @@ impl Database {
 
     let field_type = FieldType::from(field.field_type);
     let type_option = field.get_any_type_option(field_type.type_id())?;
-    type_option_cell_writer(type_option, &field_type)
+    Some(type_option_cell_writer(type_option, &field_type))
   }
 
   #[instrument(level = "debug", skip_all)]
