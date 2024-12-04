@@ -3,8 +3,8 @@ use crate::fields::date_type_option::{DateFormat, TimeFormat};
 use crate::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
 };
-use crate::rows::{new_cell_builder, Cell};
-use crate::template::entity::CELL_DATA;
+use crate::rows::Cell;
+use crate::template::timestamp_parse::TimestampCellData;
 use chrono::{DateTime, Local, Offset, TimeZone};
 use chrono_tz::Tz;
 use collab::util::AnyMapExt;
@@ -26,8 +26,7 @@ pub struct TimestampTypeOption {
 impl TypeOptionCellReader for TimestampTypeOption {
   /// Return formated date and time string for the cell
   fn json_cell(&self, cell: &Cell) -> Value {
-    let s = self.stringify_cell(cell);
-    json!(s)
+    json!(self.stringify_cell(cell))
   }
 
   fn numeric_cell(&self, _cell: &Cell) -> Option<f64> {
@@ -35,8 +34,11 @@ impl TypeOptionCellReader for TimestampTypeOption {
   }
 
   fn convert_raw_cell_data(&self, text: &str) -> String {
-    let (date_string, time_string) =
-      self.formatted_date_time_from_timestamp(&text.parse::<i64>().ok());
+    let cell_data = TimestampCellData {
+      timestamp: text.parse::<i64>().ok(),
+    };
+
+    let (date_string, time_string) = self.formatted_date_time_from_timestamp(&cell_data.timestamp);
     if self.include_time {
       format!("{} {}", date_string, time_string)
     } else {
@@ -47,15 +49,13 @@ impl TypeOptionCellReader for TimestampTypeOption {
 
 impl TypeOptionCellWriter for TimestampTypeOption {
   fn write_json(&self, json_value: Value) -> Cell {
-    let mut cell = new_cell_builder(FieldType::Time);
-    if let Some(data) = match json_value {
+    let filed_type = FieldType::from(self.field_type);
+    let data = match json_value {
       Value::String(s) => s.parse::<i64>().ok(),
       Value::Number(n) => n.as_i64(),
       _ => None,
-    } {
-      cell.insert(CELL_DATA.into(), data.into());
-    }
-    cell
+    };
+    TimestampCellData::new(data).to_cell(filed_type)
   }
 }
 
@@ -150,6 +150,7 @@ impl From<TimestampTypeOption> for TypeOptionData {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::template::entity::CELL_DATA;
   use serde_json::json;
   use std::i64;
 
@@ -253,25 +254,14 @@ mod tests {
   }
 
   #[test]
-  fn test_write_json_valid_number() {
-    let option = TimestampTypeOption::default();
-    let json_value = json!(1672531200);
-
-    let cell = option.write_json(json_value);
-    let data: i64 = cell.get_as(CELL_DATA).unwrap();
-
-    assert_eq!(data, 1672531200);
-  }
-
-  #[test]
-  fn test_write_json_valid_string() {
+  fn test_write_json_string() {
     let option = TimestampTypeOption::default();
     let json_value = json!("1672531200");
 
     let cell = option.write_json(json_value);
-    let data: i64 = cell.get_as(CELL_DATA).unwrap();
+    let data = cell.get_as::<String>(CELL_DATA).unwrap();
 
-    assert_eq!(data, 1672531200);
+    assert_eq!(data, "1672531200");
   }
 
   #[test]
