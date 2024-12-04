@@ -118,7 +118,7 @@ impl TypeOptionCellReader for DateTypeOption {
 
 impl TypeOptionCellWriter for DateTypeOption {
   fn write_json(&self, json_value: Value) -> Cell {
-    let cell_data = serde_json::from_value::<DateCellData>(json_value).unwrap_or_default();
+    let cell_data = serde_json::from_value::<DateCellData>(json_value).unwrap();
     Cell::from(&cell_data)
   }
 }
@@ -296,7 +296,7 @@ impl TimeFormat {
   }
 }
 
-#[derive(Clone, Debug, Copy, EnumIter, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Copy, EnumIter, Serialize, Deserialize, Default, Eq, PartialEq)]
 pub enum DateFormat {
   Local = 0,
   US = 1,
@@ -420,21 +420,18 @@ impl From<&DateCellData> for Cell {
     cell
   }
 }
-
 impl<'de> serde::Deserialize<'de> for DateCellData {
   fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
   where
     D: serde::Deserializer<'de>,
   {
-    struct DateCellVisitor();
+    struct DateCellVisitor;
 
     impl<'de> Visitor<'de> for DateCellVisitor {
       type Value = DateCellData;
 
       fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str(
-          "DateCellData with type: str containing either an integer timestamp or the JSON representation",
-        )
+        formatter.write_str("a JSON object representing DateCellData or an integer timestamp")
       }
 
       fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
@@ -467,47 +464,198 @@ impl<'de> serde::Deserialize<'de> for DateCellData {
         let mut is_range: Option<bool> = None;
         let mut reminder_id: Option<String> = None;
 
-        while let Some(key) = map.next_key()? {
-          match key {
+        while let Some(key) = map.next_key::<String>()? {
+          match key.as_str() {
             "timestamp" => {
-              timestamp = map.next_value()?;
+              timestamp = parse_optional_number(&mut map)?;
             },
             "end_timestamp" => {
-              end_timestamp = map.next_value()?;
+              end_timestamp = parse_optional_number(&mut map)?;
             },
             "include_time" => {
-              include_time = map.next_value()?;
+              include_time = map.next_value().ok();
             },
             "is_range" => {
-              is_range = map.next_value()?;
+              is_range = map.next_value().ok();
             },
             "reminder_id" => {
-              reminder_id = map.next_value()?;
+              reminder_id = map.next_value().ok();
             },
-            _ => {},
+            _ => {
+              let _: serde_json::Value = map.next_value()?; // Ignore unknown keys
+            },
           }
         }
-
-        let include_time = include_time.unwrap_or_default();
-        let is_range = is_range.unwrap_or_default();
-        let reminder_id = reminder_id.unwrap_or_default();
 
         Ok(DateCellData {
           timestamp,
           end_timestamp,
-          include_time,
-          is_range,
-          reminder_id,
+          include_time: include_time.unwrap_or_default(),
+          is_range: is_range.unwrap_or_default(),
+          reminder_id: reminder_id.unwrap_or_default(),
         })
       }
     }
 
-    deserializer.deserialize_any(DateCellVisitor())
+    deserializer.deserialize_any(DateCellVisitor)
   }
 }
 
+fn parse_optional_number<'de, M>(map: &mut M) -> core::result::Result<Option<i64>, M::Error>
+where
+  M: serde::de::MapAccess<'de>,
+{
+  match map.next_value::<serde_json::Value>() {
+    Ok(serde_json::Value::Number(num)) => {
+      if let Some(int) = num.as_i64() {
+        Ok(Some(int))
+      } else {
+        Ok(None)
+      }
+    },
+    Ok(serde_json::Value::String(s)) => s.parse::<i64>().ok().map(Some).ok_or_else(|| {
+      serde::de::Error::custom(format!(
+        "Expected a numeric value or parsable string, got {}",
+        s
+      ))
+    }),
+    Ok(_) => Ok(None),
+    Err(_) => Ok(None),
+  }
+}
 impl ToString for DateCellData {
   fn to_string(&self) -> String {
     serde_json::to_string(self).unwrap()
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use serde_json::json;
+
+  #[test]
+  fn test_date_cell_data_from_cell() {
+    let mut cell = Cell::new();
+    cell.insert(CELL_DATA.into(), "1672531200".to_string().into()); // Timestamp for 2023-01-01T00:00:00Z
+    cell.insert("end_timestamp".into(), "1672617600".to_string().into()); // Timestamp for 2023-01-02T00:00:00Z
+    cell.insert("include_time".into(), true.into());
+    cell.insert("is_range".into(), true.into());
+    cell.insert("reminder_id".into(), "reminder123".to_string().into());
+
+    let date_cell_data = DateCellData::from(&cell);
+    assert_eq!(date_cell_data.timestamp, Some(1672531200));
+    assert_eq!(date_cell_data.end_timestamp, Some(1672617600));
+    assert!(date_cell_data.include_time);
+    assert!(date_cell_data.is_range);
+    assert_eq!(date_cell_data.reminder_id, "reminder123");
+  }
+
+  #[test]
+  fn test_date_cell_data_to_cell() {
+    let date_cell_data = DateCellData {
+      timestamp: Some(1672531200),
+      end_timestamp: Some(1672617600),
+      include_time: true,
+      is_range: true,
+      reminder_id: "reminder123".to_string(),
+    };
+
+    let cell = Cell::from(&date_cell_data);
+    assert_eq!(
+      cell.get_as::<String>(CELL_DATA),
+      Some("1672531200".to_string())
+    );
+    assert_eq!(
+      cell.get_as::<String>("end_timestamp"),
+      Some("1672617600".to_string())
+    );
+    assert_eq!(cell.get_as::<bool>("include_time"), Some(true));
+    assert_eq!(cell.get_as::<bool>("is_range"), Some(true));
+    assert_eq!(
+      cell.get_as::<String>("reminder_id"),
+      Some("reminder123".to_string())
+    );
+  }
+
+  #[test]
+  fn test_date_type_option_json_cell() {
+    let date_type_option = DateTypeOption::default_utc();
+    let mut cell = Cell::new();
+    cell.insert(CELL_DATA.into(), "1672531200".to_string().into());
+
+    let json_value = date_type_option.json_cell(&cell);
+    assert_eq!(
+      json_value,
+      json!({
+          "timestamp": 1672531200,
+          "end_timestamp": null,
+          "include_time": false,
+          "is_range": false,
+          "reminder_id": ""
+      })
+    );
+  }
+
+  #[test]
+  fn test_date_type_option_stringify_cell() {
+    let date_type_option = DateTypeOption::default_utc();
+    let mut cell = Cell::new();
+    cell.insert(CELL_DATA.into(), "1672531200".to_string().into());
+    cell.insert("include_time".into(), true.into());
+
+    let result = date_type_option.stringify_cell(&cell);
+    assert_eq!(result, "Jan 01, 2023 00:00");
+  }
+
+  #[test]
+  fn test_date_type_option_numeric_cell() {
+    let date_type_option = DateTypeOption::default_utc();
+    let mut cell = Cell::new();
+    cell.insert(CELL_DATA.into(), "1672531200".to_string().into());
+
+    let result = date_type_option.numeric_cell(&cell);
+    assert_eq!(result, Some(1672531200.0));
+  }
+
+  #[test]
+  fn test_date_type_option_write_json() {
+    let date_type_option = DateTypeOption::default_utc();
+    let json_value = json!({
+        "timestamp": 1672531200,
+        "end_timestamp": 1672617600,
+        "include_time": true,
+        "is_range": true,
+        "reminder_id": "reminder123"
+    });
+
+    let cell = date_type_option.write_json(json_value);
+    assert_eq!(
+      cell.get_as::<String>(CELL_DATA),
+      Some("1672531200".to_string())
+    );
+    assert_eq!(
+      cell.get_as::<String>("end_timestamp"),
+      Some("1672617600".to_string())
+    );
+    assert_eq!(cell.get_as::<bool>("include_time"), Some(true));
+    assert_eq!(cell.get_as::<bool>("is_range"), Some(true));
+    assert_eq!(
+      cell.get_as::<String>("reminder_id"),
+      Some("reminder123".to_string())
+    );
+  }
+
+  #[test]
+  fn test_date_type_option_convert_raw_cell_data() {
+    let date_type_option = DateTypeOption::default_utc();
+
+    let raw_data = "1672531200";
+    let result = date_type_option.convert_raw_cell_data(raw_data);
+    assert_eq!(result, "Jan 01, 2023");
+
+    let invalid_raw_data = "invalid";
+    let result = date_type_option.convert_raw_cell_data(invalid_raw_data);
+    assert_eq!(result, "");
   }
 }

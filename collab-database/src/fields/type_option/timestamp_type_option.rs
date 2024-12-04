@@ -5,10 +5,12 @@ use crate::fields::{
 };
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
-use chrono::{DateTime, Local, Offset};
+use chrono::{DateTime, Local, Offset, TimeZone};
+use chrono_tz::Tz;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::str::FromStr;
 use yrs::Any;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -17,6 +19,8 @@ pub struct TimestampTypeOption {
   pub time_format: TimeFormat,
   pub include_time: bool,
   pub field_type: i64,
+  #[serde(default)]
+  pub timezone: Option<String>,
 }
 
 impl TypeOptionCellReader for TimestampTypeOption {
@@ -68,9 +72,14 @@ impl TimestampTypeOption {
     if let Some(naive) = timestamp.and_then(|timestamp| {
       chrono::DateTime::from_timestamp(timestamp, 0).map(|date| date.naive_utc())
     }) {
-      let offset = Local::now().offset().fix();
-      let date_time = DateTime::<Local>::from_naive_utc_and_offset(naive, offset);
+      let offset = self
+        .timezone
+        .as_ref()
+        .and_then(|timezone| Tz::from_str(&timezone).ok())
+        .map(|tz| tz.offset_from_utc_datetime(&naive).fix())
+        .unwrap_or_else(|| Local::now().offset().fix());
 
+      let date_time = DateTime::<Local>::from_naive_utc_and_offset(naive, offset);
       let fmt = self.date_format.format_str();
       let date = format!("{}", date_time.format(fmt));
       let fmt = self.time_format.format_str();
@@ -89,6 +98,7 @@ impl Default for TimestampTypeOption {
       time_format: Default::default(),
       include_time: true,
       field_type: FieldType::LastEditedTime.into(),
+      timezone: None,
     }
   }
 }
@@ -109,11 +119,13 @@ impl From<TypeOptionData> for TimestampTypeOption {
       .map(FieldType::from)
       .unwrap_or(FieldType::LastEditedTime)
       .into();
+    let timezone = data.get_as::<String>("timezone");
     Self {
       date_format,
       time_format,
       include_time,
       field_type,
+      timezone,
     }
   }
 }
@@ -132,5 +144,144 @@ impl From<TimestampTypeOption> for TypeOptionData {
       ("include_time".into(), Any::Bool(option.include_time)),
       ("field_type".into(), Any::BigInt(option.field_type)),
     ])
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use serde_json::json;
+  use std::i64;
+
+  #[test]
+  fn test_default_timestamp_type_option() {
+    let default_option = TimestampTypeOption::default();
+    assert!(default_option.include_time);
+    assert_eq!(
+      default_option.field_type,
+      i64::from(FieldType::LastEditedTime)
+    );
+  }
+
+  #[test]
+  fn test_from_type_option_data() {
+    let data = TypeOptionDataBuilder::from([
+      ("date_format".into(), Any::BigInt(2)),
+      ("time_format".into(), Any::BigInt(1)),
+      ("include_time".into(), Any::Bool(false)),
+      (
+        "field_type".into(),
+        Any::BigInt(FieldType::CreatedTime.into()),
+      ),
+    ]);
+
+    let option = TimestampTypeOption::from(data);
+    assert_eq!(option.date_format, DateFormat::ISO);
+    assert_eq!(option.time_format, TimeFormat::TwentyFourHour);
+    assert!(!option.include_time);
+    assert_eq!(option.field_type, i64::from(FieldType::CreatedTime));
+  }
+
+  #[test]
+  fn test_into_type_option_data() {
+    let option = TimestampTypeOption {
+      date_format: DateFormat::Friendly,
+      time_format: TimeFormat::TwelveHour,
+      include_time: true,
+      field_type: FieldType::CreatedTime.into(),
+      timezone: None,
+    };
+
+    let data: TypeOptionData = option.into();
+    assert_eq!(data.get_as::<i64>("date_format"), Some(3)); // Friendly format
+    assert_eq!(data.get_as::<i64>("time_format"), Some(0)); // TwelveHour format
+    assert_eq!(data.get_as::<bool>("include_time"), Some(true));
+    assert_eq!(
+      data.get_as::<i64>("field_type"),
+      Some(i64::from(FieldType::CreatedTime))
+    );
+  }
+
+  #[test]
+  fn test_formatted_date_time_from_timestamp() {
+    let option = TimestampTypeOption {
+      date_format: DateFormat::Friendly,
+      time_format: TimeFormat::TwentyFourHour,
+      include_time: true,
+      field_type: FieldType::CreatedTime.into(),
+      timezone: Some("Etc/UTC".to_string()),
+    };
+
+    let timestamp = Some(1672531200); // January 1, 2023 00:00:00 UTC
+    let (date, time) = option.formatted_date_time_from_timestamp(&timestamp);
+
+    assert_eq!(date, "Jan 01, 2023");
+    assert_eq!(time, "00:00");
+  }
+
+  #[test]
+  fn test_json_cell() {
+    let option = TimestampTypeOption {
+      date_format: DateFormat::US,
+      time_format: TimeFormat::TwentyFourHour,
+      include_time: true,
+      field_type: FieldType::CreatedTime.into(),
+      timezone: Some("Etc/UTC".to_string()),
+    };
+
+    let mut cell = Cell::new();
+    cell.insert(CELL_DATA.into(), 1672531200.to_string().into()); // January 1, 2023 00:00:00 UTC
+
+    let json_value = option.json_cell(&cell);
+    assert_eq!(json_value, json!("2023/01/01 00:00"));
+  }
+
+  #[test]
+  fn test_convert_raw_cell_data() {
+    let option = TimestampTypeOption {
+      date_format: DateFormat::ISO,
+      time_format: TimeFormat::TwentyFourHour,
+      include_time: false,
+      field_type: FieldType::CreatedTime.into(),
+      timezone: None,
+    };
+
+    let raw_data = "1672531200"; // January 1, 2023 00:00:00 UTC
+    let result = option.convert_raw_cell_data(raw_data);
+
+    assert_eq!(result, "2023-01-01");
+  }
+
+  #[test]
+  fn test_write_json_valid_number() {
+    let option = TimestampTypeOption::default();
+    let json_value = json!(1672531200);
+
+    let cell = option.write_json(json_value);
+    let data: i64 = cell.get_as(CELL_DATA).unwrap();
+
+    assert_eq!(data, 1672531200);
+  }
+
+  #[test]
+  fn test_write_json_valid_string() {
+    let option = TimestampTypeOption::default();
+    let json_value = json!("1672531200");
+
+    let cell = option.write_json(json_value);
+    let data: i64 = cell.get_as(CELL_DATA).unwrap();
+
+    assert_eq!(data, 1672531200);
+  }
+
+  #[test]
+  fn test_write_json_invalid_data() {
+    let option = TimestampTypeOption::default();
+    let json_value = json!("invalid");
+
+    let cell = option.write_json(json_value);
+    let data: Option<i64> = cell.get_as(CELL_DATA);
+
+    assert!(data.is_none());
   }
 }
