@@ -6,8 +6,6 @@ use crate::template::entity::CELL_DATA;
 use crate::template::util::TypeOptionCellData;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::fmt::{Display, Formatter};
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct ChecklistCellData {
@@ -16,9 +14,14 @@ pub struct ChecklistCellData {
   pub selected_option_ids: Vec<String>,
 }
 
-impl Display for ChecklistCellData {
-  fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-    write!(f, "{:?}", self)
+impl ToString for ChecklistCellData {
+  fn to_string(&self) -> String {
+    let selected_options: Vec<String> = self
+      .selected_options()
+      .iter()
+      .map(|option| option.name.clone())
+      .collect();
+    selected_options.join(", ")
   }
 }
 

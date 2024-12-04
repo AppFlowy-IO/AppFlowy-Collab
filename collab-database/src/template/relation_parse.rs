@@ -37,12 +37,11 @@ impl From<&Cell> for RelationCellData {
   }
 }
 
-impl From<&RelationCellData> for Cell {
-  fn from(value: &RelationCellData) -> Self {
+impl From<RelationCellData> for Cell {
+  fn from(value: RelationCellData) -> Self {
     let data = Any::Array(Arc::from(
       value
         .row_ids
-        .clone()
         .into_iter()
         .map(|id| Any::String(Arc::from(id.to_string())))
         .collect::<Vec<_>>(),
@@ -65,5 +64,22 @@ impl From<&str> for RelationCellData {
       .collect::<Vec<_>>();
 
     RelationCellData { row_ids: ids }
+  }
+}
+
+impl From<String> for RelationCellData {
+  fn from(s: String) -> Self {
+    RelationCellData::from(s.as_str())
+  }
+}
+
+impl ToString for RelationCellData {
+  fn to_string(&self) -> String {
+    self
+      .row_ids
+      .iter()
+      .map(|id| id.to_string())
+      .collect::<Vec<_>>()
+      .join(", ")
   }
 }
