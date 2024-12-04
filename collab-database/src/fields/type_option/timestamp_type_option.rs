@@ -75,7 +75,7 @@ impl TimestampTypeOption {
       let offset = self
         .timezone
         .as_ref()
-        .and_then(|timezone| Tz::from_str(&timezone).ok())
+        .and_then(|timezone| Tz::from_str(timezone).ok())
         .map(|tz| tz.offset_from_utc_datetime(&naive).fix())
         .unwrap_or_else(|| Local::now().offset().fix());
 
