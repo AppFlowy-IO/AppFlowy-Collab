@@ -1,6 +1,8 @@
 use crate::entity::FieldType;
 use crate::error::DatabaseError;
-use crate::fields::{TypeOptionCellReader, TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{
+  TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
+};
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
 use collab::preclude::Any;
@@ -29,6 +31,14 @@ impl TypeOptionCellReader for URLTypeOption {
   fn convert_raw_cell_data(&self, text: &str) -> String {
     let cell_data = URLCellData::new(text);
     cell_data.to_string()
+  }
+}
+
+impl TypeOptionCellWriter for URLTypeOption {
+  fn write_json(&self, json_value: Value) -> Cell {
+    let mut cell = new_cell_builder(FieldType::URL);
+    cell.insert(CELL_DATA.into(), json_value.to_string().into());
+    cell
   }
 }
 

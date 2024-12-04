@@ -675,7 +675,7 @@ fn assert_database_rows_with_csv_rows(
     .map(|field| {
       (
         field.id.clone(),
-        match database.get_stringify_type_option(&field.id) {
+        match database.get_cell_reader(&field.id) {
           None => {
             panic!("Field {:?} doesn't have type option", field)
           },

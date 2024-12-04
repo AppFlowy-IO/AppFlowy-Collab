@@ -119,7 +119,8 @@ pub type TypeOptionData = HashMap<String, Any>;
 pub type TypeOptionDataBuilder = HashMap<String, Any>;
 pub type TypeOptionUpdate = MapRef;
 
-/// It's used to parse each cell into readable text
+/// [TypeOptionCellReader] is a trait that provides methods to read cell data based on the field type.
+/// It's used to convert the raw cell data into a human-readable text representation.
 pub trait TypeOptionCellReader {
   /// Returns the cell data as a JSON value.
   ///
@@ -141,17 +142,43 @@ pub trait TypeOptionCellReader {
     }
   }
 
+  /// Returns the numeric value of the cell. If the value is not numeric, returns `None`.
   fn numeric_cell(&self, cell: &Cell) -> Option<f64>;
 
   /// Convert the value stored in given key:[CELL_DATA] into a readable text
   fn convert_raw_cell_data(&self, cell_data: &str) -> String;
 }
 
+/// [TypeOptionCellWriter] is a trait that provides methods to write [serde_json::Value] into a cell.
+/// Different field types have their own implementation about how to convert [serde_json::Value] into [Cell].
 pub trait TypeOptionCellWriter {
   /// Write json value into a cell
   /// Different type option has its own implementation about how to convert [serde_json::Value]
   /// into [Cell]
   fn write_json(&self, json_value: serde_json::Value) -> Cell;
+}
+
+pub fn type_option_cell_writer(
+  type_option_data: TypeOptionData,
+  field_type: &FieldType,
+) -> Option<Box<dyn TypeOptionCellWriter>> {
+  match field_type {
+    FieldType::RichText => Some(Box::new(RichTextTypeOption::from(type_option_data))),
+    FieldType::Number => Some(Box::new(NumberTypeOption::from(type_option_data))),
+    FieldType::DateTime => Some(Box::new(DateTypeOption::from(type_option_data))),
+    FieldType::SingleSelect => Some(Box::new(SingleSelectTypeOption::from(type_option_data))),
+    FieldType::MultiSelect => Some(Box::new(MultiSelectTypeOption::from(type_option_data))),
+    FieldType::Checkbox => Some(Box::new(CheckboxTypeOption::from(type_option_data))),
+    FieldType::URL => Some(Box::new(URLTypeOption::from(type_option_data))),
+    FieldType::Time => Some(Box::new(TimeTypeOption::from(type_option_data))),
+    FieldType::Media => Some(Box::new(MediaTypeOption::from(type_option_data))),
+    FieldType::Checklist => Some(Box::new(ChecklistTypeOption::from(type_option_data))),
+    FieldType::LastEditedTime => Some(Box::new(TimestampTypeOption::from(type_option_data))),
+    FieldType::CreatedTime => Some(Box::new(TimestampTypeOption::from(type_option_data))),
+    FieldType::Relation => Some(Box::new(RelationTypeOption::from(type_option_data))),
+    FieldType::Summary => Some(Box::new(SummarizationTypeOption::from(type_option_data))),
+    FieldType::Translate => Some(Box::new(TranslateTypeOption::from(type_option_data))),
+  }
 }
 
 pub fn type_option_cell_reader(
