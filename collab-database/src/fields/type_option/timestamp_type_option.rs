@@ -1,9 +1,14 @@
 use crate::entity::FieldType;
 use crate::fields::date_type_option::{DateFormat, TimeFormat};
-use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{
+  TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
+};
+use crate::rows::{new_cell_builder, Cell};
+use crate::template::entity::CELL_DATA;
 use chrono::{DateTime, Local, Offset};
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use yrs::Any;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -14,8 +19,18 @@ pub struct TimestampTypeOption {
   pub field_type: i64,
 }
 
-impl StringifyTypeOption for TimestampTypeOption {
-  fn stringify_text(&self, text: &str) -> String {
+impl TypeOptionCellReader for TimestampTypeOption {
+  /// Return formated date and time string for the cell
+  fn json_cell(&self, cell: &Cell) -> Value {
+    let s = self.stringify_cell(cell);
+    json!(s)
+  }
+
+  fn numeric_cell(&self, _cell: &Cell) -> Option<f64> {
+    None
+  }
+
+  fn convert_raw_cell_data(&self, text: &str) -> String {
     let (date_string, time_string) =
       self.formatted_date_time_from_timestamp(&text.parse::<i64>().ok());
     if self.include_time {
@@ -25,6 +40,21 @@ impl StringifyTypeOption for TimestampTypeOption {
     }
   }
 }
+
+impl TypeOptionCellWriter for TimestampTypeOption {
+  fn write_json(&self, json_value: Value) -> Cell {
+    let mut cell = new_cell_builder(FieldType::Time);
+    if let Some(data) = match json_value {
+      Value::String(s) => s.parse::<i64>().ok(),
+      Value::Number(n) => n.as_i64(),
+      _ => None,
+    } {
+      cell.insert(CELL_DATA.into(), data.into());
+    }
+    cell
+  }
+}
+
 impl TimestampTypeOption {
   pub fn new<T: Into<i64>>(field_type: T) -> Self {
     Self {

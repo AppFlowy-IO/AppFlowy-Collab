@@ -1,10 +1,13 @@
 use crate::database::gen_database_file_id;
 use crate::entity::FieldType;
-use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{
+  TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
+};
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::{json, Value};
 use serde_repr::Serialize_repr;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
@@ -24,15 +27,20 @@ impl Default for MediaTypeOption {
   }
 }
 
-impl StringifyTypeOption for MediaTypeOption {
-  fn stringify_cell(&self, cell: &Cell) -> String {
+impl TypeOptionCellReader for MediaTypeOption {
+  fn json_cell(&self, cell: &Cell) -> Value {
     match cell.get_as::<MediaCellData>(CELL_DATA) {
-      None => "".to_string(),
-      Some(s) => s.to_string(),
+      None => Value::Null,
+      Some(s) => json!(s),
     }
   }
 
-  fn stringify_text(&self, text: &str) -> String {
+  fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
+    let cell_data = cell.get_as::<String>(CELL_DATA)?;
+    cell_data.parse::<f64>().ok()
+  }
+
+  fn convert_raw_cell_data(&self, text: &str) -> String {
     let data = MediaCellData::from(text.to_string());
     data
       .files
@@ -40,6 +48,13 @@ impl StringifyTypeOption for MediaTypeOption {
       .map(|file| file.name)
       .collect::<Vec<_>>()
       .join(", ")
+  }
+}
+
+impl TypeOptionCellWriter for MediaTypeOption {
+  fn write_json(&self, json_value: Value) -> Cell {
+    let cell_data = serde_json::from_value::<MediaCellData>(json_value).unwrap_or_default();
+    cell_data.into()
   }
 }
 
@@ -59,7 +74,7 @@ impl From<MediaTypeOption> for TypeOptionData {
   }
 }
 
-#[derive(Clone, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MediaCellData {
   pub files: Vec<MediaFile>,
 }

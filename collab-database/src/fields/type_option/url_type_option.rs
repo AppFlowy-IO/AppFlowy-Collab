@@ -1,11 +1,12 @@
 use crate::entity::FieldType;
 use crate::error::DatabaseError;
-use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{TypeOptionCellReader, TypeOptionData, TypeOptionDataBuilder};
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
 use collab::preclude::Any;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use yrs::encoding::serde::from_any;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -16,9 +17,18 @@ pub struct URLTypeOption {
   pub content: String,
 }
 
-impl StringifyTypeOption for URLTypeOption {
-  fn stringify_text(&self, text: &str) -> String {
-    text.to_string()
+impl TypeOptionCellReader for URLTypeOption {
+  fn json_cell(&self, cell: &Cell) -> Value {
+    json!(self.stringify_cell(cell))
+  }
+
+  fn numeric_cell(&self, _cell: &Cell) -> Option<f64> {
+    None
+  }
+
+  fn convert_raw_cell_data(&self, text: &str) -> String {
+    let cell_data = URLCellData::new(text);
+    cell_data.to_string()
   }
 }
 

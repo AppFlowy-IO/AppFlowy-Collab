@@ -1,7 +1,9 @@
 use crate::entity::FieldType;
 use crate::error::DatabaseError;
 
-use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{
+  TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
+};
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
 use chrono::{FixedOffset, Local, MappedLocalTime, NaiveDateTime, NaiveTime, Offset, TimeZone};
@@ -11,6 +13,8 @@ use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use crate::template::time_parse::TimeCellData;
+use serde_json::{json, Value};
 use std::str::FromStr;
 pub use strum::IntoEnumIterator;
 pub use strum_macros::EnumIter;
@@ -19,9 +23,27 @@ use yrs::Any;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct TimeTypeOption;
-impl StringifyTypeOption for TimeTypeOption {
-  fn stringify_text(&self, text: &str) -> String {
-    text.to_string()
+impl TypeOptionCellReader for TimeTypeOption {
+  fn json_cell(&self, cell: &Cell) -> Value {
+    let cell_data = TimeCellData::from(cell);
+    json!(cell_data)
+  }
+
+  fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
+    let cell_data = TimeCellData::from(cell);
+    cell_data.0.map(|timestamp| timestamp as f64)
+  }
+
+  fn convert_raw_cell_data(&self, text: &str) -> String {
+    let cell_data = TimeCellData::from(text);
+    cell_data.to_string()
+  }
+}
+
+impl TypeOptionCellWriter for TimeTypeOption {
+  fn write_json(&self, json_value: Value) -> Cell {
+    let cell_data = serde_json::from_value::<TimeCellData>(json_value).unwrap_or_default();
+    Cell::from(&cell_data)
   }
 }
 
@@ -44,15 +66,19 @@ pub struct DateTypeOption {
   pub timezone_id: String,
 }
 
-impl StringifyTypeOption for DateTypeOption {
-  fn stringify_cell(&self, cell: &Cell) -> String {
+impl TypeOptionCellReader for DateTypeOption {
+  fn json_cell(&self, cell: &Cell) -> Value {
     let cell_data = DateCellData::from(cell);
+    json!(cell_data)
+  }
+
+  fn stringify_cell(&self, cell_data: &Cell) -> String {
+    let cell_data = DateCellData::from(cell_data);
     let include_time = cell_data.include_time;
     let timestamp = cell_data.timestamp;
     let is_range = cell_data.is_range;
 
     let (date, time) = self.formatted_date_time_from_timestamp(&timestamp);
-
     if is_range {
       let (end_date, end_time) = match cell_data.end_timestamp {
         Some(timestamp) => self.formatted_date_time_from_timestamp(&Some(timestamp)),
@@ -74,7 +100,12 @@ impl StringifyTypeOption for DateTypeOption {
     }
   }
 
-  fn stringify_text(&self, text: &str) -> String {
+  fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
+    let cell_data = DateCellData::from(cell);
+    cell_data.timestamp.map(|timestamp| timestamp as f64)
+  }
+
+  fn convert_raw_cell_data(&self, text: &str) -> String {
     match text.parse::<i64>() {
       Ok(timestamp) => {
         let cell = DateCellData::from_timestamp(timestamp);
@@ -82,6 +113,13 @@ impl StringifyTypeOption for DateTypeOption {
       },
       Err(_) => "".to_string(),
     }
+  }
+}
+
+impl TypeOptionCellWriter for DateTypeOption {
+  fn write_json(&self, json_value: Value) -> Cell {
+    let cell_data = serde_json::from_value::<DateCellData>(json_value).unwrap_or_default();
+    Cell::from(&cell_data)
   }
 }
 

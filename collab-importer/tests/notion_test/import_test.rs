@@ -5,7 +5,7 @@ use collab_database::entity::FieldType;
 use collab_database::entity::FieldType::*;
 use collab_database::error::DatabaseError;
 use collab_database::fields::media_type_option::MediaCellData;
-use collab_database::fields::{Field, StringifyTypeOption};
+use collab_database::fields::{Field, TypeOptionCellReader};
 use collab_database::rows::Row;
 use collab_document::blocks::{
   extract_page_id_from_block_delta, extract_view_id_from_block_data,
@@ -683,7 +683,7 @@ fn assert_database_rows_with_csv_rows(
         },
       )
     })
-    .collect::<HashMap<String, Box<dyn StringifyTypeOption>>>();
+    .collect::<HashMap<String, Box<dyn TypeOptionCellReader>>>();
 
   for (row_index, row) in rows.into_iter().enumerate() {
     let row = row.unwrap();

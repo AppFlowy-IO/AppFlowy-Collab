@@ -115,19 +115,42 @@ pub type TypeOptionDataBuilder = HashMap<String, Any>;
 pub type TypeOptionUpdate = MapRef;
 
 /// It's used to parse each cell into readable text
-pub trait StringifyTypeOption {
+pub trait TypeOptionCellReader {
+  /// Returns the cell data as a JSON value.
+  ///
+  /// The type of the returned value depends on the field type:
+  /// - **Single Select**: Returns an array of [SelectOption].
+  /// - **RichText**: Returns a string.
+  /// - Other field types: Returns appropriate JSON values, such as objects or arrays.
+  fn json_cell(&self, cell: &Cell) -> serde_json::Value;
+
+  /// Returns a human-readable text representation of the cell.
+  ///
+  /// For certain field types, the raw cell data might require formatting:
+  /// - **Single/Multi-Select**: The raw data may contain IDs as a comma-separated string.
+  ///   Calling `stringify_cell` will convert these IDs into a list of option names, separated by commas.
   fn stringify_cell(&self, cell: &Cell) -> String {
     match cell.get_as::<String>(CELL_DATA) {
       None => "".to_string(),
-      Some(s) => Self::stringify_text(self, &s),
+      Some(s) => Self::convert_raw_cell_data(self, &s),
     }
   }
-  fn stringify_text(&self, text: &str) -> String;
+
+  fn numeric_cell(&self, cell: &Cell) -> Option<f64>;
+
+  /// Convert the value stored in given key:[CELL_DATA] into a readable text
+  fn convert_raw_cell_data(&self, cell_data: &str) -> String;
 }
-pub fn stringify_type_option(
+
+pub trait TypeOptionCellWriter {
+  /// Try to convert
+  fn write_json(&self, json_value: serde_json::Value) -> Cell;
+}
+
+pub fn type_option_cell_reader(
   type_option_data: TypeOptionData,
   field_type: &FieldType,
-) -> Option<Box<dyn StringifyTypeOption>> {
+) -> Option<Box<dyn TypeOptionCellReader>> {
   match field_type {
     FieldType::RichText => Some(Box::new(RichTextTypeOption::from(type_option_data))),
     FieldType::Number => Some(Box::new(NumberTypeOption::from(type_option_data))),
