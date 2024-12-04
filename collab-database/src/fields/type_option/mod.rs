@@ -15,10 +15,15 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
 use crate::entity::FieldType;
+use crate::fields::checklist_type_option::ChecklistTypeOption;
 use crate::fields::date_type_option::{DateTypeOption, TimeTypeOption};
 use crate::fields::media_type_option::MediaTypeOption;
 use crate::fields::number_type_option::NumberTypeOption;
+use crate::fields::relation_type_option::RelationTypeOption;
 use crate::fields::select_type_option::{MultiSelectTypeOption, SingleSelectTypeOption};
+use crate::fields::summary_type_option::SummarizationTypeOption;
+use crate::fields::timestamp_type_option::TimestampTypeOption;
+use crate::fields::translate_type_option::TranslateTypeOption;
 use crate::fields::type_option::checkbox_type_option::CheckboxTypeOption;
 use crate::fields::type_option::text_type_option::RichTextTypeOption;
 use crate::fields::url_type_option::URLTypeOption;
@@ -143,7 +148,9 @@ pub trait TypeOptionCellReader {
 }
 
 pub trait TypeOptionCellWriter {
-  /// Try to convert
+  /// Write json value into a cell
+  /// Different type option has its own implementation about how to convert [serde_json::Value]
+  /// into [Cell]
   fn write_json(&self, json_value: serde_json::Value) -> Cell;
 }
 
@@ -161,12 +168,11 @@ pub fn type_option_cell_reader(
     FieldType::URL => Some(Box::new(URLTypeOption::from(type_option_data))),
     FieldType::Time => Some(Box::new(TimeTypeOption::from(type_option_data))),
     FieldType::Media => Some(Box::new(MediaTypeOption::from(type_option_data))),
-
-    FieldType::Checklist
-    | FieldType::LastEditedTime
-    | FieldType::CreatedTime
-    | FieldType::Relation
-    | FieldType::Summary
-    | FieldType::Translate => None,
+    FieldType::Checklist => Some(Box::new(ChecklistTypeOption::from(type_option_data))),
+    FieldType::LastEditedTime => Some(Box::new(TimestampTypeOption::from(type_option_data))),
+    FieldType::CreatedTime => Some(Box::new(TimestampTypeOption::from(type_option_data))),
+    FieldType::Relation => Some(Box::new(RelationTypeOption::from(type_option_data))),
+    FieldType::Summary => Some(Box::new(SummarizationTypeOption::from(type_option_data))),
+    FieldType::Translate => Some(Box::new(TranslateTypeOption::from(type_option_data))),
   }
 }
