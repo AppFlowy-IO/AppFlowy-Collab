@@ -12,7 +12,7 @@ use crate::fields::select_type_option::SelectTypeOption;
 use crate::fields::text_type_option::RichTextTypeOption;
 use crate::fields::timestamp_type_option::TimestampTypeOption;
 use crate::rows::new_cell_builder;
-use crate::template::chect_list_parse::ChecklistCellData;
+use crate::template::check_list_parse::ChecklistCellData;
 use crate::template::csv::CSVResource;
 use crate::template::date_parse::replace_cells_with_timestamp;
 use crate::template::media_parse::replace_cells_with_files;

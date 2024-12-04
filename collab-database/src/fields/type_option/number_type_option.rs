@@ -2,15 +2,22 @@
 
 use crate::error::DatabaseError;
 use crate::fields::number_type_option::number_currency::Currency;
-use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{
+  TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
+};
 
 use collab::preclude::Any;
 
+use crate::entity::FieldType;
+use crate::rows::{new_cell_builder, Cell};
+use crate::template::entity::CELL_DATA;
+use collab::util::AnyMapExt;
 use fancy_regex::Regex;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
 use rusty_money::{define_currency_set, Money};
 use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -58,12 +65,36 @@ impl From<NumberTypeOption> for TypeOptionData {
   }
 }
 
-impl StringifyTypeOption for NumberTypeOption {
-  fn stringify_text(&self, text: &str) -> String {
+impl TypeOptionCellReader for NumberTypeOption {
+  fn json_cell(&self, cell: &Cell) -> Value {
+    // Returns the formated number string.
+    Value::String(self.stringify_cell(cell))
+  }
+
+  fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
+    let cell_data = cell.get_as::<String>(CELL_DATA)?;
+    cell_data.parse::<f64>().ok()
+  }
+
+  fn convert_raw_cell_data(&self, text: &str) -> String {
     match self.format_cell_data(text) {
       Ok(cell_data) => cell_data.to_string(),
       Err(_) => "".to_string(),
     }
+  }
+}
+
+impl TypeOptionCellWriter for NumberTypeOption {
+  fn write_json(&self, json_value: Value) -> Cell {
+    let mut cell = new_cell_builder(FieldType::Number);
+    if let Some(data) = match json_value {
+      Value::String(s) => Some(s),
+      Value::Number(n) => Some(n.to_string()),
+      _ => None,
+    } {
+      cell.insert(CELL_DATA.into(), data.into());
+    }
+    cell
   }
 }
 
@@ -797,7 +828,7 @@ mod tests {
   }
 
   fn assert_number(type_option: &NumberTypeOption, input_str: &str, expected_str: &str) {
-    let output = type_option.stringify_text(input_str);
+    let output = type_option.convert_raw_cell_data(input_str);
     assert_eq!(output, expected_str.to_owned());
   }
 }

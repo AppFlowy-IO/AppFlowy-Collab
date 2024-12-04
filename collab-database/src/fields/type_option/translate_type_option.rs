@@ -1,7 +1,10 @@
-use serde::{Deserialize, Serialize};
-use yrs::{encoding::serde::from_any, Any};
-
 use super::{TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{TypeOptionCellReader, TypeOptionCellWriter};
+use crate::rows::Cell;
+use crate::template::translate_parse::TranslateCellData;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use yrs::{encoding::serde::from_any, Any};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TranslateTypeOption {
@@ -26,6 +29,28 @@ impl TranslateTypeOption {
       8 => "Simplified Chinese",
       _ => "English",
     }
+  }
+}
+
+impl TypeOptionCellReader for TranslateTypeOption {
+  fn json_cell(&self, cell: &Cell) -> Value {
+    json!(self.stringify_cell(cell))
+  }
+
+  fn numeric_cell(&self, _cell: &Cell) -> Option<f64> {
+    None
+  }
+
+  fn convert_raw_cell_data(&self, cell_data: &str) -> String {
+    let cell = serde_json::from_str::<TranslateCellData>(cell_data).unwrap_or_default();
+    cell.to_string()
+  }
+}
+
+impl TypeOptionCellWriter for TranslateTypeOption {
+  fn write_json(&self, json_value: Value) -> Cell {
+    let cell = TranslateCellData(json_value.as_str().unwrap_or_default().to_string());
+    cell.into()
   }
 }
 

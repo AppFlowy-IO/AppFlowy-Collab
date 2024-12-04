@@ -1,7 +1,10 @@
+use super::{TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{TypeOptionCellReader, TypeOptionCellWriter};
+use crate::rows::Cell;
+use crate::template::relation_parse::RelationCellData;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
-
-use super::{TypeOptionData, TypeOptionDataBuilder};
+use serde_json::{json, Value};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RelationTypeOption {
@@ -18,5 +21,33 @@ impl From<TypeOptionData> for RelationTypeOption {
 impl From<RelationTypeOption> for TypeOptionData {
   fn from(data: RelationTypeOption) -> Self {
     TypeOptionDataBuilder::from([("database_id".into(), data.database_id.into())])
+  }
+}
+
+impl TypeOptionCellReader for RelationTypeOption {
+  fn json_cell(&self, cell: &Cell) -> Value {
+    let cell_data = RelationCellData::from(cell);
+    json!(cell_data)
+  }
+
+  fn numeric_cell(&self, _cell: &Cell) -> Option<f64> {
+    None
+  }
+
+  fn convert_raw_cell_data(&self, cell_data: &str) -> String {
+    let cell_data = RelationCellData::from(cell_data);
+    cell_data
+      .row_ids
+      .into_iter()
+      .map(|id| id.to_string())
+      .collect::<Vec<_>>()
+      .join(", ")
+  }
+}
+
+impl TypeOptionCellWriter for RelationTypeOption {
+  fn write_json(&self, json_value: Value) -> Cell {
+    let cell_data = serde_json::from_value::<RelationCellData>(json_value).unwrap_or_default();
+    Cell::from(&cell_data)
   }
 }

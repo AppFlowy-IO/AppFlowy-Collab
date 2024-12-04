@@ -1,5 +1,6 @@
 mod block_test;
 mod cell_test;
+mod cell_type_option_test;
 mod encode_collab_test;
 mod field_observe_test;
 mod field_setting_test;

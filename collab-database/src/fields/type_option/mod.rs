@@ -15,10 +15,15 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
 use crate::entity::FieldType;
+use crate::fields::checklist_type_option::ChecklistTypeOption;
 use crate::fields::date_type_option::{DateTypeOption, TimeTypeOption};
 use crate::fields::media_type_option::MediaTypeOption;
 use crate::fields::number_type_option::NumberTypeOption;
+use crate::fields::relation_type_option::RelationTypeOption;
 use crate::fields::select_type_option::{MultiSelectTypeOption, SingleSelectTypeOption};
+use crate::fields::summary_type_option::SummarizationTypeOption;
+use crate::fields::timestamp_type_option::TimestampTypeOption;
+use crate::fields::translate_type_option::TranslateTypeOption;
 use crate::fields::type_option::checkbox_type_option::CheckboxTypeOption;
 use crate::fields::type_option::text_type_option::RichTextTypeOption;
 use crate::fields::url_type_option::URLTypeOption;
@@ -114,20 +119,49 @@ pub type TypeOptionData = HashMap<String, Any>;
 pub type TypeOptionDataBuilder = HashMap<String, Any>;
 pub type TypeOptionUpdate = MapRef;
 
-/// It's used to parse each cell into readable text
-pub trait StringifyTypeOption {
+/// [TypeOptionCellReader] is a trait that provides methods to read cell data based on the field type.
+/// It's used to convert the raw cell data into a human-readable text representation.
+pub trait TypeOptionCellReader {
+  /// Returns the cell data as a JSON value.
+  ///
+  /// The type of the returned value depends on the field type:
+  /// - **Single Select**: Returns an array of [SelectOption].
+  /// - **RichText**: Returns a string.
+  /// - Other field types: Returns appropriate JSON values, such as objects or arrays.
+  fn json_cell(&self, cell: &Cell) -> serde_json::Value;
+
+  /// Returns a human-readable text representation of the cell.
+  ///
+  /// For certain field types, the raw cell data might require formatting:
+  /// - **Single/Multi-Select**: The raw data may contain IDs as a comma-separated string.
+  ///   Calling `stringify_cell` will convert these IDs into a list of option names, separated by commas.
   fn stringify_cell(&self, cell: &Cell) -> String {
     match cell.get_as::<String>(CELL_DATA) {
       None => "".to_string(),
-      Some(s) => Self::stringify_text(self, &s),
+      Some(s) => Self::convert_raw_cell_data(self, &s),
     }
   }
-  fn stringify_text(&self, text: &str) -> String;
+
+  /// Returns the numeric value of the cell. If the value is not numeric, returns `None`.
+  fn numeric_cell(&self, cell: &Cell) -> Option<f64>;
+
+  /// Convert the value stored in given key:[CELL_DATA] into a readable text
+  fn convert_raw_cell_data(&self, cell_data: &str) -> String;
 }
-pub fn stringify_type_option(
+
+/// [TypeOptionCellWriter] is a trait that provides methods to write [serde_json::Value] into a cell.
+/// Different field types have their own implementation about how to convert [serde_json::Value] into [Cell].
+pub trait TypeOptionCellWriter {
+  /// Write json value into a cell
+  /// Different type option has its own implementation about how to convert [serde_json::Value]
+  /// into [Cell]
+  fn write_json(&self, json_value: serde_json::Value) -> Cell;
+}
+
+pub fn type_option_cell_writer(
   type_option_data: TypeOptionData,
   field_type: &FieldType,
-) -> Option<Box<dyn StringifyTypeOption>> {
+) -> Option<Box<dyn TypeOptionCellWriter>> {
   match field_type {
     FieldType::RichText => Some(Box::new(RichTextTypeOption::from(type_option_data))),
     FieldType::Number => Some(Box::new(NumberTypeOption::from(type_option_data))),
@@ -138,12 +172,34 @@ pub fn stringify_type_option(
     FieldType::URL => Some(Box::new(URLTypeOption::from(type_option_data))),
     FieldType::Time => Some(Box::new(TimeTypeOption::from(type_option_data))),
     FieldType::Media => Some(Box::new(MediaTypeOption::from(type_option_data))),
+    FieldType::Checklist => Some(Box::new(ChecklistTypeOption::from(type_option_data))),
+    FieldType::LastEditedTime => Some(Box::new(TimestampTypeOption::from(type_option_data))),
+    FieldType::CreatedTime => Some(Box::new(TimestampTypeOption::from(type_option_data))),
+    FieldType::Relation => Some(Box::new(RelationTypeOption::from(type_option_data))),
+    FieldType::Summary => Some(Box::new(SummarizationTypeOption::from(type_option_data))),
+    FieldType::Translate => Some(Box::new(TranslateTypeOption::from(type_option_data))),
+  }
+}
 
-    FieldType::Checklist
-    | FieldType::LastEditedTime
-    | FieldType::CreatedTime
-    | FieldType::Relation
-    | FieldType::Summary
-    | FieldType::Translate => None,
+pub fn type_option_cell_reader(
+  type_option_data: TypeOptionData,
+  field_type: &FieldType,
+) -> Option<Box<dyn TypeOptionCellReader>> {
+  match field_type {
+    FieldType::RichText => Some(Box::new(RichTextTypeOption::from(type_option_data))),
+    FieldType::Number => Some(Box::new(NumberTypeOption::from(type_option_data))),
+    FieldType::DateTime => Some(Box::new(DateTypeOption::from(type_option_data))),
+    FieldType::SingleSelect => Some(Box::new(SingleSelectTypeOption::from(type_option_data))),
+    FieldType::MultiSelect => Some(Box::new(MultiSelectTypeOption::from(type_option_data))),
+    FieldType::Checkbox => Some(Box::new(CheckboxTypeOption::from(type_option_data))),
+    FieldType::URL => Some(Box::new(URLTypeOption::from(type_option_data))),
+    FieldType::Time => Some(Box::new(TimeTypeOption::from(type_option_data))),
+    FieldType::Media => Some(Box::new(MediaTypeOption::from(type_option_data))),
+    FieldType::Checklist => Some(Box::new(ChecklistTypeOption::from(type_option_data))),
+    FieldType::LastEditedTime => Some(Box::new(TimestampTypeOption::from(type_option_data))),
+    FieldType::CreatedTime => Some(Box::new(TimestampTypeOption::from(type_option_data))),
+    FieldType::Relation => Some(Box::new(RelationTypeOption::from(type_option_data))),
+    FieldType::Summary => Some(Box::new(SummarizationTypeOption::from(type_option_data))),
+    FieldType::Translate => Some(Box::new(TranslateTypeOption::from(type_option_data))),
   }
 }

@@ -1,22 +1,56 @@
 use crate::database::gen_option_id;
 
+use crate::entity::FieldType;
 use crate::error::DatabaseError;
-use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{
+  TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
+};
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SelectTypeOption {
   pub options: Vec<SelectOption>,
+  #[serde(default)]
   pub disable_color: bool,
 }
 
-impl StringifyTypeOption for SelectTypeOption {
-  fn stringify_text(&self, text: &str) -> String {
+impl TypeOptionCellReader for SelectTypeOption {
+  /// Returns list of selected options
+  fn json_cell(&self, cell: &Cell) -> Value {
+    match cell.get_as::<String>(CELL_DATA) {
+      None => Value::Null,
+      Some(s) => {
+        let ids = SelectOptionIds::from_str(&s).unwrap_or_default().0;
+        if ids.is_empty() {
+          return Value::Array(vec![]);
+        }
+
+        let options = ids
+          .iter()
+          .flat_map(|option_id| {
+            self
+              .options
+              .iter()
+              .find(|option| &option.id == option_id)
+              .cloned()
+          })
+          .collect::<Vec<_>>();
+        json!(options)
+      },
+    }
+  }
+
+  fn numeric_cell(&self, _cell: &Cell) -> Option<f64> {
+    None
+  }
+
+  fn convert_raw_cell_data(&self, text: &str) -> String {
     let ids = SelectOptionIds::from_str(text).unwrap_or_default().0;
     if ids.is_empty() {
       return "".to_string();
@@ -62,8 +96,10 @@ impl From<SelectTypeOption> for TypeOptionData {
 pub struct SelectOption {
   pub id: String,
   pub name: String,
+  #[serde(default)]
   pub color: SelectOptionColor,
 }
+
 impl SelectOption {
   pub fn new(name: &str) -> Self {
     SelectOption {
@@ -82,6 +118,7 @@ impl SelectOption {
   }
 }
 #[derive(PartialEq, Eq, Serialize, Deserialize, Debug, Clone)]
+#[serde(try_from = "u8", into = "u8")]
 #[repr(u8)]
 #[derive(Default)]
 pub enum SelectOptionColor {
@@ -95,6 +132,31 @@ pub enum SelectOptionColor {
   Green = 6,
   Aqua = 7,
   Blue = 8,
+}
+
+impl TryFrom<u8> for SelectOptionColor {
+  type Error = &'static str;
+
+  fn try_from(value: u8) -> Result<Self, Self::Error> {
+    match value {
+      0 => Ok(SelectOptionColor::Purple),
+      1 => Ok(SelectOptionColor::Pink),
+      2 => Ok(SelectOptionColor::LightPink),
+      3 => Ok(SelectOptionColor::Orange),
+      4 => Ok(SelectOptionColor::Yellow),
+      5 => Ok(SelectOptionColor::Lime),
+      6 => Ok(SelectOptionColor::Green),
+      7 => Ok(SelectOptionColor::Aqua),
+      8 => Ok(SelectOptionColor::Blue),
+      _ => Err("Invalid color value"),
+    }
+  }
+}
+
+impl From<SelectOptionColor> for u8 {
+  fn from(color: SelectOptionColor) -> Self {
+    color as u8
+  }
 }
 
 impl From<usize> for SelectOptionColor {
@@ -117,9 +179,23 @@ impl From<usize> for SelectOptionColor {
 #[derive(Clone, Default, Debug)]
 pub struct SingleSelectTypeOption(pub SelectTypeOption);
 
-impl StringifyTypeOption for SingleSelectTypeOption {
-  fn stringify_text(&self, text: &str) -> String {
-    self.0.stringify_text(text)
+impl TypeOptionCellReader for SingleSelectTypeOption {
+  fn json_cell(&self, cell: &Cell) -> Value {
+    self.0.json_cell(cell)
+  }
+
+  fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
+    self.0.numeric_cell(cell)
+  }
+
+  fn convert_raw_cell_data(&self, text: &str) -> String {
+    self.0.convert_raw_cell_data(text)
+  }
+}
+
+impl TypeOptionCellWriter for SingleSelectTypeOption {
+  fn write_json(&self, value: Value) -> Cell {
+    cell_from_json_value(value, &self.options, FieldType::SingleSelect)
   }
 }
 
@@ -152,9 +228,23 @@ impl From<SingleSelectTypeOption> for TypeOptionData {
 // Multiple select
 #[derive(Clone, Default, Debug)]
 pub struct MultiSelectTypeOption(pub SelectTypeOption);
-impl StringifyTypeOption for MultiSelectTypeOption {
-  fn stringify_text(&self, text: &str) -> String {
-    self.0.stringify_text(text)
+impl TypeOptionCellReader for MultiSelectTypeOption {
+  fn json_cell(&self, cell: &Cell) -> Value {
+    self.0.json_cell(cell)
+  }
+
+  fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
+    self.0.numeric_cell(cell)
+  }
+
+  fn convert_raw_cell_data(&self, text: &str) -> String {
+    self.0.convert_raw_cell_data(text)
+  }
+}
+
+impl TypeOptionCellWriter for MultiSelectTypeOption {
+  fn write_json(&self, value: Value) -> Cell {
+    cell_from_json_value(value, &self.options, FieldType::MultiSelect)
   }
 }
 
@@ -193,7 +283,7 @@ impl SelectOptionIds {
   pub fn into_inner(self) -> Vec<String> {
     self.0
   }
-  pub fn to_cell_data(&self, field_type: impl Into<i64>) -> Cell {
+  pub fn to_cell(&self, field_type: impl Into<i64>) -> Cell {
     let mut cell = new_cell_builder(field_type);
     cell.insert(CELL_DATA.into(), self.to_string().into());
     cell
@@ -253,5 +343,206 @@ impl std::ops::Deref for SelectOptionIds {
 impl std::ops::DerefMut for SelectOptionIds {
   fn deref_mut(&mut self) -> &mut Self::Target {
     &mut self.0
+  }
+}
+fn cell_from_json_value(value: Value, options: &[SelectOption], field_type: FieldType) -> Cell {
+  match value {
+    Value::Array(array) => {
+      // Process array of JSON objects or strings
+      let ids = array
+        .iter()
+        .filter_map(|item| match item {
+          Value::Object(obj) => obj
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(String::from)
+            .or_else(|| {
+              obj.get("name").and_then(|v| v.as_str()).and_then(|name| {
+                options
+                  .iter()
+                  .find(|opt| opt.name == name)
+                  .map(|opt| opt.id.clone())
+              })
+            }),
+          Value::String(name) => options
+            .iter()
+            .find(|opt| &opt.name == name)
+            .map(|opt| opt.id.clone()),
+          _ => None,
+        })
+        .collect::<Vec<_>>();
+
+      SelectOptionIds::from(ids).to_cell(field_type)
+    },
+
+    Value::String(s) => {
+      // Process a single string (comma-separated names or IDs)
+      let ids = s
+        .split(SELECTION_IDS_SEPARATOR)
+        .map(str::trim)
+        .filter_map(|name| {
+          options
+            .iter()
+            .find(|opt| opt.name == name)
+            .map(|opt| opt.id.clone())
+        })
+        .collect::<Vec<_>>();
+
+      SelectOptionIds::from(ids).to_cell(field_type)
+    },
+    Value::Object(obj) => {
+      // Process a single object with "id" or "name"
+      if let Some(id) = obj.get("id").and_then(|v| v.as_str()) {
+        if options.iter().any(|opt| opt.id == id) {
+          return SelectOptionIds::from(vec![id.to_string()]).to_cell(field_type);
+        }
+      }
+
+      if let Some(name) = obj.get("name").and_then(|v| v.as_str()) {
+        if let Some(option) = options.iter().find(|opt| opt.name == name) {
+          return SelectOptionIds::from(vec![option.id.clone()]).to_cell(field_type);
+        }
+      }
+      SelectOptionIds::new().to_cell(field_type)
+    },
+    _ => SelectOptionIds::new().to_cell(field_type),
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use serde_json::{json, Value};
+
+  #[test]
+  fn test_serialize_deserialize_select_type_option() {
+    let options = vec![
+      SelectOption::new("Option 1"),
+      SelectOption::with_color("Option 2", SelectOptionColor::Blue),
+    ];
+
+    let select_type_option = SelectTypeOption {
+      options,
+      disable_color: false,
+    };
+
+    let serialized = serde_json::to_string(&select_type_option).unwrap();
+    let deserialized: SelectTypeOption = serde_json::from_str(&serialized).unwrap();
+
+    assert_eq!(select_type_option.disable_color, deserialized.disable_color);
+    assert_eq!(select_type_option.options.len(), deserialized.options.len());
+    assert_eq!(select_type_option.options[0].name, "Option 1");
+    assert_eq!(select_type_option.options[1].color, SelectOptionColor::Blue);
+  }
+
+  #[test]
+  fn test_select_option_ids_to_string() {
+    let ids = SelectOptionIds::from(vec!["id1".to_string(), "id2".to_string()]);
+    assert_eq!(ids.to_string(), "id1,id2");
+  }
+
+  #[test]
+  fn test_select_option_ids_from_str() {
+    let ids = SelectOptionIds::from_str("id1,id2").unwrap();
+    assert_eq!(ids.0, vec!["id1".to_string(), "id2".to_string()]);
+  }
+
+  #[test]
+  fn test_cell_from_json_value_array() {
+    let options = vec![SelectOption::new("Option 1"), SelectOption::new("Option 2")];
+
+    let value = json!([
+        { "id": options[0].id },
+        { "name": "Option 2" }
+    ]);
+
+    let cell = cell_from_json_value(value, &options, FieldType::MultiSelect);
+    let cell_data: String = cell.get_as(CELL_DATA).unwrap();
+    assert!(cell_data.contains(&options[0].id));
+    assert!(cell_data.contains(&options[1].id));
+  }
+
+  #[test]
+  fn test_cell_from_json_value_string() {
+    let options = vec![SelectOption::new("Option 1"), SelectOption::new("Option 2")];
+
+    let value = Value::String("Option 1,Option 2".to_string());
+    let cell = cell_from_json_value(value, &options, FieldType::MultiSelect);
+
+    let cell_data: String = cell.get_as(CELL_DATA).unwrap();
+    assert!(cell_data.contains(&options[0].id));
+    assert!(cell_data.contains(&options[1].id));
+  }
+
+  #[test]
+  fn test_single_select_type_option_write_json() {
+    let options = vec![SelectOption::new("Option A"), SelectOption::new("Option B")];
+    let single_select = SingleSelectTypeOption(SelectTypeOption {
+      options,
+      disable_color: false,
+    });
+
+    let json_value = json!({ "name": "Option A" });
+    let cell = single_select.write_json(json_value);
+
+    let cell_data: String = cell.get_as(CELL_DATA).unwrap();
+    assert!(!cell_data.is_empty());
+  }
+
+  #[test]
+  fn test_multi_select_type_option_write_json() {
+    let options = vec![SelectOption::new("Option 1"), SelectOption::new("Option 2")];
+    let multi_select = MultiSelectTypeOption(SelectTypeOption {
+      options,
+      disable_color: false,
+    });
+
+    let json_value = json!([
+        { "name": "Option 1" },
+        { "id": multi_select.options[1].id }
+    ]);
+
+    let cell = multi_select.write_json(json_value);
+    let cell_data: String = cell.get_as(CELL_DATA).unwrap();
+    assert!(cell_data.contains(&multi_select.options[0].id));
+    assert!(cell_data.contains(&multi_select.options[1].id));
+  }
+
+  #[test]
+  fn test_select_option_with_color() {
+    let option = SelectOption::with_color("Colored Option", SelectOptionColor::Aqua);
+    assert_eq!(option.name, "Colored Option");
+    assert_eq!(option.color, SelectOptionColor::Aqua);
+  }
+
+  #[test]
+  fn test_select_option_color_from_u8() {
+    assert_eq!(
+      SelectOptionColor::try_from(0_u8).unwrap(),
+      SelectOptionColor::Purple
+    );
+    assert_eq!(
+      SelectOptionColor::try_from(8_u8).unwrap(),
+      SelectOptionColor::Blue
+    );
+    assert!(SelectOptionColor::try_from(10_u8).is_err());
+  }
+
+  #[test]
+  fn test_convert_raw_cell_data() {
+    let options = vec![SelectOption::new("Option 1"), SelectOption::new("Option 2")];
+    let raw_data = options
+      .iter()
+      .map(|option| option.id.clone())
+      .collect::<Vec<_>>()
+      .join(",");
+
+    let select_type_option = SelectTypeOption {
+      options,
+      disable_color: false,
+    };
+
+    let result = select_type_option.convert_raw_cell_data(&raw_data);
+    assert_eq!(result, "Option 1, Option 2");
   }
 }

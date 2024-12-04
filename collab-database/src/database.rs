@@ -7,7 +7,8 @@ use crate::blocks::{Block, BlockEvent};
 use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
 use crate::fields::{
-  stringify_type_option, Field, FieldChangeReceiver, FieldMap, FieldUpdate, StringifyTypeOption,
+  type_option_cell_reader, type_option_cell_writer, Field, FieldChangeReceiver, FieldMap,
+  FieldUpdate, TypeOptionCellReader, TypeOptionCellWriter,
 };
 use crate::meta::MetaMap;
 use crate::rows::{
@@ -498,12 +499,26 @@ impl Database {
     self.body.block.get_row_meta(row_id).await
   }
 
-  pub fn get_stringify_type_option(&self, field_id: &str) -> Option<Box<dyn StringifyTypeOption>> {
+  /// Return [TypeOptionCellReader] for the given field id.
+  pub fn get_cell_reader(&self, field_id: &str) -> Option<Box<dyn TypeOptionCellReader>> {
     let txn = self.collab.transact();
     let field = self.body.fields.get_field(&txn, field_id)?;
+    drop(txn);
+
     let field_type = FieldType::from(field.field_type);
     let type_option = field.get_any_type_option(field_type.type_id())?;
-    stringify_type_option(type_option, &field_type)
+    type_option_cell_reader(type_option, &field_type)
+  }
+
+  /// Return [TypeOptionCellWriter] for the given field id.
+  pub fn get_cell_writer(&self, field_id: &str) -> Option<Box<dyn TypeOptionCellWriter>> {
+    let txn = self.collab.transact();
+    let field = self.body.fields.get_field(&txn, field_id)?;
+    drop(txn);
+
+    let field_type = FieldType::from(field.field_type);
+    let type_option = field.get_any_type_option(field_type.type_id())?;
+    type_option_cell_writer(type_option, &field_type)
   }
 
   #[instrument(level = "debug", skip_all)]

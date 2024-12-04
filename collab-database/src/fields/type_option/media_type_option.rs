@@ -1,10 +1,13 @@
 use crate::database::gen_database_file_id;
 use crate::entity::FieldType;
-use crate::fields::{StringifyTypeOption, TypeOptionData, TypeOptionDataBuilder};
+use crate::fields::{
+  TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
+};
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::{json, Value};
 use serde_repr::Serialize_repr;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
@@ -24,15 +27,20 @@ impl Default for MediaTypeOption {
   }
 }
 
-impl StringifyTypeOption for MediaTypeOption {
-  fn stringify_cell(&self, cell: &Cell) -> String {
+impl TypeOptionCellReader for MediaTypeOption {
+  fn json_cell(&self, cell: &Cell) -> Value {
     match cell.get_as::<MediaCellData>(CELL_DATA) {
-      None => "".to_string(),
-      Some(s) => s.to_string(),
+      None => Value::Null,
+      Some(s) => json!(s),
     }
   }
 
-  fn stringify_text(&self, text: &str) -> String {
+  fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
+    let cell_data = cell.get_as::<String>(CELL_DATA)?;
+    cell_data.parse::<f64>().ok()
+  }
+
+  fn convert_raw_cell_data(&self, text: &str) -> String {
     let data = MediaCellData::from(text.to_string());
     data
       .files
@@ -40,6 +48,13 @@ impl StringifyTypeOption for MediaTypeOption {
       .map(|file| file.name)
       .collect::<Vec<_>>()
       .join(", ")
+  }
+}
+
+impl TypeOptionCellWriter for MediaTypeOption {
+  fn write_json(&self, json_value: Value) -> Cell {
+    let cell_data = serde_json::from_value::<MediaCellData>(json_value).unwrap_or_default();
+    cell_data.into()
   }
 }
 
@@ -59,7 +74,7 @@ impl From<MediaTypeOption> for TypeOptionData {
   }
 }
 
-#[derive(Clone, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, Eq, PartialEq)]
 pub struct MediaCellData {
   pub files: Vec<MediaFile>,
 }
@@ -108,7 +123,7 @@ impl From<&Cell> for MediaCellData {
 impl From<MediaCellData> for Cell {
   fn from(value: MediaCellData) -> Self {
     let mut cell = new_cell_builder(FieldType::Media);
-    cell.insert(CELL_DATA.into(), value.into());
+    cell.insert(CELL_DATA.into(), value.to_string().into());
     cell
   }
 }
@@ -342,22 +357,124 @@ impl<'de> Deserialize<'de> for MediaUploadType {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use serde_json;
+  use serde_json::json;
 
   #[test]
-  fn test_serialize_deserialize_media_file() {
-    let media_file = MediaFile {
-      id: "123".to_string(),
-      name: "test_file".to_string(),
-      url: "http://example.com/file".to_string(),
-      upload_type: MediaUploadType::Cloud,
-      file_type: MediaFileType::Image,
+  fn test_media_cell_data_to_string() {
+    let media_file_1 = MediaFile::new(
+      "file1.jpg".to_string(),
+      "http://example.com/file1.jpg".to_string(),
+      MediaUploadType::Local,
+      MediaFileType::Image,
+    );
+    let media_file_2 = MediaFile::new(
+      "file2.png".to_string(),
+      "http://example.com/file2.png".to_string(),
+      MediaUploadType::Cloud,
+      MediaFileType::Image,
+    );
+
+    let media_cell_data = MediaCellData {
+      files: vec![media_file_1.clone(), media_file_2.clone()],
     };
 
-    // Serialize the MediaFile to a JSON string
-    let serialized = serde_json::to_string(&media_file).unwrap();
-    println!("Serialized MediaFile: {}", serialized);
-    let deserialized: MediaFile = serde_json::from_str(&serialized).unwrap();
-    assert_eq!(media_file, deserialized);
+    let expected = "file1.jpg, file2.png".to_string();
+    assert_eq!(media_cell_data.to_string(), expected);
+  }
+
+  #[test]
+  fn test_media_file_type_from_file_extension() {
+    assert_eq!(
+      MediaFileType::from_file("example.jpg"),
+      MediaFileType::Image
+    );
+    assert_eq!(
+      MediaFileType::from_file("example.mp4"),
+      MediaFileType::Video
+    );
+    assert_eq!(
+      MediaFileType::from_file("example.unknown"),
+      MediaFileType::Other
+    );
+  }
+
+  #[test]
+  fn test_serialize_deserialize_media_cell_data() {
+    let media_file_1 = MediaFile::new(
+      "file1.jpg".to_string(),
+      "http://example.com/file1.jpg".to_string(),
+      MediaUploadType::Local,
+      MediaFileType::Image,
+    );
+    let media_file_2 = MediaFile::new(
+      "file2.png".to_string(),
+      "http://example.com/file2.png".to_string(),
+      MediaUploadType::Cloud,
+      MediaFileType::Image,
+    );
+
+    let media_cell_data = MediaCellData {
+      files: vec![media_file_1.clone(), media_file_2.clone()],
+    };
+
+    // Serialize to JSON
+    let serialized = serde_json::to_string(&media_cell_data).unwrap();
+    println!("Serialized MediaCellData: {}", serialized);
+
+    // Deserialize back to struct
+    let deserialized: MediaCellData = serde_json::from_str(&serialized).unwrap();
+    assert_eq!(media_cell_data, deserialized);
+  }
+
+  #[test]
+  fn test_media_file_display() {
+    let media_file = MediaFile::new(
+      "test_file.txt".to_string(),
+      "http://example.com/file.txt".to_string(),
+      MediaUploadType::Network,
+      MediaFileType::Text,
+    );
+
+    let expected_display = format!(
+      "MediaFile(id: {}, name: test_file.txt, url: http://example.com/file.txt, upload_type: {:?}, file_type: {:?})",
+      media_file.id, media_file.upload_type, media_file.file_type
+    );
+
+    assert_eq!(media_file.to_string(), expected_display);
+  }
+
+  #[test]
+  fn test_deserialize_media_upload_type() {
+    let json_local = json!("Local");
+    let json_network = json!(1);
+    let json_cloud = json!("CloudMedia");
+
+    assert_eq!(
+      serde_json::from_value::<MediaUploadType>(json_local).unwrap(),
+      MediaUploadType::Local
+    );
+    assert_eq!(
+      serde_json::from_value::<MediaUploadType>(json_network).unwrap(),
+      MediaUploadType::Network
+    );
+    assert_eq!(
+      serde_json::from_value::<MediaUploadType>(json_cloud).unwrap(),
+      MediaUploadType::Cloud
+    );
+  }
+
+  #[test]
+  fn test_deserialize_media_file_type() {
+    let json_image = json!(1);
+    let json_text = json!("Text");
+
+    assert_eq!(
+      serde_json::from_value::<MediaFileType>(json_image).unwrap(),
+      MediaFileType::Image
+    );
+    assert_eq!(
+      serde_json::from_value::<MediaFileType>(json_text).unwrap(),
+      MediaFileType::Text
+    );
   }
 }
