@@ -5,6 +5,7 @@ use crate::fields::{
 };
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
+use crate::template::util::TypeOptionCellData;
 use collab::preclude::Any;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
@@ -35,7 +36,7 @@ impl TypeOptionCellReader for URLTypeOption {
 }
 
 impl TypeOptionCellWriter for URLTypeOption {
-  fn write_json(&self, json_value: Value) -> Cell {
+  fn convert_json_to_cell(&self, json_value: Value) -> Cell {
     let mut cell = new_cell_builder(FieldType::URL);
     cell.insert(CELL_DATA.into(), json_value.to_string().into());
     cell
@@ -60,6 +61,12 @@ impl From<URLTypeOption> for TypeOptionData {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct URLCellData {
   pub data: String,
+}
+
+impl TypeOptionCellData for URLCellData {
+  fn is_empty(&self) -> bool {
+    self.data.is_empty()
+  }
 }
 
 impl AsRef<str> for URLCellData {

@@ -46,8 +46,8 @@ impl TypeOptionCellReader for RelationTypeOption {
 }
 
 impl TypeOptionCellWriter for RelationTypeOption {
-  fn write_json(&self, json_value: Value) -> Cell {
+  fn convert_json_to_cell(&self, json_value: Value) -> Cell {
     let cell_data = serde_json::from_value::<RelationCellData>(json_value).unwrap_or_default();
-    Cell::from(&cell_data)
+    Cell::from(cell_data)
   }
 }

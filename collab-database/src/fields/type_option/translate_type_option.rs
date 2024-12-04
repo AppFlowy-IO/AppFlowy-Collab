@@ -48,7 +48,7 @@ impl TypeOptionCellReader for TranslateTypeOption {
 }
 
 impl TypeOptionCellWriter for TranslateTypeOption {
-  fn write_json(&self, json_value: Value) -> Cell {
+  fn convert_json_to_cell(&self, json_value: Value) -> Cell {
     let cell = TranslateCellData(json_value.as_str().unwrap_or_default().to_string());
     cell.into()
   }

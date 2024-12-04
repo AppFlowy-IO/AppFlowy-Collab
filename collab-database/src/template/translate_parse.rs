@@ -1,11 +1,19 @@
 use crate::entity::FieldType;
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
+use crate::template::util::TypeOptionCellData;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct TranslateCellData(pub String);
+
+impl TypeOptionCellData for TranslateCellData {
+  fn is_empty(&self) -> bool {
+    self.0.is_empty()
+  }
+}
+
 impl std::ops::Deref for TranslateCellData {
   type Target = String;
 

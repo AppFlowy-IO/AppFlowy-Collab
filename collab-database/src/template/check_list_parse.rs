@@ -1,12 +1,62 @@
 use crate::database::gen_option_id;
+use crate::entity::FieldType;
 use crate::fields::select_type_option::{SelectOption, SelectOptionColor};
+use crate::rows::{new_cell_builder, Cell};
+use crate::template::entity::CELL_DATA;
+use crate::template::util::TypeOptionCellData;
+use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct ChecklistCellData {
   pub options: Vec<SelectOption>,
   #[serde(default)]
   pub selected_option_ids: Vec<String>,
+}
+
+impl ChecklistCellData {
+  pub fn selected_options(&self) -> Vec<SelectOption> {
+    self
+      .options
+      .iter()
+      .filter(|option| self.selected_option_ids.contains(&option.id))
+      .cloned()
+      .collect()
+  }
+
+  pub fn percentage_complete(&self) -> f64 {
+    let selected_options = self.selected_option_ids.len();
+    let total_options = self.options.len();
+
+    if total_options == 0 {
+      return 0.0;
+    }
+    ((selected_options as f64) / (total_options as f64) * 100.0).round() / 100.0
+  }
+}
+
+impl From<&Cell> for ChecklistCellData {
+  fn from(cell: &Cell) -> Self {
+    cell
+      .get_as::<String>(CELL_DATA)
+      .map(|data| serde_json::from_str::<ChecklistCellData>(&data).unwrap_or_default())
+      .unwrap_or_default()
+  }
+}
+
+impl From<ChecklistCellData> for Cell {
+  fn from(cell_data: ChecklistCellData) -> Self {
+    let data = serde_json::to_string(&cell_data).unwrap_or_default();
+    let mut cell = new_cell_builder(FieldType::Checklist);
+    cell.insert(CELL_DATA.into(), data.into());
+    cell
+  }
+}
+
+impl TypeOptionCellData for ChecklistCellData {
+  fn is_empty(&self) -> bool {
+    self.options.is_empty()
+  }
 }
 
 impl From<(Vec<String>, Vec<String>)> for ChecklistCellData {
@@ -35,6 +85,12 @@ impl From<(Vec<String>, Vec<String>)> for ChecklistCellData {
       options,
       selected_option_ids,
     }
+  }
+}
+
+impl ToString for ChecklistCellData {
+  fn to_string(&self) -> String {
+    serde_json::to_string(self).unwrap_or_default()
   }
 }
 

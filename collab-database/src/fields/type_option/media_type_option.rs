@@ -4,7 +4,9 @@ use crate::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
 };
 use crate::rows::{new_cell_builder, Cell};
+
 use crate::template::entity::CELL_DATA;
+use crate::template::util::TypeOptionCellData;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{json, Value};
@@ -52,7 +54,7 @@ impl TypeOptionCellReader for MediaTypeOption {
 }
 
 impl TypeOptionCellWriter for MediaTypeOption {
-  fn write_json(&self, json_value: Value) -> Cell {
+  fn convert_json_to_cell(&self, json_value: Value) -> Cell {
     let cell_data = serde_json::from_value::<MediaCellData>(json_value).unwrap_or_default();
     cell_data.into()
   }
@@ -77,6 +79,12 @@ impl From<MediaTypeOption> for TypeOptionData {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Eq, PartialEq)]
 pub struct MediaCellData {
   pub files: Vec<MediaFile>,
+}
+
+impl TypeOptionCellData for MediaCellData {
+  fn is_empty(&self) -> bool {
+    self.files.is_empty()
+  }
 }
 
 impl From<MediaCellData> for Any {

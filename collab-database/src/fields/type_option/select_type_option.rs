@@ -7,6 +7,8 @@ use crate::fields::{
 };
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
+
+use crate::template::util::TypeOptionCellData;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -194,7 +196,7 @@ impl TypeOptionCellReader for SingleSelectTypeOption {
 }
 
 impl TypeOptionCellWriter for SingleSelectTypeOption {
-  fn write_json(&self, value: Value) -> Cell {
+  fn convert_json_to_cell(&self, value: Value) -> Cell {
     cell_from_json_value(value, &self.options, FieldType::SingleSelect)
   }
 }
@@ -243,7 +245,7 @@ impl TypeOptionCellReader for MultiSelectTypeOption {
 }
 
 impl TypeOptionCellWriter for MultiSelectTypeOption {
-  fn write_json(&self, value: Value) -> Cell {
+  fn convert_json_to_cell(&self, value: Value) -> Cell {
     cell_from_json_value(value, &self.options, FieldType::MultiSelect)
   }
 }
@@ -287,6 +289,12 @@ impl SelectOptionIds {
     let mut cell = new_cell_builder(field_type);
     cell.insert(CELL_DATA.into(), self.to_string().into());
     cell
+  }
+}
+
+impl TypeOptionCellData for SelectOptionIds {
+  fn is_empty(&self) -> bool {
+    self.0.is_empty()
   }
 }
 
@@ -483,7 +491,7 @@ mod tests {
     });
 
     let json_value = json!({ "name": "Option A" });
-    let cell = single_select.write_json(json_value);
+    let cell = single_select.convert_json_to_cell(json_value);
 
     let cell_data: String = cell.get_as(CELL_DATA).unwrap();
     assert!(!cell_data.is_empty());
@@ -502,7 +510,7 @@ mod tests {
         { "id": multi_select.options[1].id }
     ]);
 
-    let cell = multi_select.write_json(json_value);
+    let cell = multi_select.convert_json_to_cell(json_value);
     let cell_data: String = cell.get_as(CELL_DATA).unwrap();
     assert!(cell_data.contains(&multi_select.options[0].id));
     assert!(cell_data.contains(&multi_select.options[1].id));

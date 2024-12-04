@@ -1,6 +1,8 @@
 use crate::entity::FieldType;
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
+
+use crate::template::util::TypeOptionCellData;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 
@@ -9,13 +11,21 @@ pub struct TimestampCellData {
   pub timestamp: Option<i64>,
 }
 
+impl TypeOptionCellData for TimestampCellData {
+  fn is_empty(&self) -> bool {
+    self.timestamp.is_none()
+  }
+}
+
 impl TimestampCellData {
-  pub fn new(timestamp: Option<i64>) -> Self {
-    Self { timestamp }
+  pub fn new<T: Into<Option<i64>>>(timestamp: T) -> Self {
+    Self {
+      timestamp: timestamp.into(),
+    }
   }
 
-  pub fn to_cell(&self, field_type: FieldType) -> Cell {
-    let data: TimestampCellDataWrapper = (field_type, self.clone()).into();
+  pub fn to_cell<T: Into<FieldType>>(&self, field_type: T) -> Cell {
+    let data: TimestampCellDataWrapper = (field_type.into(), self.clone()).into();
     data.into()
   }
 }

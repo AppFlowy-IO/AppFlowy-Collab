@@ -152,54 +152,53 @@ pub trait TypeOptionCellReader {
 /// [TypeOptionCellWriter] is a trait that provides methods to write [serde_json::Value] into a cell.
 /// Different field types have their own implementation about how to convert [serde_json::Value] into [Cell].
 pub trait TypeOptionCellWriter {
-  /// Write json value into a cell
+  /// Convert json value into a cell
   /// Different type option has its own implementation about how to convert [serde_json::Value]
   /// into [Cell]
-  fn write_json(&self, json_value: serde_json::Value) -> Cell;
+  fn convert_json_to_cell(&self, json_value: serde_json::Value) -> Cell;
 }
-
 pub fn type_option_cell_writer(
   type_option_data: TypeOptionData,
   field_type: &FieldType,
-) -> Option<Box<dyn TypeOptionCellWriter>> {
+) -> Box<dyn TypeOptionCellWriter> {
   match field_type {
-    FieldType::RichText => Some(Box::new(RichTextTypeOption::from(type_option_data))),
-    FieldType::Number => Some(Box::new(NumberTypeOption::from(type_option_data))),
-    FieldType::DateTime => Some(Box::new(DateTypeOption::from(type_option_data))),
-    FieldType::SingleSelect => Some(Box::new(SingleSelectTypeOption::from(type_option_data))),
-    FieldType::MultiSelect => Some(Box::new(MultiSelectTypeOption::from(type_option_data))),
-    FieldType::Checkbox => Some(Box::new(CheckboxTypeOption::from(type_option_data))),
-    FieldType::URL => Some(Box::new(URLTypeOption::from(type_option_data))),
-    FieldType::Time => Some(Box::new(TimeTypeOption::from(type_option_data))),
-    FieldType::Media => Some(Box::new(MediaTypeOption::from(type_option_data))),
-    FieldType::Checklist => Some(Box::new(ChecklistTypeOption::from(type_option_data))),
-    FieldType::LastEditedTime => Some(Box::new(TimestampTypeOption::from(type_option_data))),
-    FieldType::CreatedTime => Some(Box::new(TimestampTypeOption::from(type_option_data))),
-    FieldType::Relation => Some(Box::new(RelationTypeOption::from(type_option_data))),
-    FieldType::Summary => Some(Box::new(SummarizationTypeOption::from(type_option_data))),
-    FieldType::Translate => Some(Box::new(TranslateTypeOption::from(type_option_data))),
+    FieldType::RichText => Box::new(RichTextTypeOption::from(type_option_data)),
+    FieldType::Number => Box::new(NumberTypeOption::from(type_option_data)),
+    FieldType::DateTime => Box::new(DateTypeOption::from(type_option_data)),
+    FieldType::SingleSelect => Box::new(SingleSelectTypeOption::from(type_option_data)),
+    FieldType::MultiSelect => Box::new(MultiSelectTypeOption::from(type_option_data)),
+    FieldType::Checkbox => Box::new(CheckboxTypeOption::from(type_option_data)),
+    FieldType::URL => Box::new(URLTypeOption::from(type_option_data)),
+    FieldType::Time => Box::new(TimeTypeOption::from(type_option_data)),
+    FieldType::Media => Box::new(MediaTypeOption::from(type_option_data)),
+    FieldType::Checklist => Box::new(ChecklistTypeOption::from(type_option_data)),
+    FieldType::LastEditedTime => Box::new(TimestampTypeOption::from(type_option_data)),
+    FieldType::CreatedTime => Box::new(TimestampTypeOption::from(type_option_data)),
+    FieldType::Relation => Box::new(RelationTypeOption::from(type_option_data)),
+    FieldType::Summary => Box::new(SummarizationTypeOption::from(type_option_data)),
+    FieldType::Translate => Box::new(TranslateTypeOption::from(type_option_data)),
   }
 }
 
 pub fn type_option_cell_reader(
   type_option_data: TypeOptionData,
   field_type: &FieldType,
-) -> Option<Box<dyn TypeOptionCellReader>> {
+) -> Box<dyn TypeOptionCellReader> {
   match field_type {
-    FieldType::RichText => Some(Box::new(RichTextTypeOption::from(type_option_data))),
-    FieldType::Number => Some(Box::new(NumberTypeOption::from(type_option_data))),
-    FieldType::DateTime => Some(Box::new(DateTypeOption::from(type_option_data))),
-    FieldType::SingleSelect => Some(Box::new(SingleSelectTypeOption::from(type_option_data))),
-    FieldType::MultiSelect => Some(Box::new(MultiSelectTypeOption::from(type_option_data))),
-    FieldType::Checkbox => Some(Box::new(CheckboxTypeOption::from(type_option_data))),
-    FieldType::URL => Some(Box::new(URLTypeOption::from(type_option_data))),
-    FieldType::Time => Some(Box::new(TimeTypeOption::from(type_option_data))),
-    FieldType::Media => Some(Box::new(MediaTypeOption::from(type_option_data))),
-    FieldType::Checklist => Some(Box::new(ChecklistTypeOption::from(type_option_data))),
-    FieldType::LastEditedTime => Some(Box::new(TimestampTypeOption::from(type_option_data))),
-    FieldType::CreatedTime => Some(Box::new(TimestampTypeOption::from(type_option_data))),
-    FieldType::Relation => Some(Box::new(RelationTypeOption::from(type_option_data))),
-    FieldType::Summary => Some(Box::new(SummarizationTypeOption::from(type_option_data))),
-    FieldType::Translate => Some(Box::new(TranslateTypeOption::from(type_option_data))),
+    FieldType::RichText => Box::new(RichTextTypeOption::from(type_option_data)),
+    FieldType::Number => Box::new(NumberTypeOption::from(type_option_data)),
+    FieldType::DateTime => Box::new(DateTypeOption::from(type_option_data)),
+    FieldType::SingleSelect => Box::new(SingleSelectTypeOption::from(type_option_data)),
+    FieldType::MultiSelect => Box::new(MultiSelectTypeOption::from(type_option_data)),
+    FieldType::Checkbox => Box::new(CheckboxTypeOption::from(type_option_data)),
+    FieldType::URL => Box::new(URLTypeOption::from(type_option_data)),
+    FieldType::Time => Box::new(TimeTypeOption::from(type_option_data)),
+    FieldType::Media => Box::new(MediaTypeOption::from(type_option_data)),
+    FieldType::Checklist => Box::new(ChecklistTypeOption::from(type_option_data)),
+    FieldType::LastEditedTime => Box::new(TimestampTypeOption::from(type_option_data)),
+    FieldType::CreatedTime => Box::new(TimestampTypeOption::from(type_option_data)),
+    FieldType::Relation => Box::new(RelationTypeOption::from(type_option_data)),
+    FieldType::Summary => Box::new(SummarizationTypeOption::from(type_option_data)),
+    FieldType::Translate => Box::new(TranslateTypeOption::from(type_option_data)),
   }
 }

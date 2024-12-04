@@ -1,11 +1,18 @@
 use crate::entity::FieldType;
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
+use crate::template::util::TypeOptionCellData;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TimeCellData(pub Option<i64>);
+
+impl TypeOptionCellData for TimeCellData {
+  fn is_empty(&self) -> bool {
+    self.0.is_none()
+  }
+}
 
 impl From<&Cell> for TimeCellData {
   fn from(cell: &Cell) -> Self {
