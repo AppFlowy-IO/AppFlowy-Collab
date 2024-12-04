@@ -10,12 +10,14 @@ pub struct TimestampCellData {
 }
 
 impl TimestampCellData {
-  pub fn new(timestamp: Option<i64>) -> Self {
-    Self { timestamp }
+  pub fn new<T: Into<Option<i64>>>(timestamp: T) -> Self {
+    Self {
+      timestamp: timestamp.into(),
+    }
   }
 
-  pub fn to_cell(&self, field_type: FieldType) -> Cell {
-    let data: TimestampCellDataWrapper = (field_type, self.clone()).into();
+  pub fn to_cell<T: Into<FieldType>>(&self, field_type: T) -> Cell {
+    let data: TimestampCellDataWrapper = (field_type.into(), self.clone()).into();
     data.into()
   }
 }
