@@ -14,17 +14,6 @@ pub struct ChecklistCellData {
   pub selected_option_ids: Vec<String>,
 }
 
-impl ToString for ChecklistCellData {
-  fn to_string(&self) -> String {
-    let selected_options: Vec<String> = self
-      .selected_options()
-      .iter()
-      .map(|option| option.name.clone())
-      .collect();
-    selected_options.join(", ")
-  }
-}
-
 impl ChecklistCellData {
   pub fn selected_options(&self) -> Vec<SelectOption> {
     self
@@ -96,6 +85,12 @@ impl From<(Vec<String>, Vec<String>)> for ChecklistCellData {
       options,
       selected_option_ids,
     }
+  }
+}
+
+impl ToString for ChecklistCellData {
+  fn to_string(&self) -> String {
+    serde_json::to_string(self).unwrap_or_default()
   }
 }
 
