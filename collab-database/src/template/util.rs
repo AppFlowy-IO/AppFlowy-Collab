@@ -7,6 +7,13 @@ use crate::template::entity::DatabaseTemplate;
 use crate::workspace_database::NoPersistenceDatabaseCollabService;
 use std::sync::Arc;
 
+/// This trait that provides methods to extend the [TypeOption::CellData] functionalities.
+pub trait TypeOptionCellData {
+  /// Checks if the cell content is considered empty based on certain criteria. e.g. empty text,
+  /// no date selected, no selected options
+  fn is_empty(&self) -> bool;
+}
+
 pub async fn database_from_template(template: DatabaseTemplate) -> Result<Database, DatabaseError> {
   let params = create_database_params_from_template(template);
   let context = DatabaseContext {

@@ -1,12 +1,20 @@
 use crate::entity::FieldType;
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
+
+use crate::template::util::TypeOptionCellData;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TimestampCellData {
   pub timestamp: Option<i64>,
+}
+
+impl TypeOptionCellData for TimestampCellData {
+  fn is_empty(&self) -> bool {
+    self.timestamp.is_none()
+  }
 }
 
 impl TimestampCellData {

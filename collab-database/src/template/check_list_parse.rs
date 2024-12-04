@@ -1,5 +1,6 @@
 use crate::database::gen_option_id;
 use crate::fields::select_type_option::{SelectOption, SelectOptionColor};
+use crate::template::util::TypeOptionCellData;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Clone, Serialize, Deserialize)]
@@ -7,6 +8,12 @@ pub struct ChecklistCellData {
   pub options: Vec<SelectOption>,
   #[serde(default)]
   pub selected_option_ids: Vec<String>,
+}
+
+impl TypeOptionCellData for ChecklistCellData {
+  fn is_empty(&self) -> bool {
+    self.options.is_empty()
+  }
 }
 
 impl From<(Vec<String>, Vec<String>)> for ChecklistCellData {

@@ -7,6 +7,8 @@ use crate::fields::{
 };
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
+
+use crate::template::util::TypeOptionCellData;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -287,6 +289,12 @@ impl SelectOptionIds {
     let mut cell = new_cell_builder(field_type);
     cell.insert(CELL_DATA.into(), self.to_string().into());
     cell
+  }
+}
+
+impl TypeOptionCellData for SelectOptionIds {
+  fn is_empty(&self) -> bool {
+    self.0.is_empty()
   }
 }
 

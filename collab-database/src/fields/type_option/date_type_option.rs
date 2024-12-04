@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use crate::template::time_parse::TimeCellData;
+use crate::template::util::TypeOptionCellData;
 use serde_json::{json, Value};
 use std::str::FromStr;
 pub use strum::IntoEnumIterator;
@@ -350,6 +351,11 @@ pub struct DateCellData {
   #[serde(default)]
   pub is_range: bool,
   pub reminder_id: String,
+}
+impl TypeOptionCellData for DateCellData {
+  fn is_empty(&self) -> bool {
+    self.timestamp.is_none()
+  }
 }
 
 impl DateCellData {

@@ -1,6 +1,8 @@
 use crate::entity::FieldType;
+
 use crate::rows::{new_cell_builder, Cell, RowId};
 use crate::template::entity::CELL_DATA;
+use crate::template::util::TypeOptionCellData;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use yrs::Any;
@@ -8,6 +10,12 @@ use yrs::Any;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RelationCellData {
   pub row_ids: Vec<RowId>,
+}
+
+impl TypeOptionCellData for RelationCellData {
+  fn is_empty(&self) -> bool {
+    self.row_ids.is_empty()
+  }
 }
 
 impl From<&Cell> for RelationCellData {
