@@ -182,7 +182,16 @@ pub struct SingleSelectTypeOption(pub SelectTypeOption);
 
 impl TypeOptionCellReader for SingleSelectTypeOption {
   fn json_cell(&self, cell: &Cell) -> Value {
-    self.0.json_cell(cell)
+    match cell.get_as::<String>(CELL_DATA) {
+      None => Value::Null,
+      Some(id) => self
+        .options
+        .iter()
+        .find(|option| option.id == id)
+        .map(|option| option.name.clone())
+        .unwrap_or_default()
+        .into(),
+    }
   }
 
   fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
@@ -581,6 +590,22 @@ mod tests {
     assert_eq!(select_ty_opt.options[0].name, "To Do");
     assert_eq!(select_ty_opt.options[1].color, SelectOptionColor::Orange);
     assert_eq!(select_ty_opt.options[2].id, "__n6");
-    assert_eq!(select_ty_opt.disable_color, false);
+    assert!(!select_ty_opt.disable_color);
+  }
+
+  #[test]
+  fn test_single_select_option_serialization() {
+    let options = vec![SelectOption::new("Option 1"), SelectOption::new("Option 2")];
+    let option_1_id = options[0].id.clone();
+    let select_type_option = SelectTypeOption {
+      options,
+      disable_color: false,
+    };
+    let single_select = SingleSelectTypeOption(select_type_option);
+    let single_select_cell_reader: Box<dyn TypeOptionCellReader> = Box::new(single_select);
+    let mut cell: Cell = new_cell_builder(FieldType::SingleSelect);
+    cell.insert(CELL_DATA.into(), option_1_id.into());
+    let serde_val = single_select_cell_reader.json_cell(&cell);
+    assert_eq!(serde_val, Value::String("Option 1".to_string()));
   }
 }
