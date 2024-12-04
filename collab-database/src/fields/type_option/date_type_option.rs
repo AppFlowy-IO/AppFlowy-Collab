@@ -42,7 +42,7 @@ impl TypeOptionCellReader for TimeTypeOption {
 }
 
 impl TypeOptionCellWriter for TimeTypeOption {
-  fn write_json(&self, json_value: Value) -> Cell {
+  fn convert_json_to_cell(&self, json_value: Value) -> Cell {
     let cell_data = serde_json::from_value::<TimeCellData>(json_value).unwrap_or_default();
     Cell::from(&cell_data)
   }
@@ -118,7 +118,7 @@ impl TypeOptionCellReader for DateTypeOption {
 }
 
 impl TypeOptionCellWriter for DateTypeOption {
-  fn write_json(&self, json_value: Value) -> Cell {
+  fn convert_json_to_cell(&self, json_value: Value) -> Cell {
     let cell_data = serde_json::from_value::<DateCellData>(json_value).unwrap();
     Cell::from(&cell_data)
   }
@@ -635,7 +635,7 @@ mod tests {
         "reminder_id": "reminder123"
     });
 
-    let cell = date_type_option.write_json(json_value);
+    let cell = date_type_option.convert_json_to_cell(json_value);
     assert_eq!(
       cell.get_as::<String>(CELL_DATA),
       Some("1672531200".to_string())

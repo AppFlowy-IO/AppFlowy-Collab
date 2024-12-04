@@ -10,8 +10,8 @@ use collab::preclude::Any;
 
 use crate::entity::FieldType;
 use crate::rows::{new_cell_builder, Cell};
-use crate::template::entity::CELL_DATA;
-use collab::util::AnyMapExt;
+use crate::template::number_parse::NumberCellData;
+
 use fancy_regex::Regex;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
@@ -72,8 +72,8 @@ impl TypeOptionCellReader for NumberTypeOption {
   }
 
   fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
-    let cell_data = cell.get_as::<String>(CELL_DATA)?;
-    cell_data.parse::<f64>().ok()
+    let cell_data = NumberCellData::from(cell);
+    cell_data.0.parse::<f64>().ok()
   }
 
   fn convert_raw_cell_data(&self, text: &str) -> String {
@@ -85,16 +85,16 @@ impl TypeOptionCellReader for NumberTypeOption {
 }
 
 impl TypeOptionCellWriter for NumberTypeOption {
-  fn write_json(&self, json_value: Value) -> Cell {
-    let mut cell = new_cell_builder(FieldType::Number);
+  fn convert_json_to_cell(&self, json_value: Value) -> Cell {
     if let Some(data) = match json_value {
       Value::String(s) => Some(s),
       Value::Number(n) => Some(n.to_string()),
       _ => None,
     } {
-      cell.insert(CELL_DATA.into(), data.into());
+      NumberCellData(data).into()
+    } else {
+      new_cell_builder(FieldType::Number)
     }
-    cell
   }
 }
 

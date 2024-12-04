@@ -152,10 +152,10 @@ pub trait TypeOptionCellReader {
 /// [TypeOptionCellWriter] is a trait that provides methods to write [serde_json::Value] into a cell.
 /// Different field types have their own implementation about how to convert [serde_json::Value] into [Cell].
 pub trait TypeOptionCellWriter {
-  /// Write json value into a cell
+  /// Convert json value into a cell
   /// Different type option has its own implementation about how to convert [serde_json::Value]
   /// into [Cell]
-  fn write_json(&self, json_value: serde_json::Value) -> Cell;
+  fn convert_json_to_cell(&self, json_value: serde_json::Value) -> Cell;
 }
 
 pub fn type_option_cell_writer(

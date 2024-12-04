@@ -41,7 +41,7 @@ impl TypeOptionCellReader for CheckboxTypeOption {
 }
 
 impl TypeOptionCellWriter for CheckboxTypeOption {
-  fn write_json(&self, value: Value) -> Cell {
+  fn convert_json_to_cell(&self, value: Value) -> Cell {
     let mut cell = new_cell_builder(FieldType::Checkbox);
     if let Some(data) = match value {
       Value::String(s) => Some(s),
@@ -119,17 +119,17 @@ mod tests {
 
     // Write a string
     let value = Value::String("true".to_string());
-    let cell = option.write_json(value);
+    let cell = option.convert_json_to_cell(value);
     assert_eq!(cell.get_as::<String>(CELL_DATA).unwrap(), "true");
 
     // Write a boolean
     let value = Value::Bool(true);
-    let cell = option.write_json(value);
+    let cell = option.convert_json_to_cell(value);
     assert_eq!(cell.get_as::<String>(CELL_DATA).unwrap(), "true");
 
     // Write a number
     let value = Value::Number(1.into());
-    let cell = option.write_json(value);
+    let cell = option.convert_json_to_cell(value);
     assert_eq!(cell.get_as::<String>(CELL_DATA).unwrap(), "true");
   }
 

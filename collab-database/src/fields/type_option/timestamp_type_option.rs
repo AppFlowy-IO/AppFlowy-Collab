@@ -48,7 +48,7 @@ impl TypeOptionCellReader for TimestampTypeOption {
 }
 
 impl TypeOptionCellWriter for TimestampTypeOption {
-  fn write_json(&self, json_value: Value) -> Cell {
+  fn convert_json_to_cell(&self, json_value: Value) -> Cell {
     let filed_type = FieldType::from(self.field_type);
     let data = match json_value {
       Value::String(s) => s.parse::<i64>().ok(),
@@ -258,7 +258,7 @@ mod tests {
     let option = TimestampTypeOption::default();
     let json_value = json!("1672531200");
 
-    let cell = option.write_json(json_value);
+    let cell = option.convert_json_to_cell(json_value);
     let data = cell.get_as::<String>(CELL_DATA).unwrap();
 
     assert_eq!(data, "1672531200");
@@ -269,7 +269,7 @@ mod tests {
     let option = TimestampTypeOption::default();
     let json_value = json!("invalid");
 
-    let cell = option.write_json(json_value);
+    let cell = option.convert_json_to_cell(json_value);
     let data: Option<i64> = cell.get_as(CELL_DATA);
 
     assert!(data.is_none());

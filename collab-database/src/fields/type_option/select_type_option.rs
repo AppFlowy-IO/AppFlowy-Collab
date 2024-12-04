@@ -196,7 +196,7 @@ impl TypeOptionCellReader for SingleSelectTypeOption {
 }
 
 impl TypeOptionCellWriter for SingleSelectTypeOption {
-  fn write_json(&self, value: Value) -> Cell {
+  fn convert_json_to_cell(&self, value: Value) -> Cell {
     cell_from_json_value(value, &self.options, FieldType::SingleSelect)
   }
 }
@@ -245,7 +245,7 @@ impl TypeOptionCellReader for MultiSelectTypeOption {
 }
 
 impl TypeOptionCellWriter for MultiSelectTypeOption {
-  fn write_json(&self, value: Value) -> Cell {
+  fn convert_json_to_cell(&self, value: Value) -> Cell {
     cell_from_json_value(value, &self.options, FieldType::MultiSelect)
   }
 }
@@ -491,7 +491,7 @@ mod tests {
     });
 
     let json_value = json!({ "name": "Option A" });
-    let cell = single_select.write_json(json_value);
+    let cell = single_select.convert_json_to_cell(json_value);
 
     let cell_data: String = cell.get_as(CELL_DATA).unwrap();
     assert!(!cell_data.is_empty());
@@ -510,7 +510,7 @@ mod tests {
         { "id": multi_select.options[1].id }
     ]);
 
-    let cell = multi_select.write_json(json_value);
+    let cell = multi_select.convert_json_to_cell(json_value);
     let cell_data: String = cell.get_as(CELL_DATA).unwrap();
     assert!(cell_data.contains(&multi_select.options[0].id));
     assert!(cell_data.contains(&multi_select.options[1].id));

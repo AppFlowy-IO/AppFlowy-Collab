@@ -25,7 +25,7 @@ impl TypeOptionCellReader for RichTextTypeOption {
 }
 
 impl TypeOptionCellWriter for RichTextTypeOption {
-  fn write_json(&self, json_value: Value) -> Cell {
+  fn convert_json_to_cell(&self, json_value: Value) -> Cell {
     let mut cell = new_cell_builder(FieldType::RichText);
     cell.insert(CELL_DATA.into(), json_value.to_string().into());
     cell
