@@ -130,7 +130,7 @@ impl From<&Cell> for MediaCellData {
 impl From<MediaCellData> for Cell {
   fn from(value: MediaCellData) -> Self {
     let mut cell = new_cell_builder(FieldType::Media);
-    cell.insert(CELL_DATA.into(), value.to_string().into());
+    cell.insert(CELL_DATA.into(), value.into());
     cell
   }
 }
@@ -574,5 +574,39 @@ mod tests {
     let numeric_value = media_type_option.numeric_cell(&cell);
 
     assert_eq!(numeric_value, Some(123.45));
+  }
+
+  #[test]
+  fn test_media_cell_data_to_and_from_cell() {
+    // Create MediaCellData with sample MediaFile entries
+    let media_file_1 = MediaFile::new(
+      "file1.jpg".to_string(),
+      "http://example.com/file1.jpg".to_string(),
+      MediaUploadType::Local,
+      MediaFileType::Image,
+    );
+    let media_file_2 = MediaFile::new(
+      "file2.png".to_string(),
+      "http://example.com/file2.png".to_string(),
+      MediaUploadType::Cloud,
+      MediaFileType::Image,
+    );
+
+    let media_cell_data = MediaCellData {
+      files: vec![media_file_1.clone(), media_file_2.clone()],
+    };
+
+    // Convert MediaCellData to a Cell
+    let cell: Cell = media_cell_data.clone().into();
+
+    // Assert the Cell has the correct field type and content
+    let cell_data = MediaCellData::from(&cell);
+    cell_data
+      .files
+      .iter()
+      .zip(media_cell_data.files.iter())
+      .for_each(|(a, b)| {
+        assert_eq!(a, b);
+      });
   }
 }
