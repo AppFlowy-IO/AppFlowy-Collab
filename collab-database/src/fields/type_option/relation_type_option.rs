@@ -5,6 +5,7 @@ use crate::template::relation_parse::RelationCellData;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RelationTypeOption {
@@ -35,13 +36,8 @@ impl TypeOptionCellReader for RelationTypeOption {
   }
 
   fn convert_raw_cell_data(&self, cell_data: &str) -> String {
-    let cell_data = RelationCellData::from(cell_data);
-    cell_data
-      .row_ids
-      .into_iter()
-      .map(|id| id.to_string())
-      .collect::<Vec<_>>()
-      .join(", ")
+    let cell_data = RelationCellData::from_str(cell_data).unwrap_or_default();
+    cell_data.to_string()
   }
 }
 
