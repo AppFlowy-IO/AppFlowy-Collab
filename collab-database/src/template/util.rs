@@ -11,7 +11,7 @@ use std::sync::Arc;
 pub trait TypeOptionCellData {
   /// Checks if the cell content is considered empty based on certain criteria. e.g. empty text,
   /// no date selected, no selected options
-  fn is_empty(&self) -> bool;
+  fn is_cell_empty(&self) -> bool;
 }
 
 pub async fn database_from_template(template: DatabaseTemplate) -> Result<Database, DatabaseError> {

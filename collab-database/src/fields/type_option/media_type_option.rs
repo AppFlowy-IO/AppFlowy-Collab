@@ -82,7 +82,7 @@ pub struct MediaCellData {
 }
 
 impl TypeOptionCellData for MediaCellData {
-  fn is_empty(&self) -> bool {
+  fn is_cell_empty(&self) -> bool {
     self.files.is_empty()
   }
 }

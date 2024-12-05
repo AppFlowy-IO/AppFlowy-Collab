@@ -12,7 +12,7 @@ pub struct TimestampCellData {
 }
 
 impl TypeOptionCellData for TimestampCellData {
-  fn is_empty(&self) -> bool {
+  fn is_cell_empty(&self) -> bool {
     self.timestamp.is_none()
   }
 }

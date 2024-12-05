@@ -353,7 +353,7 @@ pub struct DateCellData {
   pub reminder_id: String,
 }
 impl TypeOptionCellData for DateCellData {
-  fn is_empty(&self) -> bool {
+  fn is_cell_empty(&self) -> bool {
     self.timestamp.is_none()
   }
 }

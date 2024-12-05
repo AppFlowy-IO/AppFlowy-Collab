@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub struct TimeCellData(pub Option<i64>);
 
 impl TypeOptionCellData for TimeCellData {
-  fn is_empty(&self) -> bool {
+  fn is_cell_empty(&self) -> bool {
     self.0.is_none()
   }
 }
