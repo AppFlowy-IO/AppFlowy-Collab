@@ -5,6 +5,7 @@ use crate::fields::{
 };
 use crate::rows::{new_cell_builder, Cell};
 
+use crate::error::DatabaseError;
 use crate::template::entity::CELL_DATA;
 use crate::template::util::TypeOptionCellData;
 use collab::util::AnyMapExt;
@@ -13,6 +14,7 @@ use serde_json::{json, Value};
 use serde_repr::Serialize_repr;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use yrs::Any;
 
@@ -43,13 +45,10 @@ impl TypeOptionCellReader for MediaTypeOption {
   }
 
   fn convert_raw_cell_data(&self, text: &str) -> String {
-    let data = MediaCellData::from(text.to_string());
-    data
-      .files
-      .into_iter()
-      .map(|file| file.name)
-      .collect::<Vec<_>>()
-      .join(", ")
+    match serde_json::from_str::<MediaCellData>(text) {
+      Ok(value) => value.to_string(),
+      Err(_) => "".to_string(),
+    }
   }
 }
 
@@ -131,23 +130,8 @@ impl From<&Cell> for MediaCellData {
 impl From<MediaCellData> for Cell {
   fn from(value: MediaCellData) -> Self {
     let mut cell = new_cell_builder(FieldType::Media);
-    cell.insert(CELL_DATA.into(), value.to_string().into());
+    cell.insert(CELL_DATA.into(), value.into());
     cell
-  }
-}
-
-impl From<String> for MediaCellData {
-  fn from(s: String) -> Self {
-    if s.is_empty() {
-      return MediaCellData { files: vec![] };
-    }
-
-    let files = s
-      .split(", ")
-      .map(|file: &str| serde_json::from_str::<MediaFile>(file).unwrap_or_default())
-      .collect::<Vec<_>>();
-
-    MediaCellData { files }
   }
 }
 
@@ -159,6 +143,22 @@ impl ToString for MediaCellData {
       .map(|file| file.name.clone())
       .collect::<Vec<_>>()
       .join(", ")
+  }
+}
+
+impl FromStr for MediaCellData {
+  type Err = DatabaseError;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    if s.is_empty() {
+      return Ok(MediaCellData { files: vec![] });
+    }
+    let files = s
+      .split(", ")
+      .map(|file: &str| serde_json::from_str::<MediaFile>(file).unwrap_or_default())
+      .collect::<Vec<_>>();
+
+    Ok(MediaCellData { files })
   }
 }
 
@@ -366,6 +366,44 @@ impl<'de> Deserialize<'de> for MediaUploadType {
 mod tests {
   use super::*;
   use serde_json::json;
+  #[test]
+  fn test_is_cell_empty() {
+    let empty_media_cell_data = MediaCellData { files: vec![] };
+    assert!(empty_media_cell_data.is_cell_empty());
+
+    let non_empty_media_cell_data = MediaCellData {
+      files: vec![MediaFile::new(
+        "file1.jpg".to_string(),
+        "http://example.com/file1.jpg".to_string(),
+        MediaUploadType::Local,
+        MediaFileType::Image,
+      )],
+    };
+    assert!(!non_empty_media_cell_data.is_cell_empty());
+  }
+
+  #[test]
+  fn test_media_file_rename() {
+    let original = MediaFile::new(
+      "original_name.jpg".to_string(),
+      "http://example.com/file.jpg".to_string(),
+      MediaUploadType::Local,
+      MediaFileType::Image,
+    );
+
+    let renamed = original.rename("new_name.jpg".to_string());
+    assert_eq!(renamed.name, "new_name.jpg");
+    assert_eq!(renamed.url, original.url);
+    assert_eq!(renamed.upload_type, original.upload_type);
+    assert_eq!(renamed.file_type, original.file_type);
+  }
+
+  #[test]
+  fn test_invalid_json_deserialization() {
+    let invalid_json = json!("InvalidType");
+    assert!(serde_json::from_value::<MediaUploadType>(invalid_json.clone()).is_err());
+    assert!(serde_json::from_value::<MediaFileType>(invalid_json).is_err());
+  }
 
   #[test]
   fn test_media_cell_data_to_string() {
@@ -484,5 +522,91 @@ mod tests {
       serde_json::from_value::<MediaFileType>(json_text).unwrap(),
       MediaFileType::Text
     );
+  }
+
+  #[test]
+  fn test_convert_raw_cell_data() {
+    let media_type_option = MediaTypeOption::default();
+
+    // Test with valid JSON data
+    let valid_data =
+      r#"{"files":[{"id":"1","name":"file1","url":"url1","upload_type":0,"file_type":1}]}"#;
+    assert_eq!(
+      media_type_option.convert_raw_cell_data(valid_data),
+      "file1".to_string()
+    );
+
+    // Test with invalid JSON data
+    let invalid_data = "invalid_json";
+    assert_eq!(
+      media_type_option.convert_raw_cell_data(invalid_data),
+      "".to_string()
+    );
+
+    // Test with empty string
+    let empty_data = "";
+    assert_eq!(
+      media_type_option.convert_raw_cell_data(empty_data),
+      "".to_string()
+    );
+
+    // Test with valid JSON but missing "files" field
+    let missing_field_data = r#"{"other_field":[{"id":"1"}]}"#;
+    assert_eq!(
+      media_type_option.convert_raw_cell_data(missing_field_data),
+      "".to_string()
+    );
+
+    // Test with valid JSON but incorrect structure
+    let incorrect_structure_data = r#"{"files":"not_an_array"}"#;
+    assert_eq!(
+      media_type_option.convert_raw_cell_data(incorrect_structure_data),
+      "".to_string()
+    );
+  }
+
+  #[test]
+  fn test_numeric_cell_conversion() {
+    let mut cell = new_cell_builder(FieldType::Media);
+    cell.insert(CELL_DATA.into(), "123.45".to_string().into());
+
+    let media_type_option = MediaTypeOption::default();
+    let numeric_value = media_type_option.numeric_cell(&cell);
+
+    assert_eq!(numeric_value, Some(123.45));
+  }
+
+  #[test]
+  fn test_media_cell_data_to_and_from_cell() {
+    // Create MediaCellData with sample MediaFile entries
+    let media_file_1 = MediaFile::new(
+      "file1.jpg".to_string(),
+      "http://example.com/file1.jpg".to_string(),
+      MediaUploadType::Local,
+      MediaFileType::Image,
+    );
+    let media_file_2 = MediaFile::new(
+      "file2.png".to_string(),
+      "http://example.com/file2.png".to_string(),
+      MediaUploadType::Cloud,
+      MediaFileType::Image,
+    );
+
+    let media_cell_data = MediaCellData {
+      files: vec![media_file_1.clone(), media_file_2.clone()],
+    };
+
+    // Convert MediaCellData to a Cell
+    let cell: Cell = media_cell_data.clone().into();
+
+    // Assert the Cell has the correct field type and content
+    let cell_data = MediaCellData::from(&cell);
+    cell_data
+      .files
+      .iter()
+      .zip(media_cell_data.files.iter())
+      .for_each(|(a, b)| {
+        assert_eq!(a, b);
+      });
   }
 }

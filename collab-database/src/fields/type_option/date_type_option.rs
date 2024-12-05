@@ -104,9 +104,8 @@ impl TypeOptionCellReader for DateTypeOption {
     }
   }
 
-  fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
-    let cell_data = DateCellData::from(cell);
-    cell_data.timestamp.map(|timestamp| timestamp as f64)
+  fn numeric_cell(&self, _cell: &Cell) -> Option<f64> {
+    None
   }
 
   fn convert_raw_cell_data(&self, text: &str) -> String {
@@ -655,7 +654,7 @@ mod tests {
     cell.insert(CELL_DATA.into(), "1672531200".to_string().into());
 
     let result = date_type_option.numeric_cell(&cell);
-    assert_eq!(result, Some(1672531200.0));
+    assert_eq!(result, None);
   }
 
   #[test]

@@ -56,7 +56,7 @@ impl WorkspaceDatabase {
   /// Create a new [DatabaseMeta] for the given database id and view id
   /// use [Self::update_database] to attach more views to the existing database.
   ///
-  pub fn add_database(&mut self, database_id: &str, view_ids: Vec<String>) {
+  pub fn add_database(&mut self, database_id: &str, view_ids: Vec<String>) -> TransactionMut {
     let mut txn = self.collab.transact_mut();
     let linked_views: HashSet<String> = view_ids.into_iter().collect();
     let record = DatabaseMeta {
@@ -65,6 +65,7 @@ impl WorkspaceDatabase {
       linked_views: linked_views.into_iter().collect(),
     };
     self.body.push_back(&mut txn, record);
+    txn
   }
 
   pub fn batch_add_database(
@@ -85,17 +86,21 @@ impl WorkspaceDatabase {
   }
 
   /// Update the database by the given id
-  pub fn update_database(&mut self, database_id: &str, f: impl FnMut(&mut DatabaseMeta)) {
-    self
-      .body
-      .update_database(&mut self.collab.transact_mut(), database_id, f);
+  pub fn update_database(
+    &mut self,
+    database_id: &str,
+    f: impl FnMut(&mut DatabaseMeta),
+  ) -> TransactionMut {
+    let mut txn = self.collab.transact_mut();
+    self.body.update_database(&mut txn, database_id, f);
+    txn
   }
 
   /// Delete the database by the given id
-  pub fn delete_database(&mut self, database_id: &str) {
-    self
-      .body
-      .delete_database(&mut self.collab.transact_mut(), database_id);
+  pub fn delete_database(&mut self, database_id: &str) -> TransactionMut {
+    let mut txn = self.collab.transact_mut();
+    self.body.delete_database(&mut txn, database_id);
+    txn
   }
 
   /// Test if the database with the given id exists
