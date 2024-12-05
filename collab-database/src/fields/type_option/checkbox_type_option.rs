@@ -162,7 +162,7 @@ mod tests {
     let checkbox_type_option = CheckboxTypeOption::new();
     let cell_writer: Box<dyn TypeOptionCellReader> = Box::new(checkbox_type_option);
     {
-      let mut cell: Cell = new_cell_builder(FieldType::RichText);
+      let mut cell: Cell = new_cell_builder(FieldType::Checkbox);
       cell.insert(CELL_DATA.into(), "Yes".into());
       let serde_val = cell_writer.json_cell(&cell);
       assert_eq!(serde_val, Value::Bool(true));

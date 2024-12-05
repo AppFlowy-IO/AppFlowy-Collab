@@ -841,7 +841,7 @@ mod tests {
     let number_type_option = NumberTypeOption::default();
     let cell_writer: Box<dyn TypeOptionCellReader> = Box::new(number_type_option);
     {
-      let mut cell: Cell = new_cell_builder(FieldType::RichText);
+      let mut cell: Cell = new_cell_builder(FieldType::Number);
       cell.insert(CELL_DATA.into(), "42".into());
       let serde_val = cell_writer.json_cell(&cell);
       assert_eq!(serde_val, Value::String("42".into()));
