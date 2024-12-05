@@ -68,7 +68,7 @@ impl From<NumberTypeOption> for TypeOptionData {
 impl TypeOptionCellReader for NumberTypeOption {
   fn json_cell(&self, cell: &Cell) -> Value {
     // Returns the formated number string.
-    Value::String(self.stringify_cell(cell))
+    self.stringify_cell(cell).into()
   }
 
   fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
@@ -763,6 +763,10 @@ impl NumberFormat {
 
 #[cfg(test)]
 mod tests {
+  use collab::util::AnyMapExt;
+
+  use crate::template::entity::CELL_DATA;
+
   use super::*;
   /// Testing when the input is not a number.
   #[test]
@@ -830,5 +834,35 @@ mod tests {
   fn assert_number(type_option: &NumberTypeOption, input_str: &str, expected_str: &str) {
     let output = type_option.convert_raw_cell_data(input_str);
     assert_eq!(output, expected_str.to_owned());
+  }
+
+  #[test]
+  fn number_cell_to_serde() {
+    let number_type_option = NumberTypeOption::default();
+    let cell_writer: Box<dyn TypeOptionCellReader> = Box::new(number_type_option);
+    {
+      let mut cell: Cell = new_cell_builder(FieldType::RichText);
+      cell.insert(CELL_DATA.into(), "42".into());
+      let serde_val = cell_writer.json_cell(&cell);
+      assert_eq!(serde_val, Value::String("42".into()));
+    }
+  }
+
+  #[test]
+  fn number_serde_to_cell() {
+    let number_type_option = NumberTypeOption::default();
+    let cell_writer: Box<dyn TypeOptionCellWriter> = Box::new(number_type_option);
+    {
+      // js string
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::String("42.195".to_string()));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, "42.195");
+    }
+    {
+      // js number
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::Number(10.into()));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, "10");
+    }
   }
 }
