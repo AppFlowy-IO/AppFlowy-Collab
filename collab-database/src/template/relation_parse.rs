@@ -13,7 +13,7 @@ pub struct RelationCellData {
 }
 
 impl TypeOptionCellData for RelationCellData {
-  fn is_empty(&self) -> bool {
+  fn is_cell_empty(&self) -> bool {
     self.row_ids.is_empty()
   }
 }

@@ -64,7 +64,7 @@ pub struct URLCellData {
 }
 
 impl TypeOptionCellData for URLCellData {
-  fn is_empty(&self) -> bool {
+  fn is_cell_empty(&self) -> bool {
     self.data.is_empty()
   }
 }

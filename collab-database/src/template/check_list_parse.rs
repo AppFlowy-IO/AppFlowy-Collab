@@ -54,7 +54,7 @@ impl From<ChecklistCellData> for Cell {
 }
 
 impl TypeOptionCellData for ChecklistCellData {
-  fn is_empty(&self) -> bool {
+  fn is_cell_empty(&self) -> bool {
     self.options.is_empty()
   }
 }

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub struct SummaryCellData(pub String);
 
 impl TypeOptionCellData for SummaryCellData {
-  fn is_empty(&self) -> bool {
+  fn is_cell_empty(&self) -> bool {
     self.0.is_empty()
   }
 }

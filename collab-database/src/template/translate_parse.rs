@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub struct TranslateCellData(pub String);
 
 impl TypeOptionCellData for TranslateCellData {
-  fn is_empty(&self) -> bool {
+  fn is_cell_empty(&self) -> bool {
     self.0.is_empty()
   }
 }
