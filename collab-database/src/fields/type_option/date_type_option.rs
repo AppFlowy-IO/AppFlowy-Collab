@@ -101,9 +101,8 @@ impl TypeOptionCellReader for DateTypeOption {
     }
   }
 
-  fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
-    let cell_data = DateCellData::from(cell);
-    cell_data.timestamp.map(|timestamp| timestamp as f64)
+  fn numeric_cell(&self, _cell: &Cell) -> Option<f64> {
+    None
   }
 
   fn convert_raw_cell_data(&self, text: &str) -> String {

@@ -43,13 +43,10 @@ impl TypeOptionCellReader for MediaTypeOption {
   }
 
   fn convert_raw_cell_data(&self, text: &str) -> String {
-    let data = MediaCellData::from(text.to_string());
-    data
-      .files
-      .into_iter()
-      .map(|file| file.name)
-      .collect::<Vec<_>>()
-      .join(", ")
+    match serde_json::from_str::<MediaCellData>(text) {
+      Ok(value) => value.to_string(),
+      Err(_) => "".to_string(),
+    }
   }
 }
 
@@ -133,21 +130,6 @@ impl From<MediaCellData> for Cell {
     let mut cell = new_cell_builder(FieldType::Media);
     cell.insert(CELL_DATA.into(), value.to_string().into());
     cell
-  }
-}
-
-impl From<String> for MediaCellData {
-  fn from(s: String) -> Self {
-    if s.is_empty() {
-      return MediaCellData { files: vec![] };
-    }
-
-    let files = s
-      .split(", ")
-      .map(|file: &str| serde_json::from_str::<MediaFile>(file).unwrap_or_default())
-      .collect::<Vec<_>>();
-
-    MediaCellData { files }
   }
 }
 

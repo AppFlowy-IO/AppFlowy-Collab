@@ -143,6 +143,7 @@ pub trait TypeOptionCellReader {
   }
 
   /// Returns the numeric value of the cell. If the value is not numeric, returns `None`.
+  /// Currently, it's used to calculate the sum of the numeric cell values.
   fn numeric_cell(&self, cell: &Cell) -> Option<f64>;
 
   /// Convert the value stored in given key:[CELL_DATA] into a readable text
