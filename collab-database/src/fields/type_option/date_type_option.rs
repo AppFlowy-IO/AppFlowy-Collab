@@ -207,7 +207,7 @@ impl DateTypeOption {
   ) -> Result<Option<NaiveTime>, DatabaseError> {
     match (include_time, time_str) {
       (true, Some(time_str)) => {
-        let result = NaiveTime::parse_from_str(&time_str, self.time_format.format_str());
+        let result = NaiveTime::parse_from_str(time_str, self.time_format.format_str());
         match result {
           Ok(time) => Ok(Some(time)),
           Err(_e) => {
@@ -748,7 +748,7 @@ mod tests {
     }
     {
       // json
-      let js_val = serde_json::to_value(&DateCellData::from_timestamp(1570864850)).unwrap();
+      let js_val = serde_json::to_value(DateCellData::from_timestamp(1570864850)).unwrap();
       let cell: Cell = cell_writer.convert_json_to_cell(js_val);
       let data = cell.get_as::<String>(CELL_DATA).unwrap();
       assert_eq!(data, "1570864850");

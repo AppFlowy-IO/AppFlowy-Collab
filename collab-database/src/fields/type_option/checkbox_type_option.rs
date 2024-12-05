@@ -171,7 +171,7 @@ mod tests {
 
   #[test]
   fn number_serde_to_cell() {
-    let checkbox_type_option = CheckboxTypeOption::default();
+    let checkbox_type_option = CheckboxTypeOption;
     let cell_writer: Box<dyn TypeOptionCellWriter> = Box::new(checkbox_type_option);
     {
       // empty string
