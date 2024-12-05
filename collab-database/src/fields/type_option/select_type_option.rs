@@ -120,7 +120,6 @@ impl SelectOption {
   }
 }
 #[derive(PartialEq, Eq, Serialize, Deserialize, Debug, Clone)]
-#[serde(try_from = "u8", into = "u8")]
 #[repr(u8)]
 #[derive(Default)]
 pub enum SelectOptionColor {
@@ -552,5 +551,36 @@ mod tests {
 
     let result = select_type_option.convert_raw_cell_data(&raw_data);
     assert_eq!(result, "Option 1, Option 2");
+  }
+
+  #[test]
+  fn test_select_content_deser() {
+    let js_str = r#"{
+      "options": [
+        {
+          "id": "CEZD",
+          "name": "To Do",
+          "color": "Purple"
+        },
+        {
+          "id": "TznH",
+          "name": "Doing",
+          "color": "Orange"
+        },
+        {
+          "id": "__n6",
+          "name": "✅ Done",
+          "color": "Yellow"
+        }
+      ],
+      "disable_color": false
+    }"#;
+
+    let select_ty_opt = serde_json::from_str::<SelectTypeOption>(js_str).unwrap();
+    assert_eq!(select_ty_opt.options.len(), 3);
+    assert_eq!(select_ty_opt.options[0].name, "To Do");
+    assert_eq!(select_ty_opt.options[1].color, SelectOptionColor::Orange);
+    assert_eq!(select_ty_opt.options[2].id, "__n6");
+    assert!(!select_ty_opt.disable_color);
   }
 }

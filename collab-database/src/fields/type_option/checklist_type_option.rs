@@ -108,8 +108,8 @@ mod checklist_type_option_tests {
 
     let json_value = json!({
         "options": [
-            { "id": "1", "name": "Option1", "color": 0 },
-            { "id": "2", "name": "Option2", "color": 1 }
+            { "id": "1", "name": "Option1", "color": "Pink" },
+            { "id": "2", "name": "Option2", "color": "LightPink" }
         ],
         "selected_option_ids": ["1"]
     });
