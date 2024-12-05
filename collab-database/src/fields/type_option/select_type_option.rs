@@ -581,6 +581,6 @@ mod tests {
     assert_eq!(select_ty_opt.options[0].name, "To Do");
     assert_eq!(select_ty_opt.options[1].color, SelectOptionColor::Orange);
     assert_eq!(select_ty_opt.options[2].id, "__n6");
-    assert_eq!(select_ty_opt.disable_color, false);
+    assert!(!select_ty_opt.disable_color);
   }
 }
