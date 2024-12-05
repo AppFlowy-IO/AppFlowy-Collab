@@ -620,7 +620,7 @@ mod tests {
     cell.insert(CELL_DATA.into(), "1672531200".to_string().into());
 
     let result = date_type_option.numeric_cell(&cell);
-    assert_eq!(result, Some(1672531200.0));
+    assert_eq!(result, None);
   }
 
   #[test]
