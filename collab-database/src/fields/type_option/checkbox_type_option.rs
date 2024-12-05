@@ -88,12 +88,12 @@ mod tests {
 
     // Convert cell to JSON
     let value = option.json_cell(&cell);
-    assert_eq!(value, Value::String("true".to_string()));
+    assert_eq!(value, Value::Bool(true));
 
     // Test with empty data
     let empty_cell = new_cell_builder(FieldType::Checkbox);
     let empty_value = option.json_cell(&empty_cell);
-    assert_eq!(empty_value, Value::String("".to_string()));
+    assert_eq!(empty_value, Value::Bool(false));
   }
 
   #[test]
