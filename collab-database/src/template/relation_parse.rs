@@ -1,5 +1,7 @@
 use crate::entity::FieldType;
+use std::str::FromStr;
 
+use crate::error::DatabaseError;
 use crate::rows::{new_cell_builder, Cell, RowId};
 use crate::template::entity::CELL_DATA;
 use crate::template::util::TypeOptionCellData;
@@ -10,6 +12,23 @@ use yrs::Any;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RelationCellData {
   pub row_ids: Vec<RowId>,
+}
+
+impl FromStr for RelationCellData {
+  type Err = DatabaseError;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    if s.is_empty() {
+      return Ok(RelationCellData { row_ids: vec![] });
+    }
+
+    let ids = s
+      .split(", ")
+      .map(|id| id.to_string().into())
+      .collect::<Vec<_>>();
+
+    Ok(RelationCellData { row_ids: ids })
+  }
 }
 
 impl TypeOptionCellData for RelationCellData {
@@ -49,27 +68,6 @@ impl From<RelationCellData> for Cell {
     let mut cell = new_cell_builder(FieldType::Relation);
     cell.insert(CELL_DATA.into(), data);
     cell
-  }
-}
-
-impl From<&str> for RelationCellData {
-  fn from(s: &str) -> Self {
-    if s.is_empty() {
-      return RelationCellData { row_ids: vec![] };
-    }
-
-    let ids = s
-      .split(", ")
-      .map(|id| id.to_string().into())
-      .collect::<Vec<_>>();
-
-    RelationCellData { row_ids: ids }
-  }
-}
-
-impl From<String> for RelationCellData {
-  fn from(s: String) -> Self {
-    RelationCellData::from(s.as_str())
   }
 }
 
