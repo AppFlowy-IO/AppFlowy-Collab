@@ -553,7 +553,7 @@ impl Database {
             }
           }
 
-          trace!("Initializing chunked database rows: {:?}", chunk);
+          trace!("Initializing chunked database rows: {}", chunk.len());
           self.body.block.init_database_rows(chunk).await
         }
       })
