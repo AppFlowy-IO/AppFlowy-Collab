@@ -23,7 +23,7 @@ async fn create_initial_database_test() {
   let database_test = create_database(1, &database_id);
 
   let all_rows: Vec<Row> = database_test
-    .get_all_rows(None)
+    .get_all_rows(20, None)
     .await
     .filter_map(|result| async move { result.ok() })
     .collect()
