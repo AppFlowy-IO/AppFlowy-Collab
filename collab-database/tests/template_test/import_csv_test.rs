@@ -16,7 +16,7 @@ async fn import_csv_test() {
 
   let fields = database.get_fields_in_view(&database.get_inline_view_id(), None);
   let rows: Vec<Row> = database
-    .get_all_rows(None)
+    .get_all_rows(20, None)
     .await
     .filter_map(|result| async move { result.ok() })
     .collect()

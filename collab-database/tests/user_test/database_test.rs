@@ -130,7 +130,7 @@ async fn duplicate_database_inline_view_test() {
     .unwrap();
 
   assert_eq!(
-    db.get_rows_for_view(&duplicated_view_id, None)
+    db.get_rows_for_view(&duplicated_view_id, 20, None)
       .await
       .count()
       .await,
@@ -140,7 +140,7 @@ async fn duplicate_database_inline_view_test() {
     database
       .read()
       .await
-      .get_rows_for_view("v1", None)
+      .get_rows_for_view("v1", 10, None)
       .await
       .count()
       .await,
@@ -185,13 +185,13 @@ async fn duplicate_database_view_test() {
 
   // Duplicated database should have the same rows as the original database
   assert_eq!(
-    db.get_rows_for_view(&duplicated_view.id, None)
+    db.get_rows_for_view(&duplicated_view.id, 10, None)
       .await
       .count()
       .await,
     1
   );
-  assert_eq!(db.get_rows_for_view("v1", None).await.count().await, 1);
+  assert_eq!(db.get_rows_for_view("v1", 10, None).await.count().await, 1);
 }
 
 #[tokio::test]
@@ -283,14 +283,14 @@ async fn duplicate_database_data_test() {
 
   // compare rows
   let original_rows: Vec<Row> = original
-    .get_rows_for_view("v1", None)
+    .get_rows_for_view("v1", 10, None)
     .await
     .filter_map(|result| async { result.ok() })
     .collect()
     .await;
 
   let duplicate_rows: Vec<Row> = duplicate
-    .get_rows_for_view(duplicated_view_id, None)
+    .get_rows_for_view(duplicated_view_id, 10, None)
     .await
     .filter_map(|result| async { result.ok() })
     .collect()

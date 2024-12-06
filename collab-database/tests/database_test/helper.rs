@@ -32,7 +32,7 @@ pub struct DatabaseTest {
 
 impl DatabaseTest {
   pub async fn get_rows_for_view(&self, view_id: &str) -> Vec<Row> {
-    let rows_stream = self.database.get_rows_for_view(view_id, None).await;
+    let rows_stream = self.database.get_rows_for_view(view_id, 10, None).await;
     let rows: Vec<Row> = rows_stream
       .filter_map(|result| async move { result.ok() })
       .collect()

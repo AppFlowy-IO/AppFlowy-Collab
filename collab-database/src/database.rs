@@ -529,6 +529,7 @@ impl Database {
   pub fn init_database_rows<'a, T: Into<RowId> + Send + 'a>(
     &'a self,
     row_ids: Vec<T>,
+    chunk_size: usize,
     cancel_token: Option<CancellationToken>,
   ) -> impl Stream<Item = Result<Arc<RwLock<DatabaseRow>>, DatabaseError>> + 'a {
     let row_ids_chunk_stream = stream::iter(
@@ -536,7 +537,7 @@ impl Database {
         .into_iter()
         .map(Into::into)
         .collect::<Vec<RowId>>()
-        .chunks(50)
+        .chunks(chunk_size)
         .map(|chunk| chunk.to_vec())
         .collect::<Vec<Vec<RowId>>>(),
     );
@@ -552,6 +553,7 @@ impl Database {
             }
           }
 
+          trace!("Initializing chunked database rows: {:?}", chunk);
           self.body.block.init_database_rows(chunk).await
         }
       })
@@ -595,11 +597,12 @@ impl Database {
   pub async fn get_rows_for_view(
     &self,
     view_id: &str,
+    chunk_size: usize,
     cancel_token: Option<CancellationToken>,
   ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
     let row_orders = self.get_row_orders_for_view(view_id);
     self
-      .get_rows_from_row_orders(&row_orders, cancel_token)
+      .get_rows_from_row_orders(&row_orders, chunk_size, cancel_token)
       .await
   }
 
@@ -623,10 +626,11 @@ impl Database {
   pub async fn get_rows_from_row_orders<'a>(
     &'a self,
     row_orders: &[RowOrder],
+    chunk_size: usize,
     cancel_token: Option<CancellationToken>,
   ) -> impl Stream<Item = Result<Row, DatabaseError>> + 'a {
     let row_ids = row_orders.iter().map(|order| order.id.clone()).collect();
-    let rows_stream = self.init_database_rows(row_ids, cancel_token);
+    let rows_stream = self.init_database_rows(row_ids, chunk_size, cancel_token);
     let database_id = self.get_database_id();
     rows_stream.then(move |result| {
       let database_id = database_id.clone();
@@ -1341,7 +1345,7 @@ impl Database {
     let inline_view_id = self.body.get_inline_view_id(&txn);
     let views = self.get_all_views();
     let fields = self.body.get_fields_in_view(&txn, &inline_view_id, None);
-    let rows_stream = self.get_all_rows(None).await;
+    let rows_stream = self.get_all_rows(20, None).await;
     let rows: Vec<Row> = rows_stream
       .filter_map(|result| async move { result.ok() })
       .collect()
@@ -1372,6 +1376,7 @@ impl Database {
 
   pub async fn get_all_rows(
     &self,
+    chunk_size: usize,
     cancel_token: Option<CancellationToken>,
   ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
     let row_orders = {
@@ -1381,12 +1386,12 @@ impl Database {
     };
 
     self
-      .get_rows_from_row_orders(&row_orders, cancel_token)
+      .get_rows_from_row_orders(&row_orders, chunk_size, cancel_token)
       .await
   }
 
   pub async fn collect_all_rows(&self) -> Vec<Result<Row, DatabaseError>> {
-    let rows_stream = self.get_all_rows(None).await;
+    let rows_stream = self.get_all_rows(20, None).await;
     rows_stream.collect::<Vec<_>>().await
   }
 
