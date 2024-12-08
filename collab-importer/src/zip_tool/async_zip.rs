@@ -29,11 +29,14 @@ pub struct UnzipFile {
 }
 
 #[async_recursion(?Send)]
-pub async fn async_unzip<R: AsyncBufRead + Unpin>(
+pub async fn async_unzip<R>(
   mut zip_reader: ZipFileReader<Ready<R>>,
   out_dir: PathBuf,
   default_file_name: Option<String>,
-) -> Result<UnzipFile, ImporterError> {
+) -> Result<UnzipFile, ImporterError>
+where
+  R: AsyncBufRead + Unpin,
+{
   let mut root_dir = None;
   let mut parts = vec![];
   #[allow(irrefutable_let_patterns)]

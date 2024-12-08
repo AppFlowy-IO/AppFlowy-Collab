@@ -1,7 +1,7 @@
 use crate::entity::FieldType;
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
-use crate::template::util::TypeOptionCellData;
+use crate::template::util::{ToCellString, TypeOptionCellData};
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 
@@ -40,8 +40,8 @@ impl std::convert::From<String> for NumberCellData {
   }
 }
 
-impl ToString for NumberCellData {
-  fn to_string(&self) -> String {
+impl ToCellString for NumberCellData {
+  fn to_cell_string(&self) -> String {
     self.0.clone()
   }
 }

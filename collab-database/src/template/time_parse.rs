@@ -1,7 +1,7 @@
 use crate::entity::FieldType;
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
-use crate::template::util::TypeOptionCellData;
+use crate::template::util::{ToCellString, TypeOptionCellData};
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 
@@ -30,8 +30,8 @@ impl std::convert::From<&str> for TimeCellData {
   }
 }
 
-impl ToString for TimeCellData {
-  fn to_string(&self) -> String {
+impl ToCellString for TimeCellData {
+  fn to_cell_string(&self) -> String {
     if let Some(time) = self.0 {
       time.to_string()
     } else {
@@ -43,7 +43,7 @@ impl ToString for TimeCellData {
 impl From<&TimeCellData> for Cell {
   fn from(data: &TimeCellData) -> Self {
     let mut cell = new_cell_builder(FieldType::Time);
-    cell.insert(CELL_DATA.into(), data.to_string().into());
+    cell.insert(CELL_DATA.into(), data.to_cell_string().into());
     cell
   }
 }

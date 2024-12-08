@@ -2,6 +2,7 @@ use super::{TypeOptionData, TypeOptionDataBuilder};
 use crate::fields::{TypeOptionCellReader, TypeOptionCellWriter};
 use crate::rows::Cell;
 use crate::template::relation_parse::RelationCellData;
+use crate::template::util::ToCellString;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -37,7 +38,7 @@ impl TypeOptionCellReader for RelationTypeOption {
 
   fn convert_raw_cell_data(&self, cell_data: &str) -> String {
     let cell_data = RelationCellData::from_str(cell_data).unwrap_or_default();
-    cell_data.to_string()
+    cell_data.to_cell_string()
   }
 }
 

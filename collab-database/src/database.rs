@@ -1706,8 +1706,8 @@ impl DatabaseBody {
       DatabaseLayout::Grid,
     );
     inline_view.is_inline = true;
-    inline_view.row_orders = row_orders.clone();
-    inline_view.field_orders = field_orders.clone();
+    inline_view.row_orders.clone_from(&row_orders);
+    inline_view.field_orders.clone_from(&field_orders);
     views.insert_view(&mut txn, inline_view);
 
     let metas = MetaMap::new(metas);

@@ -48,9 +48,8 @@ fn insert_paragraphs(document: &mut Document, paragraphs: Vec<String>) {
       data: Default::default(),
     };
 
-    document.insert_block(block, Some(prev_id)).unwrap();
-
-    prev_id = block_id.clone();
+    document.insert_block(block, Some(prev_id.clone())).unwrap();
+    prev_id.clone_from(&block_id);
 
     document.apply_text_delta(&text_id, format!(r#"[{{"insert": "{}"}}]"#, paragraph));
   }

@@ -3,7 +3,7 @@ use crate::entity::FieldType;
 use crate::fields::select_type_option::{SelectOption, SelectOptionColor};
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
-use crate::template::util::TypeOptionCellData;
+use crate::template::util::{ToCellString, TypeOptionCellData};
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 
@@ -88,8 +88,8 @@ impl From<(Vec<String>, Vec<String>)> for ChecklistCellData {
   }
 }
 
-impl ToString for ChecklistCellData {
-  fn to_string(&self) -> String {
+impl ToCellString for ChecklistCellData {
+  fn to_cell_string(&self) -> String {
     serde_json::to_string(self).unwrap_or_default()
   }
 }

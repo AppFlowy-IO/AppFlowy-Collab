@@ -14,6 +14,10 @@ pub trait TypeOptionCellData {
   fn is_cell_empty(&self) -> bool;
 }
 
+pub trait ToCellString {
+  fn to_cell_string(&self) -> String;
+}
+
 pub async fn database_from_template(template: DatabaseTemplate) -> Result<Database, DatabaseError> {
   let params = create_database_params_from_template(template);
   let context = DatabaseContext {
