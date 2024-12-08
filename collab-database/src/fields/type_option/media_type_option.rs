@@ -7,7 +7,7 @@ use crate::rows::{new_cell_builder, Cell};
 
 use crate::error::DatabaseError;
 use crate::template::entity::CELL_DATA;
-use crate::template::util::TypeOptionCellData;
+use crate::template::util::{ToCellString, TypeOptionCellData};
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{json, Value};
@@ -46,7 +46,7 @@ impl TypeOptionCellReader for MediaTypeOption {
 
   fn convert_raw_cell_data(&self, text: &str) -> String {
     match serde_json::from_str::<MediaCellData>(text) {
-      Ok(value) => value.to_string(),
+      Ok(value) => value.to_cell_string(),
       Err(_) => "".to_string(),
     }
   }
@@ -135,8 +135,8 @@ impl From<MediaCellData> for Cell {
   }
 }
 
-impl ToString for MediaCellData {
-  fn to_string(&self) -> String {
+impl ToCellString for MediaCellData {
+  fn to_cell_string(&self) -> String {
     self
       .files
       .iter()
@@ -425,7 +425,7 @@ mod tests {
     };
 
     let expected = "file1.jpg, file2.png".to_string();
-    assert_eq!(media_cell_data.to_string(), expected);
+    assert_eq!(media_cell_data.to_cell_string(), expected);
   }
 
   #[test]

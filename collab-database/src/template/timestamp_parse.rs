@@ -2,7 +2,7 @@ use crate::entity::FieldType;
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
 
-use crate::template::util::TypeOptionCellData;
+use crate::template::util::{ToCellString, TypeOptionCellData};
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 
@@ -30,8 +30,8 @@ impl TimestampCellData {
   }
 }
 
-impl ToString for TimestampCellData {
-  fn to_string(&self) -> String {
+impl ToCellString for TimestampCellData {
+  fn to_cell_string(&self) -> String {
     serde_json::to_string(self).unwrap()
   }
 }

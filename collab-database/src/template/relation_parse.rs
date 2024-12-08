@@ -4,7 +4,7 @@ use std::str::FromStr;
 use crate::error::DatabaseError;
 use crate::rows::{new_cell_builder, Cell, RowId};
 use crate::template::entity::CELL_DATA;
-use crate::template::util::TypeOptionCellData;
+use crate::template::util::{ToCellString, TypeOptionCellData};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use yrs::Any;
@@ -71,8 +71,8 @@ impl From<RelationCellData> for Cell {
   }
 }
 
-impl ToString for RelationCellData {
-  fn to_string(&self) -> String {
+impl ToCellString for RelationCellData {
+  fn to_cell_string(&self) -> String {
     self
       .row_ids
       .iter()

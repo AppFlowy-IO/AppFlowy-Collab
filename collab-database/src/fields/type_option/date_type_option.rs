@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use crate::template::time_parse::TimeCellData;
-use crate::template::util::TypeOptionCellData;
+use crate::template::util::{ToCellString, TypeOptionCellData};
 use serde_json::{json, Value};
 use std::str::FromStr;
 pub use strum::IntoEnumIterator;
@@ -37,7 +37,7 @@ impl TypeOptionCellReader for TimeTypeOption {
 
   fn convert_raw_cell_data(&self, text: &str) -> String {
     let cell_data = TimeCellData::from(text);
-    cell_data.to_string()
+    cell_data.to_cell_string()
   }
 }
 
