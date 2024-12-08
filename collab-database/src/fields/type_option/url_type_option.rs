@@ -5,7 +5,7 @@ use crate::fields::{
 };
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
-use crate::template::util::TypeOptionCellData;
+use crate::template::util::{ToCellString, TypeOptionCellData};
 use collab::preclude::Any;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
@@ -31,7 +31,7 @@ impl TypeOptionCellReader for URLTypeOption {
 
   fn convert_raw_cell_data(&self, text: &str) -> String {
     let cell_data = URLCellData::new(text);
-    cell_data.to_string()
+    cell_data.to_cell_string()
   }
 }
 
@@ -103,8 +103,8 @@ impl From<URLCellData> for Cell {
   }
 }
 
-impl ToString for URLCellData {
-  fn to_string(&self) -> String {
+impl ToCellString for URLCellData {
+  fn to_cell_string(&self) -> String {
     self.to_json().unwrap()
   }
 }
