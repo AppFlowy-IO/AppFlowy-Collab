@@ -5,6 +5,7 @@ use crate::fields::number_type_option::number_currency::Currency;
 use crate::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
 };
+use std::fmt::Display;
 
 use collab::preclude::Any;
 
@@ -255,15 +256,16 @@ fn extract_number(num_str: &str) -> String {
   values.join("")
 }
 
-impl ToString for NumberCellFormat {
-  fn to_string(&self) -> String {
-    match &self.money {
+impl Display for NumberCellFormat {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let str = match &self.money {
       None => match self.decimal {
         None => String::default(),
         Some(decimal) => decimal.to_string(),
       },
       Some(money) => money.to_string(),
-    }
+    };
+    write!(f, "{}", str)
   }
 }
 

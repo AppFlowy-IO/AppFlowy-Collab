@@ -528,8 +528,8 @@ where
     Err(_) => Ok(None),
   }
 }
-impl ToString for DateCellData {
-  fn to_string(&self) -> String {
+impl ToCellString for DateCellData {
+  fn to_cell_string(&self) -> String {
     serde_json::to_string(self).unwrap()
   }
 }

@@ -451,6 +451,7 @@ impl WorkspaceDatabaseManager {
         // Attempt to fix the database inline view ID
         if try_fixing_database(&mut collab, database_meta).is_ok() {
           if let Some(persistence) = self.collab_service.persistence() {
+            #[allow(clippy::blocks_in_conditions)]
             match collab.encode_collab_v1(|collab| {
               CollabType::Database.validate_require_data(collab)?;
               Ok::<_, DatabaseError>(())
