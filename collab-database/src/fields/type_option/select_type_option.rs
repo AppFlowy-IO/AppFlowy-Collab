@@ -8,7 +8,7 @@ use crate::fields::{
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
 
-use crate::template::util::TypeOptionCellData;
+use crate::template::util::{ToCellString, TypeOptionCellData};
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -286,7 +286,7 @@ impl SelectOptionIds {
   }
   pub fn to_cell(&self, field_type: impl Into<i64>) -> Cell {
     let mut cell = new_cell_builder(field_type);
-    cell.insert(CELL_DATA.into(), self.to_string().into());
+    cell.insert(CELL_DATA.into(), self.to_cell_string().into());
     cell
   }
 }
@@ -294,6 +294,12 @@ impl SelectOptionIds {
 impl TypeOptionCellData for SelectOptionIds {
   fn is_cell_empty(&self) -> bool {
     self.0.is_empty()
+  }
+}
+
+impl ToCellString for SelectOptionIds {
+  fn to_cell_string(&self) -> String {
+    self.0.join(SELECTION_IDS_SEPARATOR)
   }
 }
 
@@ -306,14 +312,6 @@ impl std::convert::From<Vec<String>> for SelectOptionIds {
       .filter(|id| !id.is_empty())
       .collect::<Vec<String>>();
     Self(ids)
-  }
-}
-
-impl ToString for SelectOptionIds {
-  /// Returns a string that consists list of ids, placing a commas
-  /// separator between each
-  fn to_string(&self) -> String {
-    self.0.join(SELECTION_IDS_SEPARATOR)
   }
 }
 
@@ -445,7 +443,7 @@ mod tests {
   #[test]
   fn test_select_option_ids_to_string() {
     let ids = SelectOptionIds::from(vec!["id1".to_string(), "id2".to_string()]);
-    assert_eq!(ids.to_string(), "id1,id2");
+    assert_eq!(ids.to_cell_string(), "id1,id2");
   }
 
   #[test]

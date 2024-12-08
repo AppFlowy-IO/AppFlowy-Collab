@@ -2,11 +2,11 @@ use super::{TypeOptionData, TypeOptionDataBuilder};
 use crate::fields::{TypeOptionCellReader, TypeOptionCellWriter};
 use crate::rows::Cell;
 use crate::template::relation_parse::RelationCellData;
+use crate::template::util::ToCellString;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::str::FromStr;
-use crate::template::util::ToCellString;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RelationTypeOption {
