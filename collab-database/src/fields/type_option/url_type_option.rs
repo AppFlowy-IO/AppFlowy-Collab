@@ -9,7 +9,7 @@ use crate::template::util::TypeOptionCellData;
 use collab::preclude::Any;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use yrs::encoding::serde::from_any;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -22,7 +22,7 @@ pub struct URLTypeOption {
 
 impl TypeOptionCellReader for URLTypeOption {
   fn json_cell(&self, cell: &Cell) -> Value {
-    json!(self.stringify_cell(cell))
+    cell.get_as::<String>(CELL_DATA).unwrap_or_default().into()
   }
 
   fn numeric_cell(&self, _cell: &Cell) -> Option<f64> {
@@ -37,9 +37,13 @@ impl TypeOptionCellReader for URLTypeOption {
 
 impl TypeOptionCellWriter for URLTypeOption {
   fn convert_json_to_cell(&self, json_value: Value) -> Cell {
-    let mut cell = new_cell_builder(FieldType::URL);
-    cell.insert(CELL_DATA.into(), json_value.to_string().into());
-    cell
+    match json_value {
+      Value::String(s) => {
+        let cell_data = URLCellData::new(&s);
+        cell_data.into()
+      },
+      _ => Cell::default(),
+    }
   }
 }
 
@@ -106,5 +110,34 @@ impl From<URLCellData> for Cell {
 impl ToString for URLCellData {
   fn to_string(&self) -> String {
     self.to_json().unwrap()
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn url_cell_to_serde() {
+    let url_type_option = URLTypeOption::default();
+    let cell_writer: Box<dyn TypeOptionCellReader> = Box::new(url_type_option);
+    {
+      let mut cell: Cell = new_cell_builder(FieldType::DateTime);
+      cell.insert(CELL_DATA.into(), "https://appflowy.io".into());
+      let serde_val = cell_writer.json_cell(&cell);
+      assert_eq!(serde_val, "https://appflowy.io");
+    }
+  }
+
+  #[test]
+  fn url_serde_to_cell() {
+    let url_type_option = URLTypeOption::default();
+    let cell_writer: Box<dyn TypeOptionCellWriter> = Box::new(url_type_option);
+    {
+      let cell: Cell =
+        cell_writer.convert_json_to_cell(Value::String("https://appflowy.io".to_string()));
+      let data: String = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, "https://appflowy.io");
+    }
   }
 }

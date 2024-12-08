@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::entity::FieldType;
 use crate::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
@@ -19,11 +21,10 @@ impl CheckboxTypeOption {
 
 impl TypeOptionCellReader for CheckboxTypeOption {
   fn json_cell(&self, cell: &Cell) -> Value {
-    let value = match cell.get_as::<String>(CELL_DATA) {
-      None => "".to_string(),
-      Some(s) => Self::convert_raw_cell_data(self, &s),
-    };
-    Value::String(value)
+    match cell.get_as::<Arc<str>>(CELL_DATA) {
+      None => false.into(),
+      Some(s) => bool_from_str(&s).into(),
+    }
   }
 
   fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
@@ -43,14 +44,13 @@ impl TypeOptionCellReader for CheckboxTypeOption {
 impl TypeOptionCellWriter for CheckboxTypeOption {
   fn convert_json_to_cell(&self, value: Value) -> Cell {
     let mut cell = new_cell_builder(FieldType::Checkbox);
-    if let Some(data) = match value {
-      Value::String(s) => Some(s),
-      Value::Bool(b) => Some(b.to_string()),
-      Value::Number(n) => Some(n.to_string()),
-      _ => None,
-    } {
-      cell.insert(CELL_DATA.into(), bool_from_str(&data).to_string().into());
-    }
+    let checked = match value {
+      Value::String(s) => bool_from_str(&s),
+      Value::Bool(b) => b,
+      Value::Number(n) => n.as_i64().unwrap_or(0) > 0,
+      _ => false,
+    };
+    cell.insert(CELL_DATA.into(), checked.to_string().into());
     cell
   }
 }
@@ -88,12 +88,12 @@ mod tests {
 
     // Convert cell to JSON
     let value = option.json_cell(&cell);
-    assert_eq!(value, Value::String("true".to_string()));
+    assert_eq!(value, Value::Bool(true));
 
     // Test with empty data
     let empty_cell = new_cell_builder(FieldType::Checkbox);
     let empty_value = option.json_cell(&empty_cell);
-    assert_eq!(empty_value, Value::String("".to_string()));
+    assert_eq!(empty_value, Value::Bool(false));
   }
 
   #[test]
@@ -155,5 +155,53 @@ mod tests {
     // Invalid inputs default to false
     assert!(!bool_from_str("invalid"));
     assert!(!bool_from_str(""));
+  }
+
+  #[test]
+  fn checkbox_cell_to_serde() {
+    let checkbox_type_option = CheckboxTypeOption::new();
+    let cell_writer: Box<dyn TypeOptionCellReader> = Box::new(checkbox_type_option);
+    {
+      let mut cell: Cell = new_cell_builder(FieldType::Checkbox);
+      cell.insert(CELL_DATA.into(), "Yes".into());
+      let serde_val = cell_writer.json_cell(&cell);
+      assert_eq!(serde_val, Value::Bool(true));
+    }
+  }
+
+  #[test]
+  fn number_serde_to_cell() {
+    let checkbox_type_option = CheckboxTypeOption;
+    let cell_writer: Box<dyn TypeOptionCellWriter> = Box::new(checkbox_type_option);
+    {
+      // empty string
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::String("".to_string()));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, "false");
+    }
+    {
+      // "yes" in any case
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::String("yEs".to_string()));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, "true");
+    }
+    {
+      // bool
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::Bool(true));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, "true");
+    }
+    {
+      // js number
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::Number(1.into()));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, "true");
+    }
+    {
+      // js null
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::Null);
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, "false");
+    }
   }
 }

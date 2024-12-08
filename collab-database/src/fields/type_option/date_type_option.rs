@@ -1,12 +1,15 @@
 use crate::entity::FieldType;
+
 use crate::error::DatabaseError;
+use chrono::Timelike;
+use chrono::{Datelike, Local, TimeZone};
 
 use crate::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
 };
 use crate::rows::{new_cell_builder, Cell};
 use crate::template::entity::CELL_DATA;
-use chrono::{FixedOffset, Local, MappedLocalTime, NaiveDateTime, NaiveTime, Offset, TimeZone};
+use chrono::{FixedOffset, MappedLocalTime, NaiveDateTime, NaiveTime, Offset};
 use chrono_tz::Tz;
 use collab::util::AnyMapExt;
 use serde::de::Visitor;
@@ -118,8 +121,39 @@ impl TypeOptionCellReader for DateTypeOption {
 
 impl TypeOptionCellWriter for DateTypeOption {
   fn convert_json_to_cell(&self, json_value: Value) -> Cell {
-    let cell_data = serde_json::from_value::<DateCellData>(json_value).unwrap();
-    Cell::from(&cell_data)
+    let date_cell_data: DateCellData = match json_value {
+      Value::Number(number) => DateCellData::from_timestamp(number.as_i64().unwrap_or_default()),
+      Value::String(s) => {
+        // try rfc3339 format
+        if let Ok(date) = chrono::DateTime::parse_from_rfc3339(&s) {
+          DateCellData::from_timestamp(date.timestamp())
+        } else {
+          // try naive time
+          if let Ok(Some(date)) = self.naive_time_from_time_string(true, Some(&s)) {
+            let seconds_since_midnight = date.num_seconds_from_midnight();
+            let start_of_day_ts = {
+              let now = Local::now();
+              let start_of_day = Local
+                .with_ymd_and_hms(now.year(), now.month(), now.day(), 0, 0, 0)
+                .unwrap();
+              start_of_day.timestamp()
+            };
+            DateCellData::from_timestamp(start_of_day_ts + seconds_since_midnight as i64)
+          } else {
+            // try to parse as json
+            if let Ok(date_cell_data_obj) = serde_json::from_str::<Value>(&s) {
+              serde_json::from_value::<DateCellData>(date_cell_data_obj).unwrap_or_default()
+            } else {
+              DateCellData::from_timestamp(0)
+            }
+          }
+        }
+      },
+      date_cell_data_obj => {
+        serde_json::from_value::<DateCellData>(date_cell_data_obj).unwrap_or_default()
+      },
+    };
+    Cell::from(&date_cell_data)
   }
 }
 
@@ -168,11 +202,11 @@ impl DateTypeOption {
   pub fn naive_time_from_time_string(
     &self,
     include_time: bool,
-    time_str: Option<String>,
+    time_str: Option<&str>,
   ) -> Result<Option<NaiveTime>, DatabaseError> {
     match (include_time, time_str) {
       (true, Some(time_str)) => {
-        let result = NaiveTime::parse_from_str(&time_str, self.time_format.format_str());
+        let result = NaiveTime::parse_from_str(time_str, self.time_format.format_str());
         match result {
           Ok(time) => Ok(Some(time)),
           Err(_e) => {
@@ -662,5 +696,61 @@ mod tests {
     let invalid_raw_data = "invalid";
     let result = date_type_option.convert_raw_cell_data(invalid_raw_data);
     assert_eq!(result, "");
+  }
+
+  #[test]
+  fn date_cell_to_serde() {
+    let date_type_option = DateTypeOption::default_utc();
+    let cell_writer: Box<dyn TypeOptionCellReader> = Box::new(date_type_option);
+    {
+      let mut cell: Cell = new_cell_builder(FieldType::DateTime);
+      cell.insert(CELL_DATA.into(), "1672531200".into());
+      let serde_val = cell_writer.json_cell(&cell);
+      assert_eq!(
+        serde_val,
+        serde_json::to_value(DateCellData {
+          timestamp: Some(1672531200),
+          end_timestamp: None,
+          include_time: false,
+          is_range: false,
+          reminder_id: "".to_string(),
+        })
+        .unwrap()
+      );
+    }
+  }
+
+  #[test]
+  fn date_serde_to_cell() {
+    let date_type_option = DateTypeOption::default_utc();
+    let cell_writer: Box<dyn TypeOptionCellWriter> = Box::new(date_type_option);
+    {
+      // rf3339
+      let cell: Cell =
+        cell_writer.convert_json_to_cell(Value::String("2019-10-12T07:20:50.52Z".to_string()));
+      let data: String = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, "1570864850");
+    }
+    {
+      // naive time
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::String("12:51".to_string()));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      let last_2 = &data[data.len() - 2..];
+      assert_eq!(last_2, "60"); // because of the seconds
+    }
+    {
+      // enconded json
+      let str = serde_json::to_string(&DateCellData::from_timestamp(1570864850)).unwrap();
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::String(str));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, "1570864850");
+    }
+    {
+      // json
+      let js_val = serde_json::to_value(DateCellData::from_timestamp(1570864850)).unwrap();
+      let cell: Cell = cell_writer.convert_json_to_cell(js_val);
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, "1570864850");
+    }
   }
 }

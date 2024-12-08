@@ -182,7 +182,16 @@ pub struct SingleSelectTypeOption(pub SelectTypeOption);
 
 impl TypeOptionCellReader for SingleSelectTypeOption {
   fn json_cell(&self, cell: &Cell) -> Value {
-    self.0.json_cell(cell)
+    match cell.get_as::<String>(CELL_DATA) {
+      None => Value::Null,
+      Some(id) => self
+        .options
+        .iter()
+        .find(|option| option.id == id)
+        .map(|option| option.name.clone())
+        .unwrap_or_default()
+        .into(),
+    }
   }
 
   fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
@@ -231,7 +240,27 @@ impl From<SingleSelectTypeOption> for TypeOptionData {
 pub struct MultiSelectTypeOption(pub SelectTypeOption);
 impl TypeOptionCellReader for MultiSelectTypeOption {
   fn json_cell(&self, cell: &Cell) -> Value {
-    self.0.json_cell(cell)
+    match cell.get_as::<String>(CELL_DATA) {
+      None => Value::Array(vec![]),
+      Some(s) => {
+        let ids = SelectOptionIds::from_str(&s).unwrap_or_default().0;
+        if ids.is_empty() {
+          return Value::Array(vec![]);
+        }
+        ids
+          .iter()
+          .flat_map(|option_id| {
+            self
+              .options
+              .iter()
+              .find(|option| &option.id == option_id)
+              .cloned()
+          })
+          .map(|option| option.name.clone())
+          .collect::<Vec<String>>()
+          .into()
+      },
+    }
   }
 
   fn numeric_cell(&self, cell: &Cell) -> Option<f64> {
@@ -582,5 +611,119 @@ mod tests {
     assert_eq!(select_ty_opt.options[1].color, SelectOptionColor::Orange);
     assert_eq!(select_ty_opt.options[2].id, "__n6");
     assert!(!select_ty_opt.disable_color);
+  }
+
+  #[test]
+  fn single_select_cell_to_serde() {
+    let options = vec![SelectOption::new("Option 1"), SelectOption::new("Option 2")];
+    let option_1_id = options[0].id.clone();
+    let select_type_option = SelectTypeOption {
+      options,
+      disable_color: false,
+    };
+    let single_select = SingleSelectTypeOption(select_type_option);
+    let single_select_cell_reader: Box<dyn TypeOptionCellReader> = Box::new(single_select);
+    let mut cell: Cell = new_cell_builder(FieldType::SingleSelect);
+    cell.insert(CELL_DATA.into(), option_1_id.into());
+    let serde_val = single_select_cell_reader.json_cell(&cell);
+    assert_eq!(serde_val, Value::String("Option 1".to_string()));
+  }
+
+  #[test]
+  fn multi_select_cell_to_serde() {
+    let options = vec![SelectOption::new("Option 1"), SelectOption::new("Option 2")];
+    let option_1_id = options[0].id.clone();
+    let option_2_id = options[1].id.clone();
+    let select_type_option = SelectTypeOption {
+      options,
+      disable_color: false,
+    };
+
+    let multi_selection_type_option = MultiSelectTypeOption(select_type_option);
+    let multi_select_cell_reader: Box<dyn TypeOptionCellReader> =
+      Box::new(multi_selection_type_option);
+    {
+      // single select
+      let mut cell: Cell = new_cell_builder(FieldType::MultiSelect);
+      cell.insert(CELL_DATA.into(), option_1_id.clone().into());
+      let serde_val = multi_select_cell_reader.json_cell(&cell);
+      assert_eq!(
+        serde_val,
+        Value::Array(vec![Value::String("Option 1".to_string())])
+      );
+    }
+    {
+      // double select
+      let mut cell: Cell = new_cell_builder(FieldType::MultiSelect);
+      cell.insert(CELL_DATA.into(), (option_1_id + "," + &option_2_id).into());
+      let serde_val = multi_select_cell_reader.json_cell(&cell);
+      assert_eq!(
+        serde_val,
+        Value::Array(vec![
+          Value::String("Option 1".to_string()),
+          Value::String("Option 2".to_string())
+        ])
+      );
+    }
+    {
+      // no select
+      let cell: Cell = new_cell_builder(FieldType::MultiSelect);
+      let serde_val = multi_select_cell_reader.json_cell(&cell);
+      assert_eq!(serde_val, Value::Array(vec![]));
+    }
+  }
+
+  #[test]
+  fn single_select_serde_to_cell() {
+    let options = vec![SelectOption::new("Option 1"), SelectOption::new("Option 2")];
+    let option_1_id = options[0].id.clone();
+    let select_type_option = SelectTypeOption {
+      options,
+      disable_color: false,
+    };
+    let single_select = SingleSelectTypeOption(select_type_option);
+
+    let cell_writer: Box<dyn TypeOptionCellWriter> = Box::new(single_select);
+    {
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::String("Option 1".to_string()));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, option_1_id);
+    }
+  }
+
+  #[test]
+  fn multi_select_serde_to_cell() {
+    let options = vec![SelectOption::new("Option 1"), SelectOption::new("Option 2")];
+    let option_1_id = options[0].id.clone();
+    let option_2_id = options[1].id.clone();
+    let select_type_option = SelectTypeOption {
+      options,
+      disable_color: false,
+    };
+    let single_select = SingleSelectTypeOption(select_type_option);
+
+    let cell_writer: Box<dyn TypeOptionCellWriter> = Box::new(single_select);
+    {
+      // No select
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::Array(vec![]));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, "");
+    }
+    {
+      // 1 select
+      let cell: Cell =
+        cell_writer.convert_json_to_cell(Value::Array(vec![Value::String("Option 1".to_string())]));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, option_1_id);
+    }
+    {
+      // 2 select
+      let cell: Cell = cell_writer.convert_json_to_cell(Value::Array(vec![
+        Value::String("Option 1".to_string()),
+        Value::String("Option 2".to_string()),
+      ]));
+      let data = cell.get_as::<String>(CELL_DATA).unwrap();
+      assert_eq!(data, option_1_id + "," + &option_2_id);
+    }
   }
 }
