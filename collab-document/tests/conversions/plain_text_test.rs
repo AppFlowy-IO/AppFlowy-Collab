@@ -21,11 +21,10 @@ fn plain_text_1_test() {
   insert_paragraphs(&mut document, paragraphs.clone());
 
   let plain_text = document.to_plain_text().unwrap();
-  let mut splitted = plain_text.split('\n').collect::<Vec<&str>>();
+  // remove the empty lines at the beginning and the end
+  let splitted = plain_text.trim().split('\n').collect::<Vec<&str>>();
   // the first one and the last one are empty
-  assert_eq!(splitted.len(), 10);
-  splitted.remove(0);
-  splitted.pop();
+  assert_eq!(splitted.len(), 8);
 
   for i in 0..splitted.len() {
     assert_eq!(splitted[i], paragraphs[i]);

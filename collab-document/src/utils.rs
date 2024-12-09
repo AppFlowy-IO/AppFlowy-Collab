@@ -5,11 +5,7 @@ use std::collections::HashMap;
 pub(crate) fn push_deltas_to_str(buf: &mut String, deltas: Vec<TextDelta>) {
   for delta in deltas {
     if let TextDelta::Inserted(text, _) = delta {
-      let trimmed = text.trim();
-      if !trimmed.is_empty() {
-        buf.push_str(trimmed);
-        buf.push(' ');
-      }
+      buf.push_str(&text);
     }
   }
 }

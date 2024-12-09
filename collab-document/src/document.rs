@@ -430,7 +430,13 @@ impl Document {
         } else if let Some(deltas) = get_delta_from_external_text_id(block, &mut text_map) {
           push_deltas_to_str(&mut buf, deltas);
         }
+
         if let Some(children) = children_map.get(&block.children) {
+          // if the children is not empty or the stack is not empty, add a newline to separate the blocks
+          if !children.is_empty() || !stack.is_empty() {
+            buf.push('\n');
+          }
+
           // we want to process children blocks in the same order they are given in children_map
           // however stack.pop gives us the last element first, so we push children
           // in reverse order
