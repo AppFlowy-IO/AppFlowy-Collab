@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
@@ -21,6 +20,9 @@ use crate::blocks::{
 use crate::document_awareness::DocumentAwarenessState;
 use crate::error::DocumentError;
 use crate::importer::define::BlockType;
+use crate::utils::{
+  get_delta_from_block_data, get_delta_from_external_text_id, push_deltas_to_str,
+};
 
 /// The page_id is a reference that points to the block’s id.
 /// The block that is referenced by this page_id is the first block of the document.
@@ -406,35 +408,38 @@ impl Document {
   }
 
   pub fn to_plain_text(&self) -> Result<String, DocumentError> {
+    let mut buf = String::new();
+    let txn = self.collab.transact();
     let page_id = self
-      .get_page_id()
-      .ok_or_else(|| DocumentError::Internal(anyhow!("Page id is not found")))?;
-    let mut text = self.get_plain_text_from_block(&page_id).unwrap_or_default();
-    let children = self.get_block_children_ids(&page_id);
-    for child_id in children {
-      text.push('\n');
-      if let Some(child_text) = self.get_plain_text_from_block(&child_id) {
-        text.push_str(&child_text);
+      .body
+      .root
+      .get(&txn, PAGE_ID)
+      .and_then(|v| v.cast::<String>().ok())
+      .ok_or(DocumentError::PageIdIsEmpty)?;
+
+    let mut text_map = self.body.text_operation.all_text_delta(&txn);
+    let blocks = self.body.block_operation.get_all_blocks(&txn);
+    let children_map = self.body.children_operation.get_all_children(&txn);
+    let mut stack = Vec::new();
+    stack.push(&page_id);
+    // do a depth-first scan of the document blocks
+    while let Some(block_id) = stack.pop() {
+      if let Some(block) = blocks.get(block_id) {
+        if let Some(deltas) = get_delta_from_block_data(block) {
+          push_deltas_to_str(&mut buf, deltas);
+        } else if let Some(deltas) = get_delta_from_external_text_id(block, &mut text_map) {
+          push_deltas_to_str(&mut buf, deltas);
+        }
+        if let Some(children) = children_map.get(&block.children) {
+          // we want to process children blocks in the same order they are given in children_map
+          // however stack.pop gives us the last element first, so we push children
+          // in reverse order
+          stack.extend(children.iter().rev());
+        }
       }
     }
-    Ok(text)
+    Ok(buf)
   }
-
-  // pub fn to_delta(&self) -> Result<Vec<String>, DocumentError> {
-  //   let txn = self.collab.transact();
-  //   let blocks = self.body.block_operation.get_all_blocks(&txn);
-  //   let children_map = self.body.children_operation.get_all_children(&txn);
-  //   let text_map = self.body.text_operation.serialize_all_text_delta(txn);
-  //   let document_data = DocumentData {
-  //     page_id,
-  //     blocks,
-  //     meta: DocumentMeta {
-  //       children_map,
-  //       text_map: Some(text_map),
-  //     },
-  //   };
-  //   Ok(document_data)
-  // }
 }
 
 impl Deref for Document {

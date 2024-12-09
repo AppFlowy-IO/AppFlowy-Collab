@@ -31,3 +31,8 @@ tracing = "0.1.22"
 chrono = { version = "0.4.38", default-features = false, features = ["clock"] }
 async-trait = "0.1"
 arc-swap = { version = "1.7" }
+
+[patch.crates-io]
+# We're using a specific commit here because rust-rocksdb doesn't publish the latest version that includes the memory alignment fix.
+# For more details, see https://github.com/rust-rocksdb/rust-rocksdb/pull/868
+rocksdb = { git = "https://github.com/rust-rocksdb/rust-rocksdb", rev = "1710120e4549e04ba3baa6a1ee5a5a801fa45a72" }
