@@ -4,13 +4,15 @@ use crate::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
 };
 use crate::rows::Cell;
+use crate::template::entity::CELL_DATA;
 use crate::template::timestamp_parse::TimestampCellData;
 use chrono::{DateTime, Local, Offset, TimeZone};
 use chrono_tz::Tz;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::str::FromStr;
+use std::sync::Arc;
 use yrs::Any;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -26,7 +28,16 @@ pub struct TimestampTypeOption {
 impl TypeOptionCellReader for TimestampTypeOption {
   /// Return formated date and time string for the cell
   fn json_cell(&self, cell: &Cell) -> Value {
-    json!(self.stringify_cell(cell))
+    match cell.get_as::<Arc<str>>(CELL_DATA) {
+      Some(ts_str) => ts_str
+        .parse::<i64>()
+        .ok()
+        .and_then(|ts| DateTime::from_timestamp(ts, 0))
+        .map(|dt| dt.to_rfc3339())
+        .unwrap_or_default()
+        .into(),
+      None => "".into(),
+    }
   }
 
   fn numeric_cell(&self, _cell: &Cell) -> Option<f64> {
@@ -234,7 +245,7 @@ mod tests {
     cell.insert(CELL_DATA.into(), 1672531200.to_string().into()); // January 1, 2023 00:00:00 UTC
 
     let json_value = option.json_cell(&cell);
-    assert_eq!(json_value, json!("2023/01/01 00:00"));
+    assert_eq!(json_value, json!("2023-01-01T00:00:00+00:00"));
   }
 
   #[test]
