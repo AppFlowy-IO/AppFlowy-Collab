@@ -407,6 +407,8 @@ impl Document {
     });
   }
 
+  /// Get the plain text of the document.
+  /// If new_line_each_paragraph is true, it will add a newline between each paragraph.
   pub fn to_plain_text(&self, new_line_each_paragraph: bool) -> Result<String, DocumentError> {
     let mut buf = String::new();
     let txn = self.collab.transact();
