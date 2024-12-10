@@ -410,43 +410,8 @@ impl Document {
   /// Get the plain text of the document.
   /// If new_line_each_paragraph is true, it will add a newline between each paragraph.
   pub fn to_plain_text(&self, new_line_each_paragraph: bool) -> Result<String, DocumentError> {
-    let mut buf = String::new();
     let txn = self.collab.transact();
-    let page_id = self
-      .body
-      .root
-      .get(&txn, PAGE_ID)
-      .and_then(|v| v.cast::<String>().ok())
-      .ok_or(DocumentError::PageIdIsEmpty)?;
-
-    let mut text_map = self.body.text_operation.all_text_delta(&txn);
-    let blocks = self.body.block_operation.get_all_blocks(&txn);
-    let children_map = self.body.children_operation.get_all_children(&txn);
-    let mut stack = Vec::new();
-    stack.push(&page_id);
-    // do a depth-first scan of the document blocks
-    while let Some(block_id) = stack.pop() {
-      if let Some(block) = blocks.get(block_id) {
-        if let Some(deltas) = get_delta_from_block_data(block) {
-          push_deltas_to_str(&mut buf, deltas);
-        } else if let Some(deltas) = get_delta_from_external_text_id(block, &mut text_map) {
-          push_deltas_to_str(&mut buf, deltas);
-        }
-
-        if let Some(children) = children_map.get(&block.children) {
-          // if the children is not empty or the stack is not empty, add a newline to separate the blocks
-          if new_line_each_paragraph && (!children.is_empty() || !stack.is_empty()) {
-            buf.push('\n');
-          }
-
-          // we want to process children blocks in the same order they are given in children_map
-          // however stack.pop gives us the last element first, so we push children
-          // in reverse order
-          stack.extend(children.iter().rev());
-        }
-      }
-    }
-    Ok(buf)
+    self.body.to_plain_text(txn, new_line_each_paragraph)
   }
 }
 
@@ -576,6 +541,50 @@ impl DocumentBody {
       children_operation,
       text_operation,
     })
+  }
+
+  /// Get the plain text of the document.
+  /// If new_line_each_paragraph is true, it will add a newline between each paragraph.
+  pub fn to_plain_text<T: ReadTxn>(
+    &self,
+    txn: T,
+    new_line_each_paragraph: bool,
+  ) -> Result<String, DocumentError> {
+    let mut buf = String::new();
+    let page_id = self
+      .root
+      .get(&txn, PAGE_ID)
+      .and_then(|v| v.cast::<String>().ok())
+      .ok_or(DocumentError::PageIdIsEmpty)?;
+
+    let mut text_map = self.text_operation.all_text_delta(&txn);
+    let blocks = self.block_operation.get_all_blocks(&txn);
+    let children_map = self.children_operation.get_all_children(&txn);
+    let mut stack = Vec::new();
+    stack.push(&page_id);
+    // do a depth-first scan of the document blocks
+    while let Some(block_id) = stack.pop() {
+      if let Some(block) = blocks.get(block_id) {
+        if let Some(deltas) = get_delta_from_block_data(block) {
+          push_deltas_to_str(&mut buf, deltas);
+        } else if let Some(deltas) = get_delta_from_external_text_id(block, &mut text_map) {
+          push_deltas_to_str(&mut buf, deltas);
+        }
+
+        if let Some(children) = children_map.get(&block.children) {
+          // if the children is not empty or the stack is not empty, add a newline to separate the blocks
+          if new_line_each_paragraph && (!children.is_empty() || !stack.is_empty()) {
+            buf.push('\n');
+          }
+
+          // we want to process children blocks in the same order they are given in children_map
+          // however stack.pop gives us the last element first, so we push children
+          // in reverse order
+          stack.extend(children.iter().rev());
+        }
+      }
+    }
+    Ok(buf)
   }
 
   fn insert_block(
