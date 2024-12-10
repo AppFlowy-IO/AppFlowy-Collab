@@ -544,7 +544,9 @@ pub(crate) fn extract_external_links(path_str: &str) -> Result<Vec<ExternalLink>
 pub struct DeltaLink {
   pub file_name: String,
   pub link: String,
+  #[allow(dead_code)]
   pub start: usize,
+  #[allow(dead_code)]
   pub end: usize,
 }
 

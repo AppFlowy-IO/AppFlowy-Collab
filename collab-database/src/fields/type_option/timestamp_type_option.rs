@@ -157,7 +157,6 @@ mod tests {
   use super::*;
   use crate::template::entity::CELL_DATA;
   use serde_json::json;
-  use std::i64;
 
   #[test]
   fn test_default_timestamp_type_option() {

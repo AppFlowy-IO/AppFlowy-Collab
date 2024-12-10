@@ -21,7 +21,7 @@ collab-document = { workspace = true, path = "collab-document" }
 collab-folder = { workspace = true, path = "collab-folder" }
 collab-importer = { workspace = true, path = "collab-importer" }
 yrs = { version = "0.21.3", features = ["sync"] }
-anyhow = "1.0"
+anyhow = "1.0.94"
 thiserror = "1.0.39"
 serde = { version = "1.0.157", features = ["derive"] }
 serde_json = "1.0.108"
@@ -31,3 +31,8 @@ tracing = "0.1.22"
 chrono = { version = "0.4.38", default-features = false, features = ["clock"] }
 async-trait = "0.1"
 arc-swap = { version = "1.7" }
+
+[patch.crates-io]
+# We're using a specific commit here because rust-rocksdb doesn't publish the latest version that includes the memory alignment fix.
+# For more details, see https://github.com/rust-rocksdb/rust-rocksdb/pull/868
+rocksdb = { git = "https://github.com/rust-rocksdb/rust-rocksdb", rev = "1710120e4549e04ba3baa6a1ee5a5a801fa45a72" }

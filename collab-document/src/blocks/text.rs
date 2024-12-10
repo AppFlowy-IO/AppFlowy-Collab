@@ -75,6 +75,18 @@ impl TextOperation {
       .collect()
   }
 
+  pub fn all_text_delta<T: ReadTxn>(&self, txn: &T) -> HashMap<String, Vec<TextDelta>> {
+    self
+      .root
+      .iter(txn)
+      .filter_map(|(k, _)| {
+        self
+          .get_delta_with_txn(txn, k)
+          .map(|delta| (k.to_string(), delta))
+      })
+      .collect()
+  }
+
   /// get all text delta and join as string
   pub fn stringify_all_text_delta<T: ReadTxn>(&self, txn: &T) -> HashMap<String, String> {
     self
