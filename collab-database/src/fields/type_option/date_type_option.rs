@@ -72,8 +72,12 @@ pub struct DateTypeOption {
 
 impl TypeOptionCellReader for DateTypeOption {
   fn json_cell(&self, cell: &Cell) -> Value {
-    let cell_data = DateCellData::from(cell);
-    json!(cell_data)
+    let date_cell = DateCellData::from(cell);
+    let mut js_val = json!(date_cell);
+    if let Some(obj) = js_val.as_object_mut() {
+      obj.insert("pretty".to_string(), json!(self.stringify_cell(cell)));
+    }
+    js_val
   }
 
   fn stringify_cell(&self, cell_data: &Cell) -> String {
