@@ -435,10 +435,8 @@ impl Document {
 
         if let Some(children) = children_map.get(&block.children) {
           // if the children is not empty or the stack is not empty, add a newline to separate the blocks
-          if new_line_each_paragraph {
-            if !children.is_empty() || !stack.is_empty() {
-              buf.push('\n');
-            }
+          if new_line_each_paragraph && (!children.is_empty() || !stack.is_empty()) {
+            buf.push('\n');
           }
 
           // we want to process children blocks in the same order they are given in children_map
