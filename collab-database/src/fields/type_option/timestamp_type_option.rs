@@ -9,7 +9,7 @@ use chrono::{DateTime, Local, Offset, TimeZone};
 use chrono_tz::Tz;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::str::FromStr;
 use yrs::Any;
 
@@ -26,7 +26,12 @@ pub struct TimestampTypeOption {
 impl TypeOptionCellReader for TimestampTypeOption {
   /// Return formated date and time string for the cell
   fn json_cell(&self, cell: &Cell) -> Value {
-    json!(self.stringify_cell(cell))
+    TimestampCellData::from(cell)
+      .timestamp
+      .and_then(|ts| DateTime::from_timestamp(ts, 0))
+      .map(|dt| dt.to_rfc3339())
+      .unwrap_or_default()
+      .into()
   }
 
   fn numeric_cell(&self, _cell: &Cell) -> Option<f64> {
@@ -234,7 +239,7 @@ mod tests {
     cell.insert(CELL_DATA.into(), 1672531200.to_string().into()); // January 1, 2023 00:00:00 UTC
 
     let json_value = option.json_cell(&cell);
-    assert_eq!(json_value, json!("2023/01/01 00:00"));
+    assert_eq!(json_value, json!("2023-01-01T00:00:00+00:00"));
   }
 
   #[test]
@@ -254,24 +259,30 @@ mod tests {
   }
 
   #[test]
-  fn test_write_json_string() {
+  fn timestamp_serde_to_cell() {
     let option = TimestampTypeOption::default();
-    let json_value = json!("1672531200");
-
-    let cell = option.convert_json_to_cell(json_value);
-    let data = cell.get_as::<String>(CELL_DATA).unwrap();
-
-    assert_eq!(data, "1672531200");
+    {
+      let json_value = json!("1672531200");
+      let cell = option.convert_json_to_cell(json_value);
+      let ts_cell: TimestampCellData = (&cell).into();
+      assert_eq!(ts_cell.timestamp, Some(1672531200));
+    }
+    {
+      let json_value = json!(1672531200);
+      let cell = option.convert_json_to_cell(json_value);
+      let ts_cell: TimestampCellData = (&cell).into();
+      assert_eq!(ts_cell.timestamp, Some(1672531200));
+    }
   }
 
   #[test]
-  fn test_write_json_invalid_data() {
+  fn timestamp_cell_to_serde() {
     let option = TimestampTypeOption::default();
-    let json_value = json!("invalid");
-
-    let cell = option.convert_json_to_cell(json_value);
-    let data: Option<i64> = cell.get_as(CELL_DATA);
-
-    assert!(data.is_none());
+    let ts_cell_data = TimestampCellData {
+      timestamp: Some(1672531200),
+    };
+    let cell: Cell = ts_cell_data.to_cell(FieldType::CreatedTime);
+    let json_value = option.json_cell(&cell);
+    assert_eq!(json_value, "2023-01-01T00:00:00+00:00");
   }
 }
