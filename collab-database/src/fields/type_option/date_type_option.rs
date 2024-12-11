@@ -163,10 +163,14 @@ impl TypeOptionCellWriter for DateTypeOption {
 
 impl DateTypeOption {
   pub fn new() -> Self {
+    let timezone_id = iana_time_zone::get_timezone().unwrap_or_else(|err| {
+      error!("Failed to get local timezone: {}", err);
+      "Etc/UTC".to_owned()
+    });
     Self {
       date_format: DateFormat::default(),
       time_format: TimeFormat::default(),
-      timezone_id: String::new(),
+      timezone_id,
     }
   }
 

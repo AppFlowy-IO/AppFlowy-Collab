@@ -9,7 +9,7 @@ use chrono::{DateTime, Local, Offset, TimeZone};
 use chrono_tz::Tz;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::str::FromStr;
 use yrs::Any;
 
@@ -26,12 +26,16 @@ pub struct TimestampTypeOption {
 impl TypeOptionCellReader for TimestampTypeOption {
   /// Return formated date and time string for the cell
   fn json_cell(&self, cell: &Cell) -> Value {
-    TimestampCellData::from(cell)
+    let mut js_val: serde_json::Value = TimestampCellData::from(cell)
       .timestamp
       .and_then(|ts| DateTime::from_timestamp(ts, 0))
       .map(|dt| dt.to_rfc3339())
       .unwrap_or_default()
-      .into()
+      .into();
+    if let Some(obj) = js_val.as_object_mut() {
+      obj.insert("pretty".to_string(), json!(self.stringify_cell(cell)));
+    }
+    js_val
   }
 
   fn numeric_cell(&self, _cell: &Cell) -> Option<f64> {
