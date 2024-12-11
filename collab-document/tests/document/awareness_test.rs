@@ -186,7 +186,6 @@ fn document_awareness_incoming_update() {
     });
 
   // 3. set new awareness state on both ends
-  println!("setting D1");
   d1.set_awareness_local_state(DocumentAwarenessState {
     version: 1,
     user: DocumentAwarenessUser {
@@ -197,7 +196,6 @@ fn document_awareness_incoming_update() {
     metadata: Some("meta1".into()),
     timestamp: 1111,
   });
-  println!("setting D2");
   d2.set_awareness_local_state(DocumentAwarenessState {
     version: 1,
     user: DocumentAwarenessUser {

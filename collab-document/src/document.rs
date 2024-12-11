@@ -387,6 +387,7 @@ impl Document {
     F: Fn(HashMap<ClientID, DocumentAwarenessState>) + Send + Sync + 'static,
   {
     self.collab.get_awareness().on_update_with(key, move |awareness, _, _| {
+      // emit new awareness state for all known clients
       if let Ok(full_update) = awareness.update() {
         let result: HashMap<_, _> = full_update.clients.iter().filter_map(|(&client_id, entry)| {
           match serde_json::from_str::<Option<DocumentAwarenessState>>(&entry.json) {
