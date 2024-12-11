@@ -100,6 +100,7 @@ impl TypeOptionCellReader for DateTypeOption {
     json!({
       "start": dt_start_rfc3339,
       "end": dt_end_rfc3339,
+      "timezone": tz.to_string(),
 
       "pretty_start_datetime": dt_start_datetime,
       "pretty_start_date": dt_start_date,
@@ -666,6 +667,7 @@ mod tests {
       json_value,
       json!({
        "end": serde_json::Value::Null,
+       "timezone": "Etc/UTC",
        "pretty_end_date": serde_json::Value::Null,
        "pretty_end_datetime": serde_json::Value::Null,
        "pretty_end_time": serde_json::Value::Null,
@@ -753,6 +755,7 @@ mod tests {
         serde_val,
         json!({
           "start": "2023-02-02T21:05:11+08:00",
+          "timezone": "Asia/Singapore",
           "end": "2023-05-31T22:25:21+08:00",
           "pretty_start_datetime": "2023-02-02 21:05:11 +08",
           "pretty_start_date": "2023-02-02",
