@@ -5,10 +5,11 @@ use collab::preclude::block::ClientID;
 use collab::preclude::updates::decoder::{Decode, Decoder};
 use collab_document::document_awareness::{DocumentAwarenessState, DocumentAwarenessUser};
 
+use arc_swap::ArcSwapOption;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use yrs::sync::awareness::AwarenessUpdateEntry;
 use yrs::updates::encoder::{Encode, Encoder};
 
@@ -145,6 +146,76 @@ fn document_awareness_serde_test2() {
   assert_eq!(
     document_state_from_old_version_awareness.version,
     document_state.version
+  );
+}
+
+#[test]
+fn document_awareness_incoming_update() {
+  let mut d1 = DocumentTest::new(2, "1");
+  let mut d2 = DocumentTest::new(2, "1");
+
+  // 1. subscribe to awareness state changes on both ends
+  let d1_awareness_state = Arc::new(ArcSwapOption::default());
+  let awareness_state = d1_awareness_state.clone();
+  d1.document
+    .subscribe_awareness_state("test", move |a| awareness_state.store(Some(a.into())));
+
+  let d2_awareness_state = Arc::new(ArcSwapOption::default());
+  let awareness_state = d2_awareness_state.clone();
+  d2.document
+    .subscribe_awareness_state("test", move |a| awareness_state.store(Some(a.into())));
+
+  // 2. subscribe to awareness changes in the same way as `observe_awareness` from collab.rs
+  let d1 = Arc::new(d1);
+  let d2 = Arc::new(d2);
+  let other = d2.clone();
+  d1.get_awareness()
+    .on_update_with("sync", move |awareness, e, _| {
+      // we only send actual changes not entire awareness state
+      if let Ok(update) = awareness.update_with_clients(e.all_changes()) {
+        other.get_awareness().apply_update(update).unwrap();
+      }
+    });
+  let other = d1.clone();
+  d2.get_awareness()
+    .on_update_with("sync", move |awareness, e, _| {
+      // we only send actual changes not entire awareness state
+      if let Ok(update) = awareness.update_with_clients(e.all_changes()) {
+        other.get_awareness().apply_update(update).unwrap();
+      }
+    });
+
+  // 3. set new awareness state on both ends
+  d1.set_awareness_local_state(DocumentAwarenessState {
+    version: 1,
+    user: DocumentAwarenessUser {
+      uid: 1,
+      device_id: "device_1".to_string(),
+    },
+    selection: None,
+    metadata: Some("meta1".into()),
+    timestamp: 1111,
+  });
+  d2.set_awareness_local_state(DocumentAwarenessState {
+    version: 1,
+    user: DocumentAwarenessUser {
+      uid: 2,
+      device_id: "device_2".to_string(),
+    },
+    selection: None,
+    metadata: Some("meta2".into()),
+    timestamp: 2222,
+  });
+
+  // 4. compare received states
+  let state1 = d1_awareness_state.swap(None).unwrap();
+  let state2 = d2_awareness_state.swap(None).unwrap();
+
+  assert_eq!(state1, state2, "both clients should have equal state");
+  assert_eq!(
+    state1.len(),
+    2,
+    "subscribe_awareness_state should return full state"
   );
 }
 
