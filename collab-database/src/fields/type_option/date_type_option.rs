@@ -1,7 +1,7 @@
 use crate::entity::FieldType;
 
 use crate::error::DatabaseError;
-use chrono::Timelike;
+use chrono::{DateTime, Timelike};
 use chrono::{Datelike, Local, TimeZone};
 
 use crate::fields::{
@@ -63,21 +63,53 @@ impl From<TimeTypeOption> for TypeOptionData {
   }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DateTypeOption {
   pub date_format: DateFormat,
   pub time_format: TimeFormat,
   pub timezone_id: String,
 }
 
+impl Default for DateTypeOption {
+  fn default() -> Self {
+    DateTypeOption::new()
+  }
+}
+
 impl TypeOptionCellReader for DateTypeOption {
   fn json_cell(&self, cell: &Cell) -> Value {
+    let tz: Tz = self.timezone_id.parse().unwrap_or_default();
     let date_cell = DateCellData::from(cell);
-    let mut js_val = json!(date_cell);
-    if let Some(obj) = js_val.as_object_mut() {
-      obj.insert("pretty".to_string(), json!(self.stringify_cell(cell)));
-    }
-    js_val
+
+    let dt_start: Option<DateTime<Tz>> = date_cell
+      .timestamp
+      .map(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.with_timezone(&tz)))
+      .flatten();
+    let dt_start_rfc3339 = dt_start.map(|dt| dt.to_rfc3339());
+    let dt_start_datetime = dt_start.map(|dt| dt.to_string());
+    let dt_start_date = dt_start.map(|dt| dt.date_naive().to_string());
+    let dt_start_time = dt_start.map(|dt| dt.time().to_string());
+
+    let dt_end: Option<DateTime<Tz>> = date_cell
+      .end_timestamp
+      .map(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.with_timezone(&tz)))
+      .flatten();
+    let dt_end_rfc3339 = dt_end.map(|dt| dt.to_rfc3339());
+    let dt_end_datetime = dt_end.map(|dt| dt.to_string());
+    let dt_end_date = dt_end.map(|dt| dt.date_naive().to_string());
+    let dt_end_time = dt_end.map(|dt| dt.time().to_string());
+
+    json!({
+      "start": dt_start_rfc3339,
+      "end": dt_end_rfc3339,
+
+      "pretty_start_datetime": dt_start_datetime,
+      "pretty_start_date": dt_start_date,
+      "pretty_start_time": dt_start_time,
+      "pretty_end_datetime": dt_end_datetime,
+      "pretty_end_date": dt_end_date,
+      "pretty_end_time": dt_end_time
+    })
   }
 
   fn stringify_cell(&self, cell_data: &Cell) -> String {
@@ -708,11 +740,11 @@ mod tests {
 
   #[test]
   fn date_cell_to_serde() {
-    let date_type_option = DateTypeOption::default_utc();
+    let date_type_option = DateTypeOption::new();
     let cell_writer: Box<dyn TypeOptionCellReader> = Box::new(date_type_option);
     {
       let mut cell: Cell = new_cell_builder(FieldType::DateTime);
-      cell.insert(CELL_DATA.into(), "1672531200".into());
+      cell.insert(CELL_DATA.into(), "1675343111".into());
       let serde_val = cell_writer.json_cell(&cell);
       assert_eq!(
         serde_val,
