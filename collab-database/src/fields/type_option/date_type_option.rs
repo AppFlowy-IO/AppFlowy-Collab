@@ -83,8 +83,7 @@ impl TypeOptionCellReader for DateTypeOption {
 
     let dt_start: Option<DateTime<Tz>> = date_cell
       .timestamp
-      .map(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.with_timezone(&tz)))
-      .flatten();
+      .and_then(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.with_timezone(&tz)));
     let dt_start_rfc3339 = dt_start.map(|dt| dt.to_rfc3339());
     let dt_start_datetime = dt_start.map(|dt| dt.to_string());
     let dt_start_date = dt_start.map(|dt| dt.date_naive().to_string());
@@ -92,8 +91,7 @@ impl TypeOptionCellReader for DateTypeOption {
 
     let dt_end: Option<DateTime<Tz>> = date_cell
       .end_timestamp
-      .map(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.with_timezone(&tz)))
-      .flatten();
+      .and_then(|ts| DateTime::from_timestamp(ts, 0).map(|dt| dt.with_timezone(&tz)));
     let dt_end_rfc3339 = dt_end.map(|dt| dt.to_rfc3339());
     let dt_end_datetime = dt_end.map(|dt| dt.to_string());
     let dt_end_date = dt_end.map(|dt| dt.date_naive().to_string());
@@ -667,11 +665,14 @@ mod tests {
     assert_eq!(
       json_value,
       json!({
-          "timestamp": 1672531200,
-          "end_timestamp": null,
-          "include_time": false,
-          "is_range": false,
-          "reminder_id": ""
+       "end": serde_json::Value::Null,
+       "pretty_end_date": serde_json::Value::Null,
+       "pretty_end_datetime": serde_json::Value::Null,
+       "pretty_end_time": serde_json::Value::Null,
+       "pretty_start_date": "2023-01-01",
+       "pretty_start_datetime": "2023-01-01 00:00:00 UTC",
+       "pretty_start_time": "00:00:00",
+       "start": "2023-01-01T00:00:00+00:00",
       })
     );
   }
@@ -740,22 +741,26 @@ mod tests {
 
   #[test]
   fn date_cell_to_serde() {
-    let date_type_option = DateTypeOption::new();
+    let mut date_type_option = DateTypeOption::new();
+    date_type_option.timezone_id = "Asia/Singapore".to_string();
     let cell_writer: Box<dyn TypeOptionCellReader> = Box::new(date_type_option);
     {
       let mut cell: Cell = new_cell_builder(FieldType::DateTime);
       cell.insert(CELL_DATA.into(), "1675343111".into());
+      cell.insert("end_timestamp".into(), "1685543121".into());
       let serde_val = cell_writer.json_cell(&cell);
       assert_eq!(
         serde_val,
-        serde_json::to_value(DateCellData {
-          timestamp: Some(1672531200),
-          end_timestamp: None,
-          include_time: false,
-          is_range: false,
-          reminder_id: "".to_string(),
+        json!({
+          "start": "2023-02-02T21:05:11+08:00",
+          "end": "2023-05-31T22:25:21+08:00",
+          "pretty_start_datetime": "2023-02-02 21:05:11 +08",
+          "pretty_start_date": "2023-02-02",
+          "pretty_start_time": "21:05:11",
+          "pretty_end_datetime": "2023-05-31 22:25:21 +08",
+          "pretty_end_date": "2023-05-31",
+          "pretty_end_time": "22:25:21",
         })
-        .unwrap()
       );
     }
   }
