@@ -363,8 +363,8 @@ impl Document {
 
   /// Set the local state of the awareness.
   /// It will override the previous state.
-  pub fn set_awareness_local_state(&mut self, state: DocumentAwarenessState) {
-    if let Err(e) = self.collab.get_mut_awareness().set_local_state(state) {
+  pub fn set_awareness_local_state(&self, state: DocumentAwarenessState) {
+    if let Err(e) = self.collab.get_awareness().set_local_state(state) {
       tracing::error!("Failed to serialize DocumentAwarenessState, state: {}", e);
     }
   }
@@ -386,8 +386,8 @@ impl Document {
     K: Into<Origin>,
     F: Fn(HashMap<ClientID, DocumentAwarenessState>) + Send + Sync + 'static,
   {
-    self.collab.get_awareness().on_update_with(key, move |awareness, e, _| {
-      if let Ok(full_update) = awareness.update_with_clients(e.all_changes()) {
+    self.collab.get_awareness().on_update_with(key, move |awareness, _, _| {
+      if let Ok(full_update) = awareness.update() {
         let result: HashMap<_, _> = full_update.clients.iter().filter_map(|(&client_id, entry)| {
           match serde_json::from_str::<Option<DocumentAwarenessState>>(&entry.json) {
             Ok(state) => state.map(|state| (client_id, state)),
