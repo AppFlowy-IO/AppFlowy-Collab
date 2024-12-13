@@ -409,9 +409,15 @@ impl Document {
 
   /// Get the plain text of the document.
   /// If new_line_each_paragraph is true, it will add a newline between each paragraph.
-  pub fn to_plain_text(&self, new_line_each_paragraph: bool) -> Result<String, DocumentError> {
+  pub fn to_plain_text(
+    &self,
+    new_line_each_paragraph: bool,
+    empty_space_each_delta: bool,
+  ) -> Result<String, DocumentError> {
     let txn = self.collab.transact();
-    self.body.to_plain_text(txn, new_line_each_paragraph)
+    self
+      .body
+      .to_plain_text(txn, new_line_each_paragraph, empty_space_each_delta)
   }
 }
 
@@ -549,6 +555,7 @@ impl DocumentBody {
     &self,
     txn: T,
     new_line_each_paragraph: bool,
+    empty_space_each_delta: bool,
   ) -> Result<String, DocumentError> {
     let mut buf = String::new();
     let page_id = self
@@ -566,9 +573,9 @@ impl DocumentBody {
     while let Some(block_id) = stack.pop() {
       if let Some(block) = blocks.get(block_id) {
         if let Some(deltas) = get_delta_from_block_data(block) {
-          push_deltas_to_str(&mut buf, deltas);
+          push_deltas_to_str(&mut buf, deltas, empty_space_each_delta);
         } else if let Some(deltas) = get_delta_from_external_text_id(block, &mut text_map) {
-          push_deltas_to_str(&mut buf, deltas);
+          push_deltas_to_str(&mut buf, deltas, empty_space_each_delta);
         }
 
         if let Some(children) = children_map.get(&block.children) {
