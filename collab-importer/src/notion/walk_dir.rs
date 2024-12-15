@@ -209,8 +209,17 @@ fn process_csv_dir(
                   }
 
                   // In Notion, each database row is represented as a markdown file.
-                  // The content between the first-level heading (H1) and the second-level heading (H2)
+                  // The content between the first-level heading (H1) and the second empty line
                   // contains key-value pairs corresponding to the columns/cells of that row.
+                  //
+                  // Example:
+                  //  # Row page name
+                  //                           <- first empty line
+                  //  Status: Not started
+                  //  Multi-select: [Not started]
+                  //  Text: ...
+                  //                           <- second empty line
+                  //  Content
                   if process_row_md_content(md_content, file_path).is_ok() {
                     // remove page's children that can be found in the csv_relation
                     page.children.retain(|child| {

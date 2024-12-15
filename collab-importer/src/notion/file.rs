@@ -92,38 +92,48 @@ impl Resource {
     }
   }
 }
-pub fn remove_first_h1_until_next_h2(md_content: &str) -> String {
-  // Parse the Markdown content into an AST
+
+pub fn remove_text_between_first_h1_and_second_empty_line(md_content: &str) -> String {
   let parse_options = ParseOptions::default();
   let ast = to_mdast(md_content, &parse_options).unwrap();
 
   // Variables to track the line range to remove
   let mut start_line = None;
+  let mut empty_line_count = 0;
   let mut end_line = None;
 
-  // Traverse the AST to find the first H1 and next H2 headings
+  // Traverse the AST to find the first H1
   if let Node::Root(root) = &ast {
     for node in &root.children {
       if let Node::Heading(heading) = node {
         if heading.depth == 1 && start_line.is_none() {
           // Mark the start line of the H1 block
           start_line = heading.position.as_ref().map(|pos| pos.start.line);
-        } else if heading.depth == 2 && start_line.is_some() {
-          // Mark the end line of the H1 block when the first H2 is found
-          end_line = heading.position.as_ref().map(|pos| pos.start.line);
           break;
         }
       }
     }
   }
 
-  // If no H1 or H2 was found, return the original content
   if start_line.is_none() {
     return md_content.to_string();
   }
 
-  let start_line = start_line.unwrap();
-  let end_line = end_line.unwrap_or_else(|| md_content.lines().count() + 1);
+  // find the second empty line after the first H1
+  let lines = md_content.lines().collect::<Vec<_>>();
+  for (index, line) in lines.iter().enumerate() {
+    if line.trim().is_empty() && index > start_line.unwrap() {
+      empty_line_count += 1;
+    }
+    if empty_line_count == 2 {
+      end_line = Some(index);
+      break;
+    }
+  }
+
+  let start_line = start_line.unwrap_or(0);
+  // if the second empty line is not found, remove the text after the first H1
+  let end_line = end_line.unwrap_or(lines.len() + 1);
   // Filter the lines and remove the lines between start_line and end_line
   let result: String = md_content
     .lines()
@@ -143,7 +153,7 @@ pub fn remove_first_h1_until_next_h2(md_content: &str) -> String {
 }
 
 pub fn process_row_md_content(md_content: String, file_path: &PathBuf) -> io::Result<()> {
-  let updated_md = remove_first_h1_until_next_h2(&md_content);
+  let updated_md = remove_text_between_first_h1_and_second_empty_line(&md_content);
   if updated_md.is_empty() {
     return Err(io::Error::new(
       io::ErrorKind::InvalidData,

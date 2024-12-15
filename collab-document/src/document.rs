@@ -363,8 +363,8 @@ impl Document {
 
   /// Set the local state of the awareness.
   /// It will override the previous state.
-  pub fn set_awareness_local_state(&mut self, state: DocumentAwarenessState) {
-    if let Err(e) = self.collab.get_mut_awareness().set_local_state(state) {
+  pub fn set_awareness_local_state(&self, state: DocumentAwarenessState) {
+    if let Err(e) = self.collab.get_awareness().set_local_state(state) {
       tracing::error!("Failed to serialize DocumentAwarenessState, state: {}", e);
     }
   }
@@ -386,8 +386,9 @@ impl Document {
     K: Into<Origin>,
     F: Fn(HashMap<ClientID, DocumentAwarenessState>) + Send + Sync + 'static,
   {
-    self.collab.get_awareness().on_update_with(key, move |awareness, e, _| {
-      if let Ok(full_update) = awareness.update_with_clients(e.all_changes()) {
+    self.collab.get_awareness().on_update_with(key, move |awareness, _, _| {
+      // emit new awareness state for all known clients
+      if let Ok(full_update) = awareness.update() {
         let result: HashMap<_, _> = full_update.clients.iter().filter_map(|(&client_id, entry)| {
           match serde_json::from_str::<Option<DocumentAwarenessState>>(&entry.json) {
             Ok(state) => state.map(|state| (client_id, state)),
@@ -409,9 +410,15 @@ impl Document {
 
   /// Get the plain text of the document.
   /// If new_line_each_paragraph is true, it will add a newline between each paragraph.
-  pub fn to_plain_text(&self, new_line_each_paragraph: bool) -> Result<String, DocumentError> {
+  pub fn to_plain_text(
+    &self,
+    new_line_each_paragraph: bool,
+    empty_space_each_delta: bool,
+  ) -> Result<String, DocumentError> {
     let txn = self.collab.transact();
-    self.body.to_plain_text(txn, new_line_each_paragraph)
+    self
+      .body
+      .to_plain_text(txn, new_line_each_paragraph, empty_space_each_delta)
   }
 }
 
@@ -549,6 +556,7 @@ impl DocumentBody {
     &self,
     txn: T,
     new_line_each_paragraph: bool,
+    empty_space_each_delta: bool,
   ) -> Result<String, DocumentError> {
     let mut buf = String::new();
     let page_id = self
@@ -566,9 +574,9 @@ impl DocumentBody {
     while let Some(block_id) = stack.pop() {
       if let Some(block) = blocks.get(block_id) {
         if let Some(deltas) = get_delta_from_block_data(block) {
-          push_deltas_to_str(&mut buf, deltas);
+          push_deltas_to_str(&mut buf, deltas, empty_space_each_delta);
         } else if let Some(deltas) = get_delta_from_external_text_id(block, &mut text_map) {
-          push_deltas_to_str(&mut buf, deltas);
+          push_deltas_to_str(&mut buf, deltas, empty_space_each_delta);
         }
 
         if let Some(children) = children_map.get(&block.children) {

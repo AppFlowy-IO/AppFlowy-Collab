@@ -2,12 +2,20 @@ use crate::blocks::{Block, TextDelta};
 use std::collections::HashMap;
 
 #[inline]
-pub(crate) fn push_deltas_to_str(buf: &mut String, deltas: Vec<TextDelta>) {
+pub(crate) fn push_deltas_to_str(
+  buf: &mut String,
+  deltas: Vec<TextDelta>,
+  empty_space_each_delta: bool,
+) {
   for delta in deltas {
     if let TextDelta::Inserted(text, _) = delta {
       let trimmed = text.trim();
       if !trimmed.is_empty() {
         buf.push_str(trimmed);
+
+        if empty_space_each_delta {
+          buf.push(' ');
+        }
       }
     }
   }

@@ -15,8 +15,8 @@ use std::collections::{HashMap, HashSet};
 
 /// Used to store list of [DatabaseMeta].
 pub struct WorkspaceDatabase {
-  collab: Collab,
-  body: WorkspaceDatabaseBody,
+  pub collab: Collab,
+  pub body: WorkspaceDatabaseBody,
 }
 
 pub fn default_workspace_database_data(object_id: &str) -> EncodedCollab {
@@ -58,13 +58,7 @@ impl WorkspaceDatabase {
   ///
   pub fn add_database(&mut self, database_id: &str, view_ids: Vec<String>) -> TransactionMut {
     let mut txn = self.collab.transact_mut();
-    let linked_views: HashSet<String> = view_ids.into_iter().collect();
-    let record = DatabaseMeta {
-      database_id: database_id.to_string(),
-      created_at: timestamp(),
-      linked_views: linked_views.into_iter().collect(),
-    };
-    self.body.push_back(&mut txn, record);
+    self.body.add_database(&mut txn, database_id, view_ids);
     txn
   }
 
@@ -73,15 +67,9 @@ impl WorkspaceDatabase {
     view_ids_by_database_id: HashMap<String, Vec<String>>,
   ) -> TransactionMut {
     let mut txn = self.collab.transact_mut();
-    for (database_id, view_ids) in view_ids_by_database_id {
-      let linked_views: HashSet<String> = view_ids.into_iter().collect();
-      let record = DatabaseMeta {
-        database_id,
-        created_at: timestamp(),
-        linked_views: linked_views.into_iter().collect(),
-      };
-      self.body.push_back(&mut txn, record);
-    }
+    self
+      .body
+      .batch_add_database(&mut txn, view_ids_by_database_id);
     txn
   }
 
@@ -266,6 +254,32 @@ impl WorkspaceDatabaseBody {
         .map(|id| id == database_id)
         .unwrap_or(false)
     })
+  }
+
+  pub fn add_database(&self, txn: &mut TransactionMut, database_id: &str, view_ids: Vec<String>) {
+    let linked_views: HashSet<String> = view_ids.into_iter().collect();
+    let record = DatabaseMeta {
+      database_id: database_id.to_string(),
+      created_at: timestamp(),
+      linked_views: linked_views.into_iter().collect(),
+    };
+    self.push_back(txn, record);
+  }
+
+  pub fn batch_add_database(
+    &mut self,
+    txn: &mut TransactionMut,
+    view_ids_by_database_id: HashMap<String, Vec<String>>,
+  ) {
+    for (database_id, view_ids) in view_ids_by_database_id {
+      let linked_views: HashSet<String> = view_ids.into_iter().collect();
+      let record = DatabaseMeta {
+        database_id,
+        created_at: timestamp(),
+        linked_views: linked_views.into_iter().collect(),
+      };
+      self.push_back(txn, record);
+    }
   }
 
   pub fn delete_database(&self, txn: &mut TransactionMut, database_id: &str) {

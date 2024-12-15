@@ -632,7 +632,13 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
         }
       }
 
-      row_document_contents.push(document.to_plain_text(true).unwrap().trim().to_string());
+      row_document_contents.push(
+        document
+          .to_plain_text(true, false)
+          .unwrap()
+          .trim()
+          .to_string(),
+      );
     }
     assert_eq!(mention_blocks.len(), 4);
     mention_blocks.retain(|block| !linked_views.contains(&block.page_id));
