@@ -494,24 +494,14 @@ impl DocumentBody {
 
     // If the data is not None, insert the data to the document.
     if let Some(data) = data {
-      root.insert(&mut txn, PAGE_ID, data.page_id);
-
-      for (_, block) in data.blocks {
-        block_operation.create_block_with_txn(&mut txn, block)?;
-      }
-
-      for (id, child_ids) in data.meta.children_map {
-        let map = children_operation.get_or_init_children(&mut txn, &id);
-        child_ids.iter().for_each(|child_id| {
-          map.push_back(&mut txn, child_id.to_string());
-        });
-      }
-      if let Some(text_map) = data.meta.text_map {
-        for (id, delta) in text_map {
-          let delta = serde_json::from_str(&delta).unwrap_or_else(|_| vec![]);
-          text_operation.apply_delta(&mut txn, &id, delta)
-        }
-      }
+      Self::write_from_document_data(
+        &root,
+        &mut txn,
+        data,
+        &children_operation,
+        &text_operation,
+        &block_operation,
+      )?;
     }
     drop(txn);
     collab.enable_undo_redo();
@@ -521,6 +511,35 @@ impl DocumentBody {
       children_operation,
       text_operation,
     })
+  }
+
+  fn write_from_document_data(
+    root: &MapRef,
+    txn: &mut TransactionMut,
+    data: DocumentData,
+    children_operation: &ChildrenOperation,
+    text_operation: &TextOperation,
+    block_operation: &BlockOperation,
+  ) -> Result<(), DocumentError> {
+    root.insert(txn, PAGE_ID, data.page_id);
+
+    for (_, block) in data.blocks {
+      block_operation.create_block_with_txn(txn, block)?;
+    }
+
+    for (id, child_ids) in data.meta.children_map {
+      let map = children_operation.get_or_init_children(txn, &id);
+      child_ids.iter().for_each(|child_id| {
+        map.push_back(txn, child_id.to_string());
+      });
+    }
+    if let Some(text_map) = data.meta.text_map {
+      for (id, delta) in text_map {
+        let delta = serde_json::from_str(&delta).unwrap_or_else(|_| vec![]);
+        text_operation.apply_delta(txn, &id, delta)
+      }
+    }
+    Ok(())
   }
 
   /// Creates a [Document] body from the given [Collab] instance. If the required fields are not
@@ -548,6 +567,40 @@ impl DocumentBody {
       children_operation,
       text_operation,
     })
+  }
+
+  /// Erase all the data in the document and populate it with the given [DocumentData].
+  pub fn reset_with_data(
+    &mut self,
+    txn: &mut TransactionMut,
+    doc_data: Option<DocumentData>,
+  ) -> Result<(), DocumentError> {
+    let _ = self.root.remove(txn, BLOCKS);
+    let _ = self.root.remove(txn, META);
+    let _ = self.root.remove(txn, CHILDREN_MAP);
+    let _ = self.root.remove(txn, TEXT_MAP);
+
+    let blocks = self.root.insert(txn, BLOCKS, MapPrelim::default());
+    let meta = self.root.insert(txn, META, MapPrelim::default());
+    let children_map = meta.insert(txn, CHILDREN_MAP, MapPrelim::default());
+    let text_map = meta.insert(txn, TEXT_MAP, MapPrelim::default());
+
+    self.children_operation = ChildrenOperation::new(children_map);
+    self.text_operation = TextOperation::new(text_map);
+    self.block_operation = BlockOperation::new(blocks, self.children_operation.clone());
+
+    if let Some(doc_data) = doc_data {
+      Self::write_from_document_data(
+        &self.root,
+        txn,
+        doc_data,
+        &self.children_operation,
+        &self.text_operation,
+        &self.block_operation,
+      )
+    } else {
+      Ok(())
+    }
   }
 
   /// Get the plain text of the document.

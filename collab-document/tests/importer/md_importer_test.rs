@@ -1,10 +1,38 @@
 use assert_json_diff::assert_json_eq;
+use collab_document::document::{gen_document_id, Document};
 use serde_json::json;
 
 use crate::importer::util::{
   get_block_by_type, get_children_blocks, get_delta_json, get_page_block,
   markdown_to_document_data, parse_json,
 };
+
+#[test]
+fn test_override_document() {
+  let markdown_1 = "hello world";
+  let doc_data_1 = markdown_to_document_data(markdown_1);
+
+  let doc_id = gen_document_id();
+  let doc = Document::create(&doc_id, doc_data_1).unwrap();
+  {
+    let plain_txt = doc.to_plain_text(false, false).unwrap();
+    assert_eq!(markdown_1, plain_txt);
+  }
+
+  let (mut collab, mut body) = doc.split();
+
+  let markdown_2 = "foo bar";
+  let doc_data_2 = markdown_to_document_data(markdown_2);
+  {
+    let mut txn = collab.transact_mut();
+    body.reset_with_data(&mut txn, Some(doc_data_2)).unwrap();
+  }
+  {
+    let modified_doc = Document::open(collab).unwrap();
+    let plain_txt = modified_doc.to_plain_text(false, false).unwrap();
+    assert_eq!(markdown_2, plain_txt);
+  }
+}
 
 #[test]
 fn test_inline_elements() {
