@@ -575,19 +575,16 @@ impl DocumentBody {
     txn: &mut TransactionMut,
     doc_data: Option<DocumentData>,
   ) -> Result<(), DocumentError> {
-    let _ = self.root.remove(txn, BLOCKS);
-    let _ = self.root.remove(txn, META);
-    let _ = self.root.remove(txn, CHILDREN_MAP);
-    let _ = self.root.remove(txn, TEXT_MAP);
-
-    let blocks = self.root.insert(txn, BLOCKS, MapPrelim::default());
-    let meta = self.root.insert(txn, META, MapPrelim::default());
-    let children_map = meta.insert(txn, CHILDREN_MAP, MapPrelim::default());
-    let text_map = meta.insert(txn, TEXT_MAP, MapPrelim::default());
-
-    self.children_operation = ChildrenOperation::new(children_map);
-    self.text_operation = TextOperation::new(text_map);
-    self.block_operation = BlockOperation::new(blocks, self.children_operation.clone());
+    self
+      .block_operation
+      .get_all_blocks(txn)
+      .keys()
+      .for_each(|k| {
+        let _ = self
+          .block_operation
+          .delete_block_with_txn(txn, k)
+          .map_err(|err| tracing::warn!("Failed to delete block: {:?}", err));
+      });
 
     if let Some(doc_data) = doc_data {
       Self::write_from_document_data(
