@@ -16,6 +16,11 @@ fn main() -> Result<()> {
       proto_files.push(e.path().display().to_string());
     }
   }
+
+  for proto_file in &proto_files {
+    println!("cargo:rerun-if-changed={}", proto_file);
+  }
+
   // If the `PROTOC` environment variable is set, don't use vendored `protoc`
   std::env::var("PROTOC").map(|_| ()).unwrap_or_else(|_| {
     let protoc_path = protoc_bin_vendored::protoc_bin_path().expect("protoc bin path");

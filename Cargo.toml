@@ -12,14 +12,14 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-collab = { workspace = true, path = "collab" }
-collab-database = { workspace = true, path = "collab-database" }
-collab-plugins = { workspace = true, path = "collab-plugins" }
-collab-user = { workspace = true, path = "collab-user" }
-collab-entity = { workspace = true, path = "collab-entity" }
-collab-document = { workspace = true, path = "collab-document" }
-collab-folder = { workspace = true, path = "collab-folder" }
-collab-importer = { workspace = true, path = "collab-importer" }
+collab = { path = "collab" }
+collab-database = { path = "collab-database" }
+collab-plugins = { path = "collab-plugins" }
+collab-user = { path = "collab-user" }
+collab-entity = { path = "collab-entity" }
+collab-document = { path = "collab-document" }
+collab-folder = { path = "collab-folder" }
+collab-importer = { path = "collab-importer" }
 yrs = { version = "0.21.3", features = ["sync"] }
 anyhow = "1.0.94"
 thiserror = "1.0.39"
