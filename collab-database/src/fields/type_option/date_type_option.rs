@@ -445,7 +445,7 @@ impl DateCellData {
     Self {
       timestamp: Some(timestamp),
       end_timestamp: None,
-      include_time: false,
+      include_time: true,
       is_range: false,
       reminder_id: String::new(),
     }
@@ -734,7 +734,7 @@ mod tests {
 
     let raw_data = "1672531200";
     let result = date_type_option.convert_raw_cell_data(raw_data);
-    assert_eq!(result, "Jan 01, 2023");
+    assert_eq!(result, "Jan 01, 2023 00:00");
 
     let invalid_raw_data = "invalid";
     let result = date_type_option.convert_raw_cell_data(invalid_raw_data);
@@ -800,5 +800,14 @@ mod tests {
       let data = cell.get_as::<String>(CELL_DATA).unwrap();
       assert_eq!(data, "1570864850");
     }
+  }
+
+  #[test]
+  fn date_from_timestamp() {
+    let date_type_option = DateTypeOption::default_utc();
+    let date_cell = DateCellData::from_timestamp(1570864850);
+    assert!(date_cell.include_time);
+    let str = date_type_option.stringify_cell(&Cell::from(&date_cell));
+    assert_eq!(str, "Oct 12, 2019 07:20");
   }
 }
