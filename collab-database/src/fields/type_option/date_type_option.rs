@@ -157,11 +157,13 @@ impl TypeOptionCellReader for DateTypeOption {
 impl TypeOptionCellWriter for DateTypeOption {
   fn convert_json_to_cell(&self, json_value: Value) -> Cell {
     let date_cell_data: DateCellData = match json_value {
-      Value::Number(number) => DateCellData::from_timestamp(number.as_i64().unwrap_or_default()),
+      Value::Number(number) => {
+        DateCellData::from_timestamp_include_time(number.as_i64().unwrap_or_default())
+      },
       Value::String(s) => {
         // try rfc3339 format
         if let Ok(date) = chrono::DateTime::parse_from_rfc3339(&s) {
-          DateCellData::from_timestamp(date.timestamp())
+          DateCellData::from_timestamp_include_time(date.timestamp())
         } else {
           // try naive time
           if let Ok(Some(date)) = self.naive_time_from_time_string(true, Some(&s)) {
@@ -173,7 +175,9 @@ impl TypeOptionCellWriter for DateTypeOption {
                 .unwrap();
               start_of_day.timestamp()
             };
-            DateCellData::from_timestamp(start_of_day_ts + seconds_since_midnight as i64)
+            DateCellData::from_timestamp_include_time(
+              start_of_day_ts + seconds_since_midnight as i64,
+            )
           } else {
             // try to parse as json
             if let Ok(date_cell_data_obj) = serde_json::from_str::<Value>(&s) {
@@ -449,6 +453,10 @@ impl DateCellData {
       is_range: false,
       reminder_id: String::new(),
     }
+  }
+
+  pub fn from_timestamp_include_time(timestamp: i64) -> Self {
+    Self::new(timestamp, true, false, String::new())
   }
 }
 
@@ -788,17 +796,28 @@ mod tests {
     }
     {
       // enconded json
-      let str = serde_json::to_string(&DateCellData::from_timestamp(1570864850)).unwrap();
+      let str =
+        serde_json::to_string(&DateCellData::from_timestamp_include_time(1570864850)).unwrap();
       let cell: Cell = cell_writer.convert_json_to_cell(Value::String(str));
       let data = cell.get_as::<String>(CELL_DATA).unwrap();
       assert_eq!(data, "1570864850");
     }
     {
       // json
-      let js_val = serde_json::to_value(DateCellData::from_timestamp(1570864850)).unwrap();
+      let js_val =
+        serde_json::to_value(DateCellData::from_timestamp_include_time(1570864850)).unwrap();
       let cell: Cell = cell_writer.convert_json_to_cell(js_val);
       let data = cell.get_as::<String>(CELL_DATA).unwrap();
       assert_eq!(data, "1570864850");
     }
+  }
+
+  #[test]
+  fn date_from_timestamp_include_time() {
+    let date_type_option = DateTypeOption::default_utc();
+    let date_cell = DateCellData::from_timestamp_include_time(1570864850);
+    assert!(date_cell.include_time);
+    let str = date_type_option.stringify_cell(&Cell::from(&date_cell));
+    assert_eq!(str, "Oct 12, 2019 07:20");
   }
 }
