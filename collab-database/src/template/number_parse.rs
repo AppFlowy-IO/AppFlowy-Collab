@@ -22,7 +22,8 @@ impl AsRef<str> for NumberCellData {
 
 impl From<&Cell> for NumberCellData {
   fn from(cell: &Cell) -> Self {
-    Self(cell.get_as(CELL_DATA).unwrap_or_default())
+    let s = cell.get_as::<String>(CELL_DATA).unwrap_or_default();
+    Self(s)
   }
 }
 
