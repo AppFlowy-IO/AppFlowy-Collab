@@ -18,7 +18,8 @@ fn plain_text_1_test() {
     "Click `+ New Page `button at the bottom of your sidebar to add a new page.".to_string(),
     "Click `+` next to any page title in the sidebar to quickly add a new subpage, `Document`, `Grid`, or `Kanban Board`.".to_string(),
   ];
-  insert_paragraphs(&mut document, paragraphs.clone());
+  let mut prev_id = "".to_string();
+  insert_paragraphs(&mut document, paragraphs.clone(), &mut prev_id);
 
   let plain_text = document.to_plain_text(true, false).unwrap();
   // remove the empty lines at the beginning and the end
@@ -31,9 +32,24 @@ fn plain_text_1_test() {
   }
 }
 
-fn insert_paragraphs(document: &mut Document, paragraphs: Vec<String>) {
-  let page_id = document.get_page_id().unwrap();
+#[test]
+fn insert_text_after_create() {
+  let doc_id = "1";
+  let test = DocumentTest::new(1, doc_id);
+  let mut document = test.document;
   let mut prev_id = "".to_string();
+  insert_paragraphs(&mut document, vec![], &mut prev_id);
+  let plain_text = document.to_plain_text(true, false).unwrap();
+  assert_eq!(plain_text, "\n");
+
+  let paragraphs = vec!["Welcome to AppFlowy!".to_string()];
+  insert_paragraphs(&mut document, paragraphs.clone(), &mut prev_id);
+  let plain_text = document.to_plain_text(true, false).unwrap();
+  assert_eq!(plain_text, "\nWelcome to AppFlowy!\n");
+}
+
+fn insert_paragraphs(document: &mut Document, paragraphs: Vec<String>, prev_id: &mut String) {
+  let page_id = document.get_page_id().unwrap();
   for paragraph in paragraphs {
     let block_id = nanoid!(6);
     let text_id = nanoid!(6);
