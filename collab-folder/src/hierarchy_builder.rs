@@ -270,8 +270,12 @@ impl ViewExtraBuilder {
   pub fn with_space_info(mut self, space_info: SpaceInfo) -> Self {
     self.0[SPACE_IS_SPACE_KEY] = json!(space_info.is_space);
     self.0[SPACE_PERMISSION_KEY] = json!(space_info.space_permission as u8);
-    self.0[SPACE_ICON_KEY] = json!(space_info.space_icon);
-    self.0[SPACE_ICON_COLOR_KEY] = json!(space_info.space_icon_color);
+    if let Some(icon) = space_info.space_icon {
+      self.0[SPACE_ICON_KEY] = json!(icon);
+    }
+    if let Some(icon_color) = space_info.space_icon_color {
+      self.0[SPACE_ICON_COLOR_KEY] = json!(icon_color);
+    }
     self
   }
 

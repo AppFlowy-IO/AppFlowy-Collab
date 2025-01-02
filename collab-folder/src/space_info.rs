@@ -27,7 +27,7 @@ pub struct SpaceInfo {
   pub space_permission: SpacePermission,
 
   /// The created time of the space view.
-  pub created_at: i64,
+  pub space_created_at: i64,
 
   /// The space icon.
   ///
@@ -50,7 +50,7 @@ impl Default for SpaceInfo {
     Self {
       is_space: true,
       space_permission: SpacePermission::PublicToAll,
-      created_at: timestamp(),
+      space_created_at: timestamp(),
       space_icon: None,
       space_icon_color: None,
     }
