@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::timestamp;
+
 pub const SPACE_IS_SPACE_KEY: &str = "is_space";
 pub const SPACE_PERMISSION_KEY: &str = "space_permission";
 pub const SPACE_ICON_KEY: &str = "space_icon";
@@ -22,21 +24,37 @@ pub struct SpaceInfo {
   /// The permission of the space view.
   ///
   /// If the space_permission is none, the space view will use the SpacePermission::PublicToAll.
-  pub space_permission: Option<SpacePermission>,
+  pub space_permission: SpacePermission,
 
   /// The created time of the space view.
   pub created_at: i64,
 
-  /// The space icon key.
+  /// The space icon.
   ///
-  /// If the space_icon_key is none, the space view will use the default icon.
-  pub space_icon_key: Option<String>,
+  /// If the space_icon is none, the space view will use the default icon.
+  pub space_icon: Option<String>,
 
-  /// The space icon color key.
+  /// The space icon color.
   ///
-  /// If the space_icon_color_key is none, the space view will use the default icon color.
+  /// If the space_icon_color is none, the space view will use the default icon color.
   /// The value should be a valid hex color code: 0xFFA34AFD
-  pub space_icon_color_key: Option<String>,
+  pub space_icon_color: Option<String>,
+}
+
+impl Default for SpaceInfo {
+  /// Default space info is a public space
+  ///
+  /// The permission is public to all
+  /// The created time is the current timestamp
+  fn default() -> Self {
+    Self {
+      is_space: true,
+      space_permission: SpacePermission::PublicToAll,
+      created_at: timestamp(),
+      space_icon: None,
+      space_icon_color: None,
+    }
+  }
 }
 
 #[derive(Debug, Clone, serde_repr::Serialize_repr, serde_repr::Deserialize_repr)]

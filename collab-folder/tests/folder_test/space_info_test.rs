@@ -11,8 +11,8 @@ fn create_public_space_test() {
   let space_info = builder
     .is_space(true)
     .with_space_permission(SpacePermission::PublicToAll)
-    .with_space_icon_key("interface_essential/home-3")
-    .with_space_icon_color_key("0xFFA34AFD")
+    .with_space_icon(Some("interface_essential/home-3"))
+    .with_space_icon_color(Some("0xFFA34AFD"))
     .build();
   let space_info_json = serde_json::to_value(space_info).unwrap();
   assert_json_diff::assert_json_eq!(
@@ -34,8 +34,8 @@ fn create_private_space_test() {
   let space_info = builder
     .is_space(true)
     .with_space_permission(SpacePermission::Private)
-    .with_space_icon_key("interface_essential/lock")
-    .with_space_icon_color_key("0xFF4A4AFD")
+    .with_space_icon(Some("interface_essential/lock"))
+    .with_space_icon_color(Some("0xFF4A4AFD"))
     .build();
   let space_info_json = serde_json::to_value(space_info).unwrap();
   assert_json_diff::assert_json_eq!(

@@ -6,7 +6,7 @@ use crate::notion::walk_dir::{file_name_from_path, process_entry, walk_sub_dir};
 use collab_folder::hierarchy_builder::{
   NestedChildViewBuilder, NestedViews, ParentChildViews, ViewExtraBuilder,
 };
-use collab_folder::{SpacePermission, ViewLayout};
+use collab_folder::{SpaceInfo, SpacePermission, ViewLayout};
 use futures::stream;
 use futures::stream::{Stream, StreamExt};
 use std::collections::{HashMap, HashSet};
@@ -163,7 +163,7 @@ impl ImportedInfo {
       "Imported Space",
       &view_id,
       vec![],
-      SpacePermission::PublicToAll,
+      SpaceInfo::default(),
     )?;
     Ok(Self {
       uid,

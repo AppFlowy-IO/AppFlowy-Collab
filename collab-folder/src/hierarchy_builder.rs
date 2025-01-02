@@ -1,7 +1,7 @@
 use crate::space_info::SpacePermission;
 use crate::{
-  timestamp, IconType, RepeatedViewIdentifier, View, ViewIcon, ViewIdentifier, ViewLayout,
-  SPACE_CREATED_AT_KEY, SPACE_ICON_COLOR_KEY, SPACE_ICON_KEY, SPACE_IS_SPACE_KEY,
+  timestamp, IconType, RepeatedViewIdentifier, SpaceInfo, View, ViewIcon, ViewIdentifier,
+  ViewLayout, SPACE_CREATED_AT_KEY, SPACE_ICON_COLOR_KEY, SPACE_ICON_KEY, SPACE_IS_SPACE_KEY,
   SPACE_PERMISSION_KEY,
 };
 
@@ -248,18 +248,30 @@ impl ViewExtraBuilder {
     self
   }
 
-  pub fn with_space_icon_key(mut self, icon_key: &str) -> Self {
-    self.0[SPACE_ICON_KEY] = json!(icon_key);
+  pub fn with_space_icon(mut self, icon: Option<&str>) -> Self {
+    if let Some(icon) = icon {
+      self.0[SPACE_ICON_KEY] = json!(icon);
+    }
     self
   }
 
-  pub fn with_space_icon_color_key(mut self, icon_color_key: &str) -> Self {
-    self.0[SPACE_ICON_COLOR_KEY] = json!(icon_color_key);
+  pub fn with_space_icon_color(mut self, icon_color: Option<&str>) -> Self {
+    if let Some(icon_color) = icon_color {
+      self.0[SPACE_ICON_COLOR_KEY] = json!(icon_color);
+    }
     self
   }
 
   pub fn with_space_permission(mut self, permission: SpacePermission) -> Self {
     self.0[SPACE_PERMISSION_KEY] = json!(permission as u8);
+    self
+  }
+
+  pub fn with_space_info(mut self, space_info: SpaceInfo) -> Self {
+    self.0[SPACE_IS_SPACE_KEY] = json!(space_info.is_space);
+    self.0[SPACE_PERMISSION_KEY] = json!(space_info.space_permission as u8);
+    self.0[SPACE_ICON_KEY] = json!(space_info.space_icon);
+    self.0[SPACE_ICON_COLOR_KEY] = json!(space_info.space_icon_color);
     self
   }
 
