@@ -1,5 +1,8 @@
+use crate::space_info::SpacePermission;
 use crate::{
   timestamp, IconType, RepeatedViewIdentifier, View, ViewIcon, ViewIdentifier, ViewLayout,
+  SPACE_CREATED_AT_KEY, SPACE_ICON_COLOR_KEY, SPACE_ICON_KEY, SPACE_IS_SPACE_KEY,
+  SPACE_PERMISSION_KEY,
 };
 
 use serde_json::json;
@@ -236,23 +239,33 @@ impl ViewExtraBuilder {
   pub fn new() -> Self {
     Self(json!({}))
   }
-  pub fn is_space(mut self, is_space: bool, permission: SpacePermission) -> Self {
-    self.0["is_space"] = json!(is_space);
-    self.0["space_permission"] = json!(permission as u8);
-    self.0["space_created_at"] = json!(timestamp());
+
+  pub fn is_space(mut self, is_space: bool) -> Self {
+    self.0[SPACE_IS_SPACE_KEY] = json!(is_space);
+    if is_space {
+      self.0[SPACE_CREATED_AT_KEY] = json!(timestamp());
+    }
+    self
+  }
+
+  pub fn with_space_icon_key(mut self, icon_key: &str) -> Self {
+    self.0[SPACE_ICON_KEY] = json!(icon_key);
+    self
+  }
+
+  pub fn with_space_icon_color_key(mut self, icon_color_key: &str) -> Self {
+    self.0[SPACE_ICON_COLOR_KEY] = json!(icon_color_key);
+    self
+  }
+
+  pub fn with_space_permission(mut self, permission: SpacePermission) -> Self {
+    self.0[SPACE_PERMISSION_KEY] = json!(permission as u8);
     self
   }
 
   pub fn build(self) -> serde_json::Value {
     self.0
   }
-}
-
-#[derive(Debug, Clone, serde_repr::Serialize_repr, serde_repr::Deserialize_repr)]
-#[repr(u8)]
-pub enum SpacePermission {
-  PublicToAll = 0,
-  Private = 1,
 }
 
 #[derive(Debug, Clone)]

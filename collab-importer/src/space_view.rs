@@ -3,8 +3,8 @@ use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_document::document_data::default_document_collab_data;
-use collab_folder::hierarchy_builder::{NestedChildViewBuilder, ParentChildViews, SpacePermission};
-use collab_folder::ViewLayout;
+use collab_folder::hierarchy_builder::{NestedChildViewBuilder, ParentChildViews};
+use collab_folder::{SpacePermission, ViewLayout};
 
 #[allow(dead_code)]
 pub fn create_space_view(
@@ -34,7 +34,12 @@ pub fn create_space_view(
     .with_layout(ViewLayout::Document)
     .with_name(name)
     .with_children(child_views)
-    .with_extra(|extra| extra.is_space(true, space_permission).build())
+    .with_extra(|extra| {
+      extra
+        .is_space(true)
+        .with_space_permission(space_permission)
+        .build()
+    })
     .build();
   Ok((view, collab))
 }

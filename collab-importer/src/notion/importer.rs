@@ -4,9 +4,9 @@ use crate::notion::file::NotionFile;
 use crate::notion::page::{build_imported_collab_recursively, CollabResource, NotionPage};
 use crate::notion::walk_dir::{file_name_from_path, process_entry, walk_sub_dir};
 use collab_folder::hierarchy_builder::{
-  NestedChildViewBuilder, NestedViews, ParentChildViews, SpacePermission, ViewExtraBuilder,
+  NestedChildViewBuilder, NestedViews, ParentChildViews, ViewExtraBuilder,
 };
-use collab_folder::ViewLayout;
+use collab_folder::{SpacePermission, ViewLayout};
 use futures::stream;
 use futures::stream::{Stream, StreamExt};
 use std::collections::{HashMap, HashSet};
@@ -258,7 +258,8 @@ impl ImportedInfo {
         if space_ids.contains(&view.view.id) {
           view.view.extra = serde_json::to_string(
             &ViewExtraBuilder::new()
-              .is_space(true, SpacePermission::PublicToAll)
+              .is_space(true)
+              .with_space_permission(SpacePermission::PublicToAll)
               .build(),
           )
           .ok();
