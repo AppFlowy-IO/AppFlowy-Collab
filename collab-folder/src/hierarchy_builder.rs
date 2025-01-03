@@ -276,6 +276,7 @@ impl ViewExtraBuilder {
     if let Some(icon_color) = space_info.space_icon_color {
       self.0[SPACE_ICON_COLOR_KEY] = json!(icon_color);
     }
+    self.0[SPACE_CREATED_AT_KEY] = json!(space_info.space_created_at);
     self
   }
 
