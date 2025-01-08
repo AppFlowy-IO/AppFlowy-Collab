@@ -24,6 +24,7 @@ pub struct SpaceInfo {
   /// The permission of the space view.
   ///
   /// If the space_permission is none, the space view will use the SpacePermission::PublicToAll.
+  #[serde(default)]
   pub space_permission: SpacePermission,
 
   /// The created time of the space view.
@@ -57,9 +58,10 @@ impl Default for SpaceInfo {
   }
 }
 
-#[derive(Debug, Clone, serde_repr::Serialize_repr, serde_repr::Deserialize_repr)]
+#[derive(Debug, Clone, Default, serde_repr::Serialize_repr, serde_repr::Deserialize_repr)]
 #[repr(u8)]
 pub enum SpacePermission {
+  #[default]
   PublicToAll = 0,
   Private = 1,
 }
