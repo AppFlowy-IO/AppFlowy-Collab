@@ -8,14 +8,15 @@ use std::sync::Arc;
 use crate::core::collab::Path;
 use crate::core::value::Entity;
 use crate::error::CollabError;
-use crate::preclude::{FillRef, JsonValue};
+use crate::preclude::{Collab, FillRef, JsonValue};
 use yrs::block::Prelim;
 use yrs::branch::BranchPtr;
 use yrs::types::text::YChange;
 use yrs::types::{DefaultPrelim, Delta, ToJson};
+use yrs::updates::decoder::Decode;
 use yrs::{
-  Any, Array, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, Out, ReadTxn, Text, TextPrelim,
-  TextRef, TransactionMut,
+  Any, Array, ArrayPrelim, ArrayRef, Map, MapPrelim, MapRef, Out, ReadTxn, StateVector, Text,
+  TextPrelim, TextRef, TransactionMut, Update,
 };
 
 pub trait MapExt: Map {
@@ -389,5 +390,132 @@ impl AnyMapExt for Any {
       Any::Map(map) => map.get_as(key),
       _ => None,
     }
+  }
+}
+
+pub fn is_change_since_sv(collab: &Collab, state_vector: &StateVector) -> bool {
+  let txn = collab.transact();
+  let update = txn.encode_state_as_update_v1(state_vector);
+  let update = Update::decode_v1(&update).unwrap();
+
+  !update.state_vector().is_empty() || !update.delete_set().is_empty()
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[tokio::test]
+  async fn test_no_changes_after_initialization() {
+    let collab = Collab::new(1, "1", "1", vec![], false);
+    let sv_1 = collab.transact().state_vector();
+    assert!(
+      !is_change_since_sv(&collab, &sv_1),
+      "There should be no changes after initialization."
+    );
+  }
+
+  #[tokio::test]
+  async fn test_insert_triggers_change() {
+    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let sv_1 = collab.transact().state_vector();
+
+    collab.insert("text", "hello world");
+    assert!(
+      is_change_since_sv(&collab, &sv_1),
+      "Insert operation should trigger a change."
+    );
+  }
+
+  #[tokio::test]
+  async fn test_no_changes_after_state_vector_update() {
+    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    collab.insert("text", "hello world");
+    let sv_2 = collab.transact().state_vector();
+
+    // No changes since the last state vector (sv_2)
+    assert!(
+      !is_change_since_sv(&collab, &sv_2),
+      "There should be no changes after state vector update."
+    );
+  }
+
+  #[tokio::test]
+  async fn test_remove_triggers_change() {
+    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    collab.insert("text", "hello world");
+    let sv_1 = collab.transact().state_vector();
+
+    collab.remove("text");
+    assert!(
+      is_change_since_sv(&collab, &sv_1),
+      "Remove operation should trigger a change."
+    );
+  }
+
+  #[tokio::test]
+  async fn test_multiple_operations_trigger_change() {
+    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let sv_1 = collab.transact().state_vector();
+
+    collab.insert("text", "hello");
+    collab.insert("text", " world");
+    collab.remove("text");
+
+    assert!(
+      is_change_since_sv(&collab, &sv_1),
+      "Multiple operations should trigger a change."
+    );
+  }
+
+  #[tokio::test]
+  async fn test_empty_insert_and_remove_no_change() {
+    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let sv_1 = collab.transact().state_vector();
+
+    // Perform empty insert and remove operations
+    collab.insert("text", "");
+    collab.remove("text");
+
+    assert!(is_change_since_sv(&collab, &sv_1));
+  }
+
+  #[tokio::test]
+  async fn test_changes_after_sequence_of_operations() {
+    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let sv_1 = collab.transact().state_vector();
+
+    collab.insert("text", "hello");
+    assert!(
+      is_change_since_sv(&collab, &sv_1),
+      "First insert should trigger a change."
+    );
+
+    let sv_2 = collab.transact().state_vector();
+    collab.remove("text");
+    assert!(
+      is_change_since_sv(&collab, &sv_2),
+      "Remove operation should trigger a change after insert."
+    );
+  }
+
+  #[tokio::test]
+  async fn test_changes_after_full_update() {
+    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    collab.insert("text", "data");
+    let sv_1 = collab.transact().state_vector();
+
+    collab.insert("text", " more data");
+    collab.remove("text");
+    let update = collab.transact().encode_state_as_update_v1(&sv_1);
+
+    assert!(
+      !update.is_empty(),
+      "The update should not be empty after changes."
+    );
+    assert!(
+      is_change_since_sv(&collab, &sv_1),
+      "Changes should be detected after insert and remove."
+    );
   }
 }
