@@ -109,6 +109,7 @@ async fn delete_blocks_randomly_test() {
 
   println!("map_1_json: {}", map_1_json);
   println!("map_2_json: {}", map_2_json);
+  println!("map_2_json: {}", map_2_json);
 
   let a = map_1.to_json(&client_1.transact());
   let b = map_2.to_json(&client_2.transact());
