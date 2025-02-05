@@ -262,21 +262,32 @@ async fn observe_move_database_view_row_test() {
     .await
     .unwrap();
 
+  let second_view_id = uuid::Uuid::new_v4().to_string();
+  database_test
+    .create_linked_view(CreateViewParams {
+      database_id: database_id.clone(),
+      view_id: second_view_id.to_string(),
+      name: "my second grid".to_string(),
+      layout: DatabaseLayout::Grid,
+      ..Default::default()
+    })
+    .unwrap();
+
   let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   let cloned_row_id_1 = row_id_1.clone();
 
   let views = database_test.lock().await.get_all_views();
-  assert_eq!(views.len(), 1);
-  let view_id = views[0].id.clone();
+  assert_eq!(views.len(), 2);
+  let first_view_id = views[0].id.clone();
 
   let cloned_row_id_3 = row_id_3.clone();
-  let cloned_view_id = view_id.clone();
+  let cloned_first_view_id = first_view_id.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(500)).await;
     let mut db = cloned_database_test.lock().await;
     // [row_id_1, row_id_2, row_id_3, row_id_4]
-    db.update_database_view(&cloned_view_id, |view| {
+    db.update_database_view(&cloned_first_view_id, |view| {
       view.move_row_order(&cloned_row_id_1, &cloned_row_id_3);
     });
   });
@@ -304,11 +315,28 @@ async fn observe_move_database_view_row_test() {
   .await
   .unwrap();
 
-  let row_orders = database_test.lock().await.get_row_orders_for_view(&view_id);
+  // After move row, the row orders should be [row_id_2, row_id_3, row_id_1, row_id_4]
+  // Get the row orders for given database view
+  let row_orders = database_test
+    .lock()
+    .await
+    .get_row_orders_for_view(&first_view_id);
   assert_eq!(row_orders.len(), 4);
   assert_eq!(row_orders[0].id, row_id_2);
   assert_eq!(row_orders[1].id, row_id_3);
   assert_eq!(row_orders[2].id, row_id_1);
+  assert_eq!(row_orders[3].id, row_id_4);
+
+  // Get row orders for the second view
+  // Moving row in the first database view should not affect the row orders in the second view
+  let row_orders = database_test
+    .lock()
+    .await
+    .get_row_orders_for_view(&second_view_id);
+  assert_eq!(row_orders.len(), 4);
+  assert_eq!(row_orders[0].id, row_id_1);
+  assert_eq!(row_orders[1].id, row_id_2);
+  assert_eq!(row_orders[2].id, row_id_3);
   assert_eq!(row_orders[3].id, row_id_4);
 }
 
