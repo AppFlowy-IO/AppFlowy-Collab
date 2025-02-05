@@ -329,30 +329,30 @@ async fn observe_move_database_view_row_test() {
 
   // Get row orders for the second view
   // Moving row in the first database view should not affect the row orders in the second view
-  let row_orders = database_test
+  let second_row_orders = database_test
     .lock()
     .await
     .get_row_orders_for_view(&second_view_id);
-  assert_eq!(row_orders.len(), 4);
+  assert_eq!(second_row_orders.len(), 4);
   assert_eq!(
-    row_orders[0].id, row_id_1,
+    second_row_orders[0].id, row_id_1,
     "current row orders: {:?}",
-    row_orders
+    second_row_orders
   );
   assert_eq!(
-    row_orders[1].id, row_id_2,
+    second_row_orders[1].id, row_id_2,
     "current row orders: {:?}",
-    row_orders
+    second_row_orders
   );
   assert_eq!(
-    row_orders[2].id, row_id_3,
+    second_row_orders[2].id, row_id_3,
     "current row orders: {:?}",
-    row_orders
+    second_row_orders
   );
   assert_eq!(
-    row_orders[3].id, row_id_4,
+    second_row_orders[3].id, row_id_4,
     "current row orders: {:?}",
-    row_orders
+    second_row_orders
   );
 }
 
