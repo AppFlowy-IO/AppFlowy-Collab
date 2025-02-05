@@ -123,7 +123,7 @@ async fn observer_delete_non_consecutive_rows_test() {
 }
 
 #[tokio::test]
-async fn observe_move_row_test() {
+async fn observe_move_database_row_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let mut database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
@@ -152,11 +152,23 @@ async fn observe_move_row_test() {
   let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
   let cloned_row_id_1 = row_id_1.clone();
+
+  let views = database_test.lock().await.get_all_views();
+  assert_eq!(views.len(), 1);
+  let view_id = views[0].id.clone();
+  let row_orders = database_test.lock().await.get_row_orders_for_view(&view_id);
+  assert_eq!(row_orders.len(), 4);
+  assert_eq!(row_orders[0].id, row_id_1);
+  assert_eq!(row_orders[1].id, row_id_2);
+  assert_eq!(row_orders[2].id, row_id_3);
+  assert_eq!(row_orders[3].id, row_id_4);
+
+  let cloned_row_id_3 = row_id_3.clone();
   tokio::spawn(async move {
     sleep(Duration::from_millis(500)).await;
     let mut db = cloned_database_test.lock().await;
     // [row_id_1, row_id_2, row_id_3, row_id_4]
-    db.move_row(&cloned_row_id_1, &row_id_3).await;
+    db.move_row(&cloned_row_id_1, &cloned_row_id_3).await;
   });
 
   wait_for_specific_event(view_change_rx, |event| match event {
@@ -168,7 +180,7 @@ async fn observe_move_row_test() {
       if delete_row_indexes.len() == 1 {
         // [row_id_1, row_id_2, row_id_3, row_id_1, row_id_4]
         // after apply delete_row_indexs and insert_row_orders, then the array will be
-        // [row_id_2, row_id_2, row_id_1, row_id_4]
+        // [row_id_2, row_id_3, row_id_1, row_id_4]
         assert_eq!(delete_row_indexes[0], 0);
         assert_eq!(insert_row_orders[0].0.id, row_id_1);
         assert_eq!(insert_row_orders[0].1, 3);
@@ -181,6 +193,13 @@ async fn observe_move_row_test() {
   })
   .await
   .unwrap();
+
+  let row_orders = database_test.lock().await.get_row_orders_for_view(&view_id);
+  assert_eq!(row_orders.len(), 4);
+  assert_eq!(row_orders[0].id, row_id_2);
+  assert_eq!(row_orders[1].id, row_id_3);
+  assert_eq!(row_orders[2].id, row_id_1);
+  assert_eq!(row_orders[3].id, row_id_4);
 
   let cloned_row_id_1 = row_id_1.clone();
   let cloned_row_id_2 = row_id_2.clone();
@@ -215,6 +234,126 @@ async fn observe_move_row_test() {
   })
   .await
   .unwrap();
+}
+
+#[tokio::test]
+async fn observe_move_database_view_row_test() {
+  let database_id = uuid::Uuid::new_v4().to_string();
+  let mut database_test = create_database(1, &database_id);
+  let view_change_rx = database_test.subscribe_view_change().unwrap();
+  let row_id_1 = gen_row_id();
+  let row_id_2 = gen_row_id();
+  let row_id_3 = gen_row_id();
+  let row_id_4 = gen_row_id();
+  database_test
+    .create_row(CreateRowParams::new(row_id_1.clone(), database_id.clone()))
+    .await
+    .unwrap();
+  database_test
+    .create_row(CreateRowParams::new(row_id_2.clone(), database_id.clone()))
+    .await
+    .unwrap();
+  database_test
+    .create_row(CreateRowParams::new(row_id_3.clone(), database_id.clone()))
+    .await
+    .unwrap();
+  database_test
+    .create_row(CreateRowParams::new(row_id_4.clone(), database_id.clone()))
+    .await
+    .unwrap();
+
+  let second_view_id = uuid::Uuid::new_v4().to_string();
+  database_test
+    .create_linked_view(CreateViewParams {
+      database_id: database_id.clone(),
+      view_id: second_view_id.to_string(),
+      name: "my second grid".to_string(),
+      layout: DatabaseLayout::Grid,
+      ..Default::default()
+    })
+    .unwrap();
+
+  let database_test = Arc::new(Mutex::from(database_test));
+  let cloned_database_test = database_test.clone();
+  let cloned_row_id_1 = row_id_1.clone();
+
+  let views = database_test.lock().await.get_all_views();
+  assert_eq!(views.len(), 2);
+  let first_view_id = views[0].id.clone();
+
+  let cloned_row_id_3 = row_id_3.clone();
+  let cloned_first_view_id = first_view_id.clone();
+  tokio::spawn(async move {
+    sleep(Duration::from_millis(500)).await;
+    let mut db = cloned_database_test.lock().await;
+    // [row_id_1, row_id_2, row_id_3, row_id_4]
+    db.update_database_view(&cloned_first_view_id, |view| {
+      view.move_row_order(&cloned_row_id_1, &cloned_row_id_3);
+    });
+  });
+
+  wait_for_specific_event(view_change_rx, |event| match event {
+    DatabaseViewChange::DidUpdateRowOrders {
+      insert_row_orders,
+      delete_row_indexes,
+      ..
+    } => {
+      if delete_row_indexes.len() == 1 {
+        // [row_id_1, row_id_2, row_id_3, row_id_1, row_id_4]
+        // after apply delete_row_indexs and insert_row_orders, then the array will be
+        // [row_id_2, row_id_3, row_id_1, row_id_4]
+        assert_eq!(delete_row_indexes[0], 0);
+        assert_eq!(insert_row_orders[0].0.id, row_id_1);
+        assert_eq!(insert_row_orders[0].1, 3);
+        true
+      } else {
+        false
+      }
+    },
+    _ => false,
+  })
+  .await
+  .unwrap();
+
+  // After move row, the row orders should be [row_id_2, row_id_3, row_id_1, row_id_4]
+  // Get the row orders for given database view
+  let row_orders = database_test
+    .lock()
+    .await
+    .get_row_orders_for_view(&first_view_id);
+  assert_eq!(row_orders.len(), 4);
+  assert_eq!(row_orders[0].id, row_id_2);
+  assert_eq!(row_orders[1].id, row_id_3);
+  assert_eq!(row_orders[2].id, row_id_1);
+  assert_eq!(row_orders[3].id, row_id_4);
+
+  // Get row orders for the second view
+  // Moving row in the first database view should not affect the row orders in the second view
+  let second_row_orders = database_test
+    .lock()
+    .await
+    .get_row_orders_for_view(&second_view_id);
+  assert_eq!(second_row_orders.len(), 4);
+  assert_eq!(
+    second_row_orders[0].id, row_id_1,
+    "current row orders: {:?}",
+    second_row_orders
+  );
+  assert_eq!(
+    second_row_orders[1].id, row_id_2,
+    "current row orders: {:?}",
+    second_row_orders
+  );
+  assert_eq!(
+    second_row_orders[2].id, row_id_3,
+    "current row orders: {:?}",
+    second_row_orders
+  );
+  assert_eq!(
+    second_row_orders[3].id, row_id_4,
+    "current row orders: {:?}",
+    second_row_orders
+  );
 }
 
 #[tokio::test]
