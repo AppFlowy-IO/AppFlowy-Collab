@@ -2,7 +2,7 @@ use crate::database_test::helper::{
   create_database, restore_database_from_db, wait_for_specific_event,
 };
 use crate::helper::setup_log;
-use collab_database::database::gen_row_id;
+use collab_database::database::{gen_row_id, DatabaseBody};
 
 use collab::lock::Mutex;
 use collab_database::entity::CreateViewParams;
@@ -10,6 +10,7 @@ use collab_database::rows::CreateRowParams;
 use collab_database::views::{
   DatabaseLayout, DatabaseViewChange, FilterMapBuilder, GroupSettingBuilder, SortMapBuilder,
 };
+use collab_database::workspace_database::NoPersistenceDatabaseCollabService;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -263,6 +264,7 @@ async fn observe_move_database_view_row_test() {
     .unwrap();
 
   let second_view_id = uuid::Uuid::new_v4().to_string();
+  let first_view_id = database_test.get_all_views().first().unwrap().id.clone();
   database_test
     .create_linked_view(CreateViewParams {
       database_id: database_id.clone(),
@@ -279,10 +281,13 @@ async fn observe_move_database_view_row_test() {
 
   let views = database_test.lock().await.get_all_views();
   assert_eq!(views.len(), 2);
-  let first_view_id = views[0].id.clone();
 
   let cloned_row_id_3 = row_id_3.clone();
   let cloned_first_view_id = first_view_id.clone();
+  println!(
+    "first_view_id: {}, second_view_id:{}",
+    first_view_id, second_view_id
+  );
   tokio::spawn(async move {
     sleep(Duration::from_millis(500)).await;
     let mut db = cloned_database_test.lock().await;
@@ -326,6 +331,20 @@ async fn observe_move_database_view_row_test() {
   assert_eq!(row_orders[1].id, row_id_3);
   assert_eq!(row_orders[2].id, row_id_1);
   assert_eq!(row_orders[3].id, row_id_4);
+  {
+    let collab = &database_test.lock().await.collab;
+    let db_body =
+      DatabaseBody::from_collab(collab, Arc::new(NoPersistenceDatabaseCollabService), None)
+        .unwrap();
+
+    let txn = collab.transact();
+    let body_row_orders = db_body.views.get_row_orders(&txn, &first_view_id);
+    assert_eq!(body_row_orders.len(), 4);
+    assert_eq!(body_row_orders[0].id, row_id_2);
+    assert_eq!(body_row_orders[1].id, row_id_3);
+    assert_eq!(body_row_orders[2].id, row_id_1);
+    assert_eq!(body_row_orders[3].id, row_id_4);
+  }
 
   // Get row orders for the second view
   // Moving row in the first database view should not affect the row orders in the second view
@@ -335,25 +354,35 @@ async fn observe_move_database_view_row_test() {
     .get_row_orders_for_view(&second_view_id);
   assert_eq!(second_row_orders.len(), 4);
   assert_eq!(
-    second_row_orders[0].id, row_id_1,
-    "current row orders: {:?}",
+    second_row_orders.len(),
+    4,
+    "Expected 4 rows, got {:?}",
     second_row_orders
   );
-  assert_eq!(
-    second_row_orders[1].id, row_id_2,
-    "current row orders: {:?}",
-    second_row_orders
-  );
-  assert_eq!(
-    second_row_orders[2].id, row_id_3,
-    "current row orders: {:?}",
-    second_row_orders
-  );
-  assert_eq!(
-    second_row_orders[3].id, row_id_4,
-    "current row orders: {:?}",
-    second_row_orders
-  );
+
+  let expected_ids = [&row_id_1, &row_id_2, &row_id_3, &row_id_4];
+  for (i, expected_id) in expected_ids.into_iter().enumerate() {
+    assert_eq!(
+      &second_row_orders[i].id, expected_id,
+      "Mismatch at row {}: current row orders: {:?}",
+      i, second_row_orders
+    );
+  }
+
+  {
+    let collab = &database_test.lock().await.collab;
+    let db_body =
+      DatabaseBody::from_collab(collab, Arc::new(NoPersistenceDatabaseCollabService), None)
+        .unwrap();
+
+    let txn = collab.transact();
+    let body_row_orders = db_body.views.get_row_orders(&txn, &second_view_id);
+    assert_eq!(body_row_orders.len(), 4);
+    assert_eq!(body_row_orders[0].id, row_id_1);
+    assert_eq!(body_row_orders[1].id, row_id_2);
+    assert_eq!(body_row_orders[2].id, row_id_3);
+    assert_eq!(body_row_orders[3].id, row_id_4);
+  }
 }
 
 #[tokio::test]
