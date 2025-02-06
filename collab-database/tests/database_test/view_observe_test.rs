@@ -382,6 +382,15 @@ async fn observe_move_database_view_row_test() {
     assert_eq!(body_row_orders[1].id, row_id_2);
     assert_eq!(body_row_orders[2].id, row_id_3);
     assert_eq!(body_row_orders[3].id, row_id_4);
+
+    // We don't modify the row orders for the inline view. So the rows should be the created order
+    let inline_view_id = db_body.get_inline_view_id(&txn);
+    let inline_row_orders = db_body.views.get_row_orders(&txn, &inline_view_id);
+    assert_eq!(inline_row_orders.len(), 4);
+    assert_eq!(inline_row_orders[0].id, row_id_1);
+    assert_eq!(inline_row_orders[1].id, row_id_2);
+    assert_eq!(inline_row_orders[2].id, row_id_3);
+    assert_eq!(inline_row_orders[3].id, row_id_4);
   }
 }
 
