@@ -58,7 +58,9 @@ impl Default for SpaceInfo {
   }
 }
 
-#[derive(Debug, Clone, Default, serde_repr::Serialize_repr, serde_repr::Deserialize_repr)]
+#[derive(
+  Debug, Clone, Default, serde_repr::Serialize_repr, serde_repr::Deserialize_repr, PartialEq, Eq,
+)]
 #[repr(u8)]
 pub enum SpacePermission {
   #[default]
