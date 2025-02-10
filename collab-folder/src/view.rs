@@ -28,6 +28,7 @@ const VIEW_CREATED_BY: &str = "created_by";
 const VIEW_ICON: &str = "icon";
 const VIEW_LAST_EDITED_TIME: &str = "last_edited_time";
 const VIEW_LAST_EDITED_BY: &str = "last_edited_by";
+const VIEW_IS_LOCKED: &str = "is_locked";
 const VIEW_EXTRA: &str = "extra";
 // const VIEW_LAST_VIEWED_TIME: &str = "last_viewed_time";
 
@@ -454,6 +455,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     .get_with_txn(txn, VIEW_LAST_EDITED_TIME)
     .unwrap_or(timestamp());
   let last_edited_by = map_ref.get_with_txn(txn, VIEW_LAST_EDITED_BY);
+  let is_locked = map_ref.get_with_txn(txn, VIEW_IS_LOCKED);
   let extra = map_ref.get_with_txn(txn, VIEW_EXTRA);
 
   Some(View {
@@ -468,6 +470,7 @@ pub(crate) fn view_from_map_ref<T: ReadTxn>(
     created_by,
     last_edited_time,
     last_edited_by,
+    is_locked,
     extra,
   })
 }
@@ -679,6 +682,7 @@ pub struct View {
   pub created_by: Option<i64>, // user id
   pub last_edited_time: i64,
   pub last_edited_by: Option<i64>, // user id
+  pub is_locked: Option<bool>,
   /// this value used to store the extra data with JSON format
   /// for document:
   /// - cover: { type: "", value: "" }
@@ -713,6 +717,7 @@ impl View {
       created_by,
       last_edited_time: 0,
       last_edited_by: None,
+      is_locked: None,
       extra: None,
     }
   }
@@ -730,6 +735,7 @@ impl View {
       created_by: uid,
       last_edited_time: 0,
       last_edited_by: None,
+      is_locked: None,
       extra: None,
     }
   }

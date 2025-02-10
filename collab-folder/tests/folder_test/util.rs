@@ -148,6 +148,7 @@ pub fn make_test_view(view_id: &str, parent_view_id: &str, belongings: Vec<Strin
     created_by: None,
     last_edited_time: 0,
     last_edited_by: None,
+    is_locked: None,
     extra: None,
   }
 }
