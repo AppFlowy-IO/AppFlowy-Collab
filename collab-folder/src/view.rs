@@ -659,6 +659,11 @@ impl<'a, 'b, 'c> ViewUpdate<'a, 'b, 'c> {
     self
   }
 
+  pub fn set_page_lock_status(self, is_locked: bool) -> Self {
+    self.map_ref.insert(self.txn, VIEW_IS_LOCKED, is_locked);
+    self
+  }
+
   pub fn done(self) -> Option<View> {
     view_from_map_ref(self.map_ref, self.txn, &self.children_map, self.section_map)
   }
