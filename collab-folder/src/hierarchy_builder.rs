@@ -116,6 +116,7 @@ pub struct NestedChildViewBuilder {
   children: Vec<ParentChildViews>,
   is_favorite: bool,
   icon: Option<ViewIcon>,
+  is_locked: Option<bool>,
   extra: Option<String>,
 }
 
@@ -133,6 +134,7 @@ impl NestedChildViewBuilder {
       children: vec![],
       is_favorite: false,
       icon: None,
+      is_locked: None,
       extra: None,
     }
   }
@@ -219,6 +221,7 @@ impl NestedChildViewBuilder {
           .collect(),
       ),
       last_edited_by: Some(self.uid),
+      is_locked: self.is_locked,
       extra: self.extra,
     };
     ParentChildViews {
