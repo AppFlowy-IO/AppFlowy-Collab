@@ -863,6 +863,7 @@ mod tests {
       created_by: None,
       last_edited_time: current_time,
       last_edited_by: None,
+      is_locked: None,
       extra: Some(serde_json::to_string(&SpaceInfo::default()).unwrap()),
     };
     let space_view_id = space_view.id.clone();
