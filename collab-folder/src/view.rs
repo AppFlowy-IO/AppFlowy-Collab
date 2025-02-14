@@ -827,6 +827,7 @@ pub enum ViewLayout {
   Board = 2,
   Calendar = 3,
   Chat = 4,
+  Gallery = 5,
 }
 
 impl ViewLayout {
@@ -837,7 +838,7 @@ impl ViewLayout {
   pub fn is_database(&self) -> bool {
     matches!(
       self,
-      ViewLayout::Grid | ViewLayout::Board | ViewLayout::Calendar
+      ViewLayout::Grid | ViewLayout::Board | ViewLayout::Calendar | ViewLayout::Gallery
     )
   }
 }
@@ -852,6 +853,7 @@ impl TryFrom<i64> for ViewLayout {
       2 => Ok(ViewLayout::Board),
       3 => Ok(ViewLayout::Calendar),
       4 => Ok(ViewLayout::Chat),
+      5 => Ok(ViewLayout::Gallery),
       _ => bail!("Unknown layout {}", value),
     }
   }
