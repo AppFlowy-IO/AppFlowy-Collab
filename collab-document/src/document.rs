@@ -645,7 +645,7 @@ impl DocumentBody {
     Ok(buf)
   }
 
-  fn insert_block(
+  pub fn insert_block(
     &self,
     txn: &mut TransactionMut,
     block: Block,
@@ -709,7 +709,11 @@ impl DocumentBody {
   /// 1. delete all the children of this block
   /// 2. delete the block from its parent
   /// 3. delete the block from the block map
-  fn delete_block(&self, txn: &mut TransactionMut, block_id: &str) -> Result<(), DocumentError> {
+  pub fn delete_block(
+    &self,
+    txn: &mut TransactionMut,
+    block_id: &str,
+  ) -> Result<(), DocumentError> {
     let block = match self.block_operation.get_block_with_txn(txn, block_id) {
       Some(block) => block,
       None => return Err(DocumentError::BlockIsNotFound),
