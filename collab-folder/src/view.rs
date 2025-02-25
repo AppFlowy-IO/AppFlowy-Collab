@@ -293,7 +293,6 @@ impl ViewsMap {
         &self.section_map,
       )
       .add_children(vec![view_identifier], index)
-      .set_created_at(time)
       .set_last_edited_time(time)
       .done()
       .map(Arc::new);
