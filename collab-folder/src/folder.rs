@@ -1,5 +1,5 @@
 use std::borrow::{Borrow, BorrowMut};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
@@ -406,7 +406,11 @@ impl Folder {
   /// * `Vec<View>`: A vector of `View` objects that includes the parent view and all of its child views.
   pub fn get_view_recursively(&self, view_id: &str) -> Vec<View> {
     let txn = self.collab.transact();
-    self.body.get_view_recursively_with_txn(&txn, view_id)
+    let mut views = vec![];
+    self
+      .body
+      .get_view_recursively_with_txn(&txn, view_id, &mut HashSet::default(), &mut views);
+    views
   }
 }
 
@@ -579,36 +583,41 @@ impl FolderBody {
     self.meta.get_with_txn(txn, FOLDER_WORKSPACE_ID)
   }
 
-  /// Recursively retrieves all views associated with the provided `view_id` using a transaction.
+  /// Recursively retrieves all views associated with the provided `view_id` using a transaction,
+  /// adding them to the `accumulated_views` vector.
   ///
-  /// The function begins by attempting to retrieve the parent view associated with the `view_id`.
-  /// If the parent view is not found, an empty vector is returned.
+  /// The function begins by attempting to retrieve the view associated with the `view_id`.
+  /// If the parent view is not found, the function returns.
   /// If the parent view is found, the function proceeds to retrieve all of its child views recursively.
+  /// The function uses a hash set to keep track of the visited view ids to avoid infinite recursion due
+  /// to circular dependency.
   ///
-  /// The function finally returns a vector containing the parent view and all of its child views.
+  /// At the end of the recursion, `accumulated_views` will contain the parent view and all of its child views.
   /// The views are clones of the original objects.
   ///
   /// # Parameters
   ///
   /// * `txn`: A read transaction object which is used to execute the view retrieval.
   /// * `view_id`: The ID of the parent view.
-  ///
-  /// # Returns
-  ///
-  /// * `Vec<View>`: A vector of `View` objects that includes the parent view and all of its child views.
-  pub fn get_view_recursively_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Vec<View> {
+  /// * `visited`: Hash set containing all the traversed view ids.
+  /// * `accumulated_views`: Vector containing all the views that are accumulated during the traversal.
+  pub fn get_view_recursively_with_txn<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+    visited: &mut HashSet<String>,
+    accumulated_views: &mut Vec<View>,
+  ) {
+    if !visited.insert(view_id.to_string()) {
+      return;
+    }
     match self.views.get_view_with_txn(txn, view_id) {
-      None => vec![],
+      None => (),
       Some(parent_view) => {
-        let mut views = vec![parent_view.as_ref().clone()];
-        let child_views = parent_view
-          .children
-          .items
-          .iter()
-          .flat_map(|child| self.get_view_recursively_with_txn(txn, &child.id))
-          .collect::<Vec<_>>();
-        views.extend(child_views);
-        views
+        accumulated_views.push(parent_view.as_ref().clone());
+        parent_view.children.items.iter().for_each(|child| {
+          self.get_view_recursively_with_txn(txn, &child.id, visited, accumulated_views)
+        })
       },
     }
   }
@@ -643,7 +652,14 @@ impl FolderBody {
       .map(|view| view.as_ref().clone())
       .collect::<Vec<View>>();
     for view in self.views.get_views_belong_to(txn, workspace_id) {
-      views.extend(self.get_view_recursively_with_txn(txn, &view.id));
+      let mut all_views_in_workspace = vec![];
+      self.get_view_recursively_with_txn(
+        txn,
+        &view.id,
+        &mut HashSet::default(),
+        &mut all_views_in_workspace,
+      );
+      views.extend(all_views_in_workspace);
     }
     views.extend(orphan_views);
 
