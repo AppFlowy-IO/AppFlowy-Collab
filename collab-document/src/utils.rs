@@ -1,4 +1,4 @@
-use crate::blocks::{Block, TextDelta};
+use crate::blocks::{mention_block_content_from_delta, Block, TextDelta};
 use std::collections::HashMap;
 
 #[inline]
@@ -8,6 +8,9 @@ pub(crate) fn push_deltas_to_str(
   empty_space_each_delta: bool,
 ) {
   for delta in deltas {
+    if mention_block_content_from_delta(&delta).is_some() {
+      continue;
+    }
     if let TextDelta::Inserted(text, _) = delta {
       let trimmed = text.trim();
       if !trimmed.is_empty() {
