@@ -238,7 +238,6 @@ pub fn disk_plugin_with_db(
   collab_type: CollabType,
 ) -> Box<RocksdbDiskPlugin> {
   let object_id = object_id.to_string();
-  let collab_type = collab_type.clone();
   Box::new(RocksdbDiskPlugin::new_with_config(
     uid,
     workspace_id,

@@ -196,7 +196,7 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
         1,
         self.workspace_id.clone(),
         object_id.to_string(),
-        collab_type.clone(),
+        collab_type,
         Arc::downgrade(&self.db),
         CollabPersistenceConfig::default(),
       );

@@ -13,7 +13,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 /// The type of the collab object. It will be used to determine what kind of services should be
 /// used to handle the object.
 /// The value of the enum can't be changed.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize_repr, Deserialize_repr, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize_repr, Deserialize_repr, Hash)]
 #[repr(i32)]
 pub enum CollabType {
   Document = 0,
@@ -38,7 +38,7 @@ pub enum CollabValidateError {
 
 impl CollabType {
   pub fn value(&self) -> i32 {
-    self.clone() as i32
+    *self as i32
   }
 
   pub fn is_unknown(&self) -> bool {

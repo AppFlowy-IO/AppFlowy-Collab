@@ -1,6 +1,6 @@
-use std::fmt::{Display, Formatter};
-
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 use yrs::{Origin, TransactionMut};
 
 ///  ⚠️ ⚠️ ⚠️Compatibility Warning:
@@ -34,6 +34,36 @@ impl Display for CollabOrigin {
       )),
       CollabOrigin::Server => f.write_fmt(format_args!("server")),
       CollabOrigin::Empty => Ok(()),
+    }
+  }
+}
+
+impl FromStr for CollabOrigin {
+  type Err = crate::error::CollabError;
+
+  fn from_str(value: &str) -> Result<Self, Self::Err> {
+    match value {
+      "" => Ok(CollabOrigin::Empty),
+      "server" => Ok(CollabOrigin::Server),
+      other => {
+        let mut split = other.split('|');
+        match (split.next(), split.next()) {
+          (Some(uid), Some(device_id)) | (Some(device_id), Some(uid))
+            if uid.starts_with("uid:") && device_id.starts_with("device_id:") =>
+          {
+            let uid = uid.trim_start_matches("uid:");
+            let device_id = device_id.trim_start_matches("device_id:").to_string();
+            let uid: i64 = uid.parse().map_err(|err| {
+              crate::error::CollabError::NoRequiredData(format!("failed to parse uid: {}", err))
+            })?;
+            Ok(CollabOrigin::Client(CollabClient { uid, device_id }))
+          },
+          _ => Err(crate::error::CollabError::NoRequiredData(format!(
+            "couldn't parse collab origin from `{}`",
+            other
+          ))),
+        }
+      },
     }
   }
 }
@@ -98,5 +128,34 @@ impl From<CollabClient> for Origin {
   fn from(origin: CollabClient) -> Self {
     let data = serde_json::to_vec(&origin).unwrap();
     Origin::from(data.as_slice())
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use crate::core::origin::{CollabClient, CollabOrigin};
+
+  #[test]
+  fn parse_collab_origin_from_empty() {
+    parse_collab_origin(CollabOrigin::Empty);
+  }
+
+  #[test]
+  fn parse_collab_origin_from_server() {
+    parse_collab_origin(CollabOrigin::Server);
+  }
+
+  #[test]
+  fn parse_collab_origin_from_client() {
+    parse_collab_origin(CollabOrigin::Client(CollabClient::new(
+      0xdeadbeefdeadbee,
+      "device-1",
+    )));
+  }
+
+  fn parse_collab_origin(origin: CollabOrigin) {
+    let origin_str = origin.to_string();
+    let parsed = origin_str.parse::<CollabOrigin>().unwrap();
+    assert_eq!(origin, parsed);
   }
 }
