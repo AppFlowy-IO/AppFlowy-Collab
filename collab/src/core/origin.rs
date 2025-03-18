@@ -130,3 +130,32 @@ impl From<CollabClient> for Origin {
     Origin::from(data.as_slice())
   }
 }
+
+#[cfg(test)]
+mod test {
+  use crate::core::origin::{CollabClient, CollabOrigin};
+
+  #[test]
+  fn parse_collab_origin_from_empty() {
+    parse_collab_origin(CollabOrigin::Empty);
+  }
+
+  #[test]
+  fn parse_collab_origin_from_server() {
+    parse_collab_origin(CollabOrigin::Server);
+  }
+
+  #[test]
+  fn parse_collab_origin_from_client() {
+    parse_collab_origin(CollabOrigin::Client(CollabClient::new(
+      0xdeadbeefdeadbee,
+      "device-1",
+    )));
+  }
+
+  fn parse_collab_origin(origin: CollabOrigin) {
+    let origin_str = origin.to_string();
+    let parsed = origin_str.parse::<CollabOrigin>().unwrap();
+    assert_eq!(origin, parsed);
+  }
+}
