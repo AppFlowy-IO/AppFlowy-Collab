@@ -75,7 +75,7 @@ impl CollabSnapshot {
   ) {
     let weak_snapshot_persistence = Arc::downgrade(&self.snapshot_persistence);
     let object_id = object_id.to_string();
-    let collab_type = collab_type.clone();
+    let collab_type = *collab_type;
     let state = self.state.clone();
 
     if let (Some(db), Some(persistence)) = (

@@ -38,7 +38,7 @@ pub enum CollabValidateError {
 
 impl CollabType {
   pub fn value(&self) -> i32 {
-    self.clone() as i32
+    *self as i32
   }
 
   pub fn is_unknown(&self) -> bool {
