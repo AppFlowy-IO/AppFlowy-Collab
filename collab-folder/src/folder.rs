@@ -268,7 +268,8 @@ impl Folder {
     delete_favorite_view_ids,
     get_my_favorite_sections,
     get_all_favorites_sections,
-    remove_all_my_favorite_sections
+    remove_all_my_favorite_sections,
+    move_favorite_view_id
   );
 
   // Recent
@@ -279,7 +280,8 @@ impl Folder {
     delete_recent_view_ids,
     get_my_recent_sections,
     get_all_recent_sections,
-    remove_all_my_recent_sections
+    remove_all_my_recent_sections,
+    move_recent_view_id
   );
 
   // Trash
@@ -290,7 +292,8 @@ impl Folder {
     delete_trash_view_ids,
     get_my_trash_sections,
     get_all_trash_sections,
-    remove_all_my_trash_sections
+    remove_all_my_trash_sections,
+    move_trash_view_id
   );
 
   // Private
@@ -301,7 +304,8 @@ impl Folder {
     delete_private_view_ids,
     get_my_private_sections,
     get_all_private_sections,
-    remove_all_my_private_sections
+    remove_all_my_private_sections,
+    move_private_view_id
   );
 
   pub fn get_my_trash_info(&self) -> Vec<TrashInfo> {
@@ -836,10 +840,13 @@ pub fn default_folder_data(workspace_id: &str) -> FolderData {
 
 #[cfg(test)]
 mod tests {
+  use std::collections::HashMap;
+
   use collab::{core::origin::CollabOrigin, preclude::Collab};
 
   use crate::{
-    Folder, FolderData, RepeatedViewIdentifier, SpaceInfo, UserId, View, ViewIdentifier, Workspace,
+    Folder, FolderData, RepeatedViewIdentifier, SectionItem, SpaceInfo, UserId, View,
+    ViewIdentifier, Workspace,
   };
 
   #[test]
@@ -913,5 +920,98 @@ mod tests {
     assert_eq!(folder.get_current_view(), Some(view_2_id.to_string()));
     folder.body.uid = UserId::from(2);
     assert_eq!(folder.get_current_view(), Some(view_1_id.to_string()));
+  }
+
+  #[test]
+  pub fn test_move_section() {
+    let current_time = chrono::Utc::now().timestamp();
+    let workspace_id = "1234";
+    let uid = 1;
+    let collab = Collab::new_with_origin(CollabOrigin::Empty, workspace_id, vec![], false);
+    let space_view_id = "space_view_id".to_string();
+    let views: Vec<View> = (0..3)
+      .map(|i| {
+        View::new(
+          format!("view_{:?}", i),
+          space_view_id.clone(),
+          format!("View {:?}", i),
+          crate::ViewLayout::Document,
+          Some(uid),
+        )
+      })
+      .collect();
+    let space_view = View {
+      id: "space_1_id".to_string(),
+      parent_view_id: workspace_id.to_string(),
+      name: "Space 1".to_string(),
+      children: RepeatedViewIdentifier::new(
+        views
+          .iter()
+          .map(|view| ViewIdentifier::new(view.id.clone()))
+          .collect(),
+      ),
+      created_at: current_time,
+      is_favorite: false,
+      layout: crate::ViewLayout::Document,
+      icon: None,
+      created_by: None,
+      last_edited_time: current_time,
+      last_edited_by: None,
+      is_locked: None,
+      extra: Some(serde_json::to_string(&SpaceInfo::default()).unwrap()),
+    };
+    let workspace = Workspace {
+      id: workspace_id.to_string(),
+      name: "Workspace".to_string(),
+      child_views: RepeatedViewIdentifier::new(vec![ViewIdentifier::new(space_view_id.clone())]),
+      created_at: current_time,
+      created_by: Some(uid),
+      last_edited_time: current_time,
+      last_edited_by: Some(uid),
+    };
+    let all_views: Vec<View> = views
+      .iter()
+      .chain(std::iter::once(&space_view))
+      .cloned()
+      .collect();
+    let folder_data = FolderData {
+      workspace,
+      current_view: Default::default(),
+      views: all_views,
+      favorites: HashMap::from([(
+        UserId::from(uid),
+        views
+          .iter()
+          .map(|view| SectionItem::new(view.id.clone()))
+          .collect(),
+      )]),
+      recent: Default::default(),
+      trash: Default::default(),
+      private: Default::default(),
+    };
+    let mut folder = Folder::create(uid, collab, None, folder_data);
+    let favorite_sections = folder.get_all_favorites_sections();
+    let expected_favorites = vec![
+      SectionItem::new("view_0".to_string()),
+      SectionItem::new("view_1".to_string()),
+      SectionItem::new("view_2".to_string()),
+    ];
+    assert_eq!(favorite_sections, expected_favorites);
+    folder.move_favorite_view_id("view_0", Some("view_1"));
+    let favorite_sections = folder.get_all_favorites_sections();
+    let expected_favorites = vec![
+      SectionItem::new("view_1".to_string()),
+      SectionItem::new("view_0".to_string()),
+      SectionItem::new("view_2".to_string()),
+    ];
+    assert_eq!(favorite_sections, expected_favorites);
+    folder.move_favorite_view_id("view_2", None);
+    let favorite_sections = folder.get_all_favorites_sections();
+    let expected_favorites = vec![
+      SectionItem::new("view_2".to_string()),
+      SectionItem::new("view_1".to_string()),
+      SectionItem::new("view_0".to_string()),
+    ];
+    assert_eq!(favorite_sections, expected_favorites);
   }
 }

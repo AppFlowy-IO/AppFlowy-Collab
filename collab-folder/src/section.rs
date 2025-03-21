@@ -191,6 +191,39 @@ impl<'a> SectionOperation<'a> {
     }
   }
 
+  pub fn move_section_item_with_txn<T: AsRef<str>>(
+    &self,
+    txn: &mut TransactionMut,
+    id: T,
+    prev_id: Option<T>,
+  ) {
+    let section_items = self.get_all_section_item(txn);
+    let id = id.as_ref();
+    let old_pos = section_items
+      .iter()
+      .position(|item| item.id == id)
+      .map(|pos| pos as u32);
+    let new_pos = prev_id
+      .and_then(|prev_id| {
+        section_items
+          .iter()
+          .position(|item| item.id == prev_id.as_ref())
+          .map(|pos| pos as u32 + 1)
+      })
+      .unwrap_or(0);
+    let section_array = self
+      .container()
+      .get_with_txn::<_, ArrayRef>(txn, self.uid().as_ref());
+    // If the new position index is greater than the length of the section, yrs will panic
+    if new_pos > section_items.len() as u32 {
+      return;
+    }
+
+    if let (Some(old_pos), Some(section_array)) = (old_pos, section_array) {
+      section_array.move_to(txn, old_pos, new_pos);
+    }
+  }
+
   pub fn delete_section_items_with_txn<T: AsRef<str>>(
     &self,
     txn: &mut TransactionMut,
