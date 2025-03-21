@@ -105,7 +105,7 @@ macro_rules! impl_array_update {
 
 #[macro_export]
 macro_rules! impl_section_op {
-  ($section_type:expr, $set_fn:ident, $add_fn:ident, $delete_fn:ident, $get_my_fn:ident, $get_all_fn:ident, $remove_all_fn:ident) => {
+  ($section_type:expr, $set_fn:ident, $add_fn:ident, $delete_fn:ident, $get_my_fn:ident, $get_all_fn:ident, $remove_all_fn:ident, $move_fn:ident) => {
     // Add view IDs as either favorites or recents
     pub fn $add_fn(&mut self, ids: Vec<String>) {
       let mut txn = self.collab.transact_mut();
@@ -157,6 +157,15 @@ macro_rules! impl_section_op {
       let mut txn = self.collab.transact_mut();
       if let Some(op) = self.body.section.section_op(&txn, $section_type) {
         op.clear(&mut txn)
+      }
+    }
+
+    // Move the position of a single section item to after another section item. If
+    // prev_id is None, the item will be moved to the beginning of the section.
+    pub fn $move_fn(&mut self, id: &str, prev_id: Option<&str>) {
+      let mut txn = self.collab.transact_mut();
+      if let Some(op) = self.body.section.section_op(&txn, $section_type) {
+        op.move_section_item_with_txn(&mut txn, id, prev_id);
       }
     }
   };
