@@ -6,8 +6,8 @@ use collab::preclude::{
   Subscription, ToJson, TransactionMut, YrsValue,
 };
 use collab_entity::reminder::{
-  Reminder, REMINDER_ID, REMINDER_IS_ACK, REMINDER_MESSAGE, REMINDER_META, REMINDER_OBJECT_ID,
-  REMINDER_SCHEDULED_AT, REMINDER_TITLE, REMINDER_TY,
+  Reminder, REMINDER_ID, REMINDER_IS_ACK, REMINDER_IS_READ, REMINDER_MESSAGE, REMINDER_META,
+  REMINDER_OBJECT_ID, REMINDER_SCHEDULED_AT, REMINDER_TITLE, REMINDER_TY,
 };
 use tokio::sync::broadcast;
 
@@ -171,7 +171,7 @@ impl<'a, 'b> ReminderUpdate<'a, 'b> {
   }
 
   pub fn set_is_read(self, value: bool) -> Self {
-    self.map_ref.try_update(self.txn, REMINDER_IS_ACK, value);
+    self.map_ref.try_update(self.txn, REMINDER_IS_READ, value);
     self
   }
 
