@@ -56,6 +56,7 @@ impl From<Workspace> for View {
       created_by: value.created_by,
       last_edited_time: value.last_edited_time,
       last_edited_by: value.last_edited_by,
+      is_locked: None,
       extra: None,
     }
   }

@@ -294,6 +294,29 @@ impl Collab {
     }
   }
 
+  pub fn from_doc(doc: Doc, origin: CollabOrigin) -> Self {
+    // doc guid is by default a UUID v4, we can inherit it
+    let object_id = doc.guid().to_string();
+    let data = doc.get_or_insert_map(DATA_SECTION);
+    let meta = doc.get_or_insert_map(META_SECTION);
+    let state = Arc::new(State::new(&object_id));
+    let awareness = Awareness::new(doc);
+    Self {
+      object_id,
+      // if not the fact that we need origin here, it would be
+      // not necessary either
+      context: CollabContext::new(origin, awareness),
+      state,
+      data,
+      meta,
+      plugins: Plugins::default(),
+      update_subscription: Default::default(),
+      after_txn_subscription: Default::default(),
+      awareness_subscription: Default::default(),
+      index_json_sender: tokio::sync::broadcast::channel(100).0,
+    }
+  }
+
   pub fn new_with_origin<T: AsRef<str>>(
     origin: CollabOrigin,
     object_id: T,

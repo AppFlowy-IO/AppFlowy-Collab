@@ -116,6 +116,7 @@ pub struct NestedChildViewBuilder {
   children: Vec<ParentChildViews>,
   is_favorite: bool,
   icon: Option<ViewIcon>,
+  is_locked: Option<bool>,
   extra: Option<String>,
 }
 
@@ -133,6 +134,7 @@ impl NestedChildViewBuilder {
       children: vec![],
       is_favorite: false,
       icon: None,
+      is_locked: None,
       extra: None,
     }
   }
@@ -219,6 +221,7 @@ impl NestedChildViewBuilder {
           .collect(),
       ),
       last_edited_by: Some(self.uid),
+      is_locked: self.is_locked,
       extra: self.extra,
     };
     ParentChildViews {
@@ -276,6 +279,7 @@ impl ViewExtraBuilder {
     if let Some(icon_color) = space_info.space_icon_color {
       self.0[SPACE_ICON_COLOR_KEY] = json!(icon_color);
     }
+    self.0[SPACE_CREATED_AT_KEY] = json!(space_info.space_created_at);
     self
   }
 
@@ -508,93 +512,93 @@ mod tests {
       assert_eq!(views.len(), 1);
     }
   }
-}
 
-#[tokio::test]
-async fn delete_multiple_views_in_sequence_test() {
-  let workspace_id = "w1".to_string();
-  let mut builder = NestedViewBuilder::new(workspace_id, 1);
+  #[tokio::test]
+  async fn delete_multiple_views_in_sequence_test() {
+    let workspace_id = "w1".to_string();
+    let mut builder = NestedViewBuilder::new(workspace_id, 1);
 
-  // Create a 3-level nested view hierarchy
-  builder
-    .with_view_builder(|view_builder| async {
-      view_builder
-        .with_name("Root")
-        .with_child_view_builder(|child_view_builder| async {
-          child_view_builder
-            .with_name("Child-1")
-            .with_child_view_builder(|grandchild_view_builder| async {
-              grandchild_view_builder
-                .with_name("Grandchild-1-1")
-                .with_child_view_builder(|great_grandchild_view_builder| async {
-                  great_grandchild_view_builder
-                    .with_name("Great-Grandchild-1-1-1")
-                    .build()
-                })
-                .await
-                .build()
-            })
-            .await
-            .with_child_view_builder(|grandchild_view_builder| async {
-              grandchild_view_builder.with_name("Grandchild-1-2").build()
-            })
-            .await
-            .build()
-        })
-        .await
-        .with_child_view_builder(|child_view_builder| async {
-          child_view_builder.with_name("Child-2").build()
-        })
-        .await
-        .build()
-    })
-    .await;
+    // Create a 3-level nested view hierarchy
+    builder
+      .with_view_builder(|view_builder| async {
+        view_builder
+          .with_name("Root")
+          .with_child_view_builder(|child_view_builder| async {
+            child_view_builder
+              .with_name("Child-1")
+              .with_child_view_builder(|grandchild_view_builder| async {
+                grandchild_view_builder
+                  .with_name("Grandchild-1-1")
+                  .with_child_view_builder(|great_grandchild_view_builder| async {
+                    great_grandchild_view_builder
+                      .with_name("Great-Grandchild-1-1-1")
+                      .build()
+                  })
+                  .await
+                  .build()
+              })
+              .await
+              .with_child_view_builder(|grandchild_view_builder| async {
+                grandchild_view_builder.with_name("Grandchild-1-2").build()
+              })
+              .await
+              .build()
+          })
+          .await
+          .with_child_view_builder(|child_view_builder| async {
+            child_view_builder.with_name("Child-2").build()
+          })
+          .await
+          .build()
+      })
+      .await;
 
-  let workspace_views = builder.build();
-  assert_eq!(workspace_views.len(), 1); // Ensure there is one root view
+    let workspace_views = builder.build();
+    assert_eq!(workspace_views.len(), 1); // Ensure there is one root view
 
-  let views = FlattedViews::flatten_views(workspace_views.clone().into_inner());
-  assert_eq!(views.len(), 6); // Ensure there are 6 total views (1 root, 2 children, 2 grandchildren, 1 great-grandchild)
+    let views = FlattedViews::flatten_views(workspace_views.clone().into_inner());
+    assert_eq!(views.len(), 6); // Ensure there are 6 total views (1 root, 2 children, 2 grandchildren, 1 great-grandchild)
 
-  // Test deleting multiple views in sequence
-  {
-    let mut cloned_workspace_views = workspace_views.clone();
+    // Test deleting multiple views in sequence
+    {
+      let mut cloned_workspace_views = workspace_views.clone();
 
-    // First, delete a third-level view (Grandchild-1-2)
-    let view_id_grandchild_1_2 = workspace_views[0].children[0].children[1].view.id.clone(); // "Grandchild-1-2"
-    cloned_workspace_views.remove_view(&view_id_grandchild_1_2);
-    let views_after_delete =
-      FlattedViews::flatten_views(cloned_workspace_views.clone().into_inner());
-    assert_eq!(views_after_delete.len(), 5); // Should have 5 views left
-    assert!(!views_after_delete
-      .iter()
-      .any(|v| v.name == "Grandchild-1-2"));
+      // First, delete a third-level view (Grandchild-1-2)
+      let view_id_grandchild_1_2 = workspace_views[0].children[0].children[1].view.id.clone(); // "Grandchild-1-2"
+      cloned_workspace_views.remove_view(&view_id_grandchild_1_2);
+      let views_after_delete =
+        FlattedViews::flatten_views(cloned_workspace_views.clone().into_inner());
+      assert_eq!(views_after_delete.len(), 5); // Should have 5 views left
+      assert!(!views_after_delete
+        .iter()
+        .any(|v| v.name == "Grandchild-1-2"));
 
-    // Second, delete the great-grandchild (Great-Grandchild-1-1-1)
-    let view_id_great_grandchild_1_1_1 = workspace_views[0].children[0].children[0].children[0]
-      .view
-      .id
-      .clone(); // "Great-Grandchild-1-1-1"
-    cloned_workspace_views.remove_view(&view_id_great_grandchild_1_1_1);
-    let views_after_delete =
-      FlattedViews::flatten_views(cloned_workspace_views.clone().into_inner());
-    assert_eq!(views_after_delete.len(), 4); // Should have 4 views left
-    assert!(!views_after_delete
-      .iter()
-      .any(|v| v.name == "Great-Grandchild-1-1-1"));
+      // Second, delete the great-grandchild (Great-Grandchild-1-1-1)
+      let view_id_great_grandchild_1_1_1 = workspace_views[0].children[0].children[0].children[0]
+        .view
+        .id
+        .clone(); // "Great-Grandchild-1-1-1"
+      cloned_workspace_views.remove_view(&view_id_great_grandchild_1_1_1);
+      let views_after_delete =
+        FlattedViews::flatten_views(cloned_workspace_views.clone().into_inner());
+      assert_eq!(views_after_delete.len(), 4); // Should have 4 views left
+      assert!(!views_after_delete
+        .iter()
+        .any(|v| v.name == "Great-Grandchild-1-1-1"));
 
-    // Third, delete a second-level view (Child-2)
-    let view_id_child_2 = workspace_views[0].children[1].view.id.clone(); // "Child-2"
-    cloned_workspace_views.remove_view(&view_id_child_2);
-    let views_after_delete =
-      FlattedViews::flatten_views(cloned_workspace_views.clone().into_inner());
-    assert_eq!(views_after_delete.len(), 3); // Should have 3 views left
-    assert!(!views_after_delete.iter().any(|v| v.name == "Child-2"));
+      // Third, delete a second-level view (Child-2)
+      let view_id_child_2 = workspace_views[0].children[1].view.id.clone(); // "Child-2"
+      cloned_workspace_views.remove_view(&view_id_child_2);
+      let views_after_delete =
+        FlattedViews::flatten_views(cloned_workspace_views.clone().into_inner());
+      assert_eq!(views_after_delete.len(), 3); // Should have 3 views left
+      assert!(!views_after_delete.iter().any(|v| v.name == "Child-2"));
 
-    // Fourth, delete the root view (Root)
-    let view_id_root = workspace_views[0].view.id.clone(); // "Root"
-    cloned_workspace_views.remove_view(&view_id_root);
-    let views_after_delete = FlattedViews::flatten_views(cloned_workspace_views.into_inner());
-    assert_eq!(views_after_delete.len(), 0); // Should have no views left
+      // Fourth, delete the root view (Root)
+      let view_id_root = workspace_views[0].view.id.clone(); // "Root"
+      cloned_workspace_views.remove_view(&view_id_root);
+      let views_after_delete = FlattedViews::flatten_views(cloned_workspace_views.into_inner());
+      assert_eq!(views_after_delete.len(), 0); // Should have no views left
+    }
   }
 }
