@@ -3,7 +3,6 @@ use crate::local_storage::kv::snapshot::SnapshotAction;
 use crate::local_storage::kv::*;
 use smallvec::{smallvec, SmallVec};
 use std::collections::HashSet;
-use std::fmt::Debug;
 use tracing::{error, info};
 use uuid::Uuid;
 use yrs::updates::decoder::Decode;
@@ -15,18 +14,18 @@ where
   PersistenceError: From<<Self as KVStore<'a>>::Error>,
 {
   /// Create a new document with the given object id.
-  fn create_new_doc<K: AsRef<[u8]> + ?Sized + Debug, T: ReadTxn>(
+  fn create_new_doc<T: ReadTxn>(
     &self,
     uid: i64,
-    workspace_id: &K,
-    object_id: &K,
+    workspace_id: &str,
+    object_id: &str,
     txn: &T,
   ) -> Result<(), PersistenceError> {
     if self.is_exist(uid, workspace_id, object_id) {
       tracing::warn!("🟡{:?} already exist", object_id);
       return Err(PersistenceError::DocumentAlreadyExist);
     }
-    let doc_id = get_or_create_did(uid, self, workspace_id.as_ref(), object_id.as_ref())?;
+    let doc_id = get_or_create_did(uid, self, workspace_id, object_id)?;
     let doc_state = txn.encode_diff_v1(&StateVector::default());
     let sv = txn.state_vector().encode_v1();
     let doc_state_key = make_doc_state_key(doc_id);
@@ -46,11 +45,11 @@ where
   /// assigned or retrieved for the given user ID and object identifier. Then, it proceeds to clear any
   /// existing state for that document from the storage before inserting the new state and state vector.
   ///
-  fn flush_doc<K: AsRef<[u8]> + ?Sized + Debug>(
+  fn flush_doc(
     &self,
     uid: i64,
-    workspace_id: &K,
-    object_id: &K,
+    workspace_id: &str,
+    object_id: &str,
     state_vector: Vec<u8>,
     doc_state: Vec<u8>,
   ) -> Result<(), PersistenceError> {
@@ -69,12 +68,7 @@ where
     Ok(())
   }
 
-  fn is_exist<K: AsRef<[u8]> + ?Sized + Debug>(
-    &self,
-    uid: i64,
-    workspace_id: &K,
-    object_id: &K,
-  ) -> bool {
+  fn is_exist(&self, uid: i64, workspace_id: &str, object_id: &str) -> bool {
     get_doc_id(uid, self, workspace_id, object_id).is_some()
   }
 
@@ -84,11 +78,11 @@ where
   ///   2. D = document state + snapshot + updates
   ///
   /// Return the number of updates
-  fn load_doc_with_txn<K: AsRef<[u8]> + ?Sized + Debug>(
+  fn load_doc_with_txn(
     &self,
     uid: i64,
-    workspace_id: &K,
-    object_id: &K,
+    workspace_id: &str,
+    object_id: &str,
     txn: &mut TransactionMut,
   ) -> Result<u32, PersistenceError> {
     let mut update_count = 0;
@@ -145,11 +139,11 @@ where
     }
   }
 
-  fn load_doc<K: AsRef<[u8]> + ?Sized + Debug>(
+  fn load_doc(
     &self,
     uid: i64,
-    workspace_id: &K,
-    object_id: &K,
+    workspace_id: &str,
+    object_id: &str,
     doc: Doc,
   ) -> Result<u32, PersistenceError> {
     let mut txn = doc.transact_mut();
@@ -157,14 +151,14 @@ where
   }
 
   /// Push an update to the persistence
-  fn push_update<K: AsRef<[u8]> + ?Sized + Debug>(
+  fn push_update(
     &self,
     uid: i64,
-    workspace_id: &K,
-    object_id: &K,
+    workspace_id: &str,
+    object_id: &str,
     update: &[u8],
   ) -> Result<Vec<u8>, PersistenceError> {
-    match get_doc_id(uid, self, workspace_id.as_ref(), object_id.as_ref()) {
+    match get_doc_id(uid, self, workspace_id, object_id) {
       None => {
         tracing::error!(
           "🔴Insert update failed. Can't find the doc for {}-{:?}",
@@ -181,11 +175,11 @@ where
   }
 
   /// Delete the updates that prior to the given key. The given key is not included.
-  fn delete_updates_to<K: AsRef<[u8]> + ?Sized + Debug>(
+  fn delete_updates_to(
     &self,
     uid: i64,
-    workspace_id: &K,
-    object_id: &K,
+    workspace_id: &str,
+    object_id: &str,
     end: &[u8],
   ) -> Result<(), PersistenceError> {
     if let Some(doc_id) = get_doc_id(uid, self, workspace_id, object_id) {
@@ -195,11 +189,11 @@ where
     Ok(())
   }
 
-  fn delete_all_updates<K: AsRef<[u8]> + ?Sized + Debug>(
+  fn delete_all_updates(
     &self,
     uid: i64,
-    workspace_id: &K,
-    object_id: &K,
+    workspace_id: &str,
+    object_id: &str,
   ) -> Result<(), PersistenceError> {
     if let Some(doc_id) = get_doc_id(uid, self, workspace_id, object_id) {
       let start = make_doc_update_key(doc_id, 0);
@@ -209,11 +203,11 @@ where
     Ok(())
   }
 
-  fn flush_doc_with<K: AsRef<[u8]> + ?Sized + Debug>(
+  fn flush_doc_with(
     &self,
     uid: i64,
-    workspace_id: &K,
-    object_id: &K,
+    workspace_id: &str,
+    object_id: &str,
     doc_state: &[u8],
     sv: &[u8],
   ) -> Result<(), PersistenceError> {
@@ -231,11 +225,11 @@ where
     Ok(())
   }
 
-  fn get_all_updates<K: AsRef<[u8]> + ?Sized + Debug>(
+  fn get_all_updates(
     &self,
     uid: i64,
-    workspace_id: &K,
-    object_id: &K,
+    workspace_id: &str,
+    object_id: &str,
   ) -> Result<Vec<Vec<u8>>, PersistenceError> {
     if let Some(doc_id) = get_doc_id(uid, self, workspace_id, object_id) {
       let start = make_doc_update_key(doc_id, 0);
@@ -253,11 +247,11 @@ where
 
   /// Delete the document from the persistence
   /// This will remove all the updates and the document state
-  fn delete_doc<K: AsRef<[u8]> + ?Sized + Debug>(
+  fn delete_doc(
     &self,
     uid: i64,
-    workspace_id: &K,
-    object_id: &K,
+    workspace_id: &str,
+    object_id: &str,
   ) -> Result<(), PersistenceError> {
     if let Some(did) = get_doc_id(uid, self, workspace_id, object_id) {
       tracing::trace!("[Client {}] => [{}] delete {:?} doc", uid, did, object_id);
@@ -339,11 +333,11 @@ where
   }
 
   /// Return all the updates for the given document
-  fn get_decoded_v1_updates<K: AsRef<[u8]> + ?Sized>(
+  fn get_decoded_v1_updates(
     &self,
     uid: i64,
-    workspace_id: &K,
-    object_id: &K,
+    workspace_id: &str,
+    object_id: &str,
   ) -> Result<Vec<Update>, PersistenceError> {
     if let Some(doc_id) = get_doc_id(uid, self, workspace_id, object_id) {
       let start = make_doc_update_key(doc_id, 0);
@@ -359,28 +353,23 @@ where
     } else {
       Err(PersistenceError::RecordNotFound(format!(
         "The document with given object id: {:?} is not found",
-        object_id.as_ref(),
+        object_id,
       )))
     }
   }
 
-  fn get_doc_last_update_key<K: AsRef<[u8]> + ?Sized>(
+  fn get_doc_last_update_key(
     &self,
     uid: i64,
-    workspace_id: &K,
-    object_id: &K,
+    workspace_id: &str,
+    object_id: &str,
   ) -> Option<Key<16>> {
     let doc_id = get_doc_id(uid, self, workspace_id, object_id)?;
     get_last_update_key(self, doc_id, make_doc_update_key).ok()
   }
 
   /// Return the number of updates for the given document
-  fn number_of_updates<K: AsRef<[u8]> + ?Sized>(
-    &self,
-    uid: i64,
-    workspace_id: &K,
-    object_id: &K,
-  ) -> usize {
+  fn number_of_updates(&self, uid: i64, workspace_id: &str, object_id: &str) -> usize {
     if let Some(doc_id) = get_doc_id(uid, self, workspace_id, object_id) {
       let start = make_doc_update_key(doc_id, 0);
       let end = make_doc_update_key(doc_id, Clock::MAX);
@@ -402,18 +391,17 @@ where
 }
 
 /// Get or create a document id for the given object id.
-fn get_or_create_did<'a, K, S>(
+fn get_or_create_did<'a, S>(
   uid: i64,
   store: &S,
-  workspace_id: &K,
-  object_id: &K,
+  workspace_id: &str,
+  object_id: &str,
 ) -> Result<DocID, PersistenceError>
 where
   S: KVStore<'a>,
   PersistenceError: From<<S as KVStore<'a>>::Error>,
-  K: AsRef<[u8]> + ?Sized + Debug,
 {
-  if let Some(did) = get_doc_id(uid, store, workspace_id.as_ref(), object_id.as_ref()) {
+  if let Some(did) = get_doc_id(uid, store, workspace_id, object_id) {
     Ok(did)
   } else {
     let key = make_doc_id_key_v1(
@@ -426,10 +414,9 @@ where
   }
 }
 
-fn get_doc_id<'a, K, S>(uid: i64, store: &S, workspace_id: &K, object_id: &K) -> Option<DocID>
+fn get_doc_id<'a, S>(uid: i64, store: &S, workspace_id: &str, object_id: &str) -> Option<DocID>
 where
   S: KVStore<'a>,
-  K: AsRef<[u8]> + ?Sized,
 {
   let uid_bytes = uid.to_be_bytes();
 
