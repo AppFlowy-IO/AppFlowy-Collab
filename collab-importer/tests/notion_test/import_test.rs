@@ -523,7 +523,7 @@ async fn check_task_database(linked_view: &NotionPage) {
   assert_eq!(views.len(), 1);
   assert_eq!(linked_view.view_id, views[0].id);
 
-  let fields = database.get_fields_in_view(&database.get_inline_view_id(), None);
+  let fields = database.get_fields_in_view(&database.get_first_database_view_id().unwrap(), None);
   let rows = database.collect_all_rows().await;
   assert_eq!(rows.len(), 17);
   assert_eq!(fields.len(), csv_file.columns.len());
@@ -563,9 +563,10 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
 
   let csv_file = parse_csv(linked_view.notion_file.file_path().unwrap());
   let content = linked_view.as_database().await.unwrap();
-  let fields = content
-    .database
-    .get_fields_in_view(&content.database.get_inline_view_id(), None);
+  let fields = content.database.get_fields_in_view(
+    &content.database.get_first_database_view_id().unwrap(),
+    None,
+  );
   let rows = content.database.collect_all_rows().await;
   assert_eq!(rows.len(), 4);
   assert_eq!(fields.len(), csv_file.columns.len());

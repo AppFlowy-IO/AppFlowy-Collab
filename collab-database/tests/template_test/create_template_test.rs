@@ -121,7 +121,10 @@ async fn create_template_test() {
   let database = Database::create_with_template(template).await.unwrap();
 
   // Assert num of fields
-  let fields = database.get_fields_in_view(database.get_inline_view_id().as_str(), None);
+  let fields = database.get_fields_in_view(
+    database.get_first_database_view_id().unwrap().as_str(),
+    None,
+  );
   assert_eq!(fields.len(), 6);
   for (index, field) in fields.iter().enumerate() {
     assert_eq!(field.field_type, expected_field_type[index] as i64);

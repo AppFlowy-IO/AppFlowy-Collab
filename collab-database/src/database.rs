@@ -1369,11 +1369,6 @@ impl Database {
     serde_json::to_value(&database_data).unwrap()
   }
 
-  pub fn is_inline_view(&self, view_id: &str) -> bool {
-    let inline_view_id = self.get_inline_view_id();
-    inline_view_id == view_id
-  }
-
   pub async fn get_all_rows(
     &self,
     chunk_size: usize,
@@ -1395,28 +1390,27 @@ impl Database {
     rows_stream.collect::<Vec<_>>().await
   }
 
+  /// Return row orders of the inline database view
   pub async fn get_all_row_orders(&self) -> Vec<RowOrder> {
     let txn = self.collab.transact();
     let inline_view_id = self.body.get_inline_view_id(&txn);
     self.body.views.get_row_orders(&txn, &inline_view_id)
   }
 
-  pub fn get_inline_row_orders(&self) -> Vec<RowOrder> {
-    let txn = self.collab.transact();
-    let inline_view_id = self.body.get_inline_view_id(&txn);
-    self.body.views.get_row_orders(&txn, &inline_view_id)
-  }
-
   /// The inline view is the view that create with the database when initializing
-  pub fn get_inline_view_id(&self) -> String {
+  pub fn get_first_database_view_id(&self) -> Option<String> {
     let txn = self.collab.transact();
-    self.body.get_inline_view_id(&txn)
+    self
+      .body
+      .views
+      .get_all_views(&txn)
+      .first()
+      .map(|result| result.id.clone())
   }
 
   /// Delete a view from the database. If the view is the inline view it will clear all
   /// the linked views as well. Otherwise, just delete the view with given view id.
   pub fn delete_view(&mut self, view_id: &str) -> Vec<String> {
-    // TODO(nathan): delete the database from workspace database
     let mut txn = self.collab.transact_mut();
     if self.body.get_inline_view_id(&txn) == view_id {
       let views = self.body.views.get_all_views_meta(&txn);
@@ -1776,7 +1770,8 @@ impl DatabaseBody {
     root.get(&txn, DATABASE_ID)?.cast::<String>().ok()
   }
 
-  pub fn inline_view_id_from_collab(collab: &Collab) -> Option<String> {
+  #[allow(dead_code)]
+  pub(crate) fn inline_view_id_from_collab(collab: &Collab) -> Option<String> {
     let txn = collab.context.transact();
     let root = collab.data.get(&txn, DATABASE)?.cast::<MapRef>().ok()?;
     let database_id = root.get(&txn, DATABASE_ID)?.cast::<String>().ok()?;
@@ -1826,11 +1821,11 @@ impl DatabaseBody {
     view.row_orders.iter().position(|order| &order.id == row_id)
   }
 
-  pub fn get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> String {
+  pub(crate) fn get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> String {
     self.try_get_inline_view_id(txn).unwrap()
   }
 
-  pub fn try_get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+  pub(crate) fn try_get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> Option<String> {
     // It's safe to unwrap because each database inline view id was set
     // when initializing the database
     let mut inline_view_id = self.metas.get_inline_view_id(txn);

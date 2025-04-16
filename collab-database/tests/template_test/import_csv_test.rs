@@ -14,7 +14,7 @@ async fn import_csv_test() {
     .await
     .unwrap();
 
-  let fields = database.get_fields_in_view(&database.get_inline_view_id(), None);
+  let fields = database.get_fields_in_view(&database.get_first_database_view_id().unwrap(), None);
   let rows: Vec<Row> = database
     .get_all_rows(20, None)
     .await

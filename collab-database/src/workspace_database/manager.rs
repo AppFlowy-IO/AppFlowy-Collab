@@ -390,7 +390,7 @@ impl WorkspaceDatabaseManager {
     if let Ok(database) = self.get_or_init_database(database_id).await {
       let mut lock = database.write().await;
       lock.delete_view(view_id);
-      if lock.is_inline_view(view_id) {
+      if lock.get_all_views().is_empty() {
         drop(lock);
         // Delete the database if the view is the inline view.
         self.delete_database(database_id);

@@ -20,7 +20,7 @@ impl MetaMap {
   }
 
   /// Get the inline view id
-  pub fn get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> Option<String> {
+  pub(crate) fn get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> Option<String> {
     let out = self.container.get(txn, DATABASE_INLINE_VIEW);
     if out.is_none() {
       error!("Can't find inline view id");

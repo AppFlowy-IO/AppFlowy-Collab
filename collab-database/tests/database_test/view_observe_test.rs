@@ -382,15 +382,6 @@ async fn observe_move_database_view_row_test() {
     assert_eq!(body_row_orders[1].id, row_id_2);
     assert_eq!(body_row_orders[2].id, row_id_3);
     assert_eq!(body_row_orders[3].id, row_id_4);
-
-    // We don't modify the row orders for the inline view. So the rows should be the created order
-    let inline_view_id = db_body.get_inline_view_id(&txn);
-    let inline_row_orders = db_body.views.get_row_orders(&txn, &inline_view_id);
-    assert_eq!(inline_row_orders.len(), 4);
-    assert_eq!(inline_row_orders[0].id, row_id_1);
-    assert_eq!(inline_row_orders[1].id, row_id_2);
-    assert_eq!(inline_row_orders[2].id, row_id_3);
-    assert_eq!(inline_row_orders[3].id, row_id_4);
   }
 }
 
@@ -540,7 +531,7 @@ async fn observe_update_view_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
-  let view_id = database_test.get_inline_view_id();
+  let view_id = database_test.get_first_database_view_id().unwrap();
 
   let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
@@ -618,7 +609,7 @@ async fn observe_database_view_layout_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
-  let update_view_id = database_test.get_inline_view_id();
+  let update_view_id = database_test.get_first_database_view_id().unwrap();
   let cloned_update_view_id = update_view_id.clone();
 
   let database_test = Arc::new(Mutex::from(database_test));
@@ -648,7 +639,7 @@ async fn observe_database_view_filter_create_delete_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
-  let update_view_id = database_test.get_inline_view_id();
+  let update_view_id = database_test.get_first_database_view_id().unwrap();
 
   let database_test = Arc::new(Mutex::from(database_test));
 
@@ -704,7 +695,7 @@ async fn observe_database_view_sort_create_delete_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
-  let update_view_id = database_test.get_inline_view_id();
+  let update_view_id = database_test.get_first_database_view_id().unwrap();
 
   let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();
@@ -763,7 +754,7 @@ async fn observe_database_view_group_create_delete_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
   let view_change_rx = database_test.subscribe_view_change().unwrap();
-  let update_view_id = database_test.get_inline_view_id();
+  let update_view_id = database_test.get_first_database_view_id().unwrap();
 
   let database_test = Arc::new(Mutex::from(database_test));
   let cloned_database_test = database_test.clone();

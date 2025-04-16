@@ -27,11 +27,11 @@ async fn create_database_test() {
     .unwrap();
 
   let db = database.read().await;
-  let inline_view_id = db.get_inline_view_id();
+  let view_id = db.get_first_database_view_id().unwrap();
   let meta = test.get_database_meta(&database_id.to_string()).unwrap();
 
   // Inline view id should not appear in the database's linked views.
-  assert!(!meta.linked_views.contains(&inline_view_id));
+  assert!(!meta.linked_views.contains(&view_id));
 
   let views = db.get_all_views();
   assert_eq!(views.len(), 1);
@@ -130,7 +130,7 @@ async fn duplicate_database_inline_view_test() {
 
   let duplicated_database = test.duplicate_database("v1", "v1_1").await.unwrap();
   let mut db = duplicated_database.write().await;
-  let duplicated_view_id = db.get_inline_view_id();
+  let duplicated_view_id = db.get_first_database_view_id().unwrap();
   db.create_row(CreateRowParams::new(1, database_id.to_string()))
     .await
     .unwrap();
@@ -314,23 +314,23 @@ async fn duplicate_database_data_test() {
   assert_eq!(original_views.len(), duplicated_views.len());
 
   // compare inline view
-  let original_inline_view_id = original.get_inline_view_id();
-  let original_inline_view = original.get_view(&original_inline_view_id).unwrap();
-  let duplicated_inline_view_id = duplicate.get_inline_view_id();
-  let duplicated_inline_view = duplicate.get_view(&duplicated_inline_view_id).unwrap();
+  let original_view_id = original.get_first_database_view_id().unwrap();
+  let original_view = original.get_view(&original_view_id).unwrap();
+  let duplicated_view_id = duplicate.get_first_database_view_id().unwrap();
+  let duplicated_view = duplicate.get_view(&duplicated_view_id).unwrap();
   assert_eq!(
-    original_inline_view.row_orders.len(),
-    duplicated_inline_view.row_orders.len()
+    original_view.row_orders.len(),
+    duplicated_view.row_orders.len()
   );
   assert_eq!(
-    original_inline_view.field_orders.len(),
-    duplicated_inline_view.field_orders.len()
+    original_view.field_orders.len(),
+    duplicated_view.field_orders.len()
   );
 
   // compare field orders
-  assert_eq!(duplicated_inline_view.field_orders[0].id, "f1");
-  assert_eq!(duplicated_inline_view.field_orders[1].id, "f2");
-  assert_eq!(duplicated_inline_view.field_orders[2].id, "f3");
+  assert_eq!(duplicated_view.field_orders[0].id, "f1");
+  assert_eq!(duplicated_view.field_orders[1].id, "f2");
+  assert_eq!(duplicated_view.field_orders[2].id, "f3");
 }
 
 #[tokio::test]
