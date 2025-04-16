@@ -35,6 +35,7 @@ async fn create_initial_database_test() {
   let views = database_test.get_all_views();
   assert_eq!(views.len(), 1);
   assert_eq!(views[0].database_id, database_id);
+  assert_ne!(views[0].database_id, views[0].id);
   assert_eq!(views[0].name, "my first database view".to_string());
 
   let encoded_collab = database_test
@@ -233,7 +234,7 @@ async fn duplicate_database_view_test() {
 
   assert_eq!(duplicated_view.name, format!("{}-copy", view.name));
   assert_ne!(view.id, duplicated_view.id);
-  // modified and created time should also be different but the test completes within one second.
+  assert_eq!(view.database_id, duplicated_view.database_id);
 }
 
 #[tokio::test]

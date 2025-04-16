@@ -27,6 +27,12 @@ async fn create_database_test() {
     .unwrap();
 
   let db = database.read().await;
+  let inline_view_id = db.get_inline_view_id();
+  let meta = test.get_database_meta(&database_id.to_string()).unwrap();
+
+  // Inline view id should not appear in the database's linked views.
+  assert!(!meta.linked_views.contains(&inline_view_id));
+
   let views = db.get_all_views();
   assert_eq!(views.len(), 1);
 }
