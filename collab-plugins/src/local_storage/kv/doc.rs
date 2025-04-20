@@ -144,7 +144,7 @@ where
     uid: i64,
     workspace_id: &str,
     object_id: &str,
-    doc: Doc,
+    doc: &Doc,
   ) -> Result<u32, PersistenceError> {
     let mut txn = doc.transact_mut();
     self.load_doc_with_txn(uid, workspace_id, object_id, &mut txn)
