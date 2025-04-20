@@ -136,7 +136,7 @@ impl CollabContext {
   }
 
   #[inline]
-  pub(crate) fn doc(&self) -> &Doc {
+  pub fn doc(&self) -> &Doc {
     self.awareness.doc()
   }
 
