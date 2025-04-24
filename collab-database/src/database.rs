@@ -1821,7 +1821,7 @@ impl DatabaseBody {
     view.row_orders.iter().position(|order| &order.id == row_id)
   }
 
-  pub(crate) fn get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> String {
+  pub fn get_inline_view_id<T: ReadTxn>(&self, txn: &T) -> String {
     self.try_get_inline_view_id(txn).unwrap()
   }
 
