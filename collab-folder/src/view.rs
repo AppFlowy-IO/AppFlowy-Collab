@@ -788,6 +788,17 @@ pub enum IconType {
   Icon = 2,
 }
 
+impl From<u8> for IconType {
+  fn from(value: u8) -> Self {
+    match value {
+      0 => IconType::Emoji,
+      1 => IconType::Url,
+      2 => IconType::Icon,
+      _ => IconType::Emoji,
+    }
+  }
+}
+
 /// Represents an icon associated with a view, including its type and value.
 ///
 /// # Fields
