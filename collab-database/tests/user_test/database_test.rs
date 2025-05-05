@@ -13,12 +13,13 @@ async fn create_database_test() {
   let uid = random_uid();
   let database_id = Uuid::new_v4();
   let mut test = workspace_database_test(uid).await;
+  let view_id = "v1".to_string();
   let database = test
     .create_database(CreateDatabaseParams {
       database_id: database_id.to_string(),
       views: vec![CreateViewParams {
         database_id: database_id.to_string(),
-        view_id: "v1".to_string(),
+        view_id: view_id.clone(),
         ..Default::default()
       }],
       ..Default::default()
@@ -27,14 +28,14 @@ async fn create_database_test() {
     .unwrap();
 
   let db = database.read().await;
-  let view_id = db.get_first_database_view_id().unwrap();
   let meta = test.get_database_meta(&database_id.to_string()).unwrap();
 
   // Inline view id should not appear in the database's linked views.
-  assert!(!meta.linked_views.contains(&view_id));
-
-  let views = db.get_all_views();
-  assert_eq!(views.len(), 1);
+  let non_inline_views = db.get_all_views();
+  assert_eq!(non_inline_views.len(), 1);
+  assert_eq!(non_inline_views[0].id, view_id);
+  assert_eq!(meta.linked_views.len(), 1);
+  assert_eq!(meta.linked_views[0], view_id);
 }
 
 #[tokio::test]
