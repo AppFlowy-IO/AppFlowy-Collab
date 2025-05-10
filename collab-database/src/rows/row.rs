@@ -385,9 +385,32 @@ pub struct Row {
   pub height: i32,
   #[serde(default = "default_visibility")]
   pub visibility: bool,
+  #[serde(deserialize_with = "deserialize_i64")]
   pub created_at: i64,
-  #[serde(alias = "last_modified")]
+  #[serde(alias = "last_modified", deserialize_with = "deserialize_i64")]
   pub modified_at: i64,
+}
+
+fn deserialize_i64<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+  D: serde::Deserializer<'de>,
+{
+  use serde::de::{self, Unexpected};
+  match serde_json::Value::deserialize(deserializer)? {
+    serde_json::Value::Number(num) => num.as_i64().ok_or_else(|| {
+      de::Error::invalid_type(
+        Unexpected::Other(&format!("{:?}", num)),
+        &"a valid i64 number",
+      )
+    }),
+    serde_json::Value::String(s) => s.parse::<i64>().map_err(|_| {
+      de::Error::invalid_type(Unexpected::Str(&s), &"a string that can be parsed into i64")
+    }),
+    other => Err(de::Error::invalid_type(
+      Unexpected::Other(&format!("{:?}", other)),
+      &"a number or a string that can be parsed into i64",
+    )),
+  }
 }
 
 fn default_visibility() -> bool {
@@ -747,5 +770,40 @@ pub fn mut_row_with_collab<F1: Fn(RowUpdate)>(collab: &mut Collab, mut_row: F1) 
   ) {
     let update = RowUpdate::new(&mut txn, data, meta);
     mut_row(update);
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use serde_json::json;
+
+  use super::*;
+
+  #[test]
+  fn test_create_row() {
+    let input_with_numbers = json!({
+      "id": "abcd",
+      "database_id": "database_id",
+      "cells": {},
+      "height": 100,
+      "visibility": false,
+      "created_at": 1678901234,
+      "modified_at": 1678901234
+    });
+    let row: Row = serde_json::from_value(input_with_numbers)
+      .expect("Failed to deserialize row with number as i64");
+    assert_eq!(row.created_at, 1678901234);
+    let input_with_string = json!({
+      "id": "abcd",
+      "database_id": "database_id",
+      "cells": {},
+      "height": 100,
+      "visibility": false,
+      "created_at": "1678901234",
+      "modified_at": "1678901234"
+    });
+    let row: Row = serde_json::from_value(input_with_string)
+      .expect("Failed to deserialize row with string as i64");
+    assert_eq!(row.created_at, 1678901234);
   }
 }
