@@ -1,5 +1,5 @@
-use std::fmt::Debug;
 pub use std::fmt::Display;
+use std::fmt::{Debug, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::panic;
 use std::panic::AssertUnwindSafe;
@@ -238,6 +238,16 @@ pub struct CollabOptions {
   pub object_id: String,
   pub data_source: Option<DataSource>,
   pub client_id: Option<ClientID>,
+}
+
+impl Display for CollabOptions {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("CollabOptions")
+      .field("object_id", &self.object_id)
+      .field("client_id", &self.client_id)
+      .field("data_source", &self.data_source)
+      .finish()
+  }
 }
 
 impl CollabOptions {
@@ -642,6 +652,16 @@ pub enum DataSource {
   Disk(Option<Box<dyn CollabPersistence>>),
   DocStateV1(Vec<u8>),
   DocStateV2(Vec<u8>),
+}
+
+impl Debug for DataSource {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      DataSource::Disk(_) => f.write_str("Disk"),
+      DataSource::DocStateV1(_) => f.write_str("DocStateV1"),
+      DataSource::DocStateV2(_) => f.write_str("DocStateV2"),
+    }
+  }
 }
 
 impl From<EncodedCollab> for DataSource {
