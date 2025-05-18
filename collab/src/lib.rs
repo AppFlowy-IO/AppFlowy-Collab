@@ -32,7 +32,7 @@ pub mod preclude {
   pub use yrs::*;
 
   pub use crate::any_mut::AnyMut;
-  pub use crate::core::collab::{Collab, CollabBuilder};
+  pub use crate::core::collab::Collab;
   pub use crate::core::collab_plugin::CollabPlugin;
   pub use crate::core::fill::{FillError, FillRef};
   pub use crate::util::MapExt;

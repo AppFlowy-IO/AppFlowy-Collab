@@ -46,7 +46,7 @@ pub struct DatabaseRow {
 }
 
 pub fn default_database_row_data(row_id: &RowId, row: Row) -> EncodedCollab {
-  let mut collab = Collab::new_with_origin(CollabOrigin::Empty, row_id, vec![], false, None);
+  let mut collab = Collab::new_with_origin(CollabOrigin::Empty, row_id, None);
   let _ = DatabaseRowBody::create(row_id.clone(), &mut collab, row);
   collab
     .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))

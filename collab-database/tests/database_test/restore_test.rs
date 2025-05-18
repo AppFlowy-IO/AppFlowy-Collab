@@ -110,8 +110,6 @@ async fn open_020_history_database_test() {
     CollabOrigin::Empty,
     "c0e69740-49f0-4790-a488-702e2750ba8d",
     encode_collab.into(),
-    vec![],
-    false,
     None,
   )
   .unwrap();

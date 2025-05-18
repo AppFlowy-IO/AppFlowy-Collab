@@ -49,6 +49,7 @@ use nanoid::nanoid;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 
+use collab::core::collab::CollabOptions;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -88,7 +89,11 @@ impl DatabaseContext {
 
 pub async fn default_database_data(database_id: &str) -> Result<EncodedCollab, DatabaseError> {
   let context = DatabaseContext::new(Arc::new(NoPersistenceDatabaseCollabService));
-  let collab = Collab::new_with_origin(CollabOrigin::Empty, database_id, vec![], false, None);
+  let collab = Collab::new_with_options(
+    CollabOrigin::Empty,
+    CollabOptions::new(database_id.to_string()),
+  )
+  .map_err(|e| DatabaseError::Internal(e.into()))?;
   let (_, collab) =
     DatabaseBody::create(collab, database_id.to_string(), context, vec![], vec![]).await?;
   Ok(

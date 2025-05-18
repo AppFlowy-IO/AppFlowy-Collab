@@ -41,15 +41,8 @@ async fn create_initial_database_test() {
   let encoded_collab = database_test
     .encode_collab_v1(|_| Ok::<_, anyhow::Error>(()))
     .unwrap();
-  let collab = Collab::new_with_source(
-    CollabOrigin::Empty,
-    "",
-    encoded_collab.into(),
-    vec![],
-    false,
-    None,
-  )
-  .unwrap();
+  let collab =
+    Collab::new_with_source(CollabOrigin::Empty, "", encoded_collab.into(), None).unwrap();
   let database_id_from_collab = DatabaseBody::database_id_from_collab(&collab).unwrap();
   assert_eq!(database_id_from_collab, database_id);
 }

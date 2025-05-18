@@ -214,7 +214,7 @@ async fn deserialize_folder_data() {
   let folder_data: FolderData = serde_json::from_str(json).unwrap();
   let folder = Arc::new(Folder::create(
     1,
-    Collab::new_with_origin(CollabOrigin::Empty, "1", vec![], true, None),
+    Collab::new_with_origin(CollabOrigin::Empty, "1", None),
     None,
     folder_data,
   ));

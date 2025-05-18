@@ -17,8 +17,6 @@ async fn encode_database_collab_test() {
       CollabOrigin::Empty,
       &object_id,
       encoded_info.encoded_collab.into(),
-      vec![],
-      false,
       None,
     )
     .unwrap();

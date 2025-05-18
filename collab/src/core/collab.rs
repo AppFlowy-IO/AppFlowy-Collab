@@ -234,55 +234,96 @@ pub fn make_yrs_doc(skp_gc: bool, client_id: ClientID) -> Doc {
   })
 }
 
+pub struct CollabOptions {
+  pub object_id: String,
+  pub data_source: Option<DataSource>,
+  pub client_id: Option<ClientID>,
+}
+
+impl CollabOptions {
+  pub fn new(object_id: String) -> Self {
+    Self {
+      object_id,
+      data_source: None,
+      client_id: None,
+    }
+  }
+
+  pub fn with_data_source(mut self, data_source: DataSource) -> Self {
+    self.data_source = Some(data_source);
+    self
+  }
+
+  pub fn with_client_id(mut self, client_id: Option<ClientID>) -> Self {
+    self.client_id = client_id;
+    self
+  }
+}
+
 impl Collab {
   pub fn new<T: AsRef<str>>(
     uid: i64,
     object_id: T,
     device_id: impl ToString,
-    plugins: Vec<Box<dyn CollabPlugin>>,
-    skip_gc: bool,
     client_id: Option<ClientID>,
   ) -> Collab {
     let origin = CollabClient::new(uid, device_id);
-    Self::new_with_origin(
-      CollabOrigin::Client(origin),
-      object_id,
-      plugins,
-      skip_gc,
-      client_id,
-    )
+    let options = CollabOptions::new(object_id.as_ref().to_string()).with_client_id(client_id);
+    Self::new_with_options(CollabOrigin::Client(origin), options).unwrap()
   }
 
-  pub fn new_with_source(
+  pub fn new_with_options(
     origin: CollabOrigin,
-    object_id: &str,
-    data_source: DataSource,
-    plugins: Vec<Box<dyn CollabPlugin>>,
-    skip_gc: bool,
-    client_id: Option<ClientID>,
+    options: CollabOptions,
   ) -> Result<Self, CollabError> {
-    let mut collab = Self::new_with_origin(origin, object_id, plugins, skip_gc, client_id);
-    match data_source {
-      DataSource::Disk(disk) => {
-        if let Some(disk) = disk {
-          disk.load_collab_from_disk(&mut collab)?;
-        }
-      },
-      DataSource::DocStateV1(doc_state) => {
-        if !doc_state.is_empty() {
-          let update = Update::decode_v1(&doc_state)?;
-          collab.context.apply_update(update)?;
-        }
-      },
-      DataSource::DocStateV2(doc_state) => {
-        if !doc_state.is_empty() {
-          let update = Update::decode_v2(&doc_state)?;
-          collab.context.apply_update(update)?;
-        }
-      },
+    let client_id = options.client_id.unwrap_or_else(|| {
+      let mut rng = fastrand::Rng::new();
+      let client_id: u32 = rng.u32(0..u32::MAX);
+      client_id as ClientID
+    });
+    let object_id = options.object_id;
+    let doc = make_yrs_doc(false, client_id);
+    let data = doc.get_or_insert_map(DATA_SECTION);
+    let meta = doc.get_or_insert_map(META_SECTION);
+    let plugins = Plugins::new(vec![]);
+    let state = Arc::new(State::new(&object_id));
+    let awareness = Awareness::new(doc);
+    let mut this = Self {
+      object_id,
+      context: CollabContext::new(origin, awareness),
+      state,
+      data,
+      meta,
+      plugins,
+      update_subscription: Default::default(),
+      after_txn_subscription: Default::default(),
+      awareness_subscription: Default::default(),
+      index_json_sender: tokio::sync::broadcast::channel(100).0,
+    };
+
+    if let Some(data_source) = options.data_source {
+      match data_source {
+        DataSource::Disk(disk) => {
+          if let Some(disk) = disk {
+            disk.load_collab_from_disk(&mut this)?;
+          }
+        },
+        DataSource::DocStateV1(doc_state) => {
+          if !doc_state.is_empty() {
+            let update = Update::decode_v1(&doc_state)?;
+            this.context.apply_update(update)?;
+          }
+        },
+        DataSource::DocStateV2(doc_state) => {
+          if !doc_state.is_empty() {
+            let update = Update::decode_v2(&doc_state)?;
+            this.context.apply_update(update)?;
+          }
+        },
+      }
     }
 
-    Ok(collab)
+    Ok(this)
   }
 
   /// Each collab can have only one cloud plugin
@@ -319,39 +360,6 @@ impl Collab {
       data,
       meta,
       plugins: Plugins::default(),
-      update_subscription: Default::default(),
-      after_txn_subscription: Default::default(),
-      awareness_subscription: Default::default(),
-      index_json_sender: tokio::sync::broadcast::channel(100).0,
-    }
-  }
-
-  pub fn new_with_origin<T: AsRef<str>>(
-    origin: CollabOrigin,
-    object_id: T,
-    plugins: Vec<Box<dyn CollabPlugin>>,
-    skip_gc: bool,
-    client_id: Option<ClientID>,
-  ) -> Collab {
-    let client_id = client_id.unwrap_or_else(|| {
-      let mut rng = fastrand::Rng::new();
-      let client_id: u32 = rng.u32(0..u32::MAX);
-      client_id as ClientID
-    });
-    let object_id = object_id.as_ref().to_string();
-    let doc = make_yrs_doc(skip_gc, client_id);
-    let data = doc.get_or_insert_map(DATA_SECTION);
-    let meta = doc.get_or_insert_map(META_SECTION);
-    let plugins = Plugins::new(plugins);
-    let state = Arc::new(State::new(&object_id));
-    let awareness = Awareness::new(doc);
-    Self {
-      object_id,
-      context: CollabContext::new(origin, awareness),
-      state,
-      data,
-      meta,
-      plugins,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
       awareness_subscription: Default::default(),
@@ -626,17 +634,6 @@ fn observe_doc(
   (update_sub, after_txn_sub)
 }
 
-/// A builder that used to create a new `Collab` instance.
-pub struct CollabBuilder {
-  uid: i64,
-  device_id: String,
-  plugins: Vec<Box<dyn CollabPlugin>>,
-  object_id: String,
-  source: DataSource,
-  skip_gc: bool,
-  client_id: Option<ClientID>,
-}
-
 /// The raw data of a collab document. It is a list of updates. Each of them can be parsed by
 /// [Update::decode_v1].
 pub enum DataSource {
@@ -676,60 +673,6 @@ impl DataSource {
     }
   }
 }
-impl CollabBuilder {
-  pub fn new<T: AsRef<str>>(
-    uid: i64,
-    object_id: T,
-    data_source: DataSource,
-    client_id: Option<ClientID>,
-  ) -> Self {
-    let object_id = object_id.as_ref();
-    Self {
-      uid,
-      plugins: vec![],
-      object_id: object_id.to_string(),
-      device_id: "".to_string(),
-      source: data_source,
-      skip_gc: true,
-      client_id,
-    }
-  }
-
-  pub fn with_device_id<T>(mut self, device_id: T) -> Self
-  where
-    T: AsRef<str>,
-  {
-    self.device_id = device_id.as_ref().to_string();
-    self
-  }
-
-  pub fn with_plugin<T>(mut self, plugin: T) -> Self
-  where
-    T: CollabPlugin + 'static,
-  {
-    self.plugins.push(Box::new(plugin));
-    self
-  }
-
-  pub fn with_skip_gc(mut self, skip_gc: bool) -> Self {
-    self.skip_gc = skip_gc;
-    self
-  }
-
-  pub fn build(self) -> Result<Collab, CollabError> {
-    let origin = CollabOrigin::Client(CollabClient::new(self.uid, self.device_id));
-    let collab = Collab::new_with_source(
-      origin,
-      &self.object_id,
-      self.source,
-      self.plugins,
-      self.skip_gc,
-      self.client_id,
-    )?;
-    Ok(collab)
-  }
-}
-
 #[derive(Clone)]
 pub struct Path(Vec<String>);
 

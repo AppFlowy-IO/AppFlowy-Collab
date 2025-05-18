@@ -123,9 +123,8 @@ impl Folder {
     origin: CollabOrigin,
     collab_doc_state: DataSource,
     workspace_id: &str,
-    plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, FolderError> {
-    let collab = Collab::new_with_source(origin, workspace_id, collab_doc_state, plugins, false, None)?;
+    let collab = Collab::new_with_source(origin, workspace_id, collab_doc_state, None)?;
     Self::open(uid, collab, None)
   }
 
@@ -854,7 +853,7 @@ mod tests {
     let current_time = chrono::Utc::now().timestamp();
     let workspace_id = "1234";
     let uid = 1;
-    let collab = Collab::new_with_origin(CollabOrigin::Empty, workspace_id, vec![], false, None);
+    let collab = Collab::new_with_origin(CollabOrigin::Empty, workspace_id, None);
     let view_1 = View::new(
       "view_1".to_string(),
       workspace_id.to_string(),
@@ -927,7 +926,7 @@ mod tests {
     let current_time = chrono::Utc::now().timestamp();
     let workspace_id = "1234";
     let uid = 1;
-    let collab = Collab::new_with_origin(CollabOrigin::Empty, workspace_id, vec![], false, None);
+    let collab = Collab::new_with_origin(CollabOrigin::Empty, workspace_id, None);
     let space_view_id = "space_view_id".to_string();
     let views: Vec<View> = (0..3)
       .map(|i| {

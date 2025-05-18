@@ -31,7 +31,6 @@ impl Folder {
       CollabOrigin::Empty,
       encoded_collab.into(),
       &workspace_id,
-      vec![],
     )?;
     let cloned_container = other.body.views.container.clone();
     let sub = {
