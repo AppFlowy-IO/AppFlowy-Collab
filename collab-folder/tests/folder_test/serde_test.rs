@@ -1,3 +1,4 @@
+use collab::core::collab::CollabOptions;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, ReadTxn};
 use collab_folder::{Folder, FolderData, UserId, timestamp};
@@ -212,12 +213,9 @@ fn child_view_json_serde() {
 async fn deserialize_folder_data() {
   let json = include_str!("../folder_test/history_folder/folder_data.json");
   let folder_data: FolderData = serde_json::from_str(json).unwrap();
-  let folder = Arc::new(Folder::create(
-    1,
-    Collab::new_with_origin(CollabOrigin::Empty, "1", None),
-    None,
-    folder_data,
-  ));
+  let options = CollabOptions::new("1".to_string());
+  let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+  let folder = Arc::new(Folder::create(1, collab, None, folder_data));
 
   let mut handles = vec![];
   for _ in 0..40 {

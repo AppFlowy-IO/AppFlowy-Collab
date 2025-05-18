@@ -3,8 +3,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use collab::core::collab::DataSource;
-use collab::preclude::CollabBuilder;
+use collab::core::collab::{CollabOptions, DataSource};
+use collab::core::origin::{CollabClient, CollabOrigin};
+use collab::preclude::Collab;
 use collab_entity::CollabType;
 use collab_plugins::CollabKVDB;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
@@ -45,16 +46,15 @@ impl UserAwarenessTest {
     let disk_plugin = RocksdbDiskPlugin::new(
       uid,
       workspace_id,
-      id,
+      id.clone(),
       CollabType::UserAwareness,
       Arc::downgrade(&db),
     );
 
-    let mut collab = CollabBuilder::new(1, uid.to_string(), DataSource::Disk(None), None)
-      .with_plugin(disk_plugin)
-      .with_device_id("1")
-      .build()
-      .unwrap();
+    let options = CollabOptions::new(uid.to_string()).with_data_source(DataSource::Disk(None));
+    let client = CollabClient::new(uid, "1");
+    let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
+    collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();
 
     let (reminder_change_tx, _) = tokio::sync::broadcast::channel(100);

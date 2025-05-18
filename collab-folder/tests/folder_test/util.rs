@@ -5,8 +5,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
 
-use collab::core::collab::DataSource;
-use collab::preclude::CollabBuilder;
+use collab::core::collab::{CollabOptions, DataSource};
+use collab::core::origin::{CollabClient, CollabOrigin};
+use collab::preclude::Collab;
 use collab_entity::CollabType;
 use collab_folder::*;
 use collab_plugins::CollabKVDB;
@@ -60,11 +61,11 @@ pub fn create_folder_with_data(
   );
   let cleaner: Cleaner = Cleaner::new(path);
 
-  let mut collab = CollabBuilder::new(uid.as_i64(), workspace_id, DataSource::Disk(None), None)
-    .with_plugin(disk_plugin)
-    .with_device_id("1")
-    .build()
-    .unwrap();
+  let options =
+    CollabOptions::new(workspace_id.to_string()).with_data_source(DataSource::Disk(None));
+  let client = CollabClient::new(uid.as_i64(), "1");
+  let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
+  collab.add_plugin(Box::new(disk_plugin));
   collab.initialize();
 
   let (view_tx, view_rx) = tokio::sync::broadcast::channel(100);
@@ -103,11 +104,10 @@ pub fn open_folder_with_db(
     workspace_id: workspace_id.to_string(),
   };
   let cleaner: Cleaner = Cleaner::new(db_path);
-  let mut collab = CollabBuilder::new(1, object_id, data_source.into(), None)
-    .with_device_id("1")
-    .with_plugin(disk_plugin)
-    .build()
-    .unwrap();
+  let options = CollabOptions::new(object_id.to_string()).with_data_source(data_source.into());
+  let client = CollabClient::new(1, "1");
+  let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
+  collab.add_plugin(disk_plugin);
 
   collab.initialize();
 

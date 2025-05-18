@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use collab::core::collab::DataSource;
+use collab::core::collab::{CollabOptions, DataSource};
 pub use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::*;
@@ -124,7 +124,8 @@ impl Folder {
     collab_doc_state: DataSource,
     workspace_id: &str,
   ) -> Result<Self, FolderError> {
-    let collab = Collab::new_with_source(origin, workspace_id, collab_doc_state, None)?;
+    let options = CollabOptions::new(workspace_id.to_string()).with_data_source(collab_doc_state);
+    let collab = Collab::new_with_options(origin, options)?;
     Self::open(uid, collab, None)
   }
 
@@ -841,7 +842,7 @@ pub fn default_folder_data(workspace_id: &str) -> FolderData {
 mod tests {
   use std::collections::HashMap;
 
-  use collab::{core::origin::CollabOrigin, preclude::Collab};
+  use collab::{core::collab::CollabOptions, core::origin::CollabOrigin, preclude::Collab};
 
   use crate::{
     Folder, FolderData, RepeatedViewIdentifier, SectionItem, SpaceInfo, UserId, View,
@@ -853,7 +854,8 @@ mod tests {
     let current_time = chrono::Utc::now().timestamp();
     let workspace_id = "1234";
     let uid = 1;
-    let collab = Collab::new_with_origin(CollabOrigin::Empty, workspace_id, None);
+    let options = CollabOptions::new(workspace_id.to_string());
+    let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     let view_1 = View::new(
       "view_1".to_string(),
       workspace_id.to_string(),
@@ -926,7 +928,8 @@ mod tests {
     let current_time = chrono::Utc::now().timestamp();
     let workspace_id = "1234";
     let uid = 1;
-    let collab = Collab::new_with_origin(CollabOrigin::Empty, workspace_id, None);
+    let options = CollabOptions::new(workspace_id.to_string());
+    let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     let space_view_id = "space_view_id".to_string();
     let views: Vec<View> = (0..3)
       .map(|i| {
