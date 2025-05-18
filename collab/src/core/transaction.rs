@@ -19,5 +19,5 @@ pub trait DocTransactionExtension: ReadTxn {
   }
 }
 
-impl<'a> DocTransactionExtension for Transaction<'a> {}
-impl<'a> DocTransactionExtension for TransactionMut<'a> {}
+impl DocTransactionExtension for Transaction<'_> {}
+impl DocTransactionExtension for TransactionMut<'_> {}

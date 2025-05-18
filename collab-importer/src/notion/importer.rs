@@ -1,7 +1,7 @@
 use crate::error::ImporterError;
 use crate::imported_collab::{ImportType, ImportedCollab, ImportedCollabInfo};
 use crate::notion::file::NotionFile;
-use crate::notion::page::{build_imported_collab_recursively, CollabResource, NotionPage};
+use crate::notion::page::{CollabResource, NotionPage, build_imported_collab_recursively};
 use crate::notion::walk_dir::{file_name_from_path, process_entry, walk_sub_dir};
 use collab_folder::hierarchy_builder::{
   NestedChildViewBuilder, NestedViews, ParentChildViews, ViewExtraBuilder,
@@ -407,7 +407,7 @@ fn find_parent_child_csv_relationships(dir: &PathBuf) -> Result<CSVRelation, any
     if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("csv") {
       if path
         .file_name()
-        .map_or(false, |name| name.to_string_lossy().ends_with("_all.csv"))
+        .is_some_and(|name| name.to_string_lossy().ends_with("_all.csv"))
       {
         parent_csvs.push(path.to_path_buf());
       } else {

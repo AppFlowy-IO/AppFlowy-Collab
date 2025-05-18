@@ -6,8 +6,8 @@ use collab::preclude::{
   Subscription, ToJson, TransactionMut, YrsValue,
 };
 use collab_entity::reminder::{
-  Reminder, REMINDER_ID, REMINDER_IS_ACK, REMINDER_IS_READ, REMINDER_MESSAGE, REMINDER_META,
-  REMINDER_OBJECT_ID, REMINDER_SCHEDULED_AT, REMINDER_TITLE, REMINDER_TY,
+  REMINDER_ID, REMINDER_IS_ACK, REMINDER_IS_READ, REMINDER_MESSAGE, REMINDER_META,
+  REMINDER_OBJECT_ID, REMINDER_SCHEDULED_AT, REMINDER_TITLE, REMINDER_TY, Reminder,
 };
 use tokio::sync::broadcast;
 
@@ -143,7 +143,7 @@ pub struct ReminderUpdate<'a, 'b> {
   txn: &'a mut TransactionMut<'b>,
 }
 
-impl<'a, 'b> ReminderUpdate<'a, 'b> {
+impl ReminderUpdate<'_, '_> {
   pub fn set_object_id<T: AsRef<str>>(self, value: T) -> Self {
     self
       .map_ref

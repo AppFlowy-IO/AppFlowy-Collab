@@ -623,12 +623,12 @@ impl Database {
 
   /// Return a list of [Row] for the given view.
   /// The rows here is ordered by the [RowOrder] of the view.
-  pub async fn get_rows_from_row_orders<'a>(
-    &'a self,
+  pub async fn get_rows_from_row_orders(
+    &self,
     row_orders: Vec<RowOrder>,
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
-  ) -> impl Stream<Item = Result<Row, DatabaseError>> + 'a {
+  ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
     let row_ids = row_orders.iter().map(|order| order.id.clone()).collect();
     let rows_stream = self.init_database_rows(row_ids, chunk_size, cancel_token);
     let database_id = self.get_database_id();

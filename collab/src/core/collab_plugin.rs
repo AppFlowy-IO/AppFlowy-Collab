@@ -80,7 +80,6 @@ pub trait CollabPlugin: Send + Sync + 'static {
 
   /// Flush the data to the storage. It will remove all existing updates and insert the state vector
   /// and doc_state.
-
   fn start_init_sync(&self) {}
 
   /// Called when the plugin is removed
