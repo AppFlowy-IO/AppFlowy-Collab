@@ -24,7 +24,7 @@ use crate::utils::{
   get_delta_from_block_data, get_delta_from_external_text_id, push_deltas_to_str,
 };
 
-/// The page_id is a reference that points to the block’s id.
+/// The page_id is a reference that points to the block's id.
 /// The block that is referenced by this page_id is the first block of the document.
 /// Crossing this block, we can build the whole document tree.
 const PAGE_ID: &str = "page_id";
@@ -61,7 +61,7 @@ impl Document {
     document_id: &str,
     plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, DocumentError> {
-    let collab = Collab::new_with_source(origin, document_id, doc_state, plugins, true)?;
+    let collab = Collab::new_with_source(origin, document_id, doc_state, plugins, true, None)?;
     Document::open(collab)
   }
 
@@ -71,7 +71,7 @@ impl Document {
   }
 
   pub fn create(document_id: &str, data: DocumentData) -> Result<Self, DocumentError> {
-    let collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false);
+    let collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false, None);
     Self::create_with_data(collab, data)
   }
 

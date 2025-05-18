@@ -59,7 +59,7 @@ impl CollabPersistenceTest {
       uid: self.uid,
       workspace_id: self.workspace_id.clone(),
     };
-    let mut collab = CollabBuilder::new(1, id.clone(), data_source.into())
+    let mut collab = CollabBuilder::new(1, id.clone(), data_source.into(), None)
       .with_device_id("1")
       .with_plugin(disk_plugin)
       .build()
@@ -81,7 +81,7 @@ impl CollabPersistenceTest {
       uid: self.uid,
       workspace_id: self.workspace_id.clone(),
     };
-    let mut collab = CollabBuilder::new(1, id.clone(), data_source.into())
+    let mut collab = CollabBuilder::new(1, id.clone(), data_source.into(), None)
       .with_device_id("1")
       .with_plugin(disk_plugin)
       .build()
@@ -149,7 +149,7 @@ impl CollabPersistenceTest {
       uid: self.uid,
       workspace_id: self.workspace_id.clone(),
     };
-    let mut collab = CollabBuilder::new(1, &doc_id, data_source.into())
+    let mut collab = CollabBuilder::new(1, &doc_id, data_source.into(), None)
       .with_device_id("1")
       .with_plugin(disk_plugin)
       .build()
@@ -195,7 +195,7 @@ impl CollabPersistenceTest {
       uid: self.uid,
       workspace_id: self.workspace_id.clone(),
     };
-    let mut collab = CollabBuilder::new(1, id, data_source.into())
+    let mut collab = CollabBuilder::new(1, id, data_source.into(), None)
       .with_device_id("1")
       .with_plugin(disk_plugin)
       .build()

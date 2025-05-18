@@ -407,7 +407,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_no_changes_after_initialization() {
-    let collab = Collab::new(1, "1", "1", vec![], false);
+    let collab = Collab::new(1, "1", "1", vec![], false, None);
     let sv_1 = collab.transact().state_vector();
     assert!(
       !is_change_since_sv(&collab, &sv_1),
@@ -417,7 +417,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_insert_triggers_change() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, "1", "1", vec![], false, None);
     let sv_1 = collab.transact().state_vector();
 
     collab.insert("text", "hello world");
@@ -429,7 +429,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_no_changes_after_state_vector_update() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, "1", "1", vec![], false, None);
     collab.insert("text", "hello world");
     let sv_2 = collab.transact().state_vector();
 
@@ -442,7 +442,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_remove_triggers_change() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, "1", "1", vec![], false, None);
     collab.insert("text", "hello world");
     let sv_1 = collab.transact().state_vector();
 
@@ -455,7 +455,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_multiple_operations_trigger_change() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, "1", "1", vec![], false, None);
     let sv_1 = collab.transact().state_vector();
 
     collab.insert("text", "hello");
@@ -470,7 +470,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_empty_insert_and_remove_no_change() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, "1", "1", vec![], false, None);
     let sv_1 = collab.transact().state_vector();
 
     // Perform empty insert and remove operations
@@ -482,7 +482,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_changes_after_sequence_of_operations() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, "1", "1", vec![], false, None);
     let sv_1 = collab.transact().state_vector();
 
     collab.insert("text", "hello");
@@ -501,7 +501,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_changes_after_full_update() {
-    let mut collab = Collab::new(1, "1", "1", vec![], false);
+    let mut collab = Collab::new(1, "1", "1", vec![], false, None);
     collab.insert("text", "data");
     let sv_1 = collab.transact().state_vector();
 

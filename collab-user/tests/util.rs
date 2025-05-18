@@ -50,7 +50,7 @@ impl UserAwarenessTest {
       Arc::downgrade(&db),
     );
 
-    let mut collab = CollabBuilder::new(1, uid.to_string(), DataSource::Disk(None))
+    let mut collab = CollabBuilder::new(1, uid.to_string(), DataSource::Disk(None), None)
       .with_plugin(disk_plugin)
       .with_device_id("1")
       .build()

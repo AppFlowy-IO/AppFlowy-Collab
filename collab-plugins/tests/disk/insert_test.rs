@@ -47,7 +47,7 @@ async fn flush_test() {
     workspace_id: test.workspace_id.clone(),
   };
 
-  let mut collab = CollabBuilder::new(1, &doc_id, data_source.into())
+  let mut collab = CollabBuilder::new(1, &doc_id, data_source.into(), None)
     .with_device_id("1")
     .with_plugin(disk_plugin)
     .build()

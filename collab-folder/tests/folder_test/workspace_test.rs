@@ -11,7 +11,7 @@ fn test_workspace_is_ready() {
   let folder_data = FolderData::new(workspace);
   let folder = Folder::create(
     uid,
-    Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], true),
+    Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], true, None),
     None,
     folder_data,
   );
@@ -22,7 +22,7 @@ fn test_workspace_is_ready() {
 
 #[test]
 fn validate_folder_data() {
-  let collab = Collab::new_with_origin(CollabOrigin::Empty, "1", vec![], true);
+  let collab = Collab::new_with_origin(CollabOrigin::Empty, "1", vec![], true, None);
   let result = Folder::open(1, collab, None);
   assert!(result.is_err());
 }

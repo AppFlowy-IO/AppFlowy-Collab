@@ -92,7 +92,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
 
 pub fn create_row(uid: i64, workspace_id: &str, row_id: RowId) -> DatabaseRow {
   let collab_db = make_rocks_db();
-  let mut collab = CollabBuilder::new(uid, row_id.clone(), DataSource::Disk(None))
+  let mut collab = CollabBuilder::new(uid, row_id.clone(), DataSource::Disk(None), None)
     .with_device_id("1")
     .build()
     .unwrap();

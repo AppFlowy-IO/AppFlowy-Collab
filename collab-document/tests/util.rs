@@ -48,7 +48,7 @@ impl DocumentTest {
       uid,
       workspace_id: workspace_id.clone(),
     };
-    let collab = CollabBuilder::new(uid, doc_id, data_source.into())
+    let collab = CollabBuilder::new(uid, doc_id, data_source.into(), None)
       .with_device_id("1")
       .with_plugin(disk_plugin)
       .build()
@@ -140,7 +140,7 @@ pub fn open_document_with_db(
     uid,
     workspace_id: workspace_id.to_string(),
   };
-  let mut collab = CollabBuilder::new(uid, doc_id, data_source.into())
+  let mut collab = CollabBuilder::new(uid, doc_id, data_source.into(), None)
     .with_device_id("1")
     .with_plugin(disk_plugin)
     .build()
@@ -267,5 +267,5 @@ pub fn unzip_history_document_db(folder_name: &str) -> std::io::Result<(Cleaner,
 /// Can remove in the future. Just want to test the encode_collab and decode_collab
 pub fn try_decode_from_encode_collab(document: &Document) {
   let data = document.encode_collab().unwrap();
-  let _ = Collab::new_with_source(CollabOrigin::Empty, "1", data.into(), vec![], false).unwrap();
+  let _ = Collab::new_with_source(CollabOrigin::Empty, "1", data.into(), vec![], false, None).unwrap();
 }

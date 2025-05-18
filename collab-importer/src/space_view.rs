@@ -26,6 +26,7 @@ pub fn create_space_view(
     DataSource::DocStateV1(import_container_doc_state),
     vec![],
     false,
+    None,
   )
   .map_err(|err| ImporterError::Internal(err.into()))?;
 

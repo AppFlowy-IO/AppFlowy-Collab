@@ -67,6 +67,7 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
         .into(),
         vec![],
         false,
+        None,
       )
       .map_err(|err| DatabaseError::Internal(err.into())),
       Some((encoded_collab, _)) => Collab::new_with_source(
@@ -75,6 +76,7 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
         encoded_collab.into(),
         vec![],
         false,
+        None,
       )
       .map_err(|err| DatabaseError::Internal(err.into())),
     }
@@ -95,6 +97,7 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
           CollabPersistenceImpl { persistence }.into(),
           vec![],
           false,
+          None,
         )
         .map_err(|err| DatabaseError::Internal(err.into()))
         .and_then(|collab| {

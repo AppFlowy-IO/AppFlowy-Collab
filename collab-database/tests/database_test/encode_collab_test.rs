@@ -19,6 +19,7 @@ async fn encode_database_collab_test() {
       encoded_info.encoded_collab.into(),
       vec![],
       false,
+      None,
     )
     .unwrap();
     let json = collab.to_json_value();

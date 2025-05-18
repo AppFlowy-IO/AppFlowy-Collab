@@ -40,7 +40,7 @@ impl BlockTestCore {
       uid: 1,
       workspace_id,
     };
-    let mut collab = CollabBuilder::new(1, doc_id, data_source.into())
+    let mut collab = CollabBuilder::new(1, doc_id, data_source.into(), None)
       .with_plugin(disk_plugin)
       .with_device_id("1")
       .build()

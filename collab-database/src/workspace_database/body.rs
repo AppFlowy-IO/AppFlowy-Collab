@@ -20,7 +20,7 @@ pub struct WorkspaceDatabase {
 }
 
 pub fn default_workspace_database_data(object_id: &str) -> EncodedCollab {
-  let mut collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false);
+  let mut collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false, None);
   let _ = WorkspaceDatabaseBody::create(&mut collab);
   collab
     .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
@@ -44,7 +44,7 @@ impl WorkspaceDatabase {
     origin: CollabOrigin,
     collab_doc_state: DataSource,
   ) -> Result<Self, DatabaseError> {
-    let collab = Collab::new_with_source(origin, object_id, collab_doc_state, vec![], false)
+    let collab = Collab::new_with_source(origin, object_id, collab_doc_state, vec![], false, None)
       .map_err(|err| DatabaseError::Internal(anyhow!("Failed to create collab: {}", err)))?;
     Self::open(collab)
   }

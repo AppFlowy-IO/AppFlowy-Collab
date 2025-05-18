@@ -125,7 +125,7 @@ impl Folder {
     workspace_id: &str,
     plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, FolderError> {
-    let collab = Collab::new_with_source(origin, workspace_id, collab_doc_state, plugins, false)?;
+    let collab = Collab::new_with_source(origin, workspace_id, collab_doc_state, plugins, false, None)?;
     Self::open(uid, collab, None)
   }
 
@@ -337,8 +337,8 @@ impl Folder {
   ///
   /// # Behavior:
   /// - When `index` is `Some`, the new view is inserted at that position in the list of the
-  ///   parent view’s children.
-  /// - When `index` is `None`, the new view is appended to the end of the parent view’s children.
+  ///   parent view's children.
+  /// - When `index` is `None`, the new view is appended to the end of the parent view's children.
   ///
   /// Represents a view that serves as an identifier for a specific [`Collab`] object.
   /// A view can represent different types of [`Collab`] objects, such as a document or a database.
@@ -854,7 +854,7 @@ mod tests {
     let current_time = chrono::Utc::now().timestamp();
     let workspace_id = "1234";
     let uid = 1;
-    let collab = Collab::new_with_origin(CollabOrigin::Empty, workspace_id, vec![], false);
+    let collab = Collab::new_with_origin(CollabOrigin::Empty, workspace_id, vec![], false, None);
     let view_1 = View::new(
       "view_1".to_string(),
       workspace_id.to_string(),
@@ -927,7 +927,7 @@ mod tests {
     let current_time = chrono::Utc::now().timestamp();
     let workspace_id = "1234";
     let uid = 1;
-    let collab = Collab::new_with_origin(CollabOrigin::Empty, workspace_id, vec![], false);
+    let collab = Collab::new_with_origin(CollabOrigin::Empty, workspace_id, vec![], false, None);
     let space_view_id = "space_view_id".to_string();
     let views: Vec<View> = (0..3)
       .map(|i| {

@@ -145,7 +145,7 @@ impl UserAwareness {
 }
 
 pub fn default_user_awareness_data(object_id: &str) -> EncodedCollab {
-  let collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false);
+  let collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false, None);
   let awareness = UserAwareness::create(collab, None).unwrap();
   awareness
     .encode_collab_v1(|_collab| Ok::<_, Error>(()))

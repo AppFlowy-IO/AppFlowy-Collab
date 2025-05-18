@@ -225,9 +225,10 @@ impl CollabContext {
   }
 }
 
-pub fn make_yrs_doc(skp_gc: bool) -> Doc {
+pub fn make_yrs_doc(skp_gc: bool, client_id: ClientID) -> Doc {
   Doc::with_options(Options {
     skip_gc: skp_gc,
+    client_id,
     offset_kind: OffsetKind::Utf16,
     ..Options::default()
   })
@@ -240,9 +241,16 @@ impl Collab {
     device_id: impl ToString,
     plugins: Vec<Box<dyn CollabPlugin>>,
     skip_gc: bool,
+    client_id: Option<ClientID>,
   ) -> Collab {
     let origin = CollabClient::new(uid, device_id);
-    Self::new_with_origin(CollabOrigin::Client(origin), object_id, plugins, skip_gc)
+    Self::new_with_origin(
+      CollabOrigin::Client(origin),
+      object_id,
+      plugins,
+      skip_gc,
+      client_id,
+    )
   }
 
   pub fn new_with_source(
@@ -251,8 +259,9 @@ impl Collab {
     data_source: DataSource,
     plugins: Vec<Box<dyn CollabPlugin>>,
     skip_gc: bool,
+    client_id: Option<ClientID>,
   ) -> Result<Self, CollabError> {
-    let mut collab = Self::new_with_origin(origin, object_id, plugins, skip_gc);
+    let mut collab = Self::new_with_origin(origin, object_id, plugins, skip_gc, client_id);
     match data_source {
       DataSource::Disk(disk) => {
         if let Some(disk) = disk {
@@ -322,9 +331,15 @@ impl Collab {
     object_id: T,
     plugins: Vec<Box<dyn CollabPlugin>>,
     skip_gc: bool,
+    client_id: Option<ClientID>,
   ) -> Collab {
+    let client_id = client_id.unwrap_or_else(|| {
+      let mut rng = fastrand::Rng::new();
+      let client_id: u32 = rng.u32(0..u32::MAX);
+      client_id as ClientID
+    });
     let object_id = object_id.as_ref().to_string();
-    let doc = make_yrs_doc(skip_gc);
+    let doc = make_yrs_doc(skip_gc, client_id);
     let data = doc.get_or_insert_map(DATA_SECTION);
     let meta = doc.get_or_insert_map(META_SECTION);
     let plugins = Plugins::new(plugins);
@@ -619,6 +634,7 @@ pub struct CollabBuilder {
   object_id: String,
   source: DataSource,
   skip_gc: bool,
+  client_id: Option<ClientID>,
 }
 
 /// The raw data of a collab document. It is a list of updates. Each of them can be parsed by
@@ -661,7 +677,12 @@ impl DataSource {
   }
 }
 impl CollabBuilder {
-  pub fn new<T: AsRef<str>>(uid: i64, object_id: T, data_source: DataSource) -> Self {
+  pub fn new<T: AsRef<str>>(
+    uid: i64,
+    object_id: T,
+    data_source: DataSource,
+    client_id: Option<ClientID>,
+  ) -> Self {
     let object_id = object_id.as_ref();
     Self {
       uid,
@@ -670,6 +691,7 @@ impl CollabBuilder {
       device_id: "".to_string(),
       source: data_source,
       skip_gc: true,
+      client_id,
     }
   }
 
@@ -702,6 +724,7 @@ impl CollabBuilder {
       self.source,
       self.plugins,
       self.skip_gc,
+      self.client_id,
     )?;
     Ok(collab)
   }

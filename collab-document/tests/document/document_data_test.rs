@@ -31,7 +31,7 @@ fn validate_document_data() {
   let document = Document::create(document_id, document_data).unwrap();
   assert!(document.validate().is_ok());
 
-  let new_collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false);
+  let new_collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false, None);
   let result = Document::open(new_collab);
   assert!(result.is_err())
 }

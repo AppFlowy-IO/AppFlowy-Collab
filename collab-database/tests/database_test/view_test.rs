@@ -47,6 +47,7 @@ async fn create_initial_database_test() {
     encoded_collab.into(),
     vec![],
     false,
+    None,
   )
   .unwrap();
   let database_id_from_collab = DatabaseBody::database_id_from_collab(&collab).unwrap();

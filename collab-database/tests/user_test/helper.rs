@@ -83,7 +83,7 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
   }
 
   fn get_encoded_collab(&self, object_id: &str, collab_type: CollabType) -> Option<EncodedCollab> {
-    let mut collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false);
+    let mut collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false, None);
     self.load_collab(&mut collab);
     collab
       .encode_collab_v1(|collab| collab_type.validate_require_data(collab))
@@ -175,7 +175,7 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
         .into_data_source()
       });
 
-    let mut collab = CollabBuilder::new(self.uid, object_id, data_source)
+    let mut collab = CollabBuilder::new(self.uid, object_id, data_source, None)
       .with_device_id("1")
       .with_plugin(db_plugin)
       .build()
@@ -210,6 +210,7 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
           workspace_id: self.workspace_id.clone(),
         }
         .into_data_source(),
+        None,
       )
       .with_device_id("1")
       .with_plugin(db_plugin)

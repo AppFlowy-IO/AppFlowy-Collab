@@ -22,12 +22,12 @@ use yrs::types::ToJson;
 
 #[tokio::test]
 async fn restore_from_update() {
-  let mut c1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let mut c1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false, None);
   let plugin = ReceiveUpdatesPlugin::default();
   c1.add_plugin(Box::new(plugin.clone()));
   c1.initialize();
 
-  let mut c2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let mut c2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false, None);
   c2.initialize();
 
   c1.insert("1", "a");
@@ -48,12 +48,12 @@ async fn restore_from_update() {
 
 #[tokio::test]
 async fn missing_update_test() {
-  let mut c1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let mut c1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false, None);
   let plugin = ReceiveUpdatesPlugin::default();
   c1.add_plugin(Box::new(plugin.clone()));
   c1.initialize();
 
-  let mut c2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let mut c2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false, None);
   c2.initialize();
 
   c1.insert("1", "a".to_string());
@@ -100,11 +100,11 @@ async fn missing_update_test() {
 #[tokio::test]
 async fn simulate_client_missing_server_broadcast_data_test() {
   // Initialize clients and server with the same origin and test conditions.
-  let mut c1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let mut c1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false, None);
   c1.initialize();
-  let mut c2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let mut c2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false, None);
   c2.initialize();
-  let mut server = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let mut server = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false, None);
   server.initialize();
 
   // Perform initial synchronization to simulate starting conditions.
@@ -216,7 +216,7 @@ async fn simulate_client_missing_server_broadcast_data_test() {
 #[tokio::test]
 async fn simulate_client_missing_server_broadcast_data_test2() {
   // Initialize clients and server with the same origin and test conditions.
-  let mut client_1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], true);
+  let mut client_1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], true, None);
   client_1.initialize();
   let plugin_1 = ReceiveUpdatesPlugin::default();
   client_1.add_plugin(Box::new(plugin_1.clone()));
@@ -224,7 +224,7 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
   client_1.insert("2", "b".to_string());
   client_1.insert("3", "c".to_string());
 
-  let mut client_2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], true);
+  let mut client_2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], true, None);
   client_2.initialize();
   let plugin_2 = ReceiveUpdatesPlugin::default();
   client_2.add_plugin(Box::new(plugin_2.clone()));
@@ -235,7 +235,7 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
   let update_1 = plugin_1.take_updates();
   let update_2 = plugin_2.take_updates();
 
-  let mut server = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let mut server = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false, None);
   server.initialize();
 
   // Split the updates into two parts and simulate partial reception by the server.
@@ -315,7 +315,7 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
 #[tokio::test]
 async fn init_sync_test() {
   let mut client_1 =
-    Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+    Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false, None);
   client_1.initialize();
 
   // client 1 edit
@@ -331,11 +331,11 @@ async fn init_sync_test() {
   }
 
   let mut client_2 =
-    Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+    Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false, None);
   client_2.initialize();
 
   let mut server_collab =
-    Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+    Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false, None);
   server_collab.initialize();
 
   init_sync(&mut server_collab, &client_1);
@@ -358,7 +358,7 @@ fn init_sync(destination: &mut Collab, source: &Collab) {
 #[tokio::test]
 async fn restore_from_multiple_update() {
   let update_cache = CollabStateCachePlugin::new();
-  let mut collab = CollabBuilder::new(1, "1", DataSource::Disk(None))
+  let mut collab = CollabBuilder::new(1, "1", DataSource::Disk(None), None)
     .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
@@ -382,7 +382,7 @@ async fn restore_from_multiple_update() {
   }
 
   let updates = update_cache.get_doc_state().unwrap();
-  let restored_collab = CollabBuilder::new(1, "1", updates)
+  let restored_collab = CollabBuilder::new(1, "1", updates, None)
     .with_device_id("1")
     .build()
     .unwrap();
@@ -392,7 +392,7 @@ async fn restore_from_multiple_update() {
 #[tokio::test]
 async fn apply_same_update_multiple_time() {
   let update_cache = CollabStateCachePlugin::new();
-  let mut collab = CollabBuilder::new(1, "1", DataSource::Disk(None))
+  let mut collab = CollabBuilder::new(1, "1", DataSource::Disk(None), None)
     .with_device_id("1")
     .with_plugin(update_cache.clone())
     .build()
@@ -401,7 +401,7 @@ async fn apply_same_update_multiple_time() {
   collab.insert("text", "hello world");
 
   let updates = update_cache.get_doc_state().unwrap();
-  let mut restored_collab = CollabBuilder::new(1, "1", updates)
+  let mut restored_collab = CollabBuilder::new(1, "1", updates, None)
     .with_device_id("1")
     .build()
     .unwrap();
@@ -418,12 +418,12 @@ async fn apply_same_update_multiple_time() {
 #[tokio::test]
 async fn root_change_test() {
   setup_log();
-  let mut collab_1 = CollabBuilder::new(1, "1", DataSource::Disk(None))
+  let mut collab_1 = CollabBuilder::new(1, "1", DataSource::Disk(None), None)
     .with_device_id("1")
     .build()
     .unwrap();
   collab_1.initialize();
-  let mut collab_2 = CollabBuilder::new(1, "1", DataSource::Disk(None))
+  let mut collab_2 = CollabBuilder::new(1, "1", DataSource::Disk(None), None)
     .with_device_id("1")
     .build()
     .unwrap();

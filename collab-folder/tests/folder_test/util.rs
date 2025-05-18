@@ -60,7 +60,7 @@ pub fn create_folder_with_data(
   );
   let cleaner: Cleaner = Cleaner::new(path);
 
-  let mut collab = CollabBuilder::new(uid.as_i64(), workspace_id, DataSource::Disk(None))
+  let mut collab = CollabBuilder::new(uid.as_i64(), workspace_id, DataSource::Disk(None), None)
     .with_plugin(disk_plugin)
     .with_device_id("1")
     .build()
@@ -103,7 +103,7 @@ pub fn open_folder_with_db(
     workspace_id: workspace_id.to_string(),
   };
   let cleaner: Cleaner = Cleaner::new(db_path);
-  let mut collab = CollabBuilder::new(1, object_id, data_source.into())
+  let mut collab = CollabBuilder::new(1, object_id, data_source.into(), None)
     .with_device_id("1")
     .with_plugin(disk_plugin)
     .build()

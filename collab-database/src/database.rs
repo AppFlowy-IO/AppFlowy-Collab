@@ -88,7 +88,7 @@ impl DatabaseContext {
 
 pub async fn default_database_data(database_id: &str) -> Result<EncodedCollab, DatabaseError> {
   let context = DatabaseContext::new(Arc::new(NoPersistenceDatabaseCollabService));
-  let collab = Collab::new_with_origin(CollabOrigin::Empty, database_id, vec![], false);
+  let collab = Collab::new_with_origin(CollabOrigin::Empty, database_id, vec![], false, None);
   let (_, collab) =
     DatabaseBody::create(collab, database_id.to_string(), context, vec![], vec![]).await?;
   Ok(

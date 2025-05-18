@@ -112,6 +112,7 @@ async fn open_020_history_database_test() {
     encode_collab.into(),
     vec![],
     false,
+    None,
   )
   .unwrap();
   let actual_2 = restored_database_collab.to_json_value();
