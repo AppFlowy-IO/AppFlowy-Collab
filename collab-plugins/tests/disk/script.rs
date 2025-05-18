@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::setup_log;
+use collab::core::collab::CollabOptions;
+use collab::core::origin::CollabOrigin;
 use collab::lock::RwLock;
 use collab::preclude::*;
 use collab_entity::CollabType;
@@ -59,11 +61,10 @@ impl CollabPersistenceTest {
       uid: self.uid,
       workspace_id: self.workspace_id.clone(),
     };
-    let mut collab = CollabBuilder::new(1, id.clone(), data_source.into(), None)
-      .with_device_id("1")
-      .with_plugin(disk_plugin)
-      .build()
-      .unwrap();
+
+    let options = CollabOptions::new(id.clone()).with_data_source(data_source.into());
+    let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+    collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();
     self.collab_by_id.insert(id, Arc::new(RwLock::from(collab)));
   }
@@ -81,11 +82,10 @@ impl CollabPersistenceTest {
       uid: self.uid,
       workspace_id: self.workspace_id.clone(),
     };
-    let mut collab = CollabBuilder::new(1, id.clone(), data_source.into(), None)
-      .with_device_id("1")
-      .with_plugin(disk_plugin)
-      .build()
-      .unwrap();
+
+    let options = CollabOptions::new(id.clone()).with_data_source(data_source.into());
+    let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+    collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();
     self.collab_by_id.insert(id, Arc::new(RwLock::from(collab)));
   }
@@ -149,11 +149,10 @@ impl CollabPersistenceTest {
       uid: self.uid,
       workspace_id: self.workspace_id.clone(),
     };
-    let mut collab = CollabBuilder::new(1, &doc_id, data_source.into(), None)
-      .with_device_id("1")
-      .with_plugin(disk_plugin)
-      .build()
-      .unwrap();
+
+    let options = CollabOptions::new(doc_id.clone()).with_data_source(data_source.into());
+    let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+    collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();
     self
       .collab_by_id
@@ -195,11 +194,10 @@ impl CollabPersistenceTest {
       uid: self.uid,
       workspace_id: self.workspace_id.clone(),
     };
-    let mut collab = CollabBuilder::new(1, id, data_source.into(), None)
-      .with_device_id("1")
-      .with_plugin(disk_plugin)
-      .build()
-      .unwrap();
+
+    let options = CollabOptions::new(id.to_string()).with_data_source(data_source.into());
+    let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+    collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();
     let json = collab.to_json_value();
     assert_json_diff::assert_json_eq!(json, expected);
