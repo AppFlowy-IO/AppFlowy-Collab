@@ -3,7 +3,7 @@ use collab_entity::reminder::{ObjectType, Reminder};
 use collab_user::core::ReminderChange;
 use std::sync::Arc;
 
-use crate::util::{receive_with_timeout, UserAwarenessTest};
+use crate::util::{UserAwarenessTest, receive_with_timeout};
 
 #[tokio::test]
 async fn subscribe_insert_reminder_test() {

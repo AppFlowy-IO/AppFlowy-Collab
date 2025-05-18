@@ -1,6 +1,6 @@
 use crate::notion::page::ImportedRowDocument;
 use markdown::mdast::Node;
-use markdown::{to_mdast, ParseOptions};
+use markdown::{ParseOptions, to_mdast};
 use serde::Serialize;
 use std::fs::File;
 use std::io::{self, Write};

@@ -8,8 +8,8 @@ pub use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::*;
 use collab::util::any_to_json_value;
-use collab_entity::define::{FOLDER, FOLDER_META, FOLDER_WORKSPACE_ID};
 use collab_entity::CollabType;
+use collab_entity::define::{FOLDER, FOLDER_META, FOLDER_WORKSPACE_ID};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
@@ -19,8 +19,8 @@ use crate::hierarchy_builder::{FlattedViews, ParentChildViews};
 use crate::section::{Section, SectionItem, SectionMap};
 use crate::view::view_from_map_ref;
 use crate::{
-  impl_section_op, subscribe_folder_change, FolderData, ParentChildRelations, SectionChangeSender,
-  SpacePermission, TrashInfo, View, ViewUpdate, ViewsMap, Workspace,
+  FolderData, ParentChildRelations, SectionChangeSender, SpacePermission, TrashInfo, View,
+  ViewUpdate, ViewsMap, Workspace, impl_section_op, subscribe_folder_change,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]

@@ -1,5 +1,5 @@
 use assert_json_diff::assert_json_include;
-use collab_folder::{timestamp, FolderData, Section, UserId};
+use collab_folder::{FolderData, Section, UserId, timestamp};
 use serde_json::json;
 
 use crate::util::{create_folder_with_data, create_folder_with_workspace, make_test_view};

@@ -4,7 +4,7 @@ use crate::entity::FieldType;
 use crate::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
 };
-use crate::rows::{new_cell_builder, Cell};
+use crate::rows::{Cell, new_cell_builder};
 use crate::template::entity::CELL_DATA;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};

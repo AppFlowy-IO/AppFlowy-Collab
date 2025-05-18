@@ -1,6 +1,6 @@
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
-use collab_folder::{check_folder_is_valid, Folder, FolderData, UserId, Workspace};
+use collab_folder::{Folder, FolderData, UserId, Workspace, check_folder_is_valid};
 
 #[test]
 fn test_workspace_is_ready() {

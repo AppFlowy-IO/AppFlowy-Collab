@@ -9,7 +9,7 @@ use chrono::{DateTime, Local, Offset, TimeZone};
 use chrono_tz::Tz;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::str::FromStr;
 use yrs::Any;
 

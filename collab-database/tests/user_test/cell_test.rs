@@ -1,10 +1,10 @@
 use collab::util::AnyMapExt;
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
-use collab_database::rows::{new_cell_builder, CREATED_AT};
+use collab_database::rows::{CREATED_AT, new_cell_builder};
 use collab_database::rows::{CreateRowParams, LAST_MODIFIED};
 use uuid::Uuid;
 
-use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
+use crate::user_test::helper::{WorkspaceDatabaseTest, workspace_database_test};
 
 #[tokio::test]
 async fn insert_cell_test() {

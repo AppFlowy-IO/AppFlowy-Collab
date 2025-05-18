@@ -13,12 +13,12 @@ use yrs::updates::decoder::Decode;
 use yrs::Map;
 use yrs::{ArrayPrelim, ReadTxn};
 
-use crate::util::{setup_log, CollabStateCachePlugin};
+use crate::util::{CollabStateCachePlugin, setup_log};
 use collab::core::collab_plugin::CollabPluginType;
-use yrs::types::ToJson;
 use yrs::MapRef;
 use yrs::TransactionMut;
 use yrs::Update;
+use yrs::types::ToJson;
 
 #[tokio::test]
 async fn restore_from_update() {

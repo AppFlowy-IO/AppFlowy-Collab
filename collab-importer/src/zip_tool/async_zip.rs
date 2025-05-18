@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use async_recursion::async_recursion;
 use async_zip::base::read::stream::{Ready, ZipFileReader};
 use async_zip::{StringEncoding, ZipString};
-use futures::io::AsyncBufRead;
 use futures::AsyncReadExt as FuturesAsyncReadExt;
+use futures::io::AsyncBufRead;
 use std::ffi::OsString;
 use std::{io, str};
 
@@ -14,7 +14,7 @@ use tokio::io::{AsyncWriteExt, BufReader};
 
 use async_zip::base::read::seek::ZipFileReader as SeekZipFileReader;
 
-use tokio::fs::{create_dir_all, OpenOptions};
+use tokio::fs::{OpenOptions, create_dir_all};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
 

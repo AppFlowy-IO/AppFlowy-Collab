@@ -1,5 +1,5 @@
 use assert_json_diff::assert_json_eq;
-use collab_document::document::{gen_document_id, Document};
+use collab_document::document::{Document, gen_document_id};
 use serde_json::json;
 
 use crate::importer::util::{
@@ -276,10 +276,12 @@ fn test_mix_list() {
 
     if i == 3 {
       assert_eq!(ty, "todo_list");
-      assert!(!data
-        .get("checked")
-        .and_then(|v| v.as_bool())
-        .expect("'checked' should be a boolean value"));
+      assert!(
+        !data
+          .get("checked")
+          .and_then(|v| v.as_bool())
+          .expect("'checked' should be a boolean value")
+      );
     }
   }
 }

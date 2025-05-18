@@ -1,6 +1,6 @@
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, ReadTxn};
-use collab_folder::{timestamp, Folder, FolderData, UserId};
+use collab_folder::{Folder, FolderData, UserId, timestamp};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

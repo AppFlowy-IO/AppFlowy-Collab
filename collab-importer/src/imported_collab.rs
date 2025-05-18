@@ -1,7 +1,7 @@
 use crate::error::ImporterError;
-use crate::notion::page::CollabResource;
 use crate::notion::NotionImporter;
-use crate::util::{unzip_from_path_or_memory, Either};
+use crate::notion::page::CollabResource;
+use crate::util::{Either, unzip_from_path_or_memory};
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
 use std::fmt;

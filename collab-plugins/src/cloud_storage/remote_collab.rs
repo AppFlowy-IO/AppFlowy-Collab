@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use async_trait::async_trait;
 use collab::core::collab::{DataSource, TransactionMutExt};
 use collab::core::collab_state::SyncState;
@@ -17,11 +17,11 @@ use serde::Deserialize;
 use tokio::spawn;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::watch;
-use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::WatchStream;
 use tracing::trace;
 use yrs::updates::decoder::Decode;
-use yrs::{merge_updates_v1, ReadTxn, Transact, Update};
+use yrs::{ReadTxn, Transact, Update, merge_updates_v1};
 
 use crate::cloud_storage::channel::TokioUnboundedSink;
 use crate::cloud_storage::msg::{CollabSinkMessage, MsgId};

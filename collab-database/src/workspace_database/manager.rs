@@ -1,4 +1,4 @@
-use crate::database::{try_fixing_database, Database, DatabaseContext, DatabaseData};
+use crate::database::{Database, DatabaseContext, DatabaseData, try_fixing_database};
 
 use crate::error::DatabaseError;
 use crate::workspace_database::body::{DatabaseMeta, WorkspaceDatabase};

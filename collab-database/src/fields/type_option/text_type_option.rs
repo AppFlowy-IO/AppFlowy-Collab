@@ -2,10 +2,10 @@ use crate::entity::FieldType;
 use crate::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
 };
-use crate::rows::{new_cell_builder, Cell};
+use crate::rows::{Cell, new_cell_builder};
 use crate::template::entity::CELL_DATA;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RichTextTypeOption;

@@ -5,7 +5,7 @@ use crate::importer::define::*;
 use crate::importer::delta::Delta;
 use crate::importer::util::*;
 use markdown::mdast::AlignKind;
-use markdown::{mdast, to_mdast, Constructs, ParseOptions};
+use markdown::{Constructs, ParseOptions, mdast, to_mdast};
 use serde_json::Value;
 use std::collections::HashMap;
 use tracing::trace;

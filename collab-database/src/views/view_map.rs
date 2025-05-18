@@ -7,11 +7,12 @@ use crate::entity::{DatabaseView, DatabaseViewMeta};
 use crate::rows::RowId;
 use crate::views::define::*;
 use crate::views::{
-  field_settings_from_map_ref, filters_from_map_ref, group_setting_from_map_ref,
-  layout_setting_from_map_ref, sorts_from_map_ref, subscribe_view_map_change, view_from_map_ref,
-  view_from_value, view_meta_from_value, CalculationMap, DatabaseLayout, DatabaseViewUpdate,
-  FieldOrder, FieldOrderArray, FieldSettingsByFieldIdMap, FilterMap, GroupSettingMap,
-  LayoutSetting, OrderArray, RowOrder, RowOrderArray, SortMap, ViewBuilder, ViewChangeSender,
+  CalculationMap, DatabaseLayout, DatabaseViewUpdate, FieldOrder, FieldOrderArray,
+  FieldSettingsByFieldIdMap, FilterMap, GroupSettingMap, LayoutSetting, OrderArray, RowOrder,
+  RowOrderArray, SortMap, ViewBuilder, ViewChangeSender, field_settings_from_map_ref,
+  filters_from_map_ref, group_setting_from_map_ref, layout_setting_from_map_ref,
+  sorts_from_map_ref, subscribe_view_map_change, view_from_map_ref, view_from_value,
+  view_meta_from_value,
 };
 use collab::core::origin::CollabOrigin;
 use std::ops::Deref;

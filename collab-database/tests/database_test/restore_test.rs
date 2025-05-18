@@ -1,5 +1,5 @@
 use crate::database_test::helper::{
-  create_database_with_db, restore_database_from_db, DatabaseTest,
+  DatabaseTest, create_database_with_db, restore_database_from_db,
 };
 use crate::helper::unzip_history_database_db;
 use assert_json_diff::{assert_json_eq, assert_json_include};
@@ -9,7 +9,7 @@ use collab::entity::EncodedCollab;
 use collab::preclude::Collab;
 use collab_database::rows::CreateRowParams;
 use collab_plugins::CollabKVDB;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 #[tokio::test]

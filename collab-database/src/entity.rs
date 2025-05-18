@@ -1,5 +1,5 @@
 #![allow(clippy::upper_case_acronyms)]
-use crate::database::{gen_database_id, gen_database_view_id, gen_row_id, timestamp, DatabaseData};
+use crate::database::{DatabaseData, gen_database_id, gen_database_view_id, gen_row_id, timestamp};
 use crate::error::DatabaseError;
 use crate::fields::checkbox_type_option::CheckboxTypeOption;
 use crate::fields::checklist_type_option::ChecklistTypeOption;

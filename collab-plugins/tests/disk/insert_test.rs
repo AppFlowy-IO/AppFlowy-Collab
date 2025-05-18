@@ -1,13 +1,13 @@
-use crate::disk::script::{disk_plugin_with_db, CollabPersistenceTest};
+use crate::disk::script::{CollabPersistenceTest, disk_plugin_with_db};
 use assert_json_diff::assert_json_eq;
 
 use anyhow::Error;
 use collab::preclude::CollabBuilder;
 use collab_entity::CollabType;
-use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::kv::KVTransactionDB;
-use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use collab_plugins::local_storage::CollabPersistenceConfig;
+use collab_plugins::local_storage::kv::KVTransactionDB;
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use std::sync::Arc;
 
 #[tokio::test]

@@ -3,8 +3,8 @@ use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::block::ClientID;
 use collab::preclude::*;
-use collab_entity::define::DOCUMENT_ROOT;
 use collab_entity::CollabType;
+use collab_entity::define::DOCUMENT_ROOT;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::{Borrow, BorrowMut};
@@ -13,9 +13,9 @@ use std::ops::{Deref, DerefMut};
 use std::vec;
 
 use crate::blocks::{
-  deserialize_text_delta, parse_event, Block, BlockAction, BlockActionPayload, BlockActionType,
-  BlockEvent, BlockOperation, ChildrenOperation, DocumentData, DocumentMeta, TextDelta,
-  TextOperation, EXTERNAL_TYPE_TEXT,
+  Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, BlockOperation,
+  ChildrenOperation, DocumentData, DocumentMeta, EXTERNAL_TYPE_TEXT, TextDelta, TextOperation,
+  deserialize_text_delta, parse_event,
 };
 use crate::document_awareness::DocumentAwarenessState;
 use crate::error::DocumentError;

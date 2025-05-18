@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use yrs::{encoding::serde::from_any, Any};
+use yrs::{Any, encoding::serde::from_any};
 
 use super::{LayoutSetting, LayoutSettingBuilder};
 

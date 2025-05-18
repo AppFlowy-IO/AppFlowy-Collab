@@ -8,8 +8,8 @@ use collab::preclude::{
   Array, ArrayPrelim, ArrayRef, Collab, Map, MapExt, MapPrelim, MapRef, ReadTxn, TransactionMut,
   YrsValue,
 };
-use collab_entity::define::WORKSPACE_DATABASES;
 use collab_entity::CollabType;
+use collab_entity::define::WORKSPACE_DATABASES;
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::{HashMap, HashSet};
 

@@ -4,7 +4,7 @@ use assert_json_diff::assert_json_eq;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Any, Collab};
 use collab::util::AnyMapExt;
-use collab_database::database::{gen_row_id, DatabaseBody, DatabaseData};
+use collab_database::database::{DatabaseBody, DatabaseData, gen_row_id};
 use collab_database::entity::CreateViewParams;
 use collab_database::fields::Field;
 use collab_database::rows::{CreateRowParams, Row};

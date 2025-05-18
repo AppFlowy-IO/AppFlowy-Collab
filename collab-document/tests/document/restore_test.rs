@@ -4,8 +4,8 @@ use uuid::Uuid;
 use collab_plugins::CollabKVDB;
 
 use crate::util::{
-  document_storage, get_document_data, open_document_with_db, unzip_history_document_db,
-  DocumentTest,
+  DocumentTest, document_storage, get_document_data, open_document_with_db,
+  unzip_history_document_db,
 };
 
 #[test]

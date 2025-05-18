@@ -1,6 +1,6 @@
 use collab_folder::{
-  hierarchy_builder::ViewExtraBuilder, timestamp, SpacePermission, SPACE_CREATED_AT_KEY,
-  SPACE_ICON_COLOR_KEY, SPACE_ICON_KEY, SPACE_IS_SPACE_KEY, SPACE_PERMISSION_KEY,
+  SPACE_CREATED_AT_KEY, SPACE_ICON_COLOR_KEY, SPACE_ICON_KEY, SPACE_IS_SPACE_KEY,
+  SPACE_PERMISSION_KEY, SpacePermission, hierarchy_builder::ViewExtraBuilder, timestamp,
 };
 use serde_json::json;
 

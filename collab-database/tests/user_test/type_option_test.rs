@@ -5,7 +5,7 @@ use collab_database::views::OrderObjectPosition;
 use uuid::Uuid;
 
 use crate::database_test::helper::default_field_settings_by_layout;
-use crate::user_test::helper::{workspace_database_test, WorkspaceDatabaseTest};
+use crate::user_test::helper::{WorkspaceDatabaseTest, workspace_database_test};
 
 #[tokio::test]
 async fn update_single_type_option_data_test() {

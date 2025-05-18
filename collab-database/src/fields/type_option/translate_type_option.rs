@@ -3,8 +3,8 @@ use crate::fields::{TypeOptionCellReader, TypeOptionCellWriter};
 use crate::rows::Cell;
 use crate::template::translate_parse::TranslateCellData;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use yrs::{encoding::serde::from_any, Any};
+use serde_json::{Value, json};
+use yrs::{Any, encoding::serde::from_any};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TranslateTypeOption {

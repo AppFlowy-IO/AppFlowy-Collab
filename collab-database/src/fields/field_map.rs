@@ -2,8 +2,8 @@ use collab::preclude::{Map, MapExt, MapRef, ReadTxn, Subscription, TransactionMu
 
 use crate::database::timestamp;
 use crate::fields::{
-  field_from_map_ref, field_from_value, field_id_from_value, primary_field_id_from_value,
-  subscribe_field_change, Field, FieldBuilder, FieldChangeSender, FieldUpdate,
+  Field, FieldBuilder, FieldChangeSender, FieldUpdate, field_from_map_ref, field_from_value,
+  field_id_from_value, primary_field_id_from_value, subscribe_field_change,
 };
 use crate::views::FieldOrder;
 

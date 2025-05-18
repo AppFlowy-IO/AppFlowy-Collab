@@ -1,6 +1,6 @@
-use crate::local_storage::kv::doc::CollabKVAction;
-use crate::local_storage::kv::KVTransactionDB;
 use crate::CollabKVDB;
+use crate::local_storage::kv::KVTransactionDB;
+use crate::local_storage::kv::doc::CollabKVAction;
 use anyhow::anyhow;
 use collab::core::collab::DataSource;
 use collab::core::collab_plugin::CollabPersistence;

@@ -12,8 +12,8 @@ use serde_json::json;
 
 use tokio_stream::wrappers::WatchStream;
 use yrs::block::{ClientID, Prelim};
-use yrs::types::map::MapEvent;
 use yrs::types::ToJson;
+use yrs::types::map::MapEvent;
 use yrs::updates::decoder::Decode;
 
 use yrs::{

@@ -1,8 +1,8 @@
 use crate::space_info::SpacePermission;
 use crate::{
-  timestamp, IconType, RepeatedViewIdentifier, SpaceInfo, View, ViewIcon, ViewIdentifier,
-  ViewLayout, SPACE_CREATED_AT_KEY, SPACE_ICON_COLOR_KEY, SPACE_ICON_KEY, SPACE_IS_SPACE_KEY,
-  SPACE_PERMISSION_KEY,
+  IconType, RepeatedViewIdentifier, SPACE_CREATED_AT_KEY, SPACE_ICON_COLOR_KEY, SPACE_ICON_KEY,
+  SPACE_IS_SPACE_KEY, SPACE_PERMISSION_KEY, SpaceInfo, View, ViewIcon, ViewIdentifier, ViewLayout,
+  timestamp,
 };
 
 use serde_json::json;
@@ -569,9 +569,11 @@ mod tests {
       let views_after_delete =
         FlattedViews::flatten_views(cloned_workspace_views.clone().into_inner());
       assert_eq!(views_after_delete.len(), 5); // Should have 5 views left
-      assert!(!views_after_delete
-        .iter()
-        .any(|v| v.name == "Grandchild-1-2"));
+      assert!(
+        !views_after_delete
+          .iter()
+          .any(|v| v.name == "Grandchild-1-2")
+      );
 
       // Second, delete the great-grandchild (Great-Grandchild-1-1-1)
       let view_id_great_grandchild_1_1_1 = workspace_views[0].children[0].children[0].children[0]
@@ -582,9 +584,11 @@ mod tests {
       let views_after_delete =
         FlattedViews::flatten_views(cloned_workspace_views.clone().into_inner());
       assert_eq!(views_after_delete.len(), 4); // Should have 4 views left
-      assert!(!views_after_delete
-        .iter()
-        .any(|v| v.name == "Great-Grandchild-1-1-1"));
+      assert!(
+        !views_after_delete
+          .iter()
+          .any(|v| v.name == "Great-Grandchild-1-1-1")
+      );
 
       // Third, delete a second-level view (Child-2)
       let view_id_child_2 = workspace_views[0].children[1].view.id.clone(); // "Child-2"

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::thread;
 
 use crate::disk::util::rocks_db;
-use collab_plugins::local_storage::kv::keys::{clock_from_key, make_doc_update_key, Clock};
+use collab_plugins::local_storage::kv::keys::{Clock, clock_from_key, make_doc_update_key};
 use collab_plugins::local_storage::kv::{KVEntry, KVStore, KVTransactionDB};
 use smallvec::SmallVec;
 

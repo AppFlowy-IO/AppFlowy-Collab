@@ -1,7 +1,7 @@
 use crate::util::{create_folder_with_workspace, make_test_view, setup_log};
 use collab::core::collab::IndexContent;
 use collab_folder::folder_diff::FolderViewChange;
-use collab_folder::{timestamp, IconType, UserId, ViewIcon, ViewIndexContent};
+use collab_folder::{IconType, UserId, ViewIcon, ViewIndexContent, timestamp};
 
 #[test]
 fn create_view_test() {

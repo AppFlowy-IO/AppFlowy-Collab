@@ -2,7 +2,7 @@ use crate::entity::FieldType;
 use std::str::FromStr;
 
 use crate::error::DatabaseError;
-use crate::rows::{new_cell_builder, Cell, RowId};
+use crate::rows::{Cell, RowId, new_cell_builder};
 use crate::template::entity::CELL_DATA;
 use crate::template::util::{ToCellString, TypeOptionCellData};
 use serde::{Deserialize, Serialize};

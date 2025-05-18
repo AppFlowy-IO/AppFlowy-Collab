@@ -1,4 +1,4 @@
-use crate::util::{apply_actions, get_document_data, open_document_with_db, DocumentTest};
+use crate::util::{DocumentTest, apply_actions, get_document_data, open_document_with_db};
 use collab_document::{
   blocks::{Block, BlockAction, BlockActionPayload, BlockActionType},
   document::DocumentIndexContent,

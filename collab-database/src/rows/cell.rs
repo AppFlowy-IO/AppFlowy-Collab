@@ -5,7 +5,7 @@ use collab::preclude::{Any, FillRef, Map, MapRef, TransactionMut};
 use collab::util::AnyMapExt;
 
 use crate::database::timestamp;
-use crate::rows::{RowId, CREATED_AT, LAST_MODIFIED};
+use crate::rows::{CREATED_AT, LAST_MODIFIED, RowId};
 use crate::template::entity::CELL_DATA;
 
 pub type Cells = HashMap<String, Cell>;

@@ -1,6 +1,6 @@
 use crate::error::ImporterError;
 use crate::zip_tool::util::{is_multi_part_zip_signature, remove_part_suffix, sanitize_file_path};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};

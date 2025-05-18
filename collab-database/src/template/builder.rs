@@ -1,6 +1,6 @@
 use crate::database::{gen_field_id, gen_row_id};
 use crate::template::entity::{
-  CellTemplateData, DatabaseTemplate, DatabaseViewTemplate, FieldTemplate, RowTemplate, CELL_DATA,
+  CELL_DATA, CellTemplateData, DatabaseTemplate, DatabaseViewTemplate, FieldTemplate, RowTemplate,
 };
 
 use crate::entity::FieldType;
@@ -17,7 +17,7 @@ use crate::template::csv::CSVResource;
 use crate::template::date_parse::replace_cells_with_timestamp;
 use crate::template::media_parse::replace_cells_with_files;
 use crate::template::option_parse::{
-  build_options_from_cells, replace_cells_with_options_id, SELECT_OPTION_SEPARATOR,
+  SELECT_OPTION_SEPARATOR, build_options_from_cells, replace_cells_with_options_id,
 };
 use crate::views::DatabaseLayout;
 

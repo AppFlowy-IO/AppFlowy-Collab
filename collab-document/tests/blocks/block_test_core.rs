@@ -9,11 +9,11 @@ use collab_document::blocks::{
 };
 use collab_document::document::Document;
 use collab_entity::CollabType;
+use collab_plugins::CollabKVDB;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
-use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 pub const TEXT_BLOCK_TYPE: &str = "paragraph";

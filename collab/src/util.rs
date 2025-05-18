@@ -1,8 +1,8 @@
 use anyhow::Result;
 use std::collections::HashMap;
 
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::sync::Arc;
 
 use crate::core::collab::Path;

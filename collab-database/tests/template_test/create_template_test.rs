@@ -1,4 +1,4 @@
-use collab_database::database::{gen_database_id, gen_database_view_id, Database};
+use collab_database::database::{Database, gen_database_id, gen_database_view_id};
 use collab_database::entity::FieldType;
 use collab_database::rows::Row;
 use collab_database::template::builder::DatabaseTemplateBuilder;

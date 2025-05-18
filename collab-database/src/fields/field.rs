@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use collab::preclude::{Any, Map, MapExt, MapRef, ReadTxn, TransactionMut, YrsValue};
 
 use crate::database::gen_field_id;
-use crate::entity::{default_type_option_data_from_type, FieldType};
+use crate::entity::{FieldType, default_type_option_data_from_type};
 use crate::fields::{TypeOptionData, TypeOptions, TypeOptionsUpdate};
 use crate::{impl_bool_update, impl_i64_update, impl_str_update};
 

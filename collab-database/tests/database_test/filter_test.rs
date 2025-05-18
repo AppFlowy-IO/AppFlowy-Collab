@@ -1,5 +1,5 @@
-use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
-use crate::helper::{TestFieldType, TestFilter, FILTER_CONTENT};
+use crate::database_test::helper::{DatabaseTest, create_database_with_default_data};
+use crate::helper::{FILTER_CONTENT, TestFieldType, TestFilter};
 
 #[tokio::test]
 async fn create_database_view_with_filter_test() {
