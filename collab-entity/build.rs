@@ -27,7 +27,9 @@ fn main() -> Result<()> {
     let protoc_path_str = protoc_path.to_str().expect("protoc path to str");
 
     // Set the `PROTOC` environment variable to the path of the `protoc` binary.
-    std::env::set_var("PROTOC", protoc_path_str);
+    unsafe {
+      std::env::set_var("PROTOC", protoc_path_str);
+    }
   });
 
   compile_proto_files(&proto_files).expect("unable to compile proto files");

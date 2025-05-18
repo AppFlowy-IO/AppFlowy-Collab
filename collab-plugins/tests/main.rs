@@ -15,7 +15,9 @@ pub fn setup_log() {
     filters.push(format!("collab={}", level));
     filters.push(format!("collab_sync={}", level));
     filters.push(format!("collab_plugins={}", level));
-    std::env::set_var("RUST_LOG", filters.join(","));
+    unsafe {
+      std::env::set_var("RUST_LOG", filters.join(","));
+    }
 
     let subscriber = tracing_subscriber::fmt::Subscriber::builder()
       .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())

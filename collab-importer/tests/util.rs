@@ -7,9 +7,9 @@ use std::path::PathBuf;
 use std::sync::Once;
 use tokio::io::BufReader;
 use tokio_util::compat::TokioAsyncReadCompatExt;
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 
 pub struct Cleaner(PathBuf);
 
@@ -89,7 +89,9 @@ pub fn setup_log() {
     let level = "trace";
     let mut filters = vec![];
     filters.push(format!("collab_importer={}", level));
-    std::env::set_var("RUST_LOG", filters.join(","));
+    unsafe {
+      std::env::set_var("RUST_LOG", filters.join(","));
+    }
     let subscriber = Subscriber::builder()
       .with_env_filter(EnvFilter::from_default_env())
       .with_ansi(true)

@@ -1,13 +1,13 @@
 #![allow(clippy::upper_case_acronyms)]
 
-use std::fs::{create_dir_all, File};
+use std::fs::{File, create_dir_all};
 use std::io::copy;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
 use anyhow::bail;
 use collab::preclude::encoding::serde::from_any;
-use collab::preclude::{any, Any};
+use collab::preclude::{Any, any};
 use collab::util::AnyMapExt;
 use collab_database::fields::{TypeOptionData, TypeOptionDataBuilder};
 use collab_database::rows::Cell;
@@ -20,9 +20,9 @@ use nanoid::nanoid;
 use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use tempfile::TempDir;
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 use zip::ZipArchive;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -553,7 +553,9 @@ pub fn setup_log() {
     filters.push(format!("collab_persistence={}", level));
     filters.push(format!("collab={}", level));
     filters.push(format!("collab_database={}", level));
-    std::env::set_var("RUST_LOG", filters.join(","));
+    unsafe {
+      std::env::set_var("RUST_LOG", filters.join(","));
+    }
     let subscriber = Subscriber::builder()
       .with_env_filter(EnvFilter::from_default_env())
       .with_ansi(true)

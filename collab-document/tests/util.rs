@@ -1,7 +1,7 @@
 #![allow(clippy::type_complexity)]
 
 use std::collections::HashMap;
-use std::fs::{create_dir_all, File};
+use std::fs::{File, create_dir_all};
 use std::io::copy;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -12,13 +12,13 @@ use collab::preclude::{Collab, CollabBuilder};
 use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
 use collab_entity::CollabType;
+use collab_plugins::CollabKVDB;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
-use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use serde_json::json;
 use tempfile::TempDir;
-use tracing_subscriber::{fmt::Subscriber, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt::Subscriber, util::SubscriberInitExt};
 use uuid::Uuid;
 use zip::ZipArchive;
 
@@ -164,7 +164,9 @@ fn setup_log() {
     filters.push(format!("collab_persistence={}", level));
     filters.push(format!("collab={}", level));
     filters.push(format!("collab_database={}", level));
-    std::env::set_var("RUST_LOG", filters.join(","));
+    unsafe {
+      std::env::set_var("RUST_LOG", filters.join(","));
+    }
 
     let subscriber = Subscriber::builder()
       .with_env_filter(EnvFilter::from_default_env())
