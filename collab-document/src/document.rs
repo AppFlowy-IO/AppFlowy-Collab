@@ -1,3 +1,4 @@
+use collab::core::collab::CollabOptions;
 use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
@@ -59,9 +60,9 @@ impl Document {
     origin: CollabOrigin,
     doc_state: DataSource,
     document_id: &str,
-    plugins: Vec<Box<dyn CollabPlugin>>,
   ) -> Result<Self, DocumentError> {
-    let collab = Collab::new_with_source(origin, document_id, doc_state, plugins, true, None)?;
+    let options = CollabOptions::new(document_id.to_string()).with_data_source(doc_state);
+    let collab = Collab::new_with_options(origin, options)?;
     Document::open(collab)
   }
 
@@ -71,7 +72,8 @@ impl Document {
   }
 
   pub fn create(document_id: &str, data: DocumentData) -> Result<Self, DocumentError> {
-    let collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false, None);
+    let options = CollabOptions::new(document_id.to_string());
+    let collab = Collab::new_with_options(CollabOrigin::Empty, options)?;
     Self::create_with_data(collab, data)
   }
 

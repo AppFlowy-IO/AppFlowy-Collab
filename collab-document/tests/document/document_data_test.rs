@@ -1,3 +1,4 @@
+use collab::core::collab::CollabOptions;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_document::document::Document;
@@ -31,7 +32,8 @@ fn validate_document_data() {
   let document = Document::create(document_id, document_data).unwrap();
   assert!(document.validate().is_ok());
 
-  let new_collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false, None);
+  let options = CollabOptions::new(document_id.to_string());
+  let new_collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let result = Document::open(new_collab);
   assert!(result.is_err())
 }

@@ -5,6 +5,7 @@ use std::ops::{Deref, DerefMut};
 use crate::core::ReminderUpdate;
 use crate::reminder::{Reminders, RemindersChangeSender};
 use anyhow::{Error, Result};
+use collab::core::collab::CollabOptions;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::{ArrayRef, Collab, Map, MapExt, MapRef};
@@ -145,7 +146,8 @@ impl UserAwareness {
 }
 
 pub fn default_user_awareness_data(object_id: &str) -> EncodedCollab {
-  let collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false, None);
+  let options = CollabOptions::new(object_id.to_string());
+  let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let awareness = UserAwareness::create(collab, None).unwrap();
   awareness
     .encode_collab_v1(|_collab| Ok::<_, Error>(()))
