@@ -52,7 +52,7 @@ impl DocumentTest {
 
     let options = CollabOptions::new(doc_id.to_string()).with_data_source(data_source.into());
     let client = CollabClient::new(uid, "1");
-    let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
+    let collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));
 
     let mut blocks = HashMap::new();

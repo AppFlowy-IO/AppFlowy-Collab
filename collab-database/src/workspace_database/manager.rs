@@ -3,7 +3,7 @@ use crate::database::{Database, DatabaseContext, DatabaseData, try_fixing_databa
 use crate::error::DatabaseError;
 use crate::workspace_database::body::{DatabaseMeta, WorkspaceDatabase};
 use async_trait::async_trait;
-use collab::core::collab::DataSource;
+use collab::core::collab::{CollabOptions, DataSource};
 use collab::preclude::Collab;
 use collab_entity::CollabType;
 
@@ -58,18 +58,20 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
     encoded_collab: Option<(EncodedCollab, bool)>,
   ) -> Result<Collab, DatabaseError> {
     match encoded_collab {
-      None => Collab::new_with_source(
-        CollabOrigin::Empty,
-        object_id,
-        CollabPersistenceImpl {
-          persistence: self.persistence(),
-        }
-        .into(),
-        None,
-      )
-      .map_err(|err| DatabaseError::Internal(err.into())),
+      None => {
+        let options = CollabOptions::new(object_id.to_string()).with_data_source(
+          CollabPersistenceImpl {
+            persistence: self.persistence(),
+          }
+          .into(),
+        );
+        Collab::new_with_options(CollabOrigin::Empty, options)
+          .map_err(|err| DatabaseError::Internal(err.into()))
+      },
       Some((encoded_collab, _)) => {
-        Collab::new_with_source(CollabOrigin::Empty, object_id, encoded_collab.into(), None)
+        let options =
+          CollabOptions::new(object_id.to_string()).with_data_source(encoded_collab.into());
+        Collab::new_with_options(CollabOrigin::Empty, options)
           .map_err(|err| DatabaseError::Internal(err.into()))
       },
     }
@@ -84,21 +86,18 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
       .into_par_iter()
       .filter_map(|object_id| {
         let persistence = self.persistence();
-        let result = Collab::new_with_source(
-          CollabOrigin::Empty,
-          &object_id,
-          CollabPersistenceImpl { persistence }.into(),
-          None,
-        )
-        .map_err(|err| DatabaseError::Internal(err.into()))
-        .and_then(|collab| {
-          collab
-            .encode_collab_v1(|collab| {
-              collab_type.validate_require_data(collab)?;
-              Ok(())
-            })
-            .map_err(DatabaseError::Internal)
-        });
+        let options = CollabOptions::new(object_id.to_string())
+          .with_data_source(CollabPersistenceImpl { persistence }.into());
+        let result = Collab::new_with_options(CollabOrigin::Empty, options)
+          .map_err(|err| DatabaseError::Internal(err.into()))
+          .and_then(|collab| {
+            collab
+              .encode_collab_v1(|collab| {
+                collab_type.validate_require_data(collab)?;
+                Ok(())
+              })
+              .map_err(DatabaseError::Internal)
+          });
 
         // If successful, return the object ID and the encoded collab
         match result {

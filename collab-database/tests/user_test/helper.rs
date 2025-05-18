@@ -5,7 +5,9 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
-use collab::preclude::{Collab, CollabBuilder};
+use collab::core::collab::{CollabOptions, DataSource};
+use collab::core::origin::CollabOrigin;
+use collab::preclude::Collab;
 use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
 use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
@@ -22,8 +24,6 @@ use tokio::sync::mpsc::{Receiver, channel};
 use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{TestTextCell, make_rocks_db, setup_log};
 
-use collab::core::collab::DataSource;
-use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::lock::Mutex;
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
@@ -83,7 +83,8 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
   }
 
   fn get_encoded_collab(&self, object_id: &str, collab_type: CollabType) -> Option<EncodedCollab> {
-    let mut collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, None);
+    let options = CollabOptions::new(object_id.to_string());
+    let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     self.load_collab(&mut collab);
     collab
       .encode_collab_v1(|collab| collab_type.validate_require_data(collab))
@@ -175,12 +176,9 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
         .into_data_source()
       });
 
-    let mut collab = CollabBuilder::new(self.uid, object_id, data_source, None)
-      .with_device_id("1")
-      .with_plugin(db_plugin)
-      .build()
-      .unwrap();
-
+    let options = CollabOptions::new(object_id.to_string()).with_data_source(data_source);
+    let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+    collab.add_plugin(Box::new(db_plugin));
     collab.initialize();
     Ok(collab)
   }
@@ -201,21 +199,17 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
         CollabPersistenceConfig::default(),
       );
 
-      let collab = CollabBuilder::new(
-        1,
-        &object_id,
-        KVDBCollabPersistenceImpl {
-          db: Arc::downgrade(&self.db),
-          uid: self.uid,
-          workspace_id: self.workspace_id.clone(),
-        }
-        .into_data_source(),
-        None,
-      )
-      .with_device_id("1")
-      .with_plugin(db_plugin)
-      .build()
-      .unwrap();
+      let data_source = KVDBCollabPersistenceImpl {
+        db: Arc::downgrade(&self.db),
+        uid: self.uid,
+        workspace_id: self.workspace_id.clone(),
+      }
+      .into_data_source();
+
+      let options = CollabOptions::new(object_id.to_string()).with_data_source(data_source);
+      let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+      collab.add_plugin(Box::new(db_plugin));
+      collab.initialize();
 
       let encoded_collab = collab
         .encode_collab_v1(|_| Ok::<_, DatabaseError>(()))

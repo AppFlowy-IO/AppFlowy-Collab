@@ -4,6 +4,7 @@ use crate::database_test::helper::{
 use crate::helper::unzip_history_database_db;
 use assert_json_diff::{assert_json_eq, assert_json_include};
 
+use collab::core::collab::CollabOptions;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::Collab;
@@ -106,13 +107,9 @@ async fn open_020_history_database_test() {
 
   let bytes = std::fs::read("./tests/history_database/database_020_encode_collab").unwrap();
   let encode_collab = EncodedCollab::decode_from_bytes(&bytes).unwrap();
-  let restored_database_collab = Collab::new_with_source(
-    CollabOrigin::Empty,
-    "c0e69740-49f0-4790-a488-702e2750ba8d",
-    encode_collab.into(),
-    None,
-  )
-  .unwrap();
+  let options = CollabOptions::new("c0e69740-49f0-4790-a488-702e2750ba8d".to_string())
+    .with_data_source(encode_collab.into());
+  let restored_database_collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let actual_2 = restored_database_collab.to_json_value();
   assert_json_eq!(expected_database_json(), actual_2);
 }

@@ -31,6 +31,8 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, trace};
 use uuid::Uuid;
 
+use collab::core::collab::CollabOptions;
+
 pub type BlockId = i64;
 
 const META: &str = "meta";
@@ -46,7 +48,8 @@ pub struct DatabaseRow {
 }
 
 pub fn default_database_row_data(row_id: &RowId, row: Row) -> EncodedCollab {
-  let mut collab = Collab::new_with_origin(CollabOrigin::Empty, row_id, None);
+  let options = CollabOptions::new(row_id.to_string());
+  let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let _ = DatabaseRowBody::create(row_id.clone(), &mut collab, row);
   collab
     .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))

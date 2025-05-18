@@ -1,5 +1,6 @@
-use collab::core::collab::DataSource;
-use collab::preclude::{CollabBuilder, uuid_v4};
+use collab::core::collab::CollabOptions;
+use collab::core::origin::CollabOrigin;
+use collab::preclude::{Collab, uuid_v4};
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{Cells, CreateRowParams, DatabaseRow, Row, RowId};
@@ -92,10 +93,8 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
 
 pub fn create_row(uid: i64, workspace_id: &str, row_id: RowId) -> DatabaseRow {
   let collab_db = make_rocks_db();
-  let mut collab = CollabBuilder::new(uid, row_id.clone(), DataSource::Disk(None), None)
-    .with_device_id("1")
-    .build()
-    .unwrap();
+  let options = CollabOptions::new(row_id.to_string());
+  let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   collab.initialize();
   let row_change_tx = tokio::sync::broadcast::channel(1).0;
   let collab_builder = Arc::new(TestUserDatabaseServiceImpl {

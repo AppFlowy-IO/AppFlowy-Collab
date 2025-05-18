@@ -1,5 +1,6 @@
 use crate::database_test::helper::create_database_with_default_data;
 use assert_json_diff::assert_json_eq;
+use collab::core::collab::CollabOptions;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 
@@ -13,13 +14,9 @@ async fn encode_database_collab_test() {
 
   for (index, encoded_info) in database_collab.encoded_row_collabs.into_iter().enumerate() {
     let object_id = database_test.pre_define_row_ids[index].clone();
-    let collab = Collab::new_with_source(
-      CollabOrigin::Empty,
-      &object_id,
-      encoded_info.encoded_collab.into(),
-      None,
-    )
-    .unwrap();
+    let options = CollabOptions::new(object_id.to_string())
+      .with_data_source(encoded_info.encoded_collab.into());
+    let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     let json = collab.to_json_value();
     let expected_json = database_test
       .get_database_row(&object_id)
