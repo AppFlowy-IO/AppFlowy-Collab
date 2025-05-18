@@ -1,8 +1,8 @@
 use crate::entity::DatabaseView;
 use crate::views::define::*;
 use crate::views::{
-  row_order_from_value, view_from_map_ref, view_from_value, view_id_from_map_ref, DatabaseLayout,
-  FieldOrder, FilterMap, GroupMap, RowOrder, SortMap,
+  DatabaseLayout, FieldOrder, FilterMap, GroupMap, RowOrder, SortMap, row_order_from_value,
+  view_from_map_ref, view_from_value, view_id_from_map_ref,
 };
 use collab::core::origin::CollabOrigin;
 use collab::preclude::array::ArrayEvent;
@@ -118,7 +118,6 @@ pub(crate) fn subscribe_view_map_change(
 /// 4. Final Array State:
 ///    - Resulting array after the remove operation: `[A C]`
 ///    - This reflects the removal of `B` from the original array.
-
 fn handle_array_event(
   change_tx: &ViewChangeSender,
   txn: &TransactionMut,

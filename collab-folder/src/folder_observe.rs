@@ -9,7 +9,7 @@ use serde_json::json;
 use tokio::sync::broadcast;
 
 use crate::section::SectionMap;
-use crate::{view_from_map_ref, ParentChildRelations, UserId, View, ViewIndexContent};
+use crate::{ParentChildRelations, UserId, View, ViewIndexContent, view_from_map_ref};
 
 #[derive(Debug, Clone)]
 pub enum ViewChange {

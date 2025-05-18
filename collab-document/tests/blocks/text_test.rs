@@ -1,7 +1,7 @@
-use crate::blocks::block_test_core::{generate_id, BlockTestCore};
+use crate::blocks::block_test_core::{BlockTestCore, generate_id};
 use collab::preclude::{Attrs, Delta, YrsValue};
 use collab_document::blocks::{
-  deserialize_text_delta, BlockAction, BlockActionPayload, BlockActionType, TextDelta,
+  BlockAction, BlockActionPayload, BlockActionType, TextDelta, deserialize_text_delta,
 };
 
 use crate::util::try_decode_from_encode_collab;

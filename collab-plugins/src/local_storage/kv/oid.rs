@@ -2,7 +2,7 @@
 
 use lazy_static::lazy_static;
 use std::cmp;
-use std::sync::{atomic, Arc};
+use std::sync::{Arc, atomic};
 
 use crate::{if_native, if_wasm};
 
@@ -43,7 +43,7 @@ impl DocIDGen {
 
   #[inline]
   fn create_oid(timestamp: u64, sequence: u64) -> OID {
-    2 << Self::SCOPE_SHIFT | timestamp << Self::TIMESTAMP_SHIFT | Self::node_id() | sequence
+    (2 << Self::SCOPE_SHIFT) | (timestamp << Self::TIMESTAMP_SHIFT) | Self::node_id() | sequence
   }
 
   #[inline]

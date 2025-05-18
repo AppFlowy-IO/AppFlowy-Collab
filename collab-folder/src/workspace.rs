@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{timestamp, RepeatedViewIdentifier, View, ViewLayout};
+use crate::{RepeatedViewIdentifier, View, ViewLayout, timestamp};
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Workspace {

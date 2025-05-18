@@ -4,7 +4,7 @@ use crate::rows::Cell;
 use crate::template::summary_parse::SummaryCellData;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SummarizationTypeOption {

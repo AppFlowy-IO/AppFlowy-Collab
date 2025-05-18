@@ -1,7 +1,7 @@
 use std::thread::sleep;
 use std::time::Duration;
 
-use crate::util::{insert_block_for_page, open_document_with_db, DocumentTest};
+use crate::util::{DocumentTest, insert_block_for_page, open_document_with_db};
 use nanoid::nanoid;
 use serde_json::to_value;
 

@@ -7,7 +7,7 @@ use chrono::{Datelike, Local, TimeZone};
 use crate::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
 };
-use crate::rows::{new_cell_builder, Cell};
+use crate::rows::{Cell, new_cell_builder};
 use crate::template::entity::CELL_DATA;
 use chrono::{FixedOffset, MappedLocalTime, NaiveDateTime, NaiveTime, Offset};
 use chrono_tz::Tz;
@@ -18,7 +18,7 @@ use std::fmt;
 
 use crate::template::time_parse::TimeCellData;
 use crate::template::util::{ToCellString, TypeOptionCellData};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::str::FromStr;
 pub use strum::IntoEnumIterator;
 pub use strum_macros::EnumIter;

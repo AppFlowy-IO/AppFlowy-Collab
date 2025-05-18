@@ -7,17 +7,17 @@ use std::time::Duration;
 
 use tokio_retry::strategy::FibonacciBackoff;
 use tokio_retry::{Action, Retry};
-use tokio_stream::wrappers::WatchStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::WatchStream;
 
 use collab::core::collab_plugin::CollabPluginType;
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Collab, CollabPlugin};
 use collab_entity::CollabObject;
 
+use crate::CollabKVDB;
 use crate::cloud_storage::remote_collab::{RemoteCollab, RemoteCollabStorage};
 use crate::cloud_storage::sink::{SinkConfig, SinkStrategy};
-use crate::CollabKVDB;
 
 pub struct SupabaseDBPlugin {
   uid: i64,

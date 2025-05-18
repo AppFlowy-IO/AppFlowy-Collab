@@ -10,13 +10,13 @@ use std::fmt::Display;
 use collab::preclude::Any;
 
 use crate::entity::FieldType;
-use crate::rows::{new_cell_builder, Cell};
+use crate::rows::{Cell, new_cell_builder};
 use crate::template::number_parse::NumberCellData;
 
 use fancy_regex::Regex;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
-use rusty_money::{define_currency_set, Money};
+use rusty_money::{Money, define_currency_set};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::str::FromStr;

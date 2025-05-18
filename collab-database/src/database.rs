@@ -7,13 +7,13 @@ use crate::blocks::{Block, BlockEvent};
 use crate::database_state::DatabaseNotify;
 use crate::error::DatabaseError;
 use crate::fields::{
-  type_option_cell_reader, type_option_cell_writer, Field, FieldChangeReceiver, FieldMap,
-  FieldUpdate, TypeOptionCellReader, TypeOptionCellWriter,
+  Field, FieldChangeReceiver, FieldMap, FieldUpdate, TypeOptionCellReader, TypeOptionCellWriter,
+  type_option_cell_reader, type_option_cell_writer,
 };
 use crate::meta::MetaMap;
 use crate::rows::{
-  meta_id_from_row_id, CreateRowParams, CreateRowParamsValidator, DatabaseRow, Row, RowCell,
-  RowChangeReceiver, RowDetail, RowId, RowMeta, RowMetaKey, RowMetaUpdate, RowUpdate,
+  CreateRowParams, CreateRowParamsValidator, DatabaseRow, Row, RowCell, RowChangeReceiver,
+  RowDetail, RowId, RowMeta, RowMetaKey, RowMetaUpdate, RowUpdate, meta_id_from_row_id,
 };
 use crate::util::encoded_collab;
 use crate::views::define::DATABASE_VIEW_ROW_ORDERS;
@@ -40,11 +40,11 @@ use collab::preclude::{
   TransactionMut, YrsValue,
 };
 use collab::util::{AnyExt, ArrayExt};
-use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
 use collab_entity::CollabType;
+use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
 
 use futures::stream::StreamExt;
-use futures::{stream, Stream};
+use futures::{Stream, stream};
 use nanoid::nanoid;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
@@ -602,7 +602,7 @@ impl Database {
   ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
     let row_orders = self.get_row_orders_for_view(view_id);
     self
-      .get_rows_from_row_orders(&row_orders, chunk_size, cancel_token)
+      .get_rows_from_row_orders(row_orders, chunk_size, cancel_token)
       .await
   }
 
@@ -623,12 +623,12 @@ impl Database {
 
   /// Return a list of [Row] for the given view.
   /// The rows here is ordered by the [RowOrder] of the view.
-  pub async fn get_rows_from_row_orders<'a>(
-    &'a self,
-    row_orders: &[RowOrder],
+  pub async fn get_rows_from_row_orders(
+    &self,
+    row_orders: Vec<RowOrder>,
     chunk_size: usize,
     cancel_token: Option<CancellationToken>,
-  ) -> impl Stream<Item = Result<Row, DatabaseError>> + 'a {
+  ) -> impl Stream<Item = Result<Row, DatabaseError>> + '_ {
     let row_ids = row_orders.iter().map(|order| order.id.clone()).collect();
     let rows_stream = self.init_database_rows(row_ids, chunk_size, cancel_token);
     let database_id = self.get_database_id();
@@ -1381,7 +1381,7 @@ impl Database {
     };
 
     self
-      .get_rows_from_row_orders(&row_orders, chunk_size, cancel_token)
+      .get_rows_from_row_orders(row_orders, chunk_size, cancel_token)
       .await
   }
 

@@ -94,7 +94,7 @@ where
   }
 }
 
-impl<'a> TryFrom<(&mut TransactionMut<'a>, &MapRef)> for Reminder {
+impl TryFrom<(&mut TransactionMut<'_>, &MapRef)> for Reminder {
   type Error = anyhow::Error;
 
   fn try_from(value: (&mut TransactionMut, &MapRef)) -> Result<Self, Self::Error> {
@@ -103,7 +103,7 @@ impl<'a> TryFrom<(&mut TransactionMut<'a>, &MapRef)> for Reminder {
   }
 }
 
-impl<'a> TryFrom<(&TransactionMut<'a>, &MapRef)> for Reminder {
+impl TryFrom<(&TransactionMut<'_>, &MapRef)> for Reminder {
   type Error = anyhow::Error;
 
   fn try_from(value: (&TransactionMut, &MapRef)) -> Result<Self, Self::Error> {

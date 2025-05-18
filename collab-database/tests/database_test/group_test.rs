@@ -3,8 +3,8 @@ use collab::util::{AnyExt, AnyMapExt};
 use collab_database::entity::CreateViewParams;
 use collab_database::views::{DatabaseLayout, GroupMap};
 
-use crate::database_test::helper::{create_database_with_default_data, DatabaseTest};
-use crate::helper::{TestGroup, TestGroupSetting, CONTENT, GROUPS};
+use crate::database_test::helper::{DatabaseTest, create_database_with_default_data};
+use crate::helper::{CONTENT, GROUPS, TestGroup, TestGroupSetting};
 
 #[tokio::test]
 async fn create_database_view_with_group_test() {

@@ -10,15 +10,15 @@ use strum_macros::EnumIter;
 
 use collab::preclude::encoding::serde::from_any;
 use collab::util::AnyExt;
-use collab_entity::define::DATABASE_ROW_DATA;
 use collab_entity::CollabType;
+use collab_entity::define::DATABASE_ROW_DATA;
 
 use crate::database::timestamp;
 
 use crate::error::DatabaseError;
 use crate::rows::{
-  subscribe_row_data_change, Cell, Cells, CellsUpdate, RowChangeSender, RowId, RowMeta,
-  RowMetaUpdate,
+  Cell, Cells, CellsUpdate, RowChangeSender, RowId, RowMeta, RowMetaUpdate,
+  subscribe_row_data_change,
 };
 
 use crate::util::encoded_collab;

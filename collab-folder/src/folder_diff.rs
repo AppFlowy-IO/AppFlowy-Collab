@@ -9,9 +9,9 @@ use collab::error::CollabError;
 use collab::preclude::updates::decoder::Decode;
 use collab::preclude::{DeepObservable, EntryChange, Event, MapExt, ReadTxn, Update, YrsValue};
 
+use crate::Folder;
 use crate::error::FolderError;
 use crate::view::FOLDER_VIEW_ID;
-use crate::Folder;
 
 impl Folder {
   pub fn calculate_view_changes(

@@ -4,8 +4,8 @@ use indexed_db_futures::prelude::*;
 use js_sys::{ArrayBuffer, Uint8Array};
 
 use crate::local_storage::kv::keys::{
-  clock_from_key, make_doc_end_key, make_doc_id_key_v1, make_doc_start_key, make_doc_state_key,
-  make_doc_update_key, make_state_vector_key, Clock, DocID, DOC_ID_LEN,
+  Clock, DOC_ID_LEN, DocID, clock_from_key, make_doc_end_key, make_doc_id_key_v1,
+  make_doc_start_key, make_doc_state_key, make_doc_update_key, make_state_vector_key,
 };
 use crate::local_storage::kv::oid::{LOCAL_DOC_ID_GEN, OID};
 use anyhow::anyhow;

@@ -3,12 +3,12 @@ use std::fmt::Display;
 
 use fancy_regex::Regex;
 use markdown::mdast::Node;
-use markdown::{to_mdast, ParseOptions};
+use markdown::{ParseOptions, to_mdast};
 use percent_encoding::percent_decode_str;
 
-use crate::notion::file::{process_row_md_content, NotionFile, Resource};
-use crate::notion::page::{ExternalLink, ExternalLinkType, ImportedRowDocument, NotionPage};
 use crate::notion::NotionExportContext;
+use crate::notion::file::{NotionFile, Resource, process_row_md_content};
+use crate::notion::page::{ExternalLink, ExternalLinkType, ImportedRowDocument, NotionPage};
 use crate::util::parse_csv;
 
 use std::fs;

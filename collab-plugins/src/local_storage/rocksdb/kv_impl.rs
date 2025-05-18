@@ -189,7 +189,7 @@ impl KVTransactionDB for KVTransactionDBRocksdbImpl {
 // pub struct RocksKVStoreImpl<'a, DB: Send + Sync>(Transaction<'a, DB>);
 pub struct RocksdbKVStoreImpl<'a, DB: Send>(Transaction<'a, DB>);
 
-unsafe impl<'a, DB: Send> Send for RocksdbKVStoreImpl<'a, DB> {}
+unsafe impl<DB: Send> Send for RocksdbKVStoreImpl<'_, DB> {}
 
 impl<'a, DB: Send + Sync> RocksdbKVStoreImpl<'a, DB> {
   pub fn new(txn: Transaction<'a, DB>) -> Self {
@@ -306,7 +306,7 @@ pub struct RocksdbRange<'a, DB> {
   to: Vec<u8>,
 }
 
-impl<'a, DB: Send + Sync> Iterator for RocksdbRange<'a, DB> {
+impl<DB: Send + Sync> Iterator for RocksdbRange<'_, DB> {
   type Item = RocksdbEntry;
 
   fn next(&mut self) -> Option<Self::Item> {

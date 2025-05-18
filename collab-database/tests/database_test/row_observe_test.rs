@@ -6,7 +6,7 @@ use tokio::time::sleep;
 
 use collab::util::AnyMapExt;
 use collab_database::database::gen_row_id;
-use collab_database::rows::{new_cell_builder, Cell, CreateRowParams, RowChange};
+use collab_database::rows::{Cell, CreateRowParams, RowChange, new_cell_builder};
 use collab_database::views::DatabaseViewChange;
 
 use crate::database_test::helper::{create_database, wait_for_specific_event};

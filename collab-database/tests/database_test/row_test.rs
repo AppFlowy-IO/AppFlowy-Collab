@@ -4,7 +4,7 @@ use crate::database_test::helper::{
 use collab_database::database::gen_row_id;
 use collab_database::entity::{CreateViewParams, FileUploadType};
 use collab_database::rows::{
-  meta_id_from_row_id, CoverType, CreateRowParams, RowCover, RowId, RowMetaKey,
+  CoverType, CreateRowParams, RowCover, RowId, RowMetaKey, meta_id_from_row_id,
 };
 use collab_database::views::OrderObjectPosition;
 use uuid::Uuid;
@@ -367,10 +367,12 @@ async fn update_row_id_test() {
     .await;
 
   // cannot find the old row because id has changed
-  assert!(database_test
-    .get_database_row(&row_id.clone().into())
-    .await
-    .is_none());
+  assert!(
+    database_test
+      .get_database_row(&row_id.clone().into())
+      .await
+      .is_none()
+  );
 
   // Check if the new row has the same meta data as the old row
   let new_row_meta = database_test

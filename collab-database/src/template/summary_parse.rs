@@ -1,5 +1,5 @@
 use crate::entity::FieldType;
-use crate::rows::{new_cell_builder, Cell};
+use crate::rows::{Cell, new_cell_builder};
 use crate::template::entity::CELL_DATA;
 use crate::template::util::{ToCellString, TypeOptionCellData};
 use collab::util::AnyMapExt;

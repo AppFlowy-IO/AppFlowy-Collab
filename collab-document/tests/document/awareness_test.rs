@@ -9,7 +9,7 @@ use arc_swap::ArcSwapOption;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use yrs::sync::awareness::AwarenessUpdateEntry;
 use yrs::updates::encoder::{Encode, Encoder};
 

@@ -1,4 +1,4 @@
-use crate::fields::{field_from_map_ref, field_from_value, Field};
+use crate::fields::{Field, field_from_map_ref, field_from_value};
 use collab::preclude::{DeepObservable, EntryChange, Event, MapRef, Subscription};
 use tokio::sync::broadcast;
 use tracing::warn;

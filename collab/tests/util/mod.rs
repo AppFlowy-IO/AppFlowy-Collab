@@ -8,9 +8,9 @@ use collab::core::collab::DataSource;
 use collab::core::collab_plugin::CollabPluginType;
 use collab::preclude::*;
 use serde::{Deserialize, Serialize};
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 use yrs::updates::decoder::Decode;
 
 #[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -138,7 +138,9 @@ pub fn setup_log() {
     let level = "info";
     let mut filters = vec![];
     filters.push(format!("collab={}", level));
-    std::env::set_var("RUST_LOG", filters.join(","));
+    unsafe {
+      std::env::set_var("RUST_LOG", filters.join(","));
+    }
 
     let subscriber = Subscriber::builder()
       .with_env_filter(EnvFilter::from_default_env())

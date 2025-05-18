@@ -1,7 +1,7 @@
 use collab::preclude::Collab;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -83,10 +83,12 @@ async fn clean_awareness_state_test() {
   let event = rx.recv().unwrap();
   assert_eq!(event.removed().len(), 1);
 
-  assert!(collab
-    .get_awareness()
-    .local_state::<serde_json::Value>()
-    .is_none());
+  assert!(
+    collab
+      .get_awareness()
+      .local_state::<serde_json::Value>()
+      .is_none()
+  );
 }
 
 #[tokio::test]

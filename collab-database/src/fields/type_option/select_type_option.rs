@@ -5,13 +5,13 @@ use crate::error::DatabaseError;
 use crate::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
 };
-use crate::rows::{new_cell_builder, Cell};
+use crate::rows::{Cell, new_cell_builder};
 use crate::template::entity::CELL_DATA;
 
 use crate::template::util::{ToCellString, TypeOptionCellData};
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
@@ -446,7 +446,7 @@ fn cell_from_json_value(value: Value, options: &[SelectOption], field_type: Fiel
 #[cfg(test)]
 mod tests {
   use super::*;
-  use serde_json::{json, Value};
+  use serde_json::{Value, json};
 
   #[test]
   fn test_serialize_deserialize_select_type_option() {

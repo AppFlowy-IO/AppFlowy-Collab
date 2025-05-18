@@ -5,8 +5,8 @@ use collab_entity::CollabType;
 
 use crate::error::DatabaseError;
 use crate::rows::{
-  default_database_row_data, meta_id_from_row_id, Cell, DatabaseRow, Row, RowChangeSender,
-  RowDetail, RowId, RowMeta, RowMetaKey, RowMetaUpdate, RowUpdate,
+  Cell, DatabaseRow, Row, RowChangeSender, RowDetail, RowId, RowMeta, RowMetaKey, RowMetaUpdate,
+  RowUpdate, default_database_row_data, meta_id_from_row_id,
 };
 use crate::views::RowOrder;
 use crate::workspace_database::DatabaseCollabService;

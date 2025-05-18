@@ -17,21 +17,21 @@ use collab_database::workspace_database::{
 };
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
-use tokio::sync::mpsc::{channel, Receiver};
+use tokio::sync::mpsc::{Receiver, channel};
 
 use crate::database_test::helper::field_settings_for_default_database;
-use crate::helper::{make_rocks_db, setup_log, TestTextCell};
+use crate::helper::{TestTextCell, make_rocks_db, setup_log};
 
 use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::lock::Mutex;
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
-use collab_plugins::local_storage::kv::doc::CollabKVAction;
+use collab_plugins::CollabKVDB;
 use collab_plugins::local_storage::kv::KVTransactionDB;
+use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
-use collab_plugins::CollabKVDB;
 use rand::Rng;
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -60,7 +60,7 @@ impl DerefMut for WorkspaceDatabaseTest {
 
 pub fn random_uid() -> i64 {
   let mut rng = rand::thread_rng();
-  rng.gen::<i64>()
+  rng.r#gen::<i64>()
 }
 
 pub struct TestUserDatabaseServiceImpl {

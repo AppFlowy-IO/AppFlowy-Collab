@@ -1,4 +1,4 @@
-use std::fs::{create_dir_all, File};
+use std::fs::{File, create_dir_all};
 use std::io::copy;
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
@@ -9,14 +9,14 @@ use collab::core::collab::DataSource;
 use collab::preclude::CollabBuilder;
 use collab_entity::CollabType;
 use collab_folder::*;
+use collab_plugins::CollabKVDB;
 use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
-use collab_plugins::CollabKVDB;
 use nanoid::nanoid;
 use tempfile::TempDir;
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::Subscriber;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 use zip::read::ZipArchive;
 
 pub struct FolderTest {
@@ -192,7 +192,9 @@ pub fn setup_log() {
     let level = "info";
     let mut filters = vec![];
     filters.push(format!("collab_persistence={}", level));
-    std::env::set_var("RUST_LOG", filters.join(","));
+    unsafe {
+      std::env::set_var("RUST_LOG", filters.join(","));
+    }
 
     let subscriber = Subscriber::builder()
       .with_env_filter(EnvFilter::from_default_env())

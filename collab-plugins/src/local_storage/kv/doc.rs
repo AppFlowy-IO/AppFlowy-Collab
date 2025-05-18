@@ -1,7 +1,7 @@
 use crate::local_storage::kv::keys::*;
 use crate::local_storage::kv::snapshot::SnapshotAction;
 use crate::local_storage::kv::*;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::collections::HashSet;
 use tracing::{error, info};
 use uuid::Uuid;

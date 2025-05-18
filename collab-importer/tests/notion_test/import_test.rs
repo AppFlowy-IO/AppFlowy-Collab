@@ -15,12 +15,12 @@ use collab_document::blocks::{
 use collab_document::importer::define::{BlockType, URL_FIELD};
 use collab_entity::CollabType;
 use collab_folder::hierarchy_builder::ParentChildViews;
-use collab_folder::{default_folder_data, Folder, View};
+use collab_folder::{Folder, View, default_folder_data};
 use collab_importer::error::ImporterError;
-use collab_importer::imported_collab::{import_notion_zip_file, ImportType, ImportedCollabInfo};
+use collab_importer::imported_collab::{ImportType, ImportedCollabInfo, import_notion_zip_file};
 use collab_importer::notion::page::NotionPage;
-use collab_importer::notion::{is_csv_contained_cached, CSVContentCache, NotionImporter};
-use collab_importer::util::{parse_csv, CSVRow};
+use collab_importer::notion::{CSVContentCache, NotionImporter, is_csv_contained_cached};
+use collab_importer::util::{CSVRow, parse_csv};
 
 use collab_document::document::Document;
 use futures::stream::StreamExt;
@@ -593,7 +593,16 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
   for (index, field) in csv_file.columns.iter().enumerate() {
     assert_eq!(&fields[index].name, field);
   }
-  let  expected_files = HashMap::from([("DO010003572.jpeg", "http://test.appflowy.cloud/ef151418-41b1-4ca2-b190-3ed59a3bea76/v1/blob/ysINEn/TZQyERYXrrBq25cKsZVAvRqe9ZPTYNlG8EJfUioKruI=.jpeg"), ("appflowy_2x.png", "http://test.appflowy.cloud/ef151418-41b1-4ca2-b190-3ed59a3bea76/v1/blob/ysINEn/c9Ju1jv95fPw6irxJACDKPDox_-hfd-3_blIEapMaZc=.png"),]);
+  let expected_files = HashMap::from([
+    (
+      "DO010003572.jpeg",
+      "http://test.appflowy.cloud/ef151418-41b1-4ca2-b190-3ed59a3bea76/v1/blob/ysINEn/TZQyERYXrrBq25cKsZVAvRqe9ZPTYNlG8EJfUioKruI=.jpeg",
+    ),
+    (
+      "appflowy_2x.png",
+      "http://test.appflowy.cloud/ef151418-41b1-4ca2-b190-3ed59a3bea76/v1/blob/ysINEn/c9Ju1jv95fPw6irxJACDKPDox_-hfd-3_blIEapMaZc=.png",
+    ),
+  ]);
   assert_database_rows_with_csv_rows(
     csv_file.rows,
     content.database,

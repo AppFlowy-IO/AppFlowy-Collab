@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use crate::{timestamp, UserId};
+use crate::{UserId, timestamp};
 use anyhow::bail;
 use collab::preclude::encoding::serde::{from_any, to_any};
-use collab::preclude::{deserialize_i64_from_numeric, ArrayRef, MapExt};
 use collab::preclude::{
   Any, AnyMut, Array, Map, MapRef, ReadTxn, Subscription, TransactionMut, YrsValue,
 };
+use collab::preclude::{ArrayRef, MapExt, deserialize_i64_from_numeric};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
@@ -121,7 +121,7 @@ pub struct SectionOperation<'a> {
   change_tx: Option<SectionChangeSender>,
 }
 
-impl<'a> SectionOperation<'a> {
+impl SectionOperation<'_> {
   fn container(&self) -> &MapRef {
     &self.container
   }

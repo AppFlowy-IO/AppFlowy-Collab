@@ -6,7 +6,7 @@ use crate::rows::Cell;
 use crate::template::check_list_parse::ChecklistCellData;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChecklistTypeOption;

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use collab_document::blocks::{Block, BlockAction, BlockActionPayload, BlockActionType};
 use serde_json::json;
 
-use crate::blocks::block_test_core::{generate_id, BlockTestCore, TEXT_BLOCK_TYPE};
+use crate::blocks::block_test_core::{BlockTestCore, TEXT_BLOCK_TYPE, generate_id};
 use crate::util::try_decode_from_encode_collab;
 
 #[test]

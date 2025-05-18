@@ -1,4 +1,4 @@
-use crate::rows::{Cell, Row, RowId, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY};
+use crate::rows::{Cell, ROW_CELLS, ROW_HEIGHT, ROW_VISIBILITY, Row, RowId};
 
 use collab::preclude::{DeepObservable, EntryChange, Event, MapRef, TransactionMut};
 use collab::preclude::{PathSegment, ToJson};

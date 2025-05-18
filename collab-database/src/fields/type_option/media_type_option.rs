@@ -3,14 +3,14 @@ use crate::entity::FieldType;
 use crate::fields::{
   TypeOptionCellReader, TypeOptionCellWriter, TypeOptionData, TypeOptionDataBuilder,
 };
-use crate::rows::{new_cell_builder, Cell};
+use crate::rows::{Cell, new_cell_builder};
 
 use crate::error::DatabaseError;
 use crate::template::entity::CELL_DATA;
 use crate::template::util::{ToCellString, TypeOptionCellData};
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use serde_repr::Serialize_repr;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
@@ -250,7 +250,7 @@ impl<'de> Deserialize<'de> for MediaFileType {
   {
     struct MediaFileTypeVisitor;
 
-    impl<'de> serde::de::Visitor<'de> for MediaFileTypeVisitor {
+    impl serde::de::Visitor<'_> for MediaFileTypeVisitor {
       type Value = MediaFileType;
 
       fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -320,7 +320,7 @@ impl<'de> Deserialize<'de> for MediaUploadType {
   {
     struct MediaUploadTypeVisitor;
 
-    impl<'de> serde::de::Visitor<'de> for MediaUploadTypeVisitor {
+    impl serde::de::Visitor<'_> for MediaUploadTypeVisitor {
       type Value = MediaUploadType;
 
       fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

@@ -1,7 +1,7 @@
-use crate::local_storage::kv::doc::CollabKVAction;
-use crate::local_storage::kv::KVTransactionDB;
-use crate::local_storage::CollabPersistenceConfig;
 use crate::CollabKVDB;
+use crate::local_storage::CollabPersistenceConfig;
+use crate::local_storage::kv::KVTransactionDB;
+use crate::local_storage::kv::doc::CollabKVAction;
 
 use std::ops::Deref;
 use std::sync::atomic::Ordering::SeqCst;

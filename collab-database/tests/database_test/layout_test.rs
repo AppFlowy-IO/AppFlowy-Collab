@@ -2,7 +2,7 @@ use collab_database::fields::Field;
 use collab_database::views::DatabaseLayout;
 
 use crate::database_test::helper::{
-  create_database_with_default_data, DatabaseTest, DatabaseTestBuilder,
+  DatabaseTest, DatabaseTestBuilder, create_database_with_default_data,
 };
 use crate::helper::TestCalendarLayoutSetting;
 

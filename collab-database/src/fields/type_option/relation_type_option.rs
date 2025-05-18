@@ -5,7 +5,7 @@ use crate::template::relation_parse::RelationCellData;
 use crate::template::util::ToCellString;
 use collab::util::AnyMapExt;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

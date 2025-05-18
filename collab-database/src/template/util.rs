@@ -1,4 +1,4 @@
-use crate::database::{timestamp, Database, DatabaseContext};
+use crate::database::{Database, DatabaseContext, timestamp};
 use crate::entity::{CreateDatabaseParams, CreateViewParams};
 use crate::error::DatabaseError;
 use crate::fields::Field;

@@ -8,9 +8,9 @@ use anyhow::{Error, Result};
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::{ArrayRef, Collab, Map, MapExt, MapRef};
+use collab_entity::CollabType;
 use collab_entity::define::USER_AWARENESS;
 use collab_entity::reminder::Reminder;
-use collab_entity::CollabType;
 use serde::{Deserialize, Serialize};
 
 const REMINDERS: &str = "reminders";

@@ -1,6 +1,6 @@
 use assert_json_diff::assert_json_include;
 use collab::preclude::Any;
-use collab_folder::{timestamp, Section, SectionItem, UserId};
+use collab_folder::{Section, SectionItem, UserId, timestamp};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;

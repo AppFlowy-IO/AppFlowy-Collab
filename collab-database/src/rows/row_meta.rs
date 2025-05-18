@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{
   entity::FileUploadType,
-  rows::{meta_id_from_row_id, RowMetaKey},
+  rows::{RowMetaKey, meta_id_from_row_id},
 };
 
 pub struct RowMetaUpdate<'a, 'b> {

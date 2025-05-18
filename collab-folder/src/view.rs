@@ -15,8 +15,8 @@ use crate::folder_observe::ViewChangeSender;
 
 use crate::section::{Section, SectionItem, SectionMap};
 use crate::space_info::SpaceInfo;
-use crate::{impl_any_update, impl_i64_update, impl_option_i64_update, impl_str_update, UserId};
-use crate::{subscribe_view_change, ParentChildRelations, RepeatedViewIdentifier, ViewIdentifier};
+use crate::{ParentChildRelations, RepeatedViewIdentifier, ViewIdentifier, subscribe_view_change};
+use crate::{UserId, impl_any_update, impl_i64_update, impl_option_i64_update, impl_str_update};
 
 pub(crate) const FOLDER_VIEW_ID: &str = "id";
 pub(crate) const FOLDER_VIEW_NAME: &str = "name";

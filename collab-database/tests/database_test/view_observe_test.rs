@@ -2,7 +2,7 @@ use crate::database_test::helper::{
   create_database, restore_database_from_db, wait_for_specific_event,
 };
 use crate::helper::setup_log;
-use collab_database::database::{gen_row_id, DatabaseBody};
+use collab_database::database::{DatabaseBody, gen_row_id};
 
 use collab::lock::Mutex;
 use collab_database::entity::CreateViewParams;

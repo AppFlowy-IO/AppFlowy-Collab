@@ -1,7 +1,7 @@
 use std::io::Write;
 use std::ops::Deref;
 
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 
 // https://github.com/spacejam/sled
 // sled performs prefix encoding on long keys with similar prefixes that are grouped together in a
