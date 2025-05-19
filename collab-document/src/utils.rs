@@ -1,9 +1,12 @@
-use crate::blocks::{Block, TextDelta};
+use crate::blocks::{mention_block_content_from_delta, Block, TextDelta};
 use std::collections::HashMap;
 
 #[inline]
 pub(crate) fn push_deltas_to_str(buf: &mut String, deltas: Vec<TextDelta>) {
   for delta in deltas {
+    if mention_block_content_from_delta(&delta).is_some() {
+      continue;
+    }
     if let TextDelta::Inserted(text, _) = delta {
       // trim all whitespace characters from start and end of the text
       let mut start = 0;
