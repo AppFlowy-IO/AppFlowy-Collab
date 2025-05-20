@@ -14,8 +14,8 @@ use collab_database::fields::Field;
 use collab_database::rows::{Cells, CreateRowParams};
 use collab_database::views::DatabaseLayout;
 use collab_database::workspace_database::{
-  DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid, RowRelationChange,
-  RowRelationUpdateReceiver, WorkspaceDatabaseManager,
+  CollabRef, DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid,
+  RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabaseManager,
 };
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -180,6 +180,15 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
     let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     collab.add_plugin(Box::new(db_plugin));
     collab.initialize();
+    Ok(collab)
+  }
+
+  async fn finalize(
+    &self,
+    _object_id: Uuid,
+    _collab_type: CollabType,
+    collab: CollabRef,
+  ) -> Result<CollabRef, DatabaseError> {
     Ok(collab)
   }
 

@@ -22,10 +22,11 @@ use std::borrow::{Borrow, BorrowMut};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::{error, info};
+use uuid::Uuid;
 
 pub type EncodeCollabByOid = HashMap<String, EncodedCollab>;
 pub type DataSourceByOid = HashMap<String, DataSource>;
-
+pub type CollabRef = Arc<RwLock<dyn BorrowMut<Collab> + Send + Sync + 'static>>;
 /// Use this trait to build a [MutexCollab] for a database object including [Database],
 /// [DatabaseView], and [DatabaseRow]. When building a [MutexCollab], the caller can add
 /// different [CollabPlugin]s to the [MutexCollab] to support different features.
@@ -38,6 +39,13 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
     object_type: CollabType,
     encoded_collab: Option<(EncodedCollab, bool)>,
   ) -> Result<Collab, DatabaseError>;
+
+  async fn finalize(
+    &self,
+    object_id: Uuid,
+    collab_type: CollabType,
+    collab: CollabRef,
+  ) -> Result<CollabRef, DatabaseError>;
 
   async fn get_collabs(
     &self,
@@ -75,6 +83,15 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
           .map_err(|err| DatabaseError::Internal(err.into()))
       },
     }
+  }
+
+  async fn finalize(
+    &self,
+    _object_id: Uuid,
+    _collab_type: CollabType,
+    collab: CollabRef,
+  ) -> Result<CollabRef, DatabaseError> {
+    Ok(collab)
   }
 
   async fn get_collabs(
@@ -245,19 +262,21 @@ impl WorkspaceDatabaseManager {
       return Ok(database);
     }
 
-    // Helper function to insert the database into the cache
-    let insert_database = |db: Database| -> Arc<RwLock<Database>> {
-      let database = Arc::new(RwLock::new(db));
-      self
-        .databases
-        .insert(database_id.to_string(), database.clone());
-      database
-    };
-
+    let database_uuid = Uuid::parse_str(database_id)?;
     // Try to open the database
     let context = DatabaseContext::new(self.collab_service.clone());
     match Database::open(database_id, context).await {
-      Ok(database) => Ok(insert_database(database)),
+      Ok(database) => {
+        let database = Arc::new(RwLock::new(database));
+        self
+          .collab_service
+          .finalize(database_uuid, CollabType::Database, database.clone())
+          .await?;
+        self
+          .databases
+          .insert(database_id.to_string(), database.clone());
+        Ok(database)
+      },
       // If the database is missing required data, try to fix it and open it again
       Err(err) => {
         if err.is_no_required_data() {
@@ -275,7 +294,15 @@ impl WorkspaceDatabaseManager {
             )
             .await
             {
-              return Ok(insert_database(database));
+              let database = Arc::new(RwLock::new(database));
+              self
+                .collab_service
+                .finalize(database_uuid, CollabType::Database, database.clone())
+                .await?;
+              self
+                .databases
+                .insert(database_id.to_string(), database.clone());
+              return Ok(database);
             }
           }
           Err(err)

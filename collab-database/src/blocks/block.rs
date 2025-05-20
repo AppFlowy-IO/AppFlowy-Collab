@@ -334,7 +334,14 @@ impl Block {
       .collab_service
       .build_collab(&row_id, CollabType::DatabaseRow, None)
       .await?;
-    self.init_database_row_from_collab(row_id, collab).await
+
+    let row_uuid = Uuid::parse_str(&row_id)?;
+    let row = self.init_database_row_from_collab(row_id, collab).await?;
+    self
+      .collab_service
+      .finalize(row_uuid, CollabType::DatabaseRow, row.clone())
+      .await?;
+    Ok(row)
   }
 
   pub async fn init_database_row_from_collab(
@@ -342,12 +349,29 @@ impl Block {
     row_id: RowId,
     collab: Collab,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
-    let database_row = DatabaseRow::open(
-      row_id.clone(),
-      collab,
-      self.row_change_tx.clone(),
-      self.collab_service.clone(),
-    )?;
+    let is_exist = match self.collab_service.persistence() {
+      None => false,
+      Some(persistence) => persistence.is_collab_exist(&row_id),
+    };
+
+    let database_row = if is_exist {
+      DatabaseRow::open(
+        row_id.clone(),
+        collab,
+        self.row_change_tx.clone(),
+        self.collab_service.clone(),
+      )?
+    } else {
+      let row = Row::new(row_id.clone(), &self.database_id);
+      DatabaseRow::create(
+        row_id.clone(),
+        collab,
+        self.row_change_tx.clone(),
+        row,
+        self.collab_service.clone(),
+      )
+    };
+
     let row_details = RowDetail::from_collab(&database_row);
     let database_row = Arc::new(RwLock::from(database_row));
     self.row_mem_cache.insert(row_id, database_row.clone());
