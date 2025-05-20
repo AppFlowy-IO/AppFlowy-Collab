@@ -163,22 +163,6 @@ impl CollabPersistence for CollabPersistenceImpl {
     }
     Ok(())
   }
-
-  fn save_collab_to_disk(
-    &self,
-    object_id: &str,
-    encoded_collab: EncodedCollab,
-  ) -> Result<(), CollabError> {
-    if let Some(persistence) = &self.persistence {
-      persistence
-        .save_collab(object_id, encoded_collab)
-        .map_err(|err| CollabError::Internal(anyhow!(err)))
-    } else {
-      Err(CollabError::Internal(anyhow!(
-        "collab persistence is not found"
-      )))
-    }
-  }
 }
 
 impl From<CollabPersistenceImpl> for DataSource {
