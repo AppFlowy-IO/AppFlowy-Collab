@@ -150,7 +150,7 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
 
 #[async_trait]
 impl DatabaseCollabService for TestUserDatabaseServiceImpl {
-  async fn build_collab(
+  async fn build_database_related_collab(
     &self,
     object_id: &str,
     object_type: CollabType,
@@ -183,7 +183,7 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
     Ok(collab)
   }
 
-  async fn finalize(
+  async fn finalize_database_related_collab(
     &self,
     _object_id: Uuid,
     _collab_type: CollabType,
@@ -260,7 +260,7 @@ pub async fn workspace_database_test_with_config(
   };
   let workspace_database_id = uuid::Uuid::new_v4().to_string();
   let collab = collab_service
-    .build_collab(&workspace_database_id, CollabType::WorkspaceDatabase, None)
+    .build_database_related_collab(&workspace_database_id, CollabType::WorkspaceDatabase, None)
     .await
     .unwrap();
   let inner =
@@ -289,7 +289,7 @@ pub async fn workspace_database_with_db(
   // In test, we use a fixed database_storage_id
   let workspace_database_id = "database_views_aggregate_id";
   let collab = builder
-    .build_collab(workspace_database_id, CollabType::WorkspaceDatabase, None)
+    .build_database_related_collab(workspace_database_id, CollabType::WorkspaceDatabase, None)
     .await
     .unwrap();
   WorkspaceDatabaseManager::create(workspace_database_id, collab, builder).unwrap()

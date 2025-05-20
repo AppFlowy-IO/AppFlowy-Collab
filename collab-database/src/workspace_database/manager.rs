@@ -33,14 +33,14 @@ pub type CollabRef = Arc<RwLock<dyn BorrowMut<Collab> + Send + Sync + 'static>>;
 ///
 #[async_trait]
 pub trait DatabaseCollabService: Send + Sync + 'static {
-  async fn build_collab(
+  async fn build_database_related_collab(
     &self,
     object_id: &str,
     object_type: CollabType,
     encoded_collab: Option<(EncodedCollab, bool)>,
   ) -> Result<Collab, DatabaseError>;
 
-  async fn finalize(
+  async fn finalize_database_related_collab(
     &self,
     object_id: Uuid,
     collab_type: CollabType,
@@ -59,7 +59,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
 pub struct NoPersistenceDatabaseCollabService;
 #[async_trait]
 impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
-  async fn build_collab(
+  async fn build_database_related_collab(
     &self,
     object_id: &str,
     _object_type: CollabType,
@@ -85,7 +85,7 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
     }
   }
 
-  async fn finalize(
+  async fn finalize_database_related_collab(
     &self,
     _object_id: Uuid,
     _collab_type: CollabType,
@@ -270,7 +270,7 @@ impl WorkspaceDatabaseManager {
         let database = Arc::new(RwLock::new(database));
         self
           .collab_service
-          .finalize(database_uuid, CollabType::Database, database.clone())
+          .finalize_database_related_collab(database_uuid, CollabType::Database, database.clone())
           .await?;
         self
           .databases
@@ -297,7 +297,11 @@ impl WorkspaceDatabaseManager {
               let database = Arc::new(RwLock::new(database));
               self
                 .collab_service
-                .finalize(database_uuid, CollabType::Database, database.clone())
+                .finalize_database_related_collab(
+                  database_uuid,
+                  CollabType::Database,
+                  database.clone(),
+                )
                 .await?;
               self
                 .databases
@@ -346,10 +350,18 @@ impl WorkspaceDatabaseManager {
     self
       .body
       .add_database(&params.database_id, linked_views.into_iter().collect());
+    let collab_service = context.collab_service.clone();
     let database_id = params.database_id.clone();
-    let database = Database::create_with_view(params, context).await.unwrap();
-    let mutex_database = RwLock::from(database);
-    let database = Arc::new(mutex_database);
+    let database = Database::create_with_view(params, context).await?;
+    let database = Arc::new(RwLock::from(database));
+
+    collab_service
+      .finalize_database_related_collab(
+        Uuid::parse_str(&database_id)?,
+        CollabType::Database,
+        database.clone(),
+      )
+      .await?;
     self.databases.insert(database_id, database.clone());
     Ok(database)
   }
@@ -465,7 +477,7 @@ impl WorkspaceDatabaseManager {
     if let Some(database_meta) = self.get_database_meta(database_id) {
       if let Ok(mut collab) = context
         .collab_service
-        .build_collab(database_id, CollabType::Database, None)
+        .build_database_related_collab(database_id, CollabType::Database, None)
         .await
       {
         // Attempt to fix the database inline view ID

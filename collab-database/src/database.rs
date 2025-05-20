@@ -112,7 +112,7 @@ impl Database {
 
     let collab = context
       .collab_service
-      .build_collab(database_id, CollabType::Database, None)
+      .build_database_related_collab(database_id, CollabType::Database, None)
       .await?;
     let collab_service = context.collab_service.clone();
     let (body, collab) = DatabaseBody::open(collab, context)?;
@@ -136,13 +136,12 @@ impl Database {
     let encoded_collab = default_database_data(database_id).await?;
     let collab = context
       .collab_service
-      .build_collab(
+      .build_database_related_collab(
         database_id,
         CollabType::Database,
         Some((encoded_collab, true)),
       )
       .await?;
-
     let collab_service = context.collab_service.clone();
     let (body, collab) =
       DatabaseBody::create(collab, database_id.to_string(), context, rows, fields).await?;
@@ -181,7 +180,6 @@ impl Database {
     params: CreateDatabaseParams,
     context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
-    // Get or create empty database with the given database_id
     let CreateDatabaseParams {
       database_id,
       rows,
@@ -194,8 +192,6 @@ impl Database {
     let field_orders = database.get_all_field_orders();
     {
       let mut txn = database.collab.context.transact_mut();
-
-      // create the linked views
       for linked_view in views {
         database.body.create_linked_view(
           &mut txn,
@@ -206,12 +202,7 @@ impl Database {
       }
     }
 
-    tokio::task::spawn_blocking(move || {
-      database.write_to_disk()?;
-      Ok::<_, DatabaseError>(database)
-    })
-    .await
-    .map_err(|e| DatabaseError::Internal(e.into()))?
+    Ok(database)
   }
 
   pub async fn encode_database_collabs(&self) -> Result<EncodedDatabase, DatabaseError> {
