@@ -1,6 +1,6 @@
 use collab::core::collab::CollabOptions;
 use collab::core::origin::CollabOrigin;
-use collab::preclude::{Collab, uuid_v4};
+use collab::preclude::Collab;
 use collab_database::database::{Database, DatabaseContext};
 use collab_database::fields::Field;
 use collab_database::rows::{Cells, CreateRowParams, DatabaseRow, Row, RowId};
@@ -254,23 +254,20 @@ pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> D
   let row_1_id = Uuid::new_v4();
   let row_2_id = Uuid::new_v4();
   let row_3_id = Uuid::new_v4();
-  
-  let row_1 =
-    CreateRowParams::new(row_1_id, database_id.to_string()).with_cells(Cells::from([
-      ("f1".into(), TestTextCell::from("1f1cell").into()),
-      ("f2".into(), TestTextCell::from("1f2cell").into()),
-      ("f3".into(), TestTextCell::from("1f3cell").into()),
-    ]));
-  let row_2 =
-    CreateRowParams::new(row_2_id, database_id.to_string()).with_cells(Cells::from([
-      ("f1".into(), TestTextCell::from("2f1cell").into()),
-      ("f2".into(), TestTextCell::from("2f2cell").into()),
-    ]));
-  let row_3 =
-    CreateRowParams::new(row_3_id, database_id.to_string()).with_cells(Cells::from([
-      ("f1".into(), TestTextCell::from("3f1cell").into()),
-      ("f3".into(), TestTextCell::from("3f3cell").into()),
-    ]));
+
+  let row_1 = CreateRowParams::new(row_1_id, database_id.to_string()).with_cells(Cells::from([
+    ("f1".into(), TestTextCell::from("1f1cell").into()),
+    ("f2".into(), TestTextCell::from("1f2cell").into()),
+    ("f3".into(), TestTextCell::from("1f3cell").into()),
+  ]));
+  let row_2 = CreateRowParams::new(row_2_id, database_id.to_string()).with_cells(Cells::from([
+    ("f1".into(), TestTextCell::from("2f1cell").into()),
+    ("f2".into(), TestTextCell::from("2f2cell").into()),
+  ]));
+  let row_3 = CreateRowParams::new(row_3_id, database_id.to_string()).with_cells(Cells::from([
+    ("f1".into(), TestTextCell::from("3f1cell").into()),
+    ("f3".into(), TestTextCell::from("3f3cell").into()),
+  ]));
 
   let mut database_test = create_database(uid, database_id);
   database_test.pre_define_row_ids = vec![row_1.id.clone(), row_2.id.clone(), row_3.id.clone()];

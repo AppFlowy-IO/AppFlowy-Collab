@@ -110,10 +110,17 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
-    let collab = context
+    let mut collab = context
       .collab_service
-      .build_database_related_collab(database_id, CollabType::Database, None)
+      .build_collab(database_id, CollabType::Database, None)
       .await?;
+
+    let database_id = Uuid::parse_str(database_id)?;
+    context
+      .collab_service
+      .finalize_collab(database_id, CollabType::Database, &mut collab)
+      .await?;
+
     let collab_service = context.collab_service.clone();
     let (body, collab) = DatabaseBody::open(collab, context)?;
     Ok(Self {
@@ -136,15 +143,24 @@ impl Database {
     let encoded_collab = default_database_data(database_id).await?;
     let collab = context
       .collab_service
-      .build_database_related_collab(
+      .build_collab(
         database_id,
         CollabType::Database,
         Some((encoded_collab, true)),
       )
       .await?;
     let collab_service = context.collab_service.clone();
-    let (body, collab) =
+    let (body, mut collab) =
       DatabaseBody::create(collab, database_id.to_string(), context, rows, fields).await?;
+
+    collab_service
+      .finalize_collab(
+        Uuid::parse_str(database_id)?,
+        CollabType::Database,
+        &mut collab,
+      )
+      .await?;
+
     Ok(Self {
       collab,
       body,

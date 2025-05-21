@@ -8,14 +8,14 @@ use async_trait::async_trait;
 use collab::core::collab::{CollabOptions, DataSource};
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
-use collab_database::database::{gen_database_id, gen_field_id, gen_row_id};
+use collab_database::database::{gen_database_id, gen_field_id};
 use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
 use collab_database::rows::{Cells, CreateRowParams};
 use collab_database::views::DatabaseLayout;
 use collab_database::workspace_database::{
-  CollabRef, DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid,
-  RowRelationChange, RowRelationUpdateReceiver, WorkspaceDatabaseManager,
+  DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid, RowRelationChange,
+  RowRelationUpdateReceiver, WorkspaceDatabaseManager,
 };
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -150,7 +150,7 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
 
 #[async_trait]
 impl DatabaseCollabService for TestUserDatabaseServiceImpl {
-  async fn build_database_related_collab(
+  async fn build_collab(
     &self,
     object_id: &str,
     object_type: CollabType,
@@ -183,13 +183,13 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
     Ok(collab)
   }
 
-  async fn finalize_database_related_collab(
+  async fn finalize_collab(
     &self,
     _object_id: Uuid,
     _collab_type: CollabType,
-    collab: CollabRef,
-  ) -> Result<CollabRef, DatabaseError> {
-    Ok(collab)
+    _collab: &mut Collab,
+  ) -> Result<(), DatabaseError> {
+    Ok(())
   }
 
   async fn get_collabs(
@@ -260,7 +260,7 @@ pub async fn workspace_database_test_with_config(
   };
   let workspace_database_id = uuid::Uuid::new_v4().to_string();
   let collab = collab_service
-    .build_database_related_collab(&workspace_database_id, CollabType::WorkspaceDatabase, None)
+    .build_collab(&workspace_database_id, CollabType::WorkspaceDatabase, None)
     .await
     .unwrap();
   let inner =
@@ -289,7 +289,7 @@ pub async fn workspace_database_with_db(
   // In test, we use a fixed database_storage_id
   let workspace_database_id = "database_views_aggregate_id";
   let collab = builder
-    .build_database_related_collab(workspace_database_id, CollabType::WorkspaceDatabase, None)
+    .build_collab(workspace_database_id, CollabType::WorkspaceDatabase, None)
     .await
     .unwrap();
   WorkspaceDatabaseManager::create(workspace_database_id, collab, builder).unwrap()
@@ -329,7 +329,7 @@ fn create_database_params(database_id: &str) -> CreateDatabaseParams {
   let row_1_id = Uuid::new_v4();
   let row_2_id = Uuid::new_v4();
   let row_3_id = Uuid::new_v4();
-  
+
   let row_1 = CreateRowParams::new(row_1_id, database_id.to_string()).with_cells(Cells::from([
     ("f1".into(), TestTextCell::from("1f1cell").into()),
     ("f2".into(), TestTextCell::from("1f2cell").into()),

@@ -1,4 +1,4 @@
-use crate::database::{Database, DatabaseContext, DatabaseData, try_fixing_database};
+use crate::database::{Database, DatabaseContext, DatabaseData};
 
 use crate::error::DatabaseError;
 use crate::workspace_database::body::{DatabaseMeta, WorkspaceDatabase};
@@ -21,7 +21,7 @@ use rayon::prelude::*;
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tracing::{error, info};
+use tracing::error;
 use uuid::Uuid;
 
 pub type EncodeCollabByOid = HashMap<String, EncodedCollab>;
@@ -33,19 +33,28 @@ pub type CollabRef = Arc<RwLock<dyn BorrowMut<Collab> + Send + Sync + 'static>>;
 ///
 #[async_trait]
 pub trait DatabaseCollabService: Send + Sync + 'static {
-  async fn build_database_related_collab(
+  async fn build_collab(
     &self,
     object_id: &str,
     object_type: CollabType,
     encoded_collab: Option<(EncodedCollab, bool)>,
   ) -> Result<Collab, DatabaseError>;
 
-  async fn finalize_database_related_collab(
+  async fn finalize_collab(
     &self,
     object_id: Uuid,
     collab_type: CollabType,
-    collab: CollabRef,
-  ) -> Result<CollabRef, DatabaseError>;
+    collab: &mut Collab,
+  ) -> Result<(), DatabaseError>;
+
+  async fn cache_collab_ref(
+    &self,
+    _object_id: Uuid,
+    _collab_type: CollabType,
+    _collab: CollabRef,
+  ) -> Result<(), DatabaseError> {
+    Ok(())
+  }
 
   async fn get_collabs(
     &self,
@@ -59,7 +68,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
 pub struct NoPersistenceDatabaseCollabService;
 #[async_trait]
 impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
-  async fn build_database_related_collab(
+  async fn build_collab(
     &self,
     object_id: &str,
     _object_type: CollabType,
@@ -85,13 +94,13 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
     }
   }
 
-  async fn finalize_database_related_collab(
+  async fn finalize_collab(
     &self,
     _object_id: Uuid,
     _collab_type: CollabType,
-    collab: CollabRef,
-  ) -> Result<CollabRef, DatabaseError> {
-    Ok(collab)
+    _collab: &mut Collab,
+  ) -> Result<(), DatabaseError> {
+    Ok(())
   }
 
   async fn get_collabs(
@@ -246,7 +255,6 @@ impl WorkspaceDatabaseManager {
       return Ok(database);
     }
 
-    let database_uuid = Uuid::parse_str(database_id)?;
     // Try to open the database
     let context = DatabaseContext::new(self.collab_service.clone());
     match Database::open(database_id, context).await {
@@ -254,50 +262,20 @@ impl WorkspaceDatabaseManager {
         let database = Arc::new(RwLock::new(database));
         self
           .collab_service
-          .finalize_database_related_collab(database_uuid, CollabType::Database, database.clone())
+          .cache_collab_ref(
+            Uuid::parse_str(database_id)?,
+            CollabType::Database,
+            database.clone(),
+          )
           .await?;
         self
           .databases
           .insert(database_id.to_string(), database.clone());
         Ok(database)
       },
-      // If the database is missing required data, try to fix it and open it again
       Err(err) => {
-        if err.is_no_required_data() {
-          if self
-            .fix_and_open_database(
-              database_id,
-              DatabaseContext::new(self.collab_service.clone()),
-            )
-            .await
-            .is_ok()
-          {
-            if let Ok(database) = Database::open(
-              database_id,
-              DatabaseContext::new(self.collab_service.clone()),
-            )
-            .await
-            {
-              let database = Arc::new(RwLock::new(database));
-              self
-                .collab_service
-                .finalize_database_related_collab(
-                  database_uuid,
-                  CollabType::Database,
-                  database.clone(),
-                )
-                .await?;
-              self
-                .databases
-                .insert(database_id.to_string(), database.clone());
-              return Ok(database);
-            }
-          }
-          Err(err)
-        } else {
-          error!("Open database failed: {}", err);
-          Err(err)
-        }
+        error!("Open database failed: {}", err);
+        Err(err)
       },
     }
   }
@@ -334,18 +312,9 @@ impl WorkspaceDatabaseManager {
     self
       .body
       .add_database(&params.database_id, linked_views.into_iter().collect());
-    let collab_service = context.collab_service.clone();
     let database_id = params.database_id.clone();
     let database = Database::create_with_view(params, context).await?;
     let database = Arc::new(RwLock::from(database));
-
-    collab_service
-      .finalize_database_related_collab(
-        Uuid::parse_str(&database_id)?,
-        CollabType::Database,
-        database.clone(),
-      )
-      .await?;
     self.databases.insert(database_id, database.clone());
     Ok(database)
   }
@@ -449,47 +418,6 @@ impl WorkspaceDatabaseManager {
       .ok_or_else(|| DatabaseError::Internal(anyhow!("collab persistence is not found")))?
       .flush_collabs(vec![(self.object_id.clone(), encoded_collab)])?;
     Ok(())
-  }
-
-  async fn fix_and_open_database(
-    &self,
-    database_id: &str,
-    context: DatabaseContext,
-  ) -> Result<(), DatabaseError> {
-    // Try to get the database metadata
-    info!("[Fix]: Attempting to fix database: {}", database_id);
-    if let Some(database_meta) = self.get_database_meta(database_id) {
-      if let Ok(mut collab) = context
-        .collab_service
-        .build_database_related_collab(database_id, CollabType::Database, None)
-        .await
-      {
-        // Attempt to fix the database inline view ID
-        if try_fixing_database(&mut collab, database_meta).is_ok() {
-          if let Some(persistence) = self.collab_service.persistence() {
-            #[allow(clippy::blocks_in_conditions)]
-            match collab.encode_collab_v1(|collab| {
-              CollabType::Database.validate_require_data(collab)?;
-              Ok::<_, DatabaseError>(())
-            }) {
-              Ok(encoded_collab) => {
-                info!("[Fix]: save database:{} to disk", database_id);
-                persistence.save_collab(database_id, encoded_collab).ok();
-              },
-              Err(err) => {
-                error!("[Fix]: fix database:{} failed: {}", database_id, err);
-              },
-            }
-          }
-        } else {
-          info!("[Fix]: Can't fix the database: {}", database_id);
-        }
-      }
-    } else {
-      info!("Can't find any database meta for database: {}", database_id);
-    }
-
-    Err(DatabaseError::Internal(anyhow!("Can't fix the database")))
   }
 }
 

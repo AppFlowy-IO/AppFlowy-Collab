@@ -65,7 +65,7 @@ impl Block {
     for row_id in row_ids.into_iter() {
       let collab = self
         .collab_service
-        .build_database_related_collab(&row_id, CollabType::DatabaseRow, None)
+        .build_collab(&row_id, CollabType::DatabaseRow, None)
         .await?;
       match DatabaseRow::open(
         row_id.clone(),
@@ -125,7 +125,7 @@ impl Block {
     let encoded_collab = default_database_row_data(&row_id, row);
     let collab = self
       .collab_service
-      .build_database_related_collab(
+      .build_collab(
         &row_id,
         CollabType::DatabaseRow,
         Some((encoded_collab, true)),
@@ -142,7 +142,7 @@ impl Block {
     let database_row = Arc::new(RwLock::from(database_row));
     self
       .collab_service
-      .finalize_database_related_collab(
+      .cache_collab_ref(
         Uuid::parse_str(&row_id)?,
         CollabType::DatabaseRow,
         database_row.clone(),
@@ -297,7 +297,7 @@ impl Block {
         let row_id = RowId::from(row_id);
         let collab = self
           .collab_service
-          .build_database_related_collab(
+          .build_collab(
             &row_id,
             CollabType::DatabaseRow,
             Some((encoded_collab, false)),
@@ -335,14 +335,14 @@ impl Block {
     trace!("init row instance: {}", row_id);
     let collab = self
       .collab_service
-      .build_database_related_collab(&row_id, CollabType::DatabaseRow, None)
+      .build_collab(&row_id, CollabType::DatabaseRow, None)
       .await?;
 
     let row_uuid = Uuid::parse_str(&row_id)?;
     let row = self.init_database_row_from_collab(row_id, collab).await?;
     self
       .collab_service
-      .finalize_database_related_collab(row_uuid, CollabType::DatabaseRow, row.clone())
+      .cache_collab_ref(row_uuid, CollabType::DatabaseRow, row.clone())
       .await?;
     Ok(row)
   }
