@@ -129,10 +129,17 @@ fn handle_map_event(
                 });
               }
             }
-            //
           },
           EntryChange::Removed(_value) => {
             trace!("row observe delete: {}", key);
+            if let Some(PathSegment::Key(key)) = event.path().pop_back() {
+              let field_id = key.deref().to_string();
+              let _ = change_tx.send(RowChange::DidUpdateCell {
+                row_id: row_id.clone(),
+                field_id,
+                value: Cell::default(),
+              });
+            }
           },
         }
       },
