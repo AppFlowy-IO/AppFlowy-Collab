@@ -3,7 +3,7 @@ use crate::local_storage::kv::snapshot::SnapshotAction;
 use crate::local_storage::kv::*;
 use smallvec::{SmallVec, smallvec};
 use std::collections::HashSet;
-use tracing::{error, info};
+use tracing::{error, info, trace};
 use uuid::Uuid;
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
@@ -113,7 +113,10 @@ where
           // remove the update and the following updates.
           if let Err(e) = Update::decode_v1(encoded_update.value())
             .map_err(PersistenceError::Yrs)
-            .and_then(|update| txn.try_apply_update(update))
+            .and_then(|update| {
+              // trace!("apply update: {:#?}", update);
+              txn.try_apply_update(update)
+            })
           {
             tracing::error!("🔴{:?} apply update error: {}", object_id, e);
             self.remove_range(encoded_update.key().as_ref(), update_end.as_ref())?;

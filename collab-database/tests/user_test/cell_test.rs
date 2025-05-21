@@ -1,6 +1,6 @@
 use collab::util::AnyMapExt;
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
-use collab_database::rows::{CREATED_AT, new_cell_builder, RowId};
+use collab_database::rows::{CREATED_AT, RowId, new_cell_builder};
 use collab_database::rows::{CreateRowParams, LAST_MODIFIED};
 use uuid::Uuid;
 
@@ -99,7 +99,8 @@ async fn update_not_exist_row_test() {
     .unwrap();
 
   let mut db = database.write().await;
-  db.update_row(non_existent_row_id.into(), |_row_update| {}).await;
+  db.update_row(non_existent_row_id.into(), |_row_update| {})
+    .await;
   let row = db.get_row(&RowId::from(non_existent_row_id)).await;
   // If the row with the given id does not exist, the get_row method will return a empty Row
   assert!(row.is_empty())
