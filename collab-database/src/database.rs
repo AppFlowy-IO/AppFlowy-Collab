@@ -46,8 +46,6 @@ use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
 use futures::stream::StreamExt;
 use futures::{Stream, stream};
 use nanoid::nanoid;
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::ParallelIterator;
 
 use collab::core::collab::CollabOptions;
 use futures::future::join_all;
@@ -257,39 +255,6 @@ impl Database {
       encoded_database_collab,
       encoded_row_collabs,
     })
-  }
-
-  #[instrument(level = "info", skip_all, err)]
-  pub fn write_to_disk(&self) -> Result<(), DatabaseError> {
-    if let Some(persistence) = self.collab_service.persistence() {
-      let database_encoded = encoded_collab(&self.collab, &CollabType::Database)?;
-      let mut encode_collabs = vec![];
-      encode_collabs.push((self.collab.object_id().to_string(), database_encoded));
-
-      let rows = self
-        .body
-        .block
-        .row_mem_cache
-        .iter()
-        .map(|entry| entry.value().clone())
-        .collect::<Vec<_>>();
-
-      info!("[Database]: encode {} database rows", rows.len());
-      let row_encodings = rows
-        .par_iter()
-        .flat_map(|row| {
-          let row_collab = &row.blocking_read().collab;
-          let encoded_collab = encoded_collab(row_collab, &CollabType::DatabaseRow).ok()?;
-          Some((row_collab.object_id().to_string(), encoded_collab))
-        })
-        .collect::<Vec<_>>();
-
-      encode_collabs.extend(row_encodings);
-      info!("Write {} database collab", encode_collabs.len());
-      persistence.flush_collabs(encode_collabs)?;
-    }
-
-    Ok(())
   }
 
   pub fn validate(&self) -> Result<(), DatabaseError> {

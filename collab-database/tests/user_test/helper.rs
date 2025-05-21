@@ -104,27 +104,6 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
     let read_txn = self.db.read_txn();
     read_txn.is_exist(self.uid, self.workspace_id.as_str(), object_id)
   }
-
-  fn flush_collabs(
-    &self,
-    encoded_collabs: Vec<(String, EncodedCollab)>,
-  ) -> Result<(), DatabaseError> {
-    let write_txn = self.db.write_txn();
-    for (object_id, encode_collab) in encoded_collabs {
-      write_txn
-        .flush_doc(
-          self.uid,
-          &self.workspace_id,
-          &object_id,
-          encode_collab.state_vector.to_vec(),
-          encode_collab.doc_state.to_vec(),
-        )
-        .map_err(|e| DatabaseError::Internal(e.into()))?;
-    }
-
-    write_txn.commit_transaction().unwrap();
-    Ok(())
-  }
 }
 
 #[async_trait]
@@ -220,9 +199,7 @@ pub async fn workspace_database_test(uid: i64) -> WorkspaceDatabaseTest {
   let workspace_id = Uuid::new_v4().to_string();
   setup_log();
   let db = make_rocks_db();
-  let workspace_database = user_database_test_with_db(uid, &workspace_id, db).await;
-  workspace_database.flush_workspace_database().unwrap();
-  workspace_database
+  user_database_test_with_db(uid, &workspace_id, db).await
 }
 
 pub async fn workspace_database_test_with_config(

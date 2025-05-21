@@ -1,10 +1,8 @@
 use crate::user_test::helper::{
-  make_default_grid, random_uid, user_database_test_with_db, user_database_test_with_default_data,
-  workspace_database_test,
+  random_uid, user_database_test_with_default_data, workspace_database_test,
 };
-use collab_database::database::gen_database_view_id;
-use collab_database::entity::{CreateDatabaseParams, CreateViewParams, FileUploadType};
-use collab_database::rows::{CoverType, CreateRowParams, Row, RowCover};
+use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
+use collab_database::rows::{CreateRowParams, Row};
 use futures::StreamExt;
 use uuid::Uuid;
 
@@ -364,68 +362,4 @@ async fn get_database_by_view_id_test() {
 
   let database = test.get_database_with_view_id("v2").await;
   assert!(database.is_some());
-}
-
-#[tokio::test]
-async fn reopen_database_test() {
-  let uid = random_uid();
-  let mut test = workspace_database_test(uid).await;
-  let view_id = gen_database_view_id();
-  let params = make_default_grid(&view_id, "first view");
-
-  // create the database with inline view
-  let database = test.create_database(params).await.unwrap();
-  let row_orders = database.read().await.get_all_row_orders().await;
-  for (index, row_order) in row_orders.into_iter().enumerate() {
-    let cover = RowCover {
-      data: format!("cover-{}", index),
-      upload_type: FileUploadType::LocalFile,
-      cover_type: CoverType::FileCover,
-    };
-
-    database
-      .write()
-      .await
-      .update_row_meta(&row_order.id, |updater| {
-        updater
-          .insert_icon(&format!("icon-{}", index))
-          .insert_cover(&cover);
-      })
-      .await;
-
-    let row = database
-      .read()
-      .await
-      .get_or_init_database_row(&row_order.id)
-      .await
-      .unwrap();
-    let json = row.read().await.collab.to_json_value();
-    assert!(json.get("meta").is_some());
-  }
-
-  let db = test.collab_db.clone();
-  let workspace_id = test.workspace_id.clone();
-  drop(test);
-
-  let test = user_database_test_with_db(uid, &workspace_id, db).await;
-  let database = test.get_database_with_view_id(&view_id).await.unwrap();
-  let row_orders = database.read().await.get_all_row_orders().await;
-  for (index, row_order) in row_orders.into_iter().enumerate() {
-    let row_meta = database
-      .read()
-      .await
-      .get_or_init_database_row(&row_order.id)
-      .await
-      .unwrap()
-      .read()
-      .await
-      .get_row_meta()
-      .unwrap();
-
-    assert_eq!(row_meta.icon_url, Some(format!("icon-{}", index)));
-
-    let cover = row_meta.cover.unwrap();
-    assert_eq!(cover.data, format!("cover-{}", index));
-  }
-  let _ = database.read().await.to_json_value().await;
 }

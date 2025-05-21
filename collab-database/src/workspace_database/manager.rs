@@ -11,7 +11,6 @@ use collab::entity::EncodedCollab;
 
 use crate::entity::{CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator};
 
-use anyhow::anyhow;
 use collab::core::collab_plugin::CollabPersistence;
 use collab::core::origin::CollabOrigin;
 use collab::error::CollabError;
@@ -20,9 +19,31 @@ use dashmap::DashMap;
 use rayon::prelude::*;
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{
+  Arc,
+  atomic::{AtomicBool, Ordering},
+};
 use tracing::error;
 use uuid::Uuid;
+
+// Database holder tracks initialization status and holds the database reference
+struct DatabaseHolder {
+  database: Option<Arc<RwLock<Database>>>,
+  is_initializing: AtomicBool,
+}
+
+impl DatabaseHolder {
+  fn new() -> Self {
+    Self {
+      database: None,
+      is_initializing: AtomicBool::new(false),
+    }
+  }
+
+  fn set_database(&mut self, database: Arc<RwLock<Database>>) {
+    self.database = Some(database);
+  }
+}
 
 pub type EncodeCollabByOid = HashMap<String, EncodedCollab>;
 pub type DataSourceByOid = HashMap<String, DataSource>;
@@ -149,11 +170,6 @@ pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
   fn delete_collab(&self, object_id: &str) -> Result<(), DatabaseError>;
 
   fn is_collab_exist(&self, object_id: &str) -> bool;
-
-  fn flush_collabs(
-    &self,
-    encoded_collabs: Vec<(String, EncodedCollab)>,
-  ) -> Result<(), DatabaseError>;
 }
 
 pub struct CollabPersistenceImpl {
@@ -183,43 +199,40 @@ impl From<CollabPersistenceImpl> for DataSource {
 /// One database ID can have multiple view IDs.
 ///
 pub struct WorkspaceDatabaseManager {
-  object_id: String,
   body: WorkspaceDatabase,
   collab_service: Arc<dyn DatabaseCollabService>,
-  /// In memory database handlers.
+  /// In memory database handlers with their initialization state.
   /// The key is the database id. The handler will be added when the database is opened or created.
   /// and the handler will be removed when the database is deleted or closed.
-  databases: DashMap<String, Arc<RwLock<Database>>>,
+  database_holders: DashMap<String, Arc<DatabaseHolder>>,
 }
 
 impl WorkspaceDatabaseManager {
   pub fn open(
-    object_id: &str,
+    _object_id: &str,
     collab: Collab,
     collab_service: impl DatabaseCollabService,
   ) -> Result<Self, DatabaseError> {
     let collab_service = Arc::new(collab_service);
     let body = WorkspaceDatabase::open(collab)?;
     Ok(Self {
-      object_id: object_id.to_string(),
       body,
       collab_service,
-      databases: DashMap::new(),
+      database_holders: DashMap::new(),
     })
   }
 
   pub fn create(
-    object_id: &str,
+    _object_id: &str,
     collab: Collab,
     collab_service: impl DatabaseCollabService,
   ) -> Result<Self, DatabaseError> {
     let collab_service = Arc::new(collab_service);
     let body = WorkspaceDatabase::create(collab);
     Ok(Self {
-      object_id: object_id.to_string(),
       body,
       collab_service,
-      databases: DashMap::new(),
+      database_holders: DashMap::new(),
     })
   }
 
@@ -234,7 +247,6 @@ impl WorkspaceDatabaseManager {
 
   /// Get the database with the given database id.
   /// Return None if the database does not exist.
-  // The original function, now using the extracted fix_and_open_database function
   pub async fn get_or_init_database(
     &self,
     database_id: &str,
@@ -244,30 +256,65 @@ impl WorkspaceDatabaseManager {
       return Err(DatabaseError::DatabaseNotExist);
     }
 
-    // Check if the database is already initialized and cached
-    if let Some(database) = self.databases.get(database_id).as_deref().cloned() {
-      return Ok(database);
+    // Get or create holder object for this database
+    let holder = self
+      .database_holders
+      .entry(database_id.to_string())
+      .or_insert_with(|| Arc::new(DatabaseHolder::new()))
+      .clone();
+
+    // Fast path: Check if database has been initialized in holder
+    if let Some(database) = &holder.database {
+      return Ok(database.clone());
     }
 
+    // Try to set initializing flag, return false if already being initialized
+    if holder
+      .is_initializing
+      .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+      .is_err()
+    {
+      // Another thread is initializing, wait a bit and retry
+      tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+      // Use Box::pin to handle recursion in async fn
+      return Box::pin(self.get_or_init_database(database_id)).await;
+    }
+
+    // Now we have exclusive initialization rights
     // Try to open the database
     let context = DatabaseContext::new(self.collab_service.clone());
     match Database::open(database_id, context).await {
       Ok(database) => {
-        let database = Arc::new(RwLock::new(database));
+        let database_arc = Arc::new(RwLock::new(database));
+
+        // Store the database in holder
+        // We need to get the holder again to ensure we're updating the shared instance
+        if let Some(mut holder_entry) = self.database_holders.get_mut(database_id) {
+          // Get a mutable reference to the actual holder object
+          if let Some(holder_ref) = Arc::get_mut(holder_entry.value_mut()) {
+            holder_ref.set_database(database_arc.clone());
+          }
+        }
+
+        // Reset initializing flag
+        holder.is_initializing.store(false, Ordering::SeqCst);
+
+        // Cache the database
         self
           .collab_service
           .cache_collab_ref(
             Uuid::parse_str(database_id)?,
             CollabType::Database,
-            database.clone(),
+            database_arc.clone(),
           )
           .await?;
-        self
-          .databases
-          .insert(database_id.to_string(), database.clone());
-        Ok(database)
+
+        Ok(database_arc)
       },
       Err(err) => {
+        // Reset initializing flag on error
+        holder.is_initializing.store(false, Ordering::SeqCst);
+
         error!("Open database failed: {}", err);
         Err(err)
       },
@@ -309,7 +356,12 @@ impl WorkspaceDatabaseManager {
     let database_id = params.database_id.clone();
     let database = Database::create_with_view(params, context).await?;
     let database = Arc::new(RwLock::from(database));
-    self.databases.insert(database_id, database.clone());
+
+    // Store in the holder
+    let mut holder = DatabaseHolder::new();
+    holder.set_database(database.clone());
+    self.database_holders.insert(database_id, Arc::new(holder));
+
     Ok(database)
   }
 
@@ -343,11 +395,11 @@ impl WorkspaceDatabaseManager {
         error!("🔴Delete database failed: {}", err);
       }
     }
-    self.databases.remove(database_id);
+    self.database_holders.remove(database_id);
   }
 
   pub fn close_database(&self, database_id: &str) {
-    let _ = self.databases.remove(database_id);
+    let _ = self.database_holders.remove(database_id);
   }
 
   pub fn track_database(&mut self, database_id: &str, database_view_ids: Vec<String>) {
@@ -402,16 +454,6 @@ impl WorkspaceDatabaseManager {
     } else {
       Err(DatabaseError::DatabaseNotExist)
     }
-  }
-
-  pub fn flush_workspace_database(&self) -> Result<(), DatabaseError> {
-    let encoded_collab = self.body.encode_collab_v1()?;
-    self
-      .collab_service
-      .persistence()
-      .ok_or_else(|| DatabaseError::Internal(anyhow!("collab persistence is not found")))?
-      .flush_collabs(vec![(self.object_id.clone(), encoded_collab)])?;
-    Ok(())
   }
 }
 
