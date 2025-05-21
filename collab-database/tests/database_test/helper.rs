@@ -251,19 +251,23 @@ impl DatabaseTestBuilder {
 /// Create a database with default data
 /// It will create a default view with id 'v1'
 pub async fn create_database_with_default_data(uid: i64, database_id: &str) -> DatabaseTest {
+  let row_1_id = Uuid::new_v4();
+  let row_2_id = Uuid::new_v4();
+  let row_3_id = Uuid::new_v4();
+  
   let row_1 =
-    CreateRowParams::new(uuid_v4().to_string(), database_id.to_string()).with_cells(Cells::from([
+    CreateRowParams::new(row_1_id, database_id.to_string()).with_cells(Cells::from([
       ("f1".into(), TestTextCell::from("1f1cell").into()),
       ("f2".into(), TestTextCell::from("1f2cell").into()),
       ("f3".into(), TestTextCell::from("1f3cell").into()),
     ]));
   let row_2 =
-    CreateRowParams::new(uuid_v4().to_string(), database_id.to_string()).with_cells(Cells::from([
+    CreateRowParams::new(row_2_id, database_id.to_string()).with_cells(Cells::from([
       ("f1".into(), TestTextCell::from("2f1cell").into()),
       ("f2".into(), TestTextCell::from("2f2cell").into()),
     ]));
   let row_3 =
-    CreateRowParams::new(uuid_v4().to_string(), database_id.to_string()).with_cells(Cells::from([
+    CreateRowParams::new(row_3_id, database_id.to_string()).with_cells(Cells::from([
       ("f1".into(), TestTextCell::from("3f1cell").into()),
       ("f3".into(), TestTextCell::from("3f3cell").into()),
     ]));

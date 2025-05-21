@@ -326,16 +326,20 @@ pub async fn user_database_test_with_default_data(uid: i64) -> WorkspaceDatabase
 }
 
 fn create_database_params(database_id: &str) -> CreateDatabaseParams {
-  let row_1 = CreateRowParams::new(1, database_id.to_string()).with_cells(Cells::from([
+  let row_1_id = Uuid::new_v4();
+  let row_2_id = Uuid::new_v4();
+  let row_3_id = Uuid::new_v4();
+  
+  let row_1 = CreateRowParams::new(row_1_id, database_id.to_string()).with_cells(Cells::from([
     ("f1".into(), TestTextCell::from("1f1cell").into()),
     ("f2".into(), TestTextCell::from("1f2cell").into()),
     ("f3".into(), TestTextCell::from("1f3cell").into()),
   ]));
-  let row_2 = CreateRowParams::new(2, database_id.to_string()).with_cells(Cells::from([
+  let row_2 = CreateRowParams::new(row_2_id, database_id.to_string()).with_cells(Cells::from([
     ("f1".into(), TestTextCell::from("2f1cell").into()),
     ("f2".into(), TestTextCell::from("2f2cell").into()),
   ]));
-  let row_3 = CreateRowParams::new(3, database_id.to_string()).with_cells(Cells::from([
+  let row_3 = CreateRowParams::new(row_3_id, database_id.to_string()).with_cells(Cells::from([
     ("f1".into(), TestTextCell::from("3f1cell").into()),
     ("f3".into(), TestTextCell::from("3f3cell").into()),
   ]));
@@ -396,9 +400,9 @@ pub fn make_default_grid(view_id: &str, name: &str) -> CreateDatabaseParams {
       ..Default::default()
     }],
     rows: vec![
-      CreateRowParams::new(gen_row_id(), database_id.clone()),
-      CreateRowParams::new(gen_row_id(), database_id.clone()),
-      CreateRowParams::new(gen_row_id(), database_id.clone()),
+      CreateRowParams::new(Uuid::new_v4(), database_id.clone()),
+      CreateRowParams::new(Uuid::new_v4(), database_id.clone()),
+      CreateRowParams::new(Uuid::new_v4(), database_id.clone()),
     ],
     fields: vec![text_field, single_select_field, checkbox_field],
   }

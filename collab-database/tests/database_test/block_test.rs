@@ -1,14 +1,16 @@
 use collab_database::rows::CreateRowParams;
+use uuid::Uuid;
 
 use crate::database_test::helper::create_database;
 
 #[tokio::test]
 async fn create_rows_test() {
-  let database_id = uuid::Uuid::new_v4().to_string();
+  let database_id = Uuid::new_v4().to_string();
   let mut database_test = create_database(1, &database_id);
-  for i in 0..100 {
+  for _ in 0..100 {
+    let row_id = Uuid::new_v4();
     database_test
-      .create_row_in_view("v1", CreateRowParams::new(i.to_string(), "1".to_string()))
+      .create_row_in_view("v1", CreateRowParams::new(row_id, database_id.clone()))
       .await
       .unwrap();
   }

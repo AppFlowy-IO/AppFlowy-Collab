@@ -18,8 +18,10 @@ async fn restore_row_from_disk_test() {
   let workspace_id = Uuid::new_v4().to_string();
   let database_id = uuid::Uuid::new_v4().to_string();
   let (db, mut database_test) = create_database_with_db(1, &workspace_id, &database_id).await;
-  let row_1 = CreateRowParams::new(1, database_id.clone());
-  let row_2 = CreateRowParams::new(2, database_id.clone());
+  let row_1_id = Uuid::new_v4();
+  let row_2_id = Uuid::new_v4();
+  let row_1 = CreateRowParams::new(row_1_id, database_id.clone());
+  let row_2 = CreateRowParams::new(row_2_id, database_id.clone());
   database_test.create_row(row_1.clone()).await.unwrap();
   database_test.create_row(row_2.clone()).await.unwrap();
   drop(database_test);

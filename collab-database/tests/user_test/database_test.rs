@@ -132,7 +132,8 @@ async fn duplicate_database_inline_view_test() {
   let duplicated_database = test.duplicate_database("v1", "v1_1").await.unwrap();
   let mut db = duplicated_database.write().await;
   let duplicated_view_id = db.get_first_database_view_id().unwrap();
-  db.create_row(CreateRowParams::new(1, database_id.to_string()))
+  let row_id = Uuid::new_v4();
+  db.create_row(CreateRowParams::new(row_id, database_id.to_string()))
     .await
     .unwrap();
 
@@ -186,7 +187,8 @@ async fn duplicate_database_view_test() {
   // Duplicate the linked view.
   let mut db = database.write().await;
   let duplicated_view = db.duplicate_linked_view("v2").unwrap();
-  db.create_row(CreateRowParams::new(1, database_id.to_string()))
+  let row_id = Uuid::new_v4();
+  db.create_row(CreateRowParams::new(row_id, database_id.to_string()))
     .await
     .unwrap();
 
