@@ -6,7 +6,7 @@ use collab_entity::CollabType;
 use crate::error::DatabaseError;
 use crate::rows::{
   Cell, DatabaseRow, Row, RowChangeSender, RowDetail, RowId, RowMeta, RowMetaKey, RowMetaUpdate,
-  RowUpdate, default_database_row_data, meta_id_from_row_id,
+  RowUpdate, meta_id_from_row_id,
 };
 use crate::views::RowOrder;
 use crate::workspace_database::DatabaseCollabService;
@@ -122,22 +122,27 @@ impl Block {
       }
     }
 
-    let encoded_collab = default_database_row_data(&row_id, row);
     let collab = self
       .collab_service
-      .build_collab(
-        &row_id,
-        CollabType::DatabaseRow,
-        Some((encoded_collab, true)),
-      )
+      .build_collab(&row_id, CollabType::DatabaseRow, None)
       .await?;
 
-    let database_row = DatabaseRow::open(
+    let mut database_row = DatabaseRow::create(
       row_id.clone(),
       collab,
       self.row_change_tx.clone(),
+      row,
       self.collab_service.clone(),
-    )?;
+    );
+
+    self
+      .collab_service
+      .finalize_collab(
+        Uuid::parse_str(&row_id)?,
+        CollabType::DatabaseRow,
+        &mut database_row.collab,
+      )
+      .await?;
 
     let database_row = Arc::new(RwLock::from(database_row));
     self
@@ -356,7 +361,7 @@ impl Block {
       None => false,
       Some(persistence) => persistence.is_collab_exist(&row_id),
     };
-
+    let row_uuid = Uuid::parse_str(&row_id)?;
     let database_row = if is_exist {
       DatabaseRow::open(
         row_id.clone(),
@@ -366,13 +371,18 @@ impl Block {
       )?
     } else {
       let row = Row::new(row_id.clone(), &self.database_id);
-      DatabaseRow::create(
+      let mut database_row = DatabaseRow::create(
         row_id.clone(),
         collab,
         self.row_change_tx.clone(),
         row,
         self.collab_service.clone(),
-      )
+      );
+      self
+        .collab_service
+        .finalize_collab(row_uuid, CollabType::DatabaseRow, &mut database_row.collab)
+        .await?;
+      database_row
     };
 
     let row_details = RowDetail::from_collab(&database_row);

@@ -110,15 +110,9 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
-    let mut collab = context
+    let collab = context
       .collab_service
       .build_collab(database_id, CollabType::Database, None)
-      .await?;
-
-    let database_id = Uuid::parse_str(database_id)?;
-    context
-      .collab_service
-      .finalize_collab(database_id, CollabType::Database, &mut collab)
       .await?;
 
     let collab_service = context.collab_service.clone();
