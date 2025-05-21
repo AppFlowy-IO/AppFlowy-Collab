@@ -148,12 +148,6 @@ pub trait DatabaseCollabPersistenceService: Send + Sync + 'static {
 
   fn delete_collab(&self, object_id: &str) -> Result<(), DatabaseError>;
 
-  fn save_collab(
-    &self,
-    object_id: &str,
-    encoded_collab: EncodedCollab,
-  ) -> Result<(), DatabaseError>;
-
   fn is_collab_exist(&self, object_id: &str) -> bool;
 
   fn flush_collabs(

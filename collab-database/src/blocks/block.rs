@@ -6,7 +6,7 @@ use collab_entity::CollabType;
 use crate::error::DatabaseError;
 use crate::rows::{
   Cell, DatabaseRow, Row, RowChangeSender, RowDetail, RowId, RowMeta, RowMetaKey, RowMetaUpdate,
-  RowUpdate, meta_id_from_row_id,
+  RowUpdate, default_database_row_data, meta_id_from_row_id,
 };
 use crate::views::RowOrder;
 use crate::workspace_database::DatabaseCollabService;
@@ -122,9 +122,14 @@ impl Block {
       }
     }
 
+    let encoded_collab = default_database_row_data(&row_id, row.clone());
     let collab = self
       .collab_service
-      .build_collab(&row_id, CollabType::DatabaseRow, None)
+      .build_collab(
+        &row_id,
+        CollabType::DatabaseRow,
+        Some((encoded_collab, true)),
+      )
       .await?;
 
     let mut database_row = DatabaseRow::create(
