@@ -1,4 +1,4 @@
-use collab::core::collab::CollabOptions;
+use collab::core::collab::{CollabOptions, default_client_id};
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_document::document::Document;
@@ -29,10 +29,10 @@ fn get_default_data_test() {
 fn validate_document_data() {
   let document_id = "1";
   let document_data = default_document_data(document_id);
-  let document = Document::create(document_id, document_data).unwrap();
+  let document = Document::create(document_id, document_data, default_client_id()).unwrap();
   assert!(document.validate().is_ok());
 
-  let options = CollabOptions::new(document_id.to_string());
+  let options = CollabOptions::new(document_id.to_string(), default_client_id());
   let new_collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let result = Document::open(new_collab);
   assert!(result.is_err())

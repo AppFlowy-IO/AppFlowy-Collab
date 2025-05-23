@@ -12,6 +12,7 @@ use collab_entity::CollabType;
 use collab_entity::define::WORKSPACE_DATABASES;
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::{HashMap, HashSet};
+use yrs::block::ClientID;
 
 /// Used to store list of [DatabaseMeta].
 pub struct WorkspaceDatabase {
@@ -19,8 +20,8 @@ pub struct WorkspaceDatabase {
   pub body: WorkspaceDatabaseBody,
 }
 
-pub fn default_workspace_database_data(object_id: &str) -> EncodedCollab {
-  let options = CollabOptions::new(object_id.to_string());
+pub fn default_workspace_database_data(object_id: &str, client_id: ClientID) -> EncodedCollab {
+  let options = CollabOptions::new(object_id.to_string(), client_id);
   let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let _ = WorkspaceDatabaseBody::create(&mut collab);
   collab
@@ -44,8 +45,10 @@ impl WorkspaceDatabase {
     object_id: &str,
     origin: CollabOrigin,
     collab_doc_state: DataSource,
+    client_id: ClientID,
   ) -> Result<Self, DatabaseError> {
-    let options = CollabOptions::new(object_id.to_string()).with_data_source(collab_doc_state);
+    let options =
+      CollabOptions::new(object_id.to_string(), client_id).with_data_source(collab_doc_state);
     let collab = Collab::new_with_options(origin, options)
       .map_err(|err| DatabaseError::Internal(anyhow!("Failed to create collab: {}", err)))?;
     Self::open(collab)

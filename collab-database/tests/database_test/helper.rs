@@ -1,4 +1,4 @@
-use collab::core::collab::CollabOptions;
+use collab::core::collab::{CollabOptions, default_client_id};
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_database::database::{Database, DatabaseContext};
@@ -23,12 +23,14 @@ use collab_plugins::CollabKVDB;
 use tempfile::TempDir;
 use tokio::time::timeout;
 use uuid::Uuid;
+use yrs::block::ClientID;
 
 pub struct DatabaseTest {
   pub workspace_id: String,
   pub collab_db: Arc<CollabKVDB>,
   pub database: Database,
   pub pre_define_row_ids: Vec<RowId>,
+  pub client_id: ClientID,
 }
 
 impl DatabaseTest {
@@ -58,6 +60,7 @@ impl DerefMut for DatabaseTest {
 
 /// Create a database with a single view.
 pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
+  let client_id = default_client_id();
   let workspace_id = Uuid::new_v4().to_string();
   setup_log();
   let collab_db = make_rocks_db();
@@ -65,6 +68,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     uid,
     workspace_id: workspace_id.clone(),
     db: collab_db.clone(),
+    client_id,
   });
 
   let context = DatabaseContext::new(collab_service);
@@ -88,12 +92,13 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     database,
     collab_db,
     pre_define_row_ids: vec![],
+    client_id,
   }
 }
 
-pub fn create_row(uid: i64, workspace_id: &str, row_id: RowId) -> DatabaseRow {
+pub fn create_row(uid: i64, workspace_id: &str, row_id: RowId, client_id: ClientID) -> DatabaseRow {
   let collab_db = make_rocks_db();
-  let options = CollabOptions::new(row_id.to_string());
+  let options = CollabOptions::new(row_id.to_string(), client_id);
   let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   collab.initialize();
   let row_change_tx = tokio::sync::broadcast::channel(1).0;
@@ -101,6 +106,7 @@ pub fn create_row(uid: i64, workspace_id: &str, row_id: RowId) -> DatabaseRow {
     uid,
     workspace_id: workspace_id.to_string(),
     db: collab_db.clone(),
+    client_id,
   });
   DatabaseRow::create(
     row_id.clone(),
@@ -117,11 +123,13 @@ pub async fn create_database_with_db(
   database_id: &str,
 ) -> (Arc<CollabKVDB>, DatabaseTest) {
   setup_log();
+  let client_id = default_client_id();
   let collab_db = make_rocks_db();
   let collab_service = Arc::new(TestUserDatabaseServiceImpl {
     uid,
     workspace_id: workspace_id.to_string(),
     db: collab_db.clone(),
+    client_id,
   });
   let context = DatabaseContext::new(collab_service);
   let params = CreateDatabaseParams {
@@ -142,6 +150,7 @@ pub async fn create_database_with_db(
       database,
       collab_db,
       pre_define_row_ids: vec![],
+      client_id,
     },
   )
 }
@@ -152,10 +161,12 @@ pub async fn restore_database_from_db(
   database_id: &str,
   collab_db: Arc<CollabKVDB>,
 ) -> DatabaseTest {
+  let client_id = default_client_id();
   let collab_service = Arc::new(TestUserDatabaseServiceImpl {
     uid,
     workspace_id: workspace_id.to_string(),
     db: collab_db.clone(),
+    client_id,
   });
 
   let context = DatabaseContext::new(collab_service);
@@ -165,6 +176,7 @@ pub async fn restore_database_from_db(
     database,
     collab_db,
     pre_define_row_ids: vec![],
+    client_id,
   }
 }
 
@@ -214,6 +226,7 @@ impl DatabaseTestBuilder {
   }
 
   pub async fn build(self) -> DatabaseTest {
+    let client_id = default_client_id();
     let workspace_id = Uuid::new_v4().to_string();
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
@@ -222,6 +235,7 @@ impl DatabaseTestBuilder {
       uid: self.uid,
       workspace_id: workspace_id.clone(),
       db: collab_db.clone(),
+      client_id,
     });
     let context = DatabaseContext::new(collab_service);
     let params = CreateDatabaseParams {
@@ -244,6 +258,7 @@ impl DatabaseTestBuilder {
       database,
       collab_db,
       pre_define_row_ids: vec![],
+      client_id,
     }
   }
 }

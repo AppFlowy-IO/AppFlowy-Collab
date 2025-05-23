@@ -47,7 +47,7 @@ use futures::stream::StreamExt;
 use futures::{Stream, stream};
 use nanoid::nanoid;
 
-use collab::core::collab::CollabOptions;
+use collab::core::collab::{CollabOptions, default_client_id};
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -55,6 +55,7 @@ pub use tokio_stream::wrappers::WatchStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, trace};
 use uuid::Uuid;
+use yrs::block::ClientID;
 
 pub struct Database {
   pub collab: Collab,
@@ -85,11 +86,16 @@ impl DatabaseContext {
   }
 }
 
-pub async fn default_database_data(database_id: &str) -> Result<EncodedCollab, DatabaseError> {
-  let context = DatabaseContext::new(Arc::new(NoPersistenceDatabaseCollabService));
+pub async fn default_database_data(
+  database_id: &str,
+  client_id: ClientID,
+) -> Result<EncodedCollab, DatabaseError> {
+  let context = DatabaseContext::new(Arc::new(NoPersistenceDatabaseCollabService {
+    client_id: default_client_id(),
+  }));
   let collab = Collab::new_with_options(
     CollabOrigin::Empty,
-    CollabOptions::new(database_id.to_string()),
+    CollabOptions::new(database_id.to_string(), client_id),
   )
   .map_err(|e| DatabaseError::Internal(e.into()))?;
   let (_, collab) =
@@ -132,7 +138,8 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
-    let encoded_collab = default_database_data(database_id).await?;
+    let encoded_collab =
+      default_database_data(database_id, context.collab_service.client_id().await).await?;
     let collab = context
       .collab_service
       .build_collab(
@@ -175,7 +182,9 @@ impl Database {
     .into_params();
 
     let context = DatabaseContext {
-      collab_service: Arc::new(NoPersistenceDatabaseCollabService),
+      collab_service: Arc::new(NoPersistenceDatabaseCollabService {
+        client_id: default_client_id(),
+      }),
       notifier: Default::default(),
     };
     Self::create_with_view(params, context).await
@@ -329,8 +338,9 @@ impl Database {
   /// reference the given database. Return the row order if the row is
   /// created successfully. Otherwise, return None.
   pub async fn create_row(&mut self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
+    let client_id = self.collab_service.client_id().await;
     let params = CreateRowParamsValidator::validate(params)?;
-    let row_order = self.body.block.create_new_row(params).await?;
+    let row_order = self.body.block.create_new_row(params, client_id).await?;
     let mut txn = self.collab.transact_mut();
     self
       .body
@@ -369,8 +379,9 @@ impl Database {
     view_id: &str,
     params: CreateRowParams,
   ) -> Result<(usize, RowOrder), DatabaseError> {
+    let client_id = self.collab_service.client_id().await;
     let row_position = params.row_position.clone();
-    let row_order = self.body.create_row(params).await?;
+    let row_order = self.body.create_row(params, client_id).await?;
 
     let mut txn = self.collab.transact_mut();
     self
@@ -1654,7 +1665,9 @@ impl DatabaseBody {
     let inline_view_id = database_inline_view_id(&database_id_uuid);
 
     // create rows
-    let row_orders = block.create_rows(new_rows).await;
+    let row_orders = block
+      .create_rows(new_rows, context.collab_service.client_id().await)
+      .await;
 
     // create field orders
     let field_orders: Vec<FieldOrder> = new_fields.iter().map(FieldOrder::from).collect();
@@ -1782,8 +1795,12 @@ impl DatabaseBody {
   /// Create a new row from the given view.
   /// This row will be inserted into corresponding [Block]. The [RowOrder] of this row will
   /// be inserted to each view.
-  pub async fn create_row(&self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
-    let row_order = self.block.create_new_row(params).await?;
+  pub async fn create_row(
+    &self,
+    params: CreateRowParams,
+    client_id: ClientID,
+  ) -> Result<RowOrder, DatabaseError> {
+    let row_order = self.block.create_new_row(params, client_id).await?;
     Ok(row_order)
   }
 

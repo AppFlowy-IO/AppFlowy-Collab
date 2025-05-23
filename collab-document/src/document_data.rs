@@ -1,13 +1,12 @@
+use collab::preclude::ClientID;
 use std::collections::HashMap;
-
-use nanoid::nanoid;
-use uuid::Uuid;
-
-use collab::entity::EncodedCollab;
 
 use crate::blocks::{Block, DocumentData, DocumentMeta};
 use crate::document::Document;
 use crate::error::DocumentError;
+use collab::entity::EncodedCollab;
+use nanoid::nanoid;
+use uuid::Uuid;
 
 pub const PAGE: &str = "page";
 pub const PARAGRAPH_BLOCK_TYPE: &str = "paragraph";
@@ -85,9 +84,12 @@ pub fn default_document_data(document_id: &str) -> DocumentData {
 
 /// Generates default collab data for a document. This document only contains the initial state
 /// of the document.
-pub fn default_document_collab_data(document_id: &str) -> Result<EncodedCollab, DocumentError> {
+pub fn default_document_collab_data(
+  document_id: &str,
+  client_id: ClientID,
+) -> Result<EncodedCollab, DocumentError> {
   let document_data = default_document_data(document_id);
-  let document = Document::create(document_id, document_data)?;
+  let document = Document::create(document_id, document_data, client_id)?;
   document.encode_collab()
 }
 

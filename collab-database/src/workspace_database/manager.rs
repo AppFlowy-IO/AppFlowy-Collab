@@ -25,6 +25,7 @@ use std::sync::{
 };
 use tracing::error;
 use uuid::Uuid;
+use yrs::block::ClientID;
 
 // Database holder tracks initialization status and holds the database reference
 struct DatabaseHolder {
@@ -54,6 +55,7 @@ pub type CollabRef = Arc<RwLock<dyn BorrowMut<Collab> + Send + Sync + 'static>>;
 ///
 #[async_trait]
 pub trait DatabaseCollabService: Send + Sync + 'static {
+  async fn client_id(&self) -> ClientID;
   async fn build_collab(
     &self,
     object_id: &str,
@@ -86,9 +88,16 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
   fn persistence(&self) -> Option<Arc<dyn DatabaseCollabPersistenceService>>;
 }
 
-pub struct NoPersistenceDatabaseCollabService;
+pub struct NoPersistenceDatabaseCollabService {
+  pub client_id: ClientID,
+}
+
 #[async_trait]
 impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
+  async fn client_id(&self) -> ClientID {
+    self.client_id
+  }
+
   async fn build_collab(
     &self,
     object_id: &str,
@@ -97,7 +106,7 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
   ) -> Result<Collab, DatabaseError> {
     match encoded_collab {
       None => {
-        let options = CollabOptions::new(object_id.to_string()).with_data_source(
+        let options = CollabOptions::new(object_id.to_string(), self.client_id).with_data_source(
           CollabPersistenceImpl {
             persistence: self.persistence(),
           }
@@ -107,8 +116,8 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
           .map_err(|err| DatabaseError::Internal(err.into()))
       },
       Some((encoded_collab, _)) => {
-        let options =
-          CollabOptions::new(object_id.to_string()).with_data_source(encoded_collab.into());
+        let options = CollabOptions::new(object_id.to_string(), self.client_id)
+          .with_data_source(encoded_collab.into());
         Collab::new_with_options(CollabOrigin::Empty, options)
           .map_err(|err| DatabaseError::Internal(err.into()))
       },
@@ -133,7 +142,7 @@ impl DatabaseCollabService for NoPersistenceDatabaseCollabService {
       .into_par_iter()
       .filter_map(|object_id| {
         let persistence = self.persistence();
-        let options = CollabOptions::new(object_id.to_string())
+        let options = CollabOptions::new(object_id.to_string(), self.client_id)
           .with_data_source(CollabPersistenceImpl { persistence }.into());
         let result = Collab::new_with_options(CollabOrigin::Empty, options)
           .map_err(|err| DatabaseError::Internal(err.into()))

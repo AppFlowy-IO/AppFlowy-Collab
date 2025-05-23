@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::setup_log;
-use collab::core::collab::CollabOptions;
+use collab::core::collab::{CollabOptions, default_client_id};
 use collab::core::origin::CollabOrigin;
 use collab::lock::RwLock;
 use collab::preclude::*;
@@ -62,7 +62,8 @@ impl CollabPersistenceTest {
       workspace_id: self.workspace_id.clone(),
     };
 
-    let options = CollabOptions::new(id.clone()).with_data_source(data_source.into());
+    let options =
+      CollabOptions::new(id.clone(), default_client_id()).with_data_source(data_source.into());
     let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();
@@ -83,7 +84,8 @@ impl CollabPersistenceTest {
       workspace_id: self.workspace_id.clone(),
     };
 
-    let options = CollabOptions::new(id.clone()).with_data_source(data_source.into());
+    let options =
+      CollabOptions::new(id.clone(), default_client_id()).with_data_source(data_source.into());
     let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();
@@ -150,7 +152,8 @@ impl CollabPersistenceTest {
       workspace_id: self.workspace_id.clone(),
     };
 
-    let options = CollabOptions::new(doc_id.clone()).with_data_source(data_source.into());
+    let options =
+      CollabOptions::new(doc_id.clone(), default_client_id()).with_data_source(data_source.into());
     let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();
@@ -195,7 +198,8 @@ impl CollabPersistenceTest {
       workspace_id: self.workspace_id.clone(),
     };
 
-    let options = CollabOptions::new(id.to_string()).with_data_source(data_source.into());
+    let options =
+      CollabOptions::new(id.to_string(), default_client_id()).with_data_source(data_source.into());
     let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();

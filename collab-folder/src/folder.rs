@@ -123,8 +123,10 @@ impl Folder {
     origin: CollabOrigin,
     collab_doc_state: DataSource,
     workspace_id: &str,
+    client_id: ClientID,
   ) -> Result<Self, FolderError> {
-    let options = CollabOptions::new(workspace_id.to_string()).with_data_source(collab_doc_state);
+    let options =
+      CollabOptions::new(workspace_id.to_string(), client_id).with_data_source(collab_doc_state);
     let collab = Collab::new_with_options(origin, options)?;
     Self::open(uid, collab, None)
   }
@@ -842,19 +844,19 @@ pub fn default_folder_data(workspace_id: &str) -> FolderData {
 mod tests {
   use std::collections::HashMap;
 
-  use collab::{core::collab::CollabOptions, core::origin::CollabOrigin, preclude::Collab};
-
   use crate::{
     Folder, FolderData, RepeatedViewIdentifier, SectionItem, SpaceInfo, UserId, View,
     ViewIdentifier, Workspace,
   };
+  use collab::core::collab::default_client_id;
+  use collab::{core::collab::CollabOptions, core::origin::CollabOrigin, preclude::Collab};
 
   #[test]
   pub fn test_set_and_get_current_view() {
     let current_time = chrono::Utc::now().timestamp();
     let workspace_id = "1234";
     let uid = 1;
-    let options = CollabOptions::new(workspace_id.to_string());
+    let options = CollabOptions::new(workspace_id.to_string(), default_client_id());
     let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     let view_1 = View::new(
       "view_1".to_string(),
@@ -928,7 +930,7 @@ mod tests {
     let current_time = chrono::Utc::now().timestamp();
     let workspace_id = "1234";
     let uid = 1;
-    let options = CollabOptions::new(workspace_id.to_string());
+    let options = CollabOptions::new(workspace_id.to_string(), default_client_id());
     let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     let space_view_id = "space_view_id".to_string();
     let views: Vec<View> = (0..3)

@@ -20,6 +20,7 @@ use tokio::sync::broadcast::Sender;
 
 use tracing::{error, instrument, trace, warn};
 use uuid::Uuid;
+use yrs::block::ClientID;
 
 #[derive(Clone, Debug)]
 pub enum BlockEvent {
@@ -93,20 +94,24 @@ impl Block {
     Ok(())
   }
 
-  pub async fn create_rows<T>(&self, rows: Vec<T>) -> Vec<RowOrder>
+  pub async fn create_rows<T>(&self, rows: Vec<T>, client_id: ClientID) -> Vec<RowOrder>
   where
     T: Into<Row> + Send,
   {
     let mut row_orders = Vec::with_capacity(rows.len());
     for row in rows {
-      if let Ok(row_order) = self.create_new_row(row).await {
+      if let Ok(row_order) = self.create_new_row(row, client_id).await {
         row_orders.push(row_order);
       }
     }
     row_orders
   }
 
-  pub async fn create_new_row<T: Into<Row>>(&self, row: T) -> Result<RowOrder, DatabaseError> {
+  pub async fn create_new_row<T: Into<Row>>(
+    &self,
+    row: T,
+    client_id: ClientID,
+  ) -> Result<RowOrder, DatabaseError> {
     let row = row.into();
     let row_id = row.id.clone();
     let row_order = RowOrder {
@@ -122,7 +127,7 @@ impl Block {
       }
     }
 
-    let encoded_collab = default_database_row_data(&row_id, row.clone());
+    let encoded_collab = default_database_row_data(&row_id, row.clone(), client_id);
     let collab = self
       .collab_service
       .build_collab(

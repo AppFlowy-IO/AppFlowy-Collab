@@ -14,7 +14,7 @@ async fn encode_database_collab_test() {
 
   for (index, encoded_info) in database_collab.encoded_row_collabs.into_iter().enumerate() {
     let object_id = database_test.pre_define_row_ids[index].clone();
-    let options = CollabOptions::new(object_id.to_string())
+    let options = CollabOptions::new(object_id.to_string(), database_test.client_id)
       .with_data_source(encoded_info.encoded_collab.into());
     let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     let json = collab.to_json_value();

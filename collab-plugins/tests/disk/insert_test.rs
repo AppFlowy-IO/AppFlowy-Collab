@@ -2,7 +2,7 @@ use crate::disk::script::{CollabPersistenceTest, disk_plugin_with_db};
 use assert_json_diff::assert_json_eq;
 
 use anyhow::Error;
-use collab::core::collab::CollabOptions;
+use collab::core::collab::{CollabOptions, default_client_id};
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_entity::CollabType;
@@ -49,7 +49,8 @@ async fn flush_test() {
     workspace_id: test.workspace_id.clone(),
   };
 
-  let options = CollabOptions::new(doc_id.to_string()).with_data_source(data_source.into());
+  let options = CollabOptions::new(doc_id.to_string(), default_client_id())
+    .with_data_source(data_source.into());
   let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   collab.add_plugin(Box::new(disk_plugin));
   collab.initialize();

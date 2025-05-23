@@ -8,6 +8,7 @@ use anyhow::{Error, Result};
 use collab::core::collab::CollabOptions;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
+use collab::preclude::block::ClientID;
 use collab::preclude::{ArrayRef, Collab, Map, MapExt, MapRef};
 use collab_entity::CollabType;
 use collab_entity::define::USER_AWARENESS;
@@ -145,8 +146,8 @@ impl UserAwareness {
   }
 }
 
-pub fn default_user_awareness_data(object_id: &str) -> EncodedCollab {
-  let options = CollabOptions::new(object_id.to_string());
+pub fn default_user_awareness_data(object_id: &str, client_id: ClientID) -> EncodedCollab {
+  let options = CollabOptions::new(object_id.to_string(), client_id);
   let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let awareness = UserAwareness::create(collab, None).unwrap();
   awareness

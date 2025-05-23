@@ -60,8 +60,10 @@ impl Document {
     origin: CollabOrigin,
     doc_state: DataSource,
     document_id: &str,
+    client_id: ClientID,
   ) -> Result<Self, DocumentError> {
-    let options = CollabOptions::new(document_id.to_string()).with_data_source(doc_state);
+    let options =
+      CollabOptions::new(document_id.to_string(), client_id).with_data_source(doc_state);
     let collab = Collab::new_with_options(origin, options)?;
     Document::open(collab)
   }
@@ -71,8 +73,12 @@ impl Document {
     Ok(Self { collab, body })
   }
 
-  pub fn create(document_id: &str, data: DocumentData) -> Result<Self, DocumentError> {
-    let options = CollabOptions::new(document_id.to_string());
+  pub fn create(
+    document_id: &str,
+    data: DocumentData,
+    client_id: ClientID,
+  ) -> Result<Self, DocumentError> {
+    let options = CollabOptions::new(document_id.to_string(), client_id);
     let collab = Collab::new_with_options(CollabOrigin::Empty, options)?;
     Self::create_with_data(collab, data)
   }

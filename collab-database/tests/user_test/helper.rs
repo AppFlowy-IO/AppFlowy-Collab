@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
-use collab::core::collab::{CollabOptions, DataSource};
+use collab::core::collab::{CollabOptions, DataSource, default_client_id};
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_database::database::{gen_database_id, gen_field_id};
@@ -35,6 +35,7 @@ use collab_plugins::local_storage::rocksdb::util::KVDBCollabPersistenceImpl;
 use rand::Rng;
 use tempfile::TempDir;
 use uuid::Uuid;
+use yrs::block::ClientID;
 
 pub struct WorkspaceDatabaseTest {
   #[allow(dead_code)]
@@ -42,6 +43,7 @@ pub struct WorkspaceDatabaseTest {
   pub workspace_id: String,
   inner: WorkspaceDatabaseManager,
   pub collab_db: Arc<CollabKVDB>,
+  pub client_id: ClientID,
 }
 
 impl Deref for WorkspaceDatabaseTest {
@@ -67,12 +69,14 @@ pub struct TestUserDatabaseServiceImpl {
   pub uid: i64,
   pub workspace_id: String,
   pub db: Arc<CollabKVDB>,
+  pub client_id: ClientID,
 }
 
 pub struct TestUserDatabasePersistenceImpl {
   pub uid: i64,
   pub workspace_id: String,
   pub db: Arc<CollabKVDB>,
+  pub client_id: ClientID,
 }
 impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
   fn load_collab(&self, collab: &mut Collab) {
@@ -83,7 +87,7 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
   }
 
   fn get_encoded_collab(&self, object_id: &str, collab_type: CollabType) -> Option<EncodedCollab> {
-    let options = CollabOptions::new(object_id.to_string());
+    let options = CollabOptions::new(object_id.to_string(), self.client_id);
     let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     self.load_collab(&mut collab);
     collab
@@ -108,6 +112,10 @@ impl DatabaseCollabPersistenceService for TestUserDatabasePersistenceImpl {
 
 #[async_trait]
 impl DatabaseCollabService for TestUserDatabaseServiceImpl {
+  async fn client_id(&self) -> ClientID {
+    self.client_id
+  }
+
   async fn build_collab(
     &self,
     object_id: &str,
@@ -134,7 +142,8 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
         .into_data_source()
       });
 
-    let options = CollabOptions::new(object_id.to_string()).with_data_source(data_source);
+    let options =
+      CollabOptions::new(object_id.to_string(), self.client_id).with_data_source(data_source);
     let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
     collab.add_plugin(Box::new(db_plugin));
     collab.initialize();
@@ -173,7 +182,8 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
       }
       .into_data_source();
 
-      let options = CollabOptions::new(object_id.to_string()).with_data_source(data_source);
+      let options =
+        CollabOptions::new(object_id.to_string(), self.client_id).with_data_source(data_source);
       let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
       collab.add_plugin(Box::new(db_plugin));
       collab.initialize();
@@ -191,6 +201,7 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
       uid: self.uid,
       workspace_id: self.workspace_id.clone(),
       db: self.db.clone(),
+      client_id: self.client_id,
     }))
   }
 }
@@ -208,11 +219,13 @@ pub async fn workspace_database_test_with_config(
   _config: CollabPersistenceConfig,
 ) -> WorkspaceDatabaseTest {
   setup_log();
+  let client_id = default_client_id();
   let collab_db = make_rocks_db();
   let collab_service = TestUserDatabaseServiceImpl {
     uid,
     workspace_id: workspace_id.clone(),
     db: collab_db.clone(),
+    client_id,
   };
   let workspace_database_id = uuid::Uuid::new_v4().to_string();
   let collab = collab_service
@@ -226,6 +239,7 @@ pub async fn workspace_database_test_with_config(
     workspace_id,
     inner,
     collab_db,
+    client_id,
   }
 }
 
@@ -234,12 +248,14 @@ pub async fn workspace_database_with_db(
   workspace_id: &str,
   collab_db: Weak<CollabKVDB>,
   config: Option<CollabPersistenceConfig>,
+  client_id: ClientID,
 ) -> WorkspaceDatabaseManager {
   let _config = config.unwrap_or_else(|| CollabPersistenceConfig::new().snapshot_per_update(5));
   let builder = TestUserDatabaseServiceImpl {
     uid,
     workspace_id: workspace_id.to_string(),
     db: collab_db.clone().upgrade().unwrap(),
+    client_id,
   };
 
   // In test, we use a fixed database_storage_id
@@ -256,12 +272,21 @@ pub async fn user_database_test_with_db(
   workspace_id: &str,
   collab_db: Arc<CollabKVDB>,
 ) -> WorkspaceDatabaseTest {
-  let inner = workspace_database_with_db(uid, workspace_id, Arc::downgrade(&collab_db), None).await;
+  let client_id = default_client_id();
+  let inner = workspace_database_with_db(
+    uid,
+    workspace_id,
+    Arc::downgrade(&collab_db),
+    None,
+    client_id,
+  )
+  .await;
   WorkspaceDatabaseTest {
     uid,
     workspace_id: workspace_id.to_string(),
     inner,
     collab_db,
+    client_id,
   }
 }
 

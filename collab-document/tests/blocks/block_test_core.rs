@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::util::document_storage;
 
-use collab::core::collab::CollabOptions;
+use collab::core::collab::{CollabOptions, default_client_id};
 use collab::core::origin::{CollabClient, CollabOrigin};
 use collab::preclude::Collab;
 use collab_document::blocks::{
@@ -43,7 +43,8 @@ impl BlockTestCore {
       workspace_id,
     };
 
-    let options = CollabOptions::new(doc_id.to_string()).with_data_source(data_source.into());
+    let options = CollabOptions::new(doc_id.to_string(), default_client_id())
+      .with_data_source(data_source.into());
     let client = CollabClient::new(1, "1");
     let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));

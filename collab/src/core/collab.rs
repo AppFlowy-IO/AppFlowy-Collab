@@ -11,6 +11,7 @@ use std::vec::IntoIter;
 use serde_json::json;
 
 use tokio_stream::wrappers::WatchStream;
+use tracing::trace;
 use yrs::block::{ClientID, Prelim};
 use yrs::types::ToJson;
 use yrs::types::map::MapEvent;
@@ -225,19 +226,31 @@ impl CollabContext {
   }
 }
 
-pub fn make_yrs_doc(skp_gc: bool, client_id: ClientID) -> Doc {
-  Doc::with_options(Options {
-    skip_gc: skp_gc,
+pub fn default_client_id() -> ClientID {
+  let mut rng = fastrand::Rng::new();
+  let client_id: u32 = rng.u32(0..u32::MAX);
+  client_id as ClientID
+}
+
+pub fn make_yrs_doc(object_id: &str, skip_gc: bool, client_id: ClientID) -> Doc {
+  let options = Options {
+    skip_gc,
     client_id,
     offset_kind: OffsetKind::Utf16,
     ..Options::default()
-  })
+  };
+
+  trace!(
+    "Creating a new Yrs doc:{} for client:{}",
+    object_id, options.client_id
+  );
+  Doc::with_options(options)
 }
 
 pub struct CollabOptions {
   pub object_id: String,
   pub data_source: Option<DataSource>,
-  pub client_id: Option<ClientID>,
+  pub client_id: ClientID,
 }
 
 impl Display for CollabOptions {
@@ -251,21 +264,16 @@ impl Display for CollabOptions {
 }
 
 impl CollabOptions {
-  pub fn new(object_id: String) -> Self {
+  pub fn new(object_id: String, client_id: ClientID) -> Self {
     Self {
       object_id,
       data_source: None,
-      client_id: None,
+      client_id,
     }
   }
 
   pub fn with_data_source(mut self, data_source: DataSource) -> Self {
     self.data_source = Some(data_source);
-    self
-  }
-
-  pub fn with_client_id(mut self, client_id: Option<ClientID>) -> Self {
-    self.client_id = client_id;
     self
   }
 }
@@ -275,10 +283,10 @@ impl Collab {
     uid: i64,
     object_id: T,
     device_id: impl ToString,
-    client_id: Option<ClientID>,
+    client_id: ClientID,
   ) -> Collab {
     let origin = CollabClient::new(uid, device_id);
-    let options = CollabOptions::new(object_id.as_ref().to_string()).with_client_id(client_id);
+    let options = CollabOptions::new(object_id.as_ref().to_string(), client_id);
     Self::new_with_options(CollabOrigin::Client(origin), options).unwrap()
   }
 
@@ -286,13 +294,8 @@ impl Collab {
     origin: CollabOrigin,
     options: CollabOptions,
   ) -> Result<Self, CollabError> {
-    let client_id = options.client_id.unwrap_or_else(|| {
-      let mut rng = fastrand::Rng::new();
-      let client_id: u32 = rng.u32(0..u32::MAX);
-      client_id as ClientID
-    });
     let object_id = options.object_id;
-    let doc = make_yrs_doc(false, client_id);
+    let doc = make_yrs_doc(&object_id, false, options.client_id);
     let data = doc.get_or_insert_map(DATA_SECTION);
     let meta = doc.get_or_insert_map(META_SECTION);
     let plugins = Plugins::new(vec![]);

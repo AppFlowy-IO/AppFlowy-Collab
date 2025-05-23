@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use collab::core::collab::{CollabOptions, DataSource};
+use collab::core::collab::{CollabOptions, DataSource, default_client_id};
 use collab::core::origin::{CollabClient, CollabOrigin};
 use collab::preclude::Collab;
 use collab_entity::CollabType;
@@ -51,7 +51,8 @@ impl UserAwarenessTest {
       Arc::downgrade(&db),
     );
 
-    let options = CollabOptions::new(uid.to_string()).with_data_source(DataSource::Disk(None));
+    let options = CollabOptions::new(uid.to_string(), default_client_id())
+      .with_data_source(DataSource::Disk(None));
     let client = CollabClient::new(uid, "1");
     let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
     collab.add_plugin(Box::new(disk_plugin));
