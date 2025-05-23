@@ -46,9 +46,8 @@ use collab_entity::define::{DATABASE, DATABASE_ID, DATABASE_METAS};
 use futures::stream::StreamExt;
 use futures::{Stream, stream};
 use nanoid::nanoid;
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::ParallelIterator;
 
+use collab::core::collab::{CollabOptions, default_client_id};
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -56,6 +55,7 @@ pub use tokio_stream::wrappers::WatchStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, trace};
 use uuid::Uuid;
+use yrs::block::ClientID;
 
 pub struct Database {
   pub collab: Collab,
@@ -86,9 +86,18 @@ impl DatabaseContext {
   }
 }
 
-pub async fn default_database_data(database_id: &str) -> Result<EncodedCollab, DatabaseError> {
-  let context = DatabaseContext::new(Arc::new(NoPersistenceDatabaseCollabService));
-  let collab = Collab::new_with_origin(CollabOrigin::Empty, database_id, vec![], false);
+pub async fn default_database_data(
+  database_id: &str,
+  client_id: ClientID,
+) -> Result<EncodedCollab, DatabaseError> {
+  let context = DatabaseContext::new(Arc::new(NoPersistenceDatabaseCollabService {
+    client_id: default_client_id(),
+  }));
+  let collab = Collab::new_with_options(
+    CollabOrigin::Empty,
+    CollabOptions::new(database_id.to_string(), client_id),
+  )
+  .map_err(|e| DatabaseError::Internal(e.into()))?;
   let (_, collab) =
     DatabaseBody::create(collab, database_id.to_string(), context, vec![], vec![]).await?;
   Ok(
@@ -109,6 +118,7 @@ impl Database {
       .collab_service
       .build_collab(database_id, CollabType::Database, None)
       .await?;
+
     let collab_service = context.collab_service.clone();
     let (body, collab) = DatabaseBody::open(collab, context)?;
     Ok(Self {
@@ -128,7 +138,8 @@ impl Database {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
-    let encoded_collab = default_database_data(database_id).await?;
+    let encoded_collab =
+      default_database_data(database_id, context.collab_service.client_id().await).await?;
     let collab = context
       .collab_service
       .build_collab(
@@ -137,10 +148,18 @@ impl Database {
         Some((encoded_collab, true)),
       )
       .await?;
-
     let collab_service = context.collab_service.clone();
-    let (body, collab) =
+    let (body, mut collab) =
       DatabaseBody::create(collab, database_id.to_string(), context, rows, fields).await?;
+
+    collab_service
+      .finalize_collab(
+        Uuid::parse_str(database_id)?,
+        CollabType::Database,
+        &mut collab,
+      )
+      .await?;
+
     Ok(Self {
       collab,
       body,
@@ -163,7 +182,9 @@ impl Database {
     .into_params();
 
     let context = DatabaseContext {
-      collab_service: Arc::new(NoPersistenceDatabaseCollabService),
+      collab_service: Arc::new(NoPersistenceDatabaseCollabService {
+        client_id: default_client_id(),
+      }),
       notifier: Default::default(),
     };
     Self::create_with_view(params, context).await
@@ -176,7 +197,6 @@ impl Database {
     params: CreateDatabaseParams,
     context: DatabaseContext,
   ) -> Result<Self, DatabaseError> {
-    // Get or create empty database with the given database_id
     let CreateDatabaseParams {
       database_id,
       rows,
@@ -189,8 +209,6 @@ impl Database {
     let field_orders = database.get_all_field_orders();
     {
       let mut txn = database.collab.context.transact_mut();
-
-      // create the linked views
       for linked_view in views {
         database.body.create_linked_view(
           &mut txn,
@@ -201,12 +219,7 @@ impl Database {
       }
     }
 
-    tokio::task::spawn_blocking(move || {
-      database.write_to_disk()?;
-      Ok::<_, DatabaseError>(database)
-    })
-    .await
-    .map_err(|e| DatabaseError::Internal(e.into()))?
+    Ok(database)
   }
 
   pub async fn encode_database_collabs(&self) -> Result<EncodedDatabase, DatabaseError> {
@@ -251,39 +264,6 @@ impl Database {
       encoded_database_collab,
       encoded_row_collabs,
     })
-  }
-
-  #[instrument(level = "info", skip_all, err)]
-  pub fn write_to_disk(&self) -> Result<(), DatabaseError> {
-    if let Some(persistence) = self.collab_service.persistence() {
-      let database_encoded = encoded_collab(&self.collab, &CollabType::Database)?;
-      let mut encode_collabs = vec![];
-      encode_collabs.push((self.collab.object_id().to_string(), database_encoded));
-
-      let rows = self
-        .body
-        .block
-        .row_mem_cache
-        .iter()
-        .map(|entry| entry.value().clone())
-        .collect::<Vec<_>>();
-
-      info!("[Database]: encode {} database rows", rows.len());
-      let row_encodings = rows
-        .par_iter()
-        .flat_map(|row| {
-          let row_collab = &row.blocking_read().collab;
-          let encoded_collab = encoded_collab(row_collab, &CollabType::DatabaseRow).ok()?;
-          Some((row_collab.object_id().to_string(), encoded_collab))
-        })
-        .collect::<Vec<_>>();
-
-      encode_collabs.extend(row_encodings);
-      info!("Write {} database collab", encode_collabs.len());
-      persistence.flush_collabs(encode_collabs)?;
-    }
-
-    Ok(())
   }
 
   pub fn validate(&self) -> Result<(), DatabaseError> {
@@ -358,8 +338,9 @@ impl Database {
   /// reference the given database. Return the row order if the row is
   /// created successfully. Otherwise, return None.
   pub async fn create_row(&mut self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
+    let client_id = self.collab_service.client_id().await;
     let params = CreateRowParamsValidator::validate(params)?;
-    let row_order = self.body.block.create_new_row(params).await?;
+    let row_order = self.body.block.create_new_row(params, client_id).await?;
     let mut txn = self.collab.transact_mut();
     self
       .body
@@ -398,8 +379,9 @@ impl Database {
     view_id: &str,
     params: CreateRowParams,
   ) -> Result<(usize, RowOrder), DatabaseError> {
+    let client_id = self.collab_service.client_id().await;
     let row_position = params.row_position.clone();
-    let row_order = self.body.create_row(params).await?;
+    let row_order = self.body.create_row(params, client_id).await?;
 
     let mut txn = self.collab.transact_mut();
     self
@@ -1683,7 +1665,9 @@ impl DatabaseBody {
     let inline_view_id = database_inline_view_id(&database_id_uuid);
 
     // create rows
-    let row_orders = block.create_rows(new_rows).await;
+    let row_orders = block
+      .create_rows(new_rows, context.collab_service.client_id().await)
+      .await;
 
     // create field orders
     let field_orders: Vec<FieldOrder> = new_fields.iter().map(FieldOrder::from).collect();
@@ -1811,8 +1795,12 @@ impl DatabaseBody {
   /// Create a new row from the given view.
   /// This row will be inserted into corresponding [Block]. The [RowOrder] of this row will
   /// be inserted to each view.
-  pub async fn create_row(&self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
-    let row_order = self.block.create_new_row(params).await?;
+  pub async fn create_row(
+    &self,
+    params: CreateRowParams,
+    client_id: ClientID,
+  ) -> Result<RowOrder, DatabaseError> {
+    let row_order = self.block.create_new_row(params, client_id).await?;
     Ok(row_order)
   }
 

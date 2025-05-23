@@ -5,6 +5,7 @@ use crate::fields::Field;
 use crate::rows::{CreateRowParams, RowId};
 use crate::template::entity::DatabaseTemplate;
 use crate::workspace_database::NoPersistenceDatabaseCollabService;
+use collab::core::collab::default_client_id;
 use std::sync::Arc;
 
 /// This trait that provides methods to extend the [TypeOption::CellData] functionalities.
@@ -21,7 +22,9 @@ pub trait ToCellString {
 pub async fn database_from_template(template: DatabaseTemplate) -> Result<Database, DatabaseError> {
   let params = create_database_params_from_template(template);
   let context = DatabaseContext {
-    collab_service: Arc::new(NoPersistenceDatabaseCollabService),
+    collab_service: Arc::new(NoPersistenceDatabaseCollabService {
+      client_id: default_client_id(),
+    }),
     notifier: Default::default(),
   };
   let database = Database::create_with_view(params, context).await?;

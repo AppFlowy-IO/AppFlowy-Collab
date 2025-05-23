@@ -20,6 +20,7 @@ use tokio::sync::broadcast::Sender;
 
 use tracing::{error, instrument, trace, warn};
 use uuid::Uuid;
+use yrs::block::ClientID;
 
 #[derive(Clone, Debug)]
 pub enum BlockEvent {
@@ -93,20 +94,24 @@ impl Block {
     Ok(())
   }
 
-  pub async fn create_rows<T>(&self, rows: Vec<T>) -> Vec<RowOrder>
+  pub async fn create_rows<T>(&self, rows: Vec<T>, client_id: ClientID) -> Vec<RowOrder>
   where
     T: Into<Row> + Send,
   {
     let mut row_orders = Vec::with_capacity(rows.len());
     for row in rows {
-      if let Ok(row_order) = self.create_new_row(row).await {
+      if let Ok(row_order) = self.create_new_row(row, client_id).await {
         row_orders.push(row_order);
       }
     }
     row_orders
   }
 
-  pub async fn create_new_row<T: Into<Row>>(&self, row: T) -> Result<RowOrder, DatabaseError> {
+  pub async fn create_new_row<T: Into<Row>>(
+    &self,
+    row: T,
+    client_id: ClientID,
+  ) -> Result<RowOrder, DatabaseError> {
     let row = row.into();
     let row_id = row.id.clone();
     let row_order = RowOrder {
@@ -122,7 +127,7 @@ impl Block {
       }
     }
 
-    let encoded_collab = default_database_row_data(&row_id, row);
+    let encoded_collab = default_database_row_data(&row_id, row.clone(), client_id);
     let collab = self
       .collab_service
       .build_collab(
@@ -132,19 +137,32 @@ impl Block {
       )
       .await?;
 
-    let database_row = DatabaseRow::open(
+    let mut database_row = DatabaseRow::create(
       row_id.clone(),
       collab,
       self.row_change_tx.clone(),
+      row,
       self.collab_service.clone(),
-    )?;
+    );
+
+    self
+      .collab_service
+      .finalize_collab(
+        Uuid::parse_str(&row_id)?,
+        CollabType::DatabaseRow,
+        &mut database_row.collab,
+      )
+      .await?;
 
     let database_row = Arc::new(RwLock::from(database_row));
-    if let Some(persistence) = self.collab_service.persistence() {
-      if let Ok(encoded_collab) = database_row.write().await.encoded_collab() {
-        persistence.save_collab(&row_id, encoded_collab)?;
-      }
-    }
+    self
+      .collab_service
+      .cache_collab_ref(
+        Uuid::parse_str(&row_id)?,
+        CollabType::DatabaseRow,
+        database_row.clone(),
+      )
+      .await?;
     self.row_mem_cache.insert(row_id, database_row);
     Ok(row_order)
   }
@@ -334,7 +352,14 @@ impl Block {
       .collab_service
       .build_collab(&row_id, CollabType::DatabaseRow, None)
       .await?;
-    self.init_database_row_from_collab(row_id, collab).await
+
+    let row_uuid = Uuid::parse_str(&row_id)?;
+    let row = self.init_database_row_from_collab(row_id, collab).await?;
+    self
+      .collab_service
+      .cache_collab_ref(row_uuid, CollabType::DatabaseRow, row.clone())
+      .await?;
+    Ok(row)
   }
 
   pub async fn init_database_row_from_collab(
@@ -342,12 +367,34 @@ impl Block {
     row_id: RowId,
     collab: Collab,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
-    let database_row = DatabaseRow::open(
-      row_id.clone(),
-      collab,
-      self.row_change_tx.clone(),
-      self.collab_service.clone(),
-    )?;
+    let is_exist = match self.collab_service.persistence() {
+      None => false,
+      Some(persistence) => persistence.is_collab_exist(&row_id),
+    };
+    let row_uuid = Uuid::parse_str(&row_id)?;
+    let database_row = if is_exist {
+      DatabaseRow::open(
+        row_id.clone(),
+        collab,
+        self.row_change_tx.clone(),
+        self.collab_service.clone(),
+      )?
+    } else {
+      let row = Row::new(row_id.clone(), &self.database_id);
+      let mut database_row = DatabaseRow::create(
+        row_id.clone(),
+        collab,
+        self.row_change_tx.clone(),
+        row,
+        self.collab_service.clone(),
+      );
+      self
+        .collab_service
+        .finalize_collab(row_uuid, CollabType::DatabaseRow, &mut database_row.collab)
+        .await?;
+      database_row
+    };
+
     let row_details = RowDetail::from_collab(&database_row);
     let database_row = Arc::new(RwLock::from(database_row));
     self.row_mem_cache.insert(row_id, database_row.clone());

@@ -1,3 +1,4 @@
+use collab::core::collab::CollabOptions;
 use collab::core::collab::DataSource;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
@@ -24,7 +25,7 @@ use crate::utils::{
   get_delta_from_block_data, get_delta_from_external_text_id, push_deltas_to_str,
 };
 
-/// The page_id is a reference that points to the block’s id.
+/// The page_id is a reference that points to the block's id.
 /// The block that is referenced by this page_id is the first block of the document.
 /// Crossing this block, we can build the whole document tree.
 const PAGE_ID: &str = "page_id";
@@ -59,9 +60,11 @@ impl Document {
     origin: CollabOrigin,
     doc_state: DataSource,
     document_id: &str,
-    plugins: Vec<Box<dyn CollabPlugin>>,
+    client_id: ClientID,
   ) -> Result<Self, DocumentError> {
-    let collab = Collab::new_with_source(origin, document_id, doc_state, plugins, true)?;
+    let options =
+      CollabOptions::new(document_id.to_string(), client_id).with_data_source(doc_state);
+    let collab = Collab::new_with_options(origin, options)?;
     Document::open(collab)
   }
 
@@ -70,8 +73,13 @@ impl Document {
     Ok(Self { collab, body })
   }
 
-  pub fn create(document_id: &str, data: DocumentData) -> Result<Self, DocumentError> {
-    let collab = Collab::new_with_origin(CollabOrigin::Empty, document_id, vec![], false);
+  pub fn create(
+    document_id: &str,
+    data: DocumentData,
+    client_id: ClientID,
+  ) -> Result<Self, DocumentError> {
+    let options = CollabOptions::new(document_id.to_string(), client_id);
+    let collab = Collab::new_with_options(CollabOrigin::Empty, options)?;
     Self::create_with_data(collab, data)
   }
 

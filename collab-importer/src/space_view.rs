@@ -1,5 +1,5 @@
 use crate::error::ImporterError;
-use collab::core::collab::DataSource;
+use collab::core::collab::{CollabOptions, DataSource, default_client_id};
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
 use collab_document::document_data::default_document_collab_data;
@@ -15,19 +15,16 @@ pub fn create_space_view(
   child_views: Vec<ParentChildViews>,
   space_info: SpaceInfo,
 ) -> Result<(ParentChildViews, Collab), ImporterError> {
-  let import_container_doc_state = default_document_collab_data(view_id)
+  let client_id = default_client_id();
+  let import_container_doc_state = default_document_collab_data(view_id, client_id)
     .map_err(|err| ImporterError::Internal(err.into()))?
     .doc_state
     .to_vec();
 
-  let collab = Collab::new_with_source(
-    CollabOrigin::Empty,
-    view_id,
-    DataSource::DocStateV1(import_container_doc_state),
-    vec![],
-    false,
-  )
-  .map_err(|err| ImporterError::Internal(err.into()))?;
+  let options = CollabOptions::new(view_id.to_string(), client_id)
+    .with_data_source(DataSource::DocStateV1(import_container_doc_state));
+  let collab = Collab::new_with_options(CollabOrigin::Empty, options)
+    .map_err(|err| ImporterError::Internal(err.into()))?;
 
   let view = NestedChildViewBuilder::new(uid, workspace_id.to_string())
     .with_view_id(view_id)

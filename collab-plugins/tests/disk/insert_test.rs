@@ -2,7 +2,9 @@ use crate::disk::script::{CollabPersistenceTest, disk_plugin_with_db};
 use assert_json_diff::assert_json_eq;
 
 use anyhow::Error;
-use collab::preclude::CollabBuilder;
+use collab::core::collab::{CollabOptions, default_client_id};
+use collab::core::origin::CollabOrigin;
+use collab::preclude::Collab;
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::local_storage::kv::KVTransactionDB;
@@ -47,11 +49,10 @@ async fn flush_test() {
     workspace_id: test.workspace_id.clone(),
   };
 
-  let mut collab = CollabBuilder::new(1, &doc_id, data_source.into())
-    .with_device_id("1")
-    .with_plugin(disk_plugin)
-    .build()
-    .unwrap();
+  let options = CollabOptions::new(doc_id.to_string(), default_client_id())
+    .with_data_source(data_source.into());
+  let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+  collab.add_plugin(Box::new(disk_plugin));
   collab.initialize();
 
   for i in 0..100 {

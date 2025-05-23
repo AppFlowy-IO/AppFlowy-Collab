@@ -1,11 +1,11 @@
-use assert_json_diff::assert_json_eq;
-use collab_document::document::{Document, gen_document_id};
-use serde_json::json;
-
 use crate::importer::util::{
   get_block_by_type, get_children_blocks, get_delta_json, get_page_block,
   markdown_to_document_data, parse_json,
 };
+use assert_json_diff::assert_json_eq;
+use collab::core::collab::default_client_id;
+use collab_document::document::{Document, gen_document_id};
+use serde_json::json;
 
 #[test]
 fn test_override_document() {
@@ -13,7 +13,7 @@ fn test_override_document() {
   let doc_data_1 = markdown_to_document_data(markdown_1);
 
   let doc_id = gen_document_id();
-  let doc = Document::create(&doc_id, doc_data_1).unwrap();
+  let doc = Document::create(&doc_id, doc_data_1, default_client_id()).unwrap();
   {
     let plain_txt = doc.paragraphs().join("");
     assert_eq!(markdown_1, plain_txt);

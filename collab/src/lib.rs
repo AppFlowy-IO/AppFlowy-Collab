@@ -25,6 +25,7 @@ pub mod preclude {
   pub use serde_json::value::Value as JsonValue;
   pub use yrs::In as YrsInput;
   pub use yrs::Out as YrsValue;
+  pub use yrs::block::ClientID;
   pub use yrs::block::Prelim;
   pub use yrs::types::{
     AsPrelim, Attrs, Delta as YrsDelta, EntryChange, GetString, Observable, ToJson, array::Array, *,
@@ -32,7 +33,7 @@ pub mod preclude {
   pub use yrs::*;
 
   pub use crate::any_mut::AnyMut;
-  pub use crate::core::collab::{Collab, CollabBuilder};
+  pub use crate::core::collab::Collab;
   pub use crate::core::collab_plugin::CollabPlugin;
   pub use crate::core::fill::{FillError, FillRef};
   pub use crate::util::MapExt;

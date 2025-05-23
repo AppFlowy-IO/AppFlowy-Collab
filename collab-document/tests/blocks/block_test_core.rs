@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use crate::util::document_storage;
 
-use collab::preclude::{Collab, CollabBuilder};
+use collab::core::collab::{CollabOptions, default_client_id};
+use collab::core::origin::{CollabClient, CollabOrigin};
+use collab::preclude::Collab;
 use collab_document::blocks::{
   Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, DocumentData, DocumentMeta,
 };
@@ -40,11 +42,12 @@ impl BlockTestCore {
       uid: 1,
       workspace_id,
     };
-    let mut collab = CollabBuilder::new(1, doc_id, data_source.into())
-      .with_plugin(disk_plugin)
-      .with_device_id("1")
-      .build()
-      .unwrap();
+
+    let options = CollabOptions::new(doc_id.to_string(), default_client_id())
+      .with_data_source(data_source.into());
+    let client = CollabClient::new(1, "1");
+    let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
+    collab.add_plugin(Box::new(disk_plugin));
     collab.initialize();
 
     let document_data = BlockTestCore::get_default_data();

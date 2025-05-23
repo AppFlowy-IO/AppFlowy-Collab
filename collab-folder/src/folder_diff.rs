@@ -2,12 +2,13 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use arc_swap::ArcSwapOption;
-
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::error::CollabError;
 use collab::preclude::updates::decoder::Decode;
-use collab::preclude::{DeepObservable, EntryChange, Event, MapExt, ReadTxn, Update, YrsValue};
+use collab::preclude::{
+  ClientID, DeepObservable, EntryChange, Event, MapExt, ReadTxn, Update, YrsValue,
+};
 
 use crate::Folder;
 use crate::error::FolderError;
@@ -17,6 +18,7 @@ impl Folder {
   pub fn calculate_view_changes(
     &self,
     encoded_collab: EncodedCollab,
+    client_id: ClientID,
   ) -> Result<Vec<FolderViewChange>, FolderError> {
     //TODO: this entire method should be reimplemented into standard diff comparison
     let changes = Arc::new(ArcSwapOption::default());
@@ -31,7 +33,7 @@ impl Folder {
       CollabOrigin::Empty,
       encoded_collab.into(),
       &workspace_id,
-      vec![],
+      client_id,
     )?;
     let cloned_container = other.body.views.container.clone();
     let sub = {

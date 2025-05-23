@@ -1,5 +1,5 @@
-use std::fmt::Debug;
 pub use std::fmt::Display;
+use std::fmt::{Debug, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::panic;
 use std::panic::AssertUnwindSafe;
@@ -11,6 +11,7 @@ use std::vec::IntoIter;
 use serde_json::json;
 
 use tokio_stream::wrappers::WatchStream;
+use tracing::trace;
 use yrs::block::{ClientID, Prelim};
 use yrs::types::ToJson;
 use yrs::types::map::MapEvent;
@@ -225,12 +226,56 @@ impl CollabContext {
   }
 }
 
-pub fn make_yrs_doc(skp_gc: bool) -> Doc {
-  Doc::with_options(Options {
-    skip_gc: skp_gc,
+pub fn default_client_id() -> ClientID {
+  let mut rng = fastrand::Rng::new();
+  let client_id: u32 = rng.u32(0..u32::MAX);
+  client_id as ClientID
+}
+
+pub fn make_yrs_doc(object_id: &str, skip_gc: bool, client_id: ClientID) -> Doc {
+  let options = Options {
+    skip_gc,
+    client_id,
     offset_kind: OffsetKind::Utf16,
     ..Options::default()
-  })
+  };
+
+  trace!(
+    "Creating a new Yrs doc:{} for client:{}",
+    object_id, options.client_id
+  );
+  Doc::with_options(options)
+}
+
+pub struct CollabOptions {
+  pub object_id: String,
+  pub data_source: Option<DataSource>,
+  pub client_id: ClientID,
+}
+
+impl Display for CollabOptions {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("CollabOptions")
+      .field("object_id", &self.object_id)
+      .field("client_id", &self.client_id)
+      .field("data_source", &self.data_source)
+      .finish()
+  }
+}
+
+impl CollabOptions {
+  pub fn new(object_id: String, client_id: ClientID) -> Self {
+    Self {
+      object_id,
+      data_source: None,
+      client_id,
+    }
+  }
+
+  pub fn with_data_source(mut self, data_source: DataSource) -> Self {
+    self.data_source = Some(data_source);
+    self
+  }
 }
 
 impl Collab {
@@ -238,42 +283,60 @@ impl Collab {
     uid: i64,
     object_id: T,
     device_id: impl ToString,
-    plugins: Vec<Box<dyn CollabPlugin>>,
-    skip_gc: bool,
+    client_id: ClientID,
   ) -> Collab {
     let origin = CollabClient::new(uid, device_id);
-    Self::new_with_origin(CollabOrigin::Client(origin), object_id, plugins, skip_gc)
+    let options = CollabOptions::new(object_id.as_ref().to_string(), client_id);
+    Self::new_with_options(CollabOrigin::Client(origin), options).unwrap()
   }
 
-  pub fn new_with_source(
+  pub fn new_with_options(
     origin: CollabOrigin,
-    object_id: &str,
-    data_source: DataSource,
-    plugins: Vec<Box<dyn CollabPlugin>>,
-    skip_gc: bool,
+    options: CollabOptions,
   ) -> Result<Self, CollabError> {
-    let mut collab = Self::new_with_origin(origin, object_id, plugins, skip_gc);
-    match data_source {
-      DataSource::Disk(disk) => {
-        if let Some(disk) = disk {
-          disk.load_collab_from_disk(&mut collab)?;
-        }
-      },
-      DataSource::DocStateV1(doc_state) => {
-        if !doc_state.is_empty() {
-          let update = Update::decode_v1(&doc_state)?;
-          collab.context.apply_update(update)?;
-        }
-      },
-      DataSource::DocStateV2(doc_state) => {
-        if !doc_state.is_empty() {
-          let update = Update::decode_v2(&doc_state)?;
-          collab.context.apply_update(update)?;
-        }
-      },
+    let object_id = options.object_id;
+    let doc = make_yrs_doc(&object_id, false, options.client_id);
+    let data = doc.get_or_insert_map(DATA_SECTION);
+    let meta = doc.get_or_insert_map(META_SECTION);
+    let plugins = Plugins::new(vec![]);
+    let state = Arc::new(State::new(&object_id));
+    let awareness = Awareness::new(doc);
+    let mut this = Self {
+      object_id,
+      context: CollabContext::new(origin, awareness),
+      state,
+      data,
+      meta,
+      plugins,
+      update_subscription: Default::default(),
+      after_txn_subscription: Default::default(),
+      awareness_subscription: Default::default(),
+      index_json_sender: tokio::sync::broadcast::channel(100).0,
+    };
+
+    if let Some(data_source) = options.data_source {
+      match data_source {
+        DataSource::Disk(disk) => {
+          if let Some(disk) = disk {
+            disk.load_collab_from_disk(&mut this)?;
+          }
+        },
+        DataSource::DocStateV1(doc_state) => {
+          if !doc_state.is_empty() {
+            let update = Update::decode_v1(&doc_state)?;
+            this.context.apply_update(update)?;
+          }
+        },
+        DataSource::DocStateV2(doc_state) => {
+          if !doc_state.is_empty() {
+            let update = Update::decode_v2(&doc_state)?;
+            this.context.apply_update(update)?;
+          }
+        },
+      }
     }
 
-    Ok(collab)
+    Ok(this)
   }
 
   /// Each collab can have only one cloud plugin
@@ -310,33 +373,6 @@ impl Collab {
       data,
       meta,
       plugins: Plugins::default(),
-      update_subscription: Default::default(),
-      after_txn_subscription: Default::default(),
-      awareness_subscription: Default::default(),
-      index_json_sender: tokio::sync::broadcast::channel(100).0,
-    }
-  }
-
-  pub fn new_with_origin<T: AsRef<str>>(
-    origin: CollabOrigin,
-    object_id: T,
-    plugins: Vec<Box<dyn CollabPlugin>>,
-    skip_gc: bool,
-  ) -> Collab {
-    let object_id = object_id.as_ref().to_string();
-    let doc = make_yrs_doc(skip_gc);
-    let data = doc.get_or_insert_map(DATA_SECTION);
-    let meta = doc.get_or_insert_map(META_SECTION);
-    let plugins = Plugins::new(plugins);
-    let state = Arc::new(State::new(&object_id));
-    let awareness = Awareness::new(doc);
-    Self {
-      object_id,
-      context: CollabContext::new(origin, awareness),
-      state,
-      data,
-      meta,
-      plugins,
       update_subscription: Default::default(),
       after_txn_subscription: Default::default(),
       awareness_subscription: Default::default(),
@@ -611,16 +647,6 @@ fn observe_doc(
   (update_sub, after_txn_sub)
 }
 
-/// A builder that used to create a new `Collab` instance.
-pub struct CollabBuilder {
-  uid: i64,
-  device_id: String,
-  plugins: Vec<Box<dyn CollabPlugin>>,
-  object_id: String,
-  source: DataSource,
-  skip_gc: bool,
-}
-
 /// The raw data of a collab document. It is a list of updates. Each of them can be parsed by
 /// [Update::decode_v1].
 pub enum DataSource {
@@ -629,6 +655,16 @@ pub enum DataSource {
   Disk(Option<Box<dyn CollabPersistence>>),
   DocStateV1(Vec<u8>),
   DocStateV2(Vec<u8>),
+}
+
+impl Debug for DataSource {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      DataSource::Disk(_) => f.write_str("Disk"),
+      DataSource::DocStateV1(_) => f.write_str("DocStateV1"),
+      DataSource::DocStateV2(_) => f.write_str("DocStateV2"),
+    }
+  }
 }
 
 impl From<EncodedCollab> for DataSource {
@@ -660,53 +696,6 @@ impl DataSource {
     }
   }
 }
-impl CollabBuilder {
-  pub fn new<T: AsRef<str>>(uid: i64, object_id: T, data_source: DataSource) -> Self {
-    let object_id = object_id.as_ref();
-    Self {
-      uid,
-      plugins: vec![],
-      object_id: object_id.to_string(),
-      device_id: "".to_string(),
-      source: data_source,
-      skip_gc: true,
-    }
-  }
-
-  pub fn with_device_id<T>(mut self, device_id: T) -> Self
-  where
-    T: AsRef<str>,
-  {
-    self.device_id = device_id.as_ref().to_string();
-    self
-  }
-
-  pub fn with_plugin<T>(mut self, plugin: T) -> Self
-  where
-    T: CollabPlugin + 'static,
-  {
-    self.plugins.push(Box::new(plugin));
-    self
-  }
-
-  pub fn with_skip_gc(mut self, skip_gc: bool) -> Self {
-    self.skip_gc = skip_gc;
-    self
-  }
-
-  pub fn build(self) -> Result<Collab, CollabError> {
-    let origin = CollabOrigin::Client(CollabClient::new(self.uid, self.device_id));
-    let collab = Collab::new_with_source(
-      origin,
-      &self.object_id,
-      self.source,
-      self.plugins,
-      self.skip_gc,
-    )?;
-    Ok(collab)
-  }
-}
-
 #[derive(Clone)]
 pub struct Path(Vec<String>);
 

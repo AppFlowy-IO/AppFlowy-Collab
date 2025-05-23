@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use assert_json_diff::assert_json_eq;
+use collab::core::collab::{CollabOptions, default_client_id};
 use collab::core::origin::CollabOrigin;
 use collab::preclude::{Any, Collab};
 use collab::util::AnyMapExt;
@@ -41,14 +42,9 @@ async fn create_initial_database_test() {
   let encoded_collab = database_test
     .encode_collab_v1(|_| Ok::<_, anyhow::Error>(()))
     .unwrap();
-  let collab = Collab::new_with_source(
-    CollabOrigin::Empty,
-    "",
-    encoded_collab.into(),
-    vec![],
-    false,
-  )
-  .unwrap();
+  let options =
+    CollabOptions::new("".to_string(), default_client_id()).with_data_source(encoded_collab.into());
+  let collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let database_id_from_collab = DatabaseBody::database_id_from_collab(&collab).unwrap();
   assert_eq!(database_id_from_collab, database_id);
 }
