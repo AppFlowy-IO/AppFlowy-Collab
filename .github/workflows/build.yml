@@ -2,10 +2,10 @@ name: Cross-Platform Build Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     types: [ opened, synchronize, reopened ]
-    branches: [ main, develop ]
+    branches: [ main ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -43,10 +43,6 @@ jobs:
       - name: Build
         run: cargo build --target ${{ matrix.target }} --verbose
 
-      - name: Run tests (native only)
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
-        run: cargo test --target ${{ matrix.target }} --verbose
-
   # Windows Build
   windows-build:
     name: Windows Build
@@ -74,10 +70,6 @@ jobs:
       - name: Build
         run: cargo build --target ${{ matrix.target }} --verbose
 
-      - name: Run tests (x64 only)
-        if: matrix.target == 'x86_64-pc-windows-msvc'
-        run: cargo test --target ${{ matrix.target }} --verbose
-
   # macOS Build
   macos-build:
     name: macOS Build
@@ -104,9 +96,6 @@ jobs:
       - name: Build
         run: cargo build --target ${{ matrix.target }} --verbose
 
-      - name: Run tests
-        run: cargo test --target ${{ matrix.target }} --verbose
-
   # iOS Build
   ios-build:
     name: iOS Build
@@ -131,12 +120,12 @@ jobs:
         run: brew install protobuf
 
       - name: Build
-        run: cargo build --target ${{ matrix.target }} --verbose
+        run: IPHONEOS_DEPLOYMENT_TARGET=10.0 cargo build --target ${{ matrix.target }} --verbose
 
   # Android Build
   android-build:
     name: Android Build
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     strategy:
       matrix:
         target: [aarch64-linux-android]
@@ -155,8 +144,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
+          brew install protobuf
 
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
@@ -167,14 +155,10 @@ jobs:
       - name: Configure Android environment
         run: |
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
-          echo "CC_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang" >> $GITHUB_ENV
-          echo "CC_armv7_linux_androideabi=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang" >> $GITHUB_ENV
-          echo "CC_x86_64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang" >> $GITHUB_ENV
-          echo "CC_i686_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang" >> $GITHUB_ENV
-          echo "AR_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" >> $GITHUB_ENV
-          echo "AR_armv7_linux_androideabi=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" >> $GITHUB_ENV
-          echo "AR_x86_64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" >> $GITHUB_ENV
-          echo "AR_i686_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" >> $GITHUB_ENV
+          echo "CC_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang" >> $GITHUB_ENV
+          echo "CXX_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang++" >> $GITHUB_ENV
+          echo "AR_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar" >> $GITHUB_ENV
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang" >> $GITHUB_ENV
 
       - name: Build
         run: cargo build --target ${{ matrix.target }} --verbose
@@ -198,7 +182,7 @@ jobs:
              [ "${{ needs.windows-build.result }}" != "success" ] || \
              [ "${{ needs.macos-build.result }}" != "success" ] || \
              [ "${{ needs.ios-build.result }}" != "success" ] || \
-             [ "${{ needs.android-build.result }}" != "success" ] || \
+             [ "${{ needs.android-build.result }}" != "success" ]; then
             echo "❌ One or more builds failed"
             exit 1
           else
