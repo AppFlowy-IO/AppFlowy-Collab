@@ -1,0 +1,190 @@
+name: Cross-Platform Build Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    types: [ opened, synchronize, reopened ]
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: "1.85"
+
+jobs:
+  # Linux Build
+  linux-build:
+    name: Linux Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64-unknown-linux-gnu]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: linux-${{ matrix.target }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          fi
+
+      - name: Build
+        run: cargo build --target ${{ matrix.target }} --verbose
+
+  # Windows Build
+  windows-build:
+    name: Windows Build
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-${{ matrix.target }}
+
+      - name: Install protobuf
+        run: |
+          choco install protoc
+
+      - name: Build
+        run: cargo build --target ${{ matrix.target }} --verbose
+
+  # macOS Build
+  macos-build:
+    name: macOS Build
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [x86_64-apple-darwin, aarch64-apple-darwin]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-${{ matrix.target }}
+
+      - name: Install protobuf
+        run: brew install protobuf
+
+      - name: Build
+        run: cargo build --target ${{ matrix.target }} --verbose
+
+  # iOS Build
+  ios-build:
+    name: iOS Build
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [aarch64-apple-ios, aarch64-apple-ios-sim]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ios-${{ matrix.target }}
+
+      - name: Install protobuf
+        run: brew install protobuf
+
+      - name: Build
+        run: IPHONEOS_DEPLOYMENT_TARGET=10.0 cargo build --target ${{ matrix.target }} --verbose
+
+  # Android Build
+  android-build:
+    name: Android Build
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [aarch64-linux-android]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-${{ matrix.target }}
+
+      - name: Install dependencies
+        run: |
+          brew install protobuf
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25c
+          add-to-path: false
+
+      - name: Configure Android environment
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
+          echo "CC_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang" >> $GITHUB_ENV
+          echo "CXX_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang++" >> $GITHUB_ENV
+          echo "AR_aarch64_linux_android=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar" >> $GITHUB_ENV
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang" >> $GITHUB_ENV
+
+      - name: Build
+        run: cargo build --target ${{ matrix.target }} --verbose
+
+  build-summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [linux-build, windows-build, macos-build, ios-build, android-build]
+    if: always()
+    steps:
+      - name: Check build results
+        run: |
+          echo "Build Summary:"
+          echo "Linux: ${{ needs.linux-build.result }}"
+          echo "Windows: ${{ needs.windows-build.result }}"
+          echo "macOS: ${{ needs.macos-build.result }}"
+          echo "iOS: ${{ needs.ios-build.result }}"
+          echo "Android: ${{ needs.android-build.result }}"
+
+          if [ "${{ needs.linux-build.result }}" != "success" ] || \
+             [ "${{ needs.windows-build.result }}" != "success" ] || \
+             [ "${{ needs.macos-build.result }}" != "success" ] || \
+             [ "${{ needs.ios-build.result }}" != "success" ] || \
+             [ "${{ needs.android-build.result }}" != "success" ]; then
+            echo "❌ One or more builds failed"
+            exit 1
+          else
+            echo "✅ All builds succeeded"
+          fi
