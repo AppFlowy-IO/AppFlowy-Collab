@@ -1,8 +1,11 @@
+use collab::core::collab::default_client_id;
 use collab_database::database::Database;
 use collab_database::rows::Row;
 use collab_database::template::csv::CSVTemplate;
 use collab_database::template::entity::CELL_DATA;
+use collab_database::workspace_database::NoPersistenceDatabaseCollabService;
 use futures::StreamExt;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn import_csv_test() {
@@ -10,7 +13,10 @@ async fn import_csv_test() {
   let csv_template = CSVTemplate::try_from_reader(csv_data.as_bytes(), false, None).unwrap();
 
   let database_template = csv_template.try_into_database_template(None).await.unwrap();
-  let database = Database::create_with_template(database_template)
+  let service = Arc::new(NoPersistenceDatabaseCollabService {
+    client_id: default_client_id(),
+  });
+  let database = Database::create_with_template(database_template, service)
     .await
     .unwrap();
 

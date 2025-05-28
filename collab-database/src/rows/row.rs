@@ -47,13 +47,26 @@ pub struct DatabaseRow {
   collab_service: Arc<dyn DatabaseCollabService>,
 }
 
-pub fn default_database_row_data(row_id: &RowId, row: Row, client_id: ClientID) -> EncodedCollab {
+pub fn default_database_row_from_row(row: Row, client_id: ClientID) -> EncodedCollab {
+  let collab = default_database_row_collab(row, client_id);
+  collab
+    .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
+    .unwrap()
+}
+
+pub fn default_database_row_data(row: Row, client_id: ClientID) -> EncodedCollab {
+  let collab = default_database_row_collab(row, client_id);
+  collab
+    .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
+    .unwrap()
+}
+
+pub fn default_database_row_collab(row: Row, client_id: ClientID) -> Collab {
+  let row_id = row.id.clone();
   let options = CollabOptions::new(row_id.to_string(), client_id);
   let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let _ = DatabaseRowBody::create(row_id.clone(), &mut collab, row);
   collab
-    .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
-    .unwrap()
 }
 
 impl Drop for DatabaseRow {

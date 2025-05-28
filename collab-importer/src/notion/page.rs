@@ -17,6 +17,7 @@ use crate::util::{FileId, upload_file_url};
 use collab::core::collab::default_client_id;
 use collab_database::rows::RowId;
 use collab_database::template::builder::FileUrlBuilder;
+use collab_database::workspace_database::NoPersistenceDatabaseCollabService;
 use collab_document::document_data::default_document_data;
 use percent_encoding::percent_decode_str;
 use serde::Serialize;
@@ -25,6 +26,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio::fs;
 use tracing::error;
 
@@ -524,7 +526,13 @@ impl NotionPage {
           .try_into_database_template(Some(Box::new(file_url_builder)))
           .await
           .unwrap();
-        let mut database = Database::create_with_template(database_template).await?;
+        let mut database = Database::create_with_template(
+          database_template,
+          Arc::new(NoPersistenceDatabaseCollabService {
+            client_id: default_client_id(),
+          }),
+        )
+        .await?;
         let mut row_documents = row_documents.clone();
 
         if let Some(field) = database.get_primary_field() {

@@ -22,9 +22,7 @@ use crate::views::{
   FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
   OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver,
 };
-use crate::workspace_database::{
-  DatabaseCollabService, DatabaseMeta, NoPersistenceDatabaseCollabService,
-};
+use crate::workspace_database::{DatabaseCollabService, DatabaseDataVariant, DatabaseMeta};
 
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
@@ -33,7 +31,6 @@ use crate::entity::{
 use crate::template::entity::DatabaseTemplate;
 
 use collab::core::origin::CollabOrigin;
-use collab::entity::EncodedCollab;
 use collab::lock::RwLock;
 use collab::preclude::{
   Any, Array, Collab, FillRef, JsonValue, Map, MapExt, MapPrelim, MapRef, ReadTxn, ToJson,
@@ -47,7 +44,7 @@ use futures::stream::StreamExt;
 use futures::{Stream, stream};
 use nanoid::nanoid;
 
-use collab::core::collab::{CollabOptions, default_client_id};
+use collab::core::collab::CollabOptions;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -72,6 +69,7 @@ impl Drop for Database {
 const FIELDS: &str = "fields";
 const VIEWS: &str = "views";
 
+#[derive(Clone)]
 pub struct DatabaseContext {
   pub collab_service: Arc<dyn DatabaseCollabService>,
   pub notifier: DatabaseNotify,
@@ -86,88 +84,135 @@ impl DatabaseContext {
   }
 }
 
-pub async fn default_database_data(
+pub async fn default_database_collab(
   database_id: &str,
   client_id: ClientID,
-) -> Result<EncodedCollab, DatabaseError> {
-  let context = DatabaseContext::new(Arc::new(NoPersistenceDatabaseCollabService {
-    client_id: default_client_id(),
-  }));
+  params: Option<CreateDatabaseParams>,
+  context: DatabaseContext,
+) -> Result<(DatabaseBody, Collab), DatabaseError> {
   let collab = Collab::new_with_options(
     CollabOrigin::Empty,
     CollabOptions::new(database_id.to_string(), client_id),
   )
   .map_err(|e| DatabaseError::Internal(e.into()))?;
-  let (_, collab) =
-    DatabaseBody::create(collab, database_id.to_string(), context, vec![], vec![]).await?;
-  Ok(
-    collab
-      .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
-      .unwrap(),
-  )
+  let collab = match params {
+    None => {
+      DatabaseBody::create(
+        collab,
+        database_id.to_string(),
+        context,
+        vec![],
+        vec![],
+        vec![],
+      )
+      .await?
+    },
+    Some(params) => {
+      DatabaseBody::create(
+        collab,
+        database_id.to_string(),
+        context,
+        params.rows,
+        params.fields,
+        params.views,
+      )
+      .await?
+    },
+  };
+
+  Ok(collab)
 }
 
 impl Database {
   /// Get or Create a database with the given database_id.
+  pub async fn arc_open(
+    database_id: &str,
+    context: DatabaseContext,
+  ) -> Result<Arc<RwLock<Self>>, DatabaseError> {
+    if database_id.is_empty() {
+      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
+    }
+
+    let collab = context
+      .collab_service
+      .clone()
+      .build_arc_database(database_id, false, None, context)
+      .await?;
+
+    Ok(collab)
+  }
+
   pub async fn open(database_id: &str, context: DatabaseContext) -> Result<Self, DatabaseError> {
     if database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
-    let collab = context
+    let database = context
       .collab_service
-      .build_collab(database_id, CollabType::Database, None)
+      .clone()
+      .build_database(database_id, false, None, context)
       .await?;
 
-    let collab_service = context.collab_service.clone();
-    let (body, collab) = DatabaseBody::open(collab, context)?;
-    Ok(Self {
-      collab,
-      body,
-      collab_service,
-    })
+    Ok(database)
   }
 
   pub async fn create(
-    database_id: &str,
     context: DatabaseContext,
-    rows: Vec<CreateRowParams>,
-    fields: Vec<Field>,
+    params: CreateDatabaseParams,
   ) -> Result<Self, DatabaseError> {
-    if database_id.is_empty() {
+    if params.database_id.is_empty() {
+      return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
+    }
+    trace!(
+      "[Database] create {}, client_id: {}",
+      params.database_id,
+      context.collab_service.client_id().await
+    );
+    let database_id = params.database_id.clone();
+    let database = context
+      .collab_service
+      .clone()
+      .build_database(
+        &database_id,
+        true,
+        Some(DatabaseDataVariant::Params(params)),
+        context,
+      )
+      .await?;
+    Ok(database)
+  }
+
+  pub async fn arc_create(
+    context: DatabaseContext,
+    params: CreateDatabaseParams,
+  ) -> Result<Arc<RwLock<Self>>, DatabaseError> {
+    if params.database_id.is_empty() {
       return Err(DatabaseError::InvalidDatabaseID("database_id is empty"));
     }
 
-    let encoded_collab =
-      default_database_data(database_id, context.collab_service.client_id().await).await?;
-    let collab = context
+    trace!(
+      "[Database] create {}, client_id: {}",
+      params.database_id,
+      context.collab_service.client_id().await
+    );
+    let database_id = params.database_id.clone();
+    let database = context
       .collab_service
-      .build_collab(
-        database_id,
-        CollabType::Database,
-        Some((encoded_collab, true)),
+      .clone()
+      .build_arc_database(
+        &database_id,
+        true,
+        Some(DatabaseDataVariant::Params(params)),
+        context,
       )
       .await?;
-    let collab_service = context.collab_service.clone();
-    let (body, mut collab) =
-      DatabaseBody::create(collab, database_id.to_string(), context, rows, fields).await?;
-
-    collab_service
-      .finalize_collab(
-        Uuid::parse_str(database_id)?,
-        CollabType::Database,
-        &mut collab,
-      )
-      .await?;
-
-    Ok(Self {
-      collab,
-      body,
-      collab_service,
-    })
+    Ok(database)
   }
 
-  pub async fn create_with_template<T>(template: T) -> Result<Self, DatabaseError>
+  pub async fn create_with_template<T>(
+    template: T,
+    collab_service: Arc<dyn DatabaseCollabService>,
+  ) -> Result<Database, DatabaseError>
   where
     T: TryInto<DatabaseTemplate> + Send + Sync + 'static,
     <T as TryInto<DatabaseTemplate>>::Error: ToString,
@@ -182,9 +227,7 @@ impl Database {
     .into_params();
 
     let context = DatabaseContext {
-      collab_service: Arc::new(NoPersistenceDatabaseCollabService {
-        client_id: default_client_id(),
-      }),
+      collab_service,
       notifier: Default::default(),
     };
     Self::create_with_view(params, context).await
@@ -193,32 +236,19 @@ impl Database {
   /// Create a new database with the given [CreateDatabaseParams]
   /// The method will set the inline view id to the given view_id
   /// from the [CreateDatabaseParams].
+  pub async fn create_arc_with_view(
+    params: CreateDatabaseParams,
+    context: DatabaseContext,
+  ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
+    let database = Self::arc_create(context, params).await?;
+    Ok(database)
+  }
+
   pub async fn create_with_view(
     params: CreateDatabaseParams,
     context: DatabaseContext,
-  ) -> Result<Self, DatabaseError> {
-    let CreateDatabaseParams {
-      database_id,
-      rows,
-      fields,
-      views,
-    } = params;
-
-    let mut database = Self::create(&database_id, context, rows, fields).await?;
-    let row_orders = database.get_all_row_orders().await;
-    let field_orders = database.get_all_field_orders();
-    {
-      let mut txn = database.collab.context.transact_mut();
-      for linked_view in views {
-        database.body.create_linked_view(
-          &mut txn,
-          linked_view,
-          field_orders.clone(),
-          row_orders.clone(),
-        )?;
-      }
-    }
-
+  ) -> Result<Database, DatabaseError> {
+    let database = Self::create(context, params).await?;
     Ok(database)
   }
 
@@ -1630,7 +1660,7 @@ pub struct DatabaseBody {
 }
 
 impl DatabaseBody {
-  fn open(collab: Collab, context: DatabaseContext) -> Result<(Self, Collab), DatabaseError> {
+  pub fn open(collab: Collab, context: DatabaseContext) -> Result<(Self, Collab), DatabaseError> {
     CollabType::Database.validate_require_data(&collab)?;
     let body = Self::from_collab(&collab, context.collab_service, Some(context.notifier))
       .ok_or_else(|| DatabaseError::NoRequiredData("Can not open database".to_string()))?;
@@ -1643,6 +1673,7 @@ impl DatabaseBody {
     context: DatabaseContext,
     new_rows: Vec<CreateRowParams>,
     new_fields: Vec<Field>,
+    new_views: Vec<CreateViewParams>,
   ) -> Result<(Self, Collab), DatabaseError> {
     let origin = collab.origin().clone();
     let mut txn = collab.context.transact_mut();
@@ -1700,6 +1731,13 @@ impl DatabaseBody {
       block,
       notifier: Some(context.notifier),
     };
+
+    let mut txn = collab.context.transact_mut();
+    for new_view in new_views {
+      body.create_linked_view(&mut txn, new_view, field_orders.clone(), row_orders.clone())?;
+    }
+    drop(txn);
+
     Ok((body, collab))
   }
 

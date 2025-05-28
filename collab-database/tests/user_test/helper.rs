@@ -8,14 +8,17 @@ use async_trait::async_trait;
 use collab::core::collab::{CollabOptions, DataSource, default_client_id};
 use collab::core::origin::CollabOrigin;
 use collab::preclude::Collab;
-use collab_database::database::{gen_database_id, gen_field_id};
+use collab_database::database::{
+  Database, DatabaseBody, DatabaseContext, default_database_collab, gen_database_id, gen_field_id,
+};
 use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
-use collab_database::rows::{Cells, CreateRowParams};
+use collab_database::rows::{Cells, CreateRowParams, DatabaseRow, RowChangeSender, RowId};
 use collab_database::views::DatabaseLayout;
 use collab_database::workspace_database::{
-  DatabaseCollabPersistenceService, DatabaseCollabService, EncodeCollabByOid, RowRelationChange,
-  RowRelationUpdateReceiver, WorkspaceDatabaseManager,
+  DatabaseCollabPersistenceService, DatabaseCollabService, DatabaseDataVariant,
+  DatabaseRowDataVariant, EncodeCollabByOid, RowRelationChange, RowRelationUpdateReceiver,
+  WorkspaceDatabaseManager,
 };
 use collab_entity::CollabType;
 use collab_plugins::local_storage::CollabPersistenceConfig;
@@ -25,7 +28,7 @@ use crate::database_test::helper::field_settings_for_default_database;
 use crate::helper::{TestTextCell, make_rocks_db, setup_log};
 
 use collab::entity::EncodedCollab;
-use collab::lock::Mutex;
+use collab::lock::{Mutex, RwLock};
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab_plugins::CollabKVDB;
 use collab_plugins::local_storage::kv::KVTransactionDB;
@@ -72,6 +75,40 @@ pub struct TestUserDatabaseServiceImpl {
   pub client_id: ClientID,
 }
 
+impl TestUserDatabaseServiceImpl {
+  fn build_collab(
+    &self,
+    object_id: &str,
+    collab_type: CollabType,
+    encoded_collab: Option<EncodedCollab>,
+  ) -> Result<Collab, DatabaseError> {
+    let db_plugin = RocksdbDiskPlugin::new_with_config(
+      self.uid,
+      self.workspace_id.clone(),
+      object_id.to_string(),
+      collab_type,
+      Arc::downgrade(&self.db),
+      CollabPersistenceConfig::default(),
+    );
+
+    let data_source = encoded_collab.map(DataSource::from).unwrap_or_else(|| {
+      KVDBCollabPersistenceImpl {
+        db: Arc::downgrade(&self.db),
+        uid: self.uid,
+        workspace_id: self.workspace_id.clone(),
+      }
+      .into_data_source()
+    });
+
+    let options =
+      CollabOptions::new(object_id.to_string(), self.client_id).with_data_source(data_source);
+    let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+    collab.add_plugin(Box::new(db_plugin));
+    collab.initialize();
+    Ok(collab)
+  }
+}
+
 pub struct TestUserDatabasePersistenceImpl {
   pub uid: i64,
   pub workspace_id: String,
@@ -116,47 +153,75 @@ impl DatabaseCollabService for TestUserDatabaseServiceImpl {
     self.client_id
   }
 
-  async fn build_collab(
+  async fn build_arc_database(
     &self,
     object_id: &str,
-    object_type: CollabType,
-    encoded_collab: Option<(EncodedCollab, bool)>,
-  ) -> Result<Collab, DatabaseError> {
-    let db_plugin = RocksdbDiskPlugin::new_with_config(
-      self.uid,
-      self.workspace_id.clone(),
-      object_id.to_string(),
-      object_type,
-      Arc::downgrade(&self.db),
-      CollabPersistenceConfig::default(),
-    );
-
-    let data_source = encoded_collab
-      .map(|(encoded_collab, _)| DataSource::from(encoded_collab))
-      .unwrap_or_else(|| {
-        KVDBCollabPersistenceImpl {
-          db: Arc::downgrade(&self.db),
-          uid: self.uid,
-          workspace_id: self.workspace_id.clone(),
-        }
-        .into_data_source()
-      });
-
-    let options =
-      CollabOptions::new(object_id.to_string(), self.client_id).with_data_source(data_source);
-    let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
-    collab.add_plugin(Box::new(db_plugin));
-    collab.initialize();
-    Ok(collab)
+    _is_new: bool,
+    data: Option<DatabaseDataVariant>,
+    context: DatabaseContext,
+  ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
+    let database = self.build_database(object_id, false, data, context).await?;
+    Ok(Arc::new(RwLock::new(database)))
   }
 
-  async fn finalize_collab(
+  async fn build_database(
     &self,
-    _object_id: Uuid,
-    _collab_type: CollabType,
-    _collab: &mut Collab,
-  ) -> Result<(), DatabaseError> {
-    Ok(())
+    object_id: &str,
+    _is_new: bool,
+    data: Option<DatabaseDataVariant>,
+    context: DatabaseContext,
+  ) -> Result<Database, DatabaseError> {
+    let collab_service = context.collab_service.clone();
+    let collab = match data {
+      None => self.build_collab(object_id, CollabType::Database, None)?,
+      Some(data) => match data {
+        DatabaseDataVariant::Params(params) => {
+          let database_id = params.database_id.clone();
+          let collab =
+            default_database_collab(&database_id, self.client_id, Some(params), context.clone())
+              .await?
+              .1;
+          self.build_collab(
+            object_id,
+            CollabType::Database,
+            Some(collab.encode_collab_v1(|_| Ok::<_, DatabaseError>(()))?),
+          )?
+        },
+        DatabaseDataVariant::EncodedCollab(data) => {
+          self.build_collab(object_id, CollabType::Database, Some(data))?
+        },
+      },
+    };
+
+    let (body, collab) = DatabaseBody::open(collab, context)?;
+    Ok(Database {
+      collab,
+      body,
+      collab_service,
+    })
+  }
+
+  async fn build_arc_database_row(
+    &self,
+    object_id: &str,
+    _is_new: bool,
+    data: Option<DatabaseRowDataVariant>,
+    sender: Option<RowChangeSender>,
+    collab_service: Arc<dyn DatabaseCollabService>,
+  ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
+    let data = data.map(|v| v.into_encode_collab(self.client_id));
+    let collab = self.build_collab(object_id, CollabType::DatabaseRow, data)?;
+    let database_row = DatabaseRow::open(RowId::from(object_id), collab, sender, collab_service)?;
+
+    Ok(Arc::new(RwLock::new(database_row)))
+  }
+
+  async fn build_workspace_database_collab(
+    &self,
+    object_id: &str,
+    encoded_collab: Option<EncodedCollab>,
+  ) -> Result<Collab, DatabaseError> {
+    self.build_collab(object_id, CollabType::WorkspaceDatabase, encoded_collab)
   }
 
   async fn get_collabs(
@@ -229,7 +294,7 @@ pub async fn workspace_database_test_with_config(
   };
   let workspace_database_id = uuid::Uuid::new_v4().to_string();
   let collab = collab_service
-    .build_collab(&workspace_database_id, CollabType::WorkspaceDatabase, None)
+    .build_workspace_database_collab(&workspace_database_id, None)
     .await
     .unwrap();
   let inner =
@@ -261,7 +326,7 @@ pub async fn workspace_database_with_db(
   // In test, we use a fixed database_storage_id
   let workspace_database_id = "database_views_aggregate_id";
   let collab = builder
-    .build_collab(workspace_database_id, CollabType::WorkspaceDatabase, None)
+    .build_workspace_database_collab(workspace_database_id, None)
     .await
     .unwrap();
   WorkspaceDatabaseManager::create(workspace_database_id, collab, builder).unwrap()

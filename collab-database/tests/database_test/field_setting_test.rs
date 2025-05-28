@@ -18,6 +18,7 @@ async fn new_field_new_field_setting_test() {
     field_settings: field_settings_for_default_database(),
     ..Default::default()
   };
+
   database_test.create_linked_view(params).unwrap();
 
   // Create a new field
