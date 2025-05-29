@@ -333,9 +333,14 @@ async fn observe_move_database_view_row_test() {
   assert_eq!(row_orders[3].id, row_id_4);
   {
     let collab = &database_test.lock().await.collab;
-    let db_body =
-      DatabaseBody::from_collab(collab, Arc::new(NoPersistenceDatabaseCollabService), None)
-        .unwrap();
+    let db_body = DatabaseBody::from_collab(
+      collab,
+      Arc::new(NoPersistenceDatabaseCollabService {
+        client_id: collab.client_id(),
+      }),
+      None,
+    )
+    .unwrap();
 
     let txn = collab.transact();
     let body_row_orders = db_body.views.get_row_orders(&txn, &first_view_id);
@@ -371,9 +376,14 @@ async fn observe_move_database_view_row_test() {
 
   {
     let collab = &database_test.lock().await.collab;
-    let db_body =
-      DatabaseBody::from_collab(collab, Arc::new(NoPersistenceDatabaseCollabService), None)
-        .unwrap();
+    let db_body = DatabaseBody::from_collab(
+      collab,
+      Arc::new(NoPersistenceDatabaseCollabService {
+        client_id: collab.client_id(),
+      }),
+      None,
+    )
+    .unwrap();
 
     let txn = collab.transact();
     let body_row_orders = db_body.views.get_row_orders(&txn, &second_view_id);

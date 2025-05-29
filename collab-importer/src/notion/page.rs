@@ -14,8 +14,10 @@ use crate::notion::file::NotionFile;
 use crate::notion::walk_dir::{extract_delta_link, extract_external_links};
 use crate::notion::{CSVRelation, ImportedCollabInfoStream};
 use crate::util::{FileId, upload_file_url};
+use collab::core::collab::default_client_id;
 use collab_database::rows::RowId;
 use collab_database::template::builder::FileUrlBuilder;
+use collab_database::workspace_database::NoPersistenceDatabaseCollabService;
 use collab_document::document_data::default_document_data;
 use percent_encoding::percent_decode_str;
 use serde::Serialize;
@@ -24,6 +26,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio::fs;
 use tracing::error;
 
@@ -137,7 +140,7 @@ impl NotionPage {
         let md_importer = MDImporter::new(None);
         let content = fs::read_to_string(file_path).await?;
         let document_data = md_importer.import(&self.view_id, content)?;
-        let mut document = Document::create(&self.view_id, document_data)?;
+        let mut document = Document::create(&self.view_id, document_data, default_client_id())?;
 
         let url_builder = |view_id, path| async move {
           let file_id = FileId::from_path(&path).await.ok()?;
@@ -523,7 +526,13 @@ impl NotionPage {
           .try_into_database_template(Some(Box::new(file_url_builder)))
           .await
           .unwrap();
-        let mut database = Database::create_with_template(database_template).await?;
+        let mut database = Database::create_with_template(
+          database_template,
+          Arc::new(NoPersistenceDatabaseCollabService {
+            client_id: default_client_id(),
+          }),
+        )
+        .await?;
         let mut row_documents = row_documents.clone();
 
         if let Some(field) = database.get_primary_field() {
@@ -642,7 +651,7 @@ impl NotionPage {
       },
       NotionFile::Empty => {
         let data = default_document_data(&self.view_id);
-        let document = Document::create(&self.view_id, data)?;
+        let document = Document::create(&self.view_id, data, default_client_id())?;
         let encoded_collab = document.encode_collab()?;
         let imported_collab = ImportedCollab {
           object_id: self.view_id.clone(),

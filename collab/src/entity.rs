@@ -1,13 +1,32 @@
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use std::fmt::{Debug, Formatter};
+use yrs::Update;
+use yrs::updates::decoder::Decode;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct EncodedCollab {
   pub state_vector: Bytes,
   pub doc_state: Bytes,
   #[serde(default)]
   pub version: EncoderVersion,
+}
+
+impl Debug for EncodedCollab {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    let doc_state = match self.version {
+      EncoderVersion::V1 => Update::decode_v1(&self.doc_state),
+      EncoderVersion::V2 => Update::decode_v2(&self.doc_state),
+    }
+    .map_err(|_| std::fmt::Error)?;
+
+    f.debug_struct("EncodedCollab")
+      .field("state_vector", &self.state_vector)
+      .field("doc_state", &doc_state)
+      .field("version", &self.version)
+      .finish()
+  }
 }
 
 #[derive(Default, Serialize_repr, Deserialize_repr, Eq, PartialEq, Debug, Clone)]

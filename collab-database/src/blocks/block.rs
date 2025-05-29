@@ -6,20 +6,20 @@ use collab_entity::CollabType;
 use crate::error::DatabaseError;
 use crate::rows::{
   Cell, DatabaseRow, Row, RowChangeSender, RowDetail, RowId, RowMeta, RowMetaKey, RowMetaUpdate,
-  RowUpdate, default_database_row_data, meta_id_from_row_id,
+  RowUpdate, meta_id_from_row_id,
 };
 use crate::views::RowOrder;
-use crate::workspace_database::DatabaseCollabService;
+use crate::workspace_database::{DatabaseCollabService, DatabaseRowDataVariant};
 
 use collab::lock::RwLock;
-use collab::preclude::Collab;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 
-use tracing::{error, instrument, trace, warn};
+use tracing::{error, instrument, trace};
 use uuid::Uuid;
+use yrs::block::ClientID;
 
 #[derive(Clone, Debug)]
 pub enum BlockEvent {
@@ -63,28 +63,24 @@ impl Block {
     let cloned_notifier = self.notifier.clone();
     let mut row_on_disk_details = vec![];
     for row_id in row_ids.into_iter() {
-      let collab = self
+      let row = self
         .collab_service
-        .build_collab(&row_id, CollabType::DatabaseRow, None)
+        .build_arc_database_row(
+          &row_id,
+          false,
+          None,
+          self.row_change_tx.clone(),
+          self.collab_service.clone(),
+        )
         .await?;
-      match DatabaseRow::open(
-        row_id.clone(),
-        collab,
-        self.row_change_tx.clone(),
-        self.collab_service.clone(),
-      ) {
-        Ok(row_collab) => {
-          if let Some(row_detail) = RowDetail::from_collab(&row_collab) {
-            self
-              .row_mem_cache
-              .insert(row_id.clone(), Arc::new(RwLock::from(row_collab)));
-            row_on_disk_details.push(row_detail);
-          }
-        },
-        Err(err) => {
-          error!("fail to load row: {:?}", err);
-        },
+
+      let guard = row.read().await;
+      if let Some(row_detail) = RowDetail::from_collab(&guard) {
+        row_on_disk_details.push(row_detail);
       }
+      drop(guard);
+
+      self.row_mem_cache.insert(row_id.clone(), row);
     }
 
     if !row_on_disk_details.is_empty() {
@@ -93,20 +89,24 @@ impl Block {
     Ok(())
   }
 
-  pub async fn create_rows<T>(&self, rows: Vec<T>) -> Vec<RowOrder>
+  pub async fn create_rows<T>(&self, rows: Vec<T>, client_id: ClientID) -> Vec<RowOrder>
   where
     T: Into<Row> + Send,
   {
     let mut row_orders = Vec::with_capacity(rows.len());
     for row in rows {
-      if let Ok(row_order) = self.create_new_row(row).await {
+      if let Ok(row_order) = self.create_new_row(row, client_id).await {
         row_orders.push(row_order);
       }
     }
     row_orders
   }
 
-  pub async fn create_new_row<T: Into<Row>>(&self, row: T) -> Result<RowOrder, DatabaseError> {
+  pub async fn create_new_row<T: Into<Row>>(
+    &self,
+    row: T,
+    _client_id: ClientID,
+  ) -> Result<RowOrder, DatabaseError> {
     let row = row.into();
     let row_id = row.id.clone();
     let row_order = RowOrder {
@@ -114,37 +114,19 @@ impl Block {
       height: row.height,
     };
 
-    trace!("create new row: {}", row_id);
-    if let Some(persistence) = self.collab_service.persistence() {
-      if persistence.is_collab_exist(&row_id) {
-        warn!("The row already exists: {:?}", row_id);
-        return Err(DatabaseError::RecordAlreadyExist);
-      }
-    }
-
-    let encoded_collab = default_database_row_data(&row_id, row);
-    let collab = self
+    trace!("creating new database row: {}", row_id);
+    let database_row = self
       .collab_service
-      .build_collab(
+      .build_arc_database_row(
         &row_id,
-        CollabType::DatabaseRow,
-        Some((encoded_collab, true)),
+        true,
+        Some(DatabaseRowDataVariant::Row(row)),
+        self.row_change_tx.clone(),
+        self.collab_service.clone(),
       )
       .await?;
 
-    let database_row = DatabaseRow::open(
-      row_id.clone(),
-      collab,
-      self.row_change_tx.clone(),
-      self.collab_service.clone(),
-    )?;
-
-    let database_row = Arc::new(RwLock::from(database_row));
-    if let Some(persistence) = self.collab_service.persistence() {
-      if let Ok(encoded_collab) = database_row.write().await.encoded_collab() {
-        persistence.save_collab(&row_id, encoded_collab)?;
-      }
-    }
+    trace!("created new database row: {}", row_id);
     self.row_mem_cache.insert(row_id, database_row);
     Ok(row_order)
   }
@@ -294,10 +276,12 @@ impl Block {
         let row_id = RowId::from(row_id);
         let collab = self
           .collab_service
-          .build_collab(
+          .build_arc_database_row(
             &row_id,
-            CollabType::DatabaseRow,
-            Some((encoded_collab, false)),
+            false,
+            Some(DatabaseRowDataVariant::EncodedCollab(encoded_collab)),
+            self.row_change_tx.clone(),
+            self.collab_service.clone(),
           )
           .await?;
         let database_row = self
@@ -332,24 +316,28 @@ impl Block {
     trace!("init row instance: {}", row_id);
     let collab = self
       .collab_service
-      .build_collab(&row_id, CollabType::DatabaseRow, None)
+      .build_arc_database_row(
+        &row_id,
+        false,
+        None,
+        self.row_change_tx.clone(),
+        self.collab_service.clone(),
+      )
       .await?;
-    self.init_database_row_from_collab(row_id, collab).await
+
+    let row = self.init_database_row_from_collab(row_id, collab).await?;
+    Ok(row)
   }
 
   pub async fn init_database_row_from_collab(
     &self,
     row_id: RowId,
-    collab: Collab,
+    database_row: Arc<RwLock<DatabaseRow>>,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
-    let database_row = DatabaseRow::open(
-      row_id.clone(),
-      collab,
-      self.row_change_tx.clone(),
-      self.collab_service.clone(),
-    )?;
-    let row_details = RowDetail::from_collab(&database_row);
-    let database_row = Arc::new(RwLock::from(database_row));
+    let guard = database_row.read().await;
+    let row_details = RowDetail::from_collab(&guard);
+    drop(guard);
+
     self.row_mem_cache.insert(row_id, database_row.clone());
     if let Some(row_detail) = row_details {
       let _ = self

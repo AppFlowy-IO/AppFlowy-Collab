@@ -4,6 +4,7 @@ use tokio::sync::broadcast;
 use crate::rows::RowChangeSender;
 use crate::views::ViewChangeSender;
 
+#[derive(Clone)]
 pub struct DatabaseNotify {
   pub view_change_tx: ViewChangeSender,
   pub row_change_tx: RowChangeSender,

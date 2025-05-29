@@ -25,11 +25,13 @@ use crate::util::encoded_collab;
 use crate::views::{OrderObjectPosition, RowOrder};
 use crate::workspace_database::DatabaseCollabService;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
+use collab::core::collab::CollabOptions;
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use serde::{Deserialize, Serialize};
 use tracing::{error, trace};
 use uuid::Uuid;
+use yrs::block::ClientID;
 
 pub type BlockId = i64;
 
@@ -45,12 +47,26 @@ pub struct DatabaseRow {
   collab_service: Arc<dyn DatabaseCollabService>,
 }
 
-pub fn default_database_row_data(row_id: &RowId, row: Row) -> EncodedCollab {
-  let mut collab = Collab::new_with_origin(CollabOrigin::Empty, row_id, vec![], false);
-  let _ = DatabaseRowBody::create(row_id.clone(), &mut collab, row);
+pub fn default_database_row_from_row(row: Row, client_id: ClientID) -> EncodedCollab {
+  let collab = default_database_row_collab(row, client_id);
   collab
     .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
     .unwrap()
+}
+
+pub fn default_database_row_data(row: Row, client_id: ClientID) -> EncodedCollab {
+  let collab = default_database_row_collab(row, client_id);
+  collab
+    .encode_collab_v1(|_collab| Ok::<_, DatabaseError>(()))
+    .unwrap()
+}
+
+pub fn default_database_row_collab(row: Row, client_id: ClientID) -> Collab {
+  let row_id = row.id.clone();
+  let options = CollabOptions::new(row_id.to_string(), client_id);
+  let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+  let _ = DatabaseRowBody::create(row_id.clone(), &mut collab, row);
+  collab
 }
 
 impl Drop for DatabaseRow {
@@ -101,21 +117,6 @@ impl DatabaseRow {
   pub fn encoded_collab(&self) -> Result<EncodedCollab, DatabaseError> {
     let row_encoded = encoded_collab(&self.collab, &CollabType::DatabaseRow)?;
     Ok(row_encoded)
-  }
-
-  pub fn write_to_disk(&self) -> Result<(), DatabaseError> {
-    if let Some(persistence) = self.collab_service.persistence() {
-      let encoded_collab = self
-        .collab
-        .encode_collab_v1(|collab| {
-          CollabType::DatabaseRow.validate_require_data(collab)?;
-          Ok(())
-        })
-        .map_err(DatabaseError::Internal)?;
-      persistence.flush_collabs(vec![(self.collab.object_id().to_string(), encoded_collab)])?;
-    }
-
-    Ok(())
   }
 
   pub fn validate(&self) -> Result<(), DatabaseError> {

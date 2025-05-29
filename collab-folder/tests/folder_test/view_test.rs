@@ -1,5 +1,5 @@
 use crate::util::{create_folder_with_workspace, make_test_view, setup_log};
-use collab::core::collab::IndexContent;
+use collab::core::collab::{IndexContent, default_client_id};
 use collab_folder::folder_diff::FolderViewChange;
 use collab_folder::{IconType, UserId, ViewIcon, ViewIndexContent, timestamp};
 
@@ -479,7 +479,9 @@ fn compare_diff_view_test() {
   }
 
   // Calculate the changes based on the previous backup
-  let changes = folder.calculate_view_changes(encode_collab).unwrap();
+  let changes = folder
+    .calculate_view_changes(encode_collab, default_client_id())
+    .unwrap();
   assert!(changes.contains(&FolderViewChange::Inserted {
     view_id: "v1".to_string(),
   }));
@@ -502,7 +504,9 @@ fn compare_diff_view_test() {
       .unwrap();
   }
 
-  let changes = folder.calculate_view_changes(encode_collab).unwrap();
+  let changes = folder
+    .calculate_view_changes(encode_collab, default_client_id())
+    .unwrap();
   assert!(changes.contains(&FolderViewChange::Deleted {
     view_ids: vec!["v1".to_string()],
   }));

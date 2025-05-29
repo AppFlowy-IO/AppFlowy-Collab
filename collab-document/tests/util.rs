@@ -7,8 +7,9 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
-use collab::core::origin::CollabOrigin;
-use collab::preclude::{Collab, CollabBuilder};
+use collab::core::collab::{CollabOptions, default_client_id};
+use collab::core::origin::{CollabClient, CollabOrigin};
+use collab::preclude::Collab;
 use collab_document::blocks::{Block, BlockAction, DocumentData, DocumentMeta};
 use collab_document::document::Document;
 use collab_entity::CollabType;
@@ -48,11 +49,12 @@ impl DocumentTest {
       uid,
       workspace_id: workspace_id.clone(),
     };
-    let collab = CollabBuilder::new(uid, doc_id, data_source.into())
-      .with_device_id("1")
-      .with_plugin(disk_plugin)
-      .build()
-      .unwrap();
+
+    let options = CollabOptions::new(doc_id.to_string(), default_client_id())
+      .with_data_source(data_source.into());
+    let client = CollabClient::new(uid, "1");
+    let collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
+    collab.add_plugin(Box::new(disk_plugin));
 
     let mut blocks = HashMap::new();
     let mut children_map = HashMap::new();
@@ -140,11 +142,12 @@ pub fn open_document_with_db(
     uid,
     workspace_id: workspace_id.to_string(),
   };
-  let mut collab = CollabBuilder::new(uid, doc_id, data_source.into())
-    .with_device_id("1")
-    .with_plugin(disk_plugin)
-    .build()
-    .unwrap();
+
+  let options = CollabOptions::new(doc_id.to_string(), default_client_id())
+    .with_data_source(data_source.into());
+  let client = CollabClient::new(uid, "1");
+  let mut collab = Collab::new_with_options(CollabOrigin::Client(client), options).unwrap();
+  collab.add_plugin(Box::new(disk_plugin));
 
   collab.initialize();
   Document::open(collab).unwrap()
@@ -267,5 +270,7 @@ pub fn unzip_history_document_db(folder_name: &str) -> std::io::Result<(Cleaner,
 /// Can remove in the future. Just want to test the encode_collab and decode_collab
 pub fn try_decode_from_encode_collab(document: &Document) {
   let data = document.encode_collab().unwrap();
-  let _ = Collab::new_with_source(CollabOrigin::Empty, "1", data.into(), vec![], false).unwrap();
+  let options =
+    CollabOptions::new("1".to_string(), default_client_id()).with_data_source(data.into());
+  let _ = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
 }

@@ -1,7 +1,7 @@
 #![allow(clippy::all)]
 
 use assert_json_diff::assert_json_eq;
-use collab::core::collab::{CollabBuilder, DataSource};
+use collab::core::collab::{CollabOptions, DataSource, default_client_id};
 use collab::core::origin::CollabOrigin;
 
 use collab::preclude::{Collab, CollabPlugin, MapExt};
@@ -22,12 +22,14 @@ use yrs::types::ToJson;
 
 #[tokio::test]
 async fn restore_from_update() {
-  let mut c1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let options = CollabOptions::new("test".to_string(), default_client_id());
+  let mut c1 = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let plugin = ReceiveUpdatesPlugin::default();
   c1.add_plugin(Box::new(plugin.clone()));
   c1.initialize();
 
-  let mut c2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let options = CollabOptions::new("test".to_string(), default_client_id());
+  let mut c2 = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   c2.initialize();
 
   c1.insert("1", "a");
@@ -48,12 +50,14 @@ async fn restore_from_update() {
 
 #[tokio::test]
 async fn missing_update_test() {
-  let mut c1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let options = CollabOptions::new("test".to_string(), default_client_id());
+  let mut c1 = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let plugin = ReceiveUpdatesPlugin::default();
   c1.add_plugin(Box::new(plugin.clone()));
   c1.initialize();
 
-  let mut c2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let options = CollabOptions::new("test".to_string(), default_client_id());
+  let mut c2 = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   c2.initialize();
 
   c1.insert("1", "a".to_string());
@@ -100,11 +104,16 @@ async fn missing_update_test() {
 #[tokio::test]
 async fn simulate_client_missing_server_broadcast_data_test() {
   // Initialize clients and server with the same origin and test conditions.
-  let mut c1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let options = CollabOptions::new("test".to_string(), default_client_id());
+  let mut c1 = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   c1.initialize();
-  let mut c2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+
+  let options = CollabOptions::new("test".to_string(), default_client_id());
+  let mut c2 = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   c2.initialize();
-  let mut server = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+
+  let options = CollabOptions::new("test".to_string(), default_client_id());
+  let mut server = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   server.initialize();
 
   // Perform initial synchronization to simulate starting conditions.
@@ -216,7 +225,8 @@ async fn simulate_client_missing_server_broadcast_data_test() {
 #[tokio::test]
 async fn simulate_client_missing_server_broadcast_data_test2() {
   // Initialize clients and server with the same origin and test conditions.
-  let mut client_1 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], true);
+  let options = CollabOptions::new("test".to_string(), default_client_id());
+  let mut client_1 = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   client_1.initialize();
   let plugin_1 = ReceiveUpdatesPlugin::default();
   client_1.add_plugin(Box::new(plugin_1.clone()));
@@ -224,7 +234,8 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
   client_1.insert("2", "b".to_string());
   client_1.insert("3", "c".to_string());
 
-  let mut client_2 = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], true);
+  let options = CollabOptions::new("test".to_string(), default_client_id());
+  let mut client_2 = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   client_2.initialize();
   let plugin_2 = ReceiveUpdatesPlugin::default();
   client_2.add_plugin(Box::new(plugin_2.clone()));
@@ -235,7 +246,8 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
   let update_1 = plugin_1.take_updates();
   let update_2 = plugin_2.take_updates();
 
-  let mut server = Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let options = CollabOptions::new("test".to_string(), default_client_id());
+  let mut server = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   server.initialize();
 
   // Split the updates into two parts and simulate partial reception by the server.
@@ -314,8 +326,8 @@ async fn simulate_client_missing_server_broadcast_data_test2() {
 
 #[tokio::test]
 async fn init_sync_test() {
-  let mut client_1 =
-    Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let options = CollabOptions::new("test".to_string(), default_client_id());
+  let mut client_1 = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   client_1.initialize();
 
   // client 1 edit
@@ -330,12 +342,12 @@ async fn init_sync_test() {
     outer_map.insert(&mut txn, "array", ArrayPrelim::default());
   }
 
-  let mut client_2 =
-    Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let options = CollabOptions::new("test".to_string(), default_client_id());
+  let mut client_2 = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   client_2.initialize();
 
-  let mut server_collab =
-    Collab::new_with_origin(CollabOrigin::Empty, "test".to_string(), vec![], false);
+  let options = CollabOptions::new("test".to_string(), default_client_id());
+  let mut server_collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   server_collab.initialize();
 
   init_sync(&mut server_collab, &client_1);
@@ -358,11 +370,10 @@ fn init_sync(destination: &mut Collab, source: &Collab) {
 #[tokio::test]
 async fn restore_from_multiple_update() {
   let update_cache = CollabStateCachePlugin::new();
-  let mut collab = CollabBuilder::new(1, "1", DataSource::Disk(None))
-    .with_device_id("1")
-    .with_plugin(update_cache.clone())
-    .build()
-    .unwrap();
+  let options = CollabOptions::new("1".to_string(), default_client_id())
+    .with_data_source(DataSource::Disk(None));
+  let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+  collab.add_plugin(Box::new(update_cache.clone()));
   collab.initialize();
 
   // Insert map
@@ -382,29 +393,24 @@ async fn restore_from_multiple_update() {
   }
 
   let updates = update_cache.get_doc_state().unwrap();
-  let restored_collab = CollabBuilder::new(1, "1", updates)
-    .with_device_id("1")
-    .build()
-    .unwrap();
+  let options = CollabOptions::new("1".to_string(), default_client_id()).with_data_source(updates);
+  let restored_collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   assert_eq!(collab.to_json(), restored_collab.to_json());
 }
 
 #[tokio::test]
 async fn apply_same_update_multiple_time() {
   let update_cache = CollabStateCachePlugin::new();
-  let mut collab = CollabBuilder::new(1, "1", DataSource::Disk(None))
-    .with_device_id("1")
-    .with_plugin(update_cache.clone())
-    .build()
-    .unwrap();
+  let options = CollabOptions::new("1".to_string(), default_client_id())
+    .with_data_source(DataSource::Disk(None));
+  let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
+  collab.add_plugin(Box::new(update_cache.clone()));
   collab.initialize();
   collab.insert("text", "hello world");
 
   let updates = update_cache.get_doc_state().unwrap();
-  let mut restored_collab = CollabBuilder::new(1, "1", updates)
-    .with_device_id("1")
-    .build()
-    .unwrap();
+  let options = CollabOptions::new("1".to_string(), default_client_id()).with_data_source(updates);
+  let mut restored_collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
 
   // It's ok to apply the updates that were already applied
   let doc_state = update_cache.get_doc_state().unwrap();
@@ -418,15 +424,14 @@ async fn apply_same_update_multiple_time() {
 #[tokio::test]
 async fn root_change_test() {
   setup_log();
-  let mut collab_1 = CollabBuilder::new(1, "1", DataSource::Disk(None))
-    .with_device_id("1")
-    .build()
-    .unwrap();
+  let options = CollabOptions::new("1".to_string(), default_client_id())
+    .with_data_source(DataSource::Disk(None));
+  let mut collab_1 = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   collab_1.initialize();
-  let mut collab_2 = CollabBuilder::new(1, "1", DataSource::Disk(None))
-    .with_device_id("1")
-    .build()
-    .unwrap();
+
+  let options = CollabOptions::new("1".to_string(), default_client_id())
+    .with_data_source(DataSource::Disk(None));
+  let mut collab_2 = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   collab_2.initialize();
 
   {

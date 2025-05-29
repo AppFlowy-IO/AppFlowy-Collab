@@ -41,6 +41,14 @@ impl CollabType {
     *self as i32
   }
 
+  pub fn awareness_enabled(&self) -> bool {
+    matches!(self, CollabType::Document)
+  }
+
+  pub fn indexed_enabled(&self) -> bool {
+    matches!(self, CollabType::Document)
+  }
+
   pub fn is_unknown(&self) -> bool {
     matches!(self, CollabType::Unknown)
   }

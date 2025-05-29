@@ -1,9 +1,12 @@
+use collab::core::collab::default_client_id;
 use collab_database::database::{Database, gen_database_id, gen_database_view_id};
 use collab_database::entity::FieldType;
 use collab_database::rows::Row;
 use collab_database::template::builder::DatabaseTemplateBuilder;
 use collab_database::template::entity::CELL_DATA;
+use collab_database::workspace_database::NoPersistenceDatabaseCollabService;
 use futures::StreamExt;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn create_template_test() {
@@ -118,7 +121,12 @@ async fn create_template_test() {
     assert_eq!(row.cells.len(), expected_cell_len[index]);
   }
   assert_eq!(template.fields.len(), 6);
-  let database = Database::create_with_template(template).await.unwrap();
+  let service = Arc::new(NoPersistenceDatabaseCollabService {
+    client_id: default_client_id(),
+  });
+  let database = Database::create_with_template(template, service)
+    .await
+    .unwrap();
 
   // Assert num of fields
   let fields = database.get_fields_in_view(

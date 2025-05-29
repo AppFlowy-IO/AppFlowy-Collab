@@ -4,6 +4,7 @@ use crate::database_test::helper::{
 use crate::helper::unzip_history_database_db;
 use assert_json_diff::{assert_json_eq, assert_json_include};
 
+use collab::core::collab::{CollabOptions, default_client_id};
 use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::preclude::Collab;
@@ -17,8 +18,10 @@ async fn restore_row_from_disk_test() {
   let workspace_id = Uuid::new_v4().to_string();
   let database_id = uuid::Uuid::new_v4().to_string();
   let (db, mut database_test) = create_database_with_db(1, &workspace_id, &database_id).await;
-  let row_1 = CreateRowParams::new(1, database_id.clone());
-  let row_2 = CreateRowParams::new(2, database_id.clone());
+  let row_1_id = Uuid::new_v4();
+  let row_2_id = Uuid::new_v4();
+  let row_1 = CreateRowParams::new(row_1_id, database_id.clone());
+  let row_2 = CreateRowParams::new(row_2_id, database_id.clone());
   database_test.create_row(row_1.clone()).await.unwrap();
   database_test.create_row(row_2.clone()).await.unwrap();
   drop(database_test);
@@ -106,14 +109,12 @@ async fn open_020_history_database_test() {
 
   let bytes = std::fs::read("./tests/history_database/database_020_encode_collab").unwrap();
   let encode_collab = EncodedCollab::decode_from_bytes(&bytes).unwrap();
-  let restored_database_collab = Collab::new_with_source(
-    CollabOrigin::Empty,
-    "c0e69740-49f0-4790-a488-702e2750ba8d",
-    encode_collab.into(),
-    vec![],
-    false,
+  let options = CollabOptions::new(
+    "c0e69740-49f0-4790-a488-702e2750ba8d".to_string(),
+    default_client_id(),
   )
-  .unwrap();
+  .with_data_source(encode_collab.into());
+  let restored_database_collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   let actual_2 = restored_database_collab.to_json_value();
   assert_json_eq!(expected_database_json(), actual_2);
 }

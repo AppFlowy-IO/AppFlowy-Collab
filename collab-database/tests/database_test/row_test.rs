@@ -1,6 +1,7 @@
 use crate::database_test::helper::{
   create_database, create_database_with_default_data, create_row,
 };
+use collab::core::collab::default_client_id;
 use collab_database::database::gen_row_id;
 use collab_database::entity::{CreateViewParams, FileUploadType};
 use collab_database::rows::{
@@ -403,6 +404,6 @@ fn row_document_id_test() {
 #[tokio::test]
 async fn validate_row_test() {
   let workspace_id = Uuid::new_v4().to_string();
-  let row = create_row(1, &workspace_id, RowId::from(1));
+  let row = create_row(1, &workspace_id, RowId::from(1), default_client_id());
   row.validate().unwrap();
 }
