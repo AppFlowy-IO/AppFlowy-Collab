@@ -41,7 +41,8 @@ pub struct ViewsMap {
   pub(crate) container: MapRef,
   pub(crate) parent_children_relation: Arc<ParentChildRelations>,
   pub(crate) section_map: Arc<SectionMap>,
-  cache: Arc<DashMap<String, Arc<View>>>,
+  // Minimal cache only for deletion notifications - stores basic view info
+  deletion_cache: Arc<DashMap<String, Arc<View>>>,
   #[allow(dead_code)]
   subscription: Option<Subscription>,
   #[allow(dead_code)]
@@ -56,15 +57,18 @@ impl ViewsMap {
     view_relations: Arc<ParentChildRelations>,
     section_map: Arc<SectionMap>,
     index_json_sender: IndexContentSender,
-    views: HashMap<String, Arc<View>>,
+    views: HashMap<String, Arc<View>>, // Populate deletion cache with these
   ) -> ViewsMap {
-    trace!("number of views in folder: {}", views.len());
-    let view_cache = Arc::new(DashMap::from_iter(views));
+    trace!("Initializing ViewsMap with deletion cache for proper deletion notifications");
+
+    // Initialize deletion cache with existing views
+    let deletion_cache = Arc::new(DashMap::from_iter(views));
+
     let subscription = change_tx.as_ref().map(|change_tx| {
       subscribe_view_change(
         uid,
         &mut root,
-        view_cache.clone(),
+        deletion_cache.clone(),
         change_tx.clone(),
         view_relations.clone(),
         section_map.clone(),
@@ -77,8 +81,8 @@ impl ViewsMap {
       subscription,
       change_tx,
       parent_children_relation: view_relations,
-      cache: view_cache,
       section_map,
+      deletion_cache,
     }
   }
 
@@ -86,7 +90,6 @@ impl ViewsMap {
     self
       .parent_children_relation
       .move_child_with_txn(txn, parent_id, from, to);
-    self.remove_cache_view(parent_id);
   }
 
   /// Dissociate the relationship between parent_id and view_id.
@@ -120,7 +123,6 @@ impl ViewsMap {
     self
       .parent_children_relation
       .dissociate_parent_child_with_txn(txn, parent_id, view_id);
-    self.remove_cache_view(parent_id);
   }
 
   pub fn associate_parent_child_with_txn(
@@ -133,7 +135,6 @@ impl ViewsMap {
     self
       .parent_children_relation
       .associate_parent_child_with_txn(txn, parent_id, view_id, prev_view_id);
-    self.remove_cache_view(parent_id);
   }
 
   pub fn remove_child(&self, txn: &mut TransactionMut, parent_id: &str, child_index: u32) {
@@ -153,21 +154,14 @@ impl ViewsMap {
         .children
         .iter()
         .flat_map(|child| {
-          let cache_view = self.get_cache_view(&child.id);
-          match cache_view {
-            None => {
-              let view = self
-                .container
-                .get_with_txn(txn, &child.id)
-                .and_then(|map| {
-                  view_from_map_ref(&map, txn, &self.parent_children_relation, &self.section_map)
-                })
-                .map(Arc::new);
-              self.set_cache_view(view.clone());
-              view
-            },
-            Some(view) => Some(view),
-          }
+          // Always load fresh from storage
+          self
+            .container
+            .get_with_txn(txn, &child.id)
+            .and_then(|map| {
+              view_from_map_ref(&map, txn, &self.parent_children_relation, &self.section_map)
+            })
+            .map(Arc::new)
         })
         .collect::<Vec<Arc<View>>>(),
       None => {
@@ -200,24 +194,12 @@ impl ViewsMap {
     self
       .container
       .iter(txn)
-      .flat_map(|(k, v)| {
-        if let Some(entry) = self.cache.get(k) {
-          return Some(entry.value().clone());
-        }
-
-        // Process new view from container if not cached
-        match v {
-          YrsValue::YMap(map) => {
-            let view =
-              view_from_map_ref(&map, txn, &self.parent_children_relation, &self.section_map)
-                .map(Arc::new);
-            if let Some(ref view) = view {
-              self.cache.insert(k.to_string(), view.clone());
-            }
-            view
-          },
-          _ => None,
-        }
+      .flat_map(|(_, v)| match v {
+        YrsValue::YMap(map) => {
+          view_from_map_ref(&map, txn, &self.parent_children_relation, &self.section_map)
+            .map(Arc::new)
+        },
+        _ => None,
       })
       .collect()
   }
@@ -239,27 +221,43 @@ impl ViewsMap {
   }
 
   /// Return the view with the given view id.
-  /// The view is support nested, by default, we only load the view and its children.
   pub fn get_view_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<Arc<View>> {
-    let view = self.get_cache_view(view_id);
-    if view.is_none() {
-      let map_ref = self.container.get_with_txn(txn, view_id)?;
-      let view = view_from_map_ref(
-        &map_ref,
-        txn,
-        &self.parent_children_relation,
-        &self.section_map,
-      )
-      .map(Arc::new);
-      self.set_cache_view(view.clone());
-      return view;
-    }
-    view
+    let map_ref = self.container.get_with_txn(txn, view_id)?;
+    view_from_map_ref(
+      &map_ref,
+      txn,
+      &self.parent_children_relation,
+      &self.section_map,
+    )
+    .map(Arc::new)
+  }
+
+  /// Gets a view with stronger consistency guarantees, bypassing cache when needed
+  /// Use this during transactions that might have uncommitted changes
+  /// Note: Since we removed the cache, this is now identical to get_view_with_txn
+  pub fn get_view_with_strong_consistency<T: ReadTxn>(
+    &self,
+    txn: &T,
+    view_id: &str,
+  ) -> Option<Arc<View>> {
+    self.get_view_with_txn(txn, view_id)
   }
 
   pub fn get_view_name_with_txn<T: ReadTxn>(&self, txn: &T, view_id: &str) -> Option<String> {
     let map_ref: MapRef = self.container.get_with_txn(txn, view_id)?;
     map_ref.get_with_txn(txn, FOLDER_VIEW_NAME)
+  }
+
+  /// Updates the deletion cache - only used for deletion notifications
+  fn update_deletion_cache(&self, view: Option<Arc<View>>) {
+    if let Some(view) = view {
+      self.deletion_cache.insert(view.id.clone(), view);
+    }
+  }
+
+  /// Removes from deletion cache
+  fn remove_from_deletion_cache(&self, view_id: &str) {
+    self.deletion_cache.remove(view_id);
   }
 
   /// Inserts a new view into the specified workspace under a given parent view.
@@ -272,11 +270,12 @@ impl ViewsMap {
   ///
   /// # Behavior:
   /// - When `index` is `Some`, the new view is inserted at that position in the list of the
-  ///   parent view’s children.
-  /// - When `index` is `None`, the new view is appended to the end of the parent view’s children.
+  ///   parent view's children.
+  /// - When `index` is `None`, the new view is appended to the end of the parent view's children.
   ///
   pub fn insert(&self, txn: &mut TransactionMut, view: View, index: Option<u32>) {
     let time = timestamp();
+
     if let Some(parent_map_ref) = self
       .container
       .get_with_txn::<_, MapRef>(txn, &view.parent_view_id)
@@ -284,7 +283,7 @@ impl ViewsMap {
       let view_identifier = ViewIdentifier {
         id: view.id.clone(),
       };
-      let view = ViewUpdate::new(
+      let updated_view = ViewUpdate::new(
         &self.uid,
         &view.parent_view_id,
         txn,
@@ -296,11 +295,13 @@ impl ViewsMap {
       .set_last_edited_time(time)
       .done()
       .map(Arc::new);
-      self.set_cache_view(view);
+
+      // Update deletion cache for parent view
+      self.update_deletion_cache(updated_view);
     }
 
     let map_ref = self.container.insert(txn, &*view.id, MapPrelim::default());
-    let view_builder = ViewBuilder::new(
+    let created_view = ViewBuilder::new(
       &view.id,
       txn,
       map_ref,
@@ -326,16 +327,17 @@ impl ViewsMap {
         .set_extra_if_not_none(view.extra)
         .done()
     })
-    .done();
-    let view = view_builder.map(Arc::new);
-    self.set_cache_view(view);
+    .done()
+    .map(Arc::new);
+    self.update_deletion_cache(created_view);
   }
 
   pub fn delete_views<T: AsRef<str>>(&self, txn: &mut TransactionMut, view_ids: Vec<T>) {
     for view_id in view_ids {
       let view_id = view_id.as_ref();
       self.container.remove(txn, view_id);
-      self.remove_cache_view(view_id);
+      // Remove from deletion cache when explicitly deleted
+      self.remove_from_deletion_cache(view_id);
     }
   }
 
@@ -343,8 +345,9 @@ impl ViewsMap {
   where
     F: FnOnce(ViewUpdate) -> Option<View>,
   {
-    self.remove_cache_view(view_id);
-    self.update_view_with_txn(&self.uid, txn, view_id, f)
+    let result = self.update_view_with_txn(&self.uid, txn, view_id, f);
+    self.update_deletion_cache(result.clone());
+    result
   }
 
   /// Updates a view within a given transaction using a provided function.
@@ -391,23 +394,8 @@ impl ViewsMap {
     .set_last_edited_by(Some(uid.as_i64()))
     .set_last_edited_time(timestamp());
     let view = f(update).map(Arc::new);
-    self.set_cache_view(view.clone());
+    self.update_deletion_cache(view.clone());
     view
-  }
-
-  fn set_cache_view(&self, view: Option<Arc<View>>) {
-    if let Some(view) = view {
-      self.cache.insert(view.id.clone(), view);
-    }
-  }
-
-  fn get_cache_view(&self, view_id: &str) -> Option<Arc<View>> {
-    let entry = self.cache.get(view_id)?;
-    Some(entry.value().clone())
-  }
-
-  fn remove_cache_view(&self, view_id: &str) {
-    self.cache.remove(view_id);
   }
 
   // some history data may not have the timestamp and it's value equal to 0, so we should normalize the timestamp.
