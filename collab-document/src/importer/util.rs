@@ -1,5 +1,8 @@
 use super::delta::{Delta, Operation};
-use crate::{blocks::DocumentData, importer::define::*};
+use crate::{
+  blocks::{BlockType, DocumentData},
+  importer::define::*,
+};
 use markdown::mdast;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -20,8 +23,8 @@ pub(crate) fn mdast_node_type_to_block_type(node: &mdast::Node, list_type: Optio
     mdast::Node::LinkReference(_) => BlockType::LinkPreview,
     mdast::Node::Math(_) => BlockType::MathEquation,
     mdast::Node::ThematicBreak(_) => BlockType::Divider,
-    mdast::Node::Table(_) => BlockType::Table,
-    mdast::Node::TableCell(_) => BlockType::TableCell,
+    mdast::Node::Table(_) => BlockType::SimpleTable,
+    mdast::Node::TableCell(_) => BlockType::SimpleTableCell,
     mdast::Node::ListItem(list) => {
       if list.checked.is_some() {
         BlockType::TodoList

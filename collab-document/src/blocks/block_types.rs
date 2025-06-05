@@ -1,6 +1,8 @@
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 use serde::{Deserialize, Serialize};
+
+use crate::error::DocumentError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum BlockType {
@@ -33,10 +35,11 @@ pub enum BlockType {
   SimpleTableCell,
   SimpleColumns,
   SimpleColumn,
+  Custom(String),
 }
 
 impl BlockType {
-  pub fn as_str(&self) -> &'static str {
+  pub fn as_str(&self) -> &str {
     match self {
       BlockType::Page => "page",
       BlockType::Paragraph => "paragraph",
@@ -67,45 +70,63 @@ impl BlockType {
       BlockType::SimpleTableCell => "simple_table_cell",
       BlockType::SimpleColumns => "simple_columns",
       BlockType::SimpleColumn => "simple_column",
+      BlockType::Custom(s) => s,
+    }
+  }
+
+  pub fn from_block_ty(s: &str) -> Self {
+    match s {
+      "page" => BlockType::Page,
+      "paragraph" => BlockType::Paragraph,
+      "todo_list" => BlockType::TodoList,
+      "bulleted_list" => BlockType::BulletedList,
+      "numbered_list" => BlockType::NumberedList,
+      "quote" => BlockType::Quote,
+      "heading" => BlockType::Heading,
+      "image" => BlockType::Image,
+      "divider" => BlockType::Divider,
+      "multi_image" => BlockType::MultiImage,
+      "grid" => BlockType::Grid,
+      "board" => BlockType::Board,
+      "calendar" => BlockType::Calendar,
+      "callout" => BlockType::Callout,
+      "math_equation" => BlockType::MathEquation,
+      "code" => BlockType::Code,
+      "ai_writer" => BlockType::AiWriter,
+      "toggle_list" => BlockType::ToggleList,
+      "outline" => BlockType::Outline,
+      "link_preview" => BlockType::LinkPreview,
+      "video" => BlockType::Video,
+      "file" => BlockType::File,
+      "sub_page" => BlockType::SubPage,
+      "errorBlockComponentBuilderKey" => BlockType::Error,
+      "simple_table" => BlockType::SimpleTable,
+      "simple_table_row" => BlockType::SimpleTableRow,
+      "simple_table_cell" => BlockType::SimpleTableCell,
+      "simple_columns" => BlockType::SimpleColumns,
+      "simple_column" => BlockType::SimpleColumn,
+      _ => BlockType::Custom(s.to_string()),
     }
   }
 }
 
 impl FromStr for BlockType {
-  type Err = String;
+  type Err = DocumentError;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
-    match s {
-      "page" => Ok(BlockType::Page),
-      "paragraph" => Ok(BlockType::Paragraph),
-      "todo_list" => Ok(BlockType::TodoList),
-      "bulleted_list" => Ok(BlockType::BulletedList),
-      "numbered_list" => Ok(BlockType::NumberedList),
-      "quote" => Ok(BlockType::Quote),
-      "heading" => Ok(BlockType::Heading),
-      "image" => Ok(BlockType::Image),
-      "divider" => Ok(BlockType::Divider),
-      "multi_image" => Ok(BlockType::MultiImage),
-      "grid" => Ok(BlockType::Grid),
-      "board" => Ok(BlockType::Board),
-      "calendar" => Ok(BlockType::Calendar),
-      "callout" => Ok(BlockType::Callout),
-      "math_equation" => Ok(BlockType::MathEquation),
-      "code" => Ok(BlockType::Code),
-      "ai_writer" => Ok(BlockType::AiWriter),
-      "toggle_list" => Ok(BlockType::ToggleList),
-      "outline" => Ok(BlockType::Outline),
-      "link_preview" => Ok(BlockType::LinkPreview),
-      "video" => Ok(BlockType::Video),
-      "file" => Ok(BlockType::File),
-      "sub_page" => Ok(BlockType::SubPage),
-      "errorBlockComponentBuilderKey" => Ok(BlockType::Error),
-      "simple_table" => Ok(BlockType::SimpleTable),
-      "simple_table_row" => Ok(BlockType::SimpleTableRow),
-      "simple_table_cell" => Ok(BlockType::SimpleTableCell),
-      "simple_columns" => Ok(BlockType::SimpleColumns),
-      "simple_column" => Ok(BlockType::SimpleColumn),
-      _ => Err(format!("Unknown block type: {}", s)),
-    }
+    Ok(Self::from_block_ty(s))
+  }
+}
+
+// Implement AsRef<str> for ContentType
+impl AsRef<str> for BlockType {
+  fn as_ref(&self) -> &str {
+    self.as_str()
+  }
+}
+
+impl Display for BlockType {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.as_str())
   }
 }

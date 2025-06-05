@@ -52,6 +52,9 @@ pub enum DocumentError {
 
   #[error("No children found")]
   NoBlockChildrenFound,
+
+  #[error("Unknown block type: {0}")]
+  UnknownBlockType(String),
 }
 
 impl From<CollabValidateError> for DocumentError {

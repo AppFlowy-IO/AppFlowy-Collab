@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::vec;
 
+use crate::blocks::BlockType;
 use crate::blocks::{
   Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, BlockOperation,
   ChildrenOperation, DocumentData, DocumentMeta, EXTERNAL_TYPE_TEXT, TextDelta, TextOperation,
@@ -20,7 +21,6 @@ use crate::blocks::{
 };
 use crate::document_awareness::DocumentAwarenessState;
 use crate::error::DocumentError;
-use crate::importer::define::BlockType;
 use crate::utils::{
   get_delta_from_block_data, get_delta_from_external_text_id, push_deltas_to_str,
 };
