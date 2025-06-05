@@ -1,6 +1,6 @@
 use crate::block_parser::{
-  BlockParserRegistry, BulletedListParser, HeadingParser, NumberedListParser, OutputFormat,
-  PageParser, ParagraphParser, ParseContext, QuoteListParser, TodoListParser,
+  BlockParserRegistry, BulletedListParser, HeadingParser, ImageParser, NumberedListParser,
+  OutputFormat, PageParser, ParagraphParser, ParseContext, QuoteListParser, TodoListParser,
 };
 use crate::blocks::{Block, DocumentData};
 use crate::error::DocumentError;
@@ -28,7 +28,8 @@ impl DocumentParser {
       .register(Arc::new(NumberedListParser))
       .register(Arc::new(BulletedListParser))
       .register(Arc::new(TodoListParser))
-      .register(Arc::new(QuoteListParser));
+      .register(Arc::new(QuoteListParser))
+      .register(Arc::new(ImageParser));
 
     parser
   }

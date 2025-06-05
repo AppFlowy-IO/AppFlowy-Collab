@@ -1,5 +1,6 @@
 pub mod bulleted_list;
 pub mod heading;
+pub mod image;
 pub mod numbered_list;
 pub mod page;
 pub mod paragraph;
@@ -8,6 +9,7 @@ pub mod todo_list;
 
 pub use bulleted_list::*;
 pub use heading::*;
+pub use image::*;
 pub use numbered_list::*;
 pub use page::*;
 pub use paragraph::*;
