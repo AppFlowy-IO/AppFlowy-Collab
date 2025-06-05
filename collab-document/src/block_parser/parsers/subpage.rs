@@ -38,7 +38,7 @@ impl BlockParser for SubpageParser {
         if view_id.is_empty() {
           "".to_string()
         } else {
-          format!("{} {}", indent, view_id)
+          format!("{}{}", indent, view_id)
         }
       },
     };

@@ -22,7 +22,7 @@ impl BlockParser for BulletedListParser {
       },
       OutputFormat::PlainText => {
         let indent = context.get_indent();
-        format!("{} {}", indent, content)
+        format!("{}{}", indent, content)
       },
     };
 

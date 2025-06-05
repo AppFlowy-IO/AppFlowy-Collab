@@ -34,11 +34,11 @@ impl BlockParser for CalloutParser {
     let formatted_content = match context.format {
       OutputFormat::Markdown => {
         let indent = context.get_indent();
-        format!("{}> {} {}", indent, icon, content)
+        format!("{}> {}{}", indent, icon, content)
       },
       OutputFormat::PlainText => {
         let indent = context.get_indent();
-        format!("{}{} {}", indent, icon, content)
+        format!("{}{}{}", indent, icon, content)
       },
     };
 

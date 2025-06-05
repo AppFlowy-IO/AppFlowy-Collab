@@ -39,17 +39,17 @@ impl BlockParser for FileBlockParser {
       OutputFormat::Markdown => {
         let indent = context.get_indent();
         if url.is_empty() {
-          format!("{} {}", indent, name)
+          format!("{}{}", indent, name)
         } else {
-          format!("{} [{}]({})", indent, name, url)
+          format!("{}[{}]({})", indent, name, url)
         }
       },
       OutputFormat::PlainText => {
         let indent = context.get_indent();
         if url.is_empty() {
-          format!("{} {}", indent, name)
+          format!("{}{}", indent, name)
         } else {
-          format!("{} {} ({})", indent, name, url)
+          format!("{}{} ({})", indent, name, url)
         }
       },
     };

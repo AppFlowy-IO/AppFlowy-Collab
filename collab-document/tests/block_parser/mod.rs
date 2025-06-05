@@ -1,5 +1,17 @@
 mod bulleted_list_test;
+mod callout_test;
+mod code_block_test;
+mod divider_test;
+mod file_block_test;
 mod heading_test;
+mod image_test;
+mod link_preview_test;
+mod math_equation_test;
 mod numbered_list_test;
+mod page_test;
+mod paragraph_test;
+mod quote_list_test;
+mod subpage_test;
 mod text_utils_test;
 mod todo_list_test;
+mod toggle_list_test;
