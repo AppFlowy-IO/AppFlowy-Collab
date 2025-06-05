@@ -3,7 +3,7 @@ use crate::imported_collab::{ImportType, ImportedCollab, ImportedCollabInfo};
 
 use collab_database::database::{Database, get_row_document_id};
 use collab_database::template::csv::{CSVResource, CSVTemplate};
-use collab_document::blocks::{TextDelta, mention_block_data, mention_block_delta};
+use collab_document::blocks::{BlockType, TextDelta, mention_block_data, mention_block_delta};
 use collab_document::document::Document;
 use collab_document::importer::define::URL_FIELD;
 use collab_document::importer::md_importer::{MDImporter, create_image_block};
