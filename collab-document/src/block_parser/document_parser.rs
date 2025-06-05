@@ -1,6 +1,6 @@
 use crate::block_parser::{
-  BlockParserRegistry, DefaultDocumentTextExtractor, DocumentTextExtractor, HeadingParser,
-  OutputFormat, PageParser, ParagraphParser, ParseContext, ParseResult, TextParser,
+  BlockParserRegistry, HeadingParser, OutputFormat, PageParser, ParagraphParser, ParseContext,
+  TextParser,
 };
 use crate::blocks::{Block, DocumentData};
 use crate::error::DocumentError;
@@ -8,14 +8,12 @@ use std::sync::Arc;
 
 pub struct DocumentParser {
   registry: BlockParserRegistry,
-  text_extractor: Arc<dyn DocumentTextExtractor + Send + Sync>,
 }
 
 impl DocumentParser {
   pub fn new() -> Self {
     Self {
       registry: BlockParserRegistry::new(),
-      text_extractor: Arc::new(DefaultDocumentTextExtractor),
     }
   }
 
