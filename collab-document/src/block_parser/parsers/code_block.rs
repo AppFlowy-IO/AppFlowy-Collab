@@ -11,6 +11,7 @@ use crate::error::DocumentError;
 ///
 /// Code block data:
 ///   language: string
+///   delta: delta
 pub struct CodeBlockParser;
 
 // do not change the key value, it comes from the flutter code.
