@@ -7,43 +7,44 @@ use crate::block_parser::{
 use crate::blocks::{Block, BlockType};
 use crate::error::DocumentError;
 
-/// Parse the heading block.
+/// Parse the numbered list block.
 ///
-/// Heading block data:
-///   level: int,
+/// Numbered list block data:
+///   number: string,
 ///   delta: delta,
-pub struct HeadingParser;
-
-const MAX_LEVEL: usize = 6;
-const MIN_LEVEL: usize = 1;
+pub struct NumberedListParser;
 
 // do not change the key value, it comes from the flutter code.
-const LEVEL_KEY: &str = "level";
+const NUMBER_KEY: &str = "number";
 
-impl BlockParser for HeadingParser {
+impl BlockParser for NumberedListParser {
   fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, DocumentError> {
     let text_extractor = DefaultDocumentTextExtractor;
     let content = text_extractor.extract_text_from_block(block, context)?;
 
-    let level = block
+    let number = block
       .data
-      .get(LEVEL_KEY)
+      .get(NUMBER_KEY)
       .and_then(|v| match v {
         Value::Number(n) => n.as_u64().map(|n| n as usize),
         Value::String(s) => s.parse::<usize>().ok(),
         _ => None,
       })
-      .unwrap_or(1)
-      .clamp(MIN_LEVEL, MAX_LEVEL);
+      .unwrap_or_else(|| context.list_number.unwrap_or(1));
 
     let formatted_content = match context.format {
       OutputFormat::Markdown => {
-        format!("{} {}", "#".repeat(level), content)
+        let indent = context.get_indent();
+        format!("{}{}. {}", indent, number, content)
       },
-      OutputFormat::PlainText => content,
+      OutputFormat::PlainText => {
+        let indent = context.get_indent();
+        format!("{}{}. {}", indent, number, content)
+      },
     };
 
-    let children_content = self.parse_children(block, context)?;
+    let list_context = context.with_list_context(Some(number + 1));
+    let children_content = self.parse_children(block, &list_context)?;
 
     let mut result = formatted_content;
     if !children_content.is_empty() {
@@ -55,6 +56,6 @@ impl BlockParser for HeadingParser {
   }
 
   fn block_type(&self) -> &'static str {
-    BlockType::Heading.as_str()
+    BlockType::NumberedList.as_str()
   }
 }
