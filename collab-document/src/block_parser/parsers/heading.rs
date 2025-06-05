@@ -29,7 +29,12 @@ impl BlockParser for HeadingParser {
     let level = block
       .data
       .get(LEVEL_KEY)
-      .and_then(|v| v.as_u64().map(|n| n as usize))
+      .and_then(|v| {
+        // Try parsing as u64 first, then as string
+        v.as_u64()
+          .map(|n| n as usize)
+          .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+      })
       .unwrap_or(1)
       .clamp(MIN_LEVEL, MAX_LEVEL);
 

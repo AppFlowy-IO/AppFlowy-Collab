@@ -1,4 +1,5 @@
-use collab_document::importer::define::{BlockType, URL_FIELD};
+use collab_document::blocks::BlockType;
+use collab_document::importer::define::URL_FIELD;
 use serde_json::json;
 
 use crate::importer::util::{
