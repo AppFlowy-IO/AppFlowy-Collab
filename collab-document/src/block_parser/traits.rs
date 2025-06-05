@@ -77,8 +77,12 @@ impl<'a> ParseContext<'a> {
 #[derive(Debug, Clone)]
 pub struct ParseResult {
   pub content: String,
+
+  // if the block is empty, we don't need to add a newline
   pub add_newline: bool,
-  pub is_container: bool,
+
+  // if the block has children, we need to parse the children content
+  pub has_children: bool,
 }
 
 impl ParseResult {
@@ -86,7 +90,7 @@ impl ParseResult {
     Self {
       content,
       add_newline: true,
-      is_container: false,
+      has_children: false,
     }
   }
 
@@ -94,7 +98,7 @@ impl ParseResult {
     Self {
       content,
       add_newline: false,
-      is_container: false,
+      has_children: false,
     }
   }
 
@@ -102,7 +106,7 @@ impl ParseResult {
     Self {
       content,
       add_newline: true,
-      is_container: true,
+      has_children: true,
     }
   }
 
@@ -110,7 +114,7 @@ impl ParseResult {
     Self {
       content: String::new(),
       add_newline: false,
-      is_container: false,
+      has_children: false,
     }
   }
 }

@@ -55,6 +55,9 @@ pub enum DocumentError {
 
   #[error("Unknown block type: {0}")]
   UnknownBlockType(String),
+
+  #[error("Unable to find the page block")]
+  PageBlockNotFound,
 }
 
 impl From<CollabValidateError> for DocumentError {

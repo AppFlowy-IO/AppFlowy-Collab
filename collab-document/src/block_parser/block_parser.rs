@@ -13,6 +13,9 @@ pub trait BlockParser {
     self.block_type() == block_type
   }
 
+  // In most case, when customizing the parser, we don't need to override this function
+  //  unless you need to parse the children content with different format
+  //  or the children have special nesting structure, like the simple_table and columns
   fn parse_children(&self, block: &Block, context: &ParseContext) -> Result<String, DocumentError> {
     let child_ids = context
       .document_data
