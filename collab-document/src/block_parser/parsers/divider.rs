@@ -16,7 +16,7 @@ impl BlockParser for DividerParser {
       },
       OutputFormat::PlainText => {
         let indent = context.get_indent();
-        format!("{}────────────────", indent)
+        format!("{}---", indent)
       },
     };
 
