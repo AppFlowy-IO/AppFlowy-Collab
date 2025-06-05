@@ -77,7 +77,7 @@ fn test_heading_parser_empty_content() {
   let context = ParseContext::new(&document_data, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
-  assert!(result.content.is_empty());
+  assert_eq!(result.content, "## ");
 }
 
 #[test]

@@ -29,12 +29,11 @@ impl BlockParser for TodoListParser {
       OutputFormat::Markdown => {
         let indent = context.get_indent();
         let checkbox = if is_checked { "[x]" } else { "[ ]" };
-        format!("{}- {}{}", indent, checkbox, content)
+        format!("{}- {} {}", indent, checkbox, content)
       },
       OutputFormat::PlainText => {
         let indent = context.get_indent();
-        let checkbox = if is_checked { "☑" } else { "☐" };
-        format!("{}{}{}", indent, checkbox, content)
+        format!("{}{}", indent, content)
       },
     };
 

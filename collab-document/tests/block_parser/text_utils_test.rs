@@ -45,7 +45,7 @@ fn test_text_extractor_basic() {
 
 #[test]
 fn test_text_extractor_delta_parsing() {
-  // Test with formatted text delta
+
   let delta_json = r#"[
     {"insert": "Hello", "attributes": {"bold": true}},
     {"insert": " "},

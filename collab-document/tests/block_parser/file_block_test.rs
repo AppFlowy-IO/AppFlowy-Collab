@@ -53,7 +53,7 @@ fn test_file_block_parser_with_url_markdown() {
   let context = ParseContext::new(&document_data, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
-  let expected = format!(" [{}]({})", name, url);
+  let expected = format!("[{}]({})", name, url);
   assert_eq!(result.content, expected);
 }
 
@@ -69,7 +69,7 @@ fn test_file_block_parser_without_url() {
   let context = ParseContext::new(&document_data, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
-  let expected = format!(" {}", name);
+  let expected = format!("{}", name);
   assert_eq!(result.content, expected);
 }
 
@@ -86,6 +86,6 @@ fn test_file_block_parser_plain_text_format() {
   let context = ParseContext::new(&document_data, OutputFormat::PlainText);
   let result = parser.parse(&block, &context).unwrap();
 
-  let expected = format!(" {} ({})", name, url);
+  let expected = format!("{}({})", name, url);
   assert_eq!(result.content, expected);
 }

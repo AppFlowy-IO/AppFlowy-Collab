@@ -49,7 +49,7 @@ impl BlockParser for FileBlockParser {
         if url.is_empty() {
           format!("{}{}", indent, name)
         } else {
-          format!("{}{} ({})", indent, name, url)
+          format!("{}{}({})", indent, name, url)
         }
       },
     };

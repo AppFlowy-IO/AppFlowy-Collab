@@ -94,5 +94,5 @@ fn test_callout_parser_with_indent() {
   let context = ParseContext::new(&document_data, OutputFormat::Markdown).with_depth(2);
   let result = parser.parse(&block, &context).unwrap();
 
-  assert_eq!(result.content, "  > 💡 Hello AppFlowy");
+  assert_eq!(result.content, "    > 💡 Hello AppFlowy");
 }

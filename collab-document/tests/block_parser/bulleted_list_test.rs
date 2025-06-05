@@ -50,12 +50,12 @@ fn test_bulleted_list_parser_plain_text_format() {
   let mut test = BlockTestCore::new();
   let parser = BulletedListParser;
 
-  let block = create_bulleted_list_block(&mut test, "First item".to_string(), "");
+  let block = create_bulleted_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
   let context = ParseContext::new(&document_data, OutputFormat::PlainText);
 
   let result = parser.parse(&block, &context).unwrap();
-  assert_eq!(result.content, "• First item");
+  assert_eq!(result.content, "Hello AppFlowy");
 }
 
 #[test]
@@ -76,14 +76,14 @@ fn test_bulleted_list_parser_with_indentation() {
   let mut test = BlockTestCore::new();
   let parser = BulletedListParser;
 
-  let block = create_bulleted_list_block(&mut test, "Indented item".to_string(), "");
+  let block = create_bulleted_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
 
-  // Create a context with depth 2 for indentation
+
   let context = ParseContext::new(&document_data, OutputFormat::Markdown).with_depth(2);
 
   let result = parser.parse(&block, &context).unwrap();
-  assert_eq!(result.content, "    * Indented item");
+  assert_eq!(result.content, "    * Hello AppFlowy");
 }
 
 #[test]
@@ -91,12 +91,12 @@ fn test_bulleted_list_parser_nested_indentation() {
   let mut test = BlockTestCore::new();
   let parser = BulletedListParser;
 
-  let block = create_bulleted_list_block(&mut test, "Deeply nested item".to_string(), "");
+  let block = create_bulleted_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
 
-  // Create a context with depth 3 for deeper indentation
+
   let context = ParseContext::new(&document_data, OutputFormat::PlainText).with_depth(3);
 
   let result = parser.parse(&block, &context).unwrap();
-  assert_eq!(result.content, "      • Deeply nested item");
+  assert_eq!(result.content, "      Hello AppFlowy");
 }

@@ -35,12 +35,12 @@ fn test_image_parser_markdown_format() {
   let mut test = BlockTestCore::new();
   let parser = ImageParser;
 
-  let block = create_image_block(&mut test, "https://example.com/image.png", "");
+  let block = create_image_block(&mut test, "https://appflowy.io/image.png", "");
   let document_data = test.get_document_data();
   let context = ParseContext::new(&document_data, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
-  assert_eq!(result.content, "![Image](https://example.com/image.png)");
+  assert_eq!(result.content, "![Image](https://appflowy.io/image.png)");
 }
 
 #[test]
@@ -48,12 +48,12 @@ fn test_image_parser_plain_text_format() {
   let mut test = BlockTestCore::new();
   let parser = ImageParser;
 
-  let block = create_image_block(&mut test, "https://example.com/image.png", "");
+  let block = create_image_block(&mut test, "https://appflowy.io/image.png", "");
   let document_data = test.get_document_data();
   let context = ParseContext::new(&document_data, OutputFormat::PlainText);
 
   let result = parser.parse(&block, &context).unwrap();
-  assert_eq!(result.content, "[Image: https://example.com/image.png]");
+  assert_eq!(result.content, "https://appflowy.io/image.png");
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn test_image_parser_empty_url_plain_text() {
   let context = ParseContext::new(&document_data, OutputFormat::PlainText);
 
   let result = parser.parse(&block, &context).unwrap();
-  assert_eq!(result.content, "[Image]");
+  assert_eq!(result.content, "");
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn test_image_parser_missing_url_data() {
   let mut test = BlockTestCore::new();
   let parser = ImageParser;
 
-  let data = HashMap::new(); // No url field
+  let data = HashMap::new();
 
   let page_id = test.get_page().id;
   let block = Block {

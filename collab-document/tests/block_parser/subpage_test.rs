@@ -41,14 +41,14 @@ fn test_subpage_parser_with_view_id_markdown() {
   let mut test = BlockTestCore::new();
   let parser = SubpageParser;
 
-  let view_id = "page-123".to_string();
+  let view_id = "page_id".to_string();
   let block = create_subpage_block(&mut test, Some(view_id.clone()), "");
 
   let document_data = test.get_document_data();
   let context = ParseContext::new(&document_data, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
-  let expected = format!(" [Subpage]({})", view_id);
+  let expected = format!("[Subpage]({})", view_id);
   assert_eq!(result.content, expected);
 }
 
@@ -63,7 +63,7 @@ fn test_subpage_parser_without_view_id() {
   let context = ParseContext::new(&document_data, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
-  assert_eq!(result.content, " [Subpage]");
+  assert_eq!(result.content, "[Subpage]");
 }
 
 #[test]
@@ -71,13 +71,13 @@ fn test_subpage_parser_plain_text_format() {
   let mut test = BlockTestCore::new();
   let parser = SubpageParser;
 
-  let view_id = "document-456".to_string();
+  let view_id = "page_id".to_string();
   let block = create_subpage_block(&mut test, Some(view_id.clone()), "");
 
   let document_data = test.get_document_data();
   let context = ParseContext::new(&document_data, OutputFormat::PlainText);
   let result = parser.parse(&block, &context).unwrap();
 
-  let expected = format!(" {}", view_id);
+  let expected = format!("{}", view_id);
   assert_eq!(result.content, expected);
 }

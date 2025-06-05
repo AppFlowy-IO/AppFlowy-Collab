@@ -28,9 +28,9 @@ impl BlockParser for SubpageParser {
       OutputFormat::Markdown => {
         let indent = context.get_indent();
         if view_id.is_empty() {
-          format!("{} [Subpage]", indent)
+          format!("{}[Subpage]", indent)
         } else {
-          format!("{} [Subpage]({})", indent, view_id)
+          format!("{}[Subpage]({})", indent, view_id)
         }
       },
       OutputFormat::PlainText => {

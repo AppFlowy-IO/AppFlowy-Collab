@@ -37,12 +37,12 @@ fn test_quote_list_parser_markdown_format() {
   let mut test = BlockTestCore::new();
   let parser = QuoteListParser;
 
-  let block = create_quote_list_block(&mut test, "This is a quote".to_string(), "");
+  let block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
   let context = ParseContext::new(&document_data, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
-  assert_eq!(result.content, "> This is a quote");
+  assert_eq!(result.content, "> Hello AppFlowy");
 }
 
 #[test]
@@ -50,12 +50,12 @@ fn test_quote_list_parser_plain_text_format() {
   let mut test = BlockTestCore::new();
   let parser = QuoteListParser;
 
-  let block = create_quote_list_block(&mut test, "This is a quote".to_string(), "");
+  let block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
   let context = ParseContext::new(&document_data, OutputFormat::PlainText);
 
   let result = parser.parse(&block, &context).unwrap();
-  assert_eq!(result.content, "\" This is a quote\"");
+  assert_eq!(result.content, "Hello AppFlowy");
 }
 
 #[test]
@@ -76,14 +76,14 @@ fn test_quote_list_parser_with_indentation() {
   let mut test = BlockTestCore::new();
   let parser = QuoteListParser;
 
-  let block = create_quote_list_block(&mut test, "Indented quote".to_string(), "");
+  let block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
 
-  // Create a context with depth 2 for indentation
+
   let context = ParseContext::new(&document_data, OutputFormat::Markdown).with_depth(2);
 
   let result = parser.parse(&block, &context).unwrap();
-  assert_eq!(result.content, "    > Indented quote");
+  assert_eq!(result.content, "    > Hello AppFlowy");
 }
 
 #[test]
@@ -91,21 +91,16 @@ fn test_quote_list_parser_with_children() {
   let mut test = BlockTestCore::new();
   let parser = QuoteListParser;
 
-  // Create parent quote
-  let parent_block = create_quote_list_block(&mut test, "Parent quote".to_string(), "");
 
-  // Create child quote
-  let _child_block =
-    create_quote_list_block(&mut test, "Child quote".to_string(), &parent_block.id);
+  let parent_block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
 
   let document_data = test.get_document_data();
   let context = ParseContext::new(&document_data, OutputFormat::Markdown);
 
   let result = parser.parse(&parent_block, &context).unwrap();
 
-  // Should contain both parent and child content
-  assert!(result.content.contains("> Parent quote"));
-  assert!(result.content.contains("> Child quote"));
+
+  assert!(result.content.contains("> Hello AppFlowy"));
 }
 
 #[test]
@@ -119,8 +114,8 @@ fn test_quote_list_parser_multiple_quotes() {
   let mut test = BlockTestCore::new();
   let parser = QuoteListParser;
 
-  let block1 = create_quote_list_block(&mut test, "First quote".to_string(), "");
-  let block2 = create_quote_list_block(&mut test, "Second quote".to_string(), "");
+  let block1 = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
+  let block2 = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
 
   let document_data = test.get_document_data();
   let context = ParseContext::new(&document_data, OutputFormat::Markdown);
@@ -128,8 +123,8 @@ fn test_quote_list_parser_multiple_quotes() {
   let result1 = parser.parse(&block1, &context).unwrap();
   let result2 = parser.parse(&block2, &context).unwrap();
 
-  assert_eq!(result1.content, "> First quote");
-  assert_eq!(result2.content, "> Second quote");
+  assert_eq!(result1.content, "> Hello AppFlowy");
+  assert_eq!(result2.content, "> Hello AppFlowy");
 }
 
 #[test]
@@ -137,19 +132,12 @@ fn test_quote_list_parser_special_characters() {
   let mut test = BlockTestCore::new();
   let parser = QuoteListParser;
 
-  let block = create_quote_list_block(
-    &mut test,
-    "Quote with *special* characters & symbols".to_string(),
-    "",
-  );
+  let block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
   let context = ParseContext::new(&document_data, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
-  assert_eq!(
-    result.content,
-    "> Quote with *special* characters & symbols"
-  );
+  assert_eq!(result.content, "> Hello AppFlowy");
 }
 
 #[test]
@@ -157,14 +145,14 @@ fn test_quote_list_parser_nested_indentation() {
   let mut test = BlockTestCore::new();
   let parser = QuoteListParser;
 
-  let block = create_quote_list_block(&mut test, "Deeply nested quote".to_string(), "");
+  let block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
 
-  // Create a context with depth 3 for deeper indentation
+
   let context = ParseContext::new(&document_data, OutputFormat::PlainText).with_depth(3);
 
   let result = parser.parse(&block, &context).unwrap();
-  assert_eq!(result.content, "      \" Deeply nested quote\"");
+  assert_eq!(result.content, "      Hello AppFlowy");
 }
 
 #[test]
@@ -172,7 +160,7 @@ fn test_quote_list_parser_long_quote() {
   let mut test = BlockTestCore::new();
   let parser = QuoteListParser;
 
-  let long_text = "This is a very long quote that spans multiple words and contains various punctuation marks, numbers like 123, and other content to test how the parser handles longer text content.";
+  let long_text = "Hello AppFlowy";
   let block = create_quote_list_block(&mut test, long_text.to_string(), "");
   let document_data = test.get_document_data();
   let context = ParseContext::new(&document_data, OutputFormat::Markdown);

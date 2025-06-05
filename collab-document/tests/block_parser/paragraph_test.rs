@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use collab_document::block_parser::parsers::paragraph::ParagraphParser;
 use collab_document::block_parser::{BlockParser, OutputFormat, ParseContext};
 use collab_document::blocks::{Block, BlockType};
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::blocks::block_test_core::{BlockTestCore, generate_id};
 
