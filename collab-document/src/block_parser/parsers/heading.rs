@@ -1,3 +1,5 @@
+use serde_json::Value;
+
 use crate::block_parser::{
   BlockParser, DefaultDocumentTextExtractor, DocumentTextExtractor, OutputFormat, ParseContext,
   ParseResult,
@@ -21,19 +23,13 @@ impl BlockParser for HeadingParser {
     let text_extractor = DefaultDocumentTextExtractor;
     let content = text_extractor.extract_text_from_block(block, context)?;
 
-    if content.is_empty() {
-      return Ok(ParseResult::empty());
-    }
-
-    // Get heading level from block data (default to 1)
     let level = block
       .data
       .get(LEVEL_KEY)
-      .and_then(|v| {
-        // Try parsing as u64 first, then as string
-        v.as_u64()
-          .map(|n| n as usize)
-          .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+      .and_then(|v| match v {
+        Value::Number(n) => n.as_u64().map(|n| n as usize),
+        Value::String(s) => s.parse::<usize>().ok(),
+        _ => None,
       })
       .unwrap_or(1)
       .clamp(MIN_LEVEL, MAX_LEVEL);
@@ -45,7 +41,6 @@ impl BlockParser for HeadingParser {
       OutputFormat::PlainText => content,
     };
 
-    // Add any children content
     let children_content = self.parse_children(block, context)?;
 
     let mut result = formatted_content;
