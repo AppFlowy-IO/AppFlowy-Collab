@@ -79,7 +79,6 @@ fn test_quote_list_parser_with_indentation() {
   let block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
 
-
   let context = ParseContext::new(&document_data, OutputFormat::Markdown).with_depth(2);
 
   let result = parser.parse(&block, &context).unwrap();
@@ -91,14 +90,12 @@ fn test_quote_list_parser_with_children() {
   let mut test = BlockTestCore::new();
   let parser = QuoteListParser;
 
-
   let parent_block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
 
   let document_data = test.get_document_data();
   let context = ParseContext::new(&document_data, OutputFormat::Markdown);
 
   let result = parser.parse(&parent_block, &context).unwrap();
-
 
   assert!(result.content.contains("> Hello AppFlowy"));
 }
@@ -147,7 +144,6 @@ fn test_quote_list_parser_nested_indentation() {
 
   let block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
-
 
   let context = ParseContext::new(&document_data, OutputFormat::PlainText).with_depth(3);
 

@@ -41,3 +41,9 @@ impl BlockParserRegistry {
     }
   }
 }
+
+impl Default for BlockParserRegistry {
+  fn default() -> Self {
+    Self::new()
+  }
+}

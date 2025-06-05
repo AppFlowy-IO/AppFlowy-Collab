@@ -24,7 +24,7 @@ impl BlockParser for FileBlockParser {
         Value::String(s) => Some(s.clone()),
         _ => None,
       })
-      .unwrap_or_else(|| "".to_string());
+      .unwrap_or_default();
 
     let url = block
       .data
@@ -33,7 +33,7 @@ impl BlockParser for FileBlockParser {
         Value::String(s) => Some(s.clone()),
         _ => None,
       })
-      .unwrap_or_else(|| "".to_string());
+      .unwrap_or_default();
 
     let formatted_content = match context.format {
       OutputFormat::Markdown => {

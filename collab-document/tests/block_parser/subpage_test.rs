@@ -78,6 +78,5 @@ fn test_subpage_parser_plain_text_format() {
   let context = ParseContext::new(&document_data, OutputFormat::PlainText);
   let result = parser.parse(&block, &context).unwrap();
 
-  let expected = format!("{}", view_id);
-  assert_eq!(result.content, expected);
+  assert_eq!(result.content, view_id);
 }

@@ -69,8 +69,7 @@ fn test_file_block_parser_without_url() {
   let context = ParseContext::new(&document_data, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
-  let expected = format!("{}", name);
-  assert_eq!(result.content, expected);
+  assert_eq!(result.content, name);
 }
 
 #[test]

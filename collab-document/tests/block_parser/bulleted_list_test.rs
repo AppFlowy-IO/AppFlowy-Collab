@@ -79,7 +79,6 @@ fn test_bulleted_list_parser_with_indentation() {
   let block = create_bulleted_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
 
-
   let context = ParseContext::new(&document_data, OutputFormat::Markdown).with_depth(2);
 
   let result = parser.parse(&block, &context).unwrap();
@@ -93,7 +92,6 @@ fn test_bulleted_list_parser_nested_indentation() {
 
   let block = create_bulleted_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
-
 
   let context = ParseContext::new(&document_data, OutputFormat::PlainText).with_depth(3);
 
