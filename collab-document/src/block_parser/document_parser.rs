@@ -1,9 +1,9 @@
 use crate::block_parser::{
   BlockParserRegistry, BulletedListParser, CalloutParser, CodeBlockParser, DividerParser,
-  FileBlockParser, HeadingParser, ImageParser, LinkPreviewParser, MathEquationParser,
-  NumberedListParser, OutputFormat, PageParser, ParagraphParser, ParseContext, QuoteListParser,
-  SimpleColumnParser, SimpleColumnsParser, SimpleTableCellParser, SimpleTableParser,
-  SimpleTableRowParser, SubpageParser, TodoListParser, ToggleListParser,
+  DocumentParserDelegate, FileBlockParser, HeadingParser, ImageParser, LinkPreviewParser,
+  MathEquationParser, NumberedListParser, OutputFormat, PageParser, ParagraphParser, ParseContext,
+  QuoteListParser, SimpleColumnParser, SimpleColumnsParser, SimpleTableCellParser,
+  SimpleTableParser, SimpleTableRowParser, SubpageParser, TodoListParser, ToggleListParser,
 };
 use crate::blocks::{Block, DocumentData};
 use crate::error::DocumentError;
@@ -12,13 +12,30 @@ use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub struct DocumentParser {
   registry: BlockParserRegistry,
+
+  /// Provide the delegate to handle special cases like mentions during parsing
+  delegate: Option<Arc<dyn DocumentParserDelegate + Send + Sync>>,
 }
 
 impl DocumentParser {
   pub fn new() -> Self {
     Self {
       registry: BlockParserRegistry::new(),
+      delegate: None,
     }
+  }
+
+  pub fn with_delegate(mut self, delegate: Arc<dyn DocumentParserDelegate + Send + Sync>) -> Self {
+    self.delegate = Some(delegate);
+    self
+  }
+
+  pub fn set_delegate(&mut self, delegate: Arc<dyn DocumentParserDelegate + Send + Sync>) {
+    self.delegate = Some(delegate);
+  }
+
+  pub fn get_delegate(&self) -> Option<&Arc<dyn DocumentParserDelegate + Send + Sync>> {
+    self.delegate.as_ref()
   }
 
   pub fn with_default_parsers() -> Self {

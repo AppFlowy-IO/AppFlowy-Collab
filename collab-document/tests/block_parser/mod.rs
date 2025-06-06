@@ -2,6 +2,7 @@ mod bulleted_list_test;
 mod callout_test;
 mod code_block_test;
 mod divider_test;
+mod document_parser_test;
 mod file_block_test;
 mod heading_test;
 mod image_test;

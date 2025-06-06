@@ -12,11 +12,19 @@ pub trait DocumentTextExtractor {
     context: &ParseContext,
   ) -> Result<String, DocumentError>;
 
-  /// Get the plain text from the delta json string
-  fn extract_plain_text_from_delta(&self, delta_json: &str) -> Result<String, DocumentError>;
+  /// Get the plain text from the delta json string with delegate support
+  fn extract_plain_text_from_delta_with_context(
+    &self,
+    delta_json: &str,
+    context: Option<&ParseContext>,
+  ) -> Result<String, DocumentError>;
 
-  /// Get the markdown text from the delta json string
-  fn extract_markdown_text_from_delta(&self, delta_json: &str) -> Result<String, DocumentError>;
+  /// Get the markdown text from the delta json string with delegate support
+  fn extract_markdown_text_from_delta_with_context(
+    &self,
+    delta_json: &str,
+    context: Option<&ParseContext>,
+  ) -> Result<String, DocumentError>;
 }
 
 pub struct DefaultDocumentTextExtractor;
@@ -38,8 +46,12 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
 
       return match delta_json {
         Some(json) => match context.format {
-          OutputFormat::PlainText => self.extract_plain_text_from_delta(json),
-          OutputFormat::Markdown => self.extract_markdown_text_from_delta(json),
+          OutputFormat::PlainText => {
+            self.extract_plain_text_from_delta_with_context(json, Some(context))
+          },
+          OutputFormat::Markdown => {
+            self.extract_markdown_text_from_delta_with_context(json, Some(context))
+          },
         },
         None => Ok(String::new()),
       };
@@ -48,47 +60,63 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
     Ok(String::new())
   }
 
-  fn extract_plain_text_from_delta(&self, delta_json: &str) -> Result<String, DocumentError> {
+  fn extract_plain_text_from_delta_with_context(
+    &self,
+    delta_json: &str,
+    context: Option<&ParseContext>,
+  ) -> Result<String, DocumentError> {
     let deltas: Vec<TextDelta> = serde_json::from_str(delta_json)
       .map_err(|_| DocumentError::ParseDeltaJsonToTextDeltaError)?;
-    let result = deltas
-      .into_iter()
-      .filter_map(|delta| {
-        if let TextDelta::Inserted(text, attributes) = delta {
-          // TODO: mention logic should be delegated to the parser
-          if text == "$" {
-            if let Some(attrs) = attributes {
-              if let Some(Any::String(_)) = attrs.get(AttrKey::Mention.as_str()) {
-                return Some("".to_string());
-              }
+
+    let mut result = String::new();
+
+    for delta in deltas {
+      if let TextDelta::Inserted(text, attributes) = delta {
+        // Forward the text delta to the delegate
+        if let Some(context) = context {
+          if let Some(delegate) = context.parser.get_delegate() {
+            if let Some(text) = delegate.handle_text_delta(&text, attributes.as_ref(), context) {
+              result.push_str(&text);
+              continue;
             }
           }
-          Some(text)
-        } else {
-          None
         }
-      })
-      .collect::<String>();
+
+        result.push_str(&text);
+      }
+    }
 
     Ok(result)
   }
 
-  fn extract_markdown_text_from_delta(&self, delta_json: &str) -> Result<String, DocumentError> {
+  fn extract_markdown_text_from_delta_with_context(
+    &self,
+    delta_json: &str,
+    context: Option<&ParseContext>,
+  ) -> Result<String, DocumentError> {
     let deltas: Vec<TextDelta> = serde_json::from_str(delta_json)
       .map_err(|_| DocumentError::ParseDeltaJsonToTextDeltaError)?;
-    let result = deltas
-      .into_iter()
-      .filter_map(|delta| {
-        if let TextDelta::Inserted(text, attributes) = delta {
-          Some(match attributes {
+
+    let mut result = String::new();
+
+    for delta in deltas {
+      if let TextDelta::Inserted(text, attributes) = delta {
+        if let Some(context) = context {
+          if let Some(delegate) = context.parser.get_delegate() {
+            if let Some(text) = delegate.handle_text_delta(&text, attributes.as_ref(), context) {
+              result.push_str(&text);
+              continue;
+            }
+          }
+
+          let formatted_text = match attributes {
             Some(attrs) => format_text_with_attributes(&text, &attrs),
             None => text,
-          })
-        } else {
-          None
+          };
+          result.push_str(&formatted_text);
         }
-      })
-      .collect::<String>();
+      }
+    }
 
     Ok(result)
   }

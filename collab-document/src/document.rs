@@ -417,6 +417,13 @@ impl Document {
 
   /// Get the plain text of the document.
   ///
+  /// This function will call the `to_plain_text` function to get the plain text of the document.
+  pub fn paragraphs(&self) -> Vec<String> {
+    self.to_plain_text()
+  }
+
+  /// Get the plain text of the document.
+  ///
   /// This function will only return the plain text of the document, it will not include the formatting.
   /// For example, for the linked text, it will return the plain text of the linked text, the link will be removed.
   pub fn to_plain_text(&self) -> Vec<String> {

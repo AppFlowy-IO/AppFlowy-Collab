@@ -1,8 +1,11 @@
+use std::fmt::Debug;
+
 use crate::{
   block_parser::DocumentParser,
   blocks::{Block, DocumentData},
   error::DocumentError,
 };
+use collab::preclude::Attrs;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
@@ -167,5 +170,19 @@ pub trait BlockParser {
     }
 
     "".to_string()
+  }
+}
+
+pub trait DocumentParserDelegate: Debug {
+  /// Delegate the text delta to the caller.
+  ///
+  /// For example, for the mentioned page, the caller should return the page name based on the mentioned page id.
+  fn handle_text_delta(
+    &self,
+    _text: &str,
+    _attributes: Option<&Attrs>,
+    _context: &ParseContext,
+  ) -> Option<String> {
+    None
   }
 }
