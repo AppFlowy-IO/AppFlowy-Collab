@@ -1,8 +1,8 @@
 use serde_json::Value;
 
 use crate::block_parser::{
-  BlockParser, BlockParserRegistry, DefaultDocumentTextExtractor, DocumentParser,
-  DocumentTextExtractor, OutputFormat, ParseContext, ParseResult,
+  BlockParser, DefaultDocumentTextExtractor, DocumentTextExtractor, OutputFormat, ParseContext,
+  ParseResult,
 };
 use crate::blocks::{Block, BlockType};
 use crate::error::DocumentError;
@@ -43,10 +43,7 @@ impl BlockParser for HeadingParser {
       OutputFormat::PlainText => content,
     };
 
-    // the children of heading should be at the same level as the heading
-    // so we need to use the same context for the children
-    let child_context = context.with_depth(context.depth - 1);
-    let children_content = self.parse_children(block, &child_context);
+    let children_content = self.parse_children(block, context);
 
     let mut result = formatted_content;
     if !children_content.is_empty() {
@@ -60,34 +57,4 @@ impl BlockParser for HeadingParser {
   fn block_type(&self) -> &'static str {
     BlockType::Heading.as_str()
   }
-
-  // // Custom parse_children implementation that uses the registry to handle different child types
-  // fn parse_children(&self, block: &Block, context: &ParseContext) -> String {
-  //   if block.children.is_empty() {
-  //     return "".to_string();
-  //   }
-
-  //   if let Some(child_ids) = context.document_data.meta.children_map.get(&block.children) {
-  //     let child_context = context.with_depth(context.depth + 1);
-
-  //     // Create a temporary DocumentParser with default parsers to handle children
-  //     let document_parser = DocumentParser::with_default_parsers();
-
-  //     let result = child_ids
-  //       .iter()
-  //       .filter_map(|child_id| context.document_data.blocks.get(child_id))
-  //       .filter_map(|child_block| {
-  //         document_parser
-  //           .parse_block(child_block, &child_context)
-  //           .ok()
-  //       })
-  //       .filter(|child_content| !child_content.is_empty())
-  //       .collect::<Vec<String>>()
-  //       .join("\n");
-
-  //     return result;
-  //   }
-
-  //   "".to_string()
-  // }
 }

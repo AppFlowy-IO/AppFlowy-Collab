@@ -83,7 +83,8 @@ fn test_quote_list_parser_with_indentation() {
   let document_data = test.get_document_data();
 
   let document_parser = DocumentParser::with_default_parsers();
-  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown).with_depth(2);
+  let context =
+    ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown).with_depth(2);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "    > Hello AppFlowy");
@@ -153,7 +154,8 @@ fn test_quote_list_parser_nested_indentation() {
   let document_data = test.get_document_data();
 
   let document_parser = DocumentParser::with_default_parsers();
-  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText).with_depth(3);
+  let context =
+    ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText).with_depth(3);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "      Hello AppFlowy");
