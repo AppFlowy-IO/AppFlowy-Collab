@@ -68,7 +68,7 @@ impl DocumentParser {
   ) -> Result<String, DocumentError> {
     let result = self.registry.parse_block(block, context)?;
 
-    if result.has_children {
+    if result.is_container {
       let child_ids = context
         .document_data
         .meta

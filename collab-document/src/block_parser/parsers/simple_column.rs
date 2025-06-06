@@ -9,10 +9,9 @@ use crate::error::DocumentError;
 pub struct SimpleColumnParser;
 
 impl BlockParser for SimpleColumnParser {
-  fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, DocumentError> {
+  fn parse(&self, _block: &Block, _context: &ParseContext) -> Result<ParseResult, DocumentError> {
     // simple column block is a container that holds content.
     // Return empty content but signal that this block has children.
-    // The DocumentParser will handle parsing the children using the appropriate parsers.
     Ok(ParseResult::container(String::new()))
   }
 

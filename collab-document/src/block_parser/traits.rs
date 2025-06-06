@@ -85,7 +85,7 @@ pub struct ParseResult {
   pub add_newline: bool,
 
   // if the block has children, we need to parse the children content
-  pub has_children: bool,
+  pub is_container: bool,
 }
 
 impl ParseResult {
@@ -93,7 +93,7 @@ impl ParseResult {
     Self {
       content,
       add_newline: true,
-      has_children: false,
+      is_container: false,
     }
   }
 
@@ -101,7 +101,7 @@ impl ParseResult {
     Self {
       content,
       add_newline: false,
-      has_children: false,
+      is_container: false,
     }
   }
 
@@ -109,7 +109,7 @@ impl ParseResult {
     Self {
       content,
       add_newline: true,
-      has_children: true,
+      is_container: true,
     }
   }
 
@@ -117,7 +117,7 @@ impl ParseResult {
     Self {
       content: String::new(),
       add_newline: false,
-      has_children: false,
+      is_container: false,
     }
   }
 }
