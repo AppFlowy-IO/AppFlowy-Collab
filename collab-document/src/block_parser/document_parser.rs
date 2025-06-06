@@ -2,7 +2,8 @@ use crate::block_parser::{
   BlockParserRegistry, BulletedListParser, CalloutParser, CodeBlockParser, DividerParser,
   FileBlockParser, HeadingParser, ImageParser, LinkPreviewParser, MathEquationParser,
   NumberedListParser, OutputFormat, PageParser, ParagraphParser, ParseContext, QuoteListParser,
-  SimpleColumnParser, SimpleColumnsParser, SubpageParser, TodoListParser, ToggleListParser,
+  SimpleColumnParser, SimpleColumnsParser, SimpleTableCellParser, SimpleTableParser,
+  SimpleTableRowParser, SubpageParser, TodoListParser, ToggleListParser,
 };
 use crate::blocks::{Block, DocumentData};
 use crate::error::DocumentError;
@@ -41,6 +42,9 @@ impl DocumentParser {
       .register(Arc::new(MathEquationParser))
       .register(Arc::new(SimpleColumnsParser))
       .register(Arc::new(SimpleColumnParser))
+      .register(Arc::new(SimpleTableParser))
+      .register(Arc::new(SimpleTableRowParser))
+      .register(Arc::new(SimpleTableCellParser))
       .register(Arc::new(SubpageParser));
 
     parser
