@@ -36,6 +36,10 @@ pub enum BlockType {
   SimpleColumns,
   SimpleColumn,
   Custom(String),
+
+  // Legacy types
+  Table,
+  TableCell,
 }
 
 impl BlockType {
@@ -70,6 +74,8 @@ impl BlockType {
       BlockType::SimpleTableCell => "simple_table_cell",
       BlockType::SimpleColumns => "simple_columns",
       BlockType::SimpleColumn => "simple_column",
+      BlockType::Table => "table",
+      BlockType::TableCell => "table/cell",
       BlockType::Custom(s) => s,
     }
   }
@@ -105,6 +111,8 @@ impl BlockType {
       "simple_table_cell" => BlockType::SimpleTableCell,
       "simple_columns" => BlockType::SimpleColumns,
       "simple_column" => BlockType::SimpleColumn,
+      "table" => BlockType::Table,
+      "table/cell" => BlockType::TableCell,
       _ => BlockType::Custom(s.to_string()),
     }
   }

@@ -7,7 +7,8 @@ use crate::error::DocumentError;
 
 /// Parse the bulleted list block.
 ///
-/// Bulleted list block typically uses a bullet character (•, -, *) to denote list items.
+/// Bulleted list block data:
+///   delta: delta
 pub struct BulletedListParser;
 
 impl BlockParser for BulletedListParser {

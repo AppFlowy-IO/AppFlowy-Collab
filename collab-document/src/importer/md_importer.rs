@@ -205,7 +205,7 @@ fn create_block(
     parent: parent_id.unwrap_or_default(),
     children: id.to_string(),
     external_id: Some(id.to_string()),
-    external_type: Some(BlockType::Paragraph.to_string()),
+    external_type: Some("text".to_string()),
   }
 }
 
@@ -336,7 +336,7 @@ fn create_table_cell_block(
 
   Block {
     id: id.to_string(),
-    ty: BlockType::SimpleTableCell.to_string(),
+    ty: BlockType::TableCell.to_string(),
     data: cell_data,
     parent: parent_id.to_string(),
     children: id.to_string(),
