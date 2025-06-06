@@ -10,6 +10,7 @@ mod math_equation_test;
 mod numbered_list_test;
 mod paragraph_test;
 mod quote_list_test;
+mod simple_columns_test;
 mod subpage_test;
 mod text_utils_test;
 mod todo_list_test;

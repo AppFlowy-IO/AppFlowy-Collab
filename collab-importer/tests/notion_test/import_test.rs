@@ -9,10 +9,10 @@ use collab_database::fields::{Field, TypeOptionCellReader};
 use collab_database::rows::Row;
 use collab_document::blocks::{
   extract_page_id_from_block_delta, extract_view_id_from_block_data,
-  mention_block_content_from_delta,
+  mention_block_content_from_delta, BlockType,
 };
 
-use collab_document::importer::define::{BlockType, URL_FIELD};
+use collab_document::importer::define::URL_FIELD;
 use collab_entity::CollabType;
 use collab_folder::hierarchy_builder::ParentChildViews;
 use collab_folder::{Folder, View, default_folder_data};

@@ -1,4 +1,5 @@
 use crate::util::sync_unzip_asset;
+use collab_document::blocks::BlockType;
 use collab_importer::notion::NotionImporter;
 
 /// Customer import test 1
