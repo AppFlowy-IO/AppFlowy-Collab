@@ -1,4 +1,4 @@
-use crate::block_parser::{BlockParser, ParseContext, ParseResult};
+use crate::block_parser::{BlockParser, OutputFormat, ParseContext, ParseResult};
 use crate::blocks::{Block, BlockType};
 use crate::error::DocumentError;
 
@@ -11,13 +11,13 @@ pub struct SimpleTableRowParser;
 impl BlockParser for SimpleTableRowParser {
   fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, DocumentError> {
     if block.children.is_empty() {
-      return Ok(ParseResult::new(String::new()));
+      return Ok(ParseResult::new("".to_string()));
     }
 
     if let Some(child_ids) = context.document_data.meta.children_map.get(&block.children) {
       let child_context = context.with_depth(context.depth + 1);
 
-      let mut cell_contents: Vec<String> = child_ids
+      let cell_contents: Vec<String> = child_ids
         .iter()
         .filter_map(|child_id| context.document_data.blocks.get(child_id))
         .map(|child_block| {
@@ -28,21 +28,17 @@ impl BlockParser for SimpleTableRowParser {
         })
         .collect();
 
-      // Trim trailing empty cells
-      while let Some(last) = cell_contents.last() {
-        if last.is_empty() {
-          cell_contents.pop();
-        } else {
-          break;
-        }
-      }
-
-      let result = cell_contents.join("\t"); // Use tabs to separate cells
+      let result = match context.format {
+        OutputFormat::PlainText => cell_contents.join("\t"),
+        OutputFormat::Markdown => {
+          format!("| {} |", cell_contents.join(" | "))
+        },
+      };
 
       return Ok(ParseResult::new(result));
     }
 
-    Ok(ParseResult::new(String::new()))
+    Ok(ParseResult::new("".to_string()))
   }
 
   fn block_type(&self) -> &'static str {

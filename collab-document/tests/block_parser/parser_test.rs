@@ -116,9 +116,13 @@ AppFlowy 3	3	Chicago"#;
     .parse_document(&document_data, OutputFormat::Markdown)
     .unwrap();
 
-  let result = result.split("\n").collect::<Vec<&str>>();
+  let expected_markdown = r#"# Table Examples
+## Simple Table
+| Company | Type | City |
+|------|------|------|
+| AppFlowy 1 | 1 | [NYC](https://appflowy.io) |
+| AppFlowy 2 | 2 | **LA** |
+| AppFlowy 3 | 3 | `Chicago` |"#;
 
-  for line in result {
-    println!("{}", line);
-  }
+  assert_eq!(result, expected_markdown);
 }

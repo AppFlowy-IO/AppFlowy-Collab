@@ -116,7 +116,7 @@ impl DocumentParser {
     child_ids: &[String],
     context: &ParseContext,
   ) -> Result<String, DocumentError> {
-    let mut result = String::new();
+    let mut result = "".to_string();
 
     for child_id in child_ids {
       if let Some(child_block) = context.document_data.blocks.get(child_id) {

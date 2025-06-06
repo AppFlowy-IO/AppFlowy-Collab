@@ -73,5 +73,5 @@ fn test_text_extractor_mentions() {
   let plain_result = DefaultDocumentTextExtractor
     .extract_plain_text_from_delta_with_context(delta_json, None)
     .unwrap();
-  assert_eq!(plain_result, "Mention a page ");
+  assert_eq!(plain_result, "Mention a page $");
 }

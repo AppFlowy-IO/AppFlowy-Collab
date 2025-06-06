@@ -53,11 +53,11 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
             self.extract_markdown_text_from_delta_with_context(json, Some(context))
           },
         },
-        None => Ok(String::new()),
+        None => Ok("".to_string()),
       };
     }
 
-    Ok(String::new())
+    Ok("".to_string())
   }
 
   fn extract_plain_text_from_delta_with_context(
@@ -68,7 +68,7 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
     let deltas: Vec<TextDelta> = serde_json::from_str(delta_json)
       .map_err(|_| DocumentError::ParseDeltaJsonToTextDeltaError)?;
 
-    let mut result = String::new();
+    let mut result = "".to_string();
 
     for delta in deltas {
       if let TextDelta::Inserted(text, attributes) = delta {
@@ -97,7 +97,7 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
     let deltas: Vec<TextDelta> = serde_json::from_str(delta_json)
       .map_err(|_| DocumentError::ParseDeltaJsonToTextDeltaError)?;
 
-    let mut result = String::new();
+    let mut result = "".to_string();
 
     for delta in deltas {
       if let TextDelta::Inserted(text, attributes) = delta {
@@ -108,13 +108,13 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
               continue;
             }
           }
-
-          let formatted_text = match attributes {
-            Some(attrs) => format_text_with_attributes(&text, &attrs),
-            None => text,
-          };
-          result.push_str(&formatted_text);
         }
+
+        let formatted_text = match attributes {
+          Some(attrs) => format_text_with_attributes(&text, &attrs),
+          None => text,
+        };
+        result.push_str(&formatted_text);
       }
     }
 

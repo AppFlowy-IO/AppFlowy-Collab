@@ -128,7 +128,7 @@ impl ParseResult {
 
   pub fn empty() -> Self {
     Self {
-      content: String::new(),
+      content: "".to_string(),
       add_newline: false,
       is_container: false,
     }
@@ -160,7 +160,7 @@ pub trait BlockParser {
         .filter_map(|child_id| context.document_data.blocks.get(child_id))
         .filter_map(|child_block| context.parser.parse_block(child_block, &child_context).ok())
         .filter(|child_result| !child_result.is_empty())
-        .fold(String::new(), |mut acc, child_result| {
+        .fold("".to_string(), |mut acc, child_result| {
           acc.push_str(&child_result);
           acc.push('\n');
           acc
