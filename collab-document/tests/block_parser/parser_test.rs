@@ -94,21 +94,31 @@ Click ? at the bottom right for help and support."#;
 fn test_table_markdown_parser() {
   let table_markdown = r#"# Table Examples
 ## Simple Table
-| Name | Age | City |
+| Company | Type | City |
 |------|-----|------|
-| AppFlowy 1 | 25  | [NYC](https://appflowy.io)  |
-| AppFlowy 2 | 30  | **LA**   |
-| AppFlowy 3 | 22  | `Chicago` |"#;
+| AppFlowy 1 | 1  | [NYC](https://appflowy.io)  |
+| AppFlowy 2 | 2  | **LA**   |
+| AppFlowy 3 | 3  | `Chicago` |"#;
 
   let expected_result = r#"Table Examples
 Simple Table
-Name	Age	City
-AppFlowy 1	25	NYC
-AppFlowy 2	30	LA
-AppFlowy 3	22	Chicago"#;
+Company	Type	City
+AppFlowy 1	1	NYC
+AppFlowy 2	2	LA
+AppFlowy 3	3	Chicago"#;
 
   let document_data = markdown_to_document_data(table_markdown);
   let parser = DocumentParser::with_default_parsers();
   let result = parser.parse_document(&document_data, OutputFormat::PlainText);
   assert_eq!(result.unwrap(), expected_result);
+
+  let result = parser
+    .parse_document(&document_data, OutputFormat::Markdown)
+    .unwrap();
+
+  let result = result.split("\n").collect::<Vec<&str>>();
+
+  for line in result {
+    println!("{}", line);
+  }
 }

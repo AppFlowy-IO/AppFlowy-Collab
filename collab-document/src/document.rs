@@ -416,9 +416,21 @@ impl Document {
   }
 
   /// Get the plain text of the document.
+  ///
+  /// This function will only return the plain text of the document, it will not include the formatting.
+  /// For example, for the linked text, it will return the plain text of the linked text, the link will be removed.
   pub fn to_plain_text(&self) -> Vec<String> {
     let txn = self.collab.transact();
     self.body.to_plain_text(txn)
+  }
+
+  /// Get the markdown text of the document.
+  ///
+  /// This function will return the markdown text of the document, it will include the formatting.
+  /// For example, for the linked text, it will return the markdown text of the linked text, the link will be included.
+  pub fn to_markdown_text(&self) -> Vec<String> {
+    let txn = self.collab.transact();
+    self.body.to_markdown_text(txn)
   }
 }
 
@@ -600,6 +612,7 @@ impl DocumentBody {
     }
   }
 
+  /// Get the plain text of the document.
   pub fn to_plain_text<T: ReadTxn>(&self, txn: T) -> Vec<String> {
     // use DocumentParser to parse the document
     let document_parser = DocumentParser::with_default_parsers();
@@ -617,6 +630,22 @@ impl DocumentBody {
     }
   }
 
+  /// Get the markdown text of the document.
+  pub fn to_markdown_text<T: ReadTxn>(&self, txn: T) -> Vec<String> {
+    let document_parser = DocumentParser::with_default_parsers();
+    let document_data = self.get_document_data(&txn);
+    if let Ok(document_data) = document_data {
+      let markdown_text = document_parser
+        .parse_document(&document_data, OutputFormat::Markdown)
+        .unwrap_or_default();
+      markdown_text
+        .split("\n")
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>()
+    } else {
+      vec![]
+    }
+  }
   pub fn insert_block(
     &self,
     txn: &mut TransactionMut,
