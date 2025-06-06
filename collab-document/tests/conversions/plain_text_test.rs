@@ -20,7 +20,7 @@ fn plain_text_1_test() {
   ];
   insert_paragraphs(&mut document, paragraphs.clone());
 
-  let splitted = document.paragraphs();
+  let splitted = document.to_plain_text();
   // remove the empty lines at the beginning and the end
   // the first one and the last one are empty
   assert_eq!(splitted.len(), 8);

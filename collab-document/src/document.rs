@@ -13,6 +13,9 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::vec;
 
+use crate::block_parser::DocumentParser;
+use crate::block_parser::OutputFormat;
+use crate::blocks::BlockType;
 use crate::blocks::{
   Block, BlockAction, BlockActionPayload, BlockActionType, BlockEvent, BlockOperation,
   ChildrenOperation, DocumentData, DocumentMeta, EXTERNAL_TYPE_TEXT, TextDelta, TextOperation,
@@ -20,10 +23,6 @@ use crate::blocks::{
 };
 use crate::document_awareness::DocumentAwarenessState;
 use crate::error::DocumentError;
-use crate::importer::define::BlockType;
-use crate::utils::{
-  get_delta_from_block_data, get_delta_from_external_text_id, push_deltas_to_str,
-};
 
 /// The page_id is a reference that points to the block's id.
 /// The block that is referenced by this page_id is the first block of the document.
@@ -417,10 +416,28 @@ impl Document {
   }
 
   /// Get the plain text of the document.
-  /// If new_line_each_paragraph is true, it will add a newline between each paragraph.
+  ///
+  /// This function will call the `to_plain_text` function to get the plain text of the document.
   pub fn paragraphs(&self) -> Vec<String> {
+    self.to_plain_text()
+  }
+
+  /// Get the plain text of the document.
+  ///
+  /// This function will only return the plain text of the document, it will not include the formatting.
+  /// For example, for the linked text, it will return the plain text of the linked text, the link will be removed.
+  pub fn to_plain_text(&self) -> Vec<String> {
     let txn = self.collab.transact();
-    self.body.paragraphs(txn)
+    self.body.to_plain_text(txn)
+  }
+
+  /// Get the markdown text of the document.
+  ///
+  /// This function will return the markdown text of the document, it will include the formatting.
+  /// For example, for the linked text, it will return the markdown text of the linked text, the link will be included.
+  pub fn to_markdown_text(&self) -> Vec<String> {
+    let txn = self.collab.transact();
+    self.body.to_markdown_text(txn)
   }
 }
 
@@ -602,49 +619,40 @@ impl DocumentBody {
     }
   }
 
-  pub fn paragraphs<T: ReadTxn>(&self, txn: T) -> Vec<String> {
-    let page_id: String = match self.root.get(&txn, PAGE_ID).map(|v| v.cast::<String>()) {
-      Some(Ok(page_id)) => page_id,
-      _ => return Vec::new(),
-    };
-
-    let mut paragraphs = Vec::new();
-    let mut current_paragraph = String::new();
-    let mut text_map = self.text_operation.all_text_delta(&txn);
-    let blocks = self.block_operation.get_all_blocks(&txn);
-    let children_map = self.children_operation.get_all_children(&txn);
-    let mut stack = Vec::new();
-    stack.push(&page_id);
-    // do a depth-first scan of the document blocks
-    while let Some(block_id) = stack.pop() {
-      if let Some(block) = blocks.get(block_id) {
-        if let Some(deltas) = get_delta_from_block_data(block) {
-          push_deltas_to_str(&mut current_paragraph, deltas);
-        } else if let Some(deltas) = get_delta_from_external_text_id(block, &mut text_map) {
-          push_deltas_to_str(&mut current_paragraph, deltas);
-        }
-
-        if let Some(children) = children_map.get(&block.children) {
-          // if the children is not empty or the stack is not empty, add a newline to separate the blocks
-          if !current_paragraph.is_empty() && (!children.is_empty() || !stack.is_empty()) {
-            paragraphs.push(std::mem::take(&mut current_paragraph));
-          }
-
-          // we want to process children blocks in the same order they are given in children_map
-          // however stack.pop gives us the last element first, so we push children
-          // in reverse order
-          stack.extend(children.iter().rev());
-        }
-      }
+  /// Get the plain text of the document.
+  pub fn to_plain_text<T: ReadTxn>(&self, txn: T) -> Vec<String> {
+    // use DocumentParser to parse the document
+    let document_parser = DocumentParser::with_default_parsers();
+    let document_data = self.get_document_data(&txn);
+    if let Ok(document_data) = document_data {
+      let plain_text = document_parser
+        .parse_document(&document_data, OutputFormat::PlainText)
+        .unwrap_or_default();
+      plain_text
+        .split("\n")
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>()
+    } else {
+      vec![]
     }
-
-    if !current_paragraph.is_empty() {
-      paragraphs.push(current_paragraph);
-    }
-
-    paragraphs
   }
 
+  /// Get the markdown text of the document.
+  pub fn to_markdown_text<T: ReadTxn>(&self, txn: T) -> Vec<String> {
+    let document_parser = DocumentParser::with_default_parsers();
+    let document_data = self.get_document_data(&txn);
+    if let Ok(document_data) = document_data {
+      let markdown_text = document_parser
+        .parse_document(&document_data, OutputFormat::Markdown)
+        .unwrap_or_default();
+      markdown_text
+        .split("\n")
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>()
+    } else {
+      vec![]
+    }
+  }
   pub fn insert_block(
     &self,
     txn: &mut TransactionMut,
