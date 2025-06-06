@@ -10,7 +10,7 @@ pub struct PageParser;
 
 impl BlockParser for PageParser {
   fn parse(&self, block: &Block, context: &ParseContext) -> Result<ParseResult, DocumentError> {
-    let children_content = self.parse_children(block, context)?;
+    let children_content = self.parse_children(block, context);
     Ok(ParseResult::container(children_content))
   }
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_document::block_parser::parsers::paragraph::ParagraphParser;
-use collab_document::block_parser::{BlockParser, OutputFormat, ParseContext};
+use collab_document::block_parser::{BlockParser, DocumentParser, OutputFormat, ParseContext};
 use collab_document::blocks::{Block, BlockType};
 use serde_json::json;
 
@@ -40,7 +40,8 @@ fn test_paragraph_parser_basic_text() {
   let block = create_paragraph_block(&mut test, "Hello AppFlowy".to_string(), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
   assert_eq!(result.content, "Hello AppFlowy");
@@ -54,7 +55,8 @@ fn test_paragraph_parser_empty_content() {
   let block = create_paragraph_block(&mut test, "".to_string(), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
   assert!(result.content.is_empty());

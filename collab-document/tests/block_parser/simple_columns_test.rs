@@ -113,7 +113,8 @@ fn test_simple_columns_parser_with_multiple_columns() {
   );
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let columns_result = parser.parse_block(&columns_block, &context).unwrap();
   let expected = "1. Hello AppFlowy\n2. Hello AppFlowy\n3. Hello AppFlowy";
@@ -157,7 +158,8 @@ fn test_simple_columns_parser_with_multiple_paragraphs_per_column() {
   );
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let columns_result = parser.parse_block(&columns_block, &context).unwrap();
   let expected = "1. Hello AppFlowy - Line 1\n1. Hello AppFlowy - Line 2\n2. Hello AppFlowy - Line 1\n2. Hello AppFlowy - Line 2";
@@ -189,7 +191,8 @@ fn test_simple_columns_parser_plain_text_format() {
   );
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText);
 
   let columns_result = parser.parse_block(&columns_block, &context).unwrap();
   let expected = "1. Hello AppFlowy\n2. Hello AppFlowy";

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_document::block_parser::parsers::divider::DividerParser;
-use collab_document::block_parser::{BlockParser, OutputFormat, ParseContext};
+use collab_document::block_parser::{BlockParser, DocumentParser, OutputFormat, ParseContext};
 use collab_document::blocks::{Block, BlockType};
 
 use crate::blocks::block_test_core::{BlockTestCore, generate_id};
@@ -36,7 +36,8 @@ fn test_divider_parser_markdown_format() {
   let block = create_divider_block(&mut test, "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
   assert_eq!(result.content, "---");
@@ -50,7 +51,8 @@ fn test_divider_parser_plain_text_format() {
   let block = create_divider_block(&mut test, "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText);
   let result = parser.parse(&block, &context).unwrap();
 
   assert_eq!(result.content, "---");
@@ -64,7 +66,9 @@ fn test_divider_parser_with_indent() {
   let block = create_divider_block(&mut test, "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown).with_depth(2);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context =
+    ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown).with_depth(2);
   let result = parser.parse(&block, &context).unwrap();
 
   assert_eq!(result.content, "    ---");

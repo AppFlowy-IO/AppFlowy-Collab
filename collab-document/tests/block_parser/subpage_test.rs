@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_document::block_parser::parsers::subpage::SubpageParser;
-use collab_document::block_parser::{BlockParser, OutputFormat, ParseContext};
+use collab_document::block_parser::{BlockParser, DocumentParser, OutputFormat, ParseContext};
 use collab_document::blocks::{Block, BlockType};
 use serde_json::Value;
 
@@ -45,7 +45,8 @@ fn test_subpage_parser_with_view_id_markdown() {
   let block = create_subpage_block(&mut test, Some(view_id.clone()), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
   let expected = format!("[Subpage]({})", view_id);
@@ -60,7 +61,8 @@ fn test_subpage_parser_without_view_id() {
   let block = create_subpage_block(&mut test, None, "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
   assert_eq!(result.content, "[Subpage]");
@@ -75,7 +77,8 @@ fn test_subpage_parser_plain_text_format() {
   let block = create_subpage_block(&mut test, Some(view_id.clone()), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText);
   let result = parser.parse(&block, &context).unwrap();
 
   assert_eq!(result.content, view_id);

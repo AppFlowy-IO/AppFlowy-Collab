@@ -129,7 +129,8 @@ fn test_simple_table_parser_with_single_row_and_multiple_cells() {
     create_paragraph_block_in_cell(&mut test, "Cell 3".to_string(), &cell3_block.id, None);
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let table_result = parser.parse_block(&table_block, &context).unwrap();
   let expected = "Cell 1\nCell 2\nCell 3";
@@ -183,7 +184,8 @@ fn test_simple_table_parser_with_multiple_rows_and_cells() {
   );
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let table_result = parser.parse_block(&table_block, &context).unwrap();
   let expected = "Row 1, Cell 1\nRow 1, Cell 2\nRow 2, Cell 1\nRow 2, Cell 2";
@@ -214,7 +216,8 @@ fn test_simple_table_parser_with_complex_cell_content() {
   );
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let table_result = parser.parse_block(&table_block, &context).unwrap();
   let expected = "First paragraph in cell\nSecond paragraph in cell";

@@ -9,6 +9,7 @@ use crate::blocks::{Block, DocumentData};
 use crate::error::DocumentError;
 use std::sync::Arc;
 
+#[derive(Debug, Clone)]
 pub struct DocumentParser {
   registry: BlockParserRegistry,
 }
@@ -61,7 +62,7 @@ impl DocumentParser {
       .get(&document_data.page_id)
       .ok_or(DocumentError::PageBlockNotFound)?;
 
-    let context = ParseContext::new(document_data, format);
+    let context = ParseContext::new(document_data, self, format);
     self.parse_block(page_block, &context)
   }
 
@@ -73,22 +74,18 @@ impl DocumentParser {
     let result = self.registry.parse_block(block, context)?;
 
     if result.is_container {
-      let child_ids = context
-        .document_data
-        .meta
-        .children_map
-        .get(&block.children)
-        .ok_or(DocumentError::NoBlockChildrenFound)?;
-
-      let child_context = context.with_depth(context.depth + 1);
-      let children_content = self.parse_children(child_ids, &child_context)?;
-
       let mut content = result.content;
-      if !children_content.is_empty() {
-        if !content.is_empty() && result.add_newline {
-          content.push('\n');
+
+      if let Some(child_ids) = context.document_data.meta.children_map.get(&block.children) {
+        let child_context = context.with_depth(context.depth + 1);
+        let children_content = self.parse_children(child_ids, &child_context)?;
+
+        if !children_content.is_empty() {
+          if !content.is_empty() && result.add_newline {
+            content.push('\n');
+          }
+          content.push_str(&children_content);
         }
-        content.push_str(&children_content);
       }
 
       Ok(content)

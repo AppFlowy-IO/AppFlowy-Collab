@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_document::block_parser::parsers::file_block::FileBlockParser;
-use collab_document::block_parser::{BlockParser, OutputFormat, ParseContext};
+use collab_document::block_parser::{BlockParser, DocumentParser, OutputFormat, ParseContext};
 use collab_document::blocks::{Block, BlockType};
 use serde_json::Value;
 
@@ -50,7 +50,8 @@ fn test_file_block_parser_with_url_markdown() {
   let block = create_file_block(&mut test, Some(name.clone()), Some(url.clone()), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
   let expected = format!("[{}]({})", name, url);
@@ -66,7 +67,8 @@ fn test_file_block_parser_without_url() {
   let block = create_file_block(&mut test, Some(name.clone()), None, "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
   assert_eq!(result.content, name);
@@ -82,7 +84,8 @@ fn test_file_block_parser_plain_text_format() {
   let block = create_file_block(&mut test, Some(name.clone()), Some(url.clone()), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText);
   let result = parser.parse(&block, &context).unwrap();
 
   let expected = format!("{}({})", name, url);

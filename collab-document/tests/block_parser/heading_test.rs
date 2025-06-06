@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_document::block_parser::parsers::heading::HeadingParser;
-use collab_document::block_parser::{BlockParser, OutputFormat, ParseContext};
+use collab_document::block_parser::{BlockParser, DocumentParser, OutputFormat, ParseContext};
 use collab_document::blocks::{Block, BlockType};
 use serde_json::{Value, json};
 
@@ -47,7 +47,8 @@ fn test_heading_parser_different_levels() {
     let block = create_heading_block(&mut test, level, format!("Level {} Heading", level), "");
 
     let document_data = test.get_document_data();
-    let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+    let document_parser = DocumentParser::with_default_parsers();
+    let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
     let result = parser.parse(&block, &context).unwrap();
     let expected = format!("{} Level {} Heading", "#".repeat(level as usize), level);
     assert_eq!(result.content, expected);
@@ -61,7 +62,8 @@ fn test_heading_parser_plain_text_format() {
 
   let block = create_heading_block(&mut test, 3, "Heading".to_string(), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "Heading");
@@ -74,7 +76,8 @@ fn test_heading_parser_empty_content() {
 
   let block = create_heading_block(&mut test, 2, "".to_string(), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "## ");
@@ -104,7 +107,8 @@ fn test_heading_parser_missing_level_defaults_to_1() {
   test.document.insert_block(block.clone(), None).unwrap();
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "# No Level");

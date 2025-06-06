@@ -2,10 +2,20 @@ use crate::block_parser::{BlockParser, ParseContext, ParseResult};
 use crate::blocks::Block;
 use crate::error::DocumentError;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct BlockParserRegistry {
   parsers: HashMap<String, Arc<dyn BlockParser + Send + Sync>>,
+}
+
+impl Debug for BlockParserRegistry {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("BlockParserRegistry")
+      .field("parsers", &self.parsers.keys().collect::<Vec<_>>())
+      .finish()
+  }
 }
 
 impl BlockParserRegistry {

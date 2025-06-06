@@ -26,7 +26,7 @@ impl BlockParser for QuoteListParser {
       },
     };
 
-    let children_content = self.parse_children(block, context)?;
+    let children_content = self.parse_children(block, context);
 
     let mut result = formatted_content;
     if !children_content.is_empty() {

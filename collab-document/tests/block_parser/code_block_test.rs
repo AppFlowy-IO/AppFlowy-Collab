@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_document::block_parser::parsers::code_block::CodeBlockParser;
-use collab_document::block_parser::{BlockParser, OutputFormat, ParseContext};
+use collab_document::block_parser::{BlockParser, DocumentParser, OutputFormat, ParseContext};
 use collab_document::blocks::{Block, BlockType};
 use serde_json::{Value, json};
 
@@ -49,7 +49,8 @@ fn test_code_block_parser_with_language() {
   let block = create_code_block(&mut test, code.clone(), Some("dart".to_string()), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
   let expected = format!("```dart\n{}\n```", code);
@@ -65,7 +66,8 @@ fn test_code_block_parser_without_language() {
   let block = create_code_block(&mut test, code.clone(), None, "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
   let expected = format!("```\n{}\n```", code);
@@ -81,7 +83,8 @@ fn test_code_block_parser_plain_text_format() {
   let block = create_code_block(&mut test, code.clone(), Some("dart".to_string()), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText);
   let result = parser.parse(&block, &context).unwrap();
 
   assert_eq!(result.content, code);

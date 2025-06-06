@@ -44,7 +44,7 @@ impl BlockParser for NumberedListParser {
     };
 
     let list_context = context.with_list_context(Some(number + 1));
-    let children_content = self.parse_children(block, &list_context)?;
+    let children_content = self.parse_children(block, &list_context);
 
     let mut result = formatted_content;
     if !children_content.is_empty() {

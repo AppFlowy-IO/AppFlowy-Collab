@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_document::block_parser::parsers::math_equation::MathEquationParser;
-use collab_document::block_parser::{BlockParser, OutputFormat, ParseContext};
+use collab_document::block_parser::{BlockParser, DocumentParser, OutputFormat, ParseContext};
 use collab_document::blocks::{Block, BlockType};
 use serde_json::Value;
 
@@ -45,7 +45,8 @@ fn test_math_equation_parser_with_formula() {
   let block = create_math_equation_block(&mut test, Some(formula.clone()), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
   let expected = format!("```math\n{}\n```", formula);
@@ -60,7 +61,8 @@ fn test_math_equation_parser_empty_formula() {
   let block = create_math_equation_block(&mut test, None, "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
   let expected = "```math\n\n```";
@@ -76,7 +78,8 @@ fn test_math_equation_parser_plain_text_format() {
   let block = create_math_equation_block(&mut test, Some(formula.clone()), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText);
   let result = parser.parse(&block, &context).unwrap();
 
   assert_eq!(result.content, formula);

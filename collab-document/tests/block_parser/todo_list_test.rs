@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_document::block_parser::parsers::todo_list::TodoListParser;
-use collab_document::block_parser::{BlockParser, OutputFormat, ParseContext};
+use collab_document::block_parser::{BlockParser, DocumentParser, OutputFormat, ParseContext};
 use collab_document::blocks::{Block, BlockType};
 use serde_json::{Value, json};
 
@@ -47,7 +47,8 @@ fn test_todo_list_parser_unchecked_markdown() {
 
   let block = create_todo_list_block(&mut test, "Unchecked task".to_string(), Some(false), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "- [ ] Unchecked task");
@@ -60,7 +61,8 @@ fn test_todo_list_parser_checked_markdown() {
 
   let block = create_todo_list_block(&mut test, "Completed task".to_string(), Some(true), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "- [x] Completed task");
@@ -73,7 +75,8 @@ fn test_todo_list_parser_checked_plain_text() {
 
   let block = create_todo_list_block(&mut test, "Completed task".to_string(), Some(true), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "Completed task");
@@ -86,7 +89,8 @@ fn test_todo_list_parser_no_checked_data_defaults_unchecked() {
 
   let block = create_todo_list_block(&mut test, "Default task".to_string(), None, "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "- [ ] Default task");
@@ -104,7 +108,8 @@ fn test_todo_list_parser_with_bool_checked_true() {
     "",
   );
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "- [x] Boolean checked task");
@@ -122,7 +127,8 @@ fn test_todo_list_parser_with_bool_checked_false() {
     "",
   );
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "- [ ] Boolean unchecked task");
@@ -135,7 +141,8 @@ fn test_todo_list_parser_empty_content() {
 
   let block = create_todo_list_block(&mut test, "".to_string(), Some(false), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "- [ ] ");
@@ -149,7 +156,8 @@ fn test_todo_list_parser_with_indentation() {
   let block = create_todo_list_block(&mut test, "Indented task".to_string(), Some(true), "");
   let document_data = test.get_document_data();
 
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown).with_depth(2);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown).with_depth(2);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "    - [x] Indented task");

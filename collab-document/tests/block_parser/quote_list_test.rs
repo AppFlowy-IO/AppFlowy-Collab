@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_document::block_parser::parsers::quote_list::QuoteListParser;
-use collab_document::block_parser::{BlockParser, OutputFormat, ParseContext};
+use collab_document::block_parser::{BlockParser, DocumentParser, OutputFormat, ParseContext};
 use collab_document::blocks::{Block, BlockType};
 use serde_json::json;
 
@@ -39,7 +39,8 @@ fn test_quote_list_parser_markdown_format() {
 
   let block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "> Hello AppFlowy");
@@ -52,7 +53,8 @@ fn test_quote_list_parser_plain_text_format() {
 
   let block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "Hello AppFlowy");
@@ -65,7 +67,8 @@ fn test_quote_list_parser_empty_content() {
 
   let block = create_quote_list_block(&mut test, "".to_string(), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "> ");
@@ -79,7 +82,8 @@ fn test_quote_list_parser_with_indentation() {
   let block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
 
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown).with_depth(2);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown).with_depth(2);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "    > Hello AppFlowy");
@@ -93,7 +97,8 @@ fn test_quote_list_parser_with_children() {
   let parent_block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&parent_block, &context).unwrap();
 
@@ -115,7 +120,8 @@ fn test_quote_list_parser_multiple_quotes() {
   let block2 = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result1 = parser.parse(&block1, &context).unwrap();
   let result2 = parser.parse(&block2, &context).unwrap();
@@ -131,7 +137,8 @@ fn test_quote_list_parser_special_characters() {
 
   let block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "> Hello AppFlowy");
@@ -145,7 +152,8 @@ fn test_quote_list_parser_nested_indentation() {
   let block = create_quote_list_block(&mut test, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
 
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText).with_depth(3);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText).with_depth(3);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "      Hello AppFlowy");
@@ -159,7 +167,8 @@ fn test_quote_list_parser_long_quote() {
   let long_text = "Hello AppFlowy";
   let block = create_quote_list_block(&mut test, long_text.to_string(), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, format!("> {}", long_text));

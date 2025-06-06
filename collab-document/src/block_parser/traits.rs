@@ -1,4 +1,5 @@
 use crate::{
+  block_parser::DocumentParser,
   blocks::{Block, DocumentData},
   error::DocumentError,
 };
@@ -12,6 +13,7 @@ pub enum OutputFormat {
 #[derive(Debug, Clone)]
 pub struct ParseContext<'a> {
   pub document_data: &'a DocumentData,
+  pub parser: &'a DocumentParser,
   pub format: OutputFormat,
   pub depth: usize,
   // use to control the indentation of the list
@@ -25,9 +27,14 @@ pub struct ParseContext<'a> {
 }
 
 impl<'a> ParseContext<'a> {
-  pub fn new(document_data: &'a DocumentData, format: OutputFormat) -> Self {
+  pub fn new(
+    document_data: &'a DocumentData,
+    parser: &'a DocumentParser,
+    format: OutputFormat,
+  ) -> Self {
     Self {
       document_data,
+      parser,
       format,
       depth: 0,
       in_list: false,
@@ -39,6 +46,7 @@ impl<'a> ParseContext<'a> {
   pub fn with_depth(&self, depth: usize) -> Self {
     Self {
       document_data: self.document_data,
+      parser: self.parser,
       format: self.format,
       depth,
       in_list: self.in_list,
@@ -50,6 +58,7 @@ impl<'a> ParseContext<'a> {
   pub fn with_list_context(&self, list_number: Option<usize>) -> Self {
     Self {
       document_data: self.document_data,
+      parser: self.parser,
       format: self.format,
       depth: self.depth,
       in_list: true,
@@ -61,6 +70,7 @@ impl<'a> ParseContext<'a> {
   pub fn with_parent_type(&self, parent_type: String) -> Self {
     Self {
       document_data: self.document_data,
+      parser: self.parser,
       format: self.format,
       depth: self.depth,
       in_list: self.in_list,
@@ -134,29 +144,28 @@ pub trait BlockParser {
   // In most case, when customizing the parser, we don't need to override this function
   //  unless you need to parse the children content with different format
   //  or the children have special nesting structure, like the simple_table and columns
-  fn parse_children(&self, block: &Block, context: &ParseContext) -> Result<String, DocumentError> {
-    let child_ids = context
-      .document_data
-      .meta
-      .children_map
-      .get(&block.children)
-      .ok_or(DocumentError::NoBlockChildrenFound)?;
+  fn parse_children(&self, block: &Block, context: &ParseContext) -> String {
+    if block.children.is_empty() {
+      return "".to_string();
+    }
 
-    let child_context = context.with_depth(context.depth + 1);
+    if let Some(child_ids) = context.document_data.meta.children_map.get(&block.children) {
+      let child_context = context.with_depth(context.depth + 1);
 
-    let result = child_ids
-      .iter()
-      .filter_map(|child_id| context.document_data.blocks.get(child_id))
-      .filter_map(|child_block| self.parse(child_block, &child_context).ok())
-      .filter(|child_result| !child_result.content.is_empty())
-      .fold(String::new(), |mut acc, child_result| {
-        acc.push_str(&child_result.content);
-        if child_result.add_newline {
+      let result = child_ids
+        .iter()
+        .filter_map(|child_id| context.document_data.blocks.get(child_id))
+        .filter_map(|child_block| context.parser.parse_block(child_block, &child_context).ok())
+        .filter(|child_result| !child_result.is_empty())
+        .fold(String::new(), |mut acc, child_result| {
+          acc.push_str(&child_result);
           acc.push('\n');
-        }
-        acc
-      });
+          acc
+        });
 
-    Ok(result)
+      return result;
+    }
+
+    "".to_string()
   }
 }

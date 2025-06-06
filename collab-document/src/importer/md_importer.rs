@@ -105,6 +105,13 @@ fn process_mdast_node(
     }
   }
 
+  // Handle direct image nodes without creating intermediate blocks
+  if let mdast::Node::Image(image) = node {
+    if let Some(parent_id) = parent_id {
+      return process_image(document_data, image, &parent_id);
+    }
+  }
+
   // Process other nodes as normal nodes
   let id = block_id.unwrap_or_else(generate_id);
 
@@ -179,7 +186,11 @@ fn process_mdast_node(
       insert_delta_to_text_map(document_data, &id, delta);
     },
     mdast::Node::Table(table) => process_table(document_data, table, &id),
-    mdast::Node::Image(image) => process_image(document_data, image, &id),
+    // Image nodes are now handled earlier, so this case should not be reached
+    mdast::Node::Image(_) => {
+      // This should not be reached due to early return above
+      unreachable!("Image nodes should be handled earlier");
+    },
     _ => {
       trace!("Unhandled node: {:?}", node);
       // Default to processing as paragraph

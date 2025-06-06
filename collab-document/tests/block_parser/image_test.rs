@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_document::block_parser::parsers::image::ImageParser;
-use collab_document::block_parser::{BlockParser, OutputFormat, ParseContext};
+use collab_document::block_parser::{BlockParser, DocumentParser, OutputFormat, ParseContext};
 use collab_document::blocks::{Block, BlockType};
 use serde_json::Value;
 
@@ -37,7 +37,8 @@ fn test_image_parser_markdown_format() {
 
   let block = create_image_block(&mut test, "https://appflowy.io/image.png", "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "![Image](https://appflowy.io/image.png)");
@@ -50,7 +51,8 @@ fn test_image_parser_plain_text_format() {
 
   let block = create_image_block(&mut test, "https://appflowy.io/image.png", "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "https://appflowy.io/image.png");
@@ -63,7 +65,8 @@ fn test_image_parser_empty_url_markdown() {
 
   let block = create_image_block(&mut test, "", "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "![Image]()");
@@ -76,7 +79,8 @@ fn test_image_parser_empty_url_plain_text() {
 
   let block = create_image_block(&mut test, "", "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "");
@@ -103,7 +107,8 @@ fn test_image_parser_missing_url_data() {
   test.document.insert_block(block.clone(), None).unwrap();
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "![Image]()");

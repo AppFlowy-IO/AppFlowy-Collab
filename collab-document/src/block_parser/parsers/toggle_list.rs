@@ -16,7 +16,7 @@ impl BlockParser for ToggleListParser {
     let text_extractor = DefaultDocumentTextExtractor;
     let content = text_extractor.extract_text_from_block(block, context)?;
 
-    let children_content = self.parse_children(block, context)?;
+    let children_content = self.parse_children(block, context);
 
     let result = match context.format {
       OutputFormat::Markdown => {

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_document::block_parser::parsers::link_preview::LinkPreviewParser;
-use collab_document::block_parser::{BlockParser, OutputFormat, ParseContext};
+use collab_document::block_parser::{BlockParser, DocumentParser, OutputFormat, ParseContext};
 use collab_document::blocks::{Block, BlockType};
 use serde_json::Value;
 
@@ -45,7 +45,8 @@ fn test_link_preview_parser_with_url_markdown() {
   let block = create_link_preview_block(&mut test, Some(url.clone()), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
   let expected = format!("[{}]({})", url, url);
@@ -60,7 +61,8 @@ fn test_link_preview_parser_empty_url() {
   let block = create_link_preview_block(&mut test, None, "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let result = parser.parse(&block, &context).unwrap();
 
   assert!(result.content.is_empty());
@@ -75,7 +77,8 @@ fn test_link_preview_parser_plain_text_format() {
   let block = create_link_preview_block(&mut test, Some(url.clone()), "");
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText);
   let result = parser.parse(&block, &context).unwrap();
 
   assert_eq!(result.content, url);

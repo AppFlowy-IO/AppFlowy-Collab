@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use collab_document::block_parser::parsers::numbered_list::NumberedListParser;
-use collab_document::block_parser::{BlockParser, OutputFormat, ParseContext};
+use collab_document::block_parser::{BlockParser, DocumentParser, OutputFormat, ParseContext};
 use collab_document::blocks::{Block, BlockType};
 use serde_json::{Value, json};
 
@@ -83,7 +83,8 @@ fn test_numbered_list_parser_with_specific_number() {
 
   let block = create_numbered_list_block(&mut test, Some(5), "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "5. Hello AppFlowy");
@@ -96,7 +97,8 @@ fn test_numbered_list_parser_without_number_defaults_to_1() {
 
   let block = create_numbered_list_block(&mut test, None, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "1. Hello AppFlowy");
@@ -109,7 +111,8 @@ fn test_numbered_list_parser_plain_text_format() {
 
   let block = create_numbered_list_block(&mut test, Some(3), "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::PlainText);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::PlainText);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "3. Hello AppFlowy");
@@ -127,7 +130,8 @@ fn test_numbered_list_parser_with_string_number() {
     "",
   );
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "7. Hello AppFlowy");
@@ -145,7 +149,8 @@ fn test_numbered_list_parser_with_invalid_string_number() {
     "",
   );
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "1. Hello AppFlowy");
@@ -159,7 +164,8 @@ fn test_numbered_list_parser_with_context_list_number() {
   let block = create_numbered_list_block(&mut test, None, "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
 
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
   let context_with_list_number = context.with_list_context(Some(4));
 
   let result = parser.parse(&block, &context_with_list_number).unwrap();
@@ -173,7 +179,8 @@ fn test_numbered_list_parser_empty_content() {
 
   let block = create_numbered_list_block(&mut test, Some(2), "".to_string(), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "2. ");
@@ -187,7 +194,8 @@ fn test_numbered_list_parser_with_indentation() {
   let block = create_numbered_list_block(&mut test, Some(1), "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
 
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown).with_depth(2);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown).with_depth(2);
 
   let result = parser.parse(&block, &context).unwrap();
   assert_eq!(result.content, "    1. Hello AppFlowy");
@@ -209,7 +217,8 @@ fn test_numbered_list_parser_with_children() {
   );
 
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&parent_block, &context).unwrap();
 
@@ -224,7 +233,8 @@ fn test_numbered_list_parser_increments_context_number() {
 
   let block = create_numbered_list_block(&mut test, Some(5), "Hello AppFlowy".to_string(), "");
   let document_data = test.get_document_data();
-  let context = ParseContext::new(&document_data, OutputFormat::Markdown);
+  let document_parser = DocumentParser::with_default_parsers();
+  let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let result = parser.parse(&block, &context).unwrap();
 

@@ -9,6 +9,7 @@ mod link_preview_test;
 mod math_equation_test;
 mod numbered_list_test;
 mod paragraph_test;
+mod parser_test;
 mod quote_list_test;
 mod simple_columns_test;
 mod simple_table_test;
