@@ -185,7 +185,14 @@ fn process_mdast_node(
       delta.insert(code.value.clone(), Vec::new());
       insert_delta_to_text_map(document_data, &id, delta);
     },
-    mdast::Node::Table(table) => process_table(document_data, table, &id),
+    mdast::Node::Table(table) => {
+      // Process each row and create SimpleTableRow blocks
+      for (row_index, row) in table.children.iter().enumerate() {
+        if let mdast::Node::TableRow(row_node) = row {
+          process_table_row(document_data, row_node, row_index, &id, &table.align);
+        }
+      }
+    },
     // Image nodes are now handled earlier, so this case should not be reached
     mdast::Node::Image(_) => {
       // This should not be reached due to early return above
@@ -244,27 +251,25 @@ fn process_image(document_data: &mut DocumentData, image: &mdast::Image, parent_
   update_children_map(document_data, Some(parent_id.to_string()), &new_block_id);
 }
 
-fn process_table(document_data: &mut DocumentData, table: &mdast::Table, parent_id: &str) {
-  for (row_index, row) in table.children.iter().enumerate() {
-    if let mdast::Node::TableRow(row_node) = row {
-      process_table_row(document_data, row_node, row_index, parent_id, &table.align);
-    }
-  }
-}
-
 fn process_table_row(
   document_data: &mut DocumentData,
   row_node: &mdast::TableRow,
   row_index: usize,
-  parent_id: &str,
+  table_id: &str,
   align: &[AlignKind],
 ) {
+  let row_id = generate_id();
+  let row_block = create_simple_table_row_block(&row_id, table_id);
+  document_data.blocks.insert(row_id.clone(), row_block);
+  update_children_map(document_data, Some(table_id.to_string()), &row_id);
+
   for (col_index, cell) in row_node.children.iter().enumerate() {
     if let mdast::Node::TableCell(cell_node) = cell {
       let cell_id = generate_id();
-      let cell_block = create_table_cell_block(&cell_id, parent_id, row_index, col_index, align);
+      let cell_block =
+        create_simple_table_cell_block(&cell_id, &row_id, row_index, col_index, align);
       document_data.blocks.insert(cell_id.clone(), cell_block);
-      update_children_map(document_data, Some(parent_id.to_string()), &cell_id);
+      update_children_map(document_data, Some(row_id.to_string()), &cell_id);
 
       let paragraph_block_id = create_paragraph_block(document_data, &cell_id);
 
@@ -321,7 +326,19 @@ pub fn create_image_block(block_id: &str, url: String, parent_id: &str) -> Block
   }
 }
 
-fn create_table_cell_block(
+fn create_simple_table_row_block(id: &str, parent_id: &str) -> Block {
+  Block {
+    id: id.to_string(),
+    ty: BlockType::SimpleTableRow.to_string(),
+    data: HashMap::new(),
+    parent: parent_id.to_string(),
+    children: id.to_string(),
+    external_id: None,
+    external_type: None,
+  }
+}
+
+fn create_simple_table_cell_block(
   id: &str,
   parent_id: &str,
   row: usize,
@@ -347,12 +364,12 @@ fn create_table_cell_block(
 
   Block {
     id: id.to_string(),
-    ty: BlockType::TableCell.to_string(),
+    ty: BlockType::SimpleTableCell.to_string(),
     data: cell_data,
     parent: parent_id.to_string(),
     children: id.to_string(),
-    external_id: Some(id.to_string()),
-    external_type: Some(BlockType::Paragraph.to_string()),
+    external_id: None,
+    external_type: None,
   }
 }
 

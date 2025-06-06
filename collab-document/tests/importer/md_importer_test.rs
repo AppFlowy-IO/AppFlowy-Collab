@@ -364,7 +364,7 @@ fn test_divider() {
 fn test_image() {
   let image_with_title = "![Alt text](https://example.com/image.png \"Image title\")";
   let image_without_title = "![Alt text](https://example.com/image.png)";
-  let local_image = "![In the Getty Center auditorium for the recent “There Will Be Food“ panel.](Blog%20Post%20104d4deadd2c808aa7dbd79eadeff0eb/maarten-van-den-heuvel-400626-unsplash.jpg)";
+  let local_image = "![In the Getty Center auditorium for the recent \"There Will Be Food\" panel.](Blog%20Post%20104d4deadd2c808aa7dbd79eadeff0eb/maarten-van-den-heuvel-400626-unsplash.jpg)";
   let local_image_with_desc = r#"
 ![Dishes at Broken Spanish, in Downtown LA.](Blog%20Post%20104d4deadd2c808aa7dbd79eadeff0eb/christine-siracusa-363257-unsplash.jpg)
 
@@ -466,16 +466,14 @@ fn test_table() {
 "#;
 
   let result = markdown_to_document_data(markdown);
-  let table = get_block_by_type(&result, "table");
+  let table = get_block_by_type(&result, "simple_table");
 
-  assert_eq!(table.ty, "table");
-  assert_eq!(table.data["rowsLen"], 3);
-  assert_eq!(table.data["colsLen"], 3);
+  assert_eq!(table.ty, "simple_table");
 
   let table_cells = result
     .blocks
     .values()
-    .filter(|b| b.ty == "table/cell")
+    .filter(|b| b.ty == "simple_table_cell")
     .collect::<Vec<_>>();
 
   assert_eq!(table_cells.len(), 9);

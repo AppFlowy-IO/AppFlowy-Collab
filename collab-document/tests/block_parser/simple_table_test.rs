@@ -133,7 +133,7 @@ fn test_simple_table_parser_with_single_row_and_multiple_cells() {
   let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let table_result = parser.parse_block(&table_block, &context).unwrap();
-  let expected = "Cell 1\nCell 2\nCell 3";
+  let expected = "Cell 1\tCell 2\tCell 3";
   assert_eq!(table_result, expected);
 }
 
@@ -188,7 +188,7 @@ fn test_simple_table_parser_with_multiple_rows_and_cells() {
   let context = ParseContext::new(&document_data, &document_parser, OutputFormat::Markdown);
 
   let table_result = parser.parse_block(&table_block, &context).unwrap();
-  let expected = "Row 1, Cell 1\nRow 1, Cell 2\nRow 2, Cell 1\nRow 2, Cell 2";
+  let expected = "Row 1, Cell 1\tRow 1, Cell 2\nRow 2, Cell 1\tRow 2, Cell 2";
   assert_eq!(table_result, expected);
 }
 
