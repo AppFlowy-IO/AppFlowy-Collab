@@ -8,8 +8,8 @@ use collab_database::fields::media_type_option::MediaCellData;
 use collab_database::fields::{Field, TypeOptionCellReader};
 use collab_database::rows::Row;
 use collab_document::blocks::{
-  extract_page_id_from_block_delta, extract_view_id_from_block_data,
-  mention_block_content_from_delta, BlockType,
+  BlockType, extract_page_id_from_block_delta, extract_view_id_from_block_data,
+  mention_block_content_from_delta,
 };
 
 use collab_document::importer::define::URL_FIELD;
