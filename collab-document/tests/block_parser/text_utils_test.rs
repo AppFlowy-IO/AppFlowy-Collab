@@ -38,7 +38,7 @@ fn test_format_text_with_attributes() {
 fn test_text_extractor_basic() {
   let delta_json = r#"[{"insert": "Hello AppFlowy"}]"#;
   let result = DefaultDocumentTextExtractor
-    .extract_text_from_delta(delta_json)
+    .extract_plain_text_from_delta(delta_json)
     .unwrap();
   assert_eq!(result, "Hello AppFlowy");
 }
@@ -52,12 +52,26 @@ fn test_text_extractor_delta_parsing() {
   ]"#;
 
   let plain_result = DefaultDocumentTextExtractor
-    .extract_text_from_delta(delta_json)
+    .extract_plain_text_from_delta(delta_json)
     .unwrap();
   assert_eq!(plain_result, "Hello AppFlowy");
 
   let markdown_result = DefaultDocumentTextExtractor
-    .extract_markdown_from_delta(delta_json)
+    .extract_markdown_text_from_delta(delta_json)
     .unwrap();
   assert_eq!(markdown_result, "**Hello** *AppFlowy*");
+}
+
+#[test]
+fn test_text_extractor_mentions() {
+  // Test delta with mentions - mentions should be filtered out in plain text
+  let delta_json = r#"[
+    {"insert": "Mention a page "},
+    {"insert": "$", "attributes": {"mention": "@page_id"}}
+  ]"#;
+
+  let plain_result = DefaultDocumentTextExtractor
+    .extract_plain_text_from_delta(delta_json)
+    .unwrap();
+  assert_eq!(plain_result, "Mention a page ");
 }

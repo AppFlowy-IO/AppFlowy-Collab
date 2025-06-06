@@ -13,10 +13,10 @@ pub trait DocumentTextExtractor {
   ) -> Result<String, DocumentError>;
 
   /// Get the plain text from the delta json string
-  fn extract_text_from_delta(&self, delta_json: &str) -> Result<String, DocumentError>;
+  fn extract_plain_text_from_delta(&self, delta_json: &str) -> Result<String, DocumentError>;
 
   /// Get the markdown text from the delta json string
-  fn extract_markdown_from_delta(&self, delta_json: &str) -> Result<String, DocumentError>;
+  fn extract_markdown_text_from_delta(&self, delta_json: &str) -> Result<String, DocumentError>;
 }
 
 pub struct DefaultDocumentTextExtractor;
@@ -38,8 +38,8 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
 
       return match delta_json {
         Some(json) => match context.format {
-          OutputFormat::PlainText => self.extract_text_from_delta(json),
-          OutputFormat::Markdown => self.extract_markdown_from_delta(json),
+          OutputFormat::PlainText => self.extract_plain_text_from_delta(json),
+          OutputFormat::Markdown => self.extract_markdown_text_from_delta(json),
         },
         None => Ok(String::new()),
       };
@@ -48,13 +48,21 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
     Ok(String::new())
   }
 
-  fn extract_text_from_delta(&self, delta_json: &str) -> Result<String, DocumentError> {
+  fn extract_plain_text_from_delta(&self, delta_json: &str) -> Result<String, DocumentError> {
     let deltas: Vec<TextDelta> = serde_json::from_str(delta_json)
       .map_err(|_| DocumentError::ParseDeltaJsonToTextDeltaError)?;
     let result = deltas
       .into_iter()
       .filter_map(|delta| {
-        if let TextDelta::Inserted(text, _) = delta {
+        if let TextDelta::Inserted(text, attributes) = delta {
+          // TODO: mention logic should be delegated to the parser
+          if text == "$" {
+            if let Some(attrs) = attributes {
+              if let Some(Any::String(_)) = attrs.get(AttrKey::Mention.as_str()) {
+                return Some("".to_string());
+              }
+            }
+          }
           Some(text)
         } else {
           None
@@ -65,7 +73,7 @@ impl DocumentTextExtractor for DefaultDocumentTextExtractor {
     Ok(result)
   }
 
-  fn extract_markdown_from_delta(&self, delta_json: &str) -> Result<String, DocumentError> {
+  fn extract_markdown_text_from_delta(&self, delta_json: &str) -> Result<String, DocumentError> {
     let deltas: Vec<TextDelta> = serde_json::from_str(delta_json)
       .map_err(|_| DocumentError::ParseDeltaJsonToTextDeltaError)?;
     let result = deltas

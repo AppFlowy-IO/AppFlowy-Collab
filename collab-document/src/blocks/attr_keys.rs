@@ -7,6 +7,7 @@ pub enum AttrKey {
   Strikethrough,
   Href,
   Code,
+  Mention,
 }
 
 impl AttrKey {
@@ -17,6 +18,7 @@ impl AttrKey {
       AttrKey::Strikethrough => "strikethrough",
       AttrKey::Href => "href",
       AttrKey::Code => "code",
+      AttrKey::Mention => "mention",
     }
   }
 }
@@ -31,6 +33,7 @@ impl FromStr for AttrKey {
       "strikethrough" => Ok(AttrKey::Strikethrough),
       "href" => Ok(AttrKey::Href),
       "code" => Ok(AttrKey::Code),
+      "mention" => Ok(AttrKey::Mention),
       _ => Err(format!("Unknown attribute key: {}", s)),
     }
   }
