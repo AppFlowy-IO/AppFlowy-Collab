@@ -8,11 +8,11 @@ use collab_database::fields::media_type_option::MediaCellData;
 use collab_database::fields::{Field, TypeOptionCellReader};
 use collab_database::rows::Row;
 use collab_document::blocks::{
-  extract_page_id_from_block_delta, extract_view_id_from_block_data,
+  BlockType, extract_page_id_from_block_delta, extract_view_id_from_block_data,
   mention_block_content_from_delta,
 };
 
-use collab_document::importer::define::{BlockType, URL_FIELD};
+use collab_document::importer::define::URL_FIELD;
 use collab_entity::CollabType;
 use collab_folder::hierarchy_builder::ParentChildViews;
 use collab_folder::{Folder, View, default_folder_data};
@@ -645,7 +645,7 @@ async fn check_project_database(linked_view: &NotionPage, include_sub_dir: bool)
         }
       }
 
-      row_document_contents.push(document.paragraphs().join("\n").trim().to_string());
+      row_document_contents.push(document.to_plain_text().join("\n").trim().to_string());
     }
     assert_eq!(mention_blocks.len(), 4);
     mention_blocks.retain(|block| !linked_views.contains(&block.page_id));

@@ -1,4 +1,5 @@
-use collab_document::importer::define::{BlockType, URL_FIELD};
+use collab_document::blocks::BlockType;
+use collab_document::importer::define::URL_FIELD;
 use serde_json::json;
 
 use crate::importer::util::{
@@ -289,11 +290,16 @@ If you have questions or feedback, please submit an issue on Github or join the 
     |-|-|
     |**b**|d|
     */
-    assert_eq!(children_blocks[5].ty, "table");
-    assert_eq!(children_blocks[5].data.get("colsLen").unwrap(), 2);
-    assert_eq!(children_blocks[5].data.get("rowsLen").unwrap(), 2);
+    assert_eq!(children_blocks[5].ty, "simple_table");
 
-    let cells = get_children_blocks(&result, &children_blocks[5].id);
+    let rows = get_children_blocks(&result, &children_blocks[5].id);
+    assert_eq!(rows.len(), 2);
+
+    let mut cells = Vec::new();
+    for row in &rows {
+      let row_cells = get_children_blocks(&result, &row.id);
+      cells.extend(row_cells);
+    }
     assert_eq!(cells.len(), 4);
 
     for cell in &cells {
@@ -303,7 +309,7 @@ If you have questions or feedback, please submit an issue on Github or join the 
     for i in 0..2 {
       for j in 0..2 {
         let cell = &cells[2 * i + j];
-        assert_eq!(cell.ty, "table/cell");
+        assert_eq!(cell.ty, "simple_table_cell");
         println!("{:?}", cell.data);
         assert_eq!(cell.data.get("colPosition").unwrap(), j);
         assert_eq!(cell.data.get("rowPosition").unwrap(), i);

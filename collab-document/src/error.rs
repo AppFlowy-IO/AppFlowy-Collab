@@ -46,6 +46,18 @@ pub enum DocumentError {
 
   #[error("Unable to parse markdown to document data")]
   ParseMarkdownError,
+
+  #[error("Unable to parse delta json to text delta")]
+  ParseDeltaJsonToTextDeltaError,
+
+  #[error("No children found")]
+  NoBlockChildrenFound,
+
+  #[error("Unknown block type: {0}")]
+  UnknownBlockType(String),
+
+  #[error("Unable to find the page block")]
+  PageBlockNotFound,
 }
 
 impl From<CollabValidateError> for DocumentError {

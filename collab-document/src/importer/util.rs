@@ -1,5 +1,8 @@
 use super::delta::{Delta, Operation};
-use crate::{blocks::DocumentData, importer::define::*};
+use crate::{
+  blocks::{BlockType, DocumentData},
+  importer::define::*,
+};
 use markdown::mdast;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -20,8 +23,8 @@ pub(crate) fn mdast_node_type_to_block_type(node: &mdast::Node, list_type: Optio
     mdast::Node::LinkReference(_) => BlockType::LinkPreview,
     mdast::Node::Math(_) => BlockType::MathEquation,
     mdast::Node::ThematicBreak(_) => BlockType::Divider,
-    mdast::Node::Table(_) => BlockType::Table,
-    mdast::Node::TableCell(_) => BlockType::TableCell,
+    mdast::Node::Table(_) => BlockType::SimpleTable,
+    mdast::Node::TableCell(_) => BlockType::SimpleTableCell,
     mdast::Node::ListItem(list) => {
       if list.checked.is_some() {
         BlockType::TodoList
@@ -84,22 +87,8 @@ pub(crate) fn mdast_node_to_block_data(node: &mdast::Node, start_number: Option<
     mdast::Node::Math(math) => {
       data.insert(FORMULA_FIELD.to_string(), math.value.clone().into());
     },
-    mdast::Node::Table(table) => {
-      let rows_len = table.children.len();
-      data.insert(ROWS_LEN_FIELD.to_string(), rows_len.into());
-      data.insert(
-        COL_DEFAULT_WIDTH_FIELD.to_string(),
-        DEFAULT_COL_WIDTH.into(),
-      );
-      data.insert(
-        ROW_DEFAULT_HEIGHT_FIELD.to_string(),
-        DEFAULT_ROW_HEIGHT.into(),
-      );
-      let cols_len = table
-        .children
-        .first()
-        .map_or(0, |row| row.children().map(|c| c.len()).unwrap_or(0));
-      data.insert(COLS_LEN_FIELD.to_string(), cols_len.into());
+    mdast::Node::Table(_table) => {
+      // SimpleTable doesn't need special data fields
     },
     mdast::Node::ListItem(list) => {
       if let Some(checked) = list.checked {
