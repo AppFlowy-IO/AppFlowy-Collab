@@ -27,7 +27,7 @@ use std::sync::{
   Arc,
   atomic::{AtomicBool, Ordering},
 };
-use tracing::error;
+use tracing::{error, trace};
 use yrs::block::ClientID;
 
 // Database holder tracks initialization status and holds the database reference
@@ -409,6 +409,7 @@ impl WorkspaceDatabaseManager {
 
     // Fast path: Check if database has been initialized in holder
     if let Some(database) = &holder.database {
+      trace!("Database already initialized: {}", database_id);
       return Ok(database.clone());
     }
 
@@ -420,6 +421,10 @@ impl WorkspaceDatabaseManager {
     {
       // Another thread is initializing, wait a bit and retry
       tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+      trace!(
+        "Another thread is initializing the database: {}, sleep awhile",
+        database_id
+      );
       // Use Box::pin to handle recursion in async fn
       return Box::pin(self.get_or_init_database(database_id)).await;
     }
@@ -434,6 +439,7 @@ impl WorkspaceDatabaseManager {
         if let Some(mut holder_entry) = self.database_holders.get_mut(database_id) {
           // Get a mutable reference to the actual holder object
           if let Some(holder_ref) = Arc::get_mut(holder_entry.value_mut()) {
+            trace!("Database opened: {}", database_id);
             holder_ref.set_database(database.clone());
           }
         }
@@ -507,6 +513,7 @@ impl WorkspaceDatabaseManager {
       if record.linked_views.contains(&params.view_id) {
         error!("The view is already linked to the database");
       } else {
+        trace!("Insert linked view record: {}", params.view_id);
         record.linked_views.push(params.view_id.clone());
       }
     });
