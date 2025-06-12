@@ -23,29 +23,21 @@ use dashmap::DashMap;
 use rayon::prelude::*;
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::{HashMap, HashSet};
-use std::sync::{
-  Arc,
-  atomic::{AtomicBool, Ordering},
-};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tracing::{error, trace};
 use yrs::block::ClientID;
 
 // Database holder tracks initialization status and holds the database reference
 struct DatabaseHolder {
-  database: Option<Arc<RwLock<Database>>>,
-  is_initializing: AtomicBool,
+  database: Mutex<Option<Arc<RwLock<Database>>>>,
 }
 
 impl DatabaseHolder {
   fn new() -> Self {
     Self {
-      database: None,
-      is_initializing: AtomicBool::new(false),
+      database: Mutex::new(None),
     }
-  }
-
-  fn set_database(&mut self, database: Arc<RwLock<Database>>) {
-    self.database = Some(database);
   }
 }
 
@@ -407,50 +399,24 @@ impl WorkspaceDatabaseManager {
       .or_insert_with(|| Arc::new(DatabaseHolder::new()))
       .clone();
 
-    // Fast path: Check if database has been initialized in holder
-    if let Some(database) = &holder.database {
+    // Lock the mutex and check if database is already initialized
+    let mut database_guard = holder.database.lock().await;
+    if let Some(database) = database_guard.as_ref() {
       trace!("Database already initialized: {}", database_id);
       return Ok(database.clone());
     }
 
-    // Try to set initializing flag, return false if already being initialized
-    if holder
-      .is_initializing
-      .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-      .is_err()
-    {
-      // Another thread is initializing, wait a bit and retry
-      tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-      trace!(
-        "Another thread is initializing the database: {}, sleep awhile",
-        database_id
-      );
-      // Use Box::pin to handle recursion in async fn
-      return Box::pin(self.get_or_init_database(database_id)).await;
-    }
-
-    // Now we have exclusive initialization rights
-    // Try to open the database
+    // Database not initialized, let's initialize it while holding the lock
+    trace!("Initializing database: {}", database_id);
     let context = DatabaseContext::new(self.collab_service.clone());
     match Database::arc_open(database_id, context).await {
       Ok(database) => {
-        // Store the database in holder
-        // We need to get the holder again to ensure we're updating the shared instance
-        if let Some(mut holder_entry) = self.database_holders.get_mut(database_id) {
-          // Get a mutable reference to the actual holder object
-          if let Some(holder_ref) = Arc::get_mut(holder_entry.value_mut()) {
-            trace!("Database opened: {}", database_id);
-            holder_ref.set_database(database.clone());
-          }
-        }
-
-        // Reset initializing flag
-        holder.is_initializing.store(false, Ordering::SeqCst);
+        // Store the database in the holder
+        *database_guard = Some(database.clone());
+        trace!("Database opened and stored: {}", database_id);
         Ok(database)
       },
       Err(err) => {
-        // Reset initializing flag on error
-        holder.is_initializing.store(false, Ordering::SeqCst);
         error!("Open database failed: {}", err);
         Err(err)
       },
@@ -493,9 +459,12 @@ impl WorkspaceDatabaseManager {
     let database = Database::create_arc_with_view(params, context).await?;
 
     // Store in the holder
-    let mut holder = DatabaseHolder::new();
-    holder.set_database(database.clone());
-    self.database_holders.insert(database_id, Arc::new(holder));
+    let holder = Arc::new(DatabaseHolder::new());
+    {
+      let mut database_guard = holder.database.lock().await;
+      *database_guard = Some(database.clone());
+    }
+    self.database_holders.insert(database_id, holder);
 
     Ok(database)
   }
