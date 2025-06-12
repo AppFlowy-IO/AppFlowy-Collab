@@ -125,6 +125,7 @@ pub async fn default_database_collab(
 
 impl Database {
   /// Get or Create a database with the given database_id.
+  #[instrument(level = "trace", skip_all, err)]
   pub async fn arc_open(
     database_id: &str,
     context: DatabaseContext,
@@ -182,6 +183,7 @@ impl Database {
     Ok(database)
   }
 
+  #[instrument(level = "trace", skip_all, err)]
   pub async fn arc_create(
     context: DatabaseContext,
     params: CreateDatabaseParams,
@@ -1261,7 +1263,8 @@ impl Database {
     let row_orders = self.body.views.get_row_orders(&txn, &inline_view_id);
     let field_orders = self.body.views.get_field_orders(&txn, &inline_view_id);
     trace!(
-      "Create linked view: {} rows, {} fields",
+      "Create linked view:{} rows:{}, fields:{}",
+      params.view_id,
       row_orders.len(),
       field_orders.len()
     );
@@ -2018,7 +2021,11 @@ impl DatabaseBody {
       modified_at: params.modified_at,
       is_inline: false,
     };
-    // tracing::trace!("create linked view with params {:?}", params);
+
+    trace!(
+      "Insert linked view to database: {}, view: {}",
+      view.database_id, view.id
+    );
     self.views.insert_view(txn, view);
     Ok(())
   }
