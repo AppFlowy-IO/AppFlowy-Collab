@@ -191,24 +191,20 @@ impl Block {
   where
     F: FnOnce(RowUpdate),
   {
-    match self.get_database_row(&row_id).await {
-      None => {
-        error!(
-          "fail to update row. the database row is not created: {:?}",
-          row_id
-        )
-      },
-      Some(database_row) => {
-        database_row.write().await.update::<F>(f);
+    let database_row = match self.get_database_row(&row_id).await {
+      None => self.get_or_init_database_row(&row_id).await,
+      Some(database_row) => Ok(database_row),
+    };
 
-        // if row_id is updated, we need to update the the database key value store
-        let new_row_id = &database_row.read().await.row_id;
-        if *new_row_id != row_id {
-          if let Some((_, row_data)) = self.row_mem_cache.remove(&row_id) {
-            self.row_mem_cache.insert(new_row_id.clone(), row_data);
-          };
-        }
-      },
+    if let Ok(database_row) = database_row {
+      database_row.write().await.update::<F>(f);
+      // if row_id is updated, we need to update the the database key value store
+      let new_row_id = &database_row.read().await.row_id;
+      if *new_row_id != row_id {
+        if let Some((_, row_data)) = self.row_mem_cache.remove(&row_id) {
+          self.row_mem_cache.insert(new_row_id.clone(), row_data);
+        };
+      }
     }
   }
 
