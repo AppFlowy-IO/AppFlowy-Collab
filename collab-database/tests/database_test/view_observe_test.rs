@@ -1,16 +1,14 @@
-use crate::database_test::helper::{
-  create_database, restore_database_from_db, wait_for_specific_event,
-};
+use crate::database_test::helper::{create_database, wait_for_specific_event};
 use crate::helper::setup_log;
 use collab_database::database::{DatabaseBody, gen_row_id};
 
 use collab::lock::Mutex;
+use collab_database::database_trait::NoPersistenceDatabaseCollabService;
 use collab_database::entity::CreateViewParams;
 use collab_database::rows::CreateRowParams;
 use collab_database::views::{
   DatabaseLayout, DatabaseViewChange, FilterMapBuilder, GroupSettingBuilder, SortMapBuilder,
 };
-use collab_database::workspace_database::NoPersistenceDatabaseCollabService;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -495,11 +493,7 @@ async fn observer_create_delete_row_test() {
 async fn observer_create_row_when_reopen_a_database_test() {
   let database_id = uuid::Uuid::new_v4().to_string();
   let database_test = create_database(1, &database_id);
-  let object_id = database_test.database.object_id().to_string();
-  let db = database_test.collab_db.clone();
-  let workspace_id = database_test.workspace_id.clone();
 
-  let database_test = restore_database_from_db(1, &workspace_id, &object_id, db).await;
   let database_test = Arc::new(Mutex::from(database_test));
   let row_id = gen_row_id();
   let cloned_database_test = database_test.clone();

@@ -21,9 +21,9 @@ use crate::rows::{
   subscribe_row_data_change,
 };
 
+use crate::database_trait::DatabaseCollabService;
 use crate::util::encoded_collab;
 use crate::views::{OrderObjectPosition, RowOrder};
-use crate::workspace_database::DatabaseCollabService;
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
 use collab::core::collab::CollabOptions;
 use collab::core::origin::CollabOrigin;

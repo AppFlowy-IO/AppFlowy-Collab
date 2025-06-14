@@ -58,8 +58,8 @@ impl DerefMut for DatabaseTest {
   }
 }
 
-/// Create a database with a single view.
-pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
+pub async fn create_database_with_params(params: CreateDatabaseParams) -> DatabaseTest {
+  let uid = 1; // Default user id for testing
   let client_id = default_client_id();
   let workspace_id = Uuid::new_v4().to_string();
   setup_log();
@@ -72,6 +72,19 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
   });
 
   let context = DatabaseContext::new(collab_service);
+  let database = Database::create_with_view(params, context).await.unwrap();
+
+  DatabaseTest {
+    workspace_id,
+    database,
+    collab_db,
+    pre_define_row_ids: vec![],
+    client_id,
+  }
+}
+
+/// Create a database with a single view.
+pub fn create_database(_uid: i64, database_id: &str) -> DatabaseTest {
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
     views: vec![CreateViewParams {
@@ -83,17 +96,7 @@ pub fn create_database(uid: i64, database_id: &str) -> DatabaseTest {
     ..Default::default()
   };
 
-  let database = futures::executor::block_on(async {
-    Database::create_with_view(params, context).await.unwrap()
-  });
-
-  DatabaseTest {
-    workspace_id,
-    database,
-    collab_db,
-    pre_define_row_ids: vec![],
-    client_id,
-  }
+  futures::executor::block_on(async { create_database_with_params(params).await })
 }
 
 pub fn create_row(uid: i64, workspace_id: &str, row_id: RowId, client_id: ClientID) -> DatabaseRow {

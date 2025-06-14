@@ -1,9 +1,9 @@
 use collab::core::collab::default_client_id;
 use collab_database::database::Database;
+use collab_database::database_trait::NoPersistenceDatabaseCollabService;
 use collab_database::rows::Row;
 use collab_database::template::csv::CSVTemplate;
 use collab_database::template::entity::CELL_DATA;
-use collab_database::workspace_database::NoPersistenceDatabaseCollabService;
 use futures::StreamExt;
 use std::sync::Arc;
 
