@@ -1,7 +1,4 @@
 use dashmap::DashMap;
-use std::collections::HashMap;
-
-use collab_entity::CollabType;
 
 use crate::error::DatabaseError;
 use crate::rows::{
@@ -9,14 +6,13 @@ use crate::rows::{
   RowUpdate, meta_id_from_row_id,
 };
 use crate::views::RowOrder;
-use crate::workspace_database::{DatabaseCollabService, DatabaseRowDataVariant};
 
 use collab::lock::RwLock;
-use futures::future::join_all;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 
+use crate::database_trait::{DatabaseCollabService, DatabaseRowDataVariant};
 use tracing::{error, instrument, trace};
 use uuid::Uuid;
 use yrs::block::ClientID;
@@ -67,7 +63,6 @@ impl Block {
         .collab_service
         .build_arc_database_row(
           &row_id,
-          false,
           None,
           self.row_change_tx.clone(),
           self.collab_service.clone(),
@@ -117,10 +112,9 @@ impl Block {
     trace!("creating new database row: {}", row_id);
     let database_row = self
       .collab_service
-      .build_arc_database_row(
+      .create_arc_database_row(
         &row_id,
-        true,
-        Some(DatabaseRowDataVariant::Row(row)),
+        DatabaseRowDataVariant::Row(row),
         self.row_change_tx.clone(),
         self.collab_service.clone(),
       )
@@ -191,24 +185,20 @@ impl Block {
   where
     F: FnOnce(RowUpdate),
   {
-    match self.get_database_row(&row_id).await {
-      None => {
-        error!(
-          "fail to update row. the database row is not created: {:?}",
-          row_id
-        )
-      },
-      Some(database_row) => {
-        database_row.write().await.update::<F>(f);
+    let database_row = match self.get_database_row(&row_id).await {
+      None => self.get_or_init_database_row(&row_id).await,
+      Some(database_row) => Ok(database_row),
+    };
 
-        // if row_id is updated, we need to update the the database key value store
-        let new_row_id = &database_row.read().await.row_id;
-        if *new_row_id != row_id {
-          if let Some((_, row_data)) = self.row_mem_cache.remove(&row_id) {
-            self.row_mem_cache.insert(new_row_id.clone(), row_data);
-          };
-        }
-      },
+    if let Ok(database_row) = database_row {
+      database_row.write().await.update::<F>(f);
+      // if row_id is updated, we need to update the the database key value store
+      let new_row_id = &database_row.read().await.row_id;
+      if *new_row_id != row_id {
+        if let Some((_, row_data)) = self.row_mem_cache.remove(&row_id) {
+          self.row_mem_cache.insert(new_row_id.clone(), row_data);
+        };
+      }
     }
   }
 
@@ -263,38 +253,14 @@ impl Block {
       .map(|id| id.to_string())
       .collect();
 
-    // Fetch collabs for the uncached row IDs
-    let encoded_collab_by_id = self
+    let uncached_rows = self
       .collab_service
-      .get_collabs(uncached_row_ids, CollabType::DatabaseRow)
+      .batch_build_arc_database_row(
+        &uncached_row_ids,
+        self.row_change_tx.clone(),
+        self.collab_service.clone(),
+      )
       .await?;
-
-    // Prepare concurrent tasks to initialize database rows
-    let futures = encoded_collab_by_id
-      .into_iter()
-      .map(|(row_id, encoded_collab)| async {
-        let row_id = RowId::from(row_id);
-        let collab = self
-          .collab_service
-          .build_arc_database_row(
-            &row_id,
-            false,
-            Some(DatabaseRowDataVariant::EncodedCollab(encoded_collab)),
-            self.row_change_tx.clone(),
-            self.collab_service.clone(),
-          )
-          .await?;
-        let database_row = self
-          .init_database_row_from_collab(row_id.clone(), collab)
-          .await?;
-        Ok::<_, DatabaseError>((row_id, database_row))
-      });
-
-    // Execute the tasks concurrently and collect them into a HashMap
-    let uncached_rows: HashMap<RowId, Arc<RwLock<DatabaseRow>>> = join_all(futures)
-      .await
-      .into_iter()
-      .collect::<Result<HashMap<_, _>, _>>()?;
 
     // Initialize final database rows by combining cached and newly fetched rows
     let mut database_rows = Vec::with_capacity(row_ids.len());
@@ -318,27 +284,25 @@ impl Block {
       .collab_service
       .build_arc_database_row(
         &row_id,
-        false,
         None,
         self.row_change_tx.clone(),
         self.collab_service.clone(),
       )
       .await?;
 
-    let row = self.init_database_row_from_collab(row_id, collab).await?;
+    let row = self.init_database_row_from_collab(collab).await?;
+    self.row_mem_cache.insert(row_id, row.clone());
     Ok(row)
   }
 
   pub async fn init_database_row_from_collab(
     &self,
-    row_id: RowId,
     database_row: Arc<RwLock<DatabaseRow>>,
   ) -> Result<Arc<RwLock<DatabaseRow>>, DatabaseError> {
     let guard = database_row.read().await;
     let row_details = RowDetail::from_collab(&guard);
     drop(guard);
 
-    self.row_mem_cache.insert(row_id, database_row.clone());
     if let Some(row_detail) = row_details {
       let _ = self
         .notifier

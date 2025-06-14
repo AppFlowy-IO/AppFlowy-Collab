@@ -22,7 +22,7 @@ use crate::views::{
   FieldSettingsByFieldIdMap, FieldSettingsMap, FilterMap, GroupSettingMap, LayoutSetting,
   OrderArray, OrderObjectPosition, RowOrder, RowOrderArray, SortMap, ViewChangeReceiver,
 };
-use crate::workspace_database::{DatabaseCollabService, DatabaseDataVariant, DatabaseMeta};
+use crate::workspace_database::DatabaseMeta;
 
 use crate::entity::{
   CreateDatabaseParams, CreateViewParams, CreateViewParamsValidator, DatabaseView,
@@ -44,6 +44,7 @@ use futures::stream::StreamExt;
 use futures::{Stream, stream};
 use nanoid::nanoid;
 
+use crate::database_trait::{DatabaseCollabService, DatabaseDataVariant};
 use collab::core::collab::CollabOptions;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};

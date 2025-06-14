@@ -1,10 +1,10 @@
 use crate::database::{Database, DatabaseContext, timestamp};
+use crate::database_trait::NoPersistenceDatabaseCollabService;
 use crate::entity::{CreateDatabaseParams, CreateViewParams};
 use crate::error::DatabaseError;
 use crate::fields::Field;
 use crate::rows::{CreateRowParams, RowId};
 use crate::template::entity::DatabaseTemplate;
-use crate::workspace_database::NoPersistenceDatabaseCollabService;
 use collab::core::collab::default_client_id;
 use collab::lock::RwLock;
 use std::sync::Arc;

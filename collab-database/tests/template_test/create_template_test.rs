@@ -1,10 +1,10 @@
 use collab::core::collab::default_client_id;
 use collab_database::database::{Database, gen_database_id, gen_database_view_id};
+use collab_database::database_trait::NoPersistenceDatabaseCollabService;
 use collab_database::entity::FieldType;
 use collab_database::rows::Row;
 use collab_database::template::builder::DatabaseTemplateBuilder;
 use collab_database::template::entity::CELL_DATA;
-use collab_database::workspace_database::NoPersistenceDatabaseCollabService;
 use futures::StreamExt;
 use std::sync::Arc;
 
