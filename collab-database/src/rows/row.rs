@@ -543,7 +543,7 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
     self
   }
 
-  pub(crate) fn set_row_id(self, new_row_id: RowId) -> Self {
+  pub fn set_row_id(self, new_row_id: RowId) -> Self {
     let old_row_id = match row_id_from_map_ref(self.txn, &self.map_ref) {
       Some(row_id) => row_id,
       None => {

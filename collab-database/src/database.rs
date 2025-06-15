@@ -173,7 +173,7 @@ impl Database {
     trace!(
       "[Database] create {}, client_id: {}",
       params.database_id,
-      context.database_collab_service.client_id().await
+      context.database_collab_service.database_client_id().await
     );
     let database_id = params.database_id.clone();
     let database = context
@@ -201,7 +201,7 @@ impl Database {
     trace!(
       "[Database] create {}, client_id: {}",
       params.database_id,
-      context.database_collab_service.client_id().await
+      context.database_collab_service.database_client_id().await
     );
     let database_id = params.database_id.clone();
     let database = context
@@ -378,7 +378,7 @@ impl Database {
   /// reference the given database. Return the row order if the row is
   /// created successfully. Otherwise, return None.
   pub async fn create_row(&mut self, params: CreateRowParams) -> Result<RowOrder, DatabaseError> {
-    let client_id = self.collab_service.client_id().await;
+    let client_id = self.collab_service.database_client_id().await;
     let params = CreateRowParamsValidator::validate(params)?;
     let row_order = self.body.block.create_new_row(params, client_id).await?;
     let mut txn = self.collab.transact_mut();
@@ -419,7 +419,7 @@ impl Database {
     view_id: &str,
     params: CreateRowParams,
   ) -> Result<(usize, RowOrder), DatabaseError> {
-    let client_id = self.collab_service.client_id().await;
+    let client_id = self.collab_service.database_client_id().await;
     let row_position = params.row_position.clone();
     let row_order = self.body.create_row(params, client_id).await?;
 
@@ -1698,7 +1698,10 @@ impl DatabaseBody {
 
     // create rows
     let row_orders = block
-      .create_rows(new_rows, context.database_collab_service.client_id().await)
+      .create_rows(
+        new_rows,
+        context.database_collab_service.database_client_id().await,
+      )
       .await;
 
     // create field orders

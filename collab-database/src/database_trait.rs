@@ -50,7 +50,7 @@ pub type CollabRef = Arc<RwLock<dyn BorrowMut<Collab> + Send + Sync + 'static>>;
 ///
 #[async_trait]
 pub trait DatabaseCollabService: Send + Sync + 'static {
-  async fn client_id(&self) -> ClientID;
+  async fn database_client_id(&self) -> ClientID;
 
   async fn build_arc_database(
     &self,
@@ -90,7 +90,7 @@ pub trait DatabaseCollabService: Send + Sync + 'static {
 
 #[async_trait]
 pub trait DatabaseRowCollabService: Send + Sync + 'static {
-  async fn client_id(&self) -> ClientID;
+  async fn database_row_client_id(&self) -> ClientID;
 
   async fn create_arc_database_row(
     &self,
@@ -141,7 +141,7 @@ impl<T> DatabaseCollabService for T
 where
   T: DatabaseCollabReader + Send + Sync + 'static,
 {
-  async fn client_id(&self) -> ClientID {
+  async fn database_client_id(&self) -> ClientID {
     self.reader_client_id().await
   }
 
@@ -222,7 +222,7 @@ impl<T> DatabaseRowCollabService for T
 where
   T: DatabaseCollabReader + Send + Sync + 'static,
 {
-  async fn client_id(&self) -> ClientID {
+  async fn database_row_client_id(&self) -> ClientID {
     self.reader_client_id().await
   }
 
