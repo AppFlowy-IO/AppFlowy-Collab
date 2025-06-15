@@ -64,14 +64,14 @@ pub async fn create_database_with_params(params: CreateDatabaseParams) -> Databa
   let workspace_id = Uuid::new_v4().to_string();
   setup_log();
   let collab_db = make_rocks_db();
-  let collab_service = Arc::new(TestUserDatabaseServiceImpl {
+  let collab_service = Arc::new(TestUserDatabaseServiceImpl::new(
     uid,
-    workspace_id: workspace_id.clone(),
-    db: collab_db.clone(),
+    workspace_id.clone(),
+    collab_db.clone(),
     client_id,
-  });
+  ));
 
-  let context = DatabaseContext::new(collab_service);
+  let context = DatabaseContext::new(collab_service.clone(), collab_service);
   let database = Database::create_with_view(params, context).await.unwrap();
 
   DatabaseTest {
@@ -99,24 +99,22 @@ pub fn create_database(_uid: i64, database_id: &str) -> DatabaseTest {
   futures::executor::block_on(async { create_database_with_params(params).await })
 }
 
-pub fn create_row(uid: i64, workspace_id: &str, row_id: RowId, client_id: ClientID) -> DatabaseRow {
-  let collab_db = make_rocks_db();
+pub fn create_row(
+  _uid: i64,
+  _workspace_id: &str,
+  row_id: RowId,
+  client_id: ClientID,
+) -> DatabaseRow {
   let options = CollabOptions::new(row_id.to_string(), client_id);
   let mut collab = Collab::new_with_options(CollabOrigin::Empty, options).unwrap();
   collab.initialize();
+  let database_id = Uuid::new_v4().to_string();
   let row_change_tx = tokio::sync::broadcast::channel(1).0;
-  let collab_builder = Arc::new(TestUserDatabaseServiceImpl {
-    uid,
-    workspace_id: workspace_id.to_string(),
-    db: collab_db.clone(),
-    client_id,
-  });
   DatabaseRow::create(
     row_id.clone(),
     collab,
     Some(row_change_tx),
-    Row::new(row_id, "1"),
-    collab_builder,
+    Row::new(row_id, &database_id),
   )
 }
 
@@ -128,13 +126,13 @@ pub async fn create_database_with_db(
   setup_log();
   let client_id = default_client_id();
   let collab_db = make_rocks_db();
-  let collab_service = Arc::new(TestUserDatabaseServiceImpl {
+  let collab_service = Arc::new(TestUserDatabaseServiceImpl::new(
     uid,
-    workspace_id: workspace_id.to_string(),
-    db: collab_db.clone(),
+    workspace_id.to_string(),
+    collab_db.clone(),
     client_id,
-  });
-  let context = DatabaseContext::new(collab_service);
+  ));
+  let context = DatabaseContext::new(collab_service.clone(), collab_service);
   let params = CreateDatabaseParams {
     database_id: database_id.to_string(),
     views: vec![CreateViewParams {
@@ -165,14 +163,14 @@ pub async fn restore_database_from_db(
   collab_db: Arc<CollabKVDB>,
 ) -> DatabaseTest {
   let client_id = default_client_id();
-  let collab_service = Arc::new(TestUserDatabaseServiceImpl {
+  let collab_service = Arc::new(TestUserDatabaseServiceImpl::new(
     uid,
-    workspace_id: workspace_id.to_string(),
-    db: collab_db.clone(),
+    workspace_id.to_string(),
+    collab_db.clone(),
     client_id,
-  });
+  ));
 
-  let context = DatabaseContext::new(collab_service);
+  let context = DatabaseContext::new(collab_service.clone(), collab_service);
   let database = Database::open(database_id, context).await.unwrap();
   DatabaseTest {
     workspace_id: workspace_id.to_string(),
@@ -234,13 +232,13 @@ impl DatabaseTestBuilder {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.into_path();
     let collab_db = Arc::new(CollabKVDB::open(path).unwrap());
-    let collab_service = Arc::new(TestUserDatabaseServiceImpl {
-      uid: self.uid,
-      workspace_id: workspace_id.clone(),
-      db: collab_db.clone(),
+    let collab_service = Arc::new(TestUserDatabaseServiceImpl::new(
+      self.uid,
+      workspace_id.clone(),
+      collab_db.clone(),
       client_id,
-    });
-    let context = DatabaseContext::new(collab_service);
+    ));
+    let context = DatabaseContext::new(collab_service.clone(), collab_service);
     let params = CreateDatabaseParams {
       database_id: self.database_id.clone(),
       views: vec![CreateViewParams {

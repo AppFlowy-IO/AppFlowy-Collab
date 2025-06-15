@@ -44,7 +44,7 @@ use futures::stream::StreamExt;
 use futures::{Stream, stream};
 use nanoid::nanoid;
 
-use crate::database_trait::{DatabaseCollabService, DatabaseDataVariant};
+use crate::database_trait::{DatabaseCollabService, DatabaseDataVariant, DatabaseRowCollabService};
 use collab::core::collab::CollabOptions;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
@@ -72,14 +72,19 @@ const VIEWS: &str = "views";
 
 #[derive(Clone)]
 pub struct DatabaseContext {
-  pub collab_service: Arc<dyn DatabaseCollabService>,
+  pub database_collab_service: Arc<dyn DatabaseCollabService>,
+  pub database_row_collab_service: Arc<dyn DatabaseRowCollabService>,
   pub notifier: DatabaseNotify,
 }
 
 impl DatabaseContext {
-  pub fn new(collab_service: Arc<dyn DatabaseCollabService>) -> Self {
+  pub fn new(
+    database_collab_service: Arc<dyn DatabaseCollabService>,
+    database_row_collab_service: Arc<dyn DatabaseRowCollabService>,
+  ) -> Self {
     Self {
-      collab_service,
+      database_collab_service,
+      database_row_collab_service,
       notifier: DatabaseNotify::default(),
     }
   }
@@ -136,7 +141,7 @@ impl Database {
     }
 
     let collab = context
-      .collab_service
+      .database_collab_service
       .clone()
       .build_arc_database(database_id, false, None, context)
       .await?;
@@ -150,7 +155,7 @@ impl Database {
     }
 
     let database = context
-      .collab_service
+      .database_collab_service
       .clone()
       .build_database(database_id, false, None, context)
       .await?;
@@ -168,11 +173,11 @@ impl Database {
     trace!(
       "[Database] create {}, client_id: {}",
       params.database_id,
-      context.collab_service.client_id().await
+      context.database_collab_service.client_id().await
     );
     let database_id = params.database_id.clone();
     let database = context
-      .collab_service
+      .database_collab_service
       .clone()
       .build_database(
         &database_id,
@@ -196,11 +201,11 @@ impl Database {
     trace!(
       "[Database] create {}, client_id: {}",
       params.database_id,
-      context.collab_service.client_id().await
+      context.database_collab_service.client_id().await
     );
     let database_id = params.database_id.clone();
     let database = context
-      .collab_service
+      .database_collab_service
       .clone()
       .build_arc_database(
         &database_id,
@@ -214,7 +219,8 @@ impl Database {
 
   pub async fn create_with_template<T>(
     template: T,
-    collab_service: Arc<dyn DatabaseCollabService>,
+    database_collab_service: Arc<dyn DatabaseCollabService>,
+    database_row_collab_service: Arc<dyn DatabaseRowCollabService>,
   ) -> Result<Database, DatabaseError>
   where
     T: TryInto<DatabaseTemplate> + Send + Sync + 'static,
@@ -230,7 +236,8 @@ impl Database {
     .into_params();
 
     let context = DatabaseContext {
-      collab_service,
+      database_collab_service,
+      database_row_collab_service,
       notifier: Default::default(),
     };
     Self::create_with_view(params, context).await
@@ -432,17 +439,13 @@ impl Database {
 
   /// Remove the row
   /// The [RowOrder] of each view representing this row will be removed.
-  pub async fn remove_row(&mut self, row_id: &RowId) -> Option<Row> {
+  pub async fn remove_row(&mut self, row_id: &RowId) {
     {
       let mut txn = self.collab.transact_mut();
       self.body.views.update_all_views(&mut txn, |_, update| {
         update.remove_row_order(row_id);
       });
     };
-
-    let row = self.body.block.delete_row(row_id)?;
-    let read_guard = row.read().await;
-    read_guard.get_row()
   }
 
   pub async fn move_row(&mut self, from_row_id: &str, to_row_id: &str) {
@@ -452,7 +455,7 @@ impl Database {
     });
   }
 
-  pub async fn remove_rows(&mut self, row_ids: &[RowId]) -> Vec<Row> {
+  pub async fn remove_rows(&mut self, row_ids: &[RowId]) {
     {
       let mut txn = self.collab.transact_mut();
       self.body.views.update_all_views(&mut txn, |_, mut update| {
@@ -461,16 +464,6 @@ impl Database {
         }
       });
     };
-
-    let mut rows = vec![];
-    for row_id in row_ids {
-      if let Some(database_row) = self.body.block.delete_row(row_id) {
-        if let Some(row) = database_row.read().await.get_row() {
-          rows.push(row);
-        }
-      }
-    }
-    rows
   }
 
   /// Update the row
@@ -1666,8 +1659,12 @@ pub struct DatabaseBody {
 impl DatabaseBody {
   pub fn open(collab: Collab, context: DatabaseContext) -> Result<(Self, Collab), DatabaseError> {
     CollabType::Database.validate_require_data(&collab)?;
-    let body = Self::from_collab(&collab, context.collab_service, Some(context.notifier))
-      .ok_or_else(|| DatabaseError::NoRequiredData("Can not open database".to_string()))?;
+    let body = Self::from_collab(
+      &collab,
+      context.database_row_collab_service,
+      Some(context.notifier),
+    )
+    .ok_or_else(|| DatabaseError::NoRequiredData("Can not open database".to_string()))?;
     Ok((body, collab))
   }
 
@@ -1691,7 +1688,7 @@ impl DatabaseBody {
     let views = DatabaseViews::new(origin, views, Some(context.notifier.view_change_tx.clone()));
     let block = Block::new(
       database_id.clone(),
-      context.collab_service.clone(),
+      context.database_row_collab_service.clone(),
       Some(context.notifier.row_change_tx.clone()),
     );
 
@@ -1701,7 +1698,7 @@ impl DatabaseBody {
 
     // create rows
     let row_orders = block
-      .create_rows(new_rows, context.collab_service.client_id().await)
+      .create_rows(new_rows, context.database_collab_service.client_id().await)
       .await;
 
     // create field orders
@@ -1751,7 +1748,7 @@ impl DatabaseBody {
   /// There is no [DatabaseNotify] or persistence layer in [DatabaseBody] created by this method.
   pub fn from_collab(
     collab: &Collab,
-    collab_service: Arc<dyn DatabaseCollabService>,
+    collab_service: Arc<dyn DatabaseRowCollabService>,
     notifier: Option<DatabaseNotify>,
   ) -> Option<Self> {
     let txn = collab.context.transact();

@@ -4,7 +4,6 @@ use collab::preclude::{
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -21,7 +20,6 @@ use crate::rows::{
   subscribe_row_data_change,
 };
 
-use crate::database_trait::DatabaseCollabService;
 use crate::util::encoded_collab;
 use crate::views::{OrderObjectPosition, RowOrder};
 use crate::{impl_bool_update, impl_i32_update, impl_i64_update};
@@ -44,7 +42,6 @@ pub struct DatabaseRow {
   pub row_id: RowId,
   pub collab: Collab,
   pub body: DatabaseRowBody,
-  collab_service: Arc<dyn DatabaseCollabService>,
 }
 
 pub fn default_database_row_from_row(row: Row, client_id: ClientID) -> EncodedCollab {
@@ -81,7 +78,6 @@ impl DatabaseRow {
     row_id: RowId,
     mut collab: Collab,
     change_tx: Option<RowChangeSender>,
-    collab_service: Arc<dyn DatabaseCollabService>,
   ) -> Result<Self, DatabaseError> {
     let body = DatabaseRowBody::open(row_id.clone(), &mut collab)?;
     if let Some(change_tx) = change_tx {
@@ -91,7 +87,6 @@ impl DatabaseRow {
       row_id,
       collab,
       body,
-      collab_service,
     })
   }
 
@@ -100,7 +95,6 @@ impl DatabaseRow {
     mut collab: Collab,
     change_tx: Option<RowChangeSender>,
     row: Row,
-    collab_service: Arc<dyn DatabaseCollabService>,
   ) -> Self {
     let body = DatabaseRowBody::create(row_id.clone(), &mut collab, row);
     if let Some(change_tx) = change_tx {
@@ -110,7 +104,6 @@ impl DatabaseRow {
       row_id,
       collab,
       body,
-      collab_service,
     }
   }
 
@@ -182,19 +175,6 @@ impl DatabaseRow {
         f(update)
       },
       Err(e) => error!("🔴 can't update the row meta: {}", e),
-    }
-  }
-
-  pub fn delete(&self) {
-    match self.collab_service.persistence() {
-      None => {
-        trace!("skip delete database row because persistence is not available");
-      },
-      Some(persistence) => {
-        if let Err(err) = persistence.delete_collab(self.collab.object_id()) {
-          error!("🔴 delete database row failed: {}", err);
-        }
-      },
     }
   }
 }
@@ -563,7 +543,7 @@ impl<'a, 'b> RowUpdate<'a, 'b> {
     self
   }
 
-  pub fn set_row_id(self, new_row_id: RowId) -> Self {
+  pub(crate) fn set_row_id(self, new_row_id: RowId) -> Self {
     let old_row_id = match row_id_from_map_ref(self.txn, &self.map_ref) {
       Some(row_id) => row_id,
       None => {

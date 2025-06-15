@@ -1,22 +1,29 @@
+use crate::helper::make_rocks_db;
+use crate::user_test::helper::TestUserDatabaseServiceImpl;
 use collab::core::collab::default_client_id;
 use collab_database::database::Database;
-use collab_database::database_trait::NoPersistenceDatabaseCollabService;
 use collab_database::rows::Row;
 use collab_database::template::csv::CSVTemplate;
 use collab_database::template::entity::CELL_DATA;
 use futures::StreamExt;
 use std::sync::Arc;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn import_csv_test() {
   let csv_data = include_str!("../asset/selected-services-march-2024-quarter-csv.csv");
   let csv_template = CSVTemplate::try_from_reader(csv_data.as_bytes(), false, None).unwrap();
 
+  let workspace_id = Uuid::new_v4().to_string();
   let database_template = csv_template.try_into_database_template(None).await.unwrap();
-  let service = Arc::new(NoPersistenceDatabaseCollabService {
-    client_id: default_client_id(),
-  });
-  let database = Database::create_with_template(database_template, service)
+  let db = make_rocks_db();
+  let service = Arc::new(TestUserDatabaseServiceImpl::new(
+    1,
+    workspace_id,
+    db,
+    default_client_id(),
+  ));
+  let database = Database::create_with_template(database_template, service.clone(), service)
     .await
     .unwrap();
 

@@ -200,7 +200,7 @@ impl ImportedInfo {
     let view_streams = self
       .views
       .into_iter()
-      .map(|view| async { build_imported_collab_recursively(view).await });
+      .map(move |view| async move { build_imported_collab_recursively(view).await });
 
     if has_space {
       let combined_stream = stream::iter(view_streams)

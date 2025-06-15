@@ -1,13 +1,9 @@
-use crate::database::{Database, DatabaseContext, timestamp};
-use crate::database_trait::NoPersistenceDatabaseCollabService;
+use crate::database::timestamp;
 use crate::entity::{CreateDatabaseParams, CreateViewParams};
 use crate::error::DatabaseError;
 use crate::fields::Field;
 use crate::rows::{CreateRowParams, RowId};
 use crate::template::entity::DatabaseTemplate;
-use collab::core::collab::default_client_id;
-use collab::lock::RwLock;
-use std::sync::Arc;
 
 /// This trait that provides methods to extend the [TypeOption::CellData] functionalities.
 pub trait TypeOptionCellData {
@@ -18,20 +14,6 @@ pub trait TypeOptionCellData {
 
 pub trait ToCellString {
   fn to_cell_string(&self) -> String;
-}
-
-pub async fn database_from_template(
-  template: DatabaseTemplate,
-) -> Result<Arc<RwLock<Database>>, DatabaseError> {
-  let params = create_database_params_from_template(template);
-  let context = DatabaseContext {
-    collab_service: Arc::new(NoPersistenceDatabaseCollabService {
-      client_id: default_client_id(),
-    }),
-    notifier: Default::default(),
-  };
-  let database = Database::create_arc_with_view(params, context).await?;
-  Ok(database)
 }
 
 pub fn construct_create_database_params<T>(
