@@ -124,7 +124,7 @@ async fn create_template_test() {
   let service = Arc::new(NoPersistenceDatabaseCollabService {
     client_id: default_client_id(),
   });
-  let database = Database::create_with_template(template, service)
+  let database = Database::create_with_template(template, service.clone(), service)
     .await
     .unwrap();
 

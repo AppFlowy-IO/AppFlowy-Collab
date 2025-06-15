@@ -16,7 +16,7 @@ async fn import_csv_test() {
   let service = Arc::new(NoPersistenceDatabaseCollabService {
     client_id: default_client_id(),
   });
-  let database = Database::create_with_template(database_template, service)
+  let database = Database::create_with_template(database_template, service.clone(), service)
     .await
     .unwrap();
 

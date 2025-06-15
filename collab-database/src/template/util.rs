@@ -25,7 +25,10 @@ pub async fn database_from_template(
 ) -> Result<Arc<RwLock<Database>>, DatabaseError> {
   let params = create_database_params_from_template(template);
   let context = DatabaseContext {
-    collab_service: Arc::new(NoPersistenceDatabaseCollabService {
+    database_collab_service: Arc::new(NoPersistenceDatabaseCollabService {
+      client_id: default_client_id(),
+    }),
+    database_row_collab_service: Arc::new(NoPersistenceDatabaseCollabService {
       client_id: default_client_id(),
     }),
     notifier: Default::default(),

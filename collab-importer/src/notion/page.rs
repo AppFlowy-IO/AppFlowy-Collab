@@ -526,13 +526,11 @@ impl NotionPage {
           .try_into_database_template(Some(Box::new(file_url_builder)))
           .await
           .unwrap();
-        let mut database = Database::create_with_template(
-          database_template,
-          Arc::new(NoPersistenceDatabaseCollabService {
-            client_id: default_client_id(),
-          }),
-        )
-        .await?;
+        let service = Arc::new(NoPersistenceDatabaseCollabService {
+          client_id: default_client_id(),
+        });
+        let mut database =
+          Database::create_with_template(database_template, service.clone(), service).await?;
         let mut row_documents = row_documents.clone();
 
         if let Some(field) = database.get_primary_field() {
