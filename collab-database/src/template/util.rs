@@ -1,12 +1,9 @@
-use crate::database::{Database, DatabaseContext, timestamp};
+use crate::database::timestamp;
 use crate::entity::{CreateDatabaseParams, CreateViewParams};
 use crate::error::DatabaseError;
 use crate::fields::Field;
 use crate::rows::{CreateRowParams, RowId};
 use crate::template::entity::DatabaseTemplate;
-use collab::core::collab::default_client_id;
-use collab::lock::RwLock;
-use std::sync::Arc;
 
 /// This trait that provides methods to extend the [TypeOption::CellData] functionalities.
 pub trait TypeOptionCellData {

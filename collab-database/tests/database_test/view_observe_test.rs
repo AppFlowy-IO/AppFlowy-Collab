@@ -333,9 +333,7 @@ async fn observe_move_database_view_row_test() {
     let collab = &database_test.lock().await.collab;
     let db_body = DatabaseBody::from_collab(
       collab,
-      Arc::new(NoPersistenceDatabaseCollabService {
-        client_id: collab.client_id(),
-      }),
+      Arc::new(NoPersistenceDatabaseCollabService::new(collab.client_id())),
       None,
     )
     .unwrap();
@@ -376,9 +374,7 @@ async fn observe_move_database_view_row_test() {
     let collab = &database_test.lock().await.collab;
     let db_body = DatabaseBody::from_collab(
       collab,
-      Arc::new(NoPersistenceDatabaseCollabService {
-        client_id: collab.client_id(),
-      }),
+      Arc::new(NoPersistenceDatabaseCollabService::new(collab.client_id())),
       None,
     )
     .unwrap();

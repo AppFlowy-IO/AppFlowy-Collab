@@ -9,24 +9,24 @@ use collab::preclude::Collab;
 use collab_database::database::{gen_database_id, gen_field_id};
 use collab_database::error::DatabaseError;
 use collab_database::fields::Field;
-use collab_database::rows::CreateRowParams;
+use collab_database::rows::{CreateRowParams, DatabaseRow, RowId};
 use collab_database::views::DatabaseLayout;
 use collab_database::workspace_database::{RowRelationChange, RowRelationUpdateReceiver};
 use collab_entity::CollabType;
+use dashmap::DashMap;
 use tokio::sync::mpsc::{Receiver, channel};
 
 use crate::database_test::helper::field_settings_for_default_database;
 
 use collab::entity::EncodedCollab;
+use collab::lock::RwLock;
 use collab_database::database_trait::{
   DatabaseCollabPersistenceService, DatabaseCollabReader, EncodeCollabByOid,
 };
 use collab_database::entity::{CreateDatabaseParams, CreateViewParams};
 use collab_plugins::CollabKVDB;
-use collab_plugins::local_storage::CollabPersistenceConfig;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use collab_plugins::local_storage::kv::doc::CollabKVAction;
-use collab_plugins::local_storage::rocksdb::rocksdb_plugin::RocksdbDiskPlugin;
 use rand::Rng;
 use uuid::Uuid;
 use yrs::block::ClientID;
@@ -41,6 +41,7 @@ pub struct TestUserDatabaseServiceImpl {
   pub workspace_id: String,
   pub db: Arc<CollabKVDB>,
   pub client_id: ClientID,
+  pub cache: Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>,
 }
 
 impl TestUserDatabaseServiceImpl {
@@ -50,6 +51,7 @@ impl TestUserDatabaseServiceImpl {
       workspace_id,
       db,
       client_id,
+      cache: Arc::new(Default::default()),
     }
   }
 }
@@ -167,24 +169,8 @@ impl DatabaseCollabReader for TestUserDatabaseServiceImpl {
     }))
   }
 
-  fn bind_collab(
-    &self,
-    object_id: &str,
-    collab: &mut Collab,
-    collab_type: CollabType,
-  ) -> Result<(), DatabaseError> {
-    let db_plugin = RocksdbDiskPlugin::new_with_config(
-      1,
-      self.workspace_id.clone(),
-      object_id.to_string(),
-      collab_type,
-      Arc::downgrade(&self.db),
-      CollabPersistenceConfig::default(),
-    );
-
-    collab.add_plugin(Box::new(db_plugin));
-    collab.initialize();
-    Ok(())
+  fn database_row_cache(&self) -> Option<Arc<DashMap<RowId, Arc<RwLock<DatabaseRow>>>>> {
+    Some(self.cache.clone())
   }
 }
 

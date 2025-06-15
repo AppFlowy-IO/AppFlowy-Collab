@@ -15,7 +15,7 @@ use crate::notion::walk_dir::{extract_delta_link, extract_external_links};
 use crate::notion::{CSVRelation, ImportedCollabInfoStream};
 use crate::util::{FileId, upload_file_url};
 use collab::core::collab::default_client_id;
-use collab_database::database_trait::{DatabaseCollabService, DatabaseRowCollabService};
+use collab_database::database_trait::NoPersistenceDatabaseCollabService;
 use collab_database::rows::RowId;
 use collab_database::template::builder::FileUrlBuilder;
 use collab_document::document_data::default_document_data;
@@ -489,11 +489,7 @@ impl NotionPage {
     }
   }
 
-  pub async fn as_database(
-    &self,
-    database_collab_service: Arc<dyn DatabaseCollabService>,
-    database_row_collab_service: Arc<dyn DatabaseRowCollabService>,
-  ) -> Result<DatabaseImportContent, ImporterError> {
+  pub async fn as_database(&self) -> Result<DatabaseImportContent, ImporterError> {
     match &self.notion_file {
       NotionFile::CSV {
         file_path,
@@ -528,14 +524,10 @@ impl NotionPage {
         let files = csv_template.resource.as_ref().unwrap().files.clone();
         let database_template = csv_template
           .try_into_database_template(Some(Box::new(file_url_builder)))
-          .await
-          .unwrap();
-        let mut database = Database::create_with_template(
-          database_template,
-          database_collab_service,
-          database_row_collab_service,
-        )
-        .await?;
+          .await?;
+        let service = Arc::new(NoPersistenceDatabaseCollabService::new(default_client_id()));
+        let mut database =
+          Database::create_with_template(database_template, service.clone(), service).await?;
         let mut row_documents = row_documents.clone();
 
         if let Some(field) = database.get_primary_field() {
@@ -576,20 +568,11 @@ impl NotionPage {
   }
 
   #[async_recursion::async_recursion(?Send)]
-  pub async fn build_imported_collab(
-    &self,
-    database_collab_service: Arc<dyn DatabaseCollabService>,
-    database_row_collab_service: Arc<dyn DatabaseRowCollabService>,
-  ) -> Result<Option<ImportedCollabInfo>, ImporterError> {
+  pub async fn build_imported_collab(&self) -> Result<Option<ImportedCollabInfo>, ImporterError> {
     let name = self.notion_name.clone();
     match &self.notion_file {
       NotionFile::CSV { .. } => {
-        let content = self
-          .as_database(
-            database_collab_service.clone(),
-            database_row_collab_service.clone(),
-          )
-          .await?;
+        let content = self.as_database().await?;
         let database_id = content.database.get_database_id();
         let mut resources = vec![content.resource];
         let view_ids = content
@@ -628,13 +611,7 @@ impl NotionPage {
           }
 
           for child in row_document.page.children {
-            if let Ok(Some(value)) = child
-              .build_imported_collab(
-                database_collab_service.clone(),
-                database_row_collab_service.clone(),
-              )
-              .await
-            {
+            if let Ok(Some(value)) = child.build_imported_collab().await {
               imported_collabs.extend(value.imported_collabs);
               resources.extend(value.resources);
             }
@@ -693,35 +670,18 @@ impl NotionPage {
 
 pub async fn build_imported_collab_recursively<'a>(
   notion_page: NotionPage,
-  database_collab_service: Arc<dyn DatabaseCollabService>,
-  database_row_collab_service: Arc<dyn DatabaseRowCollabService>,
 ) -> ImportedCollabInfoStream<'a> {
-  let imported_collab_info = notion_page
-    .build_imported_collab(
-      database_collab_service.clone(),
-      database_row_collab_service.clone(),
-    )
-    .await;
+  let imported_collab_info = notion_page.build_imported_collab().await;
   let initial_stream: ImportedCollabInfoStream = match imported_collab_info {
     Ok(Some(info)) => Box::pin(stream::once(async { info })),
     Ok(None) => Box::pin(stream::empty()),
     Err(_) => Box::pin(stream::empty()),
   };
 
-  let clone_database_collab_service = database_collab_service.clone();
-  let clone_database_row_collab_service = database_row_collab_service.clone();
-  let child_streams = notion_page.children.into_iter().map(move |child| {
-    let clone_database_collab_service = clone_database_collab_service.clone();
-    let clone_database_row_collab_service = clone_database_row_collab_service.clone();
-    async move {
-      build_imported_collab_recursively(
-        child,
-        clone_database_collab_service,
-        clone_database_row_collab_service,
-      )
-      .await
-    }
-  });
+  let child_streams = notion_page
+    .children
+    .into_iter()
+    .map(|child| async move { build_imported_collab_recursively(child).await });
 
   let child_stream = stream::iter(child_streams)
     .then(|stream_future| stream_future)
